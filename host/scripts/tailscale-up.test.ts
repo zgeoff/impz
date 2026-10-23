@@ -878,6 +878,54 @@ test('it joins the login server again with the key when the saved node is on Tai
   ]);
 });
 
+test('it joins the login server again with the key when the saved node is on Tailscale under another hostname', () => {
+  const ctx = setupTest();
+
+  mkdirSync(join(ctx.directoryPath, 'state'));
+  writeFileSync(join(ctx.directoryPath, 'state', 'tailscaled.state'), 'saved');
+  createStubBin(ctx.directoryPath, 'ps', 'echo S');
+  createStubBin(ctx.directoryPath, 'sleep');
+
+  ctx.tailscale.writeNode({
+    BackendState: 'Running',
+    Self: {
+      HostName: 'imp-old',
+      Tags: ['tag:imp'],
+      TailscaleIPs: ['100.64.0.7'],
+      DNSName: 'imp-old.tail1234.ts.net.',
+    },
+  });
+
+  const result = Bun.spawnSync(
+    [
+      'bash',
+      '-c',
+      '"$0" >"$1" 2>"$2"',
+      new URL('tailscale-up.sh', import.meta.url).pathname,
+      ctx.out,
+      ctx.err,
+    ],
+    {
+      env: {
+        PATH: `${ctx.tailscale.bin}:${process.env['PATH'] ?? ''}`,
+        IMP_RESOLV_CONF: ctx.resolvConf,
+        IMP_TAILSCALE_STATE_DIR: join(ctx.directoryPath, 'state'),
+        IMP_TAILSCALE_HOSTNAME: 'imp',
+        TAILSCALE_AUTHKEY: 'fake-key',
+        IMP_TAILSCALE_LOGIN_SERVER: 'http://headscale.test:8080',
+      },
+    },
+  );
+
+  expect(result.exitCode).toBe(0);
+
+  expect(ctx.tailscale.readCalls('up')).toStrictEqual([
+    expect.stringMatching(
+      /^up --reset --force-reauth --auth-key=file:\S+ --hostname=imp --login-server=http:\/\/headscale\.test:8080 --accept-dns=false --timeout=60s$/u,
+    ),
+  ]);
+});
+
 test('it keeps a saved node on Tailscale without a key and says it is not on the login server', () => {
   const ctx = setupTest();
 

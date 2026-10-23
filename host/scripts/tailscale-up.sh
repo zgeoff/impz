@@ -235,9 +235,7 @@ if [ -n "$has_state" ]; then
     # Without a key the saved node is used as it is, even under another
     # hostname or control server; with one, a new hostname or control
     # server logs in again.
-    if [ -n "$has_key" ] && [ "$(ts status --json | jq -r '.Self.HostName')" != "$hostname" ]; then
-      want_up=1
-    elif control_differs; then
+    if control_differs; then
       if [ -n "$has_key" ]; then
         echo "tailscale-up: the saved node is on ${node_control:-Tailscale}, not $wanted_control; joining again with the key"
         want_up=1
@@ -245,6 +243,8 @@ if [ -n "$has_state" ]; then
       else
         echo "tailscale-up: the saved node is on ${node_control:-Tailscale}, not $wanted_control; give an auth key to join it" >&2
       fi
+    elif [ -n "$has_key" ] && [ "$(ts status --json | jq -r '.Self.HostName')" != "$hostname" ]; then
+      want_up=1
     fi
   elif needs_login "$state"; then
     if [ -z "$has_key" ]; then
