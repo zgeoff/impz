@@ -25,6 +25,7 @@ import {
   listGrantNames,
   listGrantedRules,
   listGrants,
+  readSecret,
   removeCheckedGrant,
 } from '../../platform/db/secrets';
 import type { GrantAuthority, GrantClash } from '../../platform/db/secrets';
@@ -73,6 +74,7 @@ export interface Broker {
 
   readonly refreshSecret: (name: string) => Promise<Secret>;
   readonly deleteSecret: (name: string) => Promise<void>;
+  readonly readSecretGeneration: (name: string) => Promise<string | null>;
 
   readonly addGrant: (
     impName: string,
@@ -239,6 +241,11 @@ export async function createBroker(deps: BrokerDeps): Promise<Broker> {
     listSecrets: secrets.listSecrets,
     refreshSecret: secrets.refreshSecret,
     deleteSecret: secrets.removeSecret,
+    readSecretGeneration: async (name) => {
+      const secret = await readSecret(db, name);
+
+      return secret?.generation ?? null;
+    },
 
     addGrant: async (impName, secretName, authority, filter) => {
       const imp = await requireImp(impName);

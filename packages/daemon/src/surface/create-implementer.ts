@@ -10,8 +10,6 @@ import {
 import { readChangedImps } from '../identity/auth/builder-calls';
 import { toCallerError } from '../identity/auth/caller-view';
 import { findImpName } from '../platform/audit/api-audit';
-import { readImpByName } from '../platform/db/imps';
-import { readSecret } from '../platform/db/secrets';
 import { buildBuilderError, buildForbiddenError } from '../platform/errors/impd-errors';
 import type { Caller } from '../platform/principal/caller';
 import type { RouterDeps } from './create-router';
@@ -29,14 +27,6 @@ export interface AuditDetail {
 export type RpcImplementer = ReturnType<typeof createImplementer>;
 
 export function createImplementer(deps: RouterDeps) {
-  // Never cached: a secret's name can come to mean another secret than the
-  // one a token was given.
-  const readGeneration = async (name: string): Promise<string | null> => {
-    const secret = await readSecret(deps.db, name);
-
-    return secret?.generation ?? null;
-  };
-
   return implement(callerContract)
     .$context<RpcContext>()
     .use(async (options, input) => {
@@ -46,14 +36,16 @@ export function createImplementer(deps: RouterDeps) {
       const requireAccess = async (): Promise<void> => {
         const access = findAccess(procedure);
 
-        const refusal = await checkAccess(access, caller, input, readGeneration);
+        // Never cached: a secret's name can come to mean another secret than the
+        // one a token was given.
+        const refusal = await checkAccess(access, caller, input, deps.broker.readSecretGeneration);
 
         if (refusal !== null) {
           throw buildForbiddenError(refusal.message, refusal.reason);
         }
 
         for (const name of readChangedImps(procedure, access, input)) {
-          const imp = await readImpByName(deps.db, name);
+          const imp = await deps.imps.readImpRecord(name);
 
           if (imp?.kind === 'builder') {
             throw buildBuilderError(name);
