@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { expect, onTestFinished, test } from 'bun:test';
 import { getConfig } from '@logtape/logtape';
 import { getImpdLogger } from '../../src/platform/process/get-impd-logger';
 import { captureImpdLogs } from './capture-impd-logs';
@@ -15,6 +15,14 @@ test('it captures each impd line as rendered, without its newline', () => {
   ]);
 });
 
-test('it leaves logging unconfigured after the test that captured', () => {
-  expect(getConfig()).toBeNull();
+test('it leaves logging unconfigured when the test that captured ends', () => {
+  captureImpdLogs();
+
+  const configured = getConfig() !== null;
+
+  onTestFinished(() => {
+    expect(getConfig()).toBeNull();
+  });
+
+  expect(configured).toBeTrue();
 });
