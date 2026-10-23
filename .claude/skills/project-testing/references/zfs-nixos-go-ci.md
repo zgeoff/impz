@@ -16,17 +16,34 @@ accounting or a real mount. Real-pool tests skip until their two gates name a da
 dir. Each one makes its own dataset under the mount dir, refuses a dataset that already exists, and
 releases only what it made.
 
-Two scripts run the real-pool layer:
+Two scripts run the real-pool layer. Each `.sh` runs the TypeScript entry of the same name, which
+holds the logic:
 
-- **The real-pool script**, [`test-zfs.sh`](../../../../scripts/test-zfs.sh), makes a throwaway
+- **The real-pool script**, [`test-zfs.ts`](../../../../scripts/test-zfs.ts), makes a throwaway
   sparse-file pool, runs the ZFS backend's tests with both gates set, and destroys the pool on exit
   when `zpool status` proves the pool is its own.
-- **The ZFS host script**, [`zfs-host-test.sh`](../../../../scripts/zfs-host-test.sh), runs the
+- **The ZFS host script**, [`zfs-host-test.ts`](../../../../scripts/zfs-host-test.ts), runs the
   real-pool script, then runs end-to-end suites on a ZFS-backed dev instance over a second throwaway
-  pool. `IMP_ZFS_E2E_SUITES` picks the suites.
+  pool, and writes a summary of impd's ZFS timings into the work dir, which it keeps.
+
+Both take the pool properties from [`parseZfsPool`](../../../../scripts/lib/parse-zfs-pool.ts), and
+read these settings:
+
+| Setting                       | Script    | What it does                                                                     |
+| ----------------------------- | --------- | -------------------------------------------------------------------------------- |
+| `IMP_ZFS_TEST_DIR`            | both      | The work dir for the pool files; unset or empty makes a new temp dir             |
+| `IMP_ZFS_TEST_GIB`            | real-pool | The size of the pool file                                                        |
+| `IMP_ZFS_BENCH_GIB`           | host      | The size of the second pool's file                                               |
+| `IMP_ZFS_E2E_SUITES`          | host      | The suites to run, as `--only` takes them                                        |
+| `IMP_ZFS_TEST_UNIT=0`         | host      | Skips the real-pool script, which one CI shard runs on its own                   |
+| `IMP_DEV_PORT_OFFSET`         | host      | The port offset of the `imp-zfs` dev instance                                    |
+| `IMP_ZFS_ALLOW_UIOMOVE_BUG=0` | host      | Refuses a module with the zfs_uiomove bug, which the runner's Ubuntu module has  |
+| `IMP_ZFS_MODULE_VERSION_FILE` | both      | Where the loaded module's version is read, so the tests can fake a loaded module |
 
 Both scripts have tests that run them against stub binaries; a change to either script's cleanup
-extends those tests.
+extends those tests. A test that stubs `bun` runs the entry with its own Bun, because the wrapper
+would find the stub on `PATH`. The host script's tests point `IMP_ROOT` at a tree of stub scripts,
+which the entry runs in place of the checkout's `dev.sh`, `test-e2e.sh` and `test-zfs.sh`.
 
 ## NixOS
 

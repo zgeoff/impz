@@ -1,6 +1,8 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { Document, Scalar, YAMLMap } from 'yaml';
 import * as z from 'zod';
+import { ZFS_POOL_FILE, parseZfsPool } from '../lib/parse-zfs-pool.ts';
+import { PLAIN_WORD } from '../lib/plain-word.ts';
 
 const ARGS_FILE = 'deploy/imp-host.args.json';
 const UNIT_FILE = 'deploy/imp-host.service';
@@ -9,7 +11,6 @@ const BOOTSTRAP_FILE = 'deploy/bootstrap.sh';
 const COMPOSE_FILE = 'deploy/compose.yaml';
 const ENV_EXAMPLE_FILE = 'deploy/imp-host.env.example';
 const HOST_ENV_FILE = 'deploy/lib/host-env.sh';
-const POOL_FILE = 'deploy/zfs-pool.json';
 const STORAGE_FILE = 'deploy/bootstrap/storage.sh';
 
 export const BOOTSTRAP_PARTS = [
@@ -26,9 +27,6 @@ export const BOOTSTRAP_PARTS = [
 ] as const;
 
 const UNITS_PART = 'deploy/bootstrap/units.sh';
-
-// A word of these characters needs no quoting in a systemd unit or in Nix's escapeShellArgs.
-const PLAIN_WORD = /^[\w@%+=:,./-]+$/u;
 
 // systemd splits an unbraced $NAME into words, so one variable of the env file can hold zero or
 // more words.
@@ -134,19 +132,6 @@ export function parseHostArgs(json: string): HostArgs {
   }
 
   return parsed.data;
-}
-
-// zpool create's words go unquoted into storage.sh, so each one is a plain word.
-const ZfsPoolSchema = z.object({ create: z.array(WordSchema).nonempty() });
-
-export function parseZfsPool(json: string): readonly string[] {
-  const parsed = ZfsPoolSchema.safeParse(JSON.parse(json));
-
-  if (!parsed.success) {
-    throw new Error(`${POOL_FILE}: ${z.prettifyError(parsed.error)}`);
-  }
-
-  return parsed.data.create;
 }
 
 export function renderStorage(storage: string, create: readonly string[]): string {
@@ -500,7 +485,7 @@ function main(): void {
   const sources: BootstrapSources = {
     parts: BOOTSTRAP_PARTS.map((path) => ({ path, text: readFileSync(path, 'utf8') })),
     envExample: readFileSync(ENV_EXAMPLE_FILE, 'utf8'),
-    zfsPoolJson: readFileSync(POOL_FILE, 'utf8'),
+    zfsPoolJson: readFileSync(ZFS_POOL_FILE, 'utf8'),
   };
 
   const next = render(readFileSync(ARGS_FILE, 'utf8'), current, sources);

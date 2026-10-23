@@ -8,10 +8,20 @@
     // the synced skill-gate hook in .claude/ imports it, outside every project pattern
     "@zgeoff/skill-gate"
   ],
-  // POSIX tools the tests run through Bun's shell, the iproute2 and procps
-  // tools the dev CLI runs, and the Go toolchain's gofmt, which the go:fmt-vet
-  // pre-push job runs
-  "ignoreBinaries": ["mkfifo", "pgrep", "gofmt"],
+  // POSIX tools the tests run through Bun's shell, the procps tools the e2e
+  // harness runs, the zfsutils and util-linux tools the zfs harnesses run,
+  // and the Go toolchain's gofmt, which the go:fmt-vet pre-push job runs
+  "ignoreBinaries": [
+    "mkfifo",
+    "pgrep",
+    "zpool",
+    "zfs",
+    "mount",
+    "umount",
+    "truncate",
+    "dmesg",
+    "gofmt"
+  ],
   "workspaces": {
     ".": {
       // run-related-tests.ts is a synced CLI that test:related reaches through
@@ -22,6 +32,9 @@
         "scripts/ci/run-related-tests.ts",
         // the dev CLI that scripts/dev/dev.sh runs
         "scripts/dev/dev.ts",
+        // the zfs harnesses that scripts/test-zfs.sh and scripts/zfs-host-test.sh run
+        "scripts/test-zfs.ts",
+        "scripts/zfs-host-test.ts",
         // a protoc plugin buf.gen.yaml runs
         "scripts/proto/protoc-gen-protocol-reference.ts"
       ],
