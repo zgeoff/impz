@@ -16,6 +16,7 @@ test('it takes the acceptance sizes when no variable is set', () => {
     keptPrefixes: [],
     acceptance: false,
     metricsFile: null,
+    ownsZfsHost: false,
     registryName: 'imp-e2e-registry.test',
   });
 });
@@ -35,6 +36,7 @@ test('it reads every knob from its variable', () => {
     E2E_KEPT_PREFIXES: 'e2e-scale-,e2e-rs-',
     E2E_ACCEPTANCE: '1',
     E2E_METRICS_FILE: '/run/e2e/metrics.jsonl',
+    E2E_OWNS_ZFS_HOST: '1',
     E2E_REGISTRY_NAME: 'registry.e2e.test',
   };
 
@@ -52,6 +54,7 @@ test('it reads every knob from its variable', () => {
     keptPrefixes: ['e2e-scale-', 'e2e-rs-'],
     acceptance: true,
     metricsFile: '/run/e2e/metrics.jsonl',
+    ownsZfsHost: true,
     registryName: 'registry.e2e.test',
   });
 });

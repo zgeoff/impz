@@ -132,6 +132,117 @@ test('it saves a Running node with the hostname and tags that up names', () => {
   });
 });
 
+test("it prints Tailscale's own server as the control URL before any prefs or up", () => {
+  const ctx = setupTest();
+  const tailscale = createStubTailscale(ctx.directoryPath);
+
+  const result = Bun.spawnSync([
+    join(tailscale.bin, 'tailscale'),
+    '--socket=/run/ts.sock',
+    'debug',
+    'prefs',
+  ]);
+
+  expect(JSON.parse(result.stdout.toString())).toStrictEqual({
+    ControlURL: 'https://controlplane.tailscale.com',
+  });
+});
+
+test('it prints the prefs it was given', () => {
+  const ctx = setupTest();
+  const tailscale = createStubTailscale(ctx.directoryPath);
+
+  tailscale.writePrefs({ ControlURL: 'http://headscale.test:8080' });
+
+  const result = Bun.spawnSync([
+    join(tailscale.bin, 'tailscale'),
+    '--socket=/run/ts.sock',
+    'debug',
+    'prefs',
+  ]);
+
+  expect(JSON.parse(result.stdout.toString())).toStrictEqual({
+    ControlURL: 'http://headscale.test:8080',
+  });
+});
+
+test('it saves the login server that up names as the control URL', () => {
+  const ctx = setupTest();
+  const tailscale = createStubTailscale(ctx.directoryPath);
+
+  Bun.spawnSync([
+    join(tailscale.bin, 'tailscale'),
+    '--socket=/run/ts.sock',
+    'up',
+    '--hostname=imp',
+    '--login-server=http://headscale.test:8080',
+  ]);
+
+  const result = Bun.spawnSync([
+    join(tailscale.bin, 'tailscale'),
+    '--socket=/run/ts.sock',
+    'debug',
+    'prefs',
+  ]);
+
+  expect(JSON.parse(result.stdout.toString())).toStrictEqual({
+    ControlURL: 'http://headscale.test:8080',
+  });
+});
+
+test('it refuses to move a Running node to another control server without --force-reauth', () => {
+  const ctx = setupTest();
+  const tailscale = createStubTailscale(ctx.directoryPath);
+
+  tailscale.writeNode({
+    BackendState: 'Running',
+    Self: { HostName: 'imp', Tags: [], TailscaleIPs: ['100.64.0.7'], DNSName: 'imp.ts.net.' },
+  });
+
+  const result = Bun.spawnSync([
+    join(tailscale.bin, 'tailscale'),
+    '--socket=/run/ts.sock',
+    'up',
+    '--hostname=imp',
+    '--login-server=http://headscale.test:8080',
+  ]);
+
+  expect({ exitCode: result.exitCode, stderr: result.stderr.toString() }).toStrictEqual({
+    exitCode: 1,
+    stderr: "can't change --login-server without --force-reauth\n",
+  });
+});
+
+test('it moves a Running node to another control server with --force-reauth', () => {
+  const ctx = setupTest();
+  const tailscale = createStubTailscale(ctx.directoryPath);
+
+  tailscale.writeNode({
+    BackendState: 'Running',
+    Self: { HostName: 'imp', Tags: [], TailscaleIPs: ['100.64.0.7'], DNSName: 'imp.ts.net.' },
+  });
+
+  Bun.spawnSync([
+    join(tailscale.bin, 'tailscale'),
+    '--socket=/run/ts.sock',
+    'up',
+    '--force-reauth',
+    '--hostname=imp',
+    '--login-server=http://headscale.test:8080',
+  ]);
+
+  const result = Bun.spawnSync([
+    join(tailscale.bin, 'tailscale'),
+    '--socket=/run/ts.sock',
+    'debug',
+    'prefs',
+  ]);
+
+  expect(JSON.parse(result.stdout.toString())).toStrictEqual({
+    ControlURL: 'http://headscale.test:8080',
+  });
+});
+
 test('it stops the node on down and keeps the rest of it', () => {
   const ctx = setupTest();
   const tailscale = createStubTailscale(ctx.directoryPath);

@@ -6,7 +6,7 @@ import { probeFirecrackerAlive } from './firecracker-process';
 const KIB_PER_MIB = 1024;
 
 /* @internal */
-export function parseSmapsRollup(text: string): ReadonlyMap<string, number> {
+export function parseProcFields(text: string): ReadonlyMap<string, number> {
   const fields = new Map<string, number>();
 
   for (const line of text.split('\n')) {
@@ -40,7 +40,29 @@ export async function readOwnedRamMibAsync(
   try {
     const text = await readFile(`${procRoot}/${String(pid)}/smaps_rollup`, 'utf8');
 
-    return countOwnedMib(parseSmapsRollup(text));
+    return countOwnedMib(parseProcFields(text));
+  } catch {
+    return null;
+  }
+}
+
+// The kernel keeps these counters per process, so this read walks no pages. A page's Rss is never
+// less than its Pss, so the sum bounds what smaps_rollup's anonymous and shmem Pss count.
+export async function readResidentMibAsync(
+  pid: number,
+  apiSocket: string,
+  procRoot = '/proc',
+): Promise<number | null> {
+  if (!probeFirecrackerAlive(pid, apiSocket, procRoot)) {
+    return null;
+  }
+
+  try {
+    const text = await readFile(`${procRoot}/${String(pid)}/status`, 'utf8');
+
+    const fields = parseProcFields(text);
+
+    return Math.round(((fields.get('RssAnon') ?? 0) + (fields.get('RssShmem') ?? 0)) / KIB_PER_MIB);
   } catch {
     return null;
   }
@@ -102,7 +124,7 @@ function readVmSmaps(
   }
 
   try {
-    return parseSmapsRollup(readFileSync(`${procRoot}/${String(pid)}/smaps_rollup`, 'utf8'));
+    return parseProcFields(readFileSync(`${procRoot}/${String(pid)}/smaps_rollup`, 'utf8'));
   } catch {
     return null;
   }

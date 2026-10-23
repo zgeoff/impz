@@ -54,11 +54,28 @@ const BrokerUpstreamSchema = z
     return url.origin;
   });
 
+// Some frameworks run the method one of these names in place of the
+// request's own, so on a filtered grant they could turn an allowed POST into
+// a method the filter refused.
+export const METHOD_OVERRIDE_HEADERS: readonly string[] = [
+  'x-http-method-override',
+  'x-http-method',
+  'x-method-override',
+];
+
 export const BrokerRuleSchema = z.object({
   host: BrokerHostSchema,
   header: z
     .string()
-    .regex(/^[a-z0-9-]{1,64}$/u, 'must be a lowercase header name such as authorization'),
+    .regex(/^[a-z0-9-]{1,64}$/u, 'must be a lowercase header name such as authorization')
+    .superRefine((header, context) => {
+      if (METHOD_OVERRIDE_HEADERS.includes(header)) {
+        context.addIssue({
+          code: 'custom',
+          message: `must not be ${header}, which overrides the request's method`,
+        });
+      }
+    }),
   scheme: z.enum(['bearer', 'basic', 'raw']),
   user: BasicUserSchema.optional(),
   upstream: BrokerUpstreamSchema.optional(),
