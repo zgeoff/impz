@@ -22,6 +22,10 @@ export const config = {
 
   metricsFile: process.env['E2E_METRICS_FILE'] ?? null,
 
+  // Only a ZFS host run on a machine of its own sets it: a test may then drop
+  // the machine's caches and change the run's ZFS root.
+  ownsZfsHost: process.env['E2E_OWNS_ZFS_HOST'] === '1',
+
   // The name must resolve on this machine to the registry network's gateway.
   registryName: process.env['E2E_REGISTRY_NAME'] ?? 'imp-e2e-registry.test',
 } as const;

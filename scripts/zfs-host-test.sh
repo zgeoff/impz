@@ -23,6 +23,8 @@
 #      zfs shards each pass their own, the moves suite among them, whose
 #      second impd gets a root dataset and a data dir of its own);
 #      IMP_ZFS_TEST_UNIT=0 skips part 1 (one zfs CI shard runs it on its own).
+#      E2E_OWNS_ZFS_HOST=1, on a machine the run has to itself, lets the
+#      boot-templates suite time restores with the machine's caches dropped.
 #      The summary is also written to <dir>/summary.txt.
 #      IMP_ZFS_MODULE_VERSION_FILE (default /sys/module/zfs/version) is
 #      where the loaded module's version is read, for the script's tests.
@@ -261,7 +263,7 @@ report() {
   grep -oE 'mem file [0-9]+ MiB on disk' "$work/impd.log" | sort | uniq -c || true
   echo
   echo "zfs-host-test: the suites' own metrics, CLI round trip included"
-  grep -E '^ +(newPlusExecMs|checkpointMs|restoreMs|forkCheckpointMs|forkLiveMs|idleToSleepMs|wakeOnHttpMs|backup[A-Za-z]+): ' \
+  grep -E '^ +(newPlusExecMs|checkpointMs|restoreMs|forkCheckpointMs|forkLiveMs|idleToSleepMs|wakeOnHttpMs|backup[A-Za-z]+|bootTemplate[A-Za-z0-9]+): ' \
     "$work/e2e.log" || true
   echo
   sudo zfs list -r -o name,used,refer,compressratio,recordsize "$pool"
