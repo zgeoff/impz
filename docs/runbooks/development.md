@@ -100,13 +100,13 @@ e2e/test-e2e.sh --group 2                # one group of the CI subset, as one CI
 e2e/test-e2e.sh --clean                  # wipe the dev instance's data first
 ```
 
-| Flag      | Effect                                                                                                                                  |
-| --------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `--only`  | Comma-separated suites or sets. `acceptance` (the default) is every suite; `fast` is the CI subset.                                     |
-| `--group` | One of the groups the `fast` set splits into (`FAST_GROUPS` in `e2e/lib/suites.ts`), from `1`.                                          |
-| `--clean` | Logs the instance out of the tailnet, removes the container and wipes its data dir, and the moves suites' second host and its data dir. |
-| `--reuse` | Keeps a running dev instance instead of restarting it with the run's settings.                                                          |
-| `--keep`  | Leaves the run's imps and fixture images in place for a look afterwards.                                                                |
+| Flag      | Effect                                                                                                                                                      |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--only`  | Comma-separated suites or sets. `acceptance` (the default) is every suite; `fast` is the CI subset.                                                         |
+| `--group` | One of the groups the `fast` set splits into (`FAST_GROUPS` in `e2e/lib/suites.ts`), from `1`.                                                              |
+| `--clean` | Logs the instance out of the tailnet, removes the container and wipes its data dir, and the moves suites' second host and its data dir.                     |
+| `--reuse` | Keeps a running dev instance instead of restarting it with the run's settings. A run with a Headscale suite restarts it anyway, onto the run's new tailnet. |
+| `--keep`  | Leaves the run's imps and fixture images in place for a look afterwards.                                                                                    |
 
 The `acceptance` set is the definition of done: the timing limits fail the run, where any other set
 only warns about a missed limit. The harness starts Pebble for the https suite, which needs no

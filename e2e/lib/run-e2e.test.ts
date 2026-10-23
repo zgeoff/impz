@@ -259,6 +259,57 @@ test('it removes the run’s Headscale once the suites are done', async () => {
   expect(ctx.deps.stopHeadscale).toHaveBeenCalledAfter(ctx.deps.runJourney);
 });
 
+test('it restarts a kept instance onto the run’s new Headscale in place of --reuse', async () => {
+  const ctx = setupTest();
+
+  ctx.deps.readHostImage.mockReturnValue('imp-host:dev-imp-0f3a91c2');
+
+  ctx.deps.startHeadscale.mockResolvedValue({
+    key: 'fake-headscale-key',
+    network: 'imp-e2e-a-ts',
+    member: 'imp-e2e-a-ts-member',
+  });
+
+  ctx.deps.setUpInstance.mockRejectedValue(new Error('scripts/dev/dev.sh up exited 1'));
+  ctx.deps.now.mockReturnValue(1_767_225_600_000);
+
+  await runE2E({
+    argv: ['--only', 'egress', '--reuse'],
+    env: { PATH: '/usr/bin' },
+    bunPath: '/usr/local/bin/bun',
+    resultsDir: '/var/tmp/imp-e2e-results',
+    deps: ctx.deps,
+  });
+
+  expect(ctx.deps.setUpInstance).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({ args: expect.objectContaining({ reuse: false }) }),
+  );
+
+  expect(ctx.deps.warn).toHaveBeenCalledWith(
+    'test-e2e: --reuse ignored: the instance joins this run’s new Headscale tailnet',
+  );
+});
+
+test('it keeps a running instance under --reuse for a run off the tailnet', async () => {
+  const ctx = setupTest();
+
+  ctx.deps.readHostImage.mockReturnValue('imp-host:dev-imp-0f3a91c2');
+  ctx.deps.setUpInstance.mockRejectedValue(new Error('scripts/dev/dev.sh up exited 1'));
+  ctx.deps.now.mockReturnValue(1_767_225_600_000);
+
+  await runE2E({
+    argv: ['--only', 'docker', '--reuse'],
+    env: { PATH: '/usr/bin' },
+    bunPath: '/usr/local/bin/bun',
+    resultsDir: '/var/tmp/imp-e2e-results',
+    deps: ctx.deps,
+  });
+
+  expect(ctx.deps.setUpInstance).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({ args: expect.objectContaining({ reuse: true }) }),
+  );
+});
+
 test('it removes a Headscale that did not start and sets nothing up', async () => {
   const ctx = setupTest();
 

@@ -142,8 +142,15 @@ export async function runE2E(options: Readonly<RunE2EOptions>): Promise<number> 
     return 1;
   }
 
+  // A kept instance is on the last run's Headscale, which is gone.
+  const isReused = args.reuse && tailnet.kind !== 'headscale';
+
+  if (args.reuse && !isReused) {
+    deps.warn('test-e2e: --reuse ignored: the instance joins this run’s new Headscale tailnet');
+  }
+
   const run: HarnessRun = {
-    args,
+    args: { ...args, reuse: isReused },
     config,
     env: buildHarnessEnv({ env: options.env, hostImage, config, tailnet }),
   };
