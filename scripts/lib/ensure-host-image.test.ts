@@ -65,7 +65,11 @@ test('it leaves the machine label off without a machine id, so prune never touch
     '',
   );
 
-  expect(readFileSync(docker.calls, 'utf8')).not.toInclude('imp.machine');
+  expect(readFileSync(docker.calls, 'utf8').split('\n')).toStrictEqual([
+    'docker image inspect imp-host:dev-imp-test',
+    'docker build -q --provenance=false -t imp-host:dev-imp-test --label imp.worktree=/w/imp --target dev -f /w/imp/host/Dockerfile /w/imp',
+    '',
+  ]);
 });
 
 test('it builds nothing when the host image exists', async () => {

@@ -1,13 +1,9 @@
-import { statSync } from 'node:fs';
-import { $ } from 'bun';
-import { buildDevImageTag } from '../lib/build-dev-image-tag.ts';
 import { DevError } from '../lib/dev-error.ts';
 import { readMachineID } from '../lib/read-machine-id.ts';
+import { pickImageRetention } from './pick-image-retention.ts';
+import type { ImageLabels, ImageObservation } from './pick-image-retention.ts';
 import type { Dev } from './types.ts';
 
-// Only images labelled on this machine are touched, never another project's or another machine's,
-// and only the checkout's own tag, so an override tag or a second tag keeps the image. Images of
-// live checkouts stay as build caches.
 export async function pruneDevImages(dev: Dev): Promise<void> {
   const machineID = readMachineID(dev.env);
 
@@ -17,73 +13,73 @@ export async function pruneDevImages(dev: Dev): Promise<void> {
 
   const format = '{{.Repository}}:{{.Tag}} {{.ID}}';
 
-  const listed = await $`docker image ls --filter label=imp.worktree --format ${format}`.text();
+  const listed = await dev.io.shell`docker image ls --filter label=imp.worktree --format ${format}`
+    .quiet()
+    .nothrow();
 
-  const entries = listed.split('\n').filter((entry) => entry !== '' && !entry.includes('<none>'));
+  if (listed.exitCode !== 0) {
+    throw new DevError('docker image ls failed', listed.stderr.toString());
+  }
+
+  const entries = listed.stdout
+    .toString()
+    .split('\n')
+    .filter((entry) => entry !== '' && !entry.includes('<none>'));
 
   for (const entry of entries) {
     const [ref = '', id = ''] = entry.split(' ');
 
-    const verdict = await pruneImage({ ref, id, machine: machineID.id });
+    const image = await readImageObservation(dev, ref, id);
 
-    if (verdict !== null) {
-      console.log(verdict);
+    const retention = pickImageRetention(image, machineID.id);
+
+    if (retention.kind === 'keep') {
+      dev.io.writeStdout(`dev.sh: keeping ${ref}: ${retention.reason}`);
+    }
+
+    if (retention.kind === 'remove') {
+      const removed = await dev.io.shell`docker image rm ${ref} > /dev/null`.nothrow();
+
+      const verdict =
+        removed.exitCode === 0
+          ? `dev.sh: removed ${ref} (${image.labels?.worktree ?? ''} is gone)`
+          : `dev.sh: keeping ${ref}: docker image rm failed`;
+
+      dev.io.writeStdout(verdict);
     }
   }
 
   const machineLabel = `label=imp.machine=${machineID.id}`;
 
-  await $`docker image prune -f --filter label=imp.worktree --filter ${machineLabel}`;
+  await dev.io.shell`docker image prune -f --filter label=imp.worktree --filter ${machineLabel}`;
 }
 
-interface ListedImage {
-  readonly ref: string;
-  readonly id: string;
-  readonly machine: string;
+async function readImageObservation(dev: Dev, ref: string, id: string): Promise<ImageObservation> {
+  const labels = await readImageLabels(dev, id);
+
+  const ancestor = `ancestor=${id}`;
+
+  const users = await dev.io.shell`docker ps -aq --filter ${ancestor}`.quiet().nothrow();
+
+  return {
+    ref,
+    labels,
+    isCheckoutLive: labels !== null && dev.io.files.probeDirectory(labels.worktree),
+    isInUse: users.stdout.toString().trim() !== '',
+  };
 }
 
-async function pruneImage(image: ListedImage): Promise<string | null> {
+async function readImageLabels(dev: Dev, id: string): Promise<ImageLabels | null> {
   const format =
     '{{index .Config.Labels "imp.worktree"}}{{"\t"}}{{index .Config.Labels "imp.machine"}}';
 
-  const inspect = await $`docker image inspect -f ${format} ${image.id}`.quiet().nothrow();
+  const inspect = await dev.io.shell`docker image inspect -f ${format} ${id}`.quiet().nothrow();
 
   if (inspect.exitCode !== 0) {
-    return `dev.sh: keeping ${image.ref}: docker image inspect failed`;
-  }
-
-  const [directory = '', from = ''] = inspect.stdout.toString().replace(/\n$/u, '').split('\t');
-
-  // An empty label names no checkout, so it cannot be gone.
-  if (directory === '' || probeDirectory(directory) || from !== image.machine) {
     return null;
   }
 
-  if (image.ref !== buildDevImageTag(directory)) {
-    return `dev.sh: keeping ${image.ref}: not the tag of ${directory}`;
-  }
+  const [worktree = '', machine = ''] = inspect.stdout.toString().replace(/\n$/u, '').split('\t');
 
-  const ancestor = `ancestor=${image.id}`;
-
-  const users = await $`docker ps -aq --filter ${ancestor}`.quiet().nothrow();
-
-  if (users.stdout.toString().trim() !== '') {
-    return `dev.sh: keeping ${image.ref}: a container uses it`;
-  }
-
-  const removed = await $`docker image rm ${image.ref} > /dev/null`.nothrow();
-
-  if (removed.exitCode !== 0) {
-    return `dev.sh: keeping ${image.ref}: docker image rm failed`;
-  }
-
-  return `dev.sh: removed ${image.ref} (${directory} is gone)`;
-}
-
-function probeDirectory(path: string): boolean {
-  try {
-    return statSync(path).isDirectory();
-  } catch {
-    return false;
-  }
+  return { worktree, machine };
 }

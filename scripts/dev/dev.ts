@@ -1,4 +1,3 @@
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { $ } from 'bun';
 import { match } from 'ts-pattern';
@@ -8,7 +7,7 @@ import { createHostImage } from '../lib/create-host-image.ts';
 import { DevError } from '../lib/dev-error.ts';
 import { makeOpReader } from '../lib/make-op-reader.ts';
 import type { OpReader } from '../lib/make-op-reader.ts';
-import { pickSetting } from '../lib/pick-setting.ts';
+import { parseSecondsSetting } from '../lib/parse-seconds-setting.ts';
 import { readDevCheckout } from '../lib/read-dev-checkout.ts';
 import { readHostPrivileges } from '../lib/read-host-privileges.ts';
 import { readMachineID } from '../lib/read-machine-id.ts';
@@ -17,32 +16,52 @@ import { REPO_ROOT } from '../lib/repo-root.ts';
 import { writeTailnetOAuthFile } from '../lib/write-tailnet-oauth-file.ts';
 import { buildHostRunArgs } from './build-host-run-args.ts';
 import type { TailscaleArg } from './build-host-run-args.ts';
+import { DEV_USAGE, parseDevCommand } from './parse-dev-command.ts';
+import type { DevCommand } from './parse-dev-command.ts';
 import { probeContainerRunning } from './probe-container-running.ts';
 import { pruneDevImages } from './prune-dev-images.ts';
 import { readLogTail } from './read-log-tail.ts';
 import { startDevProxy } from './start-dev-proxy.ts';
-import type { Dev } from './types.ts';
+import type { Dev, DevIO } from './types.ts';
 import { waitDevReady } from './wait-dev-ready.ts';
+import { wireDevIO } from './wire-dev-io.ts';
 
-const USAGE = 'usage: scripts/dev/dev.sh up|down|reboot|logs|restart|shell|token|prune';
 const UP_READY_S = 600;
 const RESTART_READY_S = 60;
 const STOP_POLL_MS = 200;
 
-// docs/guides/configuration.md#dev-instance lists the settings this reads.
-export async function runDev(argv: readonly string[], env: DevEnv): Promise<number> {
-  try {
-    const layout = buildDevLayout({ env, root: REPO_ROOT, cwd: process.cwd() });
-    const dev: Dev = { env, layout, checkout: readDevCheckout(env, REPO_ROOT) };
+interface RunDevOptions {
+  readonly argv: readonly string[];
+  readonly env: DevEnv;
+  readonly cwd: string;
+  readonly io: DevIO;
+}
 
-    return await dispatchDev(dev, argv[0] ?? '');
+// docs/guides/configuration.md#dev-instance lists the settings this reads.
+export async function runDev(options: RunDevOptions): Promise<number> {
+  const io = options.io;
+
+  try {
+    const env = options.env;
+    const layout = buildDevLayout({ env, root: REPO_ROOT, cwd: options.cwd });
+    const dev: Dev = { env, layout, checkout: readDevCheckout(env, REPO_ROOT), io };
+    const command = parseDevCommand(options.argv);
+
+    if (command === null) {
+      io.writeStderr(`${DEV_USAGE}\n`);
+
+      return 2;
+    }
+
+    return await dispatchDev(dev, command);
   } catch (error) {
     if (error instanceof DevError) {
-      process.stderr.write(`dev.sh: ${error.message}\n${error.detail}`);
+      io.writeStderr(`dev.sh: ${error.message}\n${error.detail}`);
 
       return 1;
     }
 
+    // Each command that throws this streams its own output, so its stderr is already printed.
     if (error instanceof $.ShellError) {
       return error.exitCode;
     }
@@ -51,7 +70,7 @@ export async function runDev(argv: readonly string[], env: DevEnv): Promise<numb
   }
 }
 
-function dispatchDev(dev: Dev, command: string): Promise<number> {
+function dispatchDev(dev: Dev, command: DevCommand): Promise<number> {
   return match(command)
     .with('up', async () => {
       await upDev(dev);
@@ -84,34 +103,32 @@ function dispatchDev(dev: Dev, command: string): Promise<number> {
 
       return 0;
     })
-    .otherwise(() => {
-      process.stderr.write(`${USAGE}\n`);
-
-      return Promise.resolve(2);
-    });
+    .exhaustive();
 }
 
 async function upDev(dev: Dev): Promise<void> {
   const drives = await prepareDrives(dev);
-  const isRunning = await probeContainerRunning(dev.layout.name);
+  const isRunning = await probeContainerRunning(dev.io, dev.layout.name);
 
   const proxyMode = isRunning ? 'keep' : 'replace';
 
   await startDevProxy(dev, proxyMode);
 
   if (isRunning) {
-    console.log(`dev.sh: ${dev.layout.name} already running`);
+    dev.io.writeStdout(`dev.sh: ${dev.layout.name} already running`);
   } else {
     await startHost(dev, drives);
 
-    console.log(`dev.sh: started ${dev.layout.name}`);
+    dev.io.writeStdout(`dev.sh: started ${dev.layout.name}`);
   }
 
   await waitDevReady(dev, UP_READY_S);
 
-  console.log(`dev.sh: impd ready on ${dev.layout.apiURL} (token: scripts/dev/dev.sh token)`);
+  dev.io.writeStdout(
+    `dev.sh: impd ready on ${dev.layout.apiURL} (token: scripts/dev/dev.sh token)`,
+  );
 
-  console.log(
+  dev.io.writeStdout(
     `dev.sh: dashboard on ${dev.layout.apiURL}/ui/ (bun run build:dashboard to build it)`,
   );
 }
@@ -122,11 +139,11 @@ interface Drives {
 }
 
 async function prepareDrives(dev: Dev): Promise<Drives> {
-  const kernel = resolveKernel(dev.env, dev.checkout.root);
+  const kernel = resolveKernel(dev);
   const systemSetting = dev.env['IMP_SYSTEM_DRIVE'] ?? '';
   const systemDrive = systemSetting || join(dev.checkout.buildDir, 'imp-system.squashfs');
 
-  if (!existsSync(kernel)) {
+  if (!dev.io.files.probeFile(kernel)) {
     throw new DevError(`no kernel at ${kernel}`);
   }
 
@@ -136,25 +153,26 @@ async function prepareDrives(dev: Dev): Promise<Drives> {
   if (systemSetting === '') {
     const script = join(dev.checkout.root, 'scripts', 'release', 'build-system-drive.sh');
 
-    await $`${script} > /dev/null`;
+    await dev.io.shell`${script} > /dev/null`;
   }
 
-  if (!existsSync(systemDrive)) {
+  if (!dev.io.files.probeFile(systemDrive)) {
     throw new DevError(`no system drive at ${systemDrive}`);
   }
 
   return { kernel, systemDrive };
 }
 
-function resolveKernel(env: DevEnv, root: string): string {
+function resolveKernel(dev: Dev): string {
+  const root = dev.checkout.root;
   const built = join(root, 'kernel', 'out', 'vmlinux');
-  const setting = env['IMP_KERNEL'] ?? '';
+  const setting = dev.env['IMP_KERNEL'] ?? '';
 
   if (setting !== '') {
     return setting;
   }
 
-  return existsSync(built) ? built : join(root, '.cache', 'vmlinux-ci');
+  return dev.io.files.probeFile(built) ? built : join(root, '.cache', 'vmlinux-ci');
 }
 
 // CI builds and loads the image first, with its own cache, and sets IMP_HOST_IMAGE_READY=1.
@@ -165,7 +183,9 @@ async function prepareHostImage(dev: Dev): Promise<void> {
     return;
   }
 
-  const inspect = await $`docker image inspect ${dev.checkout.hostImage}`.quiet().nothrow();
+  const inspect = await dev.io.shell`docker image inspect ${dev.checkout.hostImage}`
+    .quiet()
+    .nothrow();
 
   if (inspect.exitCode !== 0) {
     throw new DevError(`IMP_HOST_IMAGE_READY=1 but there is no ${dev.checkout.hostImage} image`);
@@ -175,9 +195,9 @@ async function prepareHostImage(dev: Dev): Promise<void> {
 async function startHost(dev: Dev, drives: Drives): Promise<void> {
   const readOp = makeOpReader(dev.env);
 
-  await $`docker rm -f ${dev.layout.name}`.quiet().nothrow();
+  await dev.io.shell`docker rm -f ${dev.layout.name}`.quiet().nothrow();
 
-  mkdirSync(dev.layout.dataDir, { recursive: true });
+  dev.io.files.createDirectory(dev.layout.dataDir);
 
   const tailscale = await readHostTailscale(dev, readOp);
   const tailnetOAuthFile = await writeHostOAuthFile(dev, readOp);
@@ -188,14 +208,14 @@ async function startHost(dev: Dev, drives: Drives): Promise<void> {
     acmeSetting === '' ? null : resolveContainerPath(dev.checkout.root, acmeSetting);
 
   const uplinkSetting = dev.env['IMP_UPLINK_MTU'] ?? '';
-  const uplinkMTU = uplinkSetting === '' ? await readUplinkMTU() : uplinkSetting;
+  const uplinkMTU = uplinkSetting === '' ? await readUplinkMTU(dev.io) : uplinkSetting;
 
   const args = buildHostRunArgs({
     layout: dev.layout,
     checkout: dev.checkout,
     env: tailscale.env,
     privileges: readHostPrivileges(dev.checkout.root),
-    hasEnvFile: existsSync(join(dev.checkout.root, '.env')),
+    hasEnvFile: dev.io.files.probeFile(join(dev.checkout.root, '.env')),
     tailscale: tailscale.arg,
     tailnetOAuthFile,
     acmeCAFile,
@@ -205,7 +225,7 @@ async function startHost(dev: Dev, drives: Drives): Promise<void> {
   });
 
   // docker reads .env and the key from its own environment, so no secret is in its argv.
-  await $`docker ${args} > /dev/null`.env(toProcessEnv(tailscale.env));
+  await dev.io.shell`docker ${args} > /dev/null`.env(toProcessEnv(tailscale.env));
 }
 
 interface HostTailscale {
@@ -222,7 +242,9 @@ async function readHostTailscale(dev: Dev, readOp: OpReader | null): Promise<Hos
     env: dev.env,
     root: dev.checkout.root,
     readOp,
-    warn: writeWarning,
+    warn: (line) => {
+      dev.io.writeStderr(`${line}\n`);
+    },
   });
 
   if (authkey === null) {
@@ -234,10 +256,6 @@ async function readHostTailscale(dev: Dev, readOp: OpReader | null): Promise<Hos
   return { arg: 'key', env: { ...dev.env, TAILSCALE_AUTHKEY: authkey.key, ...tags } };
 }
 
-function writeWarning(line: string): void {
-  process.stderr.write(`${line}\n`);
-}
-
 async function writeHostOAuthFile(dev: Dev, readOp: OpReader | null): Promise<string | null> {
   if (dev.env['IMP_TAILNET_NAMES'] !== '1') {
     return null;
@@ -247,7 +265,9 @@ async function writeHostOAuthFile(dev: Dev, readOp: OpReader | null): Promise<st
     file: join(dev.layout.dataDir, 'tailnet-oauth.json'),
     env: dev.env,
     readOp,
-    warn: writeWarning,
+    warn: (line) => {
+      dev.io.writeStderr(`${line}\n`);
+    },
   });
 
   if (!isWritten) {
@@ -268,16 +288,12 @@ function resolveContainerPath(root: string, path: string): string {
 }
 
 // The container's own eth0 claims 1500 whatever the real path allows.
-async function readUplinkMTU(): Promise<string> {
-  const route = await $`ip route show default`.quiet().nothrow();
+async function readUplinkMTU(io: DevIO): Promise<string> {
+  const route = await io.shell`ip route show default`.quiet().nothrow();
 
   const device = route.stdout.toString().split(/\s+/u)[4] ?? '';
 
-  try {
-    return readFileSync(`/sys/class/net/${device}/mtu`, 'utf8').trim();
-  } catch {
-    return '1500';
-  }
+  return io.files.readText(`/sys/class/net/${device}/mtu`)?.trim() ?? '1500';
 }
 
 function toProcessEnv(env: DevEnv): Record<string, string> {
@@ -288,22 +304,22 @@ function toProcessEnv(env: DevEnv): Record<string, string> {
 
 // SIGTERM gives impd time to sleep every imp, so memory survives.
 async function downDev(dev: Dev): Promise<void> {
-  const isRunning = await probeContainerRunning(dev.layout.name);
+  const isRunning = await probeContainerRunning(dev.io, dev.layout.name);
 
   if (isRunning) {
-    await $`docker stop -t 120 ${dev.layout.name} > /dev/null`;
+    await dev.io.shell`docker stop -t 120 ${dev.layout.name} > /dev/null`;
 
-    const tail = await readLogTail(dev.layout.name, 5);
+    const tail = await readLogTail(dev.io, dev.layout.name, 5);
 
     for (const line of tail.split('\n').filter((entry) => entry.includes('every imp asleep'))) {
-      console.log(line);
+      dev.io.writeStdout(line);
     }
   }
 
   const volumes = [`${dev.layout.name}-docker`, `${dev.layout.name}-docker-proxy`];
 
-  await $`docker rm -f ${dev.layout.name} ${dev.layout.proxy}`.quiet().nothrow();
-  await $`docker volume rm ${volumes}`.quiet().nothrow();
+  await dev.io.shell`docker rm -f ${dev.layout.name} ${dev.layout.proxy}`.quiet().nothrow();
+  await dev.io.shell`docker volume rm ${volumes}`.quiet().nothrow();
 }
 
 function runAttached(argv: readonly string[]): Promise<number> {
@@ -319,7 +335,7 @@ function runAttached(argv: readonly string[]): Promise<number> {
 // SIGHUP: impd exits without sleeping the VMs, and the entrypoint restarts it. The wait for the old
 // pid to go makes /health answer from the new impd.
 async function restartDev(dev: Dev): Promise<void> {
-  const isRunning = await probeContainerRunning(dev.layout.name);
+  const isRunning = await probeContainerRunning(dev.io, dev.layout.name);
 
   if (!isRunning) {
     throw new DevError(`${dev.layout.name} is not running; use scripts/dev/dev.sh up`);
@@ -329,7 +345,9 @@ async function restartDev(dev: Dev): Promise<void> {
 
   const pattern = 'bun .*/daemon/src/main.ts';
 
-  const found = await $`docker exec ${dev.layout.name} pgrep -f ${pattern}`.quiet().nothrow();
+  const found = await dev.io.shell`docker exec ${dev.layout.name} pgrep -f ${pattern}`
+    .quiet()
+    .nothrow();
 
   const pids = found.stdout
     .toString()
@@ -337,7 +355,7 @@ async function restartDev(dev: Dev): Promise<void> {
     .filter((pid) => pid !== '');
 
   if (pids.length > 0) {
-    await $`docker exec ${dev.layout.name} kill -HUP ${pids}`;
+    await dev.io.shell`docker exec ${dev.layout.name} kill -HUP ${pids}`;
     await waitForExit(dev, pids);
   }
 
@@ -345,26 +363,33 @@ async function restartDev(dev: Dev): Promise<void> {
 }
 
 async function waitForExit(dev: Dev, pids: readonly string[]): Promise<void> {
-  const stopSeconds = Number(pickSetting(dev.env, 'IMP_DEV_STOP_TIMEOUT_S') ?? '30');
-  const deadline = Date.now() + stopSeconds * 1000;
+  const stopSeconds = parseSecondsSetting(dev.env, 'IMP_DEV_STOP_TIMEOUT_S', 30);
+  const deadline = dev.io.now() + stopSeconds * 1000;
 
   for (;;) {
-    const alive = await $`docker exec ${dev.layout.name} kill -0 ${pids}`.quiet().nothrow();
+    const alive = await dev.io.shell`docker exec ${dev.layout.name} kill -0 ${pids}`
+      .quiet()
+      .nothrow();
 
     if (alive.exitCode !== 0) {
       return;
     }
 
-    if (Date.now() >= deadline) {
+    if (dev.io.now() >= deadline) {
       throw new DevError(`impd ${pids.join(' ')} did not exit`);
     }
 
-    await Bun.sleep(STOP_POLL_MS);
+    await dev.io.sleep(STOP_POLL_MS);
   }
 }
 
 if (import.meta.main) {
-  const exitCode = await runDev(process.argv.slice(2), process.env);
+  const exitCode = await runDev({
+    argv: process.argv.slice(2),
+    env: process.env,
+    cwd: process.cwd(),
+    io: wireDevIO(),
+  });
 
   process.exit(exitCode);
 }

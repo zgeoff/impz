@@ -1,69 +1,69 @@
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { $ } from 'bun';
 import type { DevEnv } from '../lib/build-dev-layout.ts';
 import { DevError } from '../lib/dev-error.ts';
 import { pickSetting } from '../lib/pick-setting.ts';
 import { readProxyPrivileges } from '../lib/read-proxy-privileges.ts';
+import { pickProxyAction } from './pick-proxy-action.ts';
+import type { ProxyMode } from './pick-proxy-action.ts';
 import { probeContainerRunning } from './probe-container-running.ts';
 import { readLogTail } from './read-log-tail.ts';
-import type { Dev } from './types.ts';
+import type { Dev, DevFiles } from './types.ts';
 
-// The proxy compiles from the repo with the image's own bun, as the release image compiles it. A
-// running proxy whose stamp changed stays with 'keep', because a replacement would cut off a build
-// or an export in flight; restart then replaces it.
-export async function startDevProxy(dev: Dev, mode: 'keep' | 'replace'): Promise<void> {
+// The proxy compiles from the repo with the image's own bun, as the release image compiles it.
+export async function startDevProxy(dev: Dev, mode: ProxyMode): Promise<void> {
   const fresh = join(dev.layout.dataDir, 'imp-docker-proxy.new');
   const stampFile = join(dev.layout.dataDir, 'imp-docker-proxy.stamp');
 
-  mkdirSync(dev.layout.dataDir, { recursive: true });
+  dev.io.files.createDirectory(dev.layout.dataDir);
 
   await compileProxy(dev);
 
   const stamp = await readProxyStamp(dev, fresh);
-  const isRunning = await probeContainerRunning(dev.layout.proxy);
 
-  if (isRunning && stamp === readStampFile(stampFile)) {
-    rmSync(fresh, { force: true });
+  const action = pickProxyAction({
+    isRunning: await probeContainerRunning(dev.io, dev.layout.proxy),
+    stamp,
+    storedStamp: dev.io.files.readText(stampFile)?.trim() ?? '',
+    mode,
+  });
 
-    return;
+  if (action !== 'replace') {
+    dev.io.files.remove(fresh);
   }
 
-  if (isRunning && mode === 'keep') {
-    rmSync(fresh, { force: true });
-
-    process.stderr.write(
+  if (action === 'defer') {
+    dev.io.writeStderr(
       `dev.sh: ${dev.layout.proxy} changed; scripts/dev/dev.sh restart replaces it\n`,
     );
-
-    return;
   }
 
-  await replaceProxy(dev, fresh);
+  if (action === 'replace') {
+    await replaceProxy(dev, fresh);
 
-  writeFileSync(stampFile, `${stamp}\n`);
+    dev.io.files.writeText(stampFile, `${stamp}\n`);
+  }
 }
 
 async function compileProxy(dev: Dev): Promise<void> {
-  const user = `${String(process.getuid?.() ?? 0)}:${String(process.getgid?.() ?? 0)}`;
   const source = `${dev.checkout.root}:/src:ro`;
   const out = `${dev.layout.dataDir}:/out`;
 
-  await $`docker run --rm --network none --user ${user} -e HOME=/tmp -v ${source} -v ${out} -w /src ${dev.checkout.hostImage} bun build --compile packages/daemon/src/imps/docker-proxy/main.ts --outfile /out/imp-docker-proxy.new > /dev/null`;
+  await dev.io
+    .shell`docker run --rm --network none --user ${dev.io.user} -e HOME=/tmp -v ${source} -v ${out} -w /src ${dev.checkout.hostImage} bun build --compile packages/daemon/src/imps/docker-proxy/main.ts --outfile /out/imp-docker-proxy.new > /dev/null`;
 }
 
 // The stamp covers what a running proxy depends on: its binary, privileges, env and image.
 async function readProxyStamp(dev: Dev, fresh: string): Promise<string> {
-  const binaryHash = createHash('sha256').update(readFileSync(fresh)).digest('hex');
+  const binaryHash = createHash('sha256').update(dev.io.files.readBytes(fresh)).digest('hex');
 
-  const image = await $`docker image inspect -f ${'{{.Id}}'} ${dev.checkout.hostImage}`
+  const image = await dev.io.shell`docker image inspect -f ${'{{.Id}}'} ${dev.checkout.hostImage}`
     .quiet()
     .nothrow();
 
   const parts = [
     ...readProxyPrivileges(dev.checkout.root),
-    ...readProxyContext(dev.env, dev.checkout.root),
+    ...readProxyContext(dev.io.files, dev.env, dev.checkout.root),
     dev.checkout.hostImage,
     image.stdout.toString(),
   ];
@@ -75,9 +75,8 @@ const CONTEXT_VARIABLES = ['IMP_BUILD_CONTEXT_MAX_MIB', 'IMP_BUILD_ISOLATION', '
 
 // Under imp isolation the proxy pulls only IMP_BUILD_IMAGE. impd takes each setting from the env,
 // else .env, so the proxy does too; only these keys come from .env, never its secrets.
-function readProxyContext(env: DevEnv, root: string): string[] {
-  const envFile = join(root, '.env');
-  const lines = existsSync(envFile) ? readFileSync(envFile, 'utf8').split('\n') : [];
+function readProxyContext(files: DevFiles, env: DevEnv, root: string): string[] {
+  const lines = files.readText(join(root, '.env'))?.split('\n') ?? [];
 
   return CONTEXT_VARIABLES.flatMap((variable) => {
     const fromFile = lines.findLast((line) => line.startsWith(`${variable}=`));
@@ -89,46 +88,49 @@ function readProxyContext(env: DevEnv, root: string): string[] {
   });
 }
 
-function readStampFile(file: string): string {
-  try {
-    return readFileSync(file, 'utf8').trim();
-  } catch {
-    return '';
-  }
-}
-
 // The socket's directory and the token are volumes of their own; the token outlives a replaced
 // proxy, so the containers it made stay its own.
 async function replaceProxy(dev: Dev, fresh: string): Promise<void> {
   const binary = join(dev.layout.dataDir, 'imp-docker-proxy');
   const proxy = dev.layout.proxy;
 
-  renameSync(fresh, binary);
+  dev.io.files.rename(fresh, binary);
 
-  await $`docker rm -f ${proxy}`.quiet().nothrow();
+  await dev.io.shell`docker rm -f ${proxy}`.quiet().nothrow();
 
-  const groupOutput = await $`stat -c %g /var/run/docker.sock`.text();
+  const group = await readSocketGroup(dev);
 
-  const group = groupOutput.trim();
   const privileges = readProxyPrivileges(dev.checkout.root);
-  const context = readProxyContext(dev.env, dev.checkout.root);
+  const context = readProxyContext(dev.io.files, dev.env, dev.checkout.root);
   const image = `IMP_HOST_IMAGE=${dev.checkout.hostImage}`;
   const socketVolume = `${dev.layout.name}-docker:/run/imp-docker`;
   const tokenVolume = `${dev.layout.name}-docker-proxy:/var/lib/imp-docker-proxy`;
   const binaryMount = `${binary}:/usr/local/bin/imp-docker-proxy:ro`;
 
-  await $`docker run -d --name ${proxy} ${privileges} --group-add ${group} -e ${image} ${context} -v /var/run/docker.sock:/var/run/docker.sock -v ${socketVolume} -v ${tokenVolume} -v ${binaryMount} ${dev.checkout.hostImage} /usr/local/bin/imp-docker-proxy > /dev/null`;
-  await waitForSocket(proxy);
+  await dev.io
+    .shell`docker run -d --name ${proxy} ${privileges} --group-add ${group} -e ${image} ${context} -v /var/run/docker.sock:/var/run/docker.sock -v ${socketVolume} -v ${tokenVolume} -v ${binaryMount} ${dev.checkout.hostImage} /usr/local/bin/imp-docker-proxy > /dev/null`;
+
+  await waitForSocket(dev, proxy);
+}
+
+async function readSocketGroup(dev: Dev): Promise<string> {
+  const stat = await dev.io.shell`stat -c %g /var/run/docker.sock`.quiet().nothrow();
+
+  if (stat.exitCode !== 0) {
+    throw new DevError('cannot read the group of /var/run/docker.sock', stat.stderr.toString());
+  }
+
+  return stat.stdout.toString().trim();
 }
 
 const SOCKET_TIMEOUT_MS = 30_000;
 const SOCKET_POLL_MS = 200;
 
-async function waitForSocket(proxy: string): Promise<void> {
-  const deadline = Date.now() + SOCKET_TIMEOUT_MS;
+async function waitForSocket(dev: Dev, proxy: string): Promise<void> {
+  const deadline = dev.io.now() + SOCKET_TIMEOUT_MS;
 
   for (;;) {
-    const probe = await $`docker exec ${proxy} test -S /run/imp-docker/docker.sock`
+    const probe = await dev.io.shell`docker exec ${proxy} test -S /run/imp-docker/docker.sock`
       .quiet()
       .nothrow();
 
@@ -136,14 +138,14 @@ async function waitForSocket(proxy: string): Promise<void> {
       return;
     }
 
-    const isRunning = await probeContainerRunning(proxy);
+    const isRunning = await probeContainerRunning(dev.io, proxy);
 
-    if (!isRunning || Date.now() >= deadline) {
-      const tail = await readLogTail(proxy, 20);
+    if (!isRunning || dev.io.now() >= deadline) {
+      const tail = await readLogTail(dev.io, proxy, 20);
 
       throw new DevError(`${proxy} has no socket; last log lines:`, tail);
     }
 
-    await Bun.sleep(SOCKET_POLL_MS);
+    await dev.io.sleep(SOCKET_POLL_MS);
   }
 }
