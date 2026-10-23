@@ -31,6 +31,7 @@ import { createVmRunner } from './vm/vmm/vm-runner';
 import {
   readOwnedRamMib,
   readOwnedRamMibAsync,
+  readResidentMibAsync,
   readRssMib,
   readThreadIds,
   readUnsharedRamMib,
@@ -91,6 +92,7 @@ export function createImpdImps(
 
   const {
     readRamMibAsync,
+    readResidentMib,
     readKsmProfitMib: readProfitMib,
     ...host
   } = resolveImpBoundaries(deps.imps ?? {});
@@ -214,6 +216,7 @@ export function createImpdImps(
       );
     },
     readRamMib: readRamMibAsync,
+    readResidentMib,
     readHeadroomMib,
     isBusy,
     trySleepImp: imps.trySleepImp,
@@ -262,6 +265,12 @@ function resolveImpBoundaries(boundaries: Readonly<ImpBoundaries>) {
     readRamMibAsync:
       readRam === undefined
         ? readOwnedRamMibAsync
+        : (pid: number, apiSocket: string) => Promise.resolve(readRam(pid, apiSocket)),
+
+    // a stand-in for the RAM reading has no KSM, so a VM owns every page it holds resident
+    readResidentMib:
+      readRam === undefined
+        ? readResidentMibAsync
         : (pid: number, apiSocket: string) => Promise.resolve(readRam(pid, apiSocket)),
     readUnsharedRamMib: boundaries.readUnsharedRamMib ?? readUnsharedRamMib,
     checkGuestMerge: boundaries.checkGuestMerge ?? checkGuestMemoryMergeable,

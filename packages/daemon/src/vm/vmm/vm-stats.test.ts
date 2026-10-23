@@ -4,10 +4,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   countUnsharedMib,
-  parseSmapsRollup,
+  parseProcFields,
   readCpuTicks,
   readOwnedRamMib,
   readOwnedRamMibAsync,
+  readResidentMibAsync,
   readRssMib,
   readUnsharedRamMib,
   readVmMemory,
@@ -27,8 +28,8 @@ function setupTest() {
   return { procRoot };
 }
 
-test('#parseSmapsRollup reads the kB fields of smaps_rollup', () => {
-  const fields = parseSmapsRollup(
+test('#parseProcFields reads the kB fields of smaps_rollup', () => {
+  const fields = parseProcFields(
     [
       '7f0000000000-7fffffffffff ---p 00000000 00:00 0                          [rollup]',
       'Rss:              349184 kB',
@@ -87,6 +88,36 @@ test('#readOwnedRamMibAsync counts what readOwnedRamMib counts', async () => {
   const ramMib = await readOwnedRamMibAsync(42, '/run/api.sock', ctx.procRoot);
 
   expect(ramMib).toBe(250);
+});
+
+test('#readResidentMibAsync counts the resident anonymous and shmem pages of a live firecracker', async () => {
+  const ctx = setupTest();
+
+  mkdirSync(join(ctx.procRoot, '42'));
+  writeFileSync(join(ctx.procRoot, '42', 'stat'), '42 (firecracker) S 1 42 42 0 -1');
+  writeFileSync(join(ctx.procRoot, '42', 'cmdline'), 'firecracker\0--api-sock\0/run/api.sock\0');
+
+  writeFileSync(
+    join(ctx.procRoot, '42', 'status'),
+    'Name:\tfirecracker\nVmRSS:\t  471040 kB\nRssAnon:\t  307200 kB\nRssFile:\t  102400 kB\nRssShmem:\t   61440 kB\nThreads:\t5\n',
+  );
+
+  const residentMib = await readResidentMibAsync(42, '/run/api.sock', ctx.procRoot);
+
+  expect(residentMib).toBe(360);
+});
+
+test('#readResidentMibAsync reads nothing for a pid that serves another socket', async () => {
+  const ctx = setupTest();
+
+  mkdirSync(join(ctx.procRoot, '42'));
+  writeFileSync(join(ctx.procRoot, '42', 'stat'), '42 (firecracker) S 1 42 42 0 -1');
+  writeFileSync(join(ctx.procRoot, '42', 'cmdline'), 'firecracker\0--api-sock\0/run/other.sock\0');
+  writeFileSync(join(ctx.procRoot, '42', 'status'), 'RssAnon:\t  307200 kB\n');
+
+  const residentMib = await readResidentMibAsync(42, '/run/api.sock', ctx.procRoot);
+
+  expect(residentMib).toBeNull();
 });
 
 test('#readOwnedRamMibAsync reads nothing for a pid that serves another socket', async () => {
