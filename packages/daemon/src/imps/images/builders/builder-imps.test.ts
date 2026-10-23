@@ -10,6 +10,7 @@ import {
   buildStubImageBuilder,
 } from '../../../../testing/imps/build-stub-image-builder';
 import { createBuilderImage } from '../../../../testing/imps/create-builder-image';
+import { makeStubEngineAnswer } from '../../../../testing/imps/make-stub-engine-answer';
 import { buildStubClock } from '../../../../testing/platform/build-stub-clock';
 import { captureImpdLogs } from '../../../../testing/platform/capture-impd-logs';
 import { startTestImpd } from '../../../../testing/start-test-impd';
@@ -154,18 +155,7 @@ test('it adds the builder image before the builder starts', async () => {
 test('it asks the builder engine again, a poll later, until it answers, then runs the build', async () => {
   const ctx = await setupTest();
 
-  const infos = { count: 0 };
-
-  const guest = buildStubGuest((run) => {
-    if (run.argv[1] !== 'info') {
-      return { stdout: 'ok' };
-    }
-
-    infos.count += 1;
-
-    return infos.count === 1 ? { code: 1, stderr: 'Cannot connect to the Docker daemon' } : {};
-  });
-
+  const guest = buildStubGuest(makeStubEngineAnswer({ refusals: 1, answer: { stdout: 'ok' } }));
   const clock = buildStubClock();
 
   const builders = createBuilders({
@@ -201,18 +191,7 @@ test('it logs the time its builder took to answer, on its clock', async () => {
   const ctx = await setupTest();
 
   const logs = captureImpdLogs();
-  const infos = { count: 0 };
-
-  const guest = buildStubGuest((run) => {
-    if (run.argv[1] !== 'info') {
-      return { stdout: 'ok' };
-    }
-
-    infos.count += 1;
-
-    return infos.count === 1 ? { code: 1, stderr: 'Cannot connect to the Docker daemon' } : {};
-  });
-
+  const guest = buildStubGuest(makeStubEngineAnswer({ refusals: 1, answer: { stdout: 'ok' } }));
   const clock = buildStubClock();
 
   const builders = createBuilders({
