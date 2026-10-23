@@ -1,3 +1,5 @@
+import { lookup } from 'node:dns/promises';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Config } from './config';
 import {
@@ -70,7 +72,16 @@ export async function createImpdFirewall(
 
   plan.broker = broker;
 
-  const testRegistry = await resolveTestRegistry(config.build.testRegistry, log);
+  const testRegistry = await resolveTestRegistry(config.build.testRegistry, {
+    readAddress: async (name) => {
+      const resolved = await lookup(name, { family: 4 });
+
+      return resolved.address;
+    },
+    readCA: (path) => readFile(path, 'utf8'),
+    log,
+    ...deps.testRegistry,
+  });
 
   const egress = createEgressService({
     config,

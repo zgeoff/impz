@@ -21,6 +21,7 @@ interface SetupOptions {
   readonly reach?: ImpdDeps['reach'];
   readonly broker?: Readonly<Partial<NonNullable<ImpdDeps['broker']>>>;
   readonly resolveIpv6?: ImpdDeps['resolveIpv6'];
+  readonly testRegistry?: ImpdDeps['testRegistry'];
 }
 
 async function setupTest(options: Readonly<SetupOptions> = {}) {
@@ -42,6 +43,7 @@ async function setupTest(options: Readonly<SetupOptions> = {}) {
     ...(ipv6 !== undefined && { ipv6 }),
     boundaries: {
       ...(options.broker !== undefined && { broker: options.broker }),
+      ...(options.testRegistry !== undefined && { testRegistry: options.testRegistry }),
       taps: {
         setupTap: (address) => {
           taps.push({ tap: address.tap, table: nft.readTable() });
@@ -652,10 +654,12 @@ test('it lets a public imp out only by the uplinks, and refuses it the private r
 
 test('it lets a builder, and no other public imp, reach the test registry on an e2e host', async () => {
   updateEnv('IMP_E2E', '1');
-  updateEnv('IMP_BUILD_TEST_REGISTRY', 'localhost:5443');
+  updateEnv('IMP_BUILD_TEST_REGISTRY', 'registry.example.test:5443');
   updateEnv('IMP_BUILD_TEST_REGISTRY_CA', '/data/registry-ca.pem');
 
-  const ctx = await setupTest();
+  const ctx = await setupTest({
+    testRegistry: { readAddress: () => Promise.resolve('10.200.0.1') },
+  });
 
   await ctx.createTestImage('base');
 
@@ -677,7 +681,7 @@ test('it lets a builder, and no other public imp, reach the test registry on an 
       '    ct state invalid drop',
       '    meta nfproto ipv4 oifname != @uplinks4 goto deny',
       '    meta nfproto ipv6 oifname != @uplinks6 goto deny',
-      '    ip daddr 127.0.0.1 tcp dport 5443 accept',
+      '    ip daddr 10.200.0.1 tcp dport 5443 accept',
       '    ip daddr @public4 goto deny',
     ].join('\n'),
   );
@@ -695,8 +699,22 @@ test('it lets a builder, and no other public imp, reach the test registry on an 
   );
 
   expect(ctx.logs).toContain(
-    'impd: warning: IMP_E2E=1 and IMP_BUILD_TEST_REGISTRY open 127.0.0.1:5443 to builders, for localhost',
+    'impd: warning: IMP_E2E=1 and IMP_BUILD_TEST_REGISTRY open 10.200.0.1:5443 to builders, for registry.example.test',
   );
+});
+
+test('it fails to start when the test registry name does not resolve', () => {
+  updateEnv('IMP_E2E', '1');
+  updateEnv('IMP_BUILD_TEST_REGISTRY', 'registry.example.test:5443');
+  updateEnv('IMP_BUILD_TEST_REGISTRY_CA', '/data/registry-ca.pem');
+
+  const starting = setupTest({
+    testRegistry: {
+      readAddress: () => Promise.reject(new Error('getaddrinfo ENOTFOUND registry.example.test')),
+    },
+  });
+
+  expect(starting).rejects.toThrowWithMessage(Error, 'getaddrinfo ENOTFOUND registry.example.test');
 });
 
 test('it ends every plain tunnel of an imp that becomes public', async () => {
