@@ -59,7 +59,7 @@ export { ENFORCE_INTERVAL_MS, ENFORCE_TRIGGER } from '../src/vm/governor/ram-gov
 export { VmIdentitySchema, readVmIdentity, writeVmIdentity } from '../src/vm/sleep/vm-identity';
 export { buildTemplateKey } from '../src/vm/templates/boot-templates';
 export { createGenerationLog } from '../src/imps/session-logs/generation-log';
-export { DOCKERFILE_FRONTEND } from '../src/imps/docker-proxy/dockerfile-frontend';
+export { DOCKERFILE_FRONTEND } from '../src/imps/docker-contract/dockerfile-frontend';
 export { BUILD_KEEPALIVE_MS } from '../src/imps/images/build-event-stream';
 export { checkDockerfile, renderPinnedDockerfile } from '../src/imps/images/dockerfile-check';
 export { parseDockerfile, splitNameWords } from '../src/imps/images/dockerfile-parse';

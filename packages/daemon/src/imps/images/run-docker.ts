@@ -2,7 +2,7 @@ import { ImpdError } from '../../platform/errors/impd-error';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { buildExitError, runCommand } from '../../platform/process/run-command';
 import type { CommandResult } from '../../platform/process/run-command';
-import { readProxyRefusal } from '../docker-proxy/refusal';
+import { readProxyRefusal } from '../docker-contract/refusal';
 
 interface DockerOptions {
   readonly env?: Readonly<Record<string, string>> | undefined;

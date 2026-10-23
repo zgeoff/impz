@@ -1,4 +1,4 @@
-import { DOCKERFILE_FRONTEND } from '../../src/imps/docker-proxy/dockerfile-frontend';
+import { DOCKERFILE_FRONTEND } from '../../src/imps/docker-contract/dockerfile-frontend';
 import type { Builders } from '../../src/imps/images/builder-imps';
 import { createGuestExec } from '../../src/imps/images/guest-exec';
 import { PIN_INSPECT_FORMAT } from '../../src/imps/images/image-pin';

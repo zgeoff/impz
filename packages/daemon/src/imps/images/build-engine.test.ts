@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createStubDockerCli } from '../../../testing/imps/create-stub-docker-cli';
 import { runCommand } from '../../platform/process/run-command';
-import { DOCKERFILE_FRONTEND } from '../docker-proxy/dockerfile-frontend';
+import { DOCKERFILE_FRONTEND } from '../docker-contract/dockerfile-frontend';
 import { createBuildEngine } from './build-engine';
 
 async function setupTest() {

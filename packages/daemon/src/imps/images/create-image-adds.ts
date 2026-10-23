@@ -6,7 +6,8 @@ import type { ImpDatabase } from '../../platform/db/open-database';
 import { ImpdError } from '../../platform/errors/impd-error';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import { createSingleFlight } from '../../platform/process/single-flight';
-import { checkReferenceRegistry } from '../docker-proxy/rules';
+import { checkReferenceRegistry } from '../docker-contract/check-registry';
+import { parseImageReference } from '../docker-contract/parse-image-reference';
 import type { ImpsConfig } from '../imps-config';
 import { createBuildEngine, toEngineRun } from './build-engine';
 import { BUILDER_IMAGE } from './builder-imps';
@@ -190,11 +191,9 @@ export function createImageAdds(deps: ImageAddsDeps, writer: ImageWriter): Image
 }
 
 function formatExplicitRef(ref: string): string {
-  const [withoutDigest = ''] = ref.split('@');
-  const lastSlash = withoutDigest.lastIndexOf('/');
-  const hasTag = withoutDigest.includes(':', lastSlash + 1);
+  const parsed = parseImageReference(ref);
 
-  return ref.includes('@') || hasTag ? ref : `${ref}:latest`;
+  return parsed.digest === null && parsed.tag === null ? `${ref}:latest` : ref;
 }
 
 // The ref goes into docker's argv, where a leading `-` reads as a flag, so every caller is

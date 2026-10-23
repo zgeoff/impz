@@ -14,7 +14,8 @@ import type { ImageRecord } from '../../platform/db/images';
 import { ImpdError } from '../../platform/errors/impd-error';
 import { buildUploadsDir } from '../../vm/storage/data-layout';
 import type { DiskBudget } from '../../vm/storage/disk-budget';
-import { checkReferenceRegistry, parseImageReference } from '../docker-proxy/rules';
+import { checkReferenceRegistry } from '../docker-contract/check-registry';
+import { parseImageReference } from '../docker-contract/parse-image-reference';
 import type { ImpsConfig } from '../imps-config';
 import { createBuildEngine, toEngineRun } from './build-engine';
 import type { BuildEngine } from './build-engine';
@@ -363,12 +364,8 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
 
 function toImageKey(ref: string): string {
   const named = parseImageReference(ref);
-  const [withoutDigest = '', digest = ''] = ref.split('@');
-  const lastSlash = withoutDigest.lastIndexOf('/');
-  const tagColon = withoutDigest.indexOf(':', lastSlash + 1);
-  const tag = tagColon === -1 ? 'latest' : withoutDigest.slice(tagColon + 1);
 
-  return `${named.registry}/${named.path}:${tag}@${digest}`;
+  return `${named.registry}/${named.path}:${named.tag ?? 'latest'}@${named.digest ?? ''}`;
 }
 
 function pickPin(

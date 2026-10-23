@@ -1,7 +1,7 @@
 import * as z from 'zod';
 import { ImpdError } from '../../platform/errors/impd-error';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
-import { DOCKERFILE_FRONTEND } from '../docker-proxy/dockerfile-frontend';
+import { DOCKERFILE_FRONTEND } from '../docker-contract/dockerfile-frontend';
 import type { ExternalImage } from './dockerfile-check';
 import type { GuestExec } from './guest-exec';
 import { PIN_INSPECT_FORMAT, PinInspectSchema, normalizePlatform } from './image-pin';

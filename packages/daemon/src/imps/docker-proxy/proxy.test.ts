@@ -7,9 +7,9 @@ import invariant from 'tiny-invariant';
 import { startStubDockerEngine } from '../../../testing/imps/start-stub-docker-engine';
 import { startStubCutStream } from '../../../testing/network/start-stub-cut-stream';
 import { startStubSilentOrigin } from '../../../testing/network/start-stub-silent-origin';
+import { readProxyRefusal } from '../docker-contract/refusal';
 import { CREATE_BODY_MAX_BYTES, PROXY_LABEL, createDockerProxy } from './proxy';
 import type { DockerProxyOptions } from './proxy';
-import { readProxyRefusal } from './refusal';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

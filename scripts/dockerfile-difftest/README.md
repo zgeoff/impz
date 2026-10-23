@@ -14,7 +14,7 @@ accept, and parses the pinned copy twice in the same way.
 ## When to run it
 
 Run it on every change to `DOCKERFILE_FRONTEND` (the `BUILDKIT_SYNTAX` pin in
-`packages/daemon/src/imps/docker-proxy/dockerfile-frontend.ts`) and on every change to
+`packages/daemon/src/imps/docker-contract/dockerfile-frontend.ts`) and on every change to
 `dockerfile-parse.ts`. CI runs it with one fixed seed in the `checks` job.
 
 ## Requirements
