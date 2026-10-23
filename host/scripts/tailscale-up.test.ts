@@ -639,6 +639,61 @@ test('it takes a slow saved node down without a key once it is Running with othe
   expect(ctx.tailscale.readCalls('up')).toStrictEqual([]);
 }, 30_000);
 
+test('it says without a key that a slow saved node is Running on another control server', async () => {
+  const ctx = setupTest();
+
+  mkdirSync(join(ctx.directoryPath, 'state'));
+  writeFileSync(join(ctx.directoryPath, 'state', 'tailscaled.state'), 'saved');
+  createStubBin(ctx.directoryPath, 'ps', 'echo S');
+  createStubBin(ctx.directoryPath, 'sleep');
+
+  ctx.tailscale.writeNode({
+    BackendState: 'Running',
+    Self: {
+      HostName: 'imp',
+      Tags: ['tag:imp'],
+      TailscaleIPs: ['100.64.0.7'],
+      DNSName: 'imp.tail1234.ts.net.',
+    },
+  });
+
+  ctx.tailscale.writePrefs({ ControlURL: 'http://headscale-old.test:8080' });
+  ctx.tailscale.holdStart();
+
+  Bun.spawnSync(
+    [
+      'bash',
+      '-c',
+      '"$0" >"$1" 2>"$2"',
+      new URL('tailscale-up.sh', import.meta.url).pathname,
+      ctx.out,
+      ctx.err,
+    ],
+    {
+      env: {
+        PATH: `${ctx.tailscale.bin}:${process.env['PATH'] ?? ''}`,
+        IMP_RESOLV_CONF: ctx.resolvConf,
+        IMP_TAILSCALE_STATE_DIR: join(ctx.directoryPath, 'state'),
+        IMP_TAILSCALE_HOSTNAME: 'imp',
+        IMP_TAILSCALE_LOGIN_SERVER: 'http://headscale.test:8080',
+      },
+    },
+  );
+
+  ctx.tailscale.releaseStart();
+
+  await waitFor(
+    () => {
+      expect(readFileSync(ctx.err, 'utf8')).toBe(
+        'tailscale-up: the saved node is on http://headscale-old.test:8080, not http://headscale.test:8080; give an auth key to join it\n',
+      );
+    },
+    { timeoutMs: 20_000 },
+  );
+
+  expect(ctx.tailscale.readCalls('up')).toStrictEqual([]);
+}, 30_000);
+
 test('it gives up in the background without a key once a slow saved node needs a login', async () => {
   const ctx = setupTest();
 

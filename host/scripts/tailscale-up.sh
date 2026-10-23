@@ -193,11 +193,14 @@ wait_later() {
     state=$(backend)
     if [ "$state" = Running ]; then
       echo "tailscale-up: the saved node is Running"
-      if [ -n "$has_key" ] && control_differs; then
-        echo "tailscale-up: the saved node is on ${node_control:-Tailscale}, not $wanted_control; joining again with the key"
-        reauth=(--force-reauth)
-        join && ensure_tags
-        return
+      if control_differs; then
+        if [ -n "$has_key" ]; then
+          echo "tailscale-up: the saved node is on ${node_control:-Tailscale}, not $wanted_control; joining again with the key"
+          reauth=(--force-reauth)
+          join && ensure_tags
+          return
+        fi
+        echo "tailscale-up: the saved node is on ${node_control:-Tailscale}, not $wanted_control; give an auth key to join it" >&2
       fi
       ensure_tags
       return
