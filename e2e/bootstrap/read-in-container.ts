@@ -14,7 +14,7 @@ export async function readInContainer(
 ): Promise<ContainerRead> {
   const container = run.state.container;
 
-  invariant(container, 'no test container is running');
+  invariant(container !== null, 'no test container is running');
 
   const result = await run.io.shell`docker exec ${container} ${[...argv]}`.quiet().nothrow();
 

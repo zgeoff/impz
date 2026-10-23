@@ -25,7 +25,7 @@ export async function runBootstrap(
 ): Promise<BootstrapResult> {
   const container = run.state.container;
 
-  invariant(container, 'no test container is running');
+  invariant(container !== null, 'no test container is running');
 
   const argv = buildBootstrapArgv({
     mode: call.mode,

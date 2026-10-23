@@ -7,7 +7,7 @@ export async function checkFirewallDrops(run: BootstrapRun): Promise<void> {
   const io = run.io;
   const container = run.state.container;
 
-  invariant(container, 'no test container is running');
+  invariant(container !== null, 'no test container is running');
 
   const format = '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}';
 
