@@ -7,11 +7,12 @@ import { createImpClient } from '@impz/client';
 import {
   buildImagePaths,
   buildMockNewImage,
+  buildStubImageBuilder,
   buildStubImpdReleaseFetch,
+  createFilesTar,
   createImage,
-  startTestImpd,
+  startBuilderImpd,
 } from '@impz/daemon/testing';
-import { checkDockerBuildx } from '../test-utils/run-docker-build';
 import { runImageAdd, runOnHostBuild } from './run-image-op';
 
 async function setupTest() {
@@ -19,13 +20,20 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
+  const directory = await mkdtemp(join(tmpdir(), 'cli-image-op-'));
+
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
+
   const rootToken = faker.string.alphanumeric(32);
 
-  const harness = await startTestImpd(stack, {
-    rootToken,
+  const builder = buildStubImageBuilder({
+    exported: [createFilesTar(directory, { hello: 'hi' })],
+    repoDigest: `sha256:${'e'.repeat(64)}`,
+  });
 
-    // the stub VMM boots no builder, so a build runs on this machine's docker
-    env: { IMP_BUILD_ISOLATION: 'host' },
+  const harness = await startBuilderImpd(stack, builder, {
+    rootToken,
+    dataDir: join(directory, 'data'),
 
     // a template copies the imp's disk, which must stay sparse
     cloneDisk: async (source, target) => {
@@ -83,42 +91,38 @@ test('#runImageAdd makes a template from an imp through the stream of a current 
   expect(ctx.calls).toStrictEqual(['imps/create', 'system/features', 'images/addStream']);
 });
 
-test.skipIf(!checkDockerBuildx())(
-  '#runOnHostBuild builds an image on the host through the stream of a current impd',
-  async () => {
-    const ctx = await setupTest();
-    const contextDir = await mkdtemp(join(tmpdir(), 'cli-image-op-ctx-'));
+test('#runOnHostBuild builds an image from a directory on the impd host through the stream of a current impd', async () => {
+  const ctx = await setupTest();
+  const contextDir = await mkdtemp(join(tmpdir(), 'cli-image-op-ctx-'));
 
-    onTestFinished(() => rm(contextDir, { recursive: true, force: true }));
+  onTestFinished(() => rm(contextDir, { recursive: true, force: true }));
 
-    await Bun.write(join(contextDir, 'Dockerfile'), 'FROM scratch\nCOPY hello /hello\n');
-    await Bun.write(join(contextDir, 'hello'), 'hi');
+  await Bun.write(join(contextDir, 'Dockerfile'), 'FROM scratch\nCOPY hello /hello\n');
+  await Bun.write(join(contextDir, 'hello'), 'hi');
 
-    const built = await runOnHostBuild(
-      ctx.client,
-      { contextDir, name: 'img' },
-      { isTTY: false, write: () => {} },
-    );
+  const built = await runOnHostBuild(
+    ctx.client,
+    { contextDir, name: 'img' },
+    { isTTY: false, write: () => {} },
+  );
 
-    const received: unknown = built;
+  const received: unknown = built;
 
-    expect(received).toStrictEqual({
-      id: expect.any(String) as unknown,
-      name: 'img',
-      ref: 'imp/img:latest',
-      digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/u) as unknown,
-      source: 'oci',
-      createdAt: expect.toBeValidDate() as unknown,
-      sizeBytes: expect.any(Number) as unknown,
-      pinned: false,
-    });
+  expect(received).toStrictEqual({
+    id: expect.any(String) as unknown,
+    name: 'img',
+    ref: 'imp/img:latest',
+    digest: expect.stringMatching(/^imp-build-[0-9a-f]{64}$/u) as unknown,
+    source: 'oci',
+    createdAt: expect.toBeValidDate() as unknown,
+    sizeBytes: expect.any(Number) as unknown,
+    pinned: false,
+  });
 
-    expect(ctx.calls).toStrictEqual(['system/features', 'images/buildStream']);
-  },
-  120_000,
-);
+  expect(ctx.calls).toStrictEqual(['system/features', 'images/buildStream']);
+});
 
-test('#runOnHostBuild passes on a current impd’s refusal of a host build', async () => {
+test('#runOnHostBuild passes on a current impd’s refusal of a context directory the impd host lacks', async () => {
   const ctx = await setupTest();
 
   const building = runOnHostBuild(
@@ -171,44 +175,40 @@ test('#runImageAdd adds through the call that answers at the end on an impd from
   expect(older.calls).toStrictEqual(['system/features', 'images/add']);
 });
 
-test.skipIf(!checkDockerBuildx())(
-  '#runOnHostBuild builds through the call that answers at the end on an impd from before imageOpStream',
-  async () => {
-    const ctx = await setupTest();
-    const contextDir = await mkdtemp(join(tmpdir(), 'cli-image-op-ctx-'));
+test('#runOnHostBuild builds through the call that answers at the end on an impd from before imageOpStream', async () => {
+  const ctx = await setupTest();
+  const contextDir = await mkdtemp(join(tmpdir(), 'cli-image-op-ctx-'));
 
-    onTestFinished(() => rm(contextDir, { recursive: true, force: true }));
+  onTestFinished(() => rm(contextDir, { recursive: true, force: true }));
 
-    await Bun.write(join(contextDir, 'Dockerfile'), 'FROM scratch\nCOPY hello /hello\n');
-    await Bun.write(join(contextDir, 'hello'), 'hi');
+  await Bun.write(join(contextDir, 'Dockerfile'), 'FROM scratch\nCOPY hello /hello\n');
+  await Bun.write(join(contextDir, 'hello'), 'hi');
 
-    const older = buildStubImpdReleaseFetch(ctx.sendRequest, {
-      withoutFeatures: ['imageOpStream'],
-    });
+  const older = buildStubImpdReleaseFetch(ctx.sendRequest, {
+    withoutFeatures: ['imageOpStream'],
+  });
 
-    const built = await runOnHostBuild(
-      createImpClient({ url: 'http://impd.test', token: ctx.rootToken, fetch: older.fetch }),
-      { contextDir, name: 'img' },
-      { isTTY: false, write: () => {} },
-    );
+  const built = await runOnHostBuild(
+    createImpClient({ url: 'http://impd.test', token: ctx.rootToken, fetch: older.fetch }),
+    { contextDir, name: 'img' },
+    { isTTY: false, write: () => {} },
+  );
 
-    const received: unknown = built;
+  const received: unknown = built;
 
-    expect(received).toStrictEqual({
-      id: expect.any(String) as unknown,
-      name: 'img',
-      ref: 'imp/img:latest',
-      digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/u) as unknown,
-      source: 'oci',
-      createdAt: expect.toBeValidDate() as unknown,
-      sizeBytes: expect.any(Number) as unknown,
-      pinned: false,
-    });
+  expect(received).toStrictEqual({
+    id: expect.any(String) as unknown,
+    name: 'img',
+    ref: 'imp/img:latest',
+    digest: expect.stringMatching(/^imp-build-[0-9a-f]{64}$/u) as unknown,
+    source: 'oci',
+    createdAt: expect.toBeValidDate() as unknown,
+    sizeBytes: expect.any(Number) as unknown,
+    pinned: false,
+  });
 
-    expect(older.calls).toStrictEqual(['system/features', 'images/build']);
-  },
-  120_000,
-);
+  expect(older.calls).toStrictEqual(['system/features', 'images/build']);
+});
 
 test('#runImageAdd rejects when impd faults by ending the stream before it answers the image', async () => {
   const ctx = await setupTest();

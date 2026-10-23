@@ -33,18 +33,6 @@ test.each<[string, string, RoutedRequest]>([
   ],
   [
     'POST',
-    '/v1.55/build?t=imp%2Fx%3Alatest&version=2',
-    {
-      versionPrefix: '/v1.55',
-      route: { kind: 'build' },
-      query: new Map([
-        ['t', ['imp/x:latest']],
-        ['version', ['2']],
-      ]),
-    },
-  ],
-  [
-    'POST',
     '/v1.55/containers/create',
     { versionPrefix: '/v1.55', route: { kind: 'create' }, query: new Map() },
   ],
@@ -107,6 +95,8 @@ test.each([
   ['POST', '/v1.55/volumes/create', '/volumes/create'],
   ['POST', '/v1.55/plugins/pull', '/plugins/pull'],
   ['GET', '/v1.55/build', '/build'],
+  ['POST', '/v1.55/build?t=imp%2Fx%3Alatest&version=2', '/build'],
+  ['POST', '/build', '/build'],
   ['PUT', `/v1.55/containers/${'a'.repeat(64)}/archive`, `/containers/${'a'.repeat(64)}/archive`],
   ['POST', '/v1.55/swarm/init', '/swarm/init'],
   ['GET', '/v1.55/images/-x/json', '/images/-x/json'],

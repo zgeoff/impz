@@ -1,14 +1,15 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   buildImagePaths,
   buildMockNewImage,
+  buildStubImageBuilder,
+  createBuilderImage,
+  createFilesTar,
   createImage,
-  createStubDockerCli,
 } from '@impz/daemon/testing';
-import { updateEnv } from '@impz/test-utils/update-env';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -51,32 +52,21 @@ test('it adds an image from a ref, which impd names when the name is left blank'
 
   const ctx = await setupTest();
 
-  await mkdir(join(ctx.workDir, 'tree'));
-  await writeFile(join(ctx.workDir, 'tree', 'hello'), 'from node\n');
-
-  const docker = createStubDockerCli({
-    directory: ctx.workDir,
-    images: [
-      {
-        refs: ['docker.io/library/node:22'],
-        inspects: [
-          {
-            Id: `sha256:${'c'.repeat(64)}`,
-            RepoDigests: [`docker.io/library/node@sha256:${'d'.repeat(64)}`],
-            Config: {},
-            Size: 1024,
-          },
-        ],
-      },
-    ],
-    create: { id: 'c'.repeat(64) },
-    exportTar: Bun.spawnSync(['tar', '-C', join(ctx.workDir, 'tree'), '-c', 'hello']).stdout,
+  const builder = buildStubImageBuilder({
+    exported: [createFilesTar(ctx.workDir, { hello: 'from node\n' })],
+    repoDigest: `sha256:${'d'.repeat(64)}`,
   });
 
-  updateEnv('PATH', docker.path);
-
   const dashboardImpd = await startDashboardImpd(ctx.stack, {
-    env: { IMP_BUILD_ISOLATION: 'host' },
+    boundaries: {
+      agent: { openBuilderExec: (_name, request) => builder.guest.open(request) },
+    },
+  });
+
+  await createBuilderImage({
+    db: dashboardImpd.harness.db,
+    dataDir: dashboardImpd.harness.dataDir,
+    ref: dashboardImpd.harness.config.build.image,
   });
 
   await dashboardImpd.logIn();
@@ -94,6 +84,7 @@ test('it adds an image from a ref, which impd names when the name is left blank'
   expect(row).toBeInTheDocument();
 
   expect(images.map((image) => [image.name, image.ref])).toStrictEqual([
+    ['imp-builder', dashboardImpd.harness.config.build.image],
     ['node', 'docker.io/library/node:22'],
   ]);
 });

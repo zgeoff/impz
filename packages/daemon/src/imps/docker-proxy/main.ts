@@ -4,7 +4,7 @@ import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { printLog } from '../../platform/process/print-log';
 import { setupLogging } from '../../platform/process/setup-logging';
 import { BUILD_IMAGE_PATTERN, DEFAULT_BUILD_IMAGE } from '../images/build-image';
-import { createDockerProxy } from './proxy';
+import { CREATE_BODY_MAX_BYTES, createDockerProxy } from './proxy';
 
 const BODY_SLACK_BYTES = 1024 ** 2;
 
@@ -26,17 +26,7 @@ function requireEnv(name: string): string {
   return value;
 }
 
-function readBuilderImage(): string | null {
-  const isolation = readEnv('IMP_BUILD_ISOLATION', 'imp');
-
-  if (isolation === 'host') {
-    return null;
-  }
-
-  if (isolation !== 'imp') {
-    throw new Error(`IMP_BUILD_ISOLATION is ${isolation}, not imp or host`);
-  }
-
+function readBuilderImage(): string {
   const image = readEnv('IMP_BUILD_IMAGE', DEFAULT_BUILD_IMAGE);
 
   if (!BUILD_IMAGE_PATTERN.test(image)) {
@@ -54,34 +44,24 @@ function main(): void {
   const stateDir = readEnv('IMP_DOCKER_PROXY_STATE', '/var/lib/imp-docker-proxy');
   const hostImage = requireEnv('IMP_HOST_IMAGE');
   const builderImage = readBuilderImage();
-  const contextMib = Number(readEnv('IMP_BUILD_CONTEXT_MAX_MIB', '1024'));
-
-  if (!Number.isInteger(contextMib) || contextMib <= 0) {
-    throw new Error(
-      `IMP_BUILD_CONTEXT_MAX_MIB is ${String(process.env['IMP_BUILD_CONTEXT_MAX_MIB'])}, not a count`,
-    );
-  }
-
-  const buildContextMaxBytes = contextMib * 1024 ** 2;
 
   const handleRequest = createDockerProxy({
     upstreamSocket,
     token: loadOrCreateToken(stateDir),
     hostImage,
     builderImage,
-    buildContextMaxBytes,
     log: printLog,
   });
 
   rmSync(listen, { force: true });
 
-  // Bun's types leave idleTimeout off unix servers, but Bun applies it there too, and 0 lets a
-  // build or an export stream for as long as it takes.
+  // Bun's types leave idleTimeout off unix servers, but Bun applies it there too, and 0 lets an
+  // export stream for as long as it takes.
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- see above
   const serveOptions = {
     unix: listen,
     fetch: handleRequest,
-    maxRequestBodySize: buildContextMaxBytes + BODY_SLACK_BYTES,
+    maxRequestBodySize: CREATE_BODY_MAX_BYTES + BODY_SLACK_BYTES,
     idleTimeout: 0,
   } as unknown as Bun.Serve.Options<undefined>;
 
@@ -90,7 +70,7 @@ function main(): void {
   chmodSync(listen, 0o600);
 
   getImpdLogger('docker-proxy').info(
-    `imp-docker-proxy on ${listen}, engine ${upstreamSocket}, host image ${hostImage}, ${builderImage === null ? 'pulls and builds as host isolation allows' : `pulls only ${builderImage}, no builds`}`,
+    `imp-docker-proxy on ${listen}, engine ${upstreamSocket}, host image ${hostImage}, pulls only ${builderImage}, no builds`,
   );
 
   const stop = async (): Promise<void> => {

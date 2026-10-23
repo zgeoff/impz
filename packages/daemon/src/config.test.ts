@@ -32,7 +32,6 @@ test('it fills every setting from its default when the env is empty', () => {
     diskReserveBytes: null,
     buildContextMaxBytes: 1024 ** 3,
     build: {
-      isolation: 'imp',
       memoryMib: 2048,
       diskBytes: 20 * 1024 ** 3,
       imageMaxBytes: 8192 * 1024 ** 2,

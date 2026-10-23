@@ -41,10 +41,6 @@ export const SUITES: readonly Suite[] = [
     prefix: 'e2e-reg-',
     images: [],
     journeys: ['registry-moved-tag', 'registry-copy-from', 'registry-multi-platform'],
-
-    // A builder imp may not reach the host's loopback, by design, so it cannot
-    // reach this registry either.
-    settings: () => ({ IMP_BUILD_ISOLATION: 'host' }),
   },
   { name: 'checkpoints', prefix: 'e2e-cp-', images: ['e2e-tiny'] },
   { name: 'disks', prefix: 'e2e-disk-', images: ['e2e-tiny'] },
@@ -144,7 +140,7 @@ export const SUITES: readonly Suite[] = [
     name: 'socket',
     prefix: 'e2e-sock-',
     images: ['e2e-tiny'],
-    journeys: ['socket-refusals', 'socket-builds', 'socket-proxy-stopped'],
+    journeys: ['socket-refusals', 'socket-proxy-stopped'],
   },
 
   {
@@ -208,7 +204,6 @@ export const SUITES: readonly Suite[] = [
 export const FAST_GROUPS: readonly (readonly string[])[] = [
   [
     'lifecycle',
-    'registry',
     'checkpoints',
     'disks',
     'restart',

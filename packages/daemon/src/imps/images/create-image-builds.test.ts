@@ -36,8 +36,6 @@ import { buildImagePaths } from '../../vm/storage/data-layout';
 import { createDiskBudget } from '../../vm/storage/disk-budget';
 import { createStorageGate } from '../../vm/storage/storage-gate';
 import { createXfsBackend } from '../../vm/storage/xfs-backend';
-import { DOCKERFILE_FRONTEND } from '../docker-proxy/dockerfile-frontend';
-import { checkBuildQuery } from '../docker-proxy/rules';
 import { normalizeDockerfilePath } from './create-image-builds';
 import { createImageService } from './image-service';
 
@@ -105,18 +103,8 @@ test.each([
   ['./Dockerfile', 'Dockerfile'],
   ['sub//./web.Dockerfile', 'sub/web.Dockerfile'],
   ['a/../Dockerfile', 'Dockerfile'],
-])('#normalizeDockerfilePath writes %p as %p, a path the proxy lets through', (given, expected) => {
-  const path = normalizeDockerfilePath(given);
-
-  const query = new Map([
-    ['t', ['imp/x:latest']],
-    ['version', ['2']],
-    ['buildargs', [JSON.stringify({ BUILDKIT_SYNTAX: DOCKERFILE_FRONTEND })]],
-    ['dockerfile', [path]],
-  ]);
-
-  expect(path).toBe(expected);
-  expect(checkBuildQuery(query)).toStrictEqual({ isOk: true });
+])('#normalizeDockerfilePath writes %p as %p', (given, expected) => {
+  expect(normalizeDockerfilePath(given)).toBe(expected);
 });
 
 test.each(['../Dockerfile', 'a/../../Dockerfile', '/etc/passwd', '.', 'sub/'])(

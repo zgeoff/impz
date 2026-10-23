@@ -68,7 +68,6 @@ test('it treats named suites as short of the acceptance run', () => {
 test('it expands a set and drops a suite the set already holds', () => {
   expect(parseArgs(['--only', 'fast,sleep']).suites).toStrictEqual([
     'lifecycle',
-    'registry',
     'checkpoints',
     'disks',
     'sleep',
@@ -105,7 +104,6 @@ test.each([
     '1',
     [
       'lifecycle',
-      'registry',
       'checkpoints',
       'disks',
       'restart',

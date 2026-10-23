@@ -54,7 +54,6 @@ const EnvSchema = z.object({
   IMP_DEFAULT_DISK_GIB: CountSchema.default(32),
   IMP_DISK_RESERVE_GIB: CountSchema.optional(),
   IMP_BUILD_CONTEXT_MAX_MIB: CountSchema.default(1024),
-  IMP_BUILD_ISOLATION: z.enum(['imp', 'host']).default('imp'),
   IMP_BUILD_MEMORY_MIB: CountSchema.default(2048),
   IMP_BUILD_DISK_GIB: CountSchema.default(20),
   IMP_BUILD_IMAGE_MAX_MIB: CountSchema.default(8192),
@@ -282,7 +281,6 @@ export function loadConfig(env: Readonly<Record<string, string | undefined>>): C
       parsed.IMP_DISK_RESERVE_GIB === undefined ? null : parsed.IMP_DISK_RESERVE_GIB * 1024 ** 3,
     buildContextMaxBytes: parsed.IMP_BUILD_CONTEXT_MAX_MIB * 1024 ** 2,
     build: {
-      isolation: parsed.IMP_BUILD_ISOLATION,
       memoryMib: parsed.IMP_BUILD_MEMORY_MIB,
       diskBytes: parsed.IMP_BUILD_DISK_GIB * 1024 ** 3,
       imageMaxBytes: parsed.IMP_BUILD_IMAGE_MAX_MIB * 1024 ** 2,

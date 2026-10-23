@@ -72,7 +72,7 @@ test('#buildJourneyEnv hands a suite’s own idle timeout to its journeys', () =
 });
 
 test('#buildJourneyEnv leaves the run’s idle timeout to a suite that sets none', () => {
-  expect(buildJourneyEnv({ IMP_BUILD_ISOLATION: 'host' })).toStrictEqual({});
+  expect(buildJourneyEnv({ IMP_KSM: '1' })).toStrictEqual({});
 });
 
 test('#buildJourneyEnv leaves the run’s idle timeout to a suite on the run’s settings', () => {
@@ -133,7 +133,6 @@ test('#SUITES gives every suite its own e2e- imp name prefix', () => {
 test('#SUITE_SETS builds the fast set from the groups, in run order', () => {
   expect(SUITE_SETS['fast']).toStrictEqual([
     'lifecycle',
-    'registry',
     'checkpoints',
     'disks',
     'sleep',

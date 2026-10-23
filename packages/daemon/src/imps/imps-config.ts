@@ -2,7 +2,6 @@ import type { VmConfig } from '../vm/vm-config';
 import type { SessionLogLimits } from './session-logs/session-log-service';
 
 interface BuildConfig {
-  readonly isolation: 'imp' | 'host';
   readonly memoryMib: number;
   readonly diskBytes: number;
   readonly imageMaxBytes: number;

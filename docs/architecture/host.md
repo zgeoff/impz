@@ -60,28 +60,23 @@ capabilities alike, and an image is unpacked in a directory no host user can rea
 
 ## The Docker socket
 
-impd pulls, exports and builds images through Docker, but imp-host never mounts the host's socket. A
+impd fetches one image through the host's Docker, the builder image that every build and pull runs
+in ([images](./storage/images.md#where-builds-run)), but imp-host never mounts the host's socket. A
 second container from the same image, imp-docker-proxy, holds it, and serves a socket of its own
-that imp-host mounts read-only. The proxy lets through exactly the calls impd and its CLI make, and
-refuses every other with a log line:
+that imp-host mounts read-only. The proxy lets through exactly the calls impd makes to fetch the
+builder image, and refuses every other with a log line:
 
 - a ping and a version check, and an image inspect;
-- a pull by name and tag, never from a registry on the host's loopback or by IP address, and never
-  of the image the two containers run, so a pull cannot move their tag;
-- a BuildKit build with no session, one fixed tag, and the pinned frontend, so a Dockerfile cannot
-  choose the image BuildKit runs as its frontend; every parameter that needs a session or moves the
-  build, such as a network mode or a remote, is refused;
-- a container create of an image with nothing to run and no network, labelled with the proxy's own
-  token, and an export and a removal of a container only by that label. There is no start route, so
-  a container the proxy creates never runs.
+- a pull of the builder image by its digest, and no other pull;
+- a container create of the builder image with nothing to run and no network, labelled with the
+  proxy's own token, and an export and a removal of a container only by that label. There is no
+  start route, so a container the proxy creates never runs.
 
-The proxy rebuilds each request from what it checked, rather than pass the client's on, so a form
-body or a header cannot smuggle a parameter past the checks. It runs as an unprivileged user with no
-capabilities, a read-only root and no network, and its token lives where only it can read it. By
-default every build and pull runs in a builder imp instead
-([images](./storage/images.md#where-builds-run)), and the proxy then refuses every pull but the
-builder's own image and every build on the host. The proxy closes the Docker socket path only: the
-mount capability above is still a way out.
+The proxy refuses every build. It rebuilds each request from what it checked, rather than pass the
+client's on, so a form body or a header cannot smuggle a parameter past the checks. It runs as an
+unprivileged user with no capabilities, a read-only root and no network, and its token lives where
+only it can read it. The proxy closes the Docker socket path only: the mount capability above is
+still a way out.
 
 imp-host wants the proxy but does not bind to it, so a proxy that stops fails image work only, and
 running imps keep running.

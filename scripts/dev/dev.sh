@@ -91,7 +91,7 @@ tuning_vars=(IMP_IDLE_TIMEOUT_S IMP_IDLE_CPU_PERCENT IMP_RAM_BUDGET_MIB IMP_BOOT
   IMP_WAKE_RESERVE_MIB IMP_SLEEP_MIN_GUEST_UPTIME_MS IMP_DEFAULT_VCPUS IMP_DEFAULT_MEMORY_MIB
   IMP_DEFAULT_DISK_GIB IMP_DISK_RESERVE_GIB IMP_TAILSCALE_HOSTNAME IMP_TAILSCALE_TAGS
   IMP_TAILNET_IDENTITIES IMP_TAILNET_NAMES IMP_TAILNET_NAME_PREFIX IMP_BUILD_CONTEXT_MAX_MIB
-  IMP_BUILD_ISOLATION IMP_BUILD_MEMORY_MIB IMP_BUILD_DISK_GIB IMP_BUILD_IMAGE_MAX_MIB
+  IMP_BUILD_MEMORY_MIB IMP_BUILD_DISK_GIB IMP_BUILD_IMAGE_MAX_MIB
   IMP_BUILD_IMAGE_MAX_FILES IMP_BUILD_IMAGE
   IMP_WATCHDOG_TIMEOUT_S IMP_WATCHDOG_ACTION IMP_KSM
   IMP_KSM_HEADROOM_PERCENT
@@ -158,17 +158,14 @@ start_proxy() {
     bun build --compile packages/daemon/src/imps/docker-proxy/main.ts \
     --outfile /out/imp-docker-proxy.new >/dev/null
   mapfile -t privileges < <(read_proxy_privileges)
-  # the settings the proxy reads too: under imp isolation it pulls only
-  # IMP_BUILD_IMAGE. impd takes each from this env, else .env, so the proxy
-  # does too; only these keys are read from .env, never its secrets.
-  local var value
-  for var in IMP_BUILD_CONTEXT_MAX_MIB IMP_BUILD_ISOLATION IMP_BUILD_IMAGE; do
-    value=${!var:-}
-    if [ -z "$value" ] && [ -f "$IMP_ROOT/.env" ]; then
-      value=$(sed -n "s/^$var=//p" "$IMP_ROOT/.env" | tail -n 1 | tr -d '\r')
-    fi
-    [ -n "$value" ] && context+=(-e "$var=$value")
-  done
+  # the setting the proxy reads too: it pulls only IMP_BUILD_IMAGE. impd takes
+  # it from this env, else .env, so the proxy does too; only this key is read
+  # from .env, never its secrets.
+  local value=${IMP_BUILD_IMAGE:-}
+  if [ -z "$value" ] && [ -f "$IMP_ROOT/.env" ]; then
+    value=$(sed -n 's/^IMP_BUILD_IMAGE=//p' "$IMP_ROOT/.env" | tail -n 1 | tr -d '\r')
+  fi
+  [ -n "$value" ] && context+=(-e "IMP_BUILD_IMAGE=$value")
   stamp=$({
     sha256sum <"$data/imp-docker-proxy.new"
     printf '%s\n' "${privileges[@]}" "${context[@]}" "$IMP_HOST_IMAGE"

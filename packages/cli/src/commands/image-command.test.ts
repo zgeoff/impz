@@ -4,18 +4,16 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { faker } from '@faker-js/faker';
 import {
-  DOCKERFILE_FRONTEND,
   buildImagePaths,
   buildMockNewImage,
-  buildStubTracedBuild,
+  buildStubImageBuilder,
+  createFilesTar,
   createImage,
-  createStubDockerCli,
   readImageByName,
-  startStubDockerEngine,
+  startBuilderImpd,
   startTestImpd,
   updateImagePin,
 } from '@impz/daemon/testing';
-import { updateEnv } from '@impz/test-utils/update-env';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import * as z from 'zod';
@@ -26,59 +24,39 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dataDir = await mkdtemp(join(tmpdir(), 'cli-image-'));
+  const directory = await mkdtemp(join(tmpdir(), 'cli-image-'));
 
-  stack.defer(() => rm(dataDir, { recursive: true, force: true }));
-
-  const engine = startStubDockerEngine({ directoryPath: dataDir });
-
-  stack.defer(() => engine.stop());
-
-  const rootToken = faker.string.alphanumeric(32);
-
-  const harness = await startTestImpd(stack, {
-    dataDir,
-    rootToken,
-    env: { IMP_BUILD_ISOLATION: 'host', DOCKER_HOST: engine.dockerHost },
-  });
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
 
   return {
-    rootToken,
-    db: harness.db,
-    dataDir,
-    engine,
-    url: harness.url,
+    stack,
+    directoryPath: directory,
+    dataDir: join(directory, 'data'),
+    rootToken: faker.string.alphanumeric(32),
   };
 }
 
 test('#imageCommand prints progress lines and the step output of a build whose stderr is no terminal', async () => {
   const ctx = await setupTest();
 
-  await mkdir(join(ctx.dataDir, 'context'));
-  await writeFile(join(ctx.dataDir, 'context', 'Dockerfile'), 'FROM scratch\n');
-  await mkdir(join(ctx.dataDir, 'tree'));
-  await writeFile(join(ctx.dataDir, 'tree', 'hello'), 'hi');
+  await mkdir(join(ctx.directoryPath, 'context'));
+  await writeFile(join(ctx.directoryPath, 'context', 'Dockerfile'), 'FROM scratch\n');
 
-  const docker = createStubDockerCli({
-    directory: ctx.dataDir,
-    images: [
-      { refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] },
-      {
-        refs: ['imp/web:latest'],
-        inspects: [{ Id: `sha256:${'e'.repeat(64)}`, Config: {}, Size: 2 }],
-      },
-    ],
-    create: { id: 'c'.repeat(64) },
-    exportTar: Bun.spawnSync(['tar', '-C', join(ctx.dataDir, 'tree'), '-c', 'hello']).stdout,
+  const builder = buildStubImageBuilder({
+    exported: [createFilesTar(ctx.directoryPath, { hello: 'hi' })],
+    repoDigest: `sha256:${'e'.repeat(64)}`,
+    buildLog:
+      '#5 [2/3] RUN echo compiling widget && echo second line\n#5 0.112 compiling widget\n#5 0.113 second line\n#5 DONE 0.2s\n',
   });
 
-  updateEnv('PATH', docker.path);
-
-  ctx.engine.setAnswer(buildStubTracedBuild({ imageId: `sha256:${'e'.repeat(64)}` }));
+  const harness = await startBuilderImpd(ctx.stack, builder, {
+    dataDir: ctx.dataDir,
+    rootToken: ctx.rootToken,
+  });
 
   const result = await runCLIInProcess({
-    args: ['image', 'build', join(ctx.dataDir, 'context'), '--name', 'web'],
-    env: { IMP_URL: ctx.url, IMP_TOKEN: ctx.rootToken },
+    args: ['image', 'build', join(ctx.directoryPath, 'context'), '--name', 'web'],
+    env: { IMP_URL: harness.url, IMP_TOKEN: ctx.rootToken },
   });
 
   expect(result.code).toBe(0);
@@ -89,44 +67,35 @@ test('#imageCommand prints progress lines and the step output of a build whose s
     expect.stringMatching(
       /^impz image build: building, 0m\d\ds, \[2\/3\] RUN echo compiling widget && echo second line$/v,
     ),
-    '#1 [2/3] RUN echo compiling widget && echo second line',
-    '#1 compiling widget',
-    '#1 second line',
+    '#5 [2/3] RUN echo compiling widget && echo second line',
+    '#5 0.112 compiling widget',
+    '#5 0.113 second line',
     expect.stringMatching(/^impz image build: unpacking, 0m\d\ds, \[2\/3\] RUN echo compiling/v),
   ]);
 
   expect(result.stdout).toStartWith('NAME');
-  expect(ctx.engine.unexpected).toStrictEqual([]);
 });
 
 test('#imageCommand prints no progress and no step output for --quiet', async () => {
   const ctx = await setupTest();
 
-  await mkdir(join(ctx.dataDir, 'context'));
-  await writeFile(join(ctx.dataDir, 'context', 'Dockerfile'), 'FROM scratch\n');
-  await mkdir(join(ctx.dataDir, 'tree'));
-  await writeFile(join(ctx.dataDir, 'tree', 'hello'), 'hi');
+  await mkdir(join(ctx.directoryPath, 'context'));
+  await writeFile(join(ctx.directoryPath, 'context', 'Dockerfile'), 'FROM scratch\n');
 
-  const docker = createStubDockerCli({
-    directory: ctx.dataDir,
-    images: [
-      { refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] },
-      {
-        refs: ['imp/web:latest'],
-        inspects: [{ Id: `sha256:${'e'.repeat(64)}`, Config: {}, Size: 2 }],
-      },
-    ],
-    create: { id: 'c'.repeat(64) },
-    exportTar: Bun.spawnSync(['tar', '-C', join(ctx.dataDir, 'tree'), '-c', 'hello']).stdout,
+  const builder = buildStubImageBuilder({
+    exported: [createFilesTar(ctx.directoryPath, { hello: 'hi' })],
+    repoDigest: `sha256:${'e'.repeat(64)}`,
+    buildLog: '#5 [2/3] RUN echo compiling widget\n#5 0.112 compiling widget\n#5 DONE 0.2s\n',
   });
 
-  updateEnv('PATH', docker.path);
-
-  ctx.engine.setAnswer(buildStubTracedBuild({ imageId: `sha256:${'e'.repeat(64)}` }));
+  const harness = await startBuilderImpd(ctx.stack, builder, {
+    dataDir: ctx.dataDir,
+    rootToken: ctx.rootToken,
+  });
 
   const result = await runCLIInProcess({
-    args: ['image', 'build', join(ctx.dataDir, 'context'), '--name', 'web', '-q'],
-    env: { IMP_URL: ctx.url, IMP_TOKEN: ctx.rootToken },
+    args: ['image', 'build', join(ctx.directoryPath, 'context'), '--name', 'web', '-q'],
+    env: { IMP_URL: harness.url, IMP_TOKEN: ctx.rootToken },
   });
 
   expect(result.code).toBe(0);
@@ -137,60 +106,37 @@ test('#imageCommand prints no progress and no step output for --quiet', async ()
 test('#imageCommand prints the image as JSON alone on stdout with --json, and the progress on stderr', async () => {
   const ctx = await setupTest();
 
-  await mkdir(join(ctx.dataDir, 'context'));
-  await writeFile(join(ctx.dataDir, 'context', 'Dockerfile'), 'FROM scratch\n');
-  await mkdir(join(ctx.dataDir, 'tree'));
-  await writeFile(join(ctx.dataDir, 'tree', 'hello'), 'hi');
+  await mkdir(join(ctx.directoryPath, 'context'));
+  await writeFile(join(ctx.directoryPath, 'context', 'Dockerfile'), 'FROM scratch\n');
 
-  const docker = createStubDockerCli({
-    directory: ctx.dataDir,
-    images: [
-      { refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] },
-      {
-        refs: ['imp/web:latest'],
-        inspects: [{ Id: `sha256:${'e'.repeat(64)}`, Config: {}, Size: 2 }],
-      },
-    ],
-    create: { id: 'c'.repeat(64) },
-    exportTar: Bun.spawnSync(['tar', '-C', join(ctx.dataDir, 'tree'), '-c', 'hello']).stdout,
+  const builder = buildStubImageBuilder({
+    exported: [createFilesTar(ctx.directoryPath, { hello: 'hi' })],
+    repoDigest: `sha256:${'e'.repeat(64)}`,
+    buildLog: '#5 [2/3] RUN echo compiling widget\n#5 0.112 compiling widget\n#5 DONE 0.2s\n',
   });
 
-  updateEnv('PATH', docker.path);
-
-  ctx.engine.setAnswer(buildStubTracedBuild({ imageId: `sha256:${'e'.repeat(64)}` }));
+  const harness = await startBuilderImpd(ctx.stack, builder, {
+    dataDir: ctx.dataDir,
+    rootToken: ctx.rootToken,
+  });
 
   const result = await runCLIInProcess({
-    args: ['image', 'build', join(ctx.dataDir, 'context'), '--name', 'web', '--json'],
-    env: { IMP_URL: ctx.url, IMP_TOKEN: ctx.rootToken },
+    args: ['image', 'build', join(ctx.directoryPath, 'context'), '--name', 'web', '--json'],
+    env: { IMP_URL: harness.url, IMP_TOKEN: ctx.rootToken },
   });
 
   const printed: unknown = JSON.parse(result.stdout);
 
   expect(result.code).toBe(0);
   expect(printed).toMatchObject({ name: 'web', ref: 'imp/web:latest', source: 'oci' });
-  expect(result.stderr).toInclude('#1 compiling widget\n');
+  expect(result.stderr).toInclude('#5 0.112 compiling widget\n');
 });
 
-test('#imageCommand lists a running build with its start and step from another shell', async () => {
+test('#imageCommand lists a running build with its start, step and builder from another shell', async () => {
   const ctx = await setupTest();
 
-  await mkdir(join(ctx.dataDir, 'context'));
-  await writeFile(join(ctx.dataDir, 'context', 'Dockerfile'), 'FROM scratch\n');
-  await mkdir(join(ctx.dataDir, 'tree'));
-  await writeFile(join(ctx.dataDir, 'tree', 'hello'), 'hi');
-
-  const docker = createStubDockerCli({
-    directory: ctx.dataDir,
-    images: [
-      { refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] },
-      {
-        refs: ['imp/web:latest'],
-        inspects: [{ Id: `sha256:${'e'.repeat(64)}`, Config: {}, Size: 2 }],
-      },
-    ],
-    create: { id: 'c'.repeat(64) },
-    exportTar: Bun.spawnSync(['tar', '-C', join(ctx.dataDir, 'tree'), '-c', 'hello']).stdout,
-  });
+  await mkdir(join(ctx.directoryPath, 'context'));
+  await writeFile(join(ctx.directoryPath, 'context', 'Dockerfile'), 'FROM scratch\n');
 
   const hold = Promise.withResolvers<void>();
 
@@ -198,30 +144,35 @@ test('#imageCommand lists a running build with its start and step from another s
     hold.resolve();
   });
 
-  updateEnv('PATH', docker.path);
+  const builder = buildStubImageBuilder({
+    exported: [createFilesTar(ctx.directoryPath, { hello: 'hi' })],
+    onExport: () => hold.promise,
+    repoDigest: `sha256:${'e'.repeat(64)}`,
+    buildLog:
+      '#5 [2/3] RUN echo compiling widget && echo second line\n#5 0.112 compiling widget\n#5 DONE 0.2s\n',
+  });
 
-  ctx.engine.setAnswer(
-    buildStubTracedBuild({ imageId: `sha256:${'e'.repeat(64)}`, hold: hold.promise }),
-  );
+  const harness = await startBuilderImpd(ctx.stack, builder, {
+    dataDir: ctx.dataDir,
+    rootToken: ctx.rootToken,
+  });
 
   const before = new Date();
 
   const building = runCLIInProcess({
-    args: ['image', 'build', join(ctx.dataDir, 'context'), '--name', 'web', '-q'],
-    env: { IMP_URL: ctx.url, IMP_TOKEN: ctx.rootToken },
+    args: ['image', 'build', join(ctx.directoryPath, 'context'), '--name', 'web', '-q'],
+    env: { IMP_URL: harness.url, IMP_TOKEN: ctx.rootToken },
   });
 
   const listedJson = await waitFor(async () => {
     const result = await runCLIInProcess({
       args: ['image', 'builds', '--json'],
-      env: { IMP_URL: ctx.url, IMP_TOKEN: ctx.rootToken },
+      env: { IMP_URL: harness.url, IMP_TOKEN: ctx.rootToken },
     });
 
-    const builds = z
-      .array(z.object({ step: z.string().nullable() }))
-      .parse(JSON.parse(result.stdout));
+    const builds = z.array(z.object({ phase: z.string() })).parse(JSON.parse(result.stdout));
 
-    invariant(typeof builds[0]?.step === 'string');
+    invariant(builds[0]?.phase === 'unpack');
 
     return result.stdout;
   });
@@ -230,7 +181,7 @@ test('#imageCommand lists a running build with its start and step from another s
 
   const table = await runCLIInProcess({
     args: ['image', 'builds'],
-    env: { IMP_URL: ctx.url, IMP_TOKEN: ctx.rootToken },
+    env: { IMP_URL: harness.url, IMP_TOKEN: ctx.rootToken },
   });
 
   hold.resolve();
@@ -244,9 +195,9 @@ test('#imageCommand lists a running build with its start and step from another s
       startedAt: expect.toSatisfy(
         (startedAt: string) => Date.parse(startedAt) >= before.getTime() - 1000,
       ),
-      phase: 'build',
+      phase: 'unpack',
       step: '[2/3] RUN echo compiling widget && echo second line',
-      builder: null,
+      builder: expect.stringMatching(/^imp-build-[a-z0-9]{8}$/v),
     },
   ]);
 
@@ -255,7 +206,7 @@ test('#imageCommand lists a running build with its start and step from another s
   expect(tableLines).toStrictEqual([
     expect.stringMatching(/^NAME +SOURCE +STARTED +ELAPSED +PHASE +STEP +BUILDER *$/v),
     expect.stringMatching(
-      /^web +upload +\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ +\d+s +build +\[2\/3\] RUN echo compiling widget && echo second line +- *$/v,
+      /^web +upload +\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ +\d+s +unpack +\[2\/3\] RUN echo compiling widget && echo second line +imp-build-[a-z0-9]{8} *$/v,
     ),
     '',
   ]);
@@ -298,14 +249,19 @@ test('#imageCommand refuses a build context without a Dockerfile before any uplo
 test('#imageCommand pins an image so that image ls shows it pinned', async () => {
   const ctx = await setupTest();
 
-  await createImage(ctx.db, buildMockNewImage({ name: 'ubuntu' }));
+  const harness = await startTestImpd(ctx.stack, {
+    dataDir: ctx.dataDir,
+    rootToken: ctx.rootToken,
+  });
+
+  await createImage(harness.db, buildMockNewImage({ name: 'ubuntu' }));
 
   const result = await runCLIInProcess({
     args: ['image', 'pin', 'ubuntu'],
-    env: { IMP_URL: ctx.url, IMP_TOKEN: ctx.rootToken },
+    env: { IMP_URL: harness.url, IMP_TOKEN: ctx.rootToken },
   });
 
-  const image = await readImageByName(ctx.db, 'ubuntu');
+  const image = await readImageByName(harness.db, 'ubuntu');
 
   expect(result).toStrictEqual({ stdout: '', stderr: '', code: 0 });
   expect(image?.isPinned).toBeTrue();
@@ -314,15 +270,20 @@ test('#imageCommand pins an image so that image ls shows it pinned', async () =>
 test('#imageCommand unpins a pinned image', async () => {
   const ctx = await setupTest();
 
-  await createImage(ctx.db, buildMockNewImage({ name: 'ubuntu' }));
-  await updateImagePin(ctx.db, 'ubuntu', true);
+  const harness = await startTestImpd(ctx.stack, {
+    dataDir: ctx.dataDir,
+    rootToken: ctx.rootToken,
+  });
+
+  await createImage(harness.db, buildMockNewImage({ name: 'ubuntu' }));
+  await updateImagePin(harness.db, 'ubuntu', true);
 
   const result = await runCLIInProcess({
     args: ['image', 'unpin', 'ubuntu'],
-    env: { IMP_URL: ctx.url, IMP_TOKEN: ctx.rootToken },
+    env: { IMP_URL: harness.url, IMP_TOKEN: ctx.rootToken },
   });
 
-  const image = await readImageByName(ctx.db, 'ubuntu');
+  const image = await readImageByName(harness.db, 'ubuntu');
 
   expect(result).toStrictEqual({ stdout: '', stderr: '', code: 0 });
   expect(image?.isPinned).toBeFalse();
@@ -331,15 +292,20 @@ test('#imageCommand unpins a pinned image', async () => {
 test('#templateCommand refuses to remove a docker image as a template', async () => {
   const ctx = await setupTest();
 
+  const harness = await startTestImpd(ctx.stack, {
+    dataDir: ctx.dataDir,
+    rootToken: ctx.rootToken,
+  });
+
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
   await Bun.write(buildImagePaths(ctx.dataDir, image.digest).rootfs, 'rootfs');
 
-  await createImage(ctx.db, image);
+  await createImage(harness.db, image);
 
   const result = await runCLIInProcess({
     args: ['template', 'rm', 'ubuntu'],
-    env: { IMP_URL: ctx.url, IMP_TOKEN: ctx.rootToken },
+    env: { IMP_URL: harness.url, IMP_TOKEN: ctx.rootToken },
   });
 
   expect(result).toStrictEqual({
