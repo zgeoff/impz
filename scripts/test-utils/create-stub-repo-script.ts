@@ -12,7 +12,7 @@ export function createStubRepoScript(
 
   writeFileSync(
     file,
-    `#!/bin/bash\nprintf '%s\\n' "${name} $*" >>${formatShellWord(calls)}\n${body}\n`,
+    `#!/bin/bash\nSTUB_CALLS=${formatShellWord(calls)}\nprintf '%s\\n' "${name} $*" >>"$STUB_CALLS"\n${body}\n`,
   );
 
   chmodSync(file, 0o755);
