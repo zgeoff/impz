@@ -259,6 +259,45 @@ test('it removes the run’s Headscale once the suites are done', async () => {
   expect(ctx.deps.stopHeadscale).toHaveBeenCalledAfter(ctx.deps.runJourney);
 });
 
+test('it removes the run’s Headscale when the cleanup after the suites fails', async () => {
+  const ctx = setupTest();
+
+  const instance = createInstance({
+    container: 'imp-e2e-a',
+    dataDir: '/var/tmp/imp-e2e-a',
+    network: 'imp-e2e-a-net',
+    ip: '10.100.0.10',
+  });
+
+  ctx.deps.readHostImage.mockReturnValue('imp-host:dev-imp-0f3a91c2');
+
+  ctx.deps.startHeadscale.mockResolvedValue({
+    key: 'fake-headscale-key',
+    network: 'imp-e2e-a-ts',
+    member: 'imp-e2e-a-ts-member',
+  });
+
+  ctx.deps.setUpInstance.mockResolvedValue({ ...instance, token: 'fake-run-token' });
+  ctx.deps.runJourney.mockResolvedValue(0);
+  ctx.deps.readImpdLogSince.mockResolvedValue('');
+  ctx.deps.removeLeftovers.mockRejectedValue(new Error('scripts/dev/dev.sh down exited 1'));
+  ctx.deps.now.mockReturnValue(1_767_225_600_000);
+
+  const failure = await runE2E({
+    argv: ['--only', 'egress'],
+    env: { PATH: '/usr/bin' },
+    bunPath: '/usr/local/bin/bun',
+    resultsDir: '/var/tmp/imp-e2e-results',
+    deps: ctx.deps,
+  }).then(
+    () => null,
+    (error: unknown) => error,
+  );
+
+  expect(failure).toBeInstanceOf(Error);
+  expect(ctx.deps.stopHeadscale).toHaveBeenCalledOnce();
+});
+
 test('it restarts a kept instance onto the run’s new Headscale in place of --reuse', async () => {
   const ctx = setupTest();
 
