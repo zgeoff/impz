@@ -49,7 +49,7 @@ async function setupTest() {
 
   const headscale = `${prefix}-headscale`;
 
-  await $`docker run -d --name ${headscale} --network ${prefix} --network-alias headscale -v ${directory}:/etc/headscale:ro --tmpfs /var/lib/headscale ${HEADSCALE_IMAGES.headscale} serve`.quiet();
+  await $`docker run -d --name ${headscale} --network ${prefix} --network-alias headscale -v ${directory}:/etc/headscale:ro --tmpfs /var/lib/headscale ${[HEADSCALE_IMAGES.headscale, 'serve']}`.quiet();
 
   stack.defer(async () => {
     await $`docker rm -f ${headscale}`.quiet();
@@ -58,7 +58,7 @@ async function setupTest() {
   const node = `${prefix}-node`;
 
   // the host image's tools that tailscale-up.sh runs, on Tailscale's own image
-  await $`docker run -d --name ${node} --network ${prefix} --cap-add NET_ADMIN --device /dev/net/tun -v ${dirname(Bun.fileURLToPath(import.meta.url))}:/scripts:ro --entrypoint sleep ${HEADSCALE_IMAGES.tailscale} infinity`.quiet();
+  await $`docker run -d --name ${node} --network ${prefix} --cap-add NET_ADMIN --device /dev/net/tun -v ${dirname(Bun.fileURLToPath(import.meta.url))}:/scripts:ro --entrypoint sleep ${[HEADSCALE_IMAGES.tailscale, 'infinity']}`.quiet();
 
   stack.defer(async () => {
     await $`docker rm -f ${node}`.quiet();

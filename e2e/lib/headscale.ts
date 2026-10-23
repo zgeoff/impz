@@ -14,7 +14,7 @@ export interface HeadscaleTailnet {
   readonly member: string;
 }
 
-export function buildHeadscaleNames(container: string = instance.container) {
+function buildHeadscaleNames(container: string = instance.container) {
   return {
     network: `${container}-ts`,
     headscale: `${container}-headscale`,
