@@ -12,6 +12,7 @@ import {
   collectUnpinnedRequests,
   createImageImp,
   createMovedTag,
+  getDigest,
   removeStaleRegistries,
   runBuildAndListRequests,
   startRegistry,
@@ -91,6 +92,7 @@ test.skipIf(registryMissing)(
     const content = await runInImp(mutable, 'cat', '/v');
 
     expect(collectUnpinnedRequests(moved.current, seen)).toStrictEqual(['1']);
+    expect(seen).toContain(getDigest(moved.current));
     expect(content).toBe('new');
   },
 );

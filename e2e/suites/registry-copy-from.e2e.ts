@@ -12,6 +12,7 @@ import {
   collectUnpinnedRequests,
   createImageImp,
   createMovedTag,
+  getDigest,
   readBusyboxDigest,
   removeStaleRegistries,
   runBuildAndListRequests,
@@ -101,6 +102,7 @@ test.skipIf(registryMissing)(
     const fromMount = await runInImp(copied, 'cat', '/mounted');
 
     expect(collectUnpinnedRequests(moved.current, seen)).toStrictEqual(['1']);
+    expect(seen).toContain(getDigest(moved.current));
     expect(fromCopy).toBe('new');
     expect(fromMount).toBe('new');
   },

@@ -49,8 +49,18 @@ export function getRepoDigest(digests: string, repository: string): string {
   return own;
 }
 
+export function getDigest(reference: string): string {
+  const at = reference.indexOf('@');
+
+  if (at === -1) {
+    throw new Error(`no digest in ${reference}`);
+  }
+
+  return reference.slice(at + 1);
+}
+
 export function collectUnpinnedRequests(pinned: string, seen: readonly string[]): string[] {
-  const digest = pinned.slice(pinned.indexOf('@') + 1);
+  const digest = getDigest(pinned);
 
   return seen.filter((reference) => reference !== digest);
 }

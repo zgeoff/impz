@@ -10,6 +10,7 @@ import { instance } from './instance';
 import {
   collectUnpinnedRequests,
   createMovedTag,
+  getDigest,
   getRepoDigest,
   parseManifestRequests,
   removeStaleRegistries,
@@ -64,6 +65,17 @@ test('#collectUnpinnedRequests keeps every reference but the pin’s digest', ()
       'sha256:abc',
     ]),
   ).toStrictEqual(['1']);
+});
+
+test('#getDigest reads the digest of a pinned reference', () => {
+  expect(getDigest('reg.test:5000/e2e/mutable@sha256:abc')).toBe('sha256:abc');
+});
+
+test('#getDigest refuses a reference with no digest', () => {
+  expect(() => getDigest('reg.test:5000/e2e/mutable:1')).toThrowWithMessage(
+    Error,
+    'no digest in reg.test:5000/e2e/mutable:1',
+  );
 });
 
 test("#startRegistry runs a registry labelled with the instance on its network's gateway, on a certificate for its name", async () => {
