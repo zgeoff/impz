@@ -1,6 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { existsSync } from 'node:fs';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { updateEnv } from '@impz/test-utils/update-env';
@@ -72,6 +72,31 @@ test('#startLocalSshAgent serves the key it made until stop, which removes its s
   expect(listed).toStrictEqual({ exitCode: 0, stdout: agent.publicKey, stderr: '' });
   expect(agent.publicKey).toEndWith(' imp-e2e-unit\n');
   expect(existsSync(agent.socket)).toBeFalse();
+});
+
+test('#startLocalSshAgent serves its key from a socket under /tmp when TMPDIR is long', async () => {
+  const ctx = await setupTest();
+
+  const longTmp = join(
+    ctx.directoryPath,
+    'a-temporary-folder-whose-path-is-long-enough-to-pass-the-limit',
+  );
+
+  await mkdir(longTmp);
+
+  updateEnv('TMPDIR', longTmp);
+
+  const agent = await startLocalSshAgent(
+    { configArgs: [], directory: ctx.directoryPath, cleanup: () => Promise.resolve() },
+    'unit',
+  );
+
+  onTestFinished(() => agent.stop());
+
+  const listed = await runCommand(['ssh-add', '-L'], { env: { SSH_AUTH_SOCK: agent.socket } });
+
+  expect(listed).toStrictEqual({ exitCode: 0, stdout: agent.publicKey, stderr: '' });
+  expect(agent.socket).toStartWith('/tmp/imp-agent-');
 });
 
 test('#startLocalSshAgent refuses a socket path past the unix socket limit, naming it', async () => {
