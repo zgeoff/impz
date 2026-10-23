@@ -51,9 +51,9 @@ each; open one when the task touches its area.
 - **`createImpd`'s `now` does not reach every clock.** Some services stay on the wall clock;
   [Booting impd](./references/stand-ins.md#booting-impd) lists the gaps and the clocks those
   components take instead.
-- **Ports come from
-  [`claimFreePorts`](../../../packages/daemon/testing/platform/claim-free-ports.ts).** It claims
-  each port until the test ends, so parallel test processes never share one. A fixed port collides.
+- **Ports come from [`claimFreePorts`](../../../packages/test-utils/src/claim-free-ports.ts).** It
+  claims each port until the test ends, so parallel test processes never share one. A fixed port
+  collides.
 - **tmpfs lacks disk features.** `tmpdir()` is a tmpfs on some hosts; a test that needs FIEMAP or
   similar makes its directory under `/var/tmp`, never in the checkout.
 - **Git hooks leak `GIT_DIR`.** A test that runs git spawns it through the helpers in

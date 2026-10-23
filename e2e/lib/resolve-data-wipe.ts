@@ -1,3 +1,4 @@
+import type { HarnessEnv } from './config';
 import { REPO_ROOT } from './instance';
 import { runHostZfs } from './run-host-zfs';
 import { resolveWipeTarget } from './wipe-target';
@@ -5,13 +6,14 @@ import type { WipeTarget } from './wipe-target';
 
 export function resolveDataWipe(
   path: string,
-  zfsRoot: string | undefined = process.env['IMP_ZFS_ROOT'],
+  env: HarnessEnv,
+  zfsRoot: string | undefined = env['IMP_ZFS_ROOT'],
 ): Promise<WipeTarget | null> {
   return resolveWipeTarget({
     path,
     repoRoot: REPO_ROOT,
-    storageBackend: process.env['IMP_STORAGE_BACKEND'],
+    storageBackend: env['IMP_STORAGE_BACKEND'],
     zfsRoot,
-    run: runHostZfs,
+    run: (argv) => runHostZfs(argv, env),
   });
 }

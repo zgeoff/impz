@@ -13,6 +13,7 @@ import {
   renderProbe,
   renderProxyExecStart,
   renderProxyUnit,
+  renderStorage,
   renderUnit,
 } from './render-imp-host';
 
@@ -43,6 +44,7 @@ test('#render renders every deploy file from one args file', () => {
       `ExecStart=/usr/bin/docker run --old \\\n  \${IMP_HOST_IMAGE}\n`,
     proxyUnit: `[Service]\nExecStart=/usr/bin/docker run --old \\\n  \${IMP_HOST_IMAGE} old\n`,
     hostEnv: 'readonly HOST_NETWORK=old\nreadonly HOST_BRIDGE=old\nhost_addresses() { old; }\n',
+    storage: 'readonly ZPOOL_CREATE_PROPERTIES=old\n',
     bootstrap: 'old\n',
     compose:
       '    # proxy privileges: from deploy/imp-host.args.json (bun run render:deploy)\n' +
@@ -58,10 +60,12 @@ test('#render renders every deploy file from one args file', () => {
     parts: [
       { path: 'deploy/bootstrap/start.sh', text: '# shellcheck shell=bash\nset -euo pipefail\n' },
       { path: 'deploy/lib/host-env.sh', text: 'not this copy\n' },
+      { path: 'deploy/bootstrap/storage.sh', text: 'not this copy either\n' },
       { path: 'deploy/bootstrap/units.sh', text: '# shellcheck shell=bash\nrender_env() { :; }\n' },
       { path: 'deploy/bootstrap/main.sh', text: '# shellcheck shell=bash\nmain() { :; }\n' },
     ],
     envExample: '# imp host settings\nIMP_DOMAIN=\n',
+    zfsPoolJson: '{"create": ["-o", "ashift=12", "-O", "compression=lz4"]}',
   };
 
   expect(render(argsJson, current, sources)).toMatchInlineSnapshot(`
@@ -80,6 +84,10 @@ test('#render renders every deploy file from one args file', () => {
     readonly HOST_NETWORK=imp-net
     readonly HOST_BRIDGE=br-impnet
     host_addresses() { ip -o addr show scope global | cut -d " " -f 4; }
+
+    # --- deploy/bootstrap/storage.sh ---
+
+    readonly ZPOOL_CREATE_PROPERTIES="-o ashift=12 -O compression=lz4"
 
     # --- deploy/bootstrap/units.sh ---
 
@@ -161,6 +169,10 @@ test('#render renders every deploy file from one args file', () => {
       \${IMP_HOST_IMAGE} /usr/local/bin/imp-docker-proxy
     "
     ,
+      "storage": 
+    "readonly ZPOOL_CREATE_PROPERTIES="-o ashift=12 -O compression=lz4"
+    "
+    ,
       "unit": 
     "[Service]
     ExecStartPre=/bin/sh -c 'case "$$IMP_HOST_NETWORK" in *imp-net*) /usr/bin/docker network inspect imp-net >/dev/null 2>&1 || /usr/bin/docker network create --ipv6 --subnet "$$IMP_HOST_SUBNET6" -o com.docker.network.bridge.name=br-impnet imp-net ;; esac'
@@ -188,6 +200,7 @@ test('#render gives the same files for the same input', () => {
       `ExecStartPre=/bin/sh -c 'a=; old'\nExecStart=/usr/bin/docker run \\\n  \${IMP_HOST_IMAGE}\n`,
     proxyUnit: `ExecStart=/usr/bin/docker run \\\n  \${IMP_HOST_IMAGE} old\n`,
     hostEnv: 'readonly HOST_NETWORK=old\nreadonly HOST_BRIDGE=old\nhost_addresses() { old; }\n',
+    storage: 'readonly ZPOOL_CREATE_PROPERTIES=old\n',
     bootstrap: 'old\n',
     compose:
       '    # proxy privileges: from deploy/imp-host.args.json (bun run render:deploy)\n' +
@@ -201,6 +214,7 @@ test('#render gives the same files for the same input', () => {
   const sources = {
     parts: [{ path: 'deploy/bootstrap/units.sh', text: 'render_env() { :; }\n' }],
     envExample: 'IMP_DOMAIN=\n',
+    zfsPoolJson: '{"create": ["-O", "atime=off"]}',
   };
 
   expect(render(argsJson, current, sources)).toStrictEqual(render(argsJson, current, sources));
@@ -214,6 +228,7 @@ test('#render leaves the checked-in units, host-env.sh, bootstrap.sh and compose
       'utf8',
     ),
     hostEnv: readFileSync(new URL('../../deploy/lib/host-env.sh', import.meta.url), 'utf8'),
+    storage: readFileSync(new URL('../../deploy/bootstrap/storage.sh', import.meta.url), 'utf8'),
     bootstrap: readFileSync(new URL('../../deploy/bootstrap.sh', import.meta.url), 'utf8'),
     compose: readFileSync(new URL('../../deploy/compose.yaml', import.meta.url), 'utf8'),
   };
@@ -224,6 +239,7 @@ test('#render leaves the checked-in units, host-env.sh, bootstrap.sh and compose
       text: readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8'),
     })),
     envExample: readFileSync(new URL('../../deploy/imp-host.env.example', import.meta.url), 'utf8'),
+    zfsPoolJson: readFileSync(new URL('../../deploy/zfs-pool.json', import.meta.url), 'utf8'),
   };
 
   const argsJson = readFileSync(
@@ -377,6 +393,26 @@ test('#renderNetworkStart makes the network on its bridge when IMP_HOST_NETWORK 
       '/usr/bin/docker network inspect imp-host >/dev/null 2>&1 || ' +
       '/usr/bin/docker network create --ipv6 --subnet "$$IMP_HOST_SUBNET6" ' +
       "-o com.docker.network.bridge.name=br-imphost imp-host ;; esac'",
+  );
+});
+
+test('#renderStorage writes the zpool create properties into their line', () => {
+  expect(
+    renderStorage('# storage\nreadonly ZPOOL_CREATE_PROPERTIES="old"\nstorage_zfs() { :; }\n', [
+      '-o',
+      'ashift=12',
+      '-O',
+      'compression=lz4',
+    ]),
+  ).toBe(
+    '# storage\nreadonly ZPOOL_CREATE_PROPERTIES="-o ashift=12 -O compression=lz4"\nstorage_zfs() { :; }\n',
+  );
+});
+
+test('#renderStorage refuses a storage.sh without the properties line', () => {
+  expect(() => renderStorage('storage_zfs() { :; }\n', ['-O', 'atime=off'])).toThrowWithMessage(
+    Error,
+    'deploy/bootstrap/storage.sh: no line for ZPOOL_CREATE_PROPERTIES',
   );
 });
 
@@ -584,6 +620,7 @@ test('#render refuses a compose file without the proxy privileges block', () => 
       `ExecStartPre=/bin/sh -c 'a=; old'\nExecStart=/usr/bin/docker run \\\n  \${IMP_HOST_IMAGE}\n`,
     proxyUnit: `ExecStart=/usr/bin/docker run \\\n  \${IMP_HOST_IMAGE} old\n`,
     hostEnv: 'readonly HOST_NETWORK=old\nreadonly HOST_BRIDGE=old\nhost_addresses() { old; }\n',
+    storage: 'readonly ZPOOL_CREATE_PROPERTIES=old\n',
     bootstrap: 'old\n',
     compose:
       '    # privileges: from deploy/imp-host.args.json (bun run render:deploy)\n' +
@@ -595,6 +632,7 @@ test('#render refuses a compose file without the proxy privileges block', () => 
   const sources = {
     parts: [{ path: 'deploy/bootstrap/units.sh', text: 'render_env() { :; }\n' }],
     envExample: 'IMP_DOMAIN=\n',
+    zfsPoolJson: '{"create": ["-O", "atime=off"]}',
   };
 
   expect(() => render(argsJson, current, sources)).toThrowWithMessage(

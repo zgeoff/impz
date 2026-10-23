@@ -1,6 +1,6 @@
 import type { MessageDirection } from '@impz/api';
+import { buildWithout } from '@impz/shared';
 import { ANNOTATIONS } from './annotations';
-import { buildWithout } from './build-without';
 import { collectSchemaMap } from './collect-schema-map';
 import { findSchema } from './find-schema';
 import { findSchemaList } from './find-schema-list';

@@ -19,12 +19,26 @@
       "entry": [
         "e2e/main.ts",
         "e2e/suites/*.e2e.ts",
+        // the bootstrap harness that e2e/test-bootstrap.sh runs
+        "e2e/test-bootstrap.ts",
         "host/scripts/*.headscale.ts",
         "scripts/ci/run-related-tests.ts",
+        // the dev CLI that scripts/dev/dev.sh runs
+        "scripts/dev/dev.ts",
+        // the zfs harnesses that scripts/test-zfs.sh and scripts/zfs-host-test.sh run
+        "scripts/test-zfs.ts",
+        "scripts/zfs-host-test.ts",
         // a protoc plugin buf.gen.yaml runs
         "scripts/proto/protoc-gen-protocol-reference.ts"
       ],
-      "project": ["e2e/**/*.ts", "scripts/**/*.ts", "deploy/**/*.ts", "host/**/*.ts", "*.test.ts"]
+      "project": [
+        "e2e/**/*.ts",
+        "scripts/**/*.ts",
+        "deploy/**/*.ts",
+        "host/**/*.ts",
+        "kernel/**/*.ts",
+        "*.test.ts"
+      ]
     },
     "packages/*": {
       "project": ["src/**/*.ts!", "!src/test-utils/**!"]

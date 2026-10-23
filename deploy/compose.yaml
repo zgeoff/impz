@@ -24,7 +24,7 @@ name: imp
 
 services:
   imp-docker-proxy:
-    image: ${IMP_HOST_IMAGE:-ghcr.io/zgeoff/imp-host:2.11.0} # x-release-please-version
+    image: ${IMP_HOST_IMAGE:-ghcr.io/zgeoff/imp-host:3.0.0} # x-release-please-version
     container_name: imp-docker-proxy
     command: ['/usr/local/bin/imp-docker-proxy']
     # proxy privileges: from deploy/imp-host.args.json (bun run render:deploy)
@@ -45,7 +45,7 @@ services:
     # IMP_BUILD_IMAGE here too, in the shell or .env; the proxy pulls only
     # IMP_BUILD_IMAGE (empty is impd's default)
     environment:
-      IMP_HOST_IMAGE: ${IMP_HOST_IMAGE:-ghcr.io/zgeoff/imp-host:2.11.0} # x-release-please-version
+      IMP_HOST_IMAGE: ${IMP_HOST_IMAGE:-ghcr.io/zgeoff/imp-host:3.0.0} # x-release-please-version
       IMP_BUILD_IMAGE: ${IMP_BUILD_IMAGE:-}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
@@ -59,7 +59,7 @@ services:
     restart: unless-stopped
 
   imp-host:
-    image: ${IMP_HOST_IMAGE:-ghcr.io/zgeoff/imp-host:2.11.0} # x-release-please-version
+    image: ${IMP_HOST_IMAGE:-ghcr.io/zgeoff/imp-host:3.0.0} # x-release-please-version
     container_name: imp-host
     # restic's backup locks name the host: a fixed one lets impd drop a lock
     # its own crashed run left (docs/architecture/storage/backups.md)

@@ -5,7 +5,8 @@
 # them. Never fails the container: CPU limits are not worth an outage.
 set -uo pipefail
 
-root=/sys/fs/cgroup
+# a test points it at its own files
+root=${IMP_CGROUP_ROOT:-/sys/fs/cgroup}
 
 if [ "$(cat /proc/self/cgroup)" != "0::/" ]; then
   echo "setup-cgroups: not in a private cgroup v2 namespace; CPU and memory limits are off" >&2
@@ -31,7 +32,7 @@ for _ in 1 2 3 4 5; do
   pids=$(cat "$root/cgroup.procs")
   [ -z "$pids" ] && break
   for pid in $pids; do
-    echo "$pid" >"$root/init/cgroup.procs" 2>/dev/null || true
+    { echo "$pid" >"$root/init/cgroup.procs"; } 2>/dev/null || true
   done
 done
 
@@ -42,7 +43,8 @@ enable() {
     echo "setup-cgroups: no $controller controller in $dir; $controller limits are off" >&2
     return 1
   fi
-  if ! echo "+$controller" >"$dir/cgroup.subtree_control" 2>/dev/null; then
+  # the braces put the redirect's own error under 2>/dev/null too
+  if ! { echo "+$controller" >"$dir/cgroup.subtree_control"; } 2>/dev/null; then
     echo "setup-cgroups: cannot enable $controller in $dir; $controller limits are off" >&2
     return 1
   fi

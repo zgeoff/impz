@@ -1,4 +1,5 @@
 import { ENFORCE_TRIGGER } from '@impz/daemon/testing';
+import { readLines } from '@impz/shared';
 import * as z from 'zod';
 import type { SleepSpan } from './budget-overshoot';
 import { startImp } from './imp-cli';
@@ -44,23 +45,11 @@ export async function startSleepWatch(): Promise<SleepWatch> {
   const sleeps: SleepSpan[] = [];
 
   const reading = (async () => {
-    const decoder = new TextDecoder();
+    for await (const line of readLines(events.stdout)) {
+      const sleep = parseSleepSpan(line);
 
-    let buffered = '';
-
-    for await (const chunk of events.stdout) {
-      buffered += decoder.decode(chunk, { stream: true });
-
-      const lines = buffered.split('\n');
-
-      buffered = lines.pop() ?? '';
-
-      for (const line of lines) {
-        const sleep = parseSleepSpan(line);
-
-        if (sleep !== null) {
-          sleeps.push(sleep);
-        }
+      if (sleep !== null) {
+        sleeps.push(sleep);
       }
     }
   })();

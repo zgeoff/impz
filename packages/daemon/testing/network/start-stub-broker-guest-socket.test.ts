@@ -1,6 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
+import { claimFreePorts } from '@impz/test-utils/claim-free-ports';
 import type { Socket } from 'bun';
-import { claimFreePorts } from '../platform/claim-free-ports';
 import { startStubBrokerGuestSocket } from './start-stub-broker-guest-socket';
 
 function setupTest() {

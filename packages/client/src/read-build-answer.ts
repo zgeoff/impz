@@ -5,7 +5,7 @@ import {
   ImageBuildResultSchema,
 } from '@impz/api';
 import type { Image, ImageBuildProgress } from '@impz/api';
-import { splitLines } from '@impz/shared';
+import { readLines } from '@impz/shared';
 import { ORPCError } from '@orpc/client';
 
 export async function readBuildAnswer(
@@ -51,7 +51,9 @@ async function readBuildEvents(
   onProgress: ((progress: ImageBuildProgress) => void) | undefined,
   onLog: ((line: string) => void) | undefined,
 ): Promise<Image> {
-  for await (const line of readLines(response)) {
+  const lines = response.body === null ? [] : readLines(response.body);
+
+  for await (const line of lines) {
     const parsed = ImageBuildEventSchema.safeParse(parseJson(line));
 
     if (!parsed.success) {
@@ -78,16 +80,6 @@ async function readBuildEvents(
   throw new ORPCError('INTERNAL_SERVER_ERROR', {
     message: 'the image build stream ended before impd answered the image',
   });
-}
-
-async function* readLines(response: Response): AsyncGenerator<string> {
-  if (response.body === null) {
-    return;
-  }
-
-  yield* response.body
-    .pipeThrough(new TextDecoderStream())
-    .pipeThrough(splitLines()) as AsyncIterable<string>;
 }
 
 function parseJson(line: string): unknown {

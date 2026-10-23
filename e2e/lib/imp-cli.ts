@@ -1,4 +1,11 @@
 import { join } from 'node:path';
+import {
+  SystemInfoSchema as ApiSystemInfoSchema,
+  CheckpointSchema,
+  ImageSchema,
+  ImpSchema,
+} from '@impz/api';
+import type { ImpState } from '@impz/api';
 import { createImpClient } from '@impz/client';
 import type { ImpClient } from '@impz/client';
 import * as z from 'zod';
@@ -6,74 +13,53 @@ import type { CommandResult, DevInstance } from './instance';
 import { REPO_ROOT, instance, readToken, runCommand } from './instance';
 
 const IMP_SCRIPT = join(REPO_ROOT, 'scripts', 'impz');
-const ImpStateSchema = z.enum(['creating', 'running', 'sleeping', 'stopped', 'error']);
-const SampleSchema = z.object({ cpuThrottledMs: z.number() });
+const ApiResourcesSchema = ImpSchema.shape.resources.unwrap();
+const ApiDiskUsageSchema = ImpSchema.shape.diskUsage.unwrap();
 
-const ResourcesSchema = z.object({
-  wakeCount: z.number(),
-  awakeMs: z.number(),
-  sample: SampleSchema.optional(),
+// `impz --json` prints each Date as its ISO string, so the row takes the API's fields and gives
+// each date its JSON shape.
+const ImpRowSchema = ImpSchema.pick({
+  id: true,
+  name: true,
+  image: true,
+  state: true,
+  vcpus: true,
+  memoryMib: true,
+  maxMemoryMib: true,
+  pluggedMib: true,
+  backup: true,
+  slot: true,
+  ip: true,
+  port: true,
+  url: true,
+  ramMib: true,
+  error: true,
+  sessions: true,
+  cpu: true,
+  coldBootReason: true,
+}).extend({
+  lastActiveAt: z.iso.datetime(),
+  sleptAt: z.iso.datetime().optional(),
+  diskUsage: ApiDiskUsageSchema.extend({ measuredAt: z.coerce.date() }).optional(),
+  resources: ApiResourcesSchema.extend({
+    sample: ApiResourcesSchema.shape.sample.unwrap().pick({ cpuThrottledMs: true }).optional(),
+  }).optional(),
 });
 
-const ImpRowSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  image: z.string(),
-  state: ImpStateSchema,
-  vcpus: z.number(),
-  memoryMib: z.number(),
-  maxMemoryMib: z.number().optional(),
-  pluggedMib: z.number().optional(),
-  backup: z.boolean().optional(),
-  slot: z.number(),
-  ip: z.string(),
-  port: z.number(),
-  url: z.string(),
-  lastActiveAt: z.string(),
-  ramMib: z.number().optional(),
-  sleptAt: z.string().optional(),
-  error: z.string().optional(),
-  sessions: z.number().optional(),
-  diskUsage: z
-    .object({
-      exclusiveBytes: z.number(),
-      sharedBytes: z.number(),
-      isPartial: z.boolean(),
-      measuredAt: z.coerce.date(),
-    })
-    .optional(),
-  cpu: z.object({ limit: z.number().nullable(), weight: z.number() }).optional(),
-  resources: ResourcesSchema.optional(),
-  coldBootReason: z.string().optional(),
+const SystemInfoSchema = ApiSystemInfoSchema.pick({
+  ramBudgetMib: true,
+  ramUsedMib: true,
+  ramReservedMib: true,
+  awakeCount: true,
+  impCount: true,
+  storage: true,
+  cpu: true,
+  ksm: true,
+  tailscale: true,
 });
 
-const NameFailureSchema = z.object({ name: z.string(), error: z.string() });
-const TailnetNamesSchema = z.object({ live: z.number(), failed: z.array(NameFailureSchema) });
-
-const SystemInfoSchema = z.object({
-  ramBudgetMib: z.number(),
-  ramUsedMib: z.number(),
-  ramReservedMib: z.number(),
-  awakeCount: z.number(),
-  impCount: z.number(),
-  storage: z.object({ backend: z.enum(['xfs', 'zfs']) }),
-  cpu: z.object({ hostCpus: z.number(), limitsEnforced: z.boolean() }).optional(),
-  ksm: z
-    .object({ sharedMib: z.number(), headroomMib: z.number(), unmergeable: z.number() })
-    .nullable()
-    .optional(),
-  tailscale: z.object({
-    state: z.string().nullable(),
-    hostname: z.string().nullable(),
-    ip: z.string().nullable(),
-    names: TailnetNamesSchema.nullable().default(null),
-  }),
-});
-
-const CheckpointRowSchema = z.object({ id: z.string(), label: z.string().optional() });
-const ImageRowSchema = z.object({ name: z.string() });
-
-export type ImpState = z.infer<typeof ImpStateSchema>;
+const CheckpointRowSchema = CheckpointSchema.pick({ id: true, label: true });
+const ImageRowSchema = ImageSchema.pick({ name: true });
 
 export type ImpRow = z.infer<typeof ImpRowSchema>;
 
@@ -86,10 +72,8 @@ const tokens = new Map<string, Promise<string>>();
 // Read from the dev container when the runner passed no token, so a suite
 // file also runs on its own.
 function readImpToken(target: DevInstance): Promise<string> {
-  const fromEnv = process.env['IMP_TOKEN'] ?? '';
-
-  if (target === instance && fromEnv !== '') {
-    return Promise.resolve(fromEnv);
+  if (target.token !== null) {
+    return Promise.resolve(target.token);
   }
 
   let token = tokens.get(target.container);
@@ -252,6 +236,10 @@ export async function assertState(
 export async function readInfo(target: DevInstance = instance): Promise<SystemInfo> {
   const stdout = await runImpWith({ target }, 'info', '--json');
 
+  return parseSystemInfo(stdout);
+}
+
+export function parseSystemInfo(stdout: string): SystemInfo {
   return SystemInfoSchema.parse(JSON.parse(stdout));
 }
 
@@ -265,8 +253,8 @@ export function parseImp(stdout: string): ImpRow {
   return ImpRowSchema.parse(JSON.parse(stdout));
 }
 
-export async function listImageNames(): Promise<readonly string[]> {
-  const stdout = await runImp('image', 'ls', '--json');
+export async function listImageNames(target: DevInstance = instance): Promise<readonly string[]> {
+  const stdout = await runImpWith({ target }, 'image', 'ls', '--json');
 
   const images = z.array(ImageRowSchema).parse(JSON.parse(stdout));
 

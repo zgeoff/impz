@@ -1,8 +1,9 @@
+import { SessionNameSchema } from '@impz/api';
 import * as z from 'zod';
 import { runImp } from './imp-cli';
 
 const SessionRowSchema = z.object({
-  name: z.string(),
+  name: SessionNameSchema,
   pid: z.number(),
   state: z.string(),
   attached: z.boolean(),

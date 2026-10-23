@@ -1,5 +1,17 @@
 # Changelog
 
+## [3.0.0](https://github.com/zgeoff/impz/compare/v2.11.0...v3.0.0) (2026-10-23)
+
+### ⚠ BREAKING CHANGES
+
+- **daemon:** IMP_BUILD_ISOLATION is gone. impd ignores a leftover IMP_BUILD_ISOLATION=host and
+  builds in builder imps; an image that only the host's Docker holds no longer adds.
+
+### Features
+
+- **daemon:** build images only in builder imps ([#647](https://github.com/zgeoff/impz/issues/647))
+  ([92438de](https://github.com/zgeoff/impz/commit/92438de8b5cc8d302a1ced98c5fe74a480fef278))
+
 ## [2.11.0](https://github.com/zgeoff/impz/compare/v2.10.6...v2.11.0) (2026-10-23)
 
 ### Features

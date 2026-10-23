@@ -1,19 +1,15 @@
+import { realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import * as z from 'zod';
+import { buildDevLayout } from '../../scripts/lib/build-dev-layout.ts';
+import { readDevCheckout } from '../../scripts/lib/read-dev-checkout.ts';
 import { config } from './config';
+import type { HarnessEnv } from './config';
 import { buildFirecrackerPgrepArgv, readFirecrackerPids } from './firecracker-pids';
 
 export const REPO_ROOT = join(import.meta.dir, '..', '..');
 export const FIXTURES_DIR = join(REPO_ROOT, 'e2e', 'fixtures');
-export const LIB_SCRIPT = join(REPO_ROOT, 'scripts', 'lib.sh');
 const DEV_SCRIPT = join(REPO_ROOT, 'scripts', 'dev', 'dev.sh');
-const offset = Number(process.env['IMP_DEV_PORT_OFFSET'] ?? '0');
-
-// With the default name, an offset run would drive and wipe imp-dev, not its
-// own instance.
-if (offset !== 0 && (process.env['IMP_DEV_NAME'] ?? '') === '') {
-  throw new Error('IMP_DEV_PORT_OFFSET needs IMP_DEV_NAME: name the instance it belongs to');
-}
 
 export interface DevInstance {
   readonly container: string;
@@ -28,19 +24,36 @@ export interface DevInstance {
   readonly portOffset: number;
 
   readonly env: Readonly<Record<string, string>>;
+
+  readonly token: string | null;
 }
 
-export const instance: DevInstance = {
-  container: process.env['IMP_DEV_NAME'] ?? 'imp-dev',
-  dataDir: process.env['IMP_DEV_DATA'] ?? join(REPO_ROOT, '.data', 'dev'),
-  apiUrl: process.env['IMP_URL'] ?? `http://localhost:${String(7070 + offset)}`,
-  proxyPort: 7080 + offset,
-  impPortBase: 20_000 + offset,
-  sshPort: 2222 + offset,
+export function buildInstance(env: HarnessEnv, cwd: string): DevInstance {
+  const layout = buildDevLayout({ env, root: REPO_ROOT, cwd });
 
-  portOffset: offset,
-  env: {},
-};
+  // With the default name, an offset run would drive and wipe imp-dev, not its
+  // own instance.
+  if (layout.offset !== 0 && (env['IMP_DEV_NAME'] ?? '') === '') {
+    throw new Error('IMP_DEV_PORT_OFFSET needs IMP_DEV_NAME: name the instance it belongs to');
+  }
+
+  const token = env['IMP_TOKEN'] ?? '';
+
+  return {
+    container: layout.name,
+    dataDir: layout.dataDir,
+    apiUrl: env['IMP_URL'] ?? layout.apiURL,
+    proxyPort: layout.proxyPort,
+    impPortBase: layout.impPortBase,
+    sshPort: layout.sshPort,
+
+    portOffset: layout.offset,
+    env: {},
+    token: token === '' ? null : token,
+  };
+}
+
+export const instance = buildInstance(process.env, process.cwd());
 
 export interface InstanceOptions {
   readonly container: string;
@@ -61,6 +74,7 @@ export function createInstance(options: InstanceOptions): DevInstance {
     impPortBase: 20_000,
     sshPort: 22,
     portOffset: 0,
+    token: null,
     env: {
       ...options.env,
       IMP_DEV_NAME: options.container,
@@ -113,20 +127,12 @@ export async function runChecked(argv: readonly string[]): Promise<string> {
   return result.stdout;
 }
 
-export async function readHostImage(): Promise<string> {
-  const stdout = await runChecked([
-    'bash',
-    '-c',
-    'source "$1" && printf "%s" "$IMP_HOST_IMAGE"',
-    'bash',
-    LIB_SCRIPT,
-  ]);
-
-  return stdout.trim();
+export function readHostImage(env: HarnessEnv): string {
+  return readDevCheckout(realpathSync, env, REPO_ROOT).hostImage;
 }
 
-export function readHostImageFromEnv(): string {
-  const image = process.env['IMP_HOST_IMAGE'] ?? '';
+export function readHostImageFromEnv(env: HarnessEnv = process.env): string {
+  const image = env['IMP_HOST_IMAGE'] ?? '';
 
   if (image === '') {
     throw new Error('IMP_HOST_IMAGE is not set: run the suites through e2e/test-e2e.sh');
@@ -138,19 +144,18 @@ export function readHostImageFromEnv(): string {
 export async function runDevScript(
   command: string,
   target: DevInstance = instance,
-  env: Readonly<Record<string, string>> = {},
+  settings: Readonly<Record<string, string>> = {},
+  env: HarnessEnv = process.env,
 ): Promise<void> {
-  // Bun.spawn's default env is the one the process started with, not
-  // process.env as changed since.
   const subprocess = Bun.spawn([DEV_SCRIPT, command], {
     stdout: 'inherit',
     stderr: 'inherit',
     env: {
       IMP_RAM_BUDGET_MIB: String(config.ramBudgetMib),
       IMP_IDLE_TIMEOUT_S: String(config.idleTimeoutS),
-      ...process.env,
-      ...target.env,
       ...env,
+      ...target.env,
+      ...settings,
     },
   });
 
@@ -192,14 +197,17 @@ export async function readContainerGateway(): Promise<string> {
   return gateway;
 }
 
-export async function readImpdLogTail(lines: number): Promise<string> {
+export async function readImpdLogTail(
+  lines: number,
+  target: Readonly<DevInstance> = instance,
+): Promise<string> {
   const result = await runCommand([
     'docker',
     'logs',
     '--timestamps',
     '--tail',
     String(lines),
-    instance.container,
+    target.container,
   ]);
 
   return `${result.stdout}${result.stderr}`;

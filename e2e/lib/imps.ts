@@ -1,11 +1,7 @@
 import { listImps, runImp, runInImp, runShellInImp, tryImp } from './imp-cli';
+import type { DevInstance } from './instance';
+import { instance } from './instance';
 import { waitFor } from './wait-for';
-
-async function removeImps(...names: readonly string[]): Promise<void> {
-  for (const name of names) {
-    await tryImp(['rm', name]);
-  }
-}
 
 export async function waitForExec(name: string, timeoutMs = 60_000): Promise<void> {
   await waitFor(`${name} to accept exec`, () => runInImp(name, 'true'), { timeoutMs });
@@ -15,12 +11,17 @@ export async function holdImp(name: string): Promise<void> {
   await runImp('hold', name, '30m');
 }
 
-export async function removeImpsWithPrefix(prefix: string): Promise<void> {
-  const rows = await listImps();
+export async function removeImpsWithPrefix(
+  prefix: string,
+  target: DevInstance = instance,
+): Promise<void> {
+  const rows = await listImps(target);
 
   const stale = rows.map((row) => row.name).filter((name) => name.startsWith(prefix));
 
-  await removeImps(...stale);
+  for (const name of stale) {
+    await tryImp(['rm', name], { target });
+  }
 }
 
 export async function writeGuestFile(name: string, path: string, content: string): Promise<void> {

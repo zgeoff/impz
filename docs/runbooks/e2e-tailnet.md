@@ -33,11 +33,12 @@ policy's members grant, so you reach a dev instance on `tag:imp-e2e` as you woul
 
 ## How the scripts use the client
 
-`scripts/lib.sh` reads the client secret with `op read`, adds `?ephemeral=true&preauthorized=true`,
-and passes it to `tailscale up` as the auth key with `--advertise-tags=tag:imp-e2e`. Each node is
-ephemeral, so Tailscale removes it soon after it goes offline, and a dev instance that restarts
-later joins again with the same secret. No script defaults to an item outside the `imp-e2e` vault.
-The `imp` op-mint profile's token reads that vault and nothing else.
+The dev script and the e2e harness read the client secret with `op read`, add
+`?ephemeral=true&preauthorized=true`, and pass it to `tailscale up` as the auth key with
+`--advertise-tags=tag:imp-e2e`. Each node is ephemeral, so Tailscale removes it soon after it goes
+offline, and a dev instance that restarts later joins again with the same secret. No script defaults
+to an item outside the `imp-e2e` vault. The `imp` op-mint profile's token reads that vault and
+nothing else.
 
 ## Replace the client
 

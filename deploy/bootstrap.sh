@@ -37,7 +37,7 @@ readonly SECCOMP_IN_IMAGE=/usr/local/share/imp/deploy/imp-host.seccomp.json
 readonly DATA_DIR=/var/lib/imp
 # The image of this script's release, as the units name it; release-please
 # bumps it.
-readonly DEFAULT_IMAGE=ghcr.io/zgeoff/imp-host:2.11.0 # x-release-please-version
+readonly DEFAULT_IMAGE=ghcr.io/zgeoff/imp-host:3.0.0 # x-release-please-version
 # The image line every env file had before the units named their release.
 # A file still holding it gets the commented pin; any other value is the
 # operator's pin and stays.
@@ -726,7 +726,9 @@ ensure_service() {
 
 # The storage phase: an XFS with reflink on /var/lib/imp, or a ZFS dataset.
 
-# Storage backends: xfs now; ZFS (#11) adds storage_zfs and a flag.
+# zpool create's properties: from deploy/zfs-pool.json (bun run render:deploy)
+readonly ZPOOL_CREATE_PROPERTIES="-o ashift=12 -O compression=lz4 -O atime=off -O xattr=sa -O mountpoint=none"
+
 ensure_storage() {
   phase storage
   case $storage in
@@ -844,8 +846,9 @@ storage_zfs() {
         if blkid -p "$data_device" >/dev/null 2>&1; then
           die "$data_device carries a signature (a partition table?); wipe it by hand if it is free"
         fi
-        change "zpool create $zfs_pool on $data_device" zpool create -o ashift=12 \
-          -O compression=lz4 -O atime=off -O xattr=sa -O mountpoint=none "$zfs_pool" "$data_device"
+        # shellcheck disable=SC2086 # plain words (render-imp-host.ts checks)
+        change "zpool create $zfs_pool on $data_device" zpool create $ZPOOL_CREATE_PROPERTIES \
+          "$zfs_pool" "$data_device"
         ;;
       *) die "$data_device holds $fstype; give an empty disk or partition" ;;
     esac
@@ -1578,7 +1581,7 @@ Type=exec
 # The image of this unit's own release; an IMP_HOST_IMAGE in the env file,
 # read after it, pins another. release-please bumps the version.
 # x-release-please-start-version
-Environment=IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:2.11.0
+Environment=IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:3.0.0
 # x-release-please-end
 EnvironmentFile=/etc/imp/imp-host.env
 # A container left over from a crash would hold the name.
@@ -1658,7 +1661,7 @@ Type=exec
 # The image of this unit's own release; an IMP_HOST_IMAGE in the env file,
 # read after it, pins another. release-please bumps the version.
 # x-release-please-start-version
-Environment=IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:2.11.0
+Environment=IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:3.0.0
 # x-release-please-end
 # IMP_HOST_IMAGE, whose repository a pull may not move, and IMP_BUILD_IMAGE,
 # the one image a pull may fetch. Only those two reach the container
@@ -1715,7 +1718,7 @@ env_template() {
 # another; to follow latest, leave the tag off: ghcr.io/zgeoff/imp-host.
 # Compose reads it from the shell or a .env next to compose.yaml instead.
 # x-release-please-start-version
-# IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:2.11.0
+# IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:3.0.0
 # x-release-please-end
 
 # A tagged, non-ephemeral auth key (docs/guides/tailscale.md). Without one

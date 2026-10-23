@@ -59,6 +59,24 @@ test('it runs its body with the arguments after logging the call', () => {
   });
 });
 
+test('it gives its body the calls file as $STUB_CALLS', () => {
+  const ctx = setupTest();
+  const calls = join(ctx.directoryPath, 'calls');
+
+  writeFileSync(calls, '');
+
+  const script = createStubRepoScript(
+    ctx.directoryPath,
+    'dev.sh',
+    calls,
+    'echo "body ran" >>"$STUB_CALLS"',
+  );
+
+  Bun.spawnSync([script, 'up']);
+
+  expect(readFileSync(calls, 'utf8')).toBe('dev.sh up\nbody ran\n');
+});
+
 test('it exits 0 with no output when it has no body', () => {
   const ctx = setupTest();
   const calls = join(ctx.directoryPath, 'calls');

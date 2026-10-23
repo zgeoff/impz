@@ -1,6 +1,6 @@
 {
   "name": "impz",
-  "version": "2.11.0",
+  "version": "3.0.0",
   "private": true,
   "description": "Persistent Linux microVMs that sleep when idle and wake on request",
   "license": "MIT",
@@ -127,6 +127,7 @@
     "@impz/cli": "workspace:*",
     "@impz/client": "workspace:*",
     "@impz/daemon": "workspace:*",
+    "@impz/shared": "workspace:*",
     "@impz/test-utils": "workspace:*",
     "@modelcontextprotocol/client": "catalog:",
     "@stylistic/eslint-plugin": "catalog:",
