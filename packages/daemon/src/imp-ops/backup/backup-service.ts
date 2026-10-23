@@ -12,6 +12,8 @@ import type { BackupRestore, BackupRun, BackupStatus, ImpState } from '@impz/api
 import * as z from 'zod';
 import type { TokenStore } from '../../identity/auth/token-store';
 import type { ImageService } from '../../imps/images/image-service';
+import { FREEZE_TIMEOUT_MS } from '../../imps/imps/consistent-disk';
+import type { DiskFreezer } from '../../imps/imps/consistent-disk';
 import type { LockedImp } from '../../imps/imps/imp-lock';
 import type { Imps } from '../../imps/imps/imp-service';
 import type { Broker } from '../../network/broker/broker-service';
@@ -26,8 +28,6 @@ import { buildKeyedMutex } from '../../platform/process/keyed-mutex';
 import { printLog } from '../../platform/process/print-log';
 import { writeFileDurably } from '../../platform/process/write-file-durably';
 import { sendFreeze, sendThaw } from '../../vm/agent-client/agent-requests';
-import { FREEZE_TIMEOUT_MS } from '../../vm/checkpoints/consistent-disk';
-import type { DiskFreezer } from '../../vm/checkpoints/consistent-disk';
 import { BACKUP_TREE, buildBackupPaths } from '../../vm/storage/data-layout';
 import type { DiskBudget } from '../../vm/storage/disk-budget';
 import type { BackupTree, StorageBackend } from '../../vm/storage/storage-backend';

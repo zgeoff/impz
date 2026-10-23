@@ -1,5 +1,5 @@
 import type { ImpState } from '@impz/api';
-import { buildInvalidStateError } from '../../platform/errors/impd-errors';
+import { buildInvalidStateError } from '../errors/impd-errors';
 
 type TransitionVia = 'any' | 'warm move';
 

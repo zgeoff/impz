@@ -27,7 +27,7 @@ import type { DiskBudget } from '../../vm/storage/disk-budget';
 import { CheckpointIdTakenError } from '../../vm/storage/storage-backend';
 import type { StorageBackend } from '../../vm/storage/storage-backend';
 import type { StorageGate } from '../../vm/storage/storage-gate';
-import { writeChangedBlocks } from '../backup/write-changed-blocks';
+import { writeChangedBlocks } from '../../vm/storage/write-changed-blocks';
 import { buildCheckpointId } from '../checkpoints/checkpoint-service';
 import { requireOwnDrivePath, requireWarmMove, writeWarmFiles } from './check-warm-move';
 import { COMMIT_WINDOW_MS } from './commit-window-ms';

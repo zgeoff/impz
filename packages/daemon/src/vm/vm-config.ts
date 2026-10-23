@@ -1,6 +1,8 @@
 import type { HostNetConfig } from '../host-net/host-net-config';
-import type { StorageBackendKind } from './storage/storage-backend';
-import type { WatchdogAction } from './watchdog/agent-watchdog';
+
+export type StorageBackendKind = 'xfs' | 'zfs';
+
+export type WatchdogAction = 'report' | 'restart' | 'snapshot';
 
 export interface KsmConfig {
   readonly execBin: string;

@@ -1,9 +1,9 @@
 import { existsSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import { buildAgentOutdatedError } from '../../src/vm/agent-client/agent-outdated';
 import { readLoadingMeta } from '../../src/vm/sleep/snapshot-meta';
-import type { ImpPaths } from '../../src/vm/storage/data-layout';
+import type { FirecrackerPaths, ImpPaths } from '../../src/vm/storage/data-layout';
 import type { InstanceState } from '../../src/vm/vmm/firecracker-client';
-import type { FirecrackerPaths, VmOwner } from '../../src/vm/vmm/firecracker-process';
+import type { VmOwner } from '../../src/vm/vmm/firecracker-process';
 import type { JailUser } from '../../src/vm/vmm/jail';
 import { TemplateRestoreError } from '../../src/vm/vmm/template-vm';
 import type { TemplateRestorePlan } from '../../src/vm/vmm/template-vm';

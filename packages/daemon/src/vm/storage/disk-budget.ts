@@ -1,4 +1,5 @@
 import type { StartTimer } from '../../platform/process/clock';
+import type { DiskRoom } from '../../platform/process/disk-room';
 import { buildKeyedMutex } from '../../platform/process/keyed-mutex';
 import { startRealTimer } from '../../platform/process/start-real-timer';
 import { DiskFullError } from './disk-full-error';
@@ -16,8 +17,7 @@ interface DiskStatus {
   readonly isLow: boolean;
 }
 
-export interface DiskBudget {
-  readonly withRoom: <T>(bytes: number, task: () => Promise<T>) => Promise<T>;
+export interface DiskBudget extends DiskRoom {
   readonly withGrowingRoom: <T>(
     task: (grow: (totalBytes: number, writtenBytes: number) => Promise<void>) => Promise<T>,
   ) => Promise<T>;

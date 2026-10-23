@@ -1,11 +1,16 @@
 import { EVENT_VERSION } from '@impz/api';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-369 moves this to the layer that owns it
 import type { LockFreeSleep } from '../../imps/imps/lock-free-sleep';
 import type { EventBus } from '../../platform/events/event-bus';
 import { createSemaphore } from '../../platform/process/semaphore';
+import type { GrowRequest } from '../../vm/imps-contract/grow-request';
+import type { AdmissionRequest, RamAdmission } from '../../vm/imps-contract/ram-admission';
+import {
+  buildImpOverBudgetError,
+  buildNeededMib,
+  buildRamBudgetError,
+} from '../../vm/imps-contract/ram-budget-error';
+import type { ProtectedImp } from '../../vm/imps-contract/ram-budget-error';
 import { pickSleepVictims } from './pick-sleep-victims';
-import { buildImpOverBudgetError, buildNeededMib, buildRamBudgetError } from './ram-budget-error';
-import type { ProtectedImp } from './ram-budget-error';
 
 // A Firecracker VM that just booted or woke shows a small RSS for some seconds, so its reservation
 // counts until the measurement catches up.
@@ -21,22 +26,6 @@ interface AwakeImp {
   readonly apiSocket: string;
   readonly lastActiveAt: number;
   readonly holdUntil: number | null;
-}
-
-interface AdmissionRequest {
-  readonly id: string;
-  readonly name: string | null;
-  readonly reserveMib: number;
-  readonly memoryMib: number;
-  readonly maySleepImps?: boolean;
-}
-
-export interface GrowRequest {
-  readonly id: string;
-  readonly name: string;
-
-  // The plug plus the host kernel's struct pages for it.
-  readonly mib: number;
 }
 
 interface UsageTotals {
@@ -77,11 +66,6 @@ interface RamUsage {
   readonly usedMib: number;
   readonly reservedMib: number;
   readonly headroomMib: number;
-}
-
-export interface RamAdmission {
-  readonly admit: (request: AdmissionRequest) => Promise<void>;
-  readonly release: (id: string) => void;
 }
 
 export interface RamGovernor extends RamAdmission {

@@ -7,6 +7,7 @@ import { writeToDisk } from '../../platform/process/write-file-durably';
 import { sendClaim, sendPing } from '../agent-client/agent-requests';
 import type { Claim } from '../agent-client/agent-requests';
 import { waitForAgent } from '../agent-client/wait-for-agent';
+import { createOwnedFile } from '../files/vm-files';
 import { waitForGuestAge } from '../sleep/guest-age';
 import type { ImpPaths } from '../storage/data-layout';
 import { VM_DEVICES, createMarks, setupVm } from './configure-vm';
@@ -20,7 +21,6 @@ import {
 } from './firecracker-process';
 import { setupTemplateFile } from './jail';
 import type { JailUser, Jails, RunPaths } from './jail';
-import { createOwnedFile } from './vm-files';
 import type { StartedVm } from './vm-runner';
 
 const CLAIMED_AGENT_DEADLINE_MS = 10_000;

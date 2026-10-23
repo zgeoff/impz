@@ -1,11 +1,9 @@
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-369 moves this to the layer that owns it
-import type { LockedImp } from '../../imps/imps/imp-lock';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-369 moves this to the layer that owns it
-import type { ImpCheckpointHooks } from '../../imps/imps/imp-service';
 import { buildInvalidStateError } from '../../platform/errors/impd-errors';
 import { getErrorMessage } from '../../platform/process/get-error-message';
-import { sendFreeze, sendThaw } from '../agent-client/agent-requests';
-import type { StorageBackend } from '../storage/storage-backend';
+import { sendFreeze, sendThaw } from '../../vm/agent-client/agent-requests';
+import type { StorageBackend } from '../../vm/storage/storage-backend';
+import type { LockedImp } from './imp-lock';
+import type { ImpCheckpointHooks } from './imp-service';
 
 export const FREEZE_TIMEOUT_MS = 10_000;
 

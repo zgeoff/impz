@@ -30,6 +30,7 @@ import { buildStubZfsStorage } from '../../../testing/vm/build-stub-zfs-storage'
 import { readImageByName } from '../../platform/db/images';
 import type { ImpWrite } from '../../platform/db/imp-write-feed';
 import { listImps, readImpByName, updateImpExposure, updateImpMove } from '../../platform/db/imps';
+import { MOVE_TRANSITIONS } from '../../platform/db/move-transitions';
 import { buildImagePaths } from '../../vm/storage/data-layout';
 import { createXfsBackend } from '../../vm/storage/xfs-backend';
 import { FileEndSchema, MOVE_FRAMES, MoveFileSchema, readJsonPayload } from './move-frames';
@@ -41,7 +42,6 @@ import {
   readReceipt,
   readTicketHeader,
 } from './move-tickets';
-import { MOVE_TRANSITIONS } from './move-transitions';
 
 function setupTest(config: Readonly<MoveHostsOptions> = {}) {
   return setupMoveHosts(config);
