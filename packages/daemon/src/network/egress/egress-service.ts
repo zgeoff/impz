@@ -31,6 +31,7 @@ import type { QueryVerdict, ResolverServer } from './egress-resolver';
 import { buildAllowRules, isNameAllowed, listExactNames } from './egress-rules';
 import type { AllowRules } from './egress-rules';
 import { buildElementChange, buildRuleset } from './egress-ruleset';
+import type { RegistryAddress } from './egress-ruleset';
 import { createEgressSets } from './egress-sets';
 import type { AddressAnswer, HeldAnswer } from './egress-sets';
 import { isMissingHostAddresses } from './is-missing-host-addresses';
@@ -60,6 +61,8 @@ export interface EgressDeps {
 
   readonly ipv6?: Ipv6Plan | null;
   readonly reach: ReachPolicy;
+
+  readonly testRegistry?: RegistryAddress | null;
 
   readonly runNft?: NftRunner;
   readonly flushConnections?: (guestIp: string) => Promise<void>;
@@ -207,6 +210,7 @@ export function createEgressService(deps: EgressDeps): EgressService {
         addresses: EGRESS_MODE_TRAITS[view.entry.policy.mode].hasAllowList
           ? sets.listAddresses(view.entry.slot)
           : [],
+        testRegistry: view.entry.isBuilder ? (deps.testRegistry ?? null) : null,
       })),
     });
 

@@ -7,21 +7,14 @@ import { tapStream } from '../../platform/process/tap-stream';
 import { formatEngineFailure, formatRefusal } from './refusal';
 import { formatQuery, getRequestRoute } from './router';
 import type { RoutedRequest } from './router';
-import {
-  BUILD_CONTENT_TYPE,
-  checkBuildContentType,
-  checkBuildQuery,
-  checkCreateBody,
-  checkNoQuery,
-  checkPullQuery,
-  checkRemoveQuery,
-} from './rules';
+import { checkCreateBody, checkNoQuery, checkPullQuery, checkRemoveQuery } from './rules';
 import type { Check } from './rules';
 
 /* @internal */
 export const PROXY_LABEL = 'imp.docker-proxy';
 const CONTROL_CALL_MS = 120_000;
-const CREATE_BODY_MAX_BYTES = 1024 ** 2;
+
+export const CREATE_BODY_MAX_BYTES = 1024 ** 2;
 
 const DROPPED_RESPONSE_HEADERS = new Set([
   'connection',
@@ -42,17 +35,12 @@ export interface DockerProxyOptions {
   readonly upstreamSocket: string;
   readonly token: string;
   readonly hostImage: string;
-  readonly builderImage: string | null;
-  readonly buildContextMaxBytes: number;
+  readonly builderImage: string;
   readonly log: (message: string) => void;
 
   // impd.docker-proxy by default
   readonly logger?: Pick<Logger, 'warning'>;
   readonly controlCallMs?: number;
-}
-
-class BodyTooLargeError extends Error {
-  override readonly name = 'BodyTooLargeError';
 }
 
 function buildJsonResponse(status: number, message: string): Response {
@@ -78,26 +66,6 @@ async function readBodyWithin(request: Request, maxBytes: number): Promise<Uint8
   }
 
   return Bun.concatArrayBuffers(chunks, Infinity, true);
-}
-
-function createByteLimit(maxBytes: number): TransformStream<Uint8Array, Uint8Array> {
-  let total = 0;
-
-  return new TransformStream({
-    transform(chunk, controller) {
-      total += chunk.byteLength;
-
-      if (total > maxBytes) {
-        controller.error(
-          new BodyTooLargeError(`the build context is larger than ${String(maxBytes)} bytes`),
-        );
-
-        return;
-      }
-
-      controller.enqueue(chunk);
-    },
-  });
 }
 
 function pickHeaders(request: Request, names: readonly string[]): Record<string, string> {
@@ -265,42 +233,6 @@ export function createDockerProxy(
     });
   };
 
-  const handleBuild = async (
-    request: Request,
-    routed: RoutedRequest,
-    path: string,
-  ): Promise<Response> => {
-    const contentType = checkBuildContentType(request.headers.get('content-type'));
-
-    if (!contentType.isOk) {
-      return buildRefusal(request, path, contentType.reason);
-    }
-
-    const limit = createByteLimit(options.buildContextMaxBytes);
-    const body = request.body === null ? null : request.body.pipeThrough(limit);
-
-    try {
-      return await sendAndRelay(routed.versionPrefix, {
-        method: 'POST',
-        path: '/build',
-        query: routed.query,
-
-        headers: { 'content-type': BUILD_CONTENT_TYPE },
-        body,
-        longRunning: { signal: request.signal },
-      });
-    } catch (error) {
-      if (error instanceof BodyTooLargeError) {
-        return buildJsonResponse(
-          413,
-          formatRefusal(`${error.message} (IMP_BUILD_CONTEXT_MAX_MIB)`),
-        );
-      }
-
-      throw error;
-    }
-  };
-
   const handlePull = async (
     request: Request,
     routed: RoutedRequest,
@@ -364,17 +296,6 @@ export function createDockerProxy(
   const checkRouteQuery = (routed: RoutedRequest): Check => {
     const kind = routed.route.kind;
 
-    if (kind === 'build' && options.builderImage !== null) {
-      return {
-        isOk: false,
-        reason: 'a build is refused: under IMP_BUILD_ISOLATION=imp impd builds in builder imps',
-      };
-    }
-
-    if (kind === 'build') {
-      return checkBuildQuery(routed.query);
-    }
-
     if (kind === 'pull') {
       return checkPullQuery(routed.query, options.hostImage, options.builderImage);
     }
@@ -409,7 +330,6 @@ export function createDockerProxy(
         sendAndRelay(prefix, { method: 'GET', path: `/images/${inspect.name}/json` }),
       )
       .with({ kind: 'pull' }, () => handlePull(request, routed, path))
-      .with({ kind: 'build' }, () => handleBuild(request, routed, path))
       .with({ kind: 'create' }, () => handleCreate(request, prefix, path))
       .with({ kind: P.union('export', 'remove') }, (owned) =>
         handleOwnContainer(request, prefix, path, owned.id),

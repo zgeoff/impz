@@ -10,9 +10,9 @@ import { instance } from './instance';
 import {
   collectUnpinnedRequests,
   createMovedTag,
+  getDigest,
   getRepoDigest,
   parseManifestRequests,
-  parsePublishedPort,
   removeStaleRegistries,
   startRegistry,
 } from './registry-steps';
@@ -32,14 +32,6 @@ async function setupTest() {
 
   return { stack, directoryPath: directory };
 }
-
-test('#parsePublishedPort reads the first published host port', () => {
-  expect(parsePublishedPort('127.0.0.1:49153\n[::1]:49154\n')).toBe('49153');
-});
-
-test('#parsePublishedPort fails on output with no port', () => {
-  expect(() => parsePublishedPort('')).toThrowWithMessage(Error, 'no published port in ""');
-});
 
 test('#parseManifestRequests reads the repository’s manifest references in order', () => {
   const logs = [
@@ -75,67 +67,187 @@ test('#collectUnpinnedRequests keeps every reference but the pin’s digest', ()
   ).toStrictEqual(['1']);
 });
 
-test('#startRegistry runs a registry labelled with the instance, on a certificate for its name', async () => {
+test('#getDigest reads the digest of a pinned reference', () => {
+  expect(getDigest('reg.test:5000/e2e/mutable@sha256:abc')).toBe('sha256:abc');
+});
+
+test('#getDigest refuses a reference with no digest', () => {
+  expect(() => getDigest('reg.test:5000/e2e/mutable:1')).toThrowWithMessage(
+    Error,
+    'no digest in reg.test:5000/e2e/mutable:1',
+  );
+});
+
+test("#startRegistry runs a registry labelled with the instance on its network's gateway, on a certificate for its name", async () => {
   const ctx = await setupTest();
 
   const docker = createStubBin(
     ctx.directoryPath,
     'docker',
-    ['case "$1" in', '  container) exit 1 ;;', '  port) echo 127.0.0.1:49153 ;;', 'esac'].join(
-      '\n',
-    ),
+    ['case "$1 $2" in', '  "container inspect"|"network inspect") exit 1 ;;', 'esac'].join('\n'),
   );
 
   updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
 
+  const certs = join(ctx.directoryPath, 'registry-tls');
+
   const registry = await startRegistry(
     ctx.stack,
-    'imp-e2e-registry.test',
+    {
+      name: 'imp-e2e-registry.test',
+      port: 15_443,
+      certDirectory: certs,
+      network: 'imp-dev-registry',
+      subnet: '10.200.0.0/24',
+      gateway: '10.200.0.1',
+    },
     'e2e-reg-registry-1',
-    ctx.directoryPath,
   );
 
   const calls = await readFile(docker.calls, 'utf8');
-  const pem = await readFile(join(ctx.directoryPath, 'certs', 'cert.pem'));
+  const pem = await readFile(join(certs, 'cert.pem'));
 
   const cert = new X509Certificate(pem);
 
   expect(registry).toStrictEqual({
-    address: 'imp-e2e-registry.test:49153',
+    address: 'imp-e2e-registry.test:15443',
     container: 'e2e-reg-registry-1',
-    certPath: join(ctx.directoryPath, 'certs', 'cert.pem'),
+    certPath: join(certs, 'cert.pem'),
   });
 
   expect(calls.split('\n')).toStrictEqual([
     'docker container inspect e2e-reg-registry-1',
-    `docker run --detach --name e2e-reg-registry-1 --label imp-e2e-instance=${instance.container} --publish 127.0.0.1::5000 --volume ${join(ctx.directoryPath, 'certs')}:/certs:ro --env REGISTRY_HTTP_TLS_CERTIFICATE=/certs/cert.pem --env REGISTRY_HTTP_TLS_KEY=/certs/key.pem registry:2`,
-    'docker port e2e-reg-registry-1 5000/tcp',
+    'docker network inspect imp-dev-registry --format {{index .Labels "imp-e2e-instance"}}',
+    `docker network create --label imp-e2e-instance=${instance.container} --subnet 10.200.0.0/24 --gateway 10.200.0.1 imp-dev-registry`,
+    `docker run --detach --name e2e-reg-registry-1 --label imp-e2e-instance=${instance.container} --network host --volume ${certs}:/certs:ro --env REGISTRY_HTTP_ADDR=10.200.0.1:15443 --env REGISTRY_HTTP_TLS_CERTIFICATE=/certs/cert.pem --env REGISTRY_HTTP_TLS_KEY=/certs/key.pem registry:2`,
     '',
   ]);
 
   expect(cert.subjectAltName).toBe('DNS:imp-e2e-registry.test');
 });
 
-test('#startRegistry removes the registry it ran once the stack goes', async () => {
+test('#startRegistry removes the network a stopped run of this instance left, before it makes its own', async () => {
   const ctx = await setupTest();
 
   const docker = createStubBin(
     ctx.directoryPath,
     'docker',
-    ['case "$1" in', '  container) exit 1 ;;', '  port) echo 127.0.0.1:49153 ;;', 'esac'].join(
-      '\n',
-    ),
+    [
+      'case "$1 $2" in',
+      '  "container inspect") exit 1 ;;',
+      `  "network inspect") echo ${instance.container} ;;`,
+      'esac',
+    ].join('\n'),
   );
 
   updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
 
-  await startRegistry(ctx.stack, 'imp-e2e-registry.test', 'e2e-reg-registry-1', ctx.directoryPath);
+  await startRegistry(
+    ctx.stack,
+    {
+      name: 'imp-e2e-registry.test',
+      port: 15_443,
+      certDirectory: join(ctx.directoryPath, 'registry-tls'),
+      network: 'imp-dev-registry',
+      subnet: '10.200.0.0/24',
+      gateway: '10.200.0.1',
+    },
+    'e2e-reg-registry-1',
+  );
+
+  const calls = await readFile(docker.calls, 'utf8');
+
+  expect(calls.split('\n').slice(1, 4)).toStrictEqual([
+    'docker network inspect imp-dev-registry --format {{index .Labels "imp-e2e-instance"}}',
+    'docker network rm imp-dev-registry',
+    `docker network create --label imp-e2e-instance=${instance.container} --subnet 10.200.0.0/24 --gateway 10.200.0.1 imp-dev-registry`,
+  ]);
+});
+
+test('#startRegistry never removes a network this instance did not label', async () => {
+  const ctx = await setupTest();
+
+  const docker = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    [
+      'case "$1 $2" in',
+      '  "container inspect") exit 1 ;;',
+      '  "network inspect") echo imp-dev-other ;;',
+      'esac',
+    ].join('\n'),
+  );
+
+  updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
+
+  const failure = await startRegistry(
+    ctx.stack,
+    {
+      name: 'imp-e2e-registry.test',
+      port: 15_443,
+      certDirectory: join(ctx.directoryPath, 'registry-tls'),
+      network: 'imp-dev-registry',
+      subnet: '10.200.0.0/24',
+      gateway: '10.200.0.1',
+    },
+    'e2e-reg-registry-1',
+  ).then(
+    () => null,
+    (error: unknown) => error,
+  );
 
   await ctx.stack.disposeAsync();
 
   const calls = await readFile(docker.calls, 'utf8');
 
-  expect(calls.split('\n').at(-2)).toBe('docker rm --force --volumes e2e-reg-registry-1');
+  expect(failure).toMatchObject({
+    message: 'a network named imp-dev-registry is there, and this instance did not label it',
+  });
+
+  expect(calls.split('\n')).toStrictEqual([
+    'docker container inspect e2e-reg-registry-1',
+    'docker network inspect imp-dev-registry --format {{index .Labels "imp-e2e-instance"}}',
+    '',
+  ]);
+});
+
+test('#startRegistry removes the registry it ran, its certificates and its network once the stack goes', async () => {
+  const ctx = await setupTest();
+
+  const docker = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    ['case "$1 $2" in', '  "container inspect"|"network inspect") exit 1 ;;', 'esac'].join('\n'),
+  );
+
+  updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
+
+  const certs = join(ctx.directoryPath, 'registry-tls');
+
+  await startRegistry(
+    ctx.stack,
+    {
+      name: 'imp-e2e-registry.test',
+      port: 15_443,
+      certDirectory: certs,
+      network: 'imp-dev-registry',
+      subnet: '10.200.0.0/24',
+      gateway: '10.200.0.1',
+    },
+    'e2e-reg-registry-1',
+  );
+
+  await ctx.stack.disposeAsync();
+
+  const calls = await readFile(docker.calls, 'utf8');
+
+  expect(calls.split('\n').slice(-3)).toStrictEqual([
+    'docker rm --force --volumes e2e-reg-registry-1',
+    'docker network rm imp-dev-registry',
+    '',
+  ]);
+
+  expect(existsSync(certs)).toBeFalse();
 });
 
 test('#startRegistry refuses a container name that is taken, before it makes anything', async () => {
@@ -145,11 +257,19 @@ test('#startRegistry refuses a container name that is taken, before it makes any
 
   updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
 
+  const certs = join(ctx.directoryPath, 'registry-tls');
+
   const failure = await startRegistry(
     ctx.stack,
-    'imp-e2e-registry.test',
+    {
+      name: 'imp-e2e-registry.test',
+      port: 15_443,
+      certDirectory: certs,
+      network: 'imp-dev-registry',
+      subnet: '10.200.0.0/24',
+      gateway: '10.200.0.1',
+    },
     'e2e-reg-registry-1',
-    ctx.directoryPath,
   ).then(
     () => null,
     (error: unknown) => error,
@@ -164,25 +284,35 @@ test('#startRegistry refuses a container name that is taken, before it makes any
   });
 
   expect(calls).toBe('docker container inspect e2e-reg-registry-1\n');
-  expect(existsSync(join(ctx.directoryPath, 'certs'))).toBeFalse();
+  expect(existsSync(certs)).toBeFalse();
 });
 
-test('#startRegistry removes nothing when the registry does not start', async () => {
+test('#startRegistry removes no container when the registry does not start', async () => {
   const ctx = await setupTest();
 
   const docker = createStubBin(
     ctx.directoryPath,
     'docker',
-    ['case "$1" in', '  container|run) exit 1 ;;', 'esac'].join('\n'),
+    [
+      'case "$1 $2" in',
+      '  "container inspect"|"network inspect"|"run --detach") exit 1 ;;',
+      'esac',
+    ].join('\n'),
   );
 
   updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
 
   const failure = await startRegistry(
     ctx.stack,
-    'imp-e2e-registry.test',
+    {
+      name: 'imp-e2e-registry.test',
+      port: 15_443,
+      certDirectory: join(ctx.directoryPath, 'registry-tls'),
+      network: 'imp-dev-registry',
+      subnet: '10.200.0.0/24',
+      gateway: '10.200.0.1',
+    },
     'e2e-reg-registry-1',
-    ctx.directoryPath,
   ).then(
     () => null,
     (error: unknown) => error,
@@ -234,7 +364,9 @@ test('#createMovedTag moves the tag to new content and pins the old, and removes
     [
       'case "$*" in',
       `  'image inspect --format {{json .RepoDigests}} busybox:1.37') echo '["busybox@sha256:aaa"]' ;;`,
+      `  'image inspect --format {{json .RepoDigests}} sha256:new') echo '["imp-e2e-registry.test:49153/e2e/mutable@sha256:ccc"]' ;;`,
       `  'image inspect'*) echo '["imp-e2e-registry.test:49153/e2e/mutable@sha256:bbb"]' ;;`,
+      `  build*mutable-new) echo sha256:new ;;`,
       'esac',
     ].join('\n'),
   );
@@ -260,6 +392,7 @@ test('#createMovedTag moves the tag to new content and pins the old, and removes
     tag,
     kept,
     pinned: 'imp-e2e-registry.test:49153/e2e/mutable@sha256:bbb',
+    current: 'imp-e2e-registry.test:49153/e2e/mutable@sha256:ccc',
   });
 
   expect(calls.split('\n')).toStrictEqual([
@@ -271,6 +404,7 @@ test('#createMovedTag moves the tag to new content and pins the old, and removes
     `docker image inspect --format {{json .RepoDigests}} ${tag}`,
     `docker build --quiet --provenance=false --sbom=false --tag ${tag} ${join(ctx.directoryPath, 'e2e', 'mutable-new')}`,
     `docker push --quiet ${tag}`,
+    'docker image inspect --format {{json .RepoDigests}} sha256:new',
     `docker tag ${kept} ${tag}`,
     `docker rmi ${kept}`,
     `docker rmi ${tag}`,

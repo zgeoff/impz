@@ -17,6 +17,13 @@ export interface FirewallSlot {
   readonly mode: EgressMode;
   readonly cidrs: readonly string[];
   readonly addresses: readonly string[];
+
+  readonly testRegistry?: RegistryAddress | null;
+}
+
+export interface RegistryAddress {
+  readonly address: string;
+  readonly port: number;
 }
 
 export interface NetworkPeer {
@@ -237,6 +244,11 @@ function buildSlotChain(slot: FirewallSlot): readonly string[] {
       'ct state invalid drop',
       'meta nfproto ipv4 oifname != @uplinks4 goto deny',
       'meta nfproto ipv6 oifname != @uplinks6 goto deny',
+      ...(slot.testRegistry === undefined || slot.testRegistry === null
+        ? []
+        : [
+            `ip daddr ${slot.testRegistry.address} tcp dport ${String(slot.testRegistry.port)} accept`,
+          ]),
       'ip daddr @public4 goto deny',
       'ip6 daddr @public6 goto deny',
       'accept',

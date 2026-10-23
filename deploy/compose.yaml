@@ -24,7 +24,7 @@ name: imp
 
 services:
   imp-docker-proxy:
-    image: ${IMP_HOST_IMAGE:-ghcr.io/zgeoff/imp-host:2.10.6} # x-release-please-version
+    image: ${IMP_HOST_IMAGE:-ghcr.io/zgeoff/imp-host:2.11.0} # x-release-please-version
     container_name: imp-docker-proxy
     command: ['/usr/local/bin/imp-docker-proxy']
     # proxy privileges: from deploy/imp-host.args.json (bun run render:deploy)
@@ -42,13 +42,10 @@ services:
       - ${IMP_DOCKER_GID:?set IMP_DOCKER_GID to the group of /var/run/docker.sock (stat -c %g
         /var/run/docker.sock)}
     # not the env file, which holds the Tailscale key: set a different
-    # IMP_BUILD_CONTEXT_MAX_MIB, IMP_BUILD_ISOLATION or IMP_BUILD_IMAGE here
-    # too, in the shell or .env; under imp isolation the proxy pulls only
+    # IMP_BUILD_IMAGE here too, in the shell or .env; the proxy pulls only
     # IMP_BUILD_IMAGE (empty is impd's default)
     environment:
-      IMP_HOST_IMAGE: ${IMP_HOST_IMAGE:-ghcr.io/zgeoff/imp-host:2.10.6} # x-release-please-version
-      IMP_BUILD_CONTEXT_MAX_MIB: ${IMP_BUILD_CONTEXT_MAX_MIB:-1024}
-      IMP_BUILD_ISOLATION: ${IMP_BUILD_ISOLATION:-imp}
+      IMP_HOST_IMAGE: ${IMP_HOST_IMAGE:-ghcr.io/zgeoff/imp-host:2.11.0} # x-release-please-version
       IMP_BUILD_IMAGE: ${IMP_BUILD_IMAGE:-}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
@@ -62,7 +59,7 @@ services:
     restart: unless-stopped
 
   imp-host:
-    image: ${IMP_HOST_IMAGE:-ghcr.io/zgeoff/imp-host:2.10.6} # x-release-please-version
+    image: ${IMP_HOST_IMAGE:-ghcr.io/zgeoff/imp-host:2.11.0} # x-release-please-version
     container_name: imp-host
     # restic's backup locks name the host: a fixed one lets impd drop a lock
     # its own crashed run left (docs/architecture/storage/backups.md)
@@ -108,7 +105,7 @@ services:
     # Unlike the systemd unit, compose does not read this host's addresses
     # into IMP_HOST_ADDRESSES: list them in IMP_EGRESS_DENY in the env file,
     # or public imps can reach them (docs/architecture/network/egress.md#public).
-    # impd pulls and builds imp images through the proxy's socket
+    # impd fetches the builder image through the proxy's socket
     environment:
       DOCKER_HOST: unix:///run/imp-docker/docker.sock
     depends_on:

@@ -23,7 +23,7 @@ export interface BuildEngine {
   readonly loadImage: (image: Readonly<ExternalImage>, signal: AbortSignal) => Promise<PinInspect>;
 
   // Docker engines before 29.6.0 fetch the BUILDKIT_SYNTAX frontend only through a client
-  // session, which a host build lacks, so the frontend is pulled by digest first.
+  // session, so the frontend is pulled by digest first.
   readonly loadFrontend: (signal: AbortSignal) => Promise<void>;
 }
 

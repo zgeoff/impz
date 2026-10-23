@@ -1,5 +1,3 @@
-import { DOCKERFILE_FRONTEND } from './dockerfile-frontend';
-
 export type Check = { readonly isOk: true } | { readonly isOk: false; readonly reason: string };
 
 const OK: Check = { isOk: true };
@@ -7,12 +5,6 @@ const OK: Check = { isOk: true };
 function buildFailure(reason: string): Check {
   return { isOk: false, reason };
 }
-
-const BUILD_TAG = /^imp\/[a-z0-9][a-z0-9_.\-]{0,62}:latest$/v;
-
-const BUILD_ARGS: Readonly<Record<string, string>> = {
-  BUILDKIT_SYNTAX: DOCKERFILE_FRONTEND,
-};
 
 interface ParamRule {
   readonly isRequired?: boolean;
@@ -55,82 +47,6 @@ function checkQuery(
   }
 
   return OK;
-}
-
-function checkDockerfilePath(value: string): string | null {
-  const segments = value.split('/');
-
-  if (
-    value === '' ||
-    value.startsWith('/') ||
-    segments.some((segment) => segment === '' || segment === '.' || segment === '..') ||
-    !/^[A-Za-z0-9._\/\-]+$/v.test(value)
-  ) {
-    return `is ${JSON.stringify(value)}, not a path inside the context`;
-  }
-
-  return null;
-}
-
-function checkBuildArgs(value: string): string | null {
-  let parsed: unknown = null;
-
-  try {
-    parsed = JSON.parse(value);
-  } catch {
-    return 'is not JSON';
-  }
-
-  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    return 'is not an object';
-  }
-
-  for (const [key, arg] of Object.entries(parsed)) {
-    if (BUILD_ARGS[key] !== arg) {
-      return `sets ${key}=${JSON.stringify(arg)}`;
-    }
-  }
-
-  // BuildKit lets a Dockerfile's `# syntax=` line pick the frontend unless this build arg pins it.
-  for (const key of Object.keys(BUILD_ARGS)) {
-    if (!Object.hasOwn(parsed, key)) {
-      return `does not set ${key}`;
-    }
-  }
-
-  return null;
-}
-
-const BUILD_RULES: Readonly<Record<string, ParamRule>> = {
-  // oxlint-disable-next-line id-length -- `t` is the Docker Engine API's tag param
-  t: {
-    isRequired: true,
-    check: (value) =>
-      BUILD_TAG.test(value) ? null : `${JSON.stringify(value)} is not imp/<name>:latest`,
-  },
-  dockerfile: { check: checkDockerfilePath },
-
-  // Version 2 is BuildKit, and version 1, the classic builder, takes no frontend pin.
-  version: { isRequired: true, check: checkOneOf(new Set(['2'])) },
-  buildargs: { isRequired: true, check: checkBuildArgs },
-};
-
-export function checkBuildQuery(query: ReadonlyMap<string, readonly string[]>): Check {
-  return checkQuery(query, BUILD_RULES);
-}
-
-export const BUILD_CONTENT_TYPE = 'application/x-tar';
-
-// The engine reads build params from r.Form, so a form body would replace or add to the checked
-// query.
-export function checkBuildContentType(value: string | null): Check {
-  if (value === null || value === BUILD_CONTENT_TYPE) {
-    return OK;
-  }
-
-  return buildFailure(
-    `a build body is a tar context, and Content-Type ${JSON.stringify(value)} is not ${BUILD_CONTENT_TYPE}`,
-  );
 }
 
 export interface ImageReference {
@@ -226,14 +142,14 @@ function checkPullOnly(fromImage: string, tag: string, pullOnly: string): Check 
   }
 
   return buildFailure(
-    `a pull of ${fromImage}:${tag} is refused: under IMP_BUILD_ISOLATION=imp the proxy pulls only IMP_BUILD_IMAGE, ${pullOnly}`,
+    `a pull of ${fromImage}:${tag} is refused: the proxy pulls only IMP_BUILD_IMAGE, ${pullOnly}`,
   );
 }
 
 export function checkPullQuery(
   query: ReadonlyMap<string, readonly string[]>,
   hostImage: string,
-  pullOnly: string | null,
+  pullOnly: string,
 ): Check {
   const checked = checkQuery(query, {
     fromImage: { isRequired: true, check: () => null },
@@ -249,7 +165,7 @@ export function checkPullQuery(
   const fromImage = query.get('fromImage')?.[0] ?? '';
   const reference = checkImageReference(fromImage, hostImage);
 
-  if (!reference.isOk || pullOnly === null) {
+  if (!reference.isOk) {
     return reference;
   }
 
@@ -342,14 +258,14 @@ function checkCreateOnly(image: string, builderImage: string): Check {
   }
 
   return buildFailure(
-    `a create from ${image} is refused: under IMP_BUILD_ISOLATION=imp the proxy creates only from IMP_BUILD_IMAGE, ${builderImage}`,
+    `a create from ${image} is refused: the proxy creates only from IMP_BUILD_IMAGE, ${builderImage}`,
   );
 }
 
 export function checkCreateBody(
   body: unknown,
   hostImage: string,
-  builderImage: string | null,
+  builderImage: string,
 ): Check & { readonly image?: string } {
   if (!isRecord(body)) {
     return buildFailure('the body is not a JSON object');
@@ -389,7 +305,7 @@ export function checkCreateBody(
     return reference;
   }
 
-  const only = builderImage === null ? OK : checkCreateOnly(image, builderImage);
+  const only = checkCreateOnly(image, builderImage);
 
   return only.isOk ? { isOk: true, image } : only;
 }

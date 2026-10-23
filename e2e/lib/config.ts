@@ -29,7 +29,7 @@ export function buildConfig(env: HarnessEnv) {
     // the machine's caches and change the run's ZFS root.
     ownsZfsHost: env['E2E_OWNS_ZFS_HOST'] === '1',
 
-    // The name must resolve to 127.0.0.1 on this machine.
+    // The name must resolve on this machine to the registry network's gateway.
     registryName: env['E2E_REGISTRY_NAME'] ?? 'imp-e2e-registry.test',
   } as const;
 }

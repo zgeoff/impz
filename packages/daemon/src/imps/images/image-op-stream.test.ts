@@ -4,19 +4,18 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Image } from '@impz/api';
 import { buildMockImage } from '@impz/api/test-utils/build-mock-image';
-import { updateEnv } from '@impz/test-utils/update-env';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
-import { createStubDockerCli } from '../../../testing/imps/create-stub-docker-cli';
-import { startStubDockerEngine } from '../../../testing/imps/start-stub-docker-engine';
+import { buildStubImageBuilder } from '../../../testing/imps/build-stub-image-builder';
+import { createFilesTar } from '../../../testing/imps/create-files-tar';
+import { startBuilderImpd } from '../../../testing/imps/start-builder-impd';
 import { buildStubRepeat } from '../../../testing/platform/build-stub-repeat';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { listApiCalls } from '../../platform/db/api-audit';
 import { createImage } from '../../platform/db/images';
 import { runChecked } from '../../platform/process/run-command';
 import { buildImagePaths } from '../../vm/storage/data-layout';
-import { DOCKERFILE_FRONTEND } from '../docker-proxy/dockerfile-frontend';
 import { runImageOp } from './image-op-stream';
 
 async function setupTest() {
@@ -24,24 +23,19 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dataDir = await mkdtemp(join(tmpdir(), 'image-op-stream-'));
+  const directory = await mkdtemp(join(tmpdir(), 'image-op-stream-'));
 
-  stack.defer(() => rm(dataDir, { recursive: true, force: true }));
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
 
-  const engine = startStubDockerEngine({ directoryPath: dataDir });
+  return {
+    stack,
+    directoryPath: directory,
+    dataDir: join(directory, 'data'),
 
-  stack.defer(() => engine.stop());
-
-  const harness = await startTestImpd(stack, {
-    dataDir,
-    env: { IMP_BUILD_ISOLATION: 'host', DOCKER_HOST: engine.dockerHost },
-
-    cloneDisk: async (source, target) => {
+    cloneDisk: async (source: string, target: string) => {
       await runChecked(['cp', '--sparse=always', source, target]);
     },
-  });
-
-  return Object.assign(harness, { engine });
+  };
 }
 
 test('it sends progress at once and at each phase, then the image', async () => {
@@ -444,25 +438,17 @@ test('it sends no log events to a client that did not ask for them', async () =>
 test('it streams the phases of an add, then the image', async () => {
   const ctx = await setupTest();
 
-  await mkdir(join(ctx.dataDir, 'tree'));
-  await writeFile(join(ctx.dataDir, 'tree', 'hello'), 'hi');
-
-  const docker = createStubDockerCli({
-    directory: ctx.dataDir,
-    images: [
-      {
-        refs: ['busybox:1.37'],
-        inspects: [{ Id: `sha256:${'b'.repeat(64)}`, Config: { Cmd: ['sh'] }, Size: 2 }],
-        isOnHost: false,
-      },
-    ],
-    create: { id: 'c'.repeat(64) },
-    exportTar: Bun.spawnSync(['tar', '-C', join(ctx.dataDir, 'tree'), '-c', 'hello']).stdout,
+  const builder = buildStubImageBuilder({
+    exported: [createFilesTar(ctx.directoryPath, { hello: 'hi' })],
+    repoDigest: `sha256:${'b'.repeat(64)}`,
   });
 
-  updateEnv('PATH', docker.path);
+  const harness = await startBuilderImpd(ctx.stack, builder, {
+    dataDir: ctx.dataDir,
+    cloneDisk: ctx.cloneDisk,
+  });
 
-  const stream = await ctx.client.images.addStream({ ref: 'busybox:1.37', name: 'box' });
+  const stream = await harness.client.images.addStream({ ref: 'busybox:1.37', name: 'box' });
   const events = await Array.fromAsync(stream);
 
   const phases = events.flatMap((event) => (event.type === 'progress' ? [event.phase] : []));
@@ -476,37 +462,27 @@ test('it streams the phases of an add, then the image', async () => {
     type: 'image',
     image: { name: 'box', createdAt: expect.any(Date) as unknown },
   });
-
-  expect(ctx.engine.unexpected).toStrictEqual([]);
 });
 
 test('it audits a streamed add as ok once it ends', async () => {
   const ctx = await setupTest();
 
-  await mkdir(join(ctx.dataDir, 'tree'));
-  await writeFile(join(ctx.dataDir, 'tree', 'hello'), 'hi');
-
-  const docker = createStubDockerCli({
-    directory: ctx.dataDir,
-    images: [
-      {
-        refs: ['busybox:1.37'],
-        inspects: [{ Id: `sha256:${'b'.repeat(64)}`, Config: {}, Size: 2 }],
-        isOnHost: false,
-      },
-    ],
-    create: { id: 'c'.repeat(64) },
-    exportTar: Bun.spawnSync(['tar', '-C', join(ctx.dataDir, 'tree'), '-c', 'hello']).stdout,
+  const builder = buildStubImageBuilder({
+    exported: [createFilesTar(ctx.directoryPath, { hello: 'hi' })],
+    repoDigest: `sha256:${'b'.repeat(64)}`,
   });
 
-  updateEnv('PATH', docker.path);
+  const harness = await startBuilderImpd(ctx.stack, builder, {
+    dataDir: ctx.dataDir,
+    cloneDisk: ctx.cloneDisk,
+  });
 
-  const stream = await ctx.client.images.addStream({ ref: 'busybox:1.37', name: 'box' });
+  const stream = await harness.client.images.addStream({ ref: 'busybox:1.37', name: 'box' });
 
   await Array.fromAsync(stream);
 
   const calls = await waitFor(async () => {
-    const rows = await listApiCalls(ctx.db, null, 100, null);
+    const rows = await listApiCalls(harness.db, null, 100, null);
 
     const adds = rows.filter((row) => row.procedure === 'images.addStream');
 
@@ -516,38 +492,27 @@ test('it audits a streamed add as ok once it ends', async () => {
   });
 
   expect(calls.map((row) => [row.outcome, row.imp ?? null])).toStrictEqual([['ok', null]]);
-  expect(ctx.engine.unexpected).toStrictEqual([]);
 });
 
 test("it keeps the reference a streamed add's pull resolved in its audit row", async () => {
   const ctx = await setupTest();
 
-  const pulled = `busybox@sha256:${'d'.repeat(64)}`;
-
-  await mkdir(join(ctx.dataDir, 'tree'));
-  await writeFile(join(ctx.dataDir, 'tree', 'hello'), 'hi');
-
-  const docker = createStubDockerCli({
-    directory: ctx.dataDir,
-    images: [
-      {
-        refs: ['busybox'],
-        inspects: [{ Id: `sha256:${'b'.repeat(64)}`, Config: {}, Size: 2, RepoDigests: [pulled] }],
-        isOnHost: false,
-      },
-    ],
-    create: { id: 'c'.repeat(64) },
-    exportTar: Bun.spawnSync(['tar', '-C', join(ctx.dataDir, 'tree'), '-c', 'hello']).stdout,
+  const builder = buildStubImageBuilder({
+    exported: [createFilesTar(ctx.directoryPath, { hello: 'hi' })],
+    repoDigest: `sha256:${'d'.repeat(64)}`,
   });
 
-  updateEnv('PATH', docker.path);
+  const harness = await startBuilderImpd(ctx.stack, builder, {
+    dataDir: ctx.dataDir,
+    cloneDisk: ctx.cloneDisk,
+  });
 
-  const stream = await ctx.client.images.addStream({ ref: 'busybox', name: 'box' });
+  const stream = await harness.client.images.addStream({ ref: 'busybox', name: 'box' });
 
   await Array.fromAsync(stream);
 
   const details = await waitFor(async () => {
-    const rows = await listApiCalls(ctx.db, null, 100, null);
+    const rows = await listApiCalls(harness.db, null, 100, null);
 
     const adds = rows.filter((row) => row.procedure === 'images.addStream');
 
@@ -556,26 +521,30 @@ test("it keeps the reference a streamed add's pull resolved in its audit row", a
     return adds.map((row) => row.detail);
   });
 
-  expect(details).toStrictEqual([pulled]);
-  expect(ctx.engine.unexpected).toStrictEqual([]);
+  expect(details).toStrictEqual([`busybox@sha256:${'d'.repeat(64)}`]);
 });
 
 test('it streams the copy of a template and audits it with its imp', async () => {
   const ctx = await setupTest();
 
+  const harness = await startTestImpd(ctx.stack, {
+    dataDir: ctx.dataDir,
+    cloneDisk: ctx.cloneDisk,
+  });
+
   const image = buildMockNewImage({ name: 'base', sizeBytes: 6 });
 
   await Bun.write(buildImagePaths(ctx.dataDir, image.digest).rootfs, 'rootfs');
 
-  await createImage(ctx.db, image);
+  await createImage(harness.db, image);
 
-  await ctx.client.imps.create({ name: 'source', image: 'base' });
+  await harness.client.imps.create({ name: 'source', image: 'base' });
 
-  const stream = await ctx.client.images.addStream({ imp: 'source', name: 'tpl' });
+  const stream = await harness.client.images.addStream({ imp: 'source', name: 'tpl' });
   const events = await Array.fromAsync(stream);
 
   const calls = await waitFor(async () => {
-    const rows = await listApiCalls(ctx.db, null, 100, null);
+    const rows = await listApiCalls(harness.db, null, 100, null);
 
     const adds = rows.filter((row) => row.procedure === 'images.addStream');
 
@@ -590,60 +559,52 @@ test('it streams the copy of a template and audits it with its imp', async () =>
 
   expect(events.at(-1)).toMatchObject({ type: 'image', image: { name: 'tpl', source: 'imp' } });
   expect(calls.map((row) => [row.outcome, row.imp ?? null])).toStrictEqual([['ok', 'source']]);
-  expect(ctx.engine.unexpected).toStrictEqual([]);
 });
 
 test('it throws a failed add through the stream with a code that keeps its message out', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubDockerCli({
-    directory: ctx.dataDir,
-    images: [
-      {
-        refs: ['busybox:1.37'],
-        inspects: [{ Id: `sha256:${'b'.repeat(64)}` }],
-        isOnHost: false,
-        pull: { stderr: 'pull access denied' },
-      },
-    ],
+  const builder = buildStubImageBuilder({
+    exported: [],
+    repoDigest: `sha256:${'b'.repeat(64)}`,
+    failures: { tag: 'no space left on device' },
   });
 
-  updateEnv('PATH', docker.path);
+  const harness = await startBuilderImpd(ctx.stack, builder, {
+    dataDir: ctx.dataDir,
+    cloneDisk: ctx.cloneDisk,
+  });
 
-  const stream = await ctx.client.images.addStream({ ref: 'busybox:1.37' });
+  const stream = await harness.client.images.addStream({ ref: 'busybox:1.37' });
 
   const adding = Array.fromAsync(stream);
 
   await adding.catch(() => {});
 
   expect(adding).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' });
-  expect(adding).rejects.not.toThrow('pull access denied');
-  expect(ctx.engine.unexpected).toStrictEqual([]);
+  expect(adding).rejects.not.toThrow('no space left on device');
 });
 
 test('it audits a failed streamed add with its code', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubDockerCli({
-    directory: ctx.dataDir,
-    images: [
-      {
-        refs: ['busybox:1.37'],
-        inspects: [{ Id: `sha256:${'b'.repeat(64)}` }],
-        isOnHost: false,
-        pull: { stderr: 'pull access denied' },
-      },
-    ],
+  const builder = buildStubImageBuilder({
+    exported: [],
+    repoDigest: `sha256:${'b'.repeat(64)}`,
+    failures: { tag: 'no space left on device' },
   });
 
-  updateEnv('PATH', docker.path);
+  const harness = await startBuilderImpd(ctx.stack, builder, {
+    dataDir: ctx.dataDir,
+    cloneDisk: ctx.cloneDisk,
+  });
 
-  const stream = await ctx.client.images.addStream({ ref: 'busybox:1.37' });
+  const stream = await harness.client.images.addStream({ ref: 'busybox:1.37' });
 
   expect(Array.fromAsync(stream)).rejects.toThrow();
 
   const calls = await waitFor(async () => {
-    const rows = await listApiCalls(ctx.db, null, 100, null);
+    const rows = await listApiCalls(harness.db, null, 100, null);
 
     const adds = rows.filter((row) => row.procedure === 'images.addStream');
 
@@ -655,21 +616,20 @@ test('it audits a failed streamed add with its code', async () => {
   expect(calls.map((row) => [row.outcome, row.imp ?? null])).toStrictEqual([
     ['INTERNAL_SERVER_ERROR', null],
   ]);
-
-  expect(ctx.engine.unexpected).toStrictEqual([]);
 });
 
 test('it refuses a streamed add to a read token and audits the refusal', async () => {
   const ctx = await setupTest();
-  const made = await ctx.client.tokens.create({ name: 'reader', scope: 'read' });
+  const harness = await startTestImpd(ctx.stack, { dataDir: ctx.dataDir });
+  const made = await harness.client.tokens.create({ name: 'reader', scope: 'read' });
 
-  const reader = ctx.buildClient(made.secret);
+  const reader = harness.buildClient(made.secret);
   const adding = reader.images.addStream({ ref: 'busybox:1.37' });
 
   expect(adding).rejects.toMatchObject({ code: 'FORBIDDEN' });
 
   const calls = await waitFor(async () => {
-    const rows = await listApiCalls(ctx.db, null, 100, null);
+    const rows = await listApiCalls(harness.db, null, 100, null);
 
     const adds = rows.filter((row) => row.procedure === 'images.addStream');
 
@@ -679,20 +639,20 @@ test('it refuses a streamed add to a read token and audits the refusal', async (
   });
 
   expect(calls.map((row) => row.outcome)).toStrictEqual(['FORBIDDEN']);
-  expect(ctx.engine.unexpected).toStrictEqual([]);
 });
 
 test('it refuses a streamed build to a read token and audits the refusal', async () => {
   const ctx = await setupTest();
-  const made = await ctx.client.tokens.create({ name: 'reader', scope: 'read' });
+  const harness = await startTestImpd(ctx.stack, { dataDir: ctx.dataDir });
+  const made = await harness.client.tokens.create({ name: 'reader', scope: 'read' });
 
-  const reader = ctx.buildClient(made.secret);
+  const reader = harness.buildClient(made.secret);
   const building = reader.images.buildStream({ contextDir: '/srv/ctx', name: 'web' });
 
   expect(building).rejects.toMatchObject({ code: 'FORBIDDEN' });
 
   const calls = await waitFor(async () => {
-    const rows = await listApiCalls(ctx.db, null, 100, null);
+    const rows = await listApiCalls(harness.db, null, 100, null);
 
     const builds = rows.filter((row) => row.procedure === 'images.buildStream');
 
@@ -702,39 +662,30 @@ test('it refuses a streamed build to a read token and audits the refusal', async
   });
 
   expect(calls.map((row) => row.outcome)).toStrictEqual(['FORBIDDEN']);
-  expect(ctx.engine.unexpected).toStrictEqual([]);
 });
 
 test('it streams the pack, then the build, of a build from a directory', async () => {
   const ctx = await setupTest();
 
-  const contextDir = join(ctx.dataDir, 'context');
+  const contextDir = join(ctx.directoryPath, 'context');
 
   await mkdir(contextDir);
   await writeFile(join(contextDir, 'Dockerfile'), 'FROM scratch\n');
 
-  const docker = createStubDockerCli({
-    directory: ctx.dataDir,
-    images: [{ refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] }],
+  const builder = buildStubImageBuilder({
+    exported: [],
+    repoDigest: `sha256:${'b'.repeat(64)}`,
+    onBuild: () => Promise.withResolvers<never>().promise,
   });
 
-  updateEnv('PATH', docker.path);
-
-  ctx.engine.setAnswer(async (request, seen) => {
-    if (!seen.target.startsWith('/build')) {
-      return null;
-    }
-
-    await new Promise((resolve) => {
-      request.signal.addEventListener('abort', resolve);
-    });
-
-    return new Response(null, { status: 499 });
+  const harness = await startBuilderImpd(ctx.stack, builder, {
+    dataDir: ctx.dataDir,
+    cloneDisk: ctx.cloneDisk,
   });
 
   const client = new AbortController();
 
-  const events = await ctx.client.images.buildStream(
+  const events = await harness.client.images.buildStream(
     { contextDir, name: 'web' },
     { signal: client.signal },
   );
@@ -755,200 +706,181 @@ test('it streams the pack, then the build, of a build from a directory', async (
     phase: 'build',
     elapsedMs: expect.any(Number) as unknown,
   });
-
-  expect(ctx.engine.unexpected).toStrictEqual([]);
 });
 
-test('it stops the engine build of a streamed build whose client goes, and audits it', async () => {
+test('it stops the builder build of a streamed build whose client goes, and audits it', async () => {
   const ctx = await setupTest();
 
-  const contextDir = join(ctx.dataDir, 'context');
+  const contextDir = join(ctx.directoryPath, 'context');
 
   await mkdir(contextDir);
   await writeFile(join(contextDir, 'Dockerfile'), 'FROM scratch\n');
 
-  const docker = createStubDockerCli({
-    directory: ctx.dataDir,
-    images: [{ refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] }],
+  const builder = buildStubImageBuilder({
+    exported: [],
+    repoDigest: `sha256:${'b'.repeat(64)}`,
+    onBuild: () => Promise.withResolvers<never>().promise,
   });
 
-  updateEnv('PATH', docker.path);
-
-  const build = { started: false, stopped: false };
-
-  ctx.engine.setAnswer(async (request, seen) => {
-    if (!seen.target.startsWith('/build')) {
-      return null;
-    }
-
-    build.started = true;
-
-    await new Promise((resolve) => {
-      request.signal.addEventListener('abort', resolve);
-    });
-
-    build.stopped = true;
-
-    return new Response(null, { status: 499 });
+  const harness = await startBuilderImpd(ctx.stack, builder, {
+    dataDir: ctx.dataDir,
+    cloneDisk: ctx.cloneDisk,
   });
 
   const client = new AbortController();
 
-  const events = await ctx.client.images.buildStream(
+  const events = await harness.client.images.buildStream(
     { contextDir, name: 'web' },
     { signal: client.signal },
   );
 
   await events.next();
 
-  await waitFor(() => {
-    expect(build.started).toBeTrue();
+  const build = await waitFor(() => {
+    const run = builder.guest.runs.find((candidate) => candidate.argv[1] === 'build');
+
+    invariant(run);
+
+    return run;
   });
 
   client.abort();
 
   const outcomes = await waitFor(async () => {
-    const rows = await listApiCalls(ctx.db, null, 100, null);
+    const rows = await listApiCalls(harness.db, null, 100, null);
 
     const builds = rows.filter((row) => row.procedure === 'images.buildStream');
 
     expect(builds).not.toBeEmpty();
-    expect(build.stopped).toBeTrue();
+    expect(build.closed).toBeTrue();
 
     return builds.map((row) => row.outcome);
   });
 
   expect(outcomes).toStrictEqual(['INTERNAL_SERVER_ERROR']);
-  expect(ctx.engine.unexpected).toStrictEqual([]);
 });
 
-test('it kills the host pull of a streamed add whose client goes, and audits it', async () => {
+test('it stops the builder pull of a streamed add whose client goes, and audits it', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubDockerCli({
-    directory: ctx.dataDir,
-    images: [
-      {
-        refs: ['registry.test/big:1'],
-        inspects: [{ Id: `sha256:${'b'.repeat(64)}` }],
-        isOnHost: false,
-        pull: 'hang',
-      },
-    ],
+  const builder = buildStubImageBuilder({
+    exported: [],
+    repoDigest: `sha256:${'b'.repeat(64)}`,
+    onPull: () => Promise.withResolvers<never>().promise,
   });
 
-  updateEnv('PATH', docker.path);
+  const harness = await startBuilderImpd(ctx.stack, builder, {
+    dataDir: ctx.dataDir,
+    cloneDisk: ctx.cloneDisk,
+  });
 
   const client = new AbortController();
 
-  const events = await ctx.client.images.addStream(
+  const events = await harness.client.images.addStream(
     { ref: 'registry.test/big:1' },
     { signal: client.signal },
   );
 
   await events.next();
 
-  await waitFor(() => {
-    expect(docker.readCalls()).toContain('pull --quiet registry.test/big:1');
+  const pull = await waitFor(() => {
+    const run = builder.guest.runs.find((candidate) => candidate.argv[1] === 'pull');
+
+    invariant(run);
+
+    return run;
   });
 
   client.abort();
 
   const outcomes = await waitFor(async () => {
-    const rows = await listApiCalls(ctx.db, null, 100, null);
+    const rows = await listApiCalls(harness.db, null, 100, null);
 
     const adds = rows.filter((row) => row.procedure === 'images.addStream');
 
     expect(adds).not.toBeEmpty();
+    expect(pull.closed).toBeTrue();
 
     return adds.map((row) => row.outcome);
   });
 
   expect(outcomes).toStrictEqual(['INTERNAL_SERVER_ERROR']);
-  expect(ctx.engine.unexpected).toStrictEqual([]);
 });
 
-test('it stops the engine build of a plain build whose client goes', async () => {
+test('it stops the builder build of a plain build whose client goes', async () => {
   const ctx = await setupTest();
 
-  const contextDir = join(ctx.dataDir, 'context');
+  const contextDir = join(ctx.directoryPath, 'context');
 
   await mkdir(contextDir);
   await writeFile(join(contextDir, 'Dockerfile'), 'FROM scratch\n');
 
-  const docker = createStubDockerCli({
-    directory: ctx.dataDir,
-    images: [{ refs: [DOCKERFILE_FRONTEND], inspects: [{ Id: `sha256:${'f'.repeat(64)}` }] }],
+  const builder = buildStubImageBuilder({
+    exported: [],
+    repoDigest: `sha256:${'b'.repeat(64)}`,
+    onBuild: () => Promise.withResolvers<never>().promise,
   });
 
-  updateEnv('PATH', docker.path);
-
-  const build = { started: false, stopped: false };
-
-  ctx.engine.setAnswer(async (request, seen) => {
-    if (!seen.target.startsWith('/build')) {
-      return null;
-    }
-
-    build.started = true;
-
-    await new Promise((resolve) => {
-      request.signal.addEventListener('abort', resolve);
-    });
-
-    build.stopped = true;
-
-    return new Response(null, { status: 499 });
+  const harness = await startBuilderImpd(ctx.stack, builder, {
+    dataDir: ctx.dataDir,
+    cloneDisk: ctx.cloneDisk,
   });
 
   const client = new AbortController();
 
-  const building = ctx.client.images.build({ contextDir, name: 'web' }, { signal: client.signal });
+  const building = harness.client.images.build(
+    { contextDir, name: 'web' },
+    { signal: client.signal },
+  );
 
-  await waitFor(() => {
-    expect(build.started).toBeTrue();
+  const build = await waitFor(() => {
+    const run = builder.guest.runs.find((candidate) => candidate.argv[1] === 'build');
+
+    invariant(run);
+
+    return run;
   });
 
   client.abort();
 
   expect(building).rejects.toThrow();
 
-  const stopped = await waitFor(() => {
-    expect(build.stopped).toBeTrue();
+  const closed = await waitFor(() => {
+    expect(build.closed).toBeTrue();
 
-    return build.stopped;
+    return build.closed;
   });
 
-  expect(stopped).toBeTrue();
-  expect(ctx.engine.unexpected).toStrictEqual([]);
+  expect(closed).toBeTrue();
 });
 
-test('it kills the host pull of a plain add whose client goes, and audits it', async () => {
+test('it stops the builder pull of a plain add whose client goes, and audits it', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubDockerCli({
-    directory: ctx.dataDir,
-    images: [
-      {
-        refs: ['busybox:1.37'],
-        inspects: [{ Id: `sha256:${'b'.repeat(64)}` }],
-        isOnHost: false,
-        pull: 'hang',
-      },
-    ],
+  const builder = buildStubImageBuilder({
+    exported: [],
+    repoDigest: `sha256:${'b'.repeat(64)}`,
+    onPull: () => Promise.withResolvers<never>().promise,
   });
 
-  updateEnv('PATH', docker.path);
+  const harness = await startBuilderImpd(ctx.stack, builder, {
+    dataDir: ctx.dataDir,
+    cloneDisk: ctx.cloneDisk,
+  });
 
   const client = new AbortController();
 
-  const adding = ctx.client.images.add(
+  const adding = harness.client.images.add(
     { ref: 'busybox:1.37', name: 'box' },
     { signal: client.signal },
   );
 
-  await waitFor(() => {
-    expect(docker.readCalls()).toContain('pull --quiet busybox:1.37');
+  const pull = await waitFor(() => {
+    const run = builder.guest.runs.find((candidate) => candidate.argv[1] === 'pull');
+
+    invariant(run);
+
+    return run;
   });
 
   client.abort();
@@ -956,15 +888,15 @@ test('it kills the host pull of a plain add whose client goes, and audits it', a
   expect(adding).rejects.toThrow();
 
   const outcomes = await waitFor(async () => {
-    const rows = await listApiCalls(ctx.db, null, 100, null);
+    const rows = await listApiCalls(harness.db, null, 100, null);
 
     const adds = rows.filter((row) => row.procedure === 'images.add');
 
     expect(adds).not.toBeEmpty();
+    expect(pull.closed).toBeTrue();
 
     return adds.map((row) => row.outcome);
   });
 
   expect(outcomes).toStrictEqual(['INTERNAL_SERVER_ERROR']);
-  expect(ctx.engine.unexpected).toStrictEqual([]);
 });

@@ -17,8 +17,6 @@ import { createIdleLoop } from './imp-ops/idle/idle-loop';
 import type { ImpdBoundaries, ImpdDeps } from './impd-deps';
 import type { ImpdStartupStep, RunImpdStartupStep } from './impd-startup-steps';
 import { createBuilders } from './imps/images/builder-imps';
-import { HOST_ADD_WARNING } from './imps/images/create-image-adds';
-import { HOST_BUILD_WARNING } from './imps/images/create-image-builds';
 import { readSetfcapWarning } from './imps/images/unpack-export';
 import { createKernelOopsWatch } from './imps/imps/kernel-oops-watch';
 import { removeUnusedDrives } from './imps/imps/remove-unused-drives';
@@ -158,11 +156,6 @@ async function startImpdParts(
 
   plan.diskUsage = diskUsage;
 
-  if (config.build.isolation === 'host') {
-    log(HOST_BUILD_WARNING);
-    log(HOST_ADD_WARNING);
-  }
-
   const secretFiles = createSecretFiles(config.dataDir);
 
   const firewall = await runStep('firewall', () =>
@@ -238,9 +231,10 @@ async function startImpdParts(
   const builders = createBuilders({
     config,
     db,
-    imps,
+    imps: { ...imps, ...deps.agent },
     ensureImage: stored.images.ensureBuilderImage,
     log,
+    testRegistry: firewall.testRegistry,
   });
 
   stored.setBuilders(builders);

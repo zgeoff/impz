@@ -7,8 +7,7 @@ import invariant from 'tiny-invariant';
 import { startStubDockerEngine } from '../../../testing/imps/start-stub-docker-engine';
 import { startStubCutStream } from '../../../testing/network/start-stub-cut-stream';
 import { startStubSilentOrigin } from '../../../testing/network/start-stub-silent-origin';
-import { DOCKERFILE_FRONTEND } from './dockerfile-frontend';
-import { PROXY_LABEL, createDockerProxy } from './proxy';
+import { CREATE_BODY_MAX_BYTES, PROXY_LABEL, createDockerProxy } from './proxy';
 import type { DockerProxyOptions } from './proxy';
 import { readProxyRefusal } from './refusal';
 
@@ -35,7 +34,7 @@ async function setupTest() {
     const server = Bun.serve({
       unix: socket,
       fetch: createDockerProxy(options),
-      maxRequestBodySize: options.buildContextMaxBytes + 1024 ** 2,
+      maxRequestBodySize: CREATE_BODY_MAX_BYTES + 1024 ** 2,
       idleTimeout: 0,
     } as unknown as Bun.Serve.Options<undefined>);
 
@@ -70,8 +69,7 @@ test('it relays a ping to the engine with its API version', async () => {
     upstreamSocket: ctx.engine.socket,
     token: 'test-token',
     hostImage: 'ghcr.io/zgeoff/imp-host:latest',
-    builderImage: null,
-    buildContextMaxBytes: 4 * 1024 ** 2,
+    builderImage: `ghcr.io/zgeoff/imp-base:0.29.0@sha256:${'d'.repeat(64)}`,
     log: ctx.log,
   });
 
@@ -88,8 +86,7 @@ test('it relays a version call to the engine', async () => {
     upstreamSocket: ctx.engine.socket,
     token: 'test-token',
     hostImage: 'ghcr.io/zgeoff/imp-host:latest',
-    builderImage: null,
-    buildContextMaxBytes: 4 * 1024 ** 2,
+    builderImage: `ghcr.io/zgeoff/imp-base:0.29.0@sha256:${'d'.repeat(64)}`,
     log: ctx.log,
   });
 
@@ -107,8 +104,7 @@ test('it relays an image inspect to the engine by the image name', async () => {
     upstreamSocket: ctx.engine.socket,
     token: 'test-token',
     hostImage: 'ghcr.io/zgeoff/imp-host:latest',
-    builderImage: null,
-    buildContextMaxBytes: 4 * 1024 ** 2,
+    builderImage: `ghcr.io/zgeoff/imp-base:0.29.0@sha256:${'d'.repeat(64)}`,
     log: ctx.log,
   });
 
@@ -128,8 +124,7 @@ test('it sends the engine a create body of its own, with its label and no networ
     upstreamSocket: ctx.engine.socket,
     token: 'test-token',
     hostImage: 'ghcr.io/zgeoff/imp-host:latest',
-    builderImage: null,
-    buildContextMaxBytes: 4 * 1024 ** 2,
+    builderImage: `ghcr.io/zgeoff/imp-base:0.29.0@sha256:${'d'.repeat(64)}`,
     log: ctx.log,
   });
 
@@ -138,7 +133,8 @@ test('it sends the engine a create body of its own, with its label and no networ
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        Image: 'busybox',
+        Image:
+          'ghcr.io/zgeoff/imp-base:0.29.0@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
         Cmd: ['/bin/true'],
         AttachStdout: true,
         HostConfig: { NetworkMode: 'default' },
@@ -156,7 +152,7 @@ test('it sends the engine a create body of its own, with its label and no networ
   expect(ctx.engine.unexpected).toStrictEqual([]);
 
   expect(JSON.parse(new TextDecoder().decode(created.body))).toStrictEqual({
-    Image: 'busybox',
+    Image: `ghcr.io/zgeoff/imp-base:0.29.0@sha256:${'d'.repeat(64)}`,
     Cmd: ['/bin/true'],
     Labels: { [PROXY_LABEL]: 'test-token' },
     HostConfig: { NetworkMode: 'none', RestartPolicy: { Name: 'no' } },
@@ -172,8 +168,7 @@ test('it forwards no client header on a create', async () => {
     upstreamSocket: ctx.engine.socket,
     token: 'test-token',
     hostImage: 'ghcr.io/zgeoff/imp-host:latest',
-    builderImage: null,
-    buildContextMaxBytes: 4 * 1024 ** 2,
+    builderImage: `ghcr.io/zgeoff/imp-base:0.29.0@sha256:${'d'.repeat(64)}`,
     log: ctx.log,
   });
 
@@ -181,7 +176,11 @@ test('it forwards no client header on a create', async () => {
     new Request('http://docker/v1.55/containers/create', {
       method: 'POST',
       headers: { authorization: 'Bearer x', cookie: 'c=1' },
-      body: JSON.stringify({ Image: 'busybox', Cmd: ['/bin/true'] }),
+      body: JSON.stringify({
+        Image:
+          'ghcr.io/zgeoff/imp-base:0.29.0@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
+        Cmd: ['/bin/true'],
+      }),
     }),
   );
 
@@ -200,8 +199,7 @@ test('it refuses a create with a bind, and logs the refusal', async () => {
     upstreamSocket: ctx.engine.socket,
     token: 'test-token',
     hostImage: 'ghcr.io/zgeoff/imp-host:latest',
-    builderImage: null,
-    buildContextMaxBytes: 4 * 1024 ** 2,
+    builderImage: `ghcr.io/zgeoff/imp-base:0.29.0@sha256:${'d'.repeat(64)}`,
     log: ctx.log,
   });
 
@@ -209,7 +207,8 @@ test('it refuses a create with a bind, and logs the refusal', async () => {
     new Request('http://docker/v1.55/containers/create', {
       method: 'POST',
       body: JSON.stringify({
-        Image: 'busybox',
+        Image:
+          'ghcr.io/zgeoff/imp-base:0.29.0@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
         Cmd: ['/bin/true'],
         HostConfig: { Binds: ['/:/host'] },
       }),
@@ -236,8 +235,7 @@ test('it refuses a create body over 1 MiB sent chunked', async () => {
     upstreamSocket: ctx.engine.socket,
     token: 'test-token',
     hostImage: 'ghcr.io/zgeoff/imp-host:latest',
-    builderImage: null,
-    buildContextMaxBytes: 4 * 1024 ** 2,
+    builderImage: `ghcr.io/zgeoff/imp-base:0.29.0@sha256:${'d'.repeat(64)}`,
     log: ctx.log,
   });
 
@@ -276,8 +274,7 @@ test('it refuses a create body that is not JSON', async () => {
     upstreamSocket: ctx.engine.socket,
     token: 'test-token',
     hostImage: 'ghcr.io/zgeoff/imp-host:latest',
-    builderImage: null,
-    buildContextMaxBytes: 4 * 1024 ** 2,
+    builderImage: `ghcr.io/zgeoff/imp-base:0.29.0@sha256:${'d'.repeat(64)}`,
     log: ctx.log,
   });
 
@@ -298,8 +295,7 @@ test('it refuses a create body with no Image', async () => {
     upstreamSocket: ctx.engine.socket,
     token: 'test-token',
     hostImage: 'ghcr.io/zgeoff/imp-host:latest',
-    builderImage: null,
-    buildContextMaxBytes: 4 * 1024 ** 2,
+    builderImage: `ghcr.io/zgeoff/imp-base:0.29.0@sha256:${'d'.repeat(64)}`,
     log: ctx.log,
   });
 
@@ -323,8 +319,7 @@ test('it exports a container it created by its full ID', async () => {
     upstreamSocket: ctx.engine.socket,
     token: 'test-token',
     hostImage: 'ghcr.io/zgeoff/imp-host:latest',
-    builderImage: null,
-    buildContextMaxBytes: 4 * 1024 ** 2,
+    builderImage: `ghcr.io/zgeoff/imp-base:0.29.0@sha256:${'d'.repeat(64)}`,
     log: ctx.log,
   });
 
@@ -354,8 +349,7 @@ test('it removes a container it created by its full ID, with its volumes', async
     upstreamSocket: ctx.engine.socket,
     token: 'test-token',
     hostImage: 'ghcr.io/zgeoff/imp-host:latest',
-    builderImage: null,
-    buildContextMaxBytes: 4 * 1024 ** 2,
+    builderImage: `ghcr.io/zgeoff/imp-base:0.29.0@sha256:${'d'.repeat(64)}`,
     log: ctx.log,
   });
 
@@ -378,8 +372,7 @@ test('it refuses the export of a container whose label holds another token', asy
     upstreamSocket: ctx.engine.socket,
     token: 'test-token',
     hostImage: 'ghcr.io/zgeoff/imp-host:latest',
-    builderImage: null,
-    buildContextMaxBytes: 4 * 1024 ** 2,
+    builderImage: `ghcr.io/zgeoff/imp-base:0.29.0@sha256:${'d'.repeat(64)}`,
     log: ctx.log,
   });
 
@@ -408,8 +401,7 @@ test('it refuses the removal of a container whose label holds another token', as
     upstreamSocket: ctx.engine.socket,
     token: 'test-token',
     hostImage: 'ghcr.io/zgeoff/imp-host:latest',
-    builderImage: null,
-    buildContextMaxBytes: 4 * 1024 ** 2,
+    builderImage: `ghcr.io/zgeoff/imp-base:0.29.0@sha256:${'d'.repeat(64)}`,
     log: ctx.log,
   });
 
@@ -431,8 +423,7 @@ test('it refuses the removal of a container the engine does not have', async () 
     upstreamSocket: ctx.engine.socket,
     token: 'test-token',
     hostImage: 'ghcr.io/zgeoff/imp-host:latest',
-    builderImage: null,
-    buildContextMaxBytes: 4 * 1024 ** 2,
+    builderImage: `ghcr.io/zgeoff/imp-base:0.29.0@sha256:${'d'.repeat(64)}`,
     log: ctx.log,
   });
 
@@ -456,8 +447,7 @@ test('it refuses a removal with a param docker rm -f does not send', async () =>
     upstreamSocket: ctx.engine.socket,
     token: 'test-token',
     hostImage: 'ghcr.io/zgeoff/imp-host:latest',
-    builderImage: null,
-    buildContextMaxBytes: 4 * 1024 ** 2,
+    builderImage: `ghcr.io/zgeoff/imp-base:0.29.0@sha256:${'d'.repeat(64)}`,
     log: ctx.log,
   });
 
@@ -478,8 +468,7 @@ test('it refuses a param on a call that takes none', async () => {
     upstreamSocket: ctx.engine.socket,
     token: 'test-token',
     hostImage: 'ghcr.io/zgeoff/imp-host:latest',
-    builderImage: null,
-    buildContextMaxBytes: 4 * 1024 ** 2,
+    builderImage: `ghcr.io/zgeoff/imp-base:0.29.0@sha256:${'d'.repeat(64)}`,
     log: ctx.log,
   });
 
@@ -490,143 +479,22 @@ test('it refuses a param on a call that takes none', async () => {
   expect(ctx.engine.unexpected).toStrictEqual([]);
 });
 
-test('it streams a build context whole to the engine as the build body', async () => {
+test('it refuses a build, and the engine sees no request', async () => {
   const ctx = await setupTest();
 
   const proxy = ctx.startProxy({
     upstreamSocket: ctx.engine.socket,
     token: 'test-token',
     hostImage: 'ghcr.io/zgeoff/imp-host:latest',
-    builderImage: null,
-    buildContextMaxBytes: 4 * 1024 ** 2,
+    builderImage: `ghcr.io/zgeoff/imp-base:0.29.0@sha256:${'d'.repeat(64)}`,
     log: ctx.log,
   });
 
-  const query = new URLSearchParams([
-    ['t', 'imp/x:latest'],
-    ['version', '2'],
-    ['buildargs', JSON.stringify({ BUILDKIT_SYNTAX: DOCKERFILE_FRONTEND })],
-  ]);
-
-  const context = new Uint8Array(2 * 1024 ** 2).fill(7);
-
-  await proxy(
-    new Request(`http://docker/v1.55/build?${query.toString()}`, {
+  const response = await proxy(
+    new Request('http://docker/v1.55/build?t=imp%2Fx%3Alatest&version=2', {
       method: 'POST',
       headers: { 'content-type': 'application/x-tar' },
-      body: context,
-    }),
-  );
-
-  expect(ctx.engine.seen).toMatchObject([
-    {
-      target: `/v1.55/build?${query.toString()}`,
-      headers: { 'content-type': 'application/x-tar' },
-      body: context,
-    },
-  ]);
-
-  expect(ctx.engine.unexpected).toStrictEqual([]);
-});
-
-test('it forwards no client header on a build', async () => {
-  const ctx = await setupTest();
-
-  const proxy = ctx.startProxy({
-    upstreamSocket: ctx.engine.socket,
-    token: 'test-token',
-    hostImage: 'ghcr.io/zgeoff/imp-host:latest',
-    builderImage: null,
-    buildContextMaxBytes: 4 * 1024 ** 2,
-    log: ctx.log,
-  });
-
-  const query = new URLSearchParams([
-    ['t', 'imp/x:latest'],
-    ['version', '2'],
-    ['buildargs', JSON.stringify({ BUILDKIT_SYNTAX: DOCKERFILE_FRONTEND })],
-  ]);
-
-  await proxy(
-    new Request(`http://docker/v1.55/build?${query.toString()}`, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/x-tar',
-        'x-registry-config': 'e30=',
-        'x-registry-auth': 'e30=',
-        cookie: 'c=1',
-      },
-      body: 'ctx',
-    }),
-  );
-
-  const [build] = ctx.engine.seen;
-
-  invariant(build);
-
-  expect(build.headers).not.toContainAnyKeys(['x-registry-config', 'x-registry-auth', 'cookie']);
-  expect(ctx.engine.unexpected).toStrictEqual([]);
-});
-
-test('it sends a build without a Content-Type to the engine as a tar', async () => {
-  const ctx = await setupTest();
-
-  const proxy = ctx.startProxy({
-    upstreamSocket: ctx.engine.socket,
-    token: 'test-token',
-    hostImage: 'ghcr.io/zgeoff/imp-host:latest',
-    builderImage: null,
-    buildContextMaxBytes: 4 * 1024 ** 2,
-    log: ctx.log,
-  });
-
-  const query = new URLSearchParams([
-    ['t', 'imp/x:latest'],
-    ['version', '2'],
-    ['buildargs', JSON.stringify({ BUILDKIT_SYNTAX: DOCKERFILE_FRONTEND })],
-  ]);
-
-  const body = new Blob([new Uint8Array(512)]).stream();
-
-  await proxy(
-    new Request(`http://docker/v1.55/build?${query.toString()}`, {
-      method: 'POST',
-      body,
-    }),
-  );
-
-  expect(ctx.engine.seen).toMatchObject([{ headers: { 'content-type': 'application/x-tar' } }]);
-  expect(ctx.engine.unexpected).toStrictEqual([]);
-});
-
-test.each([
-  ['application/x-www-form-urlencoded'],
-  ['application/x-www-form-urlencoded; charset=utf-8'],
-  ['multipart/form-data; boundary=x'],
-  ['application/x-tar; charset=utf-8'],
-])('it refuses a build whose body is sent as %s', async (contentType) => {
-  const ctx = await setupTest();
-
-  const proxy = ctx.startProxy({
-    upstreamSocket: ctx.engine.socket,
-    token: 'test-token',
-    hostImage: 'ghcr.io/zgeoff/imp-host:latest',
-    builderImage: null,
-    buildContextMaxBytes: 4 * 1024 ** 2,
-    log: ctx.log,
-  });
-
-  const query = new URLSearchParams([
-    ['t', 'imp/x:latest'],
-    ['version', '2'],
-    ['buildargs', JSON.stringify({ BUILDKIT_SYNTAX: DOCKERFILE_FRONTEND })],
-  ]);
-
-  const response = await proxy(
-    new Request(`http://docker/v1.55/build?${query.toString()}`, {
-      method: 'POST',
-      headers: { 'content-type': contentType },
-      body: 'networkmode=host&remote=http%3A%2F%2F127.0.0.1%3A9%2Fctx.tar&t=evil%3Alatest',
+      body: 'context',
     }),
   );
 
@@ -635,245 +503,10 @@ test.each([
   expect(response.status).toBe(403);
 
   expect(refusal).toStrictEqual({
-    message: `imp-docker-proxy: a build body is a tar context, and Content-Type ${JSON.stringify(contentType)} is not application/x-tar`,
+    message: 'imp-docker-proxy: POST /build is not a call impd makes',
   });
 
   expect(ctx.engine.seen).toStrictEqual([]);
-  expect(ctx.engine.unexpected).toStrictEqual([]);
-});
-
-test('it refuses a build with a form body as fetch encodes a URLSearchParams', async () => {
-  const ctx = await setupTest();
-
-  const proxy = ctx.startProxy({
-    upstreamSocket: ctx.engine.socket,
-    token: 'test-token',
-    hostImage: 'ghcr.io/zgeoff/imp-host:latest',
-    builderImage: null,
-    buildContextMaxBytes: 4 * 1024 ** 2,
-    log: ctx.log,
-  });
-
-  const query = new URLSearchParams([
-    ['t', 'imp/x:latest'],
-    ['version', '2'],
-    ['buildargs', JSON.stringify({ BUILDKIT_SYNTAX: DOCKERFILE_FRONTEND })],
-  ]);
-
-  const response = await proxy(
-    new Request(`http://docker/v1.55/build?${query.toString()}`, {
-      method: 'POST',
-      body: new URLSearchParams([
-        ['networkmode', 'host'],
-        ['t', 'evil:latest'],
-        ['version', '1'],
-      ]),
-    }),
-  );
-
-  const refusal: unknown = await response.json();
-
-  expect(response.status).toBe(403);
-
-  expect(refusal).toStrictEqual({
-    message:
-      'imp-docker-proxy: a build body is a tar context, and Content-Type "application/x-www-form-urlencoded;charset=UTF-8" is not application/x-tar',
-  });
-
-  expect(ctx.engine.seen).toStrictEqual([]);
-  expect(ctx.engine.unexpected).toStrictEqual([]);
-});
-
-test('it refuses a build with a multipart form body as fetch encodes a FormData', async () => {
-  const ctx = await setupTest();
-
-  const proxy = ctx.startProxy({
-    upstreamSocket: ctx.engine.socket,
-    token: 'test-token',
-    hostImage: 'ghcr.io/zgeoff/imp-host:latest',
-    builderImage: null,
-    buildContextMaxBytes: 4 * 1024 ** 2,
-    log: ctx.log,
-  });
-
-  const query = new URLSearchParams([
-    ['t', 'imp/x:latest'],
-    ['version', '2'],
-    ['buildargs', JSON.stringify({ BUILDKIT_SYNTAX: DOCKERFILE_FRONTEND })],
-  ]);
-
-  const form = new FormData();
-
-  form.append('networkmode', 'host');
-  form.append('remote', 'http://127.0.0.1:9/ctx.tar');
-
-  const request = new Request(`http://docker/v1.55/build?${query.toString()}`, {
-    method: 'POST',
-    body: form,
-  });
-
-  const response = await proxy(request);
-  const refusal: unknown = await response.json();
-
-  expect(response.status).toBe(403);
-
-  expect(refusal).toStrictEqual({
-    message: expect.stringMatching(
-      /^imp-docker-proxy: a build body is a tar context, and Content-Type "multipart\/form-data; ?boundary=[^"]+" is not application\/x-tar$/v,
-    ) as unknown,
-  });
-
-  expect(ctx.engine.seen).toStrictEqual([]);
-  expect(ctx.engine.unexpected).toStrictEqual([]);
-});
-
-test('it ends a build on the engine when its client goes', async () => {
-  const ctx = await setupTest();
-
-  const proxy = ctx.startProxy({
-    upstreamSocket: ctx.engine.socket,
-    token: 'test-token',
-    hostImage: 'ghcr.io/zgeoff/imp-host:latest',
-    builderImage: null,
-    buildContextMaxBytes: 4 * 1024 ** 2,
-    log: ctx.log,
-  });
-
-  const started = Promise.withResolvers<void>();
-  const gone = Promise.withResolvers<void>();
-
-  ctx.engine.setAnswer(async (request, seen) => {
-    if (!seen.target.startsWith('/v1.55/build')) {
-      return null;
-    }
-
-    started.resolve();
-
-    await new Promise((resolve) => {
-      request.signal.addEventListener('abort', resolve);
-    });
-
-    gone.resolve();
-
-    return new Response(null, { status: 499 });
-  });
-
-  const query = new URLSearchParams([
-    ['t', 'imp/x:latest'],
-    ['version', '2'],
-    ['buildargs', JSON.stringify({ BUILDKIT_SYNTAX: DOCKERFILE_FRONTEND })],
-  ]);
-
-  const client = new AbortController();
-
-  const building = proxy(
-    new Request(`http://docker/v1.55/build?${query.toString()}`, {
-      method: 'POST',
-      body: 'ctx',
-      signal: client.signal,
-    }),
-  );
-
-  await started.promise;
-
-  client.abort();
-
-  await building.catch(() => {});
-
-  await expect(gone.promise).toResolve();
-
-  expect(building).rejects.toMatchObject({ name: 'AbortError', code: 20 });
-  expect(ctx.engine.unexpected).toStrictEqual([]);
-  expect(ctx.engine.unexpected).toStrictEqual([]);
-});
-
-test('it cuts off a chunked build context over the limit', async () => {
-  const ctx = await setupTest();
-
-  const proxy = ctx.startProxy({
-    upstreamSocket: ctx.engine.socket,
-    token: 'test-token',
-    hostImage: 'ghcr.io/zgeoff/imp-host:latest',
-    builderImage: null,
-    buildContextMaxBytes: 1024 ** 2,
-    log: ctx.log,
-  });
-
-  const query = new URLSearchParams([
-    ['t', 'imp/x:latest'],
-    ['version', '2'],
-    ['buildargs', JSON.stringify({ BUILDKIT_SYNTAX: DOCKERFILE_FRONTEND })],
-  ]);
-
-  const chunk = new Uint8Array(256 * 1024);
-
-  const body = new ReadableStream<Uint8Array>({
-    start(controller) {
-      for (let index = 0; index < 6; index += 1) {
-        controller.enqueue(chunk);
-      }
-
-      controller.close();
-    },
-  });
-
-  await proxy(
-    new Request(`http://docker/v1.55/build?${query.toString()}`, { method: 'POST', body }),
-  );
-
-  const seen = await waitFor(() => {
-    invariant(ctx.engine.seen[0]);
-
-    return ctx.engine.seen[0];
-  });
-
-  expect(seen.body.byteLength).toBeLessThanOrEqual(1024 ** 2);
-  expect(ctx.engine.unexpected).toStrictEqual([]);
-});
-
-test('it answers a chunked build context over the limit with a 413 that names the limit', async () => {
-  const ctx = await setupTest();
-
-  const proxy = ctx.startProxy({
-    upstreamSocket: ctx.engine.socket,
-    token: 'test-token',
-    hostImage: 'ghcr.io/zgeoff/imp-host:latest',
-    builderImage: null,
-    buildContextMaxBytes: 1024 ** 2,
-    log: ctx.log,
-  });
-
-  const query = new URLSearchParams([
-    ['t', 'imp/x:latest'],
-    ['version', '2'],
-    ['buildargs', JSON.stringify({ BUILDKIT_SYNTAX: DOCKERFILE_FRONTEND })],
-  ]);
-
-  const chunk = new Uint8Array(256 * 1024);
-
-  const body = new ReadableStream<Uint8Array>({
-    start(controller) {
-      for (let index = 0; index < 6; index += 1) {
-        controller.enqueue(chunk);
-      }
-
-      controller.close();
-    },
-  });
-
-  const response = await proxy(
-    new Request(`http://docker/v1.55/build?${query.toString()}`, { method: 'POST', body }),
-  );
-
-  const refusal: unknown = await response.json();
-
-  expect(response.status).toBe(413);
-
-  expect(refusal).toStrictEqual({
-    message:
-      'imp-docker-proxy: the build context is larger than 1048576 bytes (IMP_BUILD_CONTEXT_MAX_MIB)',
-  });
-
   expect(ctx.engine.unexpected).toStrictEqual([]);
 });
 
@@ -884,23 +517,28 @@ test('it forwards a pull with its fromImage, tag and registry auth', async () =>
     upstreamSocket: ctx.engine.socket,
     token: 'test-token',
     hostImage: 'ghcr.io/zgeoff/imp-host:latest',
-    builderImage: null,
-    buildContextMaxBytes: 4 * 1024 ** 2,
+    builderImage: `ghcr.io/zgeoff/imp-base:0.29.0@sha256:${'d'.repeat(64)}`,
     log: ctx.log,
   });
 
   await proxy(
-    new Request('http://docker/v1.55/images/create?fromImage=busybox&tag=latest', {
-      method: 'POST',
-      headers: { 'x-registry-auth': 'e30=', cookie: 'c=1' },
-    }),
+    new Request(
+      `http://docker/v1.55/images/create?fromImage=ghcr.io%2Fzgeoff%2Fimp-base&tag=sha256%3A${'d'.repeat(64)}`,
+      {
+        method: 'POST',
+        headers: { 'x-registry-auth': 'e30=', cookie: 'c=1' },
+      },
+    ),
   );
 
   const [pull] = ctx.engine.seen;
 
   invariant(pull);
 
-  expect(pull.target).toBe('/v1.55/images/create?fromImage=busybox&tag=latest');
+  expect(pull.target).toBe(
+    `/v1.55/images/create?fromImage=ghcr.io%2Fzgeoff%2Fimp-base&tag=sha256%3A${'d'.repeat(64)}`,
+  );
+
   expect(pull.headers['x-registry-auth']).toBe('e30=');
   expect(pull.headers['cookie'] ?? null).toBe(null);
   expect(ctx.engine.unexpected).toStrictEqual([]);
@@ -913,16 +551,15 @@ test('it refuses a pull with a body', async () => {
     upstreamSocket: ctx.engine.socket,
     token: 'test-token',
     hostImage: 'ghcr.io/zgeoff/imp-host:latest',
-    builderImage: null,
-    buildContextMaxBytes: 4 * 1024 ** 2,
+    builderImage: `ghcr.io/zgeoff/imp-base:0.29.0@sha256:${'d'.repeat(64)}`,
     log: ctx.log,
   });
 
   const response = await proxy(
-    new Request('http://docker/v1.55/images/create?fromImage=busybox&tag=latest', {
-      method: 'POST',
-      body: 'x',
-    }),
+    new Request(
+      `http://docker/v1.55/images/create?fromImage=ghcr.io%2Fzgeoff%2Fimp-base&tag=sha256%3A${'d'.repeat(64)}`,
+      { method: 'POST', body: 'x' },
+    ),
   );
 
   const refusal: unknown = await response.json();
@@ -940,8 +577,7 @@ test('it ends a create the engine never answers at the control deadline, and the
     upstreamSocket: ctx.engine.socket,
     token: 'test-token',
     hostImage: 'ghcr.io/zgeoff/imp-host:latest',
-    builderImage: null,
-    buildContextMaxBytes: 4 * 1024 ** 2,
+    builderImage: `ghcr.io/zgeoff/imp-base:0.29.0@sha256:${'d'.repeat(64)}`,
     controlCallMs: 50,
     log: ctx.log,
   });
@@ -961,7 +597,11 @@ test('it ends a create the engine never answers at the control deadline, and the
   const response = await proxy(
     new Request('http://docker/v1.55/containers/create', {
       method: 'POST',
-      body: JSON.stringify({ Image: 'busybox:1.37', Cmd: ['/bin/true'] }),
+      body: JSON.stringify({
+        Image:
+          'ghcr.io/zgeoff/imp-base:0.29.0@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
+        Cmd: ['/bin/true'],
+      }),
     }),
   );
 
@@ -973,15 +613,14 @@ test('it ends a create the engine never answers at the control deadline, and the
   expect(ctx.engine.unexpected).toStrictEqual([]);
 });
 
-test('it holds a build, a pull and an export past the control deadline that ends a create', async () => {
+test('it holds a pull and an export past the control deadline that ends a create', async () => {
   const ctx = await setupTest();
 
   const proxy = ctx.startProxy({
     upstreamSocket: ctx.engine.socket,
     token: 'test-token',
     hostImage: 'ghcr.io/zgeoff/imp-host:latest',
-    builderImage: null,
-    buildContextMaxBytes: 4 * 1024 ** 2,
+    builderImage: `ghcr.io/zgeoff/imp-base:0.29.0@sha256:${'d'.repeat(64)}`,
     controlCallMs: 50,
     log: ctx.log,
   });
@@ -992,9 +631,7 @@ test('it holds a build, a pull and an export past the control deadline that ends
 
   ctx.engine.setAnswer(async (request, seen) => {
     const isLong =
-      seen.target.startsWith('/v1.55/build') ||
-      seen.target.startsWith('/v1.55/images/create') ||
-      seen.target.endsWith('/export');
+      seen.target.startsWith('/v1.55/images/create') || seen.target.endsWith('/export');
 
     if (isLong) {
       await release.promise;
@@ -1013,32 +650,28 @@ test('it holds a build, a pull and an export past the control deadline that ends
     return null;
   });
 
-  const query = new URLSearchParams([
-    ['t', 'imp/x:latest'],
-    ['version', '2'],
-    ['buildargs', JSON.stringify({ BUILDKIT_SYNTAX: DOCKERFILE_FRONTEND })],
-  ]);
-
   const long = [
     proxy(
-      new Request(`http://docker/v1.55/build?${query.toString()}`, { method: 'POST', body: 'ctx' }),
-    ),
-    proxy(
-      new Request('http://docker/v1.55/images/create?fromImage=busybox&tag=latest', {
-        method: 'POST',
-      }),
+      new Request(
+        `http://docker/v1.55/images/create?fromImage=ghcr.io%2Fzgeoff%2Fimp-base&tag=sha256%3A${'d'.repeat(64)}`,
+        { method: 'POST' },
+      ),
     ),
     proxy(new Request('http://docker/v1.55/containers/aaaa/export')),
   ];
 
   await waitFor(() => {
-    expect(ctx.engine.seen).toHaveLength(4);
+    expect(ctx.engine.seen).toHaveLength(3);
   });
 
   const created = await proxy(
     new Request('http://docker/v1.55/containers/create', {
       method: 'POST',
-      body: JSON.stringify({ Image: 'busybox:1.37', Cmd: ['/bin/true'] }),
+      body: JSON.stringify({
+        Image:
+          'ghcr.io/zgeoff/imp-base:0.29.0@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
+        Cmd: ['/bin/true'],
+      }),
     }),
   );
 
@@ -1047,7 +680,7 @@ test('it holds a build, a pull and an export past the control deadline that ends
   const answered = await Promise.all(long);
 
   expect(created.status).toBe(502);
-  expect(answered.map((response) => response.status)).toStrictEqual([200, 200, 200]);
+  expect(answered.map((response) => response.status)).toStrictEqual([200, 200]);
   expect(ctx.engine.unexpected).toStrictEqual([]);
 });
 
@@ -1108,8 +741,7 @@ test('it passes on a pull and an export the engine answers after 400 s of fake t
     upstreamSocket: ctx.engine.socket,
     token: 'test-token',
     hostImage: 'ghcr.io/zgeoff/imp-host:latest',
-    builderImage: null,
-    buildContextMaxBytes: 4 * 1024 ** 2,
+    builderImage: `ghcr.io/zgeoff/imp-base:0.29.0@sha256:${'d'.repeat(64)}`,
     log: ctx.log,
   });
 
@@ -1145,9 +777,10 @@ test('it passes on a pull and an export the engine answers after 400 s of fake t
 
   const long = [
     proxy(
-      new Request('http://docker/v1.55/images/create?fromImage=busybox&tag=latest', {
-        method: 'POST',
-      }),
+      new Request(
+        `http://docker/v1.55/images/create?fromImage=ghcr.io%2Fzgeoff%2Fimp-base&tag=sha256%3A${'d'.repeat(64)}`,
+        { method: 'POST' },
+      ),
     ),
     proxy(new Request('http://docker/v1.55/containers/aaaa/export')),
   ];
@@ -1171,8 +804,7 @@ test('it answers 502 with the engine failure when the engine is unreachable', as
     upstreamSocket: join(ctx.directoryPath, 'no-engine.sock'),
     token: 'test-token',
     hostImage: 'ghcr.io/zgeoff/imp-host:latest',
-    builderImage: null,
-    buildContextMaxBytes: 4 * 1024 ** 2,
+    builderImage: `ghcr.io/zgeoff/imp-base:0.29.0@sha256:${'d'.repeat(64)}`,
     log: ctx.log,
   });
 
@@ -1188,7 +820,7 @@ test('it answers 502 with the engine failure when the engine is unreachable', as
   expect(ctx.engine.unexpected).toStrictEqual([]);
 });
 
-test('it refuses a create from another image under imp isolation', async () => {
+test('it refuses a create from another image', async () => {
   const ctx = await setupTest();
 
   const digest = `sha256:${'d'.repeat(64)}`;
@@ -1198,7 +830,6 @@ test('it refuses a create from another image under imp isolation', async () => {
     token: 'test-token',
     hostImage: 'ghcr.io/zgeoff/imp-host:latest',
     builderImage: `ghcr.io/zgeoff/imp-base:0.29.0@${digest}`,
-    buildContextMaxBytes: 4 * 1024 ** 2,
     log: ctx.log,
   });
 
@@ -1214,14 +845,14 @@ test('it refuses a create from another image under imp isolation', async () => {
   expect(response.status).toBe(403);
 
   expect(refusal).toStrictEqual({
-    message: `imp-docker-proxy: a create from busybox:1.37 is refused: under IMP_BUILD_ISOLATION=imp the proxy creates only from IMP_BUILD_IMAGE, ghcr.io/zgeoff/imp-base:0.29.0@${digest}`,
+    message: `imp-docker-proxy: a create from busybox:1.37 is refused: the proxy creates only from IMP_BUILD_IMAGE, ghcr.io/zgeoff/imp-base:0.29.0@${digest}`,
   });
 
   expect(ctx.engine.seen).toStrictEqual([]);
   expect(ctx.engine.unexpected).toStrictEqual([]);
 });
 
-test('it passes a create from IMP_BUILD_IMAGE by its digest under imp isolation', async () => {
+test('it passes a create from IMP_BUILD_IMAGE by its digest', async () => {
   const ctx = await setupTest();
 
   const digest = `sha256:${'d'.repeat(64)}`;
@@ -1231,7 +862,6 @@ test('it passes a create from IMP_BUILD_IMAGE by its digest under imp isolation'
     token: 'test-token',
     hostImage: 'ghcr.io/zgeoff/imp-host:latest',
     builderImage: `ghcr.io/zgeoff/imp-base:0.29.0@${digest}`,
-    buildContextMaxBytes: 4 * 1024 ** 2,
     log: ctx.log,
   });
 
@@ -1249,7 +879,7 @@ test('it passes a create from IMP_BUILD_IMAGE by its digest under imp isolation'
   expect(ctx.engine.unexpected).toStrictEqual([]);
 });
 
-test('it refuses a pull of another image under imp isolation', async () => {
+test('it refuses a pull of another image', async () => {
   const ctx = await setupTest();
 
   const digest = `sha256:${'d'.repeat(64)}`;
@@ -1259,7 +889,6 @@ test('it refuses a pull of another image under imp isolation', async () => {
     token: 'test-token',
     hostImage: 'ghcr.io/zgeoff/imp-host:latest',
     builderImage: `ghcr.io/zgeoff/imp-base:0.29.0@${digest}`,
-    buildContextMaxBytes: 4 * 1024 ** 2,
     log: ctx.log,
   });
 
@@ -1269,12 +898,19 @@ test('it refuses a pull of another image under imp isolation', async () => {
     }),
   );
 
+  const refusal: unknown = await response.json();
+
   expect(response.status).toBe(403);
+
+  expect(refusal).toStrictEqual({
+    message: `imp-docker-proxy: a pull of busybox:1.37 is refused: the proxy pulls only IMP_BUILD_IMAGE, ghcr.io/zgeoff/imp-base:0.29.0@${digest}`,
+  });
+
   expect(ctx.engine.seen).toStrictEqual([]);
   expect(ctx.engine.unexpected).toStrictEqual([]);
 });
 
-test('it forwards a pull of IMP_BUILD_IMAGE by its digest under imp isolation', async () => {
+test('it forwards a pull of IMP_BUILD_IMAGE by its digest', async () => {
   const ctx = await setupTest();
 
   const digest = `sha256:${'d'.repeat(64)}`;
@@ -1284,7 +920,6 @@ test('it forwards a pull of IMP_BUILD_IMAGE by its digest under imp isolation', 
     token: 'test-token',
     hostImage: 'ghcr.io/zgeoff/imp-host:latest',
     builderImage: `ghcr.io/zgeoff/imp-base:0.29.0@${digest}`,
-    buildContextMaxBytes: 4 * 1024 ** 2,
     log: ctx.log,
   });
 
@@ -1302,45 +937,6 @@ test('it forwards a pull of IMP_BUILD_IMAGE by its digest under imp isolation', 
   expect(ctx.engine.unexpected).toStrictEqual([]);
 });
 
-test('it refuses every build under imp isolation', async () => {
-  const ctx = await setupTest();
-
-  const proxy = ctx.startProxy({
-    upstreamSocket: ctx.engine.socket,
-    token: 'test-token',
-    hostImage: 'ghcr.io/zgeoff/imp-host:latest',
-    builderImage: `ghcr.io/zgeoff/imp-base:0.29.0@sha256:${'d'.repeat(64)}`,
-    buildContextMaxBytes: 4 * 1024 ** 2,
-    log: ctx.log,
-  });
-
-  const query = new URLSearchParams([
-    ['t', 'imp/x:latest'],
-    ['version', '2'],
-    ['buildargs', JSON.stringify({ BUILDKIT_SYNTAX: DOCKERFILE_FRONTEND })],
-  ]);
-
-  const response = await proxy(
-    new Request(`http://docker/v1.55/build?${query.toString()}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-tar' },
-      body: 'context',
-    }),
-  );
-
-  const refusal: unknown = await response.json();
-
-  expect(response.status).toBe(403);
-
-  expect(refusal).toStrictEqual({
-    message:
-      'imp-docker-proxy: a build is refused: under IMP_BUILD_ISOLATION=imp impd builds in builder imps',
-  });
-
-  expect(ctx.engine.seen).toStrictEqual([]);
-  expect(ctx.engine.unexpected).toStrictEqual([]);
-});
-
 test('it refuses a pull from a loopback registry with a refusal that reads back alone', async () => {
   const ctx = await setupTest();
 
@@ -1348,8 +944,7 @@ test('it refuses a pull from a loopback registry with a refusal that reads back 
     upstreamSocket: ctx.engine.socket,
     token: 'test-token',
     hostImage: 'ghcr.io/zgeoff/imp-host:latest',
-    builderImage: null,
-    buildContextMaxBytes: 4 * 1024 ** 2,
+    builderImage: `ghcr.io/zgeoff/imp-base:0.29.0@sha256:${'d'.repeat(64)}`,
     log: ctx.log,
   });
 
@@ -1378,8 +973,7 @@ test('it refuses a create from a loopback registry with a refusal the CLI stderr
     upstreamSocket: ctx.engine.socket,
     token: 'test-token',
     hostImage: 'ghcr.io/zgeoff/imp-host:latest',
-    builderImage: null,
-    buildContextMaxBytes: 4 * 1024 ** 2,
+    builderImage: `ghcr.io/zgeoff/imp-base:0.29.0@sha256:${'d'.repeat(64)}`,
     log: ctx.log,
   });
 
@@ -1409,8 +1003,7 @@ test('it refuses an Upgrade request', async () => {
     upstreamSocket: ctx.engine.socket,
     token: 'test-token',
     hostImage: 'ghcr.io/zgeoff/imp-host:latest',
-    builderImage: null,
-    buildContextMaxBytes: 4 * 1024 ** 2,
+    builderImage: `ghcr.io/zgeoff/imp-base:0.29.0@sha256:${'d'.repeat(64)}`,
     log: ctx.log,
   });
 
@@ -1439,8 +1032,7 @@ test('it refuses a route impd does not call', async () => {
     upstreamSocket: ctx.engine.socket,
     token: 'test-token',
     hostImage: 'ghcr.io/zgeoff/imp-host:latest',
-    builderImage: null,
-    buildContextMaxBytes: 4 * 1024 ** 2,
+    builderImage: `ghcr.io/zgeoff/imp-base:0.29.0@sha256:${'d'.repeat(64)}`,
     log: ctx.log,
   });
 
@@ -1456,37 +1048,6 @@ test('it refuses a route impd does not call', async () => {
     message: `imp-docker-proxy: POST /containers/${'a'.repeat(64)}/start is not a call impd makes`,
   });
 
-  expect(ctx.engine.seen).toStrictEqual([]);
-  expect(ctx.engine.unexpected).toStrictEqual([]);
-});
-
-test('it refuses a build with a param that moves its context', async () => {
-  const ctx = await setupTest();
-
-  const proxy = ctx.startProxy({
-    upstreamSocket: ctx.engine.socket,
-    token: 'test-token',
-    hostImage: 'ghcr.io/zgeoff/imp-host:latest',
-    builderImage: null,
-    buildContextMaxBytes: 4 * 1024 ** 2,
-    log: ctx.log,
-  });
-
-  const query = new URLSearchParams([
-    ['t', 'imp/x:latest'],
-    ['version', '2'],
-    ['buildargs', JSON.stringify({ BUILDKIT_SYNTAX: DOCKERFILE_FRONTEND })],
-    ['remote', 'https://x'],
-  ]);
-
-  const response = await proxy(
-    new Request(`http://docker/v1.55/build?${query.toString()}`, { method: 'POST' }),
-  );
-
-  const refusal: unknown = await response.json();
-
-  expect(response.status).toBe(403);
-  expect(refusal).toStrictEqual({ message: 'imp-docker-proxy: param remote is not allowed' });
   expect(ctx.engine.seen).toStrictEqual([]);
   expect(ctx.engine.unexpected).toStrictEqual([]);
 });
@@ -1539,16 +1100,16 @@ test('it warns through its logger when the engine closes a stream', async () => 
     upstreamSocket: socket,
     token: 'test-token',
     hostImage: 'ghcr.io/zgeoff/imp-host:latest',
-    builderImage: null,
-    buildContextMaxBytes: 4 * 1024 ** 2,
+    builderImage: `ghcr.io/zgeoff/imp-base:0.29.0@sha256:${'d'.repeat(64)}`,
     log: ctx.log,
     logger: { warning },
   });
 
   const response = await proxy(
-    new Request('http://docker/v1.55/images/create?fromImage=busybox&tag=latest', {
-      method: 'POST',
-    }),
+    new Request(
+      `http://docker/v1.55/images/create?fromImage=ghcr.io%2Fzgeoff%2Fimp-base&tag=sha256%3A${'d'.repeat(64)}`,
+      { method: 'POST' },
+    ),
   );
 
   invariant(response.body);
@@ -1580,8 +1141,7 @@ test('it warns nothing when the engine ends a stream', async () => {
     upstreamSocket: ctx.engine.socket,
     token: 'test-token',
     hostImage: 'ghcr.io/zgeoff/imp-host:latest',
-    builderImage: null,
-    buildContextMaxBytes: 4 * 1024 ** 2,
+    builderImage: `ghcr.io/zgeoff/imp-base:0.29.0@sha256:${'d'.repeat(64)}`,
     log: ctx.log,
     logger: { warning },
   });

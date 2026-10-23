@@ -1,7 +1,8 @@
 import { expect, test } from 'bun:test';
 import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { instance } from './instance';
+import { config } from './config';
+import { REPO_ROOT, instance } from './instance';
 import type { Suite } from './suites';
 import {
   FAST_GROUPS,
@@ -61,6 +62,22 @@ test('#readSuiteSettings reads null for a suite on the run’s own settings', ()
   expect(readSuiteSettings('templates', instance)).toBeNull();
 });
 
+test("#readSuiteSettings opens the registry suite's registry to builders on an e2e impd", () => {
+  expect(
+    readSuiteSettings('registry', { ...instance, container: 'imp-dev-test', portOffset: 30 }),
+  ).toStrictEqual({
+    IMP_E2E: '1',
+    IMP_BUILD_TEST_REGISTRY: `${config.registryName}:15473`,
+    IMP_BUILD_TEST_REGISTRY_CA: join(
+      REPO_ROOT,
+      '.cache',
+      'e2e',
+      'imp-dev-test-registry-tls',
+      'cert.pem',
+    ),
+  });
+});
+
 test('#readSuiteSettings puts the sleep suite on a 5 s idle timeout', () => {
   expect(readSuiteSettings('sleep', instance)).toStrictEqual({ IMP_IDLE_TIMEOUT_S: '5' });
 });
@@ -72,7 +89,7 @@ test('#buildJourneyEnv hands a suite’s own idle timeout to its journeys', () =
 });
 
 test('#buildJourneyEnv leaves the run’s idle timeout to a suite that sets none', () => {
-  expect(buildJourneyEnv({ IMP_BUILD_ISOLATION: 'host' })).toStrictEqual({});
+  expect(buildJourneyEnv({ IMP_KSM: '1' })).toStrictEqual({});
 });
 
 test('#buildJourneyEnv leaves the run’s idle timeout to a suite on the run’s settings', () => {
