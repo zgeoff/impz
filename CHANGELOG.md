@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.10.5](https://github.com/zgeoff/impz/compare/v2.10.4...v2.10.5) (2026-10-23)
+
+### Bug Fixes
+
+- **e2e:** keep the ssh-agent socket under the unix socket path limit
+  ([#644](https://github.com/zgeoff/impz/issues/644))
+  ([93ba146](https://github.com/zgeoff/impz/commit/93ba146781fb1419f30efc0ca588d4d3f3b58804))
+
 ## [2.10.4](https://github.com/zgeoff/impz/compare/v2.10.3...v2.10.4) (2026-10-23)
 
 ### Performance Improvements

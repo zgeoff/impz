@@ -2,7 +2,14 @@ import { mkdirSync, rmSync } from 'node:fs';
 import type { EgressPolicy, Imp, ImpKind } from '@impz/api';
 import { listCheckpoints } from '../../platform/db/checkpoints';
 import type { ImageRecord } from '../../platform/db/images';
-import { listImps, removeImp, updateImpDisk, updateImpSettings } from '../../platform/db/imps';
+import {
+  listImps,
+  readImpByName,
+  removeImp,
+  updateImpDisk,
+  updateImpSettings,
+} from '../../platform/db/imps';
+import type { ImpRecord } from '../../platform/db/imps';
 import { buildInvalidStateError } from '../../platform/errors/impd-errors';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import { isRamBudgetError } from '../../vm/governor/ram-budget-error';
@@ -67,6 +74,8 @@ export interface ImpCommands {
   readonly createImp: (input: CreateImpInput) => Promise<Imp>;
   readonly listImps: () => Promise<Imp[]>;
   readonly readImp: (name: string) => Promise<Imp>;
+  readonly listImpRecords: () => Promise<ImpRecord[]>;
+  readonly readImpRecord: (name: string) => Promise<ImpRecord | undefined>;
   readonly startImp: (name: string) => Promise<Imp>;
 
   readonly stopImp: (name: string, force?: boolean) => Promise<Imp>;
@@ -291,6 +300,9 @@ export function createImpCommands(parts: ImpCommandParts): ImpCommands {
 
       return presenter.readApi(imp);
     },
+
+    listImpRecords: () => listImps(context.db),
+    readImpRecord: (name) => readImpByName(context.db, name),
 
     startImp: (name) =>
       lock.withImp(name, async (imp) => {

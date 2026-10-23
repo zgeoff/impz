@@ -9,7 +9,7 @@ import type { ExecBackend } from './exec-session';
 
 interface BuildAuditedBackendOptions {
   readonly backend: ExecBackend;
-  readonly audit: ApiAudit;
+  readonly audit: Pick<ApiAudit, 'record'>;
   readonly actor: AuditActor;
   readonly events: EventBus;
   readonly now: () => number;

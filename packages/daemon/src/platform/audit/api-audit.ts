@@ -1,4 +1,5 @@
-import { writeApiCall } from '../db/api-audit';
+import type { ApiCall } from '@impz/api';
+import { listApiCalls, writeApiCall } from '../db/api-audit';
 import type { ImpDatabase } from '../db/open-database';
 import type { AuditActor } from '../principal/caller';
 import { getErrorMessage } from '../process/get-error-message';
@@ -23,6 +24,11 @@ export interface AuditedCall {
 
 export interface ApiAudit {
   readonly record: (call: AuditedCall, failure: unknown) => void;
+  readonly listCalls: (
+    impName: string | null,
+    limit: number,
+    patterns: readonly string[] | null,
+  ) => Promise<ApiCall[]>;
 }
 
 interface ApiAuditDeps {
@@ -37,6 +43,7 @@ export function createApiAudit(deps: ApiAuditDeps): ApiAudit {
     record: (call, failure) => {
       void writeCall(deps, call, failure);
     },
+    listCalls: (impName, limit, patterns) => listApiCalls(deps.db, impName, limit, patterns),
   };
 }
 
@@ -66,7 +73,7 @@ function findField(value: unknown, key: string): string | null {
 }
 
 export async function withAuditedOpen<T>(
-  audit: ApiAudit,
+  audit: Pick<ApiAudit, 'record'>,
   call: AuditedCall,
   open: () => Promise<T>,
 ): Promise<T> {
