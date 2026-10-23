@@ -79,7 +79,7 @@ each; open one when the task touches its area.
 | ACME issuer                 | `bun run test:pebble`                                                              | Docker                                                       |
 | Headscale join              | `bun run test:headscale`                                                           | Docker, and the network for the client's packages            |
 | Small filesystem            | `IMP_TEST_SMALL_FS=<dir> bun test <file>... -t 'small filesystem'`                 | A 4 GiB loop-mounted XFS at `<dir>`; a tiny tmpfs fails      |
-| End to end                  | `e2e/test-e2e.sh [--only <suites> \| --group <1-3>] [--clean \| --reuse] [--keep]` | KVM, Docker; `--help` lists suites and extra needs           |
+| End to end                  | `e2e/test-e2e.sh [--only <suites> \| --group <1-4>] [--clean \| --reuse] [--keep]` | KVM, Docker; `--help` lists suites and extra needs           |
 | One journey                 | `bun test --config=e2e/bunfig.toml ./e2e/suites/<journey>.e2e.ts`                  | A dev instance that is already up                            |
 | NixOS module evaluation     | `nix build -L --no-link .#checks.x86_64-linux.eval`                                | Nix with flakes                                              |
 | NixOS VMs                   | `nix build -L --no-link .#checks.x86_64-linux.vm`                                  | Nix with `kvm nixos-test` system features                    |

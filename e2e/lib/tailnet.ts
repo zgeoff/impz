@@ -13,7 +13,12 @@ const PeerSchema = z.object({
 
 const TailscaleStatusSchema = z.object({
   BackendState: z.string(),
-  Peer: z.record(z.string(), PeerSchema).default({}),
+
+  // A node alone on its tailnet gives null.
+  Peer: z
+    .record(z.string(), PeerSchema)
+    .nullish()
+    .transform((peers) => peers ?? {}),
 });
 
 export type TailscaleStatus = z.infer<typeof TailscaleStatusSchema>;

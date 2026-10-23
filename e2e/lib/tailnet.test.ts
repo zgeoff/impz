@@ -103,6 +103,12 @@ test('#parseTailscaleStatus reads a status without peers as none', () => {
   });
 });
 
+test('#parseTailscaleStatus reads a node alone on its tailnet as one without peers', () => {
+  expect(
+    parseTailscaleStatus(JSON.stringify({ BackendState: 'Running', Peer: null })),
+  ).toStrictEqual({ BackendState: 'Running', Peer: {} });
+});
+
 test('#parseTailscaleStatus gives null for output that is not JSON', () => {
   expect(parseTailscaleStatus('tailscale: command not found')).toBeNull();
 });

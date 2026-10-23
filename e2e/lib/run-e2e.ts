@@ -89,7 +89,7 @@ const USAGE = `imp end-to-end harness: every case drives impd through the CLI.
 
   --only    comma-separated suites or sets (default: acceptance)
             suites: ${SUITES.map((suite) => suite.name).join(' ')}
-            sets:   acceptance (all, tailscale required), fast (the CI subset)
+            sets:   acceptance (all, timing limits enforced), fast (the CI subset)
   --group   one of the fast set's ${String(FAST_GROUPS.length)} CI groups, 1 to ${String(FAST_GROUPS.length)}
   --clean   full reset first: tailnet logout, remove the dev container, wipe
             its data dir (XFS file, db, images, imps, checkpoints), and the
