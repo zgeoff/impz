@@ -14,10 +14,10 @@ import type { RemoteForwardRequest } from '../../imps/ssh/remote-forwarding';
 import { handleSession } from '../../imps/ssh/session-channel';
 import type { SshBackend, SshConnectionContext } from '../../imps/ssh/ssh-connection-context';
 import type { ImpRecord } from '../../platform/db/imps';
-import { isCallerAllowed } from '../../platform/principal/caller';
 import type { Caller } from '../../platform/principal/caller';
 import type { StartTimer } from '../../platform/process/clock';
 import { startRealTimer } from '../../platform/process/start-real-timer';
+import { findImpRefusal } from '../find-imp-refusal';
 import type { LoginKeys } from './login-keys';
 
 interface SshGatewayLimits {
@@ -274,13 +274,13 @@ async function checkLogin(ctx: AuthContext, deps: SshGatewayDeps): Promise<Login
   // Checked once for the whole connection, which holds only because a token
   // never changes. Checked before the lookup, so the time taken shows nothing
   // of which imps exist.
-  if (!isCallerAllowed(found.caller, 'exec', ctx.username)) {
+  if (findImpRefusal(found.caller, 'exec', ctx.username, 'log in to') !== null) {
     return 'rejected';
   }
 
   const imp = await deps.backend.readImp(ctx.username);
 
-  if (imp === undefined || !isCallerAllowed(found.caller, 'exec', imp.name)) {
+  if (imp === undefined || findImpRefusal(found.caller, 'exec', imp.name, 'log in to') !== null) {
     return 'rejected';
   }
 
