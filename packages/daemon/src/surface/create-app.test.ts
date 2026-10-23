@@ -166,11 +166,14 @@ test('it answers 404 for a procedure the API does not have', async () => {
   expect(body).toBe('not found');
 });
 
-test('it refuses an image build without a token', async () => {
+test('it refuses a build context upload without a token', async () => {
   const ctx = await setupTest({ cgroups: buildStubCpuCgroups().cgroups });
 
   const response = await ctx.impd.api.app.handle(
-    new Request('http://impd.test/images/build', { method: 'POST', body: 'context' }),
+    new Request('http://impd.test/images/build-context?name=web', {
+      method: 'POST',
+      body: 'context',
+    }),
   );
 
   const body: unknown = await response.json();

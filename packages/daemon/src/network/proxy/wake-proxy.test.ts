@@ -400,7 +400,7 @@ test('it passes the first line of a streamed API answer on while the API holds t
       },
     });
 
-    return new Response(body, { headers: { 'content-type': 'application/x-ndjson' } });
+    return new Response(body, { headers: { 'content-type': 'text/event-stream' } });
   };
 
   const api = Bun.serve({
@@ -430,7 +430,7 @@ test('it passes the first line of a streamed API answer on while the API holds t
 
   ctx.stack.defer(() => apex.stop(true));
 
-  const response = await fetch(`http://127.0.0.1:${String(apex.port)}/images/build`, {
+  const response = await fetch(`http://127.0.0.1:${String(apex.port)}/rpc/images/buildStream`, {
     method: 'POST',
     body: 'tar',
   });
@@ -570,7 +570,7 @@ test('it passes the rest of a streamed API answer on once the API sends it', asy
       },
     });
 
-    return new Response(body, { headers: { 'content-type': 'application/x-ndjson' } });
+    return new Response(body, { headers: { 'content-type': 'text/event-stream' } });
   };
 
   const api = Bun.serve({
@@ -600,7 +600,7 @@ test('it passes the rest of a streamed API answer on once the API sends it', asy
 
   ctx.stack.defer(() => apex.stop(true));
 
-  const response = await fetch(`http://127.0.0.1:${String(apex.port)}/images/build`, {
+  const response = await fetch(`http://127.0.0.1:${String(apex.port)}/rpc/images/buildStream`, {
     method: 'POST',
     body: 'tar',
   });

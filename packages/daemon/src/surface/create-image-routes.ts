@@ -1,7 +1,10 @@
 import type { ImageBuildPhase } from '@impz/api';
+import { ORPCError } from '@orpc/server';
 import { runImageOp } from '../imps/images/build/image-op-stream';
 import type { ImageOpStreamOptions } from '../imps/images/build/image-op-stream';
 import { findImpName } from '../platform/audit/api-audit';
+import { ImpdError } from '../platform/errors/impd-error';
+import { getErrorMessage } from '../platform/process/get-error-message';
 import { mergeSignals } from '../platform/process/merge-signals';
 import type { AuditDetail, RpcContext, RpcImplementer } from './create-implementer';
 import type { RouterDeps } from './create-router';
@@ -59,7 +62,7 @@ export function createImageRoutes(os: RpcImplementer, deps: RouterDeps) {
 
       if ('upload' in input) {
         return runImageOp(
-          async (signal, report) => {
+          makeShownFailureRun(async (signal, report) => {
             const upload = deps.buildContexts.takeUpload(input.upload, context.context.caller);
             const run = upload.run;
 
@@ -93,13 +96,13 @@ export function createImageRoutes(os: RpcImplementer, deps: RouterDeps) {
             } finally {
               upload.release();
             }
-          },
+          }),
           { ...buildImageOpOptions(deps, context, 'images.buildStream', 'build'), logs },
         );
       }
 
       return runImageOp(
-        async (signal, report) => {
+        makeShownFailureRun(async (signal, report) => {
           const image = await deps.images.runImageBuild(
             input.contextDir,
             input.name,
@@ -112,7 +115,7 @@ export function createImageRoutes(os: RpcImplementer, deps: RouterDeps) {
           );
 
           return toApiImage(image);
-        },
+        }),
         { ...buildImageOpOptions(deps, context, 'images.buildStream', 'pack'), logs },
       );
     }),
@@ -179,5 +182,26 @@ function buildImageOpOptions(
         failure,
       );
     },
+  };
+}
+
+type ImageOpRun = Parameters<typeof runImageOp>[0];
+
+// oRPC answers an error it does not know with a bare "Internal server error", and a build
+// client needs the reason, such as a builder out of disk.
+function makeShownFailureRun(run: ImageOpRun): ImageOpRun {
+  return async (signal, report) => {
+    try {
+      return await run(signal, report);
+    } catch (error) {
+      if (error instanceof ImpdError || error instanceof ORPCError) {
+        throw error;
+      }
+
+      throw new ImpdError('INTERNAL_SERVER_ERROR', {
+        message: getErrorMessage(error),
+        cause: error,
+      });
+    }
   };
 }

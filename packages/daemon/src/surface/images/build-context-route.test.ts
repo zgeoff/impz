@@ -2211,7 +2211,12 @@ test('it ends a build that fails after the builder built it with an internal err
 
   const uploads = await readdir(buildUploadsDir(ctx.dataDir));
 
-  expect(failure).toMatchObject({ code: 'INTERNAL_SERVER_ERROR', status: 500 });
+  expect(failure).toMatchObject({
+    code: 'INTERNAL_SERVER_ERROR',
+    status: 500,
+    message: 'docker create in the builder: no space left on device',
+  });
+
   expect(uploads).toStrictEqual([]);
 });
 

@@ -708,6 +708,33 @@ test('it streams the pack, then the build, of a build from a directory', async (
   });
 });
 
+test('it ends a streamed build from a directory that fails inside impd with the reason', async () => {
+  const ctx = await setupTest();
+
+  const contextDir = join(ctx.directoryPath, 'context');
+
+  await mkdir(contextDir);
+  await writeFile(join(contextDir, 'Dockerfile'), 'FROM scratch\n');
+
+  const builder = buildStubImageBuilder({
+    exported: [],
+    repoDigest: `sha256:${'b'.repeat(64)}`,
+    failures: { create: 'no space left on device' },
+  });
+
+  const harness = await startBuilderImpd(ctx.stack, builder, {
+    dataDir: ctx.dataDir,
+    cloneDisk: ctx.cloneDisk,
+  });
+
+  const events = await harness.client.images.buildStream({ contextDir, name: 'web' });
+
+  expect(Array.fromAsync(events)).rejects.toMatchObject({
+    code: 'INTERNAL_SERVER_ERROR',
+    message: 'docker create in the builder: no space left on device',
+  });
+});
+
 test('it stops the builder build of a streamed build whose client goes, and audits it', async () => {
   const ctx = await setupTest();
 
