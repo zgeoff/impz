@@ -33,9 +33,9 @@ interface ExtentRead {
   readonly isComplete: boolean;
 }
 
-type BatchRead = { readonly extents: Extent[] } | { readonly errno: number };
+export type ExtentBatchRead = { readonly extents: Extent[] } | { readonly errno: number };
 
-function readBatch(fd: number, start: number, buffer: Uint8Array, flags: number): BatchRead {
+function readBatch(fd: number, start: number, buffer: Uint8Array, flags: number): ExtentBatchRead {
   const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
 
   buffer.fill(0);
@@ -104,17 +104,14 @@ export async function readExtents(path: string, deadline: number): Promise<Exten
   }
 }
 
-const FIEMAP_FLAG_SYNC = 0x1;
+export type ReadExtentBatch = (fd: number, start: number) => ExtentBatchRead;
 
-// flushes first, because the kernel keeps an extent unwritten until writeback even when the page
-// cache holds data for it; null where the file system has no FIEMAP, as on ZFS or tmpfs
-export function readOpenFileExtents(fd: number): Extent[] | null {
-  const buffer = new Uint8Array(HEADER_BYTES + BATCH_EXTENTS * EXTENT_BYTES);
-
+// null where the file system has no FIEMAP, as on ZFS or tmpfs
+export function readOpenFileExtents(fd: number, readExtentBatch: ReadExtentBatch): Extent[] | null {
   const extents: Extent[] = [];
 
   for (let start = 0; ;) {
-    const read = readBatch(fd, start, buffer, FIEMAP_FLAG_SYNC);
+    const read = readExtentBatch(fd, start);
 
     if ('errno' in read) {
       return null;
@@ -130,4 +127,17 @@ export function readOpenFileExtents(fd: number): Extent[] | null {
 
     start = last.logical + last.length;
   }
+}
+
+const FIEMAP_FLAG_SYNC = 0x1;
+
+// flushes first, because the kernel keeps an extent unwritten until writeback even when the page
+// cache holds data for it
+export function readSyncedExtentBatch(fd: number, start: number): ExtentBatchRead {
+  return readBatch(
+    fd,
+    start,
+    new Uint8Array(HEADER_BYTES + BATCH_EXTENTS * EXTENT_BYTES),
+    FIEMAP_FLAG_SYNC,
+  );
 }

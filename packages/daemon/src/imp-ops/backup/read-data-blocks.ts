@@ -1,6 +1,6 @@
 import { fstatSync } from 'node:fs';
 import { readErrno, readLibc } from '../../platform/process/libc';
-import { EXTENT_FLAGS, readOpenFileExtents } from '../../vm/storage/fiemap';
+import { EXTENT_FLAGS, readOpenFileExtents, readSyncedExtentBatch } from '../../vm/storage/fiemap';
 
 // Linux's lseek(2) whence values, and the one errno that is an answer.
 const SEEK_DATA = 3;
@@ -86,7 +86,7 @@ function runLseek(fd: number, offset: number, whence: number): SeekResult {
 // st_blocks counts unwritten extents, which SEEK_DATA skips as holes, so they are no data the scan
 // missed; XFS leaves them where it preallocates ahead of a file's growing end.
 function readFileAllocated(fd: number): number {
-  const unwrittenBytes = (readOpenFileExtents(fd) ?? [])
+  const unwrittenBytes = (readOpenFileExtents(fd, readSyncedExtentBatch) ?? [])
     .filter((extent) => (extent.flags & EXTENT_FLAGS.unwritten) !== 0)
     .reduce((total, extent) => total + extent.length, 0);
 
