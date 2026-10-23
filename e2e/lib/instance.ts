@@ -127,6 +127,11 @@ export async function runChecked(argv: readonly string[]): Promise<string> {
   return result.stdout;
 }
 
+export interface CommandRunners {
+  readonly runCommand: typeof runCommand;
+  readonly runChecked: typeof runChecked;
+}
+
 export function readHostImage(env: HarnessEnv): string {
   return readDevCheckout(realpathSync, env, REPO_ROOT).hostImage;
 }

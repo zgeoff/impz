@@ -1,7 +1,8 @@
 import { join } from 'node:path';
 import * as z from 'zod';
 import { HEADSCALE_IMAGES } from '../../scripts/dev/headscale-images';
-import { FIXTURES_DIR, instance, runChecked, runCommand } from './instance';
+import { FIXTURES_DIR, instance } from './instance';
+import type { CommandRunners } from './instance';
 import { readMemberStatus } from './tailnet';
 import { waitFor } from './wait-for';
 
@@ -26,20 +27,21 @@ const KeySchema = z.object({ key: z.string().min(1) });
 const UserSchema = z.object({ id: z.number() });
 
 export async function startHeadscale(
+  runners: CommandRunners,
   container: string = instance.container,
 ): Promise<HeadscaleTailnet> {
   const names = buildHeadscaleNames(container);
 
-  await stopHeadscale(container);
+  await stopHeadscale(runners, container);
 
   // The dev instance outlives the run on this network, which then stays.
-  const network = await runCommand(['docker', 'network', 'inspect', names.network]);
+  const network = await runners.runCommand(['docker', 'network', 'inspect', names.network]);
 
   if (network.exitCode !== 0) {
-    await runChecked(['docker', 'network', 'create', names.network]);
+    await runners.runChecked(['docker', 'network', 'create', names.network]);
   }
 
-  await runChecked([
+  await runners.runChecked([
     'docker',
     'create',
     '--name',
@@ -56,16 +58,16 @@ export async function startHeadscale(
     'serve',
   ]);
 
-  await runChecked(['docker', 'start', names.headscale]);
+  await runners.runChecked(['docker', 'start', names.headscale]);
 
   await waitFor(
     'Headscale to answer',
-    () => runChecked(['docker', 'exec', names.headscale, 'headscale', 'health']),
+    () => runners.runChecked(['docker', 'exec', names.headscale, 'headscale', 'health']),
     { timeoutMs: 30_000, intervalMs: 200 },
   );
 
   // Reusable: one key joins A at every start and reboot, and B.
-  const tagged = await runChecked([
+  const tagged = await runners.runChecked([
     'docker',
     'exec',
     names.headscale,
@@ -82,7 +84,7 @@ export async function startHeadscale(
     'json',
   ]);
 
-  const user = await runChecked([
+  const user = await runners.runChecked([
     'docker',
     'exec',
     names.headscale,
@@ -96,7 +98,7 @@ export async function startHeadscale(
 
   const userID = UserSchema.parse(JSON.parse(user)).id;
 
-  const memberKey = await runChecked([
+  const memberKey = await runners.runChecked([
     'docker',
     'exec',
     names.headscale,
@@ -110,7 +112,7 @@ export async function startHeadscale(
     'json',
   ]);
 
-  await startMember(names, KeySchema.parse(JSON.parse(memberKey)).key);
+  await startMember(runners, names, KeySchema.parse(JSON.parse(memberKey)).key);
 
   return {
     key: KeySchema.parse(JSON.parse(tagged)).key,
@@ -119,21 +121,25 @@ export async function startHeadscale(
   };
 }
 
-export async function stopHeadscale(container: string = instance.container): Promise<void> {
+export async function stopHeadscale(
+  runners: CommandRunners,
+  container: string = instance.container,
+): Promise<void> {
   const names = buildHeadscaleNames(container);
 
-  await runCommand(['docker', 'rm', '-f', names.member, names.headscale]);
-  await runCommand(['docker', 'network', 'rm', names.network]);
+  await runners.runCommand(['docker', 'rm', '-f', names.member, names.headscale]);
+  await runners.runCommand(['docker', 'network', 'rm', names.network]);
 }
 
 // A network of a suite's own, such as the moves suites' network: the relay
 // serves plain HTTP, which tailscaled refuses, so peers meet only on a network
 // they share, and each node reaches Headscale by its alias there.
 export async function connectHeadscale(
+  runners: CommandRunners,
   network: string,
   container: string = instance.container,
 ): Promise<void> {
-  await runChecked([
+  await runners.runChecked([
     'docker',
     'network',
     'connect',
@@ -145,10 +151,11 @@ export async function connectHeadscale(
 }
 
 export async function disconnectHeadscale(
+  runners: CommandRunners,
   network: string,
   container: string = instance.container,
 ): Promise<void> {
-  await runCommand([
+  await runners.runCommand([
     'docker',
     'network',
     'disconnect',
@@ -161,10 +168,11 @@ export async function disconnectHeadscale(
 // The test-side member: a kernel tun, so docker exec reaches tailnet addresses,
 // and MagicDNS in its resolv.conf, so it resolves node names.
 async function startMember(
+  runners: CommandRunners,
   names: ReturnType<typeof buildHeadscaleNames>,
   key: string,
 ): Promise<void> {
-  const created = await runCommand(
+  const created = await runners.runCommand(
     [
       'docker',
       'create',
@@ -195,12 +203,12 @@ async function startMember(
     throw new Error(`docker create ${names.member} exited ${String(created.exitCode)}`);
   }
 
-  await runChecked(['docker', 'start', names.member]);
+  await runners.runChecked(['docker', 'start', names.member]);
 
   await waitFor(
     `${names.member} on the tailnet`,
     async () => {
-      const status = await readMemberStatus(names.member);
+      const status = await readMemberStatus(names.member, runners);
 
       if (status.BackendState !== 'Running') {
         throw new Error(`${names.member} is ${status.BackendState}`);

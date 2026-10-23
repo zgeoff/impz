@@ -11,7 +11,7 @@ import {
   runImp,
 } from '../lib/imp-cli';
 import { holdImp, waitForExec } from '../lib/imps';
-import { runInContainer } from '../lib/instance';
+import { runChecked, runInContainer } from '../lib/instance';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
@@ -41,7 +41,7 @@ test('it answers tailnet members by IP and by name, and wakes on a tailnet reque
 
   const ip = await waitForTailnetIp();
   const info = await readInfo();
-  const status = await readMemberStatus(ctx.member);
+  const status = await readMemberStatus(ctx.member, { runChecked });
 
   const node = findTailnetNode(Object.values(status.Peer), ip);
 

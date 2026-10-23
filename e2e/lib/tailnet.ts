@@ -1,7 +1,8 @@
 import * as z from 'zod';
 import { runImpWith } from './imp-cli';
 import type { ImpRunOptions } from './imp-cli';
-import { runChecked, runCommand } from './instance';
+import { runCommand } from './instance';
+import type { CommandRunners } from './instance';
 import { waitFor } from './wait-for';
 
 const PeerSchema = z.object({
@@ -160,8 +161,18 @@ export function readTailnetMember(
   return member;
 }
 
-export async function readMemberStatus(member: string): Promise<TailscaleStatus> {
-  const stdout = await runChecked(['docker', 'exec', member, 'tailscale', 'status', '--json']);
+export async function readMemberStatus(
+  member: string,
+  runners: Pick<CommandRunners, 'runChecked'>,
+): Promise<TailscaleStatus> {
+  const stdout = await runners.runChecked([
+    'docker',
+    'exec',
+    member,
+    'tailscale',
+    'status',
+    '--json',
+  ]);
 
   const status = parseTailscaleStatus(stdout);
 

@@ -14,6 +14,7 @@ import {
   readImpdLogSince,
   readImpdLogTail,
   readToken,
+  runChecked,
   runCommand,
   runDevScript,
 } from './instance';
@@ -40,8 +41,8 @@ export function wireHarnessDeps(cwd: string): HarnessDeps {
   return {
     readHostImage,
     readTailscaleKey: readTailscaleE2EAuthKey,
-    startHeadscale,
-    stopHeadscale,
+    startHeadscale: () => startHeadscale({ runCommand, runChecked }),
+    stopHeadscale: () => stopHeadscale({ runCommand, runChecked }),
     setUpInstance: async (run) => {
       const target = buildInstance(run.env, cwd);
 

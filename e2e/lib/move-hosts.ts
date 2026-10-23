@@ -157,7 +157,7 @@ export async function removeMoveLeftovers(env: HarnessEnv): Promise<void> {
     await runDevScript('reboot', instance, {}, env);
   }
 
-  await disconnectHeadscale(names.network);
+  await disconnectHeadscale({ runCommand, runChecked }, names.network);
   await runCommand(['docker', 'network', 'rm', names.network]);
 }
 
@@ -225,7 +225,7 @@ export function buildHostBFixtureDeps(keep: boolean, env: HarnessEnv): HostBFixt
     cliDir: buildNames().cliDir,
     keep,
     removeLeftovers: () => removeMoveLeftovers(env),
-    connectHeadscale,
+    connectHeadscale: (network) => connectHeadscale({ runCommand, runChecked }, network),
     createNetwork: async (name, network) => {
       await runChecked([
         'docker',
