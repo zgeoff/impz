@@ -30,6 +30,7 @@
     "@orpc/client": "catalog:",
     "@orpc/server": "catalog:",
     "@peculiar/x509": "catalog:",
+    "@zgeoff/kysely-bun-sqlite": "catalog:",
     "acme-client": "catalog:",
     "better-auth": "catalog:",
     "dns-packet": "catalog:",

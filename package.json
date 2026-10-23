@@ -50,6 +50,7 @@
       "@zgeoff/bun-test-extended": "0.2.1",
       "@zgeoff/bun-test-react": "0.2.1",
       "@zgeoff/format-codemod": "0.3.1",
+      "@zgeoff/kysely-bun-sqlite": "0.3.0",
       "@zgeoff/oxlint-config": "0.5.2",
       "@zgeoff/skill-gate": "0.2.6",
       "acme-client": "5.4.0",

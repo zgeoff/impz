@@ -10,9 +10,6 @@
       "error",
       {
         "exemptNames": [
-          // kysely's DatabaseConnection interface, which the bun:sqlite driver's
-          // connection implements
-          "executeQuery",
           // the MCP SDK's OAuthClientProvider interface
           "saveTokens",
           "saveCodeVerifier",
@@ -251,7 +248,7 @@
           },
           {
             "name": "kysely",
-            "modules": ["kysely", "kysely-codegen"],
+            "modules": ["kysely", "kysely-codegen", "@zgeoff/kysely-bun-sqlite"],
             "from": ["packages"],
             "allow": ["db"],
             "reason": "query through a repository in packages/daemon/src/platform/db instead"
