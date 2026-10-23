@@ -40,7 +40,7 @@ export interface ReachRanges {
   readonly public6: readonly string[];
 }
 
-export interface HostReach {
+interface HostReach {
   readonly ranges: ReachRanges;
   readonly uplinks: Uplinks;
 

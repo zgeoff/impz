@@ -1,7 +1,7 @@
 import type { IdentityConfig } from '../identity/identity-config';
 import type { BackupConfig } from './backup/backup-config';
 
-export interface MovesConfig {
+interface MovesConfig {
   readonly peerUrl: string | null;
   readonly testCidr: string | null;
 }
