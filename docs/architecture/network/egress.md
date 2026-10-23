@@ -78,6 +78,12 @@ that start, so a network the host joins later stays reachable until the next sta
 host is the owner's boundary: a host that itself forwards a global address to a private service
 needs that address in the deny list.
 
+One exception exists for the end-to-end tests alone. On a host started with `IMP_E2E=1`, a test
+registry setting makes impd accept one private address and port in each builder's chain, after the
+uplink check and before the ranges it refuses. The resolver drops a private answer, so impd writes
+the registry's address into the builder's hosts file, and the registry's CA into the builder's
+Docker certificates. A plain `public` imp never gets the accept.
+
 ## Networks
 
 A private network lets its imps reach one another, IPv4 only. Each network is a set of tap and

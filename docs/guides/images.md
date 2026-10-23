@@ -25,9 +25,8 @@ from.
 
 ## Add an image
 
-`impz image add <ref> [--name <name>]` makes an image from a public registry reference. By default
-(`IMP_BUILD_ISOLATION=imp`) impd does it in a builder imp, as it does a build, and the host's Docker
-engine never has the image:
+`impz image add <ref> [--name <name>]` makes an image from a public registry reference. impd does it
+in a builder imp, as it does a build, and the host's Docker engine never has the image:
 
 1. impd creates a builder imp, as step 2 of an [isolated build](#isolated-builds) does. The governor
    and the disk budget admit it as any imp; a refusal fails the add and never falls back to the
@@ -53,9 +52,7 @@ engine and gives that pull 10 minutes; on a slow link, run `docker pull <IMP_BUI
 host first, with the exact reference, and impd uses that image without a pull.
 
 An image that only the host's Docker has, such as one from a plain `docker build`, does not add this
-way: build it with `impz image build` instead. `IMP_BUILD_ISOLATION=host` adds from the host's
-Docker engine, as before 0.36.0, for one release only, with the credentials in impd's Docker config.
-impd logs a warning at start and at every such add.
+way: build it with `impz image build` instead.
 
 ## Build an image
 
@@ -124,10 +121,6 @@ by digest as `images/examples/hello` names it, works on both.
   longer than its fetch waits. `system.info` lists `imageBuildStream` among the features of an impd
   that streams. The CLI asks for the stream and reads JSON from an impd that answers JSON.
 
-  impd's own call to the engine and imp-docker-proxy's call to the engine pass `timeout: false`, so
-  a `RUN` step that prints nothing for longer than 360 s does not end the build. The client's going
-  still ends it.
-
 - **Limits.** A context may be up to `IMP_BUILD_CONTEXT_MAX_MIB` (default 1024); a larger one fails
   with `PAYLOAD_TOO_LARGE`. At most 4 builds upload or run at once, uploads and builds together; a
   fifth gets `TOO_MANY_REQUESTS`. impd refuses the build with its real HTTP status when it can tell
@@ -140,25 +133,19 @@ by digest as `images/examples/hello` names it, works on both.
   slot, its memory and its disk like any imp.
 - **Who may build.** A token with `manage` scope and no imp patterns, as for `images.build`. Every
   build leaves an audit row.
-- **What the build may do.** impd runs one fixed BuildKit build: in a builder, `docker build -` with
-  the tar on stdin; on the host, `POST /build?version=2` with the tar as the body and no session.
-  The client gives only the name and the Dockerfile path, which must stay inside the context; it
-  cannot pass build arguments, secrets, SSH agents, `--network` or `--allow`. `BUILDKIT_SYNTAX` pins
-  the Dockerfile frontend by digest (`docker/dockerfile:1.28`, as in `host/Dockerfile`), so a
-  `# syntax=` line is ignored. `RUN --mount=type=cache` works; `RUN --network=host` and
-  `RUN --security=insecure` fail the build. A failed host build shows BuildKit's error, without the
-  `RUN` step's output. The engine pulls the frontend from Docker Hub when it lacks it.
-  `imp-docker-proxy` allows only this build
-  ([the Docker socket](../architecture/host.md#the-docker-socket)). The proxy closes the Docker
-  socket path only: imp-host keeps `SYS_ADMIN`, which still lets root out of the container.
+- **What the build may do.** impd runs one fixed BuildKit build in the builder, `docker build -`
+  with the tar on stdin. The client gives only the name and the Dockerfile path, which must stay
+  inside the context; it cannot pass build arguments, secrets, SSH agents, `--network` or `--allow`.
+  `BUILDKIT_SYNTAX` pins the Dockerfile frontend by digest (`docker/dockerfile:1.28`, as in
+  `host/Dockerfile`), so a `# syntax=` line is ignored. `RUN --mount=type=cache` works;
+  `RUN --network=host` and `RUN --security=insecure` fail the build. The engine pulls the frontend
+  from Docker Hub when it lacks it.
 - **Images the build names.** Before the build, impd pulls each image that a `FROM`, a `COPY --from`
-  or a `RUN --mount=from=` names and the engine that builds does not have yet. In a builder that is
-  a cold pull with no credentials. A host build has no session, so BuildKit cannot ask for
-  credentials there; impd pulls as a host `impz image add` does, with the credentials in impd's
-  Docker config. It skips `scratch` and the Dockerfile's own stages. impd inspects each image once,
-  for the engine's platform, and refuses an image the host has for another platform, and any image
-  the build names whose config holds `ONBUILD` triggers: the frontend runs the triggers of a
-  `COPY --from` or a `RUN --mount=from=` image too, in this build.
+  or a `RUN --mount=from=` names, a cold pull in the builder with no credentials. It skips `scratch`
+  and the Dockerfile's own stages. impd inspects each image once, for the engine's platform, and
+  refuses an image the host has for another platform, and any image the build names whose config
+  holds `ONBUILD` triggers: the frontend runs the triggers of a `COPY --from` or a
+  `RUN --mount=from=` image too, in this build.
 - **The digest the build uses.** The Dockerfile the engine gets names each of those images by the
   registry digest of the image impd inspected: `FROM busybox:1.37` becomes `FROM busybox@sha256:…`,
   so a tag that moves in the registry after the pull does not change the build. impd picks the
@@ -168,15 +155,6 @@ by digest as `images/examples/hello` names it, works on both.
   ```text
   FROM imp/base: this image exists only on this host and has no registry digest, so impd cannot bind the build to it; build FROM a registry image by tag or digest. Local base images are not supported yet (#156).
   ```
-
-  With Docker's classic image store, an image built on the host has no registry digest, and impd
-  refuses it (#156). With the containerd image store, each tag has a digest under its own name, so
-  impd pins a base built on the host by its content digest. Docker 29.8 builds from that pin; Docker
-  29.7 asks the registry for the name and fails the build. A tag you put on a pulled multi-platform
-  image (`docker tag busybox:1.37 imp/x`) cannot be pinned on the containerd store: the engine asks
-  the registry for `imp/x@sha256:…` and fails. impd then adds a line to the error that names the
-  pin; build FROM the original repository, `busybox:1.37`, instead of the retag. A build never uses
-  such an image by its tag alone, and impd's log line for each build names the image store.
 
   `FROM --platform=$BUILDPLATFORM` and `$TARGETPLATFORM` become the engine's platform, such as
   `--platform=linux/amd64`. A Dockerfile with `# check=error=true` then fails the frontend's
@@ -196,13 +174,9 @@ by digest as `images/examples/hello` names it, works on both.
     `FROM` word, an `ADD` source or the flags of `FROM`, `ADD`, `COPY` and `RUN`, since the
     frontend's lexer would read it another way than impd does.
 
-  These checks are narrow input and trigger rejection, not build-network isolation. They leave open:
-  - a registry whose DNS name resolves to a private or loopback address: the pull rule reads the
-    name, not the address;
-  - a `RUN` step, which reaches the network through the host's bridge (the caution below);
-  - a base image built on the host, which does not build until
-    [#156](https://github.com/zgeoff/impz/issues/156) but on the containerd store of Docker 29.8;
-  - `.dockerignore`, which the engine does not apply to an uploaded context.
+  These checks reject inputs and isolate nothing: the builder's `public` egress policy isolates the
+  build ([isolated builds](#isolated-builds)). The engine does not apply `.dockerignore` to an
+  uploaded context.
 
 - **The context impd builds.** impd writes the uploaded tar again as plain ustar, with pax records
   only for long names, and builds that copy. The Dockerfile it checks is the one the engine reads,
@@ -212,19 +186,13 @@ by digest as `images/examples/hello` names it, works on both.
   `user.*` xattrs and sub-second mtimes. The engine applies no ignore file to the uploaded tar, so
   the tar holds exactly the files `COPY .` sees.
 
-**CAUTION:** With `IMP_BUILD_ISOLATION=host`, a `RUN` step runs on the impd host's Docker with the
-default bridge network. It can reach the internet and anything the host's bridge can reach, the
-host's services on the bridge among them. impd's refusal of a remote `ADD` does not change that.
-Isolated builds, the default, close this ([isolated builds](#isolated-builds)).
-
 `--on-host` builds from a directory on the impd host instead, and uploads nothing. The path must be
 absolute and must exist where impd runs; `scripts/dev/dev.sh` mounts the repo at its own path for
 this. impd packs the directory as the CLI would, `.dockerignore` included, into
 `<IMP_DATA_DIR>/uploads`, and refuses a context over `IMP_BUILD_CONTEXT_MAX_MIB` before it sends it.
-An image you built with plain `docker build` goes in with `impz image add <ref>` only under
-`IMP_BUILD_ISOLATION=host` ([add an image](#add-an-image)). `images/examples/hello` starts FROM the
-published base by digest; to stack it on another base, edit that FROM line. An imp's own disk can be
-an image too: a [template](./templates.md) copies a set-up imp into new ones.
+`images/examples/hello` starts FROM the published base by digest; to stack it on another base, edit
+that FROM line. An imp's own disk can be an image too: a [template](./templates.md) copies a set-up
+imp into new ones.
 
 ## Evict images under storage pressure
 
@@ -271,8 +239,8 @@ image add, image build or template.
 
 ## Isolated builds
 
-By default (`IMP_BUILD_ISOLATION=imp`) each build runs in its own builder imp, which impd destroys
-when the build ends. Two separate things hold for a build, and neither stands in for the other:
+Each build runs in its own builder imp, which impd destroys when the build ends. Two separate things
+hold for a build, and neither stands in for the other:
 
 1. **The input guard** ([#145](https://github.com/zgeoff/impz/issues/145)): impd reads the
    Dockerfile on the host and refuses what the engine would fetch or run on its own, before any
@@ -291,9 +259,8 @@ A build goes:
    governor and the disk budget admit it as any imp; a refusal fails the build and never falls back
    to the host. Where nft cannot hold the `public` policy, a build fails with `PRECONDITION_FAILED`.
 3. It waits for the builder's dockerd (60 s at most), then pulls and pins each image the Dockerfile
-   names on the builder's engine, as the host does for a host build. The builder holds no registry
-   credentials, so a private image does not pull, and a registry name that resolves to a private
-   address fails in the builder's resolver.
+   names on the builder's engine. The builder holds no registry credentials, so a private image does
+   not pull, and a registry name that resolves to a private address fails in the builder's resolver.
 4. The pinned context goes in on the builder's stdin to `docker build`. A failed build returns the
    last 8000 characters of its log, `RUN` output included.
 5. impd streams `docker export` of the result out of the builder into the same `tar` unpack every
@@ -320,13 +287,9 @@ with `PRECONDITION_FAILED`, the idle loop and the governor never sleep it, and b
 `impz ls` hides builders; `impz ls --builders` shows them, marked `image builder`, and `imps.get`
 shows `kind: builder`.
 
-What a build costs on top of a host build: about 1.5 s for the builder and its dockerd, and the
-pulls, which start cold in every builder (about 7.5 s for `busybox` and the frontend on a home
-link). impd logs each build's phases as `pins=… build=… image=…`.
-
-`IMP_BUILD_ISOLATION=host` builds on the host's engine, as before 0.35.0, for one release only: impd
-logs a warning at start and at every build. Use it only when every caller with `manage` is trusted
-with the host (the caution above).
+A build costs about 1.5 s for the builder and its dockerd beyond the build itself, and the pulls,
+which start cold in every builder (about 7.5 s for `busybox` and the frontend on a home link). impd
+logs each build's phases as `pins=… build=… image=…`.
 
 The SDK has the same upload:
 `client.buildImage(name, context, { dockerfile, size, signal, onProgress, onLog })`, where `context`

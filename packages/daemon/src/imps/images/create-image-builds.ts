@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, rmSync, statSync } from 'node:fs';
 import { join, posix } from 'node:path';
-import { ImageRefSchema, NameSchema } from '@impz/api';
+import { ImageRefSchema } from '@impz/api';
 import type { ImageBuildPhase } from '@impz/api';
 import {
   BuildContextError,
@@ -12,13 +12,12 @@ import {
 } from '@impz/local-tar';
 import type { ImageRecord } from '../../platform/db/images';
 import { ImpdError } from '../../platform/errors/impd-error';
-import { runCommand } from '../../platform/process/run-command';
 import { buildUploadsDir } from '../../vm/storage/data-layout';
 import type { DiskBudget } from '../../vm/storage/disk-budget';
 import { checkReferenceRegistry, parseImageReference } from '../docker-proxy/rules';
 import type { ImpsConfig } from '../imps-config';
 import { createBuildEngine, toEngineRun } from './build-engine';
-import type { BuildEngine, EngineRun } from './build-engine';
+import type { BuildEngine } from './build-engine';
 import { createBuildSlots } from './build-slots';
 import type { Builders } from './builder-imps';
 import { createBuildRuns } from './create-build-runs';
@@ -26,20 +25,16 @@ import type { BuildRuns } from './create-build-runs';
 import type { BuildOutput } from './create-build-steps';
 import { requireClientImageName } from './create-image-writer';
 import type { ImageWriter } from './create-image-writer';
-import { DockerBuildError, runDockerBuild } from './docker-build';
+import { DockerBuildError } from './docker-build-error';
 import { checkDockerfile, renderPinnedDockerfile } from './dockerfile-check';
 import type { ExternalImage } from './dockerfile-check';
 import { DockerfileError } from './dockerfile-error';
 import { runGuestBuild } from './guest-build';
 import { formatPinFailure, formatPlatform, pickRepoDigest, readImageStore } from './image-pin';
 import type { ImageStore, Pin, PinInspect } from './image-pin';
-import { runDocker } from './run-docker';
 import { writeContextTar } from './write-context-tar';
 
 const DOCKERFILE_MAX_BYTES = 1024 ** 2;
-
-export const HOST_BUILD_WARNING =
-  'impd: WARNING: IMP_BUILD_ISOLATION=host: image builds run on the host engine, whose RUN steps can reach the host and its private networks; for a trusted operator only, and gone in the next release (docs/guides/images.md#isolated-builds)';
 
 interface ImageOpOptions {
   readonly signal?: AbortSignal;
@@ -78,14 +73,6 @@ interface ImageBuildsDeps {
   readonly log: (message: string) => void;
 
   readonly now?: () => number;
-}
-
-interface RunHostBuildOptions {
-  readonly tarPath: string;
-  readonly tag: string;
-  readonly dockerfile: string;
-  readonly signal: AbortSignal;
-  readonly output: BuildOutput | undefined;
 }
 
 export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): ImageBuilds {
@@ -155,18 +142,6 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
     }
   };
 
-  const runHostBuild = (options: RunHostBuildOptions) =>
-    deps.diskBudget.withRoom(statSync(options.tarPath).size, () =>
-      runDockerBuild({
-        dockerHost: deps.config.dockerHost,
-        tarPath: options.tarPath,
-        tag: options.tag,
-        dockerfile: options.dockerfile,
-        signal: options.signal,
-        output: options.output,
-      }),
-    );
-
   const createFromContext = async (
     tarPath: string,
     name: string,
@@ -179,7 +154,6 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
     const tarBytes = statSync(tarPath).size;
     const dockerfilePath = normalizeDockerfilePath(givenDockerfile);
     const rewrittenPath = `${tarPath}.rewritten`;
-    const isolation = deps.config.build.isolation;
     let pins: readonly Pin[] = [];
 
     try {
@@ -213,7 +187,7 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
           const pinList = pinned.pins.map((pin) => `${pin.use} ${pin.ref} as ${pin.pin}`);
 
           deps.log(
-            `impd: image build ${name} (${isolation}): image store ${pinned.store}; pinned ${pinList.join(', ') || 'no image'}`,
+            `impd: image build ${name}: image store ${pinned.store}; pinned ${pinList.join(', ') || 'no image'}`,
           );
 
           signal.throwIfAborted();
@@ -231,22 +205,6 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
 
           await engine.loadFrontend(signal);
         };
-
-        if (isolation === 'host') {
-          deps.log(HOST_BUILD_WARNING);
-
-          await writePinnedContext(createBuildEngine(runOnHost));
-
-          await runHostBuild({
-            tarPath: rewrittenPath,
-            tag,
-            dockerfile,
-            signal,
-            output: options.output,
-          });
-
-          return null;
-        }
 
         const builders = deps.readBuilders();
 
@@ -280,7 +238,7 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
           const imageMs = Math.round(performance.now() - ran);
 
           deps.log(
-            `impd: image build ${name} (imp): pins=${String(pinsMs)}ms build=${String(buildMs)}ms image=${String(imageMs)}ms`,
+            `impd: image build ${name}: pins=${String(pinsMs)}ms build=${String(buildMs)}ms image=${String(imageMs)}ms`,
           );
 
           return image;
@@ -289,13 +247,7 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
 
       signal.throwIfAborted();
 
-      if (built !== null) {
-        return built;
-      }
-
-      return await writer.createImageOnHost(tag, NameSchema.parse(name), {
-        ...(options.setPhase !== undefined && { setPhase: options.setPhase }),
-      });
+      return built;
     } catch (error) {
       signal.throwIfAborted();
 
@@ -468,12 +420,6 @@ function toBadRequest(error: unknown): unknown {
   return error instanceof DockerfileError
     ? new ImpdError('BAD_REQUEST', { message: `the Dockerfile: ${error.message}` })
     : error;
-}
-
-function runOnHost(argv: readonly string[], signal: AbortSignal): ReturnType<EngineRun> {
-  const [command, ...args] = argv;
-
-  return command === 'docker' ? runDocker(args, { signal }) : runCommand(argv, { signal });
 }
 
 /* @internal */

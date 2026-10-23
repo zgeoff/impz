@@ -37,7 +37,7 @@ readonly SECCOMP_IN_IMAGE=/usr/local/share/imp/deploy/imp-host.seccomp.json
 readonly DATA_DIR=/var/lib/imp
 # The image of this script's release, as the units name it; release-please
 # bumps it.
-readonly DEFAULT_IMAGE=ghcr.io/zgeoff/imp-host:2.10.6 # x-release-please-version
+readonly DEFAULT_IMAGE=ghcr.io/zgeoff/imp-host:2.11.0 # x-release-please-version
 # The image line every env file had before the units named their release.
 # A file still holding it gets the commented pin; any other value is the
 # operator's pin and stays.
@@ -1578,7 +1578,7 @@ Type=exec
 # The image of this unit's own release; an IMP_HOST_IMAGE in the env file,
 # read after it, pins another. release-please bumps the version.
 # x-release-please-start-version
-Environment=IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:2.10.6
+Environment=IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:2.11.0
 # x-release-please-end
 EnvironmentFile=/etc/imp/imp-host.env
 # A container left over from a crash would hold the name.
@@ -1637,7 +1637,7 @@ EOF
 unit_imp_docker_proxy() {
   cat <<'EOF'
 # imp-docker-proxy: the only Docker socket imp-host sees. It passes the
-# calls impd makes (pull, build, create, export, rm) and refuses every other
+# calls impd makes (pull, create, export, rm) and refuses every other
 # (docs/architecture/host.md#the-docker-socket). It closes the
 # Docker socket path only: imp-host keeps SYS_ADMIN, which still lets root
 # out of the container.
@@ -1658,13 +1658,11 @@ Type=exec
 # The image of this unit's own release; an IMP_HOST_IMAGE in the env file,
 # read after it, pins another. release-please bumps the version.
 # x-release-please-start-version
-Environment=IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:2.10.6
+Environment=IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:2.11.0
 # x-release-please-end
-# IMP_HOST_IMAGE, whose repository a pull may not move,
-# IMP_BUILD_CONTEXT_MAX_MIB, and IMP_BUILD_ISOLATION and IMP_BUILD_IMAGE, the
-# one image a pull may fetch under imp isolation. Only those four reach the
-# container (-e NAME); it never sees the rest of the file, such as
-# TAILSCALE_AUTHKEY.
+# IMP_HOST_IMAGE, whose repository a pull may not move, and IMP_BUILD_IMAGE,
+# the one image a pull may fetch. Only those two reach the container
+# (-e NAME); it never sees the rest of the file, such as TAILSCALE_AUTHKEY.
 EnvironmentFile=/etc/imp/imp-host.env
 ExecStartPre=-/usr/bin/docker rm -f imp-docker-proxy
 # The socket's directory and the proxy's token, owned by the proxy's user.
@@ -1687,8 +1685,7 @@ ExecStart=/usr/bin/docker run --rm --name imp-docker-proxy \
   --network none \
   --user 65534:65534 \
   --group-add $IMP_DOCKER_GID \
-  -e IMP_HOST_IMAGE -e IMP_BUILD_CONTEXT_MAX_MIB \
-  -e IMP_BUILD_ISOLATION -e IMP_BUILD_IMAGE \
+  -e IMP_HOST_IMAGE -e IMP_BUILD_IMAGE \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v /run/imp-docker:/run/imp-docker \
   -v /var/lib/imp-docker-proxy:/var/lib/imp-docker-proxy \
@@ -1718,7 +1715,7 @@ env_template() {
 # another; to follow latest, leave the tag off: ghcr.io/zgeoff/imp-host.
 # Compose reads it from the shell or a .env next to compose.yaml instead.
 # x-release-please-start-version
-# IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:2.10.6
+# IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:2.11.0
 # x-release-please-end
 
 # A tagged, non-ephemeral auth key (docs/guides/tailscale.md). Without one

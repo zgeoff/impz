@@ -20,7 +20,6 @@ import { listImps } from '../../platform/db/imps';
 import { runChecked } from '../../platform/process/run-command';
 import { buildImagePaths } from '../../vm/storage/data-layout';
 import { BUILDER_IMAGE, createBuilders } from './builder-imps';
-import { HOST_ADD_WARNING } from './create-image-adds';
 import { createImageService } from './image-service';
 
 async function setupTest() {
@@ -126,6 +125,51 @@ test('it adds an image through a builder for one platform, with no host engine c
     line.startsWith(
       `impd: image add box: busybox:latest for linux/amd64 (busybox@sha256:${'b'.repeat(64)}), digest ${image.digest};`,
     ),
+  );
+});
+
+test('it adds an image through a builder, with no host engine call, under a leftover IMP_BUILD_ISOLATION=host', async () => {
+  const ctx = await setupTest();
+
+  const config = loadConfig({
+    IMP_DATA_DIR: ctx.dataDir,
+    IMP_BUILD_MEMORY_MIB: '512',
+    IMP_BUILD_DISK_GIB: '4',
+    IMP_BUILD_ISOLATION: 'host',
+  });
+
+  await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: config.build.image });
+
+  const builder = buildStubImageBuilder({
+    exported: [createFilesTar(ctx.dataDir, { hello: 'pulled\n' })],
+    repoDigest: `sha256:${'b'.repeat(64)}`,
+  });
+
+  const images = createImageService({
+    config,
+    db: ctx.db,
+    storage: ctx.storage,
+    storageGate: ctx.impd.storageGate,
+    diskBudget: ctx.impd.diskBudget,
+    readBuilders: () => builders,
+    log: () => {},
+  });
+
+  const builders = createBuilders({
+    config,
+    db: ctx.db,
+    imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
+    ensureImage: (signal) => images.ensureBuilderImage(signal),
+    log: () => {},
+  });
+
+  const image = await images.addImage('busybox', 'box');
+
+  expect(existsSync(buildImagePaths(ctx.dataDir, image.digest).rootfs)).toBeTrue();
+  expect(ctx.docker.readCalls()).toStrictEqual([]);
+
+  expect(builder.guest.runs.map((run) => run.argv.slice(1).join(' '))).toContain(
+    'pull --quiet --platform linux/amd64 busybox:latest',
   );
 });
 
@@ -874,67 +918,6 @@ test('it seeds the default image at the next start once the builder image has la
 
   expect(seeded?.ref).toBe('ubuntu:24.04');
   expect(ctx.docker.readCalls()).toStrictEqual([]);
-});
-
-test('it sends an add to the host engine, with a warning and no builder, under IMP_BUILD_ISOLATION=host', async () => {
-  const ctx = await setupTest();
-
-  const config = loadConfig({
-    IMP_DATA_DIR: ctx.dataDir,
-    IMP_BUILD_MEMORY_MIB: '512',
-    IMP_BUILD_DISK_GIB: '4',
-    IMP_BUILD_ISOLATION: 'host',
-  });
-
-  createStubDockerCli({
-    directory: ctx.dataDir,
-    images: [
-      {
-        refs: ['busybox:1.37'],
-        inspects: [{ Id: `sha256:${'c'.repeat(64)}`, Config: {}, Size: 4096 }],
-        isOnHost: false,
-        pull: { stderr: 'Error response from daemon: manifest unknown' },
-      },
-    ],
-  });
-
-  const builder = buildStubImageBuilder({ exported: [], repoDigest: `sha256:${'b'.repeat(64)}` });
-
-  const images = createImageService({
-    config,
-    db: ctx.db,
-    storage: ctx.storage,
-    storageGate: ctx.impd.storageGate,
-    diskBudget: ctx.impd.diskBudget,
-    readBuilders: () => builders,
-    log: (message) => {
-      ctx.logs.push(message);
-    },
-  });
-
-  const builders = createBuilders({
-    config,
-    db: ctx.db,
-    imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
-    ensureImage: (signal) => images.ensureBuilderImage(signal),
-    log: (message) => {
-      ctx.logs.push(message);
-    },
-  });
-
-  const adding = images.addImage('busybox:1.37', 'box');
-
-  await adding.catch(() => {});
-
-  expect(adding).rejects.toThrowWithMessage(Error, /Error response from daemon: manifest unknown/v);
-
-  expect(ctx.docker.readCalls()).toStrictEqual([
-    'image inspect busybox:1.37',
-    'pull --quiet busybox:1.37',
-  ]);
-
-  expect(ctx.logs).toContain(HOST_ADD_WARNING);
-  expect(builder.guest.runs).toStrictEqual([]);
 });
 
 test('it fails a builder image pull that hangs at its limit, naming IMP_BUILD_IMAGE', async () => {

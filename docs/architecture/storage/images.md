@@ -24,27 +24,25 @@ worked or not.
 
 ## Where builds run
 
-A build or a pull runs, by default, in a builder imp: a throwaway imp from a builder image, under
-the `public` egress policy ([egress](../network/egress.md#public)), which impd destroys when the
-work ends, and at start if a stop cut it short. A `RUN` step, a pull and the build frontend's fetch
-then reach the internet only, never the host, impd, other imps, the tailnet or private networks. The
-governor and the disk budget admit a builder as any imp, and a refusal fails the build rather than
-fall back to the host. impd streams the builder's export out of the guest into the same unpack every
-add uses, and computes the image's digest itself, so no engine on the host reads what the build
-made. A builder is impd's own: every call but a removal is refused it, it never sleeps in the
-background, and backups leave it out.
+A build or a pull runs in a builder imp: a throwaway imp from a builder image, under the `public`
+egress policy ([egress](../network/egress.md#public)), which impd destroys when the work ends, and
+at start if a stop cut it short. A `RUN` step, a pull and the build frontend's fetch then reach the
+internet only, never the host, impd, other imps, the tailnet or private networks. The governor and
+the disk budget admit a builder as any imp, and a refusal fails the build rather than fall back to
+the host. impd streams the builder's export out of the guest into the same unpack every add uses,
+and computes the image's digest itself, so no engine on the host reads what the build made. A
+builder is impd's own: every call but a removal is refused it, it never sleeps in the background,
+and backups leave it out.
 
-The owner can choose to build on the host's own Docker engine instead, through the host's Docker
-proxy ([the host](../host.md#the-docker-socket)). That path trusts every caller with `manage` scope
-with the host, because a build runs in a default build container on the host's network.
+The host's own Docker engine only fetches the builder image, through the host's Docker proxy
+([the host](../host.md#the-docker-socket)), and never builds.
 
-Either way, impd checks the build's input on the host before anything runs. It parses the Dockerfile
-with a port of the pinned frontend's parser and refuses what the engine would fetch on its own, such
-as an `ADD` from a URL or a git remote, a variable in `FROM`, and `ONBUILD`. It pins every image the
-Dockerfile names to its registry digest, then builds a rewritten copy of the context with the pinned
-frontend, so a Dockerfile cannot choose the frontend BuildKit runs. A build with no BuildKit session
-cannot ask for registry credentials, so impd pulls the named images first. The guard rejects inputs
-and isolates nothing: the builder is the isolation.
+impd checks the build's input on the host before anything runs. It parses the Dockerfile with a port
+of the pinned frontend's parser and refuses what the engine would fetch on its own, such as an `ADD`
+from a URL or a git remote, a variable in `FROM`, and `ONBUILD`. It pins every image the Dockerfile
+names to its registry digest, then builds a rewritten copy of the context with the pinned frontend,
+so a Dockerfile cannot choose the frontend BuildKit runs. impd pulls the named images in the builder
+first, to pin them. The guard rejects inputs and isolates nothing: the builder is the isolation.
 
 ## Template images
 

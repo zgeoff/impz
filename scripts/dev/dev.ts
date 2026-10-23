@@ -208,6 +208,13 @@ async function startHost(dev: Dev, drives: Drives): Promise<void> {
 
   const acmeSetting = dev.env['IMP_ACME_CA_FILE'] ?? '';
   const acmeCAFile = acmeSetting === '' ? null : resolveContainerPath(dev, acmeSetting);
+  const registryCASetting = dev.env['IMP_BUILD_TEST_REGISTRY_CA'] ?? '';
+
+  const registryCAFile =
+    registryCASetting === '' ? null : resolveContainerPath(dev, registryCASetting);
+
+  const registryHost = await readRegistryHost(dev);
+
   const uplinkSetting = dev.env['IMP_UPLINK_MTU'] ?? '';
   const uplinkMTU = uplinkSetting === '' ? await readUplinkMTU(dev.io) : uplinkSetting;
 
@@ -220,6 +227,8 @@ async function startHost(dev: Dev, drives: Drives): Promise<void> {
     tailscale: tailscale.arg,
     tailnetOAuthFile,
     acmeCAFile,
+    registryCAFile,
+    registryHost,
     kernel: resolveContainerPath(dev, drives.kernel),
     systemDrive: resolveContainerPath(dev, drives.systemDrive),
     uplinkMTU,
@@ -293,6 +302,27 @@ function resolveContainerPath(dev: Dev, path: string): string {
 }
 
 // The container's own eth0 claims 1500 whatever the real path allows.
+async function readRegistryHost(dev: Dev): Promise<string | null> {
+  const registry = dev.env['IMP_BUILD_TEST_REGISTRY'] ?? '';
+
+  if (registry === '') {
+    return null;
+  }
+
+  const separator = registry.lastIndexOf(':');
+  const name = separator === -1 ? registry : registry.slice(0, separator);
+
+  const hosts = await dev.io.shell`getent ahostsv4 ${name}`.quiet().nothrow();
+
+  const address = hosts.stdout.toString().split(/\s+/u)[0] ?? '';
+
+  if (address === '') {
+    throw new DevError(`${name} (IMP_BUILD_TEST_REGISTRY) does not resolve on this machine`);
+  }
+
+  return `${name}:${address}`;
+}
+
 async function readUplinkMTU(io: DevIO): Promise<string> {
   const route = await io.shell`ip route show default`.quiet().nothrow();
 
