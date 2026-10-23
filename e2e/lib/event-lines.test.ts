@@ -58,3 +58,22 @@ test('#readEventLines passes each whole line once, across chunks that split them
 
   expect(seen).toStrictEqual(['a ImpRemoved', 'b ImpRemoved']);
 });
+
+test('#readEventLines passes a last event that the stream ends without a newline', async () => {
+  const encoder = new TextEncoder();
+
+  const stdout = new ReadableStream<Uint8Array>({
+    start: (controller) => {
+      controller.enqueue(encoder.encode('{"ev":"ImpRemoved","name":"cedar"}'));
+      controller.close();
+    },
+  });
+
+  const seen: string[] = [];
+
+  await readEventLines(stdout, (line) => {
+    seen.push(line);
+  });
+
+  expect(seen).toStrictEqual(['cedar ImpRemoved']);
+});
