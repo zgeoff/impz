@@ -15,6 +15,9 @@ export const EXTENT_FLAGS = {
 
   // the kernel gives a delayed allocation no block yet, so no physical address either
   delalloc: 0x4,
+
+  // space fallocate or XFS's preallocation reserved, which reads as zeros and holds no data
+  unwritten: 0x8_00,
   shared: 0x20_00,
 } as const;
 
@@ -30,8 +33,10 @@ interface ExtentRead {
   readonly isComplete: boolean;
 }
 
+type BatchRead = { readonly extents: Extent[] } | { readonly errno: number };
+
 // FIEMAP_FLAG_SYNC stays off, because it flushes the guest's dirty pages first
-function readBatch(fd: number, start: number, buffer: Uint8Array): Extent[] {
+function readBatch(fd: number, start: number, buffer: Uint8Array): BatchRead {
   const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
 
   buffer.fill(0);
@@ -42,12 +47,12 @@ function readBatch(fd: number, start: number, buffer: Uint8Array): Extent[] {
   const result = readLibc()?.ioctl(fd, FS_IOC_FIEMAP, ptr(buffer));
 
   if (result !== 0) {
-    throw new Error(`FIEMAP failed: errno ${String(readErrno())}`);
+    return { errno: readErrno() };
   }
 
   const mapped = view.getUint32(20, true);
 
-  return Array.from({ length: mapped }, (_unused, index) => {
+  const extents = Array.from({ length: mapped }, (_unused, index) => {
     const at = HEADER_BYTES + index * EXTENT_BYTES;
 
     return {
@@ -57,6 +62,8 @@ function readBatch(fd: number, start: number, buffer: Uint8Array): Extent[] {
       flags: view.getUint32(at + 40, true),
     };
   });
+
+  return { extents };
 }
 
 export async function readExtents(path: string, deadline: number): Promise<ExtentRead> {
@@ -72,7 +79,13 @@ export async function readExtents(path: string, deadline: number): Promise<Exten
         return { extents, isComplete: false };
       }
 
-      const batch = readBatch(fd, start, buffer);
+      const read = readBatch(fd, start, buffer);
+
+      if ('errno' in read) {
+        throw new Error(`FIEMAP failed: errno ${String(read.errno)}`);
+      }
+
+      const batch = read.extents;
       const last = batch.at(-1);
 
       extents.push(...batch);
@@ -87,5 +100,31 @@ export async function readExtents(path: string, deadline: number): Promise<Exten
     }
   } finally {
     closeSync(fd);
+  }
+}
+
+// takes its batches back to back, so a running guest's writes wait out the whole read; null where
+// the file system has no FIEMAP, as on ZFS or tmpfs
+export function readOpenFileExtents(fd: number): Extent[] | null {
+  const buffer = new Uint8Array(HEADER_BYTES + BATCH_EXTENTS * EXTENT_BYTES);
+
+  const extents: Extent[] = [];
+
+  for (let start = 0; ;) {
+    const read = readBatch(fd, start, buffer);
+
+    if ('errno' in read) {
+      return null;
+    }
+
+    const last = read.extents.at(-1);
+
+    extents.push(...read.extents);
+
+    if (last === undefined || (last.flags & EXTENT_FLAGS.last) !== 0) {
+      return extents;
+    }
+
+    start = last.logical + last.length;
   }
 }
