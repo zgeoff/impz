@@ -1,5 +1,5 @@
 import * as z from 'zod';
-import { ImageBuildPhaseSchema } from '../protocols/image-build-protocol';
+import { ImageBuildPhaseSchema } from './image-op-event-schema';
 import { NameSchema } from './name-schema';
 
 export const ImageBuildSourceSchema = z.enum(['upload', 'host']);

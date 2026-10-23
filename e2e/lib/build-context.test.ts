@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { faker } from '@faker-js/faker';
 import { buildStubImageBuilder, createFilesTar, startBuilderImpd } from '@impz/daemon/testing';
-import { sendRawBuild, writeBuildContext } from './build-context';
+import { runRawBuild, writeBuildContext } from './build-context';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();
@@ -47,7 +47,7 @@ test('#writeBuildContext makes a named directory that holds the Dockerfile', asy
   expect(dockerfile).toBe('FROM busybox:1.37\n');
 });
 
-test('#sendRawBuild builds a tar of exactly the named files on impd under the token and image name', async () => {
+test('#runRawBuild builds a tar of exactly the named files on impd under the token and image name', async () => {
   const ctx = await setupTest();
 
   const builder = buildStubImageBuilder({
@@ -61,7 +61,7 @@ test('#sendRawBuild builds a tar of exactly the named files on impd under the to
   await writeFile(join(directoryPath, 'kept.txt'), 'kept');
   await writeFile(join(directoryPath, 'left-out.txt'), 'left out');
 
-  const response = await sendRawBuild({
+  const built = await runRawBuild({
     apiUrl,
     token: ctx.rootToken,
     directoryPath,
@@ -69,40 +69,15 @@ test('#sendRawBuild builds a tar of exactly the named files on impd under the to
     name: 'e2e-img-raw',
   });
 
-  const built: unknown = await response.json();
-
   const listed = Bun.spawnSync(['tar', '-tf', '-'], {
     stdin: builder.builtContexts.at(0) ?? new Uint8Array(),
   }).stdout.toString();
 
-  expect(response.status).toBe(200);
   expect(built).toMatchObject({ name: 'e2e-img-raw', ref: 'imp/e2e-img-raw:latest' });
   expect(listed).toBe('Dockerfile\nkept.txt\n');
 });
 
-test('#sendRawBuild answers impd’s refusal of another token', async () => {
-  const ctx = await setupTest();
-
-  const builder = buildStubImageBuilder({
-    exported: [],
-    repoDigest: `sha256:${'b'.repeat(64)}`,
-  });
-
-  const apiUrl = await ctx.startImpd(builder);
-  const directoryPath = await writeBuildContext(ctx.root, 'ctx', 'FROM busybox:1.37\n');
-
-  const response = await sendRawBuild({
-    apiUrl,
-    token: 'imp_wrong',
-    directoryPath,
-    files: ['Dockerfile'],
-    name: 'e2e-img-raw',
-  });
-
-  expect(response.status).toBe(401);
-});
-
-test('#sendRawBuild throws with tar’s reason when a named file is missing', async () => {
+test('#runRawBuild throws impd’s refusal of another token', async () => {
   const ctx = await setupTest();
 
   const builder = buildStubImageBuilder({
@@ -114,7 +89,29 @@ test('#sendRawBuild throws with tar’s reason when a named file is missing', as
   const directoryPath = await writeBuildContext(ctx.root, 'ctx', 'FROM busybox:1.37\n');
 
   expect(
-    sendRawBuild({
+    runRawBuild({
+      apiUrl,
+      token: 'imp_wrong',
+      directoryPath,
+      files: ['Dockerfile'],
+      name: 'e2e-img-raw',
+    }),
+  ).rejects.toMatchObject({ code: 'UNAUTHORIZED', status: 401 });
+});
+
+test('#runRawBuild throws with tar’s reason when a named file is missing', async () => {
+  const ctx = await setupTest();
+
+  const builder = buildStubImageBuilder({
+    exported: [],
+    repoDigest: `sha256:${'b'.repeat(64)}`,
+  });
+
+  const apiUrl = await ctx.startImpd(builder);
+  const directoryPath = await writeBuildContext(ctx.root, 'ctx', 'FROM busybox:1.37\n');
+
+  expect(
+    runRawBuild({
       apiUrl,
       token: ctx.rootToken,
       directoryPath,

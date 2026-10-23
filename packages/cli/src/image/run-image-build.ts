@@ -79,6 +79,12 @@ export async function runImageBuild(
 
   progress.setTotal(countFileBytes(entries));
 
+  // impd's build stream opens once the upload ends, and off a terminal no byte count shows the
+  // upload.
+  if (!output.isTTY) {
+    status.show({ type: 'progress', phase: 'upload', elapsedMs: 0 });
+  }
+
   try {
     return await client.buildImage(
       options.name,
@@ -87,15 +93,15 @@ export async function runImageBuild(
         size,
         ...(options.dockerfile !== undefined && { dockerfile: options.dockerfile }),
         onProgress: (event) => {
-          if (event.phase !== 'upload' || !output.isTTY) {
-            progress.finish();
-            status.show(event);
-          }
-        },
-        onLog: (line) => {
           progress.finish();
-          status.printLog(line);
+          status.show(event);
         },
+        ...(!quiet && {
+          onLog: (line: string) => {
+            progress.finish();
+            status.printLog(line);
+          },
+        }),
       },
     );
   } finally {

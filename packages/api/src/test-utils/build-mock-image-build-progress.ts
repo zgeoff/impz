@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import type { ImageBuildProgress } from '../protocols/image-build-protocol';
+import type { ImageBuildProgress } from '../schemas/image-op-event-schema';
 
 export function buildMockImageBuildProgress(
   overrides: Partial<ImageBuildProgress> = {},

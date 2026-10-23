@@ -104,7 +104,6 @@ test('it serves system.info from config and the database', async () => {
       tokenImageAdd: true,
       secretRebind: true,
       databaseCopy: true,
-      imageBuildStream: true,
       imageOpStream: true,
       imageBuilds: true,
       execRequire: true,
@@ -121,6 +120,7 @@ test('it serves system.info from config and the database', async () => {
       execDropSysAdmin: true,
       guestScratch: true,
       imagePins: true,
+      buildContextUpload: true,
     },
     ksm: null,
   });

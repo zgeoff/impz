@@ -52,8 +52,6 @@ const SystemFeaturesSchema = z.object({
 
   databaseCopy: z.boolean().optional(),
 
-  imageBuildStream: z.boolean().optional(),
-
   imageOpStream: z.boolean().optional(),
 
   imageBuilds: z.boolean().optional(),
@@ -92,6 +90,8 @@ const SystemFeaturesSchema = z.object({
   guestScratch: z.boolean().optional(),
 
   imagePins: z.boolean().optional(),
+
+  buildContextUpload: z.boolean().optional(),
 });
 
 const GuestInfoSchema = z.object({

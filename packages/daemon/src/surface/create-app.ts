@@ -1,4 +1,4 @@
-import { IMAGE_BUILD_PATH, MCP_PATH } from '@impz/api';
+import { BUILD_CONTEXT_PATH, MCP_PATH } from '@impz/api';
 import { ORPCError, onError } from '@orpc/server';
 import { RPCHandler } from '@orpc/server/fetch';
 import { StrictGetMethodPlugin } from '@orpc/server/plugins';
@@ -23,7 +23,6 @@ import { createTunnelSocketRoute } from './create-tunnel-socket-route';
 import { createExecTickets, isCallerLive } from './exec/exec-tickets';
 import type { BuildContextRoute } from './images/build-context-route';
 import { createMcpEndpoint } from './mcp/mcp-endpoint';
-import { toApiImage } from './to-api-image';
 import { withRetryAfter } from './with-retry-after';
 
 // Bun pings an idle exec socket and closes it when no answer comes, so a
@@ -229,7 +228,7 @@ export function createApp(deps: AppDeps) {
     )
 
     .post(
-      IMAGE_BUILD_PATH,
+      BUILD_CONTEXT_PATH,
       async (context) => {
         const caller = await findCaller(context.request, context.server, true);
 
@@ -239,7 +238,7 @@ export function createApp(deps: AppDeps) {
 
         context.server?.timeout(context.request, 0);
 
-        return deps.buildContexts.respond(context.request, caller, toApiImage);
+        return deps.buildContexts.respond(context.request, caller);
       },
       { parse: 'none' },
     )

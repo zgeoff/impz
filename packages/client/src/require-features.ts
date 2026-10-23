@@ -15,7 +15,6 @@ const FEATURE_GAPS = {
   tokenUpdate: 'is older than 0.34.0',
   tokenImageAdd: 'has no token image adds',
   databaseCopy: 'is older than 0.30.0',
-  imageBuildStream: 'has no build stream',
   imageOpStream: 'has no image add or build streams',
   imageBuilds: 'has no list of running image builds',
   execRequire: 'is older than 0.30.0',
@@ -32,6 +31,7 @@ const FEATURE_GAPS = {
   execDropSysAdmin: 'cannot drop CAP_SYS_ADMIN from a command',
   guestScratch: 'does not name the guest scratch folder',
   imagePins: 'has no image pins',
+  buildContextUpload: 'has no build context upload',
 } as const satisfies Record<ImpdFeature, string>;
 
 export interface FeatureSource {

@@ -60,7 +60,7 @@ export { VmIdentitySchema, readVmIdentity, writeVmIdentity } from '../src/vm/sle
 export { buildTemplateKey } from '../src/vm/templates/boot-templates';
 export { createGenerationLog } from '../src/imps/session-logs/generation-log';
 export { DOCKERFILE_FRONTEND } from '../src/imps/docker-contract/dockerfile-frontend';
-export { BUILD_KEEPALIVE_MS } from '../src/imps/images/build/build-event-stream';
+export { BUILD_KEEPALIVE_MS } from '../src/imps/images/build/image-op-stream';
 
 export {
   checkDockerfile,

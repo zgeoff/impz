@@ -88,49 +88,25 @@ by digest as `images/examples/hello` names it, works on both.
   runs now, from any shell: the image name, where the context came from, when the build started, its
   phase, its step and its builder imp. It needs a token with `read` on the whole host.
 
-- **The stream.** The tar goes out as it is made, to `POST /images/build`, with its exact length as
-  the Content-Length. Neither the CLI nor impd holds it in memory. impd writes it to a temp file
-  under `<IMP_DATA_DIR>/uploads`, builds from it, and deletes it. It clears that directory when it
-  starts. When the client goes, impd ends the build request, which stops the build on the engine,
-  and frees its slot and its disk room.
-- **The answer.** A client that sends `Accept: application/x-ndjson` gets the answer as a stream,
-  one JSON event per line. impd sends the headers and a first event as soon as it takes the build,
-  and a progress event every 15 s and at each new phase. The last event holds the image or the
-  error:
-
-  ```json
-  {"type":"progress","phase":"upload","elapsedMs":0}
-  {"type":"log","text":"#5 [2/3] RUN make all"}
-  {"type":"progress","phase":"build","elapsedMs":2100,"step":"[2/3] RUN make all"}
-  {"type":"log","text":"#5 cc -o widget main.c"}
-  {"type":"image","image":{"name":"hello","ref":"imp/hello:latest","...":"..."}}
-  ```
-
-  A progress event carries `step` once a Dockerfile step has started, and impd sends one at each new
-  step. Each line of the build's output comes as a `log` event. impd holds at most 1 MiB of output
-  for a client that reads more slowly than the build writes; it drops the lines past that and sends
-  a `log` line that counts them.
-
-  An error ends the stream as `{"type":"error","code":"...","message":"..."}`, with the code an oRPC
-  call would give. A client skips an event type it does not know. The stream exists because a
-  client's fetch gives up on a response that stays silent: Bun's fetch after 360 s without a byte,
-  before the headers or between two chunks, unless the call passes `timeout: false`. Node's fetch
-  (undici) waits 300 s for the headers (`headersTimeout`) and 300 s between two chunks of the body
-  (`bodyTimeout`). A build can take longer than that. A client that sends no such `Accept`, as an
-  older CLI, gets the image or the error as JSON when the build ends, and still fails on a build
-  longer than its fetch waits. `system.info` lists `imageBuildStream` among the features of an impd
-  that streams. The CLI asks for the stream and reads JSON from an impd that answers JSON.
-
+- **The upload.** The tar goes out as it is made, to
+  `POST /images/build-context?name=<name>&dockerfile=<path>`, with its exact length as the
+  Content-Length. Neither the CLI nor impd holds it in memory. impd writes it to a temp file under
+  `<IMP_DATA_DIR>/uploads` and answers `201` with `{ "id": "...", "expiresAt": "..." }`. It clears
+  that directory when it starts.
+- **The build.** The client then calls `images.buildStream({ upload: id })`, which builds from the
+  upload, deletes it, and yields the build's progress, as the oRPC streams in
+  [long calls](#long-calls) do. Only the caller that uploaded the context may build from it, and
+  only once. An upload that no build takes within 5 minutes is deleted, with its build slot and disk
+  room. When the client goes, impd stops the build on the engine and frees its slot and its disk
+  room.
 - **Limits.** A context may be up to `IMP_BUILD_CONTEXT_MAX_MIB` (default 1024); a larger one fails
   with `PAYLOAD_TOO_LARGE`. At most 4 builds upload or run at once, uploads and builds together; a
-  fifth gets `TOO_MANY_REQUESTS`. impd refuses the build with its real HTTP status when it can tell
-  before it answers: auth, the query, a Content-Length over the limit, and a fifth build. A stream
-  answers 200 first, so a context that grows past the limit as it uploads, or a failed build, ends
-  the stream with an error event. The disk budget holds room for the tar, its rewrite, and, as the
-  export streams, twice what it has written so far for the unpacked image and its ext4 file, in 256
-  MiB steps; a disk that fills stops the export with `DISK_FULL`
-  ([storage](../architecture/storage/disk-space.md#the-budget)). Each build's builder imp takes a
-  slot, its memory and its disk like any imp.
+  fifth upload gets `TOO_MANY_REQUESTS` before it sends a byte. The upload answers each refusal with
+  its HTTP status and `{ "code": "...", "message": "..." }`, with the code an oRPC call would give.
+  The disk budget holds room for the tar, its rewrite, and, as the export streams, twice what it has
+  written so far for the unpacked image and its ext4 file, in 256 MiB steps; a disk that fills stops
+  the export with `DISK_FULL` ([storage](../architecture/storage/disk-space.md#the-budget)). Each
+  build's builder imp takes a slot, its memory and its disk like any imp.
 - **Who may build.** A token with `manage` scope and no imp patterns, as for `images.build`. Every
   build leaves an audit row.
 - **What the build may do.** impd runs one fixed BuildKit build in the builder, `docker build -`
@@ -294,21 +270,21 @@ logs each build's phases as `pins=… build=… image=…`.
 The SDK has the same upload:
 `client.buildImage(name, context, { dockerfile, size, signal, onProgress, onLog })`, where `context`
 is a tar as a `Blob`, bytes or a `ReadableStream`. Give a stream's `size` so impd holds only that
-much disk; without it, impd holds the whole limit. It reads the answer as a stream and calls
-`onProgress` with each progress event and `onLog` with each line of the build's output; an impd from
-before the stream answers JSON at the end, and sends neither. It throws an `ORPCError` as a contract
-call would.
+much disk; without it, impd holds the whole limit. It uploads the context, follows
+`images.buildStream`, and calls `onProgress` with each progress event and `onLog` with each line of
+the build's output. It throws an `ORPCError` as a contract call would, and a `MissingFeatureError`,
+before it uploads, for an impd without `buildContextUpload` among its features.
 
 ## Long calls
 
-A pull, an unpack, an on-host build or a template copy can take longer than a client's fetch waits
-for a byte: Bun's fetch gives up after 360 s, Node's (undici) after 300 s. The upload build streams
-its answer ([the answer](#build-an-image)); the oRPC calls have streamed twins:
+A pull, an unpack, a build or a template copy can take longer than a client's fetch waits for a
+byte: Bun's fetch gives up after 360 s, Node's (undici) after 300 s. The oRPC calls have streamed
+twins:
 
-| Procedure            | Same input as  | Phases, in order                        |
-| -------------------- | -------------- | --------------------------------------- |
-| `images.addStream`   | `images.add`   | `pull`, `unpack`; `copy` for a template |
-| `images.buildStream` | `images.build` | `pack`, `build`                         |
+| Procedure            | Same input as                   | Phases, in order                        |
+| -------------------- | ------------------------------- | --------------------------------------- |
+| `images.addStream`   | `images.add`                    | `pull`, `unpack`; `copy` for a template |
+| `images.buildStream` | `images.build`, or `{ upload }` | `pack` from a directory, then `build`   |
 
 Each yields a progress event (`{ type: "progress", phase, elapsedMs }`) as it starts, at each new
 phase and step and every 15 s, then `{ type: "image", image }`. `images.buildStream` with
@@ -325,7 +301,7 @@ up to 6 hours for either answer, with Bun's limit on a silent answer lifted. The
 
 When the client goes, impd stops what it can:
 
-- an on-host build stops, as an upload build does, and frees its disk room;
+- a build stops and frees its disk room;
 - an add stops its pull, but an unpack that has started runs to its end, since another add of the
   same image may wait on it, and the image is added;
 - a template copy runs to its end, as it does for `images.add`
