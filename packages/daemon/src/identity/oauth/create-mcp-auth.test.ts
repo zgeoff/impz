@@ -2,6 +2,7 @@ import { expect, mock, test } from 'bun:test';
 import { ApprovalCodeSchema } from '@impz/api';
 import invariant from 'tiny-invariant';
 import { createPendingSignIn } from '../../../testing/identity/create-pending-sign-in';
+import { runOAuthConsent } from '../../../testing/identity/run-oauth-consent';
 import { runOAuthSignIn } from '../../../testing/identity/run-oauth-sign-in';
 import { createTestDatabase } from '../../../testing/platform/create-test-database';
 import { makeOAuthResponder } from '../../../testing/surface/make-oauth-responder';
@@ -473,6 +474,276 @@ test('it answers a token request that sends a DPoP proof with a bearer token', a
 
   expect(refreshed.status).toBe(200);
   expect(body).toMatchObject({ token_type: 'Bearer' });
+});
+
+test.each([
+  [
+    'no PKCE challenge',
+    {
+      response_type: 'code',
+      redirect_uri: 'https://client.example/callback',
+      state: 'st',
+      scope: 'read',
+      resource: 'http://127.0.0.1:7171/mcp',
+    },
+    'invalid_request',
+  ],
+  [
+    'a plain PKCE challenge',
+    {
+      response_type: 'code',
+      redirect_uri: 'https://client.example/callback',
+      code_challenge: 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk',
+      code_challenge_method: 'plain',
+      state: 'st',
+      scope: 'read',
+      resource: 'http://127.0.0.1:7171/mcp',
+    },
+    'invalid_request',
+  ],
+  [
+    'another resource',
+    {
+      response_type: 'code',
+      redirect_uri: 'https://client.example/callback',
+      code_challenge: 'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM',
+      code_challenge_method: 'S256',
+      state: 'st',
+      scope: 'read',
+      resource: 'https://other.example/mcp',
+    },
+    'invalid_target',
+  ],
+])('it returns a sign-in with %s to the client with no login page', async (_what, query, error) => {
+  const ctx = await setupTest();
+  const client = await ctx.auth.addClient('conn', ['https://client.example/callback']);
+
+  const params = new URLSearchParams({ ...query, client_id: client.clientId });
+
+  const authorized = await ctx.respond(
+    new Request(`http://127.0.0.1:7171/oauth2/authorize?${params.toString()}`),
+  );
+
+  const back = new URL(authorized.headers.get('location') ?? '', 'http://127.0.0.1:7171');
+
+  expect({
+    status: authorized.status,
+    target: `${back.origin}${back.pathname}`,
+    error: back.searchParams.get('error'),
+    state: back.searchParams.get('state'),
+    iss: back.searchParams.get('iss'),
+  }).toStrictEqual({
+    status: 302,
+    target: 'https://client.example/callback',
+    error,
+    state: 'st',
+    iss: 'http://127.0.0.1:7171',
+  });
+});
+
+test('it refuses a code exchange whose PKCE verifier does not match the challenge', async () => {
+  const ctx = await setupTest();
+  const client = await ctx.auth.addClient('conn', ['https://client.example/callback']);
+  const made = await ctx.tokens.create({ name: 'laptop', scope: 'manage', imps: null });
+
+  const approver = ctx.tokens.authenticate(made.secret);
+
+  invariant(approver);
+
+  const code = await runOAuthConsent(
+    {
+      respond: ctx.respond,
+      origin: 'http://127.0.0.1:7171',
+      clientID: client.clientId,
+      redirectURI: 'https://client.example/callback',
+      scope: 'read',
+    },
+    (approvalCode) => {
+      ctx.auth.approve(ApprovalCodeSchema.parse(approvalCode), approver, 'read', undefined);
+    },
+  );
+
+  const exchanged = await ctx.respond(
+    new Request('http://127.0.0.1:7171/oauth2/token', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: client.clientId,
+        code,
+        redirect_uri: 'https://client.example/callback',
+        code_verifier: 'not-the-verifier-whose-challenge-the-sign-in-sent',
+        resource: 'http://127.0.0.1:7171/mcp',
+      }),
+    }),
+  );
+
+  expect({ status: exchanged.status, body: await exchanged.json() }).toStrictEqual({
+    status: 400,
+    body: { error: 'invalid_grant', error_description: 'code verification failed' },
+  });
+});
+
+test('it refuses a code exchange with no PKCE verifier', async () => {
+  const ctx = await setupTest();
+  const client = await ctx.auth.addClient('conn', ['https://client.example/callback']);
+  const made = await ctx.tokens.create({ name: 'laptop', scope: 'manage', imps: null });
+
+  const approver = ctx.tokens.authenticate(made.secret);
+
+  invariant(approver);
+
+  const code = await runOAuthConsent(
+    {
+      respond: ctx.respond,
+      origin: 'http://127.0.0.1:7171',
+      clientID: client.clientId,
+      redirectURI: 'https://client.example/callback',
+      scope: 'read',
+    },
+    (approvalCode) => {
+      ctx.auth.approve(ApprovalCodeSchema.parse(approvalCode), approver, 'read', undefined);
+    },
+  );
+
+  const exchanged = await ctx.respond(
+    new Request('http://127.0.0.1:7171/oauth2/token', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: client.clientId,
+        code,
+        redirect_uri: 'https://client.example/callback',
+        resource: 'http://127.0.0.1:7171/mcp',
+      }),
+    }),
+  );
+
+  expect({ status: exchanged.status, body: await exchanged.json() }).toStrictEqual({
+    status: 400,
+    body: {
+      error: 'invalid_request',
+      error_description: 'Either code_verifier or client_secret is required',
+    },
+  });
+});
+
+test('it refuses a code exchange for another resource', async () => {
+  const ctx = await setupTest();
+  const client = await ctx.auth.addClient('conn', ['https://client.example/callback']);
+  const made = await ctx.tokens.create({ name: 'laptop', scope: 'manage', imps: null });
+
+  const approver = ctx.tokens.authenticate(made.secret);
+
+  invariant(approver);
+
+  const code = await runOAuthConsent(
+    {
+      respond: ctx.respond,
+      origin: 'http://127.0.0.1:7171',
+      clientID: client.clientId,
+      redirectURI: 'https://client.example/callback',
+      scope: 'read',
+    },
+    (approvalCode) => {
+      ctx.auth.approve(ApprovalCodeSchema.parse(approvalCode), approver, 'read', undefined);
+    },
+  );
+
+  const exchanged = await ctx.respond(
+    new Request('http://127.0.0.1:7171/oauth2/token', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: client.clientId,
+        code,
+        redirect_uri: 'https://client.example/callback',
+        code_verifier: 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk',
+        resource: 'https://other.example/mcp',
+      }),
+    }),
+  );
+
+  expect({ status: exchanged.status, body: await exchanged.json() }).toStrictEqual({
+    status: 400,
+    body: { error: 'invalid_target', error_description: 'requested resource not authorized' },
+  });
+});
+
+test('it binds a code exchanged with no resource to the route’s resource', async () => {
+  const ctx = await setupTest();
+  const client = await ctx.auth.addClient('conn', ['https://client.example/callback']);
+  const made = await ctx.tokens.create({ name: 'laptop', scope: 'manage', imps: null });
+
+  const approver = ctx.tokens.authenticate(made.secret);
+
+  invariant(approver);
+
+  const code = await runOAuthConsent(
+    {
+      respond: ctx.respond,
+      origin: 'http://127.0.0.1:7171',
+      clientID: client.clientId,
+      redirectURI: 'https://client.example/callback',
+      scope: 'read',
+    },
+    (approvalCode) => {
+      ctx.auth.approve(ApprovalCodeSchema.parse(approvalCode), approver, 'read', undefined);
+    },
+  );
+
+  const exchanged = await ctx.respond(
+    new Request('http://127.0.0.1:7171/oauth2/token', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: client.clientId,
+        code,
+        redirect_uri: 'https://client.example/callback',
+        code_verifier: 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk',
+      }),
+    }),
+  );
+
+  const stored = await ctx.db.selectFrom('oauthAccessToken').select('resources').execute();
+
+  expect(exchanged.status).toBe(200);
+  expect(stored).toStrictEqual([{ resources: '["http://127.0.0.1:7171/mcp"]' }]);
+});
+
+test('it refuses an access token bound to another resource', async () => {
+  const ctx = await setupTest();
+  const client = await ctx.auth.addClient('conn', ['https://client.example/callback']);
+  const made = await ctx.tokens.create({ name: 'laptop', scope: 'manage', imps: null });
+
+  const approver = ctx.tokens.authenticate(made.secret);
+
+  invariant(approver);
+
+  const issued = await runOAuthSignIn(
+    {
+      respond: ctx.respond,
+      origin: 'http://127.0.0.1:7171',
+      clientID: client.clientId,
+      redirectURI: 'https://client.example/callback',
+      scope: 'read',
+    },
+    (approvalCode) => {
+      ctx.auth.approve(ApprovalCodeSchema.parse(approvalCode), approver, 'read', undefined);
+    },
+  );
+
+  await ctx.db
+    .updateTable('oauthAccessToken')
+    .set({ resources: '["https://other.example/mcp"]' })
+    .execute();
+
+  const access = await ctx.auth.resolveAccess(issued.access_token);
+
+  expect(access).toBeNull();
 });
 
 test('#listGrants lists a signed-in grant with its client, token, scope and imps', async () => {
