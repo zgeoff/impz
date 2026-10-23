@@ -2,6 +2,7 @@ import * as z from 'zod';
 import { runImpWith } from './imp-cli';
 import type { ImpRunOptions } from './imp-cli';
 import { runCommand } from './instance';
+import type { CommandRunners } from './instance';
 import { waitFor } from './wait-for';
 
 const PeerSchema = z.object({
@@ -13,7 +14,12 @@ const PeerSchema = z.object({
 
 const TailscaleStatusSchema = z.object({
   BackendState: z.string(),
-  Peer: z.record(z.string(), PeerSchema).default({}),
+
+  // A node alone on its tailnet gives null.
+  Peer: z
+    .record(z.string(), PeerSchema)
+    .nullish()
+    .transform((peers) => peers ?? {}),
 });
 
 export type TailscaleStatus = z.infer<typeof TailscaleStatusSchema>;
@@ -126,15 +132,6 @@ export function findServiceUrl(stdout: string): string | null {
   );
 }
 
-export function sendTailnetRpc(ip: string, path: string, input: unknown): Promise<Response> {
-  return fetch(`http://${ip}:7070/rpc/${path}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ json: input }),
-    signal: AbortSignal.timeout(30_000),
-  });
-}
-
 export async function readTailnetBody(url: string, host?: string): Promise<string> {
   const response = await fetch(url, {
     ...(host !== undefined && { headers: { host } }),
@@ -148,4 +145,62 @@ export async function readTailnetBody(url: string, host?: string): Promise<strin
   }
 
   return body.trim();
+}
+
+// The harness's test-side member of the Headscale tailnet: a container, since
+// this machine's own tailscaled stays on the tailnet it already has.
+export function readTailnetMember(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): string {
+  const member = env['E2E_TAILNET_MEMBER'] ?? '';
+
+  if (member === '') {
+    throw new Error('no E2E_TAILNET_MEMBER: the e2e harness starts the tailnet for this suite');
+  }
+
+  return member;
+}
+
+export async function readMemberStatus(
+  member: string,
+  runners: Pick<CommandRunners, 'runChecked'>,
+): Promise<TailscaleStatus> {
+  const stdout = await runners.runChecked([
+    'docker',
+    'exec',
+    member,
+    'tailscale',
+    'status',
+    '--json',
+  ]);
+
+  const status = parseTailscaleStatus(stdout);
+
+  if (status === null) {
+    throw new Error(`${member} gave no tailscale status: ${stdout}`);
+  }
+
+  return status;
+}
+
+export async function readMemberBody(member: string, url: string, host?: string): Promise<string> {
+  const result = await runCommand([
+    'docker',
+    'exec',
+    member,
+    'wget',
+    '-q',
+    '-O',
+    '-',
+    '-T',
+    '30',
+    ...(host === undefined ? [] : ['--header', `Host: ${host}`]),
+    url,
+  ]);
+
+  if (result.exitCode !== 0) {
+    throw new Error(`${url} from ${member}: ${result.stderr.trim()}`);
+  }
+
+  return result.stdout.trim();
 }

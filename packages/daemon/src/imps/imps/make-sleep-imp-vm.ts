@@ -1,8 +1,11 @@
 import { statSync } from 'node:fs';
 import type { ImpEventDetail } from '@impz/api';
+import { requireTransition } from '../../platform/db/imp-transitions';
 import type { ImpStateChange } from '../../platform/db/update-imp-state';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import { sendActivity } from '../../vm/agent-client/agent-requests';
+import { toSeenSessions } from '../../vm/agent-client/seen-session';
+import type { SeenSession } from '../../vm/agent-client/seen-session';
 import { sendServicesList } from '../../vm/agent-client/service-requests';
 import { shrinkGuest } from '../../vm/memory/shrink-guest';
 import { waitForGuestAge } from '../../vm/sleep/guest-age';
@@ -15,12 +18,9 @@ import {
 import { readVmIdentity } from '../../vm/sleep/vm-identity';
 import type { VmIdentity } from '../../vm/sleep/vm-identity';
 import type { ImpPaths } from '../../vm/storage/data-layout';
-import { toSeenSessions } from '../sessions/session-cache';
-import type { SeenSession } from '../sessions/session-cache';
 import { formatTimings } from './format-timings';
 import type { ImpContext } from './imp-context';
 import type { LockedImp } from './imp-lock';
-import { requireTransition } from './imp-transitions';
 import { OOM_KILL_TRIGGER, startOomWatch } from './oom-kill';
 
 const SLEEP_SHRINK_LIMIT_MS = 2000;

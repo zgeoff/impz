@@ -13,7 +13,9 @@
 #      over the image's env; the NixOS module mounts it from tmpfs.
 set -euo pipefail
 
-lib=/usr/local/lib/imp
+# a test points these at its own files
+lib=${IMP_LIB:-/usr/local/lib/imp}
+sock=${IMP_TAILSCALE_SOCKET:-/var/run/tailscale/tailscaled.sock}
 if [ -n "${IMP_ENV_FILE:-}" ]; then
   # shellcheck source=host/scripts/load-env-file.sh
   . "$lib/load-env-file.sh" "$IMP_ENV_FILE"
@@ -40,7 +42,7 @@ done <<<"$network_env"
 # for its URLs and impz info. The skip path exits 0 too, but starts no
 # tailscaled, so it leaves no socket.
 if "$lib/tailscale-up.sh"; then
-  if [ -S /var/run/tailscale/tailscaled.sock ]; then
+  if [ -S "$sock" ]; then
     export IMP_TAILSCALE_NODE=1
   fi
 else

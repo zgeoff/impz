@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { RunZfsCommand } from './zfs-owner';
-import { ZFS_OWNER_FILE, readZfsOwner, resetZfsRoot } from './zfs-owner';
+import { ZFS_OWNER_FILE, formatZfsOwnerFile, readZfsOwner, resetZfsRoot } from './zfs-owner';
 
 async function setupTest() {
   const work = await mkdtemp(join(tmpdir(), 'zfs-owner-'));
@@ -37,6 +37,33 @@ test('#readZfsOwner proves a data dir whose pool lists its vdev', async () => {
 
   expect(owner).toStrictEqual({ pool: 'impbench7', root: 'impbench7/imp', vdev: ctx.vdev });
   expect(run.mock.calls).toStrictEqual([[['zpool', 'status', '-P', 'impbench7']]]);
+});
+
+test('#formatZfsOwnerFile writes an owner file that the reader parses back whole', async () => {
+  const ctx = await setupTest();
+
+  await writeFile(
+    join(ctx.dataDir, ZFS_OWNER_FILE),
+    formatZfsOwnerFile({ pool: 'impbench7', root: 'impbench7/imp', vdev: ctx.vdev }),
+  );
+
+  const run = mock<RunZfsCommand>(() =>
+    Promise.resolve({
+      exitCode: 0,
+      stdout: `  pool: impbench7\n config:\n\t${ctx.vdev}  ONLINE  0 0 0\n`,
+      stderr: '',
+    }),
+  );
+
+  const owner = await readZfsOwner({ dataDir: ctx.dataDir, zfsRoot: 'impbench7/imp', run });
+
+  expect(owner).toStrictEqual({ pool: 'impbench7', root: 'impbench7/imp', vdev: ctx.vdev });
+});
+
+test('#formatZfsOwnerFile writes one JSON line', () => {
+  expect(
+    formatZfsOwnerFile({ pool: 'impbench7', root: 'impbench7/imp', vdev: '/var/tmp/w/bench.img' }),
+  ).toBe('{"pool":"impbench7","root":"impbench7/imp","vdev":"/var/tmp/w/bench.img"}\n');
 });
 
 test('#readZfsOwner proves nothing for a data dir with no owner file', async () => {

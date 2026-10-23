@@ -1,10 +1,9 @@
 import type { Imp } from '@impz/api';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-369 moves this to the layer that owns it
-import { createImpWatchdog } from '../../imp-ops/watchdog/imp-watchdog';
 import type { ImpRecord } from '../../platform/db/imps';
 import { createEventBus } from '../../platform/events/event-bus';
 import type { EventBus } from '../../platform/events/event-bus';
 import { startImpEventPublisher } from '../../platform/events/imp-event-publisher';
+import type { ResourceDelta } from '../../platform/telemetry/resource-delta';
 import { readSnapshotMeta } from '../../vm/sleep/snapshot-meta';
 import type { AgentWatchdog } from '../../vm/watchdog/agent-watchdog';
 import { createFileApi } from '../files/file-api';
@@ -19,18 +18,18 @@ import type { BootStatus } from './boot-status';
 import type { ImpCommands } from './imp-commands';
 import { createImpCommands } from './imp-commands';
 import { createImpContext } from './imp-context';
-import type { ImpServiceDeps } from './imp-context';
+import type { ImpClock, ImpDisk, ImpHost, ImpServiceDeps, ImpVms } from './imp-context';
 import { createImpLeases } from './imp-leases';
 import type { ImpLeases } from './imp-leases';
 import { createImpLock } from './imp-lock';
-import type { LockedImp } from './imp-lock';
+import type { ImpLock, LockedImp } from './imp-lock';
 import { createImpPresenter } from './imp-presenter';
 import { createImpRuntime } from './imp-runtime';
 import type { ImpRuntime } from './imp-runtime';
 import { createImpVmOps } from './imp-vm-ops';
+import type { ImpVmOps } from './imp-vm-ops';
 import { KERNEL_OOPS_REASON } from './kernel-oops-watch';
 import { readRunningImpUsage } from './read-running-imp-usage';
-import type { ResourceDelta } from './resource-sampler';
 
 export type { ImpServiceDeps } from './imp-context';
 
@@ -90,11 +89,17 @@ export type Imps = ImpService &
     readonly watchdog: AgentWatchdog;
   };
 
-export function createImpService(deps: ImpServiceDeps): Imps {
+export type CreateImpWatchdog = (
+  context: ImpHost & ImpClock & ImpVms & ImpDisk,
+  lock: ImpLock,
+  ops: ImpVmOps,
+) => AgentWatchdog;
+
+export function createImpService(deps: ImpServiceDeps, createWatchdog: CreateImpWatchdog): Imps {
   const context = createImpContext(deps);
   const lock = createImpLock(context);
   const ops = createImpVmOps(context);
-  const watchdog = createImpWatchdog(context, lock, ops);
+  const watchdog = createWatchdog(context, lock, ops);
   const presenter = createImpPresenter(context, watchdog.readSilentSince);
   const events = deps.events ?? createEventBus();
 

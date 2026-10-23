@@ -1,6 +1,6 @@
 import { listImps } from '../../platform/db/imps';
+import type { ResourceDelta } from '../../platform/telemetry/resource-delta';
 import type { ImpHost, ImpMemory, ImpVms } from './imp-context';
-import type { ResourceDelta } from './resource-sampler';
 
 export async function readRunningImpUsage(
   context: ImpHost & ImpVms & ImpMemory,

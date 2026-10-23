@@ -27,7 +27,7 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const hosts = readMoveHosts({ tailnet: false });
+  const hosts = readMoveHosts({ tailnet: 'off' });
 
   const client = await createInstanceClient();
   const clientB = await createInstanceClient(hosts.hostB);

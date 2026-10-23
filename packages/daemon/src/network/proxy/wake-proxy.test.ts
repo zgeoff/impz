@@ -1,12 +1,12 @@
 import { expect, jest, mock, onTestFinished, test } from 'bun:test';
 import { join } from 'node:path';
+import { claimFreePorts } from '@impz/test-utils/claim-free-ports';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { startStubCutStream } from '../../../testing/network/start-stub-cut-stream';
 import { startStubHeaderEcho } from '../../../testing/network/start-stub-header-echo';
 import { startStubSilentOrigin } from '../../../testing/network/start-stub-silent-origin';
 import { buildStubClock } from '../../../testing/platform/build-stub-clock';
-import { claimFreePorts } from '../../../testing/platform/claim-free-ports';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { removeImp, updateImpMove } from '../../platform/db/imps';
 import { PEER_HEADER, createForwardedPeers } from './forwarded-peers';
@@ -446,7 +446,7 @@ test('it passes the first line of a streamed API answer on while the API holds t
 
 // Bun reads its fetch idle limit (360 s by default) only at startup, so the
 // proxy runs in a child Bun with 1 s; the child's plain fetch is the control
-// that the limit expires, after about 8 s on Bun 1.4.2
+// that the limit expires, after about 8 s
 test('it passes on an API answer that stays silent past Bun’s idle limit, where a plain fetch gives up', async () => {
   const ctx = await setupTest();
 
@@ -1088,9 +1088,9 @@ test('it logs one impd.proxy line that names the imp, and nothing unhandled, whe
     new Response(child.stderr).text(),
   ]);
 
-  expect(stdout).toBe(
-    'WARNING impd.proxy imp=web the upstream closed GET /rpc/records/follow mid-stream: The socket connection was closed unexpectedly. For more information, pass `verbose: true` in the second argument to fetch()\n' +
-      '{"client":"ECONNRESET"}\n',
+  // an older Bun leaves the error's code out of a fetch error's message
+  expect(stdout).toMatch(
+    /^WARNING impd\.proxy imp=web the upstream closed GET \/rpc\/records\/follow mid-stream: (?:ECONNRESET: )?The socket connection was closed unexpectedly\. For more information, pass `verbose: true` in the second argument to fetch\(\)\n\{"client":"ECONNRESET"\}\n$/v,
   );
 
   expect(stderr).toBe('');
@@ -1141,7 +1141,9 @@ test('it warns through its logger, naming the imp, when the imp’s server close
       imp: 'web',
       method: 'GET',
       path: '/rpc/records/follow',
-      reason: expect.toStartWith('The socket connection was closed unexpectedly.'),
+      reason: expect.stringMatching(
+        /^(?:ECONNRESET: )?The socket connection was closed unexpectedly\./v,
+      ),
     },
   );
 });

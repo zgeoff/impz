@@ -74,12 +74,13 @@ These guest and host facts decide how a journey is built:
 
 ## Sets, groups and acceptance
 
-The `acceptance` set is every suite. The `fast` set is the CI subset, split into three static groups
-for three CI runners with an instance each. [`suites.test.ts`](../../../../e2e/lib/suites.test.ts)
-pins that no suite sits in two groups and that the groups make up the `fast` set, and
+The `acceptance` set is every suite. The `fast` set is the CI subset, split into static groups, one
+for each CI runner with an instance of its own.
+[`suites.test.ts`](../../../../e2e/lib/suites.test.ts) pins that no suite sits in two groups and
+that the groups make up the `fast` set, and
 [`ci-groups.test.ts`](../../../../e2e/lib/ci-groups.test.ts) pins the groups against the workflow
-file. Change all three together. A run that includes `acceptance` makes the tailnet suites fail
-instead of skipping and makes the timing limits fail the run instead of warning.
+file. Change all three together. A run that includes `acceptance` makes the timing limits fail the
+run instead of warning.
 
 ## Host safety
 
@@ -95,4 +96,5 @@ The harness touches machine-global resources only where it can prove they are it
   when `E2E_OWNS_ZFS_HOST=1` says the run has the machine and the root to itself, as each CI ZFS
   shard has.
 - The tailnet suites join as `tag:imp-e2e`, never `tag:imp`, so a test node cannot reach a live
-  impd. An instance that once joined as `tag:imp` keeps that node state until a `--clean` run.
+  impd. The Headscale suites join a control server in a container that the run starts and removes,
+  and read and fetch through a member container, never this machine's own tailscaled.

@@ -1,19 +1,15 @@
 import { expect, onTestFinished, test } from 'bun:test';
+import { createImpClient } from '@impz/client';
 import { config } from '../lib/config';
 import { resolveImageName } from '../lib/fixtures';
 import { createInstanceClient, runImp } from '../lib/imp-cli';
 import { waitForExec } from '../lib/imps';
+import { runCommand } from '../lib/instance';
+import { makeMemberFetch } from '../lib/make-member-fetch';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
-import {
-  isTailnetReady,
-  readLocalTailscaleStatus,
-  requireTailnetReady,
-  sendTailnetRpc,
-  waitForTailnetIp,
-} from '../lib/tailnet';
-import { probeTailscaleE2EKey } from '../lib/tailscale-key';
+import { readTailnetMember, waitForTailnetIp } from '../lib/tailnet';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();
@@ -22,38 +18,34 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: getSuitePrefix('tailscale'), stack, client };
+  return { prefix: getSuitePrefix('tailscale'), stack, client, member: readTailnetMember() };
 }
 
-// collection-time gate: Bun 1.4.2's skipIf takes a boolean and has no in-body skip
-const tailscaleStatus = await readLocalTailscaleStatus();
+test('it lets a tailnet member a rule names reach the API without a token, with that scope only', async () => {
+  const ctx = await setupTest();
 
-// The definition of done needs the tailnet; any other run skips without it.
-const tailnetMissing =
-  !isTailnetReady(tailscaleStatus, probeTailscaleE2EKey()) && !config.acceptance;
+  const name = `${ctx.prefix}rule`;
 
-test.skipIf(tailnetMissing)(
-  'it lets a tailnet member a rule names reach the API without a token, with that scope only',
-  async () => {
-    const ctx = await setupTest();
-    const status = await readLocalTailscaleStatus();
+  await runImp('new', name, '--image', resolveImageName('e2e-tiny'), '--memory', '512');
 
-    requireTailnetReady(status, probeTailscaleE2EKey());
+  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, name));
 
-    const name = `${ctx.prefix}rule`;
+  await waitForExec(name);
 
-    await runImp('new', name, '--image', resolveImageName('e2e-tiny'), '--memory', '512');
+  const ip = await waitForTailnetIp();
 
-    registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, name));
+  const member = createImpClient({
+    url: `http://${ip}:7070`,
+    fetch: makeMemberFetch(ctx.member, { runCommand }),
+  });
 
-    await waitForExec(name);
+  const identity = await member.tokens.whoami();
 
-    const ip = await waitForTailnetIp();
-    const whoami = await sendTailnetRpc(ip, 'tokens/whoami', {});
-    const stop = await sendTailnetRpc(ip, 'imps/stop', { name });
-    const identity: unknown = await whoami.json();
+  const stop = await member.imps.stop({ name }).then(
+    () => null,
+    (error: unknown) => error,
+  );
 
-    expect(identity).toMatchObject({ json: { kind: 'tailnet', scope: 'read', imps: null } });
-    expect(stop.status).toBe(403);
-  },
-);
+  expect(identity).toMatchObject({ kind: 'tailnet', scope: 'read', imps: null });
+  expect(stop).toMatchObject({ code: 'FORBIDDEN', status: 403 });
+});

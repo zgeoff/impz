@@ -455,9 +455,9 @@ test('it logs one impd.broker line that names the imp, and nothing unhandled, wh
     new Response(child.stderr).text(),
   ]);
 
-  expect(stdout).toBe(
-    'WARNING impd.broker imp=web the upstream closed GET api.example.com/v1/events mid-stream: The socket connection was closed unexpectedly. For more information, pass `verbose: true` in the second argument to fetch()\n' +
-      '{"client":"ECONNRESET"}\n',
+  // an older Bun leaves the error's code out of a fetch error's message
+  expect(stdout).toMatch(
+    /^WARNING impd\.broker imp=web the upstream closed GET api\.example\.com\/v1\/events mid-stream: (?:ECONNRESET: )?The socket connection was closed unexpectedly\. For more information, pass `verbose: true` in the second argument to fetch\(\)\n\{"client":"ECONNRESET"\}\n$/v,
   );
 
   expect(stderr).toBe('');
@@ -507,7 +507,9 @@ test('it warns through its logger, naming the imp, when the upstream closes a st
       method: 'GET',
       host: 'api.example.com',
       path: '/v1/events',
-      reason: expect.toStartWith('The socket connection was closed unexpectedly.'),
+      reason: expect.stringMatching(
+        /^(?:ECONNRESET: )?The socket connection was closed unexpectedly\./v,
+      ),
     },
   );
 });

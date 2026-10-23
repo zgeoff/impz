@@ -1,0 +1,286 @@
+import { expect, onTestFinished, test } from 'bun:test';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import invariant from 'tiny-invariant';
+import { claimFreePorts } from './claim-free-ports';
+import { waitFor } from './wait-for';
+
+test('it hands out distinct ports', () => {
+  const free = claimFreePorts(5);
+  const ports = [free.take(), free.take(), free.take(), free.take(), free.take()];
+
+  expect(new Set(ports).size).toBe(5);
+});
+
+test('it picks ports from the 4000 just below the start of the ephemeral range', async () => {
+  const range = await readFile('/proc/sys/net/ipv4/ip_local_port_range', 'utf8');
+
+  const ephemeralStart = Number(range.trim().split(/\s+/u)[0]);
+  const free = claimFreePorts(3);
+  const ports = [free.take(), free.take(), free.take()];
+
+  expect(ports).toSatisfyAll(
+    (port: number) => port >= ephemeralStart - 4000 && port < ephemeralStart,
+  );
+});
+
+test('it leaves the ports free for the test to bind', () => {
+  const free = claimFreePorts(2);
+  const first = free.take();
+  const second = free.take();
+
+  const firstListener = Bun.listen({
+    hostname: '127.0.0.1',
+    port: first,
+    socket: { data: () => {} },
+  });
+
+  onTestFinished(() => {
+    firstListener.stop(true);
+  });
+
+  const secondListener = Bun.listen({
+    hostname: '127.0.0.1',
+    port: second,
+    socket: { data: () => {} },
+  });
+
+  onTestFinished(() => {
+    secondListener.stop(true);
+  });
+
+  expect([firstListener.port, secondListener.port]).toStrictEqual([first, second]);
+});
+
+test('it throws when more ports are taken than were asked for', () => {
+  const free = claimFreePorts(2);
+
+  free.take();
+  free.take();
+
+  expect(() => free.take()).toThrowWithMessage(Error, /^only 2 free ports were asked for$/u);
+});
+
+test('it skips a port that a TCP listener holds', () => {
+  const held = Bun.listen({ hostname: '127.0.0.1', port: 0, socket: { data: () => {} } });
+
+  onTestFinished(() => {
+    held.stop(true);
+  });
+
+  // past 65535 no socket can hold it; the pid keeps other runs' claims off it
+  const next = 65_536 + process.pid * 4;
+  const picks = [held.port, next];
+
+  const free = claimFreePorts(1, {
+    pick: () => {
+      const port = picks.shift();
+
+      invariant(port !== undefined, 'the picks ran out');
+
+      return port;
+    },
+  });
+
+  expect(free.take()).toBe(next);
+});
+
+test('it skips a port that a UDP socket holds', async () => {
+  const held = await Bun.udpSocket({ hostname: '127.0.0.1', port: 0 });
+
+  onTestFinished(() => {
+    held.close();
+  });
+
+  // past 65535 no socket can hold it; the pid keeps other runs' claims off it
+  const next = 65_536 + process.pid * 4;
+  const picks = [held.port, next];
+
+  const free = claimFreePorts(1, {
+    pick: () => {
+      const port = picks.shift();
+
+      invariant(port !== undefined, 'the picks ran out');
+
+      return port;
+    },
+  });
+
+  expect(free.take()).toBe(next);
+});
+
+test('it skips a port that an earlier picker in this process claimed', () => {
+  // past 65535 no socket can hold them; the pid keeps other runs' claims off them
+  const claimed = 65_536 + process.pid * 4;
+  const next = 65_536 + process.pid * 4 + 1;
+  const earlierPicks = [claimed];
+
+  claimFreePorts(1, {
+    pick: () => {
+      const port = earlierPicks.shift();
+
+      invariant(port !== undefined, 'the earlier picks ran out');
+
+      return port;
+    },
+  });
+
+  const picks = [claimed, next];
+
+  const free = claimFreePorts(1, {
+    pick: () => {
+      const port = picks.shift();
+
+      invariant(port !== undefined, 'the picks ran out');
+
+      return port;
+    },
+  });
+
+  expect(free.take()).toBe(next);
+});
+
+test('it releases its claim on each port when the test ends', () => {
+  const port = claimFreePorts(1).take();
+
+  onTestFinished(() => {
+    const claim = Bun.listen({
+      unix: `\0imp-test-port-${String(port)}`,
+      socket: { data: () => {} },
+    });
+
+    claim.stop(true);
+  });
+
+  expect(() =>
+    Bun.listen({ unix: `\0imp-test-port-${String(port)}`, socket: { data: () => {} } }),
+  ).toThrow();
+});
+
+test('it never hands two pickers in separate processes the same port', async () => {
+  // the pickers stop before their directory goes
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
+  const directory = await mkdtemp(join(tmpdir(), 'find-free-ports-'));
+
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
+
+  // past 65535 no socket can hold them; the pid keeps other runs' claims off them
+  const sequence = [0, 1, 2, 3].map((offset) => 65_536 + process.pid * 4 + offset);
+
+  await writeFile(
+    join(directory, 'picker.test.ts'),
+    `import { test } from 'bun:test';
+import { existsSync, writeFileSync } from 'node:fs';
+import { waitFor } from ${JSON.stringify(Bun.resolveSync('@impz/test-utils/wait-for', import.meta.dir))};
+import { claimFreePorts } from ${JSON.stringify(join(import.meta.dir, 'claim-free-ports.ts'))};
+
+test('it picks two ports and holds them until released', async () => {
+  const picks = ${JSON.stringify(sequence)};
+  const free = claimFreePorts(2, {
+    pick: () => {
+      const port = picks.shift();
+
+      if (port === undefined) {
+        throw new Error('the picks ran out');
+      }
+
+      return port;
+    },
+  });
+
+  writeFileSync(process.env.PICKED_FILE ?? '', JSON.stringify([free.take(), free.take()]));
+  await waitFor(() => {
+    if (!existsSync('release')) {
+      throw new Error('not released yet');
+    }
+  });
+});
+`,
+  );
+
+  const first = Bun.spawn([process.execPath, 'test', './picker.test.ts'], {
+    cwd: directory,
+    env: { ...process.env, TMPDIR: directory, PICKED_FILE: join(directory, 'first.json') },
+    stdout: 'ignore',
+    stderr: 'ignore',
+  });
+
+  stack.defer(() => {
+    first.kill();
+  });
+
+  const firstPorts = await waitFor(async (): Promise<unknown> => {
+    const picked = await readFile(join(directory, 'first.json'), 'utf8');
+
+    return JSON.parse(picked) as unknown;
+  });
+
+  const second = Bun.spawn([process.execPath, 'test', './picker.test.ts'], {
+    cwd: directory,
+    env: { ...process.env, TMPDIR: directory, PICKED_FILE: join(directory, 'second.json') },
+    stdout: 'ignore',
+    stderr: 'ignore',
+  });
+
+  stack.defer(() => {
+    second.kill();
+  });
+
+  const secondPorts = await waitFor(async (): Promise<unknown> => {
+    const picked = await readFile(join(directory, 'second.json'), 'utf8');
+
+    return JSON.parse(picked) as unknown;
+  });
+
+  await writeFile(join(directory, 'release'), '');
+
+  const firstExit = await first.exited;
+  const secondExit = await second.exited;
+
+  expect(firstPorts).toStrictEqual([sequence[0], sequence[1]]);
+  expect(secondPorts).toStrictEqual([sequence[2], sequence[3]]);
+  expect(firstExit).toBe(0);
+  expect(secondExit).toBe(0);
+});
+
+test('it frees its claims when the release that onRelease got runs', () => {
+  // past 65535 no socket can hold them; the pid keeps other runs' claims off them
+  const claimed = 65_536 + process.pid * 4 + 2;
+  const releases: (() => void)[] = [];
+  const earlierPicks = [claimed];
+
+  claimFreePorts(1, {
+    pick: () => {
+      const port = earlierPicks.shift();
+
+      invariant(port !== undefined, 'the earlier picks ran out');
+
+      return port;
+    },
+    onRelease: (release) => {
+      releases.push(release);
+    },
+  });
+
+  for (const release of releases) {
+    release();
+  }
+
+  const picks = [claimed];
+
+  const free = claimFreePorts(1, {
+    pick: () => {
+      const port = picks.shift();
+
+      invariant(port !== undefined, 'the picks ran out');
+
+      return port;
+    },
+  });
+
+  expect(free.take()).toBe(claimed);
+});

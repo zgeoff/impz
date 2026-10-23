@@ -26,18 +26,18 @@ each; open one when the task touches its area.
 
 ## Traps
 
-- **Cleanup runs first-in, first-out.** On Bun 1.4.2, `onTestFinished` callbacks run in registration
-  order, and a callback that throws skips the ones after it. A util that registers its own cleanup
-  therefore releases before anything the test registers after it.
+- **Cleanup runs first-in, first-out.** `onTestFinished` callbacks run in registration order, and a
+  callback that throws skips the ones after it. A util that registers its own cleanup therefore
+  releases before anything the test registers after it.
 - **Ambient `IMP_*` settings vanish.** The root preload deletes every `IMP_*` variable the shell
   passed, except the run gates in [Layers](#layers), so a developer's settings never reach a unit
   test. Set an impd setting with [`updateEnv`](../../../packages/test-utils/src/update-env.ts)
   before `setupTest()`, which reads it through
   [`readImpEnv`](../../../packages/test-utils/src/read-imp-env.ts).
-- **An ambient proxy is turned off.** Bun's `fetch` sends even a unix-socket or loopback request
-  through the proxy that the shell's `HTTPS_PROXY` names, and it keeps that proxy after the variable
-  is deleted. The root preload sets `NO_PROXY` to `*` instead, and every child process inherits it,
-  so a child that a test sends through a proxy overrides it, as curl's `--noproxy ''` does.
+- **An ambient proxy is turned off.** Bun's `fetch` sends a loopback request through the proxy that
+  the shell's `HTTPS_PROXY` names, and an older Bun keeps that proxy after the variable is deleted,
+  so the root preload sets `NO_PROXY` to `*`. Every child process inherits it, so a child that a
+  test sends through a proxy overrides it, as curl's `--noproxy ''` does.
 - **MSW sees only `fetch`, and not all of it.** A `fetch` to loopback or a unix socket skips MSW and
   goes to the real network. `node:http` clients and WebSockets bypass MSW too, so those boundaries
   need a real stand-in server.
@@ -51,9 +51,9 @@ each; open one when the task touches its area.
 - **`createImpd`'s `now` does not reach every clock.** Some services stay on the wall clock;
   [Booting impd](./references/stand-ins.md#booting-impd) lists the gaps and the clocks those
   components take instead.
-- **Ports come from
-  [`claimFreePorts`](../../../packages/daemon/testing/platform/claim-free-ports.ts).** It claims
-  each port until the test ends, so parallel test processes never share one. A fixed port collides.
+- **Ports come from [`claimFreePorts`](../../../packages/test-utils/src/claim-free-ports.ts).** It
+  claims each port until the test ends, so parallel test processes never share one. A fixed port
+  collides.
 - **tmpfs lacks disk features.** `tmpdir()` is a tmpfs on some hosts; a test that needs FIEMAP or
   similar makes its directory under `/var/tmp`, never in the checkout.
 - **Git hooks leak `GIT_DIR`.** A test that runs git spawns it through the helpers in
@@ -79,7 +79,7 @@ each; open one when the task touches its area.
 | ACME issuer                 | `bun run test:pebble`                                                              | Docker                                                       |
 | Headscale join              | `bun run test:headscale`                                                           | Docker, and the network for the client's packages            |
 | Small filesystem            | `IMP_TEST_SMALL_FS=<dir> bun test <file>... -t 'small filesystem'`                 | A 4 GiB loop-mounted XFS at `<dir>`; a tiny tmpfs fails      |
-| End to end                  | `e2e/test-e2e.sh [--only <suites> \| --group <1-3>] [--clean \| --reuse] [--keep]` | KVM, Docker; `--help` lists suites and extra needs           |
+| End to end                  | `e2e/test-e2e.sh [--only <suites> \| --group <1-4>] [--clean \| --reuse] [--keep]` | KVM, Docker; `--help` lists suites and extra needs           |
 | One journey                 | `bun test --config=e2e/bunfig.toml ./e2e/suites/<journey>.e2e.ts`                  | A dev instance that is already up                            |
 | NixOS module evaluation     | `nix build -L --no-link .#checks.x86_64-linux.eval`                                | Nix with flakes                                              |
 | NixOS VMs                   | `nix build -L --no-link .#checks.x86_64-linux.vm`                                  | Nix with `kvm nixos-test` system features                    |

@@ -1,10 +1,11 @@
+import { ServiceStateSchema } from '@impz/api';
 import * as z from 'zod';
 import { runImp } from './imp-cli';
 import { waitFor } from './wait-for';
 
 const ServiceRowSchema = z.object({
   name: z.string(),
-  state: z.string(),
+  state: ServiceStateSchema,
   pid: z.int().nullable(),
   argv: z.array(z.string()),
   envKeys: z.array(z.string()),

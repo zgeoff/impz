@@ -45,7 +45,7 @@ error.
 | `IMP_BUILD_DISK_GIB`            | `20`                                      | Each builder imp's disk; a build that fills it fails.                                                                                                                                                                                                                 |
 | `IMP_BUILD_IMAGE_MAX_MIB`       | `8192`                                    | The largest filesystem a build's export may stream out of its builder, and may take on disk.                                                                                                                                                                          |
 | `IMP_BUILD_IMAGE_MAX_FILES`     | `1000000`                                 | The most entries (files, directories, links) a build's export may hold; `tar` counts them as it unpacks.                                                                                                                                                              |
-| `IMP_BUILD_IMAGE`               | `ghcr.io/zgeoff/imp-base:0.29.0@sha256:…` | The builders' image, by digest; impd adds it as the image `imp-builder`, a name no client may take, with the one pull imp-docker-proxy allows under `imp` isolation.                                                                                                  |
+| `IMP_BUILD_IMAGE`               | `ghcr.io/zgeoff/imp-base:0.29.0@sha256:…` | The builders' image, by digest; impd adds it as the image `imp-builder`, a name no client may take, with the one pull imp-docker-proxy allows.                                                                                                                        |
 | `IMP_IMAGE_EVICT_HIGH_PERCENT`  | none                                      | How full, in percent, the space of `IMP_DATA_DIR` gets before impd evicts unused images after an image add or build; set with the low mark, or neither ([evict images](./images.md#evict-images-under-storage-pressure)).                                             |
 | `IMP_IMAGE_EVICT_LOW_PERCENT`   | none                                      | The usage, in percent and below the high mark, that an eviction brings the space of `IMP_DATA_DIR` under.                                                                                                                                                             |
 | `IMP_KSM`                       | none                                      | `1` lets KSM merge identical guest pages: Firecracker, or the jailer that execs it, starts through `ksm-exec`; `0` or unset is off. Linux 6.10 or later; a single-owner trade-off ([KSM](../architecture/lifecycle/ram-governor.md#ksm)).                             |
@@ -75,7 +75,7 @@ error.
 | `IMP_MOVE_TEST_CIDR`            | none                                      | Tests only, with `IMP_E2E=1`: one more private range, /16 or narrower, that moves may come from and go to, off the tailnet ([moves](../architecture/storage/moves.md#the-steps)). impd logs a warning at start.                                                       |
 | `IMP_BUILD_TEST_REGISTRY`       | none                                      | Tests only, with `IMP_E2E=1`: a registry as `<name>:<port>` that builders may reach at the private address impd resolves the name to at start ([public](../architecture/network/egress.md#public)). impd logs a warning at start.                                     |
 | `IMP_BUILD_TEST_REGISTRY_CA`    | none                                      | Tests only, with `IMP_BUILD_TEST_REGISTRY`: the PEM file of that registry's CA, which impd copies into each builder.                                                                                                                                                  |
-| `IMP_DASHBOARD_DIR`             | none                                      | The [dashboard](./dashboard.md)'s built files, served at `/ui/`. The release image sets its own.                                                                                                                                                                      |
+| `IMP_DASHBOARD_DIR`             | none                                      | The built files of the [dashboard](./dashboard.md), served at `/ui/`. The release image sets its own.                                                                                                                                                                 |
 
 A host on Linux 6.7 or later does not set a restored TSC back, so it can set
 `IMP_SLEEP_MIN_GUEST_UPTIME_MS=0`: `scripts/dev/bench-wake.sh` with that setting confirms it, with a
@@ -203,21 +203,24 @@ image's tag, and reads `IMP_BUILD_CONTEXT_MAX_MIB` as impd does
 
 `scripts/dev/dev.sh` runs one host container for development. It reads these on your machine:
 
-| Variable               | Default                                        | Meaning                                                         |
-| ---------------------- | ---------------------------------------------- | --------------------------------------------------------------- |
-| `IMP_DEV_NAME`         | `imp-dev`                                      | The container name.                                             |
-| `IMP_DEV_PORT_OFFSET`  | `0`                                            | Added to every published port, for parallel instances.          |
-| `IMP_DEV_DATA`         | `<repo>/.data/dev`                             | The host directory that holds the XFS file.                     |
-| `IMP_KERNEL`           | `kernel/out/vmlinux`, else `.cache/vmlinux-ci` | The guest kernel; a path under the repo.                        |
-| `IMP_SYSTEM_DRIVE`     | `build/imp-system.squashfs`                    | The system drive; a path under the repo.                        |
-| `IMP_STORAGE_GIB`      | `200`                                          | Passed to the container.                                        |
-| `IMP_DEFAULT_IMAGE`    | none                                           | Passed to impd.                                                 |
-| `IMP_DEV_NETWORK`      | none                                           | A Docker network for the container.                             |
-| `IMP_DEV_IP`           | none                                           | The container's address on `IMP_DEV_NETWORK`.                   |
-| `IMP_DEV_PUBLISH`      | `1`                                            | `0` publishes no ports: impd answers on `IMP_DEV_IP:7070` only. |
-| `IMP_DEV_TAILNET`      | none                                           | `0` keeps the container off the tailnet, whatever key there is. |
-| `IMP_HOST_IMAGE`       | `imp-host:dev-<dir>-<hash>`                    | The host image tag, one per checkout.                           |
-| `IMP_HOST_IMAGE_READY` | none                                           | `1` uses `IMP_HOST_IMAGE` as it is, without a build.            |
+| Variable                  | Default                                        | Meaning                                                                         |
+| ------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------- |
+| `IMP_DEV_NAME`            | `imp-dev`                                      | The container name.                                                             |
+| `IMP_DEV_PORT_OFFSET`     | `0`                                            | Added to every published port, for parallel instances.                          |
+| `IMP_DEV_DATA`            | `<repo>/.data/dev`                             | The host directory that holds the XFS file.                                     |
+| `IMP_KERNEL`              | `kernel/out/vmlinux`, else `.cache/vmlinux-ci` | The guest kernel; a path under the repo.                                        |
+| `IMP_SYSTEM_DRIVE`        | `build/imp-system.squashfs`                    | The system drive; a path under the repo.                                        |
+| `IMP_STORAGE_GIB`         | `200`                                          | Passed to the container.                                                        |
+| `IMP_DEFAULT_IMAGE`       | none                                           | Passed to impd.                                                                 |
+| `IMP_DEV_NETWORK`         | none                                           | A Docker network for the container.                                             |
+| `IMP_DEV_IP`              | none                                           | The container's address on `IMP_DEV_NETWORK`.                                   |
+| `IMP_DEV_PUBLISH`         | `1`                                            | `0` publishes no ports: impd answers on `IMP_DEV_IP:7070` only.                 |
+| `IMP_DEV_TAILNET`         | none                                           | `0` keeps the container off the tailnet, whatever key there is.                 |
+| `IMP_HOST_IMAGE`          | `imp-host:dev-<dir>-<hash>`                    | The host image tag, one per checkout.                                           |
+| `IMP_HOST_IMAGE_READY`    | none                                           | `1` uses `IMP_HOST_IMAGE` as it is, without a build.                            |
+| `IMP_DEV_READY_TIMEOUT_S` | `600` for `up`, `60` for `restart`             | The seconds to wait for impd's `/health` to report ready.                       |
+| `IMP_DEV_STOP_TIMEOUT_S`  | `30`                                           | The seconds `restart` waits for the old impd to exit.                           |
+| `IMP_MACHINE_ID_FILE`     | `/etc/machine-id`                              | The file that holds this machine's id, which labels the host image for `prune`. |
 
 `dev.sh` passes `.env` in the repo root to Docker as an env file, so `IMP_DNS_API_TOKEN` and any
 other secret in it is never printed. It takes `TAILSCALE_AUTHKEY` from the first of:
@@ -230,24 +233,23 @@ other secret in it is never printed. It takes `TAILSCALE_AUTHKEY` from the first
    holds the client, or set the reference. With neither, `op` is not asked, and a message names the
    two variables. A client secret (`tskey-client-`) joins ephemeral and preauthorized, as
    `IMP_TAILSCALE_TAGS` or else `tag:imp-e2e`, so the instance reaches no live impd. The read gets
-   20 seconds, so a locked 1Password app cannot hang a run. A failed read stays quiet, falls
-   through, and sets `IMP_TAILSCALE_OP_MISSED=1`, so the rest of the run (a reboot, the e2e
-   harness's later steps) skips `op`.
+   20 seconds, so a locked 1Password app cannot hang a run. A failed read stays quiet and falls
+   through.
 3. `TAILSCALE_AUTHKEY` in `.env`.
 
 With none of them, the dev instance stays off the tailnet. The key reaches Docker as
-`-e TAILSCALE_AUTHKEY` with no value, so it never shows in argv, and `bash -x` traces never show it.
-`load_tailscale_authkey` in `scripts/lib.sh` holds the order.
+`-e TAILSCALE_AUTHKEY` with no value, so it never shows in argv.
 
-The e2e harness never uses a key from your environment or `.env`, because a `tag:imp` key there
-reaches a live impd. When a run includes the `tailscale` or `moves-tailnet` suite,
-`load_tailscale_e2e_authkey` reads the OAuth client of `tag:imp-e2e`, from
-`IMP_E2E_TAILSCALE_AUTHKEY` or else `op read "$IMP_E2E_TAILSCALE_OAUTH_REF"` (default
+The e2e harness never uses a key or a control server from your environment or `.env`, because a
+`tag:imp` key there reaches a live impd. When a run includes the `tailscale`, `egress` or
+`moves-tailnet` suite, the harness joins the instance to a Headscale tailnet of the run's own, with
+a key it mints there. When a run includes the `tailnet-names` suite with `IMP_E2E_TAILNET_NAMES=1`,
+the harness reads the OAuth client of `tag:imp-e2e`, from `IMP_E2E_TAILSCALE_AUTHKEY` or else
+`op read "$IMP_E2E_TAILSCALE_OAUTH_REF"` (default
 `op://$IMP_OP_VAULT/imp-e2e-tailscale-oauth/client-secret`, with `IMP_OP_VAULT` set as for
-`dev.sh`). The harness passes the secret to `dev.sh` as `TAILSCALE_AUTHKEY`, with
+`dev.sh`). It passes that secret to `dev.sh` as `TAILSCALE_AUTHKEY`, with
 `?ephemeral=true&preauthorized=true`, and `IMP_TAILSCALE_TAGS=tag:imp-e2e`. Every other e2e run sets
-`IMP_DEV_TAILNET=0`. [The e2e tailnet tag](../runbooks/e2e-tailnet.md) covers what impz relies on in
-the tailnet policy.
+`IMP_DEV_TAILNET=0`. [The e2e tailnet](../runbooks/e2e-tailnet.md) covers both tailnets.
 
 `dev.sh` sets `IMP_UPLINK_MTU` from this machine's default route, unless it is set.
 

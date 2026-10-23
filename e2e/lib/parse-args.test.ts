@@ -41,6 +41,7 @@ test('it runs every suite in run order when no suite is named', () => {
     'socket',
     'moves',
     'moves-tailnet',
+    'tailnet-names',
     'chaos',
     'jail',
     'memory',
@@ -73,6 +74,7 @@ test('it expands a set and drops a suite the set already holds', () => {
     'disks',
     'sleep',
     'restart',
+    'tailscale',
     'mcp',
     'mcp-oauth',
     'offsets',
@@ -85,11 +87,13 @@ test('it expands a set and drops a suite the set already holds', () => {
     'dashboard',
     'tokens',
     'leases',
+    'egress',
     'cpu',
     'templates',
     'boot-templates',
     'inner',
     'socket',
+    'moves-tailnet',
     'jail',
     'memory',
     'ksm',
@@ -126,6 +130,7 @@ test.each([
   ],
   ['2', ['sleep', 'reverse', 'jail']],
   ['3', ['mcp', 'mcp-oauth', 'inner', 'memory', 'ksm']],
+  ['4', ['tailscale', 'egress', 'moves-tailnet']],
 ])('it runs fast group %s with --group', (group, suites) => {
   expect(parseArgs(['--group', group]).suites).toStrictEqual(suites);
 });
@@ -196,12 +201,12 @@ test('it rejects --group with no number after it', () => {
   );
 });
 
-test.each([['0'], ['4'], ['one'], ['1.5'], ['01']])(
+test.each([['0'], ['5'], ['one'], ['1.5'], ['01']])(
   'it rejects --group %s, which names no fast group',
   (group) => {
     expect(() => parseArgs(['--group', group])).toThrowWithMessage(
       Error,
-      `--group takes 1 to 3, not ${group}`,
+      `--group takes 1 to 4, not ${group}`,
     );
   },
 );

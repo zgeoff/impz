@@ -2,12 +2,8 @@ import { expect, mock, onTestFinished, test } from 'bun:test';
 import { faker } from '@faker-js/faker';
 import { ApprovalCodeSchema } from '@impz/api';
 import { createImpClient } from '@impz/client';
-import {
-  claimFreePorts,
-  createPendingSignIn,
-  makeOAuthResponder,
-  startTestImpd,
-} from '@impz/daemon/testing';
+import { createPendingSignIn, makeOAuthResponder, startTestImpd } from '@impz/daemon/testing';
+import { claimFreePorts } from '@impz/test-utils/claim-free-ports';
 import * as z from 'zod';
 import { UsageError } from '../cli/errors';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';

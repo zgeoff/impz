@@ -8,11 +8,11 @@ import { buildMockNewImage } from '../../../../testing/imps/build-mock-new-image
 import { writeSyncedFile } from '../../../../testing/platform/write-synced-file';
 import { createZfsTestDataset } from '../../../../testing/vm/create-zfs-test-dataset';
 import { readZfsTestPool } from '../../../../testing/vm/read-zfs-test-pool';
-import { writeChangedBlocks } from '../../../imp-ops/backup/write-changed-blocks';
 import { createImage } from '../../../platform/db/images';
 import { readImpByName } from '../../../platform/db/imps';
 import { runChecked } from '../../../platform/process/run-command';
 import { readSnapshotMeta } from '../../sleep/snapshot-meta';
+import { writeChangedBlocks } from '../write-changed-blocks';
 import { createZfsBackend } from './zfs-backend';
 import type { ZfsBackend } from './zfs-backend';
 

@@ -68,6 +68,17 @@
           "daemon-identity": ["packages/daemon/src/identity/**"],
           "daemon-imp-ops": ["packages/daemon/src/imp-ops/**"],
           "daemon-surface": ["packages/daemon/src/surface/**"],
+          // the vm layer's folders from the bottom up, with vm-config.ts at the bottom
+          "daemon-vm-config": ["packages/daemon/src/vm/*.ts"],
+          "daemon-vm-files": ["packages/daemon/src/vm/files/**"],
+          "daemon-vm-imps-contract": ["packages/daemon/src/vm/imps-contract/**"],
+          "daemon-vm-storage": ["packages/daemon/src/vm/storage/**"],
+          "daemon-vm-agent-client": ["packages/daemon/src/vm/agent-client/**"],
+          "daemon-vm-sleep": ["packages/daemon/src/vm/sleep/**"],
+          "daemon-vm-vmm": ["packages/daemon/src/vm/vmm/**"],
+          "daemon-vm-memory": ["packages/daemon/src/vm/memory/**"],
+          "daemon-vm-watchdog": ["packages/daemon/src/vm/watchdog/**"],
+          "daemon-vm-templates": ["packages/daemon/src/vm/templates/**"],
           "daemon-below-surface": [
             "packages/daemon/src/{platform,host-net,vm,imps,network,identity,imp-ops}/**"
           ]
@@ -213,6 +224,182 @@
               "daemon-manifest"
             ],
             "reason": "a daemon layer imports only itself and the layers below it: platform, host-net, vm, imps, network, identity, imp-ops, surface"
+          },
+          {
+            "name": "daemon-vm-folder-config",
+            "from": ["daemon-vm-config"],
+            "ignore": [
+              "**/*.{test,e2e,pebble,headscale}.{ts,tsx}",
+              "**/{test-utils,smoke,mocks}/**",
+              "**/test-setup.ts"
+            ],
+            "to": ["daemon-vm"],
+            "allow": ["daemon-vm-config"],
+            "reason": "a vm folder imports only itself and the folders below it: vm-config.ts, files, imps-contract, storage, agent-client, sleep, vmm, memory, watchdog, templates"
+          },
+          {
+            "name": "daemon-vm-folder-files",
+            "from": ["daemon-vm-files"],
+            "ignore": [
+              "**/*.{test,e2e,pebble,headscale}.{ts,tsx}",
+              "**/{test-utils,smoke,mocks}/**",
+              "**/test-setup.ts"
+            ],
+            "to": ["daemon-vm"],
+            "allow": ["daemon-vm-config", "daemon-vm-files"],
+            "reason": "a vm folder imports only itself and the folders below it: vm-config.ts, files, imps-contract, storage, agent-client, sleep, vmm, memory, watchdog, templates"
+          },
+          {
+            "name": "daemon-vm-folder-imps-contract",
+            "from": ["daemon-vm-imps-contract"],
+            "ignore": [
+              "**/*.{test,e2e,pebble,headscale}.{ts,tsx}",
+              "**/{test-utils,smoke,mocks}/**",
+              "**/test-setup.ts"
+            ],
+            "to": ["daemon-vm"],
+            "allow": ["daemon-vm-config", "daemon-vm-files", "daemon-vm-imps-contract"],
+            "reason": "a vm folder imports only itself and the folders below it: vm-config.ts, files, imps-contract, storage, agent-client, sleep, vmm, memory, watchdog, templates"
+          },
+          {
+            "name": "daemon-vm-folder-storage",
+            "from": ["daemon-vm-storage"],
+            "ignore": [
+              "**/*.{test,e2e,pebble,headscale}.{ts,tsx}",
+              "**/{test-utils,smoke,mocks}/**",
+              "**/test-setup.ts"
+            ],
+            "to": ["daemon-vm"],
+            "allow": [
+              "daemon-vm-config",
+              "daemon-vm-files",
+              "daemon-vm-imps-contract",
+              "daemon-vm-storage"
+            ],
+            "reason": "a vm folder imports only itself and the folders below it: vm-config.ts, files, imps-contract, storage, agent-client, sleep, vmm, memory, watchdog, templates"
+          },
+          {
+            "name": "daemon-vm-folder-agent-client",
+            "from": ["daemon-vm-agent-client"],
+            "ignore": [
+              "**/*.{test,e2e,pebble,headscale}.{ts,tsx}",
+              "**/{test-utils,smoke,mocks}/**",
+              "**/test-setup.ts"
+            ],
+            "to": ["daemon-vm"],
+            "allow": [
+              "daemon-vm-config",
+              "daemon-vm-files",
+              "daemon-vm-imps-contract",
+              "daemon-vm-storage",
+              "daemon-vm-agent-client"
+            ],
+            "reason": "a vm folder imports only itself and the folders below it: vm-config.ts, files, imps-contract, storage, agent-client, sleep, vmm, memory, watchdog, templates"
+          },
+          {
+            "name": "daemon-vm-folder-sleep",
+            "from": ["daemon-vm-sleep"],
+            "ignore": [
+              "**/*.{test,e2e,pebble,headscale}.{ts,tsx}",
+              "**/{test-utils,smoke,mocks}/**",
+              "**/test-setup.ts"
+            ],
+            "to": ["daemon-vm"],
+            "allow": [
+              "daemon-vm-config",
+              "daemon-vm-files",
+              "daemon-vm-imps-contract",
+              "daemon-vm-storage",
+              "daemon-vm-agent-client",
+              "daemon-vm-sleep"
+            ],
+            "reason": "a vm folder imports only itself and the folders below it: vm-config.ts, files, imps-contract, storage, agent-client, sleep, vmm, memory, watchdog, templates"
+          },
+          {
+            "name": "daemon-vm-folder-vmm",
+            "from": ["daemon-vm-vmm"],
+            "ignore": [
+              "**/*.{test,e2e,pebble,headscale}.{ts,tsx}",
+              "**/{test-utils,smoke,mocks}/**",
+              "**/test-setup.ts"
+            ],
+            "to": ["daemon-vm"],
+            "allow": [
+              "daemon-vm-config",
+              "daemon-vm-files",
+              "daemon-vm-imps-contract",
+              "daemon-vm-storage",
+              "daemon-vm-agent-client",
+              "daemon-vm-sleep",
+              "daemon-vm-vmm"
+            ],
+            "reason": "a vm folder imports only itself and the folders below it: vm-config.ts, files, imps-contract, storage, agent-client, sleep, vmm, memory, watchdog, templates"
+          },
+          {
+            "name": "daemon-vm-folder-memory",
+            "from": ["daemon-vm-memory"],
+            "ignore": [
+              "**/*.{test,e2e,pebble,headscale}.{ts,tsx}",
+              "**/{test-utils,smoke,mocks}/**",
+              "**/test-setup.ts"
+            ],
+            "to": ["daemon-vm"],
+            "allow": [
+              "daemon-vm-config",
+              "daemon-vm-files",
+              "daemon-vm-imps-contract",
+              "daemon-vm-storage",
+              "daemon-vm-agent-client",
+              "daemon-vm-sleep",
+              "daemon-vm-vmm",
+              "daemon-vm-memory"
+            ],
+            "reason": "a vm folder imports only itself and the folders below it: vm-config.ts, files, imps-contract, storage, agent-client, sleep, vmm, memory, watchdog, templates"
+          },
+          {
+            "name": "daemon-vm-folder-watchdog",
+            "from": ["daemon-vm-watchdog"],
+            "ignore": [
+              "**/*.{test,e2e,pebble,headscale}.{ts,tsx}",
+              "**/{test-utils,smoke,mocks}/**",
+              "**/test-setup.ts"
+            ],
+            "to": ["daemon-vm"],
+            "allow": [
+              "daemon-vm-config",
+              "daemon-vm-files",
+              "daemon-vm-imps-contract",
+              "daemon-vm-storage",
+              "daemon-vm-agent-client",
+              "daemon-vm-sleep",
+              "daemon-vm-vmm",
+              "daemon-vm-memory",
+              "daemon-vm-watchdog"
+            ],
+            "reason": "a vm folder imports only itself and the folders below it: vm-config.ts, files, imps-contract, storage, agent-client, sleep, vmm, memory, watchdog, templates"
+          },
+          {
+            "name": "daemon-vm-folder-templates",
+            "from": ["daemon-vm-templates"],
+            "ignore": [
+              "**/*.{test,e2e,pebble,headscale}.{ts,tsx}",
+              "**/{test-utils,smoke,mocks}/**",
+              "**/test-setup.ts"
+            ],
+            "to": ["daemon-vm"],
+            "allow": [
+              "daemon-vm-config",
+              "daemon-vm-files",
+              "daemon-vm-imps-contract",
+              "daemon-vm-storage",
+              "daemon-vm-agent-client",
+              "daemon-vm-sleep",
+              "daemon-vm-vmm",
+              "daemon-vm-memory",
+              "daemon-vm-watchdog",
+              "daemon-vm-templates"
+            ],
+            "reason": "a vm folder imports only itself and the folders below it: vm-config.ts, files, imps-contract, storage, agent-client, sleep, vmm, memory, watchdog, templates"
           }
         ],
         "unzoned": [
@@ -231,6 +418,23 @@
               "daemon-surface"
             ],
             "reason": "a daemon file sits in a layer folder, or at the top of src as part of the composition root"
+          },
+          {
+            "name": "daemon-vm-folder",
+            "from": ["daemon-vm"],
+            "zones": [
+              "daemon-vm-config",
+              "daemon-vm-files",
+              "daemon-vm-imps-contract",
+              "daemon-vm-storage",
+              "daemon-vm-agent-client",
+              "daemon-vm-sleep",
+              "daemon-vm-vmm",
+              "daemon-vm-memory",
+              "daemon-vm-watchdog",
+              "daemon-vm-templates"
+            ],
+            "reason": "a vm file sits in one of the vm folders that the daemon-vm-folder-* edges order, or is vm-config.ts"
           }
         ],
         "modules": [
@@ -363,6 +567,11 @@
       "rules": { "zgeoff/test-beside-module": "off" }
     },
     {
+      // host/entrypoint has no extension, which the rule needs to match a module
+      "files": ["host/entrypoint.test.ts"],
+      "rules": { "zgeoff/test-beside-module": "off" }
+    },
+    {
       // the cli keeps every error that main.ts maps to an exit code in one module
       "files": ["packages/cli/src/cli/errors.ts"],
       "rules": { "max-classes-per-file": "off" }
@@ -373,7 +582,9 @@
   "ignorePatterns": [
     ".claude/**",
     ".cache/**",
-    "kernel/**",
+    // the unpacked kernel source and its build output
+    "kernel/.build/**",
+    "kernel/out/**",
     "agent/**",
     // protoc-gen-es output (bun run gen:proto)
     "packages/agent-protocol/src/gen/**"

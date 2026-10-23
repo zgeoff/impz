@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { connect } from 'node:net';
+import { claimFreePorts } from '@impz/test-utils/claim-free-ports';
 import { waitFor } from '@impz/test-utils/wait-for';
-import { claimFreePorts } from '../platform/claim-free-ports';
 import { buildMockDnsQuery } from './build-mock-dns-query';
 import { buildMockDnsReply } from './build-mock-dns-reply';
 import { startStubDnsUpstream } from './start-stub-dns-upstream';

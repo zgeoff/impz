@@ -1,6 +1,8 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { Document, Scalar, YAMLMap } from 'yaml';
 import * as z from 'zod';
+import { ZFS_POOL_FILE, parseZfsPoolProperties } from '../lib/parse-zfs-pool-properties.ts';
+import { PLAIN_WORD } from '../lib/plain-word.ts';
 
 const ARGS_FILE = 'deploy/imp-host.args.json';
 const UNIT_FILE = 'deploy/imp-host.service';
@@ -9,6 +11,7 @@ const BOOTSTRAP_FILE = 'deploy/bootstrap.sh';
 const COMPOSE_FILE = 'deploy/compose.yaml';
 const ENV_EXAMPLE_FILE = 'deploy/imp-host.env.example';
 const HOST_ENV_FILE = 'deploy/lib/host-env.sh';
+const STORAGE_FILE = 'deploy/bootstrap/storage.sh';
 
 export const BOOTSTRAP_PARTS = [
   'deploy/bootstrap/start.sh',
@@ -24,9 +27,6 @@ export const BOOTSTRAP_PARTS = [
 ] as const;
 
 const UNITS_PART = 'deploy/bootstrap/units.sh';
-
-// A word of these characters needs no quoting in a systemd unit or in Nix's escapeShellArgs.
-const PLAIN_WORD = /^[\w@%+=:,./-]+$/u;
 
 // systemd splits an unbraced $NAME into words, so one variable of the env file can hold zero or
 // more words.
@@ -52,6 +52,7 @@ const COMPOSE_SERVICE_NETWORKS = /^ {4}# networks:\n {4}# {3}- .*$/mu;
 const HOST_ENV_NETWORK = /^readonly HOST_NETWORK=.*$/mu;
 const HOST_ENV_BRIDGE = /^readonly HOST_BRIDGE=.*$/mu;
 const HOST_ENV_ADDRESSES = /^host_addresses\(\) \{ .* \}$/mu;
+const STORAGE_POOL_PROPERTIES = /^readonly ZPOOL_CREATE_PROPERTIES=.*$/mu;
 
 type Lines = readonly (readonly string[])[];
 
@@ -131,6 +132,17 @@ export function parseHostArgs(json: string): HostArgs {
   }
 
   return parsed.data;
+}
+
+export function renderStorage(storage: string, create: readonly string[]): string {
+  if (!STORAGE_POOL_PROPERTIES.test(storage)) {
+    throw new Error(`${STORAGE_FILE}: no line for ZPOOL_CREATE_PROPERTIES`);
+  }
+
+  return storage.replace(
+    STORAGE_POOL_PROPERTIES,
+    () => `readonly ZPOOL_CREATE_PROPERTIES="${create.join(' ')}"`,
+  );
 }
 
 export function renderExecStart(args: Omit<HostArgs, 'proxy'>): string {
@@ -397,6 +409,7 @@ export interface Rendered {
   readonly unit: string;
   readonly proxyUnit: string;
   readonly hostEnv: string;
+  readonly storage: string;
   readonly bootstrap: string;
   readonly compose: string;
 }
@@ -404,6 +417,7 @@ export interface Rendered {
 export interface BootstrapSources {
   readonly parts: readonly SourceFile[];
   readonly envExample: string;
+  readonly zfsPoolJson: string;
 }
 
 export function render(argsJson: string, current: Rendered, sources: BootstrapSources): Rendered {
@@ -411,20 +425,28 @@ export function render(argsJson: string, current: Rendered, sources: BootstrapSo
   const unit = renderUnit(current.unit, args);
   const proxyUnit = renderProxyUnit(current.proxyUnit, args.proxy);
   const hostEnv = renderHostEnv(current.hostEnv, args);
+  const storage = renderStorage(current.storage, parseZfsPoolProperties(sources.zfsPoolJson));
 
   const compose = renderCompose(renderComposeNetworks(current.compose, args.network), [
     ...args.privileges,
     ...buildComposeProbed(args.probed),
   ]);
 
-  const parts = sources.parts.map((part) =>
-    part.path === HOST_ENV_FILE ? { path: part.path, text: hostEnv } : part,
-  );
+  const rendered: Readonly<Record<string, string>> = {
+    [HOST_ENV_FILE]: hostEnv,
+    [STORAGE_FILE]: storage,
+  };
+
+  const parts = sources.parts.map((part) => ({
+    path: part.path,
+    text: rendered[part.path] ?? part.text,
+  }));
 
   return {
     unit,
     proxyUnit,
     hostEnv,
+    storage,
     bootstrap: renderBootstrap(parts, [
       { path: UNIT_FILE, function: 'unit_imp_host', text: unit },
       { path: PROXY_UNIT_FILE, function: 'unit_imp_docker_proxy', text: proxyUnit },
@@ -443,17 +465,19 @@ const FILES = {
   unit: UNIT_FILE,
   proxyUnit: PROXY_UNIT_FILE,
   hostEnv: HOST_ENV_FILE,
+  storage: STORAGE_FILE,
   bootstrap: BOOTSTRAP_FILE,
   compose: COMPOSE_FILE,
 } as const;
 
-const KEYS = ['unit', 'proxyUnit', 'hostEnv', 'bootstrap', 'compose'] as const;
+const KEYS = ['unit', 'proxyUnit', 'hostEnv', 'storage', 'bootstrap', 'compose'] as const;
 
 function main(): void {
   const current: Rendered = {
     unit: readFileSync(UNIT_FILE, 'utf8'),
     proxyUnit: readFileSync(PROXY_UNIT_FILE, 'utf8'),
     hostEnv: readFileSync(HOST_ENV_FILE, 'utf8'),
+    storage: readFileSync(STORAGE_FILE, 'utf8'),
     bootstrap: readFileSync(BOOTSTRAP_FILE, 'utf8'),
     compose: readFileSync(COMPOSE_FILE, 'utf8'),
   };
@@ -461,6 +485,7 @@ function main(): void {
   const sources: BootstrapSources = {
     parts: BOOTSTRAP_PARTS.map((path) => ({ path, text: readFileSync(path, 'utf8') })),
     envExample: readFileSync(ENV_EXAMPLE_FILE, 'utf8'),
+    zfsPoolJson: readFileSync(ZFS_POOL_FILE, 'utf8'),
   };
 
   const next = render(readFileSync(ARGS_FILE, 'utf8'), current, sources);

@@ -1,4 +1,4 @@
-import { BUILDER_IMAGE } from '../../src/imps/images/builder-imps';
+import { BUILDER_IMAGE } from '../../src/imps/images/builders/builder-imps';
 import { createImage } from '../../src/platform/db/images';
 import type { ImageRecord } from '../../src/platform/db/images';
 import type { ImpDatabase } from '../../src/platform/db/open-database';

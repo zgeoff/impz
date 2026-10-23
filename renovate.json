@@ -11,6 +11,12 @@
       "description": "msw pins its own @mswjs/interceptors range, and the repo's FetchInterceptor must match that copy's types, so the two update together.",
       "matchPackageNames": ["msw", "@mswjs/interceptors"],
       "groupName": "msw"
+    },
+    {
+      "description": "agent/tools holds only tool directives, so the go get -t ./... that Renovate runs loads none of their packages and leaves their module sums out of go.sum. go mod tidy adds them.",
+      "matchManagers": ["gomod"],
+      "matchFileNames": ["agent/tools/go.mod"],
+      "postUpdateOptions": ["gomodTidy"]
     }
   ]
 }

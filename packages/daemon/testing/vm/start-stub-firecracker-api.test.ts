@@ -114,8 +114,9 @@ test('it stops when the test ends', () => {
   startStubFirecrackerApi(socket);
 
   onTestFinished(() => {
+    // a newer Bun gives a refused connection its errno name
     expect(fetch('http://localhost/version', { unix: socket })).rejects.toMatchObject({
-      code: 'FailedToOpenSocket',
+      code: expect.toBeOneOf(['FailedToOpenSocket', 'ECONNREFUSED']),
     });
   });
 });

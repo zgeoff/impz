@@ -2,8 +2,9 @@ import { closeSync, existsSync, readFileSync, rmSync } from 'node:fs';
 import { basename } from 'node:path';
 import { IMPD_USER } from '../../platform/process/impd-user';
 import { listPids, readStatFields, stopPid } from '../../platform/process/proc';
+import { readRegularFile, setupLogFile, writeRegularFile } from '../files/vm-files';
+import type { FirecrackerPaths } from '../storage/data-layout';
 import { readProcessCgroup, readProcessUid } from './process-owner';
-import { readRegularFile, setupLogFile, writeRegularFile } from './vm-files';
 
 // a jailed process cannot change its uid or its cgroup, so ownership rests
 // on those two alone
@@ -24,13 +25,6 @@ export function isImpVm(owner: VmOwner, impId: string, jailUid: number | null): 
     (jailUid !== null && owner.uid === jailUid) ||
     owner.cgroup === `/imps/${impId}`
   );
-}
-
-export interface FirecrackerPaths {
-  readonly apiSocket: string;
-  readonly vsockSocket: string;
-  readonly logFile: string;
-  readonly pidFile: string;
 }
 
 const SOCKET_WAIT_MS = 3000;

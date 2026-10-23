@@ -1,5 +1,6 @@
 import { chmodSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { formatShellWord } from '@impz/test-utils/format-shell-word';
 
 export function createStubRepoScript(
   scripts: string,
@@ -11,7 +12,7 @@ export function createStubRepoScript(
 
   writeFileSync(
     file,
-    `#!/bin/bash\nprintf '%s\\n' "${name} $*" >>'${calls.replaceAll("'", String.raw`'\''`)}'\n${body}\n`,
+    `#!/bin/bash\nSTUB_CALLS=${formatShellWord(calls)}\nprintf '%s\\n' "${name} $*" >>"$STUB_CALLS"\n${body}\n`,
   );
 
   chmodSync(file, 0o755);

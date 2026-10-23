@@ -8,7 +8,7 @@ import { parseTailnetRules } from './identity/auth/parse-tailnet-rules';
 import { PublicMcpEnvSchema, parsePublicMcpConfig } from './identity/oauth/public-mcp-config';
 import { loadBackupConfig } from './imp-ops/backup/backup-config';
 import { buildPeerRanges, parsePeerUrlAddress } from './imp-ops/moves/peer-address';
-import { BUILD_IMAGE_PATTERN, DEFAULT_BUILD_IMAGE } from './imps/images/build-image';
+import { BUILD_IMAGE_PATTERN, DEFAULT_BUILD_IMAGE } from './imps/docker-contract/build-image';
 import type { ImageEvictionConfig, TestRegistryConfig } from './imps/imps-config';
 import { checkPublicPorts } from './network/https/check-public-ports';
 import { HttpsEnvSchema, listHttpsWarnings, readHttpsConfig } from './network/https/https-config';

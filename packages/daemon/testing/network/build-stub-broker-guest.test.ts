@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { claimFreePorts } from '../platform/claim-free-ports';
+import { claimFreePorts } from '@impz/test-utils/claim-free-ports';
 import { buildStubBrokerGuest } from './build-stub-broker-guest';
 
 async function setupTest() {

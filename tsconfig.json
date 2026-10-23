@@ -15,6 +15,7 @@
     "deploy/**/*.ts",
     "images/**/*.ts",
     "host/**/*.ts",
+    "kernel/**/*.ts",
     "*.test.ts",
     // a wildcard skips a dot-named file
     ".oxfmtrc.test.ts"

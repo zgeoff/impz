@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { listImageNames, runImp } from './imp-cli';
+import { listImageNames, runImpWith } from './imp-cli';
 import { FIXTURES_DIR, REPO_ROOT } from './instance';
+import type { DevInstance } from './instance';
 import type { FixtureImage } from './suites';
 
 interface Build {
@@ -56,8 +57,11 @@ export function resolveImageName(image: FixtureImage): string {
   return name;
 }
 
-export async function createMissingImages(images: readonly FixtureImage[]): Promise<void> {
-  const existing = await listImageNames();
+export async function createMissingImages(
+  images: readonly FixtureImage[],
+  target: DevInstance,
+): Promise<void> {
+  const existing = await listImageNames(target);
 
   const have = new Set(existing);
 
@@ -72,7 +76,7 @@ export async function createMissingImages(images: readonly FixtureImage[]): Prom
     const fileArgs = build.file === undefined ? [] : ['--file', build.file];
     const started = Date.now();
 
-    await runImp('image', 'build', build.directory, '--name', name, ...fileArgs);
+    await runImpWith({ target }, 'image', 'build', build.directory, '--name', name, ...fileArgs);
 
     console.log(`    image ${name} built in ${String(Date.now() - started)} ms`);
   }

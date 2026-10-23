@@ -128,6 +128,35 @@ test('it makes the pool of a held create once released', async () => {
   expect(Bun.spawnSync([join(stub.bin, 'zpool'), 'list', 'tank']).exitCode).toBe(0);
 });
 
+test('it keeps the pool of a held destroy until the release, then destroys it', async () => {
+  const ctx = setupTest();
+  const startedMarker = join(ctx.directoryPath, 'started');
+  const release = join(ctx.directoryPath, 'release');
+  const stub = createStubZpool(ctx.directoryPath, { destroy: { startedMarker, release } });
+
+  Bun.spawnSync([join(stub.bin, 'zpool'), 'create', 'tank', '/work/pool.img']);
+
+  const destroy = Bun.spawn([join(stub.bin, 'zpool'), 'destroy', '-f', 'tank']);
+
+  onTestFinished(async () => {
+    destroy.kill('SIGKILL');
+
+    await destroy.exited;
+  });
+
+  await waitFor(() => readFileSync(startedMarker), { timeoutMs: 10_000 });
+
+  const heldList = Bun.spawnSync([join(stub.bin, 'zpool'), 'list', 'tank']).exitCode;
+
+  writeFileSync(release, '');
+
+  const exitCode = await destroy.exited;
+
+  expect(heldList).toBe(0);
+  expect(exitCode).toBe(0);
+  expect(Bun.spawnSync([join(stub.bin, 'zpool'), 'list', 'tank']).exitCode).toBe(1);
+});
+
 test.each([
   ['fails', 1],
   ['busy', 1],

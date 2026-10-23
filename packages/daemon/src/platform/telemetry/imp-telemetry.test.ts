@@ -5,9 +5,9 @@ import { spanExporter } from '@impz/test-utils/register-tracing';
 import invariant from 'tiny-invariant';
 import { startInMemoryMetrics } from '../../../testing/platform/start-in-memory-metrics';
 import { buildMockGovernorDecision } from '../../../testing/vm/build-mock-governor-decision';
-import type { ResourceDelta } from '../../imps/imps/resource-sampler';
 import { createEventBus } from '../events/event-bus';
 import { startImpTelemetry } from './imp-telemetry';
+import type { ResourceDelta } from './resource-delta';
 
 test('it records imp.lifecycle.transitions per reason', async () => {
   const recorded = startInMemoryMetrics();

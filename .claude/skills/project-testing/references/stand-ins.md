@@ -94,7 +94,7 @@ or a bad frame, goes to a stand-in peer or to the pure function that parses the 
 
 ## Bun timer and transport facts
 
-These Bun 1.4.2 behaviours decide how a test of a deadline is built:
+These Bun behaviours decide how a test of a deadline is built:
 
 - An API listener whose idle timeout is set to 1 s ends a request about 4 s after its last byte. It
   ends a request without a body, or a streamed answer that falls silent, and never one that sent a
@@ -106,6 +106,9 @@ These Bun 1.4.2 behaviours decide how a test of a deadline is built:
   because Bun's types leave the option off unix servers.
 - Over a socket, Bun's fetch replaces the Content-Length of a Blob's stream with the Blob's real
   size. A test that sends a declared size uses a stream it builds itself.
+- Bun's fetch fails a request whose own stream ends short of its declared Content-Length, with
+  `ERR_HTTP_CONTENT_LENGTH_MISMATCH`. A test that declares more than it sends, to draw a refusal of
+  the size, leaves its stream open.
 
 ## Connectors
 

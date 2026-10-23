@@ -1,5 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { connect } from 'node:net';
+import { claimFreePorts } from '@impz/test-utils/claim-free-ports';
 import { waitFor } from '@impz/test-utils/wait-for';
 import * as dnsPacket from 'dns-packet';
 import { buildMockDnsQuery } from '../../../testing/network/build-mock-dns-query';
@@ -7,7 +8,6 @@ import { buildMockDnsReply } from '../../../testing/network/build-mock-dns-reply
 import { buildMockNetworkMember } from '../../../testing/network/build-mock-network-member';
 import { buildStubEgressService } from '../../../testing/network/build-stub-egress-service';
 import { startStubDnsUpstream } from '../../../testing/network/start-stub-dns-upstream';
-import { claimFreePorts } from '../../../testing/platform/claim-free-ports';
 import { parseSubnet } from '../../host-net/net/addressing';
 import { createDnsForward } from './dns-upstream';
 import {

@@ -11,19 +11,17 @@ import {
   runImp,
 } from '../lib/imp-cli';
 import { holdImp, waitForExec } from '../lib/imps';
-import { runInContainer } from '../lib/instance';
+import { runChecked, runInContainer } from '../lib/instance';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix } from '../lib/suites';
 import {
   findTailnetNode,
-  isTailnetReady,
-  readLocalTailscaleStatus,
-  readTailnetBody,
-  requireTailnetReady,
+  readMemberBody,
+  readMemberStatus,
+  readTailnetMember,
   waitForTailnetIp,
 } from '../lib/tailnet';
-import { probeTailscaleE2EKey } from '../lib/tailscale-key';
 import { waitFor } from '../lib/wait-for';
 
 async function setupTest() {
@@ -33,100 +31,87 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: getSuitePrefix('tailscale'), stack, client };
+  return { prefix: getSuitePrefix('tailscale'), stack, client, member: readTailnetMember() };
 }
 
-// collection-time gate: Bun 1.4.2's skipIf takes a boolean and has no in-body skip
-const tailscaleStatus = await readLocalTailscaleStatus();
+test('it answers tailnet members by IP and by name, and wakes on a tailnet request', async () => {
+  const ctx = await setupTest();
 
-// The definition of done needs the tailnet; any other run skips without it.
-const tailnetMissing =
-  !isTailnetReady(tailscaleStatus, probeTailscaleE2EKey()) && !config.acceptance;
+  const name = `${ctx.prefix}a`;
 
-test.skipIf(tailnetMissing)(
-  'it answers tailnet members by IP and by name, and wakes on a tailnet request',
-  async () => {
-    const ctx = await setupTest();
-    const status = await readLocalTailscaleStatus();
+  const ip = await waitForTailnetIp();
+  const info = await readInfo();
+  const status = await readMemberStatus(ctx.member, { runChecked });
 
-    requireTailnetReady(status, probeTailscaleE2EKey());
-    invariant(status);
+  const node = findTailnetNode(Object.values(status.Peer), ip);
 
-    const name = `${ctx.prefix}a`;
+  // The host container runs its own tailscaled and still needs public DNS.
+  const dns = await runInContainer(['getent', 'hosts', 'pkgs.tailscale.com']);
 
-    const ip = await waitForTailnetIp();
-    const info = await readInfo();
+  expect(ip).toStartWith('100.');
+  expect(node).not.toBeNull();
+  expect(dns.exitCode).toBe(0);
 
-    const node = findTailnetNode(Object.values(status.Peer), ip);
+  invariant(node);
 
-    // The host container runs its own tailscaled and still needs public DNS.
-    const dns = await runInContainer(['getent', 'hosts', 'pkgs.tailscale.com']);
+  // The e2e tag, which the tailnet policy keeps away from tag:imp's live impd.
+  expect(node.tags).toStrictEqual(['tag:imp-e2e']);
 
-    expect(ip).toStartWith('100.');
-    expect(node).not.toBeNull();
-    expect(dns.exitCode).toBe(0);
+  console.log(`    tailnet host ${String(info.tailscale.hostname)} at ${ip}`);
 
-    invariant(node);
+  await runImp('new', name, '--image', resolveImageName('e2e-tiny'), '--memory', '512');
 
-    // The e2e tag, which the tailnet policy keeps away from tag:imp's live impd.
-    expect(node.tags).toStrictEqual(['tag:imp-e2e']);
+  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, name));
 
-    console.log(`    tailnet host ${String(info.tailscale.hostname)} at ${ip}`);
+  await waitForExec(name);
+  await holdImp(name);
 
-    await runImp('new', name, '--image', resolveImageName('e2e-tiny'), '--memory', '512');
+  const row = await requireImp(name);
+  const urls = await readImpUrls(name);
 
-    registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, name));
+  invariant(urls.tailnet !== null);
 
-    await waitForExec(name);
-    await holdImp(name);
+  const url = urls.tailnet;
 
-    const row = await requireImp(name);
-    const urls = await readImpUrls(name);
+  const byUrl = await waitFor(`${url} over the tailnet`, () => readMemberBody(ctx.member, url));
 
-    invariant(urls.tailnet !== null);
+  const byIpPort = await waitFor(`${ip} port over the tailnet`, () =>
+    readMemberBody(ctx.member, `http://${ip}:${String(row.port)}/`),
+  );
 
-    const url = urls.tailnet;
+  const byIpProxy = await waitFor(`${ip} proxy over the tailnet`, () =>
+    readMemberBody(ctx.member, `http://${ip}:7080/`, `${name}.imp.localhost`),
+  );
 
-    const byUrl = await waitFor(`${url} over the tailnet`, () => readTailnetBody(url));
+  const byFqdnPort = await waitFor(`${node.fqdn} port over the tailnet`, () =>
+    readMemberBody(ctx.member, `http://${node.fqdn}:${String(row.port)}/`),
+  );
 
-    const byIpPort = await waitFor(`${ip} port over the tailnet`, () =>
-      readTailnetBody(`http://${ip}:${String(row.port)}/`),
-    );
+  const byFqdnProxy = await waitFor(`${node.fqdn} proxy over the tailnet`, () =>
+    readMemberBody(ctx.member, `http://${node.fqdn}:7080/`, `${name}.imp.localhost`),
+  );
 
-    const byIpProxy = await waitFor(`${ip} proxy over the tailnet`, () =>
-      readTailnetBody(`http://${ip}:7080/`, `${name}.imp.localhost`),
-    );
+  const byShortPort = await waitFor(`${node.short} port over the tailnet`, () =>
+    readMemberBody(ctx.member, `http://${node.short}:${String(row.port)}/`),
+  );
 
-    const byFqdnPort = await waitFor(`${node.fqdn} port over the tailnet`, () =>
-      readTailnetBody(`http://${node.fqdn}:${String(row.port)}/`),
-    );
+  const byShortProxy = await waitFor(`${node.short} proxy over the tailnet`, () =>
+    readMemberBody(ctx.member, `http://${node.short}:7080/`, `${name}.imp.localhost`),
+  );
 
-    const byFqdnProxy = await waitFor(`${node.fqdn} proxy over the tailnet`, () =>
-      readTailnetBody(`http://${node.fqdn}:7080/`, `${name}.imp.localhost`),
-    );
+  expect(byUrl).toBe('e2e-tiny-ok');
+  expect(byIpPort).toBe('e2e-tiny-ok');
+  expect(byIpProxy).toBe('e2e-tiny-ok');
+  expect(byFqdnPort).toBe('e2e-tiny-ok');
+  expect(byFqdnProxy).toBe('e2e-tiny-ok');
+  expect(byShortPort).toBe('e2e-tiny-ok');
+  expect(byShortProxy).toBe('e2e-tiny-ok');
 
-    const byShortPort = await waitFor(`${node.short} port over the tailnet`, () =>
-      readTailnetBody(`http://${node.short}:${String(row.port)}/`),
-    );
+  await runImp('hold', name, '0');
+  await runImp('sleep', name);
+  await waitFor(`${name} to sleep`, () => assertState(name, 'sleeping'));
 
-    const byShortProxy = await waitFor(`${node.short} proxy over the tailnet`, () =>
-      readTailnetBody(`http://${node.short}:7080/`, `${name}.imp.localhost`),
-    );
+  const woken = await readMemberBody(ctx.member, url);
 
-    expect(byUrl).toBe('e2e-tiny-ok');
-    expect(byIpPort).toBe('e2e-tiny-ok');
-    expect(byIpProxy).toBe('e2e-tiny-ok');
-    expect(byFqdnPort).toBe('e2e-tiny-ok');
-    expect(byFqdnProxy).toBe('e2e-tiny-ok');
-    expect(byShortPort).toBe('e2e-tiny-ok');
-    expect(byShortProxy).toBe('e2e-tiny-ok');
-
-    await runImp('hold', name, '0');
-    await runImp('sleep', name);
-    await waitFor(`${name} to sleep`, () => assertState(name, 'sleeping'));
-
-    const woken = await readTailnetBody(url);
-
-    expect(woken).toBe('e2e-tiny-ok');
-  },
-);
+  expect(woken).toBe('e2e-tiny-ok');
+});

@@ -1,0 +1,36 @@
+# The e2e harness's control server: state on a tmpfs, so each run starts from
+# nothing. Its DERP relay serves plain HTTP, which tailscaled refuses, so every
+# node shares a Docker network with each peer it reaches.
+server_url: http://headscale:8080
+listen_addr: 0.0.0.0:8080
+noise:
+  private_key_path: /var/lib/headscale/noise_private.key
+prefixes:
+  v4: 100.64.0.0/10
+  v6: fd7a:115c:a1e0::/48
+derp:
+  server:
+    enabled: true
+    region_id: 999
+    region_code: e2e
+    region_name: e2e
+    stun_listen_addr: 0.0.0.0:3478
+    private_key_path: /var/lib/headscale/derp_server_private.key
+    automatically_add_embedded_derp_region: true
+  urls: []
+  paths: []
+node:
+  ephemeral:
+    # the shortest Headscale accepts
+    inactivity_timeout: 70s
+database:
+  type: sqlite
+  sqlite:
+    path: /var/lib/headscale/db.sqlite
+dns:
+  magic_dns: true
+  base_domain: imp-e2e.test
+  override_local_dns: false
+policy:
+  mode: file
+  path: /etc/headscale/policy.hujson

@@ -1,10 +1,12 @@
 import { verifyOAuthQueryParams } from '@better-auth/oauth-provider';
 import type { Scope } from '@impz/api';
+import * as z from 'zod';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { isAllowedOrigin } from '../../platform/http/is-allowed-origin';
 import type { Caller } from '../../platform/principal/caller';
 import { buildBadTokenRequest } from './build-bad-token-request';
 import { buildConsentBinding } from './build-consent-binding';
+import { buildPKCERefusal } from './build-pkce-refusal';
 import type { Approval, SignIns } from './create-sign-ins';
 import { formatApprovalCode } from './create-sign-ins';
 import { deriveTokenHash } from './derive-token-hash';
@@ -29,6 +31,11 @@ const MINUTE_MS = 60_000;
 const CONSENT_MS = 10 * MINUTE_MS;
 const MAX_FORM_BYTES = 16 * 1024;
 const METADATA_HEADERS = { 'cache-control': 'no-store' };
+
+const PKCEMissSchema = z.object({
+  error: z.literal('invalid_request'),
+  error_description: z.literal('code verification failed'),
+});
 
 export interface AuthServer {
   readonly handler: (request: Request) => Promise<Response>;
@@ -412,6 +419,22 @@ export function createOAuthHandlers(deps: Readonly<OAuthHandlerDeps>): OAuthHand
       await removeTokenSessions(deps.db);
     }
 
+    // better-auth answers a verifier that misses its challenge with 401
+    // invalid_request; RFC 7636 section 4.6 asks for 400 invalid_grant
+    if (
+      response.status === 401 &&
+      new URLSearchParams(body).get('grant_type') === 'authorization_code'
+    ) {
+      const refusal: unknown = await response
+        .clone()
+        .json()
+        .catch(() => null);
+
+      if (PKCEMissSchema.safeParse(refusal).success) {
+        return buildPKCERefusal();
+      }
+    }
+
     return response;
   };
 
@@ -442,7 +465,10 @@ export function createOAuthHandlers(deps: Readonly<OAuthHandlerDeps>): OAuthHand
 
     // RFC 7009: a token the server does not know is answered as revoked
     if (owner === undefined && response.status === 400) {
-      const refusal: unknown = await response.clone().json();
+      const refusal: unknown = await response
+        .clone()
+        .json()
+        .catch(() => null);
 
       if (readErrorDescription(refusal) === 'token not found') {
         return new Response(null, { status: 200, headers: { 'cache-control': 'no-store' } });

@@ -31,10 +31,10 @@ async function setupTest() {
 
   const client = await createInstanceClient();
 
-  return { prefix: getSuitePrefix('moves-tailnet'), stack, client };
+  return { prefix: getSuitePrefix('tailnet-names'), stack, client };
 }
 
-// collection-time gate: Bun 1.4.2's skipIf takes a boolean and has no in-body skip
+// collection-time gate: Bun's skipIf takes a boolean and has no in-body skip
 const tailscaleStatus = await readLocalTailscaleStatus();
 
 // The tailnet name handover needs the Tailscale Services OAuth client
@@ -50,7 +50,7 @@ test.skipIf(tailnetNamesMissing)(
     const ctx = await setupTest();
 
     const named = `${ctx.prefix}n`;
-    const hosts = readMoveHosts(readMoveOptions('host-b-tailnet'));
+    const hosts = readMoveHosts(readMoveOptions('host-b-tailnet-names'));
 
     const clientB = await createInstanceClient(hosts.hostB);
 

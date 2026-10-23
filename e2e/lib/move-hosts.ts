@@ -1,5 +1,8 @@
 import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { match } from 'ts-pattern';
+import type { HarnessEnv } from './config';
+import { connectHeadscale, disconnectHeadscale } from './headscale';
 import { createInstanceClient, runImpWith } from './imp-cli';
 import type { DevInstance } from './instance';
 import {
@@ -32,8 +35,6 @@ export interface MoveHosts {
   readonly gateway: string;
 
   readonly cliEnv: Readonly<Record<string, string>>;
-
-  readonly isARebooted: boolean;
 }
 
 export interface MoveNetwork {
@@ -63,7 +64,7 @@ export function buildMoveNetwork(offset: number): MoveNetwork {
 }
 
 export interface MoveHostsOptions {
-  readonly tailnet: boolean;
+  readonly tailnet: 'off' | 'headscale' | 'tailscale';
 
   readonly env?: Readonly<Record<string, string>>;
 }
@@ -91,7 +92,7 @@ function buildHostEnv(
     IMP_DEFAULT_MEMORY_MIB: DEFAULT_MEMORY_MIB,
   };
 
-  if (options.tailnet) {
+  if (options.tailnet !== 'off') {
     return shared;
   }
 
@@ -105,16 +106,16 @@ function buildHostEnv(
 
 // B would inherit A's IMP_ZFS_ROOT otherwise, and two impds on one dataset
 // take each other's disks.
-export function readHostBZfsRoot(): string | undefined {
-  const root = process.env['IMP_ZFS_ROOT'] ?? '';
+export function pickHostBZfsRoot(env: HarnessEnv): string | undefined {
+  const root = env['IMP_ZFS_ROOT'] ?? '';
 
-  return process.env['IMP_STORAGE_BACKEND'] === 'zfs' && root !== '' ? `${root}-mv-b` : undefined;
+  return env['IMP_STORAGE_BACKEND'] === 'zfs' && root !== '' ? `${root}-mv-b` : undefined;
 }
 
 function readHostB(options: MoveHostsOptions): DevInstance {
   const names = buildNames();
   const network = buildMoveNetwork(readOffset());
-  const zfsRoot = readHostBZfsRoot();
+  const zfsRoot = pickHostBZfsRoot(process.env);
 
   return createInstance({
     container: names.container,
@@ -124,7 +125,9 @@ function readHostB(options: MoveHostsOptions): DevInstance {
     env: {
       ...buildHostEnv(options, network, network.ipB),
 
-      ...(options.tailnet ? { IMP_TAILSCALE_HOSTNAME: names.container } : { IMP_DEV_TAILNET: '0' }),
+      ...(options.tailnet === 'off'
+        ? { IMP_DEV_TAILNET: '0' }
+        : { IMP_TAILSCALE_HOSTNAME: names.container }),
       ...(zfsRoot !== undefined && { IMP_ZFS_ROOT: zfsRoot }),
     },
   });
@@ -143,40 +146,40 @@ async function checkAOnNetwork(network: string): Promise<boolean> {
 }
 
 // --bail skips afterAll, so a failed run can leave B up and A on the network.
-export async function removeMoveLeftovers(): Promise<void> {
+export async function removeMoveLeftovers(env: HarnessEnv): Promise<void> {
   const names = buildNames();
 
-  await runDevScript('down', readHostB({ tailnet: false }));
+  await runDevScript('down', readHostB({ tailnet: 'off' }), {}, env);
 
   const isOnNetwork = await checkAOnNetwork(names.network);
 
   if (isOnNetwork) {
-    await runDevScript('reboot');
+    await runDevScript('reboot', instance, {}, env);
   }
 
+  await disconnectHeadscale({ runCommand, runChecked }, names.network);
   await runCommand(['docker', 'network', 'rm', names.network]);
 }
 
-export type HostBFixtureName = 'host-b' | 'host-b-tailnet';
+export type HostBFixtureName = 'host-b' | 'host-b-tailnet' | 'host-b-tailnet-names';
 
 export function readMoveOptions(fixture: HostBFixtureName): MoveHostsOptions {
-  if (fixture === 'host-b') {
-    return { tailnet: false };
-  }
-
-  return process.env['IMP_E2E_TAILNET_NAMES'] === '1'
-    ? { tailnet: true, env: { IMP_TAILNET_NAMES: '1', IMP_TAILNET_NAME_PREFIX: 'e2e-' } }
-    : { tailnet: true };
+  return match(fixture)
+    .with('host-b', (): MoveHostsOptions => ({ tailnet: 'off' }))
+    .with('host-b-tailnet', (): MoveHostsOptions => ({ tailnet: 'headscale' }))
+    .with('host-b-tailnet-names', (): MoveHostsOptions => ({
+      tailnet: 'tailscale',
+      env: { IMP_TAILNET_NAMES: '1', IMP_TAILNET_NAME_PREFIX: 'e2e-' },
+    }))
+    .exhaustive();
 }
 
+// A tailnet move too puts A beside B on the move network: the two meet there
+// directly, and through Headscale's alias on it.
 export function buildMoveSettings(
   options: Readonly<MoveHostsOptions>,
   offset: number,
-): Record<string, string> | null {
-  if (options.tailnet && options.env === undefined) {
-    return null;
-  }
-
+): Record<string, string> {
   const names = buildNames();
   const network = buildMoveNetwork(offset);
 
@@ -199,6 +202,7 @@ export interface HostBFixtureDeps {
   readonly cliDir: string;
   readonly removeLeftovers: () => Promise<void>;
   readonly createNetwork: (name: string, network: Readonly<MoveNetwork>) => Promise<void>;
+  readonly connectHeadscale: (network: string) => Promise<void>;
 
   readonly startHost: (host: Readonly<DevInstance>) => Promise<void>;
 
@@ -214,11 +218,14 @@ export interface HostBFixtureDeps {
   readonly log: (line: string) => void;
 }
 
-export function buildHostBFixtureDeps(keep: boolean): HostBFixtureDeps {
+// env is the harness's: B starts with its host image and its tailnet key, and
+// never with a key the harness withheld.
+export function buildHostBFixtureDeps(keep: boolean, env: HarnessEnv): HostBFixtureDeps {
   return {
     cliDir: buildNames().cliDir,
     keep,
-    removeLeftovers: removeMoveLeftovers,
+    removeLeftovers: () => removeMoveLeftovers(env),
+    connectHeadscale: (network) => connectHeadscale({ runCommand, runChecked }, network),
     createNetwork: async (name, network) => {
       await runChecked([
         'docker',
@@ -232,13 +239,19 @@ export function buildHostBFixtureDeps(keep: boolean): HostBFixtureDeps {
       ]);
     },
     startHost: async (host) => {
-      await runDevScript('up', host);
+      await runDevScript('up', host, {}, env);
       await checkPrivileges(host.container);
     },
-    login: async (host, env) => {
+    login: async (host, cliEnv) => {
       const token = await readToken(host);
 
-      await runImpWith({ stdin: `${token}\n`, env }, 'login', host.apiUrl, '--name', HOST_B);
+      await runImpWith(
+        { stdin: `${token}\n`, env: cliEnv },
+        'login',
+        host.apiUrl,
+        '--name',
+        HOST_B,
+      );
     },
     resetHost: async (host, prefix) => {
       const client = await createInstanceClient(host);
@@ -246,12 +259,12 @@ export function buildHostBFixtureDeps(keep: boolean): HostBFixtureDeps {
       await resetBaseline({ client, prefixes: [prefix], dataDir: host.dataDir });
     },
     removeHost: async (host) => {
-      const target = await resolveDataWipe(host.dataDir, readHostBZfsRoot());
+      const target = await resolveDataWipe(host.dataDir, env, pickHostBZfsRoot(env));
 
-      await runDevScript('down', host);
+      await runDevScript('down', host, {}, env);
 
       if (target !== null) {
-        await removeDataDir(target);
+        await removeDataDir(target, env);
       }
     },
     log: (line) => {
@@ -282,6 +295,10 @@ export function createHostBFixture(
     start: async () => {
       await deps.removeLeftovers();
       await deps.createNetwork(names.network, buildMoveNetwork(readOffset()));
+
+      if (options.tailnet === 'headscale') {
+        await deps.connectHeadscale(names.network);
+      }
 
       await startLoggedIn();
 
@@ -322,6 +339,5 @@ export function readMoveHosts(options: Readonly<MoveHostsOptions>): MoveHosts {
     network: names.network,
     gateway: buildMoveNetwork(readOffset()).gateway,
     cliEnv: { XDG_CONFIG_HOME: names.cliDir },
-    isARebooted: !options.tailnet || options.env !== undefined,
   };
 }

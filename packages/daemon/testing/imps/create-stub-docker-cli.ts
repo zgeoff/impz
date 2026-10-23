@@ -1,6 +1,7 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { PIN_INSPECT_FORMAT } from '../../src/imps/images/image-pin';
+import { formatShellWord } from '@impz/test-utils/format-shell-word';
+import { PIN_INSPECT_FORMAT } from '../../src/imps/images/pull/image-pin';
 
 interface StubDockerInspect {
   readonly Id: string;
@@ -26,6 +27,7 @@ export interface StubDockerCliOptions {
   readonly images?: readonly StubDockerImage[];
   readonly create?: { readonly id: string } | { readonly stderr: string };
   readonly exportTar?: Uint8Array;
+  readonly isExportHeld?: boolean;
 }
 
 const FORMATS: ReadonlyMap<string, (inspect: StubDockerInspect) => string> = new Map([
@@ -91,7 +93,10 @@ export function createStubDockerCli(options: Readonly<StubDockerCliOptions>) {
   if (options.exportTar !== undefined) {
     writeFileSync(join(state, 'export.tar'), options.exportTar);
 
-    arms.push(`  'export '*) cat ${formatShellWord(join(state, 'export.tar'))} ;;`);
+    // exec, so a signal to the export reaches the sleep that holds its pipes open
+    const hold = options.isExportHeld === true ? '; exec sleep 600' : '';
+
+    arms.push(`  'export '*) cat ${formatShellWord(join(state, 'export.tar'))}${hold} ;;`);
   }
 
   const script = [
@@ -150,10 +155,6 @@ function buildInspectArm(options: BuildInspectArmOptions): string {
     `  ${formatShellWord(options.argv)}) ${present}echo >>${count}; n=$(($(wc -l <${count}) - 1))`,
     `    [ "$n" -gt ${last} ] && n=${last}; cat ${output}"$n"-${formatKey} ;;`,
   ].join('\n');
-}
-
-function formatShellWord(value: string): string {
-  return `'${value.replaceAll("'", String.raw`'\''`)}'`;
 }
 
 function buildPullArm(index: number, ref: string, pull: StubDockerPull, state: string): string {

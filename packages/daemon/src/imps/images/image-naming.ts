@@ -1,14 +1,13 @@
 import { NameSchema } from '@impz/api';
 import * as z from 'zod';
+import { parseImageReference } from '../docker-contract/parse-image-reference';
 
 const MAX_NAME_LENGTH = 31;
 
 export function deriveImageName(ref: string): string {
-  const withoutDigest = ref.split('@')[0] ?? ref;
-  const lastSegment = withoutDigest.split('/').at(-1) ?? withoutDigest;
-  const repository = lastSegment.split(':')[0] ?? lastSegment;
+  const lastSegment = parseImageReference(ref).path.split('/').at(-1) ?? '';
 
-  const name = repository
+  const name = lastSegment
     .toLowerCase()
     .replaceAll(/[^a-z0-9-]+/gu, '-')
     .replace(/^[^a-z]+/u, '')

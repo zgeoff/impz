@@ -1,3 +1,5 @@
+import { formatShellWord } from '@impz/test-utils/format-shell-word';
+
 interface StubDevHostDocker {
   readonly containers: Readonly<Record<string, boolean>>;
   readonly hasImage: boolean;
@@ -7,25 +9,34 @@ interface StubDevHostDocker {
   // pgrep exits 1 when no process matches.
   readonly impdPids?: readonly number[];
   readonly impdExits?: boolean;
+
+  // A pgrep that cannot run at all, as docker exec reports a missing binary with exit 127.
+  readonly impdLookupError?: { readonly exitCode: number; readonly stderr: string };
 }
 
 export function buildStubDevHostDocker(stub: StubDevHostDocker): string {
   const states = Object.entries(stub.containers).map(
     ([name, isRunning]) =>
-      `  "inspect -f {{.State.Running}} "${buildShellWord(name)}) echo ${isRunning ? 'true' : 'false'} ;;`,
+      `  "inspect -f {{.State.Running}} "${formatShellWord(name)}) echo ${isRunning ? 'true' : 'false'} ;;`,
   );
 
   const logs = Object.entries(stub.logs ?? {}).map(
     ([name, log]) =>
-      `  "logs --tail "*" "${buildShellWord(name)}) printf '%s' ${buildShellWord(log)} ;;`,
+      `  "logs --tail "*" "${formatShellWord(name)}) printf '%s' ${formatShellWord(log)} ;;`,
   );
 
   const pids = stub.impdPids ?? [];
+  const lookupError = stub.impdLookupError;
 
-  const pgrep =
+  const pgrepMatch =
     pids.length === 0
       ? '  "exec "*" pgrep -f "*) exit 1 ;;'
       : `  "exec "*" pgrep -f "*) printf '%s\\n' ${pids.join(' ')} ;;`;
+
+  const pgrep =
+    lookupError === undefined
+      ? pgrepMatch
+      : `  "exec "*" pgrep -f "*) printf '%s' ${formatShellWord(lookupError.stderr)} >&2; exit ${String(lookupError.exitCode)} ;;`;
 
   return [
     'case "$*" in',
@@ -34,6 +45,7 @@ export function buildStubDevHostDocker(stub: StubDevHostDocker): string {
     `  "exec "*" kill -0 "*) exit ${(stub.impdExits ?? true) ? 1 : 0} ;;`,
     '  "image inspect -f {{.Id}} "*) echo sha256:stub-host-image ;;',
     `  "image inspect "*) exit ${stub.hasImage ? 0 : 1} ;;`,
+    '  "build -q "*) echo sha256:stub-built-image ;;',
     ...states,
     '  "inspect -f {{.State.Running}} "*) echo "Error: No such object" >&2; exit 1 ;;',
     '  "run --rm "*)',
@@ -49,8 +61,4 @@ export function buildStubDevHostDocker(stub: StubDevHostDocker): string {
     '  *) echo "stub docker: unexpected call: $*" >&2; exit 1 ;;',
     'esac',
   ].join('\n');
-}
-
-function buildShellWord(value: string): string {
-  return `'${value.replaceAll("'", String.raw`'\''`)}'`;
 }

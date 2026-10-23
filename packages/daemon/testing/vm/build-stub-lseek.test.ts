@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { closeSync, ftruncateSync, mkdtempSync, openSync, rmSync, writeSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { readDataBlocks } from '../../src/imp-ops/backup/read-data-blocks';
+import { readDataBlocks } from '../../src/vm/storage/read-data-blocks';
 import { buildStubLseek } from './build-stub-lseek';
 
 test('it answers SEEK_DATA with the next extent’s start from a hole', () => {

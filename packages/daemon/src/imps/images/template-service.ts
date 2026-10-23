@@ -1,13 +1,6 @@
 import { copyFileSync, existsSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import {
-  countImageDigestUses,
-  createImage,
-  readImageById,
-  readImageByName,
-  updateImage,
-  updateImageUse,
-} from '../../platform/db/images';
+import { readImageById } from '../../platform/db/images';
 import type { ImageRecord } from '../../platform/db/images';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import {
@@ -15,16 +8,22 @@ import {
   buildInvalidStateError,
   buildNotBackedUpError,
 } from '../../platform/errors/impd-errors';
+import type { Clock } from '../../platform/process/clock';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { printLog } from '../../platform/process/print-log';
-import type { DiskFreezer } from '../../vm/checkpoints/consistent-disk';
-import { createConsistentDisk } from '../../vm/checkpoints/consistent-disk';
+import { REAL_CLOCK } from '../../platform/process/real-clock';
 import { buildImagePaths } from '../../vm/storage/data-layout';
 import type { DiskBudget } from '../../vm/storage/disk-budget';
 import type { StorageBackend } from '../../vm/storage/storage-backend';
 import type { StorageGate } from '../../vm/storage/storage-gate';
 import type { ImpsConfig } from '../imps-config';
+import type { DiskFreezer } from '../imps/consistent-disk';
+import { createConsistentDisk } from '../imps/consistent-disk';
 import type { ImpCheckpointHooks } from '../imps/imp-service';
-import { BUILDER_IMAGE } from './builder-imps';
+import { readHeldImage } from './read-held-image';
+import { requireClientImageName } from './require-client-image-name';
+import { removeUnusedRootfs } from './rootfs/remove-unused-rootfs';
+import { writeImageRow } from './write-image-row';
 
 // No Docker image ID starts with this prefix, so a template's digest never collides with one.
 const TEMPLATE_DIGEST_PREFIX = 'imp-';
@@ -43,20 +42,19 @@ interface TemplateServiceDeps {
 
   readonly diskBudget: Pick<DiskBudget, 'requireRoom'>;
   readonly runImageEviction: () => Promise<void>;
-  readonly now?: () => number;
+  readonly clock?: Pick<Clock, 'now'>;
   readonly log?: (message: string) => void;
   readonly freezer?: DiskFreezer;
 }
 
 export function createTemplateService(deps: TemplateServiceDeps): TemplateService {
-  const log = deps.log ?? printLog;
-  const now = deps.now ?? Date.now;
+  const clock = deps.clock ?? REAL_CLOCK;
   const storage = deps.storage;
 
   const withConsistentDisk = createConsistentDisk({
     storage,
     imps: deps.imps,
-    log,
+    log: deps.log ?? printLog,
     freezer: deps.freezer,
   });
 
@@ -75,37 +73,8 @@ export function createTemplateService(deps: TemplateServiceDeps): TemplateServic
     }
   };
 
-  const writeRow = (
-    existing: ImageRecord | undefined,
-    image: Readonly<{
-      name: string;
-      ref: string;
-      digest: string;
-      sizeBytes: number;
-      sourceImp: string;
-    }>,
-  ): Promise<ImageRecord> => {
-    if (existing === undefined) {
-      return createImage(deps.db, { ...image, source: 'imp' }, now());
-    }
-
-    return updateImage(deps.db, existing.id, image, now());
-  };
-
-  const removeReplaced = async (existing: ImageRecord | undefined): Promise<void> => {
-    if (existing !== undefined && (await countImageDigestUses(deps.db, existing.digest)) === 0) {
-      await storage.removeImage(existing.digest);
-    }
-  };
-
   const writeTemplate = async (impName: string, name: string): Promise<ImageRecord> => {
-    if (name === BUILDER_IMAGE) {
-      throw buildConflictError(
-        'image',
-        name,
-        `the image name ${name} is impd's, for its image builders; pick another`,
-      );
-    }
+    requireClientImageName(name);
 
     await deps.diskBudget.requireRoom(0);
 
@@ -127,11 +96,7 @@ export function createTemplateService(deps: TemplateServiceDeps): TemplateServic
           );
         }
 
-        // The use goes in before the read, so an image eviction keeps the template this
-        // replaces until the new one lands.
-        await updateImageUse(deps.db, 'name', [name], now());
-
-        const existing = await readImageByName(deps.db, name);
+        const existing = await readHeldImage(deps.db, name, clock.now());
 
         if (existing !== undefined && existing.source !== 'imp') {
           throw buildConflictError(
@@ -141,7 +106,7 @@ export function createTemplateService(deps: TemplateServiceDeps): TemplateServic
           );
         }
 
-        const started = performance.now();
+        const started = clock.now();
         const digest = `${TEMPLATE_DIGEST_PREFIX}${Bun.randomUUIDv7()}`;
 
         await storage.createImageFromImp(digest, imp.id, {
@@ -151,23 +116,33 @@ export function createTemplateService(deps: TemplateServiceDeps): TemplateServic
 
         const rootfs = buildImagePaths(deps.config.dataDir, digest).rootfs;
 
-        const image = await writeRow(existing, {
-          name,
-          ref: `imp:${imp.name}`,
-          digest,
-          sourceImp: imp.name,
-          sizeBytes: statSync(rootfs).blocks * 512,
-        }).catch(async (error: unknown) => {
+        const image = await writeImageRow(
+          deps.db,
+          existing,
+          {
+            name,
+            ref: `imp:${imp.name}`,
+            digest,
+            source: 'imp',
+            sourceImp: imp.name,
+            sizeBytes: statSync(rootfs).blocks * 512,
+          },
+          clock.now(),
+        ).catch(async (error: unknown) => {
           await storage.removeImage(digest);
 
           throw error;
         });
 
-        await removeReplaced(existing);
+        if (existing !== undefined) {
+          await removeUnusedRootfs(deps.db, storage, existing.digest);
+        }
 
-        const durationMs = Math.round(performance.now() - started);
+        const durationMs = Math.round(clock.now() - started);
 
-        log(`impd: ${imp.name}: template ${name} in ${String(durationMs)}ms`);
+        getImpdLogger('image')
+          .with({ imp: imp.name })
+          .info('template {name} in {durationMs}ms', { name, durationMs });
 
         return image;
       }),

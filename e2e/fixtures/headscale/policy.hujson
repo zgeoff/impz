@@ -1,0 +1,9 @@
+// The production tailnet's grants for tag:imp-e2e, and the members grant that
+// lets the test-side member reach every tagged node.
+{
+  "tagOwners": { "tag:imp-e2e": ["tag:imp-e2e"] },
+  "grants": [
+    { "src": ["autogroup:member"], "dst": ["tag:imp-e2e"], "ip": ["*"] },
+    { "src": ["tag:imp-e2e"], "dst": ["tag:imp-e2e"], "ip": ["tcp:7070"] },
+  ],
+}

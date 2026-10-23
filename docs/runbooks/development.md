@@ -34,8 +34,8 @@ host.
 
 `bun run deadcode` runs knip twice: over the whole tree, then in production mode, which leaves out
 every test file. The production run fails on an export that only a test imports. Un-export it when
-no test needs it, or tag it `/* @internal */` when a test reaches it as a seam. The tag takes one
-star, because the shared lint config bans JSDoc blocks and knip reads a tag from any block comment.
+no test needs it, or tag it `/* @internal */` when a test calls it directly. The tag takes one star,
+because the shared lint config bans JSDoc blocks and knip reads a tag from any block comment.
 
 ## End-to-end tests
 
@@ -55,7 +55,7 @@ drives it through a browser. The suites run in this order:
 | `sleep`          | idle sleep, wake by HTTP, API and WebSocket, memory kept, the WebSocket relay                                                                                                                                                                                                                                                  |
 | `scale`          | many imps under the RAM budget, LRU sleep, wake on request, an oversized imp refused                                                                                                                                                                                                                                           |
 | `restart`        | an impd restart re-adopts VMs; stopping the instance sleeps every imp                                                                                                                                                                                                                                                          |
-| `tailscale`      | an imp answers tailnet members, a tailnet request wakes it, a rule gives a member the API without a token, per-imp names                                                                                                                                                                                                       |
+| `tailscale`      | an imp answers tailnet members, a tailnet request wakes it, a rule gives a member the API without a token                                                                                                                                                                                                                      |
 | `mcp`            | `impz mcp` over stdio: the guard, odd file paths, modes, a timeout's group kill                                                                                                                                                                                                                                                |
 | `mcp-oauth`      | the public MCP route: a sign-in approved with `impz oauth approve`, an MCP client's own OAuth sign-in, tools by scope, refresh replay, a removed token stopping a command, 429                                                                                                                                                 |
 | `sessions`       | detach, attach after sleep, takeover, idle and busy sessions, kill                                                                                                                                                                                                                                                             |
@@ -83,7 +83,8 @@ drives it through a browser. The suites run in this order:
 | `inner`          | the inner container: PID 1 inside, signals, `kill -9 -1`, a memory hog, a reboot and the listeners after it, `rm -rf /`, a wiped root                                                                                                                                                                                          |
 | `socket`         | Docker only through imp-docker-proxy: refused containers, calls, tags, pulls and build bodies; BuildKit pinned; imps keep running while the proxy is stopped                                                                                                                                                                   |
 | `moves`          | `impz move` to a second instance on a Docker network: cold with a checkpoint, an abort, warm moves of an open and a box imp that keep tmpfs and processes and reach DNS, HTTP and the broker at once                                                                                                                           |
-| `moves-tailnet`  | `impz move` between two tailnet nodes: the real peer check, and a per-imp tailnet name that goes with its imp                                                                                                                                                                                                                  |
+| `moves-tailnet`  | `impz move` between two tailnet nodes: the real peer check on their tailnet addresses                                                                                                                                                                                                                                          |
+| `tailnet-names`  | per-imp tailnet names on Tailscale itself: an imp's own name, which wakes it, and goes with it on a move; skips unless `IMP_E2E_TAILNET_NAMES=1`                                                                                                                                                                               |
 | `chaos`          | kills of impd, Firecracker and the container mid-operation; the watchdog; a full disk                                                                                                                                                                                                                                          |
 | `jail`           | the jailer: its own uid, no capabilities, seccomp, a memory cap; sleep, wake and re-adopt jailed; rollback and upgrade between jailed and unjailed                                                                                                                                                                             |
 | `memory`         | elastic memory: a guest grows under a gradual allocation, shrinks to its use, and a sleep unplugs spare memory first                                                                                                                                                                                                           |
@@ -93,44 +94,43 @@ drives it through a browser. The suites run in this order:
 
 ```sh
 e2e/test-e2e.sh                          # the acceptance set: every suite
-e2e/test-e2e.sh --only fast              # the CI subset: lifecycle, checkpoints, disks, sleep, restart, mcp, mcp-oauth, offsets, session-logs, services, ssh, ssh-agent, reverse, proxy, dashboard, tokens, leases, cpu, templates, boot-templates, inner, socket, registry, jail, memory, ksm
+e2e/test-e2e.sh --only fast              # the CI subset: every suite in FAST_GROUPS
 e2e/test-e2e.sh --only checkpoints,sleep # named suites, run in the order above
-e2e/test-e2e.sh --group 2                # one third of the CI subset, as one CI runner runs it
+e2e/test-e2e.sh --group 2                # one group of the CI subset, as one CI runner runs it
 e2e/test-e2e.sh --clean                  # wipe the dev instance's data first
 ```
 
-| Flag      | Effect                                                                                                                                  |
-| --------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `--only`  | Comma-separated suites or sets. `acceptance` (the default) is every suite; `fast` is the CI subset.                                     |
-| `--group` | One of the three groups the `fast` set splits into (`FAST_GROUPS` in `e2e/lib/suites.ts`): `1`, `2` or `3`.                             |
-| `--clean` | Logs the instance out of the tailnet, removes the container and wipes its data dir, and the moves suites' second host and its data dir. |
-| `--reuse` | Keeps a running dev instance instead of restarting it with the run's settings.                                                          |
-| `--keep`  | Leaves the run's imps and fixture images in place for a look afterwards.                                                                |
+| Flag      | Effect                                                                                                                                                      |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--only`  | Comma-separated suites or sets. `acceptance` (the default) is every suite; `fast` is the CI subset.                                                         |
+| `--group` | One of the groups the `fast` set splits into (`FAST_GROUPS` in `e2e/lib/suites.ts`), from `1`.                                                              |
+| `--clean` | Logs the instance out of the tailnet, removes the container and wipes its data dir, and the moves suites' second host and its data dir.                     |
+| `--reuse` | Keeps a running dev instance instead of restarting it with the run's settings. A run with a Headscale suite restarts it anyway, onto the run's new tailnet. |
+| `--keep`  | Leaves the run's imps and fixture images in place for a look afterwards.                                                                                    |
 
-The `acceptance` set is the definition of done: the tailscale suite fails without a Tailscale key
-(from the env, 1Password or `.env`, as [configuration](../guides/configuration.md#dev-instance)
-lists), and the timing limits fail the run. Any other set skips tailscale without a key and only
-warns about a missed limit. The harness starts Pebble for the https suite, which needs no domain and
-reboots the instance with HTTPS on, then off again
+The `acceptance` set is the definition of done: the timing limits fail the run, where any other set
+only warns about a missed limit. The harness starts Pebble for the https suite, which needs no
+domain and reboots the instance with HTTPS on, then off again
 ([HTTPS](../guides/https.md#testing-with-pebble)). The `fast` set takes about 4.5 minutes, most of
-it idle timeouts in the sleep suite and the jail suite's two reboots. The full set adds docker,
-images, scale, tailscale, sessions, ssh-wake, proxy-wake, cp, connectors, https, egress, ipv6,
-networks, moves, moves-tailnet, chaos, backups and backups-repo; at its defaults the scale suite
-alone took about 75 seconds in the last acceptance run.
+it idle timeouts in the sleep suite and the jail suite's two reboots. The full set adds the suites
+outside `FAST_GROUPS`; at its defaults the scale suite alone took about 75 seconds in the last
+acceptance run.
 
 The moves suites start a second instance, `<IMP_DEV_NAME>-mv-b`, with its data in
 `<IMP_DEV_DATA>-mv-b`, and reboot the run's instance onto a network of their own and back. Each
 instance gets a 2 GiB RAM budget there, so a run stays inside one ordinary run's memory. On ZFS the
 second instance runs on the root dataset `<IMP_ZFS_ROOT>-mv-b`, so two impds never share one
 dataset; `scripts/zfs-host-test.sh` makes it, and a manual run makes it the same way
-(`zfs create -o mountpoint=legacy`). `moves-tailnet` needs a Tailscale key, as the tailscale suite
-does.
+(`zfs create -o mountpoint=legacy`).
 
-The per-imp names case of the tailscale suite skips unless `IMP_E2E_TAILNET_NAMES=1`: it needs the
-Tailscale Services OAuth client in 1Password (`IMP_TAILNET_OAUTH_REF`, default
-`op://$IMP_OP_VAULT/imp-e2e-tailscale-services`, fields `client-id` and `client-secret`) and the
-tailnet policy in [per-imp names](../guides/tailscale.md#per-imp-names). The tailnet suites join as
-`tag:imp-e2e`, which impz owns ([the e2e tailnet tag](./e2e-tailnet.md)).
+The tailscale, egress and moves-tailnet suites need no secret: the harness starts a Headscale
+tailnet of the run's own, and removes it at the end ([the e2e tailnet](./e2e-tailnet.md)). The
+tailnet-names suite needs Tailscale itself, so it skips unless `IMP_E2E_TAILNET_NAMES=1`, and then
+runs only on its own (`--only tailnet-names`), because one dev instance joins one control server. It
+needs the `tag:imp-e2e` OAuth client and the Tailscale Services OAuth client in 1Password
+(`IMP_TAILNET_OAUTH_REF`, default `op://$IMP_OP_VAULT/imp-e2e-tailscale-services`, fields
+`client-id` and `client-secret`) and the tailnet policy in
+[per-imp names](../guides/tailscale.md#per-imp-names).
 
 `IMP_DEV_NAME`, `IMP_DEV_PORT_OFFSET` and `IMP_DEV_DATA` pick the dev instance, as for
 `scripts/dev/dev.sh`. These variables tune a run:
@@ -204,9 +204,9 @@ should be fast; record the host's `uname -r` with the result.
 Each checkout of the repo, the main one or a git worktree, runs a dev instance of its own: give it
 an `IMP_DEV_NAME` and an `IMP_DEV_PORT_OFFSET`. Its host image is its own too. `scripts/dev/dev.sh`
 tags it `imp-host:dev-<dir>-<hash>`, where `<dir>` is the checkout's directory name and `<hash>` the
-first 8 hex characters of the sha256 of its path without symlinks (`dev_image_tag` in
-`scripts/lib.sh`). One worktree's build never replaces the image under another's running instance or
-e2e run. `IMP_HOST_IMAGE` overrides the tag, as CI does.
+first 8 hex characters of the sha256 of its path without symlinks. One worktree's build never
+replaces the image under another's running instance or e2e run. `IMP_HOST_IMAGE` overrides the tag,
+as CI does.
 
 `dev.sh down` keeps the image, so the next `up` starts at once. Once a worktree is gone, its image
 stays behind. `scripts/dev/dev.sh prune` removes the images whose checkout directory is gone and
@@ -278,7 +278,7 @@ Lefthook installs the hooks with `bun install`.
 | `shellcheck` | yes      | `bun run lint:shell`, actionlint and zizmor over `.github/`, hadolint over both Dockerfiles, and the tests that shellcheck the shell production code holds as text.                                               |
 | `cli`        | yes      | Compiles the CLI for every platform and runs the linux-x64 one; builds the release image's compile stage.                                                                                                         |
 | `client`     | yes      | Packs `@impz/client`, installs it on the oldest Node it supports, and smokes it under Node, Bun and a compiled Bun binary.                                                                                        |
-| `e2e`        | yes      | Passes only when every `e2e-group` job passed: the `fast` end-to-end set on real microVMs, in three groups on three runners (below).                                                                              |
+| `e2e`        | yes      | Passes only when every `e2e-group` job passed: the `fast` end-to-end set on real microVMs, in four groups on four runners (below).                                                                                |
 | `zfs`        | yes      | Passes only when every `zfs-shard` job passed: real imps on a ZFS pool in three shards, and `scripts/test-zfs.sh` in one (below).                                                                                 |
 
 The `checks` job also runs the docs-writing skill's scripts. `bun run lint:docs` runs
@@ -303,7 +303,7 @@ On `main`, the `release-please` job makes releases ([releasing](./releasing.md))
 
 ### The e2e job
 
-The `fast` set runs in three groups (`FAST_GROUPS` in `e2e/lib/suites.ts`), one `e2e-group` job per
+The `fast` set runs in four groups (`FAST_GROUPS` in `e2e/lib/suites.ts`), one `e2e-group` job per
 group, each on its own runner. The `e2e` job is the required check: it fails when any group failed,
 was cancelled or was skipped. Each group boots real Firecracker guests on a standard `ubuntu-24.04`
 runner (4 cores, 16 GB), which exposes `/dev/kvm`. `scripts/ci/check-kvm.sh` runs first, so a runner
@@ -317,14 +317,15 @@ without KVM fails in seconds with the reason. The job then:
 2. builds the dev host image as `imp-host:dev` with a cache of its own (scope `imp-dev`). The `e2e`
    and `zfs` jobs in `ci.yml` set `IMP_HOST_IMAGE=imp-host:dev` and `IMP_HOST_IMAGE_READY=1`, so
    `scripts/dev/dev.sh` uses that image instead of building it again. Only group 1's run on `main`
-   writes these caches, so three writers never race; pull requests only read them. Steps 1 and 2 are
+   writes these caches, so four writers never race; pull requests only read them. Steps 1 and 2 are
    the composite action `.github/actions/e2e-build`, which the `zfs` job uses too.
 3. restores the Playwright browser cache (`~/.cache/ms-playwright`), keyed on the Playwright version
    in `bun.lock`, which pins the Chromium build, in the group with the dashboard suite only. The
    dashboard suite installs that Chromium's headless shell when the cache misses.
 4. runs `e2e/test-e2e.sh --group N` with `E2E_RAM_BUDGET_MIB=4096`, `IMP_DEFAULT_MEMORY_MIB=1024`
-   and the XFS file on the runner's `/mnt` disk. There is no Tailscale key in CI, and a missed
-   timing limit only warns. The host networking tests run in group 2 only (`HOST_TESTS_GROUP`).
+   and the XFS file on the runner's `/mnt` disk. No workflow holds a Tailscale secret: group 4's
+   tailnet suites join the Headscale tailnet that the harness starts, and a missed timing limit only
+   warns. The host networking tests run in group 2 only (`HOST_TESTS_GROUP`).
 
 The ZFS suites run in three `zfs-shard` jobs, each on its own runner, and the `zfs` job is the
 required check over them, as `e2e` is over the groups. Each shard builds the same inputs, reading

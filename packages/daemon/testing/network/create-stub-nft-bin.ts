@@ -1,5 +1,6 @@
 import { chmod, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { formatShellWord } from '@impz/test-utils/format-shell-word';
 
 interface StubNftBinOptions {
   readonly stderr?: string;
@@ -33,8 +34,4 @@ export async function createStubNftBin(
     readArgv: (): Promise<string> => readFile(argvPath, 'utf8'),
     readStdin: (): Promise<string> => readFile(stdinPath, 'utf8'),
   };
-}
-
-function formatShellWord(text: string): string {
-  return `'${text.replaceAll("'", String.raw`'\''`)}'`;
 }

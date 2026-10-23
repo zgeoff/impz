@@ -3,6 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildStubAnswerQueue } from '@impz/test-utils/build-stub-answer-queue';
+import { claimFreePorts } from '@impz/test-utils/claim-free-ports';
 import { server } from '@impz/test-utils/mock-server';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { HttpResponse, http } from 'msw';
@@ -12,7 +13,6 @@ import { buildStubProxyListen } from '../../../testing/network/build-stub-proxy-
 import { createMockCertificate } from '../../../testing/network/create-mock-certificate';
 import { createStubCloudflareApi } from '../../../testing/network/create-stub-cloudflare-api';
 import { buildStubTickerTimer } from '../../../testing/platform/build-stub-ticker-timer';
-import { claimFreePorts } from '../../../testing/platform/claim-free-ports';
 import type { Certificate } from './acme/cert-store';
 import { createCertStore } from './acme/cert-store';
 import { createCloudflareProvider } from './dns/cloudflare-provider';
