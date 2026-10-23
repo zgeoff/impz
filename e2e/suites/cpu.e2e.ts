@@ -14,7 +14,7 @@ import { writeMetric } from '../lib/write-metric';
 // Where Docker does not delegate the cpu controller to a private cgroup
 // namespace, impd reports limits not enforced and the limit tests skip.
 
-// collection-time gate: Bun 1.4.3's skipIf takes a boolean and has no in-body skip
+// collection-time gate: Bun's skipIf takes a boolean and has no in-body skip
 const startInfo = await readInfo();
 
 const cpuLimitsMissing = startInfo.cpu?.limitsEnforced !== true && (process.env['CI'] ?? '') === '';

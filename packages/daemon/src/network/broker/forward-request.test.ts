@@ -455,7 +455,7 @@ test('it logs one impd.broker line that names the imp, and nothing unhandled, wh
     new Response(child.stderr).text(),
   ]);
 
-  // Bun before 1.4.3 leaves the error's code out of a fetch error's message
+  // an older Bun leaves the error's code out of a fetch error's message
   expect(stdout).toMatch(
     /^WARNING impd\.broker imp=web the upstream closed GET api\.example\.com\/v1\/events mid-stream: (?:ECONNRESET: )?The socket connection was closed unexpectedly\. For more information, pass `verbose: true` in the second argument to fetch\(\)\n\{"client":"ECONNRESET"\}\n$/v,
   );

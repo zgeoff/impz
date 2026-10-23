@@ -304,7 +304,7 @@ test('#imps.list starts no deadline of its own', async () => {
 
 // Bun reads its fetch idle limit (360 s by default) only at startup, so a
 // child Bun runs with 1 s; its imps.list is the control that the limit
-// expires, after about 8 s on Bun 1.4.3
+// expires, after about 8 s
 test('#backups.run gets an answer that stays silent past Bun’s idle limit, where imps.list gives up', async () => {
   const ctx = setupTest();
 

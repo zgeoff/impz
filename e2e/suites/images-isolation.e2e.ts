@@ -19,7 +19,7 @@ import { removeImageIfPresent, removeImpIfPresent } from '../lib/reset-baseline'
 import { getSuitePrefix } from '../lib/suites';
 import { waitFor } from '../lib/wait-for';
 
-// collection-time gate: Bun 1.4.3's skipIf takes a boolean and has no in-body skip
+// collection-time gate: Bun's skipIf takes a boolean and has no in-body skip
 const route6 = await runInContainer(['ip', '-6', 'route', 'show', 'default']);
 
 // The public IPv6 fetch needs an IPv6 default route in the host container.

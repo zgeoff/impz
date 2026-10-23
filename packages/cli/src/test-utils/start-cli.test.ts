@@ -67,7 +67,7 @@ test('#runCli keeps the test run’s variables from the CLI', async () => {
     env: { HOME: home, XDG_CONFIG_HOME: home, IMP_URL: 'http://127.0.0.1:1' },
   });
 
-  // Bun before 1.4.3 leaves the error's code out of a fetch error's message
+  // an older Bun leaves the error's code out of a fetch error's message
   expect(result).toStrictEqual({
     stdout: '',
     stderr: expect.stringMatching(

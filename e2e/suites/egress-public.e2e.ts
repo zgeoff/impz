@@ -19,7 +19,7 @@ import { startStubPrivateService } from '../lib/start-stub-private-service';
 import { getSuitePrefix } from '../lib/suites';
 import { writeMetric } from '../lib/write-metric';
 
-// collection-time gate: Bun 1.4.3's skipIf takes a boolean and has no in-body skip
+// collection-time gate: Bun's skipIf takes a boolean and has no in-body skip
 const startInfo = await readInfo();
 
 const hostTailnetMissing = startInfo.tailscale.ip === null;

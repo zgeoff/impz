@@ -70,7 +70,7 @@ test('it closes its listener and removes its data dir with the stack', async () 
 
   await ctx.stack.disposeAsync();
 
-  // Bun 1.4.3 gives a refused connection its errno name
+  // a newer Bun gives a refused connection its errno name
   expect(fetch(`${host.url}/health`)).rejects.toMatchObject({
     code: expect.toBeOneOf(['ConnectionRefused', 'ECONNREFUSED']),
   });

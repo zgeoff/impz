@@ -256,8 +256,8 @@ export function createCloudflareProvider(options: CloudflareOptions): DnsProvide
   };
 }
 
-// fetch, with the token cut out of its errors: Bun before 1.4.3 names a header
-// value it refuses, and the error reaches the log and system info
+// fetch, with the token cut out of its errors: an older Bun names a header value
+// it refuses, and the error reaches the log and system info
 async function sendFetch(
   send: CloudflareFetch,
   token: string,

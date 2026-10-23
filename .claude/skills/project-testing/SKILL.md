@@ -26,19 +26,18 @@ each; open one when the task touches its area.
 
 ## Traps
 
-- **Cleanup runs first-in, first-out.** On Bun 1.4.3, `onTestFinished` callbacks run in registration
-  order, and a callback that throws skips the ones after it. A util that registers its own cleanup
-  therefore releases before anything the test registers after it.
+- **Cleanup runs first-in, first-out.** `onTestFinished` callbacks run in registration order, and a
+  callback that throws skips the ones after it. A util that registers its own cleanup therefore
+  releases before anything the test registers after it.
 - **Ambient `IMP_*` settings vanish.** The root preload deletes every `IMP_*` variable the shell
   passed, except the run gates in [Layers](#layers), so a developer's settings never reach a unit
   test. Set an impd setting with [`updateEnv`](../../../packages/test-utils/src/update-env.ts)
   before `setupTest()`, which reads it through
   [`readImpEnv`](../../../packages/test-utils/src/read-imp-env.ts).
 - **An ambient proxy is turned off.** Bun's `fetch` sends a loopback request through the proxy that
-  the shell's `HTTPS_PROXY` names. Bun 1.4.2 keeps that proxy after the variable is deleted and Bun
-  1.4.3 follows the delete, so the root preload sets `NO_PROXY` to `*`, which turns the proxy off on
-  both. Every child process inherits it, so a child that a test sends through a proxy overrides it,
-  as curl's `--noproxy ''` does.
+  the shell's `HTTPS_PROXY` names, and an older Bun keeps that proxy after the variable is deleted,
+  so the root preload sets `NO_PROXY` to `*`. Every child process inherits it, so a child that a
+  test sends through a proxy overrides it, as curl's `--noproxy ''` does.
 - **MSW sees only `fetch`, and not all of it.** A `fetch` to loopback or a unix socket skips MSW and
   goes to the real network. `node:http` clients and WebSockets bypass MSW too, so those boundaries
   need a real stand-in server.

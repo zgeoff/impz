@@ -94,7 +94,7 @@ or a bad frame, goes to a stand-in peer or to the pure function that parses the 
 
 ## Bun timer and transport facts
 
-These Bun 1.4.3 behaviours decide how a test of a deadline is built:
+These Bun behaviours decide how a test of a deadline is built:
 
 - An API listener whose idle timeout is set to 1 s ends a request about 4 s after its last byte. It
   ends a request without a body, or a streamed answer that falls silent, and never one that sent a

@@ -34,7 +34,7 @@ async function setupTest() {
   return { prefix: getSuitePrefix('moves-tailnet'), stack, client };
 }
 
-// collection-time gate: Bun 1.4.3's skipIf takes a boolean and has no in-body skip
+// collection-time gate: Bun's skipIf takes a boolean and has no in-body skip
 const tailscaleStatus = await readLocalTailscaleStatus();
 
 // The tailnet name handover needs the Tailscale Services OAuth client

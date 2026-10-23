@@ -74,7 +74,7 @@ async function sendUdp(
         }
       },
 
-      // Bun 1.4.3 passes the error alone, not after the socket its types name
+      // Bun passes the error alone, not after the socket its types name
       error: (...args: readonly unknown[]) => {
         const message = getErrorMessage(args.at(-1));
 

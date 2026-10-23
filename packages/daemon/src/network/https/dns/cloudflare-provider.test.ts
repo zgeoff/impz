@@ -661,7 +661,7 @@ test('it keeps the token out of a fetch error', () => {
     readToken: () => Promise.resolve('cf-token-secret\u0000'),
   });
 
-  // Bun before 1.4.3 puts the refused value after the header's name
+  // an older Bun puts the refused value after the header's name
   expect(provider.setA('imp.example.com', '100.64.0.7')).rejects.toThrowWithMessage(
     Error,
     /^(?!.*cf-token-secret)Header 'Authorization' has invalid value(?:: 'Bearer <token>')?$/v,
@@ -669,7 +669,7 @@ test('it keeps the token out of a fetch error', () => {
 });
 
 test('it cuts the token out of a fetch error that names it', () => {
-  // the error text of Bun before 1.4.3, which no header value draws from Bun 1.4.3
+  // an older Bun's error text, which no header value draws from the pinned Bun
   const refuse = mock(() =>
     Promise.reject(
       new TypeError("Header 'Authorization' has invalid value: 'Bearer cf-token-secret'"),

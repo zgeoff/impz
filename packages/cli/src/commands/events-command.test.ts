@@ -88,7 +88,7 @@ test('it prints only the named imp’s events, and reconnects after impd’s con
     print,
   );
 
-  // Bun before 1.4.3 leaves the error's code out of a fetch error's message
+  // an older Bun leaves the error's code out of a fetch error's message
   expect(printing).rejects.toThrowWithMessage(
     Error,
     /^the event stream ended 5 times in a row: (?:ECONNREFUSED: )?Unable to connect\. Is the computer able to access the url\?$/v,
@@ -215,7 +215,7 @@ test('it starts the count and the backoff again after a stream that lasted', asy
     () => {},
   );
 
-  // Bun before 1.4.3 leaves the error's code out of a fetch error's message
+  // an older Bun leaves the error's code out of a fetch error's message
   expect(printing).rejects.toThrowWithMessage(
     Error,
     /^the event stream ended 5 times in a row: (?:ECONNREFUSED: )?Unable to connect\. Is the computer able to access the url\?$/v,

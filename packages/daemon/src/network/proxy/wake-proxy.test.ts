@@ -446,7 +446,7 @@ test('it passes the first line of a streamed API answer on while the API holds t
 
 // Bun reads its fetch idle limit (360 s by default) only at startup, so the
 // proxy runs in a child Bun with 1 s; the child's plain fetch is the control
-// that the limit expires, after about 8 s on Bun 1.4.3
+// that the limit expires, after about 8 s
 test('it passes on an API answer that stays silent past Bun’s idle limit, where a plain fetch gives up', async () => {
   const ctx = await setupTest();
 
@@ -1088,7 +1088,7 @@ test('it logs one impd.proxy line that names the imp, and nothing unhandled, whe
     new Response(child.stderr).text(),
   ]);
 
-  // Bun before 1.4.3 leaves the error's code out of a fetch error's message
+  // an older Bun leaves the error's code out of a fetch error's message
   expect(stdout).toMatch(
     /^WARNING impd\.proxy imp=web the upstream closed GET \/rpc\/records\/follow mid-stream: (?:ECONNRESET: )?The socket connection was closed unexpectedly\. For more information, pass `verbose: true` in the second argument to fetch\(\)\n\{"client":"ECONNRESET"\}\n$/v,
   );
