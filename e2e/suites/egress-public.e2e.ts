@@ -4,7 +4,7 @@ import { config } from '../lib/config';
 import { resolveImageName } from '../lib/fixtures';
 import { createInstanceClient, runImp, runShellInImp } from '../lib/imp-cli';
 import { holdImp, waitForExec } from '../lib/imps';
-import { readContainerGateway } from '../lib/instance';
+import { readContainerGateway, runInContainer } from '../lib/instance';
 import {
   LAN,
   readLanConnections,
@@ -15,7 +15,7 @@ import {
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
 import { startStubPrivateService } from '../lib/start-stub-private-service';
-import { getSuitePrefix } from '../lib/suites';
+import { LISTED_HOST_ADDRESS, getSuitePrefix } from '../lib/suites';
 import { waitForTailnetIp } from '../lib/tailnet';
 import { writeMetric } from '../lib/write-metric';
 
@@ -108,7 +108,7 @@ test('it lets an open imp reach each private listener, before and after a public
   expect(againGateway.isConnected).toBeTrue();
 });
 
-test('it refuses a public imp the host’s tailnet address', async () => {
+test('it refuses a public imp impd at each of its addresses and a listed host address, and lets it reach the internet', async () => {
   const ctx = await setupTest();
   const ip = await waitForTailnetIp();
 
@@ -129,9 +129,25 @@ test('it refuses a public imp the host’s tailnet address', async () => {
 
   await waitForExec(pub);
 
-  const dial = await runTimedDial(pub, ip, 7070);
+  const route = await runShellInImp(pub, 'ip -4 route show default');
 
-  expect(dial.isConnected).toBeFalse();
+  const gateway = /via (?<ip>[\d.]+)/v.exec(route)?.groups?.['ip'] ?? '';
+
+  const container = await runInContainer(['hostname', '-i']);
+
+  const containerIp = container.stdout.trim().split(' ')[0] ?? '';
+
+  const internet = await runTimedDial(pub, '1.1.1.1', 443);
+  const listed = await runTimedDial(pub, LISTED_HOST_ADDRESS, 443);
+  const tailnet = await runTimedDial(pub, ip, 7070);
+  const ownGateway = await runTimedDial(pub, gateway, 7070);
+  const impd = await runTimedDial(pub, containerIp, 7070);
+
+  expect(internet.isConnected).toBeTrue();
+  expect(listed.isConnected).toBeFalse();
+  expect(tailnet.isConnected).toBeFalse();
+  expect(ownGateway.isConnected).toBeFalse();
+  expect(impd.isConnected).toBeFalse();
 });
 
 test('it lets a public imp fetch from the internet, and removes a private address from its DNS answers', async () => {

@@ -1,16 +1,19 @@
 import { expect, onTestFinished, test } from 'bun:test';
+import { randomUUID } from 'node:crypto';
 import { config } from '../lib/config';
 import { buildTcpQueryOctal, parseTcpReplyHex } from '../lib/dns-probe';
 import { resolveImageName } from '../lib/fixtures';
 import { tryDialFromImp, tryGetFromImp, tryInImp } from '../lib/guest-probe';
 import { createInstanceClient, requireImp, runImp, runShellInImp } from '../lib/imp-cli';
+import { startReverse } from '../lib/imp-proxy';
 import { holdImp, waitForExec } from '../lib/imps';
-import { readContainerGateway } from '../lib/instance';
+import { readContainerGateway, runInContainer } from '../lib/instance';
 import { parseWholeNumber } from '../lib/parse-whole-number';
 import { registerRemoval } from '../lib/register-removal';
-import { removeImpIfPresent } from '../lib/reset-baseline';
+import { removeImpIfPresent, removeSecretIfPresent } from '../lib/reset-baseline';
 import { startStubPrivateService } from '../lib/start-stub-private-service';
 import { getSuitePrefix } from '../lib/suites';
+import { waitForTailnetIp } from '../lib/tailnet';
 import { waitFor } from '../lib/wait-for';
 import { writeMetric } from '../lib/write-metric';
 
@@ -357,4 +360,96 @@ test('it lets a none imp reach nothing, and open gives it all back', async () =>
   expect(shutFetch).toBeFalse();
   expect(shutDial).toBeFalse();
   expect(reopened).toBeTrue();
+});
+
+test('it refuses a none imp with a grant and a reverse forward every direct connection and every other broker host, and impd at each address', async () => {
+  const ctx = await setupTest();
+
+  const name = `${ctx.prefix}none-grant`;
+  const secret = `${ctx.prefix}none-model`;
+
+  const page = Bun.serve({
+    hostname: '127.0.0.1',
+    port: 0,
+    routes: { '/*': () => new Response('e2e-tool-ok\n') },
+  });
+
+  ctx.stack.defer(() => page.stop(true));
+
+  await runImp(
+    'new',
+    name,
+    '--image',
+    resolveImageName('e2e-tiny'),
+    '--memory',
+    '256',
+    '--policy',
+    'none',
+  );
+
+  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, name));
+
+  await waitForExec(name);
+  await holdImp(name);
+
+  await ctx.client.secrets.add({ name: secret, kind: 'anthropic', value: `e2e-${randomUUID()}` });
+
+  registerRemoval(ctx.stack, config.keep, () => removeSecretIfPresent(ctx.client, secret));
+
+  await runImp('grant', name, secret);
+
+  const reverse = await startReverse(name, `0:${String(page.port)}`);
+
+  ctx.stack.defer(async () => {
+    await reverse.stop();
+  });
+
+  const [port = ''] = reverse.guests;
+
+  const route = await runShellInImp(name, 'ip -4 route show default');
+
+  const gateway = /via (?<ip>[\d.]+)/v.exec(route)?.groups?.['ip'] ?? '';
+
+  const container = await runInContainer(['hostname', '-i']);
+
+  const containerIp = container.stdout.trim().split(' ')[0] ?? '';
+
+  const tailnetIp = await waitForTailnetIp();
+
+  // The broker answers a CONNECT with its status line: 200 for a granted host, whose tunnel it
+  // ends in its own TLS terminator, and 403 for any host the none policy leaves out. busybox nc
+  // stops at the end of its stdin, so the sleep holds it open for the answer.
+  const readConnectStatus = (host: string) =>
+    runShellInImp(
+      name,
+      String.raw`(printf 'CONNECT ${host}:443 HTTP/1.1\r\nHost: ${host}:443\r\n\r\n'; sleep 3) | nc -w 5 ${gateway} 7081 | head -n 1 | cut -d ' ' -f 2`,
+    );
+
+  const forward = await runShellInImp(name, `wget -qO- http://127.0.0.1:${port}/`);
+  const granted = await readConnectStatus('api.anthropic.com');
+  const other = await readConnectStatus('example.com');
+
+  const targets = [
+    ['1.1.1.1', 443],
+    ['169.254.169.254', 80],
+    ['100.100.100.100', 80],
+    [gateway, 7070],
+    [containerIp, 7070],
+    [tailnetIp, 7070],
+  ] as const;
+
+  const dials = await Promise.all(
+    targets.map(async ([ip, dialPort]) => ({
+      target: `${ip}:${String(dialPort)}`,
+      isConnected: await tryDialFromImp(name, ip, dialPort),
+    })),
+  );
+
+  expect(forward).toBe('e2e-tool-ok');
+  expect(granted).toBe('200');
+  expect(other).toBe('403');
+
+  expect(dials).toStrictEqual(
+    targets.map(([ip, dialPort]) => ({ target: `${ip}:${String(dialPort)}`, isConnected: false })),
+  );
 });
