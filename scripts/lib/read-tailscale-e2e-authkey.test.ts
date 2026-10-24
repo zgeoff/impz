@@ -2,7 +2,7 @@ import { expect, mock, test } from 'bun:test';
 import type { OpReader } from './make-op-reader.ts';
 import { readTailscaleE2EAuthkey } from './read-tailscale-e2e-authkey.ts';
 
-test('it joins e2e nodes with the tag:imp-e2e client from op, ephemeral and preauthorized', async () => {
+test('it joins e2e nodes with the test tailnet’s tag:imp-e2e client from op, ephemeral and preauthorized', async () => {
   const readOp = mock<OpReader>(() => Promise.resolve('fake-tskey-client'));
 
   const found = await readTailscaleE2EAuthkey({
@@ -17,7 +17,7 @@ test('it joins e2e nodes with the tag:imp-e2e client from op, ephemeral and prea
   });
 
   expect(readOp).toHaveBeenCalledExactlyOnceWith(
-    'op://example/imp-e2e-tailscale-oauth/client-secret',
+    'op://example/imp-e2e-test-tailnet-authkeys/client-secret',
   );
 });
 
@@ -60,7 +60,7 @@ test('it never asks op without a vault, and names the variables to set', async (
   expect(readOp).not.toHaveBeenCalled();
 
   expect(warn).toHaveBeenCalledExactlyOnceWith(
-    'impz: set IMP_OP_VAULT to the 1Password vault that holds imp-e2e-tailscale-oauth/client-secret, or IMP_E2E_TAILSCALE_OAUTH_REF to its reference',
+    'impz: set IMP_OP_VAULT to the 1Password vault that holds imp-e2e-test-tailnet-authkeys/client-secret, or IMP_E2E_TAILSCALE_OAUTH_REF to its reference',
   );
 });
 

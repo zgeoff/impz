@@ -5,8 +5,8 @@ import {
   isTailnetReady,
   parseSelfTags,
   parseTailscaleStatus,
+  readHarnessMemberStatus,
   readTailnetMember,
-  requireTailnetReady,
 } from './tailnet';
 
 test('#findServiceUrl picks the per-imp tailnet name among the URL lines', () => {
@@ -24,7 +24,7 @@ test('#findServiceUrl gives null before the imp has a tailnet name', () => {
   expect(findServiceUrl('http://e2e-mvt-n.imp.localhost:7080/\n')).toBeNull();
 });
 
-test('#isTailnetReady is ready with a key and this machine Running', () => {
+test('#isTailnetReady is ready with a key and the member Running', () => {
   expect(isTailnetReady({ BackendState: 'Running' }, true)).toBeTrue();
 });
 
@@ -32,27 +32,12 @@ test('#isTailnetReady is not ready without a key', () => {
   expect(isTailnetReady({ BackendState: 'Running' }, false)).toBeFalse();
 });
 
-test('#isTailnetReady is not ready while this machine is logged out', () => {
+test('#isTailnetReady is not ready while the member is logged out', () => {
   expect(isTailnetReady({ BackendState: 'NeedsLogin' }, true)).toBeFalse();
 });
 
 test('#isTailnetReady is not ready without a tailscale status', () => {
   expect(isTailnetReady(null, true)).toBeFalse();
-});
-
-test('#requireTailnetReady passes with a key and this machine Running', () => {
-  expect(() => {
-    requireTailnetReady({ BackendState: 'Running' }, true);
-  }).not.toThrow();
-});
-
-test('#requireTailnetReady fails with what the suite lacks while this machine is logged out', () => {
-  expect(() => {
-    requireTailnetReady({ BackendState: 'NeedsLogin' }, true);
-  }).toThrowWithMessage(
-    Error,
-    'tailscale needs the tag:imp-e2e OAuth client (op://$IMP_OP_VAULT/imp-e2e-tailscale-oauth) and this machine on the tailnet',
-  );
 });
 
 test('#parseSelfTags reads the tags the node joined with', () => {
@@ -166,6 +151,12 @@ test('#readTailnetMember names the member container the harness started', () => 
   expect(readTailnetMember({ E2E_TAILNET_MEMBER: 'imp-e2e-a-ts-member' })).toBe(
     'imp-e2e-a-ts-member',
   );
+});
+
+test('#readHarnessMemberStatus gives no status outside a harness run that started the tailnet', async () => {
+  const status = await readHarnessMemberStatus({});
+
+  expect(status).toBeNull();
 });
 
 test('#readTailnetMember fails outside a harness run that started the tailnet', () => {

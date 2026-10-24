@@ -20,6 +20,7 @@ import {
   readSuiteSettings,
 } from './suites';
 import type { TailscaleE2EKey } from './tailscale-key';
+import type { TailscaleTailnet } from './tailscale-tailnet';
 import type { ResultsOptions, Section } from './write-results';
 
 export interface HarnessRun {
@@ -39,6 +40,8 @@ export interface HarnessDeps {
   readonly readTailscaleKey: (env: HarnessEnv) => Promise<TailscaleE2EKey | null>;
   readonly startHeadscale: () => Promise<HeadscaleTailnet>;
   readonly stopHeadscale: () => Promise<void>;
+  readonly startTailscale: (key: Readonly<TailscaleE2EKey>) => Promise<TailscaleTailnet>;
+  readonly stopTailscale: () => Promise<void>;
 
   readonly setUpInstance: (run: Readonly<HarnessRun>) => Promise<DevInstance>;
   readonly recreateInstance: (run: Readonly<HarnessRun>) => Promise<DevInstance>;
@@ -306,6 +309,10 @@ export async function runE2E(options: Readonly<RunE2EOptions>): Promise<number> 
       if (tailnet.kind === 'headscale') {
         await deps.stopHeadscale();
       }
+
+      if (tailnet.kind === 'tailscale') {
+        await deps.stopTailscale();
+      }
     }
   }
 
@@ -366,7 +373,19 @@ async function startTailnet(
 
   const key = kind === 'tailscale' ? await deps.readTailscaleKey(env) : null;
 
-  return key === null ? { kind: 'off' } : { kind: 'tailscale', ...key };
+  if (key === null) {
+    return { kind: 'off' };
+  }
+
+  try {
+    return { kind: 'tailscale', ...key, ...(await deps.startTailscale(key)) };
+  } catch (error) {
+    await deps.stopTailscale();
+
+    throw new Error(`the test tailnet’s member did not start: ${formatReason(error)}`, {
+      cause: error,
+    });
+  }
 }
 
 async function runTimed(

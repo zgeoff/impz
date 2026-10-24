@@ -53,13 +53,14 @@ test('it joins the dev script and each journey to the run’s Headscale in place
   });
 });
 
-test('it gives the dev script the e2e Tailscale key and its tag in place of the shell’s tailnet', () => {
+test('it joins the dev script and each journey to the test tailnet in memory, in place of the shell’s tailnet', () => {
   const env = buildHarnessEnv({
     env: {
       PATH: '/usr/bin',
       TAILSCALE_AUTHKEY: 'fake-dev-key',
       IMP_TAILSCALE_TAGS: 'tag:imp',
       IMP_TAILSCALE_LOGIN_SERVER: 'https://control.example.test',
+      IMP_TAILSCALE_STATE_DIR: '/var/tmp/imp-ts',
     },
     hostImage: 'imp-host:dev-imp-0f3a91c2',
     config: { ramBudgetMib: 6144, idleTimeoutS: 10 },
@@ -67,6 +68,7 @@ test('it gives the dev script the e2e Tailscale key and its tag in place of the 
       kind: 'tailscale',
       key: 'fake-e2e-key?ephemeral=true&preauthorized=true',
       tags: 'tag:imp-e2e',
+      member: 'imp-e2e-a-ts-member',
     },
   });
 
@@ -77,6 +79,8 @@ test('it gives the dev script the e2e Tailscale key and its tag in place of the 
     IMP_IDLE_TIMEOUT_S: '10',
     TAILSCALE_AUTHKEY: 'fake-e2e-key?ephemeral=true&preauthorized=true',
     IMP_TAILSCALE_TAGS: 'tag:imp-e2e',
+    IMP_TAILSCALE_STATE_DIR: 'mem',
+    E2E_TAILNET_MEMBER: 'imp-e2e-a-ts-member',
   });
 });
 

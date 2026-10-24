@@ -136,8 +136,9 @@ How to install, run and use impz.
 
 - [Development](./runbooks/development.md) — the checks, the end-to-end harness, worktree dev
   instances, git hooks, CI and the branch rules
-- [The e2e tailnet](./runbooks/e2e-tailnet.md) — the Headscale tailnet each e2e run starts, and the
-  tag, OAuth client and vault impz owns on Tailscale's
+- [The e2e tailnet](./runbooks/e2e-tailnet.md) — the Headscale tailnet each e2e run starts, the test
+  tailnet of the names suite, and the tag, OAuth client and vault impz owns on the production
+  tailnet
 - [Releasing](./runbooks/releasing.md) — what release-please and the release workflow do, and the
   steps they leave to you
 

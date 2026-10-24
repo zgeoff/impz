@@ -9,8 +9,9 @@ import { removeImpIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix, readSuiteSettings } from '../lib/suites';
 import {
   isTailnetReady,
-  readLocalTailscaleStatus,
-  readTailnetBody,
+  readHarnessMemberStatus,
+  readMemberBody,
+  readTailnetMember,
   waitForTailnetIp,
 } from '../lib/tailnet';
 import { probeTailscaleE2EKey } from '../lib/tailscale-key';
@@ -29,12 +30,12 @@ async function setupTest() {
 }
 
 // collection-time gate: Bun's skipIf takes a boolean and has no in-body skip
-const tailscaleStatus = await readLocalTailscaleStatus();
+const memberStatus = await readHarnessMemberStatus();
 
-// Set IMP_E2E_TAILNET_NAMES=1 once the Services OAuth client and the tailnet
-// policy exist.
+// Per-imp names need Tailscale itself, so the suite runs only on the test
+// tailnet that IMP_E2E_TAILNET_NAMES=1 joins.
 const tailnetNamesMissing =
-  !isTailnetReady(tailscaleStatus, probeTailscaleE2EKey()) ||
+  !isTailnetReady(memberStatus, probeTailscaleE2EKey()) ||
   process.env['IMP_E2E_TAILNET_NAMES'] !== '1';
 
 test.skipIf(tailnetNamesMissing)(
@@ -43,6 +44,7 @@ test.skipIf(tailnetNamesMissing)(
     const ctx = await setupTest();
 
     const named = `${ctx.prefix}n`;
+    const member = readTailnetMember();
 
     // The suite's settings both ways, so the journeys after this one still run on
     // them.
@@ -81,11 +83,11 @@ test.skipIf(tailnetNamesMissing)(
     const plain = live.replace(/^https:/v, 'http:');
 
     // The first HTTPS request waits for the name's certificate.
-    const byHttp = await waitFor(`${plain} over the tailnet`, () => readTailnetBody(plain), {
+    const byHttp = await waitFor(`${plain} over the tailnet`, () => readMemberBody(member, plain), {
       timeoutMs: 120_000,
     });
 
-    const byHttps = await waitFor(`${live} over the tailnet`, () => readTailnetBody(live), {
+    const byHttps = await waitFor(`${live} over the tailnet`, () => readMemberBody(member, live), {
       timeoutMs: 120_000,
     });
 
@@ -96,7 +98,7 @@ test.skipIf(tailnetNamesMissing)(
     await runImp('sleep', named);
     await waitFor(`${named} to sleep`, () => assertState(named, 'sleeping'));
 
-    const woken = await readTailnetBody(live);
+    const woken = await readMemberBody(member, live);
 
     expect(woken).toBe('e2e-tiny-ok');
 
