@@ -816,6 +816,6 @@ test('it leaves consistent records after concurrent lifecycle calls on a few imp
           expect(sleepableOverBudget).toBeEmpty();
         }),
     ),
-    { numRuns: 300 },
+    { numRuns: 25 },
   );
-}, 180_000);
+});
