@@ -180,6 +180,16 @@ test('#readHarnessMemberStatus fails when the member the harness started gives n
   );
 });
 
+test('#readHarnessMemberStatus fails when the member the harness started is logged out', () => {
+  const runChecked = mock<CommandRunners['runChecked']>(() =>
+    Promise.resolve('{"BackendState": "NeedsLogin"}'),
+  );
+
+  expect(
+    readHarnessMemberStatus({ runChecked }, { E2E_TAILNET_MEMBER: 'imp-e2e-a-ts-member' }),
+  ).rejects.toThrowWithMessage(Error, 'imp-e2e-a-ts-member is NeedsLogin, not Running');
+});
+
 test('#readHarnessMemberStatus reads the status of the member the harness started', async () => {
   const runChecked = mock<CommandRunners['runChecked']>(() =>
     Promise.resolve('{"BackendState": "Running"}'),

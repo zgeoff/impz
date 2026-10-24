@@ -140,6 +140,10 @@ export async function readHarnessMemberStatus(
 
   const status = await readMemberStatus(member, runners);
 
+  if (status.BackendState !== 'Running') {
+    throw new Error(`${member} is ${status.BackendState}, not Running`);
+  }
+
   return status;
 }
 
