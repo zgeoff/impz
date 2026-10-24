@@ -60,7 +60,6 @@ test('it answers a path the routes do not have with 404', async () => {
 
 test('it answers an OAuth path with 404 while the public route is off', async () => {
   const ctx = await setupTest();
-
   const auth = await createMcpAuth({ ...ctx, config: null, now: Date.now });
 
   const response = await makeOAuthResponder(auth)(
