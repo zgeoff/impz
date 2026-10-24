@@ -1,9 +1,7 @@
 import type { ExecRequirement } from '@impz/api';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-372 puts the broker behind a port
-import { PROXY_VARIABLE } from '../../network/broker/guest-trust';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-372 puts the broker behind a port
-import type { BrokerExecEnv } from '../../network/broker/guest-trust';
 import { ImpdError } from '../../platform/errors/impd-error';
+import { PROXY_VARIABLE } from './broker-exec-env';
+import type { BrokerExecEnv } from './broker-exec-env';
 import { readEnvKey } from './merge-env';
 
 export function isBrokerRequired(requirements: readonly ExecRequirement[] | undefined): boolean {

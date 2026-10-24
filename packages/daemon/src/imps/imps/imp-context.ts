@@ -4,8 +4,6 @@ import type { SlotAddress } from '../../host-net/net/addressing';
 import type { Ipv6Plan } from '../../host-net/net/ipv6-plan';
 import type { GuestNetBytes } from '../../host-net/net/tap-bytes';
 import type { TapDevices } from '../../host-net/net/tap-devices';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-372 puts the broker behind a port
-import type { BrokerExecEnv } from '../../network/broker/guest-trust';
 import { TEMPLATE_BUILD_UID } from '../../platform/db/imps';
 import type { ImpRecord } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
@@ -31,6 +29,7 @@ import type { CpuCgroups } from '../../vm/vmm/cpu-cgroups';
 import type { JailUser } from '../../vm/vmm/jail';
 import type { VmRunner } from '../../vm/vmm/vm-runner';
 import { readCpuTicks } from '../../vm/vmm/vm-stats';
+import type { BrokerExecEnv } from '../exec/broker-exec-env';
 import type { ImageService } from '../images/image-service';
 import type { ImpsConfig } from '../imps-config';
 import { createSessionLogs } from '../session-logs/session-log-service';

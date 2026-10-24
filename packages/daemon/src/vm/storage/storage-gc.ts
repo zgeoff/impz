@@ -1,8 +1,7 @@
 import type { DroppedStorage, OrphanStorage, StorageGc } from '@impz/api';
-// oxlint-disable-next-line zgeoff/import-zones -- GEO-372 puts the broker behind a port
-import type { SecretFiles } from '../../network/broker/secret-files';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { ImpdError } from '../../platform/errors/impd-error';
+import type { KeptSecretFiles } from './kept-secret-files';
 import { printSweep } from './print-sweep';
 import type { OrphanLogging } from './print-sweep';
 import { readLiveStorage } from './read-live-storage';
@@ -17,7 +16,7 @@ interface StorageGcDeps {
   readonly storage: Pick<StorageBackend, 'dropUnnamed'>;
   readonly storageGate: StorageGate;
   readonly log: (message: string) => void;
-  readonly secretFiles?: Pick<SecretFiles, 'listKept' | 'removeKept'>;
+  readonly secretFiles?: KeptSecretFiles;
   readonly manualWaitMs?: number;
   readonly scheduledWaitMs?: number;
 }

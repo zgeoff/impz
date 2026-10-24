@@ -4,7 +4,6 @@ import type { BackupRestore, EgressPolicy, Imp } from '@impz/api';
 import type { TokenStore } from '../../identity/auth/token-store';
 import type { ImageService } from '../../imps/images/image-service';
 import type { Imps } from '../../imps/imps/imp-service';
-import type { Broker } from '../../network/broker/broker-service';
 import type { NetworkService } from '../../network/networks/network-service';
 import { createCheckpoint } from '../../platform/db/checkpoints';
 import {
@@ -31,6 +30,7 @@ import type { StorageBackend } from '../../vm/storage/storage-backend';
 import type { StorageGate } from '../../vm/storage/storage-gate';
 import { writeChangedBlocks } from '../../vm/storage/write-changed-blocks';
 import { buildCheckpointId } from '../checkpoints/checkpoint-service';
+import type { ImpGrants } from '../imp-grants';
 import { BackupManifestSchema } from './backup-manifest';
 import type { BackupManifest, ManifestImage, ManifestImp } from './backup-manifest';
 import { buildDigestTag } from './build-digest-tag';
@@ -48,7 +48,7 @@ export interface RestoreInput {
 export interface RestoreDeps {
   readonly db: ImpDatabase;
   readonly imps: Pick<Imps, 'createImp' | 'destroyImp'>;
-  readonly grants: Pick<Broker, 'addGrant'>;
+  readonly grants: Pick<ImpGrants, 'addGrant'>;
   readonly tokens: Pick<TokenStore, 'createRestored'>;
   readonly networks: Pick<NetworkService, 'writeMissingNetworks' | 'removeEmptyNetworks'>;
   readonly storage: Pick<

@@ -11,9 +11,10 @@ import {
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { writeFileDurably } from '../../platform/process/write-file-durably';
+import type { KeptSecretFiles } from '../../vm/storage/kept-secret-files';
 
 // values sit unencrypted: the key would live on the same disk
-export interface SecretFiles {
+export interface SecretFiles extends KeptSecretFiles {
   readonly write: (file: string, value: string) => void;
 
   readonly rewrite: (file: string, value: string) => void;
@@ -22,21 +23,9 @@ export interface SecretFiles {
   readonly remove: (file: string) => void;
 
   readonly keepOrphansExcept: (keep: ReadonlySet<string>, at: Date) => KeptOrphans;
-
-  readonly listKept: () => KeptDirectory[];
-  readonly removeKept: (name: string) => void;
 }
 
 const ORPHANED_DIR = '.orphaned';
-
-interface KeptDirectory {
-  readonly name: string;
-  readonly path: string;
-  readonly bytes: number;
-
-  readonly createdAt: Date | null;
-  readonly files: readonly string[];
-}
 
 interface KeptOrphans {
   readonly directory: string | null;

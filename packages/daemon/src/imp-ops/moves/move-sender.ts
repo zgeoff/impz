@@ -1,7 +1,6 @@
 import type { MovePlan, MoveStatus, WarmHost } from '@impz/api';
 import type { LockedImp } from '../../imps/imps/imp-lock';
 import type { Imps } from '../../imps/imps/imp-service';
-import type { Broker } from '../../network/broker/broker-service';
 import type { EgressService } from '../../network/egress/egress-service';
 import { listCheckpoints } from '../../platform/db/checkpoints';
 import { listImps, readImpById, readImpByName, updateImpMove } from '../../platform/db/imps';
@@ -18,6 +17,7 @@ import { buildInvalidStateError, buildNotFoundError } from '../../platform/error
 import type { StartTimer } from '../../platform/process/clock';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import type { MoveMode, StorageBackend } from '../../vm/storage/storage-backend';
+import type { ImpGrants } from '../imp-grants';
 import type { ImpOpsConfig } from '../imp-ops-config';
 import { checkWarmMove, requireSnapshotMeta } from './check-warm-move';
 import { countMoveBytes } from './count-move-bytes';
@@ -63,7 +63,7 @@ export interface MoveSenderDeps {
     | 'requireUnleased'
     | 'endForcedLeases'
   >;
-  readonly grants: Pick<Broker, 'listGrantDetails'>;
+  readonly grants: Pick<ImpGrants, 'listGrantDetails'>;
   readonly egress: Pick<EgressService, 'readPolicy' | 'readAnswers'>;
   readonly ranges: PeerRanges;
   readonly readWarmHost: () => WarmHost;
