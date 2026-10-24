@@ -48,10 +48,11 @@
         }
       }
     ],
-    // the shared cast ban stays off until the repo's casts go; GEO-1468's PRs for impz remove
-    // the casts and turn both rules back on
+    // the shared cast ban stays off until the repo's casts go, and the lock that refuses this
+    // setting goes with it; GEO-1468's PRs for impz remove the casts and turn all three back on
     "typescript/consistent-type-assertions": "off",
     "zgeoff/no-hidden-cast": "off",
+    "zgeoff/no-comment-rule-override": "off",
     // zod's documented import form is `import * as z from 'zod'`
     "import/no-namespace": "off",
     "no-restricted-imports": [
