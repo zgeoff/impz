@@ -1,5 +1,13 @@
 # Changelog
 
+## [4.1.0](https://github.com/zgeoff/impz/compare/v4.0.0...v4.1.0) (2026-10-24)
+
+### Features
+
+- **daemon:** let an image-prefix token pin and unpin its images
+  ([#683](https://github.com/zgeoff/impz/issues/683))
+  ([d178ced](https://github.com/zgeoff/impz/commit/d178ced66ea61db368406a9e4e2472bc39faa116))
+
 ## [4.0.0](https://github.com/zgeoff/impz/compare/v3.0.2...v4.0.0) (2026-10-24)
 
 ### ⚠ BREAKING CHANGES
