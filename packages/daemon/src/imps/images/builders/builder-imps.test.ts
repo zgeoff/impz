@@ -366,6 +366,43 @@ test('it fails the build when the builder engine does not answer in 60 s, and re
   expect(imps).toStrictEqual([]);
 });
 
+test("it gives the tail of the builder engine's log when the engine does not answer in 60 s", async () => {
+  const ctx = await setupTest();
+
+  const guest = buildStubGuest((run) =>
+    run.argv[0] === 'tail'
+      ? { stdout: 'level=info msg="Starting up"\nlevel=fatal msg="no overlay support"\n' }
+      : { code: 1, stderr: 'Cannot connect to the Docker daemon' },
+  );
+
+  const builders = createBuilders({
+    config: ctx.config,
+    db: ctx.db,
+    imps: {
+      ...ctx.impd.imps,
+      openBuilderExec: (_name, request) => guest.open(request),
+    },
+    ensureImage: async () => {
+      await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: ctx.config.build.image });
+    },
+    clock: buildStubClock(),
+  });
+
+  const building = builders.withBuilder(new AbortController().signal, () =>
+    Promise.resolve('built'),
+  );
+
+  expect(building).rejects.toThrowWithMessage(
+    Error,
+    [
+      "the builder's engine did not answer in 60 s: Cannot connect to the Docker daemon",
+      'the last lines of /var/log/imp/docker.log:',
+      'level=info msg="Starting up"',
+      'level=fatal msg="no overlay support"',
+    ].join('\n'),
+  );
+});
+
 test('it removes the builder of a failed build and rethrows the build error', async () => {
   const ctx = await setupTest();
 
