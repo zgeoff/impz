@@ -235,7 +235,7 @@ export function createHttpsService(deps: HttpsServiceDeps): HttpsService {
       } catch (error) {
         const message = getErrorMessage(error);
 
-        getImpdLogger('https').info('public records: {message}', { message });
+        getImpdLogger('https').warning('public records: {message}', { message });
 
         recordsStatus = { isOk: false, error: message, at: deps.now() };
       }

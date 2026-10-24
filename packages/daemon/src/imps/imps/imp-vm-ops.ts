@@ -274,7 +274,7 @@ export function createImpVmOps(context: ImpContext): ImpVmOps {
 
       getImpdLogger('imps')
         .with({ imp: imp.name })
-        .info('the guest did not grow into its disk: {message}', { message });
+        .warning('the guest did not grow into its disk: {message}', { message });
 
       await setGrowPending(imp, true);
 

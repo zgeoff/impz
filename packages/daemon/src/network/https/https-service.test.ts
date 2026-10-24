@@ -1119,7 +1119,7 @@ test('it logs a DNS failure on the public records', async () => {
   await service.updatePublicRecords();
 
   expect(ctx.logs).toContain(
-    'INFO impd.https public records: Cloudflare GET /zones/z1/dns_records: 500 DNS API down',
+    'WARNING impd.https public records: Cloudflare GET /zones/z1/dns_records: 500 DNS API down',
   );
 });
 

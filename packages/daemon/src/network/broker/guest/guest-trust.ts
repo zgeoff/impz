@@ -146,7 +146,7 @@ export function createGuestTrust(input: string, install: InstallBundle): GuestTr
 
           getImpdLogger('imps')
             .with({ imp: imp.name })
-            .info('broker CA not installed, so this exec gets no broker variables: {detail}', {
+            .warning('broker CA not installed, so this exec gets no broker variables: {detail}', {
               detail,
             });
 
