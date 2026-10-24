@@ -212,7 +212,7 @@ test('it logs a name once when it goes live', async () => {
   await names.runSync();
 
   expect(ctx.logs.filter((line) => line.includes(' impd.tailnet '))).toStrictEqual([
-    'INFO impd.tailnet tailnet names: box is svc:box',
+    'INFO impd.tailnet imp=box tailnet names: named svc:box',
   ]);
 });
 
@@ -540,7 +540,7 @@ test('it logs a failure once while it stays the same', async () => {
   await names.runSync();
 
   expect(ctx.logs.filter((line) => line.includes(' impd.tailnet '))).toStrictEqual([
-    'WARNING impd.tailnet tailnet names: box: Tailscale GET /tailnet/-/services: 503 unavailable',
+    'WARNING impd.tailnet imp=box tailnet names: Tailscale GET /tailnet/-/services: 503 unavailable',
   ]);
 });
 
@@ -703,7 +703,7 @@ test('it shows no service URL before the name is live', async () => {
 
   const failure = await waitFor(() => {
     const line = ctx.logs.find((each) =>
-      each.startsWith('WARNING impd.tailnet tailnet names: box: '),
+      each.startsWith('WARNING impd.tailnet imp=box tailnet names: '),
     );
 
     invariant(line !== undefined);
@@ -713,6 +713,6 @@ test('it shows no service URL before the name is live', async () => {
 
   const urls = await ctx.client.imps.url({ name: 'box' });
 
-  expect(failure).toStartWith('WARNING impd.tailnet tailnet names: box: ENOENT');
+  expect(failure).toStartWith('WARNING impd.tailnet imp=box tailnet names: ENOENT');
   expect(urls.service).toBeNull();
 });

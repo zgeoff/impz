@@ -167,11 +167,9 @@ export async function runRestore(deps: RestoreDeps, input: RestoreInput): Promis
 
       skippedGrants.push(...skipped);
 
-      getImpdLogger('backup').info('restored {name} from {id} ({time})', {
-        name: target.name,
-        id: point.id,
-        time: point.time.toISOString(),
-      });
+      getImpdLogger('backup')
+        .with({ imp: target.name })
+        .info('restored from {id} ({time})', { id: point.id, time: point.time.toISOString() });
     }
 
     return {

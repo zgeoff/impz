@@ -223,12 +223,13 @@ export function startWakeProxy(deps: WakeProxyDeps): WakeProxy {
     if (wokeMs !== null) {
       const path = new URL(request.url).pathname;
 
-      getImpdLogger('proxy').info('{name} woke in {wokeMs}ms for {method} {path}', {
-        name,
-        wokeMs: String(wokeMs),
-        method: request.method,
-        path,
-      });
+      getImpdLogger('proxy')
+        .with({ imp: name })
+        .info('woke in {wokeMs}ms for {method} {path}', {
+          wokeMs: String(wokeMs),
+          method: request.method,
+          path,
+        });
     }
 
     try {

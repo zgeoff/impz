@@ -211,7 +211,9 @@ test('it logs the time its builder took to answer, on its clock', async () => {
 
   await builders.withBuilder(new AbortController().signal, () => Promise.resolve());
 
-  expect(logs).toContain('INFO impd.image image build: builder imp-build-timed ready in 500ms');
+  expect(logs).toContain(
+    'INFO impd.image imp=imp-build-timed image build: the builder is ready in 500ms',
+  );
 });
 
 test('it names each builder with its name picker', async () => {
@@ -499,7 +501,7 @@ test('it keeps the build of a builder that survives its removal, and logs the su
 
   expect(logs).toContainEqual(
     expect.stringMatching(
-      /^ERROR impd\.image image build: builder imp-build-survivor survives its removal, tried again every 30 s: firecracker \d+ survived SIGKILL$/v,
+      /^ERROR impd\.image imp=imp-build-survivor image build: the builder survives its removal, tried again every 30 s: firecracker \d+ survived SIGKILL$/v,
     ),
   );
 });
@@ -534,7 +536,9 @@ test('it removes a builder that survived its removal on a later retry', async ()
   timers.firePending();
 
   await waitFor(() => {
-    expect(logs).toContain('INFO impd.image image build: removed builder imp-build-survivor');
+    expect(logs).toContain(
+      'INFO impd.image imp=imp-build-survivor image build: removed the builder',
+    );
   });
 
   const imps = await listImps(ctx.db);
@@ -583,13 +587,13 @@ test('it retries the removal of a leftover builder that survives it at start', a
   timers.firePending();
 
   await waitFor(() => {
-    expect(logs).toContain('INFO impd.image image build: removed builder imp-build-left');
+    expect(logs).toContain('INFO impd.image imp=imp-build-left image build: removed the builder');
   });
 
   const imps = await listImps(ctx.db);
 
   const errors = logs.filter((line) =>
-    line.startsWith('ERROR impd.image image build: builder imp-build-left survives'),
+    line.startsWith('ERROR impd.image imp=imp-build-left image build: the builder survives'),
   );
 
   expect(imps).toStrictEqual([]);
@@ -642,7 +646,7 @@ test('it never removes a user imp that took the id of a removed builder on a ret
   timers.firePending();
 
   await waitFor(() => {
-    expect(logs).toContain('INFO impd.image image build: removed builder imp-build-left');
+    expect(logs).toContain('INFO impd.image imp=imp-build-left image build: removed the builder');
   });
 
   const imps = await listImps(ctx.db);

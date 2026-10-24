@@ -279,7 +279,7 @@ test('it removes a builder that a stopped impd left when it boots', async () => 
   await ctx.restartImpd();
 
   expect(lines).toContain(
-    'INFO impd.image removing builder imp-build-left, which a stopped impd left',
+    'INFO impd.image imp=imp-build-left removing a builder that a stopped impd left',
   );
 
   expect(listImps(ctx.db)).resolves.toStrictEqual([]);

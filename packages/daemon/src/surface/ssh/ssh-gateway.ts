@@ -305,10 +305,9 @@ function handleLogin(
     const running = await backend.requireRunning(imp.name);
 
     if (running.wokeMs !== null) {
-      getImpdLogger('ssh').info('{name} woke in {wokeMs}ms', {
-        name: imp.name,
-        wokeMs: String(running.wokeMs),
-      });
+      getImpdLogger('ssh')
+        .with({ imp: imp.name })
+        .info('woke in {wokeMs}ms', { wokeMs: String(running.wokeMs) });
     }
 
     await backend.recordActivity(imp.name);

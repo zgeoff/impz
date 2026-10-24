@@ -826,7 +826,7 @@ test('it logs how long the wake of a login took', async () => {
     return line;
   });
 
-  expect(logged).toBe('INFO impd.ssh box woke in 840ms');
+  expect(logged).toBe('INFO impd.ssh imp=box woke in 840ms');
 });
 
 test('it records activity on the imp once a login woke it', async () => {
