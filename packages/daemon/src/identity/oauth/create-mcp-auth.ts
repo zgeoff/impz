@@ -66,7 +66,7 @@ interface McpAuthDeps {
   readonly now: () => number;
 }
 
-export function createMcpAuth(deps: Readonly<McpAuthDeps>): McpAuth {
+export async function createMcpAuth(deps: Readonly<McpAuthDeps>): Promise<McpAuth> {
   // better-auth reads these when it builds its context; an empty endpoint
   // turns its telemetry into a no-op
   process.env['BETTER_AUTH_TELEMETRY'] = '0';
@@ -249,6 +249,10 @@ export function createMcpAuth(deps: Readonly<McpAuthDeps>): McpAuth {
       throw error;
     }
   };
+
+  // better-auth seeds its rows in the background from betterAuth(); a stop before that ends
+  // leaves its query on a destroyed database
+  await auth.$context;
 
   return {
     resource,

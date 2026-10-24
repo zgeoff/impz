@@ -20,7 +20,7 @@ export async function loadImpdAccess(
     isFileKey,
   });
 
-  const oauth = createMcpAuth({
+  const oauth = await createMcpAuth({
     db: deps.db,
     tokens,
     revocations,

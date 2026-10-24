@@ -21,7 +21,7 @@ async function setupTest() {
     isFileKey: () => false,
   });
 
-  const auth = createMcpAuth({
+  const auth = await createMcpAuth({
     db: database.db,
     tokens,
     revocations,
