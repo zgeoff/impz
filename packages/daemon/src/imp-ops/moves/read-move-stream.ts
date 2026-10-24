@@ -374,19 +374,20 @@ async function requireImage(
   options: RequireImageOptions,
 ): Promise<{ readonly name: string; readonly files: readonly ReceivedFile[] }> {
   const header = options.header;
-  const offered = buildOfferedDigests(header.image.digest, header.image.receivedDigest);
-
-  // The use goes in before each read, so an image eviction keeps the image this move picks.
-  await updateImageUse(deps.db, 'digest', offered, deps.now());
-
-  const existing = await readImageByDigest(deps.db, offered);
-
-  if (existing !== undefined) {
-    return { name: existing.name, files: [] };
-  }
 
   if (!header.image.isIncluded) {
-    throw new MoveRequestError(409, `this host has no image ${header.image.digest}`);
+    const offered = buildOfferedDigests(header.image.digest, header.image.receivedDigest);
+
+    // The use goes in before each read, so an image eviction keeps the image this move picks.
+    await updateImageUse(deps.db, 'digest', offered, deps.now());
+
+    const existing = await readImageByDigest(deps.db, offered);
+
+    if (existing === undefined) {
+      throw new MoveRequestError(409, `this host has no image ${header.image.digest}`);
+    }
+
+    return { name: existing.name, files: [] };
   }
 
   const temps = { rootfs: `${options.tempBase}.rootfs`, config: `${options.tempBase}.config` };

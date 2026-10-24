@@ -6,6 +6,7 @@ import type { MoveState } from '@impz/api';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { buildMockMoveTicketRow } from '../../../testing/imp-ops/build-mock-move-ticket-row';
+import { buildStubOverlappingMove } from '../../../testing/imp-ops/build-stub-overlapping-move';
 import {
   SOURCE_PEER,
   TARGET_URL,
@@ -1106,6 +1107,37 @@ test('it files a received image under the digest of what arrived, whatever diges
   expect(status).toMatchObject({ isDone: true, error: null });
   expect(claimed).toBeUndefined();
   expect(image.receivedDigest).toBeNull();
+});
+
+test('it reads the image a move sends when an overlapping move installs that image first', async () => {
+  const overlap = buildStubOverlappingMove();
+
+  const ctx = await setupTest({ hook: overlap.hook });
+
+  await createUbuntuImage(ctx.source);
+
+  await ctx.sourceApp.client.imps.create({ name: 'zero', image: 'ubuntu' });
+  await ctx.sourceApp.client.imps.create({ name: 'one', image: 'ubuntu' });
+  await ctx.sourceApp.client.imps.create({ name: 'two', image: 'ubuntu' });
+  await ctx.sourceApp.client.imps.stop({ name: 'zero' });
+  await ctx.sourceApp.client.imps.stop({ name: 'one' });
+  await ctx.sourceApp.client.imps.stop({ name: 'two' });
+  await ctx.runMove('zero');
+  await ctx.targetApp.client.imps.destroy({ name: 'zero' });
+  await ctx.targetApp.client.images.delete({ name: 'ubuntu' });
+
+  overlap.arm(() => ctx.runMove('two'));
+
+  const status = await ctx.runMove('one');
+  const one = await readImpByName(ctx.target.db, 'one');
+  const two = await readImpByName(ctx.target.db, 'two');
+  const images = await listImages(ctx.target.db);
+
+  invariant(one);
+
+  expect(status).toMatchObject({ isDone: true, error: null });
+  expect(two?.imageId).toBe(one.imageId);
+  expect(images.map((image) => image.name)).toStrictEqual(['ubuntu']);
 });
 
 test('it refuses a data frame that goes back over the data before it', async () => {
