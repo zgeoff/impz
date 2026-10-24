@@ -12,11 +12,10 @@ export interface TailscaleTailnet {
 export async function startTailscaleTailnet(
   runners: CommandRunners,
   key: Readonly<TailscaleE2EKey>,
-  container: string = instance.container,
 ): Promise<TailscaleTailnet> {
-  const member = buildMemberName(container);
+  const member = buildMemberName(instance.container);
 
-  await stopTailscaleTailnet(runners, container);
+  await stopTailscaleTailnet(runners);
 
   await startTailnetMember(runners, {
     name: member,
@@ -27,11 +26,8 @@ export async function startTailscaleTailnet(
   return { member };
 }
 
-export async function stopTailscaleTailnet(
-  runners: CommandRunners,
-  container: string = instance.container,
-): Promise<void> {
-  await runners.runCommand(['docker', 'rm', '-f', buildMemberName(container)]);
+export async function stopTailscaleTailnet(runners: CommandRunners): Promise<void> {
+  await runners.runCommand(['docker', 'rm', '-f', buildMemberName(instance.container)]);
 }
 
 function buildMemberName(container: string): string {
