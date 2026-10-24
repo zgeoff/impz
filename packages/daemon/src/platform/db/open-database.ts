@@ -14,8 +14,11 @@ interface OpenOptions {
   readonly writes?: ImpWriteFeed;
 }
 
-export async function openDatabase(path: string, options: OpenOptions = {}): Promise<ImpDatabase> {
-  const sqlite = new Database(path, { create: true });
+export async function openDatabase(
+  source: string | Database,
+  options: OpenOptions = {},
+): Promise<ImpDatabase> {
+  const sqlite = typeof source === 'string' ? new Database(source, { create: true }) : source;
 
   sqlite.run('PRAGMA journal_mode = WAL;');
   sqlite.run('PRAGMA foreign_keys = ON;');

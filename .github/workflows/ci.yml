@@ -88,14 +88,17 @@ jobs:
 
       # this shard's files, in a cgroup capped below an imp's 2 GiB with no
       # swap, so a test fails here before it outgrows the imps it runs on; the
-      # first --timings file starts empty and takes this shard's measured times
+      # first --timings file starts empty and takes this shard's measured times.
+      # The tests' temp dirs go on tmpfs, so a test impd's data dir and its
+      # checkpoint copies never wait on the runner's disk; TMPDIR rides in the
+      # command, because glibc drops it from the environment of setuid sudo
       - name: Test
         env:
           SHARD: ${{ matrix.shard }}
         run: |
           out="$RUNNER_TEMP/unit-test"
           mkdir -p "$out"
-          scripts/ci/run-memory-capped.sh 1536 bun test --parallel=2 --no-isolate --shard="$SHARD/2" \
+          scripts/ci/run-memory-capped.sh 1536 env TMPDIR=/dev/shm bun test --parallel=2 --no-isolate --shard="$SHARD/2" \
             --timings="$out/timings-$SHARD.json" --timings=scripts/ci/unit-test-timings.json \
             --update-timings --reporter=junit --reporter-outfile="$out/results-$SHARD.xml"
 

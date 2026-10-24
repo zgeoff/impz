@@ -21,7 +21,6 @@ import type { InstallBundle } from '../src/network/broker/guest/guest-trust';
 import type { OAuthFetch } from '../src/network/broker/secrets/oauth-refresher';
 import { createImage } from '../src/platform/db/images';
 import type { ImageRecord } from '../src/platform/db/images';
-import { openDatabase } from '../src/platform/db/open-database';
 import type { ImpDatabase } from '../src/platform/db/open-database';
 import type { HostIdentity } from '../src/vm/sleep/vm-identity';
 import { buildSystemDrivePath, buildSystemDrivesDir } from '../src/vm/storage/data-layout';
@@ -36,6 +35,7 @@ import type { VmRunner } from '../src/vm/vmm/vm-runner';
 import { readThreadIds } from '../src/vm/vmm/vm-stats';
 import { readNoTailscale } from './network/read-no-tailscale';
 import { buildStubTickerTimer } from './platform/build-stub-ticker-timer';
+import { openMigratedCopy } from './platform/open-migrated-copy';
 import { pickImpdPort } from './platform/pick-impd-port';
 import { startImpdLogCapture } from './platform/start-impd-log-capture';
 import { TEST_TOKEN } from './test-token';
@@ -108,7 +108,7 @@ export async function startTestImpd(
     stack.defer(() => rm(dataDir, { recursive: true, force: true }));
   }
 
-  const db = await openDatabase(':memory:');
+  const db = await openMigratedCopy();
 
   stack.defer(async () => {
     await db.destroy();
