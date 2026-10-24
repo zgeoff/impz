@@ -8,6 +8,7 @@ export interface TailnetMemberOptions {
   readonly key: string;
   readonly tailscaleArgs: string;
   readonly network?: string;
+  readonly labels?: Readonly<Record<string, string>>;
 }
 
 // A kernel tun, so docker exec reaches tailnet addresses. Docker copies a
@@ -24,6 +25,10 @@ export async function startTailnetMember(
       '--name',
       options.name,
       ...(options.network === undefined ? [] : ['--network', options.network]),
+      ...Object.entries(options.labels ?? {}).flatMap(([key, value]) => [
+        '--label',
+        `${key}=${value}`,
+      ]),
       '--cap-add',
       'NET_ADMIN',
       '--device',

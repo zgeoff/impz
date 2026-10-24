@@ -87,7 +87,9 @@ test tailnet up before the dev instance starts:
 3. The dev instance and the moves suite's second host join with the same key and keep their node
    state in memory, so a node that an earlier run saved never comes back.
 4. `dev.sh` writes the services client into the instance's data directory for per-imp names.
-5. After the last suite, the harness removes the member, whether the run passed or not.
+5. After the last suite, the harness removes the member, whether the run passed or not. It removes
+   only a container that carries the owner label it set for this instance, and refuses another
+   container of that name.
 
 ## What the production tailnet holds
 
