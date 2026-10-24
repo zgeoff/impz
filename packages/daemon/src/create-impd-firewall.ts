@@ -67,6 +67,7 @@ export async function createImpdFirewall(
     reach,
     secretFiles,
     ...(deps.now !== undefined && { now: deps.now }),
+    timer: deps.tickerTimer,
     ...deps.broker,
   });
 

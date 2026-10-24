@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import invariant from 'tiny-invariant';
 import { buildStubHostRoutes } from '../../../../testing/host-net/build-stub-host-routes';
+import { buildStubTickerTimer } from '../../../../testing/platform/build-stub-ticker-timer';
 import { loadConfig } from '../../../config';
 import { createReachPolicy } from '../../../host-net/net/reach-policy';
 import { writeConsistentCopy } from '../../../platform/db/database-copy';
@@ -34,7 +35,7 @@ async function setupTest() {
     ...buildStubHostRoutes().deps,
   });
 
-  return { stack, config, db, dataDir, reach };
+  return { stack, config, db, dataDir, reach, timer: buildStubTickerTimer().timer };
 }
 
 test('it keeps aside a value no row of an older database names', async () => {
@@ -44,7 +45,7 @@ test('it keeps aside a value no row of an older database names', async () => {
     config: ctx.config,
     db: ctx.db,
     log: () => {},
-    runOAuthTimer: false,
+    timer: ctx.timer,
     reach: ctx.reach,
   });
 
@@ -72,7 +73,7 @@ test('it keeps aside a value no row of an older database names', async () => {
   const restored = await createBroker({
     config: ctx.config,
     db: older,
-    runOAuthTimer: false,
+    timer: ctx.timer,
     reach: ctx.reach,
     now: () => Date.parse('2026-10-04T05:30:00.000Z'),
     log: (message) => {
@@ -102,7 +103,7 @@ test('it removes the old file of a delete that stopped before removing it, on th
     config: ctx.config,
     db: ctx.db,
     log: () => {},
-    runOAuthTimer: false,
+    timer: ctx.timer,
     reach: ctx.reach,
   });
 
@@ -131,7 +132,7 @@ test('it removes the old file of a delete that stopped before removing it, on th
     config: ctx.config,
     db: ctx.db,
     log: () => {},
-    runOAuthTimer: false,
+    timer: ctx.timer,
     reach: ctx.reach,
   });
 
@@ -151,7 +152,7 @@ test('it removes the old file of a replace that stopped before removing it, on t
     config: ctx.config,
     db: ctx.db,
     log: () => {},
-    runOAuthTimer: false,
+    timer: ctx.timer,
     reach: ctx.reach,
   });
 
@@ -180,7 +181,7 @@ test('it removes the old file of a replace that stopped before removing it, on t
     config: ctx.config,
     db: ctx.db,
     log: () => {},
-    runOAuthTimer: false,
+    timer: ctx.timer,
     reach: ctx.reach,
   });
 
@@ -204,7 +205,7 @@ test('it keeps the record of a file whose removal fails again, and keeps the fil
     config: ctx.config,
     db: ctx.db,
     log: () => {},
-    runOAuthTimer: false,
+    timer: ctx.timer,
     reach: ctx.reach,
   });
 
@@ -231,7 +232,7 @@ test('it keeps the record of a file whose removal fails again, and keeps the fil
   const restarted = await createBroker({
     config: ctx.config,
     db: ctx.db,
-    runOAuthTimer: false,
+    timer: ctx.timer,
     reach: ctx.reach,
     log: (message) => {
       logs.push(message);
@@ -258,7 +259,7 @@ test('it never removes a recorded file that a row still names', async () => {
     config: ctx.config,
     db: ctx.db,
     log: () => {},
-    runOAuthTimer: false,
+    timer: ctx.timer,
     reach: ctx.reach,
   });
 
@@ -280,7 +281,7 @@ test('it never removes a recorded file that a row still names', async () => {
     config: ctx.config,
     db: ctx.db,
     log: () => {},
-    runOAuthTimer: false,
+    timer: ctx.timer,
     reach: ctx.reach,
   });
 

@@ -1104,7 +1104,7 @@ test('it refuses a tunnel into the imps’ IPv6 prefix', async () => {
     config: ctx.config,
     db: ctx.db,
     log: () => {},
-    runOAuthTimer: false,
+    timer: ctx.tickers.timer,
     reach: createReachPolicy({
       subnet: ctx.config.subnet,
       deny: [],
@@ -1147,7 +1147,7 @@ test('it dials a public IPv6 address when impd has IPv6', async () => {
     config: ctx.config,
     db: ctx.db,
     log: () => {},
-    runOAuthTimer: false,
+    timer: ctx.tickers.timer,
     reach: createReachPolicy({
       subnet: ctx.config.subnet,
       deny: [],
@@ -1192,7 +1192,7 @@ test('it refuses every IPv6 tunnel when impd has no IPv6', async () => {
     config: ctx.config,
     db: ctx.db,
     log: () => {},
-    runOAuthTimer: false,
+    timer: ctx.tickers.timer,
     reach: createReachPolicy({
       subnet: ctx.config.subnet,
       deny: [],

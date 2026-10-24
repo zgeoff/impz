@@ -401,7 +401,6 @@ test('it closes the database it opened itself when it stops', async () => {
     broker: {
       installBundle: () => Promise.resolve(),
       resolveTunnelTarget: () => Promise.reject(new Error('no network in tests')),
-      runOAuthTimer: false,
     },
     egress: {
       runNft: () => Promise.resolve(),
@@ -503,7 +502,6 @@ test('it sets a lease end from the wall clock when no clock is given', async () 
     broker: {
       installBundle: () => Promise.resolve(),
       resolveTunnelTarget: () => Promise.reject(new Error('no network in tests')),
-      runOAuthTimer: false,
     },
     egress: {
       runNft: () => Promise.resolve(),
@@ -644,7 +642,6 @@ test('it answers /health without a token, not ready before the default image is 
     broker: {
       installBundle: () => Promise.resolve(),
       resolveTunnelTarget: () => Promise.reject(new Error('no network in tests')),
-      runOAuthTimer: false,
     },
     egress: {
       runNft: () => Promise.resolve(),

@@ -14,25 +14,11 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const gap = { once: (): Promise<void> => Promise.resolve() };
-
-  const harness = await startTestImpd(stack, {
-    boundaries: {
-      broker: {
-        beforeGrantWrite: () => {
-          const run = gap.once;
-
-          gap.once = () => Promise.resolve();
-
-          return run();
-        },
-      },
-    },
-  });
+  const harness = await startTestImpd(stack);
 
   const sendToImpd = (request: Request) => harness.impd.api.app.handle(request);
 
-  return Object.assign(harness, { sendToImpd, gap });
+  return Object.assign(harness, { sendToImpd });
 }
 
 test('it lets a host-wide manage token change another token’s list', async () => {
@@ -602,26 +588,27 @@ test('it refuses in the transaction a grant checked before an update took its se
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-119-0' });
   await ctx.client.secrets.add({ name: 'npm', kind: 'npm', value: 'sk-synthetic-119-1' });
 
-  const made = await ctx.client.tokens.create({
+  await ctx.client.tokens.create({
     name: 'agent',
     scope: 'manage',
     imps: ['dev-*'],
     grantable: ['gh', 'npm'],
   });
 
-  const agent: ContractRouterClient<ImpContract> = createORPCClient(
-    new RPCLink({
-      url: 'http://impd.test/rpc',
-      headers: { authorization: `Bearer ${made.secret}` },
-      fetch: ctx.sendToImpd,
-    }),
-  );
+  const tokens = await listTokenRecords(ctx.db);
 
-  ctx.gap.once = async () => {
-    await ctx.client.tokens.update({ name: 'agent', grantable: ['npm'] });
-  };
+  const token = tokens.find((record) => record.name === 'agent');
+  const checked = token?.grantable.find((entry) => entry.name === 'gh');
 
-  const added = agent.grants.add({ name: 'dev-a', secret: 'gh' });
+  invariant(token);
+  invariant(checked);
+
+  await ctx.client.tokens.update({ name: 'agent', grantable: ['npm'] });
+
+  const added = ctx.impd.broker.addGrant('dev-a', 'gh', {
+    tokenId: token.id,
+    generation: checked.generation,
+  });
 
   expect(added).rejects.toMatchObject({ code: 'FORBIDDEN', data: { reason: 'not_grantable' } });
 

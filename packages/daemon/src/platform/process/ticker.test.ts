@@ -20,6 +20,44 @@ test('it waits one interval before the first run', () => {
   expect(stub.readDelays()).toStrictEqual({ sweep: 30_000 });
 });
 
+test('it waits the first delay it is given before the first run', () => {
+  const stub = buildStubTickerTimer();
+  const task = mock(() => Promise.resolve());
+
+  const ticker = startTicker({
+    label: 'sweep',
+    intervalMs: 30_000,
+    firstDelayMs: 0,
+    task,
+    log: () => {},
+    timer: stub.timer,
+  });
+
+  onTestFinished(() => ticker.stop());
+
+  expect(stub.readDelays()).toStrictEqual({ sweep: 0 });
+});
+
+test('it waits one interval after a first run that had its own delay', async () => {
+  const stub = buildStubTickerTimer();
+  const task = mock(() => Promise.resolve());
+
+  const ticker = startTicker({
+    label: 'sweep',
+    intervalMs: 30_000,
+    firstDelayMs: 0,
+    task,
+    log: () => {},
+    timer: stub.timer,
+  });
+
+  onTestFinished(() => ticker.stop());
+
+  await stub.fire('sweep');
+
+  expect(stub.readDelays()).toStrictEqual({ sweep: 30_000 });
+});
+
 test('it runs the task when the interval passes', async () => {
   const stub = buildStubTickerTimer();
   const task = mock(() => Promise.resolve());

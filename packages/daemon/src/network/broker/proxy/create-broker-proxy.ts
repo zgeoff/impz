@@ -51,7 +51,6 @@ interface BrokerProxyDeps {
   readonly resolveTunnelTarget?: ((host: string, mode: EgressMode) => Promise<string>) | undefined;
   readonly dialTunnel?: ((address: string, port: number) => Socket) | undefined;
   readonly reach: ReachPolicy;
-  readonly afterRuleRead?: (() => Promise<void>) | undefined;
 
   readonly refreshAfterRejection?: ForwardDeps['refreshAfterRejection'] | undefined;
 }
@@ -92,8 +91,6 @@ export function createBrokerProxy(deps: BrokerProxyDeps): BrokerProxy {
 
   const readCredential = async (impId: string, host: string): Promise<Credential | null> => {
     const granted = await readRule(impId, host);
-
-    await deps.afterRuleRead?.();
 
     const stored = granted === undefined ? null : files.read(granted.valueFile);
     const oauth = granted?.kind === 'oauth' && stored !== null ? parseOAuthState(stored) : null;

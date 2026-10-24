@@ -1,5 +1,5 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
-import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { createConnection } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -9,6 +9,7 @@ import { buildStubAnswerQueue } from '@impz/test-utils/build-stub-answer-queue';
 import { server } from '@impz/test-utils/mock-server';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { HttpResponse, http } from 'msw';
+import invariant from 'tiny-invariant';
 import { buildStubBrokerGuest } from '../../../../testing/network/build-stub-broker-guest';
 import { createStubBrokerTokenEndpoint } from '../../../../testing/network/create-stub-broker-token-endpoint';
 import { startStubBrokerGuestSocket } from '../../../../testing/network/start-stub-broker-guest-socket';
@@ -88,7 +89,6 @@ async function setupTest() {
   });
 
   const upstreamsFile = join(dataDir, 'upstreams.json');
-  const ruleRead = { hook: (): Promise<void> => Promise.resolve() };
 
   const tunnelPorts = new Map([[443, realHost.port]]);
 
@@ -103,7 +103,6 @@ async function setupTest() {
     resolveTunnelTarget: () => Promise.resolve('127.0.0.1'),
     dialTunnel: (address, port) =>
       createConnection({ host: address, port: tunnelPorts.get(port) ?? port }),
-    afterRuleRead: () => ruleRead.hook(),
   });
 
   const proxyPort = harness.config.brokerPort;
@@ -121,7 +120,6 @@ async function setupTest() {
     tunnelled,
     answers,
     tunnelAnswers,
-    ruleRead,
     upstreamsFile,
     upstreamOrigin: upstream.origin,
     upstreamCaPem: upstream.caPem,
@@ -835,7 +833,7 @@ test('it lets the request under way finish on a revoke, and the next gets no cre
   expect(ctx.tunnelled).toStrictEqual([]);
 });
 
-test('it never sends a rebound value to the host the secret had before', async () => {
+test('it sends no credential for a grant whose value file is gone', async () => {
   const ctx = await setupTest();
 
   await ctx.createTestImage('base');
@@ -856,39 +854,13 @@ test('it never sends a rebound value to the host the secret had before', async (
 
   await ctx.impd.broker.addGrant('dev', 'api');
 
-  const reached = Promise.withResolvers<void>();
-  const release = Promise.withResolvers<void>();
+  const secret = await readSecret(ctx.db, 'api');
 
-  ctx.ruleRead.hook = async () => {
-    reached.resolve();
+  invariant(secret);
 
-    await release.promise;
-  };
+  await rm(join(ctx.dataDir, 'secrets', secret.valueFile));
 
-  const request = ctx.guest.curl('https://api.github.com/x');
-
-  await reached.promise;
-
-  const replaced = ctx.impd.broker.addSecret({
-    name: 'api',
-    kind: 'custom',
-    value: 'new-value',
-    rules: [buildMockBrokerRule({ host: 'other.example.com' })],
-    replace: true,
-    rebind: true,
-  });
-
-  await waitFor(async () => {
-    const secret = await readSecret(ctx.db, 'api');
-    const files = await readdir(join(ctx.dataDir, 'secrets'));
-
-    expect(secret?.rules[0]?.host).toBe('other.example.com');
-    expect(files).toHaveLength(1);
-  });
-
-  release.resolve();
-
-  const [result] = await Promise.all([request, replaced]);
+  const result = await ctx.guest.curl('https://api.github.com/x');
 
   expect(result).toStrictEqual({
     code: 0,

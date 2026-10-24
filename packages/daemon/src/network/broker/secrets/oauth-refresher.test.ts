@@ -13,6 +13,7 @@ import { buildStubBrokerJwt } from '../../../../testing/network/build-stub-broke
 import { createStubBrokerTokenEndpoint } from '../../../../testing/network/create-stub-broker-token-endpoint';
 import { startStubBrokerTlsUpstream } from '../../../../testing/network/start-stub-broker-tls-upstream';
 import { buildQueryGate } from '../../../../testing/platform/build-query-gate';
+import { buildStubTickerTimer } from '../../../../testing/platform/build-stub-ticker-timer';
 import { createTestDatabase } from '../../../../testing/platform/create-test-database';
 import { createSecret, removeSecret } from '../../../platform/db/secrets';
 import { loadOrCreateBrokerCa } from '../tls/broker-ca';
@@ -937,6 +938,88 @@ test('it refreshes a secret that is due on a tick and leaves one that is not', a
   expect(endpoint.requests.map((request) => request.refreshToken)).toStrictEqual([
     'fake-refresh-due',
   ]);
+});
+
+test('it schedules its first refresh pass at once when it starts', async () => {
+  const ctx = await setupTest();
+
+  const timer = buildStubTickerTimer();
+
+  const refresher = createOAuthRefresher({
+    db: ctx.db,
+    files: ctx.files,
+    log: () => {},
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    timer: timer.timer,
+  });
+
+  refresher.start();
+
+  onTestFinished(() => refresher.stop());
+
+  expect(timer.readDelays()).toStrictEqual({ 'oauth-refresh': 0 });
+});
+
+test('it refreshes a pending secret when its timer fires', async () => {
+  const ctx = await setupTest();
+
+  const timer = buildStubTickerTimer();
+  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+
+  server.use(endpoint.handler);
+  endpoint.issue('fake-refresh-0', { access_token: 'fake-access-1', expires_in: 3600 });
+
+  const valueFile = buildValueFile('codex');
+
+  ctx.files.write(valueFile, formatOAuthState(buildPendingState('fake-refresh-0')));
+
+  await createSecret(ctx.db, {
+    name: 'codex',
+    kind: 'oauth',
+    rules: [buildMockBrokerRule()],
+    oauth: buildMockOAuthConfig({ tokenUrl: 'https://auth.example.com/oauth/token' }),
+    valueFile,
+  });
+
+  const refresher = createOAuthRefresher({
+    db: ctx.db,
+    files: ctx.files,
+    log: () => {},
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    timer: timer.timer,
+  });
+
+  refresher.start();
+
+  onTestFinished(() => refresher.stop());
+
+  await timer.fire('oauth-refresh');
+
+  expect(endpoint.requests.map((request) => request.refreshToken)).toStrictEqual([
+    'fake-refresh-0',
+  ]);
+});
+
+test('it schedules the next refresh pass a minute after a pass ends', async () => {
+  const ctx = await setupTest();
+
+  const timer = buildStubTickerTimer();
+
+  const refresher = createOAuthRefresher({
+    db: ctx.db,
+    files: ctx.files,
+    log: () => {},
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    timer: timer.timer,
+  });
+
+  refresher.start();
+
+  onTestFinished(() => refresher.stop());
+
+  await timer.fire('oauth-refresh');
+
+  expect(timer.readDelays()).toStrictEqual({ 'oauth-refresh': 60_000 });
 });
 
 test('it sends nothing on the next tick after a refresh', async () => {

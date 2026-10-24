@@ -25,15 +25,7 @@ import type { VmRunner } from './vm/vmm/vm-runner';
 
 type BrokerBoundaries = Pick<
   BrokerDeps,
-  | 'installBundle'
-  | 'fetch'
-  | 'oauthFetch'
-  | 'now'
-  | 'runOAuthTimer'
-  | 'resolveTunnelTarget'
-  | 'dialTunnel'
-  | 'afterRuleRead'
-  | 'beforeGrantWrite'
+  'installBundle' | 'fetch' | 'oauthFetch' | 'now' | 'resolveTunnelTarget' | 'dialTunnel'
 >;
 
 type EgressBoundaries = Pick<

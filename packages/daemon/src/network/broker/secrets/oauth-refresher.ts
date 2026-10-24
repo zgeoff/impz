@@ -7,6 +7,8 @@ import { buildBackoffMs } from '../../../platform/process/build-backoff-ms';
 import { getErrorMessage } from '../../../platform/process/get-error-message';
 import { buildKeyedMutex } from '../../../platform/process/keyed-mutex';
 import { createSingleFlight } from '../../../platform/process/single-flight';
+import { startTicker } from '../../../platform/process/ticker';
+import type { Ticker, TickerTimer } from '../../../platform/process/ticker';
 import type { Upstream } from '../tls/forward-request';
 import { isDue } from './is-due';
 import { formatOAuthState, parseOAuthState, readJwtExpiry } from './oauth-state';
@@ -57,7 +59,7 @@ interface OAuthRefresherDeps {
   readonly fetch?: OAuthFetch;
   readonly now?: () => number;
   readonly timeoutMs?: number;
-  readonly tickMs?: number;
+  readonly timer?: TickerTimer | undefined;
 }
 
 const BACKOFF_BASE_MS = 60_000;
@@ -79,12 +81,7 @@ export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
   const unsaved = new Map<string, { valueFile: string; state: OAuthStateFile }>();
 
   const lifecycle = { stopping: false };
-
-  const timer: { handle: ReturnType<typeof setInterval> | null; running: Promise<void> | null } = {
-    handle: null,
-    running: null,
-  };
-
+  const timer: { ticker: Ticker | null } = { ticker: null };
   const withLock = locks.runExclusive;
 
   const writeState = (
@@ -462,43 +459,25 @@ export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
     }
   };
 
-  const startDueRun = (): void => {
-    if (timer.running !== null) {
-      return;
-    }
-
-    timer.running = (async () => {
-      try {
-        await runDueRefreshes();
-      } finally {
-        timer.running = null;
-      }
-    })();
-  };
-
   return {
     refresh: startRefresh,
     refreshAfterRejection,
     withLock,
     tick: runDueRefreshes,
     start: () => {
-      startDueRun();
-
-      timer.handle = setInterval(startDueRun, deps.tickMs ?? 60_000);
-
-      timer.handle.unref();
+      timer.ticker = startTicker({
+        label: 'oauth-refresh',
+        intervalMs: 60_000,
+        firstDelayMs: 0,
+        task: runDueRefreshes,
+        log,
+        timer: deps.timer,
+      });
     },
     stop: async () => {
       lifecycle.stopping = true;
 
-      if (timer.handle !== null) {
-        clearInterval(timer.handle);
-
-        timer.handle = null;
-      }
-
-      await timer.running;
-
+      await timer.ticker?.stop();
       await inflight.waitForAll();
       await Promise.allSettled([...unsaved.keys()].map((name) => writeUnsaved(name)));
     },

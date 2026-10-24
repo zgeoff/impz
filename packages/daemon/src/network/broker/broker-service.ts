@@ -38,6 +38,7 @@ import {
   buildNotFoundError,
 } from '../../platform/errors/impd-errors';
 import { getErrorMessage } from '../../platform/process/get-error-message';
+import type { TickerTimer } from '../../platform/process/ticker';
 import type { NetworkConfig } from '../network-config';
 import {
   buildBrokerEnv,
@@ -131,16 +132,12 @@ export interface BrokerDeps {
   readonly fetch?: UpstreamFetch;
   readonly oauthFetch?: OAuthFetch;
   readonly now?: () => number;
+  readonly timer?: TickerTimer | undefined;
 
-  readonly runOAuthTimer?: boolean;
   readonly resolveTunnelTarget?: (host: string, mode: EgressMode) => Promise<string>;
   readonly dialTunnel?: (address: string, port: number) => Socket;
 
   readonly reach: ReachPolicy;
-
-  readonly afterRuleRead?: () => Promise<void>;
-
-  readonly beforeGrantWrite?: () => Promise<void>;
   readonly secretFiles?: SecretFiles;
 }
 
@@ -189,6 +186,7 @@ export async function createBroker(deps: BrokerDeps): Promise<Broker> {
     resolveUpstream,
     ...(deps.oauthFetch !== undefined && { fetch: deps.oauthFetch }),
     ...(deps.now !== undefined && { now: deps.now }),
+    timer: deps.timer,
   });
 
   const proxy = createBrokerProxy({
@@ -203,7 +201,6 @@ export async function createBroker(deps: BrokerDeps): Promise<Broker> {
     resolveTunnelTarget: deps.resolveTunnelTarget,
     dialTunnel: deps.dialTunnel,
     reach: deps.reach,
-    afterRuleRead: deps.afterRuleRead,
     refreshAfterRejection: refresher.refreshAfterRejection,
   });
 
@@ -217,9 +214,7 @@ export async function createBroker(deps: BrokerDeps): Promise<Broker> {
     return imp;
   };
 
-  if (deps.runOAuthTimer !== false) {
-    refresher.start();
-  }
+  refresher.start();
 
   const applyGrants = async (): Promise<void> => {
     try {
@@ -258,10 +253,6 @@ export async function createBroker(deps: BrokerDeps): Promise<Broker> {
         throw buildMovingError(impName);
       }
 
-      if (deps.beforeGrantWrite !== undefined) {
-        await deps.beforeGrantWrite();
-      }
-
       const outcome = await createCheckedGrant(db, {
         impId: imp.id,
         secretName,
@@ -286,10 +277,6 @@ export async function createBroker(deps: BrokerDeps): Promise<Broker> {
 
       if (imp.moveState !== null) {
         throw buildMovingError(impName);
-      }
-
-      if (deps.beforeGrantWrite !== undefined) {
-        await deps.beforeGrantWrite();
       }
 
       const outcome = await removeCheckedGrant(db, imp.id, secretName, authority);
@@ -334,10 +321,6 @@ export async function createBroker(deps: BrokerDeps): Promise<Broker> {
     },
 
     createForkGrants: async (source, fork, authority) => {
-      if (deps.beforeGrantWrite !== undefined) {
-        await deps.beforeGrantWrite();
-      }
-
       try {
         const outcome = await createForkGrants(db, source.id, fork.id, authority);
 
