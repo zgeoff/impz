@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { ImageOpEventSchema } from '../protocols/image-build-protocol';
+import { ImageOpEventSchema } from '../schemas/image-op-event-schema';
 import { buildMockImageBuildProgress } from './build-mock-image-build-progress';
 
 test('it builds a default image build progress', () => {

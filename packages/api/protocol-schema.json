@@ -7877,28 +7877,47 @@
     },
     "images.buildStream": {
       "input": {
-        "type": "object",
-        "properties": {
-          "contextDir": {
-            "type": "string",
-            "format": "starts_with",
-            "pattern": "^\\/.*"
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "contextDir": {
+                "type": "string",
+                "format": "starts_with",
+                "pattern": "^\\/.*"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]{0,30}$"
+              },
+              "dockerfile": {
+                "type": "string",
+                "minLength": 1
+              },
+              "logs": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "contextDir",
+              "name"
+            ]
           },
-          "name": {
-            "type": "string",
-            "pattern": "^[a-z][a-z0-9-]{0,30}$"
-          },
-          "dockerfile": {
-            "type": "string",
-            "minLength": 1
-          },
-          "logs": {
-            "type": "boolean"
+          {
+            "type": "object",
+            "properties": {
+              "upload": {
+                "type": "string",
+                "minLength": 1
+              },
+              "logs": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "upload"
+            ]
           }
-        },
-        "required": [
-          "contextDir",
-          "name"
         ]
       },
       "output": {
@@ -12502,9 +12521,6 @@
               "databaseCopy": {
                 "type": "boolean"
               },
-              "imageBuildStream": {
-                "type": "boolean"
-              },
               "imageOpStream": {
                 "type": "boolean"
               },
@@ -12551,6 +12567,9 @@
                 "type": "boolean"
               },
               "imagePins": {
+                "type": "boolean"
+              },
+              "buildContextUpload": {
                 "type": "boolean"
               }
             },
@@ -12613,9 +12632,6 @@
               "databaseCopy": {
                 "type": "boolean"
               },
-              "imageBuildStream": {
-                "type": "boolean"
-              },
               "imageOpStream": {
                 "type": "boolean"
               },
@@ -12662,6 +12678,9 @@
                 "type": "boolean"
               },
               "imagePins": {
+                "type": "boolean"
+              },
+              "buildContextUpload": {
                 "type": "boolean"
               }
             },
@@ -14609,7 +14628,7 @@
         ]
       }
     },
-    "imageBuild.query": {
+    "buildContext.query": {
       "direction": "toServer",
       "schema": {
         "type": "object",
@@ -14628,193 +14647,27 @@
         ]
       }
     },
-    "imageBuild.event": {
-      "direction": "toClient",
-      "schema": {
-        "oneOf": [
-          {
-            "type": "object",
-            "properties": {
-              "type": {
-                "type": "string",
-                "const": "progress"
-              },
-              "phase": {
-                "type": "string",
-                "enum": [
-                  "upload",
-                  "pack",
-                  "build",
-                  "pull",
-                  "unpack",
-                  "copy"
-                ]
-              },
-              "elapsedMs": {
-                "type": "number",
-                "minimum": 0
-              },
-              "step": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "type",
-              "phase",
-              "elapsedMs"
-            ]
-          },
-          {
-            "type": "object",
-            "properties": {
-              "type": {
-                "type": "string",
-                "const": "log"
-              },
-              "text": {
-                "type": "string",
-                "maxLength": 8192
-              }
-            },
-            "required": [
-              "type",
-              "text"
-            ]
-          },
-          {
-            "type": "object",
-            "properties": {
-              "type": {
-                "type": "string",
-                "const": "image"
-              },
-              "image": {
-                "type": "object",
-                "properties": {
-                  "id": {
-                    "type": "string"
-                  },
-                  "name": {
-                    "type": "string",
-                    "pattern": "^[a-z][a-z0-9-]{0,30}$"
-                  },
-                  "ref": {
-                    "type": "string"
-                  },
-                  "digest": {
-                    "type": "string"
-                  },
-                  "source": {
-                    "type": "string",
-                    "enum": [
-                      "oci",
-                      "imp"
-                    ]
-                  },
-                  "createdAt": {
-                    "type": "string",
-                    "format": "date-time"
-                  },
-                  "sizeBytes": {
-                    "type": "integer",
-                    "minimum": 0,
-                    "maximum": 9007199254740991
-                  },
-                  "pinned": {
-                    "default": false,
-                    "type": "boolean"
-                  }
-                },
-                "required": [
-                  "id",
-                  "name",
-                  "ref",
-                  "digest",
-                  "source",
-                  "createdAt",
-                  "sizeBytes"
-                ]
-              }
-            },
-            "required": [
-              "type",
-              "image"
-            ]
-          },
-          {
-            "type": "object",
-            "properties": {
-              "code": {
-                "type": "string"
-              },
-              "message": {
-                "type": "string"
-              },
-              "type": {
-                "type": "string",
-                "const": "error"
-              }
-            },
-            "required": [
-              "code",
-              "message",
-              "type"
-            ]
-          }
-        ]
-      }
-    },
-    "imageBuild.result": {
+    "buildContext.upload": {
       "direction": "toClient",
       "schema": {
         "type": "object",
         "properties": {
           "id": {
-            "type": "string"
-          },
-          "name": {
             "type": "string",
-            "pattern": "^[a-z][a-z0-9-]{0,30}$"
+            "minLength": 1
           },
-          "ref": {
-            "type": "string"
-          },
-          "digest": {
-            "type": "string"
-          },
-          "source": {
-            "type": "string",
-            "enum": [
-              "oci",
-              "imp"
-            ]
-          },
-          "createdAt": {
+          "expiresAt": {
             "type": "string",
             "format": "date-time"
-          },
-          "sizeBytes": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
-          },
-          "pinned": {
-            "default": false,
-            "type": "boolean"
           }
         },
         "required": [
           "id",
-          "name",
-          "ref",
-          "digest",
-          "source",
-          "createdAt",
-          "sizeBytes"
+          "expiresAt"
         ]
       }
     },
-    "imageBuild.error": {
+    "buildContext.error": {
       "direction": "toClient",
       "schema": {
         "type": "object",
@@ -15266,8 +15119,7 @@
     "EXEC_STDIN_WINDOW_BYTES": 1048576,
     "EXEC_MAX_STDIN_FRAME_BYTES": 65536,
     "EXEC_STDOUT_WINDOW_BYTES": 1048576,
-    "IMAGE_BUILD_PATH": "/images/build",
-    "IMAGE_BUILD_STREAM_TYPE": "application/x-ndjson",
+    "BUILD_CONTEXT_PATH": "/images/build-context",
     "TUNNEL_PATH": "/tunnel",
     "TUNNEL_CLOSE_NORMAL": 1000,
     "TUNNEL_CLOSE_PROTOCOL": 1002,

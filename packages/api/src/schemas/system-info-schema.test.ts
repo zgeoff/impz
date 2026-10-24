@@ -68,7 +68,6 @@ test('it accepts the system info of a host with every part turned on', () => {
       tokenUpdate: true,
       tokenImageAdd: true,
       databaseCopy: true,
-      imageBuildStream: true,
       imageOpStream: true,
       imageBuilds: true,
       execRequire: true,
@@ -85,6 +84,7 @@ test('it accepts the system info of a host with every part turned on', () => {
       execDropSysAdmin: true,
       guestScratch: true,
       imagePins: true,
+      buildContextUpload: true,
     },
   } as const;
 

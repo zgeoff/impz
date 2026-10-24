@@ -63,10 +63,9 @@ test('it reads each stream message in the direction it travels', () => {
     'exec.server': 'toClient',
     'tunnel.client': 'toServer',
     'tunnel.server': 'toClient',
-    'imageBuild.query': 'toServer',
-    'imageBuild.event': 'toClient',
-    'imageBuild.result': 'toClient',
-    'imageBuild.error': 'toClient',
+    'buildContext.query': 'toServer',
+    'buildContext.upload': 'toClient',
+    'buildContext.error': 'toClient',
   });
 });
 
@@ -81,7 +80,7 @@ test('it lists the wire constants', () => {
   expect(buildProtocolSchema().constants).toMatchObject({
     EXEC_PATH: '/exec',
     TUNNEL_PATH: '/tunnel',
-    IMAGE_BUILD_PATH: '/images/build',
+    BUILD_CONTEXT_PATH: '/images/build-context',
   });
 });
 

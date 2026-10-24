@@ -5,23 +5,21 @@ export { LeaseLabelSchema } from './schemas/lease-schema';
 export type { Lease, LeaseSummary } from './schemas/lease-schema';
 
 export {
-  IMAGE_BUILD_LOG_MAX_CHARS,
-  IMAGE_BUILD_PATH,
-  IMAGE_BUILD_STREAM_TYPE,
-  ImageBuildErrorSchema,
-  ImageBuildEventSchema,
-  ImageBuildQuerySchema,
-  ImageBuildResultSchema,
-} from './protocols/image-build-protocol';
+  BUILD_CONTEXT_PATH,
+  BuildContextErrorSchema,
+  BuildContextQuerySchema,
+  BuildContextUploadSchema,
+} from './protocols/build-context-protocol';
+
+export type { BuildContextQuery, BuildContextUpload } from './protocols/build-context-protocol';
+export { IMAGE_BUILD_LOG_MAX_CHARS } from './schemas/image-op-event-schema';
 
 export type {
-  ImageBuildEvent,
   ImageBuildLog,
   ImageBuildPhase,
   ImageOpEvent,
   ImageBuildProgress,
-  ImageBuildQuery,
-} from './protocols/image-build-protocol';
+} from './schemas/image-op-event-schema';
 
 export type { Checkpoint } from './schemas/checkpoint-schema';
 

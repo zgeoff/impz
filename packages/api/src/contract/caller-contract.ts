@@ -1,6 +1,6 @@
 import { eventIterator } from '@orpc/contract';
 import * as z from 'zod';
-import { DockerfilePathSchema, ImageOpEventSchema } from '../protocols/image-build-protocol';
+import { DockerfilePathSchema } from '../protocols/build-context-protocol';
 import { ApiCallSchema } from '../schemas/api-call-schema';
 import {
   BackupCheckSubsetSchema,
@@ -14,6 +14,7 @@ import { EmptySchema } from '../schemas/empty-schema';
 import { ImpEventSchema } from '../schemas/event-schema';
 import { FileContentSchema, FilePathSchema } from '../schemas/file-schema';
 import { ImageBuildRunSchema } from '../schemas/image-build-run-schema';
+import { ImageOpEventSchema } from '../schemas/image-op-event-schema';
 import { ImageRefSchema } from '../schemas/image-ref-schema';
 import { ImageSchema } from '../schemas/image-schema';
 import { ImpSchema } from '../schemas/imp-schema';
@@ -93,6 +94,12 @@ const ImageBuildInputSchema = z.object({
 
   logs: z.boolean().optional(),
 });
+
+// An upload names its image and Dockerfile when it sends the context.
+const ImageBuildStreamInputSchema = z.union([
+  ImageBuildInputSchema,
+  z.object({ upload: z.string().min(1), logs: z.boolean().optional() }),
+]);
 
 export const CheckpointCreateInputSchema = z.object({
   name: NameSchema,
@@ -234,7 +241,7 @@ export const callerContract = {
       .output(eventIterator(ImageOpEventSchema)),
     buildStream: base
       .meta({ access: { scope: 'manage', on: 'host', audit: 'refusals' } })
-      .input(ImageBuildInputSchema)
+      .input(ImageBuildStreamInputSchema)
       .output(eventIterator(ImageOpEventSchema)),
 
     // a running build's steps show its Dockerfile's commands: host-wide

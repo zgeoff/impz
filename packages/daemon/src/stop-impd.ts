@@ -25,6 +25,7 @@ export interface ImpdStopParts {
   egress?: { readonly stop: () => void };
   ssh?: Stoppable | null;
   closeExecSessions?: () => void;
+  releaseBuildUploads?: () => void;
   publicMcp?: Stoppable | null;
   api?: { readonly stop: (closeActiveConnections: boolean) => Promise<void> };
   imps?: Pick<Imps, 'sleepAllImps' | 'waitForLifecycle' | 'bootTemplates'>;
@@ -145,6 +146,14 @@ export async function stopImpd(
   if (closeExecSessions !== undefined) {
     await runStep('exec-sessions', readStepMs(), () => {
       closeExecSessions();
+    });
+  }
+
+  const releaseBuildUploads = parts.releaseBuildUploads;
+
+  if (releaseBuildUploads !== undefined) {
+    await runStep('build-uploads', readStepMs(), () => {
+      releaseBuildUploads();
     });
   }
 

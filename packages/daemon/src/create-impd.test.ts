@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { IMAGE_BUILD_STREAM_TYPE } from '@impz/api';
+import { BUILD_CONTEXT_PATH, BuildContextUploadSchema } from '@impz/api';
 import { buildStubRepeat } from '@impz/mcp/test-utils/build-stub-repeat';
 import { claimFreePorts } from '@impz/test-utils/claim-free-ports';
 import { readImpEnv } from '@impz/test-utils/read-imp-env';
@@ -11,7 +11,10 @@ import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { buildMockNewImage } from '../testing/imps/build-mock-new-image';
 import { buildMockNewImp } from '../testing/imps/build-mock-new-imp';
+import { buildStubImageBuilder } from '../testing/imps/build-stub-image-builder';
+import { createFilesTar } from '../testing/imps/create-files-tar';
 import { createStubDockerCli } from '../testing/imps/create-stub-docker-cli';
+import { startBuilderImpd } from '../testing/imps/start-builder-impd';
 import { readNoTailscale } from '../testing/network/read-no-tailscale';
 import { buildQueryGate } from '../testing/platform/build-query-gate';
 import { buildStubTickerTimer } from '../testing/platform/build-stub-ticker-timer';
@@ -685,67 +688,83 @@ test('it answers /health without a token, not ready before the default image is 
   expect(body).toStrictEqual({ status: 'ok', ready: false, warnings: [] });
 });
 
-test('it sends a streamed build its progress at the keepalive gap it is given', async () => {
+test('it sends a build stream its progress at the keepalive gap it is given', async () => {
   const repeat = buildStubRepeat();
 
-  const ctx = await setupTest({ boundaries: { keepaliveMs: 20, keepaliveRepeat: repeat.repeat } });
-
-  const upload = Promise.withResolvers<ReadableStreamDefaultController<Uint8Array>>();
-
-  const context = new ReadableStream<Uint8Array>({
-    start: (controller) => {
-      controller.enqueue(new TextEncoder().encode('tar'));
-      upload.resolve(controller);
-    },
-  });
-
-  const uploading = await upload.promise;
+  const client = new AbortController();
 
   onTestFinished(() => {
-    uploading.close();
+    client.abort();
   });
 
-  const init: RequestInit & { readonly duplex: 'half' } = {
-    method: 'POST',
-    headers: {
-      authorization: `Bearer ${TEST_TOKEN}`,
-      'content-type': 'application/x-tar',
-      accept: IMAGE_BUILD_STREAM_TYPE,
-    },
-    body: context,
-    duplex: 'half',
-  };
+  const stack = new AsyncDisposableStack();
 
-  const response = await ctx.impd.api.app.handle(
-    new Request('http://impd.test/images/build?name=web', init),
+  onTestFinished(() => stack.disposeAsync());
+
+  const directory = await mkdtemp(join(tmpdir(), 'create-impd-build-'));
+
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
+
+  const builder = buildStubImageBuilder({
+    exported: [],
+    repoDigest: `sha256:${'b'.repeat(64)}`,
+    onBuild: () => ({ stall: true }),
+  });
+
+  const harness = await startBuilderImpd(stack, builder, {
+    dataDir: join(directory, 'data'),
+    frozenClockMs: Date.UTC(2026, 0, 1),
+    boundaries: { keepaliveMs: 20, keepaliveRepeat: repeat.repeat },
+  });
+
+  const uploaded = await harness.impd.api.app.handle(
+    new Request(`http://impd.test${BUILD_CONTEXT_PATH}?name=web`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${TEST_TOKEN}` },
+      body: createFilesTar(directory, { Dockerfile: 'FROM scratch\n' }),
+    }),
   );
 
-  const body: ReadableStream<Uint8Array> | null = response.body;
+  const answer: unknown = await uploaded.json();
 
-  invariant(body);
+  const upload = BuildContextUploadSchema.parse(answer);
 
-  const reader = body.getReader();
-
-  onTestFinished(() => reader.cancel());
-
-  repeat.tick(20);
-  repeat.tick(20);
-  repeat.tick(20);
-
-  const first = await reader.read();
-  const second = await reader.read();
-  const third = await reader.read();
-  const fourth = await reader.read();
-
-  const events = [first, second, third, fourth].map(
-    (chunk) => JSON.parse(new TextDecoder().decode(chunk.value)) as unknown,
+  const events = await harness.client.images.buildStream(
+    { upload: upload.id },
+    { signal: client.signal },
   );
 
-  expect(events).toStrictEqual([
-    { type: 'progress', phase: 'upload', elapsedMs: 0 },
-    { type: 'progress', phase: 'upload', elapsedMs: 0 },
-    { type: 'progress', phase: 'upload', elapsedMs: 0 },
-    { type: 'progress', phase: 'upload', elapsedMs: 0 },
+  const first = await events.next();
+
+  await waitFor(() => {
+    expect(repeat.countRunning(20)).toBe(1);
+  });
+
+  repeat.tick(20);
+
+  const second = await events.next();
+
+  await waitFor(() => {
+    expect(repeat.countRunning(20)).toBe(1);
+  });
+
+  repeat.tick(20);
+
+  const third = await events.next();
+
+  await waitFor(() => {
+    expect(repeat.countRunning(20)).toBe(1);
+  });
+
+  repeat.tick(20);
+
+  const fourth = await events.next();
+
+  expect([first.value, second.value, third.value, fourth.value]).toStrictEqual([
+    { type: 'progress', phase: 'build', elapsedMs: 0 },
+    { type: 'progress', phase: 'build', elapsedMs: 0 },
+    { type: 'progress', phase: 'build', elapsedMs: 0 },
+    { type: 'progress', phase: 'build', elapsedMs: 0 },
   ]);
 });
 

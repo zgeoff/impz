@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { IMAGE_BUILD_PATH } from '@impz/api';
+import type { Image } from '@impz/api';
+import { createImpClient } from '@impz/client';
 
 export async function writeBuildContext(
   root: string,
@@ -26,14 +27,14 @@ export interface RawBuild {
 
 // The CLI packs only the Dockerfile it is given, so the frontend's fallbacks
 // need a tar built here.
-export async function sendRawBuild(build: Readonly<RawBuild>): Promise<Response> {
+export async function runRawBuild(build: Readonly<RawBuild>): Promise<Image> {
   const tar = Bun.spawn(['tar', '-C', build.directoryPath, '-cf', '-', ...build.files], {
     stdout: 'pipe',
     stderr: 'pipe',
   });
 
   const [body, stderr, exitCode] = await Promise.all([
-    new Response(tar.stdout).arrayBuffer(),
+    new Response(tar.stdout).blob(),
     new Response(tar.stderr).text(),
     tar.exited,
   ]);
@@ -42,13 +43,7 @@ export async function sendRawBuild(build: Readonly<RawBuild>): Promise<Response>
     throw new Error(`tar exited ${String(exitCode)}: ${stderr.trim()}`);
   }
 
-  const url = new URL(IMAGE_BUILD_PATH, build.apiUrl);
+  const client = createImpClient({ url: build.apiUrl, token: build.token });
 
-  url.searchParams.set('name', build.name);
-
-  return fetch(url, {
-    method: 'POST',
-    headers: { authorization: `Bearer ${build.token}`, 'content-type': 'application/x-tar' },
-    body,
-  });
+  return client.buildImage(build.name, body);
 }

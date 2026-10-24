@@ -18,10 +18,11 @@ and the breaking-change workflow fails a pull request whose protocol change brea
 carries no mark.
 
 The protocol lives in `packages/api/protocol-schema.json`: every oRPC procedure's input and output,
-the messages of the `/exec`, `/tunnel` and `/images/build` streams, the error codes with their data,
-and the wire constants, each as JSON Schema that zod derives from the contract.
-`bun run render:protocol` writes the file, and `bun test` fails until it matches the code. The check
-compares the file at the pull request's merge base with the file at its head, by these rules:
+the messages of the `/exec` and `/tunnel` streams and of the `/images/build-context` upload, the
+error codes with their data, and the wire constants, each as JSON Schema that zod derives from the
+contract. `bun run render:protocol` writes the file, and `bun test` fails until it matches the code.
+The check compares the file at the pull request's merge base with the file at its head, by these
+rules:
 
 - What a client sends must still pass: impd must accept every input it accepted before. A new
   required field, a tighter bound, a dropped enum value, or a field impd no longer reads breaks a

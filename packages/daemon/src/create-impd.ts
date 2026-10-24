@@ -367,6 +367,7 @@ async function startImpdParts(
   });
 
   plan.closeExecSessions = api.closeExecSessions;
+  plan.releaseBuildUploads = api.releaseBuildUploads;
 
   const listeners = await startImpdListeners(
     config,

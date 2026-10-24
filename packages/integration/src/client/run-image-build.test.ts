@@ -2,10 +2,9 @@ import { expect, mock, onTestFinished, test } from 'bun:test';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { IMAGE_BUILD_STREAM_TYPE } from '@impz/api';
 import type { ImageBuildProgress } from '@impz/api';
-import { createImpClient } from '@impz/client';
-import { buildStubImpdBeforeBuildStream } from '@impz/client/test-utils/build-stub-impd-before-build-stream';
+import { MissingFeatureError, createImpClient } from '@impz/client';
+import { makeStubImpdWithoutFeature } from '@impz/client/test-utils/make-stub-impd-without-feature';
 import { buildStubImageBuilder, createFilesTar, startBuilderImpd } from '@impz/daemon/testing';
 import { server } from '@impz/test-utils/mock-server';
 import { waitFor } from '@impz/test-utils/wait-for';
@@ -207,7 +206,7 @@ test('it uploads a stream as the build context', async () => {
   expect(note.stdout.toString()).toBe('as a stream');
 });
 
-test('it sends the name, the Dockerfile, the token and what it accepts', async () => {
+test('it uploads the context under the name, the Dockerfile and the token', async () => {
   const ctx = await setupTest();
 
   const builder = buildStubImageBuilder({
@@ -224,11 +223,12 @@ test('it sends the name, the Dockerfile, the token and what it accepts', async (
   const received = mock<(url: string, headers: Readonly<Record<string, string>>) => void>();
 
   server.use(
-    http.post('http://impd.test/images/build', (info) => {
+    http.post('http://impd.test/images/build-context', (info) => {
       received(info.request.url, Object.fromEntries(info.request.headers));
 
       return host.impd.api.app.handle(info.request);
     }),
+    http.all('http://impd.test/rpc/*', (info) => host.impd.api.app.handle(info.request)),
   );
 
   const client = createImpClient({ url: 'http://impd.test/', token: ctx.rootToken });
@@ -238,12 +238,14 @@ test('it sends the name, the Dockerfile, the token and what it accepts', async (
   const [call] = received.mock.calls;
 
   expect(received).toHaveBeenCalledOnce();
-  expect(call?.[0]).toBe('http://impd.test/images/build?name=web&dockerfile=sub%2FDockerfile');
+
+  expect(call?.[0]).toBe(
+    'http://impd.test/images/build-context?name=web&dockerfile=sub%2FDockerfile',
+  );
 
   expect(call?.[1]).toContainEntries([
     ['authorization', `Bearer ${ctx.rootToken}`],
     ['content-type', 'application/x-tar'],
-    ['accept', `${IMAGE_BUILD_STREAM_TYPE}, application/json`],
   ]);
 });
 
@@ -294,7 +296,7 @@ test('it sends the size of a stream as its Content-Length, which impd builds to'
 });
 
 test(
-  'it outlasts the idle deadline of a client fetch on progress lines while the engine is silent',
+  'it outlasts the idle deadline of a client fetch on progress events while the engine is silent',
   async () => {
     const ctx = await setupTest();
 
@@ -387,100 +389,56 @@ test(
   { timeout: 30_000 },
 );
 
-test(
-  'it gives up at the idle deadline of a client fetch on an impd from before the stream, which stops the build',
-  async () => {
-    const ctx = await setupTest();
+test('it stops the build when the caller aborts the stream', async () => {
+  const ctx = await setupTest();
 
-    const builder = buildStubImageBuilder({
-      exported: [createFilesTar(ctx.workDir, { hello: 'built\n' })],
-      repoDigest: `sha256:${'b'.repeat(64)}`,
-      onBuild: () => Promise.withResolvers<never>().promise,
-    });
+  const builder = buildStubImageBuilder({
+    exported: [createFilesTar(ctx.workDir, { hello: 'built\n' })],
+    repoDigest: `sha256:${'b'.repeat(64)}`,
+    onBuild: () => Promise.withResolvers<never>().promise,
+  });
 
-    const host = await ctx.startImpd(builder, { keepaliveMs: 500 });
+  const host = await ctx.startImpd(builder);
 
-    await mkdir(join(ctx.workDir, 'context'));
-    await writeFile(join(ctx.workDir, 'context', 'Dockerfile'), 'FROM scratch\n');
+  await mkdir(join(ctx.workDir, 'context'));
+  await writeFile(join(ctx.workDir, 'context', 'Dockerfile'), 'FROM scratch\n');
 
-    await writeFile(
-      join(ctx.workDir, 'context.tar'),
-      Bun.spawnSync(['tar', '-C', join(ctx.workDir, 'context'), '-c', '.']).stdout,
-    );
+  const tar = Bun.spawnSync(['tar', '-C', join(ctx.workDir, 'context'), '-c', '.']).stdout;
+  const client = createImpClient({ url: host.url, token: ctx.rootToken });
 
-    // Bun reads the idle deadline at startup, so the client runs in a process
-    // of its own.
-    await writeFile(
-      join(ctx.workDir, 'build.ts'),
-      [
-        `import { createImpClient } from ${JSON.stringify(Bun.resolveSync('@impz/client', import.meta.dir))};`,
-        `import { buildStubImpdBeforeBuildStream } from ${JSON.stringify(Bun.resolveSync('@impz/client/test-utils/build-stub-impd-before-build-stream', import.meta.dir))};`,
-        'const [url, token, contextPath] = process.argv.slice(2);',
-        'const client = createImpClient({ url, token, fetch: buildStubImpdBeforeBuildStream(fetch) });',
-        'await client.buildImage("web", Bun.file(contextPath)).then(',
-        '  (image) => console.log(JSON.stringify({ type: "image", name: image.name })),',
-        '  (error) => console.log(JSON.stringify({ type: "error", name: error.name })),',
-        ');',
-      ].join('\n'),
-    );
+  const caller = new AbortController();
 
-    // Bun's fetch gives up after about 8 s with no byte under this setting
-    const child = Bun.spawn(
-      [
-        process.execPath,
-        join(ctx.workDir, 'build.ts'),
-        host.url,
-        ctx.rootToken,
-        join(ctx.workDir, 'context.tar'),
-      ],
-      {
-        cwd: ctx.workDir,
-        env: { ...process.env, BUN_CONFIG_HTTP_IDLE_TIMEOUT: '1' },
-        stdout: 'pipe',
-      },
-    );
+  const building = client.buildImage('web', new Blob([tar]), { signal: caller.signal });
 
-    onTestFinished(() => {
-      child.kill();
-    });
+  const build = await waitFor(() => {
+    const run = builder.guest.runs.find((candidate) => candidate.argv[1] === 'build');
 
-    const output = new Response(child.stdout).text();
+    invariant(run);
 
-    const build = await waitFor(() => {
-      const run = builder.guest.runs.find((candidate) => candidate.argv[1] === 'build');
+    return run;
+  });
 
-      invariant(run);
+  caller.abort();
 
-      expect(builder.builtContexts).toBeArrayOfSize(1);
+  const outcome = await building.then(
+    () => null,
+    (error: unknown) => error,
+  );
 
-      return run;
-    });
+  const closed = await waitFor(() => {
+    expect(build.closed).toBeTrue();
 
-    const heldAt = Date.now();
+    return build.closed;
+  });
 
-    const exitCode = await child.exited;
+  const images = await client.images.list();
 
-    const gaveUpAfterMs = Date.now() - heldAt;
+  expect(outcome).toMatchObject({ name: 'AbortError' });
+  expect(closed).toBeTrue();
+  expect(images.map((image) => image.name)).toStrictEqual(['imp-builder']);
+});
 
-    const closed = await waitFor(() => {
-      expect(build.closed).toBeTrue();
-
-      return build.closed;
-    });
-
-    const images = await createImpClient({ url: host.url, token: ctx.rootToken }).images.list();
-    const said = await output;
-
-    expect(said).toBe('{"type":"error","name":"TimeoutError"}\n');
-    expect(exitCode).toBe(0);
-    expect(gaveUpAfterMs).toBeWithin(7000, 9000);
-    expect(closed).toBeTrue();
-    expect(images.map((image) => image.name)).toStrictEqual(['imp-builder']);
-  },
-  { timeout: 30_000 },
-);
-
-test('it reports each progress line as it arrives, before the image', async () => {
+test('it reports each progress event as it arrives, before the image', async () => {
   const ctx = await setupTest();
 
   const release = Promise.withResolvers<void>();
@@ -522,7 +480,6 @@ test('it reports each progress line as it arrives, before the image', async () =
   expect(statusWhileBuilding).toBe('pending');
 
   expect(progress.mock.calls).toStrictEqual([
-    [{ type: 'progress', phase: 'upload', elapsedMs: 0 }],
     [{ type: 'progress', phase: 'build', elapsedMs: 0 }],
     [{ type: 'progress', phase: 'unpack', elapsedMs: 0 }],
   ]);
@@ -539,7 +496,7 @@ test('it reports each progress line as it arrives, before the image', async () =
   });
 });
 
-test('it throws the ORPCError of the error line that ends the stream', async () => {
+test('it throws the ORPCError that ends the stream', async () => {
   const ctx = await setupTest();
 
   const builder = buildStubImageBuilder({
@@ -566,70 +523,125 @@ test('it throws the ORPCError of the error line that ends the stream', async () 
   });
 });
 
-test('it answers the image from an impd that answers JSON, from before the stream', async () => {
-  const ctx = await setupTest();
+test('it stops waiting on the feature check when the caller aborts', async () => {
+  server.use(
+    http.post('http://impd.test/rpc/system/features', () => Promise.withResolvers<never>().promise),
+  );
 
-  const builder = buildStubImageBuilder({
-    exported: [createFilesTar(ctx.workDir, { hello: 'built\n' })],
-    repoDigest: `sha256:${'b'.repeat(64)}`,
-  });
+  const client = createImpClient({ url: 'http://impd.test/', token: 'token' });
 
-  const host = await ctx.startImpd(builder);
+  const caller = new AbortController();
 
-  await mkdir(join(ctx.workDir, 'context'));
-  await writeFile(join(ctx.workDir, 'context', 'Dockerfile'), 'FROM scratch\n');
+  const building = client.buildImage('web', new Blob(['tar']), { signal: caller.signal });
 
-  const tar = Bun.spawnSync(['tar', '-C', join(ctx.workDir, 'context'), '-c', '.']).stdout;
-  const older = buildStubImpdBeforeBuildStream((request) => host.impd.api.app.handle(request));
+  caller.abort();
 
-  server.use(http.all('http://impd.test/*', (info) => older(info.request)));
+  const outcome = await building.then(
+    () => null,
+    (error: unknown) => error,
+  );
 
-  const progress = mock<(event: ImageBuildProgress) => void>();
-  const client = createImpClient({ url: 'http://impd.test/', token: ctx.rootToken });
-
-  const built = await client.buildImage('web', new Blob([tar]), { onProgress: progress });
-
-  expect(built).toStrictEqual({
-    id: expect.toBeString(),
-    name: 'web',
-    ref: 'imp/web:latest',
-    digest: expect.stringMatching(/^imp-build-[0-9a-f]{64}$/u),
-    source: 'oci',
-    createdAt: expect.toBeDate(),
-    sizeBytes: expect.toBeNumber(),
-    pinned: false,
-  });
-
-  expect(progress).not.toHaveBeenCalled();
+  expect(outcome).toMatchObject({ name: 'AbortError' });
 });
 
-test('it throws the ORPCError that an impd from before the stream answers', async () => {
+test('it throws INTERNAL_SERVER_ERROR with the status of an upload failure that names no code', async () => {
   const ctx = await setupTest();
 
-  const builder = buildStubImageBuilder({
-    exported: [],
-    repoDigest: `sha256:${'b'.repeat(64)}`,
-    onBuild: () => ({ code: 1, stderr: 'the Dockerfile: no such file: note\n' }),
-  });
+  const builder = buildStubImageBuilder({ exported: [], repoDigest: `sha256:${'b'.repeat(64)}` });
 
   const host = await ctx.startImpd(builder);
 
-  await mkdir(join(ctx.workDir, 'context'));
-  await writeFile(join(ctx.workDir, 'context', 'Dockerfile'), 'FROM scratch\nCOPY note /\n');
-
-  const tar = Bun.spawnSync(['tar', '-C', join(ctx.workDir, 'context'), '-c', '.']).stdout;
-  const older = buildStubImpdBeforeBuildStream((request) => host.impd.api.app.handle(request));
-
-  server.use(http.all('http://impd.test/*', (info) => older(info.request)));
+  server.use(
+    http.post(
+      'http://impd.test/images/build-context',
+      () => new Response('bad gateway', { status: 502 }),
+    ),
+    http.all('http://impd.test/*', (info) => host.impd.api.app.handle(info.request)),
+  );
 
   const client = createImpClient({ url: 'http://impd.test/', token: ctx.rootToken });
-  const building = client.buildImage('web', new Blob([tar]));
 
-  expect(building).rejects.toBeInstanceOf(ORPCError);
+  const outcome = await client.buildImage('web', new Blob(['tar'])).then(
+    () => null,
+    (error: unknown) => error,
+  );
 
-  expect(building).rejects.toMatchObject({
-    code: 'BAD_REQUEST',
-    status: 400,
-    message: expect.toInclude('the Dockerfile: no such file: note'),
+  expect(outcome).toBeInstanceOf(ORPCError);
+
+  expect(outcome).toMatchObject({
+    code: 'INTERNAL_SERVER_ERROR',
+    status: 502,
+    message: 'impd answered 502 to the build context upload',
   });
+});
+
+test('it throws UNAUTHORIZED for an upload refused with a 401 that names no code', async () => {
+  const ctx = await setupTest();
+
+  const builder = buildStubImageBuilder({ exported: [], repoDigest: `sha256:${'b'.repeat(64)}` });
+
+  const host = await ctx.startImpd(builder);
+
+  server.use(
+    http.post('http://impd.test/images/build-context', () =>
+      Response.json({ error: 'unauthorized' }, { status: 401 }),
+    ),
+    http.all('http://impd.test/*', (info) => host.impd.api.app.handle(info.request)),
+  );
+
+  const client = createImpClient({ url: 'http://impd.test/', token: ctx.rootToken });
+
+  const outcome = await client.buildImage('web', new Blob(['tar'])).then(
+    () => null,
+    (error: unknown) => error,
+  );
+
+  expect(outcome).toBeInstanceOf(ORPCError);
+
+  expect(outcome).toMatchObject({
+    code: 'UNAUTHORIZED',
+    status: 401,
+    message: 'impd answered 401 to the build context upload',
+  });
+});
+
+test('it refuses to upload to an impd without the build context upload', async () => {
+  const ctx = await setupTest();
+
+  const builder = buildStubImageBuilder({ exported: [], repoDigest: `sha256:${'b'.repeat(64)}` });
+
+  const host = await ctx.startImpd(builder);
+
+  const older = makeStubImpdWithoutFeature(
+    (request) => host.impd.api.app.handle(request),
+    'buildContextUpload',
+  );
+
+  const uploads = mock<(url: string) => void>();
+
+  server.use(
+    http.all('http://impd.test/*', (info) => {
+      uploads(info.request.url);
+
+      return older(info.request);
+    }),
+  );
+
+  const client = createImpClient({ url: 'http://impd.test/', token: ctx.rootToken });
+
+  const outcome = await client.buildImage('web', new Blob(['tar'])).then(
+    () => null,
+    (error: unknown) => error,
+  );
+
+  expect(outcome).toBeInstanceOf(MissingFeatureError);
+
+  expect(outcome).toMatchObject({
+    message:
+      'this impd has no build context upload and would answer the upload with not found; nothing was changed',
+  });
+
+  expect(uploads.mock.calls.map(([url]) => new URL(url).pathname)).toStrictEqual([
+    '/rpc/system/features',
+  ]);
 });

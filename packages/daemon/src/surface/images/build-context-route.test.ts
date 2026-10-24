@@ -4,18 +4,16 @@ import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { faker } from '@faker-js/faker';
-import {
-  IMAGE_BUILD_PATH,
-  IMAGE_BUILD_STREAM_TYPE,
-  ImageBuildEventSchema,
-  ImageBuildResultSchema,
-} from '@impz/api';
+import { BUILD_CONTEXT_PATH, BuildContextUploadSchema } from '@impz/api';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { buildMockCaller } from '../../../testing/identity/build-mock-caller';
 import { buildStubImageBuilder } from '../../../testing/imps/build-stub-image-builder';
 import { createFilesTar } from '../../../testing/imps/create-files-tar';
 import { startBuilderImpd } from '../../../testing/imps/start-builder-impd';
+import { buildStubClock } from '../../../testing/platform/build-stub-clock';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
+import { runUploadedBuild } from '../../../testing/surface/run-uploaded-build';
 import type { StubAnswer } from '../../../testing/vm/build-stub-guest';
 import { DOCKERFILE_FRONTEND } from '../../imps/docker-contract/dockerfile-frontend';
 import { PIN_INSPECT_FORMAT } from '../../imps/images/pull/image-pin';
@@ -26,8 +24,7 @@ import { listApiCalls } from '../../platform/db/api-audit';
 import { runChecked } from '../../platform/process/run-command';
 import { buildUploadsDir } from '../../vm/storage/data-layout';
 import { readErrorCode } from '../read-error-code';
-import { toApiImage } from '../to-api-image';
-import { createBuildContextRoute } from './build-context-route';
+import { UPLOAD_TTL_MS, createBuildContextRoute } from './build-context-route';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();
@@ -51,7 +48,7 @@ async function setupTest() {
   };
 }
 
-test('it builds an uploaded context and answers the image', async () => {
+test('it builds an uploaded context and streams the image last', async () => {
   const ctx = await setupTest();
 
   const builder = buildStubImageBuilder({
@@ -65,33 +62,19 @@ test('it builds an uploaded context and answers the image', async () => {
     cloneDisk: ctx.cloneDisk,
   });
 
-  await mkdir(join(ctx.directoryPath, 'context'));
-  await writeFile(join(ctx.directoryPath, 'context', 'Dockerfile'), 'FROM scratch\n');
+  const tar = createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM scratch\n' });
 
-  const tar = Bun.spawnSync([
-    'tar',
-    '-C',
-    join(ctx.directoryPath, 'context'),
-    '-c',
-    'Dockerfile',
-  ]).stdout;
+  const events = await runUploadedBuild(harness, {
+    token: ctx.rootToken,
+    query: 'name=web',
+    body: tar,
+  });
 
-  const response = await harness.impd.api.app.handle(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${ctx.rootToken}` },
-      body: tar,
-    }),
-  );
-
-  const body: unknown = await response.json();
-
-  expect(response.status).toBe(200);
-  expect(ImageBuildResultSchema.parse(body).name).toBe('web');
+  expect(events.at(-1)).toMatchObject({ type: 'image', image: { name: 'web' } });
   expect(builder.builtDockerfiles).toStrictEqual(['FROM scratch\n']);
 });
 
-test('it runs the build in the builder on the context with the Dockerfile path it names', async () => {
+test('it builds under the name and with the Dockerfile path the upload named', async () => {
   const ctx = await setupTest();
 
   const builder = buildStubImageBuilder({
@@ -116,15 +99,15 @@ test('it runs the build in the builder on the context with the Dockerfile path i
     'docker',
   ]).stdout;
 
-  await harness.impd.api.app.handle(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web&dockerfile=docker/Dockerfile`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${ctx.rootToken}` },
-      body: tar,
-    }),
-  );
+  const events = await runUploadedBuild(harness, {
+    token: ctx.rootToken,
+    query: 'name=api&dockerfile=docker/Dockerfile',
+    body: tar,
+  });
 
   const builds = builder.guest.runs.filter((run) => run.argv[1] === 'build').map((run) => run.argv);
+
+  expect(events.at(-1)).toMatchObject({ type: 'image', image: { name: 'api' } });
 
   expect(builds).toStrictEqual([
     [
@@ -142,7 +125,7 @@ test('it runs the build in the builder on the context with the Dockerfile path i
   ]);
 });
 
-test('it removes the upload and audits the build as ok once the build ends', async () => {
+test('it removes the upload and audits the build as ok under the image name once the build ends', async () => {
   const ctx = await setupTest();
 
   const builder = buildStubImageBuilder({
@@ -156,94 +139,27 @@ test('it removes the upload and audits the build as ok once the build ends', asy
     cloneDisk: ctx.cloneDisk,
   });
 
-  await mkdir(join(ctx.directoryPath, 'context'));
-  await writeFile(join(ctx.directoryPath, 'context', 'Dockerfile'), 'FROM scratch\n');
+  const tar = createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM scratch\n' });
 
-  const tar = Bun.spawnSync([
-    'tar',
-    '-C',
-    join(ctx.directoryPath, 'context'),
-    '-c',
-    'Dockerfile',
-  ]).stdout;
+  await runUploadedBuild(harness, { token: ctx.rootToken, query: 'name=web', body: tar });
 
-  await harness.impd.api.app.handle(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${ctx.rootToken}` },
-      body: tar,
-    }),
-  );
-
-  const outcomes = await waitFor(async () => {
+  const builds = await waitFor(async () => {
     const rows = await listApiCalls(harness.db, null, 100, null);
 
-    const builds = rows.filter((row) => row.procedure === 'images.build');
+    const found = rows.filter((row) => row.procedure === 'images.buildStream');
 
-    expect(builds).not.toBeEmpty();
+    expect(found).not.toBeEmpty();
 
-    return builds.map((row) => row.outcome);
+    return found.map((row) => ({ outcome: row.outcome, detail: row.detail }));
   });
 
   const uploads = await readdir(buildUploadsDir(ctx.dataDir));
 
-  expect(outcomes).toStrictEqual(['ok']);
+  expect(builds).toStrictEqual([{ outcome: 'ok', detail: 'web' }]);
   expect(uploads).toStrictEqual([]);
 });
 
-test('it answers a streamed build with its headers while the build still runs', async () => {
-  const ctx = await setupTest();
-
-  const held = Promise.withResolvers<void>();
-
-  const builder = buildStubImageBuilder({
-    exported: [],
-    repoDigest: `sha256:${'b'.repeat(64)}`,
-    onBuild: async () => {
-      await held.promise;
-
-      return { code: 1, stderr: 'held for the test\n' };
-    },
-  });
-
-  const harness = await startBuilderImpd(ctx.stack, builder, {
-    dataDir: ctx.dataDir,
-    rootToken: ctx.rootToken,
-    cloneDisk: ctx.cloneDisk,
-  });
-
-  await mkdir(join(ctx.directoryPath, 'context'));
-  await writeFile(join(ctx.directoryPath, 'context', 'Dockerfile'), 'FROM scratch\n');
-
-  const tar = Bun.spawnSync([
-    'tar',
-    '-C',
-    join(ctx.directoryPath, 'context'),
-    '-c',
-    'Dockerfile',
-  ]).stdout;
-
-  const response = await harness.impd.api.app.handle(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${ctx.rootToken}`, accept: IMAGE_BUILD_STREAM_TYPE },
-      body: tar,
-    }),
-  );
-
-  ctx.stack.defer(async () => {
-    held.resolve();
-
-    await response.text();
-  });
-
-  expect([response.status, response.headers.get('content-type')]).toStrictEqual([
-    200,
-    IMAGE_BUILD_STREAM_TYPE,
-  ]);
-});
-
-test('it streams progress lines while the build runs, then the image', async () => {
+test('it streams progress while the build runs, then the image', async () => {
   const ctx = await setupTest();
 
   const gate = Promise.withResolvers<void>();
@@ -264,58 +180,36 @@ test('it streams progress lines while the build runs, then the image', async () 
     cloneDisk: ctx.cloneDisk,
   });
 
-  await mkdir(join(ctx.directoryPath, 'context'));
-  await writeFile(join(ctx.directoryPath, 'context', 'Dockerfile'), 'FROM scratch\n');
+  const tar = createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM scratch\n' });
 
-  const route = createBuildContextRoute({
-    config: { dataDir: ctx.dataDir, buildContextMaxBytes: 1024 ** 2 },
-    images: harness.impd.images,
-    diskBudget: harness.impd.diskBudget,
-    audit: createApiAudit({ db: harness.db, now: Date.now, log: () => {}, readErrorCode }),
-    now: Date.now,
-    keepaliveMs: 10,
-  });
-
-  const tar = Bun.spawnSync([
-    'tar',
-    '-C',
-    join(ctx.directoryPath, 'context'),
-    '-c',
-    'Dockerfile',
-  ]).stdout;
-
-  const response = await route.respond(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
+  const uploaded = await harness.impd.api.app.handle(
+    new Request(`http://impd.test${BUILD_CONTEXT_PATH}?name=web`, {
       method: 'POST',
-      headers: { accept: IMAGE_BUILD_STREAM_TYPE },
+      headers: { authorization: `Bearer ${ctx.rootToken}` },
       body: tar,
     }),
-    buildMockCaller(),
-    toApiImage,
   );
 
-  const reader = response.body?.pipeThrough(new TextDecoderStream()).getReader();
-  const read = { text: '' };
+  const answer: unknown = await uploaded.json();
 
-  while (read.text.split('"phase":"build"').length <= 3) {
-    const chunk = await reader?.read();
+  const upload = BuildContextUploadSchema.parse(answer);
 
-    read.text += chunk?.value ?? '';
-  }
+  const events = await harness.buildClient(ctx.rootToken).images.buildStream({ upload: upload.id });
+
+  // The gate holds the build, so the first event comes from a build that still runs.
+  const first = await events.next();
 
   gate.resolve();
 
-  for (let chunk = await reader?.read(); chunk?.done === false; chunk = await reader?.read()) {
-    read.text += chunk.value;
-  }
+  const rest = await Array.fromAsync(events);
 
-  const events = read.text
-    .trim()
-    .split('\n')
-    .map((line) => ImageBuildEventSchema.parse(JSON.parse(line)));
+  expect(first.value).toStrictEqual({
+    type: 'progress',
+    phase: 'build',
+    elapsedMs: expect.any(Number) as unknown,
+  });
 
-  expect(events[0]).toMatchObject({ type: 'progress', phase: 'upload' });
-  expect(events.at(-1)).toMatchObject({ type: 'image', image: { name: 'web' } });
+  expect(rest.at(-1)).toMatchObject({ type: 'image', image: { name: 'web' } });
 });
 
 test('it streams the step and output of a running build, and lists it in images.builds until it ends', async () => {
@@ -337,37 +231,16 @@ test('it streams the step and output of a running build, and lists it in images.
     cloneDisk: ctx.cloneDisk,
   });
 
-  await mkdir(join(ctx.directoryPath, 'context'));
-  await writeFile(join(ctx.directoryPath, 'context', 'Dockerfile'), 'FROM scratch\n');
-
-  const route = createBuildContextRoute({
-    config: { dataDir: ctx.dataDir, buildContextMaxBytes: 1024 ** 2 },
-    images: harness.impd.images,
-    diskBudget: harness.impd.diskBudget,
-    audit: createApiAudit({ db: harness.db, now: Date.now, log: () => {}, readErrorCode }),
-    now: Date.now,
-    keepaliveMs: 10_000,
-  });
-
-  const tar = Bun.spawnSync([
-    'tar',
-    '-C',
-    join(ctx.directoryPath, 'context'),
-    '-c',
-    'Dockerfile',
-  ]).stdout;
+  const tar = createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM scratch\n' });
 
   const before = new Date();
 
-  const response = await route.respond(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
-      method: 'POST',
-      headers: { accept: IMAGE_BUILD_STREAM_TYPE },
-      body: tar,
-    }),
-    buildMockCaller(),
-    toApiImage,
-  );
+  const building = runUploadedBuild(harness, {
+    token: ctx.rootToken,
+    query: 'name=web',
+    body: tar,
+    logs: true,
+  });
 
   // The stub builder writes the whole log as its build exits, so the run is caught while its
   // export is held.
@@ -381,13 +254,8 @@ test('it streams the step and output of a running build, and lists it in images.
 
   gate.resolve();
 
-  const text = await response.text();
+  const events = await building;
   const after = await harness.client.images.builds();
-
-  const events = text
-    .trim()
-    .split('\n')
-    .map((line) => ImageBuildEventSchema.parse(JSON.parse(line)));
 
   expect(running).toStrictEqual({
     name: 'web',
@@ -413,7 +281,7 @@ test('it streams the step and output of a running build, and lists it in images.
   expect(after).toStrictEqual([]);
 });
 
-test('it sends a progress line through the proxy before the upload ends', async () => {
+test('it lists an upload in images.builds in the upload phase until a build takes it', async () => {
   const ctx = await setupTest();
 
   const builder = buildStubImageBuilder({
@@ -427,8 +295,484 @@ test('it sends a progress line through the proxy before the upload ends', async 
     cloneDisk: ctx.cloneDisk,
   });
 
-  await mkdir(join(ctx.directoryPath, 'context'));
-  await writeFile(join(ctx.directoryPath, 'context', 'Dockerfile'), 'FROM scratch\n');
+  const tar = createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM scratch\n' });
+  const client = harness.buildClient(ctx.rootToken);
+
+  const before = new Date();
+
+  const uploaded = await harness.impd.api.app.handle(
+    new Request(`http://impd.test${BUILD_CONTEXT_PATH}?name=web`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${ctx.rootToken}` },
+      body: tar,
+    }),
+  );
+
+  const answer: unknown = await uploaded.json();
+
+  const upload = BuildContextUploadSchema.parse(answer);
+
+  const listed = await client.images.builds();
+  const built = await client.images.buildStream({ upload: upload.id });
+
+  await Array.fromAsync(built);
+
+  const after = await client.images.builds();
+
+  expect(listed).toStrictEqual([
+    {
+      name: 'web',
+      source: 'upload',
+      startedAt: expect.toBeBetween(before, new Date()),
+      phase: 'upload',
+      step: null,
+      builder: null,
+    },
+  ]);
+
+  expect(after).toStrictEqual([]);
+});
+
+test('it removes an upload, frees its slot and ends its run when no build takes it in time', async () => {
+  const ctx = await setupTest();
+
+  const builder = buildStubImageBuilder({ exported: [], repoDigest: `sha256:${'b'.repeat(64)}` });
+
+  const harness = await startBuilderImpd(ctx.stack, builder, {
+    dataDir: ctx.dataDir,
+    rootToken: ctx.rootToken,
+    cloneDisk: ctx.cloneDisk,
+  });
+
+  const clock = buildStubClock();
+  const caller = buildMockCaller();
+
+  const route = createBuildContextRoute({
+    config: { dataDir: ctx.dataDir, buildContextMaxBytes: 1024 ** 2 },
+    images: harness.impd.images,
+    diskBudget: harness.impd.diskBudget,
+    audit: createApiAudit({ db: harness.db, now: Date.now, log: () => {}, readErrorCode }),
+    now: Date.now,
+    startTimer: clock.startTimer,
+  });
+
+  const uploaded = await route.respond(
+    new Request(`http://impd.test${BUILD_CONTEXT_PATH}?name=web`, { method: 'POST', body: 'tar' }),
+    caller,
+  );
+
+  const answer: unknown = await uploaded.json();
+
+  const upload = BuildContextUploadSchema.parse(answer);
+
+  clock.runFor(UPLOAD_TTL_MS);
+
+  const uploads = await readdir(buildUploadsDir(ctx.dataDir));
+  const builds = await harness.client.images.builds();
+
+  const slots = [1, 2, 3, 4].map(() => harness.impd.images.claimBuildSlot());
+
+  onTestFinished(() => {
+    for (const release of slots) {
+      release();
+    }
+  });
+
+  expect(uploads).toStrictEqual([]);
+  expect(builds).toStrictEqual([]);
+  expect(slots).toHaveLength(4);
+
+  expect(() => route.takeUpload(upload.id, caller)).toThrow(
+    `build context upload ${upload.id} not found; upload the context again`,
+  );
+});
+
+test('it frees the slot and ends the run of a released upload whose context it cannot remove', async () => {
+  const ctx = await setupTest();
+
+  const builder = buildStubImageBuilder({ exported: [], repoDigest: `sha256:${'b'.repeat(64)}` });
+
+  const harness = await startBuilderImpd(ctx.stack, builder, {
+    dataDir: ctx.dataDir,
+    rootToken: ctx.rootToken,
+    cloneDisk: ctx.cloneDisk,
+  });
+
+  const caller = buildMockCaller();
+
+  const route = createBuildContextRoute({
+    config: { dataDir: ctx.dataDir, buildContextMaxBytes: 1024 ** 2 },
+    images: harness.impd.images,
+    diskBudget: harness.impd.diskBudget,
+    audit: createApiAudit({ db: harness.db, now: Date.now, log: () => {}, readErrorCode }),
+    now: Date.now,
+    startTimer: buildStubClock().startTimer,
+  });
+
+  const uploaded = await route.respond(
+    new Request(`http://impd.test${BUILD_CONTEXT_PATH}?name=web`, { method: 'POST', body: 'tar' }),
+    caller,
+  );
+
+  const answer: unknown = await uploaded.json();
+
+  const upload = route.takeUpload(BuildContextUploadSchema.parse(answer).id, caller);
+
+  await rm(upload.tarPath);
+  await mkdir(upload.tarPath);
+  await writeFile(join(upload.tarPath, 'stray'), 'left behind');
+
+  const lines = captureImpdLogs();
+
+  upload.release();
+
+  const builds = await harness.client.images.builds();
+
+  const slots = [1, 2, 3, 4].map(() => harness.impd.images.claimBuildSlot());
+
+  onTestFinished(() => {
+    for (const release of slots) {
+      release();
+    }
+  });
+
+  expect(builds).toStrictEqual([]);
+  expect(slots).toHaveLength(4);
+
+  expect(lines).toContainEqual(
+    expect.stringMatching(/^WARNING impd\.image build context .+ not removed: /v),
+  );
+});
+
+test('it releases an upload that no build took when impd stops', async () => {
+  const ctx = await setupTest();
+
+  const clock = buildStubClock();
+  const builder = buildStubImageBuilder({ exported: [], repoDigest: `sha256:${'b'.repeat(64)}` });
+
+  const harness = await startBuilderImpd(ctx.stack, builder, {
+    dataDir: ctx.dataDir,
+    rootToken: ctx.rootToken,
+    cloneDisk: ctx.cloneDisk,
+    boundaries: { buildUploadTimer: clock.startTimer },
+  });
+
+  const uploaded = await harness.impd.api.app.handle(
+    new Request(`http://impd.test${BUILD_CONTEXT_PATH}?name=web`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${ctx.rootToken}`, 'content-length': '3' },
+      body: 'tar',
+    }),
+  );
+
+  const steps = await harness.impd.stop({ sleepImps: false });
+  const uploads = await readdir(buildUploadsDir(ctx.dataDir));
+  const status = await harness.impd.diskBudget.readStatus();
+
+  expect(uploaded.status).toBe(201);
+  expect(steps).toContainEqual({ step: 'build-uploads', outcome: 'stopped' });
+  expect(uploads).toStrictEqual([]);
+  expect(status.pendingBytes).toBe(0);
+  expect(harness.impd.images.listBuildRuns()).toStrictEqual([]);
+  expect(clock.countPending()).toBe(0);
+});
+
+test('it expires an upload on the build upload timer impd was given', async () => {
+  const ctx = await setupTest();
+
+  const clock = buildStubClock();
+  const builder = buildStubImageBuilder({ exported: [], repoDigest: `sha256:${'b'.repeat(64)}` });
+
+  const harness = await startBuilderImpd(ctx.stack, builder, {
+    dataDir: ctx.dataDir,
+    rootToken: ctx.rootToken,
+    cloneDisk: ctx.cloneDisk,
+    boundaries: { buildUploadTimer: clock.startTimer },
+  });
+
+  const uploaded = await harness.impd.api.app.handle(
+    new Request(`http://impd.test${BUILD_CONTEXT_PATH}?name=web`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${ctx.rootToken}` },
+      body: 'tar',
+    }),
+  );
+
+  const before = await readdir(buildUploadsDir(ctx.dataDir));
+
+  clock.runFor(UPLOAD_TTL_MS);
+
+  const after = await readdir(buildUploadsDir(ctx.dataDir));
+
+  expect(uploaded.status).toBe(201);
+  expect(before).toHaveLength(1);
+  expect(after).toStrictEqual([]);
+});
+
+test('it keeps the disk room of an upload after it answers, until the upload expires', async () => {
+  const ctx = await setupTest();
+
+  const builder = buildStubImageBuilder({ exported: [], repoDigest: `sha256:${'b'.repeat(64)}` });
+
+  const harness = await startBuilderImpd(ctx.stack, builder, {
+    dataDir: ctx.dataDir,
+    rootToken: ctx.rootToken,
+    cloneDisk: ctx.cloneDisk,
+  });
+
+  const clock = buildStubClock();
+
+  const route = createBuildContextRoute({
+    config: { dataDir: ctx.dataDir, buildContextMaxBytes: 1024 ** 2 },
+    images: harness.impd.images,
+    diskBudget: harness.impd.diskBudget,
+    audit: createApiAudit({ db: harness.db, now: Date.now, log: () => {}, readErrorCode }),
+    now: Date.now,
+    startTimer: clock.startTimer,
+  });
+
+  const uploaded = await route.respond(
+    new Request(`http://impd.test${BUILD_CONTEXT_PATH}?name=web`, {
+      method: 'POST',
+      headers: { 'content-length': '1024' },
+      body: new Uint8Array(1024),
+    }),
+    buildMockCaller(),
+  );
+
+  const held = await harness.impd.diskBudget.readStatus();
+
+  clock.runFor(UPLOAD_TTL_MS);
+
+  const expired = await waitFor(async () => {
+    const status = await harness.impd.diskBudget.readStatus();
+
+    expect(status.pendingBytes).toBe(0);
+
+    return status;
+  });
+
+  expect(uploaded.status).toBe(201);
+  expect(held.pendingBytes).toBe(1024);
+  expect(expired.pendingBytes).toBe(0);
+});
+
+test('it keeps the disk room of an upload while its build runs, until the build ends', async () => {
+  const ctx = await setupTest();
+
+  const gate = Promise.withResolvers<void>();
+
+  const builder = buildStubImageBuilder({
+    exported: [createFilesTar(ctx.directoryPath, { hello: 'hi' })],
+    repoDigest: `sha256:${'b'.repeat(64)}`,
+    onBuild: async () => {
+      await gate.promise;
+
+      return { stderr: '#1 DONE\n' };
+    },
+  });
+
+  const harness = await startBuilderImpd(ctx.stack, builder, {
+    dataDir: ctx.dataDir,
+    rootToken: ctx.rootToken,
+    cloneDisk: ctx.cloneDisk,
+  });
+
+  const tar = createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM scratch\n' });
+
+  const uploaded = await harness.impd.api.app.handle(
+    new Request(`http://impd.test${BUILD_CONTEXT_PATH}?name=web`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${ctx.rootToken}`,
+        'content-length': String(tar.byteLength),
+      },
+      body: tar,
+    }),
+  );
+
+  const answer: unknown = await uploaded.json();
+
+  const upload = BuildContextUploadSchema.parse(answer);
+
+  const events = await harness.buildClient(ctx.rootToken).images.buildStream({ upload: upload.id });
+
+  await waitFor(() => {
+    expect(builder.guest.runs.filter((run) => run.argv[1] === 'build')).toHaveLength(1);
+  });
+
+  const running = await harness.impd.diskBudget.readStatus();
+
+  gate.resolve();
+
+  const built = await Array.fromAsync(events);
+
+  const ended = await waitFor(async () => {
+    const status = await harness.impd.diskBudget.readStatus();
+
+    expect(status.pendingBytes).toBe(0);
+
+    return status;
+  });
+
+  // The build holds the context's size again for its rewritten copy of the context.
+  expect(running.pendingBytes).toBe(2 * tar.byteLength);
+  expect(built.at(-1)).toMatchObject({ type: 'image', image: { name: 'web' } });
+  expect(ended.pendingBytes).toBe(0);
+});
+
+test('it keeps the context, room, run and slot of a taken upload past its time to live', async () => {
+  const ctx = await setupTest();
+
+  const builder = buildStubImageBuilder({ exported: [], repoDigest: `sha256:${'b'.repeat(64)}` });
+
+  const harness = await startBuilderImpd(ctx.stack, builder, {
+    dataDir: ctx.dataDir,
+    rootToken: ctx.rootToken,
+    cloneDisk: ctx.cloneDisk,
+  });
+
+  const clock = buildStubClock();
+  const caller = buildMockCaller();
+
+  const route = createBuildContextRoute({
+    config: { dataDir: ctx.dataDir, buildContextMaxBytes: 1024 ** 2 },
+    images: harness.impd.images,
+    diskBudget: harness.impd.diskBudget,
+    audit: createApiAudit({ db: harness.db, now: Date.now, log: () => {}, readErrorCode }),
+    now: Date.now,
+    startTimer: clock.startTimer,
+  });
+
+  const uploaded = await route.respond(
+    new Request(`http://impd.test${BUILD_CONTEXT_PATH}?name=web`, {
+      method: 'POST',
+      headers: { 'content-length': '1024' },
+      body: new Uint8Array(1024),
+    }),
+    caller,
+  );
+
+  const answer: unknown = await uploaded.json();
+
+  const upload = route.takeUpload(BuildContextUploadSchema.parse(answer).id, caller);
+
+  onTestFinished(() => {
+    upload.release();
+  });
+
+  clock.runFor(UPLOAD_TTL_MS * 2);
+
+  const status = await harness.impd.diskBudget.readStatus();
+
+  const slots = [1, 2, 3].map(() => harness.impd.images.claimBuildSlot());
+
+  onTestFinished(() => {
+    for (const release of slots) {
+      release();
+    }
+  });
+
+  expect(existsSync(upload.tarPath)).toBeTrue();
+  expect(status.pendingBytes).toBe(1024);
+  expect(harness.impd.images.listBuildRuns()).toHaveLength(1);
+
+  expect(() => harness.impd.images.claimBuildSlot()).toThrow(
+    '4 image builds are already uploading or running; try again',
+  );
+});
+
+test("it refuses another caller's upload with not found", async () => {
+  const ctx = await setupTest();
+
+  const builder = buildStubImageBuilder({ exported: [], repoDigest: `sha256:${'b'.repeat(64)}` });
+
+  const harness = await startBuilderImpd(ctx.stack, builder, {
+    dataDir: ctx.dataDir,
+    rootToken: ctx.rootToken,
+    cloneDisk: ctx.cloneDisk,
+  });
+
+  const owner = buildMockCaller();
+
+  const route = createBuildContextRoute({
+    config: { dataDir: ctx.dataDir, buildContextMaxBytes: 1024 ** 2 },
+    images: harness.impd.images,
+    diskBudget: harness.impd.diskBudget,
+    audit: createApiAudit({ db: harness.db, now: Date.now, log: () => {}, readErrorCode }),
+    now: Date.now,
+    startTimer: buildStubClock().startTimer,
+  });
+
+  const uploaded = await route.respond(
+    new Request(`http://impd.test${BUILD_CONTEXT_PATH}?name=web`, { method: 'POST', body: 'tar' }),
+    owner,
+  );
+
+  const answer: unknown = await uploaded.json();
+
+  const upload = BuildContextUploadSchema.parse(answer);
+
+  onTestFinished(() => {
+    route.takeUpload(upload.id, owner).release();
+  });
+
+  expect(() => route.takeUpload(upload.id, buildMockCaller())).toThrow(
+    `build context upload ${upload.id} not found; upload the context again`,
+  );
+});
+
+test('it refuses an upload that a build already took with not found', async () => {
+  const ctx = await setupTest();
+
+  const builder = buildStubImageBuilder({
+    exported: [createFilesTar(ctx.directoryPath, { hello: 'hi' })],
+    repoDigest: `sha256:${'b'.repeat(64)}`,
+  });
+
+  const harness = await startBuilderImpd(ctx.stack, builder, {
+    dataDir: ctx.dataDir,
+    rootToken: ctx.rootToken,
+    cloneDisk: ctx.cloneDisk,
+  });
+
+  const tar = createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM scratch\n' });
+  const client = harness.buildClient(ctx.rootToken);
+
+  const uploaded = await harness.impd.api.app.handle(
+    new Request(`http://impd.test${BUILD_CONTEXT_PATH}?name=web`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${ctx.rootToken}` },
+      body: tar,
+    }),
+  );
+
+  const answer: unknown = await uploaded.json();
+
+  const upload = BuildContextUploadSchema.parse(answer);
+
+  const built = await client.images.buildStream({ upload: upload.id });
+
+  await Array.fromAsync(built);
+
+  const again = await client.images.buildStream({ upload: upload.id });
+
+  expect(Array.fromAsync(again)).rejects.toMatchObject({
+    code: 'NOT_FOUND',
+    message: `build context upload ${upload.id} not found; upload the context again`,
+  });
+});
+
+test('it takes an upload through the proxy', async () => {
+  const ctx = await setupTest();
+
+  const builder = buildStubImageBuilder({ exported: [], repoDigest: `sha256:${'b'.repeat(64)}` });
+
+  const harness = await startBuilderImpd(ctx.stack, builder, {
+    dataDir: ctx.dataDir,
+    rootToken: ctx.rootToken,
+    cloneDisk: ctx.cloneDisk,
+  });
 
   const apiPort = Number(new URL(harness.url).port);
 
@@ -450,65 +794,43 @@ test('it sends a progress line through the proxy before the upload ends', async 
 
   ctx.stack.defer(() => apex.stop(true));
 
-  const tar = Bun.spawnSync([
-    'tar',
-    '-C',
-    join(ctx.directoryPath, 'context'),
-    '-c',
-    'Dockerfile',
-  ]).stdout;
-
-  const rest = Promise.withResolvers<void>();
-  const upload = { ended: false };
+  const tar = createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM scratch\n' });
 
   const body = new ReadableStream<Uint8Array>({
-    start: async (controller) => {
+    start: (controller) => {
       controller.enqueue(tar.subarray(0, 512));
-
-      await rest.promise;
-
       controller.enqueue(tar.subarray(512));
-
-      upload.ended = true;
-
       controller.close();
     },
   });
 
   const response = await fetch(
-    `http://127.0.0.1:${String(apex.port)}${IMAGE_BUILD_PATH}?name=web`,
+    `http://127.0.0.1:${String(apex.port)}${BUILD_CONTEXT_PATH}?name=web`,
     {
       method: 'POST',
-      headers: { authorization: `Bearer ${ctx.rootToken}`, accept: IMAGE_BUILD_STREAM_TYPE },
+      headers: { authorization: `Bearer ${ctx.rootToken}` },
       body,
       duplex: 'half',
     },
   );
 
-  const reader = response.body?.pipeThrough(new TextDecoderStream()).getReader();
+  ctx.stack.defer(() => {
+    harness.impd.api.releaseBuildUploads();
+  });
 
-  const firstChunk = await reader?.read();
+  const answer: unknown = await response.json();
 
-  const endedAtFirstLine = upload.ended;
+  expect(response.status).toBe(201);
 
-  rest.resolve();
+  const upload: unknown = BuildContextUploadSchema.parse(answer);
 
-  const parts = [firstChunk?.value ?? ''];
-
-  for (let chunk = await reader?.read(); chunk?.done === false; chunk = await reader?.read()) {
-    parts.push(chunk.value);
-  }
-
-  const lines = parts.join('').trim().split('\n');
-  const first = ImageBuildEventSchema.parse(JSON.parse(lines[0] ?? 'null'));
-  const last = ImageBuildEventSchema.parse(JSON.parse(lines.at(-1) ?? 'null'));
-
-  expect(endedAtFirstLine).toBe(false);
-  expect(first).toMatchObject({ type: 'progress', phase: 'upload' });
-  expect(last).toMatchObject({ type: 'image', image: { name: 'web' } });
+  expect(upload).toStrictEqual({
+    id: expect.any(String) as unknown,
+    expiresAt: expect.toBeValidDate(),
+  });
 });
 
-test('it refuses a build to a manage token limited to some imps, and audits it', async () => {
+test('it refuses an upload to a manage token limited to some imps, and audits it', async () => {
   const ctx = await setupTest();
 
   const builder = buildStubImageBuilder({ exported: [], repoDigest: `sha256:${'b'.repeat(64)}` });
@@ -526,7 +848,7 @@ test('it refuses a build to a manage token limited to some imps, and audits it',
   });
 
   const response = await harness.impd.api.app.handle(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
+    new Request(`http://impd.test${BUILD_CONTEXT_PATH}?name=web`, {
       method: 'POST',
       headers: { authorization: `Bearer ${made.secret}` },
       body: 'tar',
@@ -536,7 +858,7 @@ test('it refuses a build to a manage token limited to some imps, and audits it',
   const outcomes = await waitFor(async () => {
     const rows = await listApiCalls(harness.db, null, 100, null);
 
-    const builds = rows.filter((row) => row.procedure === 'images.build');
+    const builds = rows.filter((row) => row.procedure === 'images.buildStream');
 
     expect(builds).not.toBeEmpty();
 
@@ -548,7 +870,7 @@ test('it refuses a build to a manage token limited to some imps, and audits it',
   expect(builder.guest.runs).toStrictEqual([]);
 });
 
-test('it refuses a build to a read token, and audits it', async () => {
+test('it refuses an upload to a read token, and audits it', async () => {
   const ctx = await setupTest();
 
   const builder = buildStubImageBuilder({ exported: [], repoDigest: `sha256:${'b'.repeat(64)}` });
@@ -562,7 +884,7 @@ test('it refuses a build to a read token, and audits it', async () => {
   const made = await harness.client.tokens.create({ name: 'reader', scope: 'read' });
 
   const response = await harness.impd.api.app.handle(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
+    new Request(`http://impd.test${BUILD_CONTEXT_PATH}?name=web`, {
       method: 'POST',
       headers: { authorization: `Bearer ${made.secret}` },
       body: 'tar',
@@ -572,7 +894,7 @@ test('it refuses a build to a read token, and audits it', async () => {
   const outcomes = await waitFor(async () => {
     const rows = await listApiCalls(harness.db, null, 100, null);
 
-    const builds = rows.filter((row) => row.procedure === 'images.build');
+    const builds = rows.filter((row) => row.procedure === 'images.buildStream');
 
     expect(builds).not.toBeEmpty();
 
@@ -584,7 +906,7 @@ test('it refuses a build to a read token, and audits it', async () => {
   expect(builder.guest.runs).toStrictEqual([]);
 });
 
-test('it answers 401 to a build with a bearer that is no token', async () => {
+test('it answers 401 to an upload with a bearer that is no token', async () => {
   const ctx = await setupTest();
 
   const builder = buildStubImageBuilder({ exported: [], repoDigest: `sha256:${'b'.repeat(64)}` });
@@ -596,7 +918,7 @@ test('it answers 401 to a build with a bearer that is no token', async () => {
   });
 
   const response = await harness.impd.api.app.handle(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
+    new Request(`http://impd.test${BUILD_CONTEXT_PATH}?name=web`, {
       method: 'POST',
       headers: { authorization: 'Bearer not-a-token' },
       body: 'tar',
@@ -625,7 +947,7 @@ test.each([
   });
 
   const response = await harness.impd.api.app.handle(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?${query}`, {
+    new Request(`http://impd.test${BUILD_CONTEXT_PATH}?${query}`, {
       method: 'POST',
       headers: { authorization: `Bearer ${ctx.rootToken}` },
       body: 'tar',
@@ -653,17 +975,16 @@ test('it refuses with 413 a context whose Content-Length is over the limit', asy
     diskBudget: harness.impd.diskBudget,
     audit: createApiAudit({ db: harness.db, now: Date.now, log: () => {}, readErrorCode }),
     now: Date.now,
-    keepaliveMs: 10_000,
+    startTimer: buildStubClock().startTimer,
   });
 
   const response = await route.respond(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
+    new Request(`http://impd.test${BUILD_CONTEXT_PATH}?name=web`, {
       method: 'POST',
       headers: { 'content-length': String(2 * 1024 ** 2) },
       body: 'x',
     }),
     buildMockCaller(),
-    toApiImage,
   );
 
   const body: unknown = await response.json();
@@ -694,29 +1015,27 @@ test('it frees the build slot of a context refused for its Content-Length', asyn
     diskBudget: harness.impd.diskBudget,
     audit: createApiAudit({ db: harness.db, now: Date.now, log: () => {}, readErrorCode }),
     now: Date.now,
-    keepaliveMs: 10_000,
+    startTimer: buildStubClock().startTimer,
   });
 
   for (let attempt = 0; attempt < 4; attempt += 1) {
     await route.respond(
-      new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
+      new Request(`http://impd.test${BUILD_CONTEXT_PATH}?name=web`, {
         method: 'POST',
         headers: { 'content-length': String(2 * 1024 ** 2) },
         body: 'x',
       }),
       buildMockCaller(),
-      toApiImage,
     );
   }
 
   const fifth = await route.respond(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
+    new Request(`http://impd.test${BUILD_CONTEXT_PATH}?name=web`, {
       method: 'POST',
       headers: { 'content-length': String(2 * 1024 ** 2) },
       body: 'x',
     }),
     buildMockCaller(),
-    toApiImage,
   );
 
   expect(fifth.status).toBe(413);
@@ -739,18 +1058,17 @@ test('it refuses with 413 a context whose bytes run over the limit, and removes 
     diskBudget: harness.impd.diskBudget,
     audit: createApiAudit({ db: harness.db, now: Date.now, log: () => {}, readErrorCode }),
     now: Date.now,
-    keepaliveMs: 10_000,
+    startTimer: buildStubClock().startTimer,
   });
 
   const context = new Blob([new Uint8Array(1024 ** 2 + 1)]).stream();
 
   const response = await route.respond(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
+    new Request(`http://impd.test${BUILD_CONTEXT_PATH}?name=web`, {
       method: 'POST',
       body: context,
     }),
     buildMockCaller(),
-    toApiImage,
   );
 
   const body: unknown = await response.json();
@@ -766,7 +1084,7 @@ test('it refuses with 413 a context whose bytes run over the limit, and removes 
   expect(uploads).toStrictEqual([]);
 });
 
-test('it refuses with 413 a streamed build whose Content-Length is over the limit', async () => {
+test('it takes a context of exactly the limit', async () => {
   const ctx = await setupTest();
 
   const builder = buildStubImageBuilder({ exported: [], repoDigest: `sha256:${'b'.repeat(64)}` });
@@ -777,38 +1095,7 @@ test('it refuses with 413 a streamed build whose Content-Length is over the limi
     cloneDisk: ctx.cloneDisk,
   });
 
-  const route = createBuildContextRoute({
-    config: { dataDir: ctx.dataDir, buildContextMaxBytes: 1024 ** 2 },
-    images: harness.impd.images,
-    diskBudget: harness.impd.diskBudget,
-    audit: createApiAudit({ db: harness.db, now: Date.now, log: () => {}, readErrorCode }),
-    now: Date.now,
-    keepaliveMs: 10_000,
-  });
-
-  const response = await route.respond(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
-      method: 'POST',
-      headers: { accept: IMAGE_BUILD_STREAM_TYPE, 'content-length': String(2 * 1024 ** 2) },
-      body: 'x',
-    }),
-    buildMockCaller(),
-    toApiImage,
-  );
-
-  expect(response.status).toBe(413);
-});
-
-test('it ends a streamed build whose bytes run over the limit with a too-large error', async () => {
-  const ctx = await setupTest();
-
-  const builder = buildStubImageBuilder({ exported: [], repoDigest: `sha256:${'b'.repeat(64)}` });
-
-  const harness = await startBuilderImpd(ctx.stack, builder, {
-    dataDir: ctx.dataDir,
-    rootToken: ctx.rootToken,
-    cloneDisk: ctx.cloneDisk,
-  });
+  const caller = buildMockCaller();
 
   const route = createBuildContextRoute({
     config: { dataDir: ctx.dataDir, buildContextMaxBytes: 1024 ** 2 },
@@ -816,77 +1103,31 @@ test('it ends a streamed build whose bytes run over the limit with a too-large e
     diskBudget: harness.impd.diskBudget,
     audit: createApiAudit({ db: harness.db, now: Date.now, log: () => {}, readErrorCode }),
     now: Date.now,
-    keepaliveMs: 10_000,
-  });
-
-  const context = new Blob([new Uint8Array(1024 ** 2 + 1)]).stream();
-
-  const response = await route.respond(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
-      method: 'POST',
-      headers: { accept: IMAGE_BUILD_STREAM_TYPE },
-      body: context,
-    }),
-    buildMockCaller(),
-    toApiImage,
-  );
-
-  const text = await response.text();
-  const uploads = await readdir(buildUploadsDir(ctx.dataDir));
-
-  const last = ImageBuildEventSchema.parse(JSON.parse(text.trim().split('\n').at(-1) ?? 'null'));
-
-  expect(response.status).toBe(200);
-
-  expect(last).toStrictEqual({
-    type: 'error',
-    code: 'PAYLOAD_TOO_LARGE',
-    message: 'the build context is larger than the limit, 1 MiB (IMP_BUILD_CONTEXT_MAX_MIB)',
-  });
-
-  expect(uploads).toStrictEqual([]);
-});
-
-test('it hands a context of exactly the limit to the build', async () => {
-  const ctx = await setupTest();
-
-  const builder = buildStubImageBuilder({ exported: [], repoDigest: `sha256:${'b'.repeat(64)}` });
-
-  const harness = await startBuilderImpd(ctx.stack, builder, {
-    dataDir: ctx.dataDir,
-    rootToken: ctx.rootToken,
-    cloneDisk: ctx.cloneDisk,
-  });
-
-  const route = createBuildContextRoute({
-    config: { dataDir: ctx.dataDir, buildContextMaxBytes: 1024 ** 2 },
-    images: harness.impd.images,
-    diskBudget: harness.impd.diskBudget,
-    audit: createApiAudit({ db: harness.db, now: Date.now, log: () => {}, readErrorCode }),
-    now: Date.now,
-    keepaliveMs: 10_000,
+    startTimer: buildStubClock().startTimer,
   });
 
   const context = new Blob([new Uint8Array(1024 ** 2)]).stream();
 
   const response = await route.respond(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
+    new Request(`http://impd.test${BUILD_CONTEXT_PATH}?name=web`, {
       method: 'POST',
       body: context,
     }),
-    buildMockCaller(),
-    toApiImage,
+    caller,
   );
 
-  const body: unknown = await response.json();
+  const answer: unknown = await response.json();
 
-  expect({ status: response.status, body }).toStrictEqual({
-    status: 400,
-    body: { code: 'BAD_REQUEST', message: 'there is no Dockerfile in the build context' },
+  const upload = BuildContextUploadSchema.parse(answer);
+
+  onTestFinished(() => {
+    route.takeUpload(upload.id, caller).release();
   });
+
+  expect(response.status).toBe(201);
 });
 
-test('it refuses a build with no body', async () => {
+test('it refuses an upload with no body', async () => {
   const ctx = await setupTest();
 
   const builder = buildStubImageBuilder({ exported: [], repoDigest: `sha256:${'b'.repeat(64)}` });
@@ -903,13 +1144,12 @@ test('it refuses a build with no body', async () => {
     diskBudget: harness.impd.diskBudget,
     audit: createApiAudit({ db: harness.db, now: Date.now, log: () => {}, readErrorCode }),
     now: Date.now,
-    keepaliveMs: 10_000,
+    startTimer: buildStubClock().startTimer,
   });
 
   const response = await route.respond(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, { method: 'POST' }),
+    new Request(`http://impd.test${BUILD_CONTEXT_PATH}?name=web`, { method: 'POST' }),
     buildMockCaller(),
-    toApiImage,
   );
 
   const body: unknown = await response.json();
@@ -920,7 +1160,7 @@ test('it refuses a build with no body', async () => {
   });
 });
 
-test('it refuses a build whose body is longer than its Content-Length', async () => {
+test('it refuses an upload whose body is longer than its Content-Length', async () => {
   const ctx = await setupTest();
 
   const builder = buildStubImageBuilder({ exported: [], repoDigest: `sha256:${'b'.repeat(64)}` });
@@ -937,19 +1177,18 @@ test('it refuses a build whose body is longer than its Content-Length', async ()
     diskBudget: harness.impd.diskBudget,
     audit: createApiAudit({ db: harness.db, now: Date.now, log: () => {}, readErrorCode }),
     now: Date.now,
-    keepaliveMs: 10_000,
+    startTimer: buildStubClock().startTimer,
   });
 
   const context = new Blob([new Uint8Array(64)]).stream();
 
   const response = await route.respond(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
+    new Request(`http://impd.test${BUILD_CONTEXT_PATH}?name=web`, {
       method: 'POST',
       headers: { 'content-length': '4' },
       body: context,
     }),
     buildMockCaller(),
-    toApiImage,
   );
 
   const body: unknown = await response.json();
@@ -960,7 +1199,7 @@ test('it refuses a build whose body is longer than its Content-Length', async ()
   });
 });
 
-test('it refuses a build whose body is empty', async () => {
+test('it refuses an upload whose body is empty', async () => {
   const ctx = await setupTest();
 
   const builder = buildStubImageBuilder({ exported: [], repoDigest: `sha256:${'b'.repeat(64)}` });
@@ -977,11 +1216,11 @@ test('it refuses a build whose body is empty', async () => {
     diskBudget: harness.impd.diskBudget,
     audit: createApiAudit({ db: harness.db, now: Date.now, log: () => {}, readErrorCode }),
     now: Date.now,
-    keepaliveMs: 10_000,
+    startTimer: buildStubClock().startTimer,
   });
 
   const response = await route.respond(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
+    new Request(`http://impd.test${BUILD_CONTEXT_PATH}?name=web`, {
       method: 'POST',
       body: new ReadableStream({
         start: (controller) => {
@@ -990,7 +1229,6 @@ test('it refuses a build whose body is empty', async () => {
       }),
     }),
     buildMockCaller(),
-    toApiImage,
   );
 
   const body: unknown = await response.json();
@@ -1001,7 +1239,7 @@ test('it refuses a build whose body is empty', async () => {
   });
 });
 
-test('it refuses a fifth build with 429 while four run', async () => {
+test('it refuses a fifth upload with 429 while four builds run', async () => {
   const ctx = await setupTest();
 
   const held = Promise.withResolvers<void>();
@@ -1022,90 +1260,16 @@ test('it refuses a fifth build with 429 while four run', async () => {
     cloneDisk: ctx.cloneDisk,
   });
 
-  await mkdir(join(ctx.directoryPath, 'context'));
-  await writeFile(join(ctx.directoryPath, 'context', 'Dockerfile'), 'FROM scratch\n');
-
-  const tar = Bun.spawnSync([
-    'tar',
-    '-C',
-    join(ctx.directoryPath, 'context'),
-    '-c',
-    'Dockerfile',
-  ]).stdout;
+  const tar = createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM scratch\n' });
 
   const running = [1, 2, 3, 4].map((index) =>
-    harness.impd.api.app.handle(
-      new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web${String(index)}`, {
-        method: 'POST',
-        headers: { authorization: `Bearer ${ctx.rootToken}` },
-        body: tar,
-      }),
-    ),
-  );
-
-  ctx.stack.defer(async () => {
-    held.resolve();
-
-    await Promise.allSettled(running);
-  });
-
-  await waitFor(() => {
-    expect(builder.guest.runs.filter((run) => run.argv[1] === 'build')).toHaveLength(4);
-  });
-
-  const fifth = await harness.impd.api.app.handle(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web5`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${ctx.rootToken}` },
+    runUploadedBuild(harness, {
+      token: ctx.rootToken,
+      query: `name=web${String(index)}`,
       body: tar,
     }),
   );
 
-  expect(fifth.status).toBe(429);
-});
-
-test('it refuses a fifth streamed build with 429, before its stream, while four run', async () => {
-  const ctx = await setupTest();
-
-  const held = Promise.withResolvers<void>();
-
-  const builder = buildStubImageBuilder({
-    exported: [],
-    repoDigest: `sha256:${'b'.repeat(64)}`,
-    onBuild: async () => {
-      await held.promise;
-
-      return { code: 1, stderr: 'held for the test\n' };
-    },
-  });
-
-  const harness = await startBuilderImpd(ctx.stack, builder, {
-    dataDir: ctx.dataDir,
-    rootToken: ctx.rootToken,
-    cloneDisk: ctx.cloneDisk,
-  });
-
-  await mkdir(join(ctx.directoryPath, 'context'));
-  await writeFile(join(ctx.directoryPath, 'context', 'Dockerfile'), 'FROM scratch\n');
-
-  const tar = Bun.spawnSync([
-    'tar',
-    '-C',
-    join(ctx.directoryPath, 'context'),
-    '-c',
-    'Dockerfile',
-  ]).stdout;
-
-  const running = [1, 2, 3, 4].map((index) =>
-    harness.impd.api.app.handle(
-      new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web${String(index)}`, {
-        method: 'POST',
-        headers: { authorization: `Bearer ${ctx.rootToken}` },
-        body: tar,
-      }),
-    ),
-  );
-
   ctx.stack.defer(async () => {
     held.resolve();
 
@@ -1117,9 +1281,9 @@ test('it refuses a fifth streamed build with 429, before its stream, while four 
   });
 
   const fifth = await harness.impd.api.app.handle(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web5`, {
+    new Request(`http://impd.test${BUILD_CONTEXT_PATH}?name=web5`, {
       method: 'POST',
-      headers: { authorization: `Bearer ${ctx.rootToken}`, accept: IMAGE_BUILD_STREAM_TYPE },
+      headers: { authorization: `Bearer ${ctx.rootToken}` },
       body: tar,
     }),
   );
@@ -1148,25 +1312,14 @@ test('it frees each build slot once its build ends', async () => {
     cloneDisk: ctx.cloneDisk,
   });
 
-  await mkdir(join(ctx.directoryPath, 'context'));
-  await writeFile(join(ctx.directoryPath, 'context', 'Dockerfile'), 'FROM scratch\n');
-
-  const tar = Bun.spawnSync([
-    'tar',
-    '-C',
-    join(ctx.directoryPath, 'context'),
-    '-c',
-    'Dockerfile',
-  ]).stdout;
+  const tar = createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM scratch\n' });
 
   const running = [1, 2, 3, 4].map((index) =>
-    harness.impd.api.app.handle(
-      new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web${String(index)}`, {
-        method: 'POST',
-        headers: { authorization: `Bearer ${ctx.rootToken}` },
-        body: tar,
-      }),
-    ),
+    runUploadedBuild(harness, {
+      token: ctx.rootToken,
+      query: `name=web${String(index)}`,
+      body: tar,
+    }),
   );
 
   await waitFor(() => {
@@ -1175,100 +1328,18 @@ test('it frees each build slot once its build ends', async () => {
 
   gate.resolve();
 
-  const responses = await Promise.all(running);
+  await Promise.all(running);
 
-  invariant(responses.every((built) => built.status === 200));
+  const fifth = await runUploadedBuild(harness, {
+    token: ctx.rootToken,
+    query: 'name=web5',
+    body: tar,
+  });
 
-  const fifth = await harness.impd.api.app.handle(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web5`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${ctx.rootToken}` },
-      body: tar,
-    }),
-  );
-
-  expect(fifth.status).toBe(200);
+  expect(fifth.at(-1)).toMatchObject({ type: 'image', image: { name: 'web5' } });
 });
 
-test.each([
-  ['JSON', {}],
-  ['a stream', { accept: IMAGE_BUILD_STREAM_TYPE }],
-])(
-  "it stops the builder's build of a client that goes, answered as %s, and removes its upload",
-  async (_, headers) => {
-    const ctx = await setupTest();
-
-    const builder = buildStubImageBuilder({
-      exported: [],
-      repoDigest: `sha256:${'b'.repeat(64)}`,
-      onBuild: () => Promise.withResolvers<StubAnswer>().promise,
-    });
-
-    const harness = await startBuilderImpd(ctx.stack, builder, {
-      dataDir: ctx.dataDir,
-      rootToken: ctx.rootToken,
-      cloneDisk: ctx.cloneDisk,
-    });
-
-    await mkdir(join(ctx.directoryPath, 'context'));
-    await writeFile(join(ctx.directoryPath, 'context', 'Dockerfile'), 'FROM scratch\n');
-
-    const tar = Bun.spawnSync([
-      'tar',
-      '-C',
-      join(ctx.directoryPath, 'context'),
-      '-c',
-      'Dockerfile',
-    ]).stdout;
-
-    const clients = [1, 2, 3, 4].map(() => new AbortController());
-
-    const sent = clients.map((client, index) =>
-      harness.impd.api.app.handle(
-        new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=gone${String(index)}`, {
-          method: 'POST',
-          headers: { authorization: `Bearer ${ctx.rootToken}`, ...headers },
-          body: tar,
-          signal: client.signal,
-        }),
-      ),
-    );
-
-    await waitFor(() => {
-      expect(builder.guest.runs.filter((run) => run.argv[1] === 'build')).toHaveLength(4);
-    });
-
-    for (const client of clients) {
-      client.abort();
-    }
-
-    await Promise.allSettled(sent);
-
-    const stopped = await waitFor(async () => {
-      const rows = await listApiCalls(harness.db, null, 100, null);
-
-      expect(rows.filter((row) => row.procedure === 'images.build').length).toBeGreaterThanOrEqual(
-        4,
-      );
-
-      const closed = builder.guest.runs.filter((run) => run.argv[1] === 'build' && run.closed);
-
-      expect(closed.length).toBeGreaterThanOrEqual(4);
-
-      return closed.length;
-    });
-
-    const uploads = await readdir(buildUploadsDir(ctx.dataDir));
-
-    expect(stopped).toBe(4);
-    expect(uploads).toStrictEqual([]);
-  },
-);
-
-test.each([
-  ['JSON', {}],
-  ['a stream', { accept: IMAGE_BUILD_STREAM_TYPE }],
-])('it frees the build slot of a client that goes, answered as %s', async (_, headers) => {
+test("it stops the builder's build of a client that goes, and removes its upload", async () => {
   const ctx = await setupTest();
 
   const builder = buildStubImageBuilder({
@@ -1283,28 +1354,73 @@ test.each([
     cloneDisk: ctx.cloneDisk,
   });
 
-  await mkdir(join(ctx.directoryPath, 'context'));
-  await writeFile(join(ctx.directoryPath, 'context', 'Dockerfile'), 'FROM scratch\n');
-
-  const tar = Bun.spawnSync([
-    'tar',
-    '-C',
-    join(ctx.directoryPath, 'context'),
-    '-c',
-    'Dockerfile',
-  ]).stdout;
-
+  const tar = createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM scratch\n' });
   const clients = [1, 2, 3, 4].map(() => new AbortController());
 
   const sent = clients.map((client, index) =>
-    harness.impd.api.app.handle(
-      new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=gone${String(index)}`, {
-        method: 'POST',
-        headers: { authorization: `Bearer ${ctx.rootToken}`, ...headers },
-        body: tar,
-        signal: client.signal,
-      }),
-    ),
+    runUploadedBuild(harness, {
+      token: ctx.rootToken,
+      query: `name=gone${String(index)}`,
+      body: tar,
+      signal: client.signal,
+    }),
+  );
+
+  await waitFor(() => {
+    expect(builder.guest.runs.filter((run) => run.argv[1] === 'build')).toHaveLength(4);
+  });
+
+  for (const client of clients) {
+    client.abort();
+  }
+
+  await Promise.allSettled(sent);
+
+  const stopped = await waitFor(async () => {
+    const rows = await listApiCalls(harness.db, null, 100, null);
+
+    expect(
+      rows.filter((row) => row.procedure === 'images.buildStream').length,
+    ).toBeGreaterThanOrEqual(4);
+
+    const closed = builder.guest.runs.filter((run) => run.argv[1] === 'build' && run.closed);
+
+    expect(closed.length).toBeGreaterThanOrEqual(4);
+
+    return closed.length;
+  });
+
+  const uploads = await readdir(buildUploadsDir(ctx.dataDir));
+
+  expect(stopped).toBe(4);
+  expect(uploads).toStrictEqual([]);
+});
+
+test('it frees the build slot of a client that goes', async () => {
+  const ctx = await setupTest();
+
+  const builder = buildStubImageBuilder({
+    exported: [],
+    repoDigest: `sha256:${'b'.repeat(64)}`,
+    onBuild: () => Promise.withResolvers<StubAnswer>().promise,
+  });
+
+  const harness = await startBuilderImpd(ctx.stack, builder, {
+    dataDir: ctx.dataDir,
+    rootToken: ctx.rootToken,
+    cloneDisk: ctx.cloneDisk,
+  });
+
+  const tar = createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM scratch\n' });
+  const clients = [1, 2, 3, 4].map(() => new AbortController());
+
+  const sent = clients.map((client, index) =>
+    runUploadedBuild(harness, {
+      token: ctx.rootToken,
+      query: `name=gone${String(index)}`,
+      body: tar,
+      signal: client.signal,
+    }),
   );
 
   await waitFor(() => {
@@ -1320,18 +1436,24 @@ test.each([
   await waitFor(async () => {
     const rows = await listApiCalls(harness.db, null, 100, null);
 
-    expect(rows.filter((row) => row.procedure === 'images.build').length).toBeGreaterThanOrEqual(4);
+    expect(
+      rows.filter((row) => row.procedure === 'images.buildStream').length,
+    ).toBeGreaterThanOrEqual(4);
   });
 
   const next = await harness.impd.api.app.handle(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
+    new Request(`http://impd.test${BUILD_CONTEXT_PATH}?name=web`, {
       method: 'POST',
       headers: { authorization: `Bearer ${ctx.rootToken}` },
-      body: 'not a tar',
+      body: 'tar',
     }),
   );
 
-  expect(next.status).toBe(400);
+  ctx.stack.defer(() => {
+    harness.impd.api.releaseBuildUploads();
+  });
+
+  expect(next.status).toBe(201);
 });
 
 test('it kills the base image pulls of clients that go, and starts no other pull', async () => {
@@ -1361,32 +1483,19 @@ test('it kills the base image pulls of clients that go, and starts no other pull
     cloneDisk: ctx.cloneDisk,
   });
 
-  await mkdir(join(ctx.directoryPath, 'context'));
-
-  await writeFile(
-    join(ctx.directoryPath, 'context', 'Dockerfile'),
-    'FROM first.test/a:1\nFROM second.test/b:1\n',
-  );
-
-  const tar = Bun.spawnSync([
-    'tar',
-    '-C',
-    join(ctx.directoryPath, 'context'),
-    '-c',
-    'Dockerfile',
-  ]).stdout;
+  const tar = createFilesTar(ctx.directoryPath, {
+    Dockerfile: 'FROM first.test/a:1\nFROM second.test/b:1\n',
+  });
 
   const clients = [1, 2, 3, 4].map(() => new AbortController());
 
   const sent = clients.map((client, index) =>
-    harness.impd.api.app.handle(
-      new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=pull${String(index)}`, {
-        method: 'POST',
-        headers: { authorization: `Bearer ${ctx.rootToken}` },
-        body: tar,
-        signal: client.signal,
-      }),
-    ),
+    runUploadedBuild(harness, {
+      token: ctx.rootToken,
+      query: `name=pull${String(index)}`,
+      body: tar,
+      signal: client.signal,
+    }),
   );
 
   await waitFor(() => {
@@ -1397,13 +1506,15 @@ test('it kills the base image pulls of clients that go, and starts no other pull
     client.abort();
   }
 
+  await Promise.allSettled(sent);
+
   await waitFor(async () => {
     const rows = await listApiCalls(harness.db, null, 100, null);
 
-    expect(rows.filter((row) => row.procedure === 'images.build').length).toBeGreaterThanOrEqual(4);
+    expect(
+      rows.filter((row) => row.procedure === 'images.buildStream').length,
+    ).toBeGreaterThanOrEqual(4);
   });
-
-  await Promise.allSettled(sent);
 
   const uploads = await readdir(buildUploadsDir(ctx.dataDir));
 
@@ -1442,28 +1553,16 @@ test('it frees the build slots of clients that go during a base image pull', asy
     cloneDisk: ctx.cloneDisk,
   });
 
-  await mkdir(join(ctx.directoryPath, 'context'));
-  await writeFile(join(ctx.directoryPath, 'context', 'Dockerfile'), 'FROM first.test/a:1\n');
-
-  const tar = Bun.spawnSync([
-    'tar',
-    '-C',
-    join(ctx.directoryPath, 'context'),
-    '-c',
-    'Dockerfile',
-  ]).stdout;
-
+  const tar = createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM first.test/a:1\n' });
   const clients = [1, 2, 3, 4].map(() => new AbortController());
 
   const sent = clients.map((client, index) =>
-    harness.impd.api.app.handle(
-      new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=pull${String(index)}`, {
-        method: 'POST',
-        headers: { authorization: `Bearer ${ctx.rootToken}` },
-        body: tar,
-        signal: client.signal,
-      }),
-    ),
+    runUploadedBuild(harness, {
+      token: ctx.rootToken,
+      query: `name=pull${String(index)}`,
+      body: tar,
+      signal: client.signal,
+    }),
   );
 
   await waitFor(() => {
@@ -1474,23 +1573,29 @@ test('it frees the build slots of clients that go during a base image pull', asy
     client.abort();
   }
 
+  await Promise.allSettled(sent);
+
   await waitFor(async () => {
     const rows = await listApiCalls(harness.db, null, 100, null);
 
-    expect(rows.filter((row) => row.procedure === 'images.build').length).toBeGreaterThanOrEqual(4);
+    expect(
+      rows.filter((row) => row.procedure === 'images.buildStream').length,
+    ).toBeGreaterThanOrEqual(4);
   });
 
-  await Promise.allSettled(sent);
-
   const next = await harness.impd.api.app.handle(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
+    new Request(`http://impd.test${BUILD_CONTEXT_PATH}?name=web`, {
       method: 'POST',
       headers: { authorization: `Bearer ${ctx.rootToken}` },
-      body: 'not a tar',
+      body: 'tar',
     }),
   );
 
-  expect(next.status).toBe(400);
+  ctx.stack.defer(() => {
+    harness.impd.api.releaseBuildUploads();
+  });
+
+  expect(next.status).toBe(201);
 });
 
 test('it refuses a base image with ONBUILD triggers once the builder has it', async () => {
@@ -1514,39 +1619,26 @@ test('it refuses a base image with ONBUILD triggers once the builder has it', as
     cloneDisk: ctx.cloneDisk,
   });
 
-  await mkdir(join(ctx.directoryPath, 'context'));
+  const tar = createFilesTar(ctx.directoryPath, {
+    Dockerfile: 'FROM base.test/onbuild:1\nRUN true\n',
+  });
 
-  await writeFile(
-    join(ctx.directoryPath, 'context', 'Dockerfile'),
-    'FROM base.test/onbuild:1\nRUN true\n',
+  const failure = await runUploadedBuild(harness, {
+    token: ctx.rootToken,
+    query: 'name=web',
+    body: tar,
+  }).then(
+    () => null,
+    (error: unknown) => error,
   );
-
-  const tar = Bun.spawnSync([
-    'tar',
-    '-C',
-    join(ctx.directoryPath, 'context'),
-    '-c',
-    'Dockerfile',
-  ]).stdout;
-
-  const response = await harness.impd.api.app.handle(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${ctx.rootToken}` },
-      body: tar,
-    }),
-  );
-
-  const body: unknown = await response.json();
 
   const calls = builder.guest.runs.map((run) =>
     run.argv.slice(1).join(' ').replace(PIN_INSPECT_FORMAT, 'PIN'),
   );
 
-  expect(response.status).toBe(400);
-
-  expect(body).toStrictEqual({
+  expect(failure).toMatchObject({
     code: 'BAD_REQUEST',
+    status: 400,
     message: 'FROM base.test/onbuild:1 has ONBUILD triggers, which impd refuses',
   });
 
@@ -1593,36 +1685,24 @@ test('it pulls COPY --from and RUN --mount images first, like a FROM, by tag or 
     cloneDisk: ctx.cloneDisk,
   });
 
-  await mkdir(join(ctx.directoryPath, 'context'));
+  const tar = createFilesTar(ctx.directoryPath, {
+    Dockerfile: `FROM base.test/a:1 AS build\nCOPY --from=tools.test/b@sha256:${'b'.repeat(64)} /x /x\nCOPY --from=build /x /y\nRUN --mount=type=bind,from=mnt.test/c:3,target=/m true`,
+  });
 
-  await writeFile(
-    join(ctx.directoryPath, 'context', 'Dockerfile'),
-    `FROM base.test/a:1 AS build\nCOPY --from=tools.test/b@sha256:${'b'.repeat(64)} /x /x\nCOPY --from=build /x /y\nRUN --mount=type=bind,from=mnt.test/c:3,target=/m true`,
+  const failure = await runUploadedBuild(harness, {
+    token: ctx.rootToken,
+    query: 'name=web',
+    body: tar,
+  }).then(
+    () => null,
+    (error: unknown) => error,
   );
-
-  const tar = Bun.spawnSync([
-    'tar',
-    '-C',
-    join(ctx.directoryPath, 'context'),
-    '-c',
-    'Dockerfile',
-  ]).stdout;
-
-  const response = await harness.impd.api.app.handle(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${ctx.rootToken}` },
-      body: tar,
-    }),
-  );
-
-  const body: unknown = await response.json();
 
   const calls = builder.guest.runs.map((run) =>
     run.argv.slice(1).join(' ').replace(PIN_INSPECT_FORMAT, 'PIN'),
   );
 
-  expect(body).toStrictEqual({
+  expect(failure).toMatchObject({
     code: 'BAD_REQUEST',
     message: 'RUN --mount from mnt.test/c:3: the pull failed: no such registry',
   });
@@ -1672,32 +1752,21 @@ test('it sends the builder the Dockerfile with each image pinned and the platfor
     cloneDisk: ctx.cloneDisk,
   });
 
-  await mkdir(join(ctx.directoryPath, 'context'));
+  const tar = createFilesTar(ctx.directoryPath, {
+    Dockerfile:
+      'FROM --platform=$BUILDPLATFORM base.test/a:1 AS build\nCOPY --from=pulled.test/p:2 /x /x\nFROM base.test/retag:1\nRUN --mount=from=build,target=/b --mount=from=base.test/a:1,target=/a true\n',
+  });
 
-  await writeFile(
-    join(ctx.directoryPath, 'context', 'Dockerfile'),
-    'FROM --platform=$BUILDPLATFORM base.test/a:1 AS build\nCOPY --from=pulled.test/p:2 /x /x\nFROM base.test/retag:1\nRUN --mount=from=build,target=/b --mount=from=base.test/a:1,target=/a true\n',
+  const failure = await runUploadedBuild(harness, {
+    token: ctx.rootToken,
+    query: 'name=web',
+    body: tar,
+  }).then(
+    () => null,
+    (error: unknown) => error,
   );
 
-  const tar = Bun.spawnSync([
-    'tar',
-    '-C',
-    join(ctx.directoryPath, 'context'),
-    '-c',
-    'Dockerfile',
-  ]).stdout;
-
-  const response = await harness.impd.api.app.handle(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${ctx.rootToken}` },
-      body: tar,
-    }),
-  );
-
-  const body: unknown = await response.json();
-
-  expect(body).toStrictEqual({
+  expect(failure).toMatchObject({
     code: 'BAD_REQUEST',
     message: 'docker build failed:\nthe stub builder builds nothing',
   });
@@ -1734,32 +1803,20 @@ test('it refuses a COPY --from image with ONBUILD triggers, which the frontend w
     cloneDisk: ctx.cloneDisk,
   });
 
-  await mkdir(join(ctx.directoryPath, 'context'));
+  const tar = createFilesTar(ctx.directoryPath, {
+    Dockerfile: 'FROM scratch\nCOPY --from=base.test/onbuild:1 / /\n',
+  });
 
-  await writeFile(
-    join(ctx.directoryPath, 'context', 'Dockerfile'),
-    'FROM scratch\nCOPY --from=base.test/onbuild:1 / /\n',
+  const failure = await runUploadedBuild(harness, {
+    token: ctx.rootToken,
+    query: 'name=web',
+    body: tar,
+  }).then(
+    () => null,
+    (error: unknown) => error,
   );
 
-  const tar = Bun.spawnSync([
-    'tar',
-    '-C',
-    join(ctx.directoryPath, 'context'),
-    '-c',
-    'Dockerfile',
-  ]).stdout;
-
-  const response = await harness.impd.api.app.handle(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${ctx.rootToken}` },
-      body: tar,
-    }),
-  );
-
-  const body: unknown = await response.json();
-
-  expect(body).toStrictEqual({
+  expect(failure).toMatchObject({
     code: 'BAD_REQUEST',
     message: 'COPY --from base.test/onbuild:1 has ONBUILD triggers, which impd refuses',
   });
@@ -1795,32 +1852,20 @@ test('it refuses a RUN --mount image with ONBUILD triggers, which the frontend w
     cloneDisk: ctx.cloneDisk,
   });
 
-  await mkdir(join(ctx.directoryPath, 'context'));
+  const tar = createFilesTar(ctx.directoryPath, {
+    Dockerfile: 'FROM base.test/a:1\nRUN --mount=from=base.test/onbuild:1,target=/m true\n',
+  });
 
-  await writeFile(
-    join(ctx.directoryPath, 'context', 'Dockerfile'),
-    'FROM base.test/a:1\nRUN --mount=from=base.test/onbuild:1,target=/m true\n',
+  const failure = await runUploadedBuild(harness, {
+    token: ctx.rootToken,
+    query: 'name=web',
+    body: tar,
+  }).then(
+    () => null,
+    (error: unknown) => error,
   );
 
-  const tar = Bun.spawnSync([
-    'tar',
-    '-C',
-    join(ctx.directoryPath, 'context'),
-    '-c',
-    'Dockerfile',
-  ]).stdout;
-
-  const response = await harness.impd.api.app.handle(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${ctx.rootToken}` },
-      body: tar,
-    }),
-  );
-
-  const body: unknown = await response.json();
-
-  expect(body).toStrictEqual({
+  expect(failure).toMatchObject({
     code: 'BAD_REQUEST',
     message: 'RUN --mount from base.test/onbuild:1 has ONBUILD triggers, which impd refuses',
   });
@@ -1849,27 +1894,13 @@ test('it inspects and pins a ref the build names twice once, so a moving tag giv
     cloneDisk: ctx.cloneDisk,
   });
 
-  await mkdir(join(ctx.directoryPath, 'context'));
+  const tar = createFilesTar(ctx.directoryPath, {
+    Dockerfile:
+      'FROM base.test/moving:1\nCOPY --from=base.test/moving:1 /x /x\nRUN --mount=from=base.test/moving:1,target=/m true\n',
+  });
 
-  await writeFile(
-    join(ctx.directoryPath, 'context', 'Dockerfile'),
-    'FROM base.test/moving:1\nCOPY --from=base.test/moving:1 /x /x\nRUN --mount=from=base.test/moving:1,target=/m true\n',
-  );
-
-  const tar = Bun.spawnSync([
-    'tar',
-    '-C',
-    join(ctx.directoryPath, 'context'),
-    '-c',
-    'Dockerfile',
-  ]).stdout;
-
-  await harness.impd.api.app.handle(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${ctx.rootToken}` },
-      body: tar,
-    }),
+  await runUploadedBuild(harness, { token: ctx.rootToken, query: 'name=web', body: tar }).catch(
+    () => [],
   );
 
   const calls = builder.guest.runs.map((run) =>
@@ -1919,27 +1950,13 @@ test('it inspects and pins the spellings of one image once', async () => {
     cloneDisk: ctx.cloneDisk,
   });
 
-  await mkdir(join(ctx.directoryPath, 'context'));
+  const tar = createFilesTar(ctx.directoryPath, {
+    Dockerfile:
+      'FROM moving:1\nCOPY --from=docker.io/library/moving:1 /x /x\nRUN --mount=from=index.docker.io/library/moving,target=/m true\n',
+  });
 
-  await writeFile(
-    join(ctx.directoryPath, 'context', 'Dockerfile'),
-    'FROM moving:1\nCOPY --from=docker.io/library/moving:1 /x /x\nRUN --mount=from=index.docker.io/library/moving,target=/m true\n',
-  );
-
-  const tar = Bun.spawnSync([
-    'tar',
-    '-C',
-    join(ctx.directoryPath, 'context'),
-    '-c',
-    'Dockerfile',
-  ]).stdout;
-
-  await harness.impd.api.app.handle(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${ctx.rootToken}` },
-      body: tar,
-    }),
+  await runUploadedBuild(harness, { token: ctx.rootToken, query: 'name=web', body: tar }).catch(
+    () => [],
   );
 
   const calls = builder.guest.runs.map((run) =>
@@ -1985,28 +2002,15 @@ test('it says how impd pinned a build the registry denies, and what to build fro
     cloneDisk: ctx.cloneDisk,
   });
 
-  await mkdir(join(ctx.directoryPath, 'context'));
-  await writeFile(join(ctx.directoryPath, 'context', 'Dockerfile'), 'FROM base.test/retag:1\n');
+  const tar = createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/retag:1\n' });
 
-  const tar = Bun.spawnSync([
-    'tar',
-    '-C',
-    join(ctx.directoryPath, 'context'),
-    '-c',
-    'Dockerfile',
-  ]).stdout;
+  const building = runUploadedBuild(harness, {
+    token: ctx.rootToken,
+    query: 'name=web',
+    body: tar,
+  });
 
-  const response = await harness.impd.api.app.handle(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${ctx.rootToken}` },
-      body: tar,
-    }),
-  );
-
-  const body: unknown = await response.json();
-
-  expect(body).toStrictEqual({
+  expect(building).rejects.toMatchObject({
     code: 'BAD_REQUEST',
     message: `docker build failed:\npull access denied, repository does not exist or may require authorization\nimpd pinned FROM base.test/retag:1 as other.test/x@sha256:${'b'.repeat(64)}. On the containerd image store a retag of a multi-platform image cannot be pinned: build FROM its original repository, such as busybox:1.37, instead of the retag.`,
   });
@@ -2027,28 +2031,18 @@ test('it refuses a FROM image with no registry digest before the build', async (
     cloneDisk: ctx.cloneDisk,
   });
 
-  await mkdir(join(ctx.directoryPath, 'context'));
-  await writeFile(join(ctx.directoryPath, 'context', 'Dockerfile'), 'FROM base.test/local:1\n');
+  const tar = createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/local:1\n' });
 
-  const tar = Bun.spawnSync([
-    'tar',
-    '-C',
-    join(ctx.directoryPath, 'context'),
-    '-c',
-    'Dockerfile',
-  ]).stdout;
-
-  const response = await harness.impd.api.app.handle(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${ctx.rootToken}` },
-      body: tar,
-    }),
+  const failure = await runUploadedBuild(harness, {
+    token: ctx.rootToken,
+    query: 'name=web',
+    body: tar,
+  }).then(
+    () => null,
+    (error: unknown) => error,
   );
 
-  const body: unknown = await response.json();
-
-  expect(body).toStrictEqual({
+  expect(failure).toMatchObject({
     code: 'BAD_REQUEST',
     message:
       'FROM base.test/local:1: this image exists only on this host and has no registry digest, so impd cannot bind the build to it; build FROM a registry image by tag or digest. Local base images are not supported yet (#156).',
@@ -2072,32 +2066,20 @@ test('it refuses a COPY --from image with no registry digest before the build', 
     cloneDisk: ctx.cloneDisk,
   });
 
-  await mkdir(join(ctx.directoryPath, 'context'));
+  const tar = createFilesTar(ctx.directoryPath, {
+    Dockerfile: 'FROM scratch\nCOPY --from=base.test/local:1 / /\n',
+  });
 
-  await writeFile(
-    join(ctx.directoryPath, 'context', 'Dockerfile'),
-    'FROM scratch\nCOPY --from=base.test/local:1 / /\n',
+  const failure = await runUploadedBuild(harness, {
+    token: ctx.rootToken,
+    query: 'name=web',
+    body: tar,
+  }).then(
+    () => null,
+    (error: unknown) => error,
   );
 
-  const tar = Bun.spawnSync([
-    'tar',
-    '-C',
-    join(ctx.directoryPath, 'context'),
-    '-c',
-    'Dockerfile',
-  ]).stdout;
-
-  const response = await harness.impd.api.app.handle(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${ctx.rootToken}` },
-      body: tar,
-    }),
-  );
-
-  const body: unknown = await response.json();
-
-  expect(body).toStrictEqual({
+  expect(failure).toMatchObject({
     code: 'BAD_REQUEST',
     message:
       'COPY --from base.test/local:1: this image exists only on this host and has no registry digest, so impd cannot bind the build to it; name a registry image by tag or digest. Local base images are not supported yet (#156).',
@@ -2127,28 +2109,18 @@ test('it refuses an arm64 image on an amd64 host before the build', async () => 
     cloneDisk: ctx.cloneDisk,
   });
 
-  await mkdir(join(ctx.directoryPath, 'context'));
-  await writeFile(join(ctx.directoryPath, 'context', 'Dockerfile'), 'FROM base.test/arm:1\n');
+  const tar = createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/arm:1\n' });
 
-  const tar = Bun.spawnSync([
-    'tar',
-    '-C',
-    join(ctx.directoryPath, 'context'),
-    '-c',
-    'Dockerfile',
-  ]).stdout;
-
-  const response = await harness.impd.api.app.handle(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${ctx.rootToken}` },
-      body: tar,
-    }),
+  const failure = await runUploadedBuild(harness, {
+    token: ctx.rootToken,
+    query: 'name=web',
+    body: tar,
+  }).then(
+    () => null,
+    (error: unknown) => error,
   );
 
-  const body: unknown = await response.json();
-
-  expect(body).toStrictEqual({
+  expect(failure).toMatchObject({
     code: 'BAD_REQUEST',
     message: 'FROM base.test/arm:1 is for linux/arm64, and the builder builds for linux/amd64',
   });
@@ -2177,28 +2149,18 @@ test('it refuses a 32-bit arm image on an amd64 host before the build', async ()
     cloneDisk: ctx.cloneDisk,
   });
 
-  await mkdir(join(ctx.directoryPath, 'context'));
-  await writeFile(join(ctx.directoryPath, 'context', 'Dockerfile'), 'FROM base.test/arm32:1\n');
+  const tar = createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/arm32:1\n' });
 
-  const tar = Bun.spawnSync([
-    'tar',
-    '-C',
-    join(ctx.directoryPath, 'context'),
-    '-c',
-    'Dockerfile',
-  ]).stdout;
-
-  const response = await harness.impd.api.app.handle(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${ctx.rootToken}` },
-      body: tar,
-    }),
+  const failure = await runUploadedBuild(harness, {
+    token: ctx.rootToken,
+    query: 'name=web',
+    body: tar,
+  }).then(
+    () => null,
+    (error: unknown) => error,
   );
 
-  const body: unknown = await response.json();
-
-  expect(body).toStrictEqual({
+  expect(failure).toMatchObject({
     code: 'BAD_REQUEST',
     message: 'FROM base.test/arm32:1 is for linux/arm, and the builder builds for linux/amd64',
   });
@@ -2229,28 +2191,18 @@ test('it refuses an image whose registry digests name only registries impd refus
     cloneDisk: ctx.cloneDisk,
   });
 
-  await mkdir(join(ctx.directoryPath, 'context'));
-  await writeFile(join(ctx.directoryPath, 'context', 'Dockerfile'), 'FROM base.test/private:1\n');
+  const tar = createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/private:1\n' });
 
-  const tar = Bun.spawnSync([
-    'tar',
-    '-C',
-    join(ctx.directoryPath, 'context'),
-    '-c',
-    'Dockerfile',
-  ]).stdout;
-
-  const response = await harness.impd.api.app.handle(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${ctx.rootToken}` },
-      body: tar,
-    }),
+  const failure = await runUploadedBuild(harness, {
+    token: ctx.rootToken,
+    query: 'name=web',
+    body: tar,
+  }).then(
+    () => null,
+    (error: unknown) => error,
   );
 
-  const body: unknown = await response.json();
-
-  expect(body).toStrictEqual({
+  expect(failure).toMatchObject({
     code: 'BAD_REQUEST',
     message: `FROM base.test/private:1: its registry digests name only registries impd refuses: localhost:5000/x@sha256:${'a'.repeat(64)}, 10.0.0.5:5000/y@sha256:${'b'.repeat(64)}`,
   });
@@ -2269,30 +2221,20 @@ test('it refuses an image under an IP address registry before any call on it', a
     cloneDisk: ctx.cloneDisk,
   });
 
-  await mkdir(join(ctx.directoryPath, 'context'));
-  await writeFile(join(ctx.directoryPath, 'context', 'Dockerfile'), 'FROM 127.0.0.1:5000/x:1\n');
+  const tar = createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM 127.0.0.1:5000/x:1\n' });
 
-  const tar = Bun.spawnSync([
-    'tar',
-    '-C',
-    join(ctx.directoryPath, 'context'),
-    '-c',
-    'Dockerfile',
-  ]).stdout;
-
-  const response = await harness.impd.api.app.handle(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${ctx.rootToken}` },
-      body: tar,
-    }),
+  const failure = await runUploadedBuild(harness, {
+    token: ctx.rootToken,
+    query: 'name=web',
+    body: tar,
+  }).then(
+    () => null,
+    (error: unknown) => error,
   );
-
-  const body: unknown = await response.json();
 
   const calls = builder.guest.runs.map((run) => run.argv.slice(1).join(' '));
 
-  expect(body).toStrictEqual({
+  expect(failure).toMatchObject({
     code: 'BAD_REQUEST',
     message: 'FROM 127.0.0.1:5000/x:1: registry 127.0.0.1:5000 is an IP address',
   });
@@ -2317,30 +2259,20 @@ test("it refuses an image under the host's own registry, in any case, before any
     cloneDisk: ctx.cloneDisk,
   });
 
-  await mkdir(join(ctx.directoryPath, 'context'));
-  await writeFile(join(ctx.directoryPath, 'context', 'Dockerfile'), 'FROM LocalHost/name:1\n');
+  const tar = createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM LocalHost/name:1\n' });
 
-  const tar = Bun.spawnSync([
-    'tar',
-    '-C',
-    join(ctx.directoryPath, 'context'),
-    '-c',
-    'Dockerfile',
-  ]).stdout;
-
-  const response = await harness.impd.api.app.handle(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${ctx.rootToken}` },
-      body: tar,
-    }),
+  const failure = await runUploadedBuild(harness, {
+    token: ctx.rootToken,
+    query: 'name=web',
+    body: tar,
+  }).then(
+    () => null,
+    (error: unknown) => error,
   );
-
-  const body: unknown = await response.json();
 
   const calls = builder.guest.runs.map((run) => run.argv.slice(1).join(' '));
 
-  expect(body).toStrictEqual({
+  expect(failure).toMatchObject({
     code: 'BAD_REQUEST',
     message: "FROM LocalHost/name:1: registry LocalHost is the host's own",
   });
@@ -2364,32 +2296,20 @@ test('it refuses a global ARG that sets the build platform before any call', asy
     cloneDisk: ctx.cloneDisk,
   });
 
-  await mkdir(join(ctx.directoryPath, 'context'));
+  const tar = createFilesTar(ctx.directoryPath, {
+    Dockerfile: 'ARG BUILDPLATFORM=linux/arm64\nFROM --platform=$BUILDPLATFORM base.test/a:1\n',
+  });
 
-  await writeFile(
-    join(ctx.directoryPath, 'context', 'Dockerfile'),
-    'ARG BUILDPLATFORM=linux/arm64\nFROM --platform=$BUILDPLATFORM base.test/a:1\n',
+  const failure = await runUploadedBuild(harness, {
+    token: ctx.rootToken,
+    query: 'name=web',
+    body: tar,
+  }).then(
+    () => null,
+    (error: unknown) => error,
   );
 
-  const tar = Bun.spawnSync([
-    'tar',
-    '-C',
-    join(ctx.directoryPath, 'context'),
-    '-c',
-    'Dockerfile',
-  ]).stdout;
-
-  const response = await harness.impd.api.app.handle(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${ctx.rootToken}` },
-      body: tar,
-    }),
-  );
-
-  const body: unknown = await response.json();
-
-  expect(body).toStrictEqual({
+  expect(failure).toMatchObject({
     code: 'BAD_REQUEST',
     message: expect.stringContaining('line 1: ARG BUILDPLATFORM is refused') as unknown,
   });
@@ -2408,32 +2328,20 @@ test('it refuses a stage ARG that sets the target platform before any call', asy
     cloneDisk: ctx.cloneDisk,
   });
 
-  await mkdir(join(ctx.directoryPath, 'context'));
+  const tar = createFilesTar(ctx.directoryPath, {
+    Dockerfile: 'FROM base.test/a:1\nARG TARGETPLATFORM\n',
+  });
 
-  await writeFile(
-    join(ctx.directoryPath, 'context', 'Dockerfile'),
-    'FROM base.test/a:1\nARG TARGETPLATFORM\n',
+  const failure = await runUploadedBuild(harness, {
+    token: ctx.rootToken,
+    query: 'name=web',
+    body: tar,
+  }).then(
+    () => null,
+    (error: unknown) => error,
   );
 
-  const tar = Bun.spawnSync([
-    'tar',
-    '-C',
-    join(ctx.directoryPath, 'context'),
-    '-c',
-    'Dockerfile',
-  ]).stdout;
-
-  const response = await harness.impd.api.app.handle(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${ctx.rootToken}` },
-      body: tar,
-    }),
-  );
-
-  const body: unknown = await response.json();
-
-  expect(body).toStrictEqual({
+  expect(failure).toMatchObject({
     code: 'BAD_REQUEST',
     message: expect.stringContaining('line 2: ARG TARGETPLATFORM is refused') as unknown,
   });
@@ -2452,32 +2360,20 @@ test('it refuses a braced platform variable before any call', async () => {
     cloneDisk: ctx.cloneDisk,
   });
 
-  await mkdir(join(ctx.directoryPath, 'context'));
+  const tar = createFilesTar(ctx.directoryPath, {
+    Dockerfile: ['FROM --platform=$', '{BUILDPLATFORM} base.test/a:1\n'].join(''),
+  });
 
-  await writeFile(
-    join(ctx.directoryPath, 'context', 'Dockerfile'),
-    ['FROM --platform=$', '{BUILDPLATFORM} base.test/a:1\n'].join(''),
+  const failure = await runUploadedBuild(harness, {
+    token: ctx.rootToken,
+    query: 'name=web',
+    body: tar,
+  }).then(
+    () => null,
+    (error: unknown) => error,
   );
 
-  const tar = Bun.spawnSync([
-    'tar',
-    '-C',
-    join(ctx.directoryPath, 'context'),
-    '-c',
-    'Dockerfile',
-  ]).stdout;
-
-  const response = await harness.impd.api.app.handle(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${ctx.rootToken}` },
-      body: tar,
-    }),
-  );
-
-  const body: unknown = await response.json();
-
-  expect(body).toStrictEqual({
+  expect(failure).toMatchObject({
     code: 'BAD_REQUEST',
     message: expect.stringContaining(
       ['FROM --platform=$', '{BUILDPLATFORM} is refused'].join(''),
@@ -2509,23 +2405,10 @@ test('it pulls a missing Dockerfile frontend by digest once, before the build', 
     cloneDisk: ctx.cloneDisk,
   });
 
-  await mkdir(join(ctx.directoryPath, 'context'));
-  await writeFile(join(ctx.directoryPath, 'context', 'Dockerfile'), 'FROM base.test/a:1\n');
+  const tar = createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\n' });
 
-  const tar = Bun.spawnSync([
-    'tar',
-    '-C',
-    join(ctx.directoryPath, 'context'),
-    '-c',
-    'Dockerfile',
-  ]).stdout;
-
-  await harness.impd.api.app.handle(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${ctx.rootToken}` },
-      body: tar,
-    }),
+  await runUploadedBuild(harness, { token: ctx.rootToken, query: 'name=web', body: tar }).catch(
+    () => [],
   );
 
   const calls = builder.guest.runs.map((run) => run.argv.slice(1).join(' '));
@@ -2559,23 +2442,10 @@ test('it pulls no Dockerfile frontend the builder has, and checks it before the 
     cloneDisk: ctx.cloneDisk,
   });
 
-  await mkdir(join(ctx.directoryPath, 'context'));
-  await writeFile(join(ctx.directoryPath, 'context', 'Dockerfile'), 'FROM base.test/a:1\n');
+  const tar = createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\n' });
 
-  const tar = Bun.spawnSync([
-    'tar',
-    '-C',
-    join(ctx.directoryPath, 'context'),
-    '-c',
-    'Dockerfile',
-  ]).stdout;
-
-  await harness.impd.api.app.handle(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${ctx.rootToken}` },
-      body: tar,
-    }),
+  await runUploadedBuild(harness, { token: ctx.rootToken, query: 'name=web', body: tar }).catch(
+    () => [],
   );
 
   const calls = builder.guest.runs.map((run) => run.argv.slice(1).join(' '));
@@ -2609,38 +2479,27 @@ test('it fails a build with 502 before the builder builds it when the frontend p
     cloneDisk: ctx.cloneDisk,
   });
 
-  await mkdir(join(ctx.directoryPath, 'context'));
-  await writeFile(join(ctx.directoryPath, 'context', 'Dockerfile'), 'FROM base.test/a:1\n');
+  const tar = createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\n' });
 
-  const tar = Bun.spawnSync([
-    'tar',
-    '-C',
-    join(ctx.directoryPath, 'context'),
-    '-c',
-    'Dockerfile',
-  ]).stdout;
-
-  const response = await harness.impd.api.app.handle(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${ctx.rootToken}` },
-      body: tar,
-    }),
+  const failure = await runUploadedBuild(harness, {
+    token: ctx.rootToken,
+    query: 'name=web',
+    body: tar,
+  }).then(
+    () => null,
+    (error: unknown) => error,
   );
 
-  const body: unknown = await response.json();
-
-  expect(response.status).toBe(502);
-
-  expect(body).toStrictEqual({
+  expect(failure).toMatchObject({
     code: 'BAD_GATEWAY',
+    status: 502,
     message: `the Dockerfile frontend ${DOCKERFILE_FRONTEND}: the pull failed: no route to host`,
   });
 
   expect(builder.builtDockerfiles).toStrictEqual([]);
 });
 
-test('it answers a build that fails after the builder built it with its error, and removes the upload', async () => {
+test('it ends a build that fails after the builder built it with an internal error, and removes the upload', async () => {
   const ctx = await setupTest();
 
   const builder = buildStubImageBuilder({
@@ -2655,81 +2514,22 @@ test('it answers a build that fails after the builder built it with its error, a
     cloneDisk: ctx.cloneDisk,
   });
 
-  await mkdir(join(ctx.directoryPath, 'context'));
-  await writeFile(join(ctx.directoryPath, 'context', 'Dockerfile'), 'FROM scratch\n');
+  const tar = createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM scratch\n' });
 
-  const tar = Bun.spawnSync([
-    'tar',
-    '-C',
-    join(ctx.directoryPath, 'context'),
-    '-c',
-    'Dockerfile',
-  ]).stdout;
-
-  const response = await harness.impd.api.app.handle(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${ctx.rootToken}` },
-      body: tar,
-    }),
+  const failure = await runUploadedBuild(harness, {
+    token: ctx.rootToken,
+    query: 'name=web',
+    body: tar,
+  }).then(
+    () => null,
+    (error: unknown) => error,
   );
-
-  const body: unknown = await response.json();
-  const uploads = await readdir(buildUploadsDir(ctx.dataDir));
-
-  expect(response.status).toBe(500);
-
-  expect(body).toStrictEqual({
-    code: 'INTERNAL_SERVER_ERROR',
-    message: 'docker create in the builder: no space left on device',
-  });
-
-  expect(uploads).toStrictEqual([]);
-});
-
-test('it ends a streamed build that fails with its error, and removes the upload', async () => {
-  const ctx = await setupTest();
-
-  const builder = buildStubImageBuilder({
-    exported: [],
-    repoDigest: `sha256:${'b'.repeat(64)}`,
-    failures: { create: 'no space left on device' },
-  });
-
-  const harness = await startBuilderImpd(ctx.stack, builder, {
-    dataDir: ctx.dataDir,
-    rootToken: ctx.rootToken,
-    cloneDisk: ctx.cloneDisk,
-  });
-
-  await mkdir(join(ctx.directoryPath, 'context'));
-  await writeFile(join(ctx.directoryPath, 'context', 'Dockerfile'), 'FROM scratch\n');
-
-  const tar = Bun.spawnSync([
-    'tar',
-    '-C',
-    join(ctx.directoryPath, 'context'),
-    '-c',
-    'Dockerfile',
-  ]).stdout;
-
-  const response = await harness.impd.api.app.handle(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${ctx.rootToken}`, accept: IMAGE_BUILD_STREAM_TYPE },
-      body: tar,
-    }),
-  );
-
-  const text = await response.text();
-
-  const last = ImageBuildEventSchema.parse(JSON.parse(text.trim().split('\n').at(-1) ?? 'null'));
 
   const uploads = await readdir(buildUploadsDir(ctx.dataDir));
 
-  expect(last).toStrictEqual({
-    type: 'error',
+  expect(failure).toMatchObject({
     code: 'INTERNAL_SERVER_ERROR',
+    status: 500,
     message: 'docker create in the builder: no space left on device',
   });
 
@@ -2751,29 +2551,16 @@ test('it audits a failed build with its code', async () => {
     cloneDisk: ctx.cloneDisk,
   });
 
-  await mkdir(join(ctx.directoryPath, 'context'));
-  await writeFile(join(ctx.directoryPath, 'context', 'Dockerfile'), 'FROM scratch\n');
+  const tar = createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM scratch\n' });
 
-  const tar = Bun.spawnSync([
-    'tar',
-    '-C',
-    join(ctx.directoryPath, 'context'),
-    '-c',
-    'Dockerfile',
-  ]).stdout;
-
-  await harness.impd.api.app.handle(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${ctx.rootToken}` },
-      body: tar,
-    }),
+  await runUploadedBuild(harness, { token: ctx.rootToken, query: 'name=web', body: tar }).catch(
+    () => [],
   );
 
   const outcomes = await waitFor(async () => {
     const rows = await listApiCalls(harness.db, null, 100, null);
 
-    const builds = rows.filter((row) => row.procedure === 'images.build');
+    const builds = rows.filter((row) => row.procedure === 'images.buildStream');
 
     expect(builds).not.toBeEmpty();
 
@@ -2804,7 +2591,7 @@ test('it clears what an earlier impd left in the uploads directory when a route 
     diskBudget: harness.impd.diskBudget,
     audit: createApiAudit({ db: harness.db, now: Date.now, log: () => {}, readErrorCode }),
     now: Date.now,
-    keepaliveMs: 10_000,
+    startTimer: buildStubClock().startTimer,
   });
 
   expect(existsSync(leftover)).toBeFalse();
@@ -2893,7 +2680,7 @@ test('it refuses an upload with 429 while on-host builds hold all four build slo
   });
 
   const response = await harness.impd.api.app.handle(
-    new Request(`http://impd.test${IMAGE_BUILD_PATH}?name=web`, {
+    new Request(`http://impd.test${BUILD_CONTEXT_PATH}?name=web`, {
       method: 'POST',
       headers: { authorization: `Bearer ${ctx.rootToken}` },
       body: 'tar',

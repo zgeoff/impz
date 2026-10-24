@@ -52,7 +52,6 @@ test('it builds a default system info', () => {
       tokenUpdate: true,
       tokenImageAdd: true,
       databaseCopy: true,
-      imageBuildStream: true,
       imageOpStream: true,
       imageBuilds: true,
       execRequire: true,
@@ -69,6 +68,7 @@ test('it builds a default system info', () => {
       execDropSysAdmin: true,
       guestScratch: true,
       imagePins: true,
+      buildContextUpload: true,
     },
   });
 
@@ -134,7 +134,6 @@ test('it applies overrides on top of the defaults', () => {
       tokenUpdate: true,
       tokenImageAdd: true,
       databaseCopy: true,
-      imageBuildStream: true,
       imageOpStream: true,
       imageBuilds: true,
       execRequire: true,
@@ -151,6 +150,7 @@ test('it applies overrides on top of the defaults', () => {
       execDropSysAdmin: true,
       guestScratch: true,
       imagePins: true,
+      buildContextUpload: true,
     },
   });
 });

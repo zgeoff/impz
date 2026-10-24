@@ -5,7 +5,7 @@ import type { BackupService } from '../imp-ops/backup/backup-service';
 import type { CheckpointService } from '../imp-ops/checkpoints/checkpoint-service';
 import type { RamGovernor } from '../imp-ops/governor/ram-governor';
 import type { MoveService } from '../imp-ops/moves/move-service';
-import type { Repeat } from '../imps/images/build/build-event-stream';
+import type { Repeat } from '../imps/images/build/image-op-stream';
 import type { ImageService } from '../imps/images/image-service';
 import type { TemplateService } from '../imps/images/template-service';
 import type { ImpService } from '../imps/imps/imp-service';
@@ -44,6 +44,7 @@ import { createSessionRoutes } from './create-session-routes';
 import { createSystemRoutes } from './create-system-routes';
 import { createTokenRoutes } from './create-token-routes';
 import type { ExecTickets } from './exec/exec-tickets';
+import type { BuildContextRoute } from './images/build-context-route';
 import type { SurfaceConfig } from './surface-config';
 
 export interface RouterDeps {
@@ -52,6 +53,7 @@ export interface RouterDeps {
   readonly writeDatabaseCopy: (name: string) => Promise<DatabaseCopyFile>;
   readonly imps: ImpService;
   readonly images: ImageService;
+  readonly buildContexts: Pick<BuildContextRoute, 'takeUpload'>;
   readonly governor: RamGovernor;
   readonly checkpoints: CheckpointService;
   readonly templates: TemplateService;

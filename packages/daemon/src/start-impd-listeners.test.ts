@@ -59,7 +59,7 @@ test.each([
   ['the dashboard', 'GET', '/ui/', '127.0.0.1:7171'],
   ['the exec socket', 'GET', '/exec', '127.0.0.1:7171'],
   ['the tunnel socket', 'GET', '/tunnel', '127.0.0.1:7171'],
-  ['the image build', 'POST', '/images/build', '127.0.0.1:7171'],
+  ['the build context upload', 'POST', '/images/build-context?name=web', '127.0.0.1:7171'],
   ['a move step', 'POST', '/move/prepare', '127.0.0.1:7171'],
   ['an imp’s wake route', 'GET', '/', 'dev.imp.example'],
   ['an imp’s wake route', 'GET', '/mcp', 'dev.imp.example'],

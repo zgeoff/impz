@@ -4,6 +4,12 @@ import * as z from 'zod';
 import { impContract } from '../contract/imp-contract';
 import { IMP_ERRORS } from '../contract/imp-errors';
 import {
+  BUILD_CONTEXT_PATH,
+  BuildContextErrorSchema,
+  BuildContextQuerySchema,
+  BuildContextUploadSchema,
+} from './build-context-protocol';
+import {
   EXEC_CHANNELS,
   EXEC_CLOSE_RESTARTING,
   EXEC_MAX_STDIN_FRAME_BYTES,
@@ -14,14 +20,6 @@ import {
   ExecClientMessageSchema,
   ExecServerMessageSchema,
 } from './exec-protocol';
-import {
-  IMAGE_BUILD_PATH,
-  IMAGE_BUILD_STREAM_TYPE,
-  ImageBuildErrorSchema,
-  ImageBuildEventSchema,
-  ImageBuildQuerySchema,
-  ImageBuildResultSchema,
-} from './image-build-protocol';
 import {
   TUNNEL_CLOSE_LOST,
   TUNNEL_CLOSE_NORMAL,
@@ -77,10 +75,9 @@ export function buildProtocolSchema(): ProtocolSchema {
       'exec.server': toMessage('toClient', ExecServerMessageSchema),
       'tunnel.client': toMessage('toServer', TunnelClientMessageSchema),
       'tunnel.server': toMessage('toClient', TunnelServerMessageSchema),
-      'imageBuild.query': toMessage('toServer', ImageBuildQuerySchema),
-      'imageBuild.event': toMessage('toClient', ImageBuildEventSchema),
-      'imageBuild.result': toMessage('toClient', ImageBuildResultSchema),
-      'imageBuild.error': toMessage('toClient', ImageBuildErrorSchema),
+      'buildContext.query': toMessage('toServer', BuildContextQuerySchema),
+      'buildContext.upload': toMessage('toClient', BuildContextUploadSchema),
+      'buildContext.error': toMessage('toClient', BuildContextErrorSchema),
     },
     errors: Object.fromEntries(
       Object.entries(IMP_ERRORS).map(([code, error]) => {
@@ -98,8 +95,7 @@ export function buildProtocolSchema(): ProtocolSchema {
       EXEC_STDIN_WINDOW_BYTES,
       EXEC_MAX_STDIN_FRAME_BYTES,
       EXEC_STDOUT_WINDOW_BYTES,
-      IMAGE_BUILD_PATH,
-      IMAGE_BUILD_STREAM_TYPE,
+      BUILD_CONTEXT_PATH,
       TUNNEL_PATH,
       TUNNEL_CLOSE_NORMAL,
       TUNNEL_CLOSE_PROTOCOL,

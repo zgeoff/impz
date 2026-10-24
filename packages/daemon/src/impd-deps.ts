@@ -4,13 +4,14 @@ import type { ReachBoundaries } from './host-net/net/reach-policy';
 import type { TailscaleStatus } from './host-net/net/tailscale-status';
 import type { TapDevices } from './host-net/net/tap-devices';
 import type { TailnetPeer } from './identity/auth/tailnet-identity';
-import type { Repeat } from './imps/images/build/build-event-stream';
+import type { Repeat } from './imps/images/build/image-op-stream';
 import type { ImageServiceDeps } from './imps/images/image-service';
 import type { DiskFreezer } from './imps/imps/consistent-disk';
 import type { ImpService, ImpServiceDeps } from './imps/imps/imp-service';
 import type { BrokerDeps } from './network/broker/broker-service';
 import type { EgressDeps } from './network/egress/egress-service';
 import type { ImpDatabase } from './platform/db/open-database';
+import type { StartTimer } from './platform/process/clock';
 import type { CommandRunner } from './platform/process/run-command';
 import type { TickerTimer } from './platform/process/ticker';
 import type { TestRegistryBoundaries } from './resolve-test-registry';
@@ -104,6 +105,7 @@ export interface ImpdDeps {
   readonly readKsmHostStats?: () => KsmHostStats | null;
   readonly readProcStatus?: () => string;
   readonly tickerTimer?: TickerTimer;
+  readonly buildUploadTimer?: StartTimer;
   readonly proxyPorts?: { readonly proxy: number; readonly slot: (slot: number) => number };
 
   // Elysia's own default is 30 s

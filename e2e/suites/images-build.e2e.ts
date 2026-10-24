@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { sendRawBuild, writeBuildContext } from '../lib/build-context';
+import { runRawBuild, writeBuildContext } from '../lib/build-context';
 import { config } from '../lib/config';
 import { runConsole } from '../lib/console';
 import { readThroughProxy } from '../lib/http';
@@ -107,12 +107,18 @@ test('it brings an uploaded context’s files, ENV and WORKDIR into the imp less
   await writeFile(join(directory, '.dockerignore'), '*.secret\n');
   await writeFile(join(directory, 'kept.txt'), 'kept');
   await writeFile(join(directory, 'dropped.secret'), 'dropped');
-  await runImp('image', 'build', directory, '--name', name);
+
+  const built = await tryImp(['image', 'build', directory, '--name', name]);
 
   registerRemoval(ctx.stack, config.keep, () => removeImageIfPresent(ctx.client, name));
 
   const images = await listImageNames();
 
+  // Off a terminal, the CLI prints the stream's phases and the build's own output on stderr.
+  expect(built.exitCode).toBe(0);
+  expect(built.stderr).toInclude('impz image build: building, 0m00s\n');
+  expect(built.stderr).toInclude('impz image build: unpacking, ');
+  expect(built.stderr).toMatch(/^#\d+ \[2\/4\] RUN echo built > \/etc\/e2e-marker$/mu);
   expect(images).toContain(name);
 
   await runImp('new', name, '--image', name, '--memory', '512');
@@ -309,7 +315,7 @@ test('it builds a raw upload whose only Dockerfile is a lowercase dockerfile, as
 
   const token = await readToken();
 
-  const response = await sendRawBuild({
+  const built = await runRawBuild({
     apiUrl: instance.apiUrl,
     token,
     directoryPath: directory,
@@ -319,7 +325,7 @@ test('it builds a raw upload whose only Dockerfile is a lowercase dockerfile, as
 
   registerRemoval(ctx.stack, config.keep, () => removeImageIfPresent(ctx.client, name));
 
-  expect(response.status).toBe(200);
+  expect(built.name).toBe(name);
 
   await runImp('new', name, '--image', name, '--memory', '512');
 
@@ -352,7 +358,7 @@ test('it applies no ignore file to a raw upload, Dockerfile.dockerignore include
 
   const token = await readToken();
 
-  const response = await sendRawBuild({
+  const built = await runRawBuild({
     apiUrl: instance.apiUrl,
     token,
     directoryPath: directory,
@@ -368,7 +374,7 @@ test('it applies no ignore file to a raw upload, Dockerfile.dockerignore include
 
   registerRemoval(ctx.stack, config.keep, () => removeImageIfPresent(ctx.client, name));
 
-  expect(response.status).toBe(200);
+  expect(built.name).toBe(name);
 
   await runImp('new', name, '--image', name, '--memory', '512');
 

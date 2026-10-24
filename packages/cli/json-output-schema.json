@@ -514,9 +514,6 @@
               "databaseCopy": {
                 "type": "boolean"
               },
-              "imageBuildStream": {
-                "type": "boolean"
-              },
               "imageOpStream": {
                 "type": "boolean"
               },
@@ -563,6 +560,9 @@
                 "type": "boolean"
               },
               "imagePins": {
+                "type": "boolean"
+              },
+              "buildContextUpload": {
                 "type": "boolean"
               }
             },

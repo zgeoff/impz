@@ -3,7 +3,7 @@ import type { ImpdServices } from './create-impd-services';
 import type { ImpdStorage } from './create-impd-storage';
 import type { TailscaleStatus } from './host-net/net/tailscale-status';
 import type { ImpdDeps } from './impd-deps';
-import { BUILD_KEEPALIVE_MS } from './imps/images/build/build-event-stream';
+import { BUILD_KEEPALIVE_MS } from './imps/images/build/image-op-stream';
 import type { Imps } from './imps/imps/imp-service';
 import type { ImpdAccess } from './load-impd-access';
 import type { Broker } from './network/broker/broker-service';
@@ -11,6 +11,7 @@ import type { EgressService } from './network/egress/egress-service';
 import { createExposureService } from './network/https/exposure-service';
 import { writeDatabaseCopy } from './platform/db/database-copy';
 import { printLog } from './platform/process/print-log';
+import { startRealTimer } from './platform/process/start-real-timer';
 import { createApp } from './surface/create-app';
 import type { AppDeps } from './surface/create-app';
 import { createBuildContextRoute } from './surface/images/build-context-route';
@@ -100,8 +101,9 @@ export function createImpdApp(
       diskBudget: parts.storage.diskBudget,
       audit: parts.services.audit,
       now,
-      keepaliveMs,
-      ...(deps.keepaliveRepeat !== undefined && { repeat: deps.keepaliveRepeat }),
+      startTimer:
+        deps.buildUploadTimer ??
+        ((fire, durationMs) => startRealTimer(fire, durationMs, { isUnref: true })),
     }),
     imageKeepaliveMs: keepaliveMs,
     ...(deps.keepaliveRepeat !== undefined && { imageKeepaliveRepeat: deps.keepaliveRepeat }),

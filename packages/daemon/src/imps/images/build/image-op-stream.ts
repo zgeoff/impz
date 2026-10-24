@@ -1,7 +1,18 @@
 import type { Image, ImageBuildPhase, ImageOpEvent } from '@impz/api';
-import { runOnInterval } from './build-event-stream';
-import type { BuildReport, Repeat } from './build-event-stream';
+import type { BuildOutput } from './create-build-steps';
 import { BUILD_LOG_QUEUE_MAX_BYTES, createLogBudget } from './create-log-budget';
+
+// Bun's fetch gives up after 360 s without a byte and undici's after 300 s (headersTimeout
+// before the headers, bodyTimeout between chunks), so a progress event this often keeps a
+// client reading.
+export const BUILD_KEEPALIVE_MS = 15_000;
+
+export type Repeat = (durationMs: number, tick: () => void) => () => void;
+
+export interface BuildReport {
+  readonly setPhase: (phase: ImageBuildPhase) => void;
+  readonly output: BuildOutput;
+}
 
 export interface ImageOpStreamOptions {
   readonly firstPhase: ImageBuildPhase;
@@ -142,4 +153,12 @@ export async function* runImageOp(
       yield buildProgress();
     }
   }
+}
+
+function runOnInterval(durationMs: number, tick: () => void): () => void {
+  const timer = setInterval(tick, durationMs);
+
+  return () => {
+    clearInterval(timer);
+  };
 }

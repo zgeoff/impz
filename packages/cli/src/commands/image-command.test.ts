@@ -64,9 +64,6 @@ test('#imageCommand prints progress lines and the step output of a build whose s
   expect(result.stderr.split('\n')).toIncludeAllMembers([
     expect.stringMatching(/^impz image build: uploading, 0m\d\ds$/v),
     expect.stringMatching(/^impz image build: building, 0m\d\ds$/v),
-    expect.stringMatching(
-      /^impz image build: building, 0m\d\ds, \[2\/3\] RUN echo compiling widget && echo second line$/v,
-    ),
     '#5 [2/3] RUN echo compiling widget && echo second line',
     '#5 0.112 compiling widget',
     '#5 0.113 second line',
