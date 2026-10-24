@@ -1,12 +1,12 @@
 import { ImpEventSchema } from '@impz/api';
 import type { ImpEvent } from '@impz/api';
 import { metrics } from '@opentelemetry/api';
+import { getImpdLogger } from '../process/get-impd-logger';
 import { SCOPE } from '../telemetry/scope';
 
 const LOG_INTERVAL_MS = 5 * 60_000;
 
 interface EventCheckDeps {
-  readonly log: (message: string) => void;
   readonly now: () => number;
 }
 
@@ -40,8 +40,9 @@ export function createEventCheck(deps: EventCheckDeps): (event: Readonly<ImpEven
       return;
     }
 
-    deps.log(
-      `impd: dropped ${drop.count} ${ev} event(s) that fail the event schema; the latest at ${issue}`,
+    getImpdLogger('events').info(
+      'dropped {count} {ev} event(s) that fail the event schema; the latest at {issue}',
+      { count: drop.count, ev, issue },
     );
 
     drop.loggedAt = time;

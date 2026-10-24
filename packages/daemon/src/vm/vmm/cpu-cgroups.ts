@@ -9,6 +9,7 @@ import {
 import { join } from 'node:path';
 import type { CpuSettings } from '../../platform/db/imps';
 import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { readProcessCgroup } from './process-owner';
 
 const PERIOD_US = 100_000;
@@ -54,7 +55,6 @@ export interface CpuCgroups {
 
 interface CpuCgroupOptions {
   readonly root: string;
-  readonly log: (message: string) => void;
   readonly procRoot?: string;
   readonly rmdir?: (path: string) => void;
   readonly sleep?: (durationMs: number) => Promise<void>;
@@ -149,14 +149,6 @@ export function createCpuCgroups(options: CpuCgroupOptions): CpuCgroups {
     writeFileSync(join(directory, 'memory.oom.group'), '1');
   };
 
-  const tryWrite = (impId: string, what: string, write: () => void): void => {
-    try {
-      write();
-    } catch (error) {
-      options.log(`impd: cgroup ${impId}: ${what}: ${getErrorMessage(error)}`);
-    }
-  };
-
   const setup = (impId: string, cpu: CpuSettings, memoryMib: number): ImpCgroup | null => {
     if (!isEnforced) {
       return null;
@@ -172,7 +164,10 @@ export function createCpuCgroups(options: CpuCgroupOptions): CpuCgroups {
       writeSettings(impId, cpu, cpu.limit);
       writeMemory(impId);
     } catch (error) {
-      options.log(`impd: cgroup ${impId}: ${getErrorMessage(error)}; this VM runs unlimited`);
+      getImpdLogger('cgroup').warning('cgroup {impId}: {error}; this VM runs unlimited', {
+        impId,
+        error: getErrorMessage(error),
+      });
 
       return null;
     }
@@ -246,7 +241,10 @@ export function createCpuCgroups(options: CpuCgroupOptions): CpuCgroups {
           return;
         } catch (error) {
           if (!isBusy(error) || attempt === REMOVE_TRIES) {
-            options.log(`impd: cgroup ${impId}: remove: ${getErrorMessage(error)}`);
+            getImpdLogger('cgroup').warning('cgroup {impId}: remove: {error}', {
+              impId,
+              error: getErrorMessage(error),
+            });
 
             return;
           }
@@ -309,4 +307,16 @@ function probeControllerDelegated(imps: string, controller: string): boolean {
 
 function isBusy(error: unknown): boolean {
   return error instanceof Error && 'code' in error && error.code === 'EBUSY';
+}
+
+function tryWrite(impId: string, what: string, write: () => void): void {
+  try {
+    write();
+  } catch (error) {
+    getImpdLogger('cgroup').warning('cgroup {impId}: {what}: {error}', {
+      impId,
+      what,
+      error: getErrorMessage(error),
+    });
+  }
 }

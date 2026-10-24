@@ -25,7 +25,7 @@ import {
   buildNotFoundError,
 } from '../../platform/errors/impd-errors';
 import { getErrorMessage } from '../../platform/process/get-error-message';
-import { printLog } from '../../platform/process/print-log';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import type { DiskBudget } from '../../vm/storage/disk-budget';
 import { CheckpointIdTakenError } from '../../vm/storage/storage-backend';
 import type { StorageBackend } from '../../vm/storage/storage-backend';
@@ -62,7 +62,6 @@ export interface CheckpointServiceDeps {
   readonly db: ImpDatabase;
   readonly imps: ImpCheckpointHooks;
   readonly storage: StorageBackend;
-  readonly log?: (message: string) => void;
   readonly freezer?: DiskFreezer;
   readonly diskBudget: Pick<DiskBudget, 'requireRoom'>;
   readonly random?: () => number;
@@ -82,15 +81,15 @@ export function isValidCheckpointLabel(label: string): boolean {
 }
 
 export function createCheckpointService(deps: CheckpointServiceDeps): CheckpointService {
-  const log = deps.log ?? printLog;
-
   const removeRefusedFork = async (name: string, forkId: string | null): Promise<void> => {
     if (forkId === null) {
       return;
     }
 
     await deps.imps.destroyImpId(forkId).catch((error: unknown) => {
-      log(`impd: ${name}: a refused fork left the imp: ${getErrorMessage(error)}`);
+      getImpdLogger('imps')
+        .with({ imp: name })
+        .warning('a refused fork left the imp: {error}', { error: getErrorMessage(error) });
     });
   };
 
@@ -99,7 +98,6 @@ export function createCheckpointService(deps: CheckpointServiceDeps): Checkpoint
   const withConsistentDisk = createConsistentDisk({
     storage,
     imps: deps.imps,
-    log,
     freezer: deps.freezer,
   });
 
@@ -169,7 +167,9 @@ export function createCheckpointService(deps: CheckpointServiceDeps): Checkpoint
 
           const durationMs = Math.round(performance.now() - started);
 
-          log(`impd: ${imp.name}: checkpoint ${id} in ${String(durationMs)}ms`);
+          getImpdLogger('imps')
+            .with({ imp: imp.name })
+            .info('checkpoint {id} in {durationMs}ms', { id, durationMs: String(durationMs) });
 
           return toApiCheckpoint(checkpoint);
         } catch (error) {
@@ -246,7 +246,12 @@ export function createCheckpointService(deps: CheckpointServiceDeps): Checkpoint
           state: booted.state,
         });
 
-        log(`impd: ${imp.name}: restored ${checkpoint.id} in ${String(durationMs)}ms`);
+        getImpdLogger('imps')
+          .with({ imp: imp.name })
+          .info('restored {id} in {durationMs}ms', {
+            id: checkpoint.id,
+            durationMs: String(durationMs),
+          });
 
         return deps.imps.toApi(restored);
       }),

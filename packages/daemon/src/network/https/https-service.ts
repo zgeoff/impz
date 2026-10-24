@@ -1,6 +1,7 @@
 import type { TailscaleStatus } from '../../host-net/net/tailscale-status';
 import type { PublicImp } from '../../platform/db/exposure';
 import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { createSemaphore } from '../../platform/process/semaphore';
 import type { Ticker, TickerTimer } from '../../platform/process/ticker';
 import { startTicker } from '../../platform/process/ticker';
@@ -53,7 +54,6 @@ interface HttpsServiceDeps {
   readonly readTailscale: (() => Promise<TailscaleStatus>) | null;
   readonly readServePorts: () => Promise<readonly number[]>;
   readonly now: () => number;
-  readonly log: (message: string) => void;
 
   readonly listPublicImps: () => Promise<readonly string[]>;
   readonly readPublicImpByName: (name: string) => Promise<PublicImp | undefined>;
@@ -66,14 +66,12 @@ interface HttpsServiceDeps {
 export function createHttpsService(deps: HttpsServiceDeps): HttpsService {
   const config = deps.config;
   const domain = config.domain;
-  const log = deps.log;
 
   const certs = createCertManager({
     domain,
     store: deps.store,
     issue: deps.issue,
     now: deps.now,
-    log,
   });
 
   const listeners = createHttpsListeners({
@@ -81,7 +79,6 @@ export function createHttpsService(deps: HttpsServiceDeps): HttpsService {
     domain,
     httpsPort: config.httpsPort,
     httpPort: config.httpPort,
-    log,
     scope: { kind: 'tailnet' },
   });
 
@@ -95,7 +92,6 @@ export function createHttpsService(deps: HttpsServiceDeps): HttpsService {
           domain,
           httpsPort: publicConfig.httpsPort,
           httpPort: publicConfig.httpPort,
-          log,
           scope: createPublicScope(deps.readPublicImpByName, createPublicLimits(deps.now)),
         });
 
@@ -120,12 +116,8 @@ export function createHttpsService(deps: HttpsServiceDeps): HttpsService {
 
   const tickers: Ticker[] = [];
 
-  const startTask = (
-    label: string,
-    intervalMs: number,
-    task: () => Promise<void>,
-    taskLog: (message: string) => void,
-  ): Ticker => startTicker({ label, intervalMs, task, log: taskLog, timer: deps.timer });
+  const startTask = (label: string, intervalMs: number, task: () => Promise<void>): Ticker =>
+    startTicker({ label, intervalMs, task, timer: deps.timer });
 
   const runRenewal = async (): Promise<void> => {
     const certificate = await certs.renew();
@@ -145,14 +137,14 @@ export function createHttpsService(deps: HttpsServiceDeps): HttpsService {
       state.recordsIp = ip;
       state.recordsError = null;
 
-      log(`impd: https: ${domain} and *.${domain} point at ${ip}`);
+      getImpdLogger('https').info('{domain} and *.{domain} point at {ip}', { domain, ip });
     } catch (error) {
-      const message = `impd: https: cannot point ${domain} at ${ip}: ${getErrorMessage(error)}`;
+      const message = `cannot point ${domain} at ${ip}: ${getErrorMessage(error)}`;
 
       if (message !== state.recordsError) {
         state.recordsError = message;
 
-        log(message);
+        getImpdLogger('https').warning('{message}', { message });
       }
     }
   };
@@ -164,8 +156,9 @@ export function createHttpsService(deps: HttpsServiceDeps): HttpsService {
 
     for (const port of [config.httpsPort, config.httpPort]) {
       if (held.includes(port)) {
-        log(
-          `impd: https: warning: tailscale serve holds tailnet port ${String(port)}, so impd never sees that traffic; remove it with \`tailscale serve --https=${String(port)} off\` or \`tailscale serve reset\``,
+        getImpdLogger('https').warning(
+          'tailscale serve holds tailnet port {port}, so impd never sees that traffic; remove it with `tailscale serve --https={port} off` or `tailscale serve reset`',
+          { port: String(port) },
         );
       }
     }
@@ -213,7 +206,7 @@ export function createHttpsService(deps: HttpsServiceDeps): HttpsService {
       if (ip !== null && present.get(fqdn) !== ip) {
         await deps.dns.setA(fqdn, ip, publicOwner);
 
-        log(`impd: https: ${fqdn} points at ${ip} (public)`);
+        getImpdLogger('https').info('{fqdn} points at {ip} (public)', { fqdn, ip });
       }
     }
 
@@ -226,7 +219,7 @@ export function createHttpsService(deps: HttpsServiceDeps): HttpsService {
 
       await deps.dns.removeA(fqdn, publicOwner);
 
-      log(`impd: https: removed ${fqdn} (no longer public)`);
+      getImpdLogger('https').info('removed {fqdn} (no longer public)', { fqdn });
     }
   };
 
@@ -242,7 +235,7 @@ export function createHttpsService(deps: HttpsServiceDeps): HttpsService {
       } catch (error) {
         const message = getErrorMessage(error);
 
-        log(`impd: https: public records: ${message}`);
+        getImpdLogger('https').warning('public records: {message}', { message });
 
         recordsStatus = { isOk: false, error: message, at: deps.now() };
       }
@@ -267,27 +260,23 @@ export function createHttpsService(deps: HttpsServiceDeps): HttpsService {
       publicListeners?.setAddresses([deps.publicAddress ?? '0.0.0.0']);
 
       if (deps.readTailscale === null) {
-        log(
-          `impd: https: no tailnet; https://<imp>.${domain} answers only inside the host container`,
+        getImpdLogger('https').info(
+          'no tailnet; https://<imp>.{domain} answers only inside the host container',
+          { domain },
         );
       }
 
-      void runLogged('addresses', updateAddresses, log);
-      void runLogged('renewal', runRenewal, log);
+      void runLogged('addresses', updateAddresses);
+      void runLogged('renewal', runRenewal);
       void updatePublicRecords();
 
       tickers.push(
-        startTask('https renewal', RENEW_INTERVAL_MS, runRenewal, log),
+        startTask('https renewal', RENEW_INTERVAL_MS, runRenewal),
 
-        startTask(
-          'https public records',
-          RENEW_INTERVAL_MS,
-          async () => {
-            await updatePublicRecords();
-          },
-          log,
-        ),
-        startTask('https addresses', ADDRESS_INTERVAL_MS, updateAddresses, log),
+        startTask('https public records', RENEW_INTERVAL_MS, async () => {
+          await updatePublicRecords();
+        }),
+        startTask('https addresses', ADDRESS_INTERVAL_MS, updateAddresses),
       );
     },
     stop: async () => {
@@ -300,14 +289,10 @@ export function createHttpsService(deps: HttpsServiceDeps): HttpsService {
   };
 }
 
-async function runLogged(
-  label: string,
-  task: () => Promise<void>,
-  log: (message: string) => void,
-): Promise<void> {
+async function runLogged(label: string, task: () => Promise<void>): Promise<void> {
   try {
     await task();
   } catch (error) {
-    log(`impd: https: ${label}: ${getErrorMessage(error)}`);
+    getImpdLogger('https').warning('{label}: {error}', { label, error: getErrorMessage(error) });
   }
 }

@@ -4,6 +4,7 @@ import * as z from 'zod';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { isAllowedOrigin } from '../../platform/http/is-allowed-origin';
 import type { Caller } from '../../platform/principal/caller';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { buildBadTokenRequest } from './build-bad-token-request';
 import { buildConsentBinding } from './build-consent-binding';
 import { buildPKCERefusal } from './build-pkce-refusal';
@@ -54,7 +55,6 @@ interface OAuthHandlerDeps {
   readonly resource: string;
 
   readonly now: () => number;
-  readonly log: (message: string) => void;
   readonly readApprover: (
     tokenID: string,
     scope: Scope,
@@ -195,7 +195,9 @@ export function createOAuthHandlers(deps: Readonly<OAuthHandlerDeps>): OAuthHand
       return new Response(renderErrorPage('too_many'), { status: 429, headers });
     }
 
-    deps.log(`impd: oauth: ${clientName} asks to sign in; it waits for impz oauth approve`);
+    getImpdLogger('oauth').info('{clientName} asks to sign in; it waits for impz oauth approve', {
+      clientName,
+    });
 
     return response;
   };
@@ -261,7 +263,9 @@ export function createOAuthHandlers(deps: Readonly<OAuthHandlerDeps>): OAuthHand
     const sessionID = await deps.auth.readSessionID(cookie);
 
     if (!signedInResponse.ok || next === null || sessionID === null) {
-      deps.log(`impd: oauth: a sign-in for ${entry.clientName} could not reach consent`);
+      getImpdLogger('oauth').warning('a sign-in for {clientName} could not reach consent', {
+        clientName: entry.clientName,
+      });
 
       return buildErrorPage('expired');
     }
@@ -376,9 +380,10 @@ export function createOAuthHandlers(deps: Readonly<OAuthHandlerDeps>): OAuthHand
     }
 
     if (isIssued) {
-      deps.log(
-        `impd: oauth: ${entry.clientName} signed in, approved by token ${entry.approval.tokenName}`,
-      );
+      getImpdLogger('oauth').info('{clientName} signed in, approved by token {tokenName}', {
+        clientName: entry.clientName,
+        tokenName: entry.approval.tokenName,
+      });
     }
 
     const sessionCookie = await deps.auth.readSessionCookie();

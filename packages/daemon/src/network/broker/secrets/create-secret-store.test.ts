@@ -855,7 +855,6 @@ test('it refreshes a pending secret when the broker starts', async () => {
   const started = await createBroker({
     config: ctx.config,
     db: ctx.db,
-    log: () => {},
     reach: ctx.reach,
     resolveUpstream: resolvePublicUpstream,
   });
@@ -1257,7 +1256,6 @@ test('it keeps aside a new file whose row never came, on the next start', async 
   const restarted = await createBroker({
     config: ctx.config,
     db: ctx.db,
-    log: () => {},
     timer: ctx.tickers.timer,
     reach: ctx.reach,
     resolveUpstream: resolvePublicUpstream,
@@ -1286,7 +1284,6 @@ test('it removes the old file of a committed replace, on the next start', async 
   const restarted = await createBroker({
     config: ctx.config,
     db: ctx.db,
-    log: () => {},
     timer: ctx.tickers.timer,
     reach: ctx.reach,
     resolveUpstream: resolvePublicUpstream,
@@ -1332,7 +1329,7 @@ test('it logs an old file a replace could not remove, and serves the new value',
   expect(files).toIncludeSameMembers([before.valueFile, after.valueFile]);
 
   expect(ctx.logs).toContainEqual(
-    expect.toStartWith('impd: broker: could not remove an old secret value file: '),
+    expect.toStartWith('WARNING impd.broker could not remove an old secret value file: '),
   );
 });
 
@@ -1362,7 +1359,6 @@ test('it removes on the next start the old file a replace could not, not keeping
   const restarted = await createBroker({
     config: ctx.config,
     db: ctx.db,
-    log: () => {},
     timer: ctx.tickers.timer,
     reach: ctx.reach,
     resolveUpstream: resolvePublicUpstream,

@@ -4,6 +4,7 @@ import { listImps } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import type { StartTimer } from '../../platform/process/clock';
 import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { startRealTimer } from '../../platform/process/start-real-timer';
 import type { ImpDiskUsage, StorageBackend } from './storage-backend';
 
@@ -33,7 +34,6 @@ export interface DiskUsageCache {
 interface DiskUsageCacheDeps {
   readonly db: ImpDatabase;
   readonly storage: Pick<StorageBackend, 'measureUsage'>;
-  readonly log: (message: string) => void;
   readonly now?: () => Date;
   readonly refreshDelayMs?: number;
   readonly startTimer?: StartTimer;
@@ -81,7 +81,7 @@ export function createDiskUsageCache(deps: DiskUsageCacheDeps): DiskUsageCache {
 
       state.usage = new Map(kept);
     } catch (error) {
-      deps.log(`impd: disk usage: ${getErrorMessage(error)}`);
+      getImpdLogger('disk').warning('disk usage: {error}', { error: getErrorMessage(error) });
     }
   };
 

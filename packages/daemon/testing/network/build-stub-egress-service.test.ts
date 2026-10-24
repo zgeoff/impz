@@ -92,11 +92,3 @@ test('it moves its clock only when told to', () => {
 
   expect(egress.deps.now()).toBe(1500);
 });
-
-test('it records each log line', () => {
-  const egress = buildStubEgressService();
-
-  egress.deps.log('impd: egress: example');
-
-  expect(egress.logs).toStrictEqual(['impd: egress: example']);
-});

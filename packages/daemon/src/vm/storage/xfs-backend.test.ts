@@ -1,4 +1,4 @@
-import { expect, mock, onTestFinished, test } from 'bun:test';
+import { expect, onTestFinished, test } from 'bun:test';
 import {
   existsSync,
   mkdirSync,
@@ -11,6 +11,7 @@ import {
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { buildStubFiemap } from '../../../testing/vm/build-stub-fiemap';
 import { readExtents } from './fiemap';
 import { createXfsBackend } from './xfs-backend';
@@ -26,11 +27,10 @@ async function setupTest(
 
   onTestFinished(() => rm(dataDir, { recursive: true, force: true }));
 
-  const log = mock<(message: string) => void>();
+  const logs = captureImpdLogs();
 
   const backend = createXfsBackend({
     dataDir,
-    log,
 
     // written byte by byte, because a temp dir's filesystem may reflink a copy and share extents
     cloneFile: (source, target) => {
@@ -42,7 +42,7 @@ async function setupTest(
     readFileExtents: options.readFileExtents ?? readExtents,
   });
 
-  return { dataDir, backend, log };
+  return { dataDir, logs, backend };
 }
 
 test('#createImage replaces a directory a crash left with no rootfs', async () => {
@@ -183,33 +183,31 @@ test('#start logs each orphan it keeps and each leftover it removes', async () =
 
   await ctx.backend.start({ impIds: new Set(), checkpointIds: new Set(), imageDigests: new Set() });
 
-  const lines = ctx.log.mock.calls.map(([line]) => line);
-
-  expect(lines).toIncludeAllMembers([
-    'impd: storage: removed image empty',
-    'impd: storage: removed imp done',
+  expect(ctx.logs).toIncludeAllMembers([
+    'INFO impd.storage removed image empty',
+    'INFO impd.storage removed imp done',
   ]);
 
   expect(
-    lines
-      .filter((line) => line.startsWith('impd: storage: kept orphan '))
+    ctx.logs
+      .filter((line) => line.startsWith('INFO impd.storage kept orphan '))
       .map((line) => line.split(' (')[0]),
   ).toIncludeSameMembers([
-    'impd: storage: kept orphan image abc',
-    'impd: storage: kept orphan image half',
-    'impd: storage: kept orphan image old',
-    'impd: storage: kept orphan imp a',
-    'impd: storage: kept orphan imp b',
-    'impd: storage: kept orphan imp sleeper',
+    'INFO impd.storage kept orphan image abc',
+    'INFO impd.storage kept orphan image half',
+    'INFO impd.storage kept orphan image old',
+    'INFO impd.storage kept orphan imp a',
+    'INFO impd.storage kept orphan imp b',
+    'INFO impd.storage kept orphan imp sleeper',
   ]);
 
-  expect(lines).toSatisfyAny((line: string) =>
-    /^impd: storage: kept orphan imp a \(.+\/imps\/a\): \d+\.\d MiB, created \d{4}-\d\d-\d\dT.+Z, snapshots: cp-1, cp-2$/u.test(
+  expect(ctx.logs).toSatisfyAny((line: string) =>
+    /^INFO impd\.storage kept orphan imp a \(.+\/imps\/a\): \d+\.\d MiB, created \d{4}-\d\d-\d\dT.+Z, snapshots: cp-1, cp-2$/u.test(
       line,
     ),
   );
 
-  expect(lines.at(-1)).toInclude('kept 6 orphans the database does not name');
+  expect(ctx.logs.at(-1)).toInclude('kept 6 orphans the database does not name');
 });
 
 test('#dropUnnamed removes what is provably nothing and keeps each orphan with its size and age', async () => {
@@ -802,8 +800,8 @@ test('#start logs and skips a reserve file that would take more than half the fr
 
   expect(existsSync(join(ctx.dataDir, 'reserve'))).toBeFalse();
 
-  expect(ctx.log).toHaveBeenCalledWith(
-    `impd: xfs: too little free space for the ${String(Number.MAX_SAFE_INTEGER)}-byte reserve file`,
+  expect(ctx.logs).toContain(
+    `INFO impd.xfs too little free space for the ${String(Number.MAX_SAFE_INTEGER)}-byte reserve file`,
   );
 });
 

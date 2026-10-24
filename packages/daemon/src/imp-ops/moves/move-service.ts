@@ -1,5 +1,6 @@
 import type { WarmHost } from '@impz/api';
 import { ImpdError } from '../../platform/errors/impd-error';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import type { ImpOpsConfig } from '../imp-ops-config';
 import { createMoveReceiver } from './move-receiver';
 import type { MoveReceiver, MoveReceiverDeps } from './move-receiver';
@@ -38,8 +39,9 @@ export function createMoveService(deps: MoveServiceDeps): MoveService {
   const ranges = buildPeerRanges(deps.config.moves.testCidr);
 
   if (ranges.testCidr !== null) {
-    deps.log(
-      `impd: warning: IMP_E2E=1 and IMP_MOVE_TEST_CIDR open moves to ${ranges.testCidr}, off the tailnet`,
+    getImpdLogger('move').warning(
+      'IMP_E2E=1 and IMP_MOVE_TEST_CIDR open moves to {testCidr}, off the tailnet',
+      { testCidr: ranges.testCidr },
     );
   }
 

@@ -1,6 +1,7 @@
 import type { ImpRecord } from '../../platform/db/imps';
 import { listLeases, writeMovedLeases } from '../../platform/db/leases';
 import type { ImpDatabase } from '../../platform/db/open-database';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { MAX_LEASE_REMAINING_MS, MAX_MOVED_LEASES, MovedLeaseOwnerSchema } from './move-header';
 import type { MoveHeader, MovedLease } from './move-header';
 import { OfferRefusalError } from './offer-refusal-error';
@@ -8,7 +9,6 @@ import { OfferRefusalError } from './offer-refusal-error';
 interface MoveLeasesDeps {
   readonly db: ImpDatabase;
   readonly now: () => number;
-  readonly log: (message: string) => void;
 }
 
 export async function readMovedLeases(
@@ -23,9 +23,12 @@ export async function readMovedLeases(
     const remainingMs = lease.until === null ? null : lease.until.getTime() - at;
 
     if (remainingMs !== null && remainingMs > MAX_LEASE_REMAINING_MS) {
-      deps.log(
-        `impd: move: ${imp.name}: lease ${lease.principal} ${lease.label} ends past 100 years; it moves with 100 years left`,
-      );
+      getImpdLogger('move')
+        .with({ imp: imp.name })
+        .info('lease {principal} {label} ends past 100 years; it moves with 100 years left', {
+          principal: lease.principal,
+          label: lease.label,
+        });
     }
 
     return {
@@ -72,9 +75,9 @@ export async function writeReceivedLeases(
   headerAt: number,
 ): Promise<void> {
   if (header.imp.leases === undefined) {
-    deps.log(
-      `impd: move: ${header.imp.name}: the source's impd predates moving leases; it arrives with none`,
-    );
+    getImpdLogger('move')
+      .with({ imp: header.imp.name })
+      .info("the source's impd predates moving leases; it arrives with none");
 
     return;
   }

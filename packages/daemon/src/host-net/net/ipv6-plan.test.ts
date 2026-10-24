@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import invariant from 'tiny-invariant';
 import { buildStubIpCommand } from '../../../testing/host-net/build-stub-ip-command';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { parsePrefix64 } from './addressing6';
 import {
   checkHostRules6,
@@ -46,12 +47,13 @@ test('#resolveIpv6Plan gives auto a NAT66 unique local prefix out of the IPv6 de
 
   invariant(ula);
 
+  const logs = captureImpdLogs();
+
   const deps = {
     readDefaultRoute: () => Promise.resolve('eth0'),
     readUlaPrefix: () => ula,
     checkHostRules: () => Promise.resolve(null),
     runNft: mock(() => Promise.resolve()),
-    log: mock(),
   };
 
   const plan = await resolveIpv6Plan({ kind: 'auto' }, deps);
@@ -72,12 +74,12 @@ test('#resolveIpv6Plan gives auto a NAT66 unique local prefix out of the IPv6 de
     ].join('\n'),
   );
 
-  expect(deps.log).toHaveBeenCalledExactlyOnceWith(
-    'impd: ipv6: fd12:3456:789a::/64, NAT66 out of eth0',
-  );
+  expect(logs).toStrictEqual(['INFO impd.ipv6 fd12:3456:789a::/64, NAT66 out of eth0']);
 });
 
 test('#resolveIpv6Plan turns auto off, and removes NAT66, without an IPv6 default route', async () => {
+  const logs = captureImpdLogs();
+
   const deps = {
     readDefaultRoute: () => Promise.resolve(null),
     readUlaPrefix: () => {
@@ -85,7 +87,6 @@ test('#resolveIpv6Plan turns auto off, and removes NAT66, without an IPv6 defaul
     },
     checkHostRules: () => Promise.resolve(null),
     runNft: mock(() => Promise.resolve()),
-    log: mock(),
   };
 
   const plan = await resolveIpv6Plan({ kind: 'auto' }, deps);
@@ -96,13 +97,14 @@ test('#resolveIpv6Plan turns auto off, and removes NAT66, without an IPv6 defaul
     'table ip6 imp_nat66 {}\ndelete table ip6 imp_nat66\n',
   );
 
-  expect(deps.log).toHaveBeenCalledExactlyOnceWith(
-    'impd: ipv6: off (IMP_SUBNET6=auto, and the container has no IPv6 default route)',
-  );
+  expect(logs).toStrictEqual([
+    'INFO impd.ipv6 off (IMP_SUBNET6=auto, and the container has no IPv6 default route)',
+  ]);
 });
 
 test('#resolveIpv6Plan uses a routed /64 as it is, without NAT, via the IPv6 default route', async () => {
   const setting = parseIpv6Setting('2001:db8:c::/64');
+  const logs = captureImpdLogs();
 
   const deps = {
     readDefaultRoute: () => Promise.resolve('eth0'),
@@ -111,7 +113,6 @@ test('#resolveIpv6Plan uses a routed /64 as it is, without NAT, via the IPv6 def
     },
     checkHostRules: () => Promise.resolve(null),
     runNft: mock(() => Promise.resolve()),
-    log: mock(),
   };
 
   const plan = await resolveIpv6Plan(setting, deps);
@@ -126,11 +127,12 @@ test('#resolveIpv6Plan uses a routed /64 as it is, without NAT, via the IPv6 def
     'table ip6 imp_nat66 {}\ndelete table ip6 imp_nat66\n',
   );
 
-  expect(deps.log).toHaveBeenCalledExactlyOnceWith('impd: ipv6: 2001:db8:c::/64, routed via eth0');
+  expect(logs).toStrictEqual(['INFO impd.ipv6 2001:db8:c::/64, routed via eth0']);
 });
 
 test('#resolveIpv6Plan uses a routed /64 with no IPv6 default route, and says so', async () => {
   const setting = parseIpv6Setting('2001:db8:c::/64');
+  const logs = captureImpdLogs();
 
   const deps = {
     readDefaultRoute: () => Promise.resolve(null),
@@ -139,19 +141,20 @@ test('#resolveIpv6Plan uses a routed /64 with no IPv6 default route, and says so
     },
     checkHostRules: () => Promise.resolve(null),
     runNft: mock(() => Promise.resolve()),
-    log: mock(),
   };
 
   const plan = await resolveIpv6Plan(setting, deps);
 
   expect(plan?.uplink).toBeNull();
 
-  expect(deps.log).toHaveBeenCalledExactlyOnceWith(
-    'impd: ipv6: 2001:db8:c::/64, routed; the container has no IPv6 default route',
-  );
+  expect(logs).toStrictEqual([
+    'INFO impd.ipv6 2001:db8:c::/64, routed; the container has no IPv6 default route',
+  ]);
 });
 
 test('#resolveIpv6Plan turns IPv6 off, and removes NAT66, when the setting is off', async () => {
+  const logs = captureImpdLogs();
+
   const deps = {
     readDefaultRoute: mock(() => Promise.resolve('eth0')),
     readUlaPrefix: () => {
@@ -159,7 +162,6 @@ test('#resolveIpv6Plan turns IPv6 off, and removes NAT66, when the setting is of
     },
     checkHostRules: () => Promise.resolve(null),
     runNft: mock(() => Promise.resolve()),
-    log: mock(),
   };
 
   const plan = await resolveIpv6Plan({ kind: 'off' }, deps);
@@ -171,10 +173,12 @@ test('#resolveIpv6Plan turns IPv6 off, and removes NAT66, when the setting is of
     'table ip6 imp_nat66 {}\ndelete table ip6 imp_nat66\n',
   );
 
-  expect(deps.log).toHaveBeenCalledExactlyOnceWith('impd: ipv6: off (IMP_SUBNET6=off)');
+  expect(logs).toStrictEqual(['INFO impd.ipv6 off (IMP_SUBNET6=off)']);
 });
 
 test('#resolveIpv6Plan turns IPv6 off when nft cannot remove a NAT66 table, as on a host without nftables', async () => {
+  const logs = captureImpdLogs();
+
   const deps = {
     readDefaultRoute: () => Promise.resolve('eth0'),
     readUlaPrefix: () => {
@@ -182,17 +186,18 @@ test('#resolveIpv6Plan turns IPv6 off when nft cannot remove a NAT66 table, as o
     },
     checkHostRules: () => Promise.resolve(null),
     runNft: mock(() => Promise.reject(new Error('nft: No such file or directory'))),
-    log: mock(),
   };
 
   const plan = await resolveIpv6Plan({ kind: 'off' }, deps);
 
   expect(plan).toBeNull();
   expect(deps.runNft).toHaveBeenCalledOnce();
-  expect(deps.log).toHaveBeenCalledExactlyOnceWith('impd: ipv6: off (IMP_SUBNET6=off)');
+  expect(logs).toStrictEqual(['INFO impd.ipv6 off (IMP_SUBNET6=off)']);
 });
 
 test('#resolveIpv6Plan turns IPv6 off, and removes NAT66, when the host lacks its IPv6 rules', async () => {
+  const logs = captureImpdLogs();
+
   const deps = {
     readDefaultRoute: () => Promise.resolve('eth0'),
     readUlaPrefix: () => {
@@ -200,7 +205,6 @@ test('#resolveIpv6Plan turns IPv6 off, and removes NAT66, when the host lacks it
     },
     checkHostRules: () => Promise.resolve('no ip6tables -t filter -A INPUT -i imp+ -j DROP'),
     runNft: mock(() => Promise.resolve()),
-    log: mock(),
   };
 
   const plan = await resolveIpv6Plan({ kind: 'auto' }, deps);
@@ -211,15 +215,17 @@ test('#resolveIpv6Plan turns IPv6 off, and removes NAT66, when the host lacks it
     'table ip6 imp_nat66 {}\ndelete table ip6 imp_nat66\n',
   );
 
-  expect(deps.log).toHaveBeenCalledExactlyOnceWith(
-    "impd: ipv6: off (the host's IPv6 rules are not in place: no ip6tables -t filter -A INPUT -i imp+ -j DROP)",
-  );
+  expect(logs).toStrictEqual([
+    "INFO impd.ipv6 off (the host's IPv6 rules are not in place: no ip6tables -t filter -A INPUT -i imp+ -j DROP)",
+  ]);
 });
 
 test('#resolveIpv6Plan turns IPv6 off when the NAT66 table cannot be written', async () => {
   const ula = parsePrefix64('fd12:3456:789a::/64');
 
   invariant(ula);
+
+  const logs = captureImpdLogs();
 
   const deps = {
     readDefaultRoute: () => Promise.resolve('eth0'),
@@ -228,7 +234,6 @@ test('#resolveIpv6Plan turns IPv6 off when the NAT66 table cannot be written', a
     runNft: mock<(script: string) => Promise<void>>()
       .mockRejectedValueOnce(new Error('Operation not supported'))
       .mockResolvedValue(undefined),
-    log: mock(),
   };
 
   const plan = await resolveIpv6Plan({ kind: 'auto' }, deps);
@@ -252,9 +257,7 @@ test('#resolveIpv6Plan turns IPv6 off when the NAT66 table cannot be written', a
     ['table ip6 imp_nat66 {}\ndelete table ip6 imp_nat66\n'],
   ]);
 
-  expect(deps.log).toHaveBeenCalledExactlyOnceWith(
-    'impd: ipv6: off (NAT66: Operation not supported)',
-  );
+  expect(logs).toStrictEqual(['INFO impd.ipv6 off (NAT66: Operation not supported)']);
 });
 
 test("#checkHostRules6 finds every one of setup-net's IPv6 rules and settings in place", async () => {

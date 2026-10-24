@@ -1,5 +1,6 @@
 import { posix } from 'node:path';
 import type { Connection, ServerChannel } from 'ssh2';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import type { GuestListener, ListenSpec } from '../../vm/agent-client/listener-stream';
 import { MAX_RELAYS_PER_FORWARD, runGuestListener } from '../reverse/run-guest-listener';
 import { formatFailure, runChannelRelay } from './channel-io';
@@ -42,7 +43,6 @@ interface RemoteForwardingDeps {
   readonly impName: string;
   readonly backend: Pick<SshBackend, 'openListener' | 'openAccept'>;
   readonly awake: Promise<void>;
-  readonly log: (message: string) => void;
 }
 
 interface OpenForward {
@@ -63,7 +63,7 @@ export function createRemoteForwarding(deps: RemoteForwardingDeps): RemoteForwar
   const state = { stopped: false };
 
   const writeLog = (message: string): void => {
-    deps.log(`impd: ssh: ${deps.impName}: remote forward ${message}`);
+    getImpdLogger('ssh').with({ imp: deps.impName }).info('remote forward {message}', { message });
   };
 
   const stopGuestClient = async (listener: GuestListener, id: number): Promise<void> => {

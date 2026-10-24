@@ -54,7 +54,7 @@ test('it moves a stopped imp cold with its disk and checkpoint, and boots it on 
 
   const logB = await readImpdLogSince(since, ctx.hosts.hostB);
 
-  expect(logB).toContain(`impd: move: ${cold}: received as ${form}, waiting for the commit`);
+  expect(logB).toContain(`INFO impd.move imp=${cold} received as ${form}, waiting for the commit`);
 
   const row = await requireImp(cold, ctx.hosts.hostB);
   const checkpoints = await runImpWith({ target: ctx.hosts.hostB }, 'checkpoints', cold, '--json');

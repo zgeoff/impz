@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test';
 import { waitFor } from '@impz/test-utils/wait-for';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { createTestDatabase } from '../../../testing/platform/create-test-database';
 import { readErrorCode } from '../../surface/read-error-code';
 import { listApiCalls } from '../db/api-audit';
@@ -10,14 +11,11 @@ async function setupTest() {
   const database = await createTestDatabase();
 
   const clock = { at: 0 };
-  const logs: string[] = [];
+  const logs = captureImpdLogs();
 
   const audit = createApiAudit({
     db: database.db,
     now: () => clock.at,
-    log: (line) => {
-      logs.push(line);
-    },
     readErrorCode,
   });
 
@@ -170,5 +168,5 @@ test('#createApiAudit logs a row it could not write', async () => {
   });
 
   expect(ctx.logs).toHaveLength(1);
-  expect(ctx.logs[0]).toMatch(/^impd: audit: ssh: .*api_audit/u);
+  expect(ctx.logs[0]).toMatch(/^WARNING impd\.audit ssh: .*api_audit/u);
 });

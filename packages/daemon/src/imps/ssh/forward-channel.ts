@@ -1,5 +1,6 @@
 import { posix } from 'node:path';
 import type { AcceptConnection, RejectConnection, ServerChannel } from 'ssh2';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import type { DialStream, DialTarget } from '../../vm/agent-client/dial-stream';
 import { formatFailure, runChannelRelay } from './channel-io';
 import type { SshConnectionContext } from './ssh-connection-context';
@@ -53,9 +54,12 @@ export async function handleForward(
 
     dial = await context.backend.openDial(context.impName, target, 'ssh');
   } catch (error) {
-    context.log(
-      `impd: ssh: ${context.impName}: forward to ${target.address}: ${formatFailure(error)}`,
-    );
+    getImpdLogger('ssh')
+      .with({ imp: context.impName })
+      .warning('forward to {address}: {error}', {
+        address: target.address,
+        error: formatFailure(error),
+      });
 
     reject();
 
@@ -65,8 +69,11 @@ export async function handleForward(
   try {
     await runChannelRelay(accept(), dial);
   } catch (error) {
-    context.log(
-      `impd: ssh: ${context.impName}: forward to ${target.address}: ${formatFailure(error)}`,
-    );
+    getImpdLogger('ssh')
+      .with({ imp: context.impName })
+      .warning('forward to {address}: {error}', {
+        address: target.address,
+        error: formatFailure(error),
+      });
   }
 }

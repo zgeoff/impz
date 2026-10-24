@@ -1,5 +1,6 @@
 import type { NetworkMember } from '../../platform/db/networks';
 import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import type { KeyedMutex } from '../../platform/process/keyed-mutex';
 
 export interface NetworkChange<T> {
@@ -9,7 +10,6 @@ export interface NetworkChange<T> {
 
 interface ChangeNetworksDeps {
   readonly mutex: KeyedMutex;
-  readonly log: (message: string) => void;
   readonly applyTable: () => Promise<void>;
   readonly tryApplyTable: () => Promise<void>;
   readonly flushPair: (first: string, second: string) => Promise<void>;
@@ -20,22 +20,6 @@ interface ChangeNetworksDeps {
 export function makeChangeNetworks(
   deps: ChangeNetworksDeps,
 ): <T>(change: NetworkChange<T>) => Promise<T> {
-  const tryUndo = async (undo: () => Promise<void>): Promise<boolean> => {
-    for (const attempt of [1, 2]) {
-      try {
-        await undo();
-
-        return true;
-      } catch (error) {
-        deps.log(
-          `impd: egress: undoing a network change (try ${String(attempt)}): ${getErrorMessage(error)}`,
-        );
-      }
-    }
-
-    return false;
-  };
-
   return (change) =>
     deps.mutex.runExclusive('policy', async () => {
       const before = listPeerPairs(deps.readMembers());
@@ -68,7 +52,10 @@ export function makeChangeNetworks(
           try {
             await deps.flushPair(first, second);
           } catch (error) {
-            deps.log(`impd: egress: ${pair}: ${getErrorMessage(error)}`);
+            getImpdLogger('egress').warning('{pair}: {error}', {
+              pair,
+              error: getErrorMessage(error),
+            });
           }
         }
       }
@@ -91,4 +78,21 @@ function listPeerPairs(members: readonly NetworkMember[]): Set<string> {
   }
 
   return pairs;
+}
+
+async function tryUndo(undo: () => Promise<void>): Promise<boolean> {
+  for (const attempt of [1, 2]) {
+    try {
+      await undo();
+
+      return true;
+    } catch (error) {
+      getImpdLogger('egress').warning('undoing a network change (try {attempt}): {error}', {
+        attempt: String(attempt),
+        error: getErrorMessage(error),
+      });
+    }
+  }
+
+  return false;
 }

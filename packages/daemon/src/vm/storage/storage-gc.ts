@@ -1,6 +1,7 @@
 import type { DroppedStorage, OrphanStorage, StorageGc } from '@impz/api';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { ImpdError } from '../../platform/errors/impd-error';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import type { KeptSecretFiles } from './kept-secret-files';
 import { printSweep } from './print-sweep';
 import type { OrphanLogging } from './print-sweep';
@@ -15,7 +16,6 @@ interface StorageGcDeps {
   readonly db: ImpDatabase;
   readonly storage: Pick<StorageBackend, 'dropUnnamed'>;
   readonly storageGate: StorageGate;
-  readonly log: (message: string) => void;
   readonly secretFiles?: KeptSecretFiles;
   readonly manualWaitMs?: number;
   readonly scheduledWaitMs?: number;
@@ -56,7 +56,7 @@ export function createStorageGc(deps: StorageGcDeps): StorageGcService {
         hourly.lastKept = kept;
       }
 
-      printSweep(deps.log, 'impd: gc', result.value, logging);
+      printSweep(getImpdLogger('gc'), result.value, logging);
     }
 
     return result;
@@ -89,7 +89,7 @@ export function createStorageGc(deps: StorageGcDeps): StorageGcService {
       );
 
       if (!result.ran) {
-        deps.log('impd: gc: storage stayed busy; the next pass tries again');
+        getImpdLogger('gc').info('storage stayed busy; the next pass tries again');
       }
     },
   };
@@ -119,7 +119,7 @@ function removeSecretFiles(
   if (!options.isDryRun) {
     for (const entry of kept) {
       deps.secretFiles?.removeKept(entry.name);
-      deps.log(`impd: gc: removed kept secret values ${entry.path}`);
+      getImpdLogger('gc').info('removed kept secret values {path}', { path: entry.path });
     }
   }
 

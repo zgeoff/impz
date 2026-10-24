@@ -46,14 +46,6 @@ test('it writes the imp of the context a line is written in, across an await', a
   expect(ctx.lines).toStrictEqual(['INFO impd.memory imp=web grew\n']);
 });
 
-test('it writes impd lines with no area under impd', () => {
-  const ctx = setupTest();
-
-  getImpdLogger().error('stop failed');
-
-  expect(ctx.lines).toStrictEqual(['ERROR impd stop failed\n']);
-});
-
 test('it writes an error value with its message', () => {
   const ctx = setupTest();
 
@@ -78,4 +70,26 @@ test('it writes no line for a logger outside impd', () => {
   getLogger(['other']).info('elsewhere');
 
   expect(ctx.lines).toStrictEqual([]);
+});
+
+test('it writes each line to stdout when given no writer', async () => {
+  const child = Bun.spawn(
+    [
+      'bun',
+      '-e',
+      `import { getImpdLogger } from './get-impd-logger';
+import { setupLogging } from './setup-logging';
+setupLogging();
+getImpdLogger('gc').info('removed 2 drives');`,
+    ],
+    { cwd: import.meta.dir, stdout: 'pipe' },
+  );
+
+  onTestFinished(() => {
+    child.kill();
+  });
+
+  const stdout = await new Response(child.stdout).text();
+
+  expect(stdout).toBe('INFO impd.gc removed 2 drives\n');
 });

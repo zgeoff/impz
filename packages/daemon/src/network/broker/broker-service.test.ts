@@ -653,7 +653,7 @@ test('it gives a new boot whose install fails no broker variables, and logs why'
 
   expect(ctx.logs).toContainEqual(
     expect.toStartWith(
-      'impd: dev: broker CA not installed, so this exec gets no broker variables: ENOENT',
+      'WARNING impd.imps imp=dev broker CA not installed, so this exec gets no broker variables: ENOENT',
     ),
   );
 });
@@ -889,7 +889,7 @@ test('it reports a fork whose grants cannot be copied, and logs the cause', asyn
   });
 
   expect(ctx.logs).toContainEqual(
-    expect.toStartWith('impd: gone: forked without the grants of dev: '),
+    expect.toStartWith('WARNING impd.imps imp=gone forked without the grants of dev: '),
   );
 });
 
@@ -921,7 +921,10 @@ test('it copies no grant to a fork whose token was removed, and says so', async 
   });
 
   expect(grants).toStrictEqual([]);
-  expect(ctx.logs).toContain('impd: copy: forked without the grants of dev: the token was removed');
+
+  expect(ctx.logs).toContain(
+    'INFO impd.imps imp=copy forked without the grants of dev: the token was removed',
+  );
 });
 
 test('it skips a grant the caller may not make on a fork, and logs why', async () => {
@@ -946,7 +949,7 @@ test('it skips a grant the caller may not make on a fork, and logs why', async (
   });
 
   expect(ctx.logs).toContain(
-    'impd: copy: forked without grant gh of dev: the caller may not grant it',
+    'INFO impd.imps imp=copy forked without grant gh of dev: the caller may not grant it',
   );
 });
 
@@ -975,7 +978,7 @@ test('it skips a grant that clashes on a fork, and logs why', async () => {
   expect(report).toStrictEqual({ notCopied: [{ secret: 'gh', reason: 'clash' }], error: null });
 
   expect(ctx.logs).toContain(
-    'impd: copy: forked without grant gh of dev: it has another credential for that host',
+    'INFO impd.imps imp=copy forked without grant gh of dev: it has another credential for that host',
   );
 });
 
@@ -1025,7 +1028,9 @@ test('it logs a grant change it could not apply rather than throw', async () => 
 
   await ctx.impd.broker.applyGrants();
 
-  expect(ctx.logs).toContainEqual(expect.toStartWith('impd: broker: could not apply grants: '));
+  expect(ctx.logs).toContainEqual(
+    expect.toStartWith('WARNING impd.broker could not apply grants: '),
+  );
 });
 
 test('it logs an audit row it could not write and still answers the request', async () => {
@@ -1080,7 +1085,7 @@ test('it logs an audit row it could not write and still answers the request', as
   await ended.promise;
 
   const logged = await waitFor(() => {
-    const line = ctx.logs.find((each) => each.startsWith('impd: broker: audit write failed'));
+    const line = ctx.logs.find((each) => each.startsWith('WARNING impd.broker audit write failed'));
 
     invariant(line !== undefined);
 
@@ -1088,7 +1093,7 @@ test('it logs an audit row it could not write and still answers the request', as
   });
 
   expect(Buffer.concat(chunks).toString()).toMatch(/^HTTP\/1\.1 200 [\s\S]*from upstream$/u);
-  expect(logged).toBe('impd: broker: audit write failed: forced failure');
+  expect(logged).toBe('WARNING impd.broker audit write failed: forced failure');
 });
 
 test('it refuses a tunnel into the imps’ IPv6 prefix', async () => {
@@ -1104,7 +1109,6 @@ test('it refuses a tunnel into the imps’ IPv6 prefix', async () => {
   const broker = await createBroker({
     config: ctx.config,
     db: ctx.db,
-    log: () => {},
     timer: ctx.tickers.timer,
     resolveUpstream: resolvePublicUpstream,
     reach: createReachPolicy({
@@ -1148,7 +1152,6 @@ test('it dials a public IPv6 address when impd has IPv6', async () => {
   const broker = await createBroker({
     config: ctx.config,
     db: ctx.db,
-    log: () => {},
     timer: ctx.tickers.timer,
     resolveUpstream: resolvePublicUpstream,
     reach: createReachPolicy({
@@ -1194,7 +1197,6 @@ test('it refuses every IPv6 tunnel when impd has no IPv6', async () => {
   const broker = await createBroker({
     config: ctx.config,
     db: ctx.db,
-    log: () => {},
     timer: ctx.tickers.timer,
     resolveUpstream: resolvePublicUpstream,
     reach: createReachPolicy({

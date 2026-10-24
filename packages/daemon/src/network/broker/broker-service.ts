@@ -38,6 +38,7 @@ import {
   buildNotFoundError,
 } from '../../platform/errors/impd-errors';
 import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import type { TickerTimer } from '../../platform/process/ticker';
 import type { NetworkConfig } from '../network-config';
 import {
@@ -125,7 +126,6 @@ export interface Broker {
 export interface BrokerDeps {
   readonly config: NetworkConfig;
   readonly db: ImpDatabase;
-  readonly log: (message: string) => void;
 
   readonly installBundle?: InstallBundle;
   readonly fetch?: UpstreamFetch;
@@ -156,21 +156,19 @@ const FORK_COPY_FAILED =
 export async function createBroker(deps: BrokerDeps): Promise<Broker> {
   const config = deps.config;
   const db = deps.db;
-  const log = deps.log;
   const now = deps.now ?? Date.now;
 
   const ca = await loadOrCreateBrokerCa(join(config.dataDir, 'broker', 'ca'), now);
 
   const files = deps.secretFiles ?? createSecretFiles(config.dataDir);
 
-  await removeStaleSecretFiles(db, files, new Date(now()), log);
+  await removeStaleSecretFiles(db, files, new Date(now()));
 
   const resolveUpstream = deps.resolveUpstream;
 
   const trust = createGuestTrust(
     buildInstallInput(ca.certPem),
     deps.installBundle ?? runBundleInstall,
-    log,
   );
 
   const unwatch = db.writes.subscribe((write) => {
@@ -182,7 +180,6 @@ export async function createBroker(deps: BrokerDeps): Promise<Broker> {
   const refresher = createOAuthRefresher({
     db,
     files,
-    log,
     resolveUpstream,
     ...(deps.oauthFetch !== undefined && { fetch: deps.oauthFetch }),
     ...(deps.now !== undefined && { now: deps.now }),
@@ -193,7 +190,6 @@ export async function createBroker(deps: BrokerDeps): Promise<Broker> {
     config,
     db,
     files,
-    log,
     now,
     ca,
     resolveUpstream,
@@ -226,11 +222,13 @@ export async function createBroker(deps: BrokerDeps): Promise<Broker> {
 
       trust.forgetExcept(new Set(imps.map((imp) => imp.id)));
     } catch (error) {
-      log(`impd: broker: could not apply grants: ${getErrorMessage(error)}`);
+      getImpdLogger('broker').warning('could not apply grants: {error}', {
+        error: getErrorMessage(error),
+      });
     }
   };
 
-  const secrets = createSecretStore({ db, files, log, refresher, applyGrants });
+  const secrets = createSecretStore({ db, files, refresher, applyGrants });
 
   return {
     addSecret: secrets.addSecret,
@@ -325,24 +323,33 @@ export async function createBroker(deps: BrokerDeps): Promise<Broker> {
         const outcome = await createForkGrants(db, source.id, fork.id, authority);
 
         if (outcome.kind === 'no-token') {
-          log(
-            `impd: ${fork.name}: forked without the grants of ${source.name}: the token was removed`,
-          );
+          getImpdLogger('imps')
+            .with({ imp: fork.name })
+            .info('forked without the grants of {name}: the token was removed', {
+              name: source.name,
+            });
 
           return { notCopied: [], error: FORK_TOKEN_GONE };
         }
 
         for (const skipped of outcome.notCopied) {
-          log(
-            `impd: ${fork.name}: forked without grant ${skipped.secret} of ${source.name}: ${FORK_SKIP_CAUSES[skipped.reason]}`,
-          );
+          getImpdLogger('imps')
+            .with({ imp: fork.name })
+            .info('forked without grant {secret} of {name}: {cause}', {
+              secret: skipped.secret,
+              name: source.name,
+              cause: FORK_SKIP_CAUSES[skipped.reason],
+            });
         }
 
         return { notCopied: outcome.notCopied, error: null };
       } catch (error) {
-        log(
-          `impd: ${fork.name}: forked without the grants of ${source.name}: ${getErrorMessage(error)}`,
-        );
+        getImpdLogger('imps')
+          .with({ imp: fork.name })
+          .warning('forked without the grants of {name}: {error}', {
+            name: source.name,
+            error: getErrorMessage(error),
+          });
 
         return { notCopied: [], error: FORK_COPY_FAILED };
       }

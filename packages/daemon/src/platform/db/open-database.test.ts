@@ -77,7 +77,7 @@ test('it publishes each imp write on the feed it was given', async () => {
 });
 
 test('it commits an imp write whose feed has a listener that throws, and tells the rest', async () => {
-  const writes = createEventBus<ImpWrite>(() => {});
+  const writes = createEventBus<ImpWrite>();
   const seen: ImpWrite[] = [];
 
   writes.subscribe(() => {

@@ -137,6 +137,6 @@ test('it logs an adopted VM that keeps the merge flag without IMP_KSM once', asy
   await ctx.restartImpd();
 
   expect(ctx.logs.filter((line) => line.includes('keeps the KSM merge flag'))).toStrictEqual([
-    'impd: dev: its VM keeps the KSM merge flag with IMP_KSM off, until the imp restarts',
+    'INFO impd.imps imp=dev its VM keeps the KSM merge flag with IMP_KSM off, until the imp restarts',
   ]);
 });

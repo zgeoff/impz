@@ -13,6 +13,7 @@ import {
 } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { IMPD_USER } from '../../platform/process/impd-user';
 import { parseMounts, readMounts as readHostMounts } from '../../platform/process/mounts';
 import { listPids, readStatFields } from '../../platform/process/proc';
@@ -80,7 +81,6 @@ export interface JailDeps {
   readonly chrootBase: string;
   readonly run: CommandRunner;
   readonly readMounts?: () => string;
-  readonly log: (message: string) => void;
   readonly killCgroup?: (impId: string) => void;
   readonly listUidPids?: (uid: number) => readonly number[];
   readonly killUidPid?: (pid: number, uid: number) => void;
@@ -290,7 +290,10 @@ export function createJails(deps: Readonly<JailDeps>): Jails {
 
           removed.push(impId);
         } catch (error) {
-          deps.log(`impd: jail ${impId}: ${getErrorMessage(error)}`);
+          getImpdLogger('jail').warning('jail {impId}: {error}', {
+            impId,
+            error: getErrorMessage(error),
+          });
         }
       }
 

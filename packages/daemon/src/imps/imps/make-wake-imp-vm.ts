@@ -4,6 +4,7 @@ import { claimTrustPending, updateImpActivity } from '../../platform/db/imps';
 import type { ImpStateChange } from '../../platform/db/update-imp-state';
 import { buildStoppingError } from '../../platform/errors/impd-errors';
 import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import {
   readColdBootReason,
   readSnapshotMeta,
@@ -57,9 +58,11 @@ export function makeWakeImpVm(deps: WakeDeps): (imp: LockedImp) => Promise<Locke
       meta === null ? 'no snapshot it can load' : readColdBootReason(meta, context.identity);
 
     if (meta === null || mismatch !== null || meta.systemDrivePath === undefined) {
-      context.log(
-        `impd: ${imp.name}: cold boot instead of a wake: ${mismatch ?? 'no snapshot it can load'}`,
-      );
+      getImpdLogger('imps')
+        .with({ imp: imp.name })
+        .info('cold boot instead of a wake: {mismatch}', {
+          mismatch: mismatch ?? 'no snapshot it can load',
+        });
 
       return startColdImpVm(imp, 'wake_fallback', mismatch);
     }
@@ -104,9 +107,13 @@ export function makeWakeImpVm(deps: WakeDeps): (imp: LockedImp) => Promise<Locke
 
     const wakeMs = Math.round(performance.now() - started);
 
-    context.log(
-      `impd: ${imp.name}: woke pid ${String(woken.pid)} in ${String(wakeMs)}ms ${formatTimings(woken.timings)}`,
-    );
+    getImpdLogger('imps')
+      .with({ imp: imp.name })
+      .info('woke pid {pid} in {wakeMs}ms {timings}', {
+        pid: String(woken.pid),
+        wakeMs: String(wakeMs),
+        timings: formatTimings(woken.timings),
+      });
 
     startCounting(context, imp, woken.pid);
 
@@ -146,7 +153,9 @@ export function makeWakeImpVm(deps: WakeDeps): (imp: LockedImp) => Promise<Locke
 
       await context.readExecEnv(imp, paths.vsockSocket);
     } catch (error) {
-      context.log(`impd: ${imp.name}: broker CA after the wake: ${getErrorMessage(error)}`);
+      getImpdLogger('imps')
+        .with({ imp: imp.name })
+        .warning('broker CA after the wake: {error}', { error: getErrorMessage(error) });
     }
 
     return toLockedImp(imp, { ...imp, isTrustPending: false });
@@ -189,7 +198,10 @@ export function makeWakeImpVm(deps: WakeDeps): (imp: LockedImp) => Promise<Locke
     } catch (error) {
       const message = getErrorMessage(error);
 
-      context.log(`impd: ${imp.name}: could not stop the woken VM: ${message}`);
+      getImpdLogger('imps')
+        .with({ imp: imp.name })
+        .warning('could not stop the woken VM: {message}', { message });
+
       context.admission?.release(imp.id);
       removeSnapshot(paths);
 
@@ -211,7 +223,7 @@ export function makeWakeImpVm(deps: WakeDeps): (imp: LockedImp) => Promise<Locke
   ): Promise<LockedImp> => {
     const failure = error.message.split('\n')[0] ?? '';
 
-    context.log(`impd: ${imp.name}: ${failure}; booting cold`);
+    getImpdLogger('imps').with({ imp: imp.name }).warning('{failure}; booting cold', { failure });
     context.admission?.release(imp.id);
 
     // The load may have run the guest, which can write its disk, so the

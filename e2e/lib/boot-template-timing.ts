@@ -41,7 +41,7 @@ export function pickPercentile(values: readonly number[], fraction: number): num
 }
 
 function findLoggedLine(log: string, name: string, what: string): string | undefined {
-  return log.split('\n').findLast((candidate) => candidate.includes(`${name}: ${what}`));
+  return log.split('\n').findLast((candidate) => candidate.includes(`imp=${name} ${what}`));
 }
 
 function parseStepPairs(text: string): Readonly<Record<string, number>> {

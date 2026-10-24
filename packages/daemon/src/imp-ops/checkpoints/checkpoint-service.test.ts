@@ -60,7 +60,6 @@ async function setupTest(options: SetupOptions) {
         streams: zfs.streams,
         readMounts: zfs.readMounts,
         readModuleVersion: () => '2.4.4',
-        log: () => {},
       }),
   };
 
@@ -711,7 +710,6 @@ test('it draws a new id when the pool holds a snapshot by the drawn one', async 
     imps: ctx.impd.imps,
     storage: ctx.storage,
     diskBudget: ctx.impd.diskBudget,
-    log: () => {},
 
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
     random: () => draws.shift() ?? Number.NaN,
@@ -752,7 +750,6 @@ test('it draws a new id when a deleted checkpoint’s snapshot stays for a fork'
     imps: ctx.impd.imps,
     storage: ctx.storage,
     diskBudget: ctx.impd.diskBudget,
-    log: () => {},
 
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
     random: () => draws.shift() ?? Number.NaN,
@@ -811,7 +808,6 @@ test('it gives up after three drawn ids that each name a snapshot in the pool', 
     imps: ctx.impd.imps,
     storage: ctx.storage,
     diskBudget: ctx.impd.diskBudget,
-    log: () => {},
 
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
     random: () => draws.shift() ?? Number.NaN,

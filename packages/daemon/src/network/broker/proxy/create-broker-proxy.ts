@@ -12,6 +12,7 @@ import { readBrokerPeer } from '../../../platform/db/read-broker-peer';
 import { listGrantedRules } from '../../../platform/db/secrets';
 import type { GrantedRule } from '../../../platform/db/secrets';
 import { getErrorMessage } from '../../../platform/process/get-error-message';
+import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import type { NetworkConfig } from '../../network-config';
 import { renderCredential } from '../secrets/connector-kinds';
 import { parseOAuthState } from '../secrets/oauth-state';
@@ -47,7 +48,6 @@ interface BrokerProxyDeps {
   readonly config: NetworkConfig;
   readonly db: ImpDatabase;
   readonly files: Pick<SecretFiles, 'read'>;
-  readonly log: (message: string) => void;
   readonly now: () => number;
   readonly ca: BrokerCa;
   readonly resolveUpstream: ResolveUpstream;
@@ -65,7 +65,6 @@ export function createBrokerProxy(deps: BrokerProxyDeps): BrokerProxy {
   const config = deps.config;
   const db = deps.db;
   const files = deps.files;
-  const log = deps.log;
   const now = deps.now;
   const ca = deps.ca;
   const reach = deps.reach;
@@ -118,7 +117,9 @@ export function createBrokerProxy(deps: BrokerProxyDeps): BrokerProxy {
     try {
       await writeAuditEntry(db, entry);
     } catch (error) {
-      log(`impd: broker: audit write failed: ${getErrorMessage(error)}`);
+      getImpdLogger('broker').warning('audit write failed: {error}', {
+        error: getErrorMessage(error),
+      });
     }
   };
 
@@ -175,7 +176,6 @@ export function createBrokerProxy(deps: BrokerProxyDeps): BrokerProxy {
         resolveTunnelTarget: deps.resolveTunnelTarget ?? resolveTarget,
         ...(deps.dialTunnel !== undefined && { dialTunnel: deps.dialTunnel }),
         recordAudit: writeBudgetedAudit,
-        log,
       });
 
       const address = front.server.address();

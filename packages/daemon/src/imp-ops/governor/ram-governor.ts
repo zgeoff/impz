@@ -1,6 +1,7 @@
 import { EVENT_VERSION } from '@impz/api';
 import type { LockFreeSleep } from '../../imps/imps/lock-free-sleep';
 import type { EventBus } from '../../platform/events/event-bus';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { createSemaphore } from '../../platform/process/semaphore';
 import type { GrowRequest } from '../../vm/imps-contract/grow-request';
 import type { AdmissionRequest, RamAdmission } from '../../vm/imps-contract/ram-admission';
@@ -89,7 +90,6 @@ export interface RamGovernorDeps {
   readonly isBusy: (id: string) => boolean;
   readonly trySleepImp: LockFreeSleep;
   readonly readDiskFullError?: () => Error | null;
-  readonly log: (message: string) => void;
   readonly now?: () => number;
   readonly events?: EventBus;
   readonly reclaim?: (excludeId: string | null) => Promise<number>;
@@ -257,7 +257,10 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
         const freedMib = await deps.reclaim(excludeId ?? protectedId);
 
         if (freedMib > 0) {
-          deps.log(`impd: governor: unplugged ${String(freedMib)} MiB from idle imps (${reason})`);
+          getImpdLogger('governor').info('unplugged {freedMib} MiB from idle imps ({reason})', {
+            freedMib: String(freedMib),
+            reason,
+          });
         }
 
         continue;
@@ -466,11 +469,14 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
         if (room.fits) {
           stuckOver = false;
         } else if (room.slept > 0) {
-          deps.log(`impd: governor: slept ${String(room.slept)}, RAM still ${over}`);
+          getImpdLogger('governor').info('slept {slept}, RAM still {over}', {
+            slept: String(room.slept),
+            over,
+          });
 
           stuckOver = true;
         } else if (!stuckOver) {
-          deps.log(`impd: governor: RAM ${over} and no idle imp left to sleep`);
+          getImpdLogger('governor').info('RAM {over} and no idle imp left to sleep', { over });
 
           stuckOver = true;
         }

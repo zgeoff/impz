@@ -1,9 +1,10 @@
-import { expect, mock, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import { ApprovalCodeSchema } from '@impz/api';
 import invariant from 'tiny-invariant';
 import { createPendingSignIn } from '../../../testing/identity/create-pending-sign-in';
 import { runOAuthConsent } from '../../../testing/identity/run-oauth-consent';
 import { runOAuthSignIn } from '../../../testing/identity/run-oauth-sign-in';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { createTestDatabase } from '../../../testing/platform/create-test-database';
 import { makeOAuthResponder } from '../../../testing/surface/make-oauth-responder';
 import { createRevocations } from '../auth/revocations';
@@ -23,15 +24,12 @@ async function setupTest() {
     isFileKey: () => false,
   });
 
-  const log = mock<(message: string) => void>();
-
   const auth = createMcpAuth({
     db: database.db,
     tokens,
     revocations,
     config: { origin: 'http://127.0.0.1:7171', host: '127.0.0.1:7171', port: 7171 },
     now: Date.now,
-    log,
   });
 
   return {
@@ -39,7 +37,6 @@ async function setupTest() {
     revocations,
     tokens,
     auth,
-    log,
 
     respond: makeOAuthResponder(auth),
   };
@@ -257,7 +254,6 @@ test('it ends a grant whose approving token no longer holds its scope', async ()
     revocations: ctx.revocations,
     config: { origin: 'http://127.0.0.1:7171', host: '127.0.0.1:7171', port: 7171 },
     now: Date.now,
-    log: () => {},
   });
 
   const access = await narrowed.resolveAccess(issued.access_token);
@@ -990,6 +986,30 @@ test('#removeExpired never removes a grant with a live refresh token', async () 
   expect(grants).toHaveLength(1);
 });
 
+test('it logs an approval under oauth with the client and the approving token', async () => {
+  const ctx = await setupTest();
+  const client = await ctx.auth.addClient('demo', ['https://client.example/callback']);
+  const made = await ctx.tokens.create({ name: 'operator', scope: 'manage', imps: ['dev-*'] });
+
+  const approver = ctx.tokens.authenticate(made.secret);
+
+  invariant(approver);
+
+  const pending = await createPendingSignIn({
+    respond: ctx.respond,
+    origin: 'http://127.0.0.1:7171',
+    clientID: client.clientId,
+    redirectURI: 'https://client.example/callback',
+    scope: 'read',
+  });
+
+  const lines = captureImpdLogs();
+
+  ctx.auth.approve(ApprovalCodeSchema.parse(pending.code), approver, 'read', undefined);
+
+  expect(lines).toStrictEqual(['INFO impd.oauth a sign-in for demo approved by token operator']);
+});
+
 test('it shows the login page again on Continue before the sign-in is approved', async () => {
   const ctx = await setupTest();
   const client = await ctx.auth.addClient('conn', ['https://client.example/callback']);
@@ -1227,7 +1247,6 @@ test('it signs a client in on a clock of impd’s own that is not the wall clock
     revocations: ctx.revocations,
     config: { origin: 'http://127.0.0.1:7171', host: '127.0.0.1:7171', port: 7171 },
     now: () => Date.UTC(2026, 0, 1),
-    log: () => {},
   });
 
   const client = await frozen.addClient('conn', ['https://client.example/callback']);
@@ -1262,7 +1281,6 @@ test('it gives no OAuth handlers while the route is off', async () => {
     revocations: ctx.revocations,
     config: null,
     now: Date.now,
-    log: () => {},
   });
 
   expect(off.handlers).toBeNull();

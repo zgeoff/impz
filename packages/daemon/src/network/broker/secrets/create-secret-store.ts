@@ -12,6 +12,7 @@ import type { NewSecret, SecretRecord } from '../../../platform/db/secrets';
 import { ImpdError } from '../../../platform/errors/impd-error';
 import { buildConflictError, buildNotFoundError } from '../../../platform/errors/impd-errors';
 import { getErrorMessage } from '../../../platform/process/get-error-message';
+import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import { SecretRulesError, resolveRules } from './connector-kinds';
 import type { OAuthRefresher } from './oauth-refresher';
 import { buildPendingState, findIdClaims, formatOAuthState, parseOAuthState } from './oauth-state';
@@ -40,7 +41,6 @@ interface SecretStore {
 interface SecretStoreDeps {
   readonly db: ImpDatabase;
   readonly files: SecretFiles;
-  readonly log: (message: string) => void;
   readonly refresher: OAuthRefresher;
 
   readonly applyGrants: () => Promise<void>;
@@ -49,7 +49,6 @@ interface SecretStoreDeps {
 export function createSecretStore(deps: SecretStoreDeps): SecretStore {
   const db = deps.db;
   const files = deps.files;
-  const log = deps.log;
   const refresher = deps.refresher;
 
   const readApiSecret = async (secret: SecretRecord): Promise<Secret> => {
@@ -127,7 +126,9 @@ export function createSecretStore(deps: SecretStoreDeps): SecretStore {
 
       await removeFileRemoval(db, file);
     } catch (error) {
-      log(`impd: broker: could not remove an old secret value file: ${getErrorMessage(error)}`);
+      getImpdLogger('broker').warning('could not remove an old secret value file: {error}', {
+        error: getErrorMessage(error),
+      });
     }
   };
 

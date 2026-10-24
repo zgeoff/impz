@@ -44,11 +44,11 @@ export function collectJailViolations(state: Readonly<JailState>): readonly stri
 
 export function hasTemplateBuildEnded(log: string, name: string, key: string): boolean {
   const ended = new RegExp(
-    `impd: boot template ${key.slice(0, 12)} (?:built in|build refused|build failed)`,
+    `impd\\.boot boot template ${key.slice(0, 12)} (?:built in|build refused|build failed)`,
     'v',
   );
 
-  return log.includes(`${name}: restored boot template`) || ended.test(log);
+  return log.includes(`imp=${name} restored boot template`) || ended.test(log);
 }
 
 async function readContainerText(path: string): Promise<string> {

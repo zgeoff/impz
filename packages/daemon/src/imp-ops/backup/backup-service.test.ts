@@ -20,6 +20,7 @@ import { buildMockBackupConfig } from '../../../testing/imp-ops/build-mock-backu
 import { buildMockNewCheckpoint } from '../../../testing/imp-ops/build-mock-new-checkpoint';
 import { buildStubRestic } from '../../../testing/imp-ops/build-stub-restic';
 import { buildQueryGate } from '../../../testing/platform/build-query-gate';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { buildStubPressureSwitch } from '../../../testing/vm/build-stub-pressure-switch';
 import { buildStubPublishHook } from '../../../testing/vm/build-stub-publish-hook';
@@ -64,7 +65,7 @@ async function setupTest() {
 
   const restic = buildStubRestic({ repoDir, now: () => new Date(host.now()) });
   const freezes: string[] = [];
-  const backupLogs: string[] = [];
+  const backupLogs = captureImpdLogs();
 
   const deps: Omit<BackupServiceDeps, 'backup'> = {
     dataDir: host.dataDir,
@@ -78,9 +79,6 @@ async function setupTest() {
     storageGate: host.storageGate,
     diskBudget: host.diskBudget,
     restic: restic.restic,
-    log: (message) => {
-      backupLogs.push(message);
-    },
     now: () => new Date(host.now()),
     freezer: {
       freeze: () => {
@@ -640,7 +638,6 @@ test('#restoreBackup restores every imp and its image on a fresh host, renaming 
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
     restic: buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date(ctx.now()) }).restic,
-    log: () => {},
     now: () => new Date(ctx.now()),
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
   });
@@ -688,7 +685,6 @@ test('#restoreBackup rejects a restored image as CONFLICT when its name and its 
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
     restic: buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date(ctx.now()) }).restic,
-    log: () => {},
     now: () => new Date(ctx.now()),
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
   });
@@ -723,7 +719,6 @@ test('#runBackup records templates with their source imp and an identity reset s
     storageGate: ctx.storageGate,
     diskBudget: ctx.diskBudget,
     runImageEviction: ctx.images.runImageEviction,
-    log: () => {},
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
   });
 
@@ -769,7 +764,6 @@ test('#restoreBackup restores unused templates with all imps, tagging one whose 
     storageGate: ctx.storageGate,
     diskBudget: ctx.diskBudget,
     runImageEviction: ctx.images.runImageEviction,
-    log: () => {},
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
   });
 
@@ -806,7 +800,6 @@ test('#restoreBackup restores unused templates with all imps, tagging one whose 
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
     restic: buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date(ctx.now()) }).restic,
-    log: () => {},
     now: () => new Date(ctx.now()),
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
   });
@@ -1006,7 +999,7 @@ test('#runScheduled logs a failed weekly check loudly and reports it in the stat
   ]);
 
   expect(ctx.backupLogs).toContain(
-    'impd: backup: CHECK FAILED, the repository may be damaged: Fatal: pack 9f2c: ciphertext verification failed',
+    'ERROR impd.backup CHECK FAILED, the repository may be damaged: Fatal: pack 9f2c: ciphertext verification failed',
   );
 
   expect(status.lastCheck?.error).toContain('ciphertext verification failed');
@@ -1049,7 +1042,7 @@ test('#runScheduled tries a prune that met a lock again on the next tick, not th
   const status = await backups.readStatus();
 
   expect(ctx.backupLogs).toContain(
-    'impd: backup: PRUNE FAILED: restic prune exited 11: unable to create lock in backend: repository is already locked exclusively by PID 7 on imp-host by root (UID 0, GID 0)',
+    'ERROR impd.backup PRUNE FAILED: restic prune exited 11: unable to create lock in backend: repository is already locked exclusively by PID 7 on imp-host by root (UID 0, GID 0)',
   );
 
   expect(ctx.restic.calls.slice(before)).toStrictEqual(['unlock', 'prune']);
@@ -1287,7 +1280,10 @@ test('#runBackup leaves out an imp replaced under its name since the database co
 
   expect(run.imps).toStrictEqual(['a']);
   expect(run.skipped).toStrictEqual([{ name: 'dev', reason: 'replaced since the database copy' }]);
-  expect(ctx.backupLogs).toContain('impd: backup: dev: left out: replaced since the database copy');
+
+  expect(ctx.backupLogs).toContain(
+    'WARNING impd.backup imp=dev left out: replaced since the database copy',
+  );
 });
 
 test('#runBackup puts no secret, key, password or token of the host in a backup', async () => {
@@ -1530,7 +1526,7 @@ test('#restoreBackup restores an egress policy this impd cannot read as none, ne
   expect(policy).toStrictEqual({ mode: 'none', allow: [] });
 
   expect(ctx.backupLogs).toContain(
-    'impd: backup: back: unknown egress policy "granted-only"; restored as none',
+    'WARNING impd.backup imp=back unknown egress policy "granted-only"; restored as none',
   );
 });
 
@@ -1736,7 +1732,6 @@ test('#restoreBackup holds the storage gate for a restored image and disk room f
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
     restic: freshRestic.restic,
-    log: () => {},
     now: () => new Date(ctx.now()),
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
   });
@@ -2215,7 +2210,6 @@ test('#restoreBackup brings back the named tokens, the secrets and the grants on
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
     restic: buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date(ctx.now()) }).restic,
-    log: () => {},
     now: () => new Date(ctx.now()),
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
   });
@@ -2267,7 +2261,6 @@ test('#restoreBackup holds the database copy’s size from the disk budget while
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
     restic: freshRestic.restic,
-    log: () => {},
     now: () => new Date(ctx.now()),
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
   });
@@ -2357,7 +2350,6 @@ test('#restoreBackup restores a token’s grantable list on a fresh host, so the
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
     restic: buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date(ctx.now()) }).restic,
-    log: () => {},
     now: () => new Date(ctx.now()),
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
   });
@@ -2414,7 +2406,6 @@ test('#restoreBackup brings back no token or secret in a restore of one imp from
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
     restic: buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date(ctx.now()) }).restic,
-    log: () => {},
     now: () => new Date(ctx.now()),
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
   });

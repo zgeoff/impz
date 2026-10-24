@@ -25,7 +25,6 @@ test('it holds the chosen making of a log until the test releases it', async () 
       maxBytes: 20,
       requireRoom: () => Promise.resolve(),
       now: () => 1000,
-      log: () => {},
     },
     { session: 'main', executionGeneration: 'a'.repeat(32), bootId: '' },
   );
@@ -58,7 +57,6 @@ test('it lets the calls before the held one through and holds the chosen append'
       maxBytes: 200,
       requireRoom: () => Promise.resolve(),
       now: () => 1000,
-      log: () => {},
     },
     { session: 'main', executionGeneration: 'a'.repeat(32), bootId: '' },
   );
@@ -97,7 +95,6 @@ test('it holds the chosen removal of a segment until the test releases it', asyn
       maxBytes: 100,
       requireRoom: () => Promise.resolve(),
       now: () => 1000,
-      log: () => {},
     },
     { session: 'main', executionGeneration: 'a'.repeat(32), bootId: '' },
   );

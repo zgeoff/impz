@@ -8,7 +8,6 @@ import { TEMPLATE_BUILD_UID } from '../../platform/db/imps';
 import type { ImpRecord } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import type { EventBus } from '../../platform/events/event-bus';
-import { printLog } from '../../platform/process/print-log';
 import type { openTapStream } from '../../vm/agent-client/exec-stream';
 import type { RamAdmission } from '../../vm/imps-contract/ram-admission';
 import { NO_MEMORY_LIMIT } from '../../vm/memory/memory-limit';
@@ -72,7 +71,6 @@ export interface ImpServiceDeps {
   readonly taps: TapDevices;
   readonly vms: VmRunner;
   readonly storage: StorageBackend;
-  readonly log?: (message: string) => void;
 
   readonly admission?: RamAdmission;
 
@@ -137,7 +135,6 @@ export interface ImpServiceDeps {
 export interface ImpHost {
   readonly config: ImpsConfig;
   readonly db: ImpDatabase;
-  readonly log: (message: string) => void;
   readonly identity: HostIdentity;
 }
 
@@ -210,7 +207,6 @@ export function createImpContext(deps: ImpServiceDeps): ImpContext {
     prefix6: deps.ipv6?.prefix ?? null,
   };
 
-  const log = deps.log ?? printLog;
   const now = deps.now ?? Date.now;
   const cgroups = deps.cgroups;
 
@@ -219,13 +215,11 @@ export function createImpContext(deps: ImpServiceDeps): ImpContext {
     createDiskBudget({
       storage: deps.storage,
       reserveBytes: deps.config.diskReserveBytes,
-      log,
     });
 
   const records: ImpHost = {
     config: deps.config,
     db: deps.db,
-    log,
     identity: deps.identity,
   };
 
@@ -243,7 +237,7 @@ export function createImpContext(deps: ImpServiceDeps): ImpContext {
     cgroups,
     hostCpus: deps.hostCpus,
     templates:
-      deps.templates === undefined ? createDefaultTemplates(deps, cgroups, log) : deps.templates,
+      deps.templates === undefined ? createDefaultTemplates(deps, cgroups) : deps.templates,
     findPaths: (impId) => deps.storage.resolveImpPaths(impId),
     findAddress: (slot) => deriveSlotAddress(slot, slotPlan),
     findJailUser: (imp) =>
@@ -282,7 +276,6 @@ export function createImpContext(deps: ImpServiceDeps): ImpContext {
       limits: deps.config.sessionLog,
       requireRoom: diskBudget.requireRoom,
       now,
-      log,
       ...(deps.openTap !== undefined && { openTap: deps.openTap }),
     }),
   };
@@ -305,7 +298,6 @@ export function createImpContext(deps: ImpServiceDeps): ImpContext {
 function createDefaultTemplates(
   deps: Readonly<ImpServiceDeps>,
   cgroups: CpuCgroups,
-  log: (message: string) => void,
 ): BootTemplates | null {
   if (!deps.config.bootTemplates) {
     return null;
@@ -325,6 +317,5 @@ function createDefaultTemplates(
     cgroups,
     admission: deps.admission,
     diskBudget: deps.diskBudget,
-    log,
   });
 }

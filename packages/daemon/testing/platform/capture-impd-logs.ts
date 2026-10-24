@@ -1,17 +1,14 @@
 import { onTestFinished } from 'bun:test';
-import { resetSync } from '@logtape/logtape';
-import { setupLogging } from '../../src/platform/process/setup-logging';
+import { startImpdLogCapture } from './start-impd-log-capture';
 
 export function captureImpdLogs(): string[] {
   const lines: string[] = [];
 
-  setupLogging((line) => {
-    lines.push(line.replace(/\n$/v, ''));
-  });
-
-  onTestFinished(() => {
-    resetSync();
-  });
+  onTestFinished(
+    startImpdLogCapture((line) => {
+      lines.push(line);
+    }),
+  );
 
   return lines;
 }

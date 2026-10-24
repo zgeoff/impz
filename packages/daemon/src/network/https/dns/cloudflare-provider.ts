@@ -1,4 +1,5 @@
 import * as z from 'zod';
+import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import type { DnsProvider } from './dns-provider';
 import { waitForTxt } from './wait-for-txt';
 import type { WaitForTxtOptions } from './wait-for-txt';
@@ -57,7 +58,6 @@ interface CloudflareOptions {
   readonly readToken: () => Promise<string>;
   readonly apiUrl?: string;
   readonly propagation?: WaitForTxtOptions;
-  readonly log?: (message: string) => void;
   readonly fetch?: CloudflareFetch;
 }
 
@@ -189,8 +189,9 @@ export function createCloudflareProvider(options: CloudflareOptions): DnsProvide
       }
 
       if (existing.length > 1) {
-        options.log?.(
-          `impd: https: warning: ${fqdn} has ${String(existing.length)} A records impd made; it updates only the first`,
+        getImpdLogger('https').warning(
+          '{fqdn} has {length} A records impd made; it updates only the first',
+          { fqdn, length: String(existing.length) },
         );
       }
 

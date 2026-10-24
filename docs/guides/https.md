@@ -26,12 +26,12 @@ You need a domain in a Cloudflare zone and an API token for it.
    IMP_ACME_EMAIL=you@example.com
    ```
 
-3. Restart the host container. impd logs its progress with an `impd: https:` prefix:
+3. Restart the host container. impd logs its progress under the `impd.https` category:
 
    ```text
-   impd: https: imp.example.com and *.imp.example.com point at 100.101.102.103
-   impd: https: asking for a certificate for imp.example.com and *.imp.example.com: there is no certificate
-   impd: https: got a certificate for imp.example.com, expiring 2027-01-01T00:00:00.000Z, in 21345ms
+   INFO impd.https imp.example.com and *.imp.example.com point at 100.101.102.103
+   INFO impd.https asking for a certificate for imp.example.com and *.imp.example.com: there is no certificate
+   INFO impd.https got a certificate for imp.example.com, expiring 2027-01-01T00:00:00.000Z, in 21345ms
    ```
 
 4. From a tailnet member, `impz url <name>` prints the https URL. With HTTPS on, it comes first,
@@ -280,7 +280,7 @@ member.
 holds 443 or 80, impd logs a warning at start:
 
 ```text
-impd: https: warning: tailscale serve holds tailnet port 443, so impd never sees that traffic; ...
+WARNING impd.https tailscale serve holds tailnet port 443, so impd never sees that traffic; ...
 ```
 
 Remove it with `tailscale serve --https=443 off` or `tailscale serve reset`, in the host container.

@@ -77,9 +77,8 @@ test('it builds the template on the second boot of a shape, and the next restore
 
   expect(second?.state).toBe('running');
 
-  expect(ctx.logs).toSatisfyAny(
-    (line: string) =>
-      line.includes('second: restored boot template') && line.includes(key.slice(0, 12)),
+  expect(ctx.logs).toSatisfyAny((line: string) =>
+    line.startsWith(`INFO impd.imps imp=second restored boot template ${key.slice(0, 12)} as pid `),
   );
 });
 
@@ -97,7 +96,7 @@ test('it logs the guest steps after the host steps of a restore', async () => {
 
   expect(ctx.logs).toSatisfyAny(
     (line: string) =>
-      line.includes('second: restored boot template') &&
+      line.startsWith('INFO impd.imps imp=second restored boot template ') &&
       line.endsWith('; guest claim=3ms mount=40ms grow=0ms ready=2ms'),
   );
 });
@@ -113,7 +112,8 @@ test('it logs the guest steps after the host steps of a kernel boot', async () =
 
   expect(ctx.logs).toSatisfyAny(
     (line: string) =>
-      line.includes('once: booted pid') && line.endsWith('; guest world=9ms mount=35ms ready=1ms'),
+      line.startsWith('INFO impd.imps imp=once booted pid ') &&
+      line.endsWith('; guest world=9ms mount=35ms ready=1ms'),
   );
 });
 

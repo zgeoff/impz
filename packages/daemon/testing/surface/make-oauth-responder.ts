@@ -9,7 +9,6 @@ export function makeOAuthResponder(
     oauth: auth.handlers,
     mcp: buildStubMcpTransport(),
     holdOpen: () => {},
-    log: () => {},
   });
 
   return (request) => app.handle(request);

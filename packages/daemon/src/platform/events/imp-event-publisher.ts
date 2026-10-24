@@ -7,6 +7,7 @@ import { readImpById } from '../db/imps';
 import type { ImpRecord } from '../db/imps';
 import type { ImpDatabase } from '../db/open-database';
 import { getErrorMessage } from '../process/get-error-message';
+import { getImpdLogger } from '../process/get-impd-logger';
 import type { EventBus } from './event-bus';
 
 interface PublisherDeps {
@@ -14,7 +15,6 @@ interface PublisherDeps {
   readonly bus: EventBus;
   readonly toApi: (imp: ImpRecord) => Promise<Imp>;
   readonly now: () => number;
-  readonly log: (message: string) => void;
 }
 
 export function startImpEventPublisher(deps: PublisherDeps): () => void {
@@ -32,7 +32,7 @@ export function startImpEventPublisher(deps: PublisherDeps): () => void {
           deps.bus.publish(event);
         }
       } catch (error) {
-        deps.log(`impd: events: ${getErrorMessage(error)}`);
+        getImpdLogger('events').warning('{error}', { error: getErrorMessage(error) });
       }
     }
 

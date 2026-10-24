@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync, statSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { utils } from 'ssh2';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 
 export interface AuthorizedKey {
   readonly type: string;
@@ -86,7 +87,7 @@ interface FileState {
   readonly isSafe: boolean;
 }
 
-export function createAuthorizedKeys(path: string, log: (message: string) => void): AuthorizedKeys {
+export function createAuthorizedKeys(path: string): AuthorizedKeys {
   const state: { current: FileState | null } = { current: null };
 
   const load = (): FileState => {
@@ -96,7 +97,7 @@ export function createAuthorizedKeys(path: string, log: (message: string) => voi
       return state.current;
     }
 
-    state.current = readFileState(path, stamp, log);
+    state.current = readFileState(path, stamp);
 
     return state.current;
   };
@@ -121,9 +122,9 @@ function readStamp(path: string): string {
   }
 }
 
-function readFileState(path: string, stamp: string, log: (message: string) => void): FileState {
+function readFileState(path: string, stamp: string): FileState {
   if (stamp === 'missing') {
-    log(`impd: ssh: no ${path}; no key can log in`);
+    getImpdLogger('ssh').info('no {path}; no key can log in', { path });
 
     return { stamp, keys: [], isSafe: true };
   }
@@ -131,13 +132,16 @@ function readFileState(path: string, stamp: string, log: (message: string) => vo
   const unsafe = [path, dirname(path)].find((each) => (statSync(each).mode & 0o022) !== 0);
 
   if (unsafe !== undefined) {
-    log(`impd: ssh: ${unsafe} is writable by group or others; no key can log in until it is not`);
+    getImpdLogger('ssh').warning(
+      '{unsafe} is writable by group or others; no key can log in until it is not',
+      { unsafe },
+    );
   }
 
   const parsed = parseAuthorizedKeys(readFileSync(path, 'utf8'));
 
   for (const problem of parsed.problems) {
-    log(`impd: ssh: ${path} ${problem}; skipped`);
+    getImpdLogger('ssh').info('{path} {problem}; skipped', { path, problem });
   }
 
   return { stamp, keys: parsed.keys, isSafe: unsafe === undefined };

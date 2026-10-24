@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createMockCertificate } from '../../../../testing/network/create-mock-certificate';
+import { captureImpdLogs } from '../../../../testing/platform/capture-impd-logs';
 import { createDnsToken } from '../dns/dns-token';
 import { createCertManager } from './cert-manager';
 import type { Certificate } from './cert-store';
@@ -24,7 +25,6 @@ test('it loads no certificate before one is issued', async () => {
     store: ctx.store,
     issue: mock(),
     now: () => Date.parse('2030-01-10T00:00:00Z'),
-    log: () => {},
   });
 
   expect(manager.load()).toBeNull();
@@ -39,7 +39,6 @@ test('it issues and stores a certificate when there is none', async () => {
     store: ctx.store,
     issue: () => Promise.resolve(fresh),
     now: () => Date.parse('2030-01-10T00:00:00Z'),
-    log: () => {},
   });
 
   const renewed = await manager.renew();
@@ -62,20 +61,19 @@ test('it logs what it asks the CA for and why', async () => {
   const ctx = await setupTest();
   const fresh = await createMockCertificate({ names: ['imp.test', '*.imp.test'] });
 
-  const log = mock<(message: string) => void>();
+  const logs = captureImpdLogs();
 
   const manager = createCertManager({
     domain: 'imp.test',
     store: ctx.store,
     issue: () => Promise.resolve(fresh),
     now: () => Date.parse('2030-01-10T00:00:00Z'),
-    log,
   });
 
   await manager.renew();
 
-  expect(log).toHaveBeenCalledWith(
-    'impd: https: asking for a certificate for imp.test and *.imp.test: there is no certificate',
+  expect(logs).toContain(
+    'INFO impd.https asking for a certificate for imp.test and *.imp.test: there is no certificate',
   );
 });
 
@@ -83,7 +81,7 @@ test('it logs the new certificate’s expiry and how long the CA took', async ()
   const ctx = await setupTest();
 
   const clock = { now: Date.parse('2030-01-10T00:00:00Z') };
-  const log = mock<(message: string) => void>();
+  const logs = captureImpdLogs();
 
   const fresh = await createMockCertificate({
     names: ['imp.test', '*.imp.test'],
@@ -100,13 +98,12 @@ test('it logs the new certificate’s expiry and how long the CA took', async ()
       return Promise.resolve(fresh);
     },
     now: () => clock.now,
-    log,
   });
 
   await manager.renew();
 
-  expect(log).toHaveBeenLastCalledWith(
-    'impd: https: got a certificate for imp.test, expiring 2030-04-10T00:00:00.000Z, in 1234ms',
+  expect(logs.at(-1)).toBe(
+    'INFO impd.https got a certificate for imp.test, expiring 2030-04-10T00:00:00.000Z, in 1234ms',
   );
 });
 
@@ -128,7 +125,6 @@ test('it asks the CA nothing while the stored certificate is fresh', async () =>
     store: ctx.store,
     issue,
     now: () => Date.parse('2030-01-10T00:00:00Z'),
-    log: () => {},
   });
 
   const renewed = await manager.renew();
@@ -140,14 +136,13 @@ test('it asks the CA nothing while the stored certificate is fresh', async () =>
 test('it records a failed attempt and logs when it tries next', async () => {
   const ctx = await setupTest();
 
-  const log = mock<(message: string) => void>();
+  const logs = captureImpdLogs();
 
   const manager = createCertManager({
     domain: 'imp.test',
     store: ctx.store,
     issue: () => Promise.reject(new Error('Cloudflare POST /zones/z1/dns_records: 403 bad token')),
     now: () => Date.parse('2030-01-10T00:00:00Z'),
-    log,
   });
 
   const renewed = await manager.renew();
@@ -160,8 +155,8 @@ test('it records a failed attempt and logs when it tries next', async () => {
     lastError: 'Cloudflare POST /zones/z1/dns_records: 403 bad token',
   });
 
-  expect(log).toHaveBeenLastCalledWith(
-    'impd: https: no certificate for imp.test: Cloudflare POST /zones/z1/dns_records: 403 bad token; the next try is after 2030-01-10T00:15:00.000Z',
+  expect(logs.at(-1)).toBe(
+    'WARNING impd.https no certificate for imp.test: Cloudflare POST /zones/z1/dns_records: 403 bad token; the next try is after 2030-01-10T00:15:00.000Z',
   );
 });
 
@@ -181,7 +176,6 @@ test('it counts an attempt as failed while it runs, so a crash still backs off',
       return Promise.resolve(fresh);
     },
     now: () => Date.parse('2030-01-10T00:00:00Z'),
-    log: () => {},
   });
 
   await manager.renew();
@@ -200,7 +194,6 @@ test('it keeps a restarted manager to the backoff a failure stored', async () =>
     store: ctx.store,
     issue: () => Promise.reject(new Error('the CA is down')),
     now: () => clock.now,
-    log: () => {},
   }).renew();
 
   const restarted = createCertManager({
@@ -208,7 +201,6 @@ test('it keeps a restarted manager to the backoff a failure stored', async () =>
     store: ctx.store,
     issue,
     now: () => clock.now,
-    log: () => {},
   });
 
   clock.now += 14 * 60_000;
@@ -230,7 +222,6 @@ test('it asks again once the stored backoff has passed', async () => {
     store: ctx.store,
     issue: () => Promise.reject(new Error('the CA is down')),
     now: () => clock.now,
-    log: () => {},
   }).renew();
 
   const restarted = createCertManager({
@@ -238,7 +229,6 @@ test('it asks again once the stored backoff has passed', async () => {
     store: ctx.store,
     issue,
     now: () => clock.now,
-    log: () => {},
   });
 
   clock.now += 15 * 60_000;
@@ -257,7 +247,7 @@ test('it asks again once the stored backoff has passed', async () => {
 test('it logs a wait for the backoff once, not at every try', async () => {
   const ctx = await setupTest();
 
-  const log = mock<(message: string) => void>();
+  const logs = captureImpdLogs();
 
   ctx.store.writeAttempts({
     failures: 1,
@@ -270,15 +260,14 @@ test('it logs a wait for the backoff once, not at every try', async () => {
     store: ctx.store,
     issue: mock(),
     now: () => Date.parse('2030-01-10T00:05:00Z'),
-    log,
   });
 
   await manager.renew();
   await manager.renew();
 
-  expect(log).toHaveBeenCalledExactlyOnceWith(
-    'impd: https: there is no certificate; the next try is after 2030-01-10T00:15:00.000Z',
-  );
+  expect(logs).toStrictEqual([
+    'INFO impd.https there is no certificate; the next try is after 2030-01-10T00:15:00.000Z',
+  ]);
 });
 
 test('it asks the CA once for two renewals at once', async () => {
@@ -293,7 +282,6 @@ test('it asks the CA once for two renewals at once', async () => {
     store: ctx.store,
     issue,
     now: () => Date.parse('2030-01-10T00:00:00Z'),
-    log: () => {},
   });
 
   const first = manager.renew();
@@ -310,7 +298,7 @@ test('it asks the CA once for two renewals at once', async () => {
 test('it loads an expired certificate on disk, with a warning', async () => {
   const ctx = await setupTest();
 
-  const log = mock<(message: string) => void>();
+  const logs = captureImpdLogs();
 
   const expired = await createMockCertificate({
     names: ['imp.test', '*.imp.test'],
@@ -325,16 +313,15 @@ test('it loads an expired certificate on disk, with a warning', async () => {
     store: ctx.store,
     issue: mock(),
     now: () => Date.parse('2030-01-10T00:00:00Z'),
-    log,
   });
 
   const loaded = manager.load();
 
   expect(loaded?.chainPem).toBe(expired.chainPem.trimEnd());
 
-  expect(log).toHaveBeenCalledExactlyOnceWith(
-    'impd: https: the stored certificate expired 2030-01-01T00:00:00.000Z; serving it until a renewal succeeds',
-  );
+  expect(logs).toStrictEqual([
+    'INFO impd.https the stored certificate expired 2030-01-01T00:00:00.000Z; serving it until a renewal succeeds',
+  ]);
 });
 
 test('it keeps serving an expired certificate after a renewal fails', async () => {
@@ -353,7 +340,6 @@ test('it keeps serving an expired certificate after a renewal fails', async () =
     store: ctx.store,
     issue: () => Promise.reject(new Error('the CA is down')),
     now: () => Date.parse('2030-01-10T00:00:00Z'),
-    log: () => {},
   });
 
   await manager.renew();
@@ -364,7 +350,7 @@ test('it keeps serving an expired certificate after a renewal fails', async () =
 test('it replaces a certificate for another domain', async () => {
   const ctx = await setupTest();
 
-  const log = mock<(message: string) => void>();
+  const logs = captureImpdLogs();
 
   const fresh = await createMockCertificate({
     names: ['imp.test', '*.imp.test'],
@@ -385,22 +371,21 @@ test('it replaces a certificate for another domain', async () => {
     store: ctx.store,
     issue: () => Promise.resolve(fresh),
     now: () => Date.parse('2030-01-10T00:00:00Z'),
-    log,
   });
 
   const renewed = await manager.renew();
 
   expect(renewed).toStrictEqual(fresh);
 
-  expect(log).toHaveBeenCalledWith(
-    'impd: https: asking for a certificate for imp.test and *.imp.test: the certificate does not cover imp.test, *.imp.test',
+  expect(logs).toContain(
+    'INFO impd.https asking for a certificate for imp.test and *.imp.test: the certificate does not cover imp.test, *.imp.test',
   );
 });
 
 test('it loads no certificate it cannot read, and logs why', async () => {
   const ctx = await setupTest();
 
-  const log = mock<(message: string) => void>();
+  const logs = captureImpdLogs();
 
   const certificate = await createMockCertificate();
 
@@ -416,16 +401,15 @@ test('it loads no certificate it cannot read, and logs why', async () => {
     store: ctx.store,
     issue: mock(),
     now: () => Date.parse('2030-01-10T00:00:00Z'),
-    log,
   });
 
   const loaded = manager.load();
 
   expect(loaded).toBeNull();
 
-  expect(log).toHaveBeenCalledExactlyOnceWith(
-    expect.toStartWith('impd: https: cannot read the stored certificate: '),
-  );
+  expect(logs).toStrictEqual([
+    expect.toStartWith('WARNING impd.https cannot read the stored certificate: '),
+  ]);
 });
 
 test('it asks for a new certificate when the stored one cannot be read', async () => {
@@ -445,7 +429,6 @@ test('it asks for a new certificate when the stored one cannot be read', async (
     store: ctx.store,
     issue: () => Promise.resolve(fresh),
     now: () => Date.parse('2030-01-10T00:00:00Z'),
-    log: () => {},
   });
 
   const renewed = await manager.renew();
@@ -456,7 +439,7 @@ test('it asks for a new certificate when the stored one cannot be read', async (
 test('it logs a renewal that fails outside the CA call, and answers no certificate', async () => {
   const ctx = await setupTest();
 
-  const log = mock<(message: string) => void>();
+  const logs = captureImpdLogs();
   const issue = mock();
 
   // a directory where the attempts file's temporary copy goes: the first
@@ -468,17 +451,13 @@ test('it logs a renewal that fails outside the CA call, and answers no certifica
     store: ctx.store,
     issue,
     now: () => Date.parse('2030-01-10T00:00:00Z'),
-    log,
   });
 
   const renewed = await manager.renew();
 
   expect(renewed).toBeNull();
   expect(issue).not.toHaveBeenCalled();
-
-  expect(log).toHaveBeenLastCalledWith(
-    expect.stringMatching(/^impd: https: renewal failed: .*EISDIR/v),
-  );
+  expect(logs.at(-1)).toMatch(/^WARNING impd\.https renewal failed: .*EISDIR/v);
 });
 
 test('it runs a new renewal after one that failed outside the CA call', async () => {
@@ -494,7 +473,6 @@ test('it runs a new renewal after one that failed outside the CA call', async ()
     store: ctx.store,
     issue: () => Promise.resolve(fresh),
     now: () => Date.parse('2030-01-10T00:00:00Z'),
-    log: () => {},
   });
 
   await manager.renew();
@@ -510,7 +488,7 @@ test('it backs off when the DNS token file holds no token', async () => {
   const ctx = await setupTest();
 
   const tokenPath = join(ctx.directoryPath, 'token');
-  const log = mock<(message: string) => void>();
+  const logs = captureImpdLogs();
   const dnsToken = createDnsToken({ kind: 'file', path: tokenPath }, () => 0);
 
   await writeFile(tokenPath, '');
@@ -524,7 +502,6 @@ test('it backs off when the DNS token file holds no token', async () => {
       return createMockCertificate();
     },
     now: () => Date.parse('2030-01-10T00:00:00Z'),
-    log,
   });
 
   const renewed = await manager.renew();
@@ -532,8 +509,8 @@ test('it backs off when the DNS token file holds no token', async () => {
   expect(renewed).toBeNull();
   expect(ctx.store.readAttempts().failures).toBe(1);
 
-  expect(log).toHaveBeenLastCalledWith(
-    `impd: https: no certificate for imp.test: the DNS API token file ${tokenPath} is empty; the next try is after 2030-01-10T00:15:00.000Z`,
+  expect(logs.at(-1)).toBe(
+    `WARNING impd.https no certificate for imp.test: the DNS API token file ${tokenPath} is empty; the next try is after 2030-01-10T00:15:00.000Z`,
   );
 });
 
@@ -542,7 +519,7 @@ test('it uses a token put in place once the backoff has passed, and never logs i
 
   const tokenPath = join(ctx.directoryPath, 'token');
   const clock = { now: Date.parse('2030-01-10T00:00:00Z') };
-  const log = mock<(message: string) => void>();
+  const logs = captureImpdLogs();
   const tokens: string[] = [];
   const dnsToken = createDnsToken({ kind: 'file', path: tokenPath }, () => clock.now);
 
@@ -559,7 +536,6 @@ test('it uses a token put in place once the backoff has passed, and never logs i
       return fresh;
     },
     now: () => clock.now,
-    log,
   });
 
   await writeFile(tokenPath, '');
@@ -576,8 +552,5 @@ test('it uses a token put in place once the backoff has passed, and never logs i
 
   expect(renewed).toStrictEqual(fresh);
   expect(tokens).toStrictEqual(['cf-new-token']);
-
-  expect(log.mock.calls.flat()).toSatisfyAll(
-    (message: string) => !message.includes('cf-new-token'),
-  );
+  expect(logs).toSatisfyAll((message: string) => !message.includes('cf-new-token'));
 });

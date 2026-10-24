@@ -507,7 +507,7 @@ test('it drops an event that fails the schema and goes on', async () => {
   expect(stream.items).toStrictEqual([good, after]);
 
   expect(ctx.logs.filter((line) => line.includes('fail the event schema'))).toStrictEqual([
-    'impd: dropped 1 GovernorDecision event(s) that fail the event schema; the latest at name: must be a lowercase letter followed by up to 30 lowercase letters, digits or hyphens',
+    'INFO impd.events dropped 1 GovernorDecision event(s) that fail the event schema; the latest at name: must be a lowercase letter followed by up to 30 lowercase letters, digits or hyphens',
   ]);
 });
 

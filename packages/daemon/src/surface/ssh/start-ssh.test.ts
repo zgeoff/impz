@@ -10,6 +10,7 @@ import { buildMockImpRecord } from '../../../testing/imps/build-mock-imp-record'
 import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
 import { buildMockNewImp } from '../../../testing/imps/build-mock-new-imp';
 import { buildStubSshBackend } from '../../../testing/imps/build-stub-ssh-backend';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { createTestDatabase } from '../../../testing/platform/create-test-database';
 import { openSshChannel } from '../../../testing/surface/open-ssh-channel';
 import { openSshClient } from '../../../testing/surface/open-ssh-client';
@@ -32,7 +33,7 @@ async function setupTest() {
 
   const database = await createTestDatabase();
 
-  const logs: string[] = [];
+  const logs = captureImpdLogs();
   const ssh = buildStubSshBackend();
 
   mkdirSync(sshDir, { mode: 0o700 });
@@ -44,14 +45,11 @@ async function setupTest() {
     logs,
     ssh,
     deps: {
-      audit: createApiAudit({ db: database.db, now: Date.now, log: () => {}, readErrorCode }),
-      authorizedKeys: createAuthorizedKeys(join(sshDir, 'authorized_keys'), () => {}),
+      audit: createApiAudit({ db: database.db, now: Date.now, readErrorCode }),
+      authorizedKeys: createAuthorizedKeys(join(sshDir, 'authorized_keys')),
       tokens: { findSshKey: () => null },
       revocations: createRevocations(),
       imps: { ...ssh.backend, readImpRecord: (name: string) => readImpByName(database.db, name) },
-      log: (message: string) => {
-        logs.push(message);
-      },
       now: Date.now,
     },
   };
@@ -71,7 +69,7 @@ test('it makes a host key and logs the port and the key’s fingerprint', async 
   const fingerprint = readFingerprint(readFileSync(join(ctx.sshDir, 'host_key'), 'utf8'));
 
   expect(ctx.logs).toStrictEqual([
-    `impd: ssh on :${String(gateway.port)}, host key ${fingerprint}`,
+    `INFO impd.ssh ssh on :${String(gateway.port)}, host key ${fingerprint}`,
   ]);
 });
 
@@ -100,7 +98,7 @@ test('it logs a corrupt host key and leaves the gateway off', async () => {
   expect(gateway).toBeNull();
 
   expect(ctx.logs).toStrictEqual([
-    expect.toSatisfy((line: string) => /^impd: ssh: not started on :0: \S/v.test(line)),
+    expect.toSatisfy((line: string) => /^WARNING impd\.ssh not started on :0: \S/v.test(line)),
   ]);
 });
 
@@ -117,7 +115,7 @@ test('it logs an unreadable host key and leaves the gateway off', async () => {
   expect(gateway).toBeNull();
 
   expect(ctx.logs).toStrictEqual([
-    expect.toSatisfy((line: string) => /^impd: ssh: not started on :0: \S/v.test(line)),
+    expect.toSatisfy((line: string) => /^WARNING impd\.ssh not started on :0: \S/v.test(line)),
   ]);
 });
 

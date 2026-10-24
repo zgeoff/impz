@@ -1,5 +1,6 @@
 import { CONSOLE_SHELL } from '@impz/api';
 import type { AcceptConnection, PseudoTtyInfo, ServerChannel, Session } from 'ssh2';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import type { AgentFeature } from '../../vm/agent-client/agent-outdated';
 import type { AgentExecRequest, ExecStream } from '../../vm/agent-client/exec-stream';
 import { SYSTEM_AGENT_PATH } from '../exec/exec-tools';
@@ -109,7 +110,10 @@ export function handleSession(session: Session, context: SshConnectionContext): 
     try {
       await runProgram(channel, program);
     } catch (error) {
-      context.log(`impd: ssh: ${context.impName}: ${formatFailure(error)}`);
+      getImpdLogger('ssh')
+        .with({ imp: context.impName })
+        .warning('{error}', { error: formatFailure(error) });
+
       channel.destroy();
     }
   };

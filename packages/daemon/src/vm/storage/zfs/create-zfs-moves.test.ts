@@ -42,7 +42,6 @@ async function setupTest(options: Readonly<{ isShared?: boolean }> = {}) {
         const backend = createZfsBackend({
           dataDir: directory,
           root: sourceSet.root,
-          log: () => {},
           isUiomoveBugAllowed: true,
         });
 
@@ -57,7 +56,6 @@ async function setupTest(options: Readonly<{ isShared?: boolean }> = {}) {
         const backend = createZfsBackend({
           dataDir: directory,
           root: targetSet.root,
-          log: () => {},
           isUiomoveBugAllowed: true,
         });
 

@@ -1,4 +1,5 @@
 import { getErrorMessage } from '../../../platform/process/get-error-message';
+import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import type { ZfsCommands, ZfsEntry } from './zfs-commands';
 import { planReclaimStep } from './zfs-reclaim';
 
@@ -7,7 +8,6 @@ interface ZfsReclaimContext {
   readonly datasets: { readonly staging: string; readonly retired: string };
   readonly runSerial: <T>(task: () => Promise<T>) => Promise<T>;
   readonly listAll: () => Promise<ZfsEntry[]>;
-  readonly log: (message: string) => void;
   readonly isKernelOopsed: () => boolean;
 }
 
@@ -32,9 +32,10 @@ export function createZfsReclaim(ctx: ZfsReclaimContext) {
 
     await (next.kind === 'promote' ? ctx.zfs.promote(next.name) : ctx.zfs.destroy(next.name));
 
-    ctx.log(
-      `impd: zfs: reclaim: ${next.kind === 'promote' ? 'promoted' : 'destroyed'} ${next.name}`,
-    );
+    getImpdLogger('zfs').info('reclaim: {action} {name}', {
+      action: next.kind === 'promote' ? 'promoted' : 'destroyed',
+      name: next.name,
+    });
 
     return false;
   };
@@ -49,7 +50,9 @@ export function createZfsReclaim(ctx: ZfsReclaimContext) {
         }
       }
 
-      ctx.log(`impd: zfs: reclaim stopped after ${String(MAX_RECLAIM_STEPS)} steps`);
+      getImpdLogger('zfs').info('reclaim stopped after {steps} steps', {
+        steps: String(MAX_RECLAIM_STEPS),
+      });
     } catch (error) {
       const message = getErrorMessage(error);
       const busy = BUSY_DATASET.exec(message)?.groups?.['name'];
@@ -59,15 +62,16 @@ export function createZfsReclaim(ctx: ZfsReclaimContext) {
         if (!oopsHeld.has(busy)) {
           oopsHeld.add(busy);
 
-          ctx.log(
-            `impd: zfs: reclaim failed: ${message}; a kernel oops holds ${busy} until the host reboots, so impd logs it once`,
+          getImpdLogger('zfs').warning(
+            'reclaim failed: {message}; a kernel oops holds {busy} until the host reboots, so impd logs it once',
+            { message, busy },
           );
         }
 
         return;
       }
 
-      ctx.log(`impd: zfs: reclaim failed: ${message}`);
+      getImpdLogger('zfs').warning('reclaim failed: {message}', { message });
     }
   };
 

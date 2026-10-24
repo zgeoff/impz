@@ -15,6 +15,7 @@ import type { ImpDatabase } from '../../platform/db/open-database';
 import { ImpdError } from '../../platform/errors/impd-error';
 import { buildNotFoundError } from '../../platform/errors/impd-errors';
 import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { buildKeyedMutex } from '../../platform/process/keyed-mutex';
 import { startInterval } from '../../platform/process/start-interval';
 import type { BucketSpec } from '../../platform/process/token-buckets';
@@ -54,7 +55,6 @@ export interface EgressDeps {
     'subnet' | 'dns' | 'egressDnsPort' | 'egressDeny' | 'hostAddresses'
   >;
   readonly db: ImpDatabase;
-  readonly log: (message: string) => void;
 
   readonly isGranted: (impId: string, host: string) => Promise<boolean>;
   readonly closeTunnels: (impId: string, keep: (host: string) => boolean) => void;
@@ -137,7 +137,9 @@ export function createEgressService(deps: EgressDeps): EgressService {
     } catch (error) {
       const message = getErrorMessage(error);
 
-      deps.log(`impd: egress: reading the host container's routes: ${message}`);
+      getImpdLogger('egress').warning("reading the host container's routes: {message}", {
+        message,
+      });
 
       return {
         ranges: startRanges,
@@ -247,8 +249,8 @@ export function createEgressService(deps: EgressDeps): EgressService {
         const isMissing = isMissingHostAddresses(hasPublic, deps.config.hostAddresses);
 
         if (isMissing && !state.denyListMissing) {
-          deps.log(
-            "impd: egress: WARNING: a public imp exists and IMP_HOST_ADDRESSES is empty, so only IMP_EGRESS_DENY keeps it from the Docker host's own addresses and networks; the systemd unit and the NixOS module fill it at each start, compose does not (docs/architecture/network/egress.md#public)",
+          getImpdLogger('egress').warning(
+            "a public imp exists and IMP_HOST_ADDRESSES is empty, so only IMP_EGRESS_DENY keeps it from the Docker host's own addresses and networks; the systemd unit and the NixOS module fill it at each start, compose does not (docs/architecture/network/egress.md#public)",
           );
         }
 
@@ -268,7 +270,6 @@ export function createEgressService(deps: EgressDeps): EgressService {
         state.peerAcceptMissing = await checkPeerAccept({
           readForwardRules,
           wasMissing: state.peerAcceptMissing,
-          log: deps.log,
         });
       }
 
@@ -279,7 +280,9 @@ export function createEgressService(deps: EgressDeps): EgressService {
     try {
       await applyTable();
     } catch (error) {
-      deps.log(`impd: egress: rebuilding the table: ${getErrorMessage(error)}`);
+      getImpdLogger('egress').warning('rebuilding the table: {error}', {
+        error: getErrorMessage(error),
+      });
     }
   };
 
@@ -345,7 +348,9 @@ export function createEgressService(deps: EgressDeps): EgressService {
 
         await writeAnswers(slot, [name], answers);
       } catch (error) {
-        deps.log(`impd: egress: ${view.entry.name}: resolving ${name}: ${getErrorMessage(error)}`);
+        getImpdLogger('egress')
+          .with({ imp: view.entry.name })
+          .warning('resolving {name}: {error}', { name, error: getErrorMessage(error) });
       }
     }
   };
@@ -366,7 +371,7 @@ export function createEgressService(deps: EgressDeps): EgressService {
     try {
       await runSweep();
     } catch (error) {
-      deps.log(`impd: egress: sweep: ${getErrorMessage(error)}`);
+      getImpdLogger('egress').warning('sweep: {error}', { error: getErrorMessage(error) });
     }
   };
 
@@ -390,7 +395,6 @@ export function createEgressService(deps: EgressDeps): EgressService {
 
   const changeNetworks = makeChangeNetworks({
     mutex,
-    log: deps.log,
     applyTable,
     tryApplyTable,
     flushPair,
@@ -423,8 +427,9 @@ export function createEgressService(deps: EgressDeps): EgressService {
           (view) => EGRESS_MODE_TRAITS[view.entry.policy.mode].needsRuleset,
         );
 
-        deps.log(
-          `impd: egress: NO FIREWALL: ${state.unenforced}; imps with a public, box or none policy will not start (${String(closed.length)} now)`,
+        getImpdLogger('egress').error(
+          'NO FIREWALL: {unenforced}; imps with a public, box or none policy will not start ({length} now)',
+          { unenforced: state.unenforced, length: String(closed.length) },
         );
 
         return;
@@ -446,14 +451,13 @@ export function createEgressService(deps: EgressDeps): EgressService {
         maxTtlS: MIN_TTL_S,
         readRate: (slot) => (isForwardedFreely(state.slots.get(slot)) ? OPEN_RATE : CLOSED_RATE),
         now,
-        log: deps.log,
       });
 
       state.server = await startResolverServer(
         deps.config.egressDnsPort,
         deps.config.subnet,
         handle,
-        { log: deps.log, now },
+        { now },
       );
 
       state.stopSweep = repeat(() => {

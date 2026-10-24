@@ -4,16 +4,14 @@ import * as z from 'zod';
 import type { ResolveUpstream } from './network/broker/tls/forward-request';
 import { resolvePublicUpstream } from './network/broker/tls/resolve-public-upstream';
 import { getErrorMessage } from './platform/process/get-error-message';
+import { getImpdLogger } from './platform/process/get-impd-logger';
 
 const FileSchema = z.object({
   ca: z.string().includes('-----BEGIN CERTIFICATE-----'),
   upstreams: z.record(z.string(), z.url({ protocol: /^https$/u })),
 });
 
-export function createUpstreamResolver(
-  path: string,
-  log: (message: string) => void,
-): ResolveUpstream {
+export function createUpstreamResolver(path: string): ResolveUpstream {
   const cache: { mtimeMs: number; file: z.infer<typeof FileSchema> | null } = {
     mtimeMs: -1,
     file: null,
@@ -39,11 +37,17 @@ export function createUpstreamResolver(
 
         const hosts = Object.keys(cache.file.upstreams).join(', ');
 
-        log(`impd: broker: warning: test upstreams from ${path} stand in for ${hosts}`);
+        getImpdLogger('broker').warning('test upstreams from {path} stand in for {hosts}', {
+          path,
+          hosts,
+        });
       } catch (error) {
         cache.file = null;
 
-        log(`impd: broker: ignoring ${path}: ${getErrorMessage(error)}`);
+        getImpdLogger('broker').warning('ignoring {path}: {error}', {
+          path,
+          error: getErrorMessage(error),
+        });
       }
     }
 

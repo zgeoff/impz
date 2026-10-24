@@ -1,5 +1,6 @@
 import { buildInvalidStateError } from '../../platform/errors/impd-errors';
 import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { sendFreeze, sendThaw } from '../../vm/agent-client/agent-requests';
 import type { StorageBackend } from '../../vm/storage/storage-backend';
 import type { LockedImp } from './imp-lock';
@@ -15,7 +16,6 @@ export interface DiskFreezer {
 interface ConsistentDiskDeps {
   readonly storage: Pick<StorageBackend, 'resolveImpPaths'>;
   readonly imps: Pick<ImpCheckpointHooks, 'requireRunningImp'>;
-  readonly log: (message: string) => void;
   readonly freezer?: DiskFreezer | undefined;
 }
 
@@ -53,7 +53,9 @@ export function createConsistentDisk(deps: ConsistentDiskDeps): WithConsistentDi
       } catch (error) {
         const message = getErrorMessage(error);
 
-        deps.log(`impd: ${imp.name}: thaw failed (the agent thaws on its own): ${message}`);
+        getImpdLogger('imps')
+          .with({ imp: imp.name })
+          .warning('thaw failed (the agent thaws on its own): {message}', { message });
       }
     }
   };

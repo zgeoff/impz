@@ -51,7 +51,6 @@ async function setupTest(
     chrootBase,
     run: mounts.run,
     readMounts: mounts.readMounts,
-    log: () => {},
     ...processes.deps,
   });
 
@@ -232,7 +231,7 @@ test('it gives way to a request while an idle sleep waits for a young guest', as
   expect(outcome).toBe('skipped');
   expect(running.imp.state).toBe('running');
   expect(running.wokeMs).toBeNull();
-  expect(ctx.logs).toContain('impd: dev: sleep (idle) gave way: the imp turned busy');
+  expect(ctx.logs).toContain('INFO impd.imps imp=dev sleep (idle) gave way: the imp turned busy');
 });
 
 test('it gives way to a hold while an idle sleep waits for a young guest', async () => {
@@ -267,7 +266,7 @@ test('it gives way to a hold while an idle sleep waits for a young guest', async
   expect(settled).toBe('done');
   expect(outcome).toBe('skipped');
   expect(after?.state).toBe('running');
-  expect(ctx.logs).toContain('impd: dev: sleep (idle) gave way: the imp turned busy');
+  expect(ctx.logs).toContain('INFO impd.imps imp=dev sleep (idle) gave way: the imp turned busy');
 });
 
 test('it sleeps young guests at once when the governor makes room for a boot', async () => {

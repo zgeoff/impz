@@ -4,6 +4,7 @@ import { findGuestSlot } from '../../host-net/net/addressing';
 import type { Subnet } from '../../host-net/net/addressing';
 import { createCountedLimit } from '../../platform/process/counted-limit';
 import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { createTokenBuckets } from '../../platform/process/token-buckets';
 import type { BucketSpec } from '../../platform/process/token-buckets';
 import { EDE_PROHIBITED, RCODE, buildEmptyReply, buildLocalReply, readQuery } from './dns-messages';
@@ -39,7 +40,6 @@ export interface ResolverDeps {
 
   readonly readRate: (slot: number) => BucketSpec;
   readonly now: () => number;
-  readonly log: (message: string) => void;
 }
 
 export type QueryHandler = (source: string, message: Uint8Array) => Promise<Uint8Array>;
@@ -96,7 +96,11 @@ export function createQueryHandler(deps: ResolverDeps): QueryHandler {
 
       return await writeAnswers(deps, { slot, name, type: query.type }, reply);
     } catch (error) {
-      deps.log(`impd: egress: ${name} for slot ${String(slot)}: ${getErrorMessage(error)}`);
+      getImpdLogger('egress').warning('{name} for slot {slot}: {error}', {
+        name,
+        slot: String(slot),
+        error: getErrorMessage(error),
+      });
 
       return buildEmptyReply(message, RCODE.servFail);
     }
@@ -189,7 +193,6 @@ interface ResolverServerLimits {
 }
 
 export interface ResolverServerOptions {
-  readonly log: (message: string) => void;
   readonly now?: () => number;
   readonly limits?: ResolverServerLimits;
 
@@ -201,19 +204,16 @@ export interface ResolverServerOptions {
 const ROUTINE_SOCKET_ERRORS = new Set(['ECONNREFUSED', 'EHOSTUNREACH', 'ENETUNREACH']);
 
 /* @internal */
-export function createSocketErrorReport(
-  log: (message: string) => void,
-  now: () => number,
-): (...args: readonly unknown[]) => void {
-  const logRoutine = makeLimitedLog(log, now);
-  const logOther = makeLimitedLog(log, now);
+export function createSocketErrorReport(now: () => number): (...args: readonly unknown[]) => void {
+  const logRoutine = makeLimitedLog(now);
+  const logOther = makeLimitedLog(now);
 
   return (...args) => {
     // Bun passes the error alone, not after the socket its types name
     const error = args.at(-1);
     const write = isRoutineSocketError(error) ? logRoutine : logOther;
 
-    write(`impd: egress: resolver socket: ${getErrorMessage(error)}`);
+    write(getErrorMessage(error));
   };
 }
 
@@ -229,13 +229,10 @@ function isRoutineSocketError(error: unknown): boolean {
 
 const SOCKET_ERROR_LOG_MS = 60_000;
 
-function makeLimitedLog(
-  log: (message: string) => void,
-  now: () => number,
-): (message: string) => void {
+function makeLimitedLog(now: () => number): (error: string) => void {
   const state = { loggedAt: null as number | null, held: 0 };
 
-  return (message) => {
+  return (error) => {
     const at = now();
 
     if (state.loggedAt !== null && at - state.loggedAt < SOCKET_ERROR_LOG_MS) {
@@ -246,7 +243,7 @@ function makeLimitedLog(
 
     const held = state.held === 0 ? '' : ` (${String(state.held)} more since the last)`;
 
-    log(`${message}${held}`);
+    getImpdLogger('egress').warning('resolver socket: {error}{held}', { error, held });
 
     state.loggedAt = at;
     state.held = 0;
@@ -269,8 +266,7 @@ export async function startResolverServer(
 
   // an unhandled error would end impd, so every socket error and failed
   // reply is logged, rate-limited, and the resolver carries on
-  const reportError =
-    options.reportError ?? createSocketErrorReport(options.log, options.now ?? Date.now);
+  const reportError = options.reportError ?? createSocketErrorReport(options.now ?? Date.now);
 
   const udp = await Bun.udpSocket({
     hostname: '0.0.0.0',

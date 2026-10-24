@@ -351,7 +351,7 @@ test('it removes an upload, frees its slot and ends its run when no build takes 
     config: { dataDir: ctx.dataDir, buildContextMaxBytes: 1024 ** 2 },
     images: harness.impd.images,
     diskBudget: harness.impd.diskBudget,
-    audit: createApiAudit({ db: harness.db, now: Date.now, log: () => {}, readErrorCode }),
+    audit: createApiAudit({ db: harness.db, now: Date.now, readErrorCode }),
     now: Date.now,
     startTimer: clock.startTimer,
   });
@@ -404,7 +404,7 @@ test('it frees the slot and ends the run of a released upload whose context it c
     config: { dataDir: ctx.dataDir, buildContextMaxBytes: 1024 ** 2 },
     images: harness.impd.images,
     diskBudget: harness.impd.diskBudget,
-    audit: createApiAudit({ db: harness.db, now: Date.now, log: () => {}, readErrorCode }),
+    audit: createApiAudit({ db: harness.db, now: Date.now, readErrorCode }),
     now: Date.now,
     startTimer: buildStubClock().startTimer,
   });
@@ -526,7 +526,7 @@ test('it keeps the disk room of an upload after it answers, until the upload exp
     config: { dataDir: ctx.dataDir, buildContextMaxBytes: 1024 ** 2 },
     images: harness.impd.images,
     diskBudget: harness.impd.diskBudget,
-    audit: createApiAudit({ db: harness.db, now: Date.now, log: () => {}, readErrorCode }),
+    audit: createApiAudit({ db: harness.db, now: Date.now, readErrorCode }),
     now: Date.now,
     startTimer: clock.startTimer,
   });
@@ -639,7 +639,7 @@ test('it keeps the context, room, run and slot of a taken upload past its time t
     config: { dataDir: ctx.dataDir, buildContextMaxBytes: 1024 ** 2 },
     images: harness.impd.images,
     diskBudget: harness.impd.diskBudget,
-    audit: createApiAudit({ db: harness.db, now: Date.now, log: () => {}, readErrorCode }),
+    audit: createApiAudit({ db: harness.db, now: Date.now, readErrorCode }),
     now: Date.now,
     startTimer: clock.startTimer,
   });
@@ -699,7 +699,7 @@ test("it refuses another caller's upload with not found", async () => {
     config: { dataDir: ctx.dataDir, buildContextMaxBytes: 1024 ** 2 },
     images: harness.impd.images,
     diskBudget: harness.impd.diskBudget,
-    audit: createApiAudit({ db: harness.db, now: Date.now, log: () => {}, readErrorCode }),
+    audit: createApiAudit({ db: harness.db, now: Date.now, readErrorCode }),
     now: Date.now,
     startTimer: buildStubClock().startTimer,
   });
@@ -780,7 +780,6 @@ test('it takes an upload through the proxy', async () => {
     config: { ...harness.config, apiPort },
     db: harness.db,
     imps: harness.impd.imps,
-    log: () => {},
     peers: createForwardedPeers(Date.now),
   });
 
@@ -973,7 +972,7 @@ test('it refuses with 413 a context whose Content-Length is over the limit', asy
     config: { dataDir: ctx.dataDir, buildContextMaxBytes: 1024 ** 2 },
     images: harness.impd.images,
     diskBudget: harness.impd.diskBudget,
-    audit: createApiAudit({ db: harness.db, now: Date.now, log: () => {}, readErrorCode }),
+    audit: createApiAudit({ db: harness.db, now: Date.now, readErrorCode }),
     now: Date.now,
     startTimer: buildStubClock().startTimer,
   });
@@ -1013,7 +1012,7 @@ test('it frees the build slot of a context refused for its Content-Length', asyn
     config: { dataDir: ctx.dataDir, buildContextMaxBytes: 1024 ** 2 },
     images: harness.impd.images,
     diskBudget: harness.impd.diskBudget,
-    audit: createApiAudit({ db: harness.db, now: Date.now, log: () => {}, readErrorCode }),
+    audit: createApiAudit({ db: harness.db, now: Date.now, readErrorCode }),
     now: Date.now,
     startTimer: buildStubClock().startTimer,
   });
@@ -1056,7 +1055,7 @@ test('it refuses with 413 a context whose bytes run over the limit, and removes 
     config: { dataDir: ctx.dataDir, buildContextMaxBytes: 1024 ** 2 },
     images: harness.impd.images,
     diskBudget: harness.impd.diskBudget,
-    audit: createApiAudit({ db: harness.db, now: Date.now, log: () => {}, readErrorCode }),
+    audit: createApiAudit({ db: harness.db, now: Date.now, readErrorCode }),
     now: Date.now,
     startTimer: buildStubClock().startTimer,
   });
@@ -1101,7 +1100,7 @@ test('it takes a context of exactly the limit', async () => {
     config: { dataDir: ctx.dataDir, buildContextMaxBytes: 1024 ** 2 },
     images: harness.impd.images,
     diskBudget: harness.impd.diskBudget,
-    audit: createApiAudit({ db: harness.db, now: Date.now, log: () => {}, readErrorCode }),
+    audit: createApiAudit({ db: harness.db, now: Date.now, readErrorCode }),
     now: Date.now,
     startTimer: buildStubClock().startTimer,
   });
@@ -1142,7 +1141,7 @@ test('it refuses an upload with no body', async () => {
     config: { dataDir: ctx.dataDir, buildContextMaxBytes: 1024 ** 2 },
     images: harness.impd.images,
     diskBudget: harness.impd.diskBudget,
-    audit: createApiAudit({ db: harness.db, now: Date.now, log: () => {}, readErrorCode }),
+    audit: createApiAudit({ db: harness.db, now: Date.now, readErrorCode }),
     now: Date.now,
     startTimer: buildStubClock().startTimer,
   });
@@ -1175,7 +1174,7 @@ test('it refuses an upload whose body is longer than its Content-Length', async 
     config: { dataDir: ctx.dataDir, buildContextMaxBytes: 1024 ** 2 },
     images: harness.impd.images,
     diskBudget: harness.impd.diskBudget,
-    audit: createApiAudit({ db: harness.db, now: Date.now, log: () => {}, readErrorCode }),
+    audit: createApiAudit({ db: harness.db, now: Date.now, readErrorCode }),
     now: Date.now,
     startTimer: buildStubClock().startTimer,
   });
@@ -1214,7 +1213,7 @@ test('it refuses an upload whose body is empty', async () => {
     config: { dataDir: ctx.dataDir, buildContextMaxBytes: 1024 ** 2 },
     images: harness.impd.images,
     diskBudget: harness.impd.diskBudget,
-    audit: createApiAudit({ db: harness.db, now: Date.now, log: () => {}, readErrorCode }),
+    audit: createApiAudit({ db: harness.db, now: Date.now, readErrorCode }),
     now: Date.now,
     startTimer: buildStubClock().startTimer,
   });
@@ -2589,7 +2588,7 @@ test('it clears what an earlier impd left in the uploads directory when a route 
     config: { dataDir: ctx.dataDir, buildContextMaxBytes: 1024 ** 2 },
     images: harness.impd.images,
     diskBudget: harness.impd.diskBudget,
-    audit: createApiAudit({ db: harness.db, now: Date.now, log: () => {}, readErrorCode }),
+    audit: createApiAudit({ db: harness.db, now: Date.now, readErrorCode }),
     now: Date.now,
     startTimer: buildStubClock().startTimer,
   });

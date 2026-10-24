@@ -1786,7 +1786,7 @@ test('it names a grant made on the fork before the copy as a clash', async () =>
   expect(devBGrants).toStrictEqual(['gh-api', 'npm']);
 
   expect(ctx.logs).toContain(
-    'impd: dev-b: forked without grant gh of dev-a: it has another credential for that host',
+    'INFO impd.imps imp=dev-b forked without grant gh of dev-a: it has another credential for that host',
   );
 });
 
@@ -1905,7 +1905,10 @@ test('it returns a fork whose copy fails as a whole, with the error and no grant
   const devBGrants = await ctx.client.grants.list({ name: 'dev-b' });
 
   expect(devBGrants).toStrictEqual([]);
-  expect(ctx.logs.join('\n')).toInclude('impd: dev-b: forked without the grants of dev-a: ');
+
+  expect(ctx.logs).toContainEqual(
+    expect.toStartWith('WARNING impd.imps imp=dev-b forked without the grants of dev-a: '),
+  );
 });
 
 test('it lets an older client read a fork answer with the new fields', async () => {

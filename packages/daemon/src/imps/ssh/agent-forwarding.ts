@@ -1,4 +1,5 @@
 import type { Connection, ServerChannel } from 'ssh2';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import type { GuestListener } from '../../vm/agent-client/listener-stream';
 import { runGuestListener } from '../reverse/run-guest-listener';
 import { formatFailure, runChannelRelay } from './channel-io';
@@ -17,7 +18,6 @@ interface AgentForwardingDeps {
   readonly client: Connection;
   readonly impName: string;
   readonly backend: Pick<SshBackend, 'requireRunning' | 'openListener' | 'openAccept'>;
-  readonly log: (message: string) => void;
 }
 
 async function stopListenerWhenOpen(listening: Promise<GuestListener>): Promise<void> {
@@ -57,7 +57,9 @@ export function createAgentForwarding(deps: AgentForwardingDeps): AgentForwardin
   };
 
   const writeLog = (message: string): void => {
-    deps.log(`impd: ssh: ${deps.impName}: agent forwarding: ${message}`);
+    getImpdLogger('ssh')
+      .with({ imp: deps.impName })
+      .info('agent forwarding: {message}', { message });
   };
 
   const stopGuestClient = async (listener: GuestListener, id: number): Promise<void> => {

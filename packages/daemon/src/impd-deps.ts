@@ -67,7 +67,6 @@ export interface ImpdDeps {
   readonly rootToken: string;
   readonly storage: StorageBackend;
   readonly systemFiles: SystemFiles;
-  readonly log?: (message: string) => void;
   readonly logRpcFailure?: AppDeps['logRpcFailure'];
   readonly now?: () => number;
   readonly readDiskSpace?: StorageBackend['readUsage'];

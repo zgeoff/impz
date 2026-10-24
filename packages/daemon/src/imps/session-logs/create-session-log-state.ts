@@ -1,5 +1,6 @@
 import { createActor } from 'xstate';
 import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { buildLogKey } from './build-log-key';
 import type { GenerationEnd, GenerationLog, GenerationLogOptions } from './generation-log';
 import { getGenerationDir } from './session-log-files';
@@ -11,7 +12,6 @@ export interface SessionLogStateDeps {
   readonly limits: SessionLogLimits;
   readonly requireRoom: (bytes: number) => Promise<void>;
   readonly now: () => number;
-  readonly log: (message: string) => void;
   readonly startTimer?: GenerationLogOptions['startTimer'];
 }
 
@@ -34,8 +34,9 @@ export function createSessionLogState(deps: SessionLogStateDeps) {
   const actor = createActor(sessionLogMachine);
 
   actor.on('cap.notice', (notice) => {
-    deps.log(
-      `impd: imp ${notice.impId}: logs no more sessions: it has ${String(deps.limits.impMaxLive)} live logs`,
+    getImpdLogger('session').info(
+      'imp {impId}: logs no more sessions: it has {impMaxLive} live logs',
+      { impId: notice.impId, impMaxLive: String(deps.limits.impMaxLive) },
     );
   });
 
@@ -66,7 +67,6 @@ export function createSessionLogState(deps: SessionLogStateDeps) {
     maxBytes: deps.limits.generationMaxBytes,
     requireRoom: deps.requireRoom,
     now: deps.now,
-    log: deps.log,
     ...(deps.startTimer !== undefined && { startTimer: deps.startTimer }),
   });
 
@@ -75,10 +75,6 @@ export function createSessionLogState(deps: SessionLogStateDeps) {
 
   const listLive = (impId: string) =>
     [...getContext().live.values()].filter((entry) => entry.impId === impId);
-
-  const printError = (imp: SessionLogImp, error: unknown): void => {
-    deps.log(`impd: session logs of imp ${imp.id}: ${getErrorMessage(error)}`);
-  };
 
   const setLive = (options: SetLiveOptions) => {
     const entry: LiveLog = {
@@ -121,4 +117,11 @@ export function createSessionLogState(deps: SessionLogStateDeps) {
     writeEnd,
     limitCheckBytes,
   };
+}
+
+function printError(imp: SessionLogImp, error: unknown): void {
+  getImpdLogger('session').warning('session logs of imp {id}: {error}', {
+    id: imp.id,
+    error: getErrorMessage(error),
+  });
 }

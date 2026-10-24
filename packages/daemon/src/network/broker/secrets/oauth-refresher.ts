@@ -5,6 +5,7 @@ import type { SecretRecord } from '../../../platform/db/secrets';
 import { sendWithCA } from '../../../platform/http/send-with-ca';
 import { buildBackoffMs } from '../../../platform/process/build-backoff-ms';
 import { getErrorMessage } from '../../../platform/process/get-error-message';
+import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import { buildKeyedMutex } from '../../../platform/process/keyed-mutex';
 import { createSingleFlight } from '../../../platform/process/single-flight';
 import { startTicker } from '../../../platform/process/ticker';
@@ -54,7 +55,6 @@ export interface OAuthRefresher {
 interface OAuthRefresherDeps {
   readonly db: ImpDatabase;
   readonly files: Pick<SecretFiles, 'read' | 'rewrite'>;
-  readonly log: (message: string) => void;
   readonly resolveUpstream: ResolveUpstream;
   readonly fetch?: OAuthFetch;
   readonly now?: () => number;
@@ -70,7 +70,6 @@ export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
   const now = deps.now ?? Date.now;
   const send = deps.fetch ?? sendWithCA;
   const timeoutMs = deps.timeoutMs ?? 30_000;
-  const log = deps.log;
   const locks = buildKeyedMutex();
   const inflight = createSingleFlight<RefreshOutcome>();
 
@@ -97,8 +96,9 @@ export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
     } catch (error) {
       unsaved.set(name, { valueFile, state });
 
-      log(
-        `impd: broker: oauth secret ${name}: could not write its value file: ${getErrorMessage(error)}`,
+      getImpdLogger('broker').warning(
+        'oauth secret {name}: could not write its value file: {error}',
+        { name, error: getErrorMessage(error) },
       );
 
       return false;
@@ -183,7 +183,9 @@ export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
     const state = loadState(name, secret);
 
     if (state === null) {
-      log(`impd: broker: oauth secret ${name}: its value file is missing or unreadable`);
+      getImpdLogger('broker').info('oauth secret {name}: its value file is missing or unreadable', {
+        name,
+      });
 
       return { kind: 'unreadable' };
     }
@@ -200,8 +202,9 @@ export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
     const current = await readSecret(deps.db, name);
 
     if (current?.valueFile !== secret.valueFile || current.generation !== secret.generation) {
-      log(
-        `impd: broker: oauth secret ${name} was replaced or deleted during a refresh; its result was dropped`,
+      getImpdLogger('broker').info(
+        'oauth secret {name} was replaced or deleted during a refresh; its result was dropped',
+        { name },
       );
 
       return { kind: 'dropped' };
@@ -267,8 +270,13 @@ export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
 
     const rotated = refreshToken !== state.refreshToken;
 
-    log(
-      `impd: broker: oauth secret ${name} refreshed; refresh token rotated: ${rotated ? 'yes' : 'no'}; expires ${expiresAt === null ? 'never known' : new Date(expiresAt).toISOString()}`,
+    getImpdLogger('broker').info(
+      'oauth secret {name} refreshed; refresh token rotated: {rotated}; expires {expiry}',
+      {
+        name,
+        rotated: rotated ? 'yes' : 'no',
+        expiry: expiresAt === null ? 'never known' : new Date(expiresAt).toISOString(),
+      },
     );
 
     return { kind: 'refreshed', rotated };
@@ -287,8 +295,9 @@ export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
 
     writeState(name, secret.valueFile, { ...state, error });
 
-    log(
-      `impd: broker: oauth secret ${name} could not refresh: ${error}; trying again in ${String(Math.round(delay / 60_000))} min`,
+    getImpdLogger('broker').warning(
+      'oauth secret {name} could not refresh: {error}; trying again in {delayMin} min',
+      { name, error, delayMin: String(Math.round(delay / 60_000)) },
     );
 
     return { kind: 'transient', error };
@@ -309,7 +318,10 @@ export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
     writeState(name, secret.valueFile, { ...state, status: 'needs_login', error: failure.error });
 
     if (state.status !== 'needs_login') {
-      log(`impd: broker: oauth secret ${name} needs a new sign-in: ${failure.error}`);
+      getImpdLogger('broker').warning('oauth secret {name} needs a new sign-in: {error}', {
+        name,
+        error: failure.error,
+      });
     }
 
     return { kind: 'needs-login', error: failure.error };
@@ -363,7 +375,10 @@ export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
       return { kind: 'skipped' };
     }
 
-    log(`impd: broker: oauth secret ${name}: a granted host refused its access token; refreshing`);
+    getImpdLogger('broker').warning(
+      'oauth secret {name}: a granted host refused its access token; refreshing',
+      { name },
+    );
 
     return runRefresh(name, false);
   };
@@ -383,7 +398,10 @@ export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
 
       return outcome.kind === 'refreshed' || outcome.kind === 'superseded';
     } catch (error) {
-      log(`impd: broker: oauth secret ${name}: ${getErrorMessage(error)}`);
+      getImpdLogger('broker').warning('oauth secret {name}: {error}', {
+        name,
+        error: getErrorMessage(error),
+      });
 
       return false;
     }
@@ -413,7 +431,10 @@ export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
         writeState(name, kept.valueFile, kept.state);
       });
     } catch (error) {
-      log(`impd: broker: oauth secret ${name}: ${getErrorMessage(error)}`);
+      getImpdLogger('broker').warning('oauth secret {name}: {error}', {
+        name,
+        error: getErrorMessage(error),
+      });
     }
   };
 
@@ -451,11 +472,16 @@ export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
         try {
           await startRefresh(secret.name, false);
         } catch (error) {
-          log(`impd: broker: oauth secret ${secret.name}: ${getErrorMessage(error)}`);
+          getImpdLogger('broker').warning('oauth secret {name}: {error}', {
+            name: secret.name,
+            error: getErrorMessage(error),
+          });
         }
       }
     } catch (error) {
-      log(`impd: broker: oauth refresh check failed: ${getErrorMessage(error)}`);
+      getImpdLogger('broker').warning('oauth refresh check failed: {error}', {
+        error: getErrorMessage(error),
+      });
     }
   };
 
@@ -470,7 +496,6 @@ export function createOAuthRefresher(deps: OAuthRefresherDeps): OAuthRefresher {
         intervalMs: 60_000,
         firstDelayMs: 0,
         task: runDueRefreshes,
-        log,
         timer: deps.timer,
       });
     },
