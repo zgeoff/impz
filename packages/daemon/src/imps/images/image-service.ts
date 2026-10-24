@@ -9,7 +9,11 @@ import {
 import type { ImageRecord } from '../../platform/db/images';
 import { countImpsUsingImage } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
-import { buildConflictError, buildNotFoundError } from '../../platform/errors/impd-errors';
+import {
+  buildConflictError,
+  buildForbiddenError,
+  buildNotFoundError,
+} from '../../platform/errors/impd-errors';
 import type { Clock } from '../../platform/process/clock';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
@@ -37,7 +41,11 @@ export type ImageService = ImageAdds &
 
     readonly findDefaultImage: () => Promise<ImageRecord | undefined>;
 
-    readonly updateImagePin: (name: string, isPinned: boolean) => Promise<ImageRecord>;
+    readonly updateImagePin: (
+      name: string,
+      isPinned: boolean,
+      refPrefix: string | null,
+    ) => Promise<ImageRecord>;
 
     readonly runImageEviction: () => Promise<void>;
 
@@ -158,14 +166,20 @@ export function createImageService(deps: ImageServiceDeps): ImageService {
         }
       });
     },
-    updateImagePin: async (name, isPinned) => {
-      const image = await updateImagePin(deps.db, name, isPinned);
+    updateImagePin: async (name, isPinned, refPrefix) => {
+      const image = await updateImagePin(deps.db, name, isPinned, refPrefix);
 
-      if (image === undefined) {
-        throw buildNotFoundError('image', name);
+      if (image !== undefined) {
+        return image;
       }
 
-      return image;
+      const held = refPrefix === null ? undefined : await readImageByName(deps.db, name);
+
+      if (refPrefix !== null && held !== undefined) {
+        throw buildForbiddenError(`image ${name} has a ref that does not start with ${refPrefix}`);
+      }
+
+      throw buildNotFoundError('image', name);
     },
     resolveImage,
     findDefaultImage: readDefaultImage,

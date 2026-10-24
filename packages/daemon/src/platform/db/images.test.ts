@@ -443,6 +443,38 @@ test('#updateImagePin unpins a pinned image', async () => {
   expect(unpinned?.isPinned).toBeFalse();
 });
 
+test('#updateImagePin pins an image whose ref starts with the prefix', async () => {
+  const ctx = await createTestDatabase();
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'kept', ref: 'ghcr.io/acme/kept:1' }));
+
+  const pinned = await updateImagePin(ctx.db, 'kept', true, 'ghcr.io/acme/');
+
+  expect(pinned?.isPinned).toBeTrue();
+});
+
+test('#updateImagePin leaves an image whose ref does not start with the prefix as it is', async () => {
+  const ctx = await createTestDatabase();
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'kept', ref: 'docker.io/acme/kept:1' }));
+
+  const pinned = await updateImagePin(ctx.db, 'kept', true, 'ghcr.io/acme/');
+  const stored = await readImageByName(ctx.db, 'kept');
+
+  expect(pinned).toBeUndefined();
+  expect(stored?.isPinned).toBeFalse();
+});
+
+test('#updateImagePin reads a % in the prefix as itself, not as a wildcard', async () => {
+  const ctx = await createTestDatabase();
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'kept', ref: 'ghcr.io/acme/kept:1' }));
+
+  const pinned = await updateImagePin(ctx.db, 'kept', true, 'ghcr.io/%');
+
+  expect(pinned).toBeUndefined();
+});
+
 test('#updateImagePin returns nothing for a name no image has', async () => {
   const ctx = await createTestDatabase();
   const pinned = await updateImagePin(ctx.db, 'missing', true);

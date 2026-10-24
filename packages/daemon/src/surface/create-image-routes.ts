@@ -1,5 +1,6 @@
 import type { ImageBuildPhase } from '@impz/api';
 import { ORPCError } from '@orpc/server';
+import invariant from 'tiny-invariant';
 import { runImageOp } from '../imps/images/build/image-op-stream';
 import type { ImageOpStreamOptions } from '../imps/images/build/image-op-stream';
 import { findImpName } from '../platform/audit/api-audit';
@@ -136,12 +137,20 @@ export function createImageRoutes(os: RpcImplementer, deps: RouterDeps) {
       return {};
     }),
     pin: os.images.pin.handler(async (context) => {
-      const image = await deps.images.updateImagePin(context.input.name, true);
+      const image = await deps.images.updateImagePin(
+        context.input.name,
+        true,
+        findPinRefPrefix(context.context.caller),
+      );
 
       return toApiImage(image);
     }),
     unpin: os.images.unpin.handler(async (context) => {
-      const image = await deps.images.updateImagePin(context.input.name, false);
+      const image = await deps.images.updateImagePin(
+        context.input.name,
+        false,
+        findPinRefPrefix(context.context.caller),
+      );
 
       return toApiImage(image);
     }),
@@ -204,4 +213,16 @@ function makeShownFailureRun(run: ImageOpRun): ImageOpRun {
       });
     }
   };
+}
+
+// the access check passed on the held image's ref, and the pin itself checks the ref
+// again, so an image replaced between the two never takes a scoped caller's pin
+function findPinRefPrefix(caller: Readonly<RpcContext['caller']>): string | null {
+  if (caller.imps === null) {
+    return null;
+  }
+
+  invariant(caller.imageRefPrefix !== null, 'a scoped pin without a prefix passed its check');
+
+  return caller.imageRefPrefix;
 }
