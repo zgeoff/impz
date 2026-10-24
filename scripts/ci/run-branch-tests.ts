@@ -5,12 +5,18 @@ import { runRelatedTests } from './run-related-tests.ts';
 // its package.
 const dashboardPrefix = 'packages/dashboard/';
 
+// bunfig.toml leaves a lane file out of every root bun test, even one named by its path, so a
+// lane file runs in its lane's script and never here.
+const lanePattern = /\.(?:host|headscale|pebble)\.test\.ts$/u;
+
 export async function runBranchTests(paths: readonly string[], cwd: string): Promise<number> {
-  const dashboard = paths
+  const unitPaths = paths.filter((path) => !lanePattern.test(path));
+
+  const dashboard = unitPaths
     .filter((path) => path.startsWith(dashboardPrefix))
     .map((path) => path.slice(dashboardPrefix.length));
 
-  const root = paths.filter((path) => !path.startsWith(dashboardPrefix));
+  const root = unitPaths.filter((path) => !path.startsWith(dashboardPrefix));
 
   const rootExitCode = await runRelatedTests(root, cwd);
   const dashboardExitCode = await runRelatedTests(dashboard, join(cwd, dashboardPrefix));
