@@ -268,6 +268,8 @@ export function createApp(deps: AppDeps) {
       execSockets.closeSessions();
       tunnelSockets.closeTunnels();
     },
+
+    releaseBuildUploads: deps.buildContexts.releaseUploads,
   };
 }
 

@@ -39,6 +39,7 @@ interface BuildUpload {
 export interface BuildContextRoute {
   readonly respond: (request: Request, caller: Readonly<Caller>) => Promise<Response>;
   readonly takeUpload: (id: string, caller: Readonly<Caller>) => BuildUpload;
+  readonly releaseUploads: () => void;
 }
 
 export interface BuildContextDeps {
@@ -203,6 +204,11 @@ export function createBuildContextRoute(deps: BuildContextDeps): BuildContextRou
       entry.actor.send({ type: 'take' });
 
       return entry.upload;
+    },
+    releaseUploads: () => {
+      for (const entry of held.values()) {
+        entry.actor.send({ type: 'stop' });
+      }
     },
   };
 }

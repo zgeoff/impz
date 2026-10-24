@@ -444,6 +444,39 @@ test('it frees the slot and ends the run of a released upload whose context it c
   );
 });
 
+test('it releases an upload that no build took when impd stops', async () => {
+  const ctx = await setupTest();
+
+  const clock = buildStubClock();
+  const builder = buildStubImageBuilder({ exported: [], repoDigest: `sha256:${'b'.repeat(64)}` });
+
+  const harness = await startBuilderImpd(ctx.stack, builder, {
+    dataDir: ctx.dataDir,
+    rootToken: ctx.rootToken,
+    cloneDisk: ctx.cloneDisk,
+    boundaries: { buildUploadTimer: clock.startTimer },
+  });
+
+  const uploaded = await harness.impd.api.app.handle(
+    new Request(`http://impd.test${BUILD_CONTEXT_PATH}?name=web`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${ctx.rootToken}`, 'content-length': '3' },
+      body: 'tar',
+    }),
+  );
+
+  const steps = await harness.impd.stop({ sleepImps: false });
+  const uploads = await readdir(buildUploadsDir(ctx.dataDir));
+  const status = await harness.impd.diskBudget.readStatus();
+
+  expect(uploaded.status).toBe(201);
+  expect(steps).toContainEqual({ step: 'build-uploads', outcome: 'stopped' });
+  expect(uploads).toStrictEqual([]);
+  expect(status.pendingBytes).toBe(0);
+  expect(harness.impd.images.listBuildRuns()).toStrictEqual([]);
+  expect(clock.countPending()).toBe(0);
+});
+
 test('it expires an upload on the build upload timer impd was given', async () => {
   const ctx = await setupTest();
 
