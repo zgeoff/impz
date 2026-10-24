@@ -2,12 +2,22 @@ name: e2e images
 
 # The images suite (e2e/test-e2e.sh --only images) on a KVM runner: its
 # journeys build images in builder imps and pull from Docker Hub, so the
-# fast set's groups leave it out. It runs each day on main and on dispatch
-# for any branch, and is no required check.
+# fast set's groups leave it out. It runs each day on main, on dispatch for
+# any branch, and on a pull request that changes how impd builds images. It is
+# no required check, so the path filter may skip the whole workflow.
 on:
   schedule:
     - cron: '17 3 * * *'
   workflow_dispatch:
+  pull_request:
+    paths:
+      - images/**
+      - host/Dockerfile
+      - packages/daemon/src/imps/images/**
+      - packages/daemon/src/imps/docker-contract/**
+      - packages/daemon/src/imps/docker-proxy/**
+      - e2e/suites/images-*.e2e.ts
+      - .github/workflows/e2e-images.yml
 
 permissions: {}
 
