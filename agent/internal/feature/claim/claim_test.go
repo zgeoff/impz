@@ -18,8 +18,6 @@ import (
 	"github.com/zgeoff/impz/agent/internal/proto"
 )
 
-// testPing stands in for the server's ping, whose fields the server's own
-// tests check.
 func testPing() *proto.Ping { return &proto.Ping{Ok: true, Version: "test"} }
 
 type parkResult struct {
@@ -27,11 +25,6 @@ type parkResult struct {
 	err   error
 }
 
-// startParked runs Park on a Unix socket named agent.sock in a
-// fresh directory that becomes the test's working directory, and returns
-// once it listens. The result arrives on the returned channel when a claim
-// applies. Cleanup closes the listener, makes the next listen fail so the
-// park loop ends, and waits for it.
 func startParked(t *testing.T, apply func(*proto.Claim) error) <-chan parkResult {
 	t.Helper()
 	// relative, from the test's own directory: a socket path past 108 bytes
@@ -73,8 +66,6 @@ func startParked(t *testing.T, apply func(*proto.Claim) error) <-chan parkResult
 	return result
 }
 
-// sendParked sends one request to the parked listener and returns the
-// reply's raw JSON.
 func sendParked(t *testing.T, req *proto.Request) string {
 	t.Helper()
 	c, err := net.Dial("unix", "agent.sock")
@@ -86,7 +77,6 @@ func sendParked(t *testing.T, req *proto.Request) string {
 	return string(f.Payload)
 }
 
-// errorCode decodes an error response's code.
 func errorCode(t *testing.T, reply string) string {
 	t.Helper()
 	var r proto.ErrorResponse
@@ -141,8 +131,6 @@ func TestParkRefusesAClaimWithoutAHostnameAndIP(t *testing.T) {
 	assert.Equal(t, errorCode(t, reply), proto.ErrBadRequest)
 }
 
-// A claim that fails to apply leaves the guest parked for another, and the
-// next claim that applies ends the park.
 func TestParkStaysParkedAfterAClaimFailsToApply(t *testing.T) {
 	var applied []*proto.Claim
 	fail := true
@@ -168,7 +156,6 @@ func TestParkStaysParkedAfterAClaimFailsToApply(t *testing.T) {
 	assert.Check(t, cmp.Len(applied, 2))
 }
 
-// Once a claim applies, the listener closes so the server can take the port.
 func TestParkClosesTheListenerAfterAClaim(t *testing.T) {
 	result := startParked(t, func(*proto.Claim) error { return nil })
 	sendParked(t, &proto.Request{Op: proto.OpClaim, Claim: validClaim()})
@@ -180,8 +167,7 @@ func TestParkClosesTheListenerAfterAClaim(t *testing.T) {
 	assert.Check(t, cmp.ErrorIs(err, syscall.ENOENT), "the parked listener is still open")
 }
 
-// A snapshot restore resets the vsock transport: the park listens again,
-// and a listen that then fails ends it with that error.
+// A snapshot restore resets the vsock transport.
 func TestParkReturnsTheErrorWhenListeningAgainFails(t *testing.T) {
 	t.Chdir(t.TempDir())
 	refused := errors.New("no vsock")

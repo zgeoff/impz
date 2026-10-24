@@ -1,4 +1,3 @@
-// Package cmdline parses the kernel command line for imp.* parameters.
 package cmdline
 
 import (
@@ -6,31 +5,19 @@ import (
 	"strings"
 )
 
-// Params holds the imp.* parameters the host passes on the kernel cmdline.
 type Params struct {
-	Hostname string
-	// IP is the guest address in CIDR form, e.g. 10.66.0.2/30.
-	IP string
-	GW string
-	// IP6 is the guest's IPv6 /128 and GW6 its link-local gateway; both
-	// empty when the host gives imps no IPv6.
-	IP6 string
-	GW6 string
-	DNS []string
-	// ResetIdentity is set on the first boot of an imp made from a template.
+	Hostname      string
+	IP            string
+	GW            string
+	IP6           string
+	GW6           string
+	DNS           []string
 	ResetIdentity bool
-	// Template is set on the cold boot that makes a boot template: the agent
-	// waits for a claim instead of mounting the user disk.
-	Template bool
-	// HotplugMemory is set for an elastic guest, whose memory grows and
-	// shrinks while it runs: the host onlines its plugged memory with
-	// memhp_default_state.
+	Template      bool
 	HotplugMemory bool
-	// Raw holds every imp.* key (without the prefix), including unknown ones.
-	Raw map[string]string
+	Raw           map[string]string
 }
 
-// Read parses /proc/cmdline.
 func Read() (Params, error) {
 	b, err := os.ReadFile("/proc/cmdline")
 	if err != nil {
@@ -39,8 +26,6 @@ func Read() (Params, error) {
 	return Parse(string(b)), nil
 }
 
-// Parse extracts imp.* parameters from a kernel command line. Values may be
-// double-quoted, as the kernel allows: imp.x="a b".
 func Parse(line string) Params {
 	p := Params{Raw: make(map[string]string)}
 	for _, field := range split(line) {
@@ -80,7 +65,7 @@ func Parse(line string) Params {
 	return p
 }
 
-// split breaks a command line on whitespace outside double quotes.
+// The kernel allows a double-quoted value with spaces: imp.x="a b".
 func split(line string) []string {
 	var out []string
 	var cur strings.Builder

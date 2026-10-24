@@ -12,8 +12,6 @@ import { STORAGE_PATHS } from './storage-paths';
 import type { BootstrapRun, BootstrapTarget } from './types';
 import { waitForImpHost } from './wait-for-imp-host';
 
-// --storage zfs on a loop device, for real: a pool, the dataset, imp-host on it, then --check and a
-// second run. The pool is kernel-global, so it takes a name unique to the run.
 export async function runZfsLeg(run: BootstrapRun): Promise<void> {
   const distro = 'ubuntu24';
   const pool = run.zfsPool;

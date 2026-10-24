@@ -9,8 +9,6 @@ import { waitForImpHost } from './wait-for-imp-host';
 
 const NONE = ['--host-firewall', 'none'];
 
-// --host-firewall none takes out the imp table and its unit, a later run keeps none, and a table
-// that comes back is drift.
 export async function checkHostFirewallNone(
   run: BootstrapRun,
   target: BootstrapTarget,

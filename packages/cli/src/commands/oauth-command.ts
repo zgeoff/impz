@@ -215,7 +215,6 @@ export const oauthCommand = defineGroup({
   subCommands: { client: clientCommand, grant: grantCommand, approve: approveCommand },
 });
 
-// --redirect-uri 'https://a/cb,https://b/cb'
 function parseRedirectUris(text: string): string[] {
   const uris = text
     .split(',')

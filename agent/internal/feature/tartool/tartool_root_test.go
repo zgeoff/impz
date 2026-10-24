@@ -1,7 +1,5 @@
 //go:build root
 
-// The tests that chown, so they need root: run them with -tags root as root.
-
 package tartool
 
 import (
@@ -16,8 +14,6 @@ import (
 	"gotest.tools/v3/assert/cmp"
 )
 
-// ownership maps each name under dir to its uid:gid, without following
-// symlinks.
 func ownership(t *testing.T, dir string, names ...string) map[string][2]uint32 {
 	t.Helper()
 	got := map[string][2]uint32{}
@@ -29,8 +25,6 @@ func ownership(t *testing.T, dir string, names ...string) map[string][2]uint32 {
 	return got
 }
 
-// As root: every entry the copy makes belongs to the owner; a directory
-// that was there keeps its own
 func TestExtractGivesEveryEntryToTheOwner(t *testing.T) {
 	dir := t.TempDir()
 	archive := buildArchive(t,
@@ -50,8 +44,6 @@ func TestExtractGivesEveryEntryToTheOwner(t *testing.T) {
 	assert.Check(t, cmp.DeepEqual(ownership(t, dir, "."), map[string][2]uint32{".": {0, 0}}))
 }
 
-// As root: with no owner, the copy belongs to the owner of the directory it
-// lands in
 func TestExtractWithNoOwnerGivesTheCopyToTheDirectorysOwner(t *testing.T) {
 	dir := t.TempDir()
 	assert.NilError(t, os.Chown(dir, 4242, 4343))

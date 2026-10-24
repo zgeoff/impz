@@ -27,8 +27,6 @@ async function setupTest() {
   stack.defer(() => rm(dataDir, { recursive: true, force: true }));
 
   const events: string[] = [];
-
-  // a test sets this to run work while a template's clone is under way
   const clones = { after: (): Promise<unknown> => Promise.resolve() };
 
   const cloneDisk = async (source: string, target: string) => {

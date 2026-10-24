@@ -15,8 +15,8 @@ import (
 	"github.com/zgeoff/impz/agent/internal/proto"
 )
 
-// defaultFreezeTimeout auto-thaws / if the host never sends thaw, so a host
-// crash mid-checkpoint cannot leave the guest wedged.
+// A host that crashes mid-checkpoint never sends thaw, and would leave the
+// guest wedged.
 const defaultFreezeTimeout = 30 * time.Second
 
 // _IOWR('X', 119, int) and _IOWR('X', 120, int); x/sys/unix lacks them.
@@ -30,8 +30,6 @@ var (
 	errPoweringOff = &proto.Error{Code: proto.ErrPoweringOff, Message: "the guest is powering off"}
 )
 
-// freeze FIFREEZEs the root filesystem; the kernel syncs it first. A second
-// freeze fails with FROZEN; it does not extend the first one's auto-thaw.
 func (s *Server) freeze(timeout time.Duration) error {
 	if timeout <= 0 {
 		timeout = defaultFreezeTimeout
@@ -80,14 +78,11 @@ func (s *Server) freeze(timeout time.Duration) error {
 	return nil
 }
 
-// growTimeout bounds the wait for the guest to see the disk's new size.
 const growTimeout = 10 * time.Second
 
-// grow resizes the root filesystem once the disk reaches diskBytes. A frozen
-// filesystem would block the resize, so a grow during a freeze fails with
-// FROZEN, and a freeze waits for a grow. impd sends grow, freeze and thaw
-// under the imp's lock, which orders them; freezeMu guards the agent's own
-// state, whatever the order they arrive in.
+// A frozen filesystem would block the resize. impd orders grow, freeze and
+// thaw under the imp's lock; the mutex guards the agent's own state, whatever
+// the order they arrive in.
 func (s *Server) grow(diskBytes int64) error {
 	s.freezeMu.Lock()
 	defer s.freezeMu.Unlock()
@@ -101,15 +96,14 @@ func (s *Server) grow(diskBytes int64) error {
 	return waitAndGrow(inner.UserRoot, diskBytes, growTimeout)
 }
 
-// thaw FITHAWs the root filesystem. Thawing an unfrozen fs is not an error.
 func (s *Server) thaw() error {
 	s.freezeMu.Lock()
 	defer s.freezeMu.Unlock()
 	return s.thawLocked()
 }
 
-// ThawForPoweroff thaws the root filesystem and refuses later freezes, so
-// poweroff can stop processes, sync and remount without blocking on it.
+// Poweroff stops processes, syncs and remounts, which a frozen filesystem
+// would block.
 func (s *Server) ThawForPoweroff() error {
 	s.freezeMu.Lock()
 	defer s.freezeMu.Unlock()

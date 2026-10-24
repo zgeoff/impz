@@ -17,11 +17,8 @@ import (
 	"github.com/zgeoff/impz/agent/internal/proto"
 )
 
-// startedPanics is a guest connection whose write of the STARTED frame
-// panics once release closes, standing in for a bug in Serve itself. The
-// test closes release once the child has written its pid, so it knows which
-// process to watch. It counts on proto.Writer sending each frame in one
-// Write that starts with the frame's type.
+// This and the STDOUT stand-in count on the frame writer sending each frame
+// in one Write that starts with the frame's type.
 type startedPanics struct {
 	net.Conn
 	release <-chan struct{}
@@ -35,9 +32,6 @@ func (c startedPanics) Write(b []byte) (int, error) {
 	return c.Conn.Write(b)
 }
 
-// stdoutPanics is a guest connection whose writes of STDOUT frames panic,
-// standing in for a bug in an output pump. It counts on proto.Writer as
-// startedPanics does.
 type stdoutPanics struct{ net.Conn }
 
 func (c stdoutPanics) Write(b []byte) (int, error) {
@@ -106,8 +100,6 @@ func TestTheStandInConnectionsPassOtherFramesThrough(t *testing.T) {
 	}
 }
 
-// A panic in Serve's own body hangs up the process before the panic travels
-// on to the request handler.
 func TestServeHangsUpTheProcessWhenItsOwnBodyPanics(t *testing.T) {
 	pidFile := filepath.Join(t.TempDir(), "pid")
 	guest, conn := net.Pipe()
@@ -140,8 +132,6 @@ func TestServeHangsUpTheProcessWhenItsOwnBodyPanics(t *testing.T) {
 	}, poll.WithTimeout(5*time.Second), poll.WithDelay(20*time.Millisecond))
 }
 
-// A panic in a session goroutine ends that session (the process gets SIGHUP)
-// instead of the agent.
 func TestServeHangsUpTheProcessWhenASessionGoroutinePanics(t *testing.T) {
 	prev := log.Writer()
 	log.SetOutput(io.Discard)

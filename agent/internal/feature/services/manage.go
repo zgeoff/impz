@@ -16,12 +16,9 @@ import (
 	"github.com/zgeoff/impz/agent/internal/proto"
 )
 
-// NameRule is the rule for a service added through the API: the name is a
-// file name in services.d and in the log dir. impd checks the same rule.
+// impd checks the same rule.
 var NameRule = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 
-// checkName keeps a name to the rule, so no op reaches a path outside
-// services.d or the log dir
 func checkName(name string) error {
 	if !NameRule.MatchString(name) {
 		return badRequest("name " + name + ": want a lowercase letter or digit, then up to 62 of a-z 0-9 -")
@@ -37,8 +34,6 @@ func noService(name string) error {
 	return &proto.Error{Code: proto.ErrNoService, Message: "no service " + name}
 }
 
-// Add writes def to services.d and starts it. A service or file with the
-// same name is SERVICE_EXISTS unless replace, which stops it first.
 func (s *Supervisor) Add(def *Def, replace bool) error {
 	if err := checkName(def.GetName()); err != nil {
 		return err
@@ -75,7 +70,6 @@ func (s *Supervisor) Add(def *Def, replace bool) error {
 	return nil
 }
 
-// Remove stops a service and deletes its file. Its logs stay.
 func (s *Supervisor) Remove(name string) error {
 	if err := checkName(name); err != nil {
 		return err
@@ -97,9 +91,6 @@ func (s *Supervisor) Remove(name string) error {
 	return removeFile(s.fsys, path)
 }
 
-// Restart stops a service and starts it again from its file, so an edit to
-// the file applies; a file written after boot starts for the first time. A
-// service whose file is gone restarts as it was.
 func (s *Supervisor) Restart(name string) error {
 	if err := checkName(name); err != nil {
 		return err
@@ -145,8 +136,6 @@ func (s *Supervisor) find(name string) *service {
 	return s.services[name]
 }
 
-// stopOne stops a service as StopAll does, SIGTERM then SIGKILL after
-// stopGrace, waits for its loop to return, and forgets it.
 func (s *Supervisor) stopOne(svc *service) {
 	s.mu.Lock()
 	if !isClosed(svc.stop) {
@@ -175,9 +164,8 @@ func (s *Supervisor) stopOne(svc *service) {
 	s.mu.Unlock()
 }
 
-// writeDef writes the file whole or not at all: a temp file, synced, then
-// renamed over the old one. The temp name does not end in .json, so a crash
-// leaves nothing Load would start.
+// A crash leaves at most the temp file, whose name does not end in .json, so
+// boot starts nothing half-written.
 func writeDef(fsys fsroot.FS, path string, def *Def) error {
 	// the file name is the name
 	file := gproto.CloneOf(def)

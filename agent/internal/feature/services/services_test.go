@@ -82,7 +82,6 @@ func TestReadDefTakesTheNameFromTheFileAndFillsTheDefaults(t *testing.T) {
 			want: &Def{Name: new("web"), Argv: []string{"httpd"}, Restart: new("always"), Source: new("image")},
 		},
 		{
-			// the file name is the name; a name field cannot claim another
 			name: "a name field is ignored",
 			file: "x.json",
 			body: `{"name":"api","argv":["api"],"restart":"on-failure","source":"api"}`,
@@ -108,8 +107,8 @@ func TestReadDefTakesTheNameFromTheFileAndFillsTheDefaults(t *testing.T) {
 	}
 }
 
-// The messages are contract: Add and Restart hand them back as the
-// BAD_REQUEST message.
+// The messages are contract: the API hands them back as the BAD_REQUEST
+// message.
 func TestReadDefRejectsADefinitionTheSupervisorCannotRun(t *testing.T) {
 	for _, tc := range []struct {
 		name string

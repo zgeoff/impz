@@ -2,7 +2,6 @@ import type { StorageBackend } from '../../src/vm/storage/storage-backend';
 
 type AfterPublish = (digest: string) => Promise<unknown>;
 
-// Runs work in the window between a rootfs landing and the caller writing the image's row.
 export function buildStubPublishHook() {
   const hook: { after: AfterPublish } = { after: () => Promise.resolve() };
 

@@ -12,8 +12,6 @@ import (
 	"gotest.tools/v3/assert/cmp"
 )
 
-// setup makes a root dir with an etc directory, and an "outside" dir next
-// to it holding the agent's secret, which no path in the root may reach.
 func setup(t *testing.T) (*Root, string, string) {
 	t.Helper()
 	base := t.TempDir()
@@ -42,7 +40,6 @@ func TestSetupOpensARootBesideAnOutsideSecret(t *testing.T) {
 
 func TestReadFileResolvesAnAbsoluteSymlinkInsideTheRoot(t *testing.T) {
 	r, inside, outside := setup(t)
-	// the user plants /etc/hosts -> <the agent's path>
 	assert.NilError(t, os.Symlink(filepath.Join(outside, "secret"), filepath.Join(inside, "etc/hosts")))
 
 	_, err := r.ReadFile("/etc/hosts")

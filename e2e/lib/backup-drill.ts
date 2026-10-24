@@ -209,10 +209,7 @@ export interface BackupDrill {
 
 interface BackupDrillDeps {
   readonly removeState: () => Promise<void>;
-
-  // An empty env reboots onto the run's own settings.
   readonly reboot: (env: Readonly<Record<string, string>>) => Promise<void>;
-
   readonly startMinio: (secrets: Readonly<BackupSecrets>) => Promise<void>;
   readonly stopMinio: () => Promise<void>;
   readonly runBackup: () => Promise<BackupRun>;
@@ -238,8 +235,6 @@ export function wireBackupDrill(stack: AsyncDisposableStack, metric: string): Ba
   });
 }
 
-// The split of a backup test's time goes to one metric when the test ends,
-// since the reboot back off the backup settings runs in its cleanup.
 export function createBackupDrill(
   stack: AsyncDisposableStack,
   metric: string,

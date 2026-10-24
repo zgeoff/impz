@@ -27,10 +27,8 @@ const (
 	previousGn = "fedcba9876543210fedcba9876543210"
 )
 
-// guestMessages is one value per message the agent sends impd, with every
-// field of every message set in at least one of them, so impd's tests see
-// each field the agent can send. The fixtures hold them as the agent's own
-// writer marshals them.
+// Every field of every message is set in at least one value, so impd's tests
+// see each field the agent can send.
 func guestMessages() map[string]any {
 	previous := &proto.Previous{ExecutionGeneration: previousGn, End: 2048, Exit: &proto.Exit{Code: 1}}
 	output := func(resume *proto.Resume) *proto.Output {
@@ -80,8 +78,6 @@ func guestMessages() map[string]any {
 	}
 }
 
-// guestFixtures is every file in testdata/guest: the messages, and the
-// numbers and names impd copies from the agent.
 func guestFixtures(t *testing.T) map[string]any {
 	t.Helper()
 	fixtures := guestMessages()
@@ -160,7 +156,6 @@ func TestEveryFrameTypeHasAName(t *testing.T) {
 	assert.DeepEqual(t, unnamed, []string(nil))
 }
 
-// frameTypes maps each frame type's name to its number.
 func frameTypes(t *testing.T) map[string]int {
 	t.Helper()
 	types := map[string]int{}
@@ -170,7 +165,6 @@ func frameTypes(t *testing.T) map[string]int {
 	return types
 }
 
-// errorCodes is every Err constant of the proto package, sorted.
 func errorCodes(t *testing.T) []string {
 	t.Helper()
 	var codes []string

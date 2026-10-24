@@ -134,7 +134,7 @@ export async function startBudgetMonitor(
     isRunning: true,
     stopped: null as Promise<void> | null,
 
-    // Kept for stop() to rethrow, so it is never an unhandled rejection.
+    // Kept for the stop to rethrow, so it is never an unhandled rejection.
     failure: null as Error | null,
   };
 

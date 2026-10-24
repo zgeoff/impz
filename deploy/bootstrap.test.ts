@@ -10,9 +10,7 @@ import { createStubBin } from '../scripts/test-utils/create-stub-bin';
 import { readEnvValues } from '../scripts/test-utils/read-env-values';
 import { runSourcedFunction } from '../scripts/test-utils/run-sourced-function';
 
-// bootstrap.sh's own functions (host-env.test.ts has the shared ones); test-bootstrap.sh runs it.
-// render_env's args: env file, template, budget, image, image set, storage, zfs root,
-// firewall, ipv6, subnet6, ksm; it gets files through $(...), which drops trailing newlines.
+// A function that gets a file through $(...) loses the file's trailing newlines.
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-bootstrap-'));
 
@@ -793,7 +791,6 @@ test('#subnet6 accepts the subnet random_ula64 picks as it is', () => {
   expect(checked).toStrictEqual({ exitCode: 0, stdout: `${subnet}\n`, stderr: '' });
 });
 
-// an existing right network gives its subnet to an env file without one
 test('#network_subnet6 reads the subnet of a network that is right', () => {
   const script = new URL('bootstrap.sh', import.meta.url).pathname;
 
@@ -2539,7 +2536,6 @@ test('#check_ipv6_live refuses an impd that logs IPv6 off, quoting its line', ()
   });
 });
 
-// one second is one try, with no sleep after it
 test('#wait_for gives up once its seconds pass without the command succeeding', () => {
   const script = new URL('bootstrap.sh', import.meta.url).pathname;
 

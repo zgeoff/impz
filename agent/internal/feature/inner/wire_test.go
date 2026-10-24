@@ -8,7 +8,6 @@ import (
 	"gotest.tools/v3/assert"
 )
 
-// socketpair makes the SEQPACKET pair and closes both ends after the test.
 func socketpair(t *testing.T) [2]int {
 	t.Helper()
 	sp, err := newSocketpair()
@@ -29,7 +28,6 @@ func TestRecvReportsAPeerThatShutTheSocketAsClosed(t *testing.T) {
 	assert.ErrorIs(t, err, errClosed)
 }
 
-// The error carries no sentinel; its text is its only identity.
 func TestRecvRefusesAMessageLongerThanItsBuffer(t *testing.T) {
 	sp := socketpair(t)
 	assert.NilError(t, send(sp[1], message{Op: opSpawn, Spec: &wireSpec{Argv: []string{"a long enough argv"}}}, nil))

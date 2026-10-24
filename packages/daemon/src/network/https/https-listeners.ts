@@ -8,8 +8,7 @@ import { parseDomainHost } from './parse-domain-host';
 export interface HttpsListeners {
   readonly setCertificate: (certificate: Certificate) => void;
 
-  // the addresses to listen on: loopback and the tailnet IP, never 0.0.0.0,
-  // so a port published to the internet never reaches these listeners
+  // loopback and the tailnet IP, never 0.0.0.0, so a port published to the internet never reaches these listeners
   readonly setAddresses: (addresses: readonly string[]) => void;
 
   readonly readPorts: () => { readonly https: number | null; readonly http: number | null };

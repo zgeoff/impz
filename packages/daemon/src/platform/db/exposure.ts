@@ -10,8 +10,6 @@ export interface PublicImp {
   readonly stored: StoredPublicAuth;
 }
 
-// undefined for a tailnet-only imp as for an unknown one, which both get the
-// same 404
 export async function readPublicImp(db: ImpDatabase, name: string): Promise<PublicImp | undefined> {
   const row = await db
     .selectFrom('imps')

@@ -3,7 +3,6 @@ import { DevError } from '../lib/dev-error.ts';
 import { StopError } from './stop-error.ts';
 import type { ZfsIO } from './types.ts';
 
-// The exit code a failed step gives the run, as bash's set -e gives a failed command's own code.
 export function reportZfsError(
   io: Pick<ZfsIO, 'writeStderr'>,
   prefix: string,

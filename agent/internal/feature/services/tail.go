@@ -15,26 +15,17 @@ import (
 )
 
 const (
-	// MaxLogLines bounds the lines services.logs sends before it follows.
 	MaxLogLines = 100_000
 	tailBlock   = 64 << 10
 	followEvery = 250 * time.Millisecond
 )
 
-// LogRequest is what services.logs asks for: the last Lines lines, or with
-// Cursor, everything after it; and with Follow, what comes after that.
 type LogRequest struct {
 	Lines  int
 	Follow bool
 	Cursor *proto.LogCursor
 }
 
-// Logs streams a service's log on w: a RESPONSE {"ok":true}, then STDOUT
-// frames, each followed by a CURSOR that names the file and the offset the
-// stream has reached. Without Follow, STDOUT_EOF ends it. With Follow, it
-// sends what the service writes until done closes, through both kinds of
-// rotation. A removed service's log still streams; a name with no service
-// and no log is NO_SERVICE.
 func (s *Supervisor) Logs(name string, req LogRequest, w *proto.Writer, done <-chan struct{}) error {
 	if req.Lines < 0 || req.Lines > MaxLogLines {
 		return badRequest("lines: want 0 to 100000")
@@ -69,15 +60,12 @@ func (s *Supervisor) Logs(name string, req LogRequest, w *proto.Writer, done <-c
 	return s.followLog(path, cur, w, done)
 }
 
-// logFile is an open log, its inode, and how far into it the stream has
-// sent.
 type logFile struct {
 	f      *os.File
 	ino    uint64
 	offset int64
 }
 
-// openLogFile opens a log and reads its size; nil when it does not exist.
 func openLogFile(fsys fsroot.FS, path string) (*logFile, int64, error) {
 	f, err := fsys.OpenFile(path, os.O_RDONLY|unix.O_NONBLOCK, 0)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -104,7 +92,6 @@ func (lf *logFile) close() {
 	}
 }
 
-// send sends the file from its offset to end, a CURSOR after each chunk.
 func (lf *logFile) send(end int64, w *proto.Writer) error {
 	buf := make([]byte, tailBlock)
 	for lf.offset < end {
@@ -129,8 +116,6 @@ func (lf *logFile) send(end int64, w *proto.Writer) error {
 	return nil
 }
 
-// sendTail sends the last n lines across <path>.1 and the first size bytes
-// of cur, and leaves cur at size.
 func sendTail(fsys fsroot.FS, path string, cur *logFile, size int64, n int, w *proto.Writer) error {
 	start, found := int64(0), 0
 	if cur != nil {
@@ -157,10 +142,6 @@ func sendTail(fsys fsroot.FS, path string, cur *logFile, size int64, n int, w *p
 	return cur.send(size, w)
 }
 
-// sendFromCursor sends what comes after the cursor and leaves cur at size.
-// The cursor names <path> itself, or <path>.1 once a start rotated it
-// there; a file that shrank below it (a copytruncate) starts again from 0.
-// A cursor in neither file is a log rotated past it: <path> goes whole.
 func sendFromCursor(fsys fsroot.FS, path string, cur *logFile, size int64, c *proto.LogCursor, w *proto.Writer) error {
 	ino, offset := uint64(c.GetInode()), int64(c.GetOffset())
 	if cur != nil && cur.ino == ino {
@@ -186,9 +167,6 @@ func sendFromCursor(fsys fsroot.FS, path string, cur *logFile, size int64, c *pr
 	return cur.send(size, w)
 }
 
-// findLastLines returns where the last n lines of f's first size bytes
-// start, reading back a block at a time, and how many lines it found. A
-// last line without a newline counts as a line.
 func findLastLines(f *os.File, size int64, n int) (int64, int) {
 	if n == 0 || size == 0 {
 		return size, 0
@@ -226,10 +204,6 @@ func findLastLines(f *os.File, size int64, n int) (int64, int) {
 	return 0, min(found, n)
 }
 
-// followLog polls the log. A rotation by rename (at a service start) leaves
-// a new file at path: the rest of the old one goes first. A copytruncate
-// (the rotator) empties the file: the rest of the copy in <path>.1 goes
-// first, then reading starts again from 0.
 func (s *Supervisor) followLog(path string, cur *logFile, w *proto.Writer, done <-chan struct{}) error {
 	defer func() { cur.close() }()
 	truncs, _, err := s.readLogState(path)
@@ -276,8 +250,6 @@ func (s *Supervisor) followLog(path string, cur *logFile, w *proto.Writer, done 
 	}
 }
 
-// sendCopyRest sends what a copytruncate copied to <path>.1 past offset:
-// what the service wrote after the follow's last read.
 func sendCopyRest(fsys fsroot.FS, path string, offset int64, w *proto.Writer) error {
 	old, size, err := openLogFile(fsys, path+".1")
 	if err != nil || old == nil {
@@ -291,8 +263,6 @@ func sendCopyRest(fsys fsroot.FS, path string, offset int64, w *proto.Writer) er
 	return old.send(size, w)
 }
 
-// sendNew sends what was written past the offset, from 0 after a truncate
-// the rotator did not do.
 func sendNew(cur *logFile, w *proto.Writer) error {
 	fi, err := cur.f.Stat()
 	if err != nil {

@@ -245,8 +245,6 @@ export const FAST_GROUPS: readonly (readonly string[])[] = [
   ],
   ['sleep', 'reverse', 'jail'],
   ['mcp', 'mcp-oauth', 'inner', 'memory', 'ksm'],
-
-  // The suites that join the run's Headscale tailnet.
   ['tailscale', 'egress', 'moves-tailnet'],
 ];
 

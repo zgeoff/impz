@@ -5,8 +5,6 @@ import { join } from 'node:path';
 import { createStubBin } from '../../scripts/test-utils/create-stub-bin';
 import { runSourcedFunction } from '../../scripts/test-utils/run-sourced-function';
 
-// host-env.sh's functions, sourced as upgrade.sh and the NixOS module source them;
-// deploy/bootstrap.test.ts tests bootstrap.sh's own.
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-host-env-lib-'));
 
@@ -87,7 +85,7 @@ test('#check_ram_budget accepts a budget of 512 MiB', () => {
   ).toStrictEqual({ exitCode: 0, stdout: '', stderr: '' });
 });
 
-// SSH, DHCP and ICMP only; a reload replaces our table in one transaction, never Docker's
+// a reload replaces this table in one transaction, never Docker's
 test('#render_firewall renders a table of its own that opens only SSH, DHCP and ICMP', () => {
   const script = new URL('host-env.sh', import.meta.url).pathname;
 

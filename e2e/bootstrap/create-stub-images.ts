@@ -3,9 +3,8 @@ import type { BootstrapIO } from './types';
 export const STUB_IMAGE = 'imp-host-stub:test';
 export const STALE_STUB_IMAGE = 'imp-host-stub:stale';
 
-// Stands in for the release image: the unit runs it with the same flags, so every phase but the
-// health check runs as on a server. Its tailscale reports Running and it saves node state, so the
-// bootstrap's tailscale phase (wait, then blank the key) runs too.
+// Its tailscale reports Running and it saves node state, so bootstrap.sh's tailscale phase (wait,
+// then blank the key) runs as on a server.
 const STUB_DOCKERFILE = `FROM debian:trixie-slim
 LABEL imp.tailscale-keyless="1"
 LABEL imp.host-contract="socket-proxy"

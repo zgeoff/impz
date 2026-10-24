@@ -109,8 +109,6 @@ func TestWriteResolvConfKeepsTheImagesFileWithoutServers(t *testing.T) {
 	assert.Equal(t, string(b), "nameserver 9.9.9.9\n")
 }
 
-// Images often link resolv.conf into systemd-resolved's runtime dir, which
-// nothing in an imp fills: the link becomes a plain file and its target stays.
 func TestWriteResolvConfReplacesASymlinkWithAPlainFile(t *testing.T) {
 	dir := t.TempDir()
 	path, target := filepath.Join(dir, "resolv.conf"), filepath.Join(dir, "stub-resolv.conf")
@@ -157,11 +155,9 @@ func TestUp6WithoutAnAddressDoesNothing(t *testing.T) {
 	assert.NilError(t, err)
 }
 
-// This runs against the host's real netlink: a fresh network namespace
-// needs CAP_SYS_ADMIN, or a user namespace that a multi-threaded test binary
-// cannot enter. Up6 looks the link up by name before it writes anything, so
-// with no such link it fails at a read-only lookup. The test refuses to run
-// if a link of that name exists, since Up6 would then configure it.
+// The host's real netlink: a fresh network namespace needs CAP_SYS_ADMIN, or
+// a user namespace that a multi-threaded test binary cannot enter. With no
+// such link, the call fails at a read-only lookup before it writes anything.
 func TestUp6FailsForAMissingLink(t *testing.T) {
 	_, err := netlink.LinkByName("no-such-link")
 	var absent netlink.LinkNotFoundError

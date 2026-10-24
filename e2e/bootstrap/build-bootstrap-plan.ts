@@ -6,7 +6,6 @@ type BootstrapLeg =
   | { readonly kind: 'device' }
   | { readonly kind: 'zfs' };
 
-// The --data-device leg follows Debian's loop-file leg, and the real ZFS pool runs last.
 export function buildBootstrapPlan(args: BootstrapArgs): readonly BootstrapLeg[] {
   const legs = args.distros.flatMap((distro): BootstrapLeg[] =>
     distro === 'debian'

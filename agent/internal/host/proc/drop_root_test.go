@@ -31,8 +31,6 @@ func init() {
 	}
 }
 
-// setupReadOnlyBind mounts a tmpfs and binds it read-only, as the inner init
-// binds the read-only files, and returns the bind.
 func setupReadOnlyBind(t *testing.T) string {
 	t.Helper()
 	src, target := t.TempDir(), t.TempDir()
@@ -45,8 +43,6 @@ func setupReadOnlyBind(t *testing.T) string {
 	return target
 }
 
-// parseCapSet reads one capability set of /proc/self/status, as `grep` in
-// the child printed it.
 func parseCapSet(t *testing.T, out, name string) uint64 {
 	t.Helper()
 	for _, line := range strings.Split(out, "\n") {

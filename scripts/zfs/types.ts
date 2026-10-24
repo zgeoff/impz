@@ -10,8 +10,6 @@ interface ZfsFiles {
   // A symlink counts, whether or not its target exists.
   readonly probePath: (path: string) => boolean;
   readonly probeDirectory: (path: string) => boolean;
-
-  // A file that cannot be read gives null.
   readonly readText: (path: string) => string | null;
 
   readonly writeText: (path: string, text: string) => void;
@@ -24,16 +22,12 @@ interface ZfsFiles {
   readonly createEmptyFile: (path: string) => void;
 
   readonly removeFile: (path: string) => void;
-
-  // A directory that is not empty, or not there, stays as it is.
   readonly removeEmptyDirectory: (path: string) => void;
 }
 
 interface ZfsChildOptions {
   readonly cwd: string;
   readonly env: DevEnv;
-
-  // pipe gives the child's stdout and stderr to the caller to read; inherit passes them through.
   readonly output: 'inherit' | 'pipe';
 }
 
@@ -47,8 +41,6 @@ export interface ZfsChild {
   readonly stderr: ReadableStream<Uint8Array> | null;
 }
 
-// What zfs-host-test finds on the host before it touches anything. Without the zfs module it asks
-// zpool and Docker nothing.
 export type ZfsHostFacts =
   | { readonly module: 'missing' }
   | {

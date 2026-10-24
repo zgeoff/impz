@@ -4,9 +4,6 @@ import * as z from 'zod';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import type { Upstream } from './forward-request';
 
-// a test file adds a CA that fake upstreams verify against; it never turns
-// verification off
-
 const FileSchema = z.object({
   ca: z.string().includes('-----BEGIN CERTIFICATE-----'),
   upstreams: z.record(z.string(), z.url({ protocol: /^https$/u })),

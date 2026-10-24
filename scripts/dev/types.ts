@@ -13,8 +13,6 @@ export interface DevFiles {
   readonly probePath: (path: string) => boolean;
   readonly probeFile: (path: string) => boolean;
   readonly probeDirectory: (path: string) => boolean;
-
-  // A file that cannot be read gives null.
   readonly readText: (path: string) => string | null;
   readonly readBytes: (path: string) => Uint8Array;
 
@@ -22,8 +20,6 @@ export interface DevFiles {
   readonly readRealPath: (path: string) => string;
 
   readonly writeText: (path: string, text: string) => void;
-
-  // Makes the parent folder, and only the owner can read the file.
   readonly writeSecretText: (path: string, text: string) => void;
   readonly createDirectory: (path: string) => void;
   readonly rename: (from: string, to: string) => void;
@@ -32,8 +28,6 @@ export interface DevFiles {
 
 export interface DevIO {
   readonly shell: DevShell;
-
-  // Runs a command on the caller's terminal and gives its exit code.
   readonly runAttached: (argv: readonly string[]) => Promise<number>;
   readonly files: DevFiles;
   readonly makeOpReader: (env: DevEnv) => OpReader | null;

@@ -111,8 +111,7 @@ async function readStream(
 
     return 'impd closed it';
   } catch (error) {
-    // an impd from before the stream has no such procedure; say which to
-    // upgrade
+    // an impd from before the stream has no such procedure
     if (isMissingStream(error)) {
       const check = await source.checkServer();
 

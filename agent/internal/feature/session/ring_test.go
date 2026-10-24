@@ -9,10 +9,8 @@ import (
 	"gotest.tools/v3/assert/cmp"
 )
 
-// The ring holds exactly the last ringSize bytes, wherever the writes split,
-// and From reads any offset it holds. The writes come from a fixed seed, so
-// a failure replays; each step checks the invariants after its write.
 func TestRingKeepsExactlyTheLastBytesWhereverTheWritesSplit(t *testing.T) {
+	// a fixed seed, so a failure replays
 	rng := rand.New(rand.NewPCG(1, 2))
 	r := newRing(ringSize)
 	var all []byte

@@ -7,7 +7,6 @@ interface ApplyCall {
   readonly failure: string;
 }
 
-// A bootstrap.sh --yes run that must succeed; its output comes back for the checks after it.
 export async function applyBootstrap(
   run: BootstrapRun,
   target: BootstrapTarget,

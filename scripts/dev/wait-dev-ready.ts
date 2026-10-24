@@ -6,7 +6,6 @@ import type { Dev } from './types.ts';
 
 const POLL_MS = 500;
 
-// Ready means /health reports the default image seeded.
 export async function waitDevReady(dev: Dev, defaultSeconds: number): Promise<void> {
   const seconds = parseSecondsSetting(dev.env, 'IMP_DEV_READY_TIMEOUT_S', defaultSeconds);
   const deadline = dev.io.now() + seconds * 1000;

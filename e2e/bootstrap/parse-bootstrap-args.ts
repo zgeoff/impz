@@ -33,7 +33,6 @@ const FLAGS = ['stub', 'health', 'keep', 'zfs', 'help'] as const;
 
 type Flag = (typeof FLAGS)[number];
 
-// Not strict, so the tokens arrive in order and the first bad one names itself as bash's loop did.
 export function parseBootstrapArgs(argv: readonly string[]): ParsedBootstrapArgs {
   const parsed = parseArgs({
     args: [...argv],
@@ -46,6 +45,8 @@ export function parseBootstrapArgs(argv: readonly string[]): ParsedBootstrapArgs
       zfs: { type: 'boolean' },
       help: { type: 'boolean', short: 'h' },
     },
+
+    // Not strict, so the tokens arrive in order and the first bad one names itself.
     strict: false,
     allowPositionals: true,
     tokens: true,

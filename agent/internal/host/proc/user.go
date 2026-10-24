@@ -17,26 +17,17 @@ import (
 	"github.com/zgeoff/impz/agent/internal/host/fsroot"
 )
 
-// The account files.
 const (
 	passwdPath = "/etc/passwd"
 	groupPath  = "/etc/group"
 )
 
-// LookupUser resolves "", "name", "uid", "name:group" or "uid:gid" against
-// the guest's /etc/passwd and /etc/group, as runc resolves docker exec -u.
-// os/user would need cgo or NSS for anything beyond the files, and the
-// files are all a guest image has. It returns nil credentials for root, so
-// the child inherits the agent's.
-//
-// A user with no group given also gets every group that lists it as a
-// member; an explicit group is the only group.
+// The resolution follows runc's for docker exec -u. os/user would need cgo or
+// NSS for anything beyond the files, and the files are all a guest image has.
 func LookupUser(spec string) (*syscall.Credential, string, error) {
 	return LookupUserIn(fsroot.Host, spec)
 }
 
-// LookupUserIn is LookupUser against the account files of fsys, such as
-// the inner container's root as the agent reaches it.
 func LookupUserIn(fsys fsroot.FS, spec string) (*syscall.Credential, string, error) {
 	if spec == "" || spec == "root" || spec == "0" {
 		return nil, "/root", nil
@@ -80,11 +71,9 @@ func LookupUserIn(fsys fsroot.FS, spec string) (*syscall.Credential, string, err
 	return &syscall.Credential{Uid: uint32(u.Uid), Gid: uint32(u.Gid), Groups: groups}, u.Home, nil
 }
 
-// readAccounts reads an account file of fsys and keeps only the lines whose
-// fields at idFields are ids the kernel takes. The library reads a missing or
-// malformed id as 0, which is root, and setresuid and setresgid read
-// (uid_t)-1 as "leave unchanged", which keeps the agent's root. A missing file
-// is a nil reader, which the library reads as no entries.
+// The library reads a missing or malformed id as 0, which is root, and
+// setresuid and setresgid read (uid_t)-1 as "leave unchanged", which keeps the
+// agent's root. The library reads a nil reader as no entries.
 func readAccounts(fsys fsroot.FS, path string, idFields ...int) (io.Reader, error) {
 	f, err := fsys.OpenFile(path, os.O_RDONLY, 0)
 	if errors.Is(err, os.ErrNotExist) {

@@ -4,12 +4,9 @@ import { createStubBin } from './create-stub-bin';
 import type { StubBin } from './create-stub-bin';
 
 export interface ZpoolStubOptions {
-  // A held create writes startedMarker, waits for the release file before it makes the pool, and
-  // fails without a pool when no release comes within 30 s.
   readonly create?: 'fails' | { readonly startedMarker: string; readonly release: string };
 
-  // busy fails the destroy as zpool does for a pool that a dataset hold keeps; ignored exits 0
-  // and the pool stays. A held destroy waits as a held create does, then destroys the pool.
+  // busy fails the destroy as zpool does for a pool that a dataset hold keeps.
   readonly destroy?:
     | 'fails'
     | 'busy'

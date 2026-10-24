@@ -14,7 +14,6 @@ import (
 	"gotest.tools/v3/assert"
 )
 
-// The test binary runs as the child when this is set: it prints its merge flag.
 const childEnv = "KSM_EXEC_TEST_CHILD"
 
 func TestMain(m *testing.M) {
@@ -30,7 +29,6 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-// kernelAtLeast reports whether the running kernel is major.minor or later.
 func kernelAtLeast(t *testing.T, major, minor int) bool {
 	t.Helper()
 	var uts unix.Utsname
@@ -38,8 +36,7 @@ func kernelAtLeast(t *testing.T, major, minor int) bool {
 	return releaseAtLeast(unix.ByteSliceToString(uts.Release[:]), major, minor)
 }
 
-// releaseAtLeast reports whether a kernel release string such as
-// "6.6.87.2-microsoft-standard-WSL2" is major.minor or later.
+// A release can read like "6.6.87.2-microsoft-standard-WSL2".
 func releaseAtLeast(release string, major, minor int) bool {
 	parts := strings.SplitN(release, ".", 3)
 	gotMajor, _ := strconv.Atoi(parts[0])
@@ -53,8 +50,6 @@ func releaseAtLeast(release string, major, minor int) bool {
 	return gotMajor > major || (gotMajor == major && gotMinor >= minor)
 }
 
-// buildKsmExec skips before Linux 6.7 or without KSM, else builds ksm-exec;
-// it returns that and this test binary, which runs as the child.
 func buildKsmExec(t *testing.T) (bin, self string) {
 	t.Helper()
 
@@ -118,12 +113,12 @@ func TestReleaseAtLeastComparesMajorThenMinor(t *testing.T) {
 	}
 }
 
-// runMerged sets the merge flag on this test process before its exec fails,
-// so the test puts the flag back as it found it.
+// The merge flag is set on this test process before the exec fails, so the
+// test puts it back as it found it.
 func TestRunMergedFailsForAMissingProgram(t *testing.T) {
 	// PR_GET_MEMORY_MERGE is EINVAL on a kernel without the prctl (before
-	// Linux 6.4, or without CONFIG_KSM), where runMerged fails before it
-	// looks at the program.
+	// Linux 6.4, or without CONFIG_KSM), where the call fails before it looks
+	// at the program.
 	prev, err := unix.PrctlRetInt(unix.PR_GET_MEMORY_MERGE, 0, 0, 0, 0)
 	if errors.Is(err, unix.EINVAL) {
 		t.Skip("this kernel has no PR_SET_MEMORY_MERGE")
@@ -136,7 +131,6 @@ func TestRunMergedFailsForAMissingProgram(t *testing.T) {
 	assert.ErrorIs(t, err, fs.ErrNotExist)
 }
 
-// Without the prctl, runMerged names what the kernel lacks.
 func TestRunMergedNamesTheMissingKernelFeature(t *testing.T) {
 	_, err := unix.PrctlRetInt(unix.PR_GET_MEMORY_MERGE, 0, 0, 0, 0)
 	if !errors.Is(err, unix.EINVAL) {

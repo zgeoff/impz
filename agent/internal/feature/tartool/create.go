@@ -12,11 +12,6 @@ import (
 	"syscall"
 )
 
-// Create writes path to w as a tar: one top entry named after path's base,
-// and for a directory everything below it. Directories, regular files and
-// symlinks go in, with their modes and times; a symlink is not followed.
-// Sockets, devices and FIFOs are left out, with a line on warn. A sparse
-// file goes in whole, its holes as zeros.
 func Create(path string, w io.Writer, warn io.Writer) error {
 	top := filepath.Base(path)
 	if top == "/" || top == "." {
@@ -69,7 +64,6 @@ func Create(path string, w io.Writer, warn io.Writer) error {
 	return tw.Close()
 }
 
-// countBytes is the size of every regular file under path, for progress
 func countBytes(path string) int64 {
 	var total int64
 	_ = filepath.WalkDir(path, func(_ string, d fs.DirEntry, err error) error {
@@ -83,7 +77,6 @@ func countBytes(path string) int64 {
 	return total
 }
 
-// buildHeader is p's header under name, or nil for a type a copy leaves out
 func buildHeader(p, name string) (*tar.Header, error) {
 	info, err := os.Lstat(p)
 	if err != nil {

@@ -12,7 +12,6 @@ import (
 	"gotest.tools/v3/assert/cmp"
 )
 
-// fakeIoctl records the ioctls freeze and thaw issue.
 type fakeIoctl struct {
 	mu    sync.Mutex
 	calls []uint
@@ -31,8 +30,7 @@ func (f *fakeIoctl) get() []uint {
 	return slices.Clone(f.calls)
 }
 
-// The auto-thaw timer runs on synctest's fake clock: the test steps to just
-// before and just past the timeout.
+// The auto-thaw timer runs on synctest's fake clock.
 func TestFreezeThawsItselfWhenTheTimeoutPasses(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		var f fakeIoctl
@@ -67,10 +65,9 @@ func TestFreezeWithoutATimeoutThawsItselfAfterTheDefault(t *testing.T) {
 	})
 }
 
-// An auto-thaw callback that fired while blocked on freezeMu, and so could
-// not be stopped, must not thaw a freeze that came after it. The test runs
-// the first freeze's callback itself, after the thaw and the next freeze, as
-// the blocked callback would once it took the lock.
+// Timer.Stop cannot stop a callback that fired and blocks on the lock, so the
+// test runs the first freeze's callback itself, after the thaw and the next
+// freeze, as the blocked callback would once it took the lock.
 func TestStaleAutoThawLeavesALaterFreezeFrozen(t *testing.T) {
 	var f fakeIoctl
 	var callbacks []func()
@@ -89,8 +86,6 @@ func TestStaleAutoThawLeavesALaterFreezeFrozen(t *testing.T) {
 	assert.Check(t, s.frozen, "the later freeze still holds")
 }
 
-// A timer that fires while freezeMu is held waits for the lock, then finds
-// its freeze thawed and a new one in place, and leaves the new one frozen.
 func TestAutoThawThatFiresWhileTheLockIsHeldWaitsAndThenLeavesALaterFreeze(t *testing.T) {
 	var f fakeIoctl
 	var callbacks []func()
@@ -106,7 +101,6 @@ func TestAutoThawThatFiresWhileTheLockIsHeldWaitsAndThenLeavesALaterFreeze(t *te
 	s.freezeMu.Lock()
 	held := true
 	fired := make(chan struct{})
-	// the timer fires: its callback runs on a goroutine of its own
 	go func() {
 		defer close(fired)
 		autoThaw()
@@ -122,9 +116,6 @@ func TestAutoThawThatFiresWhileTheLockIsHeldWaitsAndThenLeavesALaterFreeze(t *te
 			t.Error("the auto-thaw callback did not return")
 		}
 	})
-	// The callback has started while the lock is held. Whether it takes the
-	// lock before or after the later freeze below, it must leave that
-	// freeze alone.
 	select {
 	case <-started:
 	case <-time.After(5 * time.Second):
@@ -236,7 +227,6 @@ func TestFreezeAfterThawForPoweroffIsPoweringOff(t *testing.T) {
 	assert.Check(t, cmp.DeepEqual(f.get(), []uint{fiThaw}), "the refused freeze issued no ioctl")
 }
 
-// fakeGrow records the sizes grow asks the disk for.
 type fakeGrow struct {
 	grown []int64
 }

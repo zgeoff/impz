@@ -69,7 +69,6 @@ export async function writeSessionLog(
 
   const executionGeneration = await readGeneration(client, name, session, named);
 
-  // the output of one generation only: a reader who named none learns which
   if (named === undefined) {
     io.printError(`impz: generation ${executionGeneration}`);
   }

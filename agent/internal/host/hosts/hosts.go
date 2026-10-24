@@ -1,4 +1,3 @@
-// Package hosts keeps the user root's hosts file naming the imp.
 package hosts
 
 import (
@@ -12,12 +11,6 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// Update points the 127.0.1.1 line of the hosts file at name. It runs
-// every boot, because a fork or rename gives the imp a new hostname on the
-// same disk. OCI exports leave /etc/hosts empty (Docker bind-mounts it at
-// run time), so an empty or missing file gets a default one. A symlinked
-// hosts file is updated at its target, which resolves inside fsys; the
-// rename must not replace the link.
 func Update(fsys fsroot.FS, path, name string) error {
 	isLink := false
 	if fi, err := fsys.Lstat(path); err == nil && fi.Mode()&fs.ModeSymlink != 0 {
@@ -35,7 +28,7 @@ func Update(fsys fsroot.FS, path, name string) error {
 		return nil
 	}
 	if isLink {
-		// in place, through the link
+		// a rename would replace the link itself with a plain file
 		// O_NONBLOCK: a FIFO there fails instead of blocking the boot
 		f, err := fsys.OpenFile(path, os.O_WRONLY|unix.O_NONBLOCK, 0)
 		if err != nil {
@@ -58,11 +51,9 @@ func Update(fsys fsroot.FS, path, name string) error {
 	return fsroot.RewriteFile(fsys, path, []byte(out), 0o644)
 }
 
-// hostsWithName returns hosts with its first 127.0.1.1 line mapping to
-// name, or with such a line appended if there is none. A line that already
-// names it first keeps its aliases; later 127.0.1.1 lines are dropped.
 func hostsWithName(hosts, name string) string {
 	line := "127.0.1.1\t" + name
+	// OCI exports leave /etc/hosts empty, because Docker bind-mounts it at run time
 	if strings.TrimSpace(hosts) == "" {
 		return "127.0.0.1\tlocalhost\n::1\tlocalhost ip6-localhost ip6-loopback\n" + line + "\n"
 	}

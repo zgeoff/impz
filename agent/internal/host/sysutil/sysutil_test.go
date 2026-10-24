@@ -25,7 +25,6 @@ func TestNewUUIDSetsTheVersion4AndVariantBits(t *testing.T) {
 	assert.Check(t, a != b, "two ids are both %x", a)
 }
 
-// socketpair returns a connected unix pair that the test closes.
 func socketpair(t *testing.T) [2]int {
 	t.Helper()
 	pair, err := unix.Socketpair(unix.AF_UNIX, unix.SOCK_SEQPACKET|unix.SOCK_CLOEXEC, 0)

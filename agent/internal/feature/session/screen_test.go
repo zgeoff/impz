@@ -35,13 +35,10 @@ func TestHistoryDropsTheOldestOutputPastItsLimit(t *testing.T) {
 	assert.Check(t, bytes.HasSuffix(all.Bytes(), got), "replay %q is not the end of the output", got)
 }
 
-// A cut inside an escape sequence or a UTF-8 character moves forward to the
-// next point where the parser is between them.
 func TestHistoryCutsBetweenSequences(t *testing.T) {
 	tests := []struct {
-		name string
-		unit string
-		// where in unit a replay may start
+		name   string
+		unit   string
 		starts []string
 	}{
 		{"SGR sequences", "\x1b[38;5;208mX", []string{"\x1b[38;5;208mX", "X"}},
@@ -63,7 +60,6 @@ func TestHistoryCutsBetweenSequences(t *testing.T) {
 	}
 }
 
-// The modes set in output that was dropped still lead the replay.
 func TestHistoryReplaysDroppedModesFirst(t *testing.T) {
 	h := newHistory(32)
 	h.Write([]byte("\x1b[?1049h\x1b[?2004h\x1b[?1000h"))
@@ -75,8 +71,6 @@ func TestHistoryReplaysDroppedModesFirst(t *testing.T) {
 	assert.Check(t, cmp.Equal(strings.Count(got, "\x1b"), 3), "replay %q", got)
 }
 
-// A mode reset later in the kept output stays in the replay too, after the
-// prefix, so the terminal ends in the program's current modes.
 func TestHistoryKeepsALaterModeResetAfterTheDroppedModes(t *testing.T) {
 	h := newHistory(32)
 	h.Write([]byte("\x1b[?1049h\x1b[?2004h\x1b[?1000h"))
@@ -98,7 +92,6 @@ func TestHistoryKeepsOnlyItsLimitOfAWriteLargerThanTheBuffer(t *testing.T) {
 	assert.Check(t, cap(h.buf) <= 32, "buffer kept %d bytes of capacity", cap(h.buf))
 }
 
-// replay is a fresh attach's replay as one frame carries it.
 func replay(s Screen) []byte {
 	prelude, kept := s.Replay()
 	return append(append([]byte(nil), prelude...), kept...)

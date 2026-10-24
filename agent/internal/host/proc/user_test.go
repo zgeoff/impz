@@ -13,8 +13,6 @@ import (
 	"github.com/zgeoff/impz/agent/internal/host/fsroot"
 )
 
-// useAccounts is a root whose /etc/passwd and /etc/group hold the given
-// contents. An empty group leaves /etc/group out.
 func useAccounts(t *testing.T, passwd, group string) fsroot.FS {
 	t.Helper()
 	dir := t.TempDir()
@@ -30,7 +28,6 @@ func useAccounts(t *testing.T, passwd, group string) fsroot.FS {
 }
 
 func TestLookupUserInResolvesTheCredentialsAndHomeOfASpec(t *testing.T) {
-	// imp is in docker and wheel, svc only in docker
 	const passwd = "root:x:0:0:root:/root:/bin/sh\n" +
 		"imp:x:1000:1000::/home/imp:/bin/bash\n" +
 		"svc:x:1001:1001::/srv:/bin/sh\n"
@@ -51,7 +48,6 @@ func TestLookupUserInResolvesTheCredentialsAndHomeOfASpec(t *testing.T) {
 		{"imp:staff", &syscall.Credential{Uid: 1000, Gid: 50, Groups: []uint32{}}, "/home/imp"},
 		{"imp:7", &syscall.Credential{Uid: 1000, Gid: 7, Groups: []uint32{}}, "/home/imp"},
 		{"svc", &syscall.Credential{Uid: 1001, Gid: 1001, Groups: []uint32{999, 1001}}, "/srv"},
-		// A uid with no passwd entry takes its own number as its gid.
 		{"4242", &syscall.Credential{Uid: 4242, Gid: 4242, Groups: []uint32{4242}}, "/"},
 		{"4242:999", &syscall.Credential{Uid: 4242, Gid: 999, Groups: []uint32{}}, "/"},
 	} {
@@ -81,8 +77,7 @@ func TestLookupUserInLeavesRootToInheritTheAgentsCredentials(t *testing.T) {
 	}
 }
 
-// The error text is the EXEC_FAILED message the host shows. A failed lookup
-// gives no credential and no home, so it never falls back to root.
+// The error text is the EXEC_FAILED message the host shows.
 func TestLookupUserInFailsForASpecItCannotResolve(t *testing.T) {
 	for _, tc := range []struct {
 		name, spec, want string

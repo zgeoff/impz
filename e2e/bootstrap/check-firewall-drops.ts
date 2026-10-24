@@ -2,7 +2,6 @@ import invariant from 'tiny-invariant';
 import { BootstrapTestError } from './bootstrap-test-error';
 import type { BootstrapIO, BootstrapRun } from './types';
 
-// From the host, SSH connects and another listening port does not.
 export async function checkFirewallDrops(run: BootstrapRun): Promise<void> {
   const io = run.io;
   const container = run.state.container;

@@ -1,5 +1,3 @@
-// Package safe keeps a panic in one goroutine from killing the agent. The
-// agent is PID 1: if it dies, the kernel panics and the imp is gone.
 package safe
 
 import (
@@ -7,8 +5,7 @@ import (
 	"runtime/debug"
 )
 
-// Go runs f in a new goroutine. A panic in f is logged and then onPanic, if
-// not nil, runs to clean up whatever f owned.
+// The agent is PID 1: if it dies, the kernel panics and the imp is gone.
 func Go(name string, f func(), onPanic func()) {
 	go func() {
 		defer Recover(name, onPanic)
@@ -16,8 +13,6 @@ func Go(name string, f func(), onPanic func()) {
 	}()
 }
 
-// Call runs f in the current goroutine and recovers a panic in it the same
-// way, so a long-lived loop can survive one bad iteration.
 func Call(name string, f func()) {
 	defer Recover(name, nil)
 	f()

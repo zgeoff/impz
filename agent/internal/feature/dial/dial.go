@@ -1,8 +1,3 @@
-// Package dial serves a dial request: it connects to an address inside the
-// guest and relays bytes both ways over the host connection. impd's SSH
-// gateway and `imp proxy` use it, so a forward reaches a program that listens
-// on the guest's loopback, which the guest IP cannot. A TCP dial runs as root;
-// a unix socket dial runs as the image's USER (unixdial.go).
 package dial
 
 import (
@@ -20,22 +15,14 @@ import (
 // holding the host's channel open.
 const dialTimeout = 5 * time.Second
 
-// impDir holds the agent's own sockets, such as forwarded ssh-agents. impd
-// refuses the path, and connectUnix refuses a symlink that leads there.
 const impDir = "/run/imp"
 
-// chunk is the most the relay reads from the target before it writes a frame.
 const chunk = 32 << 10
 
-// halfCloser is a connection whose write side closes on its own: TCP and
-// unix stream sockets both have it.
 type halfCloser interface {
 	CloseWrite() error
 }
 
-// Serve dials req's address and relays until both sides are done. r and w
-// are the host connection's frame streams; the caller closes it after Serve
-// returns, which also ends a relay the host gave up on.
 func (d *Dialer) Serve(req *proto.Request, r *proto.Reader, w *proto.Writer) error {
 	target, err := d.open(req)
 	if err != nil {
@@ -48,13 +35,7 @@ func (d *Dialer) Serve(req *proto.Request, r *proto.Reader, w *proto.Writer) err
 	return Relay(target, r, w)
 }
 
-// Relay copies bytes between target and the host connection until both
-// sides are done: the target's output ran out and the host half-closed. The
-// caller has already sent the RESPONSE, and closes target afterwards. The
-// agent's ssh-agent forwarding relays its clients here too.
 func Relay(target net.Conn, r *proto.Reader, w *proto.Writer) error {
-	// target → host. STDOUT_EOF tells the host the target closed its side;
-	// a read error ends the relay without it, so the host sees a reset.
 	outbound := make(chan error, 1)
 	safe.Go("relay output", func() {
 		outbound <- pumpOut(target, w)
@@ -62,9 +43,8 @@ func Relay(target net.Conn, r *proto.Reader, w *proto.Writer) error {
 		outbound <- errors.New("relay output panicked")
 	})
 
-	// host → target. It reads until the host closes the connection, past
-	// STDIN_EOF, so a host that gives up is seen even while the target is
-	// quiet.
+	// Reads past STDIN_EOF until the host closes the connection, so a host
+	// that gives up is seen even while the target is quiet.
 	halfClosed := make(chan struct{})
 	inbound := make(chan error, 1)
 	safe.Go("relay input", func() {
@@ -73,9 +53,6 @@ func Relay(target net.Conn, r *proto.Reader, w *proto.Writer) error {
 		inbound <- errors.New("relay input panicked")
 	})
 
-	// Done once the target's output ran out and the host half-closed. A
-	// failure on either side ends the relay; the deferred close stops the
-	// other pump.
 	outDone := false
 	for {
 		select {
@@ -130,9 +107,6 @@ func pumpOut(target net.Conn, w *proto.Writer) error {
 	}
 }
 
-// pumpIn writes STDIN frames to the target. STDIN_EOF closes the target's
-// write side and closes halfClosed. It returns when the host connection
-// fails, or nil when the host closes it: the host may end a relay at any time.
 func pumpIn(r *proto.Reader, target net.Conn, halfClosed chan<- struct{}) error {
 	ended := false
 	for {

@@ -17,7 +17,6 @@ import { probeUpdateReadOnly } from '@impz/test-utils/probe-update-read-only';
 import { updateReadOnly } from '@impz/test-utils/update-read-only';
 import { updateLegacyConfig } from './update-legacy-config';
 
-// `stack` makes a read-only tree writable again before the directory goes
 function setupTest() {
   const stack = new DisposableStack();
 

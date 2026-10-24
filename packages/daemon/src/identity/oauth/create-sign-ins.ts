@@ -17,7 +17,7 @@ const SIGN_IN_MS = 10 * MINUTE_MS;
 const MAX_PENDING = 16;
 const MAX_PENDING_PER_CLIENT = 3;
 
-// sign-ins per client: with no client address, a flood with a client's
+// with no client address, a flood with a client's
 // public ID can hold back that client's sign-ins, and no other's
 const START_BUCKET = { size: 10, refillMs: 6000 };
 

@@ -1,6 +1,6 @@
 export interface DnsProvider {
-  // adds one TXT value next to any the name already has; ACME asks for two
-  // values on `_acme-challenge.<domain>` at once, one per certificate name
+  // keeps any value the name already has: ACME asks for two values on
+  // `_acme-challenge.<domain>` at once, one per certificate name
   readonly addTxt: (fqdn: string, value: string) => Promise<TxtRecord>;
   readonly removeTxt: (record: TxtRecord) => Promise<void>;
 

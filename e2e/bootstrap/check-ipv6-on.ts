@@ -5,7 +5,6 @@ import { readInContainer } from './read-in-container';
 import { runInContainer } from './run-in-container';
 import type { BootstrapRun, BootstrapTarget } from './types';
 
-// imp-host runs on the IPv6 network the env file names, and has an IPv6 default route.
 export async function checkIPv6On(run: BootstrapRun, target: BootstrapTarget): Promise<void> {
   const distro = target.distro;
 

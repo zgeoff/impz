@@ -22,7 +22,6 @@ export interface BootstrapIO {
 }
 
 interface BootstrapState {
-  // The test container that teardown takes away; null once it is gone.
   container: string | null;
 }
 
@@ -39,8 +38,6 @@ export interface BootstrapRun {
   readonly log: (line: string) => void;
 }
 
-// One container's settings: the storage flags every bootstrap.sh run in it passes, and whether the
-// run takes the health check.
 export interface BootstrapTarget {
   readonly distro: Distro;
   readonly storage: readonly string[];

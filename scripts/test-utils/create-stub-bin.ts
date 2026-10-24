@@ -7,7 +7,6 @@ export interface StubBin {
   readonly calls: string;
 }
 
-// A stub's script may log more calls through $STUB_CALLS.
 export function createStubBin(directory: string, name: string, script = ''): StubBin {
   const bin = join(directory, 'bin');
   const calls = join(directory, 'calls');

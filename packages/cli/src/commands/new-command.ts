@@ -117,7 +117,6 @@ interface NewArgs extends Readonly<Record<string, unknown>> {
   readonly json?: boolean | undefined;
 }
 
-// every flag checked before any call, so a bad one leaves no imp behind
 function readNewRequest(args: NewArgs): NewRequest {
   const policy = parsePolicy(args.policy, args.allow);
   const networks = args.net?.split(',').map((network) => network.trim());

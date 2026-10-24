@@ -1,15 +1,3 @@
-// Command ksm-exec lets KSM merge the memory of the program it runs. impd
-// starts the Firecracker jailer, or Firecracker itself with the jailer off,
-// through it when IMP_KSM is on:
-//
-//	setsid ksm-exec jailer --id <imp> --exec-file firecracker ...
-//
-// It sets PR_SET_MEMORY_MERGE and execs the program in place. Linux 6.10 or
-// later keeps the flag across each exec, the jailer's into Firecracker too,
-// so every anonymous mapping Firecracker makes, guest memory included, is
-// mergeable. ksm-exec runs outside the jail's chroot. Firecracker's seccomp
-// filter traps prctl, so it cannot set the flag itself
-// (docs/architecture/lifecycle/ram-governor.md#ksm).
 package main
 
 import (
@@ -31,7 +19,8 @@ func main() {
 	os.Exit(1)
 }
 
-// runMerged sets the merge flag and execs argv; it returns only on failure.
+// Firecracker's seccomp filter traps prctl, so the flag is set here. Linux
+// 6.10 or later keeps it across each exec, the jailer's into Firecracker too.
 func runMerged(argv []string) error {
 	if err := unix.Prctl(unix.PR_SET_MEMORY_MERGE, 1, 0, 0, 0); err != nil {
 		return fmt.Errorf("prctl PR_SET_MEMORY_MERGE (needs CONFIG_KSM): %w", err)

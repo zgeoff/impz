@@ -32,8 +32,6 @@ type failListener struct{ net.Listener }
 func (failListener) Accept() (net.Conn, error) { return nil, errors.New("connection reset") }
 func (failListener) Close() error              { return nil }
 
-// Serve survives a failing listener by listening again, instead of
-// returning (which would reboot the guest).
 func TestServeListensAgainAfterAFailedAccept(t *testing.T) {
 	good, err := net.Listen("tcp", "127.0.0.1:0")
 	assert.NilError(t, err)
@@ -64,7 +62,7 @@ func TestServeListensAgainAfterAFailedAccept(t *testing.T) {
 	}()
 	t.Cleanup(func() {
 		stopped.Store(true)
-		// the next Accept fails, and Serve's relisten ends the goroutine
+		// the next Accept fails, and the relisten ends the goroutine
 		good.Close()
 		select {
 		case <-exited:
@@ -76,8 +74,6 @@ func TestServeListensAgainAfterAFailedAccept(t *testing.T) {
 	c, err := net.DialTimeout("tcp", good.Addr().String(), time.Second)
 	assert.NilError(t, err)
 	t.Cleanup(func() { c.Close() })
-	// handle() closes a connection whose first frame is not a REQUEST, after
-	// a BAD_REQUEST reply.
 	assert.NilError(t, c.SetDeadline(time.Now().Add(5*time.Second)))
 	_, err = c.Write([]byte{9, 0, 0, 0, 0})
 	assert.NilError(t, err)
@@ -100,8 +96,6 @@ func TestServeReturnsTheErrorOfAFailedFirstListen(t *testing.T) {
 	assert.ErrorIs(t, err, failed)
 }
 
-// roundTrip runs one request through handle and returns the RESPONSE
-// payload, or nil if the connection closed without one.
 func roundTrip(t *testing.T, s *Server, req *proto.Request) []byte {
 	t.Helper()
 	b, err := proto.Marshal(req)
@@ -109,8 +103,6 @@ func roundTrip(t *testing.T, s *Server, req *proto.Request) []byte {
 	return roundTripFrame(t, s, proto.TypeRequest, b)
 }
 
-// roundTripFrame sends one frame as a connection's first and returns the
-// reply's payload, or nil if the connection closed without one.
 func roundTripFrame(t *testing.T, s *Server, typ proto.Type, payload []byte) []byte {
 	t.Helper()
 	host, guest := net.Pipe()
@@ -127,7 +119,6 @@ func roundTripFrame(t *testing.T, s *Server, typ proto.Type, payload []byte) []b
 	return f.Payload
 }
 
-// errorCode reads the code of an error RESPONSE payload.
 func errorCode(t *testing.T, payload []byte) string {
 	t.Helper()
 	var er proto.ErrorResponse
@@ -170,7 +161,6 @@ func TestHandleRefusesARequestWithoutItsRequiredField(t *testing.T) {
 	}
 }
 
-// A freeze over the wire that finds the root frozen replies FROZEN.
 func TestHandleRepliesFrozenToASecondFreeze(t *testing.T) {
 	var f fakeIoctl
 	s := &Server{rootIoctl: f.ioctl}

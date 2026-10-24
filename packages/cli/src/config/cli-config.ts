@@ -14,8 +14,6 @@ export interface CliConfig {
 
 const DEFAULT_URL = 'http://localhost:7070';
 
-// the URL and the token always come from one source, so a token never goes
-// to an impd it was not saved for
 export function loadCliConfig(
   env: CliEnv,
   host: string | null,

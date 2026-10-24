@@ -1,12 +1,5 @@
-// Package tartool is `imp-agent tar`, the guest end of `imp cp`. impd runs it
-// from the system drive as root, so it reads and writes any path, and every
-// image has it without a tar of its own:
-//
-//	imp-agent tar create <path>                  # a tar of path on stdout
-//	imp-agent tar extract [--owner SPEC] <dest>  # stdin's tar into dest
-//
-// A relative path resolves against the image USER's home, as scp's does.
-// See docs/guides/cp.md.
+// impd runs this from the system drive as root, so it reads and writes any
+// path, and every image has it without a tar of its own.
 package tartool
 
 import (
@@ -22,19 +15,15 @@ import (
 	"github.com/zgeoff/impz/agent/internal/host/proc"
 )
 
-// TotalRecord is the PAX record on a created archive's first entry: the
-// bytes of every regular file in it, for the CLI's progress.
+// The CLI reads this PAX record on the first entry for its progress.
 const TotalRecord = "IMP.total"
 
-// Command is one `imp-agent tar` invocation as impd sends it: an op of
-// create or extract, its path, and for an extract the owner spec, if any.
 type Command struct {
 	Op    string
 	Path  string
 	Owner string
 }
 
-// ParseArgs reads the args after "tar"; anything outside the usage fails.
 func ParseArgs(args []string) (Command, error) {
 	switch {
 	case len(args) == 2 && args[0] == "create":
@@ -48,7 +37,6 @@ func ParseArgs(args []string) (Command, error) {
 	}
 }
 
-// Run serves `imp-agent tar` with args after "tar".
 func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	cmd, err := ParseArgs(args)
 	if err != nil {
@@ -81,7 +69,6 @@ func usageError() error {
 	return errors.New("usage: imp-agent tar create <path> | extract [--owner SPEC] <dest>")
 }
 
-// resolve makes path absolute against user's home.
 func resolve(path, user string) (string, error) {
 	if path == "" {
 		return "", errors.New("an empty path")
@@ -96,7 +83,6 @@ func resolve(path, user string) (string, error) {
 	return filepath.Join(home, path), nil
 }
 
-// Owner is who extracted entries belong to.
 type Owner struct {
 	UID, GID int
 }

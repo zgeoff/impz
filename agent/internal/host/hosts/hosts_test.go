@@ -25,7 +25,6 @@ func TestHostsWithNameMapsTheFirst127011LineToTheName(t *testing.T) {
 		{name: "appended", in: "127.0.0.1 localhost", want: "127.0.0.1 localhost\n127.0.1.1\tnew\n"},
 		{name: "aliases kept", in: "127.0.1.1 new new.local\n", want: "127.0.1.1 new new.local\n"},
 		{name: "unchanged", in: "127.0.0.1 localhost\n127.0.1.1\tnew\n", want: "127.0.0.1 localhost\n127.0.1.1\tnew\n"},
-		// Only a 127.0.1.1 address field counts, not a mention in a comment.
 		{name: "comment", in: "# 127.0.1.1 old\n", want: "# 127.0.1.1 old\n127.0.1.1\tnew\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

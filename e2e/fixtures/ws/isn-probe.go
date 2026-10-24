@@ -1,8 +1,3 @@
-// isn-probe prints the secret part of the guest's TCP initial sequence
-// number: the ISN of one loopback connection on a fixed 4-tuple, less the
-// clock term the kernel adds (secure_tcp_seq: hash + realtime_ns >> 6). Two
-// guests that share the kernel's net_secret print values a few hundred apart;
-// two that do not, values with nothing in common. Needs root, for TCP_REPAIR.
 package main
 
 import (
@@ -49,6 +44,7 @@ func main() {
 		fail(err)
 	}
 
+	// TCP_REPAIR needs root
 	if err := syscall.SetsockoptInt(fd, syscall.IPPROTO_TCP, tcpRepair, 1); err != nil {
 		fail(err)
 	}
@@ -61,6 +57,8 @@ func main() {
 		fail(err)
 	}
 	isn := uint32(seq) - 1
+	// the kernel's ISN is hash + realtime_ns >> 6 (secure_tcp_seq): guests that
+	// share net_secret print values a few hundred apart, others nothing alike
 	fmt.Println(isn - uint32(clock>>6))
 }
 

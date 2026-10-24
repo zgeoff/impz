@@ -84,8 +84,6 @@ func TestLoadFallsBackToTheDefaultsForBrokenJSON(t *testing.T) {
 	}}))
 }
 
-// A directory where the file should be: the read fails and the defaults
-// remain.
 func TestLoadFallsBackToTheDefaultsForAnUnreadableFile(t *testing.T) {
 	got, err := load(fsroot.Host, t.TempDir())
 

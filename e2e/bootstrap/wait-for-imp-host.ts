@@ -2,7 +2,6 @@ import { waitFor } from '@impz/test-utils/wait-for';
 import { readInContainer } from './read-in-container';
 import type { BootstrapRun } from './types';
 
-// The unit's container runs within 30 s, or its journal tail goes to stderr.
 export async function waitForImpHost(run: BootstrapRun): Promise<boolean> {
   try {
     await waitFor(

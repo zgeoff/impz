@@ -1,7 +1,3 @@
-// Package outer runs an exec in the agent's own world, outside the inner
-// container: `imp exec --agent`, to see why the container is down or what
-// is left on /user (docs/architecture/guest/agent.md#execs-and-services). It runs as
-// root, with the busybox on the system drive.
 package outer
 
 import (
@@ -18,23 +14,19 @@ import (
 )
 
 const (
-	// CgroupDir holds a leaf per outer exec. Its memory.max keeps a
-	// runaway outer command from taking the memory the agent needs.
+	// memory.max keeps a runaway outer command from taking the memory the
+	// agent needs
 	CgroupDir = cgroup.Root + "/outer"
 	memoryMax = 32 << 20
 
-	// RunDir is HOME and TMPDIR of an outer exec: a tmpfs of its own, as
-	// the system drive is read-only and the agent's /run holds its sockets
+	// a tmpfs of its own, as the system drive is read-only and the agent's
+	// /run holds its sockets
 	RunDir  = "/run/outer"
 	runSize = "8m"
 
-	// Command is the helper that starts each outer command: imp-agent
-	// outer <path> <argv...>
 	Command = "outer"
 )
 
-// Image is an outer exec's fixed config: the system drive's /bin, root and
-// the cwd /.
 func Image() *imagecfg.Live {
 	return imagecfg.NewLive(imagecfg.Config{
 		Env:     []string{"PATH=/bin", "HOME=" + RunDir, "TMPDIR=" + RunDir},
@@ -42,8 +34,6 @@ func Image() *imagecfg.Live {
 	})
 }
 
-// Setup makes the outer cgroup with its memory limit and mounts RunDir. An
-// error leaves outer execs without a cgroup, so each one is refused.
 func Setup() (*cgroup.Tree, error) {
 	tree, err := cgroup.NewLimitedTree(CgroupDir, limitMemory)
 	if err != nil {
@@ -58,8 +48,8 @@ func Setup() (*cgroup.Tree, error) {
 	return tree, nil
 }
 
-// limitMemory sets the outer cgroup's memory.max. Before each outer exec too:
-// a root shell may have removed the cgroup, and the tree makes it again.
+// Before each outer exec too: a root shell may have removed the cgroup, and
+// the tree makes it again.
 func limitMemory(dir string) error {
 	if err := os.WriteFile(dir+"/memory.max", []byte(strconv.Itoa(memoryMax)), 0); err != nil {
 		return fmt.Errorf("memory.max: %w", err)
@@ -67,14 +57,11 @@ func limitMemory(dir string) error {
 	return nil
 }
 
-// Runner starts outer commands through Next, the agent's own runner. Each
-// one starts as the helper, in its cgroup leaf or not at all.
 type Runner struct {
 	Next proc.Runner
 }
 
-// Start resolves the command on the spec's PATH, so a missing one fails
-// here as EXEC_FAILED, and starts the helper that execs it.
+// Resolved here, so a missing command fails as EXEC_FAILED.
 func (r Runner) Start(s proc.Spec) (*proc.Process, error) {
 	if len(s.Argv) == 0 {
 		return nil, errors.New("empty argv")
@@ -92,10 +79,8 @@ func (r Runner) Start(s proc.Spec) (*proc.Process, error) {
 	return r.Next.Start(s)
 }
 
-// RunHelper is "imp-agent outer <path> <argv...>": it gives up the agent's
-// shield from the OOM killer, which every child inherits, and becomes the
-// command. Done in the child before the exec, nothing the command starts
-// can inherit the shield.
+// Every child inherits the agent's shield from the OOM killer. Given up here,
+// in the child before the exec, nothing the command starts can inherit it.
 func RunHelper(args []string) error {
 	if len(args) < 2 {
 		return errors.New("usage: imp-agent outer <path> <argv...>")

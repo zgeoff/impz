@@ -15,53 +15,29 @@ import (
 	"github.com/zgeoff/impz/agent/internal/proto"
 )
 
-// historyLimit is the least output a session keeps for a replay. A session
-// holds up to twice this in guest memory.
 const historyLimit = 256 << 10
 
-// drainGrace bounds how long output is read after the process exits, as in
-// exec: a background child that keeps the pty open cannot hold the session.
+// A background child that keeps the pty open cannot hold the session.
 const drainGrace = 500 * time.Millisecond
 
-// tapWait bounds how long a logged session's output waits for a tap
-// before the ring overwrites bytes no tap took: past it the session runs on,
-// and the bytes the ring drops are a gap in impd's log.
 const tapWait = 5 * time.Second
 
-// readSize is one read of the pty.
 const readSize = 32 << 10
 
-// stdinQueue bounds the STDIN frames waiting for the pty, at most
-// proto.MaxPayload each. Past it the viewer's input loop waits, which pushes
-// back on the host.
 const stdinQueue = 4
 
-// errOver is attach's answer once a viewer got the EXIT: nothing is left to
-// attach to.
 var errOver = errors.New("the session is over")
 
-// phase is where a session stands. The pump moves it between the first
-// three while the process runs; run and the EXIT's delivery move it on.
 type phase int
 
 const (
-	// the process runs and the pump reads freely
 	phaseRunning phase = iota
-	// the pump holds its next read for a tap, so a caller can see the hold
-	// rather than guess when it began
 	phaseHeldForTap
-	// a pump gave up waiting for a tap, and reads on unheld until one attaches
 	phaseTapless
-	// the process exited and its output drained; each new viewer gets the
-	// EXIT until one has it written
 	phaseExited
-	// the EXIT was written to a viewer: nothing is left to attach to
 	phaseOver
 )
 
-// session is one program on a pty that outlives its connections. One pump
-// reads the pty into the screen, the raw ring, the attached viewer, if any,
-// and impd's taps of a logged session; it never waits on any of them.
 type session struct {
 	name    string
 	argv    []string
@@ -69,45 +45,30 @@ type session struct {
 	proc    *proc.Process
 	master  *os.File
 
-	// generation names this run of the process; seq orders the runs of
-	// every name in this boot
-	generation string
-	seq        uint64
-	bootID     string
-	// log marks a session whose output impd keeps; only it takes taps
-	log bool
-	// dropSysAdmin marks a session that started without CAP_SYS_ADMIN
+	generation   string
+	seq          uint64
+	bootID       string
+	log          bool
 	dropSysAdmin bool
 
 	stdin chan []byte
-	// done closes once the process exited and its output drained.
-	done chan struct{}
+	done  chan struct{}
 
-	mu     sync.Mutex
-	screen Screen
-	// raw is the output a resume reads; its end is the session's offset
-	raw    *ring
-	viewer *viewer
-	// taps read the raw output beside the viewer: they take no input, never
-	// take the viewer over, and get the EXIT without delivering it. tapStart
-	// is the offset each began at; tapped the furthest offset a tap wrote out.
-	taps     map[*viewer]struct{}
-	tapStart map[*viewer]uint64
-	tapped   uint64
-	phase    phase
-	// tapProgress wakes a waiting pump when a tap wrote output out
+	mu          sync.Mutex
+	screen      Screen
+	raw         *ring
+	viewer      *viewer
+	taps        map[*viewer]struct{}
+	tapStart    map[*viewer]uint64
+	tapped      uint64
+	phase       phase
 	tapProgress chan struct{}
-	// tapWait is the manager's, as the session started
-	tapWait    time.Duration
-	cols, rows uint16
-	// exit is set as the phase reaches phaseExited
-	exit *proto.Exit
-	// onDelivered runs once the phase reaches phaseOver.
+	tapWait     time.Duration
+	cols, rows  uint16
+	exit        *proto.Exit
 	onDelivered func()
 }
 
-// run is what makes a session: its process, and where it stands among the
-// runs of this boot.
 type run struct {
 	proc       *proc.Process
 	master     *os.File
@@ -146,8 +107,6 @@ func newSession(name string, req *proto.Request, r run) *session {
 	}
 }
 
-// run pumps output until the process exits and its output drained, then
-// hands the EXIT to the viewer, or keeps it for the next one.
 func (s *session) run() {
 	pumped := make(chan struct{})
 	safe.Go("session "+s.name+" output", func() {
@@ -157,7 +116,6 @@ func (s *session) run() {
 	safe.Go("session "+s.name+" stdin", s.writeStdin, nil)
 
 	st := <-s.proc.Done
-	// a logged session's pump may be waiting for its tap
 	grace := drainGrace
 	if s.log {
 		grace += s.tapWait
@@ -181,8 +139,7 @@ func (s *session) run() {
 	close(s.done)
 }
 
-// pump reads the pty until EOF, EIO (every slave fd closed), or the drain
-// deadline.
+// A pty master's read fails with EIO once every slave fd closed.
 func (s *session) pump() {
 	buf := make([]byte, readSize)
 	for {
@@ -206,8 +163,8 @@ func (s *session) output(p []byte) {
 		s.viewer = nil
 		v.stop(&frame{typ: proto.TypeDetached, payload: mustMarshal(&proto.Detached{Reason: proto.DetachSlow})}, true)
 	}
-	// a tap that falls behind is dropped the same way: impd taps again from
-	// the offset it has, and learns of the gap from the ring
+	// impd taps again from the offset it has, and learns of the gap from the
+	// ring
 	for t := range s.taps {
 		if !t.push(frame{typ: proto.TypeStdout, payload: append([]byte(nil), p...)}) {
 			s.dropTapLocked(t)
@@ -216,11 +173,8 @@ func (s *session) output(p []byte) {
 	}
 }
 
-// waitForTap holds a logged session's next read while it could overwrite
-// ring bytes that no tap wrote out, so impd's log misses nothing it taps in
-// time: the program waits on the pty as on a slow terminal. Each call waits
-// at most tapWait from its start, and tap progress does not extend it. Once
-// a call runs out, the session reads on, unheld, until a tap attaches.
+// A held read makes the program wait on the pty as on a slow terminal, so
+// impd's log misses nothing it taps in time.
 func (s *session) waitForTap() {
 	if !s.log {
 		return
@@ -261,11 +215,6 @@ func (s *session) untappedLocked() uint64 {
 	return s.raw.End() - s.tapped
 }
 
-// tap adds t as a tap of a logged session: STARTED, the raw output from
-// resume (from the ring's start without it), then live output and the
-// EXIT. It never replays the screen or touches the viewer. It returns a
-// *proto.Error, and t got nothing, for a session with no log or a resume
-// past the end.
 func (s *session) tap(t *viewer, resume *proto.ResumeFrom) *proto.Error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -298,7 +247,6 @@ func (s *session) tap(t *viewer, resume *proto.ResumeFrom) *proto.Error {
 	return nil
 }
 
-// untap drops t if it still taps the session.
 func (s *session) untap(t *viewer) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -318,10 +266,6 @@ func (s *session) exitFrameLocked(written func()) *frame {
 	return &frame{typ: proto.TypeExit, payload: mustMarshal(s.exit), written: written}
 }
 
-// attach makes v the viewer: STARTED, the output that resume asks for (a
-// replay without it), then live output. A viewer already attached is
-// detached first. It returns errOver when the session is already over, and
-// a *proto.Error for a resume past the end; v then got nothing.
 func (s *session) attach(v *viewer, cols, rows uint16, created bool, resume *proto.ResumeFrom, previous *proto.Previous) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -354,8 +298,6 @@ func (s *session) attach(v *viewer, cols, rows uint16, created bool, resume *pro
 	case resume == nil:
 		s.redraw(cols, rows)
 	case cols > 0 && rows > 0 && (cols != s.cols || rows != s.rows):
-		// a resume continues the output as it was: no forced redraw, only
-		// the viewer's size
 		s.resizeLocked(cols, rows)
 	}
 	return nil
@@ -394,8 +336,7 @@ func (s *session) placeLocked(resume *proto.ResumeFrom) (*proto.Output, []byte, 
 	return out, s.raw.From(uint64(out.Offset)), nil
 }
 
-// isOffset reports whether a resume's offset, a JSON number, names a byte:
-// whole and not negative.
+// The offset arrives as a JSON number.
 func isOffset(offset float64) bool {
 	return offset >= 0 && offset == math.Trunc(offset)
 }
@@ -408,9 +349,8 @@ func (s *session) outputNowLocked() *proto.Output {
 	return out
 }
 
-// redraw sizes the pty for a new viewer. The kernel sends SIGWINCH only for
-// a new size, so a viewer of the same size first gets one row less: either
-// way the program sees a resize and draws its screen again.
+// The kernel sends SIGWINCH only for a new size, so a viewer of the same
+// size first gets one row less.
 func (s *session) redraw(cols, rows uint16) {
 	if cols == 0 || rows == 0 {
 		return
@@ -451,7 +391,6 @@ func (s *session) markDelivered() {
 	}
 }
 
-// detach drops v if it is still the viewer. The process keeps running.
 func (s *session) detach(v *viewer) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -469,9 +408,6 @@ func (s *session) signal(v *viewer, sig syscall.Signal) {
 	}
 }
 
-// queueStdin hands p to the stdin writer. It waits while the queue is full,
-// and gives up once the viewer or the session ends. Input from a viewer that
-// was taken over or dropped goes nowhere.
 func (s *session) queueStdin(v *viewer, p []byte) {
 	s.mu.Lock()
 	current := s.viewer == v
@@ -486,8 +422,6 @@ func (s *session) queueStdin(v *viewer, p []byte) {
 	}
 }
 
-// writeStdin writes queued input to the pty until the session ends. A write
-// the program never reads waits on the pty, not on any viewer.
 func (s *session) writeStdin() {
 	for {
 		select {
@@ -525,16 +459,12 @@ func (s *session) info() *proto.SessionInfo {
 	return info
 }
 
-// ended returns the generation as previous: called once the process
-// exited, when its output drained and its exit is set, so both are final.
 func (s *session) ended() *proto.Previous {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return &proto.Previous{ExecutionGeneration: s.generation, End: float64(s.raw.End()), Exit: s.exit}
 }
 
-// exited reports whether the process exited: a new session may then take
-// the name.
 func (s *session) exited() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -545,7 +475,6 @@ func (s *session) hasExitedLocked() bool {
 	return s.phase >= phaseExited
 }
 
-// over reports whether a viewer got the EXIT: nothing is left to attach to.
 func (s *session) over() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()

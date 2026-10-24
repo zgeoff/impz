@@ -1,6 +1,3 @@
-// Package disk grows the guest's ext4 root to the size of its block device.
-// The host grows the disk file; the filesystem follows with an online resize,
-// so no resize2fs is needed in the image.
 package disk
 
 import (
@@ -21,14 +18,11 @@ const ext4ResizeFS = 0x40086610
 
 const pollInterval = 20 * time.Millisecond
 
-// The user disk: its size in 512-byte sectors, and the device, whose ext4
-// superblock holds the filesystem's size in blocks.
 const (
 	sizePath   = "/sys/block/vda/size"
 	devicePath = "/dev/vda"
 )
 
-// device is a block device and the ext4 filesystem mounted from it.
 type device struct {
 	sizePath   string
 	devicePath string
@@ -36,19 +30,16 @@ type device struct {
 	blockSize  func(mountpoint string) (int64, error)
 }
 
-// userDisk is the guest's user disk.
 func userDisk() *device {
 	return &device{sizePath: sizePath, devicePath: devicePath, resizeFS: ioctlResize, blockSize: statBlockSize}
 }
 
-// Grow resizes the ext4 filesystem mounted at mountpoint to fill the device.
 func Grow(mountpoint string) error {
 	return userDisk().grow(mountpoint)
 }
 
-// WaitAndGrow waits until the device reports at least target bytes, then
-// grows the filesystem at mountpoint. After the host changes the drive, the
-// guest reads the new capacity on its own time.
+// After the host changes the drive, the guest kernel reads the new capacity
+// on its own time.
 func WaitAndGrow(mountpoint string, target int64, timeout time.Duration) error {
 	return userDisk().waitAndGrow(mountpoint, target, timeout)
 }
@@ -78,9 +69,8 @@ func (d *device) waitAndGrow(mountpoint string, target int64, timeout time.Durat
 	}
 }
 
-// growTo skips the resize when the filesystem fills the device already: the
-// ioctl keeps the size then, but flushes the journal all the same, and that
-// held up every boot. A superblock it cannot read leaves the call to ext4.
+// A resize to the current size still flushes the journal, which held up every
+// boot. A superblock that cannot be read leaves the call to ext4.
 func (d *device) growTo(mountpoint string, bytes int64) error {
 	size, err := d.blockSize(mountpoint)
 	if err != nil {
@@ -139,9 +129,8 @@ const (
 	incompat64Bit    = 0x80
 )
 
-// readFSBlocks reads the filesystem's size in blocks from the superblock on
-// dev. The read goes through the device's page cache, which holds the
-// mounted filesystem's own superblock buffer, so it sees a grow at once.
+// The read goes through the device's page cache, which holds the mounted
+// filesystem's own superblock buffer, so it sees a grow at once.
 func readFSBlocks(dev string) (uint64, error) {
 	f, err := os.Open(dev)
 	if err != nil {

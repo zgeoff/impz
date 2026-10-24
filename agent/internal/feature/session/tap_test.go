@@ -26,7 +26,6 @@ func tap(t *testing.T, m *Manager, name string, resume *proto.ResumeFrom) *host 
 	return connect(t, m, &proto.Request{Op: proto.OpSessionTap, Session: new(name), ResumeFrom: resume})
 }
 
-// taps reads how many taps the session has now.
 func taps(m *Manager, name string) int {
 	m.mu.Lock()
 	s := m.sessions[name]
@@ -36,7 +35,6 @@ func taps(m *Manager, name string) int {
 	return len(s.taps)
 }
 
-// heldForTap reads whether the session's pump holds its output for a tap.
 func heldForTap(m *Manager, name string) bool {
 	m.mu.Lock()
 	s := m.sessions[name]
@@ -46,8 +44,6 @@ func heldForTap(m *Manager, name string) bool {
 	return s.phase == phaseHeldForTap
 }
 
-// waitOnFile is a script line that blocks until path exists, so the test
-// decides when the program moves on.
 func waitOnFile(path string) string {
 	return "while [ ! -e " + path + " ]; do sleep 0.01; done"
 }
@@ -66,8 +62,6 @@ func TestLoggedStartMarksItsOutputAsLogged(t *testing.T) {
 	assert.Check(t, out.GetLog())
 }
 
-// A tap reads the raw output from the ring's start beside a viewer it never
-// takes over, and counts as no connection.
 func TestTapReadsFromTheRingStartBesideTheViewer(t *testing.T) {
 	m := newTestManager(t, "4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11")
 	viewer := startLogged(t, m, "job", "stty -opost -echo; printf one; exec sleep 60")
@@ -91,7 +85,6 @@ func TestTapReadsFromTheRingStartBesideTheViewer(t *testing.T) {
 	assert.Check(t, info.GetLog())
 }
 
-// A tap reads live output and the EXIT as the viewer does.
 func TestTapReadsTheLiveOutputAndTheExitBesideTheViewer(t *testing.T) {
 	m := newTestManager(t, "4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11")
 	viewer := startLogged(t, m, "job", "stty -opost -echo; printf one; read go; printf two; exit 5")
@@ -113,7 +106,6 @@ func TestTapReadsTheLiveOutputAndTheExitBesideTheViewer(t *testing.T) {
 	assert.Check(t, cmp.Equal(tp.out.String(), "onetwo"), "the tap reads the raw output")
 }
 
-// A tap of a session with no viewer gets its EXIT.
 func TestTapGetsTheExitOfASessionWithNoViewer(t *testing.T) {
 	m := newTestManager(t, "4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11")
 	ready := filepath.Join(t.TempDir(), "go")
@@ -131,7 +123,6 @@ func TestTapGetsTheExitOfASessionWithNoViewer(t *testing.T) {
 	assert.Check(t, cmp.Equal(decode[proto.Exit](t, f).Code, int32(3)))
 }
 
-// A tap gets the EXIT without delivering it: the next viewer still gets it.
 func TestTapLeavesTheExitItGotForTheNextViewer(t *testing.T) {
 	m := newTestManager(t, "4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11")
 	ready := filepath.Join(t.TempDir(), "go")
@@ -152,7 +143,6 @@ func TestTapLeavesTheExitItGotForTheNextViewer(t *testing.T) {
 	assert.Check(t, cmp.Equal(decode[proto.Exit](t, f).Code, int32(3)))
 }
 
-// A tap that comes after the exit gets the EXIT.
 func TestTapAfterTheExitGetsTheExit(t *testing.T) {
 	m := newTestManager(t, "4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11")
 	ready := filepath.Join(t.TempDir(), "go")
@@ -173,7 +163,6 @@ func TestTapAfterTheExitGetsTheExit(t *testing.T) {
 	assert.Check(t, cmp.Equal(decode[proto.Exit](t, f).Code, int32(3)))
 }
 
-// A tap that comes after the exit still leaves the EXIT for the next viewer.
 func TestTapAfterTheExitLeavesTheExitForTheNextViewer(t *testing.T) {
 	m := newTestManager(t, "4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11")
 	ready := filepath.Join(t.TempDir(), "go")
@@ -212,7 +201,6 @@ func TestTapResumesExactlyAtAnOffsetTheRingHolds(t *testing.T) {
 	assert.Check(t, cmp.DeepEqual(exact.data(t, 10), bytes.Repeat([]byte("x"), 10)))
 }
 
-// A resume below the ring's start is a gap up to it.
 func TestTapResumeBelowTheRingStartIsAGap(t *testing.T) {
 	m := newTestManager(t, "4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11")
 	m.tapWait = 100 * time.Millisecond
@@ -256,8 +244,6 @@ func TestTapOfASessionWithoutALogIsABadRequest(t *testing.T) {
 	assert.Check(t, cmp.Equal(m.Attached(), 1), "the refused tap left the viewer as the only connection")
 }
 
-// A tap that stops reading is dropped as a slow viewer is; the viewer keeps
-// its live output.
 func TestTapThatStopsReadingIsDroppedAsSlow(t *testing.T) {
 	m := newTestManager(t, "4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11")
 	m.tapWait = 100 * time.Millisecond
@@ -285,13 +271,10 @@ func TestTapThatStopsReadingIsDroppedAsSlow(t *testing.T) {
 	assert.NilError(t, err)
 	assert.Equal(t, f.Type, proto.TypeStarted)
 	from := decode[proto.Started](t, f).Output.End
-	// past maxQueued of output after the tap's STARTED, the tap that read
-	// none of it is gone; the viewer is not
 	waitFor(t, "more output", func() bool { info, _ := find(m, "main"); return info.End > from+maxQueued+(1<<20) })
 	assert.Check(t, cmp.Equal(taps(m, "main"), 0), "taps after the tap fell behind")
 	info, _ := find(m, "main")
 	assert.Check(t, info.Attached, "the viewer went with the tap")
-	// the tap, once it reads again, finds DETACHED slow at the end
 	var detached proto.Frame
 	for detached.Type != proto.TypeDetached {
 		f, err := r.Next()
@@ -307,8 +290,6 @@ func TestTapThatStopsReadingIsDroppedAsSlow(t *testing.T) {
 	}
 }
 
-// A logged session's output waits for its first tap rather than let the
-// ring drop bytes no tap took.
 func TestLoggedSessionHoldsItsOutputWithinTheRingUntilATap(t *testing.T) {
 	m := newTestManager(t, "4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11")
 	total := 4 * ringSize
@@ -322,7 +303,6 @@ func TestLoggedSessionHoldsItsOutputWithinTheRingUntilATap(t *testing.T) {
 	assert.Check(t, info.End <= ringSize, "end %d before a tap, want at most the ring, %d", info.End, ringSize)
 }
 
-// A tap that comes while the session holds its output still reads from 0.
 func TestTapOfAHeldLoggedSessionReadsItsOutputFromZero(t *testing.T) {
 	m := newTestManager(t, "4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11")
 	total := 4 * ringSize
@@ -340,8 +320,6 @@ func TestTapOfAHeldLoggedSessionReadsItsOutputFromZero(t *testing.T) {
 	assert.Check(t, bytes.Equal(got, bytes.Repeat([]byte("x"), total)), "the tap read %d bytes, want %d x's", len(got), total)
 }
 
-// With no tap within tapWait, the session runs on untapped: all its output
-// passes through the ring.
 func TestLoggedSessionRunsOnWithoutATapPastTheTapWait(t *testing.T) {
 	m := newTestManager(t, "4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11")
 	m.tapWait = 100 * time.Millisecond
@@ -350,7 +328,6 @@ func TestLoggedSessionRunsOnWithoutATapPastTheTapWait(t *testing.T) {
 	startLoggedQuiet(t, m, "job", "head -c "+strconv.FormatUint(total, 10)+" /dev/zero | tr '\\0' x", total)
 }
 
-// startLoggedQuiet is startQuiet for a logged session.
 func startLoggedQuiet(t *testing.T, m *Manager, name, script string, n uint64) *proto.Output {
 	t.Helper()
 	h := startLogged(t, m, name, "stty -opost -echo; "+script+"; exec sleep 60")
@@ -363,8 +340,6 @@ func startLoggedQuiet(t *testing.T, m *Manager, name, script string, n uint64) *
 	return out
 }
 
-// log turns logging on only for the session a start creates: a start that
-// attaches to a session that runs leaves it unlogged.
 func TestLoggedStartThatAttachesLeavesTheSessionUnlogged(t *testing.T) {
 	m := newTestManager(t, "4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11")
 	h := start(t, m, "job", "exec sleep 60")

@@ -8,7 +8,6 @@ export const AUDIT_ROWS_PER_IMP = 1000;
 /* @internal */
 export const AUDIT_ROWS = 100_000;
 
-// Nothing from a header or a body is kept.
 export interface NewAuditEntry {
   readonly impId: string;
 

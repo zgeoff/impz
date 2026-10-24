@@ -2,11 +2,8 @@ import { StopError } from './stop-error.ts';
 import type { ZfsChild, ZfsIO, ZfsSignal } from './types.ts';
 
 export interface StopGuard {
-  // The exit code of the first signal, or null before one comes.
   readonly findStopCode: () => number | null;
   readonly throwIfStopped: () => void;
-
-  // Waits for the child, and stops it first when a signal comes while it runs.
   readonly runChild: (child: ZfsChild) => Promise<number>;
 }
 

@@ -17,7 +17,6 @@ interface BootstrapResult {
   readonly output: string;
 }
 
-// Every run is bracketed by a snapshot of the host's kernel state, and a difference fails the test.
 export async function runBootstrap(
   run: BootstrapRun,
   target: BootstrapTarget,
@@ -60,7 +59,6 @@ export async function runBootstrap(
     );
   }
 
-  // A change that failed, such as a restart of imp-host: show why.
   if (result.exitCode === 1 && /^bootstrap: failed: /mu.test(output)) {
     for (const unit of ['imp-host', 'docker']) {
       const journal = await run.io

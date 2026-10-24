@@ -14,8 +14,6 @@ import (
 	"github.com/zgeoff/impz/agent/internal/proto"
 )
 
-// listenThroughHelper binds through the helper process, as the test's own
-// user.
 func listenThroughHelper(t *testing.T, network, address string) *Bound {
 	t.Helper()
 	d := testDialer("")
@@ -110,8 +108,6 @@ func TestCheckListenAddressRefusesABadAddress(t *testing.T) {
 	}
 }
 
-// The directory is resolved before the check, so a symlink in the path
-// cannot lead under the agent's own directory.
 func TestBindSocketRefusesAPathUnderTheAgentsDirectory(t *testing.T) {
 	t.Parallel()
 	dir := shortDir(t)

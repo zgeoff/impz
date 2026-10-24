@@ -81,7 +81,7 @@ export interface RamGovernorDeps {
   readonly readRamMib: (pid: number, apiSocket: string) => Promise<number | null>;
 
   // The kernel keeps this count per process, so a read walks no pages. A page's share of it is never
-  // less than its share of what readRamMib counts, KSM or not.
+  // less than its share of the owned RAM count, KSM or not.
   readonly readResidentMib: (pid: number, apiSocket: string) => Promise<number | null>;
 
   // Writes split pages that KSM merged faster than a tick, so a share of what KSM saves stays free.

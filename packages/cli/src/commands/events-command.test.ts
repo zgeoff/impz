@@ -318,8 +318,8 @@ test('it says to upgrade an impd that has no stream procedure, without retrying'
   expect(warn).not.toHaveBeenCalled();
 });
 
-// no impd sends this, as the test above shows; its input is the NOT_FOUND an
-// oRPC router sends for a procedure it does not have
+// no impd sends this; its input is the NOT_FOUND an oRPC router sends for a
+// procedure it does not have
 test('it says to upgrade an impd that answers NOT_FOUND for the stream', () => {
   const printing = printEvents(
     {

@@ -16,9 +16,6 @@ import * as z from 'zod';
 import { buildStubHostDocker } from '../scripts/test-utils/build-stub-host-docker';
 import { createStubBin } from '../scripts/test-utils/create-stub-bin';
 
-// upgrade.sh against stub docker, systemctl and curl, with the host's files in a temp dir; the
-// calls log holds every docker and systemctl call in order. The child gets only what
-// upgrade.sh needs, never this process's tokens.
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-upgrade-'));
 
@@ -84,7 +81,7 @@ test('it installs the unprivileged host unit and restarts imp-host, on an upgrad
 test('it installs both units and restarts the proxy before imp-host, on an upgrade from the socket host', () => {
   const ctx = setupTest();
 
-  // a #75 unit: unprivileged, with the host's docker.sock
+  // the socket host's unit: unprivileged, with the host's docker.sock
   const docker = createStubBin(
     ctx.directoryPath,
     'docker',

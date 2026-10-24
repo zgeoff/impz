@@ -8,7 +8,6 @@ import (
 	"gotest.tools/v3/assert"
 )
 
-// stepClock is a clock that a test moves forward by hand.
 type stepClock struct{ at time.Time }
 
 func (c *stepClock) now() time.Time { return c.at }

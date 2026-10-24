@@ -46,8 +46,6 @@ export interface ForwardDeps {
   readonly resolveUpstream: (host: string) => Upstream;
   readonly recordAudit: (entry: NewAuditEntry) => void;
   readonly fetch?: UpstreamFetch;
-
-  // impd.broker by default
   readonly logger?: Pick<Logger, 'warning'>;
 
   readonly refreshAfterRejection?: (

@@ -3,11 +3,9 @@ import { DevError } from './dev-error.ts';
 import { ZFS_POOL_FILE, parseZfsPoolProperties } from './parse-zfs-pool-properties.ts';
 
 interface PoolFileReader {
-  // A file that cannot be read gives null.
   readonly readText: (path: string) => string | null;
 }
 
-// The properties deploy/bootstrap.sh gives a pool, as zpool create's words before the pool name.
 export function readZfsPoolProperties(files: PoolFileReader, root: string): readonly string[] {
   const json = files.readText(join(root, ZFS_POOL_FILE));
 

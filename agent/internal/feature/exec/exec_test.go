@@ -25,9 +25,6 @@ import (
 // The reaper runs a process-wide wait4 loop, so the package shares one.
 var testReaper *reaper.Reaper
 
-// zombieParentEnv makes the test binary a parent that forks /bin/true,
-// writes its pid to the named file and never waits for it, so the child
-// stays a zombie until this parent dies.
 const zombieParentEnv = "EXEC_TEST_ZOMBIE_PARENT"
 
 func TestMain(m *testing.M) {
@@ -53,7 +50,6 @@ func newManager() *Manager {
 	return NewManager(launch.New(&proc.Direct{Reaper: testReaper}, imagecfg.NewLive(imagecfg.Config{Env: []string{"PATH=/usr/bin:/bin"}}), nil), nil)
 }
 
-// host is the host side of one exec connection.
 type host struct {
 	conn   net.Conn
 	w      *proto.Writer
@@ -66,9 +62,7 @@ func startExec(t *testing.T, m *Manager, req *proto.Request) *host {
 	guest, conn := net.Pipe()
 	h := &host{conn: conn, w: proto.NewWriter(conn), frames: make(chan proto.Frame, 64), served: make(chan error, 1)}
 	stop, serveDone, readDone := make(chan struct{}), make(chan struct{}), make(chan struct{})
-	// The hangup ends Serve: within the hangup grace for a process that
-	// ignores it, and at once otherwise. Cleanups registered later, such as
-	// a kill of the process, run first.
+	// Cleanups registered later, such as a kill of the process, run first.
 	t.Cleanup(func() {
 		close(stop)
 		conn.Close()
@@ -125,7 +119,6 @@ func (h *host) next(t *testing.T, timeout time.Duration) proto.Frame {
 	}
 }
 
-// wait collects stdout and stderr until EXIT.
 func (h *host) wait(t *testing.T, timeout time.Duration) (string, *proto.Exit) {
 	t.Helper()
 	var out bytes.Buffer
@@ -145,8 +138,6 @@ func (h *host) wait(t *testing.T, timeout time.Duration) (string, *proto.Exit) {
 	}
 }
 
-// hangUp closes the host side, as a host does once it has EXIT, and returns
-// what Serve returned.
 func (h *host) hangUp(t *testing.T, timeout time.Duration) error {
 	t.Helper()
 	h.conn.Close()
@@ -233,8 +224,6 @@ func TestServeDeliversASignalQueuedBehindStdinTheProcessNeverReads(t *testing.T)
 	}
 }
 
-// A background child that keeps stdout open must not hold the session open
-// past the drain grace.
 func TestServeSendsTheExitWithinTheDrainGraceWhileABackgroundChildHoldsStdout(t *testing.T) {
 	m := newManager()
 	m.drainGrace = 100 * time.Millisecond
@@ -272,8 +261,6 @@ func TestServeReturnsBeforeTheHangupGraceWhenTheProcessExitsOnSIGHUP(t *testing.
 	assert.Check(t, cmp.Equal(m.Active(), 0))
 }
 
-// A process that ignores SIGHUP keeps running after the host hangs up, but
-// no longer counts as a session.
 func TestServeDetachesAProcessThatIgnoresSIGHUPAfterTheHangupGrace(t *testing.T) {
 	m := newManager()
 	m.hangupGrace = 200 * time.Millisecond
@@ -296,8 +283,6 @@ func TestServeDetachesAProcessThatIgnoresSIGHUPAfterTheHangupGrace(t *testing.T)
 	assert.Check(t, cmp.Equal(m.Active(), 0))
 }
 
-// Output is forwarded for half a second after the process exits, and a
-// process that ignores a hangup has a second to end.
 func TestNewManagersTakeTheDrainAndHangupGraces(t *testing.T) {
 	l := launch.New(&proc.Direct{Reaper: testReaper}, imagecfg.NewLive(imagecfg.Config{}), nil)
 	for _, tc := range []struct {
@@ -314,15 +299,13 @@ func TestNewManagersTakeTheDrainAndHangupGraces(t *testing.T) {
 	}
 }
 
-// Host frames sent after the process exited, past what the stdin queue
-// holds, are still read, so none meets a closed socket: a host whose write
-// fails there loses the EXIT frame to EPIPE.
+// A host whose write meets a closed socket loses the EXIT frame to EPIPE.
 func TestServeReadsHostFramesThatArriveAfterTheExit(t *testing.T) {
 	h := startExec(t, newManager(), &proto.Request{Argv: []string{"sh", "-c", "echo refused >&2; exit 1"}})
 	h.started(t)
 	h.wait(t, 5*time.Second)
 
-	// More than stdinQueueChunks of stdinChunk, all after the session ended.
+	// More than the stdin queue holds, all after the session ended.
 	written := make(chan error, 1)
 	go func() {
 		chunk := bytes.Repeat([]byte("x"), 64<<10)

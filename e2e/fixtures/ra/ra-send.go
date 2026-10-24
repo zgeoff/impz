@@ -1,7 +1,3 @@
-// ra-send sends router advertisements out of an interface to all nodes
-// (ff02::1): a default route for 30 minutes and an autoconfigured /64. The
-// ipv6 suite runs it in a guest to check its host ignores them. It uses a
-// raw socket and no dependencies; the kernel fills in the checksum.
 package main
 
 import (
@@ -44,6 +40,7 @@ func run(args []string) error {
 		return err
 	}
 
+	// the kernel fills in the checksum on a raw ICMPv6 socket
 	fd, err := syscall.Socket(syscall.AF_INET6, syscall.SOCK_RAW, syscall.IPPROTO_ICMPV6)
 	if err != nil {
 		return err

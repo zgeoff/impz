@@ -12,9 +12,6 @@ import (
 	"gotest.tools/v3/assert/cmp"
 )
 
-// A history of 8 keeps at most 16 bytes. The second write drops the paste
-// mode's sequence into the modes; the third cuts inside the alt screen's
-// sequence, so the cut moves past it and its mode joins the prelude.
 func TestHistoryReplayOfAHandWrittenOutputMatchesTheGolden(t *testing.T) {
 	h := newHistory(8)
 
@@ -37,10 +34,6 @@ func TestHistoryReplayIsTheSameForTheSameOutput(t *testing.T) {
 	assert.DeepEqual(t, replay(first), replay(second))
 }
 
-// goldenOutput is a program's output, the same on every run: text, colours,
-// UTF-8, OSC titles, the modes a replay restores and kitty flags, written in
-// chunks of uneven size. It runs past historyLimit, so the history drops
-// part of it and cuts at a ground state.
 func goldenOutput() [][]byte {
 	rng := rand.New(rand.NewPCG(97, 2026))
 	units := []func() string{
@@ -70,8 +63,6 @@ func goldenOutput() [][]byte {
 	return chunks
 }
 
-// The replay a fresh attach gets, pinned to what the history gave before
-// output offsets: offsets must not change a byte of it.
 const (
 	goldenReplayBytes  = 274484
 	goldenReplaySHA256 = "1fbcb94098ee4593c6e2de11aad8c55bf2a15ae11f496e9b98402b3798318bc3"

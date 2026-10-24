@@ -3,10 +3,8 @@ import { readInContainer } from './read-in-container';
 import { runInContainer } from './run-in-container';
 import type { BootstrapRun, BootstrapTarget } from './types';
 
-// With the real image, an imp reaches an IPv6 address outside the host container: SSH on a dummy
-// interface of the test container, through impd's NAT66 and the imp-host network. 2001:db8::/32 is
-// not among impd's blocked ranges.
 export async function checkImpEgress6(run: BootstrapRun, target: BootstrapTarget): Promise<void> {
+  // 2001:db8::/32 is not among impd's blocked ranges.
   const address = '2001:db8:ffff::1';
   const name = 'egress6';
 

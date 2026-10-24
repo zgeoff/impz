@@ -20,7 +20,6 @@ func forkSh(script string) func() (int, error) {
 	}
 }
 
-// wait returns the status ch delivers, failing the test if none arrives.
 func wait(t *testing.T, ch <-chan Status) Status {
 	t.Helper()
 	select {
@@ -54,7 +53,6 @@ func TestStartDeliversTheChildsExitStatus(t *testing.T) {
 	}
 }
 
-// Exits that share one SIGCHLD each reach their own waiter.
 func TestStartDeliversEachOfManyCoalescedExitsToItsOwnWaiter(t *testing.T) {
 	chans := make([]<-chan Status, 20)
 	want := make([]int, len(chans))
@@ -73,8 +71,6 @@ func TestStartDeliversEachOfManyCoalescedExitsToItsOwnWaiter(t *testing.T) {
 	assert.DeepEqual(t, got, want)
 }
 
-// A child with no waiter, as an orphan reparented to PID 1 would be, does
-// not stay a zombie.
 func TestTheReaperReapsAChildWithNoWaiter(t *testing.T) {
 	pid, err := forkSh("exit 0")()
 	assert.NilError(t, err)

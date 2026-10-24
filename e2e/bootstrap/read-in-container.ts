@@ -6,8 +6,6 @@ interface ContainerRead {
   readonly output: string;
 }
 
-// A step whose failure is an answer, not an error: the output comes back without its trailing
-// newlines, as $(...) gave it, with the exit code beside it.
 export async function readInContainer(
   run: BootstrapRun,
   argv: readonly string[],

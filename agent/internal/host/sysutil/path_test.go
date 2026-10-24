@@ -10,7 +10,6 @@ import (
 	"gotest.tools/v3/assert/cmp"
 )
 
-// writeFile writes an empty file at dir/name with mode.
 func writeFile(t *testing.T, dir, name string, mode os.FileMode) string {
 	t.Helper()
 	p := filepath.Join(dir, name)

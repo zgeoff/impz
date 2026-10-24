@@ -53,8 +53,6 @@ func TestGetReturnsTheLastValueOfAKey(t *testing.T) {
 	}
 }
 
-// pathDirs makes two PATH directories, a then b, holding the binaries the
-// LookPath cases resolve.
 func pathDirs(t *testing.T) (a, b string) {
 	t.Helper()
 	a, b = t.TempDir(), t.TempDir()
@@ -85,7 +83,6 @@ func TestLookPathFindsTheFirstExecutableMatch(t *testing.T) {
 			want: func(a, b string) string { return filepath.Join(a, "tool") },
 		},
 		{
-			// A non-executable match is skipped, as a shell would.
 			name: "non-executable match skipped",
 			file: func(a, b string) string { return "noexec" },
 			want: func(a, b string) string { return filepath.Join(b, "noexec") },
