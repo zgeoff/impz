@@ -74,13 +74,31 @@ async function waitForEngine(
     }
 
     if (clock.now() > deadline) {
+      const log = await readEngineLog(exec, signal);
+
       throw new Error(
-        `the builder's engine did not answer in ${String(ENGINE_READY_MS / 1000)} s: ${info.stderr.trim()}`,
+        `the builder's engine did not answer in ${String(ENGINE_READY_MS / 1000)} s: ${info.stderr.trim()}${log}`,
       );
     }
 
     await clock.sleep(ENGINE_POLL_MS);
   }
+}
+
+// imp-agent writes each services.d service's output to /var/log/imp/<service>.log.
+const ENGINE_LOG_PATH = '/var/log/imp/docker.log';
+const ENGINE_LOG_LINES = 20;
+
+async function readEngineLog(exec: GuestExec, signal: AbortSignal): Promise<string> {
+  const tail = await exec(['tail', '-n', String(ENGINE_LOG_LINES), ENGINE_LOG_PATH], { signal });
+
+  const lines = tail.stdout.trim();
+
+  if (tail.exitCode !== 0 || lines === '') {
+    return '';
+  }
+
+  return `\nthe last lines of ${ENGINE_LOG_PATH}:\n${lines}`;
 }
 
 // The engine reads certs.d on each pull, so the CA needs no engine restart.
