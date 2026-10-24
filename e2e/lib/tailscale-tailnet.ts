@@ -26,8 +26,11 @@ export async function startTailscaleTailnet(
   return { member };
 }
 
-export async function stopTailscaleTailnet(runners: CommandRunners): Promise<void> {
-  await runners.runCommand(['docker', 'rm', '-f', buildMemberName(instance.container)]);
+// docker rm -f exits 0 for a member that is gone already.
+export async function stopTailscaleTailnet(
+  runners: Pick<CommandRunners, 'runChecked'>,
+): Promise<void> {
+  await runners.runChecked(['docker', 'rm', '-f', buildMemberName(instance.container)]);
 }
 
 function buildMemberName(container: string): string {

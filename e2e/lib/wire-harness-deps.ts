@@ -45,7 +45,7 @@ export function wireHarnessDeps(cwd: string): HarnessDeps {
     startHeadscale: () => startHeadscale({ runCommand, runChecked }),
     stopHeadscale: () => stopHeadscale({ runCommand, runChecked }),
     startTailscale: (key) => startTailscaleTailnet({ runCommand, runChecked }, key),
-    stopTailscale: () => stopTailscaleTailnet({ runCommand, runChecked }),
+    stopTailscale: () => stopTailscaleTailnet({ runChecked }),
     setUpInstance: async (run) => {
       const target = buildInstance(run.env, cwd);
 
