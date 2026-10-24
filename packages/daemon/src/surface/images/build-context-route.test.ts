@@ -557,6 +557,67 @@ test('it keeps the disk room of an upload after it answers, until the upload exp
   expect(expired.pendingBytes).toBe(0);
 });
 
+test('it keeps the context, room, run and slot of a taken upload past its time to live', async () => {
+  const ctx = await setupTest();
+
+  const builder = buildStubImageBuilder({ exported: [], repoDigest: `sha256:${'b'.repeat(64)}` });
+
+  const harness = await startBuilderImpd(ctx.stack, builder, {
+    dataDir: ctx.dataDir,
+    rootToken: ctx.rootToken,
+    cloneDisk: ctx.cloneDisk,
+  });
+
+  const clock = buildStubClock();
+  const caller = buildMockCaller();
+
+  const route = createBuildContextRoute({
+    config: { dataDir: ctx.dataDir, buildContextMaxBytes: 1024 ** 2 },
+    images: harness.impd.images,
+    diskBudget: harness.impd.diskBudget,
+    audit: createApiAudit({ db: harness.db, now: Date.now, log: () => {}, readErrorCode }),
+    now: Date.now,
+    startTimer: clock.startTimer,
+  });
+
+  const uploaded = await route.respond(
+    new Request(`http://impd.test${BUILD_CONTEXT_PATH}?name=web`, {
+      method: 'POST',
+      headers: { 'content-length': '1024' },
+      body: new Uint8Array(1024),
+    }),
+    caller,
+  );
+
+  const answer: unknown = await uploaded.json();
+
+  const upload = route.takeUpload(BuildContextUploadSchema.parse(answer).id, caller);
+
+  onTestFinished(() => {
+    upload.release();
+  });
+
+  clock.runFor(UPLOAD_TTL_MS * 2);
+
+  const status = await harness.impd.diskBudget.readStatus();
+
+  const slots = [1, 2, 3].map(() => harness.impd.images.claimBuildSlot());
+
+  onTestFinished(() => {
+    for (const release of slots) {
+      release();
+    }
+  });
+
+  expect(existsSync(upload.tarPath)).toBeTrue();
+  expect(status.pendingBytes).toBe(1024);
+  expect(harness.impd.images.listBuildRuns()).toHaveLength(1);
+
+  expect(() => harness.impd.images.claimBuildSlot()).toThrow(
+    '4 image builds are already uploading or running; try again',
+  );
+});
+
 test("it refuses another caller's upload with not found", async () => {
   const ctx = await setupTest();
 
