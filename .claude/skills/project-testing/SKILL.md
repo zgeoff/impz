@@ -120,16 +120,19 @@ and selects its files by suffix. `test:related` leaves lane files out for the sa
 
 Nothing enforces the ceilings yet: the e2e harness gives each journey 1 h (`JOURNEY_TIMEOUT_MS` in
 [`suites.ts`](../../../e2e/lib/suites.ts)), and `zgeoff/max-test-timeout` checks a lane's ceiling
-only from oxlint-config 0.7.0. A test over its lane's ceiling is a named exception with a ticket
-that brings it under; the ceiling never rises to cover it:
+only from oxlint-config 0.7.0. A test over its lane's ceiling, or within 5% of it, is a named
+exception with a ticket that brings it under; the ceiling never rises to cover it:
 
 | Test                                                                            | Lane      | Measured | Ticket   |
 | ------------------------------------------------------------------------------- | --------- | -------- | -------- |
 | `backups.e2e.ts` "it backs up a running imp mid-write, …"                       | ZFS       | 121.8 s  | GEO-1767 |
 | `memory.e2e.ts` "it grows an elastic guest under a gradual allocation, …"       | VM        | 99.8 s   | GEO-1769 |
 | `backups.e2e.ts` "it restores a point that survived the scheduled …"            | ZFS       | 64.8 s   | GEO-1768 |
+| `backups-repo.e2e.ts` "it restores past a stale lock in the repository, …"      | ZFS       | 58.8 s   | GEO-1773 |
+| `backups-repo.e2e.ts` "it lists no file of an imp created with backup off …"    | ZFS       | 58.2 s   | GEO-1772 |
+| `backups-repo.e2e.ts` "it brings back a named token, its secret’s name …"       | ZFS       | 57.2 s   | GEO-1774 |
 | `headscale.headscale.test.ts` "it refuses one tag:imp-e2e node the port 7071 …" | Headscale | 31.6 s   | GEO-1770 |
-| `headscale.headscale.test.ts` "it lets one tag:imp-e2e node reach another …"    | Headscale | 16.8 s   | GEO-1770 |
+| `headscale.headscale.test.ts` "it lets one tag:imp-e2e node reach another …"    | Headscale | 16.8 s   | GEO-1771 |
 
 A host networking test still skips where its namespace probe fails, and `IMP_HOST_TESTS=required`,
 which CI sets, turns that skip into a failure. A lane file holds only the cases that need its real
