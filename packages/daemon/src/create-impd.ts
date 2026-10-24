@@ -22,7 +22,7 @@ import { createKernelOopsWatch } from './imps/imps/kernel-oops-watch';
 import { removeUnusedDrives } from './imps/imps/remove-unused-drives';
 import { createAuthorizedKeys } from './imps/ssh/authorized-keys';
 import { loadImpdAccess } from './load-impd-access';
-import { createSecretFiles } from './network/broker/secret-files';
+import { createSecretFiles } from './network/broker/secrets/secret-files';
 import { createDnsToken } from './network/https/dns/dns-token';
 import { createPublicRecordsLink } from './network/https/public-records-link';
 import { createForwardedPeers } from './network/proxy/forwarded-peers';

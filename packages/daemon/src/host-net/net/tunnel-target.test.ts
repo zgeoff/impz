@@ -1,6 +1,6 @@
 import { expect, mock, test } from 'bun:test';
-import { buildRangeMatcher } from '../../host-net/net/range-matcher';
-import { REFUSED_RANGES4 } from '../../host-net/net/ranges';
+import { buildRangeMatcher } from './range-matcher';
+import { REFUSED_RANGES4 } from './ranges';
 import {
   TunnelRefusedError,
   isRefusedAddress,

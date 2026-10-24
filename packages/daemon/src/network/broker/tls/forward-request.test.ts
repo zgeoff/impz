@@ -6,10 +6,10 @@ import { buildStubAnswerQueue } from '@impz/test-utils/build-stub-answer-queue';
 import { server } from '@impz/test-utils/mock-server';
 import { HttpResponse, http } from 'msw';
 import invariant from 'tiny-invariant';
-import { buildMockCredential } from '../../../testing/network/build-mock-credential';
-import { startStubBrokerTlsUpstream } from '../../../testing/network/start-stub-broker-tls-upstream';
-import { startStubCutStream } from '../../../testing/network/start-stub-cut-stream';
-import type { NewAuditEntry } from '../../platform/db/broker-audit';
+import { buildMockCredential } from '../../../../testing/network/build-mock-credential';
+import { startStubBrokerTlsUpstream } from '../../../../testing/network/start-stub-broker-tls-upstream';
+import { startStubCutStream } from '../../../../testing/network/start-stub-cut-stream';
+import type { NewAuditEntry } from '../../../platform/db/broker-audit';
 import { loadOrCreateBrokerCa } from './broker-ca';
 import { createForwarder } from './forward-request';
 
@@ -442,7 +442,10 @@ test('it records an audit row with the bytes read when the guest hangs up mid-bo
 // the test reads
 test('it logs one impd.broker line that names the imp, and nothing unhandled, when the upstream closes a stream', async () => {
   const child = Bun.spawn(
-    [process.execPath, join(import.meta.dir, '../../../testing/network/run-cut-broker-stream.ts')],
+    [
+      process.execPath,
+      join(import.meta.dir, '../../../../testing/network/run-cut-broker-stream.ts'),
+    ],
     { stdout: 'pipe', stderr: 'pipe' },
   );
 

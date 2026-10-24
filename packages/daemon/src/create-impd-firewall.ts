@@ -14,7 +14,7 @@ import type { ImpdDeps } from './impd-deps';
 import type { BuilderTestRegistry } from './imps/images/builders/builder-imps';
 import { createBroker } from './network/broker/broker-service';
 import type { Broker } from './network/broker/broker-service';
-import type { SecretFiles } from './network/broker/secret-files';
+import type { SecretFiles } from './network/broker/secrets/secret-files';
 import { runNft } from './network/egress/egress-firewall';
 import { createEgressService } from './network/egress/egress-service';
 import type { EgressService } from './network/egress/egress-service';

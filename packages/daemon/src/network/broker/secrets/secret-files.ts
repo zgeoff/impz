@@ -10,8 +10,8 @@ import {
   rmSync,
 } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { writeFileDurably } from '../../platform/process/write-file-durably';
-import type { KeptSecretFiles } from '../../vm/storage/kept-secret-files';
+import { writeFileDurably } from '../../../platform/process/write-file-durably';
+import type { KeptSecretFiles } from '../../../vm/storage/kept-secret-files';
 
 // values sit unencrypted: the key would live on the same disk
 export interface SecretFiles extends KeptSecretFiles {

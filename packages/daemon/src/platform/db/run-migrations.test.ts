@@ -8,7 +8,7 @@ import { getMigrations } from 'better-auth/db/migration';
 import { sql } from 'kysely';
 import invariant from 'tiny-invariant';
 import { createUnmigratedDatabase } from '../../../testing/platform/create-unmigrated-database';
-import { createSecretFiles } from '../../network/broker/secret-files';
+import { createSecretFiles } from '../../network/broker/secrets/secret-files';
 import { readImpByName } from './imps';
 import { MIGRATIONS, runMigrations, runMigrationsTo } from './run-migrations';
 import { listGrantedRules } from './secrets';

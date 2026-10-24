@@ -75,6 +75,8 @@ docs/
 - The vm layer's folders follow the same rule among themselves: the `daemon-vm-folder-*` entries
   give their order, so no import cycle runs between two vm folders. A new vm folder takes a place in
   that order.
+- The broker's folders in `network/broker/` follow the same rule: the `daemon-broker-folder-*`
+  entries give their order, and `broker-service.ts` sits above them all.
 - The agent's packages in `agent/internal/` sit in one folder per layer, and the `layer-*` depguard
   rules in [`agent/.golangci.yml`](agent/.golangci.yml) give the order and deny each upward import.
   A new package goes in its layer's folder and takes that layer's rule. Two packages sit outside the

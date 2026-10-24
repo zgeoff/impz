@@ -1,5 +1,5 @@
 import type { BrokerRule, OAuthConfig, Secret, SecretAdded, SecretKind } from '@impz/api';
-import type { ImpDatabase } from '../../platform/db/open-database';
+import type { ImpDatabase } from '../../../platform/db/open-database';
 import {
   createSecret,
   listSecrets,
@@ -7,11 +7,11 @@ import {
   removeFileRemoval,
   removeSecret,
   upsertSecret,
-} from '../../platform/db/secrets';
-import type { NewSecret, SecretRecord } from '../../platform/db/secrets';
-import { ImpdError } from '../../platform/errors/impd-error';
-import { buildConflictError, buildNotFoundError } from '../../platform/errors/impd-errors';
-import { getErrorMessage } from '../../platform/process/get-error-message';
+} from '../../../platform/db/secrets';
+import type { NewSecret, SecretRecord } from '../../../platform/db/secrets';
+import { ImpdError } from '../../../platform/errors/impd-error';
+import { buildConflictError, buildNotFoundError } from '../../../platform/errors/impd-errors';
+import { getErrorMessage } from '../../../platform/process/get-error-message';
 import { SecretRulesError, resolveRules } from './connector-kinds';
 import type { OAuthRefresher } from './oauth-refresher';
 import { buildPendingState, findIdClaims, formatOAuthState, parseOAuthState } from './oauth-state';

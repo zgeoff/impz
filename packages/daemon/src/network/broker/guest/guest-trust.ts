@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { rootCertificates } from 'node:tls';
-import { PROXY_VARIABLE } from '../../imps/exec/broker-exec-env';
-import type { StartTimer } from '../../platform/process/clock';
-import { getErrorMessage } from '../../platform/process/get-error-message';
-import { buildExitError } from '../../platform/process/run-command';
-import { startRealTimer } from '../../platform/process/start-real-timer';
-import { openExecStream } from '../../vm/agent-client/exec-stream';
+import { PROXY_VARIABLE } from '../../../imps/exec/broker-exec-env';
+import type { StartTimer } from '../../../platform/process/clock';
+import { getErrorMessage } from '../../../platform/process/get-error-message';
+import { buildExitError } from '../../../platform/process/run-command';
+import { startRealTimer } from '../../../platform/process/start-real-timer';
+import { openExecStream } from '../../../vm/agent-client/exec-stream';
 import installScript from './install-broker-ca.sh' with { type: 'text' };
 
 const GUEST_BUNDLE_PATH = '/etc/imp/broker-ca.pem';

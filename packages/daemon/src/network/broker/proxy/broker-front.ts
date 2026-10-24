@@ -2,17 +2,17 @@ import { createConnection, createServer } from 'node:net';
 import type { Server, Socket } from 'node:net';
 import { pipeline } from 'node:stream';
 import type { AuditRefusal, EgressMode } from '@impz/api';
-import { findPeerSlot } from '../../host-net/net/addressing';
-import type { Subnet } from '../../host-net/net/addressing';
-import type { NewAuditEntry } from '../../platform/db/broker-audit';
-import type { BrokerPeer } from '../../platform/db/read-broker-peer';
-import { createCountedLimit } from '../../platform/process/counted-limit';
-import type { CountedLimit } from '../../platform/process/counted-limit';
-import { getErrorMessage } from '../../platform/process/get-error-message';
-import { isTunnelAllowed } from '../egress/egress-rules';
+import { findPeerSlot } from '../../../host-net/net/addressing';
+import type { Subnet } from '../../../host-net/net/addressing';
+import { TunnelRefusedError } from '../../../host-net/net/tunnel-target';
+import type { NewAuditEntry } from '../../../platform/db/broker-audit';
+import type { BrokerPeer } from '../../../platform/db/read-broker-peer';
+import { createCountedLimit } from '../../../platform/process/counted-limit';
+import type { CountedLimit } from '../../../platform/process/counted-limit';
+import { getErrorMessage } from '../../../platform/process/get-error-message';
+import { isTunnelAllowed } from '../../egress/egress-rules';
+import type { TerminatorKey } from '../tls/terminators';
 import { MAX_HEAD_BYTES, findHeadEnd, parseConnectHead } from './connect-head';
-import type { TerminatorKey } from './terminators';
-import { TunnelRefusedError } from './tunnel-target';
 
 const MAX_CONNECTIONS_PER_IMP = 256;
 

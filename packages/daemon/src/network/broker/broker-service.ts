@@ -39,25 +39,25 @@ import {
 } from '../../platform/errors/impd-errors';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import type { NetworkConfig } from '../network-config';
-import { loadOrCreateBrokerCa } from './broker-ca';
-import { PLACEHOLDER, listPlaceholderEnv } from './connector-kinds';
-import { createBrokerProxy } from './create-broker-proxy';
-import { createSecretStore } from './create-secret-store';
-import type { AddSecretInput } from './create-secret-store';
-import { createUpstreamResolver } from './create-upstream-resolver';
-import type { UpstreamFetch } from './forward-request';
 import {
   buildBrokerEnv,
   buildInstallInput,
   createGuestTrust,
   runBundleInstall,
-} from './guest-trust';
-import type { InstallBundle, TrustedImp } from './guest-trust';
-import { createOAuthRefresher } from './oauth-refresher';
-import type { OAuthFetch } from './oauth-refresher';
-import { removeStaleSecretFiles } from './remove-stale-secret-files';
-import { createSecretFiles } from './secret-files';
-import type { SecretFiles } from './secret-files';
+} from './guest/guest-trust';
+import type { InstallBundle, TrustedImp } from './guest/guest-trust';
+import { createBrokerProxy } from './proxy/create-broker-proxy';
+import { PLACEHOLDER, listPlaceholderEnv } from './secrets/connector-kinds';
+import { createSecretStore } from './secrets/create-secret-store';
+import type { AddSecretInput } from './secrets/create-secret-store';
+import { createOAuthRefresher } from './secrets/oauth-refresher';
+import type { OAuthFetch } from './secrets/oauth-refresher';
+import { removeStaleSecretFiles } from './secrets/remove-stale-secret-files';
+import { createSecretFiles } from './secrets/secret-files';
+import type { SecretFiles } from './secrets/secret-files';
+import { loadOrCreateBrokerCa } from './tls/broker-ca';
+import { createUpstreamResolver } from './tls/create-upstream-resolver';
+import type { UpstreamFetch } from './tls/forward-request';
 
 interface ForkGrantsReport {
   readonly notCopied: readonly GrantNotCopied[];
