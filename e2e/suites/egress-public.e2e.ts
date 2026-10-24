@@ -1,7 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { config } from '../lib/config';
 import { resolveImageName } from '../lib/fixtures';
-import { tryGetFromImp } from '../lib/guest-probe';
 import { createInstanceClient, runImp, runShellInImp } from '../lib/imp-cli';
 import { holdImp, waitForExec } from '../lib/imps';
 import { readContainerGateway } from '../lib/instance';
@@ -163,7 +162,12 @@ test('it lets a public imp fetch from the internet, and removes a private addres
   await waitForExec(pub);
   await holdImp(pub);
 
-  const fetched = await tryGetFromImp(pub, 'http://example.com/');
+  // A bare exit status hides why a fetch failed in CI, where DNS, the egress rules or the outside
+  // host can each refuse it, so the output keeps wget's error and the guest resolver's answer.
+  const fetched = await runShellInImp(
+    pub,
+    'wget -q -T 5 -O /dev/null http://example.com/ 2>&1; echo "exit $?"; nslookup example.com 2>&1 || true',
+  );
 
   // sslip.io answers with the address the name spells, here in 10/8: the open
   // imp gets it from the public resolver, and impd removes it from the public
@@ -171,7 +175,7 @@ test('it lets a public imp fetch from the internet, and removes a private addres
   const openAnswer = await runShellInImp(open, 'nslookup 10-250-77-1.sslip.io 8.8.8.8 || true');
   const publicAnswer = await runShellInImp(pub, 'nslookup 10-250-77-1.sslip.io 8.8.8.8 || true');
 
-  expect(fetched).toBeTrue();
+  expect(fetched).toStartWith('exit 0\n');
   expect(openAnswer).toContain('10.250.77.1');
   expect(publicAnswer).not.toContain('10.250.77.1');
 });
