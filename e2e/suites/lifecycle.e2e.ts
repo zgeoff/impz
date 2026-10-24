@@ -150,7 +150,8 @@ test('it resolves names and reaches the internet from the guest', async () => {
     `getent hosts example.com >/dev/null && exec 3<>/dev/tcp/example.com/80 && ${request} && head -1 <&3`,
   );
 
-  expect(status).toMatch(/^HTTP\/1\.[01] 200 /u);
+  // any status proves egress: example.com has answered 503
+  expect(status).toMatch(/^HTTP\/1\.[01] \d{3} /u);
 });
 
 test('it keeps the disk through a stop, boots a stopped imp on exec with an empty /run, and again on start', async () => {

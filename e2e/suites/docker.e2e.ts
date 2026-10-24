@@ -1,4 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
+import { buildReachScript } from '../lib/build-reach-script';
 import { config } from '../lib/config';
 import { readThroughProxy } from '../lib/http';
 import { createInstanceClient, runImp, runInImp, runShellInImp } from '../lib/imp-cli';
@@ -97,7 +98,8 @@ test('it lets a container resolve names and reach the internet', async () => {
     timeoutMs: 90_000,
   });
 
-  const page = await runInImp(
+  // any HTTP status proves egress: example.com has answered 503
+  const reach = runInImp(
     name,
     'docker',
     'run',
@@ -105,10 +107,10 @@ test('it lets a container resolve names and reach the internet', async () => {
     'alpine:3.20',
     'sh',
     '-c',
-    'nslookup example.com >/dev/null && wget -qO- http://example.com',
+    `nslookup example.com >/dev/null && ${buildReachScript('http://example.com/', 5)}`,
   );
 
-  expect(page).toContain('<title>Example Domain</title>');
+  await expect(reach).toResolve();
 });
 
 test('it serves a container port published on 8080 through the wake proxy, again after a cold boot', async () => {
