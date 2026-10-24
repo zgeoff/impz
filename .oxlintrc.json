@@ -30,6 +30,10 @@
       "error",
       { "lanes": { "e2e": 60000, "host": 15000, "headscale": 15000, "pebble": 5000 } }
     ],
+    // the shared cast ban stays off until the repo's casts go; GEO-1468's PRs for impz remove
+    // the casts and turn both rules back on
+    "typescript/consistent-type-assertions": "off",
+    "zgeoff/no-hidden-cast": "off",
     // zod's documented import form is `import * as z from 'zod'`
     "import/no-namespace": "off",
     "no-restricted-imports": [
