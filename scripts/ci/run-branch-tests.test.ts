@@ -128,6 +128,8 @@ test('it leaves out a lane file, which runs only in its lane script', async () =
   await writeFile(join(ctx.directoryPath, 'src/a.host.test.ts'), '');
   await writeFile(join(ctx.directoryPath, 'src/b.headscale.test.ts'), '');
   await writeFile(join(ctx.directoryPath, 'src/c.pebble.test.ts'), '');
+  await writeFile(join(ctx.directoryPath, 'src/d.docker.test.ts'), '');
+  await writeFile(join(ctx.directoryPath, 'src/e.small-fs.test.ts'), '');
 
   const subprocess = Bun.spawn(
     [
@@ -137,6 +139,8 @@ test('it leaves out a lane file, which runs only in its lane script', async () =
       'src/a.host.test.ts',
       'src/b.headscale.test.ts',
       'src/c.pebble.test.ts',
+      'src/d.docker.test.ts',
+      'src/e.small-fs.test.ts',
     ],
     { cwd: ctx.directoryPath, stdout: 'pipe', stderr: 'pipe' },
   );

@@ -42,10 +42,13 @@ randomize = true
 # the dashboard's component tests need a DOM, which must not leak into the
 # daemon's tests; they run from their package (bun run test:dashboard). A lane
 # file names its real system in its suffix and runs only in its lane's script
-# (test:host, test:headscale, test:pebble), which replaces this list.
+# (test:host, test:headscale, test:pebble, test:docker, test:small-fs), which
+# replaces this list.
 pathIgnorePatterns = [
   "packages/dashboard/**",
   "**/*.host.test.ts",
   "**/*.headscale.test.ts",
   "**/*.pebble.test.ts",
+  "**/*.docker.test.ts",
+  "**/*.small-fs.test.ts",
 ]
