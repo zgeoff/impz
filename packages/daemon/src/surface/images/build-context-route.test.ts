@@ -557,6 +557,70 @@ test('it keeps the disk room of an upload after it answers, until the upload exp
   expect(expired.pendingBytes).toBe(0);
 });
 
+test('it keeps the disk room of an upload while its build runs, until the build ends', async () => {
+  const ctx = await setupTest();
+
+  const gate = Promise.withResolvers<void>();
+
+  const builder = buildStubImageBuilder({
+    exported: [createFilesTar(ctx.directoryPath, { hello: 'hi' })],
+    repoDigest: `sha256:${'b'.repeat(64)}`,
+    onBuild: async () => {
+      await gate.promise;
+
+      return { stderr: '#1 DONE\n' };
+    },
+  });
+
+  const harness = await startBuilderImpd(ctx.stack, builder, {
+    dataDir: ctx.dataDir,
+    rootToken: ctx.rootToken,
+    cloneDisk: ctx.cloneDisk,
+  });
+
+  const tar = createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM scratch\n' });
+
+  const uploaded = await harness.impd.api.app.handle(
+    new Request(`http://impd.test${BUILD_CONTEXT_PATH}?name=web`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${ctx.rootToken}`,
+        'content-length': String(tar.byteLength),
+      },
+      body: tar,
+    }),
+  );
+
+  const answer: unknown = await uploaded.json();
+
+  const upload = BuildContextUploadSchema.parse(answer);
+
+  const events = await harness.buildClient(ctx.rootToken).images.buildStream({ upload: upload.id });
+
+  await waitFor(() => {
+    expect(builder.guest.runs.filter((run) => run.argv[1] === 'build')).toHaveLength(1);
+  });
+
+  const running = await harness.impd.diskBudget.readStatus();
+
+  gate.resolve();
+
+  const built = await Array.fromAsync(events);
+
+  const ended = await waitFor(async () => {
+    const status = await harness.impd.diskBudget.readStatus();
+
+    expect(status.pendingBytes).toBe(0);
+
+    return status;
+  });
+
+  // The build holds the context's size again for its rewritten copy of the context.
+  expect(running.pendingBytes).toBe(2 * tar.byteLength);
+  expect(built.at(-1)).toMatchObject({ type: 'image', image: { name: 'web' } });
+  expect(ended.pendingBytes).toBe(0);
+});
+
 test('it keeps the context, room, run and slot of a taken upload past its time to live', async () => {
   const ctx = await setupTest();
 
