@@ -1036,9 +1036,11 @@ test('it sends no image on a move back to a host that holds it, and the imp keep
   const back = await readImpByName(ctx.source.db, 'dev');
   const images = await listImages(ctx.source.db);
 
-  invariant(tickets[0]?.receipt);
+  const text = tickets[0]?.receipt;
 
-  const receipt = ReceiptSchema.parse(JSON.parse(tickets[0].receipt));
+  invariant(typeof text === 'string');
+
+  const receipt = ReceiptSchema.parse(JSON.parse(text));
 
   expect(status).toMatchObject({ isDone: true, error: null });
   expect(JSON.parse(receipt.body)).toMatchObject({ files: [{ kind: 'disk' }] });
