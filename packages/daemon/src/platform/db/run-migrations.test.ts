@@ -993,3 +993,18 @@ test('#runMigrations leaves each image unpinned in the image pin migration', asy
 
   expect(rows).toStrictEqual([{ id: 'one', pinned: 0 }]);
 });
+
+test('#runMigrations gives each image no received digest in the received digest migration', async () => {
+  const db = createUnmigratedDatabase();
+
+  await runMigrationsTo(db, '039_add_image_pins');
+
+  await sql`INSERT INTO images (id, name, ref, digest, size_bytes, created_at, last_used_at)
+    VALUES ('one', 'web-1111111', 'imp/web:1', 'sha256:1', 1, 100, 100)`.execute(db);
+
+  await runMigrations(db);
+
+  const rows = await db.selectFrom('images').select(['id', 'received_digest']).execute();
+
+  expect(rows).toStrictEqual([{ id: 'one', received_digest: null }]);
+});

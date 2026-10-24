@@ -1,8 +1,8 @@
-import { createHash } from 'node:crypto';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { copyFile, open } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { EgressPolicy, WarmHost } from '@impz/api';
+import invariant from 'tiny-invariant';
 import type { ImageService } from '../../imps/images/image-service';
 import type { Imps } from '../../imps/imps/imp-service';
 import type { Broker } from '../../network/broker/broker-service';
@@ -29,6 +29,8 @@ import type { StorageBackend } from '../../vm/storage/storage-backend';
 import type { StorageGate } from '../../vm/storage/storage-gate';
 import { writeChangedBlocks } from '../../vm/storage/write-changed-blocks';
 import { buildCheckpointId } from '../checkpoints/checkpoint-service';
+import { buildOfferedDigests } from './build-offered-digests';
+import { buildReceivedDigest } from './build-received-digest';
 import { requireOwnDrivePath, requireWarmMove, writeWarmFiles } from './check-warm-move';
 import { COMMIT_WINDOW_MS } from './commit-window-ms';
 import { createByteCounter } from './create-byte-counter';
@@ -38,6 +40,7 @@ import {
   MOVE_FRAMES,
   MoveFileSchema,
   createDataHash,
+  createFileContentHash,
   createFrameReader,
   readDataPayload,
   readJsonPayload,
@@ -256,12 +259,19 @@ export async function readMoveStream(
   return { status: 200, body: receipt };
 }
 
+interface ReadFile {
+  readonly sha256: string;
+  readonly contentSha256: string | null;
+  readonly bytes: number;
+  readonly file: MoveFile;
+}
+
 async function readFileInto(
   reader: FrameReader,
   expected: MoveFile['kind'],
   path: string,
   count: ByteCounter,
-): Promise<{ sha256: string; bytes: number; file: MoveFile }> {
+): Promise<ReadFile> {
   const start = await reader.readFrame();
 
   if (start?.type !== MOVE_FRAMES.file) {
@@ -277,7 +287,9 @@ async function readFileInto(
   const handle = await open(path, 'w');
 
   const hash = createDataHash();
+  const content = createFileContentHash(file);
   let bytes = 0;
+  let end = 0;
 
   try {
     await handle.truncate(file.sizeBytes);
@@ -296,7 +308,7 @@ async function readFileInto(
           throw new MoveRequestError(400, `${expected}: the sha256 does not match the data`);
         }
 
-        return { sha256, bytes, file };
+        return { sha256, contentSha256: content?.digest() ?? null, bytes, file };
       }
 
       if (frame.type !== MOVE_FRAMES.data) {
@@ -305,10 +317,16 @@ async function readFileInto(
 
       const data = readDataInFile(frame.payload, file.sizeBytes);
 
+      if (data.offset < end) {
+        throw new MoveRequestError(400, `${expected}: a DATA frame out of order`);
+      }
+
+      end = data.offset + data.data.length;
+
       await handle.write(data.data, 0, data.data.length, data.offset);
 
       hash.update(frame.payload);
-
+      content?.update(data.offset, data.data);
       bytes += data.data.length;
 
       count.add(data.data.length);
@@ -356,11 +374,12 @@ async function requireImage(
   options: RequireImageOptions,
 ): Promise<{ readonly name: string; readonly files: readonly ReceivedFile[] }> {
   const header = options.header;
+  const offered = buildOfferedDigests(header.image.digest, header.image.receivedDigest);
 
   // The use goes in before each read, so an image eviction keeps the image this move picks.
-  await updateImageUse(deps.db, 'digest', [header.image.digest], deps.now());
+  await updateImageUse(deps.db, 'digest', offered, deps.now());
 
-  const existing = await readImageByDigest(deps.db, header.image.digest);
+  const existing = await readImageByDigest(deps.db, offered);
 
   if (existing !== undefined) {
     return { name: existing.name, files: [] };
@@ -381,11 +400,13 @@ async function requireImage(
       { kind: 'image-config', sha256: config.sha256, bytes: config.bytes },
     ];
 
-    const digest = buildReceivedDigest(rootfs.sha256, config.sha256);
+    invariant(rootfs.contentSha256 !== null && config.contentSha256 !== null);
+
+    const digest = buildReceivedDigest(rootfs.contentSha256, config.contentSha256);
 
     await updateImageUse(deps.db, 'digest', [digest], deps.now());
 
-    const known = await readImageByDigest(deps.db, digest);
+    const known = await readImageByDigest(deps.db, [digest]);
 
     if (known !== undefined) {
       return { name: known.name, files };
@@ -430,12 +451,6 @@ async function requireImage(
     rmSync(temps.rootfs, { force: true });
     rmSync(temps.config, { force: true });
   }
-}
-
-function buildReceivedDigest(rootfsSha256: string, configSha256: string): string {
-  const hash = createHash('sha256').update(`rootfs ${rootfsSha256}\nconfig ${configSha256}\n`);
-
-  return `sha256:${hash.digest('hex')}`;
 }
 
 function resolvePolicy(header: MoveHeader, log: (message: string) => void): EgressPolicy {

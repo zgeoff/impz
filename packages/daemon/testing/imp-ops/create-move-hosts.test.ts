@@ -30,6 +30,27 @@ test('#setupMoveHosts moves a stopped imp from the source to the target', async 
   expect(hosts.commits).toStrictEqual(['dev']);
 });
 
+test('#setupMoveHosts moves an imp from the target back to the source', async () => {
+  const hosts = await setupMoveHosts();
+
+  await createUbuntuImage(hosts.source);
+  await createUbuntuImage(hosts.target);
+
+  await hosts.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
+  await hosts.sourceApp.client.imps.stop({ name: 'dev' });
+  await hosts.runMove('dev');
+
+  const status = await hosts.runMoveBack('dev');
+  const back = await hosts.sourceApp.client.imps.get({ name: 'dev' });
+
+  expect(status).toMatchObject({ isDone: true, error: null });
+  expect(back.state).toBe('stopped');
+
+  expect(hosts.targetApp.client.imps.get({ name: 'dev' })).rejects.toMatchObject({
+    code: 'NOT_FOUND',
+  });
+});
+
 test('#setupMoveHosts records one commit report for a move resumed on a reissued ticket', async () => {
   const hosts = await setupMoveHosts({ hook: makeStubDroppedCommit() });
 

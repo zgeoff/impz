@@ -273,7 +273,7 @@ async function createJoinedImage(
   // The use goes in before the read, so an image eviction keeps the image this restore picks.
   await updateImageUse(deps.db, 'digest', [image.digest], deps.now().getTime());
 
-  const existing = await readImageByDigest(deps.db, image.digest);
+  const existing = await readImageByDigest(deps.db, [image.digest]);
 
   if (existing !== undefined) {
     return existing.name;

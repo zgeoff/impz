@@ -4,7 +4,7 @@ import type { Broker } from '../../network/broker/broker-service';
 import type { EgressService } from '../../network/egress/egress-service';
 import { listCheckpoints } from '../../platform/db/checkpoints';
 import { listColdBoots } from '../../platform/db/cold-boots';
-import { readImageById } from '../../platform/db/images';
+import { readImageById, updateImageReceivedDigest } from '../../platform/db/images';
 import { updateImpMove } from '../../platform/db/imps';
 import type { ImpRecord } from '../../platform/db/imps';
 import { updateMoveSend } from '../../platform/db/move-sends';
@@ -14,6 +14,7 @@ import { parseOpaqueToken } from '../../platform/secrets/parse-opaque-token';
 import { encodeSnapshotMeta } from '../../vm/sleep/snapshot-meta';
 import type { MoveMode, StorageBackend } from '../../vm/storage/storage-backend';
 import type { ImpOpsConfig } from '../imp-ops-config';
+import { buildReceivedDigest } from './build-received-digest';
 import { readWarmHeader, requireSnapshotMeta } from './check-warm-move';
 import type { WarmParts } from './check-warm-move';
 import { MOVE_FRAMES, encodeCommand, encodeFile, encodeJsonFrame } from './move-frames';
@@ -87,6 +88,7 @@ export async function runMoveSend(
     init: {
       body: JSON.stringify({
         imageDigest: image?.digest ?? '',
+        receivedImageDigest: image?.receivedDigest ?? null,
         ...(meta !== null && { systemDrive: meta.systemDrive }),
       }),
       signal,
@@ -135,6 +137,8 @@ export async function runMoveSend(
 
   const sent: SentFile[] = [];
 
+  const contentSums = new Map<string, string>();
+
   try {
     const header = await readHeader(deps, {
       imp,
@@ -143,8 +147,12 @@ export async function runMoveSend(
       warm,
     });
 
-    const frames = encodeStream(header, opened.parts, progress.onData, (file) => {
+    const frames = encodeStream(header, opened.parts, progress.onData, (file, contentSha256) => {
       sent.push(file);
+
+      if (contentSha256 !== null) {
+        contentSums.set(file.kind, contentSha256);
+      }
     });
 
     await sendInParts(
@@ -187,6 +195,13 @@ export async function runMoveSend(
   }
 
   checkReceiptFiles(body, imp, sent);
+
+  const rootfsSum = contentSums.get('image-rootfs');
+  const configSum = contentSums.get('image-config');
+
+  if (image !== undefined && rootfsSum !== undefined && configSum !== undefined) {
+    await updateImageReceivedDigest(deps.db, image, buildReceivedDigest(rootfsSum, configSum));
+  }
 
   await updateMoveSend(deps.db, imp.id, { receipt: JSON.stringify(receipt) });
   await updateImpMove(deps.db, imp.id, 'moved');
@@ -243,6 +258,7 @@ async function readHeader(deps: MoveSendDeps, options: ReadHeaderOptions): Promi
       name: image.name,
       ref: image.ref,
       digest: image.digest,
+      receivedDigest: image.receivedDigest,
       sizeBytes: image.sizeBytes,
       source: image.source,
       sourceImp: image.sourceImp,
@@ -262,7 +278,7 @@ async function* encodeStream(
   header: Readonly<MoveHeader>,
   parts: readonly StreamPart[],
   onData: (bytes: number) => void,
-  onFile: (file: SentFile) => void,
+  onFile: (file: SentFile, contentSha256: string | null) => void,
 ): AsyncGenerator<Uint8Array, void, undefined> {
   yield encodeJsonFrame(MOVE_FRAMES.header, encodeHeader(header));
 
@@ -275,13 +291,16 @@ async function* encodeStream(
       onData(more);
     };
 
-    const onSum = (sha256: string) => {
-      onFile({
-        kind: part.file.kind,
-        ...(part.file.index !== undefined && { index: part.file.index }),
-        sha256,
-        bytes,
-      });
+    const onSum = (sha256: string, contentSha256: string | null = null) => {
+      onFile(
+        {
+          kind: part.file.kind,
+          ...(part.file.index !== undefined && { index: part.file.index }),
+          sha256,
+          bytes,
+        },
+        contentSha256,
+      );
     };
 
     yield* part.kind === 'file'

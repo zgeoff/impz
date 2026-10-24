@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { MoveHeaderSchema } from './move-header';
 
-test('it fills the defaults of a cold header from a source before boots, leases, warm moves or grant filters', () => {
+test('it fills the defaults of a cold header from a source before boots, leases, warm moves, grant filters or received digests', () => {
   const result = MoveHeaderSchema.safeParse({
     version: 1,
     imp: {
@@ -51,6 +51,7 @@ test('it fills the defaults of a cold header from a source before boots, leases,
       name: 'ubuntu',
       ref: 'ubuntu:latest',
       digest: 'sha256:ubuntu',
+      receivedDigest: null,
       sizeBytes: 6,
       source: 'oci',
       sourceImp: null,
@@ -101,6 +102,7 @@ test('it reads the dates of a ZFS warm header with boots, leases and checkpoints
       name: 'dev-tpl',
       ref: 'dev-tpl',
       digest: 'sha256:tpl',
+      receivedDigest: 'sha256:tpl-received',
       sizeBytes: 6,
       source: 'imp',
       sourceImp: 'base',
@@ -185,6 +187,7 @@ test('it reads the dates of a ZFS warm header with boots, leases and checkpoints
       name: 'dev-tpl',
       ref: 'dev-tpl',
       digest: 'sha256:tpl',
+      receivedDigest: 'sha256:tpl-received',
       sizeBytes: 6,
       source: 'imp',
       sourceImp: 'base',

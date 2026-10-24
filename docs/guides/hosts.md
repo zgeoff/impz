@@ -155,8 +155,11 @@ holds no lock on storage for its length: other imps, backups and `impz gc` go on
 
 The image goes by digest, as files. A target with the digest uses its own; one without it gets the
 image in the stream and files it under a digest of what arrived, never the source's claim: the
-source's digest names an OCI config the target cannot check against a built rootfs. When the target
-has an image by that name with another digest, the moved image's name gets a `-<8 hex>` suffix. A
+source's digest names an OCI config the target cannot check against a built rootfs. The digest of
+what arrived depends only on the image's content, so every host that receives the same image files
+it under the same digest. A source that sends the image records that digest from its own send, and a
+move back to it finds its own image by either digest and sends no image. When the target has an
+image by that name with another digest, the moved image's name gets a `-<8 hex>` suffix. A
 [template](./templates.md) stays a template, with the name of the imp it came from.
 
 ### Leases

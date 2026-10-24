@@ -27,9 +27,10 @@ import { TEST_TOKEN } from '../../../testing/test-token';
 import { buildStubPublishHook } from '../../../testing/vm/build-stub-publish-hook';
 import { buildStubStoragePressure } from '../../../testing/vm/build-stub-storage-pressure';
 import { buildStubZfsStorage } from '../../../testing/vm/build-stub-zfs-storage';
-import { readImageByName } from '../../platform/db/images';
+import { listImages, readImageByDigest, readImageByName } from '../../platform/db/images';
 import type { ImpWrite } from '../../platform/db/imp-write-feed';
 import { listImps, readImpByName, updateImpExposure, updateImpMove } from '../../platform/db/imps';
+import { listMoveTickets } from '../../platform/db/move-tickets';
 import { MOVE_TRANSITIONS } from '../../platform/db/move-transitions';
 import { buildImagePaths } from '../../vm/storage/data-layout';
 import { createXfsBackend } from '../../vm/storage/xfs-backend';
@@ -1015,6 +1016,113 @@ test('it files the image a target lacks under the digest of what arrived', async
   const rootfs = readFileSync(join(ctx.target.dataDir, 'images', hex, 'rootfs.ext4'));
 
   expect(rootfs.toString()).toStartWith('rootfs');
+});
+
+test('it sends no image on a move back to a host that holds it, and the imp keeps its image row there', async () => {
+  const ctx = await setupTest();
+
+  await createUbuntuImage(ctx.source);
+
+  const original = await readImageByName(ctx.source.db, 'ubuntu');
+
+  invariant(original);
+
+  await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
+  await ctx.sourceApp.client.imps.stop({ name: 'dev' });
+  await ctx.runMove('dev');
+
+  const status = await ctx.runMoveBack('dev');
+  const tickets = await listMoveTickets(ctx.source.db);
+  const back = await readImpByName(ctx.source.db, 'dev');
+  const images = await listImages(ctx.source.db);
+
+  invariant(tickets[0]?.receipt);
+
+  const receipt = ReceiptSchema.parse(JSON.parse(tickets[0].receipt));
+
+  expect(status).toMatchObject({ isDone: true, error: null });
+  expect(JSON.parse(receipt.body)).toMatchObject({ files: [{ kind: 'disk' }] });
+  expect(back?.imageId).toBe(original.id);
+  expect(images.map((image) => image.name)).toStrictEqual(['ubuntu']);
+});
+
+test('it files an image whose rootfs ends in zero blocks under one digest on every hop', async () => {
+  const ctx = await setupTest();
+
+  await createUbuntuImage(ctx.source);
+
+  writeFileSync(
+    buildImagePaths(ctx.source.dataDir, 'sha256:ubuntu').rootfs,
+    Buffer.concat([Buffer.from('rootfs'), Buffer.alloc(3 * 1024 * 1024 - 6)]),
+  );
+
+  await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
+  await ctx.sourceApp.client.imps.stop({ name: 'dev' });
+  await ctx.runMove('dev');
+  await ctx.sourceApp.client.images.delete({ name: 'ubuntu' });
+
+  const status = await ctx.runMoveBack('dev');
+  const there = await readImageByName(ctx.target.db, 'ubuntu');
+  const back = await readImageByName(ctx.source.db, 'ubuntu');
+
+  invariant(there);
+  invariant(back);
+
+  expect(status).toMatchObject({ isDone: true, error: null });
+  expect(back.digest).toBe(there.digest);
+});
+
+test('it files a received image under the digest of what arrived, whatever digests the source claims', async () => {
+  const ctx = await setupTest({
+    hook: makeStubMoveStreamRewrite((frames) =>
+      frames.map((frame) => {
+        if (frame.type !== MOVE_FRAMES.header) {
+          return frame;
+        }
+
+        const header = MoveHeaderSchema.parse(readJsonPayload(frame.payload));
+
+        return buildJsonMoveFrame(frame.type, {
+          ...header,
+          image: { ...header.image, digest: 'sha256:pulled', receivedDigest: 'sha256:claimed' },
+        });
+      }),
+    ),
+  });
+
+  await createUbuntuImage(ctx.source);
+
+  await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
+  await ctx.sourceApp.client.imps.stop({ name: 'dev' });
+
+  const status = await ctx.runMove('dev');
+  const image = await readImageByName(ctx.target.db, 'ubuntu');
+  const claimed = await readImageByDigest(ctx.target.db, ['sha256:pulled', 'sha256:claimed']);
+
+  invariant(image);
+
+  expect(status).toMatchObject({ isDone: true, error: null });
+  expect(claimed).toBeUndefined();
+  expect(image.receivedDigest).toBeNull();
+});
+
+test('it refuses a data frame that goes back over the data before it', async () => {
+  const ctx = await setupTest({
+    hook: makeStubMoveStreamRewrite((frames) =>
+      frames.flatMap((frame, index) =>
+        index === 2 && frame.type === MOVE_FRAMES.data ? [frame, frame] : [frame],
+      ),
+    ),
+  });
+
+  await createUbuntuImage(ctx.source);
+
+  await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
+  await ctx.sourceApp.client.imps.stop({ name: 'dev' });
+
+  const status = await ctx.runMove('dev');
+
+  expect(status.error).toContain('image-rootfs: a DATA frame out of order');
 });
 
 test('it keeps an old image the target has by digest when an eviction reaches the stream as it picks the image', async () => {

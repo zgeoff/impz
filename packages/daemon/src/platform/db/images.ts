@@ -8,6 +8,7 @@ export interface ImageRecord {
   readonly name: string;
   readonly ref: string;
   readonly digest: string;
+  readonly receivedDigest: string | null;
   readonly source: ImageSource;
 
   readonly sourceImp: string | null;
@@ -61,12 +62,12 @@ export async function readImageByName(
 
 export async function readImageByDigest(
   db: ImpDatabase,
-  digest: string,
+  digests: readonly string[],
 ): Promise<ImageRecord | undefined> {
   const row = await db
     .selectFrom('images')
     .selectAll()
-    .where('digest', '=', digest)
+    .where((eb) => eb.or([eb('digest', 'in', digests), eb('received_digest', 'in', digests)]))
     .orderBy('created_at')
     .orderBy('id')
     .executeTakeFirst();
@@ -111,6 +112,7 @@ function toImageRecord(row: Readonly<Selectable<DB['images']>>): ImageRecord {
     name: row.name,
     ref: row.ref,
     digest: row.digest,
+    receivedDigest: row.received_digest,
     source: row.source,
     sourceImp: row.source_imp,
     sizeBytes: row.size_bytes,
@@ -145,6 +147,7 @@ export async function updateImage(
     .set({
       ref: image.ref,
       digest: image.digest,
+      received_digest: null,
       size_bytes: image.sizeBytes,
       source_imp: image.sourceImp ?? null,
       last_used_at: now,
@@ -179,8 +182,25 @@ export async function updateImageUse(
   await db
     .updateTable('images')
     .set({ last_used_at: at })
-    .where(column, 'in', values)
+    .where((eb) =>
+      column === 'digest'
+        ? eb.or([eb('digest', 'in', values), eb('received_digest', 'in', values)])
+        : eb(column, 'in', values),
+    )
     .where('last_used_at', '<', at)
+    .execute();
+}
+
+export async function updateImageReceivedDigest(
+  db: ImpDatabase,
+  image: Readonly<Pick<ImageRecord, 'id' | 'digest'>>,
+  receivedDigest: string,
+): Promise<void> {
+  await db
+    .updateTable('images')
+    .set({ received_digest: receivedDigest })
+    .where('id', '=', image.id)
+    .where('digest', '=', image.digest)
     .execute();
 }
 
