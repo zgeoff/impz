@@ -345,6 +345,45 @@ test('it leaves the source unmarked when a signed receipt does not match what wa
   expect(source?.moveState).toBeNull();
 });
 
+test('it records no received digest for a sent image when the receipt does not match what was sent', async () => {
+  const ctx = await setupTest({
+    hook: async (request, forward) => {
+      const response = await forward();
+
+      const secret = readTicketHeader(request)?.secret;
+
+      if (request.headers.get(MOVE_FINISH_HEADER) !== '1' || secret === undefined) {
+        return response;
+      }
+
+      const answer: unknown = await response.json();
+
+      const body = readReceipt(ReceiptSchema.parse(answer), secret);
+
+      invariant(body);
+
+      const files = body.files.map((file) => ({ ...file, sha256: '0'.repeat(64) }));
+
+      return Response.json(buildReceipt({ ...body, files }, secret));
+    },
+  });
+
+  await createUbuntuImage(ctx.source);
+
+  await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
+  await ctx.sourceApp.client.imps.stop({ name: 'dev' });
+
+  const status = await ctx.runMove('dev');
+  const sent = await readImageByName(ctx.target.db, 'ubuntu');
+  const image = await readImageByName(ctx.source.db, 'ubuntu');
+
+  invariant(image);
+
+  expect(status.error).toContain('the receipt does not match what was sent');
+  expect(sent).toBeDefined();
+  expect(image.receivedDigest).toBeNull();
+});
+
 test('it ends a send to a target that is gone with the mark on, and says the abort went unconfirmed', async () => {
   const ctx = await setupTest({
     hook: (request, forward) => {
