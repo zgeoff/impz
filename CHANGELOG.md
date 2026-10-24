@@ -1,5 +1,16 @@
 # Changelog
 
+## [3.0.2](https://github.com/zgeoff/impz/compare/v3.0.1...v3.0.2) (2026-10-24)
+
+### Bug Fixes
+
+- **deps:** drop the stale zod 4.6.5 copies from bun.lock
+  ([#665](https://github.com/zgeoff/impz/issues/665))
+  ([c639483](https://github.com/zgeoff/impz/commit/c639483e54693b012b0d416ced9cceea6f654ed8))
+- **deps:** update fast-uri, ignore 1 unfixed advisory
+  ([#666](https://github.com/zgeoff/impz/issues/666))
+  ([b18c568](https://github.com/zgeoff/impz/commit/b18c56845132663b34ba3ec0d480c9ed6550ba3c))
+
 ## [3.0.1](https://github.com/zgeoff/impz/compare/v3.0.0...v3.0.1) (2026-10-23)
 
 ### Bug Fixes
