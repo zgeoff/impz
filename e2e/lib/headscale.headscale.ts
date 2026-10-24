@@ -3,15 +3,15 @@ import { randomUUID } from 'node:crypto';
 import { HEADSCALE_IMAGES } from '../../scripts/dev/headscale-images';
 import { HEADSCALE_LOGIN_SERVER, startHeadscale, stopHeadscale } from './headscale';
 import { runChecked, runCommand } from './instance';
+import { removeDockerNetwork } from './remove-docker-network';
 import { waitFor } from './wait-for';
 
 function setupTest() {
   const container = `imp-headscale-${String(process.pid)}-${randomUUID().slice(0, 8)}`;
 
-  onTestFinished(async () => {
-    await runCommand(['docker', 'rm', '-f', `${container}-ts-member`, `${container}-headscale`]);
-    await runCommand(['docker', 'network', 'rm', `${container}-ts`]);
-  });
+  // Cleanup runs first in, first out, so this runs before a test's own while
+  // its nodes still hold the network.
+  onTestFinished(() => removeDockerNetwork({ runCommand }, `${container}-ts`));
 
   return { container, runners: { runCommand, runChecked } };
 }
