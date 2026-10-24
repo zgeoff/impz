@@ -4,6 +4,7 @@ import invariant from 'tiny-invariant';
 import { createPendingSignIn } from '../../../testing/identity/create-pending-sign-in';
 import { runOAuthConsent } from '../../../testing/identity/run-oauth-consent';
 import { runOAuthSignIn } from '../../../testing/identity/run-oauth-sign-in';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { createTestDatabase } from '../../../testing/platform/create-test-database';
 import { makeOAuthResponder } from '../../../testing/surface/make-oauth-responder';
 import { createRevocations } from '../auth/revocations';
@@ -983,6 +984,30 @@ test('#removeExpired never removes a grant with a live refresh token', async () 
   const grants = await ctx.db.selectFrom('user').select('id').execute();
 
   expect(grants).toHaveLength(1);
+});
+
+test('it logs an approval under oauth with the client and the approving token', async () => {
+  const ctx = await setupTest();
+  const client = await ctx.auth.addClient('demo', ['https://client.example/callback']);
+  const made = await ctx.tokens.create({ name: 'operator', scope: 'manage', imps: ['dev-*'] });
+
+  const approver = ctx.tokens.authenticate(made.secret);
+
+  invariant(approver);
+
+  const pending = await createPendingSignIn({
+    respond: ctx.respond,
+    origin: 'http://127.0.0.1:7171',
+    clientID: client.clientId,
+    redirectURI: 'https://client.example/callback',
+    scope: 'read',
+  });
+
+  const lines = captureImpdLogs();
+
+  ctx.auth.approve(ApprovalCodeSchema.parse(pending.code), approver, 'read', undefined);
+
+  expect(lines).toStrictEqual(['INFO impd.oauth a sign-in for demo approved by token operator']);
 });
 
 test('it shows the login page again on Continue before the sign-in is approved', async () => {
