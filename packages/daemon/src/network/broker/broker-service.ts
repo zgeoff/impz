@@ -13,6 +13,7 @@ import type {
 import { match } from 'ts-pattern';
 import { deriveSlotAddress } from '../../host-net/net/addressing';
 import type { ReachPolicy } from '../../host-net/net/reach-policy';
+import type { BrokerExecEnv } from '../../imps/exec/broker-exec-env';
 import { listAuditEntries, listRefusedRequests } from '../../platform/db/broker-audit';
 import { createForkGrants } from '../../platform/db/create-fork-grants';
 import type { ForkAuthority } from '../../platform/db/create-fork-grants';
@@ -51,7 +52,7 @@ import {
   createGuestTrust,
   runBundleInstall,
 } from './guest-trust';
-import type { BrokerExecEnv, InstallBundle, TrustedImp } from './guest-trust';
+import type { InstallBundle, TrustedImp } from './guest-trust';
 import { createOAuthRefresher } from './oauth-refresher';
 import type { OAuthFetch } from './oauth-refresher';
 import { removeStaleSecretFiles } from './remove-stale-secret-files';

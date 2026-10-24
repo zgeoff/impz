@@ -1,6 +1,5 @@
 import { EGRESS_MODE_TRAITS } from '@impz/api';
 import type { WarmHost } from '@impz/api';
-import type { Broker } from '../../network/broker/broker-service';
 import type { EgressService } from '../../network/egress/egress-service';
 import { listCheckpoints } from '../../platform/db/checkpoints';
 import { listColdBoots } from '../../platform/db/cold-boots';
@@ -13,6 +12,7 @@ import type { StartTimer } from '../../platform/process/clock';
 import { parseOpaqueToken } from '../../platform/secrets/parse-opaque-token';
 import { encodeSnapshotMeta } from '../../vm/sleep/snapshot-meta';
 import type { MoveMode, StorageBackend } from '../../vm/storage/storage-backend';
+import type { ImpGrants } from '../imp-grants';
 import type { ImpOpsConfig } from '../imp-ops-config';
 import { buildReceivedDigest } from './build-received-digest';
 import { readWarmHeader, requireSnapshotMeta } from './check-warm-move';
@@ -41,7 +41,7 @@ interface MoveSendDeps {
   readonly db: ImpDatabase;
   readonly dataDir: string;
   readonly storage: Pick<StorageBackend, 'openMoveSource' | 'resolveImpPaths'>;
-  readonly grants: Pick<Broker, 'listGrantDetails'>;
+  readonly grants: Pick<ImpGrants, 'listGrantDetails'>;
   readonly egress: Pick<EgressService, 'readPolicy' | 'readAnswers'>;
   readonly readWarmHost: () => WarmHost;
   readonly readTapMac?: (tap: string) => string | null;

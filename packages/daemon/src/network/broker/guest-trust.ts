@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { rootCertificates } from 'node:tls';
+import { PROXY_VARIABLE } from '../../imps/exec/broker-exec-env';
 import type { StartTimer } from '../../platform/process/clock';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import { buildExitError } from '../../platform/process/run-command';
@@ -19,8 +20,6 @@ const GUEST_ROOT_PATHS = [
 ];
 
 const ROOTS_MARKER = '# imp: host roots';
-
-export const PROXY_VARIABLE = 'HTTPS_PROXY';
 
 const CA_VARIABLES = [
   'SSL_CERT_FILE',
@@ -80,11 +79,6 @@ export type InstallBundle = (vsockPath: string, input: string) => Promise<void>;
 type TrustOutcome =
   | { readonly installed: true }
   | { readonly installed: false; readonly detail: string };
-
-export type BrokerExecEnv =
-  | { readonly kind: 'ready'; readonly env: readonly string[] }
-  | { readonly kind: 'ungranted' }
-  | { readonly kind: 'untrusted'; readonly detail: string };
 
 export interface GuestTrust {
   readonly ensure: (imp: TrustedImp, vsockPath: string) => Promise<TrustOutcome>;
