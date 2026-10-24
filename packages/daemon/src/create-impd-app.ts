@@ -11,6 +11,7 @@ import type { EgressService } from './network/egress/egress-service';
 import { createExposureService } from './network/https/exposure-service';
 import { writeDatabaseCopy } from './platform/db/database-copy';
 import { printLog } from './platform/process/print-log';
+import { startRealTimer } from './platform/process/start-real-timer';
 import { createApp } from './surface/create-app';
 import type { AppDeps } from './surface/create-app';
 import { createBuildContextRoute } from './surface/images/build-context-route';
@@ -100,6 +101,9 @@ export function createImpdApp(
       diskBudget: parts.storage.diskBudget,
       audit: parts.services.audit,
       now,
+      startTimer:
+        deps.buildUploadTimer ??
+        ((fire, durationMs) => startRealTimer(fire, durationMs, { isUnref: true })),
     }),
     imageKeepaliveMs: keepaliveMs,
     ...(deps.keepaliveRepeat !== undefined && { imageKeepaliveRepeat: deps.keepaliveRepeat }),

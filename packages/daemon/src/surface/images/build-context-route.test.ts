@@ -386,6 +386,38 @@ test('it removes an upload, frees its slot and ends its run when no build takes 
   );
 });
 
+test('it expires an upload on the build upload timer impd was given', async () => {
+  const ctx = await setupTest();
+
+  const clock = buildStubClock();
+  const builder = buildStubImageBuilder({ exported: [], repoDigest: `sha256:${'b'.repeat(64)}` });
+
+  const harness = await startBuilderImpd(ctx.stack, builder, {
+    dataDir: ctx.dataDir,
+    rootToken: ctx.rootToken,
+    cloneDisk: ctx.cloneDisk,
+    boundaries: { buildUploadTimer: clock.startTimer },
+  });
+
+  const uploaded = await harness.impd.api.app.handle(
+    new Request(`http://impd.test${BUILD_CONTEXT_PATH}?name=web`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${ctx.rootToken}` },
+      body: 'tar',
+    }),
+  );
+
+  const before = await readdir(buildUploadsDir(ctx.dataDir));
+
+  clock.runFor(UPLOAD_TTL_MS);
+
+  const after = await readdir(buildUploadsDir(ctx.dataDir));
+
+  expect(uploaded.status).toBe(201);
+  expect(before).toHaveLength(1);
+  expect(after).toStrictEqual([]);
+});
+
 test("it refuses another caller's upload with not found", async () => {
   const ctx = await setupTest();
 
@@ -405,6 +437,7 @@ test("it refuses another caller's upload with not found", async () => {
     diskBudget: harness.impd.diskBudget,
     audit: createApiAudit({ db: harness.db, now: Date.now, log: () => {}, readErrorCode }),
     now: Date.now,
+    startTimer: buildStubClock().startTimer,
   });
 
   const uploaded = await route.respond(
@@ -674,6 +707,7 @@ test('it refuses with 413 a context whose Content-Length is over the limit', asy
     diskBudget: harness.impd.diskBudget,
     audit: createApiAudit({ db: harness.db, now: Date.now, log: () => {}, readErrorCode }),
     now: Date.now,
+    startTimer: buildStubClock().startTimer,
   });
 
   const response = await route.respond(
@@ -713,6 +747,7 @@ test('it frees the build slot of a context refused for its Content-Length', asyn
     diskBudget: harness.impd.diskBudget,
     audit: createApiAudit({ db: harness.db, now: Date.now, log: () => {}, readErrorCode }),
     now: Date.now,
+    startTimer: buildStubClock().startTimer,
   });
 
   for (let attempt = 0; attempt < 4; attempt += 1) {
@@ -755,6 +790,7 @@ test('it refuses with 413 a context whose bytes run over the limit, and removes 
     diskBudget: harness.impd.diskBudget,
     audit: createApiAudit({ db: harness.db, now: Date.now, log: () => {}, readErrorCode }),
     now: Date.now,
+    startTimer: buildStubClock().startTimer,
   });
 
   const context = new Blob([new Uint8Array(1024 ** 2 + 1)]).stream();
@@ -799,6 +835,7 @@ test('it takes a context of exactly the limit', async () => {
     diskBudget: harness.impd.diskBudget,
     audit: createApiAudit({ db: harness.db, now: Date.now, log: () => {}, readErrorCode }),
     now: Date.now,
+    startTimer: buildStubClock().startTimer,
   });
 
   const context = new Blob([new Uint8Array(1024 ** 2)]).stream();
@@ -839,6 +876,7 @@ test('it refuses an upload with no body', async () => {
     diskBudget: harness.impd.diskBudget,
     audit: createApiAudit({ db: harness.db, now: Date.now, log: () => {}, readErrorCode }),
     now: Date.now,
+    startTimer: buildStubClock().startTimer,
   });
 
   const response = await route.respond(
@@ -871,6 +909,7 @@ test('it refuses an upload whose body is longer than its Content-Length', async 
     diskBudget: harness.impd.diskBudget,
     audit: createApiAudit({ db: harness.db, now: Date.now, log: () => {}, readErrorCode }),
     now: Date.now,
+    startTimer: buildStubClock().startTimer,
   });
 
   const context = new Blob([new Uint8Array(64)]).stream();
@@ -909,6 +948,7 @@ test('it refuses an upload whose body is empty', async () => {
     diskBudget: harness.impd.diskBudget,
     audit: createApiAudit({ db: harness.db, now: Date.now, log: () => {}, readErrorCode }),
     now: Date.now,
+    startTimer: buildStubClock().startTimer,
   });
 
   const response = await route.respond(
@@ -2275,6 +2315,7 @@ test('it clears what an earlier impd left in the uploads directory when a route 
     diskBudget: harness.impd.diskBudget,
     audit: createApiAudit({ db: harness.db, now: Date.now, log: () => {}, readErrorCode }),
     now: Date.now,
+    startTimer: buildStubClock().startTimer,
   });
 
   expect(existsSync(leftover)).toBeFalse();

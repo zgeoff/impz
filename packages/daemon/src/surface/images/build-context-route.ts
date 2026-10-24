@@ -15,7 +15,6 @@ import type { Caller } from '../../platform/principal/caller';
 import type { StartTimer } from '../../platform/process/clock';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
-import { startRealTimer } from '../../platform/process/start-real-timer';
 import { buildUploadsDir } from '../../vm/storage/data-layout';
 import type { DiskBudget } from '../../vm/storage/disk-budget';
 import type { SurfaceConfig } from '../surface-config';
@@ -48,7 +47,7 @@ export interface BuildContextDeps {
   readonly diskBudget: Pick<DiskBudget, 'withRoom'>;
   readonly audit: ApiAudit;
   readonly now: () => number;
-  readonly startTimer?: StartTimer;
+  readonly startTimer: StartTimer;
 }
 
 interface HeldUpload {
@@ -65,10 +64,9 @@ interface BuildFailure {
 
 export function createBuildContextRoute(deps: BuildContextDeps): BuildContextRoute {
   const uploadsDir = buildUploadsDir(deps.config.dataDir);
-  const startTimer = deps.startTimer ?? startRealTimer;
 
   const clock = {
-    setTimeout: (fire: () => void, durationMs: number) => startTimer(fire, durationMs),
+    setTimeout: (fire: () => void, durationMs: number) => deps.startTimer(fire, durationMs),
     clearTimeout: (stop: unknown) => {
       if (isStopTimer(stop)) {
         stop();
