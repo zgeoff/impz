@@ -1,7 +1,0 @@
-{
-  "GHSA-834v-8h66-3h79": {
-    "package": "happy-dom",
-    "reason": "The fix is happy-dom 21.0.4, but @happy-dom/global-registrator@20.14.5 accepts only ^20.14.5; @zgeoff/bun-test-react@0.2.1 accepts only 20.14.5.",
-    "expires": "2026-11-22"
-  }
-}
