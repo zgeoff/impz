@@ -581,15 +581,11 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     const grows: number[] = [];
 
     const exported = createTreeTar(ctx.directoryPath, (tree) => {
-      for (let directoryIndex = 0; directoryIndex < 58; directoryIndex += 1) {
-        mkdirSync(join(tree, `d${String(directoryIndex)}`));
-
-        for (let index = 0; index < 1000; index += 1) {
-          writeFileSync(
-            join(tree, `d${String(directoryIndex)}`, `r${String(index)}`),
-            crypto.getRandomValues(new Uint8Array(4096)),
-          );
-        }
+      for (let index = 0; index < 253; index += 1) {
+        writeFileSync(
+          join(tree, `r${String(index)}`),
+          crypto.getRandomValues(new Uint8Array(1024 ** 2)),
+        );
       }
     });
 
