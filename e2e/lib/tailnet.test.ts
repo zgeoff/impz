@@ -155,27 +155,44 @@ test('#readTailnetMember names the member container the harness started', () => 
 });
 
 test('#readHarnessMemberStatus gives no status outside a harness run that started the tailnet', async () => {
-  const runCommand = mock<CommandRunners['runCommand']>();
+  const runChecked = mock<CommandRunners['runChecked']>();
 
-  const status = await readHarnessMemberStatus({ runCommand }, {});
+  const status = await readHarnessMemberStatus({ runChecked }, {});
 
   expect(status).toBeNull();
-  expect(runCommand).not.toHaveBeenCalled();
+  expect(runChecked).not.toHaveBeenCalled();
+});
+
+test('#readHarnessMemberStatus fails when the member the harness started gives no status', () => {
+  const runChecked = mock<CommandRunners['runChecked']>(() =>
+    Promise.reject(
+      new Error(
+        'docker exec imp-e2e-a-ts-member tailscale status --json exited 1: Error response from daemon: container is not running',
+      ),
+    ),
+  );
+
+  expect(
+    readHarnessMemberStatus({ runChecked }, { E2E_TAILNET_MEMBER: 'imp-e2e-a-ts-member' }),
+  ).rejects.toThrowWithMessage(
+    Error,
+    'docker exec imp-e2e-a-ts-member tailscale status --json exited 1: Error response from daemon: container is not running',
+  );
 });
 
 test('#readHarnessMemberStatus reads the status of the member the harness started', async () => {
-  const runCommand = mock<CommandRunners['runCommand']>(() =>
-    Promise.resolve({ exitCode: 0, stdout: '{"BackendState": "Running"}', stderr: '' }),
+  const runChecked = mock<CommandRunners['runChecked']>(() =>
+    Promise.resolve('{"BackendState": "Running"}'),
   );
 
   const status = await readHarnessMemberStatus(
-    { runCommand },
+    { runChecked },
     { E2E_TAILNET_MEMBER: 'imp-e2e-a-ts-member' },
   );
 
   expect(status).toStrictEqual({ BackendState: 'Running', Peer: {} });
 
-  expect(runCommand).toHaveBeenCalledExactlyOnceWith([
+  expect(runChecked).toHaveBeenCalledExactlyOnceWith([
     'docker',
     'exec',
     'imp-e2e-a-ts-member',
