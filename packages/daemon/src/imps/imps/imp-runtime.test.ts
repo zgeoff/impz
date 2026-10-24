@@ -448,7 +448,7 @@ test('it neither hangs nor wakes anything when a governor pass meets impd stoppi
   expect(enforced).toBe('done');
   expect(stopped).toBe('done');
   expect(imps.map((imp) => imp.state)).toStrictEqual(['sleeping', 'sleeping']);
-}, 30_000);
+});
 
 test('it refuses a create that impd stopping cuts short, and records it as an error', async () => {
   const ctx = await setupTest();

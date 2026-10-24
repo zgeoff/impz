@@ -110,7 +110,6 @@ test.skipIf(!checkDockerBuildx())(
       'sub/rooted.txt',
     ]);
   },
-  120_000,
 );
 
 test.skipIf(!checkDockerBuildx())(
@@ -165,7 +164,6 @@ test.skipIf(!checkDockerBuildx())(
     expect(fromTar).toStrictEqual(fromDir);
     expect(fromTar).toStrictEqual(['app.js*', 'start@', 'web.Dockerfile']);
   },
-  120_000,
 );
 
 test.skipIf(!checkDockerBuildx())(
@@ -233,5 +231,4 @@ test.skipIf(!checkDockerBuildx())(
       'start@',
     ]);
   },
-  120_000,
 );

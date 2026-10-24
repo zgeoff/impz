@@ -1046,7 +1046,7 @@ test('it keeps each admission within the budget and never asks a pinned imp to s
     }),
     { numRuns: 1000 },
   );
-}, 30_000);
+});
 
 test('it gets a crowded host under the budget or sleeps every imp it may', async () => {
   const crowdedArb = fc.uniqueArray(
@@ -1084,7 +1084,7 @@ test('it gets a crowded host under the budget or sleeps every imp it may', async
     }),
     { numRuns: 300 },
   );
-}, 30_000);
+});
 
 test('it settles concurrent admits with holds and RSS changes inside them, leaving no reservation for a rejected one', async () => {
   const arbitraries = buildStubGovernedHostArbitraries(['a', 'b', 'c', 'd', 'e', 'f']);
@@ -1166,7 +1166,7 @@ test('it settles concurrent admits with holds and RSS changes inside them, leavi
     ),
     { numRuns: 200 },
   );
-}, 30_000);
+});
 
 test('it keeps a grow within the budget, never sleeps its grower, and sleeps only for room it then has', async () => {
   const arbitraries = buildStubGovernedHostArbitraries(['a', 'b', 'c', 'd', 'e', 'f']);
@@ -1229,4 +1229,4 @@ test('it keeps a grow within the budget, never sleeps its grower, and sleeps onl
     }),
     { numRuns: 500 },
   );
-}, 30_000);
+});

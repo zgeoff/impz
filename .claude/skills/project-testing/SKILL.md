@@ -78,7 +78,8 @@ each; open one when the task touches its area.
 | Host networking             | `sudo env "PATH=$PATH" IMP_HOST_TESTS=required bun run test:host`                  | Root, `nft`, `iptables`, `ip6tables`, `ip`, `ping`, `sysctl` |
 | ACME issuer                 | `bun run test:pebble`                                                              | Docker                                                       |
 | Headscale join              | `bun run test:headscale`                                                           | Docker, and the network for the client's packages            |
-| Small filesystem            | `IMP_TEST_SMALL_FS=<dir> bun test <file>... -t 'small filesystem'`                 | A 4 GiB loop-mounted XFS at `<dir>`; a tiny tmpfs fails      |
+| Docker build                | `bun run test:docker`                                                              | Docker with buildx                                           |
+| Small filesystem            | `IMP_TEST_SMALL_FS=<dir> bun run test:small-fs`                                    | A 4 GiB loop-mounted XFS at `<dir>`; a tiny tmpfs fails      |
 | End to end                  | `e2e/test-e2e.sh [--only <suites> \| --group <1-4>] [--clean \| --reuse] [--keep]` | KVM, Docker; `--help` lists suites and extra needs           |
 | One journey                 | `bun test --config=e2e/bunfig.toml ./e2e/suites/<journey>.e2e.ts`                  | A dev instance that is already up                            |
 | NixOS module evaluation     | `nix build -L --no-link .#checks.x86_64-linux.eval`                                | Nix with flakes                                              |
@@ -96,10 +97,12 @@ read that CI job's result instead of working around it.
   `bun run test:dashboard` runs, and the lane files in [Lanes](#lanes).
 - A client or MCP server test that needs a real impd lives in
   [`packages/integration/`](../../../packages/integration/), not beside its module.
-- Gated tests load in plain `bun test` and skip: the real-pool ZFS tests until `IMP_TEST_ZFS_ROOT`
-  and `IMP_TEST_ZFS_DIR` are set, and the small-filesystem tests until `IMP_TEST_SMALL_FS` is.
-  `grep -rl IMP_TEST_SMALL_FS packages` lists the files that hold small-filesystem tests, and CI's
-  small-filesystem step names each of them.
+- The real-pool ZFS tests load in plain `bun test` and skip until `IMP_TEST_ZFS_ROOT` and
+  `IMP_TEST_ZFS_DIR` are set. The small-filesystem lane's tests skip until `IMP_TEST_SMALL_FS` is.
+- Every run under the root [`bunfig.toml`](../../../bunfig.toml) orders files and tests at random,
+  so a leak between tests fails in some order. The failed run prints a `--seed=<n>`; pass it to
+  `bun test` to repeat that order, and fix the leak in the preload's resets, never by pinning the
+  order.
 - Go tests that need root carry the `root` build tag.
 - `e2e/lib/*.test.ts` are unit tests of the harness: they run in plain `bun test` with no KVM.
 
@@ -110,24 +113,30 @@ suffix names that system. [`bunfig.toml`](../../../bunfig.toml) leaves every lan
 plain `bun test`, even for a file named by its path, so each lane's script replaces that ignore list
 and selects its files by suffix. `test:related` leaves lane files out for the same reason.
 
-| Lane            | Files                                             | Real system                                         | Run                                                     | Per-test ceiling |
-| --------------- | ------------------------------------------------- | --------------------------------------------------- | ------------------------------------------------------- | ---------------- |
-| VM end to end   | the other `e2e/suites/*.e2e.ts`, in the CI groups | KVM Firecracker imps on a dev instance of impd      | `e2e/test-e2e.sh --group <n>`                           | 60 s             |
-| ZFS             | `e2e/suites/*.zfs.e2e.ts`                         | KVM imps on a real zpool in a sparse file           | `scripts/zfs-host-test.sh`, `IMP_ZFS_SHARD=<n>/<count>` | 60 s             |
-| Host networking | `*.host.test.ts`                                  | root, the kernel's netfilter and network namespaces | `bun run test:host`, as root in CI                      | 15 s             |
-| Headscale join  | `*.headscale.test.ts`                             | Headscale and tailscale containers in Docker        | `bun run test:headscale`                                | 15 s             |
-| ACME issuer     | `*.pebble.test.ts`                                | the Pebble ACME server in Docker                    | `bun run test:pebble`                                   | 5 s              |
+| Lane             | Files                                             | Real system                                             | Run                                                     | Per-test limit |
+| ---------------- | ------------------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------- | -------------- |
+| VM end to end    | the other `e2e/suites/*.e2e.ts`, in the CI groups | KVM Firecracker imps on a dev instance of impd          | `e2e/test-e2e.sh --group <n>`                           | 60 s           |
+| ZFS              | `e2e/suites/*.zfs.e2e.ts`                         | KVM imps on a real zpool in a sparse file               | `scripts/zfs-host-test.sh`, `IMP_ZFS_SHARD=<n>/<count>` | 60 s           |
+| Host networking  | `*.host.test.ts`                                  | root, the kernel's netfilter and network namespaces     | `bun run test:host`, as root in CI                      | 15 s           |
+| Headscale join   | `*.headscale.test.ts`                             | Headscale and tailscale containers in Docker            | `bun run test:headscale`                                | 15 s           |
+| ACME issuer      | `*.pebble.test.ts`                                | the Pebble ACME server in Docker                        | `bun run test:pebble`                                   | 5 s            |
+| Docker build     | `*.docker.test.ts`                                | docker buildx on the host                               | `bun run test:docker`                                   | 15 s           |
+| Small filesystem | `*.small-fs.test.ts`                              | a small loop-mounted XFS that `IMP_TEST_SMALL_FS` names | `bun run test:small-fs`, after a sudo mount in CI       | 15 s           |
 
 CI splits the ZFS lane's suites into shards, longest first by each suite's `seconds` in
 [`suites.ts`](../../../e2e/lib/suites.ts); update a suite's `seconds` when its shard time moves. The
 third `zfs` shard runs VM e2e suites, named in `IMP_ZFS_E2E_SUITES`, on the ZFS backend: a backend
-matrix and not a lane, so its tests keep the VM lane's suffix and ceiling.
+matrix and not a lane, so its tests keep the VM lane's suffix and limit.
 
-Nothing enforces the ceilings yet: the e2e harness gives each journey 1 h (`JOURNEY_TIMEOUT_MS` in
-[`suites.ts`](../../../e2e/lib/suites.ts)), and `zgeoff/max-test-timeout` checks a lane's ceiling
-only from oxlint-config 0.7.0. A test over its lane's ceiling, or within 5% of it, is a named
-exception with a ticket that brings it under; the ceiling never rises to cover it. A test's measured
-time goes in the PR that acts on it, not here.
+The `lanes` map of `zgeoff/max-test-timeout` in [`.oxlintrc.json`](../../../.oxlintrc.json) holds
+each limit, and lint fails a timeout above its lane's. Both `e2e/` lanes share the `e2e` key, and
+`e2e/lib/*.test.ts` take that limit too, because the rule reads the lane from the directory. A
+lane's script passes its limit to `bun test` when it is above Bun's default, as `test:headscale`
+does. The e2e harness gives each journey 1 h (`JOURNEY_TIMEOUT_MS` in
+[`suites.ts`](../../../e2e/lib/suites.ts)), so a hung journey runs past its limit. A test over its
+lane's limit, or within 5% of it, is a named exception: its disable comment holds the measured time
+and a ticket that brings it under, or `floor:` and the evidence that the time cannot move. The limit
+never rises to cover it. A test's measured time goes in the PR that acts on it, not here.
 
 A host networking test still skips where its namespace probe fails, and `IMP_HOST_TESTS=required`,
 which CI sets, turns that skip into a failure. A lane file holds only the cases that need its real

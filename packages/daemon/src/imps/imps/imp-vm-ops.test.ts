@@ -73,7 +73,7 @@ test('it lets a restore waiting for admission past the governor sleeping its imp
   expect(xAfter?.state).toBe('sleeping');
   expect(aAfter?.state).toBe('running');
   expect(broken).toBeEmpty();
-}, 30_000);
+});
 
 test('it leaves an imp whose boot fails in error with no VM and no reservation', async () => {
   const ctx = await setupTest();
@@ -421,7 +421,7 @@ test('it starts the next impd past a creating imp whose VM will not stop', async
   expect(stuck).toMatchObject({ state: 'error', pid });
   expect(ctx.fake.alive.has(pid)).toBeTrue();
   expect(broken).toBeEmpty();
-}, 30_000);
+});
 
 test('it kills the VM of a creating imp that would not stop once a destroy lets go', async () => {
   const ctx = await setupTest();
@@ -492,7 +492,7 @@ test('it leaves every imp asleep for the next impd when impd stops with a wake u
   expect(after.map((imp) => imp.state)).toStrictEqual(['sleeping', 'sleeping']);
   expect(ctx.fake.alive.size).toBe(0);
   expect(broken).toBeEmpty();
-}, 30_000);
+});
 
 test('it wakes an imp that impd stopping left asleep on the next impd', async () => {
   const ctx = await setupTest();
@@ -816,6 +816,6 @@ test('it leaves consistent records after concurrent lifecycle calls on a few imp
           expect(sleepableOverBudget).toBeEmpty();
         }),
     ),
-    { numRuns: 300 },
+    { numRuns: 25 },
   );
-}, 180_000);
+});

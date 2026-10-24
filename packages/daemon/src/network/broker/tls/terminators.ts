@@ -64,7 +64,6 @@ export function createTerminators(deps: TerminatorDeps): Terminators {
 
     // Bun's types leave idleTimeout off unix servers, but it applies there
     // too (10 s by default, which cuts off a slow model call)
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- see above
     const options = {
       unix: socket,
       tls: { cert: leaf.certPem, key: leaf.keyPem },

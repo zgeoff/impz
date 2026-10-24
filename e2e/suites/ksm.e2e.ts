@@ -146,7 +146,6 @@ test.skipIf(!checkHostRunsKsm())(
 
     expect(awakeMib).toBeLessThanOrEqual(512);
   },
-  600_000,
 );
 
 test.skipIf(!checkHostRunsKsm())(
@@ -201,5 +200,4 @@ test.skipIf(!checkHostRunsKsm())(
 
     expect(new Set(mappings)).toStrictEqual(new Set(['rw-p mg']));
   },
-  600_000,
 );

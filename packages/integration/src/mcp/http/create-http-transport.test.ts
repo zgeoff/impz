@@ -1,6 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { createImpClient } from '@impz/client';
-import { buildQueryGate, startTestImpd } from '@impz/daemon/testing';
+import { buildQueryGate, startTestImpd, waitForOutcome } from '@impz/daemon/testing';
 import { createHttpTransport } from '@impz/mcp';
 import type { McpPrincipal } from '@impz/mcp';
 import { buildMockMcpPrincipal } from '@impz/mcp/test-utils/build-mock-mcp-principal';
@@ -2235,13 +2235,13 @@ test('it waits at close for a 2026-07-28 create whose request the client aborted
 
   const closing = transport.close();
 
-  const whileCreating = await Promise.race([closing.then(() => 'closed'), Bun.sleep(50)]);
+  const whileCreating = await waitForOutcome(closing, 50);
 
   ctx.gate.release();
 
   await closing;
 
-  expect(whileCreating).toBeUndefined();
+  expect(whileCreating).toBe('hung');
 });
 
 test('it ends the call behind an aborted 2026-07-28 create’s response only when the create does', async () => {
@@ -2294,12 +2294,12 @@ test('it ends the call behind an aborted 2026-07-28 create’s response only whe
 
   invariant(callEnd);
 
-  const whileCreating = await Promise.race([callEnd.then(() => 'ended'), Bun.sleep(50)]);
+  const whileCreating = await waitForOutcome(callEnd, 50);
 
   ctx.gate.release();
 
   await callEnd;
 
   expect(aborted.status).toBe(499);
-  expect(whileCreating).toBeUndefined();
+  expect(whileCreating).toBe('hung');
 });

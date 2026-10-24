@@ -20,6 +20,7 @@ export { buildStubImageBuilder } from './imps/build-stub-image-builder';
 export { createBuilderImage } from './imps/create-builder-image';
 export { createFilesTar } from './imps/create-files-tar';
 export { startBuilderImpd } from './imps/start-builder-impd';
+export { waitForOutcome } from './imps/wait-for-outcome';
 export { createStubBrokerTokenEndpoint } from './network/create-stub-broker-token-endpoint';
 export { createStubCloudflareApi } from './network/create-stub-cloudflare-api';
 export { startStubSilentOrigin } from './network/start-stub-silent-origin';

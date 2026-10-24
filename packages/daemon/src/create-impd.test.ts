@@ -804,4 +804,4 @@ test('it logs to stdout when no log is given', async () => {
   const stdout = await new Response(child.stdout).text();
 
   expect(stdout).toStartWith(`${readSetfcapWarning('CapEff:\t0000000000000000\n')}\n`);
-}, 30_000);
+});

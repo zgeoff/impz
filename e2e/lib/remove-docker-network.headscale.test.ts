@@ -64,4 +64,4 @@ test('it removes a network and the containers that still hold it', async () => {
 
   expect(containers.stdout).toBe('');
   expect(network.exitCode).not.toBe(0);
-}, 60_000);
+});

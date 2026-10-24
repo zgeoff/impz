@@ -29,7 +29,6 @@ async function setupTest() {
     const socket = join(directory, 'proxy.sock');
 
     // Bun's types leave idleTimeout off unix servers, but it applies there too
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- see above
     const server = Bun.serve({
       unix: socket,
       fetch: createDockerProxy(options),
@@ -710,7 +709,8 @@ test('it passes on a pull and an export that stay silent past Bun’s idle limit
     { kind: 'pull', isOk: true, status: 200, body: 'the long answer' },
     { kind: 'export', isOk: true, status: 200, body: 'the long answer' },
   ]);
-}, 30_000);
+  // oxlint-disable-next-line zgeoff/max-test-timeout -- 8.2 s on CI; floor: Bun's fetch idle limit fires at 8.0 s for BUN_CONFIG_HTTP_IDLE_TIMEOUT 1 or 2, and a fraction turns it off
+}, 16_000);
 
 test('it passes on a pull and an export the engine answers after 400 s of fake time', async () => {
   const ctx = await setupTest();
@@ -1047,7 +1047,7 @@ test('it logs one impd.docker-proxy line, and nothing unhandled, when the engine
   );
 
   expect(stderr).toBe('');
-}, 30_000);
+});
 
 test('it warns when the engine closes a stream', async () => {
   const ctx = await setupTest();

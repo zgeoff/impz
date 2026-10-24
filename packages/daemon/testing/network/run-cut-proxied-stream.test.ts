@@ -14,4 +14,4 @@ test('it prints the client’s reset as the last line of stdout, as JSON', async
   const output = await new Response(child.stdout).text();
 
   expect(output.trimEnd().split('\n').at(-1)).toBe('{"client":"ECONNRESET"}');
-}, 30_000);
+});

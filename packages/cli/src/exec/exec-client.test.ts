@@ -1790,7 +1790,7 @@ test('it ends the CLI at once on a signal before impd answers the start, without
   });
 
   expect(agent.received).toHaveLength(1);
-}, 20_000);
+});
 
 test('it sends the first SIGINT to the command and ends the CLI on the second', async () => {
   const ctx = await setupTest();
@@ -1847,7 +1847,7 @@ test('it sends the first SIGINT to the command and ends the CLI on the second', 
       .filter((frame) => frame.type === FRAME_TYPES.signal)
       .map((frame) => decodeJsonPayload(frame)),
   ).toStrictEqual([{ signal: 2 }]);
-}, 20_000);
+});
 
 test('it takes the terminal out of raw mode when an output write calls process.exit', async () => {
   const ctx = await setupTest();
@@ -1903,4 +1903,4 @@ test('it takes the terminal out of raw mode when an output write calls process.e
 
   expect(code).toBe(3);
   expect(stderr).toBe('[true]\n[true,false]\n');
-}, 20_000);
+});

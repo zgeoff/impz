@@ -17,14 +17,14 @@ test.each([
 });
 
 test('it refuses a needed scope outside the list, even to manage', () => {
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- input the contract refuses
+  // input the contract refuses
   const unknown = 'admin' as unknown as Scope;
 
   expect(hasScope('manage', unknown)).toBeFalse();
 });
 
 test('it holds nothing for a granted scope outside the list', () => {
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- input the contract refuses
+  // input the contract refuses
   const unknown = 'admin' as unknown as Scope;
 
   expect(hasScope(unknown, 'read')).toBeFalse();

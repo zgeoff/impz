@@ -464,7 +464,7 @@ test('it logs one impd.broker line that names the imp, and nothing unhandled, wh
   );
 
   expect(stderr).toBe('');
-}, 30_000);
+});
 
 test('it warns through its logger, naming the imp, when the upstream closes a stream', async () => {
   const ctx = await setupTest();

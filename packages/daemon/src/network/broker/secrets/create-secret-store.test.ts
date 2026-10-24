@@ -352,7 +352,7 @@ test.each([
     value: 'fake-refresh-0',
     rules: [buildMockBrokerRule()],
 
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- input the contract refuses
+    // input the contract refuses
     oauth: oauth as never,
   });
 

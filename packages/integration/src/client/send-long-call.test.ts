@@ -341,4 +341,5 @@ test('#backups.run gets an answer that stays silent past Bun’s idle limit, whe
     { kind: 'imps.list', isOk: false, error: 'TimeoutError' },
     { kind: 'backups.run', isOk: true, answer: { ok: true } },
   ]);
-}, 30_000);
+  // oxlint-disable-next-line zgeoff/max-test-timeout -- 8.1 s on CI; floor: Bun's fetch idle limit fires at 8.0 s for BUN_CONFIG_HTTP_IDLE_TIMEOUT 1 or 2, and a fraction turns it off
+}, 16_000);

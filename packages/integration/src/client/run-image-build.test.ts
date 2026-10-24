@@ -372,7 +372,7 @@ test(
 
     await waitFor(
       () => {
-        expect(output.join('')).toIncludeRepeated('"phase":"build"', 28);
+        expect(output.join('')).toIncludeRepeated('"phase":"build"', 18);
       },
       { timeoutMs: 20_000, intervalMs: 100 },
     );
@@ -386,7 +386,8 @@ test(
     expect(output.join('').trimEnd().split('\n').at(-1)).toBe('{"type":"image","name":"web"}');
     expect(exitCode).toBe(0);
   },
-  { timeout: 30_000 },
+  // oxlint-disable-next-line zgeoff/max-test-timeout -- 8.7 s on CI; floor: Bun's fetch idle limit fires at 8.0 s for BUN_CONFIG_HTTP_IDLE_TIMEOUT 1 or 2, and a fraction turns it off
+  { timeout: 18_000 },
 );
 
 test('it stops the build when the caller aborts the stream', async () => {

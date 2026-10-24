@@ -112,7 +112,7 @@ jobs:
           sudo mount -o loop "$fs.img" "$fs"
           trap 'sudo umount "$fs" && rm -f "$fs.img" && rmdir "$fs"' EXIT
           sudo chown "$(id -u):$(id -g)" "$fs"
-          IMP_TEST_SMALL_FS="$fs" bun test packages/daemon/src/imps/images/build/create-image-builds.test.ts packages/daemon/src/vm/storage/write-changed-blocks.test.ts packages/daemon/src/vm/storage/read-data-blocks.test.ts packages/daemon/testing/vm/start-disk-sampler.test.ts -t 'small filesystem'
+          IMP_TEST_SMALL_FS="$fs" bun run test:small-fs
 
       # impd's port of the Dockerfile parser against the Go parser it ports,
       # at the commit behind the pinned frontend (scripts/dockerfile-difftest)
@@ -156,6 +156,10 @@ jobs:
       # and the e2e harness's Headscale: its policy and its teardown
       - name: Test Headscale Join
         run: bun run test:headscale
+
+      # the CLI's build context against what docker buildx sees in it
+      - name: Test Docker Build
+        run: bun run test:docker
 
       # its own run: the component tests register a DOM that must not reach
       # the daemon's tests (bunfig.toml pathIgnorePatterns)

@@ -7,7 +7,7 @@ const dashboardPrefix = 'packages/dashboard/';
 
 // bunfig.toml leaves a lane file out of every root bun test, even one named by its path, so a
 // lane file runs in its lane's script and never here.
-const lanePattern = /\.(?:host|headscale|pebble)\.test\.ts$/u;
+const lanePattern = /\.(?:host|headscale|pebble|docker|small-fs)\.test\.ts$/u;
 
 export async function runBranchTests(paths: readonly string[], cwd: string): Promise<number> {
   const unitPaths = paths.filter((path) => !lanePattern.test(path));

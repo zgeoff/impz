@@ -276,5 +276,4 @@ test.skipIf(config.ramBudgetMib > 2048)(
 
     expect(leases).toStrictEqual([]);
   },
-  180_000,
 );

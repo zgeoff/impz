@@ -11,6 +11,8 @@ bun run test:dashboard            # the dashboard's component tests, in their ow
 bun run test:host                 # nft and iptables in namespaces; IMP_HOST_TESTS=required fails a skip
 bun run test:pebble               # the ACME issuer against Pebble in Docker
 bun run test:headscale            # tailscale-up.sh joining Headscale in Docker with a tagged key
+bun run test:docker               # the CLI's build context against docker buildx
+IMP_TEST_SMALL_FS=<dir> bun run test:small-fs   # disk holds and data blocks on a small loop-mounted XFS
 bun run format:check && bun run deadcode
 bun run lint:shell                # shellcheck and shfmt over install.sh and the shell in scripts/, host/, kernel/, deploy/, test/, packages/
 actionlint && zizmor --config .github/zizmor.yml .github   # the workflows, as CI lints them
