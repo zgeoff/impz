@@ -17,6 +17,7 @@ import { readImpByName } from '../../../platform/db/imps';
 import { readSecret, removeSecret, upsertSecret } from '../../../platform/db/secrets';
 import type { SecretRecord } from '../../../platform/db/secrets';
 import { createBroker } from '../broker-service';
+import { resolvePublicUpstream } from '../tls/resolve-public-upstream';
 import { buildValueFile, createSecretFiles } from './secret-files';
 
 async function setupTest() {
@@ -856,6 +857,7 @@ test('it refreshes a pending secret when the broker starts', async () => {
     db: ctx.db,
     log: () => {},
     reach: ctx.reach,
+    resolveUpstream: resolvePublicUpstream,
   });
 
   ctx.stack.defer(() => started.stop());
@@ -1258,6 +1260,7 @@ test('it keeps aside a new file whose row never came, on the next start', async 
     log: () => {},
     timer: ctx.tickers.timer,
     reach: ctx.reach,
+    resolveUpstream: resolvePublicUpstream,
   });
 
   ctx.stack.defer(() => restarted.stop());
@@ -1286,6 +1289,7 @@ test('it removes the old file of a committed replace, on the next start', async 
     log: () => {},
     timer: ctx.tickers.timer,
     reach: ctx.reach,
+    resolveUpstream: resolvePublicUpstream,
   });
 
   ctx.stack.defer(() => restarted.stop());
@@ -1361,6 +1365,7 @@ test('it removes on the next start the old file a replace could not, not keeping
     log: () => {},
     timer: ctx.tickers.timer,
     reach: ctx.reach,
+    resolveUpstream: resolvePublicUpstream,
   });
 
   ctx.stack.defer(() => restarted.stop());

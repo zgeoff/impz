@@ -26,6 +26,8 @@ export interface Upstream {
   readonly ca: readonly string[] | null;
 }
 
+export type ResolveUpstream = (host: string) => Upstream;
+
 interface UpstreamInit {
   readonly method: string;
   readonly headers: Headers;
@@ -43,7 +45,7 @@ export interface ForwardDeps {
   readonly host: string;
 
   readonly findCredential: (impId: string, host: string) => Promise<Credential | null>;
-  readonly resolveUpstream: (host: string) => Upstream;
+  readonly resolveUpstream: ResolveUpstream;
   readonly recordAudit: (entry: NewAuditEntry) => void;
   readonly fetch?: UpstreamFetch;
   readonly logger?: Pick<Logger, 'warning'>;

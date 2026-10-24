@@ -57,8 +57,7 @@ import { removeStaleSecretFiles } from './secrets/remove-stale-secret-files';
 import { createSecretFiles } from './secrets/secret-files';
 import type { SecretFiles } from './secrets/secret-files';
 import { loadOrCreateBrokerCa } from './tls/broker-ca';
-import { createUpstreamResolver } from './tls/create-upstream-resolver';
-import type { UpstreamFetch } from './tls/forward-request';
+import type { ResolveUpstream, UpstreamFetch } from './tls/forward-request';
 
 interface ForkGrantsReport {
   readonly notCopied: readonly GrantNotCopied[];
@@ -138,6 +137,7 @@ export interface BrokerDeps {
   readonly dialTunnel?: (address: string, port: number) => Socket;
 
   readonly reach: ReachPolicy;
+  readonly resolveUpstream: ResolveUpstream;
   readonly secretFiles?: SecretFiles;
 }
 
@@ -165,7 +165,7 @@ export async function createBroker(deps: BrokerDeps): Promise<Broker> {
 
   await removeStaleSecretFiles(db, files, new Date(now()), log);
 
-  const resolveUpstream = createUpstreamResolver(config.brokerTestUpstreams, log);
+  const resolveUpstream = deps.resolveUpstream;
 
   const trust = createGuestTrust(
     buildInstallInput(ca.certPem),

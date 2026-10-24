@@ -9,7 +9,7 @@ import { buildKeyedMutex } from '../../../platform/process/keyed-mutex';
 import { createSingleFlight } from '../../../platform/process/single-flight';
 import { startTicker } from '../../../platform/process/ticker';
 import type { Ticker, TickerTimer } from '../../../platform/process/ticker';
-import type { Upstream } from '../tls/forward-request';
+import type { ResolveUpstream } from '../tls/forward-request';
 import { isDue } from './is-due';
 import { formatOAuthState, parseOAuthState, readJwtExpiry } from './oauth-state';
 import type { OAuthStateFile } from './oauth-state';
@@ -55,7 +55,7 @@ interface OAuthRefresherDeps {
   readonly db: ImpDatabase;
   readonly files: Pick<SecretFiles, 'read' | 'rewrite'>;
   readonly log: (message: string) => void;
-  readonly resolveUpstream: (host: string) => Upstream;
+  readonly resolveUpstream: ResolveUpstream;
   readonly fetch?: OAuthFetch;
   readonly now?: () => number;
   readonly timeoutMs?: number;

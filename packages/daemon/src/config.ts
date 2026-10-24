@@ -110,6 +110,7 @@ export const NetworkEnvSchema = EnvSchema.pick({
 });
 
 export interface Config extends SurfaceConfig {
+  readonly brokerTestUpstreams: string | null;
   readonly warnings: readonly string[];
 }
 

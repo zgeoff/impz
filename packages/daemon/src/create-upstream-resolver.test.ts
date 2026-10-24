@@ -14,12 +14,6 @@ async function setupTest() {
   return { directoryPath: directory };
 }
 
-test('it sends every host to its real origin without a file', () => {
-  const resolve = createUpstreamResolver(null, () => {});
-
-  expect(resolve('api.github.com')).toStrictEqual({ origin: 'https://api.github.com', ca: null });
-});
-
 test('it sends every host to its real origin while the file is missing', async () => {
   const ctx = await setupTest();
 

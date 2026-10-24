@@ -26,6 +26,7 @@ import {
 import { readImpByName, updateImpMove } from '../../platform/db/imps';
 import { readSecret } from '../../platform/db/secrets';
 import { createBroker } from './broker-service';
+import { resolvePublicUpstream } from './tls/resolve-public-upstream';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();
@@ -1105,6 +1106,7 @@ test('it refuses a tunnel into the imps’ IPv6 prefix', async () => {
     db: ctx.db,
     log: () => {},
     timer: ctx.tickers.timer,
+    resolveUpstream: resolvePublicUpstream,
     reach: createReachPolicy({
       subnet: ctx.config.subnet,
       deny: [],
@@ -1148,6 +1150,7 @@ test('it dials a public IPv6 address when impd has IPv6', async () => {
     db: ctx.db,
     log: () => {},
     timer: ctx.tickers.timer,
+    resolveUpstream: resolvePublicUpstream,
     reach: createReachPolicy({
       subnet: ctx.config.subnet,
       deny: [],
@@ -1193,6 +1196,7 @@ test('it refuses every IPv6 tunnel when impd has no IPv6', async () => {
     db: ctx.db,
     log: () => {},
     timer: ctx.tickers.timer,
+    resolveUpstream: resolvePublicUpstream,
     reach: createReachPolicy({
       subnet: ctx.config.subnet,
       deny: [],

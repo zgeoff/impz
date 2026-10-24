@@ -17,9 +17,13 @@ import { renderCredential } from '../secrets/connector-kinds';
 import { parseOAuthState } from '../secrets/oauth-state';
 import type { SecretFiles } from '../secrets/secret-files';
 import type { BrokerCa } from '../tls/broker-ca';
-import type { ResolveUpstream } from '../tls/create-upstream-resolver';
 import { createForwarder } from '../tls/forward-request';
-import type { Credential, ForwardDeps, UpstreamFetch } from '../tls/forward-request';
+import type {
+  Credential,
+  ForwardDeps,
+  ResolveUpstream,
+  UpstreamFetch,
+} from '../tls/forward-request';
 import { createTerminators } from '../tls/terminators';
 import type { TerminatorKey } from '../tls/terminators';
 import { startBrokerFront } from './broker-front';

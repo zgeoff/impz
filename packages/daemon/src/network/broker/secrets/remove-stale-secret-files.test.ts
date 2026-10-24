@@ -11,6 +11,7 @@ import { writeConsistentCopy } from '../../../platform/db/database-copy';
 import { openDatabase } from '../../../platform/db/open-database';
 import { listFileRemovals, readSecret } from '../../../platform/db/secrets';
 import { createBroker } from '../broker-service';
+import { resolvePublicUpstream } from '../tls/resolve-public-upstream';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();
@@ -46,6 +47,7 @@ test('it keeps aside a value no row of an older database names', async () => {
     db: ctx.db,
     log: () => {},
     timer: ctx.timer,
+    resolveUpstream: resolvePublicUpstream,
     reach: ctx.reach,
   });
 
@@ -74,6 +76,7 @@ test('it keeps aside a value no row of an older database names', async () => {
     config: ctx.config,
     db: older,
     timer: ctx.timer,
+    resolveUpstream: resolvePublicUpstream,
     reach: ctx.reach,
     now: () => Date.parse('2026-10-04T05:30:00.000Z'),
     log: (message) => {
@@ -104,6 +107,7 @@ test('it removes the old file of a delete that stopped before removing it, on th
     db: ctx.db,
     log: () => {},
     timer: ctx.timer,
+    resolveUpstream: resolvePublicUpstream,
     reach: ctx.reach,
   });
 
@@ -133,6 +137,7 @@ test('it removes the old file of a delete that stopped before removing it, on th
     db: ctx.db,
     log: () => {},
     timer: ctx.timer,
+    resolveUpstream: resolvePublicUpstream,
     reach: ctx.reach,
   });
 
@@ -153,6 +158,7 @@ test('it removes the old file of a replace that stopped before removing it, on t
     db: ctx.db,
     log: () => {},
     timer: ctx.timer,
+    resolveUpstream: resolvePublicUpstream,
     reach: ctx.reach,
   });
 
@@ -182,6 +188,7 @@ test('it removes the old file of a replace that stopped before removing it, on t
     db: ctx.db,
     log: () => {},
     timer: ctx.timer,
+    resolveUpstream: resolvePublicUpstream,
     reach: ctx.reach,
   });
 
@@ -206,6 +213,7 @@ test('it keeps the record of a file whose removal fails again, and keeps the fil
     db: ctx.db,
     log: () => {},
     timer: ctx.timer,
+    resolveUpstream: resolvePublicUpstream,
     reach: ctx.reach,
   });
 
@@ -233,6 +241,7 @@ test('it keeps the record of a file whose removal fails again, and keeps the fil
     config: ctx.config,
     db: ctx.db,
     timer: ctx.timer,
+    resolveUpstream: resolvePublicUpstream,
     reach: ctx.reach,
     log: (message) => {
       logs.push(message);
@@ -260,6 +269,7 @@ test('it never removes a recorded file that a row still names', async () => {
     db: ctx.db,
     log: () => {},
     timer: ctx.timer,
+    resolveUpstream: resolvePublicUpstream,
     reach: ctx.reach,
   });
 
@@ -282,6 +292,7 @@ test('it never removes a recorded file that a row still names', async () => {
     db: ctx.db,
     log: () => {},
     timer: ctx.timer,
+    resolveUpstream: resolvePublicUpstream,
     reach: ctx.reach,
   });
 
