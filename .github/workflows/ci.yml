@@ -383,6 +383,7 @@ jobs:
   # Packs @impz/client as the release publishes it, then installs the
   # tarball into an empty project on the oldest Node it supports, and smokes
   # it against impd's app under Node, Bun and a compiled Bun binary.
+  # Then packs @impz/testing the same way and runs its smoke under bun test.
   client:
     runs-on: ubuntu-latest
     permissions:
@@ -420,6 +421,16 @@ jobs:
         env:
           TARBALL: ${{ steps.pack.outputs.tarball }}
         run: scripts/release/check-client-runtimes.sh "$TARBALL"
+
+      - name: Pack @impz/testing
+        id: pack-testing
+        run: echo "tarball=$(scripts/release/pack-testing.sh)" >> "$GITHUB_OUTPUT"
+
+      - name: Check @impz/testing under bun test
+        env:
+          TARBALL: ${{ steps.pack-testing.outputs.tarball }}
+          CLIENT: ${{ steps.pack.outputs.tarball }}
+        run: scripts/release/check-testing-package.sh "$TARBALL" "$CLIENT"
 
   # Boots real microVMs: the fast end-to-end set in its four groups
   # (FAST_GROUPS in e2e/lib/suites.ts, e2e/test-e2e.sh --group N),

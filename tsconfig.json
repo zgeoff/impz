@@ -10,6 +10,7 @@
     "packages/*/src/**/*.ts",
     "packages/daemon/testing/**/*.ts",
     "packages/client/smoke/*.ts",
+    "packages/testing/smoke/*.ts",
     "e2e/**/*.ts",
     "scripts/**/*.ts",
     "deploy/**/*.ts",

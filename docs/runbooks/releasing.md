@@ -5,7 +5,7 @@ two workflows. A `feat:` or `fix:` commit on `main` makes the `release-please` j
 update the release PR, which bumps every version, the changelog and the lock file. The release PR
 merges itself once its checks pass. On that merge the job tags `vX.Y.Z` and starts the release
 workflow for the tag, which builds the CLI, the guest kernel, the system drive, the host image, the
-base image, the npm client and the Homebrew formula, smoke-tests each, and publishes and attests
+base image, the npm packages and the Homebrew formula, smoke-tests each, and publishes and attests
 them. Every artifact carries the tag's version without the `v`, so a client, an impd and a NixOS
 flake pinned to one tag agree. The workflows' own comments cover each job; this runbook holds the
 steps they do not do.
@@ -84,6 +84,19 @@ These steps are done for `zgeoff/impz`. They are here for a new repository, or t
    variable `NPM_PUBLISH_ENABLED` to `true`. From then on each release publishes with OIDC, and no
    npm token lives in CI.
 
+   `@impz/testing` takes the same steps, with its own variable. Its check installs the client
+   tarball of the same release beside it:
+
+   ```sh
+   client=$(scripts/release/pack-client.sh)
+   tarball=$(scripts/release/pack-testing.sh)
+   scripts/release/check-testing-package.sh "$tarball" "$client"
+   npm publish "$tarball" --access public
+   ```
+
+   Then add its trusted publisher on npmjs.com (workflow `release.yml`), and set the Actions
+   variable `NPM_TESTING_PUBLISH_ENABLED` to `true`.
+
 ## Dry run
 
 A run of the release workflow with no tag builds and checks everything for the current `main` as a
@@ -120,7 +133,7 @@ gh workflow run release.yml -f tag=vX.Y.Z
 ```
 
 It builds the tag's sources, not `main`'s, and replaces the release assets and the `imp-host:X.Y.Z`
-tag. It publishes `imp-base:X.Y.Z` and the npm client only where they are missing, and moves
+tag. It publishes `imp-base:X.Y.Z` and the npm packages only where they are missing, and moves
 `latest` only when the tag is the newest release. A fix to the sources needs a new release, not a
 republish.
 

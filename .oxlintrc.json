@@ -52,6 +52,8 @@
             "**/*.{test,e2e,pebble,headscale}.{ts,tsx}",
             "**/{test-utils,smoke,mocks}/**",
             "packages/daemon/testing/**",
+            // impd's harness, published for the tests of code that drives impd
+            "packages/testing/**",
             "packages/dashboard/e2e/**",
             "**/test-setup.ts"
           ],
@@ -99,6 +101,7 @@
               "**/*.{test,e2e,pebble,headscale}.{ts,tsx}",
               "**/{test-utils,smoke,mocks}/**",
               "packages/daemon/testing/**",
+              "packages/testing/**",
               "packages/dashboard/e2e/**",
               "**/test-setup.ts"
             ],

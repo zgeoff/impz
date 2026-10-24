@@ -38,6 +38,7 @@ packages/
   local-tar/       local files as a tar, for impz cp and image build contexts
   mcp/             the MCP server: imps, exec, files and checkpoints as tools
   shared/          pure helpers that know nothing about imp
+  testing/         @impz/testing: impd on its stand-ins, published for other repos' tests
   test-utils/      the test preload and the utils every package's tests share
 proto/             the agent protocol; bun run gen:proto generates the Go, TypeScript and
                    docs/reference/agent-protocol.md from it
