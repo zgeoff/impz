@@ -958,7 +958,10 @@ test('it refuses at the offer an imp with more leases than a move carries, and r
   expect(status.sentBytes).toBe(0);
   expect(imp).toMatchObject({ state: 'running', moveState: null });
   expect(landed).toBeUndefined();
-});
+
+  // measured: the 1025 lease writes alone took up to 1.7 s late in a pre-push run on a 2 GiB
+  // host, against 0.4 s in a run of the file alone
+}, 30_000);
 
 test('it refuses at the offer a lease whose owner is longer than a header carries, and runs the imp again', async () => {
   const ctx = await setupTest();
