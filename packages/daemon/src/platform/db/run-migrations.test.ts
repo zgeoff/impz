@@ -938,7 +938,8 @@ test('#runMigrations leaves better-auth no table or column to add', async () => 
       },
     },
     plugins: [
-      // oxlint-disable-next-line no-unsafe-type-assertion -- a BetterAuthPlugin at runtime; only its endpoint option types disagree with the stricter compiler settings
+      // a BetterAuthPlugin at runtime; only its endpoint option types disagree with the stricter
+      // compiler settings
       mcp({
         loginPage: '/login',
         consentPage: '/consent',

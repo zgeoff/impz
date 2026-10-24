@@ -29,7 +29,6 @@ async function setupTest() {
     const socket = join(directory, 'proxy.sock');
 
     // Bun's types leave idleTimeout off unix servers, but it applies there too
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- see above
     const server = Bun.serve({
       unix: socket,
       fetch: createDockerProxy(options),

@@ -127,7 +127,6 @@ export function createMcpAuth(deps: Readonly<McpAuthDeps>): McpAuth {
 
     // the provider's endpoint types do not satisfy the plugin type under
     // exactOptionalPropertyTypes
-    // oxlint-disable-next-line no-unsafe-type-assertion -- a BetterAuthPlugin at runtime; only its endpoint option types disagree with the stricter compiler settings
     plugins: [provider as BetterAuthPlugin, createApproverPlugin()],
   });
 

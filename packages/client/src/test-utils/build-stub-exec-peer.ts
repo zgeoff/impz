@@ -93,7 +93,7 @@ export function buildStubExecPeer(onMessage: StubExecHandler = () => {}) {
       }
     });
 
-    // oxlint-disable-next-line no-unsafe-type-assertion -- an EventTarget's listener types are wider than WebSocket's overloads
+    // an EventTarget's listener types are wider than WebSocket's overloads
     return socket as unknown as ExecSocket;
   };
 

@@ -55,7 +55,6 @@ function main(): void {
 
   // Bun's types leave idleTimeout off unix servers, but Bun applies it there too, and 0 lets an
   // export stream for as long as it takes.
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- see above
   const serveOptions = {
     unix: listen,
     fetch: handleRequest,

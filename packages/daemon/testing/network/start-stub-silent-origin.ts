@@ -46,7 +46,6 @@ export function startStubSilentOrigin(
   const listen =
     options.unix === undefined ? { port: 0, hostname: '127.0.0.1' } : { unix: options.unix };
 
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- see above
   const server = Bun.serve({
     ...listen,
     idleTimeout: 0,
