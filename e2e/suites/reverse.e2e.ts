@@ -191,6 +191,50 @@ test('it listens again at the same path once the imp wakes, without waking it', 
   expect(listed).toContain('imp-e2e-laptop (ED25519)');
 });
 
+test('it reopens a port forward at the same port once the imp wakes, and a process in the imp reaches this machine again', async () => {
+  const ctx = await setupTest();
+
+  const name = `${ctx.prefix}again-port`;
+
+  const page = Bun.serve({
+    hostname: '127.0.0.1',
+    port: 0,
+    routes: { '/*': () => new Response('e2e-reverse-ok\n') },
+  });
+
+  ctx.stack.defer(() => page.stop(true));
+
+  await runImp('new', name, '--image', resolveImageName('e2e-git'), '--memory', '256');
+
+  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, name));
+
+  await waitForExec(name);
+  await holdImp(name);
+
+  const reverse = await startReverse(name, `4123:${String(page.port)}`);
+
+  ctx.stack.defer(async () => {
+    await reverse.stop();
+  });
+
+  const before = await runShellInImp(name, 'wget -qO- http://127.0.0.1:4123/');
+
+  await runImp('sleep', name);
+  await runImp('wake', name);
+  await holdImp(name);
+
+  await waitFor('the forward to listen again', () => {
+    if (!new RegExp(`forwarding ${name}:4123 -> \\S+ again\\n`, 'v').test(reverse.readStderr())) {
+      throw new Error(`impz proxy said ${reverse.readStderr()}`);
+    }
+  });
+
+  const after = await runShellInImp(name, 'wget -qO- http://127.0.0.1:4123/');
+
+  expect(before).toBe('e2e-reverse-ok');
+  expect(after).toBe('e2e-reverse-ok');
+});
+
 test('it keeps the imp awake while a relay is open, and lets it sleep once only the listener is left', async () => {
   const ctx = await setupTest();
 
