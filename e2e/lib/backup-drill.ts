@@ -251,6 +251,10 @@ export function wireBackupDrill(stack: AsyncDisposableStack, metric: string): Ba
     probeOnSettings: async (env) => {
       const result = await runInContainer(['env']);
 
+      if (result.exitCode !== 0) {
+        throw new Error(`the instance's settings could not be read: ${result.stderr}`);
+      }
+
       const lines = new Set(result.stdout.split('\n'));
 
       // The env file's path is the dev script's own, which it hands docker, not impd.
