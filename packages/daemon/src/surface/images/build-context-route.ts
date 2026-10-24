@@ -95,7 +95,14 @@ export function createBuildContextRoute(deps: BuildContextDeps): BuildContextRou
     const release = (): void => {
       freed.resolve();
 
-      rmSync(tarPath, { force: true });
+      try {
+        rmSync(tarPath, { force: true });
+      } catch (error) {
+        getImpdLogger('image').warning('build context {path} not removed: {error}', {
+          path: tarPath,
+          error,
+        });
+      }
 
       run.end();
 

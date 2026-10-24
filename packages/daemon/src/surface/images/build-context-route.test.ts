@@ -12,6 +12,7 @@ import { buildStubImageBuilder } from '../../../testing/imps/build-stub-image-bu
 import { createFilesTar } from '../../../testing/imps/create-files-tar';
 import { startBuilderImpd } from '../../../testing/imps/start-builder-impd';
 import { buildStubClock } from '../../../testing/platform/build-stub-clock';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { runUploadedBuild } from '../../../testing/surface/run-uploaded-build';
 import type { StubAnswer } from '../../../testing/vm/build-stub-guest';
 import { DOCKERFILE_FRONTEND } from '../../imps/docker-contract/dockerfile-frontend';
@@ -383,6 +384,63 @@ test('it removes an upload, frees its slot and ends its run when no build takes 
 
   expect(() => route.takeUpload(upload.id, caller)).toThrow(
     `build context upload ${upload.id} not found; upload the context again`,
+  );
+});
+
+test('it frees the slot and ends the run of a released upload whose context it cannot remove', async () => {
+  const ctx = await setupTest();
+
+  const builder = buildStubImageBuilder({ exported: [], repoDigest: `sha256:${'b'.repeat(64)}` });
+
+  const harness = await startBuilderImpd(ctx.stack, builder, {
+    dataDir: ctx.dataDir,
+    rootToken: ctx.rootToken,
+    cloneDisk: ctx.cloneDisk,
+  });
+
+  const caller = buildMockCaller();
+
+  const route = createBuildContextRoute({
+    config: { dataDir: ctx.dataDir, buildContextMaxBytes: 1024 ** 2 },
+    images: harness.impd.images,
+    diskBudget: harness.impd.diskBudget,
+    audit: createApiAudit({ db: harness.db, now: Date.now, log: () => {}, readErrorCode }),
+    now: Date.now,
+    startTimer: buildStubClock().startTimer,
+  });
+
+  const uploaded = await route.respond(
+    new Request(`http://impd.test${BUILD_CONTEXT_PATH}?name=web`, { method: 'POST', body: 'tar' }),
+    caller,
+  );
+
+  const answer: unknown = await uploaded.json();
+
+  const upload = route.takeUpload(BuildContextUploadSchema.parse(answer).id, caller);
+
+  await rm(upload.tarPath);
+  await mkdir(upload.tarPath);
+  await writeFile(join(upload.tarPath, 'stray'), 'left behind');
+
+  const lines = captureImpdLogs();
+
+  upload.release();
+
+  const builds = await harness.client.images.builds();
+
+  const slots = [1, 2, 3, 4].map(() => harness.impd.images.claimBuildSlot());
+
+  onTestFinished(() => {
+    for (const release of slots) {
+      release();
+    }
+  });
+
+  expect(builds).toStrictEqual([]);
+  expect(slots).toHaveLength(4);
+
+  expect(lines).toContainEqual(
+    expect.stringMatching(/^WARNING impd\.image build context .+ not removed: /v),
   );
 });
 
