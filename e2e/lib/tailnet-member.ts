@@ -10,8 +10,9 @@ export interface TailnetMemberOptions {
   readonly network?: string;
 }
 
-// The test-side member: a kernel tun, so docker exec reaches tailnet addresses,
-// and MagicDNS in its resolv.conf, so it resolves node and service names.
+// A kernel tun, so docker exec reaches tailnet addresses. Docker copies a
+// Tailscale host's quad100 into resolv.conf, which leaves MagicDNS no upstream
+// and drops service names learned after start, so the member gets its own.
 export async function startTailnetMember(
   runners: CommandRunners,
   options: Readonly<TailnetMemberOptions>,
@@ -27,6 +28,10 @@ export async function startTailnetMember(
       'NET_ADMIN',
       '--device',
       '/dev/net/tun',
+      '--dns',
+      '1.1.1.1',
+      '--dns',
+      '8.8.8.8',
       '-e',
       'TS_AUTHKEY',
       '-e',

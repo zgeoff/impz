@@ -19,7 +19,8 @@
 #      IMP_TAILSCALE_LOGIN_SERVER  a Headscale control server (default Tailscale's); its key
 #                                carries the tags, so none are advertised. A node on another
 #                                server joins this one with the key, as for a new hostname
-#      IMP_TAILSCALE_STATE_DIR   node state (default /var/lib/imp/tailscale); "mem" keeps it in memory
+#      IMP_TAILSCALE_STATE_DIR   node state (default /var/lib/imp/tailscale); "mem" keeps it in
+#                                memory, and TLS certificates in the default directory
 #      IMP_DNS                   resolvers used if resolv.conf points into the tailnet,
 #                                comma-separated as impd reads it (default "1.1.1.1,8.8.8.8")
 set -euo pipefail
@@ -99,7 +100,9 @@ if ! alive; then
   mkdir -p "$(dirname "$sock")"
   rm -f "$sock"
   if [ "$state_dir" = mem ]; then
-    args=(--state=mem:)
+    # Without --statedir tailscaled has nowhere to keep a TLS certificate, and
+    # an HTTPS name fails with "no TailscaleVarRoot".
+    args=(--state=mem: --statedir=/var/lib/imp/tailscale)
     log=/var/log/tailscaled.log
   else
     mkdir -p "$state_dir"
