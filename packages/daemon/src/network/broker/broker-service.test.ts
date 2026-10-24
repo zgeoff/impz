@@ -653,7 +653,7 @@ test('it gives a new boot whose install fails no broker variables, and logs why'
 
   expect(ctx.logs).toContainEqual(
     expect.toStartWith(
-      'INFO impd.imps imp=dev broker CA not installed, so this exec gets no broker variables: ENOENT',
+      'WARNING impd.imps imp=dev broker CA not installed, so this exec gets no broker variables: ENOENT',
     ),
   );
 });

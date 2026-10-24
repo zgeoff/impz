@@ -856,7 +856,7 @@ test('it leaves a running public imp no uplink while the routes cannot be read',
   expect(ctx.nft.readTable()).toInclude('  set uplinks4 {\n    type ifname\n  }\n');
 
   expect(ctx.logs).toContain(
-    "INFO impd.egress imp=dev reading the host container's routes: ip -4 route show default exited 1",
+    "WARNING impd.egress imp=dev reading the host container's routes: ip -4 route show default exited 1",
   );
 });
 

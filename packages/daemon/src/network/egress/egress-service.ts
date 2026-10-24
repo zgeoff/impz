@@ -137,7 +137,9 @@ export function createEgressService(deps: EgressDeps): EgressService {
     } catch (error) {
       const message = getErrorMessage(error);
 
-      getImpdLogger('egress').info("reading the host container's routes: {message}", { message });
+      getImpdLogger('egress').warning("reading the host container's routes: {message}", {
+        message,
+      });
 
       return {
         ranges: startRanges,

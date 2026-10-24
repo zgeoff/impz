@@ -164,7 +164,7 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
 
       await updateMoveSend(deps.db, imp.id, { error: message });
 
-      getImpdLogger('move').with({ imp: imp.name }).info('{message}', { message });
+      getImpdLogger('move').with({ imp: imp.name }).warning('{message}', { message });
 
       return false;
     }
@@ -212,7 +212,7 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
       } catch (error) {
         const message = getErrorMessage(error);
 
-        getImpdLogger('move').with({ imp: imp.name }).info('{message}', { message });
+        getImpdLogger('move').with({ imp: imp.name }).warning('{message}', { message });
 
         const fresh = await readImpById(deps.db, imp.id);
 

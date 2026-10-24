@@ -182,7 +182,7 @@ test('it answers a failed install as not installed, with why, and logs it', asyn
   expect(outcome).toStrictEqual({ installed: false, detail: 'no sh' });
 
   expect(logs).toStrictEqual([
-    'INFO impd.imps imp=dev broker CA not installed, so this exec gets no broker variables: no sh',
+    'WARNING impd.imps imp=dev broker CA not installed, so this exec gets no broker variables: no sh',
   ]);
 });
 

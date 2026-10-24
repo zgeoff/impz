@@ -90,7 +90,7 @@ export function createCertManager(options: CertManagerOptions): CertManager {
 
       loggedWaitUntil = now + readBackoffMs(failures);
 
-      getImpdLogger('https').info(
+      getImpdLogger('https').warning(
         'no certificate for {domain}: {reason}; the next try is after {retryAt}',
         { domain, reason, retryAt },
       );

@@ -156,7 +156,7 @@ test('it records a failed attempt and logs when it tries next', async () => {
   });
 
   expect(logs.at(-1)).toBe(
-    'INFO impd.https no certificate for imp.test: Cloudflare POST /zones/z1/dns_records: 403 bad token; the next try is after 2030-01-10T00:15:00.000Z',
+    'WARNING impd.https no certificate for imp.test: Cloudflare POST /zones/z1/dns_records: 403 bad token; the next try is after 2030-01-10T00:15:00.000Z',
   );
 });
 
@@ -510,7 +510,7 @@ test('it backs off when the DNS token file holds no token', async () => {
   expect(ctx.store.readAttempts().failures).toBe(1);
 
   expect(logs.at(-1)).toBe(
-    `INFO impd.https no certificate for imp.test: the DNS API token file ${tokenPath} is empty; the next try is after 2030-01-10T00:15:00.000Z`,
+    `WARNING impd.https no certificate for imp.test: the DNS API token file ${tokenPath} is empty; the next try is after 2030-01-10T00:15:00.000Z`,
   );
 });
 
