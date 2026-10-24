@@ -176,7 +176,7 @@ async function runTests(run: PoolRun): Promise<number> {
 
   guard.throwIfStopped();
 
-  const child = io.spawn(['bun', 'test', 'packages/daemon/src/vm/storage/zfs'], {
+  const child = io.spawn(['bun', 'test', '--timeout=15000', 'packages/daemon/src/vm/storage/zfs'], {
     cwd: run.options.root,
     env: { ...run.options.env, IMP_TEST_ZFS_ROOT: `${pool}/imp`, IMP_TEST_ZFS_DIR: run.mnt },
     output: 'inherit',

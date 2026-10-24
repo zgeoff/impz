@@ -255,8 +255,8 @@ export const SUITES: readonly Suite[] = [
   },
 ];
 
-// One list per CI runner and instance; each held about 225 s of suite work in
-// CI. Rebalance by the times in .cache/e2e/results.json.
+// One list per CI runner, split by the times in .cache/e2e/results.json so the jobs end together;
+// group 1 builds four fixture images and group 2 runs the host tests, so they hold less work.
 export const FAST_GROUPS: readonly (readonly string[])[] = [
   [
     'lifecycle',
@@ -269,18 +269,14 @@ export const FAST_GROUPS: readonly (readonly string[])[] = [
     'services',
     'ssh',
     'ssh-agent',
-    'proxy',
     'dashboard',
-    'tokens',
-    'leases',
-    'cpu',
     'templates',
     'boot-templates',
     'socket',
   ],
   ['sleep', 'reverse', 'jail'],
-  ['mcp', 'mcp-oauth', 'inner', 'memory', 'ksm'],
-  ['tailscale', 'egress', 'moves-tailnet'],
+  ['mcp', 'mcp-oauth', 'proxy', 'tokens', 'inner', 'memory', 'ksm'],
+  ['tailscale', 'leases', 'egress', 'cpu', 'moves-tailnet'],
 ];
 
 export const SUITE_SETS: Readonly<Record<string, readonly string[]>> = {
@@ -340,7 +336,8 @@ export function buildKsmSettings(isKsmRunning: boolean): Readonly<Record<string,
   };
 }
 
-const JOURNEY_TIMEOUT_MS = 3_600_000;
+// the e2e lane's limit on one journey test, as zgeoff/max-test-timeout declares it
+const JOURNEY_TIMEOUT_MS = 60_000;
 
 // Plain `bun test` skips *.e2e.ts; a ./ path runs one anyway, where a bare
 // path is a name filter.

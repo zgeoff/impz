@@ -26,7 +26,7 @@ test('#buildJourneyArgv runs a journey file by a ./ path, which bun test does no
     '--config=e2e/bunfig.toml',
     '--bail',
     '--timeout',
-    '3600000',
+    '60000',
     './e2e/suites/proxy-forwards.e2e.ts',
   ]);
 });

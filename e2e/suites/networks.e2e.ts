@@ -2,6 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { config } from '../lib/config';
 import { resolveImageName } from '../lib/fixtures';
 import { readEstabResets, waitForGuestListen } from '../lib/guest-net';
+import { tryGetFromImp } from '../lib/guest-probe';
 import { createInstanceClient, requireImp, runImp, runShellInImp, tryImp } from '../lib/imp-cli';
 import { holdImp, waitForExec } from '../lib/imps';
 import { registerRemoval } from '../lib/register-removal';
@@ -114,34 +115,11 @@ test('it lets the imps on a network reach and name each other past their policie
   expect(webToOut.exitCode).not.toBe(0);
   expect(dbToOut.exitCode).not.toBe(0);
 
-  const allowed = await tryImp([
-    'exec',
-    db,
-    '--',
-    'wget',
-    '-q',
-    '-T',
-    '5',
-    '-O',
-    '/dev/null',
-    'http://example.com/',
-  ]);
+  const allowed = await tryGetFromImp(db, 'http://example.com/');
+  const blocked = await tryGetFromImp(db, 'http://example.org/');
 
-  const blocked = await tryImp([
-    'exec',
-    db,
-    '--',
-    'wget',
-    '-q',
-    '-T',
-    '5',
-    '-O',
-    '/dev/null',
-    'http://example.org/',
-  ]);
-
-  expect(allowed.exitCode).toBe(0);
-  expect(blocked.exitCode).not.toBe(0);
+  expect(allowed).toBe(true);
+  expect(blocked).toBe(false);
 
   // busybox nslookup prints some answers on stderr.
   const fromWeb = await tryImp(['exec', web, '--', 'nslookup', `${db}.${lab}.internal`]);

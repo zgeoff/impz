@@ -118,19 +118,15 @@ test.each([
       'services',
       'ssh',
       'ssh-agent',
-      'proxy',
       'dashboard',
-      'tokens',
-      'leases',
-      'cpu',
       'templates',
       'boot-templates',
       'socket',
     ],
   ],
   ['2', ['sleep', 'reverse', 'jail']],
-  ['3', ['mcp', 'mcp-oauth', 'inner', 'memory', 'ksm']],
-  ['4', ['tailscale', 'egress', 'moves-tailnet']],
+  ['3', ['mcp', 'mcp-oauth', 'proxy', 'tokens', 'inner', 'memory', 'ksm']],
+  ['4', ['tailscale', 'leases', 'egress', 'cpu', 'moves-tailnet']],
 ])('it runs fast group %s with --group', (group, suites) => {
   expect(parseArgs(['--group', group]).suites).toStrictEqual(suites);
 });
