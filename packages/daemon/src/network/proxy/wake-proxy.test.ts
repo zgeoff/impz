@@ -971,7 +971,7 @@ test('it wakes a sleeping imp and says how long the wake took', async () => {
   expect(response.headers.get('x-imp-wake-ms')).toMatch(/^\d+$/v);
 
   expect(logs).toContain(
-    `INFO impd.proxy web woke in ${String(response.headers.get('x-imp-wake-ms'))}ms for GET /a`,
+    `INFO impd.proxy imp=web woke in ${String(response.headers.get('x-imp-wake-ms'))}ms for GET /a`,
   );
 });
 

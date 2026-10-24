@@ -63,17 +63,15 @@ export function createTailnetNames(deps: TailnetNamesDeps): TailnetNames {
     const last = states.get(impName);
 
     if (!next.live && (last === undefined || last.live || last.error !== next.error)) {
-      getImpdLogger('tailnet').warning('tailnet names: {impName}: {error}', {
-        impName,
-        error: next.error,
-      });
+      getImpdLogger('tailnet')
+        .with({ imp: impName })
+        .warning('tailnet names: {error}', { error: next.error });
     }
 
     if (next.live && last?.live !== true) {
-      getImpdLogger('tailnet').info('tailnet names: {impName} is {service}', {
-        impName,
-        service: toService(impName),
-      });
+      getImpdLogger('tailnet')
+        .with({ imp: impName })
+        .info('tailnet names: named {service}', { service: toService(impName) });
     }
 
     states.set(impName, next);
