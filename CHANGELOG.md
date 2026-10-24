@@ -2,10 +2,11 @@
 
 ## [4.2.1](https://github.com/zgeoff/impz/compare/v4.2.0...v4.2.1) (2026-10-24)
 
-
 ### Bug Fixes
 
-* **daemon:** wait for the OAuth context before createMcpAuth returns ([#709](https://github.com/zgeoff/impz/issues/709)) ([7360bbb](https://github.com/zgeoff/impz/commit/7360bbb11492e8a7a0fd581facaf2c8ce3a623db))
+- **daemon:** wait for the OAuth context before createMcpAuth returns
+  ([#709](https://github.com/zgeoff/impz/issues/709))
+  ([7360bbb](https://github.com/zgeoff/impz/commit/7360bbb11492e8a7a0fd581facaf2c8ce3a623db))
 
 ## [4.2.0](https://github.com/zgeoff/impz/compare/v4.1.0...v4.2.0) (2026-10-24)
 
