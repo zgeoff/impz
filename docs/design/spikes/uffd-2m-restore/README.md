@@ -6,31 +6,36 @@ MiB pages brings an imp's agent up in under 250 ms after the claim. impd restore
 so the spike runs its own handler beside Firecracker and times each restore with impd's own marks.
 [results.md](./results.md) holds the full numbers.
 
-## Status
+## Verdict
 
-The handler works on 4 KiB pages, and the 2 MiB numbers are not run yet. No go or no-go against 250
-ms exists until the 2 MiB rows of [results.md](./results.md) hold numbers from the target host. Both
-the development PC and the target host stop at the gate that counts free 2 MiB blocks before a 2 MiB
-build. On the target host most available memory is page cache, which that count leaves out.
+Go. On the target host, a 2 MiB template restored through an on-demand handler brings the agent up
+in a median of 60.8 ms after the claim, and no run of 21 takes longer than 95.6 ms. The File restore
+of a 4 KiB template on the same host, interleaved with it, takes a median of 1,499.8 ms.
 
 ## Findings
 
-- On a 4 KiB template, an on-demand handler is slower than the File backend: the median `agent=` is
-  258 ms against 149 ms. The boot faults about 4,370 pages after the claim, and each costs a round
-  trip to the handler.
-- A handler that copies the template's data and a recorded boot working set in before the resume
-  brings the median `agent=` down to 57 ms, and the fill itself takes a median of 27 ms. Most of
-  that gain comes from cheap page-table fills on a host without nested virtualisation, so it is no
-  forecast for a nested host.
-- A 2 MiB template build needs a free 2 MiB block for every block of guest memory, because a Full
-  snapshot reads every guest page. A 2 GiB guest needs 1,024 of them, and on a fragmented host the
-  snapshot fails with `Bad address (os error 14)`.
+- A 2 MiB boot touches about 35 distinct 2 MiB blocks of the template, and only 2 to 6 of them after
+  the claim. A 4 KiB boot faults about 5,500 pages, 4,370 of them after the claim.
+- On the target host, most of the File restore's extra time lands in the guest's mount step, which
+  takes a median of 767 ms under File and 44 ms under UFFD on the same disk copy. impd's own
+  restores on that host fall in the same range as the harness's File restores.
+- Copying the template's data in before the resume gains nothing on 2 MiB pages: the fill takes
+  about 21 ms and moves that time from the parked step into the load step. An on-demand handler is
+  enough, and it needs no recorded working set.
+- On 4 KiB pages the on-demand handler is slower than the File backend, because each of the boot's
+  thousands of faults costs a round trip to the handler. The gain comes from the page size, not from
+  UFFD.
+- A Full snapshot of a 2 MiB guest takes a hugetlb page for every block of guest memory, so a 2 GiB
+  build needs 1,024 free 2 MiB blocks at once. A host whose memory is fragmented fails the snapshot
+  with `Bad address (os error 14)`. A pool that the host reserves keeps those pages ready.
+- Hugetlb pages are neither KSM-mergeable nor reclaimable, so each running 2 MiB imp holds its whole
+  memory in the pool.
 
 ## The harness
 
 [`harness/`](./harness/) is a Go program, `uffd-spike`, that runs as root on a host with `/dev/kvm`
 and `/dev/userfaultfd`. Each command except `summary` runs in a private network namespace, with the
-template's tap made there.
+template's tap made there. Firecracker runs without impd's jailer, cgroup and KSM launcher.
 
 - `build` builds a template as impd does: it boots with `imp.template=1`, waits for the parked agent
   and the guest's minimum age, takes a Full snapshot, and digs the memory file's holes.
@@ -47,14 +52,15 @@ an image as impd does, growing it offline to impd's default size.
 
 ## Running it
 
-The host needs a cap on surplus hugetlb pages for a 2 MiB build, which you set back to 0 after.
+A 2 MiB build needs a pool of 2 MiB pages for the guest, which you free after the run.
 
 ```sh
-sysctl -w vm.nr_overcommit_hugepages=1100
+sysctl -w vm.nr_hugepages=1100
+grep HugePages_Total /proc/meminfo
 uffd-spike build -firecracker fc -kernel vmlinux -system imp-system.squashfs -template tpl-4k
 uffd-spike build -firecracker fc -kernel vmlinux -system imp-system.squashfs -template tpl-2m -huge-pages 2M
 uffd-spike bench -firecracker fc -file-template tpl-4k -uffd-template tpl-2m \
-  -disk disk.ext4 -work work -runs 21 -out results.jsonl -working-set ws-2m.json
+  -disk disk.ext4 -work work -runs 21 -record-runs 3 -out results.jsonl -working-set ws-2m.json
 uffd-spike summary results.jsonl
-sysctl -w vm.nr_overcommit_hugepages=0
+sysctl -w vm.nr_hugepages=0
 ```
