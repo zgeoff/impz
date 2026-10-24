@@ -1047,7 +1047,7 @@ test('it logs one impd.docker-proxy line, and nothing unhandled, when the engine
   );
 
   expect(stderr).toBe('');
-}, 30_000);
+});
 
 test('it warns when the engine closes a stream', async () => {
   const ctx = await setupTest();

@@ -238,7 +238,9 @@ test('it ends with what the callback throws when closing the stream fails too', 
   const [settled] = await Promise.allSettled([watching]);
 
   // one turn of the event loop, after which an unhandled rejection is reported
-  await Bun.sleep(0);
+  await new Promise<void>((resolve) => {
+    setImmediate(resolve);
+  });
 
   expect(settled).toStrictEqual({ status: 'rejected', reason: failure });
   expect(unhandled).not.toHaveBeenCalled();

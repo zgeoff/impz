@@ -20,6 +20,16 @@
         ]
       }
     ],
+    // each lane's per-test limit, as the project-testing skill's Lanes table states; `e2e/`
+    // holds both the VM and the ZFS lanes
+    "zgeoff/max-test-timeout": [
+      "error",
+      { "lanes": { "e2e": 60000, "host": 15000, "headscale": 15000, "pebble": 5000 } }
+    ],
+    "zgeoff/test-beside-module": [
+      "error",
+      { "lanes": { "e2e": 60000, "host": 15000, "headscale": 15000, "pebble": 5000 } }
+    ],
     // zod's documented import form is `import * as z from 'zod'`
     "import/no-namespace": "off",
     "no-restricted-imports": [
@@ -626,12 +636,6 @@
       // daemon, away from the modules they test, so no package depends on the daemon that
       // depends on it
       "files": ["packages/integration/**"],
-      "rules": { "zgeoff/test-beside-module": "off" }
-    },
-    {
-      // a lane suffix names the real system a test needs, and this rule in oxlint-config 0.5.2
-      // knows only `.browser`; its `lanes` option, in 0.6.4, replaces this entry
-      "files": ["**/*.{host,headscale,pebble}.test.ts"],
       "rules": { "zgeoff/test-beside-module": "off" }
     },
     {

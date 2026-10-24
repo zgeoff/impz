@@ -467,7 +467,7 @@ test('it stops the command a grant runs when the approving token goes, then answ
   expect(elapsedMs).toBeLessThan(30_000);
   expect(after.status).toBe(401);
   expect(processes).not.toContain('sleep 120');
-}, 120_000);
+});
 
 test('it answers 429 to sign-ins past the burst', async () => {
   const ctx = await setupTest();

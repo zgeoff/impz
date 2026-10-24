@@ -192,4 +192,4 @@ test('it grows an elastic guest under a gradual allocation, shrinks it once the 
   // From the snapshot, not a cold boot that would pass the same checks.
   expect(wakeLog).toContain(`${name}: woke pid`);
   expect(wakeLog).not.toContain(`${name}: cold boot instead of a wake`);
-}, 300_000);
+});

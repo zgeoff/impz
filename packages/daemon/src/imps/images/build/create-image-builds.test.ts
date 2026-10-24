@@ -2003,8 +2003,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     expect(trial.settledBytes).toBeLessThanOrEqual(hold);
     expect(trial.lowestFree).toBeGreaterThanOrEqual(128 * 1024 ** 2);
   },
-
-  120_000,
 );
 
 test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
@@ -2093,8 +2091,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     expect(trial.settledBytes).toBeLessThanOrEqual(hold);
     expect(trial.lowestFree).toBeGreaterThanOrEqual(128 * 1024 ** 2);
   },
-
-  120_000,
 );
 
 test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
@@ -2181,8 +2177,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     expect(trial.settledBytes).toBeLessThanOrEqual(hold);
     expect(trial.lowestFree).toBeGreaterThanOrEqual(128 * 1024 ** 2);
   },
-
-  120_000,
 );
 
 test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
@@ -2269,8 +2263,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     expect(trial.settledBytes).toBeLessThanOrEqual(hold);
     expect(trial.lowestFree).toBeGreaterThanOrEqual(128 * 1024 ** 2);
   },
-
-  120_000,
 );
 
 test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
@@ -2361,8 +2353,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     expect(trial.settledBytes).toBeLessThanOrEqual(hold);
     expect(trial.lowestFree).toBeGreaterThanOrEqual(128 * 1024 ** 2);
   },
-
-  120_000,
 );
 
 test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
@@ -2450,8 +2440,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     expect(trial.settledBytes).toBeLessThanOrEqual(hold);
     expect(trial.lowestFree).toBeGreaterThanOrEqual(128 * 1024 ** 2);
   },
-
-  120_000,
 );
 
 test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
@@ -2546,7 +2534,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     expect(trial.settledBytes).toBeLessThanOrEqual(hold);
     expect(trial.lowestFree).toBeGreaterThanOrEqual(128 * 1024 ** 2);
   },
-
   120_000,
 );
 
@@ -2616,8 +2603,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     expect(trial.peakBytes).toBeLessThanOrEqual(300 * 1024 ** 2);
     expect(trial.lowestFree).toBeGreaterThanOrEqual(128 * 1024 ** 2);
   },
-
-  120_000,
 );
 
 test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
@@ -2691,6 +2676,4 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     expect(trial.peakBytes).toBeLessThanOrEqual(300 * 1024 ** 2);
     expect(trial.lowestFree).toBeGreaterThanOrEqual(128 * 1024 ** 2);
   },
-
-  120_000,
 );

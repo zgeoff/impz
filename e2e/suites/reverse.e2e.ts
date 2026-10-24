@@ -298,7 +298,7 @@ test('it keeps the imp awake while a relay is open, and lets it sleep once only 
   await waitFor('the imp to sleep', () => assertState(name, 'sleeping'), {
     timeoutMs: (config.idleTimeoutS + 60) * 1000,
   });
-}, 180_000);
+});
 
 test('it forwards a port and a unix socket in the imp to this machine with ssh -R', async () => {
   const ctx = await setupTest();

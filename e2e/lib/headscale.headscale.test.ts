@@ -155,7 +155,7 @@ test('it lets one tag:imp-e2e node reach another on port 7070, and refuses it th
 
   expect(reply).toBe('open');
   expect(refused.stdout).toBe('');
-}, 180_000);
+});
 
 test('it removes Headscale, its member and its network when the run stops it', async () => {
   const ctx = setupTest();
@@ -177,7 +177,7 @@ test('it removes Headscale, its member and its network when the run stops it', a
 
   expect(left.stdout).toBe('');
   expect(network.exitCode).not.toBe(0);
-}, 120_000);
+});
 
 test('it removes a Headscale whose member never started', async () => {
   const ctx = setupTest();
@@ -197,4 +197,4 @@ test('it removes a Headscale whose member never started', async () => {
   ]);
 
   expect(left.stdout).toBe('');
-}, 120_000);
+});

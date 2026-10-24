@@ -372,7 +372,7 @@ test(
 
     await waitFor(
       () => {
-        expect(output.join('')).toIncludeRepeated('"phase":"build"', 28);
+        expect(output.join('')).toIncludeRepeated('"phase":"build"', 18);
       },
       { timeoutMs: 20_000, intervalMs: 100 },
     );

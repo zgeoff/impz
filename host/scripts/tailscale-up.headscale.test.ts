@@ -101,4 +101,4 @@ test('it joins a Headscale tailnet with the tags its pre-auth key carries', asyn
   });
 
   expect(self.Tags).toStrictEqual(['tag:imp-e2e']);
-}, 240_000);
+});

@@ -60,7 +60,6 @@ test.skipIf(!checkDockerBuildx())(
 
     expect(readFile(join(ctx.directoryPath, 'out', 'app.js'), 'utf8')).resolves.toBe('app');
   },
-  120_000,
 );
 
 test.skipIf(!checkDockerBuildx())(
@@ -89,7 +88,6 @@ test.skipIf(!checkDockerBuildx())(
       'from the tar',
     );
   },
-  120_000,
 );
 
 test.skipIf(!checkDockerBuildx())(
@@ -110,5 +108,4 @@ test.skipIf(!checkDockerBuildx())(
       });
     }).toThrowWithMessage(Error, /^docker buildx build --quiet -f .+unknown instruction/su);
   },
-  120_000,
 );

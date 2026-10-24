@@ -2740,7 +2740,6 @@ test.skipIf(readZfsTestPool() === null)(
 
     expect(readFileSync(pool.backend.resolveImpPaths('a').disk, 'utf8')).toBe('image');
   },
-  120_000,
 );
 
 test.skipIf(readZfsTestPool() === null)(
@@ -2778,7 +2777,6 @@ test.skipIf(readZfsTestPool() === null)(
 
     expect(readFileSync(pool.backend.resolveImpPaths('a').disk, 'utf8')).toBe('one');
   },
-  120_000,
 );
 
 test.skipIf(readZfsTestPool() === null)(
@@ -2817,7 +2815,6 @@ test.skipIf(readZfsTestPool() === null)(
 
     expect(readFileSync(pool.backend.resolveImpPaths('a').disk, 'utf8')).toBe('two');
   },
-  120_000,
 );
 
 test.skipIf(readZfsTestPool() === null)(
@@ -2866,7 +2863,6 @@ test.skipIf(readZfsTestPool() === null)(
     expect(readFileSync(pool.backend.resolveImpPaths('b').disk, 'utf8')).toBe('two');
     expect(readFileSync(pool.backend.resolveImpPaths('c').disk, 'utf8')).toBe('one');
   },
-  120_000,
 );
 
 test.skipIf(readZfsTestPool() === null)(
@@ -2929,7 +2925,6 @@ test.skipIf(readZfsTestPool() === null)(
       `${pool.root}/staging`,
     ]);
   },
-  120_000,
 );
 
 test.skipIf(readZfsTestPool() === null)(
@@ -2986,7 +2981,6 @@ test.skipIf(readZfsTestPool() === null)(
     expect(readFileSync(pool.backend.resolveImpPaths('b').disk, 'utf8')).toBe('golden');
     expect(readFileSync(pool.backend.resolveImpPaths('c').disk, 'utf8')).toBe('golden');
   },
-  120_000,
 );
 
 test.skipIf(readZfsTestPool() === null)(
@@ -3058,7 +3052,6 @@ test.skipIf(readZfsTestPool() === null)(
       `${pool.root}/staging`,
     ]);
   },
-  120_000,
 );
 
 test.skipIf(readZfsTestPool() === null)(
@@ -3124,7 +3117,6 @@ test.skipIf(readZfsTestPool() === null)(
     expect(failure).toMatchObject({ message: 'impd died' });
     expect(readFileSync(restarted.resolveImpPaths('a').disk, 'utf8')).toBe('one');
   },
-  120_000,
 );
 
 test.skipIf(readZfsTestPool() === null)(
@@ -3145,7 +3137,6 @@ test.skipIf(readZfsTestPool() === null)(
     expect(usage.usedBytes).toBePositive();
     expect(usage.availableBytes).toBePositive();
   },
-  120_000,
 );
 
 test.skipIf(readZfsTestPool() === null)(
@@ -3183,7 +3174,6 @@ test.skipIf(readZfsTestPool() === null)(
 
     expect(listed).toInclude(`${pool.root}/images/real@base\tsnapshot\t-\toff\n`);
   },
-  120_000,
 );
 
 // restic skips a file whose inode, mtime, ctime and size match its last run, and each run's tree
@@ -3241,7 +3231,6 @@ test.skipIf(readZfsTestPool() === null)(
     expect(second.mtimeNs).toBe(first.mtimeNs);
     expect(second.ctimeNs).toBe(first.ctimeNs);
   },
-  120_000,
 );
 
 // restic reads the tree, so a write there would change what its next run compares.
@@ -3285,7 +3274,6 @@ test.skipIf(readZfsTestPool() === null)(
     expect(touched.exitCode).not.toBe(0);
     expect(readFileSync(treeDisk, 'utf8')).toBe('one');
   },
-  120_000,
 );
 
 test.skipIf(readZfsTestPool() === null)(
@@ -3341,7 +3329,6 @@ test.skipIf(readZfsTestPool() === null)(
     expect(readFileSync(treeDisk, 'utf8')).toBe('two');
     expect(statSync(treeDisk, { bigint: true }).mtimeNs).not.toBe(first.mtimeNs);
   },
-  120_000,
 );
 
 test.skipIf(readZfsTestPool() === null)(
@@ -3403,7 +3390,6 @@ test.skipIf(readZfsTestPool() === null)(
     expect(left).not.toInclude('@bk-');
     expect(left).not.toInclude('/staging/bk');
   },
-  120_000,
 );
 
 test.skipIf(readZfsTestPool() === null)(
@@ -3447,7 +3433,6 @@ test.skipIf(readZfsTestPool() === null)(
       ),
     ).toBe('image');
   },
-  120_000,
 );
 
 test.skipIf(readZfsTestPool() === null)(
@@ -3502,7 +3487,6 @@ test.skipIf(readZfsTestPool() === null)(
     expect(left).not.toInclude('/staging/');
     expect(left).not.toInclude('@bk-');
   },
-  120_000,
 );
 
 test.skipIf(readZfsTestPool() === null)(
@@ -3596,7 +3580,6 @@ test.skipIf(readZfsTestPool() === null)(
       'new image',
     );
   },
-  120_000,
 );
 
 test.skipIf(readZfsTestPool() === null)(
@@ -3663,7 +3646,6 @@ test.skipIf(readZfsTestPool() === null)(
 
     expect(readFileSync(restarted.resolveImpPaths('a').disk, 'utf8')).toBe('from a');
   },
-  120_000,
 );
 
 test.skipIf(readZfsTestPool() === null)(
@@ -3728,7 +3710,6 @@ test.skipIf(readZfsTestPool() === null)(
       (name: string) => !/\/(?:disks|images|retired)\//u.test(name),
     );
   },
-  120_000,
 );
 
 // The ZFS txg that commits a tree can also shrink blocks outside its dataset, such as the pool's
@@ -3773,7 +3754,6 @@ test.skipIf(readZfsTestPool() === null)(
 
     expect(margins).toSatisfyAll((margin: number) => margin >= 0);
   },
-  120_000,
 );
 
 test.skipIf(readZfsTestPool() === null)(
@@ -3846,7 +3826,6 @@ test.skipIf(readZfsTestPool() === null)(
       space.freedBytes * 1.05,
     );
   },
-  120_000,
 );
 
 test.skipIf(readZfsTestPool() === null)(
@@ -3874,5 +3853,4 @@ test.skipIf(readZfsTestPool() === null)(
 
     expect(measured.images.get('sha256:spacious')?.isShared).toBeTrue();
   },
-  120_000,
 );

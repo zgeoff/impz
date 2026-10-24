@@ -60,27 +60,27 @@ test('it serves impd with the smoke imp to a client holding its token', async ()
   const imps = await client.imps.list({});
 
   expect(imps.map((imp) => imp.name)).toStrictEqual(['smoke']);
-}, 20_000);
+});
 
 test('it serves impd under the prefix', async () => {
   const ctx = await setupTest();
   const health = await fetch(new URL('health', ctx.served.prefixedUrl));
 
   expect(health.status).toBe(200);
-}, 20_000);
+});
 
 test('it serves nothing outside the prefix', async () => {
   const ctx = await setupTest();
   const outside = await fetch(new URL('/rpc', ctx.served.prefixedUrl));
 
   expect(outside.status).toBe(404);
-}, 20_000);
+});
 
 test('it names a url where nothing listens', async () => {
   const ctx = await setupTest();
 
   expect(fetch(ctx.served.closedUrl)).rejects.toThrow();
-}, 20_000);
+});
 
 test('it exits 0 on SIGTERM and leaves only its output in its temp dir', async () => {
   const ctx = await setupTest();
@@ -92,4 +92,4 @@ test('it exits 0 on SIGTERM and leaves only its output in its temp dir', async (
 
   expect(exitCode).toBe(0);
   expect(left).toStrictEqual(['stdout']);
-}, 20_000);
+});

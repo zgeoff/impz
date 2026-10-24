@@ -35,6 +35,10 @@ minimumReleaseAgeExcludes = [
 # (packages/test-utils), then registers jest-extended matchers
 preload = ["./packages/test-utils/src/preload.ts", "@zgeoff/bun-test-extended"]
 
+# a leak between tests or files that a fixed order hides fails the run, which
+# prints the --seed that repeats the order; CI's unit step runs bun test itself
+randomize = true
+
 # the dashboard's component tests need a DOM, which must not leak into the
 # daemon's tests; they run from their package (bun run test:dashboard). A lane
 # file names its real system in its suffix and runs only in its lane's script

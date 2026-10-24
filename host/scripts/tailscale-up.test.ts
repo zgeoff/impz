@@ -581,7 +581,7 @@ test('it joins again with the key once a slow saved node is Running with other t
   await waitFor(() => {
     expect(ctx.tailscale.readNode().Self.Tags).toStrictEqual(['tag:imp-e2e']);
   });
-}, 30_000);
+});
 
 test('it takes a slow saved node down without a key once it is Running with other tags', async () => {
   const ctx = setupTest();
@@ -637,7 +637,7 @@ test('it takes a slow saved node down without a key once it is Running with othe
   );
 
   expect(ctx.tailscale.readCalls('up')).toStrictEqual([]);
-}, 30_000);
+});
 
 test('it says without a key that a slow saved node is Running on another control server', async () => {
   const ctx = setupTest();
@@ -692,7 +692,7 @@ test('it says without a key that a slow saved node is Running on another control
   );
 
   expect(ctx.tailscale.readCalls('up')).toStrictEqual([]);
-}, 30_000);
+});
 
 test('it gives up in the background without a key once a slow saved node needs a login', async () => {
   const ctx = setupTest();
@@ -745,7 +745,7 @@ test('it gives up in the background without a key once a slow saved node needs a
   );
 
   expect(ctx.tailscale.readCalls('up')).toStrictEqual([]);
-}, 30_000);
+});
 
 test('it takes a saved node down that is still not Running after the wait, when it asks for tags', async () => {
   const ctx = setupTest();
@@ -798,7 +798,7 @@ test('it takes a saved node down that is still not Running after the wait, when 
   expect(readFileSync(ctx.err, 'utf8')).toBe(
     'tailscale-up: the saved node is still Starting after 30 min; taking it down, since its tags are unchecked\n',
   );
-}, 30_000);
+});
 
 test('it never puts the key on the command line', () => {
   const ctx = setupTest();
@@ -1227,7 +1227,7 @@ test('it joins the login server again with the key once a slow saved node is Run
   expect(up).toMatch(
     /^up --reset --force-reauth --auth-key=file:\S+ --hostname=imp --login-server=http:\/\/headscale\.test:8080 --accept-dns=false --timeout=60s$/u,
   );
-}, 30_000);
+});
 
 test('it joins the login server without advertising tags, which its key carries', () => {
   const ctx = setupTest();

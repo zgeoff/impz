@@ -167,7 +167,6 @@ test.skipIf(readZfsTestPool() === null)(
     expect(sourceSets).not.toInclude(created.id);
     expect(left).toBeUndefined();
   },
-  180_000,
 );
 
 test.skipIf(readZfsTestPool() === null)(
@@ -212,7 +211,6 @@ test.skipIf(readZfsTestPool() === null)(
 
     expect(started.state).toBe('running');
   },
-  180_000,
 );
 
 test.skipIf(readZfsTestPool() === null)(
@@ -290,7 +288,6 @@ test.skipIf(readZfsTestPool() === null)(
     expect(sourceSets).not.toInclude(created.id);
     expect(left).toBeUndefined();
   },
-  180_000,
 );
 
 test.skipIf(readZfsTestPool() === null)(
@@ -334,7 +331,6 @@ test.skipIf(readZfsTestPool() === null)(
     expect(woken.state).toBe('running');
     expect(ctx.target.fake.wakes).toHaveLength(1);
   },
-  180_000,
 );
 
 test.skipIf(readZfsTestPool() === null)(
@@ -414,7 +410,6 @@ test.skipIf(readZfsTestPool() === null)(
       [...landed.checkpointPaths, landed.diskPath].map((path) => readFileSync(path, 'utf8')),
     ).toStrictEqual(['one', 'two', 'three', 'four']);
   },
-  180_000,
 );
 
 test.skipIf(readZfsTestPool() === null)(
@@ -460,5 +455,4 @@ test.skipIf(readZfsTestPool() === null)(
       [...landed.checkpointPaths, landed.diskPath].map((path) => readFileSync(path, 'utf8')),
     ).toStrictEqual(['one', 'two', 'three']);
   },
-  180_000,
 );

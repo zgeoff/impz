@@ -1094,7 +1094,7 @@ test('it logs one impd.proxy line that names the imp, and nothing unhandled, whe
   );
 
   expect(stderr).toBe('');
-}, 30_000);
+});
 
 test('it warns through its logger, naming the imp, when the imp’s server closes a stream', async () => {
   const ctx = await setupTest();

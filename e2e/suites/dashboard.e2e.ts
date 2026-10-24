@@ -57,4 +57,4 @@ test('it logs in, creates, opens a console, sleeps and destroys an imp, and logs
   writeMetric('dashboardBrowserMs', Math.round(performance.now() - startedAt));
 
   expect(exitCode).toBe(0);
-}, 720_000);
+});
