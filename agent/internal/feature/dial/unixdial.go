@@ -39,8 +39,6 @@ type Dialer struct {
 
 	// cred, when set, replaces user: tests set credentials without
 	// /etc/passwd
-	// cred, when set, replaces user: tests set credentials without
-	// /etc/passwd
 	cred          *syscall.Credential
 	helperTimeout time.Duration
 }
