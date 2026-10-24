@@ -23,7 +23,6 @@ import { createImage } from '../src/platform/db/images';
 import type { ImageRecord } from '../src/platform/db/images';
 import { openDatabase } from '../src/platform/db/open-database';
 import type { ImpDatabase } from '../src/platform/db/open-database';
-import { getImpdLogger } from '../src/platform/process/get-impd-logger';
 import type { HostIdentity } from '../src/vm/sleep/vm-identity';
 import { buildSystemDrivePath, buildSystemDrivesDir } from '../src/vm/storage/data-layout';
 import type { ImpPaths } from '../src/vm/storage/data-layout';
@@ -165,19 +164,21 @@ export async function startTestImpd(
 
   const diskUsage = { usedBytes: 0, availableBytes: 1024 ** 4 };
 
-  stack.defer(
-    startImpdLogCapture((line) => {
-      logs.push(line);
-      options.onLog?.(line);
-    }),
-  );
+  const printTestLog = (line: string): void => {
+    logs.push(line);
+    options.onLog?.(line);
+  };
+
+  stack.defer(startImpdLogCapture(printTestLog));
 
   const rpcFailures: unknown[] = [];
 
+  // a request still in flight when its test ends fails late, so the line stays with this
+  // harness instead of reaching the capture of the next test
   const printRpcFailure = (failure: unknown): void => {
     rpcFailures.push(failure);
 
-    getImpdLogger('api').error('rpc failed: {failure}', { failure: Bun.inspect(failure) });
+    printTestLog(`ERROR impd.api rpc failed: ${Bun.inspect(failure)}`);
   };
 
   const createSystemDrive = (drive: string): HostIdentity => {
