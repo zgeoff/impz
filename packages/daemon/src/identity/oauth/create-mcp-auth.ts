@@ -9,6 +9,7 @@ import { isAPIError } from 'better-auth/api';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { buildConflictError, buildNotFoundError } from '../../platform/errors/impd-errors';
 import type { Caller } from '../../platform/principal/caller';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { mintSecret } from '../../platform/secrets/mint-secret';
 import type { Revocations } from '../auth/revocations';
 import type { TokenStore } from '../auth/token-store';
@@ -63,7 +64,6 @@ interface McpAuthDeps {
 
   // better-auth reads the wall clock, so every compare with its rows does too
   readonly now: () => number;
-  readonly log: (message: string) => void;
 }
 
 export function createMcpAuth(deps: Readonly<McpAuthDeps>): McpAuth {
@@ -142,7 +142,8 @@ export function createMcpAuth(deps: Readonly<McpAuthDeps>): McpAuth {
 
     for (const id of ids) {
       deps.revocations.revoke(id);
-      deps.log(`impd: oauth: grant ${id} revoked: ${why}`);
+
+      getImpdLogger('oauth').info('grant {id} revoked: {why}', { id, why });
     }
   };
 
@@ -206,7 +207,6 @@ export function createMcpAuth(deps: Readonly<McpAuthDeps>): McpAuth {
           origin,
           resource,
           now: deps.now,
-          log: deps.log,
           readApprover,
           removeGrantRows,
         });
@@ -366,9 +366,10 @@ export function createMcpAuth(deps: Readonly<McpAuthDeps>): McpAuth {
     approve: (code, approver, scope, imps) => {
       const approved = signIns.approve(code, approver, scope, imps);
 
-      deps.log(
-        `impd: oauth: a sign-in for ${approved.clientName} approved by token ${approver.name}`,
-      );
+      getImpdLogger('oauth').info('a sign-in for {clientName} approved by token {name}', {
+        clientName: approved.clientName,
+        name: approver.name,
+      });
     },
 
     handlers,

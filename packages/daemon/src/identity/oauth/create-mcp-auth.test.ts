@@ -1,4 +1,4 @@
-import { expect, mock, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import { ApprovalCodeSchema } from '@impz/api';
 import invariant from 'tiny-invariant';
 import { createPendingSignIn } from '../../../testing/identity/create-pending-sign-in';
@@ -23,15 +23,12 @@ async function setupTest() {
     isFileKey: () => false,
   });
 
-  const log = mock<(message: string) => void>();
-
   const auth = createMcpAuth({
     db: database.db,
     tokens,
     revocations,
     config: { origin: 'http://127.0.0.1:7171', host: '127.0.0.1:7171', port: 7171 },
     now: Date.now,
-    log,
   });
 
   return {
@@ -39,7 +36,6 @@ async function setupTest() {
     revocations,
     tokens,
     auth,
-    log,
 
     respond: makeOAuthResponder(auth),
   };
@@ -257,7 +253,6 @@ test('it ends a grant whose approving token no longer holds its scope', async ()
     revocations: ctx.revocations,
     config: { origin: 'http://127.0.0.1:7171', host: '127.0.0.1:7171', port: 7171 },
     now: Date.now,
-    log: () => {},
   });
 
   const access = await narrowed.resolveAccess(issued.access_token);
@@ -1227,7 +1222,6 @@ test('it signs a client in on a clock of impd’s own that is not the wall clock
     revocations: ctx.revocations,
     config: { origin: 'http://127.0.0.1:7171', host: '127.0.0.1:7171', port: 7171 },
     now: () => Date.UTC(2026, 0, 1),
-    log: () => {},
   });
 
   const client = await frozen.addClient('conn', ['https://client.example/callback']);
@@ -1262,7 +1256,6 @@ test('it gives no OAuth handlers while the route is off', async () => {
     revocations: ctx.revocations,
     config: null,
     now: Date.now,
-    log: () => {},
   });
 
   expect(off.handlers).toBeNull();

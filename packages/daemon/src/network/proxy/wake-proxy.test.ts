@@ -7,6 +7,7 @@ import { startStubCutStream } from '../../../testing/network/start-stub-cut-stre
 import { startStubHeaderEcho } from '../../../testing/network/start-stub-header-echo';
 import { startStubSilentOrigin } from '../../../testing/network/start-stub-silent-origin';
 import { buildStubClock } from '../../../testing/platform/build-stub-clock';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { removeImp, updateImpMove } from '../../platform/db/imps';
 import { PEER_HEADER, createForwardedPeers } from './forwarded-peers';
@@ -32,7 +33,6 @@ test('it ends overlapping listener syncs with no listener for an imp the databas
     config: ctx.config,
     db: ctx.db,
     imps: ctx.impd.imps,
-    log: () => {},
     peers: createForwardedPeers(Date.now),
     ports: { proxy: 0, slot: () => 0 },
   });
@@ -71,7 +71,6 @@ test('it listens on the proxy port and on the port base plus each imp’s slot b
     config: { ...ctx.config, proxyPort, portBase },
     db: ctx.db,
     imps: ctx.impd.imps,
-    log: () => {},
     peers: createForwardedPeers(Date.now),
   });
 
@@ -101,7 +100,6 @@ test('it stops the listener of an imp the database lost', async () => {
     config: ctx.config,
     db: ctx.db,
     imps: ctx.impd.imps,
-    log: () => {},
     peers: createForwardedPeers(Date.now),
     ports: { proxy: 0, slot: () => 0 },
   });
@@ -148,7 +146,6 @@ test('it keeps the dashboard session cookie from an imp over HTTP', async () => 
     config: ctx.config,
     db: ctx.db,
     imps: ctx.impd.imps,
-    log: () => {},
     peers: createForwardedPeers(Date.now),
     ports: { proxy: 0, slot: () => 0 },
   });
@@ -195,7 +192,6 @@ test('it keeps the dashboard session cookie from an imp over a WebSocket', async
     config: ctx.config,
     db: ctx.db,
     imps: ctx.impd.imps,
-    log: () => {},
     peers: createForwardedPeers(Date.now),
     ports: { proxy: 0, slot: () => 0 },
   });
@@ -240,7 +236,6 @@ test('it relays WebSocket messages both ways', async () => {
     config: ctx.config,
     db: ctx.db,
     imps: ctx.impd.imps,
-    log: () => {},
     peers: createForwardedPeers(Date.now),
     ports: { proxy: 0, slot: () => 0 },
   });
@@ -302,7 +297,6 @@ test.each([['/ui/'], ['/ui/assets/app.js'], ['/health'], ['/rpcx']])(
       config: { ...ctx.config, apiPort: api.port ?? 0 },
       db: ctx.db,
       imps: ctx.impd.imps,
-      log: () => {},
       peers: { register, take: () => null },
       ports: { proxy: 0, slot: () => 0 },
     });
@@ -353,7 +347,6 @@ test('it hands the API a peer handle for the client’s address on a path that r
     config: { ...ctx.config, apiPort: api.port ?? 0 },
     db: ctx.db,
     imps: ctx.impd.imps,
-    log: () => {},
     peers: { register, take: () => null },
     ports: { proxy: 0, slot: () => 0 },
   });
@@ -415,7 +408,6 @@ test('it passes the first line of a streamed API answer on while the API holds t
     config: { ...ctx.config, apiPort: api.port ?? 0 },
     db: ctx.db,
     imps: ctx.impd.imps,
-    log: () => {},
     peers: createForwardedPeers(Date.now),
     ports: { proxy: 0, slot: () => 0 },
   });
@@ -513,7 +505,6 @@ test('it passes on an API answer that comes after 400 s of fake time', async () 
     config: { ...ctx.config, apiPort: api.port ?? 0 },
     db: ctx.db,
     imps: ctx.impd.imps,
-    log: () => {},
     peers: createForwardedPeers(Date.now),
     ports: { proxy: 0, slot: () => 0 },
   });
@@ -585,7 +576,6 @@ test('it passes the rest of a streamed API answer on once the API sends it', asy
     config: { ...ctx.config, apiPort: api.port ?? 0 },
     db: ctx.db,
     imps: ctx.impd.imps,
-    log: () => {},
     peers: createForwardedPeers(Date.now),
     ports: { proxy: 0, slot: () => 0 },
   });
@@ -649,7 +639,6 @@ test.each([['box.tail1234.ts.net'], ['imp.example.com'], ['imp.tail1234.ts.net']
       config: { ...ctx.config, apiPort: api.port ?? 0 },
       db: ctx.db,
       imps: ctx.impd.imps,
-      log: () => {},
       peers: createForwardedPeers(Date.now),
       ports: { proxy: 0, slot: () => 0 },
     });
@@ -698,7 +687,6 @@ test('it passes tailscale serve’s headers on to the imp, with the session and 
     config: ctx.config,
     db: ctx.db,
     imps: ctx.impd.imps,
-    log: () => {},
     peers: createForwardedPeers(Date.now),
     ports: { proxy: 0, slot: () => 0 },
   });
@@ -755,7 +743,6 @@ test('it routes the Host-named imp on the proxy port', async () => {
     config: ctx.config,
     db: ctx.db,
     imps: ctx.impd.imps,
-    log: () => {},
     peers: createForwardedPeers(Date.now),
     ports: { proxy: 0, slot: () => 0 },
   });
@@ -782,7 +769,6 @@ test('it answers a Host that names no imp on the proxy port with a 404 that says
     config: ctx.config,
     db: ctx.db,
     imps: ctx.impd.imps,
-    log: () => {},
     peers: createForwardedPeers(Date.now),
     ports: { proxy: 0, slot: () => 0 },
   });
@@ -807,7 +793,6 @@ test('it answers an imp that does not exist with a 404 that names it', async () 
     config: ctx.config,
     db: ctx.db,
     imps: ctx.impd.imps,
-    log: () => {},
     peers: createForwardedPeers(Date.now),
     ports: { proxy: 0, slot: () => 0 },
   });
@@ -834,7 +819,6 @@ test('it answers an imp that cannot wake with a 503 that names the reason', asyn
     config: ctx.config,
     db: ctx.db,
     imps: ctx.impd.imps,
-    log: () => {},
     peers: createForwardedPeers(Date.now),
     ports: { proxy: 0, slot: () => 0 },
   });
@@ -865,7 +849,6 @@ test('it answers a public request for an imp that cannot wake with a 503 that na
     config: ctx.config,
     db: ctx.db,
     imps: ctx.impd.imps,
-    log: () => {},
     peers: createForwardedPeers(Date.now),
     ports: { proxy: 0, slot: () => 0 },
   });
@@ -903,7 +886,6 @@ test('it answers an unauthorized route with a 401 and its challenge', async () =
     config: ctx.config,
     db: ctx.db,
     imps: ctx.impd.imps,
-    log: () => {},
     peers: createForwardedPeers(Date.now),
     ports: { proxy: 0, slot: () => 0 },
   });
@@ -931,7 +913,6 @@ test('it answers a limited route with a 429 and its Retry-After', async () => {
     config: ctx.config,
     db: ctx.db,
     imps: ctx.impd.imps,
-    log: () => {},
     peers: createForwardedPeers(Date.now),
     ports: { proxy: 0, slot: () => 0 },
   });
@@ -965,15 +946,12 @@ test('it wakes a sleeping imp and says how long the wake took', async () => {
 
   ctx.stack.defer(() => upstream.stop(true));
 
-  const logs: string[] = [];
+  const logs = captureImpdLogs();
 
   const proxy = startWakeProxy({
     config: ctx.config,
     db: ctx.db,
     imps: ctx.impd.imps,
-    log: (message) => {
-      logs.push(message);
-    },
     peers: createForwardedPeers(Date.now),
     ports: { proxy: 0, slot: () => 0 },
   });
@@ -993,7 +971,7 @@ test('it wakes a sleeping imp and says how long the wake took', async () => {
   expect(response.headers.get('x-imp-wake-ms')).toMatch(/^\d+$/v);
 
   expect(logs).toContain(
-    `impd: proxy: web woke in ${String(response.headers.get('x-imp-wake-ms'))}ms for GET /a`,
+    `INFO impd.proxy web woke in ${String(response.headers.get('x-imp-wake-ms'))}ms for GET /a`,
   );
 });
 
@@ -1033,7 +1011,6 @@ test('it stops the request to the imp when the client goes away', async () => {
     config: ctx.config,
     db: ctx.db,
     imps: ctx.impd.imps,
-    log: () => {},
     peers: createForwardedPeers(Date.now),
     ports: { proxy: 0, slot: () => 0 },
   });
@@ -1090,7 +1067,7 @@ test('it logs one impd.proxy line that names the imp, and nothing unhandled, whe
 
   // an older Bun leaves the error's code out of a fetch error's message
   expect(stdout).toMatch(
-    /^WARNING impd\.proxy imp=web the upstream closed GET \/rpc\/records\/follow mid-stream: (?:ECONNRESET: )?The socket connection was closed unexpectedly\. For more information, pass `verbose: true` in the second argument to fetch\(\)\n\{"client":"ECONNRESET"\}\n$/v,
+    /^INFO impd\.proxy proxy on :\d+\nWARNING impd\.proxy imp=web the upstream closed GET \/rpc\/records\/follow mid-stream: (?:ECONNRESET: )?The socket connection was closed unexpectedly\. For more information, pass `verbose: true` in the second argument to fetch\(\)\n\{"client":"ECONNRESET"\}\n$/v,
   );
 
   expect(stderr).toBe('');
@@ -1108,7 +1085,6 @@ test('it warns through its logger, naming the imp, when the imp’s server close
     config: ctx.config,
     db: ctx.db,
     imps: ctx.impd.imps,
-    log: () => {},
     logger: { warning },
     peers: createForwardedPeers(Date.now),
     ports: { proxy: 0, slot: () => 0 },
@@ -1159,7 +1135,6 @@ test('it keeps serving an imp after the imp’s server closes a stream', async (
     config: ctx.config,
     db: ctx.db,
     imps: ctx.impd.imps,
-    log: () => {},
     peers: createForwardedPeers(Date.now),
     ports: { proxy: 0, slot: () => 0 },
   });
@@ -1208,7 +1183,6 @@ test('it answers a 502 that names the port when nothing answers on the imp’s H
     config: ctx.config,
     db: ctx.db,
     imps: ctx.impd.imps,
-    log: () => {},
     peers: createForwardedPeers(Date.now),
     ports: { proxy: 0, slot: () => 0 },
   });
@@ -1238,7 +1212,6 @@ test('it answers a 502 when the imp’s WebSocket cannot be reached', async () =
     config: ctx.config,
     db: ctx.db,
     imps: ctx.impd.imps,
-    log: () => {},
     peers: createForwardedPeers(Date.now),
     ports: { proxy: 0, slot: () => 0 },
   });
@@ -1289,7 +1262,6 @@ test('it answers a 502 when the imp’s WebSocket does not open in time', async 
     config: ctx.config,
     db: ctx.db,
     imps: ctx.impd.imps,
-    log: () => {},
     peers: createForwardedPeers(Date.now),
     ports: { proxy: 0, slot: () => 0 },
     upstreamSocketTimeoutMs: 50,
@@ -1342,15 +1314,12 @@ test('it warns once about a slot whose port another process holds', async () => 
 
   ctx.stack.defer(() => squatter.stop(true));
 
-  const logs: string[] = [];
+  const logs = captureImpdLogs();
 
   const proxy = startWakeProxy({
     config: ctx.config,
     db: ctx.db,
     imps: ctx.impd.imps,
-    log: (message) => {
-      logs.push(message);
-    },
     peers: createForwardedPeers(Date.now),
     ports: { proxy: 0, slot: () => squatter.port ?? 0 },
   });
@@ -1362,7 +1331,7 @@ test('it warns once about a slot whose port another process holds', async () => 
   await proxy.syncListeners();
 
   expect(logs.filter((line) => line.includes('cannot listen'))).toStrictEqual([
-    expect.toStartWith(`impd: proxy: cannot listen on :${String(squatter.port)} for first: `),
+    expect.toStartWith(`WARNING impd.proxy cannot listen on :${String(squatter.port)} for first: `),
   ]);
 });
 
@@ -1383,15 +1352,12 @@ test('it warns again about a slot that could not listen once a new imp holds it'
 
   const slotPorts = new Map([[first.slot, squatter.port ?? 0]]);
 
-  const logs: string[] = [];
+  const logs = captureImpdLogs();
 
   const proxy = startWakeProxy({
     config: ctx.config,
     db: ctx.db,
     imps: ctx.impd.imps,
-    log: (message) => {
-      logs.push(message);
-    },
     peers: createForwardedPeers(Date.now),
     ports: { proxy: 0, slot: (slot) => slotPorts.get(slot) ?? 0 },
   });
@@ -1407,8 +1373,10 @@ test('it warns again about a slot that could not listen once a new imp holds it'
   await proxy.syncListeners();
 
   expect(logs.filter((line) => line.includes('cannot listen'))).toStrictEqual([
-    expect.toStartWith(`impd: proxy: cannot listen on :${String(squatter.port)} for first: `),
-    expect.toStartWith(`impd: proxy: cannot listen on :${String(squatter.port)} for second: `),
+    expect.toStartWith(`WARNING impd.proxy cannot listen on :${String(squatter.port)} for first: `),
+    expect.toStartWith(
+      `WARNING impd.proxy cannot listen on :${String(squatter.port)} for second: `,
+    ),
   ]);
 });
 
@@ -1421,7 +1389,6 @@ test('it answers a request to a moving imp with a 503 and Retry-After', async ()
     config: ctx.config,
     db: ctx.db,
     imps: ctx.impd.imps,
-    log: () => {},
     peers: createForwardedPeers(Date.now),
     ports: { proxy: 0, slot: () => 0 },
   });

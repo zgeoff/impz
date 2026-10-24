@@ -4,6 +4,7 @@ import type { TailscaleStatus } from '../../host-net/net/tailscale-status';
 import { listPublicImpNames, readPublicImp } from '../../platform/db/exposure';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import type { WakeProxy } from '../proxy/wake-proxy';
 import { createAcmeIssuer } from './acme/acme-issuer';
 import { createCertStore } from './acme/cert-store';
@@ -21,14 +22,12 @@ interface BuildHttpsOptions {
   readonly readTailscale: (() => Promise<TailscaleStatus>) | null;
 
   readonly dnsToken: DnsToken | null;
-  readonly log: (message: string) => void;
 }
 
 export function wireHttpsService(options: BuildHttpsOptions): HttpsService {
   const config = options.config;
-  const log = options.log;
-  const store = createCertStore(options.dataDir, log);
-  const dns = createDnsProvider(config.dns, options.dnsToken, log);
+  const store = createCertStore(options.dataDir);
+  const dns = createDnsProvider(config.dns, options.dnsToken);
 
   const issue = createAcmeIssuer({
     directoryUrl: config.acmeDirectory,
@@ -36,7 +35,6 @@ export function wireHttpsService(options: BuildHttpsOptions): HttpsService {
     caPem: config.acmeCaFile === null ? null : readFileSync(config.acmeCaFile, 'utf8'),
     store,
     dns,
-    log,
   });
 
   const service = createHttpsService({
@@ -48,7 +46,6 @@ export function wireHttpsService(options: BuildHttpsOptions): HttpsService {
     readTailscale: options.readTailscale,
     readServePorts,
     now: Date.now,
-    log,
     listPublicImps: () => listPublicImpNames(options.db),
     readPublicImpByName: (name) => readPublicImp(options.db, name),
   });
@@ -63,7 +60,7 @@ export function wireHttpsService(options: BuildHttpsOptions): HttpsService {
     ...service,
     start: () => {
       if (options.dnsToken !== null) {
-        void checkDnsToken(options.dnsToken, log);
+        void checkDnsToken(options.dnsToken);
       }
 
       service.start();
@@ -76,12 +73,13 @@ export function wireHttpsService(options: BuildHttpsOptions): HttpsService {
   };
 }
 
-async function checkDnsToken(token: DnsToken, log: (message: string) => void): Promise<void> {
+async function checkDnsToken(token: DnsToken): Promise<void> {
   try {
     await token.read();
   } catch (error) {
-    log(
-      `impd: https: ${getErrorMessage(error)}; DNS records and certificates wait until it holds a token`,
+    getImpdLogger('https').warning(
+      '{error}; DNS records and certificates wait until it holds a token',
+      { error: getErrorMessage(error) },
     );
   }
 }

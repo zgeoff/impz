@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import type { SlotAddress } from '../../host-net/net/addressing';
 import { GATEWAY_IP6 } from '../../host-net/net/addressing6';
 import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import type { ImpPaths } from '../../vm/storage/data-layout';
 import type { ImpCgroup } from '../../vm/vmm/cpu-cgroups';
 import { TemplateRestoreError } from '../../vm/vmm/template-vm';
@@ -88,9 +89,14 @@ export async function startColdVm(
 
       context.templates?.reportRestored(template);
 
-      context.log(
-        `impd: ${imp.name}: restored boot template ${template.key.slice(0, 12)} as pid ${String(vm.pid)} ${formatTimings({ ...hostSteps, ...vm.timings })}${formatGuestSteps(vm.guestSteps)}`,
-      );
+      getImpdLogger('imps')
+        .with({ imp: imp.name })
+        .info('restored boot template {key} as pid {pid} {timings}{guestSteps}', {
+          key: template.key.slice(0, 12),
+          pid: String(vm.pid),
+          timings: formatTimings({ ...hostSteps, ...vm.timings }),
+          guestSteps: formatGuestSteps(vm.guestSteps),
+        });
 
       return vm;
     } catch (error) {
@@ -98,9 +104,12 @@ export async function startColdVm(
         await diskBytes;
       }
 
-      context.log(
-        `impd: ${imp.name}: boot template ${template.key.slice(0, 12)} failed, booting the kernel: ${getErrorMessage(error)}`,
-      );
+      getImpdLogger('imps')
+        .with({ imp: imp.name })
+        .warning('boot template {key} failed, booting the kernel: {error}', {
+          key: template.key.slice(0, 12),
+          error: getErrorMessage(error),
+        });
 
       const isTemplateFault = error instanceof TemplateRestoreError && error.isTemplateFault;
 
@@ -127,9 +136,13 @@ export async function startColdVm(
     jail: context.findJailUser(imp),
   });
 
-  context.log(
-    `impd: ${imp.name}: booted pid ${String(vm.pid)} ${formatTimings({ ...hostSteps, ...vm.timings })}${formatGuestSteps(vm.guestSteps)}`,
-  );
+  getImpdLogger('imps')
+    .with({ imp: imp.name })
+    .info('booted pid {pid} {timings}{guestSteps}', {
+      pid: String(vm.pid),
+      timings: formatTimings({ ...hostSteps, ...vm.timings }),
+      guestSteps: formatGuestSteps(vm.guestSteps),
+    });
 
   return vm;
 }

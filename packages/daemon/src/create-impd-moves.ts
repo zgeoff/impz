@@ -6,7 +6,6 @@ import type { ImpdDeps } from './impd-deps';
 import type { Imps } from './imps/imps/imp-service';
 import type { EgressService } from './network/egress/egress-service';
 import type { ApiAudit } from './platform/audit/api-audit';
-import { printLog } from './platform/process/print-log';
 import type { HostIdentity } from './vm/sleep/vm-identity';
 
 // a caller's commit hook hears each commit after impd's own hook, never in its place
@@ -50,6 +49,5 @@ export function createImpdMoves(
       deps.moves?.onCommitted?.(name);
     },
     now: deps.now ?? Date.now,
-    log: deps.log ?? printLog,
   });
 }

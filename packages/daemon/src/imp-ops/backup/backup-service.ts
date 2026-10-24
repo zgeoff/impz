@@ -23,8 +23,8 @@ import { ImpdError } from '../../platform/errors/impd-error';
 import { NOT_BACKED_UP_REASON } from '../../platform/errors/impd-errors';
 import { buildBackoffMs } from '../../platform/process/build-backoff-ms';
 import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { buildKeyedMutex } from '../../platform/process/keyed-mutex';
-import { printLog } from '../../platform/process/print-log';
 import { writeFileDurably } from '../../platform/process/write-file-durably';
 import { sendFreeze, sendThaw } from '../../vm/agent-client/agent-requests';
 import { BACKUP_TREE, buildBackupPaths } from '../../vm/storage/data-layout';
@@ -88,7 +88,6 @@ export interface BackupServiceDeps {
   readonly images: Pick<ImageService, 'withImagePublisher'>;
   readonly restic?: Restic;
   readonly freezer?: DiskFreezer;
-  readonly log?: (message: string) => void;
   readonly now?: () => Date;
   readonly storageGate: StorageGate;
   readonly diskBudget: Pick<DiskBudget, 'requireRoom' | 'withRoom'>;
@@ -110,7 +109,6 @@ interface ReadManifestOptions {
 }
 
 export function createBackupService(deps: BackupServiceDeps): BackupService {
-  const log = deps.log ?? printLog;
   const now = deps.now ?? (() => new Date());
   const freezer = deps.freezer ?? { freeze: sendFreeze, thaw: sendThaw };
   const storage = deps.storage;
@@ -118,7 +116,7 @@ export function createBackupService(deps: BackupServiceDeps): BackupService {
   const restic = deps.restic ?? createRestic({ config: deps.backup, cacheDir: paths.cache });
   const storageGate = deps.storageGate;
   const diskBudget = deps.diskBudget;
-  const restoreDeps = { ...deps, restic, paths, log, now };
+  const restoreDeps = { ...deps, restic, paths, now };
   const mutex = buildKeyedMutex();
   const runExclusive = <T>(task: () => Promise<T>) => mutex.runExclusive('backup', task);
   const retry = { failures: 0, lastFailureAt: 0, pruneLocks: 0 };
@@ -161,7 +159,9 @@ export function createBackupService(deps: BackupServiceDeps): BackupService {
     try {
       await freezer.freeze(vsock, FREEZE_TIMEOUT_MS);
     } catch (error) {
-      log(`impd: backup: ${imp.name}: no freeze, copied unsynced: ${getErrorMessage(error)}`);
+      getImpdLogger('backup')
+        .with({ imp: imp.name })
+        .warning('no freeze, copied unsynced: {error}', { error: getErrorMessage(error) });
 
       await storage.createBackupCopy(imp.id, runId, { isReusable: false });
 
@@ -172,9 +172,11 @@ export function createBackupService(deps: BackupServiceDeps): BackupService {
       await storage.createBackupCopy(imp.id, runId, { isReusable: false });
     } finally {
       await freezer.thaw(vsock).catch((error: unknown) => {
-        log(
-          `impd: backup: ${imp.name}: thaw failed (the agent thaws on its own): ${getErrorMessage(error)}`,
-        );
+        getImpdLogger('backup')
+          .with({ imp: imp.name })
+          .warning('thaw failed (the agent thaws on its own): {error}', {
+            error: getErrorMessage(error),
+          });
       });
     }
 
@@ -305,7 +307,9 @@ export function createBackupService(deps: BackupServiceDeps): BackupService {
       } catch (error) {
         skipped.push({ name: imp.name, reason: getErrorMessage(error) });
 
-        log(`impd: backup: ${imp.name}: left out: ${getErrorMessage(error)}`);
+        getImpdLogger('backup')
+          .with({ imp: imp.name })
+          .warning('left out: {error}', { error: getErrorMessage(error) });
       }
     }
 
@@ -396,7 +400,11 @@ export function createBackupService(deps: BackupServiceDeps): BackupService {
       const message = getErrorMessage(error);
 
       writeState({ lastCheckAt: now(), lastCheckError: message });
-      log(`impd: backup: CHECK FAILED, the repository may be damaged: ${message}`);
+
+      getImpdLogger('backup').error('CHECK FAILED, the repository may be damaged: {message}', {
+        message,
+      });
+
       throw error;
     }
   };
@@ -412,7 +420,7 @@ export function createBackupService(deps: BackupServiceDeps): BackupService {
     } catch (error) {
       retry.pruneLocks = isResticLocked(error) ? retry.pruneLocks + 1 : 0;
 
-      log(`impd: backup: PRUNE FAILED: ${getErrorMessage(error)}`);
+      getImpdLogger('backup').error('PRUNE FAILED: {error}', { error: getErrorMessage(error) });
     }
   };
 
@@ -482,8 +490,15 @@ export function createBackupService(deps: BackupServiceDeps): BackupService {
 
           const skipped = run.skipped.length > 0 ? `, ${String(run.skipped.length)} left out` : '';
 
-          log(
-            `impd: backup: ${run.snapshotId}: ${String(run.imps.length)} imps${skipped}, ${String(run.dataAddedBytes)} bytes added in ${String(run.durationMs)}ms`,
+          getImpdLogger('backup').info(
+            '{snapshotId}: {length} imps{skipped}, {dataAddedBytes} bytes added in {durationMs}ms',
+            {
+              snapshotId: run.snapshotId,
+              length: String(run.imps.length),
+              skipped,
+              dataAddedBytes: String(run.dataAddedBytes),
+              durationMs: String(run.durationMs),
+            },
           );
         } finally {
           await runMaintenance();

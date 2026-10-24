@@ -16,6 +16,7 @@ import { ImpdError, isImpdError } from '../../platform/errors/impd-error';
 import { buildInvalidStateError, buildNotFoundError } from '../../platform/errors/impd-errors';
 import type { StartTimer } from '../../platform/process/clock';
 import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import type { MoveMode, StorageBackend } from '../../vm/storage/storage-backend';
 import type { ImpGrants } from '../imp-grants';
 import type { ImpOpsConfig } from '../imp-ops-config';
@@ -73,7 +74,6 @@ export interface MoveSenderDeps {
   readonly startPeerDeadline?: StartTimer;
   readonly partBytes?: number;
   readonly now: () => number;
-  readonly log: (message: string) => void;
 }
 
 interface SendTask {
@@ -102,7 +102,9 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
 
   const runCommit = async (imp: ImpRecord, peer: string, ticket: string): Promise<void> => {
     await deps.releaseName().catch((error: unknown) => {
-      deps.log(`impd: move: ${imp.name}: tailnet name not released yet: ${getErrorMessage(error)}`);
+      getImpdLogger('move')
+        .with({ imp: imp.name })
+        .warning('tailnet name not released yet: {error}', { error: getErrorMessage(error) });
     });
 
     const response = await sendToPeer(deps, { peer, path: MOVE_PATHS.commit, ticket });
@@ -124,14 +126,18 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
 
     await removeMoveSend(deps.db, imp.id);
 
-    deps.log(`impd: move: ${imp.name}: committed on ${peer}; the copy here is gone`);
+    getImpdLogger('move')
+      .with({ imp: imp.name })
+      .info('committed on {peer}; the copy here is gone', { peer });
   };
 
   const runCommitAfterRestart = async (imp: ImpRecord, peer: string, ticket: string) => {
     try {
       await runCommit(imp, peer, ticket);
     } catch (error) {
-      deps.log(`impd: move: ${imp.name}: commit after restart: ${getErrorMessage(error)}`);
+      getImpdLogger('move')
+        .with({ imp: imp.name })
+        .warning('commit after restart: {error}', { error: getErrorMessage(error) });
     }
   };
 
@@ -158,7 +164,7 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
 
       await updateMoveSend(deps.db, imp.id, { error: message });
 
-      deps.log(`impd: move: ${imp.name}: ${message}`);
+      getImpdLogger('move').with({ imp: imp.name }).info('{message}', { message });
 
       return false;
     }
@@ -172,7 +178,9 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
     try {
       await deps.imps.startImp(imp.name);
     } catch (error) {
-      deps.log(`impd: move: ${imp.name}: could not start it again: ${getErrorMessage(error)}`);
+      getImpdLogger('move')
+        .with({ imp: imp.name })
+        .warning('could not start it again: {error}', { error: getErrorMessage(error) });
     }
   };
 
@@ -204,7 +212,7 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
       } catch (error) {
         const message = getErrorMessage(error);
 
-        deps.log(`impd: move: ${imp.name}: ${message}`);
+        getImpdLogger('move').with({ imp: imp.name }).info('{message}', { message });
 
         const fresh = await readImpById(deps.db, imp.id);
 
@@ -309,9 +317,9 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
 
       if (halted.delete(imp.id)) {
         await deps.imps.requireRunningImp(stopped).catch((startError: unknown) => {
-          deps.log(
-            `impd: move: ${imp.name}: could not start it again: ${getErrorMessage(startError)}`,
-          );
+          getImpdLogger('move')
+            .with({ imp: imp.name })
+            .warning('could not start it again: {error}', { error: getErrorMessage(startError) });
         });
       }
 
@@ -342,7 +350,9 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
           const isUndone = await resetSend(imp, row?.peer_url ?? null, row?.ticket ?? null);
 
           if (isUndone) {
-            deps.log(`impd: move: ${imp.name}: a send cut short by a restart was undone`);
+            getImpdLogger('move')
+              .with({ imp: imp.name })
+              .info('a send cut short by a restart was undone');
           }
         }
 
@@ -356,7 +366,9 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
         }
       }
     } catch (error) {
-      deps.log(`impd: move: recovery after a restart failed: ${getErrorMessage(error)}`);
+      getImpdLogger('move').warning('recovery after a restart failed: {error}', {
+        error: getErrorMessage(error),
+      });
     }
   };
 

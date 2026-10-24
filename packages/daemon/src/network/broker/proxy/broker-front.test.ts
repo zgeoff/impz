@@ -4,6 +4,7 @@ import type { EgressMode } from '@impz/api';
 import { claimFreePorts } from '@impz/test-utils/claim-free-ports';
 import { startStubBrokerGuestSocket } from '../../../../testing/network/start-stub-broker-guest-socket';
 import { startStubBrokerReplyTarget } from '../../../../testing/network/start-stub-broker-reply-target';
+import { captureImpdLogs } from '../../../../testing/platform/capture-impd-logs';
 import { parseSubnet } from '../../../host-net/net/addressing';
 import { buildRangeMatcher } from '../../../host-net/net/range-matcher';
 import { REFUSED_RANGES4 } from '../../../host-net/net/ranges';
@@ -31,7 +32,6 @@ test('it turns away an imp past its connection cap with 503', async () => {
     isGranted: () => Promise.resolve(false),
     openTerminator: () => Promise.reject(new Error('no terminator in this test')),
     resolveTunnelTarget: () => Promise.reject(new Error('no tunnel in this test')),
-    log: () => {},
     maxConnectionsPerImp: 1,
   });
 
@@ -64,7 +64,6 @@ test('it cuts off a client whose time to finish its head runs out mid-head', asy
     isGranted: () => Promise.resolve(false),
     openTerminator: () => Promise.reject(new Error('no terminator in this test')),
     resolveTunnelTarget: () => Promise.reject(new Error('no tunnel in this test')),
-    log: () => {},
 
     startHeadDeadline: () => {
       reading.resolve();
@@ -99,7 +98,6 @@ test('it cuts off a client whose time is up before its head is read', async () =
     isGranted: () => Promise.resolve(false),
     openTerminator: () => Promise.reject(new Error('no terminator in this test')),
     resolveTunnelTarget: () => Promise.reject(new Error('no tunnel in this test')),
-    log: () => {},
     startHeadDeadline: () => AbortSignal.abort(),
   });
 
@@ -130,7 +128,6 @@ test('it gives a client 10 seconds to send its head', async () => {
     isGranted: () => Promise.resolve(false),
     openTerminator: () => Promise.reject(new Error('no terminator in this test')),
     resolveTunnelTarget: () => Promise.reject(new Error('no tunnel in this test')),
-    log: () => {},
     startHeadDeadline,
   });
 
@@ -159,7 +156,6 @@ test('it cuts off a head past the size limit', async () => {
     isGranted: () => Promise.resolve(false),
     openTerminator: () => Promise.reject(new Error('no terminator in this test')),
     resolveTunnelTarget: () => Promise.reject(new Error('no tunnel in this test')),
-    log: () => {},
   });
 
   ctx.stack.defer(() => front.stop());
@@ -184,7 +180,6 @@ test('it closes a connection from a slot with no imp', async () => {
     isGranted: () => Promise.resolve(false),
     openTerminator: () => Promise.reject(new Error('no terminator in this test')),
     resolveTunnelTarget: () => Promise.reject(new Error('no tunnel in this test')),
-    log: () => {},
   });
 
   ctx.stack.defer(() => front.stop());
@@ -214,7 +209,6 @@ test('it closes a connection whose slot changed imps while its head came', async
     isGranted: () => Promise.resolve(false),
     openTerminator: () => Promise.reject(new Error('no terminator in this test')),
     resolveTunnelTarget: () => Promise.resolve('127.0.0.1'),
-    log: () => {},
   });
 
   ctx.stack.defer(() => front.stop());
@@ -246,7 +240,6 @@ test('it refuses a tunnel to a target the check refuses with a 403 that says why
         isRefused: buildRangeMatcher(REFUSED_RANGES4),
         hasIPv6: false,
       }),
-    log: () => {},
   });
 
   ctx.stack.defer(() => front.stop());
@@ -277,7 +270,6 @@ test("it resolves a public imp's tunnel under the public policy", async () => {
     isGranted: () => Promise.resolve(false),
     openTerminator: () => Promise.reject(new Error('no terminator in this test')),
     resolveTunnelTarget: resolve,
-    log: () => {},
   });
 
   ctx.stack.defer(() => front.stop());
@@ -311,7 +303,6 @@ test('it answers 502 when resolving the target fails for another reason', async 
         isRefused: () => false,
         hasIPv6: false,
       }),
-    log: () => {},
   });
 
   ctx.stack.defer(() => front.stop());
@@ -341,7 +332,6 @@ test('it answers 502 when the tunnel target refuses the connection', async () =>
     openTerminator: () => Promise.reject(new Error('no terminator in this test')),
     resolveTunnelTarget: () => Promise.resolve('127.0.0.1'),
     dialTunnel: (address) => createConnection({ host: address, port: deadPort }),
-    log: () => {},
   });
 
   ctx.stack.defer(() => front.stop());
@@ -374,7 +364,6 @@ test('it tunnels a granted host on a port other than 443 without a grant lookup'
     openTerminator: () => Promise.reject(new Error('no terminator in this test')),
     resolveTunnelTarget: () => Promise.resolve('127.0.0.1'),
     dialTunnel: (address) => createConnection({ host: address, port: target.port }),
-    log: () => {},
   });
 
   ctx.stack.defer(() => front.stop());
@@ -400,7 +389,7 @@ test('it tunnels a granted host on a port other than 443 without a grant lookup'
 
 test('it logs a failure of the connection and closes it', async () => {
   const ctx = setupTest();
-  const logs: string[] = [];
+  const logs = captureImpdLogs();
 
   const front = await startBrokerFront(0, {
     subnet: parseSubnet('127.0.0.0/16'),
@@ -410,9 +399,6 @@ test('it logs a failure of the connection and closes it', async () => {
     isGranted: () => Promise.resolve(true),
     openTerminator: () => Promise.reject(new Error('the terminator would not start')),
     resolveTunnelTarget: () => Promise.reject(new Error('no tunnel in this test')),
-    log: (message) => {
-      logs.push(message);
-    },
   });
 
   ctx.stack.defer(() => front.stop());
@@ -427,7 +413,7 @@ test('it logs a failure of the connection and closes it', async () => {
   const reply = await guest.reply;
 
   expect(reply).toBe('');
-  expect(logs).toStrictEqual(['impd: broker: the terminator would not start']);
+  expect(logs).toStrictEqual(['WARNING impd.broker the terminator would not start']);
 });
 
 test('it records a refused audit row for an imp past its connection cap', async () => {
@@ -442,7 +428,6 @@ test('it records a refused audit row for an imp past its connection cap', async 
     isGranted: () => Promise.resolve(false),
     openTerminator: () => Promise.reject(new Error('no terminator in this test')),
     resolveTunnelTarget: () => Promise.reject(new Error('no tunnel in this test')),
-    log: () => {},
     maxConnectionsPerImp: 1,
   });
 
@@ -485,7 +470,6 @@ test('it records a refused audit row with the method of a head that is not a CON
     isGranted: () => Promise.resolve(false),
     openTerminator: () => Promise.reject(new Error('no terminator in this test')),
     resolveTunnelTarget: () => Promise.reject(new Error('no tunnel in this test')),
-    log: () => {},
   });
 
   ctx.stack.defer(() => front.stop());
@@ -529,7 +513,6 @@ test('it cuts the host of a refused audit row at 253 characters', async () => {
     isGranted: () => Promise.resolve(false),
     openTerminator: () => Promise.reject(new Error('no terminator in this test')),
     resolveTunnelTarget: () => Promise.reject(new Error('no tunnel in this test')),
-    log: () => {},
   });
 
   ctx.stack.defer(() => front.stop());
@@ -560,7 +543,6 @@ test('it records a refused audit row for a tunnel the egress policy does not all
     isGranted: () => Promise.resolve(false),
     openTerminator: () => Promise.reject(new Error('no terminator in this test')),
     resolveTunnelTarget: () => Promise.reject(new Error('no tunnel in this test')),
-    log: () => {},
   });
 
   ctx.stack.defer(() => front.stop());
@@ -608,7 +590,6 @@ test('it records a refused audit row for a tunnel to an address the check refuse
         isRefused: buildRangeMatcher(REFUSED_RANGES4),
         hasIPv6: false,
       }),
-    log: () => {},
   });
 
   ctx.stack.defer(() => front.stop());
@@ -656,7 +637,6 @@ test('it records no audit row when resolving the target fails', async () => {
         isRefused: () => false,
         hasIPv6: false,
       }),
-    log: () => {},
   });
 
   ctx.stack.defer(() => front.stop());
@@ -684,7 +664,6 @@ test('it records no audit row for a connection from a slot with no imp', async (
     isGranted: () => Promise.resolve(false),
     openTerminator: () => Promise.reject(new Error('no terminator in this test')),
     resolveTunnelTarget: () => Promise.reject(new Error('no tunnel in this test')),
-    log: () => {},
   });
 
   ctx.stack.defer(() => front.stop());

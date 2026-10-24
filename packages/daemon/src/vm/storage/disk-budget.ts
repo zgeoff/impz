@@ -1,5 +1,6 @@
 import type { StartTimer } from '../../platform/process/clock';
 import type { DiskRoom } from '../../platform/process/disk-room';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { buildKeyedMutex } from '../../platform/process/keyed-mutex';
 import { startRealTimer } from '../../platform/process/start-real-timer';
 import { DiskFullError } from './disk-full-error';
@@ -33,7 +34,6 @@ interface DiskBudgetDeps {
   // commits, about 5 s after the write
   readonly releaseDelayMs?: number;
   readonly startTimer?: StartTimer;
-  readonly log: (message: string) => void;
 }
 
 export function createDiskBudget(deps: DiskBudgetDeps): DiskBudget {
@@ -59,11 +59,17 @@ export function createDiskBudget(deps: DiskBudgetDeps): DiskBudget {
     if (isLow ? !ledger.wasLow : ledger.wasLow && isEpisodeOver) {
       ledger.wasLow = isLow;
 
-      const message = isLow
-        ? `impd: warning: low on disk: ${String(Math.round(free / GIB))} GiB free, the reserve is ${String(Math.round(reserveBytes / GIB))} GiB`
-        : 'impd: disk space is back above twice the reserve';
-
-      deps.log(message);
+      if (isLow) {
+        getImpdLogger('disk').warning(
+          'low on disk: {freeGib} GiB free, the reserve is {reserveGib} GiB',
+          {
+            freeGib: String(Math.round(free / GIB)),
+            reserveGib: String(Math.round(reserveBytes / GIB)),
+          },
+        );
+      } else {
+        getImpdLogger('disk').info('disk space is back above twice the reserve');
+      }
     }
 
     return { ...usage, pendingBytes: ledger.pendingBytes, reserveBytes, isLow };

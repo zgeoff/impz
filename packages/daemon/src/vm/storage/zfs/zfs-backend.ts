@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, rmdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import { buildKeyedMutex } from '../../../platform/process/keyed-mutex';
 import { readMounts as readHostMounts } from '../../../platform/process/mounts';
-import { printLog } from '../../../platform/process/print-log';
 import { runCommand } from '../../../platform/process/run-command';
 import type { CommandRunner } from '../../../platform/process/run-command';
 import { createStreamRunner } from '../../../platform/process/run-stream';
@@ -40,7 +40,6 @@ export interface ZfsBackendDeps {
   readonly streams?: StreamRunner;
   readonly readMounts?: () => string;
   readonly readModuleVersion?: () => string | null;
-  readonly log?: (message: string) => void;
   readonly isUiomoveBugAllowed?: boolean;
   readonly isKernelOopsed?: () => boolean;
 }
@@ -55,7 +54,6 @@ export function createZfsBackend(deps: ZfsBackendDeps): ZfsBackend {
 
   const heldSnapshots = new Set<string>();
 
-  const log = deps.log ?? printLog;
   const readMounts = deps.readMounts ?? readHostMounts;
   const readModuleVersion = deps.readModuleVersion ?? readZfsModuleVersion;
   const isKernelOopsed = deps.isKernelOopsed ?? (() => false);
@@ -123,7 +121,7 @@ export function createZfsBackend(deps: ZfsBackendDeps): ZfsBackend {
 
     await zfs.rename(name, retired);
 
-    log(`impd: zfs: retired ${name} as ${retired}`);
+    getImpdLogger('zfs').info('retired {name} as {retired}', { name, retired });
   };
 
   const reclaim = createZfsReclaim({
@@ -131,7 +129,6 @@ export function createZfsBackend(deps: ZfsBackendDeps): ZfsBackend {
     datasets,
     runSerial,
     listAll,
-    log,
     isKernelOopsed,
   });
 
@@ -188,7 +185,10 @@ export function createZfsBackend(deps: ZfsBackendDeps): ZfsBackend {
       if (staged.name.startsWith(buildRestoreName('')) && !names.has(buildDiskName(impId))) {
         await zfs.rename(staged.name, buildDiskName(impId));
 
-        log(`impd: zfs: finished the restore of ${impId} that a crash cut short`);
+        getImpdLogger('zfs').info('finished the restore of {impId} that a crash cut short', {
+          impId,
+        });
+
         continue;
       }
 
@@ -200,7 +200,10 @@ export function createZfsBackend(deps: ZfsBackendDeps): ZfsBackend {
 
       await zfs.destroyRecursive(staged.name);
 
-      log(`impd: zfs: destroyed ${staged.name}, a clone or build a crash cut short`);
+      getImpdLogger('zfs').info('destroyed {name}, a clone or build a crash cut short', {
+        name: staged.name,
+      });
+
       removeMountDir(buildStagingDir(staged.name));
     }
   };
@@ -275,7 +278,6 @@ export function createZfsBackend(deps: ZfsBackendDeps): ZfsBackend {
         await checkZfsVersions({
           zfs,
           readModuleVersion,
-          log,
           isUiomoveBugAllowed: deps.isUiomoveBugAllowed,
           host,
         });
@@ -292,7 +294,7 @@ export function createZfsBackend(deps: ZfsBackendDeps): ZfsBackend {
 
         const swept = await sweep.removeLeftovers(live, { isDryRun: false, isOrphans: false });
 
-        printSweep(log, 'impd: storage', swept, 'each');
+        printSweep(getImpdLogger('storage'), swept, 'each');
 
         await reclaim.runReclaim(reclaim.runReclaimStep);
 
@@ -454,7 +456,6 @@ export function createZfsBackend(deps: ZfsBackendDeps): ZfsBackend {
       runSerial,
       runSnapshot,
       listAll,
-      log,
       setupMount,
       removeMount,
       removeDataset,
@@ -471,7 +472,6 @@ export function createZfsBackend(deps: ZfsBackendDeps): ZfsBackend {
       runSerial,
       runSnapshot,
       listAll,
-      log,
       readMounts,
       setupMount,
       removeMount,

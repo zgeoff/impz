@@ -4,15 +4,15 @@ import { formatZfsTimings } from './format-zfs-timings.ts';
 test('it summarizes the timings in impd’s log and the suites’ metrics', () => {
   expect(
     formatZfsTimings({
-      impdLog: `impd: imp-a: checkpoint cp-1a in 120ms
-impd: imp-a: checkpoint cp-2b in 80ms
-impd: imp-b: checkpoint cp-3c in 300ms
-impd: imp-a: restored cp-1a in 45ms
-impd: imp-a: disk cloned in 7ms
-impd: imp-a: asleep in 900ms
-impd: imp-a: mem file 512 MiB on disk
-impd: imp-b: mem file 256 MiB on disk
-impd: imp-c: mem file 512 MiB on disk
+      impdLog: `INFO impd.imps imp=imp-a checkpoint cp-1a in 120ms
+INFO impd.imps imp=imp-a checkpoint cp-2b in 80ms
+INFO impd.imps imp=imp-b checkpoint cp-3c in 300ms
+INFO impd.imps imp=imp-a restored cp-1a in 45ms
+INFO impd.imps imp=imp-a disk cloned in 7ms
+INFO impd.imps imp=imp-a asleep in 900ms
+INFO impd.imps imp=imp-a mem file 512 MiB on disk
+INFO impd.imps imp=imp-b mem file 256 MiB on disk
+INFO impd.imps imp=imp-c mem file 512 MiB on disk
 `,
       e2eLog: `checkpoints suite
   checkpointMs: 130

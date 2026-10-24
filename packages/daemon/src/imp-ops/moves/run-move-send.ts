@@ -49,7 +49,6 @@ interface MoveSendDeps {
   readonly startPeerDeadline?: StartTimer;
   readonly partBytes?: number;
   readonly now: () => number;
-  readonly log: (message: string) => void;
 }
 
 export interface SendTarget {
@@ -175,7 +174,7 @@ export async function runMoveSend(
       deps.partBytes,
     );
   } finally {
-    await removeMoveParts(deps, opened);
+    await removeMoveParts(opened);
   }
 
   const response = await sendToPeer(deps, {

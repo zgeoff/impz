@@ -16,7 +16,6 @@ import type { WakeProxy } from './network/proxy/wake-proxy';
 import type { TailnetNames } from './network/tailnet-names/tailnet-names';
 import type { ApiAudit } from './platform/audit/api-audit';
 import { getImpdLogger } from './platform/process/get-impd-logger';
-import { printLog } from './platform/process/print-log';
 import type { ImpdStopParts } from './stop-impd';
 import { buildApiListenOptions } from './surface/api-listen-options';
 import { startPublicListener } from './surface/oauth/public-listener';
@@ -50,7 +49,6 @@ export async function startImpdListeners(
 ) {
   const runStep = startup.runStep;
   const plan = startup.plan;
-  const log = deps.log ?? printLog;
   const db = deps.db;
 
   const api = runStep('api', () => {
@@ -92,10 +90,11 @@ export async function startImpdListeners(
   const publicMcp = runStep('public-mcp', () =>
     config.publicMcp === null
       ? null
-      : startPublicListener(
-          { config: config.publicMcp, oauth: parts.access.oauth, mcp: parts.api.publicMcp },
-          log,
-        ),
+      : startPublicListener({
+          config: config.publicMcp,
+          oauth: parts.access.oauth,
+          mcp: parts.api.publicMcp,
+        }),
   );
 
   plan.publicMcp = publicMcp;
@@ -105,7 +104,6 @@ export async function startImpdListeners(
       config,
       db,
       imps: parts.imps,
-      log,
       peers: parts.peers,
       ...(deps.proxyPorts !== undefined && { ports: deps.proxyPorts }),
     });
@@ -130,7 +128,6 @@ export async function startImpdListeners(
       proxy,
       readTailscale: config.tailscaleEnabled ? parts.readTailscale : null,
       dnsToken: parts.dnsToken,
-      log,
     });
 
     parts.publicRecords.attach(service);
@@ -161,7 +158,6 @@ export async function startImpdListeners(
       authorizedKeys: parts.authorizedKeys,
       tokens: parts.access.tokens,
       revocations: parts.access.revocations,
-      log,
       audit: parts.audit,
       now: Date.now,
     }),

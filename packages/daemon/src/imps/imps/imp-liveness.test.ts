@@ -201,7 +201,7 @@ test('it logs that an imp a kernel oops killed stays off its disk until the host
   await ctx.imps.readImp('dev');
 
   expect(ctx.logs).toContain(
-    'impd: dev: a kernel oops killed firecracker; marked it stopped; it stays off its disk until the host reboots',
+    'INFO impd.imps imp=dev a kernel oops killed firecracker; marked it stopped; it stays off its disk until the host reboots',
   );
 });
 
@@ -463,7 +463,7 @@ test('it logs at start that the host needs a reboot when the kernel has oopsed',
   await ctx.imps.reconcileImps();
 
   expect(ctx.logs).toContain(
-    'impd: the kernel oopsed since the host booted (taint flag D); the host needs a reboot',
+    'INFO impd.imps the kernel oopsed since the host booted (taint flag D); the host needs a reboot',
   );
 });
 
@@ -569,7 +569,10 @@ test('it clears the hold of an imp a kernel oops killed when impd starts with fl
   const record = await readImpByName(ctx.db, 'dev');
 
   expect(record).toMatchObject({ error: null, hasOopsHold: false });
-  expect(ctx.logs).toContain('impd: dev: the host rebooted since a kernel oops held its disk');
+
+  expect(ctx.logs).toContain(
+    'INFO impd.imps imp=dev the host rebooted since a kernel oops held its disk',
+  );
 });
 
 test('it records the boot a kernel oops held the disk of an imp in', async () => {
@@ -620,7 +623,10 @@ test('it clears the hold of an earlier boot when an oops set flag D before impd 
   const record = await readImpByName(ctx.db, 'dev');
 
   expect(record?.error).toBeNull();
-  expect(ctx.logs).toContain('impd: dev: the host rebooted since a kernel oops held its disk');
+
+  expect(ctx.logs).toContain(
+    'INFO impd.imps imp=dev the host rebooted since a kernel oops held its disk',
+  );
 });
 
 test('it starts an imp held in an earlier boot when an oops set flag D before impd started', async () => {
@@ -879,6 +885,6 @@ test('it logs at start that held imps stay held when it cannot read the taint fl
   await ctx.imps.reconcileImps();
 
   expect(ctx.logs).toContain(
-    'impd: cannot read the kernel taint flag; imps a kernel oops held stay held',
+    'WARNING impd.imps cannot read the kernel taint flag; imps a kernel oops held stay held',
   );
 });

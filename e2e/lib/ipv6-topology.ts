@@ -40,7 +40,7 @@ export function buildGuestIpv6(network: string, ipv4: string): string {
 }
 
 export function parseUlaNetwork(log: string): string {
-  const found = /impd: ipv6: (?<network>fd[\da-f:]+::)\/64, NAT66/v.exec(log)?.groups?.['network'];
+  const found = /impd\.ipv6 (?<network>fd[\da-f:]+::)\/64, NAT66/v.exec(log)?.groups?.['network'];
 
   if (found === undefined) {
     throw new TypeError(`impd logged no NAT66 prefix:\n${log}`);

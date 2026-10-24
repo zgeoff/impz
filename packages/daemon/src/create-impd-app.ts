@@ -10,7 +10,6 @@ import type { Broker } from './network/broker/broker-service';
 import type { EgressService } from './network/egress/egress-service';
 import { createExposureService } from './network/https/exposure-service';
 import { writeDatabaseCopy } from './platform/db/database-copy';
-import { printLog } from './platform/process/print-log';
 import { startRealTimer } from './platform/process/start-real-timer';
 import { createApp } from './surface/create-app';
 import type { AppDeps } from './surface/create-app';
@@ -92,7 +91,6 @@ export function createImpdApp(
     checkDnsToken: parts.checkDnsToken,
     isReady: parts.isReady,
     now,
-    log: deps.log ?? printLog,
     ...(deps.logRpcFailure !== undefined && { logRpcFailure: deps.logRpcFailure }),
     audit: parts.services.audit,
     buildContexts: createBuildContextRoute({

@@ -1,10 +1,10 @@
+import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import { parseZfsRelease } from './zfs-commands';
 import type { ZfsCommands } from './zfs-commands';
 
 interface ZfsVersionContext {
   readonly zfs: ZfsCommands;
   readonly readModuleVersion: () => string | null;
-  readonly log: (message: string) => void;
   readonly isUiomoveBugAllowed: boolean | undefined;
   readonly host: { warnings: string[] };
 }
@@ -29,7 +29,10 @@ export async function checkZfsVersions(ctx: ZfsVersionContext): Promise<void> {
 
   // Every zfs command impd runs exists in ZFS 2.2 and later, so a minor skew only warns.
   if (userRelease.minor !== kernelRelease.minor) {
-    ctx.log(`impd: zfs: warning: the userland is ${userland} but the kernel module is ${kernel}`);
+    getImpdLogger('zfs').warning('the userland is {userland} but the kernel module is {kernel}', {
+      userland,
+      kernel,
+    });
   }
 
   // The kernel oops this bug causes holds a disk until a reboot, so a host needs the fixed module.
@@ -43,7 +46,7 @@ export async function checkZfsVersions(ctx: ZfsVersionContext): Promise<void> {
   ctx.host.warnings = hasUiomoveBug(kernel) ? [formatUiomoveWarning(kernel)] : [];
 
   for (const warning of ctx.host.warnings) {
-    ctx.log(`impd: zfs: warning: ${warning}`);
+    getImpdLogger('zfs').warning('{warning}', { warning });
   }
 }
 

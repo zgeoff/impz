@@ -25,5 +25,4 @@ export interface SshConnectionContext {
   readonly awake: Promise<void>;
   readonly sshEnv: readonly string[];
   readonly agent: AgentForwarding;
-  readonly log: (message: string) => void;
 }

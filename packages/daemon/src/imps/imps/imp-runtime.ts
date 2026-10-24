@@ -9,6 +9,7 @@ import {
   isMovingError,
 } from '../../platform/errors/impd-errors';
 import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import type { AgentFeature } from '../../vm/agent-client/agent-outdated';
 import { sendActivity, sendPing } from '../../vm/agent-client/agent-requests';
 import { openDialStream } from '../../vm/agent-client/dial-stream';
@@ -285,7 +286,9 @@ export function createImpRuntime(parts: ImpRuntimeParts): ImpRuntime {
         return 'diskFull';
       }
 
-      context.log(`impd: ${imp.name}: could not sleep: ${getErrorMessage(error)}`);
+      getImpdLogger('imps')
+        .with({ imp: imp.name })
+        .warning('could not sleep: {error}', { error: getErrorMessage(error) });
 
       return 'failed';
     } finally {

@@ -3,7 +3,6 @@ import type { ImpdDeps } from './impd-deps';
 import type { Builders } from './imps/images/builders/builder-imps';
 import { createImageService } from './imps/images/image-service';
 import type { ImageService } from './imps/images/image-service';
-import { printLog } from './platform/process/print-log';
 import { createDiskBudget } from './vm/storage/disk-budget';
 import type { DiskBudget } from './vm/storage/disk-budget';
 import { createDiskUsageCache } from './vm/storage/disk-usage-cache';
@@ -20,7 +19,6 @@ export interface ImpdStorage {
 }
 
 export function createImpdStorage(config: Config, deps: Readonly<ImpdDeps>): ImpdStorage {
-  const log = deps.log ?? printLog;
   const storage = deps.storage;
   const storageGate = createStorageGate();
   const zfsCommitDelayMs = config.storageBackend === 'zfs' ? 20_000 : 0;
@@ -29,7 +27,6 @@ export function createImpdStorage(config: Config, deps: Readonly<ImpdDeps>): Imp
     storage: deps.readDiskSpace === undefined ? storage : { readUsage: deps.readDiskSpace },
     reserveBytes: config.diskReserveBytes,
     releaseDelayMs: zfsCommitDelayMs,
-    log,
   });
 
   const buildersHolder: { builders: Builders | null } = { builders: null };
@@ -45,7 +42,7 @@ export function createImpdStorage(config: Config, deps: Readonly<ImpdDeps>): Imp
     ...deps.images,
   });
 
-  const diskUsage = createDiskUsageCache({ db: deps.db, storage, log });
+  const diskUsage = createDiskUsageCache({ db: deps.db, storage });
 
   return {
     storageGate,

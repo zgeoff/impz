@@ -13,6 +13,7 @@ import {
 import type { ImpRecord } from '../../platform/db/imps';
 import { buildInvalidStateError } from '../../platform/errors/impd-errors';
 import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { isRamBudgetError } from '../../vm/imps-contract/ram-budget-error';
 import { buildImagePaths } from '../../vm/storage/data-layout';
 import { resolveMaxMemoryMib } from '../../vm/vmm/elastic-memory';
@@ -201,7 +202,9 @@ export function createImpCommands(parts: ImpCommandParts): ImpCommands {
 
           timing.cloneMs = Math.round(performance.now() - started);
 
-          context.log(`impd: ${imp.name}: disk cloned in ${String(timing.cloneMs)}ms`);
+          getImpdLogger('imps')
+            .with({ imp: imp.name })
+            .info('disk cloned in {cloneMs}ms', { cloneMs: String(timing.cloneMs) });
         };
 
         const growNewDisk = async () => {
@@ -267,9 +270,18 @@ export function createImpCommands(parts: ImpCommandParts): ImpCommands {
 
           const totalMs = Math.round(performance.now() - received);
 
-          context.log(
-            `impd: ${imp.name}: created in ${String(totalMs)}ms record=${String(recordMs)}ms clone=${String(timing.cloneMs)}ms size=${String(timing.sizeMs)}ms boot=${String(bootMs)}ms`,
-          );
+          getImpdLogger('imps')
+            .with({ imp: imp.name })
+            .info(
+              'created in {totalMs}ms record={recordMs}ms clone={cloneMs}ms size={sizeMs}ms boot={bootMs}ms',
+              {
+                totalMs: String(totalMs),
+                recordMs: String(recordMs),
+                cloneMs: String(timing.cloneMs),
+                sizeMs: String(timing.sizeMs),
+                bootMs: String(bootMs),
+              },
+            );
 
           return presented;
         } catch (error) {
@@ -414,7 +426,9 @@ export function createImpCommands(parts: ImpCommandParts): ImpCommands {
 
         const grown = toLockedImp(imp, updated);
 
-        context.log(`impd: ${imp.name}: disk grown to ${String(diskMib)} MiB`);
+        getImpdLogger('imps')
+          .with({ imp: imp.name })
+          .info('disk grown to {diskMib} MiB', { diskMib: String(diskMib) });
 
         if (grown.pid === null && grown.state !== 'sleeping') {
           await growStoppedFilesystem(context, imp.name, paths.disk);
@@ -499,9 +513,15 @@ async function growStoppedFilesystem(context: ImpHost & ImpVms, name: string, di
     const isGrown = await context.growFilesystem(disk);
 
     if (!isGrown) {
-      context.log(`impd: ${name}: the filesystem was not unmounted cleanly; its boot grows it`);
+      getImpdLogger('imps')
+        .with({ imp: name })
+        .info('the filesystem was not unmounted cleanly; its boot grows it');
     }
   } catch (error) {
-    context.log(`impd: ${name}: the host could not grow the filesystem: ${getErrorMessage(error)}`);
+    getImpdLogger('imps')
+      .with({ imp: name })
+      .warning('the host could not grow the filesystem: {error}', {
+        error: getErrorMessage(error),
+      });
   }
 }

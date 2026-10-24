@@ -77,7 +77,6 @@ interface SessionLogDeps {
   readonly limits: SessionLogLimits;
   readonly requireRoom: (bytes: number) => Promise<void>;
   readonly now: () => number;
-  readonly log: (message: string) => void;
 
   readonly startTimer?: GenerationLogOptions['startTimer'];
 
@@ -148,7 +147,7 @@ export function createSessionLogs(deps: SessionLogDeps): SessionLogs {
 
   const applyImpLimit = makeApplyImpLimit(ctx, deps);
   const createLiveLog = makeCreateLiveLog(ctx, { limits: deps.limits, now: deps.now, createLog });
-  const runTap = makeRunTap(ctx, { log: deps.log, applyImpLimit });
+  const runTap = makeRunTap(ctx, { applyImpLimit });
 
   const startNextGeneration = async (options: StartNextGenerationOptions): Promise<void> => {
     const imp = options.imp;

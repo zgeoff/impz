@@ -10,6 +10,7 @@ import type { BrokerPeer } from '../../../platform/db/read-broker-peer';
 import { createCountedLimit } from '../../../platform/process/counted-limit';
 import type { CountedLimit } from '../../../platform/process/counted-limit';
 import { getErrorMessage } from '../../../platform/process/get-error-message';
+import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import { isTunnelAllowed } from '../../egress/egress-rules';
 import type { TerminatorKey } from '../tls/terminators';
 import { MAX_HEAD_BYTES, findHeadEnd, parseConnectHead } from './connect-head';
@@ -25,7 +26,6 @@ export interface BrokerFrontDeps {
   readonly resolveTunnelTarget: (host: string, mode: EgressMode) => Promise<string>;
 
   readonly recordAudit: (entry: NewAuditEntry) => void;
-  readonly log: (message: string) => void;
 
   readonly dialTunnel?: (address: string, port: number) => Socket;
 
@@ -164,7 +164,8 @@ async function handleConnection(
   try {
     await runConnection(socket, deps, open, tunnels);
   } catch (error) {
-    deps.log(`impd: broker: ${getErrorMessage(error)}`);
+    getImpdLogger('broker').warning('{error}', { error: getErrorMessage(error) });
+
     socket.destroy();
   }
 }

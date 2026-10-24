@@ -1,4 +1,5 @@
 import { getErrorMessage } from './get-error-message';
+import { getImpdLogger } from './get-impd-logger';
 
 export interface Ticker {
   readonly stop: () => Promise<void>;
@@ -15,7 +16,6 @@ export interface StartTickerOptions {
   readonly intervalMs: number;
   readonly firstDelayMs?: number | undefined;
   readonly task: () => Promise<void>;
-  readonly log: (message: string) => void;
   readonly timer?: TickerTimer | undefined;
 }
 
@@ -23,7 +23,6 @@ export function startTicker(options: StartTickerOptions): Ticker {
   const label = options.label;
   const intervalMs = options.intervalMs;
   const task = options.task;
-  const log = options.log;
   const timer = options.timer ?? startRuntimeTimer;
 
   const state: { cancel: (() => void) | null; running: Promise<void> | null } = {
@@ -37,7 +36,10 @@ export function startTicker(options: StartTickerOptions): Ticker {
     try {
       await task();
     } catch (error) {
-      log(`impd: ${label}: ${getErrorMessage(error)}`);
+      getImpdLogger('ticker').warning('{label} failed: {error}', {
+        label,
+        error: getErrorMessage(error),
+      });
     }
   };
 

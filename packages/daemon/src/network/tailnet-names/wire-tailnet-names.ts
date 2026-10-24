@@ -21,7 +21,6 @@ interface BuildTailnetNamesOptions {
   readonly db: ImpDatabase;
   readonly imps: Pick<Imps, 'lockImp'>;
   readonly readTailscale: () => Promise<TailscaleStatus>;
-  readonly log: (message: string) => void;
 
   readonly runCommand?: CommandRunner | undefined;
 }
@@ -45,7 +44,6 @@ export function wireTailnetNames(options: BuildTailnetNamesOptions): TailnetName
 
       return suffix === '' ? null : suffix;
     },
-    log: options.log,
   });
 }
 

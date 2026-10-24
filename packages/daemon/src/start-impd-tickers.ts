@@ -30,12 +30,10 @@ export interface ImpdTickerParts {
 export function startImpdTickers(
   config: Config,
   parts: Readonly<ImpdTickerParts>,
-  options: Readonly<{ log: (message: string) => void; timer?: TickerTimer }>,
+  options: Readonly<{ timer?: TickerTimer }>,
 ): Ticker[] {
-  const log = options.log;
-
   const start = (label: string, intervalMs: number, task: () => Promise<void>): Ticker =>
-    startTicker({ label, intervalMs, task, log, timer: options.timer });
+    startTicker({ label, intervalMs, task, timer: options.timer });
 
   const tickers = [
     start('idle', 2000, parts.idle.runCheck),

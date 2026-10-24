@@ -3,6 +3,7 @@ import type { ImpDisk, ImpHost, ImpVms } from '../../imps/imps/imp-context';
 import type { LockedImp } from '../../imps/imps/imp-lock';
 import type { ImpVmOps } from '../../imps/imps/imp-vm-ops';
 import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { IMPD_USER } from '../../platform/process/impd-user';
 import { buildSnapshotIdentity, writeSnapshotMeta } from '../../vm/sleep/snapshot-meta';
 import { readVmIdentity } from '../../vm/sleep/vm-identity';
@@ -50,12 +51,16 @@ export async function writeWatchdogSnapshot(
   try {
     await context.diskBudget.withRoom(imp.memoryMib * 1024 * 1024, writeSlot);
 
-    context.log(`impd: ${imp.name}: the watchdog kept its memory in ${slot.snapshotDir}`);
+    getImpdLogger('imps')
+      .with({ imp: imp.name })
+      .info('the watchdog kept its memory in {snapshotDir}', { snapshotDir: slot.snapshotDir });
   } catch (error) {
     rmSync(slot.snapshotDir, { recursive: true, force: true });
 
     const what = isDiskFullError(error) ? 'no watchdog snapshot' : 'the watchdog snapshot failed';
 
-    context.log(`impd: ${imp.name}: ${what}: ${getErrorMessage(error)}`);
+    getImpdLogger('imps')
+      .with({ imp: imp.name })
+      .warning('{what}: {error}', { what, error: getErrorMessage(error) });
   }
 }

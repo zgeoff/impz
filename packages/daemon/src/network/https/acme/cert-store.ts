@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import * as z from 'zod';
+import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import { writeFileDurably } from '../../../platform/process/write-file-durably';
 
 export interface Certificate {
@@ -45,10 +46,7 @@ export interface CertStore {
   readonly writeAttempts: (state: AttemptState) => void;
 }
 
-export function createCertStore(
-  dataDir: string,
-  log: (message: string) => void = () => {},
-): CertStore {
+export function createCertStore(dataDir: string): CertStore {
   const directory = join(dataDir, 'tls');
   const certificatePath = join(directory, 'certificate.pem');
   const attemptsPath = join(directory, 'attempts.json');
@@ -89,7 +87,9 @@ export function createCertStore(
     if (!legacy.success && !warned.account) {
       warned.account = true;
 
-      log(`impd: https: ${accountPath} does not parse; making a new ACME account`);
+      getImpdLogger('https').info('{accountPath} does not parse; making a new ACME account', {
+        accountPath,
+      });
     }
 
     return null;

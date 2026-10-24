@@ -37,7 +37,6 @@ test('it keeps appended output in segments and drops the oldest past the bound',
       maxBytes: 20,
       requireRoom: () => Promise.resolve(),
       now: () => 1000,
-      log: () => {},
     },
     {
       session: 'main',
@@ -73,7 +72,6 @@ test('it starts each offset a skip names as a new segment', async () => {
       maxBytes: 200,
       requireRoom: () => Promise.resolve(),
       now: () => 1000,
-      log: () => {},
     },
     {
       session: 'main',
@@ -112,7 +110,6 @@ test('it cuts a torn tail back to what the meta counted when it loads a log', as
       maxBytes: 200,
       requireRoom: () => Promise.resolve(),
       now: () => 1000,
-      log: () => {},
     },
     {
       session: 'main',
@@ -144,7 +141,6 @@ test('it cuts a torn tail back to what the meta counted when it loads a log', as
       maxBytes: 200,
       requireRoom: () => Promise.resolve(),
       now: () => 1000,
-      log: () => {},
     },
     meta,
   );
@@ -168,7 +164,6 @@ test('it goes on in a new segment at the end of a loaded log', async () => {
       maxBytes: 200,
       requireRoom: () => Promise.resolve(),
       now: () => 1000,
-      log: () => {},
     },
     {
       session: 'main',
@@ -197,7 +192,6 @@ test('it goes on in a new segment at the end of a loaded log', async () => {
       maxBytes: 200,
       requireRoom: () => Promise.resolve(),
       now: () => 1000,
-      log: () => {},
     },
     meta,
   );
@@ -223,7 +217,6 @@ test('it records the end, the exit code and the end time when the log finishes',
       maxBytes: 200,
       requireRoom: () => Promise.resolve(),
       now: () => 1000,
-      log: () => {},
     },
     {
       session: 'main',
@@ -264,7 +257,6 @@ test('it keeps no output that comes after the log finished', async () => {
       maxBytes: 200,
       requireRoom: () => Promise.resolve(),
       now: () => 1000,
-      log: () => {},
     },
     {
       session: 'main',
@@ -299,7 +291,6 @@ test('it rejects an append whose new segment would reach the disk reserve', asyn
       maxBytes: 20,
       requireRoom: room.requireRoom,
       now: () => 1000,
-      log: () => {},
     },
     {
       session: 'main',
@@ -327,7 +318,6 @@ test('it records the stop and keeps the written segments when the log stops for 
       maxBytes: 20,
       requireRoom: () => Promise.resolve(),
       now: () => 1000,
-      log: () => {},
     },
     {
       session: 'main',
@@ -366,7 +356,6 @@ test('it removes the oldest segment and its file', async () => {
       maxBytes: 100,
       requireRoom: () => Promise.resolve(),
       now: () => 1000,
-      log: () => {},
     },
     {
       session: 'main',
@@ -398,7 +387,6 @@ test('it keeps the last segment when asked to remove the oldest', async () => {
       maxBytes: 100,
       requireRoom: () => Promise.resolve(),
       now: () => 1000,
-      log: () => {},
     },
     {
       session: 'main',
@@ -431,7 +419,6 @@ test('it starts a commit one second after an append', async () => {
       maxBytes: 200,
       requireRoom: () => Promise.resolve(),
       now: () => 1000,
-      log: () => {},
       startTimer: timers.startTimer,
     },
     {
@@ -463,7 +450,6 @@ test('it writes the appended bytes into the meta when the commit timer fires', a
       maxBytes: 200,
       requireRoom: () => Promise.resolve(),
       now: () => 1000,
-      log: () => {},
       startTimer: timers.startTimer,
     },
     {
@@ -498,7 +484,6 @@ test('it cancels the pending commit when the log is abandoned', async () => {
       maxBytes: 200,
       requireRoom: () => Promise.resolve(),
       now: () => 1000,
-      log: () => {},
       startTimer: timers.startTimer,
     },
     {
@@ -532,7 +517,6 @@ test('it rejects an append whose segment opened while the log was abandoned', as
       maxBytes: 200,
       requireRoom,
       now: () => 1000,
-      log: () => {},
     },
     {
       session: 'main',

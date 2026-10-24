@@ -162,8 +162,8 @@ removes the file. A failed commit removes its new file and leaves the old one in
 
 At start, impd never deletes a value file that no row and no such record names. It moves each one,
 temp files a crash left included, into `<data>/secrets/.orphaned/<start time>/` (mode 0700) and logs
-`impd: broker: kept secret value file <file>, which no database row names, in <dir>`. Such a file is
-the value of a secret added after the database copy a restore put back, or of an add or a replace
+`INFO impd.broker kept secret value file <file>, which no database row names, in <dir>`. Such a file
+is the value of a secret added after the database copy a restore put back, or of an add or a replace
 that impd stopped in before its commit: that value was never stored, but its file was written. impd
 does not read these files again. `impz gc` lists each directory as kind `secrets`, with how many
 files it holds, and `impz gc --orphans` leaves them.

@@ -1,3 +1,4 @@
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import type { ImpHost, ImpMemory } from './imp-context';
 
 export interface MergeFlags {
@@ -33,7 +34,9 @@ export async function checkMergeFlag(
   const mergeable = await context.checkGuestMerge(pid);
 
   if (mergeable === null) {
-    context.log(`impd: ${imp.name}: cannot read whether KSM may merge its guest memory`);
+    getImpdLogger('imps')
+      .with({ imp: imp.name })
+      .warning('cannot read whether KSM may merge its guest memory');
 
     return;
   }
@@ -41,9 +44,9 @@ export async function checkMergeFlag(
   if (!mergeable) {
     context.mergeFlags.recordLost(imp.id);
 
-    context.log(
-      `impd: ${imp.name}: KSM cannot merge its guest memory (no merge flag after the exec)`,
-    );
+    getImpdLogger('imps')
+      .with({ imp: imp.name })
+      .warning('KSM cannot merge its guest memory (no merge flag after the exec)');
 
     return;
   }
@@ -63,8 +66,8 @@ export async function checkAdoptedMergeFlag(
   }
 
   if ((await context.checkGuestMerge(pid)) === true) {
-    context.log(
-      `impd: ${imp.name}: its VM keeps the KSM merge flag with IMP_KSM off, until the imp restarts`,
-    );
+    getImpdLogger('imps')
+      .with({ imp: imp.name })
+      .info('its VM keeps the KSM merge flag with IMP_KSM off, until the imp restarts');
   }
 }

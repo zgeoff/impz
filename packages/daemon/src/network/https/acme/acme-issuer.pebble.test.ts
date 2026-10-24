@@ -7,6 +7,7 @@ import { server } from '@impz/test-utils/mock-server';
 import invariant from 'tiny-invariant';
 import { startPebbleStack } from '../../../../../../e2e/lib/pebble';
 import { createStubCloudflareApi } from '../../../../testing/network/create-stub-cloudflare-api';
+import { captureImpdLogs } from '../../../../testing/platform/capture-impd-logs';
 import { createChalltestsrvProvider } from '../dns/challtestsrv-provider';
 import { createCloudflareProvider } from '../dns/cloudflare-provider';
 import { createAcmeIssuer } from './acme-issuer';
@@ -37,7 +38,6 @@ test('it issues one certificate for the domain and its wildcard', async () => {
     caPem: ctx.pebble.minicaPem,
     store: createCertStore(ctx.directoryPath),
     dns: createChalltestsrvProvider(ctx.pebble.challtestsrvUrl),
-    log: () => {},
 
     // a challenge still pending at the first poll waits backoffMin before the
     // next one: acme-client's 5 s default would spend the test's whole budget
@@ -70,7 +70,6 @@ test('it renews with the account the stored key already has', async () => {
     caPem: ctx.pebble.minicaPem,
     store: createCertStore(ctx.directoryPath),
     dns: createChalltestsrvProvider(ctx.pebble.challtestsrvUrl),
-    log: () => {},
 
     // a challenge still pending at the first poll waits backoffMin before the
     // next one: acme-client's 5 s default would spend the test's whole budget
@@ -100,7 +99,6 @@ test('it opens a new account and still issues when the account file is lost', as
     caPem: ctx.pebble.minicaPem,
     store: createCertStore(ctx.directoryPath),
     dns: createChalltestsrvProvider(ctx.pebble.challtestsrvUrl),
-    log: () => {},
 
     // a challenge still pending at the first poll waits backoffMin before the
     // next one: acme-client's 5 s default would spend the test's whole budget
@@ -123,7 +121,6 @@ test('it opens a new account and still issues when the account file is lost', as
     caPem: ctx.pebble.minicaPem,
     store: createCertStore(ctx.directoryPath),
     dns: createChalltestsrvProvider(ctx.pebble.challtestsrvUrl),
-    log: () => {},
   });
 
   const certificate = await second('imp.test');
@@ -149,7 +146,6 @@ test('it rejects an untrusted ACME server in words, not as an axios crash', asyn
     caPem: null,
     store: createCertStore(ctx.directoryPath),
     dns: createChalltestsrvProvider(ctx.pebble.challtestsrvUrl),
-    log: () => {},
   });
 
   expect(issue('imp.test')).rejects.toThrowWithMessage(
@@ -167,7 +163,6 @@ test('it rejects an ACME directory that answers with an error status', async () 
     caPem: ctx.pebble.minicaPem,
     store: createCertStore(ctx.directoryPath),
     dns: createChalltestsrvProvider(ctx.pebble.challtestsrvUrl),
-    log: () => {},
   });
 
   expect(issue('imp.test')).rejects.toThrowWithMessage(
@@ -181,7 +176,7 @@ test('it rejects with the DNS provider reason, and no token, when the provider r
 
   server.use(...createStubCloudflareApi({ tokens: [] }).handlers);
 
-  const logs: string[] = [];
+  const logs = captureImpdLogs();
 
   const issue = createAcmeIssuer({
     directoryUrl: ctx.pebble.directoryUrl,
@@ -189,9 +184,6 @@ test('it rejects with the DNS provider reason, and no token, when the provider r
     caPem: ctx.pebble.minicaPem,
     store: createCertStore(ctx.directoryPath),
     dns: createCloudflareProvider({ readToken: () => Promise.resolve('integration-secret-token') }),
-    log: (message) => {
-      logs.push(message);
-    },
   });
 
   const issued = issue('imp.test');

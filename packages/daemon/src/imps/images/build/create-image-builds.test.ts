@@ -71,7 +71,6 @@ async function setupTest() {
   const diskBudget = createDiskBudget({
     storage: { readUsage: () => Promise.resolve(usage) },
     reserveBytes: 0,
-    log: () => {},
   });
 
   const grows: number[] = [];
@@ -1940,7 +1939,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     const diskBudget = createDiskBudget({
       storage,
       reserveBytes: 128 * 1024 ** 2,
-      log: () => {},
     });
 
     const grows: number[] = [];
@@ -2024,7 +2022,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     const diskBudget = createDiskBudget({
       storage,
       reserveBytes: 128 * 1024 ** 2,
-      log: () => {},
     });
 
     const grows: number[] = [];
@@ -2114,7 +2111,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     const diskBudget = createDiskBudget({
       storage,
       reserveBytes: 128 * 1024 ** 2,
-      log: () => {},
     });
 
     const grows: number[] = [];
@@ -2202,7 +2198,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     const diskBudget = createDiskBudget({
       storage,
       reserveBytes: 128 * 1024 ** 2,
-      log: () => {},
     });
 
     const grows: number[] = [];
@@ -2290,7 +2285,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     const diskBudget = createDiskBudget({
       storage,
       reserveBytes: 128 * 1024 ** 2,
-      log: () => {},
     });
 
     const grows: number[] = [];
@@ -2382,7 +2376,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     const diskBudget = createDiskBudget({
       storage,
       reserveBytes: 128 * 1024 ** 2,
-      log: () => {},
     });
 
     const grows: number[] = [];
@@ -2471,7 +2464,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     const diskBudget = createDiskBudget({
       storage,
       reserveBytes: 128 * 1024 ** 2,
-      log: () => {},
     });
 
     const grows: number[] = [];
@@ -2567,7 +2559,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     const diskBudget = createDiskBudget({
       storage,
       reserveBytes: 128 * 1024 ** 2,
-      log: () => {},
     });
 
     const exported = createTreeTar(ctx.directoryPath, (tree) => {
@@ -2637,7 +2628,6 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     const diskBudget = createDiskBudget({
       storage,
       reserveBytes: 128 * 1024 ** 2,
-      log: () => {},
     });
 
     const exported = createTreeTar(ctx.directoryPath, (tree) => {

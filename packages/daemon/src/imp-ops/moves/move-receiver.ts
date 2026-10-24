@@ -24,6 +24,7 @@ import type { ImpDatabase } from '../../platform/db/open-database';
 import { SlotTakenError } from '../../platform/db/slot-taken-error';
 import { ImpdError } from '../../platform/errors/impd-error';
 import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { hashSecret } from '../../platform/secrets/hash-secret';
 import { mintOpaqueToken } from '../../platform/secrets/mint-opaque-token';
 import type { OpaqueToken } from '../../platform/secrets/parse-opaque-token';
@@ -81,7 +82,6 @@ export interface MoveReceiverDeps {
   readonly onCommitted: (name: string) => void;
   readonly audit: Pick<ApiAudit, 'record'>;
   readonly now: () => number;
-  readonly log: (message: string) => void;
 }
 
 interface CheckedTicket {
@@ -194,7 +194,7 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
 
       await updateMoveTicket(deps.db, row.id, { slot: null });
 
-      return readErrorReply(error, deps.log);
+      return readErrorReply(error);
     }
   };
 
@@ -297,7 +297,7 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
       deps.db.writes.publish({ kind: 'changed', imp: committed, reason: 'held' });
     }
 
-    deps.log(`impd: move: ${row.name}: committed; it lives here now`);
+    getImpdLogger('move').with({ imp: row.name }).info('committed; it lives here now');
   };
 
   const handleCommit = async (request: Request): Promise<Response> => {
@@ -364,7 +364,7 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
 
     await removeStagedImp(deps, checked.row.name, impId);
 
-    deps.log(`impd: move: ${checked.row.name}: aborted by the source`);
+    getImpdLogger('move').with({ imp: checked.row.name }).info('aborted by the source');
 
     return Response.json({ isCommitted: false });
   };
@@ -383,7 +383,7 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
     try {
       return await route(request);
     } catch (error) {
-      const reply = readErrorReply(error, deps.log);
+      const reply = readErrorReply(error);
 
       return Response.json(reply.body, { status: reply.status });
     }
@@ -520,11 +520,11 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
   };
 }
 
-function readErrorReply(error: unknown, log: (message: string) => void): Reply {
+function readErrorReply(error: unknown): Reply {
   const status = readErrorStatus(error);
 
   if (status === 500) {
-    log(`impd: move: ${getErrorMessage(error)}`);
+    getImpdLogger('move').error('{error}', { error: getErrorMessage(error) });
   }
 
   return { status, body: { error: getErrorMessage(error) } };

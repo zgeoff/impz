@@ -48,7 +48,6 @@ interface WakeProxyDeps {
   readonly config: Pick<NetworkConfig, 'apiPort' | 'proxyPort' | 'subnet' | 'portBase'>;
   readonly db: ImpDatabase;
   readonly imps: Pick<ImpRuntime, 'requireRunning' | 'tracker' | 'recordActivity'>;
-  readonly log: (message: string) => void;
 
   readonly logger?: Pick<Logger, 'warning'>;
   readonly peers: ForwardedPeers;
@@ -224,7 +223,12 @@ export function startWakeProxy(deps: WakeProxyDeps): WakeProxy {
     if (wokeMs !== null) {
       const path = new URL(request.url).pathname;
 
-      deps.log(`impd: proxy: ${name} woke in ${String(wokeMs)}ms for ${request.method} ${path}`);
+      getImpdLogger('proxy').info('{name} woke in {wokeMs}ms for {method} {path}', {
+        name,
+        wokeMs: String(wokeMs),
+        method: request.method,
+        path,
+      });
     }
 
     try {
@@ -431,7 +435,9 @@ export function startWakeProxy(deps: WakeProxyDeps): WakeProxy {
     },
   });
 
-  deps.log(`impd: proxy on :${String(deps.config.proxyPort)}`);
+  getImpdLogger('proxy').info('proxy on :{proxyPort}', {
+    proxyPort: String(deps.config.proxyPort),
+  });
 
   const runListenerSync = (): Promise<void> =>
     syncSlot.run(async () => {
@@ -474,9 +480,11 @@ export function startWakeProxy(deps: WakeProxyDeps): WakeProxy {
           if (!failedSlots.has(imp.slot)) {
             failedSlots.add(imp.slot);
 
-            deps.log(
-              `impd: proxy: cannot listen on :${String(port)} for ${imp.name}: ${String(error)}`,
-            );
+            getImpdLogger('proxy').warning('cannot listen on :{port} for {name}: {error}', {
+              port: String(port),
+              name: imp.name,
+              error: String(error),
+            });
           }
         }
       }

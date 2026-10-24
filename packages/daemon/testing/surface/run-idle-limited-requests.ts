@@ -61,7 +61,6 @@ async function startProxy(stack: Readonly<AsyncDisposableStack>, origin: string)
       tracker: buildActivityTracker(),
       recordActivity: () => Promise.resolve(),
     },
-    log: () => {},
     peers: createForwardedPeers(Date.now),
     ports: { proxy: 0, slot: () => 0 },
   });

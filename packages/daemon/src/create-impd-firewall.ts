@@ -20,7 +20,6 @@ import { resolvePublicUpstream } from './network/broker/tls/resolve-public-upstr
 import { runNft } from './network/egress/egress-firewall';
 import { createEgressService } from './network/egress/egress-service';
 import type { EgressService } from './network/egress/egress-service';
-import { printLog } from './platform/process/print-log';
 import { resolveTestRegistry } from './resolve-test-registry';
 import type { ImpdStopParts } from './stop-impd';
 
@@ -37,8 +36,6 @@ export async function createImpdFirewall(
   secretFiles: SecretFiles,
   plan: Pick<ImpdStopParts, 'broker' | 'egress'>,
 ): Promise<ImpdFirewall> {
-  const log = deps.log ?? printLog;
-
   const ipv6 = await (
     deps.resolveIpv6 ??
     (() =>
@@ -47,7 +44,6 @@ export async function createImpdFirewall(
         readUlaPrefix: () => readOrCreateUlaPrefix(join(config.dataDir, 'net', 'ipv6-ula')),
         checkHostRules: () => checkHostRules6(),
         runNft: deps.egress?.runNft ?? runNft,
-        log,
       }))
   )();
 
@@ -65,12 +61,11 @@ export async function createImpdFirewall(
   const broker = await createBroker({
     config,
     db: deps.db,
-    log,
     reach,
     resolveUpstream:
       config.brokerTestUpstreams === null
         ? resolvePublicUpstream
-        : createUpstreamResolver(config.brokerTestUpstreams, log),
+        : createUpstreamResolver(config.brokerTestUpstreams),
     secretFiles,
     ...(deps.now !== undefined && { now: deps.now }),
     timer: deps.tickerTimer,
@@ -86,7 +81,6 @@ export async function createImpdFirewall(
       return resolved.address;
     },
     readCA: (path) => readFile(path, 'utf8'),
-    log,
     ...deps.testRegistry,
   });
 
@@ -96,7 +90,6 @@ export async function createImpdFirewall(
     ipv6,
     reach,
     testRegistry,
-    log,
     isGranted: broker.isGranted,
     closeTunnels: broker.closeTunnels,
     ...(deps.now !== undefined && { now: deps.now }),

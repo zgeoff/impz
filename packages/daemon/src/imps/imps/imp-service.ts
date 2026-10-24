@@ -108,7 +108,6 @@ export function createImpService(deps: ImpServiceDeps, createWatchdog: CreateImp
     bus: events,
     toApi: presenter.readApi,
     now: context.now,
-    log: context.log,
   });
 
   const resourceListeners = new Set<ResourceListener>();

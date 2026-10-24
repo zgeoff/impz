@@ -19,6 +19,7 @@ import * as z from 'zod';
 import { createPendingSignIn } from '../../../testing/identity/create-pending-sign-in';
 import { runOAuthSignIn } from '../../../testing/identity/run-oauth-sign-in';
 import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { buildStubMcpTransport } from '../../../testing/surface/build-stub-mcp-transport';
 import { buildStubExecGuest } from '../../../testing/vm/build-stub-exec-guest';
@@ -58,10 +59,11 @@ async function setupTest() {
     stack,
     rootToken,
     publicMcp,
-    handle: createPublicHandler(
-      { config: publicMcp, oauth: harness.impd.oauth, mcp: harness.impd.api.publicMcp },
-      () => {},
-    ),
+    handle: createPublicHandler({
+      config: publicMcp,
+      oauth: harness.impd.oauth,
+      mcp: harness.impd.api.publicMcp,
+    }),
   });
 }
 
@@ -660,14 +662,11 @@ test('it signs an MCP client in through its OAuth provider and lists the tools i
 
   invariant(approver);
 
-  const listener = startPublicListener(
-    {
-      config: { ...ctx.publicMcp, port: 0 },
-      oauth: ctx.impd.oauth,
-      mcp: ctx.impd.api.publicMcp,
-    },
-    () => {},
-  );
+  const listener = startPublicListener({
+    config: { ...ctx.publicMcp, port: 0 },
+    oauth: ctx.impd.oauth,
+    mcp: ctx.impd.api.publicMcp,
+  });
 
   ctx.stack.defer(() => listener.stop());
 
@@ -1598,14 +1597,11 @@ test('it audits a grant’s change refused past its patterns as FORBIDDEN', asyn
 test('it serves the route on its own port, for its own host only', async () => {
   const ctx = await setupTest();
 
-  const listener = startPublicListener(
-    {
-      config: { ...ctx.publicMcp, port: 0 },
-      oauth: ctx.impd.oauth,
-      mcp: buildStubMcpTransport(),
-    },
-    () => {},
-  );
+  const listener = startPublicListener({
+    config: { ...ctx.publicMcp, port: 0 },
+    oauth: ctx.impd.oauth,
+    mcp: buildStubMcpTransport(),
+  });
 
   ctx.stack.defer(() => listener.stop());
 
@@ -1625,10 +1621,11 @@ test('it closes the MCP transport when the listener stops', async () => {
 
   const transport = buildStubMcpTransport();
 
-  const listener = startPublicListener(
-    { config: { ...ctx.publicMcp, port: 0 }, oauth: ctx.impd.oauth, mcp: transport },
-    () => {},
-  );
+  const listener = startPublicListener({
+    config: { ...ctx.publicMcp, port: 0 },
+    oauth: ctx.impd.oauth,
+    mcp: transport,
+  });
 
   ctx.stack.defer(() => listener.stop());
 
@@ -1640,35 +1637,29 @@ test('it closes the MCP transport when the listener stops', async () => {
 test('it logs where the listener serves the route', async () => {
   const ctx = await setupTest();
 
-  const logs: string[] = [];
+  const logs = captureImpdLogs();
 
-  const listener = startPublicListener(
-    { config: { ...ctx.publicMcp, port: 0 }, oauth: ctx.impd.oauth, mcp: buildStubMcpTransport() },
-    (line) => {
-      logs.push(line);
-    },
-  );
+  const listener = startPublicListener({
+    config: { ...ctx.publicMcp, port: 0 },
+    oauth: ctx.impd.oauth,
+    mcp: buildStubMcpTransport(),
+  });
 
   ctx.stack.defer(() => listener.stop());
 
-  expect(logs).toStrictEqual([`impd: public mcp on :0 for ${ctx.publicMcp.origin}`]);
+  expect(logs).toStrictEqual([`INFO impd.public public mcp on :0 for ${ctx.publicMcp.origin}`]);
 });
 
 test('it answers a request that throws with a bare 500, and logs the reason', async () => {
   const ctx = await setupTest();
 
-  const logs: string[] = [];
+  const logs = captureImpdLogs();
 
-  const listener = startPublicListener(
-    {
-      config: { ...ctx.publicMcp, port: 0 },
-      oauth: ctx.impd.oauth,
-      mcp: buildStubMcpTransport({ failure: new Error('the transport broke') }),
-    },
-    (line) => {
-      logs.push(line);
-    },
-  );
+  const listener = startPublicListener({
+    config: { ...ctx.publicMcp, port: 0 },
+    oauth: ctx.impd.oauth,
+    mcp: buildStubMcpTransport({ failure: new Error('the transport broke') }),
+  });
 
   ctx.stack.defer(() => listener.stop());
 
@@ -1681,7 +1672,7 @@ test('it answers a request that throws with a bare 500, and logs the reason', as
 
   expect(response.status).toBe(500);
   expect(body).toBe('internal error');
-  expect(logs).toContain('impd: public mcp: the transport broke');
+  expect(logs).toContain('WARNING impd.public public mcp: the transport broke');
 });
 
 test('it lifts the idle timeout from a tool call on /mcp', async () => {
@@ -1689,10 +1680,11 @@ test('it lifts the idle timeout from a tool call on /mcp', async () => {
 
   const timeout = mock((): void => {});
 
-  const handle = createPublicHandler(
-    { config: ctx.publicMcp, oauth: ctx.impd.oauth, mcp: buildStubMcpTransport() },
-    () => {},
-  );
+  const handle = createPublicHandler({
+    config: ctx.publicMcp,
+    oauth: ctx.impd.oauth,
+    mcp: buildStubMcpTransport(),
+  });
 
   const request = new Request('http://127.0.0.1:7171/mcp', {
     method: 'POST',
@@ -1711,10 +1703,11 @@ test('it keeps the idle timeout on a sign-in page', async () => {
 
   const timeout = mock((): void => {});
 
-  const handle = createPublicHandler(
-    { config: ctx.publicMcp, oauth: ctx.impd.oauth, mcp: buildStubMcpTransport() },
-    () => {},
-  );
+  const handle = createPublicHandler({
+    config: ctx.publicMcp,
+    oauth: ctx.impd.oauth,
+    mcp: buildStubMcpTransport(),
+  });
 
   await handle(
     new Request('http://127.0.0.1:7171/login', { headers: { host: '127.0.0.1:7171' } }),
@@ -1727,10 +1720,11 @@ test('it keeps the idle timeout on a sign-in page', async () => {
 test('it takes 64 open tool calls at once', async () => {
   const ctx = await setupTest();
 
-  const handle = createPublicHandler(
-    { config: ctx.publicMcp, oauth: ctx.impd.oauth, mcp: buildStubMcpTransport() },
-    () => {},
-  );
+  const handle = createPublicHandler({
+    config: ctx.publicMcp,
+    oauth: ctx.impd.oauth,
+    mcp: buildStubMcpTransport(),
+  });
 
   const statuses = await Promise.all(
     Array.from({ length: 64 }, async () => {
@@ -1756,10 +1750,11 @@ test('it keeps a tool call’s slot until the tool ends, though its client goes'
 
   const transport = buildStubMcpTransport();
 
-  const handle = createPublicHandler(
-    { config: ctx.publicMcp, oauth: ctx.impd.oauth, mcp: transport },
-    () => {},
-  );
+  const handle = createPublicHandler({
+    config: ctx.publicMcp,
+    oauth: ctx.impd.oauth,
+    mcp: transport,
+  });
 
   await Promise.all(
     Array.from({ length: 64 }, async () => {
@@ -1791,10 +1786,11 @@ test('it frees a tool call’s slot once the tool ends', async () => {
 
   const transport = buildStubMcpTransport();
 
-  const handle = createPublicHandler(
-    { config: ctx.publicMcp, oauth: ctx.impd.oauth, mcp: transport },
-    () => {},
-  );
+  const handle = createPublicHandler({
+    config: ctx.publicMcp,
+    oauth: ctx.impd.oauth,
+    mcp: transport,
+  });
 
   await Promise.all(
     Array.from({ length: 64 }, async () => {
@@ -1847,10 +1843,11 @@ test('it reads at most 16 bodies at once for requests past every slot', async ()
 
   const transport = buildStubMcpTransport();
 
-  const handle = createPublicHandler(
-    { config: ctx.publicMcp, oauth: ctx.impd.oauth, mcp: transport },
-    () => {},
-  );
+  const handle = createPublicHandler({
+    config: ctx.publicMcp,
+    oauth: ctx.impd.oauth,
+    mcp: transport,
+  });
 
   await Promise.all(
     Array.from({ length: 64 }, async () => {
@@ -2076,10 +2073,11 @@ test('it refuses a request that starts work with every slot held', async () => {
 
   const transport = buildStubMcpTransport();
 
-  const handle = createPublicHandler(
-    { config: ctx.publicMcp, oauth: ctx.impd.oauth, mcp: transport },
-    () => {},
-  );
+  const handle = createPublicHandler({
+    config: ctx.publicMcp,
+    oauth: ctx.impd.oauth,
+    mcp: transport,
+  });
 
   await Promise.all(
     Array.from({ length: 64 }, async () => {

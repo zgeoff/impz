@@ -13,6 +13,7 @@ import { buildStubProxyListen } from '../../../testing/network/build-stub-proxy-
 import { createMockCertificate } from '../../../testing/network/create-mock-certificate';
 import { createStubCloudflareApi } from '../../../testing/network/create-stub-cloudflare-api';
 import { buildStubTickerTimer } from '../../../testing/platform/build-stub-ticker-timer';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import type { Certificate } from './acme/cert-store';
 import { createCertStore } from './acme/cert-store';
 import { createCloudflareProvider } from './dns/cloudflare-provider';
@@ -28,16 +29,11 @@ async function setupTest() {
 
   stack.defer(() => rm(directory, { recursive: true, force: true }));
 
-  const logs: string[] = [];
-
   return {
     stack,
     directoryPath: directory,
     store: createCertStore(directory),
-    logs,
-    log: (message: string) => {
-      logs.push(message);
-    },
+    logs: captureImpdLogs(),
     timer: buildStubTickerTimer(),
     proxy: buildStubProxyListen(),
   };
@@ -69,7 +65,6 @@ test('it serves nothing until the first certificate arrives', async () => {
     readTailscale: null,
     readServePorts: () => Promise.resolve([]),
     now: Date.now,
-    log: ctx.log,
     listPublicImps: () => Promise.resolve([]),
     readPublicImpByName: () => Promise.resolve(undefined),
     timer: ctx.timer.timer,
@@ -118,7 +113,6 @@ test('it serves the certificate on loopback once it arrives', async () => {
     readTailscale: null,
     readServePorts: () => Promise.resolve([]),
     now: Date.now,
-    log: ctx.log,
     listPublicImps: () => Promise.resolve([]),
     readPublicImpByName: () => Promise.resolve(undefined),
     timer: ctx.timer.timer,
@@ -181,7 +175,6 @@ test('it logs the certificate it got', async () => {
     readTailscale: null,
     readServePorts: () => Promise.resolve([]),
     now: () => Date.parse('2030-01-02T00:00:00Z'),
-    log: ctx.log,
     listPublicImps: () => Promise.resolve([]),
     readPublicImpByName: () => Promise.resolve(undefined),
     timer: ctx.timer.timer,
@@ -193,7 +186,7 @@ test('it logs the certificate it got', async () => {
 
   await waitFor(() => {
     expect(ctx.logs).toContain(
-      'impd: https: got a certificate for imp.test, expiring 2030-03-01T00:00:00.000Z, in 0ms',
+      'INFO impd.https got a certificate for imp.test, expiring 2030-03-01T00:00:00.000Z, in 0ms',
     );
   });
 });
@@ -223,7 +216,6 @@ test('it says the domain answers only inside the host container when there is no
     readTailscale: null,
     readServePorts: () => Promise.resolve([]),
     now: Date.now,
-    log: ctx.log,
     listPublicImps: () => Promise.resolve([]),
     readPublicImpByName: () => Promise.resolve(undefined),
     timer: ctx.timer.timer,
@@ -234,7 +226,7 @@ test('it says the domain answers only inside the host container when there is no
   service.start();
 
   expect(ctx.logs).toContain(
-    'impd: https: no tailnet; https://<imp>.imp.test answers only inside the host container',
+    'INFO impd.https no tailnet; https://<imp>.imp.test answers only inside the host container',
   );
 });
 
@@ -271,7 +263,6 @@ test('it serves an expired certificate on disk at start while renewal fails', as
     readTailscale: null,
     readServePorts: () => Promise.resolve([]),
     now: Date.now,
-    log: ctx.log,
     listPublicImps: () => Promise.resolve([]),
     readPublicImpByName: () => Promise.resolve(undefined),
     timer: ctx.timer.timer,
@@ -328,7 +319,6 @@ test('it says it serves an expired certificate until a renewal succeeds', async 
     readTailscale: null,
     readServePorts: () => Promise.resolve([]),
     now: () => Date.parse('2030-03-01T00:00:00Z'),
-    log: ctx.log,
     listPublicImps: () => Promise.resolve([]),
     readPublicImpByName: () => Promise.resolve(undefined),
     timer: ctx.timer.timer,
@@ -339,7 +329,7 @@ test('it says it serves an expired certificate until a renewal succeeds', async 
   service.start();
 
   expect(ctx.logs).toContain(
-    'impd: https: the stored certificate expired 2030-02-01T00:00:00.000Z; serving it until a renewal succeeds',
+    'INFO impd.https the stored certificate expired 2030-02-01T00:00:00.000Z; serving it until a renewal succeeds',
   );
 });
 
@@ -384,7 +374,6 @@ test('it logs Cloudflare’s refusal of a bad DNS token', async () => {
       }),
     readServePorts: () => Promise.resolve([]),
     now: Date.now,
-    log: ctx.log,
     listPublicImps: () => Promise.resolve([]),
     readPublicImpByName: () => Promise.resolve(undefined),
     timer: ctx.timer.timer,
@@ -399,7 +388,7 @@ test('it logs Cloudflare’s refusal of a bad DNS token', async () => {
   });
 
   expect(ctx.logs.filter((line) => line.includes('cannot point'))).toStrictEqual([
-    'impd: https: cannot point imp.test at 127.0.0.2: Cloudflare GET /zones: 403 Invalid access token',
+    'WARNING impd.https cannot point imp.test at 127.0.0.2: Cloudflare GET /zones: 403 Invalid access token',
   ]);
 });
 
@@ -444,7 +433,6 @@ test('it keeps a bad DNS token out of the log', async () => {
       }),
     readServePorts: () => Promise.resolve([]),
     now: Date.now,
-    log: ctx.log,
     listPublicImps: () => Promise.resolve([]),
     readPublicImpByName: () => Promise.resolve(undefined),
     timer: ctx.timer.timer,
@@ -508,7 +496,6 @@ test('it serves nothing on any port without a DNS token file', async () => {
       }),
     readServePorts: () => Promise.resolve([]),
     now: Date.now,
-    log: ctx.log,
     listPublicImps: () => Promise.resolve(['web']),
     readPublicImpByName: () =>
       Promise.resolve(buildMockPublicImp({ stored: { auth: 'none', user: null, hash: null } })),
@@ -593,7 +580,6 @@ test('it sends Cloudflare no call without a DNS token file', async () => {
       }),
     readServePorts: () => Promise.resolve([]),
     now: Date.now,
-    log: ctx.log,
     listPublicImps: () => Promise.resolve(['web']),
     readPublicImpByName: () => Promise.resolve(undefined),
     publicAddress: '127.0.0.1',
@@ -649,7 +635,6 @@ test('it names the missing DNS token file in the log', async () => {
       }),
     readServePorts: () => Promise.resolve([]),
     now: Date.now,
-    log: ctx.log,
     listPublicImps: () => Promise.resolve([]),
     readPublicImpByName: () => Promise.resolve(undefined),
     timer: ctx.timer.timer,
@@ -661,7 +646,7 @@ test('it names the missing DNS token file in the log', async () => {
 
   await waitFor(() => {
     expect(ctx.logs).toContain(
-      `impd: https: cannot point imp.test at 127.0.0.2: cannot read the DNS API token from ${tokenPath}: ENOENT`,
+      `WARNING impd.https cannot point imp.test at 127.0.0.2: cannot read the DNS API token from ${tokenPath}: ENOENT`,
     );
   });
 });
@@ -716,7 +701,6 @@ test('it logs a records failure that repeats once, until it changes', async () =
       }),
     readServePorts: () => Promise.resolve([]),
     now: Date.now,
-    log: ctx.log,
     listPublicImps: () => Promise.resolve([]),
     readPublicImpByName: () => Promise.resolve(undefined),
     timer: ctx.timer.timer,
@@ -742,9 +726,9 @@ test('it logs a records failure that repeats once, until it changes', async () =
   await ctx.timer.fire('https addresses');
 
   expect(ctx.logs.filter((line) => line.includes('point'))).toStrictEqual([
-    'impd: https: cannot point imp.test at 127.0.0.2: Cloudflare GET /zones/z1/dns_records: 500 DNS down',
-    'impd: https: cannot point imp.test at 127.0.0.2: Cloudflare GET /zones/z1/dns_records: 500 DNS still down',
-    'impd: https: imp.test and *.imp.test point at 127.0.0.2',
+    'WARNING impd.https cannot point imp.test at 127.0.0.2: Cloudflare GET /zones/z1/dns_records: 500 DNS down',
+    'WARNING impd.https cannot point imp.test at 127.0.0.2: Cloudflare GET /zones/z1/dns_records: 500 DNS still down',
+    'INFO impd.https imp.test and *.imp.test point at 127.0.0.2',
   ]);
 });
 
@@ -782,7 +766,6 @@ test('it points the domain and its wildcard at the tailnet IP', async () => {
       }),
     readServePorts: () => Promise.resolve([]),
     now: Date.now,
-    log: ctx.log,
     listPublicImps: () => Promise.resolve([]),
     readPublicImpByName: () => Promise.resolve(undefined),
     timer: ctx.timer.timer,
@@ -793,7 +776,7 @@ test('it points the domain and its wildcard at the tailnet IP', async () => {
   service.start();
 
   await waitFor(() => {
-    expect(ctx.logs).toContain('impd: https: imp.test and *.imp.test point at 127.0.0.2');
+    expect(ctx.logs).toContain('INFO impd.https imp.test and *.imp.test point at 127.0.0.2');
   });
 
   expect(
@@ -842,7 +825,6 @@ test('it serves the domain on the tailnet IP', async () => {
       }),
     readServePorts: () => Promise.resolve([]),
     now: Date.now,
-    log: ctx.log,
     listPublicImps: () => Promise.resolve([]),
     readPublicImpByName: () => Promise.resolve(undefined),
     timer: ctx.timer.timer,
@@ -914,7 +896,6 @@ test('it keeps the public records in line with the public imps, and leaves the r
     readTailscale: null,
     readServePorts: () => Promise.resolve([]),
     now: Date.now,
-    log: ctx.log,
     listPublicImps: () => Promise.resolve(['web']),
     readPublicImpByName: () => Promise.resolve(undefined),
     publicAddress: '127.0.0.1',
@@ -970,7 +951,6 @@ test('it removes the record of an imp that is no longer public, and says so', as
     readTailscale: null,
     readServePorts: () => Promise.resolve([]),
     now: Date.now,
-    log: ctx.log,
     listPublicImps: () => Promise.resolve([]),
     readPublicImpByName: () => Promise.resolve(undefined),
     publicAddress: '127.0.0.1',
@@ -982,7 +962,7 @@ test('it removes the record of an imp that is no longer public, and says so', as
   await service.updatePublicRecords();
 
   expect(api.readRecords()).toStrictEqual([]);
-  expect(ctx.logs).toContain('impd: https: removed web.imp.test (no longer public)');
+  expect(ctx.logs).toContain('INFO impd.https removed web.imp.test (no longer public)');
 });
 
 test('it serves the public listener on its own port', async () => {
@@ -1016,7 +996,6 @@ test('it serves the public listener on its own port', async () => {
     readTailscale: null,
     readServePorts: () => Promise.resolve([]),
     now: Date.now,
-    log: ctx.log,
     listPublicImps: () => Promise.resolve(['web']),
     readPublicImpByName: () => Promise.resolve(undefined),
     publicAddress: '127.0.0.1',
@@ -1077,7 +1056,6 @@ test('it takes the public records impd left when public mode is off', async () =
     readTailscale: null,
     readServePorts: () => Promise.resolve([]),
     now: Date.now,
-    log: ctx.log,
     listPublicImps: () => Promise.resolve(['web']),
     readPublicImpByName: () => Promise.resolve(undefined),
     timer: ctx.timer.timer,
@@ -1130,7 +1108,6 @@ test('it logs a DNS failure on the public records', async () => {
     readTailscale: null,
     readServePorts: () => Promise.resolve([]),
     now: Date.now,
-    log: ctx.log,
     listPublicImps: () => Promise.resolve(['web']),
     readPublicImpByName: () => Promise.resolve(undefined),
     publicAddress: '127.0.0.1',
@@ -1142,7 +1119,7 @@ test('it logs a DNS failure on the public records', async () => {
   await service.updatePublicRecords();
 
   expect(ctx.logs).toContain(
-    'impd: https: public records: Cloudflare GET /zones/z1/dns_records: 500 DNS API down',
+    'INFO impd.https public records: Cloudflare GET /zones/z1/dns_records: 500 DNS API down',
   );
 });
 
@@ -1186,7 +1163,6 @@ test('it reports a failed pass over the public records', async () => {
     readTailscale: null,
     readServePorts: () => Promise.resolve([]),
     now: () => 1_800_000_000_000,
-    log: ctx.log,
     listPublicImps: () => Promise.resolve(['web']),
     readPublicImpByName: () => Promise.resolve(undefined),
     publicAddress: '127.0.0.1',
@@ -1247,7 +1223,6 @@ test('it writes the public records on the pass after one that failed', async () 
     readTailscale: null,
     readServePorts: () => Promise.resolve([]),
     now: () => 1_800_000_000_000,
-    log: ctx.log,
     listPublicImps: () => Promise.resolve(['web']),
     readPublicImpByName: () => Promise.resolve(undefined),
     publicAddress: '127.0.0.1',
@@ -1304,7 +1279,6 @@ test('it warns that tailscale serve holds the tailnet HTTPS port', async () => {
       }),
     readServePorts: () => Promise.resolve([8443]),
     now: Date.now,
-    log: ctx.log,
     listPublicImps: () => Promise.resolve([]),
     readPublicImpByName: () => Promise.resolve(undefined),
     timer: ctx.timer.timer,
@@ -1316,7 +1290,7 @@ test('it warns that tailscale serve holds the tailnet HTTPS port', async () => {
 
   await waitFor(() => {
     expect(ctx.logs).toContain(
-      'impd: https: warning: tailscale serve holds tailnet port 8443, so impd never sees that traffic; remove it with `tailscale serve --https=8443 off` or `tailscale serve reset`',
+      'WARNING impd.https tailscale serve holds tailnet port 8443, so impd never sees that traffic; remove it with `tailscale serve --https=8443 off` or `tailscale serve reset`',
     );
   });
 });
@@ -1364,7 +1338,6 @@ test('it keeps the tailnet listener and its connections when a tailscale status 
     },
     readServePorts: () => Promise.resolve([]),
     now: Date.now,
-    log: ctx.log,
     listPublicImps: () => Promise.resolve([]),
     readPublicImpByName: () => Promise.resolve(undefined),
     timer: ctx.timer.timer,
@@ -1414,7 +1387,6 @@ test('it logs an address pass that fails', async () => {
     readTailscale: () => Promise.reject(new Error('tailscaled is not running')),
     readServePorts: () => Promise.resolve([]),
     now: Date.now,
-    log: ctx.log,
     listPublicImps: () => Promise.resolve([]),
     readPublicImpByName: () => Promise.resolve(undefined),
     timer: ctx.timer.timer,
@@ -1425,7 +1397,7 @@ test('it logs an address pass that fails', async () => {
   service.start();
 
   await waitFor(() => {
-    expect(ctx.logs).toContain('impd: https: addresses: tailscaled is not running');
+    expect(ctx.logs).toContain('WARNING impd.https addresses: tailscaled is not running');
   });
 });
 
@@ -1454,7 +1426,6 @@ test('it runs renewal and the public records every 10 minutes, and the addresses
     readTailscale: null,
     readServePorts: () => Promise.resolve([]),
     now: Date.now,
-    log: ctx.log,
     listPublicImps: () => Promise.resolve([]),
     readPublicImpByName: () => Promise.resolve(undefined),
     timer: ctx.timer.timer,
@@ -1502,7 +1473,6 @@ test('it asks for a certificate again on each renewal tick', async () => {
     readTailscale: null,
     readServePorts: () => Promise.resolve([]),
     now: () => clock.now,
-    log: ctx.log,
     listPublicImps: () => Promise.resolve([]),
     readPublicImpByName: () => Promise.resolve(undefined),
     timer: ctx.timer.timer,
@@ -1551,7 +1521,6 @@ test('it writes the public records again on each public records tick', async () 
     readTailscale: null,
     readServePorts: () => Promise.resolve([]),
     now: Date.now,
-    log: ctx.log,
     listPublicImps: () => Promise.resolve([...publicImps]),
     readPublicImpByName: () => Promise.resolve(undefined),
     publicAddress: '127.0.0.1',
@@ -1600,7 +1569,6 @@ test('it cancels every pending tick when it stops', async () => {
     readTailscale: null,
     readServePorts: () => Promise.resolve([]),
     now: Date.now,
-    log: ctx.log,
     listPublicImps: () => Promise.resolve([]),
     readPublicImpByName: () => Promise.resolve(undefined),
     timer: ctx.timer.timer,
@@ -1649,7 +1617,6 @@ test('it starts no listener for a certificate that arrives after it stopped', as
     readTailscale: null,
     readServePorts: () => Promise.resolve([]),
     now: Date.now,
-    log: ctx.log,
     listPublicImps: () => Promise.resolve([]),
     readPublicImpByName: () => Promise.resolve(undefined),
     timer: ctx.timer.timer,

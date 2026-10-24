@@ -1,5 +1,6 @@
 import { expect, mock, test } from 'bun:test';
 import { waitFor } from '@impz/test-utils/wait-for';
+import { captureImpdLogs } from '../testing/platform/capture-impd-logs';
 import { stopImpd } from './stop-impd';
 import type { ImpdStopParts } from './stop-impd';
 
@@ -27,10 +28,11 @@ function setupTest() {
     storage: { stop: mock(() => Promise.resolve()) },
     stopTelemetry: mock(() => Promise.resolve()),
     db: { destroy: mock(() => Promise.resolve()) },
-    log: mock(() => {}),
   } satisfies ImpdStopParts;
 
-  return { parts, firstTicker, secondTicker };
+  const logs = captureImpdLogs();
+
+  return { parts, firstTicker, secondTicker, logs };
 }
 
 test('it stops every part in order, sleeps the imps, then closes the database', async () => {
@@ -171,7 +173,7 @@ test('it logs a step that fails and goes on to the next', async () => {
   );
 
   expect(steps).toPartiallyContain({ step: 'proxy', outcome: 'failed' });
-  expect(ctx.parts.log).toHaveBeenCalledWith('impd: stop: proxy failed: port gone');
+  expect(ctx.logs).toContain('WARNING impd.stop proxy failed: port gone');
   expect(ctx.parts.broker.stop).toHaveBeenCalledOnce();
 });
 
@@ -184,7 +186,7 @@ test('it goes on past a step still running at its limit', async () => {
   );
 
   expect(steps).toPartiallyContain({ step: 'proxy', outcome: 'timed-out' });
-  expect(ctx.parts.log).toHaveBeenCalledWith('impd: stop: proxy still running after 5ms; going on');
+  expect(ctx.logs).toContain('INFO impd.stop proxy still running after 5ms; going on');
   expect(ctx.parts.db.destroy).toHaveBeenCalledOnce();
 });
 

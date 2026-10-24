@@ -1,4 +1,5 @@
 import { expect, mock, test } from 'bun:test';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { buildMockElasticImp } from '../../../testing/vm/build-mock-elastic-imp';
 import { buildStubGuestMemory } from '../../../testing/vm/build-stub-guest-memory';
 import { createMemoryController } from './memory-controller';
@@ -11,7 +12,7 @@ function setupTest() {
   const limits: string[] = [];
   const grows: { id: string; mib: number }[] = [];
   const releases: string[] = [];
-  const logs: string[] = [];
+  const logs = captureImpdLogs();
 
   const plugged = new Map<string, number>();
 
@@ -44,9 +45,6 @@ function setupTest() {
       } else {
         plugged.set(id, mib);
       }
-    },
-    log: (message) => {
-      logs.push(message);
     },
     shrinkAfterMs: 60_000,
     now: () => clock.now,
@@ -1252,7 +1250,7 @@ test('it keeps the reservation of a plug that Firecracker applied but never answ
   expect(ctx.releases).toStrictEqual([]);
 
   expect(ctx.logs).toStrictEqual([
-    `impd: ${imp.name}: memory low (22 of 512 MiB free), grew to 768 MiB`,
+    `INFO impd.imps imp=${imp.name} memory low (22 of 512 MiB free), grew to 768 MiB`,
   ]);
 });
 

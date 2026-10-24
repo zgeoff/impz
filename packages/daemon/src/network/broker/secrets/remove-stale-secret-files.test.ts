@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import invariant from 'tiny-invariant';
 import { buildStubHostRoutes } from '../../../../testing/host-net/build-stub-host-routes';
 import { buildStubTickerTimer } from '../../../../testing/platform/build-stub-ticker-timer';
+import { captureImpdLogs } from '../../../../testing/platform/capture-impd-logs';
 import { loadConfig } from '../../../config';
 import { createReachPolicy } from '../../../host-net/net/reach-policy';
 import { writeConsistentCopy } from '../../../platform/db/database-copy';
@@ -45,7 +46,6 @@ test('it keeps aside a value no row of an older database names', async () => {
   const first = await createBroker({
     config: ctx.config,
     db: ctx.db,
-    log: () => {},
     timer: ctx.timer,
     resolveUpstream: resolvePublicUpstream,
     reach: ctx.reach,
@@ -70,7 +70,7 @@ test('it keeps aside a value no row of an older database names', async () => {
 
   ctx.stack.defer(() => older.destroy());
 
-  const logs: string[] = [];
+  const logs = captureImpdLogs();
 
   const restored = await createBroker({
     config: ctx.config,
@@ -79,9 +79,6 @@ test('it keeps aside a value no row of an older database names', async () => {
     resolveUpstream: resolvePublicUpstream,
     reach: ctx.reach,
     now: () => Date.parse('2026-10-04T05:30:00.000Z'),
-    log: (message) => {
-      logs.push(message);
-    },
   });
 
   ctx.stack.defer(() => restored.stop());
@@ -95,7 +92,7 @@ test('it keeps aside a value no row of an older database names', async () => {
   expect(left).toIncludeSameMembers(['.orphaned', expect.toStartWith('early.')]);
 
   expect(logs).toStrictEqual([
-    `impd: broker: kept secret value file ${late.valueFile}, which no database row names, in ${kept}`,
+    `INFO impd.broker kept secret value file ${late.valueFile}, which no database row names, in ${kept}`,
   ]);
 });
 
@@ -105,7 +102,6 @@ test('it removes the old file of a delete that stopped before removing it, on th
   const first = await createBroker({
     config: ctx.config,
     db: ctx.db,
-    log: () => {},
     timer: ctx.timer,
     resolveUpstream: resolvePublicUpstream,
     reach: ctx.reach,
@@ -135,7 +131,6 @@ test('it removes the old file of a delete that stopped before removing it, on th
   const restarted = await createBroker({
     config: ctx.config,
     db: ctx.db,
-    log: () => {},
     timer: ctx.timer,
     resolveUpstream: resolvePublicUpstream,
     reach: ctx.reach,
@@ -156,7 +151,6 @@ test('it removes the old file of a replace that stopped before removing it, on t
   const first = await createBroker({
     config: ctx.config,
     db: ctx.db,
-    log: () => {},
     timer: ctx.timer,
     resolveUpstream: resolvePublicUpstream,
     reach: ctx.reach,
@@ -186,7 +180,6 @@ test('it removes the old file of a replace that stopped before removing it, on t
   const restarted = await createBroker({
     config: ctx.config,
     db: ctx.db,
-    log: () => {},
     timer: ctx.timer,
     resolveUpstream: resolvePublicUpstream,
     reach: ctx.reach,
@@ -211,7 +204,6 @@ test('it keeps the record of a file whose removal fails again, and keeps the fil
   const first = await createBroker({
     config: ctx.config,
     db: ctx.db,
-    log: () => {},
     timer: ctx.timer,
     resolveUpstream: resolvePublicUpstream,
     reach: ctx.reach,
@@ -235,7 +227,7 @@ test('it keeps the record of a file whose removal fails again, and keeps the fil
   await first.deleteSecret('gone');
   await first.stop();
 
-  const logs: string[] = [];
+  const logs = captureImpdLogs();
 
   const restarted = await createBroker({
     config: ctx.config,
@@ -243,9 +235,6 @@ test('it keeps the record of a file whose removal fails again, and keeps the fil
     timer: ctx.timer,
     resolveUpstream: resolvePublicUpstream,
     reach: ctx.reach,
-    log: (message) => {
-      logs.push(message);
-    },
   });
 
   ctx.stack.defer(() => restarted.stop());
@@ -257,7 +246,7 @@ test('it keeps the record of a file whose removal fails again, and keeps the fil
   expect(recorded).toStrictEqual([saved.valueFile]);
 
   expect(logs).toStrictEqual([
-    expect.toStartWith('impd: broker: could not remove an old secret value file: '),
+    expect.toStartWith('WARNING impd.broker could not remove an old secret value file: '),
   ]);
 });
 
@@ -267,7 +256,6 @@ test('it never removes a recorded file that a row still names', async () => {
   const first = await createBroker({
     config: ctx.config,
     db: ctx.db,
-    log: () => {},
     timer: ctx.timer,
     resolveUpstream: resolvePublicUpstream,
     reach: ctx.reach,
@@ -290,7 +278,6 @@ test('it never removes a recorded file that a row still names', async () => {
   const restarted = await createBroker({
     config: ctx.config,
     db: ctx.db,
-    log: () => {},
     timer: ctx.timer,
     resolveUpstream: resolvePublicUpstream,
     reach: ctx.reach,

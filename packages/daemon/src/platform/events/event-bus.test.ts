@@ -1,8 +1,9 @@
 import { expect, test } from 'bun:test';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { createEventBus } from './event-bus';
 
 test('it gives an event to the listeners after one that throws', () => {
-  const bus = createEventBus<string>(() => {});
+  const bus = createEventBus<string>();
   const heard: string[] = [];
 
   bus.subscribe((event) => {
@@ -23,7 +24,7 @@ test('it gives an event to the listeners after one that throws', () => {
 });
 
 test('it keeps a throwing listener’s error from the publisher', () => {
-  const bus = createEventBus<string>(() => {});
+  const bus = createEventBus<string>();
 
   bus.subscribe(() => {
     throw new Error('the listener broke');
@@ -35,11 +36,8 @@ test('it keeps a throwing listener’s error from the publisher', () => {
 });
 
 test('it logs the error of a listener that throws', () => {
-  const logged: string[] = [];
-
-  const bus = createEventBus<string>((message) => {
-    logged.push(message);
-  });
+  const logged = captureImpdLogs();
+  const bus = createEventBus<string>();
 
   bus.subscribe(() => {
     throw new Error('the listener broke');
@@ -47,11 +45,11 @@ test('it logs the error of a listener that throws', () => {
 
   bus.publish('tick');
 
-  expect(logged).toStrictEqual(['impd: events: a listener failed: the listener broke']);
+  expect(logged).toStrictEqual(['WARNING impd.events a listener failed: the listener broke']);
 });
 
 test('it stops giving events to a listener once it unsubscribes', () => {
-  const bus = createEventBus<string>(() => {});
+  const bus = createEventBus<string>();
   const heard: string[] = [];
 
   const unsubscribe = bus.subscribe((event) => {

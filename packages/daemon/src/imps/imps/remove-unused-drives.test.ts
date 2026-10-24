@@ -61,7 +61,9 @@ test('it keeps every imp through an agent upgrade, and asleep on the kept drive'
   await ctx.imps.sleepAllImps();
   await ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
 
-  const pruned = ctx.logs.filter((line) => line.startsWith('impd: removed system drive'));
+  const pruned = ctx.logs.filter((line) =>
+    line.startsWith('INFO impd.storage removed system drive'),
+  );
 
   const imps = await ctx.client.imps.list();
 
@@ -218,7 +220,9 @@ test('it marks a VM re-adopted after a drive change as on the old agent', async 
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
 
-  const pruned = ctx.logs.filter((line) => line.startsWith('impd: removed system drive'));
+  const pruned = ctx.logs.filter((line) =>
+    line.startsWith('INFO impd.storage removed system drive'),
+  );
 
   const awake = await ctx.client.imps.get({ name: 'dev' });
 
@@ -273,7 +277,9 @@ test('it keeps the newer drive on a downgrade while a snapshot names it', async 
   await ctx.imps.sleepAllImps();
   await ctx.restartImpd(ctx.createSystemDrive(ctx.oldDrive));
 
-  const pruned = ctx.logs.filter((line) => line.startsWith('impd: removed system drive'));
+  const pruned = ctx.logs.filter((line) =>
+    line.startsWith('INFO impd.storage removed system drive'),
+  );
 
   expect(pruned).toBeEmpty();
 });
@@ -315,10 +321,12 @@ test('it prunes the newer drive once nothing names it', async () => {
   await ctx.client.imps.stop({ name: 'dev' });
   await ctx.restartImpd(ctx.createSystemDrive(ctx.oldDrive));
 
-  const pruned = ctx.logs.filter((line) => line.startsWith('impd: removed system drive'));
+  const pruned = ctx.logs.filter((line) =>
+    line.startsWith('INFO impd.storage removed system drive'),
+  );
 
   expect(pruned).toStrictEqual([
-    `impd: removed system drive ${'d2'.repeat(32)}.squashfs: no imp uses it`,
+    `INFO impd.storage removed system drive ${'d2'.repeat(32)}.squashfs: no imp uses it`,
   ]);
 });
 
@@ -462,7 +470,7 @@ test('it runs a boot whose vm.json cannot be written, and logs why', async () =>
   expect(started.state).toBe('running');
 
   expect(ctx.logs).toSatisfyAny((line: string) =>
-    line.startsWith('impd: dev: could not write vm.json'),
+    line.startsWith('WARNING impd.imps imp=dev could not write vm.json'),
   );
 });
 
@@ -544,7 +552,9 @@ test('it never removes a drive in use when the data dir moved, by its file name'
 
   await ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
 
-  const pruned = ctx.logs.filter((line) => line.startsWith('impd: removed system drive'));
+  const pruned = ctx.logs.filter((line) =>
+    line.startsWith('INFO impd.storage removed system drive'),
+  );
 
   expect(pruned).toBeEmpty();
   expect(existsSync(buildSystemDrivePath(ctx.dataDir, ctx.oldDrive))).toBeTrue();

@@ -33,7 +33,6 @@ import { isImpSetWrite } from './platform/db/is-imp-set-write';
 import { openDatabase } from './platform/db/open-database';
 import { getErrorMessage } from './platform/process/get-error-message';
 import { getImpdLogger } from './platform/process/get-impd-logger';
-import { printLog } from './platform/process/print-log';
 import { startOtlpExport } from './platform/telemetry/start-otlp-export';
 import { startImpdListeners } from './start-impd-listeners';
 import { startImpdTickers } from './start-impd-tickers';
@@ -48,7 +47,7 @@ import { setupSystemFiles } from './vm/storage/setup-system-files';
 import { checkKsmHost, readKsmHostStats } from './vm/vmm/ksm';
 
 export async function createImpd(config: Config, boundaries: Readonly<ImpdBoundaries> = {}) {
-  const plan: ImpdStopParts = { log: boundaries.log ?? printLog };
+  const plan: ImpdStopParts = {};
 
   try {
     return await startImpdParts(config, boundaries, plan);
@@ -66,7 +65,6 @@ async function startImpdParts(
   boundaries: Readonly<ImpdBoundaries>,
   plan: ImpdStopParts,
 ) {
-  const log = boundaries.log ?? printLog;
   const now = boundaries.now ?? Date.now;
   const startup: ImpdStartupStep[] = [];
 
@@ -77,7 +75,7 @@ async function startImpdParts(
   };
 
   for (const warning of config.warnings) {
-    log(`impd: warning: ${warning}`);
+    getImpdLogger('https').warning('{warning}', { warning });
   }
 
   const readKsmStats = boundaries.readKsmHostStats ?? readKsmHostStats;
@@ -95,7 +93,9 @@ async function startImpdParts(
     }
 
     if (ksm?.running === false) {
-      log('impd: IMP_KSM is on, but ksmd does not run (/sys/kernel/mm/ksm/run is 0)');
+      getImpdLogger('memory').info(
+        'IMP_KSM is on, but ksmd does not run (/sys/kernel/mm/ksm/run is 0)',
+      );
     }
   });
 
@@ -114,7 +114,7 @@ async function startImpdParts(
     const setfcapWarning = readSetfcapWarning(boundaries.readProcStatus?.());
 
     if (setfcapWarning !== null) {
-      log(setfcapWarning);
+      getImpdLogger('image').warning('{setfcapWarning}', { setfcapWarning });
     }
 
     return files;
@@ -243,7 +243,9 @@ async function startImpdParts(
   // stale templates go first, so the drive sweep can remove their drives
   runStep('boot-templates', () => {
     for (const key of imps.bootTemplates?.removeStale() ?? []) {
-      log(`impd: removed boot template ${key.slice(0, 12)}: this host boots something else`);
+      getImpdLogger('boot').info('removed boot template {key}: this host boots something else', {
+        key: key.slice(0, 12),
+      });
     }
   });
 
@@ -257,7 +259,7 @@ async function startImpdParts(
     });
 
     for (const name of removed) {
-      log(`impd: removed system drive ${name}: no imp uses it`);
+      getImpdLogger('storage').info('removed system drive {name}: no imp uses it', { name });
     }
   });
 
@@ -272,10 +274,7 @@ async function startImpdParts(
 
   // a key in this file cannot be bound to a token, so the SSH gateway and the token store
   // share one reader
-  const authorizedKeys = createAuthorizedKeys(
-    join(setupSshDir(config.dataDir), 'authorized_keys'),
-    log,
-  );
+  const authorizedKeys = createAuthorizedKeys(join(setupSshDir(config.dataDir), 'authorized_keys'));
 
   const access = await runStep('access', () =>
     loadImpdAccess(config, deps, authorizedKeys.probeListed),
@@ -309,7 +308,6 @@ async function startImpdParts(
           db,
           imps,
           readTailscale,
-          log,
           runCommand: deps.runCommand,
         });
 
@@ -389,7 +387,7 @@ async function startImpdParts(
     { runStep, plan },
   );
 
-  const idle = createIdleLoop({ config, db, imps, log });
+  const idle = createIdleLoop({ config, db, imps });
 
   const tickers = runStep('tickers', () =>
     startImpdTickers(
@@ -407,22 +405,14 @@ async function startImpdParts(
         diskUsage,
         backups,
       },
-      { log, ...(deps.tickerTimer !== undefined && { timer: deps.tickerTimer }) },
+      { ...(deps.tickerTimer !== undefined && { timer: deps.tickerTimer }) },
     ),
   );
 
   plan.tickers = tickers;
 
-  const printSeedFailure = (error: unknown): void => {
-    if (boundaries.log === undefined) {
-      getImpdLogger('image').error('could not add the default image: {error}', { error });
-    } else {
-      log(`impd: could not add the default image: ${getErrorMessage(error)}`);
-    }
-  };
-
   const ready = runStep('default-image', async () => {
-    await setupDefaultImage(config, stored.images, { log, printSeedFailure });
+    await setupDefaultImage(config, stored.images);
 
     state.ready = true;
   });
@@ -464,10 +454,6 @@ async function startImpdParts(
 async function setupDefaultImage(
   config: Config,
   images: Readonly<ImpdStorage['images']>,
-  output: Readonly<{
-    log: (message: string) => void;
-    printSeedFailure: (error: unknown) => void;
-  }>,
 ): Promise<void> {
   try {
     await images.seedDefaultImage();
@@ -475,11 +461,14 @@ async function setupDefaultImage(
     const existing = await images.listImages();
 
     if (!existing.some((image) => image.name === config.defaultImage)) {
-      output.log(
-        `impd: warning: no image named ${config.defaultImage} (IMP_DEFAULT_IMAGE); impz new uses ubuntu until \`impz image add <ref> --name ${config.defaultImage}\` adds it`,
+      getImpdLogger('image').warning(
+        'no image named {defaultImage} (IMP_DEFAULT_IMAGE); impz new uses ubuntu until `impz image add <ref> --name {defaultImage}` adds it',
+        { defaultImage: config.defaultImage },
       );
     }
   } catch (error) {
-    output.printSeedFailure(error);
+    getImpdLogger('image').error('could not add the default image: {error}', {
+      error: getErrorMessage(error),
+    });
   }
 }

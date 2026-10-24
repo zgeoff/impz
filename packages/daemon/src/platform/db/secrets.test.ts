@@ -155,7 +155,7 @@ test('it skips the clashing copy when a fork gets a grant while its source’s a
       forkGrant: { status: 'fulfilled', value: {} },
       copied: ['gh-api'],
       skipped: [
-        'impd: copy: forked without grant gh of dev: it has another credential for that host',
+        'INFO impd.imps imp=copy forked without grant gh of dev: it has another credential for that host',
       ],
     },
     {
@@ -166,7 +166,7 @@ test('it skips the clashing copy when a fork gets a grant while its source’s a
       forkGrant: { status: 'fulfilled', value: {} },
       copied: ['gh-api', 'npm'],
       skipped: [
-        'impd: copy: forked without grant gh of dev: it has another credential for that host',
+        'INFO impd.imps imp=copy forked without grant gh of dev: it has another credential for that host',
       ],
     },
   ]);

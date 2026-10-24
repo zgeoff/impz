@@ -4,6 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { rootCertificates } from 'node:tls';
+import { captureImpdLogs } from '../testing/platform/capture-impd-logs';
 import { createUpstreamResolver } from './create-upstream-resolver';
 
 async function setupTest() {
@@ -17,12 +18,8 @@ async function setupTest() {
 test('it sends every host to its real origin while the file is missing', async () => {
   const ctx = await setupTest();
 
-  const logs: string[] = [];
-
-  const resolve = createUpstreamResolver(join(ctx.directoryPath, 'upstreams.json'), (message) => {
-    logs.push(message);
-  });
-
+  const logs = captureImpdLogs();
+  const resolve = createUpstreamResolver(join(ctx.directoryPath, 'upstreams.json'));
   const upstream = resolve('api.github.com');
 
   expect(upstream).toStrictEqual({ origin: 'https://api.github.com', ca: null });
@@ -40,7 +37,7 @@ test('it sends a listed host to its test origin, trusting the file CA beside the
     }),
   );
 
-  const resolve = createUpstreamResolver(join(ctx.directoryPath, 'upstreams.json'), () => {});
+  const resolve = createUpstreamResolver(join(ctx.directoryPath, 'upstreams.json'));
 
   expect(resolve('api.github.com')).toStrictEqual({
     origin: 'https://172.17.0.1:9443',
@@ -59,7 +56,7 @@ test('it strips a trailing slash from a test origin', async () => {
     }),
   );
 
-  const resolve = createUpstreamResolver(join(ctx.directoryPath, 'upstreams.json'), () => {});
+  const resolve = createUpstreamResolver(join(ctx.directoryPath, 'upstreams.json'));
 
   expect(resolve('api.github.com').origin).toBe('https://172.17.0.1:9443');
 });
@@ -75,7 +72,7 @@ test('it sends a host the file does not list to its real origin', async () => {
     }),
   );
 
-  const resolve = createUpstreamResolver(join(ctx.directoryPath, 'upstreams.json'), () => {});
+  const resolve = createUpstreamResolver(join(ctx.directoryPath, 'upstreams.json'));
 
   expect(resolve('github.com')).toStrictEqual({ origin: 'https://github.com', ca: null });
 });
@@ -83,7 +80,7 @@ test('it sends a host the file does not list to its real origin', async () => {
 test('it logs a load once while the file keeps its mtime', async () => {
   const ctx = await setupTest();
 
-  const logs: string[] = [];
+  const logs = captureImpdLogs();
 
   writeFileSync(
     join(ctx.directoryPath, 'upstreams.json'),
@@ -96,15 +93,13 @@ test('it logs a load once while the file keeps its mtime', async () => {
     }),
   );
 
-  const resolve = createUpstreamResolver(join(ctx.directoryPath, 'upstreams.json'), (message) => {
-    logs.push(message);
-  });
+  const resolve = createUpstreamResolver(join(ctx.directoryPath, 'upstreams.json'));
 
   resolve('api.github.com');
   resolve('github.com');
 
   expect(logs).toStrictEqual([
-    `impd: broker: warning: test upstreams from ${join(ctx.directoryPath, 'upstreams.json')} stand in for api.github.com, github.com`,
+    `WARNING impd.broker test upstreams from ${join(ctx.directoryPath, 'upstreams.json')} stand in for api.github.com, github.com`,
   ]);
 });
 
@@ -121,7 +116,7 @@ test('it reads the file again once its mtime changes', async () => {
 
   utimesSync(join(ctx.directoryPath, 'upstreams.json'), 1000, 1000);
 
-  const resolve = createUpstreamResolver(join(ctx.directoryPath, 'upstreams.json'), () => {});
+  const resolve = createUpstreamResolver(join(ctx.directoryPath, 'upstreams.json'));
 
   resolve('api.github.com');
 
@@ -141,7 +136,7 @@ test('it reads the file again once its mtime changes', async () => {
 test('it reads a file again after it was gone, though its mtime is the old one', async () => {
   const ctx = await setupTest();
 
-  const logs: string[] = [];
+  const logs = captureImpdLogs();
 
   const content = JSON.stringify({
     ca: '-----BEGIN CERTIFICATE-----\nTEST\n-----END CERTIFICATE-----',
@@ -151,9 +146,7 @@ test('it reads a file again after it was gone, though its mtime is the old one',
   writeFileSync(join(ctx.directoryPath, 'upstreams.json'), content);
   utimesSync(join(ctx.directoryPath, 'upstreams.json'), 1000, 1000);
 
-  const resolve = createUpstreamResolver(join(ctx.directoryPath, 'upstreams.json'), (message) => {
-    logs.push(message);
-  });
+  const resolve = createUpstreamResolver(join(ctx.directoryPath, 'upstreams.json'));
 
   resolve('api.github.com');
   rmSync(join(ctx.directoryPath, 'upstreams.json'));
@@ -163,15 +156,15 @@ test('it reads a file again after it was gone, though its mtime is the old one',
   resolve('api.github.com');
 
   expect(logs).toStrictEqual([
-    `impd: broker: warning: test upstreams from ${join(ctx.directoryPath, 'upstreams.json')} stand in for api.github.com`,
-    `impd: broker: warning: test upstreams from ${join(ctx.directoryPath, 'upstreams.json')} stand in for api.github.com`,
+    `WARNING impd.broker test upstreams from ${join(ctx.directoryPath, 'upstreams.json')} stand in for api.github.com`,
+    `WARNING impd.broker test upstreams from ${join(ctx.directoryPath, 'upstreams.json')} stand in for api.github.com`,
   ]);
 });
 
 test('it logs an invalid file and sends every host to its real origin', async () => {
   const ctx = await setupTest();
 
-  const logs: string[] = [];
+  const logs = captureImpdLogs();
 
   writeFileSync(
     join(ctx.directoryPath, 'upstreams.json'),
@@ -181,48 +174,29 @@ test('it logs an invalid file and sends every host to its real origin', async ()
     }),
   );
 
-  const resolve = createUpstreamResolver(join(ctx.directoryPath, 'upstreams.json'), (message) => {
-    logs.push(message);
-  });
-
+  const resolve = createUpstreamResolver(join(ctx.directoryPath, 'upstreams.json'));
   const upstream = resolve('api.github.com');
 
   expect(upstream).toStrictEqual({ origin: 'https://api.github.com', ca: null });
 
   expect(logs).toStrictEqual([
-    `impd: broker: ignoring ${join(ctx.directoryPath, 'upstreams.json')}: ${JSON.stringify(
-      [
-        {
-          code: 'invalid_format',
-          format: 'url',
-          note: 'Invalid protocol',
-          pattern: '^https$',
-          path: ['upstreams', 'api.github.com'],
-          message: 'Invalid URL',
-        },
-      ],
-      null,
-      2,
-    )}`,
+    `WARNING impd.broker ignoring ${join(ctx.directoryPath, 'upstreams.json')}: [\\n  {\\n    "code": "invalid_format",\\n    "format": "url",\\n    "note": "Invalid protocol",\\n    "pattern": "^https$",\\n    "path": [\\n      "upstreams",\\n      "api.github.com"\\n    ],\\n    "message": "Invalid URL"\\n  }\\n]`,
   ]);
 });
 
 test('it logs a file that is not JSON and sends every host to its real origin', async () => {
   const ctx = await setupTest();
 
-  const logs: string[] = [];
+  const logs = captureImpdLogs();
 
   writeFileSync(join(ctx.directoryPath, 'upstreams.json'), '{not json');
 
-  const resolve = createUpstreamResolver(join(ctx.directoryPath, 'upstreams.json'), (message) => {
-    logs.push(message);
-  });
-
+  const resolve = createUpstreamResolver(join(ctx.directoryPath, 'upstreams.json'));
   const upstream = resolve('api.github.com');
 
   expect(upstream).toStrictEqual({ origin: 'https://api.github.com', ca: null });
 
   expect(logs).toStrictEqual([
-    `impd: broker: ignoring ${join(ctx.directoryPath, 'upstreams.json')}: JSON Parse error: Expected '}'`,
+    `WARNING impd.broker ignoring ${join(ctx.directoryPath, 'upstreams.json')}: JSON Parse error: Expected '}'`,
   ]);
 });

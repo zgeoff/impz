@@ -4,6 +4,7 @@ import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { createMockCertificate } from '../../../testing/network/create-mock-certificate';
 import { startStubHeaderEcho } from '../../../testing/network/start-stub-header-echo';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { readPublicImp } from '../../platform/db/exposure';
 import { readImpByName, updateImpExposure } from '../../platform/db/imps';
@@ -28,7 +29,6 @@ async function setupTest() {
     config: { ...harness.config, apiPort: echo.port },
     db,
     imps: impd.imps,
-    log: () => {},
     peers: createForwardedPeers(Date.now),
     ports: { proxy: 0, slot: () => 0 },
   });
@@ -46,7 +46,6 @@ test('it listens on nothing before the first certificate', async () => {
     domain: 'imp.test',
     httpsPort: 0,
     httpPort: 0,
-    log: () => {},
     scope: { kind: 'tailnet' },
   });
 
@@ -64,7 +63,6 @@ test('it sends the bare domain to the API over https', async () => {
     domain: 'imp.test',
     httpsPort: 0,
     httpPort: 0,
-    log: () => {},
     scope: { kind: 'tailnet' },
   });
 
@@ -103,7 +101,6 @@ test('it takes one label in front of the domain as an imp, even one named like t
     domain: 'imp.test',
     httpsPort: 0,
     httpPort: 0,
-    log: () => {},
     scope: { kind: 'tailnet' },
   });
 
@@ -134,7 +131,6 @@ test('it answers two labels in front of the domain with a 404 that says how', as
     domain: 'imp.test',
     httpsPort: 0,
     httpPort: 0,
-    log: () => {},
     scope: { kind: 'tailnet' },
   });
 
@@ -165,7 +161,6 @@ test('it answers another domain with a 404', async () => {
     domain: 'imp.test',
     httpsPort: 0,
     httpPort: 0,
-    log: () => {},
     scope: { kind: 'tailnet' },
   });
 
@@ -192,7 +187,6 @@ test('it hands the dashboard session to the API on the bare domain', async () =>
     domain: 'imp.test',
     httpsPort: 0,
     httpPort: 0,
-    log: () => {},
     scope: { kind: 'tailnet' },
   });
 
@@ -236,7 +230,6 @@ test('it never hands the dashboard session to an imp', async () => {
     domain: 'imp.test',
     httpsPort: 0,
     httpPort: 0,
-    log: () => {},
     scope: { kind: 'tailnet' },
   });
 
@@ -283,7 +276,6 @@ test('it redirects plain http on the domain to https on its port', async () => {
     domain: 'imp.test',
     httpsPort: 0,
     httpPort: 0,
-    log: () => {},
     scope: { kind: 'tailnet' },
   });
 
@@ -316,7 +308,6 @@ test('it answers plain http for another domain with a 404', async () => {
     domain: 'imp.test',
     httpsPort: 0,
     httpPort: 0,
-    log: () => {},
     scope: { kind: 'tailnet' },
   });
 
@@ -345,7 +336,6 @@ test('it wakes no imp for plain http on the domain', async () => {
     domain: 'imp.test',
     httpsPort: 0,
     httpPort: 0,
-    log: () => {},
     scope: { kind: 'tailnet' },
   });
 
@@ -380,7 +370,6 @@ test('it serves the first certificate to a new connection', async () => {
     domain: 'imp.test',
     httpsPort: 0,
     httpPort: 0,
-    log: () => {},
     scope: { kind: 'tailnet' },
   });
 
@@ -420,7 +409,6 @@ test('it serves a new certificate to every new connection once it is set', async
     domain: 'imp.test',
     httpsPort: 0,
     httpPort: 0,
-    log: () => {},
     scope: { kind: 'tailnet' },
   });
 
@@ -472,7 +460,6 @@ test('it keeps an open WebSocket up across a new certificate', async () => {
     domain: 'imp.test',
     httpsPort: 0,
     httpPort: 0,
-    log: () => {},
     scope: { kind: 'tailnet' },
   });
 
@@ -521,7 +508,6 @@ test('it stops serving an address that goes away', async () => {
     domain: 'imp.test',
     httpsPort: 0,
     httpPort: 0,
-    log: () => {},
     scope: { kind: 'tailnet' },
   });
 
@@ -559,16 +545,13 @@ test('it logs an address it cannot bind once', async () => {
 
   ctx.stack.defer(() => squatter.stop(true));
 
-  const logs: string[] = [];
+  const logs = captureImpdLogs();
 
   const listeners = createHttpsListeners({
     proxy: ctx.proxy,
     domain: 'imp.test',
     httpsPort: squatter.port ?? 0,
     httpPort: 0,
-    log: (message) => {
-      logs.push(message);
-    },
     scope: { kind: 'tailnet' },
   });
 
@@ -581,7 +564,7 @@ test('it logs an address it cannot bind once', async () => {
   listeners.setAddresses(['127.0.0.1']);
 
   expect(logs.filter((line) => line.includes('cannot listen'))).toStrictEqual([
-    expect.toStartWith(`impd: https: cannot listen on 127.0.0.1:${String(squatter.port)}: `),
+    expect.toStartWith(`WARNING impd.https cannot listen on 127.0.0.1:${String(squatter.port)}: `),
   ]);
 });
 
@@ -597,16 +580,13 @@ test('it binds an address it could not bind once the port is free, and says so',
   ctx.stack.defer(() => squatter.stop(true));
 
   const port = squatter.port ?? 0;
-  const logs: string[] = [];
+  const logs = captureImpdLogs();
 
   const listeners = createHttpsListeners({
     proxy: ctx.proxy,
     domain: 'imp.test',
     httpsPort: port,
     httpPort: 0,
-    log: (message) => {
-      logs.push(message);
-    },
     scope: { kind: 'tailnet' },
   });
 
@@ -621,7 +601,7 @@ test('it binds an address it could not bind once the port is free, and says so',
 
   listeners.setAddresses(['127.0.0.1']);
 
-  expect(logs).toContain(`impd: https: listening on 127.0.0.1:${String(port)}`);
+  expect(logs).toContain(`INFO impd.https listening on 127.0.0.1:${String(port)}`);
 });
 
 test.each([['web.imp.test'], ['WEB.imp.test.'], ['web.imp.test:443']])(
@@ -636,7 +616,6 @@ test.each([['web.imp.test'], ['WEB.imp.test.'], ['web.imp.test:443']])(
       domain: 'imp.test',
       httpsPort: 0,
       httpPort: 0,
-      log: () => {},
       scope: createPublicScope((name) => readPublicImp(ctx.db, name), createPublicLimits()),
     });
 
@@ -671,7 +650,6 @@ test('it answers an imp that does not exist on the public listener with the same
     domain: 'imp.test',
     httpsPort: 0,
     httpPort: 0,
-    log: () => {},
     scope: createPublicScope((name) => readPublicImp(ctx.db, name), createPublicLimits()),
   });
 
@@ -702,7 +680,6 @@ test('it answers the bare domain on the public listener with the 404 for no imp'
     domain: 'imp.test',
     httpsPort: 0,
     httpPort: 0,
-    log: () => {},
     scope: createPublicScope((name) => readPublicImp(ctx.db, name), createPublicLimits()),
   });
 
@@ -735,7 +712,6 @@ test('it answers plain http for a tailnet-only imp on the public listener with a
     domain: 'imp.test',
     httpsPort: 0,
     httpPort: 0,
-    log: () => {},
     scope: createPublicScope((name) => readPublicImp(ctx.db, name), createPublicLimits()),
   });
 
@@ -767,7 +743,6 @@ test('it wakes no tailnet-only imp for a request on the public listener', async 
     domain: 'imp.test',
     httpsPort: 0,
     httpPort: 0,
-    log: () => {},
     scope: createPublicScope((name) => readPublicImp(ctx.db, name), createPublicLimits()),
   });
 
@@ -804,7 +779,6 @@ test('it serves a public imp without auth on the public listener', async () => {
     domain: 'imp.test',
     httpsPort: 0,
     httpPort: 0,
-    log: () => {},
     scope: createPublicScope((name) => readPublicImp(ctx.db, name), createPublicLimits()),
   });
 
@@ -852,7 +826,6 @@ test('it redirects plain http for a public imp to port 443', async () => {
     domain: 'imp.test',
     httpsPort: 0,
     httpPort: 0,
-    log: () => {},
     scope: createPublicScope((name) => readPublicImp(ctx.db, name), createPublicLimits()),
   });
 
@@ -897,7 +870,6 @@ test.each([
     domain: 'imp.test',
     httpsPort: 0,
     httpPort: 0,
-    log: () => {},
     scope: createPublicScope((name) => readPublicImp(ctx.db, name), createPublicLimits()),
   });
 
@@ -936,7 +908,6 @@ test('it wakes no token imp for a request without its token', async () => {
     domain: 'imp.test',
     httpsPort: 0,
     httpPort: 0,
-    log: () => {},
     scope: createPublicScope((name) => readPublicImp(ctx.db, name), createPublicLimits()),
   });
 
@@ -980,7 +951,6 @@ test('it serves a token imp given its token, without passing the token on', asyn
     domain: 'imp.test',
     httpsPort: 0,
     httpPort: 0,
-    log: () => {},
     scope: createPublicScope((name) => readPublicImp(ctx.db, name), createPublicLimits()),
   });
 
@@ -1037,7 +1007,6 @@ test.each([
     domain: 'imp.test',
     httpsPort: 0,
     httpPort: 0,
-    log: () => {},
     scope: createPublicScope((name) => readPublicImp(ctx.db, name), createPublicLimits()),
   });
 
@@ -1079,7 +1048,6 @@ test('it serves a basic auth imp given its user and password, without passing th
     domain: 'imp.test',
     httpsPort: 0,
     httpPort: 0,
-    log: () => {},
     scope: createPublicScope((name) => readPublicImp(ctx.db, name), createPublicLimits()),
   });
 
@@ -1136,7 +1104,6 @@ test('it takes no open slot and no wake for plain http on the public listener', 
     domain: 'imp.test',
     httpsPort: 0,
     httpPort: 0,
-    log: () => {},
     scope: createPublicScope((name) => readPublicImp(ctx.db, name), limits),
   });
 
@@ -1183,7 +1150,6 @@ test('it answers a WebSocket upgrade without the token with a 401', async () => 
     domain: 'imp.test',
     httpsPort: 0,
     httpPort: 0,
-    log: () => {},
     scope: createPublicScope((name) => readPublicImp(ctx.db, name), createPublicLimits()),
   });
 
@@ -1236,7 +1202,6 @@ test('it replaces a public client’s forwarding headers with its own', async ()
     domain: 'imp.test',
     httpsPort: 0,
     httpPort: 0,
-    log: () => {},
     scope: createPublicScope((name) => readPublicImp(ctx.db, name), createPublicLimits()),
   });
 
@@ -1291,7 +1256,6 @@ test('it names neither the imp’s port nor the error on the public listener whe
     domain: 'imp.test',
     httpsPort: 0,
     httpPort: 0,
-    log: () => {},
     scope: createPublicScope((name) => readPublicImp(ctx.db, name), createPublicLimits()),
   });
 

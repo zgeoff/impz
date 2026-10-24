@@ -9,7 +9,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
-import { printLog } from '../../platform/process/print-log';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { runChecked } from '../../platform/process/run-command';
 import { countOwnerBytes } from './count-owner-bytes';
 import type { OwnedFile } from './count-owner-bytes';
@@ -54,7 +54,6 @@ interface XfsBackendDeps {
   readonly dataDir: string;
   readonly cloneFile?: (source: string, target: string) => Promise<void>;
   readonly reserveFileBytes?: number;
-  readonly log?: (message: string) => void;
   readonly readFileExtents?: typeof readExtents;
 }
 
@@ -65,7 +64,6 @@ interface OwnedPath {
 
 export function createXfsBackend(deps: XfsBackendDeps): StorageBackend {
   const cloneFile = deps.cloneFile ?? createReflinkClone;
-  const log = deps.log ?? printLog;
   const readFileExtents = deps.readFileExtents ?? readExtents;
   const resolveImpPaths = (impId: string) => buildImpPaths(deps.dataDir, impId);
 
@@ -221,7 +219,9 @@ export function createXfsBackend(deps: XfsBackendDeps): StorageBackend {
     const stats = statfsSync(deps.dataDir);
 
     if (stats.bavail * stats.bsize < 2 * bytes) {
-      log(`impd: xfs: too little free space for the ${String(bytes)}-byte reserve file`);
+      getImpdLogger('xfs').info('too little free space for the {bytes}-byte reserve file', {
+        bytes: String(bytes),
+      });
 
       return;
     }
@@ -259,7 +259,7 @@ export function createXfsBackend(deps: XfsBackendDeps): StorageBackend {
 
       const swept = removeUnnamed(live, { isDryRun: false, isOrphans: false });
 
-      printSweep(log, 'impd: storage', swept, 'each');
+      printSweep(getImpdLogger('storage'), swept, 'each');
 
       return setupReserveFile();
     },

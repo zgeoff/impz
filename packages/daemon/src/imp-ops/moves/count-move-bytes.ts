@@ -10,7 +10,6 @@ interface MoveBytesDeps {
   readonly db: ImpDatabase;
   readonly dataDir: string;
   readonly storage: Pick<StorageBackend, 'openMoveSource' | 'resolveImpPaths'>;
-  readonly log: (message: string) => void;
 }
 
 // `zfs send -nP` only estimates a stream's size, so the ticket allows this
@@ -43,6 +42,6 @@ export async function countMoveBytes(
 
     return bytes;
   } finally {
-    await removeMoveParts(deps, opened);
+    await removeMoveParts(opened);
   }
 }

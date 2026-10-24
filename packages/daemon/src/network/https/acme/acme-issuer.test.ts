@@ -31,7 +31,6 @@ test('it rejects an order whose authorization offers no dns-01 challenge', async
     store: createCertStore(ctx.directoryPath),
 
     dns: createChalltestsrvProvider('http://127.0.0.1:9'),
-    log: () => {},
   });
 
   const issued = issue('imp.test');

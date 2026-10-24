@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { utils } from 'ssh2';
 import invariant from 'tiny-invariant';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { generateEd25519Key } from '../../surface/ssh/host-key';
 import { createAuthorizedKeys, formatKeyFingerprint, parseAuthorizedKeys } from './authorized-keys';
 
@@ -99,7 +100,7 @@ test('it finds a key that the file lists', async () => {
   invariant(blob);
   writeFileSync(ctx.keysPath, `${key} me\n`, { mode: 0o600 });
 
-  const keys = createAuthorizedKeys(ctx.keysPath, () => {});
+  const keys = createAuthorizedKeys(ctx.keysPath);
 
   expect(keys.readKey(blob)).toStrictEqual({
     type: 'ssh-ed25519',
@@ -117,7 +118,7 @@ test('it finds no key that the file does not list', async () => {
   invariant(other);
   writeFileSync(ctx.keysPath, `${generateEd25519Key().public}\n`, { mode: 0o600 });
 
-  const keys = createAuthorizedKeys(ctx.keysPath, () => {});
+  const keys = createAuthorizedKeys(ctx.keysPath);
 
   expect(keys.readKey(other)).toBeNull();
 });
@@ -132,7 +133,7 @@ test('it lists a key but grants none from a file that others can write', async (
   writeFileSync(ctx.keysPath, `${key}\n`, { mode: 0o600 });
   chmodSync(ctx.keysPath, 0o666);
 
-  const keys = createAuthorizedKeys(ctx.keysPath, () => {});
+  const keys = createAuthorizedKeys(ctx.keysPath);
 
   expect(keys.readKey(blob)).toBeNull();
   expect(keys.probeListed(blob)).toBeTrue();
@@ -143,20 +144,18 @@ test('it grants no key from a file whose directory others can write', async () =
 
   const key = generateEd25519Key().public;
   const blob = parseAuthorizedKeys(key).keys[0]?.blob;
-  const logs: string[] = [];
+  const logs = captureImpdLogs();
 
   invariant(blob);
   writeFileSync(ctx.keysPath, `${key}\n`, { mode: 0o600 });
   chmodSync(ctx.directoryPath, 0o777);
 
-  const keys = createAuthorizedKeys(ctx.keysPath, (message) => {
-    logs.push(message);
-  });
+  const keys = createAuthorizedKeys(ctx.keysPath);
 
   expect(keys.readKey(blob)).toBeNull();
 
   expect(logs).toStrictEqual([
-    `impd: ssh: ${ctx.directoryPath} is writable by group or others; no key can log in until it is not`,
+    `WARNING impd.ssh ${ctx.directoryPath} is writable by group or others; no key can log in until it is not`,
   ]);
 });
 
@@ -164,33 +163,29 @@ test('it logs that no key can log in when the file is missing', async () => {
   const ctx = await setupTest();
 
   const blob = parseAuthorizedKeys(generateEd25519Key().public).keys[0]?.blob;
-  const logs: string[] = [];
+  const logs = captureImpdLogs();
 
   invariant(blob);
 
-  const keys = createAuthorizedKeys(ctx.keysPath, (message) => {
-    logs.push(message);
-  });
+  const keys = createAuthorizedKeys(ctx.keysPath);
 
   expect(keys.readKey(blob)).toBeNull();
-  expect(logs).toStrictEqual([`impd: ssh: no ${ctx.keysPath}; no key can log in`]);
+  expect(logs).toStrictEqual([`INFO impd.ssh no ${ctx.keysPath}; no key can log in`]);
 });
 
 test('it logs each line it skips with its problem', async () => {
   const ctx = await setupTest();
 
-  const logs: string[] = [];
+  const logs = captureImpdLogs();
 
   writeFileSync(ctx.keysPath, 'ssh-dss AAAA me\n', { mode: 0o600 });
 
-  const keys = createAuthorizedKeys(ctx.keysPath, (message) => {
-    logs.push(message);
-  });
+  const keys = createAuthorizedKeys(ctx.keysPath);
 
   keys.probeListed(Buffer.alloc(0));
 
   expect(logs).toStrictEqual([
-    `impd: ssh: ${ctx.keysPath} line 1: ssh-dss keys are not supported; skipped`,
+    `INFO impd.ssh ${ctx.keysPath} line 1: ssh-dss keys are not supported; skipped`,
   ]);
 });
 
@@ -199,7 +194,7 @@ test('it reads the file again once it changes', async () => {
 
   const key = generateEd25519Key().public;
   const blob = parseAuthorizedKeys(key).keys[0]?.blob;
-  const keys = createAuthorizedKeys(ctx.keysPath, () => {});
+  const keys = createAuthorizedKeys(ctx.keysPath);
 
   invariant(blob);
   writeFileSync(ctx.keysPath, '', { mode: 0o600 });
@@ -223,13 +218,11 @@ test('it reads the file again once it changes', async () => {
 test('it reads the file once while it does not change', async () => {
   const ctx = await setupTest();
 
-  const logs: string[] = [];
+  const logs = captureImpdLogs();
 
   writeFileSync(ctx.keysPath, 'ssh-dss AAAA me\n', { mode: 0o600 });
 
-  const keys = createAuthorizedKeys(ctx.keysPath, (message) => {
-    logs.push(message);
-  });
+  const keys = createAuthorizedKeys(ctx.keysPath);
 
   keys.probeListed(Buffer.alloc(0));
   keys.probeListed(Buffer.alloc(0));
