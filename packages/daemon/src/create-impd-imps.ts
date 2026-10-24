@@ -194,6 +194,7 @@ export function createImpdImps(
     readRamMib: (imp) => host.readRamMib(imp.pid, imp.paths.apiSocket),
     setPluggedMib: pluggedSizes.write,
     log,
+    shrinkAfterMs: config.memoryShrinkAfterMs,
     ...(deps.now !== undefined && { now: deps.now }),
   });
 

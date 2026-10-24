@@ -84,7 +84,7 @@ test('it grows an elastic guest under a gradual allocation, shrinks it once the 
         throw new Error(`${String(pluggedMib)} MiB still plugged`);
       }
     },
-    { timeoutMs: 90_000, intervalMs: 1000 },
+    { timeoutMs: 30_000, intervalMs: 1000 },
   );
 
   writeMetric('memory_shrink_after_free_ms', Math.round(performance.now() - shrinkStarted));
@@ -93,8 +93,8 @@ test('it grows an elastic guest under a gradual allocation, shrinks it once the 
 
   expect(totalShrunk).toBeLessThan(256 + 256);
 
-  // 300 MiB at 30 MiB a second, too soon for the minute-long idle shrink. It
-  // crosses the grow mark only near its end, so it stays in use until the grow.
+  // 300 MiB at 30 MiB a second, and in use as it grows, so no shrink comes before the grow
+  // (the harness sets impd's shrink delay to 10 s). It crosses the grow mark only near its end.
   const secondFillStarted = new Date();
 
   await runShellInImp(

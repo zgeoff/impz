@@ -76,6 +76,7 @@ test('it backs up a running imp mid-write, a stopped imp and a checkpoint, adds 
   const first = await drill.runBackup();
 
   writeMetric('backupFirstMs', Date.now() - firstStarted);
+  writeMetric('backupFirstImpdMs', first.durationMs);
   writeMetric('backupFirstAddedMiB', Math.round(first.dataAddedBytes / 1_048_576));
 
   // The bracket keeps pkill from matching the shell that runs it.

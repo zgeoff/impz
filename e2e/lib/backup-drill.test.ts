@@ -129,7 +129,7 @@ test('#createBackupDrill neither reboots back nor stops MinIO for a test that re
   ]);
 });
 
-test('#buildBackupEnv points impd at the drill repository with its keys and schedule', () => {
+test('#buildBackupEnv points impd at the drill repository with its keys and schedule, on small disks', () => {
   expect(
     buildBackupEnv(
       {
@@ -147,6 +147,7 @@ test('#buildBackupEnv points impd at the drill repository with its keys and sche
     IMP_BACKUP_INTERVAL_S: '60',
     IMP_BACKUP_MEMORY_MIB: '256',
     IMP_DEV_BACKUP_ENV_FILE: '/repo/.cache/e2e/backups-a1/restic.env',
+    IMP_DEFAULT_DISK_GIB: '4',
   });
 });
 

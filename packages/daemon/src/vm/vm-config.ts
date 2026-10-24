@@ -12,6 +12,9 @@ export interface KsmConfig {
 export interface VmConfig extends HostNetConfig {
   readonly dataDir: string;
   readonly ramBudgetMib: number;
+
+  // how long an elastic guest could give back a step before impd unplugs it
+  readonly memoryShrinkAfterMs: number;
   readonly watchdogTimeoutS: number;
   readonly watchdogAction: WatchdogAction;
   readonly firecrackerBin: string;

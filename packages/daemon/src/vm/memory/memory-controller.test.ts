@@ -48,6 +48,7 @@ function setupTest() {
     log: (message) => {
       logs.push(message);
     },
+    shrinkAfterMs: 60_000,
     now: () => clock.now,
     sleep: () => Promise.resolve(),
   };
@@ -527,6 +528,41 @@ test('it shrinks a guest that could give back a step for a minute', async () => 
 
   await controller.runTick();
 
+  expect(ctx.guests.requests).toStrictEqual([496]);
+});
+
+test('it shrinks a guest that could give back a step for the delay impd is set to', async () => {
+  const ctx = setupTest();
+
+  const imp = buildMockElasticImp({
+    id: 'dev',
+    memoryMib: 512,
+    maxMemoryMib: 1536,
+    agentVersion: '0.17.0',
+  });
+
+  ctx.imps.push(imp);
+  ctx.guests.addGuest(imp.paths, { pluggedMib: 1024, requestedMib: 1024, usedMib: 600 });
+
+  const controller = createMemoryController({
+    ...ctx.deps,
+    shrinkAfterMs: 10_000,
+    readRamMib: () => 1400,
+  });
+
+  await controller.runTick();
+
+  ctx.advance(9999);
+
+  await controller.runTick();
+
+  const early = [...ctx.guests.requests];
+
+  ctx.advance(1);
+
+  await controller.runTick();
+
+  expect(early).toStrictEqual([]);
   expect(ctx.guests.requests).toStrictEqual([496]);
 });
 

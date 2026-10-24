@@ -39,6 +39,10 @@ export function buildBackupEnv(
     IMP_BACKUP_INTERVAL_S: String(intervalS),
     IMP_BACKUP_MEMORY_MIB: '256',
     IMP_DEV_BACKUP_ENV_FILE: secrets.envFile,
+
+    // restic reads a disk's whole size, holes and all, on every run, so a drill's imps take the
+    // smallest disk an image allows (4 GiB) in place of the 32 GiB default
+    IMP_DEFAULT_DISK_GIB: '4',
   };
 }
 
