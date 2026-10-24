@@ -336,7 +336,8 @@ export function buildKsmSettings(isKsmRunning: boolean): Readonly<Record<string,
   };
 }
 
-const JOURNEY_TIMEOUT_MS = 3_600_000;
+// the e2e lane's limit on one journey test, as zgeoff/max-test-timeout declares it
+const JOURNEY_TIMEOUT_MS = 60_000;
 
 // Plain `bun test` skips *.e2e.ts; a ./ path runs one anyway, where a bare
 // path is a name filter.

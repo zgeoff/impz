@@ -590,7 +590,7 @@ test('it runs each journey with its full argv and the env of the instance it set
       '--config=e2e/bunfig.toml',
       '--bail',
       '--timeout',
-      '3600000',
+      '60000',
       './e2e/suites/docker.e2e.ts',
     ],
     env: {
