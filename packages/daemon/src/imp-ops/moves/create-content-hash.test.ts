@@ -1,6 +1,15 @@
 import { expect, test } from 'bun:test';
 import { createContentHash } from './create-content-hash';
 
+test('it sums the size line, then the offset, length and bytes of each non-zero piece', () => {
+  const hash = createContentHash(3 * 1024 * 1024);
+
+  hash.update(0, Buffer.from('rootfs'));
+  hash.update(1024 * 1024, Buffer.alloc(1024 * 1024));
+
+  expect(hash.digest()).toBe('9f0f844204f54bf042f833324718cd995dec4570b77f2b2fd20137b67eb92a08');
+});
+
 test('it sums the same file sent with its zero block as data and as a hole alike', () => {
   const withZeros = createContentHash(3 * 1024 * 1024);
   const withHole = createContentHash(3 * 1024 * 1024);
