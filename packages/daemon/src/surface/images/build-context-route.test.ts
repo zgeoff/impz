@@ -509,6 +509,54 @@ test('it expires an upload on the build upload timer impd was given', async () =
   expect(after).toStrictEqual([]);
 });
 
+test('it keeps the disk room of an upload after it answers, until the upload expires', async () => {
+  const ctx = await setupTest();
+
+  const builder = buildStubImageBuilder({ exported: [], repoDigest: `sha256:${'b'.repeat(64)}` });
+
+  const harness = await startBuilderImpd(ctx.stack, builder, {
+    dataDir: ctx.dataDir,
+    rootToken: ctx.rootToken,
+    cloneDisk: ctx.cloneDisk,
+  });
+
+  const clock = buildStubClock();
+
+  const route = createBuildContextRoute({
+    config: { dataDir: ctx.dataDir, buildContextMaxBytes: 1024 ** 2 },
+    images: harness.impd.images,
+    diskBudget: harness.impd.diskBudget,
+    audit: createApiAudit({ db: harness.db, now: Date.now, log: () => {}, readErrorCode }),
+    now: Date.now,
+    startTimer: clock.startTimer,
+  });
+
+  const uploaded = await route.respond(
+    new Request(`http://impd.test${BUILD_CONTEXT_PATH}?name=web`, {
+      method: 'POST',
+      headers: { 'content-length': '1024' },
+      body: new Uint8Array(1024),
+    }),
+    buildMockCaller(),
+  );
+
+  const held = await harness.impd.diskBudget.readStatus();
+
+  clock.runFor(UPLOAD_TTL_MS);
+
+  const expired = await waitFor(async () => {
+    const status = await harness.impd.diskBudget.readStatus();
+
+    expect(status.pendingBytes).toBe(0);
+
+    return status;
+  });
+
+  expect(uploaded.status).toBe(201);
+  expect(held.pendingBytes).toBe(1024);
+  expect(expired.pendingBytes).toBe(0);
+});
+
 test("it refuses another caller's upload with not found", async () => {
   const ctx = await setupTest();
 
