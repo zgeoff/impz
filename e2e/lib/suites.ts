@@ -22,6 +22,10 @@ export interface Suite {
   readonly fixtures?: readonly HostBFixtureName[];
 }
 
+// Cloudflare's second resolver address: the egress suite lists it as a host address, and reaches
+// its first, 1.1.1.1, as the control.
+export const LISTED_HOST_ADDRESS = '1.0.0.1';
+
 // The order is the acceptance numbering (results.json `section1` is
 // lifecycle), and restart runs after scale so it re-adopts a full house.
 export const SUITES: readonly Suite[] = [
@@ -118,6 +122,9 @@ export const SUITES: readonly Suite[] = [
     prefix: 'e2e-eg-',
     images: ['e2e-tiny'],
     journeys: ['egress-box', 'egress-public'],
+
+    // A public address that impd refuses only because the list holds it, as it holds a host's own.
+    settings: () => ({ IMP_HOST_ADDRESSES: `${LISTED_HOST_ADDRESS}/32` }),
   },
   {
     name: 'ipv6',

@@ -138,6 +138,31 @@ test('it publishes the public MCP route on loopback when IMP_MCP_PUBLIC_URL is s
   expect(args.join(' ')).toInclude('-p 127.0.0.1:2222:22 -p 127.0.0.1:7071:7099 ');
 });
 
+test('it passes IMP_HOST_ADDRESSES, which the egress suite lists a host address in', () => {
+  const args = buildHostRunArgs({
+    layout: buildDevLayout({ env: {}, root: '/w/imp', cwd: '/w' }),
+    checkout: {
+      root: '/w/imp',
+      rootPhysical: '/w/imp',
+      hostImage: 'imp-host:dev-test',
+      buildDir: '/w/imp/build',
+    },
+    env: { IMP_HOST_ADDRESSES: '192.0.2.7/32' },
+    privileges: [],
+    hasEnvFile: false,
+    tailscale: 'none',
+    tailnetOAuthFile: null,
+    acmeCAFile: null,
+    registryCAFile: null,
+    registryHost: null,
+    kernel: '/src/kernel/out/vmlinux',
+    systemDrive: '/src/build/imp-system.squashfs',
+    uplinkMTU: '1500',
+  });
+
+  expect(args.join(' ')).toInclude(' -e IMP_HOST_ADDRESSES=192.0.2.7/32 ');
+});
+
 test.each([
   ['off', '-e TAILSCALE_AUTHKEY= '],
   ['key', '-e TAILSCALE_AUTHKEY '],
