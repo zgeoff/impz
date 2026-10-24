@@ -29,6 +29,7 @@ export type RpcImplementer = ReturnType<typeof createImplementer>;
 interface ImplementerDeps {
   readonly broker: Pick<RouterDeps['broker'], 'readSecretGeneration'>;
   readonly imps: Pick<RouterDeps['imps'], 'readImpRecord'>;
+  readonly images: Pick<RouterDeps['images'], 'readImage'>;
   readonly audit: Pick<RouterDeps['audit'], 'record'>;
   readonly now: () => number;
 }
@@ -42,7 +43,10 @@ export function createImplementer(deps: ImplementerDeps) {
       const access = findDeclaredAccess(options.procedure['~orpc'].meta);
 
       const requireAccess = async (): Promise<void> => {
-        const refusal = await checkAccess(access, caller, input, deps.broker.readSecretGeneration);
+        const refusal = await checkAccess(access, caller, input, {
+          readSecretGeneration: deps.broker.readSecretGeneration,
+          readImage: deps.images.readImage,
+        });
 
         if (refusal !== null) {
           throw buildForbiddenError(refusal.message, refusal.reason);

@@ -1,11 +1,13 @@
 import { callerContract, collectProcedureAccess, hasScope, isImpAllowed } from '@impz/api';
 import type { CallerAccess, ForbiddenReason, ProcedureMeta } from '@impz/api';
 import type { ForkAuthority } from '../../platform/db/create-fork-grants';
+import type { ImageRecord } from '../../platform/db/images';
 import type { GrantAuthority } from '../../platform/db/secrets';
 import { formatCaller } from '../../platform/principal/caller';
 import type { Caller } from '../../platform/principal/caller';
 import { checkGrantable } from './check-grantable';
 import { checkImageAdd } from './check-image-add';
+import { checkImagePin } from './check-image-pin';
 
 export type Access = CallerAccess;
 
@@ -15,6 +17,13 @@ export interface Refusal {
 }
 
 export type ReadSecretGeneration = (name: string) => Promise<string | null>;
+
+export type ReadImage = (name: string) => Promise<Pick<ImageRecord, 'ref'> | undefined>;
+
+export interface AccessReaders {
+  readonly readSecretGeneration: ReadSecretGeneration;
+  readonly readImage: ReadImage;
+}
 
 /* @internal */
 export const PROCEDURE_ACCESS: Readonly<Record<string, Access>> = Object.fromEntries(
@@ -58,7 +67,7 @@ export async function checkAccess(
   access: Readonly<Access> | null,
   caller: Readonly<Caller>,
   input: unknown,
-  readSecretGeneration: ReadSecretGeneration,
+  readers: Readonly<AccessReaders>,
 ): Promise<Refusal | null> {
   if (access === null) {
     return { message: 'this call has no access rule', reason: null };
@@ -86,6 +95,10 @@ export async function checkAccess(
     return null;
   }
 
+  if (access.on === 'image' && access.held === true) {
+    return checkImagePin(caller, caller.imps, findField(input, 'name'), readers.readImage);
+  }
+
   if (access.on === 'image') {
     return checkImageAdd(caller, caller.imps, {
       ref: findField(input, 'ref'),
@@ -110,7 +123,7 @@ export async function checkAccess(
   const refusal = await checkGrantable(
     caller,
     findField(input, access.secretField),
-    readSecretGeneration,
+    readers.readSecretGeneration,
   );
 
   return refusal;

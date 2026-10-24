@@ -30,6 +30,7 @@ import type { ImageWriter } from './rootfs/create-image-writer';
 export type ImageService = ImageAdds &
   ImageBuilds & {
     readonly listImages: () => Promise<ImageRecord[]>;
+    readonly readImage: (name: string) => Promise<ImageRecord | undefined>;
     readonly removeImage: (name: string) => Promise<void>;
 
     readonly resolveImage: (name?: string) => Promise<ImageRecord>;
@@ -133,6 +134,7 @@ export function createImageService(deps: ImageServiceDeps): ImageService {
     runImageBuild: (...args) => withEviction(() => builds.runImageBuild(...args)),
     buildImageFromContext: (...args) => withEviction(() => builds.buildImageFromContext(...args)),
     listImages: () => listImages(deps.db),
+    readImage: (name) => readImageByName(deps.db, name),
     removeImage: async (name) => {
       const image = await readImageByName(deps.db, name);
 

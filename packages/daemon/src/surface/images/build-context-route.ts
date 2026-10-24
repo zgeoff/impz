@@ -7,6 +7,7 @@ import { ORPCError } from '@orpc/server';
 import { createActor } from 'xstate';
 import type { Actor } from 'xstate';
 import { checkAccess, findDeclaredAccess } from '../../identity/auth/access-policy';
+import type { AccessReaders } from '../../identity/auth/access-policy';
 import type { BuildRun } from '../../imps/images/build/create-build-runs';
 import type { ImageService } from '../../imps/images/image-service';
 import type { ApiAudit } from '../../platform/audit/api-audit';
@@ -23,6 +24,7 @@ import { buildUploadMachine } from './build-upload-machine';
 
 const PROCEDURE = 'images.buildStream';
 const BUILD_ACCESS = findDeclaredAccess(callerContract.images.buildStream['~orpc'].meta);
+const NO_READS: AccessReaders = { readSecretGeneration: readNoSecret, readImage: readNoImage };
 
 // A client follows its upload with the build at once, so a context still here after this long
 // has lost its client.
@@ -165,7 +167,7 @@ export function createBuildContextRoute(deps: BuildContextDeps): BuildContextRou
         return sendError(toFailure(error));
       };
 
-      const denial = await checkAccess(BUILD_ACCESS, caller, params, readNoSecret);
+      const denial = await checkAccess(BUILD_ACCESS, caller, params, NO_READS);
 
       if (denial !== null) {
         return sendFailure(new ORPCError('FORBIDDEN', { message: denial.message }));
@@ -281,6 +283,10 @@ function buildTooLargeError(maxBytes: number): ORPCError<string, unknown> {
 
 function readNoSecret(): Promise<null> {
   return Promise.resolve(null);
+}
+
+function readNoImage(): Promise<undefined> {
+  return Promise.resolve(undefined);
 }
 
 function sendError(failure: BuildFailure): Response {

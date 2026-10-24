@@ -7,6 +7,7 @@ function setupTest() {
   const implementer = createImplementer({
     broker: { readSecretGeneration: () => Promise.resolve(null) },
     imps: { readImpRecord: () => Promise.resolve(undefined) },
+    images: { readImage: () => Promise.resolve(undefined) },
     audit: { record: () => {} },
     now: () => 0,
   });

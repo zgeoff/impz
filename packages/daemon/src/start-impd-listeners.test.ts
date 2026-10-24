@@ -111,3 +111,13 @@ test('it opens no public port without IMP_MCP_PUBLIC_URL', async () => {
   expect(harness.impd.publicMcp).toBeNull();
   expect(reached).toMatchObject({ code: 'ECONNREFUSED' });
 });
+
+test('it stops the API listener again without a failure when impd stops twice', async () => {
+  const ctx = await setupTest();
+
+  await ctx.impd.stop({ sleepImps: false });
+
+  const steps = await ctx.impd.stop({ sleepImps: false });
+
+  expect(steps).toContainEqual({ step: 'api', outcome: 'stopped' });
+});

@@ -49,7 +49,9 @@ may grant to its own imps, so an agent can set up an imp without host-wide reach
 not fork or move an imp, because a fork copies grants and a move carries them. A scoped token can
 also be given an image ref prefix, so a service adds its own released images: the access check then
 takes an image add whose name is within the token's patterns and whose ref starts with the prefix
-and is pinned by digest, since a tag can move after the owner trusted it.
+and is pinned by digest, since a tag can move after the owner trusted it. The same token may pin or
+unpin an image whose name is within its patterns. For a pin, impd reads the ref from the image it
+holds, never from the call's input, and takes the pin only when that ref starts with the prefix.
 
 The set of target kinds is closed. Authorization stays a rule per procedure in the contract, and a
 need for a new kind of target starts a redesign of authorization, not one more kind and one more

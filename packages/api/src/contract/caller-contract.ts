@@ -228,9 +228,9 @@ export const callerContract = {
   images: {
     list: base.meta(ACCESS.readAny).output(z.array(ImageSchema)),
 
-    // an image is the host's, but a token for some imps may add one under
-    // its own names from the registry path it was given; a build or a
-    // template stays host-wide
+    // an image is the host's, but a token for some imps may add, pin and
+    // unpin one under its own names from the registry path it was given; a
+    // build, a template or a delete stays host-wide
     add: base.meta(ACCESS.manageImage).input(ImageAddInputSchema).output(ImageSchema),
 
     build: base.meta(ACCESS.manageHost).input(ImageBuildInputSchema).output(ImageSchema),
@@ -249,8 +249,8 @@ export const callerContract = {
 
     delete: base.meta(ACCESS.manageHost).input(NameInputSchema).output(EmptySchema),
 
-    pin: base.meta(ACCESS.manageHost).input(NameInputSchema).output(ImageSchema),
-    unpin: base.meta(ACCESS.manageHost).input(NameInputSchema).output(ImageSchema),
+    pin: base.meta(ACCESS.manageHeldImage).input(NameInputSchema).output(ImageSchema),
+    unpin: base.meta(ACCESS.manageHeldImage).input(NameInputSchema).output(ImageSchema),
   },
 
   exec: {
