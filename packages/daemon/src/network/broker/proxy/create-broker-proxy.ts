@@ -17,9 +17,13 @@ import { renderCredential } from '../secrets/connector-kinds';
 import { parseOAuthState } from '../secrets/oauth-state';
 import type { SecretFiles } from '../secrets/secret-files';
 import type { BrokerCa } from '../tls/broker-ca';
-import type { ResolveUpstream } from '../tls/create-upstream-resolver';
 import { createForwarder } from '../tls/forward-request';
-import type { Credential, ForwardDeps, UpstreamFetch } from '../tls/forward-request';
+import type {
+  Credential,
+  ForwardDeps,
+  ResolveUpstream,
+  UpstreamFetch,
+} from '../tls/forward-request';
 import { createTerminators } from '../tls/terminators';
 import type { TerminatorKey } from '../tls/terminators';
 import { startBrokerFront } from './broker-front';
@@ -51,7 +55,6 @@ interface BrokerProxyDeps {
   readonly resolveTunnelTarget?: ((host: string, mode: EgressMode) => Promise<string>) | undefined;
   readonly dialTunnel?: ((address: string, port: number) => Socket) | undefined;
   readonly reach: ReachPolicy;
-  readonly afterRuleRead?: (() => Promise<void>) | undefined;
 
   readonly refreshAfterRejection?: ForwardDeps['refreshAfterRejection'] | undefined;
 }
@@ -92,8 +95,6 @@ export function createBrokerProxy(deps: BrokerProxyDeps): BrokerProxy {
 
   const readCredential = async (impId: string, host: string): Promise<Credential | null> => {
     const granted = await readRule(impId, host);
-
-    await deps.afterRuleRead?.();
 
     const stored = granted === undefined ? null : files.read(granted.valueFile);
     const oauth = granted?.kind === 'oauth' && stored !== null ? parseOAuthState(stored) : null;

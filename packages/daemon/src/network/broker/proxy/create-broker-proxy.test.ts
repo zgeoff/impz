@@ -9,6 +9,7 @@ import { buildStubAnswerQueue } from '@impz/test-utils/build-stub-answer-queue';
 import { server } from '@impz/test-utils/mock-server';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { HttpResponse, http } from 'msw';
+import invariant from 'tiny-invariant';
 import { buildStubBrokerGuest } from '../../../../testing/network/build-stub-broker-guest';
 import { createStubBrokerTokenEndpoint } from '../../../../testing/network/create-stub-broker-token-endpoint';
 import { startStubBrokerGuestSocket } from '../../../../testing/network/start-stub-broker-guest-socket';
@@ -17,6 +18,7 @@ import { startStubBrokerPlainUpstream } from '../../../../testing/network/start-
 import { startStubBrokerReplyTarget } from '../../../../testing/network/start-stub-broker-reply-target';
 import { startStubBrokerTlsUpstream } from '../../../../testing/network/start-stub-broker-tls-upstream';
 import { startStubBrokerTunnel } from '../../../../testing/network/start-stub-broker-tunnel';
+import { buildQueryGate } from '../../../../testing/platform/build-query-gate';
 import { buildStubHeldAnswer } from '../../../../testing/platform/build-stub-held-answer';
 import { startTestImpd } from '../../../../testing/start-test-impd';
 import { listAuditEntries } from '../../../platform/db/broker-audit';
@@ -25,6 +27,10 @@ import { listGrantNames, readSecret, removeCheckedGrant } from '../../../platfor
 import { loadOrCreateBrokerCa } from '../tls/broker-ca';
 
 async function setupTest() {
+  // first, so a held read lets go before impd stops
+  const frontGate = buildQueryGate('value_file');
+  const terminatorGate = buildQueryGate('value_file');
+
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
@@ -88,7 +94,6 @@ async function setupTest() {
   });
 
   const upstreamsFile = join(dataDir, 'upstreams.json');
-  const ruleRead = { hook: (): Promise<void> => Promise.resolve() };
 
   const tunnelPorts = new Map([[443, realHost.port]]);
 
@@ -103,7 +108,7 @@ async function setupTest() {
     resolveTunnelTarget: () => Promise.resolve('127.0.0.1'),
     dialTunnel: (address, port) =>
       createConnection({ host: address, port: tunnelPorts.get(port) ?? port }),
-    afterRuleRead: () => ruleRead.hook(),
+    wrapDatabase: (db) => terminatorGate.wrap(frontGate.wrap(db)),
   });
 
   const proxyPort = harness.config.brokerPort;
@@ -121,7 +126,8 @@ async function setupTest() {
     tunnelled,
     answers,
     tunnelAnswers,
-    ruleRead,
+    frontGate,
+    terminatorGate,
     upstreamsFile,
     upstreamOrigin: upstream.origin,
     upstreamCaPem: upstream.caPem,
@@ -856,18 +862,16 @@ test('it never sends a rebound value to the host the secret had before', async (
 
   await ctx.impd.broker.addGrant('dev', 'api');
 
-  const reached = Promise.withResolvers<void>();
-  const release = Promise.withResolvers<void>();
-
-  ctx.ruleRead.hook = async () => {
-    reached.resolve();
-
-    await release.promise;
-  };
+  ctx.frontGate.arm();
 
   const request = ctx.guest.curl('https://api.github.com/x');
 
-  await reached.promise;
+  await ctx.frontGate.reached;
+
+  ctx.terminatorGate.arm();
+  ctx.frontGate.release();
+
+  await ctx.terminatorGate.reached;
 
   const replaced = ctx.impd.broker.addSecret({
     name: 'api',
@@ -886,9 +890,47 @@ test('it never sends a rebound value to the host the secret had before', async (
     expect(files).toHaveLength(1);
   });
 
-  release.resolve();
+  ctx.terminatorGate.release();
 
   const [result] = await Promise.all([request, replaced]);
+
+  expect(result).toStrictEqual({
+    code: 0,
+    stdout: 'no credential is granted for api.github.com\n',
+    stderr: '',
+  });
+
+  expect(ctx.seen).toStrictEqual([]);
+});
+
+test('it sends no credential for a grant whose value file is gone', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
+  await writeFile(
+    ctx.upstreamsFile,
+    JSON.stringify({ ca: ctx.upstreamCaPem, upstreams: { 'api.github.com': ctx.upstreamOrigin } }),
+  );
+
+  await ctx.client.imps.create({ name: 'dev' });
+
+  await ctx.impd.broker.addSecret({
+    name: 'api',
+    kind: 'custom',
+    value: 'old-value',
+    rules: [buildMockBrokerRule({ host: 'api.github.com' })],
+  });
+
+  await ctx.impd.broker.addGrant('dev', 'api');
+
+  const secret = await readSecret(ctx.db, 'api');
+
+  invariant(secret);
+
+  await rm(join(ctx.dataDir, 'secrets', secret.valueFile));
+
+  const result = await ctx.guest.curl('https://api.github.com/x');
 
   expect(result).toStrictEqual({
     code: 0,

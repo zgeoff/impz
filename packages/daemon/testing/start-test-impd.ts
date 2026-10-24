@@ -51,7 +51,6 @@ export interface TestImpdOptions {
   readonly installBundle?: InstallBundle;
   readonly resolveTunnelTarget?: (host: string) => Promise<string>;
   readonly dialTunnel?: (address: string, port: number) => Socket;
-  readonly afterRuleRead?: () => Promise<void>;
   readonly oauthFetch?: OAuthFetch;
   readonly brokerNow?: () => number;
   readonly runNft?: (script: string) => Promise<void>;
@@ -275,10 +274,8 @@ export async function startTestImpd(
           options.resolveTunnelTarget ??
           ((name) => Promise.reject(new TunnelRefusedError(`${name}: no network in tests`))),
         ...(options.dialTunnel !== undefined && { dialTunnel: options.dialTunnel }),
-        ...(options.afterRuleRead !== undefined && { afterRuleRead: options.afterRuleRead }),
         ...(options.oauthFetch !== undefined && { oauthFetch: options.oauthFetch }),
         now: options.brokerNow ?? Date.now,
-        runOAuthTimer: false,
         ...extra.broker,
       },
       egress: {

@@ -2,6 +2,7 @@ import { lookup } from 'node:dns/promises';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Config } from './config';
+import { createUpstreamResolver } from './create-upstream-resolver';
 import {
   readConnectedPrefixes,
   readIpv6DefaultRoute,
@@ -15,6 +16,7 @@ import type { BuilderTestRegistry } from './imps/images/builders/builder-imps';
 import { createBroker } from './network/broker/broker-service';
 import type { Broker } from './network/broker/broker-service';
 import type { SecretFiles } from './network/broker/secrets/secret-files';
+import { resolvePublicUpstream } from './network/broker/tls/resolve-public-upstream';
 import { runNft } from './network/egress/egress-firewall';
 import { createEgressService } from './network/egress/egress-service';
 import type { EgressService } from './network/egress/egress-service';
@@ -65,8 +67,13 @@ export async function createImpdFirewall(
     db: deps.db,
     log,
     reach,
+    resolveUpstream:
+      config.brokerTestUpstreams === null
+        ? resolvePublicUpstream
+        : createUpstreamResolver(config.brokerTestUpstreams, log),
     secretFiles,
     ...(deps.now !== undefined && { now: deps.now }),
+    timer: deps.tickerTimer,
     ...deps.broker,
   });
 

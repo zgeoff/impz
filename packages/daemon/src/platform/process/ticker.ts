@@ -13,6 +13,7 @@ export type TickerTimer = (
 export interface StartTickerOptions {
   readonly label: string;
   readonly intervalMs: number;
+  readonly firstDelayMs?: number | undefined;
   readonly task: () => Promise<void>;
   readonly log: (message: string) => void;
   readonly timer?: TickerTimer | undefined;
@@ -46,11 +47,11 @@ export function startTicker(options: StartTickerOptions): Ticker {
     state.running = null;
 
     if (!stopped) {
-      setupNextTick();
+      setupNextTick(intervalMs);
     }
   };
 
-  const setupNextTick = (): void => {
+  const setupNextTick = (delayMs: number): void => {
     state.cancel = timer(
       label,
       () => {
@@ -60,11 +61,11 @@ export function startTicker(options: StartTickerOptions): Ticker {
 
         return running;
       },
-      intervalMs,
+      delayMs,
     );
   };
 
-  setupNextTick();
+  setupNextTick(options.firstDelayMs ?? intervalMs);
 
   return {
     stop: async () => {

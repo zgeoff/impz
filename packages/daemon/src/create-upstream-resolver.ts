@@ -1,18 +1,17 @@
 import { readFileSync, statSync } from 'node:fs';
 import { rootCertificates } from 'node:tls';
 import * as z from 'zod';
-import { getErrorMessage } from '../../../platform/process/get-error-message';
-import type { Upstream } from './forward-request';
+import type { ResolveUpstream } from './network/broker/tls/forward-request';
+import { resolvePublicUpstream } from './network/broker/tls/resolve-public-upstream';
+import { getErrorMessage } from './platform/process/get-error-message';
 
 const FileSchema = z.object({
   ca: z.string().includes('-----BEGIN CERTIFICATE-----'),
   upstreams: z.record(z.string(), z.url({ protocol: /^https$/u })),
 });
 
-export type ResolveUpstream = (host: string) => Upstream;
-
 export function createUpstreamResolver(
-  path: string | null,
+  path: string,
   log: (message: string) => void,
 ): ResolveUpstream {
   const cache: { mtimeMs: number; file: z.infer<typeof FileSchema> | null } = {
@@ -21,10 +20,6 @@ export function createUpstreamResolver(
   };
 
   const readFile = (): z.infer<typeof FileSchema> | null => {
-    if (path === null) {
-      return null;
-    }
-
     let mtimeMs: number;
 
     try {
@@ -60,7 +55,7 @@ export function createUpstreamResolver(
     const origin = file?.upstreams[host];
 
     if (file === null || origin === undefined) {
-      return { origin: `https://${host}`, ca: null };
+      return resolvePublicUpstream(host);
     }
 
     return { origin: origin.replace(/\/$/u, ''), ca: [...rootCertificates, file.ca] };

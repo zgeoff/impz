@@ -19,25 +19,11 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const gap = { once: (): Promise<void> => Promise.resolve() };
-
-  const harness = await startTestImpd(stack, {
-    boundaries: {
-      broker: {
-        beforeGrantWrite: () => {
-          const run = gap.once;
-
-          gap.once = () => Promise.resolve();
-
-          return run();
-        },
-      },
-    },
-  });
+  const harness = await startTestImpd(stack);
 
   const sendToImpd = (request: Request) => harness.impd.api.app.handle(request);
 
-  return Object.assign(harness, { stack, sendToImpd, gap });
+  return Object.assign(harness, { stack, sendToImpd });
 }
 
 test('it lets a token grant a listed secret on its imps', async () => {
@@ -1234,30 +1220,30 @@ test('it refuses in the transaction a grant whose secret was deleted and made ag
   await ctx.client.imps.create({ name: 'dev-a' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
 
-  const made = await ctx.client.tokens.create({
+  await ctx.client.tokens.create({
     name: 'agent',
     scope: 'manage',
     imps: ['dev-*'],
     grantable: ['gh'],
   });
 
-  const agent: ContractRouterClient<ImpContract> = createORPCClient(
-    new RPCLink({
-      url: 'http://impd.test/rpc',
-      headers: { authorization: `Bearer ${made.secret}` },
-      fetch: ctx.sendToImpd,
-    }),
-  );
+  const tokens = await listTokenRecords(ctx.db);
 
-  ctx.gap.once = async () => {
-    await ctx.client.secrets.delete({ name: 'gh' });
-    await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
-  };
+  const token = tokens.find((record) => record.name === 'agent');
+  const checked = token?.grantable.find((entry) => entry.name === 'gh');
 
-  expect(agent.grants.add({ name: 'dev-a', secret: 'gh' })).rejects.toMatchObject({
-    code: 'FORBIDDEN',
-    data: { reason: 'not_grantable' },
+  invariant(token);
+  invariant(checked);
+
+  await ctx.client.secrets.delete({ name: 'gh' });
+  await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
+
+  const added = ctx.impd.broker.addGrant('dev-a', 'gh', {
+    tokenId: token.id,
+    generation: checked.generation,
   });
+
+  expect(added).rejects.toMatchObject({ code: 'FORBIDDEN', data: { reason: 'not_grantable' } });
 
   const devAGrants = await ctx.client.grants.list({ name: 'dev-a' });
 
@@ -1273,28 +1259,29 @@ test('it makes no grant for a token removed after the access check', async () =>
   await ctx.client.secrets.add({ name: 'npm', kind: 'npm', value: 'sk-synthetic-126-1' });
   await ctx.client.grants.add({ name: 'dev-a', secret: 'npm' });
 
-  const made = await ctx.client.tokens.create({
+  await ctx.client.tokens.create({
     name: 'agent',
     scope: 'manage',
     imps: ['dev-*'],
     grantable: ['gh'],
   });
 
-  const agent: ContractRouterClient<ImpContract> = createORPCClient(
-    new RPCLink({
-      url: 'http://impd.test/rpc',
-      headers: { authorization: `Bearer ${made.secret}` },
-      fetch: ctx.sendToImpd,
-    }),
-  );
+  const tokens = await listTokenRecords(ctx.db);
 
-  ctx.gap.once = async () => {
-    await ctx.client.tokens.delete({ name: 'agent' });
-  };
+  const token = tokens.find((record) => record.name === 'agent');
+  const checked = token?.grantable.find((entry) => entry.name === 'gh');
 
-  expect(agent.grants.add({ name: 'dev-a', secret: 'gh' })).rejects.toMatchObject({
-    code: 'UNAUTHORIZED',
+  invariant(token);
+  invariant(checked);
+
+  await ctx.client.tokens.delete({ name: 'agent' });
+
+  const added = ctx.impd.broker.addGrant('dev-a', 'gh', {
+    tokenId: token.id,
+    generation: checked.generation,
   });
+
+  expect(added).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
 
   const devAGrants = await ctx.client.grants.list({ name: 'dev-a' });
 
@@ -1309,28 +1296,29 @@ test('it revokes no grant for a token removed after the access check', async () 
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
   await ctx.client.grants.add({ name: 'dev-a', secret: 'gh' });
 
-  const made = await ctx.client.tokens.create({
+  await ctx.client.tokens.create({
     name: 'agent',
     scope: 'manage',
     imps: ['dev-*'],
     grantable: ['gh'],
   });
 
-  const agent: ContractRouterClient<ImpContract> = createORPCClient(
-    new RPCLink({
-      url: 'http://impd.test/rpc',
-      headers: { authorization: `Bearer ${made.secret}` },
-      fetch: ctx.sendToImpd,
-    }),
-  );
+  const tokens = await listTokenRecords(ctx.db);
 
-  ctx.gap.once = async () => {
-    await ctx.client.tokens.delete({ name: 'agent' });
-  };
+  const token = tokens.find((record) => record.name === 'agent');
+  const checked = token?.grantable.find((entry) => entry.name === 'gh');
 
-  expect(agent.grants.delete({ name: 'dev-a', secret: 'gh' })).rejects.toMatchObject({
-    code: 'UNAUTHORIZED',
+  invariant(token);
+  invariant(checked);
+
+  await ctx.client.tokens.delete({ name: 'agent' });
+
+  const removed = ctx.impd.broker.removeGrant('dev-a', 'gh', {
+    tokenId: token.id,
+    generation: checked.generation,
   });
+
+  expect(removed).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
 
   const devAGrants = await ctx.client.grants.list({ name: 'dev-a' });
 
@@ -1780,14 +1768,18 @@ test('it names a grant made on the fork before the copy as a clash', async () =>
 
   await ctx.client.grants.add({ name: 'dev-a', secret: 'gh' });
   await ctx.client.grants.add({ name: 'dev-a', secret: 'npm' });
+  await ctx.client.imps.create({ name: 'dev-b' });
+  await ctx.client.grants.add({ name: 'dev-b', secret: 'gh-api' });
 
-  ctx.gap.once = async () => {
-    await ctx.client.grants.add({ name: 'dev-b', secret: 'gh-api' });
-  };
+  const source = await readImpByName(ctx.db, 'dev-a');
+  const fork = await readImpByName(ctx.db, 'dev-b');
 
-  const fork = await ctx.client.imps.fork({ source: 'dev-a', name: 'dev-b' });
+  invariant(source);
+  invariant(fork);
 
-  expect(fork.grantsNotCopied).toStrictEqual([{ secret: 'gh', reason: 'clash' }]);
+  const copied = await ctx.impd.broker.createForkGrants(source, fork, null);
+
+  expect(copied).toStrictEqual({ notCopied: [{ secret: 'gh', reason: 'clash' }], error: null });
 
   const devBGrants = await ctx.client.grants.list({ name: 'dev-b' });
 
@@ -1807,21 +1799,26 @@ test('it copies the grants a rebind between the fork and the copy left', async (
   await ctx.client.secrets.add({ name: 'npm', kind: 'npm', value: 'sk-synthetic-126-1' });
   await ctx.client.grants.add({ name: 'dev-a', secret: 'gh' });
   await ctx.client.grants.add({ name: 'dev-a', secret: 'npm' });
+  await ctx.client.imps.create({ name: 'dev-b' });
 
-  ctx.gap.once = async () => {
-    await ctx.client.secrets.add({
-      name: 'gh',
-      kind: 'custom',
-      value: 'sk-synthetic-126-0',
-      rules: [{ host: 'api.github.com', header: 'authorization', scheme: 'bearer' }],
-      replace: true,
-      rebind: true,
-    });
-  };
+  await ctx.client.secrets.add({
+    name: 'gh',
+    kind: 'custom',
+    value: 'sk-synthetic-126-0',
+    rules: [{ host: 'api.github.com', header: 'authorization', scheme: 'bearer' }],
+    replace: true,
+    rebind: true,
+  });
 
-  const fork = await ctx.client.imps.fork({ source: 'dev-a', name: 'dev-b' });
+  const source = await readImpByName(ctx.db, 'dev-a');
+  const fork = await readImpByName(ctx.db, 'dev-b');
 
-  expect(fork.grantsNotCopied).toStrictEqual([]);
+  invariant(source);
+  invariant(fork);
+
+  const copied = await ctx.impd.broker.createForkGrants(source, fork, null);
+
+  expect(copied).toStrictEqual({ notCopied: [], error: null });
 
   const devBGrants = await ctx.client.grants.list({ name: 'dev-b' });
 
@@ -1836,17 +1833,21 @@ test('it lends the fork nothing from a source destroyed and made again before th
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'sk-synthetic-126-0' });
   await ctx.client.secrets.add({ name: 'npm', kind: 'npm', value: 'sk-synthetic-126-1' });
   await ctx.client.grants.add({ name: 'dev-a', secret: 'gh' });
+  await ctx.client.imps.create({ name: 'dev-b' });
 
-  ctx.gap.once = async () => {
-    await ctx.client.imps.destroy({ name: 'dev-a' });
-    await ctx.client.imps.create({ name: 'dev-a' });
-    await ctx.client.grants.add({ name: 'dev-a', secret: 'npm' });
-  };
+  const source = await readImpByName(ctx.db, 'dev-a');
+  const fork = await readImpByName(ctx.db, 'dev-b');
 
-  const fork = await ctx.client.imps.fork({ source: 'dev-a', name: 'dev-b' });
+  invariant(source);
+  invariant(fork);
 
-  expect(fork.grantsNotCopied).toStrictEqual([]);
-  expect(fork.grantsError).toBeUndefined();
+  await ctx.client.imps.destroy({ name: 'dev-a' });
+  await ctx.client.imps.create({ name: 'dev-a' });
+  await ctx.client.grants.add({ name: 'dev-a', secret: 'npm' });
+
+  const copied = await ctx.impd.broker.createForkGrants(source, fork, null);
+
+  expect(copied).toStrictEqual({ notCopied: [], error: null });
 
   const devBGrants = await ctx.client.grants.list({ name: 'dev-b' });
 
