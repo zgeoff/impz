@@ -379,6 +379,14 @@ first job compares the files the pull request changes against the workflow's pat
 match, the work jobs skip, and GitHub reports a job skipped by its condition as a success. A push to
 `main` keeps its own path filter.
 
+`.github/workflows/e2e-images.yml` runs the images suite, which sits outside `FAST_GROUPS`, on a KVM
+runner with the e2e groups' sizes and caches. It runs each day on `main`, and its job is no required
+check. Run it on a branch by hand, then download its `e2e-images-results` artifact:
+
+```bash
+gh workflow run e2e-images.yml --ref <branch>
+```
+
 `.github/workflows/reproducible.yml` runs `scripts/release/check-reproducible.sh` (the guest kernel
 and the system drive rebuild to the same bytes). It takes two cold kernel builds, so it runs by
 hand: `gh workflow run reproducible.yml`.
