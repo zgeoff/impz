@@ -18,7 +18,7 @@ export interface Refusal {
 
 export type ReadSecretGeneration = (name: string) => Promise<string | null>;
 
-export type ReadImage = (name: string) => Promise<Pick<ImageRecord, 'ref'> | undefined>;
+type ReadImage = (name: string) => Promise<Pick<ImageRecord, 'ref'> | undefined>;
 
 export interface AccessReaders {
   readonly readSecretGeneration: ReadSecretGeneration;
@@ -96,7 +96,12 @@ export async function checkAccess(
   }
 
   if (access.on === 'image' && access.held === true) {
-    return checkImagePin(caller, caller.imps, findField(input, 'name'), readers.readImage);
+    const name = findField(input, 'name');
+
+    const held =
+      name !== null && isImpAllowed(caller.imps, name) ? await readers.readImage(name) : undefined;
+
+    return checkImagePin(caller, caller.imps, name, held);
   }
 
   if (access.on === 'image') {

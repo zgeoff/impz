@@ -1,8 +1,10 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { readImpEnv } from '@impz/test-utils/read-imp-env';
+import { buildMockCaller } from '../../../testing/identity/build-mock-caller';
 import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { createImage } from '../../platform/db/images';
+import { checkImagePin } from './check-image-pin';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();
@@ -13,6 +15,62 @@ async function setupTest() {
 
   return { db: harness.db, client: harness.client, buildClient: harness.buildClient };
 }
+
+test('it lets through a held image whose name and ref the caller covers', () => {
+  const caller = buildMockCaller({ imps: ['nixie-*'], imageRefPrefix: 'ghcr.io/zgeoff/nixie-' });
+
+  expect(
+    checkImagePin(caller, ['nixie-*'], 'nixie-x', { ref: 'ghcr.io/zgeoff/nixie-x:1' }),
+  ).toBeNull();
+});
+
+test('it leaves a name within the patterns that impd does not hold to the handler', () => {
+  const caller = buildMockCaller({ imps: ['nixie-*'], imageRefPrefix: 'ghcr.io/zgeoff/nixie-' });
+
+  expect(checkImagePin(caller, ['nixie-*'], 'nixie-x', undefined)).toBeNull();
+});
+
+test('it refuses a caller with no image ref prefix, as host-wide', () => {
+  const caller = buildMockCaller({ imps: ['nixie-*'], imageRefPrefix: null });
+
+  expect(
+    checkImagePin(caller, ['nixie-*'], 'nixie-x', { ref: 'ghcr.io/zgeoff/nixie-x:1' }),
+  ).toStrictEqual({
+    message: `token ${caller.name} is limited to some imps; this call is host-wide`,
+    reason: null,
+  });
+});
+
+test('it refuses a call that names no image', () => {
+  const caller = buildMockCaller({ imps: ['nixie-*'], imageRefPrefix: 'ghcr.io/zgeoff/nixie-' });
+
+  expect(checkImagePin(caller, ['nixie-*'], null, undefined)).toStrictEqual({
+    message: `token ${caller.name} is limited to some imps, so the call must name the image (name)`,
+    reason: 'imp_out_of_scope',
+  });
+});
+
+test('it refuses a name outside the patterns, whatever the held ref', () => {
+  const caller = buildMockCaller({ imps: ['nixie-*'], imageRefPrefix: 'ghcr.io/zgeoff/nixie-' });
+
+  expect(
+    checkImagePin(caller, ['nixie-*'], 'base', { ref: 'ghcr.io/zgeoff/nixie-x:1' }),
+  ).toStrictEqual({
+    message: `token ${caller.name} may not pin or unpin image base`,
+    reason: 'imp_out_of_scope',
+  });
+});
+
+test('it refuses a held image whose ref does not start with the prefix', () => {
+  const caller = buildMockCaller({ imps: ['nixie-*'], imageRefPrefix: 'ghcr.io/zgeoff/nixie-' });
+
+  expect(
+    checkImagePin(caller, ['nixie-*'], 'nixie-x', { ref: 'docker.io/zgeoff/nixie-x:1' }),
+  ).toStrictEqual({
+    message: `token ${caller.name} may pin or unpin only images whose ref starts with ghcr.io/zgeoff/nixie-`,
+    reason: null,
+  });
+});
 
 test('it lets a nixie-* token pin nixie-x, whose ref starts with its prefix', async () => {
   const ctx = await setupTest();

@@ -1,14 +1,15 @@
 import { isImpAllowed } from '@impz/api';
+import type { ImageRecord } from '../../platform/db/images';
 import { formatCaller } from '../../platform/principal/caller';
 import type { Caller } from '../../platform/principal/caller';
-import type { ReadImage, Refusal } from './access-policy';
+import type { Refusal } from './access-policy';
 
-export async function checkImagePin(
+export function checkImagePin(
   caller: Readonly<Caller>,
   patterns: readonly string[],
   name: string | null,
-  readImage: ReadImage,
-): Promise<Refusal | null> {
+  held: Pick<ImageRecord, 'ref'> | undefined,
+): Refusal | null {
   const who = formatCaller(caller);
   const prefix = caller.imageRefPrefix;
 
@@ -27,13 +28,7 @@ export async function checkImagePin(
     return { message: `${who} may not pin or unpin image ${name}`, reason: 'imp_out_of_scope' };
   }
 
-  const image = await readImage(name);
-
-  if (image === undefined) {
-    return null;
-  }
-
-  if (!image.ref.startsWith(prefix)) {
+  if (held !== undefined && !held.ref.startsWith(prefix)) {
     return {
       message: `${who} may pin or unpin only images whose ref starts with ${prefix}`,
       reason: null,
