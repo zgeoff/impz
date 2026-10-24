@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { readAgentFixture } from '@impz/test-utils/read-agent-fixture';
 import invariant from 'tiny-invariant';
 import * as z from 'zod';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { buildMockHostIdentity } from '../../../testing/vm/build-mock-host-identity';
 import { buildStubTemplateVm } from '../../../testing/vm/build-stub-template-vm';
 import { createDiskBudget } from '../storage/disk-budget';
@@ -17,13 +18,12 @@ async function setupTest() {
 
   onTestFinished(() => rm(dataDir, { recursive: true, force: true }));
 
-  const logs: string[] = [];
+  const logs = captureImpdLogs();
   const clock = { durationMs: Date.UTC(2026, 0, 1) };
 
   const diskBudget = createDiskBudget({
     storage: { readUsage: () => Promise.resolve({ usedBytes: 0, availableBytes: 1024 ** 4 }) },
     reserveBytes: null,
-    log: () => {},
   });
 
   const vm = buildStubTemplateVm(diskBudget);
@@ -47,9 +47,6 @@ async function setupTest() {
     admission: { admit: mock(() => Promise.resolve()), release: mock(() => {}) },
     diskBudget,
     now: () => clock.durationMs,
-    log: (message: string) => {
-      logs.push(message);
-    },
   } satisfies Omit<BootTemplateDeps, 'identity' | 'bootReservePercent'>;
 
   return {
@@ -589,7 +586,6 @@ test('#buildTemplate refuses a build the disk has no room for', async () => {
     diskBudget: createDiskBudget({
       storage: { readUsage: () => Promise.resolve({ usedBytes: 0, availableBytes: 1024 ** 3 }) },
       reserveBytes: null,
-      log: () => {},
     }),
   });
 
@@ -861,6 +857,40 @@ test('#buildTemplate removes the least recently used template past four', async 
   expect(store.requestTemplate({ vcpus: 1, memoryMib: 256 })).not.toBeNull();
   expect(store.requestTemplate({ vcpus: 1, memoryMib: 768 })).not.toBeNull();
   expect(store.requestTemplate({ vcpus: 1, memoryMib: 1024 })).not.toBeNull();
+});
+
+test('#buildTemplate logs the template it removes as least recently used', async () => {
+  const ctx = await setupTest();
+
+  const store = createBootTemplates({
+    ...ctx.deps,
+    identity: buildMockHostIdentity(),
+    bootReservePercent: 50,
+  });
+
+  const oldest = await store.buildTemplate({ vcpus: 1, memoryMib: 256 });
+
+  ctx.advance(1000);
+
+  await store.buildTemplate({ vcpus: 1, memoryMib: 512 });
+
+  ctx.advance(1000);
+
+  await store.buildTemplate({ vcpus: 1, memoryMib: 768 });
+
+  ctx.advance(1000);
+
+  await store.buildTemplate({ vcpus: 1, memoryMib: 1024 });
+
+  ctx.advance(1000);
+
+  const lines = captureImpdLogs();
+
+  await store.buildTemplate({ vcpus: 2, memoryMib: 256 });
+
+  expect(lines).toContain(
+    `INFO impd.boot removed boot template ${oldest.key.slice(0, 12)}: least recently used`,
+  );
 });
 
 test('#removeStale removes the templates of another host identity', async () => {

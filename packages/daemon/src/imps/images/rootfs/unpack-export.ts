@@ -183,5 +183,5 @@ export function readSetfcapWarning(
     return null;
   }
 
-  return `impd: warning: no CAP_SETFCAP, so an image add or build fails on an image with a file capability; ${SETFCAP_HELP}`;
+  return `no CAP_SETFCAP, so an image add or build fails on an image with a file capability; ${SETFCAP_HELP}`;
 }

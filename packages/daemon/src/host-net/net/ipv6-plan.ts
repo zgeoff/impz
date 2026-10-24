@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { runCommand } from '../../platform/process/run-command';
 import type { CommandRunner } from '../../platform/process/run-command';
 import { buildUlaPrefix, parsePrefix64 } from './addressing6';
@@ -41,7 +42,6 @@ export interface Ipv6PlanDeps {
 
   readonly checkHostRules: () => Promise<string | null>;
   readonly runNft: (script: string) => Promise<void>;
-  readonly log: (message: string) => void;
 }
 
 export async function resolveIpv6Plan(
@@ -51,7 +51,7 @@ export async function resolveIpv6Plan(
   const stopIpv6 = async (reason: string): Promise<null> => {
     await removeNat66(deps);
 
-    deps.log(`impd: ipv6: off (${reason})`);
+    getImpdLogger('ipv6').info('off ({reason})', { reason });
 
     return null;
   };
@@ -75,9 +75,10 @@ export async function resolveIpv6Plan(
   if (setting.kind === 'routed') {
     await removeNat66(deps);
 
-    deps.log(
-      `impd: ipv6: ${setting.prefix.text}, routed${uplink === null ? '; the container has no IPv6 default route' : ` via ${uplink}`}`,
-    );
+    getImpdLogger('ipv6').info('{text}, routed{route}', {
+      text: setting.prefix.text,
+      route: uplink === null ? '; the container has no IPv6 default route' : ` via ${uplink}`,
+    });
 
     return { prefix: setting.prefix, nat66: false, uplink };
   }
@@ -90,7 +91,10 @@ export async function resolveIpv6Plan(
     return stopIpv6(`NAT66: ${getErrorMessage(error)}`);
   }
 
-  deps.log(`impd: ipv6: ${prefix.text}, NAT66 out of ${uplink ?? ''}`);
+  getImpdLogger('ipv6').info('{text}, NAT66 out of {uplink}', {
+    text: prefix.text,
+    uplink: uplink ?? '',
+  });
 
   return { prefix, nat66: true, uplink };
 }

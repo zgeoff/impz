@@ -1,19 +1,17 @@
 import { expect, mock, test } from 'bun:test';
 import { buildMockImpRecord } from '../../../testing/imps/build-mock-imp-record';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { createAgentWatchdog } from './agent-watchdog';
 
 function setupTest() {
   const clock = { nowMs: 0 };
-  const logs: string[] = [];
+  const logs = captureImpdLogs();
 
   return {
     clock,
     logs,
     deps: {
       now: () => clock.nowMs,
-      log: (message: string) => {
-        logs.push(message);
-      },
     },
   };
 }
@@ -48,7 +46,7 @@ test('it reports a silent agent once, past the timeout and a failed ping', async
   expect(watchdog.readSilentSince(imp.id)).toStrictEqual(new Date(0));
 
   expect(ctx.logs).toStrictEqual([
-    'impd: dev: the agent has not answered for 60s; its VM still runs (watchdog: report)',
+    'WARNING impd.imps imp=dev the agent has not answered for 60s; its VM still runs (watchdog: report)',
   ]);
 
   expect(recover).not.toHaveBeenCalled();
@@ -127,7 +125,7 @@ test('it ends a reported silence and logs it when the idle loop gets an answer a
   watchdog.observe(imp, true);
 
   expect(watchdog.readSilentSince(imp.id)).toBeNull();
-  expect(ctx.logs.at(-1)).toBe('impd: dev: the agent answers again');
+  expect(ctx.logs.at(-1)).toBe('INFO impd.imps imp=dev the agent answers again');
 });
 
 test('it backs off restarts, then stops at three an hour', async () => {
@@ -158,7 +156,10 @@ test('it backs off restarts, then stops at three an hour', async () => {
   }
 
   expect(recoveredAt).toStrictEqual([60_000, 120_000, 240_000]);
-  expect(ctx.logs.filter((line) => line.includes('it only reports now'))).toHaveLength(1);
+
+  expect(ctx.logs.filter((line) => line.includes('it only reports now'))).toStrictEqual([
+    'INFO impd.imps imp=dev the watchdog recovered it 3 times this hour; it only reports now',
+  ]);
 });
 
 test('it tries a restart another operation held off again at the next look', async () => {

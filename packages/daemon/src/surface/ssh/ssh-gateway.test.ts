@@ -12,6 +12,7 @@ import { buildMockImpRecord } from '../../../testing/imps/build-mock-imp-record'
 import { buildStubSshBackend } from '../../../testing/imps/build-stub-ssh-backend';
 import { startStubSilentTcpProxy } from '../../../testing/network/start-stub-silent-tcp-proxy';
 import { buildStubClock } from '../../../testing/platform/build-stub-clock';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { createTestDatabase } from '../../../testing/platform/create-test-database';
 import { openSshChannel } from '../../../testing/surface/open-ssh-channel';
 import { openSshClient } from '../../../testing/surface/open-ssh-client';
@@ -37,17 +38,12 @@ async function setupTest() {
   chmodSync(directory, 0o700);
 
   const keysPath = join(directory, 'authorized_keys');
-  const logs: string[] = [];
-
-  const writeLog = (message: string): void => {
-    logs.push(message);
-  };
-
+  const logs = captureImpdLogs();
   const ssh = buildStubSshBackend();
 
   const database = await createTestDatabase();
 
-  const authorizedKeys = createAuthorizedKeys(keysPath, writeLog);
+  const authorizedKeys = createAuthorizedKeys(keysPath);
   const revocations = createRevocations();
 
   const tokens = await loadTokenStore({
@@ -66,7 +62,6 @@ async function setupTest() {
     }),
     readRevocation: revocations.readSignal,
     backend: ssh.backend,
-    log: writeLog,
   };
 
   const gateway = await startSshGateway(deps, 0, '127.0.0.1');
@@ -390,7 +385,7 @@ test('it logs and refuses a login whose imp lookup fails', async () => {
   });
 
   expect(login).rejects.toThrowWithMessage(Error, 'All configured authentication methods failed');
-  expect(ctx.logs).toContain('impd: ssh: login check failed: database is locked');
+  expect(ctx.logs).toContain('WARNING impd.ssh login check failed: database is locked');
 });
 
 test('it keeps OpenSSH’s login limits and drops a silent client after about 45 s by default', () => {
@@ -831,7 +826,7 @@ test('it logs how long the wake of a login took', async () => {
     return line;
   });
 
-  expect(logged).toBe('impd: ssh: box woke in 840ms');
+  expect(logged).toBe('INFO impd.ssh imp=box woke in 840ms');
 });
 
 test('it records activity on the imp once a login woke it', async () => {
@@ -1589,7 +1584,7 @@ test('it refuses a key from an authorized_keys file that others can write', asyn
   expect(login).rejects.toThrowWithMessage(Error, 'All configured authentication methods failed');
 
   expect(ctx.logs).toContain(
-    `impd: ssh: ${ctx.keysPath} is writable by group or others; no key can log in until it is not`,
+    `WARNING impd.ssh ${ctx.keysPath} is writable by group or others; no key can log in until it is not`,
   );
 });
 

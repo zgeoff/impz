@@ -210,11 +210,12 @@ check_ipv6_live() {
   wait_for "impd to log its IPv6 plan" 60 impd_ipv6_line
   local line
   line=$(impd_ipv6_line)
-  case $line in *"ipv6: off"*) die "IPv6 is on, but $line" ;; esac
+  case $line in *"impd.ipv6 off"* | *"ipv6: off"*) die "IPv6 is on, but $line" ;; esac
   log "health: $line"
 }
 
-impd_ipv6_line() { docker logs imp-host 2>&1 | grep -o 'impd: ipv6: .*' | tail -n 1 | grep .; }
+# an image from before impd's structured log, which a pin keeps, writes `impd: ipv6: …`
+impd_ipv6_line() { docker logs imp-host 2>&1 | grep -oE 'impd(\.ipv6|: ipv6:) .*' | tail -n 1 | grep .; }
 
 # tailnet_joined: the host container runs and holds node state.
 tailnet_joined() {

@@ -1,4 +1,4 @@
-import { expect, mock, onTestFinished, test } from 'bun:test';
+import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { createConnection } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -98,12 +98,10 @@ async function setupTest() {
   const tunnelPorts = new Map([[443, realHost.port]]);
 
   const clock = { nowMs: Date.UTC(2026, 0, 1) };
-  const log = mock<(message: string) => void>(() => {});
 
   const harness = await startTestImpd(stack, {
     dataDir,
     env: { IMP_SUBNET: '127.0.0.0/16', IMP_BROKER_TEST_UPSTREAMS: upstreamsFile },
-    onLog: log,
     brokerNow: () => clock.nowMs,
     resolveTunnelTarget: () => Promise.resolve('127.0.0.1'),
     dialTunnel: (address, port) =>
@@ -120,8 +118,8 @@ async function setupTest() {
     dataDir,
     impd: harness.impd,
     clock,
-    log,
     client: harness.client,
+    logs: harness.logs,
     seen,
     tunnelled,
     answers,
@@ -267,7 +265,7 @@ test('it records the audit row of a request that ends after its imp is destroyed
     },
   ]);
 
-  expect(ctx.log.mock.calls).not.toContainEqual([expect.toInclude('audit write failed')]);
+  expect(ctx.logs).not.toContainEqual(expect.toInclude('audit write failed'));
 });
 
 test('it streams a large upload through and counts its bytes', async () => {

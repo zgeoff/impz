@@ -1,8 +1,38 @@
 import { getLogger } from '@logtape/logtape';
 import type { Logger } from '@logtape/logtape';
 
-export function getImpdLogger(area?: string): Logger {
-  const category = area === undefined ? ['impd'] : ['impd', area];
+export type ImpdArea =
+  | 'api'
+  | 'audit'
+  | 'backup'
+  | 'boot'
+  | 'broker'
+  | 'cgroup'
+  | 'disk'
+  | 'docker-proxy'
+  | 'egress'
+  | 'events'
+  | 'gc'
+  | 'governor'
+  | 'https'
+  | 'image'
+  | 'imps'
+  | 'ipv6'
+  | 'jail'
+  | 'memory'
+  | 'move'
+  | 'oauth'
+  | 'proxy'
+  | 'public'
+  | 'session'
+  | 'ssh'
+  | 'stop'
+  | 'storage'
+  | 'tailnet'
+  | 'ticker'
+  | 'xfs'
+  | 'zfs';
 
-  return getLogger(category);
+export function getImpdLogger(area: ImpdArea): Logger {
+  return getLogger(['impd', area]);
 }

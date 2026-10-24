@@ -1,20 +1,17 @@
 import type { BuilderTestRegistry } from './imps/images/builders/builder-imps';
 import type { TestRegistryConfig } from './imps/imps-config';
+import { getImpdLogger } from './platform/process/get-impd-logger';
 
 export interface TestRegistryBoundaries {
   readonly readAddress: (name: string) => Promise<string>;
   readonly readCA: (path: string) => Promise<string>;
 }
 
-interface ResolveTestRegistryDeps extends TestRegistryBoundaries {
-  readonly log: (message: string) => void;
-}
-
 // The address comes from impd's own resolver, where the e2e host names the registry; a
 // builder's resolver drops a private answer, so impd hands the builder this address.
 export async function resolveTestRegistry(
   config: TestRegistryConfig | null,
-  deps: Readonly<ResolveTestRegistryDeps>,
+  deps: Readonly<TestRegistryBoundaries>,
 ): Promise<BuilderTestRegistry | null> {
   if (config === null) {
     return null;
@@ -22,8 +19,9 @@ export async function resolveTestRegistry(
 
   const address = await deps.readAddress(config.name);
 
-  deps.log(
-    `impd: warning: IMP_E2E=1 and IMP_BUILD_TEST_REGISTRY open ${address}:${String(config.port)} to builders, for ${config.name}`,
+  getImpdLogger('image').warning(
+    'IMP_E2E=1 and IMP_BUILD_TEST_REGISTRY open {address}:{port} to builders, for {name}',
+    { address, port: String(config.port), name: config.name },
   );
 
   return {

@@ -696,11 +696,17 @@ test('it keeps the reset pending when the boot reports it failed', async () => {
 
   ctx.fake.setIdentityReset('failed');
 
+  const lines = captureImpdLogs();
+
   await ctx.impd.imps.createImp({ name: 'copy', image: 'tools' });
 
   const copy = await readImpByName(ctx.db, 'copy');
 
   expect(copy?.isIdentityResetPending).toBeTrue();
+
+  expect(lines).toContain(
+    'INFO impd.imps imp=copy the identity reset did not finish (failed); the next boot tries again',
+  );
 });
 
 test('it keeps the reset pending when a boot reports nothing of it', async () => {
@@ -722,11 +728,17 @@ test('it keeps the reset pending when a boot reports nothing of it', async () =>
 
   ctx.fake.setIdentityReset(undefined);
 
+  const lines = captureImpdLogs();
+
   await ctx.impd.imps.startImp('copy');
 
   const copy = await readImpByName(ctx.db, 'copy');
 
   expect(copy?.isIdentityResetPending).toBeTrue();
+
+  expect(lines).toContain(
+    'INFO impd.imps imp=copy the identity reset did not finish (no report); the next boot tries again',
+  );
 });
 
 test('it clears a pending reset once a later boot reports it done', async () => {

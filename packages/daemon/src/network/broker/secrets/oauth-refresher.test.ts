@@ -14,6 +14,7 @@ import { createStubBrokerTokenEndpoint } from '../../../../testing/network/creat
 import { startStubBrokerTlsUpstream } from '../../../../testing/network/start-stub-broker-tls-upstream';
 import { buildQueryGate } from '../../../../testing/platform/build-query-gate';
 import { buildStubTickerTimer } from '../../../../testing/platform/build-stub-ticker-timer';
+import { captureImpdLogs } from '../../../../testing/platform/capture-impd-logs';
 import { createTestDatabase } from '../../../../testing/platform/create-test-database';
 import { createSecret, removeSecret } from '../../../platform/db/secrets';
 import { loadOrCreateBrokerCa } from '../tls/broker-ca';
@@ -63,7 +64,6 @@ test('it sends the refresh token and the client id as a form', async () => {
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
   });
 
@@ -106,7 +106,6 @@ test('it sends a JSON body for the json format', async () => {
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
   });
 
@@ -145,7 +144,6 @@ test('it sends the token request to the test upstream that stands in for the tok
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: () => ({ origin: 'https://upstream.test:9443', ca: ['TEST CA'] }),
   });
 
@@ -178,7 +176,6 @@ test('it refreshes over TLS from a test upstream that the test CA signed', async
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: () => ({ origin: upstream.origin, ca: [upstream.caPem] }),
   });
 
@@ -212,7 +209,6 @@ test('it treats a test upstream whose certificate the test CA did not sign as a 
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: () => ({ origin: upstream.origin, ca: [other.certPem] }),
   });
 
@@ -251,7 +247,6 @@ test('it stores the rotated tokens with the expiry expires_in gives', async () =
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
     now: () => startedAt,
   });
@@ -277,7 +272,7 @@ test('it logs a refresh with whether the token rotated and its expiry, and no to
   const ctx = await setupTest();
 
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
-  const logs: string[] = [];
+  const logs = captureImpdLogs();
 
   server.use(endpoint.handler);
 
@@ -303,9 +298,6 @@ test('it logs a refresh with whether the token rotated and its expiry, and no to
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: (message) => {
-      logs.push(message);
-    },
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
     now: () => Date.parse('2030-01-01T00:00:00Z'),
   });
@@ -313,7 +305,7 @@ test('it logs a refresh with whether the token rotated and its expiry, and no to
   await refresher.refresh('codex', true);
 
   expect(logs).toStrictEqual([
-    'impd: broker: oauth secret codex refreshed; refresh token rotated: yes; expires 2030-01-01T02:00:00.000Z',
+    'INFO impd.broker oauth secret codex refreshed; refresh token rotated: yes; expires 2030-01-01T02:00:00.000Z',
   ]);
 });
 
@@ -352,7 +344,6 @@ test('it keeps the old value of a field the answer leaves out', async () => {
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
     now: () => startedAt,
   });
@@ -378,7 +369,7 @@ test('it logs a refresh whose refresh token did not rotate as such', async () =>
   const ctx = await setupTest();
 
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
-  const logs: string[] = [];
+  const logs = captureImpdLogs();
 
   server.use(endpoint.handler);
   endpoint.issue('fake-refresh-0', { access_token: 'fake-access-1', expires_in: 3600 });
@@ -401,9 +392,6 @@ test('it logs a refresh whose refresh token did not rotate as such', async () =>
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: (message) => {
-      logs.push(message);
-    },
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
     now: () => Date.parse('2030-01-01T00:00:00Z'),
   });
@@ -411,7 +399,7 @@ test('it logs a refresh whose refresh token did not rotate as such', async () =>
   await refresher.refresh('codex', true);
 
   expect(logs).toStrictEqual([
-    'impd: broker: oauth secret codex refreshed; refresh token rotated: no; expires 2030-01-01T01:00:00.000Z',
+    'INFO impd.broker oauth secret codex refreshed; refresh token rotated: no; expires 2030-01-01T01:00:00.000Z',
   ]);
 });
 
@@ -443,7 +431,6 @@ test('it takes the expiry from expires_in over the access token exp', async () =
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
     now: () => startedAt,
   });
@@ -480,7 +467,6 @@ test('it takes the expiry from the access token exp without expires_in', async (
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
     now: () => startedAt,
   });
@@ -515,7 +501,6 @@ test('it stores no expiry for an opaque access token without expires_in', async 
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
     now: () => Date.parse('2030-01-01T00:00:00Z'),
   });
@@ -558,7 +543,6 @@ test('it stores no expiry for an expires_in no date can hold, and keeps the rota
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
     now: () => startedAt,
   });
@@ -604,7 +588,6 @@ test.each([[0], [-60]])(
     const refresher = createOAuthRefresher({
       db: ctx.db,
       files: ctx.files,
-      log: () => {},
       resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
       now: () => startedAt,
     });
@@ -650,7 +633,6 @@ test('it keeps the access token and its expiry when the answer has only a rotate
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
     now: () => startedAt,
   });
@@ -693,7 +675,6 @@ test('it keeps a rotated refresh token alone on a pending secret and stays pendi
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
     now: () => Date.parse('2030-01-01T00:00:00Z'),
   });
@@ -737,7 +718,6 @@ test('it records a 200 with no token as a transient error that changes nothing e
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
   });
 
@@ -780,7 +760,6 @@ test('it leaves the old expiry when expires_in comes with no new access token', 
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
     now: () => startedAt,
   });
@@ -928,7 +907,6 @@ test('it refreshes a secret that is due on a tick and leaves one that is not', a
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
     now: () => startedAt + 230 * 3_600_000,
   });
@@ -940,6 +918,26 @@ test('it refreshes a secret that is due on a tick and leaves one that is not', a
   ]);
 });
 
+test('it logs a tick that cannot list the secrets', async () => {
+  const ctx = await setupTest();
+
+  await ctx.db.schema.dropTable('secrets').execute();
+
+  const refresher = createOAuthRefresher({
+    db: ctx.db,
+    files: ctx.files,
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+  });
+
+  const logs = captureImpdLogs();
+
+  await refresher.tick();
+
+  expect(logs).toStrictEqual([
+    'WARNING impd.broker oauth refresh check failed: no such table: secrets',
+  ]);
+});
+
 test('it schedules its first refresh pass at once when it starts', async () => {
   const ctx = await setupTest();
 
@@ -948,7 +946,6 @@ test('it schedules its first refresh pass at once when it starts', async () => {
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
     timer: timer.timer,
   });
@@ -984,7 +981,6 @@ test('it refreshes a pending secret when its timer fires', async () => {
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
     timer: timer.timer,
   });
@@ -1008,7 +1004,6 @@ test('it schedules the next refresh pass a minute after a pass ends', async () =
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
     timer: timer.timer,
   });
@@ -1046,7 +1041,6 @@ test('it sends nothing on the next tick after a refresh', async () => {
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
     now: () => startedAt,
   });
@@ -1088,7 +1082,6 @@ test('it keeps the tokens and the status on a transient error and records the er
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
     now: () => startedAt + 230 * 3_600_000,
   });
@@ -1105,7 +1098,7 @@ test('it logs a transient error without the body it came with', async () => {
   const ctx = await setupTest();
 
   const startedAt = Date.parse('2030-01-01T00:00:00Z');
-  const logs: string[] = [];
+  const logs = captureImpdLogs();
 
   server.use(
     http.post('https://auth.example.com/oauth/token', () =>
@@ -1137,9 +1130,6 @@ test('it logs a transient error without the body it came with', async () => {
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: (message) => {
-      logs.push(message);
-    },
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
     now: () => startedAt + 230 * 3_600_000,
   });
@@ -1147,7 +1137,7 @@ test('it logs a transient error without the body it came with', async () => {
   await refresher.tick();
 
   expect(logs).toStrictEqual([
-    'impd: broker: oauth secret codex could not refresh: HTTP 503; trying again in 1 min',
+    'WARNING impd.broker oauth secret codex could not refresh: HTTP 503; trying again in 1 min',
   ]);
 });
 
@@ -1186,7 +1176,6 @@ test('it sends nothing for a minute after a transient error', async () => {
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
     now: () => clock.nowMs,
   });
@@ -1235,7 +1224,6 @@ test('it tries again a minute after a transient error', async () => {
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
     now: () => clock.nowMs,
   });
@@ -1284,7 +1272,6 @@ test('it waits two minutes after a second transient error', async () => {
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
     now: () => clock.nowMs,
   });
@@ -1307,7 +1294,7 @@ test('it caps the wait between transient errors at 30 minutes', async () => {
 
   const startedAt = Date.parse('2030-01-01T00:00:00Z');
   const clock = { nowMs: startedAt + 230 * 3_600_000 };
-  const logs: string[] = [];
+  const logs = captureImpdLogs();
 
   server.use(
     http.post('https://auth.example.com/oauth/token', () =>
@@ -1335,9 +1322,6 @@ test('it caps the wait between transient errors at 30 minutes', async () => {
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: (message) => {
-      logs.push(message);
-    },
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
     now: () => clock.nowMs,
   });
@@ -1401,7 +1385,6 @@ test('it clears the error once a refresh after a transient error succeeds', asyn
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
     now: () => clock.nowMs,
   });
@@ -1441,7 +1424,6 @@ test('it leaves a pending secret pending on a network error', async () => {
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
   });
 
@@ -1483,7 +1465,6 @@ test('it treats a redirect as transient and keeps the live tokens', async () => 
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
   });
 
@@ -1520,7 +1501,6 @@ test('it treats an answer that is not JSON as an invalid response and keeps the 
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
   });
 
@@ -1561,7 +1541,6 @@ test.each([['has space'], ['bad\r\nx-evil: 1']])(
     const refresher = createOAuthRefresher({
       db: ctx.db,
       files: ctx.files,
-      log: () => {},
       resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
     });
 
@@ -1602,7 +1581,6 @@ test('it treats a call that outlasts the timeout as transient', async () => {
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
     timeoutMs: 0,
   });
@@ -1626,7 +1604,7 @@ test.each([
     const ctx = await setupTest();
 
     const state = buildMockOAuthStateFile({ refreshToken: 'fake-refresh-0' });
-    const logs: string[] = [];
+    const logs = captureImpdLogs();
 
     server.use(
       http.post('https://auth.example.com/oauth/token', () => HttpResponse.json(body, { status })),
@@ -1647,9 +1625,6 @@ test.each([
     const refresher = createOAuthRefresher({
       db: ctx.db,
       files: ctx.files,
-      log: (message) => {
-        logs.push(message);
-      },
       resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
     });
 
@@ -1663,7 +1638,9 @@ test.each([
       error,
     });
 
-    expect(logs).toStrictEqual([`impd: broker: oauth secret codex needs a new sign-in: ${error}`]);
+    expect(logs).toStrictEqual([
+      `WARNING impd.broker oauth secret codex needs a new sign-in: ${error}`,
+    ]);
   },
 );
 
@@ -1700,7 +1677,6 @@ test('it never sends a secret that needs a new sign-in on a tick', async () => {
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
     now: () => startedAt + 1000 * 3_600_000,
   });
@@ -1735,7 +1711,6 @@ test('it answers an unforced refresh of a secret that needs a new sign-in withou
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
   });
 
@@ -1777,7 +1752,6 @@ test('it signs a secret that needs a new sign-in in again on a forced refresh wi
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
   });
 
@@ -1790,7 +1764,7 @@ test('it logs nothing when a secret that already needs a new sign-in is refused 
   const ctx = await setupTest();
 
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
-  const logs: string[] = [];
+  const logs = captureImpdLogs();
 
   server.use(endpoint.handler);
 
@@ -1818,9 +1792,6 @@ test('it logs nothing when a secret that already needs a new sign-in is refused 
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: (message) => {
-      logs.push(message);
-    },
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
   });
 
@@ -1864,7 +1835,6 @@ test('it answers a forced refresh while one runs with that one, sending one requ
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
   });
 
@@ -1892,7 +1862,7 @@ test('it drops a result when the secret was deleted during the call', async () =
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
   const reached = Promise.withResolvers<void>();
   const gate = Promise.withResolvers<void>();
-  const logs: string[] = [];
+  const logs = captureImpdLogs();
 
   server.use(endpoint.handler);
 
@@ -1925,9 +1895,6 @@ test('it drops a result when the secret was deleted during the call', async () =
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: (message) => {
-      logs.push(message);
-    },
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
   });
 
@@ -1944,7 +1911,7 @@ test('it drops a result when the secret was deleted during the call', async () =
   expect(ctx.files.read(valueFile)).toStrictEqual(before);
 
   expect(logs).toStrictEqual([
-    'impd: broker: oauth secret codex was replaced or deleted during a refresh; its result was dropped',
+    'INFO impd.broker oauth secret codex was replaced or deleted during a refresh; its result was dropped',
   ]);
 });
 
@@ -1993,7 +1960,6 @@ test('it keeps a result it could not write and sends its rotated token on the ne
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
   });
 
@@ -2051,16 +2017,21 @@ test('it answers a refresh whose earlier result still cannot be written without 
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
   });
 
   await refresher.refresh('codex', true);
 
+  const logs = captureImpdLogs();
+
   const outcome = await refresher.refresh('codex', true);
 
   expect(outcome).toStrictEqual({ kind: 'transient', error: 'value file not writable' });
   expect(endpoint.requests).toHaveLength(1);
+
+  expect(logs).toStrictEqual([
+    `WARNING impd.broker oauth secret codex: could not write its value file: EISDIR: illegal operation on a directory, rename '${valuePath}.new' -> '${valuePath}'`,
+  ]);
 });
 
 test('it writes on a tick a result an earlier write failed on, though the secret is not due', async () => {
@@ -2104,7 +2075,6 @@ test('it writes on a tick a result an earlier write failed on, though the secret
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
   });
 
@@ -2158,7 +2128,6 @@ test('it writes on stop a result an earlier write failed on', async () => {
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
   });
 
@@ -2213,7 +2182,6 @@ test('it never writes an unsaved result for a secret deleted after the tick list
   const refresher = createOAuthRefresher({
     db: gate.wrap(ctx.db),
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
   });
 
@@ -2273,7 +2241,6 @@ test('it answers stop only after the refresh under way has ended', async () => {
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
   });
 
@@ -2320,7 +2287,6 @@ test('it answers a refresh after stop as transient without a call', async () => 
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
   });
 
@@ -2350,14 +2316,19 @@ test('it reports a secret whose value file is missing as unreadable without a ca
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
   });
+
+  const logs = captureImpdLogs();
 
   const outcome = await refresher.refresh('codex', true);
 
   expect(outcome).toStrictEqual({ kind: 'unreadable' });
   expect(endpoint.requests).toBeEmpty();
+
+  expect(logs).toStrictEqual([
+    'INFO impd.broker oauth secret codex: its value file is missing or unreadable',
+  ]);
 });
 
 test('it reports a secret that does not exist as gone', async () => {
@@ -2366,7 +2337,6 @@ test('it reports a secret that does not exist as gone', async () => {
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
   });
 
@@ -2392,7 +2362,6 @@ test('it reports a secret of another kind as gone', async () => {
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
   });
 
@@ -2435,7 +2404,6 @@ test('it refreshes a rejected token older than five minutes and answers that a n
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
     now: () => startedAt + 24 * 3_600_000,
   });
@@ -2451,7 +2419,7 @@ test('it logs a refresh after a rejection without the token', async () => {
 
   const startedAt = Date.parse('2030-01-01T00:00:00Z');
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
-  const lines: string[] = [];
+  const lines = captureImpdLogs();
 
   server.use(endpoint.handler);
 
@@ -2486,9 +2454,6 @@ test('it logs a refresh after a rejection without the token', async () => {
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: (line) => {
-      lines.push(line);
-    },
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
     now: () => startedAt + 24 * 3_600_000,
   });
@@ -2496,8 +2461,8 @@ test('it logs a refresh after a rejection without the token', async () => {
   await refresher.refreshAfterRejection('codex', startedAt);
 
   expect(lines).toStrictEqual([
-    'impd: broker: oauth secret codex: a granted host refused its access token; refreshing',
-    'impd: broker: oauth secret codex refreshed; refresh token rotated: yes; expires 2030-01-02T01:00:00.000Z',
+    'WARNING impd.broker oauth secret codex: a granted host refused its access token; refreshing',
+    'INFO impd.broker oauth secret codex refreshed; refresh token rotated: yes; expires 2030-01-02T01:00:00.000Z',
   ]);
 });
 
@@ -2534,7 +2499,6 @@ test('it sends nothing for a rejected token younger than five minutes', async ()
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
     now: () => startedAt + 299_000,
   });
@@ -2576,7 +2540,6 @@ test('it answers that a new token is in place without a call when a refresh alre
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
     now: () => startedAt + 2 * 3_600_000,
   });
@@ -2620,7 +2583,6 @@ test('it sends nothing after a rejection for a secret that needs a new sign-in',
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
     now: () => startedAt + 24 * 3_600_000,
   });
@@ -2665,7 +2627,6 @@ test('it sends nothing after a rejection while a transient error holds the secre
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
     now: () => startedAt + 230 * 3_600_000,
   });
@@ -2711,7 +2672,6 @@ test('it sends one request for rejections of one token at once', async () => {
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
     now: () => startedAt + 24 * 3_600_000,
   });
@@ -2770,7 +2730,6 @@ test('it answers a forced refresh during a refresh after a rejection with that o
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
     now: () => startedAt + 24 * 3_600_000,
   });
@@ -2824,7 +2783,6 @@ test('it sends its own request for a forced refresh that joined a rejection the 
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
     now: () => startedAt + 60_000,
   });
@@ -2846,7 +2804,6 @@ test('it answers a rejection for a secret that does not exist as no new token', 
   const refresher = createOAuthRefresher({
     db: ctx.db,
     files: ctx.files,
-    log: () => {},
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
   });
 

@@ -1,3 +1,4 @@
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import type { ExecStream } from '../../vm/agent-client/exec-stream';
 import { isDiskFullError } from '../../vm/storage/disk-full-error';
 import type { SessionLogState } from './create-session-log-state';
@@ -6,7 +7,6 @@ import type { LiveLog } from './session-log-machine';
 import type { SessionLogImp } from './session-log-service';
 
 interface RunTapDeps {
-  readonly log: (message: string) => void;
   readonly applyImpLimit: (imp: SessionLogImp, life: number) => Promise<void>;
 }
 
@@ -15,8 +15,9 @@ export function makeRunTap(
   deps: RunTapDeps,
 ): (imp: SessionLogImp, entry: LiveLog, tap: Readonly<ExecStream>, life: number) => Promise<void> {
   const stopForFullDisk = async (imp: SessionLogImp, entry: LiveLog): Promise<void> => {
-    deps.log(
-      `impd: imp ${imp.id}: stopped the log of session ${entry.session}: the disk reached its reserve`,
+    getImpdLogger('session').info(
+      'imp {id}: stopped the log of session {session}: the disk reached its reserve',
+      { id: imp.id, session: entry.session },
     );
 
     ctx.send({ type: 'log.stop', entry });

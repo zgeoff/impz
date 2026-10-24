@@ -1,4 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import type { TestImpdOptions } from '../../../testing/start-test-impd';
 import { readSnapshotMeta } from '../../vm/sleep/snapshot-meta';
@@ -86,10 +87,14 @@ test('it logs an imp whose VM KSM cannot merge', async () => {
   });
 
   await ctx.createTestImage('base');
-  await ctx.client.imps.create({ name: 'dev' });
-  await ctx.client.system.info();
 
-  expect(ctx.logs).toSatisfyAny((line: string) => line.includes('KSM cannot merge'));
+  const lines = captureImpdLogs();
+
+  await ctx.client.imps.create({ name: 'dev' });
+
+  expect(lines).toContain(
+    'WARNING impd.imps imp=dev KSM cannot merge its guest memory (no merge flag after the exec)',
+  );
 });
 
 test('it counts a merge flag impd cannot read as mergeable', async () => {
@@ -114,10 +119,14 @@ test('it logs a merge flag impd cannot read', async () => {
   });
 
   await ctx.createTestImage('base');
-  await ctx.client.imps.create({ name: 'dev' });
-  await ctx.client.system.info();
 
-  expect(ctx.logs).toSatisfyAny((line: string) => line.includes('cannot read whether KSM'));
+  const lines = captureImpdLogs();
+
+  await ctx.client.imps.create({ name: 'dev' });
+
+  expect(lines).toContain(
+    'WARNING impd.imps imp=dev cannot read whether KSM may merge its guest memory',
+  );
 });
 
 test('it logs nothing about the merge flag when impd itself started the VM without IMP_KSM', async () => {
@@ -137,6 +146,6 @@ test('it logs an adopted VM that keeps the merge flag without IMP_KSM once', asy
   await ctx.restartImpd();
 
   expect(ctx.logs.filter((line) => line.includes('keeps the KSM merge flag'))).toStrictEqual([
-    'impd: dev: its VM keeps the KSM merge flag with IMP_KSM off, until the imp restarts',
+    'INFO impd.imps imp=dev its VM keeps the KSM merge flag with IMP_KSM off, until the imp restarts',
   ]);
 });

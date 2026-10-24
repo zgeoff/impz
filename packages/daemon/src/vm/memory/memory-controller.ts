@@ -1,3 +1,4 @@
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import {
   buildAgentOutdatedError,
   buildAgentUnknownError,
@@ -43,7 +44,6 @@ export interface MemoryControllerDeps {
   readonly limit: MemoryLimit;
   readonly readRamMib: (imp: ElasticImp) => number | null;
   readonly setPluggedMib: (id: string, mib: number | null) => void;
-  readonly log: (message: string) => void;
 
   // How long a guest could give back a step before the controller unplugs it.
   readonly shrinkAfterMs: number;
@@ -144,7 +144,9 @@ export function createMemoryController(deps: MemoryControllerDeps): MemoryContro
             ? buildAgentUnknownError('elastic-memory')
             : buildAgentOutdatedError('elastic-memory');
 
-        deps.log(`impd: ${imp.name}: memory low, not grown: ${error.detail}`);
+        getImpdLogger('imps')
+          .with({ imp: imp.name })
+          .info('memory low, not grown: {detail}', { detail: error.detail });
       }
 
       state.isAgentOutdated = true;
@@ -160,9 +162,11 @@ export function createMemoryController(deps: MemoryControllerDeps): MemoryContro
 
     if (!admitted) {
       if (!state.isRefused) {
-        deps.log(
-          `impd: ${imp.name}: memory low (${String(memory.availableMib)} MiB free), and the RAM budget has no room to grow it`,
-        );
+        getImpdLogger('imps')
+          .with({ imp: imp.name })
+          .info('memory low ({availableMib} MiB free), and the RAM budget has no room to grow it', {
+            availableMib: String(memory.availableMib),
+          });
       }
 
       state.isRefused = true;
@@ -199,9 +203,13 @@ export function createMemoryController(deps: MemoryControllerDeps): MemoryContro
       until: null,
     };
 
-    deps.log(
-      `impd: ${imp.name}: memory low (${String(memory.availableMib)} of ${String(memory.totalMib)} MiB free), grew to ${String(imp.memoryMib + pluggedMib)} MiB`,
-    );
+    getImpdLogger('imps')
+      .with({ imp: imp.name })
+      .info('memory low ({availableMib} of {totalMib} MiB free), grew to {memoryMib} MiB', {
+        availableMib: String(memory.availableMib),
+        totalMib: String(memory.totalMib),
+        memoryMib: String(imp.memoryMib + pluggedMib),
+      });
   };
 
   // A failed request to Firecracker may still have landed with its answer lost, so the guest's
@@ -235,9 +243,11 @@ export function createMemoryController(deps: MemoryControllerDeps): MemoryContro
     state.lowerTo = targetMib;
     state.uncountedGrow = null;
 
-    deps.log(
-      `impd: ${imp.name}: memory to spare, shrinking to ${String(imp.memoryMib + targetMib)} MiB`,
-    );
+    getImpdLogger('imps')
+      .with({ imp: imp.name })
+      .info('memory to spare, shrinking to {memoryMib} MiB', {
+        memoryMib: String(imp.memoryMib + targetMib),
+      });
   };
 
   const checkChange = async (imp: ElasticImp, memory: Readonly<GuestMemory>, time: number) => {
@@ -267,7 +277,9 @@ export function createMemoryController(deps: MemoryControllerDeps): MemoryContro
     if (!isPlug) {
       state.shrinkAfter = time + BACKOFF_MS;
 
-      deps.log(`impd: ${imp.name}: the guest could not unplug below ${guestMib} MiB`);
+      getImpdLogger('imps')
+        .with({ imp: imp.name })
+        .warning('the guest could not unplug below {guestMib} MiB', { guestMib });
 
       return;
     }
@@ -276,7 +288,9 @@ export function createMemoryController(deps: MemoryControllerDeps): MemoryContro
     state.uncountedGrow = null;
 
     if (state.stalledAtMib === null) {
-      deps.log(`impd: ${imp.name}: the guest could not plug past ${guestMib} MiB`);
+      getImpdLogger('imps')
+        .with({ imp: imp.name })
+        .warning('the guest could not plug past {guestMib} MiB', { guestMib });
     }
 
     state.stalledAtMib = memory.pluggedMib;

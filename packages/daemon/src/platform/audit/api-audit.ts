@@ -3,6 +3,7 @@ import { listApiCalls, writeApiCall } from '../db/api-audit';
 import type { ImpDatabase } from '../db/open-database';
 import type { AuditActor } from '../principal/caller';
 import { getErrorMessage } from '../process/get-error-message';
+import { getImpdLogger } from '../process/get-impd-logger';
 
 const IMP_NAMESPACES: ReadonlySet<string> = new Set([
   'imps',
@@ -34,7 +35,6 @@ export interface ApiAudit {
 interface ApiAuditDeps {
   readonly db: ImpDatabase;
   readonly now: () => number;
-  readonly log: (message: string) => void;
   readonly readErrorCode: (failure: unknown) => string;
 }
 
@@ -103,6 +103,9 @@ async function writeCall(deps: ApiAuditDeps, call: AuditedCall, failure: unknown
       detail: call.detail ?? null,
     });
   } catch (error) {
-    deps.log(`impd: audit: ${call.procedure}: ${getErrorMessage(error)}`);
+    getImpdLogger('audit').warning('{procedure}: {error}', {
+      procedure: call.procedure,
+      error: getErrorMessage(error),
+    });
   }
 }

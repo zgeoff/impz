@@ -96,9 +96,9 @@ test('it makes the template of a shape on its second boot and restores it as imp
   const sizeKib = Number(df.trim().split('\n').at(-1)?.split(/\s+/v)[1]);
 
   expect(afterFirst).toStrictEqual([]);
-  expect(log).toContain(`impd: boot template ${key.slice(0, 12)} built in `);
-  expect(log).toContain(`${second}: restored boot template ${key.slice(0, 12)}`);
-  expect(log).toContain(`${third}: restored boot template ${key.slice(0, 12)}`);
+  expect(log).toContain(`INFO impd.boot boot template ${key.slice(0, 12)} built in `);
+  expect(log).toContain(`imp=${second} restored boot template ${key.slice(0, 12)}`);
+  expect(log).toContain(`imp=${third} restored boot template ${key.slice(0, 12)}`);
   expect(consoleLog.stdout).toContain('boot: claim: crng reseeded from a 64-byte seed');
   expect(hostname).toBe(second);
   expect(secondMac).not.toBe('06:00:a9:fe:ff:fe');
@@ -207,7 +207,7 @@ test('it records each restored boot as its own cold boot, again after a restart 
   const after = await readSessionOutput(second);
   const log = await readImpdLogSince(restarted);
 
-  expect(log).toContain(`${second}: restored boot template`);
+  expect(log).toContain(`imp=${second} restored boot template`);
   expect(other.bootId).not.toBe(before.bootId);
   expect(after.bootId).not.toBe(before.bootId);
 
@@ -255,7 +255,7 @@ test('it sleeps and wakes a restored imp like any other', async () => {
   const marker = await runInImp(second, 'cat', '/root/marker');
   const log = await readImpdLogSince(started);
 
-  expect(log).toContain(`${second}: restored boot template`);
+  expect(log).toContain(`imp=${second} restored boot template`);
   expect(asleep.state).toBe('sleeping');
   expect(marker).toBe('kept');
 });

@@ -204,7 +204,7 @@ test('#readSetfcapWarning gives no start warning when CapEff holds CAP_SETFCAP',
 
 test('#readSetfcapWarning gives the start warning when CapEff lacks CAP_SETFCAP', () => {
   expect(readSetfcapWarning('Name:\timpd\nCapEff:\t00000000082810fb\n')).toBe(
-    'impd: warning: no CAP_SETFCAP, so an image add or build fails on an image with a file capability; imp-host needs CAP_SETFCAP (docs/architecture/host.md#privileges)',
+    'no CAP_SETFCAP, so an image add or build fails on an image with a file capability; imp-host needs CAP_SETFCAP (docs/architecture/host.md#privileges)',
   );
 });
 

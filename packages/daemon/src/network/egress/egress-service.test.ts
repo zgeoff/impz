@@ -7,6 +7,7 @@ import invariant from 'tiny-invariant';
 import { buildStubHostRoutes } from '../../../testing/host-net/build-stub-host-routes';
 import { buildStubNft } from '../../../testing/network/build-stub-nft';
 import { startStubEchoServer } from '../../../testing/network/start-stub-echo-server';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { parsePrefix64 } from '../../host-net/net/addressing6';
 import { resolveIpv6Plan } from '../../host-net/net/ipv6-plan';
@@ -443,7 +444,7 @@ test('it logs a run of the sweep that nft refuses', async () => {
   sweep();
 
   await waitFor(() => {
-    expect(ctx.logs).toContain('impd: egress: sweep: nft exited 1: table busy');
+    expect(ctx.logs).toContain('WARNING impd.egress sweep: nft exited 1: table busy');
   });
 });
 
@@ -504,7 +505,7 @@ test("it logs an exact name of a box's list that does not resolve", async () => 
 
   await waitFor(() => {
     expect(ctx.logs).toContain(
-      'impd: egress: dev: resolving github.com: queryA ESERVFAIL github.com',
+      'WARNING impd.egress imp=dev resolving github.com: queryA ESERVFAIL github.com',
     );
   });
 });
@@ -699,7 +700,7 @@ test('it lets a builder, and no other public imp, reach the test registry on an 
   );
 
   expect(ctx.logs).toContain(
-    'impd: warning: IMP_E2E=1 and IMP_BUILD_TEST_REGISTRY open 10.200.0.1:5443 to builders, for registry.example.test',
+    'WARNING impd.image IMP_E2E=1 and IMP_BUILD_TEST_REGISTRY open 10.200.0.1:5443 to builders, for registry.example.test',
   );
 });
 
@@ -856,7 +857,7 @@ test('it leaves a running public imp no uplink while the routes cannot be read',
   expect(ctx.nft.readTable()).toInclude('  set uplinks4 {\n    type ifname\n  }\n');
 
   expect(ctx.logs).toContain(
-    "impd: egress: reading the host container's routes: ip -4 route show default exited 1",
+    "WARNING impd.egress imp=dev reading the host container's routes: ip -4 route show default exited 1",
   );
 });
 
@@ -938,10 +939,15 @@ test('it warns once that a public imp lacks the host addresses when IMP_HOST_ADD
   const ctx = await setupTest();
 
   await ctx.createTestImage('base');
+
+  const logs = captureImpdLogs();
+
   await ctx.impd.imps.createImp({ name: 'a', policy: { mode: 'public', allow: [] } });
   await ctx.impd.imps.createImp({ name: 'b', policy: { mode: 'public', allow: [] } });
 
-  expect(ctx.logs.filter((line) => line.includes('IMP_HOST_ADDRESSES is empty'))).toHaveLength(1);
+  expect(logs.filter((line) => line.includes('IMP_HOST_ADDRESSES is empty'))).toStrictEqual([
+    "WARNING impd.egress imp=a a public imp exists and IMP_HOST_ADDRESSES is empty, so only IMP_EGRESS_DENY keeps it from the Docker host's own addresses and networks; the systemd unit and the NixOS module fill it at each start, compose does not (docs/architecture/network/egress.md#public)",
+  ]);
 });
 
 test('it warns that a public imp lacks the host addresses even when IMP_EGRESS_DENY holds some', async () => {
@@ -1105,7 +1111,7 @@ test('it runs an open imp without nft, and says the firewall is off', async () =
   expect(ctx.impd.egress.isEnforced()).toBeFalse();
 
   expect(ctx.logs).toContain(
-    'impd: egress: NO FIREWALL: nft exited 1: nft is not installed; imps with a public, box or none policy will not start (0 now)',
+    'ERROR impd.egress NO FIREWALL: nft exited 1: nft is not installed; imps with a public, box or none policy will not start (0 now)',
   );
 });
 
@@ -1261,7 +1267,6 @@ test('it turns IPv6 off when NAT66 fails, and still enforces the egress table', 
           readUlaPrefix: () => prefix,
           checkHostRules: () => Promise.resolve(null),
           runNft: nft.runNft,
-          log: () => {},
         },
       ),
   });
@@ -1314,8 +1319,8 @@ test('it builds the table from the rows when nft refuses a network change and th
   expect(undo).toHaveBeenCalledTimes(2);
 
   expect(ctx.logs.filter((line) => line.includes('undoing a network change'))).toStrictEqual([
-    'impd: egress: undoing a network change (try 1): the database is gone',
-    'impd: egress: undoing a network change (try 2): the database is gone',
+    'WARNING impd.egress undoing a network change (try 1): the database is gone',
+    'WARNING impd.egress undoing a network change (try 2): the database is gone',
   ]);
 });
 
@@ -1398,7 +1403,7 @@ test('it logs a pair whose flows cannot be dropped, and keeps the change', async
   expect(result).toBe('removed');
 
   expect(ctx.logs).toContain(
-    'impd: egress: 10.66.0.2 10.66.0.6: conntrack -D exited 1: Operation not permitted',
+    'WARNING impd.egress 10.66.0.2 10.66.0.6: conntrack -D exited 1: Operation not permitted',
   );
 });
 
@@ -1416,10 +1421,14 @@ test("it says once that setup-net.sh's imp-network ACCEPT is missing from a tabl
 
   invariant(network);
 
+  const logs = captureImpdLogs();
+
   await ctx.impd.imps.createImp({ name: 'web', networkIds: [network.id] });
   await ctx.impd.imps.createImp({ name: 'db', networkIds: [network.id] });
 
-  expect(ctx.logs.filter((line) => line.includes('imp-network ACCEPT is missing'))).toHaveLength(1);
+  expect(logs.filter((line) => line.includes('imp-network ACCEPT is missing'))).toStrictEqual([
+    "WARNING impd.egress imp=web setup-net.sh's imp-network ACCEPT is missing from FORWARD; imps on a network cannot reach each other until the host container starts again",
+  ]);
 });
 
 test('it logs a FORWARD chain it cannot read', async () => {
@@ -1439,7 +1448,7 @@ test('it logs a FORWARD chain it cannot read', async () => {
   await ctx.impd.imps.createImp({ name: 'web', networkIds: [network.id] });
 
   expect(ctx.logs).toContain(
-    'impd: egress: reading FORWARD: iptables -S FORWARD exited 4: Permission denied',
+    'WARNING impd.egress imp=web reading FORWARD: iptables -S FORWARD exited 4: Permission denied',
   );
 });
 
@@ -1507,5 +1516,5 @@ test('it logs a rebuild of the table that nft refuses too after a failed change'
   const change = ctx.impd.egress.setPolicy('dev', { mode: 'none', allow: [] });
 
   expect(change).rejects.toThrow(new Error('nft exited 1: table busy'));
-  expect(ctx.logs).toContain('impd: egress: rebuilding the table: nft exited 1: table busy');
+  expect(ctx.logs).toContain('WARNING impd.egress rebuilding the table: nft exited 1: table busy');
 });

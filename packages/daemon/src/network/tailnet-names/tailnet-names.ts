@@ -2,6 +2,7 @@ import type { ServedServices } from '../../host-net/net/tailscale-serve';
 import { listImps } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { createSemaphore } from '../../platform/process/semaphore';
 import { listServeEntries } from './service-serve';
 import type { ServiceServe } from './service-serve';
@@ -25,6 +26,7 @@ export interface TailnetNamesStatus {
 
 export interface TailnetNames {
   readonly runSync: () => Promise<void>;
+  readonly trySync: () => Promise<void>;
 
   readonly readUrl: (impName: string) => string | null;
   readonly readStatus: () => TailnetNamesStatus;
@@ -42,7 +44,6 @@ export interface TailnetNamesDeps {
   readonly isImpPresent: (name: string) => Promise<boolean>;
 
   readonly readSuffix: () => Promise<string | null>;
-  readonly log: (message: string) => void;
 }
 
 type NameState = { readonly live: true } | { readonly live: false; readonly error: string };
@@ -63,11 +64,15 @@ export function createTailnetNames(deps: TailnetNamesDeps): TailnetNames {
     const last = states.get(impName);
 
     if (!next.live && (last === undefined || last.live || last.error !== next.error)) {
-      deps.log(`impd: tailnet names: ${impName}: ${next.error}`);
+      getImpdLogger('tailnet')
+        .with({ imp: impName })
+        .warning('tailnet names: {error}', { error: next.error });
     }
 
     if (next.live && last?.live !== true) {
-      deps.log(`impd: tailnet names: ${impName} is ${toService(impName)}`);
+      getImpdLogger('tailnet')
+        .with({ imp: impName })
+        .info('tailnet names: named {service}', { service: toService(impName) });
     }
 
     states.set(impName, next);
@@ -116,7 +121,9 @@ export function createTailnetNames(deps: TailnetNamesDeps): TailnetNames {
 
     await deps.api.removeService(service);
 
-    deps.log(`impd: tailnet names: removed ${service}, which no imp has`);
+    getImpdLogger('tailnet').info('tailnet names: removed {service}, which no imp has', {
+      service,
+    });
   };
 
   const runPass = async (): Promise<void> => {
@@ -179,16 +186,17 @@ export function createTailnetNames(deps: TailnetNamesDeps): TailnetNames {
     }
   };
 
-  const tryRemove = async (service: string, remove: () => Promise<void>): Promise<void> => {
-    try {
-      await remove();
-    } catch (error) {
-      deps.log(`impd: tailnet names: removing ${service}: ${getErrorMessage(error)}`);
-    }
-  };
-
   return {
     runSync: () => pass.run(runPass),
+    trySync: async () => {
+      try {
+        await pass.run(runPass);
+      } catch (error) {
+        getImpdLogger('tailnet').warning('tailnet names: the pass failed: {error}', {
+          error: getErrorMessage(error),
+        });
+      }
+    },
     readUrl: (impName) =>
       states.get(impName)?.live === true && view.suffix !== null
         ? `https://${deps.config.prefix}${impName}.${view.suffix}`
@@ -216,4 +224,15 @@ function isSameDefinition(service: TailnetService, definition: ServiceDefinition
 
 function isSameEntries(have: readonly string[], want: readonly string[]): boolean {
   return have.length === want.length && want.every((entry) => have.includes(entry));
+}
+
+async function tryRemove(service: string, remove: () => Promise<void>): Promise<void> {
+  try {
+    await remove();
+  } catch (error) {
+    getImpdLogger('tailnet').warning('tailnet names: removing {service}: {error}', {
+      service,
+      error: getErrorMessage(error),
+    });
+  }
 }

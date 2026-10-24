@@ -20,6 +20,8 @@ import { buildMockBackupConfig } from '../../../testing/imp-ops/build-mock-backu
 import { buildMockNewCheckpoint } from '../../../testing/imp-ops/build-mock-new-checkpoint';
 import { buildStubRestic } from '../../../testing/imp-ops/build-stub-restic';
 import { buildQueryGate } from '../../../testing/platform/build-query-gate';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
+import { runSql } from '../../../testing/platform/run-sql';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { buildStubPressureSwitch } from '../../../testing/vm/build-stub-pressure-switch';
 import { buildStubPublishHook } from '../../../testing/vm/build-stub-publish-hook';
@@ -64,7 +66,7 @@ async function setupTest() {
 
   const restic = buildStubRestic({ repoDir, now: () => new Date(host.now()) });
   const freezes: string[] = [];
-  const backupLogs: string[] = [];
+  const backupLogs = captureImpdLogs();
 
   const deps: Omit<BackupServiceDeps, 'backup'> = {
     dataDir: host.dataDir,
@@ -78,9 +80,6 @@ async function setupTest() {
     storageGate: host.storageGate,
     diskBudget: host.diskBudget,
     restic: restic.restic,
-    log: (message) => {
-      backupLogs.push(message);
-    },
     now: () => new Date(host.now()),
     freezer: {
       freeze: () => {
@@ -137,6 +136,70 @@ test('#runBackup freezes a running imp and copies stopped and sleeping imps as t
     ['idle', 'stopped', true],
     ['napping', 'sleeping', false],
   ]);
+});
+
+test('#runBackup copies a running imp unsynced when its freeze fails, and logs the freeze', async () => {
+  const ctx = await setupTest();
+
+  const backups = createBackupService({
+    ...ctx.deps,
+    backup: buildMockBackupConfig(),
+    freezer: {
+      freeze: () => Promise.reject(new Error('the agent did not answer')),
+      thaw: () => Promise.resolve(),
+    },
+  });
+
+  await ctx.createTestImage('base');
+
+  writeFileSync(join(ctx.dataDir, 'images', 'base', 'config.json'), '{}');
+
+  await ctx.imps.createImp({ name: 'dev' });
+
+  const lines = captureImpdLogs();
+
+  const run = await backups.runBackup();
+
+  const manifestText = readFileSync(join(ctx.repoDir, run.snapshotId, 'manifest.json'), 'utf8');
+  const manifest = BackupManifestSchema.parse(JSON.parse(manifestText));
+
+  expect(manifest.imps.map((imp) => [imp.name, imp.synced])).toStrictEqual([['dev', false]]);
+
+  expect(lines).toContain(
+    'WARNING impd.backup imp=dev no freeze, copied unsynced: the agent did not answer',
+  );
+});
+
+test('#runBackup keeps a synced copy of a running imp whose thaw fails, and logs the thaw', async () => {
+  const ctx = await setupTest();
+
+  const backups = createBackupService({
+    ...ctx.deps,
+    backup: buildMockBackupConfig(),
+    freezer: {
+      freeze: () => Promise.resolve(),
+      thaw: () => Promise.reject(new Error('the agent did not answer')),
+    },
+  });
+
+  await ctx.createTestImage('base');
+
+  writeFileSync(join(ctx.dataDir, 'images', 'base', 'config.json'), '{}');
+
+  await ctx.imps.createImp({ name: 'dev' });
+
+  const lines = captureImpdLogs();
+
+  const run = await backups.runBackup();
+
+  const manifestText = readFileSync(join(ctx.repoDir, run.snapshotId, 'manifest.json'), 'utf8');
+  const manifest = BackupManifestSchema.parse(JSON.parse(manifestText));
+
+  expect(manifest.imps.map((imp) => [imp.name, imp.synced])).toStrictEqual([['dev', true]]);
+
+  expect(lines).toContain(
+    'WARNING impd.backup imp=dev thaw failed (the agent thaws on its own): the agent did not answer',
+  );
 });
 
 test('#runBackup tags the snapshot with the run and each imp, then forgets', async () => {
@@ -490,7 +553,10 @@ test('#restoreBackup restores the newest backup without --at', async () => {
 
   writeFileSync(buildImpPaths(ctx.dataDir, dev.id).disk, 'later');
 
-  await backups.runBackup();
+  const later = await backups.runBackup();
+
+  const lines = captureImpdLogs();
+
   await backups.restoreBackup({ name: 'dev', as: 'back' });
 
   const back = await readImpByName(ctx.db, 'back');
@@ -498,6 +564,10 @@ test('#restoreBackup restores the newest backup without --at', async () => {
   invariant(back);
 
   expect(readFileSync(buildImpPaths(ctx.dataDir, back.id).disk, 'utf8')).toBe('later');
+
+  expect(lines).toContain(
+    `INFO impd.backup imp=back restored from ${later.snapshotId} (2026-10-02T01:00:00.000Z)`,
+  );
 });
 
 test('#restoreBackup rejects a restore --at before every backup as NOT_FOUND', async () => {
@@ -640,7 +710,6 @@ test('#restoreBackup restores every imp and its image on a fresh host, renaming 
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
     restic: buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date(ctx.now()) }).restic,
-    log: () => {},
     now: () => new Date(ctx.now()),
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
   });
@@ -688,7 +757,6 @@ test('#restoreBackup rejects a restored image as CONFLICT when its name and its 
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
     restic: buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date(ctx.now()) }).restic,
-    log: () => {},
     now: () => new Date(ctx.now()),
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
   });
@@ -723,7 +791,6 @@ test('#runBackup records templates with their source imp and an identity reset s
     storageGate: ctx.storageGate,
     diskBudget: ctx.diskBudget,
     runImageEviction: ctx.images.runImageEviction,
-    log: () => {},
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
   });
 
@@ -769,7 +836,6 @@ test('#restoreBackup restores unused templates with all imps, tagging one whose 
     storageGate: ctx.storageGate,
     diskBudget: ctx.diskBudget,
     runImageEviction: ctx.images.runImageEviction,
-    log: () => {},
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
   });
 
@@ -806,7 +872,6 @@ test('#restoreBackup restores unused templates with all imps, tagging one whose 
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
     restic: buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date(ctx.now()) }).restic,
-    log: () => {},
     now: () => new Date(ctx.now()),
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
   });
@@ -869,6 +934,39 @@ test('#restoreBackup leaves no imp behind when a restore fails part way', async 
   expect(copy).toBeUndefined();
   expect(checkpoints).toStrictEqual([{ id: 'cp-one' }]);
   expect(readdirSync(join(ctx.dataDir, 'backup', 'restore'))).toStrictEqual([]);
+});
+
+test('#restoreBackup logs an imp that a failed restore cannot remove', async () => {
+  const ctx = await setupTest();
+
+  const backups = createBackupService({ ...ctx.deps, backup: buildMockBackupConfig() });
+
+  await ctx.createTestImage('base');
+
+  writeFileSync(join(ctx.dataDir, 'images', 'base', 'config.json'), '{}');
+
+  await ctx.imps.createImp({ name: 'dev' });
+
+  const run = await backups.runBackup();
+
+  const manifestText = readFileSync(join(ctx.repoDir, run.snapshotId, 'manifest.json'), 'utf8');
+  const manifest = BackupManifestSchema.parse(JSON.parse(manifestText));
+
+  rmSync(join(ctx.repoDir, run.snapshotId, manifest.imps[0]?.disk ?? ''));
+
+  await runSql(
+    ctx.db,
+    `CREATE TRIGGER keep_copies BEFORE DELETE ON imps WHEN OLD.name = 'copy'
+    BEGIN SELECT RAISE(ABORT, 'imp rows kept'); END`,
+  );
+
+  const lines = captureImpdLogs();
+
+  expect(backups.restoreBackup({ name: 'dev', as: 'copy' })).rejects.toThrow('ENOENT');
+
+  expect(lines).toContain(
+    'WARNING impd.backup imp=copy a failed restore left the imp: imp rows kept',
+  );
 });
 
 test('#restoreBackup rejects a restore of a backup that holds no copy of the imp’s image', async () => {
@@ -963,9 +1061,15 @@ test('#runScheduled backs up without a prune or a check once the interval has pa
 
   ctx.advance(60 * 60 * 1000);
 
+  const lines = captureImpdLogs();
+
   await backups.runScheduled();
 
   expect(ctx.restic.calls.slice(before)).toStrictEqual(['unlock', 'backup', 'forget']);
+
+  expect(lines).toContainEqual(
+    expect.stringMatching(/^INFO impd\.backup snap2: 1 imps, 10 bytes added in \d+ms$/v),
+  );
 });
 
 test('#runScheduled logs a failed weekly check loudly and reports it in the status', async () => {
@@ -1006,7 +1110,7 @@ test('#runScheduled logs a failed weekly check loudly and reports it in the stat
   ]);
 
   expect(ctx.backupLogs).toContain(
-    'impd: backup: CHECK FAILED, the repository may be damaged: Fatal: pack 9f2c: ciphertext verification failed',
+    'ERROR impd.backup CHECK FAILED, the repository may be damaged: Fatal: pack 9f2c: ciphertext verification failed',
   );
 
   expect(status.lastCheck?.error).toContain('ciphertext verification failed');
@@ -1049,7 +1153,7 @@ test('#runScheduled tries a prune that met a lock again on the next tick, not th
   const status = await backups.readStatus();
 
   expect(ctx.backupLogs).toContain(
-    'impd: backup: PRUNE FAILED: restic prune exited 11: unable to create lock in backend: repository is already locked exclusively by PID 7 on imp-host by root (UID 0, GID 0)',
+    'ERROR impd.backup PRUNE FAILED: restic prune exited 11: unable to create lock in backend: repository is already locked exclusively by PID 7 on imp-host by root (UID 0, GID 0)',
   );
 
   expect(ctx.restic.calls.slice(before)).toStrictEqual(['unlock', 'prune']);
@@ -1287,7 +1391,10 @@ test('#runBackup leaves out an imp replaced under its name since the database co
 
   expect(run.imps).toStrictEqual(['a']);
   expect(run.skipped).toStrictEqual([{ name: 'dev', reason: 'replaced since the database copy' }]);
-  expect(ctx.backupLogs).toContain('impd: backup: dev: left out: replaced since the database copy');
+
+  expect(ctx.backupLogs).toContain(
+    'WARNING impd.backup imp=dev left out: replaced since the database copy',
+  );
 });
 
 test('#runBackup puts no secret, key, password or token of the host in a backup', async () => {
@@ -1530,7 +1637,7 @@ test('#restoreBackup restores an egress policy this impd cannot read as none, ne
   expect(policy).toStrictEqual({ mode: 'none', allow: [] });
 
   expect(ctx.backupLogs).toContain(
-    'impd: backup: back: unknown egress policy "granted-only"; restored as none',
+    'WARNING impd.backup imp=back unknown egress policy "granted-only"; restored as none',
   );
 });
 
@@ -1736,7 +1843,6 @@ test('#restoreBackup holds the storage gate for a restored image and disk room f
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
     restic: freshRestic.restic,
-    log: () => {},
     now: () => new Date(ctx.now()),
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
   });
@@ -2197,9 +2303,7 @@ test('#restoreBackup brings back the named tokens, the secrets and the grants on
   await ctx.broker.addGrant('dev', 'gh');
 
   const made = await ctx.tokens.create({ name: 'agent', scope: 'exec', imps: ['dev'] });
-
-  await backups.runBackup();
-
+  const run = await backups.runBackup();
   const fresh = await startTestImpd(ctx.stack);
 
   const freshBackups = createBackupService({
@@ -2215,10 +2319,11 @@ test('#restoreBackup brings back the named tokens, the secrets and the grants on
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
     restic: buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date(ctx.now()) }).restic,
-    log: () => {},
     now: () => new Date(ctx.now()),
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
   });
+
+  const lines = captureImpdLogs();
 
   const restored = await freshBackups.restoreBackup({ all: true });
   const grants = await fresh.broker.listGrants('dev');
@@ -2233,6 +2338,10 @@ test('#restoreBackup brings back the named tokens, the secrets and the grants on
   });
 
   expect(grants).toStrictEqual(['gh']);
+
+  expect(lines).toContain(
+    `INFO impd.backup restored 1 tokens and 1 secrets from ${run.snapshotId}`,
+  );
 });
 
 test('#restoreBackup holds the database copy’s size from the disk budget while it restores the copy', async () => {
@@ -2267,7 +2376,6 @@ test('#restoreBackup holds the database copy’s size from the disk budget while
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
     restic: freshRestic.restic,
-    log: () => {},
     now: () => new Date(ctx.now()),
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
   });
@@ -2357,7 +2465,6 @@ test('#restoreBackup restores a token’s grantable list on a fresh host, so the
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
     restic: buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date(ctx.now()) }).restic,
-    log: () => {},
     now: () => new Date(ctx.now()),
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
   });
@@ -2414,7 +2521,6 @@ test('#restoreBackup brings back no token or secret in a restore of one imp from
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
     restic: buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date(ctx.now()) }).restic,
-    log: () => {},
     now: () => new Date(ctx.now()),
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
   });

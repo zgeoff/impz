@@ -303,7 +303,7 @@ test('it leaves a jailed imp asleep, with its memory, when its cgroup cannot be 
   writeFileSync(join(cgroupRoot, 'imps', 'cgroup.subtree_control'), 'cpu');
 
   const ctx = await setupTest({
-    cgroups: createCpuCgroups({ root: cgroupRoot, log: () => {} }),
+    cgroups: createCpuCgroups({ root: cgroupRoot }),
     env: { IMP_JAILER: 'true' },
   });
 
@@ -342,7 +342,7 @@ test('it wakes a jailed imp once its cgroup can be made again', async () => {
   writeFileSync(join(cgroupRoot, 'imps', 'cgroup.subtree_control'), 'cpu');
 
   const ctx = await setupTest({
-    cgroups: createCpuCgroups({ root: cgroupRoot, log: () => {} }),
+    cgroups: createCpuCgroups({ root: cgroupRoot }),
     env: { IMP_JAILER: 'true' },
   });
 

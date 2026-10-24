@@ -1,15 +1,15 @@
+import type { Logger } from '@logtape/logtape';
 import type { OrphanStorage, SweepResult } from './storage-backend';
 
 export type OrphanLogging = 'each' | 'count' | 'none';
 
 export function printSweep(
-  log: (message: Readonly<string>) => void,
-  prefix: string,
+  logger: Logger,
   result: Readonly<SweepResult>,
   orphans: OrphanLogging,
 ): void {
   for (const dropped of result.dropped) {
-    log(`${prefix}: removed ${dropped.kind} ${dropped.id}`);
+    logger.info('removed {kind} {id}', { kind: dropped.kind, id: dropped.id });
   }
 
   if (orphans === 'none' || result.kept.length === 0) {
@@ -18,13 +18,13 @@ export function printSweep(
 
   if (orphans === 'each') {
     for (const orphan of result.kept) {
-      log(`${prefix}: kept ${formatOrphan(orphan)}`);
+      logger.info('kept {orphan}', { orphan: formatOrphan(orphan) });
     }
   }
 
-  log(
-    `${prefix}: kept ${String(result.kept.length)} orphans the database does not name; ` +
-      '`impz gc --orphans --dry-run` lists what `impz gc --orphans` would retire',
+  logger.info(
+    'kept {length} orphans the database does not name; `impz gc --orphans --dry-run` lists what `impz gc --orphans` would retire',
+    { length: String(result.kept.length) },
   );
 }
 

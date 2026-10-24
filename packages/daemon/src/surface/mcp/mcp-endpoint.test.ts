@@ -919,7 +919,6 @@ test('it answers a tool call through the wake proxy’s API route', async () => 
     },
     db: ctx.db,
     imps: ctx.impd.imps,
-    log: () => {},
     peers: ctx.impd.peers,
   });
 
@@ -1014,7 +1013,6 @@ test('it answers a long JSON tool call through the wake proxy', async () => {
     },
     db: ctx.db,
     imps: ctx.impd.imps,
-    log: () => {},
     peers: ctx.impd.peers,
   });
 
@@ -1107,7 +1105,6 @@ test('it keeps a call answered as server-sent events open through the wake proxy
     },
     db: ctx.db,
     imps: ctx.impd.imps,
-    log: () => {},
     peers: ctx.impd.peers,
   });
 

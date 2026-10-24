@@ -16,6 +16,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import invariant from 'tiny-invariant';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { buildStubMounts } from '../../../testing/vm/build-stub-mounts';
 import { buildStubUidProcesses } from '../../../testing/vm/build-stub-uid-processes';
 import { buildImpPaths } from '../storage/data-layout';
@@ -36,7 +37,7 @@ function setupTest() {
 
   const mounts = buildStubMounts();
   const processes = buildStubUidProcesses();
-  const logs: string[] = [];
+  const logs = captureImpdLogs();
   const steps: string[] = [];
 
   const jails = createJails({
@@ -49,9 +50,6 @@ function setupTest() {
       return mounts.run(argv);
     },
     readMounts: mounts.readMounts,
-    log: (message) => {
-      logs.push(message);
-    },
     ...processes.deps,
     killCgroup: (impId) => {
       steps.push(`kill cgroup ${impId}`);
@@ -713,7 +711,7 @@ test('#removeOrphans logs and keeps an orphan jail that will not unmount, and re
   expect(removed).toStrictEqual(['i2']);
 
   expect(ctx.logs).toStrictEqual([
-    `impd: jail i1: umount --lazy ${deepest}: umount: ${deepest}: target is busy.`,
+    `WARNING impd.jail jail i1: umount --lazy ${deepest}: umount: ${deepest}: target is busy.`,
   ]);
 
   expect(existsSync(imp.root)).toBeTrue();

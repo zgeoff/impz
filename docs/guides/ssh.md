@@ -32,7 +32,7 @@ SSH, such as VS Code Remote SSH. The
 2. Check the host key on the first connection. impd logs its fingerprint when it starts:
 
    ```text
-   impd: ssh on :22, host key SHA256:…
+   INFO impd.ssh ssh on :22, host key SHA256:…
    ```
 
 3. Add this to `~/.ssh/config`. `imp` is the host's tailnet name; for the dev instance, use

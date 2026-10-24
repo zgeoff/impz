@@ -8,6 +8,7 @@ import { buildMockDnsReply } from '../../../testing/network/build-mock-dns-reply
 import { buildMockNetworkMember } from '../../../testing/network/build-mock-network-member';
 import { buildStubEgressService } from '../../../testing/network/build-stub-egress-service';
 import { startStubDnsUpstream } from '../../../testing/network/start-stub-dns-upstream';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { parseSubnet } from '../../host-net/net/addressing';
 import { createDnsForward } from './dns-upstream';
 import {
@@ -435,6 +436,7 @@ test.each([
 );
 
 test('#createQueryHandler answers SERVFAIL and logs why when no upstream answers', async () => {
+  const logs = captureImpdLogs();
   const egress = buildStubEgressService({ verdicts: { 1: { 'github.com': 'admit' } } });
 
   const handle = createQueryHandler({
@@ -446,12 +448,14 @@ test('#createQueryHandler answers SERVFAIL and logs why when no upstream answers
 
   expect(dnsPacket.decode(Buffer.from(reply))).toMatchObject({ rcode: 'SERVFAIL' });
 
-  expect(egress.logs).toStrictEqual([
-    'impd: egress: github.com for slot 1: no upstream resolver answered',
+  expect(logs).toStrictEqual([
+    'WARNING impd.egress github.com for slot 1: no upstream resolver answered',
   ]);
 });
 
 test('#createQueryHandler answers SERVFAIL and logs why when the set cannot take the answer', async () => {
+  const logs = captureImpdLogs();
+
   const egress = buildStubEgressService({
     verdicts: { 1: { 'github.com': 'admit' } },
     upstream: { 'github.com': [{ type: 'A', name: 'github.com', ttl: 60, data: '140.82.112.3' }] },
@@ -466,8 +470,8 @@ test('#createQueryHandler answers SERVFAIL and logs why when the set cannot take
 
   expect(dnsPacket.decode(Buffer.from(reply))).toMatchObject({ rcode: 'SERVFAIL' });
 
-  expect(egress.logs).toStrictEqual([
-    'impd: egress: github.com for slot 1: nft exited 1: set is full',
+  expect(logs).toStrictEqual([
+    'WARNING impd.egress github.com for slot 1: nft exited 1: set is full',
   ]);
 });
 
@@ -490,9 +494,7 @@ test('#startResolverServer answers over UDP, through an upstream whose truncated
     forward: createDnsForward(['127.0.0.1'], upstream.port),
   });
 
-  const server = await startResolverServer(ports.take(), parseSubnet('127.0.0.0/16'), handle, {
-    log: () => {},
-  });
+  const server = await startResolverServer(ports.take(), parseSubnet('127.0.0.0/16'), handle, {});
 
   onTestFinished(() => {
     server.stop();
@@ -540,7 +542,7 @@ test('#startResolverServer answers a TCP query that comes in two writes', async 
     claimFreePorts(1).take(),
     parseSubnet('127.0.0.0/16'),
     createQueryHandler(egress.deps),
-    { log: () => {} },
+    {},
   );
 
   onTestFinished(() => {
@@ -593,7 +595,7 @@ test('#startResolverServer answers each of several TCP queries that share one wr
     claimFreePorts(1).take(),
     parseSubnet('127.0.0.0/16'),
     createQueryHandler(egress.deps),
-    { log: () => {} },
+    {},
   );
 
   onTestFinished(() => {
@@ -645,7 +647,7 @@ test("#startResolverServer closes at once a TCP client past its slot's cap, and 
     claimFreePorts(1).take(),
     parseSubnet('127.0.0.0/16'),
     createQueryHandler(egress.deps),
-    { log: () => {}, limits: { idleS: 60, maxPerSlot: 2 } },
+    { limits: { idleS: 60, maxPerSlot: 2 } },
   );
 
   onTestFinished(() => {
@@ -702,7 +704,7 @@ test('#startResolverServer closes at once the 17th TCP client of a slot without 
     claimFreePorts(1).take(),
     parseSubnet('127.0.0.0/16'),
     createQueryHandler(egress.deps),
-    { log: () => {} },
+    {},
   );
 
   onTestFinished(() => {
@@ -761,7 +763,7 @@ test('#startResolverServer closes a TCP client idle past idleS', async () => {
     ports.take(),
     parseSubnet('127.0.0.0/16'),
     createQueryHandler(egress.deps),
-    { log: () => {}, limits: { idleS: 1, maxPerSlot: 2 } },
+    { limits: { idleS: 1, maxPerSlot: 2 } },
   );
 
   onTestFinished(() => {
@@ -772,7 +774,7 @@ test('#startResolverServer closes a TCP client idle past idleS', async () => {
     ports.take(),
     parseSubnet('127.0.0.0/16'),
     createQueryHandler(egress.deps),
-    { log: () => {}, limits: { idleS: 60, maxPerSlot: 2 } },
+    { limits: { idleS: 60, maxPerSlot: 2 } },
   );
 
   onTestFinished(() => {
@@ -826,17 +828,11 @@ test('#startResolverServer closes a TCP client idle past idleS', async () => {
 
 test('#startResolverServer stays up when a guest goes before its reply, and logs the ICMP error', async () => {
   const ports = claimFreePorts(1);
-  const logs: string[] = [];
+  const logs = captureImpdLogs();
   const errors: unknown[] = [];
   const reached = Promise.withResolvers<void>();
   const released = Promise.withResolvers<void>();
-
-  const report = createSocketErrorReport(
-    (message) => {
-      logs.push(message);
-    },
-    () => 0,
-  );
+  const report = createSocketErrorReport(() => 0);
 
   const server = await startResolverServer(
     ports.take(),
@@ -849,9 +845,6 @@ test('#startResolverServer stays up when a guest goes before its reply, and logs
       return message;
     },
     {
-      log: (message) => {
-        logs.push(message);
-      },
       reportError: (...args) => {
         errors.push(args.at(-1));
 
@@ -905,13 +898,13 @@ test('#startResolverServer stays up when a guest goes before its reply, and logs
   expect(answered).toStrictEqual(query);
 
   expect(logs).toStrictEqual([
-    'impd: egress: resolver socket: ECONNREFUSED: connection refused, recv',
+    'WARNING impd.egress resolver socket: ECONNREFUSED: connection refused, recv',
   ]);
 });
 
 test('#startResolverServer logs a reply that the kernel refuses after a guest went, and answers the next query', async () => {
   const ports = claimFreePorts(1);
-  const logs: string[] = [];
+  const logs = captureImpdLogs();
   const reached: string[] = [];
   const released = Promise.withResolvers<void>();
 
@@ -930,9 +923,6 @@ test('#startResolverServer logs a reply that the kernel refuses after a guest we
       return message;
     },
     {
-      log: (message) => {
-        logs.push(message);
-      },
       now: () => 0,
     },
   );
@@ -979,7 +969,7 @@ test('#startResolverServer logs a reply that the kernel refuses after a guest we
 
   await waitFor(() => {
     expect(logs).toStrictEqual([
-      'impd: egress: resolver socket: ECONNREFUSED: connection refused, send',
+      'WARNING impd.egress resolver socket: ECONNREFUSED: connection refused, send',
     ]);
   });
 
@@ -1009,7 +999,6 @@ test('#startResolverServer reports a TCP query whose handler fails, and answers 
       return Promise.resolve(message);
     },
     {
-      log: () => {},
       reportError: (...args) => {
         errors.push(args.at(-1));
       },
@@ -1060,14 +1049,8 @@ test.each([
 ])(
   '#createSocketErrorReport logs %p in the same minute as another socket error',
   (message, code, errqueue) => {
-    const logs: string[] = [];
-
-    const report = createSocketErrorReport(
-      (line) => {
-        logs.push(line);
-      },
-      () => 0,
-    );
+    const logs = captureImpdLogs();
+    const report = createSocketErrorReport(() => 0);
 
     report(Object.assign(new Error(message), { code, errqueue }));
 
@@ -1076,22 +1059,16 @@ test.each([
     );
 
     expect(logs).toStrictEqual([
-      `impd: egress: resolver socket: ${message}`,
-      'impd: egress: resolver socket: ENOBUFS: no buffer space available, send',
+      `WARNING impd.egress resolver socket: ${message}`,
+      'WARNING impd.egress resolver socket: ENOBUFS: no buffer space available, send',
     ]);
   },
 );
 
 test('#createSocketErrorReport logs a refused reply once a minute at most, with a count of the rest', () => {
-  const logs: string[] = [];
+  const logs = captureImpdLogs();
   const clock = { now: 0 };
-
-  const report = createSocketErrorReport(
-    (message) => {
-      logs.push(message);
-    },
-    () => clock.now,
-  );
+  const report = createSocketErrorReport(() => clock.now);
 
   const refused = Object.assign(new Error('ECONNREFUSED: connection refused, send'), {
     code: 'ECONNREFUSED',
@@ -1106,21 +1083,15 @@ test('#createSocketErrorReport logs a refused reply once a minute at most, with 
   report(refused);
 
   expect(logs).toStrictEqual([
-    'impd: egress: resolver socket: ECONNREFUSED: connection refused, send',
-    'impd: egress: resolver socket: ECONNREFUSED: connection refused, send (2 more since the last)',
+    'WARNING impd.egress resolver socket: ECONNREFUSED: connection refused, send',
+    'WARNING impd.egress resolver socket: ECONNREFUSED: connection refused, send (2 more since the last)',
   ]);
 });
 
 test('#createSocketErrorReport logs another socket error once a minute at most, with a count of the rest', () => {
-  const logs: string[] = [];
+  const logs = captureImpdLogs();
   const clock = { now: 0 };
-
-  const report = createSocketErrorReport(
-    (message) => {
-      logs.push(message);
-    },
-    () => clock.now,
-  );
+  const report = createSocketErrorReport(() => clock.now);
 
   const other = Object.assign(new Error('ENOBUFS: no buffer space available, send'), {
     code: 'ENOBUFS',
@@ -1138,22 +1109,16 @@ test('#createSocketErrorReport logs another socket error once a minute at most, 
   report(other);
 
   expect(logs).toStrictEqual([
-    'impd: egress: resolver socket: ENOBUFS: no buffer space available, send',
-    'impd: egress: resolver socket: ENOBUFS: no buffer space available, send (2 more since the last)',
+    'WARNING impd.egress resolver socket: ENOBUFS: no buffer space available, send',
+    'WARNING impd.egress resolver socket: ENOBUFS: no buffer space available, send (2 more since the last)',
   ]);
 });
 
 test('#createSocketErrorReport logs an error that carries no code', () => {
-  const logs: string[] = [];
-
-  const report = createSocketErrorReport(
-    (message) => {
-      logs.push(message);
-    },
-    () => 0,
-  );
+  const logs = captureImpdLogs();
+  const report = createSocketErrorReport(() => 0);
 
   report('socket closed');
 
-  expect(logs).toStrictEqual(['impd: egress: resolver socket: socket closed']);
+  expect(logs).toStrictEqual(['WARNING impd.egress resolver socket: socket closed']);
 });

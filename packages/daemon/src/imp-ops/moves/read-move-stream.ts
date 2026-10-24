@@ -20,6 +20,7 @@ import type { MoveTicketRow } from '../../platform/db/move-tickets';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { parseEgressPolicy } from '../../platform/db/parse-egress-policy';
 import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import type { HostIdentity } from '../../vm/sleep/vm-identity';
 import { toDigestHex } from '../../vm/storage/data-layout';
 import type { DiskBudget } from '../../vm/storage/disk-budget';
@@ -77,7 +78,6 @@ interface ReceiveStreamDeps {
   readonly readIdentity: () => HostIdentity;
   readonly readWarmHost: () => WarmHost;
   readonly now: () => number;
-  readonly log: (message: string) => void;
 }
 
 export interface Reply {
@@ -199,7 +199,7 @@ export async function readMoveStream(
         maxMemoryMib: header.imp.maxMemoryMib,
         httpPort: header.imp.httpPort,
         diskMib: Math.ceil(header.imp.diskBytes / (1024 * 1024)),
-        policy: resolvePolicy(header, deps.log),
+        policy: resolvePolicy(header),
         cpuLimit: header.imp.cpu.limit,
         cpuWeight: header.imp.cpu.weight,
         start: false,
@@ -254,7 +254,9 @@ export async function readMoveStream(
 
   const form = header.streams === null ? 'files' : 'zfs streams';
 
-  deps.log(`impd: move: ${header.imp.name}: received as ${form}, waiting for the commit`);
+  getImpdLogger('move')
+    .with({ imp: header.imp.name })
+    .info('received as {form}, waiting for the commit', { form });
 
   return { status: 200, body: receipt };
 }
@@ -454,14 +456,16 @@ async function requireImage(
   }
 }
 
-function resolvePolicy(header: MoveHeader, log: (message: string) => void): EgressPolicy {
+function resolvePolicy(header: MoveHeader): EgressPolicy {
   const policy = parseEgressPolicy(header.imp.egress.mode, header.imp.egress.allow);
 
   if (policy !== null) {
     return policy;
   }
 
-  log(`impd: move: ${header.imp.name}: unknown egress policy; received as none`);
+  getImpdLogger('move')
+    .with({ imp: header.imp.name })
+    .warning('unknown egress policy; received as none');
 
   return { mode: 'none', allow: [] };
 }
@@ -480,16 +484,22 @@ async function createGrants(deps: ReceiveStreamDeps, header: MoveHeader): Promis
     const secretName = grant.secret;
 
     if (!known.has(secretName)) {
-      deps.log(`impd: move: ${header.imp.name}: grant ${secretName} dropped: no such secret here`);
+      getImpdLogger('move')
+        .with({ imp: header.imp.name })
+        .info('grant {secretName} dropped: no such secret here', { secretName });
+
       continue;
     }
 
     try {
       await deps.grants.addGrant(header.imp.name, secretName, null, grant.filter);
     } catch (error) {
-      deps.log(
-        `impd: move: ${header.imp.name}: grant ${secretName} not kept: ${getErrorMessage(error)}`,
-      );
+      getImpdLogger('move')
+        .with({ imp: header.imp.name })
+        .warning('grant {secretName} not kept: {error}', {
+          secretName,
+          error: getErrorMessage(error),
+        });
     }
   }
 }

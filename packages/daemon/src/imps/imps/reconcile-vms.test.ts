@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { readBrokenInvariants } from '../../../testing/imps/read-broken-invariants';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import type { TestImpdOptions } from '../../../testing/start-test-impd';
 import { buildStubCpuCgroups } from '../../../testing/vm/build-stub-cpu-cgroups';
@@ -110,10 +111,17 @@ test('it resumes a VM a cut sleep left paused, and removes the half-written file
   writeFileSync(`${paths.memFile}.new`, 'partial');
 
   const paused = ctx.fake.readState(running.pid);
+  const lines = captureImpdLogs();
 
   await ctx.restartImpd();
 
   const imp = await readImpByName(ctx.db, 'dev');
+
+  expect(lines).toIncludeAllMembers([
+    'INFO impd.imps imp=dev resumed the VM a cut sleep left paused',
+    `INFO impd.imps imp=dev re-adopted firecracker pid ${String(running.pid)}`,
+    `WARNING impd.imps imp=dev could not read its boot id: ENOENT: no such file or directory, lstat '${paths.vsockSocket}'`,
+  ]);
 
   expect(paused).toBe('Paused');
   expect(ctx.fake.readState(running.pid)).toBe('Running');
@@ -134,11 +142,16 @@ test('it adopts a VM a cut wake left running with its memory', async () => {
   await ctx.client.imps.sleep({ name: 'dev' });
 
   const pid = ctx.fake.spawnOrphan({ paths });
+  const lines = captureImpdLogs();
 
   await ctx.restartImpd();
 
   const imp = await readImpByName(ctx.db, 'dev');
   const broken = await readBrokenInvariants(ctx, true);
+
+  expect(lines).toContain(
+    `INFO impd.imps imp=dev adopted firecracker pid ${String(pid)}, which a wake left`,
+  );
 
   expect(imp).toMatchObject({ state: 'running', pid });
   expect(existsSync(paths.snapshotMeta)).toBeFalse();
@@ -185,10 +198,16 @@ test('it kills a VM a cut wake left whose agent does not answer, so the imp boot
 
   ctx.fake.queue('agentReady', 'fail');
 
+  const lines = captureImpdLogs();
+
   await ctx.restartImpd();
 
   const imp = await readImpByName(ctx.db, 'dev');
   const broken = await readBrokenInvariants(ctx, true);
+
+  expect(lines).toContain(
+    'WARNING impd.imps imp=dev cannot adopt the VM a wake left: the agent did not answer after the load; it boots cold next',
+  );
 
   expect(ctx.fake.alive.has(pid)).toBeFalse();
   expect(imp?.state).toBe('stopped');
@@ -236,13 +255,49 @@ test('it kills a second VM on a running imp socket, and keeps the one on the rec
   invariant(typeof running?.pid === 'number');
 
   const second = ctx.fake.spawnOrphan({ paths });
+  const lines = captureImpdLogs();
 
   await ctx.restartImpd();
 
   const imp = await readImpByName(ctx.db, 'dev');
 
+  expect(lines).toContain(
+    `INFO impd.imps imp=dev killed firecracker pid ${String(second)}, which no record owns`,
+  );
+
   expect(ctx.fake.alive.has(second)).toBeFalse();
   expect(ctx.fake.alive.has(running.pid)).toBeTrue();
+  expect(imp).toMatchObject({ state: 'running', pid: running.pid });
+});
+
+test('it keeps the imp on its own VM, and logs why, when a second VM on its socket will not die', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const created = await ctx.client.imps.create({ name: 'dev' });
+
+  const paths = buildImpPaths(ctx.dataDir, created.id);
+
+  const running = await readImpByName(ctx.db, 'dev');
+
+  invariant(typeof running?.pid === 'number');
+
+  const second = ctx.fake.spawnOrphan({ paths });
+
+  ctx.fake.queue('stop', 'fail');
+
+  const lines = captureImpdLogs();
+
+  await ctx.restartImpd();
+
+  const imp = await readImpByName(ctx.db, 'dev');
+
+  expect(lines).toContain(
+    `WARNING impd.imps imp=dev could not kill pid ${String(second)}: firecracker ${String(second)} survived SIGKILL`,
+  );
+
+  expect(ctx.fake.alive.has(second)).toBeTrue();
   expect(imp).toMatchObject({ state: 'running', pid: running.pid });
 });
 
@@ -306,11 +361,16 @@ test('it leaves the imp stopped, never on the old snapshot, after a wake cut dur
 
   const metaMidLoad = readSnapshotMeta(paths);
   const loadingMidLoad = readLoadingMeta(paths);
+  const lines = captureImpdLogs();
 
   await ctx.restartImpd();
 
   const imp = await readImpByName(ctx.db, 'dev');
   const broken = await readBrokenInvariants(ctx, true);
+
+  expect(lines).toContain(
+    'INFO impd.imps imp=dev a wake was cut and its VM is gone; it boots cold next',
+  );
 
   expect(metaMidLoad).toBeNull();
   expect(loadingMidLoad).not.toBeNull();
@@ -532,4 +592,62 @@ test('it removes the orphan jails before the orphan cgroups, so a cut-short buil
   await ctx.restartImpd();
 
   expect(ctx.fake.sweeps).toStrictEqual(['jails', 'jails', 'cgroups']);
+});
+
+test('it removes the cgroup of an imp with no record, and logs it', async () => {
+  const stub = buildStubCpuCgroups();
+
+  const ctx = await setupTest({ cgroups: stub.cgroups });
+
+  stub.cgroups.setup('gone', { limit: null, weight: 100 }, 512);
+
+  const lines = captureImpdLogs();
+
+  await ctx.restartImpd();
+
+  expect(lines).toContain('INFO impd.cgroup removed the cgroup of imp gone: no imp has that id');
+});
+
+test('it removes the jail of an imp with no record, and logs it', async () => {
+  const ctx = await setupTest();
+
+  ctx.fake.orphanJails.add('gone');
+
+  const lines = captureImpdLogs();
+
+  await ctx.restartImpd();
+
+  expect(lines).toContain('INFO impd.jail removed the jail of imp gone: no imp has that id');
+});
+
+test('it keeps the imp running, and logs why, when the VM a cut sleep left paused will not resume', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.client.imps.create({ name: 'dev' });
+
+  const sleeping = ctx.fake.hold('sleep');
+
+  void ctx.client.imps.sleep({ name: 'dev' });
+
+  await sleeping.reached;
+
+  const running = await readImpByName(ctx.db, 'dev');
+
+  invariant(typeof running?.pid === 'number');
+
+  ctx.fake.queue('resume', 'fail');
+
+  const lines = captureImpdLogs();
+
+  await ctx.restartImpd();
+
+  const imp = await readImpByName(ctx.db, 'dev');
+
+  expect(lines).toContain(
+    'WARNING impd.imps imp=dev could not resume its paused VM: resume failed',
+  );
+
+  expect(ctx.fake.readState(running.pid)).toBe('Paused');
+  expect(imp).toMatchObject({ state: 'running', pid: running.pid });
 });

@@ -27,7 +27,6 @@ import { loadConfig } from './config';
 import { createImpd } from './create-impd';
 import type { ImpdBoundaries } from './impd-deps';
 import { DEFAULT_BUILD_IMAGE } from './imps/docker-contract/build-image';
-import { readSetfcapWarning } from './imps/images/rootfs/unpack-export';
 import { createImage } from './platform/db/images';
 import { createImp, listImps } from './platform/db/imps';
 import { openDatabase } from './platform/db/open-database';
@@ -35,9 +34,11 @@ import type { ImpDatabase } from './platform/db/open-database';
 import { buildSystemDrivePath, buildSystemDrivesDir } from './vm/storage/data-layout';
 import { createXfsBackend } from './vm/storage/xfs-backend';
 import type { CpuCgroups } from './vm/vmm/cpu-cgroups';
+import type { KsmHostStats } from './vm/vmm/ksm';
 
 interface SetupOptions {
   readonly cgroups?: CpuCgroups;
+  readonly readKsmHostStats?: () => KsmHostStats | null;
   readonly boundaries?: Pick<
     ImpdBoundaries,
     'keepaliveMs' | 'keepaliveRepeat' | 'readProcStatus' | 'images'
@@ -102,7 +103,7 @@ test('it says CPU limits are kept on a host without a cpu controller', async () 
   const ctx = await setupTest({ cgroups: buildStubCpuCgroups({ isEnforced: false }).cgroups });
 
   expect(ctx.logs).toContain(
-    'impd: no cpu controller under /sys/fs/cgroup/imps; CPU limits are kept, not applied',
+    'INFO impd.cgroup no cpu controller under /sys/fs/cgroup/imps; CPU limits are kept, not applied',
   );
 });
 
@@ -112,7 +113,7 @@ test('it says no jailed VM can start on a jailed host without a cpu controller',
   const ctx = await setupTest({ cgroups: buildStubCpuCgroups({ isEnforced: false }).cgroups });
 
   expect(ctx.logs).toContain(
-    'impd: no cpu controller under /sys/fs/cgroup/imps; no jailed VM can start (IMP_JAILER=false runs them unjailed, with no limits)',
+    'INFO impd.cgroup no cpu controller under /sys/fs/cgroup/imps; no jailed VM can start (IMP_JAILER=false runs them unjailed, with no limits)',
   );
 });
 
@@ -122,7 +123,53 @@ test('it warns at start that an image with a file capability fails without CAP_S
   });
 
   expect(ctx.logs).toContain(
-    'impd: warning: no CAP_SETFCAP, so an image add or build fails on an image with a file capability; imp-host needs CAP_SETFCAP (docs/architecture/host.md#privileges)',
+    'WARNING impd.image no CAP_SETFCAP, so an image add or build fails on an image with a file capability; imp-host needs CAP_SETFCAP (docs/architecture/host.md#privileges)',
+  );
+});
+
+test('it warns at start of each config warning', async () => {
+  updateEnv('IMP_DNS_API_TOKEN_FILE', '/run/imp/dns-token');
+
+  const ctx = await setupTest();
+
+  expect(ctx.logs).toContain(
+    'WARNING impd.https IMP_DNS_API_TOKEN_FILE is set without IMP_DOMAIN; HTTPS is off and the file is unused',
+  );
+});
+
+test('it says at start that ksmd does not run when IMP_KSM is on', async () => {
+  updateEnv('IMP_KSM', '1');
+
+  const ctx = await setupTest({
+    readKsmHostStats: () => ({ running: false, sharedMib: 0, profitMib: 0, zeroMib: 0 }),
+  });
+
+  expect(ctx.logs).toContain(
+    'INFO impd.memory IMP_KSM is on, but ksmd does not run (/sys/kernel/mm/ksm/run is 0)',
+  );
+});
+
+test('it warns at start that no image has the default image name', async () => {
+  const ctx = await setupTest();
+
+  expect(ctx.logs).toContain(
+    'WARNING impd.image no image named base (IMP_DEFAULT_IMAGE); impz new uses ubuntu until `impz image add <ref> --name base` adds it',
+  );
+});
+
+test('it removes a boot template of another host when it boots', async () => {
+  updateEnv('IMP_BOOT_TEMPLATES', 'true');
+
+  const ctx = await setupTest();
+
+  await mkdir(join(ctx.dataDir, 'templates', 'ab'.repeat(32)), { recursive: true });
+
+  const lines = captureImpdLogs();
+
+  await ctx.restartImpd();
+
+  expect(lines).toContain(
+    'INFO impd.boot removed boot template abababababab: this host boots something else',
   );
 });
 
@@ -163,7 +210,9 @@ test('it writes a failed default image seed to the log it is given', async () =>
 
   await ctx.impd.ready;
 
-  expect(ctx.logs).toContainEqual(expect.toStartWith('impd: could not add the default image: '));
+  expect(ctx.logs).toContainEqual(
+    expect.toStartWith('ERROR impd.image could not add the default image: '),
+  );
 });
 
 test('it closes the ports it opened when a later startup step fails', async () => {
@@ -278,7 +327,7 @@ test('it removes a builder that a stopped impd left when it boots', async () => 
   await ctx.restartImpd();
 
   expect(lines).toContain(
-    'INFO impd.image removing builder imp-build-left, which a stopped impd left',
+    'INFO impd.image imp=imp-build-left removing a builder that a stopped impd left',
   );
 
   expect(listImps(ctx.db)).resolves.toStrictEqual([]);
@@ -381,7 +430,6 @@ test('it closes the database it opened itself when it stops', async () => {
       },
     },
     readDiskSpace: () => Promise.resolve({ usedBytes: 0, availableBytes: 1024 ** 4 }),
-    log: () => {},
     readIdentity: (files, ipv6Prefix) => ({
       firecrackerVersion: 'v1.17.0',
       snapshotVersion: 'v12.0.0',
@@ -482,7 +530,6 @@ test('it sets a lease end from the wall clock when no clock is given', async () 
       },
     },
     readDiskSpace: () => Promise.resolve({ usedBytes: 0, availableBytes: 1024 ** 4 }),
-    log: () => {},
     readIdentity: (files, ipv6Prefix) => ({
       firecrackerVersion: 'v1.17.0',
       snapshotVersion: 'v12.0.0',
@@ -622,7 +669,6 @@ test('it answers /health without a token, not ready before the default image is 
       },
     },
     readDiskSpace: () => Promise.resolve({ usedBytes: 0, availableBytes: 1024 ** 4 }),
-    log: () => {},
     readIdentity: (files, ipv6Prefix) => ({
       firecrackerVersion: 'v1.17.0',
       snapshotVersion: 'v12.0.0',
@@ -763,45 +809,4 @@ test('it sends a build stream its progress at the keepalive gap it is given', as
     { type: 'progress', phase: 'build', elapsedMs: 0 },
     { type: 'progress', phase: 'build', elapsedMs: 0 },
   ]);
-});
-
-// a fresh Bun loads impd from source, which took up to 9 s on a 2 GiB host
-// straight after a type check, past the 5 s default
-test('it logs to stdout when no log is given', async () => {
-  const ctx = await setupTest();
-
-  const script = `
-    import { loadConfig } from './config';
-    import { createImpd } from './create-impd';
-    import { openDatabase } from './platform/db/open-database';
-    import { createXfsBackend } from './vm/storage/xfs-backend';
-
-    const dataDir = ${JSON.stringify(ctx.dataDir)};
-
-    await createImpd(loadConfig({ IMP_DATA_DIR: dataDir }), {
-      db: await openDatabase(':memory:'),
-      rootToken: 'root-token',
-      storage: createXfsBackend({ dataDir: dataDir + '/child' }),
-      systemFiles: { kernelPath: '', systemDrivePath: '', info: ${JSON.stringify({
-        guestKernel: { version: '6.1.188', sha256: 'a'.repeat(64) },
-        systemDrive: { sha256: 'b'.repeat(64) },
-      })} },
-
-      // a CapEff without CAP_SETFCAP, so the capability warning is the first line
-      readProcStatus: () => 'CapEff:\\t0000000000000000\\n',
-
-      // the capability warning comes before the IPv6 plan; the boot ends there
-      resolveIpv6: () => process.exit(0),
-    });
-  `;
-
-  const child = Bun.spawn(['bun', '-e', script], { cwd: import.meta.dir, stdout: 'pipe' });
-
-  onTestFinished(() => {
-    child.kill();
-  });
-
-  const stdout = await new Response(child.stdout).text();
-
-  expect(stdout).toStartWith(`${readSetfcapWarning('CapEff:\t0000000000000000\n')}\n`);
 });

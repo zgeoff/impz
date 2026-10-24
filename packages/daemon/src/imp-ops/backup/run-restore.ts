@@ -22,6 +22,7 @@ import {
   buildNotFoundError,
 } from '../../platform/errors/impd-errors';
 import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { BACKUP_TREE } from '../../vm/storage/data-layout';
 import type { buildBackupPaths } from '../../vm/storage/data-layout';
 import type { DiskBudget } from '../../vm/storage/disk-budget';
@@ -60,7 +61,6 @@ export interface RestoreDeps {
   readonly paths: Pick<ReturnType<typeof buildBackupPaths>, 'tree' | 'restoreDir'>;
   readonly storageGate: Pick<StorageGate, 'join'>;
   readonly diskBudget: Pick<DiskBudget, 'withRoom'>;
-  readonly log: (message: string) => void;
   readonly now: () => Date;
 }
 
@@ -167,9 +167,9 @@ export async function runRestore(deps: RestoreDeps, input: RestoreInput): Promis
 
       skippedGrants.push(...skipped);
 
-      deps.log(
-        `impd: backup: restored ${target.name} from ${point.id} (${point.time.toISOString()})`,
-      );
+      getImpdLogger('backup')
+        .with({ imp: target.name })
+        .info('restored from {id} ({time})', { id: point.id, time: point.time.toISOString() });
     }
 
     return {
@@ -226,9 +226,11 @@ async function createRestoredDatabase(deps: RestoreDeps, options: CreateRestored
     return createRestoredAccess(deps.db, deps.tokens, join(workDir, file));
   });
 
-  deps.log(
-    `impd: backup: restored ${String(access.tokens.length)} tokens and ${String(access.secrets.length)} secrets from ${point.id}`,
-  );
+  getImpdLogger('backup').info('restored {tokens} tokens and {secrets} secrets from {id}', {
+    tokens: String(access.tokens.length),
+    secrets: String(access.secrets.length),
+    id: point.id,
+  });
 
   return access;
 }
@@ -416,7 +418,7 @@ async function createRestoredImp(
       memoryMib: imp.memoryMib,
       maxMemoryMib: imp.maxMemoryMib ?? undefined,
       httpPort: imp.httpPort,
-      policy: resolveEgressPolicy(deps, target.name, imp),
+      policy: resolveEgressPolicy(target.name, imp),
       isIdentityResetPending: imp.identityResetPending,
       start: false,
       prepareDisk: writeRestoredDisk,
@@ -449,16 +451,18 @@ async function createCheckpointDisk(deps: RestoreDeps, impId: string) {
   }
 }
 
-function resolveEgressPolicy(deps: RestoreDeps, name: string, imp: ManifestImp): EgressPolicy {
+function resolveEgressPolicy(name: string, imp: ManifestImp): EgressPolicy {
   const policy = parseEgressPolicy(imp.egressPolicy, imp.egressAllow);
 
   if (policy !== null) {
     return policy;
   }
 
-  deps.log(
-    `impd: backup: ${name}: unknown egress policy ${JSON.stringify(imp.egressPolicy)}; restored as none`,
-  );
+  getImpdLogger('backup')
+    .with({ imp: name })
+    .warning('unknown egress policy {egressPolicy}; restored as none', {
+      egressPolicy: JSON.stringify(imp.egressPolicy),
+    });
 
   return { mode: 'none', allow: [] };
 }
@@ -475,7 +479,9 @@ async function removeFailedImp(
   }
 
   await deps.imps.destroyImp(name).catch((error: unknown) => {
-    deps.log(`impd: backup: ${name}: a failed restore left the imp: ${getErrorMessage(error)}`);
+    getImpdLogger('backup')
+      .with({ imp: name })
+      .warning('a failed restore left the imp: {error}', { error: getErrorMessage(error) });
   });
 }
 

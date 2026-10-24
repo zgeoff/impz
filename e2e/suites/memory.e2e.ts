@@ -161,7 +161,7 @@ test('it grows an elastic guest under a gradual allocation, shrinks it once the 
 
   const grows = secondFillLog
     .split('\n')
-    .filter((line) => line.includes(`${name}: memory low`) && line.includes('grew to'));
+    .filter((line) => line.includes(`imp=${name} memory low`) && line.includes('grew to'));
 
   expect(grows).toHaveLength(1);
   expect(pluggedBeforeSleep).toBeGreaterThanOrEqual(256);
@@ -190,6 +190,6 @@ test('it grows an elastic guest under a gradual allocation, shrinks it once the 
   expect(totalAfterWake).toBeLessThan(256 + 256);
 
   // From the snapshot, not a cold boot that would pass the same checks.
-  expect(wakeLog).toContain(`${name}: woke pid`);
-  expect(wakeLog).not.toContain(`${name}: cold boot instead of a wake`);
+  expect(wakeLog).toContain(`imp=${name} woke pid`);
+  expect(wakeLog).not.toContain(`imp=${name} cold boot instead of a wake`);
 });

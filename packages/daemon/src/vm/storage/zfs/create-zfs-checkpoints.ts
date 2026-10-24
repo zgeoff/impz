@@ -1,4 +1,5 @@
 import { getErrorMessage } from '../../../platform/process/get-error-message';
+import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import { CheckpointIdTakenError } from '../storage-backend';
 import type { StorageBackend } from '../storage-backend';
 import { getCheckpointSnapshot, listCheckpointSnapshots } from './zfs-commands';
@@ -9,7 +10,6 @@ interface ZfsCheckpointContext {
   readonly runSerial: <T>(task: () => Promise<T>) => Promise<T>;
   readonly runSnapshot: <T>(task: () => Promise<T>) => Promise<T>;
   readonly listAll: () => Promise<ZfsEntry[]>;
-  readonly log: (message: string) => void;
   readonly setupMount: (name: string, directory: string, isReadOnly?: boolean) => Promise<void>;
   readonly removeMount: (directory: string) => Promise<void>;
   readonly removeDataset: (name: string) => Promise<void>;
@@ -36,9 +36,10 @@ export function createZfsCheckpoints(
 
       await ctx.setupMount(ctx.buildDiskName(impId), ctx.buildDiskDir(impId));
     } catch (error) {
-      ctx.log(
-        `impd: zfs: ${impId}: the disk swap failed and so did its repair: ${getErrorMessage(error)}`,
-      );
+      getImpdLogger('zfs').warning('{impId}: the disk swap failed and so did its repair: {error}', {
+        impId,
+        error: getErrorMessage(error),
+      });
     }
   };
 
@@ -104,7 +105,10 @@ export function createZfsCheckpoints(
         try {
           await ctx.runSerial(() => ctx.zfs.destroy(staged));
         } catch (destroyError) {
-          ctx.log(`impd: zfs: could not drop ${staged}: ${getErrorMessage(destroyError)}`);
+          getImpdLogger('zfs').warning('could not drop {staged}: {error}', {
+            staged,
+            error: getErrorMessage(destroyError),
+          });
         }
 
         throw error;

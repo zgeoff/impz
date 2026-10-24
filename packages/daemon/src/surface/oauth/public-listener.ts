@@ -3,6 +3,7 @@ import type { HttpTransport } from '@impz/mcp';
 import type { McpAuth } from '../../identity/oauth/create-mcp-auth';
 import type { PublicMcpConfig } from '../../identity/oauth/public-mcp-config';
 import { readBodyText } from '../../identity/oauth/read-body-text';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { tapStream } from '../../platform/process/tap-stream';
 import { createPublicApp } from './create-public-app';
 
@@ -30,7 +31,6 @@ export interface PublicListener {
 /* @internal */
 export function createPublicHandler(
   deps: Readonly<PublicListenerDeps>,
-  log: (message: string) => void,
 ): (request: Request, server: TimeoutServer | null) => Promise<Response> {
   const state = { open: 0, control: 0 };
 
@@ -44,7 +44,6 @@ export function createPublicHandler(
     holdOpen: (request) => {
       servers.get(request)?.timeout(request, 0);
     },
-    log,
   });
 
   const handleRequest = (request: Request, server: TimeoutServer | null): Promise<Response> => {
@@ -149,11 +148,8 @@ function holdUntilDone(
   });
 }
 
-export function startPublicListener(
-  deps: Readonly<PublicListenerDeps>,
-  log: (message: string) => void,
-): PublicListener {
-  const handle = createPublicHandler(deps, log);
+export function startPublicListener(deps: Readonly<PublicListenerDeps>): PublicListener {
+  const handle = createPublicHandler(deps);
 
   const handleRequest = (request: Request, bunServer: Bun.Server<undefined>) =>
     handle(request, bunServer);
@@ -164,13 +160,16 @@ export function startPublicListener(
     idleTimeout: IDLE_TIMEOUT_S,
     fetch: handleRequest,
     error: (error) => {
-      log(`impd: public mcp: ${error.message}`);
+      getImpdLogger('public').warning('public mcp: {message}', { message: error.message });
 
       return new Response('internal error', { status: 500 });
     },
   });
 
-  log(`impd: public mcp on :${String(deps.config.port)} for ${deps.config.origin}`);
+  getImpdLogger('public').info('public mcp on :{port} for {origin}', {
+    port: String(deps.config.port),
+    origin: deps.config.origin,
+  });
 
   return {
     port: server.port ?? deps.config.port,

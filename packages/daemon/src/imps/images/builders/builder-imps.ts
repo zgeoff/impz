@@ -153,10 +153,15 @@ export function createBuilders(deps: BuildersDeps): Builders {
 
       return true;
     } catch (error) {
-      logger.error(
-        'image build: builder {name} survives its removal, tried again every {retryS} s: {error}',
-        { name, retryS: REMOVE_RETRY_MS / 1000, error: getErrorMessage(error) },
-      );
+      logger
+        .with({ imp: name })
+        .error(
+          'image build: the builder survives its removal, tried again every {retryS} s: {error}',
+          {
+            retryS: REMOVE_RETRY_MS / 1000,
+            error: getErrorMessage(error),
+          },
+        );
 
       return false;
     }
@@ -174,7 +179,7 @@ export function createBuilders(deps: BuildersDeps): Builders {
 
       if (gone) {
         retrying.delete(id);
-        logger.info('image build: removed builder {name}', { name });
+        logger.with({ imp: name }).info('image build: removed the builder');
 
         return;
       }
@@ -224,7 +229,9 @@ export function createBuilders(deps: BuildersDeps): Builders {
 
         const readyMs = Math.round(clock.now() - started);
 
-        logger.info('image build: builder {name} ready in {readyMs}ms', { name, readyMs });
+        logger.with({ imp: name }).info('image build: the builder is ready in {readyMs}ms', {
+          readyMs,
+        });
 
         return await run(exec, name);
       } finally {
@@ -235,7 +242,7 @@ export function createBuilders(deps: BuildersDeps): Builders {
       const imps = await listImps(deps.db);
 
       for (const imp of imps.filter((each) => each.kind === 'builder')) {
-        logger.info('removing builder {name}, which a stopped impd left', { name: imp.name });
+        logger.with({ imp: imp.name }).info('removing a builder that a stopped impd left');
 
         await removeBuilder(imp.id, imp.name);
       }

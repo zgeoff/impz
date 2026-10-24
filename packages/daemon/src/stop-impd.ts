@@ -1,5 +1,6 @@
 import type { Imps } from './imps/imps/imp-service';
 import { getErrorMessage } from './platform/process/get-error-message';
+import { getImpdLogger } from './platform/process/get-impd-logger';
 import type { Ticker } from './platform/process/ticker';
 import { waitWithin } from './platform/process/wait-within';
 
@@ -32,7 +33,6 @@ export interface ImpdStopParts {
   storage?: Stoppable;
   stopTelemetry?: (() => Promise<void>) | null;
   db?: { readonly destroy: () => Promise<void> } | null;
-  readonly log: (message: string) => void;
 }
 
 export interface ImpdStopOptions {
@@ -68,14 +68,21 @@ export async function stopImpd(
       const finished = await waitWithin(Promise.resolve(task()), durationMs);
 
       if (!finished) {
-        parts.log(`impd: stop: ${step} still running after ${String(durationMs)}ms; going on`);
+        getImpdLogger('stop').info('{step} still running after {durationMs}ms; going on', {
+          step,
+          durationMs: String(durationMs),
+        });
       }
 
       steps.push({ step, outcome: finished ? 'stopped' : 'timed-out' });
 
       return finished;
     } catch (error) {
-      parts.log(`impd: stop: ${step} failed: ${getErrorMessage(error)}`);
+      getImpdLogger('stop').warning('{step} failed: {error}', {
+        step,
+        error: getErrorMessage(error),
+      });
+
       steps.push({ step, outcome: 'failed' });
 
       return true;
@@ -181,7 +188,7 @@ export async function stopImpd(
     if (options.sleepImps) {
       const sleptMs = Math.round(performance.now() - started);
 
-      parts.log(`impd: every imp asleep in ${String(sleptMs)}ms`);
+      getImpdLogger('stop').info('every imp asleep in {sleptMs}ms', { sleptMs: String(sleptMs) });
     }
   }
 

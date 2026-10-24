@@ -3,6 +3,7 @@ import type { HttpTransport } from '@impz/mcp';
 import { Elysia } from 'elysia';
 import type { OAuthHandlers } from '../../identity/oauth/create-oauth-handlers';
 import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 
 // parse: 'none' leaves each body unread for the handler that reads it.
 const RAW = { parse: 'none' } as const;
@@ -11,7 +12,6 @@ interface PublicAppDeps {
   readonly oauth: OAuthHandlers | null;
   readonly mcp: Pick<HttpTransport, 'respond'>;
   readonly holdOpen: (request: Request) => void;
-  readonly log: (message: string) => void;
 }
 
 export function createPublicApp(deps: PublicAppDeps) {
@@ -31,7 +31,9 @@ export function createPublicApp(deps: PublicAppDeps) {
         return buildNotFound();
       }
 
-      deps.log(`impd: public mcp: ${getErrorMessage(context.error)}`);
+      getImpdLogger('public').warning('public mcp: {error}', {
+        error: getErrorMessage(context.error),
+      });
 
       return new Response('internal error', { status: 500 });
     })

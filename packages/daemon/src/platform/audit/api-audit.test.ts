@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test';
 import { waitFor } from '@impz/test-utils/wait-for';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { createTestDatabase } from '../../../testing/platform/create-test-database';
 import { readErrorCode } from '../../surface/read-error-code';
 import { listApiCalls } from '../db/api-audit';
@@ -10,18 +11,14 @@ async function setupTest() {
   const database = await createTestDatabase();
 
   const clock = { at: 0 };
-  const logs: string[] = [];
 
   const audit = createApiAudit({
     db: database.db,
     now: () => clock.at,
-    log: (line) => {
-      logs.push(line);
-    },
     readErrorCode,
   });
 
-  return { db: database.db, clock, logs, audit };
+  return { db: database.db, clock, audit };
 }
 
 test.each([
@@ -160,15 +157,16 @@ test('#createApiAudit logs a row it could not write', async () => {
 
   await ctx.db.schema.dropTable('api_audit').execute();
 
+  const logs = captureImpdLogs();
+
   ctx.audit.record(
     { procedure: 'ssh', actor: { kind: 'ssh', name: 'laptop' }, impName: 'dev', startedAt: 990 },
     null,
   );
 
   await waitFor(() => {
-    expect(ctx.logs).not.toBeEmpty();
+    expect(logs).not.toBeEmpty();
   });
 
-  expect(ctx.logs).toHaveLength(1);
-  expect(ctx.logs[0]).toMatch(/^impd: audit: ssh: .*api_audit/u);
+  expect(logs).toStrictEqual(['WARNING impd.audit ssh: no such table: api_audit']);
 });

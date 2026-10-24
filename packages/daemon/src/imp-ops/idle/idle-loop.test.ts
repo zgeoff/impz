@@ -117,7 +117,6 @@ test('it keeps an idle imp awake while the earlier of its leases runs', async ()
     config: { ...ctx.config, idleTimeoutS: 1 },
     db: ctx.db,
     imps: ctx.impd.imps,
-    log: () => {},
     now: ctx.now,
     readCpuTicks: () => null,
   });
@@ -163,7 +162,6 @@ test('it sleeps an idle imp once the earlier of its leases has ended', async () 
     config: { ...ctx.config, idleTimeoutS: 1 },
     db: ctx.db,
     imps: ctx.impd.imps,
-    log: () => {},
     now: ctx.now,
     readCpuTicks: () => null,
   });

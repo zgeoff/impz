@@ -27,7 +27,6 @@ async function setupTest() {
     revocations,
     config: { origin: 'http://127.0.0.1:7171', host: '127.0.0.1:7171', port: 7171 },
     now: Date.now,
-    log: () => {},
   });
 
   return {

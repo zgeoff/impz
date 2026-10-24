@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { createTestDatabase } from '../../../testing/platform/create-test-database';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { buildStubZfs } from '../../../testing/vm/build-stub-zfs';
@@ -30,7 +31,6 @@ function setupTest(
     createStorage: (dataDir) =>
       createXfsBackend({
         dataDir,
-        log: () => {},
         cloneFile:
           options.cloneFile ??
           (async (source, target) => {
@@ -143,13 +143,12 @@ test('it removes an imp no row names when asked for orphans, and keeps a live im
 test('it keeps every orphan of a lost database through start, the hourly pass and impz gc', async () => {
   const ctx = await setupTest();
 
-  const log = mock<(message: string) => void>();
+  const logs = captureImpdLogs();
 
   const gc = createStorageGc({
     db: ctx.db,
     storage: ctx.storage,
     storageGate: ctx.impd.storageGate,
-    log,
   });
 
   await ctx.storage.createImage('sha256:old', async (directory) => {
@@ -196,7 +195,7 @@ test('it keeps every orphan of a lost database through start, the hourly pass an
     'imp b',
   ]);
 
-  const lines = log.mock.calls.map(([line]) => line);
+  const lines = logs.filter((line) => line.startsWith('INFO impd.gc '));
 
   expect(lines.filter((line) => line.includes('kept orphan imp a '))).toHaveLength(1);
   expect(lines.filter((line) => line.includes('kept orphan imp b '))).toHaveLength(1);
@@ -213,7 +212,7 @@ test('it keeps what a lost database leaves on ZFS through the hourly pass and im
   const database = await createTestDatabase();
 
   const zfs = buildStubZfs({ root: 'tank/imp', rootDir: dataDir });
-  const log = mock<(message: string) => void>();
+  const logs = captureImpdLogs();
 
   const backend = createZfsBackend({
     dataDir,
@@ -221,7 +220,6 @@ test('it keeps what a lost database leaves on ZFS through the hourly pass and im
     run: zfs.run,
     readMounts: zfs.readMounts,
     readModuleVersion: () => '2.4.4',
-    log: () => {},
   });
 
   const live = await readLiveStorage(database.db);
@@ -236,7 +234,6 @@ test('it keeps what a lost database leaves on ZFS through the hourly pass and im
     db: database.db,
     storage: backend,
     storageGate: createStorageGate(),
-    log,
   });
 
   await gc.runScheduled();
@@ -250,10 +247,13 @@ test('it keeps what a lost database leaves on ZFS through the hourly pass and im
   expect(zfs.listSnapshots()).toStrictEqual(['tank/imp/disks/a@cp-1', 'tank/imp/images/old@base']);
   expect(zfs.isDeferred('tank/imp/disks/a@cp-1')).toBeFalse();
   expect(existsSync(backend.resolveImpPaths('a').vmstate)).toBeTrue();
-  expect(log).toHaveBeenCalledTimes(3);
 
-  expect(log.mock.calls[0]?.[0]).toMatch(
-    /^impd: gc: kept orphan imp a \(tank\/imp\/disks\/a\): .+snapshots: cp-1$/u,
+  const lines = logs.filter((line) => line.startsWith('INFO impd.gc '));
+
+  expect(lines).toHaveLength(3);
+
+  expect(lines[0]).toMatch(
+    /^INFO impd\.gc kept orphan imp a \(tank\/imp\/disks\/a\): .+snapshots: cp-1$/u,
   );
 });
 
@@ -415,7 +415,6 @@ test('it refuses impz gc while operations keep storage busy', async () => {
     db: database.db,
     storage: { dropUnnamed: mock() },
     storageGate,
-    log: mock<(message: string) => void>(),
     manualWaitMs: 0,
   });
 
@@ -437,22 +436,18 @@ test('it logs and skips the hourly pass while operations keep storage busy', asy
 
   void storageGate.join(() => stuck.promise);
   const dropUnnamed = mock();
-  const log = mock<(message: string) => void>();
+  const logs = captureImpdLogs();
 
   const gc = createStorageGc({
     db: database.db,
     storage: { dropUnnamed },
     storageGate,
-    log,
     scheduledWaitMs: 0,
   });
 
   await gc.runScheduled();
 
-  expect(log).toHaveBeenCalledExactlyOnceWith(
-    'impd: gc: storage stayed busy; the next pass tries again',
-  );
-
+  expect(logs).toStrictEqual(['INFO impd.gc storage stayed busy; the next pass tries again']);
   expect(dropUnnamed).not.toHaveBeenCalled();
 });
 
@@ -549,6 +544,7 @@ test('it removes the secret values kept aside when told to with orphans', async 
   files.write('late.b2', 'npm_LATE');
 
   const kept = files.keepOrphansExcept(new Set(), new Date('2026-10-04T05:30:00.000Z'));
+  const lines = captureImpdLogs();
 
   const removed = await ctx.client.system.gc({
     secretFiles: true,
@@ -559,6 +555,7 @@ test('it removes the secret values kept aside when told to with orphans', async 
   invariant(kept.directory !== null);
 
   expect(removed.dropped).toStrictEqual([{ kind: 'secrets', id: '2026-10-04T05-30-00.000Z' }]);
+  expect(lines).toContain(`INFO impd.gc removed kept secret values ${kept.directory}`);
   expect(existsSync(kept.directory)).toBeFalse();
   expect(files.listKept()).toStrictEqual([]);
 });

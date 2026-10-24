@@ -97,7 +97,7 @@ resource sampler. Metric attributes stay in a closed set, so no imp name multipl
 impd writes its log through LogTape to stdout, which the container runtime collects. Each line
 starts with its level and its category, `impd` plus the area that wrote it, and carries `imp=<name>`
 when it concerns one imp. An operation under an imp's lifecycle lock tags every line it writes with
-that imp, awaited work included, because the lock runs it inside a log context. Call sites that pass
-one line of text in the form `impd: <area or imp>: …` go through an adapter, which reads the area,
-the imp and the level from that text and keeps the text unchanged, because scripts and tests match
-it.
+that imp, awaited work included, because the lock runs it inside a log context. Each call site names
+its area and its level, so impd never reads either from a line's text, and an imp whose name matches
+an area still logs under its own name. A line looks like `INFO impd.imps imp=web asleep in 120ms`,
+and the e2e harness and the bootstrap script match lines in that form.

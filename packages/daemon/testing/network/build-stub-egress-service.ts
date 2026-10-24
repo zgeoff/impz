@@ -32,7 +32,6 @@ export function buildStubEgressService(options: Readonly<StubEgressServiceOption
   const view = { names: new Set(options.networks), members: options.members ?? [] };
   const admitted: AdmittedAnswer[] = [];
   const forwarded: string[] = [];
-  const logs: string[] = [];
   const clock = { nowMs: 0 };
 
   const deps: ResolverDeps = {
@@ -63,16 +62,12 @@ export function buildStubEgressService(options: Readonly<StubEgressServiceOption
     maxTtlS: 86_400,
     readRate: () => ({ size: 100, refillMs: 100 }),
     now: () => clock.nowMs,
-    log: (message) => {
-      logs.push(message);
-    },
   };
 
   return {
     deps,
     admitted: admitted as readonly AdmittedAnswer[],
     forwarded: forwarded as readonly string[],
-    logs: logs as readonly string[],
     advance: (durationMs: number): void => {
       clock.nowMs += durationMs;
     },

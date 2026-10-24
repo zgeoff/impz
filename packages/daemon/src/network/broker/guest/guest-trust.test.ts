@@ -13,6 +13,7 @@ import {
   encodeMessageFrame,
 } from '@impz/agent-protocol';
 import invariant from 'tiny-invariant';
+import { captureImpdLogs } from '../../../../testing/platform/capture-impd-logs';
 import { buildStubExecReplies } from '../../../../testing/vm/build-stub-exec-replies';
 import { startStubAgent } from '../../../../testing/vm/start-stub-agent';
 import {
@@ -173,28 +174,21 @@ test('it refuses an install input without the roots marker and writes no bundle'
 });
 
 test('it answers a failed install as not installed, with why, and logs it', async () => {
-  const logs: string[] = [];
-
-  const trust = createGuestTrust(
-    'input',
-    () => Promise.reject(new Error('no sh')),
-    (message) => {
-      logs.push(message);
-    },
-  );
+  const logs = captureImpdLogs();
+  const trust = createGuestTrust('input', () => Promise.reject(new Error('no sh')));
 
   const outcome = await trust.ensure({ id: 'imp-1', name: 'dev', pid: 7 }, '/vsock');
 
   expect(outcome).toStrictEqual({ installed: false, detail: 'no sh' });
 
   expect(logs).toStrictEqual([
-    'impd: dev: broker CA not installed, so this exec gets no broker variables: no sh',
+    'WARNING impd.imps imp=dev broker CA not installed, so this exec gets no broker variables: no sh',
   ]);
 });
 
 test('it tries a failed install again on the next exec', async () => {
   const install = mock<InstallBundle>(() => Promise.reject(new Error('no sh')));
-  const trust = createGuestTrust('input', install, () => {});
+  const trust = createGuestTrust('input', install);
 
   await trust.ensure({ id: 'imp-1', name: 'dev', pid: 7 }, '/vsock');
   await trust.ensure({ id: 'imp-1', name: 'dev', pid: 7 }, '/vsock');
@@ -204,7 +198,7 @@ test('it tries a failed install again on the next exec', async () => {
 
 test('it keeps a successful install for the rest of the boot', async () => {
   const install = mock<InstallBundle>(() => Promise.resolve());
-  const trust = createGuestTrust('input', install, () => {});
+  const trust = createGuestTrust('input', install);
 
   await trust.ensure({ id: 'imp-1', name: 'dev', pid: 7 }, '/vsock');
 
@@ -217,7 +211,7 @@ test('it keeps a successful install for the rest of the boot', async () => {
 test('it runs one install for execs that ask at once', async () => {
   const gate = Promise.withResolvers<void>();
   const install = mock<InstallBundle>(() => gate.promise);
-  const trust = createGuestTrust('input', install, () => {});
+  const trust = createGuestTrust('input', install);
   const first = trust.ensure({ id: 'imp-1', name: 'dev', pid: 7 }, '/vsock');
   const second = trust.ensure({ id: 'imp-1', name: 'dev', pid: 7 }, '/vsock');
 
@@ -231,7 +225,7 @@ test('it runs one install for execs that ask at once', async () => {
 
 test('it installs again for a new pid', async () => {
   const install = mock<InstallBundle>(() => Promise.resolve());
-  const trust = createGuestTrust('input', install, () => {});
+  const trust = createGuestTrust('input', install);
 
   await trust.ensure({ id: 'imp-1', name: 'dev', pid: 7 }, '/vsock');
   await trust.ensure({ id: 'imp-1', name: 'dev', pid: 8 }, '/vsock');
@@ -241,7 +235,7 @@ test('it installs again for a new pid', async () => {
 
 test('it keeps the install while the imp is seen running on the same pid', async () => {
   const install = mock<InstallBundle>(() => Promise.resolve());
-  const trust = createGuestTrust('input', install, () => {});
+  const trust = createGuestTrust('input', install);
 
   await trust.ensure({ id: 'imp-1', name: 'dev', pid: 7 }, '/vsock');
 
@@ -254,7 +248,7 @@ test('it keeps the install while the imp is seen running on the same pid', async
 
 test('it installs again for the same pid after a stop', async () => {
   const install = mock<InstallBundle>(() => Promise.resolve());
-  const trust = createGuestTrust('input', install, () => {});
+  const trust = createGuestTrust('input', install);
 
   await trust.ensure({ id: 'imp-1', name: 'dev', pid: 7 }, '/vsock');
 
@@ -268,7 +262,7 @@ test('it installs again for the same pid after a stop', async () => {
 
 test('it forgets an imp no longer listed, so its next exec installs again', async () => {
   const install = mock<InstallBundle>(() => Promise.resolve());
-  const trust = createGuestTrust('input', install, () => {});
+  const trust = createGuestTrust('input', install);
 
   await trust.ensure({ id: 'imp-1', name: 'dev', pid: 7 }, '/vsock');
 
@@ -281,7 +275,7 @@ test('it forgets an imp no longer listed, so its next exec installs again', asyn
 
 test('it keeps what it knows of an imp still listed', async () => {
   const install = mock<InstallBundle>(() => Promise.resolve());
-  const trust = createGuestTrust('input', install, () => {});
+  const trust = createGuestTrust('input', install);
 
   await trust.ensure({ id: 'imp-1', name: 'dev', pid: 7 }, '/vsock');
 

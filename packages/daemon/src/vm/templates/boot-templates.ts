@@ -11,11 +11,13 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
+import { withContext } from '@logtape/logtape';
 import * as z from 'zod';
 import type { SlotAddress } from '../../host-net/net/addressing';
 import type { TapDevices } from '../../host-net/net/tap-devices';
 import { buildBackoffMs } from '../../platform/process/build-backoff-ms';
 import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { runCommand } from '../../platform/process/run-command';
 import { createSemaphore } from '../../platform/process/semaphore';
 import { createSingleFlight } from '../../platform/process/single-flight';
@@ -104,7 +106,6 @@ export interface BootTemplateDeps {
   readonly admission?: RamAdmission | undefined;
   readonly diskBudget?: Pick<DiskBudget, 'withRoom'> | undefined;
   readonly now?: () => number;
-  readonly log: (message: string) => void;
 }
 
 class BuildRefusedError extends Error {
@@ -243,7 +244,9 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
     for (const key of byAge.slice(0, excess)) {
       removeDir(key);
 
-      deps.log(`impd: removed boot template ${key.slice(0, 12)}: least recently used`);
+      getImpdLogger('boot').info('removed boot template {key}: least recently used', {
+        key: key.slice(0, 12),
+      });
     }
   };
 
@@ -303,7 +306,10 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
     } finally {
       // A throw from finally would replace the build's own error, so this one is only logged.
       await deps.cgroups.remove(BUILD_JAIL_ID).catch((error: unknown) => {
-        deps.log(`impd: cgroup ${BUILD_JAIL_ID}: ${getErrorMessage(error)}`);
+        getImpdLogger('cgroup').warning('cgroup {id}: {error}', {
+          id: BUILD_JAIL_ID,
+          error: getErrorMessage(error),
+        });
       });
     }
 
@@ -325,7 +331,10 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
 
     const durationMs = Math.round(performance.now() - started);
 
-    deps.log(`impd: boot template ${key.slice(0, 12)} built in ${String(durationMs)}ms`);
+    getImpdLogger('boot').info('boot template {key} built in {durationMs}ms', {
+      key: key.slice(0, 12),
+      durationMs: String(durationMs),
+    });
 
     return {
       key,
@@ -379,8 +388,9 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
     if (error instanceof BuildRefusedError) {
       record.retryAt = now() + BUILD_RETRY_MS;
 
-      deps.log(
-        `impd: boot template ${key.slice(0, 12)} build refused (next try in ${String(BUILD_RETRY_MS / 1000)}s): ${error.message}`,
+      getImpdLogger('boot').warning(
+        'boot template {key} build refused (next try in {retryS}s): {message}',
+        { key: key.slice(0, 12), retryS: String(BUILD_RETRY_MS / 1000), message: error.message },
       );
 
       return;
@@ -401,9 +411,11 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
       ? 'off until impd restarts'
       : `next try in ${String(Math.round((record.retryAt - now()) / 1000))}s`;
 
-    deps.log(
-      `impd: boot template ${key.slice(0, 12)} build failed (${next}): ${getErrorMessage(error)}`,
-    );
+    getImpdLogger('boot').warning('boot template {key} build failed ({next}): {error}', {
+      key: key.slice(0, 12),
+      next,
+      error: getErrorMessage(error),
+    });
   };
 
   const createTemplateFiles = (shape: Readonly<TemplateShape>): Promise<TemplateFiles> => {
@@ -470,7 +482,9 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
       record.misses += 1;
 
       if (record.misses >= MIN_MISSES && now() >= record.retryAt) {
-        void createInBackground(shape);
+        // the build serves every imp of the shape, so its lines leave out the imp whose boot
+        // started it, which LogTape's implicit context would otherwise add
+        void withContext({ imp: undefined }, () => createInBackground(shape));
       }
 
       return null;
@@ -490,8 +504,9 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
       if (record.restoreFailures >= MAX_RESTORE_FAILURES && !record.isOff) {
         record.isOff = true;
 
-        deps.log(
-          `impd: boot template ${files.key.slice(0, 12)} off until impd restarts: ${String(record.restoreFailures)} restores failed`,
+        getImpdLogger('boot').warning(
+          'boot template {key} off until impd restarts: {restoreFailures} restores failed',
+          { key: files.key.slice(0, 12), restoreFailures: String(record.restoreFailures) },
         );
       }
     },

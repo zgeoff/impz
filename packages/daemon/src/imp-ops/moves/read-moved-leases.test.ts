@@ -7,14 +7,20 @@ import invariant from 'tiny-invariant';
 import { createUbuntuImage, setupMoveHosts } from '../../../testing/imp-ops/create-move-hosts';
 import type { MoveHostsOptions } from '../../../testing/imp-ops/create-move-hosts';
 import { makeStubDroppedCommit } from '../../../testing/imp-ops/make-stub-dropped-commit';
+import {
+  buildJsonMoveFrame,
+  makeStubMoveStreamRewrite,
+} from '../../../testing/imp-ops/make-stub-move-stream-rewrite';
 import { makeStubOlderMoveTarget } from '../../../testing/imp-ops/make-stub-older-move-target';
 import { buildMockLeaseRecord } from '../../../testing/imps/build-mock-lease-record';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { buildStubStorageFaults } from '../../../testing/vm/build-stub-storage-faults';
 import { readImpByName, updateImpActivity, updateImpExposure } from '../../platform/db/imps';
 import { listLeases, writeLease } from '../../platform/db/leases';
 import { createXfsBackend } from '../../vm/storage/xfs-backend';
 import { createIdleLoop } from '../idle/idle-loop';
-import { MOVE_PART_HEADER } from './move-header';
+import { MOVE_FRAMES, readJsonPayload } from './move-frames';
+import { MOVE_PART_HEADER, MoveHeaderSchema } from './move-header';
 
 async function setupTest(
   config: Readonly<Pick<MoveHostsOptions, 'hook' | 'isShared' | 'partBytes'>> & {
@@ -479,6 +485,39 @@ test('it keeps the leases and runs the imp again when a forced prepare fails aft
   expect(sends).toStrictEqual([]);
 });
 
+test('it logs a halted imp that does not start again when a forced prepare fails after the halt', async () => {
+  const ctx = await setupTest();
+
+  await createUbuntuImage(ctx.source);
+
+  const created = await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
+
+  const sourceNow = ctx.source.now();
+
+  const job = buildMockLeaseRecord({
+    impId: created.id,
+    principal: 'tailnet:n1',
+    label: 'job',
+    display: 'laptop',
+    until: new Date(sourceNow + 600_000),
+    createdAt: new Date(sourceNow),
+  });
+
+  await writeLease(ctx.source.db, job, { at: sourceNow, reason: null });
+
+  ctx.sourceFaults.failOnce('openMoveSource', new Error('the disk is unreadable'));
+  ctx.source.fake.queue('boot', 'fail');
+
+  const lines = captureImpdLogs();
+  const prepared = ctx.sourceApp.client.moves.prepare({ name: 'dev', stop: true, force: true });
+
+  expect(prepared).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' });
+
+  expect(lines).toContain(
+    String.raw`WARNING impd.move imp=dev could not start it again: boot failed: no agent\nlog tail`,
+  );
+});
+
 test('it moves the imp once the fault that failed its forced prepare is gone', async () => {
   const ctx = await setupTest();
 
@@ -575,6 +614,44 @@ test('it moves an imp with no lease to an older target', async () => {
   const status = await ctx.runMove('dev', true);
 
   expect(status).toMatchObject({ isDone: true, error: null });
+});
+
+test('it lands an imp from an older source with no lease, and logs it', async () => {
+  const ctx = await setupTest({
+    hook: makeStubMoveStreamRewrite((frames) =>
+      frames.map((frame) => {
+        if (frame.type !== MOVE_FRAMES.header) {
+          return frame;
+        }
+
+        const header = MoveHeaderSchema.parse(readJsonPayload(frame.payload));
+
+        return buildJsonMoveFrame(frame.type, {
+          ...header,
+          imp: { ...header.imp, leases: undefined },
+        });
+      }),
+    ),
+  });
+
+  await createUbuntuImage(ctx.source);
+  await createUbuntuImage(ctx.target);
+
+  const created = await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
+
+  await ctx.sourceApp.client.imps.stop({ name: 'dev' });
+
+  const lines = captureImpdLogs();
+
+  const status = await ctx.runMove('dev');
+  const leases = await listLeases(ctx.target.db, ctx.target.now(), [created.id]);
+
+  expect(status).toMatchObject({ isDone: true, error: null });
+  expect(leases).toStrictEqual([]);
+
+  expect(lines).toContain(
+    "INFO impd.move imp=dev the source's impd predates moving leases; it arrives with none",
+  );
 });
 
 test('it keeps the source leases and leaves the target none on an abort after the receipt', async () => {
@@ -783,7 +860,6 @@ test("it leaves a warm-moved leased imp awake through the target's idle loop", a
     config: ctx.target.config,
     db: ctx.target.db,
     imps: ctx.target.imps,
-    log: () => {},
     now: ctx.target.now,
   });
 
@@ -812,7 +888,6 @@ test("it sleeps a warm-moved imp with no lease through the target's idle loop", 
     config: ctx.target.config,
     db: ctx.target.db,
     imps: ctx.target.imps,
-    log: () => {},
     now: ctx.target.now,
   });
 
@@ -1024,9 +1099,15 @@ test('it moves a hold that ends past 100 years with 100 years left', async () =>
 
   await writeLease(ctx.source.db, hold, { at: sourceNow, reason: null });
 
+  const lines = captureImpdLogs();
+
   const status = await ctx.runMove('dev');
   const leases = await listLeases(ctx.target.db, ctx.target.now(), [created.id]);
 
   expect(status).toMatchObject({ isDone: true, error: null });
   expect(leases).toMatchObject([{ label: 'hold', until: new Date(targetStart + centuryMs) }]);
+
+  expect(lines).toContain(
+    'INFO impd.move imp=dev lease root hold ends past 100 years; it moves with 100 years left',
+  );
 });

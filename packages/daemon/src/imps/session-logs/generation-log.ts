@@ -4,6 +4,7 @@ import type { FileHandle } from 'node:fs/promises';
 import { join } from 'node:path';
 import * as z from 'zod';
 import type { StartTimer } from '../../platform/process/clock';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { buildKeyedMutex } from '../../platform/process/keyed-mutex';
 import { startRealTimer } from '../../platform/process/start-real-timer';
 import { writeFileDurablyAsync } from '../../platform/process/write-file-durably';
@@ -75,7 +76,6 @@ export interface GenerationLogOptions {
 
   readonly requireRoom: (bytes: number) => Promise<void>;
   readonly now: () => number;
-  readonly log: (message: string) => void;
 
   readonly startTimer?: StartTimer;
 }
@@ -253,7 +253,10 @@ function startGenerationLog(options: GenerationLogOptions, initial: GenerationMe
     try {
       await runInOrder(writeMeta, undefined);
     } catch (error) {
-      options.log(`impd: session log ${options.directory}: ${String(error)}`);
+      getImpdLogger('session').warning('session log {directory}: {error}', {
+        directory: options.directory,
+        error: String(error),
+      });
     }
   };
 

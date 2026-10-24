@@ -1,5 +1,6 @@
 import type { ImpRecord } from '../../platform/db/imps';
 import { buildBackoffMs } from '../../platform/process/build-backoff-ms';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { createSingleFlight } from '../../platform/process/single-flight';
 import type { WatchdogAction } from '../vm-config';
 
@@ -11,7 +12,6 @@ interface AgentWatchdogDeps {
   readonly timeoutMs: number;
   readonly action: WatchdogAction;
   readonly now: () => number;
-  readonly log: (message: string) => void;
   readonly confirmSilent: (imp: ImpRecord) => Promise<boolean>;
   readonly recover: (imp: ImpRecord, action: 'restart' | 'snapshot') => Promise<boolean>;
 }
@@ -76,9 +76,15 @@ export function createAgentWatchdog(deps: AgentWatchdogDeps): AgentWatchdog {
 
       const silentS = Math.round((deps.now() - since) / 1000);
 
-      deps.log(
-        `impd: ${imp.name}: the agent has not answered for ${String(silentS)}s; its VM still runs (watchdog: ${deps.action})`,
-      );
+      getImpdLogger('imps')
+        .with({ imp: imp.name })
+        .warning(
+          'the agent has not answered for {silentS}s; its VM still runs (watchdog: {action})',
+          {
+            silentS: String(silentS),
+            action: deps.action,
+          },
+        );
     }
 
     if (deps.action === 'report') {
@@ -91,9 +97,11 @@ export function createAgentWatchdog(deps: AgentWatchdogDeps): AgentWatchdog {
       if (!capped.has(imp.id)) {
         capped.add(imp.id);
 
-        deps.log(
-          `impd: ${imp.name}: the watchdog recovered it ${String(MAX_RECOVERIES_PER_HOUR)} times this hour; it only reports now`,
-        );
+        getImpdLogger('imps')
+          .with({ imp: imp.name })
+          .info('the watchdog recovered it {recoveries} times this hour; it only reports now', {
+            recoveries: String(MAX_RECOVERIES_PER_HOUR),
+          });
       }
 
       return;
@@ -117,7 +125,7 @@ export function createAgentWatchdog(deps: AgentWatchdogDeps): AgentWatchdog {
     observe: (imp, answered) => {
       if (answered) {
         if (reported.has(imp.id)) {
-          deps.log(`impd: ${imp.name}: the agent answers again`);
+          getImpdLogger('imps').with({ imp: imp.name }).info('the agent answers again');
         }
 
         removeSilence(imp.id);

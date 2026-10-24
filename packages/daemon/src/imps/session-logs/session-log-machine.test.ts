@@ -57,7 +57,6 @@ test('it never opens a tap again for a log deleted while live', async () => {
       maxBytes: 20,
       requireRoom: () => Promise.resolve(),
       now: () => 1000,
-      log: () => {},
     },
     {
       session: 'main',
@@ -90,7 +89,6 @@ test('it leaves the log and tap of a later life alone when an earlier life ends 
     maxBytes: 20,
     requireRoom: () => Promise.resolve(),
     now: () => 1000,
-    log: () => {},
   };
 
   const meta = {

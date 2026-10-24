@@ -107,6 +107,30 @@ test('it records each address whois was asked about, in order', async () => {
   expect(tailscale.asked).toStrictEqual(['100.64.9.9', '100.101.102.103']);
 });
 
+test('it rejects the next status read with the error a test sets', () => {
+  const tailscale = buildStubTailscale();
+
+  tailscale.failNextStatus(new Error('tailscaled is down'));
+
+  expect(tailscale.readTailscale()).rejects.toThrowWithMessage(Error, 'tailscaled is down');
+});
+
+test('it fails only one status read for each error a test sets', async () => {
+  const tailscale = buildStubTailscale();
+
+  tailscale.failNextStatus(new Error('tailscaled is down'));
+
+  const failure = await tailscale.readTailscale().then(
+    () => null,
+    (error: unknown) => error,
+  );
+
+  const status = await tailscale.readTailscale();
+
+  expect(failure).toMatchObject({ message: 'tailscaled is down' });
+  expect(status).toStrictEqual(tailscale.status);
+});
+
 test('it rejects a command it does not model', () => {
   const tailscale = buildStubTailscale();
 

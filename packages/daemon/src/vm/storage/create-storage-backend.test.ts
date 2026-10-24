@@ -147,7 +147,6 @@ test('#createStorageBackend writes no marker when start fails', async () => {
         streams: zfs.streams,
         readMounts: zfs.readMounts,
         readModuleVersion: () => null,
-        log: () => {},
       },
     },
   );
@@ -212,7 +211,6 @@ test('#createStorageBackend marks the data dir zfs once start succeeds', async (
         streams: zfs.streams,
         readMounts: zfs.readMounts,
         readModuleVersion: () => '2.4.4',
-        log: () => {},
       },
     },
   );
@@ -235,7 +233,6 @@ test('#createStorageBackend refuses a zfs module with the zfs_uiomove bug by def
         streams: zfs.streams,
         readMounts: zfs.readMounts,
         readModuleVersion: () => '2.4.1',
-        log: () => {},
       },
     },
   );
@@ -271,7 +268,6 @@ test('#createStorageBackend starts on a zfs module with the zfs_uiomove bug with
         streams: zfs.streams,
         readMounts: zfs.readMounts,
         readModuleVersion: () => '2.4.1',
-        log: () => {},
       },
     },
   );

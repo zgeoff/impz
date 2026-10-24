@@ -2,6 +2,7 @@ import type { ImpClock, ImpDisk, ImpHost, ImpVms } from '../../imps/imps/imp-con
 import type { ImpLock } from '../../imps/imps/imp-lock';
 import type { ImpVmOps } from '../../imps/imps/imp-vm-ops';
 import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { createAgentWatchdog } from '../../vm/watchdog/agent-watchdog';
 import type { AgentWatchdog } from '../../vm/watchdog/agent-watchdog';
 import { writeWatchdogSnapshot } from './write-watchdog-snapshot';
@@ -18,7 +19,6 @@ export function createImpWatchdog(
     timeoutMs: context.config.watchdogTimeoutS * 1000,
     action: context.config.watchdogAction,
     now: context.now,
-    log: context.log,
     confirmSilent: async (imp) =>
       !(await context.vms.probeAgentReady(context.findPaths(imp.id), CONFIRM_MS)),
     recover: async (imp, action) => {
@@ -32,7 +32,9 @@ export function createImpWatchdog(
         const answered = await context.vms.probeAgentReady(paths, RECHECK_MS);
 
         if (answered) {
-          context.log(`impd: ${fresh.name}: its agent answers again; the watchdog stands down`);
+          getImpdLogger('imps')
+            .with({ imp: fresh.name })
+            .info('its agent answers again; the watchdog stands down');
 
           return false;
         }
@@ -47,11 +49,11 @@ export function createImpWatchdog(
             'the watchdog restarted it: its agent stopped answering',
           );
 
-          context.log(`impd: ${fresh.name}: the watchdog booted it cold`);
+          getImpdLogger('imps').with({ imp: fresh.name }).info('the watchdog booted it cold');
         } catch (error) {
-          context.log(
-            `impd: ${fresh.name}: the watchdog restart failed: ${getErrorMessage(error)}`,
-          );
+          getImpdLogger('imps')
+            .with({ imp: fresh.name })
+            .warning('the watchdog restart failed: {error}', { error: getErrorMessage(error) });
         }
 
         return true;

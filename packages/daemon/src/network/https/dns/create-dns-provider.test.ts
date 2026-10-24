@@ -18,7 +18,6 @@ test('it sends a challtestsrv provider’s records to its API', async () => {
   const provider = createDnsProvider(
     { provider: 'challtestsrv', token: null, apiUrl: 'http://challtestsrv.test:8055' },
     null,
-    () => {},
   );
 
   await provider.addTxt('_acme-challenge.imp.test', 'v');
@@ -36,7 +35,6 @@ test('it sends a Cloudflare provider’s calls to Cloudflare with the token', as
   const provider = createDnsProvider(
     { provider: 'cloudflare', token: { kind: 'value', value: 'cf-token' }, apiUrl: null },
     { read: () => Promise.resolve('cf-token'), check: null },
-    () => {},
   );
 
   await provider.addTxt('_acme-challenge.imp.test', 'v');
@@ -62,7 +60,6 @@ test('it sends a Cloudflare provider’s calls to the API the config names', asy
       apiUrl: 'https://cloudflare.proxy.test/client/v4',
     },
     { read: () => Promise.resolve('cf-token'), check: null },
-    () => {},
   );
 
   await expect(provider.setA('imp.test', '100.64.0.7')).toReject();
@@ -74,6 +71,6 @@ test('it sends a Cloudflare provider’s calls to the API the config names', asy
 
 test('it rejects a Cloudflare provider with no token', () => {
   expect(() =>
-    createDnsProvider({ provider: 'cloudflare', token: null, apiUrl: null }, null, () => {}),
+    createDnsProvider({ provider: 'cloudflare', token: null, apiUrl: null }, null),
   ).toThrowWithMessage(Error, 'IMP_DNS_PROVIDER=cloudflare needs a token');
 });

@@ -16,7 +16,7 @@ import { createKernelOopsWatch } from './imps/imps/kernel-oops-watch';
 import type { Broker } from './network/broker/broker-service';
 import type { EgressService } from './network/egress/egress-service';
 import { countImpsByState, listImps } from './platform/db/imps';
-import { printLog } from './platform/process/print-log';
+import { getImpdLogger } from './platform/process/get-impd-logger';
 import { runCommand } from './platform/process/run-command';
 import { startImpTelemetry } from './platform/telemetry/imp-telemetry';
 import type { RamAdmission } from './vm/imps-contract/ram-admission';
@@ -61,8 +61,7 @@ export function createImpdImps(
   deps: Readonly<ImpdDeps>,
   parts: Readonly<GovernedParts>,
 ): GovernedImps {
-  const log = deps.log ?? printLog;
-  const cgroups = deps.cgroups ?? createCpuCgroups({ root: '/sys/fs/cgroup', log });
+  const cgroups = deps.cgroups ?? createCpuCgroups({ root: '/sys/fs/cgroup' });
 
   if (!cgroups.isEnforced) {
     const effect =
@@ -70,7 +69,9 @@ export function createImpdImps(
         ? 'CPU limits are kept, not applied'
         : 'no jailed VM can start (IMP_JAILER=false runs them unjailed, with no limits)';
 
-    log(`impd: no cpu controller under /sys/fs/cgroup/imps; ${effect}`);
+    getImpdLogger('cgroup').info('no cpu controller under /sys/fs/cgroup/imps; {effect}', {
+      effect,
+    });
   }
 
   const identity = (
@@ -86,7 +87,6 @@ export function createImpdImps(
         firecrackerBin: Bun.which(config.firecrackerBin) ?? config.firecrackerBin,
         chrootBase: config.jailDir,
         run: deps.runCommand ?? runCommand,
-        log,
         killCgroup: cgroups.kill,
       }),
       config.ksm?.execBin ?? null,
@@ -120,7 +120,6 @@ export function createImpdImps(
     storage: deps.storage,
     identity,
     ipv6: parts.ipv6,
-    log,
     cgroups,
     memoryLimit,
     readExecEnv: parts.broker.readExecEnv,
@@ -193,7 +192,6 @@ export function createImpdImps(
     limit: memoryLimit,
     readRamMib: (imp) => host.readRamMib(imp.pid, imp.paths.apiSocket),
     setPluggedMib: pluggedSizes.write,
-    log,
     shrinkAfterMs: config.memoryShrinkAfterMs,
     ...(deps.now !== undefined && { now: deps.now }),
   });
@@ -225,7 +223,6 @@ export function createImpdImps(
     trySleepImp: imps.trySleepImp,
     readDiskFullError: imps.readDiskFullError,
     reclaim: memory.reclaimIdle,
-    log,
     events: imps.events,
     ...(deps.now !== undefined && { now: deps.now }),
   });
