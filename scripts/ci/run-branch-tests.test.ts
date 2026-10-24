@@ -117,3 +117,37 @@ test('it fails when only the dashboard tests fail', async () => {
     exitCode: 1,
   });
 });
+
+test('it leaves out a lane file, which runs only in its lane script', async () => {
+  const ctx = await setupTest();
+
+  await mkdir(join(ctx.directoryPath, 'src'));
+  await writeFile(join(ctx.directoryPath, 'package.json'), '{"scripts":{"test":"echo root"}}');
+  await writeFile(join(ctx.directoryPath, 'src/a.ts'), '');
+  await writeFile(join(ctx.directoryPath, 'src/a.test.ts'), '');
+  await writeFile(join(ctx.directoryPath, 'src/a.host.test.ts'), '');
+  await writeFile(join(ctx.directoryPath, 'src/b.headscale.test.ts'), '');
+  await writeFile(join(ctx.directoryPath, 'src/c.pebble.test.ts'), '');
+
+  const subprocess = Bun.spawn(
+    [
+      process.execPath,
+      join(import.meta.dir, 'run-branch-tests.ts'),
+      'src/a.ts',
+      'src/a.host.test.ts',
+      'src/b.headscale.test.ts',
+      'src/c.pebble.test.ts',
+    ],
+    { cwd: ctx.directoryPath, stdout: 'pipe', stderr: 'pipe' },
+  );
+
+  const [stdout, exitCode] = await Promise.all([
+    new Response(subprocess.stdout).text(),
+    subprocess.exited,
+  ]);
+
+  expect({ stdout, exitCode }).toStrictEqual({
+    stdout: 'root ./src/a.test.ts\nrun-related-tests: no related tests\n',
+    exitCode: 0,
+  });
+});

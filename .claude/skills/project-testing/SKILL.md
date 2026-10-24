@@ -93,15 +93,37 @@ read that CI job's result instead of working around it.
 ## Layers
 
 - Plain `bun test` loads every `*.test.ts` except `packages/dashboard/**`, which only
-  `bun run test:dashboard` runs.
+  `bun run test:dashboard` runs, and the lane files in [Lanes](#lanes).
 - A client or MCP server test that needs a real impd lives in
   [`packages/integration/`](../../../packages/integration/), not beside its module.
-- `*.e2e.ts`, `*.pebble.ts` and `*.headscale.ts` never run in plain `bun test`; each runs only when
-  its `./` path is given, which the e2e harness, `test:pebble` and `test:headscale` do.
 - Gated tests load in plain `bun test` and skip: the real-pool ZFS tests until `IMP_TEST_ZFS_ROOT`
-  and `IMP_TEST_ZFS_DIR` are set, the small-filesystem tests until `IMP_TEST_SMALL_FS` is, and each
-  host networking test where its namespace probe fails. `IMP_HOST_TESTS=required` turns that skip
-  into a failure. `grep -rl IMP_TEST_SMALL_FS packages` lists the files that hold small-filesystem
-  tests, and CI's small-filesystem step names each of them.
+  and `IMP_TEST_ZFS_DIR` are set, and the small-filesystem tests until `IMP_TEST_SMALL_FS` is.
+  `grep -rl IMP_TEST_SMALL_FS packages` lists the files that hold small-filesystem tests, and CI's
+  small-filesystem step names each of them.
 - Go tests that need root carry the `root` build tag.
 - `e2e/lib/*.test.ts` are unit tests of the harness: they run in plain `bun test` with no KVM.
+
+## Lanes
+
+A lane runs the tests that need a real system the unit run cannot host. A lane file's directory or
+suffix names that system. [`bunfig.toml`](../../../bunfig.toml) leaves every lane suffix out of
+plain `bun test`, even for a file named by its path, so each lane's script replaces that ignore list
+and selects its files by suffix. `test:related` leaves lane files out for the same reason.
+
+| Lane              | Files                                   | Real system                                         | Run                                | Per-test ceiling |
+| ----------------- | --------------------------------------- | --------------------------------------------------- | ---------------------------------- | ---------------- |
+| VM end to end     | `e2e/suites/*.e2e.ts`, in the CI groups | KVM Firecracker imps on a dev instance of impd      | `e2e/test-e2e.sh --group <n>`      | 60 s             |
+| ZFS host with VMs | the suites in `IMP_ZFS_E2E_SUITES`      | KVM imps on a real zpool in a sparse file           | `scripts/zfs-host-test.sh`         | 60 s             |
+| Host networking   | `*.host.test.ts`                        | root, the kernel's netfilter and network namespaces | `bun run test:host`, as root in CI | 15 s             |
+| Headscale join    | `*.headscale.test.ts`                   | Headscale and tailscale containers in Docker        | `bun run test:headscale`           | 15 s             |
+| ACME issuer       | `*.pebble.test.ts`                      | the Pebble ACME server in Docker                    | `bun run test:pebble`              | 5 s              |
+
+Nothing enforces the ceilings yet: the e2e harness gives each journey 1 h (`JOURNEY_TIMEOUT_MS` in
+[`suites.ts`](../../../e2e/lib/suites.ts)), and `zgeoff/max-test-timeout` checks a lane's ceiling
+only from oxlint-config 0.7.0. A test over its lane's ceiling, or within 5% of it, is a named
+exception with a ticket that brings it under; the ceiling never rises to cover it. A test's measured
+time goes in the PR that acts on it, not here.
+
+A host networking test still skips where its namespace probe fails, and `IMP_HOST_TESTS=required`,
+which CI sets, turns that skip into a failure. A lane file holds only the cases that need its real
+system: a pure case of the same module stays in `<name>.test.ts`.
