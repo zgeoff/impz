@@ -28,6 +28,11 @@ minimumReleaseAgeExcludes = [
   "@tsrs/linux-x64-gnu",
   "@tsrs/linux-x64-musl",
   "fast-uri",
+  # happy-dom 21.0.4 (published 2026-10-20, patches GHSA-834v) is the DOM that
+  # @zgeoff/bun-test-react 0.2.2 pins; these entries come out on 2026-10-27,
+  # once happy-dom 21.0.4 is 7 days old
+  "happy-dom",
+  "@happy-dom/global-registrator",
 ]
 
 [test]
