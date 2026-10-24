@@ -42,10 +42,11 @@ done
 
 cp "$package/README.md" "$root/LICENSE" "$stage/"
 
-# the packages the bundle imports, read from its import and require specifiers;
+# the packages the bundle imports, read from its import, side-effect import and
+# require specifiers;
 # a name outside the catalog is no package, so the match drops it
-imported=$(grep -ohE "(from |import\(|require\()\"[^\"./][^\"]*\"" "$stage/dist/index.js" |
-  sed -E 's/^(from |import\(|require\()"//; s/"$//' |
+imported=$(grep -ohE "(from ?|import ?\(?|require\()\"[^\"./][^\"]*\"" "$stage/dist/index.js" |
+  sed -E 's/^(from ?|import ?\(?|require\()"//; s/"$//' |
   sed -E 's#^(@[^/]+/[^/]+|[^@/][^/]*).*#\1#' | sort -u | jq -R . | jq -s .)
 
 version=$(jq -r .version "$package/package.json")

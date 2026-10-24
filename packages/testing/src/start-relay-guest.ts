@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import type { Socket } from 'node:net';
 import { Duplex } from 'node:stream';
 import {
@@ -11,7 +12,7 @@ import {
   encodeFrame,
   encodeMessageFrame,
 } from '@impz/agent-protocol';
-import type { AgentFrame } from '@impz/agent-protocol';
+import type { AgentFrame, Request } from '@impz/agent-protocol';
 import { startStubAgent } from '@impz/daemon/testing/start-stub-agent';
 import type { TestGuest } from './types';
 
@@ -23,20 +24,94 @@ export interface RelayGuest {
 interface GuestListener {
   readonly socket: Socket;
   readonly id: string;
+  readonly port: number;
+  readonly pending: Map<number, PromiseWithResolvers<Duplex>>;
+  readonly counts: { next: number };
 }
 
-// The guest agent's side of a reverse forward. A process in the imp writes stdout frames and reads
-// impd's stdin frames, as the Go agent relays them; `endConnections` drops every agent connection,
-// as a VM that stops does.
+// The guest agent's reverse-forward side, after agent/internal/feature/listen and dial.Relay: it
+// listens where impd asks, and `connect` plays a process in the imp that dials the guest port.
+// `endConnections` drops every agent connection, as a VM that stops does.
 export async function startRelayGuest(
   stack: Readonly<AsyncDisposableStack>,
   vsockPath: string,
 ): Promise<RelayGuest> {
-  const listeners = new Map<number, GuestListener>();
-  const accepts = new Map<number, PromiseWithResolvers<Duplex>>();
+  const listeners = new Map<string, GuestListener>();
+  const ports = new Map<number, GuestListener>();
   const streams = new Map<Socket, Duplex>();
 
-  const counts = { listeners: 0, connections: 0 };
+  const openListener = (socket: Socket, request: Readonly<Request>): void => {
+    const asked = Number(request.address?.split(':').at(-1));
+    const port = asked === 0 ? pickFreePort(ports) : asked;
+
+    if (ports.has(port)) {
+      socket.end(
+        encodeMessageFrame(FRAME_TYPES.response, ErrorResponseSchema, {
+          error: {
+            code: 'LISTEN_FAILED',
+            message: `listen on ${request.address ?? ''}: address already in use`,
+          },
+        }),
+      );
+
+      return;
+    }
+
+    const listener: GuestListener = {
+      socket,
+      id: randomBytes(8).toString('hex'),
+      port,
+      pending: new Map(),
+      counts: { next: 0 },
+    };
+
+    listeners.set(listener.id, listener);
+    ports.set(port, listener);
+
+    socket.once('close', () => {
+      listeners.delete(listener.id);
+      ports.delete(port);
+    });
+
+    socket.write(
+      encodeMessageFrame(FRAME_TYPES.response, ListeningSchema, {
+        ok: true,
+        listener: listener.id,
+        port,
+      }),
+    );
+  };
+
+  const acceptConnection = (socket: Socket, request: Readonly<Request>): void => {
+    const listener = listeners.get(request.listener ?? '');
+    const pending = listener?.pending.get(request.connection ?? 0);
+
+    if (listener === undefined || pending === undefined) {
+      socket.end(
+        encodeMessageFrame(FRAME_TYPES.response, ErrorResponseSchema, {
+          error: {
+            code: 'NO_CONNECTION',
+            message: `no waiting connection ${String(request.connection)} on listener "${request.listener ?? ''}"`,
+          },
+        }),
+      );
+
+      return;
+    }
+
+    listener.pending.delete(request.connection ?? 0);
+
+    const stream = createGuestStream(socket);
+
+    streams.set(socket, stream);
+
+    socket.once('close', () => {
+      streams.delete(socket);
+    });
+
+    socket.write(encodeMessageFrame(FRAME_TYPES.response, OKSchema, { ok: true }));
+    pending.resolve(stream);
+  };
 
   const readFrame = (socket: Socket, request: AgentFrame, frames: readonly AgentFrame[]): void => {
     if (frames.length > 1) {
@@ -50,33 +125,9 @@ export async function startRelayGuest(
     const parsed = decodeMessageFrame(RequestSchema, request);
 
     if (parsed.op === 'listen' && parsed.network === 'tcp') {
-      counts.listeners += 1;
-
-      const port = Number(parsed.address?.split(':').at(-1));
-      const listener = { socket, id: `fwd${String(counts.listeners)}` };
-
-      listeners.set(port, listener);
-
-      socket.once('close', () => {
-        if (listeners.get(port) === listener) {
-          listeners.delete(port);
-        }
-      });
-
-      socket.write(
-        encodeMessageFrame(FRAME_TYPES.response, ListeningSchema, {
-          ok: true,
-          listener: listener.id,
-          port,
-        }),
-      );
-    } else if (parsed.op === 'agent.accept' && parsed.connection !== undefined) {
-      const stream = createGuestStream(socket);
-
-      streams.set(socket, stream);
-      socket.write(encodeMessageFrame(FRAME_TYPES.response, OKSchema, { ok: true }));
-      accepts.get(parsed.connection)?.resolve(stream);
-      accepts.delete(parsed.connection);
+      openListener(socket, parsed);
+    } else if (parsed.op === 'agent.accept') {
+      acceptConnection(socket, parsed);
     } else {
       socket.end(
         encodeMessageFrame(FRAME_TYPES.response, ErrorResponseSchema, {
@@ -90,25 +141,23 @@ export async function startRelayGuest(
 
   const guest: TestGuest = {
     connect: (port) => {
-      const listener = listeners.get(port);
+      const listener = ports.get(port);
 
       if (listener === undefined) {
         return Promise.reject(new Error(`no reverse forward listens on port ${String(port)}`));
       }
 
-      counts.connections += 1;
+      listener.counts.next += 1;
 
+      const id = listener.counts.next;
       const accept = Promise.withResolvers<Duplex>();
 
-      accepts.set(counts.connections, accept);
-
-      listener.socket.write(
-        encodeMessageFrame(FRAME_TYPES.connection, ConnectionSchema, { id: counts.connections }),
-      );
+      listener.pending.set(id, accept);
+      listener.socket.write(encodeMessageFrame(FRAME_TYPES.connection, ConnectionSchema, { id }));
 
       return accept.promise;
     },
-    listPorts: () => [...listeners.keys()],
+    listPorts: () => [...ports.keys()],
   };
 
   return {
@@ -126,6 +175,45 @@ export async function startRelayGuest(
   };
 }
 
+// the first port the stand-in hands out for a forward that asks for port 0
+const FIRST_EPHEMERAL_PORT = 32_768;
+
+function pickFreePort(ports: ReadonlyMap<number, GuestListener>): number {
+  let port = FIRST_EPHEMERAL_PORT;
+
+  while (ports.has(port)) {
+    port += 1;
+  }
+
+  return port;
+}
+
+// The process's side of an accepted connection. Its end sends STDOUT_EOF, as pumpOut does at EOF;
+// a destroy drops the agent connection with no STDOUT_EOF, which impd reads as a reset.
+function createGuestStream(socket: Socket): Duplex {
+  const stream = new Duplex({
+    read: () => {},
+    write: (chunk: Uint8Array, _encoding, done) => {
+      socket.write(encodeFrame(FRAME_TYPES.stdout, chunk), done);
+    },
+    final: (done) => {
+      socket.write(encodeFrame(FRAME_TYPES.stdoutEof), done);
+    },
+    destroy: (error, done) => {
+      socket.destroy();
+
+      done(error);
+    },
+  });
+
+  socket.once('close', () => {
+    stream.push(null);
+  });
+
+  return stream;
+}
+
+// STDIN is what the process reads; STDIN_EOF half-closes it, as pumpIn's CloseWrite does
 function relayFrame(stream: Duplex | undefined, frame: AgentFrame | undefined): void {
   if (stream === undefined || frame === undefined) {
     return;
@@ -136,22 +224,4 @@ function relayFrame(stream: Duplex | undefined, frame: AgentFrame | undefined): 
   } else if (frame.type === FRAME_TYPES.stdinEof) {
     stream.push(null);
   }
-}
-
-function createGuestStream(socket: Socket): Duplex {
-  const stream = new Duplex({
-    read: () => {},
-    write: (chunk: Uint8Array, _encoding, done) => {
-      socket.write(encodeFrame(FRAME_TYPES.stdout, chunk), done);
-    },
-    final: (done) => {
-      socket.write(encodeFrame(FRAME_TYPES.stdoutEof), done);
-    },
-  });
-
-  socket.once('close', () => {
-    stream.push(null);
-  });
-
-  return stream;
 }

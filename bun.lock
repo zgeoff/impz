@@ -281,6 +281,7 @@
       "devDependencies": {
         "@impz/agent-protocol": "workspace:*",
         "@impz/daemon": "workspace:*",
+        "@impz/test-utils": "workspace:*",
       },
     },
   },
