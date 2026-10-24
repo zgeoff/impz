@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import * as z from 'zod';
 import { writeBuildContext } from '../lib/build-context';
+import { buildReachScript } from '../lib/build-reach-script';
 import { config } from '../lib/config';
 import { createInstanceClient, runImp, runInImp } from '../lib/imp-cli';
 import { waitForExec } from '../lib/imps';
@@ -74,7 +75,7 @@ test('it lets an isolated build reach the internet but not the host, impd or a p
       `RUN for t in ${targets.join(' ')}; do \\`,
       '      if wget -T 3 -q -O /dev/null "http://$t/"; then echo "$t open"; else echo "$t closed"; fi; \\',
       '    done > /probe.txt; \\',
-      '    if wget -T 15 -q -O /dev/null http://example.com/; then echo "public open"; else echo "public closed"; fi >> /probe.txt',
+      `    if (${buildReachScript('http://example.com/', 15)}) 2>/dev/null; then echo "public open"; else echo "public closed"; fi >> /probe.txt`,
       '',
     ].join('\n'),
   );
