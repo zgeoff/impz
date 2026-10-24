@@ -1,3 +1,4 @@
+import { buildReachScript } from './build-reach-script';
 import { tryImp } from './imp-cli';
 
 export async function tryInImp(name: string, script: string): Promise<boolean> {
@@ -7,7 +8,7 @@ export async function tryInImp(name: string, script: string): Promise<boolean> {
 }
 
 export function tryGetFromImp(name: string, url: string): Promise<boolean> {
-  return tryInImp(name, `wget -q -T 5 -O /dev/null ${url}`);
+  return tryInImp(name, buildReachScript(url, 5));
 }
 
 export function tryDialFromImp(

@@ -1,4 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
+import { buildReachScript } from '../lib/build-reach-script';
 import { config } from '../lib/config';
 import { resolveImageName } from '../lib/fixtures';
 import { createInstanceClient, runImp, runShellInImp } from '../lib/imp-cli';
@@ -166,7 +167,7 @@ test('it lets a public imp fetch from the internet, and removes a private addres
   // host can each refuse it, so the output keeps wget's error and the guest resolver's answer.
   const fetched = await runShellInImp(
     pub,
-    'wget -q -T 5 -O /dev/null http://example.com/ 2>&1; echo "exit $?"; nslookup example.com 2>&1 || true',
+    `(${buildReachScript('http://example.com/', 5)}) 2>&1; echo "exit $?"; nslookup example.com 2>&1 || true`,
   );
 
   // sslip.io answers with the address the name spells, here in 10/8: the open
