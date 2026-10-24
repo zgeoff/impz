@@ -822,7 +822,7 @@ test('#startResolverServer closes a TCP client idle past idleS', async () => {
 
   expect(idle.destroyed).toBeTrue();
   expect(dnsPacket.decode(answered.subarray(2))).toMatchObject({ id: 7, rcode: 'NOERROR' });
-}, 15_000);
+});
 
 test('#startResolverServer stays up when a guest goes before its reply, and logs the ICMP error', async () => {
   const ports = claimFreePorts(1);

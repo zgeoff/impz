@@ -1193,4 +1193,4 @@ test('it keeps a call answered as server-sent events open through the wake proxy
       result: { isError: false, structuredContent: { exitCode: 0, stdout: 'waited\n' } },
     },
   ]);
-}, 20_000);
+});
