@@ -35,9 +35,8 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: read
-    # a kernel cache miss takes about 10 minutes, setup builds the base image
-    # in about 2, and the suite runs about 5
-    timeout-minutes: 40
+    # a warm run took about 7 minutes, and a kernel cache miss adds about 10
+    timeout-minutes: 25
     env:
       # the e2e groups' sizes for a 4-core, 16 GB runner
       E2E_RAM_BUDGET_MIB: 4096
