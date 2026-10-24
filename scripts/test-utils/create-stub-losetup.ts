@@ -6,8 +6,6 @@ import type { StubBin } from './create-stub-bin';
 export interface StubLosetupOptions {
   // what -f prints for the free device; with none, -f fails as on a kernel without one
   readonly free?: string;
-
-  // what -j prints for the device that holds the file already
   readonly attached?: string;
 
   // attaches that fail before one succeeds, as when another container takes the device first

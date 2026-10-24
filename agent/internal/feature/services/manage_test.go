@@ -18,7 +18,6 @@ import (
 	"github.com/zgeoff/impz/agent/internal/proto"
 )
 
-// newManagedSupervisor is a supervisor with its own services.d.
 func newManagedSupervisor(t *testing.T) *Supervisor {
 	t.Helper()
 	s := newSupervisor(t)
@@ -26,7 +25,6 @@ func newManagedSupervisor(t *testing.T) *Supervisor {
 	return s
 }
 
-// requireCode fails the test unless err is a proto.Error with code.
 func requireCode(t *testing.T, err error, code string) {
 	t.Helper()
 	var pe *proto.Error
@@ -34,7 +32,6 @@ func requireCode(t *testing.T, err error, code string) {
 	assert.Equal(t, pe.Code, code)
 }
 
-// waitRunning waits for the named service to run with a pid other than not.
 func waitRunning(t *testing.T, s *Supervisor, name string, not int32) *proto.ServiceStatus {
 	t.Helper()
 	var got *proto.ServiceStatus
@@ -68,7 +65,6 @@ func TestAddWritesTheFileAndStartsTheService(t *testing.T) {
 	assert.NilError(t, err)
 	st := waitRunning(t, s, "web", 0)
 	assert.Check(t, cmp.DeepEqual(st.Def, &Def{Name: new("web"), Argv: []string{"sleep", "30"}, Env: []string{"A=1"}, Restart: new("always"), Source: new("api")}, protocmp.Transform()))
-	// the file holds no name: its own name is the service's
 	assert.Check(t, cmp.DeepEqual(readDefFile(t, filepath.Join(s.dir, "web.json")), &Def{Argv: []string{"sleep", "30"}, Env: []string{"A=1"}, Restart: new("always"), Source: new("api")}, protocmp.Transform()))
 	_, statErr := os.Stat(filepath.Join(s.dir, "web.json.tmp"))
 	assert.Check(t, cmp.ErrorIs(statErr, fs.ErrNotExist), "the temp file is left")
@@ -131,8 +127,6 @@ func TestAddRefusesABadDefinitionAndWritesNothing(t *testing.T) {
 	}
 }
 
-// setupEscape points s at a services.d two levels down and writes the file
-// that the name ../../tmp/x would reach from it.
 func setupEscape(t *testing.T, s *Supervisor) (victim string) {
 	t.Helper()
 	base := t.TempDir()

@@ -1,7 +1,3 @@
-// Package proc spawns guest processes through the central reaper.
-//
-// It uses syscall.ForkExec, not os/exec: exec.Cmd expects its own Wait call,
-// which would race with the reaper.
 package proc
 
 import (
@@ -20,80 +16,48 @@ import (
 	"github.com/zgeoff/impz/agent/internal/host/sysutil"
 )
 
-// Spec describes one process to start. User, HOME and the binary resolve
-// where the process starts: in the inner container, against its files.
 type Spec struct {
-	Argv []string
-	// Env is the full environment, KEY=VALUE.
-	Env []string
-	// Dir is the working directory. Empty tries Workdir, then $HOME, and
-	// takes the first that is a directory, else /.
-	Dir     string
-	Workdir string
-	// User is "", "name", "uid", "name:group" or "uid:gid". Empty means root.
-	User string
-	// Cred, when set, replaces User (tests, with no /etc/passwd).
-	Cred *syscall.Credential
-	// SetHome sets HOME to User's home from /etc/passwd (not for root).
-	SetHome bool
-	// Files become fds 0, 1, 2, ... in the child.
-	Files []*os.File
-	// TTY makes the child a session leader with Files[0] as its controlling
-	// terminal. Otherwise the child gets its own process group.
-	TTY bool
-	// Helper runs the agent binary itself, with Argv[1:] as its arguments.
-	Helper bool
-	// Cgroup, if set, is the directory of the cgroup v2 leaf the child is
-	// born in (clone3 with CLONE_INTO_CGROUP).
-	Cgroup *os.File
-	// RequireCgroup fails a spawn into Cgroup that fails, where the
-	// default runs the child without one.
+	Argv          []string
+	Env           []string
+	Dir           string
+	Workdir       string
+	User          string
+	Cred          *syscall.Credential
+	SetHome       bool
+	Files         []*os.File
+	TTY           bool
+	Helper        bool
+	Cgroup        *os.File
 	RequireCgroup bool
-	// DropSysAdmin starts the child through the dropcaps helper, without
-	// dropcaps.Dropped. It needs the agent binary and takes no Helper spec.
-	DropSysAdmin bool
+	DropSysAdmin  bool
 }
 
-// Process is a started child.
 type Process struct {
-	Pid  int
-	Done <-chan reaper.Status
-	// InCgroup reports whether the child started in Spec.Cgroup. A spawn
-	// into the cgroup that fails is retried without it, unless the spec
-	// requires the cgroup.
+	Pid      int
+	Done     <-chan reaper.Status
 	InCgroup bool
 	ctl      control
 }
 
-// control signals a started child where it runs.
 type control interface {
-	// signal sends sig to pid's process group, or to pid alone. Signal 0
-	// probes: an error means nothing is left to signal.
 	signal(pid int, sig syscall.Signal, group bool) error
 }
 
-// cgroupFallback logs the first spawn that could not use its cgroup.
 var cgroupFallback sync.Once
 
-// Signal sends sig to the child's process group (the child leads it).
 func (p *Process) Signal(sig syscall.Signal) error {
 	return p.ctl.signal(p.Pid, sig, true)
 }
 
-// Kill sends SIGKILL to the child alone, never to a later process that
-// reused its pid.
 func (p *Process) Kill() error {
 	return p.ctl.signal(p.Pid, syscall.SIGKILL, false)
 }
 
-// GroupAlive reports whether any member of the child's process group lives:
-// only ESRCH means it is empty.
+// Only ESRCH means the process group is empty.
 func (p *Process) GroupAlive() bool {
 	return !errors.Is(p.ctl.signal(p.Pid, 0, true), syscall.ESRCH)
 }
 
-// NewProcess builds a Process another package started, with its own way to
-// signal it.
 func NewProcess(pid int, done <-chan reaper.Status, signal func(pid int, sig syscall.Signal, group bool) error) *Process {
 	return &Process{Pid: pid, Done: done, ctl: controlFunc(signal)}
 }
@@ -102,26 +66,18 @@ type controlFunc func(pid int, sig syscall.Signal, group bool) error
 
 func (f controlFunc) signal(pid int, sig syscall.Signal, group bool) error { return f(pid, sig, group) }
 
-// Runner starts processes: in this process's world (Direct), or in the
-// inner container.
 type Runner interface {
 	Start(s Spec) (*Process, error)
 }
 
-// ErrDown is a Runner's error when it has nowhere to start a process: the
-// inner container is down.
 var ErrDown = errors.New("the inner container is down")
 
-// Direct forks children of this process through its reaper.
 type Direct struct {
-	Reaper *reaper.Reaper
-	// Agent is the agent binary, for Helper specs. AgentFile, when set, is
-	// an open fd of it that survives the path going away.
+	Reaper    *reaper.Reaper
 	Agent     string
 	AgentFile *os.File
 }
 
-// Start resolves the user and binary, then forks through the reaper.
 func (d *Direct) Start(s Spec) (*Process, error) {
 	if len(s.Argv) == 0 {
 		return nil, errors.New("empty argv")
@@ -194,14 +150,15 @@ func (d *Direct) Start(s Spec) (*Process, error) {
 	attr := &syscall.ProcAttr{Dir: dir, Env: env, Files: fds, Sys: sys}
 	inCgroup := s.Cgroup != nil
 	pid, done, err := d.Reaper.Start(func() (int, error) {
+		// syscall.ForkExec, not os/exec: exec.Cmd expects its own Wait call,
+		// which would race with the reaper
 		pid, err := syscall.ForkExec(path, argv, attr)
 		if err == nil || !inCgroup || s.RequireCgroup {
 			return pid, err
 		}
 		// No clone3, or a cgroup gone from under us: the command still runs,
 		// and a stop falls back to its process group. An exec error (EACCES,
-		// say) also lands here; its retry fails the same way, which is
-		// harmless.
+		// say) also lands here, and its retry fails the same way.
 		sys.UseCgroupFD = false
 		pid, retryErr := syscall.ForkExec(path, argv, attr)
 		if retryErr == nil {
@@ -220,8 +177,6 @@ func (d *Direct) Start(s Spec) (*Process, error) {
 	return p, nil
 }
 
-// agentPath is the path the child runs the agent binary from, and files
-// with the binary's fd added when there is one.
 func (d *Direct) agentPath(files []*os.File) (string, []*os.File) {
 	if d.AgentFile == nil {
 		return d.Agent, files
@@ -232,8 +187,8 @@ func (d *Direct) agentPath(files []*os.File) (string, []*os.File) {
 	return path, append(append([]*os.File{}, files...), d.AgentFile)
 }
 
-// newDirectProcess signals through a pidfd until the child is reaped, so a
-// Kill never reaches a process that reused the pid.
+// A pidfd until the child is reaped keeps a kill from reaching a process that
+// reused the pid.
 func newDirectProcess(pid, pidfd int, reaped <-chan reaper.Status) *Process {
 	var mu sync.Mutex
 	done := make(chan reaper.Status, 1)
@@ -260,7 +215,6 @@ func newDirectProcess(pid, pidfd int, reaped <-chan reaper.Status) *Process {
 	})
 }
 
-// LookPath finds file in the PATH of env, not the agent's own PATH.
 func LookPath(file string, env []string) (string, error) {
 	if strings.Contains(file, "/") {
 		return file, sysutil.CheckExecutable(file, os.Stat)
@@ -268,7 +222,6 @@ func LookPath(file string, env []string) (string, error) {
 	return sysutil.FindInPath(file, Get(env, "PATH"), os.Stat)
 }
 
-// Get returns the value of key in env, or "".
 func Get(env []string, key string) string {
 	for i := len(env) - 1; i >= 0; i-- {
 		if k, v, ok := strings.Cut(env[i], "="); ok && k == key {
@@ -278,7 +231,6 @@ func Get(env []string, key string) string {
 	return ""
 }
 
-// Merge returns base with each KEY=VALUE in extra added or replaced.
 func Merge(base, extra []string) []string {
 	out := make([]string, 0, len(base)+len(extra))
 	idx := make(map[string]int)

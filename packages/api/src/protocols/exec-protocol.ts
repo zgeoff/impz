@@ -6,9 +6,6 @@ import { SessionNameSchema } from '../schemas/session-schema';
 // A client sends `start` or `attach` first and waits for `started`.
 export const EXEC_PATH = '/exec';
 export const EXEC_TICKET_PARAM = 'ticket';
-
-// impd closes every exec and tunnel socket with this code when it stops or
-// restarts.
 export const EXEC_CLOSE_RESTARTING = 1012;
 
 export const EXEC_CHANNELS = {

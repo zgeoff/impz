@@ -4,9 +4,9 @@ import { parseIpv4 } from '../../host-net/net/addressing';
 import { findMappedIpv4, formatIpv6, parseIpv6 } from '../../host-net/net/addressing6';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 
-// Where a plain tunnel may go. It starts in the host container, past the
-// `INPUT -i imp+ DROP` rule: unchecked, a guest could reach impd's API, the
-// wake proxy and other imps' ports.
+// A plain tunnel starts in the host container, past the `INPUT -i imp+ DROP`
+// rule: unchecked, a guest could reach impd's API, the wake proxy and other
+// imps' ports.
 
 export class TunnelRefusedError extends Error {
   override name = 'TunnelRefusedError';
@@ -36,8 +36,7 @@ function formatAddressKey(address: string): string {
   return ip6 === null ? address.toLowerCase() : formatIpv6(ip6);
 }
 
-// every address on the host's interfaces, read at call time: tailscaled can
-// add one after impd starts
+// read at call time: tailscaled can add an address after impd starts
 function readHostAddresses(): ReadonlySet<string> {
   const addresses = Object.values(networkInterfaces())
     .flatMap((list) => list ?? [])

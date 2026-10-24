@@ -12,8 +12,6 @@ import (
 	"github.com/zgeoff/impz/agent/internal/proto"
 )
 
-// The services ops reach the supervisor; names it does not have come back
-// as NO_SERVICE, and an add with no definition as BAD_REQUEST.
 func TestServicesOpsReplyWithTheSupervisorsErrorCode(t *testing.T) {
 	for _, tc := range []struct {
 		name string

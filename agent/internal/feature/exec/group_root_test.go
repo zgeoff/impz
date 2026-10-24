@@ -1,7 +1,5 @@
 //go:build root
 
-// The tests that need root and a writable cgroup2, as in a guest: run them with -tags root as root.
-
 package exec
 
 import (
@@ -27,9 +25,6 @@ import (
 	"github.com/zgeoff/impz/agent/internal/proto"
 )
 
-// A stopped command's child that left the process group with setsid and
-// ignores SIGTERM still dies: cgroup.kill reaches it at the deadline. It
-// needs root and a writable cgroup2, as in a guest.
 func TestKillGraceReachesAChildThatLeftTheProcessGroup(t *testing.T) {
 	// cgroup2 fixes the mount; a fresh directory under it is this test's own.
 	parent, err := os.MkdirTemp("/sys/fs/cgroup", "imp-exec-test-")
@@ -56,9 +51,6 @@ func TestKillGraceReachesAChildThatLeftTheProcessGroup(t *testing.T) {
 	assert.Check(t, !alive(escapee), "escapee %d survived the stop", escapee)
 }
 
-// cappedScript runs dd with a 400 MiB buffer in a cgroup that the command
-// makes next to its own, capped at memoryMax bytes with no swap, then prints
-// the cap's oom_kill count and exits with dd's status.
 func cappedScript(memoryMax int) string {
 	return fmt.Sprintf(`set -e
 own=/sys/fs/cgroup$(sed -n 's/^0:://p' /proc/self/cgroup)
@@ -72,8 +64,6 @@ grep '^oom_kill ' "$capped/memory.events"
 exit $status`, memoryMax)
 }
 
-// runCapped runs cappedScript through a manager on a delegated tree under a
-// fresh cgroup, and returns its output and exit.
 func runCapped(t *testing.T, memoryMax int) (string, *proto.Exit) {
 	t.Helper()
 	parent, err := os.MkdirTemp("/sys/fs/cgroup", "imp-exec-test-")
@@ -104,9 +94,6 @@ func TestACommandCappedAt1024MiBTakes400MiB(t *testing.T) {
 	assert.Check(t, cmp.Equal(exit.GetCode(), int32(0)))
 }
 
-// removeCgroup kills whatever still runs in the cgroup dir this test made
-// and removes it with every cgroup under it, deepest first. It is safe after
-// a failure part way: what is already gone is skipped.
 func removeCgroup(t *testing.T, dir string) {
 	t.Helper()
 	if err := os.WriteFile(filepath.Join(dir, "cgroup.kill"), []byte("1"), 0o600); err != nil && !errors.Is(err, fs.ErrNotExist) {

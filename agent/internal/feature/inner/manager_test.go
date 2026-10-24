@@ -16,8 +16,6 @@ import (
 	"github.com/zgeoff/impz/agent/internal/host/proc"
 )
 
-// fakeInit is an inner init served in the test's own process: a spawner on
-// a socketpair, with a pid nobody has and an exit the test controls.
 type fakeInit struct {
 	died   chan reaper.Status
 	sp     int
@@ -34,10 +32,6 @@ func (f *fakeInit) die() {
 	})
 }
 
-// testManager returns a manager whose starts make fake inits, which it
-// sends on inits. With gate set, each start first signals entered (when
-// set), then waits for gate. Its cleanup stops the manager, then ends every
-// fake init it made.
 func testManager(t *testing.T, gate <-chan struct{}, entered chan<- struct{}) (*Manager, <-chan *fakeInit) {
 	t.Helper()
 	inits := make(chan *fakeInit, 16)
@@ -87,7 +81,6 @@ func testManager(t *testing.T, gate <-chan struct{}, entered chan<- struct{}) (*
 	return m, inits
 }
 
-// receive waits for one value on ch, failing the test after within.
 func receive[T any](t *testing.T, ch <-chan T, within time.Duration, what string) T {
 	t.Helper()
 	select {
@@ -100,8 +93,6 @@ func receive[T any](t *testing.T, ch <-chan T, within time.Duration, what string
 	}
 }
 
-// die ends the fake init's spawner and reports the init killed, which the
-// manager sees as the container going down.
 func TestFakeInitDieTakesTheContainerDown(t *testing.T) {
 	m, inits := testManager(t, nil, nil)
 	down := make(chan struct{}, 1)
@@ -183,8 +174,6 @@ func TestARestartRunsOnDownThenOnUp(t *testing.T) {
 	assert.DeepEqual(t, m.Status(), Status{Up: true, Restarts: 1})
 }
 
-// A restart waits one second first, doubling up to 30 s, and an init has
-// 30 seconds to set up.
 func TestNewStartsTheRestartBackoffAtOneSecondAndGivesAnInitThirtySeconds(t *testing.T) {
 	m := New(testReaper, Config{})
 
@@ -198,7 +187,6 @@ func TestAStopDuringAStartKillsTheNewInit(t *testing.T) {
 	m, inits := testManager(t, gate, entered)
 	launched := make(chan struct{})
 	go func() { m.Launch(); close(launched) }()
-	// the start is under way, held at the gate
 	receive(t, entered, 5*time.Second, "start")
 
 	m.Stop()

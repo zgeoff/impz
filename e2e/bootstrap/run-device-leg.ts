@@ -8,9 +8,6 @@ import { startTestContainer } from './start-test-container';
 import { STORAGE_PATHS } from './storage-paths';
 import type { BootstrapRun, BootstrapTarget } from './types';
 
-// --data-device on loop devices: the refusals first (a device with ext4, a mounted device), then
-// --check with --storage zfs, then a real XFS run and --check. The health check is skipped; the
-// loop-file legs cover it.
 export async function runDeviceLeg(run: BootstrapRun): Promise<void> {
   const distro = 'debian';
   const disks = STORAGE_PATHS;
@@ -32,6 +29,8 @@ export async function runDeviceLeg(run: BootstrapRun): Promise<void> {
   const onDevice = (storage: readonly string[]): BootstrapTarget => ({
     distro,
     storage,
+
+    // The loop-file legs cover the health check.
     health: false,
   });
 

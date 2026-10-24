@@ -1,7 +1,3 @@
-// Package services supervises the long-running processes declared in
-// /etc/imp/services.d/*.json. Each service restarts with exponential
-// backoff (1s doubling to 60s) and logs to /var/log/imp/<name>.log, which
-// rotates to <name>.log.1 past 10 MiB.
 package services
 
 import (
@@ -30,49 +26,38 @@ const (
 	Dir    = "/etc/imp/services.d"
 	LogDir = "/var/log/imp"
 
-	minBackoff = time.Second
-	maxBackoff = 60 * time.Second
-	// A run at least this long resets the backoff.
+	minBackoff  = time.Second
+	maxBackoff  = 60 * time.Second
 	stableAfter = 30 * time.Second
 	stopGrace   = 5 * time.Second
 )
 
-// Def is one services.d file.
 type Def = proto.ServiceDef
 
-// Supervisor runs every service.
 type Supervisor struct {
-	runner proc.Runner
-	// fsys holds services.d and the logs: the user's files
-	fsys   fsroot.FS
-	image  *imagecfg.Live
-	dir    string
-	logDir string
-	// firstBackoff is a service's first wait before a restart, minBackoff
-	// outside tests
+	runner       proc.Runner
+	fsys         fsroot.FS
+	image        *imagecfg.Live
+	dir          string
+	logDir       string
 	firstBackoff time.Duration
 
-	// opMu serializes Add, Remove and Restart, which stop a service and
-	// touch its file outside mu
 	opMu sync.Mutex
 
 	mu       sync.Mutex
 	services map[string]*service
 	stopping bool
 	wg       sync.WaitGroup
-	// quit stops the log rotator.
-	quit chan struct{}
+	quit     chan struct{}
 
-	// truncMu guards truncs: each log path's copytruncate count, so a
-	// follow knows its file was emptied even when it grew back past the
-	// follow's offset
+	// a count, not a size check: a log emptied in place can grow back past a
+	// reader's offset before the reader looks
 	truncMu sync.Mutex
 	truncs  map[string]uint64
 }
 
 type service struct {
-	def *Def
-	// path is the services.d file the definition came from
+	def      *Def
 	path     string
 	state    string
 	pid      int
@@ -80,34 +65,26 @@ type service struct {
 	restarts int
 	lastExit *proto.Exit
 	stop     chan struct{}
-	// done closes when the supervisor loop returns
-	done chan struct{}
-	// logMu serializes rotating the log with opening it for a start.
-	logMu sync.Mutex
+	done     chan struct{}
+	logMu    sync.Mutex
 }
 
-// New runs services through runner, reading their files and writing their
-// logs in fsys.
 func New(runner proc.Runner, fsys fsroot.FS, image *imagecfg.Live) *Supervisor {
 	return &Supervisor{runner: runner, fsys: fsys, image: image, dir: Dir, logDir: LogDir,
 		services: make(map[string]*service), quit: make(chan struct{}),
 		truncs: make(map[string]uint64), firstBackoff: minBackoff}
 }
 
-// Load reads Dir and starts every service in it, and the log rotator. A bad
-// file is logged and skipped so one typo cannot keep the rest from starting.
 func (s *Supervisor) Load() error {
 	safe.Go("services: log rotator", func() { s.rotateLogs(s.quit) }, nil)
 	return s.startAll()
 }
 
-// suspendWait bounds Suspend's wait for one supervisor loop.
 const suspendWait = 5 * time.Second
 
-// Suspend ends every service's supervision without a signal, and waits for
-// the loops to finish: for a container that died, which took the services
-// with it. A loop left in its backoff would otherwise start its service in
-// the next container, beside the one Reload starts.
+// A container that died took its services with it, so nothing is signalled.
+// A loop left in its backoff would start its service in the next container,
+// beside the reloaded one.
 func (s *Supervisor) Suspend() {
 	s.opMu.Lock()
 	defer s.opMu.Unlock()
@@ -131,9 +108,6 @@ func (s *Supervisor) Suspend() {
 	}
 }
 
-// Reload drops every service and starts the directory's again, as a boot
-// would: for a container that started again, where every service died with
-// the old one.
 func (s *Supervisor) Reload() error {
 	s.opMu.Lock()
 	defer s.opMu.Unlock()
@@ -174,8 +148,6 @@ func (s *Supervisor) startAll() error {
 	return nil
 }
 
-// ReadDef reads one services.d file: the file name is the service name, and
-// a file without source "api" came with the image.
 func ReadDef(fsys fsroot.FS, path string) (*Def, error) {
 	d := &Def{}
 	b, err := fsys.ReadFile(path)
@@ -193,8 +165,6 @@ func ReadDef(fsys fsroot.FS, path string) (*Def, error) {
 	return d, checkDef(d)
 }
 
-// checkDef rejects a definition the supervisor cannot run, and fills in the
-// default restart policy.
 func checkDef(d *Def) error {
 	if len(d.Argv) == 0 {
 		return fmt.Errorf("argv is empty")
@@ -239,7 +209,6 @@ func (s *Supervisor) run(svc *service) {
 
 		s.mu.Lock()
 		svc.pid, svc.proc = 0, nil
-		// A failed start is not an exit: last_exit keeps the previous one.
 		if err != nil {
 			log.Printf("services: %s: %v", svc.def.GetName(), err)
 		} else {
@@ -270,7 +239,6 @@ func (s *Supervisor) run(svc *service) {
 	}
 }
 
-// shouldRestart applies a restart policy to a run that ended by itself.
 func shouldRestart(policy string, failed bool) bool {
 	switch policy {
 	case "never":
@@ -282,9 +250,6 @@ func shouldRestart(policy string, failed bool) bool {
 	}
 }
 
-// nextBackoff returns how long to wait before the next start, and the
-// backoff after that, given the current backoff and how long the run
-// lasted. A stable run resets the backoff.
 func nextBackoff(cur, ran time.Duration) (wait, next time.Duration) {
 	if ran >= stableAfter {
 		cur = minBackoff
@@ -292,7 +257,6 @@ func nextBackoff(cur, ran time.Duration) (wait, next time.Duration) {
 	return cur, min(cur*2, maxBackoff)
 }
 
-// once runs the service a single time and waits for it to exit.
 func (s *Supervisor) once(svc *service) (reaper.Status, error) {
 	logf, err := s.openLog(svc)
 	if err != nil {
@@ -327,8 +291,8 @@ func (s *Supervisor) once(svc *service) (reaper.Status, error) {
 
 	s.mu.Lock()
 	svc.state, svc.pid, svc.proc = "running", p.Pid, p
-	// StopAll may have run between proc.Start and here, when svc.proc was
-	// still nil, so its SIGTERM missed this process. Send it now.
+	// A stop may have run between the start and here, while proc was still
+	// nil, so its SIGTERM missed this process.
 	if isClosed(svc.stop) {
 		_ = p.Signal(syscall.SIGTERM)
 	}
@@ -340,10 +304,8 @@ func (s *Supervisor) logPath(svc *service) string {
 	return filepath.Join(s.logDir, svc.def.GetName()+".log")
 }
 
-// openLog rotates the service's log if it is too big, then opens it for
-// appending. O_NONBLOCK and the check keep a FIFO the user put there from
-// blocking the service's loop; the flag is cleared again before the service
-// gets the file.
+// O_NONBLOCK and the regular-file check keep a FIFO the user put there from
+// blocking the loop; the flag is cleared before the service gets the file.
 func (s *Supervisor) openLog(svc *service) (*os.File, error) {
 	if err := s.fsys.MkdirAll(s.logDir, 0o755); err != nil {
 		return nil, err
@@ -375,7 +337,6 @@ func (s *Supervisor) setState(svc *service, state string) {
 	s.mu.Unlock()
 }
 
-// List reports every service, sorted by name.
 func (s *Supervisor) List() []*proto.ServiceStatus {
 	s.mu.Lock()
 	out := make([]*proto.ServiceStatus, 0, len(s.services))
@@ -398,13 +359,12 @@ func (s *Supervisor) List() []*proto.ServiceStatus {
 	return out
 }
 
-// ImageUser is the user a service without one runs as.
 func (s *Supervisor) ImageUser() string {
 	return s.image.Get().User
 }
 
-// runsAsRoot resolves the user a service runs as; one the guest cannot
-// resolve counts as root, so impd asks for the most it could be.
+// A user the guest cannot resolve counts as root, so impd asks for the most
+// it could be.
 func (s *Supervisor) runsAsRoot(user string) bool {
 	if user == "" {
 		user = s.image.Get().User
@@ -413,8 +373,6 @@ func (s *Supervisor) runsAsRoot(user string) bool {
 	return err != nil || cred == nil || cred.Uid == 0
 }
 
-// StopAll sends SIGTERM to every service, then SIGKILL to whatever is left
-// after stopGrace, and waits for the supervisors to finish.
 func (s *Supervisor) StopAll() {
 	s.mu.Lock()
 	if !s.stopping {

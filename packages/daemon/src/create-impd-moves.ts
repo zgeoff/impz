@@ -9,7 +9,7 @@ import type { ApiAudit } from './platform/audit/api-audit';
 import { printLog } from './platform/process/print-log';
 import type { HostIdentity } from './vm/sleep/vm-identity';
 
-// onCommitted hears each commit after impd's own hook, never in its place
+// a caller's commit hook hears each commit after impd's own hook, never in its place
 export type ImpdMoveBoundaries = Partial<
   Pick<
     MoveServiceDeps,

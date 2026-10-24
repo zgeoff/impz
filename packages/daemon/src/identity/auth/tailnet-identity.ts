@@ -123,9 +123,8 @@ export function findTailnetCaller(
   };
 }
 
-// A user owns leases across all of its nodes. A tagged node has no user, so
-// it owns them by its stable ID; without one it owns none, since a later
-// node can take its name.
+// A tagged node has no user, so it owns leases by its stable ID; without one
+// it owns none, since a later node can take its name.
 function findTailnetPrincipal(peer: Readonly<TailnetPeer>): string | null {
   if (peer.login !== null) {
     return `tailnet-user:${peer.login}`;

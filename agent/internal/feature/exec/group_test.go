@@ -72,14 +72,11 @@ func TestStopTimerKeepsTheDeadlineOnALaterStopSignal(t *testing.T) {
 	})
 }
 
-// childScript starts a group member that ignores SIGTERM and SIGUSR1 and
-// writes its pid to pidFile, then runs leader in the foreground.
 func childScript(pidFile, leader string) string {
 	child := fmt.Sprintf(`trap "" TERM USR1; echo $$ > %s; exec sleep 300`, pidFile)
 	return fmt.Sprintf("sh -c '%s' >/dev/null 2>&1 & %s", child, leader)
 }
 
-// readPid waits for a script to write its pid to pidFile.
 func readPid(t *testing.T, pidFile string) int {
 	t.Helper()
 	var pid int
@@ -96,7 +93,6 @@ func readPid(t *testing.T, pidFile string) int {
 	return pid
 }
 
-// alive reports whether pid runs; a zombie has finished.
 func alive(pid int) bool {
 	b, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
 	if err != nil {
@@ -111,11 +107,10 @@ func TestAliveReportsARunningProcess(t *testing.T) {
 	assert.Check(t, alive(os.Getpid()))
 }
 
-// A zombie still holds its pid, but has finished.
 func TestAliveReportsAZombieAsFinished(t *testing.T) {
 	pidFile := filepath.Join(t.TempDir(), "pid")
-	// This test binary, as the parent, never waits for its child (see
-	// TestMain), so the child stays a zombie until the parent is killed.
+	// This test binary, as the parent, never waits for its child, so the
+	// child stays a zombie until the parent is killed.
 	pid, err := syscall.ForkExec(os.Args[0], []string{os.Args[0]}, &syscall.ProcAttr{Env: []string{zombieParentEnv + "=" + pidFile}})
 	assert.NilError(t, err)
 	killAfter(t, pid)
@@ -143,8 +138,6 @@ func signal(t *testing.T, h *host, sig syscall.Signal) {
 	h.send(t, proto.TypeSignal, b)
 }
 
-// A stopped command's leader exits at once; its child, which ignores
-// SIGTERM, dies at the deadline, before EXIT.
 func TestKillGraceKillsAChildThatIgnoresSIGTERMBeforeTheExit(t *testing.T) {
 	pidFile := filepath.Join(t.TempDir(), "pid")
 	const grace = 300 * time.Millisecond
@@ -166,8 +159,6 @@ func TestKillGraceKillsAChildThatIgnoresSIGTERMBeforeTheExit(t *testing.T) {
 	assert.Check(t, !alive(child), "child %d survived the grace", child)
 }
 
-// Without a host stop signal, a background child outlives its command, as it
-// always has.
 func TestKillGraceLeavesTheGroupAloneWithoutAStopSignal(t *testing.T) {
 	pidFile := filepath.Join(t.TempDir(), "pid")
 	h := startExec(t, newManager(), &proto.Request{
@@ -179,7 +170,7 @@ func TestKillGraceLeavesTheGroupAloneWithoutAStopSignal(t *testing.T) {
 	_, exit := h.wait(t, 5*time.Second)
 	child := readPid(t, pidFile)
 	killAfter(t, child)
-	// Serve has finished with the group once it returns.
+	// The exec has finished with the group once the hangup returns.
 	served := h.hangUp(t, time.Second)
 
 	assert.Check(t, cmp.DeepEqual(exit, &proto.Exit{}, protocmp.Transform()))
@@ -187,7 +178,6 @@ func TestKillGraceLeavesTheGroupAloneWithoutAStopSignal(t *testing.T) {
 	assert.Check(t, alive(child), "the background child died without a stop signal")
 }
 
-// A leader that exits on SIGUSR1 leaves its child, which ignores it, alive.
 func TestKillGraceDoesNotStartOnSIGUSR1(t *testing.T) {
 	dir := t.TempDir()
 	pidFile := filepath.Join(dir, "pid")
@@ -206,7 +196,7 @@ func TestKillGraceDoesNotStartOnSIGUSR1(t *testing.T) {
 
 	signal(t, h, syscall.SIGUSR1)
 	_, exit := h.wait(t, 5*time.Second)
-	// Serve has finished with the group once it returns.
+	// The exec has finished with the group once the hangup returns.
 	served := h.hangUp(t, time.Second)
 
 	assert.Check(t, cmp.DeepEqual(exit, &proto.Exit{}, protocmp.Transform()), "the leader's exit 0")
@@ -214,9 +204,6 @@ func TestKillGraceDoesNotStartOnSIGUSR1(t *testing.T) {
 	assert.Check(t, alive(child), "SIGUSR1 started the kill grace")
 }
 
-// A child that prints on its way out after the leader died gets that output
-// to the host before EXIT, and EXIT does not wait out the grace once the
-// group is empty.
 func TestKillGraceForwardsAStoppedChildsLastOutputBeforeTheExit(t *testing.T) {
 	pidFile := filepath.Join(t.TempDir(), "pid")
 	// The child's trap sleeps five times past the drain grace before it
@@ -259,8 +246,6 @@ func TestKillGraceComesFromTheRequestClampedAndOffForATTY(t *testing.T) {
 	}
 }
 
-// STARTED carries the grace the agent will apply, and none for a tty exec,
-// so the host does not count on a group kill.
 func TestServeEchoesTheKillGraceInStarted(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -286,8 +271,6 @@ func TestServeEchoesTheKillGraceInStarted(t *testing.T) {
 	}
 }
 
-// The host goes away right after its SIGTERM; the survivor still dies at
-// the deadline.
 func TestKillGraceStillKillsTheSurvivorAfterTheHostHangsUp(t *testing.T) {
 	pidFile := filepath.Join(t.TempDir(), "pid")
 	const grace = 300 * time.Millisecond
@@ -309,8 +292,6 @@ func TestKillGraceStillKillsTheSurvivorAfterTheHostHangsUp(t *testing.T) {
 	assert.Check(t, took >= grace, "Serve returned %s after SIGTERM, before the %s grace", took, grace)
 }
 
-// A leaf that is not a cgroup (here a plain directory) cannot take the
-// child, so the command runs without one and its leaf goes.
 func TestServeRunsWithoutALeafThatCannotTakeTheChild(t *testing.T) {
 	parent := filepath.Join(t.TempDir(), "imp-exec")
 	tree, err := cgroup.NewTree(parent)
@@ -328,7 +309,6 @@ func TestServeRunsWithoutALeafThatCannotTakeTheChild(t *testing.T) {
 	assert.Check(t, cmp.Len(leaves, 0))
 }
 
-// A strict manager refuses the exec it cannot give a leaf.
 func TestServeRefusesAStrictExecWithoutACgroupTree(t *testing.T) {
 	m := NewStrictManager(launch.New(&proc.Direct{Reaper: testReaper}, imagecfg.NewLive(imagecfg.Config{Env: []string{"PATH=/usr/bin:/bin"}}), nil), nil)
 	h := startExec(t, m, &proto.Request{Argv: []string{"echo", "ran"}})
@@ -343,8 +323,6 @@ func TestServeRefusesAStrictExecWithoutACgroupTree(t *testing.T) {
 	assert.Check(t, cmp.Contains(resp.Error.Message, "no cgroup to run in"))
 }
 
-// A leaf whose cgroup.kill cannot be written (here a plain directory) still
-// gets its process group killed.
 func TestKillCgroupFallsBackToTheProcessGroup(t *testing.T) {
 	tree, err := cgroup.NewTree(filepath.Join(t.TempDir(), "imp-exec"))
 	assert.NilError(t, err)

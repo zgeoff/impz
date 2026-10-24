@@ -28,9 +28,8 @@ func (s *Server) activity() (*proto.Activity, error) {
 	}, nil
 }
 
-// countEstablished counts ESTABLISHED sockets in a /proc/net/tcp{,6} table,
-// skipping loopback ones. The agent's own vsock connections are AF_VSOCK and
-// never appear in these tables.
+// The agent's own vsock connections are AF_VSOCK and never appear in these
+// tables.
 func countEstablished(path string) (int, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -54,9 +53,8 @@ func countEstablished(path string) (int, error) {
 	return n, sc.Err()
 }
 
-// isLoopback decodes the hex "ADDR:PORT" form of /proc/net/tcp. The kernel
-// prints each 32-bit word of the address in host byte order (little-endian
-// on x86), so every 4-byte group is reversed.
+// The kernel prints each 32-bit word of the address in host byte order
+// (little-endian on x86), so every 4-byte group is reversed.
 func isLoopback(addrPort string) bool {
 	addr, _, ok := strings.Cut(addrPort, ":")
 	if !ok {

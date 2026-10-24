@@ -18,52 +18,43 @@ import (
 	"github.com/zgeoff/impz/agent/internal/proto"
 )
 
-// A unix socket dial runs as the image's USER, the user an SSH login gets,
-// so a forward reaches only the sockets that user could open. It runs in a
-// helper process, `imp-agent dial-unix <path>`, not on a thread with its own
+// A unix dial runs in a helper process, not on a thread with the user's
 // credentials: Go moves goroutines between threads, and the server's
-// SO_PEERCRED must see the user's uid and pid, not PID 1. The helper connects
-// and hands the socket back over a socketpair (SCM_RIGHTS); the agent relays.
-
-// HelperCommand is the agent's argv[1] for the helper.
+// SO_PEERCRED must see the user's uid and pid, not PID 1.
 const HelperCommand = "dial-unix"
 
-// helperTimeout bounds the wait for the helper's answer: its connect never
-// blocks, so the margin over dialTimeout covers the fork and exec.
+// The helper's connect never blocks, so the margin over the dial timeout
+// covers the fork and exec.
 const helperTimeout = dialTimeout + 2*time.Second
 
-// The helper's one-byte answer, then a message for an error.
 const (
 	answerOK         = 'k'
 	answerBadRequest = 'b'
 	answerFailed     = 'd'
 )
 
-// Dialer serves dial requests; unix sockets dial as the image's user.
 type Dialer struct {
 	runner proc.Runner
 	image  *imagecfg.Live
 
 	// cred, when set, replaces user: tests set credentials without
 	// /etc/passwd
-	cred *syscall.Credential
-	// helperTimeout bounds each helper's answer and its exit
+	// cred, when set, replaces user: tests set credentials without
+	// /etc/passwd
+	cred          *syscall.Credential
 	helperTimeout time.Duration
 }
 
-// NewDialer dials unix sockets as the image's USER, through helpers that
-// runner starts where the sockets are: in the inner container.
 func NewDialer(runner proc.Runner, image *imagecfg.Live) *Dialer {
 	return &Dialer{runner: runner, image: image, helperTimeout: helperTimeout}
 }
 
-// openUnix connects to the socket at address as the dialer's user. Root
-// connects through the helper too, so the path resolves in the user's
-// world and never in the agent's.
 func (d *Dialer) openUnix(address string) (net.Conn, error) {
 	if !filepath.IsAbs(address) {
 		return nil, &proto.Error{Code: proto.ErrBadRequest, Message: "a unix socket path must be absolute (abstract sockets are not supported): " + address}
 	}
+	// Root dials through the helper too, so the path resolves in the user's
+	// world and never in the agent's.
 	fds, err := d.runHelper([]string{HelperCommand, address}, 1, proto.ErrDialFailed)
 	if err != nil {
 		return nil, err
@@ -71,9 +62,6 @@ func (d *Dialer) openUnix(address string) (net.Conn, error) {
 	return fileConn(fds[0], address)
 }
 
-// runHelper starts `imp-agent <args>` as the dialer's user and reads its
-// answer: up to max fds, the first a stream socket, or the error it met. A
-// failure is failCode, or BAD_REQUEST when the helper says so.
 func (d *Dialer) runHelper(args []string, max int, failCode string) ([]int, error) {
 	pair, err := unix.Socketpair(unix.AF_UNIX, unix.SOCK_STREAM|unix.SOCK_CLOEXEC, 0)
 	if err != nil {
@@ -88,9 +76,8 @@ func (d *Dialer) runHelper(args []string, max int, failCode string) ([]int, erro
 	}
 	defer devNull.Close()
 
-	// An empty env; the socketpair end as fd 0, and /dev/null as 1 and 2, so
-	// the helper's own fds land above 2 and a runtime crash message never
-	// goes into the target socket.
+	// /dev/null as fds 1 and 2 puts the helper's own fds above 2, so a
+	// runtime crash message never goes into the target socket.
 	p, err := d.runner.Start(proc.Spec{
 		Argv:   append([]string{"imp-agent"}, args...),
 		Env:    []string{},
@@ -120,8 +107,6 @@ func (d *Dialer) runHelper(args []string, max int, failCode string) ([]int, erro
 	return fds, nil
 }
 
-// waitHelper waits for a helper to exit, and kills one that outstays
-// timeout.
 func waitHelper(p *proc.Process, timeout time.Duration) {
 	select {
 	case <-p.Done:
@@ -132,16 +117,14 @@ func waitHelper(p *proc.Process, timeout time.Duration) {
 	<-p.Done
 }
 
-// receiveFds reads a helper's answer: up to max fds, the first a stream
-// socket, or the error it met. The received fds are close-on-exec from the
-// start (MSG_CMSG_CLOEXEC), so a child forked meanwhile for an exec never
-// inherits them; fds past max are closed.
 func receiveFds(conn int, timeout time.Duration, max int, failCode string) ([]int, error) {
 	if err := waitReadable(conn, timeout, failCode); err != nil {
 		return nil, err
 	}
 	buf := make([]byte, 4096)
 	oob := make([]byte, unix.CmsgSpace(4*4))
+	// MSG_CMSG_CLOEXEC, so a child forked meanwhile for an exec never
+	// inherits the received fds.
 	n, oobn, _, _, err := unix.Recvmsg(conn, buf, oob, unix.MSG_CMSG_CLOEXEC)
 	if err != nil {
 		return nil, &proto.Error{Code: failCode, Message: "read the helper's answer: " + err.Error()}
@@ -176,9 +159,7 @@ func helperFailed(message string) error {
 	return &proto.Error{Code: proto.ErrDialFailed, Message: message}
 }
 
-// waitReadable polls conn until it has data or timeout passes. A signal
-// (the reaper's SIGCHLD) interrupts poll; it goes on with the time left. It
-// holds an OS thread for up to helperTimeout, and the reaper runs one fork at
+// Holds an OS thread for up to the timeout, and the reaper runs one fork at
 // a time: both fine at the rate SSH forwards open.
 func waitReadable(conn int, timeout time.Duration, failCode string) error {
 	deadline := time.Now().Add(timeout)
@@ -189,6 +170,7 @@ func waitReadable(conn int, timeout time.Duration, failCode string) error {
 		}
 		fds := []unix.PollFd{{Fd: int32(conn), Events: unix.POLLIN}}
 		n, err := unix.Poll(fds, int(left.Milliseconds())+1)
+		// the reaper's SIGCHLD interrupts poll
 		if errors.Is(err, unix.EINTR) {
 			continue
 		}
@@ -206,10 +188,9 @@ func isStreamSocket(fd int) bool {
 	return err == nil && typ == unix.SOCK_STREAM
 }
 
-// fileConn wraps a connected socket fd as a net.Conn and closes the fd;
-// net.FileConn keeps its own copy.
 func fileConn(fd int, address string) (net.Conn, error) {
 	f := os.NewFile(uintptr(fd), "unix:"+address)
+	// net.FileConn keeps its own copy of the fd.
 	defer f.Close()
 	c, err := net.FileConn(f)
 	if err != nil {
@@ -218,10 +199,8 @@ func fileConn(fd int, address string) (net.Conn, error) {
 	return c, nil
 }
 
-// connectUnix connects to the socket at address as the calling process. It
-// opens the path with O_PATH and connects through /proc/self/fd, so the path
-// it checks against ownDir, the agent's own sockets, is the one it connects
-// to.
+// Opens the path with O_PATH and connects through /proc/self/fd, so the path
+// checked against ownDir is the one connected to.
 func connectUnix(address, ownDir string) (int, error) {
 	pathFd, err := unix.Open(address, unix.O_PATH|unix.O_CLOEXEC, 0)
 	if err != nil {
@@ -253,8 +232,6 @@ func connectUnix(address, ownDir string) (int, error) {
 	return sock, nil
 }
 
-// RunHelper is `imp-agent dial-unix <path>`: it connects to path as this
-// process's user and answers on fd 0 with the socket or the error.
 func RunHelper(address string) error {
 	fd, err := connectUnix(address, impDir)
 	if err != nil {
@@ -263,8 +240,6 @@ func RunHelper(address string) error {
 	return answer([]int{fd}, nil)
 }
 
-// answer is a helper's reply on fd 0: the fds, or the error as BAD_REQUEST
-// or a failure.
 func answer(fds []int, err error) error {
 	if err == nil {
 		return unix.Sendmsg(0, []byte{answerOK}, unix.UnixRights(fds...), nil, 0)

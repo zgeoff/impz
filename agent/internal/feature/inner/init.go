@@ -19,28 +19,18 @@ import (
 	"github.com/zgeoff/impz/agent/internal/host/sysutil"
 )
 
-// Layout of the guest the inner init sets up. The agent's own world is the
-// system drive at /, with the user disk at UserRoot.
 const (
 	UserRoot = "/user"
-	// SysMount is where the system drive shows inside, read-only: images and
-	// impd run /run/imp/sys/imp-agent sftp and the like.
-	SysMount = "/run/imp/sys"
-	// FilesMount is where the read-only files show inside: impd writes them
-	// through the agent, and every write from inside fails with EROFS.
-	FilesMount = "/run/imp/files"
-	// AgentBinary is the agent on the system drive.
+	// images and impd run /run/imp/sys/imp-agent sftp and the like
+	SysMount    = "/run/imp/sys"
+	FilesMount  = "/run/imp/files"
 	AgentBinary = "/imp-agent"
-	// UserDisk is the user disk's device.
-	UserDisk = "/dev/vda"
+	UserDisk    = "/dev/vda"
 )
 
-// MountUserDisk mounts the user disk at UserRoot in this mount namespace,
-// unless it is mounted there already. The agent and the inner init both
-// call it. The init's namespace is a copy of the agent's, taken at its
-// fork: a boot forks the init before the agent's mount, so the two mounts
-// run side by side, and the kernel reads the filesystem once for both. A
-// restart's copy has the mount already.
+// A boot forks the inner init before the agent mounts, so both namespaces
+// mount the disk and the kernel reads the filesystem once for both; a
+// restart's copy of the namespace has the mount already.
 func MountUserDisk() error {
 	// noinit_itable: the disk is a sparse file, so the inode tables of a grown
 	// disk read as zeros already; zeroing them in the background would only
@@ -51,17 +41,12 @@ func MountUserDisk() error {
 	return nil
 }
 
-// Config is what the agent tells the inner init through its environment.
 type Config struct {
-	// RunSize is the size= of the inner /run tmpfs.
 	RunSize string
 }
 
 const runSizeEnv = "IMP_INNER_RUN_SIZE"
 
-// Run is the inner init: PID 1 of the container's namespaces. It sets up
-// the user's root, pivots into it, and serves the agent on fd 3. It
-// returns only on failure; the agent restarts the container then.
 func Run() error {
 	// The socket stays the init's own: a process it starts must never
 	// inherit it, or it could spawn as root and forge exits.
@@ -84,18 +69,15 @@ func Run() error {
 	return serve(sockFd, runner)
 }
 
-// ignoreSignals makes the inner init deaf to signals from inside. The kernel
-// spares a namespace's init only the signals it has no handler for, and the
-// Go runtime installs a handler for nearly every one: a `kill -TERM 1` would
-// end it. The init takes each signal and drops it; one sent by a process,
-// even a SIGSEGV, never crashes the runtime. Not signal.Ignore: an ignored
-// signal stays ignored across exec, in every process the init starts.
-// SIGCHLD stays for the reaper; SIGURG is the runtime's own preemption
-// signal, and harmless.
+// The kernel spares a namespace's init only the signals it has no handler
+// for, and the Go runtime handles nearly every one. Not signal.Ignore: an
+// ignored signal stays ignored across exec, in every process the init starts.
 func ignoreSignals() {
 	var sigs []os.Signal
 	for sig := syscall.Signal(1); sig <= 64; sig++ {
 		switch sig {
+		// SIGCHLD stays for the reaper; SIGURG is the runtime's own preemption
+		// signal, and harmless.
 		case syscall.SIGKILL, syscall.SIGSTOP, syscall.SIGCHLD, syscall.SIGURG:
 			continue
 		}
@@ -109,9 +91,6 @@ func ignoreSignals() {
 	}()
 }
 
-// setupRoot builds the user's root on UserRoot in this mount namespace and
-// pivots into it. It returns an fd of the agent binary opened before the
-// pivot, for helpers.
 func setupRoot(runSize string) (*os.File, error) {
 	// nothing here propagates back to the agent's namespace
 	if err := unix.Mount("", "/", "", unix.MS_REC|unix.MS_PRIVATE, ""); err != nil {
@@ -185,8 +164,7 @@ func setupRoot(runSize string) (*os.File, error) {
 	return agent, nil
 }
 
-// bindReadOnly binds src at target, then makes the bind read-only, which a
-// bind takes only as a remount.
+// A bind takes read-only only as a remount.
 func bindReadOnly(src, target string) error {
 	if err := os.MkdirAll(target, 0o755); err != nil {
 		return err
@@ -197,8 +175,6 @@ func bindReadOnly(src, target string) error {
 	return unix.Mount("", target, "", unix.MS_REMOUNT|unix.MS_BIND|unix.MS_RDONLY|unix.MS_NOSUID|unix.MS_NODEV|unix.MS_NOEXEC, "")
 }
 
-// pivot makes dir the root and drops the old one, so nothing of the agent's
-// world stays reachable from inside.
 func pivot(dir string) error {
 	if err := unix.Chdir(dir); err != nil {
 		return err
@@ -212,9 +188,6 @@ func pivot(dir string) error {
 	return unix.Chdir("/")
 }
 
-// copyDev makes in dst the device nodes, directories and links of src, the
-// agent's devtmpfs, with their modes and owners. Mount points under it
-// (pts, shm) are left out: the container mounts its own.
 func copyDev(src, dst string) error {
 	var root unix.Stat_t
 	if err := unix.Lstat(src, &root); err != nil {
@@ -228,6 +201,7 @@ func copyDev(src, dst string) error {
 		if err := unix.Lstat(p, &st); err != nil {
 			return nil
 		}
+		// mount points such as pts and shm: the container mounts its own
 		if st.Dev != root.Dev {
 			if d.IsDir() {
 				return filepath.SkipDir
@@ -266,8 +240,6 @@ func copyDev(src, dst string) error {
 	})
 }
 
-// linkDev points /dev/ptmx at this devpts instance and adds the links udev
-// would make.
 func linkDev(dev string) error {
 	links := [][2]string{
 		{"pts/ptmx", "/ptmx"},
@@ -287,9 +259,8 @@ func linkDev(dev string) error {
 	return nil
 }
 
-// setupCgroup moves the init into /init, a leaf, and gives the namespace's
-// root every controller. The root then holds no process, so dockerd can
-// make its own cgroups under it, as in docker-in-docker.
+// A cgroup root that holds no process lets dockerd make its own cgroups
+// under it, as in docker-in-docker.
 func setupCgroup() error {
 	if err := os.MkdirAll(cgroup.Root+"/init", 0o755); err != nil {
 		return err

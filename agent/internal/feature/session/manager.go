@@ -1,8 +1,3 @@
-// Package session keeps named programs on a pty alive without a host
-// connection. A connection attaches as the session's one viewer: it gets a
-// replay of recent output, then live output, and its input goes to the
-// program. Closing the connection detaches; the program keeps running. See
-// docs/architecture/guest/sessions.md.
 package session
 
 import (
@@ -25,48 +20,31 @@ import (
 	"github.com/zgeoff/impz/agent/internal/proto"
 )
 
-// MaxSessions bounds the sessions of one guest, exited ones that still hold
-// an undelivered EXIT included.
 const MaxSessions = 16
 
-// killGrace is how long a killed session's process has between SIGHUP and
-// SIGKILL.
 const killGrace = 2 * time.Second
 
-// NamePattern is the session name rule; the host checks the same one.
+// the host checks the same rule
 var NamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,31}$`)
 
 type Manager struct {
-	launcher *launch.Launcher
-	// bootID is the guest's boot_id, which every session's output names
-	bootID string
-	// killGrace is the package's killGrace; a test sets its own before it
-	// starts a session
-	killGrace time.Duration
-	// tapWait and lastWriteTimeout are the package's; a test sets its own
-	// before it starts a session
+	launcher         *launch.Launcher
+	bootID           string
+	killGrace        time.Duration
 	tapWait          time.Duration
 	lastWriteTimeout time.Duration
-	// recorded, when set, gets each retired run once record has kept or
-	// passed over it; a test sets it before it starts a session, to know
-	// when a run that ended late has been judged
-	recorded func(*proto.Previous)
+	recorded         func(*proto.Previous)
 
-	// starting serializes starts, so a spawn needs no hold on mu, which List
-	// and Kill take. It guards seq too.
+	// starting serializes starts and guards seq, so a spawn needs no hold on mu.
 	starting sync.Mutex
 	seq      uint64
 	mu       sync.Mutex
 	sessions map[string]*session
-	// previous holds, per name, the last generation that ended and left
-	// the name, for at most MaxSessions names
 	previous map[string]ended
 
-	// attached counts open session connections.
 	attached atomic.Int64
 }
 
-// ended is a generation in previous, with its place among the runs.
 type ended struct {
 	seq      uint64
 	previous *proto.Previous
@@ -84,10 +62,8 @@ func NewManager(l *launch.Launcher, bootID string) *Manager {
 	}
 }
 
-// Attached returns the number of open session connections.
 func (m *Manager) Attached() int { return int(m.attached.Load()) }
 
-// List returns every session, sorted by name.
 func (m *Manager) List() []*proto.SessionInfo {
 	m.mu.Lock()
 	all := make([]*session, 0, len(m.sessions))
@@ -103,8 +79,6 @@ func (m *Manager) List() []*proto.SessionInfo {
 	return infos
 }
 
-// Kill ends a session: its name is free at once, its process gets SIGHUP,
-// then SIGKILL after killGrace. An attached viewer still gets the EXIT.
 func (m *Manager) Kill(name string) error {
 	m.mu.Lock()
 	s, ok := m.sessions[name]
@@ -130,9 +104,6 @@ func (m *Manager) Kill(name string) error {
 	return nil
 }
 
-// Serve runs one session connection: exec with a session name (start the
-// session, or attach to it if it runs), session.attach or session.tap. It
-// returns when the connection ends; the caller closes it.
 func (m *Manager) Serve(req *proto.Request, conn net.Conn, r *proto.Reader, w *proto.Writer) error {
 	if req.Op == proto.OpSessionTap {
 		return m.serveTap(req, conn, r, w)
@@ -156,9 +127,8 @@ func (m *Manager) Serve(req *proto.Request, conn net.Conn, r *proto.Reader, w *p
 	return nil
 }
 
-// serveTap runs one tap: impd reading a logged session's output for its
-// log. A tap is not a viewer, so it counts as no open connection: a logged
-// session must not keep the imp awake.
+// A tap counts as no open connection: a logged session must not keep the
+// imp awake.
 func (m *Manager) serveTap(req *proto.Request, conn net.Conn, r *proto.Reader, w *proto.Writer) error {
 	m.mu.Lock()
 	s, ok := m.sessions[req.GetSession()]
@@ -174,7 +144,6 @@ func (m *Manager) serveTap(req *proto.Request, conn net.Conn, r *proto.Reader, w
 		<-t.done
 		return proto.ReplyError(w, perr)
 	}
-	// a tap sends nothing; reading finds the connection's end
 	for {
 		if _, err := r.Next(); err != nil {
 			break
@@ -186,9 +155,6 @@ func (m *Manager) serveTap(req *proto.Request, conn net.Conn, r *proto.Reader, w
 	return nil
 }
 
-// attach finds the session req names and makes v its viewer. A start that
-// finds the session over between its look and the attach (a viewer got the
-// EXIT meanwhile) looks again, and then replaces it.
 func (m *Manager) attach(req *proto.Request, v *viewer) (*session, *proto.Error) {
 	for range 2 {
 		s, created, perr := m.find(req)
@@ -209,9 +175,6 @@ func (m *Manager) attach(req *proto.Request, v *viewer) (*session, *proto.Error)
 	return nil, m.noSession(req.GetSession())
 }
 
-// find returns the session req names. exec starts it unless it runs
-// already, or a resume names its generation, which exited but whose EXIT
-// no viewer got yet; session.attach only finds it.
 func (m *Manager) find(req *proto.Request) (*session, bool, *proto.Error) {
 	if !NamePattern.MatchString(req.GetSession()) {
 		return nil, false, &proto.Error{Code: proto.ErrBadRequest, Message: fmt.Sprintf("bad session name %q", req.GetSession())}
@@ -235,16 +198,11 @@ func (m *Manager) find(req *proto.Request) (*session, bool, *proto.Error) {
 	count := len(m.sessions)
 	m.mu.Unlock()
 	if ok && (!s.exited() || isResumeOf(req.ResumeFrom, s) && !s.over()) {
-		// the caller asked for a command without CAP_SYS_ADMIN, and this
-		// one holds it
 		if req.GetDropSysAdmin() && !s.dropSysAdmin {
 			return nil, false, &proto.Error{Code: proto.ErrBadRequest, Message: fmt.Sprintf("session %q runs with CAP_SYS_ADMIN", s.name)}
 		}
 		return s, false, nil
 	}
-	// an exited session gives its name, and its slot, to the new one. Its
-	// exit is set just before done closes: wait for that, so the new
-	// session's STARTED names it as previous.
 	if ok {
 		<-s.done
 		m.retire(s)
@@ -266,9 +224,6 @@ func (m *Manager) find(req *proto.Request) (*session, bool, *proto.Error) {
 	return s, true, nil
 }
 
-// removeIfOver frees the name of a session whose EXIT a viewer got. The
-// name frees and its previous is set in one step, so a viewer that finds
-// the name free gets the run as previous.
 func (m *Manager) removeIfOver(s *session) {
 	if !s.over() {
 		return
@@ -286,8 +241,6 @@ func (m *Manager) removeIfOver(s *session) {
 	}
 }
 
-// retire records s as its name's previous generation once its process has
-// ended, so the end and exit it records are final. s has left the name.
 func (m *Manager) retire(s *session) {
 	select {
 	case <-s.done:
@@ -300,8 +253,6 @@ func (m *Manager) retire(s *session) {
 	}
 }
 
-// record keeps s as previous unless a later run of the name is there
-// already, as when a killed process outlives its replacement.
 func (m *Manager) record(s *session) {
 	e := ended{seq: s.seq, previous: s.ended()}
 	m.keep(s.name, e)
@@ -310,14 +261,12 @@ func (m *Manager) record(s *session) {
 	}
 }
 
-// keep makes e the name's previous run unless a later run is there.
 func (m *Manager) keep(name string, e ended) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.keepLocked(name, e)
 }
 
-// keepLocked is keep for a caller that holds mu.
 func (m *Manager) keepLocked(name string, e ended) {
 	if cur, ok := m.previous[name]; ok && cur.seq > e.seq {
 		return
@@ -335,7 +284,6 @@ func (m *Manager) keepLocked(name string, e ended) {
 	delete(m.previous, oldest)
 }
 
-// previousOf returns the name's previous generation, or nil.
 func (m *Manager) previousOf(name string) *proto.Previous {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -353,13 +301,10 @@ func (m *Manager) noSession(name string) *proto.Error {
 	}
 }
 
-// isResumeOf reports whether a resume names s's generation.
 func isResumeOf(resume *proto.ResumeFrom, s *session) bool {
 	return resume != nil && resume.GetExecutionGeneration() == s.generation
 }
 
-// input applies the viewer's frames until the connection ends. It never
-// signals the process on the way out: a closed connection is a detach.
 func input(s *session, v *viewer, r *proto.Reader) {
 	// a nil StdinEOF: a tty has no EOF to give; the client sends ^D itself
 	_ = proto.Dispatch(r, proto.Input{

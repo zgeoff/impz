@@ -1,5 +1,3 @@
-// Package exec runs one exec request: it starts the process, streams its
-// stdio over the connection, and reports its exit.
 package exec
 
 import (
@@ -22,46 +20,29 @@ import (
 	"github.com/zgeoff/impz/agent/internal/proto"
 )
 
-// drainGrace bounds how long output is forwarded after the process exits.
 // Background children that inherited stdout would otherwise hold the
 // session open forever.
 const drainGrace = 500 * time.Millisecond
 
-// exitLinger bounds how long a session waits for the host to close after EXIT.
 const exitLinger = 2 * time.Second
 
-// hangupGrace bounds how long a session waits for its process after the host
-// connection drops (for example a vsock reset on snapshot restore). A process
+// A vsock reset on snapshot restore drops the host connection. A process
 // that ignores SIGHUP keeps running, but no longer counts as a session.
 const hangupGrace = time.Second
 
-// stdin flow control. The host frames arrive on one ordered stream, read by
-// one goroutine that also applies RESIZE and SIGNAL. Writes to the child's
-// stdin happen on a separate writer goroutine, fed through a queue of
-// stdinQueueChunks slots. A STDIN frame takes one slot per stdinChunk bytes
-// or part of it, so the queue holds 1024 frames or 4 MiB, whichever comes
-// first. A child that stops reading stdin fills the queue, not the reader,
-// so RESIZE and SIGNAL frames that follow stay deliverable until the queue
-// is full. Past that the reader blocks, which pushes back on the host;
-// frames behind the pending stdin then wait too, because the stream is
-// ordered.
+// A child that stops reading stdin fills this queue, not the ordered frame
+// reader, so RESIZE and SIGNAL frames behind it stay deliverable until the
+// queue is full. Past that the reader blocks, which pushes back on the host.
 const (
 	stdinChunk       = 4 << 10
 	stdinQueueChunks = 1024
 )
 
-// Manager runs exec sessions and counts the live ones.
 type Manager struct {
-	launcher *launch.Launcher
-	// cgroups gives each non-tty exec a leaf; nil runs them without one,
-	// and a stop then reaches only the process group.
-	cgroups *cgroup.Tree
-	// strict gives every exec, a tty one too, a leaf, and refuses the exec
-	// that cannot have one
-	strict bool
-	active atomic.Int64
-	// drainGrace and hangupGrace are the package's graces; a test sets its
-	// own before it serves an exec
+	launcher                *launch.Launcher
+	cgroups                 *cgroup.Tree
+	strict                  bool
+	active                  atomic.Int64
 	drainGrace, hangupGrace time.Duration
 
 	leafFailed sync.Once
@@ -71,17 +52,12 @@ func NewManager(l *launch.Launcher, cgroups *cgroup.Tree) *Manager {
 	return &Manager{launcher: l, cgroups: cgroups, drainGrace: drainGrace, hangupGrace: hangupGrace}
 }
 
-// NewStrictManager is NewManager for execs that must stay inside the limits
-// of cgroups: each one, tty or not, starts in a leaf of it or not at all.
 func NewStrictManager(l *launch.Launcher, cgroups *cgroup.Tree) *Manager {
 	return &Manager{launcher: l, cgroups: cgroups, strict: true, drainGrace: drainGrace, hangupGrace: hangupGrace}
 }
 
-// Active returns the number of running exec sessions.
 func (m *Manager) Active() int { return int(m.active.Load()) }
 
-// Serve runs req to completion. r and w are the connection's frame streams;
-// the caller closes the connection after Serve returns.
 func (m *Manager) Serve(req *proto.Request, r *proto.Reader, w *proto.Writer) error {
 	m.active.Add(1)
 	defer m.active.Add(-1)
@@ -93,9 +69,6 @@ func (m *Manager) Serve(req *proto.Request, r *proto.Reader, w *proto.Writer) er
 	if s.group != nil {
 		defer m.cgroups.Release(s.group)
 	}
-	// A panic in the session ends it as a host hangup would: its pipes
-	// close, which stops the pumps, and the process gets SIGHUP. In Serve
-	// itself the panic then goes on to the request handler's recover.
 	abort := func() {
 		s.close()
 		_ = s.proc.Signal(syscall.SIGHUP)
@@ -182,25 +155,19 @@ type output struct {
 }
 
 type session struct {
-	proc *proc.Process
-	// group is the exec's cgroup leaf; nil when the exec runs without one,
-	// as a tty exec does unless its manager is strict
+	proc    *proc.Process
 	group   *cgroup.Group
-	tty     *os.File // pty master, nil without a tty
-	stdin   *os.File // write end of the stdin pipe, nil with a tty
+	tty     *os.File
+	stdin   *os.File
 	outputs []output
 	exited  atomic.Bool
 	stop    stopTimer
-	mu      sync.Mutex // guards stdin close
+	mu      sync.Mutex
 
-	// stdinQ carries STDIN payloads from input to writeStdin. Only input
-	// sends on or closes it; stdinEnded records the close.
 	stdinQ     chan []byte
 	stdinEnded bool
-	// done closes when the session ends, so input and writeStdin stop
-	// waiting on each other.
-	done      chan struct{}
-	closeOnce sync.Once
+	done       chan struct{}
+	closeOnce  sync.Once
 }
 
 func (m *Manager) start(req *proto.Request) (*session, error) {
@@ -274,9 +241,6 @@ func (m *Manager) start(req *proto.Request) (*session, error) {
 	return s, nil
 }
 
-// newGroup makes a leaf for a new exec, or returns nil when there is no tree
-// or the leaf cannot be made (logged once). A strict manager returns the
-// error instead.
 func (m *Manager) newGroup() (*cgroup.Group, error) {
 	if m.cgroups == nil {
 		if m.strict {
@@ -297,8 +261,8 @@ func (m *Manager) newGroup() (*cgroup.Group, error) {
 	return g, nil
 }
 
-// ttyGroup is newGroup for a tty exec, which only a strict manager gives a
-// leaf: its process group belongs to the terminal, so no stop sweeps it.
+// Only a strict manager gives a tty exec a leaf: its process group belongs
+// to the terminal, so no stop sweeps it.
 func (m *Manager) ttyGroup() (*cgroup.Group, error) {
 	if !m.strict {
 		return nil, nil
@@ -306,14 +270,11 @@ func (m *Manager) ttyGroup() (*cgroup.Group, error) {
 	return m.newGroup()
 }
 
-// input applies host frames until the connection ends. If the host goes away
-// while the process runs, the process group gets SIGHUP, as a terminal
-// hangup would deliver.
 func (s *session) input(r *proto.Reader) {
 	_ = proto.Dispatch(r, proto.Input{
 		// Once the session ends the stdin goes nowhere, but the loop
 		// reads on: a host frame that meets a closed socket loses the
-		// host the EXIT frame to EPIPE (see Serve's exitLinger).
+		// host the EXIT frame to EPIPE.
 		Stdin: s.queueStdin,
 		StdinEOF: func() {
 			// A tty has no EOF to give; the client sends ^D itself.
@@ -340,8 +301,6 @@ func (s *session) input(r *proto.Reader) {
 	s.endStdin()
 }
 
-// queueStdin hands p to writeStdin in chunks. It blocks while the queue is
-// full, and drops p once the session has ended.
 func (s *session) queueStdin(p []byte) {
 	if s.stdinEnded {
 		return
@@ -362,7 +321,6 @@ func (s *session) queueStdin(p []byte) {
 	}
 }
 
-// endStdin closes the queue; writeStdin closes the pipe once it drains.
 func (s *session) endStdin() {
 	if !s.stdinEnded {
 		s.stdinEnded = true
@@ -370,9 +328,6 @@ func (s *session) endStdin() {
 	}
 }
 
-// writeStdin writes queued stdin to the process. After a failed write (the
-// process closed its stdin) it discards the rest, so the queue never stalls
-// the reader. close unblocks a write the process never reads.
 func (s *session) writeStdin() {
 	w := s.stdinWriter()
 	for {
@@ -422,8 +377,7 @@ func (s *session) close() {
 	}
 }
 
-// pump forwards f to the host as typ frames until EOF, EIO (a pty whose
-// slave side is fully closed), or the drain deadline.
+// A pty read ends with EIO, not EOF, once its slave side is fully closed.
 func pump(f *os.File, typ proto.Type, w *proto.Writer) {
 	buf := make([]byte, 32<<10)
 	for {

@@ -17,7 +17,6 @@ import { STORAGE_PATHS } from './storage-paths';
 import type { BootstrapRun, BootstrapTarget } from './types';
 import { waitForImpHost } from './wait-for-imp-host';
 
-// Each distro runs on a loop file, with --ipv6 on: CI has no IPv6 route out, so auto would say off.
 export async function runDistroLeg(run: BootstrapRun, distro: Distro): Promise<void> {
   await startTestContainer(run, distro);
 
@@ -42,6 +41,8 @@ export async function runDistroLeg(run: BootstrapRun, distro: Distro): Promise<v
   const plan = await expectBootstrapExit(run, target, {
     want: 2,
     mode: '--check',
+
+    // CI has no IPv6 route out, so auto would say off.
     extra: ['--ipv6', 'on'],
   });
 

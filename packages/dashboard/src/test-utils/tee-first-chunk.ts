@@ -1,7 +1,5 @@
 export interface TeedResponse {
   readonly response: Response;
-
-  // null once the first chunk arrives, or the failure that came before it
   readonly firstChunk: Promise<Error | null>;
 }
 

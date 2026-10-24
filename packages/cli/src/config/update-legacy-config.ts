@@ -78,8 +78,6 @@ function probePresent(path: string): boolean {
   }
 }
 
-// a path that cannot be looked up is noted and left, so it never stops a call
-// that reads impz's own config
 function checkLegacyFile(path: string, warn: (line: string) => void): boolean {
   try {
     return probePresent(path);

@@ -13,8 +13,7 @@ import (
 	"github.com/zgeoff/impz/agent/internal/proto"
 )
 
-// uncachedFile writes a file of pages pages on a disk and drops it from the
-// page cache. tmpfs keeps every page resident, so the file lives in /var/tmp.
+// tmpfs keeps every page resident, so the file lives in /var/tmp.
 func uncachedFile(t *testing.T, pages int) string {
 	t.Helper()
 	dir, err := os.MkdirTemp("/var/tmp", "imp-cache-")
@@ -30,8 +29,6 @@ func uncachedFile(t *testing.T, pages int) string {
 	return path
 }
 
-// uncachedPages counts the pages of the file at path that are not in the
-// page cache.
 func uncachedPages(t *testing.T, path string, pages int) int {
 	t.Helper()
 	f, err := os.Open(path)

@@ -20,11 +20,8 @@ import (
 	"github.com/zgeoff/impz/agent/internal/proto"
 )
 
-// The uid, gid and supplementary group the user's helper runs with, as
-// root sets them.
 const userUID, userGID, dockerGID = 4242, 4242, 4343
 
-// userDialer dials as the user, through a copy of the helper in dir.
 func userDialer(t *testing.T, dir string) *Dialer {
 	t.Helper()
 	d := NewDialer(&proc.Direct{Reaper: testReaper, Agent: helperCopy(t, dir)}, imagecfg.NewLive(imagecfg.Config{User: "dev"}))
@@ -32,8 +29,6 @@ func userDialer(t *testing.T, dir string) *Dialer {
 	return d
 }
 
-// As root: the helper takes the user's uid, gid and supplementary groups,
-// and the server sees the user in SO_PEERCRED.
 func TestOpenUnixConnectsAsTheUser(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
@@ -58,12 +53,9 @@ func TestOpenUnixConnectsAsTheUser(t *testing.T) {
 	}
 }
 
-// As root: the helper connects with the user's rights, so a socket the user
-// cannot reach fails the dial.
 func TestOpenUnixRefusesASocketTheUserCannotReach(t *testing.T) {
 	for _, tc := range []struct {
-		name string
-		// socket makes the target under dir and returns its path
+		name   string
 		socket func(t *testing.T, dir string) string
 	}{
 		{name: "a socket only root may use", socket: func(t *testing.T, dir string) string {
@@ -88,8 +80,7 @@ func TestOpenUnixRefusesASocketTheUserCannotReach(t *testing.T) {
 	}
 }
 
-// helperCopy copies the test binary, which is also the helper, into dir:
-// the user cannot run it where go test built it.
+// The user cannot run the test binary where go test built it.
 func helperCopy(t *testing.T, dir string) string {
 	t.Helper()
 	helper := filepath.Join(dir, "helper")
@@ -104,8 +95,6 @@ type peerListener struct {
 	peerUID chan uint32
 }
 
-// listenPeer listens on dir/name, owned by uid:gid with mode, and reports
-// the uid of each client from SO_PEERCRED.
 func listenPeer(t *testing.T, dir, name string, uid, gid int, mode os.FileMode) *peerListener {
 	t.Helper()
 	path := filepath.Join(dir, name)

@@ -11,8 +11,6 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-// The DNS token's staging, as the NixOS module runs it before each start, on a change to the
-// file, and every 5 minutes.
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-dns-token-'));
 
@@ -199,7 +197,6 @@ test('it keeps the staged token, without failing the start, when the source cann
     join(ctx.directoryPath, 'dns'),
   ]);
 
-  // a directory in the source's place
   rmSync(join(ctx.directoryPath, 'dns-token'));
   mkdirSync(join(ctx.directoryPath, 'dns-token'));
 

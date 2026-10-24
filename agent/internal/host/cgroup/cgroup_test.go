@@ -14,14 +14,12 @@ import (
 // These run on plain directories: what cgroupfs adds (cgroup.kill, a leaf
 // that rmdir takes with its files) is left to the e2e suite.
 
-// countEnded returns how many ended leaves still wait for their last member.
 func countEnded(tree *Tree) int {
 	tree.mu.Lock()
 	defer tree.mu.Unlock()
 	return len(tree.ended)
 }
 
-// newTree makes a tree under a fresh temporary parent.
 func newTree(t *testing.T) *Tree {
 	t.Helper()
 	tree, err := NewTree(filepath.Join(t.TempDir(), "imp-exec"))
@@ -29,7 +27,6 @@ func newTree(t *testing.T) *Tree {
 	return tree
 }
 
-// newLeaf makes a leaf of tree that the test's cleanup releases.
 func newLeaf(t *testing.T, tree *Tree) *Group {
 	t.Helper()
 	g, err := tree.New()
@@ -38,9 +35,7 @@ func newLeaf(t *testing.T, tree *Tree) *Group {
 	return g
 }
 
-// endedBusyLeaf makes a leaf, puts a member in it (on a plain directory, a
-// file standing for a nohup child), and releases it. It returns the leaf's
-// path and the member's.
+// On a plain directory, a file stands for a member such as a nohup child.
 func endedBusyLeaf(t *testing.T, tree *Tree) (leaf, member string) {
 	t.Helper()
 	g, err := tree.New()
@@ -156,7 +151,6 @@ func TestWaitEmptyReturnsOnceTheLeafEmpties(t *testing.T) {
 	g := newLeaf(t, newTree(t))
 	events := filepath.Join(g.path, "cgroup.events")
 	assert.NilError(t, os.WriteFile(events, []byte("populated 1\nfrozen 0\n"), 0o600))
-	// the first read must see the leaf populated before it empties
 	reads := make(chan bool, 1)
 	g.waitEmptyRead = func(populated bool, err error) {
 		if err != nil {
@@ -173,7 +167,7 @@ func TestWaitEmptyReturnsOnceTheLeafEmpties(t *testing.T) {
 		defer close(finished)
 		emptied <- g.WaitEmpty(time.Now().Add(5 * time.Second))
 	}()
-	// empties the leaf, so WaitEmpty ends after a failure too, and joins it
+	// the cleanup empties the leaf, so the wait ends after a failed assertion too
 	t.Cleanup(func() {
 		os.WriteFile(events, []byte("populated 0\nfrozen 0\n"), 0o600)
 		select {
@@ -202,7 +196,6 @@ func TestWaitEmptyReturnsOnceTheLeafEmpties(t *testing.T) {
 	assert.Check(t, empty, "the leaf never emptied")
 }
 
-// A parent removed under the tree is made again with its limits.
 func TestLimitedTreeSetsItsLimitsAgainOnARemovedParent(t *testing.T) {
 	parent := filepath.Join(t.TempDir(), "outer")
 	tree, err := NewLimitedTree(parent, func(dir string) error {
@@ -247,7 +240,6 @@ func TestNewLimitedTreeFailsWhenItsLimitsCannotBeSet(t *testing.T) {
 	assert.Check(t, cmp.Nil(tree))
 }
 
-// newDelegatedTree makes a delegated tree under a fresh temporary parent.
 func newDelegatedTree(t *testing.T) *Tree {
 	t.Helper()
 	tree, err := NewDelegatedTree(filepath.Join(t.TempDir(), "imp-exec"), "memory")
@@ -284,8 +276,6 @@ func TestDelegatedTreeStartsTheCommandInALeafUnderTheExecsCgroup(t *testing.T) {
 	assert.Check(t, err)
 }
 
-// A command's own cgroup next to the command leaf, such as a memory cap it
-// made, goes with the exec's cgroup.
 func TestReleaseRemovesAnExecsCgroupWithTheCgroupsUnderIt(t *testing.T) {
 	tree := newDelegatedTree(t)
 	g, err := tree.New()
@@ -368,7 +358,6 @@ func TestEnableControllersWritesNothingWithoutControllers(t *testing.T) {
 	assert.Check(t, cmp.ErrorIs(err, fs.ErrNotExist))
 }
 
-// A controller the kernel refuses must not stop the boot that asked for it.
 func TestEnableControllersSucceedsWhenTheWriteIsRefused(t *testing.T) {
 	dir := t.TempDir()
 	assert.NilError(t, os.WriteFile(filepath.Join(dir, "cgroup.controllers"), []byte("cpu\n"), 0o600))

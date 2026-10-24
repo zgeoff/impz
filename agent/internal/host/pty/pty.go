@@ -1,4 +1,3 @@
-// Package pty opens pseudo-terminals for exec and sessions.
 package pty
 
 import (
@@ -10,10 +9,9 @@ import (
 	"github.com/zgeoff/impz/agent/internal/host/fsroot"
 )
 
-// Open returns a pty master and slave. It does its own ioctls instead of
-// using creack/pty because that library calls File.Fd on the master, which
-// switches the fd to blocking mode and disables read deadlines. Exec and
-// sessions need deadlines to stop draining output once the process exits.
+// Own ioctls, not creack/pty: it calls File.Fd on the master, which switches
+// the fd to blocking mode and disables the read deadlines that stop the drain
+// of output once the process exits.
 func Open() (master, slave *os.File, err error) {
 	master, err = os.OpenFile("/dev/ptmx", os.O_RDWR|unix.O_NOCTTY, 0)
 	if err != nil {
@@ -40,9 +38,6 @@ func Open() (master, slave *os.File, err error) {
 	return master, slave, nil
 }
 
-// OpenIn opens a pty on the devpts instance at <fsys>/dev/pts, such as the
-// inner container's, which its processes use as their controlling
-// terminal. The slave comes from the master (TIOCGPTPEER), not from a path.
 func OpenIn(fsys fsroot.FS) (master, slave *os.File, err error) {
 	master, err = fsys.OpenFile("/dev/pts/ptmx", os.O_RDWR|unix.O_NOCTTY, 0)
 	if err != nil {
@@ -68,15 +63,15 @@ func OpenIn(fsys fsroot.FS) (master, slave *os.File, err error) {
 	return master, os.NewFile(uintptr(sfd), "pty"), nil
 }
 
-// SetWinsize sets the terminal size. The kernel sends SIGWINCH to the
-// foreground process group only when the size changes.
+// The kernel sends SIGWINCH to the foreground process group only when the
+// size changes.
 func SetWinsize(master *os.File, cols, rows uint16) error {
 	return control(master, func(fd int) error {
 		return unix.IoctlSetWinsize(fd, unix.TIOCSWINSZ, &unix.Winsize{Col: cols, Row: rows})
 	})
 }
 
-// control runs fn on f's fd without taking it out of non-blocking mode.
+// SyscallConn, not File.Fd, which takes the fd out of non-blocking mode.
 func control(f *os.File, fn func(fd int) error) error {
 	rc, err := f.SyscallConn()
 	if err != nil {

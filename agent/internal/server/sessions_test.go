@@ -18,8 +18,6 @@ import (
 	"github.com/zgeoff/impz/agent/internal/proto"
 )
 
-// request opens a connection to s, sends req and returns the first reply
-// frame, with the connection for more.
 func request(t *testing.T, s *Server, req *proto.Request) (proto.Frame, net.Conn) {
 	t.Helper()
 	guest, conn := net.Pipe()
@@ -49,8 +47,6 @@ func newSessionServer(t *testing.T) *Server {
 	return &Server{Exec: exec.NewManager(l, nil), Outer: exec.NewStrictManager(l, nil), Sessions: session.NewManager(l, "")}
 }
 
-// startSession runs an exec with a session name and returns its STARTED and
-// connection; the session's process group dies with the test.
 func startSession(t *testing.T, s *Server, name string) (*proto.Started, net.Conn) {
 	t.Helper()
 	f, conn := request(t, s, &proto.Request{Op: proto.OpExec, Session: new(name), Tty: new(true), Argv: []string{"sleep", "30"}})
@@ -69,7 +65,6 @@ func TestSessionKillOfNoSessionIsNoSession(t *testing.T) {
 	assert.Equal(t, replyCode(t, f), proto.ErrNoSession)
 }
 
-// exec with a session name goes to the session manager.
 func TestExecWithASessionNameStartsThatSession(t *testing.T) {
 	s := newSessionServer(t)
 

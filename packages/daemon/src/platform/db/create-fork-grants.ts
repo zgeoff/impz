@@ -38,7 +38,7 @@ export function createForkGrants(
 
       const secret = await readSecret(trx, name);
 
-      // a tokens.update since the call began may have taken it off the list
+      // a token update since the call began may have taken it off the list
       const entry = authority?.grantable.find(
         (each) =>
           each.name === name &&

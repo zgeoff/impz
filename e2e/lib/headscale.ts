@@ -131,9 +131,8 @@ export async function stopHeadscale(
   await runners.runCommand(['docker', 'network', 'rm', names.network]);
 }
 
-// A network of a suite's own, such as the moves suites' network: the relay
-// serves plain HTTP, which tailscaled refuses, so peers meet only on a network
-// they share, and each node reaches Headscale by its alias there.
+// The relay serves plain HTTP, which tailscaled refuses, so peers meet only on a
+// network they share, and each node reaches Headscale by its alias there.
 export async function connectHeadscale(
   runners: CommandRunners,
   network: string,

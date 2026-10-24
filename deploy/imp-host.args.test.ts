@@ -2,7 +2,6 @@ import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { parseHostArgs } from '../scripts/render/render-imp-host';
 
-// The host's docker run args, which scripts/render/render-imp-host.ts renders into every deploy file.
 test('it runs nothing --privileged', () => {
   const args = parseHostArgs(readFileSync(new URL('imp-host.args.json', import.meta.url), 'utf8'));
   const words = [...args.privileges, ...args.lines, ...args.proxy.privileges, ...args.proxy.lines];

@@ -219,8 +219,8 @@ export function createCloudflareProvider(options: CloudflareOptions): DnsProvide
       const found = new Map<string, string>();
 
       // `name.endswith` and `per_page` up to 5,000,000 are in Cloudflare's
-      // list-records docs. Every page: by result_info when it comes, else
-      // until a page is short, in case a page holds fewer than asked for.
+      // list-records docs. A page can hold fewer than asked for, so
+      // result_info's page count, when it comes, wins over a short page.
       for (let page = 1; ; page += 1) {
         const query = `type=A&name.endswith=${encodeURIComponent(`.${domain}`)}&per_page=${String(PAGE_SIZE)}&page=${String(page)}`;
 
@@ -256,8 +256,8 @@ export function createCloudflareProvider(options: CloudflareOptions): DnsProvide
   };
 }
 
-// fetch, with the token cut out of its errors: an older Bun names a header value
-// it refuses, and the error reaches the log and system info
+// an older Bun names a header value it refuses in its error, and the error
+// reaches the log and system info
 async function sendFetch(
   send: CloudflareFetch,
   token: string,

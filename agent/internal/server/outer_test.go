@@ -18,13 +18,12 @@ import (
 	"github.com/zgeoff/impz/agent/internal/proto"
 )
 
-// downRunner is an inner container that is down.
 type downRunner struct{}
 
 func (downRunner) Start(proc.Spec) (*proc.Process, error) { return nil, proc.ErrDown }
 
-// outsideRunner runs in this process's world. A test's leaves are plain
-// directories, so it drops the cgroup after it records that one was given.
+// A test's leaves are plain directories, not cgroups, so the runner records
+// the cgroup and starts without it.
 type outsideRunner struct {
 	direct   *proc.Direct
 	inCgroup chan bool
@@ -36,8 +35,6 @@ func (r outsideRunner) Start(s proc.Spec) (*proc.Process, error) {
 	return r.direct.Start(s)
 }
 
-// A plain directory is no cgroup, so a start that must use it fails unless
-// the runner drops it.
 func TestOutsideRunnerRecordsTheCgroupItWasGivenAndStartsWithoutIt(t *testing.T) {
 	dir, err := os.Open(t.TempDir())
 	assert.NilError(t, err)
@@ -79,7 +76,6 @@ func newOuterServer(t *testing.T) (*Server, chan bool) {
 	}, inCgroup
 }
 
-// replyCode reads the code of an error RESPONSE frame.
 func replyCode(t *testing.T, f proto.Frame) string {
 	t.Helper()
 	assert.Assert(t, cmp.Equal(f.Type, proto.TypeResponse), "%q", f.Payload)
@@ -94,8 +90,6 @@ func TestPlainExecFindsTheInnerContainerDown(t *testing.T) {
 	assert.Equal(t, replyCode(t, f), proto.ErrInnerDown)
 }
 
-// exec.outer goes to the outer manager, in a leaf of its cgroup, while the
-// inner container is down.
 func TestOuterExecRunsInACgroupLeafWithTheContainerDown(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -146,8 +140,6 @@ func TestOuterExecRefusesWhatOnlyAnInnerExecTakes(t *testing.T) {
 	}
 }
 
-// With no outer cgroup (its setup failed), every outer exec is refused
-// rather than run without its limits.
 func TestOuterExecWithoutItsCgroupIsRefused(t *testing.T) {
 	for _, tc := range []struct {
 		name string

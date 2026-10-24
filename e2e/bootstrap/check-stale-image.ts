@@ -12,8 +12,6 @@ const WRITTEN_FILES = [
   '/etc/systemd/system/imp-docker-proxy.service',
 ];
 
-// An image from before the proxy is refused before bootstrap.sh writes the env file or a unit, as
-// on an older host whose :latest was never pulled again.
 export async function checkStaleImage(run: BootstrapRun, target: BootstrapTarget): Promise<void> {
   const distro = target.distro;
 

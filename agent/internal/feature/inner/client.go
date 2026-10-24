@@ -17,19 +17,14 @@ import (
 	"github.com/zgeoff/impz/agent/internal/host/sysutil"
 )
 
-// ErrDown is the error for a spawn or signal when the container is gone.
 var ErrDown = proc.ErrDown
 
-// callTimeout bounds a request to the inner init: one that hangs (a stat on
-// a dead FUSE mount, say) fails instead of holding its caller.
+// A request that hangs (a stat on a dead FUSE mount, say) fails instead of
+// holding its caller.
 const callTimeout = 30 * time.Second
 
-// errNoAnswer is a request the inner init did not answer within callTimeout.
 var errNoAnswer = errors.New("the inner init did not answer")
 
-// pendingCall waits for one reply. register runs in the read loop as the
-// reply arrives, before the loop reads on: a spawn's waiter must exist
-// before its exit can be read.
 type pendingCall struct {
 	ch       chan result
 	register func(reply message)
@@ -40,11 +35,8 @@ type result struct {
 	err error
 }
 
-// client is the agent's half of one container's socket. It implements
-// proc.Runner: each Start is a spawn in the container.
 type client struct {
-	sock int
-	// callTimeout bounds each call
+	sock        int
 	callTimeout time.Duration
 
 	writeMu sync.Mutex
@@ -54,8 +46,7 @@ type client struct {
 	pending map[uint64]*pendingCall
 	waiters map[int]chan reaper.Status
 	closed  bool
-	// down closes when the socket does
-	down chan struct{}
+	down    chan struct{}
 }
 
 func newClient(sock int) *client {
@@ -68,8 +59,6 @@ func newClient(sock int) *client {
 	}
 }
 
-// waitReady reads the inner init's first message, sent once its namespaces
-// are set up.
 func (c *client) waitReady() error {
 	m, fds, err := recv(c.sock, make([]byte, 4096))
 	sysutil.CloseFds(fds)
@@ -82,9 +71,6 @@ func (c *client) waitReady() error {
 	return nil
 }
 
-// run reads replies and exits until the socket closes, then ends every
-// spawn and wait still open: a process in a dead container is dead. It owns
-// the socket's fd and closes it last.
 func (c *client) run() {
 	defer unix.Close(c.sock)
 	defer c.shut()
@@ -124,8 +110,6 @@ func (c *client) run() {
 	}
 }
 
-// late handles a reply that came after its call gave up. A spawn that
-// started then has nobody to wait for it, so it goes.
 func (c *client) late(m message) {
 	if m.Pid <= 0 || m.Error != "" || m.Errno != 0 {
 		return
@@ -141,9 +125,6 @@ func statusOf(m message) reaper.Status {
 	return reaper.Status{Pid: m.Pid, Code: m.Code}
 }
 
-// shut fails every pending request and ends every wait with SIGKILL, which
-// is what the container's end did to them. It shuts the socket down; run
-// closes the fd.
 func (c *client) shut() {
 	c.mu.Lock()
 	if c.closed {
@@ -164,8 +145,6 @@ func (c *client) shut() {
 	close(c.down)
 }
 
-// call sends m and waits for its reply, at most callTimeout. register, when
-// set, runs in the read loop as a good reply arrives (pendingCall).
 func (c *client) call(m message, fds []int, register func(reply message)) (message, error) {
 	ch := make(chan result, 1)
 	c.mu.Lock()
@@ -202,7 +181,6 @@ func (c *client) call(m message, fds []int, register func(reply message)) (messa
 	delete(c.pending, m.ID)
 	c.mu.Unlock()
 	if !waiting {
-		// the reply won the race after all
 		r := <-ch
 		if r.err != nil {
 			return r.m, r.err
@@ -212,7 +190,7 @@ func (c *client) call(m message, fds []int, register func(reply message)) (messa
 	return message{}, fmt.Errorf("%s: %w after %s", m.Op, errNoAnswer, c.callTimeout)
 }
 
-// Start spawns s in the container. Its pid is the container's pid for it.
+// The pid is the process's pid in the container's PID namespace.
 func (c *client) Start(s proc.Spec) (*proc.Process, error) {
 	fds := make([]int, 0, len(s.Files)+1)
 	for _, f := range s.Files {
@@ -250,22 +228,16 @@ func (c *client) signal(pid int, sig syscall.Signal, group bool) error {
 	return err
 }
 
-// Down closes when the container's socket does.
 func (c *client) Down() <-chan struct{} { return c.down }
 
-// initProc is a started inner init.
 type initProc struct {
-	pid int
-	// sock is the agent's end of the socket
-	sock int
-	// signalKill sends the init SIGKILL; release frees what that needs,
-	// once the init is reaped
+	pid        int
+	sock       int
 	signalKill func() error
 	release    func()
-	// gone closes once the init is reaped, with status
-	gone     chan struct{}
-	status   reaper.Status
-	killOnce sync.Once
+	gone       chan struct{}
+	status     reaper.Status
+	killOnce   sync.Once
 }
 
 func newInitProc(pid, sock int, died <-chan reaper.Status, signalKill func() error, release func()) *initProc {
@@ -277,8 +249,6 @@ func newInitProc(pid, sock int, died <-chan reaper.Status, signalKill func() err
 	return p
 }
 
-// kill ends the init, and with it every process in its PID namespace, and
-// waits for it to be reaped. Only the first call does anything.
 func (p *initProc) kill() {
 	p.killOnce.Do(func() {
 		select {
@@ -293,7 +263,6 @@ func (p *initProc) kill() {
 	})
 }
 
-// startInit forks the inner init from agent, with flags, env and in cgroup.
 func startInit(r *reaper.Reaper, agent string, cloneflags uintptr, cgroup *os.File, env []string) (*initProc, error) {
 	pair, err := newSocketpair()
 	if err != nil {
@@ -313,9 +282,8 @@ func startInit(r *reaper.Reaper, agent string, cloneflags uintptr, cgroup *os.Fi
 		sys.CgroupFD = int(cgroup.Fd())
 	}
 	attr := &syscall.ProcAttr{
-		Dir: "/",
-		Env: env,
-		// its log goes where the agent's does: the console
+		Dir:   "/",
+		Env:   env,
 		Files: []uintptr{devnull.Fd(), os.Stderr.Fd(), os.Stderr.Fd(), uintptr(pair[1])},
 		Sys:   sys,
 	}
@@ -332,12 +300,8 @@ func startInit(r *reaper.Reaper, agent string, cloneflags uintptr, cgroup *os.Fi
 		func() { unix.Close(pidfd) }), nil
 }
 
-// readyTimeout bounds the inner init's setup.
 const readyTimeout = 30 * time.Second
 
-// connect starts a client on p's socket once the inner init is ready. When
-// the init dies first, or takes longer than timeout, it kills the init and
-// closes the socket.
 func connect(p *initProc, timeout time.Duration) (*client, error) {
 	c := newClient(p.sock)
 	ready := make(chan error, 1)

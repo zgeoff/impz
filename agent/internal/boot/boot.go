@@ -1,6 +1,3 @@
-// Package boot brings the guest up. The agent stays on the read-only system
-// drive, mounts the user disk at /user, and runs user code in the inner
-// container over it (docs/architecture/guest/agent.md#boot).
 package boot
 
 import (
@@ -22,13 +19,11 @@ import (
 )
 
 const (
-	// agentRunSize caps the agent's own /run: its sockets and little else
 	agentRunSize = "16m"
 )
 
-// setupAgentWorld mounts the agent's own filesystems on the system drive,
-// which must contain the directories /dev, /proc, /sys, /run and /user,
-// since it cannot be written. A boot template makes them before it parks.
+// The system drive cannot be written, so it must already hold the
+// directories /dev, /proc, /sys, /run and /user.
 func setupAgentWorld() error {
 	if err := sysutil.MountOnce("devtmpfs", "/dev", "devtmpfs", unix.MS_NOSUID, "mode=0755"); err != nil {
 		return err
@@ -39,11 +34,9 @@ func setupAgentWorld() error {
 	if err := sysutil.MountOnce("sysfs", "/sys", "sysfs", unix.MS_NOSUID|unix.MS_NODEV|unix.MS_NOEXEC, ""); err != nil {
 		return err
 	}
-	// favordynmods: without it, each move into a cgroup and each change of
-	// a cgroup's controllers waits for an RCU grace period, which the boot
-	// pays several times over in the inner container's start; a fork then
-	// costs a little more. Only this mount, in the root cgroup namespace,
-	// sets it: the container's mounts and docker's cannot clear it.
+	// favordynmods: without it, each cgroup move or controller change waits an
+	// RCU grace period, paid many times in the inner container's start. Only
+	// this root-namespace mount sets it; the container's and docker's cannot.
 	if err := sysutil.MountOnce("cgroup2", cgroup.Root, "cgroup2",
 		unix.MS_NOSUID|unix.MS_NODEV|unix.MS_NOEXEC|unix.MS_RELATIME, "nsdelegate,favordynmods"); err != nil {
 		return err
@@ -51,14 +44,12 @@ func setupAgentWorld() error {
 	if err := sysutil.MountOnce("tmpfs", "/run", "tmpfs", unix.MS_NOSUID|unix.MS_NODEV, "mode=0755,size="+agentRunSize); err != nil {
 		return err
 	}
-	// the agent's own ptys, for an exec in its world
 	if err := mkdirMount("devpts", "/dev/pts", "devpts", unix.MS_NOSUID|unix.MS_NOEXEC,
 		"newinstance,ptmxmode=0666,mode=0620,gid=5"); err != nil {
 		return err
 	}
-	// the read-only files, kept in memory beside the agent's /run so a full
-	// tree never takes the agent's sockets' room; each inner container binds
-	// it read-only
+	// a tmpfs of its own, so a full tree never takes the room of the agent's
+	// sockets in /run
 	if err := mkdirMount("tmpfs", files.Dir, "tmpfs", unix.MS_NOSUID|unix.MS_NODEV|unix.MS_NOEXEC,
 		"mode=0755,size="+files.Size); err != nil {
 		return err
@@ -66,8 +57,6 @@ func setupAgentWorld() error {
 	return nil
 }
 
-// parkTemplate caches the agent binary, then parks a boot template with
-// park until its claim.
 func parkTemplate(agentBinary string, park func() (*proto.Claim, error)) (*proto.Claim, error) {
 	// The code the agent and the inner init first run after a claim would
 	// page in from the squashfs system drive, one block at a time behind its
@@ -78,8 +67,6 @@ func parkTemplate(agentBinary string, park func() (*proto.Claim, error)) (*proto
 	return park()
 }
 
-// cacheFile reads the file at path through once, which leaves its pages in
-// the page cache.
 func cacheFile(path string) error {
 	f, err := os.Open(path)
 	if err != nil {
@@ -90,25 +77,20 @@ func cacheFile(path string) error {
 	return err
 }
 
-// growUserDisk grows the mounted user disk to its device: the host may have
-// grown it since the last boot. A failed grow leaves the filesystem as it
-// was, so the boot goes on.
+// The host may have grown the disk since the last boot. A failed grow leaves
+// the filesystem as it was, so the boot goes on.
 func growUserDisk() {
 	if err := disk.Grow(inner.UserRoot); err != nil {
 		log.Printf("boot: grow %s: %v", inner.UserDisk, err)
 	}
 }
 
-// protectAgent keeps the OOM killer off the agent: a user process that eats
-// the guest's memory dies first.
 func protectAgent() {
 	if err := os.WriteFile("/proc/self/oom_score_adj", []byte("-1000"), 0); err != nil {
 		log.Printf("boot: oom_score_adj: %v", err)
 	}
 }
 
-// setupUserCgroup makes the inner container's cgroup with every controller
-// and a memory limit that leaves some memory to the agent and the kernel.
 func setupUserCgroup() error {
 	if err := cgroup.EnableControllers(cgroup.Root, "boot: "); err != nil {
 		return err
@@ -120,8 +102,7 @@ func setupUserCgroup() error {
 	return nil
 }
 
-// innerRunSize is the inner /run's size: a tenth of memory, as a user's
-// /run full of files must not take the guest's memory.
+// A user's /run full of files must not take the guest's memory.
 func innerRunSize() string {
 	if total := memory.Total(); total > 0 {
 		return strconv.FormatInt(total/10, 10)

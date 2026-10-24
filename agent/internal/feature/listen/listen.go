@@ -1,9 +1,3 @@
-// Package listen serves sockets in the guest whose clients are relayed back
-// to the host: ssh-agent forwarding (agent.listen) and reverse forwards
-// (listen). The host keeps a control connection open for as long as the
-// socket should live; the agent announces each client with a CONNECTION
-// frame, and the host pairs it with an agent.accept connection that relays
-// its bytes.
 package listen
 
 import (
@@ -29,27 +23,22 @@ import (
 	"github.com/zgeoff/impz/agent/internal/proto"
 )
 
-// The roots of the sockets the agent makes itself, one directory per
-// listener. /run is a fresh tmpfs every boot, so a socket never outlives the
-// boot it was made in.
+// /run is a fresh tmpfs every boot, so a socket never outlives the boot it
+// was made in.
 const (
 	AgentRoot   = "/run/imp/ssh-agent"
 	ForwardRoot = "/run/imp/forward"
 )
 
 const (
-	// maxPending bounds the clients that wait for impd's agent.accept; more
-	// are closed at once
 	maxPending = 16
 
-	// pendingTimeout closes a client impd never paired
 	pendingTimeout = 10 * time.Second
 
 	agentSocket   = "agent.sock"
 	forwardSocket = "sock"
 )
 
-// Binder binds a socket as the image's user: dial.Dialer.
 type Binder interface {
 	Listen(network, address string) (*dial.Bound, error)
 }
@@ -57,12 +46,9 @@ type Binder interface {
 type Manager struct {
 	agentRoot, forwardRoot string
 
-	// the image's user owns the sockets, as exec runs commands
-	image  *imagecfg.Live
-	binder Binder
-	// fsys is where the agent's own sockets go: the inner container's root
-	fsys fsroot.FS
-	// pendingTimeout closes a client impd never paired
+	image          *imagecfg.Live
+	binder         Binder
+	fsys           fsroot.FS
 	pendingTimeout time.Duration
 
 	mu        sync.Mutex
@@ -86,15 +72,13 @@ type listener struct {
 	ln net.Listener
 	w  *proto.Writer
 
-	// a unix client must be the socket's user or root; a TCP port is open
-	// to every process in the guest, as an sshd remote forward is
+	// a TCP port is open to every process in the guest, as an sshd remote
+	// forward is
 	checkPeer bool
 	uid       uint32
 
-	// removes what the listener made
 	cleanup func()
-	// inTmpfs: its socket file is on a tmpfs, which goes when the
-	// container does
+	// a tmpfs goes when the container does
 	inTmpfs bool
 
 	pendingTimeout time.Duration
@@ -105,16 +89,12 @@ type listener struct {
 	closed  bool
 }
 
-// ServeAgent serves an agent.listen connection: a socket for SSH_AUTH_SOCK
-// in a directory of its own.
 func (m *Manager) ServeAgent(r *proto.Reader, w *proto.Writer) error {
 	return m.serve(r, w, func(l *listener) (*proto.Listening, error) {
 		return m.openOwn(l, m.agentRoot, agentSocket)
 	})
 }
 
-// Serve serves a listen connection: a unix socket at the path asked for, or
-// in a directory of its own for no path, or a port on 127.0.0.1.
 func (m *Manager) Serve(req *proto.Request, r *proto.Reader, w *proto.Writer) error {
 	switch {
 	case req.GetNetwork() == "unix" && req.GetAddress() == "":
@@ -133,8 +113,6 @@ func (m *Manager) Serve(req *proto.Request, r *proto.Reader, w *proto.Writer) er
 	}
 }
 
-// serve opens a listener, replies with where it listens, then announces each
-// client until the host closes the connection. What it made goes with it.
 func (m *Manager) serve(r *proto.Reader, w *proto.Writer, open func(*listener) (*proto.Listening, error)) error {
 	id := sysutil.RandomHex(8)
 	l := &listener{id: id, w: w, pendingTimeout: m.pendingTimeout, pending: map[uint32]net.Conn{}}
@@ -176,8 +154,6 @@ func (m *Manager) serve(r *proto.Reader, w *proto.Writer, open func(*listener) (
 	}
 }
 
-// Accept serves an agent.accept connection: it takes the client the host
-// named and relays it. A client already closed or timed out is NO_CONNECTION.
 func (m *Manager) Accept(req *proto.Request, r *proto.Reader, w *proto.Writer) error {
 	m.mu.Lock()
 	l := m.listeners[req.GetListener()]
@@ -211,10 +187,9 @@ func (m *Manager) lookupUser() (uid, gid uint32, err error) {
 	return cred.Uid, cred.Gid, nil
 }
 
-// openOwn makes a directory under root and a socket in it. Both are made as
-// root and handed to the user last, so nobody else can reach the socket in
-// between. Every path resolves in the user's root; the bind goes through
-// the directory's own fd, so a symlink planted on the way cannot move it.
+// Both are made as root and handed to the user last, so nobody else can
+// reach the socket in between. The bind goes through the directory's own fd,
+// so a symlink planted on the way cannot move it.
 func (m *Manager) openOwn(l *listener, root, name string) (*proto.Listening, error) {
 	uid, gid, err := m.lookupUser()
 	if err != nil {
@@ -234,8 +209,7 @@ func (m *Manager) openOwn(l *listener, root, name string) (*proto.Listening, err
 		return nil, err
 	}
 	l.ln, l.checkPeer, l.uid = ln, true, uid
-	// the directory goes as a whole when the listener closes; a container
-	// that died took it along
+	// a container that died took the directory along
 	l.cleanup = func() {
 		if err := m.fsys.RemoveAll(dir); err != nil && !errors.Is(err, inner.ErrDown) {
 			log.Printf("listen: remove %s: %v", dir, err)
@@ -270,11 +244,9 @@ func (m *Manager) listenOwn(l *listener, path, dir, name string, uid, gid uint32
 	return ln, nil
 }
 
-// CloseLost ends the listeners whose socket file went with a dead
-// container: those on a tmpfs, as /run and /dev are. Their clients end, and the client
-// opens them again in the next container. A TCP port lives in the guest's
-// one network namespace, and a socket file on the user disk stays, so
-// those listeners go on serving the next container.
+// A socket file on a tmpfs, as /run and /dev are, went with a dead container.
+// A TCP port lives in the guest's one network namespace, and a socket file on
+// the user disk stays, so those listeners go on serving the next container.
 func (m *Manager) CloseLost() {
 	m.mu.Lock()
 	var lost []*listener
@@ -289,10 +261,9 @@ func (m *Manager) CloseLost() {
 	}
 }
 
-// onTmpfs reports whether the directory open at fd is on a tmpfs. Every
-// tmpfs the user reaches is a mount of the container, made again or gone at
-// its next start; the user disk is not one. The fd, not the path, decides,
-// so a link such as /var/run -> /run counts as what it leads to.
+// Every tmpfs the user reaches is a mount of the container, made again or
+// gone at its next start. The fd, not the path, decides, so a link such as
+// /var/run -> /run counts as what it leads to.
 func onTmpfs(fd int) bool {
 	var st unix.Statfs_t
 	if err := unix.Fstatfs(fd, &st); err != nil {
@@ -302,7 +273,6 @@ func onTmpfs(fd int) bool {
 	return st.Type == unix.TMPFS_MAGIC
 }
 
-// openBound binds network and address as the image's user.
 func (m *Manager) openBound(l *listener, network, address string) (*proto.Listening, error) {
 	uid, _, err := m.lookupUser()
 	if err != nil {
@@ -321,8 +291,6 @@ func (m *Manager) openBound(l *listener, network, address string) (*proto.Listen
 	return &proto.Listening{Path: new(filepath.Clean(address))}, nil
 }
 
-// close ends the listener, its waiting clients and what it made. Relayed
-// clients end with their own agent.accept connections.
 func (m *Manager) close(l *listener) {
 	m.mu.Lock()
 	delete(m.listeners, l.id)
@@ -340,7 +308,6 @@ func (m *Manager) close(l *listener) {
 	l.cleanup()
 }
 
-// serve accepts clients until the listener closes.
 func (l *listener) serve() error {
 	for {
 		c, err := l.ln.Accept()
@@ -365,8 +332,7 @@ func (l *listener) serve() error {
 	}
 }
 
-// allows checks a unix client's uid: the socket's owner, or root. The modes
-// already keep others out; this holds even if a mode is changed.
+// The modes already keep others out; this holds even if a mode is changed.
 func (l *listener) allows(c net.Conn) bool {
 	sc, ok := c.(syscall.Conn)
 	if !ok {
@@ -386,7 +352,6 @@ func (l *listener) allows(c net.Conn) bool {
 	return cred.Uid == l.uid || cred.Uid == 0
 }
 
-// add parks a client for agent.accept, unless maxPending already wait.
 func (l *listener) add(c net.Conn) (uint32, bool) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -412,7 +377,6 @@ func (l *listener) take(id uint32) net.Conn {
 	return c
 }
 
-// drain reads the host connection until it closes; nil for a clean close.
 func drain(r *proto.Reader) error {
 	for {
 		if _, err := r.Next(); err != nil {

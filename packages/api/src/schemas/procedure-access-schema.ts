@@ -2,8 +2,6 @@ import * as z from 'zod';
 import { ScopeSchema } from './token-schema';
 
 const FieldsSchema = z.array(z.string()).readonly();
-
-// A call that needs no session, such as the login that makes one.
 const NoSessionAccessSchema = z.object({ on: z.literal('none') });
 
 const HostAccessSchema = z.object({

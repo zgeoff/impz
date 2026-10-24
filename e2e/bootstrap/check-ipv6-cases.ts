@@ -14,9 +14,6 @@ import { waitForImpHost } from './wait-for-imp-host';
 // A dotted uplink name, whose sysctl path takes a slash form.
 const FAKE_UPLINK = 'eth9.7';
 
-// A network that differs is recreated; accept_ra=2 goes on a dotted uplink whose default route the
-// kernel took from router adverts; --ipv6 off undoes both; a client that takes router adverts stops
-// the run that would turn IPv6 on, unless --ra-handled.
 export async function checkIPv6Cases(run: BootstrapRun, target: BootstrapTarget): Promise<void> {
   const subnet = await readEnvValue(run, 'IMP_HOST_SUBNET6');
 

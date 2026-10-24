@@ -24,7 +24,6 @@ function setupTest() {
     rmSync(directory, { recursive: true, force: true });
   });
 
-  // the stubs go here, ahead of the real commands on PATH
   const bin = join(directory, 'bin');
 
   mkdirSync(bin);

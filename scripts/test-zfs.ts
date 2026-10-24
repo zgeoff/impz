@@ -38,8 +38,7 @@ interface Host {
   readonly work: string | undefined;
 }
 
-// A generated name is not ownership: it refuses a pool name that is in use, and a work dir that
-// already holds a pool file or a mount point, before it touches anything.
+// A generated name is not ownership, so a name that is in use is still refused.
 async function checkHost(options: RunTestZfsOptions): Promise<Host> {
   const io = options.io;
   const env = options.env;
@@ -89,8 +88,8 @@ async function checkHost(options: RunTestZfsOptions): Promise<Host> {
   return { pool, gib: pickSetting(env, 'IMP_ZFS_TEST_GIB') ?? '4', work };
 }
 
-// What this run made, so cleanup releases that and nothing else. The pool is proven by its vdev
-// instead, since a signal during its create stops the run only once the create has finished.
+// No flag records the pool: its vdev proves it, since a signal during its create stops the run
+// only once the create has finished.
 interface Made {
   work: boolean;
   mnt: boolean;
@@ -190,9 +189,8 @@ async function runTests(run: PoolRun): Promise<number> {
   return exitCode;
 }
 
-// In reverse order. Everything under the mount point is unmounted before the pool goes: the tests
-// mount datasets there, and a test that fails can leave them. A pool that will not go keeps its
-// file, so it can still be imported and destroyed by hand, and the run fails.
+// The tests mount datasets under the mount point, and a test that fails can leave them. A pool
+// that will not go keeps its file, so it can still be imported and destroyed by hand.
 async function removeMade(run: PoolRun, status: number): Promise<number> {
   const io = run.options.io;
   const pool = run.host.pool;

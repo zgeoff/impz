@@ -21,10 +21,6 @@ import (
 
 var testReaper = reaper.New()
 
-// pair serves a spawner in this process on one end of a socketpair and
-// returns a client on the other, as the agent and the inner init talk.
-// kill ends the spawner, as the inner init dying would; the cleanup kills
-// it too and waits for the client's read loop to end.
 func pair(t *testing.T) (c *client, kill func()) {
 	t.Helper()
 	sp, err := newSocketpair()
@@ -61,7 +57,6 @@ func devnull(t *testing.T) *os.File {
 	return f
 }
 
-// exitOf waits for p's exit.
 func exitOf(t *testing.T, p *proc.Process) reaper.Status {
 	t.Helper()
 	select {
@@ -73,8 +68,6 @@ func exitOf(t *testing.T, p *proc.Process) reaper.Status {
 	}
 }
 
-// startGroup starts a shell that leads a group with a background sleep, and
-// returns once the sleep has forked. The cleanup kills the group.
 func startGroup(t *testing.T, c *client) *proc.Process {
 	t.Helper()
 	null := devnull(t)
@@ -215,12 +208,11 @@ func TestASignalAfterTheInitDiedIsESRCH(t *testing.T) {
 
 	err = p.Signal(syscall.SIGTERM)
 
-	// nothing is left in a dead container
 	assert.ErrorIs(t, err, syscall.ESRCH)
 }
 
-// TestAnExitNeverOvertakesItsSpawnReply repeats a spawn of a child that
-// exits at once, to catch an exit read before the waiter for it exists.
+// Repeats the spawn of a child that exits at once, to catch an exit read
+// before the waiter for it exists.
 func TestAnExitNeverOvertakesItsSpawnReply(t *testing.T) {
 	c, _ := pair(t)
 	null := devnull(t)
@@ -262,10 +254,8 @@ func TestASpawnWhoseCgroupFailsRunsOutsideItAndSaysSo(t *testing.T) {
 func TestASpawnWithoutTheFdsItNamesIsRefused(t *testing.T) {
 	c, _ := pair(t)
 
-	// the spec names three files and none travel with it
 	_, err := c.call(message{Op: opSpawn, Spec: &wireSpec{Argv: []string{"true"}, Files: 3}}, nil, nil)
 
-	// the reply's text is the whole error: it carries no errno
 	assert.Error(t, err, "a spawn needs its spec and every fd it names")
 }
 
@@ -285,7 +275,6 @@ func TestAnUnknownOpIsRefused(t *testing.T) {
 	assert.Error(t, err, "unknown op reboot")
 }
 
-// A call has 30 seconds for its reply.
 func TestNewClientGivesACallThirtySeconds(t *testing.T) {
 	assert.Equal(t, newClient(-1).callTimeout, 30*time.Second)
 }
@@ -294,7 +283,6 @@ func TestACallTheInitNeverAnswersTimesOut(t *testing.T) {
 	sp, err := newSocketpair()
 	assert.NilError(t, err)
 	t.Cleanup(func() { unix.Close(sp[1]) })
-	// a peer that reads nothing and answers nothing
 	c := newClient(sp[0])
 	c.callTimeout = 200 * time.Millisecond
 	go c.run()

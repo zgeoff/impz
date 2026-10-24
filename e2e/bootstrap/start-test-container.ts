@@ -27,7 +27,6 @@ STOPSIGNAL SIGRTMIN+3
 CMD ["/sbin/init"]
 `;
 
-// A fresh systemd container, booted, with bootstrap.sh copied in.
 export async function startTestContainer(run: BootstrapRun, distro: Distro): Promise<void> {
   const io = run.io;
   const image = `imp-bootstrap-test:${distro}`;

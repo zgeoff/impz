@@ -25,9 +25,6 @@ import (
 
 var testReaper *reaper.Reaper
 
-// The test binary is also the dial and listen helper: the Dialer starts
-// os.Args[0] with `dial-unix <path>` or `listen-as-user <network>
-// <address>`. A few dial paths make a helper that misbehaves.
 func TestMain(m *testing.M) {
 	if len(os.Args) == 3 && os.Args[1] == HelperCommand {
 		runTestHelper(os.Args[2])
@@ -43,9 +40,6 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-// runTestHelper is the dial helper for address. A few addresses name a
-// fault instead, each a helper that misbehaves in one way; the tests of the
-// faults pin what each sends.
 func runTestHelper(address string) {
 	switch address {
 	case "/hang":
@@ -71,10 +65,6 @@ func runTestHelper(address string) {
 	}
 }
 
-// startFaultyHelper runs the test binary as the dial helper for fault, as
-// the Dialer runs the agent: its end of a socketpair as fd 0, /dev/null as
-// fds 1 and 2, and an empty env. It returns the helper's exit, which comes
-// once, and the other end.
 func startFaultyHelper(t *testing.T, fault string) (<-chan reaper.Status, int) {
 	t.Helper()
 	pair, err := unix.Socketpair(unix.AF_UNIX, unix.SOCK_STREAM|unix.SOCK_CLOEXEC, 0)
@@ -105,15 +95,11 @@ func startFaultyHelper(t *testing.T, fault string) (<-chan reaper.Status, int) {
 	return exit, pair[0]
 }
 
-// helperAnswer is what a helper sent in one message: its bytes, and the
-// socket type of each fd it passed.
 type helperAnswer struct {
 	Payload string
 	FdTypes []int
 }
 
-// readHelperAnswer reads one message from conn, waiting up to wait for it,
-// and closes the fds it carried.
 func readHelperAnswer(t *testing.T, conn int, wait time.Duration) (helperAnswer, error) {
 	t.Helper()
 	tv := unix.NsecToTimeval(wait.Nanoseconds())
@@ -189,15 +175,12 @@ func TestTheHangingHelperNeverAnswers(t *testing.T) {
 	assert.Check(t, cmp.ErrorIs(err, unix.EAGAIN))
 }
 
-// testDialer dials unix sockets as user; "" is root, which connects in the
-// agent itself
 func testDialer(user string) *Dialer {
 	return NewDialer(&proc.Direct{Reaper: testReaper, Agent: os.Args[0]}, imagecfg.NewLive(imagecfg.Config{User: user}))
 }
 
-// shortDir makes a directory of the test's own with a short path: a unix
-// socket path has a 108-byte limit, which a t.TempDir under a long TMPDIR
-// can pass.
+// A unix socket path has a 108-byte limit, which a t.TempDir under a long
+// TMPDIR can pass.
 func shortDir(t *testing.T) string {
 	t.Helper()
 	dir, err := os.MkdirTemp("/tmp", "dial")
@@ -206,7 +189,6 @@ func shortDir(t *testing.T) string {
 	return dir
 }
 
-// listenUnix serves an echo on dir/name and returns its path.
 func listenUnix(t *testing.T, dir, name string) string {
 	t.Helper()
 	path := filepath.Join(dir, name)
@@ -216,7 +198,6 @@ func listenUnix(t *testing.T, dir, name string) string {
 	return path
 }
 
-// codeOf returns the protocol error code that err carries.
 func codeOf(t *testing.T, err error) string {
 	t.Helper()
 	var pe *proto.Error
@@ -224,7 +205,6 @@ func codeOf(t *testing.T, err error) string {
 	return pe.Code
 }
 
-// echo writes ping to c and returns what comes back.
 func echo(t *testing.T, c net.Conn) string {
 	t.Helper()
 	assert.NilError(t, c.SetDeadline(time.Now().Add(5*time.Second)))
@@ -263,7 +243,6 @@ func TestServeDialsAUnixSocketForARootImageInTheAgent(t *testing.T) {
 	h.requireOK(t)
 }
 
-// A symlink to a socket under the agent's own directory is refused.
 func TestConnectUnixRefusesASymlinkIntoTheAgentsDirectory(t *testing.T) {
 	t.Parallel()
 	dir := shortDir(t)
@@ -278,16 +257,12 @@ func TestConnectUnixRefusesASymlinkIntoTheAgentsDirectory(t *testing.T) {
 	assert.Check(t, cmp.Equal(codeOf(t, err), proto.ErrBadRequest))
 }
 
-// A helper has seven seconds to answer: the five of the connect, and two for
-// its fork and exec.
 func TestNewDialerGivesAHelperSevenSeconds(t *testing.T) {
 	t.Parallel()
 
 	assert.Equal(t, testDialer("").helperTimeout, 7*time.Second)
 }
 
-// A helper that hangs is killed at the deadline; one that dies, answers
-// without a socket, or with a datagram socket fails the dial.
 func TestOpenUnixFailsTheDialWhenTheHelperMisbehaves(t *testing.T) {
 	t.Parallel()
 	for _, address := range []string{"/hang", "/die", "/junk", "/datagram", "/no/such.sock"} {
@@ -305,8 +280,6 @@ func TestOpenUnixFailsTheDialWhenTheHelperMisbehaves(t *testing.T) {
 	}
 }
 
-// The helper's stdout and stderr are /dev/null, so its own fds land above 2
-// and a runtime crash message never goes into the target socket.
 func TestOpenUnixGivesTheHelperDevNullForStdoutAndStderr(t *testing.T) {
 	t.Parallel()
 
@@ -316,7 +289,6 @@ func TestOpenUnixGivesTheHelperDevNullForStdoutAndStderr(t *testing.T) {
 	assert.Check(t, cmp.ErrorContains(err, "/dev/null,/dev/null"))
 }
 
-// Fds past the first in the helper's message are closed, not leaked.
 func TestOpenUnixClosesExtraFdsInTheHelpersAnswer(t *testing.T) {
 	before := countFds(t)
 
@@ -327,8 +299,6 @@ func TestOpenUnixClosesExtraFdsInTheHelpersAnswer(t *testing.T) {
 	assert.Check(t, cmp.Equal(countFds(t), before))
 }
 
-// A received fd is close-on-exec from the recvmsg on, so a child that an
-// exec forks meanwhile does not inherit it.
 func TestReceiveFdsMarksTheFdCloseOnExec(t *testing.T) {
 	pair, err := unix.Socketpair(unix.AF_UNIX, unix.SOCK_STREAM|unix.SOCK_CLOEXEC, 0)
 	assert.NilError(t, err)
@@ -350,8 +320,8 @@ func TestReceiveFdsMarksTheFdCloseOnExec(t *testing.T) {
 	assert.Check(t, !slices.Contains(inherited, fmt.Sprint(fd)), "a child inherited fd %d", fd)
 }
 
-// listChildFds forks /bin/sh to list its own fds. It forks through the test
-// reaper, which reaps every child: os/exec's Wait would race it.
+// Forks through the test reaper, which reaps every child: os/exec's Wait
+// would race it.
 func listChildFds(t *testing.T) []byte {
 	t.Helper()
 	r, w, err := os.Pipe()

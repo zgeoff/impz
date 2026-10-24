@@ -12,10 +12,9 @@ import (
 	"github.com/zgeoff/impz/agent/internal/host/sysutil"
 )
 
-// spawner is the inner init's half of the socket: it starts what the agent
-// asks for and reports each exit. Every spec resolves here, in the user's
-// world: its user against the inner /etc/passwd, its binary on the inner
-// PATH.
+// Go cannot join a mount namespace (every thread shares fs_struct), so the
+// inner init starts every user process for the agent, and each spec resolves
+// in the user's world: the inner /etc/passwd and PATH.
 type spawner struct {
 	sock   int
 	runner proc.Runner
@@ -26,7 +25,6 @@ type spawner struct {
 	procs map[int]*proc.Process
 }
 
-// serve answers the agent until the socket closes.
 func serve(sock int, runner proc.Runner) error {
 	s := &spawner{sock: sock, runner: runner, procs: make(map[int]*proc.Process)}
 	if err := s.write(message{Op: opReady}, nil); err != nil {
@@ -128,15 +126,14 @@ func (s *spawner) spawn(m message, fds []int) {
 	}, nil)
 }
 
-// signal sends a signal to a process group, which outlives its leader, or
-// to one child it started, which must not reach a later process with the
-// same pid.
 func (s *spawner) signal(m message) {
 	sig := syscall.Signal(m.Sig)
 	if m.Group {
 		s.reply(m.ID, 0, nil, syscall.Kill(-m.Pid, sig))
 		return
 	}
+	// Only a child still running: a signal must not reach a later process
+	// with the same pid.
 	s.mu.Lock()
 	p := s.procs[m.Pid]
 	s.mu.Unlock()

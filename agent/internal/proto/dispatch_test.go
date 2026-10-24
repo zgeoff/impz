@@ -10,7 +10,6 @@ import (
 	"gotest.tools/v3/assert"
 )
 
-// recordingInput returns an Input whose every handler adds a line to calls.
 func recordingInput(calls *[]string) Input {
 	return Input{
 		Stdin:    func(p []byte) { *calls = append(*calls, "stdin "+string(p)) },

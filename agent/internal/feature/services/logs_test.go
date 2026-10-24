@@ -12,7 +12,6 @@ import (
 	"github.com/zgeoff/impz/agent/internal/host/fsroot"
 )
 
-// writeLog makes a log of size bytes that starts with head.
 func writeLog(t *testing.T, path string, size int64, head string) {
 	t.Helper()
 	assert.NilError(t, os.WriteFile(path, []byte(head), 0o644))
@@ -57,9 +56,6 @@ func TestRotateLogIgnoresAMissingLog(t *testing.T) {
 	assert.NilError(t, err)
 }
 
-// TestCopyTruncateLogLetsAnAppendingWriterGoOnAtTheNewEnd checks that a
-// writer holding the log O_APPEND keeps writing to it after the copy,
-// starting at the new end.
 func TestCopyTruncateLogLetsAnAppendingWriterGoOnAtTheNewEnd(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "svc.log")
 	writeLog(t, p, maxLogSize+1, "first")

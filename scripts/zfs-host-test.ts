@@ -57,7 +57,6 @@ export async function runZfsHostTest(options: RunZfsHostTestOptions): Promise<nu
 
 const OWN_PATHS = ['bench.img', 'data', 'data-mv-b'];
 
-// Every probe only reads. A work dir that this run makes itself holds nothing yet.
 async function readHostFacts(options: RunZfsHostTestOptions): Promise<ZfsHostFacts> {
   const io = options.io;
 
@@ -155,8 +154,8 @@ async function setUpHost(options: RunZfsHostTestOptions, facts: LoadedHostFacts)
   };
 }
 
-// What this run made, so cleanup releases that and nothing else. The pool is proven by its vdev
-// instead, since a signal during its create stops the run only once the create has finished.
+// No flag records the pool: its vdev proves it, since a signal during its create stops the run
+// only once the create has finished.
 interface Made {
   img: boolean;
   instance: boolean;
@@ -193,7 +192,6 @@ async function runOnPool(options: RunZfsHostTestOptions, host: Host): Promise<nu
   return run.guard.findStopCode() ?? cleaned;
 }
 
-// A failed suite still gets its report, and the run then exits with the suites' status.
 async function runSuites(run: PoolRun): Promise<number> {
   const io = run.options.io;
   const host = run.host;
@@ -256,7 +254,6 @@ async function runSuites(run: PoolRun): Promise<number> {
   return status;
 }
 
-// Its output goes to the terminal and to e2e.log, whole before the report reads it.
 async function runE2E(run: PoolRun): Promise<number> {
   const io = run.options.io;
   const log = join(run.host.work, 'e2e.log');
@@ -325,7 +322,6 @@ async function writeReport(run: PoolRun): Promise<void> {
   io.files.writeText(join(work, 'summary.txt'), report);
 }
 
-// In reverse order; the results stay in the work dir.
 async function removeMade(run: PoolRun, status: number): Promise<number> {
   const io = run.options.io;
   const host = run.host;
@@ -409,8 +405,6 @@ function runCleanupStep(run: PoolRun, action: CleanupAction): Promise<Partial<Cl
     .exhaustive();
 }
 
-// The key lines of each kernel oops since the pool's create whose own trace runs through ZFS;
-// nothing when dmesg cannot say.
 async function readZfsOops(run: PoolRun): Promise<readonly string[]> {
   const createdAt = run.made.createdAt;
 

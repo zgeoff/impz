@@ -7,8 +7,6 @@ export interface ImageLabels {
 
 export interface ImageObservation {
   readonly ref: string;
-
-  // Null when docker image inspect failed.
   readonly labels: ImageLabels | null;
   readonly isCheckoutLive: boolean;
   readonly isInUse: boolean;
@@ -19,9 +17,6 @@ type ImageRetention =
   | { readonly kind: 'keep'; readonly reason: string }
   | { readonly kind: 'remove' };
 
-// Only images labelled on this machine are touched, never another project's or another machine's,
-// and only the checkout's own tag, so an override tag or a second tag keeps the image. Images of
-// live checkouts stay as build caches.
 export function pickImageRetention(image: ImageObservation, machineID: string): ImageRetention {
   if (image.labels === null) {
     return { kind: 'keep', reason: 'docker image inspect failed' };

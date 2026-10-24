@@ -40,10 +40,6 @@ import (
 	"github.com/zgeoff/impz/agent/internal/server"
 )
 
-// Run is PID 1 from the system drive. It mounts the agent's world and the
-// user disk, starts the inner container on it, configures the hostname and
-// network, starts services, and serves the host on vsock. It returns only on
-// failure.
 func Run() error {
 	steps := newBootSteps(time.Now)
 	r := reaper.New()
@@ -81,8 +77,6 @@ func Run() error {
 	} else {
 		steps.mark("world")
 	}
-	// the container's init starts up while the agent mounts the disk it
-	// runs on
 	mgr := inner.New(r, inner.Config{RunSize: innerRunSize()})
 	mgr.Prestart()
 	if err := inner.MountUserDisk(); err != nil {
@@ -113,9 +107,7 @@ func Run() error {
 	dialer := dial.NewDialer(mgr, image)
 	listener := listen.NewManager(listen.AgentRoot, listen.ForwardRoot, image, dialer, root)
 
-	// The services and the sockets in the old container's /run went with
-	// it. A new container gets its files set and its image config read
-	// again, as at boot, and its services.
+	// The services and the sockets in the old container's /run went with it.
 	mgr.OnDown(func() {
 		listener.CloseLost()
 		sup.Suspend()
@@ -126,8 +118,6 @@ func Run() error {
 			log.Printf("services: %v", err)
 		}
 	})
-	// with the container down, the image config stays at its defaults
-	// until it starts
 	mgr.Launch()
 	steps.mark("inner")
 	prepareRoot(root, params, image)
@@ -142,16 +132,11 @@ func Run() error {
 	}
 	steps.mark("services")
 
-	// Each non-tty exec gets a cgroup leaf, so a stop kills its escapees too,
-	// and a memory controller, so a command can cap its own memory
-	// (docs/architecture/guest/agent.md#execs-and-services).
 	execCgroups, err := cgroup.NewDelegatedTree(inner.ExecCgroupDir, "memory")
 	if err != nil {
 		log.Printf("boot: exec cgroups: %v; a stop reaches only the process group", err)
 		execCgroups = nil
 	}
-	// An outer exec runs in the agent's world, while the container is down
-	// too, in its own cgroup and memory limit or not at all.
 	outerCgroups, err := outer.Setup()
 	if err != nil {
 		log.Printf("boot: outer exec: %v; every one is refused", err)
@@ -213,10 +198,7 @@ func Run() error {
 	return srv.Serve(listenVsock)
 }
 
-// prepareRoot writes the files of the user's root that follow the imp
-// rather than the image (hostname, hosts and resolv.conf), then reads the
-// image config. A fork or rename gives the imp a new hostname on the same
-// disk.
+// A fork or rename gives the imp a new hostname on the same disk.
 func prepareRoot(root fsroot.FS, params cmdline.Params, image *imagecfg.Live) {
 	if name := params.Hostname; name != "" {
 		if err := fsroot.RewriteFile(root, "/etc/hostname", []byte(name+"\n"), 0o644); err != nil {
@@ -236,13 +218,10 @@ func prepareRoot(root fsroot.FS, params cmdline.Params, image *imagecfg.Live) {
 	image.Set(cfg)
 }
 
-// buildPing answers a parked boot template's ping as the server would.
 func buildPing() *proto.Ping {
 	return server.BuildPing(unix.ClockGettime)
 }
 
-// listenVsock listens on the agent's port, for a boot template parked for
-// its claim and for the agent's server.
 func listenVsock() (net.Listener, error) {
 	l, err := vsock.Listen(server.Port, nil)
 	if err != nil {

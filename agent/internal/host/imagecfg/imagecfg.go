@@ -1,5 +1,3 @@
-// Package imagecfg loads /etc/imp/image.json, the OCI config (Env,
-// WorkingDir, User) that the image builder copies into the rootfs.
 package imagecfg
 
 import (
@@ -14,7 +12,6 @@ import (
 
 const Path = "/etc/imp/image.json"
 
-// Config is the default context for exec and services.
 type Config struct {
 	Env     []string `json:"env"`
 	Workdir string   `json:"workdir"`
@@ -27,8 +24,6 @@ var defaultEnv = []string{
 	"TERM=xterm-256color",
 }
 
-// Live is the config the agent last read, for readers on any goroutine. The
-// agent reads it again each time the inner container starts.
 type Live struct{ p atomic.Pointer[Config] }
 
 func NewLive(c Config) *Live {
@@ -40,8 +35,6 @@ func NewLive(c Config) *Live {
 func (l *Live) Get() Config  { return *l.p.Load() }
 func (l *Live) Set(c Config) { l.p.Store(&c) }
 
-// Load reads Path in fsys, the user's root. A missing file gives the
-// defaults; image env entries override the defaults key by key.
 func Load(fsys fsroot.FS) (Config, error) {
 	return load(fsys, Path)
 }

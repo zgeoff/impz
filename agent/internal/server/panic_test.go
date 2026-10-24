@@ -11,7 +11,6 @@ import (
 	"github.com/zgeoff/impz/agent/internal/proto"
 )
 
-// quietLog discards the recovered panics' stacks for the test.
 func quietLog(t *testing.T) {
 	t.Helper()
 	prev := log.Writer()
@@ -19,8 +18,8 @@ func quietLog(t *testing.T) {
 	t.Cleanup(func() { log.SetOutput(prev) })
 }
 
-// A Server with no Services dereferences nil. The agent is PID 1, so a panic
-// in a unary request must cost one request, not the process.
+// The agent is PID 1, so a panic in a unary request must cost one request,
+// not the process.
 func TestHandleRepliesInternalToAUnaryRequestThatPanics(t *testing.T) {
 	quietLog(t)
 
@@ -29,8 +28,6 @@ func TestHandleRepliesInternalToAUnaryRequestThatPanics(t *testing.T) {
 	assert.Equal(t, errorCode(t, resp), proto.ErrInternal)
 }
 
-// A Server with no Exec dereferences nil outside safeUnary: the connection
-// just closes.
 func TestHandleClosesTheConnectionOfAStreamRequestThatPanics(t *testing.T) {
 	quietLog(t)
 

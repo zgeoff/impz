@@ -8,8 +8,8 @@ export interface Certificate {
   readonly chainPem: string;
 }
 
-// The last issuance attempts, so a restart does not retry at once and run
-// into the CA's limit on failed validations.
+// kept so a restart does not retry at once and run into the CA's limit on
+// failed validations
 export interface AttemptState {
   readonly failures: number;
   readonly lastAttemptAt: number | null;

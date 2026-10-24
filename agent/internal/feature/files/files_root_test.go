@@ -1,7 +1,5 @@
 //go:build root
 
-// The tests that mount a tmpfs, so they need root: run them with -tags root as root.
-
 package files
 
 import (

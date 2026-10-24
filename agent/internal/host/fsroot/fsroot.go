@@ -1,8 +1,3 @@
-// Package fsroot gives the agent the user's files without leaving the user's
-// root. The agent lives outside the inner container; a path it opens inside
-// resolves with openat2(RESOLVE_IN_ROOT) on a dirfd of the inner root, so a
-// symlink the user planted (/etc/hosts -> /proc/1/root/...) stays inside.
-// Host is the plain filesystem, for the inner container itself and tests.
 package fsroot
 
 import (
@@ -20,8 +15,6 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// FS is the set of file operations the agent does on user files. Paths are
-// absolute, as the user sees them.
 type FS interface {
 	OpenFile(path string, flag int, perm os.FileMode) (*os.File, error)
 	ReadFile(path string) ([]byte, error)
@@ -35,11 +28,9 @@ type FS interface {
 	Truncate(path string, size int64) error
 	Lchown(path string, uid, gid int) error
 	Chmod(path string, mode os.FileMode) error
-	// Dir opens a directory for *at calls and socket paths (/proc/self/fd/N).
 	Dir(path string) (*os.File, error)
 }
 
-// Host is the filesystem as this process sees it.
 var Host FS = hostFS{}
 
 type hostFS struct{}
@@ -60,16 +51,14 @@ func (hostFS) Lchown(p string, uid, gid int) error       { return os.Lchown(p, u
 func (hostFS) Chmod(p string, mode os.FileMode) error    { return os.Chmod(p, mode) }
 func (hostFS) Dir(p string) (*os.File, error)            { return os.Open(p) }
 
-// Root is a directory that every path resolves inside.
 type Root struct {
 	dir *os.File
 }
 
-// resolve keeps every lookup inside the root: ".." stops at it, an absolute
-// symlink starts from it, and /proc magic links are refused.
+// RESOLVE_IN_ROOT stops ".." at the root and starts an absolute symlink from
+// it, so a link the user plants cannot lead out; magic links in /proc would.
 const resolve = unix.RESOLVE_IN_ROOT | unix.RESOLVE_NO_MAGICLINKS
 
-// Open opens dir (such as /proc/<pid>/root) as a root.
 func Open(dir string) (*Root, error) {
 	f, err := os.OpenFile(dir, unix.O_PATH|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
 	if err != nil {
@@ -118,8 +107,6 @@ func (r *Root) OpenFile(p string, flag int, perm os.FileMode) (*os.File, error) 
 	return os.NewFile(uintptr(fd), p), nil
 }
 
-// parent opens p's directory and returns it with p's last name. The last
-// name is never followed by the *at calls that use it.
 func (r *Root) parent(p string) (*os.File, string, error) {
 	clean := rel(p)
 	if clean == "." {
@@ -132,8 +119,8 @@ func (r *Root) parent(p string) (*os.File, string, error) {
 	return dir, filepath.Base(clean), nil
 }
 
-// ReadFile reads a regular file. O_NONBLOCK and the check keep a FIFO or a
-// device the user put at p from blocking the agent.
+// O_NONBLOCK and the regular-file check keep a FIFO or a device the user put
+// at p from blocking the agent.
 func (r *Root) ReadFile(p string) ([]byte, error) {
 	f, err := r.OpenFile(p, os.O_RDONLY|unix.O_NONBLOCK, 0)
 	if err != nil {
@@ -146,10 +133,8 @@ func (r *Root) ReadFile(p string) ([]byte, error) {
 	return io.ReadAll(f)
 }
 
-// ErrNotRegular is a read of something other than a regular file.
 var ErrNotRegular = errors.New("not a regular file")
 
-// CheckRegular fails unless f, opened at p, is a regular file.
 func CheckRegular(f *os.File, p string) error {
 	fi, err := f.Stat()
 	if err != nil {
@@ -208,7 +193,6 @@ func (r *Root) MkdirAll(p string, perm os.FileMode) error {
 		if err != nil && !errors.Is(err, unix.EEXIST) {
 			return pathErr("mkdir", cur, err)
 		}
-		// an existing name must be a directory, reached inside the root
 		if fi, err := r.Stat(cur); err != nil {
 			return err
 		} else if !fi.IsDir() {
@@ -317,8 +301,8 @@ func (f *fileInfo) Size() int64        { return f.st.Size }
 func (f *fileInfo) ModTime() time.Time { return time.Unix(f.st.Mtim.Unix()) }
 func (f *fileInfo) IsDir() bool        { return f.Mode().IsDir() }
 
-// Sys is a *syscall.Stat_t, as os.Stat's is: callers type-assert it.
-// unix.Stat_t has the same layout.
+// Callers type-assert a *syscall.Stat_t, as os.Stat gives; unix.Stat_t has
+// the same layout.
 func (f *fileInfo) Sys() any { return (*syscall.Stat_t)(unsafe.Pointer(&f.st)) }
 
 func (f *fileInfo) Mode() fs.FileMode {
@@ -349,18 +333,13 @@ func (f *fileInfo) Mode() fs.FileMode {
 	return m
 }
 
-// WriteFileAtomic replaces p through a temporary file and a rename in fsys,
-// so a crash mid-write cannot leave it truncated.
 func WriteFileAtomic(fsys FS, p string, data []byte, mode os.FileMode) error {
 	return replaceFile(fsys, p, data, mode, true)
 }
 
-// RewriteFile replaces p as WriteFileAtomic does, without its fsync: for a
-// file that every boot writes again, such as /etc/hostname. The sync waits
-// for a journal commit, which a restored imp pays before it answers. ext4
-// still writes the data of a file a rename replaces before the rename
-// (auto_da_alloc), and a file a crash empties is written again at the next
-// boot.
+// No fsync: it waits for a journal commit, which a restored imp pays before it
+// answers. ext4's auto_da_alloc writes the data before the rename, and every
+// boot writes these files again.
 func RewriteFile(fsys FS, p string, data []byte, mode os.FileMode) error {
 	return replaceFile(fsys, p, data, mode, false)
 }

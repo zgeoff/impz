@@ -13,15 +13,10 @@ import (
 )
 
 const (
-	// maxLogSize caps a service log; past it the log moves to <name>.log.1,
-	// replacing the previous one. Checks run every rotateEvery, so a log
-	// can pass the cap by that much output.
 	maxLogSize  = 10 << 20
 	rotateEvery = time.Minute
 )
 
-// rotateLog renames a log over maxLogSize to <path>.1. It runs before a
-// service start opens the log, when nothing writes to it.
 func rotateLog(fsys fsroot.FS, path string) error {
 	if !oversize(fsys, path) {
 		return nil
@@ -29,10 +24,9 @@ func rotateLog(fsys fsroot.FS, path string) error {
 	return fsys.Rename(path, path+".1")
 }
 
-// copyTruncateLog copies a log over maxLogSize to <path>.1 and empties it in
-// place. The running service keeps its fd; it opened the log O_APPEND, so
-// its next write lands at the new end. Lines written between the copy and
-// the truncate are lost, which is the usual copytruncate trade.
+// The running service keeps its fd, opened O_APPEND, so its next write lands
+// at the new end. Lines written between the copy and the truncate are lost,
+// the usual copytruncate trade.
 func (s *Supervisor) copyTruncateLog(path string) error {
 	if !oversize(s.fsys, path) {
 		return nil
@@ -68,8 +62,6 @@ func (s *Supervisor) copyTruncateLog(path string) error {
 	return nil
 }
 
-// readLogState returns how many times the rotator emptied the log at path,
-// and its size, both read at one point between rotations.
 func (s *Supervisor) readLogState(path string) (uint64, os.FileInfo, error) {
 	s.truncMu.Lock()
 	defer s.truncMu.Unlock()
@@ -91,9 +83,6 @@ func oversize(fsys fsroot.FS, path string) bool {
 	return fi.Size() > maxLogSize
 }
 
-// rotateLogs checks every service's log each rotateEvery until quit closes.
-// It holds only the service's logMu during a copy, never s.mu, so List and
-// StopAll never wait on disk I/O.
 func (s *Supervisor) rotateLogs(quit <-chan struct{}) {
 	t := time.NewTicker(rotateEvery)
 	defer t.Stop()
@@ -103,7 +92,6 @@ func (s *Supervisor) rotateLogs(quit <-chan struct{}) {
 			return
 		case <-t.C:
 		}
-		// One bad tick must not end rotation for good.
 		safe.Call("services: log rotator", s.rotateAll)
 	}
 }

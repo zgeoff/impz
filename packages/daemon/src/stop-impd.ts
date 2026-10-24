@@ -31,8 +31,6 @@ export interface ImpdStopParts {
   imps?: Pick<Imps, 'sleepAllImps' | 'waitForLifecycle' | 'bootTemplates'>;
   storage?: Stoppable;
   stopTelemetry?: (() => Promise<void>) | null;
-
-  // null leaves a caller's database open
   db?: { readonly destroy: () => Promise<void> } | null;
   readonly log: (message: string) => void;
 }

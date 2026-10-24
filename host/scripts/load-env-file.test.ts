@@ -3,8 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-// Each test sources load-env-file.sh in bash under set -euo pipefail, as host/entrypoint does,
-// and prints what the shell holds after it.
+// The script is sourced under set -euo pipefail, as host/entrypoint sources it.
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-load-env-file-'));
 

@@ -17,8 +17,6 @@ import (
 	"github.com/zgeoff/impz/agent/internal/proto"
 )
 
-// host is the host end of a dial connection, with Serve running on the
-// other end.
 type host struct {
 	conn   net.Conn
 	r      *proto.Reader
@@ -65,7 +63,6 @@ func (h *host) requireOK(t *testing.T) {
 	assert.Equal(t, string(f.Payload), `{"ok":true}`)
 }
 
-// errorCode reads the error RESPONSE and returns its code.
 func (h *host) errorCode(t *testing.T) string {
 	t.Helper()
 	f := h.next(t)
@@ -87,7 +84,6 @@ func (h *host) waitServed(t *testing.T) error {
 	}
 }
 
-// listen hands each connection to handle on a goroutine of its own.
 func listen(t *testing.T, network, address string, handle func(net.Conn)) net.Addr {
 	t.Helper()
 	l, err := net.Listen(network, address)
@@ -96,9 +92,6 @@ func listen(t *testing.T, network, address string, handle func(net.Conn)) net.Ad
 	return l.Addr()
 }
 
-// serveConns accepts on l until cleanup and hands each connection to handle.
-// Cleanup closes l and every connection, then waits for the accept loop and
-// every handler to return.
 func serveConns(t *testing.T, l net.Listener, handle func(net.Conn)) {
 	t.Helper()
 	var (
@@ -142,9 +135,6 @@ func serveConns(t *testing.T, l net.Listener, handle func(net.Conn)) {
 	}()
 }
 
-// The target reads to EOF and only then answers: it works only when the
-// host's STDIN_EOF reaches it as a half-close, and the host learns the end of
-// the answer from STDOUT_EOF.
 func TestServeRelaysWithAHalfCloseBothWays(t *testing.T) {
 	for _, tc := range []struct {
 		network string
@@ -226,8 +216,6 @@ func TestServeRefusesABadDialRequest(t *testing.T) {
 	}
 }
 
-// A host that closes the connection ends the relay, even while the target
-// neither writes nor closes.
 func TestServeEndsTheRelayWhenTheHostCloses(t *testing.T) {
 	t.Parallel()
 	targetClosed := make(chan struct{})
@@ -248,8 +236,6 @@ func TestServeEndsTheRelayWhenTheHostCloses(t *testing.T) {
 	}
 }
 
-// After the host half-closed, a target that resets ends the relay without
-// STDOUT_EOF.
 func TestServeEndsWithoutStdoutEOFWhenTheTargetResets(t *testing.T) {
 	t.Parallel()
 	// The target resets only once the host half-closed: a reset right after
@@ -264,7 +250,6 @@ func TestServeEndsWithoutStdoutEOFWhenTheTargetResets(t *testing.T) {
 	h.requireOK(t)
 
 	assert.NilError(t, h.w.Write(proto.TypeStdinEOF, nil))
-	// read every frame until the relay ends the connection
 	var types []proto.Type
 	for f, err := h.r.Next(); err == nil; f, err = h.r.Next() {
 		types = append(types, f.Type)

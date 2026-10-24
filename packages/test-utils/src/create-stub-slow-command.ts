@@ -4,12 +4,10 @@ import { formatShellWord } from './format-shell-word';
 
 interface StubSlowCommand {
   readonly bin: string;
-
-  // Each call appends "<name> <args> started", then "<name> <args> finished" once it may end.
   readonly log: string;
 
-  // Calls hold until this file exists, so a test can act while one runs. A call also ends once the
-  // log is gone, so a call that outlives its test's directory never waits on.
+  // A call also ends once the log is gone, so a call that outlives its test's directory never
+  // waits on.
   readonly release: string;
 }
 

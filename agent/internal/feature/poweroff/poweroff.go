@@ -1,5 +1,3 @@
-// Package poweroff ends the guest: it stops the user's processes, makes the
-// user disk safe, and resets the machine.
 package poweroff
 
 import (
@@ -16,14 +14,9 @@ import (
 
 const killGrace = 3 * time.Second
 
-// Run thaws the user disk, stops services, terminates every other
-// process and the inner container, syncs, and reboots the guest. Firecracker
-// has no power-off device; with reboot=k on the kernel cmdline a reboot
-// resets through the i8042 controller, which makes Firecracker exit.
-//
-// The thaw comes first: on a frozen disk a service's SIGTERM handler, sync
-// and the read-only remount all block until the freeze's auto-thaw.
 func Run(sup *services.Supervisor, mgr *inner.Manager, thaw func() error) {
+	// On a frozen disk a service's SIGTERM handler, sync and the read-only
+	// remount all block until the freeze's auto-thaw.
 	if err := thaw(); err != nil {
 		log.Printf("poweroff: thaw: %v", err)
 	}
@@ -35,7 +28,6 @@ func Run(sup *services.Supervisor, mgr *inner.Manager, thaw func() error) {
 	for userProcesses(mgr.InitPid()) > 0 && time.Now().Before(deadline) {
 		time.Sleep(50 * time.Millisecond)
 	}
-	// no restart after this
 	mgr.Stop()
 	_ = unix.Kill(-1, unix.SIGKILL)
 
@@ -47,8 +39,8 @@ func Run(sup *services.Supervisor, mgr *inner.Manager, thaw func() error) {
 	Reboot()
 }
 
-// Reboot resets the guest and never returns. RESTART, not POWER_OFF: see
-// Run.
+// Firecracker has no power-off device; with reboot=k on the kernel cmdline a
+// reboot resets through the i8042 controller, which makes Firecracker exit.
 func Reboot() {
 	if err := unix.Reboot(unix.LINUX_REBOOT_CMD_RESTART); err != nil {
 		log.Printf("reboot: %v", err)
@@ -56,8 +48,7 @@ func Reboot() {
 	select {}
 }
 
-// userProcesses counts live processes other than PID 1 and skip. Kernel
-// threads and zombies have an empty cmdline and are skipped.
+// Kernel threads and zombies have an empty cmdline.
 func userProcesses(skip int) int {
 	ents, err := os.ReadDir("/proc")
 	if err != nil {

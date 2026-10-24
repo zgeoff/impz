@@ -14,7 +14,6 @@ import (
 	"github.com/zgeoff/impz/agent/internal/host/proc"
 )
 
-// helperEnv makes the test binary run RunHelper on its arguments.
 const helperEnv = "IMP_TEST_OUTER_HELPER"
 
 func TestMain(m *testing.M) {
@@ -30,7 +29,6 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-// recorder is the agent's runner, keeping each spec it is asked to start.
 type recorder struct{ specs []proc.Spec }
 
 func (r *recorder) Start(s proc.Spec) (*proc.Process, error) {
@@ -38,7 +36,6 @@ func (r *recorder) Start(s proc.Spec) (*proc.Process, error) {
 	return &proc.Process{}, nil
 }
 
-// openCgroup stands in for a cgroup leaf with a directory the test owns.
 func openCgroup(t *testing.T) *os.File {
 	t.Helper()
 	cg, err := os.Open(t.TempDir())
@@ -91,8 +88,6 @@ func TestRunnerRefusesACommandThatIsNotOnPATH(t *testing.T) {
 	assert.Check(t, cmp.Len(next.specs, 0), "a spec reached the runner")
 }
 
-// TestHelperResetsOOMScore: the command, and what it starts, can meet the
-// OOM killer.
 func TestHelperResetsOOMScore(t *testing.T) {
 	cmd := exec.Command(os.Args[0], "/bin/sh", "sh", "-c", "cat /proc/self/oom_score_adj; true")
 	cmd.Env = append(os.Environ(), helperEnv+"=1")

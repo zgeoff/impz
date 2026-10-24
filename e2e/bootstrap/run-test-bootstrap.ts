@@ -57,8 +57,8 @@ export async function runTestBootstrap(options: RunTestBootstrapOptions): Promis
     });
   }
 
-  // As a bash trap waits for the command that runs, a signal lets that command finish, so teardown
-  // sees the container it made; the plan's next command then stops the run.
+  // A signal lets the running command finish, so teardown sees the container that docker made; the
+  // plan's next command then stops the run.
   const guarded: BootstrapIO = {
     ...io,
     shell: (strings, ...expressions) => {
@@ -117,10 +117,10 @@ function buildRun(parts: RunParts): BootstrapRun {
     args: parts.args,
     image,
     work: parts.work,
-
-    // Not a real key: a marker the test looks for in the output.
     fakeKey: `fake-authkey-${String(runID)}-${String(Math.floor(Math.random() * 32_768))}`,
     runID,
+
+    // The pool is kernel-global, so it takes a name unique to the run.
     zfsPool: `impt${String(runID)}`,
     state: { container: null },
     log: (line) => {
@@ -163,8 +163,6 @@ async function runPlan(run: BootstrapRun): Promise<void> {
   run.log(`passed: ${run.args.distros.join(' ')}`);
 }
 
-// A check that fails exits 1; a step that must work and fails exits with its own code, as the bash
-// script's set -e did.
 function reportFailure(io: BootstrapIO, error: unknown): number {
   if (error instanceof BootstrapTestError) {
     io.writeStderr(`test-bootstrap: FAIL: ${error.message}\n`);

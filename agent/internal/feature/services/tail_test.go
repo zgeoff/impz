@@ -56,15 +56,12 @@ func shorten(s string) string {
 	return s
 }
 
-// logStream runs Logs on a pipe and collects what it sends.
 type logStream struct {
 	frames chan proto.Frame
 	done   chan struct{}
 	result chan error
 }
 
-// startLogs runs Logs in the background. Its cleanup ends the stream and
-// joins both goroutines, draining frames nobody read.
 func startLogs(t *testing.T, s *Supervisor, name string, lines int, follow bool, cursor *proto.LogCursor) *logStream {
 	t.Helper()
 	pr, pw := io.Pipe()
@@ -114,7 +111,6 @@ func startLogs(t *testing.T, s *Supervisor, name string, lines int, follow bool,
 	return ls
 }
 
-// waitResponse waits for the RESPONSE, after which the tail is read.
 func (ls *logStream) waitResponse(t *testing.T) {
 	t.Helper()
 	select {
@@ -125,7 +121,6 @@ func (ls *logStream) waitResponse(t *testing.T) {
 	}
 }
 
-// readUntil collects STDOUT until the text ends with want.
 func (ls *logStream) readUntil(t *testing.T, text *string, want string) {
 	t.Helper()
 	timeout := time.After(5 * time.Second)
@@ -221,8 +216,6 @@ func TestLogsFollowsTheLogThroughATruncateAndARename(t *testing.T) {
 		assert.NilError(t, os.Truncate(path, 0))
 		appendTo(t, path, "b\n")
 		ls.readUntil(t, &text, "b\n")
-		// rename, as a service start rotates: the rest of the old file comes
-		// before the new one
 		appendTo(t, path, "c\n")
 		assert.NilError(t, os.Rename(path, path+".1"))
 		appendTo(t, path, "d\n")
@@ -235,8 +228,6 @@ func TestLogsFollowsTheLogThroughATruncateAndARename(t *testing.T) {
 	})
 }
 
-// A running service's own output reaches a follow, through the log the
-// supervisor writes, after the tail it already had.
 func TestLogsFollowsARunningServicesOutput(t *testing.T) {
 	s := newManagedSupervisor(t)
 	release := filepath.Join(t.TempDir(), "release")
@@ -276,7 +267,6 @@ func TestLogsFollowsTheRotatorsCopytruncate(t *testing.T) {
 	})
 }
 
-// inodeOfPath is the file's inode as a cursor carries it.
 func inodeOfPath(t *testing.T, path string) float64 {
 	t.Helper()
 	fi, err := os.Stat(path)
@@ -284,7 +274,6 @@ func inodeOfPath(t *testing.T, path string) float64 {
 	return float64(inodeOf(fi))
 }
 
-// collect runs a stream without follow and returns its text and last cursor.
 func collect(t *testing.T, ls *logStream) (string, *proto.LogCursor) {
 	t.Helper()
 	text := ""
@@ -317,7 +306,6 @@ func TestLogsResumesFromACursorInTheSameFileWithNoLineTwice(t *testing.T) {
 	path := filepath.Join(s.logDir, "web.log")
 	appendTo(t, path, "1\n2\n")
 	ino := inodeOfPath(t, path)
-	// more lines while the stream was away
 	appendTo(t, path, "3\n")
 
 	text, _ := collect(t, startLogs(t, s, "web", 10, false, &proto.LogCursor{Inode: ino, Offset: 4}))
@@ -325,7 +313,6 @@ func TestLogsResumesFromACursorInTheSameFileWithNoLineTwice(t *testing.T) {
 	assert.Check(t, cmp.Equal(text, "3\n"))
 }
 
-// A start rotated the file to .1, with a line after the cursor in it.
 func TestLogsResumesFromACursorInTheRotatedFile(t *testing.T) {
 	s := newManagedSupervisor(t)
 	path := filepath.Join(s.logDir, "web.log")
@@ -341,7 +328,6 @@ func TestLogsResumesFromACursorInTheRotatedFile(t *testing.T) {
 	assert.Check(t, cmp.DeepEqual(last, &proto.LogCursor{Inode: inodeOfPath(t, path), Offset: 2}, protocmp.Transform()))
 }
 
-// A cursor in neither file: the current one goes whole.
 func TestLogsSendsTheWholeCurrentFileForACursorInNeitherFile(t *testing.T) {
 	s := newManagedSupervisor(t)
 	path := filepath.Join(s.logDir, "web.log")
@@ -355,7 +341,6 @@ func TestLogsSendsTheWholeCurrentFileForACursorInNeitherFile(t *testing.T) {
 	assert.Check(t, cmp.Equal(text, "4\n"))
 }
 
-// A cursor past the end of a file that shrank: from 0.
 func TestLogsSendsTheFileFromTheStartForACursorPastItsEnd(t *testing.T) {
 	s := newManagedSupervisor(t)
 	path := filepath.Join(s.logDir, "web.log")

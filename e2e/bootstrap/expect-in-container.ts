@@ -5,8 +5,6 @@ import type { BootstrapRun } from './types';
 interface ContainerExpectation {
   readonly argv: readonly string[];
   readonly failure: string;
-
-  // A check that holds when the command fails, such as a table that must be gone.
   readonly fails?: boolean;
 }
 

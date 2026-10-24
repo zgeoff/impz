@@ -1,7 +1,3 @@
-// Command dockerfile-difftest parses Dockerfiles with the parser of the
-// moby/buildkit commit behind impd's pinned frontend. It reads a JSON array
-// of Dockerfiles on stdin and writes one JSON line for each: the
-// instructions, or the parse error. run.ts compares them with impd's port.
 package main
 
 import (

@@ -21,8 +21,6 @@ func ownOwner() *Owner {
 	return &Owner{UID: os.Getuid(), GID: os.Getgid()}
 }
 
-// buildArchive writes entries to a tar; a TypeReg entry's Linkname is its
-// content
 func buildArchive(t *testing.T, entries ...tar.Header) *bytes.Buffer {
 	t.Helper()
 	var buf bytes.Buffer
@@ -74,8 +72,6 @@ func TestBuildArchiveWritesARegularFilesLinknameAsItsContent(t *testing.T) {
 	assert.Check(t, cmp.Equal(string(content), "hello"))
 }
 
-// makeProject makes proj/ with an executable under bin/ stamped at stamp, a
-// private file whose name has spaces, and a relative symlink.
 func makeProject(t *testing.T, stamp time.Time) string {
 	t.Helper()
 	src := filepath.Join(t.TempDir(), "proj")
@@ -169,7 +165,6 @@ func TestCreateLeavesOutAFIFOWithAWarning(t *testing.T) {
 	assert.Check(t, cmp.Contains(warn.String(), "fifo: not a file, directory or symlink; left out"))
 }
 
-// As cp -r: into dest/<top> when dest is a directory, else as dest
 func TestExtractPutsTheTopInAnExistingDirectoryOrNamesItDest(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -217,7 +212,6 @@ func TestExtractRefusesNamesThatLeaveTheCopyAndExtractsTheRest(t *testing.T) {
 	assert.Check(t, cmp.ErrorIs(err, fs.ErrNotExist))
 }
 
-// A first entry that could leave the copy names no top, so nothing extracts.
 func TestExtractFailsWhenTheFirstNameLeavesTheCopy(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
@@ -250,7 +244,6 @@ func TestExtractFailsForAnEmptyArchive(t *testing.T) {
 	assert.ErrorContains(t, err, "the archive is empty")
 }
 
-// A directory entry where the imp has a file keeps the file.
 func TestExtractRefusesADirectoryOverAFileInTheImp(t *testing.T) {
 	dir := t.TempDir()
 	assert.NilError(t, os.WriteFile(filepath.Join(dir, "src"), []byte("mine"), 0o644))
@@ -263,8 +256,6 @@ func TestExtractRefusesADirectoryOverAFileInTheImp(t *testing.T) {
 	assert.Check(t, cmp.Equal(readFile(t, filepath.Join(dir, "src")), "mine"))
 }
 
-// A symlink in the archive and then a file through it: symlinks come last,
-// so the file finds no directory there
 func TestExtractRefusesAFileThroughASymlinkOfTheArchive(t *testing.T) {
 	dir, outside := t.TempDir(), t.TempDir()
 	archive := buildArchive(t,
@@ -283,8 +274,6 @@ func TestExtractRefusesAFileThroughASymlinkOfTheArchive(t *testing.T) {
 	assert.Check(t, cmp.Equal(target, outside))
 }
 
-// A symlink that was in the imp already, such as one a guest process put
-// there, is not followed either
 func TestExtractRefusesAFileThroughASymlinkInTheImp(t *testing.T) {
 	dir, outside := t.TempDir(), t.TempDir()
 	assert.NilError(t, os.MkdirAll(filepath.Join(dir, "src"), 0o755))
@@ -340,7 +329,6 @@ func TestExtractSkipsDevicesAndDropsSetuid(t *testing.T) {
 	assert.Check(t, cmp.Equal(strings.Count(warn.String(), "skipped"), 2), warn.String())
 }
 
-// a file over a file replaces it; no temp file stays behind
 func TestExtractReplacesAFileWithoutLeftovers(t *testing.T) {
 	dir := t.TempDir()
 	assert.NilError(t, os.MkdirAll(filepath.Join(dir, "src"), 0o755))
@@ -393,8 +381,6 @@ func TestRunRefusesArgumentsOutsideTheUsage(t *testing.T) {
 	}
 }
 
-// zeros in the archive become holes, and a file that ends in zeros keeps its
-// size
 func TestExtractTurnsZerosIntoHoles(t *testing.T) {
 	dir := t.TempDir()
 	content := "head" + strings.Repeat("\x00", 1<<20) + "tail" + strings.Repeat("\x00", 1<<20)
@@ -410,7 +396,6 @@ func TestExtractTurnsZerosIntoHoles(t *testing.T) {
 	assert.Check(t, st.Blocks*512 < int64(len(content))/2, "%d bytes allocated for %d", st.Blocks*512, len(content))
 }
 
-// an archive cut inside a file fails it, and what was there stays
 func TestExtractOfACutArchiveLeavesTheFileAlone(t *testing.T) {
 	dir := t.TempDir()
 	assert.NilError(t, os.WriteFile(filepath.Join(dir, "f"), []byte("old"), 0o644))

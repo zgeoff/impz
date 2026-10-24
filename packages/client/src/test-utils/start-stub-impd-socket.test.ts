@@ -76,7 +76,7 @@ test('it refuses a request that is not a socket upgrade with 400', async () => {
 test('it stops when the test finishes', async () => {
   const ctx = await setupTest();
 
-  // the child's refused fetch: a newer Bun gives a refused connection its errno name
+  // a newer Bun gives a refused connection its errno name, not ConnectionRefused
   const run = runChildTests(
     ctx.directoryPath,
     [

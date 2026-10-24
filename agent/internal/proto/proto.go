@@ -1,6 +1,3 @@
-// Package proto implements the imp agent wire protocol. See docs/architecture/guest/protocol.md.
-//
-// A frame is [u8 type][u32 big-endian length][payload].
 package proto
 
 import (
@@ -15,7 +12,7 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-// Type is a frame type. The numbers are part of the wire format.
+// The numbers are part of the wire format that impd reads.
 type Type uint8
 
 const (
@@ -45,24 +42,19 @@ func (t Type) String() string {
 	return fmt.Sprintf("Type(%d)", uint8(t))
 }
 
-// MaxPayload bounds a single frame. Senders split larger data.
 const MaxPayload = 1 << 20
 
-// ErrTooLarge is returned for a frame whose length exceeds MaxPayload.
 var ErrTooLarge = errors.New("proto: frame too large")
 
-// Frame is one decoded frame.
 type Frame struct {
 	Type    Type
 	Payload []byte
 }
 
-// Reader decodes frames from a stream.
 type Reader struct{ r *bufio.Reader }
 
 func NewReader(r io.Reader) *Reader { return &Reader{r: bufio.NewReader(r)} }
 
-// Next reads one frame. It returns io.EOF only on a clean frame boundary.
 func (r *Reader) Next() (Frame, error) {
 	var hdr [5]byte
 	if _, err := io.ReadFull(r.r, hdr[:]); err != nil {
@@ -85,8 +77,6 @@ func (r *Reader) Next() (Frame, error) {
 	return f, nil
 }
 
-// Writer encodes frames. It is safe for concurrent use, so stdout and
-// stderr pumps can share one connection.
 type Writer struct {
 	mu sync.Mutex
 	w  io.Writer
@@ -94,7 +84,6 @@ type Writer struct {
 
 func NewWriter(w io.Writer) *Writer { return &Writer{w: w} }
 
-// Write sends one frame, splitting payloads larger than MaxPayload.
 func (w *Writer) Write(t Type, payload []byte) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -117,7 +106,6 @@ func (w *Writer) Write(t Type, payload []byte) error {
 	}
 }
 
-// WriteMessage marshals m and sends it as one frame.
 func (w *Writer) WriteMessage(t Type, m protoreflect.ProtoMessage) error {
 	b, err := Marshal(m)
 	if err != nil {
@@ -126,21 +114,17 @@ func (w *Writer) WriteMessage(t Type, m protoreflect.ProtoMessage) error {
 	return w.Write(t, b)
 }
 
-// A payload is the proto3 JSON form of a message under its proto field
-// names. The agent writes every field without presence, zero or not, which an
-// older impd requires, and skips an optional field or a message left unset.
+// An older impd requires every field without presence, zero or not, and a
+// newer impd may send a field this agent lacks.
 var (
 	marshalOptions   = protojson.MarshalOptions{UseProtoNames: true, EmitDefaultValues: true}
 	unmarshalOptions = protojson.UnmarshalOptions{DiscardUnknown: true}
 )
 
-// Marshal is the JSON payload of m.
 func Marshal(m protoreflect.ProtoMessage) ([]byte, error) {
 	return marshalOptions.Marshal(m)
 }
 
-// Unmarshal reads a JSON payload into m. A field m lacks is ignored, so a
-// newer impd's request still reaches an older agent.
 func Unmarshal(b []byte, m protoreflect.ProtoMessage) error {
 	return unmarshalOptions.Unmarshal(b, m)
 }

@@ -302,7 +302,6 @@ function resolveContainerPath(dev: Dev, path: string): string {
   return `/src/${real.slice(root.length + 1)}`;
 }
 
-// The container's own eth0 claims 1500 whatever the real path allows.
 async function readRegistryHost(dev: Dev): Promise<string | null> {
   const registry = dev.env['IMP_BUILD_TEST_REGISTRY'] ?? '';
 
@@ -324,6 +323,7 @@ async function readRegistryHost(dev: Dev): Promise<string | null> {
   return `${name}:${address}`;
 }
 
+// The container's own eth0 claims 1500 whatever the real path allows.
 async function readUplinkMTU(io: DevIO): Promise<string> {
   const route = await io.shell`ip route show default`.quiet().nothrow();
 

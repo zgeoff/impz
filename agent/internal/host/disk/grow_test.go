@@ -15,9 +15,6 @@ import (
 	"gotest.tools/v3/assert/cmp"
 )
 
-// fakeDisk is a device whose size file and device file sit in a temporary
-// directory, and whose resize ioctl it records. Its device file is missing
-// until a test makes a filesystem there.
 type fakeDisk struct {
 	*device
 	resized []uint64
@@ -72,7 +69,6 @@ func TestGrowResizesTheFilesystemToFillTheDevice(t *testing.T) {
 	assert.DeepEqual(t, f.resized, []uint64{8 << 30 / 4096})
 }
 
-// makeExt4 makes a real ext4 filesystem of blocks 4 KiB blocks at path.
 func makeExt4(t *testing.T, path string, blocks int64) {
 	t.Helper()
 	out, err := exec.Command("mkfs.ext4", "-q", "-F", "-b", "4096", path, strconv.FormatInt(blocks, 10)).CombinedOutput()
@@ -100,7 +96,6 @@ func TestGrowResizesAFilesystemSmallerThanTheDevice(t *testing.T) {
 	assert.DeepEqual(t, f.resized, []uint64{96 << 8})
 }
 
-// A device with no ext4 superblock leaves the size to the ioctl.
 func TestGrowResizesWhenTheDeviceHoldsNoExt4Superblock(t *testing.T) {
 	f := newFakeDisk(t, 64<<11)
 	assert.NilError(t, os.WriteFile(f.devicePath, make([]byte, 4096), 0o644))
@@ -147,7 +142,6 @@ func TestWaitAndGrowWaitsForTheNewSize(t *testing.T) {
 		f := newFakeDisk(t, 4<<21)
 		start := time.Now()
 		grown := make(chan error, 1)
-		// the disk grows 60ms in; until then every read sees the stale 4 GiB
 		go func() {
 			time.Sleep(60 * time.Millisecond)
 			grown <- f.setSectors(6 << 21)
@@ -158,8 +152,6 @@ func TestWaitAndGrowWaitsForTheNewSize(t *testing.T) {
 
 		assert.NilError(t, <-grown)
 		assert.Check(t, err)
-		// returning only at the growth shows the earlier reads saw the stale
-		// size and kept polling
 		assert.Check(t, took >= 60*time.Millisecond, "returned after %s, before the disk grew", took)
 		assert.Check(t, cmp.DeepEqual(f.resized, []uint64{6 << 30 / 4096}))
 	})

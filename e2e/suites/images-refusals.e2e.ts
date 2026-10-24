@@ -128,7 +128,6 @@ test('it refuses a FROM image from the host’s own registry under the proxy’s
   });
 });
 
-// {url} and {port} stand for the listener's own.
 test.each([
   ['a plain URL', 'plain', 'ADD {url} /probe', 'ADD {url} is refused'],
   ['a URL in the JSON form', 'json', 'ADD ["{url}", "/probe"]', 'ADD {url} is refused'],

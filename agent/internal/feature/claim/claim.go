@@ -1,5 +1,3 @@
-// Package claim parks a boot template until impd claims it, then makes the
-// restored guest the claiming imp's.
 package claim
 
 import (
@@ -18,27 +16,20 @@ import (
 	"github.com/zgeoff/impz/agent/internal/proto"
 )
 
-// claimRequestTimeout bounds how long a connection may take to send its
-// request while the agent is parked.
 const claimRequestTimeout = 10 * time.Second
 
-// errNotParked answers any op but ping and claim while the agent is parked.
 var errNotParked = &proto.Error{
 	Code:    proto.ErrUnknownOp,
 	Message: "the guest is a boot template waiting for claim",
 }
 
-// Park serves ping and claim on the agent's vsock port until a claim is
-// applied, then closes the listener, so the server can take the port. ping
-// builds the reply to a ping, which Park marks as a boot template's.
-// It opens no inet socket: the template's snapshot holds no TCP state.
+// No inet socket: the template's snapshot holds no TCP state.
 // docs/architecture/lifecycle/boot-templates.md#restore has the order of the steps.
 func Park(listen func() (net.Listener, error), ping func() *proto.Ping, apply func(*proto.Claim) error) (*proto.Claim, error) {
 	l, err := listen()
 	if err != nil {
 		return nil, err
 	}
-	// a failed listen again leaves l nil, with nothing to close
 	defer func() {
 		if l != nil {
 			l.Close()
@@ -63,7 +54,6 @@ func Park(listen func() (net.Listener, error), ping func() *proto.Ping, apply fu
 	}
 }
 
-// serveParked answers one connection; done is true once a claim applied.
 func serveParked(c net.Conn, ping func() *proto.Ping, apply func(*proto.Claim) error) (*proto.Claim, bool) {
 	defer c.Close()
 	r, w := proto.NewReader(c), proto.NewWriter(c)
@@ -102,8 +92,6 @@ func serveParked(c net.Conn, ping func() *proto.Ping, apply func(*proto.Claim) e
 	}
 }
 
-// Params is what the boot goes on with after a claim: the claim's values,
-// never the template's cmdline.
 func Params(c *proto.Claim) cmdline.Params {
 	return cmdline.Params{
 		Hostname:      c.Hostname,
@@ -117,10 +105,8 @@ func Params(c *proto.Claim) cmdline.Params {
 	}
 }
 
-// Apply makes the restored guest this imp's, in this order: the clock (so
-// nothing below stamps the template's time), the entropy pool and a CRNG
-// reseed, eth0's MAC, and the cached state of the user disk dev, which the
-// template never read but whose size changed under it.
+// The clock goes first, so nothing after it stamps the template's time. The
+// template never read the user disk, but its size changed under it.
 func Apply(c *proto.Claim, dev string) error {
 	var errs []error
 	if c.UnixMs > 0 {
@@ -149,8 +135,8 @@ func Apply(c *proto.Claim, dev string) error {
 	return errors.Join(errs...)
 }
 
-// addEntropy credits seed to the pool (RNDADDENTROPY), then has the CRNG
-// draw from it at once (RNDRESEEDCRNG) rather than at its next interval.
+// RNDRESEEDCRNG makes the CRNG draw from the pool at once, rather than at
+// its next interval.
 func addEntropy(seed []byte) error {
 	if len(seed) < 32 {
 		return fmt.Errorf("a seed of %d bytes; want at least 32", len(seed))
@@ -186,15 +172,13 @@ func setMAC(iface, mac string) error {
 	return netlink.LinkSetHardwareAddr(link, hw)
 }
 
-// diskSizeTimeout bounds the wait for virtio-blk to report the size the
-// restore's PATCH gave the disk.
+// the wait for virtio-blk to report the size the restore's PATCH gave the
+// disk
 const diskSizeTimeout = 2 * time.Second
 
-// sectorBytes is the unit virtio-blk reports a disk's size in.
+// the unit virtio-blk reports a disk's size in
 const sectorBytes = 512
 
-// waitForDiskSize waits until read reports at least want bytes, rounded
-// down to whole sectors; want 0 skips.
 func waitForDiskSize(read func() (uint64, error), want int64, timeout time.Duration) error {
 	want -= want % sectorBytes
 	if want <= 0 {
@@ -226,8 +210,7 @@ func readDiskBytes(dev string) (uint64, error) {
 	return size, nil
 }
 
-// flushDisk drops the block device's buffers and rereads its partition
-// table; a disk without one answers EINVAL, which is fine.
+// A disk without a partition table answers BLKRRPART with EINVAL.
 func flushDisk(dev string) error {
 	f, err := os.OpenFile(dev, os.O_RDONLY, 0)
 	if err != nil {

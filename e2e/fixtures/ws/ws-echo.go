@@ -1,10 +1,5 @@
-// ws-echo is the WebSocket peer for the e2e harness. Plain HTTP gets
-// "e2e-ws-ok". A WebSocket gets "hello" the moment it opens, then every text
-// or binary message back prefixed with "echo ". The text message
-// "close <code> <reason>" makes the server close with that code and reason,
-// and the code and reason of a close the client starts are written to
-// /tmp/ws-last-close. It implements just enough of RFC 6455, with no
-// dependencies, so the fixture builds without fetching modules.
+// Just enough of RFC 6455 by hand, with no dependencies, so the fixture builds
+// without fetching modules.
 package main
 
 import (
@@ -59,7 +54,6 @@ func serve(w http.ResponseWriter, r *http.Request) {
 	sum := sha1.Sum([]byte(key + acceptGUID))
 	head := "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n" +
 		"Sec-WebSocket-Accept: " + base64.StdEncoding.EncodeToString(sum[:]) + "\r\n"
-	// agree to the first subprotocol the client offers
 	if offered := r.Header.Get("Sec-WebSocket-Protocol"); offered != "" {
 		head += "Sec-WebSocket-Protocol: " + strings.TrimSpace(strings.Split(offered, ",")[0]) + "\r\n"
 	}
@@ -76,8 +70,7 @@ func serve(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// echo answers frames until the connection closes. Messages are single
-// frames: the harness never fragments.
+// The harness never fragments, so each frame is a whole message.
 func echo(rw *bufio.ReadWriter) error {
 	for {
 		op, payload, err := readFrame(rw.Reader)
@@ -104,7 +97,6 @@ func echo(rw *bufio.ReadWriter) error {
 	}
 }
 
-// parseCloseRequest reads "close <code> <reason>".
 func parseCloseRequest(message string) (uint16, string, bool) {
 	fields := strings.SplitN(message, " ", 3)
 	if len(fields) != 3 || fields[0] != "close" {
@@ -117,7 +109,6 @@ func parseCloseRequest(message string) (uint16, string, bool) {
 	return uint16(code), fields[2], true
 }
 
-// closeWith starts the close handshake and waits for the client's reply.
 func closeWith(rw *bufio.ReadWriter, code uint16, reason string) error {
 	payload := binary.BigEndian.AppendUint16(nil, code)
 	if err := writeFrame(rw, opClose, append(payload, reason...)); err != nil {
@@ -184,7 +175,7 @@ func readFrame(r *bufio.Reader) (byte, []byte, error) {
 	return op, payload, nil
 }
 
-// writeFrame sends one unmasked final frame, as a server must.
+// A server must not mask its frames (RFC 6455 5.1).
 func writeFrame(rw *bufio.ReadWriter, op byte, payload []byte) error {
 	head := []byte{0x80 | op}
 	switch n := len(payload); {

@@ -34,8 +34,6 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-// newSupervisor runs services as direct children, with their logs in a
-// temporary directory. StopAll ends whatever the test started.
 func newSupervisor(t *testing.T) *Supervisor {
 	t.Helper()
 	s := New(&proc.Direct{Reaper: testReaper}, fsroot.Host, imagecfg.NewLive(imagecfg.Config{Env: []string{"PATH=/usr/bin:/bin"}}))
@@ -44,14 +42,9 @@ func newSupervisor(t *testing.T) *Supervisor {
 	return s
 }
 
-// TestStopAllDeliversSIGTERMWhenItLandsDuringAStart stops a service at
-// offsets 50µs apart across its start: each offset is a fault-injection
-// point, not a settling delay. A SIGTERM lost to the window between fork
-// and recording the process would make StopAll wait out stopGrace and
-// SIGKILL. Where each stop lands depends on scheduling; the test after this
-// one puts a stop in the window itself.
+// Each 50µs offset is a fault-injection point, not a settling delay. Where
+// each stop lands depends on scheduling.
 func TestStopAllDeliversSIGTERMWhenItLandsDuringAStart(t *testing.T) {
-	// each stop's last exit: nil when it landed before the service ran
 	var exits []*proto.Exit
 	for i := range 100 {
 		offset := time.Duration(i) * 50 * time.Microsecond
@@ -82,9 +75,6 @@ func TestStopAllDeliversSIGTERMWhenItLandsDuringAStart(t *testing.T) {
 	assert.Check(t, cmp.DeepEqual(killed, sigterm, protocmp.Transform()), "every process that ran ends by SIGTERM")
 }
 
-// heldRunner starts processes through a Direct runner, then reports each
-// fork on forked and holds the return until proceed closes: the supervisor
-// has a process it has not recorded yet.
 type heldRunner struct {
 	direct  *proc.Direct
 	forked  chan *proc.Process
@@ -92,8 +82,6 @@ type heldRunner struct {
 	once    sync.Once
 }
 
-// newHeldRunner makes a heldRunner whose holds cleanup releases, so a
-// failed test leaves no Start blocked.
 func newHeldRunner(t *testing.T) *heldRunner {
 	t.Helper()
 	r := &heldRunner{direct: &proc.Direct{Reaper: testReaper}, forked: make(chan *proc.Process, 1), proceed: make(chan struct{})}
@@ -101,10 +89,8 @@ func newHeldRunner(t *testing.T) *heldRunner {
 	return r
 }
 
-// release lets every held Start return; it is safe to call twice.
 func (r *heldRunner) release() { r.once.Do(func() { close(r.proceed) }) }
 
-// nextFork waits, bounded, for the runner's next fork.
 func (r *heldRunner) nextFork(t *testing.T) *proc.Process {
 	t.Helper()
 	select {
@@ -139,8 +125,8 @@ func TestHeldRunnerHoldsTheReturnOfAStartedProcess(t *testing.T) {
 		}
 		returned <- p
 	}()
-	// registered after newHeldRunner's release, so it runs first; it
-	// releases the hold itself, then joins the Start
+	// t.Cleanup runs the last one registered first, so this runs before the
+	// runner's own release; it releases the hold itself, then joins the start
 	t.Cleanup(func() {
 		r.release()
 		select {
@@ -176,8 +162,6 @@ func TestHeldRunnerHoldsTheReturnOfAStartedProcess(t *testing.T) {
 	}
 }
 
-// A stop that lands after the fork, while the supervisor has not recorded
-// the process, still reaches it with SIGTERM.
 func TestStopAllDeliversSIGTERMBetweenTheForkAndItsRecord(t *testing.T) {
 	r := newHeldRunner(t)
 	s := New(r, fsroot.Host, imagecfg.NewLive(imagecfg.Config{Env: []string{"PATH=/usr/bin:/bin"}}))
@@ -195,8 +179,8 @@ func TestStopAllDeliversSIGTERMBetweenTheForkAndItsRecord(t *testing.T) {
 		s.StopAll()
 		stopped <- time.Since(began)
 	}()
-	// runs before the kill above and newHeldRunner's release: it releases
-	// the held start, so StopAll can finish, and joins StopAll
+	// t.Cleanup runs this before the kill above and the runner's release; it
+	// releases the held start, so the stop can finish, and joins the stop
 	t.Cleanup(func() {
 		r.release()
 		select {
@@ -205,7 +189,6 @@ func TestStopAllDeliversSIGTERMBetweenTheForkAndItsRecord(t *testing.T) {
 			t.Error("StopAll did not return")
 		}
 	})
-	// StopAll has closed the service's stop, with no process to signal yet
 	poll.WaitOn(t, func(poll.LogT) poll.Result {
 		s.mu.Lock()
 		defer s.mu.Unlock()
@@ -229,8 +212,6 @@ func TestStopAllDeliversSIGTERMBetweenTheForkAndItsRecord(t *testing.T) {
 	assert.Check(t, cmp.DeepEqual(list[0].LastExit, &proto.Exit{Code: -1, Signal: 15}, protocmp.Transform()))
 }
 
-// TestAFailedRestartKeepsTheLastExit runs a service that exits 3 and
-// deletes itself, so every restart fails to start.
 func TestAFailedRestartKeepsTheLastExit(t *testing.T) {
 	bin := filepath.Join(t.TempDir(), "once")
 	assert.NilError(t, os.WriteFile(bin, []byte("#!/bin/sh\nrm -f \"$0\"\nexit 3\n"), 0o755))
@@ -239,7 +220,6 @@ func TestAFailedRestartKeepsTheLastExit(t *testing.T) {
 
 	s.startAt(&Def{Name: new("once"), Argv: []string{bin}, Restart: new("always")}, "")
 
-	// The first restart comes after the first backoff and fails.
 	var st *proto.ServiceStatus
 	poll.WaitOn(t, func(poll.LogT) poll.Result {
 		st = s.List()[0]
@@ -251,15 +231,12 @@ func TestAFailedRestartKeepsTheLastExit(t *testing.T) {
 	assert.DeepEqual(t, st.LastExit, &proto.Exit{Code: 3}, protocmp.Transform())
 }
 
-// A service waits one second before its first restart, doubling up to 60 s.
 func TestNewStartsTheRestartBackoffAtOneSecond(t *testing.T) {
 	s := New(&proc.Direct{Reaper: testReaper}, fsroot.Host, imagecfg.NewLive(imagecfg.Config{}))
 
 	assert.Equal(t, s.firstBackoff, time.Second)
 }
 
-// openLogWithin runs openLog for svc and returns its error, failing the
-// test if the open blocks. A file it did open is closed.
 func openLogWithin(t *testing.T, s *Supervisor, svc *service) error {
 	t.Helper()
 	done := make(chan error, 1)
@@ -279,9 +256,6 @@ func openLogWithin(t *testing.T, s *Supervisor, svc *service) error {
 	}
 }
 
-// TestOpenLogRefusesAFIFOWithoutAReaderWithoutBlocking puts a FIFO at a
-// service's log with no reader: a blocking open would hold the service's
-// loop.
 func TestOpenLogRefusesAFIFOWithoutAReaderWithoutBlocking(t *testing.T) {
 	s := newSupervisor(t)
 	svc := &service{def: &Def{Name: new("fifo")}}
@@ -293,9 +267,6 @@ func TestOpenLogRefusesAFIFOWithoutAReaderWithoutBlocking(t *testing.T) {
 	assert.ErrorIs(t, err, unix.ENXIO)
 }
 
-// TestOpenLogRefusesAFIFOWithAReaderAsNotRegular puts a FIFO with a reader
-// at a service's log: the open works, and the regular-file check must
-// refuse it.
 func TestOpenLogRefusesAFIFOWithAReaderAsNotRegular(t *testing.T) {
 	s := newSupervisor(t)
 	svc := &service{def: &Def{Name: new("fifo")}}
@@ -309,8 +280,6 @@ func TestOpenLogRefusesAFIFOWithAReaderAsNotRegular(t *testing.T) {
 	assert.ErrorIs(t, err, fsroot.ErrNotRegular)
 }
 
-// TestOpenLogHandsTheServiceABlockingFile: the service gets its log without
-// O_NONBLOCK, as it would get any file.
 func TestOpenLogHandsTheServiceABlockingFile(t *testing.T) {
 	s := newSupervisor(t)
 

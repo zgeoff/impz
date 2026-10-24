@@ -9,9 +9,8 @@ import (
 	"github.com/charmbracelet/x/ansi/parser"
 )
 
-// DEC private modes that change how the terminal reads input or which
-// screen it shows. A viewer's terminal must be in the same modes as the
-// session, or keys, the mouse and pastes arrive in the wrong form.
+// A viewer's terminal must be in the same modes as the session, or keys,
+// the mouse and pastes arrive in the wrong form.
 var trackedModes = []int{
 	1,    // DECCKM: application cursor keys
 	25,   // DECTCEM: cursor visible (on by default)
@@ -30,29 +29,25 @@ var trackedModes = []int{
 	2004, // bracketed paste
 }
 
-// defaultOn lists the tracked modes a terminal starts with set.
 var defaultOn = map[int]bool{25: true}
 
-// maxKittyFlags bounds the kitty keyboard flag stack, as kitty does.
+// the bound kitty puts on its keyboard flag stack
 const maxKittyFlags = 32
 
-// parserDataSize bounds what the parser keeps of an OSC, DCS or APC string.
-// The modes never need the string data; the parser still steps through it.
+// The modes never need an OSC, DCS or APC string's data; the parser still
+// steps through it.
 const parserDataSize = 64
 
-// modes follows a terminal's input and screen modes through the bytes a
-// program writes, with a VT parser so a sequence split across writes, or
-// inside an OSC string, is read right.
+// A VT parser, so a sequence split across writes, or inside an OSC string,
+// is read right.
 type modes struct {
 	parser *ansi.Parser
 	set    map[int]bool
-	// kitty holds the kitty keyboard protocol's stacks of flag sets, one
-	// for the main screen and one for the alternate screen, as kitty keeps
-	// them; the last entry of the shown screen's stack is in effect.
+	// one stack of kitty keyboard flag sets per screen, as kitty keeps them;
+	// the last entry of the shown screen's stack is in effect
 	kitty [2][]int
 }
 
-// altModes are the modes that show the alternate screen.
 var altModes = []int{47, 1047, 1049}
 
 func newModes() *modes {
@@ -71,7 +66,6 @@ func (m *modes) reset() {
 	m.kitty = [2][]int{}
 }
 
-// screen returns 1 while the alternate screen shows, else 0.
 func (m *modes) screen() int {
 	for _, n := range altModes {
 		if m.set[n] {
@@ -83,8 +77,8 @@ func (m *modes) screen() int {
 
 func (m *modes) advance(b byte) { m.parser.Advance(b) }
 
-// atGround reports whether the parser is between sequences and characters,
-// where a byte stream can be cut and replayed from.
+// Only between sequences and characters can a byte stream be cut and
+// replayed from.
 func (m *modes) atGround() bool { return m.parser.State() == parser.GroundState }
 
 func (m *modes) handleCsi(cmd ansi.Cmd, params ansi.Params) {
@@ -144,9 +138,6 @@ func (m *modes) handleEsc(cmd ansi.Cmd) {
 	}
 }
 
-// sequence returns the bytes that put a terminal in its default modes into
-// these modes. The main screen's kitty stack goes before the switch to the
-// alternate screen, and that screen's stack after it.
 func (m *modes) sequence() []byte {
 	var b strings.Builder
 	m.writeModes(&b, false)
@@ -156,8 +147,6 @@ func (m *modes) sequence() []byte {
 	return []byte(b.String())
 }
 
-// writeModes writes the tracked modes that differ from the default: the
-// alternate screen modes, or every other one.
 func (m *modes) writeModes(b *strings.Builder, alt bool) {
 	for _, n := range trackedModes {
 		if slices.Contains(altModes, n) != alt || m.set[n] == defaultOn[n] {

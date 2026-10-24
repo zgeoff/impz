@@ -17,9 +17,8 @@ interface HarnessEnvOptions {
   readonly tailnet: HarnessTailnet;
 }
 
-// The env the dev script and every journey start with. e2e nodes join only as
-// tag:imp-e2e, which reaches no live impd, so dev's own key and control server
-// never pass through.
+// e2e nodes join only as tag:imp-e2e, which reaches no live impd, so dev's own
+// key and control server never pass through.
 export function buildHarnessEnv(options: Readonly<HarnessEnvOptions>): HarnessEnv {
   const env = {
     ...buildWithout(options.env, [

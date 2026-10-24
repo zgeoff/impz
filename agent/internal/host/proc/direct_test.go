@@ -22,7 +22,6 @@ import (
 // The reap loop is process-wide, so the package shares one Reaper.
 var testReaper = reaper.New()
 
-// devNull opens /dev/null for the rest of the test.
 func devNull(t *testing.T) *os.File {
 	t.Helper()
 	f, err := os.Open(os.DevNull)
@@ -31,8 +30,6 @@ func devNull(t *testing.T) *os.File {
 	return f
 }
 
-// run starts spec, waits for it to exit, and returns what it wrote to
-// stdout and stderr.
 func run(t *testing.T, d *Direct, spec Spec) string {
 	t.Helper()
 	r, w, err := os.Pipe()
@@ -48,8 +45,6 @@ func run(t *testing.T, d *Direct, spec Spec) string {
 	return strings.TrimSpace(string(out))
 }
 
-// startGroup starts sh leaving a sleep in its process group, and returns
-// once the sleep has started. Cleanup kills whatever is left of the group.
 func startGroup(t *testing.T, d *Direct) *Process {
 	t.Helper()
 	r, w, err := os.Pipe()
@@ -70,8 +65,6 @@ func startGroup(t *testing.T, d *Direct) *Process {
 	return p
 }
 
-// agentCopy copies /bin/echo to stand in for the agent binary, opens it, and
-// removes its path, as an agent whose system drive went away.
 func agentCopy(t *testing.T) (path string, f *os.File) {
 	t.Helper()
 	// /bin/echo is a small binary that needs nothing at a fixed path
@@ -172,7 +165,6 @@ func TestGroupAliveTurnsFalseOnceTheGroupIsGone(t *testing.T) {
 	}, poll.WithTimeout(5*time.Second), poll.WithDelay(10*time.Millisecond))
 }
 
-// openPlainDir opens a directory that is not a cgroup, as a Spec.Cgroup.
 func openPlainDir(t *testing.T) *os.File {
 	t.Helper()
 	dir, err := os.Open(t.TempDir())
@@ -196,10 +188,9 @@ func TestStartRefusesARequiredCgroupThatIsNotOne(t *testing.T) {
 
 	p, err := d.Start(Spec{Argv: []string{"true"}, Env: []string{"PATH=/usr/bin:/bin"}, Cgroup: openPlainDir(t), RequireCgroup: true})
 
-	// clone3 refuses a cgroup fd that is no cgroup with EBADF; where clone3
-	// is missing or a seccomp filter blocks it, the spawn fails with ENOSYS
-	// or EPERM. Any of them shows no retry ran without the cgroup: the
-	// retry would have started true.
+	// clone3 refuses a cgroup fd that is no cgroup with EBADF; where clone3 is
+	// missing or a seccomp filter blocks it, the spawn fails with ENOSYS or
+	// EPERM. A retry without the cgroup would have started true.
 	assert.Check(t, errors.Is(err, syscall.EBADF) || errors.Is(err, syscall.ENOSYS) || errors.Is(err, syscall.EPERM),
 		"err %v, want EBADF, or ENOSYS or EPERM without clone3", err)
 	assert.Check(t, cmp.ErrorContains(err, "start true: "))

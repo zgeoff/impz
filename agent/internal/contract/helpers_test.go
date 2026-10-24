@@ -20,10 +20,8 @@ import (
 	"github.com/zgeoff/impz/agent/internal/proto"
 )
 
-// coverage records, per type, which fields hold a value in at least one of
-// the values added. A Go struct's field holds one when it is not zero; a
-// message's when the message has it, so an optional field set to zero
-// counts and an implicit one at zero does not.
+// A message's field holds a value when the message has it, so an optional
+// field set to zero counts and an implicit one at zero does not.
 type coverage map[string]map[string]bool
 
 func (c coverage) add(value any) {
@@ -84,7 +82,6 @@ func (c coverage) fields(typ string) map[string]bool {
 	return c[typ]
 }
 
-// unset lists, as Type.field, the fields of the types seen that no value set.
 func (c coverage) unset(except ...string) []string {
 	var out []string
 	for typ, set := range c {
@@ -99,8 +96,6 @@ func (c coverage) unset(except ...string) []string {
 	return out
 }
 
-// declaredConsts reads the constants of a source file whose names start
-// with prefix and whose values are a literal: a string or an int.
 func declaredConsts(t *testing.T, path, prefix string) map[string]any {
 	t.Helper()
 	file, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
@@ -137,8 +132,6 @@ func declaredConsts(t *testing.T, path, prefix string) map[string]any {
 	return consts
 }
 
-// decodeJSON reads a fixture's JSON as plain values, to compare two whatever
-// their layout.
 func decodeJSON(t *testing.T, b []byte) any {
 	t.Helper()
 	var v any
@@ -146,8 +139,6 @@ func decodeJSON(t *testing.T, b []byte) any {
 	return v
 }
 
-// encodeFixture is a fixture file's JSON, indented: a message as the
-// agent's own writer sends it, any other value as encoding/json writes it.
 func encodeFixture(t *testing.T, value any) []byte {
 	t.Helper()
 	m, ok := value.(protoreflect.ProtoMessage)
@@ -163,7 +154,6 @@ func encodeFixture(t *testing.T, value any) []byte {
 	return append(out.Bytes(), '\n')
 }
 
-// decodeStrict decodes a fixture into v, refusing a field v does not have.
 func decodeStrict(t *testing.T, path string, v any) error {
 	t.Helper()
 	b, err := os.ReadFile(path)
@@ -173,8 +163,6 @@ func decodeStrict(t *testing.T, path string, v any) error {
 	return dec.Decode(v)
 }
 
-// decodeMessage decodes a fixture into m, refusing a field the schema does
-// not have; the agent itself ignores one.
 func decodeMessage(t *testing.T, path string, m protoreflect.ProtoMessage) error {
 	t.Helper()
 	b, err := os.ReadFile(path)

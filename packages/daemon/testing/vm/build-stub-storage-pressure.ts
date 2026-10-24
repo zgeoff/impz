@@ -6,7 +6,6 @@ interface StoragePressure {
   readonly freedBytes: number;
 }
 
-// Stands in for a full pool, on which every image frees the same bytes and no clone shares one.
 export function buildStubStoragePressure(
   pressure: Readonly<StoragePressure>,
 ): Pick<StorageBackend, 'readUsage' | 'measureImages'> {

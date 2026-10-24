@@ -5,8 +5,6 @@ import { runInContainer } from './run-in-container';
 import type { BootstrapRun, BootstrapTarget } from './types';
 import { waitForImpHost } from './wait-for-imp-host';
 
-// The host as a bootstrap.sh from before IPv6 left it: imp-host on the default bridge, and no IPv6
-// keys in the env file or the unit.
 export async function revertToOldHost(run: BootstrapRun, target: BootstrapTarget): Promise<void> {
   const distro = target.distro;
 

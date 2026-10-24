@@ -86,15 +86,13 @@ func TestTheAgentDecodesTheHostFramesWithNoFieldLeftOver(t *testing.T) {
 	}
 }
 
-// cmdlineFixture is impd's kernel cmdline for an imp with every option on,
-// and for a boot template.
 type cmdlineFixture struct {
 	BootArgs         string `json:"boot_args"`
 	TemplateBootArgs string `json:"template_boot_args"`
 }
 
-// cmdlineKeys are the imp.* keys the agent reads; imp.id is impd's own, for
-// a reader of the guest's /proc/cmdline, and the agent leaves it alone.
+// imp.id is impd's own, for a reader of the guest's /proc/cmdline, and the
+// agent leaves it alone.
 var cmdlineKeys = []string{"dns", "gw", "gw6", "hostname", "id", "ip", "ip6", "reset_identity", "template"}
 
 func TestTheAgentReadsEveryKeyOfTheHostCmdline(t *testing.T) {
@@ -128,7 +126,6 @@ func TestTheAgentReadsTheHostImageConfigWithNoFieldLeftOver(t *testing.T) {
 	assert.DeepEqual(t, c.unset(), []string(nil))
 }
 
-// tarFixture is the argv impd gives `imp-agent tar`, after "tar".
 type tarFixture struct {
 	Create       []string `json:"create"`
 	Extract      []string `json:"extract"`

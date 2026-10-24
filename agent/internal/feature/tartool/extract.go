@@ -15,14 +15,11 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// resolveBeneath keeps every lookup under the copy's parent and off
-// symlinks: the extractor runs as root, and a guest process could swap a
-// directory for a symlink between a check and a write. openat2 makes the
-// check and the use one step.
+// The extractor runs as root, and a guest process could swap a directory for
+// a symlink between a check and a write; openat2 makes the check and the use
+// one step.
 const resolveBeneath = unix.RESOLVE_BENEATH | unix.RESOLVE_NO_SYMLINKS
 
-// copyRoot is where the archive's top entry lands: base in the directory
-// parent names.
 type copyRoot struct {
 	parent int
 	base   string
@@ -49,20 +46,6 @@ type extractor struct {
 	created int
 }
 
-// Extract reads a tar from r into dest, as cp -r does: into dest/<top> when
-// dest is a directory, else as dest. Every entry belongs to owner, or with a
-// nil owner to the owner of the directory the copy lands in. In order:
-//   - a name that is absolute, holds "..", or has another top is refused;
-//   - no lookup follows a symlink below dest, so an entry under a symlink,
-//     even one a guest process puts there meanwhile, is refused;
-//   - a file is written to a fresh temp name, then renamed over its place;
-//   - a hard link must point to a file of the copy;
-//   - devices and FIFOs are skipped, and setuid and setgid are dropped;
-//   - symlinks are made last, so no entry is written through one, and
-//     directory modes after everything, so a read-only one can be filled.
-//
-// A refused entry is reported on warn and the rest still extract; the
-// error then says so.
 func Extract(dest string, r io.Reader, owner *Owner, warn io.Writer) error {
 	x := &extractor{owner: owner, warn: warn}
 	defer x.close()
@@ -91,6 +74,8 @@ func Extract(dest string, r io.Reader, owner *Owner, warn io.Writer) error {
 	if x.root == nil {
 		return errors.New("the archive is empty")
 	}
+	// Symlinks go last, so no entry is written through one, and directory
+	// modes after everything, so a read-only directory can still be filled.
 	for _, link := range x.links {
 		if err := x.makeSymlink(link); err != nil {
 			fmt.Fprintf(warn, "imp-agent tar: %s: %v\n", link.rel, err)
@@ -145,8 +130,6 @@ func (x *extractor) extractEntry(dest string, hdr *tar.Header, tr io.Reader) err
 	}
 }
 
-// splitName is name's top component and the rest, or an error for a name
-// that could leave the copy
 func splitName(name string) (string, string, error) {
 	if strings.HasPrefix(name, "/") {
 		return "", "", errors.New("an absolute name")
@@ -164,8 +147,8 @@ func splitName(name string) (string, string, error) {
 	return top, rest, nil
 }
 
-// openCopyRoot opens the directory the top entry lands in. dest itself is
-// the user's to name, so it may go through symlinks; nothing below it may.
+// dest itself is the user's to name, so it may go through symlinks; nothing
+// below it may.
 func openCopyRoot(dest, top string) (*copyRoot, error) {
 	parent, base := filepath.Dir(dest), filepath.Base(dest)
 	if info, err := os.Stat(dest); err == nil && info.IsDir() {
@@ -178,8 +161,6 @@ func openCopyRoot(dest, top string) (*copyRoot, error) {
 	return &copyRoot{parent: fd, base: base, top: top}, nil
 }
 
-// readOwner is the owner of the directory fd names, so a copy into /etc
-// belongs to root and one into /home/dev to dev
 func readOwner(fd int) (*Owner, error) {
 	var st unix.Stat_t
 	if err := unix.Fstat(fd, &st); err != nil {
@@ -188,7 +169,6 @@ func readOwner(fd int) (*Owner, error) {
 	return &Owner{UID: int(st.Uid), GID: int(st.Gid)}, nil
 }
 
-// openParent opens rel's directory under the copy's parent, with flags
 func (x *extractor) openParent(rel string, flags uint64) (int, string, error) {
 	dir, base := path.Split(rel)
 	if dir == "" {
@@ -227,7 +207,6 @@ func (x *extractor) makeDir(rel string, hdr *tar.Header) error {
 		if st.Mode&unix.S_IFMT != unix.S_IFDIR {
 			return errors.New("not a directory in the imp")
 		}
-		// a directory that was there keeps its owner and mode
 		return nil
 	}
 	if err != nil {
@@ -240,7 +219,6 @@ func (x *extractor) makeDir(rel string, hdr *tar.Header) error {
 	return nil
 }
 
-// tempName is unique within this extract; O_EXCL refuses one that exists
 func (x *extractor) tempName() string {
 	x.created++
 	return fmt.Sprintf(".imp-cp-%d-%d", os.Getpid(), x.created)
@@ -293,12 +271,9 @@ func fillFile(f *os.File, hdr *tar.Header, content io.Reader, owner *Owner) erro
 	return setTimes(int(f.Fd()), hdr.ModTime)
 }
 
-// holeBlock is the size of the blocks writeSparse checks for zeros: the
-// page size, and the block size of ext4 and xfs
+// the page size, and the block size of ext4 and xfs
 const holeBlock = 4096
 
-// writeSparse writes content to f, seeking over each all-zero block, so a
-// sparse file stays sparse in the imp. It returns the bytes it read.
 func writeSparse(f *os.File, content io.Reader) (int64, error) {
 	buf := make([]byte, holeBlock)
 	var written int64
@@ -337,7 +312,6 @@ func setTimes(fd int, modTime time.Time) error {
 	return unix.Futimes(fd, []unix.Timeval{tv, tv})
 }
 
-// safeMode keeps the permission and sticky bits, not setuid or setgid
 func safeMode(mode int64) os.FileMode {
 	perm := os.FileMode(mode) & os.ModePerm
 	if mode&0o1000 != 0 {
@@ -391,7 +365,6 @@ func (x *extractor) makeSymlink(link pendingSymlink) error {
 	return err
 }
 
-// finishDirs sets the mode and time of each directory the copy made,
 // deepest first, so a parent's time is not changed by a child's
 func (x *extractor) finishDirs() {
 	sort.Slice(x.dirs, func(i, j int) bool {

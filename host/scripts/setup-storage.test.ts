@@ -7,8 +7,8 @@ import { createStubLosetup } from '../../scripts/test-utils/create-stub-losetup'
 import { createStubMountpoint } from '../../scripts/test-utils/create-stub-mountpoint';
 
 // /dev/zfs is a fixed path, so the zfs steps after its check go untested here.
-// mknod records into its own file: make_loop_nodes calls it once for each loop
-// device this host has.
+// mknod records into its own file, because the script calls it once for each
+// loop device this host has.
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-setup-storage-'));
 

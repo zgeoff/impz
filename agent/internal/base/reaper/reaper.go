@@ -1,9 +1,3 @@
-// Package reaper owns every wait4 call in the agent.
-//
-// The agent is PID 1, so it inherits every orphan in the guest and must reap
-// them. A process-wide wait4(-1) loop races with any per-child Wait, so
-// nothing else in the agent may call Wait. Code that spawns a child does so
-// through Reaper.Start and receives the exit status on a channel.
 package reaper
 
 import (
@@ -16,12 +10,9 @@ import (
 	"github.com/zgeoff/impz/agent/internal/base/safe"
 )
 
-// Status is the outcome of a reaped child.
 type Status struct {
-	Pid int
-	// Code is the exit code, or -1 if the child died from a signal.
-	Code int
-	// Signal is the terminating signal, or 0 if the child exited normally.
+	Pid    int
+	Code   int
 	Signal syscall.Signal
 }
 
@@ -32,7 +23,9 @@ func statusFrom(pid int, ws syscall.WaitStatus) Status {
 	return Status{Pid: pid, Code: ws.ExitStatus()}
 }
 
-// Reaper reaps all children and routes exit statuses to registered waiters.
+// The agent is PID 1, so it inherits every orphan in the guest and must reap
+// them. A process-wide wait4(-1) loop races with any per-child Wait, so
+// nothing else in the agent may call Wait.
 type Reaper struct {
 	// mu is held across fork+register so the loop cannot reap a pid before
 	// its waiter exists.
@@ -40,7 +33,6 @@ type Reaper struct {
 	waiters map[int]chan Status
 }
 
-// New starts the reap loop. Call it once, before any child is spawned.
 func New() *Reaper {
 	r := &Reaper{waiters: make(map[int]chan Status)}
 	sigs := make(chan os.Signal, 1)
@@ -55,8 +47,6 @@ func New() *Reaper {
 	return r
 }
 
-// Start runs start (which must fork exactly one child and return its pid)
-// and registers the pid. The returned channel receives exactly one Status.
 func (r *Reaper) Start(start func() (int, error)) (int, <-chan Status, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -69,8 +59,7 @@ func (r *Reaper) Start(start func() (int, error)) (int, <-chan Status, error) {
 	return pid, ch, nil
 }
 
-// reapAll drains every exited child. SIGCHLD coalesces, so one signal may
-// stand for many exits.
+// SIGCHLD coalesces, so one signal may stand for many exits.
 func (r *Reaper) reapAll() {
 	for {
 		var ws syscall.WaitStatus

@@ -184,7 +184,6 @@ function buildPortArgs(layout: DevLayout, env: DevEnv): string[] {
     `127.0.0.1:${String(layout.sshPort)}:22`,
   ];
 
-  // The public MCP route answers on loopback only.
   return (env['IMP_MCP_PUBLIC_URL'] ?? '') === ''
     ? ports
     : [

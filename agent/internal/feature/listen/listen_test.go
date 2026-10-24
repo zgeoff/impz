@@ -24,8 +24,6 @@ import (
 	"github.com/zgeoff/impz/agent/internal/proto"
 )
 
-// host is impd's end of one agent connection, with the manager serving the
-// other end.
 type host struct {
 	conn   net.Conn
 	r      *proto.Reader
@@ -45,8 +43,8 @@ func startHost(t *testing.T, serve func(r *proto.Reader, w *proto.Writer) error)
 		h.served <- serve(proto.NewReader(guestEnd), proto.NewWriter(guestEnd))
 		guestEnd.Close()
 	}()
-	// registered after the close above, so it runs first: the close ends
-	// Serve, and the test does not end before it returns
+	// t.Cleanup runs this before the close above; closing the host end ends
+	// the serve, and the test does not end before it returns
 	t.Cleanup(func() {
 		hostEnd.Close()
 		select {
@@ -68,9 +66,8 @@ func (h *host) next(t *testing.T, want proto.Type, m protoreflect.ProtoMessage) 
 	}
 }
 
-// shortDir makes a directory of the test's own with a short path: a unix
-// socket path has a 108-byte limit, which a t.TempDir under a long TMPDIR
-// can pass.
+// A unix socket path has a 108-byte limit, which a t.TempDir under a long
+// TMPDIR can pass.
 func shortDir(t *testing.T) string {
 	t.Helper()
 	dir, err := os.MkdirTemp("/tmp", "listen")
@@ -79,7 +76,6 @@ func shortDir(t *testing.T) string {
 	return dir
 }
 
-// newManager serves sockets as the test's own user, under roots in dir.
 func newManager(t *testing.T, dir string) *Manager {
 	t.Helper()
 	return NewManager(filepath.Join(dir, "agents"), filepath.Join(dir, "forwards"), imagecfg.NewLive(imagecfg.Config{User: fmt.Sprint(os.Getuid())}), testBinder(), fsroot.Host)
@@ -87,8 +83,7 @@ func newManager(t *testing.T, dir string) *Manager {
 
 var testReaper *reaper.Reaper
 
-// TestMain doubles as the listen helper, which the binder starts as this
-// test binary.
+// The binder starts this test binary as its listen helper.
 func TestMain(m *testing.M) {
 	if len(os.Args) == 4 && os.Args[1] == dial.ListenCommand {
 		if err := dial.RunListenHelper(os.Args[2], os.Args[3]); err != nil {
@@ -100,7 +95,6 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-// testBinder binds through the helper, as the test's own user
 func testBinder() Binder {
 	return dial.NewDialer(&proc.Direct{Reaper: testReaper, Agent: os.Args[0]}, imagecfg.NewLive(imagecfg.Config{User: ""}))
 }
@@ -123,8 +117,6 @@ func dialSocket(t *testing.T, path string) net.Conn {
 	return c
 }
 
-// readEnd reads c until its first byte or error and returns the error: io.EOF
-// when the agent closed it.
 func readEnd(c net.Conn) error {
 	_, err := c.Read(make([]byte, 1))
 	return err
@@ -183,8 +175,7 @@ func TestServeAgentRemovesTheSocketDirectoryWhenTheHostCloses(t *testing.T) {
 	assert.Check(t, cmp.ErrorIs(err, os.ErrNotExist))
 }
 
-// impd refuses a client when the user's ssh refuses the agent channel; the
-// client must see the close at once, not after the pending timeout.
+// impd refuses a client when the user's ssh refuses the agent channel.
 func TestAcceptClosesTheClientWhenTheHostEndsTheRelay(t *testing.T) {
 	t.Parallel()
 	m := newManager(t, shortDir(t))
@@ -236,7 +227,6 @@ func TestServeAgentNumbersWaitingClientsAndClosesThoseOverTheCap(t *testing.T) {
 	assert.Check(t, cmp.ErrorIs(readEnd(over), io.EOF))
 }
 
-// A client impd never pairs has ten seconds before it is closed.
 func TestNewManagerClosesAnUnpairedClientAfterTenSeconds(t *testing.T) {
 	m := newManager(t, shortDir(t))
 
@@ -271,7 +261,6 @@ func TestAllowsAClientThatIsTheSocketsOwner(t *testing.T) {
 	assert.Check(t, allowed, "the owner is refused")
 }
 
-// The client is this test's user; the socket belongs to nobody (65534).
 func TestRefusesAClientThatIsAnotherUserThanTheSocketsOwner(t *testing.T) {
 	t.Parallel()
 	if os.Getuid() == 0 {
@@ -307,7 +296,6 @@ func TestServeAgentRefusesAnUnknownUserAndLeavesNoDirectory(t *testing.T) {
 	assert.Check(t, cmp.Len(entries, 0))
 }
 
-// serveListen starts a listen connection and reads its answer.
 func serveListen(t *testing.T, m *Manager, network, address string) (*host, *proto.Listening, *proto.Error) {
 	t.Helper()
 	h := startHost(t, func(r *proto.Reader, w *proto.Writer) error {
@@ -340,8 +328,6 @@ func refusal(t *testing.T, m *Manager, network, address string) string {
 	return failed.Code
 }
 
-// relayOnce pairs the next client with an accept and returns what the host
-// read of the client's "ping".
 func relayOnce(t *testing.T, m *Manager, control *host, listener string, client net.Conn) proto.Frame {
 	t.Helper()
 	var conn proto.Connection
@@ -443,8 +429,7 @@ func TestServeRemovesAClientPathSocketWhenTheHostCloses(t *testing.T) {
 	assert.Check(t, cmp.ErrorIs(err, os.ErrNotExist))
 }
 
-// A forward that ended with a forced sleep leaves its socket; the next
-// listen on the path replaces it.
+// A forward that ended with a forced sleep leaves its socket behind.
 func TestServeReplacesAStaleSocketAtTheClientPath(t *testing.T) {
 	t.Parallel()
 	dir := shortDir(t)
@@ -500,8 +485,6 @@ func TestServeRefusesABadListenRequest(t *testing.T) {
 	}
 }
 
-// The listener removes its own socket and nothing a process put at the name
-// meanwhile.
 func TestServeLeavesAnotherSocketAtThePathAloneWhenTheHostCloses(t *testing.T) {
 	t.Parallel()
 	dir := shortDir(t)
@@ -574,14 +557,11 @@ func TestServeClosesTheLoopbackTCPPortWhenTheHostCloses(t *testing.T) {
 	assert.Check(t, cmp.ErrorIs(err, syscall.ECONNREFUSED))
 }
 
-// A socket's directory is judged by where it is, not by its path: a link
-// such as Debian's /var/run -> /run leads onto a tmpfs.
+// Debian's /var/run -> /run link leads onto a tmpfs.
 func TestOnTmpfsJudgesADirectoryByWhereItIs(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
 		name string
-		// dir picks the directory to judge from the case's tmpfs and disk
-		// directories
 		dir  func(t *testing.T, tmpfs, disk string) string
 		want bool
 	}{

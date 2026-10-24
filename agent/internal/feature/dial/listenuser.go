@@ -15,21 +15,12 @@ import (
 	"github.com/zgeoff/impz/agent/internal/proto"
 )
 
-// A reverse forward listens in the guest as the image's USER, as a unix dial
-// connects as that user: the helper, `imp-agent listen-as-user <network>
-// <address>`, binds the socket and hands it back, so a forward binds only
-// where that user may, and a TCP port below 1024 fails as it would for them.
-
-// ListenCommand is the agent's argv[1] for the listen helper.
 const ListenCommand = "listen-as-user"
 
-// listenBacklog is the queue of clients the kernel holds before an accept.
 const listenBacklog = 64
 
-// Bound is a listening socket the helper made. For a unix path, Dir holds
-// the socket's directory open and Name, Dev and Ino name the socket in it,
-// so the agent removes its own socket and nothing a process put there
-// later. Dir is -1 for TCP.
+// Dir, Dev and Ino let the agent remove its own socket and never a file
+// another process put at the name later.
 type Bound struct {
 	Listener net.Listener
 	Port     int
@@ -38,14 +29,13 @@ type Bound struct {
 	Dev, Ino uint64
 }
 
-// Close stops the listener and removes the socket if it is still the one
-// bound: unlinked through the directory it was bound in, so a directory
-// swapped for a symlink meanwhile changes nothing.
 func (b *Bound) Close() {
 	b.Listener.Close()
 	if b.Dir < 0 {
 		return
 	}
+	// Through the held directory, so a directory swapped for a symlink since
+	// the bind changes nothing.
 	var st unix.Stat_t
 	err := unix.Fstatat(b.Dir, b.Name, &st, unix.AT_SYMLINK_NOFOLLOW)
 	if err == nil && st.Mode&unix.S_IFMT == unix.S_IFSOCK && uint64(st.Dev) == b.Dev && st.Ino == b.Ino {
@@ -54,9 +44,6 @@ func (b *Bound) Close() {
 	unix.Close(b.Dir)
 }
 
-// Listen binds network and address as the dialer's user: "unix" with an
-// absolute path, or "tcp" with 127.0.0.1:<port>, where port 0 takes any
-// free port.
 func (d *Dialer) Listen(network, address string) (*Bound, error) {
 	if err := checkListenAddress(network, address); err != nil {
 		return nil, err
@@ -87,8 +74,6 @@ func checkListenAddress(network, address string) error {
 	}
 }
 
-// parseLoopbackPort reads 127.0.0.1:<port>: a reverse forward never listens
-// on an address other machines reach
 func parseLoopbackPort(address string) (int, error) {
 	host, portText, err := net.SplitHostPort(address)
 	port, perr := strconv.Atoi(portText)
@@ -98,8 +83,6 @@ func parseLoopbackPort(address string) (int, error) {
 	return port, nil
 }
 
-// wrapBound checks the helper's fds (a listening socket, and for unix its
-// directory) and wraps them.
 func wrapBound(fds []int, network, address string) (*Bound, error) {
 	failed := func(message string) (*Bound, error) {
 		sysutil.CloseFds(fds)
@@ -143,9 +126,6 @@ func wrapBound(fds []int, network, address string) (*Bound, error) {
 	return b, nil
 }
 
-// bindSocket binds and listens as the calling process: the listening
-// socket, and for unix the directory it is in, which must not lead under
-// ownDir, the agent's own sockets.
 func bindSocket(network, address, ownDir string) ([]int, error) {
 	if network == "tcp" {
 		fd, err := bindTCP(address)
@@ -182,10 +162,6 @@ func bindTCP(address string) (int, error) {
 	return sock, nil
 }
 
-// bindUnix binds path's name in its directory. The directory is opened
-// first and resolved, so a symlink cannot lead under /run/imp, and a socket
-// left at the name (a forward that ended with a forced sleep) is replaced,
-// as OpenSSH's StreamLocalBindUnlink does; anything else there is refused.
 func bindUnix(address, ownDir string) ([]int, error) {
 	clean := filepath.Clean(address)
 	dirPath, name := filepath.Dir(clean), filepath.Base(clean)
@@ -214,6 +190,8 @@ func bindUnix(address, ownDir string) ([]int, error) {
 		return fail(proto.ErrBadRequest, address+" leads to the agent's own sockets")
 	}
 
+	// A socket that a forward ended by a forced sleep left at the name is
+	// replaced, as OpenSSH's StreamLocalBindUnlink does.
 	var st unix.Stat_t
 	err = unix.Fstatat(dir, name, &st, unix.AT_SYMLINK_NOFOLLOW)
 	switch {
@@ -247,9 +225,6 @@ func bindUnix(address, ownDir string) ([]int, error) {
 	return []int{sock, dir}, nil
 }
 
-// RunListenHelper is `imp-agent listen-as-user <network> <address>`: it
-// binds as this process's user and answers on fd 0 with the listening
-// socket (and its directory), or the error.
 func RunListenHelper(network, address string) error {
 	if err := checkListenAddress(network, address); err != nil {
 		return answer(nil, err)

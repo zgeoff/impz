@@ -4,9 +4,6 @@ import { join } from 'node:path';
 
 export interface StartCliOptions {
   readonly args: readonly string[];
-
-  // the CLI's whole environment beside PATH, so no variable of the test run
-  // reaches it unasked
   readonly env?: Readonly<Record<string, string>>;
   readonly stdin?: string;
 }

@@ -10,15 +10,11 @@ import (
 	"gotest.tools/v3/assert"
 )
 
-// pipe joins the client's writes to the server's reads, and back.
 type pipe struct {
 	io.Reader
 	io.WriteCloser
 }
 
-// startSession serves one SFTP session at home over in-process pipes and
-// returns its client. Cleanup closes the client, waits for Serve to return,
-// and checks that it ended cleanly.
 func startSession(t *testing.T, home string) *sftp.Client {
 	t.Helper()
 	toServer, fromClient := io.Pipe()
@@ -76,8 +72,6 @@ func TestServeWritesARelativePathUnderHome(t *testing.T) {
 	assert.Equal(t, string(written), "back")
 }
 
-// A home that is not a directory is ignored, as with no home at all: the
-// session starts where the server's process is.
 func TestServeIgnoresAHomeThatIsNotADirectory(t *testing.T) {
 	cwd, err := os.Getwd()
 	assert.NilError(t, err)

@@ -7,8 +7,6 @@ import { buildStubEnvRecord } from '../scripts/test-utils/build-stub-env-record'
 import { createStubBin } from '../scripts/test-utils/create-stub-bin';
 import { createStubImpd } from '../scripts/test-utils/create-stub-impd';
 
-// Each test points IMP_LIB at the stub directory, so the setup scripts the
-// entrypoint runs are stubs that record into the same calls file as impd.
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-entrypoint-'));
 

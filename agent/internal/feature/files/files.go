@@ -1,5 +1,4 @@
-// Package files keeps the read-only files: a tree that impd writes through
-// the agent and the inner container sees on a read-only bind, so a process
+// The inner container sees this tree on a read-only bind, so a process
 // inside, root included, gets EROFS on every write
 // (docs/architecture/guest/agent.md#read-only-files).
 package files
@@ -20,34 +19,30 @@ import (
 )
 
 const (
-	// Dir is the tree in the agent's world, a tmpfs of its own.
-	Dir = "/run/files"
-	// Size caps that tmpfs.
+	Dir  = "/run/files"
 	Size = "16m"
 
-	// MaxData caps one file's content, which must fit a frame as base64.
+	// one file's content must fit a frame as base64
 	MaxData = 512 << 10
 
 	maxSegments = 8
 	maxPath     = 512
 )
 
-// SegmentRule is one segment of a path. A segment never starts with a dot,
-// so no path names a staged file. impd checks the same rule.
+// A segment never starts with a dot, so no path names a staged file. impd
+// checks the same rule.
 var SegmentRule = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$`)
 
-// Store writes and removes files under one directory.
 type Store struct {
 	dir string
 }
 
-// New keeps the files under dir.
 func New(dir string) *Store {
 	return &Store{dir: dir}
 }
 
-// Write replaces the file at p with data, mode 0444, through a rename, so a
-// reader sees the old content or the new and never part of either.
+// The rename means a reader sees the old content or the new and never part
+// of either.
 func (s *Store) Write(p string, data []byte) error {
 	if err := checkPath(p); err != nil {
 		return err
@@ -81,7 +76,6 @@ func (s *Store) Write(p string, data []byte) error {
 	return nil
 }
 
-// Remove removes the file at p, and reports whether there was one.
 func (s *Store) Remove(p string) (bool, error) {
 	if err := checkPath(p); err != nil {
 		return false, err
@@ -112,7 +106,6 @@ func (s *Store) Remove(p string) (bool, error) {
 	return true, nil
 }
 
-// checkPath refuses a path outside the rule impd holds it to as well.
 func checkPath(p string) error {
 	if p == "" || len(p) > maxPath {
 		return badRequest("path must be 1 to %d bytes", maxPath)
@@ -146,8 +139,6 @@ func writeStaged(root *fsroot.Root, staged string, data []byte) error {
 	return f.Close()
 }
 
-// mapErr turns a full tmpfs into NO_SPACE and a path through a file into
-// BAD_REQUEST; anything else stays as it is.
 func mapErr(err error) error {
 	switch {
 	case errors.Is(err, syscall.ENOSPC):

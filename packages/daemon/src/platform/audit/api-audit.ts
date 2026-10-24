@@ -47,7 +47,6 @@ export function createApiAudit(deps: ApiAuditDeps): ApiAudit {
   };
 }
 
-// Only the name: the input itself is never kept.
 export function findImpName(procedure: string, input: unknown, output: unknown): string | null {
   const namespace = procedure.split('.')[0] ?? '';
 

@@ -1,5 +1,3 @@
-// Package server accepts host connections on vsock and dispatches requests.
-// One request per connection; see docs/architecture/guest/protocol.md.
 package server
 
 import (
@@ -22,64 +20,44 @@ import (
 	"github.com/zgeoff/impz/agent/internal/proto"
 )
 
-// Port is the vsock port the agent listens on.
 const Port = 1024
 
-// requestTimeout bounds how long a fresh connection may take to send its
-// request frame.
 const requestTimeout = 10 * time.Second
 
 type Server struct {
-	Exec *exec.Manager
-	// Outer runs exec.outer: an exec in the agent's own world, as root
-	Outer    *exec.Manager
-	Sessions *session.Manager
-	Services *services.Supervisor
-	Listen   *listen.Manager
-	Dial     *dial.Dialer
-	// Files holds the read-only files the inner container sees
-	Files *files.Store
-	// Shutdown powers the guest off. It runs after the reply is sent.
-	Shutdown func()
-	// IdentityReset is what this boot's identity reset reported, or "".
+	Exec          *exec.Manager
+	Outer         *exec.Manager
+	Sessions      *session.Manager
+	Services      *services.Supervisor
+	Listen        *listen.Manager
+	Dial          *dial.Dialer
+	Files         *files.Store
+	Shutdown      func()
 	IdentityReset string
-	// BootID is the guest's boot_id, for ping
-	BootID string
-	// BootSteps is how long each step of this boot took, for ping
-	BootSteps []*proto.BootStep
-	// Inner reports the inner container for ping; nil leaves it out
-	Inner func() *proto.InnerStatus
+	BootID        string
+	BootSteps     []*proto.BootStep
+	Inner         func() *proto.InnerStatus
 
-	freezeMu  sync.Mutex
-	thawTimer *time.Timer
-	// freezeGen counts freezes and thaws. An auto-thaw timer only acts if
-	// no freeze or thaw happened since it was armed.
-	freezeGen uint64
-	frozen    bool
-	// poweringOff refuses freezes once poweroff has thawed for good.
+	freezeMu    sync.Mutex
+	thawTimer   *time.Timer
+	freezeGen   uint64
+	frozen      bool
 	poweringOff bool
 
-	// Tests set these to run without root, a disk or a real timer; nil is
-	// the real kernel call, time.AfterFunc and disk.WaitAndGrow.
-	rootIoctl   func(req uint) error
-	afterFunc   func(d time.Duration, fn func()) *time.Timer
-	waitAndGrow func(mountpoint string, target int64, timeout time.Duration) error
-	// autoThawFired runs as an auto-thaw callback starts, before it takes
-	// freezeMu
+	rootIoctl     func(req uint) error
+	afterFunc     func(d time.Duration, fn func()) *time.Timer
+	waitAndGrow   func(mountpoint string, target int64, timeout time.Duration) error
 	autoThawFired func()
 }
 
-// Listen backoff bounds. A snapshot restore resets the vsock transport; the
-// listen socket should survive it, but if Accept fails anyway the agent
-// re-listens rather than return, because Serve returning reboots the guest.
+// A snapshot restore resets the vsock transport. The listen socket should
+// survive it, but a failed Accept re-listens rather than return, because a
+// return reboots the guest.
 const (
 	minRelistenDelay = 10 * time.Millisecond
 	maxRelistenDelay = time.Second
 )
 
-// Serve accepts connections forever. When Accept fails, it closes the
-// listener and calls listen again, with backoff. It returns only if the
-// first listen fails.
 func (s *Server) Serve(listen func() (net.Listener, error)) error {
 	l, err := listen()
 	if err != nil {
@@ -112,7 +90,6 @@ func (s *Server) Serve(listen func() (net.Listener, error)) error {
 
 func (s *Server) handle(c net.Conn) {
 	defer c.Close()
-	// A panic in a request drops its connection, not the agent.
 	defer safe.Recover("request", nil)
 	r, w := proto.NewReader(c), proto.NewWriter(c)
 
@@ -156,8 +133,6 @@ func (s *Server) handle(c net.Conn) {
 		}
 		return
 	}
-	// agent.listen and listen are long-lived but run nothing, so they are
-	// not execs in the activity report
 	if req.Op == proto.OpAgentListen {
 		if err := s.Listen.ServeAgent(r, w); err != nil {
 			log.Printf("agent.listen: %v", err)
@@ -192,7 +167,6 @@ func (s *Server) handle(c net.Conn) {
 	}
 }
 
-// safeUnary runs unary and turns a panic into an INTERNAL reply.
 func (s *Server) safeUnary(req *proto.Request) (resp protoreflect.ProtoMessage, err error) {
 	defer safe.Recover("request "+req.Op, func() {
 		resp, err = nil, &proto.Error{Code: proto.ErrInternal, Message: "agent panic in " + req.Op}
@@ -257,8 +231,8 @@ func (s *Server) unary(req *proto.Request) (protoreflect.ProtoMessage, error) {
 	}
 }
 
-// serveOuter runs an outer exec. It runs as root, and has no session: the
-// agent's world has no accounts, and a session would outlive the caller.
+// The agent's own world has no accounts, and a session would outlive the
+// caller.
 func (s *Server) serveOuter(req *proto.Request, r *proto.Reader, w *proto.Writer) error {
 	if req.GetSession() != "" {
 		return proto.ReplyError(w, &proto.Error{Code: proto.ErrBadRequest, Message: "an outer exec takes no session"})
@@ -269,9 +243,8 @@ func (s *Server) serveOuter(req *proto.Request, r *proto.Reader, w *proto.Writer
 	return s.Outer.Serve(req, r, w)
 }
 
-// serveLogs streams a service's log until it ends or the host closes the
-// connection, which the host does to stop a follow.
 func (s *Server) serveLogs(req *proto.Request, r *proto.Reader, w *proto.Writer) {
+	// the host closes the connection to stop a follow
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
@@ -291,8 +264,8 @@ func (s *Server) serveLogs(req *proto.Request, r *proto.Reader, w *proto.Writer)
 	}
 }
 
-// BuildPing reports the uptime from CLOCK_BOOTTIME, or none when the clock
-// read fails: a 0 would make impd wait out a guest that is not young.
+// No uptime when the clock read fails: a 0 would make impd wait out a guest
+// that is not young.
 func BuildPing(clockGettime func(int32, *unix.Timespec) error) *proto.Ping {
 	ping := &proto.Ping{Ok: true, Version: proto.Version}
 	var ts unix.Timespec

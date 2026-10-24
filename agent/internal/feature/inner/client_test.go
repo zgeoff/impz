@@ -21,13 +21,10 @@ func TestWaitReadyRefusesAnInitThatSpeaksBeforeItIsReady(t *testing.T) {
 	assert.Error(t, err, `the inner init said "exit" before it was ready`)
 }
 
-// fakeInitProc is an init that never answers on its socket and dies when
-// the test or a kill says so. kills counts the kills sent.
 func fakeInitProc(t *testing.T) (p *initProc, died chan reaper.Status, kills chan struct{}) {
 	t.Helper()
 	sp, err := newSocketpair()
 	assert.NilError(t, err)
-	// connect closes the agent's end itself; the peer's is the test's
 	t.Cleanup(func() { syscall.Close(sp[1]) })
 	died = make(chan reaper.Status, 1)
 	kills = make(chan struct{}, 1)

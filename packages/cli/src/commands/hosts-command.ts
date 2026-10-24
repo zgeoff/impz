@@ -115,8 +115,6 @@ export const hostsCommand = defineCommand({
   },
 });
 
-// every check comes before the write, so a failed login never changes
-// config.json
 async function runLogin(io: CommandIO, options: LoginOptions): Promise<string> {
   if (!isHttpUrl(options.url)) {
     throw new UsageError(`not an http(s) URL: ${options.url}`);

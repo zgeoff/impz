@@ -63,8 +63,6 @@ func TestModesBoundsTheKittyStackPastItsLimit(t *testing.T) {
 	assert.Equal(t, len(m.kitty[0]), maxKittyFlags)
 }
 
-// The ground state is read after each byte, so a failure shows every byte
-// that left or reached it wrongly.
 func TestModesReportsGroundOnlyBetweenSequencesAndCharacters(t *testing.T) {
 	m := newModes()
 	// 0xc3 0xa9 is a two-byte UTF-8 character

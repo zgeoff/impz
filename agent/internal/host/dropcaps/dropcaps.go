@@ -1,13 +1,3 @@
-// Package dropcaps starts an exec without the capabilities that let root in
-// the inner container change the read-only files: CAP_SYS_ADMIN, which
-// remounts their bind writable or unmounts it, and CAP_SYS_PTRACE, which
-// would let the command drive a process that still holds CAP_SYS_ADMIN, such
-// as the container's init (docs/architecture/guest/agent.md#read-only-files).
-//
-// Go's ForkExec cannot drop a capability from one child's bounding set, so
-// the child starts as a helper, the agent binary itself, which drops them on
-// the thread it then execs the command from. The pid, the pty, the process
-// group and the cgroup leaf stay the command's.
 package dropcaps
 
 import (
@@ -22,18 +12,17 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// Command is the helper: imp-agent drop-sys-admin <agent fd> <cred> <path>
-// <argv...>.
+// Go's ForkExec cannot drop a capability from one child's bounding set, so
+// the child starts as the agent binary, which drops them on the thread it
+// then execs the command from.
 const Command = "drop-sys-admin"
 
-// Dropped are the capabilities the command and everything it starts lack.
+// CAP_SYS_ADMIN remounts the read-only binds writable or unmounts them, and
+// CAP_SYS_PTRACE would drive a process that still holds it, such as init.
 var Dropped = []uintptr{unix.CAP_SYS_ADMIN, unix.CAP_SYS_PTRACE}
 
-// Argv is the helper's argv for the command at path. agentFd is the child's
-// fd of the agent binary that the helper runs from, or -1; the helper closes
-// it on the exec, so the command does not hold it. A nil cred runs the
-// command as root; the helper itself always starts as root, since a process
-// that has given up root can no longer change its bounding set.
+// The helper always starts as root, because a process that has given up root
+// can no longer change its bounding set.
 func Argv(agentFd int, cred *syscall.Credential, path string, argv []string) []string {
 	fd := "-"
 	if agentFd >= 0 {
@@ -42,8 +31,6 @@ func Argv(agentFd int, cred *syscall.Credential, path string, argv []string) []s
 	return append([]string{"imp-agent", Command, fd, formatCred(cred), path}, argv...)
 }
 
-// RunHelper is the helper's body, with the arguments after Command. On
-// success it does not return: it becomes the command.
 func RunHelper(args []string) error {
 	if len(args) < 4 {
 		return errors.New("usage: imp-agent " + Command + " <agent fd> <cred> <path> <argv...>")
@@ -73,11 +60,9 @@ func RunHelper(args []string) error {
 	return unix.Exec(args[2], args[3:], os.Environ())
 }
 
-// Drop takes Dropped out of the calling thread's bounding set, then out of
-// its effective, permitted and inheritable sets, which takes them out of the
-// ambient set too. A root exec after it gets its permitted set from the
-// bounding set, so neither the command nor a setuid binary it runs gets one
-// back. The caller locks its OS thread.
+// A root exec takes its permitted set from the bounding set, so neither the
+// command nor a setuid binary it runs gets one back. Clearing the permitted
+// and inheritable sets clears the ambient set too.
 func Drop() error {
 	for _, c := range Dropped {
 		if err := unix.Prctl(unix.PR_CAPBSET_DROP, c, 0, 0, 0); err != nil {
@@ -101,7 +86,6 @@ func Drop() error {
 	return nil
 }
 
-// formatCred is "" for root, else "uid:gid:group,group".
 func formatCred(cred *syscall.Credential) string {
 	if cred == nil {
 		return ""
@@ -142,8 +126,8 @@ func parseCred(s string) (*syscall.Credential, error) {
 	return cred, nil
 }
 
-// setCred becomes the user as ForkExec's Credential would: groups, then the
-// gid, then the uid, which clears what is left of root's capabilities.
+// The order follows ForkExec's Credential: groups, then the gid, then the
+// uid, whose change clears what is left of root's capabilities.
 func setCred(cred *syscall.Credential) error {
 	groups := make([]int, len(cred.Groups))
 	for i, g := range cred.Groups {

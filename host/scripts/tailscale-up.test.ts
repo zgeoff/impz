@@ -6,8 +6,8 @@ import { waitFor } from '@impz/test-utils/wait-for';
 import { createStubBin } from '../../scripts/test-utils/create-stub-bin';
 import { createStubTailscale } from '../../scripts/test-utils/create-stub-tailscale';
 
-// Each test runs tailscale-up.sh with its output in files, so a wait it
-// leaves in the background holds no pipe open.
+// The output goes to files, so a wait the script leaves in the background
+// holds no pipe open.
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-tailscale-up-'));
 

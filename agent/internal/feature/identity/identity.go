@@ -1,5 +1,3 @@
-// Package identity names a guest apart from the template it came from: its
-// machine-id, its ssh host keys, and its boot's id.
 package identity
 
 import (
@@ -21,22 +19,14 @@ import (
 	"github.com/zgeoff/impz/agent/internal/proto"
 )
 
-// keygenTimeout bounds ssh-keygen -A; past it the old keys stay, the reset
-// reports a failure, and the next boot tries again.
 const keygenTimeout = 30 * time.Second
 
-// stagePrefix names the directory under /etc/ssh where new host keys are
-// made before they replace the old ones.
 const stagePrefix = ".imp-hostkeys-"
 
-// keygenFunc writes every default host key under prefix/etc/ssh.
 type keygenFunc func(prefix string) error
 
-// Reset gives an imp made from a template its own machine-id and ssh
-// host keys, on a boot impd asks it to (imp.reset_identity=1), before any
-// service starts. root is the inner container's root, and ssh-keygen runs
-// in the container. It returns what ping reports: impd keeps asking until a
-// boot reports ok. See docs/guides/templates.md#identity.
+// impd keeps asking, through imp.reset_identity=1, until a boot reports ok.
+// See docs/guides/templates.md#identity.
 func Reset(runner proc.Runner, root fsroot.FS, env []string) string {
 	var keygen keygenFunc
 	if path, err := lookPathIn(root, "ssh-keygen", env); err == nil {
@@ -56,16 +46,15 @@ func resetIdentityAt(root fsroot.FS, keygen keygenFunc) error {
 	return errors.Join(writeMachineID(root, newMachineID()), resetHostKeys(root, keygen))
 }
 
-// newMachineID returns 32 lowercase hex digits, a random v4 UUID as
-// systemd-machine-id-setup writes one.
+// a random v4 UUID as 32 lowercase hex digits, as systemd-machine-id-setup
+// writes one
 func newMachineID() string {
 	id := sysutil.NewUUID()
 	return hex.EncodeToString(id[:])
 }
 
-// writeMachineID replaces /etc/machine-id, and D-Bus's copy when it is a file
-// of its own rather than a link to it. An empty or missing file stays as it
-// is: the template holds no id to share.
+// D-Bus keeps its own copy unless it is a link. An empty or missing file
+// stays as it is: the template holds no id to share.
 func writeMachineID(root fsroot.FS, id string) error {
 	for _, p := range []string{"/etc/machine-id", "/var/lib/dbus/machine-id"} {
 		fi, err := root.Lstat(p)
@@ -85,11 +74,7 @@ func writeMachineID(root fsroot.FS, id string) error {
 	return nil
 }
 
-// resetHostKeys makes new host keys in a directory beside the old ones, then
-// renames each into place and drops any old key of a type not made again.
 // A keygen that fails or times out leaves the old keys, so sshd still starts.
-// An image without /etc/ssh has no keys to reset; one without ssh-keygen
-// keeps them (the guide says so).
 func resetHostKeys(root fsroot.FS, keygen keygenFunc) error {
 	const dir = "/etc/ssh"
 	// a container that is down fails here, not as a missing ssh-keygen
@@ -142,7 +127,6 @@ func resetHostKeys(root fsroot.FS, keygen keygenFunc) error {
 	return nil
 }
 
-// listHostKeys names the ssh_host_* entries of dir.
 func listHostKeys(root fsroot.FS, dir string) ([]string, error) {
 	entries, err := root.ReadDir(dir)
 	if err != nil {
@@ -157,7 +141,6 @@ func listHostKeys(root fsroot.FS, dir string) ([]string, error) {
 	return keys, nil
 }
 
-// removeStaleStages drops what an earlier boot's keygen left behind.
 func removeStaleStages(root fsroot.FS, dir string) {
 	entries, _ := root.ReadDir(dir)
 	for _, e := range entries {
@@ -167,9 +150,7 @@ func removeStaleStages(root fsroot.FS, dir string) {
 	}
 }
 
-// lookPathIn finds file in the PATH of env, as the container sees it: only a
-// regular file counts, and a relative dir names nothing inside the
-// container's root.
+// A relative dir in PATH names nothing inside the container's root.
 func lookPathIn(root fsroot.FS, file string, env []string) (string, error) {
 	return sysutil.FindInPath(file, proc.Get(env, "PATH"), func(p string) (fs.FileInfo, error) {
 		if !filepath.IsAbs(p) {
@@ -183,8 +164,8 @@ func lookPathIn(root fsroot.FS, file string, env []string) (string, error) {
 	})
 }
 
-// runKeygen runs ssh-keygen -A -f prefix, which writes every missing default
-// host key under prefix/etc/ssh.
+// ssh-keygen -A -f prefix writes every missing default host key under
+// prefix/etc/ssh.
 func runKeygen(runner proc.Runner, path, prefix string, env []string) error {
 	p, err := runner.Start(proc.Spec{
 		Argv:  []string{path, "-A", "-f", prefix},

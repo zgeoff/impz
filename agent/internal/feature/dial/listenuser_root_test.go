@@ -17,7 +17,6 @@ import (
 	"github.com/zgeoff/impz/agent/internal/proto"
 )
 
-// As root: the helper binds as the user, so the socket belongs to the user.
 func TestListenBindsAsTheUser(t *testing.T) {
 	dir := rootListenDir(t)
 	open := filepath.Join(dir, "open")
@@ -34,7 +33,6 @@ func TestListenBindsAsTheUser(t *testing.T) {
 	assert.Check(t, cmp.Equal(st.Uid, uint32(4242)))
 }
 
-// As root: a directory only root may write refuses the user's bind.
 func TestListenRefusesADirectoryOnlyRootMayWrite(t *testing.T) {
 	dir := rootListenDir(t)
 	rootOnly := filepath.Join(dir, "root")
@@ -46,8 +44,6 @@ func TestListenRefusesADirectoryOnlyRootMayWrite(t *testing.T) {
 	assert.Check(t, cmp.Equal(codeOf(t, err), proto.ErrListenFailed))
 }
 
-// As root: a port below 1024 fails for the user as it would for them,
-// unless the container lets every user bind low ports.
 func TestListenRefusesAPrivilegedPort(t *testing.T) {
 	start, err := os.ReadFile("/proc/sys/net/ipv4/ip_unprivileged_port_start")
 	assert.NilError(t, err)
@@ -61,7 +57,6 @@ func TestListenRefusesAPrivilegedPort(t *testing.T) {
 	assert.Check(t, cmp.Equal(codeOf(t, err), proto.ErrListenFailed))
 }
 
-// rootListenDir is a short directory the user may enter.
 func rootListenDir(t *testing.T) string {
 	t.Helper()
 	dir := shortDir(t)
@@ -69,8 +64,6 @@ func rootListenDir(t *testing.T) string {
 	return dir
 }
 
-// userListenDialer binds as uid and gid 4242 with no supplementary groups,
-// through a copy of the helper in dir.
 func userListenDialer(t *testing.T, dir string) *Dialer {
 	t.Helper()
 	d := userDialer(t, dir)

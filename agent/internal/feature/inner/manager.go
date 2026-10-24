@@ -18,19 +18,11 @@ import (
 	"github.com/zgeoff/impz/agent/internal/host/proc"
 )
 
-// CgroupDir is the container's cgroup, as the agent sees it: the root of
-// the container's cgroup namespace. ExecCgroupDir under it holds a leaf per
-// exec; it stays when the container starts again.
 const (
 	CgroupDir     = cgroup.Root + "/user"
 	ExecCgroupDir = CgroupDir + "/exec"
 )
 
-// Restarts after the container dies: 1 s doubling to 30 s. A start that
-// fails, or a container that dies within stableAfter of its start, is a bad
-// start; after more than maxBadStarts in restartWindow the agent gives up
-// until the next boot. A root wiped by `rm -rf /` still starts: the init
-// needs nothing from it.
 const (
 	minBackoff    = time.Second
 	maxBackoff    = 30 * time.Second
@@ -40,26 +32,18 @@ const (
 	killWait      = 5 * time.Second
 )
 
-// Manager runs the inner container and starts it again when it dies. It is
-// the agent's proc.Runner for user processes.
 type Manager struct {
-	cfg       Config
-	cgroupDir string
-	// startInit starts one inner init, and rootOf names its root: a fork
-	// and /proc/<pid>/root, or a spawner in the test's own process
-	startInit func(cgroup *os.File) (*initProc, error)
-	rootOf    func(pid int) string
-	// firstBackoff is a restart's first wait, minBackoff outside tests
+	cfg          Config
+	cgroupDir    string
+	startInit    func(cgroup *os.File) (*initProc, error)
+	rootOf       func(pid int) string
 	firstBackoff time.Duration
-	// readyTimeout bounds each init's setup
 	readyTimeout time.Duration
-	// early is the init Prestart started, which the first start takes
-	early chan readyInit
+	early        chan readyInit
 
-	mu      sync.Mutex
-	current *client
-	init    *initProc
-	// rootMu keeps the root open while an operation uses it
+	mu       sync.Mutex
+	current  *client
+	init     *initProc
 	rootMu   sync.RWMutex
 	root     *fsroot.Root
 	restarts int
@@ -68,13 +52,10 @@ type Manager struct {
 	stopped  bool
 	onDown   []func()
 	onUp     []func()
-	// watching counts the watch goroutines, which Stop waits for; stopCh
-	// ends a restart's backoff
 	watching sync.WaitGroup
 	stopCh   chan struct{}
 }
 
-// New makes the container's manager; Launch starts it.
 func New(r *reaper.Reaper, cfg Config) *Manager {
 	return &Manager{
 		stopCh:       make(chan struct{}),
@@ -90,9 +71,6 @@ func New(r *reaper.Reaper, cfg Config) *Manager {
 	}
 }
 
-// Launch starts the container. A first start that fails leaves the agent
-// up, the container down, and the restarts going. The hooks must be set
-// before.
 func (m *Manager) Launch() {
 	if err := m.startOnce(); err != nil {
 		log.Printf("inner: %v", err)
@@ -100,24 +78,18 @@ func (m *Manager) Launch() {
 	}
 }
 
-// OnDown runs fn each time the container dies, before it starts again: for
-// what held its files open, such as the agent's sockets in its /run.
 func (m *Manager) OnDown(fn func()) {
 	m.mu.Lock()
 	m.onDown = append(m.onDown, fn)
 	m.mu.Unlock()
 }
 
-// OnUp runs fn each time a container starts after the first: for its
-// files and services.
 func (m *Manager) OnUp(fn func()) {
 	m.mu.Lock()
 	m.onUp = append(m.onUp, fn)
 	m.mu.Unlock()
 }
 
-// startOnce starts one container and watches it. A failed start counts as
-// a bad one.
 func (m *Manager) startOnce() error {
 	err := m.tryStart()
 	if err != nil {
@@ -129,10 +101,6 @@ func (m *Manager) startOnce() error {
 	return err
 }
 
-// Prestart starts the container's init ahead of Launch, which takes it:
-// the boot calls it before it mounts the user disk, so the init starts up
-// and sets up its root beside the agent's mount. Call it at most once,
-// before Launch.
 func (m *Manager) Prestart() {
 	early := make(chan readyInit, 1)
 	m.early = early
@@ -142,7 +110,6 @@ func (m *Manager) Prestart() {
 	}, func() { early <- readyInit{err: errors.New("panic")} })
 }
 
-// readyInit is an inner init that said it is ready, or why it is not.
 type readyInit struct {
 	p   *initProc
 	c   *client
@@ -176,14 +143,11 @@ func (m *Manager) tryStart() error {
 		m.watch(c, p, started)
 	}, nil)
 	if stopped {
-		// a Stop ran during the start and missed this init
 		p.kill()
 	}
 	return nil
 }
 
-// takeReady returns the init that Prestart started, the first time, or
-// starts one.
 func (m *Manager) takeReady() (*initProc, *client, error) {
 	if early := m.early; early != nil {
 		m.early = nil
@@ -193,8 +157,6 @@ func (m *Manager) takeReady() (*initProc, *client, error) {
 	return m.startReady()
 }
 
-// startReady forks one inner init into the container's cgroup and waits
-// until it is ready.
 func (m *Manager) startReady() (*initProc, *client, error) {
 	// what a container left behind (a cgroup that outlived the last wait,
 	// say) must not fail this one
@@ -216,9 +178,6 @@ func (m *Manager) startReady() (*initProc, *client, error) {
 	return p, c, nil
 }
 
-// watch waits for the container to end: its init dying, or its socket
-// closing, after which the init is killed. Either way every process in it
-// goes with its PID namespace.
 func (m *Manager) watch(c *client, p *initProc, started time.Time) {
 	select {
 	case <-p.gone:
@@ -253,13 +212,10 @@ func (m *Manager) watch(c *client, p *initProc, started time.Time) {
 	}
 }
 
-// badStarts holds the times of bad starts within restartWindow.
 type badStarts []time.Time
 
 func (b *badStarts) add(t time.Time) { *b = append(*b, t) }
 
-// exhausted drops the starts older than restartWindow and reports whether
-// more than maxBadStarts remain.
 func (b *badStarts) exhausted(now time.Time) bool {
 	kept := (*b)[:0]
 	for _, t := range *b {
@@ -271,8 +227,6 @@ func (b *badStarts) exhausted(now time.Time) bool {
 	return len(kept) > maxBadStarts
 }
 
-// restartLoop starts the container again with backoff, until it is up, the
-// manager stops, or the bad starts in the window run out.
 func (m *Manager) restartLoop() {
 	backoff := m.firstBackoff
 	for {
@@ -317,7 +271,6 @@ func (m *Manager) restartLoop() {
 	}
 }
 
-// Start is the Runner: it spawns s in the current container.
 func (m *Manager) Start(s proc.Spec) (*proc.Process, error) {
 	m.mu.Lock()
 	c := m.current
@@ -328,7 +281,6 @@ func (m *Manager) Start(s proc.Spec) (*proc.Process, error) {
 	return c.Start(s)
 }
 
-// Status is the container's state for ping and activity.
 type Status struct {
 	Up       bool
 	Restarts int
@@ -341,8 +293,6 @@ func (m *Manager) Status() Status {
 	return Status{Up: m.current != nil, Restarts: m.restarts, LastErr: m.lastErr}
 }
 
-// InitPid is the inner init's pid in the agent's namespace, or 0 while the
-// container is down.
 func (m *Manager) InitPid() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -352,8 +302,6 @@ func (m *Manager) InitPid() int {
 	return m.init.pid
 }
 
-// Stop ends the container for good, and waits for its processes to go: for
-// a poweroff.
 func (m *Manager) Stop() {
 	m.mu.Lock()
 	if !m.stopped {
@@ -368,11 +316,8 @@ func (m *Manager) Stop() {
 	m.watching.Wait()
 }
 
-// Root is the current container's root, for the user's files. It answers
-// ErrDown while no container runs.
 func (m *Manager) Root() fsroot.FS { return liveRoot{m} }
 
-// withRoot runs fn on the current root, which stays open until fn returns.
 func (m *Manager) withRoot(fn func(r *fsroot.Root) error) error {
 	m.rootMu.RLock()
 	defer m.rootMu.RUnlock()
@@ -389,11 +334,9 @@ func (c Config) env() []string {
 	return []string{runSizeEnv + "=" + c.RunSize}
 }
 
-// cleanCgroup waits for the container's processes to leave its cgroup, then
-// removes the cgroups the container made, so the next one starts clean. It
-// does not use cgroup.kill: on the guest kernel (6.1) a clone3 with
-// CLONE_INTO_CGROUP into a cgroup that was once killed got SIGKILL before it
-// could exec. The init's death ends every process in the namespace instead.
+// Not cgroup.kill: on the guest kernel (6.1) a clone3 with CLONE_INTO_CGROUP
+// into a cgroup once killed got SIGKILL before it could exec. The init's
+// death ends every process in the namespace instead.
 func (m *Manager) cleanCgroup() {
 	deadline := time.Now().Add(killWait)
 	for populated(m.cgroupDir) && time.Now().Before(deadline) {
@@ -417,7 +360,6 @@ func populated(dir string) bool {
 	return p
 }
 
-// removeChildren removes every cgroup under dir, deepest first.
 func removeChildren(dir string) {
 	ents, err := os.ReadDir(dir)
 	if err != nil {
@@ -435,7 +377,6 @@ func removeChildren(dir string) {
 	}
 }
 
-// liveRoot is the FS of whichever container runs.
 type liveRoot struct{ m *Manager }
 
 func (l liveRoot) with(fn func(r *fsroot.Root) error) error { return l.m.withRoot(fn) }

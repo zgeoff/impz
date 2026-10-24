@@ -5,8 +5,7 @@ import { join } from 'node:path';
 import { createStubBin } from '../../scripts/test-utils/create-stub-bin';
 import { createStubCat } from '../../scripts/test-utils/create-stub-cat';
 
-// Each test points setup-cgroups.sh at a plain directory for /sys/fs/cgroup,
-// and a cat stub answers for /proc/self/cgroup, whose real value differs by host.
+// A cat stub answers for /proc/self/cgroup, whose real value differs by host.
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-setup-cgroups-'));
 

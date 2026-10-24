@@ -32,8 +32,6 @@ export interface StubTailscale {
 
   // Until prefs are written or up runs, the node is on Tailscale's own server.
   readonly writePrefs: (prefs: StubTailscalePrefs) => void;
-
-  // Until the start is released, status reports Starting whatever the node says.
   readonly holdStart: () => void;
   readonly releaseStart: () => void;
 

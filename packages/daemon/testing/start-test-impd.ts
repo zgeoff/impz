@@ -57,7 +57,8 @@ export interface TestImpdOptions {
   readonly runNft?: (script: string) => Promise<void>;
   readonly forwardRules?: string;
 
-  // the clock moves only with `advance` and with a young guest's wait, which takes no real time
+  // the clock moves only when a test advances it and with a young guest's wait, which takes
+  // no real time
   readonly frozenClockMs?: number;
   readonly createStorage?: (dataDir: string) => StorageBackend;
   readonly kernelFiles?: {

@@ -6,8 +6,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// MountOnce mounts fstype on target unless something is already mounted
-// there. The kernel auto-mounts devtmpfs on /dev (DEVTMPFS_MOUNT).
+// The kernel auto-mounts devtmpfs on /dev (DEVTMPFS_MOUNT).
 func MountOnce(source, target, fstype string, flags uintptr, data string) error {
 	if Mounted(target) {
 		return nil
@@ -18,8 +17,6 @@ func MountOnce(source, target, fstype string, flags uintptr, data string) error 
 	return nil
 }
 
-// Mounted reports whether path is a mountpoint: its device differs from
-// its parent's.
 func Mounted(path string) bool {
 	var st, parent unix.Stat_t
 	if unix.Stat(path, &st) != nil || unix.Stat(path+"/..", &parent) != nil {
