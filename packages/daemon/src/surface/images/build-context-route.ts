@@ -4,6 +4,8 @@ import { join } from 'node:path';
 import { BuildContextQuerySchema, callerContract } from '@impz/api';
 import type { BuildContextQuery } from '@impz/api';
 import { ORPCError } from '@orpc/server';
+import { createActor } from 'xstate';
+import type { Actor } from 'xstate';
 import { checkAccess, findDeclaredAccess } from '../../identity/auth/access-policy';
 import type { BuildRun } from '../../imps/images/build/create-build-runs';
 import type { ImageService } from '../../imps/images/image-service';
@@ -18,6 +20,7 @@ import { buildUploadsDir } from '../../vm/storage/data-layout';
 import type { DiskBudget } from '../../vm/storage/disk-budget';
 import type { SurfaceConfig } from '../surface-config';
 import { toORPCError } from '../to-orpc-error';
+import { buildUploadMachine } from './build-upload-machine';
 
 const PROCEDURE = 'images.buildStream';
 const BUILD_ACCESS = findDeclaredAccess(callerContract.images.buildStream['~orpc'].meta);
@@ -51,7 +54,7 @@ export interface BuildContextDeps {
 interface HeldUpload {
   readonly upload: BuildUpload;
   readonly owner: string;
-  readonly stopTimer: () => void;
+  readonly actor: Actor<typeof buildUploadMachine>;
 }
 
 interface BuildFailure {
@@ -63,6 +66,15 @@ interface BuildFailure {
 export function createBuildContextRoute(deps: BuildContextDeps): BuildContextRoute {
   const uploadsDir = buildUploadsDir(deps.config.dataDir);
   const startTimer = deps.startTimer ?? startRealTimer;
+
+  const clock = {
+    setTimeout: (fire: () => void, durationMs: number) => startTimer(fire, durationMs),
+    clearTimeout: (stop: unknown) => {
+      if (isStopTimer(stop)) {
+        stop();
+      }
+    },
+  };
 
   const held = new Map<string, HeldUpload>();
 
@@ -109,13 +121,29 @@ export function createBuildContextRoute(deps: BuildContextDeps): BuildContextRou
 
     const expiresAt = deps.now() + UPLOAD_TTL_MS;
 
-    const stopTimer = startTimer(() => {
-      held.delete(id);
+    const actor = createActor(buildUploadMachine, {
+      input: {
+        ttlMs: UPLOAD_TTL_MS,
+        free: () => {
+          held.delete(id);
 
-      release();
-    }, UPLOAD_TTL_MS);
+          release();
+        },
+      },
+      clock,
+    });
 
-    held.set(id, { upload: { tarPath, query, run, release }, owner: toOwner(caller), stopTimer });
+    const upload = {
+      tarPath,
+      query,
+      run,
+      release: () => {
+        actor.send({ type: 'release' });
+      },
+    };
+
+    held.set(id, { upload, owner: toOwner(caller), actor });
+    actor.start();
 
     return { id, expiresAt: new Date(expiresAt) };
   };
@@ -167,11 +195,15 @@ export function createBuildContextRoute(deps: BuildContextDeps): BuildContextRou
       }
 
       held.delete(id);
-      entry.stopTimer();
+      entry.actor.send({ type: 'take' });
 
       return entry.upload;
     },
   };
+}
+
+function isStopTimer(value: unknown): value is () => void {
+  return typeof value === 'function';
 }
 
 function toOwner(caller: Readonly<Caller>): string {
