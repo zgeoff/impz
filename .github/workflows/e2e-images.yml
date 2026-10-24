@@ -1,0 +1,116 @@
+name: e2e images
+
+# The images suite (e2e/test-e2e.sh --only images) on a KVM runner: its
+# journeys build images in builder imps and pull from Docker Hub, so the
+# fast set's groups leave it out. It runs each day on main, on dispatch for
+# any branch, and on a pull request that changes how impd builds images. It is
+# no required check, so the path filter may skip the whole workflow.
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - images/**
+      - host/Dockerfile
+      - packages/daemon/src/imps/images/**
+      - packages/daemon/src/imps/docker-contract/**
+      - packages/daemon/src/imps/docker-proxy/**
+      - e2e/suites/images-*.e2e.ts
+      - .github/workflows/e2e-images.yml
+
+permissions: {}
+
+concurrency:
+  group: e2e-images-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # CI never commits, but skip hook install/execution regardless
+  LEFTHOOK: 0
+
+jobs:
+  images:
+    name: e2e (images)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    # a warm run took about 7 minutes, and a kernel cache miss adds about 10
+    timeout-minutes: 25
+    env:
+      # the e2e groups' sizes for a 4-core, 16 GB runner
+      E2E_RAM_BUDGET_MIB: 4096
+      IMP_DEFAULT_MEMORY_MIB: 1024
+      IMP_KERNEL: .cache/ci/vmlinux
+      IMP_SYSTEM_DRIVE: .cache/ci/imp-system.squashfs
+      IMP_STORAGE_GIB: 40
+      IMP_HOST_IMAGE: imp-host:dev
+      IMP_HOST_IMAGE_READY: 1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      # first, so a runner without KVM fails before any build
+      - name: Check KVM
+        run: scripts/ci/check-kvm.sh
+
+      # The harness refuses --clean on a data dir outside .data/ that holds
+      # no imp.xfs, and a fresh runner has nothing to clean.
+      - name: Pick the data dir
+        run: |
+          if mountpoint -q /mnt; then
+            data=/mnt/imp-e2e
+          else
+            data=$GITHUB_WORKSPACE/.data/ci
+          fi
+          sudo mkdir -p "$data"
+          sudo chown "$(id -u):$(id -g)" "$data"
+          echo "IMP_DEV_DATA=$data" >> "$GITHUB_ENV"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+
+      - name: Cache Bun Packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('.bun-version', 'bun.lock') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      # reads the caches that CI's e2e group 1 writes on main
+      - name: Build kernel, system drive and host image
+        uses: ./.github/actions/e2e-build
+        with:
+          write-cache: false
+
+      - name: End-to-end tests
+        run: e2e/test-e2e.sh --only images
+
+      # The steps below also run after a failure or a timeout, with or
+      # without a container, so none of them may fail the job.
+      - name: Collect logs
+        if: always()
+        run: |
+          mkdir -p .cache/e2e
+          docker logs imp-dev >.cache/e2e/impd.log 2>&1 || true
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-images-results
+          path: .cache/e2e/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Remove the dev instance
+        if: always()
+        run: docker rm -f imp-dev || true

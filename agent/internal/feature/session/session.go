@@ -129,11 +129,11 @@ func (s *session) run() {
 	s.exit = exit
 	s.phase = phaseExited
 	if s.viewer != nil {
-		s.deliverExit(s.viewer)
+		s.deliverExitLocked(s.viewer)
 	}
 	for t := range s.taps {
-		s.dropTap(t)
-		t.stop(s.exitFrame(nil), false)
+		s.dropTapLocked(t)
+		t.stop(s.exitFrameLocked(nil), false)
 	}
 	s.mu.Unlock()
 	close(s.done)
@@ -167,7 +167,7 @@ func (s *session) output(p []byte) {
 	// ring
 	for t := range s.taps {
 		if !t.push(frame{typ: proto.TypeStdout, payload: append([]byte(nil), p...)}) {
-			s.dropTap(t)
+			s.dropTapLocked(t)
 			t.stop(&frame{typ: proto.TypeDetached, payload: mustMarshal(&proto.Detached{Reason: proto.DetachSlow})}, true)
 		}
 	}
@@ -188,7 +188,7 @@ func (s *session) waitForTap() {
 			s.mu.Unlock()
 			return
 		}
-		if s.untapped()+readSize <= ringSize {
+		if s.untappedLocked()+readSize <= ringSize {
 			s.phase = phaseRunning
 			s.mu.Unlock()
 			return
@@ -208,8 +208,7 @@ func (s *session) waitForTap() {
 	}
 }
 
-// The caller holds mu.
-func (s *session) untapped() uint64 {
+func (s *session) untappedLocked() uint64 {
 	for t := range s.taps {
 		s.tapped = max(s.tapped, s.tapStart[t]+t.written.Load())
 	}
@@ -222,13 +221,13 @@ func (s *session) tap(t *viewer, resume *proto.ResumeFrom) *proto.Error {
 	if !s.log {
 		return &proto.Error{Code: proto.ErrBadRequest, Message: fmt.Sprintf("session %q keeps no log", s.name)}
 	}
-	out, data := s.outputNow(), []byte(nil)
+	out, data := s.outputNowLocked(), []byte(nil)
 	if resume == nil {
 		out.Offset = out.BufferStart
 		data = s.raw.From(uint64(out.Offset))
 	} else {
 		var err error
-		if out, data, err = s.place(resume); err != nil {
+		if out, data, err = s.placeLocked(resume); err != nil {
 			return err.(*proto.Error)
 		}
 	}
@@ -236,8 +235,8 @@ func (s *session) tap(t *viewer, resume *proto.ResumeFrom) *proto.Error {
 	if len(data) > 0 {
 		t.push(frame{typ: proto.TypeStdout, payload: data})
 	}
-	if s.hasExited() {
-		t.stop(s.exitFrame(nil), false)
+	if s.hasExitedLocked() {
+		t.stop(s.exitFrameLocked(nil), false)
 		return nil
 	}
 	s.taps[t] = struct{}{}
@@ -251,12 +250,11 @@ func (s *session) tap(t *viewer, resume *proto.ResumeFrom) *proto.Error {
 func (s *session) untap(t *viewer) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.dropTap(t)
+	s.dropTapLocked(t)
 	t.stop(nil, false)
 }
 
-// The caller holds mu.
-func (s *session) dropTap(t *viewer) {
+func (s *session) dropTapLocked(t *viewer) {
 	if start, ok := s.tapStart[t]; ok {
 		s.tapped = max(s.tapped, start+t.written.Load())
 	}
@@ -264,8 +262,7 @@ func (s *session) dropTap(t *viewer) {
 	delete(s.tapStart, t)
 }
 
-// The caller holds mu, and exit is set.
-func (s *session) exitFrame(written func()) *frame {
+func (s *session) exitFrameLocked(written func()) *frame {
 	return &frame{typ: proto.TypeExit, payload: mustMarshal(s.exit), written: written}
 }
 
@@ -275,7 +272,7 @@ func (s *session) attach(v *viewer, cols, rows uint16, created bool, resume *pro
 	if s.phase == phaseOver {
 		return errOver
 	}
-	out, data, err := s.place(resume)
+	out, data, err := s.placeLocked(resume)
 	if err != nil {
 		return err
 	}
@@ -291,8 +288,8 @@ func (s *session) attach(v *viewer, cols, rows uint16, created bool, resume *pro
 	if len(data) > 0 {
 		v.push(frame{typ: proto.TypeStdout, payload: data})
 	}
-	if s.hasExited() {
-		s.deliverExit(v)
+	if s.hasExitedLocked() {
+		s.deliverExitLocked(v)
 		return nil
 	}
 	s.viewer = v
@@ -306,9 +303,8 @@ func (s *session) attach(v *viewer, cols, rows uint16, created bool, resume *pro
 	return nil
 }
 
-// The caller holds mu.
-func (s *session) place(resume *proto.ResumeFrom) (*proto.Output, []byte, error) {
-	out := s.outputNow()
+func (s *session) placeLocked(resume *proto.ResumeFrom) (*proto.Output, []byte, error) {
+	out := s.outputNowLocked()
 	start, end := s.raw.Start(), s.raw.End()
 	switch {
 	case resume == nil:
@@ -345,8 +341,7 @@ func isOffset(offset float64) bool {
 	return offset >= 0 && offset == math.Trunc(offset)
 }
 
-// The caller holds mu.
-func (s *session) outputNow() *proto.Output {
+func (s *session) outputNowLocked() *proto.Output {
 	out := &proto.Output{BootId: s.bootID, ExecutionGeneration: s.generation, BufferStart: float64(s.raw.Start()), End: float64(s.raw.End())}
 	if s.log {
 		out.Log = new(true)
@@ -375,17 +370,16 @@ func (s *session) resize(v *viewer, cols, rows uint16) {
 }
 
 func (s *session) resizeLocked(cols, rows uint16) {
-	if s.hasExited() {
+	if s.hasExitedLocked() {
 		return
 	}
 	_ = pty.SetWinsize(s.master, cols, rows)
 	s.cols, s.rows = cols, rows
 }
 
-// The caller holds mu.
-func (s *session) deliverExit(v *viewer) {
+func (s *session) deliverExitLocked(v *viewer) {
 	s.viewer = nil
-	v.stop(s.exitFrame(s.markDelivered), false)
+	v.stop(s.exitFrameLocked(s.markDelivered), false)
 }
 
 func (s *session) markDelivered() {
@@ -409,7 +403,7 @@ func (s *session) detach(v *viewer) {
 func (s *session) signal(v *viewer, sig syscall.Signal) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.viewer == v && !s.hasExited() {
+	if s.viewer == v && !s.hasExitedLocked() {
 		_ = s.proc.Signal(sig)
 	}
 }
@@ -456,7 +450,7 @@ func (s *session) info() *proto.SessionInfo {
 		BootId:              s.bootID,
 		End:                 float64(s.raw.End()),
 	}
-	if s.hasExited() {
+	if s.hasExitedLocked() {
 		info.State = proto.SessionExited
 	}
 	if s.log {
@@ -474,11 +468,10 @@ func (s *session) ended() *proto.Previous {
 func (s *session) exited() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.hasExited()
+	return s.hasExitedLocked()
 }
 
-// The caller holds mu.
-func (s *session) hasExited() bool {
+func (s *session) hasExitedLocked() bool {
 	return s.phase >= phaseExited
 }
 
