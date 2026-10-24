@@ -95,9 +95,10 @@ Output can hold secrets: a token a program prints, a password typed at a prompt 
   Listing the logs needs `read`; the list holds no output.
 - The log lives under the imp's directory on the host, `imps/<id>/session-logs/`, mode 0700, which
   the guest cannot reach. It goes nowhere else: no backup, fork, template or move carries it.
-- `impz sessions log-rm`, the age bound and `impz rm` delete it. A live generation that is deleted
-  leaves a tombstone, `session-logs/.deleted/<generation>`, so no impd logs it again, a restarted
-  one included; the tombstone goes once the generation has ended.
+- `impz sessions log-rm`, the age bound and `impz rm` delete it. A generation that
+  `impz sessions log-rm` deletes, live or ended, leaves a tombstone,
+  `session-logs/.deleted/<generation>`, so no impd logs it again, a restarted one included. The
+  tombstone goes once the guest agent no longer lists the generation, or the imp stops.
 - impd does not trust the guest: every generation, boot id and session name an agent reports must
   have the form the real agent gives it before impd uses it, and a log's directory must be a child
   of the imp's `session-logs/`.

@@ -523,10 +523,9 @@ export function createSessionLogs(deps: SessionLogDeps): SessionLogs {
 
         if (ctx.findLive(key) !== undefined) {
           ctx.send({ type: 'log.remove', key });
-
-          writeTombstone(imp.sessionLogsDir, meta.executionGeneration);
         }
 
+        writeTombstone(imp.sessionLogsDir, meta.executionGeneration);
         removeGenerationDir(imp.sessionLogsDir, meta.executionGeneration);
       }
 

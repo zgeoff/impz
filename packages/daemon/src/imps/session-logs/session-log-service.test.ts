@@ -922,6 +922,94 @@ test('it never taps a deleted live log again', async () => {
   expect(logs.listLogs(imp)).toStrictEqual([]);
 });
 
+test('it taps a deleted ended log no more while the agent still lists its session', async () => {
+  const ctx = await setupTest();
+
+  const imp: SessionLogImp = {
+    id: 'imp-1',
+    state: 'running',
+    vsockPath: '/nonexistent/vsock.sock',
+    sessionLogsDir: ctx.sessionLogsDir,
+  };
+
+  const logs = createSessionLogs({
+    limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
+    requireRoom: () => Promise.resolve(),
+    now: () => 10_000,
+    log: () => {},
+    startTimer: ctx.timers.startTimer,
+    openTap: ctx.openTap,
+    onLookDone: ctx.onLookDone,
+  });
+
+  ctx.stack.defer(() => {
+    logs.forgetImp(imp.id);
+  });
+
+  const tap = buildStubTapStream(
+    buildMockSessionOutput({
+      executionGeneration: 'a'.repeat(32),
+      bootId: '4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11',
+      bufferStart: 0,
+      end: 0,
+      offset: 0,
+    }),
+  );
+
+  const replay = buildStubTapStream(
+    buildMockSessionOutput({
+      executionGeneration: 'a'.repeat(32),
+      bootId: '4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11',
+      bufferStart: 0,
+      end: 7,
+      offset: 0,
+    }),
+  );
+
+  ctx.answers.push(
+    () => Promise.resolve(tap.stream),
+    () => Promise.resolve(replay.stream),
+  );
+
+  logs.observe(imp, [
+    buildMockAgentSession({
+      name: 'main',
+      executionGeneration: 'a'.repeat(32),
+      bootId: '4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11',
+      log: true,
+    }),
+  ]);
+
+  await waitFor(() => {
+    expect(ctx.looks.done).toBe(1);
+  });
+
+  tap.write('logged\n');
+  tap.emitEvent({ type: 'exit', code: 0, signal: 0 });
+
+  await waitFor(() => {
+    expect(tap.state.closed).toBe(true);
+  });
+
+  logs.removeLogs(imp, { session: 'main' });
+
+  logs.observe(imp, [
+    buildMockAgentSession({
+      name: 'main',
+      executionGeneration: 'a'.repeat(32),
+      bootId: '4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11',
+      log: true,
+    }),
+  ]);
+
+  await waitFor(() => {
+    expect(ctx.looks.done).toBe(2);
+  });
+
+  expect(ctx.calls).toHaveLength(1);
+  expect(logs.listLogs(imp)).toStrictEqual([]);
+});
+
 test("it never deletes another session's log or another imp's logs", async () => {
   const ctx = await setupTest();
 
@@ -1001,7 +1089,7 @@ test("it never deletes another session's log or another imp's logs", async () =>
   const count = logs.removeLogs(imp, { session: 'main' });
 
   expect(count).toBe(1);
-  expect(readdirSync(imp.sessionLogsDir)).toStrictEqual(['b'.repeat(32)]);
+  expect(readdirSync(imp.sessionLogsDir).toSorted()).toStrictEqual(['.deleted', 'b'.repeat(32)]);
   expect(readdirSync(neighbour.sessionLogsDir)).toStrictEqual(['c'.repeat(32)]);
 });
 
