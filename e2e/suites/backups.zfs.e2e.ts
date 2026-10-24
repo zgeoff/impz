@@ -30,7 +30,7 @@ async function setupTest() {
   return { prefix: getSuitePrefix('backups'), stack, client, secrets };
 }
 
-test('it backs up a running imp mid-write, a stopped imp and a checkpoint, adds next to nothing on the next run, and restores one imp or every imp of a point', async () => {
+test('it backs up a running imp mid-write, a stopped imp and a checkpoint, adds next to nothing on the next run, and restores one imp with its checkpoint', async () => {
   const ctx = await setupTest();
 
   const drill = wireBackupDrill(ctx.stack, 'backupPointsSpansMs');
@@ -116,6 +116,35 @@ test('it backs up a running imp mid-write, a stopped imp and a checkpoint, adds 
   const checkpointFile = await readGuestFile(copy, '/root/f');
 
   expect(checkpointFile).toBe('v1');
+});
+
+test('it refuses to restore every imp of a point while one exists, and restores them all, stopped, once none does', async () => {
+  const ctx = await setupTest();
+
+  const drill = wireBackupDrill(ctx.stack, 'backupAllSpansMs');
+  const image = resolveImageName('e2e-tiny');
+  const running = `${ctx.prefix}all-run`;
+  const idle = `${ctx.prefix}all-idle`;
+
+  await drill.resetState();
+  await drill.startMinio(ctx.secrets);
+
+  await runImp('new', running, '--image', image, '--memory', '256');
+
+  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, running));
+
+  await waitForExec(running);
+  await holdImp(running);
+  await writeGuestFile(running, '/root/f', 'running');
+  await runImp('new', idle, '--image', image, '--memory', '256');
+
+  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, idle));
+
+  await waitForExec(idle);
+  await writeGuestFile(idle, '/root/f', 'idle');
+  await runImp('stop', idle);
+
+  await drill.runBackup();
 
   const all = await tryImp(['backup', 'restore', '--all']);
   const merged = await tryImp(['backup', 'restore', '--all', '--merge']);
@@ -130,20 +159,16 @@ test('it backs up a running imp mid-write, a stopped imp and a checkpoint, adds 
     exitCode: 1,
     stdout: '',
     stderr: expect.toSatisfy((stderr: string) =>
-      new RegExp(`an imp named ${ctx.prefix}(?:src|idle) exists`, 'v').test(stderr),
+      new RegExp(`an imp named ${ctx.prefix}all-(?:run|idle) exists`, 'v').test(stderr),
     ),
   });
 
-  // The newest point that holds the source: a scheduled run after the removal
-  // below holds none of the journey's imps, and one after the copy's restore
-  // holds the copy too.
   const status = await readBackupStatus();
 
-  const point = status.points.findLast((candidate) => candidate.imps.includes(source));
+  const point = status.points.findLast((candidate) => candidate.imps.includes(running));
 
-  await runImp('rm', source);
+  await runImp('rm', running);
   await runImp('rm', idle);
-  await runImp('rm', copy);
 
   const others = await listImps();
 
@@ -170,12 +195,12 @@ test('it backs up a running imp mid-write, a stopped imp and a checkpoint, adds 
   expect(restored.map((row) => row.name).toSorted()).toStrictEqual(point?.imps.toSorted() ?? []);
   expect(states).toSatisfyAll((state: string) => state === 'stopped');
 
-  await runImp('start', source);
-  await waitForExec(source);
+  await runImp('start', running);
+  await waitForExec(running);
 
-  const sourceFile = await readGuestFile(source, '/root/f');
+  const runningFile = await readGuestFile(running, '/root/f');
 
-  expect(sourceFile).toBe('v2');
+  expect(runningFile).toBe('running');
 });
 
 test('it restores a point that survived the scheduled forget and prune, and finds none before it', async () => {

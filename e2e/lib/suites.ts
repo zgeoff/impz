@@ -180,7 +180,7 @@ export const SUITES: readonly Suite[] = [
     ],
     fixtures: ['host-b'],
     settings: (target) => buildMoveSettings(readMoveOptions('host-b'), target.portOffset),
-    seconds: 76,
+    seconds: 93,
   },
   {
     name: 'moves-tailnet',
@@ -244,14 +244,14 @@ export const SUITES: readonly Suite[] = [
     prefix: 'e2e-bk-',
     images: ['e2e-tiny'],
     settings: readBackupSuiteSettings,
-    seconds: 99,
+    seconds: 140,
   },
   {
     name: 'backups-repo',
     prefix: 'e2e-bkr-',
     images: ['e2e-tiny'],
     settings: readBackupSuiteSettings,
-    seconds: 111,
+    seconds: 101,
   },
 ];
 
