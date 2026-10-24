@@ -191,10 +191,11 @@ test('it listens on a free port for a forward that asks for port 0', async () =>
   const ctx = await setupTest();
   const guest = await ctx.createImp('box');
   const listening = await ctx.openPortForward('box', 0).listening;
-  const connected = await Promise.allSettled([guest.connect(32_768)]);
+  const connected = await Promise.allSettled([guest.connect(listening.port ?? 0)]);
 
-  // the stand-in's first free port, where the real agent takes one from the kernel
-  expect(listening).toStrictEqual({ path: null, port: 32_768 });
+  // the port the forward reports is the one a process in the imp dials
+  expect(listening.path).toBeNull();
+  expect(listening.port).toBePositive();
   expect(connected).toMatchObject([{ status: 'fulfilled' }]);
 });
 
