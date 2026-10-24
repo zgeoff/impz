@@ -110,13 +110,18 @@ suffix names that system. [`bunfig.toml`](../../../bunfig.toml) leaves every lan
 plain `bun test`, even for a file named by its path, so each lane's script replaces that ignore list
 and selects its files by suffix. `test:related` leaves lane files out for the same reason.
 
-| Lane              | Files                                   | Real system                                         | Run                                | Per-test ceiling |
-| ----------------- | --------------------------------------- | --------------------------------------------------- | ---------------------------------- | ---------------- |
-| VM end to end     | `e2e/suites/*.e2e.ts`, in the CI groups | KVM Firecracker imps on a dev instance of impd      | `e2e/test-e2e.sh --group <n>`      | 60 s             |
-| ZFS host with VMs | the suites in `IMP_ZFS_E2E_SUITES`      | KVM imps on a real zpool in a sparse file           | `scripts/zfs-host-test.sh`         | 60 s             |
-| Host networking   | `*.host.test.ts`                        | root, the kernel's netfilter and network namespaces | `bun run test:host`, as root in CI | 15 s             |
-| Headscale join    | `*.headscale.test.ts`                   | Headscale and tailscale containers in Docker        | `bun run test:headscale`           | 15 s             |
-| ACME issuer       | `*.pebble.test.ts`                      | the Pebble ACME server in Docker                    | `bun run test:pebble`              | 5 s              |
+| Lane            | Files                                             | Real system                                         | Run                                                     | Per-test ceiling |
+| --------------- | ------------------------------------------------- | --------------------------------------------------- | ------------------------------------------------------- | ---------------- |
+| VM end to end   | the other `e2e/suites/*.e2e.ts`, in the CI groups | KVM Firecracker imps on a dev instance of impd      | `e2e/test-e2e.sh --group <n>`                           | 60 s             |
+| ZFS             | `e2e/suites/*.zfs.e2e.ts`                         | KVM imps on a real zpool in a sparse file           | `scripts/zfs-host-test.sh`, `IMP_ZFS_SHARD=<n>/<count>` | 60 s             |
+| Host networking | `*.host.test.ts`                                  | root, the kernel's netfilter and network namespaces | `bun run test:host`, as root in CI                      | 15 s             |
+| Headscale join  | `*.headscale.test.ts`                             | Headscale and tailscale containers in Docker        | `bun run test:headscale`                                | 15 s             |
+| ACME issuer     | `*.pebble.test.ts`                                | the Pebble ACME server in Docker                    | `bun run test:pebble`                                   | 5 s              |
+
+CI splits the ZFS lane's suites into shards, longest first by each suite's `seconds` in
+[`suites.ts`](../../../e2e/lib/suites.ts); update a suite's `seconds` when its shard time moves. The
+third `zfs` shard runs VM e2e suites, named in `IMP_ZFS_E2E_SUITES`, on the ZFS backend: a backend
+matrix and not a lane, so its tests keep the VM lane's suffix and ceiling.
 
 Nothing enforces the ceilings yet: the e2e harness gives each journey 1 h (`JOURNEY_TIMEOUT_MS` in
 [`suites.ts`](../../../e2e/lib/suites.ts)), and `zgeoff/max-test-timeout` checks a lane's ceiling

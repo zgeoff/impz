@@ -1,6 +1,7 @@
 import { join, resolve } from 'node:path';
 import invariant from 'tiny-invariant';
 import { match } from 'ts-pattern';
+import { pickZfsShard } from '../e2e/lib/suites.ts';
 import { ZFS_OWNER_FILE, formatZfsOwnerFile } from '../e2e/lib/zfs-owner.ts';
 import type { DevEnv } from './lib/build-dev-layout.ts';
 import { DevError } from './lib/dev-error.ts';
@@ -257,7 +258,9 @@ async function runSuites(run: PoolRun): Promise<number> {
 async function runE2E(run: PoolRun): Promise<number> {
   const io = run.options.io;
   const log = join(run.host.work, 'e2e.log');
-  const suites = pickSetting(run.options.env, 'IMP_ZFS_E2E_SUITES') ?? 'checkpoints,sleep';
+
+  const suites =
+    pickSetting(run.options.env, 'IMP_ZFS_E2E_SUITES') ?? pickLaneSuites(run.options.env);
 
   io.files.writeText(log, '');
 
@@ -299,6 +302,21 @@ async function runE2E(run: PoolRun): Promise<number> {
   }
 
   return status;
+}
+
+// The ZFS lane is every *.zfs.e2e.ts journey, split into IMP_ZFS_SHARD's shard (1/1 by default) by
+// recorded time; IMP_ZFS_E2E_SUITES runs named suites instead, as the VM lane on the ZFS backend.
+function pickLaneSuites(env: DevEnv): string {
+  const shard = pickSetting(env, 'IMP_ZFS_SHARD') ?? '1/1';
+  const parts = /^(?<index>[1-9]\d*)\/(?<count>[1-9]\d*)$/v.exec(shard)?.groups;
+  const index = Number(parts?.['index']);
+  const count = Number(parts?.['count']);
+
+  if (parts === undefined || index > count) {
+    throw new DevError(`IMP_ZFS_SHARD must be <shard>/<count>, such as 1/2, not ${shard}`);
+  }
+
+  return pickZfsShard(index, count).join(',');
 }
 
 async function writeReport(run: PoolRun): Promise<void> {

@@ -102,7 +102,7 @@ test('it runs the unit tests and suites on a bench pool, then releases all it ma
     'zfs create -o mountpoint=legacy impbenchPID/imp',
     'sudo zfs create -o mountpoint=legacy impbenchPID/imp-mv-b',
     'zfs create -o mountpoint=legacy impbenchPID/imp-mv-b',
-    'test-e2e.sh --only checkpoints,sleep',
+    'test-e2e.sh --only backups,backups-repo,moves',
     'docker logs imp-zfs',
     'sudo zfs list -r -o name,used,refer,compressratio,recordsize impbenchPID',
     'zfs list -r -o name,used,refer,compressratio,recordsize impbenchPID',
@@ -144,6 +144,73 @@ test('it runs the unit tests and suites on a bench pool, then releases all it ma
   expect(ownerB).toBe(
     `{"pool":"impbenchPID","root":"impbenchPID/imp-mv-b","vdev":"${work}/bench.img"}\n`,
   );
+});
+
+test.each([
+  [{ IMP_ZFS_SHARD: '1/2' }, 'test-e2e.sh --only backups'],
+  [{ IMP_ZFS_SHARD: '2/2' }, 'test-e2e.sh --only backups-repo,moves'],
+  [{ IMP_ZFS_E2E_SUITES: 'lifecycle,sleep' }, 'test-e2e.sh --only lifecycle,sleep'],
+] as const)('it runs the suites that %p picks', (settings, expected) => {
+  const ctx = setupTest();
+
+  writeFileSync(ctx.moduleVersion, '2.3.4-1\n');
+  createStubInstanceDocker(ctx.stubs, { containers: [] });
+
+  const work = join(ctx.directoryPath, 'work');
+
+  mkdirSync(work);
+  createStubZpool(ctx.stubs);
+
+  const result = Bun.spawnSync(ctx.run, {
+    env: {
+      PATH: ctx.path,
+      IMP_ROOT: ctx.root,
+      IMP_ZFS_TEST_DIR: work,
+      IMP_ZFS_BENCH_GIB: '1',
+      IMP_ZFS_MODULE_VERSION_FILE: ctx.moduleVersion,
+      IMP_ZFS_TEST_UNIT: '0',
+      ...settings,
+    },
+  });
+
+  const calls = readFileSync(ctx.calls, 'utf8').split('\n');
+
+  expect(result.exitCode).toBe(0);
+  expect(calls.filter((call) => call.startsWith('test-e2e.sh'))).toStrictEqual([expected]);
+});
+
+test('it refuses an IMP_ZFS_SHARD that names no shard, and runs no suite', () => {
+  const ctx = setupTest();
+
+  writeFileSync(ctx.moduleVersion, '2.3.4-1\n');
+  createStubInstanceDocker(ctx.stubs, { containers: [] });
+
+  const work = join(ctx.directoryPath, 'work');
+
+  mkdirSync(work);
+  createStubZpool(ctx.stubs);
+
+  const result = Bun.spawnSync(ctx.run, {
+    env: {
+      PATH: ctx.path,
+      IMP_ROOT: ctx.root,
+      IMP_ZFS_TEST_DIR: work,
+      IMP_ZFS_BENCH_GIB: '1',
+      IMP_ZFS_MODULE_VERSION_FILE: ctx.moduleVersion,
+      IMP_ZFS_TEST_UNIT: '0',
+      IMP_ZFS_SHARD: '3/2',
+    },
+  });
+
+  const calls = readFileSync(ctx.calls, 'utf8').split('\n');
+
+  expect(result.exitCode).toBe(1);
+
+  expect(result.stderr.toString()).toInclude(
+    'IMP_ZFS_SHARD must be <shard>/<count>, such as 1/2, not 3/2',
+  );
+
+  expect(calls.filter((call) => call.startsWith('test-e2e.sh'))).toStrictEqual([]);
 });
 
 test('it refuses a bench pool name that is taken and touches nothing', () => {
@@ -842,7 +909,7 @@ test('it stops the suites, the moves suites’ B, the instance and the pool when
   expect(exitCode).toBe(143);
 
   expect(calls.split('\n').slice(-21)).toStrictEqual([
-    'test-e2e.sh --only checkpoints,sleep',
+    'test-e2e.sh --only backups,backups-repo,moves',
     'docker container inspect imp-zfs-mv-b',
     'docker logs imp-zfs-mv-b',
     'dev.sh down',

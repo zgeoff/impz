@@ -14,6 +14,8 @@ import {
   buildKsmSettings,
   getSuitePrefix,
   listJourneys,
+  listZfsSuites,
+  pickZfsShard,
   readSuiteSettings,
 } from './suites';
 
@@ -27,6 +29,45 @@ test('#buildJourneyArgv runs a journey file by a ./ path, which bun test does no
     '3600000',
     './e2e/suites/proxy-forwards.e2e.ts',
   ]);
+});
+
+test('#buildJourneyArgv runs a ZFS lane journey from its .zfs.e2e.ts file', () => {
+  expect(buildJourneyArgv('/usr/bin/bun', 'moves-cold').at(-1)).toBe(
+    './e2e/suites/moves-cold.zfs.e2e.ts',
+  );
+});
+
+test('#listZfsSuites lists the suites whose journey files all carry the .zfs suffix', () => {
+  expect(listZfsSuites().map((suite) => suite.name)).toStrictEqual([
+    'moves',
+    'backups',
+    'backups-repo',
+  ]);
+});
+
+test('#listZfsSuites gives each ZFS suite its recorded time, which splits the shards', () => {
+  expect(listZfsSuites().filter((suite) => suite.seconds === undefined)).toStrictEqual([]);
+});
+
+test.each([
+  [1, 2, ['backups']],
+  [2, 2, ['backups-repo', 'moves']],
+  [1, 1, ['backups', 'backups-repo', 'moves']],
+] as const)(
+  '#pickZfsShard puts the ZFS suites of shard %p of %p, longest first, in %p',
+  (index, count, suites) => {
+    expect(pickZfsShard(index, count)).toStrictEqual(suites);
+  },
+);
+
+test('#pickZfsShard puts each ZFS suite in exactly one shard', () => {
+  const shards = [1, 2, 3].flatMap((index) => pickZfsShard(index, 3));
+
+  expect(shards.toSorted()).toStrictEqual(
+    listZfsSuites()
+      .map((suite) => suite.name)
+      .toSorted(),
+  );
 });
 
 test('#listJourneys runs the file named for a suite that lists no journeys', () => {
@@ -145,7 +186,7 @@ test('#SUITES runs every journey file under e2e/suites exactly once', () => {
 
   const files = readdirSync(suitesDir)
     .filter((file) => file.endsWith('.e2e.ts'))
-    .map((file) => file.slice(0, -'.e2e.ts'.length));
+    .map((file) => file.replace(/(?:\.zfs)?\.e2e\.ts$/v, ''));
 
   const journeys = SUITES.flatMap((suite) => listJourneys(suite));
 
