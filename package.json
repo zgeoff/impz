@@ -31,7 +31,7 @@
       "@orpc/contract": "1.15.5",
       "@orpc/server": "1.15.5",
       "@orpc/tanstack-query": "1.15.5",
-      "@peculiar/x509": "1.14.3",
+      "@peculiar/x509": "2.2.0",
       "@playwright/test": "1.64.0",
       "@stylistic/eslint-plugin": "5.10.0",
       "@tanstack/react-query": "5.104.1",
