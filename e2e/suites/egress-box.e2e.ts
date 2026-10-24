@@ -417,11 +417,12 @@ test('it refuses a none imp with a grant and a reverse forward every direct conn
   const tailnetIp = await waitForTailnetIp();
 
   // The broker answers a CONNECT with its status line: 200 for a granted host, whose tunnel it
-  // ends in its own TLS terminator, and 403 for any host the none policy leaves out.
+  // ends in its own TLS terminator, and 403 for any host the none policy leaves out. busybox nc
+  // stops at the end of its stdin, so the sleep holds it open for the answer.
   const readConnectStatus = (host: string) =>
     runShellInImp(
       name,
-      String.raw`printf 'CONNECT ${host}:443 HTTP/1.1\r\nHost: ${host}:443\r\n\r\n' | nc -w 3 ${gateway} 7081 | head -n 1 | cut -d ' ' -f 2`,
+      String.raw`(printf 'CONNECT ${host}:443 HTTP/1.1\r\nHost: ${host}:443\r\n\r\n'; sleep 3) | nc -w 5 ${gateway} 7081 | head -n 1 | cut -d ' ' -f 2`,
     );
 
   const forward = await runShellInImp(name, `wget -qO- http://127.0.0.1:${port}/`);
