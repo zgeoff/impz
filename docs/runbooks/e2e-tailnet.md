@@ -4,8 +4,10 @@ The e2e harness runs the tailscale, egress and moves-tailnet suites on a tailnet
 Headscale control server in a container, which holds no production service and needs no secret. Each
 impd node on it joins as `tag:imp-e2e`, under a policy that copies the production tailnet's grants
 for that tag, so the suites test the same contract. The test-side member joins as a user, with no
-tag. The tailnet-names suite and a dev instance started with `IMP_TAILSCALE_OP=1` join Tailscale
-itself as `tag:imp-e2e`, which impz owns with its OAuth client and the 1Password vault `imp-e2e`.
+tag. The tailnet-names suite needs Tailscale itself, so it runs on the test tailnet, a Tailscale
+tailnet that holds no production service, and its OAuth clients reach nothing else. A dev instance
+started with `IMP_TAILSCALE_OP=1` joins the production tailnet as `tag:imp-e2e`, which impz owns
+with its OAuth client and the 1Password vault `imp-e2e`.
 [Development](./development.md#end-to-end-tests) covers how to run the suites, and
 [configuration](../guides/configuration.md#dev-instance) covers the order in which `dev.sh` looks
 for a key.
@@ -40,18 +42,66 @@ The policy copies the production tailnet's grants for the tag. Members, such as 
 container, reach every port of a `tag:imp-e2e` node. One `tag:imp-e2e` node reaches another only on
 port 7070, so the moves suites' two impds reach each other's API and no other port.
 
+## The test tailnet
+
+The tailnet-names suite runs on a Tailscale tailnet of its own, because Headscale has no Tailscale
+Services API, no Serve and no TLS certificates. A client with the `services` scope reaches every
+service in its tailnet, so this tailnet holds no production service, and no credential of the
+production tailnet takes part in the run.
+
+| Where                                                 | Holds                                                                               |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| the test tailnet's policy                             | the tags `tag:imp-e2e` and `tag:imp-svc`, the services auto-approver and the grants |
+| vault `imp-e2e`, item `imp-e2e-test-tailnet-authkeys` | an OAuth client with scope Auth Keys (write) and tag `tag:imp-e2e` only             |
+| vault `imp-e2e`, item `imp-e2e-tailscale-services`    | an OAuth client with scope Services (write) and tag `tag:imp-svc` only              |
+
+Each item holds the client's `client-id` and `client-secret`. The policy holds these entries:
+
+```json
+{
+  "tagOwners": {
+    "tag:imp-e2e": ["autogroup:admin", "tag:imp-e2e"],
+    "tag:imp-svc": ["autogroup:admin", "tag:imp-e2e"]
+  },
+  "autoApprovers": { "services": { "tag:imp-svc": ["tag:imp-e2e"] } },
+  "grants": [
+    { "src": ["tag:imp-e2e"], "dst": ["tag:imp-e2e"], "ip": ["tcp:7070"] },
+    { "src": ["tag:imp-e2e"], "dst": ["tag:imp-svc"], "ip": ["80", "443"] }
+  ]
+}
+```
+
+Every node on the test tailnet joins as `tag:imp-e2e`, the test-side member too, because the
+auth-keys client mints keys for that tag only. impd makes each service through the services client,
+with the tag `tag:imp-svc`, and the auto-approver lets a `tag:imp-e2e` impd serve those services.
+The first grant lets the moves suite's two impds reach each other's API, and the second lets the
+member reach the services. The tailnet also needs MagicDNS and HTTPS certificates on, for the
+`https://` names.
+
+When a run includes the tailnet-names suite with `IMP_E2E_TAILNET_NAMES=1`, the harness sets the
+test tailnet up before the dev instance starts:
+
+1. The harness reads the auth-keys client's secret and makes it an ephemeral, preauthorized key.
+2. The harness starts the test-side member, `<IMP_DEV_NAME>-ts-member`, a Tailscale container that
+   joins with the key as `tag:imp-e2e`. The suites fetch each imp's name through it.
+3. The dev instance and the moves suite's second host join with the same key and keep their node
+   state in memory, so a node that an earlier run saved never comes back.
+4. `dev.sh` writes the services client into the instance's data directory for per-imp names.
+5. After the last suite, the harness removes the member, whether the run passed or not. It removes
+   only a container that carries the owner label it set for this instance, and refuses another
+   container of that name.
+
 ## What the production tailnet holds
 
 The production tailnet has one policy file, and the infrastructure repo that holds it applies it
 whole. This section states the part of that file impz relies on, so a change there that breaks
 impz's tests breaks this contract.
 
-| Where                                              | Holds                                                                |
-| -------------------------------------------------- | -------------------------------------------------------------------- |
-| the tailnet policy                                 | the tag `tag:imp-e2e`, owned by admins and itself, and its one grant |
-| the OAuth client `imp-e2e`                         | scope Auth Keys (write) only, tag `tag:imp-e2e` only                 |
-| vault `imp-e2e`, item `imp-e2e-tailscale-oauth`    | the client's `client-id` and `client-secret`                         |
-| vault `imp-e2e`, item `imp-e2e-tailscale-services` | the Services OAuth client of the tailnet-names suite                 |
+| Where                                           | Holds                                                                |
+| ----------------------------------------------- | -------------------------------------------------------------------- |
+| the tailnet policy                              | the tag `tag:imp-e2e`, owned by admins and itself, and its one grant |
+| the OAuth client `imp-e2e`                      | scope Auth Keys (write) only, tag `tag:imp-e2e` only                 |
+| vault `imp-e2e`, item `imp-e2e-tailscale-oauth` | the client's `client-id` and `client-secret`                         |
 
 The policy holds these two entries for the tag, and no grant that takes `tag:imp-e2e` to `tag:imp`:
 
@@ -68,12 +118,11 @@ as you would any host.
 
 ## How the scripts use the client
 
-The dev script and the harness's tailnet-names run read the client secret with `op read`, add
-`?ephemeral=true&preauthorized=true`, and pass it to `tailscale up` as the auth key with
-`--advertise-tags=tag:imp-e2e`. Each node is ephemeral, so Tailscale removes it soon after it goes
-offline, and a dev instance that restarts later joins again with the same secret. No script defaults
-to an item outside the `imp-e2e` vault. The `imp` op-mint profile's token reads that vault and
-nothing else.
+The dev script reads the client secret with `op read`, adds `?ephemeral=true&preauthorized=true`,
+and passes it to `tailscale up` as the auth key with `--advertise-tags=tag:imp-e2e`. Each node is
+ephemeral, so Tailscale removes it soon after it goes offline, and a dev instance that restarts
+later joins again with the same secret. No script defaults to an item outside the `imp-e2e` vault.
+The `imp` op-mint profile's token reads that vault and nothing else.
 
 ## Replace the client
 

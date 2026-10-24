@@ -10,6 +10,7 @@ import {
   runImpWith,
 } from '../lib/imp-cli';
 import { waitForExec } from '../lib/imps';
+import { runChecked } from '../lib/instance';
 import { HOST_B, readMoveHosts, readMoveOptions } from '../lib/move-hosts';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
@@ -17,8 +18,9 @@ import { getSuitePrefix } from '../lib/suites';
 import {
   findServiceUrl,
   isTailnetReady,
-  readLocalTailscaleStatus,
-  readTailnetBody,
+  readHarnessMemberStatus,
+  readMemberBody,
+  readTailnetMember,
 } from '../lib/tailnet';
 import { probeTailscaleE2EKey } from '../lib/tailscale-key';
 import { waitFor } from '../lib/wait-for';
@@ -35,13 +37,12 @@ async function setupTest() {
 }
 
 // collection-time gate: Bun's skipIf takes a boolean and has no in-body skip
-const tailscaleStatus = await readLocalTailscaleStatus();
+const memberStatus = await readHarnessMemberStatus({ runChecked });
 
-// The tailnet name handover needs the Tailscale Services OAuth client
-// (op://$IMP_OP_VAULT/imp-e2e-tailscale-services); set IMP_E2E_TAILNET_NAMES=1
-// when 1Password holds it.
+// Per-imp names need Tailscale itself, so the suite runs only on the test
+// tailnet that IMP_E2E_TAILNET_NAMES=1 joins.
 const tailnetNamesMissing =
-  !isTailnetReady(tailscaleStatus, probeTailscaleE2EKey()) ||
+  !isTailnetReady(memberStatus, probeTailscaleE2EKey()) ||
   process.env['IMP_E2E_TAILNET_NAMES'] !== '1';
 
 test.skipIf(tailnetNamesMissing)(
@@ -50,6 +51,7 @@ test.skipIf(tailnetNamesMissing)(
     const ctx = await setupTest();
 
     const named = `${ctx.prefix}n`;
+    const member = readTailnetMember();
     const hosts = readMoveHosts(readMoveOptions('host-b-tailnet-names'));
 
     const clientB = await createInstanceClient(hosts.hostB);
@@ -106,7 +108,7 @@ test.skipIf(tailnetNamesMissing)(
     // Over plain HTTP: the name's certificate is B's to get.
     const body = await waitFor(
       `${moved} over the tailnet from B`,
-      () => readTailnetBody(moved.replace(/^https:/v, 'http:')),
+      () => readMemberBody(member, moved.replace(/^https:/v, 'http:')),
       { timeoutMs: 180_000 },
     );
 

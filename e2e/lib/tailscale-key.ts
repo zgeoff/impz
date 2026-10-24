@@ -7,8 +7,8 @@ export interface TailscaleE2EKey {
   readonly tags: string;
 }
 
-// Never print the key. Only the tag:imp-e2e OAuth client: dev's tag:imp key
-// would join a node that reaches a live impd.
+// Never print the key. Only the test tailnet's OAuth client: dev's key would
+// join a node to the production tailnet, where a live impd runs.
 export async function readTailscaleE2EAuthKey(env: HarnessEnv): Promise<TailscaleE2EKey | null> {
   const authkey = await readTailscaleE2EAuthkey({
     env,

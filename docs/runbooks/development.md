@@ -84,7 +84,7 @@ drives it through a browser. The suites run in this order:
 | `socket`         | Docker only through imp-docker-proxy: refused containers, calls, tags, pulls and build bodies; BuildKit pinned; imps keep running while the proxy is stopped                                                                                                                                                                   |
 | `moves`          | `impz move` to a second instance on a Docker network: cold with a checkpoint, an abort, warm moves of an open and a box imp that keep tmpfs and processes and reach DNS, HTTP and the broker at once                                                                                                                           |
 | `moves-tailnet`  | `impz move` between two tailnet nodes: the real peer check on their tailnet addresses                                                                                                                                                                                                                                          |
-| `tailnet-names`  | per-imp tailnet names on Tailscale itself: an imp's own name, which wakes it, and goes with it on a move; skips unless `IMP_E2E_TAILNET_NAMES=1`                                                                                                                                                                               |
+| `tailnet-names`  | per-imp tailnet names on the test tailnet: an imp's own name, which wakes it, and goes with it on a move; skips unless `IMP_E2E_TAILNET_NAMES=1`                                                                                                                                                                               |
 | `chaos`          | kills of impd, Firecracker and the container mid-operation; the watchdog; a full disk                                                                                                                                                                                                                                          |
 | `jail`           | the jailer: its own uid, no capabilities, seccomp, a memory cap; sleep, wake and re-adopt jailed; rollback and upgrade between jailed and unjailed                                                                                                                                                                             |
 | `memory`         | elastic memory: a guest grows under a gradual allocation, shrinks to its use, and a sleep unplugs spare memory first                                                                                                                                                                                                           |
@@ -127,10 +127,15 @@ The tailscale, egress and moves-tailnet suites need no secret: the harness start
 tailnet of the run's own, and removes it at the end ([the e2e tailnet](./e2e-tailnet.md)). The
 tailnet-names suite needs Tailscale itself, so it skips unless `IMP_E2E_TAILNET_NAMES=1`, and then
 runs only on its own (`--only tailnet-names`), because one dev instance joins one control server. It
-needs the `tag:imp-e2e` OAuth client and the Tailscale Services OAuth client in 1Password
+runs on [the test tailnet](./e2e-tailnet.md#the-test-tailnet), with its two OAuth clients in
+1Password: the auth-keys client (`IMP_E2E_TAILSCALE_OAUTH_REF`, default
+`op://$IMP_OP_VAULT/imp-e2e-test-tailnet-authkeys/client-secret`) and the services client
 (`IMP_TAILNET_OAUTH_REF`, default `op://$IMP_OP_VAULT/imp-e2e-tailscale-services`, fields
-`client-id` and `client-secret`) and the tailnet policy in
-[per-imp names](../guides/tailscale.md#per-imp-names).
+`client-id` and `client-secret`). Run it with the vault set:
+
+```bash
+IMP_OP_VAULT=imp-e2e IMP_E2E_TAILNET_NAMES=1 e2e/test-e2e.sh --only tailnet-names
+```
 
 `IMP_DEV_NAME`, `IMP_DEV_PORT_OFFSET` and `IMP_DEV_DATA` pick the dev instance, as for
 `scripts/dev/dev.sh`. These variables tune a run:

@@ -48,23 +48,11 @@ export interface TailnetNode {
   readonly tags: readonly string[];
 }
 
-const TAILNET_NOT_READY =
-  'tailscale needs the tag:imp-e2e OAuth client (op://$IMP_OP_VAULT/imp-e2e-tailscale-oauth) and this machine on the tailnet';
-
 export function isTailnetReady(
   status: Readonly<Pick<TailscaleStatus, 'BackendState'>> | null,
   hasKey: boolean,
 ): boolean {
   return hasKey && status?.BackendState === 'Running';
-}
-
-export function requireTailnetReady(
-  status: Readonly<Pick<TailscaleStatus, 'BackendState'>> | null,
-  hasKey: boolean,
-): void {
-  if (!isTailnetReady(status, hasKey)) {
-    throw new Error(TAILNET_NOT_READY);
-  }
 }
 
 export function parseTailscaleStatus(stdout: string): TailscaleStatus | null {
@@ -94,12 +82,6 @@ export function findTailnetNode(peers: readonly TailnetPeer[], ip: string): Tail
   const [short = ''] = fqdn.split('.');
 
   return { fqdn, short, tags: peer.Tags ?? [] };
-}
-
-export async function readLocalTailscaleStatus(): Promise<TailscaleStatus | null> {
-  const result = await runCommand(['tailscale', 'status', '--json']).catch(() => null);
-
-  return result === null ? null : parseTailscaleStatus(result.stdout);
 }
 
 const InfoTailscaleSchema = z.object({
@@ -132,23 +114,8 @@ export function findServiceUrl(stdout: string): string | null {
   );
 }
 
-export async function readTailnetBody(url: string, host?: string): Promise<string> {
-  const response = await fetch(url, {
-    ...(host !== undefined && { headers: { host } }),
-    signal: AbortSignal.timeout(30_000),
-  });
-
-  const body = await response.text();
-
-  if (!response.ok) {
-    throw new Error(`${url} answered ${String(response.status)}: ${body}`);
-  }
-
-  return body.trim();
-}
-
-// The harness's test-side member of the Headscale tailnet: a container, since
-// this machine's own tailscaled stays on the tailnet it already has.
+// The harness's test-side member of the run's tailnet: a container, since this
+// machine's own tailscaled stays on the tailnet it already has.
 export function readTailnetMember(
   env: Readonly<Record<string, string | undefined>> = process.env,
 ): string {
@@ -159,6 +126,25 @@ export function readTailnetMember(
   }
 
   return member;
+}
+
+export async function readHarnessMemberStatus(
+  runners: Pick<CommandRunners, 'runChecked'>,
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): Promise<TailscaleStatus | null> {
+  const member = env['E2E_TAILNET_MEMBER'] ?? '';
+
+  if (member === '') {
+    return null;
+  }
+
+  const status = await readMemberStatus(member, runners);
+
+  if (status.BackendState !== 'Running') {
+    throw new Error(`${member} is ${status.BackendState}, not Running`);
+  }
+
+  return status;
 }
 
 export async function readMemberStatus(

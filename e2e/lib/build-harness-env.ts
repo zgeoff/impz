@@ -4,11 +4,12 @@ import type { E2EConfig, HarnessEnv } from './config';
 import type { HeadscaleTailnet } from './headscale';
 import { HEADSCALE_LOGIN_SERVER, HEADSCALE_TAGS } from './headscale';
 import type { TailscaleE2EKey } from './tailscale-key';
+import type { TailscaleTailnet } from './tailscale-tailnet';
 
 export type HarnessTailnet =
   | { readonly kind: 'off' }
   | ({ readonly kind: 'headscale' } & HeadscaleTailnet)
-  | ({ readonly kind: 'tailscale' } & TailscaleE2EKey);
+  | ({ readonly kind: 'tailscale' } & TailscaleE2EKey & TailscaleTailnet);
 
 interface HarnessEnvOptions {
   readonly env: HarnessEnv;
@@ -48,6 +49,11 @@ export function buildHarnessEnv(options: Readonly<HarnessEnvOptions>): HarnessEn
       ...env,
       TAILSCALE_AUTHKEY: tailnet.key,
       IMP_TAILSCALE_TAGS: tailnet.tags,
+
+      // A saved node on the same control server and tags stays on its own
+      // tailnet, so a node from a production join never comes back.
+      IMP_TAILSCALE_STATE_DIR: 'mem',
+      E2E_TAILNET_MEMBER: tailnet.member,
     }))
     .exhaustive();
 }

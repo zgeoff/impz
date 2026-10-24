@@ -10,8 +10,8 @@ interface TailscaleE2EAuthkeyOptions {
   readonly warn: (line: string) => void;
 }
 
-// Only the tag:imp-e2e OAuth client, never TAILSCALE_AUTHKEY or .env: those may hold a tag:imp key,
-// and a tag:imp node reaches a live impd.
+// Only the test tailnet's OAuth client, never TAILSCALE_AUTHKEY or .env: those may hold a key of the
+// production tailnet, where a node reaches a live impd and the services client reaches real names.
 export async function readTailscaleE2EAuthkey(
   options: TailscaleE2EAuthkeyOptions,
 ): Promise<TailscaleAuthkey | null> {
@@ -21,7 +21,7 @@ export async function readTailscaleE2EAuthkey(
     const ref = resolveOpRef(
       options.env,
       'IMP_E2E_TAILSCALE_OAUTH_REF',
-      'imp-e2e-tailscale-oauth/client-secret',
+      'imp-e2e-test-tailnet-authkeys/client-secret',
     );
 
     if (ref.kind === 'missing') {

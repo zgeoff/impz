@@ -3,7 +3,7 @@ import * as z from 'zod';
 import { HEADSCALE_IMAGES } from '../../scripts/dev/headscale-images';
 import { FIXTURES_DIR, instance } from './instance';
 import type { CommandRunners } from './instance';
-import { readMemberStatus } from './tailnet';
+import { startTailnetMember } from './tailnet-member';
 import { waitFor } from './wait-for';
 
 export const HEADSCALE_LOGIN_SERVER = 'http://headscale:8080';
@@ -112,7 +112,12 @@ export async function startHeadscale(
     'json',
   ]);
 
-  await startMember(runners, names, KeySchema.parse(JSON.parse(memberKey)).key);
+  await startTailnetMember(runners, {
+    name: names.member,
+    key: KeySchema.parse(JSON.parse(memberKey)).key,
+    tailscaleArgs: `--login-server=${HEADSCALE_LOGIN_SERVER}`,
+    network: names.network,
+  });
 
   return {
     key: KeySchema.parse(JSON.parse(tagged)).key,
@@ -162,57 +167,4 @@ export async function disconnectHeadscale(
     network,
     buildHeadscaleNames(container).headscale,
   ]);
-}
-
-// The test-side member: a kernel tun, so docker exec reaches tailnet addresses,
-// and MagicDNS in its resolv.conf, so it resolves node names.
-async function startMember(
-  runners: CommandRunners,
-  names: ReturnType<typeof buildHeadscaleNames>,
-  key: string,
-): Promise<void> {
-  const created = await runners.runCommand(
-    [
-      'docker',
-      'create',
-      '--name',
-      names.member,
-      '--network',
-      names.network,
-      '--cap-add',
-      'NET_ADMIN',
-      '--device',
-      '/dev/net/tun',
-      '-e',
-      'TS_AUTHKEY',
-      '-e',
-      'TS_USERSPACE=false',
-      '-e',
-      'TS_ACCEPT_DNS=true',
-      '-e',
-      'TS_HOSTNAME=e2e-member',
-      '-e',
-      `TS_EXTRA_ARGS=--login-server=${HEADSCALE_LOGIN_SERVER}`,
-      HEADSCALE_IMAGES.tailscale,
-    ],
-    { env: { TS_AUTHKEY: key } },
-  );
-
-  if (created.exitCode !== 0) {
-    throw new Error(`docker create ${names.member} exited ${String(created.exitCode)}`);
-  }
-
-  await runners.runChecked(['docker', 'start', names.member]);
-
-  await waitFor(
-    `${names.member} on the tailnet`,
-    async () => {
-      const status = await readMemberStatus(names.member, runners);
-
-      if (status.BackendState !== 'Running') {
-        throw new Error(`${names.member} is ${status.BackendState}`);
-      }
-    },
-    { timeoutMs: 60_000, intervalMs: 500 },
-  );
 }

@@ -57,7 +57,8 @@ change servers. Without a key it stays where it is, and `tailscale-up.sh` says s
 
 ## State and ephemeral keys
 
-State lives in `/var/lib/imp/tailscale` (`IMP_TAILSCALE_STATE_DIR`; `mem` keeps it in memory).
+State lives in `/var/lib/imp/tailscale` (`IMP_TAILSCALE_STATE_DIR`). `mem` keeps the node in memory
+and its TLS certificates in `/var/lib/imp/tailscale`, so an HTTPS name still works.
 
 impz keeps the node state even with an ephemeral key, because the name matters more than the node
 lifetime:
@@ -142,11 +143,10 @@ With `IMP_TAILNET_NAMES=1`, each imp also gets a name of its own on the tailnet,
 [Tailscale Service](https://tailscale.com/kb/1552/tailscale-services): a virtual IP and a MagicDNS
 name that this host serves. It is off by default.
 
-**CAUTION:** Per-imp names have not run against a live tailnet yet. Before anyone turns
-`IMP_TAILNET_NAMES` on, run the live test once with the OAuth client
-([development](../runbooks/development.md#end-to-end-tests)), and replace the unit tests' fake API
-answers and `tailscale serve status` output with what the live run returned for a name a device
-holds and for a served name.
+**CAUTION:** The tailnet-names suite runs per-imp names on a test tailnet
+([development](../runbooks/development.md#end-to-end-tests)), but the unit tests use fake API
+answers and `tailscale serve status` output. Before anyone turns `IMP_TAILNET_NAMES` on, replace
+those fakes with what a live run returns for a name a device holds and for a served name.
 
 **NOTE:** [A domain of your own](./https.md) is the recommended way to give imps names. It needs no
 API credential, puts no name in the tailnet's service list, and one wildcard certificate covers
@@ -168,7 +168,7 @@ Tailscale v1.86 or later on the host (the image's is newer), and on the tailnet:
    ```
 
    The autoApprovers form is the documented one. A grant to a service tag is the documented way to
-   reach services; that it covers each service's virtual IP is documented, not yet tested live.
+   reach services, and the tailnet-names suite reaches each service's virtual IP through it.
    Tailscale's docs do not say which tag owner a service made through the API needs, so admins own
    the tag too.
 

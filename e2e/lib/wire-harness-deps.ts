@@ -35,6 +35,7 @@ import { runSuite, stopSuiteGroup } from './run-suite';
 import type { FixtureImage } from './suites';
 import { SUITES } from './suites';
 import { readTailscaleE2EAuthKey } from './tailscale-key';
+import { startTailscaleTailnet, stopTailscaleTailnet } from './tailscale-tailnet';
 import { writeResults } from './write-results';
 
 export function wireHarnessDeps(cwd: string): HarnessDeps {
@@ -43,6 +44,8 @@ export function wireHarnessDeps(cwd: string): HarnessDeps {
     readTailscaleKey: readTailscaleE2EAuthKey,
     startHeadscale: () => startHeadscale({ runCommand, runChecked }),
     stopHeadscale: () => stopHeadscale({ runCommand, runChecked }),
+    startTailscale: (key) => startTailscaleTailnet({ runCommand, runChecked }, key),
+    stopTailscale: () => stopTailscaleTailnet({ runCommand, runChecked }),
     setUpInstance: async (run) => {
       const target = buildInstance(run.env, cwd);
 
