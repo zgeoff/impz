@@ -480,7 +480,8 @@ test('it passes on an API answer that stays silent past Bun’s idle limit, wher
     { kind: 'control', isOk: false, error: 'TimeoutError' },
     { kind: 'long', isOk: true, status: 200, body: 'the long answer' },
   ]);
-}, 30_000);
+  // oxlint-disable-next-line zgeoff/max-test-timeout -- 8.2 s on CI; floor: Bun's fetch idle limit fires at 8.0 s for BUN_CONFIG_HTTP_IDLE_TIMEOUT 1 or 2, and a fraction turns it off
+}, 16_000);
 
 test('it passes on an API answer that comes after 400 s of fake time', async () => {
   const ctx = await setupTest();
