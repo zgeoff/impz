@@ -1,5 +1,6 @@
 import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { readBackupSuiteSettings } from './backup-drill';
 import { config } from './config';
 import { REPO_ROOT } from './instance';
 import type { DevInstance } from './instance';
@@ -236,8 +237,22 @@ export const SUITES: readonly Suite[] = [
   },
 
   // Last, because they reboot the instance with backups on, then off again.
-  { name: 'backups', prefix: 'e2e-bk-', images: ['e2e-tiny'], seconds: 99 },
-  { name: 'backups-repo', prefix: 'e2e-bkr-', images: ['e2e-tiny'], seconds: 111 },
+
+  // Each test starts MinIO afresh for an empty repository, which impd backs up to with no reboot.
+  {
+    name: 'backups',
+    prefix: 'e2e-bk-',
+    images: ['e2e-tiny'],
+    settings: readBackupSuiteSettings,
+    seconds: 99,
+  },
+  {
+    name: 'backups-repo',
+    prefix: 'e2e-bkr-',
+    images: ['e2e-tiny'],
+    settings: readBackupSuiteSettings,
+    seconds: 111,
+  },
 ];
 
 // One list per CI runner and instance; each held about 225 s of suite work in

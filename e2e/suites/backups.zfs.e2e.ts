@@ -1,11 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import {
-  buildBackupEnv,
-  readBackupStatus,
-  removeBackupSecrets,
-  wireBackupDrill,
-  writeBackupSecrets,
-} from '../lib/backup-drill';
+import { readBackupSecrets, readBackupStatus, wireBackupDrill } from '../lib/backup-drill';
 import { config } from '../lib/config';
 import { resolveImageName } from '../lib/fixtures';
 import {
@@ -30,9 +24,8 @@ async function setupTest() {
   onTestFinished(() => stack.disposeAsync());
 
   const client = await createInstanceClient();
-  const secrets = await writeBackupSecrets();
 
-  stack.defer(() => removeBackupSecrets(secrets));
+  const secrets = readBackupSecrets();
 
   return { prefix: getSuitePrefix('backups'), stack, client, secrets };
 }
@@ -46,7 +39,7 @@ test('it backs up a running imp mid-write, a stopped imp and a checkpoint, adds 
   const idle = `${ctx.prefix}idle`;
   const copy = `${ctx.prefix}copy`;
 
-  await drill.reboot(buildBackupEnv(ctx.secrets, 60));
+  await drill.resetState();
   await drill.startMinio(ctx.secrets);
 
   await runImp('new', source, '--image', image, '--memory', '256');
@@ -195,7 +188,7 @@ test('it restores a point that survived the scheduled forget and prune, and find
   // impd's scheduled run, and the prune after it, come every 5 s. Each fails
   // until MinIO answers, so the imp exists before it does: every point a
   // prune follows holds the imp.
-  await drill.reboot(buildBackupEnv(ctx.secrets, 5));
+  await drill.reboot({ IMP_BACKUP_INTERVAL_S: '5' });
 
   await runImp('new', idle, '--image', resolveImageName('e2e-tiny'), '--memory', '256');
 

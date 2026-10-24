@@ -1,6 +1,14 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
+import { rmSync } from 'node:fs';
 import { buildStubAnswerQueue } from '@impz/test-utils/build-stub-answer-queue';
-import { buildBackupEnv, createBackupDrill, findPackKey } from './backup-drill';
+import {
+  buildBackupEnv,
+  createBackupDrill,
+  findPackKey,
+  readBackupSecrets,
+  readBackupSuiteSettings,
+} from './backup-drill';
+import { instance } from './instance';
 
 function setupTest() {
   const stack = new AsyncDisposableStack();
@@ -18,8 +26,14 @@ function setupTest() {
     steps,
     writeMetric,
     deps: {
+      suiteEnv: { IMP_BACKUP_INTERVAL_S: '3600', IMP_BACKUP_MEMORY_MIB: '256' },
       removeState: () => {
         steps.push('remove state');
+
+        return Promise.resolve();
+      },
+      writeState: (state: Readonly<{ lastRunAt: Date }>) => {
+        steps.push(`write state ${JSON.stringify(state)}`);
 
         return Promise.resolve();
       },
@@ -82,7 +96,7 @@ test('#createBackupDrill writes each span of a backup test to its metric once th
   });
 });
 
-test('#createBackupDrill clears the backup state before the reboot onto backups, and reboots back before MinIO stops', async () => {
+test('#createBackupDrill clears the backup state before a reboot over the suite’s settings, and reboots back onto them before MinIO stops', async () => {
   const ctx = setupTest();
 
   const drill = createBackupDrill(ctx.stack, 'backupTrialSpansMs', {
@@ -105,9 +119,38 @@ test('#createBackupDrill clears the backup state before the reboot onto backups,
 
   expect(ctx.steps).toStrictEqual([
     'remove state',
-    'reboot onto {"IMP_BACKUP_INTERVAL_S":"5"}',
+    'reboot onto {"IMP_BACKUP_INTERVAL_S":"5","IMP_BACKUP_MEMORY_MIB":"256"}',
     'start minio',
-    'reboot onto {}',
+    'reboot onto {"IMP_BACKUP_INTERVAL_S":"3600","IMP_BACKUP_MEMORY_MIB":"256"}',
+    'stop minio',
+    'metric backupTrialSpansMs {"rebootMs":0,"minioMs":0,"runsMs":0,"rebootBackMs":0}',
+  ]);
+});
+
+test('#createBackupDrill marks a run as just done for a test on the suite’s settings, and stops MinIO with no reboot', async () => {
+  const ctx = setupTest();
+
+  const drill = createBackupDrill(ctx.stack, 'backupTrialSpansMs', {
+    ...ctx.deps,
+    runBackup: () => Promise.reject(new Error('this test runs no backup')),
+    now: () => Date.parse('2026-03-14T09:26:53.000Z'),
+  });
+
+  await drill.resetState();
+
+  await drill.startMinio({
+    directory: '/repo/.cache/e2e/backups-d4',
+    envFile: '/repo/.cache/e2e/backups-d4/restic.env',
+    passwordInContainer: '/src/.cache/e2e/backups-d4/restic-password',
+    accessKey: 'e2e-backups',
+    secretKey: 'feed',
+  });
+
+  await ctx.stack.disposeAsync();
+
+  expect(ctx.steps).toStrictEqual([
+    'write state {"lastRunAt":"2026-03-14T09:26:53.000Z"}',
+    'start minio',
     'stop minio',
     'metric backupTrialSpansMs {"rebootMs":0,"minioMs":0,"runsMs":0,"rebootBackMs":0}',
   ]);
@@ -149,6 +192,36 @@ test('#buildBackupEnv points impd at the drill repository with its keys and sche
     IMP_DEV_BACKUP_ENV_FILE: '/repo/.cache/e2e/backups-a1/restic.env',
     IMP_DEFAULT_DISK_GIB: '4',
   });
+});
+
+test('#readBackupSecrets keeps one set of keys for an instance from call to call', () => {
+  const target = { ...instance, container: `imp-e2e-secrets-${String(process.pid)}` };
+  const first = readBackupSecrets(target);
+
+  onTestFinished(() => {
+    rmSync(first.directory, { recursive: true, force: true });
+  });
+
+  expect(readBackupSecrets(target)).toStrictEqual(first);
+  expect(first.directory).toEndWith(`/.cache/e2e/backups-${target.container}`);
+
+  expect(first.passwordInContainer).toBe(
+    `/src/.cache/e2e/backups-${target.container}/restic-password`,
+  );
+
+  expect(first.secretKey).toMatch(/^[0-9a-f]{36}$/v);
+});
+
+test('#readBackupSuiteSettings points impd at the drill repository with the instance’s keys, an hour apart', () => {
+  const target = { ...instance, container: `imp-e2e-suite-${String(process.pid)}` };
+  const settings = readBackupSuiteSettings(target);
+  const secrets = readBackupSecrets(target);
+
+  onTestFinished(() => {
+    rmSync(secrets.directory, { recursive: true, force: true });
+  });
+
+  expect(settings).toStrictEqual(buildBackupEnv(secrets, 3600));
 });
 
 test('#findPackKey reads the first data pack of a listing', () => {
