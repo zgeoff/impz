@@ -115,11 +115,22 @@ and selects its files by suffix. `test:related` leaves lane files out for the sa
 | VM end to end     | `e2e/suites/*.e2e.ts`, in the CI groups | KVM Firecracker imps on a dev instance of impd      | `e2e/test-e2e.sh --group <n>`      | 60 s; measured p95 15.7 s, max 99.8 s (`memory.e2e`)  |
 | ZFS host with VMs | the suites in `IMP_ZFS_E2E_SUITES`      | KVM imps on a real zpool in a sparse file           | `scripts/zfs-host-test.sh`         | 60 s; measured p95 9.1 s, max 121.8 s (`backups.e2e`) |
 | Host networking   | `*.host.test.ts`                        | root, the kernel's netfilter and network namespaces | `bun run test:host`, as root in CI | 15 s                                                  |
-| Headscale join    | `*.headscale.test.ts`                   | Headscale and tailscale containers in Docker        | `bun run test:headscale`           | not set yet; measured max 11.0 s (`tailscale-up`)     |
-| ACME issuer       | `*.pebble.test.ts`                      | the Pebble ACME server in Docker                    | `bun run test:pebble`              | not set yet                                           |
+| Headscale join    | `*.headscale.test.ts`                   | Headscale and tailscale containers in Docker        | `bun run test:headscale`           | 15 s; measured max 31.6 s, two exceptions below       |
+| ACME issuer       | `*.pebble.test.ts`                      | the Pebble ACME server in Docker                    | `bun run test:pebble`              | 5 s; measured max 1.7 s                               |
 
 Nothing enforces the ceilings yet: the e2e harness gives each journey 1 h (`JOURNEY_TIMEOUT_MS` in
 [`suites.ts`](../../../e2e/lib/suites.ts)), and `zgeoff/max-test-timeout` checks a lane's ceiling
-only from oxlint-config 0.7.0. A host networking test still skips where its namespace probe fails,
-and `IMP_HOST_TESTS=required`, which CI sets, turns that skip into a failure. A lane file holds only
-the cases that need its real system: a pure case of the same module stays in `<name>.test.ts`.
+only from oxlint-config 0.7.0. A test over its lane's ceiling is a named exception with a ticket
+that brings it under; the ceiling never rises to cover it:
+
+| Test                                                                            | Lane      | Measured | Ticket   |
+| ------------------------------------------------------------------------------- | --------- | -------- | -------- |
+| `backups.e2e.ts` "it backs up a running imp mid-write, …"                       | ZFS       | 121.8 s  | GEO-1767 |
+| `memory.e2e.ts` "it grows an elastic guest under a gradual allocation, …"       | VM        | 99.8 s   | GEO-1769 |
+| `backups.e2e.ts` "it restores a point that survived the scheduled …"            | ZFS       | 64.8 s   | GEO-1768 |
+| `headscale.headscale.test.ts` "it refuses one tag:imp-e2e node the port 7071 …" | Headscale | 31.6 s   | GEO-1770 |
+| `headscale.headscale.test.ts` "it lets one tag:imp-e2e node reach another …"    | Headscale | 16.8 s   | GEO-1770 |
+
+A host networking test still skips where its namespace probe fails, and `IMP_HOST_TESTS=required`,
+which CI sets, turns that skip into a failure. A lane file holds only the cases that need its real
+system: a pure case of the same module stays in `<name>.test.ts`.
