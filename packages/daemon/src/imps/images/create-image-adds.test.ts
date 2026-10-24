@@ -94,15 +94,16 @@ test('it adds an image through a builder for one platform, with no host engine c
     entry.startsWith('.build-'),
   );
 
-  expect(image as unknown).toStrictEqual({
-    id: expect.any(String) as unknown,
+  expect(image).toStrictEqual({
+    id: expect.toBeString(),
     name: 'box',
     ref: 'busybox',
-    digest: expect.stringMatching(/^imp-build-[a-f0-9]{64}$/v) as unknown,
+    digest: expect.stringMatching(/^imp-build-[a-f0-9]{64}$/v),
+    receivedDigest: null,
     source: 'oci',
     sourceImp: null,
-    sizeBytes: expect.any(Number) as unknown,
-    createdAt: expect.any(Date) as unknown,
+    sizeBytes: expect.toBeNumber(),
+    createdAt: expect.toBeValidDate(),
     isPinned: false,
   });
 

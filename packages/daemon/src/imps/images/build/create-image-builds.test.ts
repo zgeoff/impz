@@ -153,15 +153,16 @@ test('it pins, builds and exports in its builder, with no host engine call', asy
 
   const saved = await readImageByName(ctx.db, 'web');
 
-  expect(image as unknown).toStrictEqual({
-    id: expect.any(String) as unknown,
+  expect(image).toStrictEqual({
+    id: expect.toBeString(),
     name: 'web',
     ref: 'imp/web:latest',
-    digest: expect.stringMatching(/^imp-build-[a-f0-9]{64}$/v) as unknown,
+    digest: expect.stringMatching(/^imp-build-[a-f0-9]{64}$/v),
+    receivedDigest: null,
     source: 'oci',
     sourceImp: null,
-    sizeBytes: expect.any(Number) as unknown,
-    createdAt: expect.any(Date) as unknown,
+    sizeBytes: expect.toBeNumber(),
+    createdAt: expect.toBeValidDate(),
     isPinned: false,
   });
 

@@ -16,6 +16,7 @@ import {
   removeUnusedImage,
   updateImage,
   updateImagePin,
+  updateImageReceivedDigest,
   updateImageUse,
 } from './images';
 import { createImp } from './imps';
@@ -38,6 +39,7 @@ test('#createImage returns the stored image, a docker image by default', async (
     name: 'dev',
     ref: 'imp/hello:latest',
     digest: 'sha256:1111',
+    receivedDigest: null,
     source: 'oci',
     sourceImp: null,
     sizeBytes: 2048,
@@ -105,9 +107,33 @@ test('#readImageByDigest finds the oldest image of that digest', async () => {
     ])
     .execute();
 
-  const found = await readImageByDigest(ctx.db, 'sha256:1111');
+  const found = await readImageByDigest(ctx.db, ['sha256:1111']);
 
   expect(found?.name).toBe('older');
+});
+
+test('#readImageByDigest finds an image by the digest this host recorded for its copy on another host', async () => {
+  const ctx = await createTestDatabase();
+
+  await ctx.db
+    .insertInto('images')
+    .values([
+      { id: 'a', name: 'other', ref: 'r', digest: 'sha256:2222', size_bytes: 1, created_at: 0 },
+      {
+        id: 'b',
+        name: 'pulled',
+        ref: 'r',
+        digest: 'sha256:1111',
+        received_digest: 'sha256:3333',
+        size_bytes: 1,
+        created_at: 10,
+      },
+    ])
+    .execute();
+
+  const found = await readImageByDigest(ctx.db, ['sha256:9999', 'sha256:3333']);
+
+  expect(found?.name).toBe('pulled');
 });
 
 test('#readImageByDigest breaks a tie in age by id', async () => {
@@ -121,7 +147,7 @@ test('#readImageByDigest breaks a tie in age by id', async () => {
     ])
     .execute();
 
-  const found = await readImageByDigest(ctx.db, 'sha256:1111');
+  const found = await readImageByDigest(ctx.db, ['sha256:1111']);
 
   expect(found?.name).toBe('first');
 });
@@ -131,7 +157,7 @@ test('#readImageByDigest finds nothing for a digest no image has', async () => {
 
   await createImage(ctx.db, buildMockNewImage({ digest: 'sha256:1111' }));
 
-  const found = await readImageByDigest(ctx.db, 'sha256:2222');
+  const found = await readImageByDigest(ctx.db, ['sha256:2222']);
 
   expect(found).toBeUndefined();
 });
@@ -163,12 +189,51 @@ test('#updateImage points the image at the new build and keeps its name', async 
     name: 'base',
     ref: 'imp/base:v2',
     digest: 'sha256:2222',
+    receivedDigest: null,
     source: 'imp',
     sourceImp: 'dev',
     sizeBytes: 4096,
     createdAt: image.createdAt,
     isPinned: false,
   });
+});
+
+test('#updateImage drops the received digest of the build it replaces', async () => {
+  const ctx = await createTestDatabase();
+  const image = await createImage(ctx.db, buildMockNewImage({ digest: 'sha256:1111' }));
+
+  await updateImageReceivedDigest(ctx.db, image, 'sha256:3333');
+
+  const updated = await updateImage(ctx.db, image.id, {
+    ref: 'imp/base:v2',
+    digest: 'sha256:2222',
+    sizeBytes: 4096,
+  });
+
+  expect(updated.receivedDigest).toBeNull();
+});
+
+test('#updateImageReceivedDigest records the digest of the image as another host received it', async () => {
+  const ctx = await createTestDatabase();
+  const image = await createImage(ctx.db, buildMockNewImage({ digest: 'sha256:1111' }));
+
+  await updateImageReceivedDigest(ctx.db, image, 'sha256:3333');
+
+  const read = await readImageById(ctx.db, image.id);
+
+  expect(read?.receivedDigest).toBe('sha256:3333');
+});
+
+test('#updateImageReceivedDigest records nothing on an image rebuilt since the send read it', async () => {
+  const ctx = await createTestDatabase();
+  const image = await createImage(ctx.db, buildMockNewImage({ digest: 'sha256:1111' }));
+
+  await updateImage(ctx.db, image.id, { ref: 'imp/base:v2', digest: 'sha256:2222', sizeBytes: 1 });
+  await updateImageReceivedDigest(ctx.db, image, 'sha256:3333');
+
+  const read = await readImageById(ctx.db, image.id);
+
+  expect(read?.receivedDigest).toBeNull();
 });
 
 test('#updateImage clears the source imp when the build names none', async () => {
@@ -278,6 +343,21 @@ test('#updateImageUse never moves a last use back', async () => {
 
   await updateImageUse(ctx.db, 'id', [image.id], Date.parse('2030-01-02T00:00:00Z'));
   await updateImageUse(ctx.db, 'id', [image.id], Date.parse('2030-01-01T00:00:00Z'));
+
+  const uses = await listImageUses(ctx.db);
+
+  expect(uses[0]?.lastUsedAt).toBe(Date.parse('2030-01-02T00:00:00Z'));
+});
+
+test('#updateImageUse records a use of an image named by its received digest', async () => {
+  const ctx = await createTestDatabase();
+  const image = await createImage(ctx.db, buildMockNewImage({ digest: 'sha256:1111' }));
+
+  await updateImageReceivedDigest(ctx.db, image, 'sha256:3333');
+
+  await ctx.db.updateTable('images').set({ last_used_at: 0 }).execute();
+
+  await updateImageUse(ctx.db, 'digest', ['sha256:3333'], Date.parse('2030-01-02T00:00:00Z'));
 
   const uses = await listImageUses(ctx.db);
 

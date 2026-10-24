@@ -14,6 +14,8 @@ import type { TestImpd, TestImpdOptions } from '../start-test-impd';
 // a move needs the target's peer URL to be a literal tailnet address
 export const TARGET_URL = 'http://100.100.0.2:7070';
 export const SOURCE_PEER = '100.100.0.1';
+const SOURCE_URL = 'http://100.100.0.1:7070';
+const TARGET_PEER = '100.100.0.2';
 
 interface MoveHookHosts {
   readonly target: Readonly<Pick<TestImpd, 'advance'>>;
@@ -57,6 +59,13 @@ export async function createMoveHosts(
   options: MoveHostsOptions = {},
 ) {
   const commits: string[] = [];
+  const back: { source: TestImpd | null } = { source: null };
+
+  const sendToSource = (request: Request): Promise<Response> => {
+    invariant(back.source);
+
+    return back.source.moves.respond(request, TARGET_PEER);
+  };
 
   const target = await startTestImpd(stack, {
     ...options.target,
@@ -64,6 +73,7 @@ export async function createMoveHosts(
     boundaries: {
       ...options.target?.boundaries,
       moves: {
+        fetch: sendToSource,
         ...options.target?.boundaries?.moves,
         onCommitted: (name) => {
           commits.push(name);
@@ -90,6 +100,7 @@ export async function createMoveHosts(
 
   const source = await startTestImpd(stack, {
     ...options.source,
+    env: { IMP_PEER_URL: SOURCE_URL, ...options.source?.env },
     boundaries: {
       ...options.source?.boundaries,
       moves: {
@@ -117,11 +128,12 @@ export async function createMoveHosts(
   const targetApp = { client: target.client };
 
   built.hosts = { target, sourceApp };
+  back.source = source;
 
-  const waitForMove = (name: string): Promise<MoveStatus> =>
+  const waitForMoveFrom = (from: Readonly<TestImpd>, name: string): Promise<MoveStatus> =>
     waitFor(
       async () => {
-        const status = await source.client.moves.status({ name });
+        const status = await from.client.moves.status({ name });
 
         if (!status.isDone && status.error === null) {
           throw new Error(`the move of ${name} never ended`);
@@ -132,12 +144,19 @@ export async function createMoveHosts(
       { timeoutMs: options.moveTimeoutMs ?? 5000 },
     );
 
-  // the steps `impz move` runs, where a stop forces as `--stop` does
-  const runMove = async (name: string, stop = false): Promise<MoveStatus> => {
-    const info = await target.client.system.info();
-    const targetFacts = await target.client.moves.facts();
+  const waitForMove = (name: string): Promise<MoveStatus> => waitForMoveFrom(source, name);
 
-    const plan = await source.client.moves.prepare({
+  // the steps `impz move` runs, where a stop forces as `--stop` does
+  const runMoveBetween = async (
+    from: Readonly<TestImpd>,
+    to: Readonly<TestImpd>,
+    name: string,
+    stop: boolean,
+  ): Promise<MoveStatus> => {
+    const info = await to.client.system.info();
+    const targetFacts = await to.client.moves.facts();
+
+    const plan = await from.client.moves.prepare({
       name,
       stop,
       ...(stop && { force: true }),
@@ -145,16 +164,22 @@ export async function createMoveHosts(
       target: targetFacts,
     });
 
-    const ticket = await target.client.moves.receive({
+    const ticket = await to.client.moves.receive({
       name,
       bytes: plan.bytes,
       ...(plan.warm !== null && { warm: plan.warm }),
     });
 
-    await source.client.moves.send({ name, to: ticket.peerUrl, ticket: ticket.ticket });
+    await from.client.moves.send({ name, to: ticket.peerUrl, ticket: ticket.ticket });
 
-    return waitForMove(name);
+    return waitForMoveFrom(from, name);
   };
+
+  const runMove = (name: string, stop = false): Promise<MoveStatus> =>
+    runMoveBetween(source, target, name, stop);
+
+  const runMoveBack = (name: string): Promise<MoveStatus> =>
+    runMoveBetween(target, source, name, false);
 
   return {
     source,
@@ -163,6 +188,7 @@ export async function createMoveHosts(
     targetApp,
     commits,
     runMove,
+    runMoveBack,
     waitForMove,
   };
 }

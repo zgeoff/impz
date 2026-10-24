@@ -41,6 +41,7 @@ import { MIGRATION_036_KEEP_BROKER_AUDIT_OF_DESTROYED_IMPS } from './migrations/
 import { MIGRATION_037_ADD_IMAGE_LAST_USED } from './migrations/migration-037-add-image-last-used';
 import { MIGRATION_038_ADD_IMAGE_REMOVALS } from './migrations/migration-038-add-image-removals';
 import { MIGRATION_039_ADD_IMAGE_PINS } from './migrations/migration-039-add-image-pins';
+import { MIGRATION_040_ADD_IMAGE_RECEIVED_DIGESTS } from './migrations/migration-040-add-image-received-digests';
 
 export const MIGRATIONS: Record<string, Migration> = {
   '001_create_initial_schema': MIGRATION_001_CREATE_INITIAL_SCHEMA,
@@ -82,6 +83,7 @@ export const MIGRATIONS: Record<string, Migration> = {
   '037_add_image_last_used': MIGRATION_037_ADD_IMAGE_LAST_USED,
   '038_add_image_removals': MIGRATION_038_ADD_IMAGE_REMOVALS,
   '039_add_image_pins': MIGRATION_039_ADD_IMAGE_PINS,
+  '040_add_image_received_digests': MIGRATION_040_ADD_IMAGE_RECEIVED_DIGESTS,
 };
 
 const PROVIDER: MigrationProvider = {

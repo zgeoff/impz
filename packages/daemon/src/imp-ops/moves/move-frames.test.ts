@@ -132,6 +132,65 @@ test('#encodeFile hands over the sha256 that its FILE_END frame carries', async 
   expect(readJsonPayload(fileEnd.payload)).toStrictEqual({ sha256: sums[0] });
 });
 
+test('#encodeFile hands over one content sum for an image rootfs whose trailing zeros are written or a hole', async () => {
+  const ctx = await setupTest();
+
+  const written = join(ctx.directoryPath, 'written');
+  const sparse = join(ctx.directoryPath, 'sparse');
+  const sums: (string | null)[] = [];
+
+  await Bun.write(
+    written,
+    Buffer.concat([Buffer.from('rootfs'), Buffer.alloc(3 * MOVE_BLOCK_BYTES - 6)]),
+  );
+
+  const fd = openSync(sparse, 'w');
+
+  onTestFinished(() => {
+    closeSync(fd);
+  });
+
+  ftruncateSync(fd, 3 * MOVE_BLOCK_BYTES);
+  writeSync(fd, 'rootfs', 0, 'utf8');
+
+  for (const path of [written, sparse]) {
+    await Array.fromAsync(
+      encodeFile(
+        path,
+        { kind: 'image-rootfs', sizeBytes: 0 },
+        () => {},
+        (_sum, contentSum) => {
+          sums.push(contentSum);
+        },
+      ),
+    );
+  }
+
+  expect(sums).toStrictEqual([expect.toBeString(), sums[0] ?? null]);
+});
+
+test('#encodeFile hands over no content sum for a disk', async () => {
+  const ctx = await setupTest();
+
+  const path = join(ctx.directoryPath, 'disk');
+  const sums: (string | null)[] = [];
+
+  await Bun.write(path, 'data');
+
+  await Array.fromAsync(
+    encodeFile(
+      path,
+      { kind: 'disk', sizeBytes: 0 },
+      () => {},
+      (_sum, contentSum) => {
+        sums.push(contentSum);
+      },
+    ),
+  );
+
+  expect(sums).toStrictEqual([null]);
+});
+
 test('#countDataBytes counts only the data blocks of a sparse file', async () => {
   const ctx = await setupTest();
 

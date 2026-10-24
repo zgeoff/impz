@@ -4,6 +4,8 @@ import { open } from 'node:fs/promises';
 import * as z from 'zod';
 import type { StreamedCommand } from '../../platform/process/run-stream';
 import { readDataBlocks } from '../../vm/storage/read-data-blocks';
+import { createContentHash } from './create-content-hash';
+import type { ContentHash } from './create-content-hash';
 
 export const MOVE_FRAMES = { header: 1, file: 2, data: 3, fileEnd: 4, end: 5 } as const;
 
@@ -31,6 +33,12 @@ export const MoveFileSchema = z.object({
 });
 
 export type MoveFile = z.infer<typeof MoveFileSchema>;
+
+export function createFileContentHash(file: Readonly<MoveFile>): ContentHash | null {
+  return file.kind === 'image-rootfs' || file.kind === 'image-config'
+    ? createContentHash(file.sizeBytes)
+    : null;
+}
 
 export const FileEndSchema = z.object({ sha256: z.string() });
 
@@ -73,7 +81,7 @@ export async function* encodeFile(
   path: string,
   file: MoveFile,
   onData: (bytes: number) => void,
-  sums: (sha256: string) => void,
+  sums: (sha256: string, contentSha256: string | null) => void,
 ): AsyncGenerator<Uint8Array, void, undefined> {
   const handle = await open(path, 'r');
 
@@ -84,6 +92,7 @@ export async function* encodeFile(
 
     yield encodeJsonFrame(MOVE_FRAMES.file, { ...file, sizeBytes: size });
     const hash = createHash('sha256');
+    const content = createFileContentHash({ ...file, sizeBytes: size });
     const buffer = Buffer.alloc(MOVE_BLOCK_BYTES);
 
     for (const block of readDataBlocks({ fd: handle.fd, size, blockBytes: MOVE_BLOCK_BYTES })) {
@@ -95,14 +104,14 @@ export async function* encodeFile(
       const frame = encodeDataFrame(offset, buffer.subarray(0, length));
 
       hash.update(frame.subarray(HEADER_BYTES));
-
+      content?.update(offset, buffer.subarray(0, length));
       onData(length);
       yield frame;
     }
 
     const sha256 = hash.digest('hex');
 
-    sums(sha256);
+    sums(sha256, content?.digest() ?? null);
     yield encodeJsonFrame(MOVE_FRAMES.fileEnd, { sha256 });
   } finally {
     await handle.close();

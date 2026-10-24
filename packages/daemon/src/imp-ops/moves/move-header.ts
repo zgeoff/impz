@@ -110,6 +110,7 @@ export const MoveHeaderSchema = z
       name: z.string(),
       ref: z.string(),
       digest: z.string(),
+      receivedDigest: z.string().nullable().default(null),
       sizeBytes: z.int().nonnegative(),
       source: ImageSourceSchema,
       sourceImp: z.string().nullable(),
@@ -126,6 +127,7 @@ export type MoveHeader = z.infer<typeof MoveHeaderSchema>;
 
 export const MoveOfferSchema = z.object({
   imageDigest: z.string(),
+  receivedImageDigest: z.string().nullable().default(null),
   systemDrive: DriveSchema.optional(),
 });
 

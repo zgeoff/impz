@@ -34,6 +34,7 @@ import { buildSystemDrivePath } from '../../vm/storage/data-layout';
 import type { DiskBudget } from '../../vm/storage/disk-budget';
 import type { StorageBackend } from '../../vm/storage/storage-backend';
 import type { StorageGate } from '../../vm/storage/storage-gate';
+import { buildOfferedDigests } from './build-offered-digests';
 import { COMMIT_WINDOW_MS } from './commit-window-ms';
 import { MOVE_FINISH_HEADER, MOVE_PART_HEADER, MOVE_PATHS, MoveOfferSchema } from './move-header';
 import { PART_WAIT_MS, createPartPipe } from './move-parts';
@@ -156,12 +157,13 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
     const body: unknown = await request.json();
 
     const offer = MoveOfferSchema.parse(body);
+    const offered = buildOfferedDigests(offer.imageDigest, offer.receivedImageDigest);
 
     // The use goes in before the read, so an image eviction keeps the image this offer says the
     // target holds until the stream reuses it.
-    await updateImageUse(deps.db, 'digest', [offer.imageDigest], deps.now());
+    await updateImageUse(deps.db, 'digest', offered, deps.now());
 
-    const existing = await readImageByDigest(deps.db, offer.imageDigest);
+    const existing = await readImageByDigest(deps.db, offered);
 
     const needsSystemDrive =
       offer.systemDrive !== undefined &&
