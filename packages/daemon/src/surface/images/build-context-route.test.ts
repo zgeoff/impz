@@ -750,6 +750,10 @@ test('it takes an upload through the proxy', async () => {
     },
   );
 
+  ctx.stack.defer(() => {
+    harness.impd.api.releaseBuildUploads();
+  });
+
   const answer: unknown = await response.json();
 
   expect(response.status).toBe(201);
@@ -1381,6 +1385,10 @@ test('it frees the build slot of a client that goes', async () => {
     }),
   );
 
+  ctx.stack.defer(() => {
+    harness.impd.api.releaseBuildUploads();
+  });
+
   expect(next.status).toBe(201);
 });
 
@@ -1518,6 +1526,10 @@ test('it frees the build slots of clients that go during a base image pull', asy
       body: 'tar',
     }),
   );
+
+  ctx.stack.defer(() => {
+    harness.impd.api.releaseBuildUploads();
+  });
 
   expect(next.status).toBe(201);
 });
