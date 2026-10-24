@@ -1,4 +1,5 @@
-import { expect, test } from 'bun:test';
+import { expect, mock, test } from 'bun:test';
+import type { CommandRunners } from './instance';
 import {
   findServiceUrl,
   findTailnetNode,
@@ -154,9 +155,34 @@ test('#readTailnetMember names the member container the harness started', () => 
 });
 
 test('#readHarnessMemberStatus gives no status outside a harness run that started the tailnet', async () => {
-  const status = await readHarnessMemberStatus({});
+  const runCommand = mock<CommandRunners['runCommand']>();
+
+  const status = await readHarnessMemberStatus({ runCommand }, {});
 
   expect(status).toBeNull();
+  expect(runCommand).not.toHaveBeenCalled();
+});
+
+test('#readHarnessMemberStatus reads the status of the member the harness started', async () => {
+  const runCommand = mock<CommandRunners['runCommand']>(() =>
+    Promise.resolve({ exitCode: 0, stdout: '{"BackendState": "Running"}', stderr: '' }),
+  );
+
+  const status = await readHarnessMemberStatus(
+    { runCommand },
+    { E2E_TAILNET_MEMBER: 'imp-e2e-a-ts-member' },
+  );
+
+  expect(status).toStrictEqual({ BackendState: 'Running', Peer: {} });
+
+  expect(runCommand).toHaveBeenCalledExactlyOnceWith([
+    'docker',
+    'exec',
+    'imp-e2e-a-ts-member',
+    'tailscale',
+    'status',
+    '--json',
+  ]);
 });
 
 test('#readTailnetMember fails outside a harness run that started the tailnet', () => {

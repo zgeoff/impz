@@ -3,7 +3,7 @@ import { config } from '../lib/config';
 import { resolveImageName } from '../lib/fixtures';
 import { assertState, createInstanceClient, readImpUrls, readInfo, runImp } from '../lib/imp-cli';
 import { waitForExec } from '../lib/imps';
-import { instance, runDevScript } from '../lib/instance';
+import { instance, runCommand, runDevScript } from '../lib/instance';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
 import { getSuitePrefix, readSuiteSettings } from '../lib/suites';
@@ -30,7 +30,7 @@ async function setupTest() {
 }
 
 // collection-time gate: Bun's skipIf takes a boolean and has no in-body skip
-const memberStatus = await readHarnessMemberStatus();
+const memberStatus = await readHarnessMemberStatus({ runCommand });
 
 // Per-imp names need Tailscale itself, so the suite runs only on the test
 // tailnet that IMP_E2E_TAILNET_NAMES=1 joins.

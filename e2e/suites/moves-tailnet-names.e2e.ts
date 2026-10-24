@@ -10,6 +10,7 @@ import {
   runImpWith,
 } from '../lib/imp-cli';
 import { waitForExec } from '../lib/imps';
+import { runCommand } from '../lib/instance';
 import { HOST_B, readMoveHosts, readMoveOptions } from '../lib/move-hosts';
 import { registerRemoval } from '../lib/register-removal';
 import { removeImpIfPresent } from '../lib/reset-baseline';
@@ -36,7 +37,7 @@ async function setupTest() {
 }
 
 // collection-time gate: Bun's skipIf takes a boolean and has no in-body skip
-const memberStatus = await readHarnessMemberStatus();
+const memberStatus = await readHarnessMemberStatus({ runCommand });
 
 // Per-imp names need Tailscale itself, so the suite runs only on the test
 // tailnet that IMP_E2E_TAILNET_NAMES=1 joins.

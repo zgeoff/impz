@@ -129,6 +129,7 @@ export function readTailnetMember(
 }
 
 export async function readHarnessMemberStatus(
+  runners: Pick<CommandRunners, 'runCommand'>,
   env: Readonly<Record<string, string | undefined>> = process.env,
 ): Promise<TailscaleStatus | null> {
   const member = env['E2E_TAILNET_MEMBER'] ?? '';
@@ -137,7 +138,14 @@ export async function readHarnessMemberStatus(
     return null;
   }
 
-  const result = await runCommand(['docker', 'exec', member, 'tailscale', 'status', '--json']);
+  const result = await runners.runCommand([
+    'docker',
+    'exec',
+    member,
+    'tailscale',
+    'status',
+    '--json',
+  ]);
 
   return result.exitCode === 0 ? parseTailscaleStatus(result.stdout) : null;
 }
