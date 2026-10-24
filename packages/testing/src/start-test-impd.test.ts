@@ -24,7 +24,7 @@ test('it serves impd at its url to a client that holds its token', async () => {
 test('it fails to fire a ticker that impd does not wait on', async () => {
   const ctx = await setupTest();
 
-  await expect(ctx.impd.fireTicker('no-such-ticker')).rejects.toThrow(
+  expect(ctx.impd.fireTicker('no-such-ticker')).rejects.toThrow(
     'nothing waits on a timer named no-such-ticker',
   );
 });
@@ -36,5 +36,5 @@ test('it stops impd, which then answers no request', async () => {
 
   await impd.stop();
 
-  await expect(fetch(`${url}/health`)).rejects.toThrow();
+  expect(fetch(`${url}/health`)).rejects.toThrow();
 });

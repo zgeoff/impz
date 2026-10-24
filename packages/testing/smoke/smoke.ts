@@ -1,5 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { once } from 'node:events';
+import type { Duplex } from 'node:stream';
 import { openReverseForward } from '@impz/client';
 import { TEST_TOKEN, startTestImpd } from '@impz/testing';
 
@@ -54,12 +54,23 @@ test('it relays a process in an imp through a reverse forward across a sleep and
 
   const stream = await guest.connect(4000);
 
-  const reply = once(stream, 'data');
+  const reply = readChunk(stream);
 
   stream.write('ping');
 
-  const [chunk] = await reply;
+  const chunk = await reply;
 
   expect(ended).toStrictEqual({ kind: 'lost' });
-  expect(String(chunk)).toBe('pong');
+  expect(chunk).toBe('pong');
 });
+
+// the next chunk the stream reads, as text
+function readChunk(stream: Duplex): Promise<string> {
+  const chunk = Promise.withResolvers<string>();
+
+  stream.once('data', (data: Uint8Array) => {
+    chunk.resolve(new TextDecoder().decode(data));
+  });
+
+  return chunk.promise;
+}

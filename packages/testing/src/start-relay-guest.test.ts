@@ -68,13 +68,17 @@ test('it relays bytes from a process in the imp to the forward’s local end and
 
   const stream = await guest.connect(4000);
 
-  const reply = once(stream, 'data');
+  const reply = Promise.withResolvers<string>();
+
+  stream.once('data', (data: Uint8Array) => {
+    reply.resolve(new TextDecoder().decode(data));
+  });
 
   stream.write('ping');
 
-  const [chunk] = await reply;
+  const chunk = await reply.promise;
 
-  expect(String(chunk)).toBe('pong');
+  expect(chunk).toBe('pong');
   expect(ctx.events).toStrictEqual(['data ping']);
 });
 
@@ -163,15 +167,19 @@ test('it ends a forward when its imp sleeps, and listens again for a forward ope
 
   const stream = await guest.connect(4000);
 
-  const reply = once(stream, 'data');
+  const reply = Promise.withResolvers<string>();
+
+  stream.once('data', (data: Uint8Array) => {
+    reply.resolve(new TextDecoder().decode(data));
+  });
 
   stream.write('ping');
 
-  const [chunk] = await reply;
+  const chunk = await reply.promise;
 
   expect(ended).toStrictEqual({ kind: 'lost' });
   expect(portsAsleep).toStrictEqual([]);
-  expect(String(chunk)).toBe('pong');
+  expect(chunk).toBe('pong');
 });
 
 // openBound reports the port the bind took, so port 0 comes back as a real port
@@ -194,7 +202,7 @@ test('it refuses a second forward on a port a forward already listens on', async
 
   const second = ctx.openPortForward('box', 4000);
 
-  await expect(second.listening).rejects.toThrow('address already in use');
+  expect(second.listening).rejects.toThrow('address already in use');
 });
 
 // serve names each listener with random hex, so two imps' listeners never share an ID
@@ -209,17 +217,26 @@ test('it relays the forwards of two imps on the same guest port apart', async ()
   const firstStream = await first.connect(4000);
   const secondStream = await second.connect(4000);
 
-  const firstReply = once(firstStream, 'data');
-  const secondReply = once(secondStream, 'data');
+  const firstReply = Promise.withResolvers<string>();
+
+  firstStream.once('data', (data: Uint8Array) => {
+    firstReply.resolve(new TextDecoder().decode(data));
+  });
+
+  const secondReply = Promise.withResolvers<string>();
+
+  secondStream.once('data', (data: Uint8Array) => {
+    secondReply.resolve(new TextDecoder().decode(data));
+  });
 
   firstStream.write('a');
   secondStream.write('b');
 
-  const [firstChunk] = await firstReply;
-  const [secondChunk] = await secondReply;
+  const firstChunk = await firstReply.promise;
+  const secondChunk = await secondReply.promise;
 
-  expect(String(firstChunk)).toBe('pong');
-  expect(String(secondChunk)).toBe('pong');
+  expect(firstChunk).toBe('pong');
+  expect(secondChunk).toBe('pong');
   expect(ctx.events.toSorted()).toStrictEqual(['data a', 'data b']);
 });
 
@@ -227,5 +244,5 @@ test('it refuses a connection to a port no forward listens on', async () => {
   const ctx = await setupTest();
   const guest = await ctx.createImp('box');
 
-  await expect(guest.connect(4000)).rejects.toThrow('no reverse forward listens on port 4000');
+  expect(guest.connect(4000)).rejects.toThrow('no reverse forward listens on port 4000');
 });
