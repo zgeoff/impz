@@ -1,0 +1,55 @@
+name: probe test impd timings
+
+on:
+  pull_request:
+
+permissions: {}
+
+jobs:
+  probe:
+    name: probe (${{ matrix.variant }} ${{ matrix.rep }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [before, after]
+        rep: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+          path: probe
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+          ref: ${{ matrix.variant == 'before' && 'main' || 'perf/test-impd-template-db' }}
+          path: code
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: code/.bun-version
+      - name: Install
+        working-directory: code
+        run: bun install --frozen-lockfile
+      - name: TMPDIR through the memory cap
+        working-directory: code
+        env:
+          TMPDIR: /dev/shm
+        run: |
+          scripts/ci/run-memory-capped.sh 64 sh -c 'echo "step env: TMPDIR=${TMPDIR:-unset}"' | head -1
+          scripts/ci/run-memory-capped.sh 64 env TMPDIR=/dev/shm sh -c 'echo "argv env: TMPDIR=$TMPDIR"' | head -1
+      - name: imp-vm-ops property test alone
+        working-directory: code
+        run: |
+          perl ../probe/scripts/ci/probe-instrument.pl < packages/daemon/src/imps/imps/imp-vm-ops.test.ts > /tmp/t.ts
+          mv /tmp/t.ts packages/daemon/src/imps/imps/imp-vm-ops.test.ts
+          tmp=()
+          if [ "${{ matrix.variant }}" = after ]; then tmp=(env TMPDIR=/dev/shm); fi
+          scripts/ci/run-memory-capped.sh 1536 "${tmp[@]}" bun test packages/daemon/src/imps/imps/imp-vm-ops.test.ts \
+            -t 'concurrent lifecycle calls on a few imps' 2>&1 | tee "$RUNNER_TEMP/out.txt"
+          for kind in boot run; do
+            grep -o "PROBE $kind [0-9.]*" "$RUNNER_TEMP/out.txt" | awk '{print $3}' | sort -n > "$RUNNER_TEMP/$kind.txt"
+            awk -v kind="$kind" '{v[NR]=$1; s+=$1} END {printf "RESULT %s n=%d median=%.1f p90=%.1f max=%.1f sum=%.0f\n", kind, NR, v[int((NR+1)/2)], v[int(NR*0.9+0.5)], v[NR], s}' "$RUNNER_TEMP/$kind.txt"
+          done
