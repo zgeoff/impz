@@ -1,0 +1,26 @@
+{
+  "name": "@impz/testing",
+  "version": "4.0.0",
+  "description": "A real impd on stand-ins, for Bun tests of code that drives impd through @impz/client",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zgeoff/impz.git",
+    "directory": "packages/testing"
+  },
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@impz/client": "workspace:*"
+  },
+  "devDependencies": {
+    "@impz/agent-protocol": "workspace:*",
+    "@impz/daemon": "workspace:*",
+    "@impz/test-utils": "workspace:*"
+  },
+  "engines": {
+    "bun": ">=1.4.3"
+  }
+}

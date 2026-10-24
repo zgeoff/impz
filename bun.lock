@@ -272,6 +272,18 @@
         "zod": "catalog:",
       },
     },
+    "packages/testing": {
+      "name": "@impz/testing",
+      "version": "4.0.0",
+      "dependencies": {
+        "@impz/client": "workspace:*",
+      },
+      "devDependencies": {
+        "@impz/agent-protocol": "workspace:*",
+        "@impz/daemon": "workspace:*",
+        "@impz/test-utils": "workspace:*",
+      },
+    },
   },
   "patchedDependencies": {
     "ssh2@1.17.0": "patches/ssh2@1.17.0.patch",
@@ -521,6 +533,8 @@
     "@impz/shared": ["@impz/shared@workspace:packages/shared"],
 
     "@impz/test-utils": ["@impz/test-utils@workspace:packages/test-utils"],
+
+    "@impz/testing": ["@impz/testing@workspace:packages/testing"],
 
     "@inquirer/ansi": ["@inquirer/ansi@2.0.8", "", {}, "sha512-WpQM+Ti6Z40EFwwt+uL2p4UabT+W179zHp6HhLVOzfbwnVn05IPO/eXIZXGNqcT1jbQ15SujNLzQ39k4QPPxBQ=="],
 

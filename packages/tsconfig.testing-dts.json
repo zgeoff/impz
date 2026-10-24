@@ -1,0 +1,12 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2024", "ESNext.TypedArrays"],
+    "types": ["bun"],
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "noEmit": false
+  },
+  "include": ["testing/src"],
+  "exclude": ["**/*.test.ts"]
+}
