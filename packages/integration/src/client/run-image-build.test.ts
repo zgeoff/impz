@@ -544,6 +544,67 @@ test('it stops waiting on the feature check when the caller aborts', async () =>
   expect(outcome).toMatchObject({ name: 'AbortError' });
 });
 
+test('it throws INTERNAL_SERVER_ERROR with the status of an upload failure that names no code', async () => {
+  const ctx = await setupTest();
+
+  const builder = buildStubImageBuilder({ exported: [], repoDigest: `sha256:${'b'.repeat(64)}` });
+
+  const host = await ctx.startImpd(builder);
+
+  server.use(
+    http.post(
+      'http://impd.test/images/build-context',
+      () => new Response('bad gateway', { status: 502 }),
+    ),
+    http.all('http://impd.test/*', (info) => host.impd.api.app.handle(info.request)),
+  );
+
+  const client = createImpClient({ url: 'http://impd.test/', token: ctx.rootToken });
+
+  const outcome = await client.buildImage('web', new Blob(['tar'])).then(
+    () => null,
+    (error: unknown) => error,
+  );
+
+  expect(outcome).toBeInstanceOf(ORPCError);
+
+  expect(outcome).toMatchObject({
+    code: 'INTERNAL_SERVER_ERROR',
+    status: 502,
+    message: 'impd answered 502 to the build context upload',
+  });
+});
+
+test('it throws UNAUTHORIZED for an upload refused with a 401 that names no code', async () => {
+  const ctx = await setupTest();
+
+  const builder = buildStubImageBuilder({ exported: [], repoDigest: `sha256:${'b'.repeat(64)}` });
+
+  const host = await ctx.startImpd(builder);
+
+  server.use(
+    http.post('http://impd.test/images/build-context', () =>
+      Response.json({ error: 'unauthorized' }, { status: 401 }),
+    ),
+    http.all('http://impd.test/*', (info) => host.impd.api.app.handle(info.request)),
+  );
+
+  const client = createImpClient({ url: 'http://impd.test/', token: ctx.rootToken });
+
+  const outcome = await client.buildImage('web', new Blob(['tar'])).then(
+    () => null,
+    (error: unknown) => error,
+  );
+
+  expect(outcome).toBeInstanceOf(ORPCError);
+
+  expect(outcome).toMatchObject({
+    code: 'UNAUTHORIZED',
+    status: 401,
+    message: 'impd answered 401 to the build context upload',
+  });
+});
+
 test('it refuses to upload to an impd without the build context upload', async () => {
   const ctx = await setupTest();
 
