@@ -1,5 +1,5 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { createConnection } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -18,6 +18,7 @@ import { startStubBrokerPlainUpstream } from '../../../../testing/network/start-
 import { startStubBrokerReplyTarget } from '../../../../testing/network/start-stub-broker-reply-target';
 import { startStubBrokerTlsUpstream } from '../../../../testing/network/start-stub-broker-tls-upstream';
 import { startStubBrokerTunnel } from '../../../../testing/network/start-stub-broker-tunnel';
+import { buildQueryGate } from '../../../../testing/platform/build-query-gate';
 import { buildStubHeldAnswer } from '../../../../testing/platform/build-stub-held-answer';
 import { startTestImpd } from '../../../../testing/start-test-impd';
 import { listAuditEntries } from '../../../platform/db/broker-audit';
@@ -26,6 +27,10 @@ import { listGrantNames, readSecret, removeCheckedGrant } from '../../../platfor
 import { loadOrCreateBrokerCa } from '../tls/broker-ca';
 
 async function setupTest() {
+  // first, so a held read lets go before impd stops
+  const frontGate = buildQueryGate('value_file');
+  const terminatorGate = buildQueryGate('value_file');
+
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
@@ -103,6 +108,7 @@ async function setupTest() {
     resolveTunnelTarget: () => Promise.resolve('127.0.0.1'),
     dialTunnel: (address, port) =>
       createConnection({ host: address, port: tunnelPorts.get(port) ?? port }),
+    wrapDatabase: (db) => terminatorGate.wrap(frontGate.wrap(db)),
   });
 
   const proxyPort = harness.config.brokerPort;
@@ -120,6 +126,8 @@ async function setupTest() {
     tunnelled,
     answers,
     tunnelAnswers,
+    frontGate,
+    terminatorGate,
     upstreamsFile,
     upstreamOrigin: upstream.origin,
     upstreamCaPem: upstream.caPem,
@@ -831,6 +839,68 @@ test('it lets the request under way finish on a revoke, and the next gets no cre
 
   expect(ctx.seen.map((entry) => entry.path)).toStrictEqual(['/a']);
   expect(ctx.tunnelled).toStrictEqual([]);
+});
+
+test('it never sends a rebound value to the host the secret had before', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
+  await writeFile(
+    ctx.upstreamsFile,
+    JSON.stringify({ ca: ctx.upstreamCaPem, upstreams: { 'api.github.com': ctx.upstreamOrigin } }),
+  );
+
+  await ctx.client.imps.create({ name: 'dev' });
+
+  await ctx.impd.broker.addSecret({
+    name: 'api',
+    kind: 'custom',
+    value: 'old-value',
+    rules: [buildMockBrokerRule({ host: 'api.github.com' })],
+  });
+
+  await ctx.impd.broker.addGrant('dev', 'api');
+
+  ctx.frontGate.arm();
+
+  const request = ctx.guest.curl('https://api.github.com/x');
+
+  await ctx.frontGate.reached;
+
+  ctx.terminatorGate.arm();
+  ctx.frontGate.release();
+
+  await ctx.terminatorGate.reached;
+
+  const replaced = ctx.impd.broker.addSecret({
+    name: 'api',
+    kind: 'custom',
+    value: 'new-value',
+    rules: [buildMockBrokerRule({ host: 'other.example.com' })],
+    replace: true,
+    rebind: true,
+  });
+
+  await waitFor(async () => {
+    const secret = await readSecret(ctx.db, 'api');
+    const files = await readdir(join(ctx.dataDir, 'secrets'));
+
+    expect(secret?.rules[0]?.host).toBe('other.example.com');
+    expect(files).toHaveLength(1);
+  });
+
+  ctx.terminatorGate.release();
+
+  const [result] = await Promise.all([request, replaced]);
+
+  expect(result).toStrictEqual({
+    code: 0,
+    stdout: 'no credential is granted for api.github.com\n',
+    stderr: '',
+  });
+
+  expect(ctx.seen).toStrictEqual([]);
 });
 
 test('it sends no credential for a grant whose value file is gone', async () => {
