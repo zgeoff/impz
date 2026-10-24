@@ -24,7 +24,7 @@ async function setupTest() {
 test('it answers an OAuth route with the handler behind it', async () => {
   const ctx = await setupTest();
 
-  const auth = createMcpAuth({
+  const auth = await createMcpAuth({
     ...ctx,
     config: { origin: 'http://127.0.0.1:7171', host: '127.0.0.1:7171', port: 7171 },
     now: Date.now,
@@ -45,7 +45,7 @@ test('it answers an OAuth route with the handler behind it', async () => {
 test('it answers a path the routes do not have with 404', async () => {
   const ctx = await setupTest();
 
-  const auth = createMcpAuth({
+  const auth = await createMcpAuth({
     ...ctx,
     config: { origin: 'http://127.0.0.1:7171', host: '127.0.0.1:7171', port: 7171 },
     now: Date.now,
@@ -61,7 +61,7 @@ test('it answers a path the routes do not have with 404', async () => {
 test('it answers an OAuth path with 404 while the public route is off', async () => {
   const ctx = await setupTest();
 
-  const auth = createMcpAuth({ ...ctx, config: null, now: Date.now });
+  const auth = await createMcpAuth({ ...ctx, config: null, now: Date.now });
 
   const response = await makeOAuthResponder(auth)(
     new Request('http://127.0.0.1:7171/.well-known/oauth-authorization-server'),

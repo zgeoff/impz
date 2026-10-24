@@ -24,7 +24,7 @@ async function setupTest() {
     isFileKey: () => false,
   });
 
-  const auth = createMcpAuth({
+  const auth = await createMcpAuth({
     db: database.db,
     tokens,
     revocations,
@@ -248,7 +248,7 @@ test('it ends a grant whose approving token no longer holds its scope', async ()
     isFileKey: () => false,
   });
 
-  const narrowed = createMcpAuth({
+  const narrowed = await createMcpAuth({
     db: ctx.db,
     tokens: reloaded,
     revocations: ctx.revocations,
@@ -1291,7 +1291,7 @@ test('it shows a sign-in for a client it does not know a page that says so', asy
 test('it signs a client in on a clock of impd’s own that is not the wall clock', async () => {
   const ctx = await setupTest();
 
-  const frozen = createMcpAuth({
+  const frozen = await createMcpAuth({
     db: ctx.db,
     tokens: ctx.tokens,
     revocations: ctx.revocations,
@@ -1325,7 +1325,7 @@ test('it signs a client in on a clock of impd’s own that is not the wall clock
 test('it gives no OAuth handlers while the route is off', async () => {
   const ctx = await setupTest();
 
-  const off = createMcpAuth({
+  const off = await createMcpAuth({
     db: ctx.db,
     tokens: ctx.tokens,
     revocations: ctx.revocations,
