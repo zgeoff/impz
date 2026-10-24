@@ -139,6 +139,7 @@ test('it leaves a guest whose grow is refused at its size, and logs it once', as
 
   const imp = buildMockElasticImp({
     id: 'dev',
+    name: 'dev',
     memoryMib: 512,
     maxMemoryMib: 1536,
     agentVersion: '0.17.0',
@@ -157,32 +158,49 @@ test('it leaves a guest whose grow is refused at its size, and logs it once', as
   expect(ctx.guests.requests).toStrictEqual([]);
   expect(admitGrow).toHaveBeenCalledTimes(2);
   expect(ctx.limits).toStrictEqual(['dev 512']);
-  expect(ctx.logs.filter((line) => line.includes('no room to grow'))).toHaveLength(1);
+
+  expect(ctx.logs).toStrictEqual([
+    'INFO impd.imps imp=dev memory low (12 MiB free), and the RAM budget has no room to grow it',
+  ]);
 });
 
 test.each([
-  ['predates elastic memory', '0.16.0'],
-  ['impd has no record of', undefined],
-])('it never grows a guest whose agent %s, and logs why once', async (_label, agentVersion) => {
-  const ctx = setupTest();
-  const imp = buildMockElasticImp({ id: 'dev', memoryMib: 512, maxMemoryMib: 1536, agentVersion });
+  [
+    'predates elastic memory',
+    '0.16.0',
+    "INFO impd.imps imp=dev memory low, not grown: the imp's agent has no elastic memory, so its programs could not use a grow yet; stop and start the imp to update it",
+  ],
+  [
+    'impd has no record of',
+    undefined,
+    "INFO impd.imps imp=dev memory low, not grown: impd has no record of the imp's agent version, so it takes it to have no elastic memory, so its programs could not use a grow; stop and start the imp to record it",
+  ],
+])(
+  'it never grows a guest whose agent %s, and logs why once',
+  async (_label, agentVersion, line) => {
+    const ctx = setupTest();
 
-  ctx.imps.push(imp);
-  ctx.guests.addGuest(imp.paths, { usedMib: 490 });
+    const imp = buildMockElasticImp({
+      id: 'dev',
+      name: 'dev',
+      memoryMib: 512,
+      maxMemoryMib: 1536,
+      agentVersion,
+    });
 
-  const controller = createMemoryController({ ...ctx.deps, readRamMib: () => 400 });
+    ctx.imps.push(imp);
+    ctx.guests.addGuest(imp.paths, { usedMib: 490 });
 
-  await controller.runTick();
-  await controller.runTick();
+    const controller = createMemoryController({ ...ctx.deps, readRamMib: () => 400 });
 
-  expect(ctx.grows).toStrictEqual([]);
-  expect(ctx.guests.requests).toStrictEqual([]);
+    await controller.runTick();
+    await controller.runTick();
 
-  const refusals = ctx.logs.filter((line) => line.includes('not grown'));
-
-  expect(refusals).toHaveLength(1);
-  expect(refusals[0]).toContain('stop and start the imp');
-});
+    expect(ctx.grows).toStrictEqual([]);
+    expect(ctx.guests.requests).toStrictEqual([]);
+    expect(ctx.logs).toStrictEqual([line]);
+  },
+);
 
 test('it waits for a plug under way and never asks twice', async () => {
   const ctx = setupTest();
@@ -509,6 +527,7 @@ test('it shrinks a guest that could give back a step for a minute', async () => 
 
   const imp = buildMockElasticImp({
     id: 'dev',
+    name: 'dev',
     memoryMib: 512,
     maxMemoryMib: 1536,
     agentVersion: '0.17.0',
@@ -527,6 +546,7 @@ test('it shrinks a guest that could give back a step for a minute', async () => 
   await controller.runTick();
 
   expect(ctx.guests.requests).toStrictEqual([496]);
+  expect(ctx.logs).toStrictEqual(['INFO impd.imps imp=dev memory to spare, shrinking to 1008 MiB']);
 });
 
 test('it shrinks a guest that could give back a step for the delay impd is set to', async () => {
@@ -662,6 +682,7 @@ test('it asks an unplug that stops partway back to what the guest holds, and log
 
   const imp = buildMockElasticImp({
     id: 'dev',
+    name: 'dev',
     memoryMib: 512,
     maxMemoryMib: 1536,
     agentVersion: '0.17.0',
@@ -691,7 +712,10 @@ test('it asks an unplug that stops partway back to what the guest holds, and log
 
   expect(ctx.guests.requests).toStrictEqual([496, 768]);
   expect(guest.requestedMib).toBe(768);
-  expect(ctx.logs.at(-1)).toContain('could not unplug below 1280 MiB');
+
+  expect(ctx.logs.at(-1)).toBe(
+    'WARNING impd.imps imp=dev the guest could not unplug below 1280 MiB',
+  );
 });
 
 test('it sets the limit to what the guest holds after an unplug stops partway', async () => {
@@ -1050,6 +1074,7 @@ test('it asks a plug that never finishes back, and logs it', async () => {
 
   const imp = buildMockElasticImp({
     id: 'dev',
+    name: 'dev',
     memoryMib: 512,
     maxMemoryMib: 1536,
     agentVersion: '0.17.0',
@@ -1069,7 +1094,7 @@ test('it asks a plug that never finishes back, and logs it', async () => {
 
   expect(ctx.guests.requests).toStrictEqual([256, 0]);
   expect(guest.requestedMib).toBe(0);
-  expect(ctx.logs.at(-1)).toContain('could not plug past 512 MiB');
+  expect(ctx.logs.at(-1)).toBe('WARNING impd.imps imp=dev the guest could not plug past 512 MiB');
 });
 
 test('it lowers the limit again after a plug that never finishes', async () => {

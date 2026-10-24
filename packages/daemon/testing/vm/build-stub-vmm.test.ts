@@ -820,6 +820,19 @@ test('#buildStubVmm resumes the paused VM serving the socket', async () => {
   expect(ctx.fake.readState(pid)).toBe('Running');
 });
 
+test('#buildStubVmm rejects a failed resume with a fake error and leaves the VM paused', async () => {
+  const ctx = await setupTest();
+
+  const pid = ctx.fake.spawnOrphan({ paths: ctx.paths, state: 'Paused' });
+
+  ctx.fake.queue('resume', 'fail');
+
+  const resuming = ctx.runner.resumeVm(pid, ctx.paths);
+
+  expect(resuming).rejects.toThrowWithMessage(StubVmError, 'resume failed');
+  expect(ctx.fake.readState(pid)).toBe('Paused');
+});
+
 test('#buildStubVmm takes queued outcomes in order then succeeds', async () => {
   const ctx = await setupTest();
 
@@ -1095,6 +1108,17 @@ test('#buildStubVmm plugs the memory a request asks for', async () => {
   });
 });
 
+test('#buildStubVmm rejects a failed plug request with a fake error and plugs nothing', async () => {
+  const ctx = await setupTest();
+
+  ctx.fake.queue('plug', 'fail');
+
+  const requesting = ctx.runner.requestPluggedMib(ctx.paths, 256);
+
+  expect(requesting).rejects.toThrowWithMessage(StubVmError, 'plug failed');
+  expect(ctx.fake.guestMemory.get(ctx.paths.directory)).toBeUndefined();
+});
+
 test.each([
   [0, 128],
   [64, 128],
@@ -1210,6 +1234,18 @@ test('#buildStubVmm records a jail sweep that finds no orphan jails', async () =
 
   expect(removed).toStrictEqual([]);
   expect(ctx.fake.sweeps).toStrictEqual(['jails']);
+});
+
+test('#buildStubVmm removes on a jail sweep the orphan jails of imps it is not given', async () => {
+  const ctx = await setupTest();
+
+  ctx.fake.orphanJails.add('imp-1');
+  ctx.fake.orphanJails.add('gone');
+
+  const removed = await ctx.runner.removeOrphanJails(new Set(['imp-1']));
+
+  expect(removed).toStrictEqual(['gone']);
+  expect([...ctx.fake.orphanJails]).toStrictEqual(['imp-1']);
 });
 
 test('#buildStubVmm writes the snapshot files on a template build', async () => {

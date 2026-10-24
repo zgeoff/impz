@@ -1,6 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { claimFreePorts } from '@impz/test-utils/claim-free-ports';
+import { captureImpdLogs } from '../testing/platform/capture-impd-logs';
 import { startTestImpd } from '../testing/start-test-impd';
 
 async function setupTest() {
@@ -110,6 +111,24 @@ test('it opens no public port without IMP_MCP_PUBLIC_URL', async () => {
 
   expect(harness.impd.publicMcp).toBeNull();
   expect(reached).toMatchObject({ code: 'ECONNREFUSED' });
+});
+
+test('it logs the port of the API and its data dir, and the port of the broker, when it starts', async () => {
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
+  const lines = captureImpdLogs();
+
+  const harness = await startTestImpd(stack);
+
+  expect(lines).toContain(
+    `INFO impd.api api on :${String(harness.config.apiPort)}, data in ${harness.dataDir}`,
+  );
+
+  expect(lines).toContain(
+    `INFO impd.broker credential broker on :${String(harness.config.brokerPort)} of every imp's gateway`,
+  );
 });
 
 test('it stops the API listener again without a failure when impd stops twice', async () => {

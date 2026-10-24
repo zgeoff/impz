@@ -34,9 +34,11 @@ import type { ImpDatabase } from './platform/db/open-database';
 import { buildSystemDrivePath, buildSystemDrivesDir } from './vm/storage/data-layout';
 import { createXfsBackend } from './vm/storage/xfs-backend';
 import type { CpuCgroups } from './vm/vmm/cpu-cgroups';
+import type { KsmHostStats } from './vm/vmm/ksm';
 
 interface SetupOptions {
   readonly cgroups?: CpuCgroups;
+  readonly readKsmHostStats?: () => KsmHostStats | null;
   readonly boundaries?: Pick<
     ImpdBoundaries,
     'keepaliveMs' | 'keepaliveRepeat' | 'readProcStatus' | 'images'
@@ -122,6 +124,52 @@ test('it warns at start that an image with a file capability fails without CAP_S
 
   expect(ctx.logs).toContain(
     'WARNING impd.image no CAP_SETFCAP, so an image add or build fails on an image with a file capability; imp-host needs CAP_SETFCAP (docs/architecture/host.md#privileges)',
+  );
+});
+
+test('it warns at start of each config warning', async () => {
+  updateEnv('IMP_DNS_API_TOKEN_FILE', '/run/imp/dns-token');
+
+  const ctx = await setupTest();
+
+  expect(ctx.logs).toContain(
+    'WARNING impd.https IMP_DNS_API_TOKEN_FILE is set without IMP_DOMAIN; HTTPS is off and the file is unused',
+  );
+});
+
+test('it says at start that ksmd does not run when IMP_KSM is on', async () => {
+  updateEnv('IMP_KSM', '1');
+
+  const ctx = await setupTest({
+    readKsmHostStats: () => ({ running: false, sharedMib: 0, profitMib: 0, zeroMib: 0 }),
+  });
+
+  expect(ctx.logs).toContain(
+    'INFO impd.memory IMP_KSM is on, but ksmd does not run (/sys/kernel/mm/ksm/run is 0)',
+  );
+});
+
+test('it warns at start that no image has the default image name', async () => {
+  const ctx = await setupTest();
+
+  expect(ctx.logs).toContain(
+    'WARNING impd.image no image named base (IMP_DEFAULT_IMAGE); impz new uses ubuntu until `impz image add <ref> --name base` adds it',
+  );
+});
+
+test('it removes a boot template of another host when it boots', async () => {
+  updateEnv('IMP_BOOT_TEMPLATES', 'true');
+
+  const ctx = await setupTest();
+
+  await mkdir(join(ctx.dataDir, 'templates', 'ab'.repeat(32)), { recursive: true });
+
+  const lines = captureImpdLogs();
+
+  await ctx.restartImpd();
+
+  expect(lines).toContain(
+    'INFO impd.boot removed boot template abababababab: this host boots something else',
   );
 });
 

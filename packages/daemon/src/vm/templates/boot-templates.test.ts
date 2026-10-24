@@ -859,6 +859,40 @@ test('#buildTemplate removes the least recently used template past four', async 
   expect(store.requestTemplate({ vcpus: 1, memoryMib: 1024 })).not.toBeNull();
 });
 
+test('#buildTemplate logs the template it removes as least recently used', async () => {
+  const ctx = await setupTest();
+
+  const store = createBootTemplates({
+    ...ctx.deps,
+    identity: buildMockHostIdentity(),
+    bootReservePercent: 50,
+  });
+
+  const oldest = await store.buildTemplate({ vcpus: 1, memoryMib: 256 });
+
+  ctx.advance(1000);
+
+  await store.buildTemplate({ vcpus: 1, memoryMib: 512 });
+
+  ctx.advance(1000);
+
+  await store.buildTemplate({ vcpus: 1, memoryMib: 768 });
+
+  ctx.advance(1000);
+
+  await store.buildTemplate({ vcpus: 1, memoryMib: 1024 });
+
+  ctx.advance(1000);
+
+  const lines = captureImpdLogs();
+
+  await store.buildTemplate({ vcpus: 2, memoryMib: 256 });
+
+  expect(lines).toContain(
+    `INFO impd.boot removed boot template ${oldest.key.slice(0, 12)}: least recently used`,
+  );
+});
+
 test('#removeStale removes the templates of another host identity', async () => {
   const ctx = await setupTest();
 

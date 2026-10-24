@@ -140,7 +140,7 @@ export async function startImpdListeners(
 
   // not awaited, so a Tailscale API or tailscaled outage never holds up impd
   runStep('tailnet-names', () => {
-    void parts.tailnetNames?.runSync();
+    void parts.tailnetNames?.trySync();
   });
 
   const brokerPort = await runStep('broker', async () => {

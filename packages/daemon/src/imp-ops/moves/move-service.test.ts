@@ -22,10 +22,14 @@ import {
 } from '../../../testing/imp-ops/make-stub-move-stream-rewrite';
 import { makeStubOlderMoveTarget } from '../../../testing/imp-ops/make-stub-older-move-target';
 import { makeStubSwitchedStorageTarget } from '../../../testing/imp-ops/make-stub-switched-storage-target';
+import { buildStubTailscale } from '../../../testing/network/build-stub-tailscale';
 import { buildQueryGate } from '../../../testing/platform/build-query-gate';
 import { buildStubClock } from '../../../testing/platform/build-stub-clock';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
+import { runSql } from '../../../testing/platform/run-sql';
 import { TEST_TOKEN } from '../../../testing/test-token';
 import { buildStubPublishHook } from '../../../testing/vm/build-stub-publish-hook';
+import { buildStubStorageFaults } from '../../../testing/vm/build-stub-storage-faults';
 import { buildStubStoragePressure } from '../../../testing/vm/build-stub-storage-pressure';
 import { buildStubZfsStorage } from '../../../testing/vm/build-stub-zfs-storage';
 import { listImages, readImageByDigest, readImageByName } from '../../platform/db/images';
@@ -88,6 +92,26 @@ test('it moves a stopped imp with its id, its checkpoint and its disk', async ()
   expect(checkpointDisk).toStartWith('hello');
   expect(left).toBeUndefined();
   expect(ctx.commits).toStrictEqual(['dev']);
+});
+
+test('it logs a finished move under move with the imp and the target', async () => {
+  const ctx = await setupTest();
+
+  await createUbuntuImage(ctx.source);
+  await createUbuntuImage(ctx.target);
+
+  await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
+  await ctx.sourceApp.client.imps.stop({ name: 'dev' });
+
+  const lines = captureImpdLogs();
+
+  await ctx.runMove('dev');
+
+  expect(lines).toContain(
+    'INFO impd.move imp=dev committed on http://100.100.0.2:7070; the copy here is gone',
+  );
+
+  expect(lines).toContain('INFO impd.move imp=dev committed; it lives here now');
 });
 
 test('it refuses a start of a marked imp with MOVING and a retry after 30 s', async () => {
@@ -300,6 +324,8 @@ test('it leaves the source unmarked and the target empty when the receipt is not
   await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
   await ctx.sourceApp.client.imps.stop({ name: 'dev' });
 
+  const lines = captureImpdLogs();
+
   const status = await ctx.runMove('dev');
   const source = await readImpByName(ctx.source.db, 'dev');
   const target = await readImpByName(ctx.target.db, 'dev');
@@ -307,6 +333,43 @@ test('it leaves the source unmarked and the target empty when the receipt is not
   expect(status.error).toContain('the receipt is not signed with this ticket');
   expect(source?.moveState).toBeNull();
   expect(target).toBeUndefined();
+  expect(lines).toContain('INFO impd.move imp=dev aborted by the source');
+});
+
+test('it logs a staged imp on the target that the abort of a failed receive cannot remove', async () => {
+  const ctx = await setupTest({
+    hook: async (request, forward) => {
+      const response = await forward();
+
+      if (request.headers.get(MOVE_FINISH_HEADER) !== '1') {
+        return response;
+      }
+
+      const answer: unknown = await response.json();
+
+      const receipt = ReceiptSchema.parse(answer);
+
+      return Response.json({ ...receipt, mac: '00'.repeat(32) });
+    },
+  });
+
+  await createUbuntuImage(ctx.source);
+  await createUbuntuImage(ctx.target);
+
+  await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
+  await ctx.sourceApp.client.imps.stop({ name: 'dev' });
+
+  await runSql(
+    ctx.target.db,
+    `CREATE TRIGGER keep_imps BEFORE DELETE ON imps
+    BEGIN SELECT RAISE(ABORT, 'imp rows kept'); END`,
+  );
+
+  const lines = captureImpdLogs();
+
+  await ctx.runMove('dev');
+
+  expect(lines).toContain('WARNING impd.move imp=dev a failed receive left the imp: imp rows kept');
 });
 
 test('it leaves the source unmarked when a signed receipt does not match what was sent', async () => {
@@ -1414,11 +1477,115 @@ test('it carries only the grants of secrets the target has', async () => {
   await ctx.source.broker.addGrant('dev', 'npm');
   await ctx.target.broker.addSecret({ name: 'gh', kind: 'github', value: 'ghp_other' });
 
+  const lines = captureImpdLogs();
+
   const status = await ctx.runMove('dev');
   const grants = await ctx.target.broker.listGrants('dev');
 
   expect(status).toMatchObject({ isDone: true, error: null });
   expect(grants).toStrictEqual(['gh']);
+  expect(lines).toContain('INFO impd.move imp=dev grant npm dropped: no such secret here');
+});
+
+test('it lands an imp without a grant the target cannot write, and logs the grant', async () => {
+  const ctx = await setupTest();
+
+  await createUbuntuImage(ctx.source);
+  await createUbuntuImage(ctx.target);
+
+  await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
+  await ctx.sourceApp.client.imps.stop({ name: 'dev' });
+  await ctx.source.broker.addSecret({ name: 'gh', kind: 'github', value: 'ghp_real' });
+  await ctx.source.broker.addGrant('dev', 'gh');
+  await ctx.target.broker.addSecret({ name: 'gh', kind: 'github', value: 'ghp_other' });
+
+  await runSql(
+    ctx.target.db,
+    `CREATE TRIGGER refuse_grants BEFORE INSERT ON grants
+    BEGIN SELECT RAISE(ABORT, 'grant rows refused'); END`,
+  );
+
+  const lines = captureImpdLogs();
+
+  const status = await ctx.runMove('dev');
+  const grants = await ctx.target.broker.listGrants('dev');
+
+  expect(status).toMatchObject({ isDone: true, error: null });
+  expect(grants).toStrictEqual([]);
+  expect(lines).toContain('WARNING impd.move imp=dev grant gh not kept: grant rows refused');
+});
+
+test('it lands an imp whose egress policy the target does not know with no egress', async () => {
+  const ctx = await setupTest({
+    hook: makeStubMoveStreamRewrite((frames) =>
+      frames.map((frame) => {
+        if (frame.type !== MOVE_FRAMES.header) {
+          return frame;
+        }
+
+        const header = MoveHeaderSchema.parse(readJsonPayload(frame.payload));
+
+        return buildJsonMoveFrame(frame.type, {
+          ...header,
+          imp: { ...header.imp, egress: { mode: 'tunnel', allow: [] } },
+        });
+      }),
+    ),
+  });
+
+  await createUbuntuImage(ctx.source);
+  await createUbuntuImage(ctx.target);
+
+  await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
+  await ctx.sourceApp.client.imps.stop({ name: 'dev' });
+
+  const lines = captureImpdLogs();
+
+  const status = await ctx.runMove('dev');
+
+  expect(status).toMatchObject({ isDone: true, error: null });
+  expect(lines).toContain('WARNING impd.move imp=dev unknown egress policy; received as none');
+});
+
+test('it finishes a move whose source parts fail to close, and logs the close', async () => {
+  const faults = buildStubStorageFaults();
+
+  const ctx = await setupTest({
+    source: {
+      createStorage: (dataDir) =>
+        faults.wrap(
+          createXfsBackend({ dataDir, cloneFile: (source, target) => copyFile(source, target) }),
+        ),
+    },
+  });
+
+  await createUbuntuImage(ctx.source);
+  await createUbuntuImage(ctx.target);
+
+  await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
+  await ctx.sourceApp.client.imps.stop({ name: 'dev' });
+
+  faults.failOnce('closeMoveSource', new Error('the snapshot is busy'));
+
+  const lines = captureImpdLogs();
+
+  const status = await ctx.runMove('dev');
+
+  expect(status).toMatchObject({ isDone: true, error: null });
+
+  expect(lines).toContain(
+    "WARNING impd.move imp=dev closing the source's parts failed: the snapshot is busy",
+  );
+});
+
+test('it warns at boot that a test range opens moves off the tailnet', async () => {
+  const lines = captureImpdLogs();
+
+  await setupTest({ target: { env: { IMP_E2E: '1', IMP_MOVE_TEST_CIDR: '10.70.0.0/24' } } });
+
+  expect(lines).toContain(
+    'WARNING impd.move IMP_E2E=1 and IMP_MOVE_TEST_CIDR open moves to 10.70.0.0/24, off the tailnet',
+  );
 });
 
 test('it carries each grant’s filter to the target', async () => {
@@ -1625,6 +1792,31 @@ test('it starts a running elastic imp again that --stop halted when the target r
   expect(landed).toBeUndefined();
 });
 
+test('it logs a halted imp that does not start again when the target refuses its max memory', async () => {
+  const ctx = await setupTest({ hook: makeStubOlderMoveTarget('keepsMaxMemory') });
+
+  await createUbuntuImage(ctx.source);
+  await createUbuntuImage(ctx.target);
+
+  const created = await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
+
+  await ctx.source.db
+    .updateTable('imps')
+    .set({ memory_mib: 256, max_memory_mib: 1024 })
+    .where('id', '=', created.id)
+    .execute();
+
+  ctx.source.fake.queue('boot', 'fail');
+
+  const lines = captureImpdLogs();
+
+  await ctx.runMove('dev', true);
+
+  expect(lines).toContain(
+    String.raw`WARNING impd.move imp=dev could not start it again: boot failed: no agent\nlog tail`,
+  );
+});
+
 test('it keeps every file the send reads through a GC while the stream goes', async () => {
   const runs: (readonly unknown[])[] = [];
 
@@ -1691,19 +1883,101 @@ test('it undoes on restart a send cut short', async () => {
   await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
   await ctx.sourceApp.client.imps.stop({ name: 'dev' });
   await ctx.sourceApp.client.moves.prepare({ name: 'dev' });
+
+  const lines = captureImpdLogs();
+
   await ctx.source.moves.recover();
+  await ctx.source.moves.waitForRecovery();
 
-  const undone = await waitFor(async () => {
-    const imp = await readImpByName(ctx.source.db, 'dev');
+  const undone = await readImpByName(ctx.source.db, 'dev');
 
-    if (imp?.moveState !== null) {
-      throw new Error('the mark is still on');
-    }
+  expect(undone?.moveState).toBeNull();
+  expect(lines).toContain('INFO impd.move imp=dev a send cut short by a restart was undone');
+});
 
-    return imp;
+test('it logs a recovery after a restart that cannot undo a send cut short', async () => {
+  const ctx = await setupTest();
+
+  await createUbuntuImage(ctx.source);
+
+  await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
+  await ctx.sourceApp.client.imps.stop({ name: 'dev' });
+  await ctx.sourceApp.client.moves.prepare({ name: 'dev' });
+
+  await runSql(
+    ctx.source.db,
+    `CREATE TRIGGER keep_marks BEFORE UPDATE OF move_state ON imps
+    BEGIN SELECT RAISE(ABORT, 'move marks kept'); END`,
+  );
+
+  const lines = captureImpdLogs();
+
+  await ctx.source.moves.recover();
+  await ctx.source.moves.waitForRecovery();
+
+  const kept = await readImpByName(ctx.source.db, 'dev');
+
+  expect(kept?.moveState).toBe('sending');
+  expect(lines).toContain('WARNING impd.move recovery after a restart failed: move marks kept');
+});
+
+test('it logs a commit on restart that the target refuses, and the source keeps its copy', async () => {
+  const ctx = await setupTest({ hook: makeStubDroppedCommit() });
+
+  await createUbuntuImage(ctx.source);
+  await createUbuntuImage(ctx.target);
+
+  await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
+  await ctx.sourceApp.client.imps.stop({ name: 'dev' });
+  await ctx.runMove('dev');
+  await ctx.target.imps.destroyImp('dev', { isMove: true });
+
+  const lines = captureImpdLogs();
+
+  await ctx.source.moves.recover();
+  await ctx.source.moves.waitForRecovery();
+
+  const kept = await readImpByName(ctx.source.db, 'dev');
+
+  expect(kept?.moveState).toBe('moved');
+
+  expect(lines).toContain(
+    'WARNING impd.move imp=dev commit after restart: commit: the target answered 409 nothing to commit: the received copy is gone',
+  );
+});
+
+test('it commits a move whose tailnet name release fails, and logs the release', async () => {
+  const tailscale = buildStubTailscale();
+
+  const ctx = await setupTest({
+    hook: (request, forward) => {
+      if (request.headers.get(MOVE_FINISH_HEADER) === '1') {
+        tailscale.failNextStatus(new Error('tailscaled is down'));
+      }
+
+      return forward();
+    },
+    source: {
+      env: { IMP_TAILNET_NAMES: '1', IMP_TAILSCALE_NODE: '1' },
+      boundaries: { readTailscale: tailscale.readTailscale },
+    },
   });
 
-  expect(undone.moveState).toBeNull();
+  await createUbuntuImage(ctx.source);
+  await createUbuntuImage(ctx.target);
+
+  await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
+  await ctx.sourceApp.client.imps.stop({ name: 'dev' });
+
+  const lines = captureImpdLogs();
+
+  const status = await ctx.runMove('dev');
+
+  expect(status).toMatchObject({ isDone: true, error: null });
+
+  expect(lines).toContain(
+    'WARNING impd.move imp=dev tailnet name not released yet: tailscaled is down',
+  );
 });
 
 test('it finishes on restart a send the target has verified', async () => {

@@ -21,6 +21,7 @@ import { buildMockNewCheckpoint } from '../../../testing/imp-ops/build-mock-new-
 import { buildStubRestic } from '../../../testing/imp-ops/build-stub-restic';
 import { buildQueryGate } from '../../../testing/platform/build-query-gate';
 import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
+import { runSql } from '../../../testing/platform/run-sql';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { buildStubPressureSwitch } from '../../../testing/vm/build-stub-pressure-switch';
 import { buildStubPublishHook } from '../../../testing/vm/build-stub-publish-hook';
@@ -135,6 +136,70 @@ test('#runBackup freezes a running imp and copies stopped and sleeping imps as t
     ['idle', 'stopped', true],
     ['napping', 'sleeping', false],
   ]);
+});
+
+test('#runBackup copies a running imp unsynced when its freeze fails, and logs the freeze', async () => {
+  const ctx = await setupTest();
+
+  const backups = createBackupService({
+    ...ctx.deps,
+    backup: buildMockBackupConfig(),
+    freezer: {
+      freeze: () => Promise.reject(new Error('the agent did not answer')),
+      thaw: () => Promise.resolve(),
+    },
+  });
+
+  await ctx.createTestImage('base');
+
+  writeFileSync(join(ctx.dataDir, 'images', 'base', 'config.json'), '{}');
+
+  await ctx.imps.createImp({ name: 'dev' });
+
+  const lines = captureImpdLogs();
+
+  const run = await backups.runBackup();
+
+  const manifestText = readFileSync(join(ctx.repoDir, run.snapshotId, 'manifest.json'), 'utf8');
+  const manifest = BackupManifestSchema.parse(JSON.parse(manifestText));
+
+  expect(manifest.imps.map((imp) => [imp.name, imp.synced])).toStrictEqual([['dev', false]]);
+
+  expect(lines).toContain(
+    'WARNING impd.backup imp=dev no freeze, copied unsynced: the agent did not answer',
+  );
+});
+
+test('#runBackup keeps a synced copy of a running imp whose thaw fails, and logs the thaw', async () => {
+  const ctx = await setupTest();
+
+  const backups = createBackupService({
+    ...ctx.deps,
+    backup: buildMockBackupConfig(),
+    freezer: {
+      freeze: () => Promise.resolve(),
+      thaw: () => Promise.reject(new Error('the agent did not answer')),
+    },
+  });
+
+  await ctx.createTestImage('base');
+
+  writeFileSync(join(ctx.dataDir, 'images', 'base', 'config.json'), '{}');
+
+  await ctx.imps.createImp({ name: 'dev' });
+
+  const lines = captureImpdLogs();
+
+  const run = await backups.runBackup();
+
+  const manifestText = readFileSync(join(ctx.repoDir, run.snapshotId, 'manifest.json'), 'utf8');
+  const manifest = BackupManifestSchema.parse(JSON.parse(manifestText));
+
+  expect(manifest.imps.map((imp) => [imp.name, imp.synced])).toStrictEqual([['dev', true]]);
+
+  expect(lines).toContain(
+    'WARNING impd.backup imp=dev thaw failed (the agent thaws on its own): the agent did not answer',
+  );
 });
 
 test('#runBackup tags the snapshot with the run and each imp, then forgets', async () => {
@@ -488,7 +553,10 @@ test('#restoreBackup restores the newest backup without --at', async () => {
 
   writeFileSync(buildImpPaths(ctx.dataDir, dev.id).disk, 'later');
 
-  await backups.runBackup();
+  const later = await backups.runBackup();
+
+  const lines = captureImpdLogs();
+
   await backups.restoreBackup({ name: 'dev', as: 'back' });
 
   const back = await readImpByName(ctx.db, 'back');
@@ -496,6 +564,10 @@ test('#restoreBackup restores the newest backup without --at', async () => {
   invariant(back);
 
   expect(readFileSync(buildImpPaths(ctx.dataDir, back.id).disk, 'utf8')).toBe('later');
+
+  expect(lines).toContain(
+    `INFO impd.backup imp=back restored from ${later.snapshotId} (2026-10-02T01:00:00.000Z)`,
+  );
 });
 
 test('#restoreBackup rejects a restore --at before every backup as NOT_FOUND', async () => {
@@ -864,6 +936,39 @@ test('#restoreBackup leaves no imp behind when a restore fails part way', async 
   expect(readdirSync(join(ctx.dataDir, 'backup', 'restore'))).toStrictEqual([]);
 });
 
+test('#restoreBackup logs an imp that a failed restore cannot remove', async () => {
+  const ctx = await setupTest();
+
+  const backups = createBackupService({ ...ctx.deps, backup: buildMockBackupConfig() });
+
+  await ctx.createTestImage('base');
+
+  writeFileSync(join(ctx.dataDir, 'images', 'base', 'config.json'), '{}');
+
+  await ctx.imps.createImp({ name: 'dev' });
+
+  const run = await backups.runBackup();
+
+  const manifestText = readFileSync(join(ctx.repoDir, run.snapshotId, 'manifest.json'), 'utf8');
+  const manifest = BackupManifestSchema.parse(JSON.parse(manifestText));
+
+  rmSync(join(ctx.repoDir, run.snapshotId, manifest.imps[0]?.disk ?? ''));
+
+  await runSql(
+    ctx.db,
+    `CREATE TRIGGER keep_copies BEFORE DELETE ON imps WHEN OLD.name = 'copy'
+    BEGIN SELECT RAISE(ABORT, 'imp rows kept'); END`,
+  );
+
+  const lines = captureImpdLogs();
+
+  expect(backups.restoreBackup({ name: 'dev', as: 'copy' })).rejects.toThrow('ENOENT');
+
+  expect(lines).toContain(
+    'WARNING impd.backup imp=copy a failed restore left the imp: imp rows kept',
+  );
+});
+
 test('#restoreBackup rejects a restore of a backup that holds no copy of the imp’s image', async () => {
   const ctx = await setupTest();
 
@@ -956,9 +1061,15 @@ test('#runScheduled backs up without a prune or a check once the interval has pa
 
   ctx.advance(60 * 60 * 1000);
 
+  const lines = captureImpdLogs();
+
   await backups.runScheduled();
 
   expect(ctx.restic.calls.slice(before)).toStrictEqual(['unlock', 'backup', 'forget']);
+
+  expect(lines).toContainEqual(
+    expect.stringMatching(/^INFO impd\.backup snap2: 1 imps, 10 bytes added in \d+ms$/v),
+  );
 });
 
 test('#runScheduled logs a failed weekly check loudly and reports it in the status', async () => {
@@ -2192,9 +2303,7 @@ test('#restoreBackup brings back the named tokens, the secrets and the grants on
   await ctx.broker.addGrant('dev', 'gh');
 
   const made = await ctx.tokens.create({ name: 'agent', scope: 'exec', imps: ['dev'] });
-
-  await backups.runBackup();
-
+  const run = await backups.runBackup();
   const fresh = await startTestImpd(ctx.stack);
 
   const freshBackups = createBackupService({
@@ -2214,6 +2323,8 @@ test('#restoreBackup brings back the named tokens, the secrets and the grants on
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
   });
 
+  const lines = captureImpdLogs();
+
   const restored = await freshBackups.restoreBackup({ all: true });
   const grants = await fresh.broker.listGrants('dev');
 
@@ -2227,6 +2338,10 @@ test('#restoreBackup brings back the named tokens, the secrets and the grants on
   });
 
   expect(grants).toStrictEqual(['gh']);
+
+  expect(lines).toContain(
+    `INFO impd.backup restored 1 tokens and 1 secrets from ${run.snapshotId}`,
+  );
 });
 
 test('#restoreBackup holds the database copy’s size from the disk budget while it restores the copy', async () => {

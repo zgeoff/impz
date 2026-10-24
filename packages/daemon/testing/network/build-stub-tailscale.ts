@@ -94,11 +94,28 @@ export function buildStubTailscale(options: Readonly<StubTailscaleOptions> = {})
     return Promise.reject(new Error(`the stub tailscale does not run ${argv.join(' ')}`));
   };
 
+  const outage: { error: Error | null } = { error: null };
+
+  const readTailscale = (): Promise<TailscaleStatus> => {
+    const error = outage.error;
+
+    if (error === null) {
+      return Promise.resolve(status);
+    }
+
+    outage.error = null;
+
+    return Promise.reject(error);
+  };
+
   return {
     status,
     asked,
     registerPeer,
     run,
-    readTailscale: (): Promise<TailscaleStatus> => Promise.resolve(status),
+    readTailscale,
+    failNextStatus: (error: Error) => {
+      outage.error = error;
+    },
   };
 }

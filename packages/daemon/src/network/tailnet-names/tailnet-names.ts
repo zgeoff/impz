@@ -26,6 +26,7 @@ export interface TailnetNamesStatus {
 
 export interface TailnetNames {
   readonly runSync: () => Promise<void>;
+  readonly trySync: () => Promise<void>;
 
   readonly readUrl: (impName: string) => string | null;
   readonly readStatus: () => TailnetNamesStatus;
@@ -187,6 +188,15 @@ export function createTailnetNames(deps: TailnetNamesDeps): TailnetNames {
 
   return {
     runSync: () => pass.run(runPass),
+    trySync: async () => {
+      try {
+        await pass.run(runPass);
+      } catch (error) {
+        getImpdLogger('tailnet').warning('tailnet names: the pass failed: {error}', {
+          error: getErrorMessage(error),
+        });
+      }
+    },
     readUrl: (impName) =>
       states.get(impName)?.live === true && view.suffix !== null
         ? `https://${deps.config.prefix}${impName}.${view.suffix}`

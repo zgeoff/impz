@@ -899,10 +899,16 @@ test('it lets idle guests unplug instead of sleeping an imp for a boot', async (
 
   host.applyChange({ kind: 'spare', id: 'new', mib: 200 }, governor);
 
+  const logs = captureImpdLogs();
+
   await governor.admit({ id: 'x', name: 'x', reserveMib: 250, memoryMib: 512 });
 
   expect(reclaims).toStrictEqual(['x']);
   expect(host.sleepCalls).toStrictEqual([]);
+
+  expect(logs).toContain(
+    'INFO impd.governor unplugged 200 MiB from idle imps (to make room for x)',
+  );
 });
 
 test('it lets idle guests unplug before enforcement sleeps an imp', async () => {

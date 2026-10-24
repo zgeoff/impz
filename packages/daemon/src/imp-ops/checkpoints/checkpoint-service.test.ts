@@ -9,6 +9,8 @@ import { buildMockNewCheckpoint } from '../../../testing/imp-ops/build-mock-new-
 import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
 import { buildMockNewImp } from '../../../testing/imps/build-mock-new-imp';
 import { buildQueryGate } from '../../../testing/platform/build-query-gate';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
+import { runSql } from '../../../testing/platform/run-sql';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { buildStubZfs } from '../../../testing/vm/build-stub-zfs';
 import { createCheckpoint, listCheckpoints } from '../../platform/db/checkpoints';
@@ -181,6 +183,34 @@ test('it thaws and leaves no checkpoint when the clone fails', async () => {
 
   expect(rows).toStrictEqual([]);
   expect(readdirSync(paths.checkpointsDir)).toStrictEqual([]);
+});
+
+test('it keeps the checkpoint, and logs why, when the thaw after the clone fails', async () => {
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
+  const harness = await startTestImpd(stack, {
+    boundaries: {
+      freezer: {
+        freeze: () => Promise.resolve(),
+        thaw: () => Promise.reject(new Error('the agent closed the connection')),
+      },
+    },
+  });
+
+  await harness.createTestImage('ubuntu');
+  await harness.impd.imps.createImp({ name: 'dev' });
+
+  const lines = captureImpdLogs();
+
+  const checkpoint = await harness.impd.checkpoints.createCheckpoint('dev', 'clean');
+
+  expect(checkpoint).toMatchObject({ label: 'clean' });
+
+  expect(lines).toContain(
+    'WARNING impd.imps imp=dev thaw failed (the agent thaws on its own): the agent closed the connection',
+  );
 });
 
 test('it rejects a label another checkpoint of the imp holds', async () => {
@@ -572,6 +602,37 @@ test('it refuses a fork whose source is destroyed before the disk copy and leave
 
   expect(imps).toStrictEqual([]);
   expect(readdirSync(join(ctx.dataDir, 'imps'))).toStrictEqual([]);
+});
+
+test('it logs a refused fork that its cleanup cannot remove', async () => {
+  const ctx = await setupTest({ storage: 'xfs' });
+
+  await Bun.write(join(ctx.dataDir, 'images', 'base', 'rootfs.ext4'), 'rootfs');
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'base', digest: 'sha256:base' }));
+
+  await ctx.impd.imps.createImp({ name: 'dev', image: 'base' });
+
+  ctx.gate.arm();
+
+  const fork = ctx.impd.checkpoints.forkImp({ source: 'dev', name: 'copy' });
+
+  await ctx.gate.reached;
+
+  await ctx.impd.imps.destroyImp('dev');
+
+  await runSql(
+    ctx.db,
+    `CREATE TRIGGER keep_forks BEFORE DELETE ON imps WHEN OLD.name = 'copy'
+    BEGIN SELECT RAISE(ABORT, 'fork rows kept'); END`,
+  );
+
+  const lines = captureImpdLogs();
+
+  ctx.gate.release();
+
+  expect(fork).rejects.toMatchObject({ code: 'CONFLICT' });
+  expect(lines).toContain('WARNING impd.imps imp=copy a refused fork left the imp: fork rows kept');
 });
 
 test('it refuses a fork whose source is made again under its name before the disk copy', async () => {

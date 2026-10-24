@@ -522,6 +522,28 @@ test('it fails every name with the error while the API is down', async () => {
   });
 });
 
+test('it logs a pass that an imp change starts while tailscaled is down', async () => {
+  updateEnv('IMP_TAILNET_NAMES', '1');
+  updateEnv('IMP_TAILSCALE_NODE', '1');
+
+  const ctx = await setupTest();
+
+  ctx.tailscaleStatus.reject(new Error('tailscaled is down'));
+
+  await ctx.createTestImage('base');
+  await ctx.client.imps.create({ name: 'box' });
+
+  const failure = await waitFor(() => {
+    const line = ctx.logs.find((each) => each.includes('the pass failed'));
+
+    invariant(line !== undefined);
+
+    return line;
+  });
+
+  expect(failure).toBe('WARNING impd.tailnet tailnet names: the pass failed: tailscaled is down');
+});
+
 test('it logs a failure once while it stays the same', async () => {
   const ctx = await setupTest();
 

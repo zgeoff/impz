@@ -6,6 +6,7 @@ import { readImpEnv } from '@impz/test-utils/read-imp-env';
 import { updateEnv } from '@impz/test-utils/update-env';
 import invariant from 'tiny-invariant';
 import { buildStubClock } from '../../../testing/platform/build-stub-clock';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import type { TestImpdOptions } from '../../../testing/start-test-impd';
 import { buildStubCpuCgroups } from '../../../testing/vm/build-stub-cpu-cgroups';
@@ -231,6 +232,34 @@ test('it records what a plug under way asked for at a sleep', async () => {
   await ctx.client.imps.sleep({ name: 'dev' });
 
   expect(readSnapshotMeta(paths)).toMatchObject({ pluggedMib: 512 });
+});
+
+test('it sleeps with the plugged memory, and logs why, when the shrink before the sleep fails', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const created = await ctx.client.imps.create({ name: 'dev', memoryMib: 256, maxMemoryMib: 1024 });
+
+  const paths = buildImpPaths(ctx.dataDir, created.id);
+
+  ctx.fake.guestMemory.set(paths.directory, {
+    baseMib: 256,
+    pluggedMib: 512,
+    requestedMib: 512,
+    usedMib: 100,
+    unplugFloorMib: 0,
+  });
+
+  ctx.fake.queue('plug', 'fail');
+
+  const lines = captureImpdLogs();
+
+  const asleep = await ctx.client.imps.sleep({ name: 'dev' });
+
+  expect(asleep.state).toBe('sleeping');
+  expect(readSnapshotMeta(paths)).toMatchObject({ pluggedMib: 512 });
+  expect(lines).toContain('WARNING impd.imps imp=dev no shrink before the sleep: plug failed');
 });
 
 test('it allows on a wake what a plug under way at the sleep asked for', async () => {

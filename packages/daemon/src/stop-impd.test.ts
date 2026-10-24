@@ -130,6 +130,10 @@ test('it sleeps every imp before it stops storage', async () => {
   await stopImpd(ctx.parts, { sleepImps: true });
 
   expect(ctx.parts.imps.sleepAllImps).toHaveBeenCalledBefore(ctx.parts.storage.stop);
+
+  expect(ctx.logs).toContainEqual(
+    expect.stringMatching(/^INFO impd\.stop every imp asleep in \d+ms$/v),
+  );
 });
 
 test('it waits for the lifecycle and sleeps no imp when it stops for a restart in place', async () => {
