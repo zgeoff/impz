@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { parseCiWorkflow } from '../../scripts/test-utils/parse-ci-workflow';
-import { FAST_GROUPS, HOST_TESTS_GROUP, SUITES } from './suites';
+import { FAST_GROUPS, HOST_TESTS_GROUP, SUITES, listZfsSuites, pickZfsShard } from './suites';
 
 test('it runs one e2e-group job for each fast group', () => {
   const jobs = parseCiWorkflow(
@@ -223,33 +223,69 @@ test('it lets every zfs shard finish, so one failure does not hide another', () 
   expect(jobs['zfs-shard'].strategy['fail-fast']).toBeFalse();
 });
 
-test('it runs each zfs suite in one shard only, the backups, backups-repo and moves suites among them', () => {
+test('it runs the ZFS lane over the lane shards, so every *.zfs.e2e.ts suite runs once', () => {
   const jobs = parseCiWorkflow(
     readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8'),
   );
 
-  const suites = jobs['zfs-shard'].strategy.matrix.include.flatMap((row) => row.suites.split(','));
+  const lanes = jobs['zfs-shard'].strategy.matrix.include.flatMap((row) =>
+    row.lane === undefined ? [] : [row.lane],
+  );
 
-  expect(new Set(suites).size).toBe(suites.length);
-  expect(suites).toIncludeAllMembers(['backups', 'backups-repo', 'moves']);
+  const suites = lanes.flatMap((lane) => {
+    const [index, count] = lane.split('/').map(Number);
+
+    return pickZfsShard(index ?? 0, count ?? 0);
+  });
+
+  expect(lanes).toStrictEqual(
+    lanes.map((_, index) => `${String(index + 1)}/${String(lanes.length)}`),
+  );
+
+  expect(suites.toSorted()).toStrictEqual(
+    listZfsSuites()
+      .map((suite) => suite.name)
+      .toSorted(),
+  );
 });
 
-test('it names only suites the harness runs in the zfs shards', () => {
+test('it runs only VM e2e suites in the ZFS backend shard, never a ZFS lane suite', () => {
   const jobs = parseCiWorkflow(
     readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8'),
   );
 
-  const suites = jobs['zfs-shard'].strategy.matrix.include.flatMap((row) => row.suites.split(','));
+  const suites = jobs['zfs-shard'].strategy.matrix.include.flatMap((row) =>
+    row.suites === undefined ? [] : row.suites.split(','),
+  );
 
+  const lane = new Set(listZfsSuites().map((suite) => suite.name));
+
+  expect(suites).not.toBeEmpty();
+  expect(suites.filter((suite) => lane.has(suite))).toStrictEqual([]);
   expect(SUITES.map((suite) => suite.name)).toIncludeAllMembers(suites);
 });
 
-test('it hands each zfs shard its own suites', () => {
+test('it gives each zfs shard either a lane share or its suites, never both', () => {
   const jobs = parseCiWorkflow(
     readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8'),
   );
 
-  expect(jobs['zfs-shard'].env.IMP_ZFS_E2E_SUITES).toBe(`\${{ matrix.suites }}`);
+  const both = jobs['zfs-shard'].strategy.matrix.include.filter(
+    (row) => (row.lane === undefined) === (row.suites === undefined),
+  );
+
+  expect(both).toStrictEqual([]);
+});
+
+test('it hands each zfs shard its own lane share and suites', () => {
+  const jobs = parseCiWorkflow(
+    readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8'),
+  );
+
+  expect(jobs['zfs-shard'].env).toMatchObject({
+    IMP_ZFS_SHARD: `\${{ matrix.lane }}`,
+    IMP_ZFS_E2E_SUITES: `\${{ matrix.suites }}`,
+  });
 });
 
 test('it runs the ZFS backend tests in one shard only', () => {

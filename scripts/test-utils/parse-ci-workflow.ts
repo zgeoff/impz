@@ -26,7 +26,8 @@ const GroupJobSchema = z.looseObject({
 
 const ShardRowSchema = z.looseObject({
   shard: z.number(),
-  suites: z.string(),
+  lane: z.string().optional(),
+  suites: z.string().optional(),
   unit: z.boolean(),
 });
 
@@ -37,7 +38,7 @@ const ShardStepWithSchema = z.looseObject({ name: z.string().optional() });
 const ShardStepSchema = StepSchema.extend({ with: ShardStepWithSchema.optional() });
 
 const ShardJobSchema = z.looseObject({
-  env: z.looseObject({ IMP_ZFS_E2E_SUITES: z.string() }),
+  env: z.looseObject({ IMP_ZFS_SHARD: z.string(), IMP_ZFS_E2E_SUITES: z.string() }),
   strategy: z.looseObject({ 'fail-fast': z.boolean(), matrix: ShardMatrixSchema }),
   steps: z.array(ShardStepSchema),
 });

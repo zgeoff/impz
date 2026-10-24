@@ -1,3 +1,5 @@
+import { readdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { config } from './config';
 import { REPO_ROOT } from './instance';
 import type { DevInstance } from './instance';
@@ -20,6 +22,9 @@ export interface Suite {
   readonly settings?: (target: Readonly<DevInstance>) => Readonly<Record<string, string>> | null;
 
   readonly fixtures?: readonly HostBFixtureName[];
+
+  // a ZFS suite's time in its CI shard, which splits the ZFS lane into shards
+  readonly seconds?: number;
 }
 
 // Cloudflare's second resolver address: the egress suite lists it as a host address, and reaches
@@ -174,6 +179,7 @@ export const SUITES: readonly Suite[] = [
     ],
     fixtures: ['host-b'],
     settings: (target) => buildMoveSettings(readMoveOptions('host-b'), target.portOffset),
+    seconds: 86,
   },
   {
     name: 'moves-tailnet',
@@ -223,8 +229,8 @@ export const SUITES: readonly Suite[] = [
   },
 
   // Last, because they reboot the instance with backups on, then off again.
-  { name: 'backups', prefix: 'e2e-bk-', images: ['e2e-tiny'] },
-  { name: 'backups-repo', prefix: 'e2e-bkr-', images: ['e2e-tiny'] },
+  { name: 'backups', prefix: 'e2e-bk-', images: ['e2e-tiny'], seconds: 155 },
+  { name: 'backups-repo', prefix: 'e2e-bkr-', images: ['e2e-tiny'], seconds: 146 },
 ];
 
 // One list per CI runner and instance; each held about 225 s of suite work in
@@ -317,6 +323,8 @@ const JOURNEY_TIMEOUT_MS = 3_600_000;
 // Plain `bun test` skips *.e2e.ts; a ./ path runs one anyway, where a bare
 // path is a name filter.
 export function buildJourneyArgv(bunPath: string, journey: string): readonly string[] {
+  const suffix = ZFS_JOURNEYS.has(journey) ? ZFS_SUFFIX : '.e2e.ts';
+
   return [
     bunPath,
     'test',
@@ -324,6 +332,49 @@ export function buildJourneyArgv(bunPath: string, journey: string): readonly str
     '--bail',
     '--timeout',
     String(JOURNEY_TIMEOUT_MS),
-    `./e2e/suites/${journey}.e2e.ts`,
+    `./e2e/suites/${journey}${suffix}`,
   ];
+}
+
+// A journey file named *.zfs.e2e.ts belongs to the ZFS lane, which scripts/zfs-host-test.sh runs
+// on a real pool, and a suite of such journeys runs nowhere else.
+const ZFS_SUFFIX = '.zfs.e2e.ts';
+
+const ZFS_JOURNEYS: ReadonlySet<string> = new Set(
+  readdirSync(join(REPO_ROOT, 'e2e', 'suites'))
+    .filter((file) => file.endsWith(ZFS_SUFFIX))
+    .map((file) => file.slice(0, -ZFS_SUFFIX.length)),
+);
+
+export function listZfsSuites(): readonly Suite[] {
+  return SUITES.filter((suite) =>
+    listJourneys(suite).every((journey) => ZFS_JOURNEYS.has(journey)),
+  );
+}
+
+interface ZfsShard {
+  seconds: number;
+  readonly suites: string[];
+}
+
+// Longest first into the shard that holds the least time, so a long suite never shares a shard
+// with the other long ones.
+export function pickZfsShard(index: number, count: number): readonly string[] {
+  const shards = Array.from({ length: count }, (): ZfsShard => ({ seconds: 0, suites: [] }));
+
+  const suites = listZfsSuites().toSorted(
+    (first, second) => (second.seconds ?? 0) - (first.seconds ?? 0),
+  );
+
+  for (const suite of suites) {
+    const shard = shards.reduce((least, candidate) =>
+      candidate.seconds < least.seconds ? candidate : least,
+    );
+
+    shard.seconds += suite.seconds ?? 0;
+
+    shard.suites.push(suite.name);
+  }
+
+  return shards[index - 1]?.suites ?? [];
 }
