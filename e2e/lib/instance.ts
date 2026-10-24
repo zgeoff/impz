@@ -158,9 +158,6 @@ export async function runDevScript(
     env: {
       IMP_RAM_BUDGET_MIB: String(config.ramBudgetMib),
       IMP_IDLE_TIMEOUT_S: String(config.idleTimeoutS),
-
-      // the memory journey waits out one shrink, which impd starts after a minute by default
-      IMP_MEMORY_SHRINK_AFTER_S: '10',
       ...env,
       ...target.env,
       ...settings,

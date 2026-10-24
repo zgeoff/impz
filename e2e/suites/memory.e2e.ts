@@ -94,7 +94,7 @@ test('it grows an elastic guest under a gradual allocation, shrinks it once the 
   expect(totalShrunk).toBeLessThan(256 + 256);
 
   // 300 MiB at 30 MiB a second, and in use as it grows, so no shrink comes before the grow
-  // (the harness sets impd's shrink delay to 10 s). It crosses the grow mark only near its end.
+  // (the suite sets impd's shrink delay to 10 s). It crosses the grow mark only near its end.
   const secondFillStarted = new Date();
 
   await runShellInImp(
