@@ -43,9 +43,11 @@ jobs:
           # [[allowlists]] syntax .gitleaks.toml relies on and silently ignores it
           GITLEAKS_VERSION: 8.30.1
 
-  # The unit run, plain `bun test`, in two shards on two runners: one Bun
-  # process over every file took about 6 minutes, the longest job in the run.
-  # --timings splits the files by the per-file times in
+  # The unit run, plain `bun test`, in two shards on two runners, each with two
+  # workers: one Bun process over every file took about 6 minutes, the longest
+  # job in the run. --no-isolate keeps one global per worker; four workers
+  # outgrow the memory cap, and slow a CPU-bound property test past its time
+  # limit. --timings splits the files by the per-file times in
   # scripts/ci/unit-test-timings.json, and a file it does not list still runs
   # in one shard. To refresh that file, merge the timings-*.json files of a
   # main run's unit-test-results artifacts:
@@ -55,7 +57,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    # a healthy shard takes about 4 minutes
+    # a healthy shard takes about 2.5 minutes
     timeout-minutes: 15
     strategy:
       # every shard reports, so one failure does not hide another's
@@ -93,7 +95,7 @@ jobs:
         run: |
           out="$RUNNER_TEMP/unit-test"
           mkdir -p "$out"
-          scripts/ci/run-memory-capped.sh 1536 bun test --shard="$SHARD/2" \
+          scripts/ci/run-memory-capped.sh 1536 bun test --parallel=2 --no-isolate --shard="$SHARD/2" \
             --timings="$out/timings-$SHARD.json" --timings=scripts/ci/unit-test-timings.json \
             --update-timings --reporter=junit --reporter-outfile="$out/results-$SHARD.xml"
 
