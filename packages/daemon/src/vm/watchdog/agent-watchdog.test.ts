@@ -156,7 +156,10 @@ test('it backs off restarts, then stops at three an hour', async () => {
   }
 
   expect(recoveredAt).toStrictEqual([60_000, 120_000, 240_000]);
-  expect(ctx.logs.filter((line) => line.includes('it only reports now'))).toHaveLength(1);
+
+  expect(ctx.logs.filter((line) => line.includes('it only reports now'))).toStrictEqual([
+    'INFO impd.imps imp=dev the watchdog recovered it 3 times this hour; it only reports now',
+  ]);
 });
 
 test('it tries a restart another operation held off again at the next look', async () => {

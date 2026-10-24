@@ -212,7 +212,7 @@ async function startImpdParts(
     if (isImpSetWrite(write)) {
       void runWriteWork(proxyHolder.proxy?.syncListeners());
       void runWriteWork(broker.applyGrants());
-      void runWriteWork(namesHolder.names?.runSync());
+      void runWriteWork(namesHolder.names?.trySync());
     }
   });
 
@@ -335,7 +335,7 @@ async function startImpdParts(
       },
       onCommitted: () => {
         diskUsage.requestRefresh();
-        void tailnetNames?.runSync();
+        void tailnetNames?.trySync();
       },
     },
   );

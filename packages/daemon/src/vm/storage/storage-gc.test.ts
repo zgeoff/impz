@@ -544,6 +544,7 @@ test('it removes the secret values kept aside when told to with orphans', async 
   files.write('late.b2', 'npm_LATE');
 
   const kept = files.keepOrphansExcept(new Set(), new Date('2026-10-04T05:30:00.000Z'));
+  const lines = captureImpdLogs();
 
   const removed = await ctx.client.system.gc({
     secretFiles: true,
@@ -554,6 +555,7 @@ test('it removes the secret values kept aside when told to with orphans', async 
   invariant(kept.directory !== null);
 
   expect(removed.dropped).toStrictEqual([{ kind: 'secrets', id: '2026-10-04T05-30-00.000Z' }]);
+  expect(lines).toContain(`INFO impd.gc removed kept secret values ${kept.directory}`);
   expect(existsSync(kept.directory)).toBeFalse();
   expect(files.listKept()).toStrictEqual([]);
 });

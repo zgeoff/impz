@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildMockNewImp } from '../../../testing/imps/build-mock-new-imp';
 import { buildStubDiskTools } from '../../../testing/imps/build-stub-disk-tools';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { createImp, readImpByName } from '../../platform/db/imps';
 import { runChecked } from '../../platform/process/run-command';
@@ -40,8 +41,15 @@ test('it makes a new disk the size asked for', async () => {
 
   await ctx.createTestImage('ubuntu');
 
+  const lines = captureImpdLogs();
+
   const created = await ctx.client.imps.create({ name: 'sized', diskMib: 2048 });
   const imp = await readImpByName(ctx.db, 'sized');
+
+  // the clone takes as long as the host's copy takes, so the line matches any duration
+  expect(lines).toContainEqual(
+    expect.stringMatching(/^INFO impd\.imps imp=sized disk cloned in \d+ms$/v),
+  );
 
   expect(created.diskMib).toBe(2048);
   expect(statSync(buildImpPaths(ctx.dataDir, created.id).disk).size).toBe(2 * 1024 ** 3);
@@ -114,6 +122,8 @@ test('it grows a stopped disk and its filesystem on the host at a resize', async
 
   await ctx.client.imps.stop({ name: 'dev' });
 
+  const lines = captureImpdLogs();
+
   const grown = await ctx.client.imps.resizeDisk({ name: 'dev', diskMib: 4096 });
 
   const disk = buildImpPaths(ctx.dataDir, created.id).disk;
@@ -125,6 +135,31 @@ test('it grows a stopped disk and its filesystem on the host at a resize', async
   expect(imp?.isDiskGrowPending).toBeFalse();
   expect(ctx.filesystemGrows).toStrictEqual([disk, disk]);
   expect(ctx.fake.grows).toBeEmpty();
+  expect(lines).toStrictEqual(['INFO impd.imps imp=dev disk grown to 4096 MiB']);
+});
+
+test('it grows a stopped disk at a resize, and logs why, when the host cannot grow its filesystem', async () => {
+  const ctx = await setupTest({
+    growFilesystem: () => Promise.reject(new Error('resize2fs exited 1: bad superblock')),
+  });
+
+  await ctx.createTestImage('ubuntu');
+
+  const created = await ctx.client.imps.create({ name: 'dev', diskMib: 2048 });
+
+  await ctx.client.imps.stop({ name: 'dev' });
+
+  const lines = captureImpdLogs();
+
+  const grown = await ctx.client.imps.resizeDisk({ name: 'dev', diskMib: 4096 });
+
+  expect(grown.diskMib).toBe(4096);
+  expect(statSync(buildImpPaths(ctx.dataDir, created.id).disk).size).toBe(4 * 1024 ** 3);
+
+  expect(lines).toStrictEqual([
+    'INFO impd.imps imp=dev disk grown to 4096 MiB',
+    'WARNING impd.imps imp=dev the host could not grow the filesystem: resize2fs exited 1: bad superblock',
+  ]);
 });
 
 test('it refuses to shrink a disk', async () => {
@@ -175,6 +210,7 @@ test('it marks the grow pending when a running guest fails to grow', async () =>
 
   ctx.fake.queue('grow', 'fail');
 
+  const lines = captureImpdLogs();
   const resizing = ctx.client.imps.resizeDisk({ name: 'dev', diskMib: 4096 });
 
   expect(resizing).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' });
@@ -187,6 +223,11 @@ test('it marks the grow pending when a running guest fails to grow', async () =>
 
   expect(statSync(buildImpPaths(ctx.dataDir, created.id).disk).size).toBe(4 * 1024 ** 3);
   expect(imp?.isDiskGrowPending).toBeTrue();
+
+  expect(lines).toStrictEqual([
+    'INFO impd.imps imp=dev disk grown to 4096 MiB',
+    'WARNING impd.imps imp=dev the guest did not grow into its disk: grow failed',
+  ]);
 });
 
 test('it retries a failed guest grow at the next wake', async () => {

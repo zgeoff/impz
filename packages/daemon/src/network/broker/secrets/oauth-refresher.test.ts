@@ -918,6 +918,26 @@ test('it refreshes a secret that is due on a tick and leaves one that is not', a
   ]);
 });
 
+test('it logs a tick that cannot list the secrets', async () => {
+  const ctx = await setupTest();
+
+  await ctx.db.schema.dropTable('secrets').execute();
+
+  const refresher = createOAuthRefresher({
+    db: ctx.db,
+    files: ctx.files,
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+  });
+
+  const logs = captureImpdLogs();
+
+  await refresher.tick();
+
+  expect(logs).toStrictEqual([
+    'WARNING impd.broker oauth refresh check failed: no such table: secrets',
+  ]);
+});
+
 test('it schedules its first refresh pass at once when it starts', async () => {
   const ctx = await setupTest();
 
@@ -2002,10 +2022,16 @@ test('it answers a refresh whose earlier result still cannot be written without 
 
   await refresher.refresh('codex', true);
 
+  const logs = captureImpdLogs();
+
   const outcome = await refresher.refresh('codex', true);
 
   expect(outcome).toStrictEqual({ kind: 'transient', error: 'value file not writable' });
   expect(endpoint.requests).toHaveLength(1);
+
+  expect(logs).toStrictEqual([
+    `WARNING impd.broker oauth secret codex: could not write its value file: EISDIR: illegal operation on a directory, rename '${valuePath}.new' -> '${valuePath}'`,
+  ]);
 });
 
 test('it writes on a tick a result an earlier write failed on, though the secret is not due', async () => {
@@ -2293,10 +2319,16 @@ test('it reports a secret whose value file is missing as unreadable without a ca
     resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
   });
 
+  const logs = captureImpdLogs();
+
   const outcome = await refresher.refresh('codex', true);
 
   expect(outcome).toStrictEqual({ kind: 'unreadable' });
   expect(endpoint.requests).toBeEmpty();
+
+  expect(logs).toStrictEqual([
+    'INFO impd.broker oauth secret codex: its value file is missing or unreadable',
+  ]);
 });
 
 test('it reports a secret that does not exist as gone', async () => {

@@ -1520,6 +1520,8 @@ test('it stops the log for a full disk and closes its tap', async () => {
     expect(ctx.looks.done).toBe(1);
   });
 
+  const lines = captureImpdLogs();
+
   tap.write('x');
 
   await waitFor(() => {
@@ -1528,6 +1530,10 @@ test('it stops the log for a full disk and closes its tap', async () => {
 
   expect(logs.listLogs(imp)[0]?.stopped).toBe('disk_full');
   expect(tap.state.closed).toBe(true);
+
+  expect(lines).toStrictEqual([
+    'INFO impd.session imp imp-1: stopped the log of session main: the disk reached its reserve',
+  ]);
 });
 
 test('it never taps a log that stopped for a full disk again', async () => {
@@ -2883,6 +2889,8 @@ test('it stops the newest live log once only live logs keep the imp past its lim
     expect(ctx.looks.done).toBe(2);
   });
 
+  const lines = captureImpdLogs();
+
   second.write('b'.repeat(100));
 
   await waitFor(() => {
@@ -2898,6 +2906,10 @@ test('it stops the newest live log once only live logs keep the imp past its lim
   expect(newer.stopped).toBe('imp_limit');
   expect(second.state.closed).toBe(true);
   expect(older.stopped).toBeUndefined();
+
+  expect(lines).toStrictEqual([
+    'INFO impd.session imp imp-1: stopped the log of session other: its logs reached IMP_SESSION_LOG_IMP_MAX_MIB',
+  ]);
 });
 
 test('it never taps a log that stopped at the imp limit again', async () => {
@@ -3921,6 +3933,8 @@ test('it closes the tap of a next generation whose log cannot be made', async ()
 
   ctx.answers.push(() => Promise.resolve(switched.stream));
 
+  const lines = captureImpdLogs();
+
   logs.observe(imp, [
     buildMockAgentSession({
       name: 'main',
@@ -3939,6 +3953,10 @@ test('it closes the tap of a next generation whose log cannot be made', async ()
   expect(
     logs.listLogs(imp).find((log) => log.executionGeneration === 'b'.repeat(32)),
   ).toBeUndefined();
+
+  expect(lines).toStrictEqual([
+    `WARNING impd.session session logs of imp imp-1: EEXIST: file already exists, mkdir '${join(imp.sessionLogsDir, 'b'.repeat(32))}'`,
+  ]);
 });
 
 test('it taps a next generation again at the next look once its log can be made', async () => {

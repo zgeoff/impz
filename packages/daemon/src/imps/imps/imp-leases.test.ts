@@ -7,6 +7,7 @@ import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { buildMockLeaseRecord } from '../../../testing/imps/build-mock-lease-record';
 import { buildQueryGate } from '../../../testing/platform/build-query-gate';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { TEST_TOKEN } from '../../../testing/test-token';
 import { listLeases, writeLease } from '../../platform/db/leases';
@@ -467,6 +468,9 @@ test('it emits released with the count of leases a forced sleep ended', async ()
   await first.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 60 });
   await first.leases.acquire({ name: 'dev', label: 'other', ttlSeconds: 60 });
   await ctx.client.imps.hold({ name: 'dev', seconds: 600 });
+
+  const lines = captureImpdLogs();
+
   await ctx.client.imps.sleep({ name: 'dev', force: true });
 
   const released = await waitFor(() => {
@@ -480,6 +484,7 @@ test('it emits released with the count of leases a forced sleep ended', async ()
   });
 
   expect(released).toMatchObject({ detail: { released: 2 } });
+  expect(lines).toContain('INFO impd.imps imp=dev a forced sleep or stop ended 2 lease(s)');
 });
 
 test('it refuses a renew of a lease a forced sleep ended', async () => {

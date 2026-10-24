@@ -140,6 +140,23 @@ test('#setup writes nothing when the cpu controller is not handed down', () => {
   expect(existsSync(join(ctx.root, 'imps', 'a'))).toBeFalse();
 });
 
+test('#setup logs a cgroup it cannot write and gives the VM none', () => {
+  const ctx = setupTest();
+
+  writeFileSync(join(ctx.root, 'imps', 'cgroup.subtree_control'), 'cpu\n');
+  mkdirSync(join(ctx.root, 'imps', 'a', 'cpu.weight'), { recursive: true });
+
+  const cgroups = createCpuCgroups({ root: ctx.root, procRoot: ctx.procRoot });
+  const lines = captureImpdLogs();
+  const cgroup = cgroups.setup('a', { limit: 1, weight: 100 }, 512);
+
+  expect(cgroup).toBeNull();
+
+  expect(lines).toStrictEqual([
+    `WARNING impd.cgroup cgroup a: EISDIR: illegal operation on a directory, open '${join(ctx.root, 'imps', 'a', 'cpu.weight')}'; this VM runs unlimited`,
+  ]);
+});
+
 test('#removeOrphans finds nothing to sweep when the cpu controller is not handed down', () => {
   const ctx = setupTest();
 

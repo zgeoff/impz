@@ -7,6 +7,7 @@ import invariant from 'tiny-invariant';
 import { buildMockNewImp } from '../../../testing/imps/build-mock-new-imp';
 import { readBrokenInvariants } from '../../../testing/imps/read-broken-invariants';
 import { waitForOutcome } from '../../../testing/imps/wait-for-outcome';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import type { TestImpdOptions } from '../../../testing/start-test-impd';
 import { buildStubCpuCgroups } from '../../../testing/vm/build-stub-cpu-cgroups';
@@ -381,11 +382,17 @@ test('it boots cold once a snapshot from an older impd, and keeps the disk', asy
 
   await ctx.restartImpd(ctx.createSystemDrive('d2'.repeat(32)));
 
+  const lines = captureImpdLogs();
+
   const woken = await ctx.client.imps.wake({ name: 'dev' });
 
   expect(woken.state).toBe('running');
   expect(ctx.fake.wakes).toBeEmpty();
   expect(readFileSync(paths.disk, 'utf8')).toBe('disk of dev');
+
+  expect(lines).toContain(
+    'INFO impd.imps imp=dev cold boot instead of a wake: the snapshot is from an older impd',
+  );
 });
 
 test('it boots cold when the woken agent is not the one the snapshot recorded', async () => {
@@ -431,6 +438,7 @@ test('it keeps the disk to a woken VM with the wrong agent that will not stop', 
 
   ctx.fake.queue('stop', 'fail');
 
+  const lines = captureImpdLogs();
   const waking = ctx.client.imps.wake({ name: 'dev' });
 
   const outcome = await waitForOutcome(waking, 10_000);
@@ -438,6 +446,10 @@ test('it keeps the disk to a woken VM with the wrong agent that will not stop', 
   const invariants = await readBrokenInvariants(ctx, true);
 
   expect(outcome).toBe('failed');
+
+  expect(lines).toStrictEqual([
+    `WARNING impd.imps imp=dev could not stop the woken VM: firecracker ${String(ctx.fake.wakes[0])} survived SIGKILL`,
+  ]);
 
   expect(waking).rejects.toMatchObject({
     code: 'INTERNAL_SERVER_ERROR',
@@ -465,12 +477,14 @@ test('it runs a boot whose vm.json cannot be written, and logs why', async () =>
   rmSync(paths.vmIdentity);
   mkdirSync(`${paths.vmIdentity}/blocked`, { recursive: true });
 
+  const lines = captureImpdLogs();
+
   const started = await ctx.client.imps.start({ name: 'dev' });
 
   expect(started.state).toBe('running');
 
-  expect(ctx.logs).toSatisfyAny((line: string) =>
-    line.startsWith('WARNING impd.imps imp=dev could not write vm.json'),
+  expect(lines).toContain(
+    `WARNING impd.imps imp=dev could not write vm.json: EISDIR: illegal operation on a directory, rename '${paths.vmIdentity}.new' -> '${paths.vmIdentity}'`,
   );
 });
 

@@ -65,6 +65,40 @@ test('it fails only one move source open for each fault', async () => {
   expect(source.kind).toBe('files');
 });
 
+test('it rejects the next move source close with the error a fault sets', async () => {
+  const ctx = await setupTest();
+
+  const faults = buildStubStorageFaults();
+  const storage = faults.wrap(ctx.backend);
+
+  faults.failOnce('closeMoveSource', new Error('the snapshot is busy'));
+
+  const source = await storage.openMoveSource('imp-1', [], 'files');
+
+  expect(source.close()).rejects.toThrowWithMessage(Error, 'the snapshot is busy');
+});
+
+test('it fails only one move source close for each fault', async () => {
+  const ctx = await setupTest();
+
+  const faults = buildStubStorageFaults();
+  const storage = faults.wrap(ctx.backend);
+
+  faults.failOnce('closeMoveSource', new Error('the snapshot is busy'));
+
+  const first = await storage.openMoveSource('imp-1', [], 'files');
+  const second = await storage.openMoveSource('imp-1', [], 'files');
+
+  const failure = await first.close().then(
+    () => null,
+    (error: unknown) => error,
+  );
+
+  expect(failure).toMatchObject({ message: 'the snapshot is busy' });
+
+  await expect(second.close()).toResolve();
+});
+
 test("it leaves the wrapped backend's other calls as they are", async () => {
   const ctx = await setupTest();
 

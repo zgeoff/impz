@@ -7,6 +7,7 @@ import invariant from 'tiny-invariant';
 import { buildStubHostRoutes } from '../../../testing/host-net/build-stub-host-routes';
 import { buildStubNft } from '../../../testing/network/build-stub-nft';
 import { startStubEchoServer } from '../../../testing/network/start-stub-echo-server';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { parsePrefix64 } from '../../host-net/net/addressing6';
 import { resolveIpv6Plan } from '../../host-net/net/ipv6-plan';
@@ -938,10 +939,15 @@ test('it warns once that a public imp lacks the host addresses when IMP_HOST_ADD
   const ctx = await setupTest();
 
   await ctx.createTestImage('base');
+
+  const logs = captureImpdLogs();
+
   await ctx.impd.imps.createImp({ name: 'a', policy: { mode: 'public', allow: [] } });
   await ctx.impd.imps.createImp({ name: 'b', policy: { mode: 'public', allow: [] } });
 
-  expect(ctx.logs.filter((line) => line.includes('IMP_HOST_ADDRESSES is empty'))).toHaveLength(1);
+  expect(logs.filter((line) => line.includes('IMP_HOST_ADDRESSES is empty'))).toStrictEqual([
+    "WARNING impd.egress imp=a a public imp exists and IMP_HOST_ADDRESSES is empty, so only IMP_EGRESS_DENY keeps it from the Docker host's own addresses and networks; the systemd unit and the NixOS module fill it at each start, compose does not (docs/architecture/network/egress.md#public)",
+  ]);
 });
 
 test('it warns that a public imp lacks the host addresses even when IMP_EGRESS_DENY holds some', async () => {
@@ -1415,10 +1421,14 @@ test("it says once that setup-net.sh's imp-network ACCEPT is missing from a tabl
 
   invariant(network);
 
+  const logs = captureImpdLogs();
+
   await ctx.impd.imps.createImp({ name: 'web', networkIds: [network.id] });
   await ctx.impd.imps.createImp({ name: 'db', networkIds: [network.id] });
 
-  expect(ctx.logs.filter((line) => line.includes('imp-network ACCEPT is missing'))).toHaveLength(1);
+  expect(logs.filter((line) => line.includes('imp-network ACCEPT is missing'))).toStrictEqual([
+    "WARNING impd.egress imp=web setup-net.sh's imp-network ACCEPT is missing from FORWARD; imps on a network cannot reach each other until the host container starts again",
+  ]);
 });
 
 test('it logs a FORWARD chain it cannot read', async () => {

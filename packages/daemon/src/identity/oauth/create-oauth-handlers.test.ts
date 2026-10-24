@@ -1,4 +1,7 @@
 import { expect, test } from 'bun:test';
+import invariant from 'tiny-invariant';
+import { buildMockCaller } from '../../../testing/identity/build-mock-caller';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { createTestDatabase } from '../../../testing/platform/create-test-database';
 import { createOAuthHandlers } from './create-oauth-handlers';
 import { createSignIns } from './create-sign-ins';
@@ -87,4 +90,63 @@ test.each([
     status: 400,
     body: answer,
   });
+});
+
+test('it logs an approved sign-in that the server leaves without a way to consent', async () => {
+  const ctx = await setupTest();
+
+  const signIns = createSignIns({ now: () => Date.UTC(2026, 0, 1) });
+
+  const started = signIns.start({
+    key: 'client_id=impc_conn&state=a-state-of-this-test',
+    clientID: 'impc_conn',
+    clientName: 'conn',
+    redirectURI: 'https://client.example/callback',
+    requestedScope: 'read',
+  });
+
+  invariant(started.kind === 'started');
+
+  signIns.approve(
+    started.signIn.approvalCode,
+    buildMockCaller({ name: 'laptop' }),
+    'read',
+    undefined,
+  );
+
+  const handlers = createOAuthHandlers({
+    auth: {
+      handler: () => Promise.resolve(new Response(null, { status: 500 })),
+      signIn: () => Promise.resolve(Response.json({}, { status: 200 })),
+      readSessionID: () => Promise.resolve(null),
+      readSecret: () => Promise.resolve('a-secret-of-this-test'),
+      readSessionCookie: () => Promise.resolve({ name: 'session', secure: false }),
+    },
+    db: ctx.db,
+    signIns,
+    origin: 'http://127.0.0.1:7171',
+    resource: 'http://127.0.0.1:7171/mcp',
+    now: () => Date.UTC(2026, 0, 1),
+    readApprover: () => buildMockCaller({ name: 'laptop' }),
+    removeGrantRows: () => Promise.resolve(),
+  });
+
+  const lines = captureImpdLogs();
+
+  const response = await handlers.runLogin(
+    new Request('http://127.0.0.1:7171/login', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        origin: 'http://127.0.0.1:7171',
+      },
+      body: new URLSearchParams({
+        oauth_query: 'client_id=impc_conn&state=a-state-of-this-test',
+        action: 'continue',
+      }),
+    }),
+  );
+
+  expect(response.status).toBe(400);
+  expect(lines).toStrictEqual(['WARNING impd.oauth a sign-in for conn could not reach consent']);
 });

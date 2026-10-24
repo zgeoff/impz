@@ -439,9 +439,48 @@ test('it frees the slot and ends the run of a released upload whose context it c
   expect(builds).toStrictEqual([]);
   expect(slots).toHaveLength(4);
 
-  expect(lines).toContainEqual(
-    expect.stringMatching(/^WARNING impd\.image build context .+ not removed: /v),
+  expect(lines).toContain(
+    `WARNING impd.image build context ${upload.tarPath} not removed: Path is a directory: rm returned EISDIR (is a directory) ${upload.tarPath}`,
   );
+});
+
+test('it logs an upload it cannot store as an error, and answers it as an internal error', async () => {
+  const ctx = await setupTest();
+
+  const builder = buildStubImageBuilder({ exported: [], repoDigest: `sha256:${'b'.repeat(64)}` });
+
+  const harness = await startBuilderImpd(ctx.stack, builder, {
+    dataDir: ctx.dataDir,
+    rootToken: ctx.rootToken,
+    cloneDisk: ctx.cloneDisk,
+  });
+
+  const route = createBuildContextRoute({
+    config: { dataDir: ctx.dataDir, buildContextMaxBytes: 1024 ** 2 },
+    images: harness.impd.images,
+    diskBudget: harness.impd.diskBudget,
+    audit: createApiAudit({ db: harness.db, now: Date.now, readErrorCode }),
+    now: Date.now,
+    startTimer: buildStubClock().startTimer,
+  });
+
+  await rm(buildUploadsDir(ctx.dataDir), { recursive: true });
+
+  const lines = captureImpdLogs();
+
+  const uploaded = await route.respond(
+    new Request(`http://impd.test${BUILD_CONTEXT_PATH}?name=web`, { method: 'POST', body: 'tar' }),
+    buildMockCaller(),
+  );
+
+  expect(uploaded.status).toBe(500);
+  expect(lines).toHaveLength(1);
+
+  expect(lines[0]).toStartWith(
+    `ERROR impd.image build context upload failed: ENOENT: no such file or directory, open '${buildUploadsDir(ctx.dataDir)}/`,
+  );
+
+  expect(lines[0]).toEndWith(".tar'");
 });
 
 test('it releases an upload that no build took when impd stops', async () => {

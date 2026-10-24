@@ -3,6 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createStubDockerCli } from '../../../../testing/imps/create-stub-docker-cli';
+import { captureImpdLogs } from '../../../../testing/platform/capture-impd-logs';
 import { runCommand } from '../../../platform/process/run-command';
 import { DOCKERFILE_FRONTEND } from '../../docker-contract/dockerfile-frontend';
 import { createBuildEngine } from './build-engine';
@@ -234,11 +235,17 @@ test('#loadFrontend pulls the frontend the engine lacks', async () => {
     runCommand(argv, { env: { PATH: docker.path }, signal }),
   );
 
+  const logs = captureImpdLogs();
+
   await engine.loadFrontend(new AbortController().signal);
 
   expect(docker.readCalls()).toStrictEqual([
     `image inspect --format {{.Id}} ${DOCKERFILE_FRONTEND}`,
     `pull --quiet ${DOCKERFILE_FRONTEND}`,
+  ]);
+
+  expect(logs).toStrictEqual([
+    'INFO impd.image pulled the Dockerfile frontend docker/dockerfile:1.28@sha256:bb22d9815c728170f72750f4e5b0d672e06176142e1d602c7e66c050100b7e5b',
   ]);
 });
 

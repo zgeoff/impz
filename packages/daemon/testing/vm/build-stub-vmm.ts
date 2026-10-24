@@ -20,6 +20,8 @@ export type VmStep =
   | 'agentReady'
   | 'grow'
   | 'vmState'
+  | 'resume'
+  | 'plug'
   | 'template'
   | 'restore'
   | 'claim';
@@ -72,6 +74,9 @@ export function buildStubVmm() {
   const templateBuilds: { vcpus: number; memoryMib: number }[] = [];
   const restores: { hostname: string; isIdentityReset: boolean; memFile: string }[] = [];
   const sweeps: string[] = [];
+
+  const orphanJails = new Set<string>();
+
   const restorePlans: TemplateRestorePlan[] = [];
   const wakeJails: { jail: JailUser | null; files: string[] }[] = [];
 
@@ -305,11 +310,17 @@ export function buildStubVmm() {
         }),
       releaseVm: () => runInGeneration(() => Promise.resolve()),
       removeJail: () => runInGeneration(() => Promise.resolve()),
-      removeOrphanJails: () =>
+      removeOrphanJails: (impIds) =>
         runInGeneration(() => {
           sweeps.push('jails');
 
-          return Promise.resolve([]);
+          const removed = [...orphanJails].filter((impId) => !impIds.has(impId));
+
+          for (const impId of removed) {
+            orphanJails.delete(impId);
+          }
+
+          return Promise.resolve(removed);
         }),
       stopVm: (pid, _paths, graceful) =>
         runInGeneration(async () => {
@@ -353,14 +364,16 @@ export function buildStubVmm() {
           return outcome === 'ok' ? (findServing(paths)?.state ?? null) : null;
         }),
       resumeVm: (_pid, paths) =>
-        runInGeneration(() => {
+        runInGeneration(async () => {
+          if ((await chooseOutcome('resume')) !== 'ok') {
+            throw new StubVmError('resume failed');
+          }
+
           const vm = findServing(paths);
 
           if (vm !== undefined) {
             vm.state = 'Running';
           }
-
-          return Promise.resolve();
         }),
       readPid: (paths) => withGeneration(() => pidFiles.get(paths.pidFile) ?? null),
       listVms: () =>
@@ -442,13 +455,15 @@ export function buildStubVmm() {
           });
         }),
       requestPluggedMib: (paths, mib) =>
-        runInGeneration(() => {
+        runInGeneration(async () => {
+          if ((await chooseOutcome('plug')) !== 'ok') {
+            throw new StubVmError('plug failed');
+          }
+
           const memory = readFakeGuestMemory(paths.directory);
 
           memory.requestedMib = mib;
           memory.pluggedMib = Math.max(mib, Math.min(memory.pluggedMib, memory.unplugFloorMib));
-
-          return Promise.resolve();
         }),
     };
 
@@ -470,6 +485,7 @@ export function buildStubVmm() {
     restorePlans,
     wakeJails,
     sweeps,
+    orphanJails,
 
     guestMemory,
 

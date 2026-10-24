@@ -648,14 +648,51 @@ test('#restoreCheckpoint finishes the swap when its last rename fails', async ()
   expect(ctx.fake.readMountedAt(join(ctx.dataDir, 'imps', 'a', 'disk'))).toBe('tank/imp/disks/a');
 });
 
+test('#restoreCheckpoint logs a swap whose repair fails too', async () => {
+  const ctx = setupTest();
+
+  await ctx.backend.start({ impIds: new Set(), checkpointIds: new Set(), imageDigests: new Set() });
+  await ctx.backend.createImage('sha256:9f2c', () => Promise.resolve());
+  await ctx.backend.createImpDisk('a', { kind: 'image', digest: 'sha256:9f2c' });
+  await ctx.backend.createCheckpoint('a', 'cp-one');
+
+  ctx.fake.failOnce((command) => command.startsWith('zfs rename tank/imp/staging/restore-a'));
+  ctx.fake.failOnce((command) => command.startsWith('zfs rename tank/imp/staging/restore-a'));
+
+  const lines = captureImpdLogs();
+
+  expect(ctx.backend.restoreCheckpoint('a', 'cp-one', () => Promise.resolve())).rejects.toThrow(
+    /^zfs rename tank\/imp\/staging\/restore-a tank\/imp\/disks\/a exited 1: /u,
+  );
+
+  expect(lines).toContain(
+    'WARNING impd.zfs a: the disk swap failed and so did its repair: zfs rename tank/imp/staging/restore-a tank/imp/disks/a exited 1: fake zfs: zfs rename tank/imp/staging/restore-a tank/imp/disks/a failed',
+  );
+});
+
 test.each([
-  ['umount', /^umount /u, false],
-  ['retire', /^zfs rename tank\/imp\/disks\/a /u, false],
-  ['rename', /^zfs rename tank\/imp\/staging\/restore-a /u, true],
-  ['mount', /^mount -t zfs tank\/imp\/disks\/a /u, true],
+  [
+    'umount',
+    /^umount /u,
+    false,
+    ['INFO impd.zfs destroyed tank/imp/staging/restore-a, a clone or build a crash cut short'],
+  ],
+  [
+    'retire',
+    /^zfs rename tank\/imp\/disks\/a /u,
+    false,
+    ['INFO impd.zfs destroyed tank/imp/staging/restore-a, a clone or build a crash cut short'],
+  ],
+  [
+    'rename',
+    /^zfs rename tank\/imp\/staging\/restore-a /u,
+    true,
+    ['INFO impd.zfs finished the restore of a that a crash cut short'],
+  ],
+  ['mount', /^mount -t zfs tank\/imp\/disks\/a /u, true, []],
 ])(
   '#start settles a restore that a crash cut short before its %s (restored: %p)',
-  async (_step, before, isRestored) => {
+  async (_step, before, isRestored, expectedLines) => {
     const ctx = setupTest();
 
     await ctx.backend.start({
@@ -679,6 +716,7 @@ test.each([
     ctx.fake.restart(true);
 
     const restarted = ctx.startBackend();
+    const lines = captureImpdLogs();
 
     await restarted.start({
       impIds: new Set(['a']),
@@ -686,6 +724,7 @@ test.each([
       imageDigests: new Set(['sha256:9f2c']),
     });
 
+    expect(lines).toStrictEqual(expectedLines);
     expect(ctx.fake.listDatasets().filter((name) => name.includes('/staging/'))).toStrictEqual([]);
     expect(ctx.fake.readMountedAt(join(ctx.dataDir, 'imps', 'a', 'disk'))).toBe('tank/imp/disks/a');
     expect(ctx.fake.readOrigin('tank/imp/disks/a')?.endsWith('@cp-one')).toBe(isRestored);
@@ -1807,8 +1846,13 @@ test('#start drops an image build a crash cut short, with its mount dir', async 
   ctx.fake.restart(true);
 
   const restarted = ctx.startBackend();
+  const lines = captureImpdLogs();
 
   await restarted.start({ impIds: new Set(), checkpointIds: new Set(), imageDigests: new Set() });
+
+  expect(lines).toStrictEqual([
+    'INFO impd.zfs destroyed tank/imp/staging/image-crashed, a clone or build a crash cut short',
+  ]);
 
   expect(ctx.fake.listDatasets()).not.toContain('tank/imp/staging/image-crashed');
   expect(existsSync(join(ctx.dataDir, 'staging', 'image-crashed'))).toBeFalse();
@@ -2039,6 +2083,32 @@ test('#openBackupTree releases what it made when it fails to open', async () => 
 
   expect(ctx.fake.listDatasets().filter((name) => name.includes('/staging/'))).toStrictEqual([]);
   expect(ctx.fake.listSnapshots().filter((name) => name.includes('@bk-'))).toStrictEqual([]);
+});
+
+test('#openBackupTree logs a release that fails after it fails to open', async () => {
+  const ctx = setupTest();
+
+  await ctx.backend.start({ impIds: new Set(), checkpointIds: new Set(), imageDigests: new Set() });
+  await ctx.backend.createImage('sha256:9f2c', () => Promise.resolve());
+  await ctx.backend.createImpDisk('a', { kind: 'image', digest: 'sha256:9f2c' });
+  await ctx.backend.createBackupCopy('a', 'r1', { isReusable: true });
+
+  ctx.fake.failOnce((command) => command.includes('staging/bki-'));
+  ctx.fake.failOnce((command) => command === 'zfs destroy tank/imp/staging/bk-a');
+
+  const lines = captureImpdLogs();
+
+  expect(
+    ctx.backend.openBackupTree({
+      runId: 'r1',
+      imps: [{ impId: 'a', checkpointIds: [] }],
+      imageDigests: ['sha256:9f2c'],
+    }),
+  ).rejects.toThrow(/^zfs clone .+ tank\/imp\/staging\/bki-9f2c exited 1: /u);
+
+  expect(lines).toStrictEqual([
+    'WARNING impd.zfs could not close the backup tree: zfs destroy tank/imp/staging/bk-a exited 1: fake zfs: zfs destroy tank/imp/staging/bk-a failed',
+  ]);
 });
 
 test('#measureUsage counts the checkpoints a restore retired against the imp', async () => {
@@ -2665,6 +2735,29 @@ test('#removeImpDisk logs a busy dataset once while a kernel oops holds it, not 
   expect(failures).toStrictEqual([
     `WARNING impd.zfs reclaim failed: zfs destroy ${retired} exited 1: cannot destroy '${retired}': dataset is busy; a kernel oops holds ${retired} until the host reboots, so impd logs it once`,
   ]);
+});
+
+test('#start stops a reclaim pass after 1000 steps and logs it', async () => {
+  const ctx = setupTest();
+
+  await ctx.backend.start({ impIds: new Set(), checkpointIds: new Set(), imageDigests: new Set() });
+
+  await Promise.all(
+    Array.from({ length: 1001 }, (_, index) =>
+      ctx.fake.run(['zfs', 'create', `tank/imp/retired/r${String(index)}`]),
+    ),
+  );
+
+  const restarted = ctx.startBackend();
+  const lines = captureImpdLogs();
+
+  await restarted.start({ impIds: new Set(), checkpointIds: new Set(), imageDigests: new Set() });
+
+  expect(lines.at(-1)).toBe('INFO impd.zfs reclaim stopped after 1000 steps');
+
+  expect(
+    ctx.fake.listDatasets().filter((name) => name.startsWith('tank/imp/retired/')),
+  ).toHaveLength(1);
 });
 
 test('#removeImpDisk logs a busy dataset on each pass while the kernel has not oopsed', async () => {

@@ -1010,6 +1010,56 @@ test('it logs an approval under oauth with the client and the approving token', 
   expect(lines).toStrictEqual(['INFO impd.oauth a sign-in for demo approved by token operator']);
 });
 
+test('it logs a sign-in that waits for an approval under oauth with the client', async () => {
+  const ctx = await setupTest();
+  const client = await ctx.auth.addClient('demo', ['https://client.example/callback']);
+
+  const lines = captureImpdLogs();
+
+  await createPendingSignIn({
+    respond: ctx.respond,
+    origin: 'http://127.0.0.1:7171',
+    clientID: client.clientId,
+    redirectURI: 'https://client.example/callback',
+    scope: 'read',
+  });
+
+  expect(lines).toStrictEqual([
+    'INFO impd.oauth demo asks to sign in; it waits for impz oauth approve',
+  ]);
+});
+
+test('it logs a client that signs in under oauth with the approving token', async () => {
+  const ctx = await setupTest();
+  const client = await ctx.auth.addClient('demo', ['https://client.example/callback']);
+  const made = await ctx.tokens.create({ name: 'operator', scope: 'manage', imps: ['dev-*'] });
+
+  const approver = ctx.tokens.authenticate(made.secret);
+
+  invariant(approver);
+
+  const lines = captureImpdLogs();
+
+  await runOAuthSignIn(
+    {
+      respond: ctx.respond,
+      origin: 'http://127.0.0.1:7171',
+      clientID: client.clientId,
+      redirectURI: 'https://client.example/callback',
+      scope: 'read',
+    },
+    (code) => {
+      ctx.auth.approve(ApprovalCodeSchema.parse(code), approver, 'read', undefined);
+    },
+  );
+
+  expect(lines).toStrictEqual([
+    'INFO impd.oauth demo asks to sign in; it waits for impz oauth approve',
+    'INFO impd.oauth a sign-in for demo approved by token operator',
+    'INFO impd.oauth demo signed in, approved by token operator',
+  ]);
+});
+
 test('it shows the login page again on Continue before the sign-in is approved', async () => {
   const ctx = await setupTest();
   const client = await ctx.auth.addClient('conn', ['https://client.example/callback']);

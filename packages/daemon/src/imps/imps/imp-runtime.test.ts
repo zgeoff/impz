@@ -16,6 +16,8 @@ import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { buildMockLeaseRecord } from '../../../testing/imps/build-mock-lease-record';
 import { waitForOutcome } from '../../../testing/imps/wait-for-outcome';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
+import { runSql } from '../../../testing/platform/run-sql';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import type { TestImpdOptions } from '../../../testing/start-test-impd';
 import { buildStubMounts } from '../../../testing/vm/build-stub-mounts';
@@ -128,6 +130,23 @@ test('it sleeps an imp for the governor however recently it was active', async (
   const outcome = await ctx.imps.trySleepImp(imp.id, 'budget', { by: 'governor' });
 
   expect(outcome).toBe('slept');
+});
+
+test('it reports a governor sleep whose snapshot fails as failed, and logs why', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const imp = await ctx.imps.createImp({ name: 'dev' });
+
+  ctx.fake.queue('sleep', 'fail');
+
+  const lines = captureImpdLogs();
+
+  const outcome = await ctx.imps.trySleepImp(imp.id, 'budget', { by: 'governor' });
+
+  expect(outcome).toBe('failed');
+  expect(lines).toStrictEqual(['WARNING impd.imps imp=dev could not sleep: snapshot failed']);
 });
 
 test('it skips a background sleep of an imp with an open connection', async () => {
@@ -1389,6 +1408,33 @@ test('it clears the pending CA install in the wake that does it', async () => {
   const record = await readImpByName(ctx.db, 'dev');
 
   expect(record?.isTrustPending).toBeFalse();
+});
+
+test('it wakes the imp, and logs why, when the pending broker CA install cannot be claimed', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const imp = await ctx.imps.createImp({ name: 'dev' });
+
+  await ctx.imps.sleepImp('dev');
+  await ctx.db.updateTable('imps').set({ trust_pending: 1 }).where('id', '=', imp.id).execute();
+
+  await runSql(
+    ctx.db,
+    `CREATE TRIGGER refuse_trust_claim BEFORE UPDATE OF trust_pending ON imps
+    WHEN NEW.trust_pending = 0 BEGIN SELECT RAISE(ABORT, 'trust claims refused'); END`,
+  );
+
+  const lines = captureImpdLogs();
+
+  const woken = await ctx.imps.wakeImp('dev');
+
+  expect(woken.state).toBe('running');
+
+  expect(lines).toContain(
+    'WARNING impd.imps imp=dev broker CA after the wake: trust claims refused',
+  );
 });
 
 test('it installs no broker CA in a wake with no install pending', async () => {

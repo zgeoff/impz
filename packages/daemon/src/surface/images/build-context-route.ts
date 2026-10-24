@@ -103,7 +103,7 @@ export function createBuildContextRoute(deps: BuildContextDeps): BuildContextRou
       } catch (error) {
         getImpdLogger('image').warning('build context {path} not removed: {error}', {
           path: tarPath,
-          error,
+          error: getErrorMessage(error),
         });
       }
 
@@ -187,7 +187,9 @@ export function createBuildContextRoute(deps: BuildContextDeps): BuildContextRou
         return Response.json(upload, { status: 201 });
       } catch (error) {
         if (!(toORPCError(error) instanceof ORPCError) && !request.signal.aborted) {
-          getImpdLogger('image').error('build context upload failed: {error}', { error });
+          getImpdLogger('image').error('build context upload failed: {error}', {
+            error: getErrorMessage(error),
+          });
         }
 
         return sendFailure(error);
