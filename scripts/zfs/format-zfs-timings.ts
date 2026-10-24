@@ -2,7 +2,7 @@ const TIMINGS = [
   { label: 'checkpoint', pattern: /checkpoint cp-[a-z0-9]+ in [0-9]+ms/gu },
   { label: 'restore', pattern: /restored cp-[a-z0-9]+ in [0-9]+ms/gu },
   { label: 'disk clone (new/fork)', pattern: /disk cloned in [0-9]+ms/gu },
-  { label: 'sleep', pattern: /: asleep in [0-9]+ms/gu },
+  { label: 'sleep', pattern: / asleep in [0-9]+ms/gu },
 ] as const;
 
 const MEM_FILE = /mem file [0-9]+ MiB on disk/gu;

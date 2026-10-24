@@ -73,7 +73,7 @@ test('it leaves an unclean filesystem of a new disk for its boot to grow, and sa
   expect(disk.grows).toStrictEqual([buildImpPaths(ctx.dataDir, created.id).disk]);
 
   expect(ctx.logs).toContain(
-    'impd: sized: the filesystem was not unmounted cleanly; its boot grows it',
+    'INFO impd.imps imp=sized the filesystem was not unmounted cleanly; its boot grows it',
   );
 });
 

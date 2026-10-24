@@ -92,7 +92,7 @@ test('it gives an imp a /128 in the ULA prefix, from a boot template claim too, 
   const restoredRow = await requireImp(restored);
   const restoredAddress = await readGuestIpv6(restored);
 
-  expect(claimLog).toContain(`${restored}: restored boot template`);
+  expect(claimLog).toContain(`imp=${restored} restored boot template`);
   expect(restoredAddress).toBe(buildGuestIpv6(network, restoredRow.ip));
 
   const hostAddress = await readV6HostAddress();

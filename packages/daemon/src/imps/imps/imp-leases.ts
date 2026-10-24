@@ -11,6 +11,7 @@ import {
 import type { LeaseRecord } from '../../platform/db/leases';
 import { buildLeaseNotHeldError } from '../../platform/errors/impd-errors';
 import { LeasedError } from '../../platform/errors/leased-error';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import type { ImpClock, ImpHost } from './imp-context';
 import { toLockedImp } from './imp-lock';
 import type { ImpLock, LockedImp } from './imp-lock';
@@ -213,9 +214,11 @@ export function createImpLeases(parts: ImpLeaseParts): ImpLeases {
       });
 
       if (released.removed > 0) {
-        context.log(
-          `impd: ${imp.name}: a forced sleep or stop ended ${String(released.removed)} lease(s)`,
-        );
+        getImpdLogger('imps')
+          .with({ imp: imp.name })
+          .info('a forced sleep or stop ended {removed} lease(s)', {
+            removed: String(released.removed),
+          });
       }
 
       return toLockedImp(imp, released.imp);

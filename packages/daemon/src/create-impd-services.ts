@@ -8,7 +8,6 @@ import type { SecretFiles } from './network/broker/secrets/secret-files';
 import type { EgressService } from './network/egress/egress-service';
 import { createNetworkService } from './network/networks/network-service';
 import { createApiAudit } from './platform/audit/api-audit';
-import { printLog } from './platform/process/print-log';
 import { readErrorCode } from './surface/read-error-code';
 import { createStorageGc } from './vm/storage/storage-gc';
 
@@ -23,7 +22,6 @@ export function createImpdServices(
   }>,
 ) {
   const db = deps.db;
-  const log = deps.log ?? printLog;
   const storage = deps.storage;
   const freezer = deps.freezer === undefined ? {} : { freezer: deps.freezer };
 
@@ -33,7 +31,6 @@ export function createImpdServices(
     imps: parts.imps,
     storage,
     diskBudget: parts.storage.diskBudget,
-    log,
     ...freezer,
   });
 
@@ -46,7 +43,6 @@ export function createImpdServices(
     diskBudget: parts.storage.diskBudget,
     runImageEviction: parts.storage.images.runImageEviction,
     ...(deps.now !== undefined && { clock: { now: deps.now } }),
-    log,
     ...freezer,
   });
 
@@ -56,11 +52,10 @@ export function createImpdServices(
     db,
     storage,
     storageGate: parts.storage.storageGate,
-    log,
     secretFiles: parts.secretFiles,
   });
 
-  const audit = createApiAudit({ db, now: deps.now ?? Date.now, log, readErrorCode });
+  const audit = createApiAudit({ db, now: deps.now ?? Date.now, readErrorCode });
 
   return { checkpoints, templates, networks, gc, audit };
 }

@@ -3,6 +3,7 @@ import { rootCertificates } from 'node:tls';
 import { PROXY_VARIABLE } from '../../../imps/exec/broker-exec-env';
 import type { StartTimer } from '../../../platform/process/clock';
 import { getErrorMessage } from '../../../platform/process/get-error-message';
+import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import { buildExitError } from '../../../platform/process/run-command';
 import { startRealTimer } from '../../../platform/process/start-real-timer';
 import { openExecStream } from '../../../vm/agent-client/exec-stream';
@@ -93,11 +94,7 @@ interface Boot {
   readonly id: string;
 }
 
-export function createGuestTrust(
-  input: string,
-  install: InstallBundle,
-  log: (message: string) => void,
-): GuestTrust {
+export function createGuestTrust(input: string, install: InstallBundle): GuestTrust {
   // a boot is an ID impd mints, not the pid, which the kernel can hand out
   // again: the same pid after a stop, sleep or halt is a new boot
   const boots = new Map<string, Boot>();
@@ -147,9 +144,11 @@ export function createGuestTrust(
         } catch (error) {
           const detail = getErrorMessage(error);
 
-          log(
-            `impd: ${imp.name}: broker CA not installed, so this exec gets no broker variables: ${detail}`,
-          );
+          getImpdLogger('imps')
+            .with({ imp: imp.name })
+            .info('broker CA not installed, so this exec gets no broker variables: {detail}', {
+              detail,
+            });
 
           if (installs.get(imp.id) === entry) {
             installs.delete(imp.id);

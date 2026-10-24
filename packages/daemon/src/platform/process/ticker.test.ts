@@ -1,5 +1,6 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
 import { buildStubTickerTimer } from '../../../testing/platform/build-stub-ticker-timer';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { startTicker } from './ticker';
 
 test('it waits one interval before the first run', () => {
@@ -10,7 +11,6 @@ test('it waits one interval before the first run', () => {
     label: 'sweep',
     intervalMs: 30_000,
     task,
-    log: () => {},
     timer: stub.timer,
   });
 
@@ -29,7 +29,6 @@ test('it waits the first delay it is given before the first run', () => {
     intervalMs: 30_000,
     firstDelayMs: 0,
     task,
-    log: () => {},
     timer: stub.timer,
   });
 
@@ -47,7 +46,6 @@ test('it waits one interval after a first run that had its own delay', async () 
     intervalMs: 30_000,
     firstDelayMs: 0,
     task,
-    log: () => {},
     timer: stub.timer,
   });
 
@@ -66,7 +64,6 @@ test('it runs the task when the interval passes', async () => {
     label: 'sweep',
     intervalMs: 30_000,
     task,
-    log: () => {},
     timer: stub.timer,
   });
 
@@ -84,7 +81,6 @@ test('it schedules the next run once a run ends', async () => {
     label: 'sweep',
     intervalMs: 30_000,
     task: () => Promise.resolve(),
-    log: () => {},
     timer: stub.timer,
   });
 
@@ -97,15 +93,12 @@ test('it schedules the next run once a run ends', async () => {
 
 test('it logs a failed run with its label', async () => {
   const stub = buildStubTickerTimer();
-  const logs: string[] = [];
+  const logs = captureImpdLogs();
 
   const ticker = startTicker({
     label: 'sweep',
     intervalMs: 30_000,
     task: () => Promise.reject(new Error('disk full')),
-    log: (message) => {
-      logs.push(message);
-    },
     timer: stub.timer,
   });
 
@@ -113,7 +106,7 @@ test('it logs a failed run with its label', async () => {
 
   await stub.fire('sweep');
 
-  expect(logs).toStrictEqual(['impd: sweep: disk full']);
+  expect(logs).toStrictEqual(['WARNING impd.ticker sweep failed: disk full']);
 });
 
 test('it runs again after a failed run', async () => {
@@ -124,7 +117,6 @@ test('it runs again after a failed run', async () => {
     label: 'sweep',
     intervalMs: 30_000,
     task,
-    log: () => {},
     timer: stub.timer,
   });
 
@@ -143,7 +135,6 @@ test('it schedules nothing more once stopped', async () => {
     label: 'sweep',
     intervalMs: 30_000,
     task: () => Promise.resolve(),
-    log: () => {},
     timer: stub.timer,
   });
 
@@ -167,7 +158,6 @@ test('it waits for a running task when stopped', async () => {
 
       steps.push('finished');
     },
-    log: () => {},
     timer: stub.timer,
   });
 
@@ -198,7 +188,6 @@ test('it schedules no next run for a task that ends after the stop', async () =>
     label: 'sweep',
     intervalMs: 30_000,
     task: () => release.promise,
-    log: () => {},
     timer: stub.timer,
   });
 
@@ -221,7 +210,7 @@ test('it runs on the runtime timers by default', async () => {
     return Promise.resolve();
   });
 
-  const ticker = startTicker({ label: 'sweep', intervalMs: 1, task, log: () => {} });
+  const ticker = startTicker({ label: 'sweep', intervalMs: 1, task });
 
   onTestFinished(() => ticker.stop());
 

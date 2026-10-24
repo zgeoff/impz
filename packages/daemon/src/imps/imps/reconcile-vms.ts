@@ -2,6 +2,7 @@ import { rmSync } from 'node:fs';
 import { writeUnknownBoot } from '../../platform/db/cold-boots';
 import { updateImpActivity } from '../../platform/db/imps';
 import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import {
   readLoadingMeta,
   readSnapshotMeta,
@@ -71,11 +72,18 @@ export function createVmReconciler(
     try {
       await context.vms.stopVm(pid, paths, false);
 
-      context.log(`impd: ${name}: killed firecracker pid ${String(pid)}, which no record owns`);
+      getImpdLogger('imps')
+        .with({ imp: name })
+        .info('killed firecracker pid {pid}, which no record owns', { pid: String(pid) });
 
       return true;
     } catch (error) {
-      context.log(`impd: ${name}: could not kill pid ${String(pid)}: ${getErrorMessage(error)}`);
+      getImpdLogger('imps')
+        .with({ imp: name })
+        .warning('could not kill pid {pid}: {error}', {
+          pid: String(pid),
+          error: getErrorMessage(error),
+        });
 
       return false;
     }
@@ -121,7 +129,9 @@ export function createVmReconciler(
         throw new Error(`the agent answered as ${woken.agentVersion}, not ${meta.agentVersion}`);
       }
 
-      context.log(`impd: ${imp.name}: adopted firecracker pid ${String(pid)}, which a wake left`);
+      getImpdLogger('imps')
+        .with({ imp: imp.name })
+        .info('adopted firecracker pid {pid}, which a wake left', { pid: String(pid) });
 
       await updateImpActivity(context.db, imp.id, new Date());
 
@@ -142,9 +152,11 @@ export function createVmReconciler(
 
       return running;
     } catch (error) {
-      context.log(
-        `impd: ${imp.name}: cannot adopt the VM a wake left: ${getErrorMessage(error)}; it boots cold next`,
-      );
+      getImpdLogger('imps')
+        .with({ imp: imp.name })
+        .warning('cannot adopt the VM a wake left: {error}; it boots cold next', {
+          error: getErrorMessage(error),
+        });
 
       context.admission?.release(imp.id);
       removeSnapshot(paths);
@@ -175,9 +187,11 @@ export function createVmReconciler(
     try {
       await context.vms.resumeVm(imp.pid, paths);
 
-      context.log(`impd: ${imp.name}: resumed the VM a cut sleep left paused`);
+      getImpdLogger('imps').with({ imp: imp.name }).info('resumed the VM a cut sleep left paused');
     } catch (error) {
-      context.log(`impd: ${imp.name}: could not resume its paused VM: ${getErrorMessage(error)}`);
+      getImpdLogger('imps')
+        .with({ imp: imp.name })
+        .warning('could not resume its paused VM: {error}', { error: getErrorMessage(error) });
     }
   };
 
@@ -211,7 +225,9 @@ export function createVmReconciler(
       }
 
       if (imp.state === 'sleeping' && readLoadingMeta(paths) !== null) {
-        context.log(`impd: ${imp.name}: a wake was cut and its VM is gone; it boots cold next`);
+        getImpdLogger('imps')
+          .with({ imp: imp.name })
+          .info('a wake was cut and its VM is gone; it boots cold next');
 
         removeSnapshot(paths);
 

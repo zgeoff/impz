@@ -2,11 +2,11 @@ import type { Imps } from '../../imps/imps/imp-service';
 import { readImpById } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 
 interface StagedImpDeps {
   readonly db: ImpDatabase;
   readonly imps: Pick<Imps, 'destroyImp'>;
-  readonly log: (message: string) => void;
 }
 
 export async function removeStagedImp(
@@ -21,6 +21,8 @@ export async function removeStagedImp(
   }
 
   await deps.imps.destroyImp(name, { isMove: true }).catch((error: unknown) => {
-    deps.log(`impd: move: ${name}: a failed receive left the imp: ${getErrorMessage(error)}`);
+    getImpdLogger('move')
+      .with({ imp: name })
+      .warning('a failed receive left the imp: {error}', { error: getErrorMessage(error) });
   });
 }

@@ -4,11 +4,7 @@ import { createCloudflareProvider } from './cloudflare-provider';
 import type { DnsProvider } from './dns-provider';
 import type { DnsToken } from './dns-token';
 
-export function createDnsProvider(
-  config: DnsConfig,
-  token: DnsToken | null,
-  log: (message: string) => void,
-): DnsProvider {
+export function createDnsProvider(config: DnsConfig, token: DnsToken | null): DnsProvider {
   if (config.provider === 'challtestsrv') {
     return createChalltestsrvProvider(config.apiUrl ?? '');
   }
@@ -19,7 +15,6 @@ export function createDnsProvider(
 
   return createCloudflareProvider({
     readToken: token.read,
-    log,
     ...(config.apiUrl !== null && { apiUrl: config.apiUrl }),
   });
 }

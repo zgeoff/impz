@@ -39,7 +39,6 @@ test('#writeDatabaseCopy returns the copy’s path, size, schema version and int
       readUsage: () => Promise.resolve({ usedBytes: 1024 ** 3, availableBytes: 10 * 1024 ** 3 }),
     },
     reserveBytes: 1024 ** 3,
-    log: () => {},
   });
 
   const copy = await writeDatabaseCopy(ctx.db, {
@@ -71,7 +70,6 @@ test('#writeDatabaseCopy makes the copy readable by its owner only', async () =>
       readUsage: () => Promise.resolve({ usedBytes: 1024 ** 3, availableBytes: 10 * 1024 ** 3 }),
     },
     reserveBytes: 1024 ** 3,
-    log: () => {},
   });
 
   await writeDatabaseCopy(ctx.db, {
@@ -94,7 +92,6 @@ test('#writeDatabaseCopy makes an existing copies directory owner-only', async (
       readUsage: () => Promise.resolve({ usedBytes: 1024 ** 3, availableBytes: 10 * 1024 ** 3 }),
     },
     reserveBytes: 1024 ** 3,
-    log: () => {},
   });
 
   await writeDatabaseCopy(ctx.db, {
@@ -115,7 +112,6 @@ test('#writeDatabaseCopy takes a whole copy while writes run', async () => {
       readUsage: () => Promise.resolve({ usedBytes: 1024 ** 3, availableBytes: 10 * 1024 ** 3 }),
     },
     reserveBytes: 1024 ** 3,
-    log: () => {},
   });
 
   const writes = Array.from({ length: 200 }, (_, index) =>
@@ -150,7 +146,6 @@ test('#writeDatabaseCopy holds a prefix of the writes that run meanwhile', async
       readUsage: () => Promise.resolve({ usedBytes: 1024 ** 3, availableBytes: 10 * 1024 ** 3 }),
     },
     reserveBytes: 1024 ** 3,
-    log: () => {},
   });
 
   const writes = Array.from({ length: 200 }, (_, index) =>
@@ -190,7 +185,6 @@ test('#writeDatabaseCopy refuses a copy past the disk reserve, and leaves no fil
       readUsage: () => Promise.resolve({ usedBytes: 1024 ** 3, availableBytes: 1024 ** 3 }),
     },
     reserveBytes: 1024 ** 3,
-    log: () => {},
   });
 
   const refused = writeDatabaseCopy(ctx.db, {
@@ -214,7 +208,6 @@ test('#writeDatabaseCopy refuses a name a copy already has, and keeps that copy'
       readUsage: () => Promise.resolve({ usedBytes: 1024 ** 3, availableBytes: 10 * 1024 ** 3 }),
     },
     reserveBytes: 1024 ** 3,
-    log: () => {},
   });
 
   mkdirSync(join(ctx.dataDir, 'db-copies'));
@@ -247,7 +240,6 @@ test('#writeDatabaseCopy removes the half-written copy of a copy that fails', as
       readUsage: () => Promise.resolve({ usedBytes: 1024 ** 3, availableBytes: 10 * 1024 ** 3 }),
     },
     reserveBytes: 1024 ** 3,
-    log: () => {},
   });
 
   // VACUUM INTO cannot run inside a transaction, so the copy step fails

@@ -6,6 +6,7 @@ import type { AuthorizedKeys } from '../../imps/ssh/authorized-keys';
 import { withAuditedOpen } from '../../platform/audit/api-audit';
 import type { ApiAudit } from '../../platform/audit/api-audit';
 import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import type { SurfaceConfig } from '../surface-config';
 import { loadOrCreateHostKey, readFingerprint, setupSshDir } from './host-key';
 import { createLoginKeys } from './login-keys';
@@ -28,7 +29,6 @@ interface StartSshDeps {
     | 'recordActivity'
   > &
     Pick<ImpService, 'readImpRecord'>;
-  readonly log: (message: string) => void;
   readonly audit: Pick<ApiAudit, 'record'>;
   readonly now: () => number;
 }
@@ -78,17 +78,22 @@ export async function startSsh(deps: StartSshDeps): Promise<SshGateway | null> {
           recordActivity: imps.recordActivity,
           readImp: imps.readImpRecord,
         },
-        log: deps.log,
       },
       port,
       LISTEN_HOST,
     );
 
-    deps.log(`impd: ssh on :${String(gateway.port)}, host key ${readFingerprint(hostKey)}`);
+    getImpdLogger('ssh').info('ssh on :{port}, host key {hostKey}', {
+      port: String(gateway.port),
+      hostKey: readFingerprint(hostKey),
+    });
 
     return gateway;
   } catch (error) {
-    deps.log(`impd: ssh: not started on :${String(port)}: ${getErrorMessage(error)}`);
+    getImpdLogger('ssh').warning('not started on :{port}: {error}', {
+      port: String(port),
+      error: getErrorMessage(error),
+    });
 
     return null;
   }

@@ -3,7 +3,6 @@ import { createRevocations } from './identity/auth/revocations';
 import { loadTokenStore } from './identity/auth/token-store';
 import { createMcpAuth } from './identity/oauth/create-mcp-auth';
 import type { ImpdDeps } from './impd-deps';
-import { printLog } from './platform/process/print-log';
 
 export async function loadImpdAccess(
   config: Config,
@@ -11,7 +10,6 @@ export async function loadImpdAccess(
   isFileKey: (blob: Buffer) => boolean,
 ) {
   const now = deps.now ?? Date.now;
-  const log = deps.log ?? printLog;
   const revocations = createRevocations();
 
   const tokens = await loadTokenStore({
@@ -28,7 +26,6 @@ export async function loadImpdAccess(
     revocations,
     config: config.publicMcp,
     now,
-    log,
   });
 
   return { revocations, tokens, oauth };

@@ -783,7 +783,6 @@ test("it leaves a warm-moved leased imp awake through the target's idle loop", a
     config: ctx.target.config,
     db: ctx.target.db,
     imps: ctx.target.imps,
-    log: () => {},
     now: ctx.target.now,
   });
 
@@ -812,7 +811,6 @@ test("it sleeps a warm-moved imp with no lease through the target's idle loop", 
     config: ctx.target.config,
     db: ctx.target.db,
     imps: ctx.target.imps,
-    log: () => {},
     now: ctx.target.now,
   });
 

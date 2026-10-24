@@ -62,7 +62,6 @@ test('it writes the newest log to stdout and the bytes the log lost to stderr', 
       maxBytes: 128,
       requireRoom: () => Promise.resolve(),
       now: () => Date.UTC(2026, 9, 4),
-      log: () => {},
     },
     {
       session: 'main',
@@ -105,7 +104,6 @@ test('it reads a named generation from the --from offset', async () => {
       maxBytes: 128,
       requireRoom: () => Promise.resolve(),
       now: () => Date.UTC(2026, 9, 4),
-      log: () => {},
     },
     {
       session: 'main',
@@ -213,7 +211,6 @@ test('it lists the logs of an imp as JSON', async () => {
       maxBytes: 128,
       requireRoom: () => Promise.resolve(),
       now: () => Date.UTC(2026, 9, 4),
-      log: () => {},
     },
     {
       session: 'main',
@@ -273,7 +270,6 @@ test('it deletes the logs of the session it names', async () => {
       maxBytes: 128,
       requireRoom: () => Promise.resolve(),
       now: () => Date.UTC(2026, 9, 4),
-      log: () => {},
     },
     {
       session: 'main',
@@ -320,7 +316,6 @@ test('it never deletes the logs of another session or another imp', async () => 
       maxBytes: 128,
       requireRoom: () => Promise.resolve(),
       now: () => Date.UTC(2026, 9, 4),
-      log: () => {},
     },
     {
       session: 'main',
@@ -341,7 +336,6 @@ test('it never deletes the logs of another session or another imp', async () => 
       maxBytes: 128,
       requireRoom: () => Promise.resolve(),
       now: () => Date.UTC(2026, 9, 4),
-      log: () => {},
     },
     {
       session: 'work',
@@ -362,7 +356,6 @@ test('it never deletes the logs of another session or another imp', async () => 
       maxBytes: 128,
       requireRoom: () => Promise.resolve(),
       now: () => Date.UTC(2026, 9, 4),
-      log: () => {},
     },
     {
       session: 'main',

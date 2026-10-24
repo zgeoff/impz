@@ -1,14 +1,13 @@
 import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import type { OpenedParts } from './open-move-parts';
 
-interface MovePartsLog {
-  readonly log: (message: string) => void;
-}
-
-export async function removeMoveParts(deps: MovePartsLog, opened: OpenedParts): Promise<void> {
+export async function removeMoveParts(opened: OpenedParts): Promise<void> {
   try {
     await opened.close();
   } catch (error) {
-    deps.log(`impd: move: closing the source's parts failed: ${getErrorMessage(error)}`);
+    getImpdLogger('move').warning("closing the source's parts failed: {error}", {
+      error: getErrorMessage(error),
+    });
   }
 }

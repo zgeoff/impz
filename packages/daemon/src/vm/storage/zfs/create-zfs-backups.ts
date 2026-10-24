@@ -1,6 +1,7 @@
 import { rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { getErrorMessage } from '../../../platform/process/get-error-message';
+import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import { BACKUP_TREE, buildBackupPaths, toDigestHex } from '../data-layout';
 import type { StorageBackend } from '../storage-backend';
 import { listCheckpointSnapshots, parseZfsMounts } from './zfs-commands';
@@ -13,7 +14,6 @@ interface ZfsBackupContext {
   readonly runSerial: <T>(task: () => Promise<T>) => Promise<T>;
   readonly runSnapshot: <T>(task: () => Promise<T>) => Promise<T>;
   readonly listAll: () => Promise<ZfsEntry[]>;
-  readonly log: (message: string) => void;
   readonly readMounts: () => string;
   readonly setupMount: (name: string, directory: string, isReadOnly?: boolean) => Promise<void>;
   readonly removeMount: (directory: string) => Promise<void>;
@@ -140,7 +140,9 @@ export function createZfsBackups(
         await ctx.runSerial(createTreeClones);
       } catch (error) {
         await removeClones().catch((closeError: unknown) => {
-          ctx.log(`impd: zfs: could not close the backup tree: ${getErrorMessage(closeError)}`);
+          getImpdLogger('zfs').warning('could not close the backup tree: {error}', {
+            error: getErrorMessage(closeError),
+          });
         });
 
         throw error;

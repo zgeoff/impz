@@ -510,7 +510,7 @@ test('#addKey refuses a key that a group-writable authorized_keys lists', async 
     rootToken: 'root-secret',
     now: Date.now,
     onRemove: () => {},
-    isFileKey: createAuthorizedKeys(keysPath, () => {}).probeListed,
+    isFileKey: createAuthorizedKeys(keysPath).probeListed,
   });
 
   await tokens.create({ name: 'ci', scope: 'exec', imps: null });

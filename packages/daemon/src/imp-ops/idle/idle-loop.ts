@@ -13,7 +13,6 @@ interface IdleLoopDeps {
   readonly config: Pick<ImpOpsConfig, 'idleTimeoutS' | 'idleCpuPercent'>;
   readonly db: ImpDatabase;
   readonly imps: Pick<Imps, 'isImpBusy' | 'readActivity' | 'tracker' | 'trySleepImp' | 'watchdog'>;
-  readonly log: (message: string) => void;
   readonly now?: () => number;
   readonly readCpuTicks?: (pid: number) => number | null;
 }

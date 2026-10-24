@@ -16,6 +16,7 @@ import type { SshBackend, SshConnectionContext } from '../../imps/ssh/ssh-connec
 import type { ImpRecord } from '../../platform/db/imps';
 import type { Caller } from '../../platform/principal/caller';
 import type { StartTimer } from '../../platform/process/clock';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { startRealTimer } from '../../platform/process/start-real-timer';
 import { findImpRefusal } from '../find-imp-refusal';
 import type { LoginKeys } from './login-keys';
@@ -46,7 +47,6 @@ export interface SshGatewayDeps {
   readonly keys: LoginKeys;
   readonly backend: SshBackend;
   readonly readRevocation: (id: string | null) => AbortSignal | null;
-  readonly log: (message: string) => void;
   readonly limits?: Partial<SshGatewayLimits>;
   readonly startTimer?: StartTimer;
 }
@@ -204,7 +204,8 @@ function handleClient(options: HandleClientOptions, deps: SshGatewayDeps): void 
     try {
       outcome = await checkLogin(ctx, deps);
     } catch (error) {
-      deps.log(`impd: ssh: login check failed: ${formatFailure(error)}`);
+      getImpdLogger('ssh').warning('login check failed: {error}', { error: formatFailure(error) });
+
       ctx.reject(['publickey']);
 
       return;
@@ -244,7 +245,10 @@ function handleClient(options: HandleClientOptions, deps: SshGatewayDeps): void 
     }
 
     options.onAuthenticated();
-    deps.log(`impd: ssh: ${granted.imp.name}: login from ${info.ip} as ${granted.caller.name}`);
+
+    getImpdLogger('ssh')
+      .with({ imp: granted.imp.name })
+      .info('login from {ip} as {caller}', { ip: info.ip, caller: granted.caller.name });
 
     handleLogin(client, granted, buildSshEnv(info, options.socket), deps);
   });
@@ -301,7 +305,10 @@ function handleLogin(
     const running = await backend.requireRunning(imp.name);
 
     if (running.wokeMs !== null) {
-      deps.log(`impd: ssh: ${imp.name} woke in ${String(running.wokeMs)}ms`);
+      getImpdLogger('ssh').info('{name} woke in {wokeMs}ms', {
+        name: imp.name,
+        wokeMs: String(running.wokeMs),
+      });
     }
 
     await backend.recordActivity(imp.name);
@@ -313,19 +320,20 @@ function handleLogin(
     try {
       await awake;
     } catch (error) {
-      deps.log(`impd: ssh: ${imp.name}: could not wake: ${formatFailure(error)}`);
+      getImpdLogger('ssh')
+        .with({ imp: imp.name })
+        .warning('could not wake: {error}', { error: formatFailure(error) });
     }
   };
 
   void printWakeFailure();
-  const agent = createAgentForwarding({ client, impName: imp.name, backend, log: deps.log });
+  const agent = createAgentForwarding({ client, impName: imp.name, backend });
 
   const remote = createRemoteForwarding({
     client,
     impName: imp.name,
     backend,
     awake,
-    log: deps.log,
   });
 
   const context: SshConnectionContext = {
@@ -335,7 +343,6 @@ function handleLogin(
     awake,
     sshEnv,
     agent,
-    log: deps.log,
   };
 
   const updateLastActive = async (): Promise<void> => {

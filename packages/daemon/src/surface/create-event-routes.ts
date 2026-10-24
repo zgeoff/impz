@@ -8,7 +8,7 @@ import type { RpcImplementer } from './create-implementer';
 import type { RouterDeps } from './create-router';
 
 export function createEventRoutes(os: RpcImplementer, deps: RouterDeps, views: CallerImps) {
-  const isEventValid = createEventCheck({ log: deps.log, now: deps.now });
+  const isEventValid = createEventCheck({ now: deps.now });
 
   return {
     stream: os.events.stream.handler((options) => {

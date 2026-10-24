@@ -283,7 +283,7 @@ test('it raises memory.max with a grow of the guest', async () => {
   await mkdir(join(root, 'imps'));
   await writeFile(join(root, 'imps', 'cgroup.subtree_control'), 'cpu memory\n');
 
-  const ctx = await setupTest({ cgroups: createCpuCgroups({ root, log: () => {} }) });
+  const ctx = await setupTest({ cgroups: createCpuCgroups({ root }) });
 
   await ctx.createTestImage('ubuntu');
 
@@ -322,7 +322,7 @@ test('it sets memory.max to the memory at the first boot', async () => {
   await mkdir(join(root, 'imps'));
   await writeFile(join(root, 'imps', 'cgroup.subtree_control'), 'cpu memory\n');
 
-  const ctx = await setupTest({ cgroups: createCpuCgroups({ root, log: () => {} }) });
+  const ctx = await setupTest({ cgroups: createCpuCgroups({ root }) });
 
   await ctx.createTestImage('ubuntu');
 
@@ -368,7 +368,7 @@ test('it keeps memory.max at the plugged size across a sleep and a wake', async 
   await mkdir(join(root, 'imps'));
   await writeFile(join(root, 'imps', 'cgroup.subtree_control'), 'cpu memory\n');
 
-  const ctx = await setupTest({ cgroups: createCpuCgroups({ root, log: () => {} }) });
+  const ctx = await setupTest({ cgroups: createCpuCgroups({ root }) });
 
   await ctx.createTestImage('ubuntu');
 
@@ -407,7 +407,7 @@ test('it sets memory.max back to the memory on a cold boot after a stop', async 
   await mkdir(join(root, 'imps'));
   await writeFile(join(root, 'imps', 'cgroup.subtree_control'), 'cpu memory\n');
 
-  const ctx = await setupTest({ cgroups: createCpuCgroups({ root, log: () => {} }) });
+  const ctx = await setupTest({ cgroups: createCpuCgroups({ root }) });
 
   await ctx.createTestImage('ubuntu');
 
@@ -446,7 +446,7 @@ test('it allows on adopt after a restart what the guest holds', async () => {
   await mkdir(join(root, 'imps'));
   await writeFile(join(root, 'imps', 'cgroup.subtree_control'), 'cpu memory\n');
 
-  const ctx = await setupTest({ cgroups: createCpuCgroups({ root, log: () => {} }) });
+  const ctx = await setupTest({ cgroups: createCpuCgroups({ root }) });
 
   await ctx.createTestImage('ubuntu');
 
@@ -481,7 +481,7 @@ test('it keeps the adopted memory.max through a sleep before any tick after a re
   await mkdir(join(root, 'imps'));
   await writeFile(join(root, 'imps', 'cgroup.subtree_control'), 'cpu memory\n');
 
-  const ctx = await setupTest({ cgroups: createCpuCgroups({ root, log: () => {} }) });
+  const ctx = await setupTest({ cgroups: createCpuCgroups({ root }) });
 
   await ctx.createTestImage('ubuntu');
 
@@ -535,6 +535,8 @@ test('it never grows an elastic imp whose agent predates elastic memory, and log
   expect(ctx.fake.guestMemory.get(paths.directory)?.pluggedMib).toBe(0);
 
   expect(ctx.logs).toSatisfyAny((line: string) =>
-    /dev: memory low, not grown.*the imp's agent has no elastic memory/u.test(line),
+    /^INFO impd\.imps imp=dev memory low, not grown.*the imp's agent has no elastic memory/u.test(
+      line,
+    ),
   );
 });

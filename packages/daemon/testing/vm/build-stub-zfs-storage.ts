@@ -24,7 +24,6 @@ export function buildStubZfsStorage(
       streams: zfs.streams,
       readMounts: zfs.readMounts,
       readModuleVersion: () => moduleVersion,
-      log: () => {},
       isUiomoveBugAllowed: options.isUiomoveBugAllowed === true,
     });
 

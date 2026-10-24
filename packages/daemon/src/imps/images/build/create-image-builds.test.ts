@@ -62,7 +62,6 @@ async function setupTest() {
   const diskBudget = createDiskBudget({
     storage: { readUsage: () => Promise.resolve(usage) },
     reserveBytes: 0,
-    log: () => {},
   });
 
   const grows: number[] = [];

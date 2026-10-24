@@ -2519,7 +2519,7 @@ test('#check_ipv6_live refuses an impd that logs IPv6 off, quoting its line', ()
     'docker',
     buildStubBootstrapDocker({
       ipv6Route: 'default via fd12::1 dev eth0 metric 1024',
-      logs: 'impd: ipv6: off (no default route)',
+      logs: 'INFO impd.ipv6 off (no default route)',
     }),
   );
 
@@ -2532,7 +2532,32 @@ test('#check_ipv6_live refuses an impd that logs IPv6 off, quoting its line', ()
   ).toStrictEqual({
     exitCode: 1,
     stdout: '',
-    stderr: 'bootstrap: IPv6 is on, but impd: ipv6: off (no default route)\n',
+    stderr: 'bootstrap: IPv6 is on, but impd.ipv6 off (no default route)\n',
+  });
+});
+
+test('#check_ipv6_live passes an impd that logs its IPv6 plan, quoting its line', () => {
+  const ctx = setupTest();
+
+  const docker = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    buildStubBootstrapDocker({
+      ipv6Route: 'default via fd12::1 dev eth0 metric 1024',
+      logs: 'INFO impd.api api on :7070\nINFO impd.ipv6 fd12:3456:789a::/64, NAT66 out of eth0',
+    }),
+  );
+
+  expect(
+    runSourcedFunction({
+      script: new URL('bootstrap.sh', import.meta.url).pathname,
+      fn: 'check_ipv6_live',
+      env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
+    }),
+  ).toStrictEqual({
+    exitCode: 0,
+    stdout: 'bootstrap: health: impd.ipv6 fd12:3456:789a::/64, NAT66 out of eth0\n',
+    stderr: '',
   });
 });
 

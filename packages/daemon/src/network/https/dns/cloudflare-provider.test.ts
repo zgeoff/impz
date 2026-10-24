@@ -2,6 +2,7 @@ import { expect, mock, test } from 'bun:test';
 import { server } from '@impz/test-utils/mock-server';
 import { HttpResponse, http } from 'msw';
 import { createStubCloudflareApi } from '../../../../testing/network/create-stub-cloudflare-api';
+import { captureImpdLogs } from '../../../../testing/platform/capture-impd-logs';
 import { createCloudflareProvider } from './cloudflare-provider';
 import { buildPublicOwner } from './dns-provider';
 
@@ -254,7 +255,7 @@ test('it never replaces an address record it did not make, and names it', async 
 
 test('it warns when it finds more than one A record of its own', async () => {
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
-  const log = mock<(message: string) => void>();
+  const logs = captureImpdLogs();
 
   server.use(...api.handlers);
 
@@ -274,13 +275,13 @@ test('it warns when it finds more than one A record of its own', async () => {
     comment: 'managed by impd',
   });
 
-  const provider = createCloudflareProvider({ readToken: () => Promise.resolve('cf-token'), log });
+  const provider = createCloudflareProvider({ readToken: () => Promise.resolve('cf-token') });
 
   await provider.setA('two.example.com', '100.64.0.9');
 
-  expect(log).toHaveBeenCalledExactlyOnceWith(
-    'impd: https: warning: two.example.com has 2 A records impd made; it updates only the first',
-  );
+  expect(logs).toStrictEqual([
+    'WARNING impd.https two.example.com has 2 A records impd made; it updates only the first',
+  ]);
 });
 
 test('it lists only its owner’s A records under the domain, page by page', async () => {

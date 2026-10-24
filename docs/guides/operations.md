@@ -183,8 +183,8 @@ With `IMP_BACKUP_REPOSITORY` set, impd backs up every imp to a restic repository
 ([backups](../architecture/storage/backups.md), [settings](./configuration.md#backups)).
 
 - `impz backup ls` shows the restore points and the last prune and check.
-- `impd: backup: CHECK FAILED` in the log, or `FAILED` in `impz backup ls`, means the repository may
-  be damaged: run `impz backup check --subset 100%`, then repair it with `restic repair`
+- `ERROR impd.backup CHECK FAILED` in the log, or `FAILED` in `impz backup ls`, means the repository
+  may be damaged: run `impz backup check --subset 100%`, then repair it with `restic repair`
   ([restic docs](https://restic.readthedocs.io/en/stable/077_troubleshooting.html)) from a machine
   with the password.
 - `impz backup restore <name> --as <new>` restores next to the original; restored imps are stopped.
@@ -196,9 +196,9 @@ impd removes what a crash leaves at start and every hour
 
 - `impz gc --dry-run` lists what would go, and removes nothing.
 - A disk, image, checkpoint or memory snapshot that no row names is an orphan. impd keeps it, with
-  its snapshots, and logs `impd: storage: kept orphan …` at start and `impd: gc: kept orphan …` on
-  the hourly pass when the set changed: its dataset, snapshot or directory, size, creation time and
-  snapshots. `impz gc` lists them under `kept`.
+  its snapshots, and logs `INFO impd.storage kept orphan …` at start and
+  `INFO impd.gc kept orphan …` on the hourly pass when the set changed: its dataset, snapshot or
+  directory, size, creation time and snapshots. `impz gc` lists them under `kept`.
 - Orphans come from a create or a checkpoint that crashed before its row, or from a lost or replaced
   database. After a database restore, check the list before you remove anything: each orphan may be
   an imp.
@@ -272,9 +272,9 @@ What the restored database means at start:
   `the database is at migration <copy's>, newer than this impd's last, <impd's>`. Start the impd
   that wrote the copy, or a newer one.
 - **Storage the copy does not name** (imps, images and checkpoints made after the copy) is kept as
-  orphans, never deleted. Start logs each one as `impd: storage: kept orphan …`, and `impz gc` lists
-  them ([storage cleanup](#storage-cleanup)). Each may be an imp you still need. Retire them with
-  `impz gc --orphans` only after you check the list.
+  orphans, never deleted. Start logs each one as `INFO impd.storage kept orphan …`, and `impz gc`
+  lists them ([storage cleanup](#storage-cleanup)). Each may be an imp you still need. Retire them
+  with `impz gc --orphans` only after you check the list.
 - **Imps whose storage is gone** (removed after the copy) keep their rows. impd checks each imp's VM
   and memory snapshot at start, and marks one it cannot resume as stopped. Its next start fails, and
   the imp shows `error` with the missing disk. `impz rm` removes the row.
@@ -347,14 +347,15 @@ is set:
   read `/dev/kmsg`, or when no VM owned the thread. A start or a wake of it fails with
   `PRECONDITION_FAILED`:
   `the host needs a reboot: a kernel oops holds the disk of <name>; reboot the host, then start it`.
-- On ZFS, a reclaim that meets the held dataset logs `impd: zfs: reclaim failed: …` once for that
-  dataset, and tries again on each pass without a log line.
+- On ZFS, a reclaim that meets the held dataset logs `WARNING impd.zfs reclaim failed: …` once for
+  that dataset, and tries again on each pass without a log line.
 
 When impd cannot read `/proc/sys/kernel/tainted`, or finds no number in it, it logs
-`impd: cannot read the kernel taint flag; imps a kernel oops held stay held` at start. Each imp that
-a kernel oops held in this boot keeps the error `a kernel oops killed firecracker`, and its start or
-wake fails with the same `PRECONDITION_FAILED` error until impd reads the flag clear. impd clears
-the hold of an earlier boot, which it tells by the boot id in `/proc/sys/kernel/random/boot_id`.
+`WARNING impd.imps cannot read the kernel taint flag; imps a kernel oops held stay held` at start.
+Each imp that a kernel oops held in this boot keeps the error `a kernel oops killed firecracker`,
+and its start or wake fails with the same `PRECONDITION_FAILED` error until impd reads the flag
+clear. impd clears the hold of an earlier boot, which it tells by the boot id in
+`/proc/sys/kernel/random/boot_id`.
 
 To recover:
 
@@ -376,8 +377,8 @@ To recover:
 
 5. Start each imp that the oops held: `impz start <name>`. impd cleared its hold at start, when it
    read the flag clear or a new boot id, and logged
-   `impd: <name>: the host rebooted since a kernel oops held its disk`. The imp boots cold from its
-   disk.
+   `INFO impd.imps imp=<name> the host rebooted since a kernel oops held its disk`. The imp boots
+   cold from its disk.
 
 ## Troubleshooting
 

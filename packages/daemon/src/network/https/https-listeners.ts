@@ -1,4 +1,5 @@
 import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { buildErrorPage } from '../proxy/error-pages';
 import type { ProxyListenOptions, ProxyRoute } from '../proxy/wake-proxy';
 import type { Certificate } from './acme/cert-store';
@@ -40,7 +41,6 @@ interface HttpsListenersOptions {
 
   readonly httpsPort: number;
   readonly httpPort: number;
-  readonly log: (message: string) => void;
 
   readonly scope: ListenerScope;
 }
@@ -52,7 +52,6 @@ interface AddressListeners {
 
 export function createHttpsListeners(options: HttpsListenersOptions): HttpsListeners {
   const domain = options.domain;
-  const log = options.log;
   const ports = { https: options.httpsPort, http: options.httpPort };
 
   const byAddress = new Map<string, AddressListeners>();
@@ -104,7 +103,7 @@ export function createHttpsListeners(options: HttpsListenersOptions): HttpsListe
       ports[kind] = server.port ?? ports[kind];
 
       if (failed.delete(key)) {
-        log(`impd: https: listening on ${key}`);
+        getImpdLogger('https').info('listening on {key}', { key });
       }
 
       return server;
@@ -112,7 +111,10 @@ export function createHttpsListeners(options: HttpsListenersOptions): HttpsListe
       if (!failed.has(key)) {
         failed.add(key);
 
-        log(`impd: https: cannot listen on ${key}: ${getErrorMessage(error)}`);
+        getImpdLogger('https').warning('cannot listen on {key}: {error}', {
+          key,
+          error: getErrorMessage(error),
+        });
       }
 
       return null;

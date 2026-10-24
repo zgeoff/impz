@@ -2,6 +2,7 @@ import { Agent } from 'node:https';
 import * as acme from 'acme-client';
 import type { Challenge } from 'acme-client/types/rfc8555';
 import { getErrorMessage } from '../../../platform/process/get-error-message';
+import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import type { DnsProvider, TxtRecord } from '../dns/dns-provider';
 import type { CertStore, Certificate } from './cert-store';
 import type { CertificateInfo } from './renewal-policy';
@@ -14,7 +15,6 @@ export interface AcmeIssuerOptions {
   readonly caPem: string | null;
   readonly store: CertStore;
   readonly dns: DnsProvider;
-  readonly log: (message: string) => void;
 
   readonly poll?: AcmePollOptions;
 }
@@ -174,7 +174,10 @@ async function removeRecords(
     } catch (error) {
       const reason = getErrorMessage(error);
 
-      options.log(`impd: https: could not remove the TXT record ${record.fqdn}: ${reason}`);
+      getImpdLogger('https').warning('could not remove the TXT record {fqdn}: {reason}', {
+        fqdn: record.fqdn,
+        reason,
+      });
     }
   }
 }

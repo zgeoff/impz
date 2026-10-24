@@ -43,7 +43,6 @@ async function setupTest() {
     diskBudget: createDiskBudget({
       storage: { readUsage: () => Promise.resolve({ usedBytes: 0, availableBytes: 1024 ** 4 }) },
       reserveBytes: null,
-      log: () => {},
     }),
     clock: REAL_CLOCK,
   });

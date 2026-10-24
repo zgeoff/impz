@@ -3,6 +3,7 @@ import type { ImpEventDetail } from '@impz/api';
 import { requireTransition } from '../../platform/db/imp-transitions';
 import type { ImpStateChange } from '../../platform/db/update-imp-state';
 import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { sendActivity } from '../../vm/agent-client/agent-requests';
 import { toSeenSessions } from '../../vm/agent-client/seen-session';
 import type { SeenSession } from '../../vm/agent-client/seen-session';
@@ -86,7 +87,9 @@ export function makeSleepImpVm(
 
       return pluggedMib;
     } catch (error) {
-      context.log(`impd: ${imp.name}: no shrink before the sleep: ${getErrorMessage(error)}`);
+      getImpdLogger('imps')
+        .with({ imp: imp.name })
+        .warning('no shrink before the sleep: {error}', { error: getErrorMessage(error) });
 
       return readPluggedMib(imp, paths);
     }
@@ -165,9 +168,20 @@ export function makeSleepImpVm(
 
       const plugged = pluggedMib === null ? '' : `, ${String(pluggedMib)} MiB plugged`;
 
-      context.log(
-        `impd: ${imp.name}: asleep in ${String(sleepMs)}ms (${reason})${waited}, ram ${String(ramMib)} MiB${plugged}, mem file ${String(readDiskMib(paths.memFile))} MiB on disk, ${formatTimings(timings)}`,
-      );
+      getImpdLogger('imps')
+        .with({ imp: imp.name })
+        .info(
+          'asleep in {sleepMs}ms ({reason}){waited}, ram {ramMib} MiB{plugged}, mem file {memFile} MiB on disk, {timings}',
+          {
+            sleepMs: String(sleepMs),
+            reason,
+            waited,
+            ramMib: String(ramMib),
+            plugged,
+            memFile: String(readDiskMib(paths.memFile)),
+            timings: formatTimings(timings),
+          },
+        );
     } catch (error) {
       if (context.vms.probeVmAlive(pid, paths)) {
         throw error;
@@ -178,7 +192,9 @@ export function makeSleepImpVm(
       const message = getErrorMessage(error);
       const failure = isOomKill ? `${OOM_KILL_TRIGGER} (${message})` : message;
 
-      context.log(`impd: ${imp.name}: sleep failed after firecracker stopped: ${failure}`);
+      getImpdLogger('imps')
+        .with({ imp: imp.name })
+        .warning('sleep failed after firecracker stopped: {failure}', { failure });
 
       removeSnapshot(paths);
       context.admission?.release(imp.id);
@@ -236,7 +252,9 @@ export function makeSleepImpVm(
         : 0;
 
       if (waitedMs === null) {
-        context.log(`impd: ${imp.name}: sleep (${reason}) gave way: the imp turned busy`);
+        getImpdLogger('imps')
+          .with({ imp: imp.name })
+          .info('sleep ({reason}) gave way: the imp turned busy', { reason });
 
         return imp;
       }

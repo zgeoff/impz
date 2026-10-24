@@ -16,9 +16,9 @@ test('#getU32Span measures around the wrap', () => {
 
 test('#parseLoggedSteps reads the steps of the last line that names the imp', () => {
   const log = [
-    'impd: e2e-bt-t0: restored boot template 0123456789ab as pid 7 load=1ms agent=2ms',
-    'impd: e2e-bt-t1: restored boot template 0123456789ab as pid 9 load=12ms agent=30ms',
-    'impd: e2e-bt-t1: restored boot template 0123456789ab as pid 11 load=14ms agent=31ms',
+    'INFO impd.imps imp=e2e-bt-t0 restored boot template 0123456789ab as pid 7 load=1ms agent=2ms',
+    'INFO impd.imps imp=e2e-bt-t1 restored boot template 0123456789ab as pid 9 load=12ms agent=30ms',
+    'INFO impd.imps imp=e2e-bt-t1 restored boot template 0123456789ab as pid 11 load=14ms agent=31ms',
   ].join('\n');
 
   expect(parseLoggedSteps(log, 'e2e-bt-t1', 'restored boot template')).toStrictEqual({
@@ -28,7 +28,7 @@ test('#parseLoggedSteps reads the steps of the last line that names the imp', ()
 });
 
 test('#parseLoggedSteps adds the total of a created line', () => {
-  const log = 'impd: e2e-bt-t0: created in 48ms (disk=5ms boot=40ms)\n';
+  const log = 'INFO impd.imps imp=e2e-bt-t0 created in 48ms (disk=5ms boot=40ms)\n';
 
   expect(parseLoggedSteps(log, 'e2e-bt-t0', 'created in')).toStrictEqual({
     disk: 5,
@@ -39,7 +39,7 @@ test('#parseLoggedSteps adds the total of a created line', () => {
 
 test('#parseLoggedSteps leaves out the guest steps of a line', () => {
   const log =
-    'impd: e2e-bt-t0: restored boot template 0123456789ab as pid 7 claim=4ms agent=90ms; guest claim=3ms mount=40ms\n';
+    'INFO impd.imps imp=e2e-bt-t0 restored boot template 0123456789ab as pid 7 claim=4ms agent=90ms; guest claim=3ms mount=40ms\n';
 
   expect(parseLoggedSteps(log, 'e2e-bt-t0', 'restored boot template')).toStrictEqual({
     claim: 4,
@@ -49,8 +49,8 @@ test('#parseLoggedSteps leaves out the guest steps of a line', () => {
 
 test('#parseLoggedGuestSteps reads the guest steps of the last line that names the imp', () => {
   const log = [
-    'impd: e2e-bt-t1: restored boot template 0123456789ab as pid 9 agent=80ms; guest claim=2ms ready=1ms',
-    'impd: e2e-bt-t1: restored boot template 0123456789ab as pid 11 claim=4ms agent=90ms; guest claim=3ms mount=40ms ready=2ms',
+    'INFO impd.imps imp=e2e-bt-t1 restored boot template 0123456789ab as pid 9 agent=80ms; guest claim=2ms ready=1ms',
+    'INFO impd.imps imp=e2e-bt-t1 restored boot template 0123456789ab as pid 11 claim=4ms agent=90ms; guest claim=3ms mount=40ms ready=2ms',
   ].join('\n');
 
   expect(parseLoggedGuestSteps(log, 'e2e-bt-t1', 'restored boot template')).toStrictEqual({
@@ -61,20 +61,21 @@ test('#parseLoggedGuestSteps reads the guest steps of the last line that names t
 });
 
 test('#parseLoggedGuestSteps reads a line from an agent without guest steps as none', () => {
-  const log = 'impd: e2e-bt-t0: restored boot template 0123456789ab as pid 7 agent=90ms\n';
+  const log =
+    'INFO impd.imps imp=e2e-bt-t0 restored boot template 0123456789ab as pid 7 agent=90ms\n';
 
   expect(parseLoggedGuestSteps(log, 'e2e-bt-t0', 'restored boot template')).toStrictEqual({});
 });
 
 test('#parseLoggedGuestSteps reads a log without the imp as no steps', () => {
   expect(
-    parseLoggedGuestSteps('impd: e2e-bt-t0: booted pid 7\n', 'e2e-bt-t1', 'booted pid'),
+    parseLoggedGuestSteps('INFO impd.imps imp=e2e-bt-t0 booted pid 7\n', 'e2e-bt-t1', 'booted pid'),
   ).toStrictEqual({});
 });
 
 test('#parseLoggedSteps reads a log without the imp as no steps', () => {
   expect(
-    parseLoggedSteps('impd: e2e-bt-t0: created in 48ms\n', 'e2e-bt-t1', 'created in'),
+    parseLoggedSteps('INFO impd.imps imp=e2e-bt-t0 created in 48ms\n', 'e2e-bt-t1', 'created in'),
   ).toStrictEqual({});
 });
 

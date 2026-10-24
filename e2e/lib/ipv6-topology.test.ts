@@ -46,15 +46,16 @@ test('#buildV6Names names the networks and containers after the instance', () =>
 });
 
 test('#parseUlaNetwork reads the NAT66 prefix impd logged', () => {
-  const log = 'impd: listening\nimpd: ipv6: fd4e:2a1b:9c00::/64, NAT66 behind 2001:db8:6a::2\n';
+  const log =
+    'INFO impd.api api on :7070\nINFO impd.ipv6 fd4e:2a1b:9c00::/64, NAT66 behind 2001:db8:6a::2\n';
 
   expect(parseUlaNetwork(log)).toBe('fd4e:2a1b:9c00::');
 });
 
 test('#parseUlaNetwork throws on a log without the NAT66 prefix', () => {
-  expect(() => parseUlaNetwork('impd: listening\n')).toThrowWithMessage(
+  expect(() => parseUlaNetwork('INFO impd.api api on :7070\n')).toThrowWithMessage(
     TypeError,
-    'impd logged no NAT66 prefix:\nimpd: listening\n',
+    'impd logged no NAT66 prefix:\nINFO impd.api api on :7070\n',
   );
 });
 

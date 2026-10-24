@@ -2,6 +2,7 @@ import { expect, mock, onTestFinished, test } from 'bun:test';
 import invariant from 'tiny-invariant';
 import { buildMockNewCheckpoint } from '../../../testing/imp-ops/build-mock-new-checkpoint';
 import { buildStubClock } from '../../../testing/platform/build-stub-clock';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { createTestDatabase } from '../../../testing/platform/create-test-database';
 import { buildMockImpDiskUsage } from '../../../testing/vm/build-mock-imp-disk-usage';
 import { makeStubSlowMeasure } from '../../../testing/vm/make-stub-slow-measure';
@@ -45,7 +46,6 @@ test('it measures every imp with its checkpoints', async () => {
   const cache = createDiskUsageCache({
     db: ctx.db,
     storage: { measureUsage },
-    log: mock<(message: string) => void>(),
   });
 
   onTestFinished(() => {
@@ -89,7 +89,6 @@ test('it keeps each count with the time its pass started', async () => {
   const cache = createDiskUsageCache({
     db: ctx.db,
     storage: { measureUsage },
-    log: mock<(message: string) => void>(),
     now: () => new Date(clock.now()),
   });
 
@@ -114,7 +113,6 @@ test('it reads no count for an imp before the first pass', async () => {
   const cache = createDiskUsageCache({
     db: ctx.db,
     storage: { measureUsage: () => Promise.resolve({ imps: new Map(), isPartial: false }) },
-    log: mock<(message: string) => void>(),
   });
 
   onTestFinished(() => {
@@ -164,7 +162,6 @@ test('it totals what every imp takes on its own', async () => {
           isPartial: false,
         }),
     },
-    log: mock<(message: string) => void>(),
   });
 
   onTestFinished(() => {
@@ -190,7 +187,6 @@ test('it shares a pass under way with a second caller', async () => {
   const cache = createDiskUsageCache({
     db: ctx.db,
     storage: { measureUsage },
-    log: mock<(message: string) => void>(),
   });
 
   onTestFinished(() => {
@@ -236,7 +232,6 @@ test('it keeps the last count when a pass fails', async () => {
   const cache = createDiskUsageCache({
     db: ctx.db,
     storage: { measureUsage },
-    log: mock<(message: string) => void>(),
   });
 
   onTestFinished(() => {
@@ -255,12 +250,11 @@ test('it keeps the last count when a pass fails', async () => {
 test('it logs a pass that fails', async () => {
   const ctx = await setupTest();
 
-  const log = mock<(message: string) => void>();
+  const logs = captureImpdLogs();
 
   const cache = createDiskUsageCache({
     db: ctx.db,
     storage: { measureUsage: () => Promise.reject(new Error('pool gone')) },
-    log,
   });
 
   onTestFinished(() => {
@@ -269,7 +263,7 @@ test('it logs a pass that fails', async () => {
 
   await cache.runPass();
 
-  expect(log).toHaveBeenCalledExactlyOnceWith('impd: disk usage: pool gone');
+  expect(logs).toStrictEqual(['WARNING impd.disk disk usage: pool gone']);
 });
 
 test('it keeps the last count of an imp a cut-short pass did not reach', async () => {
@@ -303,7 +297,6 @@ test('it keeps the last count of an imp a cut-short pass did not reach', async (
   const cache = createDiskUsageCache({
     db: ctx.db,
     storage: { measureUsage },
-    log: mock<(message: string) => void>(),
     now: () => new Date(clock.durationMs),
   });
 
@@ -359,7 +352,6 @@ test('it stamps a count with the time its pass started, not the time it ended', 
         });
       },
     },
-    log: mock<(message: string) => void>(),
     now: () => new Date(clock.durationMs),
   });
 
@@ -400,7 +392,6 @@ test('it runs a refresh asked for during a pass as a pass of its own after it', 
   const cache = createDiskUsageCache({
     db: ctx.db,
     storage: { measureUsage },
-    log: mock<(message: string) => void>(),
     startTimer,
   });
 
@@ -438,7 +429,6 @@ test('it starts one refresh timer for a burst of refresh requests', async () => 
   const cache = createDiskUsageCache({
     db: ctx.db,
     storage: { measureUsage: () => Promise.resolve({ imps: new Map(), isPartial: false }) },
-    log: mock<(message: string) => void>(),
     startTimer,
   });
 
@@ -461,7 +451,6 @@ test('it cancels a pending refresh when it stops', async () => {
   const cache = createDiskUsageCache({
     db: ctx.db,
     storage: { measureUsage: () => Promise.resolve({ imps: new Map(), isPartial: false }) },
-    log: mock<(message: string) => void>(),
     startTimer: () => cancel,
   });
 
@@ -479,7 +468,6 @@ test('it starts no refresh after it stops', async () => {
   const cache = createDiskUsageCache({
     db: ctx.db,
     storage: { measureUsage: () => Promise.resolve({ imps: new Map(), isPartial: false }) },
-    log: mock<(message: string) => void>(),
     startTimer,
   });
 

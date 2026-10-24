@@ -74,7 +74,6 @@ export interface RouterDeps {
   readonly diskBudget: Pick<DiskBudget, 'readStatus' | 'withRoom'>;
   readonly gc: Pick<StorageGcService, 'runGc'>;
   readonly now: () => number;
-  readonly log: (message: string) => void;
   readonly audit: ApiAudit;
   readonly tokens: TokenStore;
   readonly imageKeepaliveMs: number;

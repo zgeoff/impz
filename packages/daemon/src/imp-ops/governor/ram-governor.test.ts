@@ -5,6 +5,7 @@ import fc from 'fast-check';
 import { buildStubGovernedHostArbitraries } from '../../../testing/imp-ops/build-stub-governed-host-arbitraries';
 import { createStubGovernedHost } from '../../../testing/imp-ops/create-stub-governed-host';
 import type { RoomLeft } from '../../../testing/imp-ops/create-stub-governed-host';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { createEventBus } from '../../platform/events/event-bus';
 import { ENFORCE_INTERVAL_MS, createRamGovernor } from './ram-governor';
 
@@ -23,7 +24,7 @@ test('it admits on the resident counts and walks no VM pages while the budget is
   });
 
   const readRamMib = mock(host.deps.readRamMib);
-  const governor = createRamGovernor({ ...host.deps, readRamMib, log: () => {} });
+  const governor = createRamGovernor({ ...host.deps, readRamMib });
 
   await governor.admit({ id: 'x', name: 'x', reserveMib: 300, memoryMib: 600 });
 
@@ -37,7 +38,7 @@ test('it counts the reserve it admitted on the resident counts', async () => {
     awake: [{ id: 'a', rssMib: 200 }],
   });
 
-  const governor = createRamGovernor({ ...host.deps, log: () => {} });
+  const governor = createRamGovernor({ ...host.deps });
 
   await governor.admit({ id: 'x', name: 'x', reserveMib: 300, memoryMib: 600 });
 
@@ -57,7 +58,7 @@ test('it walks every VM and makes room when the resident counts leave too little
   });
 
   const readRamMib = mock(host.deps.readRamMib);
-  const governor = createRamGovernor({ ...host.deps, readRamMib, log: () => {} });
+  const governor = createRamGovernor({ ...host.deps, readRamMib });
 
   await governor.admit({ id: 'x', name: 'x', reserveMib: 500, memoryMib: 600 });
 
@@ -75,7 +76,6 @@ test('it counts the KSM headroom beside the resident counts and makes room for i
   const governor = createRamGovernor({
     ...host.deps,
     readHeadroomMib: () => Promise.resolve(300),
-    log: () => {},
   });
 
   await governor.admit({ id: 'x', name: 'x', reserveMib: 200, memoryMib: 600 });
@@ -90,7 +90,7 @@ test('it makes room by what a guest holds now when its pages dipped during an ea
     awake: [{ id: 'old', rssMib: 900 }],
   });
 
-  const governor = createRamGovernor({ ...host.deps, log: () => {} });
+  const governor = createRamGovernor({ ...host.deps });
 
   host.applyChange({ kind: 'dip', id: 'old', mib: 200 }, governor);
 
@@ -111,7 +111,7 @@ test('it sleeps the least recently active imp that is not busy to make room', as
     ],
   });
 
-  const governor = createRamGovernor({ ...host.deps, log: () => {} });
+  const governor = createRamGovernor({ ...host.deps });
 
   host.applyChange({ kind: 'busy', id: 'pinned', on: true }, governor);
 
@@ -138,7 +138,7 @@ test('it publishes the sleep it made room with and the admission', async () => {
     published.push(event);
   });
 
-  const governor = createRamGovernor({ ...host.deps, events, log: () => {} });
+  const governor = createRamGovernor({ ...host.deps, events });
 
   host.applyChange({ kind: 'busy', id: 'pinned', on: true }, governor);
 
@@ -189,7 +189,7 @@ test('it refuses an admit that sleeping the other idle imps cannot make room for
     published.push(event);
   });
 
-  const governor = createRamGovernor({ ...host.deps, events, log: () => {} });
+  const governor = createRamGovernor({ ...host.deps, events });
 
   host.applyChange({ kind: 'busy', id: 'pinned', on: true }, governor);
 
@@ -224,7 +224,7 @@ test('it never admits an imp whose memory is larger than the whole budget', () =
     awake: [{ id: 'idle', rssMib: 300 }],
   });
 
-  const governor = createRamGovernor({ ...host.deps, log: () => {} });
+  const governor = createRamGovernor({ ...host.deps });
 
   expect(
     governor.admit({ id: 'huge', name: 'huge', reserveMib: 100, memoryMib: 1001 }),
@@ -247,7 +247,7 @@ test('it picks the next victim when the one it picked is skipped', async () => {
     ],
   });
 
-  const governor = createRamGovernor({ ...host.deps, log: () => {} });
+  const governor = createRamGovernor({ ...host.deps });
 
   host.refuseSleep('old', 'skipped');
 
@@ -267,7 +267,7 @@ test('it refuses an admit once only victims that are skipped are left', async ()
     ],
   });
 
-  const governor = createRamGovernor({ ...host.deps, log: () => {} });
+  const governor = createRamGovernor({ ...host.deps });
 
   host.refuseSleep('old', 'skipped');
 
@@ -289,7 +289,7 @@ test('it sleeps no more imps for a rejected admit once a victim is skipped', () 
     ],
   });
 
-  const governor = createRamGovernor({ ...host.deps, log: () => {} });
+  const governor = createRamGovernor({ ...host.deps });
 
   host.refuseSleep('mid', 'skipped');
 
@@ -313,7 +313,6 @@ test('it refuses an admit with the disk error when a victim had no room for its 
   const governor = createRamGovernor({
     ...host.deps,
     readDiskFullError: () => new Error('the disk has no room for a snapshot'),
-    log: () => {},
   });
 
   host.refuseSleep('old', 'diskFull');
@@ -325,7 +324,7 @@ test('it refuses an admit with the disk error when a victim had no room for its 
 
 test('it counts a reservation until its 20 s run out, and not a moment longer', async () => {
   const host = createStubGovernedHost({ budgetMib: 1000, ids: ['x'], awake: [] });
-  const governor = createRamGovernor({ ...host.deps, log: () => {} });
+  const governor = createRamGovernor({ ...host.deps });
 
   await governor.admit({ id: 'x', name: 'x', reserveMib: 400, memoryMib: 800 });
 
@@ -353,14 +352,8 @@ test('it sleeps every idle imp, oldest first, when together they cannot reach th
     ],
   });
 
-  const logs: string[] = [];
-
-  const governor = createRamGovernor({
-    ...host.deps,
-    log: (message) => {
-      logs.push(message);
-    },
-  });
+  const logs = captureImpdLogs();
+  const governor = createRamGovernor({ ...host.deps });
 
   host.applyChange({ kind: 'hold', id: 'big', on: true }, governor);
 
@@ -372,7 +365,7 @@ test('it sleeps every idle imp, oldest first, when together they cannot reach th
     'big',
   ]);
 
-  expect(logs).toStrictEqual(['impd: governor: slept 3, RAM still over budget by 1000 MiB']);
+  expect(logs).toStrictEqual(['INFO impd.governor slept 3, RAM still over budget by 1000 MiB']);
 });
 
 test('it asks no imp and stays quiet on the passes after nothing is left to sleep', async () => {
@@ -387,14 +380,8 @@ test('it asks no imp and stays quiet on the passes after nothing is left to slee
     ],
   });
 
-  const logs: string[] = [];
-
-  const governor = createRamGovernor({
-    ...host.deps,
-    log: (message) => {
-      logs.push(message);
-    },
-  });
+  const logs = captureImpdLogs();
+  const governor = createRamGovernor({ ...host.deps });
 
   host.applyChange({ kind: 'hold', id: 'big', on: true }, governor);
 
@@ -419,7 +406,7 @@ test('it still sleeps the other idle imps when one is skipped', async () => {
     ],
   });
 
-  const governor = createRamGovernor({ ...host.deps, log: () => {} });
+  const governor = createRamGovernor({ ...host.deps });
 
   host.applyChange({ kind: 'hold', id: 'big', on: true }, governor);
   host.refuseSleep('mid', 'skipped');
@@ -446,7 +433,7 @@ test('it sleeps no imp for an admit when the idle imps together cannot make room
     ],
   });
 
-  const governor = createRamGovernor({ ...host.deps, log: () => {} });
+  const governor = createRamGovernor({ ...host.deps });
 
   host.applyChange({ kind: 'hold', id: 'big', on: true }, governor);
 
@@ -464,14 +451,8 @@ test('it says once that nothing is left to sleep, until usage is under the budge
     awake: [{ id: 'big', rssMib: 2000 }],
   });
 
-  const logs: string[] = [];
-
-  const governor = createRamGovernor({
-    ...host.deps,
-    log: (message) => {
-      logs.push(message);
-    },
-  });
+  const logs = captureImpdLogs();
+  const governor = createRamGovernor({ ...host.deps });
 
   host.applyChange({ kind: 'hold', id: 'big', on: true }, governor);
 
@@ -487,8 +468,8 @@ test('it says once that nothing is left to sleep, until usage is under the budge
   await governor.enforce();
 
   expect(logs).toStrictEqual([
-    'impd: governor: RAM over budget by 1000 MiB and no idle imp left to sleep',
-    'impd: governor: RAM over budget by 500 MiB and no idle imp left to sleep',
+    'INFO impd.governor RAM over budget by 1000 MiB and no idle imp left to sleep',
+    'INFO impd.governor RAM over budget by 500 MiB and no idle imp left to sleep',
   ]);
 });
 
@@ -506,7 +487,7 @@ test('it admits an admission that may not sleep imps into free room, and publish
     published.push(event);
   });
 
-  const governor = createRamGovernor({ ...host.deps, events, log: () => {} });
+  const governor = createRamGovernor({ ...host.deps, events });
 
   await governor.admit({
     id: 't1',
@@ -529,7 +510,7 @@ test('it refuses an admission that may not sleep imps once the free room is gone
     awake: [{ id: 'idle', rssMib: 600 }],
   });
 
-  const governor = createRamGovernor({ ...host.deps, log: () => {} });
+  const governor = createRamGovernor({ ...host.deps });
 
   await governor.admit({
     id: 't1',
@@ -559,7 +540,6 @@ test('it reports no headroom while KSM saves nothing', async () => {
   const governor = createRamGovernor({
     ...host.deps,
     readHeadroomMib: () => Promise.resolve(0),
-    log: () => {},
   });
 
   const usage = await governor.readUsage();
@@ -589,7 +569,6 @@ test('it measures every awake imp at once, each read started before any ends', a
 
       return read.promise;
     },
-    log: () => {},
   });
 
   const usage = governor.readUsage();
@@ -622,7 +601,6 @@ test('it reports the KSM headroom in the usage', async () => {
   const governor = createRamGovernor({
     ...host.deps,
     readHeadroomMib: () => Promise.resolve(300),
-    log: () => {},
   });
 
   const usage = await governor.readUsage();
@@ -643,7 +621,6 @@ test('it counts the KSM headroom against the budget, so a merged page that split
   const governor = createRamGovernor({
     ...host.deps,
     readHeadroomMib: () => Promise.resolve(300),
-    log: () => {},
   });
 
   await governor.admit({ id: 'c', name: 'c', reserveMib: 200, memoryMib: 512 });
@@ -662,7 +639,7 @@ test('it sleeps the least recently active idle imp for a grow, never the grower'
     ],
   });
 
-  const governor = createRamGovernor({ ...host.deps, log: () => {} });
+  const governor = createRamGovernor({ ...host.deps });
 
   const admitted = await governor.admitGrow({ id: 'grower', name: 'grower', mib: 260 });
 
@@ -690,7 +667,6 @@ test('it asks the idle guests other than the grower to give back memory before a
 
       return host.deps.reclaim(excludeId);
     },
-    log: () => {},
   });
 
   await governor.admitGrow({ id: 'grower', name: 'grower', mib: 260 });
@@ -709,7 +685,7 @@ test('it counts a grow as reserved until the grower measures it', async () => {
     ],
   });
 
-  const governor = createRamGovernor({ ...host.deps, log: () => {} });
+  const governor = createRamGovernor({ ...host.deps });
 
   await governor.admitGrow({ id: 'grower', name: 'grower', mib: 260 });
 
@@ -727,7 +703,6 @@ test('it sleeps no imp when an unplug the reclaim did not count made room', asyn
 
   const governor = createRamGovernor({
     ...host.deps,
-    log: () => {},
     reclaim: () => {
       host.applyChange({ kind: 'rss', id: 'old', mib: 300 }, governor);
 
@@ -747,7 +722,7 @@ test('it puts back the wake reservation that a released grow counted in', async 
     awake: [{ id: 'grower', rssMib: 300 }],
   });
 
-  const governor = createRamGovernor({ ...host.deps, log: () => {} });
+  const governor = createRamGovernor({ ...host.deps });
 
   await governor.admit({ id: 'grower', name: 'grower', reserveMib: 500, memoryMib: 600 });
   await governor.admitGrow({ id: 'grower', name: 'grower', mib: 260 });
@@ -766,7 +741,7 @@ test('it reserves nothing once a grow with no reservation before it is released'
     awake: [{ id: 'grower', rssMib: 300 }],
   });
 
-  const governor = createRamGovernor({ ...host.deps, log: () => {} });
+  const governor = createRamGovernor({ ...host.deps });
 
   await governor.admitGrow({ id: 'grower', name: 'grower', mib: 260 });
 
@@ -784,7 +759,7 @@ test('it keeps a wake reservation made after a grow when the grow is released', 
     awake: [{ id: 'grower', rssMib: 300 }],
   });
 
-  const governor = createRamGovernor({ ...host.deps, log: () => {} });
+  const governor = createRamGovernor({ ...host.deps });
 
   await governor.admitGrow({ id: 'grower', name: 'grower', mib: 260 });
   await governor.admit({ id: 'grower', name: 'grower', reserveMib: 500, memoryMib: 600 });
@@ -814,7 +789,7 @@ test('it refuses a grow when only busy imps could make room, and publishes why',
     published.push(event);
   });
 
-  const governor = createRamGovernor({ ...host.deps, events, log: () => {} });
+  const governor = createRamGovernor({ ...host.deps, events });
 
   host.applyChange({ kind: 'busy', id: 'old', on: true }, governor);
   host.applyChange({ kind: 'busy', id: 'new', on: true }, governor);
@@ -862,7 +837,6 @@ test('it makes no room and reserves nothing for a grow of an imp that is no long
 
       return host.deps.reclaim(excludeId);
     },
-    log: () => {},
   });
 
   host.applyChange({ kind: 'stop', id: 'grower' }, governor);
@@ -893,7 +867,6 @@ test('it counts the KSM headroom for a grow, as for a boot or a wake', async () 
 
       return Promise.resolve(headroomMib);
     },
-    log: () => {},
   });
 
   const admitted = await governor.admitGrow({ id: 'grower', name: 'grower', mib: 200 });
@@ -922,7 +895,6 @@ test('it lets idle guests unplug instead of sleeping an imp for a boot', async (
 
       return host.deps.reclaim(excludeId);
     },
-    log: () => {},
   });
 
   host.applyChange({ kind: 'spare', id: 'new', mib: 200 }, governor);
@@ -953,7 +925,6 @@ test('it lets idle guests unplug before enforcement sleeps an imp', async () => 
 
       return host.deps.reclaim(excludeId);
     },
-    log: () => {},
   });
 
   host.applyChange({ kind: 'spare', id: 'new', mib: 200 }, governor);
@@ -985,7 +956,7 @@ test('it keeps each admission within the budget and never asks a pinned imp to s
         awake,
       });
 
-      const governor = createRamGovernor({ ...host.deps, log: () => {} });
+      const governor = createRamGovernor({ ...host.deps });
 
       for (const op of ops) {
         const awakeBefore = [...host.imps.values()].filter((imp) => imp.awake).length;
@@ -1067,7 +1038,7 @@ test('it gets a crowded host under the budget or sleeps every imp it may', async
         awake: crowded,
       });
 
-      const governor = createRamGovernor({ ...host.deps, log: () => {} });
+      const governor = createRamGovernor({ ...host.deps });
 
       for (const imp of crowded) {
         host.applyChange({ kind: 'hold', id: imp.id, on: imp.held }, governor);
@@ -1107,7 +1078,7 @@ test('it settles concurrent admits with holds and RSS changes inside them, leavi
           awake,
         });
 
-        const governor = createRamGovernor({ ...host.deps, log: () => {} });
+        const governor = createRamGovernor({ ...host.deps });
 
         host.pacer.pace = () => scheduler.schedule(Promise.resolve());
 
@@ -1189,7 +1160,7 @@ test('it keeps a grow within the budget, never sleeps its grower, and sleeps onl
         awake,
       });
 
-      const governor = createRamGovernor({ ...host.deps, log: () => {} });
+      const governor = createRamGovernor({ ...host.deps });
 
       for (const op of ops) {
         if (op.kind === 'enforce') {

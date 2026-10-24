@@ -28,7 +28,6 @@ test.each([
     origin: 'http://127.0.0.1:7171',
     resource: 'http://127.0.0.1:7171/mcp',
     now: () => Date.UTC(2026, 0, 1),
-    log: () => {},
     readApprover: () => null,
     removeGrantRows: () => Promise.resolve(),
   });
@@ -72,7 +71,6 @@ test.each([
     origin: 'http://127.0.0.1:7171',
     resource: 'http://127.0.0.1:7171/mcp',
     now: () => Date.UTC(2026, 0, 1),
-    log: () => {},
     readApprover: () => null,
     removeGrantRows: () => Promise.resolve(),
   });

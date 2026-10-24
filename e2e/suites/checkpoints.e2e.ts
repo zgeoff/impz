@@ -53,7 +53,7 @@ test('it restores the disk of a running imp from its checkpoint, within the limi
 
   invariant(cp1);
 
-  const impdMs = await readImpdLoggedMs(`${source}: checkpoint ${cp1.id} in`);
+  const impdMs = await readImpdLoggedMs(`imp=${source} checkpoint ${cp1.id} in`);
 
   invariant(impdMs !== null);
   checkLimit('checkpoint (impd)', impdMs, config.maxCheckpointMs);

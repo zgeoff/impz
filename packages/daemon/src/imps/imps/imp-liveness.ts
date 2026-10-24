@@ -2,6 +2,7 @@ import { readImpById } from '../../platform/db/imps';
 import type { ImpRecord } from '../../platform/db/imps';
 import { updateImpState } from '../../platform/db/update-imp-state';
 import type { ImpStateChange } from '../../platform/db/update-imp-state';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { probeSnapshot, readLoadingMeta, readSnapshotMeta } from '../../vm/sleep/snapshot-meta';
 import type { ImpPaths } from '../../vm/storage/data-layout';
 import { isImpVm } from '../../vm/vmm/firecracker-process';
@@ -72,7 +73,9 @@ export async function checkLiveness(
   const hold =
     trigger === KERNEL_OOPS_TRIGGER ? '; it stays off its disk until the host reboots' : '';
 
-  context.log(`impd: ${imp.name}: ${what}; marked it ${repaired.state}${hold}`);
+  getImpdLogger('imps')
+    .with({ imp: imp.name })
+    .info('{what}; marked it {state}{hold}', { what, state: repaired.state, hold });
 
   if (lostVm) {
     await context.vms.releaseVm(paths);

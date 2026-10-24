@@ -10,7 +10,6 @@ import {
 } from '../../platform/errors/impd-errors';
 import type { Clock } from '../../platform/process/clock';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
-import { printLog } from '../../platform/process/print-log';
 import { REAL_CLOCK } from '../../platform/process/real-clock';
 import { buildImagePaths } from '../../vm/storage/data-layout';
 import type { DiskBudget } from '../../vm/storage/disk-budget';
@@ -43,7 +42,6 @@ interface TemplateServiceDeps {
   readonly diskBudget: Pick<DiskBudget, 'requireRoom'>;
   readonly runImageEviction: () => Promise<void>;
   readonly clock?: Pick<Clock, 'now'>;
-  readonly log?: (message: string) => void;
   readonly freezer?: DiskFreezer;
 }
 
@@ -54,7 +52,6 @@ export function createTemplateService(deps: TemplateServiceDeps): TemplateServic
   const withConsistentDisk = createConsistentDisk({
     storage,
     imps: deps.imps,
-    log: deps.log ?? printLog,
     freezer: deps.freezer,
   });
 

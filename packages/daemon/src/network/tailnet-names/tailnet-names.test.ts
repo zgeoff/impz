@@ -9,6 +9,7 @@ import { HttpResponse, http } from 'msw';
 import invariant from 'tiny-invariant';
 import { buildStubTailscaleServe } from '../../../testing/network/build-stub-tailscale-serve';
 import { createStubTailscaleApi } from '../../../testing/network/create-stub-tailscale-api';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { deriveSlotAddress } from '../../host-net/net/addressing';
 import type { TailscaleStatus } from '../../host-net/net/tailscale-status';
@@ -42,8 +43,6 @@ async function setupTest() {
 
   server.use(...tailscaleApi.handlers);
 
-  const logs: string[] = [];
-
   const namesDeps: Omit<TailnetNamesDeps, 'hostId'> = {
     config: { prefix: '', oauthFile: join(harness.dataDir, 'unused-oauth.json') },
     db: harness.db,
@@ -55,9 +54,6 @@ async function setupTest() {
     isImpPresent: createPresenceCheck(harness.imps, harness.db),
 
     readSuffix: () => Promise.resolve(null),
-    log: (line) => {
-      logs.push(line);
-    },
   };
 
   // assigned, not spread: a spread reads the harness's parts once
@@ -65,8 +61,7 @@ async function setupTest() {
     tailscaleApi,
     tailscale,
     tailscaleStatus,
-    logs,
-    impdLogs: harness.logs,
+    logs: captureImpdLogs(),
     namesDeps,
   });
 }
@@ -216,7 +211,9 @@ test('it logs a name once when it goes live', async () => {
   await names.runSync();
   await names.runSync();
 
-  expect(ctx.logs).toStrictEqual(['impd: tailnet names: box is svc:box']);
+  expect(ctx.logs.filter((line) => line.includes(' impd.tailnet '))).toStrictEqual([
+    'INFO impd.tailnet tailnet names: box is svc:box',
+  ]);
 });
 
 test('it only lists the services on a pass that finds everything in place', async () => {
@@ -377,7 +374,9 @@ test('it logs the removal of a service no imp has', async () => {
   await ctx.client.imps.destroy({ name: 'box' });
   await names.runSync();
 
-  expect(ctx.logs.at(-1)).toBe('impd: tailnet names: removed svc:box, which no imp has');
+  expect(ctx.logs.at(-1)).toBe(
+    'INFO impd.tailnet tailnet names: removed svc:box, which no imp has',
+  );
 });
 
 test('it never removes another host’s, another owner’s or an untagged service', async () => {
@@ -540,8 +539,8 @@ test('it logs a failure once while it stays the same', async () => {
   await names.runSync();
   await names.runSync();
 
-  expect(ctx.logs).toStrictEqual([
-    'impd: tailnet names: box: Tailscale GET /tailnet/-/services: 503 unavailable',
+  expect(ctx.logs.filter((line) => line.includes(' impd.tailnet '))).toStrictEqual([
+    'WARNING impd.tailnet tailnet names: box: Tailscale GET /tailnet/-/services: 503 unavailable',
   ]);
 });
 
@@ -642,7 +641,7 @@ test('it logs a removal that fails, and goes on with the pass', async () => {
   await names.runSync();
 
   expect(ctx.logs.at(-1)).toBe(
-    'impd: tailnet names: removing svc:box: Tailscale DELETE /tailnet/-/services/svc%3Abox: 403 forbidden',
+    'WARNING impd.tailnet tailnet names: removing svc:box: Tailscale DELETE /tailnet/-/services/svc%3Abox: 403 forbidden',
   );
 });
 
@@ -703,7 +702,9 @@ test('it shows no service URL before the name is live', async () => {
   await ctx.client.imps.create({ name: 'box' });
 
   const failure = await waitFor(() => {
-    const line = ctx.impdLogs.find((each) => each.startsWith('impd: tailnet names: box: '));
+    const line = ctx.logs.find((each) =>
+      each.startsWith('WARNING impd.tailnet tailnet names: box: '),
+    );
 
     invariant(line !== undefined);
 
@@ -712,6 +713,6 @@ test('it shows no service URL before the name is live', async () => {
 
   const urls = await ctx.client.imps.url({ name: 'box' });
 
-  expect(failure).toStartWith('impd: tailnet names: box: ENOENT');
+  expect(failure).toStartWith('WARNING impd.tailnet tailnet names: box: ENOENT');
   expect(urls.service).toBeNull();
 });

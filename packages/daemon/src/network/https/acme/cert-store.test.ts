@@ -1,9 +1,10 @@
-import { expect, mock, onTestFinished, test } from 'bun:test';
+import { expect, onTestFinished, test } from 'bun:test';
 import { existsSync, statSync } from 'node:fs';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createMockCertificate } from '../../../../testing/network/create-mock-certificate';
+import { captureImpdLogs } from '../../../../testing/platform/capture-impd-logs';
 import { createCertStore } from './cert-store';
 
 async function setupTest() {
@@ -261,8 +262,8 @@ test('it drops a v0.1.1 key that has no URL', async () => {
 test('it logs an account file that does not parse once', async () => {
   const ctx = await setupTest();
 
-  const log = mock<(message: string) => void>();
-  const store = createCertStore(ctx.directoryPath, log);
+  const logs = captureImpdLogs();
+  const store = createCertStore(ctx.directoryPath);
 
   await mkdir(join(ctx.directoryPath, 'tls'));
   await writeFile(join(ctx.directoryPath, 'tls', 'account.json'), '{"directoryUrl":');
@@ -270,9 +271,9 @@ test('it logs an account file that does not parse once', async () => {
   store.readAccount('https://ca.test/dir');
   store.readAccount('https://ca.test/dir');
 
-  expect(log).toHaveBeenCalledExactlyOnceWith(
-    `impd: https: ${join(ctx.directoryPath, 'tls', 'account.json')} does not parse; making a new ACME account`,
-  );
+  expect(logs).toStrictEqual([
+    `INFO impd.https ${join(ctx.directoryPath, 'tls', 'account.json')} does not parse; making a new ACME account`,
+  ]);
 });
 
 test('it reads no account from an account file that does not parse', async () => {

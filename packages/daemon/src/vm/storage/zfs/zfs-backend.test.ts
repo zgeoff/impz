@@ -1,4 +1,4 @@
-import { expect, mock, onTestFinished, test } from 'bun:test';
+import { expect, onTestFinished, test } from 'bun:test';
 import { randomBytes } from 'node:crypto';
 import {
   closeSync,
@@ -18,6 +18,7 @@ import { dirname, join } from 'node:path';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { buildStubMoveStream } from '../../../../testing/imp-ops/build-stub-move-stream';
+import { captureImpdLogs } from '../../../../testing/platform/capture-impd-logs';
 import { writeSyncedFile } from '../../../../testing/platform/write-synced-file';
 import { StubZfsCrashError, buildStubZfs } from '../../../../testing/vm/build-stub-zfs';
 import { createZfsTestDataset } from '../../../../testing/vm/create-zfs-test-dataset';
@@ -44,7 +45,7 @@ function setupTest() {
   const peerDir = join(root, 'peer');
   const fake = buildStubZfs({ root: 'tank/imp', rootDir: dataDir });
   const peerFake = buildStubZfs({ root: 'tank/imp', rootDir: peerDir });
-  const log = mock<(message: string) => void>();
+  const logs = captureImpdLogs();
 
   const startBackend = () => {
     const backend = createZfsBackend({
@@ -54,7 +55,6 @@ function setupTest() {
       streams: fake.streams,
       readMounts: fake.readMounts,
       readModuleVersion: () => '2.4.4',
-      log,
     });
 
     stack.defer(() => backend.waitForReclaim());
@@ -69,7 +69,6 @@ function setupTest() {
     streams: peerFake.streams,
     readMounts: peerFake.readMounts,
     readModuleVersion: () => '2.4.4',
-    log: () => {},
   });
 
   stack.defer(() => peerBackend.waitForReclaim());
@@ -81,16 +80,12 @@ function setupTest() {
 
     const dataset = await createZfsTestDataset(stack, pool);
 
-    const startPoolBackend = (
-      run: CommandRunner = runCommand,
-      poolLog: (message: string) => void = () => {},
-    ) => {
+    const startPoolBackend = (run: CommandRunner = runCommand) => {
       // The zfs_uiomove bug needs a VM killed during a disk read, and these tests run no VM.
       const backend = createZfsBackend({
         dataDir: dataset.dataDir,
         root: dataset.root,
         run,
-        log: poolLog,
         isUiomoveBugAllowed: true,
       });
 
@@ -111,7 +106,7 @@ function setupTest() {
     stack,
     dataDir,
     fake,
-    log,
+    logs,
     backend: startBackend(),
     startBackend,
     peer: { dataDir: peerDir, fake: peerFake, backend: peerBackend },
@@ -128,7 +123,6 @@ test('#start refuses a userland and kernel module of different major versions', 
     run: ctx.fake.run,
     readMounts: ctx.fake.readMounts,
     readModuleVersion: () => '3.0.0-1',
-    log: ctx.log,
   });
 
   expect(
@@ -148,15 +142,14 @@ test('#start warns about a minor version skew and goes on', async () => {
     run: ctx.fake.run,
     readMounts: ctx.fake.readMounts,
     readModuleVersion: () => '2.3.7',
-    log: ctx.log,
   });
 
   ctx.stack.defer(() => backend.waitForReclaim());
 
   await backend.start({ impIds: new Set(), checkpointIds: new Set(), imageDigests: new Set() });
 
-  expect(ctx.log).toHaveBeenCalledWith(
-    'impd: zfs: warning: the userland is 2.4.4 but the kernel module is 2.3.7',
+  expect(ctx.logs).toContain(
+    'WARNING impd.zfs the userland is 2.4.4 but the kernel module is 2.3.7',
   );
 
   expect(ctx.fake.readMountedAt(join(ctx.dataDir, 'mem'))).toBe('tank/imp/mem');
@@ -173,7 +166,6 @@ test.each(['2.2.2-0ubuntu9.5', '2.3.4-1ubuntu2', '2.4.1'])(
       run: ctx.fake.run,
       readMounts: ctx.fake.readMounts,
       readModuleVersion: () => version,
-      log: ctx.log,
     });
 
     const failed = await backend
@@ -199,7 +191,6 @@ test.each(['2.2.2-0ubuntu9.5', '2.3.4-1ubuntu2', '2.4.1'])(
       run: ctx.fake.run,
       readMounts: ctx.fake.readMounts,
       readModuleVersion: () => version,
-      log: ctx.log,
       isUiomoveBugAllowed: true,
     });
 
@@ -224,7 +215,6 @@ test.each(['2.3.7', '2.4.2', '2.4.4', '2.5.0-1'])(
       run: ctx.fake.run,
       readMounts: ctx.fake.readMounts,
       readModuleVersion: () => version,
-      log: ctx.log,
     });
 
     ctx.stack.defer(() => backend.waitForReclaim());
@@ -232,7 +222,7 @@ test.each(['2.3.7', '2.4.2', '2.4.4', '2.5.0-1'])(
     await backend.start({ impIds: new Set(), checkpointIds: new Set(), imageDigests: new Set() });
 
     expect(backend.readWarnings()).toStrictEqual([]);
-    expect(ctx.log).not.toHaveBeenCalledWith(expect.stringContaining('zfs_uiomove'));
+    expect(ctx.logs).not.toContainEqual(expect.stringContaining('zfs_uiomove'));
   },
 );
 
@@ -245,7 +235,6 @@ test('#start logs the zfs_uiomove warning and still mounts the storage when the 
     run: ctx.fake.run,
     readMounts: ctx.fake.readMounts,
     readModuleVersion: () => '2.3.4-1ubuntu2',
-    log: ctx.log,
     isUiomoveBugAllowed: true,
   });
 
@@ -253,8 +242,8 @@ test('#start logs the zfs_uiomove warning and still mounts the storage when the 
 
   await backend.start({ impIds: new Set(), checkpointIds: new Set(), imageDigests: new Set() });
 
-  expect(ctx.log).toHaveBeenCalledWith(
-    'impd: zfs: warning: the zfs kernel module 2.3.4-1ubuntu2 has the zfs_uiomove short-copy bug (openzfs/zfs#15918): a VM killed during a disk read can oops the kernel and hold its disk until a reboot; modules 2.3.7, 2.4.2 and later fix it',
+  expect(ctx.logs).toContain(
+    'WARNING impd.zfs the zfs kernel module 2.3.4-1ubuntu2 has the zfs_uiomove short-copy bug (openzfs/zfs#15918): a VM killed during a disk read can oops the kernel and hold its disk until a reboot; modules 2.3.7, 2.4.2 and later fix it',
   );
 
   expect(ctx.fake.readMountedAt(join(ctx.dataDir, 'mem'))).toBe('tank/imp/mem');
@@ -269,7 +258,6 @@ test('#start mounts nothing on a kernel module with the zfs_uiomove bug', async 
     run: ctx.fake.run,
     readMounts: ctx.fake.readMounts,
     readModuleVersion: () => '2.3.4-1ubuntu2',
-    log: ctx.log,
   });
 
   const failed = await backend
@@ -585,8 +573,8 @@ test('#restoreCheckpoint throws the failed halt even when dropping the clone fai
     ctx.backend.restoreCheckpoint('a', 'cp-one', () => Promise.reject(new Error('stop failed'))),
   ).rejects.toThrowWithMessage(Error, 'stop failed');
 
-  expect(ctx.log).toHaveBeenCalledWith(
-    'impd: zfs: could not drop tank/imp/staging/restore-a: zfs destroy tank/imp/staging/restore-a exited 1: fake zfs: zfs destroy tank/imp/staging/restore-a failed',
+  expect(ctx.logs).toContain(
+    'WARNING impd.zfs could not drop tank/imp/staging/restore-a: zfs destroy tank/imp/staging/restore-a exited 1: fake zfs: zfs destroy tank/imp/staging/restore-a failed',
   );
 });
 
@@ -1079,7 +1067,7 @@ test('#start on an older database keeps the newer checkpoints and the disks it d
   await ctx.fake.run(['zfs', 'snapshot', 'tank/imp/disks/gone@fork-left']);
 
   ctx.fake.restart(true);
-  ctx.log.mockClear();
+  ctx.logs.splice(0);
 
   const restarted = ctx.startBackend();
 
@@ -1108,13 +1096,11 @@ test('#start on an older database keeps the newer checkpoints and the disks it d
     ctx.fake.listDatasets().filter((name) => name.startsWith('tank/imp/retired/')),
   ).toStrictEqual([]);
 
-  expect(
-    ctx.log.mock.calls.map(([line]) => line).filter((line) => line.startsWith('impd: storage:')),
-  ).toStrictEqual([
-    'impd: storage: removed snapshot tank/imp/disks/a@fork-left',
-    `impd: storage: kept orphan imp gone (tank/imp/disks/gone): 1.0 MiB, created ${ctx.fake.readCreatedAt('tank/imp/disks/gone').toISOString()}, snapshots: cp-g1, fork-left`,
-    `impd: storage: kept orphan checkpoint cp-new (tank/imp/disks/a@cp-new): 0.1 MiB, created ${ctx.fake.readCreatedAt('tank/imp/disks/a@cp-new').toISOString()}, snapshots: none`,
-    'impd: storage: kept 2 orphans the database does not name; `impz gc --orphans --dry-run` lists what `impz gc --orphans` would retire',
+  expect(ctx.logs.filter((line) => line.startsWith('INFO impd.storage '))).toStrictEqual([
+    'INFO impd.storage removed snapshot tank/imp/disks/a@fork-left',
+    `INFO impd.storage kept orphan imp gone (tank/imp/disks/gone): 1.0 MiB, created ${ctx.fake.readCreatedAt('tank/imp/disks/gone').toISOString()}, snapshots: cp-g1, fork-left`,
+    `INFO impd.storage kept orphan checkpoint cp-new (tank/imp/disks/a@cp-new): 0.1 MiB, created ${ctx.fake.readCreatedAt('tank/imp/disks/a@cp-new').toISOString()}, snapshots: none`,
+    'INFO impd.storage kept 2 orphans the database does not name; `impz gc --orphans --dry-run` lists what `impz gc --orphans` would retire',
   ]);
 });
 
@@ -1134,7 +1120,7 @@ test('#start after a lost database keeps the checkpoints a restore left in retir
   invariant(retired !== undefined);
 
   ctx.fake.restart(true);
-  ctx.log.mockClear();
+  ctx.logs.splice(0);
 
   const restarted = ctx.startBackend();
 
@@ -1153,15 +1139,14 @@ test('#start after a lost database keeps the checkpoints a restore left in retir
   expect(ctx.fake.isDeferred(`${retired}@cp-new`)).toBeFalse();
 
   expect(
-    ctx.log.mock.calls
-      .map(([line]) => line)
-      .filter((line) => line.startsWith('impd: storage: kept orphan'))
+    ctx.logs
+      .filter((line) => line.startsWith('INFO impd.storage kept orphan'))
       .map((line) => line.split(' (')[0]),
   ).toStrictEqual([
-    'impd: storage: kept orphan imp a',
-    'impd: storage: kept orphan image 9f2c',
-    'impd: storage: kept orphan checkpoint cp-old',
-    'impd: storage: kept orphan checkpoint cp-new',
+    'INFO impd.storage kept orphan imp a',
+    'INFO impd.storage kept orphan image 9f2c',
+    'INFO impd.storage kept orphan checkpoint cp-old',
+    'INFO impd.storage kept orphan checkpoint cp-new',
   ]);
 });
 
@@ -1234,7 +1219,7 @@ test('#start after a lost database keeps every disk, image and checkpoint, and l
   mkdirSync(join(ctx.dataDir, 'imps', 'done', 'run'), { recursive: true });
 
   ctx.fake.restart(true);
-  ctx.log.mockClear();
+  ctx.logs.splice(0);
 
   const restarted = ctx.startBackend();
 
@@ -1276,23 +1261,22 @@ test('#start after a lost database keeps every disk, image and checkpoint, and l
   expect(existsSync(join(ctx.dataDir, 'imps', 'done'))).toBeFalse();
 
   expect(
-    ctx.log.mock.calls
-      .map(([line]) => line)
-      .filter((line) => line.startsWith('impd: storage:'))
+    ctx.logs
+      .filter((line) => line.startsWith('INFO impd.storage '))
       .map((line) =>
         line.replace(/(?<dir>\(\/[^)]*\): \S+ MiB, )created \S+Z/u, '$<dir>created <birth>'),
       ),
   ).toStrictEqual([
-    'impd: storage: removed imp done',
-    'impd: storage: removed memory done',
-    `impd: storage: kept orphan imp a (tank/imp/disks/a): 1.0 MiB, created ${ctx.fake.readCreatedAt('tank/imp/disks/a').toISOString()}, snapshots: cp-1, cp-2, bk-r1-a`,
-    `impd: storage: kept orphan imp b (tank/imp/disks/b): 1.0 MiB, created ${ctx.fake.readCreatedAt('tank/imp/disks/b').toISOString()}, snapshots: cp-b, fork-left`,
-    `impd: storage: kept orphan image 9f2c (tank/imp/images/9f2c): 1.0 MiB, created ${ctx.fake.readCreatedAt('tank/imp/images/9f2c').toISOString()}, snapshots: base`,
-    `impd: storage: kept orphan image 7e1d (tank/imp/images/7e1d): 1.0 MiB, created ${ctx.fake.readCreatedAt('tank/imp/images/7e1d').toISOString()}, snapshots: base`,
-    `impd: storage: kept orphan image half (tank/imp/images/half): 1.0 MiB, created ${ctx.fake.readCreatedAt('tank/imp/images/half').toISOString()}, snapshots: none`,
-    `impd: storage: kept orphan imp v1 (${ctx.dataDir}/imps/v1): 0.0 MiB, created <birth>, snapshots: none`,
-    `impd: storage: kept orphan memory m1 (${ctx.dataDir}/mem/m1): 0.0 MiB, created <birth>, snapshots: none`,
-    'impd: storage: kept 7 orphans the database does not name; `impz gc --orphans --dry-run` lists what `impz gc --orphans` would retire',
+    'INFO impd.storage removed imp done',
+    'INFO impd.storage removed memory done',
+    `INFO impd.storage kept orphan imp a (tank/imp/disks/a): 1.0 MiB, created ${ctx.fake.readCreatedAt('tank/imp/disks/a').toISOString()}, snapshots: cp-1, cp-2, bk-r1-a`,
+    `INFO impd.storage kept orphan imp b (tank/imp/disks/b): 1.0 MiB, created ${ctx.fake.readCreatedAt('tank/imp/disks/b').toISOString()}, snapshots: cp-b, fork-left`,
+    `INFO impd.storage kept orphan image 9f2c (tank/imp/images/9f2c): 1.0 MiB, created ${ctx.fake.readCreatedAt('tank/imp/images/9f2c').toISOString()}, snapshots: base`,
+    `INFO impd.storage kept orphan image 7e1d (tank/imp/images/7e1d): 1.0 MiB, created ${ctx.fake.readCreatedAt('tank/imp/images/7e1d').toISOString()}, snapshots: base`,
+    `INFO impd.storage kept orphan image half (tank/imp/images/half): 1.0 MiB, created ${ctx.fake.readCreatedAt('tank/imp/images/half').toISOString()}, snapshots: none`,
+    `INFO impd.storage kept orphan imp v1 (${ctx.dataDir}/imps/v1): 0.0 MiB, created <birth>, snapshots: none`,
+    `INFO impd.storage kept orphan memory m1 (${ctx.dataDir}/mem/m1): 0.0 MiB, created <birth>, snapshots: none`,
+    'INFO impd.storage kept 7 orphans the database does not name; `impz gc --orphans --dry-run` lists what `impz gc --orphans` would retire',
   ]);
 });
 
@@ -2648,7 +2632,6 @@ test('#removeImpDisk logs a busy dataset once while a kernel oops holds it, not 
     run: ctx.fake.run,
     readMounts: ctx.fake.readMounts,
     readModuleVersion: () => '2.4.4',
-    log: ctx.log,
     isKernelOopsed: () => true,
   });
 
@@ -2677,12 +2660,10 @@ test('#removeImpDisk logs a busy dataset once while a kernel oops holds it, not 
   await backend.removeImpDisk('b', []);
   await backend.waitForReclaim();
 
-  const failures = ctx.log.mock.calls.filter(([line]) => line.includes('reclaim failed'));
+  const failures = ctx.logs.filter((line) => line.includes('reclaim failed'));
 
   expect(failures).toStrictEqual([
-    [
-      `impd: zfs: reclaim failed: zfs destroy ${retired} exited 1: cannot destroy '${retired}': dataset is busy; a kernel oops holds ${retired} until the host reboots, so impd logs it once`,
-    ],
+    `WARNING impd.zfs reclaim failed: zfs destroy ${retired} exited 1: cannot destroy '${retired}': dataset is busy; a kernel oops holds ${retired} until the host reboots, so impd logs it once`,
   ]);
 });
 
@@ -2712,7 +2693,7 @@ test('#removeImpDisk logs a busy dataset on each pass while the kernel has not o
   await ctx.backend.removeImpDisk('b', []);
   await ctx.backend.waitForReclaim();
 
-  const failures = ctx.log.mock.calls.filter(([line]) => line.includes('reclaim failed'));
+  const failures = ctx.logs.filter((line) => line.includes('reclaim failed'));
 
   expect(failures).toHaveLength(2);
 });
@@ -3613,8 +3594,9 @@ test.skipIf(readZfsTestPool() === null)(
       checkpointId: 'cp-one',
     });
 
-    const log = mock<(message: string) => void>();
-    const restarted = pool.startBackend(runCommand, log);
+    ctx.logs.splice(0);
+
+    const restarted = pool.startBackend();
 
     await restarted.start({ impIds: new Set(), checkpointIds: new Set(), imageDigests: new Set() });
 
@@ -3630,9 +3612,7 @@ test.skipIf(readZfsTestPool() === null)(
       pool.root,
     ]);
 
-    expect(
-      log.mock.calls.map(([line]) => line).filter((line) => line.includes('kept orphan')),
-    ).toHaveLength(3);
+    expect(ctx.logs.filter((line) => line.includes('kept orphan'))).toHaveLength(3);
 
     expect(
       names.split('\n').filter((name) => /\/(?:disks|images|retired)\//u.test(name)),

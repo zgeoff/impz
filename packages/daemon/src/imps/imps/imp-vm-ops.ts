@@ -6,6 +6,7 @@ import type { ImpStateChange } from '../../platform/db/update-imp-state';
 import { ImpdError } from '../../platform/errors/impd-error';
 import { buildAgentOutdatedApiError, buildStoppingError } from '../../platform/errors/impd-errors';
 import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { createSemaphore } from '../../platform/process/semaphore';
 import { isAgentError } from '../../vm/agent-client/is-agent-error';
 import { removeSnapshot } from '../../vm/sleep/snapshot-meta';
@@ -91,7 +92,7 @@ export function createImpVmOps(context: ImpContext): ImpVmOps {
   const writeFailure = async (imp: LockedImp, error: unknown): Promise<void> => {
     const message = getErrorMessage(error);
 
-    context.log(`impd: ${imp.name}: ${message}`);
+    getImpdLogger('imps').with({ imp: imp.name }).info('{message}', { message });
 
     await updateState(imp, {
       reason: 'failed',
@@ -99,14 +100,6 @@ export function createImpVmOps(context: ImpContext): ImpVmOps {
       pid: null,
       error: message.split('\n')[0] ?? '',
     });
-  };
-
-  const writeIdentity = (imp: LockedImp, paths: ImpPaths, identity: VmIdentity): void => {
-    try {
-      writeVmIdentity(paths, identity);
-    } catch (error) {
-      context.log(`impd: ${imp.name}: could not write vm.json: ${getErrorMessage(error)}`);
-    }
   };
 
   const setupVmCgroup = (imp: LockedImp): ImpCgroup | null => {
@@ -212,9 +205,11 @@ export function createImpVmOps(context: ImpContext): ImpVmOps {
           : running;
 
       if (reset.isIdentityResetPending) {
-        context.log(
-          `impd: ${imp.name}: the identity reset did not finish (${vm.identityReset ?? 'no report'}); the next boot tries again`,
-        );
+        getImpdLogger('imps')
+          .with({ imp: imp.name })
+          .info('the identity reset did not finish ({identityReset}); the next boot tries again', {
+            identityReset: vm.identityReset ?? 'no report',
+          });
       }
 
       return reset.isDiskGrowPending ? await setGrowPending(reset, false) : reset;
@@ -277,7 +272,9 @@ export function createImpVmOps(context: ImpContext): ImpVmOps {
     } catch (error) {
       const message = getErrorMessage(error);
 
-      context.log(`impd: ${imp.name}: the guest did not grow into its disk: ${message}`);
+      getImpdLogger('imps')
+        .with({ imp: imp.name })
+        .info('the guest did not grow into its disk: {message}', { message });
 
       await setGrowPending(imp, true);
 
@@ -357,6 +354,16 @@ export function createImpVmOps(context: ImpContext): ImpVmOps {
       isStopping = true;
     },
   };
+}
+
+function writeIdentity(imp: LockedImp, paths: ImpPaths, identity: VmIdentity): void {
+  try {
+    writeVmIdentity(paths, identity);
+  } catch (error) {
+    getImpdLogger('imps')
+      .with({ imp: imp.name })
+      .warning('could not write vm.json: {error}', { error: getErrorMessage(error) });
+  }
 }
 
 function countStepsMs(timings: Readonly<Record<string, number>>): number {

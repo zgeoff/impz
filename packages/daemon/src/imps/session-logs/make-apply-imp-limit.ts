@@ -1,3 +1,4 @@
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import type { SessionLogState } from './create-session-log-state';
 import { countLogBytes } from './generation-log';
 import { readImpMetas, removeGenerationDir } from './session-log-files';
@@ -6,7 +7,6 @@ import type { SessionLogImp, SessionLogLimits } from './session-log-service';
 
 interface ImpLimitDeps {
   readonly limits: SessionLogLimits;
-  readonly log: (message: string) => void;
 }
 
 export function makeApplyImpLimit(
@@ -14,8 +14,9 @@ export function makeApplyImpLimit(
   deps: ImpLimitDeps,
 ): (imp: SessionLogImp, life: number) => Promise<void> {
   const stopForLimit = async (imp: SessionLogImp, entry: LiveLog): Promise<void> => {
-    deps.log(
-      `impd: imp ${imp.id}: stopped the log of session ${entry.session}: its logs reached IMP_SESSION_LOG_IMP_MAX_MIB`,
+    getImpdLogger('session').info(
+      'imp {id}: stopped the log of session {session}: its logs reached IMP_SESSION_LOG_IMP_MAX_MIB',
+      { id: imp.id, session: entry.session },
     );
 
     ctx.send({ type: 'log.stop', entry });

@@ -115,7 +115,8 @@ test('it logs an unexpected RPC failure to the harness log', async () => {
 
   expect(harness.logs).toSatisfyAny(
     (line: string) =>
-      line.startsWith('impd: rpc failed: ') && line.includes('StubVmError: boot failed: no agent'),
+      line.startsWith('ERROR impd.api rpc failed: ') &&
+      line.includes('StubVmError: boot failed: no agent'),
   );
 });
 
@@ -280,7 +281,9 @@ test('it finishes a running template build before it removes its data dir', asyn
 
   await stack.disposeAsync();
 
-  const builtAt = logs.findIndex((line) => /^impd: boot template \w+ built in/u.test(line));
+  const builtAt = logs.findIndex((line) =>
+    /^INFO impd\.boot boot template \w+ built in/u.test(line),
+  );
 
   expect(builtAt).toBeGreaterThanOrEqual(0);
   expect(builtAt).toBeLessThan(logs.indexOf('test harness: database closed'));
@@ -408,7 +411,9 @@ test('it settles the template build of a replaced impd before it closes the data
   await stack.disposeAsync();
 
   const settledAt = logs.findIndex((line) =>
-    /^impd: boot template \w+ (?:built in|build failed)/u.test(line),
+    /^(?:INFO impd\.boot boot template \w+ built in|WARNING impd\.boot boot template \w+ build failed)/u.test(
+      line,
+    ),
   );
 
   expect(settledAt).toBeGreaterThanOrEqual(0);

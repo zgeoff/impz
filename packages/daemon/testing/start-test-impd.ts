@@ -23,6 +23,7 @@ import { createImage } from '../src/platform/db/images';
 import type { ImageRecord } from '../src/platform/db/images';
 import { openDatabase } from '../src/platform/db/open-database';
 import type { ImpDatabase } from '../src/platform/db/open-database';
+import { getImpdLogger } from '../src/platform/process/get-impd-logger';
 import type { HostIdentity } from '../src/vm/sleep/vm-identity';
 import { buildSystemDrivePath, buildSystemDrivesDir } from '../src/vm/storage/data-layout';
 import type { ImpPaths } from '../src/vm/storage/data-layout';
@@ -37,6 +38,7 @@ import { readThreadIds } from '../src/vm/vmm/vm-stats';
 import { readNoTailscale } from './network/read-no-tailscale';
 import { buildStubTickerTimer } from './platform/build-stub-ticker-timer';
 import { pickImpdPort } from './platform/pick-impd-port';
+import { startImpdLogCapture } from './platform/start-impd-log-capture';
 import { TEST_TOKEN } from './test-token';
 import { buildStubVmm } from './vm/build-stub-vmm';
 
@@ -163,17 +165,19 @@ export async function startTestImpd(
 
   const diskUsage = { usedBytes: 0, availableBytes: 1024 ** 4 };
 
-  const printTestLog = (message: string): void => {
-    logs.push(message);
-    options.onLog?.(message);
-  };
+  stack.defer(
+    startImpdLogCapture((line) => {
+      logs.push(line);
+      options.onLog?.(line);
+    }),
+  );
 
   const rpcFailures: unknown[] = [];
 
   const printRpcFailure = (failure: unknown): void => {
     rpcFailures.push(failure);
 
-    printTestLog(`impd: rpc failed: ${Bun.inspect(failure)}`);
+    getImpdLogger('api').error('rpc failed: {failure}', { failure: Bun.inspect(failure) });
   };
 
   const createSystemDrive = (drive: string): HostIdentity => {
@@ -205,7 +209,7 @@ export async function startTestImpd(
           },
         );
 
-  const cgroups = options.cgroups ?? createCpuCgroups({ root: '/nonexistent', log: printTestLog });
+  const cgroups = options.cgroups ?? createCpuCgroups({ root: '/nonexistent' });
   const extra = options.boundaries ?? {};
 
   const buildBoundaries = (
@@ -225,7 +229,6 @@ export async function startTestImpd(
         systemDrivePath: identity.systemDrivePath,
         info: TEST_SYSTEM_FILES,
       },
-      log: printTestLog,
       logRpcFailure: printRpcFailure,
       now: readClock,
       readTailscale: extra.readTailscale ?? readNoTailscale,
@@ -411,7 +414,6 @@ export async function startTestImpd(
     taps,
     removedTaps,
     logs,
-    log: printTestLog,
     rpcFailures,
     logRpcFailure: printRpcFailure,
     filesystemGrows,

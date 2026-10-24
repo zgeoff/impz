@@ -3,6 +3,7 @@ import { listImps } from '../../platform/db/imps';
 import type { ImpRecord } from '../../platform/db/imps';
 import { updateImpState } from '../../platform/db/update-imp-state';
 import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { sendPing } from '../../vm/agent-client/agent-requests';
 import type { ImpPaths } from '../../vm/storage/data-layout';
 import { probeJailedFirecracker } from '../../vm/vmm/firecracker-process';
@@ -42,13 +43,15 @@ export function makeReconcileImps(parts: ReconcileParts): () => Promise<void> {
     const flag = context.kernelOops.readFlag();
 
     if (flag === 'set') {
-      context.log(
-        'impd: the kernel oopsed since the host booted (taint flag D); the host needs a reboot',
+      getImpdLogger('imps').info(
+        'the kernel oopsed since the host booted (taint flag D); the host needs a reboot',
       );
     }
 
     if (flag === 'unknown') {
-      context.log('impd: cannot read the kernel taint flag; imps a kernel oops held stay held');
+      getImpdLogger('imps').warning(
+        'cannot read the kernel taint flag; imps a kernel oops held stay held',
+      );
     }
 
     const imps = await listImps(context.db);
@@ -69,11 +72,13 @@ export function makeReconcileImps(parts: ReconcileParts): () => Promise<void> {
     // The jail sweep kills every process of the uid, so the cgroups are empty
     // for their rmdir.
     for (const impId of await context.vms.removeOrphanJails(impIds)) {
-      context.log(`impd: removed the jail of imp ${impId}: no imp has that id`);
+      getImpdLogger('jail').info('removed the jail of imp {impId}: no imp has that id', { impId });
     }
 
     for (const impId of context.cgroups.removeOrphans(impIds)) {
-      context.log(`impd: removed the cgroup of imp ${impId}: no imp has that id`);
+      getImpdLogger('cgroup').info('removed the cgroup of imp {impId}: no imp has that id', {
+        impId,
+      });
     }
 
     await Promise.all(
@@ -96,9 +101,13 @@ export function makeReconcileImps(parts: ReconcileParts): () => Promise<void> {
               const note = ready ? '' : ' (the agent does not answer yet)';
               const jailed = imp.pid !== null && probeJailedFirecracker(imp.pid) ? 'jailed ' : '';
 
-              context.log(
-                `impd: ${imp.name}: re-adopted ${jailed}firecracker pid ${String(imp.pid)}${note}`,
-              );
+              getImpdLogger('imps')
+                .with({ imp: imp.name })
+                .info('re-adopted {jailed}firecracker pid {pid}{note}', {
+                  jailed,
+                  pid: String(imp.pid),
+                  note,
+                });
 
               if (imp.pid !== null) {
                 await setAdoptedMemoryLimit(imp, paths);
@@ -130,7 +139,9 @@ export function makeReconcileImps(parts: ReconcileParts): () => Promise<void> {
                 await context.vms.stopVm(imp.pid, paths, false);
               }
             } catch (stopError) {
-              context.log(`impd: ${imp.name}: could not stop: ${getErrorMessage(stopError)}`);
+              getImpdLogger('imps')
+                .with({ imp: imp.name })
+                .warning('could not stop: {error}', { error: getErrorMessage(stopError) });
 
               await ops.updateState(imp, { reason: 'failed', state: 'error', error });
 
@@ -158,7 +169,9 @@ async function removeStaleOopsHolds(context: ImpHost, imps: readonly ImpRecord[]
       oopsBootId: null,
     });
 
-    context.log(`impd: ${imp.name}: the host rebooted since a kernel oops held its disk`);
+    getImpdLogger('imps')
+      .with({ imp: imp.name })
+      .info('the host rebooted since a kernel oops held its disk');
   }
 }
 
@@ -170,6 +183,8 @@ async function writeAdoptedBoot(context: ImpHost & ImpVms, imp: ImpRecord): Prom
       await writeUnknownBoot(context.db, imp.id, ping.bootId, new Date());
     }
   } catch (error) {
-    context.log(`impd: ${imp.name}: could not read its boot id: ${getErrorMessage(error)}`);
+    getImpdLogger('imps')
+      .with({ imp: imp.name })
+      .warning('could not read its boot id: {error}', { error: getErrorMessage(error) });
   }
 }
