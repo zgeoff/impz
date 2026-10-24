@@ -24,6 +24,7 @@ import { makeStubOlderMoveTarget } from '../../../testing/imp-ops/make-stub-olde
 import { makeStubSwitchedStorageTarget } from '../../../testing/imp-ops/make-stub-switched-storage-target';
 import { buildQueryGate } from '../../../testing/platform/build-query-gate';
 import { buildStubClock } from '../../../testing/platform/build-stub-clock';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { TEST_TOKEN } from '../../../testing/test-token';
 import { buildStubPublishHook } from '../../../testing/vm/build-stub-publish-hook';
 import { buildStubStoragePressure } from '../../../testing/vm/build-stub-storage-pressure';
@@ -88,6 +89,24 @@ test('it moves a stopped imp with its id, its checkpoint and its disk', async ()
   expect(checkpointDisk).toStartWith('hello');
   expect(left).toBeUndefined();
   expect(ctx.commits).toStrictEqual(['dev']);
+});
+
+test('it logs a finished move under move with the imp and the target', async () => {
+  const ctx = await setupTest();
+
+  await createUbuntuImage(ctx.source);
+  await createUbuntuImage(ctx.target);
+
+  await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
+  await ctx.sourceApp.client.imps.stop({ name: 'dev' });
+
+  const lines = captureImpdLogs();
+
+  await ctx.runMove('dev');
+
+  expect(lines).toContain(
+    'INFO impd.move imp=dev committed on http://100.100.0.2:7070; the copy here is gone',
+  );
 });
 
 test('it refuses a start of a marked imp with MOVING and a retry after 30 s', async () => {
