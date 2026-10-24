@@ -157,7 +157,6 @@ export async function startRelayGuest(
 
       return accept.promise;
     },
-    listPorts: () => [...ports.keys()],
   };
 
   return {

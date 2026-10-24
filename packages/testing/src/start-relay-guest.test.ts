@@ -4,6 +4,7 @@ import { openReverseForward } from '@impz/client';
 import type { ReverseRelay } from '@impz/client';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { startTestImpd } from './start-test-impd';
+import { TEST_TOKEN } from './test-token';
 
 // Each case copies one behaviour of the Go agent's reverse forwards, in
 // agent/internal/feature/listen/listen.go and agent/internal/feature/dial/dial.go (Relay).
@@ -27,7 +28,7 @@ async function setupTest() {
   const openPortForward = (name: string, port: number) => {
     const forward = openReverseForward({
       baseUrl: impd.url,
-      token: impd.token,
+      token: TEST_TOKEN,
       name,
       guest: { network: 'tcp', port },
       connect: (url, headers) => new WebSocket(url, { headers: { ...headers } }),
@@ -159,8 +160,7 @@ test('it ends a forward when its imp sleeps, and listens again for a forward ope
   await ctx.impd.client.imps.sleep({ name: 'box' });
 
   const ended = await before.ended;
-
-  const portsAsleep = guest.listPorts();
+  const asleep = await Promise.allSettled([guest.connect(4000)]);
 
   await ctx.impd.client.imps.wake({ name: 'box' });
   await ctx.openPortForward('box', 4000).listening;
@@ -178,7 +178,11 @@ test('it ends a forward when its imp sleeps, and listens again for a forward ope
   const chunk = await reply.promise;
 
   expect(ended).toStrictEqual({ kind: 'lost' });
-  expect(portsAsleep).toStrictEqual([]);
+
+  expect(asleep).toMatchObject([
+    { status: 'rejected', reason: { message: 'no reverse forward listens on port 4000' } },
+  ]);
+
   expect(chunk).toBe('pong');
 });
 
@@ -187,10 +191,11 @@ test('it listens on a free port for a forward that asks for port 0', async () =>
   const ctx = await setupTest();
   const guest = await ctx.createImp('box');
   const listening = await ctx.openPortForward('box', 0).listening;
+  const connected = await Promise.allSettled([guest.connect(32_768)]);
 
   // the stand-in's first free port, where the real agent takes one from the kernel
   expect(listening).toStrictEqual({ path: null, port: 32_768 });
-  expect(guest.listPorts()).toStrictEqual([32_768]);
+  expect(connected).toMatchObject([{ status: 'fulfilled' }]);
 });
 
 // bindTCP fails a second bind of a port with LISTEN_FAILED

@@ -35,15 +35,14 @@ test('it creates an imp', async () => {
 
 It returns:
 
-| Field                 | What it is                                                         |
-| --------------------- | ------------------------------------------------------------------ |
-| `url`                 | impd's API on a loopback port, for a client the test builds itself |
-| `token`               | impd's root token, also exported as `TEST_TOKEN`                   |
-| `client`              | an `@impz/client` client on `url` with the root token              |
-| `seedImage(name)`     | adds an image of that name, which `imps.create` boots              |
-| `startGuest(impName)` | starts the stand-in guest of a created imp, for reverse forwards   |
-| `fireTicker(label)`   | runs one of impd's periodic jobs now; no job runs on its own       |
-| `stop()`              | stops impd and removes its data                                    |
+| Field                 | What it is                                                          |
+| --------------------- | ------------------------------------------------------------------- |
+| `url`                 | impd's API on a loopback port, for a client the test builds itself  |
+| `client`              | an `@impz/client` client on `url` with `TEST_TOKEN`, the root token |
+| `seedImage(name)`     | adds an image of that name, which `imps.create` boots               |
+| `startGuest(impName)` | starts the stand-in guest of a created imp, for reverse forwards    |
+| `fireTicker(label)`   | runs one of impd's periodic jobs now; no job runs on its own        |
+| `stop()`              | stops impd and removes its data                                     |
 
 The client sleeps and wakes an imp as it does on a real host: `client.imps.sleep({ name })` and
 `client.imps.wake({ name })`.
@@ -57,12 +56,13 @@ local end, and what that end sends back is what the test reads.
 
 ```ts
 import { openReverseForward } from '@impz/client';
+import { TEST_TOKEN } from '@impz/testing';
 
 const guest = await impd.startGuest('box');
 
 const forward = openReverseForward({
   baseUrl: impd.url,
-  token: impd.token,
+  token: TEST_TOKEN,
   name: 'box',
   guest: { network: 'tcp', port: 4000 },
   connect: (url, headers) => new WebSocket(url, { headers: { ...headers } }),
@@ -92,8 +92,6 @@ It does not copy:
 - unix socket forwards and ssh-agent forwarding, which it answers with `UNKNOWN_OP`
 - the refusal of a port below 1024 to an image whose user is not root
 - the limit of 16 clients waiting for impd, and the 10 s after which an unpaired client closes
-
-`listPorts()` lists the guest ports that a forward listens on now.
 
 ## What this impd does not do
 

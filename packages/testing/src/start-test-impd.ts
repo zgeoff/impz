@@ -24,7 +24,6 @@ export async function startTestImpd(options: TestImpdOptions = {}): Promise<Test
 
     return {
       url: harness.url,
-      token: TEST_TOKEN,
       client,
       seedImage: async (name) => {
         await harness.createTestImage(name);
