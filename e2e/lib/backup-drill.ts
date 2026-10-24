@@ -232,6 +232,9 @@ interface BackupDrillDeps {
   // The suite's settings, which the instance runs on until a test reboots over them.
   readonly suiteEnv: Readonly<Record<string, string>>;
 
+  // Whether the instance runs on these settings: a lone journey's instance runs on its own.
+  readonly probeOnSettings: (env: Readonly<Record<string, string>>) => Promise<boolean>;
+
   readonly removeState: () => Promise<void>;
   readonly writeState: (state: Readonly<{ lastRunAt: Date }>) => Promise<void>;
   readonly reboot: (env: Readonly<Record<string, string>>) => Promise<void>;
@@ -245,6 +248,16 @@ interface BackupDrillDeps {
 export function wireBackupDrill(stack: AsyncDisposableStack, metric: string): BackupDrill {
   return createBackupDrill(stack, metric, {
     suiteEnv: readBackupSuiteSettings(),
+    probeOnSettings: async (env) => {
+      const result = await runInContainer(['env']);
+
+      const lines = new Set(result.stdout.split('\n'));
+
+      // The env file's path is the dev script's own, which it hands docker, not impd.
+      return Object.entries(env)
+        .filter(([key]) => !key.startsWith('IMP_DEV_'))
+        .every(([key, value]) => lines.has(`${key}=${value}`));
+    },
     removeState: async () => {
       const removed = await runInContainer(['rm', '-f', BACKUP_STATE_FILE]);
 
@@ -283,6 +296,31 @@ export function createBackupDrill(
   const spans = { rebootMs: 0, minioMs: 0, runsMs: 0, rebootBackMs: 0 };
   const reached = { isRebooted: false, isMinioUp: false };
 
+  // The settings a reboot goes back to: the suite's, or a lone journey's own.
+  const home: { env: Readonly<Record<string, string>> | null } = { env: null };
+
+  const readHomeEnv = async (): Promise<Readonly<Record<string, string>>> => {
+    if (home.env === null) {
+      const isOnSuite = await deps.probeOnSettings(deps.suiteEnv);
+
+      home.env = isOnSuite ? deps.suiteEnv : {};
+    }
+
+    return home.env;
+  };
+
+  const rebootOnto = async (env: Readonly<Record<string, string>>): Promise<void> => {
+    const rebootStarted = deps.now();
+
+    await deps.removeState();
+
+    reached.isRebooted = true;
+
+    await deps.reboot(env);
+
+    spans.rebootMs += deps.now() - rebootStarted;
+  };
+
   stack.defer(() => {
     deps.writeMetric(metric, spans);
   });
@@ -302,29 +340,28 @@ export function createBackupDrill(
 
     const back = deps.now();
 
-    await deps.reboot(deps.suiteEnv);
+    await deps.reboot(home.env ?? deps.suiteEnv);
 
     spans.rebootBackMs += deps.now() - back;
   });
 
   return {
-    // impd sets up the repository at each run, so a MinIO started afresh gives a test an empty
-    // one with no reboot. A test on the suite's settings marks a run as just done, so no
-    // scheduled run falls due, and drops an earlier test's prune and check.
-    resetState: () => deps.writeState({ lastRunAt: new Date(deps.now()) }),
+    // impd sets up the repository at each run, so a fresh MinIO is an empty one with no reboot.
+    // A run marked just done keeps scheduled runs off, and drops an earlier test's prune and
+    // check. A lone journey's instance reboots onto the suite's settings first, and back after.
+    resetState: async () => {
+      if ((await readHomeEnv()) !== deps.suiteEnv) {
+        await rebootOnto(deps.suiteEnv);
+      }
+
+      await deps.writeState({ lastRunAt: new Date(deps.now()) });
+    },
 
     // For a test that needs settings of its own. impd keeps its last prune time across reboots
     // and prunes once a day, so an earlier test's prune would hold off this one's.
     reboot: async (overrides) => {
-      const rebootStarted = deps.now();
-
-      await deps.removeState();
-
-      reached.isRebooted = true;
-
-      await deps.reboot({ ...deps.suiteEnv, ...overrides });
-
-      spans.rebootMs += deps.now() - rebootStarted;
+      await readHomeEnv();
+      await rebootOnto({ ...deps.suiteEnv, ...overrides });
     },
     startMinio: async (secrets) => {
       const minioStarted = deps.now();

@@ -27,6 +27,7 @@ function setupTest() {
     writeMetric,
     deps: {
       suiteEnv: { IMP_BACKUP_INTERVAL_S: '3600', IMP_BACKUP_MEMORY_MIB: '256' },
+      probeOnSettings: () => Promise.resolve(true),
       removeState: () => {
         steps.push('remove state');
 
@@ -152,6 +153,28 @@ test('#createBackupDrill marks a run as just done for a test on the suite’s se
     'write state {"lastRunAt":"2026-03-14T09:26:53.000Z"}',
     'start minio',
     'stop minio',
+    'metric backupTrialSpansMs {"rebootMs":0,"minioMs":0,"runsMs":0,"rebootBackMs":0}',
+  ]);
+});
+
+test('#createBackupDrill reboots a lone journey’s instance onto the suite’s settings, and back onto its own', async () => {
+  const ctx = setupTest();
+
+  const drill = createBackupDrill(ctx.stack, 'backupTrialSpansMs', {
+    ...ctx.deps,
+    probeOnSettings: () => Promise.resolve(false),
+    runBackup: () => Promise.reject(new Error('this test runs no backup')),
+    now: () => Date.parse('2026-05-02T17:04:11.000Z'),
+  });
+
+  await drill.resetState();
+  await ctx.stack.disposeAsync();
+
+  expect(ctx.steps).toStrictEqual([
+    'remove state',
+    'reboot onto {"IMP_BACKUP_INTERVAL_S":"3600","IMP_BACKUP_MEMORY_MIB":"256"}',
+    'write state {"lastRunAt":"2026-05-02T17:04:11.000Z"}',
+    'reboot onto {}',
     'metric backupTrialSpansMs {"rebootMs":0,"minioMs":0,"runsMs":0,"rebootBackMs":0}',
   ]);
 });
