@@ -15,6 +15,7 @@ import { buildStubClock } from '../../../../testing/platform/build-stub-clock';
 import { captureImpdLogs } from '../../../../testing/platform/capture-impd-logs';
 import { startTestImpd } from '../../../../testing/start-test-impd';
 import { buildStubGuest } from '../../../../testing/vm/build-stub-guest';
+import { makeStubCommandAnswer } from '../../../../testing/vm/make-stub-command-answer';
 import { createImage } from '../../../platform/db/images';
 import { listImps, readImpByName } from '../../../platform/db/imps';
 import { buildImagePaths } from '../../../vm/storage/data-layout';
@@ -290,8 +291,8 @@ test('it writes the test registry into the builder, once its engine answers and 
 test('it fails the build when the builder refuses the test registry, and removes the builder', async () => {
   const ctx = await setupTest();
 
-  const guest = buildStubGuest((run) =>
-    run.argv[0] === 'sh' ? { code: 1, stderr: 'sh: read-only file system' } : {},
+  const guest = buildStubGuest(
+    makeStubCommandAnswer({ sh: { code: 1, stderr: 'sh: read-only file system' } }, {}),
   );
 
   const builders = createBuilders({
@@ -369,10 +370,11 @@ test('it fails the build when the builder engine does not answer in 60 s, and re
 test("it gives the tail of the builder engine's log when the engine does not answer in 60 s", async () => {
   const ctx = await setupTest();
 
-  const guest = buildStubGuest((run) =>
-    run.argv[0] === 'tail'
-      ? { stdout: 'level=info msg="Starting up"\nlevel=fatal msg="no overlay support"\n' }
-      : { code: 1, stderr: 'Cannot connect to the Docker daemon' },
+  const guest = buildStubGuest(
+    makeStubCommandAnswer(
+      { tail: { stdout: 'level=info msg="Starting up"\nlevel=fatal msg="no overlay support"\n' } },
+      { code: 1, stderr: 'Cannot connect to the Docker daemon' },
+    ),
   );
 
   const builders = createBuilders({
