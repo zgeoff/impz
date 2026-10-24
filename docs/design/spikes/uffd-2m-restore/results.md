@@ -52,6 +52,11 @@ fragmented memory does not have:
 Not run yet. The target is a nested-KVM host, on which each page that the guest touches costs a
 nested page-table fill.
 
+The first attempt stops at the gate, before any setting changes. The host has 32 GiB of memory, 17
+GiB of it available, but only about 330 free 2 MiB blocks. One memory compaction raises that to
+about 500, under the 1,100 that the gate asks for. Most of the available memory is page cache, which
+the free-block count leaves out.
+
 | Mode          | Runs | Load | Parked | Claim | Agent | Faults load/resumed/claimed | Fill |
 | ------------- | ---- | ---- | ------ | ----- | ----- | --------------------------- | ---- |
 | `file`        |      |      |        |       |       |                             |      |
