@@ -1,6 +1,6 @@
 {
   "name": "@impz/cli",
-  "version": "3.0.2",
+  "version": "4.0.0",
   "private": true,
   "description": "impz: the command-line client for impd",
   "bin": {

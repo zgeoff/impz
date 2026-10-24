@@ -45,8 +45,8 @@ from:
 <!-- x-release-please-start-version -->
 
 ```sh
-docker pull ghcr.io/zgeoff/imp-host:3.0.2
-docker run --rm ghcr.io/zgeoff/imp-host:3.0.2 tar -cf - -C /usr/local/share/imp deploy | tar -xf -
+docker pull ghcr.io/zgeoff/imp-host:4.0.0
+docker run --rm ghcr.io/zgeoff/imp-host:4.0.0 tar -cf - -C /usr/local/share/imp deploy | tar -xf -
 bash deploy/upgrade.sh
 ```
 

@@ -1,5 +1,27 @@
 # Changelog
 
+## [4.0.0](https://github.com/zgeoff/impz/compare/v3.0.2...v4.0.0) (2026-10-24)
+
+### ⚠ BREAKING CHANGES
+
+- **api:** upload a build context, then follow the build's stream
+  ([#667](https://github.com/zgeoff/impz/issues/667))
+
+### Features
+
+- **api:** upload a build context, then follow the build's stream
+  ([#667](https://github.com/zgeoff/impz/issues/667))
+  ([f6b6c62](https://github.com/zgeoff/impz/commit/f6b6c62412f673224116b12efcf5609f120a09de))
+
+### Bug Fixes
+
+- **daemon:** keep a deleted ended session log from being logged again
+  ([#675](https://github.com/zgeoff/impz/issues/675))
+  ([a00bf06](https://github.com/zgeoff/impz/commit/a00bf06facced63fa5b35a694cb4668d168e909e))
+- **daemon:** reuse the image a host holds when an imp moves back to it
+  ([#671](https://github.com/zgeoff/impz/issues/671))
+  ([d2c0dd1](https://github.com/zgeoff/impz/commit/d2c0dd1ec160f3f8d8ead59a40d1c71d048f95d3))
+
 ## [3.0.2](https://github.com/zgeoff/impz/compare/v3.0.1...v3.0.2) (2026-10-24)
 
 ### Bug Fixes
