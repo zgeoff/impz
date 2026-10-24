@@ -1,5 +1,6 @@
 import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { readBackupSuiteSettings } from './backup-drill';
 import { config } from './config';
 import { REPO_ROOT } from './instance';
 import type { DevInstance } from './instance';
@@ -179,7 +180,7 @@ export const SUITES: readonly Suite[] = [
     ],
     fixtures: ['host-b'],
     settings: (target) => buildMoveSettings(readMoveOptions('host-b'), target.portOffset),
-    seconds: 86,
+    seconds: 93,
   },
   {
     name: 'moves-tailnet',
@@ -217,7 +218,14 @@ export const SUITES: readonly Suite[] = [
     images: ['e2e-bare'],
     journeys: ['jail', 'jail-rollback', 'jail-oom', 'jail-remove'],
   },
-  { name: 'memory', prefix: 'e2e-mem-', images: ['e2e-tiny'] },
+  {
+    name: 'memory',
+    prefix: 'e2e-mem-',
+    images: ['e2e-tiny'],
+
+    // Its journey waits out one shrink, which impd starts after a minute by default.
+    settings: () => ({ IMP_MEMORY_SHRINK_AFTER_S: '10' }),
+  },
 
   // Skips unless KSM runs on this host, as CI turns it on: elsewhere impd cannot
   // start with IMP_KSM, so the run's settings stay.
@@ -229,8 +237,22 @@ export const SUITES: readonly Suite[] = [
   },
 
   // Last, because they reboot the instance with backups on, then off again.
-  { name: 'backups', prefix: 'e2e-bk-', images: ['e2e-tiny'], seconds: 155 },
-  { name: 'backups-repo', prefix: 'e2e-bkr-', images: ['e2e-tiny'], seconds: 146 },
+
+  // Each test starts MinIO afresh for an empty repository, which impd backs up to with no reboot.
+  {
+    name: 'backups',
+    prefix: 'e2e-bk-',
+    images: ['e2e-tiny'],
+    settings: readBackupSuiteSettings,
+    seconds: 140,
+  },
+  {
+    name: 'backups-repo',
+    prefix: 'e2e-bkr-',
+    images: ['e2e-tiny'],
+    settings: readBackupSuiteSettings,
+    seconds: 101,
+  },
 ];
 
 // One list per CI runner and instance; each held about 225 s of suite work in

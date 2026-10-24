@@ -28,6 +28,7 @@ error.
 | `IMP_BOOT_RESERVE_PERCENT`      | `50`                                      | The RAM reserved before a cold boot, as a percentage of the imp's memory (1–100).                                                                                                                                                                                     |
 | `IMP_BOOT_TEMPLATES`            | `true`                                    | A cold boot restores a parked guest of its shape; `false` boots the kernel ([boot templates](../architecture/lifecycle/boot-templates.md)).                                                                                                                           |
 | `IMP_WAKE_RESERVE_MIB`          | `256`                                     | The least RAM reserved before a wake.                                                                                                                                                                                                                                 |
+| `IMP_MEMORY_SHRINK_AFTER_S`     | `60`                                      | Seconds an elastic guest could give back a step before impd unplugs it ([elastic memory](../architecture/lifecycle/elastic-memory.md)).                                                                                                                               |
 | `IMP_SLEEP_MIN_GUEST_UPTIME_MS` | `1500`                                    | A sleep first waits until the guest has been up this long; `0` turns the wait off ([young guests](../architecture/lifecycle/sleep-and-wake.md#young-guests)).                                                                                                         |
 | `IMP_WATCHDOG_TIMEOUT_S`        | `60`                                      | Seconds an agent may stay silent before the [watchdog](../architecture/lifecycle/lifecycle.md#the-watchdog) acts.                                                                                                                                                     |
 | `IMP_WATCHDOG_ACTION`           | `report`                                  | What the watchdog does then: `report`, `restart` (boot cold), or `snapshot` (keep the memory, then boot cold).                                                                                                                                                        |
@@ -255,17 +256,18 @@ the harness reads the test tailnet's auth-keys client, from `IMP_E2E_TAILSCALE_A
 `dev.sh` sets `IMP_UPLINK_MTU` from this machine's default route, unless it is set.
 
 impd tuning passes through an allowlist. When set on your machine, `dev.sh` passes
-`IMP_IDLE_TIMEOUT_S`, `IMP_IDLE_CPU_PERCENT`, `IMP_RAM_BUDGET_MIB`, `IMP_BOOT_RESERVE_PERCENT`,
-`IMP_BOOT_TEMPLATES`, `IMP_WAKE_RESERVE_MIB`, `IMP_SLEEP_MIN_GUEST_UPTIME_MS`, `IMP_DEFAULT_VCPUS`,
-`IMP_DEFAULT_MEMORY_MIB`, `IMP_DEFAULT_DISK_GIB`, `IMP_DISK_RESERVE_GIB`, `IMP_WATCHDOG_TIMEOUT_S`,
-`IMP_WATCHDOG_ACTION`, `IMP_TAILSCALE_HOSTNAME`, `IMP_TAILNET_IDENTITIES`, `IMP_TAILNET_NAMES`,
-`IMP_TAILNET_NAME_PREFIX`, `IMP_BUILD_CONTEXT_MAX_MIB`, `IMP_BROKER_PORT`, `IMP_KSM`,
-`IMP_KSM_HEADROOM_PERCENT`, `IMP_SSH_AUTHORIZED_KEYS`, `IMP_STORAGE_BACKEND`, `IMP_ZFS_ROOT`,
-`IMP_ZFS_ALLOW_UIOMOVE_BUG`, `IMP_SUBNET6`, `IMP_JAILER`, `IMP_JAILER_BIN`, `IMP_PEER_URL`,
-`IMP_MOVE_TEST_CIDR`, `IMP_BUILD_TEST_REGISTRY` and `IMP_HOST_ADDRESSES` to impd, the `IMP_BACKUP_*`
-variables, and the HTTPS settings except the token: `IMP_DOMAIN`, `IMP_DNS_PROVIDER`,
-`IMP_DNS_API_URL`, `IMP_ACME_DIRECTORY`, `IMP_ACME_EMAIL`, `IMP_HTTPS_PORT`, `IMP_HTTP_PORT`,
-`IMP_PUBLIC_IP`, `IMP_PUBLIC_HTTPS_PORT`, `IMP_PUBLIC_HTTP_PORT`, and `IMP_ACME_CA_FILE` and
+`IMP_IDLE_TIMEOUT_S`, `IMP_IDLE_CPU_PERCENT`, `IMP_RAM_BUDGET_MIB`, `IMP_MEMORY_SHRINK_AFTER_S`,
+`IMP_BOOT_RESERVE_PERCENT`, `IMP_BOOT_TEMPLATES`, `IMP_WAKE_RESERVE_MIB`,
+`IMP_SLEEP_MIN_GUEST_UPTIME_MS`, `IMP_DEFAULT_VCPUS`, `IMP_DEFAULT_MEMORY_MIB`,
+`IMP_DEFAULT_DISK_GIB`, `IMP_DISK_RESERVE_GIB`, `IMP_WATCHDOG_TIMEOUT_S`, `IMP_WATCHDOG_ACTION`,
+`IMP_TAILSCALE_HOSTNAME`, `IMP_TAILNET_IDENTITIES`, `IMP_TAILNET_NAMES`, `IMP_TAILNET_NAME_PREFIX`,
+`IMP_BUILD_CONTEXT_MAX_MIB`, `IMP_BROKER_PORT`, `IMP_KSM`, `IMP_KSM_HEADROOM_PERCENT`,
+`IMP_SSH_AUTHORIZED_KEYS`, `IMP_STORAGE_BACKEND`, `IMP_ZFS_ROOT`, `IMP_ZFS_ALLOW_UIOMOVE_BUG`,
+`IMP_SUBNET6`, `IMP_JAILER`, `IMP_JAILER_BIN`, `IMP_PEER_URL`, `IMP_MOVE_TEST_CIDR`,
+`IMP_BUILD_TEST_REGISTRY` and `IMP_HOST_ADDRESSES` to impd, the `IMP_BACKUP_*` variables, and the
+HTTPS settings except the token: `IMP_DOMAIN`, `IMP_DNS_PROVIDER`, `IMP_DNS_API_URL`,
+`IMP_ACME_DIRECTORY`, `IMP_ACME_EMAIL`, `IMP_HTTPS_PORT`, `IMP_HTTP_PORT`, `IMP_PUBLIC_IP`,
+`IMP_PUBLIC_HTTPS_PORT`, `IMP_PUBLIC_HTTP_PORT`, and `IMP_ACME_CA_FILE` and
 `IMP_BUILD_TEST_REGISTRY_CA` as paths under the repo. `IMP_E2E=1` lets impd use the `challtestsrv`
 DNS provider. With `IMP_BUILD_TEST_REGISTRY` set, the container resolves the registry's name to the
 address your machine resolves it to. With `IMP_TAILNET_NAMES=1`, `dev.sh` writes the OAuth client

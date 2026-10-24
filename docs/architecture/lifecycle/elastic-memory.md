@@ -37,9 +37,10 @@ the balloon's statistics.
   controller therefore grows a guest again only once its statistics count the last step, or once
   they have missed it for a few polls after the plug landed, so one need costs one step. A grow made
   after such a miss waits for the statistics to count both steps.
-- **Shrink.** A guest that could give back a step for a while unplugs to its spare size: the least
-  size that leaves it a grow step clear of its grow mark. A fixed headroom would undo itself,
-  because in a large guest the grow mark passes it and the next tick would grow the guest again.
+- **Shrink.** A guest that could give back a step for a minute (`IMP_MEMORY_SHRINK_AFTER_S`) unplugs
+  to its spare size: the least size that leaves it a grow step clear of its grow mark. A fixed
+  headroom would undo itself, because in a large guest the grow mark passes it and the next tick
+  would grow the guest again.
 - **Stalls.** A plug or an unplug that stands still has stopped: the guest keeps what it reached,
   impd asks for exactly that, and the controller leaves the imp alone for a while.
 - **Reclaim.** Before the governor sleeps any imp, idle elastic guests unplug to their spare size.

@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import * as z from 'zod';
 import { runImp } from './imp-cli';
@@ -11,6 +11,7 @@ import {
   runDevScript,
   runInContainer,
 } from './instance';
+import type { DevInstance } from './instance';
 import { waitFor } from './wait-for';
 import { writeMetric } from './write-metric';
 
@@ -39,6 +40,10 @@ export function buildBackupEnv(
     IMP_BACKUP_INTERVAL_S: String(intervalS),
     IMP_BACKUP_MEMORY_MIB: '256',
     IMP_DEV_BACKUP_ENV_FILE: secrets.envFile,
+
+    // restic reads a disk's whole size, holes and all, on every run, so a drill's imps take the
+    // smallest disk an image allows (4 GiB) in place of the 32 GiB default
+    IMP_DEFAULT_DISK_GIB: '4',
   };
 }
 
@@ -66,20 +71,31 @@ const BackupStatusSchema = z.object({
   lastCheck: CheckSchema.nullable(),
 });
 
-export async function writeBackupSecrets(): Promise<BackupSecrets> {
-  const parent = join(REPO_ROOT, '.cache', 'e2e');
-
-  await mkdir(parent, { recursive: true });
-
-  const directory = await mkdtemp(join(parent, 'backups-'));
-
-  const accessKey = 'e2e-backups';
-  const secretKey = randomBytes(18).toString('hex');
+// One set per dev instance, kept across runs: impd reads the keys at its start, so the backups
+// suites' settings hold them, and each test starts MinIO afresh with the same keys.
+export function readBackupSecrets(target: Readonly<DevInstance> = instance): BackupSecrets {
+  const directory = join(REPO_ROOT, '.cache', 'e2e', `backups-${target.container}`);
   const envFile = join(directory, 'restic.env');
   const passwordFile = join(directory, 'restic-password');
+  const accessKey = 'e2e-backups';
 
-  await writeFile(passwordFile, randomBytes(24).toString('hex'), { mode: 0o644 });
-  await writeFile(envFile, `AWS_ACCESS_KEY_ID=${accessKey}\nAWS_SECRET_ACCESS_KEY=${secretKey}\n`);
+  // The env file goes last, so a set it holds is whole.
+  if (!existsSync(envFile)) {
+    mkdirSync(directory, { recursive: true });
+    writeFileSync(passwordFile, randomBytes(24).toString('hex'), { mode: 0o644 });
+
+    writeFileSync(
+      envFile,
+      `AWS_ACCESS_KEY_ID=${accessKey}\nAWS_SECRET_ACCESS_KEY=${randomBytes(18).toString('hex')}\n`,
+    );
+  }
+
+  const secretKey = /^AWS_SECRET_ACCESS_KEY=(?<key>.+)$/mv.exec(readFileSync(envFile, 'utf8'))
+    ?.groups?.['key'];
+
+  if (secretKey === undefined) {
+    throw new Error(`${envFile} holds no AWS_SECRET_ACCESS_KEY`);
+  }
 
   return {
     directory,
@@ -90,8 +106,12 @@ export async function writeBackupSecrets(): Promise<BackupSecrets> {
   };
 }
 
-export function removeBackupSecrets(secrets: Readonly<BackupSecrets>): Promise<void> {
-  return rm(secrets.directory, { recursive: true, force: true });
+// The backups suites' settings: impd backs up to the drill repository from the suite's reboot on.
+// An hour's interval keeps scheduled runs out of the tests, which run their own.
+export function readBackupSuiteSettings(
+  target: Readonly<DevInstance> = instance,
+): Readonly<Record<string, string>> {
+  return buildBackupEnv(readBackupSecrets(target), 3600);
 }
 
 function readMinioName(): string {
@@ -202,13 +222,21 @@ const BACKUP_STATE_FILE = '/var/lib/imp/backup/state.json';
 type BackupRun = z.infer<typeof BackupRunSchema>;
 
 export interface BackupDrill {
-  readonly reboot: (env: Readonly<Record<string, string>>) => Promise<void>;
+  readonly resetState: () => Promise<void>;
+  readonly reboot: (overrides: Readonly<Record<string, string>>) => Promise<void>;
   readonly startMinio: (secrets: Readonly<BackupSecrets>) => Promise<void>;
   readonly runBackup: () => Promise<BackupRun>;
 }
 
 interface BackupDrillDeps {
+  // The suite's settings, which the instance runs on until a test reboots over them.
+  readonly suiteEnv: Readonly<Record<string, string>>;
+
+  // Whether the instance runs on these settings: a lone journey's instance runs on its own.
+  readonly probeOnSettings: (env: Readonly<Record<string, string>>) => Promise<boolean>;
+
   readonly removeState: () => Promise<void>;
+  readonly writeState: (state: Readonly<{ lastRunAt: Date }>) => Promise<void>;
   readonly reboot: (env: Readonly<Record<string, string>>) => Promise<void>;
   readonly startMinio: (secrets: Readonly<BackupSecrets>) => Promise<void>;
   readonly stopMinio: () => Promise<void>;
@@ -219,11 +247,40 @@ interface BackupDrillDeps {
 
 export function wireBackupDrill(stack: AsyncDisposableStack, metric: string): BackupDrill {
   return createBackupDrill(stack, metric, {
+    suiteEnv: readBackupSuiteSettings(),
+    probeOnSettings: async (env) => {
+      const result = await runInContainer(['env']);
+
+      if (result.exitCode !== 0) {
+        throw new Error(`the instance's settings could not be read: ${result.stderr}`);
+      }
+
+      const lines = new Set(result.stdout.split('\n'));
+
+      // The env file's path is the dev script's own, which it hands docker, not impd.
+      return Object.entries(env)
+        .filter(([key]) => !key.startsWith('IMP_DEV_'))
+        .every(([key, value]) => lines.has(`${key}=${value}`));
+    },
     removeState: async () => {
       const removed = await runInContainer(['rm', '-f', BACKUP_STATE_FILE]);
 
       if (removed.exitCode !== 0) {
         throw new Error(`the backup state could not go: ${removed.stderr}`);
+      }
+    },
+    writeState: async (state) => {
+      const written = await runInContainer([
+        'sh',
+        '-c',
+        'mkdir -p "$(dirname "$1")" && printf %s "$2" > "$1"',
+        'sh',
+        BACKUP_STATE_FILE,
+        JSON.stringify(state),
+      ]);
+
+      if (written.exitCode !== 0) {
+        throw new Error(`the backup state could not be written: ${written.stderr}`);
       }
     },
     reboot: (env) => runDevScript('reboot', instance, env),
@@ -242,6 +299,31 @@ export function createBackupDrill(
 ): BackupDrill {
   const spans = { rebootMs: 0, minioMs: 0, runsMs: 0, rebootBackMs: 0 };
   const reached = { isRebooted: false, isMinioUp: false };
+
+  // The settings a reboot goes back to: the suite's, or a lone journey's own.
+  const home: { env: Readonly<Record<string, string>> | null } = { env: null };
+
+  const readHomeEnv = async (): Promise<Readonly<Record<string, string>>> => {
+    if (home.env === null) {
+      const isOnSuite = await deps.probeOnSettings(deps.suiteEnv);
+
+      home.env = isOnSuite ? deps.suiteEnv : {};
+    }
+
+    return home.env;
+  };
+
+  const rebootOnto = async (env: Readonly<Record<string, string>>): Promise<void> => {
+    const rebootStarted = deps.now();
+
+    await deps.removeState();
+
+    reached.isRebooted = true;
+
+    await deps.reboot(env);
+
+    spans.rebootMs += deps.now() - rebootStarted;
+  };
 
   stack.defer(() => {
     deps.writeMetric(metric, spans);
@@ -262,25 +344,28 @@ export function createBackupDrill(
 
     const back = deps.now();
 
-    await deps.reboot({});
+    await deps.reboot(home.env ?? deps.suiteEnv);
 
     spans.rebootBackMs += deps.now() - back;
   });
 
   return {
-    // impd sets up its repository at start, so each test reboots onto its own.
-    // impd keeps its last prune time across reboots and prunes once a day, so
-    // an earlier test's prune would hold off this one's.
-    reboot: async (env) => {
-      const rebootStarted = deps.now();
+    // impd sets up the repository at each run, so a fresh MinIO is an empty one with no reboot.
+    // A run marked just done keeps scheduled runs off, and drops an earlier test's prune and
+    // check. A lone journey's instance reboots onto the suite's settings first, and back after.
+    resetState: async () => {
+      if ((await readHomeEnv()) !== deps.suiteEnv) {
+        await rebootOnto(deps.suiteEnv);
+      }
 
-      await deps.removeState();
+      await deps.writeState({ lastRunAt: new Date(deps.now()) });
+    },
 
-      reached.isRebooted = true;
-
-      await deps.reboot(env);
-
-      spans.rebootMs += deps.now() - rebootStarted;
+    // For a test that needs settings of its own. impd keeps its last prune time across reboots
+    // and prunes once a day, so an earlier test's prune would hold off this one's.
+    reboot: async (overrides) => {
+      await readHomeEnv();
+      await rebootOnto({ ...deps.suiteEnv, ...overrides });
     },
     startMinio: async (secrets) => {
       const minioStarted = deps.now();

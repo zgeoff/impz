@@ -10,7 +10,6 @@ import type { GuestMemory, VmRunner } from '../vmm/vm-runner';
 import type { MemoryLimit } from './memory-limit';
 import { getShrinkTargetMib, shrinkGuest } from './shrink-guest';
 
-const SHRINK_AFTER_MS = 60_000;
 const BACKOFF_MS = 60_000;
 const RECLAIM_TIME_LIMIT_MS = 1000;
 const STALL_MS = 2000;
@@ -45,6 +44,9 @@ export interface MemoryControllerDeps {
   readonly readRamMib: (imp: ElasticImp) => number | null;
   readonly setPluggedMib: (id: string, mib: number | null) => void;
   readonly log: (message: string) => void;
+
+  // How long a guest could give back a step before the controller unplugs it.
+  readonly shrinkAfterMs: number;
   readonly now?: () => number;
   readonly sleep?: (durationMs: number) => Promise<void>;
 }
@@ -334,7 +336,7 @@ export function createMemoryController(deps: MemoryControllerDeps): MemoryContro
 
     state.spareSince ??= time;
 
-    if (time - state.spareSince >= SHRINK_AFTER_MS) {
+    if (time - state.spareSince >= deps.shrinkAfterMs) {
       await shrinkImp(imp, memory);
     }
   };

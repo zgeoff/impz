@@ -2,15 +2,13 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { randomBytes } from 'node:crypto';
 import * as z from 'zod';
 import {
-  buildBackupEnv,
   findPackKey,
+  readBackupSecrets,
   readBackupStatus,
-  removeBackupSecrets,
   runRestic,
   runS3,
   startRestic,
   wireBackupDrill,
-  writeBackupSecrets,
 } from '../lib/backup-drill';
 import { config } from '../lib/config';
 import { resolveImageName } from '../lib/fixtures';
@@ -39,9 +37,8 @@ async function setupTest() {
   onTestFinished(() => stack.disposeAsync());
 
   const client = await createInstanceClient();
-  const secrets = await writeBackupSecrets();
 
-  stack.defer(() => removeBackupSecrets(secrets));
+  const secrets = readBackupSecrets();
 
   return { prefix: getSuitePrefix('backups-repo'), stack, client, secrets };
 }
@@ -53,7 +50,7 @@ test('it lists no file of an imp created with backup off in the snapshot, and re
   const kept = `${ctx.prefix}off-kept`;
   const chat = `${ctx.prefix}off-chat`;
 
-  await drill.reboot(buildBackupEnv(ctx.secrets, 60));
+  await drill.resetState();
   await drill.startMinio(ctx.secrets);
 
   await runImp('new', kept, '--image', resolveImageName('e2e-tiny'), '--memory', '256');
@@ -114,7 +111,7 @@ test('it restores past a stale lock in the repository, and fails the check loudl
   const idle = `${ctx.prefix}lock-idle`;
   const unlocked = `${ctx.prefix}lock-kept`;
 
-  await drill.reboot(buildBackupEnv(ctx.secrets, 60));
+  await drill.resetState();
   await drill.startMinio(ctx.secrets);
 
   await runImp('new', idle, '--image', resolveImageName('e2e-tiny'), '--memory', '256');
@@ -200,7 +197,7 @@ test('it brings back a named token, its secret’s name and the grant from a bac
   const secret = `${ctx.prefix}gh`;
   const token = `${ctx.prefix}agent`;
 
-  await drill.reboot({ ...buildBackupEnv(ctx.secrets, 3600), IMP_BACKUP_DATABASE: 'true' });
+  await drill.reboot({ IMP_BACKUP_DATABASE: 'true' });
   await drill.startMinio(ctx.secrets);
 
   await runImp('new', name, '--image', resolveImageName('e2e-tiny'), '--memory', '256');

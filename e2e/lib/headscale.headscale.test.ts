@@ -5,6 +5,7 @@ import { HEADSCALE_LOGIN_SERVER, startHeadscale, stopHeadscale } from './headsca
 import { runChecked, runCommand } from './instance';
 import { removeDockerNetwork } from './remove-docker-network';
 import { waitFor } from './wait-for';
+import { writeMetric } from './write-metric';
 
 function setupTest() {
   const container = `imp-headscale-${String(process.pid)}-${randomUUID().slice(0, 8)}`;
@@ -16,157 +17,64 @@ function setupTest() {
   return { container, runners: { runCommand, runChecked } };
 }
 
-test('it lets one tag:imp-e2e node reach another on port 7070', async () => {
+// One topology for both ports: a tagged peer and caller, and the member. Each probe waits 1 s, as
+// a dropped port answers nothing and an open one answers at once.
+test('it lets one tag:imp-e2e node reach another on port 7070, and refuses it the port 7071 that a member reaches', async () => {
   const ctx = setupTest();
+  const started = performance.now();
+  const spans = { headscaleMs: 0, addressesMs: 0, pathsMs: 0, reachMs: 0 };
 
   const tailnet = await startHeadscale(ctx.runners, ctx.container);
 
-  await runChecked([
-    'docker',
-    'run',
-    '-d',
-    '--name',
-    `${ctx.container}-peer`,
-    '--network',
-    tailnet.network,
-    '--cap-add',
-    'NET_ADMIN',
-    '--device',
-    '/dev/net/tun',
-    '-e',
-    `TS_AUTHKEY=${tailnet.key}`,
-    '-e',
-    'TS_USERSPACE=false',
-    '-e',
-    `TS_EXTRA_ARGS=--login-server=${HEADSCALE_LOGIN_SERVER}`,
-    HEADSCALE_IMAGES.tailscale,
-  ]);
+  spans.headscaleMs = Math.round(performance.now() - started);
 
-  onTestFinished(() => runCommand(['docker', 'rm', '-f', `${ctx.container}-peer`]));
+  const peer = `${ctx.container}-peer`;
+  const caller = `${ctx.container}-caller`;
 
-  await runChecked([
-    'docker',
-    'run',
-    '-d',
-    '--name',
-    `${ctx.container}-caller`,
-    '--network',
-    tailnet.network,
-    '--cap-add',
-    'NET_ADMIN',
-    '--device',
-    '/dev/net/tun',
-    '-e',
-    `TS_AUTHKEY=${tailnet.key}`,
-    '-e',
-    'TS_USERSPACE=false',
-    '-e',
-    `TS_EXTRA_ARGS=--login-server=${HEADSCALE_LOGIN_SERVER}`,
-    HEADSCALE_IMAGES.tailscale,
-  ]);
-
-  onTestFinished(() => runCommand(['docker', 'rm', '-f', `${ctx.container}-caller`]));
-
-  const peerAddress = await waitFor('the peer’s tailnet address', () =>
-    runChecked(['docker', 'exec', `${ctx.container}-peer`, 'tailscale', 'ip', '-4']),
-  );
-
-  const peerIP = peerAddress.trim();
-
-  await runChecked([
-    'docker',
-    'exec',
-    '-d',
-    `${ctx.container}-peer`,
-    'sh',
-    '-c',
-    'while true; do echo open | nc -l -p 7070; done',
-  ]);
-
-  const reply = await waitFor('the peer’s port 7070 from the caller', async () => {
-    const answer = await runChecked([
+  const startNode = async (name: string): Promise<string> => {
+    await runChecked([
       'docker',
-      'exec',
-      `${ctx.container}-caller`,
-      'nc',
-      '-w',
-      '5',
-      peerIP,
-      '7070',
+      'run',
+      '-d',
+      '--name',
+      name,
+      '--network',
+      tailnet.network,
+      '--cap-add',
+      'NET_ADMIN',
+      '--device',
+      '/dev/net/tun',
+      '-e',
+      `TS_AUTHKEY=${tailnet.key}`,
+      '-e',
+      'TS_USERSPACE=false',
+      '-e',
+      `TS_EXTRA_ARGS=--login-server=${HEADSCALE_LOGIN_SERVER}`,
+      HEADSCALE_IMAGES.tailscale,
     ]);
 
-    if (answer.trim() === '') {
-      throw new Error('no answer yet');
-    }
+    onTestFinished(() => runCommand(['docker', 'rm', '-f', name]));
 
-    return answer.trim();
-  });
+    const address = await waitFor(`${name}’s tailnet address`, () =>
+      runChecked(['docker', 'exec', name, 'tailscale', 'ip', '-4']),
+    );
 
-  expect(reply).toBe('open');
-}, 180_000);
+    return address.trim();
+  };
 
-test('it refuses one tag:imp-e2e node the port 7071 of another, which a member reaches', async () => {
-  const ctx = setupTest();
-
-  const tailnet = await startHeadscale(ctx.runners, ctx.container);
-
-  await runChecked([
-    'docker',
-    'run',
-    '-d',
-    '--name',
-    `${ctx.container}-peer`,
-    '--network',
-    tailnet.network,
-    '--cap-add',
-    'NET_ADMIN',
-    '--device',
-    '/dev/net/tun',
-    '-e',
-    `TS_AUTHKEY=${tailnet.key}`,
-    '-e',
-    'TS_USERSPACE=false',
-    '-e',
-    `TS_EXTRA_ARGS=--login-server=${HEADSCALE_LOGIN_SERVER}`,
-    HEADSCALE_IMAGES.tailscale,
+  const [peerIP, callerIP, memberAddress] = await Promise.all([
+    startNode(peer),
+    startNode(caller),
+    runChecked(['docker', 'exec', tailnet.member, 'tailscale', 'ip', '-4']),
   ]);
 
-  onTestFinished(() => runCommand(['docker', 'rm', '-f', `${ctx.container}-peer`]));
-
-  await runChecked([
-    'docker',
-    'run',
-    '-d',
-    '--name',
-    `${ctx.container}-caller`,
-    '--network',
-    tailnet.network,
-    '--cap-add',
-    'NET_ADMIN',
-    '--device',
-    '/dev/net/tun',
-    '-e',
-    `TS_AUTHKEY=${tailnet.key}`,
-    '-e',
-    'TS_USERSPACE=false',
-    '-e',
-    `TS_EXTRA_ARGS=--login-server=${HEADSCALE_LOGIN_SERVER}`,
-    HEADSCALE_IMAGES.tailscale,
-  ]);
-
-  onTestFinished(() => runCommand(['docker', 'rm', '-f', `${ctx.container}-caller`]));
-
-  const peerAddress = await waitFor('the peer’s tailnet address', () =>
-    runChecked(['docker', 'exec', `${ctx.container}-peer`, 'tailscale', 'ip', '-4']),
-  );
-
-  const peerIP = peerAddress.trim();
+  spans.addressesMs = Math.round(performance.now() - started);
 
   await runChecked([
     'docker',
     'exec',
     '-d',
-    `${ctx.container}-peer`,
+    peer,
     'sh',
     '-c',
     'while true; do echo open | nc -l -p 7071; done',
@@ -176,57 +84,76 @@ test('it refuses one tag:imp-e2e node the port 7071 of another, which a member r
     'docker',
     'exec',
     '-d',
-    `${ctx.container}-peer`,
+    peer,
     'sh',
     '-c',
     'while true; do echo open | nc -l -p 7070; done',
   ]);
 
-  await waitFor('the peer’s port 7071 from the member', async () => {
-    const answer = await runChecked([
-      'docker',
-      'exec',
-      tailnet.member,
-      'nc',
-      '-w',
-      '5',
-      peerIP,
-      '7071',
-    ]);
+  // Disco pings until each node has a direct path to the other. With no DERP relay that tailscaled
+  // accepts, a first connection waits about 10 s for its path; the pings bring every path up in
+  // about 2 s, side by side.
+  const paths: readonly (readonly [string, string])[] = [
+    [tailnet.member, peerIP],
+    [caller, peerIP],
+    [peer, memberAddress.trim()],
+    [peer, callerIP],
+  ];
 
-    if (answer.trim() !== 'open') {
-      throw new Error('no answer yet');
-    }
-  });
+  await Promise.all(
+    paths.map(([from, address]) =>
+      runChecked([
+        'docker',
+        'exec',
+        from,
+        'tailscale',
+        'ping',
+        '--c',
+        '30',
+        '--timeout',
+        '1s',
+        address,
+      ]),
+    ),
+  );
 
-  await waitFor('the peer’s port 7070 from the caller', async () => {
-    const answer = await runChecked([
-      'docker',
-      'exec',
-      `${ctx.container}-caller`,
-      'nc',
-      '-w',
-      '5',
-      peerIP,
-      '7070',
-    ]);
+  spans.pathsMs = Math.round(performance.now() - started);
 
-    if (answer.trim() !== 'open') {
-      throw new Error('no answer yet');
-    }
-  });
+  const [, reply] = await Promise.all([
+    waitFor('the peer’s port 7071 from the member', async () => {
+      const answer = await runCommand([
+        'docker',
+        'exec',
+        tailnet.member,
+        'nc',
+        '-w',
+        '1',
+        peerIP,
+        '7071',
+      ]);
 
-  const refused = await runCommand([
-    'docker',
-    'exec',
-    `${ctx.container}-caller`,
-    'nc',
-    '-w',
-    '5',
-    peerIP,
-    '7071',
+      if (answer.stdout.trim() !== 'open') {
+        throw new Error('no answer yet');
+      }
+    }),
+    waitFor('the peer’s port 7070 from the caller', async () => {
+      const answer = await runCommand(['docker', 'exec', caller, 'nc', '-w', '1', peerIP, '7070']);
+
+      if (answer.stdout.trim() === '') {
+        throw new Error('no answer yet');
+      }
+
+      return answer.stdout.trim();
+    }),
   ]);
 
+  spans.reachMs = Math.round(performance.now() - started);
+
+  const refused = await runCommand(['docker', 'exec', caller, 'nc', '-w', '1', peerIP, '7071']);
+
+  writeMetric('headscaleSpansMs', spans);
+
+  expect(reply).toBe('open');
   expect(refused.stdout).toBe('');
 }, 180_000);
 

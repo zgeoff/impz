@@ -20,6 +20,7 @@ test('it fills every setting from its default when the env is empty', () => {
     ramBudgetMib: 16_384,
     idleTimeoutS: 60,
     idleCpuPercent: 10,
+    memoryShrinkAfterMs: 60_000,
     bootReservePercent: 50,
     wakeReserveMib: 256,
     sleepMinGuestUptimeMs: 1500,
@@ -206,6 +207,10 @@ test('it reads and coerces values from the env', () => {
   expect(config.kernelSource).toBe('/src/kernel/out/vmlinux');
   expect(config.tailscaleEnabled).toBeTrue();
   expect(config.sleepMinGuestUptimeMs).toBe(0);
+});
+
+test('it reads the memory shrink delay in seconds', () => {
+  expect(loadConfig({ IMP_MEMORY_SHRINK_AFTER_S: '10' }).memoryShrinkAfterMs).toBe(10_000);
 });
 
 test('it counts a node started from saved state as on the tailnet, with no key', () => {
