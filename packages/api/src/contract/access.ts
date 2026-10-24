@@ -12,5 +12,6 @@ export const ACCESS = {
   manageImpNoGrantable: { access: { scope: 'manage', on: 'imp', fields: IMP, noGrantable: true } },
   manageHost: { access: { scope: 'manage', on: 'host' } },
   manageImage: { access: { scope: 'manage', on: 'image' } },
+  manageHeldImage: { access: { scope: 'manage', on: 'image', held: true } },
   manageGrant: { access: { scope: 'manage', on: 'grant', fields: IMP, secretField: 'secret' } },
 } as const satisfies Record<string, ProcedureMeta>;

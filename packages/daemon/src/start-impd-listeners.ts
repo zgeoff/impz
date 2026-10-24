@@ -69,12 +69,19 @@ export async function startImpdListeners(
       dataDir: config.dataDir,
     });
 
-    const stop = async (closeActive: boolean): Promise<void> => {
-      await listening.stop(closeActive);
+    const stopping: { promise: Promise<void> | null } = { promise: null };
 
-      for (const listener of added) {
-        process.off('beforeExit', listener);
-      }
+    // Elysia's stop throws on a server it has stopped, and impd can be stopped twice
+    const stop = (closeActive: boolean): Promise<void> => {
+      stopping.promise ??= (async () => {
+        await listening.stop(closeActive);
+
+        for (const listener of added) {
+          process.off('beforeExit', listener);
+        }
+      })();
+
+      return stopping.promise;
     };
 
     return { app: listening, stop };

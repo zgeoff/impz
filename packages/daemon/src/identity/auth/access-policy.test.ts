@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { expect, mock, test } from 'bun:test';
 import { callerContract } from '@impz/api';
 import type { Scope } from '@impz/api';
 import { traverseContractProcedures } from '@orpc/server';
@@ -28,8 +28,14 @@ test('#PROCEDURE_ACCESS has a rule for every procedure a caller reaches, and no 
 });
 
 test('#checkAccess refuses a path with no rule to every caller', async () => {
-  const refusal = await checkAccess(findAccess('imps.someday'), buildMockCaller(), {}, () =>
-    Promise.resolve(null),
+  const refusal = await checkAccess(
+    findAccess('imps.someday'),
+    buildMockCaller(),
+    {},
+    {
+      readSecretGeneration: () => Promise.resolve(null),
+      readImage: () => Promise.resolve(undefined),
+    },
   );
 
   expect(refusal).toStrictEqual({ message: 'this call has no access rule', reason: null });
@@ -46,7 +52,10 @@ test('#checkAccess refuses a procedure with no access metadata to a host-wide ma
     findDeclaredAccess({}),
     buildMockCaller({ scope: 'manage' }),
     { name: 'a' },
-    () => Promise.resolve(null),
+    {
+      readSecretGeneration: () => Promise.resolve(null),
+      readImage: () => Promise.resolve(undefined),
+    },
   );
 
   expect(refusal).toStrictEqual({ message: 'this call has no access rule', reason: null });
@@ -57,7 +66,10 @@ test('#checkAccess refuses a caller’s procedure that declares it needs no sess
     findDeclaredAccess({ access: { on: 'none' } }),
     buildMockCaller({ scope: 'manage' }),
     {},
-    () => Promise.resolve(null),
+    {
+      readSecretGeneration: () => Promise.resolve(null),
+      readImage: () => Promise.resolve(undefined),
+    },
   );
 
   expect(refusal).toStrictEqual({ message: 'this call has no access rule', reason: null });
@@ -96,7 +108,10 @@ test.each([
     findAccess(path),
     buildMockCaller({ scope }),
     { name: 'a' },
-    () => Promise.resolve(null),
+    {
+      readSecretGeneration: () => Promise.resolve(null),
+      readImage: () => Promise.resolve(undefined),
+    },
   );
 
   expect(refusal).toBeNull();
@@ -105,8 +120,14 @@ test.each([
 test('#checkAccess refuses a call that needs a scope above the caller’s', async () => {
   const caller = buildMockCaller({ scope: 'read' });
 
-  const refusal = await checkAccess(findAccess('imps.stop'), caller, { name: 'a' }, () =>
-    Promise.resolve(null),
+  const refusal = await checkAccess(
+    findAccess('imps.stop'),
+    caller,
+    { name: 'a' },
+    {
+      readSecretGeneration: () => Promise.resolve(null),
+      readImage: () => Promise.resolve(undefined),
+    },
   );
 
   expect(refusal).toStrictEqual({
@@ -120,7 +141,10 @@ test('#checkAccess lets a caller with patterns touch an imp within them', async 
     findAccess('imps.destroy'),
     buildMockCaller({ imps: ['dev-*'] }),
     { name: 'dev-a' },
-    () => Promise.resolve(null),
+    {
+      readSecretGeneration: () => Promise.resolve(null),
+      readImage: () => Promise.resolve(undefined),
+    },
   );
 
   expect(refusal).toBeNull();
@@ -129,8 +153,14 @@ test('#checkAccess lets a caller with patterns touch an imp within them', async 
 test('#checkAccess refuses a caller with patterns an imp outside them', async () => {
   const caller = buildMockCaller({ imps: ['dev-*'] });
 
-  const refusal = await checkAccess(findAccess('imps.destroy'), caller, { name: 'prod' }, () =>
-    Promise.resolve(null),
+  const refusal = await checkAccess(
+    findAccess('imps.destroy'),
+    caller,
+    { name: 'prod' },
+    {
+      readSecretGeneration: () => Promise.resolve(null),
+      readImage: () => Promise.resolve(undefined),
+    },
   );
 
   expect(refusal).toStrictEqual({
@@ -144,7 +174,10 @@ test('#checkAccess lets a caller with an image ref prefix add a pinned ref under
     findAccess('images.add'),
     buildMockCaller({ imps: ['nixie-*'], imageRefPrefix: 'ghcr.io/zgeoff/nixie-' }),
     { ref: `ghcr.io/zgeoff/nixie-x@sha256:${'e'.repeat(64)}`, name: 'nixie-x' },
-    () => Promise.resolve(null),
+    {
+      readSecretGeneration: () => Promise.resolve(null),
+      readImage: () => Promise.resolve(undefined),
+    },
   );
 
   expect(refusal).toBeNull();
@@ -155,7 +188,10 @@ test('#checkAccess lets a host-wide caller add a tag-only ref from any registry'
     findAccess('images.add'),
     buildMockCaller(),
     { ref: 'docker.io/library/busybox:1.37', name: 'box' },
-    () => Promise.resolve(null),
+    {
+      readSecretGeneration: () => Promise.resolve(null),
+      readImage: () => Promise.resolve(undefined),
+    },
   );
 
   expect(refusal).toBeNull();
@@ -168,7 +204,10 @@ test('#checkAccess refuses a ref with a digest of another kind than sha256', asy
     findAccess('images.addStream'),
     caller,
     { ref: `ghcr.io/zgeoff/nixie-x@sha512:${'e'.repeat(128)}`, name: 'nixie-x' },
-    () => Promise.resolve(null),
+    {
+      readSecretGeneration: () => Promise.resolve(null),
+      readImage: () => Promise.resolve(undefined),
+    },
   );
 
   expect(refusal).toStrictEqual({
@@ -184,7 +223,10 @@ test('#checkAccess refuses a ref under the prefix that is no image ref', async (
     findAccess('images.add'),
     caller,
     { ref: `ghcr.io/zgeoff/nixie-@@sha256:${'e'.repeat(64)}`, name: 'nixie-x' },
-    () => Promise.resolve(null),
+    {
+      readSecretGeneration: () => Promise.resolve(null),
+      readImage: () => Promise.resolve(undefined),
+    },
   );
 
   expect(refusal).toStrictEqual({
@@ -200,7 +242,10 @@ test('#checkAccess refuses a caller with an image ref prefix a build', async () 
     findAccess('images.build'),
     caller,
     { contextDir: '/srv/nixie', name: 'nixie-x' },
-    () => Promise.resolve(null),
+    {
+      readSecretGeneration: () => Promise.resolve(null),
+      readImage: () => Promise.resolve(undefined),
+    },
   );
 
   expect(refusal).toStrictEqual({
@@ -216,7 +261,10 @@ test.each([['images.pin'], ['images.unpin']] as const)(
       findAccess(path),
       buildMockCaller({ scope: 'manage' }),
       { name: 'tools' },
-      () => Promise.resolve(null),
+      {
+        readSecretGeneration: () => Promise.resolve(null),
+        readImage: () => Promise.resolve(undefined),
+      },
     );
 
     expect(refusal).toBeNull();
@@ -228,8 +276,14 @@ test.each([['images.pin'], ['images.unpin']] as const)(
   async (path) => {
     const caller = buildMockCaller({ imps: ['dev-*'] });
 
-    const refusal = await checkAccess(findAccess(path), caller, { name: 'tools' }, () =>
-      Promise.resolve(null),
+    const refusal = await checkAccess(
+      findAccess(path),
+      caller,
+      { name: 'tools' },
+      {
+        readSecretGeneration: () => Promise.resolve(null),
+        readImage: () => Promise.resolve(undefined),
+      },
     );
 
     expect(refusal).toStrictEqual({
@@ -239,11 +293,77 @@ test.each([['images.pin'], ['images.unpin']] as const)(
   },
 );
 
+test.each([['images.pin'], ['images.unpin']] as const)(
+  '#checkAccess checks %s against the ref of the image impd holds, never a ref in the input',
+  async (path) => {
+    const caller = buildMockCaller({ imps: ['nixie-*'], imageRefPrefix: 'ghcr.io/zgeoff/nixie-' });
+    const readImage = mock(() => Promise.resolve({ ref: 'docker.io/zgeoff/nixie-x:1' }));
+
+    const refusal = await checkAccess(
+      findAccess(path),
+      caller,
+      { name: 'nixie-x', ref: `ghcr.io/zgeoff/nixie-x@sha256:${'e'.repeat(64)}` },
+      { readSecretGeneration: () => Promise.resolve(null), readImage },
+    );
+
+    expect(readImage).toHaveBeenCalledExactlyOnceWith('nixie-x');
+
+    expect(refusal).toStrictEqual({
+      message: `token ${caller.name} may pin or unpin only images whose ref starts with ghcr.io/zgeoff/nixie-`,
+      reason: null,
+    });
+  },
+);
+
+test('#checkAccess refuses a pin outside the caller’s patterns without reading the image', async () => {
+  const caller = buildMockCaller({ imps: ['nixie-*'], imageRefPrefix: 'ghcr.io/zgeoff/nixie-' });
+  const readImage = mock(() => Promise.resolve({ ref: 'ghcr.io/zgeoff/nixie-x:1' }));
+
+  const refusal = await checkAccess(
+    findAccess('images.pin'),
+    caller,
+    { name: 'base' },
+    { readSecretGeneration: () => Promise.resolve(null), readImage },
+  );
+
+  expect(readImage).not.toHaveBeenCalled();
+
+  expect(refusal).toStrictEqual({
+    message: `token ${caller.name} may not pin or unpin image base`,
+    reason: 'imp_out_of_scope',
+  });
+});
+
+test('#checkAccess makes a caller with patterns name the image it pins', async () => {
+  const caller = buildMockCaller({ imps: ['nixie-*'], imageRefPrefix: 'ghcr.io/zgeoff/nixie-' });
+
+  const refusal = await checkAccess(
+    findAccess('images.pin'),
+    caller,
+    {},
+    {
+      readSecretGeneration: () => Promise.resolve(null),
+      readImage: () => Promise.resolve(undefined),
+    },
+  );
+
+  expect(refusal).toStrictEqual({
+    message: `token ${caller.name} is limited to some imps, so the call must name the image (name)`,
+    reason: 'imp_out_of_scope',
+  });
+});
+
 test('#checkAccess makes a caller with patterns name the imp it creates', async () => {
   const caller = buildMockCaller({ imps: ['dev-*'] });
 
-  const refusal = await checkAccess(findAccess('imps.create'), caller, {}, () =>
-    Promise.resolve(null),
+  const refusal = await checkAccess(
+    findAccess('imps.create'),
+    caller,
+    {},
+    {
+      readSecretGeneration: () => Promise.resolve(null),
+      readImage: () => Promise.resolve(undefined),
+    },
   );
 
   expect(refusal).toStrictEqual({
@@ -259,7 +379,10 @@ test('#checkAccess refuses a fork whose source is outside the caller’s pattern
     findAccess('imps.fork'),
     caller,
     { source: 'prod', name: 'dev-copy' },
-    () => Promise.resolve(null),
+    {
+      readSecretGeneration: () => Promise.resolve(null),
+      readImage: () => Promise.resolve(undefined),
+    },
   );
 
   expect(refusal).toStrictEqual({
@@ -273,7 +396,10 @@ test('#checkAccess leaves a list to its handler for a caller with patterns', asy
     findAccess('imps.list'),
     buildMockCaller({ imps: ['dev-*'] }),
     {},
-    () => Promise.resolve(null),
+    {
+      readSecretGeneration: () => Promise.resolve(null),
+      readImage: () => Promise.resolve(undefined),
+    },
   );
 
   expect(refusal).toBeNull();
@@ -284,7 +410,10 @@ test('#checkAccess lets a host-wide read caller list the running image builds', 
     findAccess('images.builds'),
     buildMockCaller({ scope: 'read' }),
     {},
-    () => Promise.resolve(null),
+    {
+      readSecretGeneration: () => Promise.resolve(null),
+      readImage: () => Promise.resolve(undefined),
+    },
   );
 
   expect(refusal).toBeNull();
@@ -299,8 +428,14 @@ test.each([
 ])('#checkAccess refuses the host-wide call %s to a caller with patterns', async (path) => {
   const caller = buildMockCaller({ imps: ['dev-*'] });
 
-  const refusal = await checkAccess(findAccess(path), caller, { name: 'dev-a' }, () =>
-    Promise.resolve(null),
+  const refusal = await checkAccess(
+    findAccess(path),
+    caller,
+    { name: 'dev-a' },
+    {
+      readSecretGeneration: () => Promise.resolve(null),
+      readImage: () => Promise.resolve(undefined),
+    },
   );
 
   expect(refusal).toStrictEqual({
@@ -319,13 +454,16 @@ test.each([
       findAccess(path),
       buildMockCaller({ imps: ['dev-*'], grantable: [{ name: 'gh', generation: 'gen-gh' }] }),
       { name, secret },
-      (each) =>
-        Promise.resolve(
-          new Map([
-            ['gh', 'gen-gh'],
-            ['npm', 'gen-npm'],
-          ]).get(each) ?? null,
-        ),
+      {
+        readSecretGeneration: (each) =>
+          Promise.resolve(
+            new Map([
+              ['gh', 'gen-gh'],
+              ['npm', 'gen-npm'],
+            ]).get(each) ?? null,
+          ),
+        readImage: () => Promise.resolve(undefined),
+      },
     );
 
     expect(refusal).toBeNull();
@@ -346,13 +484,16 @@ test.each([
       findAccess(path),
       buildMockCaller({ imps: ['dev-*'], grantable: [{ name: 'gh', generation: 'gen-gh' }] }),
       { name, secret },
-      (each) =>
-        Promise.resolve(
-          new Map([
-            ['gh', 'gen-gh'],
-            ['npm', 'gen-npm'],
-          ]).get(each) ?? null,
-        ),
+      {
+        readSecretGeneration: (each) =>
+          Promise.resolve(
+            new Map([
+              ['gh', 'gen-gh'],
+              ['npm', 'gen-npm'],
+            ]).get(each) ?? null,
+          ),
+        readImage: () => Promise.resolve(undefined),
+      },
     );
 
     expect(refusal?.reason).toBe(reason);
@@ -370,7 +511,10 @@ test('#checkAccess refuses a grant to a token below manage, for its scope', asyn
     findAccess('grants.add'),
     caller,
     { name: 'dev-a', secret: 'gh' },
-    () => Promise.resolve('gen-gh'),
+    {
+      readSecretGeneration: () => Promise.resolve('gen-gh'),
+      readImage: () => Promise.resolve(undefined),
+    },
   );
 
   expect(refusal?.reason).toBe('scope');
@@ -383,7 +527,10 @@ test('#checkAccess refuses a grant to a token with patterns and no list', async 
     findAccess('grants.add'),
     caller,
     { name: 'dev-a', secret: 'gh' },
-    () => Promise.resolve('gen-gh'),
+    {
+      readSecretGeneration: () => Promise.resolve('gen-gh'),
+      readImage: () => Promise.resolve(undefined),
+    },
   );
 
   expect(refusal).toStrictEqual({
@@ -402,9 +549,10 @@ test.each([
     grantable: [{ name: 'gh', generation: 'gen-gh' }],
   });
 
-  const refusal = await checkAccess(findAccess('grants.add'), caller, input, () =>
-    Promise.resolve('gen-gh'),
-  );
+  const refusal = await checkAccess(findAccess('grants.add'), caller, input, {
+    readSecretGeneration: () => Promise.resolve('gen-gh'),
+    readImage: () => Promise.resolve(undefined),
+  });
 
   expect(refusal).toStrictEqual({
     message: `token ${caller.name} may not grant or revoke that secret`,
@@ -417,7 +565,10 @@ test('#checkAccess lets a host-wide manage caller grant any secret', async () =>
     findAccess('grants.add'),
     buildMockCaller(),
     { name: 'prod', secret: 'npm' },
-    () => Promise.resolve('gen-npm'),
+    {
+      readSecretGeneration: () => Promise.resolve('gen-npm'),
+      readImage: () => Promise.resolve(undefined),
+    },
   );
 
   expect(refusal).toBeNull();
@@ -433,7 +584,10 @@ test('#checkAccess refuses a list entry for a secret deleted and made again, as 
     findAccess('grants.add'),
     caller,
     { name: 'dev-a', secret: 'gh' },
-    () => Promise.resolve('gen-gh'),
+    {
+      readSecretGeneration: () => Promise.resolve('gen-gh'),
+      readImage: () => Promise.resolve(undefined),
+    },
   );
 
   expect(refusal).toStrictEqual({
@@ -452,7 +606,10 @@ test('#checkAccess refuses a list entry for a deleted secret, as for one never l
     findAccess('grants.delete'),
     caller,
     { name: 'dev-a', secret: 'gone' },
-    () => Promise.resolve(null),
+    {
+      readSecretGeneration: () => Promise.resolve(null),
+      readImage: () => Promise.resolve(undefined),
+    },
   );
 
   expect(refusal).toStrictEqual({
@@ -485,7 +642,10 @@ test.each([
       findAccess(path),
       caller,
       { source: 'dev-a', name: 'dev-b' },
-      () => Promise.resolve('gen-gh'),
+      {
+        readSecretGeneration: () => Promise.resolve('gen-gh'),
+        readImage: () => Promise.resolve(undefined),
+      },
     );
 
     expect(refusal).toStrictEqual({
@@ -502,7 +662,10 @@ test.each([['moves.abort'], ['imps.destroy']])(
       findAccess(path),
       buildMockCaller({ imps: ['dev-*'], grantable: [{ name: 'gh', generation: 'gen-gh' }] }),
       { name: 'dev-a' },
-      () => Promise.resolve('gen-gh'),
+      {
+        readSecretGeneration: () => Promise.resolve('gen-gh'),
+        readImage: () => Promise.resolve(undefined),
+      },
     );
 
     expect(refusal).toBeNull();
@@ -514,7 +677,10 @@ test('#checkAccess lets a caller with the same patterns and no list fork', async
     findAccess('imps.fork'),
     buildMockCaller({ imps: ['dev-*'] }),
     { source: 'dev-a', name: 'dev-b' },
-    () => Promise.resolve(null),
+    {
+      readSecretGeneration: () => Promise.resolve(null),
+      readImage: () => Promise.resolve(undefined),
+    },
   );
 
   expect(refusal).toBeNull();
@@ -659,7 +825,10 @@ test.each<OAuthGrantRefusalRow>([
       findAccess(row.path),
       caller,
       { name: 'dev-a', secret: 'gh' },
-      () => Promise.resolve('gen-gh'),
+      {
+        readSecretGeneration: () => Promise.resolve('gen-gh'),
+        readImage: () => Promise.resolve(undefined),
+      },
     );
 
     expect(refusal).toStrictEqual({ message: row.message, reason: row.reason });
@@ -678,7 +847,10 @@ test.each([['imps.fork'], ['moves.prepare'], ['moves.send'], ['moves.resume']])(
       findAccess(path),
       caller,
       { source: 'dev-a', name: 'dev-b' },
-      () => Promise.resolve(null),
+      {
+        readSecretGeneration: () => Promise.resolve(null),
+        readImage: () => Promise.resolve(undefined),
+      },
     );
 
     expect(refusal).toStrictEqual({
@@ -721,8 +893,13 @@ test.each([
     const answers = await Promise.all(
       paths.flatMap((path) =>
         inputs.map(async (input) => {
-          const forToken = await checkAccess(findAccess(path), token, input, readGeneration);
-          const forGrant = await checkAccess(findAccess(path), grant, input, readGeneration);
+          const readers = {
+            readSecretGeneration: readGeneration,
+            readImage: () => Promise.resolve({ ref: 'ghcr.io/zgeoff/web:1' }),
+          };
+
+          const forToken = await checkAccess(findAccess(path), token, input, readers);
+          const forGrant = await checkAccess(findAccess(path), grant, input, readers);
 
           return {
             path,

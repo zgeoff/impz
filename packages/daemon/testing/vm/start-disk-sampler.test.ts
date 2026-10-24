@@ -4,156 +4,191 @@ import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { startDiskSampler } from './start-disk-sampler';
 
+// The sampler waits for free space to hold still, which /dev/shm never does while another process
+// writes there, so these need the small filesystem of their own that IMP_TEST_SMALL_FS names,
+// which CI mounts as a loop XFS, and skip without it.
 async function setupTest() {
-  // a tmpfs no other test writes: the sampler waits for free space to hold
-  // still, which the shared temp dir's busy disk never does
-  const mount = await mkdtemp(join('/dev/shm', 'disk-sampler-'));
+  const mount = await mkdtemp(join(process.env['IMP_TEST_SMALL_FS'] ?? '', 'disk-sampler-'));
 
   onTestFinished(() => rm(mount, { recursive: true, force: true }));
 
   return { mount };
 }
 
-test('it reports a run that resolves as built', async () => {
-  const ctx = await setupTest();
-  const sampler = await startDiskSampler(ctx.mount);
-  const trial = await sampler.measure(() => Promise.resolve());
+test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
+  'it reports a run that resolves as built on a small filesystem',
+  async () => {
+    const ctx = await setupTest();
+    const sampler = await startDiskSampler(ctx.mount);
+    const trial = await sampler.measure(() => Promise.resolve());
 
-  expect(trial.outcome).toBe('built');
-});
+    expect(trial.outcome).toBe('built');
+  },
+);
 
-test('it reports a run that rejects with a code by its code', async () => {
-  const ctx = await setupTest();
-  const sampler = await startDiskSampler(ctx.mount);
+test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
+  'it reports a run that rejects with a code by its code on a small filesystem',
+  async () => {
+    const ctx = await setupTest();
+    const sampler = await startDiskSampler(ctx.mount);
 
-  const trial = await sampler.measure(() =>
-    Promise.reject(Object.assign(new Error('full'), { code: 'DISK_FULL' })),
-  );
+    const trial = await sampler.measure(() =>
+      Promise.reject(Object.assign(new Error('full'), { code: 'DISK_FULL' })),
+    );
 
-  expect(trial.outcome).toBe('DISK_FULL');
-});
+    expect(trial.outcome).toBe('DISK_FULL');
+  },
+);
 
-test('it reports a run that rejects with no code by its text', async () => {
-  const ctx = await setupTest();
-  const sampler = await startDiskSampler(ctx.mount);
-  const trial = await sampler.measure(() => Promise.reject(new Error('the build failed')));
+test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
+  'it reports a run that rejects with no code by its text on a small filesystem',
+  async () => {
+    const ctx = await setupTest();
+    const sampler = await startDiskSampler(ctx.mount);
+    const trial = await sampler.measure(() => Promise.reject(new Error('the build failed')));
 
-  expect(trial.outcome).toBe('Error: the build failed');
-});
+    expect(trial.outcome).toBe('Error: the build failed');
+  },
+);
 
-test('it reports no settled use for a run that never marks its write', async () => {
-  const ctx = await setupTest();
-  const sampler = await startDiskSampler(ctx.mount);
-  const trial = await sampler.measure(() => Promise.resolve());
+test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
+  'it reports no settled use for a run that never marks its write on a small filesystem',
+  async () => {
+    const ctx = await setupTest();
+    const sampler = await startDiskSampler(ctx.mount);
+    const trial = await sampler.measure(() => Promise.resolve());
 
-  expect(trial.settledBytes).toBe(0);
-});
+    expect(trial.settledBytes).toBe(0);
+  },
+);
 
-test('it sees the peak use of a file a run writes and removes', async () => {
-  const ctx = await setupTest();
-  const sampler = await startDiskSampler(ctx.mount);
+test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
+  'it sees the peak use of a file a run writes and removes on a small filesystem',
+  async () => {
+    const ctx = await setupTest();
+    const sampler = await startDiskSampler(ctx.mount);
 
-  const trial = await sampler.measure(async () => {
-    const file = join(ctx.mount, 'big');
-    const fd = openSync(file, 'w');
+    const trial = await sampler.measure(async () => {
+      const file = join(ctx.mount, 'big');
+      const fd = openSync(file, 'w');
 
-    writeSync(fd, new Uint8Array(32 * 1024 ** 2).fill(1));
-    fsyncSync(fd);
-    closeSync(fd);
+      writeSync(fd, new Uint8Array(32 * 1024 ** 2).fill(1));
+      fsyncSync(fd);
+      closeSync(fd);
 
-    sampler.markWritten();
+      sampler.markWritten();
 
-    await rm(file);
-  });
+      await rm(file);
+    });
 
-  expect(trial.peakBytes).toBeGreaterThanOrEqual(16 * 1024 ** 2);
-});
+    expect(trial.peakBytes).toBeGreaterThanOrEqual(16 * 1024 ** 2);
+  },
+);
 
-test('it reads the settled use at the moment the run marks its write', async () => {
-  const ctx = await setupTest();
-  const sampler = await startDiskSampler(ctx.mount);
+test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
+  'it reads the settled use at the moment the run marks its write on a small filesystem',
+  async () => {
+    const ctx = await setupTest();
+    const sampler = await startDiskSampler(ctx.mount);
 
-  const trial = await sampler.measure(async () => {
-    const file = join(ctx.mount, 'big');
-    const fd = openSync(file, 'w');
+    const trial = await sampler.measure(async () => {
+      const file = join(ctx.mount, 'big');
+      const fd = openSync(file, 'w');
 
-    writeSync(fd, new Uint8Array(32 * 1024 ** 2).fill(1));
-    fsyncSync(fd);
-    closeSync(fd);
+      writeSync(fd, new Uint8Array(32 * 1024 ** 2).fill(1));
+      fsyncSync(fd);
+      closeSync(fd);
 
-    sampler.markWritten();
+      sampler.markWritten();
 
-    await rm(file);
-  });
+      await rm(file);
+    });
 
-  expect(trial.settledBytes).toBeGreaterThanOrEqual(16 * 1024 ** 2);
-});
+    expect(trial.settledBytes).toBeGreaterThanOrEqual(16 * 1024 ** 2);
+  },
+);
 
-test('it refuses a fill when less than the room is free above the reserve', async () => {
-  const ctx = await setupTest();
-  const sampler = await startDiskSampler(ctx.mount);
+test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
+  'it refuses a fill when less than the room is free above the reserve on a small filesystem',
+  async () => {
+    const ctx = await setupTest();
+    const sampler = await startDiskSampler(ctx.mount);
 
-  const stats = statfsSync(ctx.mount);
+    const stats = statfsSync(ctx.mount);
 
-  expect(sampler.fill(1024, stats.bavail * stats.bsize)).rejects.toThrow(
-    'B free above the reserve',
-  );
-});
+    expect(sampler.fill(1024, stats.bavail * stats.bsize)).rejects.toThrow(
+      'B free above the reserve',
+    );
+  },
+);
 
-test('it refuses a fill over a file it did not make, and keeps that file', async () => {
-  const ctx = await setupTest();
+test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
+  'it refuses a fill over a file it did not make, and keeps that file, on a small filesystem',
+  async () => {
+    const ctx = await setupTest();
 
-  const taken = join(ctx.mount, 'taken');
+    const taken = join(ctx.mount, 'taken');
 
-  await Bun.write(taken, 'not the sampler’s');
+    await Bun.write(taken, 'not the sampler’s');
 
-  const sampler = await startDiskSampler(ctx.mount, taken);
+    const sampler = await startDiskSampler(ctx.mount, taken);
 
-  const stats = statfsSync(ctx.mount);
-  const filling = sampler.fill(1024 ** 2, stats.bavail * stats.bsize - 64 * 1024 ** 2);
+    const stats = statfsSync(ctx.mount);
+    const filling = sampler.fill(1024 ** 2, stats.bavail * stats.bsize - 64 * 1024 ** 2);
 
-  await filling.catch(() => {});
+    await filling.catch(() => {});
 
-  expect(filling).rejects.toThrowWithMessage(
-    Error,
-    `${taken} is there already, and not the sampler's`,
-  );
+    expect(filling).rejects.toThrowWithMessage(
+      Error,
+      `${taken} is there already, and not the sampler's`,
+    );
 
-  const kept = await Bun.file(taken).text();
+    const kept = await Bun.file(taken).text();
 
-  expect(kept).toBe('not the sampler’s');
-});
+    expect(kept).toBe('not the sampler’s');
+  },
+);
 
-test('it fails a fill whose fallocate fails, with its stderr', async () => {
-  const ctx = await setupTest();
-  const sampler = await startDiskSampler(ctx.mount, join(ctx.mount, 'missing', 'filler'));
+test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
+  'it fails a fill whose fallocate fails, with its stderr, on a small filesystem',
+  async () => {
+    const ctx = await setupTest();
+    const sampler = await startDiskSampler(ctx.mount, join(ctx.mount, 'missing', 'filler'));
 
-  const stats = statfsSync(ctx.mount);
+    const stats = statfsSync(ctx.mount);
 
-  expect(
-    sampler.fill(1024 ** 2, stats.bavail * stats.bsize - 64 * 1024 ** 2),
-  ).rejects.toThrowWithMessage(
-    Error,
-    /^fallocate failed: fallocate: cannot open .*No such file or directory/v,
-  );
-});
+    expect(
+      sampler.fill(1024 ** 2, stats.bavail * stats.bsize - 64 * 1024 ** 2),
+    ).rejects.toThrowWithMessage(
+      Error,
+      /^fallocate failed: fallocate: cannot open .*No such file or directory/v,
+    );
+  },
+);
 
-test('it removes its filler when the test ends', async () => {
-  const ctx = await setupTest();
-  const fillers = await mkdtemp(join('/dev/shm', 'disk-sampler-fillers-'));
-  const sampler = await startDiskSampler(ctx.mount, join(fillers, 'filler'));
+test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
+  'it removes its filler when the test ends on a small filesystem',
+  async () => {
+    const ctx = await setupTest();
 
-  const stats = statfsSync(ctx.mount);
+    const fillers = await mkdtemp(
+      join(process.env['IMP_TEST_SMALL_FS'] ?? '', 'disk-sampler-fillers-'),
+    );
 
-  await sampler.fill(1024 ** 2, stats.bavail * stats.bsize - 8 * 1024 ** 2);
+    const sampler = await startDiskSampler(ctx.mount, join(fillers, 'filler'));
 
-  // In Bun a hook that throws skips the hooks after it, so one hook
-  // reads, removes the directory, then checks, and never leaks it.
-  onTestFinished(async () => {
-    const left = await readdir(fillers);
+    const stats = statfsSync(ctx.mount);
 
-    await rm(fillers, { recursive: true, force: true });
+    await sampler.fill(1024 ** 2, stats.bavail * stats.bsize - 8 * 1024 ** 2);
 
-    expect(left).toStrictEqual([]);
-  });
-});
+    // In Bun a hook that throws skips the hooks after it, so one hook
+    // reads, removes the directory, then checks, and never leaks it.
+    onTestFinished(async () => {
+      const left = await readdir(fillers);
+
+      await rm(fillers, { recursive: true, force: true });
+
+      expect(left).toStrictEqual([]);
+    });
+  },
+);

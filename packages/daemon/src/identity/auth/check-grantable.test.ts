@@ -1572,7 +1572,10 @@ test.each([['imps.fork'], ['moves.prepare'], ['moves.send'], ['moves.resume']])(
       findAccess(path),
       caller,
       { source: 'dev-a', name: 'dev-a' },
-      () => Promise.resolve(null),
+      {
+        readSecretGeneration: () => Promise.resolve(null),
+        readImage: () => Promise.resolve(undefined),
+      },
     );
 
     expect(caller.kind).toBe('ssh');

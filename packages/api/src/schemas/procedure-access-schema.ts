@@ -31,6 +31,7 @@ const GrantAccessSchema = z.object({
 const ImageAccessSchema = z.object({
   scope: ScopeSchema,
   on: z.literal('image'),
+  held: z.literal(true).optional(),
   audit: z.union([z.literal(false), z.literal('refusals')]).optional(),
 });
 

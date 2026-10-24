@@ -198,12 +198,13 @@ impz image pin tools
 impz image unpin tools
 ```
 
-`impz image ls` shows each pin. An image's last use is the newest of its build, an imp create, a
-restore or a move that picks it, and an eviction that found an imp using it. impd counts what each
-removal frees from the image's own blocks, so an image whose blocks a clone or a reflink shares
-frees nothing and stays. On ZFS, an image whose dataset holds a snapshot other than its base stays
-too, because ZFS keeps the dataset while that snapshot lives. impd logs each removal with the
-image's size and last use:
+A pin needs a host-wide `manage` token, or a token with an image ref prefix for an image under its
+own names ([adding images](./tokens.md#adding-images)). `impz image ls` shows each pin. An image's
+last use is the newest of its build, an imp create, a restore or a move that picks it, and an
+eviction that found an imp using it. impd counts what each removal frees from the image's own
+blocks, so an image whose blocks a clone or a reflink shares frees nothing and stays. On ZFS, an
+image whose dataset holds a snapshot other than its base stays too, because ZFS keeps the dataset
+while that snapshot lives. impd logs each removal with the image's size and last use:
 
 ```text
 INFO impd.image image eviction: removed web-0a1b2c3 (1.5 GiB, last used 2026-09-01T00:00:00.000Z)

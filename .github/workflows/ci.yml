@@ -98,10 +98,10 @@ jobs:
         continue-on-error: true
         run: bash .claude/skills/docs-writing/scripts/check-length.sh --package README.md
 
-      # an image build's disk hold against what it really takes, and a moved
-      # disk's data blocks, on a small loop-mounted XFS of its own, as impd's
-      # data dir is; the tests skip without IMP_TEST_SMALL_FS, and the mount
-      # needs sudo
+      # an image build's disk hold against what it really takes, the disk
+      # sampler that measures it, and a moved disk's data blocks, on a small
+      # loop-mounted XFS of its own, as impd's data dir is; the tests skip
+      # without IMP_TEST_SMALL_FS, and the mount needs sudo
       - name: Test Small Filesystem
         run: |
           command -v mkfs.xfs || { sudo apt-get update && sudo apt-get install -y --no-install-recommends xfsprogs; }
@@ -112,7 +112,7 @@ jobs:
           sudo mount -o loop "$fs.img" "$fs"
           trap 'sudo umount "$fs" && rm -f "$fs.img" && rmdir "$fs"' EXIT
           sudo chown "$(id -u):$(id -g)" "$fs"
-          IMP_TEST_SMALL_FS="$fs" bun test packages/daemon/src/imps/images/build/create-image-builds.test.ts packages/daemon/src/vm/storage/write-changed-blocks.test.ts packages/daemon/src/vm/storage/read-data-blocks.test.ts -t 'small filesystem'
+          IMP_TEST_SMALL_FS="$fs" bun test packages/daemon/src/imps/images/build/create-image-builds.test.ts packages/daemon/src/vm/storage/write-changed-blocks.test.ts packages/daemon/src/vm/storage/read-data-blocks.test.ts packages/daemon/testing/vm/start-disk-sampler.test.ts -t 'small filesystem'
 
       # impd's port of the Dockerfile parser against the Go parser it ports,
       # at the commit behind the pinned frontend (scripts/dockerfile-difftest)

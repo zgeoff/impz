@@ -44,7 +44,8 @@ such as `dev-*`. Such a token:
   an imp, so a `dev-*` token could otherwise grant itself any secret; a network reaches every imp on
   it. It cannot pass `--net` to `impz new` either. A token made with a list of secrets may grant
   those ([granting secrets](#granting-secrets)), and no others. A token given an image ref prefix
-  may add images under its own names ([adding images](#adding-images)), and build none.
+  may add, pin and unpin images under its own names ([adding images](#adding-images)), and build
+  none.
 
 A token with patterns still sees host-wide totals. `system.info` shows the RAM budget, use and
 reserve, the RAM that sleeping imps hold (`ramSleepingMib`), the count of imps, awake and in all,
@@ -191,6 +192,13 @@ The token adds an image only when all of these hold, and each other add is `FORB
   checked it, and a digest cannot.
 - The add is from a ref. A template from an imp's disk, a build and `images.delete` stay host-wide.
 
+The same token may pin and unpin an image that impd holds, so an eviction keeps its released images
+between releases ([evicting images](./images.md#evict-images-under-storage-pressure)). impd checks
+the held image, not the call's input: its name is within the token's patterns and its ref starts
+with the prefix. Each other pin or unpin is `FORBIDDEN`, a template's among them, because its ref
+names an imp and no registry. A pin needs no digest in the ref, because a pin only keeps an image
+that impd holds.
+
 The prefix is a registry host with a dot, a port or `localhost`, then the start of a path. A bare
 path such as `zgeoff/nixie-` fails with `BAD_REQUEST`, because docker would read it as a repository
 on Docker Hub. The prefix is the host owner's choice when they make the token or change it with
@@ -200,8 +208,9 @@ a token without `manage`, or with no patterns, fails with `BAD_REQUEST`. `impz t
 and imps made before keep theirs.
 
 The API takes `imageRefPrefix` on `tokens.create` and `tokens.update`, where `null` takes it away.
-`images.add` and `images.addStream` from the token run the checks above before they pull anything.
-An OAuth grant never adds an image, whatever its token may. An impd older than this feature drops
+`images.add` and `images.addStream` from the token run the checks above before they pull anything,
+and `images.pin` and `images.unpin` run theirs before they change the pin. An OAuth grant never
+adds, pins or unpins an image, whatever its token may. An impd older than this feature drops
 `imageRefPrefix` unread, so `impz token new` and `impz token set` check that `system.info()` has
 `features.tokenImageAdd` first.
 

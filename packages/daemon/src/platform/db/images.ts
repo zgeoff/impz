@@ -125,13 +125,22 @@ export async function updateImagePin(
   db: ImpDatabase,
   name: string,
   isPinned: boolean,
+  refPrefix: string | null = null,
 ): Promise<ImageRecord | undefined> {
-  const row = await db
+  const update = db
     .updateTable('images')
     .set({ pinned: isPinned ? 1 : 0 })
-    .where('name', '=', name)
-    .returningAll()
-    .executeTakeFirst();
+    .where('name', '=', name);
+
+  // substr, not LIKE, so a % or _ in the prefix matches only itself
+  const scoped =
+    refPrefix === null
+      ? update
+      : update.where((eb) =>
+          eb(eb.fn<string>('substr', ['ref', eb.val(1), eb.val(refPrefix.length)]), '=', refPrefix),
+        );
+
+  const row = await scoped.returningAll().executeTakeFirst();
 
   return row === undefined ? undefined : toImageRecord(row);
 }

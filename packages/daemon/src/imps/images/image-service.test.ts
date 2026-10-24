@@ -10,7 +10,12 @@ import { createStubDockerCli } from '../../../testing/imps/create-stub-docker-cl
 import { buildQueryGate } from '../../../testing/platform/build-query-gate';
 import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { loadConfig } from '../../config';
-import { createImage, listImageRemovals, listImageUses } from '../../platform/db/images';
+import {
+  createImage,
+  listImageRemovals,
+  listImageUses,
+  readImageByName,
+} from '../../platform/db/images';
 import { openDatabase } from '../../platform/db/open-database';
 import { buildImagePaths } from '../../vm/storage/data-layout';
 import { createDiskBudget } from '../../vm/storage/disk-budget';
@@ -496,7 +501,55 @@ test('#updateImagePin answers NOT_FOUND for a name no image has', async () => {
     readBuilders: () => null,
   });
 
-  expect(images.updateImagePin('missing', true)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  expect(images.updateImagePin('missing', true, null)).rejects.toMatchObject({
+    code: 'NOT_FOUND',
+  });
+});
+
+test('#updateImagePin answers NOT_FOUND to a prefix for a name no image has', async () => {
+  const ctx = await setupTest();
+
+  const images = createImageService({
+    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
+    db: ctx.db,
+    storage: ctx.storage,
+    storageGate: createStorageGate(),
+    diskBudget: ctx.diskBudget,
+    readBuilders: () => null,
+  });
+
+  expect(images.updateImagePin('missing', true, 'ghcr.io/acme/')).rejects.toMatchObject({
+    code: 'NOT_FOUND',
+  });
+});
+
+test('#updateImagePin refuses a prefix the pin of an image whose ref does not start with it', async () => {
+  const ctx = await setupTest();
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'acme-x', ref: 'docker.io/acme/x:1' }));
+
+  const images = createImageService({
+    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
+    db: ctx.db,
+    storage: ctx.storage,
+    storageGate: createStorageGate(),
+    diskBudget: ctx.diskBudget,
+    readBuilders: () => null,
+  });
+
+  const refusal = await images.updateImagePin('acme-x', true, 'ghcr.io/acme/').then(
+    () => null,
+    (error: unknown) => error,
+  );
+
+  const stored = await readImageByName(ctx.db, 'acme-x');
+
+  expect(refusal).toMatchObject({
+    code: 'FORBIDDEN',
+    message: 'image acme-x has a ref that does not start with ghcr.io/acme/',
+  });
+
+  expect(stored?.isPinned).toBeFalse();
 });
 
 test('#resolveImage keeps an old image that an eviction reaches while the lookup reads it', async () => {
