@@ -9,7 +9,9 @@ so the spike runs its own handler beside Firecracker and times each restore with
 ## Status
 
 The handler works on 4 KiB pages, and the 2 MiB numbers are not run yet. No go or no-go against 250
-ms exists until the 2 MiB rows of [results.md](./results.md) hold numbers from the target host.
+ms exists until the 2 MiB rows of [results.md](./results.md) hold numbers from the target host. Both
+the development PC and the target host stop at the gate that counts free 2 MiB blocks before a 2 MiB
+build. On the target host most free memory is page cache, which that count leaves out.
 
 ## Findings
 
