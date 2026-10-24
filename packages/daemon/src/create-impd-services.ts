@@ -4,7 +4,7 @@ import { createCheckpointService } from './imp-ops/checkpoints/checkpoint-servic
 import type { ImpdDeps } from './impd-deps';
 import { createTemplateService } from './imps/images/template-service';
 import type { Imps } from './imps/imps/imp-service';
-import type { SecretFiles } from './network/broker/secret-files';
+import type { SecretFiles } from './network/broker/secrets/secret-files';
 import type { EgressService } from './network/egress/egress-service';
 import { createNetworkService } from './network/networks/network-service';
 import { createApiAudit } from './platform/audit/api-audit';

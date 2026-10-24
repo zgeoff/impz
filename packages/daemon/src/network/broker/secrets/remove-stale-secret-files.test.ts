@@ -3,13 +3,13 @@ import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import invariant from 'tiny-invariant';
-import { buildStubHostRoutes } from '../../../testing/host-net/build-stub-host-routes';
-import { loadConfig } from '../../config';
-import { createReachPolicy } from '../../host-net/net/reach-policy';
-import { writeConsistentCopy } from '../../platform/db/database-copy';
-import { openDatabase } from '../../platform/db/open-database';
-import { listFileRemovals, readSecret } from '../../platform/db/secrets';
-import { createBroker } from './broker-service';
+import { buildStubHostRoutes } from '../../../../testing/host-net/build-stub-host-routes';
+import { loadConfig } from '../../../config';
+import { createReachPolicy } from '../../../host-net/net/reach-policy';
+import { writeConsistentCopy } from '../../../platform/db/database-copy';
+import { openDatabase } from '../../../platform/db/open-database';
+import { listFileRemovals, readSecret } from '../../../platform/db/secrets';
+import { createBroker } from '../broker-service';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

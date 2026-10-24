@@ -81,6 +81,12 @@
           "daemon-vm-memory": ["packages/daemon/src/vm/memory/**"],
           "daemon-vm-watchdog": ["packages/daemon/src/vm/watchdog/**"],
           "daemon-vm-templates": ["packages/daemon/src/vm/templates/**"],
+          // the broker's folders from the bottom up, with broker-service.ts above them all
+          "daemon-broker": ["packages/daemon/src/network/broker/**"],
+          "daemon-broker-guest": ["packages/daemon/src/network/broker/guest/**"],
+          "daemon-broker-tls": ["packages/daemon/src/network/broker/tls/**"],
+          "daemon-broker-secrets": ["packages/daemon/src/network/broker/secrets/**"],
+          "daemon-broker-proxy": ["packages/daemon/src/network/broker/proxy/**"],
           "daemon-below-surface": [
             "packages/daemon/src/{platform,host-net,vm,imps,network,identity,imp-ops}/**"
           ]
@@ -403,6 +409,59 @@
               "daemon-vm-templates"
             ],
             "reason": "a vm folder imports only itself and the folders below it: vm-config.ts, files, imps-contract, storage, agent-client, sleep, vmm, memory, watchdog, templates"
+          },
+          {
+            "name": "daemon-broker-folder-guest",
+            "from": ["daemon-broker-guest"],
+            "ignore": [
+              "**/*.{test,e2e,pebble,headscale}.{ts,tsx}",
+              "**/{test-utils,smoke,mocks}/**",
+              "**/test-setup.ts"
+            ],
+            "to": ["daemon-broker"],
+            "allow": ["daemon-broker-guest"],
+            "reason": "a broker folder imports only itself and the folders below it: guest, tls, secrets, proxy"
+          },
+          {
+            "name": "daemon-broker-folder-tls",
+            "from": ["daemon-broker-tls"],
+            "ignore": [
+              "**/*.{test,e2e,pebble,headscale}.{ts,tsx}",
+              "**/{test-utils,smoke,mocks}/**",
+              "**/test-setup.ts"
+            ],
+            "to": ["daemon-broker"],
+            "allow": ["daemon-broker-guest", "daemon-broker-tls"],
+            "reason": "a broker folder imports only itself and the folders below it: guest, tls, secrets, proxy"
+          },
+          {
+            "name": "daemon-broker-folder-secrets",
+            "from": ["daemon-broker-secrets"],
+            "ignore": [
+              "**/*.{test,e2e,pebble,headscale}.{ts,tsx}",
+              "**/{test-utils,smoke,mocks}/**",
+              "**/test-setup.ts"
+            ],
+            "to": ["daemon-broker"],
+            "allow": ["daemon-broker-guest", "daemon-broker-tls", "daemon-broker-secrets"],
+            "reason": "a broker folder imports only itself and the folders below it: guest, tls, secrets, proxy"
+          },
+          {
+            "name": "daemon-broker-folder-proxy",
+            "from": ["daemon-broker-proxy"],
+            "ignore": [
+              "**/*.{test,e2e,pebble,headscale}.{ts,tsx}",
+              "**/{test-utils,smoke,mocks}/**",
+              "**/test-setup.ts"
+            ],
+            "to": ["daemon-broker"],
+            "allow": [
+              "daemon-broker-guest",
+              "daemon-broker-tls",
+              "daemon-broker-secrets",
+              "daemon-broker-proxy"
+            ],
+            "reason": "a broker folder imports only itself and the folders below it: guest, tls, secrets, proxy"
           }
         ],
         "unzoned": [

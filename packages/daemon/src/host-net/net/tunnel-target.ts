@@ -1,8 +1,8 @@
 import { lookup } from 'node:dns/promises';
 import { networkInterfaces } from 'node:os';
-import { parseIpv4 } from '../../host-net/net/addressing';
-import { findMappedIpv4, formatIpv6, parseIpv6 } from '../../host-net/net/addressing6';
 import { getErrorMessage } from '../../platform/process/get-error-message';
+import { parseIpv4 } from './addressing';
+import { findMappedIpv4, formatIpv6, parseIpv6 } from './addressing6';
 
 // A plain tunnel starts in the host container, past the `INPUT -i imp+ DROP`
 // rule: unchecked, a guest could reach impd's API, the wake proxy and other

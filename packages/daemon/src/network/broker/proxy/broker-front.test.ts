@@ -2,15 +2,15 @@ import { expect, mock, onTestFinished, test } from 'bun:test';
 import { createConnection } from 'node:net';
 import type { EgressMode } from '@impz/api';
 import { claimFreePorts } from '@impz/test-utils/claim-free-ports';
-import { startStubBrokerGuestSocket } from '../../../testing/network/start-stub-broker-guest-socket';
-import { startStubBrokerReplyTarget } from '../../../testing/network/start-stub-broker-reply-target';
-import { parseSubnet } from '../../host-net/net/addressing';
-import { buildRangeMatcher } from '../../host-net/net/range-matcher';
-import { REFUSED_RANGES4 } from '../../host-net/net/ranges';
-import type { NewAuditEntry } from '../../platform/db/broker-audit';
-import type { BrokerPeer } from '../../platform/db/read-broker-peer';
+import { startStubBrokerGuestSocket } from '../../../../testing/network/start-stub-broker-guest-socket';
+import { startStubBrokerReplyTarget } from '../../../../testing/network/start-stub-broker-reply-target';
+import { parseSubnet } from '../../../host-net/net/addressing';
+import { buildRangeMatcher } from '../../../host-net/net/range-matcher';
+import { REFUSED_RANGES4 } from '../../../host-net/net/ranges';
+import { TunnelRefusedError, resolveTunnelTarget } from '../../../host-net/net/tunnel-target';
+import type { NewAuditEntry } from '../../../platform/db/broker-audit';
+import type { BrokerPeer } from '../../../platform/db/read-broker-peer';
 import { startBrokerFront } from './broker-front';
-import { TunnelRefusedError, resolveTunnelTarget } from './tunnel-target';
 
 function setupTest() {
   const stack = new AsyncDisposableStack();

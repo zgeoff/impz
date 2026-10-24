@@ -1,7 +1,7 @@
 import { readFileSync, statSync } from 'node:fs';
 import { rootCertificates } from 'node:tls';
 import * as z from 'zod';
-import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getErrorMessage } from '../../../platform/process/get-error-message';
 import type { Upstream } from './forward-request';
 
 const FileSchema = z.object({

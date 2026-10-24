@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { buildStubBrokerJwt } from '../../../testing/network/build-stub-broker-jwt';
+import { buildStubBrokerJwt } from '../../../../testing/network/build-stub-broker-jwt';
 import {
   buildPendingState,
   findIdClaims,

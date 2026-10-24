@@ -1,6 +1,6 @@
-import type { ImpDatabase } from '../../platform/db/open-database';
-import { listFileRemovals, listValueFiles, removeFileRemoval } from '../../platform/db/secrets';
-import { getErrorMessage } from '../../platform/process/get-error-message';
+import type { ImpDatabase } from '../../../platform/db/open-database';
+import { listFileRemovals, listValueFiles, removeFileRemoval } from '../../../platform/db/secrets';
+import { getErrorMessage } from '../../../platform/process/get-error-message';
 import type { SecretFiles } from './secret-files';
 
 export async function removeStaleSecretFiles(

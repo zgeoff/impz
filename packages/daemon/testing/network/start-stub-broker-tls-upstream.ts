@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { loadOrCreateBrokerCa } from '../../src/network/broker/broker-ca';
+import { loadOrCreateBrokerCa } from '../../src/network/broker/tls/broker-ca';
 
 interface StubTlsUpstreamOptions {
   readonly directory: string;

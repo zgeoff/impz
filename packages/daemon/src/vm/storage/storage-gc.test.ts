@@ -9,7 +9,7 @@ import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
 import { createTestDatabase } from '../../../testing/platform/create-test-database';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { buildStubZfs } from '../../../testing/vm/build-stub-zfs';
-import { createSecretFiles } from '../../network/broker/secret-files';
+import { createSecretFiles } from '../../network/broker/secrets/secret-files';
 import { createImage } from '../../platform/db/images';
 import { runChecked } from '../../platform/process/run-command';
 import { buildImagePaths, buildImpPaths } from './data-layout';

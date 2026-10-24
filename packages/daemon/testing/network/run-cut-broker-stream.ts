@@ -1,4 +1,4 @@
-import { createForwarder } from '../../src/network/broker/forward-request';
+import { createForwarder } from '../../src/network/broker/tls/forward-request';
 import { setupLogging } from '../../src/platform/process/setup-logging';
 import { buildMockCredential } from './build-mock-credential';
 import { startStubCutStream } from './start-stub-cut-stream';
