@@ -2,18 +2,27 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { readImpEnv } from '@impz/test-utils/read-imp-env';
 import { buildMockCaller } from '../../../testing/identity/build-mock-caller';
 import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
+import { buildQueryGate } from '../../../testing/platform/build-query-gate';
 import { startTestImpd } from '../../../testing/start-test-impd';
-import { createImage } from '../../platform/db/images';
+import {
+  createImage,
+  readImageByName,
+  updateImage,
+  updateImagePin,
+} from '../../platform/db/images';
 import { checkImagePin } from './check-image-pin';
 
 async function setupTest() {
+  // first, so a held read lets go before impd stops
+  const gate = buildQueryGate('images');
+
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  const harness = await startTestImpd(stack, { env: readImpEnv() });
+  const harness = await startTestImpd(stack, { env: readImpEnv(), wrapDatabase: gate.wrap });
 
-  return { db: harness.db, client: harness.client, buildClient: harness.buildClient };
+  return { gate, db: harness.db, client: harness.client, buildClient: harness.buildClient };
 }
 
 test('it lets through a held image whose name and ref the caller covers', () => {
@@ -184,6 +193,62 @@ test.each([
       message:
         'token nixie may pin or unpin only images whose ref starts with ghcr.io/zgeoff/nixie-',
     });
+  },
+);
+
+test.each([
+  ['pin', false],
+  ['unpin', true],
+] as const)(
+  'it refuses a nixie-* token the %s of nixie-x whose ref moves outside its prefix after the check',
+  async (procedure, isPinned) => {
+    const ctx = await setupTest();
+
+    const image = await createImage(
+      ctx.db,
+      buildMockNewImage({
+        name: 'nixie-x',
+        ref: `ghcr.io/zgeoff/nixie-x@sha256:${'e'.repeat(64)}`,
+      }),
+    );
+
+    await updateImagePin(ctx.db, 'nixie-x', isPinned);
+
+    const made = await ctx.client.tokens.create({
+      name: 'nixie',
+      scope: 'manage',
+      imps: ['nixie-*'],
+      imageRefPrefix: 'ghcr.io/zgeoff/nixie-',
+    });
+
+    ctx.gate.arm('nixie-x');
+
+    const call = Promise.allSettled([
+      ctx.buildClient(made.secret).images[procedure]({ name: 'nixie-x' }),
+    ]);
+
+    await ctx.gate.reached;
+
+    await updateImage(ctx.db, image.id, {
+      ref: `docker.io/zgeoff/nixie-x@sha256:${'f'.repeat(64)}`,
+      digest: `sha256:${'f'.repeat(64)}`,
+      sizeBytes: 1,
+    });
+
+    ctx.gate.release();
+
+    const [settled] = await call;
+    const stored = await readImageByName(ctx.db, 'nixie-x');
+
+    expect(settled).toMatchObject({
+      status: 'rejected',
+      reason: {
+        code: 'FORBIDDEN',
+        message: 'image nixie-x has a ref that does not start with ghcr.io/zgeoff/nixie-',
+      },
+    });
+
+    expect(stored?.isPinned).toBe(isPinned);
   },
 );
 
