@@ -27,12 +27,12 @@ e2e/test-e2e.sh --clean       # end to end, from a clean state
 
 `bun run check` runs the whole-tree gates of CI's `checks` job: dead code, format, the type-aware
 lint, doc links, types and every test. It needs more memory than a small host has, so run it on a
-large one, or leave it to CI. CI runs `bun test` alone in a cgroup capped at 1536 MiB with no swap,
-through `scripts/ci/run-memory-capped.sh`, so the suite fails there before it outgrows a 2 GiB imp.
-`bun run lint:shell` needs shellcheck 0.11.0 and shfmt 3.14.1 on `PATH`, the versions CI pins; the
-shellcheck job in `.github/workflows/ci.yml` pins actionlint, zizmor and hadolint too. Run the
-end-to-end harness against a real instance when a change touches the lifecycle, the agent or the
-host.
+large one, or leave it to CI. CI splits `bun test` into two shards on two runners, and runs each
+shard alone in a cgroup capped at 1536 MiB with no swap, through `scripts/ci/run-memory-capped.sh`,
+so a shard fails there before it outgrows a 2 GiB imp. `bun run lint:shell` needs shellcheck 0.11.0
+and shfmt 3.14.1 on `PATH`, the versions CI pins; the shellcheck job in `.github/workflows/ci.yml`
+pins actionlint, zizmor and hadolint too. Run the end-to-end harness against a real instance when a
+change touches the lifecycle, the agent or the host.
 
 `bun run deadcode` runs knip twice: over the whole tree, then in production mode, which leaves out
 every test file. The production run fails on an export that only a test imports. Un-export it when
@@ -277,16 +277,16 @@ Lefthook installs the hooks with `bun install`.
 
 `.github/workflows/ci.yml` runs these jobs on every push to `main` and every pull request:
 
-| Job          | Required | What it runs                                                                                                                                                                                                      |
-| ------------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `gitleaks`   | yes      | A secret scan over the history.                                                                                                                                                                                   |
-| `checks`     | yes      | `bun run audit`, the Bun pin check, `bun run check:static`, `bun test` capped at 1536 MiB with no swap, `test:pebble`, `test:headscale`, and the dashboard's tests and build.                                     |
-| `go`         | yes      | In `agent/` and `host/ksm-exec`: `gofmt`, `go vet`, golangci-lint, govulncheck, deadcode, the tests; the agent's again as root with the `root` tag. Also `gofmt`, vet and lint on the Dockerfile difftest module. |
-| `shellcheck` | yes      | `bun run lint:shell`, actionlint and zizmor over `.github/`, hadolint over both Dockerfiles, and the tests that shellcheck the shell production code holds as text.                                               |
-| `cli`        | yes      | Compiles the CLI for every platform and runs the linux-x64 one; builds the release image's compile stage.                                                                                                         |
-| `client`     | yes      | Packs `@impz/client`, installs it on the oldest Node it supports, and smokes it under Node, Bun and a compiled Bun binary.                                                                                        |
-| `e2e`        | yes      | Passes only when every `e2e-group` job passed: the `fast` end-to-end set on real microVMs, in four groups on four runners (below).                                                                                |
-| `zfs`        | yes      | Passes only when every `zfs-shard` job passed: real imps on a ZFS pool in three shards, and `scripts/test-zfs.sh` in one (below).                                                                                 |
+| Job          | Required | What it runs                                                                                                                                                                                                                                     |
+| ------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `gitleaks`   | yes      | A secret scan over the history.                                                                                                                                                                                                                  |
+| `checks`     | yes      | Passes only when the `checks-unit` and `checks-lanes` jobs passed: `bun test` in two shards capped at 1536 MiB with no swap, and `bun run audit`, the Bun pin check, `bun run check:static`, the lane tests and the dashboard's tests and build. |
+| `go`         | yes      | In `agent/` and `host/ksm-exec`: `gofmt`, `go vet`, golangci-lint, govulncheck, deadcode, the tests; the agent's again as root with the `root` tag. Also `gofmt`, vet and lint on the Dockerfile difftest module.                                |
+| `shellcheck` | yes      | `bun run lint:shell`, actionlint and zizmor over `.github/`, hadolint over both Dockerfiles, and the tests that shellcheck the shell production code holds as text.                                                                              |
+| `cli`        | yes      | Compiles the CLI for every platform and runs the linux-x64 one; builds the release image's compile stage.                                                                                                                                        |
+| `client`     | yes      | Packs `@impz/client`, installs it on the oldest Node it supports, and smokes it under Node, Bun and a compiled Bun binary.                                                                                                                       |
+| `e2e`        | yes      | Passes only when every `e2e-group` job passed: the `fast` end-to-end set on real microVMs, in four groups on four runners (below).                                                                                                               |
+| `zfs`        | yes      | Passes only when every `zfs-shard` job passed: real imps on a ZFS pool in three shards, and `scripts/test-zfs.sh` in one (below).                                                                                                                |
 
 The `checks` job also runs the docs-writing skill's scripts. `bun run lint:docs` runs
 `check-links.sh`, which fails on a broken relative link or anchor in a README or a page under
