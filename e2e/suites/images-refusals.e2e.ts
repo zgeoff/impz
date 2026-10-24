@@ -54,12 +54,10 @@ test('it refuses a RUN step that asks for the host network or insecure mode', as
     stderr: expect.toInclude('network.host is not allowed'),
   });
 
-  // The pinned stable frontend has no --security, so the engine never sees the
-  // step.
   expect(insecureResult).toStrictEqual({
     exitCode: 1,
     stdout: '',
-    stderr: expect.toInclude('unknown flag: --security'),
+    stderr: expect.toInclude('security.insecure is not allowed'),
   });
 
   expect(images).not.toContain(name);
