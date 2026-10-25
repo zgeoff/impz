@@ -18,6 +18,7 @@ import {
 } from '../../../platform/db/images';
 import { createImp } from '../../../platform/db/imps';
 import { REAL_CLOCK } from '../../../platform/process/real-clock';
+import { runStreamed } from '../../../platform/process/run-streamed';
 import { buildImagePaths } from '../../../vm/storage/data-layout';
 import { createDiskBudget } from '../../../vm/storage/disk-budget';
 import { createStorageGate } from '../../../vm/storage/storage-gate';
@@ -45,6 +46,7 @@ async function setupTest() {
       reserveBytes: null,
     }),
     clock: REAL_CLOCK,
+    runStreamed,
   });
 
   return {
