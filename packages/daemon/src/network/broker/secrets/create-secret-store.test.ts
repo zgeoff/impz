@@ -291,7 +291,7 @@ test('it refuses a preset with rules and stores nothing', async () => {
   expect(response.status).toBe(400);
 
   expect(body).toMatchObject({
-    json: { data: { issues: [{ code: 'unrecognized_keys', keys: ['rules'] }] } },
+    json: { data: { issues: [{ path: [], code: 'unrecognized_keys', keys: ['rules'] }] } },
   });
 
   expect(listed).toStrictEqual([]);

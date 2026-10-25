@@ -75,7 +75,11 @@ test('#SecretAddSchema refuses a preset with rules', () => {
     rules: [{ host: 'api.example.com', header: 'x-token', scheme: 'raw' }],
   });
 
-  expect(result.error?.issues).toPartiallyContain({ code: 'unrecognized_keys', keys: ['rules'] });
+  expect(result.error?.issues).toPartiallyContain({
+    path: [],
+    code: 'unrecognized_keys',
+    keys: ['rules'],
+  });
 });
 
 test('#SecretAddSchema refuses an older preset kind with rules', () => {
@@ -86,7 +90,11 @@ test('#SecretAddSchema refuses an older preset kind with rules', () => {
     rules: [{ host: 'api.example.com', header: 'x-token', scheme: 'raw' }],
   });
 
-  expect(result.error?.issues).toPartiallyContain({ code: 'unrecognized_keys', keys: ['rules'] });
+  expect(result.error?.issues).toPartiallyContain({
+    path: [],
+    code: 'unrecognized_keys',
+    keys: ['rules'],
+  });
 });
 
 test('#SecretBindingSchema refuses a preset with rules', () => {
@@ -95,13 +103,21 @@ test('#SecretBindingSchema refuses a preset with rules', () => {
     rules: [{ host: 'api.example.com', header: 'x-token', scheme: 'raw' }],
   });
 
-  expect(result.error?.issues).toPartiallyContain({ code: 'unrecognized_keys', keys: ['rules'] });
+  expect(result.error?.issues).toPartiallyContain({
+    path: [],
+    code: 'unrecognized_keys',
+    keys: ['rules'],
+  });
 });
 
 test('#SecretBindingSchema refuses a preset with variables', () => {
   const result = SecretBindingSchema.safeParse({ preset: 'npm', env: ['NPM_TOKEN'] });
 
-  expect(result.error?.issues).toPartiallyContain({ code: 'unrecognized_keys', keys: ['env'] });
+  expect(result.error?.issues).toPartiallyContain({
+    path: [],
+    code: 'unrecognized_keys',
+    keys: ['env'],
+  });
 });
 
 test('#SecretBindingSchema refuses a static secret with a token endpoint', () => {
@@ -111,7 +127,11 @@ test('#SecretBindingSchema refuses a static secret with a token endpoint', () =>
     oauth: { tokenUrl: 'https://auth.example.com/oauth/token', clientId: 'fake-client' },
   });
 
-  expect(result.error?.issues).toPartiallyContain({ code: 'unrecognized_keys', keys: ['oauth'] });
+  expect(result.error?.issues).toPartiallyContain({
+    path: [],
+    code: 'unrecognized_keys',
+    keys: ['oauth'],
+  });
 });
 
 test('#SecretBindingSchema refuses a static secret without rules', () => {
@@ -204,7 +224,11 @@ test('#SecretBindingSchema refuses the older kind custom with variables', () => 
     env: ['EXAMPLE_TOKEN'],
   });
 
-  expect(result.error?.issues).toPartiallyContain({ code: 'unrecognized_keys', keys: ['env'] });
+  expect(result.error?.issues).toPartiallyContain({
+    path: [],
+    code: 'unrecognized_keys',
+    keys: ['env'],
+  });
 });
 
 test('#SecretAddSchema reports the field of an oauth secret it refuses', () => {

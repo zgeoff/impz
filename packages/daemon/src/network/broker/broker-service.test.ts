@@ -144,7 +144,10 @@ test.each([['../etc'], ['a/b'], ['.hidden'], ['Upper'], ['']])(
 
     expect(
       ctx.client.secrets.add({ name, kind: 'github', value: 'ghp_SECRETVALUE0123456789' }),
-    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      data: { issues: expect.toPartiallyContain({ path: ['name'] }) },
+    });
   },
 );
 
@@ -153,7 +156,10 @@ test('it rejects a value that could split a header', async () => {
 
   expect(
     ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'a\r\nx-evil: 1' }),
-  ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+  ).rejects.toMatchObject({
+    code: 'BAD_REQUEST',
+    data: { issues: expect.toPartiallyContain({ path: ['value'] }) },
+  });
 });
 
 test('it rejects a static secret with an empty rule list', async () => {
