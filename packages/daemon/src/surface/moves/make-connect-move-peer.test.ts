@@ -1,6 +1,48 @@
-import { expect, test } from 'bun:test';
+import { expect, mock, onTestFinished, test } from 'bun:test';
+import { claimFreePorts } from '@impz/test-utils/claim-free-ports';
+import { buildMockMoveTicketRow } from '../../../testing/imp-ops/build-mock-move-ticket-row';
 import { startStubMovePeer } from '../../../testing/imp-ops/start-stub-move-peer';
+import { createTestDatabase } from '../../../testing/platform/create-test-database';
+import type { MovePeerCalls } from '../../imp-ops/moves/move-receiver';
+import { MoveRequestError } from '../../imp-ops/moves/move-request-error';
+import { buildPeerRanges } from '../../imp-ops/moves/peer-address';
+import { requireMoveTicket } from '../../imp-ops/moves/require-move-ticket';
+import { writeMoveTicket } from '../../platform/db/move-tickets';
+import { hashSecret } from '../../platform/secrets/hash-secret';
+import { createMovePeerHandler } from './create-move-peer-handler';
 import { makeConnectMovePeer } from './make-connect-move-peer';
+
+// The client and the handler of one build, over real HTTP on a claimed port.
+async function setupTest() {
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
+  const database = await createTestDatabase();
+
+  const calls = {
+    ranges: buildPeerRanges(null),
+    requireTicket: (request: Request) => requireMoveTicket(database.db, request),
+    offer: mock<MovePeerCalls['offer']>(),
+    receive: mock<MovePeerCalls['receive']>(),
+    commit: mock<MovePeerCalls['commit']>(),
+    abort: mock<MovePeerCalls['abort']>(),
+  };
+
+  const handler = createMovePeerHandler({
+    calls,
+    audit: { record: () => {} },
+    now: () => 1_800_000_000_000,
+  });
+
+  const port = claimFreePorts(1, { onRelease: stack.defer.bind(stack) }).take();
+  const handleRequest = (request: Request) => handler.respond(request, '100.64.0.1');
+  const server = Bun.serve({ hostname: '127.0.0.1', port, fetch: handleRequest });
+
+  stack.defer(() => server.stop(true));
+
+  return { db: database.db, calls, url: `http://127.0.0.1:${String(port)}` };
+}
 
 test('it posts the offer as JSON to the offer route with the ticket', async () => {
   const stub = startStubMovePeer({
@@ -202,4 +244,127 @@ test('it passes on a transport failure to a target that is gone', async () => {
   const peer = makeConnectMovePeer({})({ peer: stub.url, ticket: 'ticket-id.ticket-secret' });
 
   expect(peer.commit()).rejects.toThrow();
+});
+
+test('it sends an offer the handler of the same build takes, and reads its reply', async () => {
+  const ctx = await setupTest();
+
+  await writeMoveTicket(
+    ctx.db,
+    buildMockMoveTicketRow({ id: 'ticket-1', secret_sha256: hashSecret('s3cret').toString('hex') }),
+  );
+
+  ctx.calls.offer.mockResolvedValue({
+    needsImage: true,
+    needsSystemDrive: false,
+    storage: 'zfs',
+    keepsMaxMemory: true,
+    keepsLeases: true,
+    keepsPublicEgress: true,
+    keepsBackupOff: true,
+  });
+
+  const peer = makeConnectMovePeer({})({ peer: ctx.url, ticket: 'ticket-1.s3cret' });
+
+  const reply = await peer.offer(
+    { imageDigest: 'sha256:abc', receivedImageDigest: 'sha256:def' },
+    new AbortController().signal,
+  );
+
+  expect(ctx.calls.offer).toHaveBeenCalledExactlyOnceWith({
+    imageDigest: 'sha256:abc',
+    receivedImageDigest: 'sha256:def',
+  });
+
+  expect(reply).toStrictEqual({
+    needsImage: true,
+    needsSystemDrive: false,
+    storage: 'zfs',
+    keepsMaxMemory: true,
+    keepsLeases: true,
+    keepsPublicEgress: true,
+    keepsBackupOff: true,
+  });
+});
+
+test('it sends a commit the handler of the same build takes, for the ticket it names', async () => {
+  const ctx = await setupTest();
+
+  const row = buildMockMoveTicketRow({
+    id: 'ticket-1',
+    secret_sha256: hashSecret('s3cret').toString('hex'),
+  });
+
+  await writeMoveTicket(ctx.db, row);
+
+  ctx.calls.commit.mockResolvedValue({ isCommitted: true });
+
+  const peer = makeConnectMovePeer({})({ peer: ctx.url, ticket: 'ticket-1.s3cret' });
+
+  const reply = await peer.commit();
+
+  expect(reply).toStrictEqual({ isCommitted: true });
+
+  expect(ctx.calls.commit).toHaveBeenCalledExactlyOnceWith({
+    row,
+    ticket: { id: 'ticket-1', secret: 's3cret' },
+  });
+});
+
+test.each([
+  [true, 'committed'],
+  [false, 'aborted'],
+] as const)(
+  'it reads the abort answer isCommitted %p of the handler of the same build as %s',
+  async (isCommitted, outcome) => {
+    const ctx = await setupTest();
+
+    await writeMoveTicket(
+      ctx.db,
+      buildMockMoveTicketRow({
+        id: 'ticket-1',
+        secret_sha256: hashSecret('s3cret').toString('hex'),
+      }),
+    );
+
+    ctx.calls.abort.mockResolvedValue({ isCommitted });
+
+    const peer = makeConnectMovePeer({})({ peer: ctx.url, ticket: 'ticket-1.s3cret' });
+
+    const answered = await peer.abort();
+
+    expect(answered).toBe(outcome);
+    expect(ctx.calls.abort).toHaveBeenCalledOnce();
+  },
+);
+
+test('it reads the refusal of a ticket the handler of the same build does not hold as an unknown ticket', async () => {
+  const ctx = await setupTest();
+
+  const peer = makeConnectMovePeer({})({ peer: ctx.url, ticket: 'ticket-1.s3cret' });
+
+  const answered = await peer.abort();
+
+  expect(answered).toBe('unknown-ticket');
+  expect(ctx.calls.abort).not.toHaveBeenCalled();
+});
+
+test('it names the error the handler of the same build answers a commit with', async () => {
+  const ctx = await setupTest();
+
+  await writeMoveTicket(
+    ctx.db,
+    buildMockMoveTicketRow({ id: 'ticket-1', secret_sha256: hashSecret('s3cret').toString('hex') }),
+  );
+
+  ctx.calls.commit.mockRejectedValue(
+    new MoveRequestError('CONFLICT', 'nothing to commit: the received copy is gone'),
+  );
+
+  const peer = makeConnectMovePeer({})({ peer: ctx.url, ticket: 'ticket-1.s3cret' });
+
+  expect(peer.commit()).rejects.toThrowWithMessage(
+    Error,
+    'commit: the target answered 409 nothing to commit: the received copy is gone',
+  );
 });
