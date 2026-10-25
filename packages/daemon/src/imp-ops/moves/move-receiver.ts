@@ -29,6 +29,7 @@ import type { MoveTicketRow, NewMoveTicketRow } from '../../platform/db/move-tic
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { SlotTakenError } from '../../platform/db/slot-taken-error';
 import { ImpdError } from '../../platform/errors/impd-error';
+import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { hashSecret } from '../../platform/secrets/hash-secret';
 import { mintOpaqueToken } from '../../platform/secrets/mint-opaque-token';
@@ -179,6 +180,10 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
       return { receipt: await readMoveStream(deps, { tempDir, stream: pipe.stream, row, secret }) };
     } catch (error) {
       const failure = toStreamFailure(error);
+
+      getImpdLogger('move')
+        .with({ imp: row.name })
+        .warning('the move stream failed: {error}', { error: failure.message });
 
       pipe.fail(failure);
 
@@ -465,7 +470,11 @@ function toStreamFailure(error: unknown): Error {
     return new MoveRequestError('CONFLICT', error.message);
   }
 
-  return error instanceof Error ? error : new Error(String(error));
+  if (error instanceof ImpdError) {
+    return error;
+  }
+
+  return new ImpdError('INTERNAL_SERVER_ERROR', { message: getErrorMessage(error), cause: error });
 }
 
 function requireReceipt(outcome: StreamOutcome): ReceivedPart {

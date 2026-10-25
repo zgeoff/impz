@@ -2477,6 +2477,27 @@ test('it refuses a stream that does not start with its header', async () => {
   expect(staged).toBeUndefined();
 });
 
+test('it logs on the target a stream that fails, once and with its imp', async () => {
+  const ctx = await setupTest({ hook: makeStubMoveStreamRewrite((frames) => frames.slice(1)) });
+
+  await createUbuntuImage(ctx.source);
+  await createUbuntuImage(ctx.target);
+
+  await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
+  await ctx.sourceApp.client.imps.stop({ name: 'dev' });
+
+  const lines = captureImpdLogs();
+
+  await ctx.runMove('dev');
+
+  expect(
+    lines.filter((line) => line.includes('the stream does not start with its header')),
+  ).toStrictEqual([
+    'WARNING impd.move imp=dev the move stream failed: the stream does not start with its header',
+    'WARNING impd.move imp=dev receive: the target answered 400 the stream does not start with its header',
+  ]);
+});
+
 test("it takes a stream whose header names its ticket's imp", async () => {
   const ctx = await setupTest({ hook: makeStubMoveStreamRewrite((frames) => frames) });
 
