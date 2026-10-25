@@ -971,6 +971,40 @@ test('#retire_proxy_unit stops and disables an installed legacy imp-docker-proxy
   expect(existsSync(unit)).toBeFalse();
 });
 
+test('#retire_proxy_unit fails and keeps the unit file when systemd cannot stop the legacy imp-docker-proxy', () => {
+  const ctx = setupTest();
+
+  const systemctl = createStubBin(
+    ctx.directoryPath,
+    'systemctl',
+    `echo 'Failed to stop imp-docker-proxy.service' >&2; exit 1`,
+  );
+
+  const unit = join(ctx.directoryPath, 'imp-docker-proxy.service');
+
+  writeFileSync(unit, '[Service]\nExecStart=/usr/local/bin/imp-docker-proxy\n');
+
+  const result = runSourcedFunction({
+    script: new URL('bootstrap.sh', import.meta.url).pathname,
+    fn: 'eval',
+    args: [`mode=yes; retire_proxy_unit '${unit}'`],
+    env: { PATH: `${systemctl.bin}:${process.env['PATH'] ?? ''}` },
+  });
+
+  expect(result).toStrictEqual({
+    exitCode: 1,
+    stdout: 'bootstrap: change: remove imp-docker-proxy, which impd no longer calls\n',
+    stderr:
+      'Failed to stop imp-docker-proxy.service\nbootstrap: failed: remove imp-docker-proxy, which impd no longer calls\n',
+  });
+
+  expect(readFileSync(systemctl.calls, 'utf8')).toBe(
+    'systemctl disable -q --now imp-docker-proxy\n',
+  );
+
+  expect(existsSync(unit)).toBeTrue();
+});
+
 test('#retire_proxy_unit changes nothing on a host without the legacy imp-docker-proxy unit', () => {
   const ctx = setupTest();
   const systemctl = createStubBin(ctx.directoryPath, 'systemctl');

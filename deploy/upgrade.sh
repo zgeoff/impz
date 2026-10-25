@@ -267,7 +267,10 @@ image_id() { echo "${1#sha256:}"; }
 # disabled, and kept as .bak-<time>, named in $proxy_backup
 retire_proxy_unit() {
   [ -f "$proxy_unit_file" ] || return 0
-  systemctl disable -q --now imp-docker-proxy || true
+  if ! systemctl disable -q --now imp-docker-proxy; then
+    echo "upgrade: cannot stop imp-docker-proxy, whose unit stays for the next run; $(format_host_state)" >&2
+    exit 1
+  fi
   proxy_backup=$proxy_unit_file.bak-$(backup_time)
   mv "$proxy_unit_file" "$proxy_backup"
   systemctl daemon-reload

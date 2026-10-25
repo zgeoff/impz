@@ -1,4 +1,5 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
+import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { buildMockNewCheckpoint } from '../../../testing/imp-ops/build-mock-new-checkpoint';
 import { buildStubClock } from '../../../testing/platform/build-stub-clock';
@@ -441,6 +442,69 @@ test('it starts one refresh timer for a burst of refresh requests', async () => 
   cache.requestRefresh();
 
   expect(startTimer).toHaveBeenCalledExactlyOnceWith(expect.any(Function), 10_000);
+});
+
+test('it starts a pass a full delay after a refresh asked for while an earlier one waits', async () => {
+  const ctx = await setupTest();
+
+  const image = await createImage(ctx.db, {
+    name: 'base',
+    ref: 'imp/base:latest',
+    digest: 'sha256:0000',
+    sizeBytes: 1024,
+  });
+
+  const imp = await createImp(ctx.db, {
+    name: 'dev',
+    imageId: image.id,
+    vcpus: 1,
+    memoryMib: 512,
+    slot: 0,
+    ip: '10.66.0.2',
+  });
+
+  const clock = buildStubClock();
+
+  const cache = createDiskUsageCache({
+    db: ctx.db,
+    storage: {
+      measureUsage: () =>
+        Promise.resolve({
+          imps: new Map([[imp.id, buildMockImpDiskUsage()]]),
+          isPartial: false,
+        }),
+    },
+    now: () => new Date(clock.now()),
+    startTimer: clock.startTimer,
+  });
+
+  onTestFinished(() => {
+    cache.stop();
+  });
+
+  cache.requestRefresh();
+  clock.runFor(9000);
+  cache.requestRefresh();
+  clock.runFor(1000);
+
+  await cache.runPass();
+
+  clock.runFor(9000);
+
+  const measuredAt = await waitFor(
+    () => {
+      const found = cache.read(imp.id)?.measuredAt;
+
+      if (found?.getTime() !== 19_000) {
+        throw new Error(`last count: ${found?.toISOString() ?? 'none'}`);
+      }
+
+      return found;
+    },
+    { timeoutMs: 1000 },
+  );
+
+  expect(measuredAt).toStrictEqual(new Date(19_000));
 });
 
 test('it cancels a pending refresh when it stops', async () => {

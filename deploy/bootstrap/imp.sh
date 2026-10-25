@@ -84,9 +84,9 @@ retire_proxy_unit() {
 }
 
 remove_proxy_unit() {
-  systemctl disable -q --now imp-docker-proxy 2>/dev/null || true
-  rm -f "$1"
-  systemctl daemon-reload
+  systemctl disable -q --now imp-docker-proxy &&
+    rm -f "$1" &&
+    systemctl daemon-reload
 }
 
 # read_seccomp REF: the seccomp profile in the image REF; refuses an image
