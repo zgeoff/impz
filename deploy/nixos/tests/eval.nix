@@ -323,6 +323,10 @@ let
       ) moduleHosts;
       expected = lib.mapAttrs (_: _: [ ]) moduleHosts;
     };
+    "test the image unit leaves the start limit to imp-host" = {
+      expr = zfsCfg.systemd.services.imp-host-image.unitConfig.StartLimitIntervalSec;
+      expected = 0;
+    };
     "test the image pull waits for the network" = {
       expr =
         let

@@ -509,6 +509,10 @@ in
       # pull at boot needs it
       wants = [ "network-online.target" ];
       after = [ "network-online.target" ];
+      # It runs at each start of imp-host, so systemd's default limit of 5
+      # starts in 10 s would fail imp-host on a dependency before its own
+      # limit applies.
+      unitConfig.StartLimitIntervalSec = 0;
       serviceConfig = {
         Type = "oneshot";
         ExecStart = ensureImage;
