@@ -428,7 +428,7 @@ gh attestation verify oci://ghcr.io/zgeoff/imp-host:<version> -R zgeoff/impz
 <!-- x-release-please-start-version -->
 
 ```sh
-podman pull ghcr.io/zgeoff/imp-host:4.2.2
+podman pull ghcr.io/zgeoff/imp-host:4.2.3
 gh release download -R zgeoff/impz -p 'impz-linux-x64' -p SHA256SUMS
 sha256sum -c --ignore-missing SHA256SUMS && install -m 0755 impz-linux-x64 ~/.local/bin/impz
 ```
