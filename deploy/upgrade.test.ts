@@ -1868,7 +1868,7 @@ test('it stops a Docker host before anything changes when an imp does not sleep'
   expect(calls).not.toInclude('network rm');
 });
 
-test('it fails the upgrade when impd is not ready in time after the restart', () => {
+test('it fails the upgrade, with the rollback, when impd is not ready in time after the restart', () => {
   const ctx = setupTest();
 
   const podman = createStubBin(
@@ -1902,11 +1902,63 @@ test('it fails the upgrade when impd is not ready in time after the restart', ()
 
   expect(result.exitCode).toBe(1);
 
-  expect(result.stderr.toString()).toInclude(
-    'upgrade: impd is not ready after 0 s; see: podman logs imp-host\n',
+  expect(result.stderr.toString()).toBe(
+    'upgrade: impd is not ready after 0 s; see: podman logs imp-host. ' +
+      'To roll back: podman tag old ghcr.io/zgeoff/imp-host:next, then systemctl restart imp-host.\n',
   );
 
   expect(readFileSync(podman.calls, 'utf8')).toInclude('systemctl restart imp-host\n');
+});
+
+test('it fails the move from Docker, with the rollback to Docker, when impd is not ready in time after the start', () => {
+  const ctx = setupTest();
+
+  const podman = createStubBin(
+    ctx.directoryPath,
+    'podman',
+    buildStubHostPodman({
+      image: 'ghcr.io/zgeoff/imp-host:next',
+      pulledLabel: 'no-docker',
+      pulledUnit: 'ExecStart=/usr/bin/podman run --name imp-host imp-host\n',
+      runsHost: false,
+    }),
+  );
+
+  createStubBin(ctx.directoryPath, 'docker', buildStubHostDocker({ hostNetwork: ['imp-host'] }));
+  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":false}'`);
+
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-host.service'),
+    'ExecStart=/usr/bin/docker run --name imp-host imp-host\n',
+  );
+
+  const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
+    env: {
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
+      IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
+      IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
+      IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
+      IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
+      IMP_READY_TIMEOUT_S: '0',
+    },
+  });
+
+  const unitBackup = join(
+    ctx.directoryPath,
+    readdirSync(ctx.directoryPath)
+      .filter((file) => file.startsWith('imp-host.service.bak-'))
+      .join(''),
+  );
+
+  expect(result.exitCode).toBe(1);
+
+  expect(result.stderr.toString()).toBe(
+    'upgrade: impd is not ready after 0 s; see: podman logs imp-host. ' +
+      'To roll back to Docker: systemctl stop imp-host, then podman network rm imp-host, ' +
+      `then mv ${unitBackup} ${join(ctx.directoryPath, 'imp-host.service')}, ` +
+      'then systemctl daemon-reload, then systemctl start imp-host.\n',
+  );
 });
 
 test('it stops before anything restarts when it cannot rewrite the env file', () => {

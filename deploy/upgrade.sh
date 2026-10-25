@@ -329,11 +329,21 @@ retire_docker_host() {
   fi
 }
 
+# the rollback once the new host has started, from Podman to the old image
+# or, after a move, to Docker
+format_rollback() {
+  if [ "$moved_from" = docker ]; then
+    echo "To roll back to Docker: $(format_docker_rollback)."
+  else
+    echo "To roll back: podman tag $old $image, then systemctl restart $container."
+  fi
+}
+
 wait_ready() {
   local deadline=$((SECONDS + ready_timeout_s))
   until curl -fsS "$health" 2>/dev/null | grep -q '"ready":true'; do
     if [ $SECONDS -ge $deadline ]; then
-      echo "upgrade: impd is not ready after $ready_timeout_s s; see: podman logs $container" >&2
+      echo "upgrade: impd is not ready after $ready_timeout_s s; see: podman logs $container. $(format_rollback)" >&2
       exit 1
     fi
     sleep 1
@@ -452,10 +462,10 @@ wait_ready
 pick_cli
 
 if [ "$moved_from" = docker ]; then
-  echo "upgrade: done, on Podman. To roll back to Docker: $(format_docker_rollback)."
+  echo "upgrade: done, on Podman. $(format_rollback)"
   echo "upgrade: imp no longer needs Docker; docs/guides/operations.md#upgrade says how to remove it."
 else
-  echo "upgrade: done. To roll back: podman tag $old $image, then systemctl restart $container."
+  echo "upgrade: done. $(format_rollback)"
 fi
 print_boot_status
 impz ls

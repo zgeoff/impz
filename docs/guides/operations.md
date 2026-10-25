@@ -70,7 +70,8 @@ bash deploy/upgrade.sh
    Podman reads as `latest`.
 
 4. It restarts the host, waits for `/health` to report ready, prints how to roll back, prints the
-   boot status counts from `impz info`, and lists the imps.
+   boot status counts from `impz info`, and lists the imps. When impd is not ready in time, it
+   prints the rollback beside the `podman logs` command and exits 1.
 
 ### From Docker to Podman
 
@@ -100,8 +101,8 @@ On a Podman host, roll back with `podman tag <old image ID> <image>`, then
 After a move from Docker, upgrade.sh prints the rollback with the exact paths it wrote: stop
 imp-host, remove Podman's `imp-host` network (with IPv6), move each `.bak-<time>` unit back,
 `systemctl daemon-reload`, `systemctl enable --now imp-docker-proxy` when its unit came back, and
-start imp-host. A step that fails after the old host stopped prints the rollback for what it changed
-so far.
+start imp-host. A step that fails after the old host stopped, the readiness wait included, prints
+the rollback for what it changed so far.
 
 Imps then wake on demand. Each sleeping imp either restores its memory or boots its disk cold. The
 disk is never touched.
