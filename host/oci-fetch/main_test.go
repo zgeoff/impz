@@ -577,3 +577,29 @@ func TestExportHidesALowerDirectoryAndItsChildrenUnderAnUpperWhiteout(t *testing
 		"sys":  "",
 	})
 }
+
+func TestExportKeepsAnOpaqueDirectorysOwnChildrenAndHidesTheLowerOnes(t *testing.T) {
+	host := startRegistry(t)
+	ref := pushImage(t, host, buildImage(t, nil,
+		buildLayer(t, []entry{
+			{name: "srv/", typeflag: tar.TypeDir},
+			{name: "srv/old", typeflag: tar.TypeReg, body: "old\n"},
+		}),
+		buildLayer(t, []entry{
+			{name: "srv/", typeflag: tar.TypeDir},
+			{name: "srv/.wh..wh..opq", typeflag: tar.TypeReg},
+			{name: "srv/new", typeflag: tar.TypeReg, body: "new\n"},
+		}),
+	))
+	var out bytes.Buffer
+
+	assert.NilError(t, run("export", ref, &out))
+
+	assert.DeepEqual(t, readTree(t, out.Bytes()), map[string]string{
+		"srv":     "",
+		"srv/new": "new\n",
+		"dev":     "",
+		"proc":    "",
+		"sys":     "",
+	})
+}
