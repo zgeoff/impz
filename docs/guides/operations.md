@@ -100,11 +100,11 @@ On a Podman host, roll back with `podman tag <old image ID> <image>`, then
 
 After a move from Docker, upgrade.sh prints the rollback with the exact paths it wrote: stop
 imp-host, remove Podman's `imp-host` network (with IPv6), move each `.bak-<time>` unit back,
-`systemctl daemon-reload`, `systemctl enable --now imp-docker-proxy` when its unit came back,
-`docker tag <old image ID> <image>` for the image that the restored unit runs, and start imp-host.
-The tag matters when the env file pins the new image: without it, Docker would pull that image and
-start it again. A step that fails after the old host stopped, the start and the readiness wait
-included, prints the rollback for what it changed so far.
+`systemctl daemon-reload`, `docker tag <old image ID> <image>` for the image that the restored unit
+runs, `systemctl enable --now imp-docker-proxy` when its unit came back, and start imp-host. The tag
+matters when the env file pins the new image: without it, Docker would pull that image and start it
+again, for the proxy too, and the new image has no proxy. A step that fails after the old host
+stopped, the start and the readiness wait included, prints the rollback for what it changed so far.
 
 Imps then wake on demand. Each sleeping imp either restores its memory or boots its disk cold. The
 disk is never touched.
