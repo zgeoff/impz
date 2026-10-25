@@ -1,0 +1,63 @@
+name: probe test impd timings
+
+on:
+  pull_request:
+
+permissions: {}
+
+jobs:
+  probe:
+    name: probe (${{ matrix.variant }} ${{ matrix.rep }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { variant: neither, rep: 1, ref: main, tmpfs: false }
+          - { variant: neither, rep: 2, ref: main, tmpfs: false }
+          - { variant: neither, rep: 3, ref: main, tmpfs: false }
+          - { variant: both, rep: 1, ref: perf/test-impd-template-db, tmpfs: true }
+          - { variant: both, rep: 2, ref: perf/test-impd-template-db, tmpfs: true }
+          - { variant: both, rep: 3, ref: perf/test-impd-template-db, tmpfs: true }
+          - { variant: a-only, rep: 1, ref: main, tmpfs: true }
+          - { variant: b-only, rep: 1, ref: perf/test-impd-template-db, tmpfs: false }
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+          path: probe
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+          ref: ${{ matrix.ref }}
+          path: code
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: code/.bun-version
+      - name: Install
+        working-directory: code
+        run: bun install --frozen-lockfile
+      - name: Shard 1, as CI runs it
+        working-directory: code
+        env:
+          TMPFS: ${{ matrix.tmpfs }}
+        run: |
+          perl ../probe/scripts/ci/probe-instrument.pl < packages/daemon/src/imps/imps/imp-vm-ops.test.ts > "$RUNNER_TEMP/t.ts"
+          mv "$RUNNER_TEMP/t.ts" packages/daemon/src/imps/imps/imp-vm-ops.test.ts
+          out="$RUNNER_TEMP/unit-test"
+          mkdir -p "$out"
+          tmp=()
+          if [ "$TMPFS" = true ]; then tmp=(env TMPDIR=/dev/shm); fi
+          start=$(date +%s)
+          ../probe/scripts/ci/probe-memory-capped.sh 1536 "${tmp[@]}" bun test --parallel=2 --no-isolate --shard=1/2 \
+            --timings="$out/timings-1.json" --timings=scripts/ci/unit-test-timings.json \
+            --update-timings --reporter=junit --reporter-outfile="$out/results-1.xml" > "$out/log.txt" 2>&1 || echo "RESULT exit nonzero"
+          echo "RESULT step secs $(( $(date +%s) - start ))"
+          grep -E "run-memory-capped|PROBEMEM|oom_kill" "$out/log.txt" || true
+          grep -E "\(fail\)" "$out/log.txt" | sort -u | sed 's/^/RESULT /' || true
+          grep -o "PROBE run [0-9.]*" "$out/log.txt" | awk '{print $3}' | sort -n > "$out/run.txt"
+          awk '{v[NR]=$1; s+=$1} END {printf "RESULT imp-vm-ops runs n=%d total_ms=%.0f median=%.1f max=%.1f\n", NR, s, v[int((NR+1)/2)], v[NR]}' "$out/run.txt"
+          grep -o 'name="it leaves consistent records after concurrent lifecycle calls on a few imps"[^>]*' "$out/results-1.xml" | grep -o 'time="[^"]*"' | sed 's/^/RESULT junit /' || echo "RESULT imp-vm-ops not in shard 1"
