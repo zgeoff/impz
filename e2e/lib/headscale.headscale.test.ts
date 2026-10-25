@@ -100,24 +100,20 @@ test('it lets one tag:imp-e2e node reach another on port 7070, and refuses it th
     [peer, callerIP],
   ];
 
-  // A node that just joined pings before its netmap holds the other node, and tailscale fails that
-  // ping at once with "unknown peer", so each ping runs again until the peer is known.
   await Promise.all(
     paths.map(([from, address]) =>
-      waitFor(`${from}’s path to ${address}`, () =>
-        runChecked([
-          'docker',
-          'exec',
-          from,
-          'tailscale',
-          'ping',
-          '--c',
-          '30',
-          '--timeout',
-          '1s',
-          address,
-        ]),
-      ),
+      runChecked([
+        'docker',
+        'exec',
+        from,
+        'tailscale',
+        'ping',
+        '--c',
+        '30',
+        '--timeout',
+        '1s',
+        address,
+      ]),
     ),
   );
 

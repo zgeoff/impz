@@ -104,8 +104,6 @@ type uffdHandler struct {
 	uffd     int
 	regions  []guestRegion
 	pageSize uint64
-	// the ranges given back to the kernel; only the serve loop reads them
-	gone []uffdMsg
 
 	mu       sync.Mutex
 	faults   []fault
@@ -356,10 +354,11 @@ func (h *uffdHandler) serveRound(fresh, deferred []uffdMsg) []uffdMsg {
 		fresh[i].phase, fresh[i].read = phase, read
 	}
 	msgs := append(deferred, fresh...)
+	var removed []uffdMsg
 	for _, msg := range msgs {
 		if msg.event == uffdEventRemove {
 			h.unregister(msg.address, msg.end)
-			h.gone = append(h.gone, msg)
+			removed = append(removed, msg)
 		}
 	}
 	var retry []uffdMsg
@@ -368,9 +367,8 @@ func (h *uffdHandler) serveRound(fresh, deferred []uffdMsg) []uffdMsg {
 		case uffdEventRemove:
 		case uffdEventPagefault:
 			// the guest dropped the page, and the kernel serves the next fault
-			// on an unregistered range, so a copy there only fails. A fault
-			// that came in before the unregister can be read a round later.
-			if slices.ContainsFunc(h.gone, func(r uffdMsg) bool { return msg.address >= r.address && msg.address < r.end }) {
+			// on an unregistered range, so a copy there only fails
+			if slices.ContainsFunc(removed, func(r uffdMsg) bool { return msg.address >= r.address && msg.address < r.end }) {
 				h.mu.Lock()
 				h.stale++
 				h.mu.Unlock()
