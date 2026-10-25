@@ -1,6 +1,7 @@
 import { expect, mock, test } from 'bun:test';
 import { buildMockMoveTicketRow } from '../../../testing/imp-ops/build-mock-move-ticket-row';
 import { MoveRequestError } from '../../imp-ops/moves/move-request-error';
+import type { AuditedCall } from '../../platform/audit/api-audit';
 import { createMovePeerHandler } from './create-move-peer-handler';
 
 test('it answers the plain JSON offer an older source posts with the offer reply', async () => {
@@ -95,7 +96,7 @@ test('it refuses a call from off the tailnet with the text an older source reads
 });
 
 test('it audits a refused call with its failure and no imp', () => {
-  const record = mock();
+  const record = mock<(call: AuditedCall, failure: unknown) => void>();
 
   const handler = createMovePeerHandler({
     calls: {
@@ -130,7 +131,7 @@ test('it audits a refused call with its failure and no imp', () => {
 });
 
 test('it audits a commit with the imp its ticket names', async () => {
-  const record = mock();
+  const record = mock<(call: AuditedCall, failure: unknown) => void>();
 
   const handler = createMovePeerHandler({
     calls: {

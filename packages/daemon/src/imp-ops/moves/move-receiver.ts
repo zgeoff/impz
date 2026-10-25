@@ -309,14 +309,16 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
     getImpdLogger('move').with({ imp: row.name }).info('committed; it lives here now');
   };
 
-  const commit = async (checked: CheckedTicket): Promise<MoveCommitReply> => {
+  const commit = (checked: CheckedTicket): Promise<MoveCommitReply> => {
     const impId = checked.row.imp_id;
 
     if (checked.row.receipt === null || impId === null) {
-      throw new MoveRequestError('CONFLICT', 'nothing to commit: no receipt for this ticket');
+      return Promise.reject(
+        new MoveRequestError('CONFLICT', 'nothing to commit: no receipt for this ticket'),
+      );
     }
 
-    return await deps.imps.lockImpId(impId, async (imp) => {
+    return deps.imps.lockImpId(impId, async (imp) => {
       const row = await readMoveTicket(deps.db, checked.row.id);
 
       const settled = row === undefined ? 'none' : readSettled(row, imp);

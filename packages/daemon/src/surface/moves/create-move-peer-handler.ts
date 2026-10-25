@@ -135,7 +135,14 @@ function toPeerError(error: unknown): ORPCError<string, unknown> {
   const converted = toORPCError(error);
 
   if (converted instanceof ORPCError) {
-    return converted;
+    const data: unknown = converted.data;
+
+    return new ORPCError(String(converted.code), {
+      status: converted.status,
+      message: converted.message,
+      data,
+      cause: converted.cause,
+    });
   }
 
   getImpdLogger('move').error('{error}', { error: getErrorMessage(error) });
