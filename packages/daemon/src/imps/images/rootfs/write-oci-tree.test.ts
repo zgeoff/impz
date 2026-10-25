@@ -142,7 +142,7 @@ test('it stops a stalled export and fails the write when the signal aborts', asy
 
   const [pid] = ociFetch.readStalledPIDs();
 
-  invariant(pid);
+  invariant(pid !== undefined);
 
   stop.abort(new Error('the build was cancelled'));
 
