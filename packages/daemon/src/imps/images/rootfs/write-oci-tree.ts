@@ -1,4 +1,5 @@
 import type { CommandResult } from '../../../platform/process/run-command';
+import { startTarProcess } from './start-tar-process';
 import { writeStreamedTree } from './write-streamed-tree';
 import type { TreeLimits } from './write-streamed-tree';
 
@@ -17,6 +18,7 @@ export function writeOciTree(options: Readonly<WriteOciTreeOptions>): Promise<vo
     signal: options.signal,
     source: `oci-fetch export ${options.ref}`,
     grow: options.grow,
+    startTar: startTarProcess,
     runExport: (onStdout, signal) =>
       runStreamed(['oci-fetch', 'export', options.ref], onStdout, signal),
   });

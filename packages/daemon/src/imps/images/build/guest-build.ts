@@ -6,6 +6,7 @@ import type { GuestExec } from '../builders/guest-exec';
 import { formatFailureTail } from '../pull/format-failure-tail';
 import { pickRepoDigest, requireImagePlatform } from '../pull/image-pin';
 import { readImageInspect } from '../pull/read-image-inspect';
+import { startTarProcess } from '../rootfs/start-tar-process';
 import { writeStreamedTree } from '../rootfs/write-streamed-tree';
 import type { TreeLimits } from '../rootfs/write-streamed-tree';
 import { toEngineRun } from './build-engine';
@@ -153,6 +154,7 @@ export async function writeGuestTree(options: WriteGuestTreeOptions): Promise<Ex
     source: 'docker export in the builder',
     grow: options.grow,
     startTimer: options.startTimer,
+    startTar: startTarProcess,
     runExport: (onStdout, exportSignal) =>
       exec(['docker', 'export', containerId], {
         signal: exportSignal,

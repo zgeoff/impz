@@ -13,12 +13,18 @@ export interface TreeLimits {
   readonly maxFiles: number;
 }
 
+export type TarProcess = Bun.Subprocess<'pipe', 'pipe', 'pipe'>;
+
+type StartTar = (argv: readonly string[]) => TarProcess;
+
 export interface WriteStreamedTreeOptions {
   readonly root: string;
   readonly limits: Readonly<TreeLimits>;
   readonly signal: AbortSignal;
 
   readonly source: string;
+
+  readonly startTar: StartTar;
 
   readonly runExport: (
     onStdout: (chunk: Uint8Array) => Promise<void>,
@@ -42,14 +48,7 @@ export async function writeStreamedTree(
   const grow = options.grow ?? (() => Promise.resolve());
   const startTimer = options.startTimer ?? startRealTimer;
   const maxBytes = limits.maxBytes;
-
-  const tar = Bun.spawn([...UNPACK_TAR_ARGS, '-vv', '--quoting-style=escape', '-C', root], {
-    stdin: 'pipe',
-    stdout: 'pipe',
-    stderr: 'pipe',
-    env: { ...process.env, LC_ALL: 'C' },
-  });
-
+  const tar = options.startTar([...UNPACK_TAR_ARGS, '-vv', '--quoting-style=escape', '-C', root]);
   const sent = { bytes: 0 };
   const unpacked: { over?: 'bytes' | 'files'; ended?: boolean } = {};
 
