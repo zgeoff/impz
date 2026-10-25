@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { updateEnv } from '@impz/test-utils/update-env';
 import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
 import { buildStubImageBuilder } from '../../../testing/imps/build-stub-image-builder';
+import { createFilesTar } from '../../../testing/imps/create-files-tar';
 import { createStubOciFetch } from '../../../testing/imps/create-stub-oci-fetch';
 import { buildQueryGate } from '../../../testing/platform/build-query-gate';
 import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
@@ -121,6 +122,102 @@ test('#ensureBuilderImage leaves no work directory behind when the export fails'
 
   expect(ensuring).rejects.toThrow('MANIFEST_UNKNOWN');
   expect(readdirSync(join(ctx.dataDir, 'images'))).toStrictEqual([]);
+});
+
+test('#ensureBuilderImage refuses an export over IMP_BUILD_IMAGE_MAX_MIB and publishes nothing', async () => {
+  const ctx = await setupTest();
+
+  const config = loadConfig({ IMP_DATA_DIR: ctx.dataDir, IMP_BUILD_IMAGE_MAX_MIB: '1' });
+
+  const ociFetch = createStubOciFetch({
+    directory: ctx.dataDir,
+    images: [
+      {
+        ref: config.build.image,
+        digest: `sha256:${'c'.repeat(64)}`,
+        exportTar: createFilesTar(ctx.dataDir, { dockerd: 'x'.repeat(2 * 1024 ** 2) }),
+      },
+    ],
+  });
+
+  updateEnv('PATH', ociFetch.path);
+  mkdirSync(join(ctx.dataDir, 'images'));
+
+  const images = createImageService({
+    config,
+    db: ctx.db,
+    storage: ctx.storage,
+    storageGate: createStorageGate(),
+    diskBudget: ctx.diskBudget,
+    readBuilders: () => null,
+  });
+
+  const failure = await images.ensureBuilderImage().then(
+    () => null,
+    (error: unknown) => error,
+  );
+
+  const builder = await readImageByName(ctx.db, BUILDER_IMAGE);
+  const disk = await ctx.diskBudget.readStatus();
+
+  expect(failure).toMatchObject({
+    code: 'SERVICE_UNAVAILABLE',
+    message: expect.toEndWith(
+      ": the built image's filesystem is over 1 MiB (IMP_BUILD_IMAGE_MAX_MIB)",
+    ),
+  });
+
+  expect(builder).toBeUndefined();
+  expect(readdirSync(join(ctx.dataDir, 'images'))).toStrictEqual([]);
+  expect(disk.pendingBytes).toBe(0);
+});
+
+test('#ensureBuilderImage refuses an export over IMP_BUILD_IMAGE_MAX_FILES and publishes nothing', async () => {
+  const ctx = await setupTest();
+
+  const config = loadConfig({ IMP_DATA_DIR: ctx.dataDir, IMP_BUILD_IMAGE_MAX_FILES: '2' });
+
+  const ociFetch = createStubOciFetch({
+    directory: ctx.dataDir,
+    images: [
+      {
+        ref: config.build.image,
+        digest: `sha256:${'c'.repeat(64)}`,
+        exportTar: createFilesTar(ctx.dataDir, { one: '1\n', two: '2\n', three: '3\n' }),
+      },
+    ],
+  });
+
+  updateEnv('PATH', ociFetch.path);
+  mkdirSync(join(ctx.dataDir, 'images'));
+
+  const images = createImageService({
+    config,
+    db: ctx.db,
+    storage: ctx.storage,
+    storageGate: createStorageGate(),
+    diskBudget: ctx.diskBudget,
+    readBuilders: () => null,
+  });
+
+  const failure = await images.ensureBuilderImage().then(
+    () => null,
+    (error: unknown) => error,
+  );
+
+  const builder = await readImageByName(ctx.db, BUILDER_IMAGE);
+  const disk = await ctx.diskBudget.readStatus();
+
+  expect(failure).toMatchObject({
+    code: 'SERVICE_UNAVAILABLE',
+    message: expect.toEndWith(
+      ": the built image's filesystem is over 2 files (IMP_BUILD_IMAGE_MAX_FILES)",
+    ),
+  });
+
+  expect(builder).toBeUndefined();
+  expect(readdirSync(join(ctx.dataDir, 'images'))).toStrictEqual([]);
+  expect(disk.pendingBytes).toBe(0);
 });
 
 test('#addImage answers SERVICE_UNAVAILABLE while the builders are not up', async () => {
