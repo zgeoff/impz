@@ -175,7 +175,7 @@ func TestUffdHandlerGivesARemovedRangeBackToTheKernel(t *testing.T) {
 	assert.Equal(t, after, byte(0))
 	assert.Equal(t, report.Removes, 1)
 	assert.Equal(t, report.RemovedBytes, uint64(testPage))
-	assert.Equal(t, len(report.Errors), 0)
+	assert.DeepEqual(t, report.Errors, []string(nil))
 }
 
 func TestUffdHandlerSignalsAFaultItCannotResolve(t *testing.T) {
