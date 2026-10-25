@@ -21,9 +21,11 @@ const (
 	uffdEventPagefault = 0x12
 	uffdEventRemove    = 0x15
 	uffdMsgSize        = 32
-	// _IOWR(0xAA, 0x03, struct uffdio_copy), _IOR(0xAA, 0x01, struct uffdio_range)
+	// _IOWR(0xAA, 0x03, struct uffdio_copy), _IOR(0xAA, 0x01, struct uffdio_range),
+	// _IOR(0xAA, 0x02, struct uffdio_range)
 	uffdioCopy       = 0xc028aa03
 	uffdioUnregister = 0x8010aa01
+	uffdioWake       = 0x8010aa02
 )
 
 type uffdioCopyArg struct {
@@ -104,8 +106,10 @@ type uffdHandler struct {
 	uffd     int
 	regions  []guestRegion
 	pageSize uint64
-	// the ranges given back to the kernel; only the serve loop reads them
-	gone []uffdMsg
+	// the ranges given back to the kernel, which the serve loop and the fill
+	// both read; a lock of their own keeps a fault's service clear of mu
+	goneMu sync.Mutex
+	gone   []uffdMsg
 
 	mu       sync.Mutex
 	faults   []fault
@@ -120,6 +124,10 @@ type uffdHandler struct {
 	failed   chan struct{}
 	failOnce sync.Once
 	firstErr error
+
+	// a test closes the handler before it asserts, and its cleanup closes
+	// it again when an earlier step fails
+	closeOnce sync.Once
 
 	ready    chan error
 	filled   chan fillResult
@@ -259,6 +267,10 @@ func (h *uffdHandler) fill(pages []int64) {
 				time.Sleep(10 * time.Microsecond)
 				continue
 			}
+			// the guest removed the page, and its next fault zero-fills it
+			if errors.Is(err, unix.ENOENT) && h.isGone(addr) {
+				break
+			}
 			if err != nil {
 				h.recordError(err)
 				h.filled <- fillResult{err: err}
@@ -359,7 +371,9 @@ func (h *uffdHandler) serveRound(fresh, deferred []uffdMsg) []uffdMsg {
 	for _, msg := range msgs {
 		if msg.event == uffdEventRemove {
 			h.unregister(msg.address, msg.end)
+			h.goneMu.Lock()
 			h.gone = append(h.gone, msg)
+			h.goneMu.Unlock()
 		}
 	}
 	var retry []uffdMsg
@@ -370,7 +384,10 @@ func (h *uffdHandler) serveRound(fresh, deferred []uffdMsg) []uffdMsg {
 			// the guest dropped the page, and the kernel serves the next fault
 			// on an unregistered range, so a copy there only fails. A fault
 			// that came in before the unregister can be read a round later.
-			if slices.ContainsFunc(h.gone, func(r uffdMsg) bool { return msg.address >= r.address && msg.address < r.end }) {
+			// A kernel with per-VMA locks can queue one after the unregister
+			// woke the range, and it waits until the handler wakes it.
+			if h.isGone(msg.address) {
+				h.wake(msg.address)
 				h.mu.Lock()
 				h.stale++
 				h.mu.Unlock()
@@ -422,6 +439,23 @@ func (h *uffdHandler) unregister(start, end uint64) {
 	}
 }
 
+func (h *uffdHandler) isGone(addr uint64) bool {
+	h.goneMu.Lock()
+	defer h.goneMu.Unlock()
+	return slices.ContainsFunc(h.gone, func(r uffdMsg) bool { return addr >= r.address && addr < r.end })
+}
+
+// wake releases a fault on a range the handler gave back, which the kernel
+// then zero-fills; the range takes the kernel's page alignment
+func (h *uffdHandler) wake(addr uint64) {
+	kernelPage := uint64(os.Getpagesize())
+	arg := uffdioRange{start: addr &^ (kernelPage - 1), len: kernelPage}
+	_, _, errno := unix.Syscall(unix.SYS_IOCTL, uintptr(h.uffd), uffdioWake, uintptr(unsafe.Pointer(&arg)))
+	if errno != 0 {
+		h.recordError(fmt.Errorf("UFFDIO_WAKE %#x: %w", addr, errno))
+	}
+}
+
 func (h *uffdHandler) recordError(err error) {
 	h.mu.Lock()
 	h.copyErrs = append(h.copyErrs, err.Error())
@@ -442,14 +476,16 @@ func (h *uffdHandler) err() error {
 }
 
 func (h *uffdHandler) close() {
-	close(h.done)
-	h.listener.Close()
-	<-h.finished
-	if h.uffd >= 0 {
-		unix.Close(h.uffd)
-	}
-	_ = unix.Munmap(h.src)
-	h.memFile.Close()
+	h.closeOnce.Do(func() {
+		close(h.done)
+		h.listener.Close()
+		<-h.finished
+		if h.uffd >= 0 {
+			unix.Close(h.uffd)
+		}
+		_ = unix.Munmap(h.src)
+		h.memFile.Close()
+	})
 }
 
 type faultReport struct {
