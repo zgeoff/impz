@@ -1,5 +1,13 @@
 # Changelog
 
+## [4.2.3](https://github.com/zgeoff/impz/compare/v4.2.2...v4.2.3) (2026-10-25)
+
+### Bug Fixes
+
+- **spike:** treat a fault read after its range's removal as stale
+  ([#731](https://github.com/zgeoff/impz/issues/731))
+  ([3d28dca](https://github.com/zgeoff/impz/commit/3d28dca51287f11c320f88c7aec6491979eee123))
+
 ## [4.2.2](https://github.com/zgeoff/impz/compare/v4.2.1...v4.2.2) (2026-10-25)
 
 ### ⚠ BREAKING CHANGES
