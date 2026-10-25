@@ -24,7 +24,8 @@ export interface Suite {
 
   readonly fixtures?: readonly HostBFixtureName[];
 
-  // a ZFS suite's time in its CI shard, which splits the ZFS lane into shards
+  // the time a ZFS suite adds to its CI shard, which splits the ZFS lane into shards: the suite's
+  // own time, and the build of any image no other suite in the lane needs
   readonly seconds?: number;
 }
 
@@ -180,7 +181,9 @@ export const SUITES: readonly Suite[] = [
     ],
     fixtures: ['host-b'],
     settings: (target) => buildMoveSettings(readMoveOptions('host-b'), target.portOffset),
-    seconds: 93,
+
+    // 83 s of journeys and 57 s for the base image, which only this lane suite builds
+    seconds: 140,
   },
   {
     name: 'moves-tailnet',
@@ -244,14 +247,14 @@ export const SUITES: readonly Suite[] = [
     prefix: 'e2e-bk-',
     images: ['e2e-tiny'],
     settings: readBackupSuiteSettings,
-    seconds: 140,
+    seconds: 120,
   },
   {
     name: 'backups-repo',
     prefix: 'e2e-bkr-',
     images: ['e2e-tiny'],
     settings: readBackupSuiteSettings,
-    seconds: 101,
+    seconds: 98,
   },
 ];
 

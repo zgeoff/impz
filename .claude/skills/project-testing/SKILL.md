@@ -124,9 +124,11 @@ and selects its files by suffix. `test:related` leaves lane files out for the sa
 | Small filesystem | `*.small-fs.test.ts`                              | a small loop-mounted XFS that `IMP_TEST_SMALL_FS` names | `bun run test:small-fs`, after a sudo mount in CI       | 15 s           |
 
 CI splits the ZFS lane's suites into shards, longest first by each suite's `seconds` in
-[`suites.ts`](../../../e2e/lib/suites.ts); update a suite's `seconds` when its shard time moves. The
-third `zfs` shard runs VM e2e suites, named in `IMP_ZFS_E2E_SUITES`, on the ZFS backend: a backend
-matrix and not a lane, so its tests keep the VM lane's suffix and limit.
+[`suites.ts`](../../../e2e/lib/suites.ts). A suite's `seconds` counts its own time and the build of
+any image that only it needs in the lane, so update it when either moves. The `zfs` shards also run
+VM e2e suites, named in `IMP_ZFS_E2E_SUITES`, on the ZFS backend: a backend matrix and not a lane,
+so their tests keep the VM lane's suffix and limit. A shard can run a lane share and named suites
+together, which lets the matrix place the named suites where the shards end together.
 
 The `lanes` map of `zgeoff/max-test-timeout` in [`.oxlintrc.json`](../../../.oxlintrc.json) holds
 each limit, and lint fails a timeout above its lane's. Both `e2e/` lanes share the `e2e` key, and

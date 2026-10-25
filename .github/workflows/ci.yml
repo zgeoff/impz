@@ -736,11 +736,11 @@ jobs:
   # The ZFS storage backend on real pools, in three shards on three runners:
   # scripts/zfs-host-test.sh runs real imps on a pool in a sparse file, with
   # the zfs module Ubuntu's kernel ships, and prints the ZFS timings. Shards 1
-  # and 2 are the ZFS lane: every *.zfs.e2e.ts journey, which runs nowhere
-  # else, split by its suite's recorded time. Shard 3 runs VM e2e suites on
-  # the ZFS backend, a backend matrix and not a lane. Shard 1 also runs
-  # scripts/test-zfs.sh on a throwaway pool of its own. The `zfs` job below is
-  # the required check over all three.
+  # and 2 split the ZFS lane: every *.zfs.e2e.ts journey, which runs nowhere
+  # else, split by its suite's recorded time. The `suites` rows run VM e2e
+  # suites on the ZFS backend, a backend matrix and not a lane, placed so the
+  # shards end together. Shard 1 also runs scripts/test-zfs.sh on a throwaway
+  # pool of its own. The `zfs` job below is the required check over all three.
   zfs-shard:
     name: zfs (shard ${{ matrix.shard }})
     runs-on: ubuntu-24.04
@@ -753,15 +753,17 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # the moves suite's shard, the only one that builds the base image
           - shard: 1
             lane: 1/2
+            suites: lifecycle,disks
             unit: true
-          # the moves suite's shard, the only one that builds the base image
           - shard: 2
             lane: 2/2
             unit: false
+          # sleep and boot-templates share the e2e-ws image
           - shard: 3
-            suites: lifecycle,checkpoints,disks,sleep,boot-templates
+            suites: checkpoints,sleep,boot-templates
             unit: false
     env:
       # as the e2e job: reduced sizes for a 4-core, 16 GB runner
