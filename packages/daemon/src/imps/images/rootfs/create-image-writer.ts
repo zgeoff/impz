@@ -8,6 +8,7 @@ import { getErrorMessage } from '../../../platform/process/get-error-message';
 import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import { buildKeyedMutex } from '../../../platform/process/keyed-mutex';
 import { runChecked } from '../../../platform/process/run-command';
+import type { StreamedRunner } from '../../../platform/process/run-streamed';
 import { createSingleFlight } from '../../../platform/process/single-flight';
 import { buildImagePaths, buildImagesDir } from '../../../vm/storage/data-layout';
 import type { DiskBudget } from '../../../vm/storage/disk-budget';
@@ -66,6 +67,8 @@ interface ImageWriterDeps {
   readonly diskBudget: Pick<DiskBudget, 'withGrowingRoom'>;
 
   readonly clock: Pick<Clock, 'now'>;
+
+  readonly runStreamed: StreamedRunner;
 }
 
 interface GuestRootfs {
@@ -309,7 +312,7 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
         const root = workDir.root;
 
         try {
-          await writeOciTree({ ref, root, limits, signal, grow });
+          await writeOciTree({ ref, root, limits, signal, grow, runStreamed: deps.runStreamed });
 
           options.onFetched();
 

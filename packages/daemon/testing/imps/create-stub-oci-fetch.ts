@@ -10,6 +10,7 @@ interface StubOciImage {
   readonly config?: Readonly<Record<string, unknown>>;
   readonly exportTar?: Uint8Array;
   readonly fetch?: StubOciFetchAnswer;
+  readonly export?: 'ok' | 'stall';
 }
 
 export interface StubOciFetchOptions {
@@ -21,6 +22,7 @@ export function createStubOciFetch(options: Readonly<StubOciFetchOptions>) {
   const bin = join(options.directory, 'bin');
   const state = join(options.directory, 'stub-oci-fetch');
   const log = join(state, 'calls.log');
+  const stalls = join(state, 'stalls.log');
   const arms: string[] = [];
 
   mkdirSync(bin, { recursive: true });
@@ -41,7 +43,9 @@ export function createStubOciFetch(options: Readonly<StubOciFetchOptions>) {
 
       writeFileSync(tar, image.exportTar);
 
-      arms.push(`  ${formatShellWord(`export ${image.ref}`)}) cat ${formatShellWord(tar)} ;;`);
+      arms.push(
+        buildExportArm(`export ${image.ref}`, image.export ?? 'ok', { tar, state, stalls }),
+      );
     }
   }
 
@@ -67,6 +71,9 @@ export function createStubOciFetch(options: Readonly<StubOciFetchOptions>) {
 
     readCalls: (): string[] =>
       existsSync(log) ? readFileSync(log, 'utf8').trimEnd().split('\n') : [],
+
+    readStalledPIDs: (): number[] =>
+      existsSync(stalls) ? readFileSync(stalls, 'utf8').trimEnd().split('\n').map(Number) : [],
   };
 }
 
@@ -88,4 +95,30 @@ function buildConfigArm(
   }
 
   return `  ${pattern}) printf '%s\\n' ${formatShellWord(answer.stderr)} >&2; exit 1 ;;`;
+}
+
+interface StubExportPaths {
+  readonly tar: string;
+  readonly state: string;
+  readonly stalls: string;
+}
+
+// A stalled export holds after its tar until the stub's directory goes, so a test's cleanup
+// ends it.
+function buildExportArm(
+  argv: string,
+  answer: 'ok' | 'stall',
+  paths: Readonly<StubExportPaths>,
+): string {
+  const pattern = formatShellWord(argv);
+  const tar = formatShellWord(paths.tar);
+
+  if (answer === 'ok') {
+    return `  ${pattern}) cat ${tar} ;;`;
+  }
+
+  return [
+    `  ${pattern}) cat ${tar}; echo $$ >>${formatShellWord(paths.stalls)}`,
+    `    while [ -d ${formatShellWord(paths.state)} ]; do sleep 0.05; done; exit 1 ;;`,
+  ].join('\n');
 }
