@@ -21,7 +21,7 @@
 #    empty. Refuses an image whose imp.host-contract is not no-docker: it
 #    needs a Docker socket, which a Podman host does not give. Reads the
 #    image's seccomp profile and unit; one it cannot read, or reads empty,
-#    stops the upgrade here.
+#    stops the upgrade here, and so does a unit that does not run Podman.
 # 2. Sleeps every awake imp through the API, one at a time, and stops on the
 #    first that fails: the host keeps running the old image, untouched.
 #    Stopping the container would sleep them too, but within its 120 s.
@@ -397,6 +397,13 @@ new_files=("$seccomp_file" "$unit_file")
 trap 'for f in "${new_files[@]}"; do rm -f "$f.new"; done' EXIT
 fetch_file imp-host.seccomp.json "$seccomp_file" || exit 1
 fetch_file imp-host.service "$unit_file" || exit 1
+
+# An image from before the move to Podman has the no-docker label and a unit
+# that runs Docker, which would put this host back on Docker.
+if ! grep -q '^ExecStart=/usr/bin/podman run ' "$unit_file.new"; then
+  echo "upgrade: the imp-host.service in $image does not run Podman, which this host runs imp-host with; to go back to it, put back the units that the upgrade from it kept, or run deploy/bootstrap.sh of its release (docs/guides/operations.md#upgrade). Nothing changed." >&2
+  exit 1
+fi
 
 # The unit takes the image from the env file, else its own default: one
 # from the environment alone would pull here, then restart into another.

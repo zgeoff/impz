@@ -807,6 +807,54 @@ test('it stops before any imp sleeps when the image cannot give its unit', () =>
   expect(calls).not.toInclude('systemctl');
 });
 
+test('it refuses, before any imp sleeps, an image whose unit runs Docker', () => {
+  const ctx = setupTest();
+
+  const podman = createStubBin(
+    ctx.directoryPath,
+    'podman',
+    buildStubHostPodman({
+      image: 'ghcr.io/zgeoff/imp-host:older',
+      pulledLabel: 'no-docker',
+      pulledUnit: 'ExecStart=/usr/bin/docker run --name imp-host imp-host\n',
+    }),
+  );
+
+  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
+
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-host.service'),
+    'ExecStart=/usr/bin/podman run --cap-drop ALL imp-host\n',
+  );
+
+  const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
+    env: {
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:older',
+      IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
+      IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
+      IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
+      IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
+    },
+  });
+
+  const calls = readFileSync(podman.calls, 'utf8');
+
+  expect(result.exitCode).toBe(1);
+
+  expect(result.stderr.toString()).toInclude(
+    'upgrade: the imp-host.service in ghcr.io/zgeoff/imp-host:older does not run Podman',
+  );
+
+  expect(readFileSync(join(ctx.directoryPath, 'imp-host.service'), 'utf8')).toBe(
+    'ExecStart=/usr/bin/podman run --cap-drop ALL imp-host\n',
+  );
+
+  expect(readdirSync(ctx.directoryPath).filter((file) => file.endsWith('.new'))).toBeEmpty();
+  expect(calls).not.toInclude('impz ls');
+  expect(calls).not.toInclude('systemctl');
+});
+
 test('it stops before the restart when a unit cannot be installed', () => {
   const ctx = setupTest();
 
