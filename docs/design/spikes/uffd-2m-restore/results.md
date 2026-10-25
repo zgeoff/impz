@@ -51,6 +51,19 @@ The spread of `agent` over the 21 rounds:
 - impd's own restores on the host in the same hours report `agent=` of 450, 3,136 and 4,016 ms.
 - No restore saw a REMOVE event or a handler error.
 
+The run leaves the host as it found it. After the cleanup, the host's check reads:
+
+```text
+vm.nr_hugepages = 0
+vm.nr_overcommit_hugepages = 0
+HugePages_Total:       0
+HugePages_Surp:        0
+ls: cannot access '/var/tmp/uffd-spike*': No such file or directory
+none
+```
+
+The last line is `pgrep -x uffd-spike || echo none`, so no harness process runs.
+
 ## 4 KiB pages, development PC
 
 The PC is a WSL2 guest with KVM, which runs Firecracker v1.17.0 inside the `imp-host:3.0.2` image.
