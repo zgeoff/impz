@@ -21,7 +21,7 @@ in
     imageArchive = lib.mkOption {
       type = lib.types.nullOr lib.types.path;
       default = null;
-      description = "A docker save archive that holds `image`, used instead of a pull. It is loaded at the first start, and again whenever the archive changes (a new store path).";
+      description = "An archive that holds `image`, used instead of a pull: a docker-archive or an oci-archive, which `podman load` reads. It is loaded at the first start, and again whenever the archive changes (a new store path).";
     };
 
     storage = lib.mkOption {
@@ -99,7 +99,7 @@ in
         "80:7480"
       ];
       description = ''
-        docker -p specs that publish the public listeners for public imps
+        podman -p specs that publish the public listeners for public imps
         (docs/guides/https.md#public-imps), as IMP_PUBLIC_PORTS does for
         deploy/imp-host.service. Set IMP_PUBLIC_IP in settings too, and open
         the ports in the host's firewall.
@@ -145,17 +145,17 @@ in
       description = ''
         An env file of secrets (IMP_DNS_API_TOKEN, AWS_SECRET_ACCESS_KEY),
         outside the Nix store. Copied into imp-host.env at each start. It is
-        docker --env-file format: KEY=value, no expansion, and quotes stay
+        podman --env-file format: KEY=value, no expansion, and quotes stay
         part of the value.
       '';
     };
 
     ipv6 = {
       enable = lib.mkEnableOption ''
-        imps' IPv6: imp-host runs on the Docker network imp-host, with the
-        /64 `ipv6.subnet` and the bridge br-imphost, behind Docker's NAT66,
+        imps' IPv6: imp-host runs on the Podman network imp-host, with the
+        /64 `ipv6.subnet` and the bridge br-imphost, behind netavark's NAT66,
         and impd's IMP_SUBNET6=auto gives imps IPv6 behind its own NAT66
-        (docs/guides/nixos.md#ipv6). Docker turns on IPv6 forwarding for it,
+        (docs/guides/nixos.md#ipv6). Podman turns on IPv6 forwarding for it,
         so the host's IPv6 default route must not depend on router adverts
         the kernel would then drop: an assertion asks for a static
         networking.defaultGateway6, networkd with IPv6AcceptRA = true on
@@ -172,7 +172,7 @@ in
           in
           "fd${builtins.substring 0 2 hash}:${builtins.substring 2 4 hash}:${builtins.substring 6 4 hash}::/64";
         defaultText = lib.literalMD "a unique local /64 from a hash of `networking.hostId` (else `networking.hostName`)";
-        description = "The IPv6 /64 of the imp-host network. Docker's NAT66 hides it; it only has to differ from the host's other networks.";
+        description = "The IPv6 /64 of the imp-host network. netavark's NAT66 hides it; it only has to differ from the host's other networks.";
       };
 
       uplink = lib.mkOption {
@@ -211,7 +211,7 @@ in
         "10.43.0.0/16"
       ];
       description = ''
-        IPv4 and IPv6 ranges that traffic from imp-host's bridges (docker0,
+        IPv4 and IPv6 ranges that traffic from imp-host's bridges (podman0,
         and br-imphost with IPv6) may not reach through the host, such as a
         k3s cluster's pod and service ranges. They drop in the nftables
         table imp-forward, ahead of networking.firewall's forward chain, so

@@ -23,9 +23,6 @@
 # never put in argv. Never run this script with `bash -x`.
 set -euo pipefail
 
-# The units bootstrap installs run imp-host with Podman, so a CONTAINER_CLI in
-# the caller's environment must not turn deploy/lib/host-env.sh to another CLI.
-CONTAINER_CLI=podman
 readonly IMP_DIR=/etc/imp
 readonly ENV_FILE=$IMP_DIR/imp-host.env
 readonly FIREWALL_FILE=$IMP_DIR/firewall.nft

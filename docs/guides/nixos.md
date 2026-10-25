@@ -45,7 +45,8 @@ Use a kernel that the system's ZFS builds for. The module's checks use nixpkgs' 
 
 ## What it sets
 
-- **Docker:** `virtualisation.docker.enable`.
+- **Podman:** `virtualisation.podman.enable`. imp-host runs under rootful Podman, as on Ubuntu and
+  Debian, and the module leaves `virtualisation.docker` alone.
 - **Kernel:** `vm.overcommit_memory = 1`, `vm.swappiness = 1`, and the modules `kvm`, `tun` and
   `loop`. With ZFS, also `zfs`, `boot.supportedFilesystems.zfs`, and the ARC cap (`zfs.arcMaxMiB`)
   in `boot.extraModprobeConfig`.
@@ -84,11 +85,11 @@ Use a kernel that the system's ZFS builds for. The module's checks use nixpkgs' 
   port ([Firewall](../architecture/host.md#the-host-firewall)). With `own`, the module loads
   `bootstrap.sh`'s `imp_host` table for `services.openssh.ports`, and refuses the build unless
   `networking.firewall.enable = false`. Either way it refuses
-  `networking.nftables.flushRuleset = true`, which would flush Docker's rules.
+  `networking.nftables.flushRuleset = true`, which would flush netavark's rules.
 - **Forwarding:** with `networking.firewall.filterForward = true` (nftables), the firewall drops new
   forwarded traffic that no rule admits, and so imps' egress. The module adds
-  `iifname { "br-imphost" } accept` to `networking.firewall.extraForwardRules`, or `docker0` without
-  IPv6: imp-host's bridge alone, so other containers on `docker0` need rules of their own. It trusts
+  `iifname { "br-imphost" } accept` to `networking.firewall.extraForwardRules`, or `podman0` without
+  IPv6: imp-host's bridge alone, so other containers on `podman0` need rules of their own. It trusts
   no interface: `trustedInterfaces` would also open every host service, such as the k3s API, to imp
   traffic. `forwardDeny` drops ranges that imps may not reach through the host
   ([IPv6 and forwarding](#ipv6)).
@@ -107,14 +108,14 @@ Use a kernel that the system's ZFS builds for. The module's checks use nixpkgs' 
   after the tag. A rebuild in that window fails to pull it.
 - Set `image` to run another image. To pin a digest as well as the tag, set it to
   `ghcr.io/zgeoff/imp-host:X.Y.Z@sha256:<digest>`.
-- `imageArchive` must hold `image`: save the archive under the versioned tag, not `:latest`, or
-  `imp-host-image.service` fails with "does not hold". With `imageArchive`, set `image` to the tag
-  only: a `docker load` into the classic overlay2 store records no digest, so a `tag@sha256` ref
-  fails that check.
+- `imageArchive` is a docker-archive or oci-archive tarball, which `podman load` reads. It must hold
+  `image`: save the archive under the versioned tag, not `:latest`, or `imp-host-image.service`
+  fails with "does not hold". With `imageArchive`, set `image` to the tag only: an archive need not
+  hold the registry's manifest, and then a `tag@sha256` ref fails that check.
 
 ## IPv6
 
-`ipv6.enable` runs `imp-host` on the Docker network `imp-host`, with the /64 `ipv6.subnet` and the
+`ipv6.enable` runs `imp-host` on the Podman network `imp-host`, with the /64 `ipv6.subnet` and the
 bridge `br-imphost`, as `bootstrap.sh --ipv6 on` does ([IPv6](./install.md#ipv6)). By default
 `ipv6.subnet` is a unique local /64 from a hash of `networking.hostId`. The env file says
 `IMP_HOST_IPV6=on`. Before each start, the module creates the network when it is missing, and
@@ -133,7 +134,7 @@ networking.nftables.enable = true;
 networking.firewall.filterForward = true;
 ```
 
-Docker turns on IPv6 forwarding for the network, and with forwarding on, router adverts that set the
+Podman turns on IPv6 forwarding for the network, and with forwarding on, router adverts that set the
 host's IPv6 default route can be dropped ([the caution](./install.md#ipv6)). The module refuses
 `ipv6.enable` unless one of these keeps the route:
 
@@ -149,20 +150,16 @@ host's IPv6 default route can be dropped ([the caution](./install.md#ipv6)). The
   that: run `ip -6 route show default` half an hour after `imp-host` starts, past a router advert's
   lifetime, and look for the route.
 
-The module also refuses `ipv6.enable` with a Docker older than 27.0, or with
-`virtualisation.docker.daemon.settings.ip6tables = false`: Docker then writes no NAT66 for the
-network.
+netavark, Podman's network backend, writes the network's NAT66 and leaves the `ip6tables` FORWARD
+policy as it was, so other services that forward IPv6, such as dual-stack k3s, need no accept rules
+for it.
 
-Docker also sets the `ip6tables` FORWARD policy to DROP when it turns forwarding on. A host where
-other services forward IPv6, such as dual-stack k3s, needs their own accept rules or
-`virtualisation.docker.daemon.settings.ip-forward-no-drop = true`.
-
-`forwardDeny` takes IPv4 and IPv6 ranges that traffic from `br-imphost` and `docker0` may not reach
+`forwardDeny` takes IPv4 and IPv6 ranges that traffic from `br-imphost` and `podman0` may not reach
 through the host. They drop in the nftables table `imp-forward`, a forward chain that runs before
 `networking.firewall`'s, so ICMPv6, which that chain accepts first, drops too. Only new flows drop
 (`ct direction original`): the replies of a flow that started in a denied range, such as a k3s pod
 that reaches a public imp, pass. It needs `networking.nftables.enable`. Set it to a k3s cluster's
-pod and service ranges, for example, instead of hand-written `docker0` rules.
+pod and service ranges, for example, instead of hand-written `podman0` rules.
 
 ## Reinstall
 
@@ -179,9 +176,9 @@ A reinstall keeps the pool, and the imps and node state in it:
 ## The env file
 
 The module writes the env file to `/run/imp-host/env`, in tmpfs, and mounts it read-only into the
-container at `/run/imp/env`. The container's entrypoint exports it before impd starts. Docker never
-reads the values, so neither the file nor Docker's container config puts a copy of a secret on the
-system disk. The keys that the module passes with `docker run -e`, such as `DOCKER_HOST`, stay out
+container at `/run/imp/env`. The container's entrypoint exports it before impd starts. Podman never
+reads the values, so neither the file nor Podman's container config puts a copy of a secret on the
+system disk. The keys that the module passes with `podman run -e`, such as `IMP_ENV_FILE`, stay out
 of the file, so those values win as they would over `--env-file`.
 
 The file is written again at each start of `imp-host`, so edit the module's options, not the file:
@@ -260,9 +257,8 @@ it to `/run/imp-host` and mounts the copy read-only into the container at
   node that stays offline long enough is deleted by Tailscale, and a reinstall can take that long,
   so keep a valid key in the file if the host may be down for a while.
 - A missing or empty key file only warns, and the node comes back from its saved state. The module
-  always mounts its own copy, so docker never meets a missing source; where something else mounts
-  the key, note that docker turns a missing source into an empty directory, which `tailscale-up.sh`
-  also ignores.
+  always mounts its own copy, so the mount always has a source; Podman refuses to start a container
+  whose mount source is missing.
 - A saved node still `Starting` after 15 s, as on a boot with no network yet, counts as good: the
   container starts, and `tailscale-up.sh` waits for it in the background, joining with the key only
   if it turns out to need a login.
@@ -274,9 +270,9 @@ it to `/run/imp-host` and mounts the copy read-only into the container at
 
 ```sh
 systemctl status imp-host imp-zfs-dataset
-docker exec imp-host impz info
-docker exec imp-host impz new check --image ubuntu && docker exec imp-host impz exec check -- uname -a
-docker exec imp-host impz rm check
+podman exec imp-host impz info
+podman exec imp-host impz new check --image ubuntu && podman exec imp-host impz exec check -- uname -a
+podman exec imp-host impz rm check
 ```
 
 ## Test it
@@ -291,12 +287,12 @@ docker exec imp-host impz rm check
 - `vm` boots two NixOS VMs with the module, as `e2e/test-bootstrap.sh --stub` does for
   `bootstrap.sh`. One has a ZFS pool on a second disk and a stand-in image that runs the real
   `tailscale-up.sh` against a fake `tailscale`. It checks the env file, that its secrets reach the
-  container's processes but never the system disk or Docker's config, the kernel settings, that the
-  host has no imp firewall rules, and the three ways the node comes up: a first join with the key, a
-  restart from good state with no key, and a join again when the saved node needs a login. The other
-  has `hostFirewall = "own"`: SSH connects through the imp table, and another port does not. It
-  needs KVM, with nesting, and boots no imp. Its script waits on conditions, never a fixed delay,
-  and each scenario that changes the running host restores it and checks the restore.
+  container's processes but never the system disk or Podman's config, the kernel settings, that the
+  host has no Docker and no imp firewall rules, and the three ways the node comes up: a first join
+  with the key, a restart from good state with no key, and a join again when the saved node needs a
+  login. The other has `hostFirewall = "own"`: SSH connects through the imp table, and another port
+  does not. It needs KVM, with nesting, and boots no imp. Its script waits on conditions, never a
+  fixed delay, and each scenario that changes the running host restores it and checks the restore.
 
 Without Nix on the machine, run them in a container, with `/dev/kvm` and no `--privileged`; the
 store stays in a Docker volume:

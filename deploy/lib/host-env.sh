@@ -10,25 +10,17 @@
 # A computed RAM budget below this is refused: the host is too small for the
 # formula, and the operator sets IMP_RAM_BUDGET_MIB.
 readonly RAM_BUDGET_FLOOR_MIB=512
-# The container CLI that runs imp-host; the NixOS module sets it to docker.
-readonly CONTAINER_CLI=${CONTAINER_CLI:-podman}
 # With IPv6, imp-host runs on this container network. The bridge has a fixed
 # name so a host firewall can admit it; the name keeps clear of imp's own
 # interfaces (imp0, imp+). bun run render:deploy writes both, and
 # host_addresses, from deploy/imp-host.args.json.
 readonly HOST_NETWORK=imp-host
 readonly HOST_BRIDGE=br-imphost
-# $CONTAINER_CLI network inspect -f: IPv6 on, the bridge's name, whether a
-# DNS server answers on the bridge's gateway, then every subnet, in the same
-# words for both CLIs. That server listens in the host's namespace, where the
-# host firewall drops it; Docker's answers inside the container instead.
-if [ "$CONTAINER_CLI" = docker ]; then
-  # shellcheck disable=SC2034 # for its callers
-  readonly NETWORK_FORMAT='{{.EnableIPv6}} {{or (index .Options "com.docker.network.bridge.name") "unnamed"}} false{{range .IPAM.Config}} {{.Subnet}}{{end}}'
-else
-  # shellcheck disable=SC2034 # for its callers
-  readonly NETWORK_FORMAT='{{.IPv6Enabled}} {{or .NetworkInterface "unnamed"}} {{.DNSEnabled}}{{range .Subnets}} {{.Subnet}}{{end}}'
-fi
+# podman network inspect -f: IPv6 on, the bridge's name, whether a DNS
+# server answers on the bridge's gateway, then every subnet. That server
+# listens in the host's namespace, where the host firewall drops it.
+# shellcheck disable=SC2034 # for its callers
+readonly NETWORK_FORMAT='{{.IPv6Enabled}} {{or .NetworkInterface "unnamed"}} {{.DNSEnabled}}{{range .Subnets}} {{.Subnet}}{{end}}'
 
 # The awk function trim(line): line without a trailing \r or the blanks
 # around it, as an env file edited on another system may have them, and
@@ -137,7 +129,7 @@ ipv6_expand() {
   )
 }
 
-# ipv6_canon ADDR[/LEN]: ADDR as Docker and Podman print it (RFC 5952): lower case,
+# ipv6_canon ADDR[/LEN]: ADDR as Podman prints it (RFC 5952): lower case,
 # no leading zeros, and the longest run of two or more zero groups as ::.
 ipv6_canon() {
   local expanded suffix="" i
@@ -183,8 +175,8 @@ subnet6() {
   ipv6_canon "$1"
 }
 
-# network_drift WANT INSPECT: how a network that $CONTAINER_CLI network
-# inspect (NETWORK_FORMAT) describes as INSPECT differs from IPv6 on the /64 WANT
+# network_drift WANT INSPECT: how a network that podman network inspect
+# (NETWORK_FORMAT) describes as INSPECT differs from IPv6 on the /64 WANT
 # with the bridge HOST_BRIDGE and no DNS server; nothing when it matches.
 network_drift() {
   local want=$1 enabled bridge dns subnet found="" have=()
@@ -215,26 +207,18 @@ network_drift() {
 host_addresses() { ip -o addr show scope global | tr -s " " | cut -d " " -f 4 | paste -sd ,; }
 
 # network_others: the containers on the network other than imp-host. Podman
-# 4.9's network inspect lists no containers, so podman asks ps.
+# 4.9's network inspect lists no containers, so the names come from podman ps.
 network_others() {
-  if [ "$CONTAINER_CLI" = docker ]; then
-    docker network inspect -f '{{range .Containers}}{{.Name}} {{end}}' "$HOST_NETWORK" 2>/dev/null
-  else
-    podman ps -a --filter "network=$HOST_NETWORK" --format '{{.Names}}' 2>/dev/null
-  fi | tr ' ' '\n' | grep -vx -e imp-host -e '' | paste -sd ' ' - || true
+  podman ps -a --filter "network=$HOST_NETWORK" --format '{{.Names}}' 2>/dev/null |
+    grep -vx -e imp-host -e '' | paste -sd ' ' - || true
 }
 
 # create_host_network SUBNET6: the network imp-host runs on with IPv6, on
 # the /64 SUBNET6, as the unit's ExecStartPre (deploy/imp-host.service)
 # makes it.
 create_host_network() {
-  if [ "$CONTAINER_CLI" = docker ]; then
-    docker network create --ipv6 --subnet "$1" \
-      -o "com.docker.network.bridge.name=$HOST_BRIDGE" "$HOST_NETWORK" >/dev/null
-  else
-    podman network create --ipv6 --subnet "$1" --disable-dns \
-      --interface-name "$HOST_BRIDGE" "$HOST_NETWORK" >/dev/null
-  fi
+  podman network create --ipv6 --subnet "$1" --disable-dns \
+    --interface-name "$HOST_BRIDGE" "$HOST_NETWORK" >/dev/null
 }
 
 # render_firewall PORT...: the nft ruleset. One transaction: create the
