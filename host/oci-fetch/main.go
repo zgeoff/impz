@@ -3,18 +3,14 @@ package main
 import (
 	"archive/tar"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
-	"path"
 	"runtime"
-	"strings"
 
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
-	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 )
 
@@ -84,45 +80,23 @@ func writeExport(ref string, out io.Writer) error {
 		return err
 	}
 
-	flat := mutate.Extract(img)
-	defer flat.Close()
-
-	return copyTree(tar.NewReader(flat), tar.NewWriter(out))
-}
-
-func copyTree(in *tar.Reader, out *tar.Writer) error {
-	seen := map[string]bool{}
-
-	for {
-		header, err := in.Next()
-		if errors.Is(err, io.EOF) {
-			break
-		}
-		if err != nil {
-			return fmt.Errorf("read the image's layers: %w", err)
-		}
-
-		seen[path.Clean(strings.TrimPrefix(header.Name, "/"))] = true
-
-		if err := out.WriteHeader(header); err != nil {
-			return err
-		}
-		if _, err := io.Copy(out, in); err != nil {
-			return err
-		}
+	tree := tar.NewWriter(out)
+	f, err := flatten(img, tree)
+	if err != nil {
+		return err
 	}
 
 	for _, dir := range mountDirs {
-		if seen[dir] {
+		if f.seen[dir] {
 			continue
 		}
 		header := &tar.Header{Typeflag: tar.TypeDir, Name: dir, Mode: 0o755}
-		if err := out.WriteHeader(header); err != nil {
+		if err := tree.WriteHeader(header); err != nil {
 			return err
 		}
 	}
 
-	return out.Close()
+	return tree.Close()
 }
 
 // A multi-platform ref resolves to the image for the host's own platform,

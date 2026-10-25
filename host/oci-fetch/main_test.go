@@ -7,11 +7,16 @@ import (
 	"errors"
 	"io"
 	"log"
+	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/registry"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
@@ -26,6 +31,7 @@ type entry struct {
 	name     string
 	typeflag byte
 	body     string
+	linkname string
 }
 
 func startRegistry(t *testing.T) string {
@@ -40,7 +46,7 @@ func buildLayer(t *testing.T, entries []entry) v1.Layer {
 	var buffer bytes.Buffer
 	writer := tar.NewWriter(&buffer)
 	for _, item := range entries {
-		header := &tar.Header{Name: item.name, Typeflag: item.typeflag, Mode: 0o644, Size: int64(len(item.body))}
+		header := &tar.Header{Name: item.name, Typeflag: item.typeflag, Linkname: item.linkname, Mode: 0o644, Size: int64(len(item.body))}
 		if item.typeflag == tar.TypeDir {
 			header.Mode = 0o755
 		}
@@ -90,6 +96,23 @@ func readTree(t *testing.T, archive []byte) map[string]string {
 		_, isListed := tree[header.Name]
 		assert.Assert(t, !isListed, "%s is in the export twice", header.Name)
 		tree[header.Name] = string(body)
+	}
+}
+
+// readEntries lists the archive's entries in their order.
+func readEntries(t *testing.T, archive []byte) []entry {
+	t.Helper()
+	var entries []entry
+	reader := tar.NewReader(bytes.NewReader(archive))
+	for {
+		header, err := reader.Next()
+		if errors.Is(err, io.EOF) {
+			return entries
+		}
+		assert.NilError(t, err)
+		body, err := io.ReadAll(reader)
+		assert.NilError(t, err)
+		entries = append(entries, entry{name: header.Name, typeflag: header.Typeflag, body: string(body), linkname: header.Linkname})
 	}
 }
 
@@ -179,4 +202,182 @@ func TestAnUnknownCommandFails(t *testing.T) {
 	err := run("pull", "alpine", &out)
 
 	assert.ErrorContains(t, err, `unknown command "pull"`)
+}
+
+func TestExportKeepsALowerLinkToAFileAnUpperLayerReplaced(t *testing.T) {
+	host := startRegistry(t)
+	ref := pushImage(t, host, buildImage(t, nil,
+		buildLayer(t, []entry{
+			{name: "a", typeflag: tar.TypeReg, body: "lower\n"},
+			{name: "b", typeflag: tar.TypeLink, linkname: "a"},
+		}),
+		buildLayer(t, []entry{
+			{name: "a", typeflag: tar.TypeReg, body: "upper\n"},
+		}),
+	))
+	var out bytes.Buffer
+
+	assert.NilError(t, run("export", ref, &out))
+
+	assert.DeepEqual(t, readEntries(t, out.Bytes()), []entry{
+		{name: "a", typeflag: tar.TypeReg, body: "upper\n"},
+		{name: "b", typeflag: tar.TypeReg, body: "lower\n"},
+		{name: "dev", typeflag: tar.TypeDir},
+		{name: "proc", typeflag: tar.TypeDir},
+		{name: "sys", typeflag: tar.TypeDir},
+	}, cmp.AllowUnexported(entry{}))
+}
+
+func TestExportKeepsALowerLinkToAFileAnUpperLayerDeleted(t *testing.T) {
+	host := startRegistry(t)
+	ref := pushImage(t, host, buildImage(t, nil,
+		buildLayer(t, []entry{
+			{name: "a", typeflag: tar.TypeReg, body: "lower\n"},
+			{name: "b", typeflag: tar.TypeLink, linkname: "a"},
+		}),
+		buildLayer(t, []entry{
+			{name: ".wh.a", typeflag: tar.TypeReg},
+		}),
+	))
+	var out bytes.Buffer
+
+	assert.NilError(t, run("export", ref, &out))
+
+	assert.DeepEqual(t, readEntries(t, out.Bytes()), []entry{
+		{name: "b", typeflag: tar.TypeReg, body: "lower\n"},
+		{name: "dev", typeflag: tar.TypeDir},
+		{name: "proc", typeflag: tar.TypeDir},
+		{name: "sys", typeflag: tar.TypeDir},
+	}, cmp.AllowUnexported(entry{}))
+}
+
+func TestExportLinksTheOtherLowerLinksToTheFirstOneThatKeepsTheFile(t *testing.T) {
+	host := startRegistry(t)
+	ref := pushImage(t, host, buildImage(t, nil,
+		buildLayer(t, []entry{
+			{name: "a", typeflag: tar.TypeReg, body: "lower\n"},
+			{name: "b", typeflag: tar.TypeLink, linkname: "a"},
+			{name: "c", typeflag: tar.TypeLink, linkname: "./b"},
+		}),
+		buildLayer(t, []entry{
+			{name: "a", typeflag: tar.TypeReg, body: "upper\n"},
+		}),
+	))
+	var out bytes.Buffer
+
+	assert.NilError(t, run("export", ref, &out))
+
+	assert.DeepEqual(t, readEntries(t, out.Bytes()), []entry{
+		{name: "a", typeflag: tar.TypeReg, body: "upper\n"},
+		{name: "b", typeflag: tar.TypeReg, body: "lower\n"},
+		{name: "c", typeflag: tar.TypeLink, linkname: "b"},
+		{name: "dev", typeflag: tar.TypeDir},
+		{name: "proc", typeflag: tar.TypeDir},
+		{name: "sys", typeflag: tar.TypeDir},
+	}, cmp.AllowUnexported(entry{}))
+}
+
+func TestExportKeepsAMiddleLinkToALowerFileAnUpperLayerReplaced(t *testing.T) {
+	host := startRegistry(t)
+	ref := pushImage(t, host, buildImage(t, nil,
+		buildLayer(t, []entry{
+			{name: "a", typeflag: tar.TypeReg, body: "lower\n"},
+		}),
+		buildLayer(t, []entry{
+			{name: "c", typeflag: tar.TypeLink, linkname: "a"},
+		}),
+		buildLayer(t, []entry{
+			{name: "a", typeflag: tar.TypeReg, body: "upper\n"},
+		}),
+	))
+	var out bytes.Buffer
+
+	assert.NilError(t, run("export", ref, &out))
+
+	assert.DeepEqual(t, readEntries(t, out.Bytes()), []entry{
+		{name: "a", typeflag: tar.TypeReg, body: "upper\n"},
+		{name: "c", typeflag: tar.TypeReg, body: "lower\n"},
+		{name: "dev", typeflag: tar.TypeDir},
+		{name: "proc", typeflag: tar.TypeDir},
+		{name: "sys", typeflag: tar.TypeDir},
+	}, cmp.AllowUnexported(entry{}))
+}
+
+func TestExportWritesAnUpperLinkAfterItsLowerTarget(t *testing.T) {
+	host := startRegistry(t)
+	ref := pushImage(t, host, buildImage(t, nil,
+		buildLayer(t, []entry{
+			{name: "a", typeflag: tar.TypeReg, body: "lower\n"},
+		}),
+		buildLayer(t, []entry{
+			{name: "c", typeflag: tar.TypeLink, linkname: "a"},
+		}),
+	))
+	var out bytes.Buffer
+
+	assert.NilError(t, run("export", ref, &out))
+
+	assert.DeepEqual(t, readEntries(t, out.Bytes()), []entry{
+		{name: "a", typeflag: tar.TypeReg, body: "lower\n"},
+		{name: "c", typeflag: tar.TypeLink, linkname: "a"},
+		{name: "dev", typeflag: tar.TypeDir},
+		{name: "proc", typeflag: tar.TypeDir},
+		{name: "sys", typeflag: tar.TypeDir},
+	}, cmp.AllowUnexported(entry{}))
+}
+
+func TestGNUTarExtractsAnUpperLinkToALowerFile(t *testing.T) {
+	tarPath, err := exec.LookPath("tar")
+	if err != nil {
+		t.Skip("tar is not installed")
+	}
+	host := startRegistry(t)
+	ref := pushImage(t, host, buildImage(t, nil,
+		buildLayer(t, []entry{
+			{name: "a", typeflag: tar.TypeReg, body: "lower\n"},
+		}),
+		buildLayer(t, []entry{
+			{name: "c", typeflag: tar.TypeLink, linkname: "a"},
+		}),
+	))
+	var out bytes.Buffer
+	assert.NilError(t, run("export", ref, &out))
+	dir := t.TempDir()
+	extract := exec.Command(tarPath, "-xf", "-", "-C", dir)
+	extract.Stdin = &out
+
+	output, err := extract.CombinedOutput()
+
+	assert.NilError(t, err, string(output))
+	body, err := os.ReadFile(filepath.Join(dir, "c"))
+	assert.NilError(t, err)
+	assert.Equal(t, string(body), "lower\n")
+}
+
+func TestExportOfAnImageWithACorruptLowerLayerFails(t *testing.T) {
+	handler := registry.New(registry.Logger(log.New(io.Discard, "", 0)))
+	pushServer := httptest.NewServer(handler)
+	t.Cleanup(pushServer.Close)
+	lower := buildLayer(t, []entry{{name: "lower", typeflag: tar.TypeReg, body: "lower\n"}})
+	upper := buildLayer(t, []entry{{name: "upper", typeflag: tar.TypeReg, body: "upper\n"}})
+	img := buildImage(t, nil, lower, upper)
+	pushImage(t, strings.TrimPrefix(pushServer.URL, "http://"), img)
+	imageDigest, err := img.Digest()
+	assert.NilError(t, err)
+	digest, err := lower.Digest()
+	assert.NilError(t, err)
+	// The upper layer exports before the lower layer's blob fails to verify.
+	corruptServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/blobs/"+digest.String()) {
+			_, _ = w.Write([]byte("not the layer"))
+			return
+		}
+		handler.ServeHTTP(w, r)
+	}))
+	t.Cleanup(corruptServer.Close)
+	var out bytes.Buffer
+
+	err = run("export", strings.TrimPrefix(corruptServer.URL, "http://")+"/builder@"+imageDigest.String(), &out)
+
+	assert.ErrorContains(t, err, "layer 0: ")
 }
