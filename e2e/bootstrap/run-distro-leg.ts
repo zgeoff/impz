@@ -1,5 +1,6 @@
 import { applyBootstrap } from './apply-bootstrap';
 import { BootstrapTestError } from './bootstrap-test-error';
+import { checkDockerHost } from './check-docker-host';
 import { checkFirewallDrops } from './check-firewall-drops';
 import { checkHostFirewallNone } from './check-host-firewall-none';
 import { checkImpEgress6 } from './check-imp-egress6';
@@ -93,6 +94,7 @@ export async function runDistroLeg(run: BootstrapRun, distro: Distro): Promise<v
   }
 
   await checkProxyRetired(run, target);
+  await checkDockerHost(run, target);
   await checkHostFirewallNone(run, target);
 
   if (distro === 'debian') {

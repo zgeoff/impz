@@ -1334,6 +1334,34 @@ test('#preflight refuses to run as a user other than root', () => {
   });
 });
 
+test('#preflight refuses a host whose imp-host runs under Docker', () => {
+  const ctx = setupTest();
+  const id = createStubBin(ctx.directoryPath, 'id', 'echo 0');
+  const virt = createStubBin(ctx.directoryPath, 'systemd-detect-virt', 'exit 1');
+
+  const docker = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    buildStubBootstrapDocker({ hostContainer: 'present' }),
+  );
+
+  expect(
+    runSourcedFunction({
+      script: new URL('bootstrap.sh', import.meta.url).pathname,
+      fn: 'eval',
+
+      // The platform check reads the kernel's own files, which no PATH stub replaces.
+      args: ['check_platform() { :; }; preflight'],
+      env: { PATH: `${id.bin}:${virt.bin}:${docker.bin}:${process.env['PATH'] ?? ''}` },
+    }),
+  ).toStrictEqual({
+    exitCode: 1,
+    stdout: '== preflight\n',
+    stderr:
+      'bootstrap: imp-host runs under Docker, from an older release: run deploy/upgrade.sh of this release, which moves the host to Podman (docs/guides/operations.md#upgrade); nothing changed\n',
+  });
+});
+
 test('#check_platform refuses a WSL kernel outside a container', () => {
   const ctx = setupTest();
 
