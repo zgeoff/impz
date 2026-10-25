@@ -1,4 +1,4 @@
-import { expect, onTestFinished, test } from 'bun:test';
+import { expect, mock, onTestFinished, test } from 'bun:test';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -11,6 +11,7 @@ import { createStubOciFetch } from '../../../../testing/imps/create-stub-oci-fet
 import { buildStubClock } from '../../../../testing/platform/build-stub-clock';
 import { runStreamed } from '../../../platform/process/run-streamed';
 import { ImageLimitError } from '../build/image-limit-error';
+import { startTarProcess } from './start-tar-process';
 import { writeOciTree } from './write-oci-tree';
 
 async function setupTest() {
@@ -51,6 +52,49 @@ test('it unpacks the tree oci-fetch exports into the root', async () => {
   });
 
   expect(readFileSync(join(ctx.root, 'dockerd'), 'utf8')).toBe('builder\n');
+});
+
+test("it unpacks through the given tar starter with tar's unpack and listing flags", async () => {
+  const ctx = await setupTest();
+
+  const ociFetch = createStubOciFetch({
+    directory: ctx.directoryPath,
+    images: [
+      {
+        ref: 'registry.test/builder@sha256:1',
+        digest: 'sha256:2',
+        exportTar: createFilesTar(ctx.directoryPath, { dockerd: 'builder\n' }),
+      },
+    ],
+  });
+
+  const startTar = mock(startTarProcess);
+
+  updateEnv('PATH', ociFetch.path);
+
+  await writeOciTree({
+    ref: 'registry.test/builder@sha256:1',
+    root: ctx.root,
+    limits: { maxBytes: 1024 ** 3, maxFiles: 100 },
+    signal: new AbortController().signal,
+    grow: () => Promise.resolve(),
+    runStreamed,
+    startTar,
+  });
+
+  expect(startTar).toHaveBeenCalledExactlyOnceWith([
+    'tar',
+    '--numeric-owner',
+    '--xattrs',
+    '--xattrs-include=security.capability',
+    '--xattrs-include=user.*',
+    '-xpf',
+    '-',
+    '-vv',
+    '--quoting-style=escape',
+    '-C',
+    ctx.root,
+  ]);
 });
 
 test('it holds disk ahead of the tree in 256 MiB steps', async () => {
