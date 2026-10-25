@@ -127,6 +127,9 @@ type uffdHandler struct {
 	// it again when an earlier step fails
 	closeOnce sync.Once
 
+	// a test runs a fill here, in the window after a range is unregistered
+	afterUnregister atomic.Pointer[func()]
+
 	ready    chan error
 	filled   chan fillResult
 	done     chan struct{}
@@ -368,10 +371,15 @@ func (h *uffdHandler) serveRound(fresh, deferred []uffdMsg) []uffdMsg {
 	msgs := append(deferred, fresh...)
 	for _, msg := range msgs {
 		if msg.event == uffdEventRemove {
-			h.unregister(msg.address, msg.end)
+			// a fill's copy on the range fails from the unregister on, and
+			// the fill skips the page only once the range is recorded
 			h.goneMu.Lock()
 			h.gone = append(h.gone, msg)
 			h.goneMu.Unlock()
+			h.unregister(msg.address, msg.end)
+			if hook := h.afterUnregister.Load(); hook != nil {
+				(*hook)()
+			}
 		}
 	}
 	var retry []uffdMsg

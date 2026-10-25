@@ -272,6 +272,30 @@ func TestUffdHandlerFillSkipsAPageTheGuestRemoved(t *testing.T) {
 	assert.Equal(t, len(report.Errors), 0, report.Errors)
 }
 
+func TestUffdHandlerFillSkipsAPageRightAfterItsRangeIsUnregistered(t *testing.T) {
+	// a socket path has a 108-byte limit, which a TMPDIR can pass
+	dir := t.TempDir()
+	t.Chdir(dir)
+	memFile := writeMemFile(t, dir)
+	var phase atomic.Int32
+	handler, err := startUffdHandler("uffd.sock", memFile, &phase, nil)
+	assert.NilError(t, err)
+	t.Cleanup(handler.close)
+	mem := setupGuestMemory(t, "uffd.sock", 2)
+	assert.NilError(t, <-handler.ready)
+	assert.NilError(t, (<-handler.filled).err)
+	fillPageZero := func() { handler.fill([]int64{0}) }
+	handler.afterUnregister.Store(&fillPageZero)
+
+	assert.NilError(t, unix.Madvise(mem[:testPage], unix.MADV_DONTNEED))
+	filled := <-handler.filled
+	handler.close()
+	report, _ := handler.report()
+
+	assert.NilError(t, filled.err)
+	assert.Equal(t, len(report.Errors), 0, report.Errors)
+}
+
 func TestUffdHandlerSignalsAFaultItCannotResolve(t *testing.T) {
 	// a socket path has a 108-byte limit, which a TMPDIR can pass
 	dir := t.TempDir()
