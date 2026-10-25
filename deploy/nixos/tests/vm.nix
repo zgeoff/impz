@@ -13,7 +13,8 @@
 #   needs a login (the control plane deleted it). With ipv6.enable, as the
 #   cloud host has it (networking.firewall with filterForward): imp-host's
 #   IPv6 network and default route, egress to `own` over IPv4 and IPv6, the
-#   forwardDeny ranges dropped, and no host port opened to the bridge.
+#   forwardDeny ranges dropped, no host port opened to the bridge, and no
+#   DNS server on imp-host's network or Podman's default one.
 # own: hostFirewall = "own", without networking.firewall; SSH connects
 #   through bootstrap.sh's table and another port does not.
 #
@@ -198,6 +199,13 @@ pkgs.testers.runNixOSTest {
       def ups():
           return host.succeed("cat ${stateDir}/fake-up.log 2>/dev/null || true").strip().splitlines()
 
+      def gateways(network):
+          return host.succeed(f"podman network inspect -f '{{{{range .Subnets}}}}{{{{.Gateway}}}} {{{{end}}}}' {network}").split()
+
+      def resolvers():
+          lines = host.succeed("podman exec imp-host cat /etc/resolv.conf").splitlines()
+          return [line.split()[1] for line in lines if line.startswith("nameserver ")]
+
       def connect(where, addr, port):
           return f"{where} timeout 5 bash -c 'exec 3<>/dev/tcp/{addr}/{port}'"
 
@@ -318,13 +326,20 @@ pkgs.testers.runNixOSTest {
           assert list(nets) == ["imp-host"], list(nets)
           host.succeed("podman exec imp-host ip -6 route show default | grep -q via")
 
+      with subtest("ipv6: imp-host's network answers no DNS, and imp-host uses the host's resolvers"):
+          assert host.succeed("podman network inspect -f '{{.DNSEnabled}}' imp-host").strip() == "false"
+          host.fail("pgrep -x aardvark-dns")
+          bridge = gateways("imp-host")
+          assert bridge, bridge
+          assert not set(bridge) & set(resolvers()), (bridge, resolvers())
+
       with subtest("none: no imp rules on the host; the platform's firewall stays"):
           ruleset = json.loads(host.succeed("nft -j list ruleset"))["nftables"]
           tables = [o["table"]["name"] for o in ruleset if "table" in o]
           assert "imp_host" not in tables, tables
           inputs = [o["chain"] for o in ruleset if "chain" in o and o["chain"].get("hook") == "input"]
-          # netavark's own input chain accepts its DNS and drops nothing, and a
-          # drop in nixos-fw's chain still holds beside it
+          # netavark's own input chain has policy accept and drops nothing, and
+          # a drop in nixos-fw's chain still holds beside it
           assert all(c["table"] == "nixos-fw" or (c["table"] == "netavark" and c.get("policy") == "accept") for c in inputs), inputs
           host.succeed("nft list ruleset | grep -q 41641")
           published = host.succeed("podman port imp-host").strip().splitlines()
@@ -387,6 +402,12 @@ pkgs.testers.runNixOSTest {
           assert "imp-host" not in networks, networks
           nets = json.loads(host.succeed("podman container inspect -f '{{json .NetworkSettings.Networks}}' imp-host"))
           assert list(nets) == ["podman"], list(nets)
+          # nixpkgs' Podman module leaves the default network's DNS off
+          assert host.succeed("podman network inspect -f '{{.DNSEnabled}}' podman").strip() == "false"
+          host.fail("pgrep -x aardvark-dns")
+          bridge = gateways("podman")
+          assert bridge, bridge
+          assert not set(bridge) & set(resolvers()), (bridge, resolvers())
           host.succeed("/run/booted-system/specialisation/budget/bin/switch-to-configuration test")
           start_imp_host()
           host.succeed("grep -qx IMP_HOST_IPV6=on /run/imp-host/env")
