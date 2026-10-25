@@ -397,7 +397,6 @@ function pickPin(
     });
   }
 
-  // A pin under a refused registry would let the build reach that registry.
   const repoDigests = inspect.RepoDigests ?? [];
   const allowed = repoDigests.filter((digest) => checkReferenceRegistry(digest) === null);
   const pin = pickRepoDigest(ref, allowed);
