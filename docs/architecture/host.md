@@ -47,6 +47,9 @@ AppArmor is unconfined, because the engine's default profile denies `mount`. The
 Docker's default, which Podman reads unchanged, with one rule added, `pivot_root`, which the jailer
 needs.
 
+The arguments lift the cap on the container's processes that Podman sets by default, because every
+imp's Firecracker and jailer processes and threads count against the container's cgroup.
+
 **CAUTION:** the container is not a security boundary. With the mount capability in the host's user
 namespace, root in the container can mount a new procfs and write `core_pattern`, and the host's
 kernel runs that program as root. Treat code that gets root in the container as root on the host.
