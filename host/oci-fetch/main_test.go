@@ -646,6 +646,18 @@ func TestExportDropsASymlinkThatLeavesTheTree(t *testing.T) {
 	}
 }
 
+func TestExportOfAnEntryThatLeavesTheTreeFails(t *testing.T) {
+	host := startRegistry(t)
+	ref := pushImage(t, host, buildImage(t, nil,
+		buildLayer(t, []entry{{name: "../outside", typeflag: tar.TypeReg, body: "outside\n"}}),
+	))
+	var out bytes.Buffer
+
+	err := run([]string{"export", ref}, &out)
+
+	assert.ErrorContains(t, err, `unsafe tar path "../outside"`)
+}
+
 func TestExportKeepsAnOpaqueDirectorysOwnChildrenAndHidesTheLowerOnes(t *testing.T) {
 	host := startRegistry(t)
 	ref := pushImage(t, host, buildImage(t, nil,
