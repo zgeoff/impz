@@ -423,9 +423,6 @@ test('it moves a Docker host with IPv6 and the proxy to Podman: stop on the old 
     { mode: 0o600 },
   );
 
-  mkdirSync(join(ctx.directoryPath, 'imp-data', 'imps'), { recursive: true });
-  writeFileSync(join(ctx.directoryPath, 'imp-data', 'imps', 'web.img'), 'disk of web');
-
   const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
     env: {
       PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
@@ -549,8 +546,9 @@ test('it keeps the units of a Docker host as .baks, and names them in the rollba
   );
 });
 
-test("it leaves the env file and imp's data as they are on a move from Docker to Podman", () => {
+test("it starts the image's own unit on the Docker host's /var/lib/imp and network, and leaves the env file as it is, on a move to Podman", () => {
   const ctx = setupTest();
+  const imageUnit = readFileSync(new URL('imp-host.service', import.meta.url), 'utf8');
 
   const podman = createStubBin(
     ctx.directoryPath,
@@ -558,7 +556,7 @@ test("it leaves the env file and imp's data as they are on a move from Docker to
     buildStubHostPodman({
       image: 'ghcr.io/zgeoff/imp-host:next',
       pulledLabel: 'no-docker',
-      pulledUnit: 'ExecStart=/usr/bin/podman run --name imp-host imp-host\n',
+      pulledUnit: imageUnit,
       runsHost: false,
     }),
   );
@@ -566,19 +564,27 @@ test("it leaves the env file and imp's data as they are on a move from Docker to
   createStubBin(ctx.directoryPath, 'docker', buildStubHostDocker({ hostNetwork: ['imp-host'] }));
   createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
 
+  createStubBin(
+    ctx.directoryPath,
+    'systemctl',
+    buildStubUnitSystemctl(
+      join(ctx.directoryPath, 'imp-host.service'),
+      join(ctx.directoryPath, 'imp-host.env'),
+    ),
+  );
+
   writeFileSync(
     join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --name imp-host imp-host\n',
+    'ExecStart=/usr/bin/docker run --rm --name imp-host \\\n' +
+      `  $IMP_HOST_NETWORK -v /var/lib/imp:/var/lib/imp \${IMP_HOST_IMAGE}\n`,
   );
 
   writeFileSync(
     join(ctx.directoryPath, 'imp-host.env'),
-    'IMP_HOST_NETWORK=--network imp-host\nIMP_HOST_SUBNET6=fd00:7a::/64\n',
+    'IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:next\nIMP_HOST_NETWORK=--network imp-host\n' +
+      'IMP_HOST_SUBNET6=fd00:7a::/64\n',
     { mode: 0o600 },
   );
-
-  mkdirSync(join(ctx.directoryPath, 'imp-data', 'imps'), { recursive: true });
-  writeFileSync(join(ctx.directoryPath, 'imp-data', 'imps', 'web.img'), 'disk of web');
 
   const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
     env: {
@@ -591,23 +597,26 @@ test("it leaves the env file and imp's data as they are on a move from Docker to
     },
   });
 
+  const starts = readFileSync(podman.calls, 'utf8')
+    .split('\n')
+    .filter((call) => call.startsWith('podman run --rm --name imp-host '));
+
   expect(result.exitCode).toBe(0);
 
+  expect(starts).toStrictEqual([
+    expect.toInclude(' --network imp-host -v /var/lib/imp:/var/lib/imp '),
+  ]);
+
+  expect(starts).toStrictEqual([expect.toEndWith(' ghcr.io/zgeoff/imp-host:next')]);
+
   expect(readFileSync(join(ctx.directoryPath, 'imp-host.env'), 'utf8')).toBe(
-    'IMP_HOST_NETWORK=--network imp-host\nIMP_HOST_SUBNET6=fd00:7a::/64\n',
+    'IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:next\nIMP_HOST_NETWORK=--network imp-host\n' +
+      'IMP_HOST_SUBNET6=fd00:7a::/64\n',
   );
 
   expect(
     readdirSync(ctx.directoryPath).filter((file) => file.startsWith('imp-host.env.')),
   ).toBeEmpty();
-
-  expect(
-    readdirSync(join(ctx.directoryPath, 'imp-data'), { recursive: true }),
-  ).toIncludeSameMembers(['imps', join('imps', 'web.img')]);
-
-  expect(readFileSync(join(ctx.directoryPath, 'imp-data', 'imps', 'web.img'), 'utf8')).toBe(
-    'disk of web',
-  );
 });
 
 test('it keeps the networks of a Docker host without IPv6, and rolls back without a proxy it never had', () => {
