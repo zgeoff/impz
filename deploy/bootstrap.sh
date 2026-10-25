@@ -1793,9 +1793,7 @@ ensure_imp() {
   fi
   put_file "$ENV_FILE" 600 "$env" && changed=1
   put_file /etc/systemd/system/imp-host.service 644 "$(unit_imp_host | strip_markers)" && changed=1
-  if [ -e "$PROXY_UNIT" ]; then
-    change "remove imp-docker-proxy, which impd no longer calls" remove_proxy_unit
-  fi
+  retire_proxy_unit "$PROXY_UNIT"
   if [ "$storage" = zfs ]; then
     put_file /etc/systemd/system/imp-host.service.d/zfs.conf 644 "$(unit_imp_host_zfs)" && changed=1
   fi
@@ -1818,9 +1816,16 @@ ensure_imp() {
   fi
 }
 
+# retire_proxy_unit UNIT_FILE: remove the Docker socket proxy's unit, when an
+# older release left it installed.
+retire_proxy_unit() {
+  [ -e "$1" ] || return 0
+  change "remove imp-docker-proxy, which impd no longer calls" remove_proxy_unit "$1"
+}
+
 remove_proxy_unit() {
   systemctl disable -q --now imp-docker-proxy 2>/dev/null || true
-  rm -f "$PROXY_UNIT"
+  rm -f "$1"
   systemctl daemon-reload
 }
 

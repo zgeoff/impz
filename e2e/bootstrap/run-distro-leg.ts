@@ -5,6 +5,7 @@ import { checkHostFirewallNone } from './check-host-firewall-none';
 import { checkImpEgress6 } from './check-imp-egress6';
 import { checkIPv6Cases } from './check-ipv6-cases';
 import { checkIPv6On } from './check-ipv6-on';
+import { checkProxyRetired } from './check-proxy-retired';
 import { checkStaleImage } from './check-stale-image';
 import type { Distro } from './distros';
 import { expectBootstrapExit } from './expect-bootstrap-exit';
@@ -91,6 +92,7 @@ export async function runDistroLeg(run: BootstrapRun, distro: Distro): Promise<v
     await checkStaleImage(run, target);
   }
 
+  await checkProxyRetired(run, target);
   await checkHostFirewallNone(run, target);
 
   if (distro === 'debian') {

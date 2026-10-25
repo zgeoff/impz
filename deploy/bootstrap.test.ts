@@ -1,5 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createCommandLinks } from '@impz/test-utils/create-command-links';
@@ -907,6 +907,50 @@ test.each([
   });
 
   expect(result.exitCode).toBe(exitCode);
+});
+
+test('#retire_proxy_unit stops and disables an installed legacy imp-docker-proxy, then removes its unit file', () => {
+  const ctx = setupTest();
+  const systemctl = createStubBin(ctx.directoryPath, 'systemctl');
+  const unit = join(ctx.directoryPath, 'imp-docker-proxy.service');
+
+  writeFileSync(unit, '[Service]\nExecStart=/usr/local/bin/imp-docker-proxy\n');
+
+  const result = runSourcedFunction({
+    script: new URL('bootstrap.sh', import.meta.url).pathname,
+    fn: 'eval',
+    args: [`mode=yes; retire_proxy_unit '${unit}'`],
+    env: { PATH: `${systemctl.bin}:${process.env['PATH'] ?? ''}` },
+  });
+
+  expect(result).toStrictEqual({
+    exitCode: 0,
+    stdout: 'bootstrap: change: remove imp-docker-proxy, which impd no longer calls\n',
+    stderr: '',
+  });
+
+  expect(readFileSync(systemctl.calls, 'utf8')).toBe(
+    'systemctl disable -q --now imp-docker-proxy\nsystemctl daemon-reload\n',
+  );
+
+  expect(existsSync(unit)).toBeFalse();
+});
+
+test('#retire_proxy_unit changes nothing on a host without the legacy imp-docker-proxy unit', () => {
+  const ctx = setupTest();
+  const systemctl = createStubBin(ctx.directoryPath, 'systemctl');
+
+  const result = runSourcedFunction({
+    script: new URL('bootstrap.sh', import.meta.url).pathname,
+    fn: 'eval',
+    args: [
+      `mode=yes; retire_proxy_unit '${join(ctx.directoryPath, 'imp-docker-proxy.service')}'; echo "$changes"`,
+    ],
+    env: { PATH: `${systemctl.bin}:${process.env['PATH'] ?? ''}` },
+  });
+
+  expect(result).toStrictEqual({ exitCode: 0, stdout: '0\n', stderr: '' });
+  expect(readFileSync(systemctl.calls, 'utf8')).toBe('');
 });
 
 test.each([['unit_imp_host'], ['env_template']])(
