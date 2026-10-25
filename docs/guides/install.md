@@ -289,12 +289,14 @@ Imps get IPv6 only when the `imp-host` container has an IPv6 default route
 IPv6 on, `imp-host` runs on its own Podman network instead:
 
 ```sh
-podman network create --ipv6 --subnet <IMP_HOST_SUBNET6> --interface-name br-imphost imp-host
+podman network create --ipv6 --subnet <IMP_HOST_SUBNET6> --disable-dns --interface-name br-imphost imp-host
 ```
 
 netavark's NAT66 gives the container an IPv6 default route, and impd's `IMP_SUBNET6=auto` puts the
 imps behind its own NAT66 on top. The bridge has a fixed name, `br-imphost`, so a host firewall can
-admit it; on NixOS the module does ([IPv6 on NixOS](./nixos.md#ipv6)).
+admit it; on NixOS the module does ([IPv6 on NixOS](./nixos.md#ipv6)). The network has no DNS server
+of its own, and Podman gives the container the host's resolvers: a server on the bridge would listen
+in the host's namespace, where the host firewall drops its queries.
 
 - **`--ipv6 auto|on|off`:** `auto`, the first run's default, is on when the host's IPv6 default
   route leaves through an interface with a global address. The env file records `IMP_HOST_IPV6=on`

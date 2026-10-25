@@ -134,7 +134,7 @@ export function renderProbe(probed: readonly Probed[], addresses: string): strin
 }
 
 export function renderNetworkStart(network: HostNetwork): string {
-  const create = `/usr/bin/podman network create --ipv6 --subnet "$$IMP_HOST_SUBNET6" --interface-name ${network.bridge} ${network.name} >/dev/null`;
+  const create = `/usr/bin/podman network create --ipv6 --subnet "$$IMP_HOST_SUBNET6" --disable-dns --interface-name ${network.bridge} ${network.name} >/dev/null`;
 
   return `ExecStartPre=/bin/sh -c 'case "$$IMP_HOST_NETWORK" in *${network.name}*) /usr/bin/podman network exists ${network.name} || ${create} ;; esac'`;
 }

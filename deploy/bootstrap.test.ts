@@ -789,7 +789,19 @@ test('#network_subnet6 reads the subnet of a network that is right', () => {
     runSourcedFunction({
       script,
       fn: 'network_subnet6',
-      args: ['true br-imphost 172.18.0.0/16 fd12:0:0:1::/64'],
+      args: ['true br-imphost false 172.18.0.0/16 fd12:0:0:1::/64'],
+    }).stdout,
+  ).toBe('fd12:0:0:1::/64\n');
+});
+
+test('#network_subnet6 reads the subnet of a network that answers DNS, so its recreation keeps the /64', () => {
+  const script = new URL('bootstrap.sh', import.meta.url).pathname;
+
+  expect(
+    runSourcedFunction({
+      script,
+      fn: 'network_subnet6',
+      args: ['true br-imphost true 10.89.0.0/24 fd12:0:0:1::/64'],
     }).stdout,
   ).toBe('fd12:0:0:1::/64\n');
 });
@@ -798,7 +810,11 @@ test('#network_subnet6 reads no subnet from a network whose bridge is unnamed', 
   const script = new URL('bootstrap.sh', import.meta.url).pathname;
 
   expect(
-    runSourcedFunction({ script, fn: 'network_subnet6', args: ['true unnamed fd12::/64'] }),
+    runSourcedFunction({
+      script,
+      fn: 'network_subnet6',
+      args: ['true unnamed false fd12::/64'],
+    }),
   ).toStrictEqual({ exitCode: 0, stdout: '', stderr: '' });
 });
 
@@ -2186,7 +2202,7 @@ test('#settle_host_network refuses to recreate a network that differs while othe
     ctx.directoryPath,
     'podman',
     buildStubBootstrapPodman({
-      hostNetwork: 'true unnamed 172.18.0.0/16 fd12::/64',
+      hostNetwork: 'true unnamed false 172.18.0.0/16 fd12::/64',
       networkContainers: ['imp-host', 'web'],
     }),
   );
@@ -2195,7 +2211,9 @@ test('#settle_host_network refuses to recreate a network that differs while othe
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
-      args: ["ipv6_subnet=fd12::/64; settle_host_network 1 'true unnamed 172.18.0.0/16 fd12::/64'"],
+      args: [
+        "ipv6_subnet=fd12::/64; settle_host_network 1 'true unnamed false 172.18.0.0/16 fd12::/64'",
+      ],
       env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
@@ -2206,14 +2224,14 @@ test('#settle_host_network refuses to recreate a network that differs while othe
   });
 });
 
-test('#settle_host_network keeps a network that is right', () => {
+test('#settle_host_network reads a network that answers DNS on its gateway as one that differs', () => {
   const ctx = setupTest();
 
   const podman = createStubBin(
     ctx.directoryPath,
     'podman',
     buildStubBootstrapPodman({
-      hostNetwork: 'true br-imphost 172.18.0.0/16 fd12::/64',
+      hostNetwork: 'true br-imphost true 10.89.0.0/24 fd12::/64',
       networkContainers: ['imp-host', 'web'],
     }),
   );
@@ -2223,7 +2241,36 @@ test('#settle_host_network keeps a network that is right', () => {
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
       args: [
-        "ipv6_subnet=fd12::/64; settle_host_network 1 'true br-imphost 172.18.0.0/16 fd12::/64'",
+        "ipv6_subnet=fd12::/64; settle_host_network 1 'true br-imphost true 10.89.0.0/24 fd12::/64'",
+      ],
+      env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
+    }),
+  ).toStrictEqual({
+    exitCode: 1,
+    stdout: '',
+    stderr:
+      'bootstrap: the imp-host network differs (it answers DNS on its gateway), and web use it; move them off it, then run again\n',
+  });
+});
+
+test('#settle_host_network keeps a network that is right', () => {
+  const ctx = setupTest();
+
+  const podman = createStubBin(
+    ctx.directoryPath,
+    'podman',
+    buildStubBootstrapPodman({
+      hostNetwork: 'true br-imphost false 172.18.0.0/16 fd12::/64',
+      networkContainers: ['imp-host', 'web'],
+    }),
+  );
+
+  expect(
+    runSourcedFunction({
+      script: new URL('bootstrap.sh', import.meta.url).pathname,
+      fn: 'eval',
+      args: [
+        "ipv6_subnet=fd12::/64; settle_host_network 1 'true br-imphost false 172.18.0.0/16 fd12::/64'",
       ],
       env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
     }),

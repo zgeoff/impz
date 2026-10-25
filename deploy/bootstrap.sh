@@ -147,14 +147,16 @@ readonly CONTAINER_CLI=${CONTAINER_CLI:-podman}
 # host_addresses, from deploy/imp-host.args.json.
 readonly HOST_NETWORK=imp-host
 readonly HOST_BRIDGE=br-imphost
-# $CONTAINER_CLI network inspect -f: IPv6 on, the bridge's name, then every
-# subnet, in the same words for both CLIs.
+# $CONTAINER_CLI network inspect -f: IPv6 on, the bridge's name, whether a
+# DNS server answers on the bridge's gateway, then every subnet, in the same
+# words for both CLIs. That server listens in the host's namespace, where the
+# host firewall drops it; Docker's answers inside the container instead.
 if [ "$CONTAINER_CLI" = docker ]; then
   # shellcheck disable=SC2034 # for its callers
-  readonly NETWORK_FORMAT='{{.EnableIPv6}} {{or (index .Options "com.docker.network.bridge.name") "unnamed"}}{{range .IPAM.Config}} {{.Subnet}}{{end}}'
+  readonly NETWORK_FORMAT='{{.EnableIPv6}} {{or (index .Options "com.docker.network.bridge.name") "unnamed"}} false{{range .IPAM.Config}} {{.Subnet}}{{end}}'
 else
   # shellcheck disable=SC2034 # for its callers
-  readonly NETWORK_FORMAT='{{.IPv6Enabled}} {{or .NetworkInterface "unnamed"}}{{range .Subnets}} {{.Subnet}}{{end}}'
+  readonly NETWORK_FORMAT='{{.IPv6Enabled}} {{or .NetworkInterface "unnamed"}} {{.DNSEnabled}}{{range .Subnets}} {{.Subnet}}{{end}}'
 fi
 
 # The awk function trim(line): line without a trailing \r or the blanks
@@ -312,16 +314,20 @@ subnet6() {
 
 # network_drift WANT INSPECT: how a network that $CONTAINER_CLI network
 # inspect (NETWORK_FORMAT) describes as INSPECT differs from IPv6 on the /64 WANT
-# with the bridge HOST_BRIDGE; nothing when it matches.
+# with the bridge HOST_BRIDGE and no DNS server; nothing when it matches.
 network_drift() {
-  local want=$1 enabled bridge subnet found="" have=()
-  read -r enabled bridge subnet <<<"$2"
+  local want=$1 enabled bridge dns subnet found="" have=()
+  read -r enabled bridge dns subnet <<<"$2"
   if [ "$enabled" != true ]; then
     echo "it has no IPv6"
     return
   fi
   if [ "$bridge" != "$HOST_BRIDGE" ]; then
     echo "its bridge is $bridge, not $HOST_BRIDGE"
+    return
+  fi
+  if [ "$dns" != false ]; then
+    echo "it answers DNS on its gateway"
     return
   fi
   for subnet in $subnet; do
@@ -355,7 +361,7 @@ create_host_network() {
     docker network create --ipv6 --subnet "$1" \
       -o "com.docker.network.bridge.name=$HOST_BRIDGE" "$HOST_NETWORK" >/dev/null
   else
-    podman network create --ipv6 --subnet "$1" \
+    podman network create --ipv6 --subnet "$1" --disable-dns \
       --interface-name "$HOST_BRIDGE" "$HOST_NETWORK" >/dev/null
   fi
 }
@@ -1303,7 +1309,7 @@ random_ula64() {
 # bridge HOST_BRIDGE, or nothing.
 network_subnet6() {
   local enabled bridge subnets subnet
-  read -r enabled bridge subnets <<<"$1"
+  read -r enabled bridge _ subnets <<<"$1"
   [ "$enabled" = true ] && [ "$bridge" = "$HOST_BRIDGE" ] || return 0
   for subnet in $subnets; do
     if [[ $subnet == *:* ]]; then
@@ -1557,7 +1563,7 @@ ExecStartPre=-/usr/bin/podman rm -f imp-host
 # created when it is missing; bootstrap.sh --check reports one that differs.
 # Its name and bridge come from deploy/imp-host.args.json (bun run
 # render:deploy), as do bootstrap.sh's.
-ExecStartPre=/bin/sh -c 'case "$$IMP_HOST_NETWORK" in *imp-host*) /usr/bin/podman network exists imp-host || /usr/bin/podman network create --ipv6 --subnet "$$IMP_HOST_SUBNET6" --interface-name br-imphost imp-host >/dev/null ;; esac'
+ExecStartPre=/bin/sh -c 'case "$$IMP_HOST_NETWORK" in *imp-host*) /usr/bin/podman network exists imp-host || /usr/bin/podman network create --ipv6 --subnet "$$IMP_HOST_SUBNET6" --disable-dns --interface-name br-imphost imp-host >/dev/null ;; esac'
 # The probed args (such as --device /dev/zfs) whose path this host has, into
 # IMP_HOST_PROBED; systemd reads the file again for ExecStart.
 RuntimeDirectory=imp-host

@@ -44,6 +44,7 @@ async function checkNetworkRecreated(
     '--ipv6',
     '--subnet',
     'fd00:dead:beef::/64',
+    '--disable-dns',
     '--interface-name',
     'br-imphost',
     'imp-host',

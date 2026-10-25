@@ -228,7 +228,7 @@ random_ula64() {
 # bridge HOST_BRIDGE, or nothing.
 network_subnet6() {
   local enabled bridge subnets subnet
-  read -r enabled bridge subnets <<<"$1"
+  read -r enabled bridge _ subnets <<<"$1"
   [ "$enabled" = true ] && [ "$bridge" = "$HOST_BRIDGE" ] || return 0
   for subnet in $subnets; do
     if [[ $subnet == *:* ]]; then

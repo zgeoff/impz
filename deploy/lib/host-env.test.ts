@@ -212,14 +212,14 @@ test.each([['fd12::/56'], ['fd12::1/64'], ['fd12:::/64'], ['nope/64'], ['10.0.0.
 test.each([
   [
     'podman',
-    '{{.IPv6Enabled}} {{or .NetworkInterface "unnamed"}}{{range .Subnets}} {{.Subnet}}{{end}}',
+    '{{.IPv6Enabled}} {{or .NetworkInterface "unnamed"}} {{.DNSEnabled}}{{range .Subnets}} {{.Subnet}}{{end}}',
   ],
   [
     'docker',
-    '{{.EnableIPv6}} {{or (index .Options "com.docker.network.bridge.name") "unnamed"}}{{range .IPAM.Config}} {{.Subnet}}{{end}}',
+    '{{.EnableIPv6}} {{or (index .Options "com.docker.network.bridge.name") "unnamed"}} false{{range .IPAM.Config}} {{.Subnet}}{{end}}',
   ],
 ])(
-  '#NETWORK_FORMAT reads IPv6, the bridge and the subnets from %s network inspect',
+  '#NETWORK_FORMAT reads IPv6, the bridge, the DNS server and the subnets from %s network inspect',
   (cli, format) => {
     const script = new URL('host-env.sh', import.meta.url).pathname;
 
@@ -243,14 +243,21 @@ test('#NETWORK_FORMAT reads podman network inspect when no CLI is set', () => {
 });
 
 test.each([
-  ['true br-imphost 172.18.0.0/16 fd12:3456:789a::/64', ''],
-  ['true br-imphost 10.89.0.0/24 fd12:3456:789a::/64', ''],
-  ['true br-imphost fd12:3456:789a:0:0::/64 10.89.0.0/24', ''],
-  ['false br-imphost 172.18.0.0/16', 'it has no IPv6\n'],
-  ['true podman1 10.89.0.0/24 fd12:3456:789a::/64', 'its bridge is podman1, not br-imphost\n'],
-  ['true unnamed 172.18.0.0/16 fd12:3456:789a::/64', 'its bridge is unnamed, not br-imphost\n'],
+  ['true br-imphost false 172.18.0.0/16 fd12:3456:789a::/64', ''],
+  ['true br-imphost false 10.89.0.0/24 fd12:3456:789a::/64', ''],
+  ['true br-imphost false fd12:3456:789a:0:0::/64 10.89.0.0/24', ''],
+  ['false br-imphost false 172.18.0.0/16', 'it has no IPv6\n'],
   [
-    'true br-imphost 172.18.0.0/16 fd00::/64',
+    'true podman1 false 10.89.0.0/24 fd12:3456:789a::/64',
+    'its bridge is podman1, not br-imphost\n',
+  ],
+  [
+    'true unnamed false 172.18.0.0/16 fd12:3456:789a::/64',
+    'its bridge is unnamed, not br-imphost\n',
+  ],
+  ['true br-imphost true 10.89.0.0/24 fd12:3456:789a::/64', 'it answers DNS on its gateway\n'],
+  [
+    'true br-imphost false 172.18.0.0/16 fd00::/64',
     'its IPv6 subnet is fd00::/64, not fd12:3456:789a::/64\n',
   ],
 ])('#network_drift reads the network %p as differing by %p', (inspect, drift) => {
@@ -330,7 +337,7 @@ test("#host_addresses lists the host's global addresses with their prefixes, com
   expect(readFileSync(ip.calls, 'utf8')).toBe('ip -o addr show scope global\n');
 });
 
-test('#create_host_network creates the network with podman and the arguments the unit uses', () => {
+test('#create_host_network creates the network with podman, without DNS, and the arguments the unit uses', () => {
   const ctx = setupTest();
   const podman = createStubBin(ctx.directoryPath, 'podman');
 
@@ -344,11 +351,11 @@ test('#create_host_network creates the network with podman and the arguments the
   const unit = readFileSync(new URL('../imp-host.service', import.meta.url), 'utf8');
 
   expect(readFileSync(podman.calls, 'utf8')).toBe(
-    'podman network create --ipv6 --subnet fd12::/64 --interface-name br-imphost imp-host\n',
+    'podman network create --ipv6 --subnet fd12::/64 --disable-dns --interface-name br-imphost imp-host\n',
   );
 
   expect(unit.replaceAll('"$$IMP_HOST_SUBNET6"', 'fd12::/64')).toInclude(
-    '/usr/bin/podman network create --ipv6 --subnet fd12::/64 --interface-name br-imphost imp-host >/dev/null ;;',
+    '/usr/bin/podman network create --ipv6 --subnet fd12::/64 --disable-dns --interface-name br-imphost imp-host >/dev/null ;;',
   );
 });
 

@@ -80,7 +80,7 @@ test('#render renders every deploy file from one args file', () => {
     unit_imp_host() {
       cat <<'EOF'
     [Service]
-    ExecStartPre=/bin/sh -c 'case "$$IMP_HOST_NETWORK" in *imp-net*) /usr/bin/podman network exists imp-net || /usr/bin/podman network create --ipv6 --subnet "$$IMP_HOST_SUBNET6" --interface-name br-impnet imp-net >/dev/null ;; esac'
+    ExecStartPre=/bin/sh -c 'case "$$IMP_HOST_NETWORK" in *imp-net*) /usr/bin/podman network exists imp-net || /usr/bin/podman network create --ipv6 --subnet "$$IMP_HOST_SUBNET6" --disable-dns --interface-name br-impnet imp-net >/dev/null ;; esac'
     ExecStartPre=/bin/sh -c 'a=; [ -e /dev/zfs ] && a="$$a --device /dev/zfs"; [ -e /proc/sys/net/ipv6 ] && a="$$a --sysctl net.ipv6.conf.all.forwarding=1"; { echo "IMP_HOST_PROBED=$$a"; echo "IMP_HOST_ADDRESSES=$$(ip -o addr show scope global | cut -d " " -f 4)"; } >/run/imp-host/probed.env'
     ExecStart=/usr/bin/podman run --rm --name imp-host \\
       --init --cap-add KILL \\
@@ -114,7 +114,7 @@ test('#render renders every deploy file from one args file', () => {
     ,
       "unit": 
     "[Service]
-    ExecStartPre=/bin/sh -c 'case "$$IMP_HOST_NETWORK" in *imp-net*) /usr/bin/podman network exists imp-net || /usr/bin/podman network create --ipv6 --subnet "$$IMP_HOST_SUBNET6" --interface-name br-impnet imp-net >/dev/null ;; esac'
+    ExecStartPre=/bin/sh -c 'case "$$IMP_HOST_NETWORK" in *imp-net*) /usr/bin/podman network exists imp-net || /usr/bin/podman network create --ipv6 --subnet "$$IMP_HOST_SUBNET6" --disable-dns --interface-name br-impnet imp-net >/dev/null ;; esac'
     ExecStartPre=/bin/sh -c 'a=; [ -e /dev/zfs ] && a="$$a --device /dev/zfs"; [ -e /proc/sys/net/ipv6 ] && a="$$a --sysctl net.ipv6.conf.all.forwarding=1"; { echo "IMP_HOST_PROBED=$$a"; echo "IMP_HOST_ADDRESSES=$$(ip -o addr show scope global | cut -d " " -f 4)"; } >/run/imp-host/probed.env'
     ExecStart=/usr/bin/podman run --rm --name imp-host \\
       --init --cap-add KILL \\
@@ -288,11 +288,11 @@ test('#renderProbe escapes its dollars for systemd', () => {
   );
 });
 
-test('#renderNetworkStart makes the network on its bridge when IMP_HOST_NETWORK names it', () => {
+test('#renderNetworkStart makes the network on its bridge, without DNS, when IMP_HOST_NETWORK names it', () => {
   expect(renderNetworkStart({ name: 'imp-host', bridge: 'br-imphost' })).toBe(
     'ExecStartPre=/bin/sh -c \'case "$$IMP_HOST_NETWORK" in *imp-host*) ' +
       '/usr/bin/podman network exists imp-host || ' +
-      '/usr/bin/podman network create --ipv6 --subnet "$$IMP_HOST_SUBNET6" ' +
+      '/usr/bin/podman network create --ipv6 --subnet "$$IMP_HOST_SUBNET6" --disable-dns ' +
       "--interface-name br-imphost imp-host >/dev/null ;; esac'",
   );
 });

@@ -27,12 +27,14 @@ export async function checkIPv6On(run: BootstrapRun, target: BootstrapTarget): P
     'network',
     'inspect',
     '-f',
-    '{{.IPv6Enabled}} {{.NetworkInterface}}',
+    '{{.IPv6Enabled}} {{.NetworkInterface}} {{.DNSEnabled}}',
     'imp-host',
   ]);
 
-  if (bridge.output !== 'true br-imphost') {
-    throw new BootstrapTestError(`[${distro}] the imp-host network is not IPv6 on br-imphost`);
+  if (bridge.output !== 'true br-imphost false') {
+    throw new BootstrapTestError(
+      `[${distro}] the imp-host network is not IPv6 on br-imphost without DNS`,
+    );
   }
 
   const subnets = await readInContainer(run, [
