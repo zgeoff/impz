@@ -11,8 +11,6 @@ interface StubHostDocker {
   readonly impInfo?: string | null;
   readonly runningCLI?: 'imp' | 'impz';
   readonly unreadableFile?: string;
-
-  // A compose host's imp-docker-proxy container, still running after its service left the file.
   readonly proxyContainer?: boolean;
 
   // Left unset, `docker compose config --environment` fails as it does in a Compose older than
