@@ -363,6 +363,9 @@ func (h *uffdHandler) serveFault(addr uint64, read time.Time) bool {
 		h.recordError(fmt.Errorf("fault at %#x outside every region", addr))
 		return true
 	}
+	// the copy wakes the guest, which can move the runner to its next phase,
+	// so the fault's phase is read first
+	phase := h.phase.Load()
 	err := h.copyPage(page, dst)
 	if errors.Is(err, unix.EAGAIN) {
 		return false
@@ -372,7 +375,7 @@ func (h *uffdHandler) serveFault(addr uint64, read time.Time) bool {
 		return true
 	}
 	h.mu.Lock()
-	h.faults = append(h.faults, fault{page: page, phase: h.phase.Load(), service: time.Since(read)})
+	h.faults = append(h.faults, fault{page: page, phase: phase, service: time.Since(read)})
 	h.mu.Unlock()
 	return true
 }

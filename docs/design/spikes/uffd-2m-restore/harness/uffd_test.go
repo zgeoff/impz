@@ -224,6 +224,38 @@ func TestUffdHandlerSignalsASetupFailureAfterTheHandshake(t *testing.T) {
 	assert.ErrorIs(t, failure, os.ErrNotExist)
 }
 
+func TestUffdHandlerCountsAFaultUnderThePhaseItCameIn(t *testing.T) {
+	// a socket path has a 108-byte limit, which a TMPDIR can pass
+	dir := t.TempDir()
+	t.Chdir(dir)
+	memFile := writeMemFile(t, dir)
+	var phase atomic.Int32
+	handler, err := startUffdHandler("uffd.sock", memFile, &phase, nil)
+	assert.NilError(t, err)
+	mem := setupGuestMemory(t, "uffd.sock", 3)
+	assert.NilError(t, <-handler.ready)
+	assert.NilError(t, (<-handler.filled).err)
+	phase.Store(phaseClaimed)
+	// holding the lock keeps the handler from recording the fault until the
+	// woken guest has moved the phase on, as the runner does after a boot
+	handler.mu.Lock()
+	// the guest sends what it read, so the read stays in the program
+	moved := make(chan byte, 1)
+	go func() {
+		value := mem[0]
+		phase.Store(phaseAgent)
+		moved <- value
+	}()
+
+	read := <-moved
+	handler.mu.Unlock()
+	handler.close()
+	report, _ := handler.report()
+
+	assert.Equal(t, read, byte('a'))
+	assert.DeepEqual(t, report.ByPhase, map[string]int{"load": 0, "resumed": 0, "claimed": 1, "agent": 0})
+}
+
 func TestParseUffdMsgsReadsAFaultAndARemove(t *testing.T) {
 	raw := make([]byte, 2*uffdMsgSize)
 	raw[0] = uffdEventPagefault
