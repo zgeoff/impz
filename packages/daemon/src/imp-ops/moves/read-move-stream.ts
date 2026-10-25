@@ -180,10 +180,15 @@ export async function readMoveStream(
         httpPort: header.imp.httpPort,
         diskMib: Math.ceil(header.imp.diskBytes / (1024 * 1024)),
         policy: resolveImportedPolicy({
-          area: 'move',
-          impName: header.imp.name,
           mode: header.imp.egress.mode,
           allow: header.imp.egress.allow,
+          onUnknown: (mode) => {
+            getImpdLogger('move')
+              .with({ imp: header.imp.name })
+              .warning('unknown egress policy {egressPolicy}; imported as none', {
+                egressPolicy: JSON.stringify(mode),
+              });
+          },
         }),
         cpuLimit: header.imp.cpu.limit,
         cpuWeight: header.imp.cpu.weight,

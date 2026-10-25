@@ -375,10 +375,15 @@ async function createRestoredImp(
       maxMemoryMib: imp.maxMemoryMib ?? undefined,
       httpPort: imp.httpPort,
       policy: resolveImportedPolicy({
-        area: 'backup',
-        impName: target.name,
         mode: imp.egressPolicy,
         allow: imp.egressAllow,
+        onUnknown: (mode) => {
+          getImpdLogger('backup')
+            .with({ imp: target.name })
+            .warning('unknown egress policy {egressPolicy}; imported as none', {
+              egressPolicy: JSON.stringify(mode),
+            });
+        },
       }),
       isIdentityResetPending: imp.identityResetPending,
       start: false,
