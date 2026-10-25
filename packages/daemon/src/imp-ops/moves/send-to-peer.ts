@@ -1,9 +1,9 @@
+import { MOVE_RECEIVE_PATH } from '@impz/api';
 import type { StartTimer } from '../../platform/process/clock';
 import { sendLongRequest } from '../../platform/process/send-long-request';
-import { MOVE_PATHS } from './move-header';
 import { buildTicketHeader } from './move-tickets';
 
-interface PeerDeps {
+export interface PeerDeps {
   readonly startPeerDeadline?: StartTimer;
   readonly fetch?: (request: Request) => Promise<Response>;
 }
@@ -34,7 +34,7 @@ export function sendToPeer(deps: PeerDeps, options: SendToPeerOptions): Promise<
   const { extraHeaders, ...rest } = options.init ?? {};
 
   const durationMs =
-    path === MOVE_PATHS.receive ? PEER_DEADLINES_MS.stream : PEER_DEADLINES_MS.control;
+    path === MOVE_RECEIVE_PATH ? PEER_DEADLINES_MS.stream : PEER_DEADLINES_MS.control;
 
   // A followed redirect could send the ticket to another host.
   return sendLongRequest(

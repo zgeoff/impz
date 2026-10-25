@@ -51,7 +51,7 @@ import { MoveHeaderSchema } from './move-header';
 import type { MoveHeader } from './move-header';
 import { MoveRequestError } from './move-request-error';
 import { buildReceipt, isSameHash } from './move-tickets';
-import type { ReceiptBody } from './move-tickets';
+import type { Receipt, ReceiptBody } from './move-tickets';
 import { writeReceivedLeases } from './read-moved-leases';
 import { removeStagedImp } from './remove-staged-imp';
 import { requireTicketedName } from './require-ticketed-name';
@@ -80,11 +80,6 @@ interface ReceiveStreamDeps {
   readonly now: () => number;
 }
 
-export interface Reply {
-  readonly status: number;
-  readonly body: unknown;
-}
-
 type ReceivedFile = ReceiptBody['files'][number];
 
 interface ReadMoveStreamOptions {
@@ -97,14 +92,14 @@ interface ReadMoveStreamOptions {
 export async function readMoveStream(
   deps: ReceiveStreamDeps,
   options: ReadMoveStreamOptions,
-): Promise<Reply> {
+): Promise<Receipt> {
   const row = options.row;
   const reader = createFrameReader(options.stream);
 
   const first = await reader.readFrame();
 
   if (first?.type !== MOVE_FRAMES.header) {
-    throw new MoveRequestError(400, 'the stream does not start with its header');
+    throw new MoveRequestError('BAD_REQUEST', 'the stream does not start with its header');
   }
 
   const header = MoveHeaderSchema.parse(readJsonPayload(first.payload));
@@ -113,7 +108,7 @@ export async function readMoveStream(
   requireTicketedName(row.name, header.imp.name);
 
   if ((await readImpById(deps.db, header.imp.id)) !== undefined) {
-    throw new MoveRequestError(409, `this host has an imp with id ${header.imp.id}`);
+    throw new MoveRequestError('CONFLICT', `this host has an imp with id ${header.imp.id}`);
   }
 
   if (header.warm !== null) {
@@ -121,10 +116,13 @@ export async function readMoveStream(
     requireOwnDrivePath(deps, header.warm);
 
     if (header.warm.move.slot !== row.slot) {
-      throw new MoveRequestError(409, `the ticket keeps slot ${String(row.slot)}, not this one`);
+      throw new MoveRequestError(
+        'CONFLICT',
+        `the ticket keeps slot ${String(row.slot)}, not this one`,
+      );
     }
   } else if (row.slot !== null) {
-    throw new MoveRequestError(409, 'the ticket is for a warm move, and the stream is cold');
+    throw new MoveRequestError('CONFLICT', 'the ticket is for a warm move, and the stream is cold');
   }
 
   await updateMoveTicket(deps.db, row.id, { imp_id: header.imp.id });
@@ -230,7 +228,7 @@ export async function readMoveStream(
     const end = await reader.readFrame();
 
     if (end?.type !== MOVE_FRAMES.end) {
-      throw new MoveRequestError(400, 'the stream does not end with END');
+      throw new MoveRequestError('BAD_REQUEST', 'the stream does not end with END');
     }
   } catch (error) {
     await removeStagedImp(deps, header.imp.name, header.imp.id);
@@ -258,7 +256,7 @@ export async function readMoveStream(
     .with({ imp: header.imp.name })
     .info('received as {form}, waiting for the commit', { form });
 
-  return { status: 200, body: receipt };
+  return receipt;
 }
 
 interface ReadFile {
@@ -277,13 +275,16 @@ async function readFileInto(
   const start = await reader.readFrame();
 
   if (start?.type !== MOVE_FRAMES.file) {
-    throw new MoveRequestError(400, `the stream has no ${expected} file`);
+    throw new MoveRequestError('BAD_REQUEST', `the stream has no ${expected} file`);
   }
 
   const file = MoveFileSchema.parse(readJsonPayload(start.payload));
 
   if (file.kind !== expected) {
-    throw new MoveRequestError(400, `the stream sent ${file.kind} where ${expected} goes`);
+    throw new MoveRequestError(
+      'BAD_REQUEST',
+      `the stream sent ${file.kind} where ${expected} goes`,
+    );
   }
 
   const handle = await open(path, 'w');
@@ -300,27 +301,33 @@ async function readFileInto(
       const frame = await reader.readFrame();
 
       if (frame === null) {
-        throw new MoveRequestError(400, 'the stream ended inside a file');
+        throw new MoveRequestError('BAD_REQUEST', 'the stream ended inside a file');
       }
 
       if (frame.type === MOVE_FRAMES.fileEnd) {
         const sha256 = FileEndSchema.parse(readJsonPayload(frame.payload)).sha256;
 
         if (!isSameHash(sha256, hash.digest('hex'))) {
-          throw new MoveRequestError(400, `${expected}: the sha256 does not match the data`);
+          throw new MoveRequestError(
+            'BAD_REQUEST',
+            `${expected}: the sha256 does not match the data`,
+          );
         }
 
         return { sha256, contentSha256: content?.digest() ?? null, bytes, file };
       }
 
       if (frame.type !== MOVE_FRAMES.data) {
-        throw new MoveRequestError(400, `an unexpected frame ${String(frame.type)} in a file`);
+        throw new MoveRequestError(
+          'BAD_REQUEST',
+          `an unexpected frame ${String(frame.type)} in a file`,
+        );
       }
 
       const data = readDataInFile(frame.payload, file.sizeBytes);
 
       if (data.offset < end) {
-        throw new MoveRequestError(400, `${expected}: a DATA frame out of order`);
+        throw new MoveRequestError('BAD_REQUEST', `${expected}: a DATA frame out of order`);
       }
 
       end = data.offset + data.data.length;
@@ -342,7 +349,7 @@ function readDataInFile(payload: Uint8Array, size: number): ReturnType<typeof re
   const data = readDataPayload(payload);
 
   if (data.offset + data.data.length > size) {
-    throw new MoveRequestError(400, 'a DATA frame past the end of its file');
+    throw new MoveRequestError('BAD_REQUEST', 'a DATA frame past the end of its file');
   }
 
   return data;
@@ -386,7 +393,7 @@ async function requireImage(
     const existing = await readImageByDigest(deps.db, offered);
 
     if (existing === undefined) {
-      throw new MoveRequestError(409, `this host has no image ${header.image.digest}`);
+      throw new MoveRequestError('CONFLICT', `this host has no image ${header.image.digest}`);
     }
 
     return { name: existing.name, files: [] };

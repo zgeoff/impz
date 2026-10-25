@@ -1,10 +1,17 @@
 import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import type { MoveTicket, WarmHost, WarmMove } from '@impz/api';
+import type {
+  MoveCommitReply,
+  MoveOfferReply,
+  MoveOfferSchema,
+  MoveTicket,
+  WarmHost,
+  WarmMove,
+} from '@impz/api';
+import type * as z from 'zod';
 import type { ImageService } from '../../imps/images/image-service';
 import type { Imps } from '../../imps/imps/imp-service';
 import type { EgressService } from '../../network/egress/egress-service';
-import type { ApiAudit } from '../../platform/audit/api-audit';
 import { readImageByDigest, updateImageUse } from '../../platform/db/images';
 import { listImps, readImpByName, updateImpCommitted } from '../../platform/db/imps';
 import type { ImpRecord } from '../../platform/db/imps';
@@ -23,7 +30,6 @@ import type { MoveTicketRow, NewMoveTicketRow } from '../../platform/db/move-tic
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { SlotTakenError } from '../../platform/db/slot-taken-error';
 import { ImpdError } from '../../platform/errors/impd-error';
-import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { hashSecret } from '../../platform/secrets/hash-secret';
 import { mintOpaqueToken } from '../../platform/secrets/mint-opaque-token';
@@ -37,23 +43,41 @@ import type { StorageGate } from '../../vm/storage/storage-gate';
 import type { ImpGrants } from '../imp-grants';
 import { buildOfferedDigests } from './build-offered-digests';
 import { COMMIT_WINDOW_MS } from './commit-window-ms';
-import { MOVE_FINISH_HEADER, MOVE_PART_HEADER, MOVE_PATHS, MoveOfferSchema } from './move-header';
+import { MOVE_FINISH_HEADER, MOVE_PART_HEADER } from './move-header';
 import { PART_WAIT_MS, createPartPipe } from './move-parts';
 import type { PartPipe } from './move-parts';
 import { MoveRequestError } from './move-request-error';
 import { MOVE_TICKET_PREFIX, isSameHash, readTicketHeader } from './move-tickets';
+import type { Receipt } from './move-tickets';
 import type { PeerRanges } from './peer-address';
 import { readMoveStream } from './read-move-stream';
-import type { Reply } from './read-move-stream';
 import { removeStagedImp } from './remove-staged-imp';
 import { collectWarmMismatches } from './warm-facts';
 
 const STREAM_WINDOW_MS = 10 * 60 * 1000;
 
+export interface CheckedTicket {
+  readonly row: MoveTicketRow;
+  readonly ticket: OpaqueToken;
+}
+
+export type ReceivedPart =
+  | { readonly kind: 'part'; readonly part: number }
+  | { readonly kind: 'receipt'; readonly receipt: Receipt };
+
+export interface MovePeerCalls {
+  readonly isAllowedPeer: (peer: string | null) => boolean;
+  readonly requireTicket: (request: Request) => Promise<CheckedTicket>;
+  readonly offer: (offer: z.output<typeof MoveOfferSchema>) => Promise<MoveOfferReply>;
+  readonly receive: (checked: CheckedTicket, request: Request) => Promise<ReceivedPart>;
+  readonly commit: (checked: CheckedTicket) => Promise<MoveCommitReply>;
+  readonly abort: (checked: CheckedTicket) => Promise<MoveCommitReply>;
+}
+
 export interface MoveReceiver {
   readonly issueTicket: (name: string, bytes: number, warm?: WarmMove) => Promise<MoveTicket>;
   readonly reissueTicket: (name: string) => Promise<MoveTicket>;
-  readonly respond: (request: Request, peer: string | null) => Promise<Response>;
+  readonly peerCalls: MovePeerCalls;
   readonly recover: () => Promise<void>;
 }
 
@@ -80,20 +104,16 @@ export interface MoveReceiverDeps {
   readonly readWarmHost: () => WarmHost;
   readonly readPeerUrl: () => Promise<string>;
   readonly onCommitted: (name: string) => void;
-  readonly audit: Pick<ApiAudit, 'record'>;
   readonly now: () => number;
 }
 
-interface CheckedTicket {
-  readonly row: MoveTicketRow;
-  readonly ticket: OpaqueToken;
-}
+type StreamOutcome = { readonly receipt: Receipt } | { readonly error: Error };
 
 interface ReceiveSession {
   readonly pipe: PartPipe;
   nextPart: number;
   lastPartAt: number;
-  readonly result: Promise<Reply>;
+  readonly result: Promise<StreamOutcome>;
 }
 
 export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
@@ -105,7 +125,7 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
     const ticket = readTicketHeader(request);
 
     if (ticket === null) {
-      throw new MoveRequestError(401, 'no move ticket in the Authorization header');
+      throw new MoveRequestError('UNAUTHORIZED', 'no move ticket in the Authorization header');
     }
 
     const row = await readMoveTicket(deps.db, ticket.id);
@@ -114,7 +134,7 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
       row === undefined ||
       !isSameHash(row.secret_sha256, hashSecret(ticket.secret).toString('hex'))
     ) {
-      throw new MoveRequestError(401, 'unknown move ticket');
+      throw new MoveRequestError('UNAUTHORIZED', 'unknown move ticket');
     }
 
     return { row, ticket };
@@ -151,25 +171,20 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
     };
   };
 
-  const handleOffer = async (request: Request): Promise<Response> => {
-    await requireTicket(request);
-
-    const body: unknown = await request.json();
-
-    const offer = MoveOfferSchema.parse(body);
-    const offered = buildOfferedDigests(offer.imageDigest, offer.receivedImageDigest);
+  const offer = async (offered: z.output<typeof MoveOfferSchema>): Promise<MoveOfferReply> => {
+    const digests = buildOfferedDigests(offered.imageDigest, offered.receivedImageDigest);
 
     // The use goes in before the read, so an image eviction keeps the image this offer says the
     // target holds until the stream reuses it.
-    await updateImageUse(deps.db, 'digest', offered, deps.now());
+    await updateImageUse(deps.db, 'digest', digests, deps.now());
 
-    const existing = await readImageByDigest(deps.db, offered);
+    const existing = await readImageByDigest(deps.db, digests);
 
     const needsSystemDrive =
-      offer.systemDrive !== undefined &&
-      !existsSync(buildSystemDrivePath(deps.dataDir, offer.systemDrive));
+      offered.systemDrive !== undefined &&
+      !existsSync(buildSystemDrivePath(deps.dataDir, offered.systemDrive));
 
-    return Response.json({
+    return {
       needsImage: existing === undefined,
       needsSystemDrive,
       storage: deps.storage.kind,
@@ -177,36 +192,36 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
       keepsLeases: true,
       keepsPublicEgress: true,
       keepsBackupOff: true,
-    });
+    };
   };
 
   const readStreamOrFail = async (
     pipe: PartPipe,
     row: MoveTicketRow,
     secret: string,
-  ): Promise<Reply> => {
+  ): Promise<StreamOutcome> => {
     try {
-      return await readMoveStream(deps, { tempDir, stream: pipe.stream, row, secret });
+      return { receipt: await readMoveStream(deps, { tempDir, stream: pipe.stream, row, secret }) };
     } catch (error) {
-      const failure = error instanceof Error ? error : new Error(String(error));
+      const failure = toStreamFailure(error);
 
       pipe.fail(failure);
 
       await updateMoveTicket(deps.db, row.id, { slot: null });
 
-      return readErrorReply(error);
+      return { error: failure };
     }
   };
 
   const openSession = async (row: MoveTicketRow, secret: string): Promise<ReceiveSession> => {
     if (deps.now() > row.stream_by) {
-      throw new MoveRequestError(410, 'the move ticket expired before its stream started');
+      throw new MoveRequestError('GONE', 'the move ticket expired before its stream started');
     }
 
     const isClaimed = await claimMoveTicketStream(deps.db, row.id, deps.now());
 
     if (!isClaimed) {
-      throw new MoveRequestError(409, 'the move ticket was used for a stream already');
+      throw new MoveRequestError('CONFLICT', 'the move ticket was used for a stream already');
     }
 
     const pipe = createPartPipe();
@@ -219,7 +234,7 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
     return session;
   };
 
-  const removeSessionLater = async (id: string, result: Promise<Reply>): Promise<void> => {
+  const removeSessionLater = async (id: string, result: Promise<StreamOutcome>): Promise<void> => {
     await result;
 
     setTimeout(() => {
@@ -227,41 +242,39 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
     }, PART_WAIT_MS).unref();
   };
 
-  const handleReceive = async (request: Request): Promise<Response> => {
-    const checked = await requireTicket(request);
-
+  const receive = async (checked: CheckedTicket, request: Request): Promise<ReceivedPart> => {
     const row = checked.row;
     const part = Number(request.headers.get(MOVE_PART_HEADER) ?? '0');
     const existing = sessions.get(row.id);
 
     if (request.headers.get(MOVE_FINISH_HEADER) === '1') {
       if (existing === undefined) {
-        throw new MoveRequestError(409, 'no stream to finish for this ticket');
+        throw new MoveRequestError('CONFLICT', 'no stream to finish for this ticket');
       }
 
       existing.pipe.end();
 
-      const reply = await existing.result;
+      const outcome = await existing.result;
 
       sessions.delete(row.id);
 
-      return Response.json(reply.body, { status: reply.status });
+      return requireReceipt(outcome);
     }
 
     const session = part === 0 ? await openSession(row, checked.ticket.secret) : existing;
 
     if (session?.nextPart !== part || request.body === null) {
-      throw new MoveRequestError(409, `part ${String(part)} is out of order`);
+      throw new MoveRequestError('CONFLICT', `part ${String(part)} is out of order`);
     }
 
     if (part > 0 && deps.now() - session.lastPartAt > PART_WAIT_MS) {
       session.pipe.fail(
-        new MoveRequestError(410, 'the next part of the move stream came too late'),
+        new MoveRequestError('GONE', 'the next part of the move stream came too late'),
       );
 
-      const reply = await session.result;
+      const outcome = await session.result;
 
-      return Response.json(reply.body, { status: reply.status });
+      return requireReceipt(outcome);
     }
 
     session.nextPart += 1;
@@ -272,19 +285,19 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
 
       session.lastPartAt = deps.now();
     } catch {
-      const reply = await session.result;
+      const outcome = await session.result;
 
-      return Response.json(reply.body, { status: reply.status });
+      return requireReceipt(outcome);
     }
 
-    return Response.json({ part }, { status: 202 });
+    return { kind: 'part', part };
   };
 
   const writeCommit = async (imp: ImpRecord, row: MoveTicketRow): Promise<void> => {
     const isWarm = row.slot !== null;
 
     if (isWarm && readSnapshotMeta(deps.storage.resolveImpPaths(imp.id)) === null) {
-      throw new MoveRequestError(409, 'the received memory snapshot is not complete');
+      throw new MoveRequestError('CONFLICT', 'the received memory snapshot is not complete');
     }
 
     const committed = await updateImpCommitted(deps.db, imp.id, deps.now(), isWarm);
@@ -300,41 +313,37 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
     getImpdLogger('move').with({ imp: row.name }).info('committed; it lives here now');
   };
 
-  const handleCommit = async (request: Request): Promise<Response> => {
-    const checked = await requireTicket(request);
-
+  const commit = async (checked: CheckedTicket): Promise<MoveCommitReply> => {
     const impId = checked.row.imp_id;
 
     if (checked.row.receipt === null || impId === null) {
-      throw new MoveRequestError(409, 'nothing to commit: no receipt for this ticket');
+      throw new MoveRequestError('CONFLICT', 'nothing to commit: no receipt for this ticket');
     }
 
-    return deps.imps.lockImpId(impId, async (imp) => {
+    return await deps.imps.lockImpId(impId, async (imp) => {
       const row = await readMoveTicket(deps.db, checked.row.id);
 
       const settled = row === undefined ? 'none' : readSettled(row, imp);
 
       if (settled === 'committed') {
-        return Response.json({ isCommitted: true });
+        return { isCommitted: true };
       }
 
       if (row === undefined || imp === undefined || settled === 'none') {
-        throw new MoveRequestError(409, 'nothing to commit: the received copy is gone');
+        throw new MoveRequestError('CONFLICT', 'nothing to commit: the received copy is gone');
       }
 
       if (row.commit_until !== null && deps.now() > row.commit_until) {
-        throw new MoveRequestError(410, 'the commit window ended; reissue the ticket');
+        throw new MoveRequestError('GONE', 'the commit window ended; reissue the ticket');
       }
 
       await writeCommit(imp, row);
 
-      return Response.json({ isCommitted: true });
+      return { isCommitted: true };
     });
   };
 
-  const handleAbort = async (request: Request): Promise<Response> => {
-    const checked = await requireTicket(request);
-
+  const abort = async (checked: CheckedTicket): Promise<MoveCommitReply> => {
     const impId = checked.row.imp_id;
 
     sessions.get(checked.row.id)?.pipe.fail(new Error('the source aborted the move'));
@@ -343,7 +352,7 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
     if (impId === null) {
       await removeTickets();
 
-      return Response.json({ isCommitted: false });
+      return { isCommitted: false };
     }
 
     const settled = await deps.imps.lockImpId(impId, async (imp) => {
@@ -359,41 +368,14 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
     });
 
     if (settled === 'committed') {
-      return Response.json({ isCommitted: true }, { status: 409 });
+      return { isCommitted: true };
     }
 
     await removeStagedImp(deps, checked.row.name, impId);
 
     getImpdLogger('move').with({ imp: checked.row.name }).info('aborted by the source');
 
-    return Response.json({ isCommitted: false });
-  };
-
-  const handleRoute = async (request: Request, peer: string | null): Promise<Response> => {
-    const route = ROUTES[new URL(request.url).pathname];
-
-    if (route === undefined || request.method !== 'POST') {
-      return Response.json({ error: 'not found' }, { status: 404 });
-    }
-
-    if (peer === null || !deps.ranges.isAllowed(peer)) {
-      return Response.json({ error: 'moves come only over the tailnet' }, { status: 403 });
-    }
-
-    try {
-      return await route(request);
-    } catch (error) {
-      const reply = readErrorReply(error);
-
-      return Response.json(reply.body, { status: reply.status });
-    }
-  };
-
-  const ROUTES: Readonly<Record<string, (request: Request) => Promise<Response>>> = {
-    [MOVE_PATHS.offer]: handleOffer,
-    [MOVE_PATHS.receive]: handleReceive,
-    [MOVE_PATHS.commit]: handleCommit,
-    [MOVE_PATHS.abort]: handleAbort,
+    return { isCommitted: false };
   };
 
   return {
@@ -458,32 +440,13 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
       });
     },
 
-    respond: async (request, peer) => {
-      const startedAt = deps.now();
-
-      const path = new URL(request.url).pathname;
-
-      const ticket = readTicketHeader(request);
-      const row = ticket === null ? undefined : await readMoveTicket(deps.db, ticket.id);
-
-      const response = await handleRoute(request, peer);
-
-      const failureCode = response.ok ? null : readStatusCode(response.status);
-
-      const failure =
-        failureCode === null ? null : new ImpdError(failureCode, { message: failureCode });
-
-      deps.audit.record(
-        {
-          procedure: `move.${path.slice(path.lastIndexOf('/') + 1)}`,
-          actor: { kind: 'tailnet', name: `move from ${peer ?? 'unknown'}` },
-          impName: row?.name ?? null,
-          startedAt,
-        },
-        failure,
-      );
-
-      return response;
+    peerCalls: {
+      isAllowedPeer: (peer) => peer !== null && deps.ranges.isAllowed(peer),
+      requireTicket,
+      offer,
+      receive,
+      commit,
+      abort,
     },
 
     recover: async () => {
@@ -520,22 +483,20 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
   };
 }
 
-function readErrorReply(error: unknown): Reply {
-  const status = readErrorStatus(error);
-
-  if (status === 500) {
-    getImpdLogger('move').error('{error}', { error: getErrorMessage(error) });
+function toStreamFailure(error: unknown): Error {
+  if (error instanceof SlotTakenError) {
+    return new MoveRequestError('CONFLICT', error.message);
   }
 
-  return { status, body: { error: getErrorMessage(error) } };
+  return error instanceof Error ? error : new Error(String(error));
 }
 
-function readErrorStatus(error: unknown): number {
-  if (error instanceof MoveRequestError) {
-    return error.status;
+function requireReceipt(outcome: StreamOutcome): ReceivedPart {
+  if ('error' in outcome) {
+    throw outcome.error;
   }
 
-  return error instanceof SlotTakenError ? 409 : 500;
+  return { kind: 'receipt', receipt: outcome.receipt };
 }
 
 function readSettled(
@@ -547,18 +508,4 @@ function readSettled(
   }
 
   return imp?.moveState === 'receiving' ? 'staged' : 'none';
-}
-
-const STATUS_CODES: Readonly<Record<number, string>> = {
-  400: 'BAD_REQUEST',
-  401: 'UNAUTHORIZED',
-  403: 'FORBIDDEN',
-  404: 'NOT_FOUND',
-  409: 'CONFLICT',
-  410: 'GONE',
-  413: 'PAYLOAD_TOO_LARGE',
-};
-
-function readStatusCode(status: number): string {
-  return STATUS_CODES[status] ?? 'INTERNAL_SERVER_ERROR';
 }

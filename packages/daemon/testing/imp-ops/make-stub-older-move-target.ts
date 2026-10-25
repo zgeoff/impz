@@ -1,4 +1,4 @@
-import { MOVE_PATHS, MoveOfferReplySchema } from '../../src/imp-ops/moves/move-header';
+import { MoveOfferReplySchema } from '@impz/api';
 import type { FetchHook } from './create-move-hosts';
 
 // an older target leaves each of these out of its offer reply, and the source reads a
@@ -9,7 +9,7 @@ export function makeStubOlderMoveTarget(field: OfferField): FetchHook {
   return async (request, forward) => {
     const response = await forward();
 
-    if (!request.url.endsWith(MOVE_PATHS.offer)) {
+    if (!request.url.endsWith('/move/offer')) {
       return response;
     }
 

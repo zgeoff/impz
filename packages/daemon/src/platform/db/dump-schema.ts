@@ -23,6 +23,7 @@ const CUSTOM_IMPORTS = {
   ImpKind: '@impz/api',
   ImpState: '@impz/api',
   MoveState: '@impz/api',
+  MoveSendStep: './move-send-steps',
   Scope: '@impz/api',
 };
 
@@ -40,6 +41,7 @@ const COLUMN_OVERRIDES = {
   'move_sends.mode': new GenericExpressionNode('Generated', [
     new UnionExpressionNode([new LiteralNode('files'), new LiteralNode('zfs')]),
   ]),
+  'move_sends.step': new GenericExpressionNode('Generated', [new IdentifierNode('MoveSendStep')]),
   'tokens.scope': new IdentifierNode('Scope'),
 };
 

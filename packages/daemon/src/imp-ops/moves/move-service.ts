@@ -10,7 +10,7 @@ import { buildPeerRanges } from './peer-address';
 import { readWarmHost } from './warm-facts';
 
 export type MoveService = MoveSender &
-  Pick<MoveReceiver, 'issueTicket' | 'reissueTicket' | 'respond'> & {
+  Pick<MoveReceiver, 'issueTicket' | 'reissueTicket' | 'peerCalls'> & {
     readonly recover: () => Promise<void>;
     readonly readFacts: () => WarmHost;
   };
@@ -72,7 +72,7 @@ export function createMoveService(deps: MoveServiceDeps): MoveService {
     ...sender,
     issueTicket: receiver.issueTicket,
     reissueTicket: receiver.reissueTicket,
-    respond: receiver.respond,
+    peerCalls: receiver.peerCalls,
     readFacts: readWarm,
     recover: async () => {
       await receiver.recover();

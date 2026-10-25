@@ -127,7 +127,10 @@ export function requireWarmMove(deps: Pick<WarmReceiveDeps, 'readWarmHost'>, mov
   const mismatches = collectWarmMismatches(move, deps.readWarmHost());
 
   if (mismatches.length > 0) {
-    throw new MoveRequestError(409, `this host cannot load the memory: ${mismatches.join('; ')}`);
+    throw new MoveRequestError(
+      'CONFLICT',
+      `this host cannot load the memory: ${mismatches.join('; ')}`,
+    );
   }
 }
 
@@ -141,7 +144,7 @@ export function requireOwnDrivePath(
   const named = [warm.meta.systemDrivePath, warm.vm?.systemDrivePath];
 
   if (named.some((given) => given !== undefined && given !== path)) {
-    throw new MoveRequestError(400, `the snapshot's drive is not at ${path}`);
+    throw new MoveRequestError('BAD_REQUEST', `the snapshot's drive is not at ${path}`);
   }
 }
 
@@ -191,7 +194,7 @@ export async function writeWarmFiles(deps: WarmReceiveDeps, files: WarmFiles): P
   const reason = readColdBootReason(warm.meta, deps.readIdentity());
 
   if (reason !== null) {
-    throw new MoveRequestError(409, `the memory snapshot cannot load here: ${reason}`);
+    throw new MoveRequestError('CONFLICT', `the memory snapshot cannot load here: ${reason}`);
   }
 
   writeSnapshotMeta(paths, warm.meta);
@@ -209,7 +212,7 @@ async function writeSystemDrive(
   const sha256 = await readFileSha256(temp);
 
   if (!isSameHash(sha256, meta.systemDrive)) {
-    throw new MoveRequestError(400, 'the system drive does not match its sha256');
+    throw new MoveRequestError('BAD_REQUEST', 'the system drive does not match its sha256');
   }
 
   if (!existsSync(path)) {

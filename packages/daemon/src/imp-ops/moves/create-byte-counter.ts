@@ -12,7 +12,10 @@ export function createByteCounter(limit: number): ByteCounter {
       bytes += more;
 
       if (bytes > limit) {
-        throw new MoveRequestError(413, 'the stream is longer than its ticket allows');
+        throw new MoveRequestError(
+          'PAYLOAD_TOO_LARGE',
+          'the stream is longer than its ticket allows',
+        );
       }
     },
   };

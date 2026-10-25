@@ -1,34 +1,21 @@
 import type { ImpRecord } from '../../platform/db/imps';
-import type { StartTimer } from '../../platform/process/clock';
-import { MOVE_PATHS, MoveCommitReplySchema } from './move-header';
-import { readJsonBody } from './read-json-body';
-import { sendToPeer } from './send-to-peer';
-
-interface MoveAbortDeps {
-  readonly startPeerDeadline?: StartTimer;
-  readonly fetch?: (request: Request) => Promise<Response>;
-}
+import type { MovePeer } from './move-peer';
 
 export async function sendMoveAbort(
-  deps: MoveAbortDeps,
+  peer: Pick<MovePeer, 'abort'>,
   imp: ImpRecord,
-  peer: string,
-  ticket: string,
 ): Promise<'aborted' | 'committed'> {
-  const response = await sendToPeer(deps, { peer, path: MOVE_PATHS.abort, ticket });
-  const answer = await readJsonBody(response);
+  const outcome = await peer.abort();
 
-  const reply = MoveCommitReplySchema.safeParse(answer);
-
-  if (reply.success && reply.data.isCommitted) {
-    return 'committed';
+  if (outcome !== 'unknown-ticket') {
+    return outcome;
   }
 
-  const isForgotten = response.status === 401 && imp.moveState === 'sending';
-
-  if (response.ok || isForgotten) {
+  // Before the receipt, a target that lost the ticket can never commit the imp, so the abort has
+  // nothing left to undo.
+  if (imp.moveState === 'sending') {
     return 'aborted';
   }
 
-  throw new Error(`abort: the target answered ${String(response.status)}`);
+  throw new Error('abort: the target holds no such ticket');
 }

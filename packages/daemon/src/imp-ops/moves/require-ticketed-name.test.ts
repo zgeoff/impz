@@ -14,8 +14,8 @@ test.each([
   ['an empty name', ''],
   ['the name with whitespace', 'dev '],
   ['a unicode look-alike', 'dеv'],
-])('#requireTicketedName refuses %s with a 403', (_kind, headerName) => {
+])('#requireTicketedName refuses %s as forbidden', (_kind, headerName) => {
   expect(() => {
     requireTicketedName('dev', headerName);
-  }).toThrow(new MoveRequestError(403, `the ticket is for dev, not ${headerName}`));
+  }).toThrow(new MoveRequestError('FORBIDDEN', `the ticket is for dev, not ${headerName}`));
 });

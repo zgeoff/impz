@@ -1,5 +1,4 @@
 import { expect, test } from 'bun:test';
-import { MOVE_PATHS } from '../../src/imp-ops/moves/move-header';
 import { buildTicketHeader } from '../../src/imp-ops/moves/move-tickets';
 import { SOURCE_PEER, TARGET_URL, setupMoveHosts } from './create-move-hosts';
 import { makeStubSwitchedStorageTarget } from './make-stub-switched-storage-target';
@@ -12,7 +11,7 @@ test('it names the given storage in the real target offer reply', async () => {
   const ctx = await setupTest();
   const ticket = await ctx.targetApp.client.moves.receive({ name: 'dev', bytes: 1 });
 
-  const request = new Request(`${TARGET_URL}${MOVE_PATHS.offer}`, {
+  const request = new Request(`${TARGET_URL}/move/offer`, {
     method: 'POST',
     headers: { ...buildTicketHeader(ticket.ticket), 'content-type': 'application/json' },
     body: JSON.stringify({ imageDigest: 'sha256:ubuntu' }),
@@ -43,7 +42,7 @@ test('it passes the answer of another route through unchanged', async () => {
   const ctx = await setupTest();
   const ticket = await ctx.targetApp.client.moves.receive({ name: 'dev', bytes: 1 });
 
-  const request = new Request(`${TARGET_URL}${MOVE_PATHS.commit}`, {
+  const request = new Request(`${TARGET_URL}/move/commit`, {
     method: 'POST',
     headers: buildTicketHeader(ticket.ticket),
   });
@@ -59,6 +58,10 @@ test('it passes the answer of another route through unchanged', async () => {
   expect(response.status).toBe(409);
 
   expect(body).toStrictEqual({
+    defined: false,
+    code: 'CONFLICT',
+    status: 409,
+    message: 'nothing to commit: no receipt for this ticket',
     error: 'nothing to commit: no receipt for this ticket',
   });
 });

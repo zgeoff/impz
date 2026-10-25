@@ -3,6 +3,7 @@ import {
   GrantFilterSchema,
   ImageSourceSchema,
   LeaseLabelSchema,
+  SystemDriveSchema,
   WarmMoveSchema,
 } from '@impz/api';
 import * as z from 'zod';
@@ -90,12 +91,10 @@ const HeldAnswerSchema = z
   })
   .readonly();
 
-const DriveSchema = z.string().regex(/^[\da-f]{64}$/v);
-
 const WarmSchema = z
   .object({
     move: WarmMoveSchema,
-    meta: SnapshotMetaSchema.extend({ systemDrive: DriveSchema }),
+    meta: SnapshotMetaSchema.extend({ systemDrive: SystemDriveSchema }),
     vm: VmIdentitySchema.nullable(),
     isDriveIncluded: z.boolean(),
     answers: z.array(HeldAnswerSchema).readonly(),
@@ -125,29 +124,5 @@ export const MoveHeaderSchema = z
 
 export type MoveHeader = z.infer<typeof MoveHeaderSchema>;
 
-export const MoveOfferSchema = z.object({
-  imageDigest: z.string(),
-  receivedImageDigest: z.string().nullable().default(null),
-  systemDrive: DriveSchema.optional(),
-});
-
-export const MoveOfferReplySchema = z.object({
-  needsImage: z.boolean(),
-  needsSystemDrive: z.boolean().default(false),
-  storage: z.enum(['xfs', 'zfs']),
-  keepsMaxMemory: z.boolean().default(false),
-  keepsLeases: z.boolean().default(false),
-  keepsPublicEgress: z.boolean().default(false),
-  keepsBackupOff: z.boolean().default(false),
-});
-
-export const MoveCommitReplySchema = z.object({ isCommitted: z.boolean() });
 export const MOVE_PART_HEADER = 'x-imp-move-part';
 export const MOVE_FINISH_HEADER = 'x-imp-move-finish';
-
-export const MOVE_PATHS = {
-  offer: '/move/offer',
-  receive: '/move/receive',
-  commit: '/move/commit',
-  abort: '/move/abort',
-} as const;

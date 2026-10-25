@@ -35,12 +35,13 @@ import { buildStubZfsStorage } from '../../../testing/vm/build-stub-zfs-storage'
 import { listImages, readImageByDigest, readImageByName } from '../../platform/db/images';
 import type { ImpWrite } from '../../platform/db/imp-write-feed';
 import { listImps, readImpByName, updateImpExposure, updateImpMove } from '../../platform/db/imps';
+import { updateMoveSendStep } from '../../platform/db/move-sends';
 import { listMoveTickets } from '../../platform/db/move-tickets';
 import { MOVE_TRANSITIONS } from '../../platform/db/move-transitions';
 import { buildImagePaths } from '../../vm/storage/data-layout';
 import { createXfsBackend } from '../../vm/storage/xfs-backend';
 import { FileEndSchema, MOVE_FRAMES, MoveFileSchema, readJsonPayload } from './move-frames';
-import { MOVE_FINISH_HEADER, MOVE_PART_HEADER, MOVE_PATHS, MoveHeaderSchema } from './move-header';
+import { MOVE_FINISH_HEADER, MOVE_PART_HEADER, MoveHeaderSchema } from './move-header';
 import {
   ReceiptSchema,
   buildReceipt,
@@ -450,7 +451,7 @@ test('it records no received digest for a sent image when the receipt does not m
 test('it ends a send to a target that is gone with the mark on, and says the abort went unconfirmed', async () => {
   const ctx = await setupTest({
     hook: (request, forward) => {
-      if (request.url.endsWith(MOVE_PATHS.receive) || request.url.endsWith(MOVE_PATHS.abort)) {
+      if (request.url.endsWith('/move/receive') || request.url.endsWith('/move/abort')) {
         return Promise.reject(new TypeError('Unable to connect'));
       }
 
@@ -568,7 +569,7 @@ test('it keeps both copies when the target sends no answer to the commit within 
     startPeerDeadline: clock.startTimer,
 
     hook: (request, forward) => {
-      if (!request.url.endsWith(MOVE_PATHS.commit)) {
+      if (!request.url.endsWith('/move/commit')) {
         return forward();
       }
 
@@ -614,7 +615,7 @@ test('it ends a move whose target sends no answer to the offer within ten minute
     startPeerDeadline: clock.startTimer,
 
     hook: (request, forward) => {
-      if (!request.url.endsWith(MOVE_PATHS.offer)) {
+      if (!request.url.endsWith('/move/offer')) {
         return forward();
       }
 
@@ -658,11 +659,11 @@ test('it keeps the mark when the target sends no answer to the abort within ten 
     startPeerDeadline: clock.startTimer,
 
     hook: (request, forward) => {
-      if (request.url.endsWith(MOVE_PATHS.receive)) {
+      if (request.url.endsWith('/move/receive')) {
         return Promise.reject(new TypeError('Unable to connect'));
       }
 
-      if (!request.url.endsWith(MOVE_PATHS.abort)) {
+      if (!request.url.endsWith('/move/abort')) {
         return forward();
       }
 
@@ -713,7 +714,7 @@ test('it reports no error for a failed send while its abort still goes', async (
 
   const ctx = await setupTest({
     hook: async (request, forward) => {
-      if (request.url.endsWith(MOVE_PATHS.abort)) {
+      if (request.url.endsWith('/move/abort')) {
         abortReached.resolve(undefined);
 
         await abortRelease.promise;
@@ -721,7 +722,7 @@ test('it reports no error for a failed send while its abort still goes', async (
         throw new TypeError('Unable to connect');
       }
 
-      if (request.url.endsWith(MOVE_PATHS.receive)) {
+      if (request.url.endsWith('/move/receive')) {
         throw new TypeError('Unable to connect');
       }
 
@@ -845,7 +846,7 @@ test('it refuses a ticket in the URL in place of the header', async () => {
   const ticket = await ctx.targetApp.client.moves.receive({ name: 'dev', bytes: 1024 });
 
   const response = await ctx.target.moves.respond(
-    new Request(`${TARGET_URL}${MOVE_PATHS.receive}?ticket=${ticket.ticket}`, {
+    new Request(`${TARGET_URL}/move/receive?ticket=${ticket.ticket}`, {
       method: 'POST',
       body: new Uint8Array([9, 0, 0, 0, 0]),
     }),
@@ -857,6 +858,10 @@ test('it refuses a ticket in the URL in place of the header', async () => {
   expect(response.status).toBe(401);
 
   expect(body).toStrictEqual({
+    defined: false,
+    code: 'UNAUTHORIZED',
+    status: 401,
+    message: 'no move ticket in the Authorization header',
     error: 'no move ticket in the Authorization header',
   });
 });
@@ -876,7 +881,7 @@ test.each([
   const forged = template.replace('{id}', id).replace('{secret}', secret);
 
   const response = await ctx.target.moves.respond(
-    new Request(`${TARGET_URL}${MOVE_PATHS.receive}`, {
+    new Request(`${TARGET_URL}/move/receive`, {
       method: 'POST',
       headers: buildTicketHeader(forged),
       body: new Uint8Array([9, 0, 0, 0, 0]),
@@ -887,7 +892,14 @@ test.each([
   const body: unknown = await response.json();
 
   expect(response.status).toBe(401);
-  expect(body).toStrictEqual({ error });
+
+  expect(body).toStrictEqual({
+    defined: false,
+    code: 'UNAUTHORIZED',
+    status: 401,
+    message: error,
+    error,
+  });
 });
 
 test('it refuses a stream from off the tailnet', async () => {
@@ -895,7 +907,7 @@ test('it refuses a stream from off the tailnet', async () => {
   const ticket = await ctx.targetApp.client.moves.receive({ name: 'dev', bytes: 1024 });
 
   const response = await ctx.target.moves.respond(
-    new Request(`${TARGET_URL}${MOVE_PATHS.receive}`, {
+    new Request(`${TARGET_URL}/move/receive`, {
       method: 'POST',
       headers: buildTicketHeader(ticket.ticket),
       body: new Uint8Array([9, 0, 0, 0, 0]),
@@ -911,7 +923,7 @@ test('it takes the first part of a stream from the tailnet', async () => {
   const ticket = await ctx.targetApp.client.moves.receive({ name: 'dev', bytes: 1024 });
 
   const response = await ctx.target.moves.respond(
-    new Request(`${TARGET_URL}${MOVE_PATHS.receive}`, {
+    new Request(`${TARGET_URL}/move/receive`, {
       method: 'POST',
       headers: buildTicketHeader(ticket.ticket),
       body: new Uint8Array([9, 0, 0, 0, 0]),
@@ -927,7 +939,7 @@ test('it refuses a second stream on a ticket', async () => {
   const ticket = await ctx.targetApp.client.moves.receive({ name: 'dev', bytes: 1024 });
 
   await ctx.target.moves.respond(
-    new Request(`${TARGET_URL}${MOVE_PATHS.receive}`, {
+    new Request(`${TARGET_URL}/move/receive`, {
       method: 'POST',
       headers: buildTicketHeader(ticket.ticket),
       body: new Uint8Array([9, 0, 0, 0, 0]),
@@ -936,7 +948,7 @@ test('it refuses a second stream on a ticket', async () => {
   );
 
   const second = await ctx.target.moves.respond(
-    new Request(`${TARGET_URL}${MOVE_PATHS.receive}`, {
+    new Request(`${TARGET_URL}/move/receive`, {
       method: 'POST',
       headers: buildTicketHeader(ticket.ticket),
       body: new Uint8Array([9, 0, 0, 0, 0]),
@@ -949,6 +961,10 @@ test('it refuses a second stream on a ticket', async () => {
   expect(second.status).toBe(409);
 
   expect(body).toStrictEqual({
+    defined: false,
+    code: 'CONFLICT',
+    status: 409,
+    message: 'the move ticket was used for a stream already',
     error: 'the move ticket was used for a stream already',
   });
 });
@@ -958,7 +974,7 @@ test('it refuses a part that comes before the first', async () => {
   const ticket = await ctx.targetApp.client.moves.receive({ name: 'dev', bytes: 1024 });
 
   const response = await ctx.target.moves.respond(
-    new Request(`${TARGET_URL}${MOVE_PATHS.receive}`, {
+    new Request(`${TARGET_URL}/move/receive`, {
       method: 'POST',
       headers: { ...buildTicketHeader(ticket.ticket), [MOVE_PART_HEADER]: '1' },
       body: new Uint8Array([9, 0, 0, 0, 0]),
@@ -969,7 +985,14 @@ test('it refuses a part that comes before the first', async () => {
   const body: unknown = await response.json();
 
   expect(response.status).toBe(409);
-  expect(body).toStrictEqual({ error: 'part 1 is out of order' });
+
+  expect(body).toStrictEqual({
+    defined: false,
+    code: 'CONFLICT',
+    status: 409,
+    message: 'part 1 is out of order',
+    error: 'part 1 is out of order',
+  });
 });
 
 test('it refuses a finish for a ticket with no stream', async () => {
@@ -977,7 +1000,7 @@ test('it refuses a finish for a ticket with no stream', async () => {
   const ticket = await ctx.targetApp.client.moves.receive({ name: 'dev', bytes: 1024 });
 
   const response = await ctx.target.moves.respond(
-    new Request(`${TARGET_URL}${MOVE_PATHS.receive}`, {
+    new Request(`${TARGET_URL}/move/receive`, {
       method: 'POST',
       headers: { ...buildTicketHeader(ticket.ticket), [MOVE_FINISH_HEADER]: '1' },
     }),
@@ -987,7 +1010,14 @@ test('it refuses a finish for a ticket with no stream', async () => {
   const body: unknown = await response.json();
 
   expect(response.status).toBe(409);
-  expect(body).toStrictEqual({ error: 'no stream to finish for this ticket' });
+
+  expect(body).toStrictEqual({
+    defined: false,
+    code: 'CONFLICT',
+    status: 409,
+    message: 'no stream to finish for this ticket',
+    error: 'no stream to finish for this ticket',
+  });
 });
 
 test('it refuses a commit for a ticket with no receipt', async () => {
@@ -995,7 +1025,7 @@ test('it refuses a commit for a ticket with no receipt', async () => {
   const ticket = await ctx.targetApp.client.moves.receive({ name: 'dev', bytes: 1024 });
 
   const response = await ctx.target.moves.respond(
-    new Request(`${TARGET_URL}${MOVE_PATHS.commit}`, {
+    new Request(`${TARGET_URL}/move/commit`, {
       method: 'POST',
       headers: buildTicketHeader(ticket.ticket),
     }),
@@ -1007,6 +1037,10 @@ test('it refuses a commit for a ticket with no receipt', async () => {
   expect(response.status).toBe(409);
 
   expect(body).toStrictEqual({
+    defined: false,
+    code: 'CONFLICT',
+    status: 409,
+    message: 'nothing to commit: no receipt for this ticket',
     error: 'nothing to commit: no receipt for this ticket',
   });
 });
@@ -1030,7 +1064,7 @@ test('it refuses a stream that starts past its ticket window', async () => {
   ctx.target.advance(11 * 60 * 1000);
 
   const late = await ctx.target.moves.respond(
-    new Request(`${TARGET_URL}${MOVE_PATHS.receive}`, {
+    new Request(`${TARGET_URL}/move/receive`, {
       method: 'POST',
       headers: buildTicketHeader(ticket.ticket),
       body: new Uint8Array([1]),
@@ -1043,6 +1077,10 @@ test('it refuses a stream that starts past its ticket window', async () => {
   expect(late.status).toBe(410);
 
   expect(body).toStrictEqual({
+    defined: false,
+    code: 'GONE',
+    status: 410,
+    message: 'the move ticket expired before its stream started',
     error: 'the move ticket expired before its stream started',
   });
 });
@@ -1281,7 +1319,7 @@ test('it keeps an old image the target has by digest when an eviction reaches th
       }),
     },
     hook: async (request, forward) => {
-      if (new URL(request.url).pathname === MOVE_PATHS.receive) {
+      if (new URL(request.url).pathname === '/move/receive') {
         await beforeStream.run();
 
         gate.arm();
@@ -1822,10 +1860,7 @@ test('it keeps every file the send reads through a GC while the stream goes', as
 
   const ctx = await setupTest({
     hook: async (request, forward, hosts) => {
-      if (
-        request.url.endsWith(MOVE_PATHS.receive) &&
-        request.headers.get(MOVE_PART_HEADER) === '0'
-      ) {
+      if (request.url.endsWith('/move/receive') && request.headers.get(MOVE_PART_HEADER) === '0') {
         const result = await hosts.sourceApp.client.system.gc({});
 
         runs.push(result.dropped);
@@ -1875,18 +1910,90 @@ test('it refuses an egress policy change to a marked imp', async () => {
   });
 });
 
-test('it undoes on restart a send cut short', async () => {
+test('it keeps a prepared send through a restart, and the send after it moves the imp', async () => {
+  const ctx = await setupTest();
+
+  await createUbuntuImage(ctx.source);
+  await createUbuntuImage(ctx.target);
+
+  await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
+  await ctx.sourceApp.client.imps.stop({ name: 'dev' });
+
+  const plan = await ctx.sourceApp.client.moves.prepare({ name: 'dev' });
+
+  const lines = captureImpdLogs();
+
+  await ctx.source.restartImpd();
+  await ctx.source.moves.waitForRecovery();
+
+  const kept = await readImpByName(ctx.source.db, 'dev');
+  const ticket = await ctx.target.client.moves.receive({ name: 'dev', bytes: plan.bytes });
+
+  await ctx.source.client.moves.send({ name: 'dev', to: ticket.peerUrl, ticket: ticket.ticket });
+
+  const status = await ctx.waitForMove('dev');
+  const landed = await readImpByName(ctx.target.db, 'dev');
+
+  expect(kept?.moveState).toBe('sending');
+
+  expect(lines).toContain(
+    'INFO impd.move imp=dev a prepared send waits for its send after a restart',
+  );
+
+  expect(status).toMatchObject({ isDone: true, error: null });
+  expect(landed?.moveState).toBeNull();
+});
+
+test('it starts a halted imp again when the target refuses the send that comes after a restart', async () => {
+  const ctx = await setupTest({ hook: makeStubOlderMoveTarget('keepsMaxMemory') });
+
+  await createUbuntuImage(ctx.source);
+  await createUbuntuImage(ctx.target);
+
+  const created = await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
+
+  await ctx.source.db
+    .updateTable('imps')
+    .set({ memory_mib: 256, max_memory_mib: 1024 })
+    .where('id', '=', created.id)
+    .execute();
+
+  const plan = await ctx.sourceApp.client.moves.prepare({ name: 'dev', stop: true, force: true });
+
+  await ctx.source.restartImpd();
+  await ctx.source.moves.waitForRecovery();
+
+  const ticket = await ctx.target.client.moves.receive({ name: 'dev', bytes: plan.bytes });
+
+  await ctx.source.client.moves.send({ name: 'dev', to: ticket.peerUrl, ticket: ticket.ticket });
+
+  const status = await ctx.waitForMove('dev');
+  const source = await readImpByName(ctx.source.db, 'dev');
+
+  expect(status.error).toContain('predates elastic memory');
+  expect(source).toMatchObject({ state: 'running', moveState: null });
+});
+
+test('it undoes on restart a send cut short in its stream', async () => {
   const ctx = await setupTest();
 
   await createUbuntuImage(ctx.source);
 
-  await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
+  const created = await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
+
   await ctx.sourceApp.client.imps.stop({ name: 'dev' });
-  await ctx.sourceApp.client.moves.prepare({ name: 'dev' });
+
+  const plan = await ctx.sourceApp.client.moves.prepare({ name: 'dev' });
+  const ticket = await ctx.targetApp.client.moves.receive({ name: 'dev', bytes: plan.bytes });
+
+  await updateMoveSendStep(ctx.source.db, created.id, 'streaming', {
+    peer_url: ticket.peerUrl,
+    ticket: ticket.ticket,
+  });
 
   const lines = captureImpdLogs();
 
-  await ctx.source.moves.recover();
+  await ctx.source.restartImpd();
   await ctx.source.moves.waitForRecovery();
 
   const undone = await readImpByName(ctx.source.db, 'dev');
@@ -1900,9 +2007,17 @@ test('it logs a recovery after a restart that cannot undo a send cut short', asy
 
   await createUbuntuImage(ctx.source);
 
-  await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
+  const created = await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
+
   await ctx.sourceApp.client.imps.stop({ name: 'dev' });
-  await ctx.sourceApp.client.moves.prepare({ name: 'dev' });
+
+  const plan = await ctx.sourceApp.client.moves.prepare({ name: 'dev' });
+  const ticket = await ctx.targetApp.client.moves.receive({ name: 'dev', bytes: plan.bytes });
+
+  await updateMoveSendStep(ctx.source.db, created.id, 'streaming', {
+    peer_url: ticket.peerUrl,
+    ticket: ticket.ticket,
+  });
 
   await runSql(
     ctx.source.db,
@@ -2112,7 +2227,7 @@ test('it refuses a resume past the commit window, and the source keeps its copy'
 test('it fails a send whose target answers the commit as not committed', async () => {
   const ctx = await setupTest({
     hook: (request, forward) =>
-      request.url.endsWith(MOVE_PATHS.commit)
+      request.url.endsWith('/move/commit')
         ? Promise.resolve(Response.json({ isCommitted: false }))
         : forward(),
   });
@@ -2136,13 +2251,13 @@ test('it moves the imp to the target when its commit lands before a racing abort
 
   const ctx = await setupTest({
     hook: async (request, forward, hosts) => {
-      if (request.url.endsWith(MOVE_PATHS.abort)) {
+      if (request.url.endsWith('/move/abort')) {
         await committed.promise;
       }
 
       const response = await dropped(request, forward, hosts);
 
-      if (request.url.endsWith(MOVE_PATHS.commit)) {
+      if (request.url.endsWith('/move/commit')) {
         committed.resolve(undefined);
       }
 
@@ -2177,17 +2292,17 @@ test('it keeps the imp on the source when a racing abort reaches the target befo
 
   const ctx = await setupTest({
     hook: async (request, forward, hosts) => {
-      if (request.url.endsWith(MOVE_PATHS.commit)) {
+      if (request.url.endsWith('/move/commit')) {
         commits.sent += 1;
       }
 
-      if (request.url.endsWith(MOVE_PATHS.commit) && commits.sent > 1) {
+      if (request.url.endsWith('/move/commit') && commits.sent > 1) {
         await aborted.promise;
       }
 
       const response = await dropped(request, forward, hosts);
 
-      if (request.url.endsWith(MOVE_PATHS.abort)) {
+      if (request.url.endsWith('/move/abort')) {
         aborted.resolve(undefined);
       }
 

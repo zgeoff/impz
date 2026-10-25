@@ -1,9 +1,5 @@
 import { createFrameReader } from '../../src/imp-ops/moves/move-frames';
-import {
-  MOVE_FINISH_HEADER,
-  MOVE_PART_HEADER,
-  MOVE_PATHS,
-} from '../../src/imp-ops/moves/move-header';
+import { MOVE_FINISH_HEADER, MOVE_PART_HEADER } from '../../src/imp-ops/moves/move-header';
 import type { FetchHook } from './create-move-hosts';
 
 export interface MoveFrame {
@@ -24,7 +20,7 @@ export function makeStubMoveStreamRewrite(
     const part = request.headers.get(MOVE_PART_HEADER);
 
     const isPart =
-      request.url.endsWith(MOVE_PATHS.receive) && request.headers.get(MOVE_FINISH_HEADER) === null;
+      request.url.endsWith('/move/receive') && request.headers.get(MOVE_FINISH_HEADER) === null;
 
     if (!isPart) {
       return forward();
