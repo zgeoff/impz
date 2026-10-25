@@ -172,13 +172,17 @@ func startUffdHandler(socket, memFile string, phase *atomic.Int32, fill []int64)
 
 func (h *uffdHandler) run(memFile string, fill []int64) {
 	defer close(h.finished)
+	// a setup error goes through recordError too: Firecracker can wait on a
+	// page inside /snapshot/load, which only a kill releases
 	if err := h.accept(); err != nil {
+		h.recordError(err)
 		h.ready <- err
 		h.filled <- fillResult{err: err}
 		return
 	}
 	data, err := readDataPages(memFile, int64(h.pageSize))
 	if err != nil {
+		h.recordError(err)
 		h.ready <- err
 		h.filled <- fillResult{err: err}
 		return

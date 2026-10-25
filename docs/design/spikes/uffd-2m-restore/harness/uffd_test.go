@@ -201,6 +201,29 @@ func TestUffdHandlerSignalsAFaultItCannotResolve(t *testing.T) {
 	assert.ErrorContains(t, failure, "outside every region")
 }
 
+func TestUffdHandlerSignalsASetupFailureAfterTheHandshake(t *testing.T) {
+	// a socket path has a 108-byte limit, which a TMPDIR can pass
+	dir := t.TempDir()
+	t.Chdir(dir)
+	memFile := writeMemFile(t, dir)
+	var phase atomic.Int32
+	handler, err := startUffdHandler("uffd.sock", memFile, &phase, nil)
+	assert.NilError(t, err)
+	// the handler reads the file's data pages by name after the handshake
+	assert.NilError(t, os.Remove(memFile))
+	setupGuestMemory(t, "uffd.sock", 3)
+
+	select {
+	case <-handler.failed:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the handler did not signal the setup failure")
+	}
+	failure := handler.err()
+	handler.close()
+
+	assert.ErrorIs(t, failure, os.ErrNotExist)
+}
+
 func TestParseUffdMsgsReadsAFaultAndARemove(t *testing.T) {
 	raw := make([]byte, 2*uffdMsgSize)
 	raw[0] = uffdEventPagefault
