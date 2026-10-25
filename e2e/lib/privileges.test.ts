@@ -6,6 +6,7 @@ import {
   findPrivilegeDrift,
   findSocketDrift,
   readExpectedPrivileges,
+  readSeccompProfiles,
 } from './privileges';
 
 test('#findPrivilegeDrift passes a container run with the deploy privileges', () => {
@@ -117,6 +118,21 @@ test("#buildPodmanHostConfig takes podman's effective capabilities and the text 
     SecurityOpt: ['seccomp={"defaultAction":"SCMP_ACT_ERRNO"}', 'apparmor=unconfined'],
     Devices: [{ PathOnHost: '/dev/kvm' }],
   });
+});
+
+test('#readSeccompProfiles reads the text of each seccomp profile path and skips one it cannot read', () => {
+  const texts = new Map([
+    ['/w/imp/deploy/imp-host.seccomp.json', '{"defaultAction":"SCMP_ACT_ERRNO"}'],
+  ]);
+
+  expect(
+    readSeccompProfiles(
+      ['seccomp=/w/imp/deploy/imp-host.seccomp.json', 'seccomp=/gone.json', 'apparmor=unconfined'],
+      (path) => texts.get(path) ?? null,
+    ),
+  ).toStrictEqual(
+    new Map([['/w/imp/deploy/imp-host.seccomp.json', '{"defaultAction":"SCMP_ACT_ERRNO"}']]),
+  );
 });
 
 test('#buildPodmanHostConfig shows a podman container that keeps a default capability as adding it', () => {

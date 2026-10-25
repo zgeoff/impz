@@ -201,7 +201,7 @@ export async function checkPrivileges(
       ? buildPodmanHostConfig(
           info.HostConfig,
           info.EffectiveCaps ?? [],
-          readSeccompProfiles(info.HostConfig.SecurityOpt ?? []),
+          readSeccompProfiles(info.HostConfig.SecurityOpt ?? [], readTextOrNull),
         )
       : info.HostConfig;
 
@@ -212,14 +212,17 @@ export async function checkPrivileges(
   }
 }
 
-function readSeccompProfiles(opts: readonly string[]): Map<string, string> {
+export function readSeccompProfiles(
+  opts: readonly string[],
+  readText: (path: string) => string | null,
+): Map<string, string> {
   const paths = opts
     .filter((opt) => opt.startsWith(SECCOMP_PREFIX))
     .map((opt) => opt.slice(SECCOMP_PREFIX.length));
 
   return new Map(
     paths.flatMap((path) => {
-      const text = readTextOrNull(path);
+      const text = readText(path);
 
       return text === null ? [] : [[path, text] as const];
     }),
