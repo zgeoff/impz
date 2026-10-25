@@ -937,6 +937,60 @@ test('it stops with the rollback to Docker, keeps the proxy unit, and starts not
   );
 });
 
+test('it stops with the rollback to Docker, and keeps the old unit, when it cannot keep the unit as a .bak after the host stops', () => {
+  const ctx = setupTest();
+
+  const podman = createStubBin(
+    ctx.directoryPath,
+    'podman',
+    buildStubHostPodman({
+      image: 'ghcr.io/zgeoff/imp-host:next',
+      pulledLabel: 'no-docker',
+      pulledUnit: 'ExecStart=/usr/bin/podman run --name imp-host imp-host\n',
+      runsHost: false,
+    }),
+  );
+
+  createStubBin(ctx.directoryPath, 'docker', buildStubHostDocker({}));
+  createStubBin(ctx.directoryPath, 'date', 'echo 20261025-120000');
+  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
+
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-host.service'),
+    'ExecStart=/usr/bin/docker run --name imp-host imp-host\n',
+  );
+
+  symlinkSync(
+    join(ctx.directoryPath, 'missing'),
+    join(ctx.directoryPath, 'imp-host.service.bak-20261025-120000'),
+  );
+
+  const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
+    env: {
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
+      IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
+      IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
+      IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
+      IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
+    },
+  });
+
+  expect(result.exitCode).toBe(1);
+
+  expect(result.stderr.toString()).toEndWith(
+    `upgrade: cannot keep ${join(ctx.directoryPath, 'imp-host.service')} as a .bak; ` +
+      'imp-host is stopped; to roll back to Docker: systemctl stop imp-host, ' +
+      'then systemctl daemon-reload, then systemctl start imp-host\n',
+  );
+
+  expect(readFileSync(join(ctx.directoryPath, 'imp-host.service'), 'utf8')).toBe(
+    'ExecStart=/usr/bin/docker run --name imp-host imp-host\n',
+  );
+
+  expect(readFileSync(podman.calls, 'utf8')).not.toInclude('systemctl start');
+});
+
 test('it moves a Docker host to Podman when the pulled image is the one Docker runs', () => {
   const ctx = setupTest();
 
