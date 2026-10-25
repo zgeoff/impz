@@ -1173,6 +1173,71 @@ test('it names the error of a step after the fetch that fails past the limit, no
   });
 });
 
+test('it adds the builder image when mkfs.ext4 runs past the fetch limit', async () => {
+  const ctx = await setupTest();
+
+  const config = loadConfig({
+    IMP_DATA_DIR: ctx.dataDir,
+    IMP_BUILD_MEMORY_MIB: '512',
+    IMP_BUILD_DISK_GIB: '4',
+  });
+
+  createStubOciFetch({
+    directory: ctx.dataDir,
+    images: [
+      {
+        ref: config.build.image,
+        digest: `sha256:${'f'.repeat(64)}`,
+        exportTar: createFilesTar(ctx.dataDir, { dockerd: 'builder\n' }),
+      },
+    ],
+  });
+
+  const mkfs = createStubImageMkfs(ctx.dataDir);
+  const builder = buildStubImageBuilder({ exported: [], repoDigest: 'sha256:1' });
+  const pullLimits: AbortController[] = [];
+
+  const images = createImageService({
+    config,
+    db: ctx.db,
+    storage: ctx.storage,
+    storageGate: ctx.impd.storageGate,
+    diskBudget: ctx.impd.diskBudget,
+    readBuilders: () => builders,
+    builderImagePullMs: 300,
+    startPullLimit: () => {
+      const limit = new AbortController();
+
+      pullLimits.push(limit);
+
+      return limit.signal;
+    },
+  });
+
+  const builders = createBuilders({
+    config,
+    db: ctx.db,
+    imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
+    ensureImage: (signal) => images.ensureBuilderImage(signal),
+  });
+
+  const ensuring = images.ensureBuilderImage();
+
+  await mkfs.waitForStart();
+
+  for (const limit of pullLimits) {
+    limit.abort(new DOMException('The operation timed out.', 'TimeoutError'));
+  }
+
+  mkfs.release();
+
+  await expect(ensuring).toResolve();
+
+  const row = await readImageByName(ctx.db, BUILDER_IMAGE);
+
+  expect(row?.ref).toBe(config.build.image);
+});
+
 test('it leaves no row, rootfs, hold or builder when the client leaves an add while mkfs.ext4 runs', async () => {
   const ctx = await setupTest();
 

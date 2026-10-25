@@ -319,7 +319,7 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
             config: image.config,
             imageName,
             ref,
-            signal,
+            signal: new AbortController().signal,
           });
         } finally {
           rmSync(workDir.work, { recursive: true, force: true });
