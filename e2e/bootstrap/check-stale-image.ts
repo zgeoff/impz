@@ -15,7 +15,7 @@ export async function checkStaleImage(run: BootstrapRun, target: BootstrapTarget
     `[${distro}] a stale image from an older release that needs a Docker socket is refused before anything is written`,
   );
 
-  await runInContainer(run, ['docker', 'load', '-q', '-i', `${ARCHIVE_DIR}/stale.tar`]);
+  await runInContainer(run, ['podman', 'load', '-q', '-i', `${ARCHIVE_DIR}/stale.tar`]);
 
   const before = await runInContainer(run, ['sha256sum', ...WRITTEN_FILES]);
 
@@ -35,5 +35,5 @@ export async function checkStaleImage(run: BootstrapRun, target: BootstrapTarget
     throw new BootstrapTestError(`[${distro}] the stale image run changed the env file or a unit`);
   }
 
-  await runInContainer(run, ['docker', 'rmi', STALE_STUB_IMAGE]);
+  await runInContainer(run, ['podman', 'rmi', STALE_STUB_IMAGE]);
 }

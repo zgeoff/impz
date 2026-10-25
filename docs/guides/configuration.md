@@ -2,9 +2,9 @@
 
 impz reads environment variables in three places: impd, the host container scripts, and the CLI.
 There is no config file. A server keeps the variables in an env file, `/etc/imp/imp-host.env`
-([`deploy/imp-host.env.example`](../../deploy/imp-host.env.example)), which the systemd unit and the
-compose file pass to the container. The [NixOS module](./nixos.md#the-env-file) writes its env file
-to tmpfs and mounts it into the container instead. An empty variable counts as unset.
+([`deploy/imp-host.env.example`](../../deploy/imp-host.env.example)), which the systemd unit passes
+to the container. The [NixOS module](./nixos.md#the-env-file) writes its env file to tmpfs and
+mounts it into the container instead. An empty variable counts as unset.
 
 ## impd
 
@@ -173,23 +173,23 @@ before anything starts.
 | `IMP_TAILSCALE_STATE_DIR`    | `/var/lib/imp/tailscale`           | `tailscale-up.sh`  | Node state; `mem` keeps it in memory.                                                                                                                                                                             |
 | `IMP_DNS`                    | `1.1.1.1,8.8.8.8`                  | `tailscale-up.sh`  | Resolvers for the container when its resolv.conf points into the tailnet.                                                                                                                                         |
 | `IMP_DAEMON`                 | `/src/packages/daemon/src/main.ts` | `entrypoint`       | The impd the supervisor runs: a `.ts` file under bun, else a binary. The release image sets `/usr/local/bin/impd`.                                                                                                |
-| `IMP_ENV_FILE`               | none                               | `entrypoint`       | A docker `--env-file` whose lines the entrypoint exports before anything else, over the image's env. The NixOS module mounts its env file here.                                                                   |
+| `IMP_ENV_FILE`               | none                               | `entrypoint`       | A container `--env-file` whose lines the entrypoint exports before anything else, over the image's env. The NixOS module mounts its env file here.                                                                |
 
 **NOTE:** impd and `tailscale-up.sh` read the same `IMP_DNS`, a comma-separated list. `dev.sh` does
 not pass `IMP_DNS`, so the dev instance uses the defaults.
 
-**NOTE:** CPU limits need the container in a private cgroup namespace:
-`docker run --cgroupns=private` (`cgroup: private` in Compose). `setup-cgroups.sh` turns them off
-without it ([CPU limits](./cpu-limits.md)).
+**NOTE:** CPU limits need the container in a private cgroup namespace: `--cgroupns=private` on
+`podman run` or `docker run`. `setup-cgroups.sh` turns them off without it
+([CPU limits](./cpu-limits.md)).
 
 ## Deploy files
 
-The release's systemd unit and `deploy/compose.yaml` read these, in the env file or the shell.
+The release's systemd unit reads these, in the env file or the shell.
 
-| Variable           | Default               | Read by            | Meaning                                                                                                                                                                    |
-| ------------------ | --------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `IMP_PUBLIC_PORTS` | empty                 | `imp-host.service` | Extra `docker run` words for the public listeners, such as `-p 443:7443 -p 80:7480` ([public imps](./https.md#public-imps)). Compose and NixOS publish them their own way. |
-| `IMP_HOST_PROBED`  | written at each start | `imp-host.service` | Not a setting: the unit writes the args this host supports, such as `--device /dev/zfs` and the IPv6 sysctls, to `/run/imp-host/probed.env`.                               |
+| Variable           | Default               | Read by            | Meaning                                                                                                                                                        |
+| ------------------ | --------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `IMP_PUBLIC_PORTS` | empty                 | `imp-host.service` | Extra `podman run` words for the public listeners, such as `-p 443:7443 -p 80:7480` ([public imps](./https.md#public-imps)). NixOS publishes them its own way. |
+| `IMP_HOST_PROBED`  | written at each start | `imp-host.service` | Not a setting: the unit writes the args this host supports, such as `--device /dev/zfs` and the IPv6 sysctls, to `/run/imp-host/probed.env`.                   |
 
 ## Dev instance
 
@@ -340,7 +340,7 @@ Some `IMP_*` variables are internal to the scripts and tests, not settings: `IMP
 directory for `deploy/`. `IMP_HOST_FIREWALL` (`own` or `none`) records who owns the host's inbound
 firewall; `deploy/bootstrap.sh` reads it, and impd ignores it
 ([host contract](../architecture/host.md#the-host-firewall)). `IMP_HOST_IPV6` (`on` or `off`),
-`IMP_HOST_SUBNET6` and `IMP_HOST_NETWORK` put `imp-host` on a Docker network with IPv6; the unit and
+`IMP_HOST_SUBNET6` and `IMP_HOST_NETWORK` put `imp-host` on a Podman network with IPv6; the unit and
 `bootstrap.sh` read them, and impd ignores them ([IPv6](./install.md#ipv6)). `IMP_VERSION` and
 `IMP_RELEASE_IMAGE` name the image `scripts/release/build-release.sh` builds. `KVER` and `KSHA256`
 pick the kernel source for `kernel/build.sh` ([kernel README](../../kernel/README.md)).

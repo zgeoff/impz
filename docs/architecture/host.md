@@ -10,7 +10,7 @@ holds.
 ## What the host gives
 
 - **KVM** on x86_64, and cgroup v2.
-- **Docker**, or a compatible engine, which runs the container.
+- **Podman**, rootful, which runs the container. The NixOS module runs it with Docker.
 - **Storage**: an XFS mount with reflink on the data directory, or a ZFS dataset impd's backend
   owns, with the modules each needs. The container's ZFS tools must share a major version with the
   host's module ([storage](./storage/storage.md#zfs)).
@@ -23,8 +23,8 @@ holds.
 - **Memory settings**: overcommit on and little swapping, and on ZFS a capped ARC. The ARC sits
   outside impd's RAM budget, so the installers set the budget from the host's RAM less a share for
   the host and the ARC cap.
-- **A firewall** that leaves Docker's rules alone and never flushes the whole ruleset, since that
-  removes the NAT the container's traffic leaves through.
+- **A firewall** that leaves the container engine's rules alone and never flushes the whole ruleset,
+  since that removes the NAT the container's traffic leaves through.
 - **An uplink** for the container's tailscaled, and nothing inbound.
 
 Each installer writes the environment file, installs the seccomp profile from the image, and
@@ -43,8 +43,9 @@ firewall; device nodes for the jail; the uid switches for the jailer; and the fi
 capability writes that unpacking an image needs. Each one was kept because a run without it failed,
 and the end-to-end harness fails when a dev instance's list differs. `/proc/sys` is read-only, so
 the forwarding and tap sysctls come from the container's arguments and the scripts only check them.
-AppArmor is unconfined, because Docker's default profile denies `mount`. The seccomp profile is
-Docker's default with one rule added, `pivot_root`, which the jailer needs.
+AppArmor is unconfined, because the engine's default profile denies `mount`. The seccomp profile is
+Docker's default, which Podman reads unchanged, with one rule added, `pivot_root`, which the jailer
+needs.
 
 **CAUTION:** the container is not a security boundary. With the mount capability in the host's user
 namespace, root in the container can mount a new procfs and write `core_pattern`, and the host's
@@ -60,10 +61,11 @@ capabilities alike, and an image is unpacked in a directory no host user can rea
 
 ## The Docker socket
 
-imp-host gets no Docker socket and ships no Docker client. impd fetches the builder image that every
-build and pull runs in from its registry ([images](./storage/images.md#where-builds-run)), so no
-process in the container calls the host's engine, which only starts and stops imp-host. A missing
-socket closes one path out of the container only: the mount capability above is still a way out.
+imp-host gets no Docker or Podman socket and ships no client for either. impd fetches the builder
+image that every build and pull runs in from its registry
+([images](./storage/images.md#where-builds-run)), so no process in the container calls the host's
+engine, which only starts and stops imp-host. A missing socket closes one path out of the container
+only: the mount capability above is still a way out.
 
 ## The host firewall
 

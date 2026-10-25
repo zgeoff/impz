@@ -158,7 +158,7 @@ async function checkKeyBlanked(run: BootstrapRun, distro: Distro, output: string
   });
 
   const env = await readInContainer(run, [
-    'docker',
+    'podman',
     'container',
     'inspect',
     '-f',
@@ -189,7 +189,7 @@ async function checkFirstRun(run: BootstrapRun, distro: Distro, isUbuntu: boolea
   });
 
   const mounts = await readInContainer(run, [
-    'docker',
+    'podman',
     'container',
     'inspect',
     '-f',

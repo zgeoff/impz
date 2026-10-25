@@ -23,6 +23,9 @@
 # never put in argv. Never run this script with `bash -x`.
 set -euo pipefail
 
+# The units bootstrap installs run imp-host with Podman, so a CONTAINER_CLI in
+# the caller's environment must not turn deploy/lib/host-env.sh to another CLI.
+CONTAINER_CLI=podman
 readonly IMP_DIR=/etc/imp
 readonly ENV_FILE=$IMP_DIR/imp-host.env
 readonly FIREWALL_FILE=$IMP_DIR/firewall.nft
@@ -38,8 +41,6 @@ readonly DEFAULT_IMAGE=ghcr.io/zgeoff/imp-host:4.2.2 # x-release-please-version
 # A file still holding it gets the commented pin; any other value is the
 # operator's pin and stays.
 readonly LEGACY_IMAGE_LINE=IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:latest
-# Docker's apt signing key (https://docs.docker.com/engine/install/ubuntu/).
-readonly DOCKER_KEY_FINGERPRINT=9DC858229FC7DD38854AE2D88D81803C0EBFCD88
 # The template's IMP_RAM_BUDGET_MIB; a file still holding it gets the
 # computed budget, any other value is the operator's and stays.
 readonly TEMPLATE_BUDGET_MIB=16384

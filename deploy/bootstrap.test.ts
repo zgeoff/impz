@@ -6,6 +6,7 @@ import { createCommandLinks } from '@impz/test-utils/create-command-links';
 import * as z from 'zod';
 import { buildStubBlockDevices } from '../scripts/test-utils/build-stub-block-devices';
 import { buildStubBootstrapDocker } from '../scripts/test-utils/build-stub-bootstrap-docker';
+import { buildStubBootstrapPodman } from '../scripts/test-utils/build-stub-bootstrap-podman';
 import { createStubBin } from '../scripts/test-utils/create-stub-bin';
 import { readEnvValues } from '../scripts/test-utils/read-env-values';
 import { runSourcedFunction } from '../scripts/test-utils/run-sourced-function';
@@ -842,7 +843,7 @@ test('#render_ra_file keeps a dotted interface name whole', () => {
 
   expect(runSourcedFunction({ script, fn: 'render_ra_file', args: ['eth0.100'] }).stdout)
     .toMatchInlineSnapshot(`
-      "# Written by deploy/bootstrap.sh (docs/guides/install.md#ipv6). Docker turns on
+      "# Written by deploy/bootstrap.sh (docs/guides/install.md#ipv6). Podman turns on
       # IPv6 forwarding for imp-host's network; with forwarding on, the kernel
       # takes router adverts on eth0.100 only with accept_ra=2.
       net/ipv6/conf/eth0.100/accept_ra = 2
@@ -877,17 +878,17 @@ test('#blank_env_key blanks the key and leaves every other line alone', () => {
 
 test('#check_image_contract refuses an image that needs a Docker socket, with how to get the new one', () => {
   const ctx = setupTest();
-  const docker = createStubBin(ctx.directoryPath, 'docker', "echo 'socket-proxy'");
+  const podman = createStubBin(ctx.directoryPath, 'podman', "echo 'socket-proxy'");
 
   const result = runSourcedFunction({
     script: new URL('bootstrap.sh', import.meta.url).pathname,
     fn: 'check_image_contract',
     args: ['imp-host:1'],
-    env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
+    env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
   });
 
   expect(result.exitCode).toBe(1);
-  expect(result.stderr).toInclude('pull the new image (docker pull imp-host:1)');
+  expect(result.stderr).toInclude('pull the new image (podman pull imp-host:1)');
 });
 
 test.each([
@@ -897,13 +898,13 @@ test.each([
   ['no-docker', 0],
 ])('#check_image_contract answers an image labelled %p with exit %d', (label, exitCode) => {
   const ctx = setupTest();
-  const docker = createStubBin(ctx.directoryPath, 'docker', `echo '${label}'`);
+  const podman = createStubBin(ctx.directoryPath, 'podman', `echo '${label}'`);
 
   const result = runSourcedFunction({
     script: new URL('bootstrap.sh', import.meta.url).pathname,
     fn: 'check_image_contract',
     args: ['imp-host:1'],
-    env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
+    env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
   });
 
   expect(result.exitCode).toBe(exitCode);
@@ -1282,7 +1283,7 @@ test('#resolve_subnet6 refuses an env file IMP_HOST_SUBNET6 that is no IPv6 /64'
   });
 });
 
-test('#resolve_subnet6 takes the env file IMP_HOST_SUBNET6 as Docker prints it', () => {
+test('#resolve_subnet6 takes the env file IMP_HOST_SUBNET6 as Podman prints it', () => {
   const ctx = setupTest();
 
   const script = new URL('bootstrap.sh', import.meta.url).pathname;
@@ -1537,29 +1538,90 @@ test('#apt_install refuses a failed install with the tail of the log and where t
   });
 });
 
-test("#check_docker_key refuses a key file that holds another key than Docker's", () => {
+test('#ensure_packages installs Podman and what it needs past its dependencies on a fresh host', () => {
   const ctx = setupTest();
-
-  const gpg = createStubBin(
-    ctx.directoryPath,
-    'gpg',
-    String.raw`printf '%s\n' 'pub:-:4096:1:7EA0A9C3F273FCD8:1487788586:::-:::scESA:::::::23::0:' 'fpr:::::::::1111222233334444555566667777888899990000:'`,
-  );
-
-  writeFileSync(join(ctx.directoryPath, 'docker.asc'), 'not the key\n');
+  const dpkgQuery = createStubBin(ctx.directoryPath, 'dpkg-query', 'exit 1');
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
-      fn: 'check_docker_key',
-      args: [join(ctx.directoryPath, 'docker.asc')],
-      env: { PATH: `${gpg.bin}:${process.env['PATH'] ?? ''}` },
+      fn: 'eval',
+      args: ['mode=dry-run; ensure_packages'],
+      env: { PATH: `${dpkgQuery.bin}:${process.env['PATH'] ?? ''}` },
+    }),
+  ).toStrictEqual({
+    exitCode: 0,
+    stdout:
+      '== packages\nbootstrap: would: apt-get install ca-certificates curl xfsprogs nftables jq iproute2 util-linux podman catatonit netavark aardvark-dns iptables\n',
+    stderr: '',
+  });
+});
+
+test('#check_docker_host refuses a host whose imp-host runs under Docker, naming upgrade.sh', () => {
+  const ctx = setupTest();
+
+  const docker = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    buildStubBootstrapDocker({ hostContainer: 'present' }),
+  );
+
+  expect(
+    runSourcedFunction({
+      script: new URL('bootstrap.sh', import.meta.url).pathname,
+      fn: 'check_docker_host',
+      args: [join(ctx.directoryPath, 'imp-host.service')],
+      env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
     stdout: '',
-    stderr: `bootstrap: ${join(ctx.directoryPath, 'docker.asc')} is not Docker's apt key (want 9DC858229FC7DD38854AE2D88D81803C0EBFCD88, got 1111222233334444555566667777888899990000)\n`,
+    stderr:
+      'bootstrap: imp-host runs under Docker, from an older release: run deploy/upgrade.sh of this release, which moves the host to Podman (docs/guides/operations.md#upgrade); nothing changed\n',
   });
+});
+
+test('#check_docker_host refuses a stopped older host whose installed unit runs docker', () => {
+  const ctx = setupTest();
+  const docker = createStubBin(ctx.directoryPath, 'docker', buildStubBootstrapDocker({}));
+
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-host.service'),
+    '[Service]\nExecStart=/usr/bin/docker run --rm --name imp-host ghcr.io/zgeoff/imp-host:1.0.0\n',
+  );
+
+  expect(
+    runSourcedFunction({
+      script: new URL('bootstrap.sh', import.meta.url).pathname,
+      fn: 'check_docker_host',
+      args: [join(ctx.directoryPath, 'imp-host.service')],
+      env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
+    }),
+  ).toStrictEqual({
+    exitCode: 1,
+    stdout: '',
+    stderr:
+      'bootstrap: imp-host runs under Docker, from an older release: run deploy/upgrade.sh of this release, which moves the host to Podman (docs/guides/operations.md#upgrade); nothing changed\n',
+  });
+});
+
+test('#check_docker_host passes a host whose Docker runs no imp-host', () => {
+  const ctx = setupTest();
+  const docker = createStubBin(ctx.directoryPath, 'docker', buildStubBootstrapDocker({}));
+
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-host.service'),
+    '[Service]\nExecStart=/usr/bin/podman run --rm --name imp-host ghcr.io/zgeoff/imp-host:1.0.0\n',
+  );
+
+  expect(
+    runSourcedFunction({
+      script: new URL('bootstrap.sh', import.meta.url).pathname,
+      fn: 'check_docker_host',
+      args: [join(ctx.directoryPath, 'imp-host.service')],
+      env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
+    }),
+  ).toStrictEqual({ exitCode: 0, stdout: '', stderr: '' });
 });
 
 test('#check_xfs_reflink refuses a mount on /var/lib/imp that is not XFS', () => {
@@ -2003,7 +2065,7 @@ test('#ensure_firewall refuses its own firewall while nftables.service is enable
     exitCode: 1,
     stdout: '== firewall\n',
     stderr:
-      "bootstrap: nftables.service is enabled; its /etc/nftables.conf flushes every ruleset (Docker's too). Disable it first\n",
+      "bootstrap: nftables.service is enabled; its /etc/nftables.conf flushes every ruleset (Podman's too). Disable it first\n",
   });
 });
 
@@ -2117,15 +2179,13 @@ test('#check_ruleset refuses a ruleset nft rejects', () => {
   });
 });
 
-// /etc/docker/daemon.json and /etc/imp/imp-host.env are the host's: neither may turn ip6tables
-// off or name a subnet
 test('#settle_host_network refuses to recreate a network that differs while other containers use it', () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
+  const podman = createStubBin(
     ctx.directoryPath,
-    'docker',
-    buildStubBootstrapDocker({
+    'podman',
+    buildStubBootstrapPodman({
       hostNetwork: 'true unnamed 172.18.0.0/16 fd12::/64',
       networkContainers: ['imp-host', 'web'],
     }),
@@ -2136,7 +2196,7 @@ test('#settle_host_network refuses to recreate a network that differs while othe
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
       args: ["ipv6_subnet=fd12::/64; settle_host_network 1 'true unnamed 172.18.0.0/16 fd12::/64'"],
-      env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -2149,10 +2209,10 @@ test('#settle_host_network refuses to recreate a network that differs while othe
 test('#settle_host_network keeps a network that is right', () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
+  const podman = createStubBin(
     ctx.directoryPath,
-    'docker',
-    buildStubBootstrapDocker({
+    'podman',
+    buildStubBootstrapPodman({
       hostNetwork: 'true br-imphost 172.18.0.0/16 fd12::/64',
       networkContainers: ['imp-host', 'web'],
     }),
@@ -2165,7 +2225,7 @@ test('#settle_host_network keeps a network that is right', () => {
       args: [
         "ipv6_subnet=fd12::/64; settle_host_network 1 'true br-imphost 172.18.0.0/16 fd12::/64'",
       ],
-      env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 0,
@@ -2174,97 +2234,9 @@ test('#settle_host_network keeps a network that is right', () => {
   });
 });
 
-test('#check_docker_ipv6 refuses a Docker daemon whose version it cannot read', () => {
-  const ctx = setupTest();
-  const docker = createStubBin(ctx.directoryPath, 'docker', buildStubBootstrapDocker({}));
-
-  expect(
-    runSourcedFunction({
-      script: new URL('bootstrap.sh', import.meta.url).pathname,
-      fn: 'check_docker_ipv6',
-      args: [join(ctx.directoryPath, 'daemon.json')],
-      env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
-    }),
-  ).toStrictEqual({
-    exitCode: 1,
-    stdout: '',
-    stderr: "bootstrap: cannot read the Docker daemon's version\n",
-  });
-});
-
-test('#check_docker_ipv6 refuses IPv6 on with a Docker older than 27.0, naming it', () => {
-  const ctx = setupTest();
-
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubBootstrapDocker({ serverVersion: '26.1.4' }),
-  );
-
-  expect(
-    runSourcedFunction({
-      script: new URL('bootstrap.sh', import.meta.url).pathname,
-      fn: 'check_docker_ipv6',
-      args: [join(ctx.directoryPath, 'daemon.json')],
-      env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
-    }),
-  ).toStrictEqual({
-    exitCode: 1,
-    stdout: '',
-    stderr:
-      'bootstrap: Docker 26.1.4 predates 27.0, which writes IPv6 NAT and forward rules by default; fix that, or give --ipv6 off\n',
-  });
-});
-
-test('#check_docker_ipv6 refuses IPv6 on with ip6tables off in the daemon config, naming it', () => {
-  const ctx = setupTest();
-
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubBootstrapDocker({ serverVersion: '27.3.1' }),
-  );
-
-  writeFileSync(join(ctx.directoryPath, 'daemon.json'), '{"ip6tables": false}\n');
-
-  expect(
-    runSourcedFunction({
-      script: new URL('bootstrap.sh', import.meta.url).pathname,
-      fn: 'check_docker_ipv6',
-      args: [join(ctx.directoryPath, 'daemon.json')],
-      env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
-    }),
-  ).toStrictEqual({
-    exitCode: 1,
-    stdout: '',
-    stderr: `bootstrap: ${join(ctx.directoryPath, 'daemon.json')} sets ip6tables to false, so imp-host's network would have no NAT66; fix that, or give --ipv6 off\n`,
-  });
-});
-
-test('#check_docker_ipv6 accepts Docker 27.0 or later with a daemon config that leaves ip6tables on', () => {
-  const ctx = setupTest();
-
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubBootstrapDocker({ serverVersion: '27.3.1' }),
-  );
-
-  writeFileSync(join(ctx.directoryPath, 'daemon.json'), '{"log-driver": "journald"}\n');
-
-  expect(
-    runSourcedFunction({
-      script: new URL('bootstrap.sh', import.meta.url).pathname,
-      fn: 'check_docker_ipv6',
-      args: [join(ctx.directoryPath, 'daemon.json')],
-      env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
-    }),
-  ).toStrictEqual({ exitCode: 0, stdout: '', stderr: '' });
-});
-
 test('#remove_ipv6 refuses an accept_ra file left without --ipv6 off, naming it', () => {
   const ctx = setupTest();
-  const docker = createStubBin(ctx.directoryPath, 'docker', buildStubBootstrapDocker({}));
+  const podman = createStubBin(ctx.directoryPath, 'podman', buildStubBootstrapPodman({}));
 
   writeFileSync(join(ctx.directoryPath, '90-imp-ipv6.conf'), 'net.ipv6.conf.eth0.accept_ra = 2\n');
 
@@ -2273,7 +2245,7 @@ test('#remove_ipv6 refuses an accept_ra file left without --ipv6 off, naming it'
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
       args: [`mode=yes; remove_ipv6 '${join(ctx.directoryPath, '90-imp-ipv6.conf')}'`],
-      env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -2284,18 +2256,18 @@ test('#remove_ipv6 refuses an accept_ra file left without --ipv6 off, naming it'
 
 test('#remove_ipv6 leaves a host with no network and no accept_ra file as it is', () => {
   const ctx = setupTest();
-  const docker = createStubBin(ctx.directoryPath, 'docker', buildStubBootstrapDocker({}));
+  const podman = createStubBin(ctx.directoryPath, 'podman', buildStubBootstrapPodman({}));
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
       args: [`mode=yes; remove_ipv6 '${join(ctx.directoryPath, '90-imp-ipv6.conf')}'`],
-      env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 0,
-    stdout: "bootstrap: ipv6: off; imp-host runs on Docker's default bridge\n",
+    stdout: "bootstrap: ipv6: off; imp-host runs on Podman's default network\n",
     stderr: '',
   });
 });
@@ -2303,10 +2275,10 @@ test('#remove_ipv6 leaves a host with no network and no accept_ra file as it is'
 test('#remove_ipv6 refuses to remove the network while other containers use it', () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
+  const podman = createStubBin(
     ctx.directoryPath,
-    'docker',
-    buildStubBootstrapDocker({
+    'podman',
+    buildStubBootstrapPodman({
       hostNetwork: 'true br-imphost 172.18.0.0/16 fd12::/64',
       networkContainers: ['imp-host', 'web'],
     }),
@@ -2317,7 +2289,7 @@ test('#remove_ipv6 refuses to remove the network while other containers use it',
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
       args: [`ipv6_set=1; remove_ipv6 '${join(ctx.directoryPath, '90-imp-ipv6.conf')}'`],
-      env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -2329,10 +2301,10 @@ test('#remove_ipv6 refuses to remove the network while other containers use it',
 test('#read_seccomp refuses an image without the seccomp profile', () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
+  const podman = createStubBin(
     ctx.directoryPath,
-    'docker',
-    buildStubBootstrapDocker({ images: ['imp-host:1'] }),
+    'podman',
+    buildStubBootstrapPodman({ images: ['imp-host:1'] }),
   );
 
   expect(
@@ -2340,7 +2312,7 @@ test('#read_seccomp refuses an image without the seccomp profile', () => {
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'read_seccomp',
       args: ['imp-host:1'],
-      env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -2354,10 +2326,10 @@ test('#read_seccomp refuses an image without the seccomp profile', () => {
 test('#read_seccomp prints the seccomp profile of an image that carries one', () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
+  const podman = createStubBin(
     ctx.directoryPath,
-    'docker',
-    buildStubBootstrapDocker({ images: ['imp-host:1'], seccompImages: ['imp-host:1'] }),
+    'podman',
+    buildStubBootstrapPodman({ images: ['imp-host:1'], seccompImages: ['imp-host:1'] }),
   );
 
   expect(
@@ -2365,21 +2337,21 @@ test('#read_seccomp prints the seccomp profile of an image that carries one', ()
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'read_seccomp',
       args: ['imp-host:1'],
-      env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({ exitCode: 0, stdout: '{}\n', stderr: '' });
 });
 
 test('#ensure_image refuses an image archive it cannot read', () => {
   const ctx = setupTest();
-  const docker = createStubBin(ctx.directoryPath, 'docker', buildStubBootstrapDocker({}));
+  const podman = createStubBin(ctx.directoryPath, 'podman', buildStubBootstrapPodman({}));
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
       args: [`image_archive='${join(ctx.directoryPath, 'imp-host.tar')}'; ensure_image imp-host:1`],
-      env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -2390,14 +2362,14 @@ test('#ensure_image refuses an image archive it cannot read', () => {
 
 test('#load_image refuses an archive that does not hold the image', () => {
   const ctx = setupTest();
-  const docker = createStubBin(ctx.directoryPath, 'docker', buildStubBootstrapDocker({}));
+  const podman = createStubBin(ctx.directoryPath, 'podman', buildStubBootstrapPodman({}));
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
       args: ['image_archive=/srv/imp-host.tar; load_image imp-host:1'],
-      env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -2409,17 +2381,17 @@ test('#load_image refuses an archive that does not hold the image', () => {
 test('#health refuses imp-host publishing a port beyond loopback', () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
+  const podman = createStubBin(
     ctx.directoryPath,
-    'docker',
-    buildStubBootstrapDocker({ impInfo: 'imp 0.40.4', published: '7070/tcp -> 0.0.0.0:7070' }),
+    'podman',
+    buildStubBootstrapPodman({ impInfo: 'imp 0.40.4', published: '7070/tcp -> 0.0.0.0:7070' }),
   );
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'health',
-      env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -2431,10 +2403,10 @@ test('#health refuses imp-host publishing a port beyond loopback', () => {
 test('#health asks imp in an image from before the CLI was impz', () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
+  const podman = createStubBin(
     ctx.directoryPath,
-    'docker',
-    buildStubBootstrapDocker({
+    'podman',
+    buildStubBootstrapPodman({
       impInfo: 'imp 1.6.0',
       published: '7070/tcp -> 0.0.0.0:7070',
       runningCLI: 'imp',
@@ -2445,7 +2417,7 @@ test('#health asks imp in an image from before the CLI was impz', () => {
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'health',
-      env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -2457,10 +2429,10 @@ test('#health asks imp in an image from before the CLI was impz', () => {
 test('#check_storage_live refuses impd on another storage backend than the bootstrap set up', () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
+  const podman = createStubBin(
     ctx.directoryPath,
-    'docker',
-    buildStubBootstrapDocker({ impInfo: '{"storage":{"backend":"xfs"}}' }),
+    'podman',
+    buildStubBootstrapPodman({ impInfo: '{"storage":{"backend":"xfs"}}' }),
   );
 
   expect(
@@ -2468,7 +2440,7 @@ test('#check_storage_live refuses impd on another storage backend than the boots
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
       args: ['storage=zfs; check_storage_live'],
-      env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -2482,8 +2454,8 @@ test('#check_storage_live refuses a ZFS pool that is not ONLINE', () => {
 
   createStubBin(
     ctx.directoryPath,
-    'docker',
-    buildStubBootstrapDocker({ impInfo: '{"storage":{"backend":"zfs"}}' }),
+    'podman',
+    buildStubBootstrapPodman({ impInfo: '{"storage":{"backend":"zfs"}}' }),
   );
 
   const zpool = createStubBin(ctx.directoryPath, 'zpool', 'echo DEGRADED');
@@ -2507,8 +2479,8 @@ test('#check_storage_live refuses a container with another dataset on /var/lib/i
 
   createStubBin(
     ctx.directoryPath,
-    'docker',
-    buildStubBootstrapDocker({
+    'podman',
+    buildStubBootstrapPodman({
       impInfo: '{"storage":{"backend":"zfs"}}',
       dataMount: 'tank/other zfs',
     }),
@@ -2532,13 +2504,13 @@ test('#check_storage_live refuses a container with another dataset on /var/lib/i
 
 test('#check_ipv6_live refuses imp-host without an IPv6 default route', () => {
   const ctx = setupTest();
-  const docker = createStubBin(ctx.directoryPath, 'docker', buildStubBootstrapDocker({}));
+  const podman = createStubBin(ctx.directoryPath, 'podman', buildStubBootstrapPodman({}));
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'check_ipv6_live',
-      env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -2550,10 +2522,10 @@ test('#check_ipv6_live refuses imp-host without an IPv6 default route', () => {
 test('#check_ipv6_live refuses an impd that logs IPv6 off, quoting its line', () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
+  const podman = createStubBin(
     ctx.directoryPath,
-    'docker',
-    buildStubBootstrapDocker({
+    'podman',
+    buildStubBootstrapPodman({
       ipv6Route: 'default via fd12::1 dev eth0 metric 1024',
       logs: 'INFO impd.ipv6 off (no default route)',
     }),
@@ -2563,7 +2535,7 @@ test('#check_ipv6_live refuses an impd that logs IPv6 off, quoting its line', ()
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'check_ipv6_live',
-      env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -2581,17 +2553,17 @@ test.each([
 ])('#check_ipv6_live refuses an older image whose impd logs %s', (logs, quoted) => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
+  const podman = createStubBin(
     ctx.directoryPath,
-    'docker',
-    buildStubBootstrapDocker({ ipv6Route: 'default via fd12::1 dev eth0 metric 1024', logs }),
+    'podman',
+    buildStubBootstrapPodman({ ipv6Route: 'default via fd12::1 dev eth0 metric 1024', logs }),
   );
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'check_ipv6_live',
-      env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -2603,10 +2575,10 @@ test.each([
 test('#check_ipv6_live passes an older image whose impd logs its IPv6 plan', () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
+  const podman = createStubBin(
     ctx.directoryPath,
-    'docker',
-    buildStubBootstrapDocker({
+    'podman',
+    buildStubBootstrapPodman({
       ipv6Route: 'default via fd12::1 dev eth0 metric 1024',
       logs: 'impd: api on :7070\nimpd: ipv6: fd12:3456:789a::/64, NAT66 out of eth0',
     }),
@@ -2616,7 +2588,7 @@ test('#check_ipv6_live passes an older image whose impd logs its IPv6 plan', () 
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'check_ipv6_live',
-      env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 0,
@@ -2628,10 +2600,10 @@ test('#check_ipv6_live passes an older image whose impd logs its IPv6 plan', () 
 test('#check_ipv6_live passes an impd that logs its IPv6 plan, quoting its line', () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
+  const podman = createStubBin(
     ctx.directoryPath,
-    'docker',
-    buildStubBootstrapDocker({
+    'podman',
+    buildStubBootstrapPodman({
       ipv6Route: 'default via fd12::1 dev eth0 metric 1024',
       logs: 'INFO impd.api api on :7070\nINFO impd.ipv6 fd12:3456:789a::/64, NAT66 out of eth0',
     }),
@@ -2641,7 +2613,7 @@ test('#check_ipv6_live passes an impd that logs its IPv6 plan, quoting its line'
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'check_ipv6_live',
-      env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 0,

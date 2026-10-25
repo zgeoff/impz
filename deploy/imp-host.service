@@ -1,5 +1,6 @@
-# imp host as a systemd service. One of the two supported ways to run the
-# release image; deploy/compose.yaml is the other. Run one, not both.
+# imp host as a systemd service: the supported way to run the release image
+# on Ubuntu and Debian, which deploy/bootstrap.sh installs. It runs the
+# container with rootful Podman.
 #
 #   install -m 0644 deploy/imp-host.service /etc/systemd/system/
 #   install -D -m 0600 deploy/imp-host.env.example /etc/imp/imp-host.env  # then edit
@@ -10,8 +11,7 @@
 [Unit]
 Description=imp host (impd, Firecracker, tailscaled)
 Documentation=https://github.com/zgeoff/impz/blob/main/docs/guides/install.md
-Requires=docker.service
-After=docker.service network-online.target
+After=network-online.target
 Wants=network-online.target
 # With XFS, /var/lib/imp is a host mount; never start before it is there.
 RequiresMountsFor=/var/lib/imp
@@ -25,18 +25,18 @@ Environment=IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:4.2.2
 # x-release-please-end
 EnvironmentFile=/etc/imp/imp-host.env
 # A container left over from a crash would hold the name.
-ExecStartPre=-/usr/bin/docker rm -f imp-host
+ExecStartPre=-/usr/bin/podman rm -f imp-host
 # With IPv6 (IMP_HOST_NETWORK names it), the network imp-host on its /64,
 # created when it is missing; bootstrap.sh --check reports one that differs.
 # Its name and bridge come from deploy/imp-host.args.json (bun run
-# render:deploy), as do bootstrap.sh's and deploy/compose.yaml's.
-ExecStartPre=/bin/sh -c 'case "$$IMP_HOST_NETWORK" in *imp-host*) /usr/bin/docker network inspect imp-host >/dev/null 2>&1 || /usr/bin/docker network create --ipv6 --subnet "$$IMP_HOST_SUBNET6" -o com.docker.network.bridge.name=br-imphost imp-host ;; esac'
+# render:deploy), as do bootstrap.sh's.
+ExecStartPre=/bin/sh -c 'case "$$IMP_HOST_NETWORK" in *imp-host*) /usr/bin/podman network exists imp-host || /usr/bin/podman network create --ipv6 --subnet "$$IMP_HOST_SUBNET6" --interface-name br-imphost imp-host >/dev/null ;; esac'
 # The probed args (such as --device /dev/zfs) whose path this host has, into
 # IMP_HOST_PROBED; systemd reads the file again for ExecStart.
 RuntimeDirectory=imp-host
 EnvironmentFile=-/run/imp-host/probed.env
 ExecStartPre=/bin/sh -c 'a=; [ -e /dev/zfs ] && a="$$a --device /dev/zfs"; [ -e /proc/sys/net/ipv6 ] && a="$$a --sysctl net.ipv6.conf.all.forwarding=1 --sysctl net.ipv6.conf.default.accept_ra=0 --sysctl net.ipv6.conf.default.accept_redirects=0 --sysctl net.ipv6.conf.default.disable_ipv6=0"; { echo "IMP_HOST_PROBED=$$a"; echo "IMP_HOST_ADDRESSES=$$(ip -o addr show scope global | tr -s " " | cut -d " " -f 4 | paste -sd ,)"; } >/run/imp-host/probed.env'
-# In the foreground and without a docker restart policy: systemd supervises
+# In the foreground and without a podman restart policy: systemd supervises
 # it and restarts it on failure.
 # --hostname: restic's backup locks name the host (docs/architecture/storage/backups.md)
 # $IMP_PUBLIC_PORTS, unbraced, is zero or more words from the env file: for
@@ -44,7 +44,7 @@ ExecStartPre=/bin/sh -c 'a=; [ -e /dev/zfs ] && a="$$a --device /dev/zfs"; [ -e 
 # $IMP_HOST_NETWORK too: with IPv6, `--network imp-host`
 # The arguments come from deploy/imp-host.args.json: edit that, then run
 # bun run render:deploy (the NixOS module reads the same file).
-ExecStart=/usr/bin/docker run --rm --name imp-host --hostname imp-host \
+ExecStart=/usr/bin/podman run --rm --name imp-host --hostname imp-host \
   --init --cgroupns=private --cap-drop ALL \
   --cap-add SYS_ADMIN --cap-add NET_ADMIN --cap-add MKNOD \
   --cap-add CHOWN --cap-add SETUID --cap-add SETGID --cap-add KILL \
@@ -65,7 +65,7 @@ ExecStart=/usr/bin/docker run --rm --name imp-host --hostname imp-host \
   ${IMP_HOST_IMAGE}
 # SIGTERM makes impd sleep every awake imp, so memory survives; it gets up
 # to 120 s, and systemd waits a little longer before it kills anything.
-ExecStop=/usr/bin/docker stop -t 120 imp-host
+ExecStop=/usr/bin/podman stop -t 120 imp-host
 TimeoutStopSec=150
 Restart=on-failure
 RestartSec=5

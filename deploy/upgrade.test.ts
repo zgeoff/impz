@@ -14,6 +14,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as z from 'zod';
 import { buildStubHostDocker } from '../scripts/test-utils/build-stub-host-docker';
+import { buildStubHostPodman } from '../scripts/test-utils/build-stub-host-podman';
+import { buildStubUnitSystemctl } from '../scripts/test-utils/build-stub-unit-systemctl';
 import { createStubBin } from '../scripts/test-utils/create-stub-bin';
 
 function setupTest() {
@@ -31,17 +33,16 @@ function setupTest() {
   };
 }
 
-test('it installs the unprivileged host unit and restarts imp-host, on an upgrade from the privileged host', () => {
+test('it installs the unit and restarts imp-host, and tells how to roll back, on a Podman host', () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
+  const podman = createStubBin(
     ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
+    'podman',
+    buildStubHostPodman({
       image: 'ghcr.io/zgeoff/imp-host:next',
-      runningLabel: '',
-      pulledLabel: 'unprivileged',
-      pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
+      pulledLabel: 'no-docker',
+      pulledUnit: 'ExecStart=/usr/bin/podman run --name imp-host imp-host\n',
     }),
   );
 
@@ -49,12 +50,12 @@ test('it installs the unprivileged host unit and restarts imp-host, on an upgrad
 
   writeFileSync(
     join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --init --privileged imp-host\n',
+    'ExecStart=/usr/bin/podman run --cap-drop ALL imp-host\n',
   );
 
   const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
     env: {
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
       IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
       IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
       IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
@@ -63,124 +64,33 @@ test('it installs the unprivileged host unit and restarts imp-host, on an upgrad
     },
   });
 
-  const output = result.stdout.toString() + result.stderr.toString();
-  const calls = readFileSync(docker.calls, 'utf8');
+  const calls = readFileSync(podman.calls, 'utf8');
 
   expect(result.exitCode).toBe(0);
 
   expect(readFileSync(join(ctx.directoryPath, 'imp-host.service'), 'utf8')).toBe(
-    'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
+    'ExecStart=/usr/bin/podman run --name imp-host imp-host\n',
   );
 
   expect(readFileSync(join(ctx.directoryPath, 'imp-host.seccomp.json'), 'utf8')).toBe('{}\n');
   expect(calls).toInclude('systemctl daemon-reload\nsystemctl restart imp-host\n');
-  expect(output).toInclude('predates this host contract (unprivileged): to roll back');
-  expect(existsSync(join(ctx.directoryPath, 'imp-docker-proxy.service'))).toBeFalse();
+  expect(calls).not.toInclude('docker');
+
+  expect(result.stdout.toString()).toInclude(
+    'upgrade: done. To roll back: podman tag old ghcr.io/zgeoff/imp-host:next, then systemctl restart imp-host.\n',
+  );
 });
 
-test('it installs both units and restarts the proxy before imp-host, on an upgrade from the socket host', () => {
+test('it keeps the unit it replaces as a .bak, and names it', () => {
   const ctx = setupTest();
 
-  // the socket host's unit: unprivileged, with the host's docker.sock
-  const docker = createStubBin(
+  const podman = createStubBin(
     ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
+    'podman',
+    buildStubHostPodman({
       image: 'ghcr.io/zgeoff/imp-host:next',
-      runningLabel: 'unprivileged',
-      pulledLabel: 'socket-proxy',
-      pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
-    }),
-  );
-
-  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
-
-  writeFileSync(
-    join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --cap-drop ALL -v /var/run/docker.sock:/var/run/docker.sock imp-host\n',
-  );
-
-  const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
-    env: {
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
-      IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
-      IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
-      IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
-      IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
-      IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
-    },
-  });
-
-  const output = result.stdout.toString() + result.stderr.toString();
-  const calls = readFileSync(docker.calls, 'utf8');
-
-  expect(result.exitCode).toBe(0);
-
-  expect(readFileSync(join(ctx.directoryPath, 'imp-host.service'), 'utf8')).toBe(
-    'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
-  );
-
-  expect(readFileSync(join(ctx.directoryPath, 'imp-docker-proxy.service'), 'utf8')).toBe(
-    'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
-  );
-
-  expect(calls).toInclude(
-    'systemctl daemon-reload\nsystemctl enable -q imp-docker-proxy\n' +
-      'systemctl restart imp-docker-proxy\nsystemctl restart imp-host\n',
-  );
-
-  expect(output).toInclude('run deploy/bootstrap.sh of its release');
-});
-
-test('it tells how to roll back by restarting both units, on an upgrade between proxy hosts', () => {
-  const ctx = setupTest();
-
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
-      image: 'ghcr.io/zgeoff/imp-host:next',
-      runningLabel: 'socket-proxy',
-      pulledLabel: 'socket-proxy',
-      pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
-    }),
-  );
-
-  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
-
-  writeFileSync(
-    join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
-  );
-
-  const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
-    env: {
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
-      IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
-      IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
-      IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
-      IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
-      IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
-    },
-  });
-
-  const output = result.stdout.toString() + result.stderr.toString();
-
-  expect(result.exitCode).toBe(0);
-  expect(output).toInclude('then systemctl restart imp-docker-proxy imp-host');
-});
-
-test('it stops and disables the proxy, and keeps its unit as a .bak, on an upgrade to an image that needs no Docker', () => {
-  const ctx = setupTest();
-
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
-      image: 'ghcr.io/zgeoff/imp-host:next',
-      runningLabel: 'socket-proxy',
       pulledLabel: 'no-docker',
-      pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
+      pulledUnit: 'ExecStart=/usr/bin/podman run --name imp-host imp-host\n',
     }),
   );
 
@@ -188,7 +98,402 @@ test('it stops and disables the proxy, and keeps its unit as a .bak, on an upgra
 
   writeFileSync(
     join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
+    'ExecStart=/usr/bin/podman run --cap-drop ALL imp-host\n',
+  );
+
+  const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
+    env: {
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
+      IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
+      IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
+      IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
+      IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
+    },
+  });
+
+  const backups = readdirSync(ctx.directoryPath).filter((file) =>
+    /^imp-host\.service\.bak-\d{8}-\d{6}$/v.test(file),
+  );
+
+  expect(result.exitCode).toBe(0);
+
+  expect(backups.map((file) => readFileSync(join(ctx.directoryPath, file), 'utf8'))).toStrictEqual([
+    'ExecStart=/usr/bin/podman run --cap-drop ALL imp-host\n',
+  ]);
+
+  expect(result.stdout.toString()).toInclude(
+    `upgrade: installed ${join(ctx.directoryPath, 'imp-host.service')} from ghcr.io/zgeoff/imp-host:next (the unit before: ${join(ctx.directoryPath, backups.join(''))})\n`,
+  );
+});
+
+test('it keeps no .bak and reloads no units when the unit is unchanged', () => {
+  const ctx = setupTest();
+
+  const podman = createStubBin(
+    ctx.directoryPath,
+    'podman',
+    buildStubHostPodman({
+      image: 'ghcr.io/zgeoff/imp-host:next',
+      pulledLabel: 'no-docker',
+      pulledUnit: 'ExecStart=/usr/bin/podman run --name imp-host imp-host\n',
+    }),
+  );
+
+  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
+
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-host.service'),
+    'ExecStart=/usr/bin/podman run --name imp-host imp-host\n',
+  );
+
+  const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
+    env: {
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
+      IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
+      IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
+      IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
+      IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
+    },
+  });
+
+  const calls = readFileSync(podman.calls, 'utf8');
+
+  expect(result.exitCode).toBe(0);
+  expect(readdirSync(ctx.directoryPath).filter((file) => file.includes('.bak-'))).toBeEmpty();
+  expect(calls).not.toInclude('daemon-reload');
+  expect(calls).toInclude('systemctl restart imp-host\n');
+});
+
+test.each([
+  ['socket-proxy', 'socket-proxy'],
+  ['unprivileged', 'unprivileged'],
+  ['no label', ''],
+])(
+  'it refuses an image with %s for its host contract, which needs a Docker socket, before anything changes',
+  (_, label) => {
+    const ctx = setupTest();
+
+    const podman = createStubBin(
+      ctx.directoryPath,
+      'podman',
+      buildStubHostPodman({
+        image: 'ghcr.io/zgeoff/imp-host:old',
+        pulledLabel: label,
+        pulledUnit: 'ExecStart=/usr/bin/docker run --cap-drop ALL imp-host\n',
+        awakeImps: ['web'],
+      }),
+    );
+
+    createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
+
+    writeFileSync(
+      join(ctx.directoryPath, 'imp-host.service'),
+      'ExecStart=/usr/bin/podman run --name imp-host imp-host\n',
+    );
+
+    const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
+      env: {
+        PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
+        IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:old',
+        IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
+        IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
+        IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
+        IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
+      },
+    });
+
+    const calls = readFileSync(podman.calls, 'utf8');
+
+    expect(result.exitCode).toBe(1);
+
+    expect(result.stderr.toString()).toInclude(
+      'upgrade: ghcr.io/zgeoff/imp-host:old needs a Docker socket',
+    );
+
+    expect(result.stderr.toString()).toInclude(
+      'put back the imp-host.service.bak-<time> (and imp-docker-proxy.service.bak-<time>) units',
+    );
+
+    expect(readFileSync(join(ctx.directoryPath, 'imp-host.service'), 'utf8')).toBe(
+      'ExecStart=/usr/bin/podman run --name imp-host imp-host\n',
+    );
+
+    expect(existsSync(join(ctx.directoryPath, 'imp-host.seccomp.json'))).toBeFalse();
+    expect(calls).not.toInclude('systemctl');
+    expect(calls).not.toInclude('impz');
+  },
+);
+
+test('it refuses --compose, saying the systemd unit replaces the Compose recipe', () => {
+  const ctx = setupTest();
+  const podman = createStubBin(ctx.directoryPath, 'podman');
+
+  const result = Bun.spawnSync(
+    ['bash', new URL('upgrade.sh', import.meta.url).pathname, '--compose', 'compose.yaml'],
+    {
+      env: {
+        PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
+        IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
+        IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
+        IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
+        IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
+      },
+    },
+  );
+
+  expect({ exitCode: result.exitCode, stderr: result.stderr.toString() }).toStrictEqual({
+    exitCode: 1,
+    stderr:
+      'upgrade: the Compose recipe is gone; the systemd unit that deploy/bootstrap.sh installs replaces it (docs/guides/install.md). Nothing changed.\n',
+  });
+
+  expect(readFileSync(podman.calls, 'utf8')).toBe('');
+});
+
+test('it refuses any argument with its usage', () => {
+  const ctx = setupTest();
+
+  const result = Bun.spawnSync(
+    ['bash', new URL('upgrade.sh', import.meta.url).pathname, '--check'],
+    {
+      env: {
+        PATH: `${join(ctx.directoryPath, 'bin')}:${process.env['PATH'] ?? ''}`,
+        IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
+        IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
+        IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
+        IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
+      },
+    },
+  );
+
+  expect(result.exitCode).toBe(2);
+  expect(result.stderr.toString()).toStartWith('usage: ');
+  expect(result.stderr.toString()).toEndWith('upgrade.sh\n');
+});
+
+test('it refuses to run on a host without podman, saying how to install it', () => {
+  const ctx = setupTest();
+  const curl = createStubBin(ctx.directoryPath, 'curl');
+
+  createStubBin(ctx.directoryPath, 'jq');
+
+  const result = Bun.spawnSync(
+    [Bun.which('bash') ?? 'bash', new URL('upgrade.sh', import.meta.url).pathname],
+    {
+      env: {
+        PATH: curl.bin,
+        IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
+        IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
+        IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
+        IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
+      },
+    },
+  );
+
+  expect(result.exitCode).toBe(1);
+
+  expect(result.stderr.toString()).toBe(
+    "upgrade: podman is not installed; install it (apt-get install podman catatonit netavark aardvark-dns iptables), or run this release's deploy/bootstrap.sh\n",
+  );
+
+  expect(readFileSync(curl.calls, 'utf8')).toBe('');
+});
+
+test('it refuses to run on a host without jq', () => {
+  const ctx = setupTest();
+  const podman = createStubBin(ctx.directoryPath, 'podman');
+
+  createStubBin(ctx.directoryPath, 'curl');
+
+  const result = Bun.spawnSync(
+    [Bun.which('bash') ?? 'bash', new URL('upgrade.sh', import.meta.url).pathname],
+    {
+      env: {
+        PATH: podman.bin,
+        IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
+        IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
+        IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
+        IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
+      },
+    },
+  );
+
+  expect(result.exitCode).toBe(1);
+  expect(result.stderr.toString()).toBe('upgrade: jq is not installed\n');
+  expect(readFileSync(podman.calls, 'utf8')).toBe('');
+});
+
+// the command of the releases before deploy/lib/host-env.sh took upgrade.sh alone
+test('it refuses to run without lib/host-env.sh beside it, saying how to take both from the image', () => {
+  const ctx = setupTest();
+  const podman = createStubBin(ctx.directoryPath, 'podman');
+
+  writeFileSync(
+    join(ctx.directoryPath, 'upgrade.sh'),
+    readFileSync(new URL('upgrade.sh', import.meta.url), 'utf8'),
+  );
+
+  const result = Bun.spawnSync(['bash', 'upgrade.sh'], {
+    cwd: ctx.directoryPath,
+    env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
+  });
+
+  expect(result.exitCode).toBe(1);
+
+  expect(result.stderr.toString()).toBe(
+    'upgrade: no ./lib/host-env.sh beside this script; take both from the new image: ' +
+      'podman run --rm <new image> tar -cf - -C /usr/local/share/imp deploy | tar -xf -, ' +
+      'then run deploy/upgrade.sh (docs/guides/operations.md#upgrade)\n',
+  );
+
+  expect(readFileSync(podman.calls, 'utf8')).toBe('');
+});
+
+test('it refuses a host with no imp-host container under Podman or Docker, before any pull', () => {
+  const ctx = setupTest();
+  const podman = createStubBin(ctx.directoryPath, 'podman', 'exit 1');
+
+  createStubBin(ctx.directoryPath, 'docker', 'exit 1');
+
+  const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
+    env: {
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
+      IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
+      IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
+      IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
+      IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
+    },
+  });
+
+  expect(result.exitCode).toBe(1);
+
+  expect(result.stderr.toString()).toBe(
+    'upgrade: no imp-host container; start the host first (docs/guides/install.md)\n',
+  );
+
+  expect(readFileSync(podman.calls, 'utf8')).toBe(
+    'podman container exists imp-host\ndocker container inspect imp-host\n',
+  );
+});
+
+test('it moves a Docker host with IPv6 and the proxy to Podman: stop on the old unit, then the container, the proxy and the network, then the new unit and a start', () => {
+  const ctx = setupTest();
+
+  const podman = createStubBin(
+    ctx.directoryPath,
+    'podman',
+    buildStubHostPodman({
+      image: 'ghcr.io/zgeoff/imp-host:next',
+      pulledLabel: 'no-docker',
+      pulledUnit: 'ExecStart=/usr/bin/podman run --name imp-host imp-host\n',
+      runsHost: false,
+    }),
+  );
+
+  createStubBin(
+    ctx.directoryPath,
+    'docker',
+    buildStubHostDocker({ awakeImps: ['web'], hostNetwork: ['imp-host'] }),
+  );
+
+  createStubBin(
+    ctx.directoryPath,
+    'systemctl',
+    buildStubUnitSystemctl(join(ctx.directoryPath, 'imp-host.service')),
+  );
+
+  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
+
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-host.service'),
+    'ExecStart=/usr/bin/docker run --name imp-host imp-host\n',
+  );
+
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-docker-proxy.service'),
+    'ExecStart=/usr/bin/docker run --name imp-docker-proxy imp-host\n',
+  );
+
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-host.env'),
+    'IMP_HOST_NETWORK=--network imp-host\nIMP_HOST_SUBNET6=fd00:7a::/64\n',
+    { mode: 0o600 },
+  );
+
+  mkdirSync(join(ctx.directoryPath, 'imp-data', 'imps'), { recursive: true });
+  writeFileSync(join(ctx.directoryPath, 'imp-data', 'imps', 'web.img'), 'disk of web');
+
+  const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
+    env: {
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
+      IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
+      IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
+      IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
+      IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
+    },
+  });
+
+  expect(result.exitCode).toBe(0);
+
+  expect(readFileSync(podman.calls, 'utf8')).toBe(
+    [
+      'podman container exists imp-host',
+      'docker container inspect imp-host',
+      'podman pull -q ghcr.io/zgeoff/imp-host:next',
+      'docker inspect -f {{.Image}} imp-host',
+      'podman image inspect -f {{.Id}} ghcr.io/zgeoff/imp-host:next',
+      'podman image inspect -f {{index .Config.Labels "imp.host-contract"}} ghcr.io/zgeoff/imp-host:next',
+      'docker network inspect -f {{range .Containers}}{{.Name}} {{end}} imp-host',
+      'podman run --rm ghcr.io/zgeoff/imp-host:next cat /usr/local/share/imp/deploy/imp-host.seccomp.json',
+      'podman run --rm ghcr.io/zgeoff/imp-host:next cat /usr/local/share/imp/deploy/imp-host.service',
+      'docker exec imp-host impz --version',
+      'docker exec imp-host impz ls --json',
+      'docker exec imp-host impz sleep web',
+      'systemctl stop imp-host',
+      '  unit: ExecStart=/usr/bin/docker run --name imp-host imp-host',
+      'docker rm -f imp-host',
+      'systemctl disable -q --now imp-docker-proxy',
+      '  unit: ExecStart=/usr/bin/docker run --name imp-host imp-host',
+      'systemctl daemon-reload',
+      '  unit: ExecStart=/usr/bin/docker run --name imp-host imp-host',
+      'docker network rm imp-host',
+      'systemctl daemon-reload',
+      '  unit: ExecStart=/usr/bin/podman run --name imp-host imp-host',
+      'systemctl start imp-host',
+      '  unit: ExecStart=/usr/bin/podman run --name imp-host imp-host',
+      'curl -fsS http://127.0.0.1:7070/health',
+      'podman exec imp-host impz --version',
+      'podman exec imp-host impz info --json',
+      'podman exec imp-host impz ls',
+      '',
+    ].join('\n'),
+  );
+});
+
+test('it keeps the units of a Docker host as .baks, and names them in the rollback, on a move to Podman', () => {
+  const ctx = setupTest();
+
+  const podman = createStubBin(
+    ctx.directoryPath,
+    'podman',
+    buildStubHostPodman({
+      image: 'ghcr.io/zgeoff/imp-host:next',
+      pulledLabel: 'no-docker',
+      pulledUnit: 'ExecStart=/usr/bin/podman run --name imp-host imp-host\n',
+      runsHost: false,
+    }),
+  );
+
+  createStubBin(ctx.directoryPath, 'docker', buildStubHostDocker({ hostNetwork: ['imp-host'] }));
+  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
+
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-host.service'),
+    'ExecStart=/usr/bin/docker run --name imp-host imp-host\n',
   );
 
   writeFileSync(
@@ -198,7 +503,7 @@ test('it stops and disables the proxy, and keeps its unit as a .bak, on an upgra
 
   const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
     env: {
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
       IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
       IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
       IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
@@ -207,521 +512,263 @@ test('it stops and disables the proxy, and keeps its unit as a .bak, on an upgra
     },
   });
 
-  const calls = readFileSync(docker.calls, 'utf8');
+  const unitBackup = join(
+    ctx.directoryPath,
+    readdirSync(ctx.directoryPath)
+      .filter((file) => file.startsWith('imp-host.service.bak-'))
+      .join(''),
+  );
 
-  const backups = readdirSync(ctx.directoryPath).filter((name) =>
-    name.startsWith('imp-docker-proxy.service.bak-'),
+  const proxyBackup = join(
+    ctx.directoryPath,
+    readdirSync(ctx.directoryPath)
+      .filter((file) => file.startsWith('imp-docker-proxy.service.bak-'))
+      .join(''),
   );
 
   expect(result.exitCode).toBe(0);
 
-  expect(readFileSync(join(ctx.directoryPath, 'imp-host.service'), 'utf8')).toBe(
-    'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
+  expect(readFileSync(unitBackup, 'utf8')).toBe(
+    'ExecStart=/usr/bin/docker run --name imp-host imp-host\n',
   );
 
-  expect(calls).toInclude(
-    'systemctl disable -q --now imp-docker-proxy\nsystemctl daemon-reload\n' +
-      'systemctl restart imp-host\n',
+  expect(readFileSync(proxyBackup, 'utf8')).toBe(
+    'ExecStart=/usr/bin/docker run --name imp-docker-proxy imp-host\n',
   );
 
   expect(existsSync(join(ctx.directoryPath, 'imp-docker-proxy.service'))).toBeFalse();
-  expect(backups).toHaveLength(1);
-});
-
-test('it restarts imp-host alone, between hosts that need no Docker and have no proxy unit', () => {
-  const ctx = setupTest();
-
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
-      image: 'ghcr.io/zgeoff/imp-host:next',
-      runningLabel: 'no-docker',
-      pulledLabel: 'no-docker',
-      pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
-    }),
-  );
-
-  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
-
-  writeFileSync(
-    join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --cap-drop ALL imp-host\n',
-  );
-
-  const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
-    env: {
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
-      IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
-      IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
-      IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
-      IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
-      IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
-    },
-  });
-
-  const output = result.stdout.toString() + result.stderr.toString();
-  const calls = readFileSync(docker.calls, 'utf8');
-
-  expect(result.exitCode).toBe(0);
-  expect(calls).not.toInclude('imp-docker-proxy');
-  expect(output).toInclude('then run the restart again');
-});
-
-test('it refuses a rollback to an image from before the proxy once the unit gives imp-host no docker.sock', () => {
-  const ctx = setupTest();
-
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
-      image: 'ghcr.io/zgeoff/imp-host:next',
-      runningLabel: 'no-docker',
-      pulledLabel: 'unprivileged',
-      pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
-    }),
-  );
-
-  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
-
-  writeFileSync(
-    join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --cap-drop ALL imp-host\n',
-  );
-
-  const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
-    env: {
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
-      IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
-      IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
-      IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
-      IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
-      IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
-    },
-  });
-
-  const output = result.stdout.toString() + result.stderr.toString();
-  const calls = readFileSync(docker.calls, 'utf8');
-
-  expect(result.exitCode).toBe(1);
-  expect(output).toInclude('predates the Docker socket proxy');
-  expect(calls).not.toInclude('systemctl');
-});
-
-test('it refuses, before anything changes, a compose file that still runs the proxy, on an upgrade to an image that needs no Docker', () => {
-  const ctx = setupTest();
-
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
-      image: 'ghcr.io/zgeoff/imp-host:next',
-      runningLabel: 'socket-proxy',
-      pulledLabel: 'no-docker',
-      pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
-    }),
-  );
-
-  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
-
-  writeFileSync(
-    join(ctx.directoryPath, 'compose.yaml'),
-    'services:\n  imp-docker-proxy:\n    image: x\n  imp-host:\n' +
-      '    environment:\n      DOCKER_HOST: unix:///run/imp-docker/docker.sock\n',
-  );
-
-  const result = Bun.spawnSync(
-    [
-      'bash',
-      new URL('upgrade.sh', import.meta.url).pathname,
-      '--compose',
-      join(ctx.directoryPath, 'compose.yaml'),
-    ],
-    {
-      env: {
-        PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
-        IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
-        IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
-        IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
-        IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
-        IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
-      },
-    },
-  );
-
-  const output = result.stdout.toString() + result.stderr.toString();
-  const calls = readFileSync(docker.calls, 'utf8');
-
-  expect(result.exitCode).toBe(1);
-  expect(output).toInclude('still runs imp-docker-proxy');
-  expect(calls).not.toInclude('compose -f');
-  expect(calls).not.toInclude('sleep');
-});
-
-test('it refuses a rollback past the socket proxy before anything changes', () => {
-  const ctx = setupTest();
-
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
-      image: 'ghcr.io/zgeoff/imp-host:next',
-      runningLabel: 'socket-proxy',
-      pulledLabel: 'unprivileged',
-      pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
-    }),
-  );
-
-  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
-
-  writeFileSync(
-    join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
-  );
-
-  const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
-    env: {
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
-      IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
-      IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
-      IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
-      IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
-      IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
-    },
-  });
-
-  const output = result.stdout.toString() + result.stderr.toString();
-  const calls = readFileSync(docker.calls, 'utf8');
-
-  expect(result.exitCode).toBe(1);
-  expect(output).toInclude('predates the Docker socket proxy');
-
-  expect(readFileSync(join(ctx.directoryPath, 'imp-host.service'), 'utf8')).toBe(
-    'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
-  );
-
-  expect(calls).not.toInclude('systemctl');
-  expect(calls).not.toInclude('impz sleep');
-});
-
-test("it starts imp-host alone, with a NOTE, under a compose file that gives imp-host the host's socket", () => {
-  const ctx = setupTest();
-
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
-      image: 'ghcr.io/zgeoff/imp-host:next',
-      runningLabel: 'unprivileged',
-      pulledLabel: 'socket-proxy',
-      pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
-    }),
-  );
-
-  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
-
-  writeFileSync(
-    join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --cap-drop ALL -v /var/run/docker.sock:/var/run/docker.sock imp-host\n',
-  );
-
-  writeFileSync(
-    join(ctx.directoryPath, 'compose.yaml'),
-    'services:\n  imp-host:\n    volumes:\n      - /var/run/docker.sock:/var/run/docker.sock\n',
-  );
-
-  const result = Bun.spawnSync(
-    [
-      'bash',
-      new URL('upgrade.sh', import.meta.url).pathname,
-      '--compose',
-      join(ctx.directoryPath, 'compose.yaml'),
-    ],
-    {
-      env: {
-        PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
-        IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
-        IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
-        IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
-        IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
-        IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
-      },
-    },
-  );
-
-  const output = result.stdout.toString() + result.stderr.toString();
-  const calls = readFileSync(docker.calls, 'utf8');
-
-  expect(result.exitCode).toBe(0);
-  expect(calls).toMatch(/docker compose -f \S+ up -d imp-host\n/v);
-  expect(output).toInclude("still gives imp-host the host's docker.sock");
-});
-
-test('it removes the proxy container that a compose file no longer runs, before imp-host comes up on an image that needs no Docker', () => {
-  const ctx = setupTest();
-
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
-      image: 'ghcr.io/zgeoff/imp-host:next',
-      runningLabel: 'socket-proxy',
-      pulledLabel: 'no-docker',
-      pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
-      proxyContainer: true,
-    }),
-  );
-
-  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
-  writeFileSync(join(ctx.directoryPath, 'compose.yaml'), 'services:\n  imp-host:\n    image: x\n');
-
-  const result = Bun.spawnSync(
-    [
-      'bash',
-      new URL('upgrade.sh', import.meta.url).pathname,
-      '--compose',
-      join(ctx.directoryPath, 'compose.yaml'),
-    ],
-    {
-      env: {
-        PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
-        IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
-        IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
-        IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
-        IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
-        IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
-      },
-    },
-  );
-
-  const calls = readFileSync(docker.calls, 'utf8');
-
-  expect(result.exitCode).toBe(0);
-  expect(calls).toMatch(/docker rm -f imp-docker-proxy\ndocker compose -f \S+ up -d imp-host\n/v);
 
   expect(result.stdout.toString()).toInclude(
-    'upgrade: removed the imp-docker-proxy container, which this image does not call\n',
+    'upgrade: done, on Podman. To roll back to Docker: systemctl stop imp-host, ' +
+      'then podman network rm imp-host, ' +
+      `then mv ${unitBackup} ${join(ctx.directoryPath, 'imp-host.service')}, ` +
+      `then mv ${proxyBackup} ${join(ctx.directoryPath, 'imp-docker-proxy.service')}, ` +
+      'then systemctl daemon-reload, then systemctl enable --now imp-docker-proxy, ' +
+      'then systemctl start imp-host.\n' +
+      'upgrade: imp no longer needs Docker; docs/guides/operations.md#upgrade says how to remove it.\n',
   );
 });
 
-test('it refuses, before anything changes, a rollback to an image that needs the proxy under a compose file with no proxy and no socket', () => {
+test("it leaves the env file and imp's data as they are on a move from Docker to Podman", () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
+  const podman = createStubBin(
     ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
-      image: 'ghcr.io/zgeoff/imp-host:older',
-      runningLabel: 'no-docker',
-      pulledLabel: 'socket-proxy',
-      pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
+    'podman',
+    buildStubHostPodman({
+      image: 'ghcr.io/zgeoff/imp-host:next',
+      pulledLabel: 'no-docker',
+      pulledUnit: 'ExecStart=/usr/bin/podman run --name imp-host imp-host\n',
+      runsHost: false,
     }),
   );
 
+  createStubBin(ctx.directoryPath, 'docker', buildStubHostDocker({ hostNetwork: ['imp-host'] }));
   createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
-  writeFileSync(join(ctx.directoryPath, 'compose.yaml'), 'services:\n  imp-host:\n    image: x\n');
 
-  const result = Bun.spawnSync(
-    [
-      'bash',
-      new URL('upgrade.sh', import.meta.url).pathname,
-      '--compose',
-      join(ctx.directoryPath, 'compose.yaml'),
-    ],
-    {
-      env: {
-        PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
-        IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:older',
-        IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
-        IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
-        IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
-        IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
-      },
-    },
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-host.service'),
+    'ExecStart=/usr/bin/docker run --name imp-host imp-host\n',
   );
 
-  const calls = readFileSync(docker.calls, 'utf8');
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-host.env'),
+    'IMP_HOST_NETWORK=--network imp-host\nIMP_HOST_SUBNET6=fd00:7a::/64\n',
+    { mode: 0o600 },
+  );
+
+  mkdirSync(join(ctx.directoryPath, 'imp-data', 'imps'), { recursive: true });
+  writeFileSync(join(ctx.directoryPath, 'imp-data', 'imps', 'web.img'), 'disk of web');
+
+  const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
+    env: {
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
+      IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
+      IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
+      IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
+      IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
+    },
+  });
+
+  expect(result.exitCode).toBe(0);
+
+  expect(readFileSync(join(ctx.directoryPath, 'imp-host.env'), 'utf8')).toBe(
+    'IMP_HOST_NETWORK=--network imp-host\nIMP_HOST_SUBNET6=fd00:7a::/64\n',
+  );
+
+  expect(
+    readdirSync(ctx.directoryPath).filter((file) => file.startsWith('imp-host.env.')),
+  ).toBeEmpty();
+
+  expect(
+    readdirSync(join(ctx.directoryPath, 'imp-data'), { recursive: true }),
+  ).toIncludeSameMembers(['imps', join('imps', 'web.img')]);
+
+  expect(readFileSync(join(ctx.directoryPath, 'imp-data', 'imps', 'web.img'), 'utf8')).toBe(
+    'disk of web',
+  );
+});
+
+test('it keeps the networks of a Docker host without IPv6, and rolls back without a proxy it never had', () => {
+  const ctx = setupTest();
+
+  const podman = createStubBin(
+    ctx.directoryPath,
+    'podman',
+    buildStubHostPodman({
+      image: 'ghcr.io/zgeoff/imp-host:next',
+      pulledLabel: 'no-docker',
+      pulledUnit: 'ExecStart=/usr/bin/podman run --name imp-host imp-host\n',
+      runsHost: false,
+    }),
+  );
+
+  createStubBin(ctx.directoryPath, 'docker', buildStubHostDocker({}));
+  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
+
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-host.service'),
+    'ExecStart=/usr/bin/docker run --name imp-host imp-host\n',
+  );
+
+  const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
+    env: {
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
+      IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
+      IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
+      IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
+      IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
+    },
+  });
+
+  const calls = readFileSync(podman.calls, 'utf8');
+
+  const unitBackup = join(
+    ctx.directoryPath,
+    readdirSync(ctx.directoryPath)
+      .filter((file) => file.startsWith('imp-host.service.bak-'))
+      .join(''),
+  );
+
+  expect(result.exitCode).toBe(0);
+  expect(calls).not.toInclude('network rm');
+  expect(calls).not.toInclude('imp-docker-proxy');
+  expect(calls).toInclude('systemctl stop imp-host\ndocker rm -f imp-host\n');
+
+  expect(result.stdout.toString()).toInclude(
+    'upgrade: done, on Podman. To roll back to Docker: systemctl stop imp-host, ' +
+      `then mv ${unitBackup} ${join(ctx.directoryPath, 'imp-host.service')}, ` +
+      'then systemctl daemon-reload, then systemctl start imp-host.\n',
+  );
+});
+
+test('it moves a Docker host to Podman when the pulled image is the one Docker runs', () => {
+  const ctx = setupTest();
+
+  const podman = createStubBin(
+    ctx.directoryPath,
+    'podman',
+    buildStubHostPodman({
+      image: 'ghcr.io/zgeoff/imp-host:next',
+      pulledLabel: 'no-docker',
+      pulledUnit: 'ExecStart=/usr/bin/podman run --name imp-host imp-host\n',
+      pulledIsRunning: true,
+      runsHost: false,
+    }),
+  );
+
+  createStubBin(ctx.directoryPath, 'docker', buildStubHostDocker({}));
+  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
+
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-host.service'),
+    'ExecStart=/usr/bin/docker run --name imp-host imp-host\n',
+  );
+
+  const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
+    env: {
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
+      IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
+      IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
+      IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
+      IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
+    },
+  });
+
+  const calls = readFileSync(podman.calls, 'utf8');
+
+  expect(result.exitCode).toBe(0);
+  expect(result.stdout.toString()).not.toInclude('already runs');
+  expect(calls).toInclude('systemctl start imp-host\n');
+});
+
+test('it refuses, before any imp sleeps, a Docker host whose imp-host network holds other containers', () => {
+  const ctx = setupTest();
+
+  const podman = createStubBin(
+    ctx.directoryPath,
+    'podman',
+    buildStubHostPodman({
+      image: 'ghcr.io/zgeoff/imp-host:next',
+      pulledLabel: 'no-docker',
+      pulledUnit: 'ExecStart=/usr/bin/podman run --name imp-host imp-host\n',
+      runsHost: false,
+    }),
+  );
+
+  createStubBin(
+    ctx.directoryPath,
+    'docker',
+    buildStubHostDocker({ awakeImps: ['web'], hostNetwork: ['imp-host', 'sidecar'] }),
+  );
+
+  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
+
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-host.service'),
+    'ExecStart=/usr/bin/docker run --name imp-host imp-host\n',
+  );
+
+  const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
+    env: {
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
+      IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
+      IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
+      IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
+      IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
+    },
+  });
+
+  const calls = readFileSync(podman.calls, 'utf8');
 
   expect(result.exitCode).toBe(1);
 
   expect(result.stderr.toString()).toInclude(
-    'runs no proxy and gives imp-host no docker.sock: put back the compose file',
+    "upgrade: Docker's imp-host network also holds sidecar",
   );
-
-  expect(calls).not.toInclude('sleep');
-  expect(calls).not.toInclude('compose -f');
-});
-
-test('it starts the proxy service with imp-host under a compose file that has it', () => {
-  const ctx = setupTest();
-
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
-      image: 'ghcr.io/zgeoff/imp-host:next',
-      runningLabel: 'socket-proxy',
-      pulledLabel: 'socket-proxy',
-      pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
-    }),
-  );
-
-  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
-
-  writeFileSync(
-    join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
-  );
-
-  writeFileSync(
-    join(ctx.directoryPath, 'compose.yaml'),
-    'services:\n  imp-docker-proxy:\n    image: x\n  imp-host:\n' +
-      '    environment:\n      DOCKER_HOST: unix:///run/imp-docker/docker.sock\n',
-  );
-
-  const result = Bun.spawnSync(
-    [
-      'bash',
-      new URL('upgrade.sh', import.meta.url).pathname,
-      '--compose',
-      join(ctx.directoryPath, 'compose.yaml'),
-    ],
-    {
-      env: {
-        PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
-        IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
-        IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
-        IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
-        IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
-        IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
-      },
-    },
-  );
-
-  const output = result.stdout.toString() + result.stderr.toString();
-  const calls = readFileSync(docker.calls, 'utf8');
-
-  expect(result.exitCode).toBe(0);
-  expect(calls).toMatch(/docker compose -f \S+ up -d imp-docker-proxy imp-host\n/v);
-  expect(output).not.toInclude('NOTE: ');
-});
-
-test('it refuses a rollback past the unprivileged host before anything changes', () => {
-  const ctx = setupTest();
-
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
-      image: 'ghcr.io/zgeoff/imp-host:next',
-      runningLabel: 'unprivileged',
-      pulledLabel: '',
-      pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
-    }),
-  );
-
-  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
-
-  writeFileSync(
-    join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
-  );
-
-  const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
-    env: {
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
-      IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
-      IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
-      IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
-      IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
-      IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
-    },
-  });
-
-  const output = result.stdout.toString() + result.stderr.toString();
-  const calls = readFileSync(docker.calls, 'utf8');
-
-  expect(result.exitCode).toBe(1);
-  expect(output).toInclude('run deploy/bootstrap.sh of that');
 
   expect(readFileSync(join(ctx.directoryPath, 'imp-host.service'), 'utf8')).toBe(
-    'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
+    'ExecStart=/usr/bin/docker run --name imp-host imp-host\n',
   );
 
-  expect(calls).not.toInclude('systemctl');
   expect(calls).not.toInclude('impz sleep');
-});
-
-test('it keeps the compose file, and says it still runs privileged, on an upgrade to the unprivileged host', () => {
-  const ctx = setupTest();
-
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
-      image: 'ghcr.io/zgeoff/imp-host:next',
-      runningLabel: '',
-      pulledLabel: 'unprivileged',
-      pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
-    }),
-  );
-
-  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
-
-  writeFileSync(
-    join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --init --privileged imp-host\n',
-  );
-
-  writeFileSync(
-    join(ctx.directoryPath, 'compose.yaml'),
-    'services:\n  imp-host:\n    privileged: true\n',
-  );
-
-  const result = Bun.spawnSync(
-    [
-      'bash',
-      new URL('upgrade.sh', import.meta.url).pathname,
-      '--compose',
-      join(ctx.directoryPath, 'compose.yaml'),
-    ],
-    {
-      env: {
-        PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
-        IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
-        IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
-        IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
-        IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
-        IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
-      },
-    },
-  );
-
-  const output = result.stdout.toString() + result.stderr.toString();
-  const calls = readFileSync(docker.calls, 'utf8');
-
-  expect(result.exitCode).toBe(0);
-
-  expect(readFileSync(join(ctx.directoryPath, 'imp-host.service'), 'utf8')).toBe(
-    'ExecStart=/usr/bin/docker run --init --privileged imp-host\n',
-  );
-
-  expect(readFileSync(join(ctx.directoryPath, 'imp-host.seccomp.json'), 'utf8')).toBe('{}\n');
-  expect(calls).toInclude('docker compose -f');
-  expect(output).toInclude('still runs privileged');
+  expect(calls).not.toInclude('systemctl');
 });
 
 test('it stops before any imp sleeps when the image cannot give its unit', () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
+  const podman = createStubBin(
     ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
+    'podman',
+    buildStubHostPodman({
       image: 'ghcr.io/zgeoff/imp-host:next',
-      runningLabel: '',
-      pulledLabel: 'unprivileged',
-      pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
+      pulledLabel: 'no-docker',
+      pulledUnit: 'ExecStart=/usr/bin/podman run --name imp-host imp-host\n',
       unreadableFile: '.service',
     }),
   );
@@ -730,12 +777,12 @@ test('it stops before any imp sleeps when the image cannot give its unit', () =>
 
   writeFileSync(
     join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --init --privileged imp-host\n',
+    'ExecStart=/usr/bin/podman run --cap-drop ALL imp-host\n',
   );
 
   const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
     env: {
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
       IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
       IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
       IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
@@ -745,13 +792,13 @@ test('it stops before any imp sleeps when the image cannot give its unit', () =>
   });
 
   const output = result.stdout.toString() + result.stderr.toString();
-  const calls = readFileSync(docker.calls, 'utf8');
+  const calls = readFileSync(podman.calls, 'utf8');
 
   expect(result.exitCode).toBe(1);
   expect(output).toInclude('cannot read');
 
   expect(readFileSync(join(ctx.directoryPath, 'imp-host.service'), 'utf8')).toBe(
-    'ExecStart=/usr/bin/docker run --init --privileged imp-host\n',
+    'ExecStart=/usr/bin/podman run --cap-drop ALL imp-host\n',
   );
 
   expect(existsSync(join(ctx.directoryPath, 'imp-host.seccomp.json'))).toBeFalse();
@@ -763,14 +810,13 @@ test('it stops before any imp sleeps when the image cannot give its unit', () =>
 test('it stops before the restart when a unit cannot be installed', () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
+  const podman = createStubBin(
     ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
+    'podman',
+    buildStubHostPodman({
       image: 'ghcr.io/zgeoff/imp-host:next',
-      runningLabel: '',
-      pulledLabel: 'unprivileged',
-      pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
+      pulledLabel: 'no-docker',
+      pulledUnit: 'ExecStart=/usr/bin/podman run --name imp-host imp-host\n',
     }),
   );
 
@@ -779,12 +825,12 @@ test('it stops before the restart when a unit cannot be installed', () => {
 
   writeFileSync(
     join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --init --privileged imp-host\n',
+    'ExecStart=/usr/bin/podman run --cap-drop ALL imp-host\n',
   );
 
   const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
     env: {
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
       IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
       IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
       IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
@@ -794,14 +840,15 @@ test('it stops before the restart when a unit cannot be installed', () => {
   });
 
   const output = result.stdout.toString() + result.stderr.toString();
-  const calls = readFileSync(docker.calls, 'utf8');
+  const calls = readFileSync(podman.calls, 'utf8');
 
   expect(result.exitCode).toBe(1);
   expect(output).toInclude('cannot install');
+  expect(output).toInclude('nothing restarted, the host still runs old');
   expect(output).not.toInclude('installed');
 
   expect(readFileSync(join(ctx.directoryPath, 'imp-host.service'), 'utf8')).toBe(
-    'ExecStart=/usr/bin/docker run --init --privileged imp-host\n',
+    'ExecStart=/usr/bin/podman run --cap-drop ALL imp-host\n',
   );
 
   expect(readdirSync(ctx.directoryPath).filter((file) => file.endsWith('.new'))).toBeEmpty();
@@ -813,14 +860,13 @@ test('it moves to its own release when no image is named', () => {
   const pkgText = readFileSync(new URL('../package.json', import.meta.url), 'utf8');
   const release = `ghcr.io/zgeoff/imp-host:${z.object({ version: z.string() }).parse(JSON.parse(pkgText)).version}`;
 
-  const docker = createStubBin(
+  const podman = createStubBin(
     ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
+    'podman',
+    buildStubHostPodman({
       image: release,
-      runningLabel: 'socket-proxy',
-      pulledLabel: 'socket-proxy',
-      pulledUnit: `Environment=IMP_HOST_IMAGE=${release}\nExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n`,
+      pulledLabel: 'no-docker',
+      pulledUnit: `Environment=IMP_HOST_IMAGE=${release}\nExecStart=/usr/bin/podman run --name imp-host imp-host\n`,
     }),
   );
 
@@ -828,12 +874,12 @@ test('it moves to its own release when no image is named', () => {
 
   writeFileSync(
     join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
+    'ExecStart=/usr/bin/podman run --cap-drop ALL imp-host\n',
   );
 
   const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
     env: {
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
       IMP_HOST_IMAGE: '',
       IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
       IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
@@ -842,10 +888,10 @@ test('it moves to its own release when no image is named', () => {
     },
   });
 
-  const calls = readFileSync(docker.calls, 'utf8');
+  const calls = readFileSync(podman.calls, 'utf8');
 
   expect(result.exitCode).toBe(0);
-  expect(calls).toInclude(`docker pull -q ${release}\n`);
+  expect(calls).toInclude(`podman pull -q ${release}\n`);
   expect(existsSync(join(ctx.directoryPath, 'imp-host.env'))).toBeFalse();
 });
 
@@ -854,14 +900,13 @@ test("it moves to the env file's pin over its own release", () => {
   const pkgText = readFileSync(new URL('../package.json', import.meta.url), 'utf8');
   const release = `ghcr.io/zgeoff/imp-host:${z.object({ version: z.string() }).parse(JSON.parse(pkgText)).version}`;
 
-  const docker = createStubBin(
+  const podman = createStubBin(
     ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
+    'podman',
+    buildStubHostPodman({
       image: 'imp-host:pinned',
-      runningLabel: 'socket-proxy',
-      pulledLabel: 'socket-proxy',
-      pulledUnit: `Environment=IMP_HOST_IMAGE=${release}\nExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n`,
+      pulledLabel: 'no-docker',
+      pulledUnit: `Environment=IMP_HOST_IMAGE=${release}\nExecStart=/usr/bin/podman run --name imp-host imp-host\n`,
     }),
   );
 
@@ -869,7 +914,7 @@ test("it moves to the env file's pin over its own release", () => {
 
   writeFileSync(
     join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
+    'ExecStart=/usr/bin/podman run --cap-drop ALL imp-host\n',
   );
 
   writeFileSync(
@@ -882,7 +927,7 @@ test("it moves to the env file's pin over its own release", () => {
 
   const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
     env: {
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
       IMP_HOST_IMAGE: '',
       IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
       IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
@@ -891,10 +936,10 @@ test("it moves to the env file's pin over its own release", () => {
     },
   });
 
-  const calls = readFileSync(docker.calls, 'utf8');
+  const calls = readFileSync(podman.calls, 'utf8');
 
   expect(result.exitCode).toBe(0);
-  expect(calls).toInclude('docker pull -q imp-host:pinned\n');
+  expect(calls).toInclude('podman pull -q imp-host:pinned\n');
 
   expect(readFileSync(join(ctx.directoryPath, 'imp-host.env'), 'utf8')).toBe(
     'IMP_PORT=7070\nIMP_HOST_IMAGE=imp-host:pinned\n',
@@ -910,14 +955,13 @@ test('it comments out the old template line, which is no pin, with a .bak of the
   const pkgText = readFileSync(new URL('../package.json', import.meta.url), 'utf8');
   const release = `ghcr.io/zgeoff/imp-host:${z.object({ version: z.string() }).parse(JSON.parse(pkgText)).version}`;
 
-  const docker = createStubBin(
+  const podman = createStubBin(
     ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
+    'podman',
+    buildStubHostPodman({
       image: release,
-      runningLabel: 'socket-proxy',
-      pulledLabel: 'socket-proxy',
-      pulledUnit: `Environment=IMP_HOST_IMAGE=${release}\nExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n`,
+      pulledLabel: 'no-docker',
+      pulledUnit: `Environment=IMP_HOST_IMAGE=${release}\nExecStart=/usr/bin/podman run --name imp-host imp-host\n`,
     }),
   );
 
@@ -925,7 +969,7 @@ test('it comments out the old template line, which is no pin, with a .bak of the
 
   writeFileSync(
     join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
+    'ExecStart=/usr/bin/podman run --cap-drop ALL imp-host\n',
   );
 
   writeFileSync(
@@ -936,7 +980,7 @@ test('it comments out the old template line, which is no pin, with a .bak of the
 
   const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
     env: {
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
       IMP_HOST_IMAGE: '',
       IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
       IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
@@ -946,14 +990,14 @@ test('it comments out the old template line, which is no pin, with a .bak of the
   });
 
   const output = result.stdout.toString() + result.stderr.toString();
-  const calls = readFileSync(docker.calls, 'utf8');
+  const calls = readFileSync(podman.calls, 'utf8');
 
   const backups = readdirSync(ctx.directoryPath).filter((file) =>
     /^imp-host\.env\.bak-\d{8}-\d{6}$/v.test(file),
   );
 
   expect(result.exitCode).toBe(0);
-  expect(calls).toInclude(`docker pull -q ${release}\n`);
+  expect(calls).toInclude(`podman pull -q ${release}\n`);
 
   expect(readFileSync(join(ctx.directoryPath, 'imp-host.env'), 'utf8')).toBe(
     `TAILSCALE_AUTHKEY=fake-key-for-tests\n# IMP_HOST_IMAGE=${release}\nIMP_PORT=7070\n`,
@@ -973,19 +1017,18 @@ test('it comments out the old template line, which is no pin, with a .bak of the
   expect(readdirSync(ctx.directoryPath).filter((file) => file.endsWith('.new'))).toBeEmpty();
 });
 
-test('it refuses an image from the environment that the units would not run, before any imp sleeps', () => {
+test('it refuses an image from the environment that the unit would not run, before any imp sleeps', () => {
   const ctx = setupTest();
   const pkgText = readFileSync(new URL('../package.json', import.meta.url), 'utf8');
   const release = `ghcr.io/zgeoff/imp-host:${z.object({ version: z.string() }).parse(JSON.parse(pkgText)).version}`;
 
-  const docker = createStubBin(
+  const podman = createStubBin(
     ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
+    'podman',
+    buildStubHostPodman({
       image: 'ghcr.io/zgeoff/imp-host:next',
-      runningLabel: 'socket-proxy',
-      pulledLabel: 'socket-proxy',
-      pulledUnit: `Environment=IMP_HOST_IMAGE=${release}\nExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n`,
+      pulledLabel: 'no-docker',
+      pulledUnit: `Environment=IMP_HOST_IMAGE=${release}\nExecStart=/usr/bin/podman run --name imp-host imp-host\n`,
     }),
   );
 
@@ -993,7 +1036,7 @@ test('it refuses an image from the environment that the units would not run, bef
 
   writeFileSync(
     join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
+    'ExecStart=/usr/bin/podman run --cap-drop ALL imp-host\n',
   );
 
   writeFileSync(
@@ -1006,7 +1049,7 @@ test('it refuses an image from the environment that the units would not run, bef
 
   const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
     env: {
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
       IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
       IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
       IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
@@ -1016,7 +1059,7 @@ test('it refuses an image from the environment that the units would not run, bef
   });
 
   const output = result.stdout.toString() + result.stderr.toString();
-  const calls = readFileSync(docker.calls, 'utf8');
+  const calls = readFileSync(podman.calls, 'utf8');
 
   expect(result.exitCode).toBe(1);
 
@@ -1025,7 +1068,7 @@ test('it refuses an image from the environment that the units would not run, bef
   );
 
   expect(readFileSync(join(ctx.directoryPath, 'imp-host.service'), 'utf8')).toBe(
-    'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
+    'ExecStart=/usr/bin/podman run --cap-drop ALL imp-host\n',
   );
 
   expect(readFileSync(join(ctx.directoryPath, 'imp-host.env'), 'utf8')).toBe(
@@ -1037,95 +1080,18 @@ test('it refuses an image from the environment that the units would not run, bef
   expect(calls).not.toInclude('systemctl');
 });
 
-test('it writes the image to the .env beside the compose file, with a .bak', () => {
+test("it counts a drop-in's image as its unit's own", () => {
   const ctx = setupTest();
+  const pkgText = readFileSync(new URL('../package.json', import.meta.url), 'utf8');
+  const release = `ghcr.io/zgeoff/imp-host:${z.object({ version: z.string() }).parse(JSON.parse(pkgText)).version}`;
 
-  const docker = createStubBin(
+  const podman = createStubBin(
     ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
+    'podman',
+    buildStubHostPodman({
       image: 'ghcr.io/zgeoff/imp-host:next',
-      runningLabel: 'socket-proxy',
-      pulledLabel: 'socket-proxy',
-      pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
-    }),
-  );
-
-  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
-
-  writeFileSync(
-    join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
-  );
-
-  writeFileSync(
-    join(ctx.directoryPath, 'compose.yaml'),
-    'services:\n  imp-docker-proxy:\n    image: x\n  imp-host:\n' +
-      '    environment:\n      DOCKER_HOST: unix:///run/imp-docker/docker.sock\n',
-  );
-
-  writeFileSync(
-    join(ctx.directoryPath, '.env'),
-    'IMP_DOCKER_GID=999\nIMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:0.1.0\n',
-  );
-
-  const result = Bun.spawnSync(
-    [
-      'bash',
-      new URL('upgrade.sh', import.meta.url).pathname,
-      '--compose',
-      join(ctx.directoryPath, 'compose.yaml'),
-    ],
-    {
-      env: {
-        PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
-        IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
-        IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
-        IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
-        IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
-        IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
-      },
-    },
-  );
-
-  const output = result.stdout.toString() + result.stderr.toString();
-
-  const backups = readdirSync(ctx.directoryPath).filter((file) =>
-    /^\.env\.bak-\d{8}-\d{6}$/v.test(file),
-  );
-
-  expect(result.exitCode).toBe(0);
-
-  expect(readFileSync(join(ctx.directoryPath, '.env'), 'utf8')).toBe(
-    'IMP_DOCKER_GID=999\nIMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:next\n',
-  );
-
-  expect(backups.map((file) => readFileSync(join(ctx.directoryPath, file), 'utf8'))).toStrictEqual([
-    'IMP_DOCKER_GID=999\nIMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:0.1.0\n',
-  ]);
-
-  expect(backups.map((file) => statSync(join(ctx.directoryPath, file)).mode & 0o777)).toStrictEqual(
-    [0o600],
-  );
-
-  expect(output).toInclude(
-    `wrote IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:next to ${join(ctx.directoryPath, '.env')}`,
-  );
-
-  expect(output).toInclude(`(the file before: ${join(ctx.directoryPath, '.env.bak-')}`);
-});
-
-test('it writes a .env that names the image beside a compose file without one', () => {
-  const ctx = setupTest();
-
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
-      image: 'ghcr.io/zgeoff/imp-host:next',
-      runningLabel: 'no-docker',
       pulledLabel: 'no-docker',
-      pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
+      pulledUnit: `Environment=IMP_HOST_IMAGE=${release}\nExecStart=/usr/bin/podman run --name imp-host imp-host\n`,
     }),
   );
 
@@ -1133,62 +1099,7 @@ test('it writes a .env that names the image beside a compose file without one', 
 
   writeFileSync(
     join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
-  );
-
-  writeFileSync(join(ctx.directoryPath, 'compose.yaml'), 'services:\n  imp-host:\n    image: x\n');
-
-  const result = Bun.spawnSync(
-    [
-      'bash',
-      new URL('upgrade.sh', import.meta.url).pathname,
-      '--compose',
-      join(ctx.directoryPath, 'compose.yaml'),
-    ],
-    {
-      env: {
-        PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
-        IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
-        IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
-        IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
-        IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
-        IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
-      },
-    },
-  );
-
-  expect(result.exitCode).toBe(0);
-
-  expect(readFileSync(join(ctx.directoryPath, '.env'), 'utf8')).toBe(
-    'IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:next\n',
-  );
-
-  expect(
-    readdirSync(ctx.directoryPath).filter((file) => /^\.env\.bak-\d{8}-\d{6}$/v.test(file)),
-  ).toBeEmpty();
-});
-
-test('it refuses the image of a drop-in for imp-host alone, as the proxy unit would run another', () => {
-  const ctx = setupTest();
-  const pkgText = readFileSync(new URL('../package.json', import.meta.url), 'utf8');
-  const release = `ghcr.io/zgeoff/imp-host:${z.object({ version: z.string() }).parse(JSON.parse(pkgText)).version}`;
-
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
-      image: 'ghcr.io/zgeoff/imp-host:next',
-      runningLabel: 'socket-proxy',
-      pulledLabel: 'socket-proxy',
-      pulledUnit: `Environment=IMP_HOST_IMAGE=${release}\nExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n`,
-    }),
-  );
-
-  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
-
-  writeFileSync(
-    join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
+    'ExecStart=/usr/bin/podman run --cap-drop ALL imp-host\n',
   );
 
   mkdirSync(join(ctx.directoryPath, 'imp-host.service.d'));
@@ -1200,7 +1111,7 @@ test('it refuses the image of a drop-in for imp-host alone, as the proxy unit wo
 
   const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
     env: {
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
       IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
       IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
       IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
@@ -1209,63 +1120,7 @@ test('it refuses the image of a drop-in for imp-host alone, as the proxy unit wo
     },
   });
 
-  const output = result.stdout.toString() + result.stderr.toString();
-  const calls = readFileSync(docker.calls, 'utf8');
-
-  expect(result.exitCode).toBe(1);
-  expect(output).toInclude(`imp-docker-proxy.service would run ${release}`);
-  expect(calls).not.toInclude('systemctl');
-});
-
-test("it counts a drop-in's image as its unit's own, for imp-host and the proxy alike", () => {
-  const ctx = setupTest();
-  const pkgText = readFileSync(new URL('../package.json', import.meta.url), 'utf8');
-  const release = `ghcr.io/zgeoff/imp-host:${z.object({ version: z.string() }).parse(JSON.parse(pkgText)).version}`;
-
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
-      image: 'ghcr.io/zgeoff/imp-host:next',
-      runningLabel: 'socket-proxy',
-      pulledLabel: 'socket-proxy',
-      pulledUnit: `Environment=IMP_HOST_IMAGE=${release}\nExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n`,
-    }),
-  );
-
-  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
-
-  writeFileSync(
-    join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
-  );
-
-  mkdirSync(join(ctx.directoryPath, 'imp-host.service.d'));
-
-  writeFileSync(
-    join(ctx.directoryPath, 'imp-host.service.d', 'image.conf'),
-    '[Service]\nEnvironment=IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:next\n',
-  );
-
-  mkdirSync(join(ctx.directoryPath, 'imp-docker-proxy.service.d'));
-
-  writeFileSync(
-    join(ctx.directoryPath, 'imp-docker-proxy.service.d', 'image.conf'),
-    '[Service]\nEnvironment=IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:next\n',
-  );
-
-  const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
-    env: {
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
-      IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
-      IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
-      IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
-      IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
-      IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
-    },
-  });
-
-  const calls = readFileSync(docker.calls, 'utf8');
+  const calls = readFileSync(podman.calls, 'utf8');
 
   expect(result.exitCode).toBe(0);
   expect(calls).toInclude('systemctl restart imp-host\n');
@@ -1276,14 +1131,13 @@ test('it reads the unit image from a quoted Environment= line that sets several 
   const pkgText = readFileSync(new URL('../package.json', import.meta.url), 'utf8');
   const release = `ghcr.io/zgeoff/imp-host:${z.object({ version: z.string() }).parse(JSON.parse(pkgText)).version}`;
 
-  const docker = createStubBin(
+  const podman = createStubBin(
     ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
+    'podman',
+    buildStubHostPodman({
       image: 'ghcr.io/zgeoff/imp-host:next',
-      runningLabel: 'socket-proxy',
-      pulledLabel: 'socket-proxy',
-      pulledUnit: `Environment="IMP_X=1" "IMP_HOST_IMAGE=${release}"\nExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n`,
+      pulledLabel: 'no-docker',
+      pulledUnit: `Environment="IMP_X=1" "IMP_HOST_IMAGE=${release}"\nExecStart=/usr/bin/podman run --name imp-host imp-host\n`,
     }),
   );
 
@@ -1291,12 +1145,12 @@ test('it reads the unit image from a quoted Environment= line that sets several 
 
   writeFileSync(
     join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
+    'ExecStart=/usr/bin/podman run --cap-drop ALL imp-host\n',
   );
 
   const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
     env: {
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
       IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
       IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
       IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
@@ -1314,19 +1168,18 @@ test('it reads the unit image from a quoted Environment= line that sets several 
   );
 });
 
-test('it takes the release-please marker lines out of the units it installs', () => {
+test('it takes the release-please marker lines out of the unit it installs', () => {
   const ctx = setupTest();
   const pkgText = readFileSync(new URL('../package.json', import.meta.url), 'utf8');
   const release = `ghcr.io/zgeoff/imp-host:${z.object({ version: z.string() }).parse(JSON.parse(pkgText)).version}`;
 
-  const docker = createStubBin(
+  const podman = createStubBin(
     ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
+    'podman',
+    buildStubHostPodman({
       image: release,
-      runningLabel: 'socket-proxy',
-      pulledLabel: 'socket-proxy',
-      pulledUnit: `# x-release-please-start-version\nEnvironment=IMP_HOST_IMAGE=${release}\nExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n# x-release-please-end\n`,
+      pulledLabel: 'no-docker',
+      pulledUnit: `# x-release-please-start-version\nEnvironment=IMP_HOST_IMAGE=${release}\nExecStart=/usr/bin/podman run --name imp-host imp-host\n# x-release-please-end\n`,
     }),
   );
 
@@ -1334,12 +1187,12 @@ test('it takes the release-please marker lines out of the units it installs', ()
 
   writeFileSync(
     join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
+    'ExecStart=/usr/bin/podman run --cap-drop ALL imp-host\n',
   );
 
   const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
     env: {
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
       IMP_HOST_IMAGE: '',
       IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
       IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
@@ -1351,7 +1204,7 @@ test('it takes the release-please marker lines out of the units it installs', ()
   expect(result.exitCode).toBe(0);
 
   expect(readFileSync(join(ctx.directoryPath, 'imp-host.service'), 'utf8')).toBe(
-    `Environment=IMP_HOST_IMAGE=${release}\nExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n`,
+    `Environment=IMP_HOST_IMAGE=${release}\nExecStart=/usr/bin/podman run --name imp-host imp-host\n`,
   );
 });
 
@@ -1360,14 +1213,13 @@ test('it migrates the old template line with a CR and blanks around it', () => {
   const pkgText = readFileSync(new URL('../package.json', import.meta.url), 'utf8');
   const release = `ghcr.io/zgeoff/imp-host:${z.object({ version: z.string() }).parse(JSON.parse(pkgText)).version}`;
 
-  const docker = createStubBin(
+  const podman = createStubBin(
     ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
+    'podman',
+    buildStubHostPodman({
       image: release,
-      runningLabel: 'socket-proxy',
-      pulledLabel: 'socket-proxy',
-      pulledUnit: `Environment=IMP_HOST_IMAGE=${release}\nExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n`,
+      pulledLabel: 'no-docker',
+      pulledUnit: `Environment=IMP_HOST_IMAGE=${release}\nExecStart=/usr/bin/podman run --name imp-host imp-host\n`,
     }),
   );
 
@@ -1375,7 +1227,7 @@ test('it migrates the old template line with a CR and blanks around it', () => {
 
   writeFileSync(
     join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
+    'ExecStart=/usr/bin/podman run --cap-drop ALL imp-host\n',
   );
 
   writeFileSync(
@@ -1386,7 +1238,7 @@ test('it migrates the old template line with a CR and blanks around it', () => {
 
   const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
     env: {
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
       IMP_HOST_IMAGE: '',
       IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
       IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
@@ -1395,10 +1247,10 @@ test('it migrates the old template line with a CR and blanks around it', () => {
     },
   });
 
-  const calls = readFileSync(docker.calls, 'utf8');
+  const calls = readFileSync(podman.calls, 'utf8');
 
   expect(result.exitCode).toBe(0);
-  expect(calls).toInclude(`docker pull -q ${release}\n`);
+  expect(calls).toInclude(`podman pull -q ${release}\n`);
 
   expect(readFileSync(join(ctx.directoryPath, 'imp-host.env'), 'utf8')).toBe(
     `IMP_PORT=7070\r\n# IMP_HOST_IMAGE=${release}\n`,
@@ -1410,14 +1262,13 @@ test('it migrates a quoted old template line too', () => {
   const pkgText = readFileSync(new URL('../package.json', import.meta.url), 'utf8');
   const release = `ghcr.io/zgeoff/imp-host:${z.object({ version: z.string() }).parse(JSON.parse(pkgText)).version}`;
 
-  const docker = createStubBin(
+  const podman = createStubBin(
     ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
+    'podman',
+    buildStubHostPodman({
       image: release,
-      runningLabel: 'socket-proxy',
-      pulledLabel: 'socket-proxy',
-      pulledUnit: `Environment=IMP_HOST_IMAGE=${release}\nExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n`,
+      pulledLabel: 'no-docker',
+      pulledUnit: `Environment=IMP_HOST_IMAGE=${release}\nExecStart=/usr/bin/podman run --name imp-host imp-host\n`,
     }),
   );
 
@@ -1425,7 +1276,7 @@ test('it migrates a quoted old template line too', () => {
 
   writeFileSync(
     join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
+    'ExecStart=/usr/bin/podman run --cap-drop ALL imp-host\n',
   );
 
   writeFileSync(
@@ -1436,7 +1287,7 @@ test('it migrates a quoted old template line too', () => {
 
   const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
     env: {
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
       IMP_HOST_IMAGE: '',
       IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
       IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
@@ -1445,90 +1296,28 @@ test('it migrates a quoted old template line too', () => {
     },
   });
 
-  const calls = readFileSync(docker.calls, 'utf8');
+  const calls = readFileSync(podman.calls, 'utf8');
 
   expect(result.exitCode).toBe(0);
-  expect(calls).toInclude(`docker pull -q ${release}\n`);
+  expect(calls).toInclude(`podman pull -q ${release}\n`);
 
   expect(readFileSync(join(ctx.directoryPath, 'imp-host.env'), 'utf8')).toBe(
     `IMP_PORT=7070\n# IMP_HOST_IMAGE=${release}\n`,
   );
 });
 
-test('it keeps the pin in the compose .env and moves to that image', () => {
-  const ctx = setupTest();
-
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
-      image: 'imp-host:pinned',
-      runningLabel: 'no-docker',
-      pulledLabel: 'no-docker',
-      pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
-    }),
-  );
-
-  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
-
-  writeFileSync(
-    join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
-  );
-
-  writeFileSync(join(ctx.directoryPath, 'compose.yaml'), 'services:\n  imp-host:\n    image: x\n');
-
-  writeFileSync(
-    join(ctx.directoryPath, '.env'),
-    'IMP_DOCKER_GID=999\nIMP_HOST_IMAGE="imp-host:pinned"\n',
-  );
-
-  const result = Bun.spawnSync(
-    [
-      'bash',
-      new URL('upgrade.sh', import.meta.url).pathname,
-      '--compose',
-      join(ctx.directoryPath, 'compose.yaml'),
-    ],
-    {
-      env: {
-        PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
-        IMP_HOST_IMAGE: '',
-        IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
-        IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
-        IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
-        IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
-      },
-    },
-  );
-
-  const calls = readFileSync(docker.calls, 'utf8');
-
-  expect(result.exitCode).toBe(0);
-  expect(calls).toInclude('docker pull -q imp-host:pinned\n');
-
-  expect(readFileSync(join(ctx.directoryPath, '.env'), 'utf8')).toBe(
-    'IMP_DOCKER_GID=999\nIMP_HOST_IMAGE="imp-host:pinned"\n',
-  );
-
-  expect(
-    readdirSync(ctx.directoryPath).filter((file) => /^\.env\.bak-\d{8}-\d{6}$/v.test(file)),
-  ).toBeEmpty();
-});
-
-test('it still writes the image lines and units, without a restart, on a systemd host that runs the image already', () => {
+test('it still writes the image lines and unit, without a restart, on a Podman host that runs the image already', () => {
   const ctx = setupTest();
   const pkgText = readFileSync(new URL('../package.json', import.meta.url), 'utf8');
   const release = `ghcr.io/zgeoff/imp-host:${z.object({ version: z.string() }).parse(JSON.parse(pkgText)).version}`;
 
-  const docker = createStubBin(
+  const podman = createStubBin(
     ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
+    'podman',
+    buildStubHostPodman({
       image: release,
-      runningLabel: 'socket-proxy',
-      pulledLabel: 'socket-proxy',
-      pulledUnit: `Environment=IMP_HOST_IMAGE=${release}\nExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n`,
+      pulledLabel: 'no-docker',
+      pulledUnit: `Environment=IMP_HOST_IMAGE=${release}\nExecStart=/usr/bin/podman run --name imp-host imp-host\n`,
       pulledIsRunning: true,
     }),
   );
@@ -1537,7 +1326,7 @@ test('it still writes the image lines and units, without a restart, on a systemd
 
   writeFileSync(
     join(ctx.directoryPath, 'imp-host.service'),
-    `Environment=IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:latest\nExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n`,
+    `Environment=IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:latest\nExecStart=/usr/bin/podman run --name imp-host imp-host\n`,
   );
 
   writeFileSync(
@@ -1550,7 +1339,7 @@ test('it still writes the image lines and units, without a restart, on a systemd
 
   const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
     env: {
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
       IMP_HOST_IMAGE: '',
       IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
       IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
@@ -1560,10 +1349,10 @@ test('it still writes the image lines and units, without a restart, on a systemd
   });
 
   const output = result.stdout.toString() + result.stderr.toString();
-  const calls = readFileSync(docker.calls, 'utf8');
+  const calls = readFileSync(podman.calls, 'utf8');
 
   expect(result.exitCode).toBe(0);
-  expect(output).toInclude('already runs');
+  expect(output).toInclude('imp-host already runs old');
 
   expect(readFileSync(join(ctx.directoryPath, 'imp-host.env'), 'utf8')).toBe(
     `# IMP_HOST_IMAGE=${release}\n`,
@@ -1576,11 +1365,7 @@ test('it still writes the image lines and units, without a restart, on a systemd
   ).toStrictEqual(['IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:latest\n']);
 
   expect(readFileSync(join(ctx.directoryPath, 'imp-host.service'), 'utf8')).toBe(
-    `Environment=IMP_HOST_IMAGE=${release}\nExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n`,
-  );
-
-  expect(readFileSync(join(ctx.directoryPath, 'imp-docker-proxy.service'), 'utf8')).toBe(
-    `Environment=IMP_HOST_IMAGE=${release}\nExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n`,
+    `Environment=IMP_HOST_IMAGE=${release}\nExecStart=/usr/bin/podman run --name imp-host imp-host\n`,
   );
 
   expect(calls).toInclude('systemctl daemon-reload\n');
@@ -1588,71 +1373,16 @@ test('it still writes the image lines and units, without a restart, on a systemd
   expect(calls).not.toInclude('impz ls');
 });
 
-test('it still writes the compose .env, without compose up, on a compose host that runs the image already', () => {
-  const ctx = setupTest();
-
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
-      image: 'ghcr.io/zgeoff/imp-host:next',
-      runningLabel: 'no-docker',
-      pulledLabel: 'no-docker',
-      pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
-      pulledIsRunning: true,
-    }),
-  );
-
-  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
-
-  writeFileSync(
-    join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
-  );
-
-  writeFileSync(join(ctx.directoryPath, 'compose.yaml'), 'services:\n  imp-host:\n    image: x\n');
-
-  const result = Bun.spawnSync(
-    [
-      'bash',
-      new URL('upgrade.sh', import.meta.url).pathname,
-      '--compose',
-      join(ctx.directoryPath, 'compose.yaml'),
-    ],
-    {
-      env: {
-        PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
-        IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
-        IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
-        IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
-        IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
-        IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
-      },
-    },
-  );
-
-  const calls = readFileSync(docker.calls, 'utf8');
-
-  expect(result.exitCode).toBe(0);
-
-  expect(readFileSync(join(ctx.directoryPath, '.env'), 'utf8')).toBe(
-    'IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:next\n',
-  );
-
-  expect(calls).not.toInclude('compose');
-});
-
 test('it refuses an env file that sets IMP_HOST_IMAGE empty before anything changes', () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
+  const podman = createStubBin(
     ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
+    'podman',
+    buildStubHostPodman({
       image: 'ghcr.io/zgeoff/imp-host:next',
-      runningLabel: 'socket-proxy',
-      pulledLabel: 'socket-proxy',
-      pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
+      pulledLabel: 'no-docker',
+      pulledUnit: 'ExecStart=/usr/bin/podman run --name imp-host imp-host\n',
     }),
   );
 
@@ -1660,7 +1390,7 @@ test('it refuses an env file that sets IMP_HOST_IMAGE empty before anything chan
 
   writeFileSync(
     join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
+    'ExecStart=/usr/bin/podman run --cap-drop ALL imp-host\n',
   );
 
   writeFileSync(join(ctx.directoryPath, 'imp-host.env'), 'IMP_PORT=7070\nIMP_HOST_IMAGE=\n', {
@@ -1669,7 +1399,7 @@ test('it refuses an env file that sets IMP_HOST_IMAGE empty before anything chan
 
   const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
     env: {
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
       IMP_HOST_IMAGE: '',
       IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
       IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
@@ -1679,7 +1409,7 @@ test('it refuses an env file that sets IMP_HOST_IMAGE empty before anything chan
   });
 
   const output = result.stdout.toString() + result.stderr.toString();
-  const calls = readFileSync(docker.calls, 'utf8');
+  const calls = readFileSync(podman.calls, 'utf8');
 
   expect(result.exitCode).toBe(1);
   expect(output).toInclude('imp-host.env sets IMP_HOST_IMAGE= empty');
@@ -1688,23 +1418,22 @@ test('it refuses an env file that sets IMP_HOST_IMAGE empty before anything chan
     'IMP_PORT=7070\nIMP_HOST_IMAGE=\n',
   );
 
-  expect(calls.split('\n').filter((call) => call.startsWith('docker pull '))).toBeEmpty();
+  expect(calls.split('\n').filter((call) => call.startsWith('podman pull '))).toBeEmpty();
   expect(calls).not.toInclude('systemctl');
 });
 
-test('it refuses a host that runs the image already when its units would run another', () => {
+test('it refuses a host that runs the image already when its unit would run another', () => {
   const ctx = setupTest();
   const pkgText = readFileSync(new URL('../package.json', import.meta.url), 'utf8');
   const release = `ghcr.io/zgeoff/imp-host:${z.object({ version: z.string() }).parse(JSON.parse(pkgText)).version}`;
 
-  const docker = createStubBin(
+  const podman = createStubBin(
     ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
+    'podman',
+    buildStubHostPodman({
       image: 'ghcr.io/zgeoff/imp-host:next',
-      runningLabel: 'socket-proxy',
-      pulledLabel: 'socket-proxy',
-      pulledUnit: `Environment=IMP_HOST_IMAGE=${release}\nExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n`,
+      pulledLabel: 'no-docker',
+      pulledUnit: `Environment=IMP_HOST_IMAGE=${release}\nExecStart=/usr/bin/podman run --name imp-host imp-host\n`,
       pulledIsRunning: true,
     }),
   );
@@ -1713,7 +1442,7 @@ test('it refuses a host that runs the image already when its units would run ano
 
   writeFileSync(
     join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
+    'ExecStart=/usr/bin/podman run --cap-drop ALL imp-host\n',
   );
 
   writeFileSync(
@@ -1726,7 +1455,7 @@ test('it refuses a host that runs the image already when its units would run ano
 
   const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
     env: {
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
       IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
       IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
       IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
@@ -1736,7 +1465,7 @@ test('it refuses a host that runs the image already when its units would run ano
   });
 
   const output = result.stdout.toString() + result.stderr.toString();
-  const calls = readFileSync(docker.calls, 'utf8');
+  const calls = readFileSync(podman.calls, 'utf8');
 
   expect(result.exitCode).toBe(1);
 
@@ -1745,7 +1474,7 @@ test('it refuses a host that runs the image already when its units would run ano
   );
 
   expect(readFileSync(join(ctx.directoryPath, 'imp-host.service'), 'utf8')).toBe(
-    'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
+    'ExecStart=/usr/bin/podman run --cap-drop ALL imp-host\n',
   );
 
   expect(readFileSync(join(ctx.directoryPath, 'imp-host.env'), 'utf8')).toBe(
@@ -1755,442 +1484,16 @@ test('it refuses a host that runs the image already when its units would run ano
   expect(calls).not.toInclude('systemctl');
 });
 
-test("it reads the compose .env's image through docker compose config, with the shell's unset", () => {
-  const ctx = setupTest();
-
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
-      image: 'imp-host:pinned',
-      runningLabel: 'no-docker',
-      pulledLabel: 'no-docker',
-      pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
-      composeConfig: 'PATH=/bin\nREGISTRY=imp-host\nIMP_HOST_IMAGE=imp-host:pinned\n',
-    }),
-  );
-
-  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
-
-  writeFileSync(
-    join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
-  );
-
-  writeFileSync(join(ctx.directoryPath, 'compose.yaml'), 'services:\n  imp-host:\n    image: x\n');
-
-  writeFileSync(
-    join(ctx.directoryPath, '.env'),
-    `REGISTRY=imp-host\nIMP_HOST_IMAGE=\${REGISTRY}:pinned # mine\n`,
-  );
-
-  const result = Bun.spawnSync(
-    [
-      'bash',
-      new URL('upgrade.sh', import.meta.url).pathname,
-      '--compose',
-      join(ctx.directoryPath, 'compose.yaml'),
-    ],
-    {
-      env: {
-        PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
-        IMP_DOCKER_GID: '4242',
-        IMP_HOST_IMAGE: '',
-        IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
-        IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
-        IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
-        IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
-      },
-    },
-  );
-
-  const calls = readFileSync(docker.calls, 'utf8');
-
-  expect(result.exitCode).toBe(0);
-  expect(calls).toInclude('compose config, IMP_HOST_IMAGE unset, IMP_DOCKER_GID 4242\n');
-  expect(calls).toInclude('docker pull -q imp-host:pinned\n');
-
-  expect(readFileSync(join(ctx.directoryPath, '.env'), 'utf8')).toBe(
-    `REGISTRY=imp-host\nIMP_HOST_IMAGE=\${REGISTRY}:pinned # mine\n`,
-  );
-
-  expect(
-    readdirSync(ctx.directoryPath).filter((file) => /^\.env\.bak-\d{8}-\d{6}$/v.test(file)),
-  ).toBeEmpty();
-});
-
-test('it leaves a trailing comment out of the compose .env image without compose config', () => {
-  const ctx = setupTest();
-
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
-      image: 'imp-host:pinned',
-      runningLabel: 'no-docker',
-      pulledLabel: 'no-docker',
-      pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
-    }),
-  );
-
-  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
-
-  writeFileSync(
-    join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
-  );
-
-  writeFileSync(join(ctx.directoryPath, 'compose.yaml'), 'services:\n  imp-host:\n    image: x\n');
-  writeFileSync(join(ctx.directoryPath, '.env'), 'IMP_HOST_IMAGE=imp-host:pinned # mine\r\n');
-
-  const result = Bun.spawnSync(
-    [
-      'bash',
-      new URL('upgrade.sh', import.meta.url).pathname,
-      '--compose',
-      join(ctx.directoryPath, 'compose.yaml'),
-    ],
-    {
-      env: {
-        PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
-        IMP_HOST_IMAGE: '',
-        IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
-        IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
-        IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
-        IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
-      },
-    },
-  );
-
-  const calls = readFileSync(docker.calls, 'utf8');
-
-  expect(result.exitCode).toBe(0);
-  expect(calls).toInclude('docker pull -q imp-host:pinned\n');
-
-  expect(readFileSync(join(ctx.directoryPath, '.env'), 'utf8')).toBe(
-    'IMP_HOST_IMAGE=imp-host:pinned # mine\r\n',
-  );
-});
-
-test('it refuses a compose .env image built from other variables, before any pull, without compose config', () => {
-  const ctx = setupTest();
-
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
-      image: 'ghcr.io/zgeoff/imp-host:next',
-      runningLabel: 'no-docker',
-      pulledLabel: 'no-docker',
-      pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
-    }),
-  );
-
-  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
-
-  writeFileSync(
-    join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
-  );
-
-  writeFileSync(join(ctx.directoryPath, 'compose.yaml'), 'services:\n  imp-host:\n    image: x\n');
-
-  writeFileSync(
-    join(ctx.directoryPath, '.env'),
-    `REGISTRY=imp-host\nIMP_HOST_IMAGE="\${REGISTRY}:pinned"\n`,
-  );
-
-  const result = Bun.spawnSync(
-    [
-      'bash',
-      new URL('upgrade.sh', import.meta.url).pathname,
-      '--compose',
-      join(ctx.directoryPath, 'compose.yaml'),
-    ],
-    {
-      env: {
-        PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
-        IMP_HOST_IMAGE: '',
-        IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
-        IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
-        IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
-        IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
-      },
-    },
-  );
-
-  const output = result.stdout.toString() + result.stderr.toString();
-  const calls = readFileSync(docker.calls, 'utf8');
-
-  expect(result.exitCode).toBe(1);
-  expect(output).toInclude('sets IMP_HOST_IMAGE from other variables');
-  expect(calls.split('\n').filter((call) => call.startsWith('docker pull '))).toBeEmpty();
-
-  expect(readFileSync(join(ctx.directoryPath, '.env'), 'utf8')).toBe(
-    `REGISTRY=imp-host\nIMP_HOST_IMAGE="\${REGISTRY}:pinned"\n`,
-  );
-});
-
-test("it gives compose config the Docker socket's group when the environment has no IMP_DOCKER_GID", () => {
-  const ctx = setupTest();
-
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
-      image: 'imp-host:pinned',
-      runningLabel: 'no-docker',
-      pulledLabel: 'no-docker',
-      pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
-      composeConfig: 'IMP_HOST_IMAGE=imp-host:pinned\n',
-    }),
-  );
-
-  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
-  createStubBin(ctx.directoryPath, 'stat', 'echo 4321');
-
-  writeFileSync(
-    join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
-  );
-
-  writeFileSync(join(ctx.directoryPath, 'compose.yaml'), 'services:\n  imp-host:\n    image: x\n');
-  writeFileSync(join(ctx.directoryPath, '.env'), 'IMP_HOST_IMAGE=imp-host:pinned\n');
-
-  const result = Bun.spawnSync(
-    [
-      'bash',
-      new URL('upgrade.sh', import.meta.url).pathname,
-      '--compose',
-      join(ctx.directoryPath, 'compose.yaml'),
-    ],
-    {
-      env: {
-        PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
-        IMP_HOST_IMAGE: '',
-        IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
-        IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
-        IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
-        IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
-      },
-    },
-  );
-
-  const calls = readFileSync(docker.calls, 'utf8');
-
-  expect(result.exitCode).toBe(0);
-  expect(calls).toInclude('stat -c %g /var/run/docker.sock\n');
-  expect(calls).toInclude('compose config, IMP_HOST_IMAGE unset, IMP_DOCKER_GID 4321\n');
-});
-
-test('it never prints the environment that compose config reads', () => {
-  const ctx = setupTest();
-
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
-      image: 'imp-host:pinned',
-      runningLabel: 'no-docker',
-      pulledLabel: 'no-docker',
-      pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
-      composeConfig: 'SECRET=hunter2\nIMP_HOST_IMAGE=imp-host:pinned\n',
-    }),
-  );
-
-  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
-
-  writeFileSync(
-    join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
-  );
-
-  writeFileSync(join(ctx.directoryPath, 'compose.yaml'), 'services:\n  imp-host:\n    image: x\n');
-  writeFileSync(join(ctx.directoryPath, '.env'), 'IMP_HOST_IMAGE=imp-host:pinned\n');
-
-  const result = Bun.spawnSync(
-    [
-      'bash',
-      new URL('upgrade.sh', import.meta.url).pathname,
-      '--compose',
-      join(ctx.directoryPath, 'compose.yaml'),
-    ],
-    {
-      env: {
-        PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
-        IMP_HOST_IMAGE: '',
-        IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
-        IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
-        IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
-        IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
-      },
-    },
-  );
-
-  const output = result.stdout.toString() + result.stderr.toString();
-
-  expect(result.exitCode).toBe(0);
-  expect(output).not.toInclude('hunter2');
-});
-
-test('it never prints what a failing compose config prints, and reads the .env itself', () => {
-  const ctx = setupTest();
-
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
-      image: 'imp-host:pinned',
-      runningLabel: 'no-docker',
-      pulledLabel: 'no-docker',
-      pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
-      composeConfigError: 'SECRET=hunter2\n',
-    }),
-  );
-
-  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
-
-  writeFileSync(
-    join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
-  );
-
-  writeFileSync(join(ctx.directoryPath, 'compose.yaml'), 'services:\n  imp-host:\n    image: x\n');
-  writeFileSync(join(ctx.directoryPath, '.env'), 'IMP_HOST_IMAGE=imp-host:pinned\n');
-
-  const result = Bun.spawnSync(
-    [
-      'bash',
-      new URL('upgrade.sh', import.meta.url).pathname,
-      '--compose',
-      join(ctx.directoryPath, 'compose.yaml'),
-    ],
-    {
-      env: {
-        PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
-        IMP_HOST_IMAGE: '',
-        IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
-        IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
-        IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
-        IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
-      },
-    },
-  );
-
-  const output = result.stdout.toString() + result.stderr.toString();
-  const calls = readFileSync(docker.calls, 'utf8');
-
-  expect(result.exitCode).toBe(0);
-  expect(calls).toInclude('docker pull -q imp-host:pinned\n');
-  expect(output).not.toInclude('hunter2');
-});
-
-test('it refuses --compose without a file, with its usage', () => {
-  const ctx = setupTest();
-
-  const result = Bun.spawnSync(
-    ['bash', new URL('upgrade.sh', import.meta.url).pathname, '--compose'],
-    {
-      env: {
-        PATH: `${join(ctx.directoryPath, 'bin')}:${process.env['PATH'] ?? ''}`,
-        IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
-        IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
-        IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
-        IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
-      },
-    },
-  );
-
-  expect(result.exitCode).toBe(2);
-  expect(result.stderr.toString()).toEndWith(' [--compose <file>]\n');
-});
-
-test('it refuses to run on a host without jq', () => {
-  const ctx = setupTest();
-  const docker = createStubBin(ctx.directoryPath, 'docker');
-
-  createStubBin(ctx.directoryPath, 'curl');
-
-  const result = Bun.spawnSync(
-    [Bun.which('bash') ?? 'bash', new URL('upgrade.sh', import.meta.url).pathname],
-    {
-      env: {
-        PATH: docker.bin,
-        IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
-        IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
-        IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
-        IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
-      },
-    },
-  );
-
-  expect(result.exitCode).toBe(1);
-  expect(result.stderr.toString()).toBe('upgrade: jq is not installed\n');
-  expect(readFileSync(docker.calls, 'utf8')).toBe('');
-});
-
-// the command of the releases before deploy/lib/host-env.sh took upgrade.sh alone
-test('it refuses to run without lib/host-env.sh beside it, saying how to take both from the image', () => {
-  const ctx = setupTest();
-  const docker = createStubBin(ctx.directoryPath, 'docker');
-
-  writeFileSync(
-    join(ctx.directoryPath, 'upgrade.sh'),
-    readFileSync(new URL('upgrade.sh', import.meta.url), 'utf8'),
-  );
-
-  const result = Bun.spawnSync(['bash', 'upgrade.sh'], {
-    cwd: ctx.directoryPath,
-    env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
-  });
-
-  expect(result.exitCode).toBe(1);
-
-  expect(result.stderr.toString()).toBe(
-    'upgrade: no ./lib/host-env.sh beside this script; take both from the new image: ' +
-      'docker run --rm <new image> tar -cf - -C /usr/local/share/imp deploy | tar -xf -, ' +
-      'then run deploy/upgrade.sh (docs/guides/operations.md#upgrade)\n',
-  );
-
-  expect(readFileSync(docker.calls, 'utf8')).toBe('');
-});
-
-test('it refuses a host with no imp-host container, before any pull', () => {
-  const ctx = setupTest();
-  const docker = createStubBin(ctx.directoryPath, 'docker', 'exit 1');
-
-  const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
-    env: {
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
-      IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
-      IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
-      IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
-      IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
-      IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
-    },
-  });
-
-  expect(result.exitCode).toBe(1);
-
-  expect(result.stderr.toString()).toBe(
-    'upgrade: no imp-host container; start the host first (docs/guides/install.md)\n',
-  );
-
-  expect(readFileSync(docker.calls, 'utf8')).toBe('docker inspect imp-host\n');
-});
-
 test('it sleeps each awake imp before the restart', () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
+  const podman = createStubBin(
     ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
+    'podman',
+    buildStubHostPodman({
       image: 'ghcr.io/zgeoff/imp-host:next',
-      runningLabel: 'socket-proxy',
-      pulledLabel: 'socket-proxy',
-      pulledUnit:
-        'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
+      pulledLabel: 'no-docker',
+      pulledUnit: 'ExecStart=/usr/bin/podman run --name imp-host imp-host\n',
       awakeImps: ['web', 'db'],
     }),
   );
@@ -2199,12 +1502,12 @@ test('it sleeps each awake imp before the restart', () => {
 
   writeFileSync(
     join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
+    'ExecStart=/usr/bin/podman run --cap-drop ALL imp-host\n',
   );
 
   const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
     env: {
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
       IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
       IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
       IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
@@ -2213,7 +1516,7 @@ test('it sleeps each awake imp before the restart', () => {
     },
   });
 
-  const calls = readFileSync(docker.calls, 'utf8');
+  const calls = readFileSync(podman.calls, 'utf8');
 
   expect(result.exitCode).toBe(0);
   expect(result.stdout.toString()).toInclude('upgrade: web asleep\nupgrade: db asleep\n');
@@ -2221,11 +1524,10 @@ test('it sleeps each awake imp before the restart', () => {
   expect(
     calls
       .split('\n')
-      .filter((call) => /^(?:docker exec imp-host impz sleep|systemctl restart) /v.test(call)),
+      .filter((call) => /^(?:podman exec imp-host impz sleep|systemctl restart) /v.test(call)),
   ).toStrictEqual([
-    'docker exec imp-host impz sleep web',
-    'docker exec imp-host impz sleep db',
-    'systemctl restart imp-docker-proxy',
+    'podman exec imp-host impz sleep web',
+    'podman exec imp-host impz sleep db',
     'systemctl restart imp-host',
   ]);
 });
@@ -2233,15 +1535,13 @@ test('it sleeps each awake imp before the restart', () => {
 test('it sleeps each awake imp with imp in a host image from before the CLI was impz, and asks again after the restart', () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
+  const podman = createStubBin(
     ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
+    'podman',
+    buildStubHostPodman({
       image: 'ghcr.io/zgeoff/imp-host:next',
-      runningLabel: 'socket-proxy',
-      pulledLabel: 'socket-proxy',
-      pulledUnit:
-        'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
+      pulledLabel: 'no-docker',
+      pulledUnit: 'ExecStart=/usr/bin/podman run --name imp-host imp-host\n',
       awakeImps: ['web', 'db'],
       runningCLI: 'imp',
     }),
@@ -2251,12 +1551,12 @@ test('it sleeps each awake imp with imp in a host image from before the CLI was 
 
   writeFileSync(
     join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
+    'ExecStart=/usr/bin/podman run --cap-drop ALL imp-host\n',
   );
 
   const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
     env: {
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
       IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
       IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
       IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
@@ -2265,38 +1565,35 @@ test('it sleeps each awake imp with imp in a host image from before the CLI was 
     },
   });
 
-  const calls = readFileSync(docker.calls, 'utf8');
+  const calls = readFileSync(podman.calls, 'utf8');
 
   expect(result.exitCode).toBe(0);
   expect(result.stdout.toString()).toInclude('upgrade: web asleep\nupgrade: db asleep\n');
 
   expect(
-    calls.split('\n').filter((call) => /^(?:docker exec imp-host |systemctl restart )/v.test(call)),
+    calls.split('\n').filter((call) => /^(?:podman exec imp-host |systemctl restart )/v.test(call)),
   ).toStrictEqual([
-    'docker exec imp-host impz --version',
-    'docker exec imp-host imp ls --json',
-    'docker exec imp-host imp sleep web',
-    'docker exec imp-host imp sleep db',
-    'systemctl restart imp-docker-proxy',
+    'podman exec imp-host impz --version',
+    'podman exec imp-host imp ls --json',
+    'podman exec imp-host imp sleep web',
+    'podman exec imp-host imp sleep db',
     'systemctl restart imp-host',
-    'docker exec imp-host impz --version',
-    'docker exec imp-host imp info --json',
-    'docker exec imp-host imp ls',
+    'podman exec imp-host impz --version',
+    'podman exec imp-host imp info --json',
+    'podman exec imp-host imp ls',
   ]);
 });
 
 test('it stops before anything restarts when an imp does not sleep', () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
+  const podman = createStubBin(
     ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
+    'podman',
+    buildStubHostPodman({
       image: 'ghcr.io/zgeoff/imp-host:next',
-      runningLabel: 'socket-proxy',
-      pulledLabel: 'socket-proxy',
-      pulledUnit:
-        'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
+      pulledLabel: 'no-docker',
+      pulledUnit: 'ExecStart=/usr/bin/podman run --name imp-host imp-host\n',
       awakeImps: ['web', 'db'],
       sleeplessImp: 'db',
     }),
@@ -2306,12 +1603,12 @@ test('it stops before anything restarts when an imp does not sleep', () => {
 
   writeFileSync(
     join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
+    'ExecStart=/usr/bin/podman run --cap-drop ALL imp-host\n',
   );
 
   const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
     env: {
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
       IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
       IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
       IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
@@ -2320,30 +1617,86 @@ test('it stops before anything restarts when an imp does not sleep', () => {
     },
   });
 
-  const calls = readFileSync(docker.calls, 'utf8');
+  const calls = readFileSync(podman.calls, 'utf8');
 
   expect(result.exitCode).toBe(1);
 
   expect(result.stderr.toString()).toInclude(
-    'upgrade: db did not sleep; the host still runs sha256:old\n',
+    'upgrade: db did not sleep; the host still runs old\n',
   );
 
   expect(calls).not.toInclude('systemctl');
-  expect(existsSync(join(ctx.directoryPath, 'imp-docker-proxy.service'))).toBeFalse();
+
+  expect(readFileSync(join(ctx.directoryPath, 'imp-host.service'), 'utf8')).toBe(
+    'ExecStart=/usr/bin/podman run --cap-drop ALL imp-host\n',
+  );
+});
+
+test('it stops a Docker host before anything changes when an imp does not sleep', () => {
+  const ctx = setupTest();
+
+  const podman = createStubBin(
+    ctx.directoryPath,
+    'podman',
+    buildStubHostPodman({
+      image: 'ghcr.io/zgeoff/imp-host:next',
+      pulledLabel: 'no-docker',
+      pulledUnit: 'ExecStart=/usr/bin/podman run --name imp-host imp-host\n',
+      runsHost: false,
+    }),
+  );
+
+  createStubBin(
+    ctx.directoryPath,
+    'docker',
+    buildStubHostDocker({
+      awakeImps: ['web', 'db'],
+      sleeplessImp: 'db',
+      hostNetwork: ['imp-host'],
+    }),
+  );
+
+  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
+
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-host.service'),
+    'ExecStart=/usr/bin/docker run --name imp-host imp-host\n',
+  );
+
+  const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
+    env: {
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
+      IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
+      IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
+      IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
+      IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
+    },
+  });
+
+  const calls = readFileSync(podman.calls, 'utf8');
+
+  expect(result.exitCode).toBe(1);
+
+  expect(result.stderr.toString()).toInclude(
+    'upgrade: db did not sleep; the host still runs old\n',
+  );
+
+  expect(calls).not.toInclude('systemctl');
+  expect(calls).not.toInclude('docker rm');
+  expect(calls).not.toInclude('network rm');
 });
 
 test('it fails the upgrade when impd is not ready in time after the restart', () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
+  const podman = createStubBin(
     ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
+    'podman',
+    buildStubHostPodman({
       image: 'ghcr.io/zgeoff/imp-host:next',
-      runningLabel: 'socket-proxy',
-      pulledLabel: 'socket-proxy',
-      pulledUnit:
-        'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
+      pulledLabel: 'no-docker',
+      pulledUnit: 'ExecStart=/usr/bin/podman run --name imp-host imp-host\n',
     }),
   );
 
@@ -2351,12 +1704,12 @@ test('it fails the upgrade when impd is not ready in time after the restart', ()
 
   writeFileSync(
     join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
+    'ExecStart=/usr/bin/podman run --cap-drop ALL imp-host\n',
   );
 
   const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
     env: {
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
       IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
       IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
       IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
@@ -2369,10 +1722,10 @@ test('it fails the upgrade when impd is not ready in time after the restart', ()
   expect(result.exitCode).toBe(1);
 
   expect(result.stderr.toString()).toInclude(
-    'upgrade: impd is not ready after 0 s; see: docker logs imp-host\n',
+    'upgrade: impd is not ready after 0 s; see: podman logs imp-host\n',
   );
 
-  expect(readFileSync(docker.calls, 'utf8')).toInclude('systemctl restart imp-host\n');
+  expect(readFileSync(podman.calls, 'utf8')).toInclude('systemctl restart imp-host\n');
 });
 
 test('it stops before anything restarts when it cannot rewrite the env file', () => {
@@ -2380,16 +1733,15 @@ test('it stops before anything restarts when it cannot rewrite the env file', ()
   const pkgText = readFileSync(new URL('../package.json', import.meta.url), 'utf8');
   const version = z.object({ version: z.string() }).parse(JSON.parse(pkgText)).version;
 
-  const docker = createStubBin(
+  const podman = createStubBin(
     ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
+    'podman',
+    buildStubHostPodman({
       image: `ghcr.io/zgeoff/imp-host:${version}`,
-      runningLabel: 'socket-proxy',
-      pulledLabel: 'socket-proxy',
+      pulledLabel: 'no-docker',
       pulledUnit:
         `Environment=IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:${version}\n` +
-        'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
+        'ExecStart=/usr/bin/podman run --name imp-host imp-host\n',
     }),
   );
 
@@ -2397,7 +1749,7 @@ test('it stops before anything restarts when it cannot rewrite the env file', ()
 
   writeFileSync(
     join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
+    'ExecStart=/usr/bin/podman run --cap-drop ALL imp-host\n',
   );
 
   writeFileSync(
@@ -2416,7 +1768,7 @@ test('it stops before anything restarts when it cannot rewrite the env file', ()
 
   const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
     env: {
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
       IMP_HOST_IMAGE: '',
       IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
       IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
@@ -2428,28 +1780,89 @@ test('it stops before anything restarts when it cannot rewrite the env file', ()
   expect(result.exitCode).toBe(1);
 
   expect(result.stderr.toString()).toInclude(
-    `upgrade: cannot rewrite ${join(ctx.directoryPath, 'imp-host.env')}; nothing restarted, the host still runs sha256:old\n`,
+    `upgrade: cannot rewrite ${join(ctx.directoryPath, 'imp-host.env')}; nothing restarted, the host still runs old\n`,
   );
 
   expect(readFileSync(join(ctx.directoryPath, 'imp-host.env'), 'utf8')).toBe(
     'IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:latest\n',
   );
 
-  expect(readFileSync(docker.calls, 'utf8')).not.toInclude('systemctl');
+  expect(readFileSync(podman.calls, 'utf8')).not.toInclude('systemctl');
+});
+
+test('it gives the rollback to Docker when it cannot rewrite the env file after a Docker host stops', () => {
+  const ctx = setupTest();
+  const pkgText = readFileSync(new URL('../package.json', import.meta.url), 'utf8');
+  const version = z.object({ version: z.string() }).parse(JSON.parse(pkgText)).version;
+
+  const podman = createStubBin(
+    ctx.directoryPath,
+    'podman',
+    buildStubHostPodman({
+      image: `ghcr.io/zgeoff/imp-host:${version}`,
+      pulledLabel: 'no-docker',
+      pulledUnit:
+        `Environment=IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:${version}\n` +
+        'ExecStart=/usr/bin/podman run --name imp-host imp-host\n',
+      runsHost: false,
+    }),
+  );
+
+  createStubBin(ctx.directoryPath, 'docker', buildStubHostDocker({ hostNetwork: ['imp-host'] }));
+  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
+
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-host.service'),
+    'ExecStart=/usr/bin/docker run --name imp-host imp-host\n',
+  );
+
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-host.env'),
+    'IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:latest\n',
+    {
+      mode: 0o600,
+    },
+  );
+
+  // a dangling symlink where the rewrite writes the new file, which cp will not write through
+  symlinkSync(
+    join(ctx.directoryPath, 'missing', 'imp-host.env'),
+    join(ctx.directoryPath, 'imp-host.env.new'),
+  );
+
+  const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
+    env: {
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_HOST_IMAGE: '',
+      IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
+      IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
+      IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
+      IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
+    },
+  });
+
+  expect(result.exitCode).toBe(1);
+
+  expect(result.stderr.toString()).toInclude(
+    `upgrade: cannot rewrite ${join(ctx.directoryPath, 'imp-host.env')}; imp-host is stopped; to roll back to Docker: ` +
+      'systemctl stop imp-host, then systemctl daemon-reload, then systemctl start imp-host\n',
+  );
+
+  expect(readFileSync(join(ctx.directoryPath, 'imp-host.service'), 'utf8')).toBe(
+    'ExecStart=/usr/bin/docker run --name imp-host imp-host\n',
+  );
 });
 
 test('it warns, and still upgrades, when impz info fails', () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
+  const podman = createStubBin(
     ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
+    'podman',
+    buildStubHostPodman({
       image: 'ghcr.io/zgeoff/imp-host:next',
-      runningLabel: 'socket-proxy',
-      pulledLabel: 'socket-proxy',
-      pulledUnit:
-        'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
+      pulledLabel: 'no-docker',
+      pulledUnit: 'ExecStart=/usr/bin/podman run --name imp-host imp-host\n',
       impInfo: null,
     }),
   );
@@ -2458,12 +1871,12 @@ test('it warns, and still upgrades, when impz info fails', () => {
 
   writeFileSync(
     join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
+    'ExecStart=/usr/bin/podman run --cap-drop ALL imp-host\n',
   );
 
   const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
     env: {
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
       IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
       IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
       IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
@@ -2482,15 +1895,13 @@ test('it warns, and still upgrades, when impz info fails', () => {
 test('it warns, and still upgrades, when it cannot read impz info', () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
+  const podman = createStubBin(
     ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
+    'podman',
+    buildStubHostPodman({
       image: 'ghcr.io/zgeoff/imp-host:next',
-      runningLabel: 'socket-proxy',
-      pulledLabel: 'socket-proxy',
-      pulledUnit:
-        'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
+      pulledLabel: 'no-docker',
+      pulledUnit: 'ExecStart=/usr/bin/podman run --name imp-host imp-host\n',
       impInfo: 'not json',
     }),
   );
@@ -2499,12 +1910,12 @@ test('it warns, and still upgrades, when it cannot read impz info', () => {
 
   writeFileSync(
     join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
+    'ExecStart=/usr/bin/podman run --cap-drop ALL imp-host\n',
   );
 
   const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
     env: {
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
       IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
       IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
       IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
@@ -2523,15 +1934,13 @@ test('it warns, and still upgrades, when it cannot read impz info', () => {
 test('it says when impd does not count cold boots', () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
+  const podman = createStubBin(
     ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
+    'podman',
+    buildStubHostPodman({
       image: 'ghcr.io/zgeoff/imp-host:next',
-      runningLabel: 'socket-proxy',
-      pulledLabel: 'socket-proxy',
-      pulledUnit:
-        'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
+      pulledLabel: 'no-docker',
+      pulledUnit: 'ExecStart=/usr/bin/podman run --name imp-host imp-host\n',
       impInfo: '{}',
     }),
   );
@@ -2540,12 +1949,12 @@ test('it says when impd does not count cold boots', () => {
 
   writeFileSync(
     join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
+    'ExecStart=/usr/bin/podman run --cap-drop ALL imp-host\n',
   );
 
   const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
     env: {
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
       IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
       IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
       IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
@@ -2564,15 +1973,13 @@ test('it says when impd does not count cold boots', () => {
 test('it reports the cold boots and the outdated parts that impd counts', () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
+  const podman = createStubBin(
     ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
+    'podman',
+    buildStubHostPodman({
       image: 'ghcr.io/zgeoff/imp-host:next',
-      runningLabel: 'socket-proxy',
-      pulledLabel: 'socket-proxy',
-      pulledUnit:
-        'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
+      pulledLabel: 'no-docker',
+      pulledUnit: 'ExecStart=/usr/bin/podman run --name imp-host imp-host\n',
       impInfo: '{"bootStatus":{"coldBoots":3,"outdated":{"kernel":2,"agent":0,"rootfs":1}}}',
     }),
   );
@@ -2581,12 +1988,12 @@ test('it reports the cold boots and the outdated parts that impd counts', () => 
 
   writeFileSync(
     join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
+    'ExecStart=/usr/bin/podman run --cap-drop ALL imp-host\n',
   );
 
   const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
     env: {
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
       IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
       IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
       IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
@@ -2605,15 +2012,13 @@ test('it reports the cold boots and the outdated parts that impd counts', () => 
 test('it reports no outdated parts when impd counts none', () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
+  const podman = createStubBin(
     ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({
+    'podman',
+    buildStubHostPodman({
       image: 'ghcr.io/zgeoff/imp-host:next',
-      runningLabel: 'socket-proxy',
-      pulledLabel: 'socket-proxy',
-      pulledUnit:
-        'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
+      pulledLabel: 'no-docker',
+      pulledUnit: 'ExecStart=/usr/bin/podman run --name imp-host imp-host\n',
       impInfo: '{"bootStatus":{"coldBoots":0,"outdated":{"kernel":0}}}',
     }),
   );
@@ -2622,12 +2027,12 @@ test('it reports no outdated parts when impd counts none', () => {
 
   writeFileSync(
     join(ctx.directoryPath, 'imp-host.service'),
-    'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
+    'ExecStart=/usr/bin/podman run --cap-drop ALL imp-host\n',
   );
 
   const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
     env: {
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
       IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
       IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
       IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),

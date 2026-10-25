@@ -35,17 +35,17 @@ async function checkNetworkRecreated(
   run.log(`[${distro}] ipv6: a network with another subnet is drift, and a run recreates it`);
 
   await runInContainer(run, ['systemctl', 'stop', 'imp-host']);
-  await runInContainer(run, ['docker', 'network', 'rm', 'imp-host']);
+  await runInContainer(run, ['podman', 'network', 'rm', 'imp-host']);
 
   await runInContainer(run, [
-    'docker',
+    'podman',
     'network',
     'create',
     '--ipv6',
     '--subnet',
     'fd00:dead:beef::/64',
-    '-o',
-    'com.docker.network.bridge.name=br-imphost',
+    '--interface-name',
+    'br-imphost',
     'imp-host',
   ]);
 
@@ -159,7 +159,7 @@ async function checkIPv6Off(
   await applyBootstrap(run, target, { extra: off, failure: 'the --ipv6 off run failed' });
 
   await expectInContainer(run, {
-    argv: ['docker', 'network', 'inspect', 'imp-host'],
+    argv: ['podman', 'network', 'exists', 'imp-host'],
     failure: `[${distro}] the imp-host network is left`,
     fails: true,
   });
@@ -185,8 +185,8 @@ async function checkIPv6Off(
     throw new BootstrapTestError(`[${distro}] imp-host is not running with --ipv6 off`);
   }
 
-  if ((await readImpHostNetworks(run)) !== 'bridge') {
-    throw new BootstrapTestError(`[${distro}] imp-host is not on the default bridge`);
+  if ((await readImpHostNetworks(run)) !== 'podman') {
+    throw new BootstrapTestError(`[${distro}] imp-host is not on the default network`);
   }
 
   const again = await applyBootstrap(run, target, { failure: 'the second off run failed' });
@@ -197,7 +197,7 @@ async function checkIPv6Off(
 
   run.log(`[${distro}] ipv6: a network that comes back is drift, and --yes refuses it`);
 
-  await runInContainer(run, ['docker', 'network', 'create', 'imp-host']);
+  await runInContainer(run, ['podman', 'network', 'create', 'imp-host']);
   await expectBootstrapExit(run, target, { want: 2, mode: '--check' });
 
   const refusal = await expectBootstrapExit(run, target, { want: 1, mode: '--yes' });
@@ -206,7 +206,7 @@ async function checkIPv6Off(
     throw new BootstrapTestError(`[${distro}] no hint for the drift`);
   }
 
-  await runInContainer(run, ['docker', 'network', 'rm', 'imp-host']);
+  await runInContainer(run, ['podman', 'network', 'rm', 'imp-host']);
 }
 
 async function checkRouterAdvertClient(run: BootstrapRun, target: BootstrapTarget): Promise<void> {
@@ -279,8 +279,8 @@ async function checkOldHostReruns(run: BootstrapRun, target: BootstrapTarget): P
     throw new BootstrapTestError(`[${distro}] imp-host is not running after the re-run`);
   }
 
-  if ((await readImpHostNetworks(run)) !== 'bridge') {
-    throw new BootstrapTestError(`[${distro}] imp-host left the default bridge`);
+  if ((await readImpHostNetworks(run)) !== 'podman') {
+    throw new BootstrapTestError(`[${distro}] imp-host left the default network`);
   }
 
   run.log(

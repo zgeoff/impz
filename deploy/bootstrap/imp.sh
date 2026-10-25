@@ -48,7 +48,7 @@ ensure_imp() {
   run_image=$(sed -n 's/^IMP_HOST_IMAGE=//p' <<<"$env" | tail -n 1)
   run_image=${run_image:-$DEFAULT_IMAGE}
   ensure_image "$run_image"
-  if ! dry || docker image inspect "$run_image" >/dev/null 2>&1; then
+  if ! dry || podman image inspect "$run_image" >/dev/null 2>&1; then
     refusal=$(check_image_contract "$run_image" 2>&1) || die "$refusal"
   fi
   put_file "$ENV_FILE" 600 "$env" && changed=1
@@ -62,7 +62,7 @@ ensure_imp() {
   # pivot_root for the jailer (docs/architecture/host.md#privileges).
   # A dry run pulls nothing, so it may have no image to read.
   local seccomp
-  if dry && ! docker image inspect "$run_image" >/dev/null 2>&1; then
+  if dry && ! podman image inspect "$run_image" >/dev/null 2>&1; then
     change "write $SECCOMP_FILE from the image" true
   else
     seccomp=$(read_seccomp "$run_image") || exit 1
@@ -92,7 +92,7 @@ remove_proxy_unit() {
 # read_seccomp REF: the seccomp profile in the image REF; refuses an image
 # without one.
 read_seccomp() {
-  docker run --rm "$1" cat "$SECCOMP_IN_IMAGE" ||
+  podman run --rm "$1" cat "$SECCOMP_IN_IMAGE" ||
     die "$1 has no $SECCOMP_IN_IMAGE; it predates the unprivileged host"
 }
 
@@ -100,29 +100,29 @@ read_seccomp() {
 # units expect: imp.host-contract=no-docker (host/Dockerfile)
 check_image_contract() {
   local contract
-  contract=$(docker image inspect -f '{{index .Config.Labels "imp.host-contract"}}' "$1" 2>/dev/null) || contract=
+  contract=$(podman image inspect -f '{{index .Config.Labels "imp.host-contract"}}' "$1" 2>/dev/null) || contract=
   [ "$contract" = no-docker ] && return 0
-  echo "$1 needs a Docker socket (imp.host-contract is '${contract:-none}'), and this unit gives it none: pull the new image (docker pull $1) and run again; the env file and the units are unchanged" >&2
+  echo "$1 needs a Docker socket (imp.host-contract is '${contract:-none}'), and this unit gives it none: pull the new image (podman pull $1) and run again; the env file and the units are unchanged" >&2
   return 1
 }
 
 ensure_image() {
   local ref=$1
-  if command -v docker >/dev/null && docker image inspect "$ref" >/dev/null 2>&1; then
+  if command -v podman >/dev/null && podman image inspect "$ref" >/dev/null 2>&1; then
     log "image $ref is present"
     return
   fi
   if [ -n "$image_archive" ]; then
     [ -r "$image_archive" ] || die "cannot read $image_archive"
-    change "docker load $ref from $image_archive" load_image "$ref"
+    change "podman load $ref from $image_archive" load_image "$ref"
   else
-    change "docker pull $ref" docker pull -q "$ref"
+    change "podman pull $ref" podman pull -q "$ref"
   fi
 }
 
 load_image() {
-  docker load -q -i "$image_archive" >/dev/null
-  docker image inspect "$1" >/dev/null 2>&1 || die "$image_archive does not hold $1"
+  podman load -q -i "$image_archive" >/dev/null
+  podman image inspect "$1" >/dev/null 2>&1 || die "$image_archive does not hold $1"
 }
 
 # ensure_tailscale: with a key in the env file, wait for the node to join,
@@ -134,13 +134,13 @@ ensure_tailscale() {
   wait_for "the tailnet node to be Running" 180 tailscale_running
   # An older image skips tailscaled without a key, which would take the
   # node off the tailnet at its next start.
-  if [ "$(docker container inspect -f '{{index .Config.Labels "imp.tailscale-keyless"}}' imp-host)" != 1 ]; then
+  if [ "$(podman container inspect -f '{{index .Config.Labels "imp.tailscale-keyless"}}' imp-host)" != 1 ]; then
     warn "this imp-host image needs TAILSCALE_AUTHKEY at every start; the key stays in $ENV_FILE"
     return 0
   fi
   change "blank TAILSCALE_AUTHKEY in $ENV_FILE; the node state keeps it joined" \
     write_file "$ENV_FILE" 600 "$(blank_env_key <"$ENV_FILE")"
-  # The running container still holds the key in its environment (docker
+  # The running container still holds the key in its environment (podman
   # inspect, /proc/*/environ); a restart with the blank file drops it.
   change "restart imp-host without the key" reload_unit imp-host
 }
@@ -152,10 +152,10 @@ blank_env_key() { sed 's/^TAILSCALE_AUTHKEY=.*/TAILSCALE_AUTHKEY=/'; }
 # CLI's rename that --image or an IMP_HOST_IMAGE pin chose. Asked on each call,
 # since the container may restart onto another image in between.
 host_cli() {
-  if docker exec imp-host impz --version >/dev/null 2>&1; then
-    docker exec imp-host impz "$@"
+  if podman exec imp-host impz --version >/dev/null 2>&1; then
+    podman exec imp-host impz "$@"
   else
-    docker exec imp-host imp "$@"
+    podman exec imp-host imp "$@"
   fi
 }
 
@@ -168,7 +168,7 @@ health() {
   # Nothing may be published past loopback; the tailnet reaches impd through
   # the container's own tailscaled.
   local published
-  published=$(docker port imp-host)
+  published=$(podman port imp-host)
   if grep -vE ' -> 127\.0\.0\.1:' <<<"$published" | grep -q .; then
     die "imp-host publishes a port beyond loopback: $published"
   fi
@@ -203,7 +203,7 @@ check_storage_live() {
   if [ "$storage" = zfs ]; then
     [ "$(zpool list -H -o health "$zfs_pool")" = ONLINE ] || die "pool $zfs_pool is not ONLINE"
     local top
-    top=$(docker exec imp-host findmnt -n -r -o SOURCE,FSTYPE --mountpoint "$DATA_DIR" | tail -n 1)
+    top=$(podman exec imp-host findmnt -n -r -o SOURCE,FSTYPE --mountpoint "$DATA_DIR" | tail -n 1)
     [ "$top" = "$zfs_root zfs" ] || die "the container has '${top:-nothing}' on $DATA_DIR, not $zfs_root"
   fi
   log "health: impd stores imps on $storage${zfs_root:+ ($zfs_root)}"
@@ -212,7 +212,7 @@ check_storage_live() {
 # check_ipv6_live: with IPv6 on, the container has an IPv6 default route,
 # and impd took it (docs/architecture/network/networking.md#ipv6).
 check_ipv6_live() {
-  [ -n "$(docker exec imp-host ip -6 route show default)" ] ||
+  [ -n "$(podman exec imp-host ip -6 route show default)" ] ||
     die "imp-host has no IPv6 default route on the $HOST_NETWORK network"
   wait_for "impd to log its IPv6 plan" 60 impd_ipv6_line
   local line
@@ -222,15 +222,15 @@ check_ipv6_live() {
 }
 
 # an image from before impd's structured log, which a pin keeps, writes `impd: ipv6: …`
-impd_ipv6_line() { docker logs imp-host 2>&1 | grep -oE 'impd(\.ipv6|: ipv6:) .*' | tail -n 1 | grep .; }
+impd_ipv6_line() { podman logs imp-host 2>&1 | grep -oE 'impd(\.ipv6|: ipv6:) .*' | tail -n 1 | grep .; }
 
 # tailnet_joined: the host container runs and holds node state.
 tailnet_joined() {
-  docker exec imp-host test -s /var/lib/imp/tailscale/tailscaled.state 2>/dev/null
+  podman exec imp-host test -s /var/lib/imp/tailscale/tailscaled.state 2>/dev/null
 }
 
 tailscale_backend() {
-  docker exec imp-host tailscale --socket=/var/run/tailscale/tailscaled.sock status --json 2>/dev/null |
+  podman exec imp-host tailscale --socket=/var/run/tailscale/tailscaled.sock status --json 2>/dev/null |
     jq -r '.BackendState // empty'
 }
 

@@ -10,15 +10,23 @@
 # A computed RAM budget below this is refused: the host is too small for the
 # formula, and the operator sets IMP_RAM_BUDGET_MIB.
 readonly RAM_BUDGET_FLOOR_MIB=512
-# With IPv6, imp-host runs on this Docker network. The bridge has a fixed
+# The container CLI that runs imp-host; the NixOS module sets it to docker.
+readonly CONTAINER_CLI=${CONTAINER_CLI:-podman}
+# With IPv6, imp-host runs on this container network. The bridge has a fixed
 # name so a host firewall can admit it; the name keeps clear of imp's own
 # interfaces (imp0, imp+). bun run render:deploy writes both, and
 # host_addresses, from deploy/imp-host.args.json.
 readonly HOST_NETWORK=imp-host
 readonly HOST_BRIDGE=br-imphost
-# docker network inspect: IPv6 on, the bridge's name, then every subnet.
-# shellcheck disable=SC2034 # for its callers
-readonly NETWORK_FORMAT='{{.EnableIPv6}} {{or (index .Options "com.docker.network.bridge.name") "unnamed"}}{{range .IPAM.Config}} {{.Subnet}}{{end}}'
+# $CONTAINER_CLI network inspect -f: IPv6 on, the bridge's name, then every
+# subnet, in the same words for both CLIs.
+if [ "$CONTAINER_CLI" = docker ]; then
+  # shellcheck disable=SC2034 # for its callers
+  readonly NETWORK_FORMAT='{{.EnableIPv6}} {{or (index .Options "com.docker.network.bridge.name") "unnamed"}}{{range .IPAM.Config}} {{.Subnet}}{{end}}'
+else
+  # shellcheck disable=SC2034 # for its callers
+  readonly NETWORK_FORMAT='{{.IPv6Enabled}} {{or .NetworkInterface "unnamed"}}{{range .Subnets}} {{.Subnet}}{{end}}'
+fi
 
 # The awk function trim(line): line without a trailing \r or the blanks
 # around it, as an env file edited on another system may have them, and
@@ -47,8 +55,8 @@ trim_lines() {
 strip_markers() { grep -vE '^# x-release-please-(start-[a-z]+|end)$' || true; }
 
 # check_env_image FILE: fails, and says why, when FILE's last IMP_HOST_IMAGE
-# is empty: systemd passes it over the units' own image, and docker run gets
-# none.
+# is empty: systemd passes it over the units' own image, and the container
+# run gets none.
 check_env_image() {
   [ -f "$1" ] || return 0
   [ "$(trim_lines "$1" | grep '^IMP_HOST_IMAGE=' | tail -n 1)" = IMP_HOST_IMAGE= ] || return 0
@@ -70,7 +78,7 @@ write_file() {
 }
 
 # ram_budget_mib MEMTOTAL_KIB [ARC_MIB]: the RAM awake imps may use. The
-# host keeps the larger of 8 GiB and 15 % for itself, Docker, impd and the
+# host keeps the larger of 8 GiB and 15 % for itself, its container engine, impd and the
 # page cache, and with ZFS also the ARC's cap.
 ram_budget_mib() {
   local total=$(($1 / 1024)) arc=${2:-0} reserve
@@ -127,7 +135,7 @@ ipv6_expand() {
   )
 }
 
-# ipv6_canon ADDR[/LEN]: ADDR as Docker prints it (RFC 5952): lower case,
+# ipv6_canon ADDR[/LEN]: ADDR as Docker and Podman print it (RFC 5952): lower case,
 # no leading zeros, and the longest run of two or more zero groups as ::.
 ipv6_canon() {
   local expanded suffix="" i
@@ -173,8 +181,8 @@ subnet6() {
   ipv6_canon "$1"
 }
 
-# network_drift WANT INSPECT: how a network that docker network inspect
-# (NETWORK_FORMAT) describes as INSPECT differs from IPv6 on the /64 WANT
+# network_drift WANT INSPECT: how a network that $CONTAINER_CLI network
+# inspect (NETWORK_FORMAT) describes as INSPECT differs from IPv6 on the /64 WANT
 # with the bridge HOST_BRIDGE; nothing when it matches.
 network_drift() {
   local want=$1 enabled bridge subnet found="" have=()
@@ -200,23 +208,32 @@ network_drift() {
 # (docs/architecture/network/egress.md#public)
 host_addresses() { ip -o addr show scope global | tr -s " " | cut -d " " -f 4 | paste -sd ,; }
 
-# network_others: the containers on the network other than imp-host.
+# network_others: the containers on the network other than imp-host. Podman
+# 4.9's network inspect lists no containers, so podman asks ps.
 network_others() {
-  docker network inspect -f '{{range .Containers}}{{.Name}} {{end}}' "$HOST_NETWORK" 2>/dev/null |
-    tr ' ' '\n' | grep -vx -e imp-host -e '' | paste -sd ' ' - || true
+  if [ "$CONTAINER_CLI" = docker ]; then
+    docker network inspect -f '{{range .Containers}}{{.Name}} {{end}}' "$HOST_NETWORK" 2>/dev/null
+  else
+    podman ps -a --filter "network=$HOST_NETWORK" --format '{{.Names}}' 2>/dev/null
+  fi | tr ' ' '\n' | grep -vx -e imp-host -e '' | paste -sd ' ' - || true
 }
 
 # create_host_network SUBNET6: the network imp-host runs on with IPv6, on
-# the /64 SUBNET6, as the unit's ExecStartPre (deploy/imp-host.service) and
-# the networks block of deploy/compose.yaml make it.
+# the /64 SUBNET6, as the unit's ExecStartPre (deploy/imp-host.service)
+# makes it.
 create_host_network() {
-  docker network create --ipv6 --subnet "$1" \
-    -o "com.docker.network.bridge.name=$HOST_BRIDGE" "$HOST_NETWORK" >/dev/null
+  if [ "$CONTAINER_CLI" = docker ]; then
+    docker network create --ipv6 --subnet "$1" \
+      -o "com.docker.network.bridge.name=$HOST_BRIDGE" "$HOST_NETWORK" >/dev/null
+  else
+    podman network create --ipv6 --subnet "$1" \
+      --interface-name "$HOST_BRIDGE" "$HOST_NETWORK" >/dev/null
+  fi
 }
 
 # render_firewall PORT...: the nft ruleset. One transaction: create the
 # table, delete it, create it again, so a reload replaces only our rules and
-# never Docker's. Input only; Docker owns forwarding. The host itself is not
+# never the container engine's. Input only; the engine owns forwarding. The host itself is not
 # a tailnet node (the host container is, and its traffic is forwarded), so no
 # Tailscale port is open.
 render_firewall() {

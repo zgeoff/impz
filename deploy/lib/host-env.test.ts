@@ -210,8 +210,44 @@ test.each([['fd12::/56'], ['fd12::1/64'], ['fd12:::/64'], ['nope/64'], ['10.0.0.
 );
 
 test.each([
+  [
+    'podman',
+    '{{.IPv6Enabled}} {{or .NetworkInterface "unnamed"}}{{range .Subnets}} {{.Subnet}}{{end}}',
+  ],
+  [
+    'docker',
+    '{{.EnableIPv6}} {{or (index .Options "com.docker.network.bridge.name") "unnamed"}}{{range .IPAM.Config}} {{.Subnet}}{{end}}',
+  ],
+])(
+  '#NETWORK_FORMAT reads IPv6, the bridge and the subnets from %s network inspect',
+  (cli, format) => {
+    const script = new URL('host-env.sh', import.meta.url).pathname;
+
+    expect(
+      runSourcedFunction({
+        script,
+        fn: 'eval',
+        args: ['printf %s "$NETWORK_FORMAT"'],
+        env: { CONTAINER_CLI: cli },
+      }),
+    ).toStrictEqual({ exitCode: 0, stdout: format, stderr: '' });
+  },
+);
+
+test('#NETWORK_FORMAT reads podman network inspect when no CLI is set', () => {
+  const script = new URL('host-env.sh', import.meta.url).pathname;
+
+  expect(
+    runSourcedFunction({ script, fn: 'eval', args: ['printf %s "$NETWORK_FORMAT"'] }).stdout,
+  ).toStartWith('{{.IPv6Enabled}} ');
+});
+
+test.each([
   ['true br-imphost 172.18.0.0/16 fd12:3456:789a::/64', ''],
+  ['true br-imphost 10.89.0.0/24 fd12:3456:789a::/64', ''],
+  ['true br-imphost fd12:3456:789a:0:0::/64 10.89.0.0/24', ''],
   ['false br-imphost 172.18.0.0/16', 'it has no IPv6\n'],
+  ['true podman1 10.89.0.0/24 fd12:3456:789a::/64', 'its bridge is podman1, not br-imphost\n'],
   ['true unnamed 172.18.0.0/16 fd12:3456:789a::/64', 'its bridge is unnamed, not br-imphost\n'],
   [
     'true br-imphost 172.18.0.0/16 fd00::/64',
@@ -229,17 +265,43 @@ test.each([
   ).toBe(drift);
 });
 
-test('#network_others names the containers on the network other than imp-host', () => {
+test('#network_others names the containers on the network other than imp-host, from podman ps', () => {
+  const ctx = setupTest();
+
+  const podman = createStubBin(
+    ctx.directoryPath,
+    'podman',
+    String.raw`printf '%s\n' imp-host pod-a pod-b`,
+  );
+
+  const result = runSourcedFunction({
+    script: new URL('host-env.sh', import.meta.url).pathname,
+    fn: 'network_others',
+    env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
+  });
+
+  expect(result).toStrictEqual({ exitCode: 0, stdout: 'pod-a pod-b\n', stderr: '' });
+
+  expect(readFileSync(podman.calls, 'utf8')).toBe(
+    'podman ps -a --filter network=imp-host --format {{.Names}}\n',
+  );
+});
+
+test('#network_others names the containers on the network other than imp-host, from docker network inspect', () => {
   const ctx = setupTest();
   const docker = createStubBin(ctx.directoryPath, 'docker', 'echo "imp-host pod-a pod-b "');
 
   const result = runSourcedFunction({
     script: new URL('host-env.sh', import.meta.url).pathname,
     fn: 'network_others',
-    env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
+    env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`, CONTAINER_CLI: 'docker' },
   });
 
   expect(result).toStrictEqual({ exitCode: 0, stdout: 'pod-a pod-b\n', stderr: '' });
+
+  expect(readFileSync(docker.calls, 'utf8')).toBe(
+    'docker network inspect -f {{range .Containers}}{{.Name}} {{end}} imp-host\n',
+  );
 });
 
 test("#host_addresses lists the host's global addresses with their prefixes, comma-separated", () => {
@@ -268,7 +330,29 @@ test("#host_addresses lists the host's global addresses with their prefixes, com
   expect(readFileSync(ip.calls, 'utf8')).toBe('ip -o addr show scope global\n');
 });
 
-test('#create_host_network creates the network with the arguments the unit uses', () => {
+test('#create_host_network creates the network with podman and the arguments the unit uses', () => {
+  const ctx = setupTest();
+  const podman = createStubBin(ctx.directoryPath, 'podman');
+
+  runSourcedFunction({
+    script: new URL('host-env.sh', import.meta.url).pathname,
+    fn: 'create_host_network',
+    args: ['fd12::/64'],
+    env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
+  });
+
+  const unit = readFileSync(new URL('../imp-host.service', import.meta.url), 'utf8');
+
+  expect(readFileSync(podman.calls, 'utf8')).toBe(
+    'podman network create --ipv6 --subnet fd12::/64 --interface-name br-imphost imp-host\n',
+  );
+
+  expect(unit.replaceAll('"$$IMP_HOST_SUBNET6"', 'fd12::/64')).toInclude(
+    '/usr/bin/podman network create --ipv6 --subnet fd12::/64 --interface-name br-imphost imp-host >/dev/null ;;',
+  );
+});
+
+test('#create_host_network creates the network with docker on the named bridge', () => {
   const ctx = setupTest();
   const docker = createStubBin(ctx.directoryPath, 'docker');
 
@@ -276,17 +360,11 @@ test('#create_host_network creates the network with the arguments the unit uses'
     script: new URL('host-env.sh', import.meta.url).pathname,
     fn: 'create_host_network',
     args: ['fd12::/64'],
-    env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
+    env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`, CONTAINER_CLI: 'docker' },
   });
-
-  const unit = readFileSync(new URL('../imp-host.service', import.meta.url), 'utf8');
 
   expect(readFileSync(docker.calls, 'utf8')).toBe(
     'docker network create --ipv6 --subnet fd12::/64 -o com.docker.network.bridge.name=br-imphost imp-host\n',
-  );
-
-  expect(unit.replaceAll('"$$IMP_HOST_SUBNET6"', 'fd12::/64')).toInclude(
-    '/usr/bin/docker network create --ipv6 --subnet fd12::/64 -o com.docker.network.bridge.name=br-imphost imp-host ;;',
   );
 });
 

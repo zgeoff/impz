@@ -5,8 +5,6 @@ import {
   parseHostArgs,
   render,
   renderBootstrap,
-  renderCompose,
-  renderComposeNetworks,
   renderExecStart,
   renderHostEnv,
   renderNetworkStart,
@@ -34,16 +32,10 @@ test('#render renders every deploy file from one args file', () => {
     unit:
       '[Service]\nExecStartPre=/bin/sh -c \'case "$$IMP_HOST_NETWORK" in old\'\n' +
       "ExecStartPre=/bin/sh -c 'a=; old'\n" +
-      `ExecStart=/usr/bin/docker run --old \\\n  \${IMP_HOST_IMAGE}\n`,
+      `ExecStart=/usr/bin/podman run --old \\\n  \${IMP_HOST_IMAGE}\n`,
     hostEnv: 'readonly HOST_NETWORK=old\nreadonly HOST_BRIDGE=old\nhost_addresses() { old; }\n',
     storage: 'readonly ZPOOL_CREATE_PROPERTIES=old\n',
     bootstrap: 'old\n',
-    compose:
-      '    # privileges: from deploy/imp-host.args.json (bun run render:deploy)\n' +
-      '    old: true\n    # end of privileges\n' +
-      '    # networks:\n    #   - old\n' +
-      '# network: from deploy/imp-host.args.json (bun run render:deploy)\n' +
-      '# old: true\n# end of network\n',
   };
 
   const sources = {
@@ -88,9 +80,9 @@ test('#render renders every deploy file from one args file', () => {
     unit_imp_host() {
       cat <<'EOF'
     [Service]
-    ExecStartPre=/bin/sh -c 'case "$$IMP_HOST_NETWORK" in *imp-net*) /usr/bin/docker network inspect imp-net >/dev/null 2>&1 || /usr/bin/docker network create --ipv6 --subnet "$$IMP_HOST_SUBNET6" -o com.docker.network.bridge.name=br-impnet imp-net ;; esac'
+    ExecStartPre=/bin/sh -c 'case "$$IMP_HOST_NETWORK" in *imp-net*) /usr/bin/podman network exists imp-net || /usr/bin/podman network create --ipv6 --subnet "$$IMP_HOST_SUBNET6" --interface-name br-impnet imp-net >/dev/null ;; esac'
     ExecStartPre=/bin/sh -c 'a=; [ -e /dev/zfs ] && a="$$a --device /dev/zfs"; [ -e /proc/sys/net/ipv6 ] && a="$$a --sysctl net.ipv6.conf.all.forwarding=1"; { echo "IMP_HOST_PROBED=$$a"; echo "IMP_HOST_ADDRESSES=$$(ip -o addr show scope global | cut -d " " -f 4)"; } >/run/imp-host/probed.env'
-    ExecStart=/usr/bin/docker run --rm --name imp-host \\
+    ExecStart=/usr/bin/podman run --rm --name imp-host \\
       --init --cap-add KILL \\
       -v /var/lib/imp:/data \\
       $IMP_HOST_PROBED \\
@@ -110,29 +102,6 @@ test('#render renders every deploy file from one args file', () => {
     main() { :; }
     "
     ,
-      "compose": 
-    "    # privileges: from deploy/imp-host.args.json (bun run render:deploy)
-        init: true
-        cap_add:
-          - KILL
-        sysctls:
-          - net.ipv6.conf.all.forwarding=1
-        # end of privileges
-        # networks:
-        #   - imp-net
-    # network: from deploy/imp-host.args.json (bun run render:deploy)
-    # networks:
-    #   imp-net:
-    #     name: imp-net
-    #     enable_ipv6: true
-    #     driver_opts:
-    #       com.docker.network.bridge.name: br-impnet
-    #     ipam:
-    #       config:
-    #         - subnet: \${IMP_HOST_SUBNET6:?set IMP_HOST_SUBNET6 to a /64}
-    # end of network
-    "
-    ,
       "hostEnv": 
     "readonly HOST_NETWORK=imp-net
     readonly HOST_BRIDGE=br-impnet
@@ -145,9 +114,9 @@ test('#render renders every deploy file from one args file', () => {
     ,
       "unit": 
     "[Service]
-    ExecStartPre=/bin/sh -c 'case "$$IMP_HOST_NETWORK" in *imp-net*) /usr/bin/docker network inspect imp-net >/dev/null 2>&1 || /usr/bin/docker network create --ipv6 --subnet "$$IMP_HOST_SUBNET6" -o com.docker.network.bridge.name=br-impnet imp-net ;; esac'
+    ExecStartPre=/bin/sh -c 'case "$$IMP_HOST_NETWORK" in *imp-net*) /usr/bin/podman network exists imp-net || /usr/bin/podman network create --ipv6 --subnet "$$IMP_HOST_SUBNET6" --interface-name br-impnet imp-net >/dev/null ;; esac'
     ExecStartPre=/bin/sh -c 'a=; [ -e /dev/zfs ] && a="$$a --device /dev/zfs"; [ -e /proc/sys/net/ipv6 ] && a="$$a --sysctl net.ipv6.conf.all.forwarding=1"; { echo "IMP_HOST_PROBED=$$a"; echo "IMP_HOST_ADDRESSES=$$(ip -o addr show scope global | cut -d " " -f 4)"; } >/run/imp-host/probed.env'
-    ExecStart=/usr/bin/docker run --rm --name imp-host \\
+    ExecStart=/usr/bin/podman run --rm --name imp-host \\
       --init --cap-add KILL \\
       -v /var/lib/imp:/data \\
       $IMP_HOST_PROBED \\
@@ -166,15 +135,10 @@ test('#render gives the same files for the same input', () => {
   const current = {
     unit:
       'ExecStartPre=/bin/sh -c \'case "$$IMP_HOST_NETWORK" in old\'\n' +
-      `ExecStartPre=/bin/sh -c 'a=; old'\nExecStart=/usr/bin/docker run \\\n  \${IMP_HOST_IMAGE}\n`,
+      `ExecStartPre=/bin/sh -c 'a=; old'\nExecStart=/usr/bin/podman run \\\n  \${IMP_HOST_IMAGE}\n`,
     hostEnv: 'readonly HOST_NETWORK=old\nreadonly HOST_BRIDGE=old\nhost_addresses() { old; }\n',
     storage: 'readonly ZPOOL_CREATE_PROPERTIES=old\n',
     bootstrap: 'old\n',
-    compose:
-      '    # privileges: from deploy/imp-host.args.json (bun run render:deploy)\n' +
-      '    # end of privileges\n' +
-      '    # networks:\n    #   - old\n' +
-      '# network: from deploy/imp-host.args.json (bun run render:deploy)\n# end of network\n',
   };
 
   const sources = {
@@ -186,13 +150,12 @@ test('#render gives the same files for the same input', () => {
   expect(render(argsJson, current, sources)).toStrictEqual(render(argsJson, current, sources));
 });
 
-test('#render leaves the checked-in units, host-env.sh, bootstrap.sh and compose.yaml as they are', () => {
+test('#render leaves the checked-in unit, host-env.sh and bootstrap.sh as they are', () => {
   const current = {
     unit: readFileSync(new URL('../../deploy/imp-host.service', import.meta.url), 'utf8'),
     hostEnv: readFileSync(new URL('../../deploy/lib/host-env.sh', import.meta.url), 'utf8'),
     storage: readFileSync(new URL('../../deploy/bootstrap/storage.sh', import.meta.url), 'utf8'),
     bootstrap: readFileSync(new URL('../../deploy/bootstrap.sh', import.meta.url), 'utf8'),
-    compose: readFileSync(new URL('../../deploy/compose.yaml', import.meta.url), 'utf8'),
   };
 
   const sources = {
@@ -307,7 +270,7 @@ test('#renderExecStart puts the name, the privileges, the rest, the probed args,
       addresses: 'ip -o addr',
     }),
   ).toBe(
-    'ExecStart=/usr/bin/docker run --rm --name x \\\n  --cap-drop ALL \\\n  -v /a:/b \\\n' +
+    'ExecStart=/usr/bin/podman run --rm --name x \\\n  --cap-drop ALL \\\n  -v /a:/b \\\n' +
       `  $IMP_HOST_PROBED \\\n  \${IMP_HOST_IMAGE}`,
   );
 });
@@ -328,9 +291,9 @@ test('#renderProbe escapes its dollars for systemd', () => {
 test('#renderNetworkStart makes the network on its bridge when IMP_HOST_NETWORK names it', () => {
   expect(renderNetworkStart({ name: 'imp-host', bridge: 'br-imphost' })).toBe(
     'ExecStartPre=/bin/sh -c \'case "$$IMP_HOST_NETWORK" in *imp-host*) ' +
-      '/usr/bin/docker network inspect imp-host >/dev/null 2>&1 || ' +
-      '/usr/bin/docker network create --ipv6 --subnet "$$IMP_HOST_SUBNET6" ' +
-      "-o com.docker.network.bridge.name=br-imphost imp-host ;; esac'",
+      '/usr/bin/podman network exists imp-host || ' +
+      '/usr/bin/podman network create --ipv6 --subnet "$$IMP_HOST_SUBNET6" ' +
+      "--interface-name br-imphost imp-host >/dev/null ;; esac'",
   );
 });
 
@@ -385,70 +348,9 @@ test('#renderHostEnv refuses a host-env.sh without host_addresses', () => {
   ).toThrowWithMessage(Error, 'deploy/lib/host-env.sh: no line for host_addresses');
 });
 
-test('#renderCompose writes a compose key for each privilege flag', () => {
-  const compose =
-    '    # privileges: from deploy/imp-host.args.json (bun run render:deploy)\n    # end of privileges\n';
-
-  expect(renderCompose(compose, [['--init', '--cap-add', 'KILL', '--cap-add', 'MKNOD']])).toBe(
-    '    # privileges: from deploy/imp-host.args.json (bun run render:deploy)\n' +
-      '    init: true\n    cap_add:\n      - KILL\n      - MKNOD\n    # end of privileges\n',
-  );
-});
-
-test('#renderCompose refuses a privilege flag it has no compose key for', () => {
-  const compose =
-    '    # privileges: from deploy/imp-host.args.json (bun run render:deploy)\n    # end of privileges\n';
-
-  expect(() => renderCompose(compose, [['--pid=host']])).toThrowWithMessage(
-    Error,
-    'deploy/imp-host.args.json: no compose key for the privilege --pid=host',
-  );
-});
-
-test('#renderCompose refuses a compose file without the privileges block', () => {
-  expect(() => renderCompose('services: {}\n', [['--init']])).toThrowWithMessage(
-    Error,
-    'deploy/compose.yaml: no block from "# privileges: from deploy/imp-host.args.json (bun run render:deploy)"',
-  );
-});
-
-test('#renderComposeNetworks writes the commented networks block and the lines that join it', () => {
-  const compose =
-    '  imp-host:\n    # networks:\n    #   - old\n' +
-    '# network: from deploy/imp-host.args.json (bun run render:deploy)\n# old: true\n# end of network\n';
-
-  expect(renderComposeNetworks(compose, { name: 'imp-host', bridge: 'br-imphost' }))
-    .toMatchInlineSnapshot(`
-      "  imp-host:
-          # networks:
-          #   - imp-host
-      # network: from deploy/imp-host.args.json (bun run render:deploy)
-      # networks:
-      #   imp-host:
-      #     name: imp-host
-      #     enable_ipv6: true
-      #     driver_opts:
-      #       com.docker.network.bridge.name: br-imphost
-      #     ipam:
-      #       config:
-      #         - subnet: \${IMP_HOST_SUBNET6:?set IMP_HOST_SUBNET6 to a /64}
-      # end of network
-      "
-    `);
-});
-
-test('#renderComposeNetworks refuses a compose file without the lines that join the network', () => {
+test('#renderUnit refuses a unit whose podman run does not end in the image', () => {
   expect(() =>
-    renderComposeNetworks(
-      '# network: from deploy/imp-host.args.json (bun run render:deploy)\n# end of network\n',
-      { name: 'imp-host', bridge: 'br-imphost' },
-    ),
-  ).toThrowWithMessage(Error, 'deploy/compose.yaml: no commented networks of imp-host');
-});
-
-test('#renderUnit refuses a unit whose docker run does not end in the image', () => {
-  expect(() =>
-    renderUnit("ExecStartPre=/bin/sh -c 'a=; x'\nExecStart=/usr/bin/docker run imp-host\n", {
+    renderUnit("ExecStartPre=/bin/sh -c 'a=; x'\nExecStart=/usr/bin/podman run imp-host\n", {
       privileges: [['--init']],
       probed: [],
       lines: [['x']],
@@ -457,13 +359,13 @@ test('#renderUnit refuses a unit whose docker run does not end in the image', ()
     }),
   ).toThrowWithMessage(
     Error,
-    `deploy/imp-host.service: no docker run ExecStart that ends in \${IMP_HOST_IMAGE}`,
+    `deploy/imp-host.service: no podman run ExecStart that ends in \${IMP_HOST_IMAGE}`,
   );
 });
 
 test('#renderUnit refuses a unit without the probe', () => {
   expect(() =>
-    renderUnit(`ExecStart=/usr/bin/docker run \\\n  \${IMP_HOST_IMAGE}\n`, {
+    renderUnit(`ExecStart=/usr/bin/podman run \\\n  \${IMP_HOST_IMAGE}\n`, {
       privileges: [['--init']],
       probed: [],
       lines: [['x']],
@@ -479,7 +381,7 @@ test('#renderUnit refuses a unit without the probe', () => {
 test('#renderUnit refuses a unit without the ExecStartPre that makes the network', () => {
   expect(() =>
     renderUnit(
-      `ExecStartPre=/bin/sh -c 'a=; x'\nExecStart=/usr/bin/docker run \\\n  \${IMP_HOST_IMAGE}\n`,
+      `ExecStartPre=/bin/sh -c 'a=; x'\nExecStart=/usr/bin/podman run \\\n  \${IMP_HOST_IMAGE}\n`,
       {
         privileges: [['--init']],
         probed: [],

@@ -1,7 +1,9 @@
 import type { BootstrapIO } from './types';
 
-export const STUB_IMAGE = 'imp-host-stub:test';
-export const STALE_STUB_IMAGE = 'imp-host-stub:stale';
+// Fully qualified, as podman load names them, so the test container's Podman resolves no short
+// name.
+export const STUB_IMAGE = 'localhost/imp-host-stub:test';
+export const STALE_STUB_IMAGE = 'localhost/imp-host-stub:stale';
 
 // Its tailscale reports Running and it saves node state, so bootstrap.sh's tailscale phase (wait,
 // then blank the key) runs as on a server.
