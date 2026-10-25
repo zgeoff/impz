@@ -5,11 +5,13 @@ import type { Socket } from 'node:net';
 import { join } from 'node:path';
 import { connect as connectTls } from 'node:tls';
 import { buildMockBrokerRule } from '@impz/api/test-utils/build-mock-broker-rule';
+import { buildMockOAuthConfig } from '@impz/api/test-utils/build-mock-oauth-config';
 import { server } from '@impz/test-utils/mock-server';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { HttpResponse, http } from 'msw';
 import invariant from 'tiny-invariant';
 import { buildStubHostRoutes } from '../../../testing/host-net/build-stub-host-routes';
+import { createStubBrokerTokenEndpoint } from '../../../testing/network/create-stub-broker-token-endpoint';
 import { startStubBrokerGuestSocket } from '../../../testing/network/start-stub-broker-guest-socket';
 import { startStubBrokerReplyTarget } from '../../../testing/network/start-stub-broker-reply-target';
 import { buildMockNewAuditEntry } from '../../../testing/platform/build-mock-new-audit-entry';
@@ -653,6 +655,56 @@ test('it gives an imp granted a static secret the variables the secret names', a
   });
 });
 
+test('it gives an imp granted an oauth secret the variables the secret names', async () => {
+  const ctx = await setupTest();
+
+  const tokens = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+
+  server.use(tokens.handler);
+  tokens.issue('fake-refresh-0', { access_token: 'fake-access-1', expires_in: 3600 });
+
+  await ctx.createTestImage('base');
+  await ctx.client.imps.create({ name: 'dev' });
+
+  await ctx.client.secrets.add({
+    name: 'codex',
+    kind: 'oauth',
+    value: 'fake-refresh-0',
+    rules: [buildMockBrokerRule()],
+    env: ['EXAMPLE_TOKEN'],
+    oauth: buildMockOAuthConfig({ tokenUrl: 'https://auth.example.com/oauth/token' }),
+  });
+
+  await ctx.client.grants.add({ name: 'dev', secret: 'codex' });
+
+  const imp = await readImpByName(ctx.db, 'dev');
+
+  invariant(imp);
+
+  const vsock = join(ctx.dataDir, 'vsock');
+
+  await writeFile(vsock, '');
+
+  const env = await ctx.impd.broker.readExecEnv(imp, vsock);
+
+  expect(env).toStrictEqual({
+    kind: 'ready',
+    env: [
+      `HTTPS_PROXY=http://127.0.0.1:${String(ctx.config.brokerPort)}`,
+      `https_proxy=http://127.0.0.1:${String(ctx.config.brokerPort)}`,
+      'NO_PROXY=localhost,127.0.0.1,::1',
+      'no_proxy=localhost,127.0.0.1,::1',
+      'NODE_USE_ENV_PROXY=1',
+      'SSL_CERT_FILE=/etc/imp/broker-ca.pem',
+      'NODE_EXTRA_CA_CERTS=/etc/imp/broker-ca.pem',
+      'GIT_SSL_CAINFO=/etc/imp/broker-ca.pem',
+      'REQUESTS_CA_BUNDLE=/etc/imp/broker-ca.pem',
+      'CURL_CA_BUNDLE=/etc/imp/broker-ca.pem',
+      'EXAMPLE_TOKEN=imp-broker-placeholder',
+    ],
+  });
+});
+
 test('it sets the placeholders of a granted secret’s stored env list, not its preset’s', async () => {
   const ctx = await setupTest();
 
@@ -660,6 +712,7 @@ test('it sets the placeholders of a granted secret’s stored env list, not its 
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'ghp_SECRETVALUE0123456789' });
   await ctx.client.grants.add({ name: 'dev', secret: 'gh' });
+
   await ctx.db
     .updateTable('secrets')
     .set({ env: JSON.stringify(['CUSTOM_TOKEN']) })

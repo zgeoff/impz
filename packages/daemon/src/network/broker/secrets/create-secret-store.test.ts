@@ -361,6 +361,28 @@ test('it stores a static secret with the variables it names', async () => {
   expect(listed[0]?.env).toStrictEqual(['EXAMPLE_TOKEN']);
 });
 
+test('it stores an oauth secret with the variables it names', async () => {
+  const ctx = await setupTest();
+
+  const tokens = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+
+  server.use(tokens.handler);
+  tokens.issue('fake-refresh-0', { access_token: 'fake-access-1', expires_in: 3600 });
+
+  await ctx.client.secrets.add({
+    name: 'codex',
+    kind: 'oauth',
+    value: 'fake-refresh-0',
+    rules: [buildMockBrokerRule()],
+    env: ['EXAMPLE_TOKEN'],
+    oauth: buildMockOAuthConfig({ tokenUrl: 'https://auth.example.com/oauth/token' }),
+  });
+
+  const listed = await ctx.client.secrets.list();
+
+  expect(listed[0]?.env).toStrictEqual(['EXAMPLE_TOKEN']);
+});
+
 test('it rotates an older preset kind name’s secret with a preset and keeps its grants', async () => {
   const ctx = await setupTest();
 
