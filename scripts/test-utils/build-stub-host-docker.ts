@@ -8,6 +8,9 @@ interface StubHostDocker {
   // The containers on Docker's imp-host network, as a host with IPv6 has it; left unset, Docker
   // has no such network.
   readonly hostNetwork?: readonly string[];
+
+  // Docker refuses to remove that network, as it does while an endpoint still holds it.
+  readonly networkInUse?: boolean;
 }
 
 export function buildStubHostDocker(stub: StubHostDocker): string {
@@ -20,7 +23,10 @@ export function buildStubHostDocker(stub: StubHostDocker): string {
       ? { inspect: 'echo "Error: No such network: imp-host" >&2; exit 1', remove: 'exit 1' }
       : {
           inspect: `printf '%s ' ${stub.hostNetwork.map((name) => formatShellWord(name)).join(' ')}; echo`,
-          remove: 'echo imp-host',
+          remove:
+            stub.networkInUse === true
+              ? 'echo "Error response from daemon: error while removing network: network imp-host has active endpoints" >&2; exit 1'
+              : 'echo imp-host',
         };
 
   return `case "$*" in

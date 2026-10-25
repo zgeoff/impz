@@ -114,6 +114,32 @@ test('it lists the containers on its imp-host network, and removes it', () => {
   expect(result.stdout.toString()).toBe('imp-host sidecar \nimp-host\nrm 0\n');
 });
 
+test('it lists the containers on an imp-host network in use, and fails to remove it', () => {
+  const ctx = setupTest();
+
+  const docker = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    buildStubHostDocker({ hostNetwork: ['imp-host'], networkInUse: true }),
+  );
+
+  const result = Bun.spawnSync(
+    [
+      'bash',
+      '-c',
+      "docker network inspect -f '{{range .Containers}}{{.Name}} {{end}}' imp-host; " +
+        'docker network rm imp-host; echo "rm $?"',
+    ],
+    { env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` } },
+  );
+
+  expect({ stdout: result.stdout.toString(), stderr: result.stderr.toString() }).toStrictEqual({
+    stdout: 'imp-host \nrm 1\n',
+    stderr:
+      'Error response from daemon: error while removing network: network imp-host has active endpoints\n',
+  });
+});
+
 test('it fails to inspect or remove an imp-host network it was given none of', () => {
   const ctx = setupTest();
   const docker = createStubBin(ctx.directoryPath, 'docker', buildStubHostDocker({}));
