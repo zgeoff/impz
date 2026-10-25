@@ -848,18 +848,18 @@ test('it starts the dev container with podman, and asks docker nothing, when IMP
   expect(calls.filter((call) => call.startsWith('docker '))).toStrictEqual([]);
 });
 
-test('it stops and removes the dev container through podman on down', () => {
+test("it stops and removes the dev container and an older checkout's proxy through podman, and asks docker nothing, on down", () => {
   const ctx = setupTest();
 
-  const podman = createStubBin(
-    ctx.directoryPath,
-    'podman',
-    buildStubDevHostDocker({
-      containers: { 'imp-dev': true },
-      hasImage: true,
-      logs: { 'imp-dev': 'impd: every imp asleep\n' },
-    }),
-  );
+  const stub = buildStubDevHostDocker({
+    containers: { 'imp-dev': true },
+    hasImage: true,
+    logs: { 'imp-dev': 'impd: every imp asleep\n' },
+  });
+
+  const podman = createStubBin(ctx.directoryPath, 'podman', stub);
+
+  createStubBin(ctx.directoryPath, 'docker', stub);
 
   const result = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'down'], {
     env: {
@@ -880,7 +880,8 @@ test('it stops and removes the dev container through podman on down', () => {
       'podman inspect -f {{.State.Running}} imp-dev',
       'podman stop -t 120 imp-dev',
       'podman logs --tail 5 imp-dev',
-      'podman rm -f imp-dev',
+      'podman rm -f imp-dev imp-dev-docker-proxy',
+      'podman volume rm imp-dev-docker imp-dev-docker-proxy',
       '',
     ],
   });
