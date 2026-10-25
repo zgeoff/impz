@@ -228,6 +228,67 @@ test('it stops and disables the proxy, and keeps its unit as a .bak, on an upgra
   expect(backups).toHaveLength(1);
 });
 
+test('it fails before any restart, and keeps the proxy unit for the next run, when systemd cannot stop the proxy', () => {
+  const ctx = setupTest();
+
+  const docker = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    buildStubHostDocker({
+      image: 'ghcr.io/zgeoff/imp-host:next',
+      runningLabel: 'socket-proxy',
+      pulledLabel: 'no-docker',
+      pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
+    }),
+  );
+
+  // The installed unit already matches the image's, so the stop is the first systemctl call.
+  createStubBin(
+    ctx.directoryPath,
+    'systemctl',
+    `echo 'Failed to stop imp-docker-proxy.service: Access denied' >&2; exit 1`,
+  );
+
+  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
+
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-host.service'),
+    'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
+  );
+
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-docker-proxy.service'),
+    'ExecStart=/usr/bin/docker run --name imp-docker-proxy imp-host\n',
+  );
+
+  const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
+    env: {
+      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
+      IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
+      IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
+      IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
+      IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
+    },
+  });
+
+  const calls = readFileSync(docker.calls, 'utf8');
+
+  expect(result.exitCode).toBe(1);
+
+  expect(result.stderr.toString()).toBe(
+    'Failed to stop imp-docker-proxy.service: Access denied\n' +
+      'upgrade: cannot stop imp-docker-proxy, whose unit stays for the next run; ' +
+      'nothing restarted, the host still runs sha256:old\n',
+  );
+
+  expect(calls).toEndWith('systemctl disable -q --now imp-docker-proxy\n');
+
+  expect(readFileSync(join(ctx.directoryPath, 'imp-docker-proxy.service'), 'utf8')).toBe(
+    'ExecStart=/usr/bin/docker run --name imp-docker-proxy imp-host\n',
+  );
+});
+
 test('it restarts imp-host alone, between hosts that need no Docker and have no proxy unit', () => {
   const ctx = setupTest();
 

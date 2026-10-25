@@ -300,7 +300,10 @@ socketless_deploy() {
 # disabled, and kept as .bak-<time>
 retire_proxy_unit() {
   [ -f "$proxy_unit_file" ] || return 0
-  systemctl disable -q --now imp-docker-proxy || true
+  if ! systemctl disable -q --now imp-docker-proxy; then
+    echo "upgrade: cannot stop imp-docker-proxy, whose unit stays for the next run; nothing restarted, the host still runs $old" >&2
+    exit 1
+  fi
   local backup
   backup=$proxy_unit_file.bak-$(date +%Y%m%d-%H%M%S)
   mv "$proxy_unit_file" "$backup"
