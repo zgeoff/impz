@@ -85,6 +85,31 @@ test('it refuses a restart when the container is not running', () => {
   });
 });
 
+test("it removes an older checkout's docker proxy container and both its volumes on down, and finishes when none exist", () => {
+  const ctx = setupTest();
+
+  const docker = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    buildStubDevHostDocker({ containers: { 'imp-dev': false }, hasImage: true }),
+  );
+
+  const result = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'down'], {
+    env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`, IMP_DEV_DATA: ctx.directoryPath },
+  });
+
+  expect(result.exitCode).toBe(0);
+
+  expect(readFileSync(docker.calls, 'utf8')).toBe(
+    [
+      'docker inspect -f {{.State.Running}} imp-dev',
+      'docker rm -f imp-dev imp-dev-docker-proxy',
+      'docker volume rm imp-dev-docker imp-dev-docker-proxy',
+      '',
+    ].join('\n'),
+  );
+});
+
 test.each([
   ['reports impd is not ready', `echo '{"ready":false}'`],
   ['exits nonzero after it printed ready', `echo '{"ready":true'; exit 18`],

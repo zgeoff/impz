@@ -341,7 +341,12 @@ async function downDev(dev: Dev): Promise<void> {
     }
   }
 
-  await dev.io.shell`docker rm -f ${dev.layout.name}`.quiet().nothrow();
+  // A dev instance that an older checkout started runs a Docker socket proxy beside it.
+  const proxy = `${dev.layout.name}-docker-proxy`;
+  const volumes = [`${dev.layout.name}-docker`, proxy];
+
+  await dev.io.shell`docker rm -f ${dev.layout.name} ${proxy}`.quiet().nothrow();
+  await dev.io.shell`docker volume rm ${volumes}`.quiet().nothrow();
 }
 
 // SIGHUP: impd exits without sleeping the VMs, and the entrypoint restarts it. The wait for the old
