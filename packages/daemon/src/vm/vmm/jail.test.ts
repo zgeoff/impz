@@ -244,7 +244,8 @@ test('#prepare removes what the last jailer made in the chroot', async () => {
 
   await ctx.jails.prepare(plan);
 
-  expect(existsSync(join(imp.root, 'dev'))).toBeFalse();
+  // dev/ itself can return, as a parent of the imp dir's bind when the data dir sits on /dev/shm
+  expect(existsSync(join(imp.root, 'dev', 'net'))).toBeFalse();
   expect(existsSync(join(imp.root, 'firecracker'))).toBeFalse();
   expect(existsSync(join(imp.root, 'firecracker.pid'))).toBeFalse();
 });
