@@ -132,7 +132,7 @@ func TestExportWritesTheFlattenedTreeWithoutWhiteouts(t *testing.T) {
 	))
 	var out bytes.Buffer
 
-	assert.NilError(t, run("export", ref, &out))
+	assert.NilError(t, run([]string{"export", ref}, &out))
 
 	assert.DeepEqual(t, readTree(t, out.Bytes()), map[string]string{
 		"dev":      "",
@@ -151,7 +151,7 @@ func TestConfigPrintsTheImageDigestAndItsRuntimeConfig(t *testing.T) {
 	assert.NilError(t, err)
 	var out bytes.Buffer
 
-	assert.NilError(t, run("config", ref, &out))
+	assert.NilError(t, run([]string{"config", ref}, &out))
 
 	var printed struct {
 		Digest string
@@ -177,7 +177,7 @@ func TestExportPicksTheHostPlatformFromAMultiPlatformRef(t *testing.T) {
 	assert.NilError(t, remote.WriteIndex(ref, index))
 	var out bytes.Buffer
 
-	assert.NilError(t, run("export", ref.String(), &out))
+	assert.NilError(t, run([]string{"export", ref.String()}, &out))
 
 	assert.DeepEqual(t, readTree(t, out.Bytes()), map[string]string{
 		"own":  "own\n",
@@ -189,19 +189,36 @@ func TestExportPicksTheHostPlatformFromAMultiPlatformRef(t *testing.T) {
 
 func TestFetchOfAnImageTheRegistryLacksFails(t *testing.T) {
 	host := startRegistry(t)
-	var out bytes.Buffer
+	var stdout, stderr bytes.Buffer
 
-	err := run("config", host+"/builder@sha256:"+strings.Repeat("a", 64), &out)
+	code := runMain([]string{"config", host + "/builder@sha256:" + strings.Repeat("a", 64)}, &stdout, &stderr)
 
-	assert.ErrorContains(t, err, "fetch "+host+"/builder@sha256:")
+	assert.Equal(t, code, 1)
+	assert.Assert(t, strings.HasPrefix(stderr.String(), "oci-fetch: fetch "+host+"/builder@sha256:"), stderr.String())
 }
 
-func TestAnUnknownCommandFails(t *testing.T) {
-	var out bytes.Buffer
+func TestACommandLineTheCommandsDoNotAcceptExitsWithAUsageError(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		args   []string
+		reason string
+	}{
+		{name: "no command", args: nil, reason: "no command"},
+		{name: "an unknown command", args: []string{"pull", "alpine"}, reason: `unknown command "pull"`},
+		{name: "a missing ref", args: []string{"export"}, reason: "export takes one image ref"},
+		{name: "a second ref", args: []string{"config", "alpine", "busybox"}, reason: "config takes one image ref"},
+		{name: "an unknown flag", args: []string{"export", "-insecure", "alpine"}, reason: "export: flag provided but not defined: -insecure"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
 
-	err := run("pull", "alpine", &out)
+			code := runMain(tc.args, &stdout, &stderr)
 
-	assert.ErrorContains(t, err, `unknown command "pull"`)
+			assert.Equal(t, code, 2)
+			assert.Equal(t, stderr.String(), "oci-fetch: "+tc.reason+"\nusage: oci-fetch config REF\n       oci-fetch export REF\n")
+			assert.Equal(t, stdout.String(), "")
+		})
+	}
 }
 
 func TestExportKeepsALowerLinkToAFileAnUpperLayerReplaced(t *testing.T) {
@@ -217,7 +234,7 @@ func TestExportKeepsALowerLinkToAFileAnUpperLayerReplaced(t *testing.T) {
 	))
 	var out bytes.Buffer
 
-	assert.NilError(t, run("export", ref, &out))
+	assert.NilError(t, run([]string{"export", ref}, &out))
 
 	assert.DeepEqual(t, readEntries(t, out.Bytes()), []entry{
 		{name: "a", typeflag: tar.TypeReg, body: "upper\n"},
@@ -241,7 +258,7 @@ func TestExportKeepsALowerLinkToAFileAnUpperLayerDeleted(t *testing.T) {
 	))
 	var out bytes.Buffer
 
-	assert.NilError(t, run("export", ref, &out))
+	assert.NilError(t, run([]string{"export", ref}, &out))
 
 	assert.DeepEqual(t, readEntries(t, out.Bytes()), []entry{
 		{name: "b", typeflag: tar.TypeReg, body: "lower\n"},
@@ -265,7 +282,7 @@ func TestExportLinksTheOtherLowerLinksToTheFirstOneThatKeepsTheFile(t *testing.T
 	))
 	var out bytes.Buffer
 
-	assert.NilError(t, run("export", ref, &out))
+	assert.NilError(t, run([]string{"export", ref}, &out))
 
 	assert.DeepEqual(t, readEntries(t, out.Bytes()), []entry{
 		{name: "a", typeflag: tar.TypeReg, body: "upper\n"},
@@ -292,7 +309,7 @@ func TestExportKeepsAMiddleLinkToALowerFileAnUpperLayerReplaced(t *testing.T) {
 	))
 	var out bytes.Buffer
 
-	assert.NilError(t, run("export", ref, &out))
+	assert.NilError(t, run([]string{"export", ref}, &out))
 
 	assert.DeepEqual(t, readEntries(t, out.Bytes()), []entry{
 		{name: "a", typeflag: tar.TypeReg, body: "upper\n"},
@@ -315,7 +332,7 @@ func TestExportWritesAnUpperLinkAfterItsLowerTarget(t *testing.T) {
 	))
 	var out bytes.Buffer
 
-	assert.NilError(t, run("export", ref, &out))
+	assert.NilError(t, run([]string{"export", ref}, &out))
 
 	assert.DeepEqual(t, readEntries(t, out.Bytes()), []entry{
 		{name: "a", typeflag: tar.TypeReg, body: "lower\n"},
@@ -341,7 +358,7 @@ func TestGNUTarExtractsAnUpperLinkToALowerFile(t *testing.T) {
 		}),
 	))
 	var out bytes.Buffer
-	assert.NilError(t, run("export", ref, &out))
+	assert.NilError(t, run([]string{"export", ref}, &out))
 	dir := t.TempDir()
 	extract := exec.Command(tarPath, "-xf", "-", "-C", dir)
 	extract.Stdin = &out
@@ -377,7 +394,7 @@ func TestExportOfAnImageWithACorruptLowerLayerFails(t *testing.T) {
 	t.Cleanup(corruptServer.Close)
 	var out bytes.Buffer
 
-	err = run("export", strings.TrimPrefix(corruptServer.URL, "http://")+"/builder@"+imageDigest.String(), &out)
+	err = run([]string{"export", strings.TrimPrefix(corruptServer.URL, "http://") + "/builder@" + imageDigest.String()}, &out)
 
 	assert.ErrorContains(t, err, "layer 0: ")
 }
@@ -397,7 +414,7 @@ func TestExportWritesALinkToALowerLayersLinkAfterThatLink(t *testing.T) {
 	))
 	var out bytes.Buffer
 
-	assert.NilError(t, run("export", ref, &out))
+	assert.NilError(t, run([]string{"export", ref}, &out))
 
 	assert.DeepEqual(t, readEntries(t, out.Bytes()), []entry{
 		{name: "a", typeflag: tar.TypeReg, body: "lower\n"},
@@ -445,7 +462,7 @@ func TestGNUTarExtractsAChainOfLinks(t *testing.T) {
 			}
 			ref := pushImage(t, host, buildImage(t, nil, layers...))
 			var out bytes.Buffer
-			assert.NilError(t, run("export", ref, &out))
+			assert.NilError(t, run([]string{"export", ref}, &out))
 			dir := t.TempDir()
 			extract := exec.Command(tarPath, "-xf", "-", "-C", dir)
 			extract.Stdin = &out
@@ -490,7 +507,7 @@ func TestExportKeepsAFileThatReplacesItsOwnLayersWhiteout(t *testing.T) {
 			))
 			var out bytes.Buffer
 
-			assert.NilError(t, run("export", ref, &out))
+			assert.NilError(t, run([]string{"export", ref}, &out))
 
 			assert.DeepEqual(t, readTree(t, out.Bytes()), map[string]string{
 				"foo":  "new\n",
@@ -543,7 +560,7 @@ func TestExportKeepsADirectoryThatReplacesItsOwnLayersWhiteoutAndHidesTheLowerCh
 			))
 			var out bytes.Buffer
 
-			assert.NilError(t, run("export", ref, &out))
+			assert.NilError(t, run([]string{"export", ref}, &out))
 
 			assert.DeepEqual(t, readTree(t, out.Bytes()), map[string]string{
 				"foo":     "",
@@ -569,7 +586,7 @@ func TestExportHidesALowerDirectoryAndItsChildrenUnderAnUpperWhiteout(t *testing
 	))
 	var out bytes.Buffer
 
-	assert.NilError(t, run("export", ref, &out))
+	assert.NilError(t, run([]string{"export", ref}, &out))
 
 	assert.DeepEqual(t, readTree(t, out.Bytes()), map[string]string{
 		"dev":  "",
@@ -588,7 +605,7 @@ func TestExportKeepsASymlinkToANameThatStartsWithTwoDots(t *testing.T) {
 	))
 	var out bytes.Buffer
 
-	assert.NilError(t, run("export", ref, &out))
+	assert.NilError(t, run([]string{"export", ref}, &out))
 
 	assert.DeepEqual(t, readEntries(t, out.Bytes()), []entry{
 		{name: "..data", typeflag: tar.TypeDir},
@@ -617,7 +634,7 @@ func TestExportDropsASymlinkThatLeavesTheTree(t *testing.T) {
 			))
 			var out bytes.Buffer
 
-			assert.NilError(t, run("export", ref, &out))
+			assert.NilError(t, run([]string{"export", ref}, &out))
 
 			assert.DeepEqual(t, readTree(t, out.Bytes()), map[string]string{
 				"srv":  "",
@@ -644,7 +661,7 @@ func TestExportKeepsAnOpaqueDirectorysOwnChildrenAndHidesTheLowerOnes(t *testing
 	))
 	var out bytes.Buffer
 
-	assert.NilError(t, run("export", ref, &out))
+	assert.NilError(t, run([]string{"export", ref}, &out))
 
 	assert.DeepEqual(t, readTree(t, out.Bytes()), map[string]string{
 		"srv":     "",

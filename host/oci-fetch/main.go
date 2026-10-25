@@ -3,6 +3,8 @@ package main
 import (
 	"archive/tar"
 	"encoding/json"
+	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -17,28 +19,70 @@ import (
 const usage = `usage: oci-fetch config REF
        oci-fetch export REF`
 
-func main() {
-	if len(os.Args) != 3 {
-		fmt.Fprintln(os.Stderr, usage)
-		os.Exit(2)
-	}
+// usageError is a command line that the commands do not accept.
+type usageError struct{ reason string }
 
-	err := run(os.Args[1], os.Args[2], os.Stdout)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "oci-fetch: %v\n", err)
-		os.Exit(1)
-	}
+func (err *usageError) Error() string { return err.reason }
+
+var commands = map[string]func(ref string, out io.Writer) error{
+	"config": writeConfig,
+	"export": writeExport,
 }
 
-func run(command, ref string, out io.Writer) error {
-	switch command {
-	case "config":
-		return writeConfig(ref, out)
-	case "export":
-		return writeExport(ref, out)
-	default:
-		return fmt.Errorf("unknown command %q\n%s", command, usage)
+func main() {
+	os.Exit(runMain(os.Args[1:], os.Stdout, os.Stderr))
+}
+
+// runMain runs one command line and returns its exit code: 2 for a usage
+// error, 1 for a failed command.
+func runMain(args []string, stdout, stderr io.Writer) int {
+	err := run(args, stdout)
+	var usageErr *usageError
+	if errors.As(err, &usageErr) {
+		fmt.Fprintf(stderr, "oci-fetch: %v\n%s\n", err, usage)
+		return 2
 	}
+	if err != nil {
+		fmt.Fprintf(stderr, "oci-fetch: %v\n", err)
+		return 1
+	}
+	return 0
+}
+
+func run(args []string, out io.Writer) error {
+	write, ref, err := parseArgs(args)
+	if err != nil {
+		return err
+	}
+	return write(ref, out)
+}
+
+// parseArgs reads the command's name and its one image ref.
+func parseArgs(args []string) (func(ref string, out io.Writer) error, string, error) {
+	global := flag.NewFlagSet("oci-fetch", flag.ContinueOnError)
+	global.SetOutput(io.Discard)
+	if err := global.Parse(args); err != nil {
+		return nil, "", &usageError{reason: err.Error()}
+	}
+	if global.NArg() == 0 {
+		return nil, "", &usageError{reason: "no command"}
+	}
+
+	name := global.Arg(0)
+	write, ok := commands[name]
+	if !ok {
+		return nil, "", &usageError{reason: fmt.Sprintf("unknown command %q", name)}
+	}
+
+	command := flag.NewFlagSet(name, flag.ContinueOnError)
+	command.SetOutput(io.Discard)
+	if err := command.Parse(global.Args()[1:]); err != nil {
+		return nil, "", &usageError{reason: fmt.Sprintf("%s: %v", name, err)}
+	}
+	if command.NArg() != 1 {
+		return nil, "", &usageError{reason: fmt.Sprintf("%s takes one image ref", name)}
+	}
+	return write, command.Arg(0), nil
 }
 
 type imageConfig struct {
