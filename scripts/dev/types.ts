@@ -14,7 +14,6 @@ interface DevFiles {
   readonly probeFile: (path: string) => boolean;
   readonly probeDirectory: (path: string) => boolean;
   readonly readText: (path: string) => string | null;
-  readonly readBytes: (path: string) => Uint8Array;
 
   // As realpath -m does: the symlinks of the part that exists resolve, and the rest is kept.
   readonly readRealPath: (path: string) => string;
@@ -22,7 +21,6 @@ interface DevFiles {
   readonly writeText: (path: string, text: string) => void;
   readonly writeSecretText: (path: string, text: string) => void;
   readonly createDirectory: (path: string) => void;
-  readonly rename: (from: string, to: string) => void;
   readonly remove: (path: string) => void;
 }
 
