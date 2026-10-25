@@ -1,35 +1,28 @@
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { copyFile, open } from 'node:fs/promises';
+import { mkdirSync, rmSync } from 'node:fs';
+import { open } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { EgressPolicy, WarmHost } from '@impz/api';
+import type { WarmHost } from '@impz/api';
 import invariant from 'tiny-invariant';
 import type { ImageService } from '../../imps/images/image-service';
 import type { Imps } from '../../imps/imps/imp-service';
 import type { EgressService } from '../../network/egress/egress-service';
-import { createCheckpoint } from '../../platform/db/checkpoints';
 import { writeMovedBoots } from '../../platform/db/cold-boots';
-import {
-  createImage,
-  readImageByDigest,
-  readImageByName,
-  updateImageUse,
-} from '../../platform/db/images';
 import { readImpById } from '../../platform/db/imps';
 import { updateMoveTicket } from '../../platform/db/move-tickets';
 import type { MoveTicketRow } from '../../platform/db/move-tickets';
 import type { ImpDatabase } from '../../platform/db/open-database';
-import { parseEgressPolicy } from '../../platform/db/parse-egress-policy';
-import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import type { HostIdentity } from '../../vm/sleep/vm-identity';
-import { toDigestHex } from '../../vm/storage/data-layout';
 import type { DiskBudget } from '../../vm/storage/disk-budget';
-import { CheckpointIdTakenError } from '../../vm/storage/storage-backend';
 import type { StorageBackend } from '../../vm/storage/storage-backend';
 import type { StorageGate } from '../../vm/storage/storage-gate';
 import { writeChangedBlocks } from '../../vm/storage/write-changed-blocks';
-import { buildCheckpointId } from '../checkpoints/checkpoint-service';
 import type { ImpGrants } from '../imp-grants';
+import { createImageFromFile } from '../imp-import/create-image-from-file';
+import { readImageInUse } from '../imp-import/read-image-in-use';
+import { replayCheckpoints } from '../imp-import/replay-checkpoints';
+import { resolveImportedPolicy } from '../imp-import/resolve-imported-policy';
+import { restoreGrants } from '../imp-import/restore-grants';
 import { buildOfferedDigests } from './build-offered-digests';
 import { buildReceivedDigest } from './build-received-digest';
 import { requireOwnDrivePath, requireWarmMove, writeWarmFiles } from './check-warm-move';
@@ -73,7 +66,7 @@ interface ReceiveStreamDeps {
   readonly diskBudget: Pick<DiskBudget, 'withRoom'>;
   readonly images: Pick<ImageService, 'withImagePublisher'>;
   readonly imps: Pick<Imps, 'createImp' | 'destroyImp'>;
-  readonly grants: Pick<ImpGrants, 'addGrant' | 'listSecrets'>;
+  readonly grants: Pick<ImpGrants, 'addGrant'>;
   readonly egress: Pick<EgressService, 'writeAnswers'>;
   readonly readIdentity: () => HostIdentity;
   readonly readWarmHost: () => WarmHost;
@@ -149,28 +142,17 @@ export async function readMoveStream(
       return;
     }
 
-    await deps.storage.createImpDisk(impId, { kind: 'empty' });
+    const disk = await replayCheckpoints(deps, {
+      impId,
+      checkpoints: header.checkpoints,
+      writeCheckpoint: async (_checkpoint, index, target) => {
+        const got = await readFileInto(reader, 'checkpoint', temp, count);
 
-    const disk = deps.storage.resolveImpPaths(impId).disk;
+        await writeChangedBlocks(temp, target);
 
-    for (const [index, checkpoint] of header.checkpoints.entries()) {
-      const got = await readFileInto(reader, 'checkpoint', temp, count);
-
-      await writeChangedBlocks(temp, disk);
-
-      const made = await createCheckpointDisk(deps, impId);
-
-      await createCheckpoint(deps.db, {
-        id: made.id,
-        impId,
-        label: checkpoint.label,
-        sizeBytes: made.sizeBytes,
-        createdAt: checkpoint.createdAt,
-        diskBytes: checkpoint.diskBytes,
-      });
-
-      files.push({ kind: 'checkpoint', index, sha256: got.sha256, bytes: got.bytes });
-    }
+        files.push({ kind: 'checkpoint', index, sha256: got.sha256, bytes: got.bytes });
+      },
+    });
 
     const got = await readFileInto(reader, 'disk', temp, count);
 
@@ -197,7 +179,12 @@ export async function readMoveStream(
         maxMemoryMib: header.imp.maxMemoryMib,
         httpPort: header.imp.httpPort,
         diskMib: Math.ceil(header.imp.diskBytes / (1024 * 1024)),
-        policy: resolvePolicy(header),
+        policy: resolveImportedPolicy({
+          area: 'move',
+          impName: header.imp.name,
+          mode: header.imp.egress.mode,
+          allow: header.imp.egress.allow,
+        }),
         cpuLimit: header.imp.cpu.limit,
         cpuWeight: header.imp.cpu.weight,
         start: false,
@@ -355,22 +342,6 @@ function readDataInFile(payload: Uint8Array, size: number): ReturnType<typeof re
   return data;
 }
 
-const ID_ATTEMPTS = 5;
-
-async function createCheckpointDisk(deps: ReceiveStreamDeps, impId: string) {
-  for (let attempt = 1; ; attempt += 1) {
-    const id = buildCheckpointId();
-
-    try {
-      return { id, sizeBytes: await deps.storage.createCheckpoint(impId, id) };
-    } catch (error) {
-      if (!(error instanceof CheckpointIdTakenError) || attempt >= ID_ATTEMPTS) {
-        throw error;
-      }
-    }
-  }
-}
-
 interface RequireImageOptions {
   readonly reader: FrameReader;
   readonly header: MoveHeader;
@@ -387,10 +358,7 @@ async function requireImage(
   if (!header.image.isIncluded) {
     const offered = buildOfferedDigests(header.image.digest, header.image.receivedDigest);
 
-    // The use goes in before each read, so an image eviction keeps the image this move picks.
-    await updateImageUse(deps.db, 'digest', offered, deps.now());
-
-    const existing = await readImageByDigest(deps.db, offered);
+    const existing = await readImageInUse(deps.db, offered, deps.now());
 
     if (existing === undefined) {
       throw new MoveRequestError('CONFLICT', `this host has no image ${header.image.digest}`);
@@ -414,47 +382,24 @@ async function requireImage(
 
     const digest = buildReceivedDigest(rootfs.contentSha256, config.contentSha256);
 
-    await updateImageUse(deps.db, 'digest', [digest], deps.now());
-
-    const known = await readImageByDigest(deps.db, [digest]);
+    const known = await readImageInUse(deps.db, [digest], deps.now());
 
     if (known !== undefined) {
       return { name: known.name, files };
     }
 
-    const name = await deps.images.withImagePublisher(digest, header.image.name, async () => {
-      await deps.storageGate.join(() =>
-        deps.storage.createImage(digest, async (directory) => {
-          await copyFile(temps.config, join(directory, 'config.json'));
-
-          writeFileSync(join(directory, 'rootfs.ext4'), '');
-
-          await writeChangedBlocks(temps.rootfs, join(directory, 'rootfs.ext4'));
-        }),
-      );
-
-      const taken = await readImageByName(deps.db, header.image.name);
-
-      const hex = toDigestHex(digest).slice(0, 8);
-
-      const picked =
-        taken === undefined ? header.image.name : `${header.image.name.slice(0, 22)}-${hex}`;
-
-      await createImage(
-        deps.db,
-        {
-          name: picked,
-          ref: header.image.ref,
-          digest,
-          sizeBytes: header.image.sizeBytes,
-          source: header.image.source,
-          sourceImp: header.image.sourceImp,
-        },
-        deps.now(),
-      );
-
-      return picked;
-    });
+    const name = await deps.storageGate.join(() =>
+      createImageFromFile(deps, {
+        name: header.image.name,
+        ref: header.image.ref,
+        digest,
+        sizeBytes: header.image.sizeBytes,
+        source: header.image.source,
+        sourceImp: header.image.sourceImp,
+        rootfsPath: temps.rootfs,
+        configPath: temps.config,
+      }),
+    );
 
     return { name, files };
   } finally {
@@ -463,50 +408,15 @@ async function requireImage(
   }
 }
 
-function resolvePolicy(header: MoveHeader): EgressPolicy {
-  const policy = parseEgressPolicy(header.imp.egress.mode, header.imp.egress.allow);
-
-  if (policy !== null) {
-    return policy;
-  }
-
-  getImpdLogger('move')
-    .with({ imp: header.imp.name })
-    .warning('unknown egress policy; received as none');
-
-  return { mode: 'none', allow: [] };
-}
-
 async function createGrants(deps: ReceiveStreamDeps, header: MoveHeader): Promise<void> {
-  const secrets = await deps.grants.listSecrets();
+  const skipped = await restoreGrants(deps, header.imp.name, header.imp);
 
-  const known = new Set(secrets.map((secret) => secret.name));
-
-  const grants = [
-    ...header.imp.grants.map((secret) => ({ secret, filter: undefined })),
-    ...header.imp.filteredGrants,
-  ];
-
-  for (const grant of grants) {
-    const secretName = grant.secret;
-
-    if (!known.has(secretName)) {
-      getImpdLogger('move')
-        .with({ imp: header.imp.name })
-        .info('grant {secretName} dropped: no such secret here', { secretName });
-
-      continue;
-    }
-
-    try {
-      await deps.grants.addGrant(header.imp.name, secretName, null, grant.filter);
-    } catch (error) {
-      getImpdLogger('move')
-        .with({ imp: header.imp.name })
-        .warning('grant {secretName} not kept: {error}', {
-          secretName,
-          error: getErrorMessage(error),
-        });
-    }
+  for (const grant of skipped) {
+    getImpdLogger('move')
+      .with({ imp: header.imp.name })
+      .warning('grant {secretName} not kept: {reason}', {
+        secretName: grant.secret,
+        reason: grant.reason,
+      });
   }
 }

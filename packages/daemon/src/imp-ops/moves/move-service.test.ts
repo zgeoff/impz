@@ -1522,7 +1522,7 @@ test('it carries only the grants of secrets the target has', async () => {
 
   expect(status).toMatchObject({ isDone: true, error: null });
   expect(grants).toStrictEqual(['gh']);
-  expect(lines).toContain('INFO impd.move imp=dev grant npm dropped: no such secret here');
+  expect(lines).toContain('WARNING impd.move imp=dev grant npm not kept: secret npm not found');
 });
 
 test('it lands an imp without a grant the target cannot write, and logs the grant', async () => {
@@ -1582,7 +1582,10 @@ test('it lands an imp whose egress policy the target does not know with no egres
   const status = await ctx.runMove('dev');
 
   expect(status).toMatchObject({ isDone: true, error: null });
-  expect(lines).toContain('WARNING impd.move imp=dev unknown egress policy; received as none');
+
+  expect(lines).toContain(
+    'WARNING impd.move imp=dev unknown egress policy "tunnel"; imported as none',
+  );
 });
 
 test('it finishes a move whose source parts fail to close, and logs the close', async () => {

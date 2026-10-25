@@ -1,20 +1,12 @@
-import { copyFileSync, rmSync, writeFileSync } from 'node:fs';
+import { rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import type { BackupRestore, EgressPolicy, Imp } from '@impz/api';
+import type { BackupRestore, Imp } from '@impz/api';
 import type { TokenStore } from '../../identity/auth/token-store';
 import type { ImageService } from '../../imps/images/image-service';
 import type { Imps } from '../../imps/imps/imp-service';
 import type { NetworkService } from '../../network/networks/network-service';
-import { createCheckpoint } from '../../platform/db/checkpoints';
-import {
-  createImage,
-  readImageByDigest,
-  readImageByName,
-  updateImageUse,
-} from '../../platform/db/images';
 import { listImps, readImpByName } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
-import { parseEgressPolicy } from '../../platform/db/parse-egress-policy';
 import { ImpdError } from '../../platform/errors/impd-error';
 import {
   buildConflictError,
@@ -26,15 +18,18 @@ import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { BACKUP_TREE } from '../../vm/storage/data-layout';
 import type { buildBackupPaths } from '../../vm/storage/data-layout';
 import type { DiskBudget } from '../../vm/storage/disk-budget';
-import { CheckpointIdTakenError } from '../../vm/storage/storage-backend';
 import type { StorageBackend } from '../../vm/storage/storage-backend';
 import type { StorageGate } from '../../vm/storage/storage-gate';
 import { writeChangedBlocks } from '../../vm/storage/write-changed-blocks';
-import { buildCheckpointId } from '../checkpoints/checkpoint-service';
 import type { ImpGrants } from '../imp-grants';
+import { createImageFromFile } from '../imp-import/create-image-from-file';
+import { readImageInUse } from '../imp-import/read-image-in-use';
+import { replayCheckpoints } from '../imp-import/replay-checkpoints';
+import { resolveImportedImageName } from '../imp-import/resolve-imported-image-name';
+import { resolveImportedPolicy } from '../imp-import/resolve-imported-policy';
+import { restoreGrants } from '../imp-import/restore-grants';
 import { BackupManifestSchema } from './backup-manifest';
 import type { BackupManifest, ManifestImage, ManifestImp } from './backup-manifest';
-import { buildDigestTag } from './build-digest-tag';
 import { createRestoredAccess } from './create-restored-access';
 import type { Restic, ResticSnapshot } from './restic';
 
@@ -163,9 +158,15 @@ export async function runRestore(deps: RestoreDeps, input: RestoreInput): Promis
 
       restored.push(created);
 
-      const skipped = await createRestoredGrants(deps, target.name, imp);
+      const skipped = await restoreGrants(deps, target.name, imp);
 
-      skippedGrants.push(...skipped);
+      skippedGrants.push(
+        ...skipped.map((grant) => ({
+          imp: target.name,
+          secret: grant.secret,
+          reason: grant.reason,
+        })),
+      );
 
       getImpdLogger('backup')
         .with({ imp: target.name })
@@ -272,69 +273,36 @@ async function createJoinedImage(
   const image = options.image;
   const workDir = options.workDir;
 
-  // The use goes in before the read, so an image eviction keeps the image this restore picks.
-  await updateImageUse(deps.db, 'digest', [image.digest], deps.now().getTime());
-
-  const existing = await readImageByDigest(deps.db, [image.digest]);
+  const existing = await readImageInUse(deps.db, [image.digest], deps.now().getTime());
 
   if (existing !== undefined) {
     return existing.name;
   }
 
-  const name = await resolveRestoredImageName(deps, image);
+  // The name check goes before the download, so a taken name fails the restore early.
+  await resolveImportedImageName(deps.db, image.name, image.digest);
 
   const directory = join(workDir, image.dir);
 
   await deps.restic.restore(point.id, join(base, image.dir), directory, []);
 
-  await deps.images.withImagePublisher(image.digest, name, async () => {
-    await deps.storage.createImage(image.digest, async (target) => {
-      writeFileSync(join(target, 'rootfs.ext4'), '');
-
-      await writeChangedBlocks(join(directory, 'rootfs.ext4'), join(target, 'rootfs.ext4'));
-
-      copyFileSync(join(directory, 'config.json'), join(target, 'config.json'));
-    });
-
-    rmSync(directory, { recursive: true, force: true });
-
-    await createImage(
-      deps.db,
+  try {
+    return await createImageFromFile(
+      { ...deps, now: () => deps.now().getTime() },
       {
-        name,
+        name: image.name,
         ref: image.ref,
         digest: image.digest,
         sizeBytes: image.sizeBytes,
         source: image.source,
         sourceImp: image.sourceImp,
+        rootfsPath: join(directory, 'rootfs.ext4'),
+        configPath: join(directory, 'config.json'),
       },
-      deps.now().getTime(),
     );
-  });
-
-  return name;
-}
-
-async function resolveRestoredImageName(deps: RestoreDeps, image: ManifestImage): Promise<string> {
-  const taken = await readImageByName(deps.db, image.name);
-
-  if (taken === undefined) {
-    return image.name;
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
   }
-
-  const fallback = `${image.name.slice(0, 22)}-${buildDigestTag(image.digest)}`;
-
-  const fallbackTaken = await readImageByName(deps.db, fallback);
-
-  if (fallbackTaken !== undefined) {
-    throw buildConflictError(
-      'image',
-      fallback,
-      `images ${image.name} and ${fallback} both exist; remove one to restore this image`,
-    );
-  }
-
-  return fallback;
 }
 
 interface RestoreTarget {
@@ -385,24 +353,12 @@ async function createRestoredImp(
   const writeRestoredDisk = async (impId: string) => {
     created.id = impId;
 
-    await deps.storage.createImpDisk(impId, { kind: 'empty' });
-
-    const disk = deps.storage.resolveImpPaths(impId).disk;
-
-    for (const checkpoint of imp.checkpoints) {
-      await writeRestoredFile(checkpoint.disk, disk, checkpoint);
-
-      const made = await createCheckpointDisk(deps, impId);
-
-      await createCheckpoint(deps.db, {
-        id: made.id,
-        impId,
-        label: checkpoint.label,
-        sizeBytes: made.sizeBytes,
-        createdAt: checkpoint.createdAt,
-        diskBytes: checkpoint.diskBytes,
-      });
-    }
+    const disk = await replayCheckpoints(deps, {
+      impId,
+      checkpoints: imp.checkpoints,
+      writeCheckpoint: (checkpoint, _index, replayed) =>
+        writeRestoredFile(checkpoint.disk, replayed, checkpoint),
+    });
 
     await writeRestoredFile(imp.disk, disk, imp);
   };
@@ -418,7 +374,12 @@ async function createRestoredImp(
       memoryMib: imp.memoryMib,
       maxMemoryMib: imp.maxMemoryMib ?? undefined,
       httpPort: imp.httpPort,
-      policy: resolveEgressPolicy(target.name, imp),
+      policy: resolveImportedPolicy({
+        area: 'backup',
+        impName: target.name,
+        mode: imp.egressPolicy,
+        allow: imp.egressAllow,
+      }),
       isIdentityResetPending: imp.identityResetPending,
       start: false,
       prepareDisk: writeRestoredDisk,
@@ -430,41 +391,6 @@ async function createRestoredImp(
 
     throw error;
   }
-}
-
-const ID_ATTEMPTS = 3;
-
-// ZFS can still hold a deleted checkpoint's id in a snapshot a fork needs.
-async function createCheckpointDisk(deps: RestoreDeps, impId: string) {
-  for (let attempt = 1; ; attempt += 1) {
-    const id = buildCheckpointId();
-
-    try {
-      const sizeBytes = await deps.storage.createCheckpoint(impId, id);
-
-      return { id, sizeBytes };
-    } catch (error) {
-      if (!(error instanceof CheckpointIdTakenError) || attempt >= ID_ATTEMPTS) {
-        throw error;
-      }
-    }
-  }
-}
-
-function resolveEgressPolicy(name: string, imp: ManifestImp): EgressPolicy {
-  const policy = parseEgressPolicy(imp.egressPolicy, imp.egressAllow);
-
-  if (policy !== null) {
-    return policy;
-  }
-
-  getImpdLogger('backup')
-    .with({ imp: name })
-    .warning('unknown egress policy {egressPolicy}; restored as none', {
-      egressPolicy: JSON.stringify(imp.egressPolicy),
-    });
-
-  return { mode: 'none', allow: [] };
 }
 
 async function removeFailedImp(
@@ -483,25 +409,4 @@ async function removeFailedImp(
       .with({ imp: name })
       .warning('a failed restore left the imp: {error}', { error: getErrorMessage(error) });
   });
-}
-
-async function createRestoredGrants(deps: RestoreDeps, impName: string, imp: ManifestImp) {
-  const skipped: SkippedGrant[] = [];
-
-  const grants = [
-    ...imp.grants.map((secret) => ({ secret, filter: undefined })),
-    ...imp.filteredGrants,
-  ];
-
-  for (const grant of grants) {
-    const secret = grant.secret;
-
-    try {
-      await deps.grants.addGrant(impName, secret, null, grant.filter);
-    } catch (error) {
-      skipped.push({ imp: impName, secret, reason: getErrorMessage(error) });
-    }
-  }
-
-  return skipped;
 }

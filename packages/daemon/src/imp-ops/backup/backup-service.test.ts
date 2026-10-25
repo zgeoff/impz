@@ -773,7 +773,7 @@ test('#restoreBackup rejects a restored image as CONFLICT when its name and its 
 
   expect(freshBackups.restoreBackup({ name: 'dev' })).rejects.toMatchObject({
     code: 'CONFLICT',
-    message: 'images base and base-base both exist; remove one to restore this image',
+    message: 'images base and base-base both exist; remove one to import this image',
     data: { kind: 'image', name: 'base-base' },
   });
 });
@@ -1637,7 +1637,7 @@ test('#restoreBackup restores an egress policy this impd cannot read as none, ne
   expect(policy).toStrictEqual({ mode: 'none', allow: [] });
 
   expect(ctx.backupLogs).toContain(
-    'WARNING impd.backup imp=back unknown egress policy "granted-only"; restored as none',
+    'WARNING impd.backup imp=back unknown egress policy "granted-only"; imported as none',
   );
 });
 

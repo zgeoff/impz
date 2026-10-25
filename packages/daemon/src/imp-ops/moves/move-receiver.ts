@@ -12,7 +12,6 @@ import type * as z from 'zod';
 import type { ImageService } from '../../imps/images/image-service';
 import type { Imps } from '../../imps/imps/imp-service';
 import type { EgressService } from '../../network/egress/egress-service';
-import { readImageByDigest, updateImageUse } from '../../platform/db/images';
 import { listImps, readImpByName, updateImpCommitted } from '../../platform/db/imps';
 import type { ImpRecord } from '../../platform/db/imps';
 import { listLeases } from '../../platform/db/leases';
@@ -41,6 +40,7 @@ import type { DiskBudget } from '../../vm/storage/disk-budget';
 import type { StorageBackend } from '../../vm/storage/storage-backend';
 import type { StorageGate } from '../../vm/storage/storage-gate';
 import type { ImpGrants } from '../imp-grants';
+import { readImageInUse } from '../imp-import/read-image-in-use';
 import { buildOfferedDigests } from './build-offered-digests';
 import { COMMIT_WINDOW_MS } from './commit-window-ms';
 import { MOVE_FINISH_HEADER, MOVE_PART_HEADER } from './move-header';
@@ -97,7 +97,7 @@ export interface MoveReceiverDeps {
   readonly diskBudget: Pick<DiskBudget, 'requireRoom' | 'withRoom'>;
   readonly images: Pick<ImageService, 'withImagePublisher'>;
   readonly imps: Pick<Imps, 'createImp' | 'destroyImp' | 'lockImpId'>;
-  readonly grants: Pick<ImpGrants, 'addGrant' | 'listSecrets'>;
+  readonly grants: Pick<ImpGrants, 'addGrant'>;
   readonly egress: Pick<EgressService, 'writeAnswers'>;
   readonly ranges: PeerRanges;
   readonly readIdentity: () => HostIdentity;
@@ -174,11 +174,7 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
   const offer = async (offered: z.output<typeof MoveOfferSchema>): Promise<MoveOfferReply> => {
     const digests = buildOfferedDigests(offered.imageDigest, offered.receivedImageDigest);
 
-    // The use goes in before the read, so an image eviction keeps the image this offer says the
-    // target holds until the stream reuses it.
-    await updateImageUse(deps.db, 'digest', digests, deps.now());
-
-    const existing = await readImageByDigest(deps.db, digests);
+    const existing = await readImageInUse(deps.db, digests, deps.now());
 
     const needsSystemDrive =
       offered.systemDrive !== undefined &&
