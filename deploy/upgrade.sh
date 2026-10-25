@@ -151,11 +151,12 @@ format_docker_rollback() {
   [ -z "$unit_backup" ] || steps+=("mv $unit_backup $unit_file")
   [ -z "$proxy_backup" ] || steps+=("mv $proxy_backup $proxy_unit_file")
   steps+=("systemctl daemon-reload")
-  [ -z "$proxy_backup" ] || steps+=("systemctl enable --now imp-docker-proxy")
-  # The env file may pin the new image, which Docker would pull and start.
+  # The env file may pin the new image, which Docker would pull and start;
+  # the proxy reads the same pin, and the new image has no proxy binary.
   local runs
   runs=$(docker_unit_image)
   [ -z "$runs" ] || steps+=("docker tag $old $runs")
+  [ -z "$proxy_backup" ] || steps+=("systemctl enable --now imp-docker-proxy")
   steps+=("systemctl start $container")
   local text=${steps[0]} step
   for step in "${steps[@]:1}"; do text+=", then $step"; done

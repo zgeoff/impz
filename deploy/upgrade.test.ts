@@ -798,6 +798,74 @@ test("it stops with the rollback to Docker, and starts nothing, when Docker's ne
   );
 });
 
+test('it tags the old image before it starts the proxy in the rollback to Docker, when the env file pins the new image', () => {
+  const ctx = setupTest();
+
+  const podman = createStubBin(
+    ctx.directoryPath,
+    'podman',
+    buildStubHostPodman({
+      image: 'ghcr.io/zgeoff/imp-host:next',
+      pulledLabel: 'no-docker',
+      pulledUnit: 'ExecStart=/usr/bin/podman run --name imp-host imp-host\n',
+      runsHost: false,
+    }),
+  );
+
+  createStubBin(
+    ctx.directoryPath,
+    'docker',
+    buildStubHostDocker({ hostNetwork: ['imp-host'], networkInUse: true }),
+  );
+
+  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
+
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-host.service'),
+    'ExecStart=/usr/bin/docker run --name imp-host imp-host\n',
+  );
+
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-docker-proxy.service'),
+    'ExecStart=/usr/bin/docker run --name imp-docker-proxy imp-host\n',
+  );
+
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-host.env'),
+    'IMP_PORT=7070\nIMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:next\n',
+    { mode: 0o600 },
+  );
+
+  const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
+    env: {
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_HOST_IMAGE: '',
+      IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
+      IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
+      IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
+      IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
+    },
+  });
+
+  const proxyBackup = join(
+    ctx.directoryPath,
+    readdirSync(ctx.directoryPath)
+      .filter((file) => file.startsWith('imp-docker-proxy.service.bak-'))
+      .join(''),
+  );
+
+  expect(result.exitCode).toBe(1);
+
+  expect(result.stderr.toString()).toBe(
+    'Error response from daemon: error while removing network: network imp-host has active endpoints\n' +
+      "upgrade: cannot remove Docker's imp-host network, whose bridge Podman needs; " +
+      'imp-host is stopped; to roll back to Docker: systemctl stop imp-host, ' +
+      `then mv ${proxyBackup} ${join(ctx.directoryPath, 'imp-docker-proxy.service')}, ` +
+      'then systemctl daemon-reload, then docker tag old ghcr.io/zgeoff/imp-host:next, ' +
+      'then systemctl enable --now imp-docker-proxy, then systemctl start imp-host\n',
+  );
+});
+
 test('it stops with the rollback to Docker, keeps the proxy unit, and starts nothing, when the proxy cannot be stopped after the host stops', () => {
   const ctx = setupTest();
 
