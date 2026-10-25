@@ -11,7 +11,7 @@ export interface WriteOciTreeOptions {
   readonly runStreamed: StreamedRunner;
   readonly startTar: WriteStreamedTreeOptions['startTar'];
   readonly countTreeBytes: WriteStreamedTreeOptions['countTreeBytes'];
-  readonly startTimer?: WriteStreamedTreeOptions['startTimer'];
+  readonly startTimer: WriteStreamedTreeOptions['startTimer'];
 }
 
 export function writeOciTree(options: Readonly<WriteOciTreeOptions>): Promise<void> {

@@ -10,6 +10,7 @@ import {
 } from '../../../../testing/imps/build-stub-image-builder';
 import { buildStubClock } from '../../../../testing/platform/build-stub-clock';
 import { buildStubGuest } from '../../../../testing/vm/build-stub-guest';
+import { startRealTimer } from '../../../platform/process/start-real-timer';
 import { countTreeBytes } from '../../../vm/storage/count-tree-bytes';
 import { DOCKERFILE_FRONTEND } from '../../docker-contract/dockerfile-frontend';
 import { createGuestExec } from '../builders/guest-exec';
@@ -52,6 +53,7 @@ test('#writeGuestTree unpacks the builder export into the root', async () => {
     limits: { maxBytes: 1024 ** 3, maxFiles: 100 },
     signal: new AbortController().signal,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
   });
 
@@ -76,6 +78,7 @@ test('#writeGuestTree gives the image config the builder inspected', async () =>
     limits: { maxBytes: 1024 ** 3, maxFiles: 100 },
     signal: new AbortController().signal,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
   });
 
@@ -99,6 +102,7 @@ test('#writeGuestTree gives a build digest of 64 hex characters', async () => {
     limits: { maxBytes: 1024 ** 3, maxFiles: 100 },
     signal: new AbortController().signal,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
   });
 
@@ -127,6 +131,7 @@ test('#writeGuestTree gives the same digest for the same config and export', asy
     limits,
     signal,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
   });
 
@@ -136,6 +141,7 @@ test('#writeGuestTree gives the same digest for the same config and export', asy
     limits,
     signal,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
   });
 
@@ -173,6 +179,7 @@ test('#writeGuestTree gives another digest for another config of the same export
     limits,
     signal,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
   });
 
@@ -182,6 +189,7 @@ test('#writeGuestTree gives another digest for another config of the same export
     limits,
     signal,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
   });
 
@@ -217,6 +225,7 @@ test('#writeGuestTree gives another digest for another export of the same config
     limits,
     signal,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
   });
 
@@ -226,6 +235,7 @@ test('#writeGuestTree gives another digest for another export of the same config
     limits,
     signal,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
   });
 
@@ -248,6 +258,7 @@ test('#writeGuestTree inspects, creates and exports the built image in the build
     limits: { maxBytes: 1024 ** 3, maxFiles: 100 },
     signal: new AbortController().signal,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
   });
 
@@ -277,6 +288,7 @@ test("#writeGuestTree unpacks through the given tar starter with tar's unpack an
     limits: { maxBytes: 1024 ** 3, maxFiles: 100 },
     signal: new AbortController().signal,
     startTar,
+    startTimer: startRealTimer,
     countTreeBytes,
   });
 
@@ -319,6 +331,7 @@ test('#writeGuestTree holds disk ahead of the export in 256 MiB steps', async ()
       return Promise.resolve();
     },
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
   });
 
@@ -349,6 +362,7 @@ test('#writeGuestTree grows the hold with the written bytes that the given tree 
       return Promise.resolve();
     },
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes: () => Promise.resolve(4096),
   });
 
@@ -377,6 +391,7 @@ test('#writeGuestTree refuses an export past the byte cap', async () => {
       limits: { maxBytes: 2 * 65_536, maxFiles: 100 },
       signal: new AbortController().signal,
       startTar: startTarProcess,
+      startTimer: startRealTimer,
       countTreeBytes,
     }),
   ).rejects.toThrowWithMessage(
@@ -406,6 +421,7 @@ test('#writeGuestTree ends the export exec at the byte cap', async () => {
     limits: { maxBytes: 2 * 65_536, maxFiles: 100 },
     signal: new AbortController().signal,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
   });
 
@@ -436,6 +452,7 @@ test('#writeGuestTree refuses an export of more entries than the file cap', asyn
       limits: { maxBytes: 1024 ** 3, maxFiles: 10 },
       signal: new AbortController().signal,
       startTar: startTarProcess,
+      startTimer: startRealTimer,
       countTreeBytes,
     }),
   ).rejects.toThrowWithMessage(
@@ -465,6 +482,7 @@ test('#writeGuestTree counts a sparse file at its full size against the cap', as
       limits: { maxBytes: 1024 ** 2, maxFiles: 1000 },
       signal: new AbortController().signal,
       startTar: startTarProcess,
+      startTimer: startRealTimer,
       countTreeBytes,
     }),
   ).rejects.toThrowWithMessage(
@@ -496,6 +514,7 @@ test('#writeGuestTree counts a block for each small file against the cap', async
       limits: { maxBytes: 1024 ** 2, maxFiles: 1000 },
       signal: new AbortController().signal,
       startTar: startTarProcess,
+      startTimer: startRealTimer,
       countTreeBytes,
     }),
   ).rejects.toThrowWithMessage(
@@ -533,6 +552,7 @@ test('#writeGuestTree counts the directories tar makes for a member as entries',
       limits: { maxBytes: 1024 ** 3, maxFiles: 1 },
       signal: new AbortController().signal,
       startTar: startTarProcess,
+      startTimer: startRealTimer,
       countTreeBytes,
     }),
   ).rejects.toThrowWithMessage(
@@ -570,6 +590,7 @@ test('#writeGuestTree counts the directories tar makes for a member as blocks', 
       limits: { maxBytes: 64 * 1024, maxFiles: 1000 },
       signal: new AbortController().signal,
       startTar: startTarProcess,
+      startTimer: startRealTimer,
       countTreeBytes,
     }),
   ).rejects.toThrowWithMessage(
@@ -607,6 +628,7 @@ test('#writeGuestTree ends an export that stalls past a limit', async () => {
     limits: { maxBytes: 1024 ** 3, maxFiles: 1 },
     signal: new AbortController().signal,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
   });
 
@@ -669,6 +691,7 @@ test("#writeGuestTree refuses a builder's config that is not one JSON object", a
     limits: { maxBytes: 1024, maxFiles: 100 },
     signal: new AbortController().signal,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
   });
 
@@ -692,6 +715,7 @@ test('#writeGuestTree fails when the inspect in the builder exits non-zero', asy
       limits: { maxBytes: 1024, maxFiles: 100 },
       signal: new AbortController().signal,
       startTar: startTarProcess,
+      startTimer: startRealTimer,
       countTreeBytes,
     }),
   ).rejects.toThrowWithMessage(
@@ -716,6 +740,7 @@ test('#writeGuestTree fails when the create in the builder exits non-zero', asyn
       limits: { maxBytes: 1024, maxFiles: 100 },
       signal: new AbortController().signal,
       startTar: startTarProcess,
+      startTimer: startRealTimer,
       countTreeBytes,
     }),
   ).rejects.toThrowWithMessage(Error, 'docker create in the builder: no space left on device');
@@ -737,6 +762,7 @@ test('#writeGuestTree fails when the export in the builder exits non-zero', asyn
       limits: { maxBytes: 1024 ** 3, maxFiles: 100 },
       signal: new AbortController().signal,
       startTar: startTarProcess,
+      startTimer: startRealTimer,
       countTreeBytes,
     }),
   ).rejects.toThrowWithMessage(Error, 'docker export in the builder: container gone');

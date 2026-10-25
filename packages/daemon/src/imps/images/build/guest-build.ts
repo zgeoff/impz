@@ -118,7 +118,7 @@ interface WriteGuestTreeOptions {
   readonly limits: Readonly<TreeLimits>;
   readonly signal: AbortSignal;
   readonly grow?: (totalBytes: number, writtenBytes: number) => Promise<void>;
-  readonly startTimer?: StartTimer;
+  readonly startTimer: StartTimer;
   readonly startTar: WriteStreamedTreeOptions['startTar'];
   readonly countTreeBytes: WriteStreamedTreeOptions['countTreeBytes'];
 }
