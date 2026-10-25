@@ -122,8 +122,8 @@ export function createImageAdds(deps: ImageAddsDeps, writer: ImageWriter): Image
   ): Promise<ImageRecord> => {
     assertImageRef(ref);
 
-    // A builder's pull reaches a literal address that imp-docker-proxy never sees, so impd
-    // refuses these registries before any builder boots.
+    // A builder's pull reaches a literal address, so impd refuses these registries before any
+    // builder boots.
     const registryProblem = checkReferenceRegistry(ref);
 
     if (registryProblem !== null) {

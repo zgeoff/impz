@@ -181,8 +181,9 @@ async function checkFirstRun(run: BootstrapRun, distro: Distro, isUbuntu: boolea
   }
 
   await expectInContainer(run, {
-    argv: ['systemctl', '-q', 'is-active', 'imp-docker-proxy'],
-    failure: `[${distro}] imp-docker-proxy is not active`,
+    argv: ['systemctl', 'cat', 'imp-docker-proxy'],
+    failure: `[${distro}] an imp-docker-proxy unit is installed`,
+    fails: true,
   });
 
   const mounts = await readInContainer(run, [

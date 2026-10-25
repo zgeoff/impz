@@ -818,14 +818,14 @@ test("#loadGuestImage refuses a ref the registry denies to the builder's engine"
   });
 });
 
-test('#loadGuestImage refuses a ref whose pull imp-docker-proxy refuses in the builder', () => {
+test("#loadGuestImage refuses a ref whose registry the builder's engine cannot reach", () => {
   const builder = buildStubImageBuilder({
     exported: [],
     repoDigest: `sha256:${'b'.repeat(64)}`,
     onPull: () => ({
       code: 1,
       stderr:
-        "Error response from daemon: imp-docker-proxy: registry localhost:5320 is the host's own\n",
+        'Error response from daemon: Get "https://localhost:5320/v2/": dial tcp 127.0.0.1:5320: connect: connection refused\n',
     }),
   });
 
@@ -838,7 +838,7 @@ test('#loadGuestImage refuses a ref whose pull imp-docker-proxy refuses in the b
   ).rejects.toMatchObject({
     code: 'BAD_REQUEST',
     message:
-      "the pull of localhost:5320/x:1 in the builder failed: Error response from daemon: imp-docker-proxy: registry localhost:5320 is the host's own",
+      'the pull of localhost:5320/x:1 in the builder failed: Error response from daemon: Get "https://localhost:5320/v2/": dial tcp 127.0.0.1:5320: connect: connection refused',
   });
 });
 

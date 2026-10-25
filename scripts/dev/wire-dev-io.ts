@@ -38,6 +38,5 @@ export function wireDevIO(): DevIO {
     sleep: Bun.sleep,
     writeStdout: writeStdoutLine,
     writeStderr,
-    user: `${String(process.getuid?.() ?? 0)}:${String(process.getgid?.() ?? 0)}`,
   };
 }

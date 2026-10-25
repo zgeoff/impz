@@ -27,11 +27,6 @@ test("it swaps the deployed seccomp profile for the repo's own and adds each pro
     join(ctx.root, 'deploy', 'imp-host.args.json'),
     JSON.stringify({
       lines: [['--rm', '--name', 'imp-host']],
-      proxy: {
-        privileges: [['--cap-drop', 'ALL']],
-        lines: [['--rm', '--name', 'imp-docker-proxy']],
-        command: ['/usr/local/bin/imp-docker-proxy'],
-      },
       network: { name: 'imp', bridge: 'imp0' },
       addresses: 'hostname -I',
       privileges: [

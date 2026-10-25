@@ -3,18 +3,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { z } from 'zod';
 import { loadConfig } from '../../src/config';
-import { createDockerProxy } from '../../src/imps/docker-proxy/proxy';
 import { buildActivityTracker } from '../../src/imps/imps/activity-tracker';
 import { createForwardedPeers } from '../../src/network/proxy/forwarded-peers';
 import { startWakeProxy } from '../../src/network/proxy/wake-proxy';
 import { openDatabase } from '../../src/platform/db/open-database';
 import { sendLongRequest } from '../../src/platform/process/send-long-request';
 
-const ArgsSchema = z.discriminatedUnion('via', [
-  z.object({ via: z.enum(['long-request', 'wake-proxy']), origin: z.url() }),
-  z.object({ via: z.literal('docker-proxy'), socket: z.string() }),
-]);
-
+const ArgsSchema = z.object({ via: z.enum(['long-request', 'wake-proxy']), origin: z.url() });
 const args = ArgsSchema.parse(JSON.parse(process.argv[2] ?? ''));
 
 function print(line: unknown): void {
@@ -78,41 +73,9 @@ async function startProxy(stack: Readonly<AsyncDisposableStack>, origin: string)
   return `http://127.0.0.1:${String(listener.port)}`;
 }
 
-function makeDockerProxyCalls(socket: string): [string, () => Promise<Response>][] {
-  const proxy = createDockerProxy({
-    upstreamSocket: socket,
-    token: 'test-token',
-    hostImage: 'ghcr.io/zgeoff/imp-host:latest',
-    builderImage: `ghcr.io/zgeoff/imp-base:0.29.0@sha256:${'d'.repeat(64)}`,
-  });
-
-  return [
-    [
-      'pull',
-      () =>
-        proxy(
-          new Request(
-            `http://docker/v1.55/images/create?fromImage=ghcr.io%2Fzgeoff%2Fimp-base&tag=sha256%3A${'d'.repeat(64)}`,
-            { method: 'POST' },
-          ),
-        ),
-    ],
-    ['export', () => proxy(new Request(`http://docker/v1.55/containers/${'a'.repeat(64)}/export`))],
-    [
-      'control',
-      () =>
-        fetch('http://docker/control', { method: 'POST', body: 'the control call', unix: socket }),
-    ],
-  ];
-}
-
 const stack = new AsyncDisposableStack();
 
 function makeCalls(): [string, () => Promise<Response>][] {
-  if (args.via === 'docker-proxy') {
-    return makeDockerProxyCalls(args.socket);
-  }
-
   const origin = args.origin;
 
   const sendLong =

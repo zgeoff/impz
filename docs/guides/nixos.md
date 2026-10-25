@@ -62,15 +62,14 @@ Use a kernel that the system's ZFS builds for. The module's checks use nixpkgs' 
   [`deploy/imp-host.args.json`](../../deploy/imp-host.args.json), the same file
   [`deploy/imp-host.service`](../../deploy/imp-host.service) comes from. Before each start it writes
   [the env file](#the-env-file) to `/run/imp-host/env` (0600). `imp-host-image.service` loads
-  `imageArchive`, or pulls `image` when the image is missing, before each start of either container.
-  With ZFS, it needs `imp-zfs-dataset.service`.
-- **`imp-docker-proxy.service`:** the only Docker socket imp-host sees, from the `proxy` section of
-  the same file ([the Docker socket](../architecture/host.md#the-docker-socket)). imp-host wants it
-  and starts after it; a proxy that stops fails image work only. It closes the Docker socket path
-  only: `SYS_ADMIN` still lets root out of the container. The module and the image must come from
-  the same release ([the image](#the-image)). The module runs the image without `--privileged`, so
-  an image from before that change ([#75](https://github.com/zgeoff/impz/issues/75)) fails at start,
-  in `setup-storage`.
+  `imageArchive`, or pulls `image` when the image is missing, before each start. With ZFS, it needs
+  `imp-zfs-dataset.service`.
+- **No Docker socket:** imp-host gets none
+  ([the Docker socket](../architecture/host.md#the-docker-socket)). That closes the Docker socket
+  path only: `SYS_ADMIN` still lets root out of the container. The module and the image must come
+  from the same release ([the image](#the-image)). The module runs the image without `--privileged`,
+  so an image from before that change ([#75](https://github.com/zgeoff/impz/issues/75)) fails at
+  start, in `setup-storage`.
 - **Public imps:** `publicPorts`, such as `[ "443:7443" "80:7480" ]`, publishes the public
   listeners, as `IMP_PUBLIC_PORTS` does for the systemd unit
   ([public imps](./https.md#public-imps)). Set `IMP_PUBLIC_IP` in `settings`, and open the ports in
@@ -274,7 +273,7 @@ it to `/run/imp-host` and mounts the copy read-only into the container at
 ## Check it
 
 ```sh
-systemctl status imp-docker-proxy imp-host imp-zfs-dataset
+systemctl status imp-host imp-zfs-dataset
 docker exec imp-host impz info
 docker exec imp-host impz new check --image ubuntu && docker exec imp-host impz exec check -- uname -a
 docker exec imp-host impz rm check

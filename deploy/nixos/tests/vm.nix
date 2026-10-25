@@ -69,11 +69,6 @@ let
       cp ${../../../host/scripts/tailscale-up.sh} lib/imp/tailscale-up.sh
       cp ${../../../host/scripts/load-env-file.sh} lib/imp/load-env-file.sh
       chmod 755 lib/imp/tailscale-up.sh
-      # stands in for imp-docker-proxy: a socket where the proxy's would be
-      mkdir -p usr/local/bin
-      printf '#!/bin/bash\nexec socat UNIX-LISTEN:/run/imp-docker/docker.sock,fork SYSTEM:true\n' \
-        >usr/local/bin/imp-docker-proxy
-      chmod 755 usr/local/bin/imp-docker-proxy
     '';
     config = {
       Cmd = [
@@ -142,7 +137,7 @@ pkgs.testers.runNixOSTest {
         IMP_BACKUP_REPOSITORY=s3:https://example.invalid/imp
         AWS_ACCESS_KEY_ID=fake-aws-key-id-for-the-vm-test
         AWS_SECRET_ACCESS_KEY=${fakeAwsSecret}
-        DOCKER_HOST=unix:///nowhere.sock
+        IMP_TAILSCALE_AUTHKEY_FILE=/nowhere
       '';
       # 3 GiB is below what the formula needs, so imp-host refuses to start
       # until ramBudgetMiB is set; the test switches to this.
@@ -279,8 +274,8 @@ pkgs.testers.runNixOSTest {
           assert "AWS_SECRET_ACCESS_KEY=${fakeAwsSecret}" in environ, [line.split("=")[0] for line in environ]
           assert "IMP_BACKUP_REPOSITORY=s3:https://example.invalid/imp" in environ, [line.split("=")[0] for line in environ]
           # an -e value wins over the secrets file, as it would over --env-file
-          assert "DOCKER_HOST=unix:///run/imp-docker/docker.sock" in environ, [line for line in environ if line.startswith("DOCKER_HOST=")]
-          host.fail("grep -q '^DOCKER_HOST=' /run/imp-host/env")
+          assert "IMP_TAILSCALE_AUTHKEY_FILE=/run/imp/tailscale-authkey" in environ, [line for line in environ if line.startswith("IMP_TAILSCALE_AUTHKEY_FILE=")]
+          host.fail("grep -q '^IMP_TAILSCALE_AUTHKEY_FILE=' /run/imp-host/env")
 
       with subtest("the backup password: a file in the container, never a value"):
           host.succeed("grep -qx IMP_BACKUP_PASSWORD_FILE=/run/imp/backup-password /run/imp-host/env")
@@ -293,17 +288,11 @@ pkgs.testers.runNixOSTest {
           assert "Read-only file system" in out, out
           assert host.succeed("docker exec imp-host cat /run/imp/backup-password").strip() == "${fakeBackupPassword}"
 
-      with subtest("imp-docker-proxy is the only Docker socket imp-host sees"):
-          host.succeed("systemctl is-active imp-docker-proxy")
-          host.succeed("test -S /run/imp-docker/docker.sock")
-          assert host.succeed("stat -c %u:%a /run/imp-docker").strip() == "65534:700"
+      with subtest("imp-host sees no Docker socket"):
+          host.fail("systemctl cat imp-docker-proxy")
           mounts = host.succeed("docker container inspect -f '{{range .Mounts}}{{.Source}}:{{.Destination}}:{{.RW}} {{end}}' imp-host")
-          assert "docker.sock" not in mounts, mounts
-          assert "/run/imp-docker:/run/imp-docker:false" in mounts, mounts
-          host.succeed("docker container inspect -f '{{.Config.Env}}' imp-host | grep -qF DOCKER_HOST=unix:///run/imp-docker/docker.sock")
-          info = host.succeed("docker container inspect -f '{{.Config.User}} {{.HostConfig.NetworkMode}} {{.HostConfig.ReadonlyRootfs}} {{.HostConfig.CapDrop}}' imp-docker-proxy").strip()
-          assert info == "65534:65534 none true [ALL]", info
-          assert "${fakeKey}" not in host.succeed("docker container inspect imp-docker-proxy")
+          assert "docker" not in mounts, mounts
+          host.fail("docker container inspect -f '{{.Config.Env}}' imp-host | grep -qF DOCKER_HOST")
 
       with subtest("the kernel has the module's sysctls, devices and ARC cap"):
           host.succeed("sysctl -n vm.overcommit_memory | grep -qx 1")
@@ -377,17 +366,6 @@ pkgs.testers.runNixOSTest {
               (gateway6, 9999): TIMED_OUT_IN_CONTAINER,
           }, codes
           host.succeed("systemctl stop listen9998 listen9999")
-
-      with subtest("a proxy stop leaves imp-host running"):
-          started = invocation()
-          host.succeed("systemctl stop imp-docker-proxy")
-          # a stop that reached imp-host would have stopped or restarted it in
-          # the same job; Wants= passes on no stop
-          host.succeed("systemctl is-active imp-host")
-          assert invocation() == started, (started, invocation())
-          host.succeed("systemctl start imp-docker-proxy")
-          host.succeed("test -S /run/imp-docker/docker.sock")
-          assert invocation() == started, (started, invocation())
 
       with subtest("ipv6 off, then on again, on a running host"):
           host.succeed("/run/booted-system/specialisation/noipv6/bin/switch-to-configuration test")

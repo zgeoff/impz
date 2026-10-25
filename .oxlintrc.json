@@ -183,8 +183,6 @@
             "name": "daemon-layer-imps",
             "from": ["daemon-imps"],
             "ignore": [
-              // imp-docker-proxy's composition root, as main.ts is impd's
-              "packages/daemon/src/imps/docker-proxy/main.ts",
               "**/*.{test,e2e}.{ts,tsx}",
               "**/{test-utils,smoke,mocks}/**",
               "**/test-setup.ts"

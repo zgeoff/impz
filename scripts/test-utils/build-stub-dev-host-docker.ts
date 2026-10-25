@@ -3,7 +3,6 @@ import { formatShellWord } from '@impz/test-utils/format-shell-word';
 interface StubDevHostDocker {
   readonly containers: Readonly<Record<string, boolean>>;
   readonly hasImage: boolean;
-  readonly hasSocket: boolean;
   readonly logs?: Readonly<Record<string, string>>;
 
   // pgrep exits 1 when no process matches.
@@ -48,14 +47,8 @@ export function buildStubDevHostDocker(stub: StubDevHostDocker): string {
     '  "build -q "*) echo sha256:stub-built-image ;;',
     ...states,
     '  "inspect -f {{.State.Running}} "*) echo "Error: No such object" >&2; exit 1 ;;',
-    '  "run --rm "*)',
-    '    for arg in "$@"; do',
-    `      case $arg in *:/out) : >"$(printf '%s' "$arg" | sed 's|:/out$||')/imp-docker-proxy.new" ;; esac`,
-    '    done',
-    '    ;;',
     '  "run -d "*) echo c0ffee ;;',
     '  "rm -f "*) ;;',
-    `  "exec "*" test -S /run/imp-docker/docker.sock") exit ${stub.hasSocket ? 0 : 1} ;;`,
     ...logs,
     '  "logs --tail "*) ;;',
     '  *) echo "stub docker: unexpected call: $*" >&2; exit 1 ;;',

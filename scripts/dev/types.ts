@@ -8,7 +8,7 @@ export type DevShell = (
   ...expressions: ShellExpression[]
 ) => $.ShellPromise;
 
-export interface DevFiles {
+interface DevFiles {
   // A device node such as /dev/kvm counts.
   readonly probePath: (path: string) => boolean;
   readonly probeFile: (path: string) => boolean;
@@ -35,9 +35,6 @@ export interface DevIO {
   readonly sleep: (durationMs: number) => Promise<void>;
   readonly writeStdout: (line: string) => void;
   readonly writeStderr: (text: string) => void;
-
-  // The uid:gid the proxy compiles as, so its binary is the caller's own.
-  readonly user: string;
 }
 
 export interface Dev {

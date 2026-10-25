@@ -1,5 +1,5 @@
-# What services.imp does to the system: the imp-host and imp-docker-proxy
-# units, and the network, firewall and kernel settings they need. The
+# What services.imp does to the system: the imp-host unit, and the network,
+# firewall and kernel settings it needs. The
 # options are in options.nix; module.nix imports both.
 {
   config,
@@ -184,43 +184,6 @@ let
         )
       ) args
     );
-
-  # imp-docker-proxy (deploy/imp-docker-proxy.service): the only Docker
-  # socket imp-host sees. It closes the Docker socket path only: imp-host
-  # keeps SYS_ADMIN, which still lets root out of the container. It runs as
-  # 65534 and joins the group of the host's socket, read at each start.
-  proxyWord =
-    word:
-    if word == "$IMP_DOCKER_GID" then
-      ''"$gid"''
-    else if lib.hasPrefix "$" word then
-      throw "services.imp: the proxy section of deploy/imp-host.args.json has ${word}, which the module has no value for"
-    else
-      lib.escapeShellArg word;
-  proxyWords = lib.flatten hostArgs.proxy.privileges ++ lib.flatten hostArgs.proxy.lines;
-  runProxy = pkgs.writeShellScript "imp-docker-proxy-run" ''
-    set -euo pipefail
-    gid=$(${pkgs.coreutils}/bin/stat -c %g /var/run/docker.sock)
-    exec ${docker} run ${
-      lib.concatMapStringsSep " " proxyWord proxyWords
-    } ${lib.escapeShellArg cfg.image} ${lib.escapeShellArgs hostArgs.proxy.command}
-  '';
-  # The socket's directory and the proxy's token, owned by its user. Not
-  # RuntimeDirectory: a stop would remove the directory under imp-host's
-  # bind mount. A socket a crash left would pass the wait below.
-  proxyDirs = pkgs.writeShellScript "imp-docker-proxy-dirs" ''
-    set -euo pipefail
-    ${pkgs.coreutils}/bin/install -d -m 0700 -o 65534 -g 65534 /run/imp-docker /var/lib/imp-docker-proxy
-    ${pkgs.coreutils}/bin/rm -f /run/imp-docker/docker.sock
-  '';
-  waitProxy = pkgs.writeShellScript "imp-docker-proxy-wait" ''
-    for _ in $(${pkgs.coreutils}/bin/seq 300); do
-      [ -S /run/imp-docker/docker.sock ] && exit 0
-      ${pkgs.coreutils}/bin/sleep 0.1
-    done
-    echo "imp-docker-proxy: no socket after 30 s" >&2
-    exit 1
-  '';
 
   # The module's own keys; settings may not set them (an assertion below).
   # No secret goes here: it is in the Nix store.
@@ -546,8 +509,8 @@ in
       };
     };
 
-    # The image both containers run, loaded or pulled before either starts.
-    # A oneshot that stays inactive, so each start of either runs it again.
+    # The image imp-host runs, loaded or pulled before it starts. A oneshot
+    # that stays inactive, so each start of imp-host runs it again.
     systemd.services.imp-host-image = {
       description = "imp host image (load or pull)";
       requires = [ "docker.service" ];
@@ -556,42 +519,6 @@ in
         Type = "oneshot";
         ExecStart = ensureImage;
         TimeoutStartSec = "15min";
-      };
-    };
-
-    systemd.services.imp-docker-proxy = {
-      description = "imp Docker socket proxy (the Docker API calls impd makes)";
-      documentation = [ "https://github.com/zgeoff/impz/blob/main/docs/architecture/host.md" ];
-      wantedBy = [ "multi-user.target" ];
-      requires = [
-        "docker.service"
-        "imp-host-image.service"
-      ];
-      after = [
-        "docker.service"
-        "imp-host-image.service"
-      ];
-      # IMP_HOST_IMAGE, whose repository a pull may not move, and IMP_BUILD_IMAGE,
-      # the one image the proxy pulls; -e NAME passes these, and nothing else, to
-      # the container
-      environment = {
-        IMP_HOST_IMAGE = cfg.image;
-      }
-      // lib.optionalAttrs (cfg.settings ? IMP_BUILD_IMAGE) {
-        IMP_BUILD_IMAGE = toString cfg.settings.IMP_BUILD_IMAGE;
-      };
-      serviceConfig = {
-        Type = "exec";
-        ExecStartPre = [
-          "-${docker} rm -f imp-docker-proxy"
-          proxyDirs
-        ];
-        ExecStart = runProxy;
-        # up once the socket is there, so impd's first docker call finds it
-        ExecStartPost = waitProxy;
-        ExecStop = "${docker} stop -t 10 imp-docker-proxy";
-        Restart = "always";
-        RestartSec = 2;
       };
     };
 
@@ -627,17 +554,11 @@ in
         "imp-host-image.service"
       ]
       ++ lib.optional zfs "imp-zfs-dataset.service";
-      # impd reaches Docker through the proxy. Wants, not BindsTo: a proxy
-      # that stops fails image work only, and the imps keep running.
-      wants = [
-        "network-online.target"
-        "imp-docker-proxy.service"
-      ];
+      wants = [ "network-online.target" ];
       after = [
         "docker.service"
         "network-online.target"
         "imp-host-image.service"
-        "imp-docker-proxy.service"
       ]
       ++ lib.optional zfs "imp-zfs-dataset.service";
       unitConfig = {

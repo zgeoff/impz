@@ -13,8 +13,7 @@ impz runs on one Linux machine, in one host container, in one of two ways:
 
 - `/dev/kvm`: bare metal, or a VM with nested virtualization (WSL2 works).
 - Docker. The host container runs as root with the capabilities in
-  [privileges](../architecture/host.md#privileges). It reaches Docker through `imp-docker-proxy`, a
-  second container, never the host's socket
+  [privileges](../architecture/host.md#privileges). It gets no Docker socket
   ([the Docker socket](../architecture/host.md#the-docker-socket)). That closes the Docker socket
   path only: `SYS_ADMIN` still lets root out of the container.
 - A host kernel with the iptables `rpfilter` and `addrtype` matches (`xt_rpfilter`, `xt_addrtype`).
@@ -87,12 +86,8 @@ restarts and day-to-day care.
   agent's system drive) from `agent/`, so a changed agent reaches the next imp. The Docker cache
   makes the rebuild take about half a second when the agent is unchanged. With `IMP_SYSTEM_DRIVE`
   set, it uses that drive as it is.
-- Starts `<name>-docker-proxy` first: this checkout's proxy, compiled with `bun build --compile` as
-  the release image compiles it, with the proxy's privileges from `deploy/imp-host.args.json`. Its
-  socket directory and token are Docker volumes of their own, which `dev.sh down` removes.
 - Starts the container with the deploy's privileges (`deploy/imp-host.args.json`, with this
-  checkout's seccomp profile), the loop devices, the proxy's socket, and the repo mounted at `/src`
-  and at its own path.
+  checkout's seccomp profile), the loop devices, and the repo mounted at `/src` and at its own path.
 - Keeps data in `.data/dev/imp.xfs`, a sparse XFS file that the container loop-mounts on
   `/var/lib/imp`.
 - Publishes the API on 7070, the proxy on 7080, and per-imp ports 20000–20063.
@@ -164,12 +159,10 @@ The phases run in order:
   enabled. With `--host-firewall none`, it does none of this ([Firewall](#firewall)).
 - **ipv6:** With IPv6 on, keeps the host's router adverts, then creates the `imp-host` Docker
   network ([IPv6](#ipv6)). With `--ipv6 off`, removes what an earlier run made.
-- **imp:** Writes `/etc/imp/imp-host.env` (0600), `/etc/systemd/system/imp-host.service` and
-  `imp-docker-proxy.service`, pulls the image of the script's release, or the `--image` it pins in
-  the env file (or loads `--image-archive`), and refuses an image whose `imp.host-contract` label is
-  not `socket-proxy`. It starts the proxy, then imp-host. The proxy is the only Docker socket
-  imp-host sees, and closes that path only: `SYS_ADMIN` still lets root out of the container
-  ([the Docker socket](../architecture/host.md#the-docker-socket)). The unit has
+- **imp:** Writes `/etc/imp/imp-host.env` (0600), `/etc/systemd/system/imp-host.service`, pulls the
+  image of the script's release, or the `--image` it pins in the env file (or loads
+  `--image-archive`), and refuses an image whose `imp.host-contract` label is not `no-docker`, then
+  starts imp-host. It removes the `imp-docker-proxy` unit an older release installed. The unit has
   `RequiresMountsFor=/var/lib/imp`, so it never starts before the XFS mount. With ZFS, a drop-in
   orders it after `zfs.target`.
 - **tailscale:** With a key in the env file, waits for the node to be `Running`, then blanks the key
@@ -443,7 +436,7 @@ sha256sum -c --ignore-missing SHA256SUMS && install -m 0755 impz-linux-x64 ~/.lo
 
 <!-- x-release-please-end -->
 
-The deploy files run the image of their own release: `deploy/bootstrap.sh`, both units and
+The deploy files run the image of their own release: `deploy/bootstrap.sh`, the unit and
 `deploy/compose.yaml` name `ghcr.io/zgeoff/imp-host:X.Y.Z`, the version in impz's `package.json`,
 and `deploy/upgrade.sh` moves the host to the release it comes from
 ([upgrade](./operations.md#upgrade)). On `main`, `package.json` holds the last release until the
@@ -513,35 +506,27 @@ CI by hand.
 Use one of the two, not both. Both run the container with the privileges of
 [`deploy/imp-host.args.json`](../../deploy/imp-host.args.json)
 ([privileges](../architecture/host.md#privileges)) in a private cgroup namespace (for
-[CPU limits](./cpu-limits.md)), the socket of `imp-docker-proxy` and `/var/lib/imp`, and give impd
-120 seconds to sleep every imp on stop. Both need the seccomp profile at
-`/etc/imp/imp-host.seccomp.json`:
+[CPU limits](./cpu-limits.md)) and `/var/lib/imp`, and give impd 120 seconds to sleep every imp on
+stop. Both need the seccomp profile at `/etc/imp/imp-host.seccomp.json`:
 
 ```sh
 install -D -m 0644 deploy/imp-host.seccomp.json /etc/imp/imp-host.seccomp.json
 ```
 
 - **systemd:** [`deploy/imp-host.service`](../../deploy/imp-host.service) runs `docker run` in the
-  foreground, so systemd supervises it. It wants and starts after
-  [`deploy/imp-docker-proxy.service`](../../deploy/imp-docker-proxy.service), the only Docker socket
-  imp-host sees ([the Docker socket](../architecture/host.md#the-docker-socket)).
+  foreground, so systemd supervises it.
 
   ```sh
-  install -m 0644 deploy/imp-host.service deploy/imp-docker-proxy.service /etc/systemd/system/
-  systemctl daemon-reload && systemctl enable --now imp-docker-proxy imp-host
+  install -m 0644 deploy/imp-host.service /etc/systemd/system/
+  systemctl daemon-reload && systemctl enable --now imp-host
   ```
 
 - **Compose:** [`deploy/compose.yaml`](../../deploy/compose.yaml), with a Docker restart policy.
   Needs Docker Compose 2.24 or later, for the `env_file` entry with `path` and `required`.
 
   ```sh
-  export IMP_DOCKER_GID=$(stat -c %g /var/run/docker.sock)   # the proxy joins this group
   docker compose -f deploy/compose.yaml up -d
   ```
-
-  The file runs `imp-docker-proxy` beside imp-host. Put `IMP_DOCKER_GID` in a `.env` next to the
-  file to keep it. The proxy never reads the env file, so a changed `IMP_BUILD_IMAGE` goes in that
-  `.env` too.
 
   Compose does not read the host's addresses into `IMP_HOST_ADDRESSES`, as the unit does at each
   start. With `public` imps, list the host's addresses and networks (`ip -o addr show scope global`)

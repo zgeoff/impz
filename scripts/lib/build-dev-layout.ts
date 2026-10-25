@@ -6,7 +6,6 @@ export type DevEnv = Readonly<Record<string, string | undefined>>;
 
 export interface DevLayout {
   readonly name: string;
-  readonly proxy: string;
   readonly dataDir: string;
   readonly offset: number;
   readonly isPublished: boolean;
@@ -55,7 +54,6 @@ export function buildDevLayout(options: DevLayoutOptions): DevLayout {
 
   return {
     name,
-    proxy: `${name}-docker-proxy`,
     dataDir: resolve(options.cwd, dataSetting),
     offset,
     isPublished,

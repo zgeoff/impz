@@ -7,8 +7,7 @@ type HostImageShell = (
   ...expressions: ShellExpression[]
 ) => $.ShellPromise;
 
-// No provenance: its build timestamp gives every rebuild a new image id, and the proxy's stamp
-// would then replace the proxy on every up.
+// No provenance: its build timestamp would give each rebuild of an unchanged tree a new image id.
 export async function createHostImage(
   shell: HostImageShell,
   checkout: DevCheckout,

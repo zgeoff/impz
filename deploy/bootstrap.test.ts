@@ -33,16 +33,6 @@ test('#unit_imp_host prints deploy/imp-host.service unchanged', () => {
   });
 });
 
-test('#unit_imp_docker_proxy prints deploy/imp-docker-proxy.service unchanged', () => {
-  const script = new URL('bootstrap.sh', import.meta.url).pathname;
-
-  expect(runSourcedFunction({ script, fn: 'unit_imp_docker_proxy' })).toStrictEqual({
-    exitCode: 0,
-    stdout: readFileSync(new URL('imp-docker-proxy.service', import.meta.url), 'utf8'),
-    stderr: '',
-  });
-});
-
 test('#env_template prints deploy/imp-host.env.example unchanged', () => {
   const script = new URL('bootstrap.sh', import.meta.url).pathname;
 
@@ -885,9 +875,9 @@ test('#blank_env_key blanks the key and leaves every other line alone', () => {
   ).toBe('IMP_HOST_IMAGE=imp-host:1\nTAILSCALE_AUTHKEY=\nIMP_TAILSCALE_HOSTNAME=imp\n');
 });
 
-test('#check_image_contract refuses an image from before the proxy, with how to get the new one', () => {
+test('#check_image_contract refuses an image that needs a Docker socket, with how to get the new one', () => {
   const ctx = setupTest();
-  const docker = createStubBin(ctx.directoryPath, 'docker', "echo 'unprivileged'");
+  const docker = createStubBin(ctx.directoryPath, 'docker', "echo 'socket-proxy'");
 
   const result = runSourcedFunction({
     script: new URL('bootstrap.sh', import.meta.url).pathname,
@@ -902,7 +892,9 @@ test('#check_image_contract refuses an image from before the proxy, with how to 
 
 test.each([
   ['', 1],
-  ['socket-proxy', 0],
+  ['unprivileged', 1],
+  ['socket-proxy', 1],
+  ['no-docker', 0],
 ])('#check_image_contract answers an image labelled %p with exit %d', (label, exitCode) => {
   const ctx = setupTest();
   const docker = createStubBin(ctx.directoryPath, 'docker', `echo '${label}'`);
@@ -917,7 +909,7 @@ test.each([
   expect(result.exitCode).toBe(exitCode);
 });
 
-test.each([['unit_imp_host'], ['unit_imp_docker_proxy'], ['env_template']])(
+test.each([['unit_imp_host'], ['env_template']])(
   '#strip_markers takes the release-please markers out of what %s installs',
   (fn) => {
     const script = new URL('bootstrap.sh', import.meta.url).pathname;

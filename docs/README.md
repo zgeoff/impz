@@ -21,8 +21,8 @@ How impz is built: the parts, what each one owns, and what holds whatever a call
   rules that cross every part, on one page
 - [Isolation](./architecture/isolation.md) — the VM, the jailer, cgroups, the host container, and
   what keeps one imp from another
-- [The host](./architecture/host.md) — what the host gives, the container's privileges, the Docker
-  socket proxy and the host firewall
+- [The host](./architecture/host.md) — what the host gives, the container's privileges, why it gets
+  no Docker socket, and the host firewall
 
 ### Lifecycle
 

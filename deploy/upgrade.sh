@@ -17,17 +17,21 @@
 #    the image lines and files, and restarts nothing. Refuses an image that the restarted units would not run
 #    (drop-ins count), and an env file with IMP_HOST_IMAGE= empty. Refuses an
 #    image older than the Docker socket proxy (imp.host-contract other
-#    than socket-proxy) once the unit or compose file gives imp-host the
-#    proxy's socket, and an image with no label once it runs without
-#    --privileged: only deploy/bootstrap.sh of that image's release puts its
-#    deploy back. Reads the image's seccomp profile and both units; one it
-#    cannot read, or reads empty, stops the upgrade here.
+#    than socket-proxy or no-docker) once the unit or compose file gives
+#    imp-host no host docker.sock, and an image with no label once it runs
+#    without --privileged: only deploy/bootstrap.sh of that image's release
+#    puts its deploy back. With --compose, refuses an image that needs no
+#    Docker (no-docker) while the compose file still runs imp-docker-proxy.
+#    Reads the image's seccomp profile and units; one it cannot read, or
+#    reads empty, stops the upgrade here.
 # 2. Sleeps every awake imp through the API, one at a time, and stops on the
 #    first that fails: the host keeps running the old image, untouched.
 #    Stopping the container would sleep them too, but within its 120 s.
 # 3. Installs the image's seccomp profile and systemd units by rename (with
 #    --compose, the compose file is the operator's and stays), restarts
-#    imp-docker-proxy, then the host, on the new image and waits for impd.
+#    imp-docker-proxy when the image needs it, then the host, on the new
+#    image and waits for impd. An image that needs no Docker stops and
+#    disables imp-docker-proxy, and its unit becomes .bak-<time>.
 #    Local changes to a unit belong in a drop-in (imp-host.service.d/),
 #    which stays. First, an env file line IMP_HOST_IMAGE=...:latest, as every
 #    env file had before the units named their release, is the old
@@ -274,9 +278,10 @@ print_boot_status() {
     end' <<<"$info" || echo "upgrade: could not read impz info; see the NOTE column below" >&2
 }
 
-# IMAGE's imp.host-contract label (host/Dockerfile): socket-proxy runs
-# without --privileged and reaches Docker through imp-docker-proxy;
-# unprivileged, the release before, binds the host's docker.sock
+# IMAGE's imp.host-contract label (host/Dockerfile): no-docker runs without
+# --privileged and needs no Docker socket; socket-proxy, the release before,
+# reaches Docker through imp-docker-proxy; unprivileged binds the host's
+# docker.sock
 contract_of() {
   docker image inspect -f '{{index .Config.Labels "imp.host-contract"}}' "$1"
 }
@@ -284,6 +289,23 @@ contract_of() {
 # succeeds when FILE gives imp-host the proxy's socket, not the host's
 proxy_deploy() {
   grep -q 'unix:///run/imp-docker/docker.sock' "$1"
+}
+
+# succeeds when FILE gives an unprivileged imp-host no Docker socket at all
+socketless_deploy() {
+  ! grep -q 'docker.sock' "$1" && ! grep -qE -- '--privileged|privileged: true' "$1"
+}
+
+# The proxy's unit, out of the way once the image needs no Docker: stopped,
+# disabled, and kept as .bak-<time>
+retire_proxy_unit() {
+  [ -f "$proxy_unit_file" ] || return 0
+  systemctl disable -q --now imp-docker-proxy || true
+  local backup
+  backup=$proxy_unit_file.bak-$(date +%Y%m%d-%H%M%S)
+  mv "$proxy_unit_file" "$backup"
+  systemctl daemon-reload
+  echo "upgrade: stopped and disabled imp-docker-proxy, which this image does not call (the unit before: $backup)"
 }
 
 # the deploy file in use: the unit, or the compose file
@@ -346,6 +368,7 @@ restart_host() {
     systemctl restart imp-docker-proxy
     systemctl restart imp-host
   else
+    [ "$new_contract" != no-docker ] || retire_proxy_unit
     systemctl restart imp-host
   fi
 }
@@ -394,8 +417,8 @@ new=$(docker image inspect -f '{{.Id}}' "$image")
 new_contract=$(contract_of "$image")
 old_contract=$(contract_of "$old")
 
-if [ "$new_contract" != socket-proxy ]; then
-  if proxy_deploy "$(deploy_file)"; then
+if [ "$new_contract" != socket-proxy ] && [ "$new_contract" != no-docker ]; then
+  if proxy_deploy "$(deploy_file)" || socketless_deploy "$(deploy_file)"; then
     echo "upgrade: $image predates the Docker socket proxy, and $(deploy_file) gives imp-host no docker.sock." >&2
     echo "upgrade: to roll back past it, run deploy/bootstrap.sh of that image's release (docs/guides/operations.md#upgrade)." >&2
     exit 1
@@ -405,6 +428,11 @@ if [ "$new_contract" != socket-proxy ]; then
     echo "upgrade: to roll back past it, run deploy/bootstrap.sh of that image's release (docs/guides/operations.md#upgrade)." >&2
     exit 1
   fi
+fi
+
+if [ -n "$compose_file" ] && [ "$new_contract" = no-docker ] && grep -q '^  imp-docker-proxy:' "$compose_file"; then
+  echo "upgrade: $image needs no Docker, and $compose_file still runs imp-docker-proxy, which it no longer has: take the imp-host service from this release's deploy/compose.yaml and drop imp-docker-proxy and its volumes. Nothing changed." >&2
+  exit 1
 fi
 
 # The image's seccomp profile and units, read before any imp sleeps: an

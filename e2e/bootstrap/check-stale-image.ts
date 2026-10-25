@@ -6,11 +6,7 @@ import { readInContainer } from './read-in-container';
 import { runInContainer } from './run-in-container';
 import type { BootstrapRun, BootstrapTarget } from './types';
 
-const WRITTEN_FILES = [
-  '/etc/imp/imp-host.env',
-  '/etc/systemd/system/imp-host.service',
-  '/etc/systemd/system/imp-docker-proxy.service',
-];
+const WRITTEN_FILES = ['/etc/imp/imp-host.env', '/etc/systemd/system/imp-host.service'];
 
 export async function checkStaleImage(run: BootstrapRun, target: BootstrapTarget): Promise<void> {
   const distro = target.distro;
