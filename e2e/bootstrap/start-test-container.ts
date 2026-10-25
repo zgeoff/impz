@@ -65,6 +65,10 @@ export async function startTestContainer(run: BootstrapRun, distro: Distro): Pro
     // volume.
     '-v',
     '/var/lib/containers',
+
+    // The same holds for the inner Docker that the Docker host move installs.
+    '-v',
+    '/var/lib/docker',
     '-v',
     `${run.work}:${ARCHIVE_DIR}:ro`,
   ];

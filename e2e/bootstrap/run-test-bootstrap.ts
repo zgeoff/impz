@@ -4,7 +4,12 @@ import invariant from 'tiny-invariant';
 import { match } from 'ts-pattern';
 import { BootstrapTestError } from './bootstrap-test-error';
 import { buildBootstrapPlan } from './build-bootstrap-plan';
-import { STALE_STUB_IMAGE, STUB_IMAGE, createStubImages } from './create-stub-images';
+import {
+  MOVE_STUB_IMAGE,
+  STALE_STUB_IMAGE,
+  STUB_IMAGE,
+  createStubImages,
+} from './create-stub-images';
 import { BOOTSTRAP_USAGE, parseBootstrapArgs } from './parse-bootstrap-args';
 import type { BootstrapArgs } from './parse-bootstrap-args';
 import { removeTestContainer } from './remove-test-container';
@@ -133,7 +138,7 @@ async function runPlan(run: BootstrapRun): Promise<void> {
   const io = run.io;
 
   if (run.args.stub) {
-    await createStubImages(io);
+    await createStubImages(io, run.root);
   }
 
   io.writeText(join(run.work, 'authkey'), `${run.fakeKey}\n`);
@@ -150,6 +155,7 @@ async function runPlan(run: BootstrapRun): Promise<void> {
 
   if (run.args.stub) {
     await io.shell`docker save -o ${join(run.work, 'stale.tar')} ${STALE_STUB_IMAGE}`.quiet();
+    await io.shell`docker save -o ${join(run.work, 'move.tar')} ${MOVE_STUB_IMAGE}`.quiet();
   }
 
   for (const leg of buildBootstrapPlan(run.args)) {
