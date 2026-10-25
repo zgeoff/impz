@@ -7,10 +7,10 @@ import type { Clock } from '../../../platform/process/clock';
 import { getErrorMessage } from '../../../platform/process/get-error-message';
 import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import { buildKeyedMutex } from '../../../platform/process/keyed-mutex';
-import { runChecked, runCommand } from '../../../platform/process/run-command';
+import { runChecked } from '../../../platform/process/run-command';
+import type { CommandRunner } from '../../../platform/process/run-command';
 import type { StreamedRunner } from '../../../platform/process/run-streamed';
 import { createSingleFlight } from '../../../platform/process/single-flight';
-import { countTreeBytes } from '../../../vm/storage/count-tree-bytes';
 import { buildImagePaths, buildImagesDir } from '../../../vm/storage/data-layout';
 import type { DiskBudget } from '../../../vm/storage/disk-budget';
 import type { StorageBackend } from '../../../vm/storage/storage-backend';
@@ -24,9 +24,9 @@ import { writeImageRow } from '../write-image-row';
 import { readOciConfig } from './read-oci-config';
 import { removeUnusedRootfs } from './remove-unused-rootfs';
 import { planRootfs } from './rootfs-plan';
-import { startTarProcess } from './start-tar-process';
 import { writeImageConfig } from './write-image-config';
 import { writeOciTree } from './write-oci-tree';
+import type { WriteStreamedTreeOptions } from './write-streamed-tree';
 
 interface BuilderImageOptions {
   readonly signal: AbortSignal;
@@ -59,7 +59,7 @@ export interface ImageWriter {
   ) => Promise<T>;
 }
 
-interface ImageWriterDeps {
+export interface ImageWriterDeps {
   readonly config: ImpsConfig;
   readonly db: ImpDatabase;
   readonly storage: StorageBackend;
@@ -71,6 +71,14 @@ interface ImageWriterDeps {
   readonly clock: Pick<Clock, 'now'>;
 
   readonly runStreamed: StreamedRunner;
+
+  readonly runCommand: CommandRunner;
+
+  readonly startTar: WriteStreamedTreeOptions['startTar'];
+
+  readonly countTreeBytes: WriteStreamedTreeOptions['countTreeBytes'];
+
+  readonly startTimer: WriteStreamedTreeOptions['startTimer'];
 }
 
 interface GuestRootfs {
@@ -280,8 +288,9 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
             limits: { maxBytes, maxFiles: deps.config.build.imageMaxFiles },
             signal,
             grow,
-            startTar: startTarProcess,
-            countTreeBytes,
+            startTar: deps.startTar,
+            countTreeBytes: deps.countTreeBytes,
+            startTimer: deps.startTimer,
           });
 
           return await writeGuestRootfsAndRow({
@@ -308,7 +317,7 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
     const build = deps.config.build;
     const limits = { maxBytes: build.imageMaxBytes, maxFiles: build.imageMaxFiles };
 
-    const image = await readOciConfig(ref, signal, runCommand);
+    const image = await readOciConfig(ref, signal, deps.runCommand);
 
     return deps.diskBudget.withGrowingRoom((grow) =>
       storageGate.join(async () => {
@@ -323,8 +332,9 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
             signal,
             grow,
             runStreamed: deps.runStreamed,
-            startTar: startTarProcess,
-            countTreeBytes,
+            startTar: deps.startTar,
+            countTreeBytes: deps.countTreeBytes,
+            startTimer: deps.startTimer,
           });
 
           options.onFetched();
