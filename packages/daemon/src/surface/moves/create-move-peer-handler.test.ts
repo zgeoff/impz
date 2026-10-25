@@ -1,6 +1,7 @@
 import { expect, mock, test } from 'bun:test';
 import { buildMockMoveTicketRow } from '../../../testing/imp-ops/build-mock-move-ticket-row';
 import { MoveRequestError } from '../../imp-ops/moves/move-request-error';
+import { buildPeerRanges } from '../../imp-ops/moves/peer-address';
 import type { AuditedCall } from '../../platform/audit/api-audit';
 import { createMovePeerHandler } from './create-move-peer-handler';
 
@@ -19,7 +20,7 @@ test('it answers the plain JSON offer an older source posts with the offer reply
 
   const handler = createMovePeerHandler({
     calls: {
-      isAllowedPeer: () => true,
+      ranges: buildPeerRanges(null),
       requireTicket: () =>
         Promise.resolve({
           row: buildMockMoveTicketRow({ name: 'dev' }),
@@ -63,11 +64,24 @@ test('it answers the plain JSON offer an older source posts with the offer reply
   });
 });
 
-test('it refuses a call from off the tailnet with the text an older source reads', async () => {
+test.each([
+  ['no peer address', null],
+  ['a LAN address', '192.168.1.5'],
+  ['a public address', '203.0.113.9'],
+  ['loopback', '127.0.0.1'],
+  ['an address just past the tailnet range', '100.128.0.1'],
+  ['an IPv4-mapped LAN address', '::ffff:192.168.1.5'],
+  ['a public IPv6 address', '2001:db8::1'],
+  ['an IPv6 address past the tailnet prefix', 'fd7a:115c:a1e1::5'],
+  ['a host name', 'peer.example'],
+  ['an empty address', ''],
+])('it refuses a call from %s with the text an older source reads', async (_label, peer) => {
+  const requireTicket = mock();
+
   const handler = createMovePeerHandler({
     calls: {
-      isAllowedPeer: () => false,
-      requireTicket: mock(),
+      ranges: buildPeerRanges(null),
+      requireTicket,
       offer: mock(),
       receive: mock(),
       commit: mock(),
@@ -79,7 +93,7 @@ test('it refuses a call from off the tailnet with the text an older source reads
 
   const response = await handler.respond(
     new Request('http://100.64.0.2:7070/move/commit', { method: 'POST' }),
-    '192.168.1.5',
+    peer,
   );
 
   expect(response.status).toBe(403);
@@ -93,6 +107,8 @@ test('it refuses a call from off the tailnet with the text an older source reads
     message: 'moves come only over the tailnet',
     error: 'moves come only over the tailnet',
   });
+
+  expect(requireTicket).not.toHaveBeenCalled();
 });
 
 test('it audits a refused call with its failure and no imp', () => {
@@ -100,7 +116,7 @@ test('it audits a refused call with its failure and no imp', () => {
 
   const handler = createMovePeerHandler({
     calls: {
-      isAllowedPeer: () => true,
+      ranges: buildPeerRanges(null),
       requireTicket: () =>
         Promise.reject(new MoveRequestError('UNAUTHORIZED', 'unknown move ticket')),
       offer: mock(),
@@ -135,7 +151,7 @@ test('it audits a commit with the imp its ticket names', async () => {
 
   const handler = createMovePeerHandler({
     calls: {
-      isAllowedPeer: () => true,
+      ranges: buildPeerRanges(null),
       requireTicket: () =>
         Promise.resolve({
           row: buildMockMoveTicketRow({ name: 'dev' }),
@@ -173,7 +189,7 @@ test('it audits a commit with the imp its ticket names', async () => {
 test('it answers a stream part it took with 202 and the part', async () => {
   const handler = createMovePeerHandler({
     calls: {
-      isAllowedPeer: () => true,
+      ranges: buildPeerRanges(null),
       requireTicket: () =>
         Promise.resolve({
           row: buildMockMoveTicketRow({ name: 'dev' }),
@@ -203,7 +219,7 @@ test('it answers a stream part it took with 202 and the part', async () => {
 test('it answers the finish of a stream with the receipt', async () => {
   const handler = createMovePeerHandler({
     calls: {
-      isAllowedPeer: () => true,
+      ranges: buildPeerRanges(null),
       requireTicket: () =>
         Promise.resolve({
           row: buildMockMoveTicketRow({ name: 'dev' }),
@@ -234,7 +250,7 @@ test('it answers the finish of a stream with the receipt', async () => {
 test('it answers a stream that fails inside the target with 500 and the failure', async () => {
   const handler = createMovePeerHandler({
     calls: {
-      isAllowedPeer: () => true,
+      ranges: buildPeerRanges(null),
       requireTicket: () =>
         Promise.resolve({
           row: buildMockMoveTicketRow({ name: 'dev' }),
@@ -270,7 +286,7 @@ test('it answers a stream that fails inside the target with 500 and the failure'
 test('it answers a route the contract lacks with 404', async () => {
   const handler = createMovePeerHandler({
     calls: {
-      isAllowedPeer: () => true,
+      ranges: buildPeerRanges(null),
       requireTicket: mock(),
       offer: mock(),
       receive: mock(),

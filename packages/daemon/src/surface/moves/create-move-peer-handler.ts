@@ -47,7 +47,7 @@ export function createMovePeerHandler(deps: MovePeerHandlerDeps): MovePeerHandle
     };
 
     try {
-      if (!deps.calls.isAllowedPeer(context.peer)) {
+      if (context.peer === null || !deps.calls.ranges.isAllowed(context.peer)) {
         throw new MoveRequestError('FORBIDDEN', 'moves come only over the tailnet');
       }
 

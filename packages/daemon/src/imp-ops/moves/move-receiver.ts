@@ -63,7 +63,7 @@ type ReceivedPart =
   | { readonly kind: 'receipt'; readonly receipt: Receipt };
 
 export interface MovePeerCalls {
-  readonly isAllowedPeer: (peer: string | null) => boolean;
+  readonly ranges: Pick<PeerRanges, 'isAllowed'>;
   readonly requireTicket: (request: Request) => Promise<CheckedTicket>;
   readonly offer: (offer: z.output<typeof MoveOfferSchema>) => Promise<MoveOfferReply>;
   readonly receive: (checked: CheckedTicket, request: Request) => Promise<ReceivedPart>;
@@ -418,7 +418,7 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
     },
 
     peerCalls: {
-      isAllowedPeer: (peer) => peer !== null && deps.ranges.isAllowed(peer),
+      ranges: deps.ranges,
       requireTicket: (request) => requireMoveTicket(deps.db, request),
       offer,
       receive,
