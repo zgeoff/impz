@@ -381,3 +381,199 @@ func TestExportOfAnImageWithACorruptLowerLayerFails(t *testing.T) {
 
 	assert.ErrorContains(t, err, "layer 0: ")
 }
+
+func TestExportWritesALinkToALowerLayersLinkAfterThatLink(t *testing.T) {
+	host := startRegistry(t)
+	ref := pushImage(t, host, buildImage(t, nil,
+		buildLayer(t, []entry{
+			{name: "a", typeflag: tar.TypeReg, body: "lower\n"},
+		}),
+		buildLayer(t, []entry{
+			{name: "b", typeflag: tar.TypeLink, linkname: "a"},
+		}),
+		buildLayer(t, []entry{
+			{name: "c", typeflag: tar.TypeLink, linkname: "b"},
+		}),
+	))
+	var out bytes.Buffer
+
+	assert.NilError(t, run("export", ref, &out))
+
+	assert.DeepEqual(t, readEntries(t, out.Bytes()), []entry{
+		{name: "a", typeflag: tar.TypeReg, body: "lower\n"},
+		{name: "b", typeflag: tar.TypeLink, linkname: "a"},
+		{name: "c", typeflag: tar.TypeLink, linkname: "b"},
+		{name: "dev", typeflag: tar.TypeDir},
+		{name: "proc", typeflag: tar.TypeDir},
+		{name: "sys", typeflag: tar.TypeDir},
+	}, cmp.AllowUnexported(entry{}))
+}
+
+func TestGNUTarExtractsAChainOfLinks(t *testing.T) {
+	tarPath, err := exec.LookPath("tar")
+	if err != nil {
+		t.Skip("tar is not installed")
+	}
+	for _, tc := range []struct {
+		name   string
+		layers [][]entry
+	}{
+		{
+			name: "one link per layer",
+			layers: [][]entry{
+				{{name: "a", typeflag: tar.TypeReg, body: "lower\n"}},
+				{{name: "b", typeflag: tar.TypeLink, linkname: "a"}},
+				{{name: "c", typeflag: tar.TypeLink, linkname: "b"}},
+			},
+		},
+		{
+			name: "both links in one upper layer",
+			layers: [][]entry{
+				{{name: "a", typeflag: tar.TypeReg, body: "lower\n"}},
+				{
+					{name: "b", typeflag: tar.TypeLink, linkname: "a"},
+					{name: "c", typeflag: tar.TypeLink, linkname: "b"},
+				},
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			host := startRegistry(t)
+			var layers []v1.Layer
+			for _, entries := range tc.layers {
+				layers = append(layers, buildLayer(t, entries))
+			}
+			ref := pushImage(t, host, buildImage(t, nil, layers...))
+			var out bytes.Buffer
+			assert.NilError(t, run("export", ref, &out))
+			dir := t.TempDir()
+			extract := exec.Command(tarPath, "-xf", "-", "-C", dir)
+			extract.Stdin = &out
+
+			output, err := extract.CombinedOutput()
+
+			assert.NilError(t, err, string(output))
+			body, err := os.ReadFile(filepath.Join(dir, "c"))
+			assert.NilError(t, err)
+			assert.Equal(t, string(body), "lower\n")
+		})
+	}
+}
+
+func TestExportKeepsAFileThatReplacesItsOwnLayersWhiteout(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		upper []entry
+	}{
+		{
+			name: "whiteout first",
+			upper: []entry{
+				{name: ".wh.foo", typeflag: tar.TypeReg},
+				{name: "foo", typeflag: tar.TypeReg, body: "new\n"},
+			},
+		},
+		{
+			name: "whiteout last",
+			upper: []entry{
+				{name: "foo", typeflag: tar.TypeReg, body: "new\n"},
+				{name: ".wh.foo", typeflag: tar.TypeReg},
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			host := startRegistry(t)
+			ref := pushImage(t, host, buildImage(t, nil,
+				buildLayer(t, []entry{
+					{name: "foo", typeflag: tar.TypeReg, body: "old\n"},
+				}),
+				buildLayer(t, tc.upper),
+			))
+			var out bytes.Buffer
+
+			assert.NilError(t, run("export", ref, &out))
+
+			assert.DeepEqual(t, readTree(t, out.Bytes()), map[string]string{
+				"foo":  "new\n",
+				"dev":  "",
+				"proc": "",
+				"sys":  "",
+			})
+		})
+	}
+}
+
+func TestExportKeepsADirectoryThatReplacesItsOwnLayersWhiteoutAndHidesTheLowerChildren(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		upper []entry
+	}{
+		{
+			name: "whiteout first",
+			upper: []entry{
+				{name: ".wh.foo", typeflag: tar.TypeReg},
+				{name: "foo/", typeflag: tar.TypeDir},
+				{name: "foo/new", typeflag: tar.TypeReg, body: "new\n"},
+			},
+		},
+		{
+			name: "whiteout between the directory and its child",
+			upper: []entry{
+				{name: "foo/", typeflag: tar.TypeDir},
+				{name: ".wh.foo", typeflag: tar.TypeReg},
+				{name: "foo/new", typeflag: tar.TypeReg, body: "new\n"},
+			},
+		},
+		{
+			name: "whiteout last",
+			upper: []entry{
+				{name: "foo/", typeflag: tar.TypeDir},
+				{name: "foo/new", typeflag: tar.TypeReg, body: "new\n"},
+				{name: ".wh.foo", typeflag: tar.TypeReg},
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			host := startRegistry(t)
+			ref := pushImage(t, host, buildImage(t, nil,
+				buildLayer(t, []entry{
+					{name: "foo/", typeflag: tar.TypeDir},
+					{name: "foo/old", typeflag: tar.TypeReg, body: "old\n"},
+				}),
+				buildLayer(t, tc.upper),
+			))
+			var out bytes.Buffer
+
+			assert.NilError(t, run("export", ref, &out))
+
+			assert.DeepEqual(t, readTree(t, out.Bytes()), map[string]string{
+				"foo":     "",
+				"foo/new": "new\n",
+				"dev":     "",
+				"proc":    "",
+				"sys":     "",
+			})
+		})
+	}
+}
+
+func TestExportHidesALowerDirectoryAndItsChildrenUnderAnUpperWhiteout(t *testing.T) {
+	host := startRegistry(t)
+	ref := pushImage(t, host, buildImage(t, nil,
+		buildLayer(t, []entry{
+			{name: "foo/", typeflag: tar.TypeDir},
+			{name: "foo/old", typeflag: tar.TypeReg, body: "old\n"},
+		}),
+		buildLayer(t, []entry{
+			{name: ".wh.foo", typeflag: tar.TypeReg},
+		}),
+	))
+	var out bytes.Buffer
+
+	assert.NilError(t, run("export", ref, &out))
+
+	assert.DeepEqual(t, readTree(t, out.Bytes()), map[string]string{
+		"dev":  "",
+		"proc": "",
+		"sys":  "",
+	})
+}

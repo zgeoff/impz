@@ -98,13 +98,41 @@ func flatten(img v1.Image, out *tar.Writer) (*flattener, error) {
 	for _, target := range slices.Sorted(maps.Keys(f.pending)) {
 		f.deferred = append(f.deferred, f.pending[target]...)
 	}
-	for _, link := range f.deferred {
-		if err := f.write(link, nil); err != nil {
-			return nil, err
-		}
+	if err := f.writeDeferred(); err != nil {
+		return nil, err
 	}
 
 	return f, nil
+}
+
+// writeDeferred writes each deferred link after its target, since the walk
+// queues an upper layer's link before a lower layer's link it points at.
+func (f *flattener) writeDeferred() error {
+	links := f.deferred
+	for len(links) > 0 {
+		var waiting []*tar.Header
+		for _, link := range links {
+			if !f.seen[path.Clean(strings.TrimPrefix(link.Linkname, "/"))] {
+				waiting = append(waiting, link)
+				continue
+			}
+			if err := f.write(link, nil); err != nil {
+				return err
+			}
+		}
+		if len(waiting) == len(links) {
+			break
+		}
+		links = waiting
+	}
+
+	// No entry in the output gives these targets, so their order stays.
+	for _, link := range links {
+		if err := f.write(link, nil); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (f *flattener) writeLayer(layer v1.Layer) error {
@@ -114,8 +142,9 @@ func (f *flattener) writeLayer(layer v1.Layer) error {
 		roots:    map[string]string{},
 		orphans:  map[string][]*tar.Header{},
 	}
-	// An opaque marker hides only the layers below its own.
+	// An opaque marker or a whiteout hides only the layers below its own.
 	layerOpaque := map[string]bool{}
+	layerWhiteouts := map[string]bool{}
 
 	reader, err := layer.Uncompressed()
 	if err != nil {
@@ -175,11 +204,12 @@ func (f *flattener) writeLayer(layer v1.Layer) error {
 			continue
 		}
 
-		// A name that is not a directory hides its children too.
-		f.fileMap[name] = tombstone || header.Typeflag != tar.TypeDir
 		if tombstone {
+			layerWhiteouts[name] = true
 			continue
 		}
+		// A name that is not a directory hides its children too.
+		f.fileMap[name] = header.Typeflag != tar.TypeDir
 
 		if header.Typeflag == tar.TypeLink {
 			root := state.root(header.Linkname)
@@ -200,6 +230,11 @@ func (f *flattener) writeLayer(layer v1.Layer) error {
 
 	for dir := range layerOpaque {
 		f.opaqueDirs[dir] = true
+	}
+	// A whiteout beside its layer's own directory of that name still hides
+	// the lower layers' children.
+	for name := range layerWhiteouts {
+		f.fileMap[name] = true
 	}
 
 	// The verifying reader checks the layer's digest only once it reaches
