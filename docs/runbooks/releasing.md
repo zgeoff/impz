@@ -17,6 +17,19 @@ a later `feat:` or `fix:` lands. To release such commits sooner, merge a commit 
 with the footer `Release-As: <version>`, such as `Release-As: 4.2.1`. release-please then opens the
 release PR for that version.
 
+## A release that fails to tag
+
+The `release-please` job tags the release PR's merge commit. When a pull request that changes
+`.github/workflows/` merges before that job runs, the merge commit is no longer the head of `main`,
+and the release App's token gets `Resource not accessible by integration` when it creates the
+release. The job then fails on every later run, because it retries the same commit. To recover:
+
+1. On the merged release PR, replace the label `autorelease: pending` with `autorelease: tagged`.
+   release-please then skips that version.
+2. Merge a commit with the footer `Release-As: <next patch version>`.
+3. Merge no pull request that changes `.github/workflows/` until the new release PR has merged and
+   its `release-please` job has tagged it.
+
 ## Breaking changes
 
 A client accepts any impd of its own major version, so a change that breaks the protocol between
