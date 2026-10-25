@@ -33,7 +33,7 @@ readonly PROXY_UNIT=/etc/systemd/system/imp-docker-proxy.service
 readonly DATA_DIR=/var/lib/imp
 # The image of this script's release, as the units name it; release-please
 # bumps it.
-readonly DEFAULT_IMAGE=ghcr.io/zgeoff/imp-host:4.2.2 # x-release-please-version
+readonly DEFAULT_IMAGE=ghcr.io/zgeoff/imp-host:4.2.3 # x-release-please-version
 # The image line every env file had before the units named their release.
 # A file still holding it gets the commented pin; any other value is the
 # operator's pin and stays.

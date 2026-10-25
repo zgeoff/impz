@@ -354,9 +354,12 @@ and does not apply them; `accept_ra`, which is per network namespace, it applies
 with `--ipv6 on`, as CI has no IPv6 route out. On Debian it also checks a network with another
 subnet, `accept_ra=2` on a dotted interface with a fake router-advert route, `--ipv6 off`, the
 refusal when a client takes the adverts, the `--data-device` refusals and what
-`--check --storage zfs` plans. With `--health`, an imp also reaches an IPv6 address outside the
-container. `--zfs` adds a real ZFS run on Ubuntu 24.04, on a pool with a unique name that the test
-destroys; it needs the zfs module loaded on the host, which WSL2 does not have.
+`--check --storage zfs` plans. With `--stub`, it then installs Docker, runs imp-host under Docker
+with the unit's arguments, and checks that `deploy/upgrade.sh` moves the host to Podman and that the
+moved container reads a file the Docker one wrote to `/var/lib/imp`. With `--health`, an imp also
+reaches an IPv6 address outside the container. `--zfs` adds a real ZFS run on Ubuntu 24.04, on a
+pool with a unique name that the test destroys; it needs the zfs module loaded on the host, which
+WSL2 does not have.
 
 ```sh
 e2e/test-bootstrap.sh --stub --zfs                        # a stand-in image (what CI runs)
@@ -427,7 +430,7 @@ gh attestation verify oci://ghcr.io/zgeoff/imp-host:<version> -R zgeoff/impz
 <!-- x-release-please-start-version -->
 
 ```sh
-podman pull ghcr.io/zgeoff/imp-host:4.2.2
+podman pull ghcr.io/zgeoff/imp-host:4.2.3
 gh release download -R zgeoff/impz -p 'impz-linux-x64' -p SHA256SUMS
 sha256sum -c --ignore-missing SHA256SUMS && install -m 0755 impz-linux-x64 ~/.local/bin/impz
 ```
