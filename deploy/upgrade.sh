@@ -152,10 +152,26 @@ format_docker_rollback() {
   [ -z "$proxy_backup" ] || steps+=("mv $proxy_backup $proxy_unit_file")
   steps+=("systemctl daemon-reload")
   [ -z "$proxy_backup" ] || steps+=("systemctl enable --now imp-docker-proxy")
+  # The env file may pin the new image, which Docker would pull and start.
+  local runs
+  runs=$(docker_unit_image)
+  [ -z "$runs" ] || steps+=("docker tag $old $runs")
   steps+=("systemctl start $container")
   local text=${steps[0]} step
   for step in "${steps[@]:1}"; do text+=", then $step"; done
   echo "$text"
+}
+
+# the image the Docker unit runs once it is back: the env file's last
+# IMP_HOST_IMAGE, else the default that the unit or a drop-in sets
+docker_unit_image() {
+  local line
+  line=$(trim_lines "$env_file" | grep -E '^IMP_HOST_IMAGE=.' | tail -n 1 || true)
+  if [ -n "$line" ]; then
+    echo "${line#IMP_HOST_IMAGE=}"
+    return
+  fi
+  environment_image "${unit_backup:-$unit_file}" "$unit_file".d/*.conf
 }
 
 # what a failed step leaves: the old host running, or, once a Docker host's

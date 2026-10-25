@@ -1961,6 +1961,106 @@ test('it fails the move from Docker, with the rollback to Docker, when impd is n
   );
 });
 
+test("it tags the old image as the env file's pin in the rollback to Docker, so the restored unit runs the old image", () => {
+  const ctx = setupTest();
+
+  const podman = createStubBin(
+    ctx.directoryPath,
+    'podman',
+    buildStubHostPodman({
+      image: 'ghcr.io/zgeoff/imp-host:next',
+      pulledLabel: 'no-docker',
+      pulledUnit: 'ExecStart=/usr/bin/podman run --name imp-host imp-host\n',
+      runsHost: false,
+    }),
+  );
+
+  createStubBin(ctx.directoryPath, 'docker', buildStubHostDocker({}));
+  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":false}'`);
+
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-host.service'),
+    'Environment=IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:old\nExecStart=/usr/bin/docker run --name imp-host imp-host\n',
+  );
+
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-host.env'),
+    'IMP_PORT=7070\nIMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:next\n',
+    { mode: 0o600 },
+  );
+
+  const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
+    env: {
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_HOST_IMAGE: '',
+      IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
+      IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
+      IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
+      IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
+      IMP_READY_TIMEOUT_S: '0',
+    },
+  });
+
+  const unitBackup = join(
+    ctx.directoryPath,
+    readdirSync(ctx.directoryPath)
+      .filter((file) => file.startsWith('imp-host.service.bak-'))
+      .join(''),
+  );
+
+  expect(result.exitCode).toBe(1);
+
+  expect(result.stderr.toString()).toBe(
+    'upgrade: impd is not ready after 0 s; see: podman logs imp-host. ' +
+      'To roll back to Docker: systemctl stop imp-host, ' +
+      `then mv ${unitBackup} ${join(ctx.directoryPath, 'imp-host.service')}, ` +
+      'then systemctl daemon-reload, then docker tag old ghcr.io/zgeoff/imp-host:next, ' +
+      'then systemctl start imp-host.\n',
+  );
+});
+
+test("it tags the old image as the restored unit's own default in the rollback to Docker", () => {
+  const ctx = setupTest();
+
+  const podman = createStubBin(
+    ctx.directoryPath,
+    'podman',
+    buildStubHostPodman({
+      image: 'ghcr.io/zgeoff/imp-host:next',
+      pulledLabel: 'no-docker',
+      pulledUnit: 'ExecStart=/usr/bin/podman run --name imp-host imp-host\n',
+      runsHost: false,
+    }),
+  );
+
+  createStubBin(ctx.directoryPath, 'docker', buildStubHostDocker({}));
+  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":false}'`);
+
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-host.service'),
+    'Environment=IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:old\nExecStart=/usr/bin/docker run --name imp-host imp-host\n',
+  );
+
+  const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
+    env: {
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
+      IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
+      IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
+      IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
+      IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
+      IMP_READY_TIMEOUT_S: '0',
+    },
+  });
+
+  expect(result.exitCode).toBe(1);
+
+  expect(result.stderr.toString()).toInclude(
+    'then systemctl daemon-reload, then docker tag old ghcr.io/zgeoff/imp-host:old, ' +
+      'then systemctl start imp-host.\n',
+  );
+});
+
 test('it stops before anything restarts when it cannot rewrite the env file', () => {
   const ctx = setupTest();
   const pkgText = readFileSync(new URL('../package.json', import.meta.url), 'utf8');
@@ -2078,7 +2178,8 @@ test('it gives the rollback to Docker when it cannot rewrite the env file after 
 
   expect(result.stderr.toString()).toInclude(
     `upgrade: cannot rewrite ${join(ctx.directoryPath, 'imp-host.env')}; imp-host is stopped; to roll back to Docker: ` +
-      'systemctl stop imp-host, then systemctl daemon-reload, then systemctl start imp-host\n',
+      'systemctl stop imp-host, then systemctl daemon-reload, ' +
+      'then docker tag old ghcr.io/zgeoff/imp-host:latest, then systemctl start imp-host\n',
   );
 
   expect(readFileSync(join(ctx.directoryPath, 'imp-host.service'), 'utf8')).toBe(
