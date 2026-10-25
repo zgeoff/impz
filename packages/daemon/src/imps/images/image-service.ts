@@ -19,6 +19,7 @@ import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { REAL_CLOCK } from '../../platform/process/real-clock';
 import { runStreamed } from '../../platform/process/run-streamed';
+import type { StreamedRunner } from '../../platform/process/run-streamed';
 import type { DiskBudget } from '../../vm/storage/disk-budget';
 import type { StorageBackend } from '../../vm/storage/storage-backend';
 import type { StorageGate } from '../../vm/storage/storage-gate';
@@ -71,11 +72,19 @@ export interface ImageServiceDeps {
   readonly seedRef?: string | null;
 
   readonly clock?: Pick<Clock, 'now'>;
+
+  readonly runStreamed?: StreamedRunner;
 }
 
 export function createImageService(deps: ImageServiceDeps): ImageService {
   const clock = deps.clock ?? REAL_CLOCK;
-  const writer = createImageWriter({ ...deps, clock, runStreamed });
+
+  const writer = createImageWriter({
+    ...deps,
+    clock,
+    runStreamed: deps.runStreamed ?? runStreamed,
+  });
+
   const builds = createImageBuilds({ ...deps, clock }, writer);
   const adds = createImageAdds({ ...deps, clock }, writer);
 
