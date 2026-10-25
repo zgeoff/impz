@@ -152,10 +152,26 @@ format_docker_rollback() {
   [ -z "$proxy_backup" ] || steps+=("mv $proxy_backup $proxy_unit_file")
   steps+=("systemctl daemon-reload")
   [ -z "$proxy_backup" ] || steps+=("systemctl enable --now imp-docker-proxy")
+  # The env file may pin the new image, which Docker would pull and start.
+  local runs
+  runs=$(docker_unit_image)
+  [ -z "$runs" ] || steps+=("docker tag $old $runs")
   steps+=("systemctl start $container")
   local text=${steps[0]} step
   for step in "${steps[@]:1}"; do text+=", then $step"; done
   echo "$text"
+}
+
+# the image the Docker unit runs once it is back: the env file's last
+# IMP_HOST_IMAGE, else the default that the unit or a drop-in sets
+docker_unit_image() {
+  local line
+  line=$(trim_lines "$env_file" | grep -E '^IMP_HOST_IMAGE=.' | tail -n 1 || true)
+  if [ -n "$line" ]; then
+    echo "${line#IMP_HOST_IMAGE=}"
+    return
+  fi
+  environment_image "${unit_backup:-$unit_file}" "$unit_file".d/*.conf
 }
 
 # what a failed step leaves: the old host running, or, once a Docker host's
@@ -251,7 +267,10 @@ image_id() { echo "${1#sha256:}"; }
 # disabled, and kept as .bak-<time>, named in $proxy_backup
 retire_proxy_unit() {
   [ -f "$proxy_unit_file" ] || return 0
-  systemctl disable -q --now imp-docker-proxy || true
+  if ! systemctl disable -q --now imp-docker-proxy; then
+    echo "upgrade: cannot stop imp-docker-proxy, whose unit stays for the next run; $(format_host_state)" >&2
+    exit 1
+  fi
   proxy_backup=$proxy_unit_file.bak-$(backup_time)
   mv "$proxy_unit_file" "$proxy_backup"
   systemctl daemon-reload
@@ -336,6 +355,18 @@ format_rollback() {
     echo "To roll back to Docker: $(format_docker_rollback)."
   else
     echo "To roll back: podman tag $old $image, then systemctl restart $container."
+  fi
+}
+
+# report_failure COMMAND: what the failed COMMAND leaves, before set -e
+# exits: the rollback once the start or restart has run
+restarting=
+report_failure() {
+  [ "$BASH_SUBSHELL" -eq 0 ] || return 0
+  if [ -n "$restarting" ]; then
+    echo "upgrade: $container did not start; see: journalctl -u $container. $(format_rollback)" >&2
+  else
+    echo "upgrade: $1 failed; $(format_host_state)" >&2
   fi
 }
 
@@ -447,18 +478,26 @@ for name in $awake; do
   echo "upgrade: $name asleep"
 done
 
+moved_from=$runtime
+# set -e skips the ERR trap only where it skips the exit, so a failed step
+# that prints nothing of its own still prints what it leaves.
+set -E
+trap 'report_failure "$BASH_COMMAND"' ERR
 if [ "$runtime" = docker ]; then
   retire_docker_host
   install_new_files
-  systemctl start "$container"
+  # A start that fails may have made Podman's network already.
   started=1
+  restarting=1
+  systemctl start "$container"
 else
   install_new_files
+  restarting=1
   systemctl restart "$container"
 fi
-moved_from=$runtime
 runtime=podman
 wait_ready
+trap - ERR
 pick_cli
 
 if [ "$moved_from" = docker ]; then
