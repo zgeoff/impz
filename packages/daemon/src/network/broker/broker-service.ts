@@ -8,6 +8,7 @@ import type {
   GrantNotCopied,
   RefusedRequest,
   Secret,
+  SecretAdd,
   SecretAdded,
 } from '@impz/api';
 import { match } from 'ts-pattern';
@@ -51,7 +52,6 @@ import type { InstallBundle, TrustedImp } from './guest/guest-trust';
 import { createBrokerProxy } from './proxy/create-broker-proxy';
 import { PLACEHOLDER, listPlaceholderEnv } from './secrets/connector-kinds';
 import { createSecretStore } from './secrets/create-secret-store';
-import type { AddSecretInput } from './secrets/create-secret-store';
 import { createOAuthRefresher } from './secrets/oauth-refresher';
 import type { OAuthFetch } from './secrets/oauth-refresher';
 import { removeStaleSecretFiles } from './secrets/remove-stale-secret-files';
@@ -71,7 +71,7 @@ interface ForkEnd {
 }
 
 export interface Broker {
-  readonly addSecret: (input: AddSecretInput) => Promise<SecretAdded>;
+  readonly addSecret: (input: Readonly<SecretAdd>) => Promise<SecretAdded>;
   readonly listSecrets: () => Promise<Secret[]>;
 
   readonly refreshSecret: (name: string) => Promise<Secret>;

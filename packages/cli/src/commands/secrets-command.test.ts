@@ -53,19 +53,76 @@ test.each([
   [
     'an unknown kind',
     ['--kind', 'gitlab'],
-    'impz: --kind must be one of github, anthropic, npm, custom, oauth',
+    'impz: --kind must be one of static, oauth, github, anthropic, npm, custom',
   ],
-  ['a custom kind without hosts', ['--kind', 'custom'], 'impz: --kind custom needs --hosts'],
+  [
+    'an unknown preset',
+    ['--preset', 'gitlab'],
+    'impz: --preset must be one of github, anthropic, npm',
+  ],
+  ['no kind and no preset', [], 'impz: give one of --kind and --preset'],
+  [
+    'both a kind and a preset',
+    ['--kind', 'static', '--preset', 'github'],
+    'impz: give one of --kind and --preset',
+  ],
+  ['a static kind without hosts', ['--kind', 'static'], 'impz: --hosts: needs at least one host'],
+  ['a custom kind without hosts', ['--kind', 'custom'], 'impz: --hosts: needs at least one host'],
+  [
+    'hosts on a preset',
+    ['--preset', 'github', '--hosts', 'api.github.com'],
+    'impz: --preset github takes no --hosts',
+  ],
+  [
+    'a header on a preset',
+    ['--preset', 'npm', '--header', 'x-token'],
+    'impz: --preset npm takes no --hosts',
+  ],
+  [
+    'variables on a preset',
+    ['--preset', 'anthropic', '--env', 'OTHER_KEY'],
+    'impz: --preset anthropic takes no --env',
+  ],
   [
     'hosts on a github kind',
     ['--kind', 'github', '--hosts', 'api.github.com'],
-    'impz: --hosts, --header, --scheme and --user are for --kind custom and --kind oauth',
+    'impz: --kind github takes no --hosts',
   ],
-  ['an oauth kind without hosts', ['--kind', 'oauth'], 'impz: --kind oauth needs --hosts'],
+  [
+    'a lower-case variable name',
+    ['--kind', 'static', '--hosts', 'api.example.com', '--env', 'api_key'],
+    'impz: --env: must be an upper-case variable name',
+  ],
+  [
+    'an oauth kind without hosts',
+    ['--kind', 'oauth', '--token-url', 'https://a.example.com/t', '--client-id', 'c'],
+    'impz: --hosts: needs at least one host',
+  ],
   [
     'an oauth kind without a token URL and client ID',
     ['--kind', 'oauth', '--hosts', 'api.example.com'],
-    'impz: --kind oauth needs --token-url and --client-id',
+    'impz: --token-url and --client-id: needs a token URL and a client id',
+  ],
+  [
+    'an oauth kind without a client ID',
+    ['--kind', 'oauth', '--hosts', 'api.example.com', '--token-url', 'https://a.example.com/t'],
+    'impz: --client-id: Invalid input: expected string, received undefined',
+  ],
+  [
+    'an upstream on an oauth kind',
+    [
+      '--kind',
+      'oauth',
+      '--hosts',
+      'svc.imp.internal',
+      '--upstream',
+      'http://172.17.0.1:18081',
+      '--token-url',
+      'https://a.example.com/t',
+      '--client-id',
+      'c',
+    ],
+    'impz: --hosts: an oauth secret cannot have an upstream; it is for kind static',
   ],
   [
     'an http token URL',
@@ -79,7 +136,7 @@ test.each([
       '--client-id',
       'c',
     ],
-    'impz: Invalid URL',
+    'impz: --token-url: Invalid URL',
   ],
   [
     'an unknown token format',
@@ -95,22 +152,32 @@ test.each([
       '--token-format',
       'xml',
     ],
-    'impz: Invalid option: expected one of "json"|"form"',
+    'impz: --token-format: Invalid option: expected one of "json"|"form"',
+  ],
+  [
+    'oauth flags on a static kind',
+    ['--kind', 'static', '--hosts', 'api.example.com', '--client-id', 'c'],
+    'impz: --kind static takes no --token-url and --client-id',
   ],
   [
     'oauth flags on a custom kind',
     ['--kind', 'custom', '--hosts', 'api.example.com', '--client-id', 'c'],
-    'impz: --token-url, --client-id and --token-format are for --kind oauth',
+    'impz: --kind custom takes no --token-url and --client-id',
   ],
   [
     'an address as a host',
-    ['--kind', 'custom', '--hosts', '10.0.0.1'],
-    'impz: must be a lowercase hostname such as api.example.com',
+    ['--kind', 'static', '--hosts', '10.0.0.1'],
+    'impz: --hosts: must be a lowercase hostname such as api.example.com',
+  ],
+  [
+    'two rules for one host',
+    ['--kind', 'static', '--hosts', 'api.example.com,api.example.com'],
+    'impz: --hosts: api.example.com has more than one rule',
   ],
   [
     'an unknown scheme',
-    ['--kind', 'custom', '--hosts', 'api.example.com', '--scheme', 'digest'],
-    'impz: Invalid option: expected one of "bearer"|"basic"|"raw"',
+    ['--kind', 'static', '--hosts', 'api.example.com', '--scheme', 'digest'],
+    'impz: --scheme: Invalid option: expected one of "bearer"|"basic"|"raw"',
   ],
 ])('it refuses %s before it asks for a value', async (_case, flags, message) => {
   const result = await runCLIInProcess({
@@ -151,8 +218,18 @@ test.each([
     'impz: --upstream needs exactly one host in --hosts\n',
   ],
   [
-    ['secret', 'add', 'gh', '--kind', 'github', '--upstream', 'http://172.17.0.1:18081'],
-    'impz: --upstream is for --kind custom\n',
+    [
+      'secret',
+      'add',
+      'gh',
+      '--kind',
+      'github',
+      '--hosts',
+      'github.com',
+      '--upstream',
+      'http://172.17.0.1:18081',
+    ],
+    'impz: --kind github takes no --hosts\n',
   ],
   [
     [
@@ -166,7 +243,7 @@ test.each([
       '--upstream',
       'http://172.17.0.1:18081/x',
     ],
-    'impz: must be an origin with no path\n',
+    'impz: --upstream: must be an origin with no path\n',
   ],
 ])('it refuses %p before any call to impd', async (args, stderr) => {
   const result = await runCLIInProcess({
@@ -227,6 +304,35 @@ test.each([
     ],
     'secretUpstream',
     'has no secret upstreams and would send the credential to the host itself',
+  ],
+  [
+    ['secret', 'add', 'gh', '--preset', 'github'],
+    'secretPresets',
+    'has no static secrets or presets and would refuse a preset or a static secret, and drop --env unread',
+  ],
+  [
+    ['secret', 'add', 'api', '--kind', 'static', '--hosts', 'api.example.com'],
+    'secretPresets',
+    'has no static secrets or presets and would refuse a preset or a static secret, and drop --env unread',
+  ],
+  [
+    [
+      'secret',
+      'add',
+      'codex',
+      '--kind',
+      'oauth',
+      '--hosts',
+      'chatgpt.com',
+      '--token-url',
+      'https://auth.example.com/oauth/token',
+      '--client-id',
+      'fake-client',
+      '--env',
+      'OPENAI_API_KEY',
+    ],
+    'secretPresets',
+    'has no static secrets or presets and would refuse a preset or a static secret, and drop --env unread',
   ],
 ])(
   'it makes no call past the feature check for %p on an impd from before %s',
@@ -305,7 +411,7 @@ test('it replaces a secret on an impd with the feature', async () => {
   expect(result).toStrictEqual({
     stdout: [
       'NAME  KIND    STATE  HOSTS                                         IMPS',
-      'gh    github  -      github.com,api.github.com,uploads.github.com  -',
+      'gh    static  -      github.com,api.github.com,uploads.github.com  -',
       '',
     ].join('\n'),
     stderr: '',
@@ -529,7 +635,7 @@ test('it shows a state column on secret ls, with a dash for other kinds', async 
     stdout: [
       'NAME   KIND    STATE                               HOSTS                                         IMPS',
       'codex  oauth   needs_login (refresh_token_reused)  chatgpt.com                                   -',
-      'gh     github  -                                   github.com,api.github.com,uploads.github.com  -',
+      'gh     static  -                                   github.com,api.github.com,uploads.github.com  -',
       '',
     ].join('\n'),
     stderr: '',
@@ -546,7 +652,7 @@ test('it sends a secret upstream in the rule to an impd that knows it', async ()
       'add',
       'op-connect',
       '--kind',
-      'custom',
+      'static',
       '--hosts',
       'op-connect.imp.internal',
       '--upstream',
@@ -563,7 +669,7 @@ test('it sends a secret upstream in the rule to an impd that knows it', async ()
   expect(secrets).toStrictEqual([
     {
       name: 'op-connect',
-      kind: 'custom',
+      kind: 'static',
       rules: [
         {
           host: 'op-connect.imp.internal',
@@ -577,6 +683,81 @@ test('it sends a secret upstream in the rule to an impd that knows it', async ()
       createdAt: expect.toBeValidDate() as unknown,
     },
   ]);
+});
+
+test('it stores a preset as a static secret with the preset’s hosts and variables', async () => {
+  const ctx = await setupTest();
+
+  const result = await runCLIInProcess({
+    args: ['secret', 'add', 'npm', '--preset', 'npm'],
+    env: { IMP_URL: ctx.url, IMP_TOKEN: ctx.rootToken },
+    stdin: 'fake-token\n',
+  });
+
+  const secrets: unknown = await ctx.client.secrets.list();
+
+  expect(result.code).toBe(0);
+
+  expect(secrets).toStrictEqual([
+    {
+      name: 'npm',
+      kind: 'static',
+      rules: [{ host: 'registry.npmjs.org', header: 'authorization', scheme: 'bearer' }],
+      env: ['NPM_TOKEN'],
+      imps: [],
+      createdAt: expect.toBeValidDate() as unknown,
+    },
+  ]);
+});
+
+test('it stores a secret given an older kind name in the new shape', async () => {
+  const ctx = await setupTest();
+
+  const result = await runCLIInProcess({
+    args: ['secret', 'add', 'claude', '--kind', 'anthropic'],
+    env: { IMP_URL: ctx.url, IMP_TOKEN: ctx.rootToken },
+    stdin: 'fake-token\n',
+  });
+
+  const secrets: unknown = await ctx.client.secrets.list();
+
+  expect(result.code).toBe(0);
+
+  expect(secrets).toStrictEqual([
+    {
+      name: 'claude',
+      kind: 'static',
+      rules: [{ host: 'api.anthropic.com', header: 'x-api-key', scheme: 'raw' }],
+      env: ['ANTHROPIC_API_KEY'],
+      imps: [],
+      createdAt: expect.toBeValidDate() as unknown,
+    },
+  ]);
+});
+
+test('it stores the variables --env names with a static secret', async () => {
+  const ctx = await setupTest();
+
+  const result = await runCLIInProcess({
+    args: [
+      'secret',
+      'add',
+      'api',
+      '--kind',
+      'static',
+      '--hosts',
+      'api.example.com',
+      '--env',
+      'EXAMPLE_TOKEN, OTHER_TOKEN',
+    ],
+    env: { IMP_URL: ctx.url, IMP_TOKEN: ctx.rootToken },
+    stdin: 'fake-token\n',
+  });
+
+  const secrets = await ctx.client.secrets.list();
+
+  expect(result.code).toBe(0);
+  expect(secrets[0]?.env).toStrictEqual(['EXAMPLE_TOKEN', 'OTHER_TOKEN']);
 });
 
 test('it stores nothing when stdin gives an empty value', async () => {

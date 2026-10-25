@@ -147,8 +147,8 @@ test('it copies the grants by secret name', async () => {
   const image = await createImage(ctx.db, buildMockNewImage());
   const imp = await createImp(ctx.db, buildMockNewImp({ imageId: image.id }));
 
-  await createSecret(ctx.db, { name: 'npm', kind: 'github', rules: [], valueFile: 'npm' });
-  await createSecret(ctx.db, { name: 'gh', kind: 'github', rules: [], valueFile: 'gh' });
+  await createSecret(ctx.db, { name: 'npm', kind: 'static', rules: [], valueFile: 'npm' });
+  await createSecret(ctx.db, { name: 'gh', kind: 'static', rules: [], valueFile: 'gh' });
   await createCheckedGrant(ctx.db, { impId: imp.id, secretName: 'npm', authority: null });
   await createCheckedGrant(ctx.db, { impId: imp.id, secretName: 'gh', authority: null });
 

@@ -87,15 +87,23 @@ export const SecretPresetSchema = z.enum(['github', 'anthropic', 'npm']);
 
 export type SecretPreset = z.infer<typeof SecretPresetSchema>;
 
-export const SecretKindSchema = z.enum([...SecretPresetSchema.options, 'custom', 'oauth']);
+// An `oauth` secret holds a refresh token that impd trades for access tokens.
+// The `oauth` ApiActor of an audit row is another thing: a caller that signed
+// in to impd through its own OAuth server.
+export const SecretKindSchema = z.enum(['static', 'oauth']);
 
 export type SecretKind = z.infer<typeof SecretKindSchema>;
 
-export const OAuthConfigSchema = z.object({
-  tokenUrl: z.url({ protocol: /^https$/u }).max(2048),
-  clientId: PrintableSchema.min(1).max(256),
-  tokenFormat: z.enum(['json', 'form']).default('form'),
-});
+export const OAuthConfigSchema = z.object(
+  {
+    tokenUrl: z.url({ protocol: /^https$/u }).max(2048),
+    clientId: PrintableSchema.min(1).max(256),
+    tokenFormat: z.enum(['json', 'form']).default('form'),
+  },
+  {
+    error: (issue) => (issue.input === undefined ? 'needs a token URL and a client id' : undefined),
+  },
+);
 
 export type OAuthConfig = z.infer<typeof OAuthConfigSchema>;
 

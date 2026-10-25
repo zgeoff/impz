@@ -152,6 +152,14 @@ export {
 
 export { SECRET_PRESETS } from './schemas/secret-presets';
 
+export {
+  SecretAddKindSchema,
+  SecretAddSchema,
+  SecretBindingSchema,
+} from './schemas/secret-add-schema';
+
+export type { SecretAdd, SecretAddKind, SecretBinding } from './schemas/secret-add-schema';
+
 export type {
   AuditEntry,
   AuditRefusal,

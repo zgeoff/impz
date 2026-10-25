@@ -71,13 +71,13 @@ test('it answers an added secret with its hosts and no value', async () => {
 
   const added: unknown = await ctx.client.secrets.add({
     name: 'gh',
-    kind: 'github',
+    preset: 'github',
     value: 'ghp_SECRETVALUE0123456789',
   });
 
   expect(added).toStrictEqual({
     name: 'gh',
-    kind: 'github',
+    kind: 'static',
     rules: [
       { host: 'github.com', header: 'authorization', scheme: 'basic', user: 'x-access-token' },
       { host: 'api.github.com', header: 'authorization', scheme: 'bearer' },
@@ -122,7 +122,7 @@ test('it lists a secret with the imps it is granted to', async () => {
   expect(secrets).toStrictEqual([
     {
       name: 'gh',
-      kind: 'github',
+      kind: 'static',
       rules: [
         { host: 'github.com', header: 'authorization', scheme: 'basic', user: 'x-access-token' },
         { host: 'api.github.com', header: 'authorization', scheme: 'bearer' },
@@ -154,11 +154,16 @@ test('it rejects a value that could split a header', async () => {
   ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
 });
 
-test('it rejects a custom secret without rules', async () => {
+test('it rejects a static secret with an empty rule list', async () => {
   const ctx = await setupTest();
 
   expect(
-    ctx.client.secrets.add({ name: 'api', kind: 'custom', value: 'ghp_SECRETVALUE0123456789' }),
+    ctx.client.secrets.add({
+      name: 'api',
+      kind: 'static',
+      value: 'ghp_SECRETVALUE0123456789',
+      rules: [],
+    }),
   ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
 });
 
@@ -568,6 +573,86 @@ test('it gives a granted imp the broker variables once the CA is in its boot', a
   });
 });
 
+test.each([
+  [
+    { preset: 'github' },
+    ['GH_TOKEN=imp-broker-placeholder', 'GITHUB_TOKEN=imp-broker-placeholder'],
+  ],
+  [{ preset: 'anthropic' }, ['ANTHROPIC_API_KEY=imp-broker-placeholder']],
+  [{ preset: 'npm' }, ['NPM_TOKEN=imp-broker-placeholder']],
+  [{ kind: 'anthropic' }, ['ANTHROPIC_API_KEY=imp-broker-placeholder']],
+  [{ kind: 'npm' }, ['NPM_TOKEN=imp-broker-placeholder']],
+] as const)(
+  'it gives an imp granted %o its preset’s placeholders',
+  async (binding, placeholders) => {
+    const ctx = await setupTest();
+
+    await ctx.createTestImage('base');
+    await ctx.client.imps.create({ name: 'dev' });
+    await ctx.client.secrets.add({ name: 'cred', value: 'fake-value-1', ...binding });
+    await ctx.client.grants.add({ name: 'dev', secret: 'cred' });
+
+    const imp = await readImpByName(ctx.db, 'dev');
+
+    invariant(imp);
+
+    const vsock = join(ctx.dataDir, 'vsock');
+
+    await writeFile(vsock, '');
+
+    const env = await ctx.impd.broker.readExecEnv(imp, vsock);
+
+    expect(env).toStrictEqual({
+      kind: 'ready',
+      env: [
+        `HTTPS_PROXY=http://127.0.0.1:${String(ctx.config.brokerPort)}`,
+        `https_proxy=http://127.0.0.1:${String(ctx.config.brokerPort)}`,
+        'NO_PROXY=localhost,127.0.0.1,::1',
+        'no_proxy=localhost,127.0.0.1,::1',
+        'NODE_USE_ENV_PROXY=1',
+        'SSL_CERT_FILE=/etc/imp/broker-ca.pem',
+        'NODE_EXTRA_CA_CERTS=/etc/imp/broker-ca.pem',
+        'GIT_SSL_CAINFO=/etc/imp/broker-ca.pem',
+        'REQUESTS_CA_BUNDLE=/etc/imp/broker-ca.pem',
+        'CURL_CA_BUNDLE=/etc/imp/broker-ca.pem',
+        ...placeholders,
+      ],
+    });
+  },
+);
+
+test('it gives an imp granted a static secret the variables the secret names', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+  await ctx.client.imps.create({ name: 'dev' });
+
+  await ctx.client.secrets.add({
+    name: 'api',
+    kind: 'static',
+    value: 'fake-value-1',
+    rules: [{ host: 'api.example.com', header: 'x-token', scheme: 'raw' }],
+    env: ['EXAMPLE_TOKEN'],
+  });
+
+  await ctx.client.grants.add({ name: 'dev', secret: 'api' });
+
+  const imp = await readImpByName(ctx.db, 'dev');
+
+  invariant(imp);
+
+  const vsock = join(ctx.dataDir, 'vsock');
+
+  await writeFile(vsock, '');
+
+  const env = await ctx.impd.broker.readExecEnv(imp, vsock);
+
+  expect(env).toMatchObject({
+    kind: 'ready',
+    env: expect.arrayContaining(['EXAMPLE_TOKEN=imp-broker-placeholder']) as unknown,
+  });
+});
+
 test('it sets the placeholders of a granted secret’s stored env list, not its preset’s', async () => {
   const ctx = await setupTest();
 
@@ -575,7 +660,6 @@ test('it sets the placeholders of a granted secret’s stored env list, not its 
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'ghp_SECRETVALUE0123456789' });
   await ctx.client.grants.add({ name: 'dev', secret: 'gh' });
-
   await ctx.db
     .updateTable('secrets')
     .set({ env: JSON.stringify(['CUSTOM_TOKEN']) })

@@ -1035,6 +1035,104 @@ test('#runMigrations gives a custom or oauth secret no variables in the secret e
   ]);
 });
 
+test('#runMigrations makes each secret of an older kind static in the kind merge migration', async () => {
+  const db = createUnmigratedDatabase();
+
+  await runMigrationsTo(db, '042_add_secret_env');
+
+  const rules = JSON.stringify([{ host: 'api.example.com', header: 'x-token', scheme: 'raw' }]);
+
+  await sql`INSERT INTO secrets (name, kind, rules, env, created_at, generation, value_file)
+    VALUES ('api', 'custom', ${rules}, '[]', 0, 'g1', 'api'),
+      ('claude', 'anthropic', '[]', '["ANTHROPIC_API_KEY"]', 0, 'g2', 'claude'),
+      ('codex', 'oauth', ${rules}, '[]', 0, 'g3', 'codex'),
+      ('gh', 'github', '[]', '["GH_TOKEN","GITHUB_TOKEN"]', 0, 'g4', 'gh'),
+      ('npm', 'npm', '[]', '["NPM_TOKEN"]', 0, 'g5', 'npm')`.execute(db);
+
+  await runMigrations(db);
+
+  const rows = await db
+    .selectFrom('secrets')
+    .select(['name', 'kind', 'rules', 'env', 'generation'])
+    .orderBy('name')
+    .execute();
+
+  expect(rows).toStrictEqual([
+    { name: 'api', kind: 'static', rules, env: '[]', generation: 'g1' },
+    { name: 'claude', kind: 'static', rules: '[]', env: '["ANTHROPIC_API_KEY"]', generation: 'g2' },
+    { name: 'codex', kind: 'oauth', rules, env: '[]', generation: 'g3' },
+    {
+      name: 'gh',
+      kind: 'static',
+      rules: '[]',
+      env: '["GH_TOKEN","GITHUB_TOKEN"]',
+      generation: 'g4',
+    },
+    { name: 'npm', kind: 'static', rules: '[]', env: '["NPM_TOKEN"]', generation: 'g5' },
+  ]);
+});
+
+test('#runMigrations keeps a granted github secret of the older kind working through both secret migrations', async () => {
+  const db = createUnmigratedDatabase();
+
+  await runMigrationsTo(db, '041_add_move_send_steps');
+
+  const rules = JSON.stringify([
+    { host: 'github.com', header: 'authorization', scheme: 'basic', user: 'x-access-token' },
+    { host: 'api.github.com', header: 'authorization', scheme: 'bearer' },
+    { host: 'uploads.github.com', header: 'authorization', scheme: 'bearer' },
+  ]);
+
+  await sql`INSERT INTO secrets (name, kind, rules, created_at, generation, value_file)
+    VALUES ('gh', 'github', ${rules}, 0, 'g1', 'gh.a1')`.execute(db);
+
+  await sql`INSERT INTO images (id, name, ref, digest, size_bytes, created_at, last_used_at)
+    VALUES ('img', 'base', 'imp/base:latest', 'sha256:0', 1, 0, 0)`.execute(db);
+
+  await sql`INSERT INTO imps (id, name, image_id, state, vcpus, memory_mib, slot, ip,
+    created_at, last_active_at)
+    VALUES ('imp', 'dev', 'img', 'stopped', 1, 512, 0, 'ip', 0, 0)`.execute(db);
+
+  await sql`INSERT INTO grants (imp_id, secret_name, secret_generation)
+    VALUES ('imp', 'gh', 'g1')`.execute(db);
+
+  await runMigrations(db);
+
+  const granted = await listGrantedRules(db, 'imp');
+
+  expect(granted).toStrictEqual([
+    {
+      secretName: 'gh',
+      kind: 'static',
+      rule: {
+        host: 'github.com',
+        header: 'authorization',
+        scheme: 'basic',
+        user: 'x-access-token',
+      },
+      env: ['GH_TOKEN', 'GITHUB_TOKEN'],
+      valueFile: 'gh.a1',
+      filter: null,
+    },
+    {
+      secretName: 'gh',
+      kind: 'static',
+      rule: { host: 'api.github.com', header: 'authorization', scheme: 'bearer' },
+      env: ['GH_TOKEN', 'GITHUB_TOKEN'],
+      valueFile: 'gh.a1',
+      filter: null,
+    },
+    {
+      secretName: 'gh',
+      kind: 'static',
+      rule: { host: 'uploads.github.com', header: 'authorization', scheme: 'bearer' },
+      env: ['GH_TOKEN', 'GITHUB_TOKEN'],
+      valueFile: 'gh.a1',
+      filter: null,
+    },
+  ]);
+});
+
 test('#runMigrations gives each image no received digest in the received digest migration', async () => {
   const db = createUnmigratedDatabase();
 
