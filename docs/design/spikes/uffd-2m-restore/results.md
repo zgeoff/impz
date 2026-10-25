@@ -41,7 +41,7 @@ The spread of `agent` over the 21 rounds:
 | `uffd-demand` | 50.8  | 60.8   | 87.0   | 95.6   |
 | `uffd-fill`   | 50.3  | 59.8   | 68.2   | 87.7   |
 
-- A `uffd-demand` boot faults in 34 to 36 distinct 2 MiB blocks, 2 to 6 of them after the claim. The
+- A `uffd-demand` boot faults in 33 to 36 distinct 2 MiB blocks, 2 to 5 of them after the claim. The
   handler serves a 2 MiB fault in a median of 450 µs, about 20 ms in each boot.
 - The working set holds 35 blocks, and the fill copies 49: the blocks that hold data and the working
   set.
