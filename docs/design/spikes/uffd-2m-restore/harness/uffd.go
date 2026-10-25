@@ -52,6 +52,10 @@ type uffdMsg struct {
 	event   uint8
 	address uint64
 	end     uint64
+	// the phase and the time at which the handler read a fault, which a
+	// fault deferred to a later round keeps
+	phase int32
+	read  time.Time
 }
 
 func parseUffdMsgs(raw []byte) []uffdMsg {
@@ -324,48 +328,59 @@ func (h *uffdHandler) serve() {
 			h.recordError(err)
 			return
 		}
-		read := time.Now()
-		msgs := deferred
-		deferred = nil
+		var fresh []uffdMsg
 		for {
 			n, err := unix.Read(h.uffd, buf)
 			if n > 0 {
-				msgs = append(msgs, parseUffdMsgs(buf[:n])...)
+				fresh = append(fresh, parseUffdMsgs(buf[:n])...)
 			}
 			if err != nil || n < len(buf) {
 				break
 			}
 		}
-		for _, msg := range msgs {
-			if msg.event == uffdEventRemove {
-				h.unregister(msg.address, msg.end)
-			}
-		}
-		for _, msg := range msgs {
-			switch msg.event {
-			case uffdEventRemove:
-			case uffdEventPagefault:
-				if !h.serveFault(msg.address, read) {
-					deferred = append(deferred, msg)
-				}
-			default:
-				h.mu.Lock()
-				h.unknown++
-				h.mu.Unlock()
-			}
-		}
+		deferred = h.serveRound(fresh, deferred)
 	}
 }
 
-func (h *uffdHandler) serveFault(addr uint64, read time.Time) bool {
-	page, dst, ok := h.pageOf(addr)
+// serveRound handles the events of one read, after the faults deferred from
+// the round before, and returns the faults to retry. It stamps each fresh
+// fault with the phase it came in: a copy wakes the guest, which can move the
+// runner to its next phase before the fault is recorded.
+func (h *uffdHandler) serveRound(fresh, deferred []uffdMsg) []uffdMsg {
+	read := time.Now()
+	phase := h.phase.Load()
+	for i := range fresh {
+		fresh[i].phase, fresh[i].read = phase, read
+	}
+	msgs := append(deferred, fresh...)
+	for _, msg := range msgs {
+		if msg.event == uffdEventRemove {
+			h.unregister(msg.address, msg.end)
+		}
+	}
+	var retry []uffdMsg
+	for _, msg := range msgs {
+		switch msg.event {
+		case uffdEventRemove:
+		case uffdEventPagefault:
+			if !h.serveFault(msg) {
+				retry = append(retry, msg)
+			}
+		default:
+			h.mu.Lock()
+			h.unknown++
+			h.mu.Unlock()
+		}
+	}
+	return retry
+}
+
+func (h *uffdHandler) serveFault(msg uffdMsg) bool {
+	page, dst, ok := h.pageOf(msg.address)
 	if !ok {
-		h.recordError(fmt.Errorf("fault at %#x outside every region", addr))
+		h.recordError(fmt.Errorf("fault at %#x outside every region", msg.address))
 		return true
 	}
-	// the copy wakes the guest, which can move the runner to its next phase,
-	// so the fault's phase is read first
-	phase := h.phase.Load()
 	err := h.copyPage(page, dst)
 	if errors.Is(err, unix.EAGAIN) {
 		return false
@@ -375,7 +390,7 @@ func (h *uffdHandler) serveFault(addr uint64, read time.Time) bool {
 		return true
 	}
 	h.mu.Lock()
-	h.faults = append(h.faults, fault{page: page, phase: phase, service: time.Since(read)})
+	h.faults = append(h.faults, fault{page: page, phase: msg.phase, service: time.Since(msg.read)})
 	h.mu.Unlock()
 	return true
 }

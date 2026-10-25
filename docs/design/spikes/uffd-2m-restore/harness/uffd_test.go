@@ -41,10 +41,9 @@ type uffdioRegisterArg struct {
 	ioctls uint64
 }
 
-// setupGuestMemory plays Firecracker's side of the handshake: it maps three
-// pages, registers them with a new uffd, and sends a region of the first
-// advertisedPages pages and the uffd to the handler's socket.
-func setupGuestMemory(t *testing.T, socket string, advertisedPages uint64) []byte {
+// registerGuestMemory does what Firecracker does to guest memory: it maps
+// three pages and registers them with a new uffd, which the caller closes.
+func registerGuestMemory(t *testing.T) ([]byte, int) {
 	t.Helper()
 	mem, err := unix.Mmap(-1, 0, 3*testPage, unix.PROT_READ|unix.PROT_WRITE, unix.MAP_PRIVATE|unix.MAP_ANONYMOUS)
 	assert.NilError(t, err)
@@ -55,13 +54,23 @@ func setupGuestMemory(t *testing.T, socket string, advertisedPages uint64) []byt
 		t.Skipf("this kernel has no user-mode userfaultfd: %v", errno)
 	}
 	assert.Assert(t, errno == 0, "userfaultfd: %v", errno)
-	defer unix.Close(int(fd))
 
 	api := uffdioAPIArg{api: uffdAPI, features: uffdFeatureEventRemove}
 	assert.NilError(t, ioctl(int(fd), uffdioAPI, unsafe.Pointer(&api)))
-	base := uint64(uintptr(unsafe.Pointer(&mem[0])))
-	register := uffdioRegisterArg{start: base, len: 3 * testPage, mode: uffdioRegisterMissing}
+	register := uffdioRegisterArg{start: uint64(uintptr(unsafe.Pointer(&mem[0]))), len: 3 * testPage, mode: uffdioRegisterMissing}
 	assert.NilError(t, ioctl(int(fd), uffdioRegister, unsafe.Pointer(&register)))
+	return mem, int(fd)
+}
+
+// setupGuestMemory plays Firecracker's side of the handshake: it registers
+// guest memory and sends a region of the first advertisedPages pages and the
+// uffd to the handler's socket.
+func setupGuestMemory(t *testing.T, socket string, advertisedPages uint64) []byte {
+	t.Helper()
+	mem, fd := registerGuestMemory(t)
+	// the handler's copy is then the only one, so its close releases a fault
+	defer unix.Close(fd)
+	base := uint64(uintptr(unsafe.Pointer(&mem[0])))
 
 	regions, err := json.Marshal([]guestRegion{{BaseHostVirtAddr: base, Size: advertisedPages * testPage, Offset: 0, PageSize: testPage}})
 	assert.NilError(t, err)
@@ -254,6 +263,41 @@ func TestUffdHandlerCountsAFaultUnderThePhaseItCameIn(t *testing.T) {
 
 	assert.Equal(t, read, byte('a'))
 	assert.DeepEqual(t, report.ByPhase, map[string]int{"load": 0, "resumed": 0, "claimed": 1, "agent": 0})
+}
+
+func TestUffdHandlerKeepsAFaultsPhaseThroughARetry(t *testing.T) {
+	mem, fd := registerGuestMemory(t)
+	t.Cleanup(func() { _ = unix.Close(fd) })
+	base := uint64(uintptr(unsafe.Pointer(&mem[0])))
+	var phase atomic.Int32
+	handler := &uffdHandler{
+		uffd: fd, pageSize: testPage, phase: &phase, failed: make(chan struct{}),
+		regions: []guestRegion{{BaseHostVirtAddr: base, Size: 3 * testPage, PageSize: testPage}},
+		data:    map[int64]bool{}, zero: make([]byte, testPage),
+	}
+	// a REMOVE that the handler has not read makes every copy answer EAGAIN;
+	// the madvise waits until the handler reads it
+	removed := make(chan error, 1)
+	go func() { removed <- unix.Madvise(mem[testPage:2*testPage], unix.MADV_DONTNEED) }()
+	pending, err := unix.Poll([]unix.PollFd{{Fd: int32(fd), Events: unix.POLLIN}}, 10_000)
+	assert.NilError(t, err)
+	assert.Equal(t, pending, 1)
+	phase.Store(phaseClaimed)
+	deferred := handler.serveRound([]uffdMsg{{event: uffdEventPagefault, address: base}}, nil)
+	phase.Store(phaseAgent)
+	buf := make([]byte, uffdMsgSize*4)
+	n, err := unix.Read(fd, buf)
+	assert.NilError(t, err)
+	// the kernel ends the REMOVE once the madvise returns, not at the read
+	assert.NilError(t, <-removed)
+
+	retry := handler.serveRound(parseUffdMsgs(buf[:n]), deferred)
+	report, _ := handler.report()
+
+	assert.Equal(t, len(deferred), 1)
+	assert.Equal(t, len(retry), 0)
+	assert.DeepEqual(t, report.ByPhase, map[string]int{"load": 0, "resumed": 0, "claimed": 1, "agent": 0})
+	assert.Equal(t, len(report.Errors), 0)
 }
 
 func TestParseUffdMsgsReadsAFaultAndARemove(t *testing.T) {
