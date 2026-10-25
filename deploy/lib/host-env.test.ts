@@ -209,11 +209,16 @@ test.each([['fd12::/56'], ['fd12::1/64'], ['fd12:::/64'], ['nope/64'], ['10.0.0.
   },
 );
 
-test('#NETWORK_FORMAT reads IPv6, the bridge, the DNS server and the subnets from podman network inspect', () => {
+test('#NETWORK_FORMAT reads IPv6, the bridge, the DNS server and the subnets from podman network inspect, whatever CONTAINER_CLI says', () => {
   const script = new URL('host-env.sh', import.meta.url).pathname;
 
   expect(
-    runSourcedFunction({ script, fn: 'eval', args: ['printf %s "$NETWORK_FORMAT"'] }),
+    runSourcedFunction({
+      script,
+      fn: 'eval',
+      args: ['printf %s "$NETWORK_FORMAT"'],
+      env: { CONTAINER_CLI: 'docker' },
+    }),
   ).toStrictEqual({
     exitCode: 0,
     stdout:

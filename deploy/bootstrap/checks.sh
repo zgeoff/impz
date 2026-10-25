@@ -107,6 +107,8 @@ parse_args() {
   done
 }
 
+# preflight [OSRELEASE] [OS_RELEASE] [KVM] [CPUINFO]: the checks before any
+# change. The arguments go to the platform check.
 preflight() {
   phase preflight
   [ "$(id -u)" = 0 ] || die "run as root"
@@ -114,7 +116,7 @@ preflight() {
     in_container=1
     warn "running in a container: kernel settings are written, not applied"
   fi
-  check_platform
+  check_platform "${1:-}" "${2:-}" "${3:-}" "${4:-}"
   check_docker_host
 
   resolve_storage

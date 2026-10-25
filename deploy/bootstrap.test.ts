@@ -782,6 +782,24 @@ test('#subnet6 accepts the subnet random_ula64 picks as it is', () => {
   expect(checked).toStrictEqual({ exitCode: 0, stdout: `${subnet}\n`, stderr: '' });
 });
 
+test('#create_host_network creates the network with podman when the caller sets CONTAINER_CLI to docker', () => {
+  const ctx = setupTest();
+  const podman = createStubBin(ctx.directoryPath, 'podman');
+
+  createStubBin(ctx.directoryPath, 'docker');
+
+  runSourcedFunction({
+    script: new URL('bootstrap.sh', import.meta.url).pathname,
+    fn: 'create_host_network',
+    args: ['fd12::/64'],
+    env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`, CONTAINER_CLI: 'docker' },
+  });
+
+  expect(readFileSync(podman.calls, 'utf8')).toBe(
+    'podman network create --ipv6 --subnet fd12::/64 --disable-dns --interface-name br-imphost imp-host\n',
+  );
+});
+
 test('#network_subnet6 reads the subnet of a network that is right', () => {
   const script = new URL('bootstrap.sh', import.meta.url).pathname;
 
@@ -951,6 +969,40 @@ test('#retire_proxy_unit stops and disables an installed legacy imp-docker-proxy
   );
 
   expect(existsSync(unit)).toBeFalse();
+});
+
+test('#retire_proxy_unit fails and keeps the unit file when systemd cannot stop the legacy imp-docker-proxy', () => {
+  const ctx = setupTest();
+
+  const systemctl = createStubBin(
+    ctx.directoryPath,
+    'systemctl',
+    `echo 'Failed to stop imp-docker-proxy.service' >&2; exit 1`,
+  );
+
+  const unit = join(ctx.directoryPath, 'imp-docker-proxy.service');
+
+  writeFileSync(unit, '[Service]\nExecStart=/usr/local/bin/imp-docker-proxy\n');
+
+  const result = runSourcedFunction({
+    script: new URL('bootstrap.sh', import.meta.url).pathname,
+    fn: 'eval',
+    args: [`mode=yes; retire_proxy_unit '${unit}'`],
+    env: { PATH: `${systemctl.bin}:${process.env['PATH'] ?? ''}` },
+  });
+
+  expect(result).toStrictEqual({
+    exitCode: 1,
+    stdout: 'bootstrap: change: remove imp-docker-proxy, which impd no longer calls\n',
+    stderr:
+      'Failed to stop imp-docker-proxy.service\nbootstrap: failed: remove imp-docker-proxy, which impd no longer calls\n',
+  });
+
+  expect(readFileSync(systemctl.calls, 'utf8')).toBe(
+    'systemctl disable -q --now imp-docker-proxy\n',
+  );
+
+  expect(existsSync(unit)).toBeTrue();
 });
 
 test('#retire_proxy_unit changes nothing on a host without the legacy imp-docker-proxy unit', () => {
@@ -1338,6 +1390,7 @@ test('#preflight refuses a host whose imp-host runs under Docker', () => {
   const ctx = setupTest();
   const id = createStubBin(ctx.directoryPath, 'id', 'echo 0');
   const virt = createStubBin(ctx.directoryPath, 'systemd-detect-virt', 'exit 1');
+  const uname = createStubBin(ctx.directoryPath, 'uname', 'echo x86_64');
 
   const docker = createStubBin(
     ctx.directoryPath,
@@ -1345,18 +1398,32 @@ test('#preflight refuses a host whose imp-host runs under Docker', () => {
     buildStubBootstrapDocker({ hostContainer: 'present' }),
   );
 
+  writeFileSync(join(ctx.directoryPath, 'osrelease'), '6.8.0-85-generic\n');
+
+  writeFileSync(
+    join(ctx.directoryPath, 'os-release'),
+    'ID=ubuntu\nVERSION_ID="24.04"\nPRETTY_NAME="Ubuntu 24.04.3 LTS"\n',
+  );
+
+  writeFileSync(join(ctx.directoryPath, 'cpuinfo'), 'flags\t\t: fpu vme vmx sse2\n');
+
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
-      fn: 'eval',
-
-      // The platform check reads the kernel's own files, which no PATH stub replaces.
-      args: ['check_platform() { :; }; preflight'],
-      env: { PATH: `${id.bin}:${virt.bin}:${docker.bin}:${process.env['PATH'] ?? ''}` },
+      fn: 'preflight',
+      args: [
+        join(ctx.directoryPath, 'osrelease'),
+        join(ctx.directoryPath, 'os-release'),
+        '/dev/null',
+        join(ctx.directoryPath, 'cpuinfo'),
+      ],
+      env: {
+        PATH: `${id.bin}:${virt.bin}:${uname.bin}:${docker.bin}:${process.env['PATH'] ?? ''}`,
+      },
     }),
   ).toStrictEqual({
     exitCode: 1,
-    stdout: '== preflight\n',
+    stdout: '== preflight\nbootstrap: OS: Ubuntu 24.04.3 LTS\n',
     stderr:
       'bootstrap: imp-host runs under Docker, from an older release: run deploy/upgrade.sh of this release, which moves the host to Podman (docs/guides/operations.md#upgrade); nothing changed\n',
   });

@@ -1,6 +1,7 @@
 import * as z from 'zod';
 import { ImpdError } from '../../../platform/errors/impd-error';
 import type { StartTimer } from '../../../platform/process/clock';
+import { countTreeBytes } from '../../../vm/storage/count-tree-bytes';
 import { DOCKERFILE_FRONTEND } from '../../docker-contract/dockerfile-frontend';
 import type { GuestExec } from '../builders/guest-exec';
 import { formatFailureTail } from '../pull/format-failure-tail';
@@ -155,6 +156,7 @@ export async function writeGuestTree(options: WriteGuestTreeOptions): Promise<Ex
     grow: options.grow,
     startTimer: options.startTimer,
     startTar: startTarProcess,
+    countTreeBytes,
     runExport: (onStdout, exportSignal) =>
       exec(['docker', 'export', containerId], {
         signal: exportSignal,

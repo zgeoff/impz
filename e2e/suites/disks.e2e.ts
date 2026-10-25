@@ -103,9 +103,9 @@ test('it grows a disk past its image at the first boot, at once while running, o
 
   await runImp('stop', name);
 
-  // The stop wrote the grown filesystem out and asked for a usage pass, about
-  // 10 s later. A count from a pass that started before the stop does not
-  // hold those blocks, so only a later one counts.
+  // The stop wrote the grown filesystem out and asked for a usage pass that
+  // starts 10 s or more after it, well after the command returns. A count
+  // from a pass that started before the stop does not hold those blocks.
   const stoppedAt = new Date();
 
   const afterGrows = await runInContainer(['e2fsck', '-fn', disk]);
