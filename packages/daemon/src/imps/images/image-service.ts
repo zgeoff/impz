@@ -18,7 +18,6 @@ import type { Clock } from '../../platform/process/clock';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { REAL_CLOCK } from '../../platform/process/real-clock';
-import { runStreamed } from '../../platform/process/run-streamed';
 import type { StreamedRunner } from '../../platform/process/run-streamed';
 import type { DiskBudget } from '../../vm/storage/disk-budget';
 import type { StorageBackend } from '../../vm/storage/storage-backend';
@@ -73,7 +72,7 @@ export interface ImageServiceDeps {
 
   readonly clock?: Pick<Clock, 'now'>;
 
-  readonly runStreamed?: StreamedRunner;
+  readonly runStreamed: StreamedRunner;
 
   readonly runCommand: ImageWriterDeps['runCommand'];
 
@@ -88,7 +87,6 @@ export function createImageService(deps: ImageServiceDeps): ImageService {
   const writer = createImageWriter({
     ...deps,
     clock,
-    runStreamed: deps.runStreamed ?? runStreamed,
   });
 
   const builds = createImageBuilds({ ...deps, clock }, writer);

@@ -13,6 +13,7 @@ import { startDiskSampler } from '../../../../testing/vm/start-disk-sampler';
 import { loadConfig } from '../../../config';
 import { openDatabase } from '../../../platform/db/open-database';
 import { runCommand } from '../../../platform/process/run-command';
+import { runStreamed } from '../../../platform/process/run-streamed';
 import { countTreeBytes } from '../../../vm/storage/count-tree-bytes';
 import { createDiskBudget } from '../../../vm/storage/disk-budget';
 import { createStorageGate } from '../../../vm/storage/storage-gate';
@@ -80,6 +81,7 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
       runCommand,
       startTar: startTarProcess,
       countTreeBytes,
+      runStreamed,
       config: loadConfig({ IMP_DATA_DIR: dataDir }),
       db: ctx.db,
       storage: {
@@ -170,6 +172,7 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
       runCommand,
       startTar: startTarProcess,
       countTreeBytes,
+      runStreamed,
       config: loadConfig({ IMP_DATA_DIR: dataDir }),
       db: ctx.db,
       storage: {
@@ -258,6 +261,7 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
       runCommand,
       startTar: startTarProcess,
       countTreeBytes,
+      runStreamed,
       config: loadConfig({ IMP_DATA_DIR: dataDir }),
       db: ctx.db,
       storage: {
@@ -346,6 +350,7 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
       runCommand,
       startTar: startTarProcess,
       countTreeBytes,
+      runStreamed,
       config: loadConfig({ IMP_DATA_DIR: dataDir }),
       db: ctx.db,
       storage: {
@@ -438,6 +443,7 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
       runCommand,
       startTar: startTarProcess,
       countTreeBytes,
+      runStreamed,
       config: loadConfig({ IMP_DATA_DIR: dataDir }),
       db: ctx.db,
       storage: {
@@ -527,6 +533,7 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
       runCommand,
       startTar: startTarProcess,
       countTreeBytes,
+      runStreamed,
       config: loadConfig({ IMP_DATA_DIR: dataDir }),
       db: ctx.db,
       storage: {
@@ -616,6 +623,7 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
       runCommand,
       startTar: startTarProcess,
       countTreeBytes,
+      runStreamed,
       config: loadConfig({ IMP_DATA_DIR: dataDir }),
       db: ctx.db,
       storage: {
@@ -703,6 +711,7 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
       runCommand,
       startTar: startTarProcess,
       countTreeBytes,
+      runStreamed,
       config: loadConfig({ IMP_DATA_DIR: dataDir }),
       db: ctx.db,
       storage: {
@@ -778,6 +787,7 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
       runCommand,
       startTar: startTarProcess,
       countTreeBytes,
+      runStreamed,
       config: loadConfig({ IMP_DATA_DIR: dataDir }),
       db: ctx.db,
       storage: {

@@ -5,6 +5,7 @@ import { createImageService } from './imps/images/image-service';
 import type { ImageService } from './imps/images/image-service';
 import { startTarProcess } from './imps/images/rootfs/start-tar-process';
 import { runCommand } from './platform/process/run-command';
+import { runStreamed } from './platform/process/run-streamed';
 import { countTreeBytes } from './vm/storage/count-tree-bytes';
 import { createDiskBudget } from './vm/storage/disk-budget';
 import type { DiskBudget } from './vm/storage/disk-budget';
@@ -42,6 +43,7 @@ export function createImpdStorage(config: Config, deps: Readonly<ImpdDeps>): Imp
     diskBudget,
     readBuilders: () => buildersHolder.builders,
     runCommand,
+    runStreamed,
     startTar: startTarProcess,
     countTreeBytes,
     ...(deps.now !== undefined && { clock: { now: deps.now } }),
