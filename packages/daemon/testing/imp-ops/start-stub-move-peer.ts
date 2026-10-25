@@ -44,7 +44,13 @@ export function startStubMovePeer(answers: Readonly<Record<string, StubPeerAnswe
   };
 
   const releases: (() => void)[] = [];
-  const port = claimFreePorts(1, { onRelease: (release) => releases.push(release) }).take();
+
+  const port = claimFreePorts(1, {
+    onRelease: (release) => {
+      releases.push(release);
+    },
+  }).take();
+
   const server = Bun.serve({ hostname: '127.0.0.1', port, fetch: handleRequest });
 
   onTestFinished(async () => {
