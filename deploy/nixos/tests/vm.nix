@@ -14,7 +14,8 @@
 #   cloud host has it (networking.firewall with filterForward): imp-host's
 #   IPv6 network and default route, egress to `own` over IPv4 and IPv6, the
 #   forwardDeny ranges dropped, no host port opened to the bridge, and no
-#   DNS server on imp-host's network or Podman's default one.
+#   DNS server on imp-host's network or Podman's default one. Without
+#   imageArchive, a missing image is pulled from a registry on the node.
 # own: hostFirewall = "own", without networking.firewall; SSH connects
 #   through bootstrap.sh's table and another port does not.
 #
@@ -121,6 +122,9 @@ pkgs.testers.runNixOSTest {
         interface = "eth1";
       };
       environment.systemPackages = [ pkgs.socat ];
+      # the registry the pull specialisation's image comes from, over plain HTTP
+      services.dockerRegistry.enable = true;
+      virtualisation.containers.registries.insecure = [ "localhost:5000" ];
       services.imp = {
         ipv6.enable = true;
         # own answers on addresses in these, from the test script
@@ -149,6 +153,12 @@ pkgs.testers.runNixOSTest {
       specialisation.noipv6.configuration.services.imp = {
         ramBudgetMiB = 1024;
         ipv6.enable = pkgs.lib.mkForce false;
+      };
+      # no archive, so imp-host-image pulls the image from the registry
+      specialisation.pull.configuration.services.imp = {
+        ramBudgetMiB = 1024;
+        image = pkgs.lib.mkForce "localhost:5000/imp-host-stub:test";
+        imageArchive = pkgs.lib.mkForce null;
       };
     };
 
@@ -425,6 +435,25 @@ pkgs.testers.runNixOSTest {
       with subtest("an archive that differs from the one loaded is loaded again"):
           host.succeed("echo /nix/store/another-archive > /var/lib/imp-host/image-archive")
           start_imp_host()
+          assert loads() == 2, loads()
+
+      with subtest("without an archive, a missing image is pulled, and imp-host starts"):
+          host.wait_for_unit("docker-registry.service")
+          host.wait_for_open_port(5000)
+          host.succeed("podman push -q imp-host-stub:test localhost:5000/imp-host-stub:test")
+          host.fail("podman image exists localhost:5000/imp-host-stub:test")
+          host.succeed("/run/booted-system/specialisation/pull/bin/switch-to-configuration test")
+          start_imp_host()
+          host.succeed("podman image exists localhost:5000/imp-host-stub:test")
+          image = host.succeed("podman container inspect -f '{{.ImageName}}' imp-host").strip()
+          assert image == "localhost:5000/imp-host-stub:test", image
+          host.succeed("grep -qx IMP_HOST_IMAGE=localhost:5000/imp-host-stub:test /run/imp-host/env")
+          assert loads() == 2, loads()
+          host.fail("systemctl is-active docker.service")
+          # the restore: the archive's image again, which is loaded already
+          host.succeed("/run/booted-system/specialisation/budget/bin/switch-to-configuration test")
+          start_imp_host()
+          host.succeed("grep -qx IMP_HOST_IMAGE=imp-host-stub:test /run/imp-host/env")
           assert loads() == 2, loads()
 
       with subtest("saved state that needs a login joins again with the key"):
