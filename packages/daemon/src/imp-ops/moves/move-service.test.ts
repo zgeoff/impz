@@ -35,7 +35,7 @@ import { buildStubZfsStorage } from '../../../testing/vm/build-stub-zfs-storage'
 import { listImages, readImageByDigest, readImageByName } from '../../platform/db/images';
 import type { ImpWrite } from '../../platform/db/imp-write-feed';
 import { listImps, readImpByName, updateImpExposure, updateImpMove } from '../../platform/db/imps';
-import { updateMoveSendStep } from '../../platform/db/move-sends';
+import { readMoveSend, updateMoveSendStep } from '../../platform/db/move-sends';
 import { listMoveTickets } from '../../platform/db/move-tickets';
 import { MOVE_TRANSITIONS } from '../../platform/db/move-transitions';
 import { buildImagePaths } from '../../vm/storage/data-layout';
@@ -802,6 +802,44 @@ test('it commits on resume after a lost commit, and the source copy goes', async
   expect(source).toBeUndefined();
   expect(target?.moveState).toBeNull();
 });
+
+test.each([
+  ['request', 'dropped the commit'],
+  ['answer', 'dropped the answer'],
+] as const)(
+  'it commits once after a restart between the stored receipt and the move mark, with the %s lost',
+  async (drops, dropped) => {
+    const ctx = await setupTest({ hook: makeStubDroppedCommit({ drops }) });
+
+    await createUbuntuImage(ctx.source);
+    await createUbuntuImage(ctx.target);
+
+    const created = await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
+
+    await ctx.sourceApp.client.imps.stop({ name: 'dev' });
+
+    const failed = await ctx.runMove('dev');
+    const send = await readMoveSend(ctx.source.db, created.id);
+
+    await ctx.source.db
+      .updateTable('imps')
+      .set({ move_state: 'sending' })
+      .where('id', '=', created.id)
+      .execute();
+
+    await ctx.source.restartImpd();
+    await ctx.source.moves.waitForRecovery();
+
+    const source = await readImpByName(ctx.source.db, 'dev');
+    const target = await readImpByName(ctx.target.db, 'dev');
+
+    expect(failed.error).toContain(dropped);
+    expect(send?.step).toBe('sent');
+    expect(source).toBeUndefined();
+    expect(target?.moveState).toBeNull();
+    expect(ctx.commits).toStrictEqual(['dev']);
+  },
+);
 
 test('it reports the commit on the target once when a commit whose answer was lost resumes', async () => {
   const ctx = await setupTest({ hook: makeStubDroppedCommit({ drops: 'answer' }) });
