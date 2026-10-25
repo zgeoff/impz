@@ -86,7 +86,7 @@ export interface ImpdDeps {
   readonly reach?: Partial<ReachBoundaries>;
   readonly testRegistry?: Partial<TestRegistryBoundaries>;
   readonly imps?: ImpBoundaries;
-  readonly images?: Pick<ImageServiceDeps, 'dockerEnv' | 'builderImagePullMs' | 'seedRef'>;
+  readonly images?: Pick<ImageServiceDeps, 'builderImagePullMs' | 'seedRef'>;
   readonly moves?: ImpdMoveBoundaries;
   readonly agent?: Partial<Pick<ImpService, 'openExec' | 'openAttach' | 'openBuilderExec'>>;
   readonly freezer?: DiskFreezer;

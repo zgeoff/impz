@@ -60,11 +60,11 @@ capabilities alike, and an image is unpacked in a directory no host user can rea
 
 ## The Docker socket
 
-impd fetches one image through the host's Docker, the builder image that every build and pull runs
-in ([images](./storage/images.md#where-builds-run)), but imp-host never mounts the host's socket. A
-second container from the same image, imp-docker-proxy, holds it, and serves a socket of its own
-that imp-host mounts read-only. The proxy lets through exactly the calls impd makes to fetch the
-builder image, and refuses every other with a log line:
+impd fetches the builder image that every build and pull runs in from its registry, never through
+Docker ([images](./storage/images.md#where-builds-run)), and imp-host never mounts the host's
+socket. A second container from the same image, imp-docker-proxy, holds it, and serves a socket of
+its own that imp-host mounts read-only. impd makes no call through that socket. The proxy lets
+through only these calls, and refuses every other with a log line:
 
 - a ping and a version check, and an image inspect;
 - a pull of the builder image by its digest, and no other pull;

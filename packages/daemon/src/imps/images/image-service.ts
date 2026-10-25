@@ -67,8 +67,6 @@ export interface ImageServiceDeps {
 
   readonly startPullLimit?: (pullMs: number) => AbortSignal;
 
-  readonly dockerEnv?: Readonly<Record<string, string>>;
-
   readonly seedRef?: string | null;
 
   readonly clock?: Pick<Clock, 'now'>;

@@ -12,6 +12,7 @@ import { createBuilderImage } from '../../../testing/imps/create-builder-image';
 import { createFilesTar } from '../../../testing/imps/create-files-tar';
 import { createStubDockerCli } from '../../../testing/imps/create-stub-docker-cli';
 import { createStubImageMkfs } from '../../../testing/imps/create-stub-image-mkfs';
+import { createStubOciFetch } from '../../../testing/imps/create-stub-oci-fetch';
 import { buildQueryGate } from '../../../testing/platform/build-query-gate';
 import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { startTestImpd } from '../../../testing/start-test-impd';
@@ -34,6 +35,7 @@ async function setupTest() {
   stack.defer(() => rm(dataDir, { recursive: true, force: true }));
 
   const docker = createStubDockerCli({ directory: dataDir });
+  const ociFetch = createStubOciFetch({ directory: dataDir });
 
   updateEnv('PATH', docker.path);
 
@@ -45,7 +47,7 @@ async function setupTest() {
     },
   });
 
-  return Object.assign(harness, { stack, docker, lines: captureImpdLogs() });
+  return Object.assign(harness, { stack, docker, ociFetch, lines: captureImpdLogs() });
 }
 
 test('it adds an image through a builder for one platform, with no host engine call', async () => {
@@ -631,7 +633,7 @@ test('it fails the add of a builder the governor refuses, with no host engine ca
   expect(ctx.docker.readCalls()).toStrictEqual([]);
 });
 
-test('it fails the add with SERVICE_UNAVAILABLE when the host engine cannot give the builder image', async () => {
+test('it fails the add with SERVICE_UNAVAILABLE when the registry cannot give the builder image', async () => {
   const ctx = await setupTest();
 
   const config = loadConfig({
@@ -666,7 +668,7 @@ test('it fails the add with SERVICE_UNAVAILABLE when the host engine cannot give
   });
 });
 
-test('it asks the host engine only for the builder image when it cannot give it', async () => {
+test('it asks the registry only for the builder image config when it cannot give it', async () => {
   const ctx = await setupTest();
 
   const config = loadConfig({
@@ -701,11 +703,7 @@ test('it asks the host engine only for the builder image when it cannot give it'
 
   const imps = await listImps(ctx.db);
 
-  expect(ctx.docker.readCalls()).toStrictEqual([
-    `image inspect ${config.build.image}`,
-    `pull --quiet ${config.build.image}`,
-  ]);
-
+  expect(ctx.ociFetch.readCalls()).toStrictEqual([`config ${config.build.image}`]);
   expect(builder.guest.runs).toStrictEqual([]);
   expect(imps).toStrictEqual([]);
 });
@@ -724,17 +722,15 @@ test('it adds a bumped IMP_BUILD_IMAGE once, by its digest, and moves the row', 
     buildMockNewImage({ name: BUILDER_IMAGE, ref: 'ghcr.io/zgeoff/imp-base:0.1.0' }),
   );
 
-  createStubDockerCli({
+  createStubOciFetch({
     directory: ctx.dataDir,
     images: [
       {
-        refs: [config.build.image],
-        inspects: [{ Id: `sha256:${'f'.repeat(64)}`, Config: {}, Size: 4096 }],
-        isOnHost: false,
+        ref: config.build.image,
+        digest: `sha256:${'f'.repeat(64)}`,
+        exportTar: createFilesTar(ctx.dataDir, { dockerd: 'builder\n' }),
       },
     ],
-    create: { id: 'e'.repeat(64) },
-    exportTar: createFilesTar(ctx.dataDir, { dockerd: 'builder\n' }),
   });
 
   const builder = buildStubImageBuilder({ exported: [], repoDigest: 'sha256:1' });
@@ -760,11 +756,13 @@ test('it adds a bumped IMP_BUILD_IMAGE once, by its digest, and moves the row', 
 
   const row = await readImageByName(ctx.db, BUILDER_IMAGE);
 
-  const pulls = ctx.docker.readCalls().filter((call) => call.startsWith('pull '));
-
   expect(row?.ref).toStrictEqual(config.build.image);
   expect(row?.digest).toStrictEqual(`sha256:${'f'.repeat(64)}`);
-  expect(pulls).toStrictEqual([`pull --quiet ${config.build.image}`]);
+
+  expect(ctx.ociFetch.readCalls()).toStrictEqual([
+    `config ${config.build.image}`,
+    `export ${config.build.image}`,
+  ]);
 });
 
 test('it seeds the default image at first start through a builder', async () => {
@@ -776,17 +774,15 @@ test('it seeds the default image at first start through a builder', async () => 
     IMP_BUILD_DISK_GIB: '4',
   });
 
-  createStubDockerCli({
+  createStubOciFetch({
     directory: ctx.dataDir,
     images: [
       {
-        refs: [config.build.image],
-        inspects: [{ Id: `sha256:${'f'.repeat(64)}`, Config: {}, Size: 4096 }],
-        isOnHost: false,
+        ref: config.build.image,
+        digest: `sha256:${'f'.repeat(64)}`,
+        exportTar: createFilesTar(ctx.dataDir, { dockerd: 'builder\n' }),
       },
     ],
-    create: { id: 'e'.repeat(64) },
-    exportTar: createFilesTar(ctx.dataDir, { dockerd: 'builder\n' }),
   });
 
   const builder = buildStubImageBuilder({
@@ -817,15 +813,7 @@ test('it seeds the default image at first start through a builder', async () => 
   const image = config.build.image;
 
   expect(seeded?.ref).toBe('ubuntu:24.04');
-
-  expect(ctx.docker.readCalls()).toStrictEqual([
-    `image inspect ${image}`,
-    `pull --quiet ${image}`,
-    `image inspect ${image}`,
-    `create ${image} /bin/true`,
-    `export ${'e'.repeat(64)}`,
-    `rm -f ${'e'.repeat(64)}`,
-  ]);
+  expect(ctx.ociFetch.readCalls()).toStrictEqual([`config ${image}`, `export ${image}`]);
 });
 
 test('it seeds the default image at the next start once the builder image has landed', async () => {
@@ -865,10 +853,10 @@ test('it seeds the default image at the next start once the builder image has la
   const seeded = await readImageByName(ctx.db, 'ubuntu');
 
   expect(seeded?.ref).toBe('ubuntu:24.04');
-  expect(ctx.docker.readCalls()).toStrictEqual([]);
+  expect(ctx.ociFetch.readCalls()).toStrictEqual([]);
 });
 
-test('it fails a builder image pull that hangs at its limit, naming IMP_BUILD_IMAGE', async () => {
+test('it fails a builder image fetch that hangs at its limit, naming IMP_BUILD_IMAGE', async () => {
   const ctx = await setupTest();
 
   const config = loadConfig({
@@ -877,16 +865,9 @@ test('it fails a builder image pull that hangs at its limit, naming IMP_BUILD_IM
     IMP_BUILD_DISK_GIB: '4',
   });
 
-  createStubDockerCli({
+  createStubOciFetch({
     directory: ctx.dataDir,
-    images: [
-      {
-        refs: [config.build.image],
-        inspects: [{ Id: `sha256:${'f'.repeat(64)}`, Config: {}, Size: 4096 }],
-        isOnHost: false,
-        pull: 'hang',
-      },
-    ],
+    images: [{ ref: config.build.image, digest: `sha256:${'f'.repeat(64)}`, fetch: 'hang' }],
   });
 
   const builder = buildStubImageBuilder({ exported: [], repoDigest: 'sha256:1' });
@@ -920,7 +901,7 @@ test('it fails a builder image pull that hangs at its limit, naming IMP_BUILD_IM
   const ensuring = images.ensureBuilderImage();
 
   await waitFor(() => {
-    expect(ctx.docker.readCalls()).toContain(`pull --quiet ${image}`);
+    expect(ctx.ociFetch.readCalls()).toContain(`config ${image}`);
   });
 
   for (const limit of pullLimits) {
@@ -929,11 +910,11 @@ test('it fails a builder image pull that hangs at its limit, naming IMP_BUILD_IM
 
   expect(ensuring).rejects.toMatchObject({
     code: 'SERVICE_UNAVAILABLE',
-    message: `impd cannot add its builder image ${image} (IMP_BUILD_IMAGE) from the host engine, so no image add or build can run: the pull did not finish in 0.3 s; on a slow link, pull ${image} on the host engine first (docker pull ${image}), and impd takes it from there`,
+    message: `impd cannot add its builder image ${image} (IMP_BUILD_IMAGE) from its registry, so no image add or build can run: the fetch did not finish in 0.3 s`,
   });
 });
 
-test('it makes no host engine call beyond the inspect and the pull when the pull hangs', async () => {
+test('it exports nothing when the config fetch of the builder image hangs', async () => {
   const ctx = await setupTest();
 
   const config = loadConfig({
@@ -942,16 +923,9 @@ test('it makes no host engine call beyond the inspect and the pull when the pull
     IMP_BUILD_DISK_GIB: '4',
   });
 
-  createStubDockerCli({
+  createStubOciFetch({
     directory: ctx.dataDir,
-    images: [
-      {
-        refs: [config.build.image],
-        inspects: [{ Id: `sha256:${'f'.repeat(64)}`, Config: {}, Size: 4096 }],
-        isOnHost: false,
-        pull: 'hang',
-      },
-    ],
+    images: [{ ref: config.build.image, digest: `sha256:${'f'.repeat(64)}`, fetch: 'hang' }],
   });
 
   const builder = buildStubImageBuilder({ exported: [], repoDigest: 'sha256:1' });
@@ -984,7 +958,7 @@ test('it makes no host engine call beyond the inspect and the pull when the pull
   const ensuring = images.ensureBuilderImage();
 
   await waitFor(() => {
-    expect(ctx.docker.readCalls()).toContain(`pull --quiet ${config.build.image}`);
+    expect(ctx.ociFetch.readCalls()).toContain(`config ${config.build.image}`);
   });
 
   for (const limit of pullLimits) {
@@ -994,14 +968,10 @@ test('it makes no host engine call beyond the inspect and the pull when the pull
   await ensuring.catch(() => {});
 
   expect(ensuring).rejects.toMatchObject({ code: 'SERVICE_UNAVAILABLE' });
-
-  expect(ctx.docker.readCalls()).toStrictEqual([
-    `image inspect ${config.build.image}`,
-    `pull --quiet ${config.build.image}`,
-  ]);
+  expect(ctx.ociFetch.readCalls()).toStrictEqual([`config ${config.build.image}`]);
 });
 
-test('it pulls the builder image again on the add after a pull that failed', async () => {
+test('it fetches the builder image again on the add after a fetch that failed', async () => {
   const ctx = await setupTest();
 
   const config = loadConfig({
@@ -1010,13 +980,10 @@ test('it pulls the builder image again on the add after a pull that failed', asy
     IMP_BUILD_DISK_GIB: '4',
   });
 
-  const host = {
-    refs: [config.build.image],
-    inspects: [{ Id: `sha256:${'f'.repeat(64)}`, Config: {}, Size: 4096 }],
-    isOnHost: false,
-  };
-
-  createStubDockerCli({ directory: ctx.dataDir, images: [{ ...host, pull: 'hang' }] });
+  createStubOciFetch({
+    directory: ctx.dataDir,
+    images: [{ ref: config.build.image, digest: `sha256:${'f'.repeat(64)}`, fetch: 'hang' }],
+  });
 
   const builder = buildStubImageBuilder({ exported: [], repoDigest: 'sha256:1' });
   const pullLimits: AbortController[] = [];
@@ -1048,7 +1015,7 @@ test('it pulls the builder image again on the add after a pull that failed', asy
   const failing = images.ensureBuilderImage();
 
   await waitFor(() => {
-    expect(ctx.docker.readCalls()).toContain(`pull --quiet ${config.build.image}`);
+    expect(ctx.ociFetch.readCalls()).toContain(`config ${config.build.image}`);
   });
 
   for (const limit of pullLimits) {
@@ -1057,18 +1024,22 @@ test('it pulls the builder image again on the add after a pull that failed', asy
 
   const [first] = await Promise.allSettled([failing]);
 
-  createStubDockerCli({
+  createStubOciFetch({
     directory: ctx.dataDir,
-    images: [{ ...host, pull: 'ok' }],
-    create: { id: 'e'.repeat(64) },
-    exportTar: createFilesTar(ctx.dataDir, { dockerd: 'builder\n' }),
+    images: [
+      {
+        ref: config.build.image,
+        digest: `sha256:${'f'.repeat(64)}`,
+        exportTar: createFilesTar(ctx.dataDir, { dockerd: 'builder\n' }),
+      },
+    ],
   });
 
   await images.ensureBuilderImage();
 
   const row = await readImageByName(ctx.db, BUILDER_IMAGE);
 
-  const pulls = ctx.docker.readCalls().filter((call) => call.startsWith('pull '));
+  const fetches = ctx.ociFetch.readCalls().filter((call) => call.startsWith('config '));
 
   expect(first).toMatchObject({
     status: 'rejected',
@@ -1076,10 +1047,10 @@ test('it pulls the builder image again on the add after a pull that failed', asy
   });
 
   expect(row?.ref).toStrictEqual(config.build.image);
-  expect(pulls).toHaveLength(2);
+  expect(fetches).toHaveLength(2);
 });
 
-test('it stops the wait of a caller that goes, and the pull it shared goes on for the others', async () => {
+test('it stops the wait of a caller that goes, and the fetch it shared goes on for the others', async () => {
   const ctx = await setupTest();
 
   const config = loadConfig({
@@ -1088,17 +1059,15 @@ test('it stops the wait of a caller that goes, and the pull it shared goes on fo
     IMP_BUILD_DISK_GIB: '4',
   });
 
-  createStubDockerCli({
+  createStubOciFetch({
     directory: ctx.dataDir,
     images: [
       {
-        refs: [config.build.image],
-        inspects: [{ Id: `sha256:${'f'.repeat(64)}`, Config: {}, Size: 4096 }],
-        isOnHost: false,
+        ref: config.build.image,
+        digest: `sha256:${'f'.repeat(64)}`,
+        exportTar: createFilesTar(ctx.dataDir, { dockerd: 'builder\n' }),
       },
     ],
-    create: { id: 'e'.repeat(64) },
-    exportTar: createFilesTar(ctx.dataDir, { dockerd: 'builder\n' }),
   });
 
   const builder = buildStubImageBuilder({ exported: [], repoDigest: 'sha256:1' });
@@ -1132,13 +1101,13 @@ test('it stops the wait of a caller that goes, and the pull it shared goes on fo
 
   const row = await readImageByName(ctx.db, BUILDER_IMAGE);
 
-  const pulls = ctx.docker.readCalls().filter((call) => call.startsWith('pull '));
+  const fetches = ctx.ociFetch.readCalls().filter((call) => call.startsWith('config '));
 
   expect(row?.ref).toStrictEqual(config.build.image);
-  expect(pulls).toHaveLength(1);
+  expect(fetches).toHaveLength(1);
 });
 
-test('it does not pull a builder image the host engine has already', async () => {
+test('it names the error of a step after the fetch that fails past the limit, not the fetch', async () => {
   const ctx = await setupTest();
 
   const config = loadConfig({
@@ -1147,67 +1116,15 @@ test('it does not pull a builder image the host engine has already', async () =>
     IMP_BUILD_DISK_GIB: '4',
   });
 
-  createStubDockerCli({
+  createStubOciFetch({
     directory: ctx.dataDir,
     images: [
       {
-        refs: [config.build.image],
-        inspects: [{ Id: `sha256:${'f'.repeat(64)}`, Config: {}, Size: 4096 }],
-        pull: 'hang',
+        ref: config.build.image,
+        digest: `sha256:${'f'.repeat(64)}`,
+        exportTar: createFilesTar(ctx.dataDir, { dockerd: 'builder\n' }),
       },
     ],
-    create: { id: 'e'.repeat(64) },
-    exportTar: createFilesTar(ctx.dataDir, { dockerd: 'builder\n' }),
-  });
-
-  const builder = buildStubImageBuilder({ exported: [], repoDigest: 'sha256:1' });
-
-  const images = createImageService({
-    config,
-    db: ctx.db,
-    storage: ctx.storage,
-    storageGate: ctx.impd.storageGate,
-    diskBudget: ctx.impd.diskBudget,
-    readBuilders: () => builders,
-    builderImagePullMs: 300,
-  });
-
-  const builders = createBuilders({
-    config,
-    db: ctx.db,
-    imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
-    ensureImage: (signal) => images.ensureBuilderImage(signal),
-  });
-
-  await images.ensureBuilderImage();
-
-  const row = await readImageByName(ctx.db, BUILDER_IMAGE);
-
-  const pulls = ctx.docker.readCalls().filter((call) => call.startsWith('pull '));
-
-  expect(row?.ref).toStrictEqual(config.build.image);
-  expect(pulls).toStrictEqual([]);
-});
-
-test('it names the error of a step after the pull that fails past the limit, not the pull', async () => {
-  const ctx = await setupTest();
-
-  const config = loadConfig({
-    IMP_DATA_DIR: ctx.dataDir,
-    IMP_BUILD_MEMORY_MIB: '512',
-    IMP_BUILD_DISK_GIB: '4',
-  });
-
-  createStubDockerCli({
-    directory: ctx.dataDir,
-    images: [
-      {
-        refs: [config.build.image],
-        inspects: [{ Id: `sha256:${'f'.repeat(64)}`, Config: {}, Size: 4096 }],
-      },
-    ],
-    create: { id: 'e'.repeat(64) },
-    exportTar: createFilesTar(ctx.dataDir, { dockerd: 'builder\n' }),
   });
 
   const mkfs = createStubImageMkfs(ctx.dataDir);
@@ -1251,7 +1168,7 @@ test('it names the error of a step after the pull that fails past the limit, not
   expect(ensuring).rejects.toMatchObject({
     code: 'SERVICE_UNAVAILABLE',
     message: expect.stringMatching(
-      /^(?!.*the pull did not finish).*no space left on device/sv,
+      /^(?!.*the fetch did not finish).*no space left on device/sv,
     ) as unknown,
   });
 });

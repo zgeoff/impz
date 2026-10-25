@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { updateEnv } from '@impz/test-utils/update-env';
 import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
 import { buildStubImageBuilder } from '../../../testing/imps/build-stub-image-builder';
-import { createStubDockerCli } from '../../../testing/imps/create-stub-docker-cli';
+import { createStubOciFetch } from '../../../testing/imps/create-stub-oci-fetch';
 import { buildQueryGate } from '../../../testing/platform/build-query-gate';
 import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { loadConfig } from '../../config';
@@ -93,23 +93,17 @@ test('#runImageBuild refuses a context path that docker could read as a flag', a
   });
 });
 
-test('#ensureBuilderImage leaves no work directory behind when the create fails', async () => {
+test('#ensureBuilderImage leaves no work directory behind when the export fails', async () => {
   const ctx = await setupTest();
 
   const config = loadConfig({ IMP_DATA_DIR: ctx.dataDir });
 
-  const docker = createStubDockerCli({
+  const ociFetch = createStubOciFetch({
     directory: ctx.dataDir,
-    images: [
-      {
-        refs: [config.build.image],
-        inspects: [{ Id: `sha256:${'c'.repeat(64)}`, Config: {}, Size: 1 }],
-      },
-    ],
-    create: { stderr: 'no space left on device' },
+    images: [{ ref: config.build.image, digest: `sha256:${'c'.repeat(64)}` }],
   });
 
-  updateEnv('PATH', docker.path);
+  updateEnv('PATH', ociFetch.path);
   mkdirSync(join(ctx.dataDir, 'images'));
 
   const images = createImageService({
@@ -125,7 +119,7 @@ test('#ensureBuilderImage leaves no work directory behind when the create fails'
 
   await ensuring.catch(() => {});
 
-  expect(ensuring).rejects.toThrow('no space left on device');
+  expect(ensuring).rejects.toThrow('MANIFEST_UNKNOWN');
   expect(readdirSync(join(ctx.dataDir, 'images'))).toStrictEqual([]);
 });
 

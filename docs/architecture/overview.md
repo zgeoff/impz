@@ -8,14 +8,14 @@ imp under a RAM budget the owner sets, and sleeps the least recently active ones
 host joins a Tailscale tailnet that the owner runs, and other machines reach impd through that
 tailnet. One exception: an imp the owner makes public takes requests from the internet.
 
-The code is one Bun workspace and the Go modules of the guest agent and the host's ksm-exec. impd is
-`packages/daemon`. Its typed contract, `packages/api`, is shared with the CLI, the npm client, the
-MCP server and the dashboard. Helpers that know nothing about imps, such as byte and duration
-formats, live in `packages/shared`, which imports no other workspace package and no Node module, so
-the dashboard and the published client can bundle it. impd's side of the vsock protocol with the
-guest agent, the frame codec and the generated message types, lives in `packages/agent-protocol`,
-another leaf, which the client's and the CLI's tests use to play the agent. The guest agent is
-`agent/`.
+The code is one Bun workspace and the Go modules of the guest agent and the host's ksm-exec and
+oci-fetch. impd is `packages/daemon`. Its typed contract, `packages/api`, is shared with the CLI,
+the npm client, the MCP server and the dashboard. Helpers that know nothing about imps, such as byte
+and duration formats, live in `packages/shared`, which imports no other workspace package and no
+Node module, so the dashboard and the published client can bundle it. impd's side of the vsock
+protocol with the guest agent, the frame codec and the generated message types, lives in
+`packages/agent-protocol`, another leaf, which the client's and the CLI's tests use to play the
+agent. The guest agent is `agent/`.
 
 ## The path of a request
 
@@ -68,7 +68,7 @@ flowchart TB
   I -->|"API socket"| F2
   I -->|"vsock"| A1["guest agent"]
   F1 --- A1
-  I -->|"Docker calls"| X --> D
+  X --> D
   T --- I
 ```
 
@@ -76,9 +76,10 @@ The host under impz is thin: it gives KVM, cgroup v2, Docker and a filesystem fo
 two containers from one image ([the host](./host.md)). The imp-host container holds impd, every
 Firecracker process and the tailnet node, in a network namespace of its own, so the taps, routes and
 firewall rules for the imps never touch the host's network. A small entrypoint sets up the cgroups,
-the storage, the network and Tailscale, then runs impd under a supervisor that restarts it. The
-second container, imp-docker-proxy, holds the host's Docker socket and lets through only the calls
-impd makes to fetch the builder image that every image pull and build runs in.
+the storage, the network and Tailscale, then runs impd under a supervisor that restarts it. impd
+fetches the builder image that every image pull and build runs in from its registry, with no Docker
+engine. The second container, imp-docker-proxy, holds the host's Docker socket, and impd makes no
+call through it.
 
 impd is one Bun process. It starts one Firecracker microVM per awake imp, detached from itself, so
 an impd restart leaves every VM running and the next impd adopts them. Each Firecracker runs under

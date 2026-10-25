@@ -20,6 +20,7 @@ hadolint host/Dockerfile images/base/Dockerfile
 bun run lint:docs                 # every docs link, and every docs/ path code cites, resolves
 (cd agent && gofmt -l . && go vet ./...)   # gofmt -l lists unformatted files
 (cd host/ksm-exec && gofmt -l . && go vet ./... && go test ./...)   # ksm-exec, a Go module of its own
+(cd host/oci-fetch && gofmt -l . && go vet ./... && go test ./...)  # oci-fetch, a Go module of its own
 (cd agent && go tool -modfile=tools/go.mod golangci-lint run --build-tags root ./...)   # the lint CI runs
 scripts/test-go.sh                # the agent's Go tests with -race; prints the slowest cases
 e2e/test-e2e.sh --clean       # end to end, from a clean state
@@ -269,10 +270,10 @@ Lefthook installs the hooks with `bun install`.
   `.lefthook/pre-push-baseline.yml`, which repo-sync delivers from zgeoff/tools. The baseline checks
   the format and the types of the whole tree, and lints and tests only the files the branch changes
   since its merge base with `origin/main`. A dashboard file's tests run from its package. CI's
-  `checks` job runs type-aware lint, deadcode and every test. On a branch that changes the agent's
-  or ksm-exec's Go, pre-push also runs `gofmt` on the changed files and `go vet -p 1`, which keeps
-  vet's memory within what a 2 GB imp can spare; the Go lint, vulnerability and dead-code gates run
-  in CI only.
+  `checks` job runs type-aware lint, deadcode and every test. On a branch that changes the agent's,
+  ksm-exec's or oci-fetch's Go, pre-push also runs `gofmt` on the changed files and `go vet -p 1`,
+  which keeps vet's memory within what a 2 GB imp can spare; the Go lint, vulnerability and
+  dead-code gates run in CI only.
 
 ## CI
 
@@ -282,7 +283,7 @@ Lefthook installs the hooks with `bun install`.
 | ------------ | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `gitleaks`   | yes      | A secret scan over the history.                                                                                                                                                                                                                                  |
 | `checks`     | yes      | Passes only when the `checks-unit` and `checks-lanes` jobs passed: `bun test` in two shards of two workers, capped at 1536 MiB with no swap, and `bun run audit`, the Bun pin check, `bun run check:static`, the lane tests and the dashboard's tests and build. |
-| `go`         | yes      | In `agent/` and `host/ksm-exec`: `gofmt`, `go vet`, golangci-lint, govulncheck, deadcode, the tests; the agent's again as root with the `root` tag. Also `gofmt`, vet and lint on the Dockerfile difftest module.                                                |
+| `go`         | yes      | In `agent/`, `host/ksm-exec` and `host/oci-fetch`: `gofmt`, `go vet`, golangci-lint, govulncheck, deadcode, the tests; the agent's again as root with the `root` tag. Also `gofmt`, vet and lint on the Dockerfile difftest module.                              |
 | `shellcheck` | yes      | `bun run lint:shell`, actionlint and zizmor over `.github/`, hadolint over both Dockerfiles, and the tests that shellcheck the shell production code holds as text.                                                                                              |
 | `cli`        | yes      | Compiles the CLI for every platform and runs the linux-x64 one; builds the release image's compile stage.                                                                                                                                                        |
 | `client`     | yes      | Packs `@impz/client`, installs it on the oldest Node it supports, and smokes it under Node, Bun and a compiled Bun binary.                                                                                                                                       |
