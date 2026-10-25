@@ -1,6 +1,5 @@
 import type { StartTimer } from '../../../platform/process/clock';
 import type { CommandResult } from '../../../platform/process/run-command';
-import { startRealTimer } from '../../../platform/process/start-real-timer';
 import { ImageLimitError } from '../build/image-limit-error';
 import { planRootfsOverhead } from './rootfs-plan';
 import { UNPACK_TAR_ARGS, assertUnpacked } from './unpack-export';
@@ -33,7 +32,7 @@ export interface WriteStreamedTreeOptions {
   ) => Promise<CommandResult>;
 
   readonly grow?: ((totalBytes: number, writtenBytes: number) => Promise<void>) | undefined;
-  readonly startTimer?: StartTimer | undefined;
+  readonly startTimer: StartTimer;
 }
 
 const EXPORT_IDLE_MS = 120_000;
@@ -47,7 +46,7 @@ export async function writeStreamedTree(
   const root = options.root;
   const limits = options.limits;
   const grow = options.grow ?? (() => Promise.resolve());
-  const startTimer = options.startTimer ?? startRealTimer;
+  const startTimer = options.startTimer;
   const maxBytes = limits.maxBytes;
   const tar = options.startTar([...UNPACK_TAR_ARGS, '-vv', '--quoting-style=escape', '-C', root]);
   const sent = { bytes: 0 };
