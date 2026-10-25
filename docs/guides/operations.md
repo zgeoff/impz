@@ -83,9 +83,11 @@ bash deploy/upgrade.sh
 
 4. It stops and disables `imp-docker-proxy`, whose unit becomes
    `imp-docker-proxy.service.bak-<time>`, then restarts the host (with compose, `up -d` of
-   imp-host). It waits for `/health` to report ready, prints how to roll back (`docker tag` the old
-   image ID, then `systemctl restart imp-host`), prints the boot status counts from `impz info`, and
-   lists the imps.
+   imp-host). It waits for `/health` to report ready, prints how to roll back, prints the boot
+   status counts from `impz info`, and lists the imps. When the old image has the new image's host
+   contract, the printed rollback is `docker tag` of the old image ID and the same restart. When the
+   contracts differ, as from a `socket-proxy` image to a `no-docker` one, the printed rollback is
+   `deploy/bootstrap.sh` of the old image's release.
 
 Imps then wake on demand. Each sleeping imp either restores its memory or boots its disk cold. The
 disk is never touched.
@@ -129,11 +131,13 @@ An impd from before this scheme kept the drive at `/var/lib/imp/system/imp-syste
 VM it booted still runs from that file. impd leaves the file alone. Remove it once no such VM runs:
 `impz ls` shows none with `booted by an older impd`.
 
-**Roll back** with `docker tag <old image ID> <image>` and the same restart. A rollback to an impd
-from before this upgrade scheme (the first release with `system/drives/`) does not match the hashes
-in the new snapshot records, and every sleeping imp boots cold once. The same happens once the other
-way: an older impd hashed the drive with another hash and wrote no drive path, so its snapshots boot
-cold with `the snapshot is from an older impd`.
+**Roll back** to an image of the same host contract with `docker tag <old image ID> <image>` and the
+same restart. Roll back to an image of another host contract with `deploy/bootstrap.sh` of that
+image's release, which writes the units its contract needs. A rollback to an impd from before this
+upgrade scheme (the first release with `system/drives/`) does not match the hashes in the new
+snapshot records, and every sleeping imp boots cold once. The same happens once the other way: an
+older impd hashed the drive with another hash and wrote no drive path, so its snapshots boot cold
+with `the snapshot is from an older impd`.
 
 **CAUTION:** A rollback to an image from before the unprivileged host needs the old unit with
 `--privileged`, which `docker tag` does not bring back; upgrade.sh refuses it. Run
