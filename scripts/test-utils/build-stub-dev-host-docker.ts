@@ -44,14 +44,18 @@ export function buildStubDevHostDocker(stub: StubDevHostDocker): string {
     `  "exec "*" kill -0 "*) exit ${(stub.impdExits ?? true) ? 1 : 0} ;;`,
     '  "image inspect -f {{.Id}} "*) echo sha256:stub-host-image ;;',
     `  "image inspect "*) exit ${stub.hasImage ? 0 : 1} ;;`,
+
+    // podman's own spelling of the image check; every other call is the same in both CLIs.
+    `  "image exists "*) exit ${stub.hasImage ? 0 : 1} ;;`,
     '  "build -q "*) echo sha256:stub-built-image ;;',
     ...states,
     '  "inspect -f {{.State.Running}} "*) echo "Error: No such object" >&2; exit 1 ;;',
     '  "run -d "*) echo c0ffee ;;',
+    '  "stop -t "*) ;;',
     '  "rm -f "*) ;;',
     ...logs,
     '  "logs --tail "*) ;;',
-    '  *) echo "stub docker: unexpected call: $*" >&2; exit 1 ;;',
+    '  *) echo "stub $(basename "$0"): unexpected call: $*" >&2; exit 1 ;;',
     'esac',
   ].join('\n');
 }

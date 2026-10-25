@@ -113,23 +113,29 @@ async function resetInstance(target: DevInstance, env: HarnessEnv): Promise<void
 
   console.log(`    clean reset: tailnet logout, remove ${target.container}, wipe ${wiped}`);
 
-  const container = await runCommand(['docker', 'inspect', target.container]);
+  const cli = target.containerCLI;
+
+  const container = await runCommand([cli, 'inspect', target.container]);
 
   if (container.exitCode === 0) {
-    await runCommand(['docker', 'exec', target.container, '/usr/local/lib/imp/tailscale-down.sh']);
+    await runCommand([cli, 'exec', target.container, '/usr/local/lib/imp/tailscale-down.sh']);
   }
 
   await runDevScript('down', target, {}, env);
-  await runCommand(['docker', 'rm', '-f', `${target.container}-mv-b`]);
+
+  // The second host runs only under docker, and a podman run may have no Docker engine to ask.
+  if (cli === 'docker') {
+    await runCommand(['docker', 'rm', '-f', `${target.container}-mv-b`]);
+  }
 
   for (const wipe of targets) {
-    await removeDataDir(wipe, env);
+    await removeDataDir(wipe, env, cli);
   }
 }
 
 async function startInstance(base: DevInstance, run: Readonly<HarnessRun>): Promise<DevInstance> {
   await runDevScript('up', base, {}, run.env);
-  await checkPrivileges(base.container);
+  await checkPrivileges(base);
 
   const token = await readToken(base);
 

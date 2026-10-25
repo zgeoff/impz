@@ -18,10 +18,10 @@ export async function waitDevReady(dev: Dev, defaultSeconds: number): Promise<vo
       return;
     }
 
-    const isRunning = await probeContainerRunning(dev.io, dev.layout.name);
+    const isRunning = await probeContainerRunning(dev);
 
     if (!isRunning) {
-      const tail = await readLogTail(dev.io, dev.layout.name, 40);
+      const tail = await readLogTail(dev, 40);
 
       throw new DevError(`${dev.layout.name} stopped; last log lines:`, tail);
     }

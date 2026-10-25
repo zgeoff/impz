@@ -240,7 +240,7 @@ export function buildHostBFixtureDeps(keep: boolean, env: HarnessEnv): HostBFixt
     },
     startHost: async (host) => {
       await runDevScript('up', host, {}, env);
-      await checkPrivileges(host.container);
+      await checkPrivileges(host);
     },
     login: async (host, cliEnv) => {
       const token = await readToken(host);
@@ -264,7 +264,7 @@ export function buildHostBFixtureDeps(keep: boolean, env: HarnessEnv): HostBFixt
       await runDevScript('down', host, {}, env);
 
       if (target !== null) {
-        await removeDataDir(target, env);
+        await removeDataDir(target, env, host.containerCLI);
       }
     },
     log: (line) => {

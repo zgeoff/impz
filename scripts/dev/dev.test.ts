@@ -767,6 +767,125 @@ test('it runs logs, shell and token on the caller terminal through the given run
   ]);
 });
 
+test('it runs token through podman when IMP_DEV_CONTAINER_CLI is podman', async () => {
+  const runAttached = mock(() => Promise.resolve(0));
+
+  await runDev({
+    argv: ['token'],
+    env: { IMP_DEV_CONTAINER_CLI: 'podman' },
+    cwd: '/',
+    io: { ...wireDevIO(), runAttached },
+  });
+
+  expect(runAttached).toHaveBeenCalledExactlyOnceWith([
+    'podman',
+    'exec',
+    'imp-dev',
+    'cat',
+    '/var/lib/imp/token',
+  ]);
+});
+
+test('it refuses up under podman without the host image in podman, naming the command that loads it', () => {
+  const ctx = setupTest();
+  const stub = buildStubDevHostDocker({ containers: {}, hasImage: false });
+  const podman = createStubBin(ctx.directoryPath, 'podman', stub);
+
+  createStubBin(ctx.directoryPath, 'docker', stub);
+
+  const result = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'up'], {
+    env: {
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_DEV_DATA: join(ctx.directoryPath, 'data'),
+      IMP_DEV_CONTAINER_CLI: 'podman',
+
+      IMP_KERNEL: new URL('../../package.json', import.meta.url).pathname,
+      IMP_SYSTEM_DRIVE: new URL('../../package.json', import.meta.url).pathname,
+      IMP_HOST_IMAGE: 'imp-host:dev-test',
+      IMP_HOST_IMAGE_READY: '1',
+    },
+  });
+
+  expect({
+    exitCode: result.exitCode,
+    stdout: result.stdout.toString(),
+    stderr: result.stderr.toString(),
+    calls: readFileSync(podman.calls, 'utf8'),
+  }).toStrictEqual({
+    exitCode: 1,
+    stdout: '',
+    stderr:
+      'dev.sh: podman has no imp-host:dev-test image; load it with: docker save imp-host:dev-test | podman load\n',
+    calls: 'podman image exists imp-host:dev-test\n',
+  });
+});
+
+test('it starts the dev container with podman, and asks docker nothing, when IMP_DEV_CONTAINER_CLI is podman', () => {
+  const ctx = setupTest();
+  const stub = buildStubDevHostDocker({ containers: { 'imp-dev': false }, hasImage: true });
+  const podman = createStubBin(ctx.directoryPath, 'podman', stub);
+
+  createStubBin(ctx.directoryPath, 'docker', stub);
+  createStubBin(ctx.directoryPath, 'curl', 'exit 7');
+
+  Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'up'], {
+    env: {
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_DEV_DATA: join(ctx.directoryPath, 'data'),
+      IMP_DEV_CONTAINER_CLI: 'podman',
+
+      IMP_KERNEL: new URL('../../package.json', import.meta.url).pathname,
+      IMP_SYSTEM_DRIVE: new URL('../../package.json', import.meta.url).pathname,
+      IMP_HOST_IMAGE: 'imp-host:dev-test',
+      IMP_DEV_TAILNET: '0',
+      IMP_UPLINK_MTU: '1500',
+    },
+  });
+
+  const calls = readFileSync(podman.calls, 'utf8').split('\n');
+
+  expect(calls).toContainEqual(expect.toStartWith('podman run -d --name imp-dev '));
+  expect(calls.filter((call) => call.startsWith('docker '))).toStrictEqual([]);
+});
+
+test('it stops and removes the dev container through podman on down', () => {
+  const ctx = setupTest();
+
+  const podman = createStubBin(
+    ctx.directoryPath,
+    'podman',
+    buildStubDevHostDocker({
+      containers: { 'imp-dev': true },
+      hasImage: true,
+      logs: { 'imp-dev': 'impd: every imp asleep\n' },
+    }),
+  );
+
+  const result = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'down'], {
+    env: {
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_DEV_DATA: join(ctx.directoryPath, 'data'),
+      IMP_DEV_CONTAINER_CLI: 'podman',
+    },
+  });
+
+  expect({
+    exitCode: result.exitCode,
+    stdout: result.stdout.toString(),
+    calls: readFileSync(podman.calls, 'utf8').split('\n'),
+  }).toStrictEqual({
+    exitCode: 0,
+    stdout: 'impd: every imp asleep\n',
+    calls: [
+      'podman inspect -f {{.State.Running}} imp-dev',
+      'podman stop -t 120 imp-dev',
+      'podman logs --tail 5 imp-dev',
+      'podman rm -f imp-dev',
+      '',
+    ],
+  });
+});
+
 test('it stops before it asks docker anything when there is no machine id', () => {
   const ctx = setupTest();
   const docker = createStubBin(ctx.directoryPath, 'docker', 'exit 1');

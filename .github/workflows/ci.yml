@@ -741,6 +741,102 @@ jobs:
           echo "e2e groups: $RESULT"
           test "$RESULT" = success
 
+  # The proof that an imp host runs with no Docker engine: e2e/podman/run-podman-proof.sh
+  # starts the dev instance under Docker, masks the runner's Docker, starts it again
+  # under rootful Podman on the same data dir, checks what survived, and runs the
+  # socket and podman suites. Not a required check, and not in the e2e gate.
+  podman:
+    name: podman (no Docker)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    # a cache miss rebuilds the guest kernel, about 10 minutes on 4 cores, and
+    # impd builds its default image before the first imp
+    timeout-minutes: 40
+    env:
+      E2E_RAM_BUDGET_MIB: 4096
+      IMP_DEFAULT_MEMORY_MIB: 1024
+      IMP_KERNEL: .cache/ci/vmlinux
+      IMP_SYSTEM_DRIVE: .cache/ci/imp-system.squashfs
+      IMP_STORAGE_GIB: 40
+      IMP_HOST_IMAGE: imp-host:dev
+      IMP_HOST_IMAGE_READY: 1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Check KVM
+        run: scripts/ci/check-kvm.sh
+
+      - name: Pick the data dir
+        run: |
+          df -h / /mnt || true
+          if mountpoint -q /mnt; then
+            data=/mnt/imp-e2e
+          else
+            data=$GITHUB_WORKSPACE/.data/ci
+          fi
+          sudo mkdir -p "$data"
+          sudo chown "$(id -u):$(id -g)" "$data"
+          echo "IMP_DEV_DATA=$data" >> "$GITHUB_ENV"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+
+      - name: Cache Bun Packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('.bun-version', 'bun.lock') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      # the e2e groups write the caches; this job only reads them
+      - name: Build kernel, system drive and host image
+        uses: ./.github/actions/e2e-build
+        with:
+          write-cache: false
+
+      - name: Install Podman
+        run: |
+          if ! command -v podman >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends podman catatonit netavark aardvark-dns
+          fi
+          sudo podman --version
+
+      - name: Run the Podman proof
+        run: sudo -E env "PATH=$PATH" e2e/podman/run-podman-proof.sh
+
+      # The steps below also run after a failure or a timeout, with or
+      # without a container, so none of them may fail the job.
+      - name: Collect logs
+        if: always()
+        run: |
+          sudo mkdir -p .cache/e2e
+          sudo sh -c 'podman logs imp-dev >.cache/e2e/impd.log 2>&1' || true
+          sudo chown -R "$(id -u):$(id -g)" .cache/e2e || true
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-results-podman
+          path: .cache/e2e/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Remove the dev instance
+        if: always()
+        run: sudo podman rm -f imp-dev || true
+
   # The ZFS storage backend on real pools, in three shards on three runners:
   # scripts/zfs-host-test.sh runs real imps on a pool in a sparse file, with
   # the zfs module Ubuntu's kernel ships, and prints the ZFS timings. Shards 1

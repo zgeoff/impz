@@ -1,4 +1,5 @@
 import { realpathSync } from 'node:fs';
+import type { ContainerCLI } from '../../scripts/lib/build-dev-layout.ts';
 import { ensureHostImage } from '../../scripts/lib/ensure-host-image.ts';
 import { readDevCheckout } from '../../scripts/lib/read-dev-checkout.ts';
 import { readMachineID } from '../../scripts/lib/read-machine-id.ts';
@@ -9,17 +10,22 @@ import { runHostZfs } from './run-host-zfs';
 import type { WipeTarget } from './wipe-target';
 import { ZFS_OWNER_FILE, resetZfsRoot } from './zfs-owner';
 
-export async function removeDataDir(target: Readonly<WipeTarget>, env: HarnessEnv): Promise<void> {
+export async function removeDataDir(
+  target: Readonly<WipeTarget>,
+  env: HarnessEnv,
+  containerCLI: ContainerCLI,
+): Promise<void> {
   const hostImage = readHostImageFromEnv(env);
 
   await ensureHostImage(
     readDevCheckout(realpathSync, env, REPO_ROOT),
     readMachineID(readTextOrNull, env).id,
+    containerCLI,
   );
 
   // imp.xfs is root-owned, and a stale loop device can outlive the container.
   await runChecked([
-    'docker',
+    containerCLI,
     'run',
     '--rm',
     '--privileged',

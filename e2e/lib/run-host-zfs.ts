@@ -14,6 +14,7 @@ export async function runHostZfs(
   await ensureHostImage(
     readDevCheckout(realpathSync, env, REPO_ROOT),
     readMachineID(readTextOrNull, env).id,
+    'docker',
   );
 
   return runCommand(['docker', 'run', '--rm', '--privileged', readHostImageFromEnv(env), ...argv]);

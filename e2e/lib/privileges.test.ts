@@ -1,7 +1,12 @@
 import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { findPrivilegeDrift, findSocketDrift, readExpectedPrivileges } from './privileges';
+import {
+  buildPodmanHostConfig,
+  findPrivilegeDrift,
+  findSocketDrift,
+  readExpectedPrivileges,
+} from './privileges';
 
 test('#findPrivilegeDrift passes a container run with the deploy privileges', () => {
   expect(
@@ -90,6 +95,52 @@ test('#findPrivilegeDrift flags a container that keeps the default capability se
       },
     ),
   ).toBe('it keeps the default capabilities (no --cap-drop ALL)');
+});
+
+test("#buildPodmanHostConfig takes podman's effective capabilities and the text of its seccomp profile", () => {
+  expect(
+    buildPodmanHostConfig(
+      {
+        Privileged: false,
+        CapAdd: ['CAP_KILL', 'CAP_SYS_ADMIN'],
+        CapDrop: ['CAP_CHOWN', 'CAP_NET_BIND_SERVICE'],
+        SecurityOpt: ['seccomp=/w/imp/deploy/imp-host.seccomp.json', 'apparmor=unconfined'],
+        Devices: [{ PathOnHost: '/dev/kvm' }],
+      },
+      ['CAP_KILL', 'CAP_SYS_ADMIN'],
+      new Map([['/w/imp/deploy/imp-host.seccomp.json', '{"defaultAction":"SCMP_ACT_ERRNO"}']]),
+    ),
+  ).toStrictEqual({
+    Privileged: false,
+    CapAdd: ['CAP_KILL', 'CAP_SYS_ADMIN'],
+    CapDrop: ['ALL'],
+    SecurityOpt: ['seccomp={"defaultAction":"SCMP_ACT_ERRNO"}', 'apparmor=unconfined'],
+    Devices: [{ PathOnHost: '/dev/kvm' }],
+  });
+});
+
+test('#buildPodmanHostConfig shows a podman container that keeps a default capability as adding it', () => {
+  const host = buildPodmanHostConfig(
+    {
+      Privileged: false,
+      CapAdd: ['CAP_KILL', 'CAP_SYS_ADMIN'],
+      CapDrop: ['CAP_NET_BIND_SERVICE'],
+      SecurityOpt: ['seccomp=/w/imp/deploy/imp-host.seccomp.json', 'apparmor=unconfined'],
+      Devices: [{ PathOnHost: '/dev/kvm' }, { PathOnHost: '/dev/net/tun' }],
+    },
+    ['CAP_CHOWN', 'CAP_KILL', 'CAP_SYS_ADMIN'],
+    new Map([['/w/imp/deploy/imp-host.seccomp.json', '{"defaultAction":"SCMP_ACT_ERRNO"}']]),
+  );
+
+  expect(
+    findPrivilegeDrift(host, {
+      caps: ['CAP_KILL', 'CAP_SYS_ADMIN'],
+      securityOpts: ['apparmor=unconfined'],
+      seccomp: { defaultAction: 'SCMP_ACT_ERRNO' },
+      devices: ['/dev/kvm', '/dev/net/tun'],
+      optionalDevices: ['/dev/zfs', '/dev/loop-control'],
+    }),
+  ).toBe('it adds CAP_CHOWN CAP_KILL CAP_SYS_ADMIN, not CAP_KILL CAP_SYS_ADMIN');
 });
 
 test('#findPrivilegeDrift flags a missing capability', () => {

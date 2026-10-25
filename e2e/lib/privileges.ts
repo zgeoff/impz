@@ -1,7 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import * as z from 'zod';
+import { readTextOrNull } from '../../scripts/lib/read-text-or-null.ts';
 import { REPO_ROOT, runChecked } from './instance';
+import type { DevInstance } from './instance';
 
 const WordsSchema = z.array(z.string());
 const ProbedSchema = z.object({ path: z.string(), args: WordsSchema });
@@ -25,7 +27,11 @@ const HostConfigSchema = z.object({
 const MountSchema = z.object({ Source: z.string(), Destination: z.string() });
 
 const InspectSchema = z.array(
-  z.object({ HostConfig: HostConfigSchema, Mounts: z.array(MountSchema).nullable() }),
+  z.object({
+    HostConfig: HostConfigSchema,
+    Mounts: z.array(MountSchema).nullable(),
+    EffectiveCaps: ListSchema.optional(),
+  }),
 );
 
 export interface Mount {
@@ -151,7 +157,30 @@ export function findSocketDrift(mounts: readonly Mount[]): string | null {
   return socket === undefined ? null : `it mounts ${socket.Source} at ${socket.Destination}`;
 }
 
-export async function checkPrivileges(container: string): Promise<void> {
+// podman lists the effective capabilities, which after --cap-drop ALL are the added ones alone, and
+// it keeps the seccomp profile's path where docker keeps the profile's text.
+export function buildPodmanHostConfig(
+  host: HostConfig,
+  effectiveCaps: readonly string[],
+  profiles: ReadonlyMap<string, string>,
+): HostConfig {
+  return {
+    ...host,
+    CapAdd: effectiveCaps,
+    CapDrop: ['ALL'],
+    SecurityOpt: (host.SecurityOpt ?? []).map((opt) => {
+      const profile = opt.startsWith(SECCOMP_PREFIX)
+        ? profiles.get(opt.slice(SECCOMP_PREFIX.length))
+        : undefined;
+
+      return profile === undefined ? opt : `${SECCOMP_PREFIX}${profile}`;
+    }),
+  };
+}
+
+export async function checkPrivileges(
+  target: Pick<DevInstance, 'container' | 'containerCLI'>,
+): Promise<void> {
   const deploy = join(REPO_ROOT, 'deploy');
 
   const expected = readExpectedPrivileges(
@@ -159,17 +188,40 @@ export async function checkPrivileges(container: string): Promise<void> {
     readFileSync(join(deploy, 'imp-host.seccomp.json'), 'utf8'),
   );
 
-  const inspected = await runChecked(['docker', 'inspect', container]);
+  const inspected = await runChecked([target.containerCLI, 'inspect', target.container]);
 
   const [info] = InspectSchema.parse(JSON.parse(inspected));
 
   if (info === undefined) {
-    throw new Error(`docker inspect ${container} returned nothing`);
+    throw new Error(`${target.containerCLI} inspect ${target.container} returned nothing`);
   }
 
-  const drift = findPrivilegeDrift(info.HostConfig, expected) ?? findSocketDrift(info.Mounts ?? []);
+  const host =
+    target.containerCLI === 'podman'
+      ? buildPodmanHostConfig(
+          info.HostConfig,
+          info.EffectiveCaps ?? [],
+          readSeccompProfiles(info.HostConfig.SecurityOpt ?? []),
+        )
+      : info.HostConfig;
+
+  const drift = findPrivilegeDrift(host, expected) ?? findSocketDrift(info.Mounts ?? []);
 
   if (drift !== null) {
-    throw new Error(`${container} does not match deploy/imp-host.args.json: ${drift}`);
+    throw new Error(`${target.container} does not match deploy/imp-host.args.json: ${drift}`);
   }
+}
+
+function readSeccompProfiles(opts: readonly string[]): Map<string, string> {
+  const paths = opts
+    .filter((opt) => opt.startsWith(SECCOMP_PREFIX))
+    .map((opt) => opt.slice(SECCOMP_PREFIX.length));
+
+  return new Map(
+    paths.flatMap((path) => {
+      const text = readTextOrNull(path);
+
+      return text === null ? [] : [[path, text] as const];
+    }),
+  );
 }

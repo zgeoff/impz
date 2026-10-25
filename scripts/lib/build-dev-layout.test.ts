@@ -4,6 +4,7 @@ import { buildDevLayout } from './build-dev-layout.ts';
 test('it lays out the default instance on the base ports', () => {
   expect(buildDevLayout({ env: {}, root: '/w/imp', cwd: '/w' })).toStrictEqual({
     name: 'imp-dev',
+    containerCLI: 'docker',
     dataDir: '/w/imp/.data/dev',
     offset: 0,
     isPublished: true,
@@ -25,6 +26,7 @@ test('it shifts every published port by IMP_DEV_PORT_OFFSET', () => {
     }),
   ).toStrictEqual({
     name: 'imp-side',
+    containerCLI: 'docker',
     dataDir: '/w/imp/.data/dev',
     offset: 100,
     isPublished: true,
@@ -58,6 +60,25 @@ test('it refuses IMP_DEV_PUBLISH=0 without IMP_DEV_IP', () => {
   expect(() =>
     buildDevLayout({ env: { IMP_DEV_PUBLISH: '0' }, root: '/w/imp', cwd: '/w' }),
   ).toThrowWithMessage(Error, 'IMP_DEV_PUBLISH=0 needs IMP_DEV_IP');
+});
+
+test('it drives the dev container with podman when IMP_DEV_CONTAINER_CLI says so', () => {
+  expect(
+    buildDevLayout({ env: { IMP_DEV_CONTAINER_CLI: 'podman' }, root: '/w/imp', cwd: '/w' })
+      .containerCLI,
+  ).toBe('podman');
+});
+
+test('it reads an empty IMP_DEV_CONTAINER_CLI as docker', () => {
+  expect(
+    buildDevLayout({ env: { IMP_DEV_CONTAINER_CLI: '' }, root: '/w/imp', cwd: '/w' }).containerCLI,
+  ).toBe('docker');
+});
+
+test('it refuses an IMP_DEV_CONTAINER_CLI that is neither docker nor podman', () => {
+  expect(() =>
+    buildDevLayout({ env: { IMP_DEV_CONTAINER_CLI: 'nerdctl' }, root: '/w/imp', cwd: '/w' }),
+  ).toThrowWithMessage(Error, "IMP_DEV_CONTAINER_CLI must be docker or podman, got 'nerdctl'");
 });
 
 test('it refuses an IMP_DEV_PORT_OFFSET that is not a whole number', () => {
