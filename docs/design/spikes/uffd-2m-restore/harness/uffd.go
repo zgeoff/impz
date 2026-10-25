@@ -108,6 +108,12 @@ type uffdHandler struct {
 	unknown  int
 	copyErrs []string
 
+	// failed closes on the first error, a fault the handler cannot
+	// resolve, so the runner stops the VM rather than wait on it
+	failed   chan struct{}
+	failOnce sync.Once
+	firstErr error
+
 	ready    chan error
 	filled   chan fillResult
 	done     chan struct{}
@@ -154,6 +160,7 @@ func startUffdHandler(socket, memFile string, phase *atomic.Int32, fill []int64)
 		src:      src,
 		phase:    phase,
 		uffd:     -1,
+		failed:   make(chan struct{}),
 		ready:    make(chan error, 1),
 		filled:   make(chan fillResult, 1),
 		done:     make(chan struct{}),
@@ -242,6 +249,7 @@ func (h *uffdHandler) fill(pages []int64) {
 				continue
 			}
 			if err != nil {
+				h.recordError(err)
 				h.filled <- fillResult{err: err}
 				return
 			}
@@ -371,18 +379,31 @@ func (h *uffdHandler) unregister(start, end uint64) {
 	arg := uffdioRange{start: start, len: end - start}
 	_, _, errno := unix.Syscall(unix.SYS_IOCTL, uintptr(h.uffd), uffdioUnregister, uintptr(unsafe.Pointer(&arg)))
 	h.mu.Lock()
-	defer h.mu.Unlock()
 	h.removes++
 	h.removed += end - start
+	h.mu.Unlock()
 	if errno != 0 {
-		h.copyErrs = append(h.copyErrs, fmt.Sprintf("UFFDIO_UNREGISTER %#x-%#x: %v", start, end, errno))
+		h.recordError(fmt.Errorf("UFFDIO_UNREGISTER %#x-%#x: %w", start, end, errno))
 	}
 }
 
 func (h *uffdHandler) recordError(err error) {
 	h.mu.Lock()
-	defer h.mu.Unlock()
 	h.copyErrs = append(h.copyErrs, err.Error())
+	h.mu.Unlock()
+	h.failOnce.Do(func() {
+		h.mu.Lock()
+		h.firstErr = err
+		h.mu.Unlock()
+		close(h.failed)
+	})
+}
+
+// err returns the handler's first error, nil while it has none.
+func (h *uffdHandler) err() error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.firstErr
 }
 
 func (h *uffdHandler) close() {

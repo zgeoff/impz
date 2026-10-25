@@ -205,7 +205,12 @@ func restoreOnce(o restoreOptions, run int) (result, []int64, error) {
 	}
 	m.mark("spawn")
 
+	stopWatch := func() {}
+	if handler != nil {
+		stopWatch = killOnFailure(handler.failed, func() { _ = fc.cmd.Process.Kill() })
+	}
 	bootErr := bootClaimed(fc, handler, &phase, &m, &res, o, vsock, disk, info.Size())
+	stopWatch()
 	if bootErr == nil {
 		res.HugePagesSurp = readMeminfo("HugePages_Surp")
 	}
@@ -216,6 +221,12 @@ func restoreOnce(o restoreOptions, run int) (result, []int64, error) {
 		report, faulted := handler.report()
 		res.Faults = &report
 		pages = faulted
+		// a handler error fails the run even when the boot got through it
+		if err := handler.err(); err != nil && bootErr == nil {
+			bootErr = fmt.Errorf("uffd handler: %w", err)
+		} else if err != nil {
+			bootErr = fmt.Errorf("uffd handler: %w, then %w", err, bootErr)
+		}
 	}
 	for _, s := range m.steps {
 		res.Marks[s.name] = s.ms
@@ -225,6 +236,26 @@ func restoreOnce(o restoreOptions, run int) (result, []int64, error) {
 		return res, nil, fmt.Errorf("%s run %d: %w\n%s", o.label, run, bootErr, lastLines(string(tail), 10))
 	}
 	return res, pages, os.RemoveAll(runDir)
+}
+
+// killOnFailure calls kill when failed closes, so a guest that waits on a
+// fault the handler cannot resolve stops and its pending API call returns.
+// The returned func ends the watch.
+func killOnFailure(failed <-chan struct{}, kill func()) func() {
+	done := make(chan struct{})
+	ended := make(chan struct{})
+	go func() {
+		defer close(ended)
+		select {
+		case <-failed:
+			kill()
+		case <-done:
+		}
+	}()
+	return func() {
+		close(done)
+		<-ended
+	}
 }
 
 func bootClaimed(fc *firecracker, handler *uffdHandler, phase *atomic.Int32, m *marks, res *result, o restoreOptions, vsock, disk string, diskBytes int64) error {

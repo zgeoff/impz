@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sync/atomic"
 	"testing"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/unix"
@@ -41,9 +42,9 @@ type uffdioRegisterArg struct {
 }
 
 // setupGuestMemory plays Firecracker's side of the handshake: it maps three
-// pages, registers them with a new uffd, and sends the region and the uffd
-// to the handler's socket.
-func setupGuestMemory(t *testing.T, socket string) []byte {
+// pages, registers them with a new uffd, and sends a region of the first
+// advertisedPages pages and the uffd to the handler's socket.
+func setupGuestMemory(t *testing.T, socket string, advertisedPages uint64) []byte {
 	t.Helper()
 	mem, err := unix.Mmap(-1, 0, 3*testPage, unix.PROT_READ|unix.PROT_WRITE, unix.MAP_PRIVATE|unix.MAP_ANONYMOUS)
 	assert.NilError(t, err)
@@ -62,7 +63,7 @@ func setupGuestMemory(t *testing.T, socket string) []byte {
 	register := uffdioRegisterArg{start: base, len: 3 * testPage, mode: uffdioRegisterMissing}
 	assert.NilError(t, ioctl(int(fd), uffdioRegister, unsafe.Pointer(&register)))
 
-	regions, err := json.Marshal([]guestRegion{{BaseHostVirtAddr: base, Size: 3 * testPage, Offset: 0, PageSize: testPage}})
+	regions, err := json.Marshal([]guestRegion{{BaseHostVirtAddr: base, Size: advertisedPages * testPage, Offset: 0, PageSize: testPage}})
 	assert.NilError(t, err)
 	conn, err := net.DialUnix("unix", nil, &net.UnixAddr{Name: socket, Net: "unix"})
 	assert.NilError(t, err)
@@ -103,7 +104,7 @@ func TestUffdHandlerCopiesTheMemoryFileIntoFaultingPages(t *testing.T) {
 	var phase atomic.Int32
 	handler, err := startUffdHandler("uffd.sock", memFile, &phase, nil)
 	assert.NilError(t, err)
-	mem := setupGuestMemory(t, "uffd.sock")
+	mem := setupGuestMemory(t, "uffd.sock", 3)
 	assert.NilError(t, <-handler.ready)
 	assert.NilError(t, (<-handler.filled).err)
 
@@ -129,7 +130,7 @@ func TestUffdHandlerFillsPagesBeforeAnyFault(t *testing.T) {
 	var phase atomic.Int32
 	handler, err := startUffdHandler("uffd.sock", memFile, &phase, []int64{0, 2 * testPage})
 	assert.NilError(t, err)
-	mem := setupGuestMemory(t, "uffd.sock")
+	mem := setupGuestMemory(t, "uffd.sock", 3)
 	assert.NilError(t, <-handler.ready)
 	filled := <-handler.filled
 
@@ -152,7 +153,7 @@ func TestUffdHandlerGivesARemovedRangeBackToTheKernel(t *testing.T) {
 	var phase atomic.Int32
 	handler, err := startUffdHandler("uffd.sock", memFile, &phase, nil)
 	assert.NilError(t, err)
-	mem := setupGuestMemory(t, "uffd.sock")
+	mem := setupGuestMemory(t, "uffd.sock", 3)
 	assert.NilError(t, <-handler.ready)
 	assert.NilError(t, (<-handler.filled).err)
 	_ = mem[0]
@@ -166,6 +167,38 @@ func TestUffdHandlerGivesARemovedRangeBackToTheKernel(t *testing.T) {
 	assert.Equal(t, report.Removes, 1)
 	assert.Equal(t, report.RemovedBytes, uint64(testPage))
 	assert.Equal(t, len(report.Errors), 0)
+}
+
+func TestUffdHandlerSignalsAFaultItCannotResolve(t *testing.T) {
+	// a socket path has a 108-byte limit, which a TMPDIR can pass
+	dir := t.TempDir()
+	t.Chdir(dir)
+	memFile := writeMemFile(t, dir)
+	var phase atomic.Int32
+	handler, err := startUffdHandler("uffd.sock", memFile, &phase, nil)
+	assert.NilError(t, err)
+	mem := setupGuestMemory(t, "uffd.sock", 2)
+	assert.NilError(t, <-handler.ready)
+	assert.NilError(t, (<-handler.filled).err)
+	// the fault blocks until close releases the uffd, so it runs aside; the
+	// read sits in its own statement, because a send passes its value by
+	// address and would read the page only at the receive
+	touched := make(chan byte)
+	go func() {
+		value := mem[2*testPage]
+		touched <- value
+	}()
+
+	select {
+	case <-handler.failed:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the handler did not signal the unresolved fault")
+	}
+	failure := handler.err()
+	handler.close()
+	<-touched
+
+	assert.ErrorContains(t, failure, "outside every region")
 }
 
 func TestParseUffdMsgsReadsAFaultAndARemove(t *testing.T) {
