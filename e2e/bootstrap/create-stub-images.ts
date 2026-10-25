@@ -21,8 +21,6 @@ JSON
 CMD ["sh", "-c", "mkdir -p /var/lib/imp/tailscale && echo stub >/var/lib/imp/tailscale/tailscaled.state && exec sleep infinity"]
 `;
 
-// The stale image is an older release that needs a Docker socket, as a stale :latest on an older
-// host would be.
 export async function createStubImages(io: BootstrapIO): Promise<void> {
   await io.shell`docker build -q -t ${STUB_IMAGE} - < ${new Response(STUB_DOCKERFILE)}`.quiet();
 
