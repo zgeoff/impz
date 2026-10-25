@@ -77,6 +77,8 @@ export interface ImageWriterDeps {
   readonly startTar: WriteStreamedTreeOptions['startTar'];
 
   readonly countTreeBytes: WriteStreamedTreeOptions['countTreeBytes'];
+
+  readonly startTimer: WriteStreamedTreeOptions['startTimer'];
 }
 
 interface GuestRootfs {
@@ -288,6 +290,7 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
             grow,
             startTar: deps.startTar,
             countTreeBytes: deps.countTreeBytes,
+            startTimer: deps.startTimer,
           });
 
           return await writeGuestRootfsAndRow({
@@ -331,6 +334,7 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
             runStreamed: deps.runStreamed,
             startTar: deps.startTar,
             countTreeBytes: deps.countTreeBytes,
+            startTimer: deps.startTimer,
           });
 
           options.onFetched();

@@ -20,6 +20,7 @@ import { createImp } from '../../../platform/db/imps';
 import { REAL_CLOCK } from '../../../platform/process/real-clock';
 import { runCommand } from '../../../platform/process/run-command';
 import { runStreamed } from '../../../platform/process/run-streamed';
+import { startRealTimer } from '../../../platform/process/start-real-timer';
 import { countTreeBytes } from '../../../vm/storage/count-tree-bytes';
 import { buildImagePaths } from '../../../vm/storage/data-layout';
 import { createDiskBudget } from '../../../vm/storage/disk-budget';
@@ -52,6 +53,7 @@ async function setupTest() {
     runStreamed,
     runCommand,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
   });
 

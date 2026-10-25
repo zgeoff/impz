@@ -79,6 +79,8 @@ export interface ImageServiceDeps {
   readonly startTar: ImageWriterDeps['startTar'];
 
   readonly countTreeBytes: ImageWriterDeps['countTreeBytes'];
+
+  readonly startTimer: ImageWriterDeps['startTimer'];
 }
 
 export function createImageService(deps: ImageServiceDeps): ImageService {

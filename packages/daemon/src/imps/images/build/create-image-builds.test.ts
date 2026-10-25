@@ -31,6 +31,7 @@ import { createImp } from '../../../platform/db/imps';
 import { openDatabase } from '../../../platform/db/open-database';
 import { runCommand } from '../../../platform/process/run-command';
 import { runStreamed } from '../../../platform/process/run-streamed';
+import { startRealTimer } from '../../../platform/process/start-real-timer';
 import { countTreeBytes } from '../../../vm/storage/count-tree-bytes';
 import { buildImagePaths } from '../../../vm/storage/data-layout';
 import { createDiskBudget } from '../../../vm/storage/disk-budget';
@@ -125,6 +126,7 @@ test('it pins, builds and exports in its builder, with no host engine call', asy
   const images = createImageService({
     runCommand,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
     runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
@@ -198,6 +200,7 @@ test('it logs the pins of a build and the time of each phase on its clock', asyn
   const images = createImageService({
     runCommand,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
     runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
@@ -235,6 +238,7 @@ test('it builds in its builder, with no host engine call, under a leftover IMP_B
   const images = createImageService({
     runCommand,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
     runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir, IMP_BUILD_ISOLATION: 'host' }),
@@ -289,6 +293,7 @@ test('it lists an on-host build with its builder and step while it runs, and sen
   const images = createImageService({
     runCommand,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
     runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
@@ -355,6 +360,7 @@ test('it holds disk in 256 MiB steps as the export grows, not at the image cap',
   const images = createImageService({
     runCommand,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
     runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
@@ -390,6 +396,7 @@ test('it refuses with DISK_FULL an export that outgrows the free disk', async ()
   const images = createImageService({
     runCommand,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
     runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
@@ -430,6 +437,7 @@ test('it stops the export at the step the free disk refuses', async () => {
   const images = createImageService({
     runCommand,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
     runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
@@ -472,6 +480,7 @@ test('it releases the disk hold once a build succeeds', async () => {
   const images = createImageService({
     runCommand,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
     runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
@@ -510,6 +519,7 @@ test('it removes the least recently used images after a build under storage pres
   const images = createImageService({
     runCommand,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
     runStreamed,
     config: loadConfig({
@@ -598,6 +608,7 @@ test('it keeps every image after a build under storage pressure while no marks a
   const images = createImageService({
     runCommand,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
     runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
@@ -648,6 +659,7 @@ test('it keeps an old image that a build of the same digest rebuilds', async () 
   const images = createImageService({
     runCommand,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
     runStreamed,
     config: loadConfig({
@@ -709,6 +721,7 @@ test('it records the service clock as the last use of an image it builds', async
   const images = createImageService({
     runCommand,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
     runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
@@ -770,6 +783,7 @@ test('it returns a row that still exists when an eviction reaches a same-digest 
   const images = createImageService({
     runCommand,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
     runStreamed,
     config: loadConfig({
@@ -857,6 +871,7 @@ test('it rebuilds an image under a new digest when an eviction reaches the build
   const images = createImageService({
     runCommand,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
     runStreamed,
     config: loadConfig({
@@ -949,6 +964,7 @@ test('it keeps an image while a build of another name publishes its digest', asy
   const images = createImageService({
     runCommand,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
     runStreamed,
     config: loadConfig({
@@ -1021,6 +1037,7 @@ test('it releases the disk hold when the export is over the file limit', async (
   const images = createImageService({
     runCommand,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
     runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir, IMP_BUILD_IMAGE_MAX_FILES: '5' }),
@@ -1073,6 +1090,7 @@ test('it refuses an export over IMP_BUILD_IMAGE_MAX_FILES', async () => {
   const images = createImageService({
     runCommand,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
     runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir, IMP_BUILD_IMAGE_MAX_FILES: '5' }),
@@ -1116,6 +1134,7 @@ test('it releases the disk hold when the free disk refuses the export', async ()
   const images = createImageService({
     runCommand,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
     runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
@@ -1162,6 +1181,7 @@ test('it releases the disk hold when the client goes while the builder holds its
   const images = createImageService({
     runCommand,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
     runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
@@ -1215,6 +1235,7 @@ test('it fails the build when the client goes while the builder holds its export
   const images = createImageService({
     runCommand,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
     runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
@@ -1269,6 +1290,7 @@ test('it leaves no new row and no rootfs when a template takes the name during t
   const images = createImageService({
     runCommand,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
     runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
@@ -1336,6 +1358,7 @@ test('it refuses a build whose name a template took during the build', async () 
   const images = createImageService({
     runCommand,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
     runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
@@ -1386,6 +1409,7 @@ test('it keeps the rootfs another build of the digest is writing when its own ro
   const images = createImageService({
     runCommand,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
     runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
@@ -1475,6 +1499,7 @@ test('it keeps the rootfs when an image rm runs while a build of its digest is b
   const images = createImageService({
     runCommand,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
     runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
@@ -1556,6 +1581,7 @@ test("it removes that rootfs after all when the build's row then fails", async (
   const images = createImageService({
     runCommand,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
     runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
@@ -1623,6 +1649,7 @@ test('it removes a rootfs whose write fails after it is published', async () => 
   const images = createImageService({
     runCommand,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
     runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
@@ -1679,6 +1706,7 @@ test('it returns the error of a rootfs write that fails after it is published', 
   const images = createImageService({
     runCommand,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
     runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
@@ -1729,6 +1757,7 @@ test('it leaves no row, rootfs or hold when the client goes while mkfs.ext4 runs
   const images = createImageService({
     runCommand,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
     runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
@@ -1792,6 +1821,7 @@ test('it ends a stalled export over a limit at once, with its builder and its di
   const images = createImageService({
     runCommand,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
     runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir, IMP_BUILD_IMAGE_MAX_FILES: '5' }),
@@ -1838,6 +1868,7 @@ test('it refuses a Dockerfile the input guard refuses', async () => {
   const images = createImageService({
     runCommand,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
     runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
@@ -1875,6 +1906,7 @@ test('it boots no builder for a Dockerfile the input guard refuses', async () =>
   const images = createImageService({
     runCommand,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
     runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
@@ -1927,6 +1959,7 @@ test("it changes no host file through a built image's image.json link", async ()
   const images = createImageService({
     runCommand,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
     runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
@@ -1968,6 +2001,7 @@ test('it refuses an image whose /etc/imp is a link to a host directory', async (
   const images = createImageService({
     runCommand,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
     runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
@@ -2017,6 +2051,7 @@ test('it writes nothing into the host directory an /etc/imp link names', async (
   const images = createImageService({
     runCommand,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
     runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),

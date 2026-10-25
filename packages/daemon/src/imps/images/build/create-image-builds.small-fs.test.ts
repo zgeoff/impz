@@ -14,6 +14,7 @@ import { loadConfig } from '../../../config';
 import { openDatabase } from '../../../platform/db/open-database';
 import { runCommand } from '../../../platform/process/run-command';
 import { runStreamed } from '../../../platform/process/run-streamed';
+import { startRealTimer } from '../../../platform/process/start-real-timer';
 import { countTreeBytes } from '../../../vm/storage/count-tree-bytes';
 import { createDiskBudget } from '../../../vm/storage/disk-budget';
 import { createStorageGate } from '../../../vm/storage/storage-gate';
@@ -80,6 +81,7 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     const images = createImageService({
       runCommand,
       startTar: startTarProcess,
+      startTimer: startRealTimer,
       countTreeBytes,
       runStreamed,
       config: loadConfig({ IMP_DATA_DIR: dataDir }),
@@ -171,6 +173,7 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     const images = createImageService({
       runCommand,
       startTar: startTarProcess,
+      startTimer: startRealTimer,
       countTreeBytes,
       runStreamed,
       config: loadConfig({ IMP_DATA_DIR: dataDir }),
@@ -260,6 +263,7 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     const images = createImageService({
       runCommand,
       startTar: startTarProcess,
+      startTimer: startRealTimer,
       countTreeBytes,
       runStreamed,
       config: loadConfig({ IMP_DATA_DIR: dataDir }),
@@ -349,6 +353,7 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     const images = createImageService({
       runCommand,
       startTar: startTarProcess,
+      startTimer: startRealTimer,
       countTreeBytes,
       runStreamed,
       config: loadConfig({ IMP_DATA_DIR: dataDir }),
@@ -442,6 +447,7 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     const images = createImageService({
       runCommand,
       startTar: startTarProcess,
+      startTimer: startRealTimer,
       countTreeBytes,
       runStreamed,
       config: loadConfig({ IMP_DATA_DIR: dataDir }),
@@ -532,6 +538,7 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     const images = createImageService({
       runCommand,
       startTar: startTarProcess,
+      startTimer: startRealTimer,
       countTreeBytes,
       runStreamed,
       config: loadConfig({ IMP_DATA_DIR: dataDir }),
@@ -622,6 +629,7 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     const images = createImageService({
       runCommand,
       startTar: startTarProcess,
+      startTimer: startRealTimer,
       countTreeBytes,
       runStreamed,
       config: loadConfig({ IMP_DATA_DIR: dataDir }),
@@ -710,6 +718,7 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     const images = createImageService({
       runCommand,
       startTar: startTarProcess,
+      startTimer: startRealTimer,
       countTreeBytes,
       runStreamed,
       config: loadConfig({ IMP_DATA_DIR: dataDir }),
@@ -786,6 +795,7 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     const images = createImageService({
       runCommand,
       startTar: startTarProcess,
+      startTimer: startRealTimer,
       countTreeBytes,
       runStreamed,
       config: loadConfig({ IMP_DATA_DIR: dataDir }),
