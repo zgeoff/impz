@@ -1,5 +1,5 @@
 import * as z from 'zod';
-import { buildExitError, runCommand } from '../../../platform/process/run-command';
+import { buildExitError } from '../../../platform/process/run-command';
 import type { CommandRunner } from '../../../platform/process/run-command';
 
 const OciConfigSchema = z.object({
@@ -12,7 +12,7 @@ export type OciConfig = z.infer<typeof OciConfigSchema>;
 export async function readOciConfig(
   ref: string,
   signal: AbortSignal,
-  run: CommandRunner = runCommand,
+  run: CommandRunner,
 ): Promise<OciConfig> {
   const argv = ['oci-fetch', 'config', ref];
 

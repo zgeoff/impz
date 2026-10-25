@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { updateEnv } from '@impz/test-utils/update-env';
 import { createStubOciFetch } from '../../../../testing/imps/create-stub-oci-fetch';
+import { runCommand } from '../../../platform/process/run-command';
 import { readOciConfig } from './read-oci-config';
 
 async function setupTest() {
@@ -30,7 +31,11 @@ test('it reads the digest and runtime config oci-fetch prints', async () => {
 
   updateEnv('PATH', ociFetch.path);
 
-  const image = await readOciConfig('registry.test/builder@sha256:1', new AbortController().signal);
+  const image = await readOciConfig(
+    'registry.test/builder@sha256:1',
+    new AbortController().signal,
+    runCommand,
+  );
 
   expect(image).toStrictEqual({
     digest: `sha256:${'a'.repeat(64)}`,
@@ -69,7 +74,7 @@ test('it fails with the stderr of a fetch that fails', async () => {
   updateEnv('PATH', ociFetch.path);
 
   expect(
-    readOciConfig('registry.test/builder@sha256:1', new AbortController().signal),
+    readOciConfig('registry.test/builder@sha256:1', new AbortController().signal, runCommand),
   ).rejects.toThrowWithMessage(
     Error,
     'oci-fetch config registry.test/builder@sha256:1 exited 1: oci-fetch: fetch registry.test/builder@sha256:1: MANIFEST_UNKNOWN: manifest unknown',
@@ -87,7 +92,7 @@ test('it refuses a digest that is not a sha256 digest', async () => {
   updateEnv('PATH', ociFetch.path);
 
   expect(
-    readOciConfig('registry.test/builder@sha256:1', new AbortController().signal),
+    readOciConfig('registry.test/builder@sha256:1', new AbortController().signal, runCommand),
   ).rejects.toMatchObject({
     issues: expect.arrayContaining([expect.objectContaining({ path: ['digest'] })]) as unknown,
   });
@@ -105,7 +110,7 @@ test('it ends the fetch with the reason of the signal that stops it', async () =
 
   updateEnv('PATH', ociFetch.path);
 
-  const reading = readOciConfig('registry.test/builder@sha256:1', stop.signal);
+  const reading = readOciConfig('registry.test/builder@sha256:1', stop.signal, runCommand);
 
   stop.abort(new Error('the limit passed'));
 
