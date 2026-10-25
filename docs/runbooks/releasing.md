@@ -10,6 +10,13 @@ them. Every artifact carries the tag's version without the `v`, so a client, an 
 flake pinned to one tag agree. The workflows' own comments cover each job; this runbook holds the
 steps they do not do.
 
+## Release changes that open no release PR
+
+A `refactor:`, `docs:`, `test:` or `chore:` commit opens no release PR, so it reaches no host until
+a later `feat:` or `fix:` lands. To release such commits sooner, merge a commit whose message ends
+with the footer `Release-As: <version>`, such as `Release-As: 4.2.1`. release-please then opens the
+release PR for that version.
+
 ## Breaking changes
 
 A client accepts any impd of its own major version, so a change that breaks the protocol between
