@@ -32,7 +32,6 @@ import { ImpdError } from '../../platform/errors/impd-error';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { hashSecret } from '../../platform/secrets/hash-secret';
 import { mintOpaqueToken } from '../../platform/secrets/mint-opaque-token';
-import type { OpaqueToken } from '../../platform/secrets/parse-opaque-token';
 import { readSnapshotMeta } from '../../vm/sleep/snapshot-meta';
 import type { HostIdentity } from '../../vm/sleep/vm-identity';
 import { buildSystemDrivePath } from '../../vm/storage/data-layout';
@@ -48,19 +47,16 @@ import { MOVE_FINISH_HEADER, MOVE_PART_HEADER } from './move-header';
 import { PART_WAIT_MS, createPartPipe } from './move-parts';
 import type { PartPipe } from './move-parts';
 import { MoveRequestError } from './move-request-error';
-import { MOVE_TICKET_PREFIX, isSameHash, readTicketHeader } from './move-tickets';
+import { MOVE_TICKET_PREFIX } from './move-tickets';
 import type { Receipt } from './move-tickets';
 import type { PeerRanges } from './peer-address';
 import { readMoveStream } from './read-move-stream';
 import { removeStagedImp } from './remove-staged-imp';
+import { requireMoveTicket } from './require-move-ticket';
+import type { CheckedTicket } from './require-move-ticket';
 import { collectWarmMismatches } from './warm-facts';
 
 const STREAM_WINDOW_MS = 10 * 60 * 1000;
-
-export interface CheckedTicket {
-  readonly row: MoveTicketRow;
-  readonly ticket: OpaqueToken;
-}
 
 type ReceivedPart =
   | { readonly kind: 'part'; readonly part: number }
@@ -122,25 +118,6 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
   const tempDir = join(deps.dataDir, 'moves');
 
   const sessions = new Map<string, ReceiveSession>();
-
-  const requireTicket = async (request: Request): Promise<CheckedTicket> => {
-    const ticket = readTicketHeader(request);
-
-    if (ticket === null) {
-      throw new MoveRequestError('UNAUTHORIZED', 'no move ticket in the Authorization header');
-    }
-
-    const row = await readMoveTicket(deps.db, ticket.id);
-
-    if (
-      row === undefined ||
-      !isSameHash(row.secret_sha256, hashSecret(ticket.secret).toString('hex'))
-    ) {
-      throw new MoveRequestError('UNAUTHORIZED', 'unknown move ticket');
-    }
-
-    return { row, ticket };
-  };
 
   const writeTicketRow = async (
     name: string,
@@ -442,7 +419,7 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
 
     peerCalls: {
       isAllowedPeer: (peer) => peer !== null && deps.ranges.isAllowed(peer),
-      requireTicket,
+      requireTicket: (request) => requireMoveTicket(deps.db, request),
       offer,
       receive,
       commit,
