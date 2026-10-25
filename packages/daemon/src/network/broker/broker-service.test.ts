@@ -649,9 +649,21 @@ test('it gives an imp granted a static secret the variables the secret names', a
 
   const env = await ctx.impd.broker.readExecEnv(imp, vsock);
 
-  expect(env).toMatchObject({
+  expect(env).toStrictEqual({
     kind: 'ready',
-    env: expect.arrayContaining(['EXAMPLE_TOKEN=imp-broker-placeholder']) as unknown,
+    env: [
+      `HTTPS_PROXY=http://127.0.0.1:${String(ctx.config.brokerPort)}`,
+      `https_proxy=http://127.0.0.1:${String(ctx.config.brokerPort)}`,
+      'NO_PROXY=localhost,127.0.0.1,::1',
+      'no_proxy=localhost,127.0.0.1,::1',
+      'NODE_USE_ENV_PROXY=1',
+      'SSL_CERT_FILE=/etc/imp/broker-ca.pem',
+      'NODE_EXTRA_CA_CERTS=/etc/imp/broker-ca.pem',
+      'GIT_SSL_CAINFO=/etc/imp/broker-ca.pem',
+      'REQUESTS_CA_BUNDLE=/etc/imp/broker-ca.pem',
+      'CURL_CA_BUNDLE=/etc/imp/broker-ca.pem',
+      'EXAMPLE_TOKEN=imp-broker-placeholder',
+    ],
   });
 });
 
