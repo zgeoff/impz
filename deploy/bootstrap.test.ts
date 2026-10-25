@@ -782,6 +782,24 @@ test('#subnet6 accepts the subnet random_ula64 picks as it is', () => {
   expect(checked).toStrictEqual({ exitCode: 0, stdout: `${subnet}\n`, stderr: '' });
 });
 
+test('#create_host_network creates the network with podman when the caller sets CONTAINER_CLI to docker', () => {
+  const ctx = setupTest();
+  const podman = createStubBin(ctx.directoryPath, 'podman');
+
+  createStubBin(ctx.directoryPath, 'docker');
+
+  runSourcedFunction({
+    script: new URL('bootstrap.sh', import.meta.url).pathname,
+    fn: 'create_host_network',
+    args: ['fd12::/64'],
+    env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`, CONTAINER_CLI: 'docker' },
+  });
+
+  expect(readFileSync(podman.calls, 'utf8')).toBe(
+    'podman network create --ipv6 --subnet fd12::/64 --disable-dns --interface-name br-imphost imp-host\n',
+  );
+});
+
 test('#network_subnet6 reads the subnet of a network that is right', () => {
   const script = new URL('bootstrap.sh', import.meta.url).pathname;
 
