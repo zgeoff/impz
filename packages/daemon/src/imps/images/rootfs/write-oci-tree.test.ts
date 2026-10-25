@@ -8,6 +8,7 @@ import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { createFilesTar } from '../../../../testing/imps/create-files-tar';
 import { createStubOciFetch } from '../../../../testing/imps/create-stub-oci-fetch';
+import { buildStubClock } from '../../../../testing/platform/build-stub-clock';
 import { runStreamed } from '../../../platform/process/run-streamed';
 import { ImageLimitError } from '../build/image-limit-error';
 import { writeOciTree } from './write-oci-tree';
@@ -86,6 +87,41 @@ test('it holds disk ahead of the tree in 256 MiB steps', async () => {
   expect(holds).toStrictEqual([256 * 1024 ** 2]);
 });
 
+test('it grows the hold with the written bytes that the given tree counter reads', async () => {
+  const ctx = await setupTest();
+
+  const ociFetch = createStubOciFetch({
+    directory: ctx.directoryPath,
+    images: [
+      {
+        ref: 'registry.test/builder@sha256:1',
+        digest: 'sha256:2',
+        exportTar: createFilesTar(ctx.directoryPath, { dockerd: 'builder\n' }),
+      },
+    ],
+  });
+
+  const grows: number[][] = [];
+
+  updateEnv('PATH', ociFetch.path);
+
+  await writeOciTree({
+    ref: 'registry.test/builder@sha256:1',
+    root: ctx.root,
+    limits: { maxBytes: 1024 ** 3, maxFiles: 100 },
+    signal: new AbortController().signal,
+    grow: (totalBytes, writtenBytes) => {
+      grows.push([totalBytes, writtenBytes]);
+
+      return Promise.resolve();
+    },
+    runStreamed,
+    countTreeBytes: () => Promise.resolve(4096),
+  });
+
+  expect(grows).toStrictEqual([[256 * 1024 ** 2, 4096]]);
+});
+
 test('it fails with the stderr of an export that fails', async () => {
   const ctx = await setupTest();
 
@@ -153,6 +189,47 @@ test('it stops a stalled export and fails the write when the signal aborts', asy
 
   expect(failure).toStrictEqual(new Error('the build was cancelled'));
   expect(() => process.kill(pid, 0)).toThrow();
+});
+
+test('it ends an export that sends nothing for its idle limit on the given timer', async () => {
+  const ctx = await setupTest();
+
+  const ociFetch = createStubOciFetch({
+    directory: ctx.directoryPath,
+    images: [
+      {
+        ref: 'registry.test/builder@sha256:1',
+        digest: 'sha256:2',
+        exportTar: createFilesTar(ctx.directoryPath, { dockerd: 'builder\n' }),
+        export: 'stall',
+      },
+    ],
+  });
+
+  updateEnv('PATH', ociFetch.path);
+
+  const timers = buildStubClock();
+
+  const writing = writeOciTree({
+    ref: 'registry.test/builder@sha256:1',
+    root: ctx.root,
+    limits: { maxBytes: 1024 ** 3, maxFiles: 100 },
+    signal: new AbortController().signal,
+    grow: () => Promise.resolve(),
+    runStreamed,
+    startTimer: timers.startTimer,
+  });
+
+  await waitFor(() => {
+    expect(ociFetch.readStalledPIDs()).toHaveLength(1);
+  });
+
+  timers.firePending();
+
+  expect(writing).rejects.toThrowWithMessage(
+    Error,
+    'oci-fetch export registry.test/builder@sha256:1 sent nothing in 120 s',
+  );
 });
 
 test('it refuses a tree of more entries than the file cap', async () => {

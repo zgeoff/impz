@@ -1,4 +1,4 @@
-import { expect, onTestFinished, test } from 'bun:test';
+import { expect, mock, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -36,6 +36,29 @@ test('it reads the digest and runtime config oci-fetch prints', async () => {
     digest: `sha256:${'a'.repeat(64)}`,
     config: { Env: ['PATH=/usr/bin'] },
   });
+});
+
+test('it runs oci-fetch config through the given command runner', async () => {
+  const signal = new AbortController().signal;
+
+  const run = mock(() =>
+    Promise.resolve({
+      exitCode: 0,
+      stdout: `{"digest":"sha256:${'b'.repeat(64)}","config":null}\n`,
+      stderr: '',
+    }),
+  );
+
+  const image = await readOciConfig('registry.test/builder@sha256:1', signal, run);
+
+  expect(image).toStrictEqual({ digest: `sha256:${'b'.repeat(64)}`, config: null });
+
+  expect(run).toHaveBeenCalledExactlyOnceWith(
+    ['oci-fetch', 'config', 'registry.test/builder@sha256:1'],
+    {
+      signal,
+    },
+  );
 });
 
 test('it fails with the stderr of a fetch that fails', async () => {
