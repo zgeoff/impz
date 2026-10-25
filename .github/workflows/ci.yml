@@ -774,7 +774,7 @@ jobs:
       # the tag e2e-build loads; one checkout per runner needs no tag of its own
       IMP_HOST_IMAGE: imp-host:dev
       IMP_HOST_IMAGE_READY: 1
-      # a lane shard leaves the suites empty, and zfs-host-test picks its share
+      # zfs-host-test runs the lane share and the named suites a row sets
       IMP_ZFS_SHARD: ${{ matrix.lane }}
       IMP_ZFS_E2E_SUITES: ${{ matrix.suites }}
       IMP_ZFS_TEST_UNIT: 0
