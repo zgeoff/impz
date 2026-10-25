@@ -22,6 +22,7 @@ const HostConfigSchema = z.object({
   CapDrop: ListSchema,
   SecurityOpt: ListSchema,
   Devices: z.array(DeviceSchema).nullable(),
+  PidsLimit: z.number().nullable(),
 });
 
 const MountSchema = z.object({ Source: z.string(), Destination: z.string() });
@@ -45,6 +46,7 @@ export interface HostConfig {
   readonly CapDrop: readonly string[] | null;
   readonly SecurityOpt: readonly string[] | null;
   readonly Devices: readonly { readonly PathOnHost: string }[] | null;
+  readonly PidsLimit: number | null;
 }
 
 // dev.sh's own device, for the loop file its XFS lives in.
@@ -59,10 +61,17 @@ export interface ExpectedPrivileges {
   readonly devices: readonly string[];
 
   readonly optionalDevices: readonly string[];
+  readonly unlimitedPids: boolean;
 }
 
 function readFlagValues(words: readonly string[], flag: string): string[] {
-  return words.flatMap((word, index) => (words[index - 1] === flag ? [word] : []));
+  return words.flatMap((word, index) => {
+    if (words[index - 1] === flag) {
+      return [word];
+    }
+
+    return word.startsWith(`${flag}=`) ? [word.slice(flag.length + 1)] : [];
+  });
 }
 
 export function readExpectedPrivileges(argsJson: string, seccompJson: string): ExpectedPrivileges {
@@ -82,6 +91,7 @@ export function readExpectedPrivileges(argsJson: string, seccompJson: string): E
       ...args.probed.flatMap((entry) => readFlagValues(entry.args, '--device')),
       ...DEV_DEVICES,
     ],
+    unlimitedPids: readFlagValues(words, '--pids-limit').some((limit) => Number(limit) <= 0),
   };
 }
 
@@ -136,7 +146,21 @@ export function findPrivilegeDrift(host: HostConfig, expected: ExpectedPrivilege
     return `its security options are ${others.join(' ')}, not ${expected.securityOpts.join(' ')}`;
   }
 
-  return findSeccompDrift(opts, expected.seccomp) ?? findDeviceDrift(host, expected);
+  return (
+    findSeccompDrift(opts, expected.seccomp) ??
+    findDeviceDrift(host, expected) ??
+    findPidsDrift(host, expected)
+  );
+}
+
+// docker inspect shows a container with no pids limit as null, and podman inspect as the limit it
+// was given, which for no limit is 0 or less.
+function findPidsDrift(host: HostConfig, expected: ExpectedPrivileges): string | null {
+  if (!expected.unlimitedPids || host.PidsLimit === null || host.PidsLimit <= 0) {
+    return null;
+  }
+
+  return `it caps its processes at ${String(host.PidsLimit)}`;
 }
 
 // A bind of the host's Docker socket, or of a directory above it, hands

@@ -420,8 +420,9 @@ check it made:
    `docker.socket` and `docker.service`, and checks that `/var/run/docker.sock` is gone and that
    `docker info` reaches no engine.
 3. It starts the instance under Podman on the same data dir, and checks that the container has no
-   Docker socket and no `docker` binary, that impd lists `e2e-podman-keep` with its file intact, and
-   that the builder image keeps its id and digest, so impd did not fetch it again.
+   Docker socket and no `docker` binary, that it runs with no pids limit, that it can make device
+   nodes where an image unpack writes them, that impd lists `e2e-podman-keep` with its file intact,
+   and that the builder image keeps its id and digest, so impd did not fetch it again.
 4. It starts a second instance under Podman on a fresh data dir, `<data>-fresh`, and waits for impd
    to fetch its builder image there, with Docker masked.
 5. It runs `e2e/test-e2e.sh --only socket,podman` on that instance.

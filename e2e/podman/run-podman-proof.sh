@@ -95,6 +95,21 @@ TOKEN=$("$DEV" token)
 podman exec "$CONTAINER" sh -c '[ ! -e /var/run/docker.sock ] && ! command -v docker' ||
   fail "$CONTAINER has a Docker socket or a docker binary"
 pass "$CONTAINER has no Docker socket and no docker binary"
+# podman inspect shows the limit the container was given, so --pids-limit=-1
+# shows as -1; without the flag it shows containers.conf's default, 2048.
+pids_limit=$(podman inspect -f '{{.HostConfig.PidsLimit}}' "$CONTAINER")
+[ "$pids_limit" = -1 ] || fail "$CONTAINER has pids limit $pids_limit, not -1"
+pids_max=$(podman exec "$CONTAINER" cat /sys/fs/cgroup/pids.max) ||
+  fail "$CONTAINER has no pids.max in its cgroup"
+[ "$pids_max" = max ] || fail "$CONTAINER's cgroup caps its processes at $pids_max"
+pass "$CONTAINER runs with no pids limit"
+# An image unpack writes the image's device nodes under /var/lib/imp/images,
+# which the engine's device cgroup rules must allow.
+podman exec "$CONTAINER" sh -c 'd=$(mktemp -d -p /var/lib/imp/images) &&
+  mknod "$d/null" c 1 3 && test -c "$d/null" &&
+  mknod "$d/loop" b 7 0 && test -b "$d/loop" && rm -rf "$d"' ||
+  fail "$CONTAINER cannot make device nodes under /var/lib/imp/images"
+pass "$CONTAINER makes character and block device nodes under /var/lib/imp/images"
 run_impz ls --json | jq -e --arg name "$KEEP" 'any(.[]; .name == $name)' >/dev/null ||
   fail "impd no longer lists $KEEP"
 pass "impd lists $KEEP, which it made under Docker"
