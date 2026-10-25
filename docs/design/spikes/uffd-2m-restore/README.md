@@ -28,8 +28,11 @@ of a 4 KiB template on the same host, interleaved with it, takes a median of 1,4
 - A Full snapshot of a 2 MiB guest takes a hugetlb page for every block of guest memory, so a 2 GiB
   build needs 1,024 free 2 MiB blocks at once. A host whose memory is fragmented fails the snapshot
   with `Bad address (os error 14)`. A pool that the host reserves keeps those pages ready.
-- Hugetlb pages are neither KSM-mergeable nor reclaimable, so each running 2 MiB imp holds its whole
-  memory in the pool.
+- An on-demand restore takes a pool page only for each block the guest touches: about 35 at boot,
+  against the 1,024 of the configured guest memory. The guest takes more as it uses its memory. A
+  pool page that a guest holds is neither KSM-mergeable nor reclaimable. The harness does not
+  measure whether the kernel also reserves the guest's untouched blocks when Firecracker maps its
+  memory, which decides how many imps a pool of a given size can hold.
 
 ## The harness
 
