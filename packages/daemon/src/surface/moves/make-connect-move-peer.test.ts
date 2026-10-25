@@ -1,10 +1,11 @@
-import { expect, mock, test } from 'bun:test';
+import { expect, test } from 'bun:test';
+import { startStubMovePeer } from '../../../testing/imp-ops/start-stub-move-peer';
 import { makeConnectMovePeer } from './make-connect-move-peer';
 
 test('it posts the offer as JSON to the offer route with the ticket', async () => {
-  const send = mock<(request: Request) => Promise<Response>>(() =>
-    Promise.resolve(
-      Response.json({
+  const stub = startStubMovePeer({
+    '/move/offer': {
+      body: {
         needsImage: true,
         needsSystemDrive: false,
         storage: 'xfs',
@@ -12,36 +13,61 @@ test('it posts the offer as JSON to the offer route with the ticket', async () =
         keepsLeases: true,
         keepsPublicEgress: true,
         keepsBackupOff: true,
-      }),
-    ),
-  );
-
-  const peer = makeConnectMovePeer({ fetch: send })({
-    peer: 'http://100.64.0.2:7070',
-    ticket: 'ticket-id.ticket-secret',
+      },
+    },
   });
+
+  const peer = makeConnectMovePeer({})({ peer: stub.url, ticket: 'ticket-id.ticket-secret' });
 
   await peer.offer({ imageDigest: 'sha256:abc' }, new AbortController().signal);
 
-  const request = send.mock.calls[0]?.[0];
+  expect(stub.received).toStrictEqual([
+    {
+      method: 'POST',
+      path: '/move/offer',
+      authorization: 'ImpMove ticket-id.ticket-secret',
+      contentType: 'application/json',
+      body: '{"imageDigest":"sha256:abc"}',
+    },
+  ]);
+});
 
-  const body: unknown = await request?.json();
+test('it reads the offer reply of a target on the contract', async () => {
+  const stub = startStubMovePeer({
+    '/move/offer': {
+      body: {
+        needsImage: true,
+        needsSystemDrive: true,
+        storage: 'zfs',
+        keepsMaxMemory: true,
+        keepsLeases: true,
+        keepsPublicEgress: true,
+        keepsBackupOff: true,
+      },
+    },
+  });
 
-  expect(request?.url).toBe('http://100.64.0.2:7070/move/offer');
-  expect(request?.method).toBe('POST');
-  expect(request?.redirect).toBe('manual');
-  expect(request?.headers.get('authorization')).toBe('ImpMove ticket-id.ticket-secret');
-  expect(request?.headers.get('content-type')).toBe('application/json');
-  expect(body).toStrictEqual({ imageDigest: 'sha256:abc' });
+  const peer = makeConnectMovePeer({})({ peer: stub.url, ticket: 'ticket-id.ticket-secret' });
+
+  const reply = await peer.offer({ imageDigest: 'sha256:abc' }, new AbortController().signal);
+
+  expect(reply).toStrictEqual({
+    needsImage: true,
+    needsSystemDrive: true,
+    storage: 'zfs',
+    keepsMaxMemory: true,
+    keepsLeases: true,
+    keepsPublicEgress: true,
+    keepsBackupOff: true,
+  });
 });
 
 test('it reads each field an older target leaves out of its offer reply as false', async () => {
-  const send = mock(() => Promise.resolve(Response.json({ needsImage: false, storage: 'zfs' })));
-
-  const peer = makeConnectMovePeer({ fetch: send })({
-    peer: 'http://100.64.0.2:7070',
-    ticket: 'ticket-id.ticket-secret',
+  const stub = startStubMovePeer({
+    '/move/offer': { body: { needsImage: false, storage: 'zfs' } },
   });
+
+  const peer = makeConnectMovePeer({})({ peer: stub.url, ticket: 'ticket-id.ticket-secret' });
 
   const reply = await peer.offer({ imageDigest: 'sha256:abc' }, new AbortController().signal);
 
@@ -56,17 +82,15 @@ test('it reads each field an older target leaves out of its offer reply as false
   });
 });
 
-test('it names the status and the text of an error from an older target', () => {
-  const send = mock(() =>
-    Promise.resolve(
-      Response.json({ error: 'the commit window ended; reissue the ticket' }, { status: 410 }),
-    ),
-  );
-
-  const peer = makeConnectMovePeer({ fetch: send })({
-    peer: 'http://100.64.0.2:7070',
-    ticket: 'ticket-id.ticket-secret',
+test('it names the status and the text of an error body from an older target', () => {
+  const stub = startStubMovePeer({
+    '/move/commit': {
+      status: 410,
+      body: { error: 'the commit window ended; reissue the ticket' },
+    },
   });
+
+  const peer = makeConnectMovePeer({})({ peer: stub.url, ticket: 'ticket-id.ticket-secret' });
 
   expect(peer.commit()).rejects.toThrowWithMessage(
     Error,
@@ -75,25 +99,20 @@ test('it names the status and the text of an error from an older target', () => 
 });
 
 test('it names the status and the message of an error from a target on the contract', () => {
-  const send = mock(() =>
-    Promise.resolve(
-      Response.json(
-        {
-          defined: false,
-          code: 'CONFLICT',
-          status: 409,
-          message: 'nothing to commit: the received copy is gone',
-          error: 'nothing to commit: the received copy is gone',
-        },
-        { status: 409 },
-      ),
-    ),
-  );
-
-  const peer = makeConnectMovePeer({ fetch: send })({
-    peer: 'http://100.64.0.2:7070',
-    ticket: 'ticket-id.ticket-secret',
+  const stub = startStubMovePeer({
+    '/move/commit': {
+      status: 409,
+      body: {
+        defined: false,
+        code: 'CONFLICT',
+        status: 409,
+        message: 'nothing to commit: the received copy is gone',
+        error: 'nothing to commit: the received copy is gone',
+      },
+    },
   });
+
+  const peer = makeConnectMovePeer({})({ peer: stub.url, ticket: 'ticket-id.ticket-secret' });
 
   expect(peer.commit()).rejects.toThrowWithMessage(
     Error,
@@ -101,67 +120,73 @@ test('it names the status and the message of an error from a target on the contr
   );
 });
 
-test('it reads the abort of a committed move as committed', async () => {
-  const send = mock(() => Promise.resolve(Response.json({ isCommitted: true })));
+test('it names the status of an error with no body text', () => {
+  const stub = startStubMovePeer({ '/move/commit': { status: 502, body: {} } });
+  const peer = makeConnectMovePeer({})({ peer: stub.url, ticket: 'ticket-id.ticket-secret' });
 
-  const peer = makeConnectMovePeer({ fetch: send })({
-    peer: 'http://100.64.0.2:7070',
-    ticket: 'ticket-id.ticket-secret',
-  });
-
-  const outcome = await peer.abort();
-
-  expect(outcome).toBe('committed');
+  expect(peer.commit()).rejects.toThrowWithMessage(
+    Error,
+    'commit: the target answered 502 with no error text',
+  );
 });
 
-test('it reads the 409 an older target sends for the abort of a committed move as committed', async () => {
-  const send = mock(() => Promise.resolve(Response.json({ isCommitted: true }, { status: 409 })));
+test('it names the 404 of an older target that lacks the route', () => {
+  const stub = startStubMovePeer({});
+  const peer = makeConnectMovePeer({})({ peer: stub.url, ticket: 'ticket-id.ticket-secret' });
 
-  const peer = makeConnectMovePeer({ fetch: send })({
-    peer: 'http://100.64.0.2:7070',
-    ticket: 'ticket-id.ticket-secret',
-  });
-
-  const outcome = await peer.abort();
-
-  expect(outcome).toBe('committed');
+  expect(peer.commit()).rejects.toThrowWithMessage(
+    Error,
+    'commit: the target answered 404 not found',
+  );
 });
 
-test('it reads an abort the target took as aborted', async () => {
-  const send = mock(() => Promise.resolve(Response.json({ isCommitted: false })));
+test('it follows no redirect, so the ticket goes to no other host', async () => {
+  const other = startStubMovePeer({ '/move/commit': { body: { isCommitted: true } } });
 
-  const peer = makeConnectMovePeer({ fetch: send })({
-    peer: 'http://100.64.0.2:7070',
-    ticket: 'ticket-id.ticket-secret',
+  const stub = startStubMovePeer({
+    '/move/commit': { status: 307, body: {}, headers: { location: `${other.url}/move/commit` } },
   });
 
-  const outcome = await peer.abort();
+  const peer = makeConnectMovePeer({})({ peer: stub.url, ticket: 'ticket-id.ticket-secret' });
 
-  expect(outcome).toBe('aborted');
-});
-
-test('it reads an abort the target answers with 401 as an unknown ticket', async () => {
-  const send = mock(() =>
-    Promise.resolve(Response.json({ error: 'unknown move ticket' }, { status: 401 })),
+  const failure = await peer.commit().then(
+    () => null,
+    (error: unknown) => error,
   );
 
-  const peer = makeConnectMovePeer({ fetch: send })({
-    peer: 'http://100.64.0.2:7070',
-    ticket: 'ticket-id.ticket-secret',
-  });
+  expect(failure).toBeInstanceOf(Error);
+  expect(other.received).toStrictEqual([]);
+});
 
-  const outcome = await peer.abort();
+test.each([
+  ['a target on the contract', 200, { isCommitted: true }, 'committed'],
+  ['an older target', 409, { isCommitted: true }, 'committed'],
+  ['a target that took it', 200, { isCommitted: false }, 'aborted'],
+  ['an older target with no such ticket', 401, { error: 'unknown move ticket' }, 'unknown-ticket'],
+  [
+    'a target on the contract with no such ticket',
+    401,
+    {
+      defined: false,
+      code: 'UNAUTHORIZED',
+      status: 401,
+      message: 'unknown move ticket',
+      error: 'unknown move ticket',
+    },
+    'unknown-ticket',
+  ],
+] as const)('it reads the abort answer of %s', async (_label, status, body, outcome) => {
+  const stub = startStubMovePeer({ '/move/abort': { status, body } });
+  const peer = makeConnectMovePeer({})({ peer: stub.url, ticket: 'ticket-id.ticket-secret' });
 
-  expect(outcome).toBe('unknown-ticket');
+  const answered = await peer.abort();
+
+  expect(answered).toBe(outcome);
 });
 
 test('it refuses an abort the target fails with another status', () => {
-  const send = mock(() => Promise.resolve(Response.json({ error: 'disk full' }, { status: 500 })));
-
-  const peer = makeConnectMovePeer({ fetch: send })({
-    peer: 'http://100.64.0.2:7070',
-    ticket: 'ticket-id.ticket-secret',
-  });
+  const stub = startStubMovePeer({ '/move/abort': { status: 500, body: { error: 'disk full' } } });
+  const peer = makeConnectMovePeer({})({ peer: stub.url, ticket: 'ticket-id.ticket-secret' });
 
   expect(peer.abort()).rejects.toThrowWithMessage(
     Error,
@@ -169,13 +194,12 @@ test('it refuses an abort the target fails with another status', () => {
   );
 });
 
-test('it passes on a transport failure as it is', () => {
-  const send = mock(() => Promise.reject(new Error('connection refused')));
+test('it passes on a transport failure to a target that is gone', async () => {
+  const stub = startStubMovePeer({});
 
-  const peer = makeConnectMovePeer({ fetch: send })({
-    peer: 'http://100.64.0.2:7070',
-    ticket: 'ticket-id.ticket-secret',
-  });
+  await stub.stop();
 
-  expect(peer.commit()).rejects.toThrowWithMessage(Error, 'connection refused');
+  const peer = makeConnectMovePeer({})({ peer: stub.url, ticket: 'ticket-id.ticket-secret' });
+
+  expect(peer.commit()).rejects.toThrow();
 });
