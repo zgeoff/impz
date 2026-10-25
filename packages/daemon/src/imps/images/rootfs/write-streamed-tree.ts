@@ -1,7 +1,6 @@
 import type { StartTimer } from '../../../platform/process/clock';
 import type { CommandResult } from '../../../platform/process/run-command';
 import { startRealTimer } from '../../../platform/process/start-real-timer';
-import { countTreeBytes } from '../../../vm/storage/count-tree-bytes';
 import { ImageLimitError } from '../build/image-limit-error';
 import { planRootfsOverhead } from './rootfs-plan';
 import { UNPACK_TAR_ARGS, assertUnpacked } from './unpack-export';
@@ -25,6 +24,8 @@ export interface WriteStreamedTreeOptions {
   readonly source: string;
 
   readonly startTar: StartTar;
+
+  readonly countTreeBytes: (root: string) => Promise<number>;
 
   readonly runExport: (
     onStdout: (chunk: Uint8Array) => Promise<void>,
@@ -68,7 +69,7 @@ export async function writeStreamedTree(
     if (needed > held.bytes) {
       held.bytes = (Math.floor(needed / GROW_STEP_BYTES) + 1) * GROW_STEP_BYTES;
 
-      const writtenBytes = await countTreeBytes(root);
+      const writtenBytes = await options.countTreeBytes(root);
 
       await grow(held.bytes, writtenBytes);
     }
