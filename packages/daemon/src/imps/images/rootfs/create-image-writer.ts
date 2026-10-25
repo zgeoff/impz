@@ -7,7 +7,7 @@ import type { Clock } from '../../../platform/process/clock';
 import { getErrorMessage } from '../../../platform/process/get-error-message';
 import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import { buildKeyedMutex } from '../../../platform/process/keyed-mutex';
-import { runChecked } from '../../../platform/process/run-command';
+import { runChecked, runCommand } from '../../../platform/process/run-command';
 import type { StreamedRunner } from '../../../platform/process/run-streamed';
 import { createSingleFlight } from '../../../platform/process/single-flight';
 import { countTreeBytes } from '../../../vm/storage/count-tree-bytes';
@@ -308,7 +308,7 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
     const build = deps.config.build;
     const limits = { maxBytes: build.imageMaxBytes, maxFiles: build.imageMaxFiles };
 
-    const image = await readOciConfig(ref, signal);
+    const image = await readOciConfig(ref, signal, runCommand);
 
     return deps.diskBudget.withGrowingRoom((grow) =>
       storageGate.join(async () => {
