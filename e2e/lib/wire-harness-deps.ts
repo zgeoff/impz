@@ -102,18 +102,22 @@ export function wireHarnessDeps(cwd: string): HarnessDeps {
 }
 
 async function resetInstance(target: DevInstance, env: HarnessEnv): Promise<void> {
+  const cli = target.containerCLI;
+
   const data = await resolveDataWipe(target.dataDir, env);
 
   // A reset takes the second host's data too, so no old migration outlives a
-  // rebase that renumbered it.
-  const hostB = await resolveDataWipe(`${target.dataDir}-mv-b`, env, pickHostBZfsRoot(env));
+  // rebase that renumbered it. The second host runs only under docker, and a
+  // podman run neither stops it nor wipes what it may still be using.
+  const hostB =
+    cli === 'docker'
+      ? await resolveDataWipe(`${target.dataDir}-mv-b`, env, pickHostBZfsRoot(env))
+      : null;
 
   const targets = [data, hostB].filter((wipe) => wipe !== null);
   const wiped = targets.map((wipe) => wipe.directory).join(' and ') || 'nothing';
 
   console.log(`    clean reset: tailnet logout, remove ${target.container}, wipe ${wiped}`);
-
-  const cli = target.containerCLI;
 
   const container = await runCommand([cli, 'inspect', target.container]);
 
@@ -123,7 +127,6 @@ async function resetInstance(target: DevInstance, env: HarnessEnv): Promise<void
 
   await runDevScript('down', target, {}, env);
 
-  // The second host runs only under docker, and a podman run may have no Docker engine to ask.
   if (cli === 'docker') {
     await runCommand(['docker', 'rm', '-f', `${target.container}-mv-b`]);
   }
