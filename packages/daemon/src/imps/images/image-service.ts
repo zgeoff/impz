@@ -31,7 +31,7 @@ import { FALLBACK_DEFAULT_IMAGE, createImageAdds } from './create-image-adds';
 import type { ImageAdds } from './create-image-adds';
 import { createImageEviction } from './eviction/create-image-eviction';
 import { createImageWriter } from './rootfs/create-image-writer';
-import type { ImageWriter } from './rootfs/create-image-writer';
+import type { ImageWriter, ImageWriterDeps } from './rootfs/create-image-writer';
 
 export type ImageService = ImageAdds &
   ImageBuilds & {
@@ -74,6 +74,12 @@ export interface ImageServiceDeps {
   readonly clock?: Pick<Clock, 'now'>;
 
   readonly runStreamed?: StreamedRunner;
+
+  readonly runCommand: ImageWriterDeps['runCommand'];
+
+  readonly startTar: ImageWriterDeps['startTar'];
+
+  readonly countTreeBytes: ImageWriterDeps['countTreeBytes'];
 }
 
 export function createImageService(deps: ImageServiceDeps): ImageService {
