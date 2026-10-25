@@ -7,23 +7,35 @@ permissions: {}
 
 jobs:
   probe:
+    name: probe (${{ matrix.variant }} shard ${{ matrix.shard }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [a-only, b-only]
+        shard: [1, 2]
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
-          ref: perf/test-impd-template-db
+          ref: ${{ matrix.variant == 'a-only' && 'main' || 'perf/test-impd-template-db' }}
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: .bun-version
       - name: Install
         run: bun install --frozen-lockfile
-      - name: entrypoint test on tmpfs
+      - name: Test
+        env:
+          SHARD: ${{ matrix.shard }}
         run: |
-          findmnt /dev/shm
-          for i in 1 2 3 4 5 6 7 8; do
-            scripts/ci/run-memory-capped.sh 1536 env TMPDIR=/dev/shm bun test host/entrypoint.test.ts 2>&1 | grep -E "\(fail\)| pass$| fail$|timed out" || true
-          done
+          tmp=()
+          if [ "${{ matrix.variant }}" = a-only ]; then tmp=(env TMPDIR=/dev/shm); fi
+          start=$(date +%s)
+          scripts/ci/run-memory-capped.sh 1536 "${tmp[@]}" bun test --parallel=2 --no-isolate --shard="$SHARD/2" \
+            --timings=scripts/ci/unit-test-timings.json --reporter=junit --reporter-outfile="$RUNNER_TEMP/r.xml" 2>&1 \
+            | grep -E "run-memory-capped|oom_kill|\(fail\)" || true
+          echo "RESULT secs $(( $(date +%s) - start ))"
+          grep -o 'name="it leaves consistent records after concurrent lifecycle calls on a few imps"[^>]*' "$RUNNER_TEMP/r.xml" | grep -o 'time="[^"]*"' || true
