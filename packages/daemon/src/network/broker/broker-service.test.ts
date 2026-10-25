@@ -568,6 +568,48 @@ test('it gives a granted imp the broker variables once the CA is in its boot', a
   });
 });
 
+test('it sets the placeholders of a granted secret’s stored env list, not its preset’s', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+  await ctx.client.imps.create({ name: 'dev' });
+  await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'ghp_SECRETVALUE0123456789' });
+  await ctx.client.grants.add({ name: 'dev', secret: 'gh' });
+
+  await ctx.db
+    .updateTable('secrets')
+    .set({ env: JSON.stringify(['CUSTOM_TOKEN']) })
+    .where('name', '=', 'gh')
+    .execute();
+
+  const imp = await readImpByName(ctx.db, 'dev');
+
+  invariant(imp);
+
+  const vsock = join(ctx.dataDir, 'vsock');
+
+  await writeFile(vsock, '');
+
+  const env = await ctx.impd.broker.readExecEnv(imp, vsock);
+
+  expect(env).toStrictEqual({
+    kind: 'ready',
+    env: [
+      `HTTPS_PROXY=http://127.0.0.1:${String(ctx.config.brokerPort)}`,
+      `https_proxy=http://127.0.0.1:${String(ctx.config.brokerPort)}`,
+      'NO_PROXY=localhost,127.0.0.1,::1',
+      'no_proxy=localhost,127.0.0.1,::1',
+      'NODE_USE_ENV_PROXY=1',
+      'SSL_CERT_FILE=/etc/imp/broker-ca.pem',
+      'NODE_EXTRA_CA_CERTS=/etc/imp/broker-ca.pem',
+      'GIT_SSL_CAINFO=/etc/imp/broker-ca.pem',
+      'REQUESTS_CA_BUNDLE=/etc/imp/broker-ca.pem',
+      'CURL_CA_BUNDLE=/etc/imp/broker-ca.pem',
+      'CUSTOM_TOKEN=imp-broker-placeholder',
+    ],
+  });
+});
+
 test('it points an imp in another slot at that slot’s gateway', async () => {
   const ctx = await setupTest();
 
