@@ -58,6 +58,15 @@ pre-push:
       run: test -z "$(gofmt -l {files})" && go vet -p 1 ./...
     - name: go:fmt-vet-ksm-exec
       files: bun run --silent files:branch
-      glob: 'host/ksm-exec/**/*.go'
+      glob:
+        - 'host/ksm-exec/*.go'
+        - 'host/ksm-exec/**/*.go'
       root: host/ksm-exec/
+      run: test -z "$(gofmt -l {files})" && go vet -p 1 ./...
+    - name: go:fmt-vet-uffd-spike
+      files: bun run --silent files:branch
+      glob:
+        - 'docs/design/spikes/uffd-2m-restore/harness/*.go'
+        - 'docs/design/spikes/uffd-2m-restore/harness/**/*.go'
+      root: docs/design/spikes/uffd-2m-restore/harness/
       run: test -z "$(gofmt -l {files})" && go vet -p 1 ./...

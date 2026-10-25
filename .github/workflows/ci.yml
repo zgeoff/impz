@@ -268,8 +268,8 @@ jobs:
           persist-credentials: false
 
       # go.mod lives in agent/, so the version and the module cache key both
-      # need pointing there; the key also covers the lint tools, ksm-exec and
-      # the Dockerfile difftest module
+      # need pointing there; the key also covers the lint tools, ksm-exec, the
+      # Dockerfile difftest module and the UFFD spike's harness
       - name: Setup Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -279,11 +279,12 @@ jobs:
             agent/tools/go.sum
             host/ksm-exec/go.sum
             scripts/dockerfile-difftest/go.sum
+            docs/design/spikes/uffd-2m-restore/harness/go.sum
 
       # gofmt -l lists unformatted files and exits 0 either way
       - name: Format
         run: |
-          unformatted=$(gofmt -l . ../host/ksm-exec ../scripts/dockerfile-difftest)
+          unformatted=$(gofmt -l . ../host/ksm-exec ../scripts/dockerfile-difftest ../docs/design/spikes/uffd-2m-restore/harness)
           if [ -n "$unformatted" ]; then
             echo "::error::gofmt wants to reformat:"
             echo "$unformatted"
@@ -296,6 +297,7 @@ jobs:
           go vet -tags root ./...
           go -C ../host/ksm-exec vet ./...
           go -C ../scripts/dockerfile-difftest vet ./...
+          go -C ../docs/design/spikes/uffd-2m-restore/harness vet ./...
 
       # golangci-lint, govulncheck and deadcode are pinned in tools/go.mod, a
       # module of their own so their dependencies never move the agent's;
@@ -307,6 +309,8 @@ jobs:
           go tool -modfile=../../agent/tools/go.mod golangci-lint run --config ../../agent/.golangci.yml ./...
           cd ../../scripts/dockerfile-difftest
           go tool -modfile=../../agent/tools/go.mod golangci-lint run --config ../../agent/.golangci.yml --disable depguard ./...
+          cd ../../docs/design/spikes/uffd-2m-restore/harness
+          go tool -modfile=../../../../../agent/tools/go.mod golangci-lint run --config ../../../../../agent/.golangci.yml --disable depguard ./...
 
       - name: Vulnerabilities
         run: |
@@ -332,6 +336,7 @@ jobs:
         run: |
           ../scripts/test-go.sh
           go -C ../host/ksm-exec test -race ./...
+          go -C ../docs/design/spikes/uffd-2m-restore/harness test -race ./...
         env:
           GO_TEST_JSONFILE: ${{ runner.temp }}/go-test.json
 
