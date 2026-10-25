@@ -1,5 +1,165 @@
 # Changelog
 
+## [4.2.2](https://github.com/zgeoff/impz/compare/v4.2.1...v4.2.2) (2026-10-25)
+
+
+### ⚠ BREAKING CHANGES
+
+* **api:** upload a build context, then follow the build's stream ([#667](https://github.com/zgeoff/impz/issues/667))
+* **daemon:** IMP_BUILD_ISOLATION is gone. impd ignores a leftover IMP_BUILD_ISOLATION=host and builds in builder imps; an image that only the host's Docker holds no longer adds.
+* **geo-480:** the CLI is impz, not imp.
+* **images:** releases no longer publish ghcr.io/zgeoff/imp-coder, and the repo no longer has images/dev. Published imp-coder tags stay on GHCR.
+* **images:** under the default IMP_BUILD_ISOLATION=imp, imp image add pulls in a builder imp from a public registry, so an image that only the host's Docker engine has (such as one from a plain docker build) no longer adds; build it with imp image build, or set IMP_BUILD_ISOLATION=host for this release. Private registries do not pull in a builder.
+* **images:** under the default IMP_BUILD_ISOLATION=imp, imp image add pulls in a builder imp from a public registry, so an image that only the host's Docker engine has (such as one from a plain docker build) no longer adds; build it with imp image build, or set IMP_BUILD_ISOLATION=host for this release. Private registries do not pull in a builder.
+* **images:** under the default IMP_BUILD_ISOLATION=imp, imp image add pulls in a builder imp from a public registry, so an image that only the host's Docker engine has (such as one from a plain docker build) no longer adds; build it with imp image build, or set IMP_BUILD_ISOLATION=host for this release. Private registries do not pull in a builder.
+* **images:** imp image build refuses a Dockerfile with a variable ($) in FROM, such as FROM ${BASE}; write the base image literally.
+
+### Features
+
+* **agent:** delegate the memory controller to each exec's cgroup ([#579](https://github.com/zgeoff/impz/issues/579)) ([0510bab](https://github.com/zgeoff/impz/commit/0510bab6b1a14ac8ce8c08d349d225c0992f6145))
+* **agent:** time the guest's boot steps, skip a no-op grow ([#540](https://github.com/zgeoff/impz/issues/540)) ([592da9e](https://github.com/zgeoff/impz/commit/592da9edf52d9fd31f4593b63f30e8091966cc7c))
+* **api:** declare the guest scratch folder in system.info ([#534](https://github.com/zgeoff/impz/issues/534)) ([3600483](https://github.com/zgeoff/impz/commit/360048324346352369e0a35f4d167a793c4aa82c))
+* **api:** upload a build context, then follow the build's stream ([#667](https://github.com/zgeoff/impz/issues/667)) ([f6b6c62](https://github.com/zgeoff/impz/commit/f6b6c62412f673224116b12efcf5609f120a09de))
+* **broker:** add a refreshing oauth secret kind ([#235](https://github.com/zgeoff/impz/issues/235)) ([f625b1a](https://github.com/zgeoff/impz/commit/f625b1a6ffd10f5e1c023a8cb40555119788399a))
+* **broker:** send a custom secret's requests to a set upstream ([#236](https://github.com/zgeoff/impz/issues/236)) ([a16a6ff](https://github.com/zgeoff/impz/commit/a16a6ffc19f5c7e8f3b08f3f54d9fe8f0e0ef978))
+* **client:** take an abort signal in the server version check ([#537](https://github.com/zgeoff/impz/issues/537)) ([0fc3621](https://github.com/zgeoff/impz/commit/0fc36217b0245f7a428ff3b463777184649abf31))
+* **daemon:** build images only in builder imps ([#647](https://github.com/zgeoff/impz/issues/647)) ([92438de](https://github.com/zgeoff/impz/commit/92438de8b5cc8d302a1ced98c5fe74a480fef278))
+* **daemon:** evict unused images under storage pressure ([#582](https://github.com/zgeoff/impz/issues/582)) ([1d015f9](https://github.com/zgeoff/impz/commit/1d015f904453d709f78647fe474016c1fc984a67))
+* **daemon:** let an image-prefix token pin and unpin its images ([#683](https://github.com/zgeoff/impz/issues/683)) ([d178ced](https://github.com/zgeoff/impz/commit/d178ced66ea61db368406a9e4e2472bc39faa116))
+* **egress:** a public egress policy that reaches the internet only ([#180](https://github.com/zgeoff/impz/issues/180)) ([9a5b63b](https://github.com/zgeoff/impz/commit/9a5b63b65a8ad2abe2be6fc21f06aba270141c10))
+* **exec:** a broker requirement that refuses an exec before it starts ([#177](https://github.com/zgeoff/impz/issues/177)) ([06fb3ea](https://github.com/zgeoff/impz/commit/06fb3ea5cc9572f58da7bba43b2eb0206f6cb270))
+* **geo-1059:** enforce impd's zfs module requirement ([#424](https://github.com/zgeoff/impz/issues/424)) ([93e4acb](https://github.com/zgeoff/impz/commit/93e4acb13eef83d09fcc9843cb93c1341e39c74a))
+* **geo-1060:** add better-auth's tables to impd's database ([#437](https://github.com/zgeoff/impz/issues/437)) ([318c03d](https://github.com/zgeoff/impz/commit/318c03de24f5404925f91424da15a7fd5e0f3872))
+* **geo-1060:** drop the oauth tables better-auth replaced ([#496](https://github.com/zgeoff/impz/issues/496)) ([459e3e0](https://github.com/zgeoff/impz/commit/459e3e0f78f393d3718f954fc7e12869b33df4f4))
+* **geo-1060:** run the public mcp route's oauth on better-auth ([#438](https://github.com/zgeoff/impz/issues/438)) ([94fc23d](https://github.com/zgeoff/impz/commit/94fc23d04703887e82213b8a3de6e05d2dcbfc02))
+* **geo-1062:** gate the cli's --json output as a contract ([#429](https://github.com/zgeoff/impz/issues/429)) ([7056932](https://github.com/zgeoff/impz/commit/70569329761672185e312afa8e2191083668f88a))
+* **geo-1224:** add system.features and read vm memory at once ([#454](https://github.com/zgeoff/impz/issues/454)) ([d74026b](https://github.com/zgeoff/impz/commit/d74026b2317ed0ebcc990f2d7f7bb5d72ffa13f8))
+* **geo-179:** give impd read-only files in the guest ([#369](https://github.com/zgeoff/impz/issues/369)) ([89b194c](https://github.com/zgeoff/impz/commit/89b194c3f7de63efc4415e2cd614f1a655d590dd))
+* **geo-204:** stream image build progress and step output ([#389](https://github.com/zgeoff/impz/issues/389)) ([68259c3](https://github.com/zgeoff/impz/commit/68259c36a787322f692264b65c56e3b8aae07490))
+* **geo-283:** limit a grant to given methods and paths ([#364](https://github.com/zgeoff/impz/issues/364)) ([df41eaf](https://github.com/zgeoff/impz/commit/df41eaf659bfdd945dae4c738fdb6ed5d06e2565))
+* **geo-286:** audit the requests the broker refuses ([#360](https://github.com/zgeoff/impz/issues/360)) ([e22db93](https://github.com/zgeoff/impz/commit/e22db93242332b22e696367ba4706a7b5c1fa76c))
+* **geo-367:** give the client every impd wire protocol ([#469](https://github.com/zgeoff/impz/issues/469)) ([0681219](https://github.com/zgeoff/impz/commit/068121940c93f6cebf3de54e9d906f15b107566e))
+* **geo-367:** run the cli on gunshi ([#472](https://github.com/zgeoff/impz/issues/472)) ([11cc460](https://github.com/zgeoff/impz/commit/11cc460a621e0e768b422409f564e565b08cde06))
+* **geo-480:** rename the cli, packages and release assets to impz ([#397](https://github.com/zgeoff/impz/issues/397)) ([df985e2](https://github.com/zgeoff/impz/commit/df985e29d3b875f57fc55299bbf9ffcf62915ebb))
+* **geo-498:** let a scoped token add its own pinned images ([#358](https://github.com/zgeoff/impz/issues/358)) ([cfe2c3f](https://github.com/zgeoff/impz/commit/cfe2c3f306c21772f7e3e79b78e26b88650bcbaf))
+* **geo-534:** leave an imp created with backup off out of every backup ([#327](https://github.com/zgeoff/impz/issues/327)) ([416a8cc](https://github.com/zgeoff/impz/commit/416a8ccaae89f660031acdbfb0e174d3890adbca))
+* **geo-630:** back up impd's database to restore tokens and secrets ([#328](https://github.com/zgeoff/impz/issues/328)) ([2a11f22](https://github.com/zgeoff/impz/commit/2a11f228bbc03a9c28738e4d28fd6423a75af0c5))
+* **geo-862:** warn when the zfs module has the zfs_uiomove bug ([#384](https://github.com/zgeoff/impz/issues/384)) ([a45d299](https://github.com/zgeoff/impz/commit/a45d2993e5dcd3cbd814939f17654375b6ca8b28))
+* **geo-880:** let an exec drop cap_sys_admin from its process tree ([#427](https://github.com/zgeoff/impz/issues/427)) ([73c1a6b](https://github.com/zgeoff/impz/commit/73c1a6b4e8d5ffea79d830a95df12f7de9345fff))
+* **host:** join a headscale tailnet with a tagged pre-auth key ([#636](https://github.com/zgeoff/impz/issues/636)) ([02509f2](https://github.com/zgeoff/impz/commit/02509f257838d019356726b28dfdabad82eb427b))
+* **images:** add gh to the coder image ([#218](https://github.com/zgeoff/impz/issues/218)) ([3f3a053](https://github.com/zgeoff/impz/commit/3f3a053f9603b13e3b4afc433fd257b6bdfcecd0))
+* **images:** build images in a disposable builder imp ([#194](https://github.com/zgeoff/impz/issues/194)) ([b29b883](https://github.com/zgeoff/impz/commit/b29b8832c4b6274f3749d4af47de24ecfe435b92))
+* **images:** build with BuildKit through the socket proxy, bound to inspected images ([#163](https://github.com/zgeoff/impz/issues/163)) ([51df459](https://github.com/zgeoff/impz/commit/51df459d63b85426e419294b3410fe10a3bf7c64))
+* **images:** publish imp-base as the only image ([#226](https://github.com/zgeoff/impz/issues/226)) ([461ff88](https://github.com/zgeoff/impz/commit/461ff882840e88b9e6d9fbbc6032118f5d8840e1))
+* **images:** publish imp-coder, a small image for running a coding agent ([#176](https://github.com/zgeoff/impz/issues/176)) ([f7bfd1b](https://github.com/zgeoff/impz/commit/f7bfd1b47defa7f5fa5b3ddcde951049ee27b89b))
+* **images:** pull added images in a disposable builder imp ([#198](https://github.com/zgeoff/impz/issues/198)) ([ca6dc4d](https://github.com/zgeoff/impz/commit/ca6dc4d55fb2028433e8bc668a4ebc5cbf9e3662))
+* **mcp:** an OAuth sign-in for a default-off public /mcp route ([#190](https://github.com/zgeoff/impz/issues/190)) ([4b92ed3](https://github.com/zgeoff/impz/commit/4b92ed3cd8053b3f63b04b62162b3ab783e13120))
+* **ops:** copy the database safely while impd runs, and document a restore ([#184](https://github.com/zgeoff/impz/issues/184)) ([e29ea05](https://github.com/zgeoff/impz/commit/e29ea05de8250a02b958140b1183082910ee026c))
+* **release:** publish the imp base image to ghcr ([#158](https://github.com/zgeoff/impz/issues/158)) ([4b3f4fc](https://github.com/zgeoff/impz/commit/4b3f4fc940b95b043da3efded10d3c5fec54a29d))
+* **security:** let scoped tokens manage selected secret grants ([#154](https://github.com/zgeoff/impz/issues/154)) ([9145ae6](https://github.com/zgeoff/impz/commit/9145ae68e1afc2cb4a4f6775e50466cce4e06ae1))
+* **sessions:** opt-in durable output logs, kept on the host ([#178](https://github.com/zgeoff/impz/issues/178)) ([724ffa2](https://github.com/zgeoff/impz/commit/724ffa230bf2d6d215a33342b93661980942bcee))
+* **testing:** publish impd's test harness as @impz/testing ([#687](https://github.com/zgeoff/impz/issues/687)) ([91b5db3](https://github.com/zgeoff/impz/commit/91b5db33dad21664e94374a08dc64327b00d9bca))
+* **tokens:** change a token's grantable list without a new secret ([#221](https://github.com/zgeoff/impz/issues/221)) ([da3b8a0](https://github.com/zgeoff/impz/commit/da3b8a001bb91f824365ba190cf197956165b72e))
+
+
+### Bug Fixes
+
+* **agent:** keep reading host frames after an exec's session ends ([#187](https://github.com/zgeoff/impz/issues/187)) ([282a085](https://github.com/zgeoff/impz/commit/282a085f861bf8840150e49572ad9a7effa36810))
+* **agent:** set a session's previous before its name frees ([#614](https://github.com/zgeoff/impz/issues/614)) ([ec43c0c](https://github.com/zgeoff/impz/commit/ec43c0c423b48cd3ccf7a67d3a773cdc9ee4bbce))
+* **api:** refuse a secret rule whose header overrides the method ([#649](https://github.com/zgeoff/impz/issues/649)) ([d808882](https://github.com/zgeoff/impz/commit/d808882c1576a2f8cf25e7b6a36aa330f058ca82))
+* **broker:** keep secret value files that no row names instead of deleting them ([#188](https://github.com/zgeoff/impz/issues/188)) ([9fb32a7](https://github.com/zgeoff/impz/commit/9fb32a7145c9eb42ec28362dcec9a894311018cb))
+* **ci:** read zod 4.6 json schema forms in the breaking-change gate ([#573](https://github.com/zgeoff/impz/issues/573)) ([93249da](https://github.com/zgeoff/impz/commit/93249da72a15f35c650c7f90b6e4c0e47d7b44fc))
+* **client:** send large stdin in small frames, and keep a fast command's exit ([#216](https://github.com/zgeoff/impz/issues/216)) ([ed5e36a](https://github.com/zgeoff/impz/commit/ed5e36a3dadccd11930fc7fa131e6e840c3ebb54))
+* **daemon:** keep a deleted ended session log from being logged again ([#675](https://github.com/zgeoff/impz/issues/675)) ([a00bf06](https://github.com/zgeoff/impz/commit/a00bf06facced63fa5b35a694cb4668d168e909e))
+* **daemon:** keep stale session log work off a re-created imp's logs ([#197](https://github.com/zgeoff/impz/issues/197)) ([36edfa8](https://github.com/zgeoff/impz/commit/36edfa8ee28bf976c71f8d8b0e18a2ff21dc54aa))
+* **daemon:** log a proxied stream that the imp closes through logtape ([#544](https://github.com/zgeoff/impz/issues/544)) ([5db1ff5](https://github.com/zgeoff/impz/commit/5db1ff5f52cb6c3a95e86fe3dabaf386d71e290f))
+* **daemon:** log upstream stream cuts in the broker and docker proxy ([#591](https://github.com/zgeoff/impz/issues/591)) ([05ead41](https://github.com/zgeoff/impz/commit/05ead411022098e59f10aaca76f00b1887506833))
+* **daemon:** refuse a failed code verifier with invalid_grant ([#660](https://github.com/zgeoff/impz/issues/660)) ([1c3783a](https://github.com/zgeoff/impz/commit/1c3783a25076c7132c98c619d135b875081ef754))
+* **daemon:** refuse a move mark change the transition table lacks ([#519](https://github.com/zgeoff/impz/issues/519)) ([49ebd4f](https://github.com/zgeoff/impz/commit/49ebd4fb16cbb1b182849fd5e0134d18cc4d2b27))
+* **daemon:** reuse the image a host holds when an imp moves back to it ([#671](https://github.com/zgeoff/impz/issues/671)) ([d2c0dd1](https://github.com/zgeoff/impz/commit/d2c0dd1ec160f3f8d8ead59a40d1c71d048f95d3))
+* **daemon:** say a follow's imp sleeps after a step held it running ([#543](https://github.com/zgeoff/impz/issues/543)) ([315caaf](https://github.com/zgeoff/impz/commit/315caaf74ed601c2f2966fbbe742cc73cbc694ea))
+* **daemon:** stop resending the preallocated tail of a received disk ([#645](https://github.com/zgeoff/impz/issues/645)) ([72ab134](https://github.com/zgeoff/impz/commit/72ab134af2c3b54efa69fae3f4c88ccd0b99ca74))
+* **daemon:** wait for the OAuth context before createMcpAuth returns ([#709](https://github.com/zgeoff/impz/issues/709)) ([7360bbb](https://github.com/zgeoff/impz/commit/7360bbb11492e8a7a0fd581facaf2c8ce3a623db))
+* **deploy:** run the image of the deploy files' own release ([#153](https://github.com/zgeoff/impz/issues/153)) ([a84a70c](https://github.com/zgeoff/impz/commit/a84a70cf4147ad2e1d76ccbd1c17780d663f09d5))
+* **deps:** drop the stale zod 4.6.5 copies from bun.lock ([#665](https://github.com/zgeoff/impz/issues/665)) ([c639483](https://github.com/zgeoff/impz/commit/c639483e54693b012b0d416ced9cceea6f654ed8))
+* **deps:** pin source-map-js 1.2.2 past its advisory ([#219](https://github.com/zgeoff/impz/issues/219)) ([1c6e7ad](https://github.com/zgeoff/impz/commit/1c6e7ad9014776b534893d0e906d4e763ae847de))
+* **deps:** update fast-uri, ignore 1 unfixed advisory ([#666](https://github.com/zgeoff/impz/issues/666)) ([b18c568](https://github.com/zgeoff/impz/commit/b18c56845132663b34ba3ec0d480c9ed6550ba3c))
+* **deps:** update follow-redirects to fix advisories ([#562](https://github.com/zgeoff/impz/issues/562)) ([183e39d](https://github.com/zgeoff/impz/commit/183e39d8d406264295fc0797892dae51644a7611))
+* **deps:** update module github.com/moby/buildkit to v0.31.1 [security] ([#461](https://github.com/zgeoff/impz/issues/461)) ([c7af091](https://github.com/zgeoff/impz/commit/c7af091ff1760c20e387327d299f1711605982da))
+* **deps:** update module github.com/moby/buildkit to v0.34.0 ([#504](https://github.com/zgeoff/impz/issues/504)) ([4028170](https://github.com/zgeoff/impz/commit/4028170668d978fec5aeb904b08a317077a3cb49))
+* **deps:** update module golang.org/x/sys to v0.49.0 ([#505](https://github.com/zgeoff/impz/issues/505)) ([063f81e](https://github.com/zgeoff/impz/commit/063f81e1d02e5d4b49b81ea34db04cc3127ce497))
+* **deps:** update module golang.org/x/term to v0.47.0 ([#513](https://github.com/zgeoff/impz/issues/513)) ([ed978e1](https://github.com/zgeoff/impz/commit/ed978e1910897d38f265325c9eba726ae761605e))
+* **e2e:** keep the ssh-agent socket under the unix socket path limit ([#644](https://github.com/zgeoff/impz/issues/644)) ([93ba146](https://github.com/zgeoff/impz/commit/93ba146781fb1419f30efc0ca588d4d3f3b58804))
+* **egress:** keep impd up when a resolver socket gets a refusal ([#193](https://github.com/zgeoff/impz/issues/193)) ([f516cc0](https://github.com/zgeoff/impz/commit/f516cc00252f6944641d578ebf183078b54b5636))
+* **geo-1027:** read saved hosts when the old token file cannot move ([#408](https://github.com/zgeoff/impz/issues/408)) ([d1264df](https://github.com/zgeoff/impz/commit/d1264df442ae1323f2bd93583d7144fb317c4253))
+* **geo-1036:** give the feed, wake and state writes one owner each ([#416](https://github.com/zgeoff/impz/issues/416)) ([ed09426](https://github.com/zgeoff/impz/commit/ed09426cd440097af5ba387cac03fbb099fb08c2))
+* **geo-1061:** point dev and e2e scripts at impz's imp-e2e vault ([#407](https://github.com/zgeoff/impz/issues/407)) ([4b1831e](https://github.com/zgeoff/impz/commit/4b1831e5489b8c984559cda5fad0a1076e292bbd))
+* **geo-1150:** write only impz's formula to the homebrew tap ([#432](https://github.com/zgeoff/impz/issues/432)) ([2d1c8e1](https://github.com/zgeoff/impz/commit/2d1c8e1d16f9663615962dd18030d6f966bf4dcb))
+* **geo-1213:** keep imp-host's env file in tmpfs, off the system disk ([#451](https://github.com/zgeoff/impz/issues/451)) ([43afedb](https://github.com/zgeoff/impz/commit/43afedb737515aaf5ebd7a668ee13d2e606a459e))
+* **geo-1220:** refresh an oauth secret when its granted host answers 401 ([#450](https://github.com/zgeoff/impz/issues/450)) ([8bf1d0e](https://github.com/zgeoff/impz/commit/8bf1d0e1770cef9b3ab8799d325427b22d2e5f18))
+* **geo-1269:** keep the broker audit row of a request past its imp ([#501](https://github.com/zgeoff/impz/issues/501)) ([b941a79](https://github.com/zgeoff/impz/commit/b941a79bfdc083f7cde1413535a044b1c789deda))
+* **geo-1287:** name no 1Password vault in scripts or docs ([#512](https://github.com/zgeoff/impz/issues/512)) ([31642fe](https://github.com/zgeoff/impz/commit/31642fe535c257e1b5e41c68d0001004cc068789))
+* **geo-135:** assert the exact path the zfs host test passes to sudo ([#269](https://github.com/zgeoff/impz/issues/269)) ([9f192ca](https://github.com/zgeoff/impz/commit/9f192ca9bc19e01cf2f45b8bde31b8d13eb66337))
+* **geo-135:** report a refused resolver reply instead of ending impd ([#274](https://github.com/zgeoff/impz/issues/274)) ([afc2a45](https://github.com/zgeoff/impz/commit/afc2a45563f2288d56204aa07f246b71e22c7270))
+* **geo-135:** wait for the leader's trap before sending sigusr1 ([#245](https://github.com/zgeoff/impz/issues/245)) ([3aa85bb](https://github.com/zgeoff/impz/commit/3aa85bb4b0e00bcce1233092077bee28ed9723a2))
+* **geo-135:** wait for the session-log tap instead of sleeping ([#256](https://github.com/zgeoff/impz/issues/256)) ([45095e5](https://github.com/zgeoff/impz/commit/45095e5874ed6df368d805a6988f5821ad5c49bf))
+* **geo-455:** show the upgrade hint for an impd without the stream ([#376](https://github.com/zgeoff/impz/issues/376)) ([ec54752](https://github.com/zgeoff/impz/commit/ec5475296e9a4fda742a95c0c576f37bd7a33de1))
+* **geo-456:** count a pool as using the image only on an equal vdev path ([#371](https://github.com/zgeoff/impz/issues/371)) ([16777fc](https://github.com/zgeoff/impz/commit/16777fc3d8f79e0bb383eaa4072d0f45901b5ab6))
+* **geo-457:** count a growing hold's written bytes once ([#375](https://github.com/zgeoff/impz/issues/375)) ([81a035b](https://github.com/zgeoff/impz/commit/81a035b3face359d26e6bdd15c52c81f7247062c))
+* **geo-458:** log a refused resolver reply to a guest that went ([#372](https://github.com/zgeoff/impz/issues/372)) ([b432e13](https://github.com/zgeoff/impz/commit/b432e138e6c498bfa90a6f5785ebf643dd0c449f))
+* **geo-460:** wait for a killed vm that is still exiting ([#380](https://github.com/zgeoff/impz/issues/380)) ([de5abf4](https://github.com/zgeoff/impz/commit/de5abf470021041166172afff276c6922f03af11))
+* **geo-477:** bind the snapshot's own drive into a jailed wake ([#325](https://github.com/zgeoff/impz/issues/325)) ([dc76759](https://github.com/zgeoff/impz/commit/dc76759a64f90c05f279f8b616142f08196a71df))
+* **geo-729:** grow a guest once per need ([#333](https://github.com/zgeoff/impz/issues/333)) ([59a5398](https://github.com/zgeoff/impz/commit/59a5398abe60fa3cebeb1d0d3430a94f0d02686d))
+* **geo-743:** stop memory control leaking grows or missing reclaims ([#337](https://github.com/zgeoff/impz/issues/337)) ([92341f0](https://github.com/zgeoff/impz/commit/92341f05d6b580587acaef2d49b54547f06c6274))
+* **geo-757:** combine an intersection's constraints in the break check ([#344](https://github.com/zgeoff/impz/issues/344)) ([eabbbc3](https://github.com/zgeoff/impz/commit/eabbbc33ec96e6825f30eee0623e3955aa0b4f5e))
+* **geo-809:** intersect an intersection's enums in the break check ([#351](https://github.com/zgeoff/impz/issues/351)) ([d11743e](https://github.com/zgeoff/impz/commit/d11743e9408c05e86ca5592ec5a6beafbe14e6f2))
+* **geo-821:** move latest under one lock across release runs ([#361](https://github.com/zgeoff/impz/issues/361)) ([7139aac](https://github.com/zgeoff/impz/commit/7139aacbeb5e3aa8d3c21d00b3861e6209fa4453))
+* **geo-832:** keep a pool that a kernel oops in zfs holds ([#367](https://github.com/zgeoff/impz/issues/367)) ([b3dbfa7](https://github.com/zgeoff/impz/commit/b3dbfa787d9a62b806c13a6980a133de8f36792f))
+* **geo-846:** encode a warm move's snapshot record as meta.json does ([#368](https://github.com/zgeoff/impz/issues/368)) ([831f40f](https://github.com/zgeoff/impz/commit/831f40f9fc6bfbcf24a903c866352205e8bd64d1))
+* **geo-863:** hold an imp a kernel oops killed until a reboot ([#374](https://github.com/zgeoff/impz/issues/374)) ([ec2c03d](https://github.com/zgeoff/impz/commit/ec2c03df7cb3edc3298e27932f3de7d17422fa46))
+* **geo-889:** hold only the vm whose thread a kernel oops killed ([#412](https://github.com/zgeoff/impz/issues/412)) ([e641930](https://github.com/zgeoff/impz/commit/e6419300a9310d4f42d2c0d23f583aae58cf0155))
+* **geo-899:** keep kernel oops holds when the taint flag is unreadable ([#383](https://github.com/zgeoff/impz/issues/383)) ([d9d5957](https://github.com/zgeoff/impz/commit/d9d595728604a9a192fa4cd8282b21d89631535d))
+* **geo-900:** push a wide directory's subdirectories one at a time ([#385](https://github.com/zgeoff/impz/issues/385)) ([9bd8770](https://github.com/zgeoff/impz/commit/9bd877066d750be85fb86f03920b485d41a86f71))
+* **geo-908:** clear a kernel oops hold that an earlier boot recorded ([#388](https://github.com/zgeoff/impz/issues/388)) ([c97136e](https://github.com/zgeoff/impz/commit/c97136ea39bd5e81b37802ece016948edfdbd075))
+* **geo-942:** keep the impz rename from stranding a config or breaking an install ([#401](https://github.com/zgeoff/impz/issues/401)) ([af73a97](https://github.com/zgeoff/impz/commit/af73a970bf15251a671f482ff96a7fe2808f44ec))
+* **geo-979:** drop method-override headers on a filtered grant ([#402](https://github.com/zgeoff/impz/issues/402)) ([0dac0aa](https://github.com/zgeoff/impz/commit/0dac0aa4f04763f0adb719538ee27da89406d06d))
+* **geo-988:** check the lifecycle table and moves at every state lock ([#414](https://github.com/zgeoff/impz/issues/414)) ([dff578f](https://github.com/zgeoff/impz/commit/dff578f82a0d46f389de1082ce0a6f5f864abd8d))
+* **geo-990:** give every long-silent call a keepalive or a deadline ([#410](https://github.com/zgeoff/impz/issues/410)) ([5e99b5c](https://github.com/zgeoff/impz/commit/5e99b5cef56a3aeaf4963ecf8ac943405ecea325))
+* **geo-992:** point code citations at the split docs and check them ([#404](https://github.com/zgeoff/impz/issues/404)) ([021349d](https://github.com/zgeoff/impz/commit/021349d5fc36d26875ae19e04e3b6cf309f5c032))
+* **https:** warn when the public ip is not an internet address ([#192](https://github.com/zgeoff/impz/issues/192)) ([f344390](https://github.com/zgeoff/impz/commit/f3443907363b59e21753532ba0db1499310ea8f2))
+* **images:** a docker proxy refusal reaches the client as BAD_REQUEST ([#179](https://github.com/zgeoff/impz/issues/179)) ([0f080a2](https://github.com/zgeoff/impz/commit/0f080a2db45e6579e854cacc588cf878eef554da))
+* **images:** build dev and hello on the published base by digest ([#160](https://github.com/zgeoff/impz/issues/160)) ([e73c42b](https://github.com/zgeoff/impz/commit/e73c42b54965255d53d882f40bb2650a8484613c))
+* **images:** drop a build's rootfs when its row fails or is cancelled ([#203](https://github.com/zgeoff/impz/issues/203)) ([3bddbac](https://github.com/zgeoff/impz/commit/3bddbacb2afd2f5623947452cb977aa2eec60e6b))
+* **images:** hold room for the rootfs journal in a build's disk hold ([#229](https://github.com/zgeoff/impz/issues/229)) ([5c757c7](https://github.com/zgeoff/impz/commit/5c757c7a03247cc15f63201162394740fe507a60))
+* **images:** leave no work directory when docker create fails ([#227](https://github.com/zgeoff/impz/issues/227)) ([9353e10](https://github.com/zgeoff/impz/commit/9353e10776cf6283d2b2f05f851caf91060799dd))
+* **images:** let a build stay silent past 360 s on the way to the engine ([#213](https://github.com/zgeoff/impz/issues/213)) ([935b064](https://github.com/zgeoff/impz/commit/935b064371011eb9b74175fc876d24e762f9085f))
+* **images:** stream build events so a long build outlives the fetch ([#174](https://github.com/zgeoff/impz/issues/174)) ([73de198](https://github.com/zgeoff/impz/commit/73de19871a4e6bfe198859a91ed15c80424daff0)), closes [#162](https://github.com/zgeoff/impz/issues/162)
+* **images:** stream images.add and on-host builds past fetch timeouts ([#181](https://github.com/zgeoff/impz/issues/181)) ([f1b42a8](https://github.com/zgeoff/impz/commit/f1b42a8f1b5d6ddf83ccd5a38ae1f93ad140f527))
+* **images:** time out the builder image pull, and let callers leave it ([#201](https://github.com/zgeoff/impz/issues/201)) ([c8f7504](https://github.com/zgeoff/impz/commit/c8f7504c80f346b84a220eb3d14389434ca20f7f))
+* **images:** write image.json without following links in the image ([#196](https://github.com/zgeoff/impz/issues/196)) ([3d4541a](https://github.com/zgeoff/impz/commit/3d4541a1a25b5d1238050bfb5b9efc7c172ea884))
+* **security:** a scoped token's fork copies only the grants it could make ([#172](https://github.com/zgeoff/impz/issues/172)) ([eef2ec8](https://github.com/zgeoff/impz/commit/eef2ec8dd50580820650e7aecce6927758c7c069))
+* **storage:** count disk usage after stops, sleeps and resizes ([#166](https://github.com/zgeoff/impz/issues/166)) ([dce9a74](https://github.com/zgeoff/impz/commit/dce9a742c27836c22e90075b2e0577f41f838be8))
+* **storage:** count disk usage when a move lands ([#183](https://github.com/zgeoff/impz/issues/183)) ([3223f05](https://github.com/zgeoff/impz/commit/3223f0528949c479712a85ed5c3147b5e165d29d))
+
+
+### Performance Improvements
+
+* **agent:** cache the agent binary before a boot template parks ([#626](https://github.com/zgeoff/impz/issues/626)) ([ad24cdb](https://github.com/zgeoff/impz/commit/ad24cdb9320eb6f5c5eb885a41585df8bd278d3f))
+* **agent:** cut the guest's steps after a boot template claim ([#593](https://github.com/zgeoff/impz/issues/593)) ([2b72f87](https://github.com/zgeoff/impz/commit/2b72f87b11621d90ace9f72e8662afaf6d2799d4))
+* **daemon:** admit without a page walk while ram is far under budget ([#637](https://github.com/zgeoff/impz/issues/637)) ([d38d41b](https://github.com/zgeoff/impz/commit/d38d41b32820c141580ef69d950fa7cd0ed1500f))
+* **daemon:** sleep a woken imp with a diff snapshot ([#495](https://github.com/zgeoff/impz/issues/495)) ([53579f1](https://github.com/zgeoff/impz/commit/53579f1c79618e86d075215f14f9a4736d64a6a3))
+
+
+### Documentation
+
+* **release:** say how to recover a release that fails to tag ([#729](https://github.com/zgeoff/impz/issues/729)) ([58c6a23](https://github.com/zgeoff/impz/commit/58c6a23fc85f5ca1e548f08b49df1f7414675b13))
+* **release:** say how to release refactor-only commits ([#724](https://github.com/zgeoff/impz/issues/724)) ([4daf646](https://github.com/zgeoff/impz/commit/4daf6462131c093bf242965358e0232c9c7c97fa))
+
+
+### Miscellaneous Chores
+
+* release 1.0.0 ([#331](https://github.com/zgeoff/impz/issues/331)) ([a7f7cb2](https://github.com/zgeoff/impz/commit/a7f7cb2b4a53b9f393a879dfbfe597c471ca3cdb))
+
 ## [4.2.1](https://github.com/zgeoff/impz/compare/v4.2.0...v4.2.1) (2026-10-24)
 
 ### Bug Fixes
