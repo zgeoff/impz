@@ -323,6 +323,17 @@ let
       ) moduleHosts;
       expected = lib.mapAttrs (_: _: [ ]) moduleHosts;
     };
+    "test the image pull waits for the network" = {
+      expr =
+        let
+          image = zfsCfg.systemd.services.imp-host-image;
+        in
+        lib.all (list: lib.elem "network-online.target" list) [
+          image.wants
+          image.after
+        ];
+      expected = true;
+    };
     # zfsHost: module defaults (storage = "zfs")
     "test imp-host needs the dataset" = {
       expr = lib.elem "imp-zfs-dataset.service" unit.requires;

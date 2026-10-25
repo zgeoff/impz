@@ -505,6 +505,10 @@ in
     # that stays inactive, so each start of imp-host runs it again.
     systemd.services.imp-host-image = {
       description = "imp host image (load or pull)";
+      # podman has no daemon whose start would wait for the network, and a
+      # pull at boot needs it
+      wants = [ "network-online.target" ];
+      after = [ "network-online.target" ];
       serviceConfig = {
         Type = "oneshot";
         ExecStart = ensureImage;
