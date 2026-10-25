@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.2.4](https://github.com/zgeoff/impz/compare/v4.2.3...v4.2.4) (2026-10-25)
+
+
+### Bug Fixes
+
+* **daemon:** start a usage pass a full delay after every change ([#736](https://github.com/zgeoff/impz/issues/736)) ([5da47f7](https://github.com/zgeoff/impz/commit/5da47f7261d127661fa8bdfefdfa7d44e97d0cb5))
+
 ## [4.2.3](https://github.com/zgeoff/impz/compare/v4.2.2...v4.2.3) (2026-10-25)
 
 ### Bug Fixes
