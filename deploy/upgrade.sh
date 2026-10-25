@@ -14,30 +14,32 @@
 # as the releases before did, moves to Podman here: step 3 says how.
 #
 # 1. Pulls the image with Podman: this script's own release, unless
-#    IMP_HOST_IMAGE (the environment, then the env file) names another. When
-#    a Podman host already runs it, step 3 still installs the image lines and
-#    files, and restarts nothing. Refuses an image that the restarted unit
-#    would not run (drop-ins count), and an env file with IMP_HOST_IMAGE=
-#    empty. Refuses an image whose imp.host-contract is not no-docker: it
-#    needs a Docker socket, which a Podman host does not give. Reads the
-#    image's seccomp profile and unit; one it cannot read, or reads empty,
-#    stops the upgrade here, and so does a unit that does not run Podman.
+#    IMP_HOST_IMAGE (the environment, then the env file) names another. When a
+#    Podman host already runs it, step 3 still installs the image lines and
+#    files and retires imp-docker-proxy, and restarts nothing else. Refuses an
+#    image that the restarted unit would not run (drop-ins count), and an env
+#    file with IMP_HOST_IMAGE= empty. Refuses an image whose imp.host-contract
+#    is not no-docker: it needs a Docker socket, which a Podman host does not
+#    give. Reads the image's seccomp profile and unit; one it cannot read, or
+#    reads empty, stops the upgrade here, and so does a unit that does not run
+#    Podman.
 # 2. Sleeps every awake imp through the API, one at a time, and stops on the
 #    first that fails: the host keeps running the old image, untouched.
 #    Stopping the container would sleep them too, but within its 120 s.
-# 3. On a Docker host: stops imp-host with the old unit, removes its
-#    container, stops and disables imp-docker-proxy, whose unit becomes
-#    .bak-<time>, and with IPv6 removes Docker's imp-host network, so the
-#    new unit's Podman makes its own on the same /64 and bridge. Then, on
-#    any host, installs the image's seccomp profile and systemd unit by
-#    rename, keeping a changed unit as .bak-<time>, and starts or restarts
-#    imp-host on the new image and waits for impd. /var/lib/imp and the env
-#    file's values stay, and so does Docker. Local changes to a unit belong
-#    in a drop-in (imp-host.service.d/), which stays. First, an env file line
+# 3. On a Docker host: stops imp-host with the old unit, removes its container,
+#    stops and disables imp-docker-proxy, whose unit becomes .bak-<time>, and
+#    with IPv6 removes Docker's imp-host network, so the new unit's Podman
+#    makes its own on the same /64 and bridge. Then, on any host, installs the
+#    image's seccomp profile and systemd unit by rename, keeping a changed unit
+#    as .bak-<time>, stops and disables an imp-docker-proxy that a Podman host
+#    still has, as on a Docker host, and starts or restarts imp-host on the new
+#    image and waits for impd. /var/lib/imp and the env file's values stay, and
+#    so does Docker. Local changes to a unit belong in a drop-in
+#    (imp-host.service.d/), which stays. First, an env file line
 #    IMP_HOST_IMAGE=...:latest, as every env file had before the units named
-#    their release, is the old template's, not a pin: it becomes a comment,
-#    and the file before is kept as .bak-<time>. Installed units and files
-#    lose the release-please marker lines.
+#    their release, is the old template's, not a pin: it becomes a comment, and
+#    the file before is kept as .bak-<time>. Installed units and files lose the
+#    release-please marker lines.
 # 4. Prints how to roll back, how many imps will boot cold and how many run
 #    outdated parts, then lists the imps: a NOTE says which boot cold on
 #    their next wake, and why (docs/guides/operations.md#upgrade).
@@ -460,9 +462,11 @@ fi
 
 # A host on :latest may run this release's image already. It still gets
 # its image lines and this image's unit, or the old unit's :latest would
-# run another image at the next restart. Nothing restarts.
+# run another image at the next restart. The proxy still goes, or it keeps
+# the host's Docker socket. Nothing restarts.
 if [ "$runtime" = podman ] && [ "$old" = "$new" ]; then
   install_new_files
+  retire_proxy_unit
   echo "upgrade: $container already runs $new"
   exit 0
 fi
@@ -493,6 +497,7 @@ if [ "$runtime" = docker ]; then
   systemctl start "$container"
 else
   install_new_files
+  retire_proxy_unit
   restarting=1
   systemctl restart "$container"
 fi
