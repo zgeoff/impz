@@ -61,7 +61,7 @@ export interface CheckedTicket {
   readonly ticket: OpaqueToken;
 }
 
-export type ReceivedPart =
+type ReceivedPart =
   | { readonly kind: 'part'; readonly part: number }
   | { readonly kind: 'receipt'; readonly receipt: Receipt };
 

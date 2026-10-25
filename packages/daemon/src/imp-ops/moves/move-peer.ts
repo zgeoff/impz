@@ -6,7 +6,7 @@ export interface MovePeer {
   readonly abort: () => Promise<'aborted' | 'committed' | 'unknown-ticket'>;
 }
 
-export interface MovePeerTarget {
+interface MovePeerTarget {
   readonly peer: string;
   readonly ticket: string;
 }
