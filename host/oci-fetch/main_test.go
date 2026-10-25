@@ -578,6 +578,57 @@ func TestExportHidesALowerDirectoryAndItsChildrenUnderAnUpperWhiteout(t *testing
 	})
 }
 
+func TestExportKeepsASymlinkToANameThatStartsWithTwoDots(t *testing.T) {
+	host := startRegistry(t)
+	ref := pushImage(t, host, buildImage(t, nil,
+		buildLayer(t, []entry{
+			{name: "..data/", typeflag: tar.TypeDir},
+			{name: "current", typeflag: tar.TypeSymlink, linkname: "..data"},
+		}),
+	))
+	var out bytes.Buffer
+
+	assert.NilError(t, run("export", ref, &out))
+
+	assert.DeepEqual(t, readEntries(t, out.Bytes()), []entry{
+		{name: "..data", typeflag: tar.TypeDir},
+		{name: "current", typeflag: tar.TypeSymlink, linkname: "..data"},
+		{name: "dev", typeflag: tar.TypeDir},
+		{name: "proc", typeflag: tar.TypeDir},
+		{name: "sys", typeflag: tar.TypeDir},
+	}, cmp.AllowUnexported(entry{}))
+}
+
+func TestExportDropsASymlinkThatLeavesTheTree(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		linkname string
+	}{
+		{name: "the root's parent", linkname: "../.."},
+		{name: "a name beside the root", linkname: "../../outside"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			host := startRegistry(t)
+			ref := pushImage(t, host, buildImage(t, nil,
+				buildLayer(t, []entry{
+					{name: "srv/", typeflag: tar.TypeDir},
+					{name: "srv/escape", typeflag: tar.TypeSymlink, linkname: tc.linkname},
+				}),
+			))
+			var out bytes.Buffer
+
+			assert.NilError(t, run("export", ref, &out))
+
+			assert.DeepEqual(t, readTree(t, out.Bytes()), map[string]string{
+				"srv":  "",
+				"dev":  "",
+				"proc": "",
+				"sys":  "",
+			})
+		})
+	}
+}
+
 func TestExportKeepsAnOpaqueDirectorysOwnChildrenAndHidesTheLowerOnes(t *testing.T) {
 	host := startRegistry(t)
 	ref := pushImage(t, host, buildImage(t, nil,

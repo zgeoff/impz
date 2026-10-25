@@ -445,7 +445,7 @@ func unsafeRelativeLink(name, linkname string) bool {
 		return true
 	}
 	resolved := path.Clean(path.Join(path.Dir(name), clean))
-	return strings.HasPrefix(resolved, "..")
+	return resolved == ".." || strings.HasPrefix(resolved, "../")
 }
 
 func cleanArchivePath(name string) string {
