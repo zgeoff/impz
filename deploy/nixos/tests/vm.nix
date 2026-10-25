@@ -15,7 +15,8 @@
 #   IPv6 network and default route, egress to `own` over IPv4 and IPv6, the
 #   forwardDeny ranges dropped, no host port opened to the bridge, and no
 #   DNS server on imp-host's network or Podman's default one. Without
-#   imageArchive, a missing image is pulled from a registry on the node.
+#   imageArchive, a missing image is pulled from a registry on the node,
+#   and an oci-archive loads as a docker-archive does.
 # own: hostFirewall = "own", without networking.firewall; SSH connects
 #   through bootstrap.sh's table and another port does not.
 #
@@ -81,6 +82,12 @@ let
       Labels."imp.tailscale-keyless" = "1";
     };
   };
+
+  # the stand-in as an oci-archive, whose ref annotation names the image
+  stubOCI = pkgs.runCommand "imp-host-stub-oci.tar" { nativeBuildInputs = [ pkgs.skopeo ]; } ''
+    export HOME=$TMPDIR
+    skopeo --insecure-policy --tmpdir "$TMPDIR" copy docker-archive:${stub} oci-archive:$out:imp-host-stub:oci
+  '';
 
   base = {
     imports = [ self.nixosModules.imp ];
@@ -159,6 +166,11 @@ pkgs.testers.runNixOSTest {
         ramBudgetMiB = 1024;
         image = pkgs.lib.mkForce "localhost:5000/imp-host-stub:test";
         imageArchive = pkgs.lib.mkForce null;
+      };
+      specialisation.oci.configuration.services.imp = {
+        ramBudgetMiB = 1024;
+        image = pkgs.lib.mkForce "imp-host-stub:oci";
+        imageArchive = pkgs.lib.mkForce stubOCI;
       };
     };
 
@@ -455,6 +467,21 @@ pkgs.testers.runNixOSTest {
           start_imp_host()
           host.succeed("grep -qx IMP_HOST_IMAGE=imp-host-stub:test /run/imp-host/env")
           assert loads() == 2, loads()
+
+      with subtest("an oci-archive is loaded, and imp-host starts from its image"):
+          host.fail("podman image exists imp-host-stub:oci")
+          host.succeed("/run/booted-system/specialisation/oci/bin/switch-to-configuration test")
+          start_imp_host()
+          host.succeed("podman image exists imp-host-stub:oci")
+          host.succeed("grep -qx ${stubOCI} /var/lib/imp-host/image-archive")
+          host.succeed("grep -qx IMP_HOST_IMAGE=imp-host-stub:oci /run/imp-host/env")
+          assert loads() == 3, loads()
+          # the restore: the docker-archive differs from the one loaded last, so it loads again
+          host.succeed("/run/booted-system/specialisation/budget/bin/switch-to-configuration test")
+          start_imp_host()
+          host.succeed("grep -qx IMP_HOST_IMAGE=imp-host-stub:test /run/imp-host/env")
+          host.succeed("grep -qx ${stub} /var/lib/imp-host/image-archive")
+          assert loads() == 4, loads()
 
       with subtest("saved state that needs a login joins again with the key"):
           host.succeed("echo stale > ${stateDir}/tailscaled.state")
