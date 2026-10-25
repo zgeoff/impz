@@ -13,6 +13,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as z from 'zod';
+import { buildStubFailingSystemctl } from '../scripts/test-utils/build-stub-failing-systemctl';
 import { buildStubHostDocker } from '../scripts/test-utils/build-stub-host-docker';
 import { buildStubHostPodman } from '../scripts/test-utils/build-stub-host-podman';
 import { buildStubUnitSystemctl } from '../scripts/test-utils/build-stub-unit-systemctl';
@@ -1958,6 +1959,149 @@ test('it fails the move from Docker, with the rollback to Docker, when impd is n
       'To roll back to Docker: systemctl stop imp-host, then podman network rm imp-host, ' +
       `then mv ${unitBackup} ${join(ctx.directoryPath, 'imp-host.service')}, ` +
       'then systemctl daemon-reload, then systemctl start imp-host.\n',
+  );
+});
+
+test('it fails the move from Docker, with the rollback to Docker, when the start of the new unit fails', () => {
+  const ctx = setupTest();
+
+  const podman = createStubBin(
+    ctx.directoryPath,
+    'podman',
+    buildStubHostPodman({
+      image: 'ghcr.io/zgeoff/imp-host:next',
+      pulledLabel: 'no-docker',
+      pulledUnit: 'ExecStart=/usr/bin/podman run --name imp-host imp-host\n',
+      runsHost: false,
+    }),
+  );
+
+  createStubBin(ctx.directoryPath, 'docker', buildStubHostDocker({ hostNetwork: ['imp-host'] }));
+  createStubBin(ctx.directoryPath, 'systemctl', buildStubFailingSystemctl('start'));
+  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
+
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-host.service'),
+    'ExecStart=/usr/bin/docker run --name imp-host imp-host\n',
+  );
+
+  const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
+    env: {
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
+      IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
+      IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
+      IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
+      IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
+    },
+  });
+
+  const unitBackup = join(
+    ctx.directoryPath,
+    readdirSync(ctx.directoryPath)
+      .filter((file) => file.startsWith('imp-host.service.bak-'))
+      .join(''),
+  );
+
+  expect(result.exitCode).toBe(1);
+
+  expect(result.stderr.toString()).toBe(
+    'Job for imp-host.service failed because the control process exited with error code.\n' +
+      'upgrade: imp-host did not start; see: journalctl -u imp-host. ' +
+      'To roll back to Docker: systemctl stop imp-host, then podman network rm imp-host, ' +
+      `then mv ${unitBackup} ${join(ctx.directoryPath, 'imp-host.service')}, ` +
+      'then systemctl daemon-reload, then systemctl start imp-host.\n',
+  );
+});
+
+test('it names the failed step, with the rollback to Docker, when the reload of the new unit fails after a Docker host stops', () => {
+  const ctx = setupTest();
+
+  const podman = createStubBin(
+    ctx.directoryPath,
+    'podman',
+    buildStubHostPodman({
+      image: 'ghcr.io/zgeoff/imp-host:next',
+      pulledLabel: 'no-docker',
+      pulledUnit: 'ExecStart=/usr/bin/podman run --name imp-host imp-host\n',
+      runsHost: false,
+    }),
+  );
+
+  createStubBin(ctx.directoryPath, 'docker', buildStubHostDocker({}));
+  createStubBin(ctx.directoryPath, 'systemctl', buildStubFailingSystemctl('daemon-reload'));
+  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
+
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-host.service'),
+    'ExecStart=/usr/bin/docker run --name imp-host imp-host\n',
+  );
+
+  const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
+    env: {
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
+      IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
+      IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
+      IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
+      IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
+    },
+  });
+
+  const unitBackup = join(
+    ctx.directoryPath,
+    readdirSync(ctx.directoryPath)
+      .filter((file) => file.startsWith('imp-host.service.bak-'))
+      .join(''),
+  );
+
+  expect(result.exitCode).toBe(1);
+
+  expect(result.stderr.toString()).toEndWith(
+    'upgrade: systemctl daemon-reload failed; imp-host is stopped; to roll back to Docker: ' +
+      `systemctl stop imp-host, then mv ${unitBackup} ${join(ctx.directoryPath, 'imp-host.service')}, ` +
+      'then systemctl daemon-reload, then systemctl start imp-host\n',
+  );
+});
+
+test('it fails the upgrade, with the rollback, when the restart of a Podman host fails', () => {
+  const ctx = setupTest();
+
+  const podman = createStubBin(
+    ctx.directoryPath,
+    'podman',
+    buildStubHostPodman({
+      image: 'ghcr.io/zgeoff/imp-host:next',
+      pulledLabel: 'no-docker',
+      pulledUnit: 'ExecStart=/usr/bin/podman run --name imp-host imp-host\n',
+    }),
+  );
+
+  createStubBin(ctx.directoryPath, 'systemctl', buildStubFailingSystemctl('restart'));
+  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
+
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-host.service'),
+    'ExecStart=/usr/bin/podman run --cap-drop ALL imp-host\n',
+  );
+
+  const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
+    env: {
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
+      IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
+      IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
+      IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
+      IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
+    },
+  });
+
+  expect(result.exitCode).toBe(1);
+
+  expect(result.stderr.toString()).toBe(
+    'Job for imp-host.service failed because the control process exited with error code.\n' +
+      'upgrade: imp-host did not start; see: journalctl -u imp-host. ' +
+      'To roll back: podman tag old ghcr.io/zgeoff/imp-host:next, then systemctl restart imp-host.\n',
   );
 });
 

@@ -103,8 +103,8 @@ imp-host, remove Podman's `imp-host` network (with IPv6), move each `.bak-<time>
 `systemctl daemon-reload`, `systemctl enable --now imp-docker-proxy` when its unit came back,
 `docker tag <old image ID> <image>` for the image that the restored unit runs, and start imp-host.
 The tag matters when the env file pins the new image: without it, Docker would pull that image and
-start it again. A step that fails after the old host stopped, the readiness wait included, prints
-the rollback for what it changed so far.
+start it again. A step that fails after the old host stopped, the start and the readiness wait
+included, prints the rollback for what it changed so far.
 
 Imps then wake on demand. Each sleeping imp either restores its memory or boots its disk cold. The
 disk is never touched.

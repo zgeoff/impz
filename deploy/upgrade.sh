@@ -355,6 +355,18 @@ format_rollback() {
   fi
 }
 
+# report_failure COMMAND: what the failed COMMAND leaves, before set -e
+# exits: the rollback once the start or restart has run
+restarting=
+report_failure() {
+  [ "$BASH_SUBSHELL" -eq 0 ] || return 0
+  if [ -n "$restarting" ]; then
+    echo "upgrade: $container did not start; see: journalctl -u $container. $(format_rollback)" >&2
+  else
+    echo "upgrade: $1 failed; $(format_host_state)" >&2
+  fi
+}
+
 wait_ready() {
   local deadline=$((SECONDS + ready_timeout_s))
   until curl -fsS "$health" 2>/dev/null | grep -q '"ready":true'; do
@@ -463,18 +475,26 @@ for name in $awake; do
   echo "upgrade: $name asleep"
 done
 
+moved_from=$runtime
+# set -e skips the ERR trap only where it skips the exit, so a failed step
+# that prints nothing of its own still prints what it leaves.
+set -E
+trap 'report_failure "$BASH_COMMAND"' ERR
 if [ "$runtime" = docker ]; then
   retire_docker_host
   install_new_files
-  systemctl start "$container"
+  # A start that fails may have made Podman's network already.
   started=1
+  restarting=1
+  systemctl start "$container"
 else
   install_new_files
+  restarting=1
   systemctl restart "$container"
 fi
-moved_from=$runtime
 runtime=podman
 wait_ready
+trap - ERR
 pick_cli
 
 if [ "$moved_from" = docker ]; then
