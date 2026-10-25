@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { expect, onTestFinished, test } from 'bun:test';
 import { startStubMovePeer } from './start-stub-move-peer';
 
 test('it answers a path in its table with the status, body and headers of that path', async () => {
@@ -54,6 +54,14 @@ test('it records the method, path, ticket, content type and body of each request
       body: '{"imageDigest":"sha256:abc"}',
     },
   ]);
+});
+
+test('it closes its server when the test ends, with no stop called', () => {
+  const stub = startStubMovePeer({});
+
+  onTestFinished(async () => {
+    await expect(fetch(`${stub.url}/move/commit`, { method: 'POST' })).toReject();
+  });
 });
 
 test('it refuses connections once stopped', async () => {
