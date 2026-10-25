@@ -32,6 +32,7 @@ import type { DiskBudget } from '../../vm/storage/disk-budget';
 import type { BackupTree, StorageBackend } from '../../vm/storage/storage-backend';
 import type { StorageGate } from '../../vm/storage/storage-gate';
 import type { ImpGrants } from '../imp-grants';
+import type { ImageImportDeps } from '../imp-import/create-image-from-file';
 import type { BackupConfig } from './backup-config';
 import type { BackupManifest } from './backup-manifest';
 import { readDatabaseCopy } from './read-database-copy';
@@ -91,6 +92,7 @@ export interface BackupServiceDeps {
   readonly now?: () => Date;
   readonly storageGate: StorageGate;
   readonly diskBudget: Pick<DiskBudget, 'requireRoom' | 'withRoom'>;
+  readonly writeImageFiles: ImageImportDeps['writeImageFiles'];
 }
 
 export function buildBackupsOffError(): ImpdError<'PRECONDITION_FAILED'> {

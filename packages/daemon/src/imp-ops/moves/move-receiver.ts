@@ -40,6 +40,7 @@ import type { DiskBudget } from '../../vm/storage/disk-budget';
 import type { StorageBackend } from '../../vm/storage/storage-backend';
 import type { StorageGate } from '../../vm/storage/storage-gate';
 import type { ImpGrants } from '../imp-grants';
+import type { ImageImportDeps } from '../imp-import/create-image-from-file';
 import { readImageInUse } from '../imp-import/read-image-in-use';
 import { buildOfferedDigests } from './build-offered-digests';
 import { COMMIT_WINDOW_MS } from './commit-window-ms';
@@ -105,6 +106,7 @@ export interface MoveReceiverDeps {
   readonly readPeerUrl: () => Promise<string>;
   readonly onCommitted: (name: string) => void;
   readonly now: () => number;
+  readonly writeImageFiles: ImageImportDeps['writeImageFiles'];
 }
 
 type StreamOutcome = { readonly receipt: Receipt } | { readonly error: Error };

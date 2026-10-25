@@ -23,6 +23,7 @@ import type { StorageGate } from '../../vm/storage/storage-gate';
 import { writeChangedBlocks } from '../../vm/storage/write-changed-blocks';
 import type { ImpGrants } from '../imp-grants';
 import { createImageFromFile } from '../imp-import/create-image-from-file';
+import type { ImageImportDeps } from '../imp-import/create-image-from-file';
 import { readImageInUse } from '../imp-import/read-image-in-use';
 import { replayCheckpoints } from '../imp-import/replay-checkpoints';
 import { resolveImportedImageName } from '../imp-import/resolve-imported-image-name';
@@ -57,6 +58,7 @@ export interface RestoreDeps {
   readonly storageGate: Pick<StorageGate, 'join'>;
   readonly diskBudget: Pick<DiskBudget, 'withRoom'>;
   readonly now: () => Date;
+  readonly writeImageFiles: ImageImportDeps['writeImageFiles'];
 }
 
 type SkippedGrant = BackupRestore['skippedGrants'][number];

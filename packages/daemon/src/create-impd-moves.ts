@@ -11,6 +11,7 @@ import { createMovePeerHandler } from './surface/moves/create-move-peer-handler'
 import type { MovePeerHandler } from './surface/moves/create-move-peer-handler';
 import { makeConnectMovePeer } from './surface/moves/make-connect-move-peer';
 import type { HostIdentity } from './vm/sleep/vm-identity';
+import { writeImageFiles } from './vm/storage/write-image-files';
 
 // a caller's commit hook hears each commit after impd's own hook, never in its place
 export type ImpdMoveBoundaries = Partial<
@@ -53,6 +54,7 @@ export function createImpdMoves(
     grants: parts.broker,
     egress: parts.egress,
     readIdentity: parts.readIdentity,
+    writeImageFiles,
     ...hooks,
     ...boundaries,
     ...peerDeps,
