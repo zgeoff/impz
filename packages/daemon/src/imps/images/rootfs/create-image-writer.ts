@@ -10,6 +10,7 @@ import { buildKeyedMutex } from '../../../platform/process/keyed-mutex';
 import { runChecked } from '../../../platform/process/run-command';
 import type { StreamedRunner } from '../../../platform/process/run-streamed';
 import { createSingleFlight } from '../../../platform/process/single-flight';
+import { countTreeBytes } from '../../../vm/storage/count-tree-bytes';
 import { buildImagePaths, buildImagesDir } from '../../../vm/storage/data-layout';
 import type { DiskBudget } from '../../../vm/storage/disk-budget';
 import type { StorageBackend } from '../../../vm/storage/storage-backend';
@@ -23,6 +24,7 @@ import { writeImageRow } from '../write-image-row';
 import { readOciConfig } from './read-oci-config';
 import { removeUnusedRootfs } from './remove-unused-rootfs';
 import { planRootfs } from './rootfs-plan';
+import { startTarProcess } from './start-tar-process';
 import { writeImageConfig } from './write-image-config';
 import { writeOciTree } from './write-oci-tree';
 
@@ -278,6 +280,8 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
             limits: { maxBytes, maxFiles: deps.config.build.imageMaxFiles },
             signal,
             grow,
+            startTar: startTarProcess,
+            countTreeBytes,
           });
 
           return await writeGuestRootfsAndRow({
@@ -312,7 +316,16 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
         const root = workDir.root;
 
         try {
-          await writeOciTree({ ref, root, limits, signal, grow, runStreamed: deps.runStreamed });
+          await writeOciTree({
+            ref,
+            root,
+            limits,
+            signal,
+            grow,
+            runStreamed: deps.runStreamed,
+            startTar: startTarProcess,
+            countTreeBytes,
+          });
 
           options.onFetched();
 
