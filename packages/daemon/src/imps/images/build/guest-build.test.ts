@@ -1,4 +1,4 @@
-import { expect, onTestFinished, test } from 'bun:test';
+import { expect, mock, onTestFinished, test } from 'bun:test';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -13,6 +13,7 @@ import { buildStubGuest } from '../../../../testing/vm/build-stub-guest';
 import { DOCKERFILE_FRONTEND } from '../../docker-contract/dockerfile-frontend';
 import { createGuestExec } from '../builders/guest-exec';
 import { PIN_INSPECT_FORMAT } from '../pull/image-pin';
+import { startTarProcess } from '../rootfs/start-tar-process';
 import { DockerBuildError } from './docker-build-error';
 import { loadGuestImage, runGuestBuild, writeGuestTree } from './guest-build';
 import { ImageLimitError } from './image-limit-error';
@@ -233,6 +234,42 @@ test('#writeGuestTree inspects, creates and exports the built image in the build
     'docker image inspect --format {{json .Config}} imp-build:latest',
     'docker create imp-build:latest /bin/true',
     `docker export ${STUB_BUILDER_CONTAINER}`,
+  ]);
+});
+
+test("#writeGuestTree unpacks through the given tar starter with tar's unpack and listing flags", async () => {
+  const ctx = await setupTest();
+
+  mkdirSync(join(ctx.directoryPath, 'tree'));
+  writeFileSync(join(ctx.directoryPath, 'tree', 'hello'), 'hi\n');
+
+  const builder = buildStubImageBuilder({
+    exported: [Bun.spawnSync(['tar', '-C', join(ctx.directoryPath, 'tree'), '-c', '.']).stdout],
+    repoDigest: `sha256:${'b'.repeat(64)}`,
+  });
+
+  const startTar = mock(startTarProcess);
+
+  await writeGuestTree({
+    exec: createGuestExec(builder.guest.open),
+    root: ctx.root,
+    limits: { maxBytes: 1024 ** 3, maxFiles: 100 },
+    signal: new AbortController().signal,
+    startTar,
+  });
+
+  expect(startTar).toHaveBeenCalledExactlyOnceWith([
+    'tar',
+    '--numeric-owner',
+    '--xattrs',
+    '--xattrs-include=security.capability',
+    '--xattrs-include=user.*',
+    '-xpf',
+    '-',
+    '-vv',
+    '--quoting-style=escape',
+    '-C',
+    ctx.root,
   ]);
 });
 

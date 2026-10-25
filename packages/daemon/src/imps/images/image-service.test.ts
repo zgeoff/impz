@@ -124,6 +124,53 @@ test('#ensureBuilderImage leaves no work directory behind when the export fails'
   expect(readdirSync(join(ctx.dataDir, 'images'))).toStrictEqual([]);
 });
 
+test('#ensureBuilderImage fails with the error of the given export runner and publishes nothing', async () => {
+  const ctx = await setupTest();
+
+  const config = loadConfig({ IMP_DATA_DIR: ctx.dataDir });
+
+  const ociFetch = createStubOciFetch({
+    directory: ctx.dataDir,
+    images: [
+      {
+        ref: config.build.image,
+        digest: `sha256:${'c'.repeat(64)}`,
+        exportTar: createFilesTar(ctx.dataDir, { dockerd: 'builder\n' }),
+      },
+    ],
+  });
+
+  updateEnv('PATH', ociFetch.path);
+  mkdirSync(join(ctx.dataDir, 'images'));
+
+  const images = createImageService({
+    config,
+    db: ctx.db,
+    storage: ctx.storage,
+    storageGate: createStorageGate(),
+    diskBudget: ctx.diskBudget,
+    readBuilders: () => null,
+    runStreamed: () => Promise.reject(new Error('the registry hung up')),
+  });
+
+  const failure = await images.ensureBuilderImage().then(
+    () => null,
+    (error: unknown) => error,
+  );
+
+  const builder = await readImageByName(ctx.db, BUILDER_IMAGE);
+  const disk = await ctx.diskBudget.readStatus();
+
+  expect(failure).toMatchObject({
+    code: 'SERVICE_UNAVAILABLE',
+    message: expect.toEndWith(': the registry hung up'),
+  });
+
+  expect(builder).toBeUndefined();
+  expect(readdirSync(join(ctx.dataDir, 'images'))).toStrictEqual([]);
+  expect(disk.pendingBytes).toBe(0);
+});
+
 test('#ensureBuilderImage refuses an export over IMP_BUILD_IMAGE_MAX_MIB and publishes nothing', async () => {
   const ctx = await setupTest();
 
