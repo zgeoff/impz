@@ -35,8 +35,8 @@ settings:
 | `IMP_ZFS_TEST_DIR`            | both      | The work dir for the pool files; unset or empty makes a new temp dir             |
 | `IMP_ZFS_TEST_GIB`            | real-pool | The size of the pool file                                                        |
 | `IMP_ZFS_BENCH_GIB`           | host      | The size of the second pool's file                                               |
-| `IMP_ZFS_E2E_SUITES`          | host      | Names the suites to run, as `--only` takes them, in place of the ZFS lane        |
-| `IMP_ZFS_SHARD`               | host      | The ZFS lane's share to run, `<n>/<count>`; unset runs the whole lane (`1/1`)    |
+| `IMP_ZFS_E2E_SUITES`          | host      | Names VM suites to run, as `--only` takes them; alone, in place of the ZFS lane  |
+| `IMP_ZFS_SHARD`               | host      | The lane share to run, `<n>/<count>`; unset, with no suites, runs the whole lane |
 | `IMP_ZFS_TEST_UNIT=0`         | host      | Skips the real-pool script, which one CI shard runs on its own                   |
 | `IMP_DEV_PORT_OFFSET`         | host      | The port offset of the `imp-zfs` dev instance                                    |
 | `IMP_ZFS_ALLOW_UIOMOVE_BUG=0` | host      | Refuses a module with the zfs_uiomove bug, which the runner's Ubuntu module has  |

@@ -265,16 +265,16 @@ test('it runs only VM e2e suites in the ZFS backend shard, never a ZFS lane suit
   expect(SUITES.map((suite) => suite.name)).toIncludeAllMembers(suites);
 });
 
-test('it gives each zfs shard either a lane share or its suites, never both', () => {
+test('it gives each zfs shard a lane share, its suites, or both', () => {
   const jobs = parseCiWorkflow(
     readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8'),
   );
 
-  const both = jobs['zfs-shard'].strategy.matrix.include.filter(
-    (row) => (row.lane === undefined) === (row.suites === undefined),
+  const idle = jobs['zfs-shard'].strategy.matrix.include.filter(
+    (row) => row.lane === undefined && row.suites === undefined,
   );
 
-  expect(both).toStrictEqual([]);
+  expect(idle).toStrictEqual([]);
 });
 
 test('it hands each zfs shard its own lane share and suites', () => {

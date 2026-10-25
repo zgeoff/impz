@@ -102,7 +102,7 @@ test('it runs the unit tests and suites on a bench pool, then releases all it ma
     'zfs create -o mountpoint=legacy impbenchPID/imp',
     'sudo zfs create -o mountpoint=legacy impbenchPID/imp-mv-b',
     'zfs create -o mountpoint=legacy impbenchPID/imp-mv-b',
-    'test-e2e.sh --only backups,backups-repo,moves',
+    'test-e2e.sh --only moves,backups,backups-repo',
     'docker logs imp-zfs',
     'sudo zfs list -r -o name,used,refer,compressratio,recordsize impbenchPID',
     'zfs list -r -o name,used,refer,compressratio,recordsize impbenchPID',
@@ -147,9 +147,13 @@ test('it runs the unit tests and suites on a bench pool, then releases all it ma
 });
 
 test.each([
-  [{ IMP_ZFS_SHARD: '1/2' }, 'test-e2e.sh --only backups'],
-  [{ IMP_ZFS_SHARD: '2/2' }, 'test-e2e.sh --only backups-repo,moves'],
+  [{ IMP_ZFS_SHARD: '1/2' }, 'test-e2e.sh --only moves'],
+  [{ IMP_ZFS_SHARD: '2/2' }, 'test-e2e.sh --only backups,backups-repo'],
   [{ IMP_ZFS_E2E_SUITES: 'lifecycle,sleep' }, 'test-e2e.sh --only lifecycle,sleep'],
+  [
+    { IMP_ZFS_SHARD: '1/2', IMP_ZFS_E2E_SUITES: 'lifecycle,sleep' },
+    'test-e2e.sh --only moves,lifecycle,sleep',
+  ],
 ] as const)('it runs the suites that %p picks', (settings, expected) => {
   const ctx = setupTest();
 
@@ -909,7 +913,7 @@ test('it stops the suites, the moves suites’ B, the instance and the pool when
   expect(exitCode).toBe(143);
 
   expect(calls.split('\n').slice(-21)).toStrictEqual([
-    'test-e2e.sh --only backups,backups-repo,moves',
+    'test-e2e.sh --only moves,backups,backups-repo',
     'docker container inspect imp-zfs-mv-b',
     'docker logs imp-zfs-mv-b',
     'dev.sh down',

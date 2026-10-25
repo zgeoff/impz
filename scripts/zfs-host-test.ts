@@ -258,9 +258,7 @@ async function runSuites(run: PoolRun): Promise<number> {
 async function runE2E(run: PoolRun): Promise<number> {
   const io = run.options.io;
   const log = join(run.host.work, 'e2e.log');
-
-  const suites =
-    pickSetting(run.options.env, 'IMP_ZFS_E2E_SUITES') ?? pickLaneSuites(run.options.env);
+  const suites = pickSuites(run.options.env);
 
   io.files.writeText(log, '');
 
@@ -304,10 +302,21 @@ async function runE2E(run: PoolRun): Promise<number> {
   return status;
 }
 
-// The ZFS lane is every *.zfs.e2e.ts journey, split into IMP_ZFS_SHARD's shard (1/1 by default) by
-// recorded time; IMP_ZFS_E2E_SUITES runs named suites instead, as the VM lane on the ZFS backend.
-function pickLaneSuites(env: DevEnv): string {
-  const shard = pickSetting(env, 'IMP_ZFS_SHARD') ?? '1/1';
+// The ZFS lane is every *.zfs.e2e.ts journey, split into IMP_ZFS_SHARD's shard by recorded time.
+// IMP_ZFS_E2E_SUITES names VM e2e suites to run on the ZFS backend: alone, it runs only those; beside
+// IMP_ZFS_SHARD, it runs them with that share. Neither set runs the whole lane.
+function pickSuites(env: DevEnv): string {
+  const named = pickSetting(env, 'IMP_ZFS_E2E_SUITES');
+  const shard = pickSetting(env, 'IMP_ZFS_SHARD');
+
+  if (shard === undefined) {
+    return named ?? pickLaneSuites('1/1');
+  }
+
+  return [pickLaneSuites(shard), named ?? ''].filter((suites) => suites !== '').join(',');
+}
+
+function pickLaneSuites(shard: string): string {
   const parts = /^(?<index>[1-9]\d*)\/(?<count>[1-9]\d*)$/v.exec(shard)?.groups;
   const index = Number(parts?.['index']);
   const count = Number(parts?.['count']);

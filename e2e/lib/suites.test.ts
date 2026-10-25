@@ -50,9 +50,9 @@ test('#listZfsSuites gives each ZFS suite its recorded time, which splits the sh
 });
 
 test.each([
-  [1, 2, ['backups']],
-  [2, 2, ['backups-repo', 'moves']],
-  [1, 1, ['backups', 'backups-repo', 'moves']],
+  [1, 2, ['moves']],
+  [2, 2, ['backups', 'backups-repo']],
+  [1, 1, ['moves', 'backups', 'backups-repo']],
 ] as const)(
   '#pickZfsShard puts the ZFS suites of shard %p of %p, longest first, in %p',
   (index, count, suites) => {
