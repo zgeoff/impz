@@ -422,7 +422,9 @@ check it made:
 3. It starts the instance under Podman on the same data dir, and checks that the container has no
    Docker socket and no `docker` binary, that impd lists `e2e-podman-keep` with its file intact, and
    that the builder image keeps its id and digest, so impd did not fetch it again.
-4. It runs `e2e/test-e2e.sh --only socket,podman` under Podman.
+4. It starts a second instance under Podman on a fresh data dir, `<data>-fresh`, and waits for impd
+   to fetch its builder image there, with Docker masked.
+5. It runs `e2e/test-e2e.sh --only socket,podman` on that instance.
 
 The script masks Docker for good, so it refuses to run unless `CI=true`. The job uploads an
 `e2e-results-podman` artifact with impd's log under Docker (`impd-docker.log`) and under Podman

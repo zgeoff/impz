@@ -3,8 +3,9 @@
 # dev instance under Docker, makes an imp and lets impd fetch its builder
 # image, then stops the instance, masks the host's Docker, and starts the
 # instance again under rootful Podman on the same data dir. It checks that
-# the data dir and the builder image survive the switch, then runs the
-# socket and podman e2e suites under Podman.
+# the data dir and the builder image survive the switch. Last, it starts a
+# Podman instance on a fresh data dir, which fetches its own builder image,
+# and runs the socket and podman e2e suites on it.
 #
 #   sudo -E env "PATH=$PATH" e2e/podman/run-podman-proof.sh
 #
@@ -105,6 +106,16 @@ builder_after="$(read_image_field imp-builder id) $(read_image_field imp-builder
   fail "imp-builder is $builder_after, not $builder_before: impd fetched it again"
 pass "imp-builder is the image impd fetched under Docker: $builder_after"
 run_impz rm "$KEEP" >/dev/null
+"$DEV" down
+
+# A fresh data dir, so impd fetches its builder image on a host that never ran Docker for it.
+echo "== under Podman, on a fresh data dir"
+export IMP_DEV_DATA="${IMP_DEV_DATA:-$ROOT/.data/dev}-fresh"
+mkdir -p "$IMP_DEV_DATA"
+"$DEV" up
+TOKEN=$("$DEV" token)
+wait_for_image imp-builder
+pass "impd fetched imp-builder under Podman, with Docker masked: $(read_image_field imp-builder digest)"
 
 echo "== the socket and podman suites under Podman"
 "$ROOT/e2e/test-e2e.sh" --only socket,podman
