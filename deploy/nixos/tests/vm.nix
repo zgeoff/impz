@@ -323,7 +323,9 @@ pkgs.testers.runNixOSTest {
           tables = [o["table"]["name"] for o in ruleset if "table" in o]
           assert "imp_host" not in tables, tables
           inputs = [o["chain"] for o in ruleset if "chain" in o and o["chain"].get("hook") == "input"]
-          assert all(c["table"] == "nixos-fw" for c in inputs), inputs
+          # netavark's own input chain accepts its DNS and drops nothing, and a
+          # drop in nixos-fw's chain still holds beside it
+          assert all(c["table"] == "nixos-fw" or (c["table"] == "netavark" and c.get("policy") == "accept") for c in inputs), inputs
           host.succeed("nft list ruleset | grep -q 41641")
           published = host.succeed("podman port imp-host").strip().splitlines()
           assert published and all(" -> 127.0.0.1:" in p for p in published), published

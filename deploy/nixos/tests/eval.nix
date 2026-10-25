@@ -97,7 +97,16 @@ let
   };
   dnsHost = host { services.imp.dnsApiTokenFile = "/run/secrets/imp-dns-api-token"; };
   moduleHosts = {
-    inherit zfsHost xfsHost ownFirewall poolElsewhere ipv6Host ipv6Kernel filterOnly dnsHost;
+    inherit
+      zfsHost
+      xfsHost
+      ownFirewall
+      poolElsewhere
+      ipv6Host
+      ipv6Kernel
+      filterOnly
+      dnsHost
+      ;
   };
 
   zfsCfg = zfsHost.config;
