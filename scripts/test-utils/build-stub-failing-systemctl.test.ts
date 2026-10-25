@@ -41,6 +41,31 @@ test('it fails the verb it names with the message systemd prints', () => {
   });
 });
 
+test('it names the unit after the flags that come before it', () => {
+  const ctx = setupTest();
+
+  const systemctl = createStubBin(
+    ctx.directoryPath,
+    'systemctl',
+    buildStubFailingSystemctl('disable'),
+  );
+
+  const result = Bun.spawnSync(['systemctl', 'disable', '-q', '--now', 'imp-docker-proxy'], {
+    env: { PATH: `${systemctl.bin}:${process.env['PATH'] ?? ''}` },
+  });
+
+  expect({
+    exitCode: result.exitCode,
+    stdout: result.stdout.toString(),
+    stderr: result.stderr.toString(),
+  }).toStrictEqual({
+    exitCode: 1,
+    stdout: '',
+    stderr:
+      'Job for imp-docker-proxy.service failed because the control process exited with error code.\n',
+  });
+});
+
 test('it answers every other verb with success and records each call', () => {
   const ctx = setupTest();
 

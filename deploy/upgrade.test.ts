@@ -840,7 +840,7 @@ test('it stops with the rollback to Docker, keeps the proxy unit, and starts not
   expect(result.exitCode).toBe(1);
 
   expect(result.stderr.toString()).toBe(
-    'Job for -q.service failed because the control process exited with error code.\n' +
+    'Job for imp-docker-proxy.service failed because the control process exited with error code.\n' +
       'upgrade: cannot stop imp-docker-proxy, whose unit stays for the next run; ' +
       'imp-host is stopped; to roll back to Docker: systemctl stop imp-host, ' +
       'then systemctl daemon-reload, then systemctl start imp-host\n',
