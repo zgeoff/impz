@@ -442,6 +442,69 @@ test.each([
   });
 });
 
+test.each([
+  [
+    'a token endpoint on the older preset kind github',
+    {
+      kind: 'github',
+      oauth: { tokenUrl: 'https://auth.example.com/oauth/token', clientId: 'fake-client' },
+    },
+    { path: [], code: 'unrecognized_keys', keys: ['oauth'] },
+  ],
+  [
+    'a token endpoint on the older kind custom',
+    {
+      kind: 'custom',
+      rules: [{ host: 'api.example.com', header: 'x-token', scheme: 'raw' }],
+      oauth: { tokenUrl: 'https://auth.example.com/oauth/token', clientId: 'fake-client' },
+    },
+    { path: [], code: 'unrecognized_keys', keys: ['oauth'] },
+  ],
+  [
+    'a token endpoint on a preset',
+    {
+      preset: 'github',
+      oauth: { tokenUrl: 'https://auth.example.com/oauth/token', clientId: 'fake-client' },
+    },
+    { path: [], code: 'unrecognized_keys', keys: ['oauth'] },
+  ],
+  [
+    'the older kind custom without rules',
+    { kind: 'custom' },
+    { path: ['rules'], message: 'needs at least one host' },
+  ],
+  [
+    'the older kind custom with an empty rule list',
+    { kind: 'custom', rules: [] },
+    { path: ['rules'], message: 'needs at least one host' },
+  ],
+  [
+    'an oauth secret without hosts',
+    {
+      kind: 'oauth',
+      oauth: { tokenUrl: 'https://auth.example.com/oauth/token', clientId: 'fake-client' },
+    },
+    { path: ['rules'], message: 'needs at least one host' },
+  ],
+  [
+    'an oauth secret without its token endpoint',
+    { kind: 'oauth', rules: [{ host: 'api.example.com', header: 'x-token', scheme: 'raw' }] },
+    { path: ['oauth'], message: 'needs a token URL and a client id' },
+  ],
+] as const)('it rejects %s and names the field', async (_, binding, issue) => {
+  const ctx = await setupTest();
+
+  const input = { name: 'api', value: 'fake-value-1', ...binding };
+
+  // input the contract refuses
+  const added = ctx.client.secrets.add(input as never);
+
+  expect(added).rejects.toMatchObject({
+    code: 'BAD_REQUEST',
+    data: { issues: expect.toPartiallyContain(issue) },
+  });
+});
+
 test('it sends nothing to the token endpoint for a refused oauth secret', async () => {
   const ctx = await setupTest();
 

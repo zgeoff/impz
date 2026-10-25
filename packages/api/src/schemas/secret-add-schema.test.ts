@@ -185,6 +185,24 @@ test('#SecretBindingSchema keeps the upstream of a static secret’s rule', () =
   expect(result.data).toStrictEqual(payload);
 });
 
+test('#SecretBindingSchema keeps the upstream of the older kind custom’s rule', () => {
+  const payload = {
+    kind: 'custom',
+    rules: [
+      {
+        host: 'svc.imp.internal',
+        header: 'authorization',
+        scheme: 'bearer',
+        upstream: 'http://172.17.0.1:18081',
+      },
+    ],
+  } as const;
+
+  const result = SecretBindingSchema.safeParse(payload);
+
+  expect(result.data).toStrictEqual(payload);
+});
+
 test('#SecretBindingSchema refuses an upstream on an oauth secret’s rule', () => {
   const result = SecretBindingSchema.safeParse({
     kind: 'oauth',
