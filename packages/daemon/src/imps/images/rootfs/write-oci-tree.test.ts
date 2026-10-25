@@ -4,6 +4,8 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { updateEnv } from '@impz/test-utils/update-env';
+import { waitFor } from '@impz/test-utils/wait-for';
+import invariant from 'tiny-invariant';
 import { createFilesTar } from '../../../../testing/imps/create-files-tar';
 import { createStubOciFetch } from '../../../../testing/imps/create-stub-oci-fetch';
 import { runStreamed } from '../../../platform/process/run-streamed';
@@ -104,6 +106,53 @@ test('it fails with the stderr of an export that fails', async () => {
     Error,
     'oci-fetch export registry.test/builder@sha256:1: oci-fetch: fetch registry.test/builder@sha256:1: MANIFEST_UNKNOWN: manifest unknown',
   );
+});
+
+test('it stops a stalled export and fails the write when the signal aborts', async () => {
+  const ctx = await setupTest();
+
+  const ociFetch = createStubOciFetch({
+    directory: ctx.directoryPath,
+    images: [
+      {
+        ref: 'registry.test/builder@sha256:1',
+        digest: 'sha256:2',
+        exportTar: createFilesTar(ctx.directoryPath, { dockerd: 'builder\n' }),
+        export: 'stall',
+      },
+    ],
+  });
+
+  updateEnv('PATH', ociFetch.path);
+
+  const stop = new AbortController();
+
+  const writing = writeOciTree({
+    ref: 'registry.test/builder@sha256:1',
+    root: ctx.root,
+    limits: { maxBytes: 1024 ** 3, maxFiles: 100 },
+    signal: stop.signal,
+    grow: () => Promise.resolve(),
+    runStreamed,
+  });
+
+  await waitFor(() => {
+    expect(ociFetch.readStalledPIDs()).toHaveLength(1);
+  });
+
+  const [pid] = ociFetch.readStalledPIDs();
+
+  invariant(pid);
+
+  stop.abort(new Error('the build was cancelled'));
+
+  const failure = await writing.then(
+    () => null,
+    (error: unknown) => error,
+  );
+
+  expect(failure).toStrictEqual(new Error('the build was cancelled'));
+  expect(() => process.kill(pid, 0)).toThrow();
 });
 
 test('it refuses a tree of more entries than the file cap', async () => {
