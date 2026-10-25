@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { create } from '@bufbuild/protobuf';
 import { ServicesListSchema } from '@impz/agent-protocol';
+import { MoveOfferReplySchema } from '@impz/api';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import * as z from 'zod';
@@ -20,12 +21,7 @@ import { probeSlotFree } from '../../platform/db/probe-slot-free';
 import { readSnapshotMeta, writeSnapshotMeta } from '../../vm/sleep/snapshot-meta';
 import { VmIdentitySchema } from '../../vm/sleep/vm-identity';
 import { MOVE_FRAMES, readJsonPayload } from './move-frames';
-import {
-  MOVE_PART_HEADER,
-  MOVE_PATHS,
-  MoveHeaderSchema,
-  MoveOfferReplySchema,
-} from './move-header';
+import { MOVE_PART_HEADER, MoveHeaderSchema } from './move-header';
 
 function setupTest(
   config: Pick<
@@ -430,7 +426,7 @@ test('it refuses a commit with the memory snapshot incomplete, and the source ke
     isShared: true,
 
     hook: (request, forward) => {
-      if (new URL(request.url).pathname === MOVE_PATHS.commit && state.metaPath !== null) {
+      if (new URL(request.url).pathname === '/move/commit' && state.metaPath !== null) {
         rmSync(state.metaPath, { force: true });
       }
 
@@ -666,7 +662,7 @@ test('it refuses a system drive the target lacks whose sum is not its name', asy
     hook: async (request, forward) => {
       const response = await forward();
 
-      if (!request.url.endsWith(MOVE_PATHS.offer)) {
+      if (!request.url.endsWith('/move/offer')) {
         return response;
       }
 
@@ -702,13 +698,13 @@ test("it refuses a snapshot that opens a drive off the target's own path, and fr
     isShared: true,
 
     hook: async (request, forward) => {
-      if (request.url.endsWith(MOVE_PATHS.abort)) {
+      if (request.url.endsWith('/move/abort')) {
         throw new Error('the source is gone');
       }
 
       const response = await forward();
 
-      if (request.url.endsWith(MOVE_PATHS.receive) && !response.ok) {
+      if (request.url.endsWith('/move/receive') && !response.ok) {
         const body = await response.clone().text();
 
         refusals.push(body);
@@ -746,7 +742,7 @@ test('it commits a warm move whose commit was lost on resume, with a reissued ti
     isShared: true,
 
     hook: (request, forward) => {
-      if (request.url.endsWith(MOVE_PATHS.commit) && lost.commits > 0) {
+      if (request.url.endsWith('/move/commit') && lost.commits > 0) {
         lost.commits -= 1;
 
         return Promise.reject(new Error('the network dropped the commit'));
@@ -783,7 +779,7 @@ test('it commits a verified warm move warm when the source restarts', async () =
     isShared: true,
 
     hook: (request, forward) => {
-      if (request.url.endsWith(MOVE_PATHS.commit) && lost.commits > 0) {
+      if (request.url.endsWith('/move/commit') && lost.commits > 0) {
         lost.commits -= 1;
 
         return Promise.reject(new Error('the network dropped the commit'));
@@ -816,7 +812,7 @@ test('it frees the slot and removes the memory on the target on an abort after t
     isShared: true,
 
     hook: (request, forward) =>
-      request.url.endsWith(MOVE_PATHS.commit)
+      request.url.endsWith('/move/commit')
         ? Promise.reject(new Error('the network dropped the commit'))
         : forward(),
   });
@@ -842,7 +838,7 @@ test('it leaves the imp asleep on the source to wake there after an abort after 
     isShared: true,
 
     hook: (request, forward) =>
-      request.url.endsWith(MOVE_PATHS.commit)
+      request.url.endsWith('/move/commit')
         ? Promise.reject(new Error('the network dropped the commit'))
         : forward(),
   });
@@ -865,7 +861,7 @@ test('it removes the memory and frees the slot of a warm stream cut short with n
     partBytes: 4096,
 
     hook: (request, forward, hosts) => {
-      if (request.url.endsWith(MOVE_PATHS.abort)) {
+      if (request.url.endsWith('/move/abort')) {
         return Promise.reject(new Error('the source is gone'));
       }
 

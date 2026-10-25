@@ -1009,3 +1009,39 @@ test('#runMigrations gives each image no received digest in the received digest 
 
   expect(rows).toStrictEqual([{ id: 'one', received_digest: null }]);
 });
+
+test('#runMigrations gives each send in flight the step its marks show in the move step migration', async () => {
+  const db = createUnmigratedDatabase();
+
+  await runMigrationsTo(db, '040_add_image_received_digests');
+
+  await sql`INSERT INTO images (id, name, ref, digest, size_bytes, created_at)
+    VALUES ('img', 'base', 'imp/base:latest', 'sha256:0', 1, 0)`.execute(db);
+
+  await sql`INSERT INTO imps (id, name, image_id, state, vcpus, memory_mib, slot, ip,
+    created_at, last_active_at, move_state)
+    VALUES
+      ('a', 'marked', 'img', 'stopped', 1, 512, 0, 'ip0', 0, 0, 'sending'),
+      ('b', 'streaming', 'img', 'stopped', 1, 512, 1, 'ip1', 0, 0, 'sending'),
+      ('c', 'sent', 'img', 'stopped', 1, 512, 2, 'ip2', 0, 0, 'moved')`.execute(db);
+
+  await sql`INSERT INTO move_sends (imp_id, peer_url, ticket, total_bytes, receipt, created_at)
+    VALUES
+      ('a', NULL, NULL, 1, NULL, 0),
+      ('b', 'http://100.64.0.2:7070', 'ticket-b', 1, NULL, 0),
+      ('c', 'http://100.64.0.2:7070', 'ticket-c', 1, '{}', 0)`.execute(db);
+
+  await runMigrations(db);
+
+  const rows = await db
+    .selectFrom('move_sends')
+    .select(['imp_id', 'step', 'halted'])
+    .orderBy('imp_id')
+    .execute();
+
+  expect(rows).toStrictEqual([
+    { imp_id: 'a', step: 'prepared', halted: 0 },
+    { imp_id: 'b', step: 'streaming', halted: 0 },
+    { imp_id: 'c', step: 'sent', halted: 0 },
+  ]);
+});

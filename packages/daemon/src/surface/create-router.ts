@@ -61,7 +61,7 @@ export interface RouterDeps {
   readonly egress: Pick<EgressService, 'readPolicy' | 'setPolicy' | 'isEnforced'>;
   readonly networks: NetworkService;
   readonly backups: BackupService | null;
-  readonly moves: Omit<MoveService, 'respond' | 'recover'>;
+  readonly moves: Omit<MoveService, 'peerCalls' | 'recover'>;
   readonly firecrackerVersion: string | null;
   readonly systemFiles: SystemFileInfo;
   readonly readKsmHostStats?: () => KsmHostStats | null;

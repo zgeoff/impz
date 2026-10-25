@@ -31,6 +31,14 @@ scope on the whole target. The source then talks to the target on routes that ta
 ticket is their only credential, and the target answers them only for a peer on the tailnet, judged
 by the connected socket's address, never by a header or a lookup.
 
+The offer, the commit and the abort are the procedures of a typed oRPC contract that both impds
+share, and each goes as a plain JSON POST to a fixed path. The stream goes beside the contract, as
+plain POSTs of raw frames behind the same ticket check, because oRPC holds a file input whole in
+memory. Those paths and bodies are the ones an impd of an earlier release sends and reads, so hosts
+on different releases move imps both ways. Each error body carries its text under `error` as well,
+which is all an earlier source reads, and the source reads an earlier target's bare `error` bodies
+and its 409 for the abort of a committed move as the same answers.
+
 The offer tells the source whether the target needs the image and what it can keep: an elastic imp's
 max memory, the imp's leases, and the `public` egress policy. The source refuses to send an imp that
 the target would land with less, before the stream, and starts again an imp its prepare stopped. A
@@ -89,11 +97,29 @@ for a commit whose window ran out, and `impz move --resume` finishes a move with
 
 ## Recovery
 
-A crash on either side leaves marks that say where the move stood. At start the source aborts a
-`sending` imp at the target and takes its mark off once the target confirms, and retries the commit
-of a `moved` one, in the background. The target settles its side before it serves the API: it
-removes a staged imp whose stream has no receipt, deletes unused tickets past their window, and
-clears its stream files. A staged imp with a receipt stays until the source commits or aborts it.
+A crash on either side leaves marks that say where the move stood. The source also keeps the step of
+each send in its database, and one table of the steps refuses any change it does not list.
+
+```mermaid
+stateDiagram-v2
+  [*] --> prepared: prepare
+  prepared --> streaming: send
+  streaming --> sent: receipt checked
+  sent --> [*]: commit
+```
+
+The send's row also records whether its prepare stopped a running imp. At start the source acts on
+each step in the background:
+
+- **prepared:** the source keeps the mark, so the send that follows the restart goes as it would
+  have, and an imp the prepare stopped starts again when the target refuses the offer.
+- **streaming:** the parts sent so far cannot resume, so the source aborts the send at the target
+  and takes the mark off once the target confirms.
+- **sent:** the source retries the commit.
+
+The target settles its side before it serves the API: it removes a staged imp whose stream has no
+receipt, deletes unused tickets past their window, and clears its stream files. A staged imp with a
+receipt stays until the source commits or aborts it.
 
 ## Warm moves
 

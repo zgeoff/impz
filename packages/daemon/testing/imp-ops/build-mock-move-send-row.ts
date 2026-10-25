@@ -12,6 +12,8 @@ export function buildMockMoveSendRow(overrides: Partial<MoveSendRow> = {}): Move
     total_bytes: faker.number.int({ min: 1, max: 64 * 1024 ** 3 }),
     mode: 'files',
     warm: 0,
+    step: 'prepared',
+    halted: 0,
     receipt: null,
     error: null,
     created_at: faker.date.recent().getTime(),

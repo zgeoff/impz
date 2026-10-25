@@ -113,7 +113,18 @@ export { ProtocolSchemaSchema, buildProtocolSchema } from './protocols/build-pro
 export type { MessageDirection, ProtocolSchema } from './protocols/build-protocol-schema';
 export { CONSOLE_SHELL } from './protocols/login-shell';
 export { MCP_PATH } from './protocols/mcp-path';
+export { MOVE_RECEIVE_PATH } from './protocols/move-receive-path';
 export { WarmHostSchema, WarmMoveSchema } from './schemas/move-schema';
+export { movePeerContract } from './contract/move-peer-contract';
+
+export {
+  MoveCommitReplySchema,
+  MoveOfferReplySchema,
+  MoveOfferSchema,
+  SystemDriveSchema,
+} from './schemas/move-peer-schema';
+
+export type { MoveCommitReply, MoveOffer, MoveOfferReply } from './schemas/move-peer-schema';
 
 export type {
   MovePlan,

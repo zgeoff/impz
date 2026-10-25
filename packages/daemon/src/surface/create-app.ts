@@ -23,6 +23,7 @@ import { createTunnelSocketRoute } from './create-tunnel-socket-route';
 import { createExecTickets, isCallerLive } from './exec/exec-tickets';
 import type { BuildContextRoute } from './images/build-context-route';
 import { createMcpEndpoint } from './mcp/mcp-endpoint';
+import type { MovePeerHandler } from './moves/create-move-peer-handler';
 import { withRetryAfter } from './with-retry-after';
 
 // Bun pings an idle exec socket and closes it when no answer comes, so a
@@ -38,7 +39,7 @@ export interface AppDeps extends Omit<RouterDeps, 'execTickets'> {
   readonly peers: ForwardedPeers;
   readonly isReady: () => boolean;
   readonly buildContexts: BuildContextRoute;
-  readonly moves: MoveService;
+  readonly moves: MoveService & MovePeerHandler;
   readonly logRpcFailure?: (failure: unknown) => void;
 }
 

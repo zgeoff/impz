@@ -33,6 +33,7 @@ import { readImpByName } from '../../platform/db/imps';
 import { readSecret } from '../../platform/db/secrets';
 import { updateImpState } from '../../platform/db/update-imp-state';
 import { BACKUP_TREE, buildImagePaths, buildImpPaths } from '../../vm/storage/data-layout';
+import { writeImageFiles } from '../../vm/storage/write-image-files';
 import { createXfsBackend } from '../../vm/storage/xfs-backend';
 import { BackupManifestSchema } from './backup-manifest';
 import { buildBackupsOffError, createBackupService } from './backup-service';
@@ -79,6 +80,7 @@ async function setupTest() {
     images: host.images,
     storageGate: host.storageGate,
     diskBudget: host.diskBudget,
+    writeImageFiles,
     restic: restic.restic,
     now: () => new Date(host.now()),
     freezer: {
@@ -709,6 +711,7 @@ test('#restoreBackup restores every imp and its image on a fresh host, renaming 
     images: fresh.images,
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
+    writeImageFiles,
     restic: buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date(ctx.now()) }).restic,
     now: () => new Date(ctx.now()),
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
@@ -756,6 +759,7 @@ test('#restoreBackup rejects a restored image as CONFLICT when its name and its 
     images: fresh.images,
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
+    writeImageFiles,
     restic: buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date(ctx.now()) }).restic,
     now: () => new Date(ctx.now()),
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
@@ -773,7 +777,7 @@ test('#restoreBackup rejects a restored image as CONFLICT when its name and its 
 
   expect(freshBackups.restoreBackup({ name: 'dev' })).rejects.toMatchObject({
     code: 'CONFLICT',
-    message: 'images base and base-base both exist; remove one to restore this image',
+    message: 'images base and base-base both exist; remove one to import this image',
     data: { kind: 'image', name: 'base-base' },
   });
 });
@@ -871,6 +875,7 @@ test('#restoreBackup restores unused templates with all imps, tagging one whose 
     images: fresh.images,
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
+    writeImageFiles,
     restic: buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date(ctx.now()) }).restic,
     now: () => new Date(ctx.now()),
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
@@ -1637,7 +1642,7 @@ test('#restoreBackup restores an egress policy this impd cannot read as none, ne
   expect(policy).toStrictEqual({ mode: 'none', allow: [] });
 
   expect(ctx.backupLogs).toContain(
-    'WARNING impd.backup imp=back unknown egress policy "granted-only"; restored as none',
+    'WARNING impd.backup imp=back unknown egress policy "granted-only"; imported as none',
   );
 });
 
@@ -1842,6 +1847,7 @@ test('#restoreBackup holds the storage gate for a restored image and disk room f
     images: fresh.images,
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
+    writeImageFiles,
     restic: freshRestic.restic,
     now: () => new Date(ctx.now()),
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
@@ -2318,6 +2324,7 @@ test('#restoreBackup brings back the named tokens, the secrets and the grants on
     images: fresh.images,
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
+    writeImageFiles,
     restic: buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date(ctx.now()) }).restic,
     now: () => new Date(ctx.now()),
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
@@ -2375,6 +2382,7 @@ test('#restoreBackup holds the database copy’s size from the disk budget while
     images: fresh.images,
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
+    writeImageFiles,
     restic: freshRestic.restic,
     now: () => new Date(ctx.now()),
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
@@ -2464,6 +2472,7 @@ test('#restoreBackup restores a token’s grantable list on a fresh host, so the
     images: fresh.images,
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
+    writeImageFiles,
     restic: buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date(ctx.now()) }).restic,
     now: () => new Date(ctx.now()),
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
@@ -2520,6 +2529,7 @@ test('#restoreBackup brings back no token or secret in a restore of one imp from
     images: fresh.images,
     storageGate: fresh.storageGate,
     diskBudget: fresh.diskBudget,
+    writeImageFiles,
     restic: buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date(ctx.now()) }).restic,
     now: () => new Date(ctx.now()),
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },

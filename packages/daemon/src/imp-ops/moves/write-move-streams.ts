@@ -41,7 +41,10 @@ export async function writeMoveStreams(
   const streams = checkStreams(header);
 
   if (deps.storage.kind !== 'zfs') {
-    throw new MoveRequestError(409, 'this host is not on ZFS: it takes a move as files only');
+    throw new MoveRequestError(
+      'CONFLICT',
+      'this host is not on ZFS: it takes a move as files only',
+    );
   }
 
   const steps = streams.map((stream) => ({
@@ -66,7 +69,7 @@ export async function writeMoveStreams(
     const checkpoint = header.checkpoints[ordered[index]?.checkpoint ?? -1];
 
     if (checkpoint === undefined) {
-      throw new MoveRequestError(400, 'a stream names no checkpoint of the header');
+      throw new MoveRequestError('BAD_REQUEST', 'a stream names no checkpoint of the header');
     }
 
     await createCheckpoint(deps.db, {
@@ -93,7 +96,7 @@ function checkStreams(header: MoveHeader): NonNullable<MoveHeader['streams']> {
     named.every((checkpoint) => checkpoint < header.checkpoints.length);
 
   if (!isEach) {
-    throw new MoveRequestError(400, 'the streams do not name each checkpoint once');
+    throw new MoveRequestError('BAD_REQUEST', 'the streams do not name each checkpoint once');
   }
 
   return streams;
@@ -129,7 +132,7 @@ function readStreamFile(
         : null;
 
     if (file?.kind !== 'zfs-stream' || file.index !== index) {
-      throw new MoveRequestError(400, `the stream has no ZFS stream ${String(index)}`);
+      throw new MoveRequestError('BAD_REQUEST', `the stream has no ZFS stream ${String(index)}`);
     }
 
     state.isStarted = true;
@@ -142,7 +145,10 @@ function readStreamFile(
       const sha256 = FileEndSchema.parse(readJsonPayload(frame.payload)).sha256;
 
       if (!isSameHash(sha256, hash.digest('hex'))) {
-        throw new MoveRequestError(400, `ZFS stream ${String(index)}: the sha256 does not match`);
+        throw new MoveRequestError(
+          'BAD_REQUEST',
+          `ZFS stream ${String(index)}: the sha256 does not match`,
+        );
       }
 
       onEnd({ sha256, bytes: state.offset });
@@ -151,13 +157,16 @@ function readStreamFile(
     }
 
     if (frame?.type !== MOVE_FRAMES.data) {
-      throw new MoveRequestError(400, `ZFS stream ${String(index)} ended early`);
+      throw new MoveRequestError('BAD_REQUEST', `ZFS stream ${String(index)} ended early`);
     }
 
     const data = readDataPayload(frame.payload);
 
     if (data.offset !== state.offset) {
-      throw new MoveRequestError(400, `ZFS stream ${String(index)}: a DATA frame out of order`);
+      throw new MoveRequestError(
+        'BAD_REQUEST',
+        `ZFS stream ${String(index)}: a DATA frame out of order`,
+      );
     }
 
     hash.update(frame.payload);

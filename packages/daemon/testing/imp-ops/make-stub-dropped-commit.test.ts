@@ -1,5 +1,4 @@
 import { expect, test } from 'bun:test';
-import { MOVE_PATHS } from '../../src/imp-ops/moves/move-header';
 import { TARGET_URL, setupMoveHosts } from './create-move-hosts';
 import { makeStubDroppedCommit } from './make-stub-dropped-commit';
 
@@ -13,7 +12,7 @@ test('it rejects the first commit before it reaches the target', async () => {
   const forwarded: string[] = [];
 
   const sent = makeStubDroppedCommit()(
-    new Request(`${TARGET_URL}${MOVE_PATHS.commit}`, { method: 'POST' }),
+    new Request(`${TARGET_URL}/move/commit`, { method: 'POST' }),
     () => {
       forwarded.push('commit');
 
@@ -32,13 +31,13 @@ test('it lets a commit through once it dropped as many as it was told', async ()
   const hook = makeStubDroppedCommit({ count: 2 });
 
   const first = hook(
-    new Request(`${TARGET_URL}${MOVE_PATHS.commit}`),
+    new Request(`${TARGET_URL}/move/commit`),
     () => Promise.resolve(new Response(null)),
     ctx,
   );
 
   const second = hook(
-    new Request(`${TARGET_URL}${MOVE_PATHS.commit}`),
+    new Request(`${TARGET_URL}/move/commit`),
     () => Promise.resolve(new Response(null)),
     ctx,
   );
@@ -46,7 +45,7 @@ test('it lets a commit through once it dropped as many as it was told', async ()
   await Promise.allSettled([first, second]);
 
   const third = await hook(
-    new Request(`${TARGET_URL}${MOVE_PATHS.commit}`),
+    new Request(`${TARGET_URL}/move/commit`),
     () => Promise.resolve(Response.json({ isCommitted: true })),
     ctx,
   );
@@ -60,7 +59,7 @@ test('it lets the commit reach the target and drops its answer when told to', as
   const forwarded: string[] = [];
 
   const sent = makeStubDroppedCommit({ drops: 'answer' })(
-    new Request(`${TARGET_URL}${MOVE_PATHS.commit}`, { method: 'POST' }),
+    new Request(`${TARGET_URL}/move/commit`, { method: 'POST' }),
     () => {
       forwarded.push('commit');
 
@@ -77,7 +76,7 @@ test('it forwards a request to another route as sent', async () => {
   const ctx = await setupTest();
 
   const response = await makeStubDroppedCommit()(
-    new Request(`${TARGET_URL}${MOVE_PATHS.offer}`, { method: 'POST' }),
+    new Request(`${TARGET_URL}/move/offer`, { method: 'POST' }),
     () => Promise.resolve(new Response(null, { status: 204 })),
     ctx,
   );

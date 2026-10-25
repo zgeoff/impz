@@ -1,14 +1,18 @@
-import type { MovePlan, MoveStatus, WarmHost } from '@impz/api';
+import type { MovePlan, MoveState, MoveStatus, WarmHost } from '@impz/api';
+import invariant from 'tiny-invariant';
+import { match } from 'ts-pattern';
 import type { LockedImp } from '../../imps/imps/imp-lock';
 import type { Imps } from '../../imps/imps/imp-service';
 import type { EgressService } from '../../network/egress/egress-service';
 import { listCheckpoints } from '../../platform/db/checkpoints';
 import { listImps, readImpById, readImpByName, updateImpMove } from '../../platform/db/imps';
 import type { ImpRecord } from '../../platform/db/imps';
+import type { MoveSendStep } from '../../platform/db/move-send-steps';
 import {
   readMoveSend,
   removeMoveSend,
   updateMoveSend,
+  updateMoveSendStep,
   writeMoveSend,
 } from '../../platform/db/move-sends';
 import type { ImpDatabase } from '../../platform/db/open-database';
@@ -22,15 +26,13 @@ import type { ImpGrants } from '../imp-grants';
 import type { ImpOpsConfig } from '../imp-ops-config';
 import { checkWarmMove, requireSnapshotMeta } from './check-warm-move';
 import { countMoveBytes } from './count-move-bytes';
-import { MOVE_PATHS, MoveCommitReplySchema } from './move-header';
+import type { ConnectMovePeer } from './move-peer';
 import { OfferRefusalError } from './offer-refusal-error';
 import { parsePeerUrlAddress } from './peer-address';
 import type { PeerRanges } from './peer-address';
-import { requireOk } from './require-ok';
 import { runMoveSend } from './run-move-send';
 import type { SendTarget } from './run-move-send';
 import { sendMoveAbort } from './send-move-abort';
-import { sendToPeer } from './send-to-peer';
 
 interface PrepareOptions {
   readonly stop: boolean;
@@ -70,6 +72,7 @@ export interface MoveSenderDeps {
   readonly readWarmHost: () => WarmHost;
   readonly readTapMac?: (tap: string) => string | null;
   readonly releaseName: () => Promise<void>;
+  readonly connectPeer: ConnectMovePeer;
   readonly fetch?: (request: Request) => Promise<Response>;
   readonly startPeerDeadline?: StartTimer;
   readonly partBytes?: number;
@@ -85,10 +88,11 @@ interface SendTask {
   isDone: boolean;
 }
 
+type SentRow = NonNullable<Awaited<ReturnType<typeof readMoveSend>>>;
+
 export function createMoveSender(deps: MoveSenderDeps): MoveSender {
   const tasks = new Map<string, SendTask>();
   const finished = new Map<string, { readonly error: string | null; readonly isDone: boolean }>();
-  const halted = new Set<string>();
 
   const requireImp = async (name: string): Promise<ImpRecord> => {
     const imp = await readImpByName(deps.db, name);
@@ -107,10 +111,7 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
         .warning('tailnet name not released yet: {error}', { error: getErrorMessage(error) });
     });
 
-    const response = await sendToPeer(deps, { peer, path: MOVE_PATHS.commit, ticket });
-    const answer = await requireOk(response, 'commit');
-
-    const reply = MoveCommitReplySchema.parse(answer);
+    const reply = await deps.connectPeer({ peer, ticket }).commit();
 
     if (!reply.isCommitted) {
       throw new Error('commit: the target did not commit');
@@ -158,7 +159,7 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
     }
 
     try {
-      await sendMoveAbort(deps, imp, peer, ticket);
+      await sendMoveAbort(deps.connectPeer({ peer, ticket }), imp);
     } catch (error) {
       const message = `the target did not confirm the abort (${getErrorMessage(error)}); run impz move ${imp.name} <host> --abort`;
 
@@ -184,15 +185,17 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
     }
   };
 
-  const startSend = (imp: ImpRecord, target: SendTarget, totalBytes: number): SendTask => {
+  const startSend = async (imp: ImpRecord, target: SendTarget, send: SentRow): Promise<void> => {
     const peer = target.peer;
     const ticket = target.ticket;
+
+    await updateMoveSendStep(deps.db, imp.id, 'streaming', { peer_url: peer, ticket });
 
     const task: SendTask = {
       abort: new AbortController(),
       done: Promise.resolve(),
       sentBytes: 0,
-      totalBytes,
+      totalBytes: send.total_bytes,
       error: null,
       isDone: false,
     };
@@ -220,13 +223,12 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
           await resetSend(imp, peer, ticket);
         }
 
-        if (error instanceof OfferRefusalError && halted.has(imp.id)) {
+        if (error instanceof OfferRefusalError && send.halted === 1) {
           await startHaltedAgain(imp);
         }
 
         task.error = message;
       } finally {
-        halted.delete(imp.id);
         finished.set(imp.id, { error: task.error, isDone: task.isDone });
         tasks.delete(imp.id);
       }
@@ -235,8 +237,6 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
     tasks.set(imp.id, task);
 
     task.done = run();
-
-    return task;
   };
 
   const readStatusOf = async (imp: ImpRecord): Promise<MoveStatus> => {
@@ -263,8 +263,9 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
   const writeSendMark = async (
     imp: LockedImp,
     options: PrepareOptions,
-    isWarm: boolean,
+    marks: Readonly<{ isWarm: boolean; isHalted: boolean }>,
   ): Promise<MovePlan> => {
+    const isWarm = marks.isWarm;
     const meta = isWarm ? requireSnapshotMeta(deps, imp) : null;
     const warm = meta === null ? null : await checkWarmMove(deps, imp, meta, options.target);
     const isZfs = deps.storage.kind === 'zfs' && options.targetStorage === 'zfs';
@@ -279,6 +280,7 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
       total_bytes: bytes,
       mode,
       warm: isWarm ? 1 : 0,
+      halted: marks.isHalted ? 1 : 0,
       receipt: null,
       error: null,
       created_at: deps.now(),
@@ -304,8 +306,10 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
     stopped: LockedImp,
     options: PrepareOptions,
   ): Promise<MovePlan> => {
+    const isHalted = imp.state === 'running';
+
     try {
-      const plan = await writeSendMark(stopped, options, false);
+      const plan = await writeSendMark(stopped, options, { isWarm: false, isHalted });
 
       if (options.force) {
         await deps.imps.endForcedLeases(stopped);
@@ -315,7 +319,7 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
     } catch (error) {
       await removeMark(imp);
 
-      if (halted.delete(imp.id)) {
+      if (isHalted) {
         await deps.imps.requireRunningImp(stopped).catch((startError: unknown) => {
           getImpdLogger('move')
             .with({ imp: imp.name })
@@ -346,30 +350,41 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
       for (const imp of await listImps(deps.db)) {
         const row = await readMoveSend(deps.db, imp.id);
 
-        if (imp.moveState === 'sending') {
-          const isUndone = await resetSend(imp, row?.peer_url ?? null, row?.ticket ?? null);
-
-          if (isUndone) {
-            getImpdLogger('move')
-              .with({ imp: imp.name })
-              .info('a send cut short by a restart was undone');
-          }
-        }
-
-        if (
-          imp.moveState === 'moved' &&
-          row !== undefined &&
-          row.peer_url !== null &&
-          row.ticket !== null
-        ) {
-          await runCommitAfterRestart(imp, row.peer_url, row.ticket);
-        }
+        await recoverSend(imp, row);
       }
     } catch (error) {
       getImpdLogger('move').warning('recovery after a restart failed: {error}', {
         error: getErrorMessage(error),
       });
     }
+  };
+
+  const recoverSend = async (imp: ImpRecord, row: SentRow | undefined): Promise<void> => {
+    const log = getImpdLogger('move').with({ imp: imp.name });
+
+    await match(pickSendRecovery(imp.moveState, row?.step))
+      .with('unmark', () => removeMark(imp))
+      .with('wait', () => {
+        log.info('a prepared send waits for its send after a restart');
+      })
+      .with('abort', async () => {
+        const isUndone = await resetSend(imp, row?.peer_url ?? null, row?.ticket ?? null);
+
+        if (isUndone) {
+          log.info('a send cut short by a restart was undone');
+        }
+      })
+      .with('commit', async () => {
+        invariant(row !== undefined && row.peer_url !== null && row.ticket !== null);
+
+        // A restart between the step and the mark leaves a checked receipt on an imp still sending.
+        const moved =
+          imp.moveState === 'moved' ? imp : await updateImpMove(deps.db, imp.id, 'moved');
+
+        await runCommitAfterRestart(moved, row.peer_url, row.ticket);
+      })
+      .with('none', () => {})
+      .exhaustive();
   };
 
   return {
@@ -382,7 +397,7 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
         const isWarm = imp.state === 'sleeping' && !options.stop;
 
         if (isWarm || imp.state === 'stopped') {
-          return writeSendMark(imp, options, isWarm);
+          return writeSendMark(imp, options, { isWarm, isHalted: false });
         }
 
         if (imp.state !== 'running' && imp.state !== 'sleeping') {
@@ -397,10 +412,6 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
 
         const stopped = await deps.imps.haltImp(imp);
 
-        if (imp.state === 'running') {
-          halted.add(imp.id);
-        }
-
         return writeHaltedMark(imp, stopped, options);
       }),
 
@@ -410,16 +421,19 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
       const imp = await requireImp(name);
       const row = await readMoveSend(deps.db, imp.id);
 
-      if (imp.moveState !== 'sending' || row === undefined || tasks.has(imp.id)) {
+      if (
+        imp.moveState !== 'sending' ||
+        row === undefined ||
+        row.step === 'sent' ||
+        tasks.has(imp.id)
+      ) {
         throw new ImpdError('CONFLICT', {
           message: `${name} is not prepared for a send: run moves.prepare first`,
           data: { kind: 'imp' as const, name },
         });
       }
 
-      await updateMoveSend(deps.db, imp.id, { peer_url: peer, ticket });
-
-      startSend(imp, { peer, ticket, mode: row.mode, isWarm: row.warm === 1 }, row.total_bytes);
+      await startSend(imp, { peer, ticket, mode: row.mode, isWarm: row.warm === 1 }, row);
 
       return readStatusOf(imp);
     },
@@ -465,10 +479,10 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
       }
 
       if (imp.moveState === 'sending' && !tasks.has(imp.id) && ticket !== undefined) {
-        startSend(
+        await startSend(
           imp,
           { peer: row.peer_url, ticket, mode: row.mode, isWarm: row.warm === 1 },
-          row.total_bytes,
+          row,
         );
 
         return readStatusOf(imp);
@@ -499,7 +513,9 @@ export function createMoveSender(deps: MoveSenderDeps): MoveSender {
       const isMarked = imp.moveState === 'sending' || imp.moveState === 'moved';
 
       if (isMarked && peer !== null && ticket !== null) {
-        const outcome = await withPeerError(() => sendMoveAbort(deps, imp, peer, ticket));
+        const outcome = await withPeerError(() =>
+          sendMoveAbort(deps.connectPeer({ peer, ticket }), imp),
+        );
 
         if (outcome === 'committed') {
           await withPeerError(() => runCommit(imp, peer, ticket));
@@ -530,6 +546,24 @@ function buildPublicError(name: string) {
   return new ImpdError('PRECONDITION_FAILED', {
     message: `${name} is public: run impz unexpose ${name} first, and impz expose on the target after the move`,
   });
+}
+
+type SendRecovery = 'unmark' | 'wait' | 'abort' | 'commit' | 'none';
+
+function pickSendRecovery(
+  moveState: MoveState | null,
+  step: MoveSendStep | undefined,
+): SendRecovery {
+  if (moveState === 'sending') {
+    return match(step)
+      .with(undefined, () => 'unmark' as const)
+      .with('prepared', () => 'wait' as const)
+      .with('streaming', () => 'abort' as const)
+      .with('sent', () => 'commit' as const)
+      .exhaustive();
+  }
+
+  return moveState === 'moved' && step === 'sent' ? 'commit' : 'none';
 }
 
 async function withPeerError<T>(call: () => Promise<T>): Promise<T> {

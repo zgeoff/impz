@@ -1,4 +1,3 @@
-import { MOVE_PATHS } from '../../src/imp-ops/moves/move-header';
 import type { FetchHook } from './create-move-hosts';
 
 export interface StubOverlappingMove {
@@ -13,7 +12,7 @@ export function buildStubOverlappingMove(): StubOverlappingMove {
     hook: async (request, forward) => {
       const runOther = state.runOther;
 
-      if (!request.url.endsWith(MOVE_PATHS.receive) || runOther === null) {
+      if (!request.url.endsWith('/move/receive') || runOther === null) {
         return forward();
       }
 

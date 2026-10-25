@@ -1,6 +1,7 @@
 // Written by kysely-codegen from the migrated database: run
 // `bun run render:db-schema` after a migration, never edit it by hand.
 
+import type { MoveSendStep } from "./move-send-steps";
 import type { ApiActor, AuditRefusal, ColdBootCause, ImageSource, ImpKind, ImpState, MoveState, Scope } from "@impz/api";
 import type { ColumnType } from "kysely";
 
@@ -155,10 +156,12 @@ export interface Imps {
 export interface MoveSends {
   created_at: number;
   error: string | null;
+  halted: Generated<number>;
   imp_id: string;
   mode: Generated<"files" | "zfs">;
   peer_url: string | null;
   receipt: string | null;
+  step: Generated<MoveSendStep>;
   ticket: string | null;
   total_bytes: number;
   warm: Generated<number>;

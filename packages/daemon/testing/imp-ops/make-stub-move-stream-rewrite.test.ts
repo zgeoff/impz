@@ -1,11 +1,7 @@
 import { expect, test } from 'bun:test';
 import invariant from 'tiny-invariant';
 import { MOVE_FRAMES, encodeJsonFrame, readJsonPayload } from '../../src/imp-ops/moves/move-frames';
-import {
-  MOVE_FINISH_HEADER,
-  MOVE_PART_HEADER,
-  MOVE_PATHS,
-} from '../../src/imp-ops/moves/move-header';
+import { MOVE_FINISH_HEADER, MOVE_PART_HEADER } from '../../src/imp-ops/moves/move-header';
 import { TARGET_URL } from './create-move-hosts';
 import { buildJsonMoveFrame, makeStubMoveStreamRewrite } from './make-stub-move-stream-rewrite';
 import type { MoveFrame } from './make-stub-move-stream-rewrite';
@@ -29,7 +25,7 @@ test('it hands the rewrite the frames of the first part, decoded', async () => {
   const header = encodeJsonFrame(MOVE_FRAMES.header, { version: 1 });
   const end = encodeJsonFrame(MOVE_FRAMES.end, {});
 
-  const request = new Request(`${TARGET_URL}${MOVE_PATHS.receive}`, {
+  const request = new Request(`${TARGET_URL}/move/receive`, {
     method: 'POST',
     headers: { [MOVE_PART_HEADER]: '0' },
     body: new Blob([header, end]),
@@ -50,7 +46,7 @@ test('it forwards the rewritten frames as the body of the first part', async () 
   const header = encodeJsonFrame(MOVE_FRAMES.header, { version: 1 });
   const end = encodeJsonFrame(MOVE_FRAMES.end, {});
 
-  const request = new Request(`${TARGET_URL}${MOVE_PATHS.receive}`, {
+  const request = new Request(`${TARGET_URL}/move/receive`, {
     method: 'POST',
     headers: { [MOVE_PART_HEADER]: '0' },
     body: new Blob([header, end]),
@@ -76,7 +72,7 @@ test('it forwards the rewritten frames as the body of the first part', async () 
 test('it forwards a finish as sent', async () => {
   const forwarded: (Request | undefined)[] = [];
 
-  const request = new Request(`${TARGET_URL}${MOVE_PATHS.receive}`, {
+  const request = new Request(`${TARGET_URL}/move/receive`, {
     method: 'POST',
     headers: { [MOVE_FINISH_HEADER]: '1' },
   });
@@ -93,7 +89,7 @@ test('it forwards a finish as sent', async () => {
 test('it forwards a request to another route as sent', async () => {
   const forwarded: (Request | undefined)[] = [];
 
-  const request = new Request(`${TARGET_URL}${MOVE_PATHS.commit}`, { method: 'POST' });
+  const request = new Request(`${TARGET_URL}/move/commit`, { method: 'POST' });
 
   await makeStubMoveStreamRewrite(() => [])(request, (replacement) => {
     forwarded.push(replacement);
@@ -105,7 +101,7 @@ test('it forwards a request to another route as sent', async () => {
 });
 
 test('it fails a stream that comes in more than one part', () => {
-  const request = new Request(`${TARGET_URL}${MOVE_PATHS.receive}`, {
+  const request = new Request(`${TARGET_URL}/move/receive`, {
     method: 'POST',
     headers: { [MOVE_PART_HEADER]: '1' },
     body: new Uint8Array([1]),

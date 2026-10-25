@@ -44,6 +44,7 @@ import { createDataDirs } from './vm/storage/data-layout';
 import { CHANGES_USAGE } from './vm/storage/disk-usage-cache';
 import { readLiveStorage } from './vm/storage/read-live-storage';
 import { setupSystemFiles } from './vm/storage/setup-system-files';
+import { writeImageFiles } from './vm/storage/write-image-files';
 import { checkKsmHost, readKsmHostStats } from './vm/vmm/ksm';
 
 export async function createImpd(config: Config, boundaries: Readonly<ImpdBoundaries> = {}) {
@@ -295,6 +296,7 @@ async function startImpdParts(
           networks: services.networks,
           storageGate: stored.storageGate,
           diskBudget: stored.diskBudget,
+          writeImageFiles,
         });
 
   const peers = createForwardedPeers(now);

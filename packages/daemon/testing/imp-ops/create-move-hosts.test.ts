@@ -1,6 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { existsSync, readFileSync } from 'node:fs';
-import { MOVE_PATHS } from '../../src/imp-ops/moves/move-header';
 import { readImageByName } from '../../src/platform/db/images';
 import { buildImagePaths } from '../../src/vm/storage/data-layout';
 import { buildStubZfsStorage } from '../vm/build-stub-zfs-storage';
@@ -88,20 +87,14 @@ test('#setupMoveHosts hands its hook each request to the target, with both hosts
   await hosts.sourceApp.client.imps.stop({ name: 'dev' });
   await hosts.runMove('dev');
 
-  expect(paths).toStrictEqual([
-    MOVE_PATHS.offer,
-    MOVE_PATHS.receive,
-    MOVE_PATHS.receive,
-    MOVE_PATHS.commit,
-  ]);
-
+  expect(paths).toStrictEqual(['/move/offer', '/move/receive', '/move/receive', '/move/commit']);
   expect(isTarget).toStrictEqual([true, true, true, true]);
 });
 
 test('#setupMoveHosts sends the request a hook forwards in place of the one sent', async () => {
   const hosts = await setupMoveHosts({
     hook: (request, forward) =>
-      request.url.endsWith(MOVE_PATHS.offer)
+      request.url.endsWith('/move/offer')
         ? forward(new Request(`${TARGET_URL}/move/nowhere`, { method: 'POST' }))
         : forward(),
   });
@@ -127,7 +120,7 @@ test('#createMoveHosts gives up waiting for a move that never ends', async () =>
   const hosts = await createMoveHosts(stack, {
     moveTimeoutMs: 50,
     hook: async (request, forward) => {
-      if (request.url.endsWith(MOVE_PATHS.receive)) {
+      if (request.url.endsWith('/move/receive')) {
         await held.promise;
       }
 

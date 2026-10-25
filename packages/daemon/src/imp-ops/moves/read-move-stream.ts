@@ -1,35 +1,29 @@
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { copyFile, open } from 'node:fs/promises';
+import { mkdirSync, rmSync } from 'node:fs';
+import { open } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { EgressPolicy, WarmHost } from '@impz/api';
+import type { WarmHost } from '@impz/api';
 import invariant from 'tiny-invariant';
 import type { ImageService } from '../../imps/images/image-service';
 import type { Imps } from '../../imps/imps/imp-service';
 import type { EgressService } from '../../network/egress/egress-service';
-import { createCheckpoint } from '../../platform/db/checkpoints';
 import { writeMovedBoots } from '../../platform/db/cold-boots';
-import {
-  createImage,
-  readImageByDigest,
-  readImageByName,
-  updateImageUse,
-} from '../../platform/db/images';
 import { readImpById } from '../../platform/db/imps';
 import { updateMoveTicket } from '../../platform/db/move-tickets';
 import type { MoveTicketRow } from '../../platform/db/move-tickets';
 import type { ImpDatabase } from '../../platform/db/open-database';
-import { parseEgressPolicy } from '../../platform/db/parse-egress-policy';
-import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import type { HostIdentity } from '../../vm/sleep/vm-identity';
-import { toDigestHex } from '../../vm/storage/data-layout';
 import type { DiskBudget } from '../../vm/storage/disk-budget';
-import { CheckpointIdTakenError } from '../../vm/storage/storage-backend';
 import type { StorageBackend } from '../../vm/storage/storage-backend';
 import type { StorageGate } from '../../vm/storage/storage-gate';
 import { writeChangedBlocks } from '../../vm/storage/write-changed-blocks';
-import { buildCheckpointId } from '../checkpoints/checkpoint-service';
 import type { ImpGrants } from '../imp-grants';
+import { createImageFromFile } from '../imp-import/create-image-from-file';
+import type { ImageImportDeps } from '../imp-import/create-image-from-file';
+import { readImageInUse } from '../imp-import/read-image-in-use';
+import { replayCheckpoints } from '../imp-import/replay-checkpoints';
+import { resolveImportedPolicy } from '../imp-import/resolve-imported-policy';
+import { restoreGrants } from '../imp-import/restore-grants';
 import { buildOfferedDigests } from './build-offered-digests';
 import { buildReceivedDigest } from './build-received-digest';
 import { requireOwnDrivePath, requireWarmMove, writeWarmFiles } from './check-warm-move';
@@ -51,7 +45,7 @@ import { MoveHeaderSchema } from './move-header';
 import type { MoveHeader } from './move-header';
 import { MoveRequestError } from './move-request-error';
 import { buildReceipt, isSameHash } from './move-tickets';
-import type { ReceiptBody } from './move-tickets';
+import type { Receipt, ReceiptBody } from './move-tickets';
 import { writeReceivedLeases } from './read-moved-leases';
 import { removeStagedImp } from './remove-staged-imp';
 import { requireTicketedName } from './require-ticketed-name';
@@ -73,16 +67,12 @@ interface ReceiveStreamDeps {
   readonly diskBudget: Pick<DiskBudget, 'withRoom'>;
   readonly images: Pick<ImageService, 'withImagePublisher'>;
   readonly imps: Pick<Imps, 'createImp' | 'destroyImp'>;
-  readonly grants: Pick<ImpGrants, 'addGrant' | 'listSecrets'>;
+  readonly grants: Pick<ImpGrants, 'addGrant'>;
   readonly egress: Pick<EgressService, 'writeAnswers'>;
   readonly readIdentity: () => HostIdentity;
   readonly readWarmHost: () => WarmHost;
   readonly now: () => number;
-}
-
-export interface Reply {
-  readonly status: number;
-  readonly body: unknown;
+  readonly writeImageFiles: ImageImportDeps['writeImageFiles'];
 }
 
 type ReceivedFile = ReceiptBody['files'][number];
@@ -97,14 +87,14 @@ interface ReadMoveStreamOptions {
 export async function readMoveStream(
   deps: ReceiveStreamDeps,
   options: ReadMoveStreamOptions,
-): Promise<Reply> {
+): Promise<Receipt> {
   const row = options.row;
   const reader = createFrameReader(options.stream);
 
   const first = await reader.readFrame();
 
   if (first?.type !== MOVE_FRAMES.header) {
-    throw new MoveRequestError(400, 'the stream does not start with its header');
+    throw new MoveRequestError('BAD_REQUEST', 'the stream does not start with its header');
   }
 
   const header = MoveHeaderSchema.parse(readJsonPayload(first.payload));
@@ -113,7 +103,7 @@ export async function readMoveStream(
   requireTicketedName(row.name, header.imp.name);
 
   if ((await readImpById(deps.db, header.imp.id)) !== undefined) {
-    throw new MoveRequestError(409, `this host has an imp with id ${header.imp.id}`);
+    throw new MoveRequestError('CONFLICT', `this host has an imp with id ${header.imp.id}`);
   }
 
   if (header.warm !== null) {
@@ -121,10 +111,13 @@ export async function readMoveStream(
     requireOwnDrivePath(deps, header.warm);
 
     if (header.warm.move.slot !== row.slot) {
-      throw new MoveRequestError(409, `the ticket keeps slot ${String(row.slot)}, not this one`);
+      throw new MoveRequestError(
+        'CONFLICT',
+        `the ticket keeps slot ${String(row.slot)}, not this one`,
+      );
     }
   } else if (row.slot !== null) {
-    throw new MoveRequestError(409, 'the ticket is for a warm move, and the stream is cold');
+    throw new MoveRequestError('CONFLICT', 'the ticket is for a warm move, and the stream is cold');
   }
 
   await updateMoveTicket(deps.db, row.id, { imp_id: header.imp.id });
@@ -151,28 +144,17 @@ export async function readMoveStream(
       return;
     }
 
-    await deps.storage.createImpDisk(impId, { kind: 'empty' });
+    const disk = await replayCheckpoints(deps, {
+      impId,
+      checkpoints: header.checkpoints,
+      writeCheckpoint: async (_checkpoint, index, target) => {
+        const got = await readFileInto(reader, 'checkpoint', temp, count);
 
-    const disk = deps.storage.resolveImpPaths(impId).disk;
+        await writeChangedBlocks(temp, target);
 
-    for (const [index, checkpoint] of header.checkpoints.entries()) {
-      const got = await readFileInto(reader, 'checkpoint', temp, count);
-
-      await writeChangedBlocks(temp, disk);
-
-      const made = await createCheckpointDisk(deps, impId);
-
-      await createCheckpoint(deps.db, {
-        id: made.id,
-        impId,
-        label: checkpoint.label,
-        sizeBytes: made.sizeBytes,
-        createdAt: checkpoint.createdAt,
-        diskBytes: checkpoint.diskBytes,
-      });
-
-      files.push({ kind: 'checkpoint', index, sha256: got.sha256, bytes: got.bytes });
-    }
+        files.push({ kind: 'checkpoint', index, sha256: got.sha256, bytes: got.bytes });
+      },
+    });
 
     const got = await readFileInto(reader, 'disk', temp, count);
 
@@ -199,7 +181,17 @@ export async function readMoveStream(
         maxMemoryMib: header.imp.maxMemoryMib,
         httpPort: header.imp.httpPort,
         diskMib: Math.ceil(header.imp.diskBytes / (1024 * 1024)),
-        policy: resolvePolicy(header),
+        policy: resolveImportedPolicy({
+          mode: header.imp.egress.mode,
+          allow: header.imp.egress.allow,
+          onUnknown: (mode) => {
+            getImpdLogger('move')
+              .with({ imp: header.imp.name })
+              .warning('unknown egress policy {egressPolicy}; imported as none', {
+                egressPolicy: JSON.stringify(mode),
+              });
+          },
+        }),
         cpuLimit: header.imp.cpu.limit,
         cpuWeight: header.imp.cpu.weight,
         start: false,
@@ -230,7 +222,7 @@ export async function readMoveStream(
     const end = await reader.readFrame();
 
     if (end?.type !== MOVE_FRAMES.end) {
-      throw new MoveRequestError(400, 'the stream does not end with END');
+      throw new MoveRequestError('BAD_REQUEST', 'the stream does not end with END');
     }
   } catch (error) {
     await removeStagedImp(deps, header.imp.name, header.imp.id);
@@ -258,7 +250,7 @@ export async function readMoveStream(
     .with({ imp: header.imp.name })
     .info('received as {form}, waiting for the commit', { form });
 
-  return { status: 200, body: receipt };
+  return receipt;
 }
 
 interface ReadFile {
@@ -277,13 +269,16 @@ async function readFileInto(
   const start = await reader.readFrame();
 
   if (start?.type !== MOVE_FRAMES.file) {
-    throw new MoveRequestError(400, `the stream has no ${expected} file`);
+    throw new MoveRequestError('BAD_REQUEST', `the stream has no ${expected} file`);
   }
 
   const file = MoveFileSchema.parse(readJsonPayload(start.payload));
 
   if (file.kind !== expected) {
-    throw new MoveRequestError(400, `the stream sent ${file.kind} where ${expected} goes`);
+    throw new MoveRequestError(
+      'BAD_REQUEST',
+      `the stream sent ${file.kind} where ${expected} goes`,
+    );
   }
 
   const handle = await open(path, 'w');
@@ -300,27 +295,33 @@ async function readFileInto(
       const frame = await reader.readFrame();
 
       if (frame === null) {
-        throw new MoveRequestError(400, 'the stream ended inside a file');
+        throw new MoveRequestError('BAD_REQUEST', 'the stream ended inside a file');
       }
 
       if (frame.type === MOVE_FRAMES.fileEnd) {
         const sha256 = FileEndSchema.parse(readJsonPayload(frame.payload)).sha256;
 
         if (!isSameHash(sha256, hash.digest('hex'))) {
-          throw new MoveRequestError(400, `${expected}: the sha256 does not match the data`);
+          throw new MoveRequestError(
+            'BAD_REQUEST',
+            `${expected}: the sha256 does not match the data`,
+          );
         }
 
         return { sha256, contentSha256: content?.digest() ?? null, bytes, file };
       }
 
       if (frame.type !== MOVE_FRAMES.data) {
-        throw new MoveRequestError(400, `an unexpected frame ${String(frame.type)} in a file`);
+        throw new MoveRequestError(
+          'BAD_REQUEST',
+          `an unexpected frame ${String(frame.type)} in a file`,
+        );
       }
 
       const data = readDataInFile(frame.payload, file.sizeBytes);
 
       if (data.offset < end) {
-        throw new MoveRequestError(400, `${expected}: a DATA frame out of order`);
+        throw new MoveRequestError('BAD_REQUEST', `${expected}: a DATA frame out of order`);
       }
 
       end = data.offset + data.data.length;
@@ -342,26 +343,10 @@ function readDataInFile(payload: Uint8Array, size: number): ReturnType<typeof re
   const data = readDataPayload(payload);
 
   if (data.offset + data.data.length > size) {
-    throw new MoveRequestError(400, 'a DATA frame past the end of its file');
+    throw new MoveRequestError('BAD_REQUEST', 'a DATA frame past the end of its file');
   }
 
   return data;
-}
-
-const ID_ATTEMPTS = 5;
-
-async function createCheckpointDisk(deps: ReceiveStreamDeps, impId: string) {
-  for (let attempt = 1; ; attempt += 1) {
-    const id = buildCheckpointId();
-
-    try {
-      return { id, sizeBytes: await deps.storage.createCheckpoint(impId, id) };
-    } catch (error) {
-      if (!(error instanceof CheckpointIdTakenError) || attempt >= ID_ATTEMPTS) {
-        throw error;
-      }
-    }
-  }
 }
 
 interface RequireImageOptions {
@@ -380,13 +365,10 @@ async function requireImage(
   if (!header.image.isIncluded) {
     const offered = buildOfferedDigests(header.image.digest, header.image.receivedDigest);
 
-    // The use goes in before each read, so an image eviction keeps the image this move picks.
-    await updateImageUse(deps.db, 'digest', offered, deps.now());
-
-    const existing = await readImageByDigest(deps.db, offered);
+    const existing = await readImageInUse(deps.db, offered, deps.now());
 
     if (existing === undefined) {
-      throw new MoveRequestError(409, `this host has no image ${header.image.digest}`);
+      throw new MoveRequestError('CONFLICT', `this host has no image ${header.image.digest}`);
     }
 
     return { name: existing.name, files: [] };
@@ -407,47 +389,24 @@ async function requireImage(
 
     const digest = buildReceivedDigest(rootfs.contentSha256, config.contentSha256);
 
-    await updateImageUse(deps.db, 'digest', [digest], deps.now());
-
-    const known = await readImageByDigest(deps.db, [digest]);
+    const known = await readImageInUse(deps.db, [digest], deps.now());
 
     if (known !== undefined) {
       return { name: known.name, files };
     }
 
-    const name = await deps.images.withImagePublisher(digest, header.image.name, async () => {
-      await deps.storageGate.join(() =>
-        deps.storage.createImage(digest, async (directory) => {
-          await copyFile(temps.config, join(directory, 'config.json'));
-
-          writeFileSync(join(directory, 'rootfs.ext4'), '');
-
-          await writeChangedBlocks(temps.rootfs, join(directory, 'rootfs.ext4'));
-        }),
-      );
-
-      const taken = await readImageByName(deps.db, header.image.name);
-
-      const hex = toDigestHex(digest).slice(0, 8);
-
-      const picked =
-        taken === undefined ? header.image.name : `${header.image.name.slice(0, 22)}-${hex}`;
-
-      await createImage(
-        deps.db,
-        {
-          name: picked,
-          ref: header.image.ref,
-          digest,
-          sizeBytes: header.image.sizeBytes,
-          source: header.image.source,
-          sourceImp: header.image.sourceImp,
-        },
-        deps.now(),
-      );
-
-      return picked;
-    });
+    const name = await deps.storageGate.join(() =>
+      createImageFromFile(deps, {
+        name: header.image.name,
+        ref: header.image.ref,
+        digest,
+        sizeBytes: header.image.sizeBytes,
+        source: header.image.source,
+        sourceImp: header.image.sourceImp,
+        rootfsPath: temps.rootfs,
+        configPath: temps.config,
+      }),
+    );
 
     return { name, files };
   } finally {
@@ -456,50 +415,15 @@ async function requireImage(
   }
 }
 
-function resolvePolicy(header: MoveHeader): EgressPolicy {
-  const policy = parseEgressPolicy(header.imp.egress.mode, header.imp.egress.allow);
-
-  if (policy !== null) {
-    return policy;
-  }
-
-  getImpdLogger('move')
-    .with({ imp: header.imp.name })
-    .warning('unknown egress policy; received as none');
-
-  return { mode: 'none', allow: [] };
-}
-
 async function createGrants(deps: ReceiveStreamDeps, header: MoveHeader): Promise<void> {
-  const secrets = await deps.grants.listSecrets();
+  const skipped = await restoreGrants(deps, header.imp.name, header.imp);
 
-  const known = new Set(secrets.map((secret) => secret.name));
-
-  const grants = [
-    ...header.imp.grants.map((secret) => ({ secret, filter: undefined })),
-    ...header.imp.filteredGrants,
-  ];
-
-  for (const grant of grants) {
-    const secretName = grant.secret;
-
-    if (!known.has(secretName)) {
-      getImpdLogger('move')
-        .with({ imp: header.imp.name })
-        .info('grant {secretName} dropped: no such secret here', { secretName });
-
-      continue;
-    }
-
-    try {
-      await deps.grants.addGrant(header.imp.name, secretName, null, grant.filter);
-    } catch (error) {
-      getImpdLogger('move')
-        .with({ imp: header.imp.name })
-        .warning('grant {secretName} not kept: {error}', {
-          secretName,
-          error: getErrorMessage(error),
-        });
-    }
+  for (const grant of skipped) {
+    getImpdLogger('move')
+      .with({ imp: header.imp.name })
+      .warning('grant {secretName} not kept: {reason}', {
+        secretName: grant.secret,
+        reason: grant.reason,
+      });
   }
 }

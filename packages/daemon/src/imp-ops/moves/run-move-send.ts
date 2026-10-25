@@ -1,4 +1,4 @@
-import { EGRESS_MODE_TRAITS } from '@impz/api';
+import { EGRESS_MODE_TRAITS, MOVE_RECEIVE_PATH } from '@impz/api';
 import type { WarmHost } from '@impz/api';
 import type { EgressService } from '../../network/egress/egress-service';
 import { listCheckpoints } from '../../platform/db/checkpoints';
@@ -6,7 +6,7 @@ import { listColdBoots } from '../../platform/db/cold-boots';
 import { readImageById, updateImageReceivedDigest } from '../../platform/db/images';
 import { updateImpMove } from '../../platform/db/imps';
 import type { ImpRecord } from '../../platform/db/imps';
-import { updateMoveSend } from '../../platform/db/move-sends';
+import { updateMoveSendStep } from '../../platform/db/move-sends';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import type { StartTimer } from '../../platform/process/clock';
 import { parseOpaqueToken } from '../../platform/secrets/parse-opaque-token';
@@ -18,14 +18,10 @@ import { buildReceivedDigest } from './build-received-digest';
 import { readWarmHeader, requireSnapshotMeta } from './check-warm-move';
 import type { WarmParts } from './check-warm-move';
 import { MOVE_FRAMES, encodeCommand, encodeFile, encodeJsonFrame } from './move-frames';
-import {
-  MOVE_FINISH_HEADER,
-  MOVE_PART_HEADER,
-  MOVE_PATHS,
-  MoveOfferReplySchema,
-} from './move-header';
+import { MOVE_FINISH_HEADER, MOVE_PART_HEADER } from './move-header';
 import type { MoveHeader } from './move-header';
 import { sendInParts } from './move-parts';
+import type { ConnectMovePeer } from './move-peer';
 import { MOVE_TICKET_PREFIX, ReceiptSchema, readReceipt } from './move-tickets';
 import type { ReadonlyReceiptBody, ReceiptBody } from './move-tickets';
 import { OfferRefusalError } from './offer-refusal-error';
@@ -45,6 +41,7 @@ interface MoveSendDeps {
   readonly egress: Pick<EgressService, 'readPolicy' | 'readAnswers'>;
   readonly readWarmHost: () => WarmHost;
   readonly readTapMac?: (tap: string) => string | null;
+  readonly connectPeer: ConnectMovePeer;
   readonly fetch?: (request: Request) => Promise<Response>;
   readonly startPeerDeadline?: StartTimer;
   readonly partBytes?: number;
@@ -80,24 +77,14 @@ export async function runMoveSend(
 
   const meta = target.isWarm ? requireSnapshotMeta(deps, imp) : null;
 
-  const offer = await sendToPeer(deps, {
-    peer,
-    path: MOVE_PATHS.offer,
-    ticket,
-    init: {
-      body: JSON.stringify({
-        imageDigest: image?.digest ?? '',
-        receivedImageDigest: image?.receivedDigest ?? null,
-        ...(meta !== null && { systemDrive: meta.systemDrive }),
-      }),
-      signal,
-      extraHeaders: { 'content-type': 'application/json' },
+  const reply = await deps.connectPeer({ peer, ticket }).offer(
+    {
+      imageDigest: image?.digest ?? '',
+      receivedImageDigest: image?.receivedDigest ?? null,
+      ...(meta !== null && { systemDrive: meta.systemDrive }),
     },
-  });
-
-  const offered = await requireOk(offer, 'offer');
-
-  const reply = MoveOfferReplySchema.parse(offered);
+    signal,
+  );
 
   if (target.mode === 'zfs' && reply.storage !== 'zfs') {
     throw new Error('the target is not on ZFS any more; prepare the move again');
@@ -159,7 +146,7 @@ export async function runMoveSend(
       async (part, body) => {
         const sentPart = await sendToPeer(deps, {
           peer,
-          path: MOVE_PATHS.receive,
+          path: MOVE_RECEIVE_PATH,
           ticket,
           init: {
             body,
@@ -179,7 +166,7 @@ export async function runMoveSend(
 
   const response = await sendToPeer(deps, {
     peer,
-    path: MOVE_PATHS.receive,
+    path: MOVE_RECEIVE_PATH,
     ticket,
     init: { signal, extraHeaders: { [MOVE_FINISH_HEADER]: '1' } },
   });
@@ -202,7 +189,7 @@ export async function runMoveSend(
     await updateImageReceivedDigest(deps.db, image, buildReceivedDigest(rootfsSum, configSum));
   }
 
-  await updateMoveSend(deps.db, imp.id, { receipt: JSON.stringify(receipt) });
+  await updateMoveSendStep(deps.db, imp.id, 'sent', { receipt: JSON.stringify(receipt) });
   await updateImpMove(deps.db, imp.id, 'moved');
 }
 

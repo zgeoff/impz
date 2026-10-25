@@ -535,7 +535,7 @@
         "modules": [
           {
             "name": "orpc-in-surface",
-            "modules": ["@orpc/server", "@orpc/client"],
+            "modules": ["@orpc/server", "@orpc/client", "@orpc/openapi", "@orpc/openapi-client"],
             "from": ["daemon-below-surface"],
             "ignore": [
               "**/*.{test,e2e}.{ts,tsx}",
