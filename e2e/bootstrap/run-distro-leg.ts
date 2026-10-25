@@ -1,6 +1,7 @@
 import { applyBootstrap } from './apply-bootstrap';
 import { BootstrapTestError } from './bootstrap-test-error';
 import { checkDockerHost } from './check-docker-host';
+import { checkDockerMove } from './check-docker-move';
 import { checkFirewallDrops } from './check-firewall-drops';
 import { checkHostFirewallNone } from './check-host-firewall-none';
 import { checkImpEgress6 } from './check-imp-egress6';
@@ -99,6 +100,11 @@ export async function runDistroLeg(run: BootstrapRun, distro: Distro): Promise<v
 
   if (distro === 'debian') {
     await checkIPv6Cases(run, target);
+  }
+
+  // Last in the leg: Docker stays installed, as upgrade.sh leaves it.
+  if (distro === 'debian' && run.args.stub) {
+    await checkDockerMove(run, target);
   }
 
   await removeTestContainer(run);
