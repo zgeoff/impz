@@ -13,6 +13,10 @@ interface StubHostPodman {
   readonly impInfo?: string | null;
   readonly runningCLI?: 'imp' | 'impz';
   readonly unreadableFile?: string;
+
+  // The inspect that fails, as one does when its container or image is gone: imp-host's image id,
+  // or the pulled image's own id.
+  readonly failedInspect?: 'host' | 'pulled';
 }
 
 export function buildStubHostPodman(stub: StubHostPodman): string {
@@ -24,13 +28,20 @@ export function buildStubHostPodman(stub: StubHostPodman): string {
   const cli = stub.runningCLI ?? 'impz';
   const version = cli === 'impz' ? 'echo 0.0.0' : 'exit 126';
   const runsHost = stub.runsHost === false ? 'exit 1' : '';
+  const noSuchObject = 'echo "Error: no such object" >&2; exit 125';
+  const hostImage = stub.failedInspect === 'host' ? noSuchObject : 'echo old';
+
+  const pulledImage =
+    stub.failedInspect === 'pulled'
+      ? noSuchObject
+      : `echo ${stub.pulledIsRunning === true ? 'old' : 'new'}`;
 
   // Podman prints an image id without the sha256: that Docker puts before it.
   return `case "$*" in
   "container exists imp-host") ${runsHost} ;;
-  "inspect -f {{.Image}} imp-host") echo old ;;
+  "inspect -f {{.Image}} imp-host") ${hostImage} ;;
   "pull -q "${formatShellWord(stub.image)}) ;;
-  "image inspect -f {{.Id}} "${formatShellWord(stub.image)}) echo ${stub.pulledIsRunning === true ? 'old' : 'new'} ;;
+  "image inspect -f {{.Id}} "${formatShellWord(stub.image)}) ${pulledImage} ;;
   "image inspect -f "*" "${formatShellWord(stub.image)}) echo ${formatShellWord(stub.pulledLabel)} ;;
   "run --rm "${formatShellWord(stub.image)}" cat "*${formatShellWord(stub.unreadableFile ?? 'none')}) exit 1 ;;
   "run --rm "${formatShellWord(stub.image)}" cat "*.service) printf '%s' ${formatShellWord(stub.pulledUnit)} ;;

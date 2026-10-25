@@ -366,8 +366,11 @@ image=$(read_image)
 echo "upgrade: pulling $image"
 podman pull -q "$image" >/dev/null
 
-old=$(image_id "$("$runtime" inspect -f '{{.Image}}' "$container")")
-new=$(image_id "$(podman image inspect -f '{{.Id}}' "$image")")
+# set -e misses a failed inspect nested in another substitution
+old_ref=$("$runtime" inspect -f '{{.Image}}' "$container")
+new_ref=$(podman image inspect -f '{{.Id}}' "$image")
+old=$(image_id "$old_ref")
+new=$(image_id "$new_ref")
 
 [ "$old" = "$new" ] || echo "upgrade: $old -> $new"
 

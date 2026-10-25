@@ -43,6 +43,34 @@ test('it answers the image ids, without sha256:, and the contract label of the p
   expect(result.stdout.toString()).toBe('old\nnew\nno-docker\n');
 });
 
+test.each([
+  ['host', 'podman inspect -f {{.Image}} imp-host'],
+  ['pulled', 'podman image inspect -f {{.Id}} imp-host:next'],
+] as const)('it fails the %s image inspect when told to', (failedInspect, command) => {
+  const ctx = setupTest();
+
+  const podman = createStubBin(
+    ctx.directoryPath,
+    'podman',
+    buildStubHostPodman({
+      image: 'imp-host:next',
+      pulledLabel: 'no-docker',
+      pulledUnit: 'unit',
+      failedInspect,
+    }),
+  );
+
+  const result = Bun.spawnSync(['bash', '-c', command], {
+    env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
+  });
+
+  expect({
+    exitCode: result.exitCode,
+    stdout: result.stdout.toString(),
+    stderr: result.stderr.toString(),
+  }).toStrictEqual({ exitCode: 125, stdout: '', stderr: 'Error: no such object\n' });
+});
+
 test('it answers the running image id for the pulled image when that runs already', () => {
   const ctx = setupTest();
 

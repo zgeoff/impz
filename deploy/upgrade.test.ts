@@ -664,6 +664,56 @@ test('it keeps the networks of a Docker host without IPv6, and rolls back withou
   );
 });
 
+test.each([
+  ['host', 'podman inspect -f {{.Image}} imp-host'],
+  ['pulled', 'podman image inspect -f {{.Id}} ghcr.io/zgeoff/imp-host:next'],
+] as const)(
+  'it stops before anything changes when the %s image id cannot be read',
+  (failedInspect, lastCall) => {
+    const ctx = setupTest();
+
+    const podman = createStubBin(
+      ctx.directoryPath,
+      'podman',
+      buildStubHostPodman({
+        image: 'ghcr.io/zgeoff/imp-host:next',
+        pulledLabel: 'no-docker',
+        pulledUnit: 'ExecStart=/usr/bin/podman run --name imp-host imp-host\n',
+        failedInspect,
+      }),
+    );
+
+    createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
+
+    writeFileSync(
+      join(ctx.directoryPath, 'imp-host.service'),
+      'ExecStart=/usr/bin/podman run --cap-drop ALL imp-host\n',
+    );
+
+    const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
+      env: {
+        PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
+        IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
+        IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
+        IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
+        IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
+        IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
+      },
+    });
+
+    expect({ exitCode: result.exitCode, stderr: result.stderr.toString() }).toStrictEqual({
+      exitCode: 125,
+      stderr: 'Error: no such object\n',
+    });
+
+    expect(readFileSync(podman.calls, 'utf8')).toEndWith(`${lastCall}\n`);
+
+    expect(readFileSync(join(ctx.directoryPath, 'imp-host.service'), 'utf8')).toBe(
+      'ExecStart=/usr/bin/podman run --cap-drop ALL imp-host\n',
+    );
+  },
+);
+
 test("it stops with the rollback to Docker, and starts nothing, when Docker's network cannot be removed after the host stops", () => {
   const ctx = setupTest();
 
