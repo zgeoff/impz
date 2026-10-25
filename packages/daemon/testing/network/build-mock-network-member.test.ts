@@ -1,6 +1,15 @@
 import { expect, test } from 'bun:test';
 import { isIPv4 } from 'node:net';
+import { NameSchema } from '@impz/api';
 import { buildMockNetworkMember } from './build-mock-network-member';
+
+test('it builds network and imp names that the name schema accepts', () => {
+  const members = Array.from({ length: 10_000 }, () => buildMockNetworkMember());
+
+  expect(members.flatMap((member) => [member.network, member.name])).toSatisfyAll(
+    (name: unknown) => NameSchema.safeParse(name).success,
+  );
+});
 
 test('it builds a default network member', () => {
   const member = buildMockNetworkMember();

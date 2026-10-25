@@ -1,5 +1,14 @@
 import { expect, test } from 'bun:test';
+import { NameSchema } from '@impz/api';
 import { buildMockNewAuditEntry } from './build-mock-new-audit-entry';
+
+test('it builds imp and secret names that the name schema accepts', () => {
+  const entries = Array.from({ length: 10_000 }, () => buildMockNewAuditEntry());
+
+  expect(entries.flatMap((entry) => [entry.impName, entry.secretName])).toSatisfyAll(
+    (name: unknown) => NameSchema.safeParse(name).success,
+  );
+});
 
 test('it builds a default new audit entry', () => {
   expect(buildMockNewAuditEntry()).toStrictEqual({
