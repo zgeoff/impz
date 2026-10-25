@@ -583,11 +583,9 @@ An image from a public registry goes in with `impz image add <ref>`, which pulls
 Until an image named `IMP_DEFAULT_IMAGE` (default `base`) exists, `impz new` uses `ubuntu` and impd
 logs a warning at start.
 
-On a new host, impd's first start pulls its builder image (`IMP_BUILD_IMAGE`, the published
-`imp-base`, about 700 MB unpacked) by digest onto the host's Docker engine, the one pull
-`imp-docker-proxy` lets through, and adds it as `imp-builder`. It then adds `ubuntu` in a builder
-imp. Both took 34 to 41 s on a home link. If the builder image does not pull, every add and build
-fails with an error that names `IMP_BUILD_IMAGE`; none falls back to the host's engine. The pull has
-10 minutes; one that hangs fails then, and the next add or build pulls again. A client that goes
-stops waiting for the pull, which goes on for the others. On a slow link, run `docker pull` with
-that exact reference on the host engine first, and impd uses the image without a pull.
+On a new host, impd's first start fetches its builder image (`IMP_BUILD_IMAGE`, the published
+`imp-base`, about 700 MB unpacked) from its registry, never through the host's Docker engine, and
+adds it as `imp-builder`. It then adds `ubuntu` in a builder imp. If the builder image does not
+fetch, every add and build fails with an error that names `IMP_BUILD_IMAGE`. The fetch has 10
+minutes; one that hangs fails then, and the next add or build fetches again. A client that goes
+stops waiting for the fetch, which goes on for the others.
