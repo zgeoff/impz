@@ -1580,7 +1580,7 @@ ExecStartPre=/bin/sh -c 'a=; [ -e /dev/zfs ] && a="$$a --device /dev/zfs"; [ -e 
 # The arguments come from deploy/imp-host.args.json: edit that, then run
 # bun run render:deploy (the NixOS module reads the same file).
 ExecStart=/usr/bin/podman run --rm --name imp-host --hostname imp-host \
-  --init --cgroupns=private --cap-drop ALL \
+  --init --cgroupns=private --pids-limit=-1 --cap-drop ALL \
   --cap-add SYS_ADMIN --cap-add NET_ADMIN --cap-add MKNOD \
   --cap-add CHOWN --cap-add SETUID --cap-add SETGID --cap-add KILL \
   --cap-add SYS_PTRACE --cap-add DAC_OVERRIDE --cap-add FOWNER \
