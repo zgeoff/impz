@@ -14,8 +14,9 @@ of a 4 KiB template on the same host, interleaved with it, takes a median of 1,4
 
 ## Findings
 
-- A 2 MiB boot touches about 35 distinct 2 MiB blocks of the template, and only 2 to 5 of them after
-  the claim. A 4 KiB boot faults about 5,500 pages, 4,370 of them after the claim.
+- A 2 MiB boot touches about 35 distinct 2 MiB blocks of the template, and only 2 to 5 of them from
+  the start of the claim request. A 4 KiB boot faults about 5,500 pages, 4,370 of them from the
+  start of the claim request.
 - On the target host, most of the File restore's extra time lands in the guest's mount step, which
   takes a median of 767 ms under File and 44 ms under UFFD on the same disk copy. impd's own
   restores on that host fall in the same range as the harness's File restores.

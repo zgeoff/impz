@@ -15,8 +15,10 @@ GiB disk, built from `imp-base:0.29.0`. Each run's raw lines sit beside this fil
 | `uffd-fill`   | UFFD    | copies the template's data and the boot working set in before resuming |
 
 The working set is the union of the pages that the `record-demand` restores faulted in before the
-agent came up unparked. Fault counts give the pages faulted in after load, after the resume and
-after the claim.
+agent came up unparked. Fault counts give the pages first faulted in during three phases. The load
+phase runs until the resume, and the resumed phase runs from the resume to the claim request. The
+claimed phase starts just before the claim request and runs until the agent comes up unparked, so it
+covers both the `claim` and the `agent` marks.
 
 ## 2 MiB pages, target host
 
@@ -41,8 +43,8 @@ The spread of `agent` over the 21 rounds:
 | `uffd-demand` | 50.8  | 60.8   | 87.0   | 95.6   |
 | `uffd-fill`   | 50.3  | 59.8   | 68.2   | 87.7   |
 
-- A `uffd-demand` boot faults in 33 to 36 distinct 2 MiB blocks, 2 to 5 of them after the claim. The
-  handler serves a 2 MiB fault in a median of 450 µs, about 20 ms in each boot.
+- A `uffd-demand` boot faults in 33 to 36 distinct 2 MiB blocks, 2 to 5 of them in the claimed
+  phase. The handler serves a 2 MiB fault in a median of 450 µs, about 20 ms in each boot.
 - The working set holds 35 blocks, and the fill copies 49: the blocks that hold data and the working
   set.
 - `file` restores split into two groups: most take 1.4 to 3.3 s, and the last five take about 330
