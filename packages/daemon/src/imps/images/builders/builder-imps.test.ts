@@ -18,8 +18,10 @@ import { buildStubGuest } from '../../../../testing/vm/build-stub-guest';
 import { makeStubCommandAnswer } from '../../../../testing/vm/make-stub-command-answer';
 import { createImage } from '../../../platform/db/images';
 import { listImps, readImpByName } from '../../../platform/db/imps';
+import { countTreeBytes } from '../../../vm/storage/count-tree-bytes';
 import { buildImagePaths } from '../../../vm/storage/data-layout';
 import { writeGuestTree } from '../build/guest-build';
+import { startTarProcess } from '../rootfs/start-tar-process';
 import { createBuilders } from './builder-imps';
 
 function setupTest() {
@@ -699,6 +701,8 @@ test('it ends an export over its file limit and removes its builder, with no cli
       root: join(tree, 'root'),
       limits: { maxBytes: 1024 ** 3, maxFiles: 1 },
       signal: new AbortController().signal,
+      startTar: startTarProcess,
+      countTreeBytes,
     }),
   );
 
@@ -758,6 +762,8 @@ test('it ends an export stopped while its exec opens, closes the exec and remove
       signal: new AbortController().signal,
       grow: () => Promise.resolve(),
       startTimer: timers.startTimer,
+      startTar: startTarProcess,
+      countTreeBytes,
     }),
   );
 
