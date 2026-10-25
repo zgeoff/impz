@@ -14,7 +14,8 @@
 # 1. Pulls the image: this script's own release, unless IMP_HOST_IMAGE (the
 #    environment, then with --compose the compose .env, then the env file)
 #    names another. When the host already runs it, step 3 still installs
-#    the image lines and files, and restarts nothing. Refuses an image that the restarted units would not run
+#    the image lines and files and retires imp-docker-proxy when the image
+#    needs no Docker, and restarts nothing else. Refuses an image that the restarted units would not run
 #    (drop-ins count), and an env file with IMP_HOST_IMAGE= empty. Refuses an
 #    image older than the Docker socket proxy (imp.host-contract other
 #    than socket-proxy or no-docker) once the unit or compose file gives
@@ -489,10 +490,18 @@ fi
 
 # A host on :latest may run this release's image already. It still gets
 # its image lines and this image's units, or the old units' :latest would
-# run another image at the next restart. Nothing restarts.
+# run another image at the next restart. The proxy still goes once the image
+# needs no Docker, or it keeps the host's Docker socket. Nothing restarts.
 if [ "$old" = "$new" ]; then
   install_new_files
   [ -z "$compose_file" ] || write_compose_env
+  if [ "$new_contract" = no-docker ]; then
+    if [ -n "$compose_file" ]; then
+      retire_proxy_container
+    else
+      retire_proxy_unit
+    fi
+  fi
   echo "upgrade: $container already runs $new"
   exit 0
 fi

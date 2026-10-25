@@ -50,8 +50,9 @@ bash deploy/upgrade.sh
    `/etc/imp/imp-host.env`. It reads the `.env` as Compose does (through
    `docker compose config --environment` when Compose has it), so a trailing comment is not part of
    the image, and variables resolve. When the host already runs that image, it still installs the
-   image lines and files of step 3, so the next restart keeps that image, and restarts nothing. With
-   the systemd unit, it refuses an image from the environment that `imp-host.service` (drop-ins
+   image lines and files of step 3, so the next restart keeps that image. For an image that needs no
+   Docker, it still retires `imp-docker-proxy` as step 4 does, but it restarts nothing. With the
+   systemd unit, it refuses an image from the environment that `imp-host.service` (drop-ins
    included) would not run: pin it in the env file instead. It refuses an env file whose last
    `IMP_HOST_IMAGE=` is empty, which would give the units no image. It refuses an image from before
    the Docker socket proxy once the unit or compose file gives imp-host no host `docker.sock`, and
