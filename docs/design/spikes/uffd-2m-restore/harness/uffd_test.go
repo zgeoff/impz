@@ -300,6 +300,29 @@ func TestUffdHandlerKeepsAFaultsPhaseThroughARetry(t *testing.T) {
 	assert.Equal(t, len(report.Errors), 0)
 }
 
+func TestUffdHandlerDropsAFaultOnARangeARemoveUnregisters(t *testing.T) {
+	mem, fd := registerGuestMemory(t)
+	t.Cleanup(func() { _ = unix.Close(fd) })
+	base := uint64(uintptr(unsafe.Pointer(&mem[0])))
+	var phase atomic.Int32
+	handler := &uffdHandler{
+		uffd: fd, pageSize: testPage, phase: &phase, failed: make(chan struct{}),
+		regions: []guestRegion{{BaseHostVirtAddr: base, Size: 3 * testPage, PageSize: testPage}},
+		data:    map[int64]bool{}, zero: make([]byte, testPage),
+	}
+
+	retry := handler.serveRound([]uffdMsg{
+		{event: uffdEventPagefault, address: base + 0x10},
+		{event: uffdEventRemove, address: base, end: base + testPage},
+	}, nil)
+	report, _ := handler.report()
+
+	assert.DeepEqual(t, report.Errors, []string(nil))
+	assert.Equal(t, len(retry), 0)
+	assert.Equal(t, report.StaleFaults, 1)
+	assert.DeepEqual(t, report.ByPhase, map[string]int{"load": 0, "resumed": 0, "claimed": 0, "agent": 0})
+}
+
 func TestParseUffdMsgsReadsAFaultAndARemove(t *testing.T) {
 	raw := make([]byte, 2*uffdMsgSize)
 	raw[0] = uffdEventPagefault

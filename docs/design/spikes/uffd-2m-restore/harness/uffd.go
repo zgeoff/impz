@@ -109,6 +109,7 @@ type uffdHandler struct {
 	faults   []fault
 	removes  int
 	removed  uint64
+	stale    int
 	unknown  int
 	copyErrs []string
 
@@ -353,9 +354,11 @@ func (h *uffdHandler) serveRound(fresh, deferred []uffdMsg) []uffdMsg {
 		fresh[i].phase, fresh[i].read = phase, read
 	}
 	msgs := append(deferred, fresh...)
+	var removed []uffdMsg
 	for _, msg := range msgs {
 		if msg.event == uffdEventRemove {
 			h.unregister(msg.address, msg.end)
+			removed = append(removed, msg)
 		}
 	}
 	var retry []uffdMsg
@@ -363,6 +366,14 @@ func (h *uffdHandler) serveRound(fresh, deferred []uffdMsg) []uffdMsg {
 		switch msg.event {
 		case uffdEventRemove:
 		case uffdEventPagefault:
+			// the guest dropped the page, and the kernel serves the next fault
+			// on an unregistered range, so a copy there only fails
+			if slices.ContainsFunc(removed, func(r uffdMsg) bool { return msg.address >= r.address && msg.address < r.end }) {
+				h.mu.Lock()
+				h.stale++
+				h.mu.Unlock()
+				continue
+			}
 			if !h.serveFault(msg) {
 				retry = append(retry, msg)
 			}
@@ -447,6 +458,7 @@ type faultReport struct {
 	ServiceSumMs float64        `json:"service_sum_ms"`
 	Removes      int            `json:"removes"`
 	RemovedBytes uint64         `json:"removed_bytes"`
+	StaleFaults  int            `json:"stale_faults"`
 	Unknown      int            `json:"unknown_events"`
 	Errors       []string       `json:"errors,omitempty"`
 }
@@ -459,6 +471,7 @@ func (h *uffdHandler) report() (faultReport, []int64) {
 		ByPhase:      map[string]int{"load": 0, "resumed": 0, "claimed": 0, "agent": 0},
 		Removes:      h.removes,
 		RemovedBytes: h.removed,
+		StaleFaults:  h.stale,
 		Unknown:      h.unknown,
 		Errors:       h.copyErrs,
 	}
