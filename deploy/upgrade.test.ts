@@ -1694,6 +1694,161 @@ test('it still writes the image lines and unit, without a restart, on a Podman h
   expect(calls).not.toInclude('impz ls');
 });
 
+test('it stops and disables the proxy, and keeps its unit as a .bak, on a Podman host that runs the image already', () => {
+  const ctx = setupTest();
+
+  const podman = createStubBin(
+    ctx.directoryPath,
+    'podman',
+    buildStubHostPodman({
+      image: 'ghcr.io/zgeoff/imp-host:next',
+      pulledLabel: 'no-docker',
+      pulledUnit: 'ExecStart=/usr/bin/podman run --name imp-host imp-host\n',
+      pulledIsRunning: true,
+    }),
+  );
+
+  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
+
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-host.service'),
+    'ExecStart=/usr/bin/podman run --name imp-host imp-host\n',
+  );
+
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-docker-proxy.service'),
+    'ExecStart=/usr/bin/docker run --name imp-docker-proxy imp-host\n',
+  );
+
+  const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
+    env: {
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
+      IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
+      IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
+      IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
+      IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
+    },
+  });
+
+  const calls = readFileSync(podman.calls, 'utf8');
+
+  const backups = readdirSync(ctx.directoryPath)
+    .filter((name) => name.startsWith('imp-docker-proxy.service.bak-'))
+    .map((name) => readFileSync(join(ctx.directoryPath, name), 'utf8'));
+
+  expect(result.exitCode).toBe(0);
+  expect(calls).toEndWith('systemctl disable -q --now imp-docker-proxy\nsystemctl daemon-reload\n');
+  expect(existsSync(join(ctx.directoryPath, 'imp-docker-proxy.service'))).toBeFalse();
+
+  expect(backups).toStrictEqual([
+    'ExecStart=/usr/bin/docker run --name imp-docker-proxy imp-host\n',
+  ]);
+
+  expect(result.stdout.toString()).toMatch(
+    /upgrade: stopped and disabled imp-docker-proxy, which this image does not call \(the unit before: \S+\)\nupgrade: imp-host already runs old\n$/v,
+  );
+});
+
+test('it fails, and keeps the proxy unit for the next run, when systemd cannot stop the proxy on a Podman host that runs the image already', () => {
+  const ctx = setupTest();
+
+  const podman = createStubBin(
+    ctx.directoryPath,
+    'podman',
+    buildStubHostPodman({
+      image: 'ghcr.io/zgeoff/imp-host:next',
+      pulledLabel: 'no-docker',
+      pulledUnit: 'ExecStart=/usr/bin/podman run --name imp-host imp-host\n',
+      pulledIsRunning: true,
+    }),
+  );
+
+  createStubBin(ctx.directoryPath, 'systemctl', buildStubFailingSystemctl('disable'));
+  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
+
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-host.service'),
+    'ExecStart=/usr/bin/podman run --name imp-host imp-host\n',
+  );
+
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-docker-proxy.service'),
+    'ExecStart=/usr/bin/docker run --name imp-docker-proxy imp-host\n',
+  );
+
+  const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
+    env: {
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
+      IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
+      IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
+      IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
+      IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
+    },
+  });
+
+  expect(result.exitCode).toBe(1);
+
+  expect(result.stderr.toString()).toBe(
+    'Job for imp-docker-proxy.service failed because the control process exited with error code.\n' +
+      'upgrade: cannot stop imp-docker-proxy, whose unit stays for the next run; ' +
+      'nothing restarted, the host still runs old\n',
+  );
+
+  expect(readFileSync(join(ctx.directoryPath, 'imp-docker-proxy.service'), 'utf8')).toBe(
+    'ExecStart=/usr/bin/docker run --name imp-docker-proxy imp-host\n',
+  );
+});
+
+test('it stops and disables the proxy before it restarts imp-host on a Podman host that still has the proxy unit', () => {
+  const ctx = setupTest();
+
+  const podman = createStubBin(
+    ctx.directoryPath,
+    'podman',
+    buildStubHostPodman({
+      image: 'ghcr.io/zgeoff/imp-host:next',
+      pulledLabel: 'no-docker',
+      pulledUnit: 'ExecStart=/usr/bin/podman run --name imp-host imp-host\n',
+    }),
+  );
+
+  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
+
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-host.service'),
+    'ExecStart=/usr/bin/podman run --name imp-host imp-host\n',
+  );
+
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-docker-proxy.service'),
+    'ExecStart=/usr/bin/docker run --name imp-docker-proxy imp-host\n',
+  );
+
+  const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
+    env: {
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
+      IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
+      IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
+      IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
+      IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
+    },
+  });
+
+  const calls = readFileSync(podman.calls, 'utf8');
+
+  expect(result.exitCode).toBe(0);
+
+  expect(calls).toInclude(
+    'systemctl disable -q --now imp-docker-proxy\nsystemctl daemon-reload\n' +
+      'systemctl restart imp-host\n',
+  );
+
+  expect(existsSync(join(ctx.directoryPath, 'imp-docker-proxy.service'))).toBeFalse();
+});
+
 test('it refuses an env file that sets IMP_HOST_IMAGE empty before anything changes', () => {
   const ctx = setupTest();
 
