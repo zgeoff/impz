@@ -10,6 +10,7 @@ import { createFilesTar } from '../../../../testing/imps/create-files-tar';
 import { createStubOciFetch } from '../../../../testing/imps/create-stub-oci-fetch';
 import { buildStubClock } from '../../../../testing/platform/build-stub-clock';
 import { runStreamed } from '../../../platform/process/run-streamed';
+import { countTreeBytes } from '../../../vm/storage/count-tree-bytes';
 import { ImageLimitError } from '../build/image-limit-error';
 import { startTarProcess } from './start-tar-process';
 import { writeOciTree } from './write-oci-tree';
@@ -49,6 +50,8 @@ test('it unpacks the tree oci-fetch exports into the root', async () => {
     signal: new AbortController().signal,
     grow: () => Promise.resolve(),
     runStreamed,
+    startTar: startTarProcess,
+    countTreeBytes,
   });
 
   expect(readFileSync(join(ctx.root, 'dockerd'), 'utf8')).toBe('builder\n');
@@ -80,6 +83,7 @@ test("it unpacks through the given tar starter with tar's unpack and listing fla
     grow: () => Promise.resolve(),
     runStreamed,
     startTar,
+    countTreeBytes,
   });
 
   expect(startTar).toHaveBeenCalledExactlyOnceWith([
@@ -126,6 +130,8 @@ test('it holds disk ahead of the tree in 256 MiB steps', async () => {
       return Promise.resolve();
     },
     runStreamed,
+    startTar: startTarProcess,
+    countTreeBytes,
   });
 
   expect(holds).toStrictEqual([256 * 1024 ** 2]);
@@ -160,6 +166,7 @@ test('it grows the hold with the written bytes that the given tree counter reads
       return Promise.resolve();
     },
     runStreamed,
+    startTar: startTarProcess,
     countTreeBytes: () => Promise.resolve(4096),
   });
 
@@ -181,6 +188,8 @@ test('it fails with the stderr of an export that fails', async () => {
       signal: new AbortController().signal,
       grow: () => Promise.resolve(),
       runStreamed,
+      startTar: startTarProcess,
+      countTreeBytes,
     }),
   ).rejects.toThrowWithMessage(
     Error,
@@ -214,6 +223,8 @@ test('it stops a stalled export and fails the write when the signal aborts', asy
     signal: stop.signal,
     grow: () => Promise.resolve(),
     runStreamed,
+    startTar: startTarProcess,
+    countTreeBytes,
   });
 
   await waitFor(() => {
@@ -261,6 +272,8 @@ test('it ends an export that sends nothing for its idle limit on the given timer
     signal: new AbortController().signal,
     grow: () => Promise.resolve(),
     runStreamed,
+    startTar: startTarProcess,
+    countTreeBytes,
     startTimer: timers.startTimer,
   });
 
@@ -300,6 +313,8 @@ test('it refuses a tree of more entries than the file cap', async () => {
       signal: new AbortController().signal,
       grow: () => Promise.resolve(),
       runStreamed,
+      startTar: startTarProcess,
+      countTreeBytes,
     }),
   ).rejects.toThrowWithMessage(
     ImageLimitError,
