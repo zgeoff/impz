@@ -49,6 +49,7 @@ export function createDiskUsageCache(deps: DiskUsageCacheDeps): DiskUsageCache {
     usage: new Map<string, CachedDiskUsage>(),
     running: null as Promise<void> | null,
     cancelRefresh: null as (() => void) | null,
+    lateDueAtMs: null as number | null,
     isStopped: false,
   };
 
@@ -107,6 +108,20 @@ export function createDiskUsageCache(deps: DiskUsageCacheDeps): DiskUsageCache {
     }
   };
 
+  const startRefreshTimer = (durationMs: number): void => {
+    state.cancelRefresh = startTimer(() => {
+      const lateDueAtMs = state.lateDueAtMs;
+
+      state.cancelRefresh = null;
+      state.lateDueAtMs = null;
+      void runAfterCurrent();
+
+      if (lateDueAtMs !== null) {
+        startRefreshTimer(Math.max(0, lateDueAtMs - now().getTime()));
+      }
+    }, durationMs);
+  };
+
   return {
     runPass: runOnePass,
     requestRefresh: () => {
@@ -114,10 +129,11 @@ export function createDiskUsageCache(deps: DiskUsageCacheDeps): DiskUsageCache {
         return;
       }
 
-      state.cancelRefresh ??= startTimer(() => {
-        state.cancelRefresh = null;
-        void runAfterCurrent();
-      }, refreshDelayMs);
+      if (state.cancelRefresh === null) {
+        startRefreshTimer(refreshDelayMs);
+      } else {
+        state.lateDueAtMs = now().getTime() + refreshDelayMs;
+      }
     },
     read: (impId) => state.usage.get(impId),
     readExclusiveTotal: () =>
