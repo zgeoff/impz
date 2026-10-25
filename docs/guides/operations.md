@@ -79,9 +79,9 @@ bash deploy/upgrade.sh
 
 ### From Docker to Podman
 
-On a host whose imp-host runs under Docker, upgrade.sh moves the host to Podman. It refuses, before
-any imp sleeps, when another container is on Docker's `imp-host` network. After the sleeps of step
-2, it does these, in order:
+On a host whose imp-host runs under Docker, upgrade.sh moves the host to Podman. With IPv6, it
+refuses, before any imp sleeps, when another container is on Docker's `imp-host` network. After the
+sleeps of step 2, it does these, in order:
 
 1. It stops imp-host with the old unit, so Docker stops the container, and removes the container.
 2. It stops and disables `imp-docker-proxy`, when an older release installed it, and keeps its unit
@@ -103,12 +103,13 @@ On a Podman host, roll back with `podman tag <old image ID> <image>`, then
 `systemctl restart imp-host`; upgrade.sh prints both.
 
 After a move from Docker, upgrade.sh prints the rollback with the exact paths it wrote: stop
-imp-host, remove Podman's `imp-host` network (with IPv6), move each `.bak-<time>` unit back,
-`systemctl daemon-reload`, `docker tag <old image ID> <image>` for the image that the restored unit
-runs, `systemctl enable --now imp-docker-proxy` when its unit came back, and start imp-host. The tag
-matters when the env file pins the new image: without it, Docker would pull that image and start it
-again, for the proxy too, and the new image has no proxy. A step that fails after the old host
-stopped, the start and the readiness wait included, prints the rollback for what it changed so far.
+imp-host, remove Podman's `imp-host` network when imp-host started under Podman on a host with IPv6,
+move each `.bak-<time>` unit back, `systemctl daemon-reload`, `docker tag <old image ID> <image>`
+for the image that the restored unit runs, `systemctl enable --now imp-docker-proxy` when its unit
+came back, and start imp-host. The tag matters when the env file pins the new image: without it,
+Docker would pull that image and start it again, for the proxy too, and the new image has no proxy.
+A step that fails after the old host stopped, the start and the readiness wait included, prints the
+rollback for what it changed so far.
 
 Imps then wake on demand. Each sleeping imp either restores its memory or boots its disk cold. The
 disk is never touched.
@@ -159,8 +160,9 @@ path, so its snapshots boot cold with `the snapshot is from an older impd`.
 
 **CAUTION:** An image whose `imp.host-contract` label is not `no-docker` needs Docker, which
 `podman tag` does not bring back; upgrade.sh refuses it. Run `deploy/bootstrap.sh` of that release
-with the old image instead, on a host with Docker, after `systemctl stop imp-host` and
-`podman network rm imp-host`: it writes the unit that image needs.
+with the old image instead, on a host with Docker, after `systemctl stop imp-host`: it writes the
+unit that image needs. On a host with IPv6, run `podman network rm imp-host` before bootstrap.sh,
+because Podman makes that network only with IPv6.
 
 **CAUTION:** `deploy/bootstrap.sh` blanks the spent Tailscale key once the node has joined, and the
 image starts `tailscaled` from its saved state. An image without the `imp.tailscale-keyless` label
