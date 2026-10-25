@@ -886,6 +886,47 @@ test('it stops and removes the dev container through podman on down', () => {
   });
 });
 
+test('it finds, signals and waits out the old impd through podman, and asks docker nothing, on a restart under podman', () => {
+  const ctx = setupTest();
+
+  const stub = buildStubDevHostDocker({
+    containers: { 'imp-dev': true },
+    hasImage: true,
+    impdPids: [4242],
+  });
+
+  const podman = createStubBin(ctx.directoryPath, 'podman', stub);
+
+  createStubBin(ctx.directoryPath, 'docker', stub);
+  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
+
+  const result = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'restart'], {
+    env: {
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_DEV_DATA: join(ctx.directoryPath, 'data'),
+      IMP_HOST_IMAGE: 'imp-host:dev-test',
+      IMP_DEV_CONTAINER_CLI: 'podman',
+    },
+  });
+
+  expect({
+    exitCode: result.exitCode,
+    stderr: result.stderr.toString(),
+    calls: readFileSync(podman.calls, 'utf8').split('\n'),
+  }).toStrictEqual({
+    exitCode: 0,
+    stderr: '',
+    calls: [
+      'podman inspect -f {{.State.Running}} imp-dev',
+      'podman exec imp-dev pgrep -f bun .*/daemon/src/main.ts',
+      'podman exec imp-dev kill -HUP 4242',
+      'podman exec imp-dev kill -0 4242',
+      'curl -fsS http://localhost:7070/health',
+      '',
+    ],
+  });
+});
+
 test('it stops before it asks docker anything when there is no machine id', () => {
   const ctx = setupTest();
   const docker = createStubBin(ctx.directoryPath, 'docker', 'exit 1');
