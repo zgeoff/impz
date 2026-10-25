@@ -1,13 +1,11 @@
 import * as z from 'zod';
 import { ImpdError } from '../../../platform/errors/impd-error';
 import type { StartTimer } from '../../../platform/process/clock';
-import { countTreeBytes } from '../../../vm/storage/count-tree-bytes';
 import { DOCKERFILE_FRONTEND } from '../../docker-contract/dockerfile-frontend';
 import type { GuestExec } from '../builders/guest-exec';
 import { formatFailureTail } from '../pull/format-failure-tail';
 import { pickRepoDigest, requireImagePlatform } from '../pull/image-pin';
 import { readImageInspect } from '../pull/read-image-inspect';
-import { startTarProcess } from '../rootfs/start-tar-process';
 import { writeStreamedTree } from '../rootfs/write-streamed-tree';
 import type { TreeLimits, WriteStreamedTreeOptions } from '../rootfs/write-streamed-tree';
 import { toEngineRun } from './build-engine';
@@ -121,8 +119,8 @@ interface WriteGuestTreeOptions {
   readonly signal: AbortSignal;
   readonly grow?: (totalBytes: number, writtenBytes: number) => Promise<void>;
   readonly startTimer?: StartTimer;
-  readonly startTar?: WriteStreamedTreeOptions['startTar'];
-  readonly countTreeBytes?: WriteStreamedTreeOptions['countTreeBytes'];
+  readonly startTar: WriteStreamedTreeOptions['startTar'];
+  readonly countTreeBytes: WriteStreamedTreeOptions['countTreeBytes'];
 }
 
 export async function writeGuestTree(options: WriteGuestTreeOptions): Promise<ExportedImage> {
@@ -157,8 +155,8 @@ export async function writeGuestTree(options: WriteGuestTreeOptions): Promise<Ex
     source: 'docker export in the builder',
     grow: options.grow,
     startTimer: options.startTimer,
-    startTar: options.startTar ?? startTarProcess,
-    countTreeBytes: options.countTreeBytes ?? countTreeBytes,
+    startTar: options.startTar,
+    countTreeBytes: options.countTreeBytes,
     runExport: (onStdout, exportSignal) =>
       exec(['docker', 'export', containerId], {
         signal: exportSignal,

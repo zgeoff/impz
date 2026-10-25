@@ -280,6 +280,8 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
             limits: { maxBytes, maxFiles: deps.config.build.imageMaxFiles },
             signal,
             grow,
+            startTar: startTarProcess,
+            countTreeBytes,
           });
 
           return await writeGuestRootfsAndRow({
