@@ -37,7 +37,8 @@ deploy/upgrade.sh
 ```
 
 Before you move impd to 5.0.0 or later, move any nixie that drives it to nixie 0.47.0 or later. An
-older nixie's sandbox adapter refuses impd 5 and reports itself unready.
+older nixie's sandbox adapter refuses impd 5 and reports itself unready. nixie 0.47.0 is the first
+release whose adapter accepts impd 5, and nixie's production deployment runs it.
 
 Take `upgrade.sh` from the new image, not from the release the host runs, with the `lib/host-env.sh`
 beside it that it sources. A host on the release before the Docker socket proxy must: its own
