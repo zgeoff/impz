@@ -166,7 +166,10 @@ test('it rejects a static secret with an empty rule list', async () => {
       value: 'ghp_SECRETVALUE0123456789',
       rules: [],
     }),
-  ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+  ).rejects.toMatchObject({
+    code: 'BAD_REQUEST',
+    data: { issues: expect.toPartiallyContain({ path: ['rules'] }) },
+  });
 });
 
 test('it refuses a taken name without replace and keeps the stored value', async () => {

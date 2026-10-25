@@ -457,7 +457,10 @@ test('it sends nothing to the token endpoint for a refused oauth secret', async 
     oauth: buildMockOAuthConfig({ tokenUrl: 'https://auth.example.com/oauth/token' }),
   });
 
-  expect(added).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+  expect(added).rejects.toMatchObject({
+    code: 'BAD_REQUEST',
+    data: { issues: expect.toPartiallyContain({ path: ['rules'] }) },
+  });
 
   const listed = await ctx.client.secrets.list();
 
