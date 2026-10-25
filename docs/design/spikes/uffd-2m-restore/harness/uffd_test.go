@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -13,6 +14,7 @@ import (
 
 	"golang.org/x/sys/unix"
 	"gotest.tools/v3/assert"
+	"gotest.tools/v3/poll"
 )
 
 // From linux/userfaultfd.h: what Firecracker does to make and register the
@@ -70,16 +72,19 @@ func setupGuestMemory(t *testing.T, socket string, advertisedPages uint64) []byt
 	mem, fd := registerGuestMemory(t)
 	// the handler's copy is then the only one, so its close releases a fault
 	defer unix.Close(fd)
-	base := uint64(uintptr(unsafe.Pointer(&mem[0])))
+	sendGuestMemory(t, socket, uint64(uintptr(unsafe.Pointer(&mem[0]))), fd, advertisedPages)
+	return mem
+}
 
+func sendGuestMemory(t *testing.T, socket string, base uint64, fd int, advertisedPages uint64) {
+	t.Helper()
 	regions, err := json.Marshal([]guestRegion{{BaseHostVirtAddr: base, Size: advertisedPages * testPage, Offset: 0, PageSize: testPage}})
 	assert.NilError(t, err)
 	conn, err := net.DialUnix("unix", nil, &net.UnixAddr{Name: socket, Net: "unix"})
 	assert.NilError(t, err)
 	defer conn.Close()
-	_, _, err = conn.WriteMsgUnix(regions, unix.UnixRights(int(fd)), nil)
+	_, _, err = conn.WriteMsgUnix(regions, unix.UnixRights(fd), nil)
 	assert.NilError(t, err)
-	return mem
 }
 
 // writeMemFile writes a three-page memory file: a page of 'a', a hole, and a
@@ -176,6 +181,95 @@ func TestUffdHandlerGivesARemovedRangeBackToTheKernel(t *testing.T) {
 	assert.Equal(t, report.Removes, 1)
 	assert.Equal(t, report.RemovedBytes, uint64(testPage))
 	assert.DeepEqual(t, report.Errors, []string(nil))
+}
+
+// A kernel with per-VMA locks serves a fault without the mmap lock, so a
+// fault can queue its message after an unregister wakes the range's waiters.
+// A fresh mapping over the page leaves the queued fault in that state.
+func TestUffdHandlerWakesAFaultThatReachesItAfterItsRangeIsRemoved(t *testing.T) {
+	// a socket path has a 108-byte limit, which a TMPDIR can pass
+	dir := t.TempDir()
+	t.Chdir(dir)
+	memFile := writeMemFile(t, dir)
+	var phase atomic.Int32
+	handler, err := startUffdHandler("uffd.sock", memFile, &phase, nil)
+	assert.NilError(t, err)
+	t.Cleanup(handler.close)
+	mem, fd := registerGuestMemory(t)
+	defer unix.Close(fd)
+	base := uint64(uintptr(unsafe.Pointer(&mem[0])))
+	read := make(chan byte, 1)
+	go func() {
+		// Go's preemption signal interrupts a fault that nothing woke, and the
+		// retried fault would pass without the wake; the thread ends with the
+		// goroutine, so its mask goes with it
+		runtime.LockOSThread()
+		urgent := unix.Sigset_t{}
+		urgent.Val[0] = 1 << (unix.SIGURG - 1)
+		if err := unix.PthreadSigmask(unix.SIG_BLOCK, &urgent, nil); err != nil {
+			read <- 0xff
+			return
+		}
+		// a send passes its value by address, so the read sits in its own
+		// statement and never faults while the channel is locked
+		value := mem[0]
+		read <- value
+	}()
+	pending := []unix.PollFd{{Fd: int32(fd), Events: unix.POLLIN}}
+	queued, err := unix.Poll(pending, 5000)
+	assert.NilError(t, err)
+	assert.Equal(t, queued, 1)
+	_, err = unix.MmapPtr(-1, 0, unsafe.Pointer(&mem[0]), testPage, unix.PROT_READ|unix.PROT_WRITE, unix.MAP_PRIVATE|unix.MAP_ANONYMOUS|unix.MAP_FIXED)
+	assert.NilError(t, err)
+	handler.goneMu.Lock()
+	handler.gone = append(handler.gone, uffdMsg{event: uffdEventRemove, address: base, end: base + testPage})
+	handler.goneMu.Unlock()
+
+	sendGuestMemory(t, "uffd.sock", base, fd, 3)
+	assert.NilError(t, <-handler.ready)
+	var after byte
+	select {
+	case after = <-read:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the fault on the remapped page never woke")
+	}
+	handler.close()
+	report, _ := handler.report()
+
+	assert.Equal(t, after, byte(0))
+	assert.Equal(t, len(report.Errors), 0, report.Errors)
+	assert.Equal(t, report.StaleFaults, 1)
+}
+
+func TestUffdHandlerFillSkipsAPageTheGuestRemoved(t *testing.T) {
+	// a socket path has a 108-byte limit, which a TMPDIR can pass
+	dir := t.TempDir()
+	t.Chdir(dir)
+	memFile := writeMemFile(t, dir)
+	var phase atomic.Int32
+	handler, err := startUffdHandler("uffd.sock", memFile, &phase, nil)
+	assert.NilError(t, err)
+	t.Cleanup(handler.close)
+	mem := setupGuestMemory(t, "uffd.sock", 3)
+	assert.NilError(t, <-handler.ready)
+	assert.NilError(t, (<-handler.filled).err)
+	assert.NilError(t, unix.Madvise(mem[:testPage], unix.MADV_DONTNEED))
+	poll.WaitOn(t, func(poll.LogT) poll.Result {
+		if report, _ := handler.report(); report.Removes == 1 {
+			return poll.Success()
+		}
+		return poll.Continue("the handler has not read the remove")
+	})
+
+	handler.fill([]int64{0, 2 * testPage})
+	filled := <-handler.filled
+	last := mem[2*testPage]
+	handler.close()
+	report, _ := handler.report()
+
+	assert.NilError(t, filled.err)
+	assert.Equal(t, last, byte('c'))
+	assert.Equal(t, len(report.Errors), 0, report.Errors)
 }
 
 func TestUffdHandlerSignalsAFaultItCannotResolve(t *testing.T) {
