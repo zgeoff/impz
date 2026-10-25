@@ -3,6 +3,11 @@ import type { ImpdDeps } from './impd-deps';
 import type { Builders } from './imps/images/builders/builder-imps';
 import { createImageService } from './imps/images/image-service';
 import type { ImageService } from './imps/images/image-service';
+import { startTarProcess } from './imps/images/rootfs/start-tar-process';
+import { runCommand } from './platform/process/run-command';
+import { runStreamed } from './platform/process/run-streamed';
+import { startRealTimer } from './platform/process/start-real-timer';
+import { countTreeBytes } from './vm/storage/count-tree-bytes';
 import { createDiskBudget } from './vm/storage/disk-budget';
 import type { DiskBudget } from './vm/storage/disk-budget';
 import { createDiskUsageCache } from './vm/storage/disk-usage-cache';
@@ -38,6 +43,11 @@ export function createImpdStorage(config: Config, deps: Readonly<ImpdDeps>): Imp
     storageGate,
     diskBudget,
     readBuilders: () => buildersHolder.builders,
+    runCommand,
+    runStreamed,
+    startTar: startTarProcess,
+    countTreeBytes,
+    startTimer: startRealTimer,
     ...(deps.now !== undefined && { clock: { now: deps.now } }),
     ...deps.images,
   });

@@ -20,10 +20,14 @@ import type { StubAnswer } from '../../../testing/vm/build-stub-guest';
 import { loadConfig } from '../../config';
 import { createImage, listImages, readImageByName } from '../../platform/db/images';
 import { listImps } from '../../platform/db/imps';
-import { runChecked } from '../../platform/process/run-command';
+import { runChecked, runCommand } from '../../platform/process/run-command';
+import { runStreamed } from '../../platform/process/run-streamed';
+import { startRealTimer } from '../../platform/process/start-real-timer';
+import { countTreeBytes } from '../../vm/storage/count-tree-bytes';
 import { buildImagePaths } from '../../vm/storage/data-layout';
 import { BUILDER_IMAGE, createBuilders } from './builders/builder-imps';
 import { createImageService } from './image-service';
+import { startTarProcess } from './rootfs/start-tar-process';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();
@@ -68,6 +72,11 @@ test('it adds an image through a builder for one platform, with no host engine c
 
   const images = createImageService({
     config,
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     db: ctx.db,
     storage: ctx.storage,
     storageGate: ctx.impd.storageGate,
@@ -142,6 +151,11 @@ test('it logs the pull and image times of an add on its clock', async () => {
 
   const images = createImageService({
     config,
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     db: ctx.db,
     storage: ctx.storage,
     storageGate: ctx.impd.storageGate,
@@ -183,6 +197,11 @@ test('it adds an image through a builder, with no host engine call, under a left
 
   const images = createImageService({
     config,
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     db: ctx.db,
     storage: ctx.storage,
     storageGate: ctx.impd.storageGate,
@@ -226,6 +245,11 @@ test('it returns a failed pull in the builder as the client error', async () => 
 
   const images = createImageService({
     config,
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     db: ctx.db,
     storage: ctx.storage,
     storageGate: ctx.impd.storageGate,
@@ -270,6 +294,11 @@ test("it returns a registry's refusal of a pull in the builder as the client err
 
   const images = createImageService({
     config,
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     db: ctx.db,
     storage: ctx.storage,
     storageGate: ctx.impd.storageGate,
@@ -309,6 +338,11 @@ test('it leaves no builder, row or work directory after a failed pull', async ()
 
   const images = createImageService({
     config,
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     db: ctx.db,
     storage: ctx.storage,
     storageGate: ctx.impd.storageGate,
@@ -365,6 +399,11 @@ test('it refuses an export over IMP_BUILD_IMAGE_MAX_MIB', async () => {
 
   const images = createImageService({
     config,
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     db: ctx.db,
     storage: ctx.storage,
     storageGate: ctx.impd.storageGate,
@@ -404,6 +443,11 @@ test('it leaves no builder, row or work directory after an export over the limit
 
   const images = createImageService({
     config,
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     db: ctx.db,
     storage: ctx.storage,
     storageGate: ctx.impd.storageGate,
@@ -465,6 +509,11 @@ test("it changes no host file through an added image's image.json link", async (
 
   const images = createImageService({
     config,
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     db: ctx.db,
     storage: ctx.storage,
     storageGate: ctx.impd.storageGate,
@@ -512,6 +561,11 @@ test('it ends the pull in the builder, and the builder, when the client goes', a
 
   const images = createImageService({
     config,
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     db: ctx.db,
     storage: ctx.storage,
     storageGate: ctx.impd.storageGate,
@@ -566,6 +620,11 @@ test.each([
 
   const images = createImageService({
     config,
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     db: ctx.db,
     storage: ctx.storage,
     storageGate: ctx.impd.storageGate,
@@ -607,6 +666,11 @@ test('it fails the add of a builder the governor refuses, with no host engine ca
 
   const images = createImageService({
     config,
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     db: ctx.db,
     storage: ctx.storage,
     storageGate: ctx.impd.storageGate,
@@ -646,6 +710,11 @@ test('it fails the add with SERVICE_UNAVAILABLE when the registry cannot give th
 
   const images = createImageService({
     config,
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     db: ctx.db,
     storage: ctx.storage,
     storageGate: ctx.impd.storageGate,
@@ -681,6 +750,11 @@ test('it asks the registry only for the builder image config when it cannot give
 
   const images = createImageService({
     config,
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     db: ctx.db,
     storage: ctx.storage,
     storageGate: ctx.impd.storageGate,
@@ -737,6 +811,11 @@ test('it adds a bumped IMP_BUILD_IMAGE once, by its digest, and moves the row', 
 
   const images = createImageService({
     config,
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     db: ctx.db,
     storage: ctx.storage,
     storageGate: ctx.impd.storageGate,
@@ -792,6 +871,11 @@ test('it seeds the default image at first start through a builder', async () => 
 
   const images = createImageService({
     config,
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     db: ctx.db,
     storage: ctx.storage,
     storageGate: ctx.impd.storageGate,
@@ -834,6 +918,11 @@ test('it seeds the default image at the next start once the builder image has la
 
   const images = createImageService({
     config,
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     db: ctx.db,
     storage: ctx.storage,
     storageGate: ctx.impd.storageGate,
@@ -875,6 +964,11 @@ test('it fails a builder image fetch that hangs at its limit, naming IMP_BUILD_I
 
   const images = createImageService({
     config,
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     db: ctx.db,
     storage: ctx.storage,
     storageGate: ctx.impd.storageGate,
@@ -933,6 +1027,11 @@ test('it exports nothing when the config fetch of the builder image hangs', asyn
 
   const images = createImageService({
     config,
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     db: ctx.db,
     storage: ctx.storage,
     storageGate: ctx.impd.storageGate,
@@ -990,6 +1089,11 @@ test('it fetches the builder image again on the add after a fetch that failed', 
 
   const images = createImageService({
     config,
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     db: ctx.db,
     storage: ctx.storage,
     storageGate: ctx.impd.storageGate,
@@ -1074,6 +1178,11 @@ test('it stops the wait of a caller that goes, and the fetch it shared goes on f
 
   const images = createImageService({
     config,
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     db: ctx.db,
     storage: ctx.storage,
     storageGate: ctx.impd.storageGate,
@@ -1133,6 +1242,11 @@ test('it names the error of a step after the fetch that fails past the limit, no
 
   const images = createImageService({
     config,
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     db: ctx.db,
     storage: ctx.storage,
     storageGate: ctx.impd.storageGate,
@@ -1199,6 +1313,11 @@ test('it adds the builder image when mkfs.ext4 runs past the fetch limit', async
 
   const images = createImageService({
     config,
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     db: ctx.db,
     storage: ctx.storage,
     storageGate: ctx.impd.storageGate,
@@ -1258,6 +1377,11 @@ test('it leaves no row, rootfs, hold or builder when the client leaves an add wh
 
   const images = createImageService({
     config,
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     db: ctx.db,
     storage: ctx.storage,
     storageGate: ctx.impd.storageGate,
@@ -1323,6 +1447,11 @@ test('it leaves no new row and no rootfs when a template takes the name during a
 
   const images = createImageService({
     config,
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     db: ctx.db,
     storage: ctx.storage,
     storageGate: ctx.impd.storageGate,
@@ -1381,6 +1510,11 @@ test("it keeps the other's row and rootfs when an add and a build of one digest 
 
   const images = createImageService({
     config,
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     db: ctx.db,
     storage: ctx.storage,
     storageGate: ctx.impd.storageGate,
@@ -1474,6 +1608,11 @@ test('it keeps the rootfs when an image rm runs while an add of its digest is be
 
   const images = createImageService({
     config,
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     db: gate.wrap(ctx.db),
     storage: ctx.storage,
     storageGate: ctx.impd.storageGate,
@@ -1544,6 +1683,11 @@ test("it removes that rootfs after all when the add's row then fails", async () 
 
   const images = createImageService({
     config,
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     db: gate.wrap(ctx.db),
     storage: ctx.storage,
     storageGate: ctx.impd.storageGate,
@@ -1609,6 +1753,11 @@ test('it logs a cleanup removal that fails, and returns the add its own error', 
 
   const images = createImageService({
     config,
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     db: ctx.db,
 
     storage: {

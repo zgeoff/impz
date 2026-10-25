@@ -18,12 +18,16 @@ import {
 } from '../../../platform/db/images';
 import { createImp } from '../../../platform/db/imps';
 import { REAL_CLOCK } from '../../../platform/process/real-clock';
+import { runCommand } from '../../../platform/process/run-command';
 import { runStreamed } from '../../../platform/process/run-streamed';
+import { startRealTimer } from '../../../platform/process/start-real-timer';
+import { countTreeBytes } from '../../../vm/storage/count-tree-bytes';
 import { buildImagePaths } from '../../../vm/storage/data-layout';
 import { createDiskBudget } from '../../../vm/storage/disk-budget';
 import { createStorageGate } from '../../../vm/storage/storage-gate';
 import { createXfsBackend } from '../../../vm/storage/xfs-backend';
 import { createImageWriter } from '../rootfs/create-image-writer';
+import { startTarProcess } from '../rootfs/start-tar-process';
 import { createImageEviction } from './create-image-eviction';
 
 async function setupTest() {
@@ -47,6 +51,10 @@ async function setupTest() {
     }),
     clock: REAL_CLOCK,
     runStreamed,
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
   });
 
   return {

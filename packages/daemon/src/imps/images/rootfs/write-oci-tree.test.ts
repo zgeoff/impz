@@ -10,6 +10,7 @@ import { createFilesTar } from '../../../../testing/imps/create-files-tar';
 import { createStubOciFetch } from '../../../../testing/imps/create-stub-oci-fetch';
 import { buildStubClock } from '../../../../testing/platform/build-stub-clock';
 import { runStreamed } from '../../../platform/process/run-streamed';
+import { startRealTimer } from '../../../platform/process/start-real-timer';
 import { countTreeBytes } from '../../../vm/storage/count-tree-bytes';
 import { ImageLimitError } from '../build/image-limit-error';
 import { startTarProcess } from './start-tar-process';
@@ -51,6 +52,7 @@ test('it unpacks the tree oci-fetch exports into the root', async () => {
     grow: () => Promise.resolve(),
     runStreamed,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
   });
 
@@ -83,6 +85,7 @@ test("it unpacks through the given tar starter with tar's unpack and listing fla
     grow: () => Promise.resolve(),
     runStreamed,
     startTar,
+    startTimer: startRealTimer,
     countTreeBytes,
   });
 
@@ -131,6 +134,7 @@ test('it holds disk ahead of the tree in 256 MiB steps', async () => {
     },
     runStreamed,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
   });
 
@@ -167,6 +171,7 @@ test('it grows the hold with the written bytes that the given tree counter reads
     },
     runStreamed,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes: () => Promise.resolve(4096),
   });
 
@@ -189,6 +194,7 @@ test('it fails with the stderr of an export that fails', async () => {
       grow: () => Promise.resolve(),
       runStreamed,
       startTar: startTarProcess,
+      startTimer: startRealTimer,
       countTreeBytes,
     }),
   ).rejects.toThrowWithMessage(
@@ -224,6 +230,7 @@ test('it stops a stalled export and fails the write when the signal aborts', asy
     grow: () => Promise.resolve(),
     runStreamed,
     startTar: startTarProcess,
+    startTimer: startRealTimer,
     countTreeBytes,
   });
 
@@ -314,6 +321,7 @@ test('it refuses a tree of more entries than the file cap', async () => {
       grow: () => Promise.resolve(),
       runStreamed,
       startTar: startTarProcess,
+      startTimer: startRealTimer,
       countTreeBytes,
     }),
   ).rejects.toThrowWithMessage(

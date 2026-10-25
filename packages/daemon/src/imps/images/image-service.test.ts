@@ -1,14 +1,16 @@
-import { expect, onTestFinished, test } from 'bun:test';
+import { expect, mock, onTestFinished, test } from 'bun:test';
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { updateEnv } from '@impz/test-utils/update-env';
+import { waitFor } from '@impz/test-utils/wait-for';
 import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
 import { buildStubImageBuilder } from '../../../testing/imps/build-stub-image-builder';
 import { createFilesTar } from '../../../testing/imps/create-files-tar';
 import { createStubOciFetch } from '../../../testing/imps/create-stub-oci-fetch';
 import { buildQueryGate } from '../../../testing/platform/build-query-gate';
+import { buildStubClock } from '../../../testing/platform/build-stub-clock';
 import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { loadConfig } from '../../config';
 import {
@@ -18,12 +20,17 @@ import {
   readImageByName,
 } from '../../platform/db/images';
 import { openDatabase } from '../../platform/db/open-database';
+import { runCommand } from '../../platform/process/run-command';
+import { runStreamed } from '../../platform/process/run-streamed';
+import { startRealTimer } from '../../platform/process/start-real-timer';
+import { countTreeBytes } from '../../vm/storage/count-tree-bytes';
 import { buildImagePaths } from '../../vm/storage/data-layout';
 import { createDiskBudget } from '../../vm/storage/disk-budget';
 import { createStorageGate } from '../../vm/storage/storage-gate';
 import { createXfsBackend } from '../../vm/storage/xfs-backend';
 import { BUILDER_IMAGE } from './builders/builder-imps';
 import { createImageService } from './image-service';
+import { startTarProcess } from './rootfs/start-tar-process';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();
@@ -57,6 +64,11 @@ test.each(['--help', '-v/:/host', 'ubuntu --privileged', ''])(
     const ctx = await setupTest();
 
     const images = createImageService({
+      runCommand,
+      startTar: startTarProcess,
+      startTimer: startRealTimer,
+      countTreeBytes,
+      runStreamed,
       config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
       db: ctx.db,
       storage: ctx.storage,
@@ -78,6 +90,11 @@ test('#runImageBuild refuses a context path that docker could read as a flag', a
   const ctx = await setupTest();
 
   const images = createImageService({
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
     db: ctx.db,
     storage: ctx.storage,
@@ -108,6 +125,11 @@ test('#ensureBuilderImage leaves no work directory behind when the export fails'
   mkdirSync(join(ctx.dataDir, 'images'));
 
   const images = createImageService({
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     config,
     db: ctx.db,
     storage: ctx.storage,
@@ -144,6 +166,10 @@ test('#ensureBuilderImage fails with the error of the given export runner and pu
   mkdirSync(join(ctx.dataDir, 'images'));
 
   const images = createImageService({
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
     config,
     db: ctx.db,
     storage: ctx.storage,
@@ -171,6 +197,151 @@ test('#ensureBuilderImage fails with the error of the given export runner and pu
   expect(disk.pendingBytes).toBe(0);
 });
 
+test('#ensureBuilderImage reads the builder config through the given command runner', async () => {
+  const ctx = await setupTest();
+
+  const config = loadConfig({ IMP_DATA_DIR: ctx.dataDir });
+
+  mkdirSync(join(ctx.dataDir, 'images'));
+
+  const run = mock(() =>
+    Promise.resolve({ exitCode: 1, stdout: '', stderr: 'oci-fetch: the mirror is offline' }),
+  );
+
+  const images = createImageService({
+    runCommand: run,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
+    config,
+    db: ctx.db,
+    storage: ctx.storage,
+    storageGate: createStorageGate(),
+    diskBudget: ctx.diskBudget,
+    readBuilders: () => null,
+  });
+
+  const failure = await images.ensureBuilderImage().then(
+    () => null,
+    (error: unknown) => error,
+  );
+
+  const builder = await readImageByName(ctx.db, BUILDER_IMAGE);
+
+  expect(failure).toMatchObject({
+    code: 'SERVICE_UNAVAILABLE',
+    message: expect.toEndWith(': oci-fetch: the mirror is offline'),
+  });
+
+  expect(run).toHaveBeenCalledExactlyOnceWith(['oci-fetch', 'config', config.build.image], {
+    signal: expect.any(AbortSignal) as unknown,
+  });
+
+  expect(builder).toBeUndefined();
+});
+
+test('#ensureBuilderImage ends an export that sends nothing on the given timer', async () => {
+  const ctx = await setupTest();
+
+  const config = loadConfig({ IMP_DATA_DIR: ctx.dataDir });
+
+  const ociFetch = createStubOciFetch({
+    directory: ctx.dataDir,
+    images: [
+      {
+        ref: config.build.image,
+        digest: `sha256:${'c'.repeat(64)}`,
+        exportTar: createFilesTar(ctx.dataDir, { dockerd: 'builder\n' }),
+        export: 'stall',
+      },
+    ],
+  });
+
+  updateEnv('PATH', ociFetch.path);
+  mkdirSync(join(ctx.dataDir, 'images'));
+
+  const timers = buildStubClock();
+
+  const images = createImageService({
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: timers.startTimer,
+    countTreeBytes,
+    runStreamed,
+    config,
+    db: ctx.db,
+    storage: ctx.storage,
+    storageGate: createStorageGate(),
+    diskBudget: ctx.diskBudget,
+    readBuilders: () => null,
+  });
+
+  const ensuring = images.ensureBuilderImage();
+
+  await waitFor(() => {
+    expect(ociFetch.readStalledPIDs()).toHaveLength(1);
+  });
+
+  timers.firePending();
+
+  expect(ensuring).rejects.toMatchObject({
+    code: 'SERVICE_UNAVAILABLE',
+    message: expect.toEndWith(`: oci-fetch export ${config.build.image} sent nothing in 120 s`),
+  });
+});
+
+test('#ensureBuilderImage unpacks the export through the given tar starter', async () => {
+  const ctx = await setupTest();
+
+  const config = loadConfig({ IMP_DATA_DIR: ctx.dataDir });
+
+  const ociFetch = createStubOciFetch({
+    directory: ctx.dataDir,
+    images: [
+      {
+        ref: config.build.image,
+        digest: `sha256:${'c'.repeat(64)}`,
+        exportTar: createFilesTar(ctx.dataDir, { dockerd: 'builder\n' }),
+      },
+    ],
+  });
+
+  updateEnv('PATH', ociFetch.path);
+  mkdirSync(join(ctx.dataDir, 'images'));
+
+  const images = createImageService({
+    runCommand,
+    startTar: () => {
+      throw new Error('tar is not installed');
+    },
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
+    config,
+    db: ctx.db,
+    storage: ctx.storage,
+    storageGate: createStorageGate(),
+    diskBudget: ctx.diskBudget,
+    readBuilders: () => null,
+  });
+
+  const failure = await images.ensureBuilderImage().then(
+    () => null,
+    (error: unknown) => error,
+  );
+
+  const builder = await readImageByName(ctx.db, BUILDER_IMAGE);
+
+  expect(failure).toMatchObject({
+    code: 'SERVICE_UNAVAILABLE',
+    message: expect.toEndWith(': tar is not installed'),
+  });
+
+  expect(builder).toBeUndefined();
+  expect(readdirSync(join(ctx.dataDir, 'images'))).toStrictEqual([]);
+});
+
 test('#ensureBuilderImage refuses an export over IMP_BUILD_IMAGE_MAX_MIB and publishes nothing', async () => {
   const ctx = await setupTest();
 
@@ -191,6 +362,11 @@ test('#ensureBuilderImage refuses an export over IMP_BUILD_IMAGE_MAX_MIB and pub
   mkdirSync(join(ctx.dataDir, 'images'));
 
   const images = createImageService({
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     config,
     db: ctx.db,
     storage: ctx.storage,
@@ -239,6 +415,11 @@ test('#ensureBuilderImage refuses an export over IMP_BUILD_IMAGE_MAX_FILES and p
   mkdirSync(join(ctx.dataDir, 'images'));
 
   const images = createImageService({
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     config,
     db: ctx.db,
     storage: ctx.storage,
@@ -271,6 +452,11 @@ test('#addImage answers SERVICE_UNAVAILABLE while the builders are not up', asyn
   const ctx = await setupTest();
 
   const images = createImageService({
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
     db: ctx.db,
     storage: ctx.storage,
@@ -299,6 +485,11 @@ test('#buildImageFromContext answers SERVICE_UNAVAILABLE while the builders are 
   Bun.spawnSync(['tar', '-C', contextDir, '-cf', tarPath, 'Dockerfile']);
 
   const images = createImageService({
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
     db: ctx.db,
     storage: ctx.storage,
@@ -321,6 +512,11 @@ test('#addImage refuses the name imp-builder, which is impd’s', async () => {
   const ctx = await setupTest();
 
   const images = createImageService({
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
     db: ctx.db,
     storage: ctx.storage,
@@ -341,6 +537,11 @@ test('#buildImageFromContext refuses the name imp-builder, which is impd’s', a
   const ctx = await setupTest();
 
   const images = createImageService({
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
     db: ctx.db,
     storage: ctx.storage,
@@ -363,6 +564,11 @@ test('#runImageBuild refuses a context that is not on the impd host', async () =
   const ctx = await setupTest();
 
   const images = createImageService({
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
     db: ctx.db,
     storage: ctx.storage,
@@ -383,6 +589,11 @@ test('#runImageBuild refuses a context on the impd host with no Dockerfile', asy
   const ctx = await setupTest();
 
   const images = createImageService({
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
     db: ctx.db,
     storage: ctx.storage,
@@ -409,6 +620,11 @@ test('#runImageBuild refuses a context over IMP_BUILD_CONTEXT_MAX_MIB before it 
   writeFileSync(join(contextDir, 'big'), new Uint8Array(2 * 1024 ** 2));
 
   const images = createImageService({
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir, IMP_BUILD_CONTEXT_MAX_MIB: '1' }),
     db: ctx.db,
     storage: ctx.storage,
@@ -437,6 +653,11 @@ test('#runImageBuild refuses a Dockerfile image that is not an image reference',
   writeFileSync(join(contextDir, 'Dockerfile'), 'FROM a..b\n');
 
   const images = createImageService({
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
     db: ctx.db,
     storage: ctx.storage,
@@ -467,6 +688,11 @@ test('#runImageBuild answers BAD_REQUEST when the pinned Dockerfile does not par
   writeFileSync(join(contextDir, 'Dockerfile'), 'FROM busybox:1\n');
 
   const images = createImageService({
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
     db: ctx.db,
     storage: ctx.storage,
@@ -487,6 +713,11 @@ test('#resolveImage records the lookup as a use of the image', async () => {
   const ctx = await setupTest();
 
   const images = createImageService({
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
     db: ctx.db,
     storage: ctx.storage,
@@ -509,6 +740,11 @@ test('#addImage evicts an old image under storage pressure, even when the add fa
   const ctx = await setupTest();
 
   const images = createImageService({
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     config: loadConfig({
       IMP_DATA_DIR: ctx.dataDir,
       IMP_IMAGE_EVICT_HIGH_PERCENT: '80',
@@ -548,6 +784,11 @@ test('#runImageBuild evicts an old image under storage pressure, even when the b
   const ctx = await setupTest();
 
   const images = createImageService({
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     config: loadConfig({
       IMP_DATA_DIR: ctx.dataDir,
       IMP_IMAGE_EVICT_HIGH_PERCENT: '80',
@@ -587,6 +828,11 @@ test('#buildImageFromContext evicts an old image under storage pressure, even wh
   const ctx = await setupTest();
 
   const images = createImageService({
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     config: loadConfig({
       IMP_DATA_DIR: ctx.dataDir,
       IMP_IMAGE_EVICT_HIGH_PERCENT: '80',
@@ -630,6 +876,11 @@ test('#updateImagePin answers NOT_FOUND for a name no image has', async () => {
   const ctx = await setupTest();
 
   const images = createImageService({
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
     db: ctx.db,
     storage: ctx.storage,
@@ -647,6 +898,11 @@ test('#updateImagePin answers NOT_FOUND to a prefix for a name no image has', as
   const ctx = await setupTest();
 
   const images = createImageService({
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
     db: ctx.db,
     storage: ctx.storage,
@@ -666,6 +922,11 @@ test('#updateImagePin refuses a prefix the pin of an image whose ref does not st
   await createImage(ctx.db, buildMockNewImage({ name: 'acme-x', ref: 'docker.io/acme/x:1' }));
 
   const images = createImageService({
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
     db: ctx.db,
     storage: ctx.storage,
@@ -695,6 +956,11 @@ test('#resolveImage keeps an old image that an eviction reaches while the lookup
   const gate = buildQueryGate('web-1111111');
 
   const images = createImageService({
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     config: loadConfig({
       IMP_DATA_DIR: ctx.dataDir,
       IMP_IMAGE_EVICT_HIGH_PERCENT: '80',
@@ -746,6 +1012,11 @@ test('#runImageEviction logs an eviction that fails as an error, and resolves', 
   const lines = captureImpdLogs();
 
   const images = createImageService({
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     config: loadConfig({
       IMP_DATA_DIR: ctx.dataDir,
       IMP_IMAGE_EVICT_HIGH_PERCENT: '80',
@@ -770,6 +1041,11 @@ test('#resolveImage answers NOT_FOUND for a name no image has', async () => {
   const ctx = await setupTest();
 
   const images = createImageService({
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
     db: ctx.db,
     storage: ctx.storage,
@@ -790,6 +1066,11 @@ test('#resolveImage answers NOT_FOUND naming the default image when neither defa
   const ctx = await setupTest();
 
   const images = createImageService({
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir, IMP_DEFAULT_IMAGE: 'tools' }),
     db: ctx.db,
     storage: ctx.storage,
@@ -807,6 +1088,11 @@ test('#removeImage answers NOT_FOUND for a name no image has', async () => {
   const ctx = await setupTest();
 
   const images = createImageService({
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
     db: ctx.db,
     storage: ctx.storage,
@@ -832,6 +1118,11 @@ test('#removeImage keeps the rootfs while another image uses its digest', async 
   await createImage(ctx.db, buildMockNewImage({ name: 'web-copy', digest }));
 
   const images = createImageService({
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
     db: ctx.db,
     storage: ctx.storage,
@@ -856,6 +1147,11 @@ test('#removeImage removes the rootfs once no image uses its digest', async () =
   await createImage(ctx.db, buildMockNewImage({ name: 'web', digest }));
 
   const images = createImageService({
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
     db: ctx.db,
     storage: ctx.storage,
@@ -878,6 +1174,11 @@ test('#removeImage keeps a record of the rootfs while its removal fails', async 
   writeFileSync(join(ctx.dataDir, 'images'), '');
 
   const images = createImageService({
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
     db: ctx.db,
     storage: ctx.storage,
@@ -901,6 +1202,11 @@ test('#removeImage leaves no record of the rootfs once it is gone', async () => 
   await createImage(ctx.db, buildMockNewImage({ name: 'web', digest: 'sha256:1' }));
 
   const images = createImageService({
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
     db: ctx.db,
     storage: ctx.storage,
@@ -922,6 +1228,11 @@ test('#removeImage keeps a record of the rootfs while a publisher of its digest 
   await createImage(ctx.db, buildMockNewImage({ name: 'web', digest: 'sha256:1' }));
 
   const images = createImageService({
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
     config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
     db: ctx.db,
     storage: ctx.storage,
