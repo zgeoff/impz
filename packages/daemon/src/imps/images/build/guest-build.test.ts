@@ -264,6 +264,35 @@ test('#writeGuestTree holds disk ahead of the export in 256 MiB steps', async ()
   expect(holds).toStrictEqual([256 * 1024 ** 2]);
 });
 
+test('#writeGuestTree grows the hold with the written bytes that the given tree counter reads', async () => {
+  const ctx = await setupTest();
+
+  mkdirSync(join(ctx.directoryPath, 'tree'));
+  writeFileSync(join(ctx.directoryPath, 'tree', 'hello'), 'hi\n');
+
+  const grows: number[][] = [];
+
+  const builder = buildStubImageBuilder({
+    exported: [Bun.spawnSync(['tar', '-C', join(ctx.directoryPath, 'tree'), '-c', '.']).stdout],
+    repoDigest: `sha256:${'b'.repeat(64)}`,
+  });
+
+  await writeGuestTree({
+    exec: createGuestExec(builder.guest.open),
+    root: ctx.root,
+    limits: { maxBytes: 1024 ** 3, maxFiles: 100 },
+    signal: new AbortController().signal,
+    grow: (totalBytes, writtenBytes) => {
+      grows.push([totalBytes, writtenBytes]);
+
+      return Promise.resolve();
+    },
+    countTreeBytes: () => Promise.resolve(4096),
+  });
+
+  expect(grows).toStrictEqual([[256 * 1024 ** 2, 4096]]);
+});
+
 test('#writeGuestTree refuses an export past the byte cap', async () => {
   const ctx = await setupTest();
 

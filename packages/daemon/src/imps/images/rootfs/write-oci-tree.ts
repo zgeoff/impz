@@ -13,6 +13,7 @@ export interface WriteOciTreeOptions {
   readonly runStreamed: StreamedRunner;
   readonly startTar?: WriteStreamedTreeOptions['startTar'];
   readonly countTreeBytes?: WriteStreamedTreeOptions['countTreeBytes'];
+  readonly startTimer?: WriteStreamedTreeOptions['startTimer'];
 }
 
 export function writeOciTree(options: Readonly<WriteOciTreeOptions>): Promise<void> {
@@ -22,6 +23,7 @@ export function writeOciTree(options: Readonly<WriteOciTreeOptions>): Promise<vo
     signal: options.signal,
     source: `oci-fetch export ${options.ref}`,
     grow: options.grow,
+    startTimer: options.startTimer,
     startTar: options.startTar ?? startTarProcess,
     countTreeBytes: options.countTreeBytes ?? countTreeBytes,
     runExport: (onStdout, signal) =>
