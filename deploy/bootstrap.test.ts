@@ -1356,6 +1356,7 @@ test('#preflight refuses a host whose imp-host runs under Docker', () => {
   const ctx = setupTest();
   const id = createStubBin(ctx.directoryPath, 'id', 'echo 0');
   const virt = createStubBin(ctx.directoryPath, 'systemd-detect-virt', 'exit 1');
+  const uname = createStubBin(ctx.directoryPath, 'uname', 'echo x86_64');
 
   const docker = createStubBin(
     ctx.directoryPath,
@@ -1363,18 +1364,32 @@ test('#preflight refuses a host whose imp-host runs under Docker', () => {
     buildStubBootstrapDocker({ hostContainer: 'present' }),
   );
 
+  writeFileSync(join(ctx.directoryPath, 'osrelease'), '6.8.0-85-generic\n');
+
+  writeFileSync(
+    join(ctx.directoryPath, 'os-release'),
+    'ID=ubuntu\nVERSION_ID="24.04"\nPRETTY_NAME="Ubuntu 24.04.3 LTS"\n',
+  );
+
+  writeFileSync(join(ctx.directoryPath, 'cpuinfo'), 'flags\t\t: fpu vme vmx sse2\n');
+
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
-      fn: 'eval',
-
-      // The platform check reads the kernel's own files, which no PATH stub replaces.
-      args: ['check_platform() { :; }; preflight'],
-      env: { PATH: `${id.bin}:${virt.bin}:${docker.bin}:${process.env['PATH'] ?? ''}` },
+      fn: 'preflight',
+      args: [
+        join(ctx.directoryPath, 'osrelease'),
+        join(ctx.directoryPath, 'os-release'),
+        '/dev/null',
+        join(ctx.directoryPath, 'cpuinfo'),
+      ],
+      env: {
+        PATH: `${id.bin}:${virt.bin}:${uname.bin}:${docker.bin}:${process.env['PATH'] ?? ''}`,
+      },
     }),
   ).toStrictEqual({
     exitCode: 1,
-    stdout: '== preflight\n',
+    stdout: '== preflight\nbootstrap: OS: Ubuntu 24.04.3 LTS\n',
     stderr:
       'bootstrap: imp-host runs under Docker, from an older release: run deploy/upgrade.sh of this release, which moves the host to Podman (docs/guides/operations.md#upgrade); nothing changed\n',
   });
