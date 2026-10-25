@@ -86,6 +86,41 @@ test('it holds disk ahead of the tree in 256 MiB steps', async () => {
   expect(holds).toStrictEqual([256 * 1024 ** 2]);
 });
 
+test('it grows the hold with the written bytes that the given tree counter reads', async () => {
+  const ctx = await setupTest();
+
+  const ociFetch = createStubOciFetch({
+    directory: ctx.directoryPath,
+    images: [
+      {
+        ref: 'registry.test/builder@sha256:1',
+        digest: 'sha256:2',
+        exportTar: createFilesTar(ctx.directoryPath, { dockerd: 'builder\n' }),
+      },
+    ],
+  });
+
+  const grows: number[][] = [];
+
+  updateEnv('PATH', ociFetch.path);
+
+  await writeOciTree({
+    ref: 'registry.test/builder@sha256:1',
+    root: ctx.root,
+    limits: { maxBytes: 1024 ** 3, maxFiles: 100 },
+    signal: new AbortController().signal,
+    grow: (totalBytes, writtenBytes) => {
+      grows.push([totalBytes, writtenBytes]);
+
+      return Promise.resolve();
+    },
+    runStreamed,
+    countTreeBytes: () => Promise.resolve(4096),
+  });
+
+  expect(grows).toStrictEqual([[256 * 1024 ** 2, 4096]]);
+});
+
 test('it fails with the stderr of an export that fails', async () => {
   const ctx = await setupTest();
 

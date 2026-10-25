@@ -2,7 +2,7 @@ import type { StreamedRunner } from '../../../platform/process/run-streamed';
 import { countTreeBytes } from '../../../vm/storage/count-tree-bytes';
 import { startTarProcess } from './start-tar-process';
 import { writeStreamedTree } from './write-streamed-tree';
-import type { TreeLimits } from './write-streamed-tree';
+import type { TreeLimits, WriteStreamedTreeOptions } from './write-streamed-tree';
 
 export interface WriteOciTreeOptions {
   readonly ref: string;
@@ -11,6 +11,8 @@ export interface WriteOciTreeOptions {
   readonly signal: AbortSignal;
   readonly grow: (totalBytes: number, writtenBytes: number) => Promise<void>;
   readonly runStreamed: StreamedRunner;
+  readonly startTar?: WriteStreamedTreeOptions['startTar'];
+  readonly countTreeBytes?: WriteStreamedTreeOptions['countTreeBytes'];
 }
 
 export function writeOciTree(options: Readonly<WriteOciTreeOptions>): Promise<void> {
@@ -20,8 +22,8 @@ export function writeOciTree(options: Readonly<WriteOciTreeOptions>): Promise<vo
     signal: options.signal,
     source: `oci-fetch export ${options.ref}`,
     grow: options.grow,
-    startTar: startTarProcess,
-    countTreeBytes,
+    startTar: options.startTar ?? startTarProcess,
+    countTreeBytes: options.countTreeBytes ?? countTreeBytes,
     runExport: (onStdout, signal) =>
       options.runStreamed(['oci-fetch', 'export', options.ref], onStdout, signal),
   });
