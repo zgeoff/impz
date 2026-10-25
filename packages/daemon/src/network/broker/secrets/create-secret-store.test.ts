@@ -285,9 +285,15 @@ test('it refuses a preset with rules and stores nothing', async () => {
     }),
   );
 
+  const body: unknown = await response.json();
   const listed = await ctx.client.secrets.list();
 
   expect(response.status).toBe(400);
+
+  expect(body).toMatchObject({
+    json: { data: { issues: [{ code: 'unrecognized_keys', keys: ['rules'] }] } },
+  });
+
   expect(listed).toStrictEqual([]);
 });
 
