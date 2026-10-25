@@ -13,7 +13,8 @@ import { ImpdError } from '../../../platform/errors/impd-error';
 import { buildConflictError, buildNotFoundError } from '../../../platform/errors/impd-errors';
 import { getErrorMessage } from '../../../platform/process/get-error-message';
 import { getImpdLogger } from '../../../platform/process/get-impd-logger';
-import { SecretRulesError, resolveRules } from './connector-kinds';
+import { SecretRulesError, resolveBinding } from './connector-kinds';
+import type { SecretBinding } from './connector-kinds';
 import type { OAuthRefresher } from './oauth-refresher';
 import { buildPendingState, findIdClaims, formatOAuthState, parseOAuthState } from './oauth-state';
 import { buildValueFile } from './secret-files';
@@ -64,6 +65,7 @@ export function createSecretStore(deps: SecretStoreDeps): SecretStore {
       name: secret.name,
       kind: secret.kind,
       rules: secret.rules,
+      env: secret.env,
       imps,
       createdAt: secret.createdAt,
     };
@@ -134,10 +136,10 @@ export function createSecretStore(deps: SecretStoreDeps): SecretStore {
 
   return {
     addSecret: async (input) => {
-      let rules: readonly BrokerRule[];
+      let binding: SecretBinding;
 
       try {
-        rules = resolveRules(input.kind, input.rules);
+        binding = resolveBinding(input.kind, input.rules);
       } catch (error) {
         if (error instanceof SecretRulesError) {
           throw new ImpdError('BAD_REQUEST', { message: error.message });
@@ -169,7 +171,14 @@ export function createSecretStore(deps: SecretStoreDeps): SecretStore {
         files.write(valueFile, content);
 
         const written = await writeSecretRow(
-          { name: input.name, kind: input.kind, rules, oauth, valueFile },
+          {
+            name: input.name,
+            kind: input.kind,
+            rules: binding.rules,
+            env: binding.env,
+            oauth,
+            valueFile,
+          },
           input,
         );
 

@@ -478,6 +478,7 @@ test('it exits 1 for a refreshed oauth secret that is not ready', async () => {
     name: 'codex',
     kind: 'oauth',
     rules: [{ host: 'chatgpt.com', header: 'authorization', scheme: 'bearer' }],
+    env: [],
     imps: [],
     createdAt: expect.any(String) as unknown,
     oauth: {
@@ -571,6 +572,7 @@ test('it sends a secret upstream in the rule to an impd that knows it', async ()
           upstream: 'http://172.17.0.1:18081',
         },
       ],
+      env: [],
       imps: [],
       createdAt: expect.toBeValidDate() as unknown,
     },

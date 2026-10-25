@@ -115,6 +115,7 @@ test('it answers a signed-in oauth secret ready, with its account claims only', 
     name: 'codex',
     kind: 'oauth',
     rules: [{ host: 'api.example.com', header: 'authorization', scheme: 'bearer' }],
+    env: [],
     imps: [],
     createdAt: expect.any(Date) as unknown,
     droppedGrants: 0,
@@ -587,6 +588,31 @@ test('it answers a forced refresh of a dead refresh token as needing a new sign-
 
   expect(dead.oauth?.status).toBe('needs_login');
   expect(dead.oauth?.error).toBe('HTTP 401');
+});
+
+test('it lists a preset secret with its preset’s variables', async () => {
+  const ctx = await setupTest();
+
+  await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'ghp_x' });
+
+  const listed = await ctx.client.secrets.list();
+
+  expect(listed[0]?.env).toStrictEqual(['GH_TOKEN', 'GITHUB_TOKEN']);
+});
+
+test('it lists a custom secret with no variables', async () => {
+  const ctx = await setupTest();
+
+  await ctx.client.secrets.add({
+    name: 'api',
+    kind: 'custom',
+    value: 'v1',
+    rules: [buildMockBrokerRule()],
+  });
+
+  const listed = await ctx.client.secrets.list();
+
+  expect(listed[0]?.env).toStrictEqual([]);
 });
 
 test('it refuses a refresh of a secret that is not oauth', async () => {

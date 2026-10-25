@@ -377,7 +377,7 @@ export async function createBroker(deps: BrokerDeps): Promise<Broker> {
 
       const env = buildBrokerEnv({
         proxyUrl: `http://${gateway}:${String(proxy.getPort())}`,
-        placeholders: listPlaceholderEnv(granted.map((entry) => entry.kind)),
+        placeholders: listPlaceholderEnv(granted.map((entry) => entry.env)),
         placeholder: PLACEHOLDER,
       });
 

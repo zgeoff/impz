@@ -9350,6 +9350,15 @@
               "additionalProperties": false
             }
           },
+          "env": {
+            "readOnly": true,
+            "maxItems": 16,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Z_][A-Z0-9_]{0,63}$"
+            }
+          },
           "imps": {
             "readOnly": true,
             "type": "array",
@@ -9459,6 +9468,7 @@
           "name",
           "kind",
           "rules",
+          "env",
           "imps",
           "createdAt",
           "droppedGrants"
@@ -9525,6 +9535,15 @@
                   "scheme"
                 ],
                 "additionalProperties": false
+              }
+            },
+            "env": {
+              "readOnly": true,
+              "maxItems": 16,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Z_][A-Z0-9_]{0,63}$"
               }
             },
             "imps": {
@@ -9630,6 +9649,7 @@
             "name",
             "kind",
             "rules",
+            "env",
             "imps",
             "createdAt"
           ],
@@ -9705,6 +9725,15 @@
                 "scheme"
               ],
               "additionalProperties": false
+            }
+          },
+          "env": {
+            "readOnly": true,
+            "maxItems": 16,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Z_][A-Z0-9_]{0,63}$"
             }
           },
           "imps": {
@@ -9810,6 +9839,7 @@
           "name",
           "kind",
           "rules",
+          "env",
           "imps",
           "createdAt"
         ],

@@ -43,6 +43,7 @@ import { MIGRATION_038_ADD_IMAGE_REMOVALS } from './migrations/migration-038-add
 import { MIGRATION_039_ADD_IMAGE_PINS } from './migrations/migration-039-add-image-pins';
 import { MIGRATION_040_ADD_IMAGE_RECEIVED_DIGESTS } from './migrations/migration-040-add-image-received-digests';
 import { MIGRATION_041_ADD_MOVE_SEND_STEPS } from './migrations/migration-041-add-move-send-steps';
+import { MIGRATION_042_ADD_SECRET_ENV } from './migrations/migration-042-add-secret-env';
 
 export const MIGRATIONS: Record<string, Migration> = {
   '001_create_initial_schema': MIGRATION_001_CREATE_INITIAL_SCHEMA,
@@ -86,6 +87,7 @@ export const MIGRATIONS: Record<string, Migration> = {
   '039_add_image_pins': MIGRATION_039_ADD_IMAGE_PINS,
   '040_add_image_received_digests': MIGRATION_040_ADD_IMAGE_RECEIVED_DIGESTS,
   '041_add_move_send_steps': MIGRATION_041_ADD_MOVE_SEND_STEPS,
+  '042_add_secret_env': MIGRATION_042_ADD_SECRET_ENV,
 };
 
 const PROVIDER: MigrationProvider = {

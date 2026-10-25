@@ -8,6 +8,7 @@ import {
   OAuthConfigSchema,
   RefusedRequestSchema,
   SecretAddedSchema,
+  SecretEnvSchema,
   SecretKindSchema,
   SecretNameSchema,
   SecretSchema,
@@ -283,6 +284,7 @@ test('#SecretSchema accepts a secret with its rules and grants', () => {
     name: 'github-token',
     kind: 'github',
     rules: [{ host: 'api.github.com', header: 'authorization', scheme: 'bearer' }],
+    env: ['GH_TOKEN'],
     imps: ['dev'],
     createdAt: new Date('2026-01-02T03:04:05.000Z'),
   } as const;
@@ -297,6 +299,7 @@ test('#SecretSchema accepts an oauth secret with its state', () => {
     name: 'claude',
     kind: 'oauth',
     rules: [{ host: 'api.anthropic.com', header: 'authorization', scheme: 'bearer' }],
+    env: [],
     imps: [],
     createdAt: new Date('2026-01-02T03:04:05.000Z'),
     oauth: {
@@ -316,11 +319,37 @@ test('#SecretSchema accepts an oauth secret with its state', () => {
   expect(result.data).toStrictEqual(payload);
 });
 
+test('#SecretSchema rejects an env name that is not upper case', () => {
+  const result = SecretSchema.safeParse({
+    name: 'github-token',
+    kind: 'github',
+    rules: [{ host: 'api.github.com', header: 'authorization', scheme: 'bearer' }],
+    env: ['gh_token'],
+    imps: ['dev'],
+    createdAt: new Date('2026-01-02T03:04:05.000Z'),
+  });
+
+  expect(result.error?.issues).toPartiallyContain({ path: ['env', 0], code: 'invalid_format' });
+});
+
+test.each(['HTTPS_PROXY', 'SSL_CERT_FILE', 'NODE_EXTRA_CA_CERTS'])(
+  '#SecretEnvSchema rejects %s, which the broker sets',
+  (name) => {
+    const result = SecretEnvSchema.safeParse([name]);
+
+    expect(result.error?.issues).toPartiallyContain({
+      path: [0],
+      message: 'must not be a variable the broker sets',
+    });
+  },
+);
+
 test('#SecretSchema rejects a name that is not a secret name', () => {
   const result = SecretSchema.safeParse({
     name: 'GitHub',
     kind: 'github',
     rules: [{ host: 'api.github.com', header: 'authorization', scheme: 'bearer' }],
+    env: ['GH_TOKEN'],
     imps: ['dev'],
     createdAt: new Date('2026-01-02T03:04:05.000Z'),
   });
@@ -333,6 +362,7 @@ test('#SecretSchema rejects an unknown kind', () => {
     name: 'github-token',
     kind: 'aws',
     rules: [{ host: 'api.github.com', header: 'authorization', scheme: 'bearer' }],
+    env: ['GH_TOKEN'],
     imps: ['dev'],
     createdAt: new Date('2026-01-02T03:04:05.000Z'),
   });
@@ -360,6 +390,7 @@ test('#SecretSchema rejects a grant to an imp name that is not a name', () => {
     name: 'github-token',
     kind: 'github',
     rules: [{ host: 'api.github.com', header: 'authorization', scheme: 'bearer' }],
+    env: ['GH_TOKEN'],
     imps: ['Dev'],
     createdAt: new Date('2026-01-02T03:04:05.000Z'),
   });
@@ -372,6 +403,7 @@ test('#SecretSchema rejects an oauth state of an unknown status', () => {
     name: 'claude',
     kind: 'oauth',
     rules: [{ host: 'api.anthropic.com', header: 'authorization', scheme: 'bearer' }],
+    env: [],
     imps: [],
     createdAt: new Date('2026-01-02T03:04:05.000Z'),
     oauth: {
@@ -397,6 +429,7 @@ test('#SecretAddedSchema defaults the dropped grants to none', () => {
     name: 'github-token',
     kind: 'github',
     rules: [{ host: 'api.github.com', header: 'authorization', scheme: 'bearer' }],
+    env: ['GH_TOKEN'],
     imps: ['dev'],
     createdAt: new Date('2026-01-02T03:04:05.000Z'),
   });
@@ -405,6 +438,7 @@ test('#SecretAddedSchema defaults the dropped grants to none', () => {
     name: 'github-token',
     kind: 'github',
     rules: [{ host: 'api.github.com', header: 'authorization', scheme: 'bearer' }],
+    env: ['GH_TOKEN'],
     imps: ['dev'],
     createdAt: new Date('2026-01-02T03:04:05.000Z'),
     droppedGrants: 0,
@@ -416,6 +450,7 @@ test('#SecretAddedSchema accepts the grants a rebind dropped', () => {
     name: 'github-token',
     kind: 'github',
     rules: [{ host: 'api.github.com', header: 'authorization', scheme: 'bearer' }],
+    env: ['GH_TOKEN'],
     imps: ['dev'],
     createdAt: new Date('2026-01-02T03:04:05.000Z'),
     droppedGrants: 2,
@@ -434,6 +469,7 @@ test.each([
     name: 'github-token',
     kind: 'github',
     rules: [{ host: 'api.github.com', header: 'authorization', scheme: 'bearer' }],
+    env: ['GH_TOKEN'],
     imps: ['dev'],
     createdAt: new Date('2026-01-02T03:04:05.000Z'),
     droppedGrants,
