@@ -95,10 +95,10 @@ TOKEN=$("$DEV" token)
 podman exec "$CONTAINER" sh -c '[ ! -e /var/run/docker.sock ] && ! command -v docker' ||
   fail "$CONTAINER has a Docker socket or a docker binary"
 pass "$CONTAINER has no Docker socket and no docker binary"
-# podman inspect shows the limit the container was given, so --pids-limit=-1
-# shows as -1; without the flag it shows containers.conf's default, 2048.
+# Without the flag, podman inspect shows containers.conf's default, 2048.
+# Podman 4.9 shows --pids-limit=-1 as 0, so 0 and -1 both mean no limit.
 pids_limit=$(podman inspect -f '{{.HostConfig.PidsLimit}}' "$CONTAINER")
-[ "$pids_limit" = -1 ] || fail "$CONTAINER has pids limit $pids_limit, not -1"
+[ "$pids_limit" -le 0 ] || fail "$CONTAINER caps its processes at $pids_limit"
 pids_max=$(podman exec "$CONTAINER" cat /sys/fs/cgroup/pids.max) ||
   fail "$CONTAINER has no pids.max in its cgroup"
 [ "$pids_max" = max ] || fail "$CONTAINER's cgroup caps its processes at $pids_max"
