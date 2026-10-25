@@ -308,6 +308,15 @@ retire_proxy_unit() {
   echo "upgrade: stopped and disabled imp-docker-proxy, which this image does not call (the unit before: $backup)"
 }
 
+# The proxy's container under compose, once the compose file runs no proxy
+# and the image needs no Docker: `up -d` of imp-host alone leaves it running
+# with the host's Docker socket
+retire_proxy_container() {
+  docker container inspect imp-docker-proxy >/dev/null 2>&1 || return 0
+  docker rm -f imp-docker-proxy >/dev/null
+  echo "upgrade: removed the imp-docker-proxy container, which this image does not call"
+}
+
 # the deploy file in use: the unit, or the compose file
 deploy_file() {
   echo "${compose_file:-$unit_file}"
@@ -361,6 +370,7 @@ restart_host() {
     write_compose_env
     local services=(imp-host)
     ! grep -q '^  imp-docker-proxy:' "$compose_file" || services=(imp-docker-proxy imp-host)
+    [ "$new_contract" != no-docker ] || retire_proxy_container
     IMP_DOCKER_GID=${IMP_DOCKER_GID:-$(stat -c %g /var/run/docker.sock 2>/dev/null || true)} \
     IMP_HOST_IMAGE=$image docker compose -f "$compose_file" up -d "${services[@]}"
   elif [ "$new_contract" = socket-proxy ]; then
@@ -428,6 +438,12 @@ if [ "$new_contract" != socket-proxy ] && [ "$new_contract" != no-docker ]; then
     echo "upgrade: to roll back past it, run deploy/bootstrap.sh of that image's release (docs/guides/operations.md#upgrade)." >&2
     exit 1
   fi
+fi
+
+if [ -n "$compose_file" ] && [ "$new_contract" = socket-proxy ] && socketless_deploy "$compose_file" &&
+  ! grep -q '^  imp-docker-proxy:' "$compose_file"; then
+  echo "upgrade: $image reaches Docker through imp-docker-proxy, and $compose_file runs no proxy and gives imp-host no docker.sock: put back the compose file of that image's release first. Nothing changed." >&2
+  exit 1
 fi
 
 if [ -n "$compose_file" ] && [ "$new_contract" = no-docker ] && grep -q '^  imp-docker-proxy:' "$compose_file"; then
