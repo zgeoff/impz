@@ -49,18 +49,21 @@ bash deploy/upgrade.sh
 1. It pulls the image of its own release with Podman, unless `IMP_HOST_IMAGE` names another: from
    the environment, else a pin in `/etc/imp/imp-host.env`. When the host already runs that image
    under Podman, it still installs the image lines and files of step 3, so the next restart keeps
-   that image, and restarts nothing. It refuses an image from the environment that
-   `imp-host.service` (drop-ins included) would not run: pin it in the env file instead. It refuses
-   an env file whose last `IMP_HOST_IMAGE=` is empty, which would give the unit no image. It refuses
-   an image whose `imp.host-contract` label is not `no-docker`: that image needs a Docker socket,
-   which a Podman host does not give. To go back to one, see [roll back](#roll-back).
+   that image, and still retires `imp-docker-proxy` as step 3 does, but restarts nothing. It refuses
+   an image from the environment that `imp-host.service` (drop-ins included) would not run: pin it
+   in the env file instead. It refuses an env file whose last `IMP_HOST_IMAGE=` is empty, which
+   would give the unit no image. It refuses an image whose `imp.host-contract` label is not
+   `no-docker`: that image needs a Docker socket, which a Podman host does not give. To go back to
+   one, see [roll back](#roll-back).
 2. It sleeps every awake imp through the API, one at a time. If the list or one sleep fails, it
    stops and the host keeps the old image. The stop would sleep them too, but only within its 120 s.
 3. It installs the new image's seccomp profile in `/etc/imp/imp-host.seccomp.json` and its
    `imp-host.service`, so a change to the [privileges](../architecture/host.md#privileges) reaches
    the server. A unit it replaces stays as `imp-host.service.bak-<time>`. Keep local changes to the
    unit in a drop-in (`imp-host.service.d/`). The installed unit drops the release-please marker
-   comments.
+   comments. It stops and disables `imp-docker-proxy` when an older release installed it, because
+   the proxy holds the host's Docker socket, and keeps its unit as
+   `imp-docker-proxy.service.bak-<time>`.
 
    An env file line `IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:latest`, which every env file had before
    the unit named its release, is the old template's and no pin. It becomes the commented pin, so

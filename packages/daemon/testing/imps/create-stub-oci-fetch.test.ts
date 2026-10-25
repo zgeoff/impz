@@ -126,6 +126,74 @@ test('it holds a hanging config fetch until the signal ends it', async () => {
   expect(result.exitCode).not.toBe(0);
 });
 
+test('it holds a stalled export after its tar until the signal ends it', async () => {
+  const ctx = await setupTest();
+
+  const ociFetch = createStubOciFetch({
+    directory: ctx.directoryPath,
+    images: [
+      {
+        ref: 'registry.test/builder@sha256:1',
+        digest: 'sha256:2',
+        exportTar: new TextEncoder().encode('a tar\n'),
+        export: 'stall',
+      },
+    ],
+  });
+
+  const stop = new AbortController();
+
+  const exporting = runCommand(['oci-fetch', 'export', 'registry.test/builder@sha256:1'], {
+    env: { PATH: ociFetch.path },
+    signal: stop.signal,
+  });
+
+  await waitFor(() => {
+    expect(ociFetch.readStalledPIDs()).toHaveLength(1);
+  });
+
+  stop.abort();
+
+  const result = await exporting;
+
+  expect(result.stdout).toBe('a tar\n');
+  expect(result.exitCode).not.toBe(0);
+});
+
+test('it records the pid of a stalled export', async () => {
+  const ctx = await setupTest();
+
+  const ociFetch = createStubOciFetch({
+    directory: ctx.directoryPath,
+    images: [
+      {
+        ref: 'registry.test/builder@sha256:1',
+        digest: 'sha256:2',
+        exportTar: new TextEncoder().encode('a tar\n'),
+        export: 'stall',
+      },
+    ],
+  });
+
+  const stop = new AbortController();
+
+  const child = Bun.spawn(['oci-fetch', 'export', 'registry.test/builder@sha256:1'], {
+    env: { PATH: ociFetch.path },
+    stdout: 'ignore',
+    signal: stop.signal,
+  });
+
+  onTestFinished(async () => {
+    stop.abort();
+
+    await child.exited;
+  });
+
+  await waitFor(() => {
+    expect(ociFetch.readStalledPIDs()).toStrictEqual([child.pid]);
+  });
+});
+
 test('it records each call in order', async () => {
   const ctx = await setupTest();
 
