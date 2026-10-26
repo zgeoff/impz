@@ -1,12 +1,13 @@
 import {
-  BrokerRuleSchema,
   GrantFilterSchema,
-  OAuthConfigSchema,
-  SecretKindSchema,
+  SecretAddKindSchema,
+  SecretBindingSchema,
+  SecretPresetSchema,
 } from '@impz/api';
-import type { BrokerRule, GrantFilter, OAuthConfig, Secret, SecretKind } from '@impz/api';
+import type { GrantFilter, Secret, SecretAddKind, SecretBinding, SecretPreset } from '@impz/api';
 import { requireFeatures } from '@impz/client';
 import { choice, integer } from 'gunshi/combinators';
+import type * as z from 'zod';
 import { jsonArg, nameArg } from '../args/common-args';
 import { defineCommand, defineGroup } from '../cli/define-command';
 import { UsageError } from '../cli/errors';
@@ -23,90 +24,118 @@ import { buildTokenTerminal, readToken } from '../prompts/read-token';
 
 const secretArg = { type: 'positional', description: 'secret name', required: true } as const;
 
-interface CustomRuleArgs {
+interface BindingArgs {
+  readonly kind?: SecretAddKind | undefined;
+  readonly preset?: SecretPreset | undefined;
   readonly hosts?: string | undefined;
   readonly header?: string | undefined;
   readonly scheme?: string | undefined;
   readonly user?: string | undefined;
   readonly upstream?: string | undefined;
-}
-
-interface OAuthArgs {
+  readonly env?: string | undefined;
   readonly tokenUrl?: string | undefined;
   readonly clientId?: string | undefined;
   readonly tokenFormat?: string | undefined;
 }
 
-function buildCustomRules(kind: SecretKind, args: CustomRuleArgs): BrokerRule[] | undefined {
-  const given = [args.hosts, args.header, args.scheme, args.user].some((arg) => arg !== undefined);
-
-  if (args.upstream !== undefined && kind !== 'custom') {
-    throw new UsageError('--upstream is for --kind custom');
+function buildSecretBinding(args: BindingArgs): SecretBinding {
+  if ((args.kind === undefined) === (args.preset === undefined)) {
+    throw new UsageError('give one of --kind and --preset');
   }
 
-  if (kind !== 'custom' && kind !== 'oauth') {
-    if (given) {
-      throw new UsageError(
-        '--hosts, --header, --scheme and --user are for --kind custom and --kind oauth',
-      );
-    }
+  const rules = buildRuleFlags(args);
+  const oauth = buildOAuthFlags(args);
+  const env = args.env?.split(',').map((name) => name.trim());
 
+  const parsed = SecretBindingSchema.safeParse({
+    ...(args.kind !== undefined && { kind: args.kind }),
+    ...(args.preset !== undefined && { preset: args.preset }),
+    ...(rules !== undefined && { rules }),
+    ...(oauth !== undefined && { oauth }),
+    ...(env !== undefined && { env }),
+  });
+
+  if (!parsed.success) {
+    const named = args.kind === undefined ? `--preset ${args.preset ?? ''}` : `--kind ${args.kind}`;
+
+    throw new UsageError(
+      parsed.error.issues.map((issue) => formatBindingIssue(issue, named)).join('; '),
+    );
+  }
+
+  return parsed.data;
+}
+
+function isNewBinding(binding: Readonly<SecretBinding>): boolean {
+  return (
+    binding.kind === undefined ||
+    binding.kind === 'static' ||
+    ('env' in binding && binding.env !== undefined)
+  );
+}
+
+function buildRuleFlags(args: BindingArgs): Record<string, string | undefined>[] | undefined {
+  const given = [args.hosts, args.header, args.scheme, args.user, args.upstream];
+
+  if (given.every((arg) => arg === undefined)) {
     return undefined;
   }
 
-  if (args.hosts === undefined) {
-    throw new UsageError(`--kind ${kind} needs --hosts`);
-  }
-
-  const hosts = args.hosts.split(',');
+  const hosts = args.hosts?.split(',') ?? [];
 
   if (args.upstream !== undefined && hosts.length !== 1) {
     throw new UsageError('--upstream needs exactly one host in --hosts');
   }
 
-  return hosts.map((host) => {
-    const parsed = BrokerRuleSchema.safeParse({
-      host: host.trim(),
-      header: (args.header ?? 'authorization').toLowerCase(),
-      scheme: args.scheme ?? 'bearer',
-      ...(args.user !== undefined && { user: args.user }),
-      ...(args.upstream !== undefined && { upstream: args.upstream }),
-    });
+  const header = (args.header ?? 'authorization').toLowerCase();
+  const scheme = args.scheme ?? 'bearer';
 
-    if (!parsed.success) {
-      throw new UsageError(parsed.error.issues.map((issue) => issue.message).join('; '));
-    }
-
-    return parsed.data;
-  });
+  return hosts.map((host) => ({
+    host: host.trim(),
+    header,
+    scheme,
+    user: args.user,
+    upstream: args.upstream,
+  }));
 }
 
-function buildOAuthConfig(kind: SecretKind, args: OAuthArgs): OAuthConfig | undefined {
-  const given = [args.tokenUrl, args.clientId, args.tokenFormat].some((arg) => arg !== undefined);
-
-  if (kind !== 'oauth') {
-    if (given) {
-      throw new UsageError('--token-url, --client-id and --token-format are for --kind oauth');
-    }
-
+function buildOAuthFlags(args: BindingArgs): Record<string, string> | undefined {
+  if ([args.tokenUrl, args.clientId, args.tokenFormat].every((arg) => arg === undefined)) {
     return undefined;
   }
 
-  if (args.tokenUrl === undefined || args.clientId === undefined) {
-    throw new UsageError('--kind oauth needs --token-url and --client-id');
-  }
-
-  const parsed = OAuthConfigSchema.safeParse({
-    tokenUrl: args.tokenUrl,
-    clientId: args.clientId,
+  return {
+    ...(args.tokenUrl !== undefined && { tokenUrl: args.tokenUrl }),
+    ...(args.clientId !== undefined && { clientId: args.clientId }),
     ...(args.tokenFormat !== undefined && { tokenFormat: args.tokenFormat }),
-  });
+  };
+}
 
-  if (!parsed.success) {
-    throw new UsageError(parsed.error.issues.map((issue) => issue.message).join('; '));
+const FIELD_FLAGS: Readonly<Record<string, string>> = {
+  rules: '--hosts',
+  oauth: '--token-url and --client-id',
+  env: '--env',
+  host: '--hosts',
+  header: '--header',
+  scheme: '--scheme',
+  user: '--user',
+  upstream: '--upstream',
+  tokenUrl: '--token-url',
+  clientId: '--client-id',
+  tokenFormat: '--token-format',
+};
+
+function formatBindingIssue(issue: Readonly<z.core.$ZodIssue>, named: string): string {
+  if (issue.code === 'unrecognized_keys') {
+    const flags = issue.keys.map((key) => FIELD_FLAGS[key] ?? key);
+
+    return `${named} takes no ${flags.join(', ')}`;
   }
 
-  return parsed.data;
+  const field = issue.path.findLast((key) => typeof key === 'string');
+  const flag = typeof field === 'string' ? FIELD_FLAGS[field] : undefined;
+
+  return flag === undefined ? issue.message : `${flag}: ${issue.message}`;
 }
 
 function formatOAuthOutcome(secret: Readonly<Secret>): string | null {
@@ -149,26 +178,34 @@ const addCommand = defineCommand({
   description: 'Store a secret in impd; the value comes from stdin or a prompt, never a flag',
   args: {
     name: secretArg,
-    kind: choice(SecretKindSchema.options, {
-      description: 'github, anthropic, npm, custom or oauth (both with --hosts)',
-      required: true,
+    kind: choice(SecretAddKindSchema.options, {
+      description:
+        'static or oauth, both with --hosts; github, anthropic, npm and custom are the older names of --preset and static',
+    }),
+    preset: choice(SecretPresetSchema.options, {
+      description: 'github, anthropic or npm: a static secret with its hosts and variables',
     }),
 
     // not --host, which names the impd to call
     hosts: {
       type: 'string',
-      description: 'custom, oauth: the hosts it is for, comma-separated',
+      description: 'static, oauth: the hosts it is for, comma-separated',
     },
     header: {
       type: 'string',
-      description: 'custom, oauth: the header to set (default authorization)',
+      description: 'static, oauth: the header to set (default authorization)',
     },
-    scheme: { type: 'string', description: 'custom, oauth: bearer (default), basic or raw' },
-    user: { type: 'string', description: 'custom, oauth: the user name for basic' },
+    scheme: { type: 'string', description: 'static, oauth: bearer (default), basic or raw' },
+    user: { type: 'string', description: 'static, oauth: the user name for basic' },
     upstream: {
       type: 'string',
       description:
-        'custom, one host: send its requests here (http or https origin) instead of the host; the credential goes there',
+        'static, one host: send its requests here (http or https origin) instead of the host; the credential goes there',
+    },
+    env: {
+      type: 'string',
+      description:
+        'static, oauth: the variables a granted imp gets set to a placeholder, comma-separated',
     },
     'token-url': { type: 'string', description: 'oauth: the https token endpoint' },
     'client-id': { type: 'string', description: 'oauth: the client the refresh token is for' },
@@ -185,22 +222,22 @@ const addCommand = defineCommand({
   },
   run: (ctx) =>
     runAction(ctx.extensions.impz, async (client) => {
-      const kind = ctx.values.kind;
-      const rules = buildCustomRules(kind, ctx.values);
-
-      const oauth = buildOAuthConfig(kind, {
+      const binding = buildSecretBinding({
+        ...ctx.values,
         tokenUrl: ctx.values['token-url'],
         clientId: ctx.values['client-id'],
         tokenFormat: ctx.values['token-format'],
       });
+
+      const isOAuth = binding.kind === 'oauth';
 
       if (ctx.values.rebind === true && ctx.values.replace !== true) {
         throw new UsageError('--rebind needs --replace');
       }
 
       // an older impd would take another binding and keep every grant; drop
-      // the upstream unread and send the credential to the host; or refuse
-      // the oauth kind, or drop its config unread
+      // the upstream unread and send the credential to the host; refuse the
+      // oauth kind, or drop its config unread; or drop the variables unread
       await requireFeatures(client, {
         ...(ctx.values.replace === true && {
           secretRebind: 'let --replace change the hosts and keep every grant',
@@ -208,10 +245,13 @@ const addCommand = defineCommand({
         ...(ctx.values.upstream !== undefined && {
           secretUpstream: 'send the credential to the host itself',
         }),
-        ...(kind === 'oauth' && { oauthSecrets: 'refuse the oauth kind' }),
+        ...(isOAuth && { oauthSecrets: 'refuse the oauth kind' }),
+        ...(isNewBinding(binding) && {
+          secretPresets: 'refuse a preset or a static secret, and drop --env unread',
+        }),
       });
 
-      const prompt = kind === 'oauth' ? 'refresh token' : 'value';
+      const prompt = isOAuth ? 'refresh token' : 'value';
 
       const value = await readToken(
         `${prompt} for ${ctx.values.name}: `,
@@ -223,11 +263,9 @@ const addCommand = defineCommand({
       }
 
       const secret = await client.secrets.add({
+        ...binding,
         name: ctx.values.name,
-        kind,
         value,
-        ...(rules !== undefined && { rules }),
-        ...(oauth !== undefined && { oauth }),
         ...(ctx.values.replace === true && { replace: true }),
         ...(ctx.values.rebind === true && { rebind: true }),
       });

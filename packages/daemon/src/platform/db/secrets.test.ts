@@ -275,8 +275,9 @@ test('it ends a rebind and a revoke made at once with no grant left', async () =
         status: 'fulfilled',
         value: {
           name: 'other',
-          kind: 'custom',
+          kind: 'static',
           rules: [{ host: 'api.github.com', header: 'authorization', scheme: 'bearer' }],
+          env: [],
           imps: [],
           createdAt: expect.any(Date) as unknown,
           droppedGrants: 0,
@@ -289,8 +290,9 @@ test('it ends a rebind and a revoke made at once with no grant left', async () =
         status: 'fulfilled',
         value: {
           name: 'other',
-          kind: 'custom',
+          kind: 'static',
           rules: [{ host: 'api.github.com', header: 'authorization', scheme: 'bearer' }],
+          env: [],
           imps: [],
           createdAt: expect.any(Date) as unknown,
           droppedGrants: 1,

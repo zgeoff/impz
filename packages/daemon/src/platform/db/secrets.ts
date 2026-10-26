@@ -18,6 +18,7 @@ export interface SecretRecord {
   readonly name: string;
   readonly kind: SecretKind;
   readonly rules: readonly BrokerRule[];
+  readonly env: readonly string[];
 
   readonly oauth: OAuthConfig | null;
 
@@ -31,6 +32,7 @@ export interface NewSecret {
   readonly name: string;
   readonly kind: SecretKind;
   readonly rules: readonly BrokerRule[];
+  readonly env?: readonly string[] | undefined;
 
   readonly oauth?: OAuthConfig | null | undefined;
 
@@ -42,6 +44,7 @@ export interface GrantedRule {
   readonly secretName: string;
   readonly kind: SecretKind;
   readonly rule: BrokerRule;
+  readonly env: readonly string[];
   readonly valueFile: string;
 
   readonly filter: GrantFilter | null;
@@ -80,6 +83,7 @@ export type ReplaceOutcome =
   | { readonly kind: 'binding-changed' };
 
 const RulesSchema = z.array(BrokerRuleSchema);
+const EnvSchema = z.array(z.string());
 
 export async function createSecret(
   db: ImpQueries,
@@ -91,6 +95,7 @@ export async function createSecret(
       name: secret.name,
       kind: secret.kind,
       rules: JSON.stringify(secret.rules),
+      env: JSON.stringify(secret.env ?? []),
       oauth: formatOAuthConfig(secret.oauth),
       generation: createGeneration(),
       value_file: secret.valueFile,
@@ -140,6 +145,7 @@ export function upsertSecret(
       .set({
         kind: secret.kind,
         rules: JSON.stringify(secret.rules),
+        env: JSON.stringify(secret.env ?? []),
         oauth: formatOAuthConfig(secret.oauth),
         value_file: secret.valueFile,
         ...(!isRotation && { generation: createGeneration() }),
@@ -315,6 +321,7 @@ export async function listGrantedRules(db: ImpQueries, impId: string): Promise<G
       'secrets.name',
       'secrets.kind',
       'secrets.rules',
+      'secrets.env',
       'secrets.value_file',
       'grants.filter',
     ])
@@ -327,6 +334,7 @@ export async function listGrantedRules(db: ImpQueries, impId: string): Promise<G
       secretName: row.name,
       kind: parseKind(row.kind),
       rule,
+      env: parseEnv(row.env),
       valueFile: row.value_file,
       filter: parseFilter(row.filter),
     })),
@@ -468,6 +476,7 @@ function toSecretRecord(row: Readonly<SecretRow>): SecretRecord {
     name: row.name,
     kind: parseKind(row.kind),
     rules: parseRules(row.rules),
+    env: parseEnv(row.env),
     oauth: parseOAuth(row.oauth),
     generation: row.generation,
     valueFile: row.value_file,
@@ -477,6 +486,10 @@ function toSecretRecord(row: Readonly<SecretRow>): SecretRecord {
 
 function parseRules(json: string): BrokerRule[] {
   return RulesSchema.parse(JSON.parse(json));
+}
+
+function parseEnv(json: string): string[] {
+  return EnvSchema.parse(JSON.parse(json));
 }
 
 function parseFilter(json: string | null): GrantFilter | null {

@@ -24,6 +24,7 @@ const FEATURE_GAPS = {
   publicEgress: 'is older than 0.35.0',
   oauthSecrets: 'has no oauth secrets',
   secretUpstream: 'has no secret upstreams',
+  secretPresets: 'has no static secrets or presets',
   backupOptOut: 'has no backup opt-out',
   brokerRefusals: 'has no audit of refused broker requests',
   grantFilters: 'has no grant filters',

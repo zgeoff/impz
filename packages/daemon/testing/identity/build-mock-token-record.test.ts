@@ -1,5 +1,12 @@
 import { expect, test } from 'bun:test';
+import { NameSchema } from '@impz/api';
 import { buildMockTokenRecord } from './build-mock-token-record';
+
+test('it builds token names that the name schema accepts', () => {
+  const names = Array.from({ length: 100 }, () => buildMockTokenRecord().name);
+
+  expect(names).toSatisfyAll((name: unknown) => NameSchema.safeParse(name).success);
+});
 
 test('it builds a default token record', () => {
   const record = buildMockTokenRecord();

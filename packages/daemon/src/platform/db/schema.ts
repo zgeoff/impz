@@ -321,6 +321,7 @@ export interface SecretFileRemovals {
 
 export interface Secrets {
   created_at: number;
+  env: Generated<string>;
   generation: Generated<string>;
   kind: string;
   name: string;
