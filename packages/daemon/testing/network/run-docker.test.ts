@@ -1,5 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createStubBin } from '@impz/test-utils/create-stub-bin';
@@ -17,13 +17,27 @@ async function setupTest() {
 test('it returns the standard output of a docker command that succeeds', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubBin(ctx.directoryPath, 'docker', 'echo "ran $*"');
+  const docker = createStubBin(ctx.directoryPath, 'docker', 'echo 5f0c2a9e');
 
   updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
 
   const stdout = await runDocker(['network', 'create', 'imp-wt-acme']);
 
-  expect(stdout).toBe('ran network create imp-wt-acme\n');
+  expect(stdout).toBe('5f0c2a9e\n');
+});
+
+test('it passes its arguments to docker as they are', async () => {
+  const ctx = await setupTest();
+
+  const docker = createStubBin(ctx.directoryPath, 'docker');
+
+  updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
+
+  await runDocker(['network', 'create', 'imp-wt-acme']);
+
+  const calls = await readFile(docker.calls, 'utf8');
+
+  expect(calls).toBe('docker network create imp-wt-acme\n');
 });
 
 test('it refuses a docker command that fails, with its arguments, exit code and standard error', async () => {
