@@ -42,22 +42,32 @@ done
 
 cp "$package/README.md" "$root/LICENSE" "$stage/"
 
-# the packages the bundle imports, read from its import, side-effect import and
-# require specifiers;
+# the packages the bundle imports, read from the specifiers that match $1;
 # a name outside the catalog is no package, so the match drops it
-imported=$(grep -ohE "(from ?|import ?\(?|require\()\"[^\"./][^\"]*\"" "$stage/dist/index.js" |
-  sed -E 's/^(from ?|import ?\(?|require\()"//; s/"$//' |
-  sed -E 's#^(@[^/]+/[^/]+|[^@/][^/]*).*#\1#' | sort -u | jq -R . | jq -s .)
+read_imports() {
+  { grep -ohE "($1)\"[^\"./][^\"]*\"" "$stage/dist/index.js" || true; } |
+    sed -E "s/^($1)\"//; s/\"\$//" |
+    sed -E 's#^(@[^/]+/[^/]+|[^@/][^/]*).*#\1#' | sort -u | jq -R . | jq -s .
+}
+
+# a package the bundle loads only through import() serves a setting that a test turns on, such
+# as acme-client for HTTPS, so it is an optional peer that the consumer installs to use it
+imported=$(read_imports 'from ?|import ?|require\(')
+loaded=$(read_imports 'import ?\(')
 
 version=$(jq -r .version "$package/package.json")
 
-jq --slurpfile workspace "$root/package.json" --argjson imported "$imported" --arg version "$version" '
+jq --slurpfile workspace "$root/package.json" --argjson imported "$imported" \
+  --argjson loaded "$loaded" --arg version "$version" '
   $workspace[0].workspaces.catalog as $catalog
+  | ($loaded - $imported | map(select($catalog[.] != null))) as $optional
   | .dependencies = (
       [$imported[] | select($catalog[.] != null) | { key: ., value: ("^" + $catalog[.]) }]
       | from_entries
       | . + { "@impz/client": $version }
     )
+  | .peerDependencies = ([$optional[] | { key: ., value: ("^" + $catalog[.]) }] | from_entries)
+  | .peerDependenciesMeta = ([$optional[] | { key: ., value: { optional: true } }] | from_entries)
   | del(.scripts, .devDependencies)
   | .exports = { ".": { types: "./dist/index.d.ts", default: "./dist/index.js" } }
   | .files = ["dist"]

@@ -1,8 +1,8 @@
 import { getErrorMessage } from '../../../platform/process/get-error-message';
 import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import type { IssueCertificate } from './acme-issuer';
-import { readCertificateInfo } from './acme-issuer';
 import type { CertStore, Certificate } from './cert-store';
+import { readCertificateInfo } from './read-certificate-info';
 import type { CertificateInfo } from './renewal-policy';
 import { planRenewal, readBackoffMs } from './renewal-policy';
 
