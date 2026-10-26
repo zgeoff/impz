@@ -83,15 +83,27 @@ export const BrokerRuleSchema = z.object({
 
 export type BrokerRule = z.infer<typeof BrokerRuleSchema>;
 
-export const SecretKindSchema = z.enum(['github', 'anthropic', 'npm', 'custom', 'oauth']);
+export const SecretPresetSchema = z.enum(['github', 'anthropic', 'npm']);
+
+export type SecretPreset = z.infer<typeof SecretPresetSchema>;
+
+// An `oauth` secret holds a refresh token that impd trades for access tokens.
+// The `oauth` ApiActor of an audit row is another thing: a caller that signed
+// in to impd through its own OAuth server.
+export const SecretKindSchema = z.enum(['static', 'oauth']);
 
 export type SecretKind = z.infer<typeof SecretKindSchema>;
 
-export const OAuthConfigSchema = z.object({
-  tokenUrl: z.url({ protocol: /^https$/u }).max(2048),
-  clientId: PrintableSchema.min(1).max(256),
-  tokenFormat: z.enum(['json', 'form']).default('form'),
-});
+export const OAuthConfigSchema = z.object(
+  {
+    tokenUrl: z.url({ protocol: /^https$/u }).max(2048),
+    clientId: PrintableSchema.min(1).max(256),
+    tokenFormat: z.enum(['json', 'form']).default('form'),
+  },
+  {
+    error: (issue) => (issue.input === undefined ? 'needs a token URL and a client id' : undefined),
+  },
+);
 
 export type OAuthConfig = z.infer<typeof OAuthConfigSchema>;
 
@@ -105,11 +117,38 @@ const OAuthStateSchema = OAuthConfigSchema.extend({
   idClaims: z.record(z.string(), z.unknown()).readonly().nullable(),
 });
 
+export const BROKER_ENV_NAMES: readonly string[] = [
+  'HTTPS_PROXY',
+  'https_proxy',
+  'NO_PROXY',
+  'no_proxy',
+  'NODE_USE_ENV_PROXY',
+  'SSL_CERT_FILE',
+  'NODE_EXTRA_CA_CERTS',
+  'GIT_SSL_CAINFO',
+  'REQUESTS_CA_BUNDLE',
+  'CURL_CA_BUNDLE',
+];
+
+// The guest's tools read these names, and some, such as gh, refuse to send a
+// request while their variable is unset. A placeholder set after the broker's
+// own variables would replace its proxy or its CA.
+export const SecretEnvSchema = z
+  .array(
+    z
+      .string()
+      .regex(/^[A-Z_][A-Z0-9_]{0,63}$/u, 'must be an upper-case variable name')
+      .refine((name) => !BROKER_ENV_NAMES.includes(name), 'must not be a variable the broker sets'),
+  )
+  .max(16)
+  .readonly();
+
 // A secret's value never leaves impd.
 export const SecretSchema = z.object({
   name: SecretNameSchema,
   kind: SecretKindSchema,
   rules: z.array(BrokerRuleSchema).readonly(),
+  env: SecretEnvSchema,
 
   imps: z.array(NameSchema).readonly(),
   createdAt: z.date(),

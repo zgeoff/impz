@@ -118,11 +118,17 @@ impz audit --kind api          # every imp, newest first
 impz audit box --kind api      # the calls that named box
 ```
 
-| Caller      | Means                                                      |
-| ----------- | ---------------------------------------------------------- |
-| `token`     | A call with the API token: the CLI, the SDK, `impz mcp`.   |
-| `dashboard` | A call with a dashboard session, or an exec on its ticket. |
-| `ssh`       | A session through the [SSH gateway](./ssh.md).             |
+| Caller      | Means                                                                         |
+| ----------- | ----------------------------------------------------------------------------- |
+| `token`     | A call with the API token: the CLI, the SDK, `impz mcp`.                      |
+| `dashboard` | A call with a dashboard session, or an exec on its ticket.                    |
+| `ssh`       | A session through the [SSH gateway](./ssh.md).                                |
+| `tailnet`   | A call from a [tailnet identity](./tokens.md#tailnet-identity).               |
+| `oauth`     | A call from an MCP client signed in through [impd's OAuth](./mcp.md#sign-in). |
+
+The `oauth` caller is a sign-in to impd. An `oauth` secret is another thing that shares the word: a
+refresh token the broker trades for access tokens to another service
+([oauth secrets](./connectors.md#oauth-secrets)).
 
 impd writes the row after it answers, so the log never slows a call, and a failed write is logged.
 It keeps the newest 10,000 rows across all imps. A row names the imp by name with no link to it, so

@@ -9,3 +9,10 @@ useDefault = true
 targetRules = ["private-key", "jwt"]
 description = "test files hold intentionally fake keys and tokens"
 paths = ['''\.test\.tsx?$''']
+
+[[allowlists]]
+targetRules = ["generic-api-key"]
+description = "the migration map's keys are migration names, such as 043_merge_secret_kinds"
+condition = "AND"
+paths = ['''packages/daemon/src/platform/db/run-migrations\.ts$''']
+regexes = ['''^\d{3}_[a-z0-9_]+$''']
