@@ -4,7 +4,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-file=$(tr -d '[:space:]' <.bun-version)
+file=$(tr -d '[:space:]' < .bun-version)
 manager=$(jq -r '.packageManager | sub("^bun@"; "")' package.json)
 image=$(sed -nE 's#^FROM oven/bun:([^@ ]+)@sha256:[0-9a-f]{64} .*#\1#p' host/Dockerfile)
 

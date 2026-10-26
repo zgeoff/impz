@@ -41,7 +41,7 @@ function trim(line, value, first) {
 # trim_lines [FILE]: each line of FILE, else of stdin, through trim; nothing
 # when FILE is missing
 trim_lines() {
-  awk -v q="'" "$TRIM_AWK"' { print trim($0) }' "$@" 2>/dev/null || true
+  awk -v q="'" "$TRIM_AWK"' { print trim($0) }' "$@" 2> /dev/null || true
 }
 
 # strip_markers: stdin without the release-please marker lines, which only
@@ -65,7 +65,7 @@ write_file() {
   local path=$1 perm=$2 content=$3 tmp
   mkdir -p "$(dirname "$path")" || return 1
   tmp=$(mktemp "$path.XXXXXX") || return 1
-  if ! { chmod "$perm" "$tmp" && printf '%s\n' "$content" >"$tmp" && mv "$tmp" "$path"; }; then
+  if ! { chmod "$perm" "$tmp" && printf '%s\n' "$content" > "$tmp" && mv "$tmp" "$path"; }; then
     rm -f "$tmp"
     return 1
   fi
@@ -110,13 +110,13 @@ ipv6_expand() {
   local -a groups=() head=() tail=()
   if [[ $addr == *::* ]]; then
     [[ ${addr#*::} != *::* ]] || return 1
-    [ -z "${addr%%::*}" ] || IFS=: read -ra head <<<"${addr%%::*}"
-    [ -z "${addr#*::}" ] || IFS=: read -ra tail <<<"${addr#*::}"
+    [ -z "${addr%%::*}" ] || IFS=: read -ra head <<< "${addr%%::*}"
+    [ -z "${addr#*::}" ] || IFS=: read -ra tail <<< "${addr#*::}"
     groups=("${head[@]}")
     for ((i = ${#head[@]} + ${#tail[@]}; i < 8; i++)); do groups+=(0); done
     groups+=("${tail[@]}")
   else
-    IFS=: read -ra groups <<<"$addr"
+    IFS=: read -ra groups <<< "$addr"
   fi
   [ ${#groups[@]} = 8 ] || return 1
   for i in "${!groups[@]}"; do
@@ -136,7 +136,7 @@ ipv6_canon() {
   [[ $1 == */* ]] && suffix=/${1#*/}
   expanded=$(ipv6_expand "${1%%/*}") || return 1
   local -a groups
-  IFS=: read -ra groups <<<"$expanded"
+  IFS=: read -ra groups <<< "$expanded"
   local best=-1 best_len=1 run=0 start=0
   for i in "${!groups[@]}"; do
     if [ "${groups[i]}" = 0 ]; then
@@ -180,7 +180,7 @@ subnet6() {
 # with the bridge HOST_BRIDGE and no DNS server; nothing when it matches.
 network_drift() {
   local want=$1 enabled bridge dns subnet found="" have=()
-  read -r enabled bridge dns subnet <<<"$2"
+  read -r enabled bridge dns subnet <<< "$2"
   if [ "$enabled" != true ]; then
     echo "it has no IPv6"
     return
@@ -209,7 +209,7 @@ host_addresses() { ip -o addr show scope global | tr -s " " | cut -d " " -f 4 | 
 # network_others: the containers on the network other than imp-host. Podman
 # 4.9's network inspect lists no containers, so the names come from podman ps.
 network_others() {
-  podman ps -a --filter "network=$HOST_NETWORK" --format '{{.Names}}' 2>/dev/null |
+  podman ps -a --filter "network=$HOST_NETWORK" --format '{{.Names}}' 2> /dev/null |
     grep -vx -e imp-host -e '' | paste -sd ' ' - || true
 }
 
@@ -218,7 +218,7 @@ network_others() {
 # makes it.
 create_host_network() {
   podman network create --ipv6 --subnet "$1" --disable-dns \
-    --interface-name "$HOST_BRIDGE" "$HOST_NETWORK" >/dev/null
+    --interface-name "$HOST_BRIDGE" "$HOST_NETWORK" > /dev/null
 }
 
 # render_firewall PORT...: the nft ruleset. One transaction: create the
@@ -229,7 +229,7 @@ create_host_network() {
 render_firewall() {
   local ports
   ports=$(printf '%s\n' "$@" | sort -nu | paste -sd, - | sed 's/,/, /g')
-  cat <<EOF
+  cat << EOF
 # imp host firewall, written by deploy/bootstrap.sh. Loaded by
 # imp-firewall.service. Inbound: SSH only.
 table inet imp_host

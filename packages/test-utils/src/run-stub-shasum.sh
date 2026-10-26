@@ -4,7 +4,7 @@
 # it holds. shasum.calls gets each call's arguments. Builtins only, since the
 # script under test runs with a PATH that lacks sha256sum.
 dir=${0%/*}
-echo "$*" >>"$dir/shasum.calls"
+echo "$*" >> "$dir/shasum.calls"
 [ "$1 $2" = "-a 256" ] || exit 1
-read -r sha256sum <"$dir/shasum.sha256sum"
+read -r sha256sum < "$dir/shasum.sha256sum"
 exec "$sha256sum" "$3"

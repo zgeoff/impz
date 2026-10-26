@@ -23,16 +23,16 @@ if [ -n "$up" ]; then
     echo "backend error: invalid key: unable to validate API key" >&2
     exit 1
   fi
-  echo "up $*" >>"$dir/fake-up.log"
-  echo valid >"$dir/tailscaled.state"
-  echo "$name" >"$dir/fake-hostname"
+  echo "up $*" >> "$dir/fake-up.log"
+  echo valid > "$dir/tailscaled.state"
+  echo "$name" > "$dir/fake-hostname"
   exit 0
 fi
-case $(cat "$dir/tailscaled.state" 2>/dev/null) in
+case $(cat "$dir/tailscaled.state" 2> /dev/null) in
   valid) state=Running ;;
   starting) state=Starting ;; # no network yet
   *) state=NeedsLogin ;;
 esac
-name=$(cat "$dir/fake-hostname" 2>/dev/null || echo none)
+name=$(cat "$dir/fake-hostname" 2> /dev/null || echo none)
 printf '{"BackendState":"%s","Self":{"HostName":"%s","TailscaleIPs":["100.64.0.1"],"DNSName":"%s.example.ts.net."}}\n' \
   "$state" "$name" "$name"

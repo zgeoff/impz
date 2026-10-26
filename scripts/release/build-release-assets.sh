@@ -25,5 +25,5 @@ docker buildx build \
   -f "$root/host/Dockerfile" --target system-files --platform linux/amd64 \
   --output "type=local,dest=$dist" "$@" "$root"
 
-(cd "$dist" && sha256sum -- * >SHA256SUMS)
+(cd "$dist" && sha256sum -- * > SHA256SUMS)
 cat "$dist/SHA256SUMS"

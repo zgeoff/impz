@@ -5,15 +5,15 @@
 # of `attestation ...`; every other command succeeds. Builtins only, since the
 # script under test may run with a PATH of a few linked commands.
 dir=${0%/*}
-echo "$*" >>"$dir/gh.calls"
+echo "$*" >> "$dir/gh.calls"
 
 if [ "$1 $2" = "auth status" ]; then
-  read -r code <"$dir/gh.auth-status"
+  read -r code < "$dir/gh.auth-status"
   exit "$code"
 fi
 
 if [ "$1" = attestation ]; then
-  read -r code <"$dir/gh.attestation"
+  read -r code < "$dir/gh.attestation"
   exit "$code"
 fi
 

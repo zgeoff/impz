@@ -16,7 +16,7 @@ fi
 # Docker mounts it read-only without --privileged. The namespace is private,
 # so the remount reaches no cgroup but this container's own (CAP_SYS_ADMIN).
 if [[ ,$(findmnt -n -o OPTIONS --mountpoint "$root"), == *,ro,* ]]; then
-  if ! mount -o remount,rw "$root" 2>/dev/null; then
+  if ! mount -o remount,rw "$root" 2> /dev/null; then
     echo "setup-cgroups: cannot remount $root read-write; CPU and memory limits are off" >&2
     exit 0
   fi
@@ -32,7 +32,7 @@ for _ in 1 2 3 4 5; do
   pids=$(cat "$root/cgroup.procs")
   [ -z "$pids" ] && break
   for pid in $pids; do
-    { echo "$pid" >"$root/init/cgroup.procs"; } 2>/dev/null || true
+    { echo "$pid" > "$root/init/cgroup.procs"; } 2> /dev/null || true
   done
 done
 
@@ -44,7 +44,7 @@ enable() {
     return 1
   fi
   # the braces put the redirect's own error under 2>/dev/null too
-  if ! { echo "+$controller" >"$dir/cgroup.subtree_control"; } 2>/dev/null; then
+  if ! { echo "+$controller" > "$dir/cgroup.subtree_control"; } 2> /dev/null; then
     echo "setup-cgroups: cannot enable $controller in $dir; $controller limits are off" >&2
     return 1
   fi

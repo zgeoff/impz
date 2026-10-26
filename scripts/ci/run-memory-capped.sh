@@ -17,14 +17,14 @@ if [ "${1:-}" = --inside ]; then
   # memory.peak counts the page cache, which the kernel takes back under the
   # cap; the anonymous memory, sampled each second, is what it cannot
   anon_file=$(mktemp)
-  echo 0 >"$anon_file"
+  echo 0 > "$anon_file"
   (
     peak=0
     while sleep 1; do
       anon=$(sed -n 's/^anon //p' "$cgroup/memory.stat")
       if [ "$anon" -gt "$peak" ]; then
         peak=$anon
-        echo "$peak" >"$anon_file"
+        echo "$peak" > "$anon_file"
       fi
     done
   ) &

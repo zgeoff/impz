@@ -3,7 +3,7 @@
 # keeps in the env file (storage, host firewall, IPv6).
 
 usage() {
-  cat <<'EOF'
+  cat << 'EOF'
 Usage: bootstrap.sh [--yes | --dry-run | --check] STORAGE [options]
 
 Modes (one):
@@ -74,7 +74,7 @@ parse_args() {
       --image-archive) image_archive=${2:?--image-archive needs a file} && shift ;;
       --tailscale-authkey-file)
         [ -r "${2:-}" ] || die "--tailscale-authkey-file: cannot read ${2:-}"
-        authkey=$(tr -d '[:space:]' <"$2")
+        authkey=$(tr -d '[:space:]' < "$2")
         authkey_file=$2
         shift
         ;;
@@ -112,7 +112,7 @@ parse_args() {
 preflight() {
   phase preflight
   [ "$(id -u)" = 0 ] || die "run as root"
-  if systemd-detect-virt -q --container 2>/dev/null; then
+  if systemd-detect-virt -q --container 2> /dev/null; then
     in_container=1
     warn "running in a container: kernel settings are written, not applied"
   fi
@@ -163,8 +163,8 @@ check_platform() {
 # The Podman unit would start a second imp-host on the same data.
 check_docker_host() {
   local unit=${1:-/etc/systemd/system/imp-host.service}
-  if ! grep -qE '^ExecStart=.*/docker run' "$unit" 2>/dev/null &&
-    ! { command -v docker >/dev/null && docker container inspect imp-host >/dev/null 2>&1; }; then
+  if ! grep -qE '^ExecStart=.*/docker run' "$unit" 2> /dev/null &&
+    ! { command -v docker > /dev/null && docker container inspect imp-host > /dev/null 2>&1; }; then
     return 0
   fi
   die "imp-host runs under Docker, from an older release: run deploy/upgrade.sh of this release, which moves the host to Podman (docs/guides/operations.md#upgrade); nothing changed"
@@ -253,8 +253,8 @@ resolve_ipv6() {
 # has a global address (not fc00::/7, not link-local).
 global_ipv6_uplink() {
   local uplink
-  uplink=$(route_uplink "$(ip -6 route show default 2>/dev/null | head -n 1)")
+  uplink=$(route_uplink "$(ip -6 route show default 2> /dev/null | head -n 1)")
   [ -n "$uplink" ] || return 1
-  ip -6 -o addr show dev "$uplink" scope global 2>/dev/null | awk '{ print $4 }' | grep -qvE '^f[cd]' || return 1
+  ip -6 -o addr show dev "$uplink" scope global 2> /dev/null | awk '{ print $4 }' | grep -qvE '^f[cd]' || return 1
   echo "$uplink"
 }

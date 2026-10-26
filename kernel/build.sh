@@ -63,7 +63,7 @@ case "$mode" in
 esac
 
 docker build -q -t "$BUILDER_IMAGE" --target kernel-builder \
-  -f "$here/../host/Dockerfile" "$here/.." >/dev/null
+  -f "$here/../host/Dockerfile" "$here/.." > /dev/null
 
 docker run --rm \
   --user "$(id -u):$(id -g)" \

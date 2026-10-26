@@ -54,13 +54,13 @@ render_env() {
         if (!done["IMP_HOST_SUBNET6"] && ENVIRON["SUBNET6"] != "") set("IMP_HOST_SUBNET6", ENVIRON["SUBNET6"])
         if (!done["IMP_KSM"] && ENVIRON["KSM"] != "") set("IMP_KSM", ENVIRON["KSM"] == "on" ? "1" : "0")
       }
-    ' <<<"$base"
+    ' <<< "$base"
 }
 
 # The pool imports at boot (zfs-import-cache.service); the container needs
 # it and /dev/zfs before it starts.
 unit_imp_host_zfs() {
-  cat <<'EOF'
+  cat << 'EOF'
 # Written by deploy/bootstrap.sh: import the ZFS pool before imp starts.
 [Unit]
 Wants=zfs.target
