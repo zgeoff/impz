@@ -4,10 +4,8 @@ import type { NewAuditEntry } from '../../src/platform/db/broker-audit';
 export function buildMockNewAuditEntry(overrides: Partial<NewAuditEntry> = {}): NewAuditEntry {
   return {
     impId: faker.string.uuid(),
-
-    // faker's nouns include acronyms such as SUV, and a name is lowercase
-    impName: faker.word.noun().toLowerCase(),
-    secretName: faker.word.noun().toLowerCase(),
+    impName: faker.string.alpha({ length: 10, casing: 'lower' }),
+    secretName: faker.string.alpha({ length: 10, casing: 'lower' }),
     at: faker.date.recent(),
     method: 'GET',
     host: faker.internet.domainName(),

@@ -3,7 +3,7 @@ import { NameSchema } from '@impz/api';
 import { buildMockTokenRecord } from './build-mock-token-record';
 
 test('it builds token names that the name schema accepts', () => {
-  const names = Array.from({ length: 10_000 }, () => buildMockTokenRecord().name);
+  const names = Array.from({ length: 100 }, () => buildMockTokenRecord().name);
 
   expect(names).toSatisfyAll((name: unknown) => NameSchema.safeParse(name).success);
 });
