@@ -8,7 +8,6 @@ import { startStubDockerEngine } from '../../../testing/imps/start-stub-docker-e
 import { startStubCutStream } from '../../../testing/network/start-stub-cut-stream';
 import { startStubSilentOrigin } from '../../../testing/network/start-stub-silent-origin';
 import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
-import { readProxyRefusal } from '../docker-contract/refusal';
 import { CREATE_BODY_MAX_BYTES, PROXY_LABEL, createDockerProxy } from './proxy';
 import type { DockerProxyOptions } from './proxy';
 
@@ -909,7 +908,7 @@ test('it forwards a pull of IMP_BUILD_IMAGE by its digest', async () => {
   expect(ctx.engine.unexpected).toStrictEqual([]);
 });
 
-test('it refuses a pull from a loopback registry with a refusal that reads back alone', async () => {
+test('it refuses a pull from a loopback registry with the refusal as its body message', async () => {
   const ctx = await setupTest();
 
   const proxy = ctx.startProxy({
@@ -930,14 +929,14 @@ test('it refuses a pull from a loopback registry with a refusal that reads back 
   expect(response.status).toBe(403);
   expect(ctx.engine.seen).toStrictEqual([]);
 
-  expect(readProxyRefusal(body)).toBe(
-    "imp-docker-proxy: registry localhost:5320 is the host's own",
-  );
+  expect(JSON.parse(body)).toStrictEqual({
+    message: "imp-docker-proxy: registry localhost:5320 is the host's own",
+  });
 
   expect(ctx.engine.unexpected).toStrictEqual([]);
 });
 
-test('it refuses a create from a loopback registry with a refusal the CLI stderr reads back', async () => {
+test('it refuses a create from a loopback registry with the refusal as its body message', async () => {
   const ctx = await setupTest();
 
   const proxy = ctx.startProxy({
@@ -959,9 +958,9 @@ test('it refuses a create from a loopback registry with a refusal the CLI stderr
   expect(response.status).toBe(403);
   expect(ctx.engine.seen).toStrictEqual([]);
 
-  expect(readProxyRefusal(`Error response from daemon: ${body}`)).toBe(
-    "imp-docker-proxy: registry localhost:5320 is the host's own",
-  );
+  expect(JSON.parse(body)).toStrictEqual({
+    message: "imp-docker-proxy: registry localhost:5320 is the host's own",
+  });
 
   expect(ctx.engine.unexpected).toStrictEqual([]);
 });

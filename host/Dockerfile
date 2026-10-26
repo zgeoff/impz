@@ -27,6 +27,16 @@ COPY host/ksm-exec/*.go ./
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 go build -buildvcs=false -trimpath -ldflags='-s -w' -o /out/ksm-exec .
 
+# --- oci-fetch: reads impd's builder image from its registry, with no
+# Docker engine (docs/architecture/storage/images.md) ---
+FROM golang:1.26.8-trixie@sha256:eae2aaa6add2936cbf350dd0d2628b363461542f0c4b3c0b558957e0f2997379 AS oci-fetch
+WORKDIR /src/oci-fetch
+COPY host/oci-fetch/go.mod host/oci-fetch/go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
+COPY host/oci-fetch/*.go ./
+RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 go build -buildvcs=false -trimpath -ldflags='-s -w' -o /out/oci-fetch .
+
 # --- runtime: what every host container needs, dev or release ---
 FROM debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a AS runtime
 
@@ -83,6 +93,7 @@ RUN curl -fsSL -o /tmp/firecracker.tgz "https://github.com/firecracker-microvm/f
  && rm -rf /tmp/release-* /tmp/firecracker.tgz
 
 COPY --from=ksm-exec /out/ksm-exec /usr/local/bin/ksm-exec
+COPY --from=oci-fetch /out/oci-fetch /usr/local/bin/oci-fetch
 
 # the pipe feeds echo into `sha256sum -c`, where only the check can fail
 # hadolint ignore=DL4006

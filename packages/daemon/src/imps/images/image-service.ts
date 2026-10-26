@@ -18,6 +18,7 @@ import type { Clock } from '../../platform/process/clock';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { REAL_CLOCK } from '../../platform/process/real-clock';
+import type { StreamedRunner } from '../../platform/process/run-streamed';
 import type { DiskBudget } from '../../vm/storage/disk-budget';
 import type { StorageBackend } from '../../vm/storage/storage-backend';
 import type { StorageGate } from '../../vm/storage/storage-gate';
@@ -29,7 +30,7 @@ import { FALLBACK_DEFAULT_IMAGE, createImageAdds } from './create-image-adds';
 import type { ImageAdds } from './create-image-adds';
 import { createImageEviction } from './eviction/create-image-eviction';
 import { createImageWriter } from './rootfs/create-image-writer';
-import type { ImageWriter } from './rootfs/create-image-writer';
+import type { ImageWriter, ImageWriterDeps } from './rootfs/create-image-writer';
 
 export type ImageService = ImageAdds &
   ImageBuilds & {
@@ -67,16 +68,29 @@ export interface ImageServiceDeps {
 
   readonly startPullLimit?: (pullMs: number) => AbortSignal;
 
-  readonly dockerEnv?: Readonly<Record<string, string>>;
-
   readonly seedRef?: string | null;
 
   readonly clock?: Pick<Clock, 'now'>;
+
+  readonly runStreamed: StreamedRunner;
+
+  readonly runCommand: ImageWriterDeps['runCommand'];
+
+  readonly startTar: ImageWriterDeps['startTar'];
+
+  readonly countTreeBytes: ImageWriterDeps['countTreeBytes'];
+
+  readonly startTimer: ImageWriterDeps['startTimer'];
 }
 
 export function createImageService(deps: ImageServiceDeps): ImageService {
   const clock = deps.clock ?? REAL_CLOCK;
-  const writer = createImageWriter({ ...deps, clock });
+
+  const writer = createImageWriter({
+    ...deps,
+    clock,
+  });
+
   const builds = createImageBuilds({ ...deps, clock }, writer);
   const adds = createImageAdds({ ...deps, clock }, writer);
 
