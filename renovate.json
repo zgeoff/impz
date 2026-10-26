@@ -3,9 +3,10 @@
   "extends": ["github>zgeoff/tools"],
   "packageRules": [
     {
-      "description": "msw pins its own @mswjs/interceptors range, and the repo's FetchInterceptor must match that copy's types, so the two update together.",
+      "description": "msw pins its own @mswjs/interceptors range, and the repo's FetchInterceptor must match that copy's types, so the two update together. A major msw update and a minor interceptors update share one branch only when the group does not separate majors.",
       "matchPackageNames": ["msw", "@mswjs/interceptors"],
-      "groupName": "msw"
+      "groupName": "msw",
+      "separateMajorMinor": false
     },
     {
       "description": "agent/tools holds only tool directives, so the go get -t ./... that Renovate runs loads none of their packages and leaves their module sums out of go.sum. go mod tidy adds them.",
