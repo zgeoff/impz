@@ -14,7 +14,7 @@ bun run test:headscale            # tailscale-up.sh joining Headscale in Docker 
 bun run test:docker               # the CLI's build context against docker buildx
 IMP_TEST_SMALL_FS=<dir> bun run test:small-fs   # disk holds and data blocks on a small loop-mounted XFS
 bun run format:check && bun run deadcode
-bun run lint:shell                # shellcheck and shfmt over install.sh and the shell in scripts/, host/, kernel/, deploy/, test/, packages/
+bun run lint:shell                # shellcheck and shfmt over install.sh and the shell in scripts/, host/, kernel/, deploy/, e2e/, packages/
 actionlint && zizmor --config .github/zizmor.yml .github   # the workflows, as CI lints them
 hadolint host/Dockerfile images/base/Dockerfile
 bun run lint:docs                 # every docs link, and every docs/ path code cites, resolves
