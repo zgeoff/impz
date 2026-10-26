@@ -51,6 +51,14 @@ test('it tags a type that JSON Schema cannot express', () => {
   expect(output?.['properties']).toMatchObject({ data: { 'x-unrepresentable': 'custom' } });
 });
 
+test('it renders a property that must stay absent as a schema nothing matches', () => {
+  const input = buildProtocolSchema().procedures['secrets.add']?.input;
+
+  expect(input?.['oneOf']).toPartiallyContain({
+    properties: expect.objectContaining({ kind: { not: {} } }),
+  });
+});
+
 test('it reads each stream message in the direction it travels', () => {
   const messages = buildProtocolSchema().messages;
 

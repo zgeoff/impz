@@ -187,7 +187,7 @@ test('it reaches a service with no public name over plain http through a secret 
       'add',
       secret,
       '--kind',
-      'custom',
+      'static',
       '--hosts',
       'svc.imp.internal',
       '--upstream',

@@ -788,8 +788,8 @@ test('#create binds a grantable list to each secret’s generation now', async (
   const ctx = await setupTest();
   const tokens = await ctx.load('root-secret');
 
-  await createSecret(ctx.db, { name: 'gh', kind: 'github', rules: [], valueFile: 'gh' });
-  await createSecret(ctx.db, { name: 'npm', kind: 'github', rules: [], valueFile: 'npm' });
+  await createSecret(ctx.db, { name: 'gh', kind: 'static', rules: [], valueFile: 'gh' });
+  await createSecret(ctx.db, { name: 'npm', kind: 'static', rules: [], valueFile: 'npm' });
 
   const gh = await readSecret(ctx.db, 'gh');
   const npm = await readSecret(ctx.db, 'npm');
@@ -814,7 +814,7 @@ test('#authenticate gives a made token’s grantable list, after a restart', asy
   const ctx = await setupTest();
   const before = await ctx.load('root-secret');
 
-  await createSecret(ctx.db, { name: 'gh', kind: 'github', rules: [], valueFile: 'gh' });
+  await createSecret(ctx.db, { name: 'gh', kind: 'static', rules: [], valueFile: 'gh' });
 
   const gh = await readSecret(ctx.db, 'gh');
 
@@ -854,7 +854,7 @@ test('#update takes a token’s image ref prefix away and keeps its grantable li
   const ctx = await setupTest();
   const tokens = await ctx.load('root-secret');
 
-  await createSecret(ctx.db, { name: 'gh', kind: 'github', rules: [], valueFile: 'gh' });
+  await createSecret(ctx.db, { name: 'gh', kind: 'static', rules: [], valueFile: 'gh' });
 
   const gh = await readSecret(ctx.db, 'gh');
 
@@ -896,7 +896,7 @@ test('#list shows a grantable list by name, after a restart', async () => {
   const ctx = await setupTest();
   const before = await ctx.load('root-secret');
 
-  await createSecret(ctx.db, { name: 'gh', kind: 'github', rules: [], valueFile: 'gh' });
+  await createSecret(ctx.db, { name: 'gh', kind: 'static', rules: [], valueFile: 'gh' });
 
   await before.create({ name: 'agent', scope: 'manage', imps: ['dev-*'], grantable: ['gh'] });
 
@@ -911,7 +911,7 @@ test('#findSshKey gives a key’s login its token’s grantable list, after a re
 
   const line = `${generateEd25519Key().public} me@laptop`;
 
-  await createSecret(ctx.db, { name: 'gh', kind: 'github', rules: [], valueFile: 'gh' });
+  await createSecret(ctx.db, { name: 'gh', kind: 'static', rules: [], valueFile: 'gh' });
 
   const gh = await readSecret(ctx.db, 'gh');
 
@@ -938,7 +938,7 @@ test('#create refuses a grantable list for a host-wide token', async () => {
   const ctx = await setupTest();
   const tokens = await ctx.load('root-secret');
 
-  await createSecret(ctx.db, { name: 'gh', kind: 'github', rules: [], valueFile: 'gh' });
+  await createSecret(ctx.db, { name: 'gh', kind: 'static', rules: [], valueFile: 'gh' });
 
   expect(
     tokens.create({ name: 'a', scope: 'manage', imps: null, grantable: ['gh'] }),
@@ -952,7 +952,7 @@ test('#create refuses a grantable list for a token below manage', async () => {
   const ctx = await setupTest();
   const tokens = await ctx.load('root-secret');
 
-  await createSecret(ctx.db, { name: 'gh', kind: 'github', rules: [], valueFile: 'gh' });
+  await createSecret(ctx.db, { name: 'gh', kind: 'static', rules: [], valueFile: 'gh' });
 
   expect(
     tokens.create({ name: 'b', scope: 'exec', imps: ['dev-*'], grantable: ['gh'] }),
@@ -975,8 +975,8 @@ test('#update binds a new list to each secret’s generation now', async () => {
   const ctx = await setupTest();
   const tokens = await ctx.load('root-secret', () => 1_800_000_000_000);
 
-  await createSecret(ctx.db, { name: 'gh', kind: 'github', rules: [], valueFile: 'gh' });
-  await createSecret(ctx.db, { name: 'npm', kind: 'github', rules: [], valueFile: 'npm' });
+  await createSecret(ctx.db, { name: 'gh', kind: 'static', rules: [], valueFile: 'gh' });
+  await createSecret(ctx.db, { name: 'npm', kind: 'static', rules: [], valueFile: 'npm' });
 
   await tokens.create({ name: 'agent', scope: 'manage', imps: ['dev-*'], grantable: ['gh'] });
 
@@ -1000,7 +1000,7 @@ test('#update gives the token’s next caller the new list', async () => {
   const ctx = await setupTest();
   const tokens = await ctx.load('root-secret');
 
-  await createSecret(ctx.db, { name: 'npm', kind: 'github', rules: [], valueFile: 'npm' });
+  await createSecret(ctx.db, { name: 'npm', kind: 'static', rules: [], valueFile: 'npm' });
 
   const npm = await readSecret(ctx.db, 'npm');
   const made = await tokens.create({ name: 'agent', scope: 'manage', imps: ['dev-*'] });
@@ -1055,7 +1055,7 @@ test('#update refuses a list for a host-wide token', async () => {
   const ctx = await setupTest();
   const tokens = await ctx.load('root-secret');
 
-  await createSecret(ctx.db, { name: 'gh', kind: 'github', rules: [], valueFile: 'gh' });
+  await createSecret(ctx.db, { name: 'gh', kind: 'static', rules: [], valueFile: 'gh' });
 
   await tokens.create({ name: 'host', scope: 'manage', imps: null });
 

@@ -15,8 +15,8 @@ import { getErrorMessage } from '../../../platform/process/get-error-message';
 import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import type { NetworkConfig } from '../../network-config';
 import { renderCredential } from '../secrets/connector-kinds';
-import { parseOAuthState } from '../secrets/oauth-state';
 import type { SecretFiles } from '../secrets/secret-files';
+import { SECRET_KINDS } from '../secrets/secret-kinds';
 import type { BrokerCa } from '../tls/broker-ca';
 import { createForwarder } from '../tls/forward-request';
 import type {
@@ -96,20 +96,23 @@ export function createBrokerProxy(deps: BrokerProxyDeps): BrokerProxy {
     const granted = await readRule(impId, host);
 
     const stored = granted === undefined ? null : files.read(granted.valueFile);
-    const oauth = granted?.kind === 'oauth' && stored !== null ? parseOAuthState(stored) : null;
-    const value = granted?.kind === 'oauth' ? (oauth?.accessToken ?? null) : stored;
 
-    if (granted === undefined || value === null) {
+    const credential =
+      granted === undefined || stored === null
+        ? null
+        : SECRET_KINDS[granted.kind].findCredential(stored);
+
+    if (granted === undefined || credential === null) {
       return null;
     }
 
     return {
       secretName: granted.secretName,
       header: granted.rule.header,
-      value: renderCredential(granted.rule, value),
+      value: renderCredential(granted.rule, credential.value),
       upstream: granted.rule.upstream ?? null,
       filter: granted.filter,
-      oauth: oauth === null ? null : { refreshedAt: oauth.refreshedAt },
+      oauth: credential.oauth,
     };
   };
 

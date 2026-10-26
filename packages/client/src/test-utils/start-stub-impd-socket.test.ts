@@ -60,9 +60,8 @@ test('it records every message and answers only the first', async () => {
 
   await waitFor(() => {
     expect(stub.received).toStrictEqual(['first', 'second']);
+    expect(answers).toStrictEqual(['one']);
   });
-
-  expect(answers).toStrictEqual(['one']);
 });
 
 test('it refuses a request that is not a socket upgrade with 400', async () => {
