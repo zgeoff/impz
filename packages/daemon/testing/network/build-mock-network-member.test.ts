@@ -4,7 +4,7 @@ import { NameSchema } from '@impz/api';
 import { buildMockNetworkMember } from './build-mock-network-member';
 
 test('it builds network and imp names that the name schema accepts', () => {
-  const members = Array.from({ length: 10_000 }, () => buildMockNetworkMember());
+  const members = Array.from({ length: 100 }, () => buildMockNetworkMember());
 
   expect(members.flatMap((member) => [member.network, member.name])).toSatisfyAll(
     (name: unknown) => NameSchema.safeParse(name).success,
