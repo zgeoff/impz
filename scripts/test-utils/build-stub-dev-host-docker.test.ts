@@ -47,6 +47,38 @@ test('it fails the inspect of the host image when it has none', () => {
   expect(result.exitCode).toBe(1);
 });
 
+test('it finds the host image through podman image exists when it has one', () => {
+  const ctx = setupTest();
+
+  const podman = createStubBin(
+    ctx.directoryPath,
+    'podman',
+    buildStubDevHostDocker({ containers: {}, hasImage: true }),
+  );
+
+  const result = Bun.spawnSync(['podman', 'image', 'exists', 'imp-host:dev'], {
+    env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
+  });
+
+  expect(result.exitCode).toBe(0);
+});
+
+test('it fails podman image exists when it has no host image', () => {
+  const ctx = setupTest();
+
+  const podman = createStubBin(
+    ctx.directoryPath,
+    'podman',
+    buildStubDevHostDocker({ containers: {}, hasImage: false }),
+  );
+
+  const result = Bun.spawnSync(['podman', 'image', 'exists', 'imp-host:dev'], {
+    env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
+  });
+
+  expect(result.exitCode).toBe(1);
+});
+
 test("it prints the host image's id", () => {
   const ctx = setupTest();
 
@@ -138,6 +170,22 @@ test("it starts a detached container and prints the container's id", () => {
     exitCode: 0,
     stdout: 'c0ffee\n',
   });
+});
+
+test('it stops a container', () => {
+  const ctx = setupTest();
+
+  const docker = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    buildStubDevHostDocker({ containers: { 'imp-dev': true }, hasImage: true }),
+  );
+
+  const result = Bun.spawnSync(['docker', 'stop', '-t', '120', 'imp-dev'], {
+    env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
+  });
+
+  expect(result.exitCode).toBe(0);
 });
 
 test('it removes a container', () => {
@@ -359,4 +407,20 @@ test('it fails a call that up and restart do not make, naming it', () => {
     exitCode: 1,
     stderr: 'stub docker: unexpected call: volume rm imp-dev-data\n',
   });
+});
+
+test('it names the binary it stands in for in an unexpected call', () => {
+  const ctx = setupTest();
+
+  const podman = createStubBin(
+    ctx.directoryPath,
+    'podman',
+    buildStubDevHostDocker({ containers: {}, hasImage: true }),
+  );
+
+  const result = Bun.spawnSync(['podman', 'volume', 'rm', 'imp-dev-data'], {
+    env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
+  });
+
+  expect(result.stderr.toString()).toBe('stub podman: unexpected call: volume rm imp-dev-data\n');
 });

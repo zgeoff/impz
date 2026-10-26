@@ -59,13 +59,15 @@ const SystemInfoSchema = ApiSystemInfoSchema.pick({
 });
 
 const CheckpointRowSchema = CheckpointSchema.pick({ id: true, label: true });
-const ImageRowSchema = ImageSchema.pick({ name: true });
+const ImageRowSchema = ImageSchema.pick({ name: true, ref: true, source: true });
 
 export type ImpRow = z.infer<typeof ImpRowSchema>;
 
 export type SystemInfo = z.infer<typeof SystemInfoSchema>;
 
 export type CheckpointRow = z.infer<typeof CheckpointRowSchema>;
+
+export type ImageRow = z.infer<typeof ImageRowSchema>;
 
 const tokens = new Map<string, Promise<string>>();
 
@@ -253,10 +255,18 @@ export function parseImp(stdout: string): ImpRow {
   return ImpRowSchema.parse(JSON.parse(stdout));
 }
 
-export async function listImageNames(target: DevInstance = instance): Promise<readonly string[]> {
+export function parseImages(stdout: string): ImageRow[] {
+  return z.array(ImageRowSchema).parse(JSON.parse(stdout));
+}
+
+export async function listImages(target: DevInstance = instance): Promise<readonly ImageRow[]> {
   const stdout = await runImpWith({ target }, 'image', 'ls', '--json');
 
-  const images = z.array(ImageRowSchema).parse(JSON.parse(stdout));
+  return parseImages(stdout);
+}
+
+export async function listImageNames(target: DevInstance = instance): Promise<readonly string[]> {
+  const images = await listImages(target);
 
   return images.map((image) => image.name);
 }

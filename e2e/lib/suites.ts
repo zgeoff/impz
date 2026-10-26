@@ -164,6 +164,9 @@ export const SUITES: readonly Suite[] = [
     journeys: ['socket-none'],
   },
 
+  // The Podman proof runs it beside socket, on a dev container that podman runs.
+  { name: 'podman', prefix: 'e2e-podman-', images: [], journeys: ['podman-build'] },
+
   {
     name: 'moves',
     prefix: 'e2e-mv-',

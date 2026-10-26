@@ -1,13 +1,20 @@
 import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { findPrivilegeDrift, findSocketDrift, readExpectedPrivileges } from './privileges';
+import {
+  buildPodmanHostConfig,
+  findPrivilegeDrift,
+  findSocketDrift,
+  readExpectedPrivileges,
+  readSeccompProfiles,
+} from './privileges';
 
 test('#findPrivilegeDrift passes a container run with the deploy privileges', () => {
   expect(
     findPrivilegeDrift(
       {
         Privileged: false,
+        PidsLimit: null,
         CapAdd: ['CAP_SYS_ADMIN', 'CAP_KILL'],
         CapDrop: ['ALL'],
         SecurityOpt: ['apparmor=unconfined', 'seccomp={"defaultAction":"SCMP_ACT_ERRNO"}'],
@@ -19,6 +26,7 @@ test('#findPrivilegeDrift passes a container run with the deploy privileges', ()
         seccomp: { defaultAction: 'SCMP_ACT_ERRNO' },
         devices: ['/dev/kvm', '/dev/net/tun'],
         optionalDevices: ['/dev/zfs', '/dev/loop-control'],
+        unlimitedPids: true,
       },
     ),
   ).toBeNull();
@@ -29,6 +37,7 @@ test('#findPrivilegeDrift passes a probed device and the dev instance’s loop d
     findPrivilegeDrift(
       {
         Privileged: false,
+        PidsLimit: null,
         CapAdd: ['CAP_SYS_ADMIN', 'CAP_KILL'],
         CapDrop: ['ALL'],
         SecurityOpt: ['apparmor=unconfined', 'seccomp={"defaultAction":"SCMP_ACT_ERRNO"}'],
@@ -45,6 +54,7 @@ test('#findPrivilegeDrift passes a probed device and the dev instance’s loop d
         seccomp: { defaultAction: 'SCMP_ACT_ERRNO' },
         devices: ['/dev/kvm', '/dev/net/tun'],
         optionalDevices: ['/dev/zfs', '/dev/loop-control'],
+        unlimitedPids: true,
       },
     ),
   ).toBeNull();
@@ -55,6 +65,7 @@ test('#findPrivilegeDrift flags a container run --privileged', () => {
     findPrivilegeDrift(
       {
         Privileged: true,
+        PidsLimit: null,
         CapAdd: ['CAP_SYS_ADMIN', 'CAP_KILL'],
         CapDrop: ['ALL'],
         SecurityOpt: ['apparmor=unconfined', 'seccomp={"defaultAction":"SCMP_ACT_ERRNO"}'],
@@ -66,6 +77,7 @@ test('#findPrivilegeDrift flags a container run --privileged', () => {
         seccomp: { defaultAction: 'SCMP_ACT_ERRNO' },
         devices: ['/dev/kvm', '/dev/net/tun'],
         optionalDevices: ['/dev/zfs', '/dev/loop-control'],
+        unlimitedPids: true,
       },
     ),
   ).toBe('it runs --privileged');
@@ -76,6 +88,7 @@ test('#findPrivilegeDrift flags a container that keeps the default capability se
     findPrivilegeDrift(
       {
         Privileged: false,
+        PidsLimit: null,
         CapAdd: ['CAP_SYS_ADMIN', 'CAP_KILL'],
         CapDrop: null,
         SecurityOpt: ['apparmor=unconfined', 'seccomp={"defaultAction":"SCMP_ACT_ERRNO"}'],
@@ -87,9 +100,75 @@ test('#findPrivilegeDrift flags a container that keeps the default capability se
         seccomp: { defaultAction: 'SCMP_ACT_ERRNO' },
         devices: ['/dev/kvm', '/dev/net/tun'],
         optionalDevices: ['/dev/zfs', '/dev/loop-control'],
+        unlimitedPids: true,
       },
     ),
   ).toBe('it keeps the default capabilities (no --cap-drop ALL)');
+});
+
+test("#buildPodmanHostConfig takes podman's effective capabilities and the text of its seccomp profile", () => {
+  expect(
+    buildPodmanHostConfig(
+      {
+        Privileged: false,
+        PidsLimit: null,
+        CapAdd: ['CAP_KILL', 'CAP_SYS_ADMIN'],
+        CapDrop: ['CAP_CHOWN', 'CAP_NET_BIND_SERVICE'],
+        SecurityOpt: ['seccomp=/w/imp/deploy/imp-host.seccomp.json', 'apparmor=unconfined'],
+        Devices: [{ PathOnHost: '/dev/kvm' }],
+      },
+      ['CAP_KILL', 'CAP_SYS_ADMIN'],
+      new Map([['/w/imp/deploy/imp-host.seccomp.json', '{"defaultAction":"SCMP_ACT_ERRNO"}']]),
+    ),
+  ).toStrictEqual({
+    Privileged: false,
+    PidsLimit: null,
+    CapAdd: ['CAP_KILL', 'CAP_SYS_ADMIN'],
+    CapDrop: ['ALL'],
+    SecurityOpt: ['seccomp={"defaultAction":"SCMP_ACT_ERRNO"}', 'apparmor=unconfined'],
+    Devices: [{ PathOnHost: '/dev/kvm' }],
+  });
+});
+
+test('#readSeccompProfiles reads the text of each seccomp profile path and skips one it cannot read', () => {
+  const texts = new Map([
+    ['/w/imp/deploy/imp-host.seccomp.json', '{"defaultAction":"SCMP_ACT_ERRNO"}'],
+  ]);
+
+  expect(
+    readSeccompProfiles(
+      ['seccomp=/w/imp/deploy/imp-host.seccomp.json', 'seccomp=/gone.json', 'apparmor=unconfined'],
+      (path) => texts.get(path) ?? null,
+    ),
+  ).toStrictEqual(
+    new Map([['/w/imp/deploy/imp-host.seccomp.json', '{"defaultAction":"SCMP_ACT_ERRNO"}']]),
+  );
+});
+
+test('#buildPodmanHostConfig shows a podman container that keeps a default capability as adding it', () => {
+  const host = buildPodmanHostConfig(
+    {
+      Privileged: false,
+      PidsLimit: null,
+      CapAdd: ['CAP_KILL', 'CAP_SYS_ADMIN'],
+      CapDrop: ['CAP_NET_BIND_SERVICE'],
+      SecurityOpt: ['seccomp=/w/imp/deploy/imp-host.seccomp.json', 'apparmor=unconfined'],
+      Devices: [{ PathOnHost: '/dev/kvm' }, { PathOnHost: '/dev/net/tun' }],
+    },
+    ['CAP_CHOWN', 'CAP_KILL', 'CAP_SYS_ADMIN'],
+    new Map([['/w/imp/deploy/imp-host.seccomp.json', '{"defaultAction":"SCMP_ACT_ERRNO"}']]),
+  );
+
+  expect(
+    findPrivilegeDrift(host, {
+      caps: ['CAP_KILL', 'CAP_SYS_ADMIN'],
+      securityOpts: ['apparmor=unconfined'],
+      seccomp: { defaultAction: 'SCMP_ACT_ERRNO' },
+      devices: ['/dev/kvm', '/dev/net/tun'],
+      optionalDevices: ['/dev/zfs', '/dev/loop-control'],
+      unlimitedPids: true,
+    }),
+  ).toBe('it adds CAP_CHOWN CAP_KILL CAP_SYS_ADMIN, not CAP_KILL CAP_SYS_ADMIN');
 });
 
 test('#findPrivilegeDrift flags a missing capability', () => {
@@ -97,6 +176,7 @@ test('#findPrivilegeDrift flags a missing capability', () => {
     findPrivilegeDrift(
       {
         Privileged: false,
+        PidsLimit: null,
         CapAdd: ['CAP_SYS_ADMIN'],
         CapDrop: ['ALL'],
         SecurityOpt: ['apparmor=unconfined', 'seccomp={"defaultAction":"SCMP_ACT_ERRNO"}'],
@@ -108,6 +188,7 @@ test('#findPrivilegeDrift flags a missing capability', () => {
         seccomp: { defaultAction: 'SCMP_ACT_ERRNO' },
         devices: ['/dev/kvm', '/dev/net/tun'],
         optionalDevices: ['/dev/zfs', '/dev/loop-control'],
+        unlimitedPids: true,
       },
     ),
   ).toBe('it adds CAP_SYS_ADMIN, not CAP_KILL CAP_SYS_ADMIN');
@@ -118,6 +199,7 @@ test('#findPrivilegeDrift flags AppArmor confinement', () => {
     findPrivilegeDrift(
       {
         Privileged: false,
+        PidsLimit: null,
         CapAdd: ['CAP_SYS_ADMIN', 'CAP_KILL'],
         CapDrop: ['ALL'],
         SecurityOpt: ['seccomp={"defaultAction":"SCMP_ACT_ERRNO"}'],
@@ -129,6 +211,7 @@ test('#findPrivilegeDrift flags AppArmor confinement', () => {
         seccomp: { defaultAction: 'SCMP_ACT_ERRNO' },
         devices: ['/dev/kvm', '/dev/net/tun'],
         optionalDevices: ['/dev/zfs', '/dev/loop-control'],
+        unlimitedPids: true,
       },
     ),
   ).toBe('its security options are , not apparmor=unconfined');
@@ -139,6 +222,7 @@ test('#findPrivilegeDrift flags another seccomp profile', () => {
     findPrivilegeDrift(
       {
         Privileged: false,
+        PidsLimit: null,
         CapAdd: ['CAP_SYS_ADMIN', 'CAP_KILL'],
         CapDrop: ['ALL'],
         SecurityOpt: ['apparmor=unconfined', 'seccomp={"defaultAction":"SCMP_ACT_ALLOW"}'],
@@ -150,6 +234,7 @@ test('#findPrivilegeDrift flags another seccomp profile', () => {
         seccomp: { defaultAction: 'SCMP_ACT_ERRNO' },
         devices: ['/dev/kvm', '/dev/net/tun'],
         optionalDevices: ['/dev/zfs', '/dev/loop-control'],
+        unlimitedPids: true,
       },
     ),
   ).toBe('its seccomp profile is not deploy/imp-host.seccomp.json');
@@ -160,6 +245,7 @@ test('#findPrivilegeDrift flags a container with no seccomp profile', () => {
     findPrivilegeDrift(
       {
         Privileged: false,
+        PidsLimit: null,
         CapAdd: ['CAP_SYS_ADMIN', 'CAP_KILL'],
         CapDrop: ['ALL'],
         SecurityOpt: ['apparmor=unconfined'],
@@ -171,6 +257,7 @@ test('#findPrivilegeDrift flags a container with no seccomp profile', () => {
         seccomp: { defaultAction: 'SCMP_ACT_ERRNO' },
         devices: ['/dev/kvm', '/dev/net/tun'],
         optionalDevices: ['/dev/zfs', '/dev/loop-control'],
+        unlimitedPids: true,
       },
     ),
   ).toBe('it has 0 seccomp options, not 1');
@@ -181,6 +268,7 @@ test('#findPrivilegeDrift flags a missing device', () => {
     findPrivilegeDrift(
       {
         Privileged: false,
+        PidsLimit: null,
         CapAdd: ['CAP_SYS_ADMIN', 'CAP_KILL'],
         CapDrop: ['ALL'],
         SecurityOpt: ['apparmor=unconfined', 'seccomp={"defaultAction":"SCMP_ACT_ERRNO"}'],
@@ -192,6 +280,7 @@ test('#findPrivilegeDrift flags a missing device', () => {
         seccomp: { defaultAction: 'SCMP_ACT_ERRNO' },
         devices: ['/dev/kvm', '/dev/net/tun'],
         optionalDevices: ['/dev/zfs', '/dev/loop-control'],
+        unlimitedPids: true,
       },
     ),
   ).toBe('its devices lack /dev/net/tun and add none');
@@ -202,6 +291,7 @@ test('#findPrivilegeDrift flags a host device the deploy does not give', () => {
     findPrivilegeDrift(
       {
         Privileged: false,
+        PidsLimit: null,
         CapAdd: ['CAP_SYS_ADMIN', 'CAP_KILL'],
         CapDrop: ['ALL'],
         SecurityOpt: ['apparmor=unconfined', 'seccomp={"defaultAction":"SCMP_ACT_ERRNO"}'],
@@ -217,15 +307,62 @@ test('#findPrivilegeDrift flags a host device the deploy does not give', () => {
         seccomp: { defaultAction: 'SCMP_ACT_ERRNO' },
         devices: ['/dev/kvm', '/dev/net/tun'],
         optionalDevices: ['/dev/zfs', '/dev/loop-control'],
+        unlimitedPids: true,
       },
     ),
   ).toBe('its devices lack none and add /dev/sda');
 });
 
+test('#findPrivilegeDrift passes a podman container run with --pids-limit=-1', () => {
+  expect(
+    findPrivilegeDrift(
+      {
+        Privileged: false,
+        PidsLimit: -1,
+        CapAdd: ['CAP_SYS_ADMIN', 'CAP_KILL'],
+        CapDrop: ['ALL'],
+        SecurityOpt: ['apparmor=unconfined', 'seccomp={"defaultAction":"SCMP_ACT_ERRNO"}'],
+        Devices: [{ PathOnHost: '/dev/kvm' }, { PathOnHost: '/dev/net/tun' }],
+      },
+      {
+        caps: ['CAP_KILL', 'CAP_SYS_ADMIN'],
+        securityOpts: ['apparmor=unconfined'],
+        seccomp: { defaultAction: 'SCMP_ACT_ERRNO' },
+        devices: ['/dev/kvm', '/dev/net/tun'],
+        optionalDevices: ['/dev/zfs', '/dev/loop-control'],
+        unlimitedPids: true,
+      },
+    ),
+  ).toBeNull();
+});
+
+test("#findPrivilegeDrift flags a container that keeps podman's default pids limit", () => {
+  expect(
+    findPrivilegeDrift(
+      {
+        Privileged: false,
+        PidsLimit: 2048,
+        CapAdd: ['CAP_SYS_ADMIN', 'CAP_KILL'],
+        CapDrop: ['ALL'],
+        SecurityOpt: ['apparmor=unconfined', 'seccomp={"defaultAction":"SCMP_ACT_ERRNO"}'],
+        Devices: [{ PathOnHost: '/dev/kvm' }, { PathOnHost: '/dev/net/tun' }],
+      },
+      {
+        caps: ['CAP_KILL', 'CAP_SYS_ADMIN'],
+        securityOpts: ['apparmor=unconfined'],
+        seccomp: { defaultAction: 'SCMP_ACT_ERRNO' },
+        devices: ['/dev/kvm', '/dev/net/tun'],
+        optionalDevices: ['/dev/zfs', '/dev/loop-control'],
+        unlimitedPids: true,
+      },
+    ),
+  ).toBe('it caps its processes at 2048');
+});
+
 test('#readExpectedPrivileges reads the capabilities, options and devices of the deploy arguments', () => {
   const argsJson = JSON.stringify({
     privileges: [
-      ['--init', '--cap-drop', 'ALL'],
+      ['--init', '--pids-limit=-1', '--cap-drop', 'ALL'],
       ['--cap-add', 'SYS_ADMIN', '--cap-add', 'KILL'],
       ['--security-opt', 'apparmor=unconfined'],
       ['--security-opt', 'seccomp=/etc/imp/imp-host.seccomp.json'],
@@ -240,7 +377,19 @@ test('#readExpectedPrivileges reads the capabilities, options and devices of the
     seccomp: { defaultAction: 'SCMP_ACT_ERRNO' },
     devices: ['/dev/kvm', '/dev/net/tun'],
     optionalDevices: ['/dev/zfs', '/dev/loop-control'],
+    unlimitedPids: true,
   });
+});
+
+test.each([
+  ['--pids-limit=-1', ['--pids-limit=-1'], true],
+  ['--pids-limit 0', ['--pids-limit', '0'], true],
+  ['--pids-limit=2048', ['--pids-limit=2048'], false],
+  ['no --pids-limit', [], false],
+])('#readExpectedPrivileges reads %s as unlimited pids: %p', (_, words, unlimited) => {
+  const argsJson = JSON.stringify({ privileges: [['--init', ...words]], probed: [] });
+
+  expect(readExpectedPrivileges(argsJson, '{}').unlimitedPids).toBe(unlimited);
 });
 
 test('#readExpectedPrivileges reads deploy/imp-host.args.json without the module-loading capability', () => {
@@ -256,6 +405,7 @@ test('#readExpectedPrivileges reads deploy/imp-host.args.json without the module
   expect(expected.securityOpts).toStrictEqual(['apparmor=unconfined']);
   expect(expected.devices).toStrictEqual(['/dev/kvm', '/dev/net/tun']);
   expect(expected.optionalDevices).toStrictEqual(['/dev/zfs', '/dev/loop-control']);
+  expect(expected.unlimitedPids).toBe(true);
 });
 
 test('#findSocketDrift passes a mount that holds no Docker socket', () => {

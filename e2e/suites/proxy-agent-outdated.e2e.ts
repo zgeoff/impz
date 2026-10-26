@@ -46,7 +46,7 @@ test('it reports AGENT_OUTDATED and closes the connection when the imp’s agent
   const file = `/var/lib/imp/imps/${imp.id}/vm.json`;
 
   await runChecked([
-    'docker',
+    instance.containerCLI,
     'exec',
     instance.container,
     'sh',
@@ -55,7 +55,14 @@ test('it reports AGENT_OUTDATED and closes the connection when the imp’s agent
   ]);
 
   ctx.stack.defer(async () => {
-    await runChecked(['docker', 'exec', instance.container, 'mv', `${file}.e2e`, file]);
+    await runChecked([
+      instance.containerCLI,
+      'exec',
+      instance.container,
+      'mv',
+      `${file}.e2e`,
+      file,
+    ]);
   });
 
   const [port] = proxy.ports;

@@ -12,8 +12,10 @@ impz runs on one Linux machine, in one host container, in one of two ways:
 ## Needs
 
 - `/dev/kvm`: bare metal, or a VM with nested virtualization (WSL2 works).
-- A container engine: rootful Podman for the release image, and Docker for the dev instance, which
-  `dev.sh` builds and runs with Docker. The host container runs as root with the capabilities in
+- A container engine: rootful Podman for the release image, and Docker for the dev instance, whose
+  host image builds with Docker. `dev.sh` runs the dev instance under Docker by default, or under
+  Podman with `IMP_DEV_CONTAINER_CLI=podman` ([dev instance](configuration.md#dev-instance)). The
+  host container runs as root with the capabilities in
   [privileges](../architecture/host.md#privileges). It gets no Docker socket
   ([the Docker socket](../architecture/host.md#the-docker-socket)). That closes the Docker socket
   path only: `SYS_ADMIN` still lets root out of the container.

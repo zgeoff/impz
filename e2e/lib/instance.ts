@@ -2,6 +2,7 @@ import { realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import * as z from 'zod';
 import { buildDevLayout } from '../../scripts/lib/build-dev-layout.ts';
+import type { ContainerCLI } from '../../scripts/lib/build-dev-layout.ts';
 import { readDevCheckout } from '../../scripts/lib/read-dev-checkout.ts';
 import { config } from './config';
 import type { HarnessEnv } from './config';
@@ -13,6 +14,7 @@ const DEV_SCRIPT = join(REPO_ROOT, 'scripts', 'dev', 'dev.sh');
 
 export interface DevInstance {
   readonly container: string;
+  readonly containerCLI: ContainerCLI;
 
   readonly dataDir: string;
   readonly apiUrl: string;
@@ -41,6 +43,7 @@ export function buildInstance(env: HarnessEnv, cwd: string): DevInstance {
 
   return {
     container: layout.name,
+    containerCLI: layout.containerCLI,
     dataDir: layout.dataDir,
     apiUrl: env['IMP_URL'] ?? layout.apiURL,
     proxyPort: layout.proxyPort,
@@ -65,9 +68,11 @@ export interface InstanceOptions {
   readonly env?: Readonly<Record<string, string>>;
 }
 
+// The second host joins a network that the host's Docker makes, so it always runs under docker.
 export function createInstance(options: InstanceOptions): DevInstance {
   return {
     container: options.container,
+    containerCLI: 'docker',
     dataDir: options.dataDir,
     apiUrl: `http://${options.ip}:7070`,
     proxyPort: 7080,
@@ -78,6 +83,7 @@ export function createInstance(options: InstanceOptions): DevInstance {
     env: {
       ...options.env,
       IMP_DEV_NAME: options.container,
+      IMP_DEV_CONTAINER_CLI: 'docker',
       IMP_DEV_DATA: options.dataDir,
       IMP_DEV_PORT_OFFSET: '0',
       IMP_DEV_NETWORK: options.network,
@@ -185,7 +191,7 @@ export function runInContainer(
   argv: readonly string[],
   target: DevInstance = instance,
 ): Promise<CommandResult> {
-  return runCommand(['docker', 'exec', target.container, ...argv]);
+  return runCommand([target.containerCLI, 'exec', target.container, ...argv]);
 }
 
 // Guests reach this machine through FORWARD and MASQUERADE. Egress policies
@@ -207,7 +213,7 @@ export async function readImpdLogTail(
   target: Readonly<DevInstance> = instance,
 ): Promise<string> {
   const result = await runCommand([
-    'docker',
+    target.containerCLI,
     'logs',
     '--timestamps',
     '--tail',
@@ -222,7 +228,7 @@ export async function readImpdLogSince(
   since: Readonly<Date>,
   target: Readonly<DevInstance> = instance,
 ): Promise<string> {
-  const argv = ['docker', 'logs', '--since', since.toISOString(), target.container];
+  const argv = [target.containerCLI, 'logs', '--since', since.toISOString(), target.container];
 
   const result = await runCommand(argv);
 
@@ -234,7 +240,7 @@ export async function readImpdLogSince(
 }
 
 export async function readImpdLoggedMs(text: string): Promise<number | null> {
-  const result = await runCommand(['docker', 'logs', instance.container]);
+  const result = await runCommand([instance.containerCLI, 'logs', instance.container]);
 
   const lines = `${result.stdout}${result.stderr}`
     .split('\n')
@@ -257,7 +263,7 @@ export async function stopFirecrackerHard(id: string): Promise<void> {
 
   const pids = readFirecrackerPids(id, found.stdout);
 
-  await runChecked(['docker', 'exec', instance.container, 'kill', '-9', ...pids]);
+  await runChecked([instance.containerCLI, 'exec', instance.container, 'kill', '-9', ...pids]);
 }
 
 export async function readImpdPid(): Promise<string | null> {

@@ -86,6 +86,7 @@ drives it through a browser. The suites run in this order:
 | `boot-templates` | a cold boot restored from a boot template: its own name, MAC, disk size and TCP ISN secret; a sleep and wake after                                                                                                                                                                                                             |
 | `inner`          | the inner container: PID 1 inside, signals, `kill -9 -1`, a memory hog, a reboot and the listeners after it, `rm -rf /`, a wiped root                                                                                                                                                                                          |
 | `socket`         | no Docker in the dev container: no `docker.sock`, no `/run/imp-docker` and no `docker` binary                                                                                                                                                                                                                                  |
+| `podman`         | the builder image that impd fetched by digest, and `impz image build` of a two-line Dockerfile whose file an imp from the image holds; the `podman` CI job runs it under Podman                                                                                                                                                |
 | `moves`          | `impz move` to a second instance on a Docker network: cold with a checkpoint, an abort, warm moves of an open and a box imp that keep tmpfs and processes and reach DNS, HTTP and the broker at once                                                                                                                           |
 | `moves-tailnet`  | `impz move` between two tailnet nodes: the real peer check on their tailnet addresses                                                                                                                                                                                                                                          |
 | `tailnet-names`  | per-imp tailnet names on the test tailnet: an imp's own name, which wakes it, and goes with it on a move; skips unless `IMP_E2E_TAILNET_NAMES=1`                                                                                                                                                                               |
@@ -142,7 +143,11 @@ IMP_OP_VAULT=imp-e2e IMP_E2E_TAILNET_NAMES=1 e2e/test-e2e.sh --only tailnet-name
 ```
 
 `IMP_DEV_NAME`, `IMP_DEV_PORT_OFFSET` and `IMP_DEV_DATA` pick the dev instance, as for
-`scripts/dev/dev.sh`. These variables tune a run:
+`scripts/dev/dev.sh`. `IMP_DEV_CONTAINER_CLI=podman` drives the dev container through Podman
+([the dev instance's settings](../guides/configuration.md#dev-instance)). The suites that start
+containers of their own, such as the registry, Headscale, Pebble and the moves suites' second host,
+start them with Docker, so a Podman run takes only the suites that start none. These variables tune
+a run:
 
 | Variable                | Default | Effect                                                   |
 | ----------------------- | ------- | -------------------------------------------------------- |
@@ -289,6 +294,7 @@ Lefthook installs the hooks with `bun install`.
 | `client`     | yes      | Packs `@impz/client`, installs it on the oldest Node it supports, and smokes it under Node, Bun and a compiled Bun binary.                                                                                                                                       |
 | `e2e`        | yes      | Passes only when every `e2e-group` job passed: the `fast` end-to-end set on real microVMs, in four groups on four runners (below).                                                                                                                               |
 | `zfs`        | yes      | Passes only when every `zfs-shard` job passed: real imps on a ZFS pool in three shards, and `scripts/test-zfs.sh` in one (below).                                                                                                                                |
+| `podman`     | no       | `e2e/podman/run-podman-proof.sh`: the proof that an imp host runs with no Docker engine (below).                                                                                                                                                                 |
 
 The `checks` job also runs the docs-writing skill's scripts. `bun run lint:docs` runs
 `check-links.sh`, which fails on a broken relative link or anchor in a README or a page under
@@ -399,6 +405,31 @@ gh workflow run e2e-images.yml --ref <branch>
 `.github/workflows/reproducible.yml` runs `scripts/release/check-reproducible.sh` (the guest kernel
 and the system drive rebuild to the same bytes). It takes two cold kernel builds, so it runs by
 hand: `gh workflow run reproducible.yml`.
+
+### The podman job
+
+The `podman` job proves that an imp host runs with no Docker engine. It builds the e2e groups'
+inputs on a KVM runner, reading the caches only, and runs `e2e/podman/run-podman-proof.sh` as root.
+The script fails at the first check that does not hold, with the reason, and at the end prints every
+check it made:
+
+1. It starts the dev instance under Docker, waits for impd to add its builder image and its default
+   image, makes the imp `e2e-podman-keep` with a file in it, and records the builder image's id and
+   digest.
+2. It stops the instance, loads the host image into Podman (`docker save | podman load`), masks
+   `docker.socket` and `docker.service`, and checks that `/var/run/docker.sock` is gone and that
+   `docker info` reaches no engine.
+3. It starts the instance under Podman on the same data dir, and checks that the container has no
+   Docker socket and no `docker` binary, that it runs with no pids limit, that it can make device
+   nodes where an image unpack writes them, that impd lists `e2e-podman-keep` with its file intact,
+   and that the builder image keeps its id and digest, so impd did not fetch it again.
+4. It starts a second instance under Podman on a fresh data dir, `<data>-fresh`, and waits for impd
+   to fetch its builder image there, with Docker masked.
+5. It runs `e2e/test-e2e.sh --only socket,podman` on that instance.
+
+The script masks Docker for good, so it refuses to run unless `CI=true`. The job uploads an
+`e2e-results-podman` artifact with impd's log under Docker (`impd-docker.log`) and under Podman
+(`impd.log`). It is no required check, and the `e2e` job does not wait for it.
 
 ## Branch rules
 

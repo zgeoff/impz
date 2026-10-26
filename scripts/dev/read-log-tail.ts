@@ -1,7 +1,10 @@
-import type { DevIO } from './types.ts';
+import type { Dev } from './types.ts';
 
-export async function readLogTail(io: DevIO, container: string, lines: number): Promise<string> {
-  const logs = await io.shell`docker logs --tail ${lines} ${container}`.quiet().nothrow();
+export async function readLogTail(dev: Dev, lines: number): Promise<string> {
+  const logs = await dev.io
+    .shell`${dev.layout.containerCLI} logs --tail ${lines} ${dev.layout.name}`
+    .quiet()
+    .nothrow();
 
   return `${logs.stdout.toString()}${logs.stderr.toString()}`;
 }

@@ -200,6 +200,7 @@ The release's systemd unit reads these, in the env file or the shell.
 | `IMP_DEV_NAME`            | `imp-dev`                                      | The container name.                                                             |
 | `IMP_DEV_PORT_OFFSET`     | `0`                                            | Added to every published port, for parallel instances.                          |
 | `IMP_DEV_DATA`            | `<repo>/.data/dev`                             | The host directory that holds the XFS file.                                     |
+| `IMP_DEV_CONTAINER_CLI`   | `docker`                                       | The CLI that runs the container: `docker`, or `podman` for rootful Podman.      |
 | `IMP_KERNEL`              | `kernel/out/vmlinux`, else `.cache/vmlinux-ci` | The guest kernel; a path under the repo.                                        |
 | `IMP_SYSTEM_DRIVE`        | `build/imp-system.squashfs`                    | The system drive; a path under the repo.                                        |
 | `IMP_STORAGE_GIB`         | `200`                                          | Passed to the container.                                                        |
@@ -213,6 +214,12 @@ The release's systemd unit reads these, in the env file or the shell.
 | `IMP_DEV_READY_TIMEOUT_S` | `600` for `up`, `60` for `restart`             | The seconds to wait for impd's `/health` to report ready.                       |
 | `IMP_DEV_STOP_TIMEOUT_S`  | `30`                                           | The seconds `restart` waits for the old impd to exit.                           |
 | `IMP_MACHINE_ID_FILE`     | `/etc/machine-id`                              | The file that holds this machine's id, which labels the host image for `prune`. |
+
+With `IMP_DEV_CONTAINER_CLI=podman`, `dev.sh` builds no host image, because the host image builds
+with docker buildx and its cache. Load it into Podman's store with
+`docker save <IMP_HOST_IMAGE> | podman load`; `dev.sh up` refuses to start without it and prints
+that command. The system drive builds with Docker too, so on a host with Docker off, set
+`IMP_SYSTEM_DRIVE` to a drive built before.
 
 `dev.sh` passes `.env` in the repo root to Docker as an env file, so `IMP_DNS_API_TOKEN` and any
 other secret in it is never printed. It takes `TAILSCALE_AUTHKEY` from the first of:
