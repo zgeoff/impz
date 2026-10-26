@@ -1,24 +1,24 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
-import * as z from 'zod';
-import { writeBuildContext } from '../lib/build-context';
-import { buildReachScript } from '../lib/build-reach-script';
-import { config } from '../lib/config';
-import { createInstanceClient, runImp, runInImp } from '../lib/imp-cli';
-import { waitForExec } from '../lib/imps';
-import { parseInet6Addresses } from '../lib/inet6-addresses';
+import { writeBuildContext } from '@impz/e2e-harness/build-context';
+import { buildReachScript } from '@impz/e2e-harness/build-reach-script';
+import { config } from '@impz/e2e-harness/config';
+import { createInstanceClient, runImp, runInImp } from '@impz/e2e-harness/imp-cli';
+import { waitForExec } from '@impz/e2e-harness/imps';
+import { parseInet6Addresses } from '@impz/e2e-harness/inet6-addresses';
 import {
   REPO_ROOT,
   readContainerGateway,
   runChecked,
   runCommand,
   runInContainer,
-} from '../lib/instance';
-import { registerRemoval } from '../lib/register-removal';
-import { removeImageIfPresent, removeImpIfPresent } from '../lib/reset-baseline';
-import { getSuitePrefix } from '../lib/suites';
-import { waitFor } from '../lib/wait-for';
+} from '@impz/e2e-harness/instance';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImageIfPresent, removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import { waitFor } from '@impz/e2e-harness/wait-for';
+import * as z from 'zod';
 
 // collection-time gate: Bun's skipIf takes a boolean and has no in-body skip
 const route6 = await runInContainer(['ip', '-6', 'route', 'show', 'default']);

@@ -1,15 +1,15 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { config } from '../lib/config';
-import { resolveImageName } from '../lib/fixtures';
-import { createInstanceClient, readImp, runImp, runImpWith } from '../lib/imp-cli';
-import { waitForExec, writeGuestFile } from '../lib/imps';
-import { runInContainer } from '../lib/instance';
-import { HOST_B, readMoveHosts, readMoveOptions } from '../lib/move-hosts';
-import { registerRemoval } from '../lib/register-removal';
-import { removeImpIfPresent } from '../lib/reset-baseline';
-import { getSuitePrefix } from '../lib/suites';
-import { parseSelfTags, waitForTailnetIp } from '../lib/tailnet';
-import { waitFor } from '../lib/wait-for';
+import { config } from '@impz/e2e-harness/config';
+import { resolveImageName } from '@impz/e2e-harness/fixtures';
+import { createInstanceClient, readImp, runImp, runImpWith } from '@impz/e2e-harness/imp-cli';
+import { waitForExec, writeGuestFile } from '@impz/e2e-harness/imps';
+import { runInContainer } from '@impz/e2e-harness/instance';
+import { HOST_B, readMoveHosts, readMoveOptions } from '@impz/e2e-harness/move-hosts';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import { parseSelfTags, waitForTailnetIp } from '@impz/e2e-harness/tailnet';
+import { waitFor } from '@impz/e2e-harness/wait-for';
 
 // One stack for every release, so B's imps go before B.
 async function setupTest() {

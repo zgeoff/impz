@@ -1,16 +1,20 @@
 import { expect, onTestFinished, test } from 'bun:test';
+import { config } from '@impz/e2e-harness/config';
+import {
+  openSessionSocket,
+  requireOutput,
+  requireSessionError,
+} from '@impz/e2e-harness/exec-socket';
+import { resolveImageName } from '@impz/e2e-harness/fixtures';
+import { assertState, createInstanceClient, requireImp, runImp } from '@impz/e2e-harness/imp-cli';
+import { waitForExec } from '@impz/e2e-harness/imps';
+import { stopFirecrackerHard } from '@impz/e2e-harness/instance';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import { waitFor } from '@impz/e2e-harness/wait-for';
+import { writeMetric } from '@impz/e2e-harness/write-metric';
 import invariant from 'tiny-invariant';
-import { config } from '../lib/config';
-import { openSessionSocket, requireOutput, requireSessionError } from '../lib/exec-socket';
-import { resolveImageName } from '../lib/fixtures';
-import { assertState, createInstanceClient, requireImp, runImp } from '../lib/imp-cli';
-import { waitForExec } from '../lib/imps';
-import { stopFirecrackerHard } from '../lib/instance';
-import { registerRemoval } from '../lib/register-removal';
-import { removeImpIfPresent } from '../lib/reset-baseline';
-import { getSuitePrefix } from '../lib/suites';
-import { waitFor } from '../lib/wait-for';
-import { writeMetric } from '../lib/write-metric';
 
 // One stack for every release, so each session socket closes before its imp
 // goes.

@@ -1,9 +1,9 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { createStubBin } from '@impz/test-utils/create-stub-bin';
 import { formatShellWord } from '@impz/test-utils/format-shell-word';
 import { match } from 'ts-pattern';
 import { buildStubEnvRecord } from './build-stub-env-record';
-import { createStubBin } from './create-stub-bin';
 
 export interface StubImpdOptions {
   // the lines impd --network-env prints

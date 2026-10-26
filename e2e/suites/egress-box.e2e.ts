@@ -1,21 +1,21 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { randomUUID } from 'node:crypto';
-import { config } from '../lib/config';
-import { buildTcpQueryOctal, parseTcpReplyHex } from '../lib/dns-probe';
-import { resolveImageName } from '../lib/fixtures';
-import { tryDialFromImp, tryGetFromImp, tryInImp } from '../lib/guest-probe';
-import { createInstanceClient, requireImp, runImp, runShellInImp } from '../lib/imp-cli';
-import { startReverse } from '../lib/imp-proxy';
-import { holdImp, waitForExec } from '../lib/imps';
-import { readContainerGateway, runInContainer } from '../lib/instance';
-import { parseWholeNumber } from '../lib/parse-whole-number';
-import { registerRemoval } from '../lib/register-removal';
-import { removeImpIfPresent, removeSecretIfPresent } from '../lib/reset-baseline';
-import { startStubPrivateService } from '../lib/start-stub-private-service';
-import { getSuitePrefix } from '../lib/suites';
-import { waitForTailnetIp } from '../lib/tailnet';
-import { waitFor } from '../lib/wait-for';
-import { writeMetric } from '../lib/write-metric';
+import { config } from '@impz/e2e-harness/config';
+import { buildTcpQueryOctal, parseTcpReplyHex } from '@impz/e2e-harness/dns-probe';
+import { resolveImageName } from '@impz/e2e-harness/fixtures';
+import { tryDialFromImp, tryGetFromImp, tryInImp } from '@impz/e2e-harness/guest-probe';
+import { createInstanceClient, requireImp, runImp, runShellInImp } from '@impz/e2e-harness/imp-cli';
+import { startReverse } from '@impz/e2e-harness/imp-proxy';
+import { holdImp, waitForExec } from '@impz/e2e-harness/imps';
+import { readContainerGateway, runInContainer } from '@impz/e2e-harness/instance';
+import { parseWholeNumber } from '@impz/e2e-harness/parse-whole-number';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent, removeSecretIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { startStubPrivateService } from '@impz/e2e-harness/start-stub-private-service';
+import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import { waitForTailnetIp } from '@impz/e2e-harness/tailnet';
+import { waitFor } from '@impz/e2e-harness/wait-for';
+import { writeMetric } from '@impz/e2e-harness/write-metric';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

@@ -1,7 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import invariant from 'tiny-invariant';
-import { config } from '../lib/config';
-import { resolveImageName } from '../lib/fixtures';
+import { config } from '@impz/e2e-harness/config';
+import { resolveImageName } from '@impz/e2e-harness/fixtures';
 import {
   assertState,
   createInstanceClient,
@@ -9,20 +8,21 @@ import {
   readInfo,
   requireImp,
   runImp,
-} from '../lib/imp-cli';
-import { holdImp, waitForExec } from '../lib/imps';
-import { runChecked, runInContainer } from '../lib/instance';
-import { registerRemoval } from '../lib/register-removal';
-import { removeImpIfPresent } from '../lib/reset-baseline';
-import { getSuitePrefix } from '../lib/suites';
+} from '@impz/e2e-harness/imp-cli';
+import { holdImp, waitForExec } from '@impz/e2e-harness/imps';
+import { runChecked, runInContainer } from '@impz/e2e-harness/instance';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { getSuitePrefix } from '@impz/e2e-harness/suites';
 import {
   findTailnetNode,
   readMemberBody,
   readMemberStatus,
   readTailnetMember,
   waitForTailnetIp,
-} from '../lib/tailnet';
-import { waitFor } from '../lib/wait-for';
+} from '@impz/e2e-harness/tailnet';
+import { waitFor } from '@impz/e2e-harness/wait-for';
+import invariant from 'tiny-invariant';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

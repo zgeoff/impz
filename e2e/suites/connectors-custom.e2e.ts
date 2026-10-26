@@ -1,21 +1,27 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { randomUUID } from 'node:crypto';
-import * as z from 'zod';
 import {
   buildBrokerUpstreams,
   readBrokerAudit,
   removeBrokerUpstreams,
   writeBrokerUpstreams,
-} from '../lib/broker-upstreams';
-import { config } from '../lib/config';
-import { resolveImageName } from '../lib/fixtures';
-import { createInstanceClient, requireImp, runImp, runShellInImp, tryImp } from '../lib/imp-cli';
-import { holdImp, waitForExec } from '../lib/imps';
-import { readContainerGateway, runInContainer } from '../lib/instance';
-import { registerRemoval } from '../lib/register-removal';
-import { removeImpIfPresent, removeSecretIfPresent } from '../lib/reset-baseline';
-import { startStubUpstream } from '../lib/start-stub-upstream';
-import { getSuitePrefix } from '../lib/suites';
+} from '@impz/e2e-harness/broker-upstreams';
+import { config } from '@impz/e2e-harness/config';
+import { resolveImageName } from '@impz/e2e-harness/fixtures';
+import {
+  createInstanceClient,
+  requireImp,
+  runImp,
+  runShellInImp,
+  tryImp,
+} from '@impz/e2e-harness/imp-cli';
+import { holdImp, waitForExec } from '@impz/e2e-harness/imps';
+import { readContainerGateway, runInContainer } from '@impz/e2e-harness/instance';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent, removeSecretIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { startStubUpstream } from '@impz/e2e-harness/start-stub-upstream';
+import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import * as z from 'zod';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

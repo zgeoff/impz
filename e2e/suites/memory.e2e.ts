@@ -1,18 +1,22 @@
 import { expect, onTestFinished, test } from 'bun:test';
+import { readBalloonStats } from '@impz/e2e-harness/balloon-stats';
+import { config } from '@impz/e2e-harness/config';
+import { resolveImageName } from '@impz/e2e-harness/fixtures';
+import {
+  readMemAvailableMib,
+  readMemTotalMib,
+  readPluggedMib,
+} from '@impz/e2e-harness/guest-memory';
+import { createInstanceClient, requireImp, runImp, runShellInImp } from '@impz/e2e-harness/imp-cli';
+import { findAsleepLine } from '@impz/e2e-harness/impd-sleep-log';
+import { holdImp, waitForExec } from '@impz/e2e-harness/imps';
+import { readImpdLogSince } from '@impz/e2e-harness/instance';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import { waitFor } from '@impz/e2e-harness/wait-for';
+import { writeMetric } from '@impz/e2e-harness/write-metric';
 import invariant from 'tiny-invariant';
-import { readBalloonStats } from '../lib/balloon-stats';
-import { config } from '../lib/config';
-import { resolveImageName } from '../lib/fixtures';
-import { readMemAvailableMib, readMemTotalMib, readPluggedMib } from '../lib/guest-memory';
-import { createInstanceClient, requireImp, runImp, runShellInImp } from '../lib/imp-cli';
-import { findAsleepLine } from '../lib/impd-sleep-log';
-import { holdImp, waitForExec } from '../lib/imps';
-import { readImpdLogSince } from '../lib/instance';
-import { registerRemoval } from '../lib/register-removal';
-import { removeImpIfPresent } from '../lib/reset-baseline';
-import { getSuitePrefix } from '../lib/suites';
-import { waitFor } from '../lib/wait-for';
-import { writeMetric } from '../lib/write-metric';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

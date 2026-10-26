@@ -1,7 +1,7 @@
 import { copyFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { createStubBin } from './create-stub-bin';
-import type { StubBin } from './create-stub-bin';
+import { createStubBin } from '@impz/test-utils/create-stub-bin';
+import type { StubBin } from '@impz/test-utils/create-stub-bin';
 
 export interface ZpoolStubOptions {
   readonly create?: 'fails' | { readonly startedMarker: string; readonly release: string };

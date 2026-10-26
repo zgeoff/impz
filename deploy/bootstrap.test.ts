@@ -3,11 +3,11 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createCommandLinks } from '@impz/test-utils/create-command-links';
+import { createStubBin } from '@impz/test-utils/create-stub-bin';
 import * as z from 'zod';
 import { buildStubBlockDevices } from '../scripts/test-utils/build-stub-block-devices';
 import { buildStubBootstrapDocker } from '../scripts/test-utils/build-stub-bootstrap-docker';
 import { buildStubBootstrapPodman } from '../scripts/test-utils/build-stub-bootstrap-podman';
-import { createStubBin } from '../scripts/test-utils/create-stub-bin';
 import { readEnvValues } from '../scripts/test-utils/read-env-values';
 import { runSourcedFunction } from '../scripts/test-utils/run-sourced-function';
 

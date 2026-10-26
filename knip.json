@@ -17,10 +17,7 @@
       // run-related-tests.ts is a synced CLI that test:related reaches through
       // run-branch-tests.ts; its other exports serve the tests in zgeoff/tools
       "entry": [
-        "e2e/main.ts",
         "e2e/suites/*.e2e.ts",
-        // the bootstrap harness that e2e/test-bootstrap.sh runs
-        "e2e/test-bootstrap.ts",
         "scripts/ci/run-related-tests.ts",
         // the dev CLI that scripts/dev/dev.sh runs
         "scripts/dev/dev.ts",
@@ -67,6 +64,9 @@
     "packages/dashboard": {
       "entry": ["augment-bun-test.ts", "e2e/*.e2e.ts"],
       "project": ["src/**/*.{ts,tsx}!", "!src/test-utils/**!", "e2e/**/*.ts"]
+    },
+    "packages/e2e-harness": {
+      "project": ["src/**/*.ts"]
     },
     "packages/testing": {
       // the package smoke, which scripts/release/check-testing-package.sh runs installed

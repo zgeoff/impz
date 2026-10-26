@@ -1,8 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import invariant from 'tiny-invariant';
-import { config } from '../lib/config';
-import { resolveImageName } from '../lib/fixtures';
-import { readThroughProxy, sendProxyRequest } from '../lib/http';
+import { config } from '@impz/e2e-harness/config';
+import { resolveImageName } from '@impz/e2e-harness/fixtures';
+import { readThroughProxy, sendProxyRequest } from '@impz/e2e-harness/http';
 import {
   createInstanceClient,
   readState,
@@ -12,14 +11,15 @@ import {
   runShellInImp,
   startImp,
   tryImp,
-} from '../lib/imp-cli';
-import { readText } from '../lib/imp-proxy';
-import { waitForExec } from '../lib/imps';
-import { registerRemoval } from '../lib/register-removal';
-import { removeImpIfPresent } from '../lib/reset-baseline';
-import { listServices, waitForServicePid } from '../lib/services';
-import { getSuitePrefix } from '../lib/suites';
-import { waitFor } from '../lib/wait-for';
+} from '@impz/e2e-harness/imp-cli';
+import { readText } from '@impz/e2e-harness/imp-proxy';
+import { waitForExec } from '@impz/e2e-harness/imps';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { listServices, waitForServicePid } from '@impz/e2e-harness/services';
+import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import { waitFor } from '@impz/e2e-harness/wait-for';
+import invariant from 'tiny-invariant';
 
 // One stack for every release, so a follow stops before its imp goes.
 async function setupTest() {

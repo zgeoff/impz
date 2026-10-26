@@ -1,13 +1,13 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { config } from '../lib/config';
-import { resolveImageName } from '../lib/fixtures';
-import { sendProxyRequest } from '../lib/http';
-import { createInstanceClient, runImp } from '../lib/imp-cli';
-import { waitForExec } from '../lib/imps';
-import { registerRemoval } from '../lib/register-removal';
-import { removeImpIfPresent } from '../lib/reset-baseline';
-import { getSuitePrefix } from '../lib/suites';
-import { openProxySocket } from '../lib/websocket';
+import { config } from '@impz/e2e-harness/config';
+import { resolveImageName } from '@impz/e2e-harness/fixtures';
+import { sendProxyRequest } from '@impz/e2e-harness/http';
+import { createInstanceClient, runImp } from '@impz/e2e-harness/imp-cli';
+import { waitForExec } from '@impz/e2e-harness/imps';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import { openProxySocket } from '@impz/e2e-harness/websocket';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

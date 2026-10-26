@@ -2,9 +2,9 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createStubBin } from '@impz/test-utils/create-stub-bin';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { buildStubEnvRecord } from '../scripts/test-utils/build-stub-env-record';
-import { createStubBin } from '../scripts/test-utils/create-stub-bin';
 import { createStubImpd } from '../scripts/test-utils/create-stub-impd';
 
 function setupTest() {

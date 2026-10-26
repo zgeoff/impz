@@ -1,16 +1,16 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { waitAwakePastIdle } from '../lib/awake-past-idle';
-import { config } from '../lib/config';
-import { resolveImageName } from '../lib/fixtures';
-import { assertState, createInstanceClient, requireImp, runImp } from '../lib/imp-cli';
-import { countMatches } from '../lib/imp-proxy';
-import { waitForExec } from '../lib/imps';
-import { registerRemoval } from '../lib/register-removal';
-import { removeImpIfPresent } from '../lib/reset-baseline';
-import { listSessions, requireSession } from '../lib/sessions';
-import { getSuitePrefix } from '../lib/suites';
-import { openTerminal } from '../lib/terminal';
-import { waitFor } from '../lib/wait-for';
+import { waitAwakePastIdle } from '@impz/e2e-harness/awake-past-idle';
+import { config } from '@impz/e2e-harness/config';
+import { resolveImageName } from '@impz/e2e-harness/fixtures';
+import { assertState, createInstanceClient, requireImp, runImp } from '@impz/e2e-harness/imp-cli';
+import { countMatches } from '@impz/e2e-harness/imp-proxy';
+import { waitForExec } from '@impz/e2e-harness/imps';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { listSessions, requireSession } from '@impz/e2e-harness/sessions';
+import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import { openTerminal } from '@impz/e2e-harness/terminal';
+import { waitFor } from '@impz/e2e-harness/wait-for';
 
 // One stack for every release, so each terminal closes before its imp goes.
 async function setupTest() {

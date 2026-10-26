@@ -1,8 +1,8 @@
 import { join, resolve } from 'node:path';
+import { pickZfsShard } from '@impz/e2e-harness/suites';
+import { ZFS_OWNER_FILE, formatZfsOwnerFile } from '@impz/e2e-harness/zfs-owner';
 import invariant from 'tiny-invariant';
 import { match } from 'ts-pattern';
-import { pickZfsShard } from '../e2e/lib/suites.ts';
-import { ZFS_OWNER_FILE, formatZfsOwnerFile } from '../e2e/lib/zfs-owner.ts';
 import type { DevEnv } from './lib/build-dev-layout.ts';
 import { DevError } from './lib/dev-error.ts';
 import { pickSetting } from './lib/pick-setting.ts';
@@ -223,12 +223,12 @@ async function runSuites(run: PoolRun): Promise<number> {
 
   guard.throwIfStopped();
 
-  // The moves suites' B, on a root dataset of its own (e2e/lib/move-hosts.ts).
+  // The moves suites' B, on a root dataset of its own (packages/e2e-harness/src/move-hosts.ts).
   await io.shell`sudo zfs create -o mountpoint=legacy ${zfsRoot}-mv-b`;
 
   guard.throwIfStopped();
 
-  // What e2e/main.ts proves before it wipes this run's data dirs and datasets to make an instance
+  // What packages/e2e-harness/src/main.ts proves before it wipes this run's data dirs and datasets to make an instance
   // anew, one owner file for each impd.
   for (const [directory, root] of [
     ['data', zfsRoot],

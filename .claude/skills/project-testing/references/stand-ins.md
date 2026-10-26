@@ -9,7 +9,7 @@ own test shows what it models and what it refuses. The folders are
 [the CLI's](../../../../packages/cli/src/test-utils/),
 [the MCP server's](../../../../packages/mcp/src/test-utils/) and
 [the scripts'](../../../../scripts/test-utils/). The end-to-end harness keeps its own in
-[`e2e/lib/`](../../../../e2e/lib/).
+[`packages/e2e-harness/src/`](../../../../packages/e2e-harness/src/).
 
 - [Kinds of stand-in](#kinds-of-stand-in)
 - [Booting impd](#booting-impd)

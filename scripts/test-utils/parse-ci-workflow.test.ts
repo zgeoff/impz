@@ -52,6 +52,9 @@ test('it reads the e2e group matrix, the e2e aggregate, the zfs shards, the zfs 
     '        run: test "$RESULT" = success',
     '  release-please:',
     '    needs: [e2e]',
+    '    steps:',
+    '      - name: Auto-merge release PR',
+    '        run: gh pr list --draft=false',
   ].join('\n');
 
   expect(parseCiWorkflow(yaml)).toStrictEqual({
@@ -97,7 +100,10 @@ test('it reads the e2e group matrix, the e2e aggregate, the zfs shards, the zfs 
         { env: { RESULT: `\${{ needs.zfs-shard.result }}` }, run: 'test "$RESULT" = success' },
       ],
     },
-    'release-please': { needs: ['e2e'] },
+    'release-please': {
+      needs: ['e2e'],
+      steps: [{ name: 'Auto-merge release PR', run: 'gh pr list --draft=false' }],
+    },
   });
 });
 

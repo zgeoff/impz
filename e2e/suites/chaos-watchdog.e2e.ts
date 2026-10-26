@@ -1,15 +1,26 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { collectStrayVms, listContainerVms, readLoopDevices, waitForImpd } from '../lib/chaos';
-import { config } from '../lib/config';
-import { resolveImageName } from '../lib/fixtures';
-import { createInstanceClient, listImps, requireImp, runImp, runInImp } from '../lib/imp-cli';
-import { holdImp, waitForExec } from '../lib/imps';
-import { instance, runDevScript, runInContainer } from '../lib/instance';
-import { checkMemoryKept, startMemoryProof } from '../lib/memory-proof';
-import { registerRemoval } from '../lib/register-removal';
-import { removeImpIfPresent } from '../lib/reset-baseline';
-import { getSuitePrefix } from '../lib/suites';
-import { waitFor } from '../lib/wait-for';
+import {
+  collectStrayVms,
+  listContainerVms,
+  readLoopDevices,
+  waitForImpd,
+} from '@impz/e2e-harness/chaos';
+import { config } from '@impz/e2e-harness/config';
+import { resolveImageName } from '@impz/e2e-harness/fixtures';
+import {
+  createInstanceClient,
+  listImps,
+  requireImp,
+  runImp,
+  runInImp,
+} from '@impz/e2e-harness/imp-cli';
+import { holdImp, waitForExec } from '@impz/e2e-harness/imps';
+import { instance, runDevScript, runInContainer } from '@impz/e2e-harness/instance';
+import { checkMemoryKept, startMemoryProof } from '@impz/e2e-harness/memory-proof';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import { waitFor } from '@impz/e2e-harness/wait-for';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

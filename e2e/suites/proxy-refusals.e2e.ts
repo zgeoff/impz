@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { createServer } from 'node:net';
-import { tryImp } from '../lib/imp-cli';
-import { getSuitePrefix } from '../lib/suites';
+import { tryImp } from '@impz/e2e-harness/imp-cli';
+import { getSuitePrefix } from '@impz/e2e-harness/suites';
 
 test('it refuses a busy local port before it checks the imp', async () => {
   const name = `${getSuitePrefix('proxy')}nope`;

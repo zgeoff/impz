@@ -1,15 +1,15 @@
 import { expect, onTestFinished, test } from 'bun:test';
+import { config } from '@impz/e2e-harness/config';
+import { resolveImageName } from '@impz/e2e-harness/fixtures';
+import { createInstanceClient, requireImp, runImp } from '@impz/e2e-harness/imp-cli';
+import { openHeldSocket, startProxy } from '@impz/e2e-harness/imp-proxy';
+import { waitForExec } from '@impz/e2e-harness/imps';
+import { instance, runChecked } from '@impz/e2e-harness/instance';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import { waitFor } from '@impz/e2e-harness/wait-for';
 import invariant from 'tiny-invariant';
-import { config } from '../lib/config';
-import { resolveImageName } from '../lib/fixtures';
-import { createInstanceClient, requireImp, runImp } from '../lib/imp-cli';
-import { openHeldSocket, startProxy } from '../lib/imp-proxy';
-import { waitForExec } from '../lib/imps';
-import { instance, runChecked } from '../lib/instance';
-import { registerRemoval } from '../lib/register-removal';
-import { removeImpIfPresent } from '../lib/reset-baseline';
-import { getSuitePrefix } from '../lib/suites';
-import { waitFor } from '../lib/wait-for';
 
 // One stack for every release, so the agent version comes back and the proxy
 // stops before the imp goes.

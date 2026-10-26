@@ -2,15 +2,20 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { config } from '../lib/config';
-import { resolveImageName } from '../lib/fixtures';
-import { createInstanceClient, runImp, runImpWith } from '../lib/imp-cli';
-import { waitForExec } from '../lib/imps';
-import { HOST_B, readMoveHosts } from '../lib/move-hosts';
-import { HOST_A, listAllHosts, startMoveSend, writeBothHostsConfig } from '../lib/move-steps';
-import { registerRemoval } from '../lib/register-removal';
-import { removeImpIfPresent } from '../lib/reset-baseline';
-import { getSuitePrefix } from '../lib/suites';
+import { config } from '@impz/e2e-harness/config';
+import { resolveImageName } from '@impz/e2e-harness/fixtures';
+import { createInstanceClient, runImp, runImpWith } from '@impz/e2e-harness/imp-cli';
+import { waitForExec } from '@impz/e2e-harness/imps';
+import { HOST_B, readMoveHosts } from '@impz/e2e-harness/move-hosts';
+import {
+  HOST_A,
+  listAllHosts,
+  startMoveSend,
+  writeBothHostsConfig,
+} from '@impz/e2e-harness/move-steps';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { getSuitePrefix } from '@impz/e2e-harness/suites';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

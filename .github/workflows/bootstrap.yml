@@ -15,8 +15,8 @@ on:
     paths:
       - deploy/**
       - e2e/test-bootstrap.*
-      - e2e/bootstrap/**
-      - e2e/lib/read-pool-properties.ts
+      - packages/e2e-harness/src/bootstrap/**
+      - packages/e2e-harness/src/read-pool-properties.ts
       - packages/test-utils/src/wait-for.ts
       - .bun-version
       - scripts/ci/check-kvm.sh
@@ -51,8 +51,8 @@ jobs:
           paths: |
             deploy/**
             e2e/test-bootstrap.*
-            e2e/bootstrap/**
-            e2e/lib/read-pool-properties.ts
+            packages/e2e-harness/src/bootstrap/**
+            packages/e2e-harness/src/read-pool-properties.ts
             packages/test-utils/src/wait-for.ts
             .bun-version
             scripts/ci/check-kvm.sh

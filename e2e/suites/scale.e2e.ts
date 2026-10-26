@@ -1,10 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { ENFORCE_INTERVAL_MS, loadConfig } from '@impz/daemon/testing';
-import invariant from 'tiny-invariant';
-import { collectOvershoots } from '../lib/budget-overshoot';
-import { config } from '../lib/config';
-import { resolveImageName } from '../lib/fixtures';
-import { readThroughProxy } from '../lib/http';
+import { collectOvershoots } from '@impz/e2e-harness/budget-overshoot';
+import { config } from '@impz/e2e-harness/config';
+import { resolveImageName } from '@impz/e2e-harness/fixtures';
+import { readThroughProxy } from '@impz/e2e-harness/http';
 import {
   createInstanceClient,
   listImps,
@@ -14,10 +13,10 @@ import {
   runImp,
   runShellInImp,
   tryImp,
-} from '../lib/imp-cli';
-import { waitForExec } from '../lib/imps';
-import { registerRemoval } from '../lib/register-removal';
-import { removeImpIfPresent } from '../lib/reset-baseline';
+} from '@impz/e2e-harness/imp-cli';
+import { waitForExec } from '@impz/e2e-harness/imps';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
 import {
   buildFillScript,
   buildOvershootLimits,
@@ -27,10 +26,11 @@ import {
   startBudgetMonitor,
   waitForSampleAfter,
   waitForUnderBudget,
-} from '../lib/scale-budget';
-import { buildStats } from '../lib/stats';
-import { getSuitePrefix } from '../lib/suites';
-import { writeMetric } from '../lib/write-metric';
+} from '@impz/e2e-harness/scale-budget';
+import { buildStats } from '@impz/e2e-harness/stats';
+import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import { writeMetric } from '@impz/e2e-harness/write-metric';
+import invariant from 'tiny-invariant';
 
 // One stack for every release, so the monitor stops and the holds go before
 // the imps they name.

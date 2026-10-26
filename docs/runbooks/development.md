@@ -108,7 +108,7 @@ e2e/test-e2e.sh --clean                  # wipe the dev instance's data first
 | Flag      | Effect                                                                                                                                                      |
 | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `--only`  | Comma-separated suites or sets. `acceptance` (the default) is every suite; `fast` is the CI subset.                                                         |
-| `--group` | One of the groups the `fast` set splits into (`FAST_GROUPS` in `e2e/lib/suites.ts`), from `1`.                                                              |
+| `--group` | One of the groups the `fast` set splits into (`FAST_GROUPS` in `packages/e2e-harness/src/suites.ts`), from `1`.                                             |
 | `--clean` | Logs the instance out of the tailnet, removes the container and wipes its data dir, and the moves suites' second host and its data dir.                     |
 | `--reuse` | Keeps a running dev instance instead of restarting it with the run's settings. A run with a Headscale suite restarts it anyway, onto the run's new tailnet. |
 | `--keep`  | Leaves the run's imps and fixture images in place for a look afterwards.                                                                                    |
@@ -317,11 +317,11 @@ On `main`, the `release-please` job makes releases ([releasing](./releasing.md))
 
 ### The e2e job
 
-The `fast` set runs in four groups (`FAST_GROUPS` in `e2e/lib/suites.ts`), one `e2e-group` job per
-group, each on its own runner. The `e2e` job is the required check: it fails when any group failed,
-was cancelled or was skipped. Each group boots real Firecracker guests on a standard `ubuntu-24.04`
-runner (4 cores, 16 GB), which exposes `/dev/kvm`. `scripts/ci/check-kvm.sh` runs first, so a runner
-without KVM fails in seconds with the reason. The job then:
+The `fast` set runs in four groups (`FAST_GROUPS` in `packages/e2e-harness/src/suites.ts`), one
+`e2e-group` job per group, each on its own runner. The `e2e` job is the required check: it fails
+when any group failed, was cancelled or was skipped. Each group boots real Firecracker guests on a
+standard `ubuntu-24.04` runner (4 cores, 16 GB), which exposes `/dev/kvm`. `scripts/ci/check-kvm.sh`
+runs first, so a runner without KVM fails in seconds with the reason. The job then:
 
 1. builds the guest kernel and the system drive from the `system-files` stage, with the release's
    GitHub Actions cache (scope `system-files`): the kernel rebuilds only when `kernel/build.sh`,

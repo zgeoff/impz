@@ -6,9 +6,9 @@ import {
   readBrokerAudit,
   removeBrokerUpstreams,
   writeBrokerUpstreams,
-} from '../lib/broker-upstreams';
-import { config } from '../lib/config';
-import { resolveImageName } from '../lib/fixtures';
+} from '@impz/e2e-harness/broker-upstreams';
+import { config } from '@impz/e2e-harness/config';
+import { resolveImageName } from '@impz/e2e-harness/fixtures';
 import {
   createInstanceClient,
   requireImp,
@@ -16,14 +16,14 @@ import {
   runImpWith,
   runShellInImp,
   tryImp,
-} from '../lib/imp-cli';
-import { holdImp, waitForExec } from '../lib/imps';
-import { readContainerGateway, runChecked, runInContainer } from '../lib/instance';
-import { registerRemoval } from '../lib/register-removal';
-import { removeImpIfPresent, removeSecretIfPresent } from '../lib/reset-baseline';
-import { startStubUpstream } from '../lib/start-stub-upstream';
-import { getSuitePrefix } from '../lib/suites';
-import { writeMetric } from '../lib/write-metric';
+} from '@impz/e2e-harness/imp-cli';
+import { holdImp, waitForExec } from '@impz/e2e-harness/imps';
+import { readContainerGateway, runChecked, runInContainer } from '@impz/e2e-harness/instance';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent, removeSecretIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { startStubUpstream } from '@impz/e2e-harness/start-stub-upstream';
+import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import { writeMetric } from '@impz/e2e-harness/write-metric';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

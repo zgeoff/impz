@@ -87,6 +87,8 @@
             "packages/daemon/testing/**",
             // impd's harness, published for the tests of code that drives impd
             "packages/testing/**",
+            // the end-to-end harness that the suites in e2e/ run on
+            "packages/e2e-harness/**",
             "packages/dashboard/e2e/**",
             "**/test-setup.ts"
           ],
@@ -141,6 +143,7 @@
               "**/{test-utils,smoke,mocks}/**",
               "packages/daemon/testing/**",
               "packages/testing/**",
+              "packages/e2e-harness/**",
               "packages/dashboard/e2e/**",
               "**/test-setup.ts"
             ],

@@ -2,9 +2,9 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createStubBin } from '@impz/test-utils/create-stub-bin';
 import { updateEnv } from '@impz/test-utils/update-env';
 import { buildStubDevHostDocker } from '../test-utils/build-stub-dev-host-docker';
-import { createStubBin } from '../test-utils/create-stub-bin';
 import { ensureHostImage } from './ensure-host-image.ts';
 
 function setupTest() {

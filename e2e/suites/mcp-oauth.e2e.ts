@@ -1,18 +1,10 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { randomBytes } from 'node:crypto';
-import {
-  Client,
-  StreamableHTTPClientTransport,
-  UnauthorizedError,
-} from '@modelcontextprotocol/client';
-import type { OAuthClientProvider, OAuthTokens } from '@modelcontextprotocol/client';
-import invariant from 'tiny-invariant';
-import * as z from 'zod';
-import { config } from '../lib/config';
-import { resolveImageName } from '../lib/fixtures';
-import { createInstanceClient, readImpEnv, runImp, tryImp } from '../lib/imp-cli';
-import { waitForExec } from '../lib/imps';
-import { instance } from '../lib/instance';
+import { config } from '@impz/e2e-harness/config';
+import { resolveImageName } from '@impz/e2e-harness/fixtures';
+import { createInstanceClient, readImpEnv, runImp, tryImp } from '@impz/e2e-harness/imp-cli';
+import { waitForExec } from '@impz/e2e-harness/imps';
+import { instance } from '@impz/e2e-harness/instance';
 import {
   BROWSER_FORM,
   RouteTokensSchema,
@@ -25,15 +17,23 @@ import {
   runSignIn,
   sendForm,
   sendMcp,
-} from '../lib/oauth-route';
-import { registerRemoval } from '../lib/register-removal';
+} from '@impz/e2e-harness/oauth-route';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
 import {
   removeImpIfPresent,
   removeOAuthClientIfPresent,
   removeTokenIfPresent,
-} from '../lib/reset-baseline';
-import { getSuitePrefix } from '../lib/suites';
-import { waitFor } from '../lib/wait-for';
+} from '@impz/e2e-harness/reset-baseline';
+import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import { waitFor } from '@impz/e2e-harness/wait-for';
+import {
+  Client,
+  StreamableHTTPClientTransport,
+  UnauthorizedError,
+} from '@modelcontextprotocol/client';
+import type { OAuthClientProvider, OAuthTokens } from '@modelcontextprotocol/client';
+import invariant from 'tiny-invariant';
+import * as z from 'zod';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

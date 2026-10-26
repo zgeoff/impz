@@ -1,15 +1,15 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { createImpClient } from '@impz/client';
-import { config } from '../lib/config';
-import { resolveImageName } from '../lib/fixtures';
-import { createInstanceClient, runImp } from '../lib/imp-cli';
-import { waitForExec } from '../lib/imps';
-import { runCommand } from '../lib/instance';
-import { makeMemberFetch } from '../lib/make-member-fetch';
-import { registerRemoval } from '../lib/register-removal';
-import { removeImpIfPresent } from '../lib/reset-baseline';
-import { getSuitePrefix } from '../lib/suites';
-import { readTailnetMember, waitForTailnetIp } from '../lib/tailnet';
+import { config } from '@impz/e2e-harness/config';
+import { resolveImageName } from '@impz/e2e-harness/fixtures';
+import { createInstanceClient, runImp } from '@impz/e2e-harness/imp-cli';
+import { waitForExec } from '@impz/e2e-harness/imps';
+import { runCommand } from '@impz/e2e-harness/instance';
+import { makeMemberFetch } from '@impz/e2e-harness/make-member-fetch';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import { readTailnetMember, waitForTailnetIp } from '@impz/e2e-harness/tailnet';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

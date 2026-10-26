@@ -7,22 +7,28 @@ import {
   readShapeTemplateKeys,
   removeShapeTemplates,
   waitForShapeTemplate,
-} from '../lib/boot-template-guest';
+} from '@impz/e2e-harness/boot-template-guest';
 import {
   getU32Span,
   parseLoggedGuestSteps,
   parseLoggedSteps,
   pickPercentile,
-} from '../lib/boot-template-timing';
-import { config } from '../lib/config';
-import { resolveImageName } from '../lib/fixtures';
-import { createInstanceClient, requireImp, runImp, runInImp, runShellInImp } from '../lib/imp-cli';
-import { waitForExec } from '../lib/imps';
-import { instance, readImpdLogSince, runChecked, runInContainer } from '../lib/instance';
-import { registerRemoval } from '../lib/register-removal';
-import { removeImpIfPresent } from '../lib/reset-baseline';
-import { getSuitePrefix } from '../lib/suites';
-import { writeMetric } from '../lib/write-metric';
+} from '@impz/e2e-harness/boot-template-timing';
+import { config } from '@impz/e2e-harness/config';
+import { resolveImageName } from '@impz/e2e-harness/fixtures';
+import {
+  createInstanceClient,
+  requireImp,
+  runImp,
+  runInImp,
+  runShellInImp,
+} from '@impz/e2e-harness/imp-cli';
+import { waitForExec } from '@impz/e2e-harness/imps';
+import { instance, readImpdLogSince, runChecked, runInContainer } from '@impz/e2e-harness/instance';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import { writeMetric } from '@impz/e2e-harness/write-metric';
 
 // Each test boots a memory size of its own, so a template one test leaves
 // under --keep is no other test's.

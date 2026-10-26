@@ -1,6 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { config } from '../lib/config';
-import { resolveImageName } from '../lib/fixtures';
+import { config } from '@impz/e2e-harness/config';
+import { resolveImageName } from '@impz/e2e-harness/fixtures';
 import {
   assertState,
   createInstanceClient,
@@ -8,14 +8,14 @@ import {
   runImp,
   runShellInImp,
   tryImp,
-} from '../lib/imp-cli';
-import { holdImp, waitForExec } from '../lib/imps';
-import { runInContainer } from '../lib/instance';
-import { listJailMounts } from '../lib/jail-host';
-import { registerRemoval } from '../lib/register-removal';
-import { removeImpIfPresent } from '../lib/reset-baseline';
-import { getSuitePrefix } from '../lib/suites';
-import { waitFor } from '../lib/wait-for';
+} from '@impz/e2e-harness/imp-cli';
+import { holdImp, waitForExec } from '@impz/e2e-harness/imps';
+import { runInContainer } from '@impz/e2e-harness/instance';
+import { listJailMounts } from '@impz/e2e-harness/jail-host';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import { waitFor } from '@impz/e2e-harness/wait-for';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

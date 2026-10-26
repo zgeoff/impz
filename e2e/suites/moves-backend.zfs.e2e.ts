@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
-import { readInfo } from '../lib/imp-cli';
-import { readMoveHosts } from '../lib/move-hosts';
+import { readInfo } from '@impz/e2e-harness/imp-cli';
+import { readMoveHosts } from '@impz/e2e-harness/move-hosts';
 
 function setupTest() {
   const hosts = readMoveHosts({ tailnet: 'off' });

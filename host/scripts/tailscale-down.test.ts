@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubBin } from '../../scripts/test-utils/create-stub-bin';
+import { createStubBin } from '@impz/test-utils/create-stub-bin';
 import { createStubProcessTable } from '../../scripts/test-utils/create-stub-process-table';
 
 function setupTest() {

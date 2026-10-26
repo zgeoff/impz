@@ -1,12 +1,12 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
-import { config } from '../lib/config';
-import { createRegistryTrust } from '../lib/create-registry-trust';
-import { createInstanceClient, runInImp } from '../lib/imp-cli';
-import { REPO_ROOT, instance } from '../lib/instance';
-import { registerRemoval } from '../lib/register-removal';
-import { buildRegistryPlan } from '../lib/registry-plan';
+import { config } from '@impz/e2e-harness/config';
+import { createRegistryTrust } from '@impz/e2e-harness/create-registry-trust';
+import { createInstanceClient, runInImp } from '@impz/e2e-harness/imp-cli';
+import { REPO_ROOT, instance } from '@impz/e2e-harness/instance';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { buildRegistryPlan } from '@impz/e2e-harness/registry-plan';
 import {
   checkRegistryReady,
   collectUnpinnedRequests,
@@ -16,9 +16,9 @@ import {
   removeStaleRegistries,
   runBuildAndListRequests,
   startRegistry,
-} from '../lib/registry-steps';
-import { removeImageIfPresent } from '../lib/reset-baseline';
-import { getSuitePrefix } from '../lib/suites';
+} from '@impz/e2e-harness/registry-steps';
+import { removeImageIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { getSuitePrefix } from '@impz/e2e-harness/suites';
 
 // collection-time gate: Bun's skipIf takes a boolean and has no in-body skip
 const isReady = await checkRegistryReady(

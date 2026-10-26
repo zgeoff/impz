@@ -4,9 +4,9 @@
 #
 #   e2e/test-e2e.sh [--only SUITES | --group N] [--clean | --reuse] [--keep]
 #
-# --group N runs one of the fast set's CI groups (e2e/lib/suites.ts
-# FAST_GROUPS), as each of CI's e2e runners does.
+# --group N runs one of the fast set's CI groups
+# (packages/e2e-harness/src/suites.ts FAST_GROUPS), as each of CI's e2e runners does.
 #
 # e2e/test-e2e.sh --help lists the suites, sets and tuning env.
 set -euo pipefail
-exec bun "$(dirname "$0")/main.ts" "$@"
+exec bun "$(dirname "$0")/../packages/e2e-harness/src/main.ts" "$@"
