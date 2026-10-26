@@ -1,7 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import * as z from 'zod';
-import { readTextOrNull } from '../../scripts/lib/read-text-or-null.ts';
 import { REPO_ROOT, runChecked } from './instance';
 import type { DevInstance } from './instance';
 
@@ -204,6 +203,7 @@ export function buildPodmanHostConfig(
 
 export async function checkPrivileges(
   target: Pick<DevInstance, 'container' | 'containerCLI'>,
+  readText: (path: string) => string | null,
 ): Promise<void> {
   const deploy = join(REPO_ROOT, 'deploy');
 
@@ -225,7 +225,7 @@ export async function checkPrivileges(
       ? buildPodmanHostConfig(
           info.HostConfig,
           info.EffectiveCaps ?? [],
-          readSeccompProfiles(info.HostConfig.SecurityOpt ?? [], readTextOrNull),
+          readSeccompProfiles(info.HostConfig.SecurityOpt ?? [], readText),
         )
       : info.HostConfig;
 

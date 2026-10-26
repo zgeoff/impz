@@ -1,6 +1,7 @@
 import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { match } from 'ts-pattern';
+import { readTextOrNull } from '../../scripts/lib/read-text-or-null.ts';
 import type { HarnessEnv } from './config';
 import { connectHeadscale, disconnectHeadscale } from './headscale';
 import { createInstanceClient, runImpWith } from './imp-cli';
@@ -240,7 +241,7 @@ export function buildHostBFixtureDeps(keep: boolean, env: HarnessEnv): HostBFixt
     },
     startHost: async (host) => {
       await runDevScript('up', host, {}, env);
-      await checkPrivileges(host);
+      await checkPrivileges(host, readTextOrNull);
     },
     login: async (host, cliEnv) => {
       const token = await readToken(host);

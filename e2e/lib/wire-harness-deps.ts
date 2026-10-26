@@ -1,5 +1,6 @@
 import { mkdirSync, readFileSync, rmSync, statfsSync } from 'node:fs';
 import { createImpClient } from '@impz/client';
+import { readTextOrNull } from '../../scripts/lib/read-text-or-null.ts';
 import type { HarnessEnv } from './config';
 import { createMissingImages } from './fixtures';
 import { startHeadscale, stopHeadscale } from './headscale';
@@ -138,7 +139,7 @@ async function resetInstance(target: DevInstance, env: HarnessEnv): Promise<void
 
 async function startInstance(base: DevInstance, run: Readonly<HarnessRun>): Promise<DevInstance> {
   await runDevScript('up', base, {}, run.env);
-  await checkPrivileges(base);
+  await checkPrivileges(base, readTextOrNull);
 
   const token = await readToken(base);
 
