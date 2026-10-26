@@ -20,7 +20,7 @@ input=$target.in
 next=$target.tmp
 
 mkdir -p "$(dirname "$target")"
-cat >"$input"
+cat > "$input"
 
 # the first line that is the marker, matched whole and as a fixed string
 split=$(grep -n -x -F -e "$marker" "$input" | head -n 1 | cut -d : -f 1)
@@ -47,7 +47,7 @@ done
   fi
   echo
   head -n "$((split - 1))" "$input"
-} >"$next"
+} > "$next"
 
 rm -f "$input"
 

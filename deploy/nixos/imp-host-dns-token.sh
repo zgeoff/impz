@@ -29,8 +29,8 @@ staged=$dir/token
 tmp=$(mktemp "$dir/.token.XXXXXX")
 trap 'rm -f "$tmp"' EXIT
 
-if ! cat -- "$source" >"$tmp" 2>/dev/null || ! grep -q '[^[:space:]]' "$tmp"; then
-  if grep -q '[^[:space:]]' "$staged" 2>/dev/null; then
+if ! cat -- "$source" > "$tmp" 2> /dev/null || ! grep -q '[^[:space:]]' "$tmp"; then
+  if grep -q '[^[:space:]]' "$staged" 2> /dev/null; then
     echo "imp-host-dns-token: $source is missing or empty; impd keeps the token staged before" >&2
   else
     echo "imp-host-dns-token: $source is missing or empty; HTTPS certificates and DNS records wait until it holds the token" >&2

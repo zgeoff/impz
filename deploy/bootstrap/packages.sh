@@ -10,7 +10,7 @@ ensure_packages() {
     podman catatonit netavark aardvark-dns iptables)
   local pkg missing=()
   for pkg in "${wanted[@]}"; do
-    dpkg-query -W -f '${Status}' "$pkg" 2>/dev/null | grep -q 'install ok installed' || missing+=("$pkg")
+    dpkg-query -W -f '${Status}' "$pkg" 2> /dev/null | grep -q 'install ok installed' || missing+=("$pkg")
   done
   if [ ${#missing[@]} -gt 0 ]; then
     change "apt-get install ${missing[*]}" apt_install "$APT_LOG" "${missing[@]}"
@@ -29,7 +29,7 @@ ensure_zfs_packages() {
     wanted=("linux-headers-$(uname -r)" zfs-dkms zfsutils-linux)
   fi
   for pkg in "${wanted[@]}"; do
-    dpkg-query -W -f '${Status}' "$pkg" 2>/dev/null | grep -q 'install ok installed' || missing+=("$pkg")
+    dpkg-query -W -f '${Status}' "$pkg" 2> /dev/null | grep -q 'install ok installed' || missing+=("$pkg")
   done
   if [ ${#missing[@]} -gt 0 ]; then
     change "apt-get install ${missing[*]}" apt_install "$APT_LOG" "${missing[@]}"
@@ -37,7 +37,7 @@ ensure_zfs_packages() {
 }
 
 debian_contrib_sources() {
-  cat <<'EOF'
+  cat << 'EOF'
 # Written by deploy/bootstrap.sh: contrib, for zfs-dkms and zfsutils-linux.
 Types: deb
 URIs: http://deb.debian.org/debian
@@ -53,7 +53,7 @@ apt_install() {
   shift
   if ! {
     apt-get update -q && DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends "$@"
-  } >"$apt_log" 2>&1; then
+  } > "$apt_log" 2>&1; then
     tail -n 20 "$apt_log" >&2
     die "apt-get install $* failed; the whole log is in $apt_log"
   fi
@@ -61,6 +61,6 @@ apt_install() {
 
 # ensure_service UNIT: enabled and active.
 ensure_service() {
-  systemctl -q is-enabled "$1" 2>/dev/null || change "enable $1" systemctl enable -q "$1"
-  systemctl -q is-active "$1" 2>/dev/null || change "start $1" systemctl start "$1"
+  systemctl -q is-enabled "$1" 2> /dev/null || change "enable $1" systemctl enable -q "$1"
+  systemctl -q is-active "$1" 2> /dev/null || change "start $1" systemctl start "$1"
 }

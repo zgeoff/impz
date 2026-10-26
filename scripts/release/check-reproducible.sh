@@ -27,13 +27,13 @@ build() {
   shift 2
   echo "check-reproducible: building $name" >&2
   docker buildx build -q -f "$context/host/Dockerfile" --target system-files \
-    --output "type=local,dest=$work/$name" "$@" "$context" >/dev/null
-  (cd "$work/$name" && sha256sum vmlinux imp-system.squashfs) >"$work/$name.sha256"
+    --output "type=local,dest=$work/$name" "$@" "$context" > /dev/null
+  (cd "$work/$name" && sha256sum vmlinux imp-system.squashfs) > "$work/$name.sha256"
 }
 
 build first "$root" --no-cache
 
-docker buildx create --name "$builder" --driver docker-container >/dev/null
+docker buildx create --name "$builder" --driver docker-container > /dev/null
 jobs=$(($(nproc) / 2))
 build fresh-builder "$root" --builder "$builder" --build-arg JOBS=$((jobs > 0 ? jobs : 1))
 
@@ -43,7 +43,7 @@ copy="$work/tree"
 mkdir "$copy"
 (cd "$root" && git ls-files -z --cached --others --exclude-standard |
   tar --null -T - -cf -) | tar -xf - -C "$copy"
-echo "// check-reproducible $(date +%s%N)" >>"$copy/packages/daemon/src/main.ts"
+echo "// check-reproducible $(date +%s%N)" >> "$copy/packages/daemon/src/main.ts"
 build packages-changed "$copy"
 
 status=0

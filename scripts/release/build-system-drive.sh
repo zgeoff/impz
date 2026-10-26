@@ -10,5 +10,5 @@ IMP_BUILD=${IMP_BUILD:-$IMP_ROOT/build}
 
 mkdir -p "$IMP_BUILD"
 docker buildx build -q -f "$IMP_ROOT/host/Dockerfile" --target system-drive \
-  --output "type=local,dest=$IMP_BUILD" "$IMP_ROOT" >/dev/null
+  --output "type=local,dest=$IMP_BUILD" "$IMP_ROOT" > /dev/null
 echo "$IMP_BUILD/imp-system.squashfs"

@@ -62,7 +62,7 @@ jq --slurpfile workspace "$root/package.json" --argjson imported "$imported" --a
   | .exports = { ".": { types: "./dist/index.d.ts", default: "./dist/index.js" } }
   | .files = ["dist"]
   | .publishConfig = { access: "public" }
-' "$package/package.json" >"$stage/package.json"
+' "$package/package.json" > "$stage/package.json"
 
 if grep -Eq '"(catalog|workspace):' "$stage/package.json"; then
   echo "pack-testing: the packed package.json still has a catalog: or workspace: version" >&2

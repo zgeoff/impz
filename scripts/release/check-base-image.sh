@@ -53,7 +53,7 @@ for pin in docker-ce=DOCKER_CE_VERSION docker-ce-cli=DOCKER_CE_CLI_VERSION \
   containerd.io=CONTAINERD_VERSION docker-buildx-plugin=BUILDX_VERSION; do
   package=${pin%%=*} arg=${pin#*=}
   want=$(sed -n "s/^ARG $arg=//p" "$dockerfile")
-  got=$(in_image "dpkg-query -W -f '\${Version}' $package" 2>/dev/null || true)
+  got=$(in_image "dpkg-query -W -f '\${Version}' $package" 2> /dev/null || true)
   if [ -z "$want" ] || [ "$got" != "$want" ]; then
     fail "$package is ${got:-not installed}, want ${want:-the ARG $arg in $dockerfile}"
   fi
@@ -67,7 +67,7 @@ done
 if ! agents=$(in_image 'find / -xdev -name "imp-agent*"'); then
   fail "cannot search the image for imp-agent"
 elif [ -n "$agents" ]; then
-  fail "the image carries imp-agent: $(paste -sd ' ' <<<"$agents")"
+  fail "the image carries imp-agent: $(paste -sd ' ' <<< "$agents")"
 fi
 
 # What a published image must not carry: a machine identity, host keys,
@@ -86,13 +86,13 @@ for leftover in "${leftovers[@]}"; do
   if ! found=$(in_image "${leftover#*:}; true"); then
     fail "cannot check the image for ${leftover%%:*}"
   elif [ -n "$found" ]; then
-    fail "the image carries ${leftover%%:*}: $(paste -sd ' ' <<<"$found")"
+    fail "the image carries ${leftover%%:*}: $(paste -sd ' ' <<< "$found")"
   fi
 done
 
 imp_files=$(in_image 'find /etc/imp -mindepth 1 ! -type d 2> /dev/null | sort')
 if [ "$imp_files" != /etc/imp/services.d/docker.json ]; then
-  fail "/etc/imp holds '$(paste -sd ' ' <<<"$imp_files")', want only /etc/imp/services.d/docker.json"
+  fail "/etc/imp holds '$(paste -sd ' ' <<< "$imp_files")', want only /etc/imp/services.d/docker.json"
 fi
 
 if [ "$status" = 0 ]; then

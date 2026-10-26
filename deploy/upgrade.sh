@@ -116,7 +116,7 @@ read_image() {
 # the IMP_HOST_IMAGE that the Environment= lines of FILE... set, the last
 # one winning. A line may set several, each one in double quotes or not.
 environment_image() {
-  sed -n 's/^Environment=//p' "$@" 2>/dev/null | xargs -n 1 2>/dev/null |
+  sed -n 's/^Environment=//p' "$@" 2> /dev/null | xargs -n 1 2> /dev/null |
     sed -n 's/^IMP_HOST_IMAGE=//p' | tail -n 1 || true
 }
 
@@ -196,7 +196,7 @@ rewrite_file() {
   shift
   backup=$path.bak-$(backup_time)
   if ! { (umask 077 && cp "$path" "$backup") && chmod 600 "$backup" && cp -p "$path" "$path.new" &&
-    awk "$@" "$backup" >"$path.new" && mv "$path.new" "$path"; }; then
+    awk "$@" "$backup" > "$path.new" && mv "$path.new" "$path"; }; then
     rm -f "$path.new"
     echo "upgrade: cannot rewrite $path; $(format_host_state)" >&2
     exit 1
@@ -220,7 +220,7 @@ migrate_env_file() {
 cli=impz
 pick_cli() {
   cli=impz
-  "$runtime" exec "$container" impz --version >/dev/null 2>&1 || cli=imp
+  "$runtime" exec "$container" impz --version > /dev/null 2>&1 || cli=imp
 }
 
 impz() {
@@ -230,7 +230,7 @@ impz() {
 list_awake() {
   local imps
   imps=$(impz ls --json) || return 1
-  jq -r '.[] | select(.state == "running") | .name' <<<"$imps"
+  jq -r '.[] | select(.state == "running") | .name' <<< "$imps"
 }
 
 # the counts `impz info` reports; an older impd has none, and the NOTE column
@@ -249,15 +249,15 @@ print_boot_status() {
       | [$status.outdated | to_entries[] | select(.value > 0) | "\(.value) \(.key)"]
       | (if length == 0 then "none" else join(", ") end) as $outdated
       | "upgrade: \($status.coldBoots) imps will boot cold; outdated: \($outdated)"
-    end' <<<"$info" || echo "upgrade: could not read impz info; see the NOTE column below" >&2
+    end' <<< "$info" || echo "upgrade: could not read impz info; see the NOTE column below" >&2
 }
 
 # the runtime that runs imp-host: podman, docker, or nothing when neither
 # has the container
 find_runtime() {
-  if podman container exists "$container" 2>/dev/null; then
+  if podman container exists "$container" 2> /dev/null; then
     echo podman
-  elif command -v docker >/dev/null && docker container inspect "$container" >/dev/null 2>&1; then
+  elif command -v docker > /dev/null && docker container inspect "$container" > /dev/null 2>&1; then
     echo docker
   fi
 }
@@ -284,7 +284,7 @@ retire_proxy_unit() {
 # leaves no PATH.new, when the image cannot give it or gives it empty. Its
 # caller tests it, so set -e is off in here: each step is checked.
 fetch_file() {
-  if ! podman run --rm "$image" cat "$image_deploy/$1" | strip_markers >"$2.new" || [ ! -s "$2.new" ]; then
+  if ! podman run --rm "$image" cat "$image_deploy/$1" | strip_markers > "$2.new" || [ ! -s "$2.new" ]; then
     rm -f "$2.new"
     echo "upgrade: cannot read $image_deploy/$1 from $image; nothing changed, the host still runs $old" >&2
     return 1
@@ -339,10 +339,10 @@ install_new_files() {
 retire_docker_host() {
   systemctl stop "$container"
   stopped=1
-  docker rm -f "$container" >/dev/null 2>&1 || true
+  docker rm -f "$container" > /dev/null 2>&1 || true
   retire_proxy_unit
   if [ -n "$docker_network" ]; then
-    if ! docker network rm "$HOST_NETWORK" >/dev/null; then
+    if ! docker network rm "$HOST_NETWORK" > /dev/null; then
       echo "upgrade: cannot remove Docker's $HOST_NETWORK network, whose bridge Podman needs; $(format_host_state)" >&2
       exit 1
     fi
@@ -375,7 +375,7 @@ report_failure() {
 
 wait_ready() {
   local deadline=$((SECONDS + ready_timeout_s))
-  until curl -fsS "$health" 2>/dev/null | grep -q '"ready":true'; do
+  until curl -fsS "$health" 2> /dev/null | grep -q '"ready":true'; do
     if [ $SECONDS -ge $deadline ]; then
       echo "upgrade: impd is not ready after $ready_timeout_s s; see: podman logs $container. $(format_rollback)" >&2
       exit 1
@@ -385,7 +385,7 @@ wait_ready() {
 }
 
 for tool in podman curl jq; do
-  command -v "$tool" >/dev/null && continue
+  command -v "$tool" > /dev/null && continue
   if [ "$tool" = podman ]; then
     echo "upgrade: podman is not installed; install it (apt-get install podman catatonit netavark aardvark-dns iptables), or run this release's deploy/bootstrap.sh" >&2
   else
@@ -408,7 +408,7 @@ fi
 image=$(read_image)
 
 echo "upgrade: pulling $image"
-podman pull -q "$image" >/dev/null
+podman pull -q "$image" > /dev/null
 
 # set -e misses a failed inspect nested in another substitution
 old_ref=$("$runtime" inspect -f '{{.Image}}' "$container")
@@ -429,9 +429,9 @@ fi
 # empty when it holds none; unset when Docker has no such network
 docker_network=
 if [ "$runtime" = docker ] &&
-  network_containers=$(docker network inspect -f '{{range .Containers}}{{.Name}} {{end}}' "$HOST_NETWORK" 2>/dev/null); then
+  network_containers=$(docker network inspect -f '{{range .Containers}}{{.Name}} {{end}}' "$HOST_NETWORK" 2> /dev/null); then
   docker_network=1
-  others=$(tr ' ' '\n' <<<"$network_containers" | grep -vx -e "$container" -e '' | paste -sd ' ' - || true)
+  others=$(tr ' ' '\n' <<< "$network_containers" | grep -vx -e "$container" -e '' | paste -sd ' ' - || true)
   if [ -n "$others" ]; then
     echo "upgrade: Docker's $HOST_NETWORK network also holds $others, and Podman needs its bridge: take them off it (docker network disconnect $HOST_NETWORK <name>) and run again. Nothing changed." >&2
     exit 1
@@ -476,7 +476,7 @@ pick_cli
 awake=$(list_awake)
 
 for name in $awake; do
-  if ! impz sleep "$name" >/dev/null; then
+  if ! impz sleep "$name" > /dev/null; then
     echo "upgrade: $name did not sleep; the host still runs $old" >&2
     exit 1
   fi

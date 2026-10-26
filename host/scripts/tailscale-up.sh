@@ -46,14 +46,14 @@ ts() { timeout 90 tailscale --socket="$sock" "$@"; }
 # pgrep matches zombies too, so read the process state from ps instead.
 # shellcheck disable=SC2009
 alive() { ps -C tailscaled -o stat= | grep -qv '^Z'; }
-backend() { timeout 5 tailscale --socket="$sock" status --json 2>/dev/null | jq -r '.BackendState // empty'; }
+backend() { timeout 5 tailscale --socket="$sock" status --json 2> /dev/null | jq -r '.BackendState // empty'; }
 
 # tags_differ: IMP_TAILSCALE_TAGS names tags, and the running node holds
 # others; sets node_tags and wanted_tags
 tags_differ() {
   [ -n "${IMP_TAILSCALE_TAGS:-}" ] || return 1
   node_tags=$(ts status --json | jq -r '(.Self.Tags // []) | sort | join(",")')
-  wanted_tags=$(tr ',' '\n' <<<"$IMP_TAILSCALE_TAGS" | sed '/^$/d' | LC_ALL=C sort | paste -sd, -)
+  wanted_tags=$(tr ',' '\n' <<< "$IMP_TAILSCALE_TAGS" | sed '/^$/d' | LC_ALL=C sort | paste -sd, -)
   [ "$node_tags" != "$wanted_tags" ]
 }
 
@@ -62,7 +62,7 @@ tags_differ() {
 # with the wrong tags must not stay connected.
 refuse() {
   echo "tailscale-up: $1" >&2
-  ts down >/dev/null 2>&1 || true
+  ts down > /dev/null 2>&1 || true
 }
 
 if [ -z "$has_key" ] && [ -z "$has_state" ]; then
@@ -91,8 +91,8 @@ fi
 if grep -qE '^nameserver[[:space:]]+(100\.100\.100\.100|fd7a:115c:a1e0::53)' "$resolv_conf"; then
   dns=${IMP_DNS:-1.1.1.1,8.8.8.8}
   # Commas are the impd form; spaces still work.
-  read -ra resolvers <<<"${dns//,/ }"
-  printf 'nameserver %s\n' "${resolvers[@]}" >"$resolv_conf"
+  read -ra resolvers <<< "${dns//,/ }"
+  printf 'nameserver %s\n' "${resolvers[@]}" > "$resolv_conf"
   echo "tailscale-up: resolv.conf pointed into the tailnet; now ${resolvers[*]}"
 fi
 
@@ -111,7 +111,7 @@ if ! alive; then
   fi
   # Kernel TUN mode: the container is privileged and has its own netns.
   setsid tailscaled "${args[@]}" --socket="$sock" --tun=tailscale0 \
-    >"$log" 2>&1 </dev/null &
+    > "$log" 2>&1 < /dev/null &
   for _ in $(seq 100); do
     [ -S "$sock" ] && break
     sleep 0.1
@@ -150,7 +150,7 @@ join() {
   if [ -z "$auth" ]; then
     auth=$(mktemp)
     chmod 0600 "$auth"
-    printf '%s' "$TAILSCALE_AUTHKEY" >"$auth"
+    printf '%s' "$TAILSCALE_AUTHKEY" > "$auth"
   fi
   ts up --reset "${reauth[@]}" --auth-key="file:$auth" --hostname="$hostname" \
     "${control[@]}" --accept-dns=false --timeout=60s || rc=$?
@@ -263,7 +263,7 @@ if [ -n "$has_state" ]; then
     # Exit 0 with tailscaled's socket up, so the entrypoint sets
     # IMP_TAILSCALE_NODE and impd comes up as a tailnet node.
     echo "tailscale-up: the saved node is still ${state:-unknown} after 15 s; going on, and waiting for it in the background"
-    wait_later </dev/null &
+    wait_later < /dev/null &
     exit 0
   fi
 elif [ "$(backend)" = Running ]; then

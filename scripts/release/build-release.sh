@@ -15,7 +15,7 @@
 set -euo pipefail
 
 root=$(cd "$(dirname "$0")/../.." && pwd)
-version=${IMP_VERSION:-$(git -C "$root" describe --tags --always --dirty 2>/dev/null || echo unknown)}
+version=${IMP_VERSION:-$(git -C "$root" describe --tags --always --dirty 2> /dev/null || echo unknown)}
 image=${IMP_RELEASE_IMAGE:-imp-host}
 
 output=(--load)

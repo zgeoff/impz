@@ -5,19 +5,19 @@
 ensure_firewall() {
   phase firewall
   if [ "$host_firewall" = none ]; then
-    if systemctl -q is-enabled nftables 2>/dev/null && grep -qE '^[[:space:]]*flush ruleset' /etc/nftables.conf 2>/dev/null; then
+    if systemctl -q is-enabled nftables 2> /dev/null && grep -qE '^[[:space:]]*flush ruleset' /etc/nftables.conf 2> /dev/null; then
       warn "nftables.service is enabled and /etc/nftables.conf flushes every ruleset, Podman's too, at each reload"
     fi
     remove_firewall
     return
   fi
-  if systemctl -q is-enabled nftables 2>/dev/null; then
+  if systemctl -q is-enabled nftables 2> /dev/null; then
     die "nftables.service is enabled; its /etc/nftables.conf flushes every ruleset (Podman's too). Disable it first"
   fi
-  if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q '^Status: active'; then
+  if command -v ufw > /dev/null && ufw status 2> /dev/null | grep -q '^Status: active'; then
     change "disable ufw (imp-firewall.service replaces it)" disable_ufw
   fi
-  if systemctl -q is-active firewalld 2>/dev/null; then
+  if systemctl -q is-active firewalld 2> /dev/null; then
     change "stop and disable firewalld (imp-firewall.service replaces it)" systemctl disable -q --now firewalld
   fi
 
@@ -31,12 +31,12 @@ ensure_firewall() {
     die "run as root, or with sudo --preserve-env=SSH_CONNECTION, so the firewall phase can check this SSH session's port"
   fi
   local session_port
-  session_port=$(awk '{ print $4 }' <<<"${SSH_CONNECTION:-}")
+  session_port=$(awk '{ print $4 }' <<< "${SSH_CONNECTION:-}")
   if [ -n "$session_port" ] && ! printf '%s\n' "${ports[@]}" | grep -qx "$session_port"; then
     die "this SSH session uses port $session_port, which sshd does not report; give --ssh-port $session_port"
   fi
   log "SSH ports kept open: ${ports[*]}"
-  if sshd -T 2>/dev/null | grep -qi '^passwordauthentication yes'; then
+  if sshd -T 2> /dev/null | grep -qi '^passwordauthentication yes'; then
     warn "sshd allows password logins; set PasswordAuthentication no"
   fi
 
@@ -59,7 +59,7 @@ ensure_firewall() {
 remove_firewall() {
   local loaded=""
   if [ -e /etc/systemd/system/imp-firewall.service ] || [ -e "$FIREWALL_FILE" ] ||
-    { command -v nft >/dev/null && nft list table inet imp_host >/dev/null 2>&1; }; then
+    { command -v nft > /dev/null && nft list table inet imp_host > /dev/null 2>&1; }; then
     loaded=1
   fi
   if [ -z "$loaded" ]; then
@@ -77,8 +77,8 @@ remove_firewall() {
 }
 
 uninstall_firewall() {
-  systemctl disable -q --now imp-firewall 2>/dev/null || true
-  if command -v nft >/dev/null && nft list table inet imp_host >/dev/null 2>&1; then
+  systemctl disable -q --now imp-firewall 2> /dev/null || true
+  if command -v nft > /dev/null && nft list table inet imp_host > /dev/null 2>&1; then
     nft delete table inet imp_host || return 1
   fi
   rm -f /etc/systemd/system/imp-firewall.service "$FIREWALL_FILE"
@@ -86,10 +86,10 @@ uninstall_firewall() {
   # An earlier run with own disabled ufw and firewalld.
   # Read first: under pipefail, grep -q quitting early fails nft with SIGPIPE.
   local rules
-  rules=$(nft list ruleset 2>/dev/null || true)
-  if ! grep -q 'hook input' <<<"$rules" &&
-    ! { command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q '^Status: active'; } &&
-    ! systemctl -q is-active firewalld 2>/dev/null; then
+  rules=$(nft list ruleset 2> /dev/null || true)
+  if ! grep -q 'hook input' <<< "$rules" &&
+    ! { command -v ufw > /dev/null && ufw status 2> /dev/null | grep -q '^Status: active'; } &&
+    ! systemctl -q is-active firewalld 2> /dev/null; then
     warn "the host now has no inbound firewall; the platform must give one (docs/architecture/host.md#the-host-firewall)"
   fi
 }
@@ -98,20 +98,20 @@ uninstall_firewall() {
 # never replaces a good one, or leaves the host with none. Skipped in a dry
 # run before nftables is installed.
 check_ruleset() {
-  if ! command -v nft >/dev/null; then
+  if ! command -v nft > /dev/null; then
     dry || die "nft is missing"
     return 0
   fi
   local file rc=0
   file=$(mktemp)
-  printf '%s\n' "$1" >"$file"
+  printf '%s\n' "$1" > "$file"
   nft -c -f "$file" || rc=$?
   rm -f "$file"
   [ "$rc" = 0 ] || die "nft rejects the firewall ruleset; nothing was loaded"
 }
 
 disable_ufw() {
-  ufw --force disable >/dev/null
+  ufw --force disable > /dev/null
   systemctl disable -q ufw
 }
 
@@ -120,11 +120,11 @@ disable_ufw() {
 # know the port the socket listens on.
 ssh_ports() {
   {
-    sshd -T 2>/dev/null | ssh_ports_from_sshd_t || true
-    if systemctl -q is-active ssh.socket 2>/dev/null; then
+    sshd -T 2> /dev/null | ssh_ports_from_sshd_t || true
+    if systemctl -q is-active ssh.socket 2> /dev/null; then
       systemctl show -p Listen --value ssh.socket | ssh_ports_from_listen || true
     fi
-    ss -Hltnp 2>/dev/null | awk '/"sshd/ { print $4 }' | ssh_ports_from_listen || true
+    ss -Hltnp 2> /dev/null | awk '/"sshd/ { print $4 }' | ssh_ports_from_listen || true
     printf '%s\n' "${extra_ssh_ports[@]}"
   } | grep -E '^[0-9]+$' | sort -nu
 }
@@ -137,7 +137,7 @@ ssh_ports_from_sshd_t() { awk 'tolower($1) == "port" { print $2 }'; }
 ssh_ports_from_listen() { grep -oE ':[0-9]+( |$)' | tr -d ': '; }
 
 unit_imp_firewall() {
-  cat <<EOF
+  cat << EOF
 # Written by deploy/bootstrap.sh. Loads $FIREWALL_FILE before the network
 # comes up, as Debian's nftables.service does.
 [Unit]
@@ -169,7 +169,7 @@ ensure_ipv6() {
     return
   fi
   local inspect="" existing=""
-  if command -v podman >/dev/null && inspect=$(podman network inspect -f "$NETWORK_FORMAT" "$HOST_NETWORK" 2>/dev/null); then
+  if command -v podman > /dev/null && inspect=$(podman network inspect -f "$NETWORK_FORMAT" "$HOST_NETWORK" 2> /dev/null); then
     existing=1
   fi
   resolve_subnet6 "$inspect"
@@ -228,7 +228,7 @@ random_ula64() {
 # bridge HOST_BRIDGE, or nothing.
 network_subnet6() {
   local enabled bridge subnets subnet
-  read -r enabled bridge _ subnets <<<"$1"
+  read -r enabled bridge _ subnets <<< "$1"
   [ "$enabled" = true ] && [ "$bridge" = "$HOST_BRIDGE" ] || return 0
   for subnet in $subnets; do
     if [[ $subnet == *:* ]]; then
@@ -245,13 +245,13 @@ network_subnet6() {
 # applies in a test container too. EXISTING: the network is there already.
 ensure_router_adverts() {
   local route uplink live file_uplink=""
-  route=$(ip -6 route show default 2>/dev/null | head -n 1)
+  route=$(ip -6 route show default 2> /dev/null | head -n 1)
   uplink=$(route_uplink "$route")
   if [ -z "$uplink" ]; then
     log "router adverts: the host has no IPv6 default route"
     return
   fi
-  [ -f "$RA_FILE" ] && file_uplink=$(ra_file_uplink <"$RA_FILE")
+  [ -f "$RA_FILE" ] && file_uplink=$(ra_file_uplink < "$RA_FILE")
   live=$(cat "/proc/sys/net/ipv6/conf/$uplink/accept_ra")
   # Ours already (a second run finds 2), or the kernel's to take.
   if [ "$file_uplink" = "$uplink" ] || { route_is_ra "$route" && [ "$live" = 1 ]; }; then
@@ -274,7 +274,7 @@ ensure_router_adverts() {
 }
 
 # route_uplink ROUTE: the device of an `ip -6 route` line, or nothing.
-route_uplink() { awk '{ for (i = 1; i < NF; i++) if ($i == "dev") { print $(i + 1); exit } }' <<<"$1"; }
+route_uplink() { awk '{ for (i = 1; i < NF; i++) if ($i == "dev") { print $(i + 1); exit } }' <<< "$1"; }
 
 # route_is_ra ROUTE: the route came from a router advert.
 route_is_ra() { [[ " $1 " == *" proto ra "* ]]; }
@@ -297,18 +297,18 @@ ra_file_uplink() { sed -n 's|^net/ipv6/conf/\(.*\)/accept_ra = 2$|\1|p' | tail -
 # IPv6 off with a warning (fails), and on stops.
 ra_userspace() {
   local uplink=$1 owner network_file=""
-  network_file=$(networkctl status "$uplink" 2>/dev/null | sed -n 's/^ *Network File: //p' || true)
+  network_file=$(networkctl status "$uplink" 2> /dev/null | sed -n 's/^ *Network File: //p' || true)
   if [ -n "$network_file" ] && [ "$network_file" != n/a ]; then
     owner=systemd-networkd
     # networkd's IPv6AcceptRA defaults to off once forwarding is on; yes keeps it
-    if cat "$network_file" "$network_file.d"/*.conf 2>/dev/null |
+    if cat "$network_file" "$network_file.d"/*.conf 2> /dev/null |
       grep -qiE '^[[:space:]]*IPv6AcceptRA[[:space:]]*=[[:space:]]*(yes|true|on|1)[[:space:]]*$'; then
       log "router adverts: systemd-networkd takes them on $uplink, with IPv6AcceptRA=yes in $network_file"
       return
     fi
-  elif nmcli -t -f DEVICE,STATE device 2>/dev/null | grep -qx "$uplink:connected"; then
+  elif nmcli -t -f DEVICE,STATE device 2> /dev/null | grep -qx "$uplink:connected"; then
     owner=NetworkManager
-  elif pgrep -x dhcpcd >/dev/null; then
+  elif pgrep -x dhcpcd > /dev/null; then
     owner=dhcpcd
   else
     owner="a client other than the kernel"
@@ -329,13 +329,13 @@ ra_userspace() {
 
 # stop_imp_host: stop the unit, so imp-host leaves the network.
 stop_imp_host() {
-  systemctl stop imp-host 2>/dev/null || true
-  podman rm -f imp-host >/dev/null 2>&1 || true
+  systemctl stop imp-host 2> /dev/null || true
+  podman rm -f imp-host > /dev/null 2>&1 || true
 }
 
 recreate_host_network() {
   stop_imp_host
-  podman network rm "$HOST_NETWORK" >/dev/null && create_host_network "$ipv6_subnet"
+  podman network rm "$HOST_NETWORK" > /dev/null && create_host_network "$ipv6_subnet"
 }
 
 # remove_ipv6 [RA_FILE]: with off, take out what an earlier run with on put in, but
@@ -344,7 +344,7 @@ recreate_host_network() {
 # RA_FILE defaults to $RA_FILE.
 remove_ipv6() {
   local ra_file=${1:-$RA_FILE} network="" file=""
-  if command -v podman >/dev/null && podman network exists "$HOST_NETWORK"; then
+  if command -v podman > /dev/null && podman network exists "$HOST_NETWORK"; then
     network=1
   fi
   [ ! -f "$ra_file" ] || file=1
@@ -372,5 +372,5 @@ remove_ipv6() {
 
 remove_host_network() {
   stop_imp_host
-  podman network rm "$HOST_NETWORK" >/dev/null
+  podman network rm "$HOST_NETWORK" > /dev/null
 }

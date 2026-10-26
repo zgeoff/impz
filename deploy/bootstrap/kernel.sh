@@ -23,13 +23,13 @@ ensure_kernel() {
   local key want
   while read -r key want; do
     [ "$(sysctl -n "$key")" = "$want" ] || change "sysctl $key=$want" sysctl -qw "$key=$want"
-  done <<<$'vm.overcommit_memory 1\nvm.swappiness 1'
+  done <<< $'vm.overcommit_memory 1\nvm.swappiness 1'
   local mod
   for mod in "${mods[@]}"; do
     module_present "$mod" || change "modprobe $mod" modprobe "$mod"
   done
   local arc_param=/sys/module/zfs/parameters/zfs_arc_max
-  if [ -n "$arc_bytes" ] && [ "$(cat "$arc_param" 2>/dev/null)" != "$arc_bytes" ]; then
+  if [ -n "$arc_bytes" ] && [ "$(cat "$arc_param" 2> /dev/null)" != "$arc_bytes" ]; then
     change "set zfs_arc_max to $arc_bytes" write_param "$arc_param" "$arc_bytes"
   fi
   local swap
@@ -40,10 +40,10 @@ ensure_kernel() {
 # module_present MOD: loaded, or built into the kernel. A built-in module
 # without parameters (tun on Ubuntu 26.04) has no /sys/module entry.
 module_present() {
-  [ -d "/sys/module/$1" ] || grep -q "/$1.ko" "/lib/modules/$(uname -r)/modules.builtin" 2>/dev/null
+  [ -d "/sys/module/$1" ] || grep -q "/$1.ko" "/lib/modules/$(uname -r)/modules.builtin" 2> /dev/null
 }
 
-write_param() { echo "$2" >"$1"; }
+write_param() { echo "$2" > "$1"; }
 
 memtotal_kib() { awk '/^MemTotal:/ { print $2 }' /proc/meminfo; }
 
@@ -89,6 +89,6 @@ ksm_tmpfiles() {
 # ksm_merges: ksmd runs, or pages it merged are still shared
 ksm_merges() {
   local dir=${KSM_DIR:-/sys/kernel/mm/ksm}
-  [ "$(cat "$dir/run" 2>/dev/null || echo 0)" = 1 ] ||
-    [ "$(cat "$dir/pages_shared" 2>/dev/null || echo 0)" -gt 0 ]
+  [ "$(cat "$dir/run" 2> /dev/null || echo 0)" = 1 ] ||
+    [ "$(cat "$dir/pages_shared" 2> /dev/null || echo 0)" -gt 0 ]
 }

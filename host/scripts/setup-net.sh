@@ -15,9 +15,9 @@ done
 
 # Debian's iptables defaults to the nf_tables backend. Fall back to legacy
 # if this kernel cannot do nf_tables.
-if ! iptables -t nat -S >/dev/null 2>&1; then
-  update-alternatives --set iptables /usr/sbin/iptables-legacy >/dev/null
-  update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy >/dev/null
+if ! iptables -t nat -S > /dev/null 2>&1; then
+  update-alternatives --set iptables /usr/sbin/iptables-legacy > /dev/null
+  update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy > /dev/null
   echo "setup-net: using iptables-legacy"
 fi
 
@@ -37,7 +37,7 @@ fi
 rule() {
   local table=$1 chain=$2
   shift 2
-  iptables -t "$table" -C "$chain" "$@" 2>/dev/null || iptables -t "$table" -A "$chain" "$@"
+  iptables -t "$table" -C "$chain" "$@" 2> /dev/null || iptables -t "$table" -A "$chain" "$@"
 }
 
 # IMP_SUBNET is the pool impd carves guest /30s from.
@@ -54,8 +54,8 @@ stale=$(iptables -S FORWARD | grep -- '--comment imp-network' |
 while read -r spec; do
   # shellcheck disable=SC2086 # the saved rule is split back into its words
   [ -z "$spec" ] || iptables ${spec/#-A/-D}
-done <<<"$stale"
-iptables -C FORWARD "${peer_rule[@]}" 2>/dev/null || iptables -I FORWARD 1 "${peer_rule[@]}"
+done <<< "$stale"
+iptables -C FORWARD "${peer_rule[@]}" 2> /dev/null || iptables -I FORWARD 1 "${peer_rule[@]}"
 rule filter FORWARD -i imp+ -o imp+ -j DROP
 rule filter FORWARD -i imp+ -o "$out" -j ACCEPT
 rule filter FORWARD -i "$out" -o imp+ -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
@@ -69,10 +69,10 @@ rule filter INPUT -i imp+ -j DROP
 rule6() {
   local table=$1 chain=$2
   shift 2
-  ip6tables -t "$table" -C "$chain" "$@" 2>/dev/null || ip6tables -t "$table" -A "$chain" "$@"
+  ip6tables -t "$table" -C "$chain" "$@" 2> /dev/null || ip6tables -t "$table" -A "$chain" "$@"
 }
 out6=
-if ip6tables -S INPUT >/dev/null 2>&1 && [ -d /proc/sys/net/ipv6 ]; then
+if ip6tables -S INPUT > /dev/null 2>&1 && [ -d /proc/sys/net/ipv6 ]; then
   out6=$(ip -6 route show default | awk '{for (i = 1; i < NF; i++) if ($i == "dev") { print $(i + 1); exit }}')
   # A key that holds its value already (docker run --sysctl) is not
   # written, so a read-only /proc/sys works.
@@ -84,7 +84,7 @@ if ip6tables -S INPUT >/dev/null 2>&1 && [ -d /proc/sys/net/ipv6 ]; then
   # read-only and this fails, so a route from adverts is not supported; the
   # warning says so. Docker's default route is static and needs none. Taps
   # take none, and no redirects.
-  if [ -n "$out6" ] && ! set6 "net.ipv6.conf.$out6.accept_ra" 2 2>/dev/null; then
+  if [ -n "$out6" ] && ! set6 "net.ipv6.conf.$out6.accept_ra" 2 2> /dev/null; then
     echo "setup-net: cannot set accept_ra=2 on $out6 (read-only /proc/sys); a route it learns from adverts will lapse" >&2
   fi
   set6 net.ipv6.conf.default.accept_ra 0
@@ -94,7 +94,7 @@ if ip6tables -S INPUT >/dev/null 2>&1 && [ -d /proc/sys/net/ipv6 ]; then
   # Router and neighbour solicitations and neighbour adverts, as only a
   # neighbour sends them (hop limit 255); never adverts or redirects.
   for type in 133 135 136; do
-    ip6tables -C INPUT -i imp+ -p ipv6-icmp --icmpv6-type "$type" -m hl --hl-eq 255 -j ACCEPT 2>/dev/null ||
+    ip6tables -C INPUT -i imp+ -p ipv6-icmp --icmpv6-type "$type" -m hl --hl-eq 255 -j ACCEPT 2> /dev/null ||
       ip6tables -I INPUT 1 -i imp+ -p ipv6-icmp --icmpv6-type "$type" -m hl --hl-eq 255 -j ACCEPT
   done
   rule6 filter INPUT -i imp+ -j DROP
@@ -132,15 +132,15 @@ broker_tag=(-m comment --comment imp-broker)
 # The kept rule per chain: anything else tagged is stale, including the
 # INPUT DROP an older setup-net.sh added.
 for where in "filter INPUT ACCEPT" "raw PREROUTING DROP"; do
-  read -r table chain target <<<"$where"
+  read -r table chain target <<< "$where"
   stale=$(iptables -t "$table" -S "$chain" | grep -- '--comment imp-broker' |
     grep -v -- "--dport $broker_port .*-j $target\$" || true)
   while read -r spec; do
     # shellcheck disable=SC2086 # the saved rule is split back into its words
     [ -z "$spec" ] || iptables -t "$table" ${spec/#-A/-D}
-  done <<<"$stale"
+  done <<< "$stale"
 done
-iptables -C INPUT -i imp+ -p tcp --dport "$broker_port" "${broker_tag[@]}" -j ACCEPT 2>/dev/null ||
+iptables -C INPUT -i imp+ -p tcp --dport "$broker_port" "${broker_tag[@]}" -j ACCEPT 2> /dev/null ||
   iptables -I INPUT 1 -i imp+ -p tcp --dport "$broker_port" "${broker_tag[@]}" -j ACCEPT
 rule raw PREROUTING ! -i imp+ -p tcp --dport "$broker_port" -m addrtype --dst-type LOCAL \
   "${broker_tag[@]}" -j DROP
@@ -151,8 +151,8 @@ rule raw PREROUTING ! -i imp+ -p tcp --dport "$broker_port" -m addrtype --dst-ty
 # any chain, for IPv4 and IPv6. Loopback stays: a connection to impd's own
 # tailnet address comes in on lo.
 rule raw PREROUTING -s 100.64.0.0/10 ! -i tailscale0 -m addrtype ! --src-type LOCAL -j DROP
-if ip6tables -t raw -S PREROUTING >/dev/null 2>&1; then
-  ip6tables -t raw -C PREROUTING -s fd7a:115c:a1e0::/48 ! -i tailscale0 -m addrtype ! --src-type LOCAL -j DROP 2>/dev/null ||
+if ip6tables -t raw -S PREROUTING > /dev/null 2>&1; then
+  ip6tables -t raw -C PREROUTING -s fd7a:115c:a1e0::/48 ! -i tailscale0 -m addrtype ! --src-type LOCAL -j DROP 2> /dev/null ||
     ip6tables -t raw -A PREROUTING -s fd7a:115c:a1e0::/48 ! -i tailscale0 -m addrtype ! --src-type LOCAL -j DROP
 fi
 
@@ -164,16 +164,16 @@ fi
 dns_port=$IMP_EGRESS_DNS_PORT
 dns_tag=(-m comment --comment imp-egress-dns)
 for where in "filter INPUT ACCEPT" "raw PREROUTING DROP"; do
-  read -r table chain target <<<"$where"
+  read -r table chain target <<< "$where"
   stale=$(iptables -t "$table" -S "$chain" | grep -- '--comment imp-egress-dns' |
     grep -v -- "--dport $dns_port .*-j $target\$" || true)
   while read -r spec; do
     # shellcheck disable=SC2086 # the saved rule is split back into its words
     [ -z "$spec" ] || iptables -t "$table" ${spec/#-A/-D}
-  done <<<"$stale"
+  done <<< "$stale"
 done
 for proto in udp tcp; do
-  iptables -C INPUT -i imp+ -p "$proto" --dport "$dns_port" "${dns_tag[@]}" -j ACCEPT 2>/dev/null ||
+  iptables -C INPUT -i imp+ -p "$proto" --dport "$dns_port" "${dns_tag[@]}" -j ACCEPT 2> /dev/null ||
     iptables -I INPUT 1 -i imp+ -p "$proto" --dport "$dns_port" "${dns_tag[@]}" -j ACCEPT
   rule raw PREROUTING ! -i imp+ -p "$proto" --dport "$dns_port" -m addrtype --dst-type LOCAL \
     "${dns_tag[@]}" -j DROP

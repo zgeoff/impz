@@ -14,7 +14,7 @@ project=$(mktemp -d)
 trap 'rm -rf "$project"' EXIT
 
 cd "$project"
-npm init -y >/dev/null
+npm init -y > /dev/null
 npm pkg set type=module
 npm install --no-audit --no-fund --silent "$tarball"
 

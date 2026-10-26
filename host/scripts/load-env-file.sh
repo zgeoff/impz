@@ -24,5 +24,5 @@ while IFS= read -r load_env_file_text || [ -n "$load_env_file_text" ]; do
     return 1
   fi
   export "${load_env_file_text?}"
-done <"${1:?usage: . load-env-file.sh FILE}"
+done < "${1:?usage: . load-env-file.sh FILE}"
 unset load_env_file_line load_env_file_text

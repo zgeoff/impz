@@ -41,5 +41,5 @@ while IFS= read -r line; do
     echo "make-vmlinux: ${BASH_REMATCH[1]}=${BASH_REMATCH[2]} not in final config" >&2
     missing=1
   fi
-done <"$here/docker.fragment"
+done < "$here/docker.fragment"
 exit "$missing"

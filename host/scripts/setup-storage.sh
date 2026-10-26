@@ -83,7 +83,7 @@ mount_loop() {
     dev=$(losetup -f) || die "no free loop device; is /dev/loop-control passed in?"
     dev=${dev%% *}
     [ -b "$dev" ] || mknod "$dev" b 7 "${dev#/dev/loop}"
-    if losetup "$dev" "$file" 2>/dev/null; then
+    if losetup "$dev" "$file" 2> /dev/null; then
       # nosuid, as bootstrap mounts it on a host
       if ! mount -o nosuid "$dev" "$dir"; then
         losetup -d "$dev" || true
@@ -154,8 +154,8 @@ fi
 # its device node, and without --privileged the container has one only for
 # a loop file it mounted itself.
 probe=$(mktemp "$root/.reflink-probe.XXXXXX")
-head -c 4096 /dev/zero >"$probe"
-if ! cp --reflink=always "$probe" "$probe.clone" 2>/dev/null; then
+head -c 4096 /dev/zero > "$probe"
+if ! cp --reflink=always "$probe" "$probe.clone" 2> /dev/null; then
   rm -f "$probe" "$probe.clone"
   fail "$root is XFS without reflink${mounted:+ (from $mounted)}; recreate it with mkfs.xfs -m reflink=1"
 fi

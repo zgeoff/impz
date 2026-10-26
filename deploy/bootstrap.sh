@@ -167,7 +167,7 @@ function trim(line, value, first) {
 # trim_lines [FILE]: each line of FILE, else of stdin, through trim; nothing
 # when FILE is missing
 trim_lines() {
-  awk -v q="'" "$TRIM_AWK"' { print trim($0) }' "$@" 2>/dev/null || true
+  awk -v q="'" "$TRIM_AWK"' { print trim($0) }' "$@" 2> /dev/null || true
 }
 
 # strip_markers: stdin without the release-please marker lines, which only
@@ -191,7 +191,7 @@ write_file() {
   local path=$1 perm=$2 content=$3 tmp
   mkdir -p "$(dirname "$path")" || return 1
   tmp=$(mktemp "$path.XXXXXX") || return 1
-  if ! { chmod "$perm" "$tmp" && printf '%s\n' "$content" >"$tmp" && mv "$tmp" "$path"; }; then
+  if ! { chmod "$perm" "$tmp" && printf '%s\n' "$content" > "$tmp" && mv "$tmp" "$path"; }; then
     rm -f "$tmp"
     return 1
   fi
@@ -236,13 +236,13 @@ ipv6_expand() {
   local -a groups=() head=() tail=()
   if [[ $addr == *::* ]]; then
     [[ ${addr#*::} != *::* ]] || return 1
-    [ -z "${addr%%::*}" ] || IFS=: read -ra head <<<"${addr%%::*}"
-    [ -z "${addr#*::}" ] || IFS=: read -ra tail <<<"${addr#*::}"
+    [ -z "${addr%%::*}" ] || IFS=: read -ra head <<< "${addr%%::*}"
+    [ -z "${addr#*::}" ] || IFS=: read -ra tail <<< "${addr#*::}"
     groups=("${head[@]}")
     for ((i = ${#head[@]} + ${#tail[@]}; i < 8; i++)); do groups+=(0); done
     groups+=("${tail[@]}")
   else
-    IFS=: read -ra groups <<<"$addr"
+    IFS=: read -ra groups <<< "$addr"
   fi
   [ ${#groups[@]} = 8 ] || return 1
   for i in "${!groups[@]}"; do
@@ -262,7 +262,7 @@ ipv6_canon() {
   [[ $1 == */* ]] && suffix=/${1#*/}
   expanded=$(ipv6_expand "${1%%/*}") || return 1
   local -a groups
-  IFS=: read -ra groups <<<"$expanded"
+  IFS=: read -ra groups <<< "$expanded"
   local best=-1 best_len=1 run=0 start=0
   for i in "${!groups[@]}"; do
     if [ "${groups[i]}" = 0 ]; then
@@ -306,7 +306,7 @@ subnet6() {
 # with the bridge HOST_BRIDGE and no DNS server; nothing when it matches.
 network_drift() {
   local want=$1 enabled bridge dns subnet found="" have=()
-  read -r enabled bridge dns subnet <<<"$2"
+  read -r enabled bridge dns subnet <<< "$2"
   if [ "$enabled" != true ]; then
     echo "it has no IPv6"
     return
@@ -335,7 +335,7 @@ host_addresses() { ip -o addr show scope global | tr -s " " | cut -d " " -f 4 | 
 # network_others: the containers on the network other than imp-host. Podman
 # 4.9's network inspect lists no containers, so the names come from podman ps.
 network_others() {
-  podman ps -a --filter "network=$HOST_NETWORK" --format '{{.Names}}' 2>/dev/null |
+  podman ps -a --filter "network=$HOST_NETWORK" --format '{{.Names}}' 2> /dev/null |
     grep -vx -e imp-host -e '' | paste -sd ' ' - || true
 }
 
@@ -344,7 +344,7 @@ network_others() {
 # makes it.
 create_host_network() {
   podman network create --ipv6 --subnet "$1" --disable-dns \
-    --interface-name "$HOST_BRIDGE" "$HOST_NETWORK" >/dev/null
+    --interface-name "$HOST_BRIDGE" "$HOST_NETWORK" > /dev/null
 }
 
 # render_firewall PORT...: the nft ruleset. One transaction: create the
@@ -355,7 +355,7 @@ create_host_network() {
 render_firewall() {
   local ports
   ports=$(printf '%s\n' "$@" | sort -nu | paste -sd, - | sed 's/,/, /g')
-  cat <<EOF
+  cat << EOF
 # imp host firewall, written by deploy/bootstrap.sh. Loaded by
 # imp-firewall.service. Inbound: SSH only.
 table inet imp_host
@@ -382,7 +382,7 @@ EOF
 # keeps in the env file (storage, host firewall, IPv6).
 
 usage() {
-  cat <<'EOF'
+  cat << 'EOF'
 Usage: bootstrap.sh [--yes | --dry-run | --check] STORAGE [options]
 
 Modes (one):
@@ -453,7 +453,7 @@ parse_args() {
       --image-archive) image_archive=${2:?--image-archive needs a file} && shift ;;
       --tailscale-authkey-file)
         [ -r "${2:-}" ] || die "--tailscale-authkey-file: cannot read ${2:-}"
-        authkey=$(tr -d '[:space:]' <"$2")
+        authkey=$(tr -d '[:space:]' < "$2")
         authkey_file=$2
         shift
         ;;
@@ -491,7 +491,7 @@ parse_args() {
 preflight() {
   phase preflight
   [ "$(id -u)" = 0 ] || die "run as root"
-  if systemd-detect-virt -q --container 2>/dev/null; then
+  if systemd-detect-virt -q --container 2> /dev/null; then
     in_container=1
     warn "running in a container: kernel settings are written, not applied"
   fi
@@ -542,8 +542,8 @@ check_platform() {
 # The Podman unit would start a second imp-host on the same data.
 check_docker_host() {
   local unit=${1:-/etc/systemd/system/imp-host.service}
-  if ! grep -qE '^ExecStart=.*/docker run' "$unit" 2>/dev/null &&
-    ! { command -v docker >/dev/null && docker container inspect imp-host >/dev/null 2>&1; }; then
+  if ! grep -qE '^ExecStart=.*/docker run' "$unit" 2> /dev/null &&
+    ! { command -v docker > /dev/null && docker container inspect imp-host > /dev/null 2>&1; }; then
     return 0
   fi
   die "imp-host runs under Docker, from an older release: run deploy/upgrade.sh of this release, which moves the host to Podman (docs/guides/operations.md#upgrade); nothing changed"
@@ -632,9 +632,9 @@ resolve_ipv6() {
 # has a global address (not fc00::/7, not link-local).
 global_ipv6_uplink() {
   local uplink
-  uplink=$(route_uplink "$(ip -6 route show default 2>/dev/null | head -n 1)")
+  uplink=$(route_uplink "$(ip -6 route show default 2> /dev/null | head -n 1)")
   [ -n "$uplink" ] || return 1
-  ip -6 -o addr show dev "$uplink" scope global 2>/dev/null | awk '{ print $4 }' | grep -qvE '^f[cd]' || return 1
+  ip -6 -o addr show dev "$uplink" scope global 2> /dev/null | awk '{ print $4 }' | grep -qvE '^f[cd]' || return 1
   echo "$uplink"
 }
 
@@ -651,7 +651,7 @@ ensure_packages() {
     podman catatonit netavark aardvark-dns iptables)
   local pkg missing=()
   for pkg in "${wanted[@]}"; do
-    dpkg-query -W -f '${Status}' "$pkg" 2>/dev/null | grep -q 'install ok installed' || missing+=("$pkg")
+    dpkg-query -W -f '${Status}' "$pkg" 2> /dev/null | grep -q 'install ok installed' || missing+=("$pkg")
   done
   if [ ${#missing[@]} -gt 0 ]; then
     change "apt-get install ${missing[*]}" apt_install "$APT_LOG" "${missing[@]}"
@@ -670,7 +670,7 @@ ensure_zfs_packages() {
     wanted=("linux-headers-$(uname -r)" zfs-dkms zfsutils-linux)
   fi
   for pkg in "${wanted[@]}"; do
-    dpkg-query -W -f '${Status}' "$pkg" 2>/dev/null | grep -q 'install ok installed' || missing+=("$pkg")
+    dpkg-query -W -f '${Status}' "$pkg" 2> /dev/null | grep -q 'install ok installed' || missing+=("$pkg")
   done
   if [ ${#missing[@]} -gt 0 ]; then
     change "apt-get install ${missing[*]}" apt_install "$APT_LOG" "${missing[@]}"
@@ -678,7 +678,7 @@ ensure_zfs_packages() {
 }
 
 debian_contrib_sources() {
-  cat <<'EOF'
+  cat << 'EOF'
 # Written by deploy/bootstrap.sh: contrib, for zfs-dkms and zfsutils-linux.
 Types: deb
 URIs: http://deb.debian.org/debian
@@ -694,7 +694,7 @@ apt_install() {
   shift
   if ! {
     apt-get update -q && DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends "$@"
-  } >"$apt_log" 2>&1; then
+  } > "$apt_log" 2>&1; then
     tail -n 20 "$apt_log" >&2
     die "apt-get install $* failed; the whole log is in $apt_log"
   fi
@@ -702,8 +702,8 @@ apt_install() {
 
 # ensure_service UNIT: enabled and active.
 ensure_service() {
-  systemctl -q is-enabled "$1" 2>/dev/null || change "enable $1" systemctl enable -q "$1"
-  systemctl -q is-active "$1" 2>/dev/null || change "start $1" systemctl start "$1"
+  systemctl -q is-enabled "$1" 2> /dev/null || change "enable $1" systemctl enable -q "$1"
+  systemctl -q is-active "$1" 2> /dev/null || change "start $1" systemctl start "$1"
 }
 
 # --- deploy/bootstrap/storage.sh ---
@@ -765,7 +765,7 @@ check_xfs_reflink() {
 # dry run, before mkfs.
 device_source() {
   local uuid
-  uuid=$(blkid -s UUID -o value "$1" 2>/dev/null || true)
+  uuid=$(blkid -s UUID -o value "$1" 2> /dev/null || true)
   if [ -n "$uuid" ]; then echo "UUID=$uuid"; else echo "$1"; fi
 }
 
@@ -774,11 +774,11 @@ check_device_free() {
   local dev=$1
   # stat, not test -b, so a test can stand in for the device; LC_ALL=C keeps
   # the file type in English whatever the host's locale
-  [ "$(LC_ALL=C stat -L -c %F "$dev" 2>/dev/null)" = "block special file" ] || die "$dev is not a block device"
+  [ "$(LC_ALL=C stat -L -c %F "$dev" 2> /dev/null)" = "block special file" ] || die "$dev is not a block device"
   dev=$(readlink -f "$dev")
   local root_disk
   root_disk=$(findmnt -n -o SOURCE / | sed 's/\[.*//')
-  if lsblk -n -s -o PATH "$root_disk" 2>/dev/null | grep -qx "$dev"; then
+  if lsblk -n -s -o PATH "$root_disk" 2> /dev/null | grep -qx "$dev"; then
     die "$dev holds the root filesystem"
   fi
   if [ -n "$(lsblk -n -o MOUNTPOINTS "$dev" | tr -d '[:space:]')" ]; then
@@ -795,11 +795,11 @@ prepare_device() {
   local dev=$1
   check_device_free "$dev"
   local fstype
-  fstype=$(blkid -p -s TYPE -o value "$dev" 2>/dev/null || true)
+  fstype=$(blkid -p -s TYPE -o value "$dev" 2> /dev/null || true)
   case $fstype in
     xfs) log "$dev already holds XFS; reusing it" ;;
     "")
-      if blkid -p "$dev" >/dev/null 2>&1; then
+      if blkid -p "$dev" > /dev/null 2>&1; then
         die "$dev carries a signature (a partition table?); wipe it by hand if it is free"
       fi
       # shellcheck disable=SC2046 # the options are words
@@ -814,12 +814,12 @@ prepare_device() {
 # mounts it: the container mounts it on /var/lib/imp, and impd creates the
 # children (docs/architecture/storage/storage.md#zfs).
 storage_zfs() {
-  if command -v zpool >/dev/null && zpool list -H -o name "$zfs_pool" >/dev/null 2>&1; then
+  if command -v zpool > /dev/null && zpool list -H -o name "$zfs_pool" > /dev/null 2>&1; then
     log "pool $zfs_pool is imported"
   elif [ -n "$data_device" ]; then
     check_device_free "$data_device"
     local fstype
-    fstype=$(blkid -p -s TYPE -o value "$data_device" 2>/dev/null || true)
+    fstype=$(blkid -p -s TYPE -o value "$data_device" 2> /dev/null || true)
     case $fstype in
       zfs_member)
         [ "$(blkid -p -s LABEL -o value "$data_device")" = "$zfs_pool" ] ||
@@ -827,7 +827,7 @@ storage_zfs() {
         change "zpool import $zfs_pool" zpool import "$zfs_pool"
         ;;
       "")
-        if blkid -p "$data_device" >/dev/null 2>&1; then
+        if blkid -p "$data_device" > /dev/null 2>&1; then
           die "$data_device carries a signature (a partition table?); wipe it by hand if it is free"
         fi
         # shellcheck disable=SC2086 # plain words (render-imp-host.ts checks)
@@ -840,7 +840,7 @@ storage_zfs() {
     die "no pool $zfs_pool; give --data-device DEV to create it"
   fi
 
-  if ! command -v zfs >/dev/null || ! zfs list -H -o name "$zfs_root" >/dev/null 2>&1; then
+  if ! command -v zfs > /dev/null || ! zfs list -H -o name "$zfs_root" > /dev/null 2>&1; then
     change "zfs create $zfs_root (mountpoint=legacy)" zfs create -o mountpoint=legacy "$zfs_root"
   elif [ "$(zfs get -H -o value mountpoint "$zfs_root")" != legacy ]; then
     change "zfs set mountpoint=legacy $zfs_root" zfs set mountpoint=legacy "$zfs_root"
@@ -856,7 +856,7 @@ prepare_loop_file() {
   [ "$(findmnt -n -o TARGET --target "$dir")" = / ] ||
     die "--loop-file must be on the root filesystem, which mounts before $DATA_DIR"
   if [ -e "$loop_file" ]; then
-    [ "$(blkid -p -s TYPE -o value "$loop_file" 2>/dev/null || true)" = xfs ] ||
+    [ "$(blkid -p -s TYPE -o value "$loop_file" 2> /dev/null || true)" = xfs ] ||
       die "$loop_file exists and is not XFS"
     log "$loop_file already holds XFS; reusing it"
     return
@@ -881,7 +881,7 @@ make_loop_file() {
 }
 
 xfsprogs_version() {
-  if command -v mkfs.xfs >/dev/null; then
+  if command -v mkfs.xfs > /dev/null; then
     mkfs.xfs -V | grep -oE '[0-9]+(\.[0-9]+)+'
   else
     echo 0 # a dry run before the package is installed
@@ -963,7 +963,7 @@ fstab_entry_state() {
   fi
 }
 
-append_line() { printf '%s\n' "$2" >>"$1"; }
+append_line() { printf '%s\n' "$2" >> "$1"; }
 
 # --- deploy/bootstrap/kernel.sh ---
 
@@ -991,13 +991,13 @@ ensure_kernel() {
   local key want
   while read -r key want; do
     [ "$(sysctl -n "$key")" = "$want" ] || change "sysctl $key=$want" sysctl -qw "$key=$want"
-  done <<<$'vm.overcommit_memory 1\nvm.swappiness 1'
+  done <<< $'vm.overcommit_memory 1\nvm.swappiness 1'
   local mod
   for mod in "${mods[@]}"; do
     module_present "$mod" || change "modprobe $mod" modprobe "$mod"
   done
   local arc_param=/sys/module/zfs/parameters/zfs_arc_max
-  if [ -n "$arc_bytes" ] && [ "$(cat "$arc_param" 2>/dev/null)" != "$arc_bytes" ]; then
+  if [ -n "$arc_bytes" ] && [ "$(cat "$arc_param" 2> /dev/null)" != "$arc_bytes" ]; then
     change "set zfs_arc_max to $arc_bytes" write_param "$arc_param" "$arc_bytes"
   fi
   local swap
@@ -1008,10 +1008,10 @@ ensure_kernel() {
 # module_present MOD: loaded, or built into the kernel. A built-in module
 # without parameters (tun on Ubuntu 26.04) has no /sys/module entry.
 module_present() {
-  [ -d "/sys/module/$1" ] || grep -q "/$1.ko" "/lib/modules/$(uname -r)/modules.builtin" 2>/dev/null
+  [ -d "/sys/module/$1" ] || grep -q "/$1.ko" "/lib/modules/$(uname -r)/modules.builtin" 2> /dev/null
 }
 
-write_param() { echo "$2" >"$1"; }
+write_param() { echo "$2" > "$1"; }
 
 memtotal_kib() { awk '/^MemTotal:/ { print $2 }' /proc/meminfo; }
 
@@ -1057,8 +1057,8 @@ ksm_tmpfiles() {
 # ksm_merges: ksmd runs, or pages it merged are still shared
 ksm_merges() {
   local dir=${KSM_DIR:-/sys/kernel/mm/ksm}
-  [ "$(cat "$dir/run" 2>/dev/null || echo 0)" = 1 ] ||
-    [ "$(cat "$dir/pages_shared" 2>/dev/null || echo 0)" -gt 0 ]
+  [ "$(cat "$dir/run" 2> /dev/null || echo 0)" = 1 ] ||
+    [ "$(cat "$dir/pages_shared" 2> /dev/null || echo 0)" -gt 0 ]
 }
 
 # --- deploy/bootstrap/network.sh ---
@@ -1069,19 +1069,19 @@ ksm_merges() {
 ensure_firewall() {
   phase firewall
   if [ "$host_firewall" = none ]; then
-    if systemctl -q is-enabled nftables 2>/dev/null && grep -qE '^[[:space:]]*flush ruleset' /etc/nftables.conf 2>/dev/null; then
+    if systemctl -q is-enabled nftables 2> /dev/null && grep -qE '^[[:space:]]*flush ruleset' /etc/nftables.conf 2> /dev/null; then
       warn "nftables.service is enabled and /etc/nftables.conf flushes every ruleset, Podman's too, at each reload"
     fi
     remove_firewall
     return
   fi
-  if systemctl -q is-enabled nftables 2>/dev/null; then
+  if systemctl -q is-enabled nftables 2> /dev/null; then
     die "nftables.service is enabled; its /etc/nftables.conf flushes every ruleset (Podman's too). Disable it first"
   fi
-  if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q '^Status: active'; then
+  if command -v ufw > /dev/null && ufw status 2> /dev/null | grep -q '^Status: active'; then
     change "disable ufw (imp-firewall.service replaces it)" disable_ufw
   fi
-  if systemctl -q is-active firewalld 2>/dev/null; then
+  if systemctl -q is-active firewalld 2> /dev/null; then
     change "stop and disable firewalld (imp-firewall.service replaces it)" systemctl disable -q --now firewalld
   fi
 
@@ -1095,12 +1095,12 @@ ensure_firewall() {
     die "run as root, or with sudo --preserve-env=SSH_CONNECTION, so the firewall phase can check this SSH session's port"
   fi
   local session_port
-  session_port=$(awk '{ print $4 }' <<<"${SSH_CONNECTION:-}")
+  session_port=$(awk '{ print $4 }' <<< "${SSH_CONNECTION:-}")
   if [ -n "$session_port" ] && ! printf '%s\n' "${ports[@]}" | grep -qx "$session_port"; then
     die "this SSH session uses port $session_port, which sshd does not report; give --ssh-port $session_port"
   fi
   log "SSH ports kept open: ${ports[*]}"
-  if sshd -T 2>/dev/null | grep -qi '^passwordauthentication yes'; then
+  if sshd -T 2> /dev/null | grep -qi '^passwordauthentication yes'; then
     warn "sshd allows password logins; set PasswordAuthentication no"
   fi
 
@@ -1123,7 +1123,7 @@ ensure_firewall() {
 remove_firewall() {
   local loaded=""
   if [ -e /etc/systemd/system/imp-firewall.service ] || [ -e "$FIREWALL_FILE" ] ||
-    { command -v nft >/dev/null && nft list table inet imp_host >/dev/null 2>&1; }; then
+    { command -v nft > /dev/null && nft list table inet imp_host > /dev/null 2>&1; }; then
     loaded=1
   fi
   if [ -z "$loaded" ]; then
@@ -1141,8 +1141,8 @@ remove_firewall() {
 }
 
 uninstall_firewall() {
-  systemctl disable -q --now imp-firewall 2>/dev/null || true
-  if command -v nft >/dev/null && nft list table inet imp_host >/dev/null 2>&1; then
+  systemctl disable -q --now imp-firewall 2> /dev/null || true
+  if command -v nft > /dev/null && nft list table inet imp_host > /dev/null 2>&1; then
     nft delete table inet imp_host || return 1
   fi
   rm -f /etc/systemd/system/imp-firewall.service "$FIREWALL_FILE"
@@ -1150,10 +1150,10 @@ uninstall_firewall() {
   # An earlier run with own disabled ufw and firewalld.
   # Read first: under pipefail, grep -q quitting early fails nft with SIGPIPE.
   local rules
-  rules=$(nft list ruleset 2>/dev/null || true)
-  if ! grep -q 'hook input' <<<"$rules" &&
-    ! { command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q '^Status: active'; } &&
-    ! systemctl -q is-active firewalld 2>/dev/null; then
+  rules=$(nft list ruleset 2> /dev/null || true)
+  if ! grep -q 'hook input' <<< "$rules" &&
+    ! { command -v ufw > /dev/null && ufw status 2> /dev/null | grep -q '^Status: active'; } &&
+    ! systemctl -q is-active firewalld 2> /dev/null; then
     warn "the host now has no inbound firewall; the platform must give one (docs/architecture/host.md#the-host-firewall)"
   fi
 }
@@ -1162,20 +1162,20 @@ uninstall_firewall() {
 # never replaces a good one, or leaves the host with none. Skipped in a dry
 # run before nftables is installed.
 check_ruleset() {
-  if ! command -v nft >/dev/null; then
+  if ! command -v nft > /dev/null; then
     dry || die "nft is missing"
     return 0
   fi
   local file rc=0
   file=$(mktemp)
-  printf '%s\n' "$1" >"$file"
+  printf '%s\n' "$1" > "$file"
   nft -c -f "$file" || rc=$?
   rm -f "$file"
   [ "$rc" = 0 ] || die "nft rejects the firewall ruleset; nothing was loaded"
 }
 
 disable_ufw() {
-  ufw --force disable >/dev/null
+  ufw --force disable > /dev/null
   systemctl disable -q ufw
 }
 
@@ -1184,11 +1184,11 @@ disable_ufw() {
 # know the port the socket listens on.
 ssh_ports() {
   {
-    sshd -T 2>/dev/null | ssh_ports_from_sshd_t || true
-    if systemctl -q is-active ssh.socket 2>/dev/null; then
+    sshd -T 2> /dev/null | ssh_ports_from_sshd_t || true
+    if systemctl -q is-active ssh.socket 2> /dev/null; then
       systemctl show -p Listen --value ssh.socket | ssh_ports_from_listen || true
     fi
-    ss -Hltnp 2>/dev/null | awk '/"sshd/ { print $4 }' | ssh_ports_from_listen || true
+    ss -Hltnp 2> /dev/null | awk '/"sshd/ { print $4 }' | ssh_ports_from_listen || true
     printf '%s\n' "${extra_ssh_ports[@]}"
   } | grep -E '^[0-9]+$' | sort -nu
 }
@@ -1201,7 +1201,7 @@ ssh_ports_from_sshd_t() { awk 'tolower($1) == "port" { print $2 }'; }
 ssh_ports_from_listen() { grep -oE ':[0-9]+( |$)' | tr -d ': '; }
 
 unit_imp_firewall() {
-  cat <<EOF
+  cat << EOF
 # Written by deploy/bootstrap.sh. Loads $FIREWALL_FILE before the network
 # comes up, as Debian's nftables.service does.
 [Unit]
@@ -1233,7 +1233,7 @@ ensure_ipv6() {
     return
   fi
   local inspect="" existing=""
-  if command -v podman >/dev/null && inspect=$(podman network inspect -f "$NETWORK_FORMAT" "$HOST_NETWORK" 2>/dev/null); then
+  if command -v podman > /dev/null && inspect=$(podman network inspect -f "$NETWORK_FORMAT" "$HOST_NETWORK" 2> /dev/null); then
     existing=1
   fi
   resolve_subnet6 "$inspect"
@@ -1292,7 +1292,7 @@ random_ula64() {
 # bridge HOST_BRIDGE, or nothing.
 network_subnet6() {
   local enabled bridge subnets subnet
-  read -r enabled bridge _ subnets <<<"$1"
+  read -r enabled bridge _ subnets <<< "$1"
   [ "$enabled" = true ] && [ "$bridge" = "$HOST_BRIDGE" ] || return 0
   for subnet in $subnets; do
     if [[ $subnet == *:* ]]; then
@@ -1309,13 +1309,13 @@ network_subnet6() {
 # applies in a test container too. EXISTING: the network is there already.
 ensure_router_adverts() {
   local route uplink live file_uplink=""
-  route=$(ip -6 route show default 2>/dev/null | head -n 1)
+  route=$(ip -6 route show default 2> /dev/null | head -n 1)
   uplink=$(route_uplink "$route")
   if [ -z "$uplink" ]; then
     log "router adverts: the host has no IPv6 default route"
     return
   fi
-  [ -f "$RA_FILE" ] && file_uplink=$(ra_file_uplink <"$RA_FILE")
+  [ -f "$RA_FILE" ] && file_uplink=$(ra_file_uplink < "$RA_FILE")
   live=$(cat "/proc/sys/net/ipv6/conf/$uplink/accept_ra")
   # Ours already (a second run finds 2), or the kernel's to take.
   if [ "$file_uplink" = "$uplink" ] || { route_is_ra "$route" && [ "$live" = 1 ]; }; then
@@ -1338,7 +1338,7 @@ ensure_router_adverts() {
 }
 
 # route_uplink ROUTE: the device of an `ip -6 route` line, or nothing.
-route_uplink() { awk '{ for (i = 1; i < NF; i++) if ($i == "dev") { print $(i + 1); exit } }' <<<"$1"; }
+route_uplink() { awk '{ for (i = 1; i < NF; i++) if ($i == "dev") { print $(i + 1); exit } }' <<< "$1"; }
 
 # route_is_ra ROUTE: the route came from a router advert.
 route_is_ra() { [[ " $1 " == *" proto ra "* ]]; }
@@ -1361,18 +1361,18 @@ ra_file_uplink() { sed -n 's|^net/ipv6/conf/\(.*\)/accept_ra = 2$|\1|p' | tail -
 # IPv6 off with a warning (fails), and on stops.
 ra_userspace() {
   local uplink=$1 owner network_file=""
-  network_file=$(networkctl status "$uplink" 2>/dev/null | sed -n 's/^ *Network File: //p' || true)
+  network_file=$(networkctl status "$uplink" 2> /dev/null | sed -n 's/^ *Network File: //p' || true)
   if [ -n "$network_file" ] && [ "$network_file" != n/a ]; then
     owner=systemd-networkd
     # networkd's IPv6AcceptRA defaults to off once forwarding is on; yes keeps it
-    if cat "$network_file" "$network_file.d"/*.conf 2>/dev/null |
+    if cat "$network_file" "$network_file.d"/*.conf 2> /dev/null |
       grep -qiE '^[[:space:]]*IPv6AcceptRA[[:space:]]*=[[:space:]]*(yes|true|on|1)[[:space:]]*$'; then
       log "router adverts: systemd-networkd takes them on $uplink, with IPv6AcceptRA=yes in $network_file"
       return
     fi
-  elif nmcli -t -f DEVICE,STATE device 2>/dev/null | grep -qx "$uplink:connected"; then
+  elif nmcli -t -f DEVICE,STATE device 2> /dev/null | grep -qx "$uplink:connected"; then
     owner=NetworkManager
-  elif pgrep -x dhcpcd >/dev/null; then
+  elif pgrep -x dhcpcd > /dev/null; then
     owner=dhcpcd
   else
     owner="a client other than the kernel"
@@ -1393,13 +1393,13 @@ ra_userspace() {
 
 # stop_imp_host: stop the unit, so imp-host leaves the network.
 stop_imp_host() {
-  systemctl stop imp-host 2>/dev/null || true
-  podman rm -f imp-host >/dev/null 2>&1 || true
+  systemctl stop imp-host 2> /dev/null || true
+  podman rm -f imp-host > /dev/null 2>&1 || true
 }
 
 recreate_host_network() {
   stop_imp_host
-  podman network rm "$HOST_NETWORK" >/dev/null && create_host_network "$ipv6_subnet"
+  podman network rm "$HOST_NETWORK" > /dev/null && create_host_network "$ipv6_subnet"
 }
 
 # remove_ipv6 [RA_FILE]: with off, take out what an earlier run with on put in, but
@@ -1408,7 +1408,7 @@ recreate_host_network() {
 # RA_FILE defaults to $RA_FILE.
 remove_ipv6() {
   local ra_file=${1:-$RA_FILE} network="" file=""
-  if command -v podman >/dev/null && podman network exists "$HOST_NETWORK"; then
+  if command -v podman > /dev/null && podman network exists "$HOST_NETWORK"; then
     network=1
   fi
   [ ! -f "$ra_file" ] || file=1
@@ -1436,7 +1436,7 @@ remove_ipv6() {
 
 remove_host_network() {
   stop_imp_host
-  podman network rm "$HOST_NETWORK" >/dev/null
+  podman network rm "$HOST_NETWORK" > /dev/null
 }
 
 # --- deploy/bootstrap/units.sh ---
@@ -1496,13 +1496,13 @@ render_env() {
         if (!done["IMP_HOST_SUBNET6"] && ENVIRON["SUBNET6"] != "") set("IMP_HOST_SUBNET6", ENVIRON["SUBNET6"])
         if (!done["IMP_KSM"] && ENVIRON["KSM"] != "") set("IMP_KSM", ENVIRON["KSM"] == "on" ? "1" : "0")
       }
-    ' <<<"$base"
+    ' <<< "$base"
 }
 
 # The pool imports at boot (zfs-import-cache.service); the container needs
 # it and /dev/zfs before it starts.
 unit_imp_host_zfs() {
-  cat <<'EOF'
+  cat << 'EOF'
 # Written by deploy/bootstrap.sh: import the ZFS pool before imp starts.
 [Unit]
 Wants=zfs.target
@@ -1513,7 +1513,7 @@ EOF
 # --- deploy/imp-host.service, deploy/imp-host.env.example ---
 
 unit_imp_host() {
-  cat <<'EOF'
+  cat << 'EOF'
 # imp host as a systemd service: the supported way to run the release image
 # on Ubuntu and Debian, which deploy/bootstrap.sh installs. It runs the
 # container with rootful Podman.
@@ -1592,7 +1592,7 @@ EOF
 }
 
 env_template() {
-  cat <<'EOF'
+  cat << 'EOF'
 # imp host settings. Copy to /etc/imp/imp-host.env (mode 0600: it holds the
 # Tailscale key and the DNS token). deploy/imp-host.service passes it to the
 # container. docs/guides/configuration.md lists every variable.
@@ -1700,7 +1700,7 @@ EOF
 reload_unit() {
   systemctl daemon-reload
   systemctl enable -q "$1"
-  systemctl reset-failed "$1" 2>/dev/null || true
+  systemctl reset-failed "$1" 2> /dev/null || true
   systemctl restart "$1"
 }
 
@@ -1726,7 +1726,7 @@ ensure_imp() {
     "$storage" "$zfs_root" "$host_firewall" "$ipv6" "$ipv6_subnet" "$ksm")
   # An operator's value stays (render_env), so the floor binds the formula only.
   local refusal
-  if [ "$(sed -n 's/^IMP_RAM_BUDGET_MIB=//p' <<<"$env" | tail -n 1)" = "$budget" ] &&
+  if [ "$(sed -n 's/^IMP_RAM_BUDGET_MIB=//p' <<< "$env" | tail -n 1)" = "$budget" ] &&
     ! refusal=$(check_ram_budget "$budget" "$memtotal" "$arc" "IMP_RAM_BUDGET_MIB in $ENV_FILE" 2>&1); then
     die "$refusal"
   fi
@@ -1734,14 +1734,14 @@ ensure_imp() {
   # Checked before anything is written: the unit gives imp-host no Docker
   # socket, and an older image, such as a stale pin that ensure_image keeps,
   # needs one.
-  if trim_lines <<<"$existing" | grep -qxF "$LEGACY_IMAGE_LINE" && [ -z "$image_set" ]; then
+  if trim_lines <<< "$existing" | grep -qxF "$LEGACY_IMAGE_LINE" && [ -z "$image_set" ]; then
     log "$ENV_FILE: $LEGACY_IMAGE_LINE was the old template's line, not a pin; it becomes a comment"
   fi
   local run_image
-  run_image=$(sed -n 's/^IMP_HOST_IMAGE=//p' <<<"$env" | tail -n 1)
+  run_image=$(sed -n 's/^IMP_HOST_IMAGE=//p' <<< "$env" | tail -n 1)
   run_image=${run_image:-$DEFAULT_IMAGE}
   ensure_image "$run_image"
-  if ! dry || podman image inspect "$run_image" >/dev/null 2>&1; then
+  if ! dry || podman image inspect "$run_image" > /dev/null 2>&1; then
     refusal=$(check_image_contract "$run_image" 2>&1) || die "$refusal"
   fi
   put_file "$ENV_FILE" 600 "$env" && changed=1
@@ -1755,7 +1755,7 @@ ensure_imp() {
   # pivot_root for the jailer (docs/architecture/host.md#privileges).
   # A dry run pulls nothing, so it may have no image to read.
   local seccomp
-  if dry && ! podman image inspect "$run_image" >/dev/null 2>&1; then
+  if dry && ! podman image inspect "$run_image" > /dev/null 2>&1; then
     change "write $SECCOMP_FILE from the image" true
   else
     seccomp=$(read_seccomp "$run_image") || exit 1
@@ -1793,7 +1793,7 @@ read_seccomp() {
 # units expect: imp.host-contract=no-docker (host/Dockerfile)
 check_image_contract() {
   local contract
-  contract=$(podman image inspect -f '{{index .Config.Labels "imp.host-contract"}}' "$1" 2>/dev/null) || contract=
+  contract=$(podman image inspect -f '{{index .Config.Labels "imp.host-contract"}}' "$1" 2> /dev/null) || contract=
   [ "$contract" = no-docker ] && return 0
   echo "$1 needs a Docker socket (imp.host-contract is '${contract:-none}'), and this unit gives it none: pull the new image (podman pull $1) and run again; the env file and the units are unchanged" >&2
   return 1
@@ -1801,7 +1801,7 @@ check_image_contract() {
 
 ensure_image() {
   local ref=$1
-  if command -v podman >/dev/null && podman image inspect "$ref" >/dev/null 2>&1; then
+  if command -v podman > /dev/null && podman image inspect "$ref" > /dev/null 2>&1; then
     log "image $ref is present"
     return
   fi
@@ -1814,8 +1814,8 @@ ensure_image() {
 }
 
 load_image() {
-  podman load -q -i "$image_archive" >/dev/null
-  podman image inspect "$1" >/dev/null 2>&1 || die "$image_archive does not hold $1"
+  podman load -q -i "$image_archive" > /dev/null
+  podman image inspect "$1" > /dev/null 2>&1 || die "$image_archive does not hold $1"
 }
 
 # ensure_tailscale: with a key in the env file, wait for the node to join,
@@ -1832,7 +1832,7 @@ ensure_tailscale() {
     return 0
   fi
   change "blank TAILSCALE_AUTHKEY in $ENV_FILE; the node state keeps it joined" \
-    write_file "$ENV_FILE" 600 "$(blank_env_key <"$ENV_FILE")"
+    write_file "$ENV_FILE" 600 "$(blank_env_key < "$ENV_FILE")"
   # The running container still holds the key in its environment (podman
   # inspect, /proc/*/environ); a restart with the blank file drops it.
   change "restart imp-host without the key" reload_unit imp-host
@@ -1845,7 +1845,7 @@ blank_env_key() { sed 's/^TAILSCALE_AUTHKEY=.*/TAILSCALE_AUTHKEY=/'; }
 # CLI's rename that --image or an IMP_HOST_IMAGE pin chose. Asked on each call,
 # since the container may restart onto another image in between.
 host_cli() {
-  if podman exec imp-host impz --version >/dev/null 2>&1; then
+  if podman exec imp-host impz --version > /dev/null 2>&1; then
     podman exec imp-host impz "$@"
   else
     podman exec imp-host imp "$@"
@@ -1862,7 +1862,7 @@ health() {
   # the container's own tailscaled.
   local published
   published=$(podman port imp-host)
-  if grep -vE ' -> 127\.0\.0\.1:' <<<"$published" | grep -q .; then
+  if grep -vE ' -> 127\.0\.0\.1:' <<< "$published" | grep -q .; then
     die "imp-host publishes a port beyond loopback: $published"
   fi
 
@@ -1877,7 +1877,7 @@ health() {
   # On a new host impd adds ubuntu:24.04 as `ubuntu` after it starts.
   wait_for "the ubuntu image" 600 has_ubuntu_image
   trap 'host_cli rm '"$name"' >/dev/null 2>&1 || true' EXIT
-  host_cli rm "$name" >/dev/null 2>&1 || true
+  host_cli rm "$name" > /dev/null 2>&1 || true
   # uname needs little memory; the default would take 2 GiB of a small host
   host_cli new "$name" --image ubuntu --memory 512m
   host_cli exec "$name" -- uname -a
@@ -1919,24 +1919,24 @@ impd_ipv6_line() { podman logs imp-host 2>&1 | grep -oE 'impd(\.ipv6|: ipv6:) .*
 
 # tailnet_joined: the host container runs and holds node state.
 tailnet_joined() {
-  podman exec imp-host test -s /var/lib/imp/tailscale/tailscaled.state 2>/dev/null
+  podman exec imp-host test -s /var/lib/imp/tailscale/tailscaled.state 2> /dev/null
 }
 
 tailscale_backend() {
-  podman exec imp-host tailscale --socket=/var/run/tailscale/tailscaled.sock status --json 2>/dev/null |
+  podman exec imp-host tailscale --socket=/var/run/tailscale/tailscaled.sock status --json 2> /dev/null |
     jq -r '.BackendState // empty'
 }
 
 tailscale_running() { [ "$(tailscale_backend)" = Running ]; }
 
-has_ubuntu_image() { host_cli image ls 2>/dev/null | grep -q '^ubuntu '; }
+has_ubuntu_image() { host_cli image ls 2> /dev/null | grep -q '^ubuntu '; }
 
 # wait_for WHAT SECONDS CMD...: retry CMD once a second until it succeeds.
 wait_for() {
   local what=$1 seconds=$2 i
   shift 2
   for i in $(seq "$seconds"); do
-    "$@" >/dev/null 2>&1 && return 0
+    "$@" > /dev/null 2>&1 && return 0
     [ "$i" = "$seconds" ] || sleep 1
   done
   die "gave up waiting ${seconds} s for $what; see journalctl -u imp-host"

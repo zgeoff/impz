@@ -45,5 +45,5 @@ done < <(git ls-files install.sh scripts host kernel e2e deploy packages)
 shellcheck -x "${files[@]}"
 
 # the parts of deploy/bootstrap.sh are formatted too, so the whole renders
-# formatted; lefthook's pre-commit runs `shfmt -w` with these flags
-shfmt -d -i 2 -ci "${formatted[@]}"
+# formatted; shfmt reads its style from .editorconfig, as lefthook's pre-commit does
+shfmt -d "${formatted[@]}"

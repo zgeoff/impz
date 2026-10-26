@@ -37,7 +37,7 @@ darwin_x64=$(sha darwin-x64)
 linux_arm64=$(sha linux-arm64)
 linux_x64=$(sha linux-x64)
 
-cat <<FORMULA
+cat << FORMULA
 class Impz < Formula
   desc "CLI for impd: persistent Linux microVMs that sleep when idle"
   homepage "https://github.com/zgeoff/impz"

@@ -37,7 +37,7 @@ arc_param=${IMP_ARC_PARAM:-/sys/module/zfs/parameters/zfs_arc_max}
 memtotal=$(awk '/^MemTotal:/ { print $2 }' "$meminfo")
 arc=0
 if [ "$IMP_STORAGE" = zfs ]; then
-  live=$(cat "$arc_param" 2>/dev/null || echo 0)
+  live=$(cat "$arc_param" 2> /dev/null || echo 0)
   if [ -n "${IMP_ARC_MAX:-}" ]; then
     # boot.extraModprobeConfig sets it at boot; this covers a module loaded before.
     arc=$IMP_ARC_MAX
@@ -48,7 +48,7 @@ if [ "$IMP_STORAGE" = zfs ]; then
     arc=$(zfs_arc_max_mib "$memtotal")
   fi
   if [ "$live" != $((arc * 1024 * 1024)) ] && [ -w "$arc_param" ]; then
-    echo $((arc * 1024 * 1024)) >"$arc_param"
+    echo $((arc * 1024 * 1024)) > "$arc_param"
   fi
 fi
 if [ -n "${IMP_RAM_BUDGET:-}" ]; then

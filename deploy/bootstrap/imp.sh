@@ -7,7 +7,7 @@
 reload_unit() {
   systemctl daemon-reload
   systemctl enable -q "$1"
-  systemctl reset-failed "$1" 2>/dev/null || true
+  systemctl reset-failed "$1" 2> /dev/null || true
   systemctl restart "$1"
 }
 
@@ -33,7 +33,7 @@ ensure_imp() {
     "$storage" "$zfs_root" "$host_firewall" "$ipv6" "$ipv6_subnet" "$ksm")
   # An operator's value stays (render_env), so the floor binds the formula only.
   local refusal
-  if [ "$(sed -n 's/^IMP_RAM_BUDGET_MIB=//p' <<<"$env" | tail -n 1)" = "$budget" ] &&
+  if [ "$(sed -n 's/^IMP_RAM_BUDGET_MIB=//p' <<< "$env" | tail -n 1)" = "$budget" ] &&
     ! refusal=$(check_ram_budget "$budget" "$memtotal" "$arc" "IMP_RAM_BUDGET_MIB in $ENV_FILE" 2>&1); then
     die "$refusal"
   fi
@@ -41,14 +41,14 @@ ensure_imp() {
   # Checked before anything is written: the unit gives imp-host no Docker
   # socket, and an older image, such as a stale pin that ensure_image keeps,
   # needs one.
-  if trim_lines <<<"$existing" | grep -qxF "$LEGACY_IMAGE_LINE" && [ -z "$image_set" ]; then
+  if trim_lines <<< "$existing" | grep -qxF "$LEGACY_IMAGE_LINE" && [ -z "$image_set" ]; then
     log "$ENV_FILE: $LEGACY_IMAGE_LINE was the old template's line, not a pin; it becomes a comment"
   fi
   local run_image
-  run_image=$(sed -n 's/^IMP_HOST_IMAGE=//p' <<<"$env" | tail -n 1)
+  run_image=$(sed -n 's/^IMP_HOST_IMAGE=//p' <<< "$env" | tail -n 1)
   run_image=${run_image:-$DEFAULT_IMAGE}
   ensure_image "$run_image"
-  if ! dry || podman image inspect "$run_image" >/dev/null 2>&1; then
+  if ! dry || podman image inspect "$run_image" > /dev/null 2>&1; then
     refusal=$(check_image_contract "$run_image" 2>&1) || die "$refusal"
   fi
   put_file "$ENV_FILE" 600 "$env" && changed=1
@@ -62,7 +62,7 @@ ensure_imp() {
   # pivot_root for the jailer (docs/architecture/host.md#privileges).
   # A dry run pulls nothing, so it may have no image to read.
   local seccomp
-  if dry && ! podman image inspect "$run_image" >/dev/null 2>&1; then
+  if dry && ! podman image inspect "$run_image" > /dev/null 2>&1; then
     change "write $SECCOMP_FILE from the image" true
   else
     seccomp=$(read_seccomp "$run_image") || exit 1
@@ -100,7 +100,7 @@ read_seccomp() {
 # units expect: imp.host-contract=no-docker (host/Dockerfile)
 check_image_contract() {
   local contract
-  contract=$(podman image inspect -f '{{index .Config.Labels "imp.host-contract"}}' "$1" 2>/dev/null) || contract=
+  contract=$(podman image inspect -f '{{index .Config.Labels "imp.host-contract"}}' "$1" 2> /dev/null) || contract=
   [ "$contract" = no-docker ] && return 0
   echo "$1 needs a Docker socket (imp.host-contract is '${contract:-none}'), and this unit gives it none: pull the new image (podman pull $1) and run again; the env file and the units are unchanged" >&2
   return 1
@@ -108,7 +108,7 @@ check_image_contract() {
 
 ensure_image() {
   local ref=$1
-  if command -v podman >/dev/null && podman image inspect "$ref" >/dev/null 2>&1; then
+  if command -v podman > /dev/null && podman image inspect "$ref" > /dev/null 2>&1; then
     log "image $ref is present"
     return
   fi
@@ -121,8 +121,8 @@ ensure_image() {
 }
 
 load_image() {
-  podman load -q -i "$image_archive" >/dev/null
-  podman image inspect "$1" >/dev/null 2>&1 || die "$image_archive does not hold $1"
+  podman load -q -i "$image_archive" > /dev/null
+  podman image inspect "$1" > /dev/null 2>&1 || die "$image_archive does not hold $1"
 }
 
 # ensure_tailscale: with a key in the env file, wait for the node to join,
@@ -139,7 +139,7 @@ ensure_tailscale() {
     return 0
   fi
   change "blank TAILSCALE_AUTHKEY in $ENV_FILE; the node state keeps it joined" \
-    write_file "$ENV_FILE" 600 "$(blank_env_key <"$ENV_FILE")"
+    write_file "$ENV_FILE" 600 "$(blank_env_key < "$ENV_FILE")"
   # The running container still holds the key in its environment (podman
   # inspect, /proc/*/environ); a restart with the blank file drops it.
   change "restart imp-host without the key" reload_unit imp-host
@@ -152,7 +152,7 @@ blank_env_key() { sed 's/^TAILSCALE_AUTHKEY=.*/TAILSCALE_AUTHKEY=/'; }
 # CLI's rename that --image or an IMP_HOST_IMAGE pin chose. Asked on each call,
 # since the container may restart onto another image in between.
 host_cli() {
-  if podman exec imp-host impz --version >/dev/null 2>&1; then
+  if podman exec imp-host impz --version > /dev/null 2>&1; then
     podman exec imp-host impz "$@"
   else
     podman exec imp-host imp "$@"
@@ -169,7 +169,7 @@ health() {
   # the container's own tailscaled.
   local published
   published=$(podman port imp-host)
-  if grep -vE ' -> 127\.0\.0\.1:' <<<"$published" | grep -q .; then
+  if grep -vE ' -> 127\.0\.0\.1:' <<< "$published" | grep -q .; then
     die "imp-host publishes a port beyond loopback: $published"
   fi
 
@@ -184,7 +184,7 @@ health() {
   # On a new host impd adds ubuntu:24.04 as `ubuntu` after it starts.
   wait_for "the ubuntu image" 600 has_ubuntu_image
   trap 'host_cli rm '"$name"' >/dev/null 2>&1 || true' EXIT
-  host_cli rm "$name" >/dev/null 2>&1 || true
+  host_cli rm "$name" > /dev/null 2>&1 || true
   # uname needs little memory; the default would take 2 GiB of a small host
   host_cli new "$name" --image ubuntu --memory 512m
   host_cli exec "$name" -- uname -a
@@ -226,24 +226,24 @@ impd_ipv6_line() { podman logs imp-host 2>&1 | grep -oE 'impd(\.ipv6|: ipv6:) .*
 
 # tailnet_joined: the host container runs and holds node state.
 tailnet_joined() {
-  podman exec imp-host test -s /var/lib/imp/tailscale/tailscaled.state 2>/dev/null
+  podman exec imp-host test -s /var/lib/imp/tailscale/tailscaled.state 2> /dev/null
 }
 
 tailscale_backend() {
-  podman exec imp-host tailscale --socket=/var/run/tailscale/tailscaled.sock status --json 2>/dev/null |
+  podman exec imp-host tailscale --socket=/var/run/tailscale/tailscaled.sock status --json 2> /dev/null |
     jq -r '.BackendState // empty'
 }
 
 tailscale_running() { [ "$(tailscale_backend)" = Running ]; }
 
-has_ubuntu_image() { host_cli image ls 2>/dev/null | grep -q '^ubuntu '; }
+has_ubuntu_image() { host_cli image ls 2> /dev/null | grep -q '^ubuntu '; }
 
 # wait_for WHAT SECONDS CMD...: retry CMD once a second until it succeeds.
 wait_for() {
   local what=$1 seconds=$2 i
   shift 2
   for i in $(seq "$seconds"); do
-    "$@" >/dev/null 2>&1 && return 0
+    "$@" > /dev/null 2>&1 && return 0
     [ "$i" = "$seconds" ] || sleep 1
   done
   die "gave up waiting ${seconds} s for $what; see journalctl -u imp-host"

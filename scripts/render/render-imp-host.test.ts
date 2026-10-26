@@ -78,7 +78,7 @@ test('#render renders every deploy file from one args file', () => {
     # --- deploy/imp-host.service, deploy/imp-host.env.example ---
 
     unit_imp_host() {
-      cat <<'EOF'
+      cat << 'EOF'
     [Service]
     ExecStartPre=/bin/sh -c 'case "$$IMP_HOST_NETWORK" in *imp-net*) /usr/bin/podman network exists imp-net || /usr/bin/podman network create --ipv6 --subnet "$$IMP_HOST_SUBNET6" --disable-dns --interface-name br-impnet imp-net >/dev/null ;; esac'
     ExecStartPre=/bin/sh -c 'a=; [ -e /dev/zfs ] && a="$$a --device /dev/zfs"; [ -e /proc/sys/net/ipv6 ] && a="$$a --sysctl net.ipv6.conf.all.forwarding=1"; { echo "IMP_HOST_PROBED=$$a"; echo "IMP_HOST_ADDRESSES=$$(ip -o addr show scope global | cut -d " " -f 4)"; } >/run/imp-host/probed.env'
@@ -91,7 +91,7 @@ test('#render renders every deploy file from one args file', () => {
     }
 
     env_template() {
-      cat <<'EOF'
+      cat << 'EOF'
     # imp host settings
     IMP_DOMAIN=
     EOF

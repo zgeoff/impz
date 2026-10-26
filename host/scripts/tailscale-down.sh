@@ -14,7 +14,7 @@ sock=/var/run/tailscale/tailscaled.sock
 alive() { ps -C tailscaled -o stat= | grep -qv '^Z'; }
 
 if alive; then
-  timeout 30 tailscale --socket="$sock" logout 2>/dev/null || true
+  timeout 30 tailscale --socket="$sock" logout 2> /dev/null || true
   pkill -x tailscaled || true
   for _ in $(seq 50); do
     alive || break

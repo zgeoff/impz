@@ -31,9 +31,9 @@ done
 in_image=$(docker run --rm --entrypoint sh "$image" -c \
   'cd /usr/local/share/imp && sha256sum vmlinux imp-system.squashfs')
 in_assets=$(grep -E '  (vmlinux|imp-system\.squashfs)$' "$sums" | sort -k2)
-if [ "$(sort -k2 <<<"$in_image")" != "$in_assets" ]; then
+if [ "$(sort -k2 <<< "$in_image")" != "$in_assets" ]; then
   echo "check-release-image: the image's system files differ from $sums" >&2
-  diff <(echo "$in_assets") <(sort -k2 <<<"$in_image") >&2 || true
+  diff <(echo "$in_assets") <(sort -k2 <<< "$in_image") >&2 || true
   status=1
 fi
 
