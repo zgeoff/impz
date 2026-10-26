@@ -7,7 +7,7 @@ service. The guest holds only a placeholder, and so do its disk, its memory snap
 checkpoints and its forks.
 
 ```sh
-impz secret add gh --kind github      # paste the token at the prompt, or pipe it in
+impz secret add gh --preset github    # paste the token at the prompt, or pipe it in
 impz grant box gh
 impz exec box -- gh api user          # works; the token never enters the guest
 impz exec box -- git push             # also works, over https://github.com
@@ -23,7 +23,8 @@ put secrets into the sandbox as environment variables.
 
 | Command                                                    | What it does                                                                                                                                                          |
 | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `impz secret add <name> --kind <kind>`                     | Stores a secret. The value comes from stdin or a prompt that does not echo, never from a flag.                                                                        |
+| `impz secret add <name> --preset <preset>`                 | Stores a secret with a [preset's](#kinds-and-presets) hosts. The value comes from stdin or a prompt that does not echo, never from a flag.                            |
+| `impz secret add <name> --kind <kind> --hosts <hosts>`     | Stores a `static` or `oauth` secret for the hosts you name ([kinds and presets](#kinds-and-presets)).                                                                 |
 | `impz secret add <name> ... --replace`                     | Replaces the value of a secret that exists, for a rotation. Other hosts or headers need `--rebind` too ([rotate or rebind](#rotate-or-rebind)).                       |
 | `impz secret ls`                                           | Lists each secret's kind, state, hosts and imps. It never shows a value.                                                                                              |
 | `impz secret refresh <name>`                               | Refreshes an [oauth secret](#oauth-secrets) now, and exits 1 unless it is ready after it.                                                                             |
@@ -135,8 +136,10 @@ in host order, so the same rules in another order are the same binding.
 
 Each grant records the secret's generation, and the broker uses a grant only while the two match.
 
-A preset's hosts are part of its binding. If a later impd changes the hosts of a preset such as
-`github`, a plain `--replace` of a secret of that kind fails with `binding_changed`; add `--rebind`.
+A preset's hosts become the secret's rules when you add it. If a later impd changes the hosts of a
+preset such as `github`, a plain `--replace` with that preset fails with `binding_changed`; add
+`--rebind`. The placeholder variables are not part of the binding: a replace stores the ones it
+gives and keeps the grants.
 
 The split between rotation and rebind needs impd 0.27.0 or later. An older impd drops `rebind`
 unread, takes a changed binding with a plain replace, and keeps every grant. Before a client sends
@@ -185,23 +188,38 @@ undone ([storage cleanup](./operations.md#storage-cleanup)).
   values of secrets added after the copy are kept aside at the next start
   ([value files](#value-files)), not deleted.
 
-### Kinds
+### Kinds and presets
 
-| Kind        | Hosts and headers                                                                                                                                                                                           | Placeholder variables      |
-| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
-| `github`    | `github.com`: `Authorization: Basic` for `x-access-token` (git over HTTPS); `api.github.com`, `uploads.github.com`: `Bearer`                                                                                | `GH_TOKEN`, `GITHUB_TOKEN` |
-| `anthropic` | `api.anthropic.com`: `x-api-key`                                                                                                                                                                            | `ANTHROPIC_API_KEY`        |
-| `npm`       | `registry.npmjs.org`: `Bearer`                                                                                                                                                                              | `NPM_TOKEN`                |
-| `custom`    | `--hosts a.example.com,b.example.com`, with `--header` (default `authorization`), `--scheme bearer\|basic\|raw`, `--user` and, for one host, `--upstream` ([no public name](#services-with-no-public-name)) | none                       |
-| `oauth`     | As `custom`, and the value is a refresh token ([oauth secrets](#oauth-secrets))                                                                                                                             | none                       |
+A secret has one of two kinds. A preset is a named set of hosts and variables that impd expands into
+a `static` secret when you add it, so `impz secret ls` lists that secret as `static`.
+
+| Kind     | Hosts and headers                                                                                                                                                                                           | Placeholder variables |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
+| `static` | `--hosts a.example.com,b.example.com`, with `--header` (default `authorization`), `--scheme bearer\|basic\|raw`, `--user` and, for one host, `--upstream` ([no public name](#services-with-no-public-name)) | `--env`, if any       |
+| `oauth`  | As `static`, and the value is a refresh token ([oauth secrets](#oauth-secrets))                                                                                                                             | `--env`, if any       |
+
+| Preset      | Hosts and headers                                                                                                            | Placeholder variables      |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| `github`    | `github.com`: `Authorization: Basic` for `x-access-token` (git over HTTPS); `api.github.com`, `uploads.github.com`: `Bearer` | `GH_TOKEN`, `GITHUB_TOKEN` |
+| `anthropic` | `api.anthropic.com`: `x-api-key`                                                                                             | `ANTHROPIC_API_KEY`        |
+| `npm`       | `registry.npmjs.org`: `Bearer`                                                                                               | `NPM_TOKEN`                |
+
+A preset takes no `--hosts`, `--header`, `--scheme`, `--user`, `--upstream` or `--env`, and impd
+refuses one given with any of them. The older kind names `github`, `anthropic` and `npm` add the
+preset of that name, and `custom` adds a `static` secret, so `--kind github` stores the same secret
+as `--preset github`.
 
 Some tools refuse to run without a token: `gh` with none stops at `gh auth login`. So the guest gets
-the placeholder variables, set to `imp-broker-placeholder`. The broker drops whatever the guest
-sends in the header and sets the real value.
+the placeholder variables of each secret granted to it, set to `imp-broker-placeholder`. The broker
+drops whatever the guest sends in the header and sets the real value. impd refuses an `--env` name
+that the broker sets itself, such as `HTTPS_PROXY`, because the placeholder would replace it.
+
+An impd without `system.info().features.secretPresets` refuses a preset and a `static` secret, and
+drops `--env` unread, so `impz secret add` checks first and fails before it stores anything.
 
 ## Services with no public name
 
-A `custom` secret with `--upstream <origin>` sends its host's requests to that origin instead of
+A `static` secret with `--upstream <origin>` sends its host's requests to that origin instead of
 `https://<host>`. The host is only the name the guest uses, so it needs no DNS record: the broker
 matches it from the `CONNECT`, gives it a leaf certificate from the host CA and swaps the credential
 as for any granted host. The origin is `http` or `https` with an optional port, and no user name,
@@ -211,7 +229,7 @@ path, query or fragment; `https` is verified against the system roots.
 it:
 
 ```sh
-impz secret add op-connect --kind custom --hosts op-connect.imp.internal \
+impz secret add op-connect --kind static --hosts op-connect.imp.internal \
   --upstream http://172.17.0.1:18081
 impz grant dev op-connect
 ```
@@ -223,7 +241,7 @@ OP_CONNECT_HOST=https://op-connect.imp.internal
 OP_CONNECT_TOKEN=imp-broker-placeholder
 ```
 
-- `--upstream` needs `--kind custom` and exactly one host.
+- `--upstream` needs `--kind static` and exactly one host.
 - The credential goes to the upstream, so it must be an address the operator trusts. impd does not
   range-check it; the operator may point it at a service on the host on purpose. Only a caller that
   may add or replace secrets can set one.
@@ -238,7 +256,7 @@ OP_CONNECT_TOKEN=imp-broker-placeholder
 
 ## OAuth secrets
 
-A token that expires and is renewed from a refresh token cannot be a `custom` secret: its value
+A token that expires and is renewed from a refresh token cannot be a `static` secret: its value
 would go stale. Kind `oauth` holds the refresh token in impd. impd exchanges it for an access token
 at the token endpoint before the old one expires, stores each rotated refresh token, and the broker
 sets the current access token on the granted hosts. The guest only ever holds the placeholder.
@@ -257,7 +275,7 @@ impz grant dev codex
 | `--client-id`    | The client the refresh token was issued to.                                                 |
 | `--token-format` | `form` (default, `application/x-www-form-urlencoded`) or `json` for the token request body. |
 
-`--hosts`, `--header`, `--scheme` and `--user` are as for `custom`. The request carries
+`--hosts`, `--header`, `--scheme`, `--user` and `--env` are as for `static`. The request carries
 `grant_type=refresh_token`, `refresh_token` and `client_id`, and impd reads `access_token`,
 `refresh_token`, `id_token` and `expires_in` from the answer. A field the answer leaves out keeps
 its old value. The expiry is `expires_in`, else the `exp` of the access token if it is a JWT, else
