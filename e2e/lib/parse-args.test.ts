@@ -39,6 +39,7 @@ test('it runs every suite in run order when no suite is named', () => {
     'boot-templates',
     'inner',
     'socket',
+    'podman',
     'moves',
     'moves-tailnet',
     'tailnet-names',

@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import * as z from 'zod';
 import { REPO_ROOT, runChecked } from './instance';
+import type { DevInstance } from './instance';
 
 const WordsSchema = z.array(z.string());
 const ProbedSchema = z.object({ path: z.string(), args: WordsSchema });
@@ -20,34 +21,22 @@ const HostConfigSchema = z.object({
   CapDrop: ListSchema,
   SecurityOpt: ListSchema,
   Devices: z.array(DeviceSchema).nullable(),
+  PidsLimit: z.number().nullable(),
 });
 
 const MountSchema = z.object({ Source: z.string(), Destination: z.string() });
 
 const InspectSchema = z.array(
-  z.object({ HostConfig: HostConfigSchema, Mounts: z.array(MountSchema).nullable() }),
+  z.object({
+    HostConfig: HostConfigSchema,
+    Mounts: z.array(MountSchema).nullable(),
+    EffectiveCaps: ListSchema.optional(),
+  }),
 );
-
-const ProxyHostConfigSchema = HostConfigSchema.extend({
-  ReadonlyRootfs: z.boolean(),
-  NetworkMode: z.string(),
-});
-
-const ProxyInfoSchema = z.object({
-  Config: z.object({ User: z.string() }),
-  HostConfig: ProxyHostConfigSchema,
-});
-
-const ProxyInspectSchema = z.array(ProxyInfoSchema);
 
 export interface Mount {
   readonly Source: string;
   readonly Destination: string;
-}
-
-export interface ProxyConfig {
-  readonly user: string;
-  readonly host: HostConfig & { readonly ReadonlyRootfs: boolean; readonly NetworkMode: string };
 }
 
 export interface HostConfig {
@@ -56,6 +45,7 @@ export interface HostConfig {
   readonly CapDrop: readonly string[] | null;
   readonly SecurityOpt: readonly string[] | null;
   readonly Devices: readonly { readonly PathOnHost: string }[] | null;
+  readonly PidsLimit: number | null;
 }
 
 // dev.sh's own device, for the loop file its XFS lives in.
@@ -70,10 +60,17 @@ export interface ExpectedPrivileges {
   readonly devices: readonly string[];
 
   readonly optionalDevices: readonly string[];
+  readonly unlimitedPids: boolean;
 }
 
 function readFlagValues(words: readonly string[], flag: string): string[] {
-  return words.flatMap((word, index) => (words[index - 1] === flag ? [word] : []));
+  return words.flatMap((word, index) => {
+    if (words[index - 1] === flag) {
+      return [word];
+    }
+
+    return word.startsWith(`${flag}=`) ? [word.slice(flag.length + 1)] : [];
+  });
 }
 
 export function readExpectedPrivileges(argsJson: string, seccompJson: string): ExpectedPrivileges {
@@ -93,6 +90,7 @@ export function readExpectedPrivileges(argsJson: string, seccompJson: string): E
       ...args.probed.flatMap((entry) => readFlagValues(entry.args, '--device')),
       ...DEV_DEVICES,
     ],
+    unlimitedPids: readFlagValues(words, '--pids-limit').some((limit) => Number(limit) <= 0),
   };
 }
 
@@ -147,11 +145,25 @@ export function findPrivilegeDrift(host: HostConfig, expected: ExpectedPrivilege
     return `its security options are ${others.join(' ')}, not ${expected.securityOpts.join(' ')}`;
   }
 
-  return findSeccompDrift(opts, expected.seccomp) ?? findDeviceDrift(host, expected);
+  return (
+    findSeccompDrift(opts, expected.seccomp) ??
+    findDeviceDrift(host, expected) ??
+    findPidsDrift(host, expected)
+  );
+}
+
+// docker inspect shows a container with no pids limit as null, and podman inspect as the limit it
+// was given, which for no limit is 0 or less.
+function findPidsDrift(host: HostConfig, expected: ExpectedPrivileges): string | null {
+  if (!expected.unlimitedPids || host.PidsLimit === null || host.PidsLimit <= 0) {
+    return null;
+  }
+
+  return `it caps its processes at ${String(host.PidsLimit)}`;
 }
 
 // A bind of the host's Docker socket, or of a directory above it, hands
-// imp-host the socket that only imp-docker-proxy may hold.
+// imp-host the host's Docker engine, which it must never reach.
 const HOST_SOCKETS = ['/var/run/docker.sock', '/run/docker.sock'];
 
 function isSocketMount(mount: Mount): boolean {
@@ -168,80 +180,31 @@ export function findSocketDrift(mounts: readonly Mount[]): string | null {
   return socket === undefined ? null : `it mounts ${socket.Source} at ${socket.Destination}`;
 }
 
-const ProxyArgsSchema = z.object({ proxy: z.object({ privileges: z.array(WordsSchema) }) });
-
-export interface ExpectedProxy {
-  readonly capDrop: readonly string[];
-  readonly securityOpts: readonly string[];
-  readonly isReadOnly: boolean;
-  readonly network: string;
-  readonly user: string;
-}
-
-export function readExpectedProxy(argsJson: string): ExpectedProxy {
-  const words = ProxyArgsSchema.parse(JSON.parse(argsJson)).proxy.privileges.flat();
-
+// podman lists the effective capabilities, which after --cap-drop ALL are the added ones alone, and
+// it keeps the seccomp profile's path where docker keeps the profile's text.
+export function buildPodmanHostConfig(
+  host: HostConfig,
+  effectiveCaps: readonly string[],
+  profiles: ReadonlyMap<string, string>,
+): HostConfig {
   return {
-    capDrop: readFlagValues(words, '--cap-drop').toSorted(),
-    securityOpts: readFlagValues(words, '--security-opt').toSorted(),
-    isReadOnly: words.includes('--read-only'),
-    network: readFlagValues(words, '--network')[0] ?? 'default',
-    user: readFlagValues(words, '--user')[0] ?? '',
+    ...host,
+    CapAdd: effectiveCaps,
+    CapDrop: ['ALL'],
+    SecurityOpt: (host.SecurityOpt ?? []).map((opt) => {
+      const profile = opt.startsWith(SECCOMP_PREFIX)
+        ? profiles.get(opt.slice(SECCOMP_PREFIX.length))
+        : undefined;
+
+      return profile === undefined ? opt : `${SECCOMP_PREFIX}${profile}`;
+    }),
   };
 }
 
-export function findProxyDrift(proxy: ProxyConfig, expected: ExpectedProxy): string | null {
-  const host = proxy.host;
-  const capDrop = (host.CapDrop ?? []).toSorted();
-  const opts = (host.SecurityOpt ?? []).toSorted();
-
-  if (
-    host.Privileged ||
-    (host.CapAdd ?? []).length > 0 ||
-    capDrop.join(' ') !== expected.capDrop.join(' ')
-  ) {
-    return `it keeps capabilities (drops ${capDrop.join(' ') || 'none'})`;
-  }
-
-  if (opts.join(' ') !== expected.securityOpts.join(' ')) {
-    return `its security options are ${opts.join(' ') || 'none'}, not ${expected.securityOpts.join(' ')}`;
-  }
-
-  if (host.ReadonlyRootfs !== expected.isReadOnly || host.NetworkMode !== expected.network) {
-    return `its root is ${host.ReadonlyRootfs ? 'read-only' : 'writable'}, network ${host.NetworkMode}`;
-  }
-
-  if (proxy.user !== expected.user) {
-    return `it runs as ${proxy.user || 'root'}, not ${expected.user}`;
-  }
-
-  return (host.Devices ?? []).length > 0 ? 'it has devices' : null;
-}
-
-async function checkProxy(container: string): Promise<void> {
-  const proxy = `${container}-docker-proxy`;
-
-  const inspected = await runChecked(['docker', 'inspect', proxy]);
-
-  const [info] = ProxyInspectSchema.parse(JSON.parse(inspected));
-
-  if (info === undefined) {
-    throw new Error(`docker inspect ${proxy} returned nothing`);
-  }
-
-  const argsJson = readFileSync(join(REPO_ROOT, 'deploy', 'imp-host.args.json'), 'utf8');
-
-  const drift = findProxyDrift(
-    { user: info.Config.User, host: info.HostConfig },
-    readExpectedProxy(argsJson),
-  );
-
-  if (drift !== null) {
-    throw new Error(`${proxy} does not match the proxy in deploy/imp-host.args.json: ${drift}`);
-  }
-}
-
-export async function checkPrivileges(container: string): Promise<void> {
+export async function checkPrivileges(
+  target: Pick<DevInstance, 'container' | 'containerCLI'>,
+  readText: (path: string) => string | null,
+): Promise<void> {
   const deploy = join(REPO_ROOT, 'deploy');
 
   const expected = readExpectedPrivileges(
@@ -249,19 +212,43 @@ export async function checkPrivileges(container: string): Promise<void> {
     readFileSync(join(deploy, 'imp-host.seccomp.json'), 'utf8'),
   );
 
-  const inspected = await runChecked(['docker', 'inspect', container]);
+  const inspected = await runChecked([target.containerCLI, 'inspect', target.container]);
 
   const [info] = InspectSchema.parse(JSON.parse(inspected));
 
   if (info === undefined) {
-    throw new Error(`docker inspect ${container} returned nothing`);
+    throw new Error(`${target.containerCLI} inspect ${target.container} returned nothing`);
   }
 
-  const drift = findPrivilegeDrift(info.HostConfig, expected) ?? findSocketDrift(info.Mounts ?? []);
+  const host =
+    target.containerCLI === 'podman'
+      ? buildPodmanHostConfig(
+          info.HostConfig,
+          info.EffectiveCaps ?? [],
+          readSeccompProfiles(info.HostConfig.SecurityOpt ?? [], readText),
+        )
+      : info.HostConfig;
+
+  const drift = findPrivilegeDrift(host, expected) ?? findSocketDrift(info.Mounts ?? []);
 
   if (drift !== null) {
-    throw new Error(`${container} does not match deploy/imp-host.args.json: ${drift}`);
+    throw new Error(`${target.container} does not match deploy/imp-host.args.json: ${drift}`);
   }
+}
 
-  await checkProxy(container);
+export function readSeccompProfiles(
+  opts: readonly string[],
+  readText: (path: string) => string | null,
+): Map<string, string> {
+  const paths = opts
+    .filter((opt) => opt.startsWith(SECCOMP_PREFIX))
+    .map((opt) => opt.slice(SECCOMP_PREFIX.length));
+
+  return new Map(
+    paths.flatMap((path) => {
+      const text = readText(path);
+
+      return text === null ? [] : [[path, text] as const];
+    }),
+  );
 }

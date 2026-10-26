@@ -1,7 +1,7 @@
 #!/bin/bash
 # Build the release host image: impd and the imp CLI compiled, the guest
 # kernel and the system drive baked in. Nothing from the repo is mounted when
-# it runs (deploy/ has the compose file and the systemd unit).
+# it runs (deploy/ has the systemd unit).
 #
 #   scripts/release/build-release.sh [buildx args...]
 #

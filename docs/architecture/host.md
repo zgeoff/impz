@@ -10,7 +10,7 @@ holds.
 ## What the host gives
 
 - **KVM** on x86_64, and cgroup v2.
-- **Docker**, or a compatible engine, which runs the two containers.
+- **Podman**, rootful, which runs the container.
 - **Storage**: an XFS mount with reflink on the data directory, or a ZFS dataset impd's backend
   owns, with the modules each needs. The container's ZFS tools must share a major version with the
   host's module ([storage](./storage/storage.md#zfs)).
@@ -23,12 +23,12 @@ holds.
 - **Memory settings**: overcommit on and little swapping, and on ZFS a capped ARC. The ARC sits
   outside impd's RAM budget, so the installers set the budget from the host's RAM less a share for
   the host and the ARC cap.
-- **A firewall** that leaves Docker's rules alone and never flushes the whole ruleset, since that
-  removes the NAT the container's traffic leaves through.
+- **A firewall** that leaves the container engine's rules alone and never flushes the whole ruleset,
+  since that removes the NAT the container's traffic leaves through.
 - **An uplink** for the container's tailscaled, and nothing inbound.
 
 Each installer writes the environment file, installs the seccomp profile from the image, and
-installs the two units. The units run the image with the arguments in one file,
+installs the unit. The unit runs the image with the arguments in one file,
 `deploy/imp-host.args.json`, from which the systemd unit and the bootstrap script are generated and
 which the NixOS module reads, and a test fails when they drift apart. At each start, the unit probes
 the host's global addresses for the egress deny list ([egress](./network/egress.md#public)) and the
@@ -43,8 +43,12 @@ firewall; device nodes for the jail; the uid switches for the jailer; and the fi
 capability writes that unpacking an image needs. Each one was kept because a run without it failed,
 and the end-to-end harness fails when a dev instance's list differs. `/proc/sys` is read-only, so
 the forwarding and tap sysctls come from the container's arguments and the scripts only check them.
-AppArmor is unconfined, because Docker's default profile denies `mount`. The seccomp profile is
-Docker's default with one rule added, `pivot_root`, which the jailer needs.
+AppArmor is unconfined, because the engine's default profile denies `mount`. The seccomp profile is
+Docker's default, which Podman reads unchanged, with one rule added, `pivot_root`, which the jailer
+needs.
+
+The arguments lift the cap on the container's processes that Podman sets by default, because every
+imp's Firecracker and jailer processes and threads count against the container's cgroup.
 
 **CAUTION:** the container is not a security boundary. With the mount capability in the host's user
 namespace, root in the container can mount a new procfs and write `core_pattern`, and the host's
@@ -60,26 +64,11 @@ capabilities alike, and an image is unpacked in a directory no host user can rea
 
 ## The Docker socket
 
-impd fetches one image through the host's Docker, the builder image that every build and pull runs
-in ([images](./storage/images.md#where-builds-run)), but imp-host never mounts the host's socket. A
-second container from the same image, imp-docker-proxy, holds it, and serves a socket of its own
-that imp-host mounts read-only. The proxy lets through exactly the calls impd makes to fetch the
-builder image, and refuses every other with a log line:
-
-- a ping and a version check, and an image inspect;
-- a pull of the builder image by its digest, and no other pull;
-- a container create of the builder image with nothing to run and no network, labelled with the
-  proxy's own token, and an export and a removal of a container only by that label. There is no
-  start route, so a container the proxy creates never runs.
-
-The proxy refuses every build. It rebuilds each request from what it checked, rather than pass the
-client's on, so a form body or a header cannot smuggle a parameter past the checks. It runs as an
-unprivileged user with no capabilities, a read-only root and no network, and its token lives where
-only it can read it. The proxy closes the Docker socket path only: the mount capability above is
-still a way out.
-
-imp-host wants the proxy but does not bind to it, so a proxy that stops fails image work only, and
-running imps keep running.
+imp-host gets no Docker or Podman socket and ships no client for either. impd fetches the builder
+image that every build and pull runs in from its registry
+([images](./storage/images.md#where-builds-run)), so no process in the container calls the host's
+engine, which only starts and stops imp-host. A missing socket closes one path out of the container
+only: the mount capability above is still a way out.
 
 ## The host firewall
 

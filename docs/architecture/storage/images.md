@@ -34,8 +34,12 @@ and computes the image's digest itself, so no engine on the host reads what the 
 builder is impd's own: every call but a removal is refused it, it never sleeps in the background,
 and backups leave it out.
 
-The host's own Docker engine only fetches the builder image, through the host's Docker proxy
-([the host](../host.md#the-docker-socket)), and never builds.
+impd fetches the builder image itself, with no Docker engine. oci-fetch, a Go program in imp-host,
+reads the image that `IMP_BUILD_IMAGE` names from its registry, picks the host's platform from a
+multi-platform index, and writes the image's tree as one tar, with each layer's deletions applied.
+impd streams that tar into the same unpack, under the same limits, as a builder's export, and keys
+the rootfs by the image's manifest digest. impd passes oci-fetch no other reference, so a client
+cannot steer what the host fetches, and no engine on the host builds.
 
 impd checks the build's input on the host before anything runs. It parses the Dockerfile with a port
 of the pinned frontend's parser and refuses what the engine would fetch on its own, such as an `ADD`

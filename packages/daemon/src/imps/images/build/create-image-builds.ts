@@ -112,8 +112,8 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
         });
       }
 
-      // The engine may hold the image already, and then no pull passes imp-docker-proxy to
-      // refuse it.
+      // The builder's engine may hold the image already and pull nothing, so impd checks the
+      // registry itself.
       const registryProblem = checkReferenceRegistry(image.ref);
 
       if (registryProblem !== null) {
@@ -397,8 +397,6 @@ function pickPin(
     });
   }
 
-  // A pin under a refused registry would let the build reach that registry with no pull for
-  // imp-docker-proxy to refuse.
   const repoDigests = inspect.RepoDigests ?? [];
   const allowed = repoDigests.filter((digest) => checkReferenceRegistry(digest) === null);
   const pin = pickRepoDigest(ref, allowed);

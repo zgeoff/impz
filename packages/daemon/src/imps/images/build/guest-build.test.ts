@@ -1,4 +1,4 @@
-import { expect, onTestFinished, test } from 'bun:test';
+import { expect, mock, onTestFinished, test } from 'bun:test';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -10,9 +10,12 @@ import {
 } from '../../../../testing/imps/build-stub-image-builder';
 import { buildStubClock } from '../../../../testing/platform/build-stub-clock';
 import { buildStubGuest } from '../../../../testing/vm/build-stub-guest';
+import { startRealTimer } from '../../../platform/process/start-real-timer';
+import { countTreeBytes } from '../../../vm/storage/count-tree-bytes';
 import { DOCKERFILE_FRONTEND } from '../../docker-contract/dockerfile-frontend';
 import { createGuestExec } from '../builders/guest-exec';
 import { PIN_INSPECT_FORMAT } from '../pull/image-pin';
+import { startTarProcess } from '../rootfs/start-tar-process';
 import { DockerBuildError } from './docker-build-error';
 import { loadGuestImage, runGuestBuild, writeGuestTree } from './guest-build';
 import { ImageLimitError } from './image-limit-error';
@@ -49,6 +52,9 @@ test('#writeGuestTree unpacks the builder export into the root', async () => {
     root: ctx.root,
     limits: { maxBytes: 1024 ** 3, maxFiles: 100 },
     signal: new AbortController().signal,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
   });
 
   expect(readFileSync(join(ctx.root, 'etc', 'hello'), 'utf8')).toBe('hi\n'.repeat(100_000));
@@ -71,6 +77,9 @@ test('#writeGuestTree gives the image config the builder inspected', async () =>
     root: ctx.root,
     limits: { maxBytes: 1024 ** 3, maxFiles: 100 },
     signal: new AbortController().signal,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
   });
 
   expect(image.config).toStrictEqual({ Cmd: ['sh'], Env: ['A=1'] });
@@ -92,6 +101,9 @@ test('#writeGuestTree gives a build digest of 64 hex characters', async () => {
     root: ctx.root,
     limits: { maxBytes: 1024 ** 3, maxFiles: 100 },
     signal: new AbortController().signal,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
   });
 
   expect(image.digest).toMatch(/^imp-build-[0-9a-f]{64}$/v);
@@ -118,6 +130,9 @@ test('#writeGuestTree gives the same digest for the same config and export', asy
     root: ctx.root,
     limits,
     signal,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
   });
 
   const second = await writeGuestTree({
@@ -125,6 +140,9 @@ test('#writeGuestTree gives the same digest for the same config and export', asy
     root: join(ctx.directoryPath, 'again'),
     limits,
     signal,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
   });
 
   expect(second.digest).toBe(first.digest);
@@ -160,6 +178,9 @@ test('#writeGuestTree gives another digest for another config of the same export
     root: ctx.root,
     limits,
     signal,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
   });
 
   const second = await writeGuestTree({
@@ -167,6 +188,9 @@ test('#writeGuestTree gives another digest for another config of the same export
     root: join(ctx.directoryPath, 'again'),
     limits,
     signal,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
   });
 
   expect(second.digest).not.toBe(first.digest);
@@ -200,6 +224,9 @@ test('#writeGuestTree gives another digest for another export of the same config
     root: ctx.root,
     limits,
     signal,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
   });
 
   const second = await writeGuestTree({
@@ -207,6 +234,9 @@ test('#writeGuestTree gives another digest for another export of the same config
     root: join(ctx.directoryPath, 'again'),
     limits,
     signal,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
   });
 
   expect(second.digest).not.toBe(first.digest);
@@ -227,12 +257,53 @@ test('#writeGuestTree inspects, creates and exports the built image in the build
     root: ctx.root,
     limits: { maxBytes: 1024 ** 3, maxFiles: 100 },
     signal: new AbortController().signal,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
   });
 
   expect(builder.guest.runs.map((run) => run.argv.join(' '))).toStrictEqual([
     'docker image inspect --format {{json .Config}} imp-build:latest',
     'docker create imp-build:latest /bin/true',
     `docker export ${STUB_BUILDER_CONTAINER}`,
+  ]);
+});
+
+test("#writeGuestTree unpacks through the given tar starter with tar's unpack and listing flags", async () => {
+  const ctx = await setupTest();
+
+  mkdirSync(join(ctx.directoryPath, 'tree'));
+  writeFileSync(join(ctx.directoryPath, 'tree', 'hello'), 'hi\n');
+
+  const builder = buildStubImageBuilder({
+    exported: [Bun.spawnSync(['tar', '-C', join(ctx.directoryPath, 'tree'), '-c', '.']).stdout],
+    repoDigest: `sha256:${'b'.repeat(64)}`,
+  });
+
+  const startTar = mock(startTarProcess);
+
+  await writeGuestTree({
+    exec: createGuestExec(builder.guest.open),
+    root: ctx.root,
+    limits: { maxBytes: 1024 ** 3, maxFiles: 100 },
+    signal: new AbortController().signal,
+    startTar,
+    startTimer: startRealTimer,
+    countTreeBytes,
+  });
+
+  expect(startTar).toHaveBeenCalledExactlyOnceWith([
+    'tar',
+    '--numeric-owner',
+    '--xattrs',
+    '--xattrs-include=security.capability',
+    '--xattrs-include=user.*',
+    '-xpf',
+    '-',
+    '-vv',
+    '--quoting-style=escape',
+    '-C',
+    ctx.root,
   ]);
 });
 
@@ -259,9 +330,43 @@ test('#writeGuestTree holds disk ahead of the export in 256 MiB steps', async ()
 
       return Promise.resolve();
     },
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
   });
 
   expect(holds).toStrictEqual([256 * 1024 ** 2]);
+});
+
+test('#writeGuestTree grows the hold with the written bytes that the given tree counter reads', async () => {
+  const ctx = await setupTest();
+
+  mkdirSync(join(ctx.directoryPath, 'tree'));
+  writeFileSync(join(ctx.directoryPath, 'tree', 'hello'), 'hi\n');
+
+  const grows: number[][] = [];
+
+  const builder = buildStubImageBuilder({
+    exported: [Bun.spawnSync(['tar', '-C', join(ctx.directoryPath, 'tree'), '-c', '.']).stdout],
+    repoDigest: `sha256:${'b'.repeat(64)}`,
+  });
+
+  await writeGuestTree({
+    exec: createGuestExec(builder.guest.open),
+    root: ctx.root,
+    limits: { maxBytes: 1024 ** 3, maxFiles: 100 },
+    signal: new AbortController().signal,
+    grow: (totalBytes, writtenBytes) => {
+      grows.push([totalBytes, writtenBytes]);
+
+      return Promise.resolve();
+    },
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes: () => Promise.resolve(4096),
+  });
+
+  expect(grows).toStrictEqual([[256 * 1024 ** 2, 4096]]);
 });
 
 test('#writeGuestTree refuses an export past the byte cap', async () => {
@@ -285,6 +390,9 @@ test('#writeGuestTree refuses an export past the byte cap', async () => {
       root: ctx.root,
       limits: { maxBytes: 2 * 65_536, maxFiles: 100 },
       signal: new AbortController().signal,
+      startTar: startTarProcess,
+      startTimer: startRealTimer,
+      countTreeBytes,
     }),
   ).rejects.toThrowWithMessage(
     ImageLimitError,
@@ -312,6 +420,9 @@ test('#writeGuestTree ends the export exec at the byte cap', async () => {
     root: ctx.root,
     limits: { maxBytes: 2 * 65_536, maxFiles: 100 },
     signal: new AbortController().signal,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
   });
 
   expect(writing).rejects.toBeInstanceOf(ImageLimitError);
@@ -340,6 +451,9 @@ test('#writeGuestTree refuses an export of more entries than the file cap', asyn
       root: ctx.root,
       limits: { maxBytes: 1024 ** 3, maxFiles: 10 },
       signal: new AbortController().signal,
+      startTar: startTarProcess,
+      startTimer: startRealTimer,
+      countTreeBytes,
     }),
   ).rejects.toThrowWithMessage(
     ImageLimitError,
@@ -367,6 +481,9 @@ test('#writeGuestTree counts a sparse file at its full size against the cap', as
       root: ctx.root,
       limits: { maxBytes: 1024 ** 2, maxFiles: 1000 },
       signal: new AbortController().signal,
+      startTar: startTarProcess,
+      startTimer: startRealTimer,
+      countTreeBytes,
     }),
   ).rejects.toThrowWithMessage(
     ImageLimitError,
@@ -396,6 +513,9 @@ test('#writeGuestTree counts a block for each small file against the cap', async
       root: ctx.root,
       limits: { maxBytes: 1024 ** 2, maxFiles: 1000 },
       signal: new AbortController().signal,
+      startTar: startTarProcess,
+      startTimer: startRealTimer,
+      countTreeBytes,
     }),
   ).rejects.toThrowWithMessage(
     ImageLimitError,
@@ -431,6 +551,9 @@ test('#writeGuestTree counts the directories tar makes for a member as entries',
       root: ctx.root,
       limits: { maxBytes: 1024 ** 3, maxFiles: 1 },
       signal: new AbortController().signal,
+      startTar: startTarProcess,
+      startTimer: startRealTimer,
+      countTreeBytes,
     }),
   ).rejects.toThrowWithMessage(
     ImageLimitError,
@@ -466,6 +589,9 @@ test('#writeGuestTree counts the directories tar makes for a member as blocks', 
       root: ctx.root,
       limits: { maxBytes: 64 * 1024, maxFiles: 1000 },
       signal: new AbortController().signal,
+      startTar: startTarProcess,
+      startTimer: startRealTimer,
+      countTreeBytes,
     }),
   ).rejects.toThrowWithMessage(
     ImageLimitError,
@@ -501,6 +627,9 @@ test('#writeGuestTree ends an export that stalls past a limit', async () => {
     root: ctx.root,
     limits: { maxBytes: 1024 ** 3, maxFiles: 1 },
     signal: new AbortController().signal,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
   });
 
   expect(writing).rejects.toThrowWithMessage(
@@ -529,6 +658,8 @@ test('#writeGuestTree ends an export that sends nothing for its idle limit', asy
     signal: new AbortController().signal,
     grow: () => Promise.resolve(),
     startTimer: timers.startTimer,
+    startTar: startTarProcess,
+    countTreeBytes,
   });
 
   await waitFor(() => {
@@ -559,6 +690,9 @@ test("#writeGuestTree refuses a builder's config that is not one JSON object", a
     root: ctx.root,
     limits: { maxBytes: 1024, maxFiles: 100 },
     signal: new AbortController().signal,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
   });
 
   expect(writing).rejects.toThrowWithMessage(Error, /expected record/v);
@@ -580,6 +714,9 @@ test('#writeGuestTree fails when the inspect in the builder exits non-zero', asy
       root: ctx.root,
       limits: { maxBytes: 1024, maxFiles: 100 },
       signal: new AbortController().signal,
+      startTar: startTarProcess,
+      startTimer: startRealTimer,
+      countTreeBytes,
     }),
   ).rejects.toThrowWithMessage(
     Error,
@@ -602,6 +739,9 @@ test('#writeGuestTree fails when the create in the builder exits non-zero', asyn
       root: ctx.root,
       limits: { maxBytes: 1024, maxFiles: 100 },
       signal: new AbortController().signal,
+      startTar: startTarProcess,
+      startTimer: startRealTimer,
+      countTreeBytes,
     }),
   ).rejects.toThrowWithMessage(Error, 'docker create in the builder: no space left on device');
 });
@@ -621,6 +761,9 @@ test('#writeGuestTree fails when the export in the builder exits non-zero', asyn
       root: ctx.root,
       limits: { maxBytes: 1024 ** 3, maxFiles: 100 },
       signal: new AbortController().signal,
+      startTar: startTarProcess,
+      startTimer: startRealTimer,
+      countTreeBytes,
     }),
   ).rejects.toThrowWithMessage(Error, 'docker export in the builder: container gone');
 });
@@ -818,14 +961,14 @@ test("#loadGuestImage refuses a ref the registry denies to the builder's engine"
   });
 });
 
-test('#loadGuestImage refuses a ref whose pull imp-docker-proxy refuses in the builder', () => {
+test("#loadGuestImage refuses a ref whose registry the builder's engine cannot reach", () => {
   const builder = buildStubImageBuilder({
     exported: [],
     repoDigest: `sha256:${'b'.repeat(64)}`,
     onPull: () => ({
       code: 1,
       stderr:
-        "Error response from daemon: imp-docker-proxy: registry localhost:5320 is the host's own\n",
+        'Error response from daemon: Get "https://localhost:5320/v2/": dial tcp 127.0.0.1:5320: connect: connection refused\n',
     }),
   });
 
@@ -838,7 +981,7 @@ test('#loadGuestImage refuses a ref whose pull imp-docker-proxy refuses in the b
   ).rejects.toMatchObject({
     code: 'BAD_REQUEST',
     message:
-      "the pull of localhost:5320/x:1 in the builder failed: Error response from daemon: imp-docker-proxy: registry localhost:5320 is the host's own",
+      'the pull of localhost:5320/x:1 in the builder failed: Error response from daemon: Get "https://localhost:5320/v2/": dial tcp 127.0.0.1:5320: connect: connection refused',
   });
 });
 

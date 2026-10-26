@@ -43,7 +43,6 @@ export interface ImpsConfig extends VmConfig {
   readonly build: BuildConfig;
   readonly imageEviction: ImageEvictionConfig | null;
   readonly sessionLog: SessionLogLimits;
-  readonly dockerHost: string | null;
   readonly defaultImage: string;
 
   // a node with no key is still on the tailnet when the entrypoint started tailscaled from

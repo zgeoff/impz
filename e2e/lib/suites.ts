@@ -160,9 +160,12 @@ export const SUITES: readonly Suite[] = [
   {
     name: 'socket',
     prefix: 'e2e-sock-',
-    images: ['e2e-tiny'],
-    journeys: ['socket-refusals', 'socket-proxy-stopped'],
+    images: [],
+    journeys: ['socket-none'],
   },
+
+  // The Podman proof runs it beside socket, on a dev container that podman runs.
+  { name: 'podman', prefix: 'e2e-podman-', images: [], journeys: ['podman-build'] },
 
   {
     name: 'moves',

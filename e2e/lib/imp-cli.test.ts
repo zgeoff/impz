@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { parseImp, parseSystemInfo } from './imp-cli';
+import { parseImages, parseImp, parseSystemInfo } from './imp-cli';
 
 test('#parseImp reads an imp as impz --json prints it, with its dates as ISO strings', () => {
   const stdout = JSON.stringify({
@@ -130,5 +130,47 @@ test('#parseSystemInfo refuses a negative RAM budget, naming the ramBudgetMib fi
 
   expect(() => parseSystemInfo(stdout)).toThrow(
     expect.objectContaining({ issues: [expect.objectContaining({ path: ['ramBudgetMib'] })] }),
+  );
+});
+
+test('#parseImages reads the images as impz image ls --json prints them', () => {
+  const stdout = JSON.stringify([
+    {
+      id: 'img_1',
+      name: 'imp-builder',
+      ref: 'registry.example.test/builder@sha256:0000000000000000000000000000000000000000000000000000000000000001',
+      digest: 'sha256:0000000000000000000000000000000000000000000000000000000000000001',
+      source: 'oci',
+      createdAt: '2026-01-02T03:04:05.000Z',
+      sizeBytes: 4096,
+      pinned: false,
+    },
+  ]);
+
+  expect(parseImages(stdout)).toStrictEqual([
+    {
+      name: 'imp-builder',
+      ref: 'registry.example.test/builder@sha256:0000000000000000000000000000000000000000000000000000000000000001',
+      source: 'oci',
+    },
+  ]);
+});
+
+test('#parseImages refuses an image whose source impd does not know, naming the source field', () => {
+  const stdout = JSON.stringify([
+    {
+      id: 'img_1',
+      name: 'imp-builder',
+      ref: 'registry.example.test/builder@sha256:0000000000000000000000000000000000000000000000000000000000000001',
+      digest: 'sha256:0000000000000000000000000000000000000000000000000000000000000001',
+      source: 'docker',
+      createdAt: '2026-01-02T03:04:05.000Z',
+      sizeBytes: 4096,
+      pinned: false,
+    },
+  ]);
+
+  expect(() => parseImages(stdout)).toThrow(
+    expect.objectContaining({ issues: [expect.objectContaining({ path: [0, 'source'] })] }),
   );
 });

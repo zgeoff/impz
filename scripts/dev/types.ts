@@ -8,13 +8,12 @@ export type DevShell = (
   ...expressions: ShellExpression[]
 ) => $.ShellPromise;
 
-export interface DevFiles {
+interface DevFiles {
   // A device node such as /dev/kvm counts.
   readonly probePath: (path: string) => boolean;
   readonly probeFile: (path: string) => boolean;
   readonly probeDirectory: (path: string) => boolean;
   readonly readText: (path: string) => string | null;
-  readonly readBytes: (path: string) => Uint8Array;
 
   // As realpath -m does: the symlinks of the part that exists resolve, and the rest is kept.
   readonly readRealPath: (path: string) => string;
@@ -22,7 +21,6 @@ export interface DevFiles {
   readonly writeText: (path: string, text: string) => void;
   readonly writeSecretText: (path: string, text: string) => void;
   readonly createDirectory: (path: string) => void;
-  readonly rename: (from: string, to: string) => void;
   readonly remove: (path: string) => void;
 }
 
@@ -35,9 +33,6 @@ export interface DevIO {
   readonly sleep: (durationMs: number) => Promise<void>;
   readonly writeStdout: (line: string) => void;
   readonly writeStderr: (text: string) => void;
-
-  // The uid:gid the proxy compiles as, so its binary is the caller's own.
-  readonly user: string;
 }
 
 export interface Dev {

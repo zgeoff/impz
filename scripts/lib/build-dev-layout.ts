@@ -4,9 +4,11 @@ import { pickSetting } from './pick-setting.ts';
 
 export type DevEnv = Readonly<Record<string, string | undefined>>;
 
+export type ContainerCLI = 'docker' | 'podman';
+
 export interface DevLayout {
   readonly name: string;
-  readonly proxy: string;
+  readonly containerCLI: ContainerCLI;
   readonly dataDir: string;
   readonly offset: number;
   readonly isPublished: boolean;
@@ -39,6 +41,7 @@ export function buildDevLayout(options: DevLayoutOptions): DevLayout {
     throw new DevError(`IMP_DEV_PORT_OFFSET must be a whole number, got '${offsetSetting}'`);
   }
 
+  const containerCLI = pickContainerCLI(options.env);
   const isPublished = options.env['IMP_DEV_PUBLISH'] !== '0';
   const ip = pickSetting(options.env, 'IMP_DEV_IP');
 
@@ -55,7 +58,7 @@ export function buildDevLayout(options: DevLayoutOptions): DevLayout {
 
   return {
     name,
-    proxy: `${name}-docker-proxy`,
+    containerCLI,
     dataDir: resolve(options.cwd, dataSetting),
     offset,
     isPublished,
@@ -66,4 +69,14 @@ export function buildDevLayout(options: DevLayoutOptions): DevLayout {
     sshPort: SSH_PORT + offset,
     mcpPort: MCP_PORT + offset,
   };
+}
+
+function pickContainerCLI(env: DevEnv): ContainerCLI {
+  const setting = pickSetting(env, 'IMP_DEV_CONTAINER_CLI') ?? 'docker';
+
+  if (setting !== 'docker' && setting !== 'podman') {
+    throw new DevError(`IMP_DEV_CONTAINER_CLI must be docker or podman, got '${setting}'`);
+  }
+
+  return setting;
 }

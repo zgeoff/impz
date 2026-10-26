@@ -1,7 +1,8 @@
-import type { DevIO } from './types.ts';
+import type { Dev } from './types.ts';
 
-export async function probeContainerRunning(io: DevIO, container: string): Promise<boolean> {
-  const inspect = await io.shell`docker inspect -f ${'{{.State.Running}}'} ${container}`
+export async function probeContainerRunning(dev: Dev): Promise<boolean> {
+  const inspect = await dev.io
+    .shell`${dev.layout.containerCLI} inspect -f ${'{{.State.Running}}'} ${dev.layout.name}`
     .quiet()
     .nothrow();
 

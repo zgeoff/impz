@@ -1,5 +1,6 @@
 import { mkdirSync, readFileSync, rmSync, statfsSync } from 'node:fs';
 import { createImpClient } from '@impz/client';
+import { readTextOrNull } from '../../scripts/lib/read-text-or-null.ts';
 import type { HarnessEnv } from './config';
 import { createMissingImages } from './fixtures';
 import { startHeadscale, stopHeadscale } from './headscale';
@@ -102,34 +103,43 @@ export function wireHarnessDeps(cwd: string): HarnessDeps {
 }
 
 async function resetInstance(target: DevInstance, env: HarnessEnv): Promise<void> {
+  const cli = target.containerCLI;
+
   const data = await resolveDataWipe(target.dataDir, env);
 
   // A reset takes the second host's data too, so no old migration outlives a
-  // rebase that renumbered it.
-  const hostB = await resolveDataWipe(`${target.dataDir}-mv-b`, env, pickHostBZfsRoot(env));
+  // rebase that renumbered it. The second host runs only under docker, and a
+  // podman run neither stops it nor wipes what it may still be using.
+  const hostB =
+    cli === 'docker'
+      ? await resolveDataWipe(`${target.dataDir}-mv-b`, env, pickHostBZfsRoot(env))
+      : null;
 
   const targets = [data, hostB].filter((wipe) => wipe !== null);
   const wiped = targets.map((wipe) => wipe.directory).join(' and ') || 'nothing';
 
   console.log(`    clean reset: tailnet logout, remove ${target.container}, wipe ${wiped}`);
 
-  const container = await runCommand(['docker', 'inspect', target.container]);
+  const container = await runCommand([cli, 'inspect', target.container]);
 
   if (container.exitCode === 0) {
-    await runCommand(['docker', 'exec', target.container, '/usr/local/lib/imp/tailscale-down.sh']);
+    await runCommand([cli, 'exec', target.container, '/usr/local/lib/imp/tailscale-down.sh']);
   }
 
   await runDevScript('down', target, {}, env);
-  await runCommand(['docker', 'rm', '-f', `${target.container}-mv-b`]);
+
+  if (cli === 'docker') {
+    await runCommand(['docker', 'rm', '-f', `${target.container}-mv-b`]);
+  }
 
   for (const wipe of targets) {
-    await removeDataDir(wipe, env);
+    await removeDataDir(wipe, env, cli);
   }
 }
 
 async function startInstance(base: DevInstance, run: Readonly<HarnessRun>): Promise<DevInstance> {
   await runDevScript('up', base, {}, run.env);
-  await checkPrivileges(base.container);
+  await checkPrivileges(base, readTextOrNull);
 
   const token = await readToken(base);
 

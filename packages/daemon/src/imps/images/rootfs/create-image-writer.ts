@@ -1,6 +1,5 @@
 import { existsSync, mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import * as z from 'zod';
 import type { ImageRecord } from '../../../platform/db/images';
 import type { ImpDatabase } from '../../../platform/db/open-database';
 import { buildConflictError } from '../../../platform/errors/impd-errors';
@@ -8,7 +7,9 @@ import type { Clock } from '../../../platform/process/clock';
 import { getErrorMessage } from '../../../platform/process/get-error-message';
 import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import { buildKeyedMutex } from '../../../platform/process/keyed-mutex';
-import { runChecked, runCommand } from '../../../platform/process/run-command';
+import { runChecked } from '../../../platform/process/run-command';
+import type { CommandRunner } from '../../../platform/process/run-command';
+import type { StreamedRunner } from '../../../platform/process/run-streamed';
 import { createSingleFlight } from '../../../platform/process/single-flight';
 import { buildImagePaths, buildImagesDir } from '../../../vm/storage/data-layout';
 import type { DiskBudget } from '../../../vm/storage/disk-budget';
@@ -20,31 +21,23 @@ import type { GuestExec } from '../builders/guest-exec';
 import { buildImageRuntimeConfig } from '../image-naming';
 import { readHeldImage } from '../read-held-image';
 import { writeImageRow } from '../write-image-row';
+import { readOciConfig } from './read-oci-config';
 import { removeUnusedRootfs } from './remove-unused-rootfs';
-import { planRootfs, planRootfsOverhead } from './rootfs-plan';
-import { runDocker, runDockerChecked } from './run-docker';
-import { writeExportedTree } from './unpack-export';
+import { planRootfs } from './rootfs-plan';
 import { writeImageConfig } from './write-image-config';
+import { writeOciTree } from './write-oci-tree';
+import type { WriteStreamedTreeOptions } from './write-streamed-tree';
 
-const InspectSchema = z.tuple([
-  z.object({
-    Id: z.string(),
-    Config: z.unknown(),
-    Size: z.number().optional(),
-  }),
-]);
-
-interface HostImageOptions {
+interface BuilderImageOptions {
   readonly signal: AbortSignal;
 
-  readonly onPulled: () => void;
+  readonly onFetched: () => void;
 }
 
 export interface ImageWriter {
-  readonly createImageOnHost: (
-    ref: string,
+  readonly createBuilderImage: (
     imageName: string,
-    options: Readonly<HostImageOptions>,
+    options: Readonly<BuilderImageOptions>,
   ) => Promise<ImageRecord>;
 
   readonly writeGuestImage: (
@@ -66,18 +59,26 @@ export interface ImageWriter {
   ) => Promise<T>;
 }
 
-interface ImageWriterDeps {
+export interface ImageWriterDeps {
   readonly config: ImpsConfig;
   readonly db: ImpDatabase;
   readonly storage: StorageBackend;
 
   readonly storageGate: StorageGate;
 
-  readonly diskBudget: Pick<DiskBudget, 'withRoom' | 'withGrowingRoom'>;
-
-  readonly dockerEnv?: Readonly<Record<string, string>>;
+  readonly diskBudget: Pick<DiskBudget, 'withGrowingRoom'>;
 
   readonly clock: Pick<Clock, 'now'>;
+
+  readonly runStreamed: StreamedRunner;
+
+  readonly runCommand: CommandRunner;
+
+  readonly startTar: WriteStreamedTreeOptions['startTar'];
+
+  readonly countTreeBytes: WriteStreamedTreeOptions['countTreeBytes'];
+
+  readonly startTimer: WriteStreamedTreeOptions['startTimer'];
 }
 
 interface GuestRootfs {
@@ -98,25 +99,6 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
   const freshRootfs = new Set<string>();
 
   const guestRootfsLock = buildKeyedMutex();
-  const docker = { env: deps.dockerEnv };
-
-  const readInspect = async (ref: string, signal: AbortSignal) => {
-    const options = { ...docker, signal };
-
-    const first = await runDocker(['image', 'inspect', ref], options);
-
-    if (first.exitCode === 0) {
-      return InspectSchema.parse(JSON.parse(first.stdout))[0];
-    }
-
-    await runDockerChecked(['pull', '--quiet', ref], options);
-
-    signal.throwIfAborted();
-
-    const stdout = await runDockerChecked(['image', 'inspect', ref], options);
-
-    return InspectSchema.parse(JSON.parse(stdout))[0];
-  };
 
   // 0700 because the tree's setuid and capability files are live while it is unpacked, and no
   // host user may reach them.
@@ -161,32 +143,6 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
     });
 
     return readDiskUsage(buildImagePaths(deps.config.dataDir, digest).rootfs);
-  };
-
-  const createRootfs = async (ref: string, digest: string, ociConfig: unknown): Promise<number> => {
-    const paths = buildImagePaths(deps.config.dataDir, digest);
-
-    if (existsSync(paths.rootfs)) {
-      return readDiskUsage(paths.rootfs);
-    }
-
-    const created = await runDockerChecked(['create', ref, '/bin/true'], docker);
-
-    const containerId = created.trim();
-
-    try {
-      const workDir = makeWorkDir();
-
-      try {
-        await writeExportedTree(containerId, workDir.root);
-
-        return await writeRootfs(workDir.root, digest, ociConfig);
-      } finally {
-        rmSync(workDir.work, { recursive: true, force: true });
-      }
-    } finally {
-      await runCommand(['docker', 'rm', '-f', containerId]);
-    }
   };
 
   const createRootfsOnce = (digest: string, create: () => Promise<number>) =>
@@ -283,36 +239,6 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
       }
     });
 
-  const createImageOnHost = async (
-    ref: string,
-    imageName: string,
-    options: Readonly<HostImageOptions>,
-  ): Promise<ImageRecord> => {
-    const inspect = await readInspect(ref, options.signal);
-
-    options.onPulled();
-
-    const treeBytes = inspect.Size ?? 0;
-    const buildBytes = 2 * treeBytes + planRootfsOverhead(treeBytes);
-    const withRoom = deps.diskBudget.withRoom;
-
-    return withRoom(buildBytes, () =>
-      storageGate.join(async () => {
-        await holdPublisher(inspect.Id);
-
-        try {
-          const sizeBytes = await createRootfsOnce(inspect.Id, () =>
-            createRootfs(ref, inspect.Id, inspect.Config),
-          );
-
-          return await writeDockerImageRow(imageName, ref, inspect.Id, sizeBytes);
-        } finally {
-          await releasePublisher(inspect.Id, imageName);
-        }
-      }),
-    );
-  };
-
   const writeGuestRootfsAndRow = async (guest: Readonly<GuestRootfs>): Promise<ImageRecord> => {
     const digest = guest.digest;
     const rootfs = buildImagePaths(deps.config.dataDir, digest).rootfs;
@@ -362,6 +288,9 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
             limits: { maxBytes, maxFiles: deps.config.build.imageMaxFiles },
             signal,
             grow,
+            startTar: deps.startTar,
+            countTreeBytes: deps.countTreeBytes,
+            startTimer: deps.startTimer,
           });
 
           return await writeGuestRootfsAndRow({
@@ -371,6 +300,52 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
             imageName,
             ref,
             signal,
+          });
+        } finally {
+          rmSync(workDir.work, { recursive: true, force: true });
+        }
+      }),
+    );
+  };
+
+  const createBuilderImage = async (
+    imageName: string,
+    options: Readonly<BuilderImageOptions>,
+  ): Promise<ImageRecord> => {
+    const ref = deps.config.build.image;
+    const signal = options.signal;
+    const build = deps.config.build;
+    const limits = { maxBytes: build.imageMaxBytes, maxFiles: build.imageMaxFiles };
+
+    const image = await readOciConfig(ref, signal, deps.runCommand);
+
+    return deps.diskBudget.withGrowingRoom((grow) =>
+      storageGate.join(async () => {
+        const workDir = makeWorkDir();
+        const root = workDir.root;
+
+        try {
+          await writeOciTree({
+            ref,
+            root,
+            limits,
+            signal,
+            grow,
+            runStreamed: deps.runStreamed,
+            startTar: deps.startTar,
+            countTreeBytes: deps.countTreeBytes,
+            startTimer: deps.startTimer,
+          });
+
+          options.onFetched();
+
+          return await writeGuestRootfsAndRow({
+            root,
+            digest: image.digest,
+            config: image.config,
+            imageName,
+            ref,
+            signal: new AbortController().signal,
           });
         } finally {
           rmSync(workDir.work, { recursive: true, force: true });
@@ -393,7 +368,7 @@ export function createImageWriter(deps: ImageWriterDeps): ImageWriter {
     }
   };
 
-  return { createImageOnHost, writeGuestImage, removeIdleRootfs, removeIdleImage, withPublisher };
+  return { createBuilderImage, writeGuestImage, removeIdleRootfs, removeIdleImage, withPublisher };
 }
 
 export function requireDockerImage(existing: ImageRecord | undefined): void {

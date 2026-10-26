@@ -15,7 +15,7 @@ on:
       - host/Dockerfile
       - packages/daemon/src/imps/images/**
       - packages/daemon/src/imps/docker-contract/**
-      - packages/daemon/src/imps/docker-proxy/**
+      - host/oci-fetch/**
       - e2e/suites/images-*.e2e.ts
       - .github/workflows/e2e-images.yml
 

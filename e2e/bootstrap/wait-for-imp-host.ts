@@ -7,7 +7,7 @@ export async function waitForImpHost(run: BootstrapRun): Promise<boolean> {
     await waitFor(
       async () => {
         const inspect = await readInContainer(run, [
-          'docker',
+          'podman',
           'container',
           'inspect',
           '-f',

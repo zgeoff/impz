@@ -16,8 +16,7 @@
 # bun run render:deploy (scripts/render/render-imp-host.ts) writes it from the parts
 # in deploy/bootstrap/, in the order BOOTSTRAP_PARTS there lists, with
 # deploy/lib/host-env.sh and the deploy files it installs:
-# deploy/imp-host.service, deploy/imp-docker-proxy.service and
-# deploy/imp-host.env.example.
+# deploy/imp-host.service and deploy/imp-host.env.example.
 #
 # The Tailscale key comes from --tailscale-authkey-file or TAILSCALE_AUTHKEY
 # and goes only to /etc/imp/imp-host.env (0600). It is never printed and
@@ -29,6 +28,8 @@ readonly ENV_FILE=$IMP_DIR/imp-host.env
 readonly FIREWALL_FILE=$IMP_DIR/firewall.nft
 readonly SECCOMP_FILE=$IMP_DIR/imp-host.seccomp.json
 readonly SECCOMP_IN_IMAGE=/usr/local/share/imp/deploy/imp-host.seccomp.json
+# the Docker socket proxy's unit, which an older release installed
+readonly PROXY_UNIT=/etc/systemd/system/imp-docker-proxy.service
 readonly DATA_DIR=/var/lib/imp
 # The image of this script's release, as the units name it; release-please
 # bumps it.
@@ -37,8 +38,6 @@ readonly DEFAULT_IMAGE=ghcr.io/zgeoff/imp-host:5.0.0 # x-release-please-version
 # A file still holding it gets the commented pin; any other value is the
 # operator's pin and stays.
 readonly LEGACY_IMAGE_LINE=IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:latest
-# Docker's apt signing key (https://docs.docker.com/engine/install/ubuntu/).
-readonly DOCKER_KEY_FINGERPRINT=9DC858229FC7DD38854AE2D88D81803C0EBFCD88
 # The template's IMP_RAM_BUDGET_MIB; a file still holding it gets the
 # computed budget, any other value is the operator's and stays.
 readonly TEMPLATE_BUDGET_MIB=16384

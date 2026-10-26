@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.28@sha256:bb22d9815c728170f72750f4e5b0d672e06176142e1d602c7e66c050100b7e5b
-# imp host container: impd, Firecracker and tailscaled; the same image runs
-# imp-docker-proxy, the only Docker socket imp-host sees.
+# imp host container: impd, Firecracker and tailscaled. It needs no Docker
+# engine: oci-fetch reads the builder image from its registry.
 # Run with the privileges of deploy/imp-host.args.json, not --privileged
 # (docs/architecture/host.md#privileges), and its own network namespace.
 #
@@ -26,6 +26,16 @@ RUN --mount=type=cache,target=/go/pkg/mod go mod download
 COPY host/ksm-exec/*.go ./
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 go build -buildvcs=false -trimpath -ldflags='-s -w' -o /out/ksm-exec .
+
+# --- oci-fetch: reads impd's builder image from its registry, with no
+# Docker engine (docs/architecture/storage/images.md) ---
+FROM golang:1.26.8-trixie@sha256:eae2aaa6add2936cbf350dd0d2628b363461542f0c4b3c0b558957e0f2997379 AS oci-fetch
+WORKDIR /src/oci-fetch
+COPY host/oci-fetch/go.mod host/oci-fetch/go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
+COPY host/oci-fetch/*.go ./
+RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 go build -buildvcs=false -trimpath -ldflags='-s -w' -o /out/oci-fetch .
 
 # --- runtime: what every host container needs, dev or release ---
 FROM debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a AS runtime
@@ -60,17 +70,11 @@ RUN echo "deb [check-valid-until=no] https://snapshot.debian.org/archive/debian/
  && apt-get install -y --no-install-recommends -t trixie-backports "zfsutils-linux=${ZFS_VERSION}" \
  && rm -rf /var/lib/apt/lists/*
 
-# Docker CLI and Tailscale from their upstream apt repos. The CLI is pinned, so
-# a rebuild gets the same `docker pull`, `create` and `export` impd runs.
-ARG DOCKER_CLI_VERSION=5:29.8.2-1~debian.13~trixie
-RUN install -m 0755 -d /etc/apt/keyrings \
- && curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc \
- && echo "deb [signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian trixie stable" \
-      > /etc/apt/sources.list.d/docker.list \
- && curl -fsSL https://pkgs.tailscale.com/stable/debian/trixie.noarmor.gpg -o /usr/share/keyrings/tailscale-archive-keyring.gpg \
+# Tailscale from its upstream apt repo.
+RUN curl -fsSL https://pkgs.tailscale.com/stable/debian/trixie.noarmor.gpg -o /usr/share/keyrings/tailscale-archive-keyring.gpg \
  && curl -fsSL https://pkgs.tailscale.com/stable/debian/trixie.tailscale-keyring.list -o /etc/apt/sources.list.d/tailscale.list \
  && apt-get update \
- && apt-get install -y --no-install-recommends "docker-ce-cli=${DOCKER_CLI_VERSION}" tailscale \
+ && apt-get install -y --no-install-recommends tailscale \
  && rm -rf /var/lib/apt/lists/*
 
 # the pipe feeds echo into `sha256sum -c`, where only the check can fail
@@ -83,6 +87,7 @@ RUN curl -fsSL -o /tmp/firecracker.tgz "https://github.com/firecracker-microvm/f
  && rm -rf /tmp/release-* /tmp/firecracker.tgz
 
 COPY --from=ksm-exec /out/ksm-exec /usr/local/bin/ksm-exec
+COPY --from=oci-fetch /out/oci-fetch /usr/local/bin/oci-fetch
 
 # the pipe feeds echo into `sha256sum -c`, where only the check can fail
 # hadolint ignore=DL4006
@@ -97,12 +102,9 @@ COPY host/scripts/ /usr/local/lib/imp/
 # deploy/bootstrap.sh may blank a spent key in the env file.
 LABEL imp.tailscale-keyless="1"
 # Runs without --privileged under deploy/imp-host.service's privileges, and
-# reaches Docker through imp-docker-proxy, not the host's socket;
-# deploy/upgrade.sh refuses an image without this once the unit drops it.
-LABEL imp.host-contract="socket-proxy"
-# imp-docker-proxy's socket directory and state, as a compose volume copies
-# them: its user (65534) owns both, and nothing else gets in.
-RUN install -d -m 0700 -o 65534 -g 65534 /run/imp-docker /var/lib/imp-docker-proxy
+# needs no Docker socket; deploy/upgrade.sh refuses an image without this
+# once the unit gives imp-host none.
+LABEL imp.host-contract="no-docker"
 COPY host/entrypoint /usr/local/bin/imp-entrypoint
 
 EXPOSE 7070 7080
@@ -244,7 +246,6 @@ RUN --mount=type=cache,target=/root/.bun/install/cache \
 # --external cpu-features: ssh2 loads this optional native module in a
 # try/catch, and --ignore-scripts leaves its .node file unbuilt.
 RUN bun build --compile --external cpu-features packages/daemon/src/main.ts --outfile /out/impd \
- && bun build --compile packages/daemon/src/imps/docker-proxy/main.ts --outfile /out/imp-docker-proxy \
  && bun build --compile packages/cli/src/main.ts --outfile /out/impz
 
 # --- dashboard: the web dashboard's static files. Its own stage: the build
@@ -271,13 +272,13 @@ LABEL org.opencontainers.image.title="imp-host" \
       org.opencontainers.image.version="${IMP_VERSION}"
 
 COPY --from=system-files / /usr/local/share/imp/
-COPY --from=compile /out/impd /out/imp-docker-proxy /out/impz /usr/local/bin/
+COPY --from=compile /out/impd /out/impz /usr/local/bin/
 COPY --from=dashboard /src/packages/dashboard/dist /usr/local/share/imp/dashboard
 # deploy/bootstrap.sh and deploy/upgrade.sh install the units and seccomp
 # profile of the image they run; a host on an older release gets upgrade.sh,
 # with the lib/host-env.sh it sources, from here (docs/guides/operations.md)
-COPY deploy/imp-host.service deploy/imp-docker-proxy.service deploy/imp-host.seccomp.json \
-     deploy/upgrade.sh /usr/local/share/imp/deploy/
+COPY deploy/imp-host.service deploy/imp-host.seccomp.json deploy/upgrade.sh \
+     /usr/local/share/imp/deploy/
 COPY deploy/lib/host-env.sh /usr/local/share/imp/deploy/lib/
 # the CLI in the container finds impd's token with no IMP_TOKEN
 RUN mkdir -p /root/.config/impz && ln -s /var/lib/imp/token /root/.config/impz/token

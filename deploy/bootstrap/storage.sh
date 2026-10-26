@@ -204,7 +204,7 @@ mkfs_xfs_opts() {
 }
 
 # loop_size_auto_gib AVAIL_GIB: the loop file's size from the free space on
-# /. The OS, Docker's images and logs keep the larger of 30 GiB and 15 %;
+# /. The OS, Podman's images and logs keep the larger of 30 GiB and 15 %;
 # the file is sparse, but it must never grow into that and fill /.
 loop_size_auto_gib() { echo $(($1 - $(loop_reserve_gib "$1"))); }
 

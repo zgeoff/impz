@@ -12,10 +12,15 @@ import { createTreeTar } from '../../../../testing/imps/create-tree-tar';
 import { startDiskSampler } from '../../../../testing/vm/start-disk-sampler';
 import { loadConfig } from '../../../config';
 import { openDatabase } from '../../../platform/db/open-database';
+import { runCommand } from '../../../platform/process/run-command';
+import { runStreamed } from '../../../platform/process/run-streamed';
+import { startRealTimer } from '../../../platform/process/start-real-timer';
+import { countTreeBytes } from '../../../vm/storage/count-tree-bytes';
 import { createDiskBudget } from '../../../vm/storage/disk-budget';
 import { createStorageGate } from '../../../vm/storage/storage-gate';
 import { createXfsBackend } from '../../../vm/storage/xfs-backend';
 import { createImageService } from '../image-service';
+import { startTarProcess } from '../rootfs/start-tar-process';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();
@@ -74,6 +79,11 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     });
 
     const images = createImageService({
+      runCommand,
+      startTar: startTarProcess,
+      startTimer: startRealTimer,
+      countTreeBytes,
+      runStreamed,
       config: loadConfig({ IMP_DATA_DIR: dataDir }),
       db: ctx.db,
       storage: {
@@ -161,6 +171,11 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     });
 
     const images = createImageService({
+      runCommand,
+      startTar: startTarProcess,
+      startTimer: startRealTimer,
+      countTreeBytes,
+      runStreamed,
       config: loadConfig({ IMP_DATA_DIR: dataDir }),
       db: ctx.db,
       storage: {
@@ -246,6 +261,11 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     });
 
     const images = createImageService({
+      runCommand,
+      startTar: startTarProcess,
+      startTimer: startRealTimer,
+      countTreeBytes,
+      runStreamed,
       config: loadConfig({ IMP_DATA_DIR: dataDir }),
       db: ctx.db,
       storage: {
@@ -331,6 +351,11 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     });
 
     const images = createImageService({
+      runCommand,
+      startTar: startTarProcess,
+      startTimer: startRealTimer,
+      countTreeBytes,
+      runStreamed,
       config: loadConfig({ IMP_DATA_DIR: dataDir }),
       db: ctx.db,
       storage: {
@@ -420,6 +445,11 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     });
 
     const images = createImageService({
+      runCommand,
+      startTar: startTarProcess,
+      startTimer: startRealTimer,
+      countTreeBytes,
+      runStreamed,
       config: loadConfig({ IMP_DATA_DIR: dataDir }),
       db: ctx.db,
       storage: {
@@ -506,6 +536,11 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     });
 
     const images = createImageService({
+      runCommand,
+      startTar: startTarProcess,
+      startTimer: startRealTimer,
+      countTreeBytes,
+      runStreamed,
       config: loadConfig({ IMP_DATA_DIR: dataDir }),
       db: ctx.db,
       storage: {
@@ -592,6 +627,11 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     });
 
     const images = createImageService({
+      runCommand,
+      startTar: startTarProcess,
+      startTimer: startRealTimer,
+      countTreeBytes,
+      runStreamed,
       config: loadConfig({ IMP_DATA_DIR: dataDir }),
       db: ctx.db,
       storage: {
@@ -676,6 +716,11 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     });
 
     const images = createImageService({
+      runCommand,
+      startTar: startTarProcess,
+      startTimer: startRealTimer,
+      countTreeBytes,
+      runStreamed,
       config: loadConfig({ IMP_DATA_DIR: dataDir }),
       db: ctx.db,
       storage: {
@@ -748,6 +793,11 @@ test.skipIf(process.env['IMP_TEST_SMALL_FS'] === undefined)(
     });
 
     const images = createImageService({
+      runCommand,
+      startTar: startTarProcess,
+      startTimer: startRealTimer,
+      countTreeBytes,
+      runStreamed,
       config: loadConfig({ IMP_DATA_DIR: dataDir }),
       db: ctx.db,
       storage: {

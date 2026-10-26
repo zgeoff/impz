@@ -12,6 +12,7 @@ import { readHostPrivileges } from '../lib/read-host-privileges.ts';
 import { readMachineID } from '../lib/read-machine-id.ts';
 import { readTailscaleAuthkey } from '../lib/read-tailscale-authkey.ts';
 import { REPO_ROOT } from '../lib/repo-root.ts';
+import { requirePodmanHostImage } from '../lib/require-podman-host-image.ts';
 import { toProcessEnv } from '../lib/to-process-env.ts';
 import { writeTailnetOAuthFile } from '../lib/write-tailnet-oauth-file.ts';
 import { buildHostRunArgs } from './build-host-run-args.ts';
@@ -21,7 +22,6 @@ import type { DevCommand } from './parse-dev-command.ts';
 import { probeContainerRunning } from './probe-container-running.ts';
 import { pruneDevImages } from './prune-dev-images.ts';
 import { readLogTail } from './read-log-tail.ts';
-import { startDevProxy } from './start-dev-proxy.ts';
 import type { Dev, DevIO } from './types.ts';
 import { waitDevReady } from './wait-dev-ready.ts';
 import { wireDevIO } from './wire-dev-io.ts';
@@ -72,6 +72,8 @@ export async function runDev(options: RunDevOptions): Promise<number> {
 }
 
 function dispatchDev(dev: Dev, command: DevCommand): Promise<number> {
+  const cli = dev.layout.containerCLI;
+
   return match(command)
     .with('up', async () => {
       await upDev(dev);
@@ -89,15 +91,15 @@ function dispatchDev(dev: Dev, command: DevCommand): Promise<number> {
 
       return 0;
     })
-    .with('logs', () => dev.io.runAttached(['docker', 'logs', '-f', dev.layout.name]))
+    .with('logs', () => dev.io.runAttached([cli, 'logs', '-f', dev.layout.name]))
     .with('restart', async () => {
       await restartDev(dev);
 
       return 0;
     })
-    .with('shell', () => dev.io.runAttached(['docker', 'exec', '-it', dev.layout.name, 'bash']))
+    .with('shell', () => dev.io.runAttached([cli, 'exec', '-it', dev.layout.name, 'bash']))
     .with('token', () =>
-      dev.io.runAttached(['docker', 'exec', dev.layout.name, 'cat', '/var/lib/imp/token']),
+      dev.io.runAttached([cli, 'exec', dev.layout.name, 'cat', '/var/lib/imp/token']),
     )
     .with('prune', async () => {
       await pruneDevImages(dev);
@@ -109,11 +111,7 @@ function dispatchDev(dev: Dev, command: DevCommand): Promise<number> {
 
 async function upDev(dev: Dev): Promise<void> {
   const drives = await prepareDrives(dev);
-  const isRunning = await probeContainerRunning(dev.io, dev.layout.name);
-
-  const proxyMode = isRunning ? 'keep' : 'replace';
-
-  await startDevProxy(dev, proxyMode);
+  const isRunning = await probeContainerRunning(dev);
 
   if (isRunning) {
     dev.io.writeStdout(`dev.sh: ${dev.layout.name} already running`);
@@ -178,6 +176,12 @@ function resolveKernel(dev: Dev): string {
 
 // CI builds and loads the image first, with its own cache, and sets IMP_HOST_IMAGE_READY=1.
 async function prepareHostImage(dev: Dev): Promise<void> {
+  if (dev.layout.containerCLI === 'podman') {
+    await requirePodmanHostImage(dev.io.shell, dev.checkout.hostImage);
+
+    return;
+  }
+
   if (dev.env['IMP_HOST_IMAGE_READY'] !== '1') {
     await createHostImage(
       dev.io.shell,
@@ -200,7 +204,7 @@ async function prepareHostImage(dev: Dev): Promise<void> {
 async function startHost(dev: Dev, drives: Drives): Promise<void> {
   const readOp = dev.io.makeOpReader(dev.env);
 
-  await dev.io.shell`docker rm -f ${dev.layout.name}`.quiet().nothrow();
+  await dev.io.shell`${dev.layout.containerCLI} rm -f ${dev.layout.name}`.quiet().nothrow();
 
   dev.io.files.createDirectory(dev.layout.dataDir);
 
@@ -235,8 +239,10 @@ async function startHost(dev: Dev, drives: Drives): Promise<void> {
     uplinkMTU,
   });
 
-  // docker reads .env and the key from its own environment, so no secret is in its argv.
-  await dev.io.shell`docker ${args} > /dev/null`.env(toProcessEnv(tailscale.env));
+  // The CLI reads .env and the key from its own environment, so no secret is in its argv.
+  await dev.io.shell`${dev.layout.containerCLI} ${args} > /dev/null`.env(
+    toProcessEnv(tailscale.env),
+  );
 }
 
 interface HostTailscale {
@@ -334,38 +340,42 @@ async function readUplinkMTU(io: DevIO): Promise<string> {
 
 // SIGTERM gives impd time to sleep every imp, so memory survives.
 async function downDev(dev: Dev): Promise<void> {
-  const isRunning = await probeContainerRunning(dev.io, dev.layout.name);
+  const cli = dev.layout.containerCLI;
+
+  const isRunning = await probeContainerRunning(dev);
 
   if (isRunning) {
-    await dev.io.shell`docker stop -t 120 ${dev.layout.name} > /dev/null`;
+    await dev.io.shell`${cli} stop -t 120 ${dev.layout.name} > /dev/null`;
 
-    const tail = await readLogTail(dev.io, dev.layout.name, 5);
+    const tail = await readLogTail(dev, 5);
 
     for (const line of tail.split('\n').filter((entry) => entry.includes('every imp asleep'))) {
       dev.io.writeStdout(line);
     }
   }
 
-  const volumes = [`${dev.layout.name}-docker`, `${dev.layout.name}-docker-proxy`];
+  // A dev instance that an older checkout started runs a Docker socket proxy beside it.
+  const proxy = `${dev.layout.name}-docker-proxy`;
+  const volumes = [`${dev.layout.name}-docker`, proxy];
 
-  await dev.io.shell`docker rm -f ${dev.layout.name} ${dev.layout.proxy}`.quiet().nothrow();
-  await dev.io.shell`docker volume rm ${volumes}`.quiet().nothrow();
+  await dev.io.shell`${cli} rm -f ${dev.layout.name} ${proxy}`.quiet().nothrow();
+  await dev.io.shell`${cli} volume rm ${volumes}`.quiet().nothrow();
 }
 
 // SIGHUP: impd exits without sleeping the VMs, and the entrypoint restarts it. The wait for the old
 // pid to go makes /health answer from the new impd.
 async function restartDev(dev: Dev): Promise<void> {
-  const isRunning = await probeContainerRunning(dev.io, dev.layout.name);
+  const cli = dev.layout.containerCLI;
+
+  const isRunning = await probeContainerRunning(dev);
 
   if (!isRunning) {
     throw new DevError(`${dev.layout.name} is not running; use scripts/dev/dev.sh up`);
   }
 
-  await startDevProxy(dev, 'replace');
-
   const pattern = 'bun .*/daemon/src/main.ts';
 
-  const found = await dev.io.shell`docker exec ${dev.layout.name} pgrep -f ${pattern}`
+  const found = await dev.io.shell`${cli} exec ${dev.layout.name} pgrep -f ${pattern}`
     .quiet()
     .nothrow();
 
@@ -380,7 +390,7 @@ async function restartDev(dev: Dev): Promise<void> {
     .filter((pid) => pid !== '');
 
   if (pids.length > 0) {
-    await dev.io.shell`docker exec ${dev.layout.name} kill -HUP ${pids}`;
+    await dev.io.shell`${cli} exec ${dev.layout.name} kill -HUP ${pids}`;
     await waitForExit(dev, pids);
   }
 
@@ -392,7 +402,8 @@ async function waitForExit(dev: Dev, pids: readonly string[]): Promise<void> {
   const deadline = dev.io.now() + stopSeconds * 1000;
 
   for (;;) {
-    const alive = await dev.io.shell`docker exec ${dev.layout.name} kill -0 ${pids}`
+    const alive = await dev.io
+      .shell`${dev.layout.containerCLI} exec ${dev.layout.name} kill -0 ${pids}`
       .quiet()
       .nothrow();
 

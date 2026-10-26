@@ -20,6 +20,7 @@ hadolint host/Dockerfile images/base/Dockerfile
 bun run lint:docs                 # every docs link, and every docs/ path code cites, resolves
 (cd agent && gofmt -l . && go vet ./...)   # gofmt -l lists unformatted files
 (cd host/ksm-exec && gofmt -l . && go vet ./... && go test ./...)   # ksm-exec, a Go module of its own
+(cd host/oci-fetch && gofmt -l . && go vet ./... && go test ./...)  # oci-fetch, a Go module of its own
 (cd agent && go tool -modfile=tools/go.mod golangci-lint run --build-tags root ./...)   # the lint CI runs
 scripts/test-go.sh                # the agent's Go tests with -race; prints the slowest cases
 e2e/test-e2e.sh --clean       # end to end, from a clean state
@@ -84,7 +85,8 @@ drives it through a browser. The suites run in this order:
 | `templates`      | `impz template`: copies of a running imp's disk, a new machine-id and ssh host keys per copy, kept after a reboot, rm                                                                                                                                                                                                          |
 | `boot-templates` | a cold boot restored from a boot template: its own name, MAC, disk size and TCP ISN secret; a sleep and wake after                                                                                                                                                                                                             |
 | `inner`          | the inner container: PID 1 inside, signals, `kill -9 -1`, a memory hog, a reboot and the listeners after it, `rm -rf /`, a wiped root                                                                                                                                                                                          |
-| `socket`         | Docker only through imp-docker-proxy: refused containers, calls, tags, pulls and build bodies; BuildKit pinned; imps keep running while the proxy is stopped                                                                                                                                                                   |
+| `socket`         | no Docker in the dev container: no `docker.sock`, no `/run/imp-docker` and no `docker` binary                                                                                                                                                                                                                                  |
+| `podman`         | the builder image that impd fetched by digest, and `impz image build` of a two-line Dockerfile whose file an imp from the image holds; the `podman` CI job runs it under Podman                                                                                                                                                |
 | `moves`          | `impz move` to a second instance on a Docker network: cold with a checkpoint, an abort, warm moves of an open and a box imp that keep tmpfs and processes and reach DNS, HTTP and the broker at once                                                                                                                           |
 | `moves-tailnet`  | `impz move` between two tailnet nodes: the real peer check on their tailnet addresses                                                                                                                                                                                                                                          |
 | `tailnet-names`  | per-imp tailnet names on the test tailnet: an imp's own name, which wakes it, and goes with it on a move; skips unless `IMP_E2E_TAILNET_NAMES=1`                                                                                                                                                                               |
@@ -141,7 +143,11 @@ IMP_OP_VAULT=imp-e2e IMP_E2E_TAILNET_NAMES=1 e2e/test-e2e.sh --only tailnet-name
 ```
 
 `IMP_DEV_NAME`, `IMP_DEV_PORT_OFFSET` and `IMP_DEV_DATA` pick the dev instance, as for
-`scripts/dev/dev.sh`. These variables tune a run:
+`scripts/dev/dev.sh`. `IMP_DEV_CONTAINER_CLI=podman` drives the dev container through Podman
+([the dev instance's settings](../guides/configuration.md#dev-instance)). The suites that start
+containers of their own, such as the registry, Headscale, Pebble and the moves suites' second host,
+start them with Docker, so a Podman run takes only the suites that start none. These variables tune
+a run:
 
 | Variable                | Default | Effect                                                   |
 | ----------------------- | ------- | -------------------------------------------------------- |
@@ -269,10 +275,10 @@ Lefthook installs the hooks with `bun install`.
   `.lefthook/pre-push-baseline.yml`, which repo-sync delivers from zgeoff/tools. The baseline checks
   the format and the types of the whole tree, and lints and tests only the files the branch changes
   since its merge base with `origin/main`. A dashboard file's tests run from its package. CI's
-  `checks` job runs type-aware lint, deadcode and every test. On a branch that changes the agent's
-  or ksm-exec's Go, pre-push also runs `gofmt` on the changed files and `go vet -p 1`, which keeps
-  vet's memory within what a 2 GB imp can spare; the Go lint, vulnerability and dead-code gates run
-  in CI only.
+  `checks` job runs type-aware lint, deadcode and every test. On a branch that changes the agent's,
+  ksm-exec's or oci-fetch's Go, pre-push also runs `gofmt` on the changed files and `go vet -p 1`,
+  which keeps vet's memory within what a 2 GB imp can spare; the Go lint, vulnerability and
+  dead-code gates run in CI only.
 
 ## CI
 
@@ -282,12 +288,13 @@ Lefthook installs the hooks with `bun install`.
 | ------------ | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `gitleaks`   | yes      | A secret scan over the history.                                                                                                                                                                                                                                  |
 | `checks`     | yes      | Passes only when the `checks-unit` and `checks-lanes` jobs passed: `bun test` in two shards of two workers, capped at 1536 MiB with no swap, and `bun run audit`, the Bun pin check, `bun run check:static`, the lane tests and the dashboard's tests and build. |
-| `go`         | yes      | In `agent/` and `host/ksm-exec`: `gofmt`, `go vet`, golangci-lint, govulncheck, deadcode, the tests; the agent's again as root with the `root` tag. Also `gofmt`, vet and lint on the Dockerfile difftest module.                                                |
+| `go`         | yes      | In `agent/`, `host/ksm-exec` and `host/oci-fetch`: `gofmt`, `go vet`, golangci-lint, govulncheck, deadcode, the tests; the agent's again as root with the `root` tag. Also `gofmt`, vet and lint on the Dockerfile difftest module.                              |
 | `shellcheck` | yes      | `bun run lint:shell`, actionlint and zizmor over `.github/`, hadolint over both Dockerfiles, and the tests that shellcheck the shell production code holds as text.                                                                                              |
 | `cli`        | yes      | Compiles the CLI for every platform and runs the linux-x64 one; builds the release image's compile stage.                                                                                                                                                        |
 | `client`     | yes      | Packs `@impz/client`, installs it on the oldest Node it supports, and smokes it under Node, Bun and a compiled Bun binary.                                                                                                                                       |
 | `e2e`        | yes      | Passes only when every `e2e-group` job passed: the `fast` end-to-end set on real microVMs, in four groups on four runners (below).                                                                                                                               |
 | `zfs`        | yes      | Passes only when every `zfs-shard` job passed: real imps on a ZFS pool in three shards, and `scripts/test-zfs.sh` in one (below).                                                                                                                                |
+| `podman`     | no       | `e2e/podman/run-podman-proof.sh`: the proof that an imp host runs with no Docker engine (below).                                                                                                                                                                 |
 
 The `checks` job also runs the docs-writing skill's scripts. `bun run lint:docs` runs
 `check-links.sh`, which fails on a broken relative link or anchor in a README or a page under
@@ -365,12 +372,11 @@ Its job is a required check.
 `deploy/bootstrap.sh` is generated, so that a server downloads one file to install. Its sources are
 the parts in `deploy/bootstrap/`, the functions in `deploy/lib/host-env.sh` that `deploy/upgrade.sh`
 and the NixOS module source as well, and the units and env template it installs.
-`deploy/imp-host.args.json` holds the `docker run` arguments of imp-host and, under `proxy`, of
-imp-docker-proxy, with the name and bridge of the IPv6 network and the pipeline that reads the
-host's addresses. After an edit to any of these, `bun run render:deploy` writes both units, the
-network lines of `deploy/lib/host-env.sh`, `bootstrap.sh`, and the privileges and network blocks of
-`deploy/compose.yaml`. `bun test` fails until it has (`scripts/render/render-imp-host.test.ts`), and
-so does a hand edit to `bootstrap.sh`. The NixOS module reads the arguments file itself.
+`deploy/imp-host.args.json` holds the `podman run` arguments of imp-host, with the name and bridge
+of the IPv6 network and the pipeline that reads the host's addresses. After an edit to any of these,
+`bun run render:deploy` writes the unit, the network lines of `deploy/lib/host-env.sh` and
+`bootstrap.sh`. `bun test` fails until it has (`scripts/render/render-imp-host.test.ts`), and so
+does a hand edit to `bootstrap.sh`. The NixOS module reads the arguments file itself.
 
 `.github/workflows/breaking-change.yml` fails a pull request that breaks the protocol between a
 client and impd without marking the change as breaking
@@ -399,6 +405,31 @@ gh workflow run e2e-images.yml --ref <branch>
 `.github/workflows/reproducible.yml` runs `scripts/release/check-reproducible.sh` (the guest kernel
 and the system drive rebuild to the same bytes). It takes two cold kernel builds, so it runs by
 hand: `gh workflow run reproducible.yml`.
+
+### The podman job
+
+The `podman` job proves that an imp host runs with no Docker engine. It builds the e2e groups'
+inputs on a KVM runner, reading the caches only, and runs `e2e/podman/run-podman-proof.sh` as root.
+The script fails at the first check that does not hold, with the reason, and at the end prints every
+check it made:
+
+1. It starts the dev instance under Docker, waits for impd to add its builder image and its default
+   image, makes the imp `e2e-podman-keep` with a file in it, and records the builder image's id and
+   digest.
+2. It stops the instance, loads the host image into Podman (`docker save | podman load`), masks
+   `docker.socket` and `docker.service`, and checks that `/var/run/docker.sock` is gone and that
+   `docker info` reaches no engine.
+3. It starts the instance under Podman on the same data dir, and checks that the container has no
+   Docker socket and no `docker` binary, that it runs with no pids limit, that it can make device
+   nodes where an image unpack writes them, that impd lists `e2e-podman-keep` with its file intact,
+   and that the builder image keeps its id and digest, so impd did not fetch it again.
+4. It starts a second instance under Podman on a fresh data dir, `<data>-fresh`, and waits for impd
+   to fetch its builder image there, with Docker masked.
+5. It runs `e2e/test-e2e.sh --only socket,podman` on that instance.
+
+The script masks Docker for good, so it refuses to run unless `CI=true`. The job uploads an
+`e2e-results-podman` artifact with impd's log under Docker (`impd-docker.log`) and under Podman
+(`impd.log`). It is no required check, and the `e2e` job does not wait for it.
 
 ## Branch rules
 

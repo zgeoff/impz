@@ -1,5 +1,5 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildDevImageTag } from '../lib/build-dev-image-tag.ts';
@@ -67,7 +67,7 @@ test('it refuses a restart when the container is not running', () => {
   const docker = createStubBin(
     ctx.directoryPath,
     'docker',
-    buildStubDevHostDocker({ containers: {}, hasImage: true, hasSocket: true }),
+    buildStubDevHostDocker({ containers: {}, hasImage: true }),
   );
 
   const result = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'restart'], {
@@ -85,41 +85,29 @@ test('it refuses a restart when the container is not running', () => {
   });
 });
 
-test('it fails a restart whose new proxy stops without a socket, printing its log', () => {
+test("it removes an older checkout's docker proxy container and both its volumes on down, and finishes when none exist", () => {
   const ctx = setupTest();
 
   const docker = createStubBin(
     ctx.directoryPath,
     'docker',
-    buildStubDevHostDocker({
-      containers: { 'imp-dev': true, 'imp-dev-docker-proxy': false },
-      hasImage: true,
-      hasSocket: false,
-      logs: { 'imp-dev-docker-proxy': 'proxy: listen EACCES /run/imp-docker/docker.sock\n' },
-    }),
+    buildStubDevHostDocker({ containers: { 'imp-dev': false }, hasImage: true }),
   );
 
-  // A host without Docker has no docker socket, so stat answers for the socket's group.
-  createStubBin(ctx.directoryPath, 'stat', 'echo 999');
-
-  const result = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'restart'], {
-    env: {
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
-      IMP_DEV_DATA: join(ctx.directoryPath, 'data'),
-      IMP_HOST_IMAGE: 'imp-host:dev-test',
-    },
+  const result = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'down'], {
+    env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`, IMP_DEV_DATA: ctx.directoryPath },
   });
 
-  expect({
-    exitCode: result.exitCode,
-    stdout: result.stdout.toString(),
-    stderr: result.stderr.toString(),
-  }).toStrictEqual({
-    exitCode: 1,
-    stdout: '',
-    stderr:
-      'dev.sh: imp-dev-docker-proxy has no socket; last log lines:\nproxy: listen EACCES /run/imp-docker/docker.sock\n',
-  });
+  expect(result.exitCode).toBe(0);
+
+  expect(readFileSync(docker.calls, 'utf8')).toBe(
+    [
+      'docker inspect -f {{.State.Running}} imp-dev',
+      'docker rm -f imp-dev imp-dev-docker-proxy',
+      'docker volume rm imp-dev-docker imp-dev-docker-proxy',
+      '',
+    ].join('\n'),
+  );
 });
 
 test.each([
@@ -132,16 +120,12 @@ test.each([
     ctx.directoryPath,
     'docker',
     buildStubDevHostDocker({
-      containers: { 'imp-dev': true, 'imp-dev-docker-proxy': true },
+      containers: { 'imp-dev': true },
       hasImage: true,
-      hasSocket: true,
     }),
   );
 
   createStubBin(ctx.directoryPath, 'curl', curl);
-
-  // A host without Docker has no docker socket, so stat answers for the socket's group.
-  createStubBin(ctx.directoryPath, 'stat', 'echo 999');
 
   const result = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'restart'], {
     env: {
@@ -170,16 +154,12 @@ test('it finishes a restart under IMP_DEV_READY_TIMEOUT_S once impd reports read
     ctx.directoryPath,
     'docker',
     buildStubDevHostDocker({
-      containers: { 'imp-dev': true, 'imp-dev-docker-proxy': true },
+      containers: { 'imp-dev': true },
       hasImage: true,
-      hasSocket: true,
     }),
   );
 
   createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
-
-  // A host without Docker has no docker socket, so stat answers for the socket's group.
-  createStubBin(ctx.directoryPath, 'stat', 'echo 999');
 
   const result = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'restart'], {
     env: {
@@ -204,18 +184,14 @@ test('it fails a restart whose old impd does not exit by IMP_DEV_STOP_TIMEOUT_S'
     ctx.directoryPath,
     'docker',
     buildStubDevHostDocker({
-      containers: { 'imp-dev': true, 'imp-dev-docker-proxy': true },
+      containers: { 'imp-dev': true },
       hasImage: true,
-      hasSocket: true,
       impdPids: [4242],
       impdExits: false,
     }),
   );
 
   createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
-
-  // A host without Docker has no docker socket, so stat answers for the socket's group.
-  createStubBin(ctx.directoryPath, 'stat', 'echo 999');
 
   const result = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'restart'], {
     env: {
@@ -244,17 +220,13 @@ test('it finishes a restart under IMP_DEV_STOP_TIMEOUT_S once the old impd exits
     ctx.directoryPath,
     'docker',
     buildStubDevHostDocker({
-      containers: { 'imp-dev': true, 'imp-dev-docker-proxy': true },
+      containers: { 'imp-dev': true },
       hasImage: true,
-      hasSocket: true,
       impdPids: [4242],
     }),
   );
 
   createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
-
-  // A host without Docker has no docker socket, so stat answers for the socket's group.
-  createStubBin(ctx.directoryPath, 'stat', 'echo 999');
 
   const result = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'restart'], {
     env: {
@@ -274,51 +246,6 @@ test('it finishes a restart under IMP_DEV_STOP_TIMEOUT_S once the old impd exits
   expect(readFileSync(docker.calls, 'utf8')).toInclude('docker exec imp-dev kill -HUP 4242\n');
 });
 
-test('it replaces a running proxy once over a stamp from the bash script, then reuses it', () => {
-  const ctx = setupTest();
-
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubDevHostDocker({
-      containers: { 'imp-dev': true, 'imp-dev-docker-proxy': true },
-      hasImage: true,
-      hasSocket: true,
-    }),
-  );
-
-  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
-
-  // A host without Docker has no docker socket, so stat answers for the socket's group.
-  createStubBin(ctx.directoryPath, 'stat', 'echo 999');
-  mkdirSync(join(ctx.directoryPath, 'data'));
-
-  writeFileSync(
-    join(ctx.directoryPath, 'data', 'imp-docker-proxy.stamp'),
-    '9f2c4e1b7a35d0c8e6f1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f7  -\n',
-  );
-
-  const options = {
-    env: {
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
-      IMP_DEV_DATA: join(ctx.directoryPath, 'data'),
-      IMP_HOST_IMAGE: 'imp-host:dev-test',
-    },
-  };
-
-  const first = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'restart'], options);
-  const second = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'restart'], options);
-
-  expect(first.exitCode).toBe(0);
-  expect(second.exitCode).toBe(0);
-
-  expect(
-    readFileSync(docker.calls, 'utf8')
-      .split('\n')
-      .filter((call) => call.startsWith('docker run -d --name imp-dev-docker-proxy ')),
-  ).toBeArrayOfSize(1);
-});
-
 test('it fails a restart whose IMP_DEV_READY_TIMEOUT_S is not a number', () => {
   const ctx = setupTest();
 
@@ -326,16 +253,12 @@ test('it fails a restart whose IMP_DEV_READY_TIMEOUT_S is not a number', () => {
     ctx.directoryPath,
     'docker',
     buildStubDevHostDocker({
-      containers: { 'imp-dev': true, 'imp-dev-docker-proxy': true },
+      containers: { 'imp-dev': true },
       hasImage: true,
-      hasSocket: true,
     }),
   );
 
   createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":false}'`);
-
-  // A host without Docker has no docker socket, so stat answers for the socket's group.
-  createStubBin(ctx.directoryPath, 'stat', 'echo 999');
 
   const result = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'restart'], {
     env: {
@@ -364,17 +287,13 @@ test('it fails a restart with the reason when it cannot look up the old impd', (
     ctx.directoryPath,
     'docker',
     buildStubDevHostDocker({
-      containers: { 'imp-dev': true, 'imp-dev-docker-proxy': true },
+      containers: { 'imp-dev': true },
       hasImage: true,
-      hasSocket: true,
       impdLookupError: { exitCode: 127, stderr: 'exec: "pgrep": executable file not found\n' },
     }),
   );
 
   createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
-
-  // A host without Docker has no docker socket, so stat answers for the socket's group.
-  createStubBin(ctx.directoryPath, 'stat', 'echo 999');
 
   const result = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'restart'], {
     env: {
@@ -395,45 +314,6 @@ test('it fails a restart with the reason when it cannot look up the old impd', (
   });
 
   expect(readFileSync(docker.calls, 'utf8')).not.toInclude('kill -HUP');
-});
-
-test('it fails a restart with the reason when it cannot read the docker socket group', () => {
-  const ctx = setupTest();
-
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubDevHostDocker({
-      containers: { 'imp-dev': true, 'imp-dev-docker-proxy': false },
-      hasImage: true,
-      hasSocket: true,
-    }),
-  );
-
-  createStubBin(
-    ctx.directoryPath,
-    'stat',
-    `echo "stat: cannot statx '/var/run/docker.sock': No such file or directory" >&2; exit 1`,
-  );
-
-  const result = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'restart'], {
-    env: {
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
-      IMP_DEV_DATA: join(ctx.directoryPath, 'data'),
-      IMP_HOST_IMAGE: 'imp-host:dev-test',
-    },
-  });
-
-  expect({
-    exitCode: result.exitCode,
-    stdout: result.stdout.toString(),
-    stderr: result.stderr.toString(),
-  }).toStrictEqual({
-    exitCode: 1,
-    stdout: '',
-    stderr:
-      "dev.sh: cannot read the group of /var/run/docker.sock\nstat: cannot statx '/var/run/docker.sock': No such file or directory\n",
-  });
 });
 
 test('it refuses up when IMP_KERNEL names a directory', () => {
@@ -467,7 +347,7 @@ test('it refuses up when IMP_SYSTEM_DRIVE names a directory', () => {
   const docker = createStubBin(
     ctx.directoryPath,
     'docker',
-    buildStubDevHostDocker({ containers: {}, hasImage: true, hasSocket: true }),
+    buildStubDevHostDocker({ containers: {}, hasImage: true }),
   );
 
   const result = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'up'], {
@@ -524,7 +404,7 @@ test('it refuses up with IMP_HOST_IMAGE_READY=1 when there is no host image', ()
   const docker = createStubBin(
     ctx.directoryPath,
     'docker',
-    buildStubDevHostDocker({ containers: {}, hasImage: false, hasSocket: true }),
+    buildStubDevHostDocker({ containers: {}, hasImage: false }),
   );
 
   const result = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'up'], {
@@ -556,7 +436,7 @@ test('it refuses up without the system drive IMP_SYSTEM_DRIVE names', () => {
   const docker = createStubBin(
     ctx.directoryPath,
     'docker',
-    buildStubDevHostDocker({ containers: {}, hasImage: true, hasSocket: true }),
+    buildStubDevHostDocker({ containers: {}, hasImage: true }),
   );
 
   const result = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'up'], {
@@ -589,16 +469,12 @@ test('it refuses up with IMP_TAILNET_NAMES=1 when 1Password has no OAuth client'
     ctx.directoryPath,
     'docker',
     buildStubDevHostDocker({
-      containers: { 'imp-dev-docker-proxy': true },
+      containers: {},
       hasImage: true,
-      hasSocket: true,
     }),
   );
 
   createStubBin(ctx.directoryPath, 'op', 'exit 1');
-
-  // A host without Docker has no docker socket, so stat answers for the socket's group.
-  createStubBin(ctx.directoryPath, 'stat', 'echo 999');
 
   const result = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'up'], {
     env: {
@@ -635,16 +511,11 @@ test('it passes the Tailscale key to docker in its environment, never in its arg
     ctx.directoryPath,
     'docker',
     [
-      'case "$*" in *imp-docker-proxy.new) : > "$IMP_DEV_DATA/imp-docker-proxy.new"; exit 0 ;; esac',
-      'case "$*" in *bin/imp-docker-proxy) exit 0 ;; esac',
       `case "$*" in "run -d --name imp-dev-trace-check "*) printf '%s' "$TAILSCALE_AUTHKEY" > '${join(ctx.directoryPath, 'docker-env-key')}'; exit 1 ;; esac`,
       'case "$1" in run|inspect) exit 1 ;; esac',
       'exit 0',
     ].join('\n'),
   );
-
-  // A host without Docker has no docker socket, so stat answers for the socket's group.
-  createStubBin(ctx.directoryPath, 'stat', 'echo 999');
 
   const result = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'up'], {
     env: {
@@ -681,14 +552,10 @@ test('it refuses up with an IMP_ACME_CA_FILE outside the repo', () => {
     ctx.directoryPath,
     'docker',
     buildStubDevHostDocker({
-      containers: { 'imp-dev-docker-proxy': true },
+      containers: {},
       hasImage: true,
-      hasSocket: true,
     }),
   );
-
-  // A host without Docker has no docker socket, so stat answers for the socket's group.
-  createStubBin(ctx.directoryPath, 'stat', 'echo 999');
 
   const result = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'up'], {
     env: {
@@ -724,18 +591,14 @@ test("it passes the test registry to impd, at this machine's address for its nam
     ctx.directoryPath,
     'docker',
     buildStubDevHostDocker({
-      containers: { 'imp-dev': false, 'imp-dev-docker-proxy': true },
+      containers: { 'imp-dev': false },
       hasImage: true,
-      hasSocket: true,
       logs: { 'imp-dev': 'impd: /dev/kvm is missing\n' },
     }),
   );
 
   createStubBin(ctx.directoryPath, 'curl', 'exit 7');
   createStubBin(ctx.directoryPath, 'getent', 'echo "10.200.0.1      STREAM registry.example.test"');
-
-  // A host without Docker has no docker socket, so stat answers for the socket's group.
-  createStubBin(ctx.directoryPath, 'stat', 'echo 999');
 
   Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'up'], {
     env: {
@@ -771,16 +634,12 @@ test('it refuses up with a test registry whose name does not resolve on this mac
     ctx.directoryPath,
     'docker',
     buildStubDevHostDocker({
-      containers: { 'imp-dev-docker-proxy': true },
+      containers: {},
       hasImage: true,
-      hasSocket: true,
     }),
   );
 
   createStubBin(ctx.directoryPath, 'getent', 'exit 2');
-
-  // A host without Docker has no docker socket, so stat answers for the socket's group.
-  createStubBin(ctx.directoryPath, 'stat', 'echo 999');
 
   const result = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'up'], {
     env: {
@@ -819,17 +678,13 @@ test('it fails up when the container stops before impd is ready, printing its lo
     ctx.directoryPath,
     'docker',
     buildStubDevHostDocker({
-      containers: { 'imp-dev': false, 'imp-dev-docker-proxy': true },
+      containers: { 'imp-dev': false },
       hasImage: true,
-      hasSocket: true,
       logs: { 'imp-dev': 'impd: /dev/kvm is missing\n' },
     }),
   );
 
   createStubBin(ctx.directoryPath, 'curl', 'exit 7');
-
-  // A host without Docker has no docker socket, so stat answers for the socket's group.
-  createStubBin(ctx.directoryPath, 'stat', 'echo 999');
 
   const result = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'up'], {
     env: {
@@ -863,16 +718,12 @@ test('it gives the container the real path of a kernel that a symlink outside th
     ctx.directoryPath,
     'docker',
     buildStubDevHostDocker({
-      containers: { 'imp-dev': false, 'imp-dev-docker-proxy': true },
+      containers: { 'imp-dev': false },
       hasImage: true,
-      hasSocket: true,
     }),
   );
 
   createStubBin(ctx.directoryPath, 'curl', 'exit 7');
-
-  // A host without Docker has no docker socket, so stat answers for the socket's group.
-  createStubBin(ctx.directoryPath, 'stat', 'echo 999');
 
   const kernel = join(ctx.directoryPath, 'vmlinux');
 
@@ -914,6 +765,167 @@ test('it runs logs, shell and token on the caller terminal through the given run
     'cat',
     '/var/lib/imp/token',
   ]);
+});
+
+test('it runs token through podman when IMP_DEV_CONTAINER_CLI is podman', async () => {
+  const runAttached = mock(() => Promise.resolve(0));
+
+  await runDev({
+    argv: ['token'],
+    env: { IMP_DEV_CONTAINER_CLI: 'podman' },
+    cwd: '/',
+    io: { ...wireDevIO(), runAttached },
+  });
+
+  expect(runAttached).toHaveBeenCalledExactlyOnceWith([
+    'podman',
+    'exec',
+    'imp-dev',
+    'cat',
+    '/var/lib/imp/token',
+  ]);
+});
+
+test('it refuses up under podman without the host image in podman, naming the command that loads it', () => {
+  const ctx = setupTest();
+  const stub = buildStubDevHostDocker({ containers: {}, hasImage: false });
+  const podman = createStubBin(ctx.directoryPath, 'podman', stub);
+
+  createStubBin(ctx.directoryPath, 'docker', stub);
+
+  const result = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'up'], {
+    env: {
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_DEV_DATA: join(ctx.directoryPath, 'data'),
+      IMP_DEV_CONTAINER_CLI: 'podman',
+
+      IMP_KERNEL: new URL('../../package.json', import.meta.url).pathname,
+      IMP_SYSTEM_DRIVE: new URL('../../package.json', import.meta.url).pathname,
+      IMP_HOST_IMAGE: 'imp-host:dev-test',
+      IMP_HOST_IMAGE_READY: '1',
+    },
+  });
+
+  expect({
+    exitCode: result.exitCode,
+    stdout: result.stdout.toString(),
+    stderr: result.stderr.toString(),
+    calls: readFileSync(podman.calls, 'utf8'),
+  }).toStrictEqual({
+    exitCode: 1,
+    stdout: '',
+    stderr:
+      'dev.sh: podman has no imp-host:dev-test image; load it with: docker save imp-host:dev-test | podman load\n',
+    calls: 'podman image exists imp-host:dev-test\n',
+  });
+});
+
+test('it starts the dev container with podman, and asks docker nothing, when IMP_DEV_CONTAINER_CLI is podman', () => {
+  const ctx = setupTest();
+  const stub = buildStubDevHostDocker({ containers: { 'imp-dev': false }, hasImage: true });
+  const podman = createStubBin(ctx.directoryPath, 'podman', stub);
+
+  createStubBin(ctx.directoryPath, 'docker', stub);
+  createStubBin(ctx.directoryPath, 'curl', 'exit 7');
+
+  Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'up'], {
+    env: {
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_DEV_DATA: join(ctx.directoryPath, 'data'),
+      IMP_DEV_CONTAINER_CLI: 'podman',
+
+      IMP_KERNEL: new URL('../../package.json', import.meta.url).pathname,
+      IMP_SYSTEM_DRIVE: new URL('../../package.json', import.meta.url).pathname,
+      IMP_HOST_IMAGE: 'imp-host:dev-test',
+      IMP_DEV_TAILNET: '0',
+      IMP_UPLINK_MTU: '1500',
+    },
+  });
+
+  const calls = readFileSync(podman.calls, 'utf8').split('\n');
+
+  expect(calls).toContainEqual(expect.toStartWith('podman run -d --name imp-dev '));
+  expect(calls.filter((call) => call.startsWith('docker '))).toStrictEqual([]);
+});
+
+test("it stops and removes the dev container and an older checkout's proxy through podman, and asks docker nothing, on down", () => {
+  const ctx = setupTest();
+
+  const stub = buildStubDevHostDocker({
+    containers: { 'imp-dev': true },
+    hasImage: true,
+    logs: { 'imp-dev': 'impd: every imp asleep\n' },
+  });
+
+  const podman = createStubBin(ctx.directoryPath, 'podman', stub);
+
+  createStubBin(ctx.directoryPath, 'docker', stub);
+
+  const result = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'down'], {
+    env: {
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_DEV_DATA: join(ctx.directoryPath, 'data'),
+      IMP_DEV_CONTAINER_CLI: 'podman',
+    },
+  });
+
+  expect({
+    exitCode: result.exitCode,
+    stdout: result.stdout.toString(),
+    calls: readFileSync(podman.calls, 'utf8').split('\n'),
+  }).toStrictEqual({
+    exitCode: 0,
+    stdout: 'impd: every imp asleep\n',
+    calls: [
+      'podman inspect -f {{.State.Running}} imp-dev',
+      'podman stop -t 120 imp-dev',
+      'podman logs --tail 5 imp-dev',
+      'podman rm -f imp-dev imp-dev-docker-proxy',
+      'podman volume rm imp-dev-docker imp-dev-docker-proxy',
+      '',
+    ],
+  });
+});
+
+test('it finds, signals and waits out the old impd through podman, and asks docker nothing, on a restart under podman', () => {
+  const ctx = setupTest();
+
+  const stub = buildStubDevHostDocker({
+    containers: { 'imp-dev': true },
+    hasImage: true,
+    impdPids: [4242],
+  });
+
+  const podman = createStubBin(ctx.directoryPath, 'podman', stub);
+
+  createStubBin(ctx.directoryPath, 'docker', stub);
+  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
+
+  const result = Bun.spawnSync([new URL('dev.sh', import.meta.url).pathname, 'restart'], {
+    env: {
+      PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_DEV_DATA: join(ctx.directoryPath, 'data'),
+      IMP_HOST_IMAGE: 'imp-host:dev-test',
+      IMP_DEV_CONTAINER_CLI: 'podman',
+    },
+  });
+
+  expect({
+    exitCode: result.exitCode,
+    stderr: result.stderr.toString(),
+    calls: readFileSync(podman.calls, 'utf8').split('\n'),
+  }).toStrictEqual({
+    exitCode: 0,
+    stderr: '',
+    calls: [
+      'podman inspect -f {{.State.Running}} imp-dev',
+      'podman exec imp-dev pgrep -f bun .*/daemon/src/main.ts',
+      'podman exec imp-dev kill -HUP 4242',
+      'podman exec imp-dev kill -0 4242',
+      'curl -fsS http://localhost:7070/health',
+      '',
+    ],
+  });
 });
 
 test('it stops before it asks docker anything when there is no machine id', () => {

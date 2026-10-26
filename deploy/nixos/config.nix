@@ -1,5 +1,5 @@
-# What services.imp does to the system: the imp-host and imp-docker-proxy
-# units, and the network, firewall and kernel settings they need. The
+# What services.imp does to the system: the imp-host unit, and the network,
+# firewall and kernel settings it needs. The
 # options are in options.nix; module.nix imports both.
 {
   config,
@@ -10,11 +10,11 @@
 
 let
   cfg = config.services.imp;
-  docker = "${config.virtualisation.docker.package}/bin/docker";
+  podman = "${config.virtualisation.podman.package}/bin/podman";
   zfs = cfg.storage == "zfs";
   ownFirewall = cfg.hostFirewall == "own";
   ipv6 = cfg.ipv6.enable;
-  # The docker run arguments, shared with deploy/imp-host.service and
+  # The podman run arguments, shared with deploy/imp-host.service and
   # bootstrap.sh (scripts/render/render-imp-host.ts writes those two from it). A
   # $NAME word is env-file words in the unit, and an option here.
   hostArgs = lib.importJSON ../imp-host.args.json;
@@ -22,6 +22,8 @@ let
   # forward rules below name; host-env.sh has the same from the same file.
   hostNetwork = hostArgs.network.name;
   hostBridge = hostArgs.network.bridge;
+  # the bridge of Podman's default network, which imp-host runs on without IPv6
+  defaultBridge = "podman0";
   # the seccomp profile from the store, not /etc/imp
   seccomp = "seccomp=${../imp-host.seccomp.json}";
   privileges = map (
@@ -43,7 +45,7 @@ let
     "-e"
     "IMP_HOST_ADDRESSES"
   ];
-  # The unit's --env-file is on the system disk, and docker keeps every value
+  # The unit's --env-file is on the system disk, and podman keeps every value
   # it reads in the container's config there too. Here imp-host-env.sh writes
   # the file to tmpfs, and the container gets it as a read-only mount that
   # host/entrypoint exports from.
@@ -94,7 +96,7 @@ let
   stateDir = "/var/lib/imp-host";
   # Secret files outside the store: each is copied before every start to
   # /run/imp-host (0400) and the copy is mounted read-only, so a missing
-  # source never stops docker run; the copy is then empty, which the reader
+  # source never stops podman run; the copy is then empty, which the reader
   # treats as no secret. The Tailscale key is read by tailscale inside the
   # container only when the node has to join (host/scripts/tailscale-up.sh);
   # the backup password by restic, through IMP_BACKUP_PASSWORD_FILE, which
@@ -166,7 +168,7 @@ let
     exec ${pkgs.bash}/bin/bash ${./imp-host-dns-token.sh} ${lib.escapeShellArg cfg.dnsApiTokenFile} ${dnsStageDir}
   '';
   runArgs = privileges ++ probedArgs ++ sharedArgs ++ secretArgs ++ dnsArgs ++ [ cfg.image ];
-  # The keys docker run sets with -e KEY=value. host/entrypoint exports the
+  # The keys podman run sets with -e KEY=value. host/entrypoint exports the
   # env file over the container's env, so imp-host-env.sh leaves these keys
   # out of it, and they keep their -e values as they would over --env-file.
   containerKeys =
@@ -184,43 +186,6 @@ let
         )
       ) args
     );
-
-  # imp-docker-proxy (deploy/imp-docker-proxy.service): the only Docker
-  # socket imp-host sees. It closes the Docker socket path only: imp-host
-  # keeps SYS_ADMIN, which still lets root out of the container. It runs as
-  # 65534 and joins the group of the host's socket, read at each start.
-  proxyWord =
-    word:
-    if word == "$IMP_DOCKER_GID" then
-      ''"$gid"''
-    else if lib.hasPrefix "$" word then
-      throw "services.imp: the proxy section of deploy/imp-host.args.json has ${word}, which the module has no value for"
-    else
-      lib.escapeShellArg word;
-  proxyWords = lib.flatten hostArgs.proxy.privileges ++ lib.flatten hostArgs.proxy.lines;
-  runProxy = pkgs.writeShellScript "imp-docker-proxy-run" ''
-    set -euo pipefail
-    gid=$(${pkgs.coreutils}/bin/stat -c %g /var/run/docker.sock)
-    exec ${docker} run ${
-      lib.concatMapStringsSep " " proxyWord proxyWords
-    } ${lib.escapeShellArg cfg.image} ${lib.escapeShellArgs hostArgs.proxy.command}
-  '';
-  # The socket's directory and the proxy's token, owned by its user. Not
-  # RuntimeDirectory: a stop would remove the directory under imp-host's
-  # bind mount. A socket a crash left would pass the wait below.
-  proxyDirs = pkgs.writeShellScript "imp-docker-proxy-dirs" ''
-    set -euo pipefail
-    ${pkgs.coreutils}/bin/install -d -m 0700 -o 65534 -g 65534 /run/imp-docker /var/lib/imp-docker-proxy
-    ${pkgs.coreutils}/bin/rm -f /run/imp-docker/docker.sock
-  '';
-  waitProxy = pkgs.writeShellScript "imp-docker-proxy-wait" ''
-    for _ in $(${pkgs.coreutils}/bin/seq 300); do
-      [ -S /run/imp-docker/docker.sock ] && exit 0
-      ${pkgs.coreutils}/bin/sleep 0.1
-    done
-    echo "imp-docker-proxy: no socket after 30 s" >&2
-    exit 1
-  '';
 
   # The module's own keys; settings may not set them (an assertion below).
   # No secret goes here: it is in the Nix store.
@@ -287,19 +252,19 @@ let
       if cfg.imageArchive != null then
         ''
           stamp=${stateDir}/image-archive
-          if ${docker} image inspect "$ref" >/dev/null 2>&1 \
+          if ${podman} image exists "$ref" \
             && [ "$(cat "$stamp" 2>/dev/null)" = ${cfg.imageArchive} ]; then
             exit 0
           fi
           echo "imp-host: loading $ref from ${cfg.imageArchive}"
-          ${docker} load -q -i ${cfg.imageArchive} >/dev/null
-          ${docker} image inspect "$ref" >/dev/null 2>&1 \
+          ${podman} load -q -i ${cfg.imageArchive} >/dev/null
+          ${podman} image exists "$ref" \
             || { echo "imp-host: ${cfg.imageArchive} does not hold $ref" >&2; exit 1; }
           echo ${cfg.imageArchive} >"$stamp"
         ''
       else
         ''
-          ${docker} image inspect "$ref" >/dev/null 2>&1 || ${docker} pull -q "$ref"
+          ${podman} image exists "$ref" || ${podman} pull -q "$ref"
         ''
     }
   '';
@@ -311,7 +276,7 @@ let
     set -euo pipefail
     export PATH=${
       lib.makeBinPath [
-        config.virtualisation.docker.package
+        config.virtualisation.podman.package
         pkgs.coreutils
         pkgs.gawk
         pkgs.gnugrep
@@ -323,7 +288,7 @@ let
         ''
           ipv6_subnet=$(subnet6 ${lib.escapeShellArg cfg.ipv6.subnet}) \
             || { echo "imp-host: services.imp.ipv6.subnet is ${cfg.ipv6.subnet}; want an IPv6 /64" >&2; exit 1; }
-          if inspect=$(docker network inspect -f "$NETWORK_FORMAT" "$HOST_NETWORK" 2>/dev/null); then
+          if inspect=$(podman network inspect -f "$NETWORK_FORMAT" "$HOST_NETWORK" 2>/dev/null); then
             drift=$(network_drift "$ipv6_subnet" "$inspect")
             [ -n "$drift" ] || exit 0
             others=$(network_others)
@@ -332,20 +297,20 @@ let
               exit 1
             fi
             echo "imp-host: the $HOST_NETWORK network differs ($drift); making it again"
-            docker network rm "$HOST_NETWORK" >/dev/null
+            podman network rm "$HOST_NETWORK" >/dev/null
           fi
           create_host_network "$ipv6_subnet"
         ''
       else
         ''
-          if docker network inspect "$HOST_NETWORK" >/dev/null 2>&1 && [ -z "$(network_others)" ]; then
-            docker network rm "$HOST_NETWORK" >/dev/null
+          if podman network exists "$HOST_NETWORK" && [ -z "$(network_others)" ]; then
+            podman network rm "$HOST_NETWORK" >/dev/null
           fi
         ''
     }
   '';
 
-  # How the host keeps its IPv6 default route once Docker turns on
+  # How the host keeps its IPv6 default route once Podman turns on
   # forwarding (bootstrap.sh's ensure_router_adverts): a static route needs
   # nothing, networkd keeps router adverts with IPv6AcceptRA = true, and
   # otherwise the owner says (ipv6.routerAdverts).
@@ -375,23 +340,17 @@ let
     || cfg.ipv6.uplink == null
     || !dhcpcdOnUplink
     || config.networking.dhcpcd.IPv6rs == false;
-  # check_docker_ipv6 in bootstrap.sh: Docker writes the NAT66 and forward
-  # rules itself from 27.0, unless ip6tables is off.
-  dockerIpv6 =
-    lib.versionAtLeast config.virtualisation.docker.package.version "27.0"
-    && (config.virtualisation.docker.daemon.settings.ip6tables or true) != false;
-
   # Forwarding from imp-host's bridge. Where networking.firewall filters it,
   # the module admits imp-host's bridge alone (br-imphost with IPv6, else
-  # docker0); nothing is trusted for input. The denied ranges drop in a
+  # podman0); nothing is trusted for input. The denied ranges drop in a
   # chain of their own, from either bridge: a drop in any forward chain is
   # final, and NixOS's chain accepts ICMPv6 before any rule of ours could
   # run. Only new flows drop, so the replies of a flow from a denied range
   # (a pod that reaches a public imp) still pass.
   forwardFilter = config.networking.firewall.filterForward && config.networking.nftables.enable;
   nftSet = names: "{ ${lib.concatMapStringsSep ", " (name: ''"${name}"'') names} }";
-  acceptSet = nftSet [ (if ipv6 then hostBridge else "docker0") ];
-  denySet = nftSet (lib.optional ipv6 hostBridge ++ [ "docker0" ]);
+  acceptSet = nftSet [ (if ipv6 then hostBridge else defaultBridge) ];
+  denySet = nftSet (lib.optional ipv6 hostBridge ++ [ defaultBridge ]);
   denied = lib.partition (cidr: lib.hasInfix ":" cidr) cfg.forwardDeny;
   denyRule =
     family: cidrs:
@@ -431,11 +390,11 @@ in
       }
       {
         assertion = !(config.networking.nftables.enable && config.networking.nftables.flushRuleset);
-        message = "services.imp: networking.nftables.flushRuleset would flush Docker's rules on every reload; leave it false";
+        message = "services.imp: networking.nftables.flushRuleset would flush netavark's rules on every reload; leave it false";
       }
       {
         assertion = !ipv6 || raKept;
-        message = "services.imp.ipv6: Docker turns on IPv6 forwarding, and with it on, router adverts that set the host's IPv6 default route are dropped unless something keeps them. Set one of: a static networking.defaultGateway6; services.imp.ipv6.uplink with a systemd.network.networks entry for it that sets networkConfig.IPv6AcceptRA = true; services.imp.ipv6.routerAdverts = \"kernel\" (with ipv6.uplink: accept_ra = 2); or services.imp.ipv6.routerAdverts = \"handled\" when your DHCP client keeps them";
+        message = "services.imp.ipv6: Podman turns on IPv6 forwarding, and with it on, router adverts that set the host's IPv6 default route are dropped unless something keeps them. Set one of: a static networking.defaultGateway6; services.imp.ipv6.uplink with a systemd.network.networks entry for it that sets networkConfig.IPv6AcceptRA = true; services.imp.ipv6.routerAdverts = \"kernel\" (with ipv6.uplink: accept_ra = 2); or services.imp.ipv6.routerAdverts = \"handled\" when your DHCP client keeps them";
       }
       {
         assertion = cfg.ipv6.routerAdverts != "kernel" || cfg.ipv6.uplink != null;
@@ -446,16 +405,12 @@ in
         message = "services.imp.ipv6.routerAdverts = \"kernel\": dhcpcd runs on ${toString cfg.ipv6.uplink} and solicits router adverts itself, and may set accept_ra back. Set networking.dhcpcd.IPv6rs = false, or use \"handled\"";
       }
       {
-        assertion = !ipv6 || dockerIpv6;
-        message = "services.imp.ipv6 needs Docker 27.0 or later with ip6tables on (virtualisation.docker.daemon.settings.ip6tables not false), which writes the network's NAT66 and forward rules";
-      }
-      {
         assertion = cfg.forwardDeny == [ ] || config.networking.nftables.enable;
         message = "services.imp.forwardDeny needs networking.nftables.enable = true, for its table";
       }
     ];
 
-    virtualisation.docker.enable = true;
+    virtualisation.podman.enable = true;
     # nft, to inspect the imp table
     environment.systemPackages = lib.mkIf ownFirewall [ pkgs.nftables ];
 
@@ -546,52 +501,22 @@ in
       };
     };
 
-    # The image both containers run, loaded or pulled before either starts.
-    # A oneshot that stays inactive, so each start of either runs it again.
+    # The image imp-host runs, loaded or pulled before it starts. A oneshot
+    # that stays inactive, so each start of imp-host runs it again.
     systemd.services.imp-host-image = {
       description = "imp host image (load or pull)";
-      requires = [ "docker.service" ];
-      after = [ "docker.service" ];
+      # podman has no daemon whose start would wait for the network, and a
+      # pull at boot needs it
+      wants = [ "network-online.target" ];
+      after = [ "network-online.target" ];
+      # It runs at each start of imp-host, so systemd's default limit of 5
+      # starts in 10 s would fail imp-host on a dependency before its own
+      # limit applies.
+      unitConfig.StartLimitIntervalSec = 0;
       serviceConfig = {
         Type = "oneshot";
         ExecStart = ensureImage;
         TimeoutStartSec = "15min";
-      };
-    };
-
-    systemd.services.imp-docker-proxy = {
-      description = "imp Docker socket proxy (the Docker API calls impd makes)";
-      documentation = [ "https://github.com/zgeoff/impz/blob/main/docs/architecture/host.md" ];
-      wantedBy = [ "multi-user.target" ];
-      requires = [
-        "docker.service"
-        "imp-host-image.service"
-      ];
-      after = [
-        "docker.service"
-        "imp-host-image.service"
-      ];
-      # IMP_HOST_IMAGE, whose repository a pull may not move, and IMP_BUILD_IMAGE,
-      # the one image the proxy pulls; -e NAME passes these, and nothing else, to
-      # the container
-      environment = {
-        IMP_HOST_IMAGE = cfg.image;
-      }
-      // lib.optionalAttrs (cfg.settings ? IMP_BUILD_IMAGE) {
-        IMP_BUILD_IMAGE = toString cfg.settings.IMP_BUILD_IMAGE;
-      };
-      serviceConfig = {
-        Type = "exec";
-        ExecStartPre = [
-          "-${docker} rm -f imp-docker-proxy"
-          proxyDirs
-        ];
-        ExecStart = runProxy;
-        # up once the socket is there, so impd's first docker call finds it
-        ExecStartPost = waitProxy;
-        ExecStop = "${docker} stop -t 10 imp-docker-proxy";
-        Restart = "always";
-        RestartSec = 2;
       };
     };
 
@@ -622,22 +547,11 @@ in
       description = "imp host (impd, Firecracker, tailscaled)";
       documentation = [ "https://github.com/zgeoff/impz/blob/main/docs/guides/nixos.md" ];
       wantedBy = [ "multi-user.target" ];
-      requires = [
-        "docker.service"
-        "imp-host-image.service"
-      ]
-      ++ lib.optional zfs "imp-zfs-dataset.service";
-      # impd reaches Docker through the proxy. Wants, not BindsTo: a proxy
-      # that stops fails image work only, and the imps keep running.
-      wants = [
-        "network-online.target"
-        "imp-docker-proxy.service"
-      ];
+      requires = [ "imp-host-image.service" ] ++ lib.optional zfs "imp-zfs-dataset.service";
+      wants = [ "network-online.target" ];
       after = [
-        "docker.service"
         "network-online.target"
         "imp-host-image.service"
-        "imp-docker-proxy.service"
       ]
       ++ lib.optional zfs "imp-zfs-dataset.service";
       unitConfig = {
@@ -655,12 +569,12 @@ in
           ++ [
             writeEnv
             # A container left over from a crash would hold the name.
-            "-${docker} rm -f imp-host"
+            "-${podman} rm -f imp-host"
             ensureNetwork
           ];
-        ExecStart = "${docker} run ${lib.escapeShellArgs runArgs}";
+        ExecStart = "${podman} run ${lib.escapeShellArgs runArgs}";
         # SIGTERM makes impd sleep every awake imp; it gets up to 120 s.
-        ExecStop = "${docker} stop -t 120 imp-host";
+        ExecStop = "${podman} stop -t 120 imp-host";
         TimeoutStartSec = "15min";
         TimeoutStopSec = 150;
         Restart = "on-failure";

@@ -1,54 +1,58 @@
 #!/bin/bash
 # Upgrade the imp host to a new release image without losing imps.
 #
-#   deploy/upgrade.sh                      the systemd unit (deploy/imp-host.service)
-#   deploy/upgrade.sh --compose <file>     docker compose (deploy/compose.yaml)
+#   deploy/upgrade.sh
 #
 # A host on an older release gets this script, with the deploy/lib/host-env.sh
 # it sources, from the new image, not from its own release
 # (docs/guides/operations.md#upgrade):
 #
-#   docker run --rm <new image> tar -cf - -C /usr/local/share/imp deploy | tar -xf -
+#   podman run --rm <new image> tar -cf - -C /usr/local/share/imp deploy | tar -xf -
 #   deploy/upgrade.sh
 #
-# 1. Pulls the image: this script's own release, unless IMP_HOST_IMAGE (the
-#    environment, then with --compose the compose .env, then the env file)
-#    names another. When the host already runs it, step 3 still installs
-#    the image lines and files, and restarts nothing. Refuses an image that the restarted units would not run
-#    (drop-ins count), and an env file with IMP_HOST_IMAGE= empty. Refuses an
-#    image older than the Docker socket proxy (imp.host-contract other
-#    than socket-proxy) once the unit or compose file gives imp-host the
-#    proxy's socket, and an image with no label once it runs without
-#    --privileged: only deploy/bootstrap.sh of that image's release puts its
-#    deploy back. Reads the image's seccomp profile and both units; one it
-#    cannot read, or reads empty, stops the upgrade here.
+# The unit runs imp-host with Podman. A host whose imp-host runs under Docker,
+# as the releases before did, moves to Podman here: step 3 says how.
+#
+# 1. Pulls the image with Podman: this script's own release, unless
+#    IMP_HOST_IMAGE (the environment, then the env file) names another. When a
+#    Podman host already runs it, step 3 still installs the image lines and
+#    files and retires imp-docker-proxy, and restarts nothing else. Refuses an
+#    image that the restarted unit would not run (drop-ins count), and an env
+#    file with IMP_HOST_IMAGE= empty. Refuses an image whose imp.host-contract
+#    is not no-docker: it needs a Docker socket, which a Podman host does not
+#    give. Reads the image's seccomp profile and unit; one it cannot read, or
+#    reads empty, stops the upgrade here, and so does a unit that does not run
+#    Podman.
 # 2. Sleeps every awake imp through the API, one at a time, and stops on the
 #    first that fails: the host keeps running the old image, untouched.
 #    Stopping the container would sleep them too, but within its 120 s.
-# 3. Installs the image's seccomp profile and systemd units by rename (with
-#    --compose, the compose file is the operator's and stays), restarts
-#    imp-docker-proxy, then the host, on the new image and waits for impd.
-#    Local changes to a unit belong in a drop-in (imp-host.service.d/),
-#    which stays. First, an env file line IMP_HOST_IMAGE=...:latest, as every
-#    env file had before the units named their release, is the old
-#    template's, not a pin: it becomes a comment, and the file before is kept
-#    as .bak-<time>. With --compose, IMP_HOST_IMAGE goes to the .env next to
-#    the compose file (a .bak-<time> too), so a later `docker compose up -d`
-#    keeps the image. Installed units and files lose the release-please
-#    marker lines.
-# 4. Prints how many imps will boot cold and how many run outdated parts, then
-#    lists the imps: a NOTE says which boot cold on their next wake, and why
-#    (docs/guides/operations.md#upgrade).
+# 3. On a Docker host: stops imp-host with the old unit, removes its container,
+#    stops and disables imp-docker-proxy, whose unit becomes .bak-<time>, and
+#    with IPv6 removes Docker's imp-host network, so the new unit's Podman
+#    makes its own on the same /64 and bridge. Then, on any host, installs the
+#    image's seccomp profile and systemd unit by rename, keeping a changed unit
+#    as .bak-<time>, stops and disables an imp-docker-proxy that a Podman host
+#    still has, as on a Docker host, and starts or restarts imp-host on the new
+#    image and waits for impd. /var/lib/imp and the env file's values stay, and
+#    so does Docker. Local changes to a unit belong in a drop-in
+#    (imp-host.service.d/), which stays. First, an env file line
+#    IMP_HOST_IMAGE=...:latest, as every env file had before the units named
+#    their release, is the old template's, not a pin: it becomes a comment, and
+#    the file before is kept as .bak-<time>. Installed units and files lose the
+#    release-please marker lines.
+# 4. Prints how to roll back, how many imps will boot cold and how many run
+#    outdated parts, then lists the imps: a NOTE says which boot cold on
+#    their next wake, and why (docs/guides/operations.md#upgrade).
 #
-# Needs docker, curl and jq on the host.
+# Needs podman, curl and jq on the host, and docker to move a Docker host.
 #
 # Env: IMP_HOST_IMAGE (default: from IMP_HOST_ENV_FILE, else this script's
-#      release) must be the image the unit or the compose file runs.
+#      release) must be the image the unit runs.
 #      IMP_HOST_ENV_FILE defaults to /etc/imp/imp-host.env.
 #      IMP_HOST_UNIT_FILE defaults to /etc/systemd/system/imp-host.service,
-#      IMP_DOCKER_PROXY_UNIT_FILE to /etc/systemd/system/imp-docker-proxy.service,
-#      IMP_HOST_SECCOMP_FILE to /etc/imp/imp-host.seccomp.json. With
-#      --compose, IMP_DOCKER_GID defaults to the group of /var/run/docker.sock.
+#      IMP_DOCKER_PROXY_UNIT_FILE, the unit a Docker host may still have, to
+#      /etc/systemd/system/imp-docker-proxy.service, IMP_HOST_SECCOMP_FILE to
+#      /etc/imp/imp-host.seccomp.json.
 #      IMP_READY_TIMEOUT_S (default 120) is how long impd gets to answer ready.
 set -euo pipefail
 
@@ -59,7 +63,7 @@ here=${BASH_SOURCE[0]%/*}
 [ "$here" != "${BASH_SOURCE[0]}" ] || here=.
 host_env=$here/lib/host-env.sh
 if [ ! -r "$host_env" ]; then
-  echo "upgrade: no $host_env beside this script; take both from the new image: docker run --rm <new image> tar -cf - -C /usr/local/share/imp deploy | tar -xf -, then run deploy/upgrade.sh (docs/guides/operations.md#upgrade)" >&2
+  echo "upgrade: no $host_env beside this script; take both from the new image: podman run --rm <new image> tar -cf - -C /usr/local/share/imp deploy | tar -xf -, then run deploy/upgrade.sh (docs/guides/operations.md#upgrade)" >&2
   exit 1
 fi
 # shellcheck source=deploy/lib/host-env.sh
@@ -73,25 +77,22 @@ seccomp_file=${IMP_HOST_SECCOMP_FILE:-/etc/imp/imp-host.seccomp.json}
 ready_timeout_s=${IMP_READY_TIMEOUT_S:-120}
 image_deploy=/usr/local/share/imp/deploy
 health=http://127.0.0.1:7070/health
-compose_file=
 # The image of this script's release, as its units name it; release-please
 # bumps it.
 readonly release_image=ghcr.io/zgeoff/imp-host:5.0.0 # x-release-please-version
 # The image line every env file had before the units named their release.
 readonly legacy_image_line=IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:latest
 
-usage() {
-  echo "usage: $0 [--compose <file>]" >&2
-  exit 2
-}
-
 case ${1:-} in
   '') ;;
   --compose)
-    [ $# -eq 2 ] || usage
-    compose_file=$2
+    echo "upgrade: the Compose recipe is gone; the systemd unit that deploy/bootstrap.sh installs replaces it (docs/guides/install.md). Nothing changed." >&2
+    exit 1
     ;;
-  *) usage ;;
+  *)
+    echo "usage: $0" >&2
+    exit 2
+    ;;
 esac
 
 # the env file's pin, or nothing: its last non-empty IMP_HOST_IMAGE line
@@ -102,75 +103,14 @@ pinned_image() {
   echo "${line#IMP_HOST_IMAGE=}"
 }
 
-# the .env next to the compose file, which compose reads at every `up`
-compose_env_file() {
-  echo "$(dirname "$compose_file")/.env"
-}
-
-# A line that sets IMP_HOST_IMAGE in an env file compose reads
-readonly compose_env_line='^[ \t]*(export[ \t]+)?IMP_HOST_IMAGE[ \t]*='
-
-# the compose .env's IMP_HOST_IMAGE as compose reads it: interpolated, and
-# without a trailing comment; empty when it sets none. docker compose config
-# tells it, with the shell's IMP_HOST_IMAGE unset, as that one would win. An
-# older compose has no --environment: read_env_value reads the file instead.
-compose_env_image() {
-  local env config
-  env=$(compose_env_file)
-  [ -f "$env" ] || return 0
-  # compose.yaml needs IMP_DOCKER_GID, as in restart_host
-  if config=$(env -u IMP_HOST_IMAGE \
-    IMP_DOCKER_GID="${IMP_DOCKER_GID:-$(stat -c %g /var/run/docker.sock 2>/dev/null || true)}" \
-    docker compose -f "$compose_file" config --environment 2>/dev/null); then
-    sed -n 's/^IMP_HOST_IMAGE=//p' <<<"$config" | tail -n 1
-  else
-    read_env_value "$env"
-  fi
-}
-
-# read_env_value FILE: FILE's last IMP_HOST_IMAGE value as compose reads it:
-# without its quotes, and an unquoted one ends at a blank before #. Fails,
-# and says why, on a $ outside single quotes, which only compose resolves.
-read_env_value() {
-  local value
-  # shellcheck disable=SC2016 # an awk program
-  value=$(awk -v pattern="$compose_env_line" -v q="'" '
-    { sub(/\r$/, "") }
-    $0 ~ pattern { line = $0; found = 1 }
-    END {
-      if (!found) exit
-      sub(/^[^=]*=[ \t]*/, "", line)
-      first = substr(line, 1, 1)
-      if (first == q || first == "\"") {
-        line = substr(line, 2)
-        line = substr(line, 1, index(line, first) - 1)
-      } else {
-        sub(/([ \t]+#.*)?[ \t]*$/, "", line)
-      }
-      print (first == q ? "literal:" : "raw:") line
-    }' "$1")
-  case $value in
-    literal:*) echo "${value#literal:}" ;;
-    raw:*\$*)
-      echo "upgrade: $1 sets IMP_HOST_IMAGE from other variables, which only a docker compose with config --environment resolves: update Compose, or write the image there in full; nothing changed" >&2
-      return 1
-      ;;
-    *) echo "${value#raw:}" ;;
-  esac
-}
-
-# the image to move to: the environment, then (with --compose) the compose
-# .env's, in $compose_image, then the env file's pin, then this script's
-# release
+# the image to move to: the environment, then the env file's pin, then this
+# script's release
 read_image() {
   if [ -n "${IMP_HOST_IMAGE:-}" ]; then
     echo "$IMP_HOST_IMAGE"
     return
   fi
-  {
-    echo "$compose_image"
-    pinned_image
-  } | grep . | head -n 1 || echo "$release_image"
+  pinned_image | grep . || echo "$release_image"
 }
 
 # the IMP_HOST_IMAGE that the Environment= lines of FILE... set, the last
@@ -193,6 +133,60 @@ unit_image() {
   environment_image "$1" "$2".d/*.conf
 }
 
+# a timestamp for the .bak-<time> files
+backup_time() { date +%Y%m%d-%H%M%S; }
+
+# Set once a Docker host's imp-host stops, and as each step of the move
+# changes the host, for the rollback steps that format_docker_rollback gives
+stopped=
+network_removed=
+started=
+unit_backup=
+proxy_backup=
+
+# the rollback steps from Podman back to the Docker host, for what the move
+# has changed so far
+format_docker_rollback() {
+  local steps=("systemctl stop $container")
+  # Podman makes its network as imp-host starts; the old unit makes Docker's
+  [ -z "$network_removed" ] || [ -z "$started" ] || steps+=("podman network rm $HOST_NETWORK")
+  [ -z "$unit_backup" ] || steps+=("mv $unit_backup $unit_file")
+  [ -z "$proxy_backup" ] || steps+=("mv $proxy_backup $proxy_unit_file")
+  steps+=("systemctl daemon-reload")
+  # The env file may pin the new image, which Docker would pull and start;
+  # the proxy reads the same pin, and the new image has no proxy binary.
+  local runs
+  runs=$(docker_unit_image)
+  [ -z "$runs" ] || steps+=("docker tag $old $runs")
+  [ -z "$proxy_backup" ] || steps+=("systemctl enable --now imp-docker-proxy")
+  steps+=("systemctl start $container")
+  local text=${steps[0]} step
+  for step in "${steps[@]:1}"; do text+=", then $step"; done
+  echo "$text"
+}
+
+# the image the Docker unit runs once it is back: the env file's last
+# IMP_HOST_IMAGE, else the default that the unit or a drop-in sets
+docker_unit_image() {
+  local line
+  line=$(trim_lines "$env_file" | grep -E '^IMP_HOST_IMAGE=.' | tail -n 1 || true)
+  if [ -n "$line" ]; then
+    echo "${line#IMP_HOST_IMAGE=}"
+    return
+  fi
+  environment_image "${unit_backup:-$unit_file}" "$unit_file".d/*.conf
+}
+
+# what a failed step leaves: the old host running, or, once a Docker host's
+# imp-host stops, the steps that bring it back
+format_host_state() {
+  if [ -n "$stopped" ]; then
+    echo "imp-host is stopped; to roll back to Docker: $(format_docker_rollback)"
+  else
+    echo "nothing restarted, the host still runs $old"
+  fi
+}
+
 # rewrite_file PATH AWK_PROGRAM [AWK_ARGS...]: PATH through awk, by rename,
 # with the old PATH kept as PATH.bak-<time>, named in $backup. The env file
 # holds secrets: the backup is 0600, and the new PATH keeps PATH's mode.
@@ -200,11 +194,11 @@ unit_image() {
 rewrite_file() {
   local path=$1
   shift
-  backup=$path.bak-$(date +%Y%m%d-%H%M%S)
+  backup=$path.bak-$(backup_time)
   if ! { (umask 077 && cp "$path" "$backup") && chmod 600 "$backup" && cp -p "$path" "$path.new" &&
     awk "$@" "$backup" >"$path.new" && mv "$path.new" "$path"; }; then
     rm -f "$path.new"
-    echo "upgrade: cannot rewrite $path; nothing restarted, the host still runs $old" >&2
+    echo "upgrade: cannot rewrite $path; $(format_host_state)" >&2
     exit 1
   fi
 }
@@ -220,33 +214,17 @@ migrate_env_file() {
   echo "upgrade: $env_file: $legacy_image_line was the old template's line, not a pin; it is a comment now, and the units run their release's image (the file before: $backup)"
 }
 
-# IMP_HOST_IMAGE=$image in the compose .env: without it, a later `up -d`
-# runs the compose file's default
-write_compose_env() {
-  local env
-  env=$(compose_env_file)
-  if [ ! -f "$env" ]; then
-    echo "IMP_HOST_IMAGE=$image" >"$env"
-    echo "upgrade: wrote IMP_HOST_IMAGE=$image to $env"
-  elif [ "$compose_image" != "$image" ]; then
-    # shellcheck disable=SC2016 # an awk program
-    rewrite_file "$env" -v pattern="$compose_env_line" -v line="IMP_HOST_IMAGE=$image" \
-      '$0 ~ pattern { if (!done) print line; done = 1; next } { print } END { if (!done) print line }'
-    echo "upgrade: wrote IMP_HOST_IMAGE=$image to $env (the file before: $backup)"
-  fi
-}
-
 # The CLI in the running container: impz, or imp in an image from before the
 # CLI's rename, which is the old image while its imps go to sleep. Picked
 # before the sleeps and again once the host restarts on the new image.
 cli=impz
 pick_cli() {
   cli=impz
-  docker exec "$container" impz --version >/dev/null 2>&1 || cli=imp
+  "$runtime" exec "$container" impz --version >/dev/null 2>&1 || cli=imp
 }
 
 impz() {
-  docker exec "$container" "$cli" "$@"
+  "$runtime" exec "$container" "$cli" "$@"
 }
 
 list_awake() {
@@ -274,28 +252,39 @@ print_boot_status() {
     end' <<<"$info" || echo "upgrade: could not read impz info; see the NOTE column below" >&2
 }
 
-# IMAGE's imp.host-contract label (host/Dockerfile): socket-proxy runs
-# without --privileged and reaches Docker through imp-docker-proxy;
-# unprivileged, the release before, binds the host's docker.sock
-contract_of() {
-  docker image inspect -f '{{index .Config.Labels "imp.host-contract"}}' "$1"
+# the runtime that runs imp-host: podman, docker, or nothing when neither
+# has the container
+find_runtime() {
+  if podman container exists "$container" 2>/dev/null; then
+    echo podman
+  elif command -v docker >/dev/null && docker container inspect "$container" >/dev/null 2>&1; then
+    echo docker
+  fi
 }
 
-# succeeds when FILE gives imp-host the proxy's socket, not the host's
-proxy_deploy() {
-  grep -q 'unix:///run/imp-docker/docker.sock' "$1"
-}
+# an image id without the sha256: that Docker puts before it and Podman
+# does not
+image_id() { echo "${1#sha256:}"; }
 
-# the deploy file in use: the unit, or the compose file
-deploy_file() {
-  echo "${compose_file:-$unit_file}"
+# The proxy's unit, out of the way on Podman, which gives no Docker: stopped,
+# disabled, and kept as .bak-<time>, named in $proxy_backup
+retire_proxy_unit() {
+  [ -f "$proxy_unit_file" ] || return 0
+  if ! systemctl disable -q --now imp-docker-proxy; then
+    echo "upgrade: cannot stop imp-docker-proxy, whose unit stays for the next run; $(format_host_state)" >&2
+    exit 1
+  fi
+  proxy_backup=$proxy_unit_file.bak-$(backup_time)
+  mv "$proxy_unit_file" "$proxy_backup"
+  systemctl daemon-reload
+  echo "upgrade: stopped and disabled imp-docker-proxy, which this image does not call (the unit before: $proxy_backup)"
 }
 
 # fetch_file NAME PATH: the image's deploy/NAME into PATH.new. Fails, and
 # leaves no PATH.new, when the image cannot give it or gives it empty. Its
 # caller tests it, so set -e is off in here: each step is checked.
 fetch_file() {
-  if ! docker run --rm "$image" cat "$image_deploy/$1" | strip_markers >"$2.new" || [ ! -s "$2.new" ]; then
+  if ! podman run --rm "$image" cat "$image_deploy/$1" | strip_markers >"$2.new" || [ ! -s "$2.new" ]; then
     rm -f "$2.new"
     echo "upgrade: cannot read $image_deploy/$1 from $image; nothing changed, the host still runs $old" >&2
     return 1
@@ -303,50 +292,84 @@ fetch_file() {
 }
 
 # install_file PATH: PATH.new into place, by rename, when it differs; fails
-# when it is unchanged
+# when it is unchanged. A changed unit stays as .bak-<time>, named in
+# $unit_backup, for a rollback.
 install_file() {
   if cmp -s "$1.new" "$1"; then
     rm -f "$1.new"
     return 1
   fi
+  local kept=
+  if [ "$1" = "$unit_file" ] && [ -f "$1" ]; then
+    unit_backup=$1.bak-$(backup_time)
+    kept=" (the unit before: $unit_backup)"
+    if ! cp -p "$1" "$unit_backup"; then
+      unit_backup=
+      echo "upgrade: cannot keep $1 as a .bak; $(format_host_state)" >&2
+      exit 1
+    fi
+  fi
   # its caller tests it, so set -e is off in here: a failed rename stops
   # the upgrade before the restart
   if ! mv "$1.new" "$1"; then
-    echo "upgrade: cannot install $1; nothing restarted, the host still runs $old" >&2
+    echo "upgrade: cannot install $1; $(format_host_state)" >&2
     exit 1
   fi
-  echo "upgrade: installed $1 from $image"
+  echo "upgrade: installed $1 from $image$kept"
 }
 
 # The env file's migration, then the files fetched into $new_files, and a
-# daemon-reload when a unit changed. The migration comes first: a failed
-# rewrite stops here, with the old units in place.
+# daemon-reload when the unit changed. The migration comes first: a failed
+# rewrite stops here, with the old unit in place.
 install_new_files() {
   local f unit_changed=
   migrate_env_file
   for f in "${new_files[@]}"; do
-    if install_file "$f" && [ "$f" != "$seccomp_file" ]; then
+    if install_file "$f" && [ "$f" = "$unit_file" ]; then
       unit_changed=1
     fi
   done
   [ -z "$unit_changed" ] || systemctl daemon-reload
 }
 
-# the proxy first: imp-host starts after it, and impd's first docker call
-# needs its socket
-restart_host() {
-  if [ -n "$compose_file" ]; then
-    write_compose_env
-    local services=(imp-host)
-    ! grep -q '^  imp-docker-proxy:' "$compose_file" || services=(imp-docker-proxy imp-host)
-    IMP_DOCKER_GID=${IMP_DOCKER_GID:-$(stat -c %g /var/run/docker.sock 2>/dev/null || true)} \
-    IMP_HOST_IMAGE=$image docker compose -f "$compose_file" up -d "${services[@]}"
-  elif [ "$new_contract" = socket-proxy ]; then
-    systemctl enable -q imp-docker-proxy
-    systemctl restart imp-docker-proxy
-    systemctl restart imp-host
+# A Docker host's imp-host, out of the way before the new unit is installed:
+# stopped with the old unit's own ExecStop, which Docker's container needs,
+# then its container, the proxy and, with IPv6, Docker's network, whose
+# bridge and /64 Podman takes over
+retire_docker_host() {
+  systemctl stop "$container"
+  stopped=1
+  docker rm -f "$container" >/dev/null 2>&1 || true
+  retire_proxy_unit
+  if [ -n "$docker_network" ]; then
+    if ! docker network rm "$HOST_NETWORK" >/dev/null; then
+      echo "upgrade: cannot remove Docker's $HOST_NETWORK network, whose bridge Podman needs; $(format_host_state)" >&2
+      exit 1
+    fi
+    network_removed=1
+    echo "upgrade: removed Docker's $HOST_NETWORK network; Podman makes its own on the same /64"
+  fi
+}
+
+# the rollback once the new host has started, from Podman to the old image
+# or, after a move, to Docker
+format_rollback() {
+  if [ "$moved_from" = docker ]; then
+    echo "To roll back to Docker: $(format_docker_rollback)."
   else
-    systemctl restart imp-host
+    echo "To roll back: podman tag $old $image, then systemctl restart $container."
+  fi
+}
+
+# report_failure COMMAND: what the failed COMMAND leaves, before set -e
+# exits: the rollback once the start or restart has run
+restarting=
+report_failure() {
+  [ "$BASH_SUBSHELL" -eq 0 ] || return 0
+  if [ -n "$restarting" ]; then
+    echo "upgrade: $container did not start; see: journalctl -u $container. $(format_rollback)" >&2
+  else
+    echo "upgrade: $1 failed; $(format_host_state)" >&2
   fi
 }
 
@@ -354,98 +377,96 @@ wait_ready() {
   local deadline=$((SECONDS + ready_timeout_s))
   until curl -fsS "$health" 2>/dev/null | grep -q '"ready":true'; do
     if [ $SECONDS -ge $deadline ]; then
-      echo "upgrade: impd is not ready after $ready_timeout_s s; see: docker logs $container" >&2
+      echo "upgrade: impd is not ready after $ready_timeout_s s; see: podman logs $container. $(format_rollback)" >&2
       exit 1
     fi
     sleep 1
   done
 }
 
-for tool in docker curl jq; do
-  command -v "$tool" >/dev/null || {
+for tool in podman curl jq; do
+  command -v "$tool" >/dev/null && continue
+  if [ "$tool" = podman ]; then
+    echo "upgrade: podman is not installed; install it (apt-get install podman catatonit netavark aardvark-dns iptables), or run this release's deploy/bootstrap.sh" >&2
+  else
     echo "upgrade: $tool is not installed" >&2
-    exit 1
-  }
+  fi
+  exit 1
 done
 
-if ! docker inspect "$container" >/dev/null 2>&1; then
+runtime=$(find_runtime)
+if [ -z "$runtime" ]; then
   echo "upgrade: no $container container; start the host first (docs/guides/install.md)" >&2
   exit 1
 fi
 
-# compose takes its image from the shell or its .env, never the env file
-if [ -z "$compose_file" ] && ! refusal=$(check_env_image "$env_file" 2>&1); then
+if ! refusal=$(check_env_image "$env_file" 2>&1); then
   echo "upgrade: $refusal; nothing changed" >&2
   exit 1
 fi
-compose_image=
-[ -z "$compose_file" ] || compose_image=$(compose_env_image) || exit 1
 
 image=$(read_image)
 
 echo "upgrade: pulling $image"
-docker pull -q "$image" >/dev/null
+podman pull -q "$image" >/dev/null
 
-old=$(docker inspect -f '{{.Image}}' "$container")
-new=$(docker image inspect -f '{{.Id}}' "$image")
+# set -e misses a failed inspect nested in another substitution
+old_ref=$("$runtime" inspect -f '{{.Image}}' "$container")
+new_ref=$(podman image inspect -f '{{.Id}}' "$image")
+old=$(image_id "$old_ref")
+new=$(image_id "$new_ref")
 
 [ "$old" = "$new" ] || echo "upgrade: $old -> $new"
 
-new_contract=$(contract_of "$image")
-old_contract=$(contract_of "$old")
+contract=$(podman image inspect -f '{{index .Config.Labels "imp.host-contract"}}' "$image")
+if [ "$contract" != no-docker ]; then
+  echo "upgrade: $image needs a Docker socket (imp.host-contract ${contract:-unset}), which a Podman host does not give. Nothing changed." >&2
+  echo "upgrade: to roll back to it, put back the imp-host.service.bak-<time> (and imp-docker-proxy.service.bak-<time>) units that the upgrade from it kept, or run deploy/bootstrap.sh of its release (docs/guides/operations.md#upgrade)." >&2
+  exit 1
+fi
 
-if [ "$new_contract" != socket-proxy ]; then
-  if proxy_deploy "$(deploy_file)"; then
-    echo "upgrade: $image predates the Docker socket proxy, and $(deploy_file) gives imp-host no docker.sock." >&2
-    echo "upgrade: to roll back past it, run deploy/bootstrap.sh of that image's release (docs/guides/operations.md#upgrade)." >&2
-    exit 1
-  fi
-  if [ -z "$new_contract" ] && ! grep -qE -- '--privileged|privileged: true' "$(deploy_file)"; then
-    echo "upgrade: $image predates the unprivileged host, and $(deploy_file) runs without --privileged." >&2
-    echo "upgrade: to roll back past it, run deploy/bootstrap.sh of that image's release (docs/guides/operations.md#upgrade)." >&2
+# Docker's imp-host network, with IPv6: the names of the containers on it,
+# empty when it holds none; unset when Docker has no such network
+docker_network=
+if [ "$runtime" = docker ] &&
+  network_containers=$(docker network inspect -f '{{range .Containers}}{{.Name}} {{end}}' "$HOST_NETWORK" 2>/dev/null); then
+  docker_network=1
+  others=$(tr ' ' '\n' <<<"$network_containers" | grep -vx -e "$container" -e '' | paste -sd ' ' - || true)
+  if [ -n "$others" ]; then
+    echo "upgrade: Docker's $HOST_NETWORK network also holds $others, and Podman needs its bridge: take them off it (docker network disconnect $HOST_NETWORK <name>) and run again. Nothing changed." >&2
     exit 1
   fi
 fi
 
-# The image's seccomp profile and units, read before any imp sleeps: an
+# The image's seccomp profile and unit, read before any imp sleeps: an
 # image that cannot give them stops the upgrade with the host untouched.
-new_files=()
-if [ -n "$new_contract" ]; then
-  new_files=("$seccomp_file")
-  [ -n "$compose_file" ] || new_files+=("$unit_file")
-  [ -n "$compose_file" ] || [ "$new_contract" != socket-proxy ] || new_files+=("$proxy_unit_file")
-fi
+new_files=("$seccomp_file" "$unit_file")
 trap 'for f in "${new_files[@]}"; do rm -f "$f.new"; done' EXIT
-for f in "${new_files[@]}"; do
-  case $f in
-    "$unit_file") deploy_name=imp-host.service ;;
-    "$proxy_unit_file") deploy_name=imp-docker-proxy.service ;;
-    *) deploy_name=imp-host.seccomp.json ;;
-  esac
-  fetch_file "$deploy_name" "$f" || exit 1
-done
+fetch_file imp-host.seccomp.json "$seccomp_file" || exit 1
+fetch_file imp-host.service "$unit_file" || exit 1
 
-# The units take the image from the env file, else their own default: one
+# An image from before the move to Podman has the no-docker label and a unit
+# that runs Docker, which would put this host back on Docker.
+if ! grep -q '^ExecStart=/usr/bin/podman run ' "$unit_file.new"; then
+  echo "upgrade: the imp-host.service in $image does not run Podman, which this host runs imp-host with; to go back to it, put back the units that the upgrade from it kept, or run deploy/bootstrap.sh of its release (docs/guides/operations.md#upgrade). Nothing changed." >&2
+  exit 1
+fi
+
+# The unit takes the image from the env file, else its own default: one
 # from the environment alone would pull here, then restart into another.
-if [ -z "$compose_file" ]; then
-  units=("$unit_file")
-  [ "$new_contract" != socket-proxy ] || units+=("$proxy_unit_file")
-  for f in "${units[@]}"; do
-    [ -f "$f.new" ] || [ -f "$f" ] || continue
-    unit_runs=$(unit_image "$([ -f "$f.new" ] && echo "$f.new" || echo "$f")" "$f")
-    if [ -n "$unit_runs" ] && [ "$unit_runs" != "$image" ]; then
-      echo "upgrade: $(basename "$f") would run $unit_runs, not $image; pin IMP_HOST_IMAGE=$image in $env_file and run again. Nothing changed." >&2
-      exit 1
-    fi
-  done
+unit_runs=$(unit_image "$unit_file.new" "$unit_file")
+if [ -n "$unit_runs" ] && [ "$unit_runs" != "$image" ]; then
+  echo "upgrade: $(basename "$unit_file") would run $unit_runs, not $image; pin IMP_HOST_IMAGE=$image in $env_file and run again. Nothing changed." >&2
+  exit 1
 fi
 
 # A host on :latest may run this release's image already. It still gets
-# its image lines and this image's units, or the old units' :latest would
-# run another image at the next restart. Nothing restarts.
-if [ "$old" = "$new" ]; then
+# its image lines and this image's unit, or the old unit's :latest would
+# run another image at the next restart. The proxy still goes, or it keeps
+# the host's Docker socket. Nothing restarts.
+if [ "$runtime" = podman ] && [ "$old" = "$new" ]; then
   install_new_files
-  [ -z "$compose_file" ] || write_compose_env
+  retire_proxy_unit
   echo "upgrade: $container already runs $new"
   exit 0
 fi
@@ -462,25 +483,34 @@ for name in $awake; do
   echo "upgrade: $name asleep"
 done
 
-install_new_files
-restart_host
+moved_from=$runtime
+# set -e skips the ERR trap only where it skips the exit, so a failed step
+# that prints nothing of its own still prints what it leaves.
+set -E
+trap 'report_failure "$BASH_COMMAND"' ERR
+if [ "$runtime" = docker ]; then
+  retire_docker_host
+  install_new_files
+  # A start that fails may have made Podman's network already.
+  started=1
+  restarting=1
+  systemctl start "$container"
+else
+  install_new_files
+  retire_proxy_unit
+  restarting=1
+  systemctl restart "$container"
+fi
+runtime=podman
 wait_ready
+trap - ERR
 pick_cli
 
-if [ "$old_contract" = "$new_contract" ]; then
-  if [ -n "$compose_file" ] || [ "$new_contract" != socket-proxy ]; then
-    echo "upgrade: done. To roll back: docker tag $old $image, then run the restart again."
-  else
-    echo "upgrade: done. To roll back: docker tag $old $image, then systemctl restart imp-docker-proxy imp-host."
-  fi
+if [ "$moved_from" = docker ]; then
+  echo "upgrade: done, on Podman. $(format_rollback)"
+  echo "upgrade: imp no longer needs Docker; docs/guides/operations.md#upgrade says how to remove it."
 else
-  echo "upgrade: done. $old predates this host contract ($new_contract): to roll back to it, run deploy/bootstrap.sh of its release."
-fi
-if [ -n "$compose_file" ] && grep -q 'privileged: true' "$compose_file"; then
-  echo "upgrade: NOTE: $compose_file still runs privileged; take the privileges of this release's deploy/compose.yaml" >&2
-fi
-if [ -n "$compose_file" ] && [ "$new_contract" = socket-proxy ] && ! proxy_deploy "$compose_file"; then
-  echo "upgrade: NOTE: $compose_file still gives imp-host the host's docker.sock; take the imp-docker-proxy service and imp-host's volumes from this release's deploy/compose.yaml" >&2
+  echo "upgrade: done. $(format_rollback)"
 fi
 print_boot_status
 impz ls

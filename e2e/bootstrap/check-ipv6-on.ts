@@ -23,24 +23,26 @@ export async function checkIPv6On(run: BootstrapRun, target: BootstrapTarget): P
   }
 
   const bridge = await readInContainer(run, [
-    'docker',
+    'podman',
     'network',
     'inspect',
     '-f',
-    '{{.EnableIPv6}} {{index .Options "com.docker.network.bridge.name"}}',
+    '{{.IPv6Enabled}} {{.NetworkInterface}} {{.DNSEnabled}}',
     'imp-host',
   ]);
 
-  if (bridge.output !== 'true br-imphost') {
-    throw new BootstrapTestError(`[${distro}] the imp-host network is not IPv6 on br-imphost`);
+  if (bridge.output !== 'true br-imphost false') {
+    throw new BootstrapTestError(
+      `[${distro}] the imp-host network is not IPv6 on br-imphost without DNS`,
+    );
   }
 
   const subnets = await readInContainer(run, [
-    'docker',
+    'podman',
     'network',
     'inspect',
     '-f',
-    '{{range .IPAM.Config}} {{.Subnet}}{{end}} ',
+    '{{range .Subnets}} {{.Subnet}}{{end}} ',
     'imp-host',
   ]);
 
@@ -66,7 +68,7 @@ export async function checkIPv6On(run: BootstrapRun, target: BootstrapTarget): P
 // The stub image has no ip, so the route is read from imp-host's network namespace.
 async function readImpHostRoute6(run: BootstrapRun): Promise<string> {
   const pid = await runInContainer(run, [
-    'docker',
+    'podman',
     'container',
     'inspect',
     '-f',

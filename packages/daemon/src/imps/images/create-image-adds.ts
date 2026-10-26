@@ -122,8 +122,8 @@ export function createImageAdds(deps: ImageAddsDeps, writer: ImageWriter): Image
   ): Promise<ImageRecord> => {
     assertImageRef(ref);
 
-    // A builder's pull reaches a literal address that imp-docker-proxy never sees, so impd
-    // refuses these registries before any builder boots.
+    // A builder's pull reaches a literal address, so impd refuses these registries before any
+    // builder boots.
     const registryProblem = checkReferenceRegistry(ref);
 
     if (registryProblem !== null) {
@@ -145,23 +145,23 @@ export function createImageAdds(deps: ImageAddsDeps, writer: ImageWriter): Image
   const createBuilderImage = async (ref: string): Promise<ImageRecord> => {
     const pullMs = deps.builderImagePullMs ?? BUILDER_IMAGE_PULL_MS;
     const timeout = deps.startPullLimit?.(pullMs) ?? AbortSignal.timeout(pullMs);
-    const step = { pulled: false };
+    const step = { fetched: false };
 
     try {
-      return await writer.createImageOnHost(ref, BUILDER_IMAGE, {
+      return await writer.createBuilderImage(BUILDER_IMAGE, {
         signal: timeout,
-        onPulled: () => {
-          step.pulled = true;
+        onFetched: () => {
+          step.fetched = true;
         },
       });
     } catch (error) {
       const reason =
-        timeout.aborted && !step.pulled
-          ? `the pull did not finish in ${formatPullLimit(pullMs)}; on a slow link, pull ${ref} on the host engine first (docker pull ${ref}), and impd takes it from there`
+        timeout.aborted && !step.fetched
+          ? `the fetch did not finish in ${formatPullLimit(pullMs)}`
           : getErrorMessage(error);
 
       throw new ImpdError('SERVICE_UNAVAILABLE', {
-        message: `impd cannot add its builder image ${ref} (IMP_BUILD_IMAGE) from the host engine, so no image add or build can run: ${reason}`,
+        message: `impd cannot add its builder image ${ref} (IMP_BUILD_IMAGE) from its registry, so no image add or build can run: ${reason}`,
       });
     }
   };

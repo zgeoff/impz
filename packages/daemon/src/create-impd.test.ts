@@ -13,7 +13,7 @@ import { buildMockNewImage } from '../testing/imps/build-mock-new-image';
 import { buildMockNewImp } from '../testing/imps/build-mock-new-imp';
 import { buildStubImageBuilder } from '../testing/imps/build-stub-image-builder';
 import { createFilesTar } from '../testing/imps/create-files-tar';
-import { createStubDockerCli } from '../testing/imps/create-stub-docker-cli';
+import { createStubOciFetch } from '../testing/imps/create-stub-oci-fetch';
 import { startBuilderImpd } from '../testing/imps/start-builder-impd';
 import { readNoTailscale } from '../testing/network/read-no-tailscale';
 import { buildQueryGate } from '../testing/platform/build-query-gate';
@@ -188,23 +188,22 @@ test('it leaves no process exit listener behind once it stops', async () => {
 });
 
 test('it writes a failed default image seed to the log it is given', async () => {
-  const dockerDir = await mkdtemp(join(tmpdir(), 'create-impd-docker-'));
+  const ociFetchDir = await mkdtemp(join(tmpdir(), 'create-impd-oci-fetch-'));
 
-  onTestFinished(() => rm(dockerDir, { recursive: true, force: true }));
+  onTestFinished(() => rm(ociFetchDir, { recursive: true, force: true }));
 
-  const docker = createStubDockerCli({
-    directory: dockerDir,
+  const ociFetch = createStubOciFetch({
+    directory: ociFetchDir,
     images: [
       {
-        refs: [DEFAULT_BUILD_IMAGE],
-        inspects: [{ Id: `sha256:${'c'.repeat(64)}` }],
-        isOnHost: false,
-        pull: { stderr: 'pull access denied for ghcr.io/zgeoff/imp-base' },
+        ref: DEFAULT_BUILD_IMAGE,
+        digest: `sha256:${'c'.repeat(64)}`,
+        fetch: { stderr: 'oci-fetch: fetch ghcr.io/zgeoff/imp-base: UNAUTHORIZED' },
       },
     ],
   });
 
-  updateEnv('PATH', docker.path);
+  updateEnv('PATH', ociFetch.path);
 
   const ctx = await setupTest({ boundaries: { images: { seedRef: 'seed.test/ubuntu:24.04' } } });
 
@@ -610,23 +609,16 @@ test('it answers /health without a token, not ready before the default image is 
 
   stack.defer(() => rm(dataDir, { recursive: true, force: true }));
 
-  // the seed's builder waits on the stub docker's pull of the builder image, which holds until
-  // its directory goes
-  const dockerDir = await mkdtemp(join(tmpdir(), 'create-impd-docker-'));
+  // the seed's builder waits on the stub oci-fetch's fetch of the builder image, which holds
+  // until its directory goes
+  const ociFetchDir = await mkdtemp(join(tmpdir(), 'create-impd-oci-fetch-'));
 
-  const docker = createStubDockerCli({
-    directory: dockerDir,
-    images: [
-      {
-        refs: [DEFAULT_BUILD_IMAGE],
-        inspects: [{ Id: `sha256:${'c'.repeat(64)}` }],
-        isOnHost: false,
-        pull: 'hang',
-      },
-    ],
+  const ociFetch = createStubOciFetch({
+    directory: ociFetchDir,
+    images: [{ ref: DEFAULT_BUILD_IMAGE, digest: `sha256:${'c'.repeat(64)}`, fetch: 'hang' }],
   });
 
-  updateEnv('PATH', docker.path);
+  updateEnv('PATH', ociFetch.path);
 
   const db = await openDatabase(':memory:');
 
@@ -718,11 +710,11 @@ test('it answers /health without a token, not ready before the default image is 
     await impd.stop({ sleepImps: false });
   });
 
-  // deferred last, so the held pull ends and the seed fails before impd stops
-  stack.defer(() => rm(dockerDir, { recursive: true, force: true }));
+  // deferred last, so the held fetch ends and the seed fails before impd stops
+  stack.defer(() => rm(ociFetchDir, { recursive: true, force: true }));
 
   await waitFor(() => {
-    expect(docker.readCalls()).toContainEqual(expect.toStartWith('pull'));
+    expect(ociFetch.readCalls()).toContainEqual(expect.toStartWith('config '));
   });
 
   const response = await impd.api.app.handle(new Request('http://impd.test/health'));
