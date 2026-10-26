@@ -1,4 +1,5 @@
 import { hasScope } from '@impz/api';
+import type { Scope } from '@impz/api';
 import { McpServer, ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server';
 import type { ServerContext } from '@modelcontextprotocol/server';
 import { runAfter } from './after';
@@ -44,11 +45,7 @@ export function createImpServer(
     { name: 'imp', title: 'imp', version: options.version },
     {
       capabilities: { tools: { listChanged: false } },
-      instructions: [
-        'imp runs persistent Linux microVMs ("imps") that sleep when idle and wake on use.',
-        `This server may touch ${caller.guard.summary}.`,
-        'Create an imp, run commands and read and write files in it, checkpoint before a risky change, fork to try two fixes, and destroy what you no longer need.',
-      ].join(' '),
+      instructions: buildInstructions(caller),
       supportedProtocolVersions: [...PROTOCOL_VERSIONS, ...MODERN_PROTOCOL_VERSIONS],
     },
   );
@@ -132,6 +129,28 @@ export function createImpServer(
   }
 
   return server;
+}
+
+// A client reads the instructions as what the server can do, so a narrower
+// scope says what it lacks rather than offering tools it hides.
+const SCOPE_GUIDES: Readonly<Record<Scope, string>> = {
+  read: 'This caller has the read scope, so it can only look: list imps, their URLs, the images and the checkpoints. Running commands, reading or writing files, and creating, checkpointing, forking or destroying an imp need a wider grant: exec or manage.',
+  exec: 'This caller has the exec scope: list imps, their URLs, the images and the checkpoints, run commands and read and write files in an imp, and put one to sleep. Creating, checkpointing, restoring, forking or destroying an imp needs a manage grant.',
+  manage:
+    'Create an imp, run commands and read and write files in it, checkpoint before a risky change, fork to try two fixes, and destroy what you no longer need.',
+};
+
+function buildInstructions(caller: Readonly<McpCaller>): string {
+  const names = TOOLS.filter((tool) => hasScope(caller.scope, tool.scope)).map(
+    (tool) => tool.definition.name,
+  );
+
+  return [
+    'imp runs persistent Linux microVMs ("imps") that sleep when idle and wake on use.',
+    `This server may touch ${caller.guard.summary}.`,
+    SCOPE_GUIDES[caller.scope],
+    `Its tools: ${names.join(', ')}.`,
+  ].join(' ');
 }
 
 interface ProgressOptions {

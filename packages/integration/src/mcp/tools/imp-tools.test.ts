@@ -8,7 +8,7 @@ import {
   startStubExecAgent,
   startTestImpd,
 } from '@impz/daemon/testing';
-import { buildImpGuard } from '@impz/mcp';
+import { buildImpGuard, createPatternGuard } from '@impz/mcp';
 import { createMcpServer } from '@impz/mcp/test-utils/create-mcp-server';
 import invariant from 'tiny-invariant';
 import * as z from 'zod';
@@ -657,6 +657,42 @@ test('it lists the images', async () => {
       },
     },
   ]);
+});
+
+test('it lists to a token for some imps the images that only other imps boot from', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.createTestImage('alpine');
+  await ctx.rootClient.imps.create({ name: 'work-a', image: 'alpine' });
+
+  const made = await ctx.rootClient.tokens.create({
+    name: 'assistant',
+    scope: 'read',
+    imps: ['home-*'],
+  });
+
+  await ctx.mcp.receive(
+    JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: { name: 'imp_image_list', arguments: {} },
+    }),
+    {
+      reply: ctx.reply,
+      client: createImpClient({ url: ctx.url, token: made.secret }),
+      guard: createPatternGuard(['home-*']),
+      scope: 'read',
+    },
+  );
+
+  const Image = z.object({ name: z.string() });
+  const Listed = z.object({ structuredContent: z.object({ images: z.array(Image) }) });
+  const Answer = z.object({ result: Listed });
+  const images = Answer.parse(ctx.sent[0]).result.structuredContent.images;
+
+  expect(images.map((image) => image.name)).toIncludeSameMembers(['ubuntu', 'alpine']);
 });
 
 test('it forks a sleeping imp from a checkpoint', async () => {

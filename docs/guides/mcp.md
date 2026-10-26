@@ -41,7 +41,7 @@ the server. The boundary is the token's scope, which impd enforces. Run `impz mc
 | `imp_sleep`             | put an imp to sleep; the next use wakes it                                         | idempotent  |
 | `imp_url`               | the imp's local and tailnet URLs                                                   | read-only   |
 | `imp_fork`              | a new imp from another's disk, now or at a checkpoint; names grants it did not get |             |
-| `imp_image_list`        | the images `imp_create` can boot                                                   | read-only   |
+| `imp_image_list`        | every image on the host, which `imp_create` can boot                               | read-only   |
 | `imp_exec`              | run a command to its exit, with capped output and a timeout                        | destructive |
 | `imp_read_file`         | read a file, as UTF-8 or base64, up to `maxBytes`                                  | read-only   |
 | `imp_write_file`        | replace a file whole, through a temp file and a rename                             | destructive |
@@ -133,7 +133,9 @@ file tools work in a minimal image too.
   only capability.
 - One JSON-RPC message per line on stdio. stdout carries only JSON-RPC messages; `impz mcp` writes
   everything else to stderr.
-- `initialize` returns `instructions` that name the guard, so the agent knows which imps it has.
+- `initialize` returns `instructions` that hold the guard and the caller's tools, so the agent knows
+  which imps it has and what it may do. A `read` or `exec` caller's instructions list what it lacks
+  and the wider scope that adds it.
 
 The server lives in `packages/mcp` (`@impz/mcp`), built on the MCP TypeScript SDK
 (`@modelcontextprotocol/server`) and calling impd through `@impz/client`; `impz mcp` serves it on
@@ -162,7 +164,9 @@ claude mcp add --transport http imp https://imp.example.com/mcp \
   `imp_exec` and the file tools; `manage` gets them all. impd refuses the rest with `FORBIDDEN`.
 - **The guard is the token's patterns.** No `--prefix` here. A create without a name works only for
   a caller with exactly one pattern of the form `prefix*`, and gets `prefix` and 8 more characters.
-  Any other caller must name the imp, and gets a `GUARD` error that names its patterns.
+  Any other caller must name the imp, and gets a `GUARD` error that names its patterns. The patterns
+  leave `imp_image_list` alone: it lists every image on the host
+  ([imp patterns](./tokens.md#imp-patterns)).
 - **Sessions.** A `2026-07-28` request carries everything it needs and opens no session. A 2025-era
   `initialize` returns an `Mcp-Session-Id`; send it on every later request. A session answers only
   the caller that opened it, and another caller gets 404. `DELETE /mcp` with the id ends a session.
