@@ -859,6 +859,9 @@ test('it reports beside the fork each grant it did not get', async () => {
   await ctx.createTestImage('ubuntu');
 
   const mcp = createMcpServer({ version: '1.2.3' });
+
+  ctx.stack.defer(() => mcp.close());
+
   const sent: unknown[] = [];
 
   await ctx.rootClient.imps.create({ name: 'dev-a' });
@@ -926,6 +929,9 @@ test('it reports an empty grant report beside a fork that got every grant', asyn
   await ctx.createTestImage('ubuntu');
 
   const mcp = createMcpServer({ version: '1.2.3' });
+
+  ctx.stack.defer(() => mcp.close());
+
   const sent: unknown[] = [];
 
   await ctx.rootClient.imps.create({ name: 'dev-a' });
@@ -985,6 +991,9 @@ test('it reports beside the fork why it got none of the grants', async () => {
   await ctx.createTestImage('ubuntu');
 
   const mcp = createMcpServer({ version: '1.2.3' });
+
+  ctx.stack.defer(() => mcp.close());
+
   const sent: unknown[] = [];
 
   await ctx.rootClient.imps.create({ name: 'dev-a' });
@@ -1047,6 +1056,9 @@ test('it leaves the grant report out of a fork from an impd that sends none', as
   await ctx.createTestImage('ubuntu');
 
   const mcp = createMcpServer({ version: '1.2.3' });
+
+  ctx.stack.defer(() => mcp.close());
+
   const sent: unknown[] = [];
 
   await ctx.rootClient.imps.create({ name: 'dev-a' });
@@ -1106,6 +1118,9 @@ test('it gives the fork as indented JSON text beside its structured content', as
   await ctx.createTestImage('ubuntu');
 
   const mcp = createMcpServer({ version: '1.2.3' });
+
+  ctx.stack.defer(() => mcp.close());
+
   const sent: unknown[] = [];
 
   await ctx.rootClient.imps.create({ name: 'dev-a' });
