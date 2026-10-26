@@ -21,7 +21,6 @@ import type { DevCommand } from './parse-dev-command.ts';
 import { probeContainerRunning } from './probe-container-running.ts';
 import { pruneDevImages } from './prune-dev-images.ts';
 import { readLogTail } from './read-log-tail.ts';
-import { startDevProxy } from './start-dev-proxy.ts';
 import type { Dev, DevIO } from './types.ts';
 import { waitDevReady } from './wait-dev-ready.ts';
 import { wireDevIO } from './wire-dev-io.ts';
@@ -110,10 +109,6 @@ function dispatchDev(dev: Dev, command: DevCommand): Promise<number> {
 async function upDev(dev: Dev): Promise<void> {
   const drives = await prepareDrives(dev);
   const isRunning = await probeContainerRunning(dev.io, dev.layout.name);
-
-  const proxyMode = isRunning ? 'keep' : 'replace';
-
-  await startDevProxy(dev, proxyMode);
 
   if (isRunning) {
     dev.io.writeStdout(`dev.sh: ${dev.layout.name} already running`);
@@ -346,9 +341,11 @@ async function downDev(dev: Dev): Promise<void> {
     }
   }
 
-  const volumes = [`${dev.layout.name}-docker`, `${dev.layout.name}-docker-proxy`];
+  // A dev instance that an older checkout started runs a Docker socket proxy beside it.
+  const proxy = `${dev.layout.name}-docker-proxy`;
+  const volumes = [`${dev.layout.name}-docker`, proxy];
 
-  await dev.io.shell`docker rm -f ${dev.layout.name} ${dev.layout.proxy}`.quiet().nothrow();
+  await dev.io.shell`docker rm -f ${dev.layout.name} ${proxy}`.quiet().nothrow();
   await dev.io.shell`docker volume rm ${volumes}`.quiet().nothrow();
 }
 
@@ -360,8 +357,6 @@ async function restartDev(dev: Dev): Promise<void> {
   if (!isRunning) {
     throw new DevError(`${dev.layout.name} is not running; use scripts/dev/dev.sh up`);
   }
-
-  await startDevProxy(dev, 'replace');
 
   const pattern = 'bun .*/daemon/src/main.ts';
 

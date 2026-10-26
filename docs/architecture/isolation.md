@@ -74,8 +74,8 @@ impd, Firecracker and tailscaled run in one container, started without `--privil
 capabilities, devices and sysctls they use, and a network namespace of its own. That stops
 accidents, not an escape: root in the container can still become root on the host, through the mount
 capability the jailer's own mounts need. Treat code that gets root in the container as root on the
-host ([the host](./host.md#privileges)). The Docker socket is one path out that impd does close,
-behind a proxy that lets through only its own calls ([the host](./host.md#the-docker-socket)).
+host ([the host](./host.md#privileges)). The Docker socket is one path out that impd does close: the
+container gets none ([the host](./host.md#the-docker-socket)).
 
 ## Between imps
 

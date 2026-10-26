@@ -85,7 +85,7 @@ drives it through a browser. The suites run in this order:
 | `templates`      | `impz template`: copies of a running imp's disk, a new machine-id and ssh host keys per copy, kept after a reboot, rm                                                                                                                                                                                                          |
 | `boot-templates` | a cold boot restored from a boot template: its own name, MAC, disk size and TCP ISN secret; a sleep and wake after                                                                                                                                                                                                             |
 | `inner`          | the inner container: PID 1 inside, signals, `kill -9 -1`, a memory hog, a reboot and the listeners after it, `rm -rf /`, a wiped root                                                                                                                                                                                          |
-| `socket`         | Docker only through imp-docker-proxy: refused containers, calls, tags, pulls and build bodies; BuildKit pinned; imps keep running while the proxy is stopped                                                                                                                                                                   |
+| `socket`         | no Docker in the dev container: no `docker.sock`, no `/run/imp-docker` and no `docker` binary                                                                                                                                                                                                                                  |
 | `moves`          | `impz move` to a second instance on a Docker network: cold with a checkpoint, an abort, warm moves of an open and a box imp that keep tmpfs and processes and reach DNS, HTTP and the broker at once                                                                                                                           |
 | `moves-tailnet`  | `impz move` between two tailnet nodes: the real peer check on their tailnet addresses                                                                                                                                                                                                                                          |
 | `tailnet-names`  | per-imp tailnet names on the test tailnet: an imp's own name, which wakes it, and goes with it on a move; skips unless `IMP_E2E_TAILNET_NAMES=1`                                                                                                                                                                               |
@@ -366,12 +366,12 @@ Its job is a required check.
 `deploy/bootstrap.sh` is generated, so that a server downloads one file to install. Its sources are
 the parts in `deploy/bootstrap/`, the functions in `deploy/lib/host-env.sh` that `deploy/upgrade.sh`
 and the NixOS module source as well, and the units and env template it installs.
-`deploy/imp-host.args.json` holds the `docker run` arguments of imp-host and, under `proxy`, of
-imp-docker-proxy, with the name and bridge of the IPv6 network and the pipeline that reads the
-host's addresses. After an edit to any of these, `bun run render:deploy` writes both units, the
-network lines of `deploy/lib/host-env.sh`, `bootstrap.sh`, and the privileges and network blocks of
-`deploy/compose.yaml`. `bun test` fails until it has (`scripts/render/render-imp-host.test.ts`), and
-so does a hand edit to `bootstrap.sh`. The NixOS module reads the arguments file itself.
+`deploy/imp-host.args.json` holds the `docker run` arguments of imp-host, with the name and bridge
+of the IPv6 network and the pipeline that reads the host's addresses. After an edit to any of these,
+`bun run render:deploy` writes the unit, the network lines of `deploy/lib/host-env.sh`,
+`bootstrap.sh`, and the privileges and network blocks of `deploy/compose.yaml`. `bun test` fails
+until it has (`scripts/render/render-imp-host.test.ts`), and so does a hand edit to `bootstrap.sh`.
+The NixOS module reads the arguments file itself.
 
 `.github/workflows/breaking-change.yml` fails a pull request that breaks the protocol between a
 client and impd without marking the change as breaking

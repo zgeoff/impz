@@ -1,8 +1,12 @@
 import { parseImageReference } from './parse-image-reference';
 
-// The engine pulls from the host's network, so a loopback, link-local or IP-literal registry
-// would reach a service on the host.
-export function checkRegistry(registry: string): string | null {
+export function checkReferenceRegistry(reference: string): string | null {
+  return checkRegistry(parseImageReference(reference).registry);
+}
+
+// A loopback, link-local or IP-literal registry would point a pull at a service on the host or
+// a private network.
+function checkRegistry(registry: string): string | null {
   const host = readRegistryHost(registry).toLowerCase();
 
   if (host === 'localhost' || host.endsWith('.localhost')) {
@@ -14,10 +18,6 @@ export function checkRegistry(registry: string): string | null {
   }
 
   return null;
-}
-
-export function checkReferenceRegistry(reference: string): string | null {
-  return checkRegistry(parseImageReference(reference).registry);
 }
 
 function readRegistryHost(registry: string): string {

@@ -48,7 +48,6 @@ test('it fills every setting from its default when the env is empty', () => {
       impMaxLive: 8,
       maxAgeMs: 7 * 86_400_000,
     },
-    dockerHost: null,
     dns: ['1.1.1.1', '8.8.8.8'],
     subnet: { network: 0x0a_42_00_00, prefixLength: 16 },
     ipv6: { kind: 'auto' },

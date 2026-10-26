@@ -170,6 +170,255 @@ test('it tells how to roll back by restarting both units, on an upgrade between 
   expect(output).toInclude('then systemctl restart imp-docker-proxy imp-host');
 });
 
+test('it stops and disables the proxy, and keeps its unit as a .bak, on an upgrade to an image that needs no Docker', () => {
+  const ctx = setupTest();
+
+  const docker = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    buildStubHostDocker({
+      image: 'ghcr.io/zgeoff/imp-host:next',
+      runningLabel: 'socket-proxy',
+      pulledLabel: 'no-docker',
+      pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
+    }),
+  );
+
+  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
+
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-host.service'),
+    'ExecStart=/usr/bin/docker run --cap-drop ALL -e DOCKER_HOST=unix:///run/imp-docker/docker.sock imp-host\n',
+  );
+
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-docker-proxy.service'),
+    'ExecStart=/usr/bin/docker run --name imp-docker-proxy imp-host\n',
+  );
+
+  const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
+    env: {
+      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
+      IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
+      IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
+      IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
+      IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
+    },
+  });
+
+  const calls = readFileSync(docker.calls, 'utf8');
+
+  const backups = readdirSync(ctx.directoryPath).filter((name) =>
+    name.startsWith('imp-docker-proxy.service.bak-'),
+  );
+
+  expect(result.exitCode).toBe(0);
+
+  expect(readFileSync(join(ctx.directoryPath, 'imp-host.service'), 'utf8')).toBe(
+    'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
+  );
+
+  expect(calls).toInclude(
+    'systemctl disable -q --now imp-docker-proxy\nsystemctl daemon-reload\n' +
+      'systemctl restart imp-host\n',
+  );
+
+  expect(existsSync(join(ctx.directoryPath, 'imp-docker-proxy.service'))).toBeFalse();
+  expect(backups).toHaveLength(1);
+});
+
+test('it fails before any restart, and keeps the proxy unit for the next run, when systemd cannot stop the proxy', () => {
+  const ctx = setupTest();
+
+  const docker = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    buildStubHostDocker({
+      image: 'ghcr.io/zgeoff/imp-host:next',
+      runningLabel: 'socket-proxy',
+      pulledLabel: 'no-docker',
+      pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
+    }),
+  );
+
+  // The installed unit already matches the image's, so the stop is the first systemctl call.
+  createStubBin(
+    ctx.directoryPath,
+    'systemctl',
+    `echo 'Failed to stop imp-docker-proxy.service: Access denied' >&2; exit 1`,
+  );
+
+  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
+
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-host.service'),
+    'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
+  );
+
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-docker-proxy.service'),
+    'ExecStart=/usr/bin/docker run --name imp-docker-proxy imp-host\n',
+  );
+
+  const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
+    env: {
+      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
+      IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
+      IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
+      IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
+      IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
+    },
+  });
+
+  const calls = readFileSync(docker.calls, 'utf8');
+
+  expect(result.exitCode).toBe(1);
+
+  expect(result.stderr.toString()).toBe(
+    'Failed to stop imp-docker-proxy.service: Access denied\n' +
+      'upgrade: cannot stop imp-docker-proxy, whose unit stays for the next run; ' +
+      'nothing restarted, the host still runs sha256:old\n',
+  );
+
+  expect(calls).toEndWith('systemctl disable -q --now imp-docker-proxy\n');
+
+  expect(readFileSync(join(ctx.directoryPath, 'imp-docker-proxy.service'), 'utf8')).toBe(
+    'ExecStart=/usr/bin/docker run --name imp-docker-proxy imp-host\n',
+  );
+});
+
+test('it restarts imp-host alone, between hosts that need no Docker and have no proxy unit', () => {
+  const ctx = setupTest();
+
+  const docker = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    buildStubHostDocker({
+      image: 'ghcr.io/zgeoff/imp-host:next',
+      runningLabel: 'no-docker',
+      pulledLabel: 'no-docker',
+      pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
+    }),
+  );
+
+  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
+
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-host.service'),
+    'ExecStart=/usr/bin/docker run --cap-drop ALL imp-host\n',
+  );
+
+  const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
+    env: {
+      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
+      IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
+      IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
+      IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
+      IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
+    },
+  });
+
+  const output = result.stdout.toString() + result.stderr.toString();
+  const calls = readFileSync(docker.calls, 'utf8');
+
+  expect(result.exitCode).toBe(0);
+  expect(calls).not.toInclude('imp-docker-proxy');
+  expect(output).toInclude('then run the restart again');
+});
+
+test('it refuses a rollback to an image from before the proxy once the unit gives imp-host no docker.sock', () => {
+  const ctx = setupTest();
+
+  const docker = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    buildStubHostDocker({
+      image: 'ghcr.io/zgeoff/imp-host:next',
+      runningLabel: 'no-docker',
+      pulledLabel: 'unprivileged',
+      pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
+    }),
+  );
+
+  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
+
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-host.service'),
+    'ExecStart=/usr/bin/docker run --cap-drop ALL imp-host\n',
+  );
+
+  const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
+    env: {
+      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
+      IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
+      IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
+      IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
+      IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
+    },
+  });
+
+  const output = result.stdout.toString() + result.stderr.toString();
+  const calls = readFileSync(docker.calls, 'utf8');
+
+  expect(result.exitCode).toBe(1);
+  expect(output).toInclude('predates the Docker socket proxy');
+  expect(calls).not.toInclude('systemctl');
+});
+
+test('it refuses, before anything changes, a compose file that still runs the proxy, on an upgrade to an image that needs no Docker', () => {
+  const ctx = setupTest();
+
+  const docker = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    buildStubHostDocker({
+      image: 'ghcr.io/zgeoff/imp-host:next',
+      runningLabel: 'socket-proxy',
+      pulledLabel: 'no-docker',
+      pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
+    }),
+  );
+
+  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
+
+  writeFileSync(
+    join(ctx.directoryPath, 'compose.yaml'),
+    'services:\n  imp-docker-proxy:\n    image: x\n  imp-host:\n' +
+      '    environment:\n      DOCKER_HOST: unix:///run/imp-docker/docker.sock\n',
+  );
+
+  const result = Bun.spawnSync(
+    [
+      'bash',
+      new URL('upgrade.sh', import.meta.url).pathname,
+      '--compose',
+      join(ctx.directoryPath, 'compose.yaml'),
+    ],
+    {
+      env: {
+        PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+        IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
+        IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
+        IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
+        IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
+        IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
+      },
+    },
+  );
+
+  const output = result.stdout.toString() + result.stderr.toString();
+  const calls = readFileSync(docker.calls, 'utf8');
+
+  expect(result.exitCode).toBe(1);
+  expect(output).toInclude('still runs imp-docker-proxy');
+  expect(calls).not.toInclude('compose -f');
+  expect(calls).not.toInclude('sleep');
+});
+
 test('it refuses a rollback past the socket proxy before anything changes', () => {
   const ctx = setupTest();
 
@@ -267,6 +516,101 @@ test("it starts imp-host alone, with a NOTE, under a compose file that gives imp
   expect(result.exitCode).toBe(0);
   expect(calls).toMatch(/docker compose -f \S+ up -d imp-host\n/v);
   expect(output).toInclude("still gives imp-host the host's docker.sock");
+});
+
+test('it removes the proxy container that a compose file no longer runs, before imp-host comes up on an image that needs no Docker', () => {
+  const ctx = setupTest();
+
+  const docker = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    buildStubHostDocker({
+      image: 'ghcr.io/zgeoff/imp-host:next',
+      runningLabel: 'socket-proxy',
+      pulledLabel: 'no-docker',
+      pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
+      proxyContainer: true,
+    }),
+  );
+
+  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
+  writeFileSync(join(ctx.directoryPath, 'compose.yaml'), 'services:\n  imp-host:\n    image: x\n');
+
+  const result = Bun.spawnSync(
+    [
+      'bash',
+      new URL('upgrade.sh', import.meta.url).pathname,
+      '--compose',
+      join(ctx.directoryPath, 'compose.yaml'),
+    ],
+    {
+      env: {
+        PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+        IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
+        IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
+        IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
+        IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
+        IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
+      },
+    },
+  );
+
+  const calls = readFileSync(docker.calls, 'utf8');
+
+  expect(result.exitCode).toBe(0);
+  expect(calls).toMatch(/docker rm -f imp-docker-proxy\ndocker compose -f \S+ up -d imp-host\n/v);
+
+  expect(result.stdout.toString()).toInclude(
+    'upgrade: removed the imp-docker-proxy container, which this image does not call\n',
+  );
+});
+
+test('it refuses, before anything changes, a rollback to an image that needs the proxy under a compose file with no proxy and no socket', () => {
+  const ctx = setupTest();
+
+  const docker = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    buildStubHostDocker({
+      image: 'ghcr.io/zgeoff/imp-host:older',
+      runningLabel: 'no-docker',
+      pulledLabel: 'socket-proxy',
+      pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
+    }),
+  );
+
+  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
+  writeFileSync(join(ctx.directoryPath, 'compose.yaml'), 'services:\n  imp-host:\n    image: x\n');
+
+  const result = Bun.spawnSync(
+    [
+      'bash',
+      new URL('upgrade.sh', import.meta.url).pathname,
+      '--compose',
+      join(ctx.directoryPath, 'compose.yaml'),
+    ],
+    {
+      env: {
+        PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+        IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:older',
+        IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
+        IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
+        IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
+        IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
+      },
+    },
+  );
+
+  const calls = readFileSync(docker.calls, 'utf8');
+
+  expect(result.exitCode).toBe(1);
+
+  expect(result.stderr.toString()).toInclude(
+    'runs no proxy and gives imp-host no docker.sock: put back the compose file',
+  );
+
+  expect(calls).not.toInclude('sleep');
+  expect(calls).not.toInclude('compose -f');
 });
 
 test('it starts the proxy service with imp-host under a compose file that has it', () => {
@@ -840,8 +1184,8 @@ test('it writes a .env that names the image beside a compose file without one', 
     'docker',
     buildStubHostDocker({
       image: 'ghcr.io/zgeoff/imp-host:next',
-      runningLabel: 'socket-proxy',
-      pulledLabel: 'socket-proxy',
+      runningLabel: 'no-docker',
+      pulledLabel: 'no-docker',
       pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
     }),
   );
@@ -1180,8 +1524,8 @@ test('it keeps the pin in the compose .env and moves to that image', () => {
     'docker',
     buildStubHostDocker({
       image: 'imp-host:pinned',
-      runningLabel: 'socket-proxy',
-      pulledLabel: 'socket-proxy',
+      runningLabel: 'no-docker',
+      pulledLabel: 'no-docker',
       pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
     }),
   );
@@ -1313,8 +1657,8 @@ test('it still writes the compose .env, without compose up, on a compose host th
     'docker',
     buildStubHostDocker({
       image: 'ghcr.io/zgeoff/imp-host:next',
-      runningLabel: 'socket-proxy',
-      pulledLabel: 'socket-proxy',
+      runningLabel: 'no-docker',
+      pulledLabel: 'no-docker',
       pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
       pulledIsRunning: true,
     }),
@@ -1357,6 +1701,170 @@ test('it still writes the compose .env, without compose up, on a compose host th
   );
 
   expect(calls).not.toInclude('compose');
+});
+
+test('it stops and disables the proxy, and keeps its unit as a .bak, on a systemd host that runs an image that needs no Docker already', () => {
+  const ctx = setupTest();
+
+  const docker = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    buildStubHostDocker({
+      image: 'ghcr.io/zgeoff/imp-host:next',
+      runningLabel: 'no-docker',
+      pulledLabel: 'no-docker',
+      pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
+      pulledIsRunning: true,
+    }),
+  );
+
+  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
+
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-host.service'),
+    'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
+  );
+
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-docker-proxy.service'),
+    'ExecStart=/usr/bin/docker run --name imp-docker-proxy imp-host\n',
+  );
+
+  const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
+    env: {
+      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
+      IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
+      IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
+      IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
+      IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
+    },
+  });
+
+  const calls = readFileSync(docker.calls, 'utf8');
+
+  const backups = readdirSync(ctx.directoryPath)
+    .filter((name) => name.startsWith('imp-docker-proxy.service.bak-'))
+    .map((name) => readFileSync(join(ctx.directoryPath, name), 'utf8'));
+
+  expect(result.exitCode).toBe(0);
+  expect(calls).toEndWith('systemctl disable -q --now imp-docker-proxy\nsystemctl daemon-reload\n');
+  expect(existsSync(join(ctx.directoryPath, 'imp-docker-proxy.service'))).toBeFalse();
+
+  expect(backups).toStrictEqual([
+    'ExecStart=/usr/bin/docker run --name imp-docker-proxy imp-host\n',
+  ]);
+
+  expect(result.stdout.toString()).toMatch(
+    /upgrade: stopped and disabled imp-docker-proxy, which this image does not call \(the unit before: \S+\)\nupgrade: imp-host already runs sha256:old\n$/v,
+  );
+});
+
+test('it fails, and keeps the proxy unit for the next run, when systemd cannot stop the proxy on a host that runs an image that needs no Docker already', () => {
+  const ctx = setupTest();
+
+  const docker = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    buildStubHostDocker({
+      image: 'ghcr.io/zgeoff/imp-host:next',
+      runningLabel: 'no-docker',
+      pulledLabel: 'no-docker',
+      pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
+      pulledIsRunning: true,
+    }),
+  );
+
+  // The installed unit already matches the image's, so the stop is the first systemctl call.
+  createStubBin(
+    ctx.directoryPath,
+    'systemctl',
+    `echo 'Failed to stop imp-docker-proxy.service: Access denied' >&2; exit 1`,
+  );
+
+  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
+
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-host.service'),
+    'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
+  );
+
+  writeFileSync(
+    join(ctx.directoryPath, 'imp-docker-proxy.service'),
+    'ExecStart=/usr/bin/docker run --name imp-docker-proxy imp-host\n',
+  );
+
+  const result = Bun.spawnSync(['bash', new URL('upgrade.sh', import.meta.url).pathname], {
+    env: {
+      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
+      IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
+      IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
+      IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
+      IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
+    },
+  });
+
+  expect(result.exitCode).toBe(1);
+
+  expect(result.stderr.toString()).toBe(
+    'Failed to stop imp-docker-proxy.service: Access denied\n' +
+      'upgrade: cannot stop imp-docker-proxy, whose unit stays for the next run; ' +
+      'nothing restarted, the host still runs sha256:old\n',
+  );
+
+  expect(readFileSync(join(ctx.directoryPath, 'imp-docker-proxy.service'), 'utf8')).toBe(
+    'ExecStart=/usr/bin/docker run --name imp-docker-proxy imp-host\n',
+  );
+});
+
+test('it removes the proxy container, without compose up, on a compose host that runs an image that needs no Docker already', () => {
+  const ctx = setupTest();
+
+  const docker = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    buildStubHostDocker({
+      image: 'ghcr.io/zgeoff/imp-host:next',
+      runningLabel: 'no-docker',
+      pulledLabel: 'no-docker',
+      pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
+      pulledIsRunning: true,
+      proxyContainer: true,
+    }),
+  );
+
+  createStubBin(ctx.directoryPath, 'curl', `echo '{"ready":true}'`);
+  writeFileSync(join(ctx.directoryPath, 'compose.yaml'), 'services:\n  imp-host:\n    image: x\n');
+
+  const result = Bun.spawnSync(
+    [
+      'bash',
+      new URL('upgrade.sh', import.meta.url).pathname,
+      '--compose',
+      join(ctx.directoryPath, 'compose.yaml'),
+    ],
+    {
+      env: {
+        PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+        IMP_HOST_IMAGE: 'ghcr.io/zgeoff/imp-host:next',
+        IMP_HOST_ENV_FILE: join(ctx.directoryPath, 'imp-host.env'),
+        IMP_HOST_UNIT_FILE: join(ctx.directoryPath, 'imp-host.service'),
+        IMP_DOCKER_PROXY_UNIT_FILE: join(ctx.directoryPath, 'imp-docker-proxy.service'),
+        IMP_HOST_SECCOMP_FILE: join(ctx.directoryPath, 'imp-host.seccomp.json'),
+      },
+    },
+  );
+
+  const calls = readFileSync(docker.calls, 'utf8');
+
+  expect(result.exitCode).toBe(0);
+  expect(calls).toEndWith('docker rm -f imp-docker-proxy\n');
+
+  expect(result.stdout.toString()).toEndWith(
+    'upgrade: removed the imp-docker-proxy container, which this image does not call\n' +
+      'upgrade: imp-host already runs sha256:old\n',
+  );
 });
 
 test('it refuses an env file that sets IMP_HOST_IMAGE empty before anything changes', () => {
@@ -1480,8 +1988,8 @@ test("it reads the compose .env's image through docker compose config, with the 
     'docker',
     buildStubHostDocker({
       image: 'imp-host:pinned',
-      runningLabel: 'socket-proxy',
-      pulledLabel: 'socket-proxy',
+      runningLabel: 'no-docker',
+      pulledLabel: 'no-docker',
       pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
       composeConfig: 'PATH=/bin\nREGISTRY=imp-host\nIMP_HOST_IMAGE=imp-host:pinned\n',
     }),
@@ -1544,8 +2052,8 @@ test('it leaves a trailing comment out of the compose .env image without compose
     'docker',
     buildStubHostDocker({
       image: 'imp-host:pinned',
-      runningLabel: 'socket-proxy',
-      pulledLabel: 'socket-proxy',
+      runningLabel: 'no-docker',
+      pulledLabel: 'no-docker',
       pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
     }),
   );
@@ -1597,8 +2105,8 @@ test('it refuses a compose .env image built from other variables, before any pul
     'docker',
     buildStubHostDocker({
       image: 'ghcr.io/zgeoff/imp-host:next',
-      runningLabel: 'socket-proxy',
-      pulledLabel: 'socket-proxy',
+      runningLabel: 'no-docker',
+      pulledLabel: 'no-docker',
       pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
     }),
   );
@@ -1656,8 +2164,8 @@ test("it gives compose config the Docker socket's group when the environment has
     'docker',
     buildStubHostDocker({
       image: 'imp-host:pinned',
-      runningLabel: 'socket-proxy',
-      pulledLabel: 'socket-proxy',
+      runningLabel: 'no-docker',
+      pulledLabel: 'no-docker',
       pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
       composeConfig: 'IMP_HOST_IMAGE=imp-host:pinned\n',
     }),
@@ -1708,8 +2216,8 @@ test('it never prints the environment that compose config reads', () => {
     'docker',
     buildStubHostDocker({
       image: 'imp-host:pinned',
-      runningLabel: 'socket-proxy',
-      pulledLabel: 'socket-proxy',
+      runningLabel: 'no-docker',
+      pulledLabel: 'no-docker',
       pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
       composeConfig: 'SECRET=hunter2\nIMP_HOST_IMAGE=imp-host:pinned\n',
     }),
@@ -1758,8 +2266,8 @@ test('it never prints what a failing compose config prints, and reads the .env i
     'docker',
     buildStubHostDocker({
       image: 'imp-host:pinned',
-      runningLabel: 'socket-proxy',
-      pulledLabel: 'socket-proxy',
+      runningLabel: 'no-docker',
+      pulledLabel: 'no-docker',
       pulledUnit: 'ExecStart=/usr/bin/docker run --init --cap-drop ALL imp-host\n',
       composeConfigError: 'SECRET=hunter2\n',
     }),

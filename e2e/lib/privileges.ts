@@ -28,26 +28,9 @@ const InspectSchema = z.array(
   z.object({ HostConfig: HostConfigSchema, Mounts: z.array(MountSchema).nullable() }),
 );
 
-const ProxyHostConfigSchema = HostConfigSchema.extend({
-  ReadonlyRootfs: z.boolean(),
-  NetworkMode: z.string(),
-});
-
-const ProxyInfoSchema = z.object({
-  Config: z.object({ User: z.string() }),
-  HostConfig: ProxyHostConfigSchema,
-});
-
-const ProxyInspectSchema = z.array(ProxyInfoSchema);
-
 export interface Mount {
   readonly Source: string;
   readonly Destination: string;
-}
-
-export interface ProxyConfig {
-  readonly user: string;
-  readonly host: HostConfig & { readonly ReadonlyRootfs: boolean; readonly NetworkMode: string };
 }
 
 export interface HostConfig {
@@ -151,7 +134,7 @@ export function findPrivilegeDrift(host: HostConfig, expected: ExpectedPrivilege
 }
 
 // A bind of the host's Docker socket, or of a directory above it, hands
-// imp-host the socket that only imp-docker-proxy may hold.
+// imp-host the host's Docker engine, which it must never reach.
 const HOST_SOCKETS = ['/var/run/docker.sock', '/run/docker.sock'];
 
 function isSocketMount(mount: Mount): boolean {
@@ -166,79 +149,6 @@ export function findSocketDrift(mounts: readonly Mount[]): string | null {
   const socket = mounts.find((mount) => isSocketMount(mount));
 
   return socket === undefined ? null : `it mounts ${socket.Source} at ${socket.Destination}`;
-}
-
-const ProxyArgsSchema = z.object({ proxy: z.object({ privileges: z.array(WordsSchema) }) });
-
-export interface ExpectedProxy {
-  readonly capDrop: readonly string[];
-  readonly securityOpts: readonly string[];
-  readonly isReadOnly: boolean;
-  readonly network: string;
-  readonly user: string;
-}
-
-export function readExpectedProxy(argsJson: string): ExpectedProxy {
-  const words = ProxyArgsSchema.parse(JSON.parse(argsJson)).proxy.privileges.flat();
-
-  return {
-    capDrop: readFlagValues(words, '--cap-drop').toSorted(),
-    securityOpts: readFlagValues(words, '--security-opt').toSorted(),
-    isReadOnly: words.includes('--read-only'),
-    network: readFlagValues(words, '--network')[0] ?? 'default',
-    user: readFlagValues(words, '--user')[0] ?? '',
-  };
-}
-
-export function findProxyDrift(proxy: ProxyConfig, expected: ExpectedProxy): string | null {
-  const host = proxy.host;
-  const capDrop = (host.CapDrop ?? []).toSorted();
-  const opts = (host.SecurityOpt ?? []).toSorted();
-
-  if (
-    host.Privileged ||
-    (host.CapAdd ?? []).length > 0 ||
-    capDrop.join(' ') !== expected.capDrop.join(' ')
-  ) {
-    return `it keeps capabilities (drops ${capDrop.join(' ') || 'none'})`;
-  }
-
-  if (opts.join(' ') !== expected.securityOpts.join(' ')) {
-    return `its security options are ${opts.join(' ') || 'none'}, not ${expected.securityOpts.join(' ')}`;
-  }
-
-  if (host.ReadonlyRootfs !== expected.isReadOnly || host.NetworkMode !== expected.network) {
-    return `its root is ${host.ReadonlyRootfs ? 'read-only' : 'writable'}, network ${host.NetworkMode}`;
-  }
-
-  if (proxy.user !== expected.user) {
-    return `it runs as ${proxy.user || 'root'}, not ${expected.user}`;
-  }
-
-  return (host.Devices ?? []).length > 0 ? 'it has devices' : null;
-}
-
-async function checkProxy(container: string): Promise<void> {
-  const proxy = `${container}-docker-proxy`;
-
-  const inspected = await runChecked(['docker', 'inspect', proxy]);
-
-  const [info] = ProxyInspectSchema.parse(JSON.parse(inspected));
-
-  if (info === undefined) {
-    throw new Error(`docker inspect ${proxy} returned nothing`);
-  }
-
-  const argsJson = readFileSync(join(REPO_ROOT, 'deploy', 'imp-host.args.json'), 'utf8');
-
-  const drift = findProxyDrift(
-    { user: info.Config.User, host: info.HostConfig },
-    readExpectedProxy(argsJson),
-  );
-
-  if (drift !== null) {
-    throw new Error(`${proxy} does not match the proxy in deploy/imp-host.args.json: ${drift}`);
-  }
 }
 
 export async function checkPrivileges(container: string): Promise<void> {
@@ -262,6 +172,4 @@ export async function checkPrivileges(container: string): Promise<void> {
   if (drift !== null) {
     throw new Error(`${container} does not match deploy/imp-host.args.json: ${drift}`);
   }
-
-  await checkProxy(container);
 }

@@ -6,16 +6,14 @@ import { readInContainer } from './read-in-container';
 import { runInContainer } from './run-in-container';
 import type { BootstrapRun, BootstrapTarget } from './types';
 
-const WRITTEN_FILES = [
-  '/etc/imp/imp-host.env',
-  '/etc/systemd/system/imp-host.service',
-  '/etc/systemd/system/imp-docker-proxy.service',
-];
+const WRITTEN_FILES = ['/etc/imp/imp-host.env', '/etc/systemd/system/imp-host.service'];
 
 export async function checkStaleImage(run: BootstrapRun, target: BootstrapTarget): Promise<void> {
   const distro = target.distro;
 
-  run.log(`[${distro}] a stale image is refused before anything is written`);
+  run.log(
+    `[${distro}] a stale image from an older release that needs a Docker socket is refused before anything is written`,
+  );
 
   await runInContainer(run, ['docker', 'load', '-q', '-i', `${ARCHIVE_DIR}/stale.tar`]);
 

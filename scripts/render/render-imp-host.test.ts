@@ -11,8 +11,6 @@ import {
   renderHostEnv,
   renderNetworkStart,
   renderProbe,
-  renderProxyExecStart,
-  renderProxyUnit,
   renderStorage,
   renderUnit,
 } from './render-imp-host';
@@ -28,11 +26,6 @@ test('#render renders every deploy file from one args file', () => {
       ['--rm', '--name', 'imp-host'],
       ['-v', '/var/lib/imp:/data'],
     ],
-    proxy: {
-      privileges: [['--read-only', '--user', '65534:65534']],
-      lines: [['--rm', '--name', 'imp-docker-proxy']],
-      command: ['/usr/local/bin/imp-docker-proxy'],
-    },
     network: { name: 'imp-net', bridge: 'br-impnet' },
     addresses: 'ip -o addr show scope global | cut -d " " -f 4',
   });
@@ -42,13 +35,10 @@ test('#render renders every deploy file from one args file', () => {
       '[Service]\nExecStartPre=/bin/sh -c \'case "$$IMP_HOST_NETWORK" in old\'\n' +
       "ExecStartPre=/bin/sh -c 'a=; old'\n" +
       `ExecStart=/usr/bin/docker run --old \\\n  \${IMP_HOST_IMAGE}\n`,
-    proxyUnit: `[Service]\nExecStart=/usr/bin/docker run --old \\\n  \${IMP_HOST_IMAGE} old\n`,
     hostEnv: 'readonly HOST_NETWORK=old\nreadonly HOST_BRIDGE=old\nhost_addresses() { old; }\n',
     storage: 'readonly ZPOOL_CREATE_PROPERTIES=old\n',
     bootstrap: 'old\n',
     compose:
-      '    # proxy privileges: from deploy/imp-host.args.json (bun run render:deploy)\n' +
-      '    old: true\n    # end of proxy privileges\n' +
       '    # privileges: from deploy/imp-host.args.json (bun run render:deploy)\n' +
       '    old: true\n    # end of privileges\n' +
       '    # networks:\n    #   - old\n' +
@@ -93,7 +83,7 @@ test('#render renders every deploy file from one args file', () => {
 
     render_env() { :; }
 
-    # --- deploy/imp-host.service, deploy/imp-docker-proxy.service, deploy/imp-host.env.example ---
+    # --- deploy/imp-host.service, deploy/imp-host.env.example ---
 
     unit_imp_host() {
       cat <<'EOF'
@@ -105,15 +95,6 @@ test('#render renders every deploy file from one args file', () => {
       -v /var/lib/imp:/data \\
       $IMP_HOST_PROBED \\
       \${IMP_HOST_IMAGE}
-    EOF
-    }
-
-    unit_imp_docker_proxy() {
-      cat <<'EOF'
-    [Service]
-    ExecStart=/usr/bin/docker run --rm --name imp-docker-proxy \\
-      --read-only --user 65534:65534 \\
-      \${IMP_HOST_IMAGE} /usr/local/bin/imp-docker-proxy
     EOF
     }
 
@@ -130,11 +111,7 @@ test('#render renders every deploy file from one args file', () => {
     "
     ,
       "compose": 
-    "    # proxy privileges: from deploy/imp-host.args.json (bun run render:deploy)
-        read_only: true
-        user: '65534:65534'
-        # end of proxy privileges
-        # privileges: from deploy/imp-host.args.json (bun run render:deploy)
+    "    # privileges: from deploy/imp-host.args.json (bun run render:deploy)
         init: true
         cap_add:
           - KILL
@@ -162,13 +139,6 @@ test('#render renders every deploy file from one args file', () => {
     host_addresses() { ip -o addr show scope global | cut -d " " -f 4; }
     "
     ,
-      "proxyUnit": 
-    "[Service]
-    ExecStart=/usr/bin/docker run --rm --name imp-docker-proxy \\
-      --read-only --user 65534:65534 \\
-      \${IMP_HOST_IMAGE} /usr/local/bin/imp-docker-proxy
-    "
-    ,
       "storage": 
     "readonly ZPOOL_CREATE_PROPERTIES="-o ashift=12 -O compression=lz4"
     "
@@ -191,20 +161,16 @@ test('#render renders every deploy file from one args file', () => {
 test('#render gives the same files for the same input', () => {
   const argsJson =
     '{"privileges": [["--init"]], "probed": [], "lines": [["--name", "x"]], ' +
-    '"proxy": {"privileges": [["--read-only"]], "lines": [["--name", "p"]], "command": ["y"]}, ' +
     '"network": {"name": "n", "bridge": "b"}, "addresses": "ip -o addr"}';
 
   const current = {
     unit:
       'ExecStartPre=/bin/sh -c \'case "$$IMP_HOST_NETWORK" in old\'\n' +
       `ExecStartPre=/bin/sh -c 'a=; old'\nExecStart=/usr/bin/docker run \\\n  \${IMP_HOST_IMAGE}\n`,
-    proxyUnit: `ExecStart=/usr/bin/docker run \\\n  \${IMP_HOST_IMAGE} old\n`,
     hostEnv: 'readonly HOST_NETWORK=old\nreadonly HOST_BRIDGE=old\nhost_addresses() { old; }\n',
     storage: 'readonly ZPOOL_CREATE_PROPERTIES=old\n',
     bootstrap: 'old\n',
     compose:
-      '    # proxy privileges: from deploy/imp-host.args.json (bun run render:deploy)\n' +
-      '    # end of proxy privileges\n' +
       '    # privileges: from deploy/imp-host.args.json (bun run render:deploy)\n' +
       '    # end of privileges\n' +
       '    # networks:\n    #   - old\n' +
@@ -223,10 +189,6 @@ test('#render gives the same files for the same input', () => {
 test('#render leaves the checked-in units, host-env.sh, bootstrap.sh and compose.yaml as they are', () => {
   const current = {
     unit: readFileSync(new URL('../../deploy/imp-host.service', import.meta.url), 'utf8'),
-    proxyUnit: readFileSync(
-      new URL('../../deploy/imp-docker-proxy.service', import.meta.url),
-      'utf8',
-    ),
     hostEnv: readFileSync(new URL('../../deploy/lib/host-env.sh', import.meta.url), 'utf8'),
     storage: readFileSync(new URL('../../deploy/bootstrap/storage.sh', import.meta.url), 'utf8'),
     bootstrap: readFileSync(new URL('../../deploy/bootstrap.sh', import.meta.url), 'utf8'),
@@ -261,7 +223,6 @@ test('#render runs bootstrap.sh in the order of BOOTSTRAP_PARTS, with every part
 test('#parseHostArgs passes an unbraced $NAME in lines as env words', () => {
   const args = parseHostArgs(
     '{"privileges": [["--init"]], "probed": [], "lines": [["$IMP_PUBLIC_PORTS"]], ' +
-      '"proxy": {"privileges": [["--read-only"]], "lines": [["x"]], "command": ["y"]}, ' +
       '"network": {"name": "n", "bridge": "b"}, "addresses": "ip -o addr"}',
   );
 
@@ -272,7 +233,6 @@ test(`#parseHostArgs refuses a braced \${NAME} in lines`, () => {
   expect(() =>
     parseHostArgs(
       `{"privileges": [["--init"]], "probed": [], "lines": [["\${IMP_PUBLIC_PORTS}"]], ` +
-        '"proxy": {"privileges": [["--read-only"]], "lines": [["x"]], "command": ["y"]}, ' +
         '"network": {"name": "n", "bridge": "b"}, "addresses": "ip -o addr"}',
     ),
   ).toThrowWithMessage(Error, /is not a plain word or \$NAME/u);
@@ -282,7 +242,6 @@ test('#parseHostArgs refuses a $NAME in privileges', () => {
   expect(() =>
     parseHostArgs(
       '{"privileges": [["$IMP_PUBLIC_PORTS"]], "probed": [], "lines": [["x"]], ' +
-        '"proxy": {"privileges": [["--read-only"]], "lines": [["x"]], "command": ["y"]}, ' +
         '"network": {"name": "n", "bridge": "b"}, "addresses": "ip -o addr"}',
     ),
   ).toThrowWithMessage(Error, /is not a plain word/u);
@@ -292,7 +251,6 @@ test('#parseHostArgs refuses a word that would need quoting', () => {
   expect(() =>
     parseHostArgs(
       '{"privileges": [["--init"]], "probed": [], "lines": [["-v", "/a b:/c"]], ' +
-        '"proxy": {"privileges": [["--read-only"]], "lines": [["x"]], "command": ["y"]}, ' +
         '"network": {"name": "n", "bridge": "b"}, "addresses": "ip -o addr"}',
     ),
   ).toThrowWithMessage(Error, /is not a plain word/u);
@@ -302,7 +260,6 @@ test('#parseHostArgs refuses empty lines', () => {
   expect(() =>
     parseHostArgs(
       '{"privileges": [["--init"]], "probed": [], "lines": [], ' +
-        '"proxy": {"privileges": [["--read-only"]], "lines": [["x"]], "command": ["y"]}, ' +
         '"network": {"name": "n", "bridge": "b"}, "addresses": "ip -o addr"}',
     ),
   ).toThrowWithMessage(Error, /must be non-empty/u);
@@ -312,7 +269,6 @@ test('#parseHostArgs refuses args without probed, naming the args file', () => {
   expect(() =>
     parseHostArgs(
       '{"privileges": [["--init"]], "lines": [["x"]], ' +
-        '"proxy": {"privileges": [["--read-only"]], "lines": [["x"]], "command": ["y"]}, ' +
         '"network": {"name": "n", "bridge": "b"}, "addresses": "ip -o addr"}',
     ),
   ).toThrowWithMessage(Error, /^deploy\/imp-host\.args\.json: .*\n.*at probed/u);
@@ -323,7 +279,6 @@ test('#parseHostArgs refuses a bridge name longer than an interface name may be'
   expect(() =>
     parseHostArgs(
       '{"privileges": [["--init"]], "probed": [], "lines": [["x"]], ' +
-        '"proxy": {"privileges": [["--read-only"]], "lines": [["x"]], "command": ["y"]}, ' +
         '"network": {"name": "n", "bridge": "br-sixteen-bytes"}, "addresses": "ip -o addr"}',
     ),
   ).toThrowWithMessage(Error, /is not a bridge name\n.*at network\.bridge/u);
@@ -334,26 +289,9 @@ test('#parseHostArgs refuses an address pipeline with a quote', () => {
   expect(() =>
     parseHostArgs(
       '{"privileges": [["--init"]], "probed": [], "lines": [["x"]], ' +
-        '"proxy": {"privileges": [["--read-only"]], "lines": [["x"]], "command": ["y"]}, ' +
         '"network": {"name": "n", "bridge": "b"}, "addresses": "ip -o addr | cut -d \' \' -f 4"}',
     ),
   ).toThrowWithMessage(Error, /must be one line without a quote or a \$\n.*at addresses/u);
-});
-
-test('#renderProxyExecStart ends the line in the image and the command', () => {
-  expect(
-    renderProxyExecStart({
-      privileges: [['--cap-drop', 'ALL']],
-      lines: [
-        ['--rm', '--name', 'p'],
-        ['-e', 'X'],
-      ],
-      command: ['/usr/local/bin/imp-docker-proxy'],
-    }),
-  ).toBe(
-    'ExecStart=/usr/bin/docker run --rm --name p \\\n  --cap-drop ALL \\\n  -e X \\\n' +
-      `  \${IMP_HOST_IMAGE} /usr/local/bin/imp-docker-proxy`,
-  );
 });
 
 test('#renderExecStart puts the name, the privileges, the rest, the probed args, then the image', () => {
@@ -425,7 +363,6 @@ test('#renderHostEnv writes the network, its bridge and the address pipeline', (
         privileges: [['--init']],
         probed: [],
         lines: [['x']],
-        proxy: { privileges: [['--read-only']], lines: [['x']], command: ['y'] },
         network: { name: 'imp-host', bridge: 'br-imphost' },
         addresses: 'ip -o addr show scope global | cut -d " " -f 4',
       },
@@ -442,7 +379,6 @@ test('#renderHostEnv refuses a host-env.sh without host_addresses', () => {
       privileges: [['--init']],
       probed: [],
       lines: [['x']],
-      proxy: { privileges: [['--read-only']], lines: [['x']], command: ['y'] },
       network: { name: 'imp-host', bridge: 'br-imphost' },
       addresses: 'ip -o addr',
     }),
@@ -456,16 +392,6 @@ test('#renderCompose writes a compose key for each privilege flag', () => {
   expect(renderCompose(compose, [['--init', '--cap-add', 'KILL', '--cap-add', 'MKNOD']])).toBe(
     '    # privileges: from deploy/imp-host.args.json (bun run render:deploy)\n' +
       '    init: true\n    cap_add:\n      - KILL\n      - MKNOD\n    # end of privileges\n',
-  );
-});
-
-test('#renderCompose quotes the value of a flag, so 65534:65534 stays a string', () => {
-  const compose =
-    '    # privileges: from deploy/imp-host.args.json (bun run render:deploy)\n    # end of privileges\n';
-
-  expect(renderCompose(compose, [['--user', '65534:65534', '--network', 'none']])).toBe(
-    '    # privileges: from deploy/imp-host.args.json (bun run render:deploy)\n' +
-      "    user: '65534:65534'\n    network_mode: 'none'\n    # end of privileges\n",
   );
 });
 
@@ -526,7 +452,6 @@ test('#renderUnit refuses a unit whose docker run does not end in the image', ()
       privileges: [['--init']],
       probed: [],
       lines: [['x']],
-      proxy: { privileges: [['--read-only']], lines: [['x']], command: ['y'] },
       network: { name: 'imp-host', bridge: 'br-imphost' },
       addresses: 'ip -o addr',
     }),
@@ -542,7 +467,6 @@ test('#renderUnit refuses a unit without the probe', () => {
       privileges: [['--init']],
       probed: [],
       lines: [['x']],
-      proxy: { privileges: [['--read-only']], lines: [['x']], command: ['y'] },
       network: { name: 'imp-host', bridge: 'br-imphost' },
       addresses: 'ip -o addr',
     }),
@@ -560,7 +484,6 @@ test('#renderUnit refuses a unit without the ExecStartPre that makes the network
         privileges: [['--init']],
         probed: [],
         lines: [['x']],
-        proxy: { privileges: [['--read-only']], lines: [['x']], command: ['y'] },
         network: { name: 'imp-host', bridge: 'br-imphost' },
         addresses: 'ip -o addr',
       },
@@ -568,19 +491,6 @@ test('#renderUnit refuses a unit without the ExecStartPre that makes the network
   ).toThrowWithMessage(
     Error,
     "deploy/imp-host.service: no ExecStartPre=/bin/sh -c 'case ...' for the IPv6 network",
-  );
-});
-
-test('#renderProxyUnit refuses a unit whose docker run has no command after the image', () => {
-  expect(() =>
-    renderProxyUnit(`ExecStart=/usr/bin/docker run \\\n  \${IMP_HOST_IMAGE}\n`, {
-      privileges: [['--read-only']],
-      lines: [['x']],
-      command: ['y'],
-    }),
-  ).toThrowWithMessage(
-    Error,
-    `deploy/imp-docker-proxy.service: no docker run ExecStart with \${IMP_HOST_IMAGE} and a command`,
   );
 });
 
@@ -605,38 +515,5 @@ test('#renderBootstrap refuses a deploy file with a line EOF, which would end it
   ).toThrowWithMessage(
     Error,
     'deploy/imp-host.service: a line EOF would end its heredoc in deploy/bootstrap.sh',
-  );
-});
-
-test('#render refuses a compose file without the proxy privileges block', () => {
-  const argsJson =
-    '{"privileges": [["--init"]], "probed": [], "lines": [["--name", "x"]], ' +
-    '"proxy": {"privileges": [["--read-only"]], "lines": [["--name", "p"]], "command": ["y"]}, ' +
-    '"network": {"name": "n", "bridge": "b"}, "addresses": "ip -o addr"}';
-
-  const current = {
-    unit:
-      'ExecStartPre=/bin/sh -c \'case "$$IMP_HOST_NETWORK" in old\'\n' +
-      `ExecStartPre=/bin/sh -c 'a=; old'\nExecStart=/usr/bin/docker run \\\n  \${IMP_HOST_IMAGE}\n`,
-    proxyUnit: `ExecStart=/usr/bin/docker run \\\n  \${IMP_HOST_IMAGE} old\n`,
-    hostEnv: 'readonly HOST_NETWORK=old\nreadonly HOST_BRIDGE=old\nhost_addresses() { old; }\n',
-    storage: 'readonly ZPOOL_CREATE_PROPERTIES=old\n',
-    bootstrap: 'old\n',
-    compose:
-      '    # privileges: from deploy/imp-host.args.json (bun run render:deploy)\n' +
-      '    # end of privileges\n' +
-      '    # networks:\n    #   - old\n' +
-      '# network: from deploy/imp-host.args.json (bun run render:deploy)\n# end of network\n',
-  };
-
-  const sources = {
-    parts: [{ path: 'deploy/bootstrap/units.sh', text: 'render_env() { :; }\n' }],
-    envExample: 'IMP_DOMAIN=\n',
-    zfsPoolJson: '{"create": ["-O", "atime=off"]}',
-  };
-
-  expect(() => render(argsJson, current, sources)).toThrowWithMessage(
-    Error,
-    'deploy/compose.yaml: no block from "# proxy privileges: from deploy/imp-host.args.json (bun run render:deploy)"',
   );
 });

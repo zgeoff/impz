@@ -160,8 +160,8 @@ export const SUITES: readonly Suite[] = [
   {
     name: 'socket',
     prefix: 'e2e-sock-',
-    images: ['e2e-tiny'],
-    journeys: ['socket-refusals', 'socket-proxy-stopped'],
+    images: [],
+    journeys: ['socket-none'],
   },
 
   {

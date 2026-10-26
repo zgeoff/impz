@@ -38,9 +38,9 @@ ensure_imp() {
     die "$refusal"
   fi
   # The image the units run: the env file's pin, else their own release's.
-  # Checked before anything is written: the units run imp-docker-proxy from
-  # the image and give imp-host no docker.sock, and an older image, such as
-  # a stale pin that ensure_image keeps, has neither.
+  # Checked before anything is written: the unit gives imp-host no Docker
+  # socket, and an older image, such as a stale pin that ensure_image keeps,
+  # needs one.
   if trim_lines <<<"$existing" | grep -qxF "$LEGACY_IMAGE_LINE" && [ -z "$image_set" ]; then
     log "$ENV_FILE: $LEGACY_IMAGE_LINE was the old template's line, not a pin; it becomes a comment"
   fi
@@ -53,9 +53,7 @@ ensure_imp() {
   fi
   put_file "$ENV_FILE" 600 "$env" && changed=1
   put_file /etc/systemd/system/imp-host.service 644 "$(unit_imp_host | strip_markers)" && changed=1
-  # imp-host reaches Docker through this proxy only (docs/architecture/host.md#the-docker-socket)
-  local proxy_changed=
-  put_file /etc/systemd/system/imp-docker-proxy.service 644 "$(unit_imp_docker_proxy | strip_markers)" && proxy_changed=1
+  retire_proxy_unit "$PROXY_UNIT"
   if [ "$storage" = zfs ]; then
     put_file /etc/systemd/system/imp-host.service.d/zfs.conf 644 "$(unit_imp_host_zfs)" && changed=1
   fi
@@ -71,15 +69,24 @@ ensure_imp() {
     put_file "$SECCOMP_FILE" 644 "$seccomp" && changed=1
   fi
 
-  # The proxy first: imp-host starts after it, and impd's first docker call
-  # needs its socket.
-  if [ -n "$proxy_changed$changed" ]; then
-    change "restart imp-docker-proxy" reload_unit imp-docker-proxy
+  if [ -n "$changed" ]; then
     change "restart imp-host" reload_unit imp-host
   else
-    ensure_service imp-docker-proxy
     ensure_service imp-host
   fi
+}
+
+# retire_proxy_unit UNIT_FILE: remove the Docker socket proxy's unit, when an
+# older release left it installed.
+retire_proxy_unit() {
+  [ -e "$1" ] || return 0
+  change "remove imp-docker-proxy, which impd no longer calls" remove_proxy_unit "$1"
+}
+
+remove_proxy_unit() {
+  systemctl disable -q --now imp-docker-proxy &&
+    rm -f "$1" &&
+    systemctl daemon-reload
 }
 
 # read_seccomp REF: the seccomp profile in the image REF; refuses an image
@@ -90,12 +97,12 @@ read_seccomp() {
 }
 
 # check_image_contract REF: fails, and says why, unless REF runs as these
-# units expect: imp.host-contract=socket-proxy (host/Dockerfile)
+# units expect: imp.host-contract=no-docker (host/Dockerfile)
 check_image_contract() {
   local contract
   contract=$(docker image inspect -f '{{index .Config.Labels "imp.host-contract"}}' "$1" 2>/dev/null) || contract=
-  [ "$contract" = socket-proxy ] && return 0
-  echo "$1 predates the Docker socket proxy (imp.host-contract is '${contract:-none}'): pull the new image (docker pull $1) and run again; the env file and the units are unchanged" >&2
+  [ "$contract" = no-docker ] && return 0
+  echo "$1 needs a Docker socket (imp.host-contract is '${contract:-none}'), and this unit gives it none: pull the new image (docker pull $1) and run again; the env file and the units are unchanged" >&2
   return 1
 }
 

@@ -43,12 +43,11 @@
       "project": ["src/**/*.ts!", "!src/test-utils/**!"]
     },
     "packages/daemon": {
-      // impd and imp-docker-proxy, which host/Dockerfile compiles, the scripts
-      // a test runs in a child Bun, and render:db-schema's dump
+      // impd, which host/Dockerfile compiles, the scripts a test runs in a
+      // child Bun, and render:db-schema's dump
       "entry": [
         // a pattern ending in ! is production code for knip --production
         "src/main.ts!",
-        "src/imps/docker-proxy/main.ts!",
         "testing/*/run-*.ts",
         "src/platform/db/dump-schema.ts"
       ],

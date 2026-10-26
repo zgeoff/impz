@@ -1,12 +1,11 @@
 import { readFileSync, writeFileSync } from 'node:fs';
-import { Document, Scalar, YAMLMap } from 'yaml';
+import { Document, YAMLMap } from 'yaml';
 import * as z from 'zod';
 import { ZFS_POOL_FILE, parseZfsPoolProperties } from '../lib/parse-zfs-pool-properties.ts';
 import { PLAIN_WORD } from '../lib/plain-word.ts';
 
 const ARGS_FILE = 'deploy/imp-host.args.json';
 const UNIT_FILE = 'deploy/imp-host.service';
-const PROXY_UNIT_FILE = 'deploy/imp-docker-proxy.service';
 const BOOTSTRAP_FILE = 'deploy/bootstrap.sh';
 const COMPOSE_FILE = 'deploy/compose.yaml';
 const ENV_EXAMPLE_FILE = 'deploy/imp-host.env.example';
@@ -32,20 +31,11 @@ const UNITS_PART = 'deploy/bootstrap/units.sh';
 // more words.
 const ENV_WORDS = /^\$[A-Z][A-Z0-9_]*$/u;
 const EXEC_START = /^ExecStart=\/usr\/bin\/docker run (?:.*\\\n)*\s*\$\{IMP_HOST_IMAGE\}$/mu;
-
-const PROXY_EXEC_START =
-  /^ExecStart=\/usr\/bin\/docker run (?:.*\\\n)*\s*\$\{IMP_HOST_IMAGE\} \S.*$/mu;
-
 const PROBE = /^ExecStartPre=\/bin\/sh -c 'a=; .*'$/mu;
 const NETWORK_START = /^ExecStartPre=\/bin\/sh -c 'case "\$\$IMP_HOST_NETWORK" in .*'$/mu;
 const PROBED_FILE = '/run/imp-host/probed.env';
 const COMPOSE_HEAD = '    # privileges: from deploy/imp-host.args.json (bun run render:deploy)\n';
 const COMPOSE_TAIL = '    # end of privileges\n';
-
-const PROXY_COMPOSE_HEAD =
-  '    # proxy privileges: from deploy/imp-host.args.json (bun run render:deploy)\n';
-
-const PROXY_COMPOSE_TAIL = '    # end of proxy privileges\n';
 const COMPOSE_NETWORK_HEAD = '# network: from deploy/imp-host.args.json (bun run render:deploy)\n';
 const COMPOSE_NETWORK_TAIL = '# end of network\n';
 const COMPOSE_SERVICE_NETWORKS = /^ {4}# networks:\n {4}# {3}- .*$/mu;
@@ -61,12 +51,6 @@ interface Probed {
   readonly args: readonly string[];
 }
 
-interface ProxyArgs {
-  readonly privileges: Lines;
-  readonly lines: Lines;
-  readonly command: readonly string[];
-}
-
 interface HostNetwork {
   readonly name: string;
   readonly bridge: string;
@@ -77,7 +61,6 @@ export interface HostArgs {
 
   readonly probed: readonly Probed[];
   readonly lines: Lines;
-  readonly proxy: ProxyArgs;
   readonly network: HostNetwork;
   readonly addresses: string;
 }
@@ -98,12 +81,6 @@ const LinesSchema = z
 
 const ProbedSchema = z.object({ path: WordSchema, args: z.array(WordSchema).nonempty() });
 
-const ProxyArgsSchema = z.object({
-  privileges: PrivilegeLinesSchema,
-  lines: LinesSchema,
-  command: z.array(WordSchema).nonempty(),
-});
-
 // Linux limits an interface name, such as a bridge's, to 15 bytes.
 const HostNetworkSchema = z.object({
   name: z.string().regex(/^[a-z][a-z0-9-]*$/u, { error: 'is not a network name' }),
@@ -119,7 +96,6 @@ const HostArgsSchema = z.object({
   privileges: PrivilegeLinesSchema,
   probed: z.array(ProbedSchema),
   lines: LinesSchema,
-  proxy: ProxyArgsSchema,
   network: HostNetworkSchema,
   addresses: AddressesSchema,
 });
@@ -145,7 +121,7 @@ export function renderStorage(storage: string, create: readonly string[]): strin
   );
 }
 
-export function renderExecStart(args: Omit<HostArgs, 'proxy'>): string {
+export function renderExecStart(args: HostArgs): string {
   const [first = [], ...rest] = args.lines;
   const tail = [...args.privileges, ...rest].map((line) => `  ${line.join(' ')} \\`);
 
@@ -155,27 +131,6 @@ export function renderExecStart(args: Omit<HostArgs, 'proxy'>): string {
     '  $IMP_HOST_PROBED \\',
     `  \${IMP_HOST_IMAGE}`,
   ].join('\n');
-}
-
-export function renderProxyExecStart(proxy: ProxyArgs): string {
-  const [first = [], ...rest] = proxy.lines;
-  const tail = [...proxy.privileges, ...rest].map((line) => `  ${line.join(' ')} \\`);
-
-  return [
-    `ExecStart=/usr/bin/docker run ${first.join(' ')} \\`,
-    ...tail,
-    `  \${IMP_HOST_IMAGE} ${proxy.command.join(' ')}`,
-  ].join('\n');
-}
-
-export function renderProxyUnit(unit: string, proxy: ProxyArgs): string {
-  if (!PROXY_EXEC_START.test(unit)) {
-    throw new Error(
-      `${PROXY_UNIT_FILE}: no docker run ExecStart with \${IMP_HOST_IMAGE} and a command`,
-    );
-  }
-
-  return unit.replace(PROXY_EXEC_START, () => renderProxyExecStart(proxy));
 }
 
 // The unit reads the host's addresses at each start, because a new DHCP lease can change them.
@@ -230,12 +185,6 @@ export function renderHostEnv(hostEnv: string, args: HostArgs): string {
 const COMPOSE_SCALARS: Readonly<Record<string, readonly [string, boolean | string]>> = {
   '--init': ['init', true],
   '--cgroupns=private': ['cgroup', 'private'],
-  '--read-only': ['read_only', true],
-};
-
-const COMPOSE_VALUES: Readonly<Record<string, string>> = {
-  '--network': 'network_mode',
-  '--user': 'user',
 };
 
 const COMPOSE_LISTS: Readonly<Record<string, string>> = {
@@ -244,7 +193,6 @@ const COMPOSE_LISTS: Readonly<Record<string, string>> = {
   '--security-opt': 'security_opt',
   '--device': 'devices',
   '--sysctl': 'sysctls',
-  '--tmpfs': 'tmpfs',
 };
 
 function renderComposeKeys(privileges: Lines): string {
@@ -257,20 +205,10 @@ function renderComposeKeys(privileges: Lines): string {
   for (let index = 0; index < words.length; index += 1) {
     const word = words[index] ?? '';
     const scalar = COMPOSE_SCALARS[word];
-    const valued = COMPOSE_VALUES[word];
     const list = COMPOSE_LISTS[word];
 
     if (scalar !== undefined) {
       keys.add(doc.createPair(scalar[0], scalar[1]));
-    } else if (valued !== undefined) {
-      index += 1;
-
-      // Quoted as oxfmt writes YAML, so 65534:65534 stays a string.
-      const value = new Scalar(words[index] ?? '');
-
-      value.type = Scalar.QUOTE_SINGLE;
-
-      keys.add(doc.createPair(valued, value));
     } else if (list === undefined) {
       throw new Error(`${ARGS_FILE}: no compose key for the privilege ${word}`);
     } else {
@@ -312,20 +250,6 @@ function buildComposeProbed(probed: readonly Probed[]): Lines {
   return probed.filter((entry) => entry.args[0] !== '--device').map((entry) => entry.args);
 }
 
-function renderComposeBlock(
-  compose: string,
-  privileges: Lines,
-  head: string,
-  tail: string,
-): string {
-  return mergeBetween(
-    compose,
-    head,
-    tail,
-    buildPrefixedLines(renderComposeKeys(privileges), '    '),
-  );
-}
-
 function buildPrefixedLines(text: string, prefix: string): string {
   return text.replaceAll(/^(?=.)/gmu, prefix);
 }
@@ -342,7 +266,12 @@ function mergeBetween(text: string, head: string, tail: string, block: string): 
 }
 
 export function renderCompose(compose: string, privileges: Lines): string {
-  return renderComposeBlock(compose, privileges, COMPOSE_HEAD, COMPOSE_TAIL);
+  return mergeBetween(
+    compose,
+    COMPOSE_HEAD,
+    COMPOSE_TAIL,
+    buildPrefixedLines(renderComposeKeys(privileges), '    '),
+  );
 }
 
 export function renderComposeNetworks(compose: string, network: HostNetwork): string {
@@ -407,7 +336,6 @@ function renderDeployFiles(deployFiles: readonly DeployFile[]): string {
 
 export interface Rendered {
   readonly unit: string;
-  readonly proxyUnit: string;
   readonly hostEnv: string;
   readonly storage: string;
   readonly bootstrap: string;
@@ -423,7 +351,6 @@ export interface BootstrapSources {
 export function render(argsJson: string, current: Rendered, sources: BootstrapSources): Rendered {
   const args = parseHostArgs(argsJson);
   const unit = renderUnit(current.unit, args);
-  const proxyUnit = renderProxyUnit(current.proxyUnit, args.proxy);
   const hostEnv = renderHostEnv(current.hostEnv, args);
   const storage = renderStorage(current.storage, parseZfsPoolProperties(sources.zfsPoolJson));
 
@@ -444,38 +371,29 @@ export function render(argsJson: string, current: Rendered, sources: BootstrapSo
 
   return {
     unit,
-    proxyUnit,
     hostEnv,
     storage,
     bootstrap: renderBootstrap(parts, [
       { path: UNIT_FILE, function: 'unit_imp_host', text: unit },
-      { path: PROXY_UNIT_FILE, function: 'unit_imp_docker_proxy', text: proxyUnit },
       { path: ENV_EXAMPLE_FILE, function: 'env_template', text: sources.envExample },
     ]),
-    compose: renderComposeBlock(
-      compose,
-      args.proxy.privileges,
-      PROXY_COMPOSE_HEAD,
-      PROXY_COMPOSE_TAIL,
-    ),
+    compose,
   };
 }
 
 const FILES = {
   unit: UNIT_FILE,
-  proxyUnit: PROXY_UNIT_FILE,
   hostEnv: HOST_ENV_FILE,
   storage: STORAGE_FILE,
   bootstrap: BOOTSTRAP_FILE,
   compose: COMPOSE_FILE,
 } as const;
 
-const KEYS = ['unit', 'proxyUnit', 'hostEnv', 'storage', 'bootstrap', 'compose'] as const;
+const KEYS = ['unit', 'hostEnv', 'storage', 'bootstrap', 'compose'] as const;
 
 function main(): void {
   const current: Rendered = {
     unit: readFileSync(UNIT_FILE, 'utf8'),
-    proxyUnit: readFileSync(PROXY_UNIT_FILE, 'utf8'),
     hostEnv: readFileSync(HOST_ENV_FILE, 'utf8'),
     storage: readFileSync(STORAGE_FILE, 'utf8'),
     bootstrap: readFileSync(BOOTSTRAP_FILE, 'utf8'),

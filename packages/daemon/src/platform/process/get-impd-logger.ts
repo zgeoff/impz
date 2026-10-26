@@ -9,7 +9,6 @@ export type ImpdArea =
   | 'broker'
   | 'cgroup'
   | 'disk'
-  | 'docker-proxy'
   | 'egress'
   | 'events'
   | 'gc'

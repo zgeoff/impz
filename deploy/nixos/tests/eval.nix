@@ -104,7 +104,6 @@ let
   ipv6Unit = ipv6Cfg.systemd.services.imp-host;
   xfsCfg = xfsHost.config;
   unit = zfsCfg.systemd.services.imp-host;
-  proxyUnit = zfsCfg.systemd.services.imp-docker-proxy;
   ownCfg = ownFirewall.config;
   hostArgs = lib.importJSON ../../imp-host.args.json;
   # The default image is the tag for package.json's version. The cases below
@@ -301,28 +300,13 @@ let
       expected = true;
     };
     # zfsHost: module defaults
-    "test imp-host wants the proxy" = {
-      expr = lib.elem "imp-docker-proxy.service" unit.wants;
-      expected = true;
-    };
-    # zfsHost: module defaults
-    "test imp-host starts after the proxy" = {
-      expr = lib.elem "imp-docker-proxy.service" unit.after;
-      expected = true;
+    "test the module runs no Docker socket proxy" = {
+      expr = zfsCfg.systemd.services ? imp-docker-proxy;
+      expected = false;
     };
     # zfsHost: module defaults
     "test imp-host needs its image" = {
       expr = lib.elem "imp-host-image.service" unit.requires;
-      expected = true;
-    };
-    # zfsHost: module defaults
-    "test the proxy needs the image" = {
-      expr = lib.elem "imp-host-image.service" proxyUnit.requires;
-      expected = true;
-    };
-    # zfsHost: module defaults
-    "test the proxy starts after the image" = {
-      expr = lib.elem "imp-host-image.service" proxyUnit.after;
       expected = true;
     };
     # zfsHost: module defaults (image)
@@ -330,25 +314,15 @@ let
       expr = zfsCfg.services.imp.image;
       expected = releaseImage;
     };
-    # zfsHost: module defaults (image)
-    "test the proxy gets the host image" = {
-      expr = proxyUnit.environment.IMP_HOST_IMAGE;
-      expected = releaseImage;
-    };
-    # zfsHost: module defaults
-    "test the proxy restarts always" = {
-      expr = proxyUnit.serviceConfig.Restart;
-      expected = "always";
-    };
     # zfsHost: module defaults
     "test imp-host binds no docker.sock" = {
       expr = lib.hasInfix "/var/run/docker.sock" unit.serviceConfig.ExecStart;
       expected = false;
     };
     # zfsHost: module defaults
-    "test imp-host reaches Docker through the proxy's socket" = {
-      expr = lib.hasInfix "DOCKER_HOST=unix:///run/imp-docker/docker.sock" unit.serviceConfig.ExecStart;
-      expected = true;
+    "test imp-host gets no Docker host" = {
+      expr = lib.hasInfix "DOCKER_HOST" unit.serviceConfig.ExecStart;
+      expected = false;
     };
     # zfsHost: module defaults
     "test imp-host runs docker run --init" = {
@@ -732,7 +706,7 @@ in
     grep -qx 'export IMP_BACKUP_STAGED=/run/imp-host/backup-password' ${zfsPre}
     # the env file goes to tmpfs, without the keys docker run sets with -e
     grep -qx 'export IMP_ENV_OUT=/run/imp-host/env' ${zfsPre}
-    grep -qxF "export IMP_CONTAINER_KEYS='IMP_ENV_FILE DOCKER_HOST IMP_TAILSCALE_AUTHKEY_FILE'" ${zfsPre}
+    grep -qxF "export IMP_CONTAINER_KEYS='IMP_ENV_FILE IMP_TAILSCALE_AUTHKEY_FILE'" ${zfsPre}
     grep -q "^export IMP_CONTAINER_KEYS=.* IMP_DNS_API_TOKEN_FILE'$" ${writerOf dnsCfg}
     # the staging copies both secrets, by path
     grep -q "stage /run/secrets/imp-authkey /run/imp-host/tailscale-authkey" ${stagePre}
@@ -752,12 +726,6 @@ in
     grep -qx IMP_HOST_IPV6=off "$zfs"
     grep -qx IMP_HOST_SUBNET6= "$zfs"
     grep -q 'create_host_network' ${ipv6Network}
-    # the proxy: the args file's words, its socket's group read at start
-    grep -qF -- '--group-add "$gid"' ${proxyUnit.serviceConfig.ExecStart}
-    grep -qF -- "--cap-drop ALL --security-opt no-new-privileges --read-only" ${proxyUnit.serviceConfig.ExecStart}
-    grep -qF -- "-v /var/run/docker.sock:/var/run/docker.sock" ${proxyUnit.serviceConfig.ExecStart}
-    grep -qF -- "${releaseImage} /usr/local/bin/imp-docker-proxy" ${proxyUnit.serviceConfig.ExecStart}
-    absent -- --env-file ${proxyUnit.serviceConfig.ExecStart}
     grep -q 'subnet6 ${ipv6Cfg.services.imp.ipv6.subnet}' ${ipv6Network}
   '';
 }

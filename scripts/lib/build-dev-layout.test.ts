@@ -4,7 +4,6 @@ import { buildDevLayout } from './build-dev-layout.ts';
 test('it lays out the default instance on the base ports', () => {
   expect(buildDevLayout({ env: {}, root: '/w/imp', cwd: '/w' })).toStrictEqual({
     name: 'imp-dev',
-    proxy: 'imp-dev-docker-proxy',
     dataDir: '/w/imp/.data/dev',
     offset: 0,
     isPublished: true,
@@ -26,7 +25,6 @@ test('it shifts every published port by IMP_DEV_PORT_OFFSET', () => {
     }),
   ).toStrictEqual({
     name: 'imp-side',
-    proxy: 'imp-side-docker-proxy',
     dataDir: '/w/imp/.data/dev',
     offset: 100,
     isPublished: true,

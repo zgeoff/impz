@@ -18,7 +18,6 @@
         { "type": "generic", "path": "deploy/bootstrap/start.sh" },
         { "type": "generic", "path": "deploy/upgrade.sh" },
         { "type": "generic", "path": "deploy/imp-host.service" },
-        { "type": "generic", "path": "deploy/imp-docker-proxy.service" },
         { "type": "generic", "path": "deploy/imp-host.env.example" },
         { "type": "generic", "path": "deploy/compose.yaml" },
         { "type": "generic", "path": "docs/guides/install.md" },

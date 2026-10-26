@@ -1,5 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createCommandLinks } from '@impz/test-utils/create-command-links';
@@ -29,16 +29,6 @@ test('#unit_imp_host prints deploy/imp-host.service unchanged', () => {
   expect(runSourcedFunction({ script, fn: 'unit_imp_host' })).toStrictEqual({
     exitCode: 0,
     stdout: readFileSync(new URL('imp-host.service', import.meta.url), 'utf8'),
-    stderr: '',
-  });
-});
-
-test('#unit_imp_docker_proxy prints deploy/imp-docker-proxy.service unchanged', () => {
-  const script = new URL('bootstrap.sh', import.meta.url).pathname;
-
-  expect(runSourcedFunction({ script, fn: 'unit_imp_docker_proxy' })).toStrictEqual({
-    exitCode: 0,
-    stdout: readFileSync(new URL('imp-docker-proxy.service', import.meta.url), 'utf8'),
     stderr: '',
   });
 });
@@ -885,9 +875,9 @@ test('#blank_env_key blanks the key and leaves every other line alone', () => {
   ).toBe('IMP_HOST_IMAGE=imp-host:1\nTAILSCALE_AUTHKEY=\nIMP_TAILSCALE_HOSTNAME=imp\n');
 });
 
-test('#check_image_contract refuses an image from before the proxy, with how to get the new one', () => {
+test('#check_image_contract refuses an image that needs a Docker socket, with how to get the new one', () => {
   const ctx = setupTest();
-  const docker = createStubBin(ctx.directoryPath, 'docker', "echo 'unprivileged'");
+  const docker = createStubBin(ctx.directoryPath, 'docker', "echo 'socket-proxy'");
 
   const result = runSourcedFunction({
     script: new URL('bootstrap.sh', import.meta.url).pathname,
@@ -902,7 +892,9 @@ test('#check_image_contract refuses an image from before the proxy, with how to 
 
 test.each([
   ['', 1],
-  ['socket-proxy', 0],
+  ['unprivileged', 1],
+  ['socket-proxy', 1],
+  ['no-docker', 0],
 ])('#check_image_contract answers an image labelled %p with exit %d', (label, exitCode) => {
   const ctx = setupTest();
   const docker = createStubBin(ctx.directoryPath, 'docker', `echo '${label}'`);
@@ -917,7 +909,85 @@ test.each([
   expect(result.exitCode).toBe(exitCode);
 });
 
-test.each([['unit_imp_host'], ['unit_imp_docker_proxy'], ['env_template']])(
+test('#retire_proxy_unit stops and disables an installed legacy imp-docker-proxy, then removes its unit file', () => {
+  const ctx = setupTest();
+  const systemctl = createStubBin(ctx.directoryPath, 'systemctl');
+  const unit = join(ctx.directoryPath, 'imp-docker-proxy.service');
+
+  writeFileSync(unit, '[Service]\nExecStart=/usr/local/bin/imp-docker-proxy\n');
+
+  const result = runSourcedFunction({
+    script: new URL('bootstrap.sh', import.meta.url).pathname,
+    fn: 'eval',
+    args: [`mode=yes; retire_proxy_unit '${unit}'`],
+    env: { PATH: `${systemctl.bin}:${process.env['PATH'] ?? ''}` },
+  });
+
+  expect(result).toStrictEqual({
+    exitCode: 0,
+    stdout: 'bootstrap: change: remove imp-docker-proxy, which impd no longer calls\n',
+    stderr: '',
+  });
+
+  expect(readFileSync(systemctl.calls, 'utf8')).toBe(
+    'systemctl disable -q --now imp-docker-proxy\nsystemctl daemon-reload\n',
+  );
+
+  expect(existsSync(unit)).toBeFalse();
+});
+
+test('#retire_proxy_unit fails and keeps the unit file when systemd cannot stop the legacy imp-docker-proxy', () => {
+  const ctx = setupTest();
+
+  const systemctl = createStubBin(
+    ctx.directoryPath,
+    'systemctl',
+    `echo 'Failed to stop imp-docker-proxy.service' >&2; exit 1`,
+  );
+
+  const unit = join(ctx.directoryPath, 'imp-docker-proxy.service');
+
+  writeFileSync(unit, '[Service]\nExecStart=/usr/local/bin/imp-docker-proxy\n');
+
+  const result = runSourcedFunction({
+    script: new URL('bootstrap.sh', import.meta.url).pathname,
+    fn: 'eval',
+    args: [`mode=yes; retire_proxy_unit '${unit}'`],
+    env: { PATH: `${systemctl.bin}:${process.env['PATH'] ?? ''}` },
+  });
+
+  expect(result).toStrictEqual({
+    exitCode: 1,
+    stdout: 'bootstrap: change: remove imp-docker-proxy, which impd no longer calls\n',
+    stderr:
+      'Failed to stop imp-docker-proxy.service\nbootstrap: failed: remove imp-docker-proxy, which impd no longer calls\n',
+  });
+
+  expect(readFileSync(systemctl.calls, 'utf8')).toBe(
+    'systemctl disable -q --now imp-docker-proxy\n',
+  );
+
+  expect(existsSync(unit)).toBeTrue();
+});
+
+test('#retire_proxy_unit changes nothing on a host without the legacy imp-docker-proxy unit', () => {
+  const ctx = setupTest();
+  const systemctl = createStubBin(ctx.directoryPath, 'systemctl');
+
+  const result = runSourcedFunction({
+    script: new URL('bootstrap.sh', import.meta.url).pathname,
+    fn: 'eval',
+    args: [
+      `mode=yes; retire_proxy_unit '${join(ctx.directoryPath, 'imp-docker-proxy.service')}'; echo "$changes"`,
+    ],
+    env: { PATH: `${systemctl.bin}:${process.env['PATH'] ?? ''}` },
+  });
+
+  expect(result).toStrictEqual({ exitCode: 0, stdout: '0\n', stderr: '' });
+  expect(readFileSync(systemctl.calls, 'utf8')).toBe('');
+});
+
+test.each([['unit_imp_host'], ['env_template']])(
   '#strip_markers takes the release-please markers out of what %s installs',
   (fn) => {
     const script = new URL('bootstrap.sh', import.meta.url).pathname;

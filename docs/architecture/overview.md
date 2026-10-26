@@ -62,24 +62,22 @@ flowchart TB
       F1["Firecracker, jailed"]
       F2["Firecracker, jailed"]
     end
-    X["imp-docker-proxy"]
   end
   I -->|"API socket"| F1
   I -->|"API socket"| F2
   I -->|"vsock"| A1["guest agent"]
   F1 --- A1
-  X --> D
+  D -->|"runs"| ih
   T --- I
 ```
 
 The host under impz is thin: it gives KVM, cgroup v2, Docker and a filesystem for the data, and runs
-two containers from one image ([the host](./host.md)). The imp-host container holds impd, every
+one container from impz's image ([the host](./host.md)). The imp-host container holds impd, every
 Firecracker process and the tailnet node, in a network namespace of its own, so the taps, routes and
 firewall rules for the imps never touch the host's network. A small entrypoint sets up the cgroups,
 the storage, the network and Tailscale, then runs impd under a supervisor that restarts it. impd
-fetches the builder image that every image pull and build runs in from its registry, with no Docker
-engine. The second container, imp-docker-proxy, holds the host's Docker socket, and impd makes no
-call through it.
+fetches the builder image that every image pull and build runs in from its registry, and the
+container gets no Docker socket.
 
 impd is one Bun process. It starts one Firecracker microVM per awake imp, detached from itself, so
 an impd restart leaves every VM running and the next impd adopts them. Each Firecracker runs under

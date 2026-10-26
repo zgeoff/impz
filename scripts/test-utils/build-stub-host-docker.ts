@@ -11,6 +11,7 @@ interface StubHostDocker {
   readonly impInfo?: string | null;
   readonly runningCLI?: 'imp' | 'impz';
   readonly unreadableFile?: string;
+  readonly proxyContainer?: boolean;
 
   // Left unset, `docker compose config --environment` fails as it does in a Compose older than
   // 2.24.
@@ -41,6 +42,8 @@ export function buildStubHostDocker(stub: StubHostDocker): string {
   "run --rm "${formatShellWord(stub.image)}" cat "*${formatShellWord(stub.unreadableFile ?? 'none')}) exit 1 ;;
   "run --rm "${formatShellWord(stub.image)}" cat "*.service) printf '%s' ${formatShellWord(stub.pulledUnit)} ;;
   "run --rm "${formatShellWord(stub.image)}" cat "*.json) echo '{}' ;;
+  "container inspect imp-docker-proxy") ${stub.proxyContainer === true ? '' : 'exit 1'} ;;
+  "rm -f imp-docker-proxy") ;;
   "exec imp-host impz --version") ${version} ;;
   "exec imp-host ${cli} ls --json") echo ${formatShellWord(imps)} ;;
   "exec imp-host ${cli} sleep "${formatShellWord(stub.sleeplessImp ?? '')}) exit 1 ;;

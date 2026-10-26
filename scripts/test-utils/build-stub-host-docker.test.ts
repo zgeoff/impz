@@ -44,6 +44,51 @@ test('it answers the image ids and contract labels of the running and the pulled
   expect(result.stdout.toString()).toBe('sha256:old\nsha256:new\nunprivileged\nsocket-proxy\n');
 });
 
+test('it finds the proxy container it was told runs, and removes it', () => {
+  const ctx = setupTest();
+
+  const docker = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    buildStubHostDocker({
+      image: 'imp-host:next',
+      runningLabel: 'socket-proxy',
+      pulledLabel: 'no-docker',
+      pulledUnit: 'unit',
+      proxyContainer: true,
+    }),
+  );
+
+  const result = Bun.spawnSync(
+    ['bash', '-c', 'docker container inspect imp-docker-proxy && docker rm -f imp-docker-proxy'],
+    { env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` } },
+  );
+
+  expect(result.exitCode).toBe(0);
+});
+
+test('it finds no proxy container unless told one runs', () => {
+  const ctx = setupTest();
+
+  const docker = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    buildStubHostDocker({
+      image: 'imp-host:next',
+      runningLabel: 'socket-proxy',
+      pulledLabel: 'no-docker',
+      pulledUnit: 'unit',
+    }),
+  );
+
+  const result = Bun.spawnSync(['bash', '-c', 'docker container inspect imp-docker-proxy'], {
+    env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
+  });
+
+  expect(result.exitCode).toBe(1);
+  expect(result.stderr.toString()).toBe('');
+});
+
 test('it answers the running image id for the pulled image when that runs already', () => {
   const ctx = setupTest();
 

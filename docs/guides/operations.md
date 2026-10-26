@@ -13,12 +13,6 @@ dev instance from the [install guide](./install.md). On a server running the rel
 | `scripts/dev/dev.sh down`    | impd sleeps every awake imp (up to 120 s), then the container goes away.          |
 | `scripts/dev/dev.sh reboot`  | `down`, then `up`. Imps come back asleep and wake on demand.                      |
 
-`up` and `restart` also compile the Docker socket proxy from the repo with the image's own `bun`,
-and replace the running proxy when its binary, privileges, env or image changed. `up` leaves a
-changed proxy running while impd runs, so a build in flight is not cut off; `restart` replaces it
-before impd comes back. The proxy's token survives the replacement, so the containers it made stay
-its own.
-
 Use `restart` after a change to impd's code: the entrypoint restarts impd, and nothing in the guests
 notices. Use `reboot` after a change to `host/`. Data stays in `.data/dev` across all three.
 
@@ -41,10 +35,9 @@ older nixie's sandbox adapter refuses impd 5 and reports itself unready. nixie 0
 release whose adapter accepts impd 5, and nixie's production deployment runs it.
 
 Take `upgrade.sh` from the new image, not from the release the host runs, with the `lib/host-env.sh`
-beside it that it sources. A host on the release before the Docker socket proxy must: its own
-`upgrade.sh` refuses the new image, whose `imp.host-contract` label is `socket-proxy`. Each
-release's `upgrade.sh` moves the host to that release, so pick the release in the image you take it
-from:
+beside it that it sources. A host whose image has the `imp.host-contract` label `socket-proxy`, or
+none, must: its own `upgrade.sh` refuses the new image, whose label is `no-docker`. Each release's
+`upgrade.sh` moves the host to that release, so pick the release in the image you take it from:
 
 <!-- x-release-please-start-version -->
 
@@ -61,25 +54,25 @@ bash deploy/upgrade.sh
    `/etc/imp/imp-host.env`. It reads the `.env` as Compose does (through
    `docker compose config --environment` when Compose has it), so a trailing comment is not part of
    the image, and variables resolve. When the host already runs that image, it still installs the
-   image lines and files of step 3, so the next restart keeps that image, and restarts nothing. With
-   the systemd unit, it refuses an image from the environment that `imp-host.service` or
-   `imp-docker-proxy.service` (drop-ins included) would not run: pin it in the env file instead. It
-   refuses an env file whose last `IMP_HOST_IMAGE=` is empty, which would give the units no image.
-   It refuses an image from before the Docker socket proxy once the unit or compose file gives
-   imp-host the proxy's socket, and an image from before the unprivileged host (no
-   `imp.host-contract` label) once it runs without `--privileged`. To go back past either, run
-   `deploy/bootstrap.sh` of that image's release.
+   image lines and files of step 3, so the next restart keeps that image. For an image that needs no
+   Docker, it still retires `imp-docker-proxy` as step 4 does, but it restarts nothing. With the
+   systemd unit, it refuses an image from the environment that `imp-host.service` (drop-ins
+   included) would not run: pin it in the env file instead. It refuses an env file whose last
+   `IMP_HOST_IMAGE=` is empty, which would give the units no image. It refuses an image from before
+   the Docker socket proxy once the unit or compose file gives imp-host no host `docker.sock`, and
+   an image from before the unprivileged host (no `imp.host-contract` label) once it runs without
+   `--privileged`. To go back past either, run `deploy/bootstrap.sh` of that image's release.
 2. It sleeps every awake imp through the API, one at a time. If the list or one sleep fails, it
    stops and the host keeps the old image. The stop would sleep them too, but only within its 120 s.
 3. It installs the new image's seccomp profile in `/etc/imp/imp-host.seccomp.json` and, for the
-   systemd unit, its `imp-host.service` and `imp-docker-proxy.service`, so a change to the
+   systemd unit, its `imp-host.service`, so a change to the
    [privileges](../architecture/host.md#privileges) or the
    [Docker socket](../architecture/host.md#the-docker-socket) reaches the server. Keep local changes
    to a unit in a drop-in (`imp-host.service.d/`). The installed units drop the release-please
    marker comments. A compose file is the operator's: upgrade.sh leaves it, and says when it still
-   runs `--privileged` or still gives imp-host the host's `docker.sock`. Then take the
-   `imp-docker-proxy` service and imp-host's volumes from this release's `deploy/compose.yaml`. The
-   proxy closes the Docker socket path only: `SYS_ADMIN` still lets root out of the container.
+   runs `--privileged`. It refuses a compose file that still runs `imp-docker-proxy`, and changes
+   nothing: take the imp-host service from this release's `deploy/compose.yaml` and drop the proxy
+   and its volumes.
 
    An env file line `IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:latest`, which every env file had before
    the units named their release, is the old template's and no pin. It becomes the commented pin, so
@@ -93,11 +86,13 @@ bash deploy/upgrade.sh
    chose the image. Compose reads that `.env` at each `up`, so a later `docker compose up -d` keeps
    the new image, not the default of an older compose file.
 
-4. It enables and restarts `imp-docker-proxy`, then restarts the host (with compose, `up -d` of both
-   services, or of imp-host alone when the file has no proxy). It waits for `/health` to report
-   ready, prints how to roll back (`docker tag` the old image ID, then
-   `systemctl restart imp-docker-proxy imp-host`), prints the boot status counts from `impz info`,
-   and lists the imps.
+4. It stops and disables `imp-docker-proxy`, whose unit becomes
+   `imp-docker-proxy.service.bak-<time>`, then restarts the host (with compose, `up -d` of
+   imp-host). It waits for `/health` to report ready, prints how to roll back, prints the boot
+   status counts from `impz info`, and lists the imps. When the old image has the new image's host
+   contract, the printed rollback is `docker tag` of the old image ID and the same restart. When the
+   contracts differ, as from a `socket-proxy` image to a `no-docker` one, the printed rollback is
+   `deploy/bootstrap.sh` of the old image's release.
 
 Imps then wake on demand. Each sleeping imp either restores its memory or boots its disk cold. The
 disk is never touched.
@@ -141,11 +136,13 @@ An impd from before this scheme kept the drive at `/var/lib/imp/system/imp-syste
 VM it booted still runs from that file. impd leaves the file alone. Remove it once no such VM runs:
 `impz ls` shows none with `booted by an older impd`.
 
-**Roll back** with `docker tag <old image ID> <image>` and the same restart. A rollback to an impd
-from before this upgrade scheme (the first release with `system/drives/`) does not match the hashes
-in the new snapshot records, and every sleeping imp boots cold once. The same happens once the other
-way: an older impd hashed the drive with another hash and wrote no drive path, so its snapshots boot
-cold with `the snapshot is from an older impd`.
+**Roll back** to an image of the same host contract with `docker tag <old image ID> <image>` and the
+same restart. Roll back to an image of another host contract with `deploy/bootstrap.sh` of that
+image's release, which writes the units its contract needs. A rollback to an impd from before this
+upgrade scheme (the first release with `system/drives/`) does not match the hashes in the new
+snapshot records, and every sleeping imp boots cold once. The same happens once the other way: an
+older impd hashed the drive with another hash and wrote no drive path, so its snapshots boot cold
+with `the snapshot is from an older impd`.
 
 **CAUTION:** A rollback to an image from before the unprivileged host needs the old unit with
 `--privileged`, which `docker tag` does not bring back; upgrade.sh refuses it. Run
@@ -294,8 +291,6 @@ What the restored database means at start:
 
 - `scripts/dev/dev.sh logs` follows impd. Every boot, sleep and wake logs a line with its time and a
   breakdown per step.
-- `docker logs imp-docker-proxy` (`<name>-docker-proxy` for a dev instance) shows each Docker call
-  the proxy refused, with the rule ([the Docker socket](../architecture/host.md#the-docker-socket)).
 - Each imp's serial console and Firecracker log go to `/var/lib/imp/imps/<id>/run/firecracker.log`
   in the container (`scripts/dev/dev.sh shell`).
 - A service's output goes to `/var/log/imp/<name>.log` inside the imp. `impz logs <imp> <service>`

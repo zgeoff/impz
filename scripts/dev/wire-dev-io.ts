@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, statSync } from 'node:fs';
 import { makeOpReader } from '../lib/make-op-reader.ts';
 import { probeDirectory } from '../lib/probe-directory.ts';
 import { readRealPath } from '../lib/read-real-path.ts';
@@ -21,15 +21,11 @@ export function wireDevIO(): DevIO {
       probeFile: (path) => statSync(path, { throwIfNoEntry: false })?.isFile() ?? false,
       probeDirectory,
       readText: readTextOrNull,
-      readBytes: (path) => readFileSync(path),
       readRealPath: (path) => readRealPath(path, process.cwd()),
       writeText,
       writeSecretText,
       createDirectory: (path) => {
         mkdirSync(path, { recursive: true });
-      },
-      rename: (from, to) => {
-        renameSync(from, to);
       },
       remove: removeFile,
     },
@@ -38,6 +34,5 @@ export function wireDevIO(): DevIO {
     sleep: Bun.sleep,
     writeStdout: writeStdoutLine,
     writeStderr,
-    user: `${String(process.getuid?.() ?? 0)}:${String(process.getgid?.() ?? 0)}`,
   };
 }
