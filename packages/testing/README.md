@@ -30,7 +30,10 @@ test('it creates an imp', async () => {
 
 `startTestImpd(options)` takes:
 
-- `env`: impd settings, as the `IMP_*` variables impd reads at start.
+- `env`: impd settings, as the `IMP_*` variables impd reads at start. A setting that turns on HTTPS
+  or OpenTelemetry export needs the package that impd loads for it, which the package lists as an
+  optional peer dependency: add `acme-client` or the `@opentelemetry/*` exporters to your dev
+  dependencies.
 - `onLog`: a callback for each line impd logs. impd writes nothing to stderr.
 
 It returns:

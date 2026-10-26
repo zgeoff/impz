@@ -1,12 +1,17 @@
 import { Agent } from 'node:https';
-import * as acme from 'acme-client';
+import type * as AcmeClient from 'acme-client';
 import type { Challenge } from 'acme-client/types/rfc8555';
 import { getErrorMessage } from '../../../platform/process/get-error-message';
 import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import type { DnsProvider, TxtRecord } from '../dns/dns-provider';
 import type { CertStore, Certificate } from './cert-store';
-import type { CertificateInfo } from './renewal-policy';
 import { listCertificateNames } from './renewal-policy';
+
+interface AcmePollOptions {
+  readonly backoffAttempts: number;
+  readonly backoffMin: number;
+  readonly backoffMax: number;
+}
 
 export interface AcmeIssuerOptions {
   readonly directoryUrl: string;
@@ -19,12 +24,6 @@ export interface AcmeIssuerOptions {
   readonly poll?: AcmePollOptions;
 }
 
-interface AcmePollOptions {
-  readonly backoffAttempts: number;
-  readonly backoffMin: number;
-  readonly backoffMax: number;
-}
-
 interface PendingChallenge {
   readonly challenge: Challenge;
   readonly fqdn: string;
@@ -34,14 +33,18 @@ interface PendingChallenge {
 export type IssueCertificate = (domain: string) => Promise<Certificate>;
 
 export function createAcmeIssuer(options: AcmeIssuerOptions): IssueCertificate {
-  if (options.caPem !== null) {
-    acme.axios.defaults.httpsAgent = new Agent({ ca: options.caPem });
-  }
+  const loading: { promise: Promise<typeof AcmeClient> | null } = { promise: null };
+
+  const loadAcme = (): Promise<typeof AcmeClient> => {
+    loading.promise ??= readAcmeClient(options.caPem);
+
+    return loading.promise;
+  };
 
   // a key that has an account but lost its URL is never registered again:
   // acme-client then sends an account update that strict CAs such as Pebble
   // refuse
-  const openClient = async (): Promise<acme.Client> => {
+  const openClient = async (acme: typeof AcmeClient): Promise<AcmeClient.Client> => {
     const stored = options.store.readAccount(options.directoryUrl);
 
     if (stored !== null) {
@@ -80,7 +83,8 @@ export function createAcmeIssuer(options: AcmeIssuerOptions): IssueCertificate {
   const runOrder = async (domain: string): Promise<Certificate> => {
     await checkDirectory(options.directoryUrl, options.caPem);
 
-    const client = await openClient();
+    const acme = await loadAcme();
+    const client = await openClient(acme);
 
     const names = listCertificateNames(domain);
 
@@ -154,32 +158,16 @@ export function createAcmeIssuer(options: AcmeIssuerOptions): IssueCertificate {
   };
 }
 
-export function readCertificateInfo(chainPem: string): CertificateInfo {
-  const info = acme.crypto.readCertificateInfo(chainPem);
+// acme-client loads on the first order, so an impd with HTTPS off never loads it, and
+// @impz/testing leaves it out of the dependencies of a consumer that boots impd without HTTPS
+async function readAcmeClient(caPem: string | null): Promise<typeof AcmeClient> {
+  const acme = await import('acme-client');
 
-  const names = new Set([info.domains.commonName, ...info.domains.altNames]);
-
-  names.delete('');
-
-  return { notBefore: info.notBefore, notAfter: info.notAfter, names: [...names] };
-}
-
-async function removeRecords(
-  options: AcmeIssuerOptions,
-  records: readonly TxtRecord[],
-): Promise<void> {
-  for (const record of records) {
-    try {
-      await options.dns.removeTxt(record);
-    } catch (error) {
-      const reason = getErrorMessage(error);
-
-      getImpdLogger('https').warning('could not remove the TXT record {fqdn}: {reason}', {
-        fqdn: record.fqdn,
-        reason,
-      });
-    }
+  if (caPem !== null) {
+    acme.axios.defaults.httpsAgent = new Agent({ ca: caPem });
   }
+
+  return acme;
 }
 
 // Under Bun a failed TLS handshake inside acme-client reads only `undefined
@@ -199,6 +187,24 @@ async function checkDirectory(directoryUrl: string, caPem: string | null): Promi
     throw new Error(`cannot reach the ACME server at ${directoryUrl}: ${getErrorMessage(error)}`, {
       cause: error,
     });
+  }
+}
+
+async function removeRecords(
+  options: AcmeIssuerOptions,
+  records: readonly TxtRecord[],
+): Promise<void> {
+  for (const record of records) {
+    try {
+      await options.dns.removeTxt(record);
+    } catch (error) {
+      const reason = getErrorMessage(error);
+
+      getImpdLogger('https').warning('could not remove the TXT record {fqdn}: {reason}', {
+        fqdn: record.fqdn,
+        reason,
+      });
+    }
   }
 }
 
