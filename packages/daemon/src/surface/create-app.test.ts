@@ -113,6 +113,7 @@ test('it serves system.info from config and the database', async () => {
       publicEgress: true,
       oauthSecrets: true,
       secretUpstream: true,
+      secretPresets: true,
       backupOptOut: true,
       brokerRefusals: true,
       grantFilters: true,

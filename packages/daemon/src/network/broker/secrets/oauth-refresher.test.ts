@@ -2354,7 +2354,7 @@ test('it reports a secret of another kind as gone', async () => {
 
   await createSecret(ctx.db, {
     name: 'gh',
-    kind: 'custom',
+    kind: 'static',
     rules: [buildMockBrokerRule()],
     valueFile,
   });

@@ -175,6 +175,8 @@ function buildJsonSchema(schema: unknown, io: 'input' | 'output'): JsonSchema {
         context.jsonSchema['x-unrepresentable'] = 'custom';
       } else if (zodSchema instanceof z.ZodTransform) {
         context.jsonSchema['x-unrepresentable'] = 'transform';
+      } else if (zodSchema instanceof z.ZodUndefined) {
+        context.jsonSchema.not = {};
       }
     },
   });

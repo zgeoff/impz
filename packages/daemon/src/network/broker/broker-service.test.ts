@@ -5,11 +5,13 @@ import type { Socket } from 'node:net';
 import { join } from 'node:path';
 import { connect as connectTls } from 'node:tls';
 import { buildMockBrokerRule } from '@impz/api/test-utils/build-mock-broker-rule';
+import { buildMockOAuthConfig } from '@impz/api/test-utils/build-mock-oauth-config';
 import { server } from '@impz/test-utils/mock-server';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { HttpResponse, http } from 'msw';
 import invariant from 'tiny-invariant';
 import { buildStubHostRoutes } from '../../../testing/host-net/build-stub-host-routes';
+import { createStubBrokerTokenEndpoint } from '../../../testing/network/create-stub-broker-token-endpoint';
 import { startStubBrokerGuestSocket } from '../../../testing/network/start-stub-broker-guest-socket';
 import { startStubBrokerReplyTarget } from '../../../testing/network/start-stub-broker-reply-target';
 import { buildMockNewAuditEntry } from '../../../testing/platform/build-mock-new-audit-entry';
@@ -71,13 +73,13 @@ test('it answers an added secret with its hosts and no value', async () => {
 
   const added: unknown = await ctx.client.secrets.add({
     name: 'gh',
-    kind: 'github',
+    preset: 'github',
     value: 'ghp_SECRETVALUE0123456789',
   });
 
   expect(added).toStrictEqual({
     name: 'gh',
-    kind: 'github',
+    kind: 'static',
     rules: [
       { host: 'github.com', header: 'authorization', scheme: 'basic', user: 'x-access-token' },
       { host: 'api.github.com', header: 'authorization', scheme: 'bearer' },
@@ -122,7 +124,7 @@ test('it lists a secret with the imps it is granted to', async () => {
   expect(secrets).toStrictEqual([
     {
       name: 'gh',
-      kind: 'github',
+      kind: 'static',
       rules: [
         { host: 'github.com', header: 'authorization', scheme: 'basic', user: 'x-access-token' },
         { host: 'api.github.com', header: 'authorization', scheme: 'bearer' },
@@ -142,7 +144,10 @@ test.each([['../etc'], ['a/b'], ['.hidden'], ['Upper'], ['']])(
 
     expect(
       ctx.client.secrets.add({ name, kind: 'github', value: 'ghp_SECRETVALUE0123456789' }),
-    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      data: { issues: expect.toPartiallyContain({ path: ['name'] }) },
+    });
   },
 );
 
@@ -151,15 +156,26 @@ test('it rejects a value that could split a header', async () => {
 
   expect(
     ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'a\r\nx-evil: 1' }),
-  ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+  ).rejects.toMatchObject({
+    code: 'BAD_REQUEST',
+    data: { issues: expect.toPartiallyContain({ path: ['value'] }) },
+  });
 });
 
-test('it rejects a custom secret without rules', async () => {
+test('it rejects a static secret with an empty rule list', async () => {
   const ctx = await setupTest();
 
   expect(
-    ctx.client.secrets.add({ name: 'api', kind: 'custom', value: 'ghp_SECRETVALUE0123456789' }),
-  ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    ctx.client.secrets.add({
+      name: 'api',
+      kind: 'static',
+      value: 'ghp_SECRETVALUE0123456789',
+      rules: [],
+    }),
+  ).rejects.toMatchObject({
+    code: 'BAD_REQUEST',
+    data: { issues: expect.toPartiallyContain({ path: ['rules'] }) },
+  });
 });
 
 test('it refuses a taken name without replace and keeps the stored value', async () => {
@@ -564,6 +580,148 @@ test('it gives a granted imp the broker variables once the CA is in its boot', a
       'CURL_CA_BUNDLE=/etc/imp/broker-ca.pem',
       'GH_TOKEN=imp-broker-placeholder',
       'GITHUB_TOKEN=imp-broker-placeholder',
+    ],
+  });
+});
+
+test.each([
+  [
+    { preset: 'github' },
+    ['GH_TOKEN=imp-broker-placeholder', 'GITHUB_TOKEN=imp-broker-placeholder'],
+  ],
+  [{ preset: 'anthropic' }, ['ANTHROPIC_API_KEY=imp-broker-placeholder']],
+  [{ preset: 'npm' }, ['NPM_TOKEN=imp-broker-placeholder']],
+  [{ kind: 'anthropic' }, ['ANTHROPIC_API_KEY=imp-broker-placeholder']],
+  [{ kind: 'npm' }, ['NPM_TOKEN=imp-broker-placeholder']],
+] as const)(
+  'it gives an imp granted %o its preset’s placeholders',
+  async (binding, placeholders) => {
+    const ctx = await setupTest();
+
+    await ctx.createTestImage('base');
+    await ctx.client.imps.create({ name: 'dev' });
+    await ctx.client.secrets.add({ name: 'cred', value: 'fake-value-1', ...binding });
+    await ctx.client.grants.add({ name: 'dev', secret: 'cred' });
+
+    const imp = await readImpByName(ctx.db, 'dev');
+
+    invariant(imp);
+
+    const vsock = join(ctx.dataDir, 'vsock');
+
+    await writeFile(vsock, '');
+
+    const env = await ctx.impd.broker.readExecEnv(imp, vsock);
+
+    expect(env).toStrictEqual({
+      kind: 'ready',
+      env: [
+        `HTTPS_PROXY=http://127.0.0.1:${String(ctx.config.brokerPort)}`,
+        `https_proxy=http://127.0.0.1:${String(ctx.config.brokerPort)}`,
+        'NO_PROXY=localhost,127.0.0.1,::1',
+        'no_proxy=localhost,127.0.0.1,::1',
+        'NODE_USE_ENV_PROXY=1',
+        'SSL_CERT_FILE=/etc/imp/broker-ca.pem',
+        'NODE_EXTRA_CA_CERTS=/etc/imp/broker-ca.pem',
+        'GIT_SSL_CAINFO=/etc/imp/broker-ca.pem',
+        'REQUESTS_CA_BUNDLE=/etc/imp/broker-ca.pem',
+        'CURL_CA_BUNDLE=/etc/imp/broker-ca.pem',
+        ...placeholders,
+      ],
+    });
+  },
+);
+
+test('it gives an imp granted a static secret the variables the secret names', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+  await ctx.client.imps.create({ name: 'dev' });
+
+  await ctx.client.secrets.add({
+    name: 'api',
+    kind: 'static',
+    value: 'fake-value-1',
+    rules: [{ host: 'api.example.com', header: 'x-token', scheme: 'raw' }],
+    env: ['EXAMPLE_TOKEN'],
+  });
+
+  await ctx.client.grants.add({ name: 'dev', secret: 'api' });
+
+  const imp = await readImpByName(ctx.db, 'dev');
+
+  invariant(imp);
+
+  const vsock = join(ctx.dataDir, 'vsock');
+
+  await writeFile(vsock, '');
+
+  const env = await ctx.impd.broker.readExecEnv(imp, vsock);
+
+  expect(env).toStrictEqual({
+    kind: 'ready',
+    env: [
+      `HTTPS_PROXY=http://127.0.0.1:${String(ctx.config.brokerPort)}`,
+      `https_proxy=http://127.0.0.1:${String(ctx.config.brokerPort)}`,
+      'NO_PROXY=localhost,127.0.0.1,::1',
+      'no_proxy=localhost,127.0.0.1,::1',
+      'NODE_USE_ENV_PROXY=1',
+      'SSL_CERT_FILE=/etc/imp/broker-ca.pem',
+      'NODE_EXTRA_CA_CERTS=/etc/imp/broker-ca.pem',
+      'GIT_SSL_CAINFO=/etc/imp/broker-ca.pem',
+      'REQUESTS_CA_BUNDLE=/etc/imp/broker-ca.pem',
+      'CURL_CA_BUNDLE=/etc/imp/broker-ca.pem',
+      'EXAMPLE_TOKEN=imp-broker-placeholder',
+    ],
+  });
+});
+
+test('it gives an imp granted an oauth secret the variables the secret names', async () => {
+  const ctx = await setupTest();
+
+  const tokens = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+
+  server.use(tokens.handler);
+  tokens.issue('fake-refresh-0', { access_token: 'fake-access-1', expires_in: 3600 });
+
+  await ctx.createTestImage('base');
+  await ctx.client.imps.create({ name: 'dev' });
+
+  await ctx.client.secrets.add({
+    name: 'codex',
+    kind: 'oauth',
+    value: 'fake-refresh-0',
+    rules: [buildMockBrokerRule()],
+    env: ['EXAMPLE_TOKEN'],
+    oauth: buildMockOAuthConfig({ tokenUrl: 'https://auth.example.com/oauth/token' }),
+  });
+
+  await ctx.client.grants.add({ name: 'dev', secret: 'codex' });
+
+  const imp = await readImpByName(ctx.db, 'dev');
+
+  invariant(imp);
+
+  const vsock = join(ctx.dataDir, 'vsock');
+
+  await writeFile(vsock, '');
+
+  const env = await ctx.impd.broker.readExecEnv(imp, vsock);
+
+  expect(env).toStrictEqual({
+    kind: 'ready',
+    env: [
+      `HTTPS_PROXY=http://127.0.0.1:${String(ctx.config.brokerPort)}`,
+      `https_proxy=http://127.0.0.1:${String(ctx.config.brokerPort)}`,
+      'NO_PROXY=localhost,127.0.0.1,::1',
+      'no_proxy=localhost,127.0.0.1,::1',
+      'NODE_USE_ENV_PROXY=1',
+      'SSL_CERT_FILE=/etc/imp/broker-ca.pem',
+      'NODE_EXTRA_CA_CERTS=/etc/imp/broker-ca.pem',
+      'GIT_SSL_CAINFO=/etc/imp/broker-ca.pem',
+      'REQUESTS_CA_BUNDLE=/etc/imp/broker-ca.pem',
+      'CURL_CA_BUNDLE=/etc/imp/broker-ca.pem',
+      'EXAMPLE_TOKEN=imp-broker-placeholder',
     ],
   });
 });

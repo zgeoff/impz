@@ -12,6 +12,7 @@ import { buildStubBrokerJwt } from '../../../../testing/network/build-stub-broke
 import { createStubBrokerTokenEndpoint } from '../../../../testing/network/create-stub-broker-token-endpoint';
 import { runSql } from '../../../../testing/platform/run-sql';
 import { startTestImpd } from '../../../../testing/start-test-impd';
+import { TEST_TOKEN } from '../../../../testing/test-token';
 import { createReachPolicy } from '../../../host-net/net/reach-policy';
 import { readImpByName } from '../../../platform/db/imps';
 import { readSecret, removeSecret, upsertSecret } from '../../../platform/db/secrets';
@@ -266,66 +267,144 @@ test('it lists an oauth secret whose refresh token is dead as needing a new sign
   });
 });
 
-test('it rejects an oauth secret without its token endpoint', async () => {
+test('it refuses a preset with rules and stores nothing', async () => {
   const ctx = await setupTest();
 
-  expect(
-    ctx.client.secrets.add({
-      name: 'codex',
-      kind: 'oauth',
-      value: 'fake-refresh-0',
-      rules: [buildMockBrokerRule()],
+  const response = await ctx.impd.api.app.handle(
+    new Request('http://impd.test/rpc/secrets/add', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${TEST_TOKEN}`, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        json: {
+          name: 'gh',
+          preset: 'github',
+          value: 'ghp_x',
+          rules: [{ host: 'api.example.com', header: 'authorization', scheme: 'bearer' }],
+        },
+      }),
     }),
-  ).rejects.toMatchObject({
-    code: 'BAD_REQUEST',
-    message: 'kind oauth needs a token URL and a client id',
+  );
+
+  const body: unknown = await response.json();
+  const listed = await ctx.client.secrets.list();
+
+  expect(response.status).toBe(400);
+
+  expect(body).toMatchObject({
+    json: { data: { issues: [{ path: [], code: 'unrecognized_keys', keys: ['rules'] }] } },
+  });
+
+  expect(listed).toStrictEqual([]);
+});
+
+test('it stores a preset as a static secret with the preset’s rules and variables', async () => {
+  const ctx = await setupTest();
+
+  await ctx.client.secrets.add({ name: 'claude', preset: 'anthropic', value: 'sk-fake' });
+
+  const stored = await readSecret(ctx.db, 'claude');
+
+  expect(stored).toMatchObject({
+    kind: 'static',
+    rules: [{ host: 'api.anthropic.com', header: 'x-api-key', scheme: 'raw' }],
+    env: ['ANTHROPIC_API_KEY'],
+    oauth: null,
   });
 });
 
-test('it rejects an oauth secret without hosts', async () => {
+test('it stores an older preset kind name as a static secret with the preset’s rules', async () => {
   const ctx = await setupTest();
 
-  expect(
-    ctx.client.secrets.add({
-      name: 'codex',
-      kind: 'oauth',
-      value: 'fake-refresh-0',
-      oauth: buildMockOAuthConfig({ tokenUrl: 'https://auth.example.com/oauth/token' }),
-    }),
-  ).rejects.toMatchObject({ code: 'BAD_REQUEST', message: 'kind oauth needs at least one host' });
-});
+  await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'ghp_x' });
 
-test('it rejects a token endpoint on a preset secret', async () => {
-  const ctx = await setupTest();
+  const stored = await readSecret(ctx.db, 'gh');
 
-  expect(
-    ctx.client.secrets.add({
-      name: 'gh',
-      kind: 'github',
-      value: 'x',
-      oauth: buildMockOAuthConfig({ tokenUrl: 'https://auth.example.com/oauth/token' }),
-    }),
-  ).rejects.toMatchObject({
-    code: 'BAD_REQUEST',
-    message: 'kind github has no token URL or client id; they are for kind oauth',
+  expect(stored).toMatchObject({
+    kind: 'static',
+    rules: [
+      { host: 'github.com', header: 'authorization', scheme: 'basic', user: 'x-access-token' },
+      { host: 'api.github.com', header: 'authorization', scheme: 'bearer' },
+      { host: 'uploads.github.com', header: 'authorization', scheme: 'bearer' },
+    ],
+    env: ['GH_TOKEN', 'GITHUB_TOKEN'],
+    oauth: null,
   });
 });
 
-test('it rejects a token endpoint on a custom secret', async () => {
+test('it stores the older kind name custom as a static secret with its rules', async () => {
   const ctx = await setupTest();
 
-  expect(
-    ctx.client.secrets.add({
-      name: 'api',
-      kind: 'custom',
-      value: 'x',
-      rules: [buildMockBrokerRule()],
-      oauth: buildMockOAuthConfig({ tokenUrl: 'https://auth.example.com/oauth/token' }),
-    }),
-  ).rejects.toMatchObject({
-    code: 'BAD_REQUEST',
-    message: 'kind custom has no token URL or client id; they are for kind oauth',
+  await ctx.client.secrets.add({
+    name: 'api',
+    kind: 'custom',
+    value: 'v1',
+    rules: [{ host: 'api.example.com', header: 'x-token', scheme: 'raw' }],
   });
+
+  const stored = await readSecret(ctx.db, 'api');
+
+  expect(stored).toMatchObject({
+    kind: 'static',
+    rules: [{ host: 'api.example.com', header: 'x-token', scheme: 'raw' }],
+    env: [],
+    oauth: null,
+  });
+});
+
+test('it stores a static secret with the variables it names', async () => {
+  const ctx = await setupTest();
+
+  await ctx.client.secrets.add({
+    name: 'api',
+    kind: 'static',
+    value: 'v1',
+    rules: [{ host: 'api.example.com', header: 'x-token', scheme: 'raw' }],
+    env: ['EXAMPLE_TOKEN'],
+  });
+
+  const listed = await ctx.client.secrets.list();
+
+  expect(listed[0]?.env).toStrictEqual(['EXAMPLE_TOKEN']);
+});
+
+test('it stores an oauth secret with the variables it names', async () => {
+  const ctx = await setupTest();
+
+  const tokens = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+
+  server.use(tokens.handler);
+  tokens.issue('fake-refresh-0', { access_token: 'fake-access-1', expires_in: 3600 });
+
+  await ctx.client.secrets.add({
+    name: 'codex',
+    kind: 'oauth',
+    value: 'fake-refresh-0',
+    rules: [buildMockBrokerRule()],
+    env: ['EXAMPLE_TOKEN'],
+    oauth: buildMockOAuthConfig({ tokenUrl: 'https://auth.example.com/oauth/token' }),
+  });
+
+  const listed = await ctx.client.secrets.list();
+
+  expect(listed[0]?.env).toStrictEqual(['EXAMPLE_TOKEN']);
+});
+
+test('it rotates an older preset kind name’s secret with a preset and keeps its grants', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+  await ctx.client.imps.create({ name: 'dev' });
+  await ctx.client.secrets.add({ name: 'gh', kind: 'github', value: 'ghp_x' });
+  await ctx.client.grants.add({ name: 'dev', secret: 'gh' });
+
+  const rotated = await ctx.client.secrets.add({
+    name: 'gh',
+    preset: 'github',
+    value: 'ghp_y',
+    replace: true,
+  });
+
+  expect(rotated.imps).toStrictEqual(['dev']);
 });
 
 test.each([
@@ -363,6 +442,69 @@ test.each([
   });
 });
 
+test.each([
+  [
+    'a token endpoint on the older preset kind github',
+    {
+      kind: 'github',
+      oauth: { tokenUrl: 'https://auth.example.com/oauth/token', clientId: 'fake-client' },
+    },
+    { path: [], code: 'unrecognized_keys', keys: ['oauth'] },
+  ],
+  [
+    'a token endpoint on the older kind custom',
+    {
+      kind: 'custom',
+      rules: [{ host: 'api.example.com', header: 'x-token', scheme: 'raw' }],
+      oauth: { tokenUrl: 'https://auth.example.com/oauth/token', clientId: 'fake-client' },
+    },
+    { path: [], code: 'unrecognized_keys', keys: ['oauth'] },
+  ],
+  [
+    'a token endpoint on a preset',
+    {
+      preset: 'github',
+      oauth: { tokenUrl: 'https://auth.example.com/oauth/token', clientId: 'fake-client' },
+    },
+    { path: [], code: 'unrecognized_keys', keys: ['oauth'] },
+  ],
+  [
+    'the older kind custom without rules',
+    { kind: 'custom' },
+    { path: ['rules'], message: 'needs at least one host' },
+  ],
+  [
+    'the older kind custom with an empty rule list',
+    { kind: 'custom', rules: [] },
+    { path: ['rules'], message: 'needs at least one host' },
+  ],
+  [
+    'an oauth secret without hosts',
+    {
+      kind: 'oauth',
+      oauth: { tokenUrl: 'https://auth.example.com/oauth/token', clientId: 'fake-client' },
+    },
+    { path: ['rules'], message: 'needs at least one host' },
+  ],
+  [
+    'an oauth secret without its token endpoint',
+    { kind: 'oauth', rules: [{ host: 'api.example.com', header: 'x-token', scheme: 'raw' }] },
+    { path: ['oauth'], message: 'needs a token URL and a client id' },
+  ],
+] as const)('it rejects %s and names the field', async (_, binding, issue) => {
+  const ctx = await setupTest();
+
+  const input = { name: 'api', value: 'fake-value-1', ...binding };
+
+  // input the contract refuses
+  const added = ctx.client.secrets.add(input as never);
+
+  expect(added).rejects.toMatchObject({
+    code: 'BAD_REQUEST',
+    data: { issues: expect.toPartiallyContain(issue) },
+  });
+});
+
 test('it sends nothing to the token endpoint for a refused oauth secret', async () => {
   const ctx = await setupTest();
 
@@ -374,10 +516,14 @@ test('it sends nothing to the token endpoint for a refused oauth secret', async 
     name: 'codex',
     kind: 'oauth',
     value: 'fake-refresh-0',
-    rules: [buildMockBrokerRule()],
+    rules: [],
+    oauth: buildMockOAuthConfig({ tokenUrl: 'https://auth.example.com/oauth/token' }),
   });
 
-  expect(added).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+  expect(added).rejects.toMatchObject({
+    code: 'BAD_REQUEST',
+    data: { issues: expect.toPartiallyContain({ path: ['rules'] }) },
+  });
 
   const listed = await ctx.client.secrets.list();
 
@@ -1305,7 +1451,7 @@ test('it removes the old file of a committed replace, on the next start', async 
 
   createSecretFiles(ctx.dataDir).write(next, 'v3');
 
-  await upsertSecret(ctx.db, { name: 'api', kind: 'custom', rules, valueFile: next }, false);
+  await upsertSecret(ctx.db, { name: 'api', kind: 'static', rules, valueFile: next }, false);
 
   const restarted = await createBroker({
     config: ctx.config,

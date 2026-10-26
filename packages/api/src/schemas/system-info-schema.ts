@@ -72,6 +72,8 @@ const SystemFeaturesSchema = z.object({
   // credential to https://<host>.
   secretUpstream: z.boolean().optional(),
 
+  secretPresets: z.boolean().optional(),
+
   // An impd without this drops a create's `backup` unread and backs the imp up.
   backupOptOut: z.boolean().optional(),
 

@@ -1,4 +1,4 @@
-import type { BrokerRule, OAuthConfig, Secret, SecretAdded, SecretKind } from '@impz/api';
+import type { Secret, SecretAdd, SecretAdded } from '@impz/api';
 import type { ImpDatabase } from '../../../platform/db/open-database';
 import {
   createSecret,
@@ -13,26 +13,15 @@ import { ImpdError } from '../../../platform/errors/impd-error';
 import { buildConflictError, buildNotFoundError } from '../../../platform/errors/impd-errors';
 import { getErrorMessage } from '../../../platform/process/get-error-message';
 import { getImpdLogger } from '../../../platform/process/get-impd-logger';
-import { SecretRulesError, resolveBinding } from './connector-kinds';
-import type { SecretBinding } from './connector-kinds';
+import { buildStoredBinding } from './build-stored-binding';
 import type { OAuthRefresher } from './oauth-refresher';
-import { buildPendingState, findIdClaims, formatOAuthState, parseOAuthState } from './oauth-state';
+import { findIdClaims, parseOAuthState } from './oauth-state';
 import { buildValueFile } from './secret-files';
 import type { SecretFiles } from './secret-files';
-
-export interface AddSecretInput {
-  readonly name: string;
-  readonly kind: SecretKind;
-  readonly value: string;
-  readonly rules?: readonly BrokerRule[] | undefined;
-
-  readonly oauth?: OAuthConfig | undefined;
-  readonly replace?: boolean | undefined;
-  readonly rebind?: boolean | undefined;
-}
+import { SECRET_KINDS } from './secret-kinds';
 
 interface SecretStore {
-  readonly addSecret: (input: AddSecretInput) => Promise<SecretAdded>;
+  readonly addSecret: (input: Readonly<SecretAdd>) => Promise<SecretAdded>;
   readonly listSecrets: () => Promise<Secret[]>;
 
   readonly refreshSecret: (name: string) => Promise<Secret>;
@@ -92,7 +81,7 @@ export function createSecretStore(deps: SecretStoreDeps): SecretStore {
 
   const writeSecretRow = async (
     secret: Readonly<NewSecret>,
-    input: Readonly<AddSecretInput>,
+    input: Readonly<SecretAdd>,
   ): Promise<{
     readonly secret: SecretRecord;
     readonly oldValueFile: string | null;
@@ -136,51 +125,15 @@ export function createSecretStore(deps: SecretStoreDeps): SecretStore {
 
   return {
     addSecret: async (input) => {
-      let binding: SecretBinding;
-
-      try {
-        binding = resolveBinding(input.kind, input.rules);
-      } catch (error) {
-        if (error instanceof SecretRulesError) {
-          throw new ImpdError('BAD_REQUEST', { message: error.message });
-        }
-
-        throw error;
-      }
-
-      if (input.kind === 'oauth' && input.oauth === undefined) {
-        throw new ImpdError('BAD_REQUEST', {
-          message: 'kind oauth needs a token URL and a client id',
-        });
-      }
-
-      if (input.kind !== 'oauth' && input.oauth !== undefined) {
-        throw new ImpdError('BAD_REQUEST', {
-          message: `kind ${input.kind} has no token URL or client id; they are for kind oauth`,
-        });
-      }
-
-      const oauth = input.kind === 'oauth' ? (input.oauth ?? null) : null;
+      const binding = buildStoredBinding(input);
+      const kind = SECRET_KINDS[binding.kind];
 
       const saved = await refresher.withLock(input.name, async () => {
         const valueFile = buildValueFile(input.name);
 
-        const content =
-          input.kind === 'oauth' ? formatOAuthState(buildPendingState(input.value)) : input.value;
+        files.write(valueFile, kind.formatValueFile(input.value));
 
-        files.write(valueFile, content);
-
-        const written = await writeSecretRow(
-          {
-            name: input.name,
-            kind: input.kind,
-            rules: binding.rules,
-            env: binding.env,
-            oauth,
-            valueFile,
-          },
-          input,
-        );
+        const written = await writeSecretRow({ name: input.name, ...binding, valueFile }, input);
 
         if (written.oldValueFile !== null) {
           await removeDisplacedFile(written.oldValueFile);
@@ -191,7 +144,7 @@ export function createSecretStore(deps: SecretStoreDeps): SecretStore {
         return written;
       });
 
-      if (input.kind === 'oauth') {
+      if (kind.isRefreshed) {
         await refresher.refresh(input.name, true);
       }
 
@@ -214,7 +167,7 @@ export function createSecretStore(deps: SecretStoreDeps): SecretStore {
         throw buildNotFoundError('secret', name);
       }
 
-      if (secret.kind !== 'oauth') {
+      if (!SECRET_KINDS[secret.kind].isRefreshed) {
         throw new ImpdError('BAD_REQUEST', { message: `secret ${name} is not an oauth secret` });
       }
 
