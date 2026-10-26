@@ -1253,6 +1253,60 @@ test('it lists only the read tools to a read grant', async () => {
   ]);
 });
 
+test('it names only the read tools in the instructions it gives a read grant', async () => {
+  const ctx = await setupTest();
+  const oauthClient = await ctx.impd.oauth.addClient('conn', ['https://client.example/callback']);
+  const made = await ctx.impd.tokens.create({ name: 'laptop', scope: 'manage', imps: null });
+
+  const approver = ctx.impd.tokens.authenticate(made.secret);
+
+  invariant(approver);
+
+  const tokens = await runOAuthSignIn(
+    {
+      respond: (request) => ctx.handle(request, null),
+      origin: 'http://127.0.0.1:7171',
+      clientID: oauthClient.clientId,
+      redirectURI: 'https://client.example/callback',
+      scope: 'read exec manage',
+    },
+    (code) => {
+      ctx.impd.oauth.approve(ApprovalCodeSchema.parse(code), approver, 'read', ['home-*']);
+    },
+  );
+
+  const opened = await ctx.handle(
+    new Request(`http://127.0.0.1:7171/mcp`, {
+      method: 'POST',
+      headers: {
+        host: '127.0.0.1:7171',
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream',
+        authorization: `Bearer ${tokens.access_token}`,
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 0,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-06-18',
+          capabilities: {},
+          clientInfo: { name: 'test', version: '1.0.0' },
+        },
+      }),
+    }),
+    null,
+  );
+
+  const json = await readMcpAnswer(opened);
+
+  const initialized = z.object({ result: z.object({ instructions: z.string() }) }).parse(json);
+
+  expect(initialized.result.instructions).toBe(
+    'imp runs persistent Linux microVMs ("imps") that sleep when idle and wake on use. This server may touch imps matching home-*. This caller has the read scope, so it can only look: list imps, their URLs, the images and the checkpoints. Running commands, reading or writing files, and creating, checkpointing, forking or destroying an imp need a wider grant: exec or manage. Its tools: imp_list, imp_url, imp_image_list, imp_checkpoint_list.',
+  );
+});
+
 test.each([
   ['read', undefined, 'dev-a', 'a read grant'],
   ['exec', ['dev-*'], 'box', 'a grant for dev-*'],

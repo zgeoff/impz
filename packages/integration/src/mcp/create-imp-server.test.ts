@@ -78,6 +78,8 @@ test.each([['2025-11-25'], ['2025-06-18'], ['2025-03-26']])(
 
     const server = createMcpServer({ version: '1.2.3' });
 
+    ctx.stack.defer(() => server.close());
+
     await server.receive(
       JSON.stringify({
         jsonrpc: '2.0',
@@ -117,6 +119,8 @@ test('it offers the newest protocol version for one it does not support', async 
 
   const server = createMcpServer({ version: '1.2.3' });
 
+  ctx.stack.defer(() => server.close());
+
   await server.receive(
     JSON.stringify({
       jsonrpc: '2.0',
@@ -149,6 +153,8 @@ test('it names the guard in the instructions it gives at initialize', async () =
   const ctx = await setupTest();
 
   const server = createMcpServer({ version: '1.2.3' });
+
+  ctx.stack.defer(() => server.close());
 
   await server.receive(
     JSON.stringify({
@@ -185,10 +191,68 @@ test('it names the guard in the instructions it gives at initialize', async () =
   ]);
 });
 
+test.each([
+  [
+    'read',
+    'imp runs persistent Linux microVMs ("imps") that sleep when idle and wake on use. This server may touch imps named home-*. This caller has the read scope, so it can only look: list imps, their URLs, the images and the checkpoints. Running commands, reading or writing files, and creating, checkpointing, forking or destroying an imp need a wider grant: exec or manage. Its tools: imp_list, imp_url, imp_image_list, imp_checkpoint_list.',
+  ],
+  [
+    'exec',
+    'imp runs persistent Linux microVMs ("imps") that sleep when idle and wake on use. This server may touch imps named home-*. This caller has the exec scope: list imps, their URLs, the images and the checkpoints, run commands and read and write files in an imp, and put one to sleep. Creating, checkpointing, restoring, forking or destroying an imp needs a manage grant. Its tools: imp_list, imp_sleep, imp_url, imp_image_list, imp_exec, imp_read_file, imp_write_file, imp_checkpoint_list.',
+  ],
+  [
+    'manage',
+    'imp runs persistent Linux microVMs ("imps") that sleep when idle and wake on use. This server may touch imps named home-*. Create an imp, run commands and read and write files in it, checkpoint before a risky change, fork to try two fixes, and destroy what you no longer need. Its tools: imp_list, imp_create, imp_destroy, imp_sleep, imp_url, imp_fork, imp_image_list, imp_exec, imp_read_file, imp_write_file, imp_checkpoint, imp_checkpoint_list, imp_restore, imp_checkpoint_delete.',
+  ],
+] as const)(
+  'it names only the %s tools in the instructions it gives at initialize',
+  async (scope, instructions) => {
+    const ctx = await setupTest();
+
+    const server = createMcpServer({ version: '1.2.3' });
+
+    ctx.stack.defer(() => server.close());
+
+    await server.receive(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-11-25',
+          capabilities: {},
+          clientInfo: { name: 'test', version: '1.0.0' },
+        },
+      }),
+      {
+        reply: ctx.reply,
+        client: ctx.client,
+        guard: buildImpGuard({ prefix: 'home-' }),
+        scope,
+      },
+    );
+
+    expect(ctx.sent).toStrictEqual([
+      {
+        jsonrpc: '2.0',
+        id: 1,
+        result: {
+          protocolVersion: '2025-11-25',
+          capabilities: { tools: { listChanged: false } },
+          serverInfo: { name: 'imp', title: 'imp', version: '1.2.3' },
+          instructions,
+        },
+      },
+    ]);
+  },
+);
+
 test('it lists every tool to a manage caller', async () => {
   const ctx = await setupTest();
 
   const server = createMcpServer({ version: '1.2.3' });
+
+  ctx.stack.defer(() => server.close());
 
   await server.receive(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }), {
     reply: ctx.reply,
@@ -225,6 +289,8 @@ test('it lists only the read tools to a read caller on a server a manage caller 
 
   const server = createMcpServer({ version: '1.2.3' });
 
+  ctx.stack.defer(() => server.close());
+
   await server.receive(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'ping' }), {
     reply: ctx.reply,
     client: ctx.client,
@@ -257,6 +323,8 @@ test('it marks the destructive tools with a destructive hint', async () => {
 
   const server = createMcpServer({ version: '1.2.3' });
 
+  ctx.stack.defer(() => server.close());
+
   await server.receive(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }), {
     reply: ctx.reply,
     client: ctx.client,
@@ -286,6 +354,8 @@ test('it gives every tool an object input schema', async () => {
 
   const server = createMcpServer({ version: '1.2.3' });
 
+  ctx.stack.defer(() => server.close());
+
   await server.receive(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }), {
     reply: ctx.reply,
     client: ctx.client,
@@ -305,6 +375,8 @@ test('it describes every input field of every tool', async () => {
   const ctx = await setupTest();
 
   const server = createMcpServer({ version: '1.2.3' });
+
+  ctx.stack.defer(() => server.close());
 
   await server.receive(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }), {
     reply: ctx.reply,
@@ -334,6 +406,8 @@ test('it answers ping with an empty result', async () => {
 
   const server = createMcpServer({ version: '1.2.3' });
 
+  ctx.stack.defer(() => server.close());
+
   await server.receive(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'ping' }), {
     reply: ctx.reply,
     client: ctx.client,
@@ -348,6 +422,8 @@ test('it answers an unknown method with a method-not-found error', async () => {
   const ctx = await setupTest();
 
   const server = createMcpServer({ version: '1.2.3' });
+
+  ctx.stack.defer(() => server.close());
 
   await server.receive(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'resources/list' }), {
     reply: ctx.reply,
@@ -369,6 +445,8 @@ test('it answers a call of an unknown tool with an invalid-params error', async 
   const ctx = await setupTest();
 
   const server = createMcpServer({ version: '1.2.3' });
+
+  ctx.stack.defer(() => server.close());
 
   await server.receive(
     JSON.stringify({
@@ -393,6 +471,8 @@ test('it refuses a call whose id a running call holds with an invalid-params err
   const ctx = await setupTest();
 
   const server = createMcpServer({ version: '1.2.3' });
+
+  ctx.stack.defer(() => server.close());
 
   const context = {
     reply: ctx.reply,
@@ -447,6 +527,8 @@ test('it still answers a create whose cancel arrives before the create starts', 
 
   const server = createMcpServer({ version: '1.2.3' });
 
+  ctx.stack.defer(() => server.close());
+
   const context = {
     reply: ctx.reply,
     client: ctx.client,
@@ -493,6 +575,8 @@ test('it cancels the first call after refusing a second with its id', async () =
   const ctx = await setupTest();
 
   const server = createMcpServer({ version: '1.2.3' });
+
+  ctx.stack.defer(() => server.close());
 
   const context = {
     reply: ctx.reply,
@@ -553,6 +637,8 @@ test('it runs a call that reuses the id of a call cancelled while its arguments 
 
   const server = createMcpServer({ version: '1.2.3' });
 
+  ctx.stack.defer(() => server.close());
+
   const context = {
     reply: ctx.reply,
     client: ctx.client,
@@ -612,6 +698,8 @@ test.each([
   const ctx = await setupTest();
 
   const server = createMcpServer({ version: '1.2.3' });
+
+  ctx.stack.defer(() => server.close());
 
   await server.receive(line, {
     reply: ctx.reply,

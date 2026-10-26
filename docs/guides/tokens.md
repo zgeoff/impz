@@ -56,6 +56,13 @@ egress policies (`egress.isEnforced`). With `IMP_KSM`, it shows what KSM shares 
 shows the host's RAM use and budget. Neither names an imp it cannot see. This is accepted: the
 totals tell it why a wake waits.
 
+A token with patterns sees every image in `impz image ls`, with its name, ref and digest, and not
+only the images its own imps boot from. An image belongs to the host, any imp may boot from it, and
+a create takes one by name, so a `manage` token on `dev-*` must see the images before it has an imp.
+A template's ref holds the name of the imp it was copied from, which can be an imp outside the
+token's patterns: the owner shares that imp's disk with every token that may create when they make
+the template.
+
 ## Manage tokens
 
 Only a `manage` token with no patterns manages tokens.
