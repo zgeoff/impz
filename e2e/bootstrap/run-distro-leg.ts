@@ -1,5 +1,7 @@
 import { applyBootstrap } from './apply-bootstrap';
 import { BootstrapTestError } from './bootstrap-test-error';
+import { checkDockerHost } from './check-docker-host';
+import { checkDockerMove } from './check-docker-move';
 import { checkFirewallDrops } from './check-firewall-drops';
 import { checkHostFirewallNone } from './check-host-firewall-none';
 import { checkImpEgress6 } from './check-imp-egress6';
@@ -93,10 +95,16 @@ export async function runDistroLeg(run: BootstrapRun, distro: Distro): Promise<v
   }
 
   await checkProxyRetired(run, target);
+  await checkDockerHost(run, target);
   await checkHostFirewallNone(run, target);
 
   if (distro === 'debian') {
     await checkIPv6Cases(run, target);
+  }
+
+  // Last in the leg: Docker stays installed, as upgrade.sh leaves it.
+  if (distro === 'debian' && run.args.stub) {
+    await checkDockerMove(run, target);
   }
 
   await removeTestContainer(run);
@@ -158,7 +166,7 @@ async function checkKeyBlanked(run: BootstrapRun, distro: Distro, output: string
   });
 
   const env = await readInContainer(run, [
-    'docker',
+    'podman',
     'container',
     'inspect',
     '-f',
@@ -189,7 +197,7 @@ async function checkFirstRun(run: BootstrapRun, distro: Distro, isUbuntu: boolea
   });
 
   const mounts = await readInContainer(run, [
-    'docker',
+    'podman',
     'container',
     'inspect',
     '-f',

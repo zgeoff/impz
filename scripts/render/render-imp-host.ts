@@ -1,5 +1,4 @@
 import { readFileSync, writeFileSync } from 'node:fs';
-import { Document, YAMLMap } from 'yaml';
 import * as z from 'zod';
 import { ZFS_POOL_FILE, parseZfsPoolProperties } from '../lib/parse-zfs-pool-properties.ts';
 import { PLAIN_WORD } from '../lib/plain-word.ts';
@@ -7,7 +6,6 @@ import { PLAIN_WORD } from '../lib/plain-word.ts';
 const ARGS_FILE = 'deploy/imp-host.args.json';
 const UNIT_FILE = 'deploy/imp-host.service';
 const BOOTSTRAP_FILE = 'deploy/bootstrap.sh';
-const COMPOSE_FILE = 'deploy/compose.yaml';
 const ENV_EXAMPLE_FILE = 'deploy/imp-host.env.example';
 const HOST_ENV_FILE = 'deploy/lib/host-env.sh';
 const STORAGE_FILE = 'deploy/bootstrap/storage.sh';
@@ -30,15 +28,10 @@ const UNITS_PART = 'deploy/bootstrap/units.sh';
 // systemd splits an unbraced $NAME into words, so one variable of the env file can hold zero or
 // more words.
 const ENV_WORDS = /^\$[A-Z][A-Z0-9_]*$/u;
-const EXEC_START = /^ExecStart=\/usr\/bin\/docker run (?:.*\\\n)*\s*\$\{IMP_HOST_IMAGE\}$/mu;
+const EXEC_START = /^ExecStart=\/usr\/bin\/podman run (?:.*\\\n)*\s*\$\{IMP_HOST_IMAGE\}$/mu;
 const PROBE = /^ExecStartPre=\/bin\/sh -c 'a=; .*'$/mu;
 const NETWORK_START = /^ExecStartPre=\/bin\/sh -c 'case "\$\$IMP_HOST_NETWORK" in .*'$/mu;
 const PROBED_FILE = '/run/imp-host/probed.env';
-const COMPOSE_HEAD = '    # privileges: from deploy/imp-host.args.json (bun run render:deploy)\n';
-const COMPOSE_TAIL = '    # end of privileges\n';
-const COMPOSE_NETWORK_HEAD = '# network: from deploy/imp-host.args.json (bun run render:deploy)\n';
-const COMPOSE_NETWORK_TAIL = '# end of network\n';
-const COMPOSE_SERVICE_NETWORKS = /^ {4}# networks:\n {4}# {3}- .*$/mu;
 const HOST_ENV_NETWORK = /^readonly HOST_NETWORK=.*$/mu;
 const HOST_ENV_BRIDGE = /^readonly HOST_BRIDGE=.*$/mu;
 const HOST_ENV_ADDRESSES = /^host_addresses\(\) \{ .* \}$/mu;
@@ -126,7 +119,7 @@ export function renderExecStart(args: HostArgs): string {
   const tail = [...args.privileges, ...rest].map((line) => `  ${line.join(' ')} \\`);
 
   return [
-    `ExecStart=/usr/bin/docker run ${first.join(' ')} \\`,
+    `ExecStart=/usr/bin/podman run ${first.join(' ')} \\`,
     ...tail,
     '  $IMP_HOST_PROBED \\',
     `  \${IMP_HOST_IMAGE}`,
@@ -141,14 +134,14 @@ export function renderProbe(probed: readonly Probed[], addresses: string): strin
 }
 
 export function renderNetworkStart(network: HostNetwork): string {
-  const create = `/usr/bin/docker network create --ipv6 --subnet "$$IMP_HOST_SUBNET6" -o com.docker.network.bridge.name=${network.bridge} ${network.name}`;
+  const create = `/usr/bin/podman network create --ipv6 --subnet "$$IMP_HOST_SUBNET6" --disable-dns --interface-name ${network.bridge} ${network.name} >/dev/null`;
 
-  return `ExecStartPre=/bin/sh -c 'case "$$IMP_HOST_NETWORK" in *${network.name}*) /usr/bin/docker network inspect ${network.name} >/dev/null 2>&1 || ${create} ;; esac'`;
+  return `ExecStartPre=/bin/sh -c 'case "$$IMP_HOST_NETWORK" in *${network.name}*) /usr/bin/podman network exists ${network.name} || ${create} ;; esac'`;
 }
 
 export function renderUnit(unit: string, args: HostArgs): string {
   if (!EXEC_START.test(unit)) {
-    throw new Error(`${UNIT_FILE}: no docker run ExecStart that ends in \${IMP_HOST_IMAGE}`);
+    throw new Error(`${UNIT_FILE}: no podman run ExecStart that ends in \${IMP_HOST_IMAGE}`);
   }
 
   if (!PROBE.test(unit)) {
@@ -180,111 +173,6 @@ export function renderHostEnv(hostEnv: string, args: HostArgs): string {
 
     return text.replace(pattern, () => line);
   }, hostEnv);
-}
-
-const COMPOSE_SCALARS: Readonly<Record<string, readonly [string, boolean | string]>> = {
-  '--init': ['init', true],
-  '--cgroupns=private': ['cgroup', 'private'],
-};
-
-const COMPOSE_LISTS: Readonly<Record<string, string>> = {
-  '--cap-drop': 'cap_drop',
-  '--cap-add': 'cap_add',
-  '--security-opt': 'security_opt',
-  '--device': 'devices',
-  '--sysctl': 'sysctls',
-};
-
-function renderComposeKeys(privileges: Lines): string {
-  const doc = new Document(new YAMLMap());
-  const keys = new YAMLMap();
-  const lists = new Map<string, string[]>();
-
-  const words = privileges.flat();
-
-  for (let index = 0; index < words.length; index += 1) {
-    const word = words[index] ?? '';
-    const scalar = COMPOSE_SCALARS[word];
-    const list = COMPOSE_LISTS[word];
-
-    if (scalar !== undefined) {
-      keys.add(doc.createPair(scalar[0], scalar[1]));
-    } else if (list === undefined) {
-      throw new Error(`${ARGS_FILE}: no compose key for the privilege ${word}`);
-    } else {
-      index += 1;
-
-      lists.set(list, [...(lists.get(list) ?? []), words[index] ?? '']);
-    }
-  }
-
-  for (const [key, values] of lists) {
-    keys.add(doc.createPair(key, values));
-  }
-
-  doc.contents = keys;
-
-  return doc.toString();
-}
-
-function renderComposeNetwork(network: HostNetwork): string {
-  const doc = new Document({
-    networks: {
-      [network.name]: {
-        name: network.name,
-        enable_ipv6: true,
-        driver_opts: { 'com.docker.network.bridge.name': network.bridge },
-
-        // oxlint-disable-next-line no-template-curly-in-string -- compose interpolates it
-        ipam: { config: [{ subnet: '${IMP_HOST_SUBNET6:?set IMP_HOST_SUBNET6 to a /64}' }] },
-      },
-    },
-  });
-
-  return buildPrefixedLines(doc.toString(), '# ');
-}
-
-// Compose cannot probe the host, so the IPv6 sysctls go in as they are, and /dev/zfs comes from
-// deploy/compose.zfs.yaml.
-function buildComposeProbed(probed: readonly Probed[]): Lines {
-  return probed.filter((entry) => entry.args[0] !== '--device').map((entry) => entry.args);
-}
-
-function buildPrefixedLines(text: string, prefix: string): string {
-  return text.replaceAll(/^(?=.)/gmu, prefix);
-}
-
-function mergeBetween(text: string, head: string, tail: string, block: string): string {
-  const start = text.indexOf(head);
-  const end = text.indexOf(tail, start);
-
-  if (start === -1 || end === -1) {
-    throw new Error(`${COMPOSE_FILE}: no block from ${JSON.stringify(head.trim())}`);
-  }
-
-  return text.slice(0, start + head.length) + block + text.slice(end);
-}
-
-export function renderCompose(compose: string, privileges: Lines): string {
-  return mergeBetween(
-    compose,
-    COMPOSE_HEAD,
-    COMPOSE_TAIL,
-    buildPrefixedLines(renderComposeKeys(privileges), '    '),
-  );
-}
-
-export function renderComposeNetworks(compose: string, network: HostNetwork): string {
-  if (!COMPOSE_SERVICE_NETWORKS.test(compose)) {
-    throw new Error(`${COMPOSE_FILE}: no commented networks of imp-host`);
-  }
-
-  return mergeBetween(
-    compose,
-    COMPOSE_NETWORK_HEAD,
-    COMPOSE_NETWORK_TAIL,
-    renderComposeNetwork(network),
-  ).replace(COMPOSE_SERVICE_NETWORKS, () => `    # networks:\n    #   - ${network.name}`);
 }
 
 export interface SourceFile {
@@ -339,7 +227,6 @@ export interface Rendered {
   readonly hostEnv: string;
   readonly storage: string;
   readonly bootstrap: string;
-  readonly compose: string;
 }
 
 export interface BootstrapSources {
@@ -353,11 +240,6 @@ export function render(argsJson: string, current: Rendered, sources: BootstrapSo
   const unit = renderUnit(current.unit, args);
   const hostEnv = renderHostEnv(current.hostEnv, args);
   const storage = renderStorage(current.storage, parseZfsPoolProperties(sources.zfsPoolJson));
-
-  const compose = renderCompose(renderComposeNetworks(current.compose, args.network), [
-    ...args.privileges,
-    ...buildComposeProbed(args.probed),
-  ]);
 
   const rendered: Readonly<Record<string, string>> = {
     [HOST_ENV_FILE]: hostEnv,
@@ -377,7 +259,6 @@ export function render(argsJson: string, current: Rendered, sources: BootstrapSo
       { path: UNIT_FILE, function: 'unit_imp_host', text: unit },
       { path: ENV_EXAMPLE_FILE, function: 'env_template', text: sources.envExample },
     ]),
-    compose,
   };
 }
 
@@ -386,10 +267,9 @@ const FILES = {
   hostEnv: HOST_ENV_FILE,
   storage: STORAGE_FILE,
   bootstrap: BOOTSTRAP_FILE,
-  compose: COMPOSE_FILE,
 } as const;
 
-const KEYS = ['unit', 'hostEnv', 'storage', 'bootstrap', 'compose'] as const;
+const KEYS = ['unit', 'hostEnv', 'storage', 'bootstrap'] as const;
 
 function main(): void {
   const current: Rendered = {
@@ -397,7 +277,6 @@ function main(): void {
     hostEnv: readFileSync(HOST_ENV_FILE, 'utf8'),
     storage: readFileSync(STORAGE_FILE, 'utf8'),
     bootstrap: readFileSync(BOOTSTRAP_FILE, 'utf8'),
-    compose: readFileSync(COMPOSE_FILE, 'utf8'),
   };
 
   const sources: BootstrapSources = {

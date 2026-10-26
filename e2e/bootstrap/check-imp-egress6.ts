@@ -24,10 +24,10 @@ export async function checkImpEgress6(run: BootstrapRun, target: BootstrapTarget
     'nodad',
   ]);
 
-  await readInContainer(run, ['docker', 'exec', 'imp-host', 'impz', 'rm', name]);
+  await readInContainer(run, ['podman', 'exec', 'imp-host', 'impz', 'rm', name]);
 
   await runInContainer(run, [
-    'docker',
+    'podman',
     'exec',
     'imp-host',
     'impz',
@@ -40,7 +40,7 @@ export async function checkImpEgress6(run: BootstrapRun, target: BootstrapTarget
   ]);
 
   const reach = await readInContainer(run, [
-    'docker',
+    'podman',
     'exec',
     'imp-host',
     'impz',
@@ -58,6 +58,6 @@ export async function checkImpEgress6(run: BootstrapRun, target: BootstrapTarget
     throw new BootstrapTestError(`[${target.distro}] the imp cannot reach ${address}:22 over IPv6`);
   }
 
-  await runInContainer(run, ['docker', 'exec', 'imp-host', 'impz', 'rm', name]);
+  await runInContainer(run, ['podman', 'exec', 'imp-host', 'impz', 'rm', name]);
   await runInContainer(run, ['ip', 'link', 'del', 'imptarget']);
 }

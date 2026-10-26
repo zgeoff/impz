@@ -60,14 +60,12 @@ export async function runBootstrap(
   }
 
   if (result.exitCode === 1 && /^bootstrap: failed: /mu.test(output)) {
-    for (const unit of ['imp-host', 'docker']) {
-      const journal = await run.io
-        .shell`docker exec ${container} journalctl -u ${unit} --no-pager -n 40`
-        .quiet()
-        .nothrow();
+    const journal = await run.io
+      .shell`docker exec ${container} journalctl -u imp-host --no-pager -n 40`
+      .quiet()
+      .nothrow();
 
-      run.io.writeStderr(journal.stdout.toString());
-    }
+    run.io.writeStderr(journal.stdout.toString());
   }
 
   return { exitCode: result.exitCode, output };

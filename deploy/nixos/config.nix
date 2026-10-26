@@ -280,6 +280,7 @@ let
         pkgs.gnugrep
       ]
     }
+    CONTAINER_CLI=docker
     source ${../lib/host-env.sh}
     ${
       if ipv6 then

@@ -23,7 +23,7 @@ Storage:
   --loop-file PATH            XFS only: a sparse XFS file on the root
                               filesystem instead of a device
   --loop-size GIB|auto        its size (default auto: the free space on /
-                              less what the OS and Docker keep)
+                              less what the OS and Podman keep)
   --zfs-pool NAME             ZFS only: the pool (default tank). It is created
                               on --data-device, or must exist already; imp
                               gets the dataset NAME/imp.
@@ -31,15 +31,15 @@ Storage:
 Options:
   --image REF                 host image, pinned in the env file (default: the
                               image of this script's release)
-  --image-archive FILE        docker load FILE when REF is missing, instead of a pull
+  --image-archive FILE        podman load FILE when REF is missing, instead of a pull
   --tailscale-authkey-file F  a tagged auth key for the host container's node
                               (or TAILSCALE_AUTHKEY in the environment)
   --host-firewall own|none    own (default): an nft table admits SSH only;
                               none: the platform owns the inbound firewall,
                               and a table loaded by an earlier run is removed
   --ssh-port N                one more SSH port to keep open (repeatable)
-  --ipv6 auto|on|off          imps' IPv6: on runs imp-host on a Docker network
-                              with IPv6, behind Docker's NAT66; auto (the
+  --ipv6 auto|on|off          imps' IPv6: on runs imp-host on a Podman network
+                              with IPv6, behind Podman's NAT66; auto (the
                               first run's default) is on when the host has a
                               global IPv6 default route. Later runs keep the
                               env file's choice. off removes the network.
@@ -107,6 +107,8 @@ parse_args() {
   done
 }
 
+# preflight [OSRELEASE] [OS_RELEASE] [KVM] [CPUINFO]: the checks before any
+# change. The arguments go to the platform check.
 preflight() {
   phase preflight
   [ "$(id -u)" = 0 ] || die "run as root"
@@ -114,7 +116,8 @@ preflight() {
     in_container=1
     warn "running in a container: kernel settings are written, not applied"
   fi
-  check_platform
+  check_platform "${1:-}" "${2:-}" "${3:-}" "${4:-}"
+  check_docker_host
 
   resolve_storage
   resolve_host_firewall
@@ -152,6 +155,19 @@ check_platform() {
 
   [ -c "$kvm" ] || die "$kvm is missing; enable VT-x/AMD-V in the firmware"
   grep -qwE 'vmx|svm' "$cpuinfo" || die "the CPU reports neither vmx nor svm"
+}
+
+# check_docker_host [UNIT]: refuses a host whose imp-host an older release runs
+# under Docker: its container exists, or the installed UNIT (default
+# /etc/systemd/system/imp-host.service) runs docker, as a stopped one does.
+# The Podman unit would start a second imp-host on the same data.
+check_docker_host() {
+  local unit=${1:-/etc/systemd/system/imp-host.service}
+  if ! grep -qE '^ExecStart=.*/docker run' "$unit" 2>/dev/null &&
+    ! { command -v docker >/dev/null && docker container inspect imp-host >/dev/null 2>&1; }; then
+    return 0
+  fi
+  die "imp-host runs under Docker, from an older release: run deploy/upgrade.sh of this release, which moves the host to Podman (docs/guides/operations.md#upgrade); nothing changed"
 }
 
 # check_data_source: XFS needs a device, a loop file, or a mount already on

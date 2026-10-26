@@ -125,9 +125,10 @@ start it again.
 ### Listeners
 
 impd listens on `IMP_HTTPS_PORT` (443) and `IMP_HTTP_PORT` (80), each on two addresses: the tailnet
-IP and 127.0.0.1. It never listens on 0.0.0.0, so a port that Docker publishes to the internet never
-reaches these listeners. impd checks the tailnet IP every 30 seconds and moves the listeners when it
-changes. A failed check keeps them where they are, so it never cuts open connections.
+IP and 127.0.0.1. It never listens on 0.0.0.0, so a port that the container engine publishes to the
+internet never reaches these listeners. impd checks the tailnet IP every 30 seconds and moves the
+listeners when it changes. A failed check keeps them where they are, so it never cuts open
+connections.
 
 - **443** terminates TLS and hands the request to the
   [wake proxy](../architecture/network/ingress.md#the-wake-proxy). The Host header must be exactly
@@ -200,8 +201,7 @@ restore are tailnet-only until you expose them.
    link-local address: the records would point where the internet cannot reach.
 
 2. Publish the public listeners as the host's ports 443 and 80. With the systemd unit, set
-   `IMP_PUBLIC_PORTS=-p 443:7443 -p 80:7480` in the same env file. With compose, uncomment the two
-   ports in `deploy/compose.yaml`.
+   `IMP_PUBLIC_PORTS=-p 443:7443 -p 80:7480` in the same env file.
 3. Open 443 and 80 in the host's firewall, then restart the host container.
 
 **WARNING:** A public imp is on the internet. Anyone who finds its name can reach it when it has no
@@ -210,9 +210,10 @@ auth, and the name is in DNS. Expose only what you would put on the internet you
 ### How it works
 
 - **Listeners.** impd runs a second pair of listeners, TLS on `IMP_PUBLIC_HTTPS_PORT` (7443) and a
-  redirect on `IMP_PUBLIC_HTTP_PORT` (7480), on every address in the host container. Docker
+  redirect on `IMP_PUBLIC_HTTP_PORT` (7480), on every address in the host container. Podman
   publishes them as 443 and 80. The listener a request comes in on decides what it may reach, never
-  the client's address: Docker's userland proxy can make a public client look like the bridge.
+  the client's address: a container engine's port publishing can make a public client look like the
+  bridge.
 - **Routing.** The public listeners serve public imps only. A tailnet-only imp, a name that is no
   imp, and the bare domain all get the same `404`, whatever the Host header says, so the internet
   cannot tell which names exist. The redirect on 80 answers only for public imps too.
@@ -222,8 +223,8 @@ auth, and the name is in DNS. Expose only what you would put on the internet you
   gets the `401` challenge and counts against nothing, so a stranger cannot block a browser's
   password prompt; the right credential always passes too, so guessing cannot lock the owner out.
   The redirect on port 80 only checks that the name is a public imp: it takes no slot and no wake.
-  The limits count per imp, not per client: behind Docker's userland proxy every client can share
-  one source address.
+  The limits count per imp, not per client: behind a container engine's port publishing every client
+  can share one source address.
 - **Privacy.** A `502` or `503` on the public listener says only that the site did not answer or is
   not available, never why. The client's own `Forwarded`, `X-Real-IP` and `X-Forwarded-For` are
   dropped, and `X-Forwarded-For` holds only the address of the socket, or is left out when impd
@@ -262,8 +263,8 @@ inside your tailnet, so:
 - DNS-01 never needs the host to be reachable, so a public CA issues the certificate for a host that
   has no public IP at all.
 - A public IP in the records would expose the listeners to the internet. impd would then have to
-  tell tailnet clients from public ones, and a client's source address is not reliable behind
-  Docker's port publishing.
+  tell tailnet clients from public ones, and a client's source address is not reliable behind a
+  container engine's port publishing.
 
 What the public learns: the domain exists, and it points at a CGNAT address. Certificate
 Transparency logs show `*.imp.example.com`, but not the imp names.

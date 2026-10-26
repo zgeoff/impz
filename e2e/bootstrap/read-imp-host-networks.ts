@@ -4,7 +4,7 @@ import type { BootstrapRun } from './types';
 
 export async function readImpHostNetworks(run: BootstrapRun): Promise<string> {
   const inspect = await readInContainer(run, [
-    'docker',
+    'podman',
     'container',
     'inspect',
     '-f',

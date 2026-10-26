@@ -1,18 +1,18 @@
 # shellcheck shell=bash
 # The firewall and ipv6 phases: the nft table that admits SSH only, and
-# the Docker network imp-host runs on with IPv6.
+# the Podman network imp-host runs on with IPv6.
 
 ensure_firewall() {
   phase firewall
   if [ "$host_firewall" = none ]; then
     if systemctl -q is-enabled nftables 2>/dev/null && grep -qE '^[[:space:]]*flush ruleset' /etc/nftables.conf 2>/dev/null; then
-      warn "nftables.service is enabled and /etc/nftables.conf flushes every ruleset, Docker's too, at each reload"
+      warn "nftables.service is enabled and /etc/nftables.conf flushes every ruleset, Podman's too, at each reload"
     fi
     remove_firewall
     return
   fi
   if systemctl -q is-enabled nftables 2>/dev/null; then
-    die "nftables.service is enabled; its /etc/nftables.conf flushes every ruleset (Docker's too). Disable it first"
+    die "nftables.service is enabled; its /etc/nftables.conf flushes every ruleset (Podman's too). Disable it first"
   fi
   if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q '^Status: active'; then
     change "disable ufw (imp-firewall.service replaces it)" disable_ufw
@@ -159,8 +159,8 @@ WantedBy=sysinit.target
 EOF
 }
 
-# ensure_ipv6: with IPv6 on, imp-host's Docker network, and the host's
-# router adverts kept once Docker turns on forwarding. Before the imp phase,
+# ensure_ipv6: with IPv6 on, imp-host's Podman network, and the host's
+# router adverts kept once Podman turns on forwarding. Before the imp phase,
 # so the unit's first start finds the network.
 ensure_ipv6() {
   phase ipv6
@@ -168,14 +168,8 @@ ensure_ipv6() {
     remove_ipv6
     return
   fi
-  if ! check_docker_ipv6; then
-    ipv6=off
-    remove_ipv6
-    return
-  fi
-
   local inspect="" existing=""
-  if command -v docker >/dev/null && inspect=$(docker network inspect -f "$NETWORK_FORMAT" "$HOST_NETWORK" 2>/dev/null); then
+  if command -v podman >/dev/null && inspect=$(podman network inspect -f "$NETWORK_FORMAT" "$HOST_NETWORK" 2>/dev/null); then
     existing=1
   fi
   resolve_subnet6 "$inspect"
@@ -234,7 +228,7 @@ random_ula64() {
 # bridge HOST_BRIDGE, or nothing.
 network_subnet6() {
   local enabled bridge subnets subnet
-  read -r enabled bridge subnets <<<"$1"
+  read -r enabled bridge _ subnets <<<"$1"
   [ "$enabled" = true ] && [ "$bridge" = "$HOST_BRIDGE" ] || return 0
   for subnet in $subnets; do
     if [[ $subnet == *:* ]]; then
@@ -244,27 +238,7 @@ network_subnet6() {
   done
 }
 
-# check_docker_ipv6 [DAEMON_JSON]: Docker writes the NAT66 and forward rules
-# for an IPv6 network itself from 27.0, where ip6tables became the default. A
-# Docker without them refuses on, and turns auto off with a warning.
-# DAEMON_JSON defaults to /etc/docker/daemon.json.
-check_docker_ipv6() {
-  # a dry run on a fresh host: the packages phase would install docker-ce
-  command -v docker >/dev/null || return 0
-  local daemon_json=${1:-/etc/docker/daemon.json} version why=""
-  version=$(docker version -f '{{.Server.Version}}' 2>/dev/null) || die "cannot read the Docker daemon's version"
-  if ! version_ge "$version" 27.0; then
-    why="Docker $version predates 27.0, which writes IPv6 NAT and forward rules by default"
-  elif [ -f "$daemon_json" ] && [ "$(jq -r '.ip6tables' "$daemon_json" 2>/dev/null)" = false ]; then
-    why="$daemon_json sets ip6tables to false, so imp-host's network would have no NAT66"
-  fi
-  [ -n "$why" ] || return 0
-  [ -n "$ipv6_auto" ] || die "$why; fix that, or give --ipv6 off"
-  warn "$why; ipv6: off"
-  return 1
-}
-
-# ensure_router_adverts EXISTING: Docker sets net.ipv6.conf.all.forwarding=1
+# ensure_router_adverts EXISTING: Podman sets net.ipv6.conf.all.forwarding=1
 # for an IPv6 network, and with forwarding on the kernel ignores router
 # adverts where accept_ra=1: a host whose IPv6 default route comes from them
 # loses it when it expires. accept_ra is per network namespace, so this
@@ -308,7 +282,7 @@ route_is_ra() { [[ " $1 " == *" proto ra "* ]]; }
 # render_ra_file UPLINK: the sysctl.d file. The key's slash form keeps a
 # dotted interface name (eth0.100) whole.
 render_ra_file() {
-  printf '%s\n' "# Written by deploy/bootstrap.sh (docs/guides/install.md#ipv6). Docker turns on" \
+  printf '%s\n' "# Written by deploy/bootstrap.sh (docs/guides/install.md#ipv6). Podman turns on" \
     "# IPv6 forwarding for imp-host's network; with forwarding on, the kernel" \
     "# takes router adverts on $1 only with accept_ra=2." \
     "net/ipv6/conf/$1/accept_ra = 2"
@@ -347,7 +321,7 @@ ra_userspace() {
     log "router adverts: $owner takes them on $uplink; IPv6 was on already"
     return
   fi
-  local why="the IPv6 default route on $uplink comes from router adverts that $owner takes. Docker turns on IPv6 forwarding for imp-host's network, and $owner may then drop them, and the route with them. Make it keep router adverts with forwarding on (systemd-networkd: IPv6AcceptRA=yes; netplan: accept-ra: true), then run again with --ipv6 on --ra-handled (docs/guides/install.md#ipv6)"
+  local why="the IPv6 default route on $uplink comes from router adverts that $owner takes. Podman turns on IPv6 forwarding for imp-host's network, and $owner may then drop them, and the route with them. Make it keep router adverts with forwarding on (systemd-networkd: IPv6AcceptRA=yes; netplan: accept-ra: true), then run again with --ipv6 on --ra-handled (docs/guides/install.md#ipv6)"
   [ -n "$ipv6_auto" ] || die "$why; or give --ipv6 off"
   warn "$why. ipv6: off"
   return 1
@@ -356,12 +330,12 @@ ra_userspace() {
 # stop_imp_host: stop the unit, so imp-host leaves the network.
 stop_imp_host() {
   systemctl stop imp-host 2>/dev/null || true
-  docker rm -f imp-host >/dev/null 2>&1 || true
+  podman rm -f imp-host >/dev/null 2>&1 || true
 }
 
 recreate_host_network() {
   stop_imp_host
-  docker network rm "$HOST_NETWORK" >/dev/null && create_host_network "$ipv6_subnet"
+  podman network rm "$HOST_NETWORK" >/dev/null && create_host_network "$ipv6_subnet"
 }
 
 # remove_ipv6 [RA_FILE]: with off, take out what an earlier run with on put in, but
@@ -370,12 +344,12 @@ recreate_host_network() {
 # RA_FILE defaults to $RA_FILE.
 remove_ipv6() {
   local ra_file=${1:-$RA_FILE} network="" file=""
-  if command -v docker >/dev/null && docker network inspect "$HOST_NETWORK" >/dev/null 2>&1; then
+  if command -v podman >/dev/null && podman network exists "$HOST_NETWORK"; then
     network=1
   fi
   [ ! -f "$ra_file" ] || file=1
   if [ -z "$network$file" ]; then
-    log "ipv6: off; imp-host runs on Docker's default bridge"
+    log "ipv6: off; imp-host runs on Podman's default network"
     return
   fi
   if [ -z "$ipv6_set" ]; then
@@ -398,5 +372,5 @@ remove_ipv6() {
 
 remove_host_network() {
   stop_imp_host
-  docker network rm "$HOST_NETWORK" >/dev/null
+  podman network rm "$HOST_NETWORK" >/dev/null
 }

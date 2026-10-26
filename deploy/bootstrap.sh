@@ -28,6 +28,9 @@
 # never put in argv. Never run this script with `bash -x`.
 set -euo pipefail
 
+# The units bootstrap installs run imp-host with Podman, so a CONTAINER_CLI in
+# the caller's environment must not turn deploy/lib/host-env.sh to another CLI.
+CONTAINER_CLI=podman
 readonly IMP_DIR=/etc/imp
 readonly ENV_FILE=$IMP_DIR/imp-host.env
 readonly FIREWALL_FILE=$IMP_DIR/firewall.nft
@@ -43,8 +46,6 @@ readonly DEFAULT_IMAGE=ghcr.io/zgeoff/imp-host:5.0.0 # x-release-please-version
 # A file still holding it gets the commented pin; any other value is the
 # operator's pin and stays.
 readonly LEGACY_IMAGE_LINE=IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:latest
-# Docker's apt signing key (https://docs.docker.com/engine/install/ubuntu/).
-readonly DOCKER_KEY_FINGERPRINT=9DC858229FC7DD38854AE2D88D81803C0EBFCD88
 # The template's IMP_RAM_BUDGET_MIB; a file still holding it gets the
 # computed budget, any other value is the operator's and stays.
 readonly TEMPLATE_BUDGET_MIB=16384
@@ -138,15 +139,25 @@ version_ge() {
 # A computed RAM budget below this is refused: the host is too small for the
 # formula, and the operator sets IMP_RAM_BUDGET_MIB.
 readonly RAM_BUDGET_FLOOR_MIB=512
-# With IPv6, imp-host runs on this Docker network. The bridge has a fixed
+# The container CLI that runs imp-host; the NixOS module sets it to docker.
+readonly CONTAINER_CLI=${CONTAINER_CLI:-podman}
+# With IPv6, imp-host runs on this container network. The bridge has a fixed
 # name so a host firewall can admit it; the name keeps clear of imp's own
 # interfaces (imp0, imp+). bun run render:deploy writes both, and
 # host_addresses, from deploy/imp-host.args.json.
 readonly HOST_NETWORK=imp-host
 readonly HOST_BRIDGE=br-imphost
-# docker network inspect: IPv6 on, the bridge's name, then every subnet.
-# shellcheck disable=SC2034 # for its callers
-readonly NETWORK_FORMAT='{{.EnableIPv6}} {{or (index .Options "com.docker.network.bridge.name") "unnamed"}}{{range .IPAM.Config}} {{.Subnet}}{{end}}'
+# $CONTAINER_CLI network inspect -f: IPv6 on, the bridge's name, whether a
+# DNS server answers on the bridge's gateway, then every subnet, in the same
+# words for both CLIs. That server listens in the host's namespace, where the
+# host firewall drops it; Docker's answers inside the container instead.
+if [ "$CONTAINER_CLI" = docker ]; then
+  # shellcheck disable=SC2034 # for its callers
+  readonly NETWORK_FORMAT='{{.EnableIPv6}} {{or (index .Options "com.docker.network.bridge.name") "unnamed"}} false{{range .IPAM.Config}} {{.Subnet}}{{end}}'
+else
+  # shellcheck disable=SC2034 # for its callers
+  readonly NETWORK_FORMAT='{{.IPv6Enabled}} {{or .NetworkInterface "unnamed"}} {{.DNSEnabled}}{{range .Subnets}} {{.Subnet}}{{end}}'
+fi
 
 # The awk function trim(line): line without a trailing \r or the blanks
 # around it, as an env file edited on another system may have them, and
@@ -175,8 +186,8 @@ trim_lines() {
 strip_markers() { grep -vE '^# x-release-please-(start-[a-z]+|end)$' || true; }
 
 # check_env_image FILE: fails, and says why, when FILE's last IMP_HOST_IMAGE
-# is empty: systemd passes it over the units' own image, and docker run gets
-# none.
+# is empty: systemd passes it over the units' own image, and the container
+# run gets none.
 check_env_image() {
   [ -f "$1" ] || return 0
   [ "$(trim_lines "$1" | grep '^IMP_HOST_IMAGE=' | tail -n 1)" = IMP_HOST_IMAGE= ] || return 0
@@ -198,7 +209,7 @@ write_file() {
 }
 
 # ram_budget_mib MEMTOTAL_KIB [ARC_MIB]: the RAM awake imps may use. The
-# host keeps the larger of 8 GiB and 15 % for itself, Docker, impd and the
+# host keeps the larger of 8 GiB and 15 % for itself, its container engine, impd and the
 # page cache, and with ZFS also the ARC's cap.
 ram_budget_mib() {
   local total=$(($1 / 1024)) arc=${2:-0} reserve
@@ -255,7 +266,7 @@ ipv6_expand() {
   )
 }
 
-# ipv6_canon ADDR[/LEN]: ADDR as Docker prints it (RFC 5952): lower case,
+# ipv6_canon ADDR[/LEN]: ADDR as Docker and Podman print it (RFC 5952): lower case,
 # no leading zeros, and the longest run of two or more zero groups as ::.
 ipv6_canon() {
   local expanded suffix="" i
@@ -301,18 +312,22 @@ subnet6() {
   ipv6_canon "$1"
 }
 
-# network_drift WANT INSPECT: how a network that docker network inspect
-# (NETWORK_FORMAT) describes as INSPECT differs from IPv6 on the /64 WANT
-# with the bridge HOST_BRIDGE; nothing when it matches.
+# network_drift WANT INSPECT: how a network that $CONTAINER_CLI network
+# inspect (NETWORK_FORMAT) describes as INSPECT differs from IPv6 on the /64 WANT
+# with the bridge HOST_BRIDGE and no DNS server; nothing when it matches.
 network_drift() {
-  local want=$1 enabled bridge subnet found="" have=()
-  read -r enabled bridge subnet <<<"$2"
+  local want=$1 enabled bridge dns subnet found="" have=()
+  read -r enabled bridge dns subnet <<<"$2"
   if [ "$enabled" != true ]; then
     echo "it has no IPv6"
     return
   fi
   if [ "$bridge" != "$HOST_BRIDGE" ]; then
     echo "its bridge is $bridge, not $HOST_BRIDGE"
+    return
+  fi
+  if [ "$dns" != false ]; then
+    echo "it answers DNS on its gateway"
     return
   fi
   for subnet in $subnet; do
@@ -328,23 +343,32 @@ network_drift() {
 # (docs/architecture/network/egress.md#public)
 host_addresses() { ip -o addr show scope global | tr -s " " | cut -d " " -f 4 | paste -sd ,; }
 
-# network_others: the containers on the network other than imp-host.
+# network_others: the containers on the network other than imp-host. Podman
+# 4.9's network inspect lists no containers, so podman asks ps.
 network_others() {
-  docker network inspect -f '{{range .Containers}}{{.Name}} {{end}}' "$HOST_NETWORK" 2>/dev/null |
-    tr ' ' '\n' | grep -vx -e imp-host -e '' | paste -sd ' ' - || true
+  if [ "$CONTAINER_CLI" = docker ]; then
+    docker network inspect -f '{{range .Containers}}{{.Name}} {{end}}' "$HOST_NETWORK" 2>/dev/null
+  else
+    podman ps -a --filter "network=$HOST_NETWORK" --format '{{.Names}}' 2>/dev/null
+  fi | tr ' ' '\n' | grep -vx -e imp-host -e '' | paste -sd ' ' - || true
 }
 
 # create_host_network SUBNET6: the network imp-host runs on with IPv6, on
-# the /64 SUBNET6, as the unit's ExecStartPre (deploy/imp-host.service) and
-# the networks block of deploy/compose.yaml make it.
+# the /64 SUBNET6, as the unit's ExecStartPre (deploy/imp-host.service)
+# makes it.
 create_host_network() {
-  docker network create --ipv6 --subnet "$1" \
-    -o "com.docker.network.bridge.name=$HOST_BRIDGE" "$HOST_NETWORK" >/dev/null
+  if [ "$CONTAINER_CLI" = docker ]; then
+    docker network create --ipv6 --subnet "$1" \
+      -o "com.docker.network.bridge.name=$HOST_BRIDGE" "$HOST_NETWORK" >/dev/null
+  else
+    podman network create --ipv6 --subnet "$1" --disable-dns \
+      --interface-name "$HOST_BRIDGE" "$HOST_NETWORK" >/dev/null
+  fi
 }
 
 # render_firewall PORT...: the nft ruleset. One transaction: create the
 # table, delete it, create it again, so a reload replaces only our rules and
-# never Docker's. Input only; Docker owns forwarding. The host itself is not
+# never the container engine's. Input only; the engine owns forwarding. The host itself is not
 # a tailnet node (the host container is, and its traffic is forwarded), so no
 # Tailscale port is open.
 render_firewall() {
@@ -397,7 +421,7 @@ Storage:
   --loop-file PATH            XFS only: a sparse XFS file on the root
                               filesystem instead of a device
   --loop-size GIB|auto        its size (default auto: the free space on /
-                              less what the OS and Docker keep)
+                              less what the OS and Podman keep)
   --zfs-pool NAME             ZFS only: the pool (default tank). It is created
                               on --data-device, or must exist already; imp
                               gets the dataset NAME/imp.
@@ -405,15 +429,15 @@ Storage:
 Options:
   --image REF                 host image, pinned in the env file (default: the
                               image of this script's release)
-  --image-archive FILE        docker load FILE when REF is missing, instead of a pull
+  --image-archive FILE        podman load FILE when REF is missing, instead of a pull
   --tailscale-authkey-file F  a tagged auth key for the host container's node
                               (or TAILSCALE_AUTHKEY in the environment)
   --host-firewall own|none    own (default): an nft table admits SSH only;
                               none: the platform owns the inbound firewall,
                               and a table loaded by an earlier run is removed
   --ssh-port N                one more SSH port to keep open (repeatable)
-  --ipv6 auto|on|off          imps' IPv6: on runs imp-host on a Docker network
-                              with IPv6, behind Docker's NAT66; auto (the
+  --ipv6 auto|on|off          imps' IPv6: on runs imp-host on a Podman network
+                              with IPv6, behind Podman's NAT66; auto (the
                               first run's default) is on when the host has a
                               global IPv6 default route. Later runs keep the
                               env file's choice. off removes the network.
@@ -481,6 +505,8 @@ parse_args() {
   done
 }
 
+# preflight [OSRELEASE] [OS_RELEASE] [KVM] [CPUINFO]: the checks before any
+# change. The arguments go to the platform check.
 preflight() {
   phase preflight
   [ "$(id -u)" = 0 ] || die "run as root"
@@ -488,7 +514,8 @@ preflight() {
     in_container=1
     warn "running in a container: kernel settings are written, not applied"
   fi
-  check_platform
+  check_platform "${1:-}" "${2:-}" "${3:-}" "${4:-}"
+  check_docker_host
 
   resolve_storage
   resolve_host_firewall
@@ -526,6 +553,19 @@ check_platform() {
 
   [ -c "$kvm" ] || die "$kvm is missing; enable VT-x/AMD-V in the firmware"
   grep -qwE 'vmx|svm' "$cpuinfo" || die "the CPU reports neither vmx nor svm"
+}
+
+# check_docker_host [UNIT]: refuses a host whose imp-host an older release runs
+# under Docker: its container exists, or the installed UNIT (default
+# /etc/systemd/system/imp-host.service) runs docker, as a stopped one does.
+# The Podman unit would start a second imp-host on the same data.
+check_docker_host() {
+  local unit=${1:-/etc/systemd/system/imp-host.service}
+  if ! grep -qE '^ExecStart=.*/docker run' "$unit" 2>/dev/null &&
+    ! { command -v docker >/dev/null && docker container inspect imp-host >/dev/null 2>&1; }; then
+    return 0
+  fi
+  die "imp-host runs under Docker, from an older release: run deploy/upgrade.sh of this release, which moves the host to Podman (docs/guides/operations.md#upgrade); nothing changed"
 }
 
 # check_data_source: XFS needs a device, a loop file, or a mount already on
@@ -619,11 +659,15 @@ global_ipv6_uplink() {
 
 # --- deploy/bootstrap/packages.sh ---
 
-# The packages phase: the tools, the ZFS packages, and Docker CE.
+# The packages phase: the tools, Podman, and the ZFS packages.
 
 ensure_packages() {
   phase packages
-  local wanted=(ca-certificates curl gnupg xfsprogs nftables jq iproute2 util-linux)
+  # apt_install skips Recommends, so the list names what Podman needs past its
+  # dependencies: catatonit for --init, netavark and aardvark-dns, and iptables,
+  # netavark's firewall driver. A Docker already on the host stays, untouched.
+  local wanted=(ca-certificates curl xfsprogs nftables jq iproute2 util-linux
+    podman catatonit netavark aardvark-dns iptables)
   local pkg missing=()
   for pkg in "${wanted[@]}"; do
     dpkg-query -W -f '${Status}' "$pkg" 2>/dev/null | grep -q 'install ok installed' || missing+=("$pkg")
@@ -632,7 +676,6 @@ ensure_packages() {
     change "apt-get install ${missing[*]}" apt_install "$APT_LOG" "${missing[@]}"
   fi
   [ "$storage" != zfs ] || ensure_zfs_packages
-  ensure_docker
 }
 
 # Ubuntu ships the zfs module with its kernel; Debian builds it with DKMS,
@@ -673,47 +716,6 @@ apt_install() {
   } >"$apt_log" 2>&1; then
     tail -n 20 "$apt_log" >&2
     die "apt-get install $* failed; the whole log is in $apt_log"
-  fi
-}
-
-# Docker CE from Docker's apt repo, as host/Dockerfile uses. A Docker that is
-# already installed (docker-ce or the distro's docker.io) is kept.
-ensure_docker() {
-  local pkg
-  for pkg in docker-ce docker.io; do
-    if dpkg-query -W -f '${Status}' "$pkg" 2>/dev/null | grep -q 'install ok installed'; then
-      log "docker: $pkg is installed"
-      ensure_service docker
-      return
-    fi
-  done
-  # shellcheck source=/dev/null
-  . /etc/os-release
-  local key=/etc/apt/keyrings/docker.asc
-  if [ ! -s "$key" ]; then
-    change "fetch Docker's apt key to $key" fetch_docker_key "$key" "$ID"
-  fi
-  # A dry run has not fetched it; an existing key is checked every run.
-  [ ! -s "$key" ] || check_docker_key "$key"
-  put_file /etc/apt/sources.list.d/docker.list 644 \
-    "deb [arch=amd64 signed-by=$key] https://download.docker.com/linux/$ID $VERSION_CODENAME stable" || true
-  change "apt-get install docker-ce" apt_install "$APT_LOG" docker-ce docker-ce-cli containerd.io
-  ensure_service docker
-}
-
-fetch_docker_key() {
-  install -m 0755 -d "$(dirname "$1")" || return 1
-  curl -fsSL "https://download.docker.com/linux/$2/gpg" -o "$1.new" || return 1
-  check_docker_key "$1.new" && chmod 0644 "$1.new" && mv "$1.new" "$1"
-}
-
-# check_docker_key FILE: the file holds Docker's key and only that key.
-check_docker_key() {
-  local fingerprints
-  fingerprints=$(gpg --show-keys --with-colons "$1" 2>/dev/null | awk -F: '$1 == "pub" { pub = 1 } $1 == "fpr" && pub { print $10; pub = 0 }')
-  if [ "$fingerprints" != "$DOCKER_KEY_FINGERPRINT" ]; then
-    rm -f "$1.new"
-    die "$1 is not Docker's apt key (want $DOCKER_KEY_FINGERPRINT, got ${fingerprints:-none})"
   fi
 }
 
@@ -930,7 +932,7 @@ mkfs_xfs_opts() {
 }
 
 # loop_size_auto_gib AVAIL_GIB: the loop file's size from the free space on
-# /. The OS, Docker's images and logs keep the larger of 30 GiB and 15 %;
+# /. The OS, Podman's images and logs keep the larger of 30 GiB and 15 %;
 # the file is sparse, but it must never grow into that and fill /.
 loop_size_auto_gib() { echo $(($1 - $(loop_reserve_gib "$1"))); }
 
@@ -1081,19 +1083,19 @@ ksm_merges() {
 # --- deploy/bootstrap/network.sh ---
 
 # The firewall and ipv6 phases: the nft table that admits SSH only, and
-# the Docker network imp-host runs on with IPv6.
+# the Podman network imp-host runs on with IPv6.
 
 ensure_firewall() {
   phase firewall
   if [ "$host_firewall" = none ]; then
     if systemctl -q is-enabled nftables 2>/dev/null && grep -qE '^[[:space:]]*flush ruleset' /etc/nftables.conf 2>/dev/null; then
-      warn "nftables.service is enabled and /etc/nftables.conf flushes every ruleset, Docker's too, at each reload"
+      warn "nftables.service is enabled and /etc/nftables.conf flushes every ruleset, Podman's too, at each reload"
     fi
     remove_firewall
     return
   fi
   if systemctl -q is-enabled nftables 2>/dev/null; then
-    die "nftables.service is enabled; its /etc/nftables.conf flushes every ruleset (Docker's too). Disable it first"
+    die "nftables.service is enabled; its /etc/nftables.conf flushes every ruleset (Podman's too). Disable it first"
   fi
   if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q '^Status: active'; then
     change "disable ufw (imp-firewall.service replaces it)" disable_ufw
@@ -1240,8 +1242,8 @@ WantedBy=sysinit.target
 EOF
 }
 
-# ensure_ipv6: with IPv6 on, imp-host's Docker network, and the host's
-# router adverts kept once Docker turns on forwarding. Before the imp phase,
+# ensure_ipv6: with IPv6 on, imp-host's Podman network, and the host's
+# router adverts kept once Podman turns on forwarding. Before the imp phase,
 # so the unit's first start finds the network.
 ensure_ipv6() {
   phase ipv6
@@ -1249,14 +1251,8 @@ ensure_ipv6() {
     remove_ipv6
     return
   fi
-  if ! check_docker_ipv6; then
-    ipv6=off
-    remove_ipv6
-    return
-  fi
-
   local inspect="" existing=""
-  if command -v docker >/dev/null && inspect=$(docker network inspect -f "$NETWORK_FORMAT" "$HOST_NETWORK" 2>/dev/null); then
+  if command -v podman >/dev/null && inspect=$(podman network inspect -f "$NETWORK_FORMAT" "$HOST_NETWORK" 2>/dev/null); then
     existing=1
   fi
   resolve_subnet6 "$inspect"
@@ -1315,7 +1311,7 @@ random_ula64() {
 # bridge HOST_BRIDGE, or nothing.
 network_subnet6() {
   local enabled bridge subnets subnet
-  read -r enabled bridge subnets <<<"$1"
+  read -r enabled bridge _ subnets <<<"$1"
   [ "$enabled" = true ] && [ "$bridge" = "$HOST_BRIDGE" ] || return 0
   for subnet in $subnets; do
     if [[ $subnet == *:* ]]; then
@@ -1325,27 +1321,7 @@ network_subnet6() {
   done
 }
 
-# check_docker_ipv6 [DAEMON_JSON]: Docker writes the NAT66 and forward rules
-# for an IPv6 network itself from 27.0, where ip6tables became the default. A
-# Docker without them refuses on, and turns auto off with a warning.
-# DAEMON_JSON defaults to /etc/docker/daemon.json.
-check_docker_ipv6() {
-  # a dry run on a fresh host: the packages phase would install docker-ce
-  command -v docker >/dev/null || return 0
-  local daemon_json=${1:-/etc/docker/daemon.json} version why=""
-  version=$(docker version -f '{{.Server.Version}}' 2>/dev/null) || die "cannot read the Docker daemon's version"
-  if ! version_ge "$version" 27.0; then
-    why="Docker $version predates 27.0, which writes IPv6 NAT and forward rules by default"
-  elif [ -f "$daemon_json" ] && [ "$(jq -r '.ip6tables' "$daemon_json" 2>/dev/null)" = false ]; then
-    why="$daemon_json sets ip6tables to false, so imp-host's network would have no NAT66"
-  fi
-  [ -n "$why" ] || return 0
-  [ -n "$ipv6_auto" ] || die "$why; fix that, or give --ipv6 off"
-  warn "$why; ipv6: off"
-  return 1
-}
-
-# ensure_router_adverts EXISTING: Docker sets net.ipv6.conf.all.forwarding=1
+# ensure_router_adverts EXISTING: Podman sets net.ipv6.conf.all.forwarding=1
 # for an IPv6 network, and with forwarding on the kernel ignores router
 # adverts where accept_ra=1: a host whose IPv6 default route comes from them
 # loses it when it expires. accept_ra is per network namespace, so this
@@ -1389,7 +1365,7 @@ route_is_ra() { [[ " $1 " == *" proto ra "* ]]; }
 # render_ra_file UPLINK: the sysctl.d file. The key's slash form keeps a
 # dotted interface name (eth0.100) whole.
 render_ra_file() {
-  printf '%s\n' "# Written by deploy/bootstrap.sh (docs/guides/install.md#ipv6). Docker turns on" \
+  printf '%s\n' "# Written by deploy/bootstrap.sh (docs/guides/install.md#ipv6). Podman turns on" \
     "# IPv6 forwarding for imp-host's network; with forwarding on, the kernel" \
     "# takes router adverts on $1 only with accept_ra=2." \
     "net/ipv6/conf/$1/accept_ra = 2"
@@ -1428,7 +1404,7 @@ ra_userspace() {
     log "router adverts: $owner takes them on $uplink; IPv6 was on already"
     return
   fi
-  local why="the IPv6 default route on $uplink comes from router adverts that $owner takes. Docker turns on IPv6 forwarding for imp-host's network, and $owner may then drop them, and the route with them. Make it keep router adverts with forwarding on (systemd-networkd: IPv6AcceptRA=yes; netplan: accept-ra: true), then run again with --ipv6 on --ra-handled (docs/guides/install.md#ipv6)"
+  local why="the IPv6 default route on $uplink comes from router adverts that $owner takes. Podman turns on IPv6 forwarding for imp-host's network, and $owner may then drop them, and the route with them. Make it keep router adverts with forwarding on (systemd-networkd: IPv6AcceptRA=yes; netplan: accept-ra: true), then run again with --ipv6 on --ra-handled (docs/guides/install.md#ipv6)"
   [ -n "$ipv6_auto" ] || die "$why; or give --ipv6 off"
   warn "$why. ipv6: off"
   return 1
@@ -1437,12 +1413,12 @@ ra_userspace() {
 # stop_imp_host: stop the unit, so imp-host leaves the network.
 stop_imp_host() {
   systemctl stop imp-host 2>/dev/null || true
-  docker rm -f imp-host >/dev/null 2>&1 || true
+  podman rm -f imp-host >/dev/null 2>&1 || true
 }
 
 recreate_host_network() {
   stop_imp_host
-  docker network rm "$HOST_NETWORK" >/dev/null && create_host_network "$ipv6_subnet"
+  podman network rm "$HOST_NETWORK" >/dev/null && create_host_network "$ipv6_subnet"
 }
 
 # remove_ipv6 [RA_FILE]: with off, take out what an earlier run with on put in, but
@@ -1451,12 +1427,12 @@ recreate_host_network() {
 # RA_FILE defaults to $RA_FILE.
 remove_ipv6() {
   local ra_file=${1:-$RA_FILE} network="" file=""
-  if command -v docker >/dev/null && docker network inspect "$HOST_NETWORK" >/dev/null 2>&1; then
+  if command -v podman >/dev/null && podman network exists "$HOST_NETWORK"; then
     network=1
   fi
   [ ! -f "$ra_file" ] || file=1
   if [ -z "$network$file" ]; then
-    log "ipv6: off; imp-host runs on Docker's default bridge"
+    log "ipv6: off; imp-host runs on Podman's default network"
     return
   fi
   if [ -z "$ipv6_set" ]; then
@@ -1479,7 +1455,7 @@ remove_ipv6() {
 
 remove_host_network() {
   stop_imp_host
-  docker network rm "$HOST_NETWORK" >/dev/null
+  podman network rm "$HOST_NETWORK" >/dev/null
 }
 
 # --- deploy/bootstrap/units.sh ---
@@ -1557,8 +1533,9 @@ EOF
 
 unit_imp_host() {
   cat <<'EOF'
-# imp host as a systemd service. One of the two supported ways to run the
-# release image; deploy/compose.yaml is the other. Run one, not both.
+# imp host as a systemd service: the supported way to run the release image
+# on Ubuntu and Debian, which deploy/bootstrap.sh installs. It runs the
+# container with rootful Podman.
 #
 #   install -m 0644 deploy/imp-host.service /etc/systemd/system/
 #   install -D -m 0600 deploy/imp-host.env.example /etc/imp/imp-host.env  # then edit
@@ -1569,8 +1546,7 @@ unit_imp_host() {
 [Unit]
 Description=imp host (impd, Firecracker, tailscaled)
 Documentation=https://github.com/zgeoff/impz/blob/main/docs/guides/install.md
-Requires=docker.service
-After=docker.service network-online.target
+After=network-online.target
 Wants=network-online.target
 # With XFS, /var/lib/imp is a host mount; never start before it is there.
 RequiresMountsFor=/var/lib/imp
@@ -1584,18 +1560,18 @@ Environment=IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:5.0.0
 # x-release-please-end
 EnvironmentFile=/etc/imp/imp-host.env
 # A container left over from a crash would hold the name.
-ExecStartPre=-/usr/bin/docker rm -f imp-host
+ExecStartPre=-/usr/bin/podman rm -f imp-host
 # With IPv6 (IMP_HOST_NETWORK names it), the network imp-host on its /64,
 # created when it is missing; bootstrap.sh --check reports one that differs.
 # Its name and bridge come from deploy/imp-host.args.json (bun run
-# render:deploy), as do bootstrap.sh's and deploy/compose.yaml's.
-ExecStartPre=/bin/sh -c 'case "$$IMP_HOST_NETWORK" in *imp-host*) /usr/bin/docker network inspect imp-host >/dev/null 2>&1 || /usr/bin/docker network create --ipv6 --subnet "$$IMP_HOST_SUBNET6" -o com.docker.network.bridge.name=br-imphost imp-host ;; esac'
+# render:deploy), as do bootstrap.sh's.
+ExecStartPre=/bin/sh -c 'case "$$IMP_HOST_NETWORK" in *imp-host*) /usr/bin/podman network exists imp-host || /usr/bin/podman network create --ipv6 --subnet "$$IMP_HOST_SUBNET6" --disable-dns --interface-name br-imphost imp-host >/dev/null ;; esac'
 # The probed args (such as --device /dev/zfs) whose path this host has, into
 # IMP_HOST_PROBED; systemd reads the file again for ExecStart.
 RuntimeDirectory=imp-host
 EnvironmentFile=-/run/imp-host/probed.env
 ExecStartPre=/bin/sh -c 'a=; [ -e /dev/zfs ] && a="$$a --device /dev/zfs"; [ -e /proc/sys/net/ipv6 ] && a="$$a --sysctl net.ipv6.conf.all.forwarding=1 --sysctl net.ipv6.conf.default.accept_ra=0 --sysctl net.ipv6.conf.default.accept_redirects=0 --sysctl net.ipv6.conf.default.disable_ipv6=0"; { echo "IMP_HOST_PROBED=$$a"; echo "IMP_HOST_ADDRESSES=$$(ip -o addr show scope global | tr -s " " | cut -d " " -f 4 | paste -sd ,)"; } >/run/imp-host/probed.env'
-# In the foreground and without a docker restart policy: systemd supervises
+# In the foreground and without a podman restart policy: systemd supervises
 # it and restarts it on failure.
 # --hostname: restic's backup locks name the host (docs/architecture/storage/backups.md)
 # $IMP_PUBLIC_PORTS, unbraced, is zero or more words from the env file: for
@@ -1603,8 +1579,8 @@ ExecStartPre=/bin/sh -c 'a=; [ -e /dev/zfs ] && a="$$a --device /dev/zfs"; [ -e 
 # $IMP_HOST_NETWORK too: with IPv6, `--network imp-host`
 # The arguments come from deploy/imp-host.args.json: edit that, then run
 # bun run render:deploy (the NixOS module reads the same file).
-ExecStart=/usr/bin/docker run --rm --name imp-host --hostname imp-host \
-  --init --cgroupns=private --cap-drop ALL \
+ExecStart=/usr/bin/podman run --rm --name imp-host --hostname imp-host \
+  --init --cgroupns=private --pids-limit=-1 --cap-drop ALL \
   --cap-add SYS_ADMIN --cap-add NET_ADMIN --cap-add MKNOD \
   --cap-add CHOWN --cap-add SETUID --cap-add SETGID --cap-add KILL \
   --cap-add SYS_PTRACE --cap-add DAC_OVERRIDE --cap-add FOWNER \
@@ -1624,7 +1600,7 @@ ExecStart=/usr/bin/docker run --rm --name imp-host --hostname imp-host \
   ${IMP_HOST_IMAGE}
 # SIGTERM makes impd sleep every awake imp, so memory survives; it gets up
 # to 120 s, and systemd waits a little longer before it kills anything.
-ExecStop=/usr/bin/docker stop -t 120 imp-host
+ExecStop=/usr/bin/podman stop -t 120 imp-host
 TimeoutStopSec=150
 Restart=on-failure
 RestartSec=5
@@ -1637,16 +1613,15 @@ EOF
 env_template() {
   cat <<'EOF'
 # imp host settings. Copy to /etc/imp/imp-host.env (mode 0600: it holds the
-# Tailscale key and the DNS token). Both deploy/imp-host.service and deploy/compose.yaml pass
-# it to the container. docs/guides/configuration.md lists every variable.
+# Tailscale key and the DNS token). deploy/imp-host.service passes it to the
+# container. docs/guides/configuration.md lists every variable.
 #
-# docker --env-file format: KEY=value, one per line, no quotes, no
-# expansion. An empty value counts as unset.
+# --env-file format: KEY=value, one per line, no quotes, no expansion. An
+# empty value counts as unset.
 
 # The image to run. Unset, the systemd units run the image of their own
 # release, and deploy/upgrade.sh moves them to its own. Set it to pin
 # another; to follow latest, leave the tag off: ghcr.io/zgeoff/imp-host.
-# Compose reads it from the shell or a .env next to compose.yaml instead.
 # x-release-please-start-version
 # IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:5.0.0
 # x-release-please-end
@@ -1672,17 +1647,14 @@ IMP_ACME_EMAIL=
 # Public imps (docs/guides/https.md#public-imps): `impz expose <name>` serves
 # an imp to the internet. IMP_PUBLIC_IP is the host's public IPv4, which
 # their records point at. With the systemd unit, IMP_PUBLIC_PORTS publishes
-# the public listeners: -p 443:7443 -p 80:7480. With compose, uncomment the
-# two ports in deploy/compose.yaml instead.
+# the public listeners: -p 443:7443 -p 80:7480.
 IMP_PUBLIC_IP=
 IMP_PUBLIC_PORTS=
 
 # The public egress policy (docs/architecture/network/egress.md#public): more
 # addresses no public imp may reach, IPv4 and IPv6, comma-separated. The
 # systemd unit writes this host's global addresses into IMP_HOST_ADDRESSES at
-# each start; list what that misses. With deploy/compose.yaml, list every
-# address this host owns: impd cannot see them from inside the container.
-# IMP_PUBLIC_IP is always in it.
+# each start; list what that misses. IMP_PUBLIC_IP is always in it.
 IMP_EGRESS_DENY=
 
 # The RAM awake imps may use, in MiB. Leave room for the host itself.
@@ -1707,10 +1679,10 @@ IMP_ZFS_ROOT=
 # impd needs no inbound host port either way.
 IMP_HOST_FIREWALL=own
 
-# Imps' IPv6 (docs/guides/install.md#ipv6). on: imp-host runs on the Docker
+# Imps' IPv6 (docs/guides/install.md#ipv6). on: imp-host runs on the Podman
 # network imp-host, with the /64 IMP_HOST_SUBNET6 and the bridge br-imphost,
-# behind Docker's NAT66; IMP_HOST_NETWORK is the docker run words for it.
-# off: Docker's default bridge, IPv4 only. deploy/bootstrap.sh writes all
+# behind Podman's NAT66; IMP_HOST_NETWORK is the podman run words for it.
+# off: Podman's default bridge, IPv4 only. deploy/bootstrap.sh writes all
 # three (--ipv6); empty IMP_HOST_IPV6 means it decides at its first run.
 IMP_HOST_IPV6=
 IMP_HOST_SUBNET6=
@@ -1788,7 +1760,7 @@ ensure_imp() {
   run_image=$(sed -n 's/^IMP_HOST_IMAGE=//p' <<<"$env" | tail -n 1)
   run_image=${run_image:-$DEFAULT_IMAGE}
   ensure_image "$run_image"
-  if ! dry || docker image inspect "$run_image" >/dev/null 2>&1; then
+  if ! dry || podman image inspect "$run_image" >/dev/null 2>&1; then
     refusal=$(check_image_contract "$run_image" 2>&1) || die "$refusal"
   fi
   put_file "$ENV_FILE" 600 "$env" && changed=1
@@ -1802,7 +1774,7 @@ ensure_imp() {
   # pivot_root for the jailer (docs/architecture/host.md#privileges).
   # A dry run pulls nothing, so it may have no image to read.
   local seccomp
-  if dry && ! docker image inspect "$run_image" >/dev/null 2>&1; then
+  if dry && ! podman image inspect "$run_image" >/dev/null 2>&1; then
     change "write $SECCOMP_FILE from the image" true
   else
     seccomp=$(read_seccomp "$run_image") || exit 1
@@ -1832,7 +1804,7 @@ remove_proxy_unit() {
 # read_seccomp REF: the seccomp profile in the image REF; refuses an image
 # without one.
 read_seccomp() {
-  docker run --rm "$1" cat "$SECCOMP_IN_IMAGE" ||
+  podman run --rm "$1" cat "$SECCOMP_IN_IMAGE" ||
     die "$1 has no $SECCOMP_IN_IMAGE; it predates the unprivileged host"
 }
 
@@ -1840,29 +1812,29 @@ read_seccomp() {
 # units expect: imp.host-contract=no-docker (host/Dockerfile)
 check_image_contract() {
   local contract
-  contract=$(docker image inspect -f '{{index .Config.Labels "imp.host-contract"}}' "$1" 2>/dev/null) || contract=
+  contract=$(podman image inspect -f '{{index .Config.Labels "imp.host-contract"}}' "$1" 2>/dev/null) || contract=
   [ "$contract" = no-docker ] && return 0
-  echo "$1 needs a Docker socket (imp.host-contract is '${contract:-none}'), and this unit gives it none: pull the new image (docker pull $1) and run again; the env file and the units are unchanged" >&2
+  echo "$1 needs a Docker socket (imp.host-contract is '${contract:-none}'), and this unit gives it none: pull the new image (podman pull $1) and run again; the env file and the units are unchanged" >&2
   return 1
 }
 
 ensure_image() {
   local ref=$1
-  if command -v docker >/dev/null && docker image inspect "$ref" >/dev/null 2>&1; then
+  if command -v podman >/dev/null && podman image inspect "$ref" >/dev/null 2>&1; then
     log "image $ref is present"
     return
   fi
   if [ -n "$image_archive" ]; then
     [ -r "$image_archive" ] || die "cannot read $image_archive"
-    change "docker load $ref from $image_archive" load_image "$ref"
+    change "podman load $ref from $image_archive" load_image "$ref"
   else
-    change "docker pull $ref" docker pull -q "$ref"
+    change "podman pull $ref" podman pull -q "$ref"
   fi
 }
 
 load_image() {
-  docker load -q -i "$image_archive" >/dev/null
-  docker image inspect "$1" >/dev/null 2>&1 || die "$image_archive does not hold $1"
+  podman load -q -i "$image_archive" >/dev/null
+  podman image inspect "$1" >/dev/null 2>&1 || die "$image_archive does not hold $1"
 }
 
 # ensure_tailscale: with a key in the env file, wait for the node to join,
@@ -1874,13 +1846,13 @@ ensure_tailscale() {
   wait_for "the tailnet node to be Running" 180 tailscale_running
   # An older image skips tailscaled without a key, which would take the
   # node off the tailnet at its next start.
-  if [ "$(docker container inspect -f '{{index .Config.Labels "imp.tailscale-keyless"}}' imp-host)" != 1 ]; then
+  if [ "$(podman container inspect -f '{{index .Config.Labels "imp.tailscale-keyless"}}' imp-host)" != 1 ]; then
     warn "this imp-host image needs TAILSCALE_AUTHKEY at every start; the key stays in $ENV_FILE"
     return 0
   fi
   change "blank TAILSCALE_AUTHKEY in $ENV_FILE; the node state keeps it joined" \
     write_file "$ENV_FILE" 600 "$(blank_env_key <"$ENV_FILE")"
-  # The running container still holds the key in its environment (docker
+  # The running container still holds the key in its environment (podman
   # inspect, /proc/*/environ); a restart with the blank file drops it.
   change "restart imp-host without the key" reload_unit imp-host
 }
@@ -1892,10 +1864,10 @@ blank_env_key() { sed 's/^TAILSCALE_AUTHKEY=.*/TAILSCALE_AUTHKEY=/'; }
 # CLI's rename that --image or an IMP_HOST_IMAGE pin chose. Asked on each call,
 # since the container may restart onto another image in between.
 host_cli() {
-  if docker exec imp-host impz --version >/dev/null 2>&1; then
-    docker exec imp-host impz "$@"
+  if podman exec imp-host impz --version >/dev/null 2>&1; then
+    podman exec imp-host impz "$@"
   else
-    docker exec imp-host imp "$@"
+    podman exec imp-host imp "$@"
   fi
 }
 
@@ -1908,7 +1880,7 @@ health() {
   # Nothing may be published past loopback; the tailnet reaches impd through
   # the container's own tailscaled.
   local published
-  published=$(docker port imp-host)
+  published=$(podman port imp-host)
   if grep -vE ' -> 127\.0\.0\.1:' <<<"$published" | grep -q .; then
     die "imp-host publishes a port beyond loopback: $published"
   fi
@@ -1943,7 +1915,7 @@ check_storage_live() {
   if [ "$storage" = zfs ]; then
     [ "$(zpool list -H -o health "$zfs_pool")" = ONLINE ] || die "pool $zfs_pool is not ONLINE"
     local top
-    top=$(docker exec imp-host findmnt -n -r -o SOURCE,FSTYPE --mountpoint "$DATA_DIR" | tail -n 1)
+    top=$(podman exec imp-host findmnt -n -r -o SOURCE,FSTYPE --mountpoint "$DATA_DIR" | tail -n 1)
     [ "$top" = "$zfs_root zfs" ] || die "the container has '${top:-nothing}' on $DATA_DIR, not $zfs_root"
   fi
   log "health: impd stores imps on $storage${zfs_root:+ ($zfs_root)}"
@@ -1952,7 +1924,7 @@ check_storage_live() {
 # check_ipv6_live: with IPv6 on, the container has an IPv6 default route,
 # and impd took it (docs/architecture/network/networking.md#ipv6).
 check_ipv6_live() {
-  [ -n "$(docker exec imp-host ip -6 route show default)" ] ||
+  [ -n "$(podman exec imp-host ip -6 route show default)" ] ||
     die "imp-host has no IPv6 default route on the $HOST_NETWORK network"
   wait_for "impd to log its IPv6 plan" 60 impd_ipv6_line
   local line
@@ -1962,15 +1934,15 @@ check_ipv6_live() {
 }
 
 # an image from before impd's structured log, which a pin keeps, writes `impd: ipv6: …`
-impd_ipv6_line() { docker logs imp-host 2>&1 | grep -oE 'impd(\.ipv6|: ipv6:) .*' | tail -n 1 | grep .; }
+impd_ipv6_line() { podman logs imp-host 2>&1 | grep -oE 'impd(\.ipv6|: ipv6:) .*' | tail -n 1 | grep .; }
 
 # tailnet_joined: the host container runs and holds node state.
 tailnet_joined() {
-  docker exec imp-host test -s /var/lib/imp/tailscale/tailscaled.state 2>/dev/null
+  podman exec imp-host test -s /var/lib/imp/tailscale/tailscaled.state 2>/dev/null
 }
 
 tailscale_backend() {
-  docker exec imp-host tailscale --socket=/var/run/tailscale/tailscaled.sock status --json 2>/dev/null |
+  podman exec imp-host tailscale --socket=/var/run/tailscale/tailscaled.sock status --json 2>/dev/null |
     jq -r '.BackendState // empty'
 }
 

@@ -34,21 +34,21 @@ so the proxy strips the dashboard's session cookie from every request it forward
 With a domain of its own, impd serves every imp at `https://<name>.<domain>` on the tailnet. It gets
 one wildcard certificate for the domain by ACME's DNS challenge, renews it well before it expires,
 and points the domain's wildcard record at the host's tailnet address. The TLS listener binds the
-tailnet address and loopback only, never every address, so a port Docker publishes to the internet
-never reaches it. It hands each request to the wake proxy, and accepts exactly `<name>.<domain>` for
-an imp and `<domain>` for impd's API, so the bare domain never reaches an imp. A renewed certificate
-starts a second listener beside the old one, which lets its open connections finish, because Bun
-cannot change a running server's certificate. The [HTTPS guide](../../guides/https.md) covers the
-setup and the records.
+tailnet address and loopback only, never every address, so a port the container engine publishes to
+the internet never reaches it. It hands each request to the wake proxy, and accepts exactly
+`<name>.<domain>` for an imp and `<domain>` for impd's API, so the bare domain never reaches an imp.
+A renewed certificate starts a second listener beside the old one, which lets its open connections
+finish, because Bun cannot change a running server's certificate. The
+[HTTPS guide](../../guides/https.md) covers the setup and the records.
 
 A public imp is the one route from the internet, and the owner opts each imp in. A second pair of
 listeners, on every address, serves public imps only, behind credentials the owner sets per imp. The
-listener a request arrives on decides what it may reach, never the client's address, because
-Docker's userland proxy can make a public client look like the bridge. Anything that is not a public
-imp gets the same not-found answer, so the internet cannot tell which names exist. Each public imp
-has limits on open requests, wakes and wrong credentials, counted per imp, and its own DNS record at
-the host's public address, which wins over the tailnet wildcard. A public imp never moves to another
-host.
+listener a request arrives on decides what it may reach, never the client's address, because a
+container engine's port publishing can make a public client look like the bridge. Anything that is
+not a public imp gets the same not-found answer, so the internet cannot tell which names exist. Each
+public imp has limits on open requests, wakes and wrong credentials, counted per imp, and its own
+DNS record at the host's public address, which wins over the tailnet wildcard. A public imp never
+moves to another host.
 
 ## Per-imp tailnet names
 

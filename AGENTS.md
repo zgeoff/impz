@@ -47,7 +47,7 @@ host/              the host container image that runs impd; ksm-exec, the Go pro
                    that reads the builder image from its registry
 images/            the guest images that ship with imp
 kernel/            the guest kernel build
-deploy/            the Compose recipe, the systemd units, bootstrap and the NixOS module
+deploy/            the systemd units, bootstrap and the NixOS module
 e2e/               the end-to-end harness and its suites
 scripts/           the ci, dev, release and render scripts
 patches/           bun patches for third-party packages

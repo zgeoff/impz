@@ -129,12 +129,12 @@ Serve config is part of the node state, so it survives restarts with persisted s
 
 ## DNS
 
-Docker copies the host's resolv.conf into the container. On a host that runs Tailscale with MagicDNS
-(this WSL machine does), that is `nameserver 100.100.100.100`. A normal container reaches the host's
-quad100 through the host. The imp host container runs its own `tailscaled`, which captures
-`100.64.0.0/10` in its own netns. With `--accept-dns=false` its quad100 has no upstream, so every
-lookup fails, including ACME for `tailscale serve`. `tailscale-up.sh` rewrites resolv.conf in that
-case. `scripts/dev/dev.sh` also starts the host container with `--dns 1.1.1.1 --dns 8.8.8.8`.
+Docker and Podman copy the host's resolv.conf into the container. On a host that runs Tailscale with
+MagicDNS (this WSL machine does), that is `nameserver 100.100.100.100`. A normal container reaches
+the host's quad100 through the host. The imp host container runs its own `tailscaled`, which
+captures `100.64.0.0/10` in its own netns. With `--accept-dns=false` its quad100 has no upstream, so
+every lookup fails, including ACME for `tailscale serve`. `tailscale-up.sh` rewrites resolv.conf in
+that case. `scripts/dev/dev.sh` also starts the host container with `--dns 1.1.1.1 --dns 8.8.8.8`.
 
 ## Per-imp names
 

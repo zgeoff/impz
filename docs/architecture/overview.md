@@ -55,7 +55,7 @@ tunnel or an SSH forward dials through the agent from inside the guest.
 ```mermaid
 flowchart TB
   subgraph host["the host"]
-    D["Docker engine"]
+    D["Podman"]
     subgraph ih["imp-host container, own network namespace"]
       I["impd"]
       T["tailscaled"]
@@ -71,7 +71,7 @@ flowchart TB
   T --- I
 ```
 
-The host under impz is thin: it gives KVM, cgroup v2, Docker and a filesystem for the data, and runs
+The host under impz is thin: it gives KVM, cgroup v2, Podman and a filesystem for the data, and runs
 one container from impz's image ([the host](./host.md)). The imp-host container holds impd, every
 Firecracker process and the tailnet node, in a network namespace of its own, so the taps, routes and
 firewall rules for the imps never touch the host's network. A small entrypoint sets up the cgroups,

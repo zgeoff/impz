@@ -1,9 +1,13 @@
 # shellcheck shell=bash
-# The packages phase: the tools, the ZFS packages, and Docker CE.
+# The packages phase: the tools, Podman, and the ZFS packages.
 
 ensure_packages() {
   phase packages
-  local wanted=(ca-certificates curl gnupg xfsprogs nftables jq iproute2 util-linux)
+  # apt_install skips Recommends, so the list names what Podman needs past its
+  # dependencies: catatonit for --init, netavark and aardvark-dns, and iptables,
+  # netavark's firewall driver. A Docker already on the host stays, untouched.
+  local wanted=(ca-certificates curl xfsprogs nftables jq iproute2 util-linux
+    podman catatonit netavark aardvark-dns iptables)
   local pkg missing=()
   for pkg in "${wanted[@]}"; do
     dpkg-query -W -f '${Status}' "$pkg" 2>/dev/null | grep -q 'install ok installed' || missing+=("$pkg")
@@ -12,7 +16,6 @@ ensure_packages() {
     change "apt-get install ${missing[*]}" apt_install "$APT_LOG" "${missing[@]}"
   fi
   [ "$storage" != zfs ] || ensure_zfs_packages
-  ensure_docker
 }
 
 # Ubuntu ships the zfs module with its kernel; Debian builds it with DKMS,
@@ -53,47 +56,6 @@ apt_install() {
   } >"$apt_log" 2>&1; then
     tail -n 20 "$apt_log" >&2
     die "apt-get install $* failed; the whole log is in $apt_log"
-  fi
-}
-
-# Docker CE from Docker's apt repo, as host/Dockerfile uses. A Docker that is
-# already installed (docker-ce or the distro's docker.io) is kept.
-ensure_docker() {
-  local pkg
-  for pkg in docker-ce docker.io; do
-    if dpkg-query -W -f '${Status}' "$pkg" 2>/dev/null | grep -q 'install ok installed'; then
-      log "docker: $pkg is installed"
-      ensure_service docker
-      return
-    fi
-  done
-  # shellcheck source=/dev/null
-  . /etc/os-release
-  local key=/etc/apt/keyrings/docker.asc
-  if [ ! -s "$key" ]; then
-    change "fetch Docker's apt key to $key" fetch_docker_key "$key" "$ID"
-  fi
-  # A dry run has not fetched it; an existing key is checked every run.
-  [ ! -s "$key" ] || check_docker_key "$key"
-  put_file /etc/apt/sources.list.d/docker.list 644 \
-    "deb [arch=amd64 signed-by=$key] https://download.docker.com/linux/$ID $VERSION_CODENAME stable" || true
-  change "apt-get install docker-ce" apt_install "$APT_LOG" docker-ce docker-ce-cli containerd.io
-  ensure_service docker
-}
-
-fetch_docker_key() {
-  install -m 0755 -d "$(dirname "$1")" || return 1
-  curl -fsSL "https://download.docker.com/linux/$2/gpg" -o "$1.new" || return 1
-  check_docker_key "$1.new" && chmod 0644 "$1.new" && mv "$1.new" "$1"
-}
-
-# check_docker_key FILE: the file holds Docker's key and only that key.
-check_docker_key() {
-  local fingerprints
-  fingerprints=$(gpg --show-keys --with-colons "$1" 2>/dev/null | awk -F: '$1 == "pub" { pub = 1 } $1 == "fpr" && pub { print $10; pub = 0 }')
-  if [ "$fingerprints" != "$DOCKER_KEY_FINGERPRINT" ]; then
-    rm -f "$1.new"
-    die "$1 is not Docker's apt key (want $DOCKER_KEY_FINGERPRINT, got ${fingerprints:-none})"
   fi
 }
 

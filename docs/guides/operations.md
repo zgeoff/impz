@@ -2,8 +2,9 @@
 
 Day-to-day care of an imp host: restarts, the RAM budget, logs, and checks. The commands assume the
 dev instance from the [install guide](./install.md). On a server running the release image,
-`systemctl restart imp-host` (or `docker compose restart`) does what `reboot` does here, and
-`docker exec imp-host pkill -HUP -x impd` what `restart` does.
+`systemctl restart imp-host` does what `reboot` does here, and
+`podman exec imp-host pkill -HUP -x impd` what `restart` does. The NixOS module runs imp-host under
+Docker, so on a NixOS host the `restart` command is `docker exec imp-host pkill -HUP -x impd`.
 
 ## Restart without losing imps
 
@@ -23,8 +24,9 @@ asleep. A VM that the dead impd left behind is adopted or killed, so no imp ends
 
 ## Upgrade
 
-`deploy/upgrade.sh` moves a server to a new release image. Pass `--compose deploy/compose.yaml` when
-the host runs under compose; the default is the systemd unit. It needs `docker`, `curl` and `jq`.
+`deploy/upgrade.sh` moves a server to a new release image, under the systemd unit and Podman. It
+needs `podman`, `curl` and `jq`, and `docker` only to move a host that runs under Docker. It takes
+no arguments: the Compose recipe is gone, and `--compose` is refused.
 
 ```sh
 deploy/upgrade.sh
@@ -35,64 +37,83 @@ older nixie's sandbox adapter refuses impd 5 and reports itself unready. nixie 0
 release whose adapter accepts impd 5, and nixie's production deployment runs it.
 
 Take `upgrade.sh` from the new image, not from the release the host runs, with the `lib/host-env.sh`
-beside it that it sources. A host whose image has the `imp.host-contract` label `socket-proxy`, or
-none, must: its own `upgrade.sh` refuses the new image, whose label is `no-docker`. Each release's
-`upgrade.sh` moves the host to that release, so pick the release in the image you take it from:
+beside it that it sources. A host that runs under Docker must, since its own `upgrade.sh` cannot
+move it to Podman. Each release's `upgrade.sh` moves the host to that release, so pick the release
+in the image you take it from:
 
 <!-- x-release-please-start-version -->
 
 ```sh
-docker pull ghcr.io/zgeoff/imp-host:5.0.0
-docker run --rm ghcr.io/zgeoff/imp-host:5.0.0 tar -cf - -C /usr/local/share/imp deploy | tar -xf -
+podman pull ghcr.io/zgeoff/imp-host:5.0.0
+podman run --rm ghcr.io/zgeoff/imp-host:5.0.0 tar -cf - -C /usr/local/share/imp deploy | tar -xf -
 bash deploy/upgrade.sh
 ```
 
 <!-- x-release-please-end -->
 
-1. It pulls the image of its own release, unless `IMP_HOST_IMAGE` names another: from the
-   environment, else (with compose) the `.env` next to the compose file, else a pin in
-   `/etc/imp/imp-host.env`. It reads the `.env` as Compose does (through
-   `docker compose config --environment` when Compose has it), so a trailing comment is not part of
-   the image, and variables resolve. When the host already runs that image, it still installs the
-   image lines and files of step 3, so the next restart keeps that image. For an image that needs no
-   Docker, it still retires `imp-docker-proxy` as step 4 does, but it restarts nothing. With the
-   systemd unit, it refuses an image from the environment that `imp-host.service` (drop-ins
-   included) would not run: pin it in the env file instead. It refuses an env file whose last
-   `IMP_HOST_IMAGE=` is empty, which would give the units no image. It refuses an image from before
-   the Docker socket proxy once the unit or compose file gives imp-host no host `docker.sock`, and
-   an image from before the unprivileged host (no `imp.host-contract` label) once it runs without
-   `--privileged`. To go back past either, run `deploy/bootstrap.sh` of that image's release.
+1. It pulls the image of its own release with Podman, unless `IMP_HOST_IMAGE` names another: from
+   the environment, else a pin in `/etc/imp/imp-host.env`. When the host already runs that image
+   under Podman, it still installs the image lines and files of step 3, so the next restart keeps
+   that image, and still retires `imp-docker-proxy` as step 3 does, but restarts nothing. It refuses
+   an image from the environment that `imp-host.service` (drop-ins included) would not run: pin it
+   in the env file instead. It refuses an env file whose last `IMP_HOST_IMAGE=` is empty, which
+   would give the unit no image. It refuses an image whose `imp.host-contract` label is not
+   `no-docker`: that image needs a Docker socket, which a Podman host does not give. To go back to
+   one, see [roll back](#roll-back).
 2. It sleeps every awake imp through the API, one at a time. If the list or one sleep fails, it
    stops and the host keeps the old image. The stop would sleep them too, but only within its 120 s.
-3. It installs the new image's seccomp profile in `/etc/imp/imp-host.seccomp.json` and, for the
-   systemd unit, its `imp-host.service`, so a change to the
-   [privileges](../architecture/host.md#privileges) or the
-   [Docker socket](../architecture/host.md#the-docker-socket) reaches the server. Keep local changes
-   to a unit in a drop-in (`imp-host.service.d/`). The installed units drop the release-please
-   marker comments. A compose file is the operator's: upgrade.sh leaves it, and says when it still
-   runs `--privileged`. It refuses a compose file that still runs `imp-docker-proxy`, and changes
-   nothing: take the imp-host service from this release's `deploy/compose.yaml` and drop the proxy
-   and its volumes.
+3. It installs the new image's seccomp profile in `/etc/imp/imp-host.seccomp.json` and its
+   `imp-host.service`, so a change to the [privileges](../architecture/host.md#privileges) reaches
+   the server. A unit it replaces stays as `imp-host.service.bak-<time>`. Keep local changes to the
+   unit in a drop-in (`imp-host.service.d/`). The installed unit drops the release-please marker
+   comments. It stops and disables `imp-docker-proxy` when an older release installed it, because
+   the proxy holds the host's Docker socket, and keeps its unit as
+   `imp-docker-proxy.service.bak-<time>`.
 
    An env file line `IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:latest`, which every env file had before
-   the units named their release, is the old template's and no pin. It becomes the commented pin, so
-   the units run their release's image. This happens before the units are installed, and the file
-   before stays as `imp-host.env.bak-<time>`, mode `0600`; upgrade.sh prints its path. Any other
-   value is a pin and stays. To follow `latest` on purpose, pin
-   `IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host`, which Docker reads as `latest`.
+   the unit named its release, is the old template's and no pin. It becomes the commented pin, so
+   the unit runs its release's image. This happens before the unit is installed, and the file before
+   stays as `imp-host.env.bak-<time>`, mode `0600`; upgrade.sh prints its path. Any other value is a
+   pin and stays. To follow `latest` on purpose, pin `IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host`, which
+   Podman reads as `latest`.
 
-   With compose, it writes `IMP_HOST_IMAGE` to the `.env` next to the compose file when that
-   differs, and keeps the file before as `.env.bak-<time>`, mode `0600`. A pin there stays, since it
-   chose the image. Compose reads that `.env` at each `up`, so a later `docker compose up -d` keeps
-   the new image, not the default of an older compose file.
+4. It restarts the host, waits for `/health` to report ready, prints how to roll back, prints the
+   boot status counts from `impz info`, and lists the imps. When impd is not ready in time, it
+   prints the rollback beside the `podman logs` command and exits 1.
 
-4. It stops and disables `imp-docker-proxy`, whose unit becomes
-   `imp-docker-proxy.service.bak-<time>`, then restarts the host (with compose, `up -d` of
-   imp-host). It waits for `/health` to report ready, prints how to roll back, prints the boot
-   status counts from `impz info`, and lists the imps. When the old image has the new image's host
-   contract, the printed rollback is `docker tag` of the old image ID and the same restart. When the
-   contracts differ, as from a `socket-proxy` image to a `no-docker` one, the printed rollback is
-   `deploy/bootstrap.sh` of the old image's release.
+### From Docker to Podman
+
+On a host whose imp-host runs under Docker, upgrade.sh moves the host to Podman. With IPv6, it
+refuses, before any imp sleeps, when another container is on Docker's `imp-host` network. After the
+sleeps of step 2, it does these, in order:
+
+1. It stops imp-host with the old unit, so Docker stops the container, and removes the container.
+2. It stops and disables `imp-docker-proxy`, when an older release installed it, and keeps its unit
+   as `imp-docker-proxy.service.bak-<time>`.
+3. With IPv6, it removes Docker's `imp-host` network. The new unit makes a Podman network of the
+   same name on the same `/64` and bridge, from `IMP_HOST_SUBNET6` in the env file.
+4. It installs the files of step 3 and starts imp-host under Podman.
+
+`/var/lib/imp` and the env file's values stay as they are, so every imp, image and the builder
+image's row come back. Podman pulls its own copy of the image, and Docker keeps the old one.
+
+Docker stays installed, and imp no longer uses it. Once the host runs well under Podman, remove the
+old image with `docker image rm <old image ID>`, and remove Docker's packages if nothing else on the
+host needs them.
+
+### Roll back
+
+On a Podman host, roll back with `podman tag <old image ID> <image>`, then
+`systemctl restart imp-host`; upgrade.sh prints both.
+
+After a move from Docker, upgrade.sh prints the rollback with the exact paths it wrote: stop
+imp-host, remove Podman's `imp-host` network when imp-host started under Podman on a host with IPv6,
+move each `.bak-<time>` unit back, `systemctl daemon-reload`, `docker tag <old image ID> <image>`
+for the image that the restored unit runs, `systemctl enable --now imp-docker-proxy` when its unit
+came back, and start imp-host. The tag matters when the env file pins the new image: without it,
+Docker would pull that image and start it again, for the proxy too, and the new image has no proxy.
+A step that fails after the old host stopped, the start and the readiness wait included, prints the
+rollback for what it changed so far.
 
 Imps then wake on demand. Each sleeping imp either restores its memory or boots its disk cold. The
 disk is never touched.
@@ -136,18 +157,16 @@ An impd from before this scheme kept the drive at `/var/lib/imp/system/imp-syste
 VM it booted still runs from that file. impd leaves the file alone. Remove it once no such VM runs:
 `impz ls` shows none with `booted by an older impd`.
 
-**Roll back** to an image of the same host contract with `docker tag <old image ID> <image>` and the
-same restart. Roll back to an image of another host contract with `deploy/bootstrap.sh` of that
-image's release, which writes the units its contract needs. A rollback to an impd from before this
-upgrade scheme (the first release with `system/drives/`) does not match the hashes in the new
-snapshot records, and every sleeping imp boots cold once. The same happens once the other way: an
-older impd hashed the drive with another hash and wrote no drive path, so its snapshots boot cold
-with `the snapshot is from an older impd`.
+A rollback to an impd from before this upgrade scheme (the first release with `system/drives/`) does
+not match the hashes in the new snapshot records, and every sleeping imp boots cold once. The same
+happens once the other way: an older impd hashed the drive with another hash and wrote no drive
+path, so its snapshots boot cold with `the snapshot is from an older impd`.
 
-**CAUTION:** A rollback to an image from before the unprivileged host needs the old unit with
-`--privileged`, which `docker tag` does not bring back; upgrade.sh refuses it. Run
-`deploy/bootstrap.sh` of that release with the old image instead: it writes the unit that image
-needs. Under compose, put `privileged: true` back in the compose file.
+**CAUTION:** An image whose `imp.host-contract` label is not `no-docker` needs Docker, which
+`podman tag` does not bring back; upgrade.sh refuses it. Run `deploy/bootstrap.sh` of that release
+with the old image instead, on a host with Docker, after `systemctl stop imp-host`: it writes the
+unit that image needs. On a host with IPv6, run `podman network rm imp-host` before bootstrap.sh,
+because Podman makes that network only with IPv6.
 
 **CAUTION:** `deploy/bootstrap.sh` blanks the spent Tailscale key once the node has joined, and the
 image starts `tailscaled` from its saved state. An image without the `imp.tailscale-keyless` label
@@ -256,9 +275,8 @@ before you restore, and expect each secret added after the copy to be lost until
 with `impz secret add`.
 
 1. Copy `<data>/secrets` aside.
-2. Stop impd with a full stop that sleeps the imps (`systemctl stop imp-host`, or
-   `docker compose stop`), not a restart: a restart leaves the VMs running for the new impd to
-   adopt.
+2. Stop impd with a full stop that sleeps the imps (`systemctl stop imp-host`), not a restart: a
+   restart leaves the VMs running for the new impd to adopt.
 3. Copy `<data>/db/imp.sqlite` with its `-wal` and `-shm` files to a directory outside `<data>/db`,
    in case you need to go back. With impd stopped, the three files agree.
 4. Remove `<data>/db/imp.sqlite-wal` and `<data>/db/imp.sqlite-shm`. A WAL file left beside a
@@ -364,8 +382,7 @@ To recover:
    **CAUTION:** A reboot ends every running imp without its memory. Stop impd first, so that it
    sleeps the imps and writes their memory to disk.
 
-2. Stop impd with a full stop that sleeps the imps (`systemctl stop imp-host`, or
-   `docker compose stop`), not a restart.
+2. Stop impd with a full stop that sleeps the imps (`systemctl stop imp-host`), not a restart.
 3. Reboot the host.
 4. Check that impd sees a clear flag: `curl -s http://127.0.0.1:7070/health`. Expect
    `"warnings":[]`.

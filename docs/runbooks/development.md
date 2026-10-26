@@ -366,12 +366,11 @@ Its job is a required check.
 `deploy/bootstrap.sh` is generated, so that a server downloads one file to install. Its sources are
 the parts in `deploy/bootstrap/`, the functions in `deploy/lib/host-env.sh` that `deploy/upgrade.sh`
 and the NixOS module source as well, and the units and env template it installs.
-`deploy/imp-host.args.json` holds the `docker run` arguments of imp-host, with the name and bridge
+`deploy/imp-host.args.json` holds the `podman run` arguments of imp-host, with the name and bridge
 of the IPv6 network and the pipeline that reads the host's addresses. After an edit to any of these,
-`bun run render:deploy` writes the unit, the network lines of `deploy/lib/host-env.sh`,
-`bootstrap.sh`, and the privileges and network blocks of `deploy/compose.yaml`. `bun test` fails
-until it has (`scripts/render/render-imp-host.test.ts`), and so does a hand edit to `bootstrap.sh`.
-The NixOS module reads the arguments file itself.
+`bun run render:deploy` writes the unit, the network lines of `deploy/lib/host-env.sh` and
+`bootstrap.sh`. `bun test` fails until it has (`scripts/render/render-imp-host.test.ts`), and so
+does a hand edit to `bootstrap.sh`. The NixOS module reads the arguments file itself.
 
 `.github/workflows/breaking-change.yml` fails a pull request that breaks the protocol between a
 client and impd without marking the change as breaking

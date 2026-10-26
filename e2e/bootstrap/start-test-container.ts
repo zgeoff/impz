@@ -40,8 +40,8 @@ export async function startTestContainer(run: BootstrapRun, distro: Distro): Pro
 
   run.state.container = container;
 
-  // Its own network namespace (the default bridge), never --network host: the firewall and Docker's
-  // rules inside it never reach the host.
+  // Its own network namespace (the default bridge), never --network host: the firewall and the
+  // inner Podman's rules never reach the host.
   const runArgs = [
     '--name',
     container,
@@ -54,19 +54,21 @@ export async function startTestContainer(run: BootstrapRun, distro: Distro): Pro
     '--tmpfs',
     '/run/lock',
 
-    // Docker turns IPv6 off in a container on an IPv4-only network; the inner Docker's IPv6
+    // Docker turns IPv6 off in a container on an IPv4-only network; the inner Podman's IPv6
     // network needs it on.
     '--sysctl',
     'net.ipv6.conf.all.disable_ipv6=0',
     '--sysctl',
     'net.ipv6.conf.default.disable_ipv6=0',
 
-    // The inner Docker cannot put overlayfs on the container's own overlayfs, so its stores are
-    // volumes.
+    // The inner Podman cannot put overlayfs on the container's own overlayfs, so its store is a
+    // volume.
+    '-v',
+    '/var/lib/containers',
+
+    // The same holds for the inner Docker that the Docker host move installs.
     '-v',
     '/var/lib/docker',
-    '-v',
-    '/var/lib/containerd',
     '-v',
     `${run.work}:${ARCHIVE_DIR}:ro`,
   ];
