@@ -3,10 +3,9 @@ import type { NetworkMember } from '../../src/platform/db/networks';
 
 export function buildMockNetworkMember(overrides: Partial<NetworkMember> = {}): NetworkMember {
   return {
-    // faker's nouns include acronyms such as SUV, and a name is lowercase
-    network: faker.word.noun().toLowerCase(),
+    network: faker.string.alpha({ length: 10, casing: 'lower' }),
     impId: faker.string.uuid(),
-    name: faker.word.noun().toLowerCase(),
+    name: faker.string.alpha({ length: 10, casing: 'lower' }),
     slot: faker.number.int({ min: 0, max: 4095 }),
     guestIp: faker.internet.ipv4(),
     ...overrides,
