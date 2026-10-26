@@ -1,5 +1,13 @@
 # Changelog
 
+## [4.2.5](https://github.com/zgeoff/impz/compare/v4.2.4...v4.2.5) (2026-10-26)
+
+### Bug Fixes
+
+- **spike:** wake a uffd fault on a removed range, and skip it in fills
+  ([#739](https://github.com/zgeoff/impz/issues/739))
+  ([a8db735](https://github.com/zgeoff/impz/commit/a8db735e061b95b7b09df70eace0407aafbfe3f8))
+
 ## [4.2.4](https://github.com/zgeoff/impz/compare/v4.2.3...v4.2.4) (2026-10-25)
 
 ### Bug Fixes
