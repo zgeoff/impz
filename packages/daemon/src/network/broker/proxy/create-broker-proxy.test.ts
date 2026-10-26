@@ -68,12 +68,19 @@ async function setupTest() {
 
   const answers = new Map<string, () => Response | Promise<Response>>();
 
+  const credentials: { authorization: string | null; apiKey: string | null }[] = [];
+
   const upstream = await startStubBrokerTlsUpstream(stack, {
     directory: join(dataDir, 'upstream'),
     respond: async (request: Request) => {
       const body = await request.arrayBuffer();
 
       const path = new URL(request.url).pathname;
+
+      credentials.push({
+        authorization: request.headers.get('authorization'),
+        apiKey: request.headers.get('x-api-key'),
+      });
 
       const answer = answers.get(path);
 
@@ -121,6 +128,7 @@ async function setupTest() {
     client: harness.client,
     logs: harness.logs,
     seen,
+    credentials,
     tunnelled,
     answers,
     tunnelAnswers,
@@ -164,6 +172,49 @@ test('it sends the real credential in place of the placeholder to a granted host
     { method: 'GET', path: '/user', authorization: 'Bearer ghp_real', bodyBytes: 0 },
   ]);
 });
+
+test.each([
+  [{ preset: 'github' }, 'api.github.com', { authorization: 'Bearer ghp_real', apiKey: null }],
+  [
+    { preset: 'github' },
+    'github.com',
+    { authorization: 'Basic eC1hY2Nlc3MtdG9rZW46Z2hwX3JlYWw=', apiKey: null },
+  ],
+  [{ preset: 'github' }, 'uploads.github.com', { authorization: 'Bearer ghp_real', apiKey: null }],
+  [{ preset: 'anthropic' }, 'api.anthropic.com', { authorization: null, apiKey: 'ghp_real' }],
+  [{ preset: 'npm' }, 'registry.npmjs.org', { authorization: 'Bearer ghp_real', apiKey: null }],
+  [{ kind: 'github' }, 'api.github.com', { authorization: 'Bearer ghp_real', apiKey: null }],
+  [
+    { kind: 'github' },
+    'github.com',
+    { authorization: 'Basic eC1hY2Nlc3MtdG9rZW46Z2hwX3JlYWw=', apiKey: null },
+  ],
+  [{ kind: 'anthropic' }, 'api.anthropic.com', { authorization: null, apiKey: 'ghp_real' }],
+  [{ kind: 'npm' }, 'registry.npmjs.org', { authorization: 'Bearer ghp_real', apiKey: null }],
+] as const)(
+  'it sends the credential of %o to %s as the preset says',
+  async (binding, host, sent) => {
+    const ctx = await setupTest();
+
+    await ctx.createTestImage('base');
+
+    await writeFile(
+      ctx.upstreamsFile,
+      JSON.stringify({ ca: ctx.upstreamCaPem, upstreams: { [host]: ctx.upstreamOrigin } }),
+    );
+
+    ctx.answers.set('/thing', () => new Response('from upstream'));
+
+    await ctx.client.imps.create({ name: 'dev' });
+    await ctx.impd.broker.addSecret({ name: 'cred', value: 'ghp_real', ...binding });
+    await ctx.impd.broker.addGrant('dev', 'cred');
+
+    const result = await ctx.guest.curl(`https://${host}/thing`);
+
+    expect(result).toStrictEqual({ code: 0, stdout: 'from upstream', stderr: '' });
+    expect(ctx.credentials).toStrictEqual([sent]);
+  },
+);
 
 test('it records an audit row for a forwarded request', async () => {
   const ctx = await setupTest();

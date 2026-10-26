@@ -38,18 +38,15 @@ import {
   OAuthGrantSchema,
   RedirectUrisSchema,
 } from '../schemas/oauth-schema';
+import { SecretAddSchema } from '../schemas/secret-add-schema';
 import {
   AuditEntrySchema,
-  BrokerRuleSchema,
   GrantFilterSchema,
   GrantSchema,
-  OAuthConfigSchema,
   RefusedRequestSchema,
   SecretAddedSchema,
-  SecretKindSchema,
   SecretNameSchema,
   SecretSchema,
-  SecretValueSchema,
 } from '../schemas/secret-schema';
 import {
   SERVICE_LOG_MAX_LINES,
@@ -340,20 +337,7 @@ export const callerContract = {
   // secrets belong to the host: a grant hands one to an imp, so a token
   // limited to some imps could grant itself any secret
   secrets: {
-    add: base
-      .meta(ACCESS.manageHost)
-      .input(
-        z.object({
-          name: SecretNameSchema,
-          kind: SecretKindSchema,
-          value: SecretValueSchema,
-          rules: z.array(BrokerRuleSchema).min(1).max(16).optional(),
-          oauth: OAuthConfigSchema.optional(),
-          replace: z.boolean().optional(),
-          rebind: z.boolean().optional(),
-        }),
-      )
-      .output(SecretAddedSchema),
+    add: base.meta(ACCESS.manageHost).input(SecretAddSchema).output(SecretAddedSchema),
 
     list: base.meta(ACCESS.readAny).output(z.array(SecretSchema)),
 

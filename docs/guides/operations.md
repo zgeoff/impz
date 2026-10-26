@@ -30,6 +30,10 @@ the host runs under compose; the default is the systemd unit. It needs `docker`,
 deploy/upgrade.sh
 ```
 
+Before you move impd to 5.0.0 or later, move any nixie that drives it to nixie 0.47.0 or later. An
+older nixie's sandbox adapter refuses impd 5 and reports itself unready. nixie 0.47.0 is the first
+release whose adapter accepts impd 5, and nixie's production deployment runs it.
+
 Take `upgrade.sh` from the new image, not from the release the host runs, with the `lib/host-env.sh`
 beside it that it sources. A host whose image has the `imp.host-contract` label `socket-proxy`, or
 none, must: its own `upgrade.sh` refuses the new image, whose label is `no-docker`. Each release's
@@ -38,8 +42,8 @@ none, must: its own `upgrade.sh` refuses the new image, whose label is `no-docke
 <!-- x-release-please-start-version -->
 
 ```sh
-docker pull ghcr.io/zgeoff/imp-host:4.2.4
-docker run --rm ghcr.io/zgeoff/imp-host:4.2.4 tar -cf - -C /usr/local/share/imp deploy | tar -xf -
+docker pull ghcr.io/zgeoff/imp-host:5.0.0
+docker run --rm ghcr.io/zgeoff/imp-host:5.0.0 tar -cf - -C /usr/local/share/imp deploy | tar -xf -
 bash deploy/upgrade.sh
 ```
 

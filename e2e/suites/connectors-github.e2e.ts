@@ -65,7 +65,7 @@ test('it takes a secret on stdin, never shows it back, gives a granted guest the
     'secret',
     'add',
     secret,
-    '--kind',
+    '--preset',
     'github',
   );
 
@@ -165,7 +165,7 @@ test('it pushes a git pack over 1 MB through the broker with Basic auth', async 
   await waitForExec(name);
   await holdImp(name);
 
-  await ctx.client.secrets.add({ name: secret, kind: 'github', value: token });
+  await ctx.client.secrets.add({ name: secret, preset: 'github', value: token });
 
   registerRemoval(ctx.stack, config.keep, () => removeSecretIfPresent(ctx.client, secret));
 
@@ -230,7 +230,7 @@ test('it tunnels hosts without a grant, and lets nothing inside be reached', asy
   await waitForExec(name);
   await holdImp(name);
 
-  await ctx.client.secrets.add({ name: secret, kind: 'github', value: token });
+  await ctx.client.secrets.add({ name: secret, preset: 'github', value: token });
 
   registerRemoval(ctx.stack, config.keep, () => removeSecretIfPresent(ctx.client, secret));
 
@@ -291,7 +291,7 @@ test('it leaves no secret in the memory of a slept guest, which still gets the b
   await waitForExec(name);
   await holdImp(name);
 
-  await ctx.client.secrets.add({ name: secret, kind: 'github', value: token });
+  await ctx.client.secrets.add({ name: secret, preset: 'github', value: token });
 
   registerRemoval(ctx.stack, config.keep, () => removeSecretIfPresent(ctx.client, secret));
 
@@ -343,7 +343,7 @@ test('it refuses an exec that requires the broker when the CA bundle step failed
   await waitForExec(name);
   await holdImp(name);
 
-  await ctx.client.secrets.add({ name: secret, kind: 'github', value: token });
+  await ctx.client.secrets.add({ name: secret, preset: 'github', value: token });
 
   registerRemoval(ctx.stack, config.keep, () => removeSecretIfPresent(ctx.client, secret));
 

@@ -9191,107 +9191,346 @@
     },
     "secrets.add": {
       "input": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "pattern": "^[a-z][a-z0-9-]{0,30}$"
-          },
-          "kind": {
-            "type": "string",
-            "enum": [
-              "github",
-              "anthropic",
-              "npm",
-              "custom",
-              "oauth"
-            ]
-          },
-          "value": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 8192,
-            "pattern": "^[!-~]+$"
-          },
-          "rules": {
-            "minItems": 1,
-            "maxItems": 16,
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "host": {
-                  "type": "string",
-                  "maxLength": 253,
-                  "pattern": "^(?:[a-z0-9][a-z0-9-]{0,62}\\.)+[a-z][a-z0-9-]{0,62}$"
-                },
-                "header": {
-                  "type": "string",
-                  "pattern": "^[a-z0-9-]{1,64}$"
-                },
-                "scheme": {
-                  "type": "string",
-                  "enum": [
-                    "bearer",
-                    "basic",
-                    "raw"
-                  ]
-                },
-                "user": {
-                  "type": "string",
-                  "pattern": "^[!-9;-~]{1,64}$"
-                },
-                "upstream": {
-                  "type": "string",
-                  "maxLength": 2048
-                }
-              },
-              "required": [
-                "host",
-                "header",
-                "scheme"
-              ]
-            }
-          },
-          "oauth": {
+        "oneOf": [
+          {
             "type": "object",
             "properties": {
-              "tokenUrl": {
+              "kind": {
                 "type": "string",
-                "maxLength": 2048,
-                "format": "uri"
+                "const": "static"
               },
-              "clientId": {
+              "rules": {
+                "readOnly": true,
+                "minItems": 1,
+                "maxItems": 16,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "host": {
+                      "type": "string",
+                      "maxLength": 253,
+                      "pattern": "^(?:[a-z0-9][a-z0-9-]{0,62}\\.)+[a-z][a-z0-9-]{0,62}$"
+                    },
+                    "header": {
+                      "type": "string",
+                      "pattern": "^[a-z0-9-]{1,64}$"
+                    },
+                    "scheme": {
+                      "type": "string",
+                      "enum": [
+                        "bearer",
+                        "basic",
+                        "raw"
+                      ]
+                    },
+                    "user": {
+                      "type": "string",
+                      "pattern": "^[!-9;-~]{1,64}$"
+                    },
+                    "upstream": {
+                      "type": "string",
+                      "maxLength": 2048
+                    }
+                  },
+                  "required": [
+                    "host",
+                    "header",
+                    "scheme"
+                  ]
+                }
+              },
+              "env": {
+                "readOnly": true,
+                "maxItems": 16,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[A-Z_][A-Z0-9_]{0,63}$"
+                }
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]{0,30}$"
+              },
+              "value": {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 256,
+                "maxLength": 8192,
                 "pattern": "^[!-~]+$"
               },
-              "tokenFormat": {
-                "default": "form",
-                "type": "string",
-                "enum": [
-                  "json",
-                  "form"
-                ]
+              "replace": {
+                "type": "boolean"
+              },
+              "rebind": {
+                "type": "boolean"
               }
             },
             "required": [
-              "tokenUrl",
-              "clientId"
-            ]
+              "kind",
+              "rules",
+              "name",
+              "value"
+            ],
+            "additionalProperties": false
           },
-          "replace": {
-            "type": "boolean"
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "oauth"
+              },
+              "rules": {
+                "readOnly": true,
+                "minItems": 1,
+                "maxItems": 16,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "host": {
+                      "type": "string",
+                      "maxLength": 253,
+                      "pattern": "^(?:[a-z0-9][a-z0-9-]{0,62}\\.)+[a-z][a-z0-9-]{0,62}$"
+                    },
+                    "header": {
+                      "type": "string",
+                      "pattern": "^[a-z0-9-]{1,64}$"
+                    },
+                    "scheme": {
+                      "type": "string",
+                      "enum": [
+                        "bearer",
+                        "basic",
+                        "raw"
+                      ]
+                    },
+                    "user": {
+                      "type": "string",
+                      "pattern": "^[!-9;-~]{1,64}$"
+                    },
+                    "upstream": {
+                      "type": "string",
+                      "maxLength": 2048
+                    }
+                  },
+                  "required": [
+                    "host",
+                    "header",
+                    "scheme"
+                  ]
+                }
+              },
+              "env": {
+                "readOnly": true,
+                "maxItems": 16,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[A-Z_][A-Z0-9_]{0,63}$"
+                }
+              },
+              "oauth": {
+                "type": "object",
+                "properties": {
+                  "tokenUrl": {
+                    "type": "string",
+                    "maxLength": 2048,
+                    "format": "uri"
+                  },
+                  "clientId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256,
+                    "pattern": "^[!-~]+$"
+                  },
+                  "tokenFormat": {
+                    "default": "form",
+                    "type": "string",
+                    "enum": [
+                      "json",
+                      "form"
+                    ]
+                  }
+                },
+                "required": [
+                  "tokenUrl",
+                  "clientId"
+                ]
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]{0,30}$"
+              },
+              "value": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 8192,
+                "pattern": "^[!-~]+$"
+              },
+              "replace": {
+                "type": "boolean"
+              },
+              "rebind": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "kind",
+              "rules",
+              "oauth",
+              "name",
+              "value"
+            ],
+            "additionalProperties": false
           },
-          "rebind": {
-            "type": "boolean"
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "not": {}
+              },
+              "preset": {
+                "type": "string",
+                "enum": [
+                  "github",
+                  "anthropic",
+                  "npm"
+                ]
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]{0,30}$"
+              },
+              "value": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 8192,
+                "pattern": "^[!-~]+$"
+              },
+              "replace": {
+                "type": "boolean"
+              },
+              "rebind": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "preset",
+              "name",
+              "value"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "github",
+                  "anthropic",
+                  "npm"
+                ]
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]{0,30}$"
+              },
+              "value": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 8192,
+                "pattern": "^[!-~]+$"
+              },
+              "replace": {
+                "type": "boolean"
+              },
+              "rebind": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "kind",
+              "name",
+              "value"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "custom"
+              },
+              "rules": {
+                "readOnly": true,
+                "minItems": 1,
+                "maxItems": 16,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "host": {
+                      "type": "string",
+                      "maxLength": 253,
+                      "pattern": "^(?:[a-z0-9][a-z0-9-]{0,62}\\.)+[a-z][a-z0-9-]{0,62}$"
+                    },
+                    "header": {
+                      "type": "string",
+                      "pattern": "^[a-z0-9-]{1,64}$"
+                    },
+                    "scheme": {
+                      "type": "string",
+                      "enum": [
+                        "bearer",
+                        "basic",
+                        "raw"
+                      ]
+                    },
+                    "user": {
+                      "type": "string",
+                      "pattern": "^[!-9;-~]{1,64}$"
+                    },
+                    "upstream": {
+                      "type": "string",
+                      "maxLength": 2048
+                    }
+                  },
+                  "required": [
+                    "host",
+                    "header",
+                    "scheme"
+                  ]
+                }
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]{0,30}$"
+              },
+              "value": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 8192,
+                "pattern": "^[!-~]+$"
+              },
+              "replace": {
+                "type": "boolean"
+              },
+              "rebind": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "kind",
+              "rules",
+              "name",
+              "value"
+            ],
+            "additionalProperties": false
           }
-        },
-        "required": [
-          "name",
-          "kind",
-          "value"
         ]
       },
       "output": {
@@ -9304,10 +9543,7 @@
           "kind": {
             "type": "string",
             "enum": [
-              "github",
-              "anthropic",
-              "npm",
-              "custom",
+              "static",
               "oauth"
             ]
           },
@@ -9348,6 +9584,15 @@
                 "scheme"
               ],
               "additionalProperties": false
+            }
+          },
+          "env": {
+            "readOnly": true,
+            "maxItems": 16,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Z_][A-Z0-9_]{0,63}$"
             }
           },
           "imps": {
@@ -9459,6 +9704,7 @@
           "name",
           "kind",
           "rules",
+          "env",
           "imps",
           "createdAt",
           "droppedGrants"
@@ -9481,10 +9727,7 @@
             "kind": {
               "type": "string",
               "enum": [
-                "github",
-                "anthropic",
-                "npm",
-                "custom",
+                "static",
                 "oauth"
               ]
             },
@@ -9525,6 +9768,15 @@
                   "scheme"
                 ],
                 "additionalProperties": false
+              }
+            },
+            "env": {
+              "readOnly": true,
+              "maxItems": 16,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Z_][A-Z0-9_]{0,63}$"
               }
             },
             "imps": {
@@ -9630,6 +9882,7 @@
             "name",
             "kind",
             "rules",
+            "env",
             "imps",
             "createdAt"
           ],
@@ -9661,10 +9914,7 @@
           "kind": {
             "type": "string",
             "enum": [
-              "github",
-              "anthropic",
-              "npm",
-              "custom",
+              "static",
               "oauth"
             ]
           },
@@ -9705,6 +9955,15 @@
                 "scheme"
               ],
               "additionalProperties": false
+            }
+          },
+          "env": {
+            "readOnly": true,
+            "maxItems": 16,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Z_][A-Z0-9_]{0,63}$"
             }
           },
           "imps": {
@@ -9810,6 +10069,7 @@
           "name",
           "kind",
           "rules",
+          "env",
           "imps",
           "createdAt"
         ],
@@ -12548,6 +12808,9 @@
               "secretUpstream": {
                 "type": "boolean"
               },
+              "secretPresets": {
+                "type": "boolean"
+              },
               "backupOptOut": {
                 "type": "boolean"
               },
@@ -12657,6 +12920,9 @@
                 "type": "boolean"
               },
               "secretUpstream": {
+                "type": "boolean"
+              },
+              "secretPresets": {
                 "type": "boolean"
               },
               "backupOptOut": {
