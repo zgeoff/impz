@@ -1,5 +1,23 @@
 # Changelog
 
+## [5.0.0](https://github.com/zgeoff/impz/compare/v4.2.5...v5.0.0) (2026-10-26)
+
+### ⚠ BREAKING CHANGES
+
+- **api:** secrets.add refuses in its schema a field the kind does not take, such as rules on a
+  preset, and secrets.list shows each stored secret as kind static or oauth. The older kind names
+  github, anthropic, npm and custom still work in this release and go in the next major release: use
+  the preset of that name, or kind static.
+
+### Features
+
+- **api:** take static and oauth secrets, with presets as data
+  ([#718](https://github.com/zgeoff/impz/issues/718))
+  ([9696e0a](https://github.com/zgeoff/impz/commit/9696e0a02b17430a431963e992cf76022edd39c3))
+- **daemon:** store an env list on each secret, with the presets as data
+  ([#717](https://github.com/zgeoff/impz/issues/717))
+  ([5c4f4e8](https://github.com/zgeoff/impz/commit/5c4f4e878ab64081262843728ac944e4a9ff2724))
+
 ## [4.2.5](https://github.com/zgeoff/impz/compare/v4.2.4...v4.2.5) (2026-10-26)
 
 ### Bug Fixes
