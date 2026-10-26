@@ -15,9 +15,9 @@ stubs=${STUB_CALLS%/*}
 pools=$stubs/pools
 touch "$pools"
 
-read -r create <"$stubs/zpool.create" || create=
-read -r destroy <"$stubs/zpool.destroy" || destroy=
-read -r queries <"$stubs/zpool.queries" || queries=
+read -r create < "$stubs/zpool.create" || create=
+read -r destroy < "$stubs/zpool.destroy" || destroy=
+read -r queries < "$stubs/zpool.queries" || queries=
 
 # a query once a pool exists fails, when the settings say so
 check_query() {
@@ -30,9 +30,9 @@ check_query() {
 # $1-release, and fails after 30 s
 hold() {
   local started release held=0
-  read -r started <"$stubs/$1-started"
-  read -r release <"$stubs/$1-release"
-  : >"$started"
+  read -r started < "$stubs/$1-started"
+  read -r release < "$stubs/$1-release"
+  : > "$started"
   while [ ! -e "$release" ]; do
     [ "$held" -lt 600 ] || {
       echo "no release within 30 s" >&2
@@ -53,7 +53,7 @@ case "$1" in
   list)
     if [ "$2" = -H ]; then
       check_query
-      while read -r pool _; do printf '%s\n' "$pool"; done <"$pools"
+      while read -r pool _; do printf '%s\n' "$pool"; done < "$pools"
     else
       grep -q "^$2 " "$pools"
     fi
@@ -65,7 +65,7 @@ case "$1" in
     elif [ "$create" = held ]; then
       hold zpool.create
     fi
-    printf '%s %s\n' "$prev" "$last" >>"$pools"
+    printf '%s %s\n' "$prev" "$last" >> "$pools"
     ;;
   status)
     check_query
@@ -78,7 +78,7 @@ case "$1" in
       if [ -z "$want" ] || [ "$pool" = "$want" ]; then
         printf '  pool: %s\n\t  %s  ONLINE  0 0 0\n' "$pool" "$file"
       fi
-    done <"$pools"
+    done < "$pools"
     ;;
   destroy)
     if [ "$destroy" = fails ]; then
@@ -91,7 +91,7 @@ case "$1" in
     elif [ "$destroy" = held ]; then
       hold zpool.destroy
     fi
-    grep -v "^$last " "$pools" >"$pools.next" || true
+    grep -v "^$last " "$pools" > "$pools.next" || true
     mv "$pools.next" "$pools"
     ;;
 esac

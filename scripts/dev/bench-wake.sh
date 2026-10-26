@@ -43,7 +43,7 @@ now_ms() {
 }
 
 impz() {
-  "$imp_bin" "$@" >/dev/null
+  "$imp_bin" "$@" > /dev/null
 }
 
 cleanup() {

@@ -17,19 +17,19 @@ impd_pid=
 
 cleanup() {
   if [ -n "$impd_pid" ]; then
-    kill "$impd_pid" 2>/dev/null || true
-    wait "$impd_pid" 2>/dev/null || true
+    kill "$impd_pid" 2> /dev/null || true
+    wait "$impd_pid" 2> /dev/null || true
   fi
   rm -rf "$work"
 }
 trap cleanup EXIT
 
-bun "$root/packages/daemon/testing/surface/run-stub-impd.ts" >"$work/impd.json" &
+bun "$root/packages/daemon/testing/surface/run-stub-impd.ts" > "$work/impd.json" &
 impd_pid=$!
 
 for _ in $(seq 100); do
   [ -s "$work/impd.json" ] && break
-  kill -0 "$impd_pid" 2>/dev/null || {
+  kill -0 "$impd_pid" 2> /dev/null || {
     echo "run-stub-impd exited before it was ready" >&2
     exit 1
   }
@@ -45,7 +45,7 @@ impd=$(head -1 "$work/impd.json")
 mkdir "$work/node"
 (
   cd "$work/node"
-  npm init -y >/dev/null
+  npm init -y > /dev/null
   npm pkg set type=module
   npm install --no-audit --no-fund --silent "$tarball"
   cp "$smoke" smoke.ts
@@ -56,13 +56,13 @@ mkdir "$work/node"
 mkdir "$work/bun" "$work/bare"
 (
   cd "$work/bun"
-  echo '{ "name": "client-smoke", "private": true, "type": "module" }' >package.json
+  echo '{ "name": "client-smoke", "private": true, "type": "module" }' > package.json
   bun add --silent "$tarball"
   cp "$smoke" smoke.ts
   echo "bun $(bun --version)"
   bun smoke.ts "$version" "$impd"
 
-  bun build --compile smoke.ts --outfile smoke >/dev/null
+  bun build --compile smoke.ts --outfile smoke > /dev/null
 )
 
 # no node_modules and no package.json beside the binary: it holds the client

@@ -58,8 +58,8 @@ wait_for_image() {
 [ "$(id -u)" = 0 ] || fail "run as root: it masks the host's Docker and runs rootful Podman"
 [ "${CI:-}" = true ] || fail "it masks the host's Docker for good; run it only on a CI runner (CI=true)"
 [ -n "${IMP_HOST_IMAGE:-}" ] || fail "IMP_HOST_IMAGE must name the host image in Docker's store"
-command -v podman >/dev/null || fail "no podman on PATH"
-command -v jq >/dev/null || fail "no jq on PATH"
+command -v podman > /dev/null || fail "no podman on PATH"
+command -v jq > /dev/null || fail "no jq on PATH"
 mkdir -p "$LOG_DIR"
 
 echo "== under Docker"
@@ -68,10 +68,10 @@ TOKEN=$(IMP_DEV_CONTAINER_CLI=docker "$DEV" token)
 wait_for_image imp-builder
 wait_for_image ubuntu
 builder_before="$(read_image_field imp-builder id) $(read_image_field imp-builder digest)"
-run_impz new "$KEEP" --image ubuntu >/dev/null
+run_impz new "$KEEP" --image ubuntu > /dev/null
 run_impz exec "$KEEP" -- sh -c "echo $MARKER_TEXT > $MARKER"
 echo "    $KEEP holds $MARKER; imp-builder is $builder_before"
-docker logs "$CONTAINER" >"$LOG_DIR/impd-docker.log" 2>&1 || true
+docker logs "$CONTAINER" > "$LOG_DIR/impd-docker.log" 2>&1 || true
 IMP_DEV_CONTAINER_CLI=docker "$DEV" down
 
 echo "== the host image into Podman, then Docker off"
@@ -83,7 +83,7 @@ systemctl mask --now docker.socket docker.service
 rm -f /var/run/docker.sock
 [ ! -e /var/run/docker.sock ] || fail "/var/run/docker.sock is still there"
 pass "the host has no /var/run/docker.sock"
-if docker info >/dev/null 2>&1; then
+if docker info > /dev/null 2>&1; then
   fail "docker info still reaches an engine"
 fi
 pass "docker info reaches no engine"
@@ -110,7 +110,7 @@ podman exec "$CONTAINER" sh -c 'd=$(mktemp -d -p /var/lib/imp/images) &&
   mknod "$d/loop" b 7 0 && test -b "$d/loop" && rm -rf "$d"' ||
   fail "$CONTAINER cannot make device nodes under /var/lib/imp/images"
 pass "$CONTAINER makes character and block device nodes under /var/lib/imp/images"
-run_impz ls --json | jq -e --arg name "$KEEP" 'any(.[]; .name == $name)' >/dev/null ||
+run_impz ls --json | jq -e --arg name "$KEEP" 'any(.[]; .name == $name)' > /dev/null ||
   fail "impd no longer lists $KEEP"
 pass "impd lists $KEEP, which it made under Docker"
 marker=$(run_impz exec "$KEEP" -- cat "$MARKER")
@@ -120,7 +120,7 @@ builder_after="$(read_image_field imp-builder id) $(read_image_field imp-builder
 [ "$builder_after" = "$builder_before" ] ||
   fail "imp-builder is $builder_after, not $builder_before: impd fetched it again"
 pass "imp-builder is the image impd fetched under Docker: $builder_after"
-run_impz rm "$KEEP" >/dev/null
+run_impz rm "$KEEP" > /dev/null
 "$DEV" down
 
 # A fresh data dir, so impd fetches its builder image on a host that never ran Docker for it.

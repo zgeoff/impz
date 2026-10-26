@@ -56,7 +56,7 @@ check_xfs_reflink() {
 # dry run, before mkfs.
 device_source() {
   local uuid
-  uuid=$(blkid -s UUID -o value "$1" 2>/dev/null || true)
+  uuid=$(blkid -s UUID -o value "$1" 2> /dev/null || true)
   if [ -n "$uuid" ]; then echo "UUID=$uuid"; else echo "$1"; fi
 }
 
@@ -65,11 +65,11 @@ check_device_free() {
   local dev=$1
   # stat, not test -b, so a test can stand in for the device; LC_ALL=C keeps
   # the file type in English whatever the host's locale
-  [ "$(LC_ALL=C stat -L -c %F "$dev" 2>/dev/null)" = "block special file" ] || die "$dev is not a block device"
+  [ "$(LC_ALL=C stat -L -c %F "$dev" 2> /dev/null)" = "block special file" ] || die "$dev is not a block device"
   dev=$(readlink -f "$dev")
   local root_disk
   root_disk=$(findmnt -n -o SOURCE / | sed 's/\[.*//')
-  if lsblk -n -s -o PATH "$root_disk" 2>/dev/null | grep -qx "$dev"; then
+  if lsblk -n -s -o PATH "$root_disk" 2> /dev/null | grep -qx "$dev"; then
     die "$dev holds the root filesystem"
   fi
   if [ -n "$(lsblk -n -o MOUNTPOINTS "$dev" | tr -d '[:space:]')" ]; then
@@ -86,11 +86,11 @@ prepare_device() {
   local dev=$1
   check_device_free "$dev"
   local fstype
-  fstype=$(blkid -p -s TYPE -o value "$dev" 2>/dev/null || true)
+  fstype=$(blkid -p -s TYPE -o value "$dev" 2> /dev/null || true)
   case $fstype in
     xfs) log "$dev already holds XFS; reusing it" ;;
     "")
-      if blkid -p "$dev" >/dev/null 2>&1; then
+      if blkid -p "$dev" > /dev/null 2>&1; then
         die "$dev carries a signature (a partition table?); wipe it by hand if it is free"
       fi
       # shellcheck disable=SC2046 # the options are words
@@ -105,12 +105,12 @@ prepare_device() {
 # mounts it: the container mounts it on /var/lib/imp, and impd creates the
 # children (docs/architecture/storage/storage.md#zfs).
 storage_zfs() {
-  if command -v zpool >/dev/null && zpool list -H -o name "$zfs_pool" >/dev/null 2>&1; then
+  if command -v zpool > /dev/null && zpool list -H -o name "$zfs_pool" > /dev/null 2>&1; then
     log "pool $zfs_pool is imported"
   elif [ -n "$data_device" ]; then
     check_device_free "$data_device"
     local fstype
-    fstype=$(blkid -p -s TYPE -o value "$data_device" 2>/dev/null || true)
+    fstype=$(blkid -p -s TYPE -o value "$data_device" 2> /dev/null || true)
     case $fstype in
       zfs_member)
         [ "$(blkid -p -s LABEL -o value "$data_device")" = "$zfs_pool" ] ||
@@ -118,7 +118,7 @@ storage_zfs() {
         change "zpool import $zfs_pool" zpool import "$zfs_pool"
         ;;
       "")
-        if blkid -p "$data_device" >/dev/null 2>&1; then
+        if blkid -p "$data_device" > /dev/null 2>&1; then
           die "$data_device carries a signature (a partition table?); wipe it by hand if it is free"
         fi
         # shellcheck disable=SC2086 # plain words (render-imp-host.ts checks)
@@ -131,7 +131,7 @@ storage_zfs() {
     die "no pool $zfs_pool; give --data-device DEV to create it"
   fi
 
-  if ! command -v zfs >/dev/null || ! zfs list -H -o name "$zfs_root" >/dev/null 2>&1; then
+  if ! command -v zfs > /dev/null || ! zfs list -H -o name "$zfs_root" > /dev/null 2>&1; then
     change "zfs create $zfs_root (mountpoint=legacy)" zfs create -o mountpoint=legacy "$zfs_root"
   elif [ "$(zfs get -H -o value mountpoint "$zfs_root")" != legacy ]; then
     change "zfs set mountpoint=legacy $zfs_root" zfs set mountpoint=legacy "$zfs_root"
@@ -147,7 +147,7 @@ prepare_loop_file() {
   [ "$(findmnt -n -o TARGET --target "$dir")" = / ] ||
     die "--loop-file must be on the root filesystem, which mounts before $DATA_DIR"
   if [ -e "$loop_file" ]; then
-    [ "$(blkid -p -s TYPE -o value "$loop_file" 2>/dev/null || true)" = xfs ] ||
+    [ "$(blkid -p -s TYPE -o value "$loop_file" 2> /dev/null || true)" = xfs ] ||
       die "$loop_file exists and is not XFS"
     log "$loop_file already holds XFS; reusing it"
     return
@@ -172,7 +172,7 @@ make_loop_file() {
 }
 
 xfsprogs_version() {
-  if command -v mkfs.xfs >/dev/null; then
+  if command -v mkfs.xfs > /dev/null; then
     mkfs.xfs -V | grep -oE '[0-9]+(\.[0-9]+)+'
   else
     echo 0 # a dry run before the package is installed
@@ -254,4 +254,4 @@ fstab_entry_state() {
   fi
 }
 
-append_line() { printf '%s\n' "$2" >>"$1"; }
+append_line() { printf '%s\n' "$2" >> "$1"; }

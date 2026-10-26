@@ -75,7 +75,7 @@ echo "impz: downloading $asset $tag"
 curl -fsSL "$releases/download/$tag/$asset" -o "$tmp/$asset" || fail "cannot download $asset $tag"
 
 want=$(awk -v name="$asset" '$2 == name { print $1 }' "$tmp/SHA256SUMS")
-if command -v sha256sum >/dev/null 2>&1; then
+if command -v sha256sum > /dev/null 2>&1; then
   got=$(sha256sum "$tmp/$asset" | cut -d' ' -f1)
 else
   got=$(shasum -a 256 "$tmp/$asset" | cut -d' ' -f1)
@@ -83,11 +83,11 @@ fi
 [ "$got" = "$want" ] || fail "$asset does not match SHA256SUMS for $tag; nothing installed"
 
 # gh asks the GitHub API for the attestation, which needs a login
-if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
-  gh attestation verify "$tmp/$asset" -R "$repo" >/dev/null ||
+if command -v gh > /dev/null 2>&1 && gh auth status > /dev/null 2>&1; then
+  gh attestation verify "$tmp/$asset" -R "$repo" > /dev/null ||
     fail "could not verify provenance of $asset from $repo; nothing installed"
   echo "impz: provenance verified"
-elif command -v gh >/dev/null 2>&1; then
+elif command -v gh > /dev/null 2>&1; then
   echo "impz: gh is not logged in; skipped the provenance check"
 fi
 

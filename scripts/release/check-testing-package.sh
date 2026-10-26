@@ -21,13 +21,13 @@ jq -n --arg client "file:$client" '{
   private: true,
   type: "module",
   overrides: { "@impz/client": $client }
-}' >package.json
+}' > package.json
 
 # an isolated install exposes only the declared dependencies, so one the
 # manifest misses fails the import, where a hoisted install would hide it
-printf '[install]\nlinker = "isolated"\n' >bunfig.toml
+printf '[install]\nlinker = "isolated"\n' > bunfig.toml
 
-bun add --dev "$client" "$testing" "@types/bun@$(jq -r '.workspaces.catalog["@types/bun"]' "$root/package.json")" >/dev/null
+bun add --dev "$client" "$testing" "@types/bun@$(jq -r '.workspaces.catalog["@types/bun"]' "$root/package.json")" > /dev/null
 
 # bun test runs only a *.test.ts file, and the lint rule for one wants a module beside it
 cp "$smoke/smoke.ts" smoke.test.ts

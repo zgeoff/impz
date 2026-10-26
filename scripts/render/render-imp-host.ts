@@ -214,7 +214,7 @@ function renderDeployFiles(deployFiles: readonly DeployFile[]): string {
       throw new Error(`${file.path}: a line EOF would end its heredoc in ${BOOTSTRAP_FILE}`);
     }
 
-    return `${file.function}() {\n  cat <<'EOF'\n${file.text.replace(/\n+$/u, '')}\nEOF\n}\n`;
+    return `${file.function}() {\n  cat << 'EOF'\n${file.text.replace(/\n+$/u, '')}\nEOF\n}\n`;
   });
 
   const paths = deployFiles.map((file) => file.path).join(', ');

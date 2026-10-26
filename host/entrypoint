@@ -22,8 +22,8 @@ if [ -n "${IMP_ENV_FILE:-}" ]; then
 fi
 daemon=${IMP_DAEMON:-/src/packages/daemon/src/main.ts}
 case $daemon in
-  *.ts) run_daemon=(bun "$daemon") ;;
-  *) run_daemon=("$daemon") ;;
+*.ts) run_daemon=(bun "$daemon") ;;
+*) run_daemon=("$daemon") ;;
 esac
 
 # impd's values for the settings setup-net.sh reads, its defaults included;
