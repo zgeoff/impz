@@ -995,6 +995,46 @@ test('#runMigrations leaves each image unpinned in the image pin migration', asy
   expect(rows).toStrictEqual([{ id: 'one', pinned: 0 }]);
 });
 
+test('#runMigrations gives each preset secret its variables in the secret env migration', async () => {
+  const db = createUnmigratedDatabase();
+
+  await runMigrationsTo(db, '041_add_move_send_steps');
+
+  await sql`INSERT INTO secrets (name, kind, rules, created_at, generation, value_file)
+    VALUES ('claude', 'anthropic', '[]', 0, 'g1', 'claude'),
+      ('gh', 'github', '[]', 0, 'g2', 'gh'),
+      ('npm', 'npm', '[]', 0, 'g3', 'npm')`.execute(db);
+
+  await runMigrations(db);
+
+  const rows = await db.selectFrom('secrets').select(['name', 'env']).orderBy('name').execute();
+
+  expect(rows).toStrictEqual([
+    { name: 'claude', env: '["ANTHROPIC_API_KEY"]' },
+    { name: 'gh', env: '["GH_TOKEN","GITHUB_TOKEN"]' },
+    { name: 'npm', env: '["NPM_TOKEN"]' },
+  ]);
+});
+
+test('#runMigrations gives a custom or oauth secret no variables in the secret env migration', async () => {
+  const db = createUnmigratedDatabase();
+
+  await runMigrationsTo(db, '041_add_move_send_steps');
+
+  await sql`INSERT INTO secrets (name, kind, rules, created_at, generation, value_file)
+    VALUES ('api', 'custom', '[]', 0, 'g1', 'api'),
+      ('codex', 'oauth', '[]', 0, 'g2', 'codex')`.execute(db);
+
+  await runMigrations(db);
+
+  const rows = await db.selectFrom('secrets').select(['name', 'env']).orderBy('name').execute();
+
+  expect(rows).toStrictEqual([
+    { name: 'api', env: '[]' },
+    { name: 'codex', env: '[]' },
+  ]);
+});
+
 test('#runMigrations gives each image no received digest in the received digest migration', async () => {
   const db = createUnmigratedDatabase();
 

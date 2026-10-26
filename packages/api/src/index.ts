@@ -139,13 +139,18 @@ export { NameSchema } from './schemas/name-schema';
 export type { Network, NetworkJoin } from './schemas/network-schema';
 
 export {
+  BROKER_ENV_NAMES,
   BrokerRuleSchema,
   GrantFilterSchema,
   METHOD_OVERRIDE_HEADERS,
   OAuthConfigSchema,
+  SecretEnvSchema,
   SecretKindSchema,
   SecretNameSchema,
+  SecretPresetSchema,
 } from './schemas/secret-schema';
+
+export { SECRET_PRESETS } from './schemas/secret-presets';
 
 export type {
   AuditEntry,
@@ -158,6 +163,7 @@ export type {
   Secret,
   SecretAdded,
   SecretKind,
+  SecretPreset,
 } from './schemas/secret-schema';
 
 export {

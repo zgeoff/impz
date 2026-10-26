@@ -1,44 +1,21 @@
+import { SECRET_PRESETS } from '@impz/api';
 import type { BrokerRule, SecretKind } from '@impz/api';
-
-interface Preset {
-  readonly rules: readonly BrokerRule[];
-
-  // a tool checks these before it sends anything: gh with none stops at
-  // `gh auth login`
-  readonly env: readonly string[];
-}
 
 export const PLACEHOLDER = 'imp-broker-placeholder';
 
-const PRESETS: Readonly<Record<Exclude<SecretKind, 'custom' | 'oauth'>, Preset>> = {
-  // git smart HTTP on github.com takes Basic auth; the REST and upload APIs
-  // take a bearer token
-  github: {
-    rules: [
-      { host: 'github.com', header: 'authorization', scheme: 'basic', user: 'x-access-token' },
-      { host: 'api.github.com', header: 'authorization', scheme: 'bearer' },
-      { host: 'uploads.github.com', header: 'authorization', scheme: 'bearer' },
-    ],
-    env: ['GH_TOKEN', 'GITHUB_TOKEN'],
-  },
-  anthropic: {
-    rules: [{ host: 'api.anthropic.com', header: 'x-api-key', scheme: 'raw' }],
-    env: ['ANTHROPIC_API_KEY'],
-  },
-  npm: {
-    rules: [{ host: 'registry.npmjs.org', header: 'authorization', scheme: 'bearer' }],
-    env: ['NPM_TOKEN'],
-  },
-};
+export interface SecretBinding {
+  readonly rules: readonly BrokerRule[];
+  readonly env: readonly string[];
+}
 
 export class SecretRulesError extends Error {
   override name = 'SecretRulesError';
 }
 
-export function resolveRules(
+export function resolveBinding(
   kind: SecretKind,
   given: readonly BrokerRule[] | undefined,
-): readonly BrokerRule[] {
+): SecretBinding {
   if (kind !== 'custom' && kind !== 'oauth') {
     if (given !== undefined) {
       throw new SecretRulesError(
@@ -46,7 +23,7 @@ export function resolveRules(
       );
     }
 
-    return PRESETS[kind].rules;
+    return SECRET_PRESETS[kind];
   }
 
   if (given === undefined || given.length === 0) {
@@ -64,15 +41,11 @@ export function resolveRules(
     throw new SecretRulesError(`${repeated} has more than one rule`);
   }
 
-  return given;
+  return { rules: given, env: [] };
 }
 
-export function listPlaceholderEnv(kinds: readonly SecretKind[]): readonly string[] {
-  const names = kinds.flatMap((kind) =>
-    kind === 'custom' || kind === 'oauth' ? [] : PRESETS[kind].env,
-  );
-
-  return [...new Set(names)];
+export function listPlaceholderEnv(envLists: readonly (readonly string[])[]): readonly string[] {
+  return [...new Set(envLists.flat())];
 }
 
 export function renderCredential(rule: Readonly<BrokerRule>, value: string): string {
