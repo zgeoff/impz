@@ -1,5 +1,43 @@
 # Changelog
 
+## [6.0.0](https://github.com/zgeoff/impz/compare/v5.0.0...v6.0.0) (2026-10-26)
+
+### ⚠ BREAKING CHANGES
+
+- **nixos:** services.imp no longer enables virtualisation.docker; a host that needs Docker for
+  something else enables it itself.
+- **deploy:** imp-host runs under podman, not Docker, and deploy/compose.yaml is gone; run this
+  release's upgrade.sh to move a Docker host.
+- imp-host gets no Docker socket and runs no imp-docker-proxy; a compose file that still runs the
+  proxy needs this release's imp-host service.
+
+### Features
+
+- **daemon:** fetch the builder image with oci-fetch, not host docker
+  ([#721](https://github.com/zgeoff/impz/issues/721))
+  ([7022828](https://github.com/zgeoff/impz/commit/702282801d66168b85c3bbc255e7d41d00494427))
+- **deploy:** run imp-host under rootful podman ([#725](https://github.com/zgeoff/impz/issues/725))
+  ([fdfe9b9](https://github.com/zgeoff/impz/commit/fdfe9b9b09014ba5bd67dc0f0053bd067ca7baac))
+- **mcp:** describe only the tools the caller's scope exposes
+  ([#749](https://github.com/zgeoff/impz/issues/749))
+  ([383021b](https://github.com/zgeoff/impz/commit/383021bcef96ae7b0cc6e2dbd8e568a5dbfc4fd4))
+- **nixos:** run imp-host under podman, with docker off
+  ([#727](https://github.com/zgeoff/impz/issues/727))
+  ([e9f3925](https://github.com/zgeoff/impz/commit/e9f392513b55785b1369fa6c79c0c917c7672880))
+
+### Bug Fixes
+
+- **deps:** update patch updates ([#744](https://github.com/zgeoff/impz/issues/744))
+  ([66e5c76](https://github.com/zgeoff/impz/commit/66e5c76a2f170cffab6cbc8fae035cb21ffb91b7))
+- **testing:** keep acme-client out of @impz/testing's dependencies
+  ([#758](https://github.com/zgeoff/impz/issues/758))
+  ([94b069f](https://github.com/zgeoff/impz/commit/94b069f01bef9529d00dfee4320c63b4c3405012))
+
+### Code Refactoring
+
+- remove the docker socket proxy ([#722](https://github.com/zgeoff/impz/issues/722))
+  ([af39c43](https://github.com/zgeoff/impz/commit/af39c43aa13cbe5f9220af9084eb9c37ec0218b6))
+
 ## [5.0.0](https://github.com/zgeoff/impz/compare/v4.2.5...v5.0.0) (2026-10-26)
 
 ### ⚠ BREAKING CHANGES
