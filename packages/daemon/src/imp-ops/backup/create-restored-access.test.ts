@@ -40,7 +40,7 @@ test('it writes the copy’s secrets and tokens, each secret with its generation
 
   const secret = await createSecret(source.db, {
     name: 'gh',
-    kind: 'github',
+    kind: 'static',
     rules: [],
     valueFile: 'gh.0123456789abcdef',
   });
@@ -73,12 +73,12 @@ test('it keeps this host’s own secret under a name the copy has', async () => 
 
   await createSecret(source.db, {
     name: 'gh',
-    kind: 'github',
+    kind: 'static',
     rules: [],
     valueFile: 'gh.0123456789abcdef',
   });
 
-  await createSecret(ctx.db, { name: 'gh', kind: 'github', rules: [], valueFile: 'gh.here' });
+  await createSecret(ctx.db, { name: 'gh', kind: 'static', rules: [], valueFile: 'gh.here' });
   await writeConsistentCopy(source.db, ctx.copyPath);
 
   const result = await createRestoredAccess(ctx.db, ctx.tokens, ctx.copyPath);
@@ -121,7 +121,7 @@ test('it refuses a copy from a newer impd and writes nothing', async () => {
   const ctx = await setupTest();
   const source = await createTestDatabase();
 
-  await createSecret(source.db, { name: 'gh', kind: 'github', rules: [], valueFile: 'gh' });
+  await createSecret(source.db, { name: 'gh', kind: 'static', rules: [], valueFile: 'gh' });
 
   await runSql(
     source.db,
@@ -147,11 +147,11 @@ test('it leaves out a secret whose value file names a path outside the secrets d
   const ctx = await setupTest();
   const source = await createTestDatabase();
 
-  await createSecret(source.db, { name: 'gh', kind: 'github', rules: [], valueFile: '../token' });
+  await createSecret(source.db, { name: 'gh', kind: 'static', rules: [], valueFile: '../token' });
 
   await createSecret(source.db, {
     name: 'npm',
-    kind: 'npm',
+    kind: 'static',
     rules: [],
     valueFile: 'npm.0123456789abcdef',
   });

@@ -15,6 +15,7 @@ export function createSecretRoutes(os: RpcImplementer, deps: RouterDeps) {
         name: secret.name,
         kind: secret.kind,
         rules: secret.rules,
+        env: secret.env,
         imps: secret.imps.filter((name) => isImpAllowed(patterns, name)),
         createdAt: secret.createdAt,
         oauth: secret.oauth,

@@ -12,6 +12,7 @@ import {
   encodeFrame,
   encodeMessageFrame,
 } from '@impz/agent-protocol';
+import { BROKER_ENV_NAMES } from '@impz/api';
 import invariant from 'tiny-invariant';
 import { captureImpdLogs } from '../../../../testing/platform/capture-impd-logs';
 import { buildStubExecReplies } from '../../../../testing/vm/build-stub-exec-replies';
@@ -36,6 +37,18 @@ async function setupTest() {
 
   return { stack, directoryPath: directory };
 }
+
+test('it sets only the variables that a secret’s placeholders may never name', () => {
+  const env = buildBrokerEnv({
+    proxyUrl: 'http://10.66.0.1:7081',
+    placeholders: [],
+    placeholder: 'imp-broker-placeholder',
+  });
+
+  expect(env.map((entry) => entry.slice(0, entry.indexOf('=')))).toStrictEqual([
+    ...BROKER_ENV_NAMES,
+  ]);
+});
 
 test('it gives an exec both spellings of the proxy, the CA bundle and the placeholders', () => {
   expect(

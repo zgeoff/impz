@@ -541,6 +541,9 @@
               "secretUpstream": {
                 "type": "boolean"
               },
+              "secretPresets": {
+                "type": "boolean"
+              },
               "backupOptOut": {
                 "type": "boolean"
               },
