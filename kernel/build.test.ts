@@ -11,8 +11,8 @@ import {
 } from 'node:fs';
 import { tmpdir, userInfo } from 'node:os';
 import { join } from 'node:path';
+import { createStubBin } from '@impz/test-utils/create-stub-bin';
 import { buildStubEnvRecord } from '../scripts/test-utils/build-stub-env-record';
-import { createStubBin } from '../scripts/test-utils/create-stub-bin';
 import { createStubCurl } from '../scripts/test-utils/create-stub-curl';
 import { createStubRepoScript } from '../scripts/test-utils/create-stub-repo-script';
 

@@ -11,8 +11,8 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createStubBin } from '@impz/test-utils/create-stub-bin';
 import { waitFor } from '@impz/test-utils/wait-for';
-import { createStubBin } from './test-utils/create-stub-bin';
 import { createStubZfs } from './test-utils/create-stub-zfs';
 import { createStubZpool } from './test-utils/create-stub-zpool';
 

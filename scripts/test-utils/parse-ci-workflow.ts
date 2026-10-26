@@ -49,7 +49,10 @@ const AggregateJobSchema = z.looseObject({
   steps: z.array(StepSchema),
 });
 
-const ReleaseJobSchema = z.looseObject({ needs: z.array(z.string()) });
+const ReleaseJobSchema = z.looseObject({
+  needs: z.array(z.string()),
+  steps: z.array(StepSchema),
+});
 
 const WorkflowSchema = z.looseObject({
   jobs: z.looseObject({

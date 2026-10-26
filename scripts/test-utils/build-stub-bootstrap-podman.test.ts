@@ -2,8 +2,8 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createStubBin } from '@impz/test-utils/create-stub-bin';
 import { buildStubBootstrapPodman } from './build-stub-bootstrap-podman';
-import { createStubBin } from './create-stub-bin';
 
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-bootstrap-podman-'));

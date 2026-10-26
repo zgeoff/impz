@@ -1,10 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { createServer } from 'node:net';
 import { dirname } from 'node:path';
-import invariant from 'tiny-invariant';
-import { waitAwakePastIdle } from '../lib/awake-past-idle';
-import { config } from '../lib/config';
-import { resolveImageName } from '../lib/fixtures';
+import { waitAwakePastIdle } from '@impz/e2e-harness/awake-past-idle';
+import { config } from '@impz/e2e-harness/config';
+import { resolveImageName } from '@impz/e2e-harness/fixtures';
 import {
   assertState,
   createInstanceClient,
@@ -12,14 +11,15 @@ import {
   runImp,
   runShellInImp,
   tryImp,
-} from '../lib/imp-cli';
-import { readText, startReverse } from '../lib/imp-proxy';
-import { holdImp, waitForExec, waitForGuestPathGone } from '../lib/imps';
-import { registerRemoval } from '../lib/register-removal';
-import { removeImpIfPresent } from '../lib/reset-baseline';
-import { SSH_HOST, setupSshClient, startLocalSshAgent, startSsh } from '../lib/ssh';
-import { getSuitePrefix } from '../lib/suites';
-import { waitFor } from '../lib/wait-for';
+} from '@impz/e2e-harness/imp-cli';
+import { readText, startReverse } from '@impz/e2e-harness/imp-proxy';
+import { holdImp, waitForExec, waitForGuestPathGone } from '@impz/e2e-harness/imps';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { SSH_HOST, setupSshClient, startLocalSshAgent, startSsh } from '@impz/e2e-harness/ssh';
+import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import { waitFor } from '@impz/e2e-harness/wait-for';
+import invariant from 'tiny-invariant';
 
 // One stack for every release, so a forward stops before the agent and the
 // imp go.

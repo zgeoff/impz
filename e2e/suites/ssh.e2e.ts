@@ -4,19 +4,25 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { config } from '@impz/e2e-harness/config';
+import { resolveImageName } from '@impz/e2e-harness/fixtures';
+import { createInstanceClient, runImp, runImpWith, runShellInImp } from '@impz/e2e-harness/imp-cli';
+import { waitForExec } from '@impz/e2e-harness/imps';
+import { runCommand } from '@impz/e2e-harness/instance';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import {
+  SSH_HOST,
+  readTapLinkLocal,
+  runSsh,
+  setupSshClient,
+  startSsh,
+} from '@impz/e2e-harness/ssh';
+import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import { openCommandTerminal } from '@impz/e2e-harness/terminal';
+import { waitFor } from '@impz/e2e-harness/wait-for';
+import { writeMetric } from '@impz/e2e-harness/write-metric';
 import { claimFreePorts } from '@impz/test-utils/claim-free-ports';
-import { config } from '../lib/config';
-import { resolveImageName } from '../lib/fixtures';
-import { createInstanceClient, runImp, runImpWith, runShellInImp } from '../lib/imp-cli';
-import { waitForExec } from '../lib/imps';
-import { runCommand } from '../lib/instance';
-import { registerRemoval } from '../lib/register-removal';
-import { removeImpIfPresent } from '../lib/reset-baseline';
-import { SSH_HOST, readTapLinkLocal, runSsh, setupSshClient, startSsh } from '../lib/ssh';
-import { getSuitePrefix } from '../lib/suites';
-import { openCommandTerminal } from '../lib/terminal';
-import { waitFor } from '../lib/wait-for';
-import { writeMetric } from '../lib/write-metric';
 
 // One stack for every release, so a forward stops before its imp goes.
 async function setupTest() {

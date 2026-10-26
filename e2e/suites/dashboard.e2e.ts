@@ -1,13 +1,13 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { join } from 'node:path';
-import { config } from '../lib/config';
-import { resolveImageName } from '../lib/fixtures';
-import { createInstanceClient, readImpEnv } from '../lib/imp-cli';
-import { REPO_ROOT, runChecked } from '../lib/instance';
-import { registerRemoval } from '../lib/register-removal';
-import { removeImpIfPresent } from '../lib/reset-baseline';
-import { getSuitePrefix } from '../lib/suites';
-import { writeMetric } from '../lib/write-metric';
+import { config } from '@impz/e2e-harness/config';
+import { resolveImageName } from '@impz/e2e-harness/fixtures';
+import { createInstanceClient, readImpEnv } from '@impz/e2e-harness/imp-cli';
+import { REPO_ROOT, runChecked } from '@impz/e2e-harness/instance';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import { writeMetric } from '@impz/e2e-harness/write-metric';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

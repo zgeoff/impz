@@ -2,8 +2,8 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { config } from '../lib/config';
-import { resolveImageName } from '../lib/fixtures';
+import { config } from '@impz/e2e-harness/config';
+import { resolveImageName } from '@impz/e2e-harness/fixtures';
 import {
   createInstanceClient,
   readInfo,
@@ -11,13 +11,13 @@ import {
   runImp,
   runShellInImp,
   tryImp,
-} from '../lib/imp-cli';
-import { buildImpDiskPath } from '../lib/imp-disk-path';
-import { waitForExec, waitForGuestPathGone } from '../lib/imps';
-import { readContainerGateway, runChecked, runCommand } from '../lib/instance';
-import { countKeyTraces, readKeyPatterns } from '../lib/key-traces';
-import { registerRemoval } from '../lib/register-removal';
-import { removeImpIfPresent } from '../lib/reset-baseline';
+} from '@impz/e2e-harness/imp-cli';
+import { buildImpDiskPath } from '@impz/e2e-harness/imp-disk-path';
+import { waitForExec, waitForGuestPathGone } from '@impz/e2e-harness/imps';
+import { readContainerGateway, runChecked, runCommand } from '@impz/e2e-harness/instance';
+import { countKeyTraces, readKeyPatterns } from '@impz/e2e-harness/key-traces';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
 import {
   SSH_HOST,
   listAgentThroughUnixForward,
@@ -25,10 +25,10 @@ import {
   setupSshClient,
   startLocalSshAgent,
   startSsh,
-} from '../lib/ssh';
-import { startStubGitSshServer } from '../lib/start-stub-git-ssh-server';
-import { getSuitePrefix } from '../lib/suites';
-import { waitFor } from '../lib/wait-for';
+} from '@impz/e2e-harness/ssh';
+import { startStubGitSshServer } from '@impz/e2e-harness/start-stub-git-ssh-server';
+import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import { waitFor } from '@impz/e2e-harness/wait-for';
 
 // One stack for every release, so ssh stops before the agent and the imp go.
 async function setupTest() {

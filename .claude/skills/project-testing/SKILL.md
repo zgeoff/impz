@@ -57,13 +57,13 @@ each; open one when the task touches its area.
 - **tmpfs lacks disk features.** `tmpdir()` is a tmpfs on some hosts; a test that needs FIEMAP or
   similar makes its directory under `/var/tmp`, never in the checkout.
 - **Git hooks leak `GIT_DIR`.** A test that runs git spawns it through the helpers in
-  [`git-env.ts`](../../../e2e/lib/git-env.ts), `runGitCommand`, `runGitChecked` or
+  [`git-env.ts`](../../../packages/e2e-harness/src/git-env.ts), `runGitCommand`, `runGitChecked` or
   `createGitFreeEnv`; otherwise a child git works on this checkout whatever its `-C` says.
 - **One impd runs one suite at a time.** A worktree's dev instance needs its own `IMP_DEV_NAME` and
   `IMP_DEV_PORT_OFFSET`. A journey run alone gets no baseline reset and no fixture image build.
 - **A journey removes what it makes.** It registers each removal with
-  [`registerRemoval`](../../../e2e/lib/register-removal.ts) on the line after the act that made the
-  thing, so an imp goes before the template it boots.
+  [`registerRemoval`](../../../packages/e2e-harness/src/register-removal.ts) on the line after the
+  act that made the thing, so an imp goes before the template it boots.
 
 ## Commands
 
@@ -104,7 +104,10 @@ read that CI job's result instead of working around it.
   `bun test` to repeat that order, and fix the leak in the preload's resets, never by pinning the
   order.
 - Go tests that need root carry the `root` build tag.
-- `e2e/lib/*.test.ts` are unit tests of the harness: they run in plain `bun test` with no KVM.
+- The tests in [`packages/e2e-harness/`](../../../packages/e2e-harness/) are unit tests of the
+  end-to-end and bootstrap harnesses: they run in plain `bun test` with no KVM, under the unit
+  limit. [`e2e/`](../../../e2e/) holds only the suites, their fixtures and the scripts that run
+  them.
 
 ## Lanes
 
@@ -124,21 +127,21 @@ and selects its files by suffix. `test:related` leaves lane files out for the sa
 | Small filesystem | `*.small-fs.test.ts`                              | a small loop-mounted XFS that `IMP_TEST_SMALL_FS` names | `bun run test:small-fs`, after a sudo mount in CI       | 15 s           |
 
 CI splits the ZFS lane's suites into shards, longest first by each suite's `seconds` in
-[`suites.ts`](../../../e2e/lib/suites.ts). A suite's `seconds` counts its own time and the build of
-any image that only it needs in the lane, so update it when either moves. The `zfs` shards also run
-VM e2e suites, named in `IMP_ZFS_E2E_SUITES`, on the ZFS backend: a backend matrix and not a lane,
-so their tests keep the VM lane's suffix and limit. A shard can run a lane share and named suites
-together, which lets the matrix place the named suites where the shards end together.
+[`suites.ts`](../../../packages/e2e-harness/src/suites.ts). A suite's `seconds` counts its own time
+and the build of any image that only it needs in the lane, so update it when either moves. The `zfs`
+shards also run VM e2e suites, named in `IMP_ZFS_E2E_SUITES`, on the ZFS backend: a backend matrix
+and not a lane, so their tests keep the VM lane's suffix and limit. A shard can run a lane share and
+named suites together, which lets the matrix place the named suites where the shards end together.
 
 The `lanes` map of `zgeoff/max-test-timeout` in [`.oxlintrc.json`](../../../.oxlintrc.json) holds
-each limit, and lint fails a timeout above its lane's. Both `e2e/` lanes share the `e2e` key, and
-`e2e/lib/*.test.ts` take that limit too, because the rule reads the lane from the directory. A
-lane's script passes its limit to `bun test` when it is above Bun's default, as `test:headscale`
-does. The e2e harness gives each journey 1 h (`JOURNEY_TIMEOUT_MS` in
-[`suites.ts`](../../../e2e/lib/suites.ts)), so a hung journey runs past its limit. A test over its
-lane's limit, or within 5% of it, is a named exception: its disable comment holds the measured time
-and a ticket that brings it under, or `floor:` and the evidence that the time cannot move. The limit
-never rises to cover it. A test's measured time goes in the PR that acts on it, not here.
+each limit, and lint fails a timeout above its lane's. Both `e2e/` lanes share the `e2e` key,
+because the rule reads the lane from the directory. A lane's script passes its limit to `bun test`
+when it is above Bun's default, as `test:headscale` does, and the e2e harness passes the `e2e` limit
+to each journey's `bun test` (`JOURNEY_TIMEOUT_MS` in
+[`suites.ts`](../../../packages/e2e-harness/src/suites.ts)). A test over its lane's limit, or within
+5% of it, is a named exception: its disable comment holds the measured time and a ticket that brings
+it under, or `floor:` and the evidence that the time cannot move. The limit never rises to cover it.
+A test's measured time goes in the PR that acts on it, not here.
 
 A host networking test still skips where its namespace probe fails, and `IMP_HOST_TESTS=required`,
 which CI sets, turns that skip into a failure. A lane file holds only the cases that need its real

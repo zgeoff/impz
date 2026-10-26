@@ -9,6 +9,7 @@
     "./testing": "./testing/index.ts",
     "./testing/build-stub-clock": "./testing/platform/build-stub-clock.ts",
     "./testing/data-layout": "./src/vm/storage/data-layout.ts",
+    "./testing/pebble-images": "./testing/network/pebble-images.ts",
     "./testing/start-stub-agent": "./testing/vm/start-stub-agent.ts",
     "./testing/start-test-impd": "./testing/start-test-impd.ts",
     "./testing/test-token": "./testing/test-token.ts",

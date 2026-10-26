@@ -1,8 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import * as z from 'zod';
-import { config } from '../lib/config';
-import { openSessionSocket, requireOutput } from '../lib/exec-socket';
-import { resolveImageName } from '../lib/fixtures';
+import { config } from '@impz/e2e-harness/config';
+import { openSessionSocket, requireOutput } from '@impz/e2e-harness/exec-socket';
+import { resolveImageName } from '@impz/e2e-harness/fixtures';
 import {
   assertState,
   createInstanceClient,
@@ -10,14 +9,15 @@ import {
   runImp,
   runInImp,
   tryImp,
-} from '../lib/imp-cli';
-import { waitForExec } from '../lib/imps';
-import { registerRemoval } from '../lib/register-removal';
-import { removeImpIfPresent } from '../lib/reset-baseline';
-import { listSessionLogs, requireSessionLog } from '../lib/session-logs';
-import { getSuitePrefix } from '../lib/suites';
-import { waitFor } from '../lib/wait-for';
-import { writeMetric } from '../lib/write-metric';
+} from '@impz/e2e-harness/imp-cli';
+import { waitForExec } from '@impz/e2e-harness/imps';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { listSessionLogs, requireSessionLog } from '@impz/e2e-harness/session-logs';
+import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import { waitFor } from '@impz/e2e-harness/wait-for';
+import { writeMetric } from '@impz/e2e-harness/write-metric';
+import * as z from 'zod';
 
 // One stack for every release, so each session socket closes before its imp
 // goes.

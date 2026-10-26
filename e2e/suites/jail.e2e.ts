@@ -1,28 +1,28 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { config } from '../lib/config';
-import { resolveImageName } from '../lib/fixtures';
+import { config } from '@impz/e2e-harness/config';
+import { resolveImageName } from '@impz/e2e-harness/fixtures';
 import {
   assertState,
   createInstanceClient,
   requireImp,
   runImp,
   runShellInImp,
-} from '../lib/imp-cli';
-import { holdImp, waitForExec } from '../lib/imps';
-import { checkHealthReady, runDevScript } from '../lib/instance';
+} from '@impz/e2e-harness/imp-cli';
+import { holdImp, waitForExec } from '@impz/e2e-harness/imps';
+import { checkHealthReady, runDevScript } from '@impz/e2e-harness/instance';
 import {
   collectJailViolations,
   listJailMounts,
   readImpCgroupText,
   readJailState,
   readVmProcess,
-} from '../lib/jail-host';
-import { checkMemoryProof, startMemoryProof } from '../lib/memory-proof';
-import { parseWholeNumber } from '../lib/parse-whole-number';
-import { registerRemoval } from '../lib/register-removal';
-import { removeImpIfPresent } from '../lib/reset-baseline';
-import { getSuitePrefix } from '../lib/suites';
-import { waitFor } from '../lib/wait-for';
+} from '@impz/e2e-harness/jail-host';
+import { checkMemoryProof, startMemoryProof } from '@impz/e2e-harness/memory-proof';
+import { parseWholeNumber } from '@impz/e2e-harness/parse-whole-number';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import { waitFor } from '@impz/e2e-harness/wait-for';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

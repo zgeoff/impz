@@ -1,18 +1,18 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import invariant from 'tiny-invariant';
-import { listAuditCalls } from '../lib/audit';
-import { config } from '../lib/config';
-import { resolveImageName } from '../lib/fixtures';
-import { createInstanceClient, runImp, runImpWith, tryImp } from '../lib/imp-cli';
-import { waitForExec } from '../lib/imps';
-import { registerRemoval } from '../lib/register-removal';
+import { listAuditCalls } from '@impz/e2e-harness/audit';
+import { config } from '@impz/e2e-harness/config';
+import { resolveImageName } from '@impz/e2e-harness/fixtures';
+import { createInstanceClient, runImp, runImpWith, tryImp } from '@impz/e2e-harness/imp-cli';
+import { waitForExec } from '@impz/e2e-harness/imps';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
 import {
   removeImpIfPresent,
   removeSecretIfPresent,
   removeTokenIfPresent,
-} from '../lib/reset-baseline';
-import { runSsh, setupKeyClient } from '../lib/ssh';
-import { getSuitePrefix } from '../lib/suites';
+} from '@impz/e2e-harness/reset-baseline';
+import { runSsh, setupKeyClient } from '@impz/e2e-harness/ssh';
+import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import invariant from 'tiny-invariant';
 
 // One stack for every release, so a token goes before the imps it names.
 async function setupTest() {

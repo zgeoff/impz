@@ -1,6 +1,6 @@
+import { createStubBin } from '@impz/test-utils/create-stub-bin';
+import type { StubBin } from '@impz/test-utils/create-stub-bin';
 import { formatShellWord } from '@impz/test-utils/format-shell-word';
-import { createStubBin } from './create-stub-bin';
-import type { StubBin } from './create-stub-bin';
 
 export interface StubCurlOptions {
   // the file whose bytes curl writes to its -o path, whatever the URL

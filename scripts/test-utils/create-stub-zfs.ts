@@ -1,5 +1,5 @@
-import { createStubBin } from './create-stub-bin';
-import type { StubBin } from './create-stub-bin';
+import { createStubBin } from '@impz/test-utils/create-stub-bin';
+import type { StubBin } from '@impz/test-utils/create-stub-bin';
 
 export interface ZfsStubOptions {
   readonly create?: 'fails';

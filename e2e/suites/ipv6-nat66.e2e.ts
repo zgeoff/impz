@@ -1,11 +1,11 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { waitForShapeTemplate } from '../lib/boot-template-guest';
-import { config } from '../lib/config';
-import { resolveImageName } from '../lib/fixtures';
-import { tryGetFromImp } from '../lib/guest-probe';
-import { createInstanceClient, requireImp, runImp, runShellInImp } from '../lib/imp-cli';
-import { holdImp, waitForExec } from '../lib/imps';
-import { instance, readImpdLogSince, runDevScript } from '../lib/instance';
+import { waitForShapeTemplate } from '@impz/e2e-harness/boot-template-guest';
+import { config } from '@impz/e2e-harness/config';
+import { resolveImageName } from '@impz/e2e-harness/fixtures';
+import { tryGetFromImp } from '@impz/e2e-harness/guest-probe';
+import { createInstanceClient, requireImp, runImp, runShellInImp } from '@impz/e2e-harness/imp-cli';
+import { holdImp, waitForExec } from '@impz/e2e-harness/imps';
+import { instance, readImpdLogSince, runDevScript } from '@impz/e2e-harness/instance';
 import {
   buildGuestIpv6,
   buildV6Plan,
@@ -15,10 +15,10 @@ import {
   startV6Instance,
   startV6Topology,
   stopV6Topology,
-} from '../lib/ipv6-topology';
-import { registerRemoval } from '../lib/register-removal';
-import { removeImpIfPresent } from '../lib/reset-baseline';
-import { getSuitePrefix } from '../lib/suites';
+} from '@impz/e2e-harness/ipv6-topology';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { getSuitePrefix } from '@impz/e2e-harness/suites';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

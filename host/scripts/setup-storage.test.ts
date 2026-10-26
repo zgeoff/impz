@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubBin } from '../../scripts/test-utils/create-stub-bin';
+import { createStubBin } from '@impz/test-utils/create-stub-bin';
 import { createStubLosetup } from '../../scripts/test-utils/create-stub-losetup';
 import { createStubMountpoint } from '../../scripts/test-utils/create-stub-mountpoint';
 

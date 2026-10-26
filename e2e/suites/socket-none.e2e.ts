@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { runInContainer } from '../lib/instance';
+import { runInContainer } from '@impz/e2e-harness/instance';
 
 test('it gives the dev container no Docker socket and no docker binary', async () => {
   const hostSocket = await runInContainer(['test', '-e', '/var/run/docker.sock']);

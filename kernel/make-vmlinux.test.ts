@@ -10,8 +10,8 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createStubBin } from '@impz/test-utils/create-stub-bin';
 import { buildStubEnvRecord } from '../scripts/test-utils/build-stub-env-record';
-import { createStubBin } from '../scripts/test-utils/create-stub-bin';
 import { createStubRepoScript } from '../scripts/test-utils/create-stub-repo-script';
 
 // make-vmlinux.sh reads its config inputs beside itself, so each test runs a

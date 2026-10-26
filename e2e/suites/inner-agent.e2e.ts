@@ -1,13 +1,19 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { config } from '../lib/config';
-import { resolveImageName } from '../lib/fixtures';
-import { createInstanceClient, runImp, runInImp, startImp, tryImp } from '../lib/imp-cli';
-import { holdImp, waitForExec } from '../lib/imps';
-import { registerRemoval } from '../lib/register-removal';
-import { removeImpIfPresent, removeTokenIfPresent } from '../lib/reset-baseline';
-import { getSuitePrefix } from '../lib/suites';
-import { startTextCapture } from '../lib/text-capture';
-import { waitFor } from '../lib/wait-for';
+import { config } from '@impz/e2e-harness/config';
+import { resolveImageName } from '@impz/e2e-harness/fixtures';
+import {
+  createInstanceClient,
+  runImp,
+  runInImp,
+  startImp,
+  tryImp,
+} from '@impz/e2e-harness/imp-cli';
+import { holdImp, waitForExec } from '@impz/e2e-harness/imps';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent, removeTokenIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import { startTextCapture } from '@impz/e2e-harness/text-capture';
+import { waitFor } from '@impz/e2e-harness/wait-for';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

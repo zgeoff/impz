@@ -1,23 +1,23 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { buildReachScript } from '../lib/build-reach-script';
-import { config } from '../lib/config';
-import { resolveImageName } from '../lib/fixtures';
-import { createInstanceClient, runImp, runShellInImp } from '../lib/imp-cli';
-import { holdImp, waitForExec } from '../lib/imps';
-import { readContainerGateway, runInContainer } from '../lib/instance';
+import { buildReachScript } from '@impz/e2e-harness/build-reach-script';
+import { config } from '@impz/e2e-harness/config';
+import { resolveImageName } from '@impz/e2e-harness/fixtures';
+import { createInstanceClient, runImp, runShellInImp } from '@impz/e2e-harness/imp-cli';
+import { holdImp, waitForExec } from '@impz/e2e-harness/imps';
+import { readContainerGateway, runInContainer } from '@impz/e2e-harness/instance';
 import {
   LAN,
   readLanConnections,
   runTimedDial,
   startLanNetns,
   stopLanNetns,
-} from '../lib/lan-netns';
-import { registerRemoval } from '../lib/register-removal';
-import { removeImpIfPresent } from '../lib/reset-baseline';
-import { startStubPrivateService } from '../lib/start-stub-private-service';
-import { LISTED_HOST_ADDRESS, getSuitePrefix } from '../lib/suites';
-import { waitForTailnetIp } from '../lib/tailnet';
-import { writeMetric } from '../lib/write-metric';
+} from '@impz/e2e-harness/lan-netns';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { startStubPrivateService } from '@impz/e2e-harness/start-stub-private-service';
+import { LISTED_HOST_ADDRESS, getSuitePrefix } from '@impz/e2e-harness/suites';
+import { waitForTailnetIp } from '@impz/e2e-harness/tailnet';
+import { writeMetric } from '@impz/e2e-harness/write-metric';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

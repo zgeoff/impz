@@ -1,15 +1,21 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { waitAwakePastIdle } from '../lib/awake-past-idle';
-import { config } from '../lib/config';
-import { resolveImageName } from '../lib/fixtures';
-import { assertState, createInstanceClient, readState, runImp } from '../lib/imp-cli';
-import { waitForExec } from '../lib/imps';
-import { registerRemoval } from '../lib/register-removal';
-import { removeImpIfPresent } from '../lib/reset-baseline';
-import { SSH_HOST, SSH_HOST_OTHER_KEY, runSsh, setupSshClient, startSsh } from '../lib/ssh';
-import { getSuitePrefix } from '../lib/suites';
-import { waitFor } from '../lib/wait-for';
-import { writeMetric } from '../lib/write-metric';
+import { waitAwakePastIdle } from '@impz/e2e-harness/awake-past-idle';
+import { config } from '@impz/e2e-harness/config';
+import { resolveImageName } from '@impz/e2e-harness/fixtures';
+import { assertState, createInstanceClient, readState, runImp } from '@impz/e2e-harness/imp-cli';
+import { waitForExec } from '@impz/e2e-harness/imps';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import {
+  SSH_HOST,
+  SSH_HOST_OTHER_KEY,
+  runSsh,
+  setupSshClient,
+  startSsh,
+} from '@impz/e2e-harness/ssh';
+import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import { waitFor } from '@impz/e2e-harness/wait-for';
+import { writeMetric } from '@impz/e2e-harness/write-metric';
 
 // One stack for every release, so ssh stops before the imp goes.
 async function setupTest() {

@@ -33,6 +33,8 @@ packages/
   client/          the typed client for impd
   daemon/          impd, the host daemon
   dashboard/       the web dashboard that impd serves at /ui/
+  e2e-harness/     the end-to-end and bootstrap harnesses that the scripts in e2e/ run, and the
+                   helpers the suites import
   integration/     the client's and the MCP server's tests against a real impd, which sit
                    downstream of the daemon because the daemon depends on both packages
   local-tar/       local files as a tar, for impz cp and image build contexts
@@ -48,7 +50,7 @@ host/              the host container image that runs impd; ksm-exec, the Go pro
 images/            the guest images that ship with imp
 kernel/            the guest kernel build
 deploy/            the systemd units, bootstrap and the NixOS module
-e2e/               the end-to-end harness and its suites
+e2e/               the end-to-end suites, their fixtures, and the scripts that run them
 scripts/           the ci, dev, release and render scripts
 patches/           bun patches for third-party packages
 docs/

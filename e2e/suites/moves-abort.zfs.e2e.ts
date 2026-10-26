@@ -1,14 +1,20 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { config } from '../lib/config';
-import { resolveImageName } from '../lib/fixtures';
-import { assertState, createInstanceClient, readImp, runImp, runImpWith } from '../lib/imp-cli';
-import { waitForExec } from '../lib/imps';
-import { HOST_B, readMoveHosts } from '../lib/move-hosts';
-import { startMoveSend } from '../lib/move-steps';
-import { registerRemoval } from '../lib/register-removal';
-import { removeImpIfPresent } from '../lib/reset-baseline';
-import { getSuitePrefix } from '../lib/suites';
-import { waitFor } from '../lib/wait-for';
+import { config } from '@impz/e2e-harness/config';
+import { resolveImageName } from '@impz/e2e-harness/fixtures';
+import {
+  assertState,
+  createInstanceClient,
+  readImp,
+  runImp,
+  runImpWith,
+} from '@impz/e2e-harness/imp-cli';
+import { waitForExec } from '@impz/e2e-harness/imps';
+import { HOST_B, readMoveHosts } from '@impz/e2e-harness/move-hosts';
+import { startMoveSend } from '@impz/e2e-harness/move-steps';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import { waitFor } from '@impz/e2e-harness/wait-for';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

@@ -1,13 +1,19 @@
 import { expect, onTestFinished, test } from 'bun:test';
+import { config } from '@impz/e2e-harness/config';
+import { resolveImageName } from '@impz/e2e-harness/fixtures';
+import { createInstanceClient, runImp, runShellInImp } from '@impz/e2e-harness/imp-cli';
+import {
+  GUEST_SERVERS,
+  PAGE,
+  readPage,
+  sendRequest,
+  startProxy,
+} from '@impz/e2e-harness/imp-proxy';
+import { waitForExec } from '@impz/e2e-harness/imps';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { getSuitePrefix } from '@impz/e2e-harness/suites';
 import invariant from 'tiny-invariant';
-import { config } from '../lib/config';
-import { resolveImageName } from '../lib/fixtures';
-import { createInstanceClient, runImp, runShellInImp } from '../lib/imp-cli';
-import { GUEST_SERVERS, PAGE, readPage, sendRequest, startProxy } from '../lib/imp-proxy';
-import { waitForExec } from '../lib/imps';
-import { registerRemoval } from '../lib/register-removal';
-import { removeImpIfPresent } from '../lib/reset-baseline';
-import { getSuitePrefix } from '../lib/suites';
 
 // One stack for every release, so the proxy stops before its imp goes.
 async function setupTest() {

@@ -6,7 +6,8 @@ the journey before it did. The
 [development runbook](../../../../docs/runbooks/development.md#end-to-end-tests) owns how to run the
 harness: the suites, the flags, the tuning variables, the moves suites' second host and the tailnet
 suites. This file covers what a journey author needs. The harness code and its unit tests live in
-[`e2e/lib/`](../../../../e2e/lib/), and the unit tests run in plain `bun test` without KVM.
+[`packages/e2e-harness/src/`](../../../../packages/e2e-harness/src/), and the unit tests run in
+plain `bun test` without KVM.
 
 ## A run, stage by stage
 
@@ -49,10 +50,10 @@ The reset leaves three things alone:
 A journey's `setupTest()` creates one stack, registers its disposal, and returns the run's client
 and the suite's prefix. Name everything the journey makes with that prefix, so the baseline reset
 can find it after a crash. Register each removal through
-[`registerRemoval`](../../../../e2e/lib/register-removal.ts) on the line after the act that made the
-thing. The stack then removes an imp before the template it boots and the network it joins. Under
-`--keep` the helper defers no removal, so the imps and images stay for a look afterwards, while the
-other releases, such as a proxy process, still run.
+[`registerRemoval`](../../../../packages/e2e-harness/src/register-removal.ts) on the line after the
+act that made the thing. The stack then removes an imp before the template it boots and the network
+it joins. Under `--keep` the helper defers no removal, so the imps and images stay for a look
+afterwards, while the other releases, such as a proxy process, still run.
 
 Put impd settings that every journey of a suite needs on the suite itself rather than in a journey.
 A journey that needs settings only it uses reboots onto them over the suite's settings and defers a
@@ -67,8 +68,8 @@ These guest and host facts decide how a journey is built:
 - A unix socket path holds at most 107 bytes, which a worktree's cache directory can exceed. Put
   ssh-agent and forward sockets in a temporary directory under `TMPDIR`.
 - To prove that something keeps an imp awake past its idle timeout, use
-  [`waitAwakePastIdle`](../../../../e2e/lib/awake-past-idle.ts), and run no exec in the imp during
-  it, because an exec records activity.
+  [`waitAwakePastIdle`](../../../../packages/e2e-harness/src/awake-past-idle.ts), and run no exec in
+  the imp during it, because an exec records activity.
 - Run alone, a journey file gets no baseline reset and no fixture build, and the shell's
   `IMP_RAM_BUDGET_MIB` and `IMP_IDLE_TIMEOUT_S` override the run's values.
 
@@ -76,11 +77,11 @@ These guest and host facts decide how a journey is built:
 
 The `acceptance` set is every suite. The `fast` set is the CI subset, split into static groups, one
 for each CI runner with an instance of its own.
-[`suites.test.ts`](../../../../e2e/lib/suites.test.ts) pins that no suite sits in two groups and
-that the groups make up the `fast` set, and
-[`ci-groups.test.ts`](../../../../e2e/lib/ci-groups.test.ts) pins the groups against the workflow
-file. Change all three together. A run that includes `acceptance` makes the timing limits fail the
-run instead of warning.
+[`suites.test.ts`](../../../../packages/e2e-harness/src/suites.test.ts) pins that no suite sits in
+two groups and that the groups make up the `fast` set, and
+[`ci-groups.test.ts`](../../../../packages/e2e-harness/src/ci-groups.test.ts) pins the groups
+against the workflow file. Change all three together. A run that includes `acceptance` makes the
+timing limits fail the run instead of warning.
 
 ## Host safety
 

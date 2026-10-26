@@ -1,13 +1,13 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { config } from '../lib/config';
-import { resolveImageName } from '../lib/fixtures';
-import { countGuestSleeps } from '../lib/guest-processes';
-import { createInstanceClient, readImp } from '../lib/imp-cli';
-import { startHttpMcpSession, startMcpSession } from '../lib/mcp';
-import { readToolData } from '../lib/mcp-result';
-import { registerRemoval } from '../lib/register-removal';
-import { removeImpIfPresent, removeTokenIfPresent } from '../lib/reset-baseline';
-import { getSuitePrefix } from '../lib/suites';
+import { config } from '@impz/e2e-harness/config';
+import { resolveImageName } from '@impz/e2e-harness/fixtures';
+import { countGuestSleeps } from '@impz/e2e-harness/guest-processes';
+import { createInstanceClient, readImp } from '@impz/e2e-harness/imp-cli';
+import { startHttpMcpSession, startMcpSession } from '@impz/e2e-harness/mcp';
+import { readToolData } from '@impz/e2e-harness/mcp-result';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent, removeTokenIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { getSuitePrefix } from '@impz/e2e-harness/suites';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

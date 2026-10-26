@@ -1,0 +1,27 @@
+{
+  "name": "@impz/e2e-harness",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The end-to-end harness that e2e/test-e2e.sh and e2e/test-bootstrap.sh run, and the helpers the suites in e2e/ import",
+  "type": "module",
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "dependencies": {
+    "@faker-js/faker": "catalog:",
+    "@impz/api": "workspace:*",
+    "@impz/client": "workspace:*",
+    "@impz/daemon": "workspace:*",
+    "@impz/shared": "workspace:*",
+    "@impz/test-utils": "workspace:*",
+    "dns-packet": "catalog:",
+    "ssh2": "catalog:",
+    "tiny-invariant": "catalog:",
+    "ts-pattern": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/dns-packet": "catalog:",
+    "@types/ssh2": "catalog:"
+  }
+}

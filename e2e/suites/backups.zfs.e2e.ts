@@ -1,7 +1,11 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { readBackupSecrets, readBackupStatus, wireBackupDrill } from '../lib/backup-drill';
-import { config } from '../lib/config';
-import { resolveImageName } from '../lib/fixtures';
+import {
+  readBackupSecrets,
+  readBackupStatus,
+  wireBackupDrill,
+} from '@impz/e2e-harness/backup-drill';
+import { config } from '@impz/e2e-harness/config';
+import { resolveImageName } from '@impz/e2e-harness/fixtures';
 import {
   createInstanceClient,
   listCheckpoints,
@@ -10,13 +14,13 @@ import {
   runImp,
   runShellInImp,
   tryImp,
-} from '../lib/imp-cli';
-import { holdImp, readGuestFile, waitForExec, writeGuestFile } from '../lib/imps';
-import { registerRemoval } from '../lib/register-removal';
-import { removeImpIfPresent } from '../lib/reset-baseline';
-import { getSuitePrefix } from '../lib/suites';
-import { waitFor } from '../lib/wait-for';
-import { writeMetric } from '../lib/write-metric';
+} from '@impz/e2e-harness/imp-cli';
+import { holdImp, readGuestFile, waitForExec, writeGuestFile } from '@impz/e2e-harness/imps';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import { waitFor } from '@impz/e2e-harness/wait-for';
+import { writeMetric } from '@impz/e2e-harness/write-metric';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

@@ -537,7 +537,7 @@ jobs:
         run: scripts/release/check-testing-package.sh "$TARBALL" "$CLIENT"
 
   # Boots real microVMs: the fast end-to-end set in its four groups
-  # (FAST_GROUPS in e2e/lib/suites.ts, e2e/test-e2e.sh --group N),
+  # (FAST_GROUPS in packages/e2e-harness/src/suites.ts, e2e/test-e2e.sh --group N),
   # each against a dev instance on its own runner's KVM. The `e2e` job below
   # is the required check over all four.
   e2e-group:
@@ -686,7 +686,7 @@ jobs:
           key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
 
       # The registry suite's registry listens under this name on the gateway of
-      # its own Docker network (e2e/lib/registry-plan.ts, port offset 0), which
+      # its own Docker network (packages/e2e-harness/src/registry-plan.ts, port offset 0), which
       # both this host's engine and impd's builders reach; the suite trusts its
       # certificate in /etc/docker/certs.d with sudo
       - name: Name the e2e registry
@@ -1093,12 +1093,13 @@ jobs:
       # release PR needed no update, for example after a run that failed past
       # creating it. release-please labels its open PR "autorelease: pending".
       # GitHub merges the PR once its required checks pass, or at once when
-      # no ruleset requires any.
+      # no ruleset requires any. A draft release PR is held by hand, and
+      # GitHub refuses auto-merge on a draft, which would fail this step.
       - name: Auto-merge release PR
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          for pr in $(gh pr list --repo "$GITHUB_REPOSITORY" --base main --state open --label "autorelease: pending" --json number --jq '.[].number'); do
+          for pr in $(gh pr list --repo "$GITHUB_REPOSITORY" --base main --state open --draft=false --label "autorelease: pending" --json number --jq '.[].number'); do
             gh pr merge "$pr" --repo "$GITHUB_REPOSITORY" --auto --squash
           done
 

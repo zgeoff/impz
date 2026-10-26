@@ -1,7 +1,7 @@
 import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { createStubBin } from '@impz/test-utils/create-stub-bin';
 import * as z from 'zod';
-import { createStubBin } from './create-stub-bin';
 
 interface StubTailscaleNode {
   readonly BackendState: string;

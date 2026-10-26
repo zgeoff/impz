@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubBin } from '../../scripts/test-utils/create-stub-bin';
+import { createStubBin } from '@impz/test-utils/create-stub-bin';
 import { readEnvValues } from '../../scripts/test-utils/read-env-values';
 
 // The NixOS module's env writer, run with bash as the module runs it, with a stub ip for the

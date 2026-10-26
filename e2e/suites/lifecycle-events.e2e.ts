@@ -1,13 +1,13 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { pickNewCalls, readAuditCalls } from '../lib/audit-calls';
-import { config } from '../lib/config';
-import { readEventLines } from '../lib/event-lines';
-import { createInstanceClient, runImp, startImp } from '../lib/imp-cli';
-import { waitForExec } from '../lib/imps';
-import { registerRemoval } from '../lib/register-removal';
-import { removeImpIfPresent } from '../lib/reset-baseline';
-import { getSuitePrefix } from '../lib/suites';
-import { waitFor } from '../lib/wait-for';
+import { pickNewCalls, readAuditCalls } from '@impz/e2e-harness/audit-calls';
+import { config } from '@impz/e2e-harness/config';
+import { readEventLines } from '@impz/e2e-harness/event-lines';
+import { createInstanceClient, runImp, startImp } from '@impz/e2e-harness/imp-cli';
+import { waitForExec } from '@impz/e2e-harness/imps';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import { waitFor } from '@impz/e2e-harness/wait-for';
 
 // One stack for every release, so the event stream ends before its imps go.
 async function setupTest() {
