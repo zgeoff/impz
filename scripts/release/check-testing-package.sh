@@ -29,6 +29,15 @@ printf '[install]\nlinker = "isolated"\n' >bunfig.toml
 
 bun add --dev "$client" "$testing" "@types/bun@$(jq -r '.workspaces.catalog["@types/bun"]' "$root/package.json")" >/dev/null
 
+# impd loads acme-client only for HTTPS, so an install that leaves HTTPS off brings neither it
+# nor node-forge, whose advisory GHSA-86w9-cpqp-85rv has no fixed version
+for installed in node_modules/.bun/acme-client@* node_modules/.bun/node-forge@*; do
+  if [[ -e $installed ]]; then
+    echo "check-testing-package: the install brings ${installed#node_modules/.bun/}, which only HTTPS needs" >&2
+    exit 1
+  fi
+done
+
 # bun test runs only a *.test.ts file, and the lint rule for one wants a module beside it
 cp "$smoke/smoke.ts" smoke.test.ts
 cp "$smoke/smoke.tsconfig.json" .
