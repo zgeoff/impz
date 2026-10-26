@@ -96,6 +96,18 @@ let
     networking.firewall.filterForward = true;
   };
   dnsHost = host { services.imp.dnsApiTokenFile = "/run/secrets/imp-dns-api-token"; };
+  moduleHosts = {
+    inherit
+      zfsHost
+      xfsHost
+      ownFirewall
+      poolElsewhere
+      ipv6Host
+      ipv6Kernel
+      filterOnly
+      dnsHost
+      ;
+  };
 
   zfsCfg = zfsHost.config;
   dnsCfg = dnsHost.config;
@@ -256,7 +268,7 @@ let
         networking.nftables.flushRuleset = true;
       });
       expected = [
-        "services.imp: networking.nftables.flushRuleset would flush Docker's rules on every reload; leave it false"
+        "services.imp: networking.nftables.flushRuleset would flush netavark's rules on every reload; leave it false"
       ];
     };
     # zfsHost: module defaults
@@ -290,8 +302,40 @@ let
       expected = [ "tank" ];
     };
     # zfsHost: module defaults
-    "test Docker is on" = {
-      expr = zfsCfg.virtualisation.docker.enable;
+    "test Podman is on" = {
+      expr = zfsCfg.virtualisation.podman.enable;
+      expected = true;
+    };
+    # moduleHosts: each host above, with the options it sets
+    "test no host turns Docker on" = {
+      expr = lib.mapAttrs (_: system: system.config.virtualisation.docker.enable) moduleHosts;
+      expected = lib.mapAttrs (_: _: false) moduleHosts;
+    };
+    # moduleHosts: each host above, with the options it sets
+    "test no unit needs or waits for docker.service" = {
+      expr = lib.mapAttrs (
+        _: system:
+        lib.attrNames (
+          lib.filterAttrs (
+            _: service: lib.elem "docker.service" (service.requires ++ service.after)
+          ) system.config.systemd.services
+        )
+      ) moduleHosts;
+      expected = lib.mapAttrs (_: _: [ ]) moduleHosts;
+    };
+    "test the image unit leaves the start limit to imp-host" = {
+      expr = zfsCfg.systemd.services.imp-host-image.unitConfig.StartLimitIntervalSec;
+      expected = 0;
+    };
+    "test the image pull waits for the network" = {
+      expr =
+        let
+          image = zfsCfg.systemd.services.imp-host-image;
+        in
+        lib.all (list: lib.elem "network-online.target" list) [
+          image.wants
+          image.after
+        ];
       expected = true;
     };
     # zfsHost: module defaults (storage = "zfs")
@@ -325,9 +369,9 @@ let
       expected = false;
     };
     # zfsHost: module defaults
-    "test imp-host runs docker run --init" = {
-      expr = lib.hasPrefix "/bin/docker run --init " (
-        lib.removePrefix "${zfsCfg.virtualisation.docker.package}" unit.serviceConfig.ExecStart
+    "test imp-host runs podman run --init" = {
+      expr = lib.hasPrefix "/bin/podman run --init " (
+        lib.removePrefix "${zfsCfg.virtualisation.podman.package}" unit.serviceConfig.ExecStart
       );
       expected = true;
     };
@@ -349,6 +393,11 @@ let
     # zfsHost: module defaults
     "test the privileges come from deploy/imp-host.args.json" = {
       expr = lib.hasInfix "--cap-drop ALL --cap-add SYS_ADMIN" unit.serviceConfig.ExecStart;
+      expected = true;
+    };
+    # zfsHost: module defaults; containers.conf gives a podman container a pids limit
+    "test imp-host runs with no pids limit" = {
+      expr = lib.hasInfix " ${lib.escapeShellArg "--pids-limit=-1"} " unit.serviceConfig.ExecStart;
       expected = true;
     };
     # zfsHost: module defaults
@@ -451,7 +500,7 @@ let
       expected = true;
     };
     # zfsHost: module defaults (ipv6.enable = false)
-    "test without ipv6, imp-host runs on Docker's default bridge" = {
+    "test without ipv6, imp-host runs on Podman's default network" = {
       expr = lib.hasInfix "--network" unit.serviceConfig.ExecStart;
       expected = false;
     };
@@ -470,8 +519,8 @@ let
       expr = lib.hasInfix ''
         chain forward {
           type filter hook forward priority filter - 1; policy accept;
-          iifname { "br-imphost", "docker0" } ip daddr { 10.42.0.0/16, 10.43.0.0/16 } ct direction original drop
-          iifname { "br-imphost", "docker0" } ip6 daddr { fd42::/64 } ct direction original drop
+          iifname { "br-imphost", "podman0" } ip daddr { 10.42.0.0/16, 10.43.0.0/16 } ct direction original drop
+          iifname { "br-imphost", "podman0" } ip6 daddr { fd42::/64 } ct direction original drop
         }'' ipv6Cfg.networking.nftables.tables.imp-forward.content;
       expected = true;
     };
@@ -496,14 +545,14 @@ let
       expected = false;
     };
     # ipv6Host sets services.imp.ipv6.enable = true
-    "test docker0 is not trusted for input" = {
-      expr = lib.elem "docker0" ipv6Cfg.networking.firewall.trustedInterfaces;
+    "test podman0 is not trusted for input" = {
+      expr = lib.elem "podman0" ipv6Cfg.networking.firewall.trustedInterfaces;
       expected = false;
     };
     # filterOnly sets networking.nftables.enable and networking.firewall.filterForward, and leaves ipv6.enable off
-    "test filterForward without ipv6 admits docker0 alone, with no deny" = {
+    "test filterForward without ipv6 admits podman0 alone, with no deny" = {
       expr = filterOnly.config.networking.firewall.extraForwardRules;
-      expected = ''iifname { "docker0" } accept comment "imp: imp-host's egress"'';
+      expected = ''iifname { "podman0" } accept comment "imp: imp-host's egress"'';
     };
     # zfsHost: module defaults, with NixOS's default networking.firewall.filterForward = false
     "test no forward filter writes no forward rules" = {
@@ -515,7 +564,7 @@ let
         services.imp.ipv6.enable = true;
       });
       expected = [
-        "services.imp.ipv6: Docker turns on IPv6 forwarding, and with it on, router adverts that set the host's IPv6 default route are dropped unless something keeps them. Set one of: a static networking.defaultGateway6; services.imp.ipv6.uplink with a systemd.network.networks entry for it that sets networkConfig.IPv6AcceptRA = true; services.imp.ipv6.routerAdverts = \"kernel\" (with ipv6.uplink: accept_ra = 2); or services.imp.ipv6.routerAdverts = \"handled\" when your DHCP client keeps them"
+        "services.imp.ipv6: Podman turns on IPv6 forwarding, and with it on, router adverts that set the host's IPv6 default route are dropped unless something keeps them. Set one of: a static networking.defaultGateway6; services.imp.ipv6.uplink with a systemd.network.networks entry for it that sets networkConfig.IPv6AcceptRA = true; services.imp.ipv6.routerAdverts = \"kernel\" (with ipv6.uplink: accept_ra = 2); or services.imp.ipv6.routerAdverts = \"handled\" when your DHCP client keeps them"
       ];
     };
     "test networkd's IPv6AcceptRA on the uplink keeps router adverts" = {
@@ -551,18 +600,6 @@ let
       });
       expected = [
         "services.imp.ipv6.routerAdverts = \"kernel\": dhcpcd runs on eth0 and solicits router adverts itself, and may set accept_ra back. Set networking.dhcpcd.IPv6rs = false, or use \"handled\""
-      ];
-    };
-    "test ipv6 with ip6tables off is refused" = {
-      expr = failed (host {
-        services.imp.ipv6 = {
-          enable = true;
-          routerAdverts = "handled";
-        };
-        virtualisation.docker.daemon.settings.ip6tables = false;
-      });
-      expected = [
-        "services.imp.ipv6 needs Docker 27.0 or later with ip6tables on (virtualisation.docker.daemon.settings.ip6tables not false), which writes the network's NAT66 and forward rules"
       ];
     };
     "test kernel router adverts need the uplink" = {
@@ -704,7 +741,7 @@ in
     absent imp-authkey ${zfsPre}
     grep -qx 'export IMP_SECRETS=/run/secrets/imp-host.env' ${zfsPre}
     grep -qx 'export IMP_BACKUP_STAGED=/run/imp-host/backup-password' ${zfsPre}
-    # the env file goes to tmpfs, without the keys docker run sets with -e
+    # the env file goes to tmpfs, without the keys podman run sets with -e
     grep -qx 'export IMP_ENV_OUT=/run/imp-host/env' ${zfsPre}
     grep -qxF "export IMP_CONTAINER_KEYS='IMP_ENV_FILE IMP_TAILSCALE_AUTHKEY_FILE'" ${zfsPre}
     grep -q "^export IMP_CONTAINER_KEYS=.* IMP_DNS_API_TOKEN_FILE'$" ${writerOf dnsCfg}
@@ -726,6 +763,8 @@ in
     grep -qx IMP_HOST_IPV6=off "$zfs"
     grep -qx IMP_HOST_SUBNET6= "$zfs"
     grep -q 'create_host_network' ${ipv6Network}
+    grep -q 'podman network inspect -f "$NETWORK_FORMAT"' ${ipv6Network}
+    absent -i docker ${ipv6Network}
     grep -q 'subnet6 ${ipv6Cfg.services.imp.ipv6.subnet}' ${ipv6Network}
   '';
 }

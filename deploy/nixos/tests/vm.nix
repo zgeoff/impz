@@ -13,7 +13,10 @@
 #   needs a login (the control plane deleted it). With ipv6.enable, as the
 #   cloud host has it (networking.firewall with filterForward): imp-host's
 #   IPv6 network and default route, egress to `own` over IPv4 and IPv6, the
-#   forwardDeny ranges dropped, and no host port opened to the bridge.
+#   forwardDeny ranges dropped, no host port opened to the bridge, and no
+#   DNS server on imp-host's network or Podman's default one. Without
+#   imageArchive, a missing image is pulled from a registry on the node,
+#   and an oci-archive loads as a docker-archive does.
 # own: hostFirewall = "own", without networking.firewall; SSH connects
 #   through bootstrap.sh's table and another port does not.
 #
@@ -80,12 +83,20 @@ let
     };
   };
 
+  # the stand-in as an oci-archive, whose ref annotation names the image
+  stubOCI = pkgs.runCommand "imp-host-stub-oci.tar" { nativeBuildInputs = [ pkgs.skopeo ]; } ''
+    export HOME=$TMPDIR
+    skopeo --insecure-policy --tmpdir "$TMPDIR" copy docker-archive:${stub} oci-archive:$out:imp-host-stub:oci
+  '';
+
   base = {
     imports = [ self.nixosModules.imp ];
     # 6.18 LTS, which the pinned ZFS 2.4.4 builds for
     boot.kernelPackages = pkgs.linuxPackages;
     networking.hostId = "8425e349";
     environment.systemPackages = [ pkgs.netcat ];
+    # off, as NixOS has it, so a module that turns Docker on fails the test
+    virtualisation.docker.enable = false;
     services.imp = {
       enable = true;
       image = "imp-host-stub:test";
@@ -118,6 +129,9 @@ pkgs.testers.runNixOSTest {
         interface = "eth1";
       };
       environment.systemPackages = [ pkgs.socat ];
+      # the registry the pull specialisation's image comes from, over plain HTTP
+      services.dockerRegistry.enable = true;
+      virtualisation.containers.registries.insecure = [ "localhost:5000" ];
       services.imp = {
         ipv6.enable = true;
         # own answers on addresses in these, from the test script
@@ -147,6 +161,17 @@ pkgs.testers.runNixOSTest {
         ramBudgetMiB = 1024;
         ipv6.enable = pkgs.lib.mkForce false;
       };
+      # no archive, so imp-host-image pulls the image from the registry
+      specialisation.pull.configuration.services.imp = {
+        ramBudgetMiB = 1024;
+        image = pkgs.lib.mkForce "localhost:5000/imp-host-stub:test";
+        imageArchive = pkgs.lib.mkForce null;
+      };
+      specialisation.oci.configuration.services.imp = {
+        ramBudgetMiB = 1024;
+        image = pkgs.lib.mkForce "imp-host-stub:oci";
+        imageArchive = pkgs.lib.mkForce stubOCI;
+      };
     };
 
   nodes.own = {
@@ -168,7 +193,7 @@ pkgs.testers.runNixOSTest {
 
       own4 = "${nodes.own.networking.primaryIPAddress}"
       own6 = "${nodes.own.networking.primaryIPv6Address}"
-      container = "docker exec imp-host"
+      container = "podman exec imp-host"
 
       start_all()
       host.wait_for_unit("multi-user.target")
@@ -196,6 +221,13 @@ pkgs.testers.runNixOSTest {
       def ups():
           return host.succeed("cat ${stateDir}/fake-up.log 2>/dev/null || true").strip().splitlines()
 
+      def gateways(network):
+          return host.succeed(f"podman network inspect -f '{{{{range .Subnets}}}}{{{{.Gateway}}}} {{{{end}}}}' {network}").split()
+
+      def resolvers():
+          lines = host.succeed("podman exec imp-host cat /etc/resolv.conf").splitlines()
+          return [line.split()[1] for line in lines if line.startswith("nameserver ")]
+
       def connect(where, addr, port):
           return f"{where} timeout 5 bash -c 'exec 3<>/dev/tcp/{addr}/{port}'"
 
@@ -205,7 +237,7 @@ pkgs.testers.runNixOSTest {
       # On the nodes `timeout` is GNU coreutils', which exits 124.
       TIMED_OUT_ON_NODE = 124
       # The stand-in image's `timeout` is busybox's (it has no coreutils): it
-      # execs the command itself and kills it with SIGTERM, so docker exec
+      # execs the command itself and kills it with SIGTERM, so podman exec
       # reports 128 + 15.
       TIMED_OUT_IN_CONTAINER = 143
 
@@ -260,17 +292,17 @@ pkgs.testers.runNixOSTest {
           assert host.succeed("findmnt -n -o FSTYPE --target /run/imp-host/env").strip() == "tmpfs"
           assert host.succeed("stat -c %a /run/imp-host").strip() == "700"
           host.succeed("test ! -e /etc/imp/imp-host.env")
-          mounts = host.succeed("docker container inspect -f '{{range .Mounts}}{{.Source}}:{{.Destination}}:{{.RW}} {{end}}' imp-host")
+          mounts = host.succeed("podman container inspect -f '{{range .Mounts}}{{.Source}}:{{.Destination}}:{{.RW}} {{end}}' imp-host")
           assert "/run/imp-host/env:/run/imp/env:false" in mounts, mounts
-          docker_env = host.succeed("docker container inspect -f '{{json .Config.Env}}' imp-host")
-          assert "AWS_" not in docker_env, docker_env
-          assert "IMP_BACKUP_REPOSITORY" not in docker_env, docker_env
+          container_env = host.succeed("podman container inspect -f '{{json .Config.Env}}' imp-host")
+          assert "AWS_" not in container_env, container_env
+          assert "IMP_BACKUP_REPOSITORY" not in container_env, container_env
           # the system disk: /etc (but the test's own secrets file), /var and /root
           host.fail("grep -rqF --exclude-dir=imp-test ${fakeAwsSecret} /etc /var /root")
           assert "${fakeAwsSecret}" not in host.succeed("journalctl -b --no-pager")
           # the stand-in's last process, as impd under host/entrypoint, has the file's values
-          host.wait_until_succeeds("docker exec imp-host pgrep -fx 'sleep infinity'", timeout=60)
-          environ = host.succeed("docker exec imp-host sh -c 'tr \"\\\\0\" \"\\\\n\" </proc/$(pgrep -fx \"sleep infinity\")/environ'").splitlines()
+          host.wait_until_succeeds("podman exec imp-host pgrep -fx 'sleep infinity'", timeout=60)
+          environ = host.succeed("podman exec imp-host sh -c 'tr \"\\\\0\" \"\\\\n\" </proc/$(pgrep -fx \"sleep infinity\")/environ'").splitlines()
           assert "AWS_SECRET_ACCESS_KEY=${fakeAwsSecret}" in environ, [line.split("=")[0] for line in environ]
           assert "IMP_BACKUP_REPOSITORY=s3:https://example.invalid/imp" in environ, [line.split("=")[0] for line in environ]
           # an -e value wins over the secrets file, as it would over --env-file
@@ -281,18 +313,26 @@ pkgs.testers.runNixOSTest {
           host.succeed("grep -qx IMP_BACKUP_PASSWORD_FILE=/run/imp/backup-password /run/imp-host/env")
           host.succeed("grep -qx IMP_BACKUP_REPOSITORY=s3:https://example.invalid/imp /run/imp-host/env")
           assert "${fakeBackupPassword}" not in host.succeed("cat /run/imp-host/env")
-          assert "${fakeBackupPassword}" not in host.succeed("docker container inspect imp-host")
+          assert "${fakeBackupPassword}" not in host.succeed("podman container inspect imp-host")
           assert "${fakeBackupPassword}" not in host.succeed("journalctl -b --no-pager")
-          assert host.succeed("docker exec imp-host cat /run/imp/backup-password").strip() == "${fakeBackupPassword}"
-          out = host.fail("docker exec imp-host sh -c '{ echo x > /run/imp/backup-password; } 2>&1'")
+          assert host.succeed("podman exec imp-host cat /run/imp/backup-password").strip() == "${fakeBackupPassword}"
+          out = host.fail("podman exec imp-host sh -c '{ echo x > /run/imp/backup-password; } 2>&1'")
           assert "Read-only file system" in out, out
-          assert host.succeed("docker exec imp-host cat /run/imp/backup-password").strip() == "${fakeBackupPassword}"
+          assert host.succeed("podman exec imp-host cat /run/imp/backup-password").strip() == "${fakeBackupPassword}"
 
       with subtest("imp-host sees no Docker socket"):
           host.fail("systemctl cat imp-docker-proxy")
-          mounts = host.succeed("docker container inspect -f '{{range .Mounts}}{{.Source}}:{{.Destination}}:{{.RW}} {{end}}' imp-host")
+          mounts = host.succeed("podman container inspect -f '{{range .Mounts}}{{.Source}}:{{.Destination}}:{{.RW}} {{end}}' imp-host")
           assert "docker" not in mounts, mounts
-          host.fail("docker container inspect -f '{{.Config.Env}}' imp-host | grep -qF DOCKER_HOST")
+          host.fail("podman container inspect -f '{{.Config.Env}}' imp-host | grep -qF DOCKER_HOST")
+
+      with subtest("the host runs imp-host with Podman, and has no Docker"):
+          host.fail("systemctl cat docker.service")
+          host.fail("systemctl is-active docker.service")
+          host.succeed("test ! -e /var/run/docker.sock")
+          host.fail("command -v docker")
+          host.succeed("podman container inspect -f '{{.State.Running}}' imp-host | grep -qx true")
+          host.fail("podman exec imp-host sh -c 'command -v docker'")
 
       with subtest("the kernel has the module's sysctls, devices and ARC cap"):
           host.succeed("sysctl -n vm.overcommit_memory | grep -qx 1")
@@ -302,20 +342,29 @@ pkgs.testers.runNixOSTest {
 
       with subtest("ipv6: imp-host runs on br-imphost, with an IPv6 default route"):
           host.succeed("grep -qx IMP_HOST_IPV6=on /run/imp-host/env")
-          info = host.succeed("docker network inspect -f '{{.EnableIPv6}} {{index .Options \"com.docker.network.bridge.name\"}}' imp-host").strip()
+          info = host.succeed("podman network inspect -f '{{.IPv6Enabled}} {{.NetworkInterface}}' imp-host").strip()
           assert info == "true br-imphost", info
-          nets = json.loads(host.succeed("docker container inspect -f '{{json .NetworkSettings.Networks}}' imp-host"))
+          nets = json.loads(host.succeed("podman container inspect -f '{{json .NetworkSettings.Networks}}' imp-host"))
           assert list(nets) == ["imp-host"], list(nets)
-          host.succeed("docker exec imp-host ip -6 route show default | grep -q via")
+          host.succeed("podman exec imp-host ip -6 route show default | grep -q via")
+
+      with subtest("ipv6: imp-host's network answers no DNS, and imp-host uses the host's resolvers"):
+          assert host.succeed("podman network inspect -f '{{.DNSEnabled}}' imp-host").strip() == "false"
+          host.fail("pgrep -x aardvark-dns")
+          bridge = gateways("imp-host")
+          assert bridge, bridge
+          assert not set(bridge) & set(resolvers()), (bridge, resolvers())
 
       with subtest("none: no imp rules on the host; the platform's firewall stays"):
           ruleset = json.loads(host.succeed("nft -j list ruleset"))["nftables"]
           tables = [o["table"]["name"] for o in ruleset if "table" in o]
           assert "imp_host" not in tables, tables
           inputs = [o["chain"] for o in ruleset if "chain" in o and o["chain"].get("hook") == "input"]
-          assert all(c["table"] == "nixos-fw" for c in inputs), inputs
+          # netavark's own input chain has policy accept and drops nothing, and
+          # a drop in nixos-fw's chain still holds beside it
+          assert all(c["table"] == "nixos-fw" or (c["table"] == "netavark" and c.get("policy") == "accept") for c in inputs), inputs
           host.succeed("nft list ruleset | grep -q 41641")
-          published = host.succeed("docker port imp-host").strip().splitlines()
+          published = host.succeed("podman port imp-host").strip().splitlines()
           assert published and all(" -> 127.0.0.1:" in p for p in published), published
 
       with subtest("filterForward: egress to own over IPv4 and IPv6, denied ranges dropped"):
@@ -351,8 +400,8 @@ pkgs.testers.runNixOSTest {
           host.succeed("systemd-run --unit=listen9999 socat TCP6-LISTEN:9999,ipv6only=0,fork,reuseaddr SYSTEM:true")
           host.wait_for_open_port(9998)
           host.wait_for_open_port(9999)
-          gateway4 = host.succeed("docker exec imp-host ip route show default | awk '/^default/ {print $3; exit}'").strip()
-          gateway6 = host.succeed("docker exec imp-host ip -6 route show default | awk '/^default/ {print $3; exit}'").strip()
+          gateway4 = host.succeed("podman exec imp-host ip route show default | awk '/^default/ {print $3; exit}'").strip()
+          gateway6 = host.succeed("podman exec imp-host ip -6 route show default | awk '/^default/ {print $3; exit}'").strip()
           # the exit code of each connect, all reported together: 9998 opens, 9999 drops
           codes = {
               (gateway, port): host.execute(connect(container, gateway, port))[0]
@@ -371,16 +420,22 @@ pkgs.testers.runNixOSTest {
           host.succeed("/run/booted-system/specialisation/noipv6/bin/switch-to-configuration test")
           start_imp_host()
           host.succeed("grep -qx IMP_HOST_IPV6=off /run/imp-host/env")
-          networks = host.succeed("docker network ls --format '{{.Name}}'").split()
+          networks = host.succeed("podman network ls --format '{{.Name}}'").split()
           assert "imp-host" not in networks, networks
-          nets = json.loads(host.succeed("docker container inspect -f '{{json .NetworkSettings.Networks}}' imp-host"))
-          assert list(nets) == ["bridge"], list(nets)
+          nets = json.loads(host.succeed("podman container inspect -f '{{json .NetworkSettings.Networks}}' imp-host"))
+          assert list(nets) == ["podman"], list(nets)
+          # nixpkgs' Podman module leaves the default network's DNS off
+          assert host.succeed("podman network inspect -f '{{.DNSEnabled}}' podman").strip() == "false"
+          host.fail("pgrep -x aardvark-dns")
+          bridge = gateways("podman")
+          assert bridge, bridge
+          assert not set(bridge) & set(resolvers()), (bridge, resolvers())
           host.succeed("/run/booted-system/specialisation/budget/bin/switch-to-configuration test")
           start_imp_host()
           host.succeed("grep -qx IMP_HOST_IPV6=on /run/imp-host/env")
-          info = host.succeed("docker network inspect -f '{{.EnableIPv6}} {{index .Options \"com.docker.network.bridge.name\"}}' imp-host").strip()
+          info = host.succeed("podman network inspect -f '{{.IPv6Enabled}} {{.NetworkInterface}}' imp-host").strip()
           assert info == "true br-imphost", info
-          nets = json.loads(host.succeed("docker container inspect -f '{{json .NetworkSettings.Networks}}' imp-host"))
+          nets = json.loads(host.succeed("podman container inspect -f '{{json .NetworkSettings.Networks}}' imp-host"))
           assert list(nets) == ["imp-host"], list(nets)
           host.succeed(connect(container, own6, 22))
 
@@ -393,6 +448,40 @@ pkgs.testers.runNixOSTest {
           host.succeed("echo /nix/store/another-archive > /var/lib/imp-host/image-archive")
           start_imp_host()
           assert loads() == 2, loads()
+
+      with subtest("without an archive, a missing image is pulled, and imp-host starts"):
+          host.wait_for_unit("docker-registry.service")
+          host.wait_for_open_port(5000)
+          host.succeed("podman push -q imp-host-stub:test localhost:5000/imp-host-stub:test")
+          host.fail("podman image exists localhost:5000/imp-host-stub:test")
+          host.succeed("/run/booted-system/specialisation/pull/bin/switch-to-configuration test")
+          start_imp_host()
+          host.succeed("podman image exists localhost:5000/imp-host-stub:test")
+          image = host.succeed("podman container inspect -f '{{.ImageName}}' imp-host").strip()
+          assert image == "localhost:5000/imp-host-stub:test", image
+          host.succeed("grep -qx IMP_HOST_IMAGE=localhost:5000/imp-host-stub:test /run/imp-host/env")
+          assert loads() == 2, loads()
+          host.fail("systemctl is-active docker.service")
+          # the restore: the archive's image again, which is loaded already
+          host.succeed("/run/booted-system/specialisation/budget/bin/switch-to-configuration test")
+          start_imp_host()
+          host.succeed("grep -qx IMP_HOST_IMAGE=imp-host-stub:test /run/imp-host/env")
+          assert loads() == 2, loads()
+
+      with subtest("an oci-archive is loaded, and imp-host starts from its image"):
+          host.fail("podman image exists imp-host-stub:oci")
+          host.succeed("/run/booted-system/specialisation/oci/bin/switch-to-configuration test")
+          start_imp_host()
+          host.succeed("podman image exists imp-host-stub:oci")
+          host.succeed("grep -qx ${stubOCI} /var/lib/imp-host/image-archive")
+          host.succeed("grep -qx IMP_HOST_IMAGE=imp-host-stub:oci /run/imp-host/env")
+          assert loads() == 3, loads()
+          # the restore: the docker-archive differs from the one loaded last, so it loads again
+          host.succeed("/run/booted-system/specialisation/budget/bin/switch-to-configuration test")
+          start_imp_host()
+          host.succeed("grep -qx IMP_HOST_IMAGE=imp-host-stub:test /run/imp-host/env")
+          host.succeed("grep -qx ${stub} /var/lib/imp-host/image-archive")
+          assert loads() == 4, loads()
 
       with subtest("saved state that needs a login joins again with the key"):
           host.succeed("echo stale > ${stateDir}/tailscaled.state")
@@ -423,7 +512,7 @@ pkgs.testers.runNixOSTest {
           assert len(ups()) == 2, ups()
           # the stand-in's command goes on to `sleep infinity` after
           # tailscale-up.sh: a container there outlived the failed join
-          host.wait_until_succeeds("docker exec imp-host pgrep -fx 'sleep infinity'", timeout=60)
+          host.wait_until_succeeds("podman exec imp-host pgrep -fx 'sleep infinity'", timeout=60)
           host.succeed("systemctl is-active imp-host")
           assert invocation() == started, (started, invocation())
           assert restarts() == before, (before, restarts())
@@ -457,7 +546,7 @@ pkgs.testers.runNixOSTest {
 
       with subtest("the key is never in the env, argv, the log or the store's env file"):
           assert "TAILSCALE_AUTHKEY" not in host.succeed("cat /run/imp-host/env")
-          assert "${fakeKey}" not in host.succeed("docker container inspect -f '{{.Config.Env}}' imp-host")
+          assert "${fakeKey}" not in host.succeed("podman container inspect -f '{{.Config.Env}}' imp-host")
           assert "${fakeKey}" not in host.succeed("cat ${stateDir}/fake-up.log ${stateDir}/up.out")
           assert "${fakeKey}" not in host.succeed("journalctl -b --no-pager")
 

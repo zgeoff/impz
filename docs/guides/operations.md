@@ -3,8 +3,7 @@
 Day-to-day care of an imp host: restarts, the RAM budget, logs, and checks. The commands assume the
 dev instance from the [install guide](./install.md). On a server running the release image,
 `systemctl restart imp-host` does what `reboot` does here, and
-`podman exec imp-host pkill -HUP -x impd` what `restart` does. The NixOS module runs imp-host under
-Docker, so on a NixOS host the `restart` command is `docker exec imp-host pkill -HUP -x impd`.
+`podman exec imp-host pkill -HUP -x impd` what `restart` does.
 
 ## Restart without losing imps
 

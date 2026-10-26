@@ -10,7 +10,7 @@ holds.
 ## What the host gives
 
 - **KVM** on x86_64, and cgroup v2.
-- **Podman**, rootful, which runs the container. The NixOS module runs it with Docker.
+- **Podman**, rootful, which runs the container.
 - **Storage**: an XFS mount with reflink on the data directory, or a ZFS dataset impd's backend
   owns, with the modules each needs. The container's ZFS tools must share a major version with the
   host's module ([storage](./storage/storage.md#zfs)).

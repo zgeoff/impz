@@ -407,7 +407,7 @@ test('it copies the secrets file in, where a later line replaces an earlier one'
   );
 });
 
-test('it leaves out the keys docker run sets with -e, indented or not, whichever file sets them', () => {
+test('it leaves out the keys podman run sets with -e, indented or not, whichever file sets them', () => {
   const ctx = setupTest();
   const ip = createStubBin(ctx.directoryPath, 'ip');
 
@@ -420,7 +420,7 @@ test('it leaves out the keys docker run sets with -e, indented or not, whichever
 
   writeFileSync(
     join(ctx.directoryPath, 'secrets'),
-    'AWS_SECRET_ACCESS_KEY=fake-secret\n  DOCKER_HOST=unix:///nowhere.sock\n',
+    'AWS_SECRET_ACCESS_KEY=fake-secret\n  IMP_DNS_API_TOKEN_FILE=/nowhere\n',
   );
 
   const result = Bun.spawnSync(
@@ -437,7 +437,7 @@ test('it leaves out the keys docker run sets with -e, indented or not, whichever
         IMP_RAM_BUDGET: '',
         IMP_ARC_MAX: '',
         IMP_SECRETS: join(ctx.directoryPath, 'secrets'),
-        IMP_CONTAINER_KEYS: 'IMP_ENV_FILE DOCKER_HOST IMP_TAILSCALE_AUTHKEY_FILE',
+        IMP_CONTAINER_KEYS: 'IMP_ENV_FILE IMP_DNS_API_TOKEN_FILE IMP_TAILSCALE_AUTHKEY_FILE',
         IMP_ENV_OUT: join(ctx.directoryPath, 'imp-host.env'),
         IMP_MEMINFO: join(ctx.directoryPath, 'meminfo'),
         IMP_BACKUP_STAGED: '',
