@@ -14,7 +14,12 @@ import { VM_DEVICES, createMarks, setupVm } from './configure-vm';
 import type { ImpCgroup } from './cpu-cgroups';
 import { BLOCK_MIB, SLOT_MIB, getRegionMib } from './elastic-memory';
 import { createFirecrackerClient } from './firecracker-client';
-import type { HotplugState, InstanceState, SnapshotType } from './firecracker-client';
+import type {
+  CreateFirecrackerClient,
+  HotplugState,
+  InstanceState,
+  SnapshotType,
+} from './firecracker-client';
 import type { FoundVm, VmOwner } from './firecracker-process';
 import {
   buildFirecrackerCommand,
@@ -100,12 +105,19 @@ export interface VmRunner {
   readonly requestPluggedMib: (paths: ImpPaths, mib: number) => Promise<void>;
 }
 
-export function createVmRunner(
-  jails: Jails,
-  mergeWrapper: string | null = null,
-  sendUptimePing: typeof sendPing = sendPing,
-  procRoot = '/proc',
-): VmRunner {
+export interface VmRunnerOptions {
+  readonly mergeWrapper?: string | null;
+  readonly sendUptimePing?: typeof sendPing;
+  readonly procRoot?: string;
+  readonly createClient?: CreateFirecrackerClient;
+}
+
+export function createVmRunner(jails: Jails, options: Readonly<VmRunnerOptions> = {}): VmRunner {
+  const mergeWrapper = options.mergeWrapper ?? null;
+  const sendUptimePing = options.sendUptimePing ?? sendPing;
+  const procRoot = options.procRoot ?? '/proc';
+  const createClient = options.createClient ?? createFirecrackerClient;
+  const templates = { mergeWrapper, createClient };
   const removeVmMounts = (paths: ImpPaths): Promise<void> => jails.release(paths.impId);
 
   const setupVmCommand = async (
@@ -142,7 +154,7 @@ export function createVmRunner(
   const stopVmNow = async (pid: number, paths: ImpPaths): Promise<boolean> => {
     stopPid(pid);
 
-    const exited = await waitForExit(pid, paths.apiSocket, VM_DEADLINES.killMs);
+    const exited = await waitForExit(pid, paths.apiSocket, VM_DEADLINES.killMs, { procRoot });
 
     if (exited) {
       await removeVmMounts(paths);
@@ -162,7 +174,7 @@ export function createVmRunner(
       try {
         await sendShutdown(paths.vsockSocket);
 
-        const exited = await waitForExit(pid, paths.apiSocket, SHUTDOWN_TIMEOUT_MS);
+        const exited = await waitForExit(pid, paths.apiSocket, SHUTDOWN_TIMEOUT_MS, { procRoot });
 
         if (exited) {
           await removeVmMounts(paths);
@@ -197,7 +209,7 @@ export function createVmRunner(
       setMark('spawn');
 
       try {
-        const api = createFirecrackerClient(plan.paths.apiSocket);
+        const api = createClient(plan.paths.apiSocket);
         const versionPromise = api.readVersion();
 
         await setupVm(api, {
@@ -254,7 +266,7 @@ export function createVmRunner(
 
         // the disk stays open until the process is gone: a retry must not
         // put a second VM on it
-        await waitForExit(pid, plan.paths.apiSocket, VM_DEADLINES.killMs);
+        await waitForExit(pid, plan.paths.apiSocket, VM_DEADLINES.killMs, { procRoot });
 
         const reason = getErrorMessage(error);
 
@@ -266,7 +278,7 @@ export function createVmRunner(
     sleepVm: async (pid, paths, cgroup, target) => {
       const timer = createMarks();
       const setMark = timer.setMark;
-      const api = createFirecrackerClient(paths.apiSocket);
+      const api = createClient(paths.apiSocket);
       const files = { snapshotPath: `${target.vmstate}.new`, memFilePath: `${target.memFile}.new` };
       const owner = lstatSync(paths.disk);
 
@@ -363,7 +375,7 @@ export function createVmRunner(
       setMark('spawn');
 
       try {
-        const api = createFirecrackerClient(plan.paths.apiSocket);
+        const api = createClient(plan.paths.apiSocket);
 
         // the load binds the vsock socket, so the jail's seal waits for the load
         // and lands before the guest runs
@@ -416,22 +428,18 @@ export function createVmRunner(
     removeJail: (paths) => jails.remove(paths.impId),
     removeOrphanJails: jails.removeOrphans,
     growDrive: async (paths, diskBytes) => {
-      await createFirecrackerClient(paths.apiSocket).patchDrive(
-        VM_DEVICES.drives.rootfs,
-        paths.disk,
-      );
-
+      await createClient(paths.apiSocket).patchDrive(VM_DEVICES.drives.rootfs, paths.disk);
       await sendGrow(paths.vsockSocket, diskBytes);
     },
     readGuestMemory: async (paths) => {
-      const api = createFirecrackerClient(paths.apiSocket, GUEST_MEMORY_TIMEOUTS);
+      const api = createClient(paths.apiSocket, GUEST_MEMORY_TIMEOUTS);
 
       const [hotplug, stats] = await Promise.all([api.readHotplugMemory(), api.readBalloonStats()]);
 
       return { ...hotplug, ...stats };
     },
     requestPluggedMib: async (paths, mib) => {
-      await createFirecrackerClient(paths.apiSocket, GUEST_MEMORY_TIMEOUTS).patchHotplugMemory(mib);
+      await createClient(paths.apiSocket, GUEST_MEMORY_TIMEOUTS).patchHotplugMemory(mib);
     },
     probeVmAlive: (pid, paths) => probeFirecrackerAlive(pid, paths.apiSocket, procRoot),
     probeAgentReady: async (paths, deadlineMs = 2000) => {
@@ -454,7 +462,7 @@ export function createVmRunner(
     },
     readVmState: async (paths) => {
       try {
-        return await createFirecrackerClient(paths.apiSocket).readInstanceState();
+        return await createClient(paths.apiSocket).readInstanceState();
       } catch {
         return null;
       }
@@ -470,11 +478,11 @@ export function createVmRunner(
         throw error;
       }
 
-      await createFirecrackerClient(paths.apiSocket).resume();
+      await createClient(paths.apiSocket).resume();
     },
     readPid: (paths) => readPidFile(paths.pidFile),
-    listVms: listFirecrackers,
-    readVmOwner,
+    listVms: () => listFirecrackers(procRoot),
+    readVmOwner: (pid) => readVmOwner(pid, procRoot),
     finishWake: async (paths) => {
       const ping = await waitForAgent(paths.vsockSocket, {
         deadlineMs: WAKE_AGENT_DEADLINE_MS,
@@ -483,11 +491,11 @@ export function createVmRunner(
 
       await sendResumed(paths.vsockSocket, Date.now());
 
-      const firecrackerVersion = await createFirecrackerClient(paths.apiSocket).readVersion();
+      const firecrackerVersion = await createClient(paths.apiSocket).readVersion();
 
       return { agentVersion: ping.version, firecrackerVersion, bootId: ping.bootId };
     },
-    createTemplateVm: (plan) => createTemplateVm(plan, jails, mergeWrapper),
-    loadTemplateVm: (plan) => loadTemplateVm(plan, jails, mergeWrapper),
+    createTemplateVm: (plan) => createTemplateVm(plan, jails, templates),
+    loadTemplateVm: (plan) => loadTemplateVm(plan, jails, templates),
   };
 }

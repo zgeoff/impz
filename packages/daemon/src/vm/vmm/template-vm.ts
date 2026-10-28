@@ -13,6 +13,7 @@ import type { ImpPaths } from '../storage/data-layout';
 import { VM_DEVICES, createMarks, setupVm } from './configure-vm';
 import type { ImpCgroup } from './cpu-cgroups';
 import { createFirecrackerClient } from './firecracker-client';
+import type { CreateFirecrackerClient } from './firecracker-client';
 import {
   buildFirecrackerCommand,
   readLogTail,
@@ -67,13 +68,18 @@ export interface TemplateRestorePlan {
   readonly claim: Omit<Claim, 'unixMs' | 'diskBytes'>;
 }
 
+export interface TemplateVmOptions {
+  readonly mergeWrapper?: string | null;
+  readonly createClient?: CreateFirecrackerClient;
+}
+
 export async function createTemplateVm(
   plan: Readonly<TemplateBuildPlan>,
   jails: Jails,
-  mergeWrapper: string | null = null,
+  options: Readonly<TemplateVmOptions> = {},
 ): Promise<void> {
   try {
-    await runBuildVm(plan, jails, mergeWrapper);
+    await runBuildVm(plan, jails, options);
 
     setupTemplateFile(plan.vmstate);
     setupTemplateFile(plan.memFile);
@@ -91,7 +97,7 @@ export async function createTemplateVm(
 async function runBuildVm(
   plan: Readonly<TemplateBuildPlan>,
   jails: Jails,
-  mergeWrapper: string | null,
+  options: Readonly<TemplateVmOptions>,
 ): Promise<void> {
   try {
     const argv =
@@ -110,11 +116,11 @@ async function runBuildVm(
       argv,
       plan.paths,
       plan.cgroup?.procsPath ?? null,
-      mergeWrapper,
+      options.mergeWrapper ?? null,
     );
 
     try {
-      const api = createFirecrackerClient(plan.paths.apiSocket);
+      const api = (options.createClient ?? createFirecrackerClient)(plan.paths.apiSocket);
 
       await setupVm(api, {
         kernelPath: plan.kernelPath,
@@ -218,18 +224,18 @@ export class TemplateRestoreError extends Error {
 export async function loadTemplateVm(
   plan: Readonly<TemplateRestorePlan>,
   jails: Jails,
-  mergeWrapper: string | null = null,
+  options: Readonly<TemplateVmOptions> = {},
 ): Promise<StartedVm> {
   const marks = createMarks();
 
-  const pid = await startRestoreProcess(plan, jails, mergeWrapper);
+  const pid = await startRestoreProcess(plan, jails, options.mergeWrapper ?? null);
 
   marks.setMark('spawn');
 
   const step = { isTemplateFault: true };
 
   try {
-    const api = createFirecrackerClient(plan.paths.apiSocket);
+    const api = (options.createClient ?? createFirecrackerClient)(plan.paths.apiSocket);
 
     await api.loadSnapshot(
       { snapshotPath: plan.vmstate, memFilePath: plan.memFile },

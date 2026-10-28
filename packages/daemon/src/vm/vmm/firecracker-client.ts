@@ -144,6 +144,11 @@ class FirecrackerApiError extends Error {
   }
 }
 
+export type CreateFirecrackerClient = (
+  socketPath: string,
+  timeouts?: FirecrackerTimeouts,
+) => FirecrackerClient;
+
 export function createFirecrackerClient(
   socketPath: string,
   timeouts: FirecrackerTimeouts = DEFAULT_TIMEOUTS,

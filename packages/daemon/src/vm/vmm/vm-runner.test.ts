@@ -16,6 +16,7 @@ import { deriveSlotAddress, parseSubnet } from '../../host-net/net/addressing';
 import { stopPid } from '../../platform/process/proc';
 import { sendPing } from '../agent-client/agent-requests';
 import { buildImpPaths, buildSnapshotPaths } from '../storage/data-layout';
+import { createFirecrackerClient } from './firecracker-client';
 import { probeFirecrackerAlive } from './firecracker-process';
 import { buildJailerCommand } from './jail';
 import { createVmRunner } from './vm-runner';
@@ -265,7 +266,9 @@ test('#readGuestUptimeMs asks the agent with a 250 ms deadline', async () => {
     Promise.resolve(create(PingSchema, { ok: true, version: '0.1.0', uptimeMs: 1350 })),
   );
 
-  const uptime = await createVmRunner(buildStubJails().jails, null, ping).readGuestUptimeMs(paths);
+  const uptime = await createVmRunner(buildStubJails().jails, {
+    sendUptimePing: ping,
+  }).readGuestUptimeMs(paths);
 
   expect(uptime).toBe(1350);
   expect(ping).toHaveBeenCalledWith(paths.vsockSocket, 250);
@@ -277,9 +280,9 @@ test('#readGuestUptimeMs reads no uptime from an agent that does not answer by t
 
   await startStubAgent(paths.vsockSocket, () => {});
 
-  const uptime = await createVmRunner(buildStubJails().jails, null, (vsockPath) =>
-    sendPing(vsockPath, 20),
-  ).readGuestUptimeMs(paths);
+  const uptime = await createVmRunner(buildStubJails().jails, {
+    sendUptimePing: (vsockPath) => sendPing(vsockPath, 20),
+  }).readGuestUptimeMs(paths);
 
   expect(uptime).toBeNull();
 });
@@ -363,6 +366,43 @@ test('#readVmState reads the VM state from the API', async () => {
   expect(state).toBe('Running');
 });
 
+test('#readVmState asks Firecracker through the client the runner is given', async () => {
+  const ctx = setupTest();
+  const paths = ctx.createImpDir('vm');
+  const sockets: string[] = [];
+
+  await startStubFirecracker({ apiSocket: paths.apiSocket, logPath: ctx.logPath });
+
+  const runner = createVmRunner(buildStubJails().jails, {
+    createClient: (socketPath, timeouts) => {
+      sockets.push(socketPath);
+
+      return createFirecrackerClient(socketPath, timeouts);
+    },
+  });
+
+  const state = await runner.readVmState(paths);
+
+  expect(state).toBe('Running');
+  expect(sockets).toStrictEqual([paths.apiSocket]);
+});
+
+test('#listVms lists the firecrackers in the /proc the runner is given', () => {
+  const ctx = setupTest();
+  const paths = ctx.createImpDir('vm');
+  const procRoot = join(ctx.directoryPath, 'proc');
+
+  mkdirSync(join(procRoot, '42'), { recursive: true });
+  writeFileSync(join(procRoot, '42', 'stat'), '42 (firecracker) S 1 42 42 0 -1');
+  writeFileSync(join(procRoot, '42', 'cmdline'), `firecracker\0--api-sock\0${paths.apiSocket}\0`);
+  writeFileSync(join(procRoot, '42', 'status'), 'Uid:\t900002\t900002\t0\t0\n');
+  writeFileSync(join(procRoot, '42', 'cgroup'), '0::/imps/vm\n');
+
+  expect(createVmRunner(buildStubJails().jails, { procRoot }).listVms()).toStrictEqual([
+    { pid: 42, apiSocket: paths.apiSocket, owner: { uid: 900_002, cgroup: '/imps/vm' } },
+  ]);
+});
+
 test('#readVmState reads no state once the API is gone', async () => {
   const ctx = setupTest();
   const paths = ctx.createImpDir('vm');
@@ -443,12 +483,9 @@ test('#isVmAlive reads the liveness of a VM from the given /proc', () => {
     `firecracker\0--api-sock\0${paths.apiSocket}\0`,
   );
 
-  const runner = createVmRunner(
-    buildStubJails().jails,
-    null,
-    sendPing,
-    join(ctx.directoryPath, 'proc'),
-  );
+  const runner = createVmRunner(buildStubJails().jails, {
+    procRoot: join(ctx.directoryPath, 'proc'),
+  });
 
   expect(runner.probeVmAlive(42, paths)).toBeTrue();
 });
@@ -460,7 +497,7 @@ test('#stopVm only releases the jail of a VM the given /proc shows gone', async 
 
   mkdirSync(join(ctx.directoryPath, 'proc'));
 
-  await createVmRunner(stub.jails, null, sendPing, join(ctx.directoryPath, 'proc')).stopVm(
+  await createVmRunner(stub.jails, { procRoot: join(ctx.directoryPath, 'proc') }).stopVm(
     42,
     paths,
     true,
@@ -523,7 +560,7 @@ test('#wakeVm starts a jailed VM through the merge wrapper, which runs the jaile
   });
 
   expect(
-    createVmRunner(buildStubJails({ argv: command }).jails, wrapper.path).wakeVm({
+    createVmRunner(buildStubJails({ argv: command }).jails, { mergeWrapper: wrapper.path }).wakeVm({
       firecrackerBin: 'firecracker',
       paths,
       cgroup: null,

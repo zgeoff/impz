@@ -1,7 +1,9 @@
 import { closeSync, existsSync, readFileSync, rmSync } from 'node:fs';
 import { basename } from 'node:path';
+import type { Clock } from '../../platform/process/clock';
 import { IMPD_USER } from '../../platform/process/impd-user';
 import { listPids, readStatFields, stopPid } from '../../platform/process/proc';
+import { REAL_CLOCK } from '../../platform/process/real-clock';
 import { readRegularFile, setupLogFile, writeRegularFile } from '../files/vm-files';
 import type { FirecrackerPaths } from '../storage/data-layout';
 import { readProcessCgroup, readProcessUid } from './process-owner';
@@ -103,19 +105,26 @@ export function probeFirecrackerAlive(pid: number, apiSocket: string, procRoot =
   }
 }
 
+export interface ExitWatch {
+  readonly clock?: Pick<Clock, 'now' | 'sleep'>;
+  readonly procRoot?: string;
+}
+
 export async function waitForExit(
   pid: number,
   apiSocket: string,
   timeoutMs: number,
+  watch: Readonly<ExitWatch> = {},
 ): Promise<boolean> {
-  const deadline = Date.now() + timeoutMs;
+  const clock = watch.clock ?? REAL_CLOCK;
+  const deadline = clock.now() + timeoutMs;
 
-  while (probeFirecrackerAlive(pid, apiSocket)) {
-    if (Date.now() > deadline) {
+  while (probeFirecrackerAlive(pid, apiSocket, watch.procRoot)) {
+    if (clock.now() > deadline) {
       return false;
     }
 
-    await Bun.sleep(10);
+    await clock.sleep(10);
   }
 
   return true;
@@ -139,11 +148,11 @@ export function readPidFile(pidFile: string): number | null {
   }
 }
 
-export function listFirecrackers(): FoundVm[] {
+export function listFirecrackers(procRoot = '/proc'): FoundVm[] {
   const found: FoundVm[] = [];
 
-  for (const pid of listPids()) {
-    const argv = readCommandLine(pid);
+  for (const pid of listPids(procRoot)) {
+    const argv = readCommandLine(pid, procRoot);
     const flag = argv.indexOf('--api-sock');
     const apiSocket = argv[flag + 1];
 
@@ -151,24 +160,24 @@ export function listFirecrackers(): FoundVm[] {
       basename(argv[0] ?? '') === 'firecracker' &&
       flag !== -1 &&
       apiSocket !== undefined &&
-      probeFirecrackerAlive(pid, apiSocket)
+      probeFirecrackerAlive(pid, apiSocket, procRoot)
     ) {
       // A jailed process can put any socket in its command line, so only its owner shows whose VM
       // it is.
-      found.push({ pid, apiSocket, owner: readVmOwner(pid) });
+      found.push({ pid, apiSocket, owner: readVmOwner(pid, procRoot) });
     }
   }
 
   return found;
 }
 
-export function readVmOwner(pid: number): VmOwner {
-  return { uid: readProcessUid(pid), cgroup: readProcessCgroup(pid) };
+export function readVmOwner(pid: number, procRoot = '/proc'): VmOwner {
+  return { uid: readProcessUid(pid, procRoot), cgroup: readProcessCgroup(pid, procRoot) };
 }
 
-function readCommandLine(pid: number): string[] {
+function readCommandLine(pid: number, procRoot: string): string[] {
   try {
-    return readFileSync(`/proc/${String(pid)}/cmdline`, 'utf8').split('\0');
+    return readFileSync(`${procRoot}/${String(pid)}/cmdline`, 'utf8').split('\0');
   } catch {
     return [];
   }
@@ -178,13 +187,7 @@ export function buildFirecrackerCommand(bin: string, apiSocket: string): readonl
   return [bin, '--api-sock', apiSocket];
 }
 
-export function probeJailedFirecracker(pid: number): boolean {
-  try {
-    // The jailer passes its --id on to the Firecracker it execs.
-    return readFileSync(`/proc/${String(pid)}/cmdline`, 'utf8')
-      .split('\0')
-      .includes('--id');
-  } catch {
-    return false;
-  }
+export function probeJailedFirecracker(pid: number, procRoot = '/proc'): boolean {
+  // The jailer passes its --id on to the Firecracker it execs.
+  return readCommandLine(pid, procRoot).includes('--id');
 }

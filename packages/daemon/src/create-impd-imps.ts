@@ -89,7 +89,7 @@ export function createImpdImps(
         run: deps.runCommand ?? runCommand,
         killCgroup: cgroups.kill,
       }),
-      config.ksm?.execBin ?? null,
+      { mergeWrapper: config.ksm?.execBin ?? null },
     );
 
   const {
