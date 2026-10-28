@@ -26,7 +26,6 @@ import { toSeenSessions } from '../../vm/agent-client/seen-session';
 import type { ImpPaths } from '../../vm/storage/data-layout';
 import { isDiskFullError } from '../../vm/storage/disk-full-error';
 import type { BootTemplates } from '../../vm/templates/boot-templates';
-import { findSessionLogImp } from '../session-logs/find-session-log-imp';
 import type { ActivityTracker, ConnectionKind } from './activity-tracker';
 import type { ImpClock, ImpGuest, ImpHost, ImpMemory, ImpVms } from './imp-context';
 import type { ImpLock, LockedImp } from './imp-lock';
@@ -37,6 +36,7 @@ import { makeReconcileImps } from './make-reconcile-imps';
 import type { YoungGuestWait } from './make-sleep-imp-vm';
 import { openImpExec } from './open-imp-exec';
 import { requireFeature } from './require-feature';
+import { findSessionLogImp } from './session-logs/find-session-log-imp';
 import { withColdBoots } from './with-cold-boots';
 
 export interface ImpRuntime {

@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import type { GenerationMeta } from '../../src/imps/session-logs/generation-log';
+import type { GenerationMeta } from '../../src/imps/imps/session-logs/generation-log';
 
 export function buildMockGenerationMeta(overrides: Partial<GenerationMeta> = {}): GenerationMeta {
   return {

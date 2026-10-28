@@ -14,7 +14,6 @@ import { writeVmIdentity } from '../../vm/sleep/vm-identity';
 import type { VmIdentity } from '../../vm/sleep/vm-identity';
 import type { ImpPaths } from '../../vm/storage/data-layout';
 import type { ImpCgroup } from '../../vm/vmm/cpu-cgroups';
-import { findSessionLogImp } from '../session-logs/find-session-log-imp';
 import { checkMergeFlag } from './check-merge-flag';
 import type { ImpContext } from './imp-context';
 import { toLockedImp } from './imp-lock';
@@ -24,6 +23,7 @@ import type { YoungGuestWait } from './make-sleep-imp-vm';
 import { makeWakeImpVm } from './make-wake-imp-vm';
 import { startCounting } from './read-running-imp-usage';
 import { requireNoOopsHold } from './require-no-oops-hold';
+import { findSessionLogImp } from './session-logs/find-session-log-imp';
 import { startColdVm } from './start-cold-vm';
 import { updateLockedImpState } from './update-locked-imp-state';
 

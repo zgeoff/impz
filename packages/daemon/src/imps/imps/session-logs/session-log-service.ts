@@ -2,10 +2,10 @@ import type { SessionInfo } from '@impz/agent-protocol';
 import type { PreviousGeneration, ResumeFrom, SessionLog, SessionLogRead } from '@impz/api';
 import { PreviousGenerationSchema } from '@impz/api';
 import * as z from 'zod';
-import { isAgentLogIdentity } from '../../vm/agent-client/agent-ids';
-import { openTapStream } from '../../vm/agent-client/exec-stream';
-import type { ExecStream } from '../../vm/agent-client/exec-stream';
-import { isAgentError } from '../../vm/agent-client/is-agent-error';
+import { isAgentLogIdentity } from '../../../vm/agent-client/agent-ids';
+import { openTapStream } from '../../../vm/agent-client/exec-stream';
+import type { ExecStream } from '../../../vm/agent-client/exec-stream';
+import { isAgentError } from '../../../vm/agent-client/is-agent-error';
 import { buildLogKey } from './build-log-key';
 import { createSessionLogState } from './create-session-log-state';
 import {

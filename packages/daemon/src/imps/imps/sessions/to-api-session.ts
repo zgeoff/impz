@@ -1,7 +1,7 @@
 import type { Session } from '@impz/api';
-import { isAgentSessionState } from '../../vm/agent-client/is-agent-session-state';
-import type { SeenSession } from '../../vm/agent-client/seen-session';
-import { getSignalName } from '../exec/signal-names';
+import { isAgentSessionState } from '../../../vm/agent-client/is-agent-session-state';
+import type { SeenSession } from '../../../vm/agent-client/seen-session';
+import { getSignalName } from '../../exec/signal-names';
 
 export function toApiSession(session: SeenSession): Session {
   const hasOffsets = session.executionGeneration !== '';

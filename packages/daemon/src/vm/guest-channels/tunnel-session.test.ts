@@ -12,10 +12,10 @@ import { buildStubTunnelPeer } from '../../../testing/imps/build-stub-tunnel-pee
 import { buildStubDialStream } from '../../../testing/vm/build-stub-dial-stream';
 import { buildStubGuestListener } from '../../../testing/vm/build-stub-guest-listener';
 import { ImpdError } from '../../platform/errors/impd-error';
-import { AgentError } from '../../vm/agent-client/agent-connection';
-import type { DialStream } from '../../vm/agent-client/dial-stream';
-import type { GuestListener } from '../../vm/agent-client/listener-stream';
-import { createReverseForwards } from '../reverse/reverse-forwards';
+import { AgentError } from '../agent-client/agent-connection';
+import type { DialStream } from '../agent-client/dial-stream';
+import type { GuestListener } from '../agent-client/listener-stream';
+import { createReverseForwards } from './reverse-forwards';
 import { createTunnelLimits, createTunnelSession } from './tunnel-session';
 import type { TunnelBackend } from './tunnel-session';
 

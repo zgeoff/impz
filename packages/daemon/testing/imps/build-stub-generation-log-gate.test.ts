@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { readGenerationMeta } from '../../src/imps/session-logs/generation-log';
+import { readGenerationMeta } from '../../src/imps/imps/session-logs/generation-log';
 import { buildStubGenerationLogGate } from './build-stub-generation-log-gate';
 
 async function setupTest() {

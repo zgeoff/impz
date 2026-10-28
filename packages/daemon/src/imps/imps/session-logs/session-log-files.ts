@@ -3,8 +3,8 @@ import { open } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import type { SessionLog, SessionLogRead } from '@impz/api';
 import { SESSION_LOG_READ_MAX_BYTES } from '@impz/api';
-import { ImpdError } from '../../platform/errors/impd-error';
-import { writeFileDurably } from '../../platform/process/write-file-durably';
+import { ImpdError } from '../../../platform/errors/impd-error';
+import { writeFileDurably } from '../../../platform/process/write-file-durably';
 import {
   countLogBytes,
   getGenerationBounds,

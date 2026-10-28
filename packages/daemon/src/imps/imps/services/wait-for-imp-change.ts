@@ -1,6 +1,6 @@
 import type { ImpEvent } from '@impz/api';
-import type { EventBus } from '../../platform/events/event-bus';
-import type { StartTimer } from '../../platform/process/clock';
+import type { EventBus } from '../../../platform/events/event-bus';
+import type { StartTimer } from '../../../platform/process/clock';
 
 export function waitForImpChange(
   context: Readonly<{ events: Pick<EventBus, 'subscribe'>; startTimer: StartTimer }>,

@@ -2,7 +2,10 @@ import { posix } from 'node:path';
 import type { Connection, ServerChannel } from 'ssh2';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import type { GuestListener, ListenSpec } from '../../vm/agent-client/listener-stream';
-import { MAX_RELAYS_PER_FORWARD, runGuestListener } from '../reverse/run-guest-listener';
+import {
+  MAX_RELAYS_PER_FORWARD,
+  runGuestListener,
+} from '../../vm/guest-channels/run-guest-listener';
 import { formatFailure, runChannelRelay } from './channel-io';
 import type { SshBackend } from './ssh-connection-context';
 

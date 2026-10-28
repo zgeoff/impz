@@ -1,5 +1,5 @@
-import type { ImpRecord } from '../../platform/db/imps';
-import type { ImpPaths } from '../../vm/storage/data-layout';
+import type { ImpRecord } from '../../../platform/db/imps';
+import type { ImpPaths } from '../../../vm/storage/data-layout';
 import type { SessionLogImp } from './session-log-service';
 
 export function findSessionLogImp(

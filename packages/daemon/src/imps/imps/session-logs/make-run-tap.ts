@@ -1,6 +1,6 @@
-import { getImpdLogger } from '../../platform/process/get-impd-logger';
-import type { ExecStream } from '../../vm/agent-client/exec-stream';
-import { isDiskFullError } from '../../vm/storage/disk-full-error';
+import { getImpdLogger } from '../../../platform/process/get-impd-logger';
+import type { ExecStream } from '../../../vm/agent-client/exec-stream';
+import { isDiskFullError } from '../../../vm/storage/disk-full-error';
 import type { SessionLogState } from './create-session-log-state';
 import { getGenerationBounds } from './generation-log';
 import type { LiveLog } from './session-log-machine';

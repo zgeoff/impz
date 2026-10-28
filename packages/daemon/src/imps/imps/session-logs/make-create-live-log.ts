@@ -1,4 +1,4 @@
-import { isAgentLogIdentity } from '../../vm/agent-client/agent-ids';
+import { isAgentLogIdentity } from '../../../vm/agent-client/agent-ids';
 import { buildLogKey } from './build-log-key';
 import type { SessionLogState } from './create-session-log-state';
 import type { GenerationLog, createGenerationLog } from './generation-log';

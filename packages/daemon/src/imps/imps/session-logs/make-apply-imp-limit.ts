@@ -1,4 +1,4 @@
-import { getImpdLogger } from '../../platform/process/get-impd-logger';
+import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import type { SessionLogState } from './create-session-log-state';
 import { countLogBytes } from './generation-log';
 import { readImpMetas, removeGenerationDir } from './session-log-files';

@@ -10,11 +10,11 @@ import type { TunnelClientMessage, TunnelServerMessage } from '@impz/api';
 import { ImpdError } from '../../platform/errors/impd-error';
 import { createCountedLimit } from '../../platform/process/counted-limit';
 import { getErrorMessage } from '../../platform/process/get-error-message';
-import { AgentError } from '../../vm/agent-client/agent-connection';
-import type { DialStream, DialTarget } from '../../vm/agent-client/dial-stream';
-import type { GuestListener, ListenSpec } from '../../vm/agent-client/listener-stream';
-import type { ReverseForwards } from '../reverse/reverse-forwards';
-import { runGuestListener } from '../reverse/run-guest-listener';
+import { AgentError } from '../agent-client/agent-connection';
+import type { DialStream, DialTarget } from '../agent-client/dial-stream';
+import type { GuestListener, ListenSpec } from '../agent-client/listener-stream';
+import type { ReverseForwards } from './reverse-forwards';
+import { runGuestListener } from './run-guest-listener';
 
 const MAX_TUNNELS_PER_IMP = 256;
 const MAX_PENDING_BYTES = TUNNEL_WINDOW_BYTES + TUNNEL_MAX_FRAME_BYTES;

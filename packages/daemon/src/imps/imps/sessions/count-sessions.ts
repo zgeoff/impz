@@ -1,6 +1,6 @@
-import type { ImpRecord } from '../../platform/db/imps';
-import { readSnapshotMeta } from '../../vm/sleep/snapshot-meta';
-import type { ImpContext } from '../imps/imp-context';
+import type { ImpRecord } from '../../../platform/db/imps';
+import { readSnapshotMeta } from '../../../vm/sleep/snapshot-meta';
+import type { ImpContext } from '../imp-context';
 
 type SessionSources = Pick<ImpContext, 'sessions' | 'findPaths'>;
 

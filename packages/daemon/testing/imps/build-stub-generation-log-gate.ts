@@ -1,5 +1,5 @@
-import { createGenerationLog } from '../../src/imps/session-logs/generation-log';
-import type { GenerationLog } from '../../src/imps/session-logs/generation-log';
+import { createGenerationLog } from '../../src/imps/imps/session-logs/generation-log';
+import type { GenerationLog } from '../../src/imps/imps/session-logs/generation-log';
 
 type HeldOperation = 'create' | 'append' | 'removeOldestSegment';
 

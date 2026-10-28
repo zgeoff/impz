@@ -9,15 +9,15 @@ import {
 } from '@impz/agent-protocol';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
-import { buildStubClock } from '../../../testing/platform/build-stub-clock';
-import { readInBackground } from '../../../testing/platform/read-in-background';
-import { readQueuedText } from '../../../testing/platform/read-queued-text';
-import { startTestImpd } from '../../../testing/start-test-impd';
-import { TEST_TOKEN } from '../../../testing/test-token';
-import { startStubServiceAgent } from '../../../testing/vm/start-stub-service-agent';
-import { updateImpActivity } from '../../platform/db/imps';
-import { readSnapshotMeta } from '../../vm/sleep/snapshot-meta';
-import { buildImpPaths } from '../../vm/storage/data-layout';
+import { buildStubClock } from '../../../../testing/platform/build-stub-clock';
+import { readInBackground } from '../../../../testing/platform/read-in-background';
+import { readQueuedText } from '../../../../testing/platform/read-queued-text';
+import { startTestImpd } from '../../../../testing/start-test-impd';
+import { TEST_TOKEN } from '../../../../testing/test-token';
+import { startStubServiceAgent } from '../../../../testing/vm/start-stub-service-agent';
+import { updateImpActivity } from '../../../platform/db/imps';
+import { readSnapshotMeta } from '../../../vm/sleep/snapshot-meta';
+import { buildImpPaths } from '../../../vm/storage/data-layout';
 import { createServiceApi } from './service-api';
 
 async function setupTest() {

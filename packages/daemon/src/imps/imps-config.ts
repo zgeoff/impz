@@ -1,5 +1,5 @@
 import type { VmConfig } from '../vm/vm-config';
-import type { SessionLogLimits } from './session-logs/session-log-service';
+import type { SessionLogLimits } from './imps/session-logs/session-log-service';
 
 interface BuildConfig {
   readonly memoryMib: number;

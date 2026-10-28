@@ -1,4 +1,4 @@
-import type { SeenSession } from '../../vm/agent-client/seen-session';
+import type { SeenSession } from '../../../vm/agent-client/seen-session';
 
 export interface SessionCache {
   readonly record: (impId: string, sessions: readonly SeenSession[]) => void;

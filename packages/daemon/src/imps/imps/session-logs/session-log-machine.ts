@@ -1,5 +1,5 @@
 import { assign, emit, setup } from 'xstate';
-import type { ExecStream } from '../../vm/agent-client/exec-stream';
+import type { ExecStream } from '../../../vm/agent-client/exec-stream';
 import type { GenerationLog } from './generation-log';
 
 export interface LiveLog {

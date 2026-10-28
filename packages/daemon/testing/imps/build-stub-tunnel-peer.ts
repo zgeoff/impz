@@ -1,4 +1,4 @@
-import type { TunnelPeer } from '../../src/imps/tunnel/tunnel-session';
+import type { TunnelPeer } from '../../src/vm/guest-channels/tunnel-session';
 
 export function buildStubTunnelPeer() {
   const sent: unknown[] = [];

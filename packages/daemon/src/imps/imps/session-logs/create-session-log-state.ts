@@ -1,6 +1,6 @@
 import { createActor } from 'xstate';
-import { getErrorMessage } from '../../platform/process/get-error-message';
-import { getImpdLogger } from '../../platform/process/get-impd-logger';
+import { getErrorMessage } from '../../../platform/process/get-error-message';
+import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import { buildLogKey } from './build-log-key';
 import type { GenerationEnd, GenerationLog, GenerationLogOptions } from './generation-log';
 import { getGenerationDir } from './session-log-files';

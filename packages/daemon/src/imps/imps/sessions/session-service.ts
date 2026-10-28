@@ -1,13 +1,16 @@
 import type { Session, SessionLog, SessionLogRead } from '@impz/api';
-import { updateImpActivity } from '../../platform/db/imps';
-import type { ImpRecord } from '../../platform/db/imps';
-import { buildAgentOutdatedApiError, buildNotFoundError } from '../../platform/errors/impd-errors';
-import { sendActivity, sendSessionKill } from '../../vm/agent-client/agent-requests';
-import { isAgentError } from '../../vm/agent-client/is-agent-error';
-import { toSeenSessions } from '../../vm/agent-client/seen-session';
-import type { ImpGuest, ImpHost, ImpVms } from '../imps/imp-context';
-import type { ImpLock } from '../imps/imp-lock';
-import type { ImpRuntime } from '../imps/imp-runtime';
+import { updateImpActivity } from '../../../platform/db/imps';
+import type { ImpRecord } from '../../../platform/db/imps';
+import {
+  buildAgentOutdatedApiError,
+  buildNotFoundError,
+} from '../../../platform/errors/impd-errors';
+import { sendActivity, sendSessionKill } from '../../../vm/agent-client/agent-requests';
+import { isAgentError } from '../../../vm/agent-client/is-agent-error';
+import { toSeenSessions } from '../../../vm/agent-client/seen-session';
+import type { ImpGuest, ImpHost, ImpVms } from '../imp-context';
+import type { ImpLock } from '../imp-lock';
+import type { ImpRuntime } from '../imp-runtime';
 import { findSessionLogImp } from '../session-logs/find-session-log-imp';
 import type { SessionLogReadRequest } from '../session-logs/session-log-files';
 import type { SessionLogTarget } from '../session-logs/session-log-service';

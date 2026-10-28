@@ -1,28 +1,28 @@
 import type { LogCursor, ServiceStatus, ServicesList } from '@impz/agent-protocol';
 import { ServiceRestartSchema, ServiceStateSchema } from '@impz/api';
 import type { Service, ServiceDef, ServiceList, ServiceLog } from '@impz/api';
-import type { ImpRecord } from '../../platform/db/imps';
-import { ImpdError, isImpdError } from '../../platform/errors/impd-error';
+import type { ImpRecord } from '../../../platform/db/imps';
+import { ImpdError, isImpdError } from '../../../platform/errors/impd-error';
 import {
   buildAgentOutdatedApiError,
   buildConflictError,
   buildForbiddenError,
   buildInvalidStateError,
   buildNotFoundError,
-} from '../../platform/errors/impd-errors';
-import type { EventBus } from '../../platform/events/event-bus';
-import type { StartTimer } from '../../platform/process/clock';
-import { startRealTimer } from '../../platform/process/start-real-timer';
-import { isAgentError } from '../../vm/agent-client/is-agent-error';
+} from '../../../platform/errors/impd-errors';
+import type { EventBus } from '../../../platform/events/event-bus';
+import type { StartTimer } from '../../../platform/process/clock';
+import { startRealTimer } from '../../../platform/process/start-real-timer';
+import { isAgentError } from '../../../vm/agent-client/is-agent-error';
 import {
   openServiceLogStream,
   sendServicesAdd,
   sendServicesList,
   sendServicesRemove,
   sendServicesRestart,
-} from '../../vm/agent-client/service-requests';
-import { getSignalName } from '../exec/signal-names';
-import type { ImpRuntime } from '../imps/imp-runtime';
+} from '../../../vm/agent-client/service-requests';
+import { getSignalName } from '../../exec/signal-names';
+import type { ImpRuntime } from '../imp-runtime';
 import { createLogDecoders } from './create-log-decoders';
 import { mergeLogStreams } from './merge-log-streams';
 import type { NamedStream } from './merge-log-streams';

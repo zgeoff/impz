@@ -5,9 +5,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
-import { buildStubClock } from '../../../testing/platform/build-stub-clock';
-import { buildStubRoomCheck } from '../../../testing/vm/build-stub-room-check';
-import { ImpdError } from '../../platform/errors/impd-error';
+import { buildStubClock } from '../../../../testing/platform/build-stub-clock';
+import { buildStubRoomCheck } from '../../../../testing/vm/build-stub-room-check';
+import { ImpdError } from '../../../platform/errors/impd-error';
 import {
   createGenerationLog,
   getGenerationBounds,
