@@ -33,7 +33,7 @@ test('it locks the data of a sparse file and none of its holes', async () => {
 
   const lockedKiB = readFileSync('/proc/self/smaps', 'utf8')
     .split(/\n(?=[\da-f]+-[\da-f]+ )/u)
-    .filter((mapping) => mapping.split('\n')[0]?.endsWith(path))
+    .filter((mapping) => mapping.split('\n')[0]?.endsWith(path) === true)
     .map((mapping) => Number(/^Locked:\s+(?<kib>\d+) kB$/mu.exec(mapping)?.groups?.['kib']));
 
   expect(result.lock.lockedBytes).toBe(12_288);
@@ -84,7 +84,7 @@ test('it holds the locked pages in a mapping of the file until release', async (
 
   const lockedKiB = readFileSync('/proc/self/smaps', 'utf8')
     .split(/\n(?=[\da-f]+-[\da-f]+ )/u)
-    .filter((mapping) => mapping.split('\n')[0]?.endsWith(path))
+    .filter((mapping) => mapping.split('\n')[0]?.endsWith(path) === true)
     .map((mapping) => Number(/^Locked:\s+(?<kib>\d+) kB$/mu.exec(mapping)?.groups?.['kib']));
 
   result.lock.release();
