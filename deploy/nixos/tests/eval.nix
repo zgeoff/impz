@@ -395,6 +395,12 @@ let
       expr = lib.hasInfix "--cap-drop ALL --cap-add SYS_ADMIN" unit.serviceConfig.ExecStart;
       expected = true;
     };
+    # zfsHost: module defaults; Podman, unlike Docker, keeps the container's
+    # net.ipv4.ip_unprivileged_port_start at 1024
+    "test impd may bind its tailnet ports below 1024" = {
+      expr = lib.hasInfix " --cap-add NET_BIND_SERVICE " unit.serviceConfig.ExecStart;
+      expected = true;
+    };
     # zfsHost: module defaults
     "test imp-host may lock the memory of its boot templates" = {
       expr = lib.hasInfix " --ulimit ${lib.escapeShellArg "memlock=2147483648:2147483648"} " unit.serviceConfig.ExecStart;
