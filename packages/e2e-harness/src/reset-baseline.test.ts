@@ -424,7 +424,9 @@ test('#removeImpIfPresent ends a send that runs on after its caller stopped wait
   const stalled = Promise.withResolvers<undefined>();
 
   const hosts = await createMoveHosts(stack, {
-    hook: makeStubStalledMovePart(() => stalled.resolve(undefined)),
+    hook: makeStubStalledMovePart(() => {
+      stalled.resolve(undefined);
+    }),
   });
 
   await createUbuntuImage(hosts.source);

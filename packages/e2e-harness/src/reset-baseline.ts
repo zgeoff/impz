@@ -73,34 +73,28 @@ function isMoving(error: unknown): boolean {
 }
 
 export async function removeImpIfPresent(client: ImpClient, name: string): Promise<void> {
-  const refusal = await removeImpOrRefusal(client, name);
+  try {
+    await removeImpUnlessGone(client, name);
+  } catch (error) {
+    if (!isMoving(error)) {
+      throw error;
+    }
 
-  if (refusal === null) {
-    return;
-  }
+    // A send runs on in impd after `impz move` stops, and impd refuses to remove an
+    // imp a move holds, so the abort ends the move and waits for it to settle.
+    await client.moves.abort({ name });
 
-  if (!isMoving(refusal)) {
-    throw refusal;
-  }
-
-  // A send runs on in impd after `impz move` stops, and impd refuses to remove an
-  // imp a move holds, so the abort ends the move and waits for it to settle.
-  await client.moves.abort({ name });
-
-  const lastRefusal = await removeImpOrRefusal(client, name);
-
-  if (lastRefusal !== null) {
-    throw lastRefusal;
+    await removeImpUnlessGone(client, name);
   }
 }
 
-async function removeImpOrRefusal(client: ImpClient, name: string): Promise<unknown> {
+async function removeImpUnlessGone(client: ImpClient, name: string): Promise<void> {
   try {
     await client.imps.destroy({ name });
-
-    return null;
   } catch (error) {
-    return isNotFound(error) ? null : error;
+    if (!isNotFound(error)) {
+      throw error;
+    }
   }
 }
 
