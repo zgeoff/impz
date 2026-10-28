@@ -397,7 +397,7 @@ let
     };
     # zfsHost: module defaults
     "test imp-host may lock the memory of its boot templates" = {
-      expr = lib.hasInfix "--ulimit memlock=2147483648:2147483648" unit.serviceConfig.ExecStart;
+      expr = lib.hasInfix " --ulimit ${lib.escapeShellArg "memlock=2147483648:2147483648"} " unit.serviceConfig.ExecStart;
       expected = true;
     };
     # zfsHost: module defaults; containers.conf gives a podman container a pids limit
