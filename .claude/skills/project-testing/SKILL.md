@@ -116,15 +116,15 @@ suffix names that system. [`bunfig.toml`](../../../bunfig.toml) leaves every lan
 plain `bun test`, even for a file named by its path, so each lane's script replaces that ignore list
 and selects its files by suffix. `test:related` leaves lane files out for the same reason.
 
-| Lane             | Files                                             | Real system                                             | Run                                                     | Per-test limit |
-| ---------------- | ------------------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------- | -------------- |
-| VM end to end    | the other `e2e/suites/*.e2e.ts`, in the CI groups | KVM Firecracker imps on a dev instance of impd          | `e2e/test-e2e.sh --group <n>`                           | 60 s           |
-| ZFS              | `e2e/suites/*.zfs.e2e.ts`                         | KVM imps on a real zpool in a sparse file               | `scripts/zfs-host-test.sh`, `IMP_ZFS_SHARD=<n>/<count>` | 60 s           |
-| Host networking  | `*.host.test.ts`                                  | root, the kernel's netfilter and network namespaces     | `bun run test:host`, as root in CI                      | 15 s           |
-| Headscale join   | `*.headscale.test.ts`                             | Headscale and tailscale containers in Docker            | `bun run test:headscale`                                | 15 s           |
-| ACME issuer      | `*.pebble.test.ts`                                | the Pebble ACME server in Docker                        | `bun run test:pebble`                                   | 5 s            |
-| Docker build     | `*.docker.test.ts`                                | docker buildx on the host                               | `bun run test:docker`                                   | 15 s           |
-| Small filesystem | `*.small-fs.test.ts`                              | a small loop-mounted XFS that `IMP_TEST_SMALL_FS` names | `bun run test:small-fs`, after a sudo mount in CI       | 15 s           |
+| Lane             | Files                                             | Real system                                                       | Run                                                     | Per-test limit |
+| ---------------- | ------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------- | -------------- |
+| VM end to end    | the other `e2e/suites/*.e2e.ts`, in the CI groups | KVM Firecracker imps on a dev instance of impd                    | `e2e/test-e2e.sh --group <n>`                           | 60 s           |
+| ZFS              | `e2e/suites/*.zfs.e2e.ts`                         | KVM imps on a real zpool in a sparse file                         | `scripts/zfs-host-test.sh`, `IMP_ZFS_SHARD=<n>/<count>` | 60 s           |
+| Host networking  | `*.host.test.ts`                                  | root, the kernel's netfilter, network namespaces and memory locks | `bun run test:host`, as root in CI                      | 15 s           |
+| Headscale join   | `*.headscale.test.ts`                             | Headscale and tailscale containers in Docker                      | `bun run test:headscale`                                | 15 s           |
+| ACME issuer      | `*.pebble.test.ts`                                | the Pebble ACME server in Docker                                  | `bun run test:pebble`                                   | 5 s            |
+| Docker build     | `*.docker.test.ts`                                | docker buildx on the host                                         | `bun run test:docker`                                   | 15 s           |
+| Small filesystem | `*.small-fs.test.ts`                              | a small loop-mounted XFS that `IMP_TEST_SMALL_FS` names           | `bun run test:small-fs`, after a sudo mount in CI       | 15 s           |
 
 CI splits the ZFS lane's suites into shards, longest first by each suite's `seconds` in
 [`suites.ts`](../../../packages/e2e-harness/src/suites.ts). A suite's `seconds` counts its own time
