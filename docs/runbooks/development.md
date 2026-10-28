@@ -313,7 +313,7 @@ it ships.
 to it. Version 1.2.2 fixes GHSA-68fv-2mgg-jv7q, which reaches the dashboard through vite and
 postcss.
 
-On `main`, the `release-please` job makes releases ([releasing](./releasing.md)).
+On `main`, the `release` job makes releases ([releasing](./releasing.md)).
 
 ### The e2e job
 
@@ -354,8 +354,8 @@ After a pass, a failure or a timeout, each group saves an `e2e-results-N` artifa
 suite's Playwright traces and screenshots. A failed suite also prints the last 40 lines of impd's
 log inline. Download one with `gh run download <run-id> -n e2e-results-1`.
 
-The `e2e` job is a required check, and `release-please` waits for it. It became one after it passed
-on every push to `main` from its first run (#2).
+The `e2e` job is a required check, and the release job merges a release PR only after it passes. It
+became one after it passed on every push to `main` from its first run (#2).
 
 If GitHub-hosted runners lose KVM, move the job to an ephemeral, dedicated self-hosted runner and
 run it only on push to `main`, never on pull requests. Never use the deploy box. The repo is public,

@@ -50,7 +50,13 @@ const AggregateJobSchema = z.looseObject({
 });
 
 const ReleaseJobSchema = z.looseObject({
+  needs: z.array(z.string()).optional(),
+  uses: z.string(),
+});
+
+const StartReleaseJobSchema = z.looseObject({
   needs: z.array(z.string()),
+  if: z.string(),
   steps: z.array(StepSchema),
 });
 
@@ -60,7 +66,8 @@ const WorkflowSchema = z.looseObject({
     e2e: AggregateJobSchema,
     'zfs-shard': ShardJobSchema,
     zfs: AggregateJobSchema,
-    'release-please': ReleaseJobSchema,
+    release: ReleaseJobSchema,
+    'start-release': StartReleaseJobSchema,
   }),
 });
 

@@ -89,24 +89,42 @@ test('it passes the required e2e check only when the groups succeeded', () => {
   expect(runs.join('\n')).toInclude('test "$RESULT" = success');
 });
 
-test('it keeps release-please waiting on the required e2e check', () => {
+test('it calls the shared release job at the sync tag that repo-sync calls', () => {
   const jobs = parseCiWorkflow(
     readFileSync(new URL('../../../.github/workflows/ci.yml', import.meta.url), 'utf8'),
   );
 
-  expect(jobs['release-please'].needs).toContain('e2e');
+  const repoSync = readFileSync(
+    new URL('../../../.github/workflows/repo-sync.yml', import.meta.url),
+    'utf8',
+  );
+
+  const syncTag = /zgeoff\/tools\/\.github\/workflows\/repo-sync\.yml@(?<tag>\S+)/u.exec(repoSync)
+    ?.groups?.['tag'];
+
+  expect(syncTag).toBeString();
+  expect(jobs.release.uses).toBe(`zgeoff/tools/.github/workflows/release-please.yml@${syncTag}`);
 });
 
-test('it leaves a draft release PR out of the auto-merge, which GitHub refuses on a draft', () => {
+test("it starts the release job with no gate, so the tag lands while the merge is main's head", () => {
   const jobs = parseCiWorkflow(
     readFileSync(new URL('../../../.github/workflows/ci.yml', import.meta.url), 'utf8'),
   );
 
-  expect(jobs['release-please'].steps).toPartiallyContain({
-    name: 'Auto-merge release PR',
-    run: expect.stringContaining(
-      'gh pr list --repo "$GITHUB_REPOSITORY" --base main --state open --draft=false',
-    ),
+  expect(jobs.release.needs).toBeUndefined();
+});
+
+test('it starts release.yml for the tag the release job created', () => {
+  const jobs = parseCiWorkflow(
+    readFileSync(new URL('../../../.github/workflows/ci.yml', import.meta.url), 'utf8'),
+  );
+
+  expect(jobs['start-release'].needs).toStrictEqual(['release']);
+  expect(jobs['start-release'].if).toBe(`needs.release.outputs.releases_created == 'true'`);
+
+  expect(jobs['start-release'].steps).toPartiallyContain({
+    env: expect.objectContaining({ TAG: `\${{ needs.release.outputs.tag }}` }),
+    run: expect.stringContaining('gh workflow run release.yml'),
   });
 });
 

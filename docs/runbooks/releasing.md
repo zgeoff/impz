@@ -1,14 +1,16 @@
 # Releasing
 
 Releases come from `main` through [release-please](https://github.com/googleapis/release-please) and
-two workflows. A `feat:` or `fix:` commit on `main` makes the `release-please` job in CI open or
-update the release PR, which bumps every version, the changelog and the lock file. The release PR
-merges itself once its checks pass. On that merge the job tags `vX.Y.Z` and starts the release
-workflow for the tag, which builds the CLI, the guest kernel, the system drive, the host image, the
-base image, the npm packages and the Homebrew formula, smoke-tests each, and publishes and attests
-them. Every artifact carries the tag's version without the `v`, so a client, an impd and a NixOS
-flake pinned to one tag agree. The workflows' own comments cover each job; this runbook holds the
-steps they do not do.
+two workflows. A `feat:` or `fix:` commit on `main` makes the `release` job in CI open or update the
+release PR, which bumps every version, the changelog and the lock file. The `release` job calls the
+shared release-please workflow of `zgeoff/tools` at the repo's sync tag. It merges the release PR
+once every check on the PR passes, and a draft release PR or one labelled `autorelease: hold` stays
+open. The run that merges the release PR tags `vX.Y.Z`, and CI then starts the release workflow for
+the tag, which builds the CLI, the guest kernel, the system drive, the host image, the base image,
+the npm packages and the Homebrew formula, smoke-tests each, and publishes and attests them. Every
+artifact carries the tag's version without the `v`, so a client, an impd and a NixOS flake pinned to
+one tag agree. The workflows' own comments cover each job; this runbook holds the steps they do not
+do.
 
 ## Release changes that open no release PR
 
@@ -19,16 +21,17 @@ release PR for that version.
 
 ## A release that fails to tag
 
-The `release-please` job tags the release PR's merge commit. When a pull request that changes
-`.github/workflows/` merges before that job runs, the merge commit is no longer the head of `main`,
-and the release App's token gets `Resource not accessible by integration` when it creates the
-release. The job then fails on every later run, because it retries the same commit. To recover:
+The release App's token has no Workflows permission, so GitHub refuses it a tag on a merge commit
+that a change to `.github/workflows/` has left behind the head of `main`. The `release` job tags in
+the same run that merges, seconds after the merge. When a workflow change lands first, the job fails
+before release-please runs, with an error that names the release PR and the changed files, and it
+fails on every later run until you recover:
 
 1. On the merged release PR, replace the label `autorelease: pending` with `autorelease: tagged`.
    release-please then skips that version.
 2. Merge a commit with the footer `Release-As: <next patch version>`.
 3. Merge no pull request that changes `.github/workflows/` until the new release PR has merged and
-   its `release-please` job has tagged it.
+   its `release` job has tagged it.
 
 ## Breaking changes
 
@@ -80,11 +83,11 @@ title or the body runs the check again.
 These steps are done for `zgeoff/impz`. They are here for a new repository, or to set one up again.
 
 1. **The release App.** Events from `GITHUB_TOKEN` start no workflows, so a release PR opened with
-   it would get no CI run, and the `release-please` job is skipped until an App is configured.
-   Create a GitHub App, or reuse `zgeoff-release`, with no webhook and with Contents and Pull
-   requests read and write. Install it on the repository and on `zgeoff/homebrew-tap`. Add the
-   Actions variable `RELEASE_APP_ID` (the App's client ID) and the Actions secret
-   `RELEASE_APP_PRIVATE_KEY`, and turn on Settings → General → "Allow auto-merge".
+   it would get no CI run, and the `release` job is skipped until an App is configured. Create a
+   GitHub App, or reuse `zgeoff-release`, with no webhook and with Contents and Pull requests read
+   and write. Install it on the repository and on `zgeoff/homebrew-tap`. Add the Actions variable
+   `RELEASE_APP_ID` (the App's client ID) and the Actions secret `RELEASE_APP_PRIVATE_KEY`, and turn
+   on Settings → General → "Allow auto-merge".
 2. **GHCR.** The first push creates the `imp-host` and `imp-base` packages as private. Make each one
    public in its package settings, so a server pulls it without a login, and link `imp-base` to the
    repository.
