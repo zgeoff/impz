@@ -1,6 +1,7 @@
 import type { LogCursor, ServiceStatus, ServicesList } from '@impz/agent-protocol';
 import { ServiceRestartSchema, ServiceStateSchema } from '@impz/api';
 import type { Service, ServiceDef, ServiceList, ServiceLog } from '@impz/api';
+import { match } from 'ts-pattern';
 import type { ImpRecord } from '../../../platform/db/imps';
 import { ImpdError, isImpdError } from '../../../platform/errors/impd-error';
 import {
@@ -13,7 +14,7 @@ import {
 import type { EventBus } from '../../../platform/events/event-bus';
 import type { StartTimer } from '../../../platform/process/clock';
 import { startRealTimer } from '../../../platform/process/start-real-timer';
-import { isAgentError } from '../../../vm/agent-client/is-agent-error';
+import { AgentError } from '../../../vm/agent-client/agent-connection';
 import {
   openServiceLogStream,
   sendServicesAdd,
@@ -291,23 +292,16 @@ function countLinesPerService(request: Readonly<ServiceLogsRequest>, count: numb
 
 function handleAgentError(service: string): (error: unknown) => never {
   return (error) => {
-    if (isAgentError(error, 'NO_SERVICE')) {
-      throw buildNotFoundError('service', service);
+    if (!(error instanceof AgentError)) {
+      throw error;
     }
 
-    if (isAgentError(error, 'SERVICE_EXISTS')) {
-      throw buildConflictError('service', service);
-    }
-
-    if (isAgentError(error, 'BAD_REQUEST')) {
-      throw new ImpdError('BAD_REQUEST', { message: error.detail });
-    }
-
-    if (isAgentError(error, 'AGENT_OUTDATED')) {
-      throw buildAgentOutdatedApiError(error.message);
-    }
-
-    throw error;
+    throw match(error.code)
+      .with('NO_SERVICE', () => buildNotFoundError('service', service))
+      .with('SERVICE_EXISTS', () => buildConflictError('service', service))
+      .with('BAD_REQUEST', () => new ImpdError('BAD_REQUEST', { message: error.detail }))
+      .with('AGENT_OUTDATED', () => buildAgentOutdatedApiError(error.message))
+      .otherwise(() => error);
   };
 }
 

@@ -279,16 +279,12 @@ export async function createBroker(deps: BrokerDeps): Promise<Broker> {
 
       const outcome = await removeCheckedGrant(db, imp.id, secretName, authority);
 
-      if (outcome.kind === 'no-token') {
-        throw buildTokenGoneError();
-      }
-
-      if (outcome.kind === 'not-grantable') {
-        throw buildStaleError(secretName);
-      }
-
-      if (outcome.kind === 'no-grant') {
-        throw buildNotFoundError('grant', `${impName}/${secretName}`);
+      if (outcome.kind !== 'revoked') {
+        throw match(outcome)
+          .with({ kind: 'no-token' }, () => buildTokenGoneError())
+          .with({ kind: 'not-grantable' }, () => buildStaleError(secretName))
+          .with({ kind: 'no-grant' }, () => buildNotFoundError('grant', `${impName}/${secretName}`))
+          .exhaustive();
       }
 
       await applyGrants();
