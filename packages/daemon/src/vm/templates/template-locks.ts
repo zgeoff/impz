@@ -3,7 +3,7 @@ import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { createSingleFlight } from '../../platform/process/single-flight';
 import type { MemoryLock, MemoryLockResult } from './create-memory-lock';
 
-export interface LockTarget {
+interface LockTarget {
   readonly key: string;
   readonly buildId: string;
   readonly memFile: string;
