@@ -1,7 +1,10 @@
 import type { Logger } from '@logtape/logtape';
+import { match } from 'ts-pattern';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import { createSingleFlight } from '../../platform/process/single-flight';
+import { canAdmitLock } from './can-admit-lock';
 import type { MemoryLock, MemoryLockResult } from './create-memory-lock';
+import { pickLockOutcome } from './pick-lock-outcome';
 
 interface LockTarget {
   readonly key: string;
@@ -28,10 +31,6 @@ export interface TemplateLockDeps {
 
 const MIB = 1024 * 1024;
 
-// No sleep frees a locked page, so the locks keep to a share of the RAM budget that leaves the
-// imps room to boot and grow on a small host.
-const MAX_LOCKED_PERCENT = 10;
-
 export function createTemplateLocks(deps: TemplateLockDeps): TemplateLocks {
   const locks = new Map<string, MemoryLock>();
 
@@ -41,7 +40,6 @@ export function createTemplateLocks(deps: TemplateLockDeps): TemplateLocks {
   const sizedBytes = new Map<string, number>();
 
   const state = { isStopping: false };
-  const maxLockedBytes = Math.floor((deps.ramBudgetMib * MAX_LOCKED_PERCENT) / 100) * MIB;
 
   const readHeldBytes = (): number =>
     [...locks.values()].reduce((total, held) => total + held.lockedBytes, 0) +
@@ -52,50 +50,45 @@ export function createTemplateLocks(deps: TemplateLockDeps): TemplateLocks {
 
     try {
       const result = await deps.lockMemory(target.memFile, (lockBytes) => {
-        if (readHeldBytes() + lockBytes > maxLockedBytes) {
-          return false;
+        const isAdmitted = canAdmitLock({
+          heldBytes: readHeldBytes(),
+          lockBytes,
+          ramBudgetMib: deps.ramBudgetMib,
+        });
+
+        if (isAdmitted) {
+          sizedBytes.set(target.buildId, lockBytes);
         }
 
-        sizedBytes.set(target.buildId, lockBytes);
-
-        return true;
+        return isAdmitted;
       });
 
-      if ('errno' in result) {
-        deps.logger.warning(
-          'boot template {key} memory not locked (errno {errno}): a restore reads what the host dropped',
-          { key, errno: String(result.errno) },
-        );
+      // a build removed or replaced while its pages were read in is no longer current
+      match(pickLockOutcome(result, deps.probeCurrent(target)))
+        .with({ kind: 'failed' }, (failed) => {
+          deps.logger.warning(
+            'boot template {key} memory not locked (errno {errno}): a restore reads what the host dropped',
+            { key, errno: String(failed.errno) },
+          );
+        })
+        .with({ kind: 'declined' }, (declined) => {
+          deps.logger.info(
+            'boot template {key} memory not locked: {lockMib} MiB would take the locks past a tenth of the RAM budget',
+            { key, lockMib: String(declined.lockMib) },
+          );
+        })
+        .with({ kind: 'stale' }, (stale) => {
+          stale.lock.release();
+        })
+        .with({ kind: 'held' }, (held) => {
+          locks.set(target.key, held.lock);
 
-        return;
-      }
-
-      if ('declinedBytes' in result) {
-        deps.logger.info(
-          'boot template {key} memory not locked: {lockMib} MiB would pass the {maxMib} MiB that locks may hold',
-          {
+          deps.logger.info('boot template {key} memory locked: {lockMib} MiB', {
             key,
-            lockMib: String(Math.ceil(result.declinedBytes / MIB)),
-            maxMib: String(maxLockedBytes / MIB),
-          },
-        );
-
-        return;
-      }
-
-      // the build was removed or replaced while its pages were read in
-      if (!deps.probeCurrent(target)) {
-        result.lock.release();
-
-        return;
-      }
-
-      locks.set(target.key, result.lock);
-
-      deps.logger.info('boot template {key} memory locked: {lockMib} MiB', {
-        key,
-        lockMib: String(Math.ceil(result.lock.lockedBytes / MIB)),
-      });
+            lockMib: String(held.lockMib),
+          });
+        })
+        .exhaustive();
     } catch (error) {
       deps.logger.warning('boot template {key} memory not locked: {error}', {
         key,

@@ -119,7 +119,7 @@ test('it logs a declined lock and counts none of its memory', async () => {
   await locks.lock({ key: 'k1', buildId: 'b1', memFile: '/data/templates/k1/mem' });
 
   expect(logs.at(-1)).toInclude(
-    'boot template k1 memory not locked: 11 MiB would pass the 10 MiB that locks may hold',
+    'boot template k1 memory not locked: 11 MiB would take the locks past a tenth of the RAM budget',
   );
 
   expect(locks.readLockedMib()).toBe(0);
