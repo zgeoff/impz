@@ -12,8 +12,7 @@ import {
 import { waitForExec } from '@impz/e2e-harness/imps';
 import { runChecked } from '@impz/e2e-harness/instance';
 import { HOST_B, readMoveHosts, readMoveOptions } from '@impz/e2e-harness/move-hosts';
-import { registerRemoval } from '@impz/e2e-harness/register-removal';
-import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { registerMoveRemoval } from '@impz/e2e-harness/register-move-removal';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
 import {
   findServiceUrl,
@@ -58,7 +57,7 @@ test.skipIf(tailnetNamesMissing)(
 
     await runImp('new', named, '--image', resolveImageName('e2e-tiny'), '--memory', '256');
 
-    registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, named));
+    registerMoveRemoval(ctx.stack, config.keep, { source: ctx.client, target: clientB }, named);
 
     await waitForExec(named);
 
@@ -78,8 +77,6 @@ test.skipIf(tailnetNamesMissing)(
 
     await runImp('stop', named);
     await runImpWith({ env: hosts.cliEnv }, 'move', named, HOST_B);
-
-    registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(clientB, named));
 
     const info = await readInfo();
 

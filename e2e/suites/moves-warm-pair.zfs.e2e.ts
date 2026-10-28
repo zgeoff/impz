@@ -10,8 +10,7 @@ import {
 } from '@impz/e2e-harness/imp-cli';
 import { waitForExec } from '@impz/e2e-harness/imps';
 import { HOST_B, readMoveHosts } from '@impz/e2e-harness/move-hosts';
-import { registerRemoval } from '@impz/e2e-harness/register-removal';
-import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { registerMoveRemoval } from '@impz/e2e-harness/register-move-removal';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
 import { waitFor } from '@impz/e2e-harness/wait-for';
 
@@ -36,11 +35,11 @@ test('it moves two sleeping imps from slots of their own on A onto B side by sid
 
   await runImp('new', first, '--image', resolveImageName('e2e-tiny'), '--memory', '256');
 
-  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, first));
+  registerMoveRemoval(ctx.stack, config.keep, { source: ctx.client, target: ctx.clientB }, first);
 
   await runImp('new', second, '--image', resolveImageName('e2e-tiny'), '--memory', '256');
 
-  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, second));
+  registerMoveRemoval(ctx.stack, config.keep, { source: ctx.client, target: ctx.clientB }, second);
 
   await waitForExec(first);
   await waitForExec(second);
@@ -54,13 +53,7 @@ test('it moves two sleeping imps from slots of their own on A onto B side by sid
   await waitFor(`${second} to sleep`, () => assertState(second, 'sleeping'));
 
   const firstOut = await runImpWith({ env: ctx.hosts.cliEnv }, 'move', first, HOST_B);
-
-  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.clientB, first));
-
   const secondOut = await runImpWith({ env: ctx.hosts.cliEnv }, 'move', second, HOST_B);
-
-  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.clientB, second));
-
   const firstMoved = await requireImp(first, ctx.hosts.hostB);
   const secondMoved = await requireImp(second, ctx.hosts.hostB);
 

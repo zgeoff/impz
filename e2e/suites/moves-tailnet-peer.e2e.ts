@@ -5,8 +5,7 @@ import { createInstanceClient, readImp, runImp, runImpWith } from '@impz/e2e-har
 import { waitForExec, writeGuestFile } from '@impz/e2e-harness/imps';
 import { runInContainer } from '@impz/e2e-harness/instance';
 import { HOST_B, readMoveHosts, readMoveOptions } from '@impz/e2e-harness/move-hosts';
-import { registerRemoval } from '@impz/e2e-harness/register-removal';
-import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { registerMoveRemoval } from '@impz/e2e-harness/register-move-removal';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
 import { parseSelfTags, waitForTailnetIp } from '@impz/e2e-harness/tailnet';
 import { waitFor } from '@impz/e2e-harness/wait-for';
@@ -60,16 +59,13 @@ test('it moves an imp between two tailnet nodes, past the peer check on their ta
 
   await runImp('new', plain, '--image', resolveImageName('e2e-tiny'), '--memory', '256');
 
-  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, plain));
+  registerMoveRemoval(ctx.stack, config.keep, { source: ctx.client, target: clientB }, plain);
 
   await waitForExec(plain);
   await writeGuestFile(plain, '/root/moved', 'tailnet-ok');
   await runImp('stop', plain);
 
   const out = await runImpWith({ env: hosts.cliEnv }, 'move', plain, HOST_B);
-
-  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(clientB, plain));
-
   const left = await readImp(plain);
 
   expect(out).toContain(`${plain}: moved to ${HOST_B}`);

@@ -5,8 +5,7 @@ import { createInstanceClient, runImp, runImpWith } from '@impz/e2e-harness/imp-
 import { waitForExec } from '@impz/e2e-harness/imps';
 import { HOST_B, readMoveHosts } from '@impz/e2e-harness/move-hosts';
 import { listLeasesOn, sendHostRpc } from '@impz/e2e-harness/move-steps';
-import { registerRemoval } from '@impz/e2e-harness/register-removal';
-import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { registerMoveRemoval } from '@impz/e2e-harness/register-move-removal';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
 
 async function setupTest() {
@@ -29,7 +28,7 @@ test('it ends the leases a client took on a stop move, and brings the hold over 
 
   await runImp('new', leased, '--image', resolveImageName('e2e-tiny'), '--memory', '256');
 
-  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, leased));
+  registerMoveRemoval(ctx.stack, config.keep, { source: ctx.client, target: ctx.clientB }, leased);
 
   await waitForExec(leased);
 
@@ -54,8 +53,6 @@ test('it ends the leases a client took on a stop move, and brings the hold over 
   const before = Date.now();
 
   const out = await runImpWith({ env: ctx.hosts.cliEnv }, 'move', leased, HOST_B, '--stop');
-
-  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.clientB, leased));
 
   const after = Date.now();
 

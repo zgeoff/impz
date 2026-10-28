@@ -16,6 +16,7 @@ import {
 import { waitForExec } from '@impz/e2e-harness/imps';
 import { HOST_B, readMoveHosts } from '@impz/e2e-harness/move-hosts';
 import { writeBothHostsConfig } from '@impz/e2e-harness/move-steps';
+import { registerMoveRemoval } from '@impz/e2e-harness/register-move-removal';
 import { registerRemoval } from '@impz/e2e-harness/register-removal';
 import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
@@ -52,14 +53,11 @@ test('it creates on the saved host with the most free RAM for impz new --place',
   // apart; without it the tie would go to A, first by name.
   await runImp('new', seed, '--image', resolveImageName('e2e-tiny'), '--memory', '256');
 
-  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, seed));
+  registerMoveRemoval(ctx.stack, config.keep, { source: ctx.client, target: ctx.clientB }, seed);
 
   await waitForExec(seed);
   await runImp('stop', seed);
   await runImpWith({ env: ctx.hosts.cliEnv }, 'move', seed, HOST_B);
-
-  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.clientB, seed));
-
   await runImpWith({ target: ctx.hosts.hostB }, 'rm', seed);
 
   // A's sleeper counts its whole memory as taken, which leaves A less free RAM
@@ -86,8 +84,7 @@ test('it creates on the saved host with the most free RAM for impz new --place',
     { env: bothEnv },
   );
 
-  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.clientB, placed));
-  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, placed));
+  registerMoveRemoval(ctx.stack, config.keep, { source: ctx.client, target: ctx.clientB }, placed);
 
   const onA = await readImp(placed);
   const onB = await requireImp(placed, ctx.hosts.hostB);
