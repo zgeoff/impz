@@ -54,7 +54,11 @@ test('it reports the bytes it will lock before it locks them', async () => {
 
   await truncate(path, 4 * 1024 * 1024);
 
-  const onSized = mock<(lockBytes: number) => void>(() => {});
+  const smapsAtSize: string[] = [];
+
+  const onSized = mock<(lockBytes: number) => void>(() => {
+    smapsAtSize.push(readFileSync('/proc/self/smaps', 'utf8'));
+  });
 
   const result = await createMemoryLock(path, onSized);
 
@@ -62,6 +66,7 @@ test('it reports the bytes it will lock before it locks them', async () => {
   onTestFinished(result.lock.release);
 
   expect(onSized).toHaveBeenCalledExactlyOnceWith(12_288);
+  expect(smapsAtSize).toSatisfyAll((smaps: string) => !smaps.includes(path));
 });
 
 test('it holds the locked pages in a mapping of the file until release', async () => {
