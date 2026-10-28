@@ -5,6 +5,15 @@ const CORE_SYMBOLS = {
   ioctl: { args: [FFIType.i32, FFIType.u64, FFIType.ptr], returns: FFIType.i32 },
   lseek: { args: [FFIType.i32, FFIType.i64, FFIType.i32], returns: FFIType.i64 },
 
+  // addresses go as plain integers: an address that mmap returned never passes a pointer argument's
+  // type without a cast
+  mmap: {
+    args: [FFIType.u64, FFIType.u64, FFIType.i32, FFIType.i32, FFIType.i32, FFIType.i64],
+    returns: FFIType.i64,
+  },
+  munmap: { args: [FFIType.u64, FFIType.u64], returns: FFIType.i32 },
+  mlock: { args: [FFIType.u64, FFIType.u64], returns: FFIType.i32 },
+
   __errno_location: { args: [], returns: FFIType.ptr },
 } as const;
 

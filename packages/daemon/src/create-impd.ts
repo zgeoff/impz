@@ -248,6 +248,8 @@ async function startImpdParts(
         key: key.slice(0, 12),
       });
     }
+
+    void imps.bootTemplates?.lockKept();
   });
 
   // runs before anything can boot or sleep an imp, so the set of drives in use holds still

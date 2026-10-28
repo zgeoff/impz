@@ -9,6 +9,12 @@ suites. This file covers what a journey author needs. The harness code and its u
 [`packages/e2e-harness/src/`](../../../../packages/e2e-harness/src/), and the unit tests run in
 plain `bun test` without KVM.
 
+- [A run, stage by stage](#a-run-stage-by-stage)
+- [What the baseline reset covers](#what-the-baseline-reset-covers)
+- [Writing a journey](#writing-a-journey)
+- [Sets, groups and acceptance](#sets-groups-and-acceptance)
+- [Host safety](#host-safety)
+
 ## A run, stage by stage
 
 1. The harness brings the dev instance up, checks its container's privileges against the deploy

@@ -87,6 +87,9 @@ export interface RamGovernorDeps {
 
   // Writes split pages that KSM merged faster than a tick, so a share of what KSM saves stays free.
   readonly readHeadroomMib?: (pids: readonly number[]) => Promise<number>;
+
+  // Locked host memory outside any VM, such as boot templates' pages: no sleep frees it.
+  readonly readLockedMib?: () => number;
   readonly isBusy: (id: string) => boolean;
   readonly trySleepImp: LockFreeSleep;
   readonly readDiskFullError?: () => Error | null;
@@ -175,8 +178,9 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
 
     const byImp = new Map<string, number>();
 
-    let usedMib = 0;
-    let effectiveMib = 0;
+    const lockedMib = deps.readLockedMib?.() ?? 0;
+    let usedMib = lockedMib;
+    let effectiveMib = lockedMib;
 
     const readings = await Promise.all(awake.map((imp) => readVmMib(imp.pid, imp.apiSocket)));
 

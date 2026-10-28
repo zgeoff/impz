@@ -1566,6 +1566,7 @@ ExecStart=/usr/bin/podman run --rm --name imp-host --hostname imp-host \
   --cap-add CHOWN --cap-add SETUID --cap-add SETGID --cap-add KILL \
   --cap-add SYS_PTRACE --cap-add DAC_OVERRIDE --cap-add FOWNER \
   --cap-add FSETID --cap-add SETFCAP \
+  --ulimit memlock=2147483648:2147483648 \
   --security-opt apparmor=unconfined \
   --security-opt seccomp=/etc/imp/imp-host.seccomp.json \
   --device /dev/kvm --device /dev/net/tun \

@@ -99,5 +99,9 @@ starts with its level and its category, `impd` plus the area that wrote it, and 
 when it concerns one imp. An operation under an imp's lifecycle lock tags every line it writes with
 that imp, awaited work included, because the lock runs it inside a log context. Each call site names
 its area and its level, so impd never reads either from a line's text, and an imp whose name matches
-an area still logs under its own name. A line looks like `INFO impd.imps imp=web asleep in 120ms`,
-and the e2e harness and the bootstrap script match lines in that form.
+an area still logs under its own name. The e2e harness and the bootstrap script match lines in this
+form:
+
+```text
+INFO impd.imps imp=web asleep in 120ms
+```

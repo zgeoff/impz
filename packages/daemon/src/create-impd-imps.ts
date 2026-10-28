@@ -219,6 +219,7 @@ export function createImpdImps(
     readRamMib: readRamMibAsync,
     readResidentMib,
     readHeadroomMib,
+    readLockedMib: () => imps.bootTemplates?.readLockedMib() ?? 0,
     isBusy,
     trySleepImp: imps.trySleepImp,
     readDiskFullError: imps.readDiskFullError,

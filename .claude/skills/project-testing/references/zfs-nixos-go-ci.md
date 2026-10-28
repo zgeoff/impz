@@ -92,5 +92,5 @@ change a test:
   the groups changes both.
 - The ZFS work runs as three `zfs-shard` jobs, and the required `zfs` check passes only when every
   shard passes. Each shard installs ZFS on its runner and runs its suites; one also runs
-  `scripts/test-zfs.sh`. A ZFS failure on a pull request shows there and nowhere else, and a unit
-  test pins the shards against the workflow file.
+  [`scripts/test-zfs.sh`](../../../../scripts/test-zfs.sh). A ZFS failure on a pull request shows
+  there and nowhere else, and a unit test pins the shards against the workflow file.

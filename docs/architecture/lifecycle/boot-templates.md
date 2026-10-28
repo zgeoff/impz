@@ -66,7 +66,21 @@ A small number of templates is kept, and past it the least recently restored one
 The governor counts a restored VM as it counts every VM, without its clean file pages. The pages a
 guest only reads stay clean pages of the template's memory file, which the host's page cache shares
 across every imp restored from it, and a page the guest writes becomes its own anonymous page. So a
-restored imp costs less than a cold-booted one at first, and the governor needs no special case.
+restored imp costs less than a cold-booted one at first.
+
+A restore reads its guest's memory from the host's page cache, one page fault at a time, so a
+restore after the host reclaimed those pages waits on storage for each one and takes seconds. impd
+therefore locks each kept template's data pages in the page cache: once a build finishes, and for
+every kept template at start. The build digs holes where the guest's memory was zero, and the lock
+skips the holes, so it holds only the pages that a boot left non-zero.
+
+The governor counts locked template pages as used RAM from the moment the lock starts to read them
+in, because no sleep frees them. The locks keep to a tenth of the RAM budget, so on a small host
+they leave the imps room to boot and grow, and a template whose lock would pass that share stays
+unlocked. impd releases a template's lock when it removes the template, and a lock that finishes
+after a rebuild of its template releases itself. A lock that fails, such as over the container's
+locked-memory limit, leaves the template unlocked and logged, and its restores still work at the
+speed of whatever the host still caches.
 
 ## Accepted risks
 

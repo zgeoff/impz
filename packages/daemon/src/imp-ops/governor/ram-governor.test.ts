@@ -608,6 +608,37 @@ test('it reports the KSM headroom in the usage', async () => {
   expect(usage).toStrictEqual({ usedMib: 600, reservedMib: 0, headroomMib: 300 });
 });
 
+test('it reports locked host memory as used', async () => {
+  const host = createStubGovernedHost({
+    budgetMib: 1000,
+    ids: ['a'],
+    awake: [{ id: 'a', rssMib: 300 }],
+  });
+
+  const governor = createRamGovernor({ ...host.deps, readLockedMib: () => 90 });
+
+  const usage = await governor.readUsage();
+
+  expect(usage).toStrictEqual({ usedMib: 390, reservedMib: 0, headroomMib: 0 });
+});
+
+test('it counts locked host memory against the budget, so an admission makes room for it', async () => {
+  const host = createStubGovernedHost({
+    budgetMib: 1000,
+    ids: ['a', 'b', 'c'],
+    awake: [
+      { id: 'a', rssMib: 300 },
+      { id: 'b', rssMib: 300 },
+    ],
+  });
+
+  const governor = createRamGovernor({ ...host.deps, readLockedMib: () => 300 });
+
+  await governor.admit({ id: 'c', name: 'c', reserveMib: 200, memoryMib: 512 });
+
+  expect(host.sleepCalls.map((call) => call.id)).toStrictEqual(['a']);
+});
+
 test('it counts the KSM headroom against the budget, so a merged page that splits still fits', async () => {
   const host = createStubGovernedHost({
     budgetMib: 1000,
