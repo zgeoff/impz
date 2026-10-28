@@ -327,15 +327,15 @@ test('#formatIdentity names the imp patterns and the secrets the caller may gran
 test('#formatIdentity names the image ref prefix the caller may add images from', () => {
   const identity = buildMockIdentity({
     kind: 'token',
-    name: 'nixie',
+    name: 'tansy',
     scope: 'manage',
-    imps: ['nixie-*'],
+    imps: ['tansy-*'],
     grantable: [],
-    imageRefPrefix: 'ghcr.io/zgeoff/nixie-',
+    imageRefPrefix: 'ghcr.io/zgeoff/tansy-',
   });
 
   expect(formatIdentity(identity)).toBe(
-    'token nixie: manage on nixie-*; may add images from ghcr.io/zgeoff/nixie-',
+    'token tansy: manage on tansy-*; may add images from ghcr.io/zgeoff/tansy-',
   );
 });
 

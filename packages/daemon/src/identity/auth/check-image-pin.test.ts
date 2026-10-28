@@ -26,24 +26,24 @@ async function setupTest() {
 }
 
 test('it lets through a held image whose name and ref the caller covers', () => {
-  const caller = buildMockCaller({ imps: ['nixie-*'], imageRefPrefix: 'ghcr.io/zgeoff/nixie-' });
+  const caller = buildMockCaller({ imps: ['tansy-*'], imageRefPrefix: 'ghcr.io/zgeoff/tansy-' });
 
   expect(
-    checkImagePin(caller, ['nixie-*'], 'nixie-x', { ref: 'ghcr.io/zgeoff/nixie-x:1' }),
+    checkImagePin(caller, ['tansy-*'], 'tansy-x', { ref: 'ghcr.io/zgeoff/tansy-x:1' }),
   ).toBeNull();
 });
 
 test('it leaves a name within the patterns that impd does not hold to the handler', () => {
-  const caller = buildMockCaller({ imps: ['nixie-*'], imageRefPrefix: 'ghcr.io/zgeoff/nixie-' });
+  const caller = buildMockCaller({ imps: ['tansy-*'], imageRefPrefix: 'ghcr.io/zgeoff/tansy-' });
 
-  expect(checkImagePin(caller, ['nixie-*'], 'nixie-x', undefined)).toBeNull();
+  expect(checkImagePin(caller, ['tansy-*'], 'tansy-x', undefined)).toBeNull();
 });
 
 test('it refuses a caller with no image ref prefix, as host-wide', () => {
-  const caller = buildMockCaller({ imps: ['nixie-*'], imageRefPrefix: null });
+  const caller = buildMockCaller({ imps: ['tansy-*'], imageRefPrefix: null });
 
   expect(
-    checkImagePin(caller, ['nixie-*'], 'nixie-x', { ref: 'ghcr.io/zgeoff/nixie-x:1' }),
+    checkImagePin(caller, ['tansy-*'], 'tansy-x', { ref: 'ghcr.io/zgeoff/tansy-x:1' }),
   ).toStrictEqual({
     message: `token ${caller.name} is limited to some imps; this call is host-wide`,
     reason: null,
@@ -51,19 +51,19 @@ test('it refuses a caller with no image ref prefix, as host-wide', () => {
 });
 
 test('it refuses a call that names no image', () => {
-  const caller = buildMockCaller({ imps: ['nixie-*'], imageRefPrefix: 'ghcr.io/zgeoff/nixie-' });
+  const caller = buildMockCaller({ imps: ['tansy-*'], imageRefPrefix: 'ghcr.io/zgeoff/tansy-' });
 
-  expect(checkImagePin(caller, ['nixie-*'], null, undefined)).toStrictEqual({
+  expect(checkImagePin(caller, ['tansy-*'], null, undefined)).toStrictEqual({
     message: `token ${caller.name} is limited to some imps, so the call must name the image (name)`,
     reason: 'imp_out_of_scope',
   });
 });
 
 test('it refuses a name outside the patterns, whatever the held ref', () => {
-  const caller = buildMockCaller({ imps: ['nixie-*'], imageRefPrefix: 'ghcr.io/zgeoff/nixie-' });
+  const caller = buildMockCaller({ imps: ['tansy-*'], imageRefPrefix: 'ghcr.io/zgeoff/tansy-' });
 
   expect(
-    checkImagePin(caller, ['nixie-*'], 'base', { ref: 'ghcr.io/zgeoff/nixie-x:1' }),
+    checkImagePin(caller, ['tansy-*'], 'base', { ref: 'ghcr.io/zgeoff/tansy-x:1' }),
   ).toStrictEqual({
     message: `token ${caller.name} may not pin or unpin image base`,
     reason: 'imp_out_of_scope',
@@ -71,58 +71,58 @@ test('it refuses a name outside the patterns, whatever the held ref', () => {
 });
 
 test('it refuses a held image whose ref does not start with the prefix', () => {
-  const caller = buildMockCaller({ imps: ['nixie-*'], imageRefPrefix: 'ghcr.io/zgeoff/nixie-' });
+  const caller = buildMockCaller({ imps: ['tansy-*'], imageRefPrefix: 'ghcr.io/zgeoff/tansy-' });
 
   expect(
-    checkImagePin(caller, ['nixie-*'], 'nixie-x', { ref: 'docker.io/zgeoff/nixie-x:1' }),
+    checkImagePin(caller, ['tansy-*'], 'tansy-x', { ref: 'docker.io/zgeoff/tansy-x:1' }),
   ).toStrictEqual({
-    message: `token ${caller.name} may pin or unpin only images whose ref starts with ghcr.io/zgeoff/nixie-`,
+    message: `token ${caller.name} may pin or unpin only images whose ref starts with ghcr.io/zgeoff/tansy-`,
     reason: null,
   });
 });
 
-test('it lets a nixie-* token pin nixie-x, whose ref starts with its prefix', async () => {
+test('it lets a tansy-* token pin tansy-x, whose ref starts with its prefix', async () => {
   const ctx = await setupTest();
 
-  const ref = `ghcr.io/zgeoff/nixie-x@sha256:${'e'.repeat(64)}`;
+  const ref = `ghcr.io/zgeoff/tansy-x@sha256:${'e'.repeat(64)}`;
 
-  await createImage(ctx.db, buildMockNewImage({ name: 'nixie-x', ref }));
+  await createImage(ctx.db, buildMockNewImage({ name: 'tansy-x', ref }));
 
   const made = await ctx.client.tokens.create({
-    name: 'nixie',
+    name: 'tansy',
     scope: 'manage',
-    imps: ['nixie-*'],
-    imageRefPrefix: 'ghcr.io/zgeoff/nixie-',
+    imps: ['tansy-*'],
+    imageRefPrefix: 'ghcr.io/zgeoff/tansy-',
   });
 
-  const pinned = await ctx.buildClient(made.secret).images.pin({ name: 'nixie-x' });
+  const pinned = await ctx.buildClient(made.secret).images.pin({ name: 'tansy-x' });
 
-  expect(pinned).toMatchObject({ name: 'nixie-x', ref, pinned: true });
+  expect(pinned).toMatchObject({ name: 'tansy-x', ref, pinned: true });
 });
 
-test('it lets a nixie-* token unpin nixie-x, whose ref starts with its prefix', async () => {
+test('it lets a tansy-* token unpin tansy-x, whose ref starts with its prefix', async () => {
   const ctx = await setupTest();
 
-  const ref = `ghcr.io/zgeoff/nixie-x@sha256:${'e'.repeat(64)}`;
+  const ref = `ghcr.io/zgeoff/tansy-x@sha256:${'e'.repeat(64)}`;
 
-  await createImage(ctx.db, buildMockNewImage({ name: 'nixie-x', ref }));
+  await createImage(ctx.db, buildMockNewImage({ name: 'tansy-x', ref }));
 
-  await ctx.client.images.pin({ name: 'nixie-x' });
+  await ctx.client.images.pin({ name: 'tansy-x' });
 
   const made = await ctx.client.tokens.create({
-    name: 'nixie',
+    name: 'tansy',
     scope: 'manage',
-    imps: ['nixie-*'],
-    imageRefPrefix: 'ghcr.io/zgeoff/nixie-',
+    imps: ['tansy-*'],
+    imageRefPrefix: 'ghcr.io/zgeoff/tansy-',
   });
 
-  const unpinned = await ctx.buildClient(made.secret).images.unpin({ name: 'nixie-x' });
+  const unpinned = await ctx.buildClient(made.secret).images.unpin({ name: 'tansy-x' });
 
-  expect(unpinned).toMatchObject({ name: 'nixie-x', ref, pinned: false });
+  expect(unpinned).toMatchObject({ name: 'tansy-x', ref, pinned: false });
 });
 
 test.each([['pin'], ['unpin']] as const)(
-  'it refuses a nixie-* token the %s of an image outside its patterns',
+  'it refuses a tansy-* token the %s of an image outside its patterns',
   async (procedure) => {
     const ctx = await setupTest();
 
@@ -130,68 +130,68 @@ test.each([['pin'], ['unpin']] as const)(
       ctx.db,
       buildMockNewImage({
         name: 'other-x',
-        ref: `ghcr.io/zgeoff/nixie-x@sha256:${'e'.repeat(64)}`,
+        ref: `ghcr.io/zgeoff/tansy-x@sha256:${'e'.repeat(64)}`,
       }),
     );
 
     const made = await ctx.client.tokens.create({
-      name: 'nixie',
+      name: 'tansy',
       scope: 'manage',
-      imps: ['nixie-*'],
-      imageRefPrefix: 'ghcr.io/zgeoff/nixie-',
+      imps: ['tansy-*'],
+      imageRefPrefix: 'ghcr.io/zgeoff/tansy-',
     });
 
     expect(
       ctx.buildClient(made.secret).images[procedure]({ name: 'other-x' }),
     ).rejects.toMatchObject({
       code: 'FORBIDDEN',
-      message: 'token nixie may not pin or unpin image other-x',
+      message: 'token tansy may not pin or unpin image other-x',
       data: { reason: 'imp_out_of_scope' },
     });
   },
 );
 
-test('it refuses a nixie-* token the pin of a name outside its patterns that impd does not hold', async () => {
+test('it refuses a tansy-* token the pin of a name outside its patterns that impd does not hold', async () => {
   const ctx = await setupTest();
 
   const made = await ctx.client.tokens.create({
-    name: 'nixie',
+    name: 'tansy',
     scope: 'manage',
-    imps: ['nixie-*'],
-    imageRefPrefix: 'ghcr.io/zgeoff/nixie-',
+    imps: ['tansy-*'],
+    imageRefPrefix: 'ghcr.io/zgeoff/tansy-',
   });
 
   expect(ctx.buildClient(made.secret).images.pin({ name: 'missing' })).rejects.toMatchObject({
     code: 'FORBIDDEN',
-    message: 'token nixie may not pin or unpin image missing',
+    message: 'token tansy may not pin or unpin image missing',
   });
 });
 
 test.each([
-  ['pin', 'another registry', `docker.io/zgeoff/nixie-x@sha256:${'e'.repeat(64)}`],
-  ['unpin', 'another registry', `docker.io/zgeoff/nixie-x@sha256:${'e'.repeat(64)}`],
+  ['pin', 'another registry', `docker.io/zgeoff/tansy-x@sha256:${'e'.repeat(64)}`],
+  ['unpin', 'another registry', `docker.io/zgeoff/tansy-x@sha256:${'e'.repeat(64)}`],
   ['pin', 'another repository', `ghcr.io/zgeoff/other@sha256:${'e'.repeat(64)}`],
-  ['pin', 'a template', 'imp:nixie-a'],
+  ['pin', 'a template', 'imp:tansy-a'],
 ] as const)(
-  'it refuses a nixie-* token the %s of nixie-x from %s',
+  'it refuses a tansy-* token the %s of tansy-x from %s',
   async (procedure, _label, ref) => {
     const ctx = await setupTest();
 
-    await createImage(ctx.db, buildMockNewImage({ name: 'nixie-x', ref }));
+    await createImage(ctx.db, buildMockNewImage({ name: 'tansy-x', ref }));
 
     const made = await ctx.client.tokens.create({
-      name: 'nixie',
+      name: 'tansy',
       scope: 'manage',
-      imps: ['nixie-*'],
-      imageRefPrefix: 'ghcr.io/zgeoff/nixie-',
+      imps: ['tansy-*'],
+      imageRefPrefix: 'ghcr.io/zgeoff/tansy-',
     });
 
     expect(
-      ctx.buildClient(made.secret).images[procedure]({ name: 'nixie-x' }),
+      ctx.buildClient(made.secret).images[procedure]({ name: 'tansy-x' }),
     ).rejects.toMatchObject({
       code: 'FORBIDDEN',
       message:
-        'token nixie may pin or unpin only images whose ref starts with ghcr.io/zgeoff/nixie-',
+        'token tansy may pin or unpin only images whose ref starts with ghcr.io/zgeoff/tansy-',
     });
   },
 );
@@ -200,37 +200,37 @@ test.each([
   ['pin', false],
   ['unpin', true],
 ] as const)(
-  'it refuses a nixie-* token the %s of nixie-x whose ref moves outside its prefix after the check',
+  'it refuses a tansy-* token the %s of tansy-x whose ref moves outside its prefix after the check',
   async (procedure, isPinned) => {
     const ctx = await setupTest();
 
     const image = await createImage(
       ctx.db,
       buildMockNewImage({
-        name: 'nixie-x',
-        ref: `ghcr.io/zgeoff/nixie-x@sha256:${'e'.repeat(64)}`,
+        name: 'tansy-x',
+        ref: `ghcr.io/zgeoff/tansy-x@sha256:${'e'.repeat(64)}`,
       }),
     );
 
-    await updateImagePin(ctx.db, 'nixie-x', isPinned);
+    await updateImagePin(ctx.db, 'tansy-x', isPinned);
 
     const made = await ctx.client.tokens.create({
-      name: 'nixie',
+      name: 'tansy',
       scope: 'manage',
-      imps: ['nixie-*'],
-      imageRefPrefix: 'ghcr.io/zgeoff/nixie-',
+      imps: ['tansy-*'],
+      imageRefPrefix: 'ghcr.io/zgeoff/tansy-',
     });
 
-    ctx.gate.arm('nixie-x');
+    ctx.gate.arm('tansy-x');
 
     const call = Promise.allSettled([
-      ctx.buildClient(made.secret).images[procedure]({ name: 'nixie-x' }),
+      ctx.buildClient(made.secret).images[procedure]({ name: 'tansy-x' }),
     ]);
 
     await ctx.gate.reached;
 
     await updateImage(ctx.db, image.id, {
-      ref: `docker.io/zgeoff/nixie-x@sha256:${'f'.repeat(64)}`,
+      ref: `docker.io/zgeoff/tansy-x@sha256:${'f'.repeat(64)}`,
       digest: `sha256:${'f'.repeat(64)}`,
       sizeBytes: 1,
     });
@@ -238,13 +238,13 @@ test.each([
     ctx.gate.release();
 
     const [settled] = await call;
-    const stored = await readImageByName(ctx.db, 'nixie-x');
+    const stored = await readImageByName(ctx.db, 'tansy-x');
 
     expect(settled).toMatchObject({
       status: 'rejected',
       reason: {
         code: 'FORBIDDEN',
-        message: 'image nixie-x has a ref that does not start with ghcr.io/zgeoff/nixie-',
+        message: 'image tansy-x has a ref that does not start with ghcr.io/zgeoff/tansy-',
       },
     });
 
@@ -252,27 +252,27 @@ test.each([
   },
 );
 
-test('it leaves an image unpinned after it refuses a nixie-* token its pin', async () => {
+test('it leaves an image unpinned after it refuses a tansy-* token its pin', async () => {
   const ctx = await setupTest();
 
   await createImage(
     ctx.db,
     buildMockNewImage({
-      name: 'nixie-x',
-      ref: `docker.io/zgeoff/nixie-x@sha256:${'e'.repeat(64)}`,
+      name: 'tansy-x',
+      ref: `docker.io/zgeoff/tansy-x@sha256:${'e'.repeat(64)}`,
     }),
   );
 
   const made = await ctx.client.tokens.create({
-    name: 'nixie',
+    name: 'tansy',
     scope: 'manage',
-    imps: ['nixie-*'],
-    imageRefPrefix: 'ghcr.io/zgeoff/nixie-',
+    imps: ['tansy-*'],
+    imageRefPrefix: 'ghcr.io/zgeoff/tansy-',
   });
 
   const refusal = await ctx
     .buildClient(made.secret)
-    .images.pin({ name: 'nixie-x' })
+    .images.pin({ name: 'tansy-x' })
     .then(
       () => null,
       (error: unknown) => error,
@@ -281,60 +281,60 @@ test('it leaves an image unpinned after it refuses a nixie-* token its pin', asy
   const images = await ctx.client.images.list();
 
   expect(refusal).toMatchObject({ code: 'FORBIDDEN' });
-  expect(images).toPartiallyContain({ name: 'nixie-x', pinned: false });
+  expect(images).toPartiallyContain({ name: 'tansy-x', pinned: false });
 });
 
-test('it refuses a nixie-* token without an image ref prefix the pin of nixie-x', async () => {
+test('it refuses a tansy-* token without an image ref prefix the pin of tansy-x', async () => {
   const ctx = await setupTest();
 
   await createImage(
     ctx.db,
-    buildMockNewImage({ name: 'nixie-x', ref: `ghcr.io/zgeoff/nixie-x@sha256:${'e'.repeat(64)}` }),
+    buildMockNewImage({ name: 'tansy-x', ref: `ghcr.io/zgeoff/tansy-x@sha256:${'e'.repeat(64)}` }),
   );
 
   const made = await ctx.client.tokens.create({
-    name: 'nixie',
+    name: 'tansy',
     scope: 'manage',
-    imps: ['nixie-*'],
+    imps: ['tansy-*'],
   });
 
-  expect(ctx.buildClient(made.secret).images.pin({ name: 'nixie-x' })).rejects.toMatchObject({
+  expect(ctx.buildClient(made.secret).images.pin({ name: 'tansy-x' })).rejects.toMatchObject({
     code: 'FORBIDDEN',
-    message: 'token nixie is limited to some imps; this call is host-wide',
+    message: 'token tansy is limited to some imps; this call is host-wide',
   });
 });
 
-test('it refuses a read token with imp patterns the pin of nixie-x, for its scope', async () => {
+test('it refuses a read token with imp patterns the pin of tansy-x, for its scope', async () => {
   const ctx = await setupTest();
 
   await createImage(
     ctx.db,
-    buildMockNewImage({ name: 'nixie-x', ref: `ghcr.io/zgeoff/nixie-x@sha256:${'e'.repeat(64)}` }),
+    buildMockNewImage({ name: 'tansy-x', ref: `ghcr.io/zgeoff/tansy-x@sha256:${'e'.repeat(64)}` }),
   );
 
   const made = await ctx.client.tokens.create({
-    name: 'nixie',
+    name: 'tansy',
     scope: 'read',
-    imps: ['nixie-*'],
+    imps: ['tansy-*'],
   });
 
-  expect(ctx.buildClient(made.secret).images.pin({ name: 'nixie-x' })).rejects.toMatchObject({
+  expect(ctx.buildClient(made.secret).images.pin({ name: 'tansy-x' })).rejects.toMatchObject({
     code: 'FORBIDDEN',
     data: { reason: 'scope' },
   });
 });
 
-test('it tells a nixie-* token that impd holds no nixie-y to pin', async () => {
+test('it tells a tansy-* token that impd holds no tansy-y to pin', async () => {
   const ctx = await setupTest();
 
   const made = await ctx.client.tokens.create({
-    name: 'nixie',
+    name: 'tansy',
     scope: 'manage',
-    imps: ['nixie-*'],
-    imageRefPrefix: 'ghcr.io/zgeoff/nixie-',
+    imps: ['tansy-*'],
+    imageRefPrefix: 'ghcr.io/zgeoff/tansy-',
   });
 
-  expect(ctx.buildClient(made.secret).images.pin({ name: 'nixie-y' })).rejects.toMatchObject({
+  expect(ctx.buildClient(made.secret).images.pin({ name: 'tansy-y' })).rejects.toMatchObject({
     code: 'NOT_FOUND',
   });
 });

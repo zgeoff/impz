@@ -839,15 +839,15 @@ test('#authenticate gives a made token’s image ref prefix, after a restart', a
   const before = await ctx.load('root-secret');
 
   const made = await before.create({
-    name: 'nixie',
+    name: 'tansy',
     scope: 'manage',
-    imps: ['nixie-*'],
-    imageRefPrefix: 'ghcr.io/zgeoff/nixie-',
+    imps: ['tansy-*'],
+    imageRefPrefix: 'ghcr.io/zgeoff/tansy-',
   });
 
   const restarted = await ctx.load('root-secret');
 
-  expect(restarted.authenticate(made.secret)?.imageRefPrefix).toBe('ghcr.io/zgeoff/nixie-');
+  expect(restarted.authenticate(made.secret)?.imageRefPrefix).toBe('ghcr.io/zgeoff/tansy-');
 });
 
 test('#update takes a token’s image ref prefix away and keeps its grantable list', async () => {
@@ -859,14 +859,14 @@ test('#update takes a token’s image ref prefix away and keeps its grantable li
   const gh = await readSecret(ctx.db, 'gh');
 
   const made = await tokens.create({
-    name: 'nixie',
+    name: 'tansy',
     scope: 'manage',
-    imps: ['nixie-*'],
+    imps: ['tansy-*'],
     grantable: ['gh'],
-    imageRefPrefix: 'ghcr.io/zgeoff/nixie-',
+    imageRefPrefix: 'ghcr.io/zgeoff/tansy-',
   });
 
-  await tokens.update('nixie', { imageRefPrefix: null });
+  await tokens.update('tansy', { imageRefPrefix: null });
 
   const restarted = await ctx.load('root-secret');
 
@@ -882,10 +882,10 @@ test('#update refuses an image ref prefix for a token below manage', async () =>
   const ctx = await setupTest();
   const tokens = await ctx.load('root-secret');
 
-  await tokens.create({ name: 'viewer', scope: 'exec', imps: ['nixie-*'] });
+  await tokens.create({ name: 'viewer', scope: 'exec', imps: ['tansy-*'] });
 
   expect(
-    tokens.update('viewer', { imageRefPrefix: 'ghcr.io/zgeoff/nixie-' }),
+    tokens.update('viewer', { imageRefPrefix: 'ghcr.io/zgeoff/tansy-' }),
   ).rejects.toMatchObject({
     code: 'BAD_REQUEST',
     message: 'a token that may add images needs scope manage and imp patterns',

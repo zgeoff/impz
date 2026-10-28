@@ -172,8 +172,8 @@ test('#checkAccess refuses a caller with patterns an imp outside them', async ()
 test('#checkAccess lets a caller with an image ref prefix add a pinned ref under it', async () => {
   const refusal = await checkAccess(
     findAccess('images.add'),
-    buildMockCaller({ imps: ['nixie-*'], imageRefPrefix: 'ghcr.io/zgeoff/nixie-' }),
-    { ref: `ghcr.io/zgeoff/nixie-x@sha256:${'e'.repeat(64)}`, name: 'nixie-x' },
+    buildMockCaller({ imps: ['tansy-*'], imageRefPrefix: 'ghcr.io/zgeoff/tansy-' }),
+    { ref: `ghcr.io/zgeoff/tansy-x@sha256:${'e'.repeat(64)}`, name: 'tansy-x' },
     {
       readSecretGeneration: () => Promise.resolve(null),
       readImage: () => Promise.resolve(undefined),
@@ -198,12 +198,12 @@ test('#checkAccess lets a host-wide caller add a tag-only ref from any registry'
 });
 
 test('#checkAccess refuses a ref with a digest of another kind than sha256', async () => {
-  const caller = buildMockCaller({ imps: ['nixie-*'], imageRefPrefix: 'ghcr.io/zgeoff/nixie-' });
+  const caller = buildMockCaller({ imps: ['tansy-*'], imageRefPrefix: 'ghcr.io/zgeoff/tansy-' });
 
   const refusal = await checkAccess(
     findAccess('images.addStream'),
     caller,
-    { ref: `ghcr.io/zgeoff/nixie-x@sha512:${'e'.repeat(128)}`, name: 'nixie-x' },
+    { ref: `ghcr.io/zgeoff/tansy-x@sha512:${'e'.repeat(128)}`, name: 'tansy-x' },
     {
       readSecretGeneration: () => Promise.resolve(null),
       readImage: () => Promise.resolve(undefined),
@@ -211,18 +211,18 @@ test('#checkAccess refuses a ref with a digest of another kind than sha256', asy
   );
 
   expect(refusal).toStrictEqual({
-    message: `token ${caller.name} may add only an image ref pinned by digest, such as ghcr.io/zgeoff/nixie-app@sha256:…`,
+    message: `token ${caller.name} may add only an image ref pinned by digest, such as ghcr.io/zgeoff/tansy-app@sha256:…`,
     reason: null,
   });
 });
 
 test('#checkAccess refuses a ref under the prefix that is no image ref', async () => {
-  const caller = buildMockCaller({ imps: ['nixie-*'], imageRefPrefix: 'ghcr.io/zgeoff/nixie-' });
+  const caller = buildMockCaller({ imps: ['tansy-*'], imageRefPrefix: 'ghcr.io/zgeoff/tansy-' });
 
   const refusal = await checkAccess(
     findAccess('images.add'),
     caller,
-    { ref: `ghcr.io/zgeoff/nixie-@@sha256:${'e'.repeat(64)}`, name: 'nixie-x' },
+    { ref: `ghcr.io/zgeoff/tansy-@@sha256:${'e'.repeat(64)}`, name: 'tansy-x' },
     {
       readSecretGeneration: () => Promise.resolve(null),
       readImage: () => Promise.resolve(undefined),
@@ -236,12 +236,12 @@ test('#checkAccess refuses a ref under the prefix that is no image ref', async (
 });
 
 test('#checkAccess refuses a caller with an image ref prefix a build', async () => {
-  const caller = buildMockCaller({ imps: ['nixie-*'], imageRefPrefix: 'ghcr.io/zgeoff/nixie-' });
+  const caller = buildMockCaller({ imps: ['tansy-*'], imageRefPrefix: 'ghcr.io/zgeoff/tansy-' });
 
   const refusal = await checkAccess(
     findAccess('images.build'),
     caller,
-    { contextDir: '/srv/nixie', name: 'nixie-x' },
+    { contextDir: '/srv/tansy', name: 'tansy-x' },
     {
       readSecretGeneration: () => Promise.resolve(null),
       readImage: () => Promise.resolve(undefined),
@@ -296,28 +296,28 @@ test.each([['images.pin'], ['images.unpin']] as const)(
 test.each([['images.pin'], ['images.unpin']] as const)(
   '#checkAccess checks %s against the ref of the image impd holds, never a ref in the input',
   async (path) => {
-    const caller = buildMockCaller({ imps: ['nixie-*'], imageRefPrefix: 'ghcr.io/zgeoff/nixie-' });
-    const readImage = mock(() => Promise.resolve({ ref: 'docker.io/zgeoff/nixie-x:1' }));
+    const caller = buildMockCaller({ imps: ['tansy-*'], imageRefPrefix: 'ghcr.io/zgeoff/tansy-' });
+    const readImage = mock(() => Promise.resolve({ ref: 'docker.io/zgeoff/tansy-x:1' }));
 
     const refusal = await checkAccess(
       findAccess(path),
       caller,
-      { name: 'nixie-x', ref: `ghcr.io/zgeoff/nixie-x@sha256:${'e'.repeat(64)}` },
+      { name: 'tansy-x', ref: `ghcr.io/zgeoff/tansy-x@sha256:${'e'.repeat(64)}` },
       { readSecretGeneration: () => Promise.resolve(null), readImage },
     );
 
-    expect(readImage).toHaveBeenCalledExactlyOnceWith('nixie-x');
+    expect(readImage).toHaveBeenCalledExactlyOnceWith('tansy-x');
 
     expect(refusal).toStrictEqual({
-      message: `token ${caller.name} may pin or unpin only images whose ref starts with ghcr.io/zgeoff/nixie-`,
+      message: `token ${caller.name} may pin or unpin only images whose ref starts with ghcr.io/zgeoff/tansy-`,
       reason: null,
     });
   },
 );
 
 test('#checkAccess refuses a pin outside the caller’s patterns without reading the image', async () => {
-  const caller = buildMockCaller({ imps: ['nixie-*'], imageRefPrefix: 'ghcr.io/zgeoff/nixie-' });
-  const readImage = mock(() => Promise.resolve({ ref: 'ghcr.io/zgeoff/nixie-x:1' }));
+  const caller = buildMockCaller({ imps: ['tansy-*'], imageRefPrefix: 'ghcr.io/zgeoff/tansy-' });
+  const readImage = mock(() => Promise.resolve({ ref: 'ghcr.io/zgeoff/tansy-x:1' }));
 
   const refusal = await checkAccess(
     findAccess('images.pin'),
@@ -335,7 +335,7 @@ test('#checkAccess refuses a pin outside the caller’s patterns without reading
 });
 
 test('#checkAccess makes a caller with patterns name the image it pins', async () => {
-  const caller = buildMockCaller({ imps: ['nixie-*'], imageRefPrefix: 'ghcr.io/zgeoff/nixie-' });
+  const caller = buildMockCaller({ imps: ['tansy-*'], imageRefPrefix: 'ghcr.io/zgeoff/tansy-' });
 
   const refusal = await checkAccess(
     findAccess('images.pin'),
