@@ -1,5 +1,6 @@
 import { rmSync } from 'node:fs';
 import type { Checkpoint, Imp } from '@impz/api';
+import { customAlphabet, customRandom } from 'nanoid';
 import { createConsistentDisk } from '../../imps/imps/consistent-disk';
 import type { DiskFreezer } from '../../imps/imps/consistent-disk';
 import { toLockedImp } from '../../imps/imps/imp-lock';
@@ -64,15 +65,21 @@ export interface CheckpointServiceDeps {
   readonly storage: StorageBackend;
   readonly freezer?: DiskFreezer;
   readonly diskBudget: Pick<DiskBudget, 'requireRoom'>;
-  readonly random?: () => number;
+  readonly random?: RandomBytes;
 }
 
-export function buildCheckpointId(random: () => number = Math.random): string {
-  const picks = Array.from({ length: 6 }, () =>
-    Math.floor(random() * CHECKPOINT_ID_ALPHABET.length),
-  );
+export type RandomBytes = (size: number) => Uint8Array;
 
-  return CHECKPOINT_ID_PREFIX + picks.map((pick) => CHECKPOINT_ID_ALPHABET[pick]).join('');
+const CHECKPOINT_ID_LENGTH = 6;
+const buildRandomSuffix = customAlphabet(CHECKPOINT_ID_ALPHABET, CHECKPOINT_ID_LENGTH);
+
+export function buildCheckpointId(random?: RandomBytes): string {
+  const suffix =
+    random === undefined
+      ? buildRandomSuffix()
+      : customRandom(CHECKPOINT_ID_ALPHABET, CHECKPOINT_ID_LENGTH, random)();
+
+  return CHECKPOINT_ID_PREFIX + suffix;
 }
 
 /* @internal */

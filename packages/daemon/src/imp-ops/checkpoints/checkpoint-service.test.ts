@@ -1,9 +1,10 @@
-import { expect, onTestFinished, test } from 'bun:test';
+import { expect, mock, onTestFinished, test } from 'bun:test';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { copyFile, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { Imp } from '@impz/api';
+import { buildStubAnswerQueue } from '@impz/test-utils/build-stub-answer-queue';
 import invariant from 'tiny-invariant';
 import { buildMockNewCheckpoint } from '../../../testing/imp-ops/build-mock-new-checkpoint';
 import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
@@ -94,10 +95,16 @@ test('it makes an id of cp- and six letters that read unambiguously', () => {
   expect(buildCheckpointId()).toMatch(/^cp-[a-km-z2-9]{6}$/u);
 });
 
-test('it picks each letter of an id from its own draw of the random source', () => {
-  const draws = [0, 10 / 32, 11 / 32, 23 / 32, 24 / 32, 31 / 32];
+test('it picks each letter of an id from its own byte of the injected random source', () => {
+  expect(buildCheckpointId(() => Uint8Array.from([31, 24, 23, 11, 10, 0]))).toBe('cp-akmz29');
+});
 
-  expect(buildCheckpointId(() => draws.shift() ?? Number.NaN)).toBe('cp-akmz29');
+test('it draws the six bytes of an id in one call to the injected random source', () => {
+  const random = mock((size: number) => new Uint8Array(size));
+
+  buildCheckpointId(random);
+
+  expect(random).toHaveBeenCalledExactlyOnceWith(6);
 });
 
 test.each([
@@ -744,26 +751,11 @@ test('it draws a new id when the pool holds a snapshot by the drawn one', async 
 
   await ctx.impd.imps.createImp({ id: impId, name: 'dev', image: 'base' });
 
-  const draws = [
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    1 / 32,
-    1 / 32,
-    1 / 32,
-    1 / 32,
-    1 / 32,
-    1 / 32,
-  ];
+  const draws = buildStubAnswerQueue([
+    new Uint8Array(6),
+    new Uint8Array(6),
+    new Uint8Array(6).fill(1),
+  ]);
 
   const checkpoints = createCheckpointService({
     config: ctx.config,
@@ -773,7 +765,7 @@ test('it draws a new id when the pool holds a snapshot by the drawn one', async 
     diskBudget: ctx.impd.diskBudget,
 
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
-    random: () => draws.shift() ?? Number.NaN,
+    random: draws.next,
   });
 
   await checkpoints.createCheckpoint('dev', 'first');
@@ -800,10 +792,11 @@ test('it draws a new id when a deleted checkpoint’s snapshot stays for a fork'
 
   await ctx.impd.imps.createImp({ id: impId, name: 'dev', image: 'base' });
 
-  const draws = [
-    ...Array.from({ length: 12 }, () => 0),
-    ...Array.from({ length: 6 }, () => 1 / 32),
-  ];
+  const draws = buildStubAnswerQueue([
+    new Uint8Array(6),
+    new Uint8Array(6),
+    new Uint8Array(6).fill(1),
+  ]);
 
   const checkpoints = createCheckpointService({
     config: ctx.config,
@@ -813,7 +806,7 @@ test('it draws a new id when a deleted checkpoint’s snapshot stays for a fork'
     diskBudget: ctx.impd.diskBudget,
 
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
-    random: () => draws.shift() ?? Number.NaN,
+    random: draws.next,
   });
 
   await checkpoints.createCheckpoint('dev', 'v1');
@@ -858,10 +851,13 @@ test('it gives up after three drawn ids that each name a snapshot in the pool', 
 
   await ctx.impd.imps.createImp({ id: impId, name: 'dev', image: 'base' });
 
-  const draws = [
-    ...Array.from({ length: 24 }, () => 0),
-    ...Array.from({ length: 6 }, () => 1 / 32),
-  ];
+  const draws = buildStubAnswerQueue([
+    new Uint8Array(6),
+    new Uint8Array(6),
+    new Uint8Array(6),
+    new Uint8Array(6),
+    new Uint8Array(6).fill(1),
+  ]);
 
   const checkpoints = createCheckpointService({
     config: ctx.config,
@@ -871,7 +867,7 @@ test('it gives up after three drawn ids that each name a snapshot in the pool', 
     diskBudget: ctx.impd.diskBudget,
 
     freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
-    random: () => draws.shift() ?? Number.NaN,
+    random: draws.next,
   });
 
   await checkpoints.createCheckpoint('dev', 'first');

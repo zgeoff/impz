@@ -46,6 +46,7 @@
     "ipaddr.js": "catalog:",
     "kysely": "catalog:",
     "lru-cache": "catalog:",
+    "nanoid": "catalog:",
     "reflect-metadata": "catalog:",
     "ssh2": "catalog:",
     "ts-pattern": "catalog:",
