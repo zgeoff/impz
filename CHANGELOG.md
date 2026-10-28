@@ -2,10 +2,11 @@
 
 ## [6.0.2](https://github.com/zgeoff/impz/compare/v6.0.1...v6.0.2) (2026-10-28)
 
-
 ### Bug Fixes
 
-* **deploy:** let impd bind its tailnet ports under Podman ([#773](https://github.com/zgeoff/impz/issues/773)) ([69ecc04](https://github.com/zgeoff/impz/commit/69ecc040f93c85a9246b4c0547ef990c036ed3d5))
+- **deploy:** let impd bind its tailnet ports under Podman
+  ([#773](https://github.com/zgeoff/impz/issues/773))
+  ([69ecc04](https://github.com/zgeoff/impz/commit/69ecc040f93c85a9246b4c0547ef990c036ed3d5))
 
 ## [6.0.1](https://github.com/zgeoff/impz/compare/v6.0.0...v6.0.1) (2026-10-28)
 
