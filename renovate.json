@@ -9,9 +9,8 @@
       "separateMajorMinor": false
     },
     {
-      "description": "agent/tools holds only tool directives, so the go get -t ./... that Renovate runs loads none of their packages and leaves their module sums out of go.sum. go mod tidy adds them.",
+      "description": "Every Go module here holds tool directives, and the go get -t ./... that Renovate runs loads none of their packages, so it leaves their module sums out of go.sum. go mod tidy adds them.",
       "matchManagers": ["gomod"],
-      "matchFileNames": ["agent/tools/go.mod"],
       "postUpdateOptions": ["gomodTidy"]
     }
   ]
