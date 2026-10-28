@@ -1,5 +1,5 @@
+import type { Logger } from '@logtape/logtape';
 import { getErrorMessage } from '../../platform/process/get-error-message';
-import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { createSingleFlight } from '../../platform/process/single-flight';
 import type { MemoryLock, MemoryLockResult } from './create-memory-lock';
 
@@ -22,6 +22,7 @@ export interface TemplateLockDeps {
     onSized: (lockBytes: number) => void,
   ) => Promise<MemoryLockResult>;
   readonly probeCurrent: (target: Readonly<LockTarget>) => boolean;
+  readonly logger: Logger;
 }
 
 const MIB = 1024 * 1024;
@@ -43,7 +44,7 @@ export function createTemplateLocks(deps: TemplateLockDeps): TemplateLocks {
       });
 
       if ('errno' in result) {
-        getImpdLogger('boot').warning(
+        deps.logger.warning(
           'boot template {key} memory not locked (errno {errno}): a restore reads what the host dropped',
           { key: target.key.slice(0, 12), errno: String(result.errno) },
         );
@@ -60,7 +61,7 @@ export function createTemplateLocks(deps: TemplateLockDeps): TemplateLocks {
 
       locks.set(target.key, result.lock);
     } catch (error) {
-      getImpdLogger('boot').warning('boot template {key} memory not locked: {error}', {
+      deps.logger.warning('boot template {key} memory not locked: {error}', {
         key: target.key.slice(0, 12),
         error: getErrorMessage(error),
       });

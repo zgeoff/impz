@@ -227,6 +227,7 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
   const templateLocks = createTemplateLocks({
     lockMemory: deps.lockMemory,
     probeCurrent: (target) => readMeta(target.key)?.buildId === target.buildId,
+    logger: getImpdLogger('boot'),
   });
 
   const readLastUsed = (key: string): number => {
