@@ -124,21 +124,34 @@ test('it unmaps the file when the lock passes the locked-memory limit', async ()
 
   const modulePath = join(import.meta.dir, 'create-memory-lock.ts');
 
+  // CAP_IPC_LOCK lifts the locked-memory limit for a root test run, so the child takes it out of its
+  // effective set (capability 14, in the first word of capget's data) before it lowers the limit
   const script = `
+    import { FFIType, dlopen, ptr } from 'bun:ffi';
     import { readFileSync } from 'node:fs';
     import { createMemoryLock } from ${JSON.stringify(modulePath)};
+    const libc = dlopen('libc.so.6', {
+      capget: { args: [FFIType.ptr, FFIType.ptr], returns: FFIType.i32 },
+      capset: { args: [FFIType.ptr, FFIType.ptr], returns: FFIType.i32 },
+      setrlimit: { args: [FFIType.i32, FFIType.ptr], returns: FFIType.i32 },
+    }).symbols;
+    const header = new Uint32Array([0x20080522, 0]);
+    const caps = new Uint32Array(6);
+    const capget = libc.capget(ptr(header), ptr(caps));
+    caps[0] &= ~(1 << 14);
+    const capset = libc.capset(ptr(header), ptr(caps));
+    const setrlimit = libc.setrlimit(8, ptr(new BigUint64Array([65536n, 65536n])));
     const result = await createMemoryLock(${JSON.stringify(path)}, () => true);
     const smaps = readFileSync('/proc/self/smaps', 'utf8');
-    console.log(JSON.stringify({ result, isMapped: smaps.includes(${JSON.stringify(path)}) }));
+    console.log(JSON.stringify({
+      setup: [capget, capset, setrlimit],
+      result,
+      isMapped: smaps.includes(${JSON.stringify(path)}),
+    }));
   `;
 
-  // CAP_IPC_LOCK lifts the limit for a root test run, and a process in a new user namespace lacks
-  // it on the host, so the child's mlock fails on the limit as it does for an unprivileged impd
-  const report: unknown =
-    await $`prlimit --memlock=65536:65536 unshare --user --map-root-user ${process.execPath} --eval ${script}`
-      .quiet()
-      .json();
+  const report: unknown = await $`${process.execPath} --eval ${script}`.quiet().json();
 
   // ENOMEM: mlock(2) refuses a lock past a nonzero RLIMIT_MEMLOCK with it
-  expect(report).toStrictEqual({ result: { errno: 12 }, isMapped: false });
+  expect(report).toStrictEqual({ setup: [0, 0, 0], result: { errno: 12 }, isMapped: false });
 });
