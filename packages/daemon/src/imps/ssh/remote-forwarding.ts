@@ -2,11 +2,14 @@ import { posix } from 'node:path';
 import type { Connection, ServerChannel } from 'ssh2';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import type { GuestListener, ListenSpec } from '../../vm/agent-client/listener-stream';
+import { formatGuestFailure } from '../../vm/guest-channels/format-guest-failure';
+import { IMP_RUN_DIR } from '../../vm/guest-channels/imp-run-dir';
 import {
   MAX_RELAYS_PER_FORWARD,
   runGuestListener,
 } from '../../vm/guest-channels/run-guest-listener';
-import { formatFailure, runChannelRelay } from './channel-io';
+import { stopGuestClient } from '../../vm/guest-channels/stop-guest-client';
+import { runChannelRelay } from './channel-io';
 import type { SshBackend } from './ssh-connection-context';
 
 // ssh2 leaves out both callbacks when a global request wants no reply.
@@ -69,13 +72,8 @@ export function createRemoteForwarding(deps: RemoteForwardingDeps): RemoteForwar
     getImpdLogger('ssh').with({ imp: deps.impName }).info('remote forward {message}', { message });
   };
 
-  const stopGuestClient = async (listener: GuestListener, id: number): Promise<void> => {
-    try {
-      const stream = await deps.backend.openAccept(deps.impName, listener.id, id, 'ssh');
-
-      stream.close();
-    } catch {}
-  };
+  const refuseGuestClient = (listener: GuestListener, id: number): Promise<void> =>
+    stopGuestClient(() => deps.backend.openAccept(deps.impName, listener.id, id, 'ssh'));
 
   const openClientChannel = (request: RemoteForwardRequest, port: number): Promise<ServerChannel> =>
     new Promise((resolve, reject) => {
@@ -108,9 +106,9 @@ export function createRemoteForwarding(deps: RemoteForwardingDeps): RemoteForwar
       try {
         channel = await openClientChannel(request, port);
       } catch (error) {
-        writeLog(`${forward.label}: the client refused the channel: ${formatFailure(error)}`);
+        writeLog(`${forward.label}: the client refused the channel: ${formatGuestFailure(error)}`);
 
-        await stopGuestClient(forward.listener, id);
+        await refuseGuestClient(forward.listener, id);
 
         return;
       }
@@ -122,7 +120,7 @@ export function createRemoteForwarding(deps: RemoteForwardingDeps): RemoteForwar
       } catch (error) {
         channel.destroy();
 
-        writeLog(`${forward.label}: ${formatFailure(error)}`);
+        writeLog(`${forward.label}: ${formatGuestFailure(error)}`);
       }
     } finally {
       countRelays(forward.key, -1);
@@ -139,11 +137,11 @@ export function createRemoteForwarding(deps: RemoteForwardingDeps): RemoteForwar
     try {
       await runGuestListener(forward.listener, {
         deliver: (id) => runClientRelay(request, forward, port, id),
-        refuse: (id) => stopGuestClient(forward.listener, id),
+        refuse: (id) => refuseGuestClient(forward.listener, id),
         isFull: () => (relays.get(key) ?? 0) >= MAX_RELAYS_PER_FORWARD,
       });
     } catch (error) {
-      writeLog(`${forward.label} ended: ${formatFailure(error)}`);
+      writeLog(`${forward.label} ended: ${formatGuestFailure(error)}`);
     } finally {
       forward.listener.close();
 
@@ -183,7 +181,7 @@ export function createRemoteForwarding(deps: RemoteForwardingDeps): RemoteForwar
 
         listener = await deps.backend.openListener(deps.impName, spec, null);
       } catch (error) {
-        writeLog(`${label}: ${formatFailure(error)}`);
+        writeLog(`${label}: ${formatGuestFailure(error)}`);
         reject?.();
 
         return;
@@ -238,8 +236,6 @@ export function createRemoteForwarding(deps: RemoteForwardingDeps): RemoteForwar
 
 // As sshd does with GatewayPorts no, each of these binds listens on the guest's 127.0.0.1.
 const LOOPBACK_BINDS = new Set(['', '*', '0.0.0.0', '::', 'localhost', '127.0.0.1', '::1']);
-
-const IMP_RUN_DIR = '/run/imp/';
 
 function resolveRemoteForward(request: RemoteForwardRequest): ListenSpec | null {
   if (request.kind === 'unix') {

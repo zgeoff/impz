@@ -7,14 +7,17 @@ import {
   TunnelClientMessageSchema,
 } from '@impz/api';
 import type { TunnelClientMessage, TunnelServerMessage } from '@impz/api';
+import { match } from 'ts-pattern';
 import { ImpdError } from '../../platform/errors/impd-error';
 import { createCountedLimit } from '../../platform/process/counted-limit';
-import { getErrorMessage } from '../../platform/process/get-error-message';
-import { AgentError } from '../agent-client/agent-connection';
 import type { DialStream, DialTarget } from '../agent-client/dial-stream';
 import type { GuestListener, ListenSpec } from '../agent-client/listener-stream';
+import { buildGuestFailure } from './build-guest-failure';
+import { createAckSender } from './create-ack-sender';
+import { createAckWindow } from './create-ack-window';
 import type { ReverseForwards } from './reverse-forwards';
 import { runGuestListener } from './run-guest-listener';
+import { stopGuestClient } from './stop-guest-client';
 
 const MAX_TUNNELS_PER_IMP = 256;
 const MAX_PENDING_BYTES = TUNNEL_WINDOW_BYTES + TUNNEL_MAX_FRAME_BYTES;
@@ -40,6 +43,8 @@ export interface TunnelSession {
 
 type TunnelListen = Extract<TunnelClientMessage, { type: 'listen' }>;
 
+type TunnelStart = Extract<TunnelClientMessage, { type: 'open' | 'listen' | 'accept' }>;
+
 export interface TunnelLimits {
   readonly max: number;
   readonly tryOpen: (impId: string) => (() => void) | null;
@@ -52,15 +57,13 @@ export function createTunnelLimits(max = MAX_TUNNELS_PER_IMP): TunnelLimits {
 }
 
 function buildErrorMessage(error: unknown): TunnelServerMessage {
-  if (error instanceof ImpdError) {
-    return { type: 'error', code: String(error.code), message: error.message };
-  }
+  const failure = buildGuestFailure(error);
 
-  if (error instanceof AgentError) {
-    return { type: 'error', code: error.code, message: error.detail };
-  }
-
-  return { type: 'error', message: getErrorMessage(error) };
+  return {
+    type: 'error',
+    ...(failure.code !== undefined && { code: failure.code }),
+    message: failure.message,
+  };
 }
 
 export function createTunnelSession(
@@ -74,10 +77,6 @@ export function createTunnelSession(
     stream: DialStream | null;
     listener: GuestListener | null;
     release: () => void;
-    unacked: number;
-    ackWaiter: (() => void) | null;
-    pendingAck: number;
-    acking: boolean;
     guestEof: boolean;
     peerEof: boolean;
   } = {
@@ -85,10 +84,6 @@ export function createTunnelSession(
     stream: null,
     listener: null,
     release: () => {},
-    unacked: 0,
-    ackWaiter: null,
-    pendingAck: 0,
-    acking: false,
     guestEof: false,
     peerEof: false,
   };
@@ -96,6 +91,13 @@ export function createTunnelSession(
   const send = (message: TunnelServerMessage): void => {
     peer.sendText(JSON.stringify(message));
   };
+
+  const isOpen = (): boolean => state.phase === 'open';
+  const outputWindow = createAckWindow(TUNNEL_WINDOW_BYTES, isOpen);
+
+  const peerAcks = createAckSender(isOpen, (bytes) => {
+    send({ type: 'ack', bytes });
+  });
 
   const stopTunnel = (code: number, reason: string): void => {
     if (state.phase === 'closed') {
@@ -106,7 +108,7 @@ export function createTunnelSession(
     state.stream?.close();
     state.listener?.close();
     state.release();
-    state.ackWaiter?.();
+    outputWindow.stop();
     peer.close(code, reason);
   };
 
@@ -119,16 +121,6 @@ export function createTunnelSession(
     stopTunnel(TUNNEL_CLOSE_NORMAL, 'tunnel failed');
   };
 
-  const waitForWindow = async (): Promise<void> => {
-    while (state.phase === 'open' && state.unacked > TUNNEL_WINDOW_BYTES) {
-      await new Promise<void>((resolve) => {
-        state.ackWaiter = resolve;
-      });
-
-      state.ackWaiter = null;
-    }
-  };
-
   const sendGuestOutput = async (stream: DialStream): Promise<void> => {
     for await (const event of stream.events()) {
       if (event.type === 'eof') {
@@ -138,15 +130,14 @@ export function createTunnelSession(
         continue;
       }
 
-      await waitForWindow();
+      await outputWindow.waitForRoom();
 
       if (state.phase !== 'open') {
         return;
       }
 
       peer.sendBinary(event.data);
-
-      state.unacked += event.data.byteLength;
+      outputWindow.countSent(event.data.byteLength);
     }
 
     // The agent ends a relay once both sides have sent eof, so any other end is a lost connection.
@@ -163,24 +154,6 @@ export function createTunnelSession(
     } catch {
       stopTunnel(TUNNEL_CLOSE_LOST, 'lost');
     }
-  };
-
-  const sendPeerAcks = async (stream: DialStream): Promise<void> => {
-    state.acking = true;
-
-    while (state.pendingAck > 0 && state.phase === 'open') {
-      const bytes = state.pendingAck;
-
-      await stream.drained();
-
-      state.pendingAck -= bytes;
-
-      if (state.phase === 'open') {
-        send({ type: 'ack', bytes });
-      }
-    }
-
-    state.acking = false;
   };
 
   const readOpeningImp = async (name: string): Promise<string | null> => {
@@ -275,14 +248,6 @@ export function createTunnelSession(
     }
   };
 
-  const stopGuestClient = async (name: string, listener: string, id: number): Promise<void> => {
-    try {
-      const stream = await backend.openAccept(name, listener, id);
-
-      stream.close();
-    } catch {}
-  };
-
   const runForward = async (name: string, listener: GuestListener): Promise<void> => {
     try {
       await runGuestListener(listener, {
@@ -291,7 +256,7 @@ export function createTunnelSession(
 
           return Promise.resolve();
         },
-        refuse: (id) => stopGuestClient(name, listener.id, id),
+        refuse: (id) => stopGuestClient(() => backend.openAccept(name, listener.id, id)),
         isFull: () => forwards.isFull(listener.id),
       });
     } catch {}
@@ -357,28 +322,7 @@ export function createTunnelSession(
     const control = parsed.data;
 
     if (control.type === 'open' || control.type === 'listen' || control.type === 'accept') {
-      if (state.phase !== 'waiting') {
-        stopTunnel(TUNNEL_CLOSE_PROTOCOL, `${control.type} after the start`);
-      } else if (control.type === 'open') {
-        const name = control.name;
-        const target: DialTarget = { network: 'tcp', address: `127.0.0.1:${String(control.port)}` };
-
-        void openTunnel(
-          name,
-          (impId) => allocateTunnel(name, impId),
-          () => backend.openDial(name, target),
-        );
-      } else if (control.type === 'accept') {
-        const name = control.name;
-
-        void openTunnel(
-          name,
-          (impId) => allocateRelay(name, control.listener, impId),
-          () => backend.openAccept(name, control.listener, control.connection),
-        );
-      } else {
-        void openForward(control);
-      }
+      startTunnel(control);
 
       return;
     }
@@ -391,14 +335,46 @@ export function createTunnelSession(
       return;
     }
 
-    if (control.type === 'eof') {
-      state.peerEof = true;
+    match(control)
+      .with({ type: 'eof' }, () => {
+        state.peerEof = true;
 
-      stream.end();
-    } else {
-      state.unacked = Math.max(0, state.unacked - control.bytes);
-      state.ackWaiter?.();
+        stream.end();
+      })
+      .with({ type: 'ack' }, (ack) => {
+        outputWindow.countAcked(ack.bytes);
+      })
+      .exhaustive();
+  };
+
+  const startTunnel = (control: TunnelStart): void => {
+    if (state.phase !== 'waiting') {
+      stopTunnel(TUNNEL_CLOSE_PROTOCOL, `${control.type} after the start`);
+
+      return;
     }
+
+    match(control)
+      .with({ type: 'open' }, (open) => {
+        const target: DialTarget = { network: 'tcp', address: `127.0.0.1:${String(open.port)}` };
+
+        void openTunnel(
+          open.name,
+          (impId) => allocateTunnel(open.name, impId),
+          () => backend.openDial(open.name, target),
+        );
+      })
+      .with({ type: 'accept' }, (accept) => {
+        void openTunnel(
+          accept.name,
+          (impId) => allocateRelay(accept.name, accept.listener, impId),
+          () => backend.openAccept(accept.name, accept.listener, accept.connection),
+        );
+      })
+      .with({ type: 'listen' }, (listen) => {
+        void openForward(listen);
+      })
+      .exhaustive();
   };
 
   const handleData = (data: Uint8Array): void => {
@@ -410,19 +386,16 @@ export function createTunnelSession(
       return;
     }
 
-    state.pendingAck += data.byteLength;
+    const pending = peerAcks.countReceived(data.byteLength);
 
-    if (data.byteLength > TUNNEL_MAX_FRAME_BYTES || state.pendingAck > MAX_PENDING_BYTES) {
+    if (data.byteLength > TUNNEL_MAX_FRAME_BYTES || pending > MAX_PENDING_BYTES) {
       stopTunnel(TUNNEL_CLOSE_PROTOCOL, 'past the window');
 
       return;
     }
 
     stream.write(data);
-
-    if (!state.acking) {
-      void sendPeerAcks(stream);
-    }
+    peerAcks.sendAcks(() => stream.drained());
   };
 
   return {
@@ -446,7 +419,7 @@ export function createTunnelSession(
       state.stream?.close();
       state.listener?.close();
       state.release();
-      state.ackWaiter?.();
+      outputWindow.stop();
     },
   };
 }

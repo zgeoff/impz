@@ -2,7 +2,9 @@ import { posix } from 'node:path';
 import type { AcceptConnection, RejectConnection, ServerChannel } from 'ssh2';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import type { DialStream, DialTarget } from '../../vm/agent-client/dial-stream';
-import { formatFailure, runChannelRelay } from './channel-io';
+import { formatGuestFailure } from '../../vm/guest-channels/format-guest-failure';
+import { IMP_RUN_DIR } from '../../vm/guest-channels/imp-run-dir';
+import { runChannelRelay } from './channel-io';
 import type { SshConnectionContext } from './ssh-connection-context';
 
 const ADMINISTRATIVELY_PROHIBITED = 1;
@@ -14,10 +16,6 @@ const LOOPBACK_HOSTS: Readonly<Record<string, string>> = {
   '127.0.0.1': '127.0.0.1',
   '::1': '[::1]',
 };
-
-// Not a security boundary, since the agent dials as the image's user, who owns each forwarded
-// agent; it keeps a root image's forward off impd's own sockets.
-const IMP_RUN_DIR = '/run/imp/';
 
 export function resolveSocketTarget(socketPath: string): DialTarget | null {
   const path = posix.normalize(posix.join('/', socketPath));
@@ -58,7 +56,7 @@ export async function handleForward(
       .with({ imp: context.impName })
       .warning('forward to {address}: {error}', {
         address: target.address,
-        error: formatFailure(error),
+        error: formatGuestFailure(error),
       });
 
     reject();
@@ -73,7 +71,7 @@ export async function handleForward(
       .with({ imp: context.impName })
       .warning('forward to {address}: {error}', {
         address: target.address,
-        error: formatFailure(error),
+        error: formatGuestFailure(error),
       });
   }
 }

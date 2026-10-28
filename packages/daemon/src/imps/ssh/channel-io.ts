@@ -1,8 +1,5 @@
 import type { Readable, Writable } from 'node:stream';
 import type { ServerChannel } from 'ssh2';
-import { ImpdError } from '../../platform/errors/impd-error';
-import { getErrorMessage } from '../../platform/process/get-error-message';
-import { AgentError } from '../../vm/agent-client/agent-connection';
 import type { DialStream } from '../../vm/agent-client/dial-stream';
 
 export interface ChannelSink {
@@ -62,16 +59,4 @@ export async function runChannelRelay(channel: ServerChannel, stream: DialStream
     stream.close();
     channel.destroy();
   }
-}
-
-export function formatFailure(error: unknown): string {
-  if (error instanceof AgentError) {
-    return `${error.code}: ${error.detail}`;
-  }
-
-  if (error instanceof ImpdError) {
-    return `${String(error.code)}: ${error.message}`;
-  }
-
-  return getErrorMessage(error);
 }

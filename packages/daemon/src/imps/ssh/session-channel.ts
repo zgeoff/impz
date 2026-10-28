@@ -3,9 +3,10 @@ import type { AcceptConnection, PseudoTtyInfo, ServerChannel, Session } from 'ss
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import type { AgentFeature } from '../../vm/agent-client/agent-outdated';
 import type { AgentExecRequest, ExecStream } from '../../vm/agent-client/exec-stream';
+import { formatGuestFailure } from '../../vm/guest-channels/format-guest-failure';
 import { SYSTEM_AGENT_PATH } from '../exec/exec-tools';
 import { findSignalNumber, getSignalName } from '../exec/signal-names';
-import { formatFailure, startChannelInput, writeToChannel } from './channel-io';
+import { startChannelInput, writeToChannel } from './channel-io';
 import type { SshConnectionContext } from './ssh-connection-context';
 
 const SFTP_ARGV = [SYSTEM_AGENT_PATH, 'sftp'];
@@ -112,7 +113,7 @@ export function handleSession(session: Session, context: SshConnectionContext): 
     } catch (error) {
       getImpdLogger('ssh')
         .with({ imp: context.impName })
-        .warning('{error}', { error: formatFailure(error) });
+        .warning('{error}', { error: formatGuestFailure(error) });
 
       channel.destroy();
     }
@@ -146,7 +147,7 @@ export function handleSession(session: Session, context: SshConnectionContext): 
         context.actor,
       );
     } catch (error) {
-      channel.stderr.write(`imp: ${formatFailure(error)}${newline}`);
+      channel.stderr.write(`imp: ${formatGuestFailure(error)}${newline}`);
       channel.exit(255);
       channel.end();
 
@@ -195,7 +196,7 @@ export function handleSession(session: Session, context: SshConnectionContext): 
     try {
       return await context.agent.readSocket();
     } catch (error) {
-      channel.stderr.write(`imp: no agent forwarding: ${formatFailure(error)}${newline}`);
+      channel.stderr.write(`imp: no agent forwarding: ${formatGuestFailure(error)}${newline}`);
 
       return null;
     }
