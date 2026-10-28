@@ -11,7 +11,10 @@ export interface MemoryLock {
 
 export type MemoryLockResult = { readonly lock: MemoryLock } | { readonly errno: number };
 
-export async function createMemoryLock(path: string): Promise<MemoryLockResult> {
+export async function createMemoryLock(
+  path: string,
+  onSized: (lockBytes: number) => void,
+): Promise<MemoryLockResult> {
   const libc = readLibc();
 
   if (libc === null) {
@@ -27,6 +30,10 @@ export async function createMemoryLock(path: string): Promise<MemoryLockResult> 
     if ('errno' in runs) {
       return runs;
     }
+
+    const lockedBytes = runs.reduce((total, run) => total + run.length, 0);
+
+    onSized(lockedBytes);
 
     const address = Number(libc.mmap(0, size, PROT_READ, MAP_SHARED, fd, 0));
 
@@ -55,8 +62,6 @@ export async function createMemoryLock(path: string): Promise<MemoryLockResult> 
 
       await Bun.sleep(0);
     }
-
-    const lockedBytes = runs.reduce((total, run) => total + run.length, 0);
 
     return { lock: { lockedBytes, release } };
   } finally {

@@ -12,6 +12,7 @@ import { buildStubTemplateVm } from '../../../testing/vm/build-stub-template-vm'
 import { createDiskBudget } from '../storage/disk-budget';
 import { TEMPLATE_BOOT_ARGS, buildTemplateKey, createBootTemplates } from './boot-templates';
 import type { BootTemplateDeps } from './boot-templates';
+import type { MemoryLockResult } from './create-memory-lock';
 
 async function setupTest() {
   const dataDir = await mkdtemp(join(tmpdir(), 'boot-templates-'));
@@ -1008,7 +1009,7 @@ test('#listDrivePaths drops the drive of a stale template once it is removed', a
   expect(store.listDrivePaths()).toStrictEqual(['/data/system/drives/d1']);
 });
 
-test('#buildTemplate locks the memory of the template it built, which readLockedMib counts', async () => {
+test('#buildTemplate locks the memory file of the template it built', async () => {
   const ctx = await setupTest();
 
   const lockMemory = mock(() =>
@@ -1026,7 +1027,58 @@ test('#buildTemplate locks the memory of the template it built, which readLocked
 
   await store.stop();
 
-  expect(lockMemory).toHaveBeenCalledExactlyOnceWith(files.memFile);
+  expect(lockMemory).toHaveBeenCalledExactlyOnceWith(files.memFile, expect.any(Function));
+});
+
+test('#buildTemplate locks a rebuilt template apart from the lock its removed build left', async () => {
+  const ctx = await setupTest();
+
+  const pending = Promise.withResolvers<MemoryLockResult>();
+  const lockMemory = mock(() => pending.promise);
+
+  const store = createBootTemplates({
+    ...ctx.deps,
+    lockMemory,
+    identity: buildMockHostIdentity(),
+    bootReservePercent: 50,
+  });
+
+  const removed = await store.buildTemplate({ vcpus: 1, memoryMib: 512 });
+
+  store.reportFailure(removed, true);
+
+  const rebuilt = await store.buildTemplate({ vcpus: 1, memoryMib: 512 });
+
+  pending.resolve({ errno: 12 });
+
+  await store.stop();
+
+  expect(lockMemory).toHaveBeenCalledTimes(2);
+  expect(lockMemory).toHaveBeenLastCalledWith(rebuilt.memFile, expect.any(Function));
+});
+
+test('#stop starts no lock of a kept template after it is called', async () => {
+  const ctx = await setupTest();
+
+  const identity = buildMockHostIdentity();
+  const earlier = createBootTemplates({ ...ctx.deps, identity, bootReservePercent: 50 });
+
+  await earlier.buildTemplate({ vcpus: 1, memoryMib: 512 });
+  await earlier.buildTemplate({ vcpus: 2, memoryMib: 512 });
+  await earlier.stop();
+
+  const first = Promise.withResolvers<MemoryLockResult>();
+  const lockMemory = mock(() => first.promise);
+  const store = createBootTemplates({ ...ctx.deps, lockMemory, identity, bootReservePercent: 50 });
+  const keeping = store.lockKept();
+  const stopping = store.stop();
+
+  first.resolve({ errno: 12 });
+
+  await stopping;
+  await keeping;
+
+  expect(lockMemory).toHaveBeenCalledOnce();
 });
 
 test('#readLockedMib sums the locked memory of every template, in whole MiB', async () => {
@@ -1111,7 +1163,7 @@ test('#lockKept locks each template that an earlier impd built', async () => {
 
   await store.lockKept();
 
-  expect(lockMemory).toHaveBeenCalledExactlyOnceWith(files.memFile);
+  expect(lockMemory).toHaveBeenCalledExactlyOnceWith(files.memFile, expect.any(Function));
 });
 
 test('#lockKept leaves a template unlocked and restorable when its lock fails', async () => {
