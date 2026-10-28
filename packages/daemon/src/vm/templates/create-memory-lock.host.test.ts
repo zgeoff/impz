@@ -2,6 +2,7 @@ import { expect, mock, onTestFinished, test } from 'bun:test';
 import { closeSync, openSync, readFileSync, writeSync } from 'node:fs';
 import { mkdtemp, rm, truncate } from 'node:fs/promises';
 import { join } from 'node:path';
+import { $ } from 'bun';
 import invariant from 'tiny-invariant';
 import { createMemoryLock } from './create-memory-lock';
 
@@ -110,4 +111,34 @@ test('it holds the locked pages in a mapping of the file until release', async (
 
   expect(lockedKiB).toStrictEqual([8]);
   expect(readFileSync('/proc/self/smaps', 'utf8')).not.toInclude(path);
+});
+
+test('it unmaps the file when the lock passes the locked-memory limit', async () => {
+  const ctx = await setupTest();
+
+  const path = join(ctx.directory, 'mem');
+  const fd = openSync(path, 'w');
+
+  writeSync(fd, Buffer.alloc(1024 * 1024, 1), 0, 1024 * 1024, 0);
+  closeSync(fd);
+
+  const modulePath = join(import.meta.dir, 'create-memory-lock.ts');
+
+  const script = `
+    import { readFileSync } from 'node:fs';
+    import { createMemoryLock } from ${JSON.stringify(modulePath)};
+    const result = await createMemoryLock(${JSON.stringify(path)}, () => true);
+    const smaps = readFileSync('/proc/self/smaps', 'utf8');
+    console.log(JSON.stringify({ result, isMapped: smaps.includes(${JSON.stringify(path)}) }));
+  `;
+
+  // CAP_IPC_LOCK lifts the limit for a root test run, and a process in a new user namespace lacks
+  // it on the host, so the child's mlock fails on the limit as it does for an unprivileged impd
+  const report: unknown =
+    await $`prlimit --memlock=65536:65536 unshare --user --map-root-user ${process.execPath} --eval ${script}`
+      .quiet()
+      .json();
+
+  // ENOMEM: mlock(2) refuses a lock past a nonzero RLIMIT_MEMLOCK with it
+  expect(report).toStrictEqual({ result: { errno: 12 }, isMapped: false });
 });

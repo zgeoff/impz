@@ -77,8 +77,9 @@ named session outlives the socket, so a client can attach to it again and resume
 ## Errors, features and versions
 
 A failed call throws an `ORPCError` with impd's `code` and typed `data`; `safe` and `isDefinedError`
-narrow it. An older impd drops an input field it does not know, so `requireFeatures` checks the
-features a call needs first. `imp.checkServer()` tells whether impd speaks this client's API.
+narrow it. A call to a procedure that an older impd lacks throws an `UnknownProcedureError` instead.
+An older impd drops an input field it does not know, so `requireFeatures` checks the features a call
+needs first. `imp.checkServer()` tells whether impd speaks this client's API.
 
 ## Documentation
 
