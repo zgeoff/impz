@@ -48,7 +48,10 @@ Docker's default, which Podman reads unchanged, with one rule added, `pivot_root
 needs.
 
 The arguments lift the cap on the container's processes that Podman sets by default, because every
-imp's Firecracker and jailer processes and threads count against the container's cgroup.
+imp's Firecracker and jailer processes and threads count against the container's cgroup. They also
+raise the container's locked-memory limit, which bounds the pages impd locks for
+[boot templates](./lifecycle/boot-templates.md#ram), since the container has no capability to lock
+memory past it.
 
 **CAUTION:** the container is not a security boundary. With the mount capability in the host's user
 namespace, root in the container can mount a new procfs and write `core_pattern`, and the host's

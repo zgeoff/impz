@@ -28,6 +28,7 @@ import { BASE_BOOT_ARGS, VM_DEVICES } from '../vmm/configure-vm';
 import type { CpuCgroups } from '../vmm/cpu-cgroups';
 import type { JailUser } from '../vmm/jail';
 import type { TemplateBuildPlan } from '../vmm/template-vm';
+import type { MemoryLock, MemoryLockResult } from './create-memory-lock';
 
 /* @internal */
 export const TEMPLATE_BOOT_ARGS = [...BASE_BOOT_ARGS, 'imp.template=1'].join(' ');
@@ -89,6 +90,8 @@ export interface BootTemplates {
   readonly reportRestored: (files: Readonly<TemplateFiles>) => void;
   readonly removeStale: () => string[];
   readonly listDrivePaths: () => string[];
+  readonly lockKept: () => Promise<void>;
+  readonly readLockedMib: () => number;
   readonly stop: () => Promise<void>;
 }
 
@@ -100,6 +103,7 @@ export interface BootTemplateDeps {
   readonly minGuestUptimeMs: number;
   readonly bootReservePercent: number;
   readonly buildVm: (plan: Readonly<TemplateBuildPlan>) => Promise<void>;
+  readonly lockMemory: (memFile: string) => Promise<MemoryLockResult>;
   readonly taps: TapDevices;
   readonly jail: JailUser | null;
   readonly cgroups: Pick<CpuCgroups, 'setup' | 'remove'>;
@@ -151,7 +155,9 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
 
   const records = new Map<string, KeyRecord>();
   const lastUsed = new Map<string, number>();
+  const locks = new Map<string, MemoryLock>();
 
+  const locking = createSingleFlight<void>();
   const lane = createSemaphore(1);
 
   const getRecord = (key: string): KeyRecord => {
@@ -204,6 +210,9 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
   // Linux keeps a mapped mem file alive until its last VM exits, so a directory that a restore may
   // still map is renamed away before it is removed.
   const removeDir = (name: string): void => {
+    locks.get(name)?.release();
+    locks.delete(name);
+
     const gone = join(root, `.gone-${Bun.randomUUIDv7()}`);
 
     try {
@@ -216,6 +225,38 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
 
     lastUsed.delete(name);
   };
+
+  const runLock = async (files: Readonly<TemplateFiles>): Promise<void> => {
+    try {
+      const result = await deps.lockMemory(files.memFile);
+
+      if ('errno' in result) {
+        getImpdLogger('boot').warning(
+          'boot template {key} memory not locked (errno {errno}): a restore reads what the host dropped',
+          { key: files.key.slice(0, 12), errno: String(result.errno) },
+        );
+
+        return;
+      }
+
+      // the build was removed or replaced while its pages were read in
+      if (readMeta(files.key)?.buildId !== files.buildId) {
+        result.lock.release();
+
+        return;
+      }
+
+      locks.set(files.key, result.lock);
+    } catch (error) {
+      getImpdLogger('boot').warning('boot template {key} memory not locked: {error}', {
+        key: files.key.slice(0, 12),
+        error: getErrorMessage(error),
+      });
+    }
+  };
+
+  const lockTemplate = (files: Readonly<TemplateFiles>): Promise<void> =>
+    locks.has(files.key) ? Promise.resolve() : locking.run(files.key, () => runLock(files));
 
   const readLastUsed = (key: string): number => {
     const used = lastUsed.get(key);
@@ -336,7 +377,7 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
       durationMs: String(durationMs),
     });
 
-    return {
+    const files = {
       key,
       buildId,
       vmstate: join(root, key, 'vmstate'),
@@ -344,6 +385,10 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
       systemDrivePath: meta.systemDrivePath,
       placeholderPath: placeholder,
     };
+
+    void lockTemplate(files);
+
+    return files;
   };
 
   const runBuild = async (shape: Readonly<TemplateShape>, key: string): Promise<TemplateFiles> => {
@@ -545,6 +590,26 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
 
         return meta === null ? [] : [meta.systemDrivePath];
       }),
-    stop: () => building.waitForAll(),
+    lockKept: async () => {
+      for (const key of listTemplateKeys()) {
+        const ready = readReady(key);
+
+        if (ready !== null) {
+          await lockTemplate(ready);
+        }
+      }
+    },
+    readLockedMib: () =>
+      Math.ceil([...locks.values()].reduce((total, lock) => total + lock.lockedBytes, 0) / MIB),
+    stop: async () => {
+      await building.waitForAll();
+      await locking.waitForAll();
+
+      for (const lock of locks.values()) {
+        lock.release();
+      }
+
+      locks.clear();
+    },
   };
 }

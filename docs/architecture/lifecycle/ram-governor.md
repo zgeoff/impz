@@ -14,7 +14,9 @@ set size, from the kernel's per-process memory summary. It leaves out clean file
 woken guest maps its memory file privately, so the pages it has only read are clean pages of that
 file, which the host can drop and read again. A guest restored from a
 [boot template](./boot-templates.md#ram) shares its template's file the same way. Counting those
-pages would charge each woken imp for memory the host can take back at any time.
+pages would charge each woken imp for memory the host can take back at any time. The pages impd
+locks for boot templates are the exception: the host cannot drop them, so the governor counts them
+as used beside the VMs.
 
 To answer for one VM, the kernel walks every page that VM maps, which takes longer the more memory
 the guest uses. The governor therefore reads every awake VM's summary at once, off impd's event

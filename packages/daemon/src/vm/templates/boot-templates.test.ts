@@ -34,6 +34,7 @@ async function setupTest() {
     kernelPath: 'vmlinux',
     minGuestUptimeMs: 1500,
     buildVm: vm.buildVm,
+    lockMemory: mock(() => Promise.resolve({ lock: { lockedBytes: 0, release: () => {} } })),
     taps: { setupTap: mock(() => Promise.resolve()), removeTap: mock(() => Promise.resolve()) },
     jail: null,
     cgroups: {
@@ -1005,4 +1006,153 @@ test('#listDrivePaths drops the drive of a stale template once it is removed', a
   store.removeStale();
 
   expect(store.listDrivePaths()).toStrictEqual(['/data/system/drives/d1']);
+});
+
+test('#buildTemplate locks the memory of the template it built, which readLockedMib counts', async () => {
+  const ctx = await setupTest();
+
+  const lockMemory = mock(() =>
+    Promise.resolve({ lock: { lockedBytes: 3 * 1024 * 1024, release: () => {} } }),
+  );
+
+  const store = createBootTemplates({
+    ...ctx.deps,
+    lockMemory,
+    identity: buildMockHostIdentity(),
+    bootReservePercent: 50,
+  });
+
+  const files = await store.buildTemplate({ vcpus: 1, memoryMib: 512 });
+
+  await store.stop();
+
+  expect(lockMemory).toHaveBeenCalledExactlyOnceWith(files.memFile);
+});
+
+test('#readLockedMib sums the locked memory of every template, in whole MiB', async () => {
+  const ctx = await setupTest();
+
+  const store = createBootTemplates({
+    ...ctx.deps,
+    lockMemory: mock(() =>
+      Promise.resolve({ lock: { lockedBytes: 1_500_000, release: () => {} } }),
+    ),
+    identity: buildMockHostIdentity(),
+    bootReservePercent: 50,
+  });
+
+  await store.buildTemplate({ vcpus: 1, memoryMib: 512 });
+  await store.buildTemplate({ vcpus: 2, memoryMib: 512 });
+  await store.lockKept();
+
+  expect(store.readLockedMib()).toBe(3);
+});
+
+test('#reportFailure releases the lock of the template it removes', async () => {
+  const ctx = await setupTest();
+
+  const release = mock(() => {});
+
+  const store = createBootTemplates({
+    ...ctx.deps,
+    lockMemory: mock(() => Promise.resolve({ lock: { lockedBytes: 4096, release } })),
+    identity: buildMockHostIdentity(),
+    bootReservePercent: 50,
+  });
+
+  const files = await store.buildTemplate({ vcpus: 1, memoryMib: 512 });
+
+  await store.lockKept();
+
+  store.reportFailure(files, true);
+
+  expect(release).toHaveBeenCalledOnce();
+  expect(store.readLockedMib()).toBe(0);
+});
+
+test('#reportFailure releases a lock that finishes after it removed the template', async () => {
+  const ctx = await setupTest();
+
+  const release = mock(() => {});
+  const pending = Promise.withResolvers<{ lock: { lockedBytes: number; release: () => void } }>();
+
+  const store = createBootTemplates({
+    ...ctx.deps,
+    lockMemory: mock(() => pending.promise),
+    identity: buildMockHostIdentity(),
+    bootReservePercent: 50,
+  });
+
+  const files = await store.buildTemplate({ vcpus: 1, memoryMib: 512 });
+
+  store.reportFailure(files, true);
+  pending.resolve({ lock: { lockedBytes: 4096, release } });
+
+  await store.stop();
+
+  expect(release).toHaveBeenCalledOnce();
+});
+
+test('#lockKept locks each template that an earlier impd built', async () => {
+  const ctx = await setupTest();
+
+  const identity = buildMockHostIdentity();
+  const earlier = createBootTemplates({ ...ctx.deps, identity, bootReservePercent: 50 });
+
+  const files = await earlier.buildTemplate({ vcpus: 1, memoryMib: 512 });
+
+  await earlier.stop();
+
+  const lockMemory = mock(() =>
+    Promise.resolve({ lock: { lockedBytes: 4096, release: () => {} } }),
+  );
+
+  const store = createBootTemplates({ ...ctx.deps, lockMemory, identity, bootReservePercent: 50 });
+
+  await store.lockKept();
+
+  expect(lockMemory).toHaveBeenCalledExactlyOnceWith(files.memFile);
+});
+
+test('#lockKept leaves a template unlocked and restorable when its lock fails', async () => {
+  const ctx = await setupTest();
+
+  const identity = buildMockHostIdentity();
+  const earlier = createBootTemplates({ ...ctx.deps, identity, bootReservePercent: 50 });
+
+  const files = await earlier.buildTemplate({ vcpus: 1, memoryMib: 512 });
+
+  await earlier.stop();
+
+  const store = createBootTemplates({
+    ...ctx.deps,
+    lockMemory: mock(() => Promise.resolve({ errno: 12 })),
+    identity,
+    bootReservePercent: 50,
+  });
+
+  await store.lockKept();
+
+  expect(ctx.logs.at(-1)).toInclude('memory not locked (errno 12)');
+  expect(store.readLockedMib()).toBe(0);
+  expect(store.requestTemplate({ vcpus: 1, memoryMib: 512 })).toStrictEqual(files);
+});
+
+test('#stop releases the lock of every template', async () => {
+  const ctx = await setupTest();
+
+  const release = mock(() => {});
+
+  const store = createBootTemplates({
+    ...ctx.deps,
+    lockMemory: mock(() => Promise.resolve({ lock: { lockedBytes: 4096, release } })),
+    identity: buildMockHostIdentity(),
+    bootReservePercent: 50,
+  });
+
+  await store.buildTemplate({ vcpus: 1, memoryMib: 512 });
+  await store.stop();
+
+  expect(release).toHaveBeenCalledOnce();
+  expect(store.readLockedMib()).toBe(0);
 });

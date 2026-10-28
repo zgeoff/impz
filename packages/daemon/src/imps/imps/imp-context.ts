@@ -24,6 +24,7 @@ import { createStorageGate } from '../../vm/storage/storage-gate';
 import type { StorageGate } from '../../vm/storage/storage-gate';
 import { createBootTemplates } from '../../vm/templates/boot-templates';
 import type { BootTemplates } from '../../vm/templates/boot-templates';
+import { createMemoryLock } from '../../vm/templates/create-memory-lock';
 import type { CpuCgroups } from '../../vm/vmm/cpu-cgroups';
 import type { JailUser } from '../../vm/vmm/jail';
 import type { VmRunner } from '../../vm/vmm/vm-runner';
@@ -311,6 +312,7 @@ function createDefaultTemplates(
     minGuestUptimeMs: deps.config.sleepMinGuestUptimeMs,
     bootReservePercent: deps.config.bootReservePercent,
     buildVm: deps.vms.createTemplateVm,
+    lockMemory: createMemoryLock,
     taps: deps.taps,
     jail:
       deps.config.jailerBin === null ? null : { uid: TEMPLATE_BUILD_UID, gid: TEMPLATE_BUILD_UID },
