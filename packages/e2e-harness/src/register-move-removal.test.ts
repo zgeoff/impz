@@ -60,6 +60,44 @@ test('it removes the imp from the target when the abort finds the move committed
   expect(targetImps).toBeEmpty();
 });
 
+test('it removes the imp from the target when the removal on the source fails', async () => {
+  const ctx = await setupTest();
+
+  await createUbuntuImage(ctx.hosts.source);
+  await createUbuntuImage(ctx.hosts.target);
+
+  await ctx.clients.source.imps.create({ name: 'e2e-x-dev', image: 'ubuntu' });
+  await ctx.clients.source.imps.stop({ name: 'e2e-x-dev' });
+  await ctx.hosts.runMove('e2e-x-dev');
+
+  const sendStrangerRequest = (request: Request) => ctx.hosts.source.impd.api.app.handle(request);
+
+  const stranger = createImpClient({
+    url: 'http://impd.test',
+    token: 'not-a-token',
+    fetch: sendStrangerRequest,
+  });
+
+  const cleanup = new AsyncDisposableStack();
+
+  registerMoveRemoval(
+    cleanup,
+    false,
+    { source: stranger, target: ctx.clients.target },
+    'e2e-x-dev',
+  );
+
+  const failure = await cleanup.disposeAsync().then(
+    () => null,
+    (error: unknown) => error,
+  );
+
+  const targetImps = await ctx.clients.target.imps.list();
+
+  expect(failure).toMatchObject({ code: 'UNAUTHORIZED' });
+  expect(targetImps).toBeEmpty();
+});
+
 test('it keeps the imp with --keep', async () => {
   const ctx = await setupTest();
 

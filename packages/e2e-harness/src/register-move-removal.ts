@@ -14,9 +14,8 @@ export function registerMoveRemoval(
   name: string,
 ): void {
   // impd answers an abort of a move the target already committed by destroying the source's
-  // copy, so the imp can live on the target even when `impz move` never returned.
-  registerRemoval(stack, keep, async () => {
-    await removeImpIfPresent(hosts.source, name);
-    await removeImpIfPresent(hosts.target, name);
-  });
+  // copy, so the imp can live on the target even when `impz move` never returned. The stack
+  // runs the last removal first, and runs each one when another throws.
+  registerRemoval(stack, keep, () => removeImpIfPresent(hosts.target, name));
+  registerRemoval(stack, keep, () => removeImpIfPresent(hosts.source, name));
 }
