@@ -191,8 +191,8 @@ test('it prepares each impd it boots once', async () => {
 
 test("it passes impd's log lines only to the case that runs", async () => {
   const ctx = setupTest();
-  const first = mock();
-  const second = mock();
+  const first = mock<(message: string, impd: TestImpd) => void>();
+  const second = mock<(message: string, impd: TestImpd) => void>();
   const pool = createTestImpdPool(ctx.stack);
 
   await pool.withImpd(() => Promise.resolve(), { onLog: first });
