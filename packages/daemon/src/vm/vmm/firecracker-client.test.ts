@@ -457,10 +457,10 @@ test('it rejects a hot-plug answer without the plugged size', () => {
     answers: { 'GET /hotplug/memory': { status: 200, body: { requested_size_mib: 0 } } },
   });
 
-  expect(createFirecrackerClient(ctx.socket).readHotplugMemory()).rejects.toThrowWithMessage(
-    TypeError,
-    'firecracker: no number plugged_size_mib in {"requested_size_mib":0}',
-  );
+  expect(createFirecrackerClient(ctx.socket).readHotplugMemory()).rejects.toMatchObject({
+    message: 'firecracker GET /hotplug/memory: unexpected body {"requested_size_mib":0}',
+    cause: { issues: expect.toPartiallyContain({ path: ['plugged_size_mib'] }) },
+  });
 });
 
 test('it reads the balloon statistics in whole MiB', async () => {
@@ -494,10 +494,10 @@ test('it rejects balloon statistics without the available memory', () => {
     answers: { 'GET /balloon/statistics': { status: 200, body: { total_memory: 1_048_576 } } },
   });
 
-  expect(createFirecrackerClient(ctx.socket).readBalloonStats()).rejects.toThrowWithMessage(
-    TypeError,
-    'firecracker: no number available_memory in {"total_memory":1048576}',
-  );
+  expect(createFirecrackerClient(ctx.socket).readBalloonStats()).rejects.toMatchObject({
+    message: 'firecracker GET /balloon/statistics: unexpected body {"total_memory":1048576}',
+    cause: { issues: expect.toPartiallyContain({ path: ['available_memory'] }) },
+  });
 });
 
 test('it reads the Firecracker version', async () => {
@@ -545,7 +545,7 @@ test('it rejects an instance state Firecracker does not have', () => {
   });
 
   expect(createFirecrackerClient(ctx.socket).readInstanceState()).rejects.toMatchObject({
-    name: 'ZodError',
-    issues: expect.toPartiallyContain({ path: ['state'], code: 'invalid_value' }),
+    message: 'firecracker GET /: unexpected body {"id":"i1","state":"Sleeping"}',
+    cause: { issues: expect.toPartiallyContain({ path: ['state'], code: 'invalid_value' }) },
   });
 });
