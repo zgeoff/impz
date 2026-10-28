@@ -1031,6 +1031,10 @@ jobs:
       # the release PR bumps versions that bun.lock records, and writes a
       # CHANGELOG.md that oxfmt reformats in one pass (.oxfmtrc.test.ts)
       sync-command: bun install && bun run format && bun run format:check
+      # longer than any pull request job's timeout, with time for the runner
+      # queue: a check still pending at the deadline leaves the release PR
+      # open, unmerged, until the next push to main
+      checks-timeout-minutes: 60
     secrets:
       app-private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
 

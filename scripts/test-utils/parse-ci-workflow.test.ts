@@ -52,13 +52,8 @@ test('it reads the e2e group matrix, the e2e aggregate, the zfs shards, the zfs 
     '        run: test "$RESULT" = success',
     '  release:',
     '    uses: zgeoff/tools/.github/workflows/release-please.yml@sync-v1',
-    '  start-release:',
-    '    needs: [release]',
-    "    if: needs.release.outputs.releases_created == 'true'",
-    '    steps:',
-    '      - env:',
-    `          TAG: \${{ needs.release.outputs.tag }}`,
-    '        run: gh workflow run release.yml -f tag="$TAG"',
+    '    with:',
+    '      checks-timeout-minutes: 45',
   ].join('\n');
 
   expect(parseCiWorkflow(yaml)).toStrictEqual({
@@ -104,16 +99,9 @@ test('it reads the e2e group matrix, the e2e aggregate, the zfs shards, the zfs 
         { env: { RESULT: `\${{ needs.zfs-shard.result }}` }, run: 'test "$RESULT" = success' },
       ],
     },
-    release: { uses: 'zgeoff/tools/.github/workflows/release-please.yml@sync-v1' },
-    'start-release': {
-      needs: ['release'],
-      if: "needs.release.outputs.releases_created == 'true'",
-      steps: [
-        {
-          env: { TAG: `\${{ needs.release.outputs.tag }}` },
-          run: 'gh workflow run release.yml -f tag="$TAG"',
-        },
-      ],
+    release: {
+      uses: 'zgeoff/tools/.github/workflows/release-please.yml@sync-v1',
+      with: { 'checks-timeout-minutes': 45 },
     },
   });
 });

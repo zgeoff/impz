@@ -18,6 +18,7 @@ bun run lint:shell                # shellcheck and shfmt over install.sh and the
 actionlint && zizmor --config .github/zizmor.yml .github   # the workflows, as CI lints them
 hadolint host/Dockerfile images/base/Dockerfile
 bun run lint:docs                 # every docs link, and every docs/ path code cites, resolves
+bun run lint:workflows            # ci.yml's release job waits on no gate and starts release.yml for its tag
 (cd agent && gofmt -l . && go vet ./...)   # gofmt -l lists unformatted files
 (cd host/ksm-exec && gofmt -l . && go vet ./... && go test ./...)   # ksm-exec, a Go module of its own
 (cd host/oci-fetch && gofmt -l . && go vet ./... && go test ./...)  # oci-fetch, a Go module of its own
@@ -271,14 +272,14 @@ Lefthook installs the hooks with `bun install`.
   files), then runs gitleaks on them. gitleaks and shfmt must be on `PATH`.
 - **commit-msg** runs commitlint: conventional commits, lowercase, a header of 72 characters or
   fewer.
-- **pre-push** runs one job at a time: `lint:docs` and shellcheck, then the shared baseline in
-  `.lefthook/pre-push-baseline.yml`, which repo-sync delivers from zgeoff/tools. The baseline checks
-  the format and the types of the whole tree, and lints and tests only the files the branch changes
-  since its merge base with `origin/main`. A dashboard file's tests run from its package. CI's
-  `checks` job runs type-aware lint, deadcode and every test. On a branch that changes the agent's,
-  ksm-exec's or oci-fetch's Go, pre-push also runs `gofmt` on the changed files and `go vet -p 1`,
-  which keeps vet's memory within what a 2 GB imp can spare; the Go lint, vulnerability and
-  dead-code gates run in CI only.
+- **pre-push** runs one job at a time: `lint:docs`, `lint:workflows` and shellcheck, then the shared
+  baseline in `.lefthook/pre-push-baseline.yml`, which repo-sync delivers from zgeoff/tools. The
+  baseline checks the format and the types of the whole tree, and lints and tests only the files the
+  branch changes since its merge base with `origin/main`. A dashboard file's tests run from its
+  package. CI's `checks` job runs type-aware lint, deadcode and every test. On a branch that changes
+  the agent's, ksm-exec's or oci-fetch's Go, pre-push also runs `gofmt` on the changed files and
+  `go vet -p 1`, which keeps vet's memory within what a 2 GB imp can spare; the Go lint,
+  vulnerability and dead-code gates run in CI only.
 
 ## CI
 
