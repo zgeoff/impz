@@ -31,7 +31,15 @@ test('it locks the data of a sparse file and none of its holes', async () => {
   invariant('lock' in result);
   onTestFinished(result.lock.release);
 
+  const lockedKiB = readFileSync('/proc/self/smaps', 'utf8')
+    .split(/\n(?=[\da-f]+-[\da-f]+ )/u)
+    .filter((mapping) => mapping.split('\n')[0]?.endsWith(path))
+    .map((mapping) => Number(/^Locked:\s+(?<kib>\d+) kB$/mu.exec(mapping)?.groups?.['kib']));
+
   expect(result.lock.lockedBytes).toBe(12_288);
+
+  // mlock splits the mapping at each locked run, so each data run and each hole is its own entry
+  expect(lockedKiB).toStrictEqual([4, 0, 8, 0]);
 });
 
 test('it reports the bytes it will lock before it locks them', async () => {
