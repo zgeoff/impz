@@ -60,6 +60,13 @@ docs/
   runbooks/        operator and contributor procedures
 ```
 
+## Consumers
+
+imp is a standalone sandbox host, so its docs, code and tests name no product that uses it. A rule
+that only one consumer's deployment needs, such as the order in which that consumer and impd
+upgrade, belongs in the consumer's own repo. Here, state the general rule, and give an example
+consumer an invented name.
+
 ## Packages
 
 - Every external version lives once, in the root `workspaces.catalog`. A package writes `"catalog:"`

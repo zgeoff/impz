@@ -102,8 +102,8 @@ test('#GrantableUpdateSchema rejects a secret named twice', () => {
 });
 
 test.each([
-  ['a registry host and a path start', 'ghcr.io/zgeoff/nixie-'],
-  ['a whole repository', 'ghcr.io/zgeoff/nixie-sandbox'],
+  ['a registry host and a path start', 'ghcr.io/zgeoff/tansy-'],
+  ['a whole repository', 'ghcr.io/zgeoff/tansy-sandbox'],
   ['a registry host with a port', 'registry.test:5000/team/'],
   ['localhost', 'localhost/app'],
 ])('#ImageRefPrefixSchema accepts %s', (_label, source) => {
@@ -111,11 +111,11 @@ test.each([
 });
 
 test.each([
-  ['a bare path, which docker reads as Docker Hub', 'zgeoff/nixie-'],
+  ['a bare path, which docker reads as Docker Hub', 'zgeoff/tansy-'],
   ['a registry host alone', 'ghcr.io/'],
-  ['a tag', 'ghcr.io/zgeoff/nixie:1'],
-  ['a digest', 'ghcr.io/zgeoff/nixie@sha256:'],
-  ['an upper-case host', 'GHCR.io/zgeoff/nixie-'],
+  ['a tag', 'ghcr.io/zgeoff/tansy:1'],
+  ['a digest', 'ghcr.io/zgeoff/tansy@sha256:'],
+  ['an upper-case host', 'GHCR.io/zgeoff/tansy-'],
 ])('#ImageRefPrefixSchema rejects %s', (_label, source) => {
   const result = ImageRefPrefixSchema.safeParse(source);
 
@@ -165,7 +165,7 @@ test('#TokenSchema accepts a token limited to some imps', () => {
     imps: ['ci-*'],
     sshKeys: [{ fingerprint: 'SHA256:abc', type: 'ssh-ed25519', comment: 'ci@runner' }],
     grantable: ['github-token'],
-    imageRefPrefix: 'ghcr.io/zgeoff/nixie-',
+    imageRefPrefix: 'ghcr.io/zgeoff/tansy-',
     createdAt: new Date('2026-01-02T03:04:05.000Z'),
   } as const;
 

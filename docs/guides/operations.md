@@ -31,9 +31,10 @@ no arguments: the Compose recipe is gone, and `--compose` is refused.
 deploy/upgrade.sh
 ```
 
-Before you move impd to 5.0.0 or later, move any nixie that drives it to nixie 0.47.0 or later. An
-older nixie's sandbox adapter refuses impd 5 and reports itself unready. nixie 0.47.0 is the first
-release whose adapter accepts impd 5, and nixie's production deployment runs it.
+Before you move impd to a new major version, move each client that drives it to a release that
+accepts that major. A client accepts only an impd of its own major version
+([breaking changes](../runbooks/releasing.md#breaking-changes)), so an older client refuses the new
+impd.
 
 Take `upgrade.sh` from the new image, not from the release the host runs, with the `lib/host-env.sh`
 beside it that it sources. A host that runs under Docker must, since its own `upgrade.sh` cannot

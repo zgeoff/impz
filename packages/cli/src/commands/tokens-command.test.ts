@@ -144,22 +144,22 @@ test.each([
     'impz: --grantable takes secret names, such as gh,npm; not Not A Name\n',
   ],
   [
-    ['token', 'new', 'nixie', '--scope', 'manage', '--image-ref-prefix', 'ghcr.io/zgeoff/nixie-'],
+    ['token', 'new', 'tansy', '--scope', 'manage', '--image-ref-prefix', 'ghcr.io/zgeoff/tansy-'],
     'impz: --image-ref-prefix needs --scope manage and --imps\n',
   ],
   [
     [
       'token',
       'new',
-      'nixie',
+      'tansy',
       '--scope',
       'manage',
       '--imps',
-      'nixie-*',
+      'tansy-*',
       '--image-ref-prefix',
-      'zgeoff/nixie-',
+      'zgeoff/tansy-',
     ],
-    'impz: --image-ref-prefix takes a registry host and the start of a path, such as ghcr.io/org/app-; not zgeoff/nixie-\n',
+    'impz: --image-ref-prefix takes a registry host and the start of a path, such as ghcr.io/org/app-; not zgeoff/tansy-\n',
   ],
   [['token', 'set', 'agent'], 'impz: give --grantable, --image-ref-prefix or both\n'],
 ])('it refuses %p before any call to impd', async (args, stderr) => {
@@ -186,19 +186,19 @@ test.each([
     [
       'token',
       'new',
-      'nixie',
+      'tansy',
       '--scope',
       'manage',
       '--imps',
-      'nixie-*',
+      'tansy-*',
       '--image-ref-prefix',
-      'ghcr.io/zgeoff/nixie-',
+      'ghcr.io/zgeoff/tansy-',
     ],
     'tokenImageAdd',
     'has no token image adds and would drop --image-ref-prefix and make a token that adds no image',
   ],
   [
-    ['token', 'set', 'nixie', '--image-ref-prefix', 'ghcr.io/zgeoff/nixie-'],
+    ['token', 'set', 'tansy', '--image-ref-prefix', 'ghcr.io/zgeoff/tansy-'],
     'tokenImageAdd',
     'has no token image adds and would not change the image ref prefix',
   ],
@@ -357,13 +357,13 @@ test('it creates a token with an image ref prefix and shows it in token ls', asy
     args: [
       'token',
       'new',
-      'nixie',
+      'tansy',
       '--scope',
       'manage',
       '--imps',
-      'nixie-*',
+      'tansy-*',
       '--image-ref-prefix',
-      'ghcr.io/zgeoff/nixie-',
+      'ghcr.io/zgeoff/tansy-',
     ],
     env: { IMP_URL: ctx.url, IMP_TOKEN: 'root-token' },
   });
@@ -378,7 +378,7 @@ test('it creates a token with an image ref prefix and shows it in token ls', asy
   expect(lines).toStrictEqual([
     'NAME   SCOPE   IMPS     GRANTABLE  IMAGE REF PREFIX       SSH KEYS  CREATED',
     expect.stringMatching(
-      /^nixie {2}manage {2}nixie-\* {2}- {10}ghcr\.io\/zgeoff\/nixie- {2}0 {9}\S+$/u,
+      /^tansy {2}manage {2}tansy-\* {2}- {10}ghcr\.io\/zgeoff\/tansy- {2}0 {9}\S+$/u,
     ) as unknown,
     '',
   ]);
@@ -387,22 +387,22 @@ test('it creates a token with an image ref prefix and shows it in token ls', asy
 test('it gives a token an image ref prefix on token set', async () => {
   const ctx = await setupTest();
 
-  await ctx.client.tokens.create({ name: 'nixie', scope: 'manage', imps: ['nixie-*'] });
+  await ctx.client.tokens.create({ name: 'tansy', scope: 'manage', imps: ['tansy-*'] });
 
   const result = await runCLIInProcess({
-    args: ['token', 'set', 'nixie', '--image-ref-prefix', 'ghcr.io/zgeoff/nixie-', '--json'],
+    args: ['token', 'set', 'tansy', '--image-ref-prefix', 'ghcr.io/zgeoff/tansy-', '--json'],
     env: { IMP_URL: ctx.url, IMP_TOKEN: 'root-token' },
   });
 
   const printed: unknown = JSON.parse(result.stdout);
 
   expect(printed).toStrictEqual({
-    name: 'nixie',
+    name: 'tansy',
     scope: 'manage',
-    imps: ['nixie-*'],
+    imps: ['tansy-*'],
     sshKeys: [],
     grantable: [],
-    imageRefPrefix: 'ghcr.io/zgeoff/nixie-',
+    imageRefPrefix: 'ghcr.io/zgeoff/tansy-',
     createdAt: expect.any(String) as unknown,
   });
 });
@@ -411,14 +411,14 @@ test('it takes a token’s image ref prefix away on token set with an empty --im
   const ctx = await setupTest();
 
   await ctx.client.tokens.create({
-    name: 'nixie',
+    name: 'tansy',
     scope: 'manage',
-    imps: ['nixie-*'],
-    imageRefPrefix: 'ghcr.io/zgeoff/nixie-',
+    imps: ['tansy-*'],
+    imageRefPrefix: 'ghcr.io/zgeoff/tansy-',
   });
 
   await runCLIInProcess({
-    args: ['token', 'set', 'nixie', '--image-ref-prefix', ''],
+    args: ['token', 'set', 'tansy', '--image-ref-prefix', ''],
     env: { IMP_URL: ctx.url, IMP_TOKEN: 'root-token' },
   });
 

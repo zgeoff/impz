@@ -72,7 +72,7 @@ impz token new ci --scope exec --imps 'dev-*'   # prints the secret once, on std
 impz token ls                                   # names, scopes, imps, grantable secrets, SSH keys
 impz token whoami                               # who impd takes this CLI for
 impz token set agent --grantable 'gh,npm'       # change the secrets it may grant
-impz token set nixie --image-ref-prefix ghcr.io/zgeoff/nixie-   # let it add its images
+impz token set tansy --image-ref-prefix ghcr.io/zgeoff/tansy-   # let it add its images
 impz token rm ci
 ```
 
@@ -181,19 +181,15 @@ registry itself, so a service that runs its guests on impd adds its released ima
 without the host owner adding each one first:
 
 ```sh
-impz token new nixie --scope manage --imps 'nixie-*' --image-ref-prefix ghcr.io/zgeoff/nixie-
-impz token set nixie --image-ref-prefix ''   # take the permission away
+impz token new tansy --scope manage --imps 'tansy-*' --image-ref-prefix ghcr.io/zgeoff/tansy-
+impz token set tansy --image-ref-prefix ''   # take the permission away
 ```
-
-nixie's own docs define the names it gives its imps, images and secrets, and why its token takes the
-pattern `nixie-*` and its sandbox images stay publicly pullable:
-[nixie's names in impd](https://github.com/zgeoff/nixie/blob/main/docs/architecture/deployment/impd-names.md).
 
 The token adds an image only when all of these hold, and each other add is `FORBIDDEN`:
 
-- The image's name is within its patterns, so `nixie-sandbox` and never `base`. The call must name
+- The image's name is within its patterns, so `tansy-sandbox` and never `base`. The call must name
   the image.
-- The ref starts with the prefix, so `ghcr.io/zgeoff/nixie-sandbox@sha256:<digest>` and never an
+- The ref starts with the prefix, so `ghcr.io/zgeoff/tansy-sandbox@sha256:<digest>` and never an
   image from another repository or registry.
 - The ref is pinned by its `sha256` digest. A tag can move to other content after the token's owner
   checked it, and a digest cannot.
@@ -207,7 +203,7 @@ names an imp and no registry. A pin needs no digest in the ref, because a pin on
 that impd holds.
 
 The prefix is a registry host with a dot, a port or `localhost`, then the start of a path. A bare
-path such as `zgeoff/nixie-` fails with `BAD_REQUEST`, because docker would read it as a repository
+path such as `zgeoff/tansy-` fails with `BAD_REQUEST`, because docker would read it as a repository
 on Docker Hub. The prefix is the host owner's choice when they make the token or change it with
 `impz token set`, never the token's: a token with patterns cannot call `tokens.update`. A prefix on
 a token without `manage`, or with no patterns, fails with `BAD_REQUEST`. `impz token ls` and
