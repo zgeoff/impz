@@ -86,11 +86,11 @@ test('#assertUnpacked fails an unpack whose tar exited non-zero with its stderr'
 
 // The mask is imp-host's capability set from deploy/imp-host.args.json, which holds bit 31.
 test('#readSetfcapWarning gives no start warning when CapEff holds CAP_SETFCAP', () => {
-  expect(readSetfcapWarning('Name:\timpd\nCapEff:\t00000000882810fb\n')).toBeNull();
+  expect(readSetfcapWarning('Name:\timpd\nCapEff:\t00000000882814fb\n')).toBeNull();
 });
 
 test('#readSetfcapWarning gives the start warning when CapEff lacks CAP_SETFCAP', () => {
-  expect(readSetfcapWarning('Name:\timpd\nCapEff:\t00000000082810fb\n')).toBe(
+  expect(readSetfcapWarning('Name:\timpd\nCapEff:\t00000000082814fb\n')).toBe(
     'no CAP_SETFCAP, so an image add or build fails on an image with a file capability; imp-host needs CAP_SETFCAP (docs/architecture/host.md#privileges)',
   );
 });

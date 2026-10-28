@@ -7,7 +7,8 @@
 #   host/scripts/tailscale-up.sh against a fake tailscale, after
 #   host/scripts/load-env-file.sh exports the env file as host/entrypoint
 #   does. It checks the env file, that its secrets stay off the disk, the
-#   kernel settings, that the host has no imp rules, and the three
+#   kernel settings, that the stand-in binds impd's ports below 1024 as
+#   impd does, that the host has no imp rules, and the three
 #   ways the node comes up: a first join with the key file, a restart from
 #   good saved state with no key used, and a join again when the saved node
 #   needs a login (the control plane deleted it). With ipv6.enable, as the
@@ -32,6 +33,13 @@ let
   fakeBackupPassword = "fake-backup-password-for-the-vm-test";
   fakeAwsSecret = "fake-aws-secret-for-the-vm-test";
   stateDir = "/var/lib/imp/tailscale";
+  # impd's tailnet ports (HTTPS, HTTP and SSH), which the stand-in binds as
+  # impd does: as the container's root, with the container's capabilities.
+  impdPorts = [
+    "443"
+    "80"
+    "22"
+  ];
 
   # Stands in for tailscaled: a socket, and its name in ps.
   fakeTailscaled = pkgs.writeScriptBin "tailscaled" ''
@@ -68,7 +76,8 @@ let
       pathsToLink = [ "/bin" ];
     };
     extraCommands = ''
-      mkdir -p lib/imp
+      mkdir -p lib/imp tmp
+      chmod 1777 tmp
       cp ${../../../host/scripts/tailscale-up.sh} lib/imp/tailscale-up.sh
       cp ${../../../host/scripts/load-env-file.sh} lib/imp/load-env-file.sh
       chmod 755 lib/imp/tailscale-up.sh
@@ -77,7 +86,7 @@ let
       Cmd = [
         "/bin/bash"
         "-c"
-        ". /lib/imp/load-env-file.sh \"$IMP_ENV_FILE\"; mkdir -p ${stateDir}; /lib/imp/tailscale-up.sh >${stateDir}/up.out 2>&1; echo $? >${stateDir}/up.rc; exec sleep infinity"
+        ". /lib/imp/load-env-file.sh \"$IMP_ENV_FILE\"; mkdir -p ${stateDir}; /lib/imp/tailscale-up.sh >${stateDir}/up.out 2>&1; echo $? >${stateDir}/up.rc; for port in ${pkgs.lib.concatStringsSep " " impdPorts}; do socat TCP-LISTEN:$port,fork,reuseaddr SYSTEM:true 2>>/tmp/listen.err & done; exec sleep infinity"
       ];
       Labels."imp.tailscale-keyless" = "1";
     };
@@ -333,6 +342,14 @@ pkgs.testers.runNixOSTest {
           host.fail("command -v docker")
           host.succeed("podman container inspect -f '{{.State.Running}}' imp-host | grep -qx true")
           host.fail("podman exec imp-host sh -c 'command -v docker'")
+
+      with subtest("impd's stand-in listens on its tailnet ports below 1024"):
+          for port in [${pkgs.lib.concatStringsSep ", " impdPorts}]:
+              try:
+                  host.wait_until_succeeds(connect(container, "127.0.0.1", port), timeout=30)
+              except Exception:
+                  errors = host.succeed("podman exec imp-host cat /tmp/listen.err")
+                  raise AssertionError(f"nothing listens on {port} in imp-host: {errors}")
 
       with subtest("the kernel has the module's sysctls, devices and ARC cap"):
           host.succeed("sysctl -n vm.overcommit_memory | grep -qx 1")

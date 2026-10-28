@@ -39,13 +39,17 @@ directory when it can, and joins with a key only when it has none.
 
 The container runs without `--privileged`. Its arguments drop every capability and add back the few
 impd uses: the mounts for storage, cgroups and the jailer; the network for taps, routes and the
-firewall; device nodes for the jail; the uid switches for the jailer; and the file ownership and
-capability writes that unpacking an image needs. Each one was kept because a run without it failed,
-and the end-to-end harness fails when a dev instance's list differs. `/proc/sys` is read-only, so
-the forwarding and tap sysctls come from the container's arguments and the scripts only check them.
-AppArmor is unconfined, because the engine's default profile denies `mount`. The seccomp profile is
-Docker's default, which Podman reads unchanged, with one rule added, `pivot_root`, which the jailer
-needs.
+firewall; device nodes for the jail; the uid switches for the jailer; the file ownership and
+capability writes that unpacking an image needs; and the bind of impd's tailnet ports below 1024.
+Each one was kept because a run without it failed, and the end-to-end harness fails when a dev
+instance's list differs. `/proc/sys` is read-only, so the forwarding and tap sysctls come from the
+container's arguments and the scripts only check them. AppArmor is unconfined, because the engine's
+default profile denies `mount`. The seccomp profile is Docker's default, which Podman reads
+unchanged, with one rule added, `pivot_root`, which the jailer needs.
+
+Docker opens the ports below 1024 to every process in the container by default, and Podman does not.
+The arguments add the capability to bind them, which opens them to the container's root alone, on
+either engine.
 
 The arguments lift the cap on the container's processes that Podman sets by default, because every
 imp's Firecracker and jailer processes and threads count against the container's cgroup. They also
