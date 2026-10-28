@@ -311,6 +311,7 @@ function createDefaultTemplates(
     kernelPath: deps.config.kernelPath,
     minGuestUptimeMs: deps.config.sleepMinGuestUptimeMs,
     bootReservePercent: deps.config.bootReservePercent,
+    ramBudgetMib: deps.config.ramBudgetMib,
     buildVm: deps.vms.createTemplateVm,
     lockMemory: createMemoryLock,
     taps: deps.taps,

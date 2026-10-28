@@ -9,11 +9,14 @@ export interface MemoryLock {
   readonly release: () => void;
 }
 
-export type MemoryLockResult = { readonly lock: MemoryLock } | { readonly errno: number };
+export type MemoryLockResult =
+  | { readonly lock: MemoryLock }
+  | { readonly errno: number }
+  | { readonly declinedBytes: number };
 
 export async function createMemoryLock(
   path: string,
-  onSized: (lockBytes: number) => void,
+  onSized: (lockBytes: number) => boolean,
 ): Promise<MemoryLockResult> {
   const libc = readLibc();
 
@@ -33,7 +36,9 @@ export async function createMemoryLock(
 
     const lockedBytes = runs.reduce((total, run) => total + run.length, 0);
 
-    onSized(lockedBytes);
+    if (!onSized(lockedBytes)) {
+      return { declinedBytes: lockedBytes };
+    }
 
     const address = Number(libc.mmap(0, size, PROT_READ, MAP_SHARED, fd, 0));
 

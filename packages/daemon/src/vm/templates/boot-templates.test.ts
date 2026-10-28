@@ -34,6 +34,7 @@ async function setupTest() {
     firecrackerBin: 'firecracker',
     kernelPath: 'vmlinux',
     minGuestUptimeMs: 1500,
+    ramBudgetMib: 8192,
     buildVm: vm.buildVm,
     lockMemory: mock(() => Promise.resolve({ lock: { lockedBytes: 0, release: () => {} } })),
     taps: { setupTap: mock(() => Promise.resolve()), removeTap: mock(() => Promise.resolve()) },

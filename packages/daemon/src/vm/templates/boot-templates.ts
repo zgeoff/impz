@@ -103,6 +103,7 @@ export interface BootTemplateDeps {
   readonly kernelPath: string;
   readonly minGuestUptimeMs: number;
   readonly bootReservePercent: number;
+  readonly ramBudgetMib: number;
   readonly buildVm: (plan: Readonly<TemplateBuildPlan>) => Promise<void>;
   readonly lockMemory: TemplateLockDeps['lockMemory'];
   readonly taps: TapDevices;
@@ -227,6 +228,7 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
   const templateLocks = createTemplateLocks({
     lockMemory: deps.lockMemory,
     probeCurrent: (target) => readMeta(target.key)?.buildId === target.buildId,
+    ramBudgetMib: deps.ramBudgetMib,
     logger: getImpdLogger('boot'),
   });
 

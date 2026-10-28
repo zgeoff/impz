@@ -26,7 +26,7 @@ test('it locks the data of a sparse file and none of its holes', async () => {
 
   await truncate(path, 4 * 1024 * 1024);
 
-  const result = await createMemoryLock(path, () => {});
+  const result = await createMemoryLock(path, () => true);
 
   invariant('lock' in result);
   onTestFinished(result.lock.release);
@@ -56,8 +56,10 @@ test('it reports the bytes it will lock before it locks them', async () => {
 
   const smapsAtSize: string[] = [];
 
-  const onSized = mock<(lockBytes: number) => void>(() => {
+  const onSized = mock<(lockBytes: number) => boolean>(() => {
     smapsAtSize.push(readFileSync('/proc/self/smaps', 'utf8'));
+
+    return true;
   });
 
   const result = await createMemoryLock(path, onSized);
@@ -69,6 +71,21 @@ test('it reports the bytes it will lock before it locks them', async () => {
   expect(smapsAtSize).toSatisfyAll((smaps: string) => !smaps.includes(path));
 });
 
+test('it maps and locks nothing when the size report declines the lock', async () => {
+  const ctx = await setupTest();
+
+  const path = join(ctx.directory, 'mem');
+  const fd = openSync(path, 'w');
+
+  writeSync(fd, Buffer.alloc(8192, 1), 0, 8192, 0);
+  closeSync(fd);
+
+  const result = await createMemoryLock(path, () => false);
+
+  expect(result).toStrictEqual({ declinedBytes: 8192 });
+  expect(readFileSync('/proc/self/smaps', 'utf8')).not.toInclude(path);
+});
+
 test('it holds the locked pages in a mapping of the file until release', async () => {
   const ctx = await setupTest();
 
@@ -78,7 +95,7 @@ test('it holds the locked pages in a mapping of the file until release', async (
   writeSync(fd, Buffer.alloc(8192, 1), 0, 8192, 0);
   closeSync(fd);
 
-  const result = await createMemoryLock(path, () => {});
+  const result = await createMemoryLock(path, () => true);
 
   invariant('lock' in result);
 
