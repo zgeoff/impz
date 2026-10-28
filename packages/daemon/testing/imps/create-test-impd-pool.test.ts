@@ -1,6 +1,10 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
+import { existsSync } from 'node:fs';
+import { buildStubAnswerQueue } from '@impz/test-utils/build-stub-answer-queue';
+import invariant from 'tiny-invariant';
 import type { Impd } from '../../src/create-impd';
 import { listImps } from '../../src/platform/db/imps';
+import type { TestImpd } from '../start-test-impd';
 import { createTestImpdPool } from './create-test-impd-pool';
 
 function setupTest() {
@@ -129,6 +133,41 @@ test('it fails the case and boots a fresh impd when the reset fails', async () =
 
   expect(failed).toMatchObject({ code: 'INTERNAL_SERVER_ERROR' });
   expect(seen).not.toContain(second);
+});
+
+test('it releases an impd whose prepare fails and boots a fresh one for the next case', async () => {
+  const ctx = setupTest();
+  const prepared: TestImpd[] = [];
+
+  const answers = buildStubAnswerQueue([
+    () => Promise.reject(new Error('the image write failed')),
+    () => Promise.resolve(),
+  ]);
+
+  const pool = createTestImpdPool(ctx.stack, {
+    prepareImpd: (impd) => {
+      prepared.push(impd);
+
+      return answers.next()();
+    },
+  });
+
+  const firstCase = pool.withImpd(() => Promise.resolve());
+
+  const failed = await firstCase.then(
+    () => null,
+    (error: unknown) => error,
+  );
+
+  const second = await pool.withImpd((lease) => Promise.resolve(lease.ctx.impd));
+
+  const [first, retried] = prepared;
+
+  invariant(first !== undefined && retried !== undefined);
+
+  expect(failed).toStrictEqual(new Error('the image write failed'));
+  expect(second).toBe(retried.impd);
+  expect(existsSync(first.dataDir)).toBeFalse();
 });
 
 test('it prepares each impd it boots once', async () => {

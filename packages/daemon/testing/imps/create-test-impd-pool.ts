@@ -44,17 +44,24 @@ export function createTestImpdPool(
 
     const impdStack = new AsyncDisposableStack();
 
-    pool.current = {
-      stack: impdStack,
-      ctx: await startTestImpd(impdStack, {
+    const ctx = await Promise.try(async () => {
+      const started = await startTestImpd(impdStack, {
         ...options.impd,
         onLog: (message) => sink.onLog?.(message),
-      }),
-    };
+      });
 
-    await options.prepareImpd?.(pool.current.ctx);
+      await options.prepareImpd?.(started);
 
-    return pool.current.ctx;
+      return started;
+    }).catch(async (error: unknown) => {
+      await impdStack.disposeAsync();
+
+      throw error;
+    });
+
+    pool.current = { stack: impdStack, ctx };
+
+    return ctx;
   };
 
   return {
