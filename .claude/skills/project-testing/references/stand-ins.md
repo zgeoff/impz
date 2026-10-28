@@ -77,8 +77,13 @@ The harness restarts impd over the same database and VMs as a crash leaves them,
 and holds a lifecycle step through the fake VMM. It keeps each unexpected RPC failure in a list and
 writes it to its own log, not to stderr.
 
-Two harnesses build on `startTestImpd`:
+Three harnesses build on `startTestImpd`:
 
+- **The impd pool**,
+  [`createTestImpdPool`](../../../../packages/daemon/testing/imps/create-test-impd-pool.ts), lends
+  one impd to each case of a property and removes every imp the case left before the next case. A
+  case that stops impd's VM starts, as a shutdown does, retires the impd, and the next case boots a
+  fresh one.
 - **The move hosts**,
   [`setupMoveHosts`](../../../../packages/daemon/testing/imp-ops/create-move-hosts.ts), start two
   impds with a hook that sees every request the source sends to the target. The fake VMM numbers VMs
