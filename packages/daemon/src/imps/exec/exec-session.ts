@@ -10,9 +10,7 @@ import {
   encodeExecFrame,
 } from '@impz/api';
 import type { DetachReason, ExecChannel, ExecServerMessage, SessionOutput } from '@impz/api';
-import { ImpdError } from '../../platform/errors/impd-error';
-import { getErrorMessage } from '../../platform/process/get-error-message';
-import { AgentError } from '../../vm/agent-client/agent-connection';
+import { match } from 'ts-pattern';
 import type { AgentFeature } from '../../vm/agent-client/agent-outdated';
 import type {
   AgentAttachRequest,
@@ -20,6 +18,9 @@ import type {
   ExecEvent,
   ExecStream,
 } from '../../vm/agent-client/exec-stream';
+import { buildGuestFailure } from '../../vm/guest-channels/build-guest-failure';
+import { createAckSender } from '../../vm/guest-channels/create-ack-sender';
+import { createAckWindow } from '../../vm/guest-channels/create-ack-window';
 import { TOOL_FEATURES, buildToolRequest } from './exec-tools';
 import { findSignalNumber, getSignalName } from './signal-names';
 
@@ -56,9 +57,6 @@ export function createExecSession(peer: ExecPeer, backend: ExecBackend): ExecSes
     name: string;
     pending: unknown[];
     tool: boolean;
-    unacked: number;
-    acking: boolean;
-    outUnacked: number;
     killGrace: boolean;
     log: boolean;
     output: Extract<SessionOutput, { continuity: 'offsets' }> | null;
@@ -70,9 +68,6 @@ export function createExecSession(peer: ExecPeer, backend: ExecBackend): ExecSes
     name: '',
     pending: [],
     tool: false,
-    unacked: 0,
-    acking: false,
-    outUnacked: 0,
     killGrace: false,
     log: false,
     output: null,
@@ -156,17 +151,12 @@ export function createExecSession(peer: ExecPeer, backend: ExecBackend): ExecSes
     }
   };
 
-  const ackWaiter: { wake: (() => void) | null } = { wake: null };
+  const isOpen = (): boolean => !state.closed;
+  const stdoutWindow = createAckWindow(EXEC_STDOUT_WINDOW_BYTES, isOpen);
 
-  const waitForStdoutAcks = async (): Promise<void> => {
-    while (!state.closed && state.outUnacked > EXEC_STDOUT_WINDOW_BYTES) {
-      await new Promise<void>((resolve) => {
-        ackWaiter.wake = resolve;
-      });
-
-      ackWaiter.wake = null;
-    }
-  };
+  const stdinAcks = createAckSender(isOpen, (bytes) => {
+    send({ type: 'stdin_ack', bytes });
+  });
 
   const drainOutput = async (stream: ExecStream): Promise<void> => {
     try {
@@ -184,9 +174,9 @@ export function createExecSession(peer: ExecPeer, backend: ExecBackend): ExecSes
         }
 
         if (state.tool && event.type === 'stdout') {
-          state.outUnacked += event.data.byteLength;
+          stdoutWindow.countSent(event.data.byteLength);
 
-          await waitForStdoutAcks();
+          await stdoutWindow.waitForRoom();
         }
 
         await waitForPeerDrain();
@@ -257,24 +247,6 @@ export function createExecSession(peer: ExecPeer, backend: ExecBackend): ExecSes
     await drainOutput(stream);
   };
 
-  const sendStdinAcks = async (stream: ExecStream): Promise<void> => {
-    state.acking = true;
-
-    while (state.unacked > 0 && !state.closed) {
-      const bytes = state.unacked;
-
-      await stream.stdinDrained();
-
-      state.unacked -= bytes;
-
-      if (!state.closed) {
-        send({ type: 'stdin_ack', bytes });
-      }
-    }
-
-    state.acking = false;
-  };
-
   const writeStdin = (data: Uint8Array): void => {
     const stream = state.stream;
 
@@ -288,11 +260,11 @@ export function createExecSession(peer: ExecPeer, backend: ExecBackend): ExecSes
       return;
     }
 
-    state.unacked += data.byteLength;
+    const pending = stdinAcks.countReceived(data.byteLength);
 
     if (
       data.byteLength > EXEC_MAX_STDIN_FRAME_BYTES ||
-      state.unacked > EXEC_STDIN_WINDOW_BYTES + EXEC_MAX_STDIN_FRAME_BYTES
+      pending > EXEC_STDIN_WINDOW_BYTES + EXEC_MAX_STDIN_FRAME_BYTES
     ) {
       sendFailure(new Error('stdin past the window'));
 
@@ -302,10 +274,7 @@ export function createExecSession(peer: ExecPeer, backend: ExecBackend): ExecSes
     }
 
     stream.writeStdin(data);
-
-    if (!state.acking) {
-      void sendStdinAcks(stream);
-    }
+    stdinAcks.sendAcks(() => stream.stdinDrained());
   };
 
   const handleControl = (message: unknown): void => {
@@ -392,20 +361,24 @@ export function createExecSession(peer: ExecPeer, backend: ExecBackend): ExecSes
       return;
     }
 
-    if (control.type === 'stdout_ack') {
-      state.outUnacked = Math.max(0, state.outUnacked - control.bytes);
-      ackWaiter.wake?.();
-    } else if (control.type === 'stdin_eof') {
-      stream.closeStdin();
-    } else if (control.type === 'resize') {
-      stream.resize(control.cols, control.rows);
-    } else {
-      const signal = findSignalNumber(control.signal);
+    match(control)
+      .with({ type: 'stdout_ack' }, (ack) => {
+        stdoutWindow.countAcked(ack.bytes);
+      })
+      .with({ type: 'stdin_eof' }, () => {
+        stream.closeStdin();
+      })
+      .with({ type: 'resize' }, (resize) => {
+        stream.resize(resize.cols, resize.rows);
+      })
+      .with({ type: 'signal' }, (signal) => {
+        const signalNumber = findSignalNumber(signal.signal);
 
-      if (signal !== undefined) {
-        stream.sendSignal(signal);
-      }
-    }
+        if (signalNumber !== undefined) {
+          stream.sendSignal(signalNumber);
+        }
+      })
+      .exhaustive();
   };
 
   const handleMessage = (message: unknown): void => {
@@ -441,7 +414,7 @@ export function createExecSession(peer: ExecPeer, backend: ExecBackend): ExecSes
     handleClose: () => {
       state.closed = true;
       state.stream?.close();
-      ackWaiter.wake?.();
+      stdoutWindow.stop();
     },
     handleDrain: () => {
       drainWaiter.wake?.();
@@ -450,29 +423,7 @@ export function createExecSession(peer: ExecPeer, backend: ExecBackend): ExecSes
 }
 
 function buildErrorMessage(error: unknown): ExecServerMessage {
-  if (error instanceof ImpdError) {
-    const data: unknown = error.data;
-
-    return {
-      type: 'error',
-      code: String(error.code),
-      message: error.message,
-      ...(data !== undefined && { data }),
-    };
-  }
-
-  if (error instanceof AgentError) {
-    const data: unknown = error.data;
-
-    return {
-      type: 'error',
-      code: error.code,
-      message: error.detail,
-      ...(data !== undefined && { data }),
-    };
-  }
-
-  return { type: 'error', message: getErrorMessage(error) };
+  return { type: 'error', ...buildGuestFailure(error) };
 }
 
 function readDetachReason(reason: string): DetachReason {

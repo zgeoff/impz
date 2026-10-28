@@ -1,13 +1,13 @@
 import { TUNNEL_CLOSE_RESTARTING, TUNNEL_PATH } from '@impz/api';
 import { Elysia } from 'elysia';
 import type { ImpService } from '../imps/imps/imp-service';
-import { createReverseForwards } from '../imps/reverse/reverse-forwards';
-import { createTunnelLimits, createTunnelSession } from '../imps/tunnel/tunnel-session';
-import type { TunnelSession } from '../imps/tunnel/tunnel-session';
 import { withAuditedOpen } from '../platform/audit/api-audit';
 import type { ApiAudit } from '../platform/audit/api-audit';
 import type { Caller } from '../platform/principal/caller';
 import type { ListenSpec } from '../vm/agent-client/listener-stream';
+import { createReverseForwards } from '../vm/guest-channels/reverse-forwards';
+import { createTunnelLimits, createTunnelSession } from '../vm/guest-channels/tunnel-session';
+import type { TunnelSession } from '../vm/guest-channels/tunnel-session';
 import { createSocketRegistry } from './create-socket-registry';
 import { findImpRefusal } from './find-imp-refusal';
 

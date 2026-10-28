@@ -19,6 +19,7 @@ import { buildStubFirecrackerArgv } from '../../../testing/vm/start-stub-firecra
 import { startStubParkedAgent } from '../../../testing/vm/start-stub-parked-agent';
 import { stopPid } from '../../platform/process/proc';
 import { buildImpPaths } from '../storage/data-layout';
+import { createFirecrackerClient } from './firecracker-client';
 import { probeFirecrackerAlive } from './firecracker-process';
 import { TemplateRestoreError, createTemplateVm, loadTemplateVm } from './template-vm';
 
@@ -219,6 +220,38 @@ test('#loadTemplateVm kills the VM and releases the jail of a restore that fails
   expect(stub.notes.at(-1)).toBe('release i1');
 });
 
+test('#loadTemplateVm asks Firecracker through the client factory it is given', () => {
+  const ctx = setupTest();
+  const paths = buildImpPaths(ctx.directoryPath, 'i1');
+  const sockets: string[] = [];
+
+  mkdirSync(paths.runDir, { recursive: true });
+
+  const stub = buildStubJails({
+    argv: buildStubFirecrackerArgv({
+      apiSocket: paths.apiSocket,
+      logPath: ctx.logPath,
+      failures: ['PUT /snapshot/load'],
+    }),
+  });
+
+  expect(
+    loadTemplateVm(
+      buildMockTemplateRestorePlan({ paths, jail: { uid: 900_001, gid: 900_001 } }),
+      stub.jails,
+      {
+        createClient: (socketPath, timeouts) => {
+          sockets.push(socketPath);
+
+          return createFirecrackerClient(socketPath, timeouts);
+        },
+      },
+    ),
+  ).rejects.toThrow();
+
+  expect(sockets).toStrictEqual([paths.apiSocket]);
+});
+
 test('#loadTemplateVm releases the jail of a restore whose prepare fails, and passes the error on', () => {
   const ctx = setupTest();
   const paths = buildImpPaths(ctx.directoryPath, 'i1');
@@ -333,6 +366,40 @@ test('#buildTemplateVm binds the kernel and the system drive into a jailed build
       scratchFiles: [plan.placeholderPath],
     },
   ]);
+});
+
+test('#buildTemplateVm configures the VM through the client factory it is given', async () => {
+  const ctx = setupTest();
+  const sockets: string[] = [];
+
+  const plan = buildMockTemplateBuildPlan({
+    workDir: join(ctx.directoryPath, '.build-1'),
+    jailId: 'tpl-build',
+    jail: { uid: process.getuid?.() ?? 0, gid: process.getgid?.() ?? 0 },
+  });
+
+  mkdirSync(plan.paths.runDir, { recursive: true });
+
+  const stub = buildStubJails({
+    argv: buildStubFirecrackerArgv({ apiSocket: plan.paths.apiSocket, logPath: ctx.logPath }),
+  });
+
+  const building = createTemplateVm(plan, stub.jails, {
+    createClient: (socketPath, timeouts) => {
+      sockets.push(socketPath);
+
+      return createFirecrackerClient(socketPath, timeouts);
+    },
+  });
+
+  await waitFor(() => {
+    expect(existsSync(plan.paths.apiSocket)).toBeTrue();
+  });
+
+  await startStubParkedAgent(plan.paths.vsockSocket);
+  await building;
+
+  expect(sockets).toStrictEqual([plan.paths.apiSocket]);
 });
 
 test('#buildTemplateVm fails a build whose VM refuses its config', () => {

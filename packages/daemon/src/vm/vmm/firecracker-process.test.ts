@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { waitFor } from '@impz/test-utils/wait-for';
+import { buildStubClock } from '../../../testing/platform/build-stub-clock';
 import { startStubFirecrackerProcess } from '../../../testing/vm/start-stub-firecracker-process';
 import { stopPid } from '../../platform/process/proc';
 import {
@@ -314,4 +315,77 @@ test('#probeJailedFirecracker finds an unjailed firecracker not jailed', async (
   const child = await startStubFirecrackerProcess(join(ctx.directoryPath, 'api.sock'));
 
   expect(probeJailedFirecracker(child.pid)).toBeFalse();
+});
+
+test('#probeJailedFirecracker reads the command line from the /proc it is given', () => {
+  const ctx = setupTest();
+
+  mkdirSync(join(ctx.directoryPath, 'proc', '42'), { recursive: true });
+
+  writeFileSync(
+    join(ctx.directoryPath, 'proc', '42', 'cmdline'),
+    'firecracker\0--id\0i1\0--api-sock\0/run/api.sock\0',
+  );
+
+  expect(probeJailedFirecracker(42, join(ctx.directoryPath, 'proc'))).toBeTrue();
+});
+
+test('#listFirecrackers finds each firecracker in the /proc it is given, with its owner', () => {
+  const ctx = setupTest();
+  const procRoot = join(ctx.directoryPath, 'proc');
+
+  mkdirSync(join(procRoot, '42'), { recursive: true });
+  mkdirSync(join(procRoot, '43'));
+  mkdirSync(join(procRoot, 'self'));
+  writeFileSync(join(procRoot, '42', 'stat'), '42 (firecracker) S 1 42 42 0 -1');
+
+  writeFileSync(
+    join(procRoot, '42', 'cmdline'),
+    '/usr/bin/firecracker\0--id\0i1\0--api-sock\0/run/api.sock\0',
+  );
+
+  writeFileSync(join(procRoot, '42', 'status'), 'Name:\tfirecracker\nUid:\t900001\t900001\t0\t0\n');
+  writeFileSync(join(procRoot, '42', 'cgroup'), '0::/imps/i1\n');
+  writeFileSync(join(procRoot, '43', 'stat'), '43 (sleep) S 1 43 43 0 -1');
+  writeFileSync(join(procRoot, '43', 'cmdline'), 'sleep\0--api-sock\0/run/api.sock\0');
+
+  expect(listFirecrackers(procRoot)).toStrictEqual([
+    { pid: 42, apiSocket: '/run/api.sock', owner: { uid: 900_001, cgroup: '/imps/i1' } },
+  ]);
+});
+
+test('#waitForExit gives up at the timeout of the injected clock while the firecracker stays', async () => {
+  const ctx = setupTest();
+  const clock = buildStubClock();
+
+  mkdirSync(join(ctx.directoryPath, 'proc', '42'), { recursive: true });
+  writeFileSync(join(ctx.directoryPath, 'proc', '42', 'stat'), '42 (firecracker) S 1 42 42 0 -1');
+
+  writeFileSync(
+    join(ctx.directoryPath, 'proc', '42', 'cmdline'),
+    'firecracker\0--api-sock\0/run/api.sock\0',
+  );
+
+  const exited = await waitForExit(42, '/run/api.sock', 30, {
+    clock,
+    procRoot: join(ctx.directoryPath, 'proc'),
+  });
+
+  expect(exited).toBeFalse();
+  expect(clock.sleeps).toStrictEqual([10, 10, 10, 10]);
+});
+
+test('#waitForExit resolves true at once for a pid gone from the /proc it is given', async () => {
+  const ctx = setupTest();
+  const clock = buildStubClock();
+
+  mkdirSync(join(ctx.directoryPath, 'proc'));
+
+  const exited = await waitForExit(42, '/run/api.sock', 30, {
+    clock,
+    procRoot: join(ctx.directoryPath, 'proc'),
+  });
+
+  expect(exited).toBeTrue();
+  expect(clock.sleeps).toStrictEqual([]);
 });

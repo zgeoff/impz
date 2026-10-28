@@ -8,11 +8,6 @@ import { readSnapshotMeta } from '../../vm/sleep/snapshot-meta';
 import type { AgentWatchdog } from '../../vm/watchdog/agent-watchdog';
 import { createFileApi } from '../files/file-api';
 import type { FileApi } from '../files/file-api';
-import { createServiceApi } from '../services/service-api';
-import type { ServiceApi } from '../services/service-api';
-import { countSessions } from '../sessions/count-sessions';
-import { createSessionService } from '../sessions/session-service';
-import type { SessionService } from '../sessions/session-service';
 import { readBootStatus } from './boot-status';
 import type { BootStatus } from './boot-status';
 import type { ImpCommands } from './imp-commands';
@@ -30,6 +25,11 @@ import { createImpVmOps } from './imp-vm-ops';
 import type { ImpVmOps } from './imp-vm-ops';
 import { KERNEL_OOPS_REASON } from './kernel-oops-watch';
 import { readRunningImpUsage } from './read-running-imp-usage';
+import { createServiceApi } from './services/service-api';
+import type { ServiceApi } from './services/service-api';
+import { countSessions } from './sessions/count-sessions';
+import { createSessionService } from './sessions/session-service';
+import type { SessionService } from './sessions/session-service';
 
 export type { ImpServiceDeps } from './imp-context';
 

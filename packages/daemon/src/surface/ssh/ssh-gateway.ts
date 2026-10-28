@@ -3,7 +3,6 @@ import type { Socket } from 'node:net';
 import { Server } from 'ssh2';
 import type { AuthContext, ClientInfo, Connection } from 'ssh2';
 import { createAgentForwarding } from '../../imps/ssh/agent-forwarding';
-import { formatFailure } from '../../imps/ssh/channel-io';
 import {
   handleForward,
   resolveSocketTarget,
@@ -18,6 +17,7 @@ import type { Caller } from '../../platform/principal/caller';
 import type { StartTimer } from '../../platform/process/clock';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { startRealTimer } from '../../platform/process/start-real-timer';
+import { formatGuestFailure } from '../../vm/guest-channels/format-guest-failure';
 import { findImpRefusal } from '../find-imp-refusal';
 import type { LoginKeys } from './login-keys';
 
@@ -204,7 +204,9 @@ function handleClient(options: HandleClientOptions, deps: SshGatewayDeps): void 
     try {
       outcome = await checkLogin(ctx, deps);
     } catch (error) {
-      getImpdLogger('ssh').warning('login check failed: {error}', { error: formatFailure(error) });
+      getImpdLogger('ssh').warning('login check failed: {error}', {
+        error: formatGuestFailure(error),
+      });
 
       ctx.reject(['publickey']);
 
@@ -321,7 +323,7 @@ function handleLogin(
     } catch (error) {
       getImpdLogger('ssh')
         .with({ imp: imp.name })
-        .warning('could not wake: {error}', { error: formatFailure(error) });
+        .warning('could not wake: {error}', { error: formatGuestFailure(error) });
     }
   };
 

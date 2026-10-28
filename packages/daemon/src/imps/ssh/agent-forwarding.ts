@@ -1,8 +1,10 @@
 import type { Connection, ServerChannel } from 'ssh2';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import type { GuestListener } from '../../vm/agent-client/listener-stream';
-import { runGuestListener } from '../reverse/run-guest-listener';
-import { formatFailure, runChannelRelay } from './channel-io';
+import { formatGuestFailure } from '../../vm/guest-channels/format-guest-failure';
+import { runGuestListener } from '../../vm/guest-channels/run-guest-listener';
+import { stopGuestClient } from '../../vm/guest-channels/stop-guest-client';
+import { runChannelRelay } from './channel-io';
 import type { SshBackend } from './ssh-connection-context';
 
 /* @internal */
@@ -62,13 +64,8 @@ export function createAgentForwarding(deps: AgentForwardingDeps): AgentForwardin
       .info('agent forwarding: {message}', { message });
   };
 
-  const stopGuestClient = async (listener: GuestListener, id: number): Promise<void> => {
-    try {
-      const stream = await deps.backend.openAccept(deps.impName, listener.id, id, 'ssh');
-
-      stream.close();
-    } catch {}
-  };
+  const refuseGuestClient = (listener: GuestListener, id: number): Promise<void> =>
+    stopGuestClient(() => deps.backend.openAccept(deps.impName, listener.id, id, 'ssh'));
 
   const openClientChannel = (): Promise<ServerChannel> =>
     new Promise((resolve, reject) => {
@@ -89,9 +86,9 @@ export function createAgentForwarding(deps: AgentForwardingDeps): AgentForwardin
     try {
       channel = await openClientChannel();
     } catch (error) {
-      writeLog(`the client refused the agent channel: ${formatFailure(error)}`);
+      writeLog(`the client refused the agent channel: ${formatGuestFailure(error)}`);
 
-      await stopGuestClient(listener, id);
+      await refuseGuestClient(listener, id);
 
       return;
     }
@@ -103,7 +100,7 @@ export function createAgentForwarding(deps: AgentForwardingDeps): AgentForwardin
     } catch (error) {
       channel.destroy();
 
-      writeLog(formatFailure(error));
+      writeLog(formatGuestFailure(error));
     }
   };
 
@@ -121,11 +118,11 @@ export function createAgentForwarding(deps: AgentForwardingDeps): AgentForwardin
     try {
       await runGuestListener(listener, {
         deliver: (id) => handleConnection(listener, id),
-        refuse: (id) => stopGuestClient(listener, id),
+        refuse: (id) => refuseGuestClient(listener, id),
         isFull: () => state.channels >= MAX_AGENT_CHANNELS,
       });
     } catch (error) {
-      writeLog(`the guest socket ended: ${formatFailure(error)}`);
+      writeLog(`the guest socket ended: ${formatGuestFailure(error)}`);
     } finally {
       listener.close();
 

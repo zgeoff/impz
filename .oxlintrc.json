@@ -111,6 +111,7 @@
           "daemon-vm-imps-contract": ["packages/daemon/src/vm/imps-contract/**"],
           "daemon-vm-storage": ["packages/daemon/src/vm/storage/**"],
           "daemon-vm-agent-client": ["packages/daemon/src/vm/agent-client/**"],
+          "daemon-vm-guest-channels": ["packages/daemon/src/vm/guest-channels/**"],
           "daemon-vm-sleep": ["packages/daemon/src/vm/sleep/**"],
           "daemon-vm-vmm": ["packages/daemon/src/vm/vmm/**"],
           "daemon-vm-memory": ["packages/daemon/src/vm/memory/**"],
@@ -278,7 +279,7 @@
             ],
             "to": ["daemon-vm"],
             "allow": ["daemon-vm-config"],
-            "reason": "a vm folder imports only itself and the folders below it: vm-config.ts, files, imps-contract, storage, agent-client, sleep, vmm, memory, watchdog, templates"
+            "reason": "a vm folder imports only itself and the folders below it: vm-config.ts, files, imps-contract, storage, agent-client, guest-channels, sleep, vmm, memory, watchdog, templates"
           },
           {
             "name": "daemon-vm-folder-files",
@@ -290,7 +291,7 @@
             ],
             "to": ["daemon-vm"],
             "allow": ["daemon-vm-config", "daemon-vm-files"],
-            "reason": "a vm folder imports only itself and the folders below it: vm-config.ts, files, imps-contract, storage, agent-client, sleep, vmm, memory, watchdog, templates"
+            "reason": "a vm folder imports only itself and the folders below it: vm-config.ts, files, imps-contract, storage, agent-client, guest-channels, sleep, vmm, memory, watchdog, templates"
           },
           {
             "name": "daemon-vm-folder-imps-contract",
@@ -302,7 +303,7 @@
             ],
             "to": ["daemon-vm"],
             "allow": ["daemon-vm-config", "daemon-vm-files", "daemon-vm-imps-contract"],
-            "reason": "a vm folder imports only itself and the folders below it: vm-config.ts, files, imps-contract, storage, agent-client, sleep, vmm, memory, watchdog, templates"
+            "reason": "a vm folder imports only itself and the folders below it: vm-config.ts, files, imps-contract, storage, agent-client, guest-channels, sleep, vmm, memory, watchdog, templates"
           },
           {
             "name": "daemon-vm-folder-storage",
@@ -319,7 +320,7 @@
               "daemon-vm-imps-contract",
               "daemon-vm-storage"
             ],
-            "reason": "a vm folder imports only itself and the folders below it: vm-config.ts, files, imps-contract, storage, agent-client, sleep, vmm, memory, watchdog, templates"
+            "reason": "a vm folder imports only itself and the folders below it: vm-config.ts, files, imps-contract, storage, agent-client, guest-channels, sleep, vmm, memory, watchdog, templates"
           },
           {
             "name": "daemon-vm-folder-agent-client",
@@ -337,7 +338,26 @@
               "daemon-vm-storage",
               "daemon-vm-agent-client"
             ],
-            "reason": "a vm folder imports only itself and the folders below it: vm-config.ts, files, imps-contract, storage, agent-client, sleep, vmm, memory, watchdog, templates"
+            "reason": "a vm folder imports only itself and the folders below it: vm-config.ts, files, imps-contract, storage, agent-client, guest-channels, sleep, vmm, memory, watchdog, templates"
+          },
+          {
+            "name": "daemon-vm-folder-guest-channels",
+            "from": ["daemon-vm-guest-channels"],
+            "ignore": [
+              "**/*.{test,e2e}.{ts,tsx}",
+              "**/{test-utils,smoke,mocks}/**",
+              "**/test-setup.ts"
+            ],
+            "to": ["daemon-vm"],
+            "allow": [
+              "daemon-vm-config",
+              "daemon-vm-files",
+              "daemon-vm-imps-contract",
+              "daemon-vm-storage",
+              "daemon-vm-agent-client",
+              "daemon-vm-guest-channels"
+            ],
+            "reason": "a vm folder imports only itself and the folders below it: vm-config.ts, files, imps-contract, storage, agent-client, guest-channels, sleep, vmm, memory, watchdog, templates"
           },
           {
             "name": "daemon-vm-folder-sleep",
@@ -354,9 +374,10 @@
               "daemon-vm-imps-contract",
               "daemon-vm-storage",
               "daemon-vm-agent-client",
+              "daemon-vm-guest-channels",
               "daemon-vm-sleep"
             ],
-            "reason": "a vm folder imports only itself and the folders below it: vm-config.ts, files, imps-contract, storage, agent-client, sleep, vmm, memory, watchdog, templates"
+            "reason": "a vm folder imports only itself and the folders below it: vm-config.ts, files, imps-contract, storage, agent-client, guest-channels, sleep, vmm, memory, watchdog, templates"
           },
           {
             "name": "daemon-vm-folder-vmm",
@@ -373,10 +394,11 @@
               "daemon-vm-imps-contract",
               "daemon-vm-storage",
               "daemon-vm-agent-client",
+              "daemon-vm-guest-channels",
               "daemon-vm-sleep",
               "daemon-vm-vmm"
             ],
-            "reason": "a vm folder imports only itself and the folders below it: vm-config.ts, files, imps-contract, storage, agent-client, sleep, vmm, memory, watchdog, templates"
+            "reason": "a vm folder imports only itself and the folders below it: vm-config.ts, files, imps-contract, storage, agent-client, guest-channels, sleep, vmm, memory, watchdog, templates"
           },
           {
             "name": "daemon-vm-folder-memory",
@@ -393,11 +415,12 @@
               "daemon-vm-imps-contract",
               "daemon-vm-storage",
               "daemon-vm-agent-client",
+              "daemon-vm-guest-channels",
               "daemon-vm-sleep",
               "daemon-vm-vmm",
               "daemon-vm-memory"
             ],
-            "reason": "a vm folder imports only itself and the folders below it: vm-config.ts, files, imps-contract, storage, agent-client, sleep, vmm, memory, watchdog, templates"
+            "reason": "a vm folder imports only itself and the folders below it: vm-config.ts, files, imps-contract, storage, agent-client, guest-channels, sleep, vmm, memory, watchdog, templates"
           },
           {
             "name": "daemon-vm-folder-watchdog",
@@ -414,12 +437,13 @@
               "daemon-vm-imps-contract",
               "daemon-vm-storage",
               "daemon-vm-agent-client",
+              "daemon-vm-guest-channels",
               "daemon-vm-sleep",
               "daemon-vm-vmm",
               "daemon-vm-memory",
               "daemon-vm-watchdog"
             ],
-            "reason": "a vm folder imports only itself and the folders below it: vm-config.ts, files, imps-contract, storage, agent-client, sleep, vmm, memory, watchdog, templates"
+            "reason": "a vm folder imports only itself and the folders below it: vm-config.ts, files, imps-contract, storage, agent-client, guest-channels, sleep, vmm, memory, watchdog, templates"
           },
           {
             "name": "daemon-vm-folder-templates",
@@ -436,13 +460,14 @@
               "daemon-vm-imps-contract",
               "daemon-vm-storage",
               "daemon-vm-agent-client",
+              "daemon-vm-guest-channels",
               "daemon-vm-sleep",
               "daemon-vm-vmm",
               "daemon-vm-memory",
               "daemon-vm-watchdog",
               "daemon-vm-templates"
             ],
-            "reason": "a vm folder imports only itself and the folders below it: vm-config.ts, files, imps-contract, storage, agent-client, sleep, vmm, memory, watchdog, templates"
+            "reason": "a vm folder imports only itself and the folders below it: vm-config.ts, files, imps-contract, storage, agent-client, guest-channels, sleep, vmm, memory, watchdog, templates"
           },
           {
             "name": "daemon-broker-folder-guest",
@@ -524,6 +549,7 @@
               "daemon-vm-imps-contract",
               "daemon-vm-storage",
               "daemon-vm-agent-client",
+              "daemon-vm-guest-channels",
               "daemon-vm-sleep",
               "daemon-vm-vmm",
               "daemon-vm-memory",

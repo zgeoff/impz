@@ -7,6 +7,14 @@ export type InstanceState = z.infer<typeof InstanceInfoSchema>['state'];
 
 // Firecracker leaves the field out for a VM that does not track dirty pages
 const MachineConfigSchema = z.object({ track_dirty_pages: z.boolean().optional() });
+const BalloonStatsSchema = z.object({ total_memory: z.number(), available_memory: z.number() });
+
+const HotplugMemorySchema = z.object({
+  plugged_size_mib: z.number(),
+  requested_size_mib: z.number(),
+});
+
+const VersionSchema = z.object({ firecracker_version: z.string() });
 
 interface BootSource {
   readonly kernelImagePath: string;
@@ -136,6 +144,11 @@ class FirecrackerApiError extends Error {
   }
 }
 
+export type CreateFirecrackerClient = (
+  socketPath: string,
+  timeouts?: FirecrackerTimeouts,
+) => FirecrackerClient;
+
 export function createFirecrackerClient(
   socketPath: string,
   timeouts: FirecrackerTimeouts = DEFAULT_TIMEOUTS,
@@ -179,6 +192,19 @@ export function createFirecrackerClient(
     }
   };
 
+  const readAnswer = async <T>(path: string, schema: z.ZodType<T>): Promise<T> => {
+    const text = await sendRequest('GET', path);
+
+    const body: unknown = JSON.parse(text);
+    const parsed = schema.safeParse(body);
+
+    if (!parsed.success) {
+      throw new Error(`firecracker GET ${path}: unexpected body ${text}`, { cause: parsed.error });
+    }
+
+    return parsed.data;
+  };
+
   const sendPut = async (path: string, body: unknown, timeoutMs?: number): Promise<void> => {
     await sendRequest('PUT', path, body, timeoutMs);
   };
@@ -192,9 +218,7 @@ export function createFirecrackerClient(
     putMachineConfig: (config) =>
       sendPut('/machine-config', { vcpu_count: config.vcpuCount, mem_size_mib: config.memSizeMib }),
     loadMachineConfig: async () => {
-      const text = await sendRequest('GET', '/machine-config');
-
-      const parsed = MachineConfigSchema.parse(JSON.parse(text));
+      const parsed = await readAnswer('/machine-config', MachineConfigSchema);
 
       return { isTrackingDirtyPages: parsed.track_dirty_pages === true };
     },
@@ -226,13 +250,11 @@ export function createFirecrackerClient(
         free_page_reporting: balloon.freePageReporting,
       }),
     readBalloonStats: async () => {
-      const text = await sendRequest('GET', '/balloon/statistics');
-
-      const parsed = parseObject('GET /balloon/statistics', text);
+      const parsed = await readAnswer('/balloon/statistics', BalloonStatsSchema);
 
       return {
-        totalMib: readBytesAsMib(parsed, 'total_memory'),
-        availableMib: readBytesAsMib(parsed, 'available_memory'),
+        totalMib: toMib(parsed.total_memory),
+        availableMib: toMib(parsed.available_memory),
       };
     },
     putHotplugMemory: (hotplug) =>
@@ -242,14 +264,9 @@ export function createFirecrackerClient(
         block_size_mib: hotplug.blockSizeMib,
       }),
     readHotplugMemory: async () => {
-      const text = await sendRequest('GET', '/hotplug/memory');
+      const parsed = await readAnswer('/hotplug/memory', HotplugMemorySchema);
 
-      const parsed = parseObject('GET /hotplug/memory', text);
-
-      return {
-        pluggedMib: readNumber(parsed, 'plugged_size_mib'),
-        requestedMib: readNumber(parsed, 'requested_size_mib'),
-      };
+      return { pluggedMib: parsed.plugged_size_mib, requestedMib: parsed.requested_size_mib };
     },
     patchHotplugMemory: async (requestedMib) => {
       await sendRequest('PATCH', '/hotplug/memory', { requested_size_mib: requestedMib });
@@ -290,49 +307,18 @@ export function createFirecrackerClient(
         timeouts.snapshotMs,
       ),
     readVersion: async () => {
-      const text = await sendRequest('GET', '/version');
+      const parsed = await readAnswer('/version', VersionSchema);
 
-      const parsed: unknown = JSON.parse(text);
-
-      if (
-        typeof parsed === 'object' &&
-        parsed !== null &&
-        'firecracker_version' in parsed &&
-        typeof parsed.firecracker_version === 'string'
-      ) {
-        return parsed.firecracker_version;
-      }
-
-      throw new Error(`firecracker GET /version: unexpected body ${text}`);
+      return parsed.firecracker_version;
     },
     readInstanceState: async () => {
-      const text = await sendRequest('GET', '/');
+      const parsed = await readAnswer('/', InstanceInfoSchema);
 
-      return InstanceInfoSchema.parse(JSON.parse(text)).state;
+      return parsed.state;
     },
   };
 }
 
-function parseObject(call: string, text: string): Readonly<Record<string, unknown>> {
-  const parsed: unknown = JSON.parse(text);
-
-  if (typeof parsed !== 'object' || parsed === null) {
-    throw new Error(`firecracker ${call}: unexpected body ${text}`);
-  }
-
-  return Object.fromEntries(Object.entries(parsed));
-}
-
-function readBytesAsMib(parsed: Readonly<Record<string, unknown>>, key: string): number {
-  return Math.floor(readNumber(parsed, key) / 1_048_576);
-}
-
-function readNumber(parsed: Readonly<Record<string, unknown>>, key: string): number {
-  const value = parsed[key];
-
-  if (typeof value !== 'number') {
-    throw new TypeError(`firecracker: no number ${key} in ${JSON.stringify(parsed)}`);
-  }
-
-  return value;
+function toMib(bytes: number): number {
+  return Math.floor(bytes / 1_048_576);
 }

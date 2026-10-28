@@ -1,5 +1,7 @@
 import type { Ping } from '@impz/agent-protocol';
+import type { Clock } from '../../platform/process/clock';
 import { getErrorMessage } from '../../platform/process/get-error-message';
+import { REAL_CLOCK } from '../../platform/process/real-clock';
 import { sendPing } from './agent-requests';
 
 export interface WaitOptions {
@@ -8,6 +10,7 @@ export interface WaitOptions {
   readonly maxDelayMs?: number;
   readonly attemptMs?: number;
   readonly isParked?: boolean;
+  readonly clock?: Pick<Clock, 'now' | 'sleep'>;
 }
 
 // During boot Firecracker's vsock socket may not exist yet, refuse the CONNECT, or close, so every
@@ -16,13 +19,14 @@ export async function waitForAgent(
   vsockPath: string,
   options: Readonly<WaitOptions>,
 ): Promise<Ping> {
-  const deadline = Date.now() + options.deadlineMs;
+  const clock = options.clock ?? REAL_CLOCK;
+  const deadline = clock.now() + options.deadlineMs;
   const maxDelay = options.maxDelayMs ?? 100;
   let delay = options.firstDelayMs ?? 5;
   let lastError: unknown = null;
 
-  while (Date.now() < deadline) {
-    const attemptMs = Math.min(options.attemptMs ?? 1000, deadline - Date.now());
+  while (clock.now() < deadline) {
+    const attemptMs = Math.min(options.attemptMs ?? 1000, deadline - clock.now());
 
     try {
       const ping = await sendPing(vsockPath, Math.max(1, attemptMs));
@@ -40,7 +44,7 @@ export async function waitForAgent(
       lastError = error;
     }
 
-    await Bun.sleep(delay);
+    await clock.sleep(delay);
 
     delay = Math.min(maxDelay, delay * 2);
   }

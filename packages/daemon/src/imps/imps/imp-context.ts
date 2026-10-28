@@ -32,10 +32,6 @@ import { readCpuTicks } from '../../vm/vmm/vm-stats';
 import type { BrokerExecEnv } from '../exec/broker-exec-env';
 import type { ImageService } from '../images/image-service';
 import type { ImpsConfig } from '../imps-config';
-import { createSessionLogs } from '../session-logs/session-log-service';
-import type { SessionLogs } from '../session-logs/session-log-service';
-import { createSessionCache } from '../sessions/session-cache';
-import type { SessionCache } from '../sessions/session-cache';
 import { buildActivityTracker } from './activity-tracker';
 import type { ActivityTracker } from './activity-tracker';
 import { createMergeFlags } from './check-merge-flag';
@@ -45,6 +41,10 @@ import type { InnerCache } from './inner-cache';
 import type { KernelOopsWatch } from './kernel-oops-watch';
 import { createResourceSampler } from './resource-sampler';
 import type { ResourceSampler } from './resource-sampler';
+import { createSessionLogs } from './session-logs/session-log-service';
+import type { SessionLogs } from './session-logs/session-log-service';
+import { createSessionCache } from './sessions/session-cache';
+import type { SessionCache } from './sessions/session-cache';
 
 interface ImpEgress {
   readonly requirePolicy: (policy: EgressPolicy) => void;

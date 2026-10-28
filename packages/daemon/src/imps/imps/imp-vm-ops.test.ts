@@ -7,6 +7,7 @@ import fc from 'fast-check';
 import invariant from 'tiny-invariant';
 import { match } from 'ts-pattern';
 import { buildMockNewImp } from '../../../testing/imps/build-mock-new-imp';
+import { createTestImpdPool } from '../../../testing/imps/create-test-impd-pool';
 import { readBrokenInvariants } from '../../../testing/imps/read-broken-invariants';
 import { waitForOutcome } from '../../../testing/imps/wait-for-outcome';
 import { runWithStack } from '../../../testing/platform/run-with-stack';
@@ -15,7 +16,6 @@ import { StubVmError } from '../../../testing/vm/build-stub-vmm';
 import type { VmOutcome } from '../../../testing/vm/build-stub-vmm';
 import { writeTestSnapshot } from '../../../testing/vm/write-test-snapshot';
 import { createImp, listImps, readImpByName, updateImpActivity } from '../../platform/db/imps';
-import type { ImpDatabase } from '../../platform/db/open-database';
 import { updateImpState } from '../../platform/db/update-imp-state';
 import { readSnapshotMeta, writeSnapshotMeta } from '../../vm/sleep/snapshot-meta';
 import { buildImpPaths } from '../../vm/storage/data-layout';
@@ -613,37 +613,201 @@ test('it leaves consistent records after concurrent lifecycle calls on a few imp
     agentReady: fc.array(outcomeArb, { maxLength: 4 }),
   });
 
+  const poolStack = new AsyncDisposableStack();
+
+  onTestFinished(() => poolStack.disposeAsync());
+
+  const pool = createTestImpdPool(poolStack, {
+    impd: {
+      env: {
+        IMP_RAM_BUDGET_MIB: '900',
+        IMP_DEFAULT_MEMORY_MIB: '512',
+        IMP_BOOT_RESERVE_PERCENT: '80',
+        IMP_WAKE_RESERVE_MIB: '410',
+      },
+    },
+    prepareImpd: async (impd) => {
+      await impd.createTestImage('ubuntu');
+    },
+  });
+
   await fc.assert(
     fc.asyncProperty(
       fc.scheduler(),
       fc.array(opArb, { minLength: 4, maxLength: 16 }),
       scriptArb,
 
-      (scheduler, ops, script) =>
-        runWithStack(async (stack) => {
-          const governorSleeps: Promise<{ readonly name: string; readonly held: boolean }>[] = [];
+      (scheduler, ops, script) => {
+        const governorSleeps: Promise<{ readonly name: string; readonly held: boolean }>[] = [];
 
-          const holder: { db: ImpDatabase | null; now: () => number } = {
-            db: null,
-            now: Date.now,
-          };
+        return pool.withImpd(
+          (lease) =>
+            runWithStack(async (stack) => {
+              const ctx = lease.ctx;
+              const client = ctx.client;
 
-          const readSleep = async (name: string, at: number) => {
-            const imp = holder.db === null ? undefined : await readImpByName(holder.db, name);
-            const holdUntil = imp?.holdUntil?.getTime() ?? 0;
+              await client.imps.create({ name: 'c' });
+              await client.checkpoints.create({ name: 'c', label: 'base' });
+              await client.imps.sleep({ name: 'c' });
+              await client.imps.create({ name: 'a' });
+              await client.checkpoints.create({ name: 'a', label: 'base' });
+              await client.imps.create({ name: 'b' });
+              await client.checkpoints.create({ name: 'b', label: 'base' });
 
-            return { name, held: holdUntil > at };
-          };
+              ctx.fake.queue('boot', ...script.boot);
+              ctx.fake.queue('wake', ...script.wake);
+              ctx.fake.queue('sleep', ...script.sleep);
+              ctx.fake.queue('stop', ...script.stop);
+              ctx.fake.queue('agentReady', ...script.agentReady);
+              ctx.fake.setPace(() => scheduler.schedule(Promise.resolve()));
 
-          const ctx = await startTestImpd(stack, {
-            env: {
-              IMP_RAM_BUDGET_MIB: '900',
-              IMP_DEFAULT_MEMORY_MIB: '512',
-              IMP_BOOT_RESERVE_PERCENT: '80',
-              IMP_WAKE_RESERVE_MIB: '410',
-            },
+              const runOp = async (op: (typeof ops)[number]): Promise<void> => {
+                await match(op)
+                  .returnType<unknown>()
+                  .with({ kind: 'create' }, (create) => client.imps.create({ name: create.name }))
+                  .with({ kind: 'sleep' }, (sleep) => client.imps.sleep({ name: sleep.name }))
+                  .with({ kind: 'wake' }, (wake) => client.imps.wake({ name: wake.name }))
+                  .with({ kind: 'start' }, (start) => client.imps.start({ name: start.name }))
+                  .with({ kind: 'stop' }, (stop) => client.imps.stop({ name: stop.name }))
+                  .with({ kind: 'restore' }, (restore) =>
+                    client.checkpoints.restore({ name: restore.name, checkpoint: 'base' }),
+                  )
+                  .with({ kind: 'hold' }, (hold) =>
+                    client.imps.hold({ name: hold.name, seconds: 30 }),
+                  )
+                  .with({ kind: 'destroy' }, (destroy) =>
+                    client.imps.destroy({ name: destroy.name }),
+                  )
+                  .with({ kind: 'crash' }, async (crash) => {
+                    const imp = await readImpByName(ctx.db, crash.name);
 
-            onLog: (message) => {
+                    ctx.fake.alive.delete(imp?.pid ?? 0);
+                  })
+                  .with({ kind: 'outdate' }, async (outdate) => {
+                    const imp = await readImpByName(ctx.db, outdate.name);
+
+                    const paths = buildImpPaths(ctx.dataDir, imp?.id ?? '');
+                    const meta = readSnapshotMeta(paths);
+
+                    if (meta !== null) {
+                      writeSnapshotMeta(paths, { ...meta, firecrackerVersion: 'v0.1.0' });
+                    }
+                  })
+                  .with({ kind: 'enforce' }, () => ctx.governor.enforce())
+
+                  .with({ kind: 'sigterm' }, () => {
+                    lease.retire();
+
+                    return ctx.imps.sleepAllImps();
+                  })
+                  .with({ kind: 'tick' }, () => {
+                    ctx.advance(40_000);
+                  })
+                  .exhaustive();
+              };
+
+              const all = Promise.all(
+                ops.map(async (op) => {
+                  await scheduler.schedule(Promise.resolve());
+
+                  return runOp(op).then(
+                    () => null,
+                    (error: unknown) => error,
+                  );
+                }),
+              );
+
+              stack.defer(async () => {
+                ctx.fake.setPace(() => Promise.resolve());
+                ctx.fake.clearQueues();
+                ctx.fake.releaseHangs();
+
+                await scheduler.waitIdle();
+
+                await all;
+
+                await ctx.imps.waitForLifecycle();
+              });
+
+              await waitFor(
+                async () => {
+                  await scheduler.waitIdle();
+
+                  ctx.fake.releaseHangs();
+
+                  if (Bun.peek.status(all) === 'pending') {
+                    throw new Error('a call never settled');
+                  }
+                },
+                { intervalMs: 0 },
+              );
+
+              const errors = await all;
+
+              ctx.fake.setPace(() => Promise.resolve());
+              ctx.fake.clearQueues();
+
+              await ctx.imps.waitForLifecycle();
+
+              const unknown = errors.filter(
+                (error) =>
+                  error !== null &&
+                  !(
+                    typeof error === 'object' &&
+                    'code' in error &&
+                    [
+                      'NOT_FOUND',
+                      'CONFLICT',
+                      'INVALID_STATE',
+                      'RAM_BUDGET_EXCEEDED',
+                      'INTERNAL_SERVER_ERROR',
+                      'SERVICE_UNAVAILABLE',
+                    ].includes(String(error.code))
+                  ),
+              );
+
+              const realErrors = ctx.rpcFailures.filter((error) => !(error instanceof StubVmError));
+
+              const sleeps = await Promise.all(governorSleeps);
+
+              const pinnedSleeps = sleeps.filter((sleep) => sleep.held);
+
+              const quiescent = await readBrokenInvariants(ctx, false);
+
+              await client.imps.list();
+
+              const repaired = await readBrokenInvariants(ctx, true);
+              const afterOps = await listImps(ctx.db);
+
+              const busy = afterOps.filter(
+                (imp) => ctx.imps.isImpBusy(imp.id) || ctx.imps.tracker.count(imp.id) > 0,
+              );
+
+              expect(unknown).toBeEmpty();
+              expect(realErrors).toBeEmpty();
+              expect(pinnedSleeps).toBeEmpty();
+              expect(quiescent).toBeEmpty();
+              expect(repaired).toBeEmpty();
+              expect(busy).toBeEmpty();
+
+              await ctx.governor.enforce();
+
+              const usage = await ctx.governor.readUsage();
+              const imps = await listImps(ctx.db);
+
+              const runningUnheld = imps.filter(
+                (imp) =>
+                  imp.state === 'running' &&
+                  (imp.holdUntil === null || imp.holdUntil.getTime() <= ctx.now()),
+              );
+
+              const sleepableOverBudget =
+                usage.usedMib > ctx.config.ramBudgetMib ? runningUnheld : [];
+
+              expect(sleepableOverBudget).toBeEmpty();
+            }),
+          {
+            onLog: (message, impd) => {
               const asleep =
                 /^impd: (?<name>\S+): asleep in \d+ms \((?:to make room for \S+|RAM over budget)\)/u.exec(
                   message,
@@ -652,169 +816,19 @@ test('it leaves consistent records after concurrent lifecycle calls on a few imp
               const name = asleep?.groups?.['name'];
 
               if (name !== undefined) {
-                governorSleeps.push(readSleep(name, holder.now()));
+                const at = impd.now();
+
+                governorSleeps.push(
+                  readImpByName(impd.db, name).then((imp) => ({
+                    name,
+                    held: (imp?.holdUntil?.getTime() ?? 0) > at,
+                  })),
+                );
               }
             },
-          });
-
-          holder.db = ctx.db;
-          holder.now = ctx.now;
-
-          await ctx.createTestImage('ubuntu');
-
-          const client = ctx.client;
-
-          await client.imps.create({ name: 'c' });
-          await client.checkpoints.create({ name: 'c', label: 'base' });
-          await client.imps.sleep({ name: 'c' });
-          await client.imps.create({ name: 'a' });
-          await client.checkpoints.create({ name: 'a', label: 'base' });
-          await client.imps.create({ name: 'b' });
-          await client.checkpoints.create({ name: 'b', label: 'base' });
-
-          ctx.fake.queue('boot', ...script.boot);
-          ctx.fake.queue('wake', ...script.wake);
-          ctx.fake.queue('sleep', ...script.sleep);
-          ctx.fake.queue('stop', ...script.stop);
-          ctx.fake.queue('agentReady', ...script.agentReady);
-          ctx.fake.setPace(() => scheduler.schedule(Promise.resolve()));
-
-          const runOp = async (op: (typeof ops)[number]): Promise<void> => {
-            await match(op)
-              .returnType<unknown>()
-              .with({ kind: 'create' }, (create) => client.imps.create({ name: create.name }))
-              .with({ kind: 'sleep' }, (sleep) => client.imps.sleep({ name: sleep.name }))
-              .with({ kind: 'wake' }, (wake) => client.imps.wake({ name: wake.name }))
-              .with({ kind: 'start' }, (start) => client.imps.start({ name: start.name }))
-              .with({ kind: 'stop' }, (stop) => client.imps.stop({ name: stop.name }))
-              .with({ kind: 'restore' }, (restore) =>
-                client.checkpoints.restore({ name: restore.name, checkpoint: 'base' }),
-              )
-              .with({ kind: 'hold' }, (hold) => client.imps.hold({ name: hold.name, seconds: 30 }))
-              .with({ kind: 'destroy' }, (destroy) => client.imps.destroy({ name: destroy.name }))
-              .with({ kind: 'crash' }, async (crash) => {
-                const imp = await readImpByName(ctx.db, crash.name);
-
-                ctx.fake.alive.delete(imp?.pid ?? 0);
-              })
-              .with({ kind: 'outdate' }, async (outdate) => {
-                const imp = await readImpByName(ctx.db, outdate.name);
-
-                const paths = buildImpPaths(ctx.dataDir, imp?.id ?? '');
-                const meta = readSnapshotMeta(paths);
-
-                if (meta !== null) {
-                  writeSnapshotMeta(paths, { ...meta, firecrackerVersion: 'v0.1.0' });
-                }
-              })
-              .with({ kind: 'enforce' }, () => ctx.governor.enforce())
-
-              .with({ kind: 'sigterm' }, () => ctx.imps.sleepAllImps())
-              .with({ kind: 'tick' }, () => {
-                ctx.advance(40_000);
-              })
-              .exhaustive();
-          };
-
-          const all = Promise.all(
-            ops.map(async (op) => {
-              await scheduler.schedule(Promise.resolve());
-
-              return runOp(op).then(
-                () => null,
-                (error: unknown) => error,
-              );
-            }),
-          );
-
-          stack.defer(async () => {
-            ctx.fake.setPace(() => Promise.resolve());
-            ctx.fake.clearQueues();
-            ctx.fake.releaseHangs();
-
-            await scheduler.waitIdle();
-
-            await all;
-
-            await ctx.imps.waitForLifecycle();
-          });
-
-          await waitFor(
-            async () => {
-              await scheduler.waitIdle();
-
-              ctx.fake.releaseHangs();
-
-              if (Bun.peek.status(all) === 'pending') {
-                throw new Error('a call never settled');
-              }
-            },
-            { intervalMs: 0 },
-          );
-
-          const errors = await all;
-
-          ctx.fake.setPace(() => Promise.resolve());
-          ctx.fake.clearQueues();
-
-          await ctx.imps.waitForLifecycle();
-
-          const unknown = errors.filter(
-            (error) =>
-              error !== null &&
-              !(
-                typeof error === 'object' &&
-                'code' in error &&
-                [
-                  'NOT_FOUND',
-                  'CONFLICT',
-                  'INVALID_STATE',
-                  'RAM_BUDGET_EXCEEDED',
-                  'INTERNAL_SERVER_ERROR',
-                  'SERVICE_UNAVAILABLE',
-                ].includes(String(error.code))
-              ),
-          );
-
-          const realErrors = ctx.rpcFailures.filter((error) => !(error instanceof StubVmError));
-
-          const sleeps = await Promise.all(governorSleeps);
-
-          const pinnedSleeps = sleeps.filter((sleep) => sleep.held);
-
-          const quiescent = await readBrokenInvariants(ctx, false);
-
-          await client.imps.list();
-
-          const repaired = await readBrokenInvariants(ctx, true);
-          const afterOps = await listImps(ctx.db);
-
-          const busy = afterOps.filter(
-            (imp) => ctx.imps.isImpBusy(imp.id) || ctx.imps.tracker.count(imp.id) > 0,
-          );
-
-          expect(unknown).toBeEmpty();
-          expect(realErrors).toBeEmpty();
-          expect(pinnedSleeps).toBeEmpty();
-          expect(quiescent).toBeEmpty();
-          expect(repaired).toBeEmpty();
-          expect(busy).toBeEmpty();
-
-          await ctx.governor.enforce();
-
-          const usage = await ctx.governor.readUsage();
-          const imps = await listImps(ctx.db);
-
-          const runningUnheld = imps.filter(
-            (imp) =>
-              imp.state === 'running' &&
-              (imp.holdUntil === null || imp.holdUntil.getTime() <= ctx.now()),
-          );
-
-          const sleepableOverBudget = usage.usedMib > ctx.config.ramBudgetMib ? runningUnheld : [];
-
-          expect(sleepableOverBudget).toBeEmpty();
-        }),
+          },
+        );
+      },
     ),
     { numRuns: 25 },
   );

@@ -9,11 +9,11 @@ import type { ImpPaths } from '../../vm/storage/data-layout';
 import { checkBrokerAttach, checkOpenedSession } from '../exec/broker-sessions';
 import { buildBrokerNotReadyError, checkBrokerReady, isBrokerRequired } from '../exec/exec-require';
 import { mergeEnv } from '../exec/merge-env';
-import { findSessionLogImp } from '../session-logs/find-session-log-imp';
 import type { ImpClock, ImpGuest, ImpHost, ImpMemory, ImpVms } from './imp-context';
 import type { ImpLock } from './imp-lock';
 import type { ImpVmOps } from './imp-vm-ops';
 import { requireFeature } from './require-feature';
+import { findSessionLogImp } from './session-logs/find-session-log-imp';
 import { withColdBoots } from './with-cold-boots';
 
 interface ExecParts {

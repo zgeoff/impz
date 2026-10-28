@@ -4,10 +4,10 @@ import type { ImpRecord } from '../../platform/db/imps';
 import { listLeases } from '../../platform/db/leases';
 import type { LeaseRecord } from '../../platform/db/leases';
 import type { ImpHttpsConfig } from '../imps-config';
-import { countSessions } from '../sessions/count-sessions';
 import { readBootStatus } from './boot-status';
 import type { ImpContext } from './imp-context';
 import { MIB } from './imp-disk';
+import { countSessions } from './sessions/count-sessions';
 
 export interface ImpUrls {
   readonly local: string;
