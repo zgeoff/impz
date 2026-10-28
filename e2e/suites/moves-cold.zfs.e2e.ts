@@ -11,8 +11,7 @@ import {
 import { waitForExec, writeGuestFile } from '@impz/e2e-harness/imps';
 import { readImpdLogSince } from '@impz/e2e-harness/instance';
 import { HOST_B, readMoveHosts } from '@impz/e2e-harness/move-hosts';
-import { registerRemoval } from '@impz/e2e-harness/register-removal';
-import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { registerMoveRemoval } from '@impz/e2e-harness/register-move-removal';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
 import { waitFor } from '@impz/e2e-harness/wait-for';
 
@@ -36,7 +35,7 @@ test('it moves a stopped imp cold with its disk and checkpoint, and boots it on 
 
   await runImp('new', cold, '--image', resolveImageName('e2e-tiny'), '--memory', '256');
 
-  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, cold));
+  registerMoveRemoval(ctx.stack, config.keep, { source: ctx.client, target: ctx.clientB }, cold);
 
   await waitForExec(cold);
   await writeGuestFile(cold, '/root/moved', 'cold-ok');
@@ -46,9 +45,6 @@ test('it moves a stopped imp cold with its disk and checkpoint, and boots it on 
   const since = new Date();
 
   const out = await runImpWith({ env: ctx.hosts.cliEnv }, 'move', cold, HOST_B);
-
-  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.clientB, cold));
-
   const left = await readImp(cold);
 
   expect(out).toContain(`${cold}: moved to ${HOST_B}`);

@@ -8,6 +8,8 @@ export { makeOAuthResponder } from './surface/make-oauth-responder';
 export { createStubDockerCli } from './imps/create-stub-docker-cli';
 export type { StubDockerCliOptions, StubDockerImage } from './imps/create-stub-docker-cli';
 export { createMoveHosts, createUbuntuImage } from './imp-ops/create-move-hosts';
+export { makeStubDroppedCommit } from './imp-ops/make-stub-dropped-commit';
+export { makeStubStalledMovePart } from './imp-ops/make-stub-stalled-move-part';
 export type { MoveHostsOptions } from './imp-ops/create-move-hosts';
 export { buildMockTokenSshKeyRecord } from './identity/build-mock-token-ssh-key-record';
 export { createPendingSignIn } from './identity/create-pending-sign-in';

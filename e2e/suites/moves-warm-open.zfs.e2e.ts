@@ -12,8 +12,7 @@ import {
 import { holdImp, waitForExec } from '@impz/e2e-harness/imps';
 import { HOST_B, readMoveHosts } from '@impz/e2e-harness/move-hosts';
 import { readJailOwners } from '@impz/e2e-harness/move-steps';
-import { registerRemoval } from '@impz/e2e-harness/register-removal';
-import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { registerMoveRemoval } from '@impz/e2e-harness/register-move-removal';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
 import { waitFor } from '@impz/e2e-harness/wait-for';
 
@@ -37,7 +36,7 @@ test('it moves a sleeping open imp with its memory, and it reaches out at once o
 
   await runImp('new', open, '--image', resolveImageName('e2e-tiny'), '--memory', '256');
 
-  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, open));
+  registerMoveRemoval(ctx.stack, config.keep, { source: ctx.client, target: ctx.clientB }, open);
 
   await waitForExec(open);
   await holdImp(open);
@@ -63,9 +62,6 @@ test('it moves a sleeping open imp with its memory, and it reaches out at once o
   await waitFor(`${open} to sleep`, () => assertState(open, 'sleeping'));
 
   const out = await runImpWith({ env: ctx.hosts.cliEnv }, 'move', open, HOST_B);
-
-  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.clientB, open));
-
   const left = await readImp(open);
   const moved = await requireImp(open, ctx.hosts.hostB);
 

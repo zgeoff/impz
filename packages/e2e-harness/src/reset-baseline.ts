@@ -68,7 +68,27 @@ function isNotFound(error: unknown): boolean {
   );
 }
 
+function isMoving(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'MOVING';
+}
+
 export async function removeImpIfPresent(client: ImpClient, name: string): Promise<void> {
+  try {
+    await removeImpUnlessGone(client, name);
+  } catch (error) {
+    if (!isMoving(error)) {
+      throw error;
+    }
+
+    // A send runs on in impd after `impz move` stops, and impd refuses to remove an
+    // imp a move holds, so the abort ends the move and waits for it to settle.
+    await client.moves.abort({ name });
+
+    await removeImpUnlessGone(client, name);
+  }
+}
+
+async function removeImpUnlessGone(client: ImpClient, name: string): Promise<void> {
   try {
     await client.imps.destroy({ name });
   } catch (error) {

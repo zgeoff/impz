@@ -3,9 +3,13 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { createImpClient } from '@impz/client';
 import {
+  TEST_TOKEN,
   buildImagePaths,
   buildMockNewImage,
   createImage,
+  createMoveHosts,
+  createUbuntuImage,
+  makeStubStalledMovePart,
   startTestImpd,
 } from '@impz/daemon/testing';
 import {
@@ -393,6 +397,87 @@ test('#removeImpIfPresent passes over an imp that is already gone', async () => 
   const ctx = await setupTest();
 
   await expect(removeImpIfPresent(ctx.client, 'e2e-x-dev')).toResolve();
+});
+
+test('#removeImpIfPresent ends the move of an imp a stopped move left marked, then removes it', async () => {
+  const ctx = await setupTest();
+  const image = await ctx.createTestImage('ubuntu');
+
+  // A move's first step counts the image's files too.
+  await Bun.write(join(ctx.dataDir, 'images', image.name, 'config.json'), '{}');
+  await ctx.client.imps.create({ name: 'e2e-x-dev' });
+  await ctx.client.imps.stop({ name: 'e2e-x-dev' });
+  await ctx.client.moves.prepare({ name: 'e2e-x-dev', targetStorage: 'xfs' });
+
+  await removeImpIfPresent(ctx.client, 'e2e-x-dev');
+
+  const imps = await ctx.client.imps.list();
+
+  expect(imps).toBeEmpty();
+});
+
+test('#removeImpIfPresent ends a send that runs on after its caller stopped waiting, then removes the imp', async () => {
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
+  const stalled = Promise.withResolvers<undefined>();
+
+  const hosts = await createMoveHosts(stack, {
+    hook: makeStubStalledMovePart(() => {
+      stalled.resolve(undefined);
+    }),
+  });
+
+  await createUbuntuImage(hosts.source);
+  await createUbuntuImage(hosts.target);
+
+  await hosts.sourceApp.client.imps.create({ name: 'e2e-x-dev', image: 'ubuntu' });
+  await hosts.sourceApp.client.imps.stop({ name: 'e2e-x-dev' });
+
+  const info = await hosts.targetApp.client.system.info();
+  const facts = await hosts.targetApp.client.moves.facts();
+
+  const plan = await hosts.sourceApp.client.moves.prepare({
+    name: 'e2e-x-dev',
+    targetStorage: info.storage.backend,
+    target: facts,
+  });
+
+  const ticket = await hosts.targetApp.client.moves.receive({
+    name: 'e2e-x-dev',
+    bytes: plan.bytes,
+  });
+
+  await hosts.sourceApp.client.moves.send({
+    name: 'e2e-x-dev',
+    to: ticket.peerUrl,
+    ticket: ticket.ticket,
+  });
+
+  await stalled.promise;
+
+  const sendSourceRequest = (request: Request) => hosts.source.impd.api.app.handle(request);
+
+  const sourceClient = createImpClient({
+    url: 'http://impd.test',
+    token: TEST_TOKEN,
+    fetch: sendSourceRequest,
+  });
+
+  const refusal = await sourceClient.imps.destroy({ name: 'e2e-x-dev' }).then(
+    () => null,
+    (error: unknown) => error,
+  );
+
+  await removeImpIfPresent(sourceClient, 'e2e-x-dev');
+
+  const sourceImps = await hosts.sourceApp.client.imps.list();
+  const targetImps = await hosts.targetApp.client.imps.list();
+
+  expect(refusal).toMatchObject({ code: 'MOVING' });
+  expect(sourceImps).toBeEmpty();
+  expect(targetImps).toBeEmpty();
 });
 
 test('#removeImpIfPresent fails when impd refuses the removal', async () => {

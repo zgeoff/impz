@@ -13,8 +13,7 @@ import {
   startMoveSend,
   writeBothHostsConfig,
 } from '@impz/e2e-harness/move-steps';
-import { registerRemoval } from '@impz/e2e-harness/register-removal';
-import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { registerMoveRemoval } from '@impz/e2e-harness/register-move-removal';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
 
 async function setupTest() {
@@ -44,7 +43,7 @@ test('it shows both hosts in impz ls --all, with the move mark while the imp mov
 
   await runImp('new', seen, '--image', resolveImageName('e2e-tiny'), '--memory', '256');
 
-  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, seen));
+  registerMoveRemoval(ctx.stack, config.keep, { source: ctx.client, target: ctx.clientB }, seen);
 
   await waitForExec(seen);
   await runImp('stop', seen);
@@ -59,8 +58,6 @@ test('it shows both hosts in impz ls --all, with the move mark while the imp mov
 
   await runImpWith({ env: ctx.hosts.cliEnv }, 'move', seen, HOST_B, '--abort');
   await runImpWith({ env: ctx.hosts.cliEnv }, 'move', seen, HOST_B);
-
-  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.clientB, seen));
 
   const after = await listAllHosts(bothEnv, seen);
 

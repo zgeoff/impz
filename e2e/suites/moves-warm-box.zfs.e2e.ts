@@ -14,8 +14,9 @@ import {
 import { holdImp, waitForExec } from '@impz/e2e-harness/imps';
 import { HOST_B, readMoveHosts } from '@impz/e2e-harness/move-hosts';
 import { buildUpstreamsPath, readAllowSet, writeUpstreamsFile } from '@impz/e2e-harness/move-steps';
+import { registerMoveRemoval } from '@impz/e2e-harness/register-move-removal';
 import { registerRemoval } from '@impz/e2e-harness/register-removal';
-import { removeImpIfPresent, removeSecretIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { removeSecretIfPresent } from '@impz/e2e-harness/reset-baseline';
 import { startStubUpstream } from '@impz/e2e-harness/start-stub-upstream';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
 import { waitFor } from '@impz/e2e-harness/wait-for';
@@ -87,7 +88,7 @@ test('it moves a sleeping box imp with its allow list, and the target’s broker
     'example.com,api.github.com,github.com,*.wikipedia.org',
   );
 
-  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, box));
+  registerMoveRemoval(ctx.stack, config.keep, { source: ctx.client, target: ctx.clientB }, box);
 
   await waitForExec(box);
   await runImp('grant', box, secret);
@@ -119,9 +120,6 @@ test('it moves a sleeping box imp with its allow list, and the target’s broker
   await waitFor(`${box} to sleep`, () => assertState(box, 'sleeping'));
 
   const out = await runImpWith({ env: ctx.hosts.cliEnv }, 'move', box, HOST_B);
-
-  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.clientB, box));
-
   const left = await readImp(box);
   const moved = await requireImp(box, ctx.hosts.hostB);
 
