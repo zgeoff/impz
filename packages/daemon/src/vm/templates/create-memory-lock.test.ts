@@ -98,6 +98,7 @@ test('it holds the locked pages in a mapping of the file until release', async (
   const result = await createMemoryLock(path, () => true);
 
   invariant('lock' in result);
+  onTestFinished(result.lock.release);
 
   const lockedKiB = readFileSync('/proc/self/smaps', 'utf8')
     .split(/\n(?=[\da-f]+-[\da-f]+ )/u)
