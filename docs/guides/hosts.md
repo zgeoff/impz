@@ -274,9 +274,10 @@ A verified copy waits on the target until the source commits or aborts it.
   let `tag:imp` reach `tag:imp` on the API port ([ACL](#the-acl)).
 - The imp must be stopped, or sleeping on a host the target matches ([warm moves](#warm-moves)). A
   running imp moves with `--stop`, cold; `impz sleep` first keeps its memory.
-- The imp must be tailnet-only. A [public imp](./https.md#public-imps)'s credential and DNS record
-  belong to the source's domain, so `impz move` refuses it: run `impz unexpose`, move it, then
-  `impz expose` on the target. A marked imp refuses `impz expose` and `impz unexpose` with `MOVING`.
+- The imp must be tailnet-only. The credential and DNS record of a
+  [public imp](./https.md#public-imps) belong to the source's domain, so `impz move` refuses it: run
+  `impz unexpose`, move it, then `impz expose` on the target. A marked imp refuses `impz expose` and
+  `impz unexpose` with `MOVING`.
 - Between two ZFS hosts the disk goes as `zfs send` streams; any other pair sends files
   ([ZFS](../architecture/storage/moves.md#zfs)). Either way the checkpoints get new IDs on the
   target.

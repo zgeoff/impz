@@ -79,22 +79,10 @@ await forward.listening;
 const stream = await guest.connect(4000);
 ```
 
-The guest copies these behaviours of the real guest agent's reverse forwards:
-
-- Bytes relay both ways between the process and the forward's local end.
-- The process's end of its side reaches the local end as an EOF, and the local end's EOF ends what
-  the process reads.
-- A process that resets its connection drops the relay with no EOF.
-- A forward that asks for port 0 gets a free port, and a second forward on a port in use fails with
-  `LISTEN_FAILED`.
-- When the imp sleeps or goes away, the guest drops its connections, so a forward ends as `lost`. A
-  forward opened after the wake listens on the guest again.
-
-It does not copy:
-
-- unix socket forwards and ssh-agent forwarding, which it answers with `UNKNOWN_OP`
-- the refusal of a port below 1024 to an image whose user is not root
-- the limit of 16 clients waiting for impd, and the 10 s after which an unpaired client closes
+The guest relays bytes and EOFs as the real guest agent's reverse forwards do, and drops its
+connections when the imp sleeps.
+[Testing against impd](https://github.com/zgeoff/impz/blob/main/docs/guides/testing-impd.md) lists
+what it copies and what it does not.
 
 ## What this impd does not do
 

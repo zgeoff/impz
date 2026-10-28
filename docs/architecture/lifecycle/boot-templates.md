@@ -72,13 +72,15 @@ A restore reads its guest's memory from the host's page cache, one page fault at
 restore after the host reclaimed those pages waits on storage for each one and takes seconds. impd
 therefore locks each kept template's data pages in the page cache: once a build finishes, and for
 every kept template at start. The build digs holes where the guest's memory was zero, and the lock
-skips the holes, so it holds only the pages that a boot left non-zero. The governor counts those
-pages as used RAM from the moment the lock starts to read them in, because no sleep frees them. The
-locks keep to a tenth of the RAM budget, so on a small host they leave the imps room to boot and
-grow, and a template whose lock would pass that share stays unlocked. impd releases a template's
-lock when it removes the template, and a lock that finishes after a rebuild of its template releases
-itself. A lock that fails, such as over the container's locked-memory limit, leaves the template
-unlocked and logged, and its restores still work at the speed of whatever the host still caches.
+skips the holes, so it holds only the pages that a boot left non-zero.
+
+The governor counts locked template pages as used RAM from the moment the lock starts to read them
+in, because no sleep frees them. The locks keep to a tenth of the RAM budget, so on a small host
+they leave the imps room to boot and grow, and a template whose lock would pass that share stays
+unlocked. impd releases a template's lock when it removes the template, and a lock that finishes
+after a rebuild of its template releases itself. A lock that fails, such as over the container's
+locked-memory limit, leaves the template unlocked and logged, and its restores still work at the
+speed of whatever the host still caches.
 
 ## Accepted risks
 

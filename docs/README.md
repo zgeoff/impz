@@ -11,8 +11,6 @@
   </p>
 </div>
 
----
-
 ## Architecture
 
 How impz is built: the parts, what each one owns, and what holds whatever a caller does.
@@ -125,6 +123,10 @@ How to install, run and use impz.
   machine
 - [Session logs](./guides/session-logs.md) — a session's output kept on the host, and how to read it
 - [MCP server](./guides/mcp.md) — the tools a coding agent gets, and the guard on them
+- [The TypeScript client](./guides/client.md) — streaming, sessions and resume, errors, features and
+  the version check
+- [Testing against impd](./guides/testing-impd.md) — what the test impd's stand-in guest copies of
+  the real guest agent
 - [Dashboard](./guides/dashboard.md) — the web dashboard, its login, and how to build it
 - [Events, audit and telemetry](./guides/events.md) — the event stream, the audit log and
   OpenTelemetry
