@@ -2,6 +2,7 @@
 import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { parseCiWorkflow } from '../../../scripts/test-utils/parse-ci-workflow';
+import { readLongestPullRequestTimeout } from '../../../scripts/test-utils/read-longest-pull-request-timeout';
 import { FAST_GROUPS, HOST_TESTS_GROUP, SUITES, listZfsSuites, pickZfsShard } from './suites';
 
 test('it runs one e2e-group job for each fast group', () => {
@@ -89,25 +90,33 @@ test('it passes the required e2e check only when the groups succeeded', () => {
   expect(runs.join('\n')).toInclude('test "$RESULT" = success');
 });
 
-test('it keeps release-please waiting on the required e2e check', () => {
+test('it calls the shared release job at the sync tag that repo-sync calls', () => {
   const jobs = parseCiWorkflow(
     readFileSync(new URL('../../../.github/workflows/ci.yml', import.meta.url), 'utf8'),
   );
 
-  expect(jobs['release-please'].needs).toContain('e2e');
+  const repoSync = readFileSync(
+    new URL('../../../.github/workflows/repo-sync.yml', import.meta.url),
+    'utf8',
+  );
+
+  const syncTag = /zgeoff\/tools\/\.github\/workflows\/repo-sync\.yml@(?<tag>\S+)/u.exec(repoSync)
+    ?.groups?.['tag'];
+
+  expect(syncTag).toBeString();
+  expect(jobs.release.uses).toBe(`zgeoff/tools/.github/workflows/release-please.yml@${syncTag}`);
 });
 
-test('it leaves a draft release PR out of the auto-merge, which GitHub refuses on a draft', () => {
+test("it waits for the release PR's checks longer than any pull request job may run", () => {
   const jobs = parseCiWorkflow(
     readFileSync(new URL('../../../.github/workflows/ci.yml', import.meta.url), 'utf8'),
   );
 
-  expect(jobs['release-please'].steps).toPartiallyContain({
-    name: 'Auto-merge release PR',
-    run: expect.stringContaining(
-      'gh pr list --repo "$GITHUB_REPOSITORY" --base main --state open --draft=false',
-    ),
-  });
+  const longest = readLongestPullRequestTimeout(
+    new URL('../../../.github/workflows', import.meta.url).pathname,
+  );
+
+  expect(jobs.release.with['checks-timeout-minutes']).toBeGreaterThan(longest);
 });
 
 test('it writes the build caches from group 1 alone, and only on a push', () => {

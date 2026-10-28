@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { parseCiWorkflow } from './parse-ci-workflow';
 
-test('it reads the e2e group matrix, the e2e aggregate, the zfs shards, the zfs aggregate and release-please', () => {
+test('it reads the e2e group matrix, the e2e aggregate, the zfs shards, the zfs aggregate and the release jobs', () => {
   const yaml = [
     'jobs:',
     '  e2e-group:',
@@ -50,11 +50,10 @@ test('it reads the e2e group matrix, the e2e aggregate, the zfs shards, the zfs 
     '      - env:',
     `          RESULT: \${{ needs.zfs-shard.result }}`,
     '        run: test "$RESULT" = success',
-    '  release-please:',
-    '    needs: [e2e]',
-    '    steps:',
-    '      - name: Auto-merge release PR',
-    '        run: gh pr list --draft=false',
+    '  release:',
+    '    uses: zgeoff/tools/.github/workflows/release-please.yml@sync-v1',
+    '    with:',
+    '      checks-timeout-minutes: 45',
   ].join('\n');
 
   expect(parseCiWorkflow(yaml)).toStrictEqual({
@@ -100,9 +99,9 @@ test('it reads the e2e group matrix, the e2e aggregate, the zfs shards, the zfs 
         { env: { RESULT: `\${{ needs.zfs-shard.result }}` }, run: 'test "$RESULT" = success' },
       ],
     },
-    'release-please': {
-      needs: ['e2e'],
-      steps: [{ name: 'Auto-merge release PR', run: 'gh pr list --draft=false' }],
+    release: {
+      uses: 'zgeoff/tools/.github/workflows/release-please.yml@sync-v1',
+      with: { 'checks-timeout-minutes': 45 },
     },
   });
 });
@@ -128,8 +127,8 @@ test('it throws on a workflow without the zfs aggregate job', () => {
     '      matrix:',
     '        include: []',
     '    steps: []',
-    '  release-please:',
-    '    needs: []',
+    '  release:',
+    '    uses: tools',
   ].join('\n');
 
   expect(() => parseCiWorkflow(yaml)).toThrowWithMessage(Error, /"zfs"/u);
@@ -142,8 +141,8 @@ test('it throws on a workflow without the e2e-group job', () => {
     '    if: always()',
     '    needs: []',
     '    steps: []',
-    '  release-please:',
-    '    needs: []',
+    '  release:',
+    '    uses: tools',
   ].join('\n');
 
   expect(() => parseCiWorkflow(yaml)).toThrowWithMessage(Error, /"e2e-group"/u);
@@ -164,8 +163,8 @@ test('it throws on a matrix row without its host-tests flag', () => {
     '    if: always()',
     '    needs: []',
     '    steps: []',
-    '  release-please:',
-    '    needs: []',
+    '  release:',
+    '    uses: tools',
   ].join('\n');
 
   expect(() => parseCiWorkflow(yaml)).toThrowWithMessage(Error, /"host-tests"/u);
@@ -184,8 +183,8 @@ test('it throws on an e2e aggregate without its if condition', () => {
     '  e2e:',
     '    needs: []',
     '    steps: []',
-    '  release-please:',
-    '    needs: []',
+    '  release:',
+    '    uses: tools',
   ].join('\n');
 
   expect(() => parseCiWorkflow(yaml)).toThrowWithMessage(Error, /"if"/u);
@@ -204,8 +203,8 @@ test('it throws on an e2e-group job without its WRITE_CACHE env', () => {
     '    if: always()',
     '    needs: []',
     '    steps: []',
-    '  release-please:',
-    '    needs: []',
+    '  release:',
+    '    uses: tools',
   ].join('\n');
 
   expect(() => parseCiWorkflow(yaml)).toThrowWithMessage(Error, /"env"/u);
@@ -224,8 +223,8 @@ test('it throws on a matrix strategy without its fail-fast setting', () => {
     '    if: always()',
     '    needs: []',
     '    steps: []',
-    '  release-please:',
-    '    needs: []',
+    '  release:',
+    '    uses: tools',
   ].join('\n');
 
   expect(() => parseCiWorkflow(yaml)).toThrowWithMessage(Error, /"fail-fast"/u);

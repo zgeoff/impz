@@ -5,7 +5,7 @@ name: Release
 # SHA256SUMS to the GitHub release, the Homebrew formula to the tap, and
 # @impz/client to npm, the last two once they are turned on.
 #
-# - Started by ci.yml's release-please job with the tag it just created.
+# - Started by ci.yml's start-release job with the tag that the release job created.
 # - Run by hand with a tag to republish an existing release. Every step is
 #   safe to repeat: assets upload with --clobber, and `latest` moves only
 #   when the tag is the newest release. The base job never pushes over an

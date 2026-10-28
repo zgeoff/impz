@@ -1002,114 +1002,57 @@ jobs:
   # Main-only jobs go below with `if: github.event_name == 'push'` and
   # `needs:` on the gates above.
 
-  # A release takes two runs of this job (docs/runbooks/releasing.md):
+  # A release takes two runs of the release job (docs/runbooks/releasing.md),
+  # through the shared release-please job in zgeoff/tools:
   # - after a releasable commit lands on main, release-please opens or updates
-  #   the release PR (version bump and changelog), and the sync step makes
-  #   that PR pass the checks job
-  # - after the release PR merges, release-please tags vX.Y.Z and creates the
-  #   GitHub release, and the job starts release.yml for the tag
+  #   the release PR (version bump and changelog), the sync command makes it
+  #   pass the checks job, and the job merges it once its checks pass
+  # - the run that merges the release PR tags vX.Y.Z and creates the GitHub
+  #   release at once, and the start-release job starts release.yml for the tag
   #
-  # The job runs only once a release App is configured (vars.RELEASE_APP_ID),
-  # as in atc: a release PR opened with GITHUB_TOKEN would get no CI, and the
-  # repo would need Actions to be allowed to open PRs. The App's token opens
-  # the PR, CI runs on it, and the job turns on auto-merge.
-  release-please:
+  # The release job waits for no gate: the release PR passed its own checks,
+  # and the tag must land while the merge commit is still main's head, as
+  # the release App's token cannot tag a commit behind a workflow change.
+  #
+  # The job runs only once a release App is configured (vars.RELEASE_APP_ID):
+  # a release PR opened with GITHUB_TOKEN would get no CI, and the repo would
+  # need Actions to be allowed to open PRs.
+  release:
     if: github.event_name == 'push' && vars.RELEASE_APP_ID != ''
-    needs: [gitleaks, checks, go, shellcheck, cli, client, e2e]
-    runs-on: ubuntu-latest
     permissions:
       contents: write
       pull-requests: write
+    uses: zgeoff/tools/.github/workflows/release-please.yml@sync-v29
+    with:
+      app-id: ${{ vars.RELEASE_APP_ID }}
+      merge: true
+      # release-please names the branch for the root package's component
+      release-branch: release-please--branches--main--components--impz
+      # the release PR bumps versions that bun.lock records, and writes a
+      # CHANGELOG.md that oxfmt reformats in one pass (.oxfmtrc.test.ts)
+      sync-command: bun install && bun run format && bun run format:check
+      # longer than any pull request job's timeout, with time for the runner
+      # queue: a check still pending at the deadline leaves the release PR
+      # open, unmerged, until the next push to main
+      checks-timeout-minutes: 60
+    secrets:
+      app-private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
+  # A run of its own, outside this workflow's concurrency group, so an
+  # hour-long release never holds up CI on main, and impz's npm trusted
+  # publishers keep naming release.yml. release.yml comes from main and checks
+  # out the tag. A dispatch is the one GITHUB_TOKEN event that starts a
+  # workflow.
+  start-release:
+    needs: [release]
+    if: needs.release.outputs.releases_created == 'true'
+    runs-on: ubuntu-latest
+    permissions:
       actions: write
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
-      - name: Mint GitHub App token
-        id: app-token
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
-        with:
-          client-id: ${{ vars.RELEASE_APP_ID }}
-          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
-          # what the steps below use it for: release-please, the push to the
-          # release branch and the auto-merge; the App holds no more
-          permission-contents: write
-          permission-pull-requests: write
-
-      - name: Run release-please
-        id: release
-        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
-        with:
-          token: ${{ steps.app-token.outputs.token }}
-
-      # The release PR bumps package versions that bun.lock records too, and
-      # writes a CHANGELOG.md that oxfmt reformats: repair both so the PR
-      # passes the checks job like any other. The PR output stays a string
-      # here: env is evaluated even when the step is skipped, and fromJSON of
-      # an empty output would fail the run that tags a release.
-      - name: Checkout
-        if: steps.release.outputs.prs_created == 'true'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      # no cache: a job holding the App token must not run a Bun binary that
-      # another run's cache entry could have replaced
-      - name: Setup Bun
-        if: steps.release.outputs.prs_created == 'true'
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version-file: .bun-version
-          no-cache: true
-
-      # The token goes in the push URL only, never into .git/config; Actions
-      # masks it in the log.
-      - name: Sync lockfile and formatting on release PR
-        if: steps.release.outputs.prs_created == 'true'
-        env:
-          PR: ${{ steps.release.outputs.pr }}
-          TOKEN: ${{ steps.app-token.outputs.token }}
-        run: |
-          branch=$(jq -r .headBranchName <<<"$PR")
-          git fetch --depth=1 origin "$branch"
-          git checkout -B "$branch" FETCH_HEAD
-          bun install
-          bun run format
-          # One more pass at most (.oxfmtrc.test.ts): if the
-          # second pass still leaves changes, the formatter does not settle
-          if ! bun run format:check; then
-            bun run format
-            if ! bun run format:check; then
-              echo "::error::bun run format still changes the release pull request after two passes"
-              exit 1
-            fi
-          fi
-          if ! git diff --quiet; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git commit -am "chore: sync lockfile and format release files"
-            git push "https://x-access-token:$TOKEN@github.com/$GITHUB_REPOSITORY.git" "HEAD:$branch"
-          fi
-
-      # Reads no release-please outputs: prs_created is false when the open
-      # release PR needed no update, for example after a run that failed past
-      # creating it. release-please labels its open PR "autorelease: pending".
-      # GitHub merges the PR once its required checks pass, or at once when
-      # no ruleset requires any. A draft release PR is held by hand, and
-      # GitHub refuses auto-merge on a draft, which would fail this step.
-      - name: Auto-merge release PR
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-        run: |
-          for pr in $(gh pr list --repo "$GITHUB_REPOSITORY" --base main --state open --draft=false --label "autorelease: pending" --json number --jq '.[].number'); do
-            gh pr merge "$pr" --repo "$GITHUB_REPOSITORY" --auto --squash
-          done
-
-      # A run of its own, outside this workflow's concurrency group, so an
-      # hour-long release never holds up CI on main. release.yml comes from
-      # main and checks out the tag. A dispatch is the one GITHUB_TOKEN event
-      # that starts a workflow.
       - name: Start the release
-        if: steps.release.outputs.release_created == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.release.outputs.tag_name }}
+          TAG: ${{ needs.release.outputs.tag }}
         run: gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref main -f tag="$TAG"
