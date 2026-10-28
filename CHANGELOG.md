@@ -2,15 +2,16 @@
 
 ## [6.0.1](https://github.com/zgeoff/impz/compare/v6.0.0...v6.0.1) (2026-10-28)
 
-
 ### Bug Fixes
 
-* run the skill-gate hook with bun --no-install ([#769](https://github.com/zgeoff/impz/issues/769)) ([8648c6e](https://github.com/zgeoff/impz/commit/8648c6ee5d96565f95e0d7f764d7dd9adea29631))
-
+- run the skill-gate hook with bun --no-install ([#769](https://github.com/zgeoff/impz/issues/769))
+  ([8648c6e](https://github.com/zgeoff/impz/commit/8648c6ee5d96565f95e0d7f764d7dd9adea29631))
 
 ### Performance Improvements
 
-* **daemon:** lock boot template memory in the host page cache ([#766](https://github.com/zgeoff/impz/issues/766)) ([4e5d6b4](https://github.com/zgeoff/impz/commit/4e5d6b49ecfa67a7458b7ab8c7cc35a214cc3d20))
+- **daemon:** lock boot template memory in the host page cache
+  ([#766](https://github.com/zgeoff/impz/issues/766))
+  ([4e5d6b4](https://github.com/zgeoff/impz/commit/4e5d6b49ecfa67a7458b7ab8c7cc35a214cc3d20))
 
 ## [6.0.0](https://github.com/zgeoff/impz/compare/v5.0.0...v6.0.0) (2026-10-26)
 
