@@ -11,7 +11,7 @@ export interface KsmConfig {
 
 // Firecracker backs a 2 MiB guest with hugetlb pages, which only a UFFD
 // handler restores.
-export interface HugePagesConfig {
+interface HugePagesConfig {
   readonly handlerBin: string;
 }
 

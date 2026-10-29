@@ -95,7 +95,9 @@ let
   # An entry with a setting goes in only where settings give it that value,
   # as the unit reads it from the env file.
   probedSettingHolds =
-    entry: !(entry ? setting) || toString (cfg.settings.${entry.setting.name} or "") == entry.setting.value;
+    entry:
+    !(entry ? setting)
+    || toString (cfg.settings.${entry.setting.name} or "") == entry.setting.value;
   probedArgs = lib.concatMap (
     entry: lib.optionals (probedWhen.${entry.path} && probedSettingHolds entry) entry.args
   ) hostArgs.probed;
