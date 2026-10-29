@@ -717,7 +717,6 @@
     "packages/e2e-harness/src/create-registry-trust.test.ts": 52,
     "packages/e2e-harness/src/dns-probe.test.ts": 3,
     "packages/e2e-harness/src/event-lines.test.ts": 3,
-    "packages/e2e-harness/src/example-images.test.ts": 1,
     "packages/e2e-harness/src/exec-socket.test.ts": 2,
     "packages/e2e-harness/src/firecracker-memory.test.ts": 4,
     "packages/e2e-harness/src/firecracker-pids.test.ts": 1,
