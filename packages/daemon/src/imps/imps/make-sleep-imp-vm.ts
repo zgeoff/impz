@@ -197,7 +197,8 @@ export function makeSleepImpVm(
         .warning('sleep failed after firecracker stopped: {failure}', { failure });
 
       removeSnapshot(paths);
-      context.admission?.release(imp.id);
+
+      context.admission.release(imp.id);
 
       await updateState(imp, {
         reason: 'stopped',
@@ -210,7 +211,7 @@ export function makeSleepImpVm(
       throw isOomKill ? new Error(`sleep failed: ${OOM_KILL_TRIGGER}`, { cause: error }) : error;
     }
 
-    context.admission?.release(imp.id);
+    context.admission.release(imp.id);
 
     return updateState(imp, {
       reason: 'slept',

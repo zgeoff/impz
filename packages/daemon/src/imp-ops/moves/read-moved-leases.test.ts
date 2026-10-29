@@ -1012,19 +1012,31 @@ test('it refuses at the offer an imp with more leases than a move carries, and r
 
   const sourceNow = ctx.source.now();
 
-  const holds = Array.from({ length: 1025 }, (_unused, index) =>
+  await ctx.source.db
+    .insertInto('imp_leases')
+    .values(
+      Array.from({ length: 1024 }, (_unused, index) => ({
+        imp_id: created.id,
+        principal: `tailnet:n${String(index)}`,
+        label: 'hold',
+        display: 'root',
+        until: sourceNow + 600_000,
+        created_at: sourceNow,
+      })),
+    )
+    .execute();
+
+  await writeLease(
+    ctx.source.db,
     buildMockLeaseRecord({
       impId: created.id,
-      principal: `tailnet:n${String(index)}`,
+      principal: 'tailnet:n1024',
       label: 'hold',
       display: 'root',
       until: new Date(sourceNow + 600_000),
       createdAt: new Date(sourceNow),
     }),
-  );
-
-  await Promise.all(
-    holds.map((hold) => writeLease(ctx.source.db, hold, { at: sourceNow, reason: null })),
+    { at: sourceNow, reason: null },
   );
 
   const status = await ctx.runMove('dev', true);

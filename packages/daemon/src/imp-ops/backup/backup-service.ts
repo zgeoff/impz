@@ -54,6 +54,7 @@ const CHECK_SUBSET = '5%';
 // behind is stale and unlock removes it.
 const PRUNE_LOCK_TRIES = 6;
 const RETRY_FIRST_MS = 5 * 60 * 1000;
+const BUSY_REASON = 'busy with another job';
 
 const BackupStateSchema = z.object({
   lastRunAt: z.coerce.date().nullable().default(null),
@@ -81,7 +82,7 @@ export interface BackupServiceDeps {
   readonly dataDir: string;
   readonly backup: BackupConfig;
   readonly db: ImpDatabase;
-  readonly imps: Pick<Imps, 'createImp' | 'destroyImp' | 'lockImp'>;
+  readonly imps: Pick<Imps, 'createImp' | 'destroyImp' | 'tryLockImpId'>;
   readonly grants: Pick<ImpGrants, 'addGrant'>;
   readonly tokens: Pick<TokenStore, 'createRestored'>;
   readonly networks: Pick<NetworkService, 'writeMissingNetworks' | 'removeEmptyNetworks'>;
@@ -206,6 +207,7 @@ export function createBackupService(deps: BackupServiceDeps): BackupService {
           id: imp.id,
           name: imp.name,
           imageDigest: digests.get(imp.imageId) ?? '',
+          clonedDigest: imp.imageDigest,
           vcpus: imp.vcpus,
           memoryMib: imp.memoryMib,
           maxMemoryMib: imp.maxMemoryMib,
@@ -299,13 +301,23 @@ export function createBackupService(deps: BackupServiceDeps): BackupService {
       }
 
       try {
-        const made = await deps.imps.lockImp(imp.name, (locked) =>
-          locked.id === imp.id
-            ? createCopy(locked, runId)
-            : Promise.reject(new Error('replaced since the database copy')),
+        const made = await deps.imps.tryLockImpId(imp.id, (locked) =>
+          locked === undefined
+            ? Promise.reject(new Error('removed since the database copy'))
+            : createCopy(locked, runId),
         );
 
-        copies.set(imp.id, made);
+        if (!made.ran) {
+          skipped.push({ name: imp.name, reason: BUSY_REASON });
+
+          getImpdLogger('backup').with({ imp: imp.name }).info('left out: {reason}', {
+            reason: BUSY_REASON,
+          });
+
+          continue;
+        }
+
+        copies.set(imp.id, made.value);
       } catch (error) {
         skipped.push({ name: imp.name, reason: getErrorMessage(error) });
 

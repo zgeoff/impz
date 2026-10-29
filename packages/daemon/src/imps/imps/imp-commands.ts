@@ -46,6 +46,8 @@ interface CreateImpInput {
 
   readonly prepareDisk?: (impId: string) => Promise<void>;
 
+  readonly imageDigest?: string;
+
   readonly start?: boolean;
 
   readonly isIdentityResetPending?: boolean;
@@ -132,7 +134,7 @@ export function createImpCommands(parts: ImpCommandParts): ImpCommands {
       checkpoints.map((checkpoint) => checkpoint.id),
     );
 
-    context.admission?.release(imp.id);
+    context.admission.release(imp.id);
 
     await removeImp(context.db, imp.id);
   };

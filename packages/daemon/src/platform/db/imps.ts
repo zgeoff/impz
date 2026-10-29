@@ -13,6 +13,7 @@ export interface ImpRecord {
   readonly id: string;
   readonly name: string;
   readonly imageId: string;
+  readonly imageDigest: string;
   readonly state: ImpState;
   readonly kind: ImpKind;
   readonly vcpus: number;
@@ -63,6 +64,7 @@ export interface NewImp {
   readonly id?: string;
   readonly name: string;
   readonly imageId: string;
+  readonly imageDigest: string;
   readonly vcpus: number;
   readonly memoryMib: number;
 
@@ -136,6 +138,7 @@ async function writeImpRow(db: ImpQueries, imp: NewImp): Promise<ImpRecord> {
       id: imp.id ?? Bun.randomUUIDv7(),
       name: imp.name,
       image_id: imp.imageId,
+      image_digest: imp.imageDigest,
       state: 'creating',
       vcpus: imp.vcpus,
       memory_mib: imp.memoryMib,

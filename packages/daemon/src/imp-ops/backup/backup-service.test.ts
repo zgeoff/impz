@@ -15,10 +15,12 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { readImpEnv } from '@impz/test-utils/read-imp-env';
 import { updateEnv } from '@impz/test-utils/update-env';
+import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { buildMockBackupConfig } from '../../../testing/imp-ops/build-mock-backup-config';
 import { buildMockNewCheckpoint } from '../../../testing/imp-ops/build-mock-new-checkpoint';
 import { buildStubRestic } from '../../../testing/imp-ops/build-stub-restic';
+import { buildMockNewImp } from '../../../testing/imps/build-mock-new-imp';
 import { buildQueryGate } from '../../../testing/platform/build-query-gate';
 import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { runSql } from '../../../testing/platform/run-sql';
@@ -29,9 +31,8 @@ import { createTemplateService } from '../../imps/images/template-service';
 import { createNetworkService } from '../../network/networks/network-service';
 import { createCheckpoint, listCheckpoints } from '../../platform/db/checkpoints';
 import { readImageByName } from '../../platform/db/images';
-import { readImpByName } from '../../platform/db/imps';
+import { createImp, readImpByName } from '../../platform/db/imps';
 import { readSecret } from '../../platform/db/secrets';
-import { updateImpState } from '../../platform/db/update-imp-state';
 import { BACKUP_TREE, buildImagePaths, buildImpPaths } from '../../vm/storage/data-layout';
 import { writeImageFiles } from '../../vm/storage/write-image-files';
 import { createXfsBackend } from '../../vm/storage/xfs-backend';
@@ -394,6 +395,133 @@ test('#restoreBackup restores an imp stopped, with its disk and its checkpoints 
   );
 
   expect(readdirSync(join(ctx.dataDir, 'backup', 'restore'))).toStrictEqual([]);
+});
+
+test('#restoreBackup keeps the imp’s id when no imp on the host holds it', async () => {
+  const ctx = await setupTest();
+
+  const backups = createBackupService({ ...ctx.deps, backup: buildMockBackupConfig() });
+
+  await ctx.createTestImage('base');
+
+  writeFileSync(join(ctx.dataDir, 'images', 'base', 'config.json'), '{}');
+
+  const dev = await ctx.imps.createImp({ name: 'dev' });
+
+  await backups.runBackup();
+  await ctx.imps.destroyImp('dev');
+  await backups.restoreBackup({ name: 'dev' });
+
+  const restored = await readImpByName(ctx.db, 'dev');
+
+  expect(restored?.id).toBe(dev.id);
+});
+
+test('#runBackup records the digest an imp cloned from beside the image digest an older impd restores from', async () => {
+  const ctx = await setupTest();
+
+  const backups = createBackupService({ ...ctx.deps, backup: buildMockBackupConfig() });
+
+  await ctx.createTestImage('base');
+
+  writeFileSync(join(ctx.dataDir, 'images', 'base', 'config.json'), '{}');
+
+  const dev = await ctx.imps.createImp({ name: 'dev' });
+
+  await runSql(ctx.db, 'UPDATE imps SET image_digest = ? WHERE id = ?', ['sha256:older', dev.id]);
+
+  const run = await backups.runBackup();
+
+  const manifestText = readFileSync(join(ctx.repoDir, run.snapshotId, 'manifest.json'), 'utf8');
+  const manifest = BackupManifestSchema.parse(JSON.parse(manifestText));
+
+  expect(manifest.version).toBe(1);
+
+  expect(manifest.imps[0]).toMatchObject({
+    imageDigest: 'sha256:base',
+    clonedDigest: 'sha256:older',
+  });
+});
+
+test('#restoreBackup gives the restored imp the digest it cloned from', async () => {
+  const ctx = await setupTest();
+
+  const backups = createBackupService({ ...ctx.deps, backup: buildMockBackupConfig() });
+
+  await ctx.createTestImage('base');
+
+  writeFileSync(join(ctx.dataDir, 'images', 'base', 'config.json'), '{}');
+
+  const dev = await ctx.imps.createImp({ name: 'dev' });
+
+  await runSql(ctx.db, 'UPDATE imps SET image_digest = ? WHERE id = ?', ['sha256:older', dev.id]);
+
+  await backups.runBackup();
+  await ctx.imps.destroyImp('dev');
+  await backups.restoreBackup({ name: 'dev' });
+
+  const restored = await readImpByName(ctx.db, 'dev');
+
+  expect(restored?.imageDigest).toBe('sha256:older');
+});
+
+test('#restoreBackup gives an imp from a manifest with no cloned digest its image’s digest', async () => {
+  const ctx = await setupTest();
+
+  const backups = createBackupService({ ...ctx.deps, backup: buildMockBackupConfig() });
+
+  await ctx.createTestImage('base');
+
+  writeFileSync(join(ctx.dataDir, 'images', 'base', 'config.json'), '{}');
+
+  const dev = await ctx.imps.createImp({ name: 'dev' });
+
+  await runSql(ctx.db, 'UPDATE imps SET image_digest = ? WHERE id = ?', ['sha256:older', dev.id]);
+
+  const run = await backups.runBackup();
+
+  const manifestPath = join(ctx.repoDir, run.snapshotId, 'manifest.json');
+  const manifest = BackupManifestSchema.parse(JSON.parse(readFileSync(manifestPath, 'utf8')));
+
+  writeFileSync(
+    manifestPath,
+    JSON.stringify({
+      ...manifest,
+      imps: manifest.imps.map((imp) => {
+        const { clonedDigest: _dropped, ...older } = imp;
+
+        return older;
+      }),
+    }),
+  );
+
+  await ctx.imps.destroyImp('dev');
+  await backups.restoreBackup({ name: 'dev' });
+
+  const restored = await readImpByName(ctx.db, 'dev');
+
+  expect(restored?.imageDigest).toBe('sha256:base');
+});
+
+test('#restoreBackup gives a copy restored beside its imp an id of its own', async () => {
+  const ctx = await setupTest();
+
+  const backups = createBackupService({ ...ctx.deps, backup: buildMockBackupConfig() });
+
+  await ctx.createTestImage('base');
+
+  writeFileSync(join(ctx.dataDir, 'images', 'base', 'config.json'), '{}');
+
+  const dev = await ctx.imps.createImp({ name: 'dev' });
+
+  await backups.runBackup();
+  await backups.restoreBackup({ name: 'dev', as: 'back' });
+
+  const copy = await readImpByName(ctx.db, 'back');
+
+  invariant(copy);
+
+  expect(copy.id).not.toBe(dev.id);
 });
 
 test('#restoreBackup keeps an old image it reuses when an eviction reaches the restore as it picks the image', async () => {
@@ -1355,18 +1483,52 @@ test('#runBackup leaves an imp being created out of the run', async () => {
 
   const backups = createBackupService({ ...ctx.deps, backup: buildMockBackupConfig() });
 
-  await ctx.createTestImage('base');
+  const image = await ctx.createTestImage('base');
 
   writeFileSync(join(ctx.dataDir, 'images', 'base', 'config.json'), '{}');
 
-  const dev = await ctx.imps.createImp({ name: 'dev' });
-
-  await updateImpState(ctx.db, dev.id, { reason: 'failed', state: 'creating' });
+  await createImp(ctx.db, buildMockNewImp({ name: 'dev', imageId: image.id }));
 
   const run = await backups.runBackup();
 
   expect(run.imps).toStrictEqual([]);
   expect(run.skipped).toStrictEqual([{ name: 'dev', reason: 'being created' }]);
+});
+
+test('#runBackup leaves out an imp another job holds, without waiting on it', async () => {
+  const ctx = await setupTest();
+
+  const backups = createBackupService({ ...ctx.deps, backup: buildMockBackupConfig() });
+
+  await ctx.createTestImage('base');
+
+  writeFileSync(join(ctx.dataDir, 'images', 'base', 'config.json'), '{}');
+
+  await ctx.imps.createImp({ name: 'a' });
+
+  const dev = await ctx.imps.createImp({ name: 'dev' });
+
+  const gate = Promise.withResolvers<void>();
+
+  onTestFinished(() => {
+    gate.resolve();
+  });
+
+  const holding = ctx.imps.lockImp('dev', () => gate.promise);
+
+  await waitFor(() => {
+    expect(ctx.imps.isImpBusy(dev.id)).toBeTrue();
+  });
+
+  const run = await backups.runBackup();
+
+  gate.resolve();
+
+  await holding;
+
+  expect(run.imps).toStrictEqual(['a']);
+  expect(run.skipped).toStrictEqual([{ name: 'dev', reason: 'busy with another job' }]);
+  expect(ctx.backupLogs).toContain('INFO impd.backup imp=dev left out: busy with another job');
 });
 
 test('#runBackup leaves out an imp replaced under its name since the database copy', async () => {
@@ -1395,10 +1557,10 @@ test('#runBackup leaves out an imp replaced under its name since the database co
   const run = await backups.runBackup();
 
   expect(run.imps).toStrictEqual(['a']);
-  expect(run.skipped).toStrictEqual([{ name: 'dev', reason: 'replaced since the database copy' }]);
+  expect(run.skipped).toStrictEqual([{ name: 'dev', reason: 'removed since the database copy' }]);
 
   expect(ctx.backupLogs).toContain(
-    'WARNING impd.backup imp=dev left out: replaced since the database copy',
+    'WARNING impd.backup imp=dev left out: removed since the database copy',
   );
 });
 

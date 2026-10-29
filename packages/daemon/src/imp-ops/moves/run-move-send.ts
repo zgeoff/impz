@@ -223,6 +223,7 @@ async function readHeader(deps: MoveSendDeps, options: ReadHeaderOptions): Promi
     imp: {
       id: imp.id,
       name: imp.name,
+      clonedDigest: imp.imageDigest,
       vcpus: imp.vcpus,
       memoryMib: imp.memoryMib,
       maxMemoryMib: imp.maxMemoryMib,

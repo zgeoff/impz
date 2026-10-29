@@ -18,7 +18,7 @@ import { createServiceServe } from './service-serve';
 import { createServicesApi } from './services-api';
 import { SERVICE_TAG, createTailnetNames } from './tailnet-names';
 import type { TailnetNamesDeps } from './tailnet-names';
-import { createPresenceCheck } from './wire-tailnet-names';
+import { makePresenceCheck } from './wire-tailnet-names';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();
@@ -51,7 +51,7 @@ async function setupTest() {
     }),
     serve: createServiceServe(tailscale.runChecked),
     findPort: (slot) => deriveSlotAddress(slot, harness.config).tailnetPort,
-    isImpPresent: createPresenceCheck(harness.imps, harness.db),
+    isImpPresent: makePresenceCheck(harness.imps, harness.db),
 
     readSuffix: () => Promise.resolve(null),
   };

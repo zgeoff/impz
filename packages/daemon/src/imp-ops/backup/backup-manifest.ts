@@ -21,6 +21,9 @@ const ManifestImpSchema = z
     id: z.string(),
     name: z.string(),
     imageDigest: z.string(),
+
+    // Optional, so a manifest from before it restores with the image's digest.
+    clonedDigest: z.string().optional(),
     vcpus: z.int(),
     memoryMib: z.int(),
     maxMemoryMib: z.int().nullable().optional(),

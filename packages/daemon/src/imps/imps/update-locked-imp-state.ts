@@ -1,4 +1,3 @@
-import { requireTransition } from '../../platform/db/imp-transitions';
 import type { ImpRecord } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { updateImpState } from '../../platform/db/update-imp-state';
@@ -15,10 +14,6 @@ export async function updateLockedImpState(
 
   if (!isLockedImp(record)) {
     throw new Error(`imp ${record.id}: a state write needs the imp's lock`);
-  }
-
-  if (change.state !== imp.state) {
-    requireTransition(imp.state, change.state, `move to ${change.state}`);
   }
 
   const updated = await updateImpState(db, imp.id, change);

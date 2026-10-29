@@ -73,7 +73,7 @@ export interface ImpServiceDeps {
   readonly vms: VmRunner;
   readonly storage: StorageBackend;
 
-  readonly admission?: RamAdmission;
+  readonly admission: RamAdmission;
 
   readonly identity: HostIdentity;
 
@@ -164,7 +164,7 @@ export interface ImpVms {
 }
 
 export interface ImpMemory {
-  readonly admission: RamAdmission | undefined;
+  readonly admission: RamAdmission;
   readonly readRamMib: (pid: number, apiSocket: string) => number | null;
   readonly readRssMib: (pid: number, apiSocket: string) => number | null;
 

@@ -32,14 +32,17 @@ export function createStubImpd(directory: string, options: Readonly<StubImpdOpti
   const running = join(directory, 'impd-running');
   const exitCodes = (options.exitCodes ?? []).join(' ');
 
-  // the wait is bounded, so a stub that misses its signal still ends
+  // bash runs a trap only once a foreground command ends, but a trapped signal ends the wait
+  // builtin at once; the sleep bounds a stub that misses its signal, and holds none of its pipes
   const lastRun = match(options.lastRun ?? 'stop-entrypoint')
     .with('stop-entrypoint', () => 'kill -TERM "$PPID"')
     .with(
       'wait-for-term',
-      () => `trap 'echo "impd got TERM" >>"$STUB_CALLS"; exit 0' TERM
+      () => `trap 'kill "$sleeper" 2>/dev/null; echo "impd got TERM" >>"$STUB_CALLS"; exit 0' TERM
+command -p sleep 30 </dev/null >/dev/null 2>&1 &
+sleeper=$!
 touch ${formatShellWord(running)}
-for _ in $(seq 300); do command -p sleep 0.1; done`,
+wait "$sleeper"`,
     )
     .exhaustive();
 

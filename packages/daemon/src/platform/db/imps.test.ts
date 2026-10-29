@@ -36,6 +36,7 @@ test('#createImp returns a creating imp with the defaults for what it leaves out
     buildMockNewImp({
       name: 'dev',
       imageId: image.id,
+      imageDigest: image.digest,
       vcpus: 2,
       memoryMib: 2048,
       slot: 0,
@@ -47,6 +48,7 @@ test('#createImp returns a creating imp with the defaults for what it leaves out
     id: expect.toBeString(),
     name: 'dev',
     imageId: image.id,
+    imageDigest: image.digest,
     state: 'creating',
     kind: 'user',
     vcpus: 2,
@@ -301,7 +303,7 @@ test('#createImpInFreeSlot puts the imp in the lowest free slot', async () => {
 
   const imp = await createImpInFreeSlot(
     ctx.db,
-    { name: 'dev', imageId: image.id, vcpus: 2, memoryMib: 2048 },
+    { name: 'dev', imageId: image.id, imageDigest: image.digest, vcpus: 2, memoryMib: 2048 },
     { count: 16, findIp: (slot) => `10.66.0.${String(slot * 4 + 2)}` },
   );
 
@@ -322,7 +324,7 @@ test('#createImpInFreeSlot emits one ImpAdded, once it commits', async () => {
 
   const imp = await createImpInFreeSlot(
     ctx.db,
-    { name: 'dev', imageId: image.id, vcpus: 2, memoryMib: 2048 },
+    { name: 'dev', imageId: image.id, imageDigest: image.digest, vcpus: 2, memoryMib: 2048 },
     { count: 16, findIp: (slot) => `10.66.0.${String(slot * 4 + 2)}` },
   );
 
@@ -340,7 +342,7 @@ test('#createImpInFreeSlot leaves a slot a live ticket keeps to a new imp', asyn
 
   const imp = await createImpInFreeSlot(
     ctx.db,
-    { name: 'new', imageId: image.id, vcpus: 2, memoryMib: 2048 },
+    { name: 'new', imageId: image.id, imageDigest: image.digest, vcpus: 2, memoryMib: 2048 },
     {
       count: 4,
       findIp: (slot) => `10.66.0.${String(slot * 4 + 2)}`,
@@ -362,7 +364,7 @@ test('#createImpInFreeSlot gives a warm move the slot its own ticket keeps', asy
 
   const imp = await createImpInFreeSlot(
     ctx.db,
-    { name: 'moved', imageId: image.id, vcpus: 2, memoryMib: 2048 },
+    { name: 'moved', imageId: image.id, imageDigest: image.digest, vcpus: 2, memoryMib: 2048 },
     { count: 4, findIp: (slot) => `10.66.0.${String(slot * 4 + 2)}`, slot: 0 },
   );
 
@@ -378,7 +380,7 @@ test('#createImpInFreeSlot refuses a warm move a slot an imp holds', async () =>
   expect(
     createImpInFreeSlot(
       ctx.db,
-      { name: 'moved', imageId: image.id, vcpus: 2, memoryMib: 2048 },
+      { name: 'moved', imageId: image.id, imageDigest: image.digest, vcpus: 2, memoryMib: 2048 },
       { count: 4, findIp: (slot) => `10.66.0.${String(slot * 4 + 2)}`, slot: 1 },
     ),
   ).rejects.toThrowWithMessage(SlotTakenError, 'slot 1 is taken on this host');
@@ -391,7 +393,7 @@ test('#createImpInFreeSlot refuses a warm move a slot past this host’s slots',
   expect(
     createImpInFreeSlot(
       ctx.db,
-      { name: 'moved', imageId: image.id, vcpus: 2, memoryMib: 2048 },
+      { name: 'moved', imageId: image.id, imageDigest: image.digest, vcpus: 2, memoryMib: 2048 },
       { count: 4, findIp: (slot) => `10.66.0.${String(slot * 4 + 2)}`, slot: 4 },
     ),
   ).rejects.toThrowWithMessage(SlotTakenError, 'slot 4 is taken on this host');

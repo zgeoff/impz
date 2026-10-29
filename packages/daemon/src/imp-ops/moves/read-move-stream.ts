@@ -176,6 +176,7 @@ export async function readMoveStream(
         id: header.imp.id,
         name: header.imp.name,
         image: image.name,
+        ...(header.imp.clonedDigest !== undefined && { imageDigest: header.imp.clonedDigest }),
         vcpus: header.imp.vcpus,
         memoryMib: header.imp.memoryMib,
         maxMemoryMib: header.imp.maxMemoryMib,

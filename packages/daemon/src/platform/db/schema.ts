@@ -129,6 +129,7 @@ export interface Imps {
   http_port: Generated<number>;
   id: string;
   identity_reset_pending: Generated<number>;
+  image_digest: Generated<string>;
   image_id: string;
   ip: string;
   jail_uid: number | null;

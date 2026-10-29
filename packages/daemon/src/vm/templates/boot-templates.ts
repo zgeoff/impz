@@ -115,7 +115,7 @@ export interface BootTemplateDeps {
   readonly taps: TapDevices;
   readonly jail: JailUser | null;
   readonly cgroups: Pick<CpuCgroups, 'setup' | 'remove'>;
-  readonly admission?: RamAdmission | undefined;
+  readonly admission: RamAdmission;
   readonly diskBudget?: Pick<DiskBudget, 'withRoom'> | undefined;
   readonly now?: () => number;
 }
@@ -392,7 +392,7 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
     };
 
     try {
-      await deps.admission?.admit({
+      await deps.admission.admit({
         id,
         name: null,
         reserveMib: Math.ceil((shape.memoryMib * deps.bootReservePercent) / 100),
@@ -411,7 +411,8 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
 
       throw new BuildRefusedError(getErrorMessage(error), { cause: error });
     } finally {
-      deps.admission?.release(id);
+      deps.admission.release(id);
+
       rmSync(work, { recursive: true, force: true });
     }
   };

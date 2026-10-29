@@ -1287,6 +1287,65 @@ test('it files a received image under the digest of what arrived, whatever diges
   expect(image.receivedDigest).toBeNull();
 });
 
+test('it lands a moved imp with the digest it cloned from', async () => {
+  const ctx = await setupTest();
+
+  await createUbuntuImage(ctx.source);
+  await createUbuntuImage(ctx.target);
+
+  const created = await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
+
+  await ctx.sourceApp.client.imps.stop({ name: 'dev' });
+
+  await runSql(ctx.source.db, 'UPDATE imps SET image_digest = ? WHERE id = ?', [
+    'sha256:older',
+    created.id,
+  ]);
+
+  const status = await ctx.runMove('dev');
+  const landed = await readImpByName(ctx.target.db, 'dev');
+
+  expect(status).toMatchObject({ isDone: true, error: null });
+  expect(landed?.imageDigest).toBe('sha256:older');
+});
+
+test('it lands an imp from a source that sends no cloned digest with its image’s digest', async () => {
+  const ctx = await setupTest({
+    hook: makeStubMoveStreamRewrite((frames) =>
+      frames.map((frame) => {
+        if (frame.type !== MOVE_FRAMES.header) {
+          return frame;
+        }
+
+        const header = MoveHeaderSchema.parse(readJsonPayload(frame.payload));
+        const { clonedDigest: _dropped, ...imp } = header.imp;
+
+        return buildJsonMoveFrame(frame.type, { ...header, imp });
+      }),
+    ),
+  });
+
+  await createUbuntuImage(ctx.source);
+
+  const created = await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
+
+  await ctx.sourceApp.client.imps.stop({ name: 'dev' });
+
+  await runSql(ctx.source.db, 'UPDATE imps SET image_digest = ? WHERE id = ?', [
+    'sha256:older',
+    created.id,
+  ]);
+
+  const status = await ctx.runMove('dev');
+  const landed = await readImpByName(ctx.target.db, 'dev');
+  const image = await readImageByName(ctx.target.db, 'ubuntu');
+
+  invariant(image);
+
+  expect(status).toMatchObject({ isDone: true, error: null });
+  expect(landed?.imageDigest).toBe(image.digest);
+});
+
 test('it reads the image a move sends when an overlapping move installs that image first', async () => {
   const overlap = buildStubOverlappingMove();
 

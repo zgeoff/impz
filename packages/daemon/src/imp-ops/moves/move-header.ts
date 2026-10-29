@@ -54,6 +54,9 @@ const ImpSchema = z
     // The id names the target's datasets and paths, so only a UUID passes.
     id: z.uuid(),
     name: z.string(),
+
+    // Optional, so a source that predates it lands the imp with the image's digest.
+    clonedDigest: z.string().optional(),
     vcpus: z.int().positive(),
     memoryMib: z.int().positive(),
     maxMemoryMib: z.int().positive().optional(),

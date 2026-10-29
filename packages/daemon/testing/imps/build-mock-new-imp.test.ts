@@ -5,6 +5,7 @@ test('it builds a default new imp', () => {
   expect(buildMockNewImp()).toStrictEqual({
     name: expect.toSatisfy((name: string) => /^[a-z]{8}$/u.test(name)),
     imageId: expect.toBeString(),
+    imageDigest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/u),
     vcpus: expect.toBeWithin(1, 5),
     memoryMib: expect.toBeOneOf([256, 512, 1024, 2048]),
     slot: 0,
@@ -16,6 +17,7 @@ test('it applies overrides on top of the defaults', () => {
   const imp = buildMockNewImp({
     name: 'stuck',
     imageId: 'image-1',
+    imageDigest: 'sha256:1111',
     vcpus: 2,
     memoryMib: 768,
     slot: 20,
@@ -26,6 +28,7 @@ test('it applies overrides on top of the defaults', () => {
   expect(imp).toStrictEqual({
     name: 'stuck',
     imageId: 'image-1',
+    imageDigest: 'sha256:1111',
     vcpus: 2,
     memoryMib: 768,
     slot: 20,

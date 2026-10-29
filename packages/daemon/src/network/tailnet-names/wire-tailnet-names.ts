@@ -3,7 +3,6 @@ import type { TailscaleStatus } from '../../host-net/net/tailscale-status';
 import type { Imps } from '../../imps/imps/imp-service';
 import { readImpByName } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
-import { isImpdError } from '../../platform/errors/impd-error';
 import { runChecked, runCommand } from '../../platform/process/run-command';
 import type { CommandRunner } from '../../platform/process/run-command';
 import type { NetworkConfig } from '../network-config';
@@ -19,7 +18,7 @@ interface BuildTailnetNamesOptions {
   readonly names: TailnetNamesConfig;
   readonly config: Pick<NetworkConfig, 'dataDir' | 'subnet' | 'portBase'>;
   readonly db: ImpDatabase;
-  readonly imps: Pick<Imps, 'lockImp'>;
+  readonly imps: Pick<Imps, 'tryLockImpId'>;
   readonly readTailscale: () => Promise<TailscaleStatus>;
 
   readonly runCommand?: CommandRunner | undefined;
@@ -36,7 +35,7 @@ export function wireTailnetNames(options: BuildTailnetNamesOptions): TailnetName
     serve: createServiceServe((argv) => runChecked(argv, {}, options.runCommand ?? runCommand)),
     findPort: (slot) => deriveSlotAddress(slot, options.config).tailnetPort,
 
-    isImpPresent: createPresenceCheck(options.imps, options.db),
+    isImpPresent: makePresenceCheck(options.imps, options.db),
     readSuffix: async () => {
       const status = await options.readTailscale();
 
@@ -48,25 +47,25 @@ export function wireTailnetNames(options: BuildTailnetNamesOptions): TailnetName
 }
 
 /* @internal */
-export function createPresenceCheck(
-  imps: Pick<Imps, 'lockImp'>,
+export function makePresenceCheck(
+  imps: Pick<Imps, 'tryLockImpId'>,
   db: ImpDatabase,
 ): (name: string) => Promise<boolean> {
   return async (name) => {
-    try {
-      return await imps.lockImp(name, () => Promise.resolve(true));
-    } catch (error) {
-      if (isImpdError(error, 'NOT_FOUND')) {
-        return false;
-      }
+    const imp = await readImpByName(db, name);
 
-      if (isImpdError(error, 'MOVING')) {
-        const imp = await readImpByName(db, name);
-
-        return imp !== undefined && imp.moveState !== 'moved';
-      }
-
-      throw error;
+    if (imp === undefined) {
+      return false;
     }
+
+    if (imp.moveState !== null) {
+      return imp.moveState !== 'moved';
+    }
+
+    const result = await imps.tryLockImpId(imp.id, (locked) =>
+      Promise.resolve(locked !== undefined),
+    );
+
+    return !result.ran || result.value;
   };
 }

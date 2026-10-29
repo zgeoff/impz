@@ -32,6 +32,7 @@ test('it measures every imp with its checkpoints', async () => {
   const imp = await createImp(ctx.db, {
     name: 'dev',
     imageId: image.id,
+    imageDigest: image.digest,
     vcpus: 1,
     memoryMib: 512,
     slot: 0,
@@ -73,6 +74,7 @@ test('it keeps each count with the time its pass started', async () => {
   const imp = await createImp(ctx.db, {
     name: 'dev',
     imageId: image.id,
+    imageDigest: image.digest,
     vcpus: 1,
     memoryMib: 512,
     slot: 0,
@@ -136,6 +138,7 @@ test('it totals what every imp takes on its own', async () => {
   const dev = await createImp(ctx.db, {
     name: 'dev',
     imageId: image.id,
+    imageDigest: image.digest,
     vcpus: 1,
     memoryMib: 512,
     slot: 0,
@@ -145,6 +148,7 @@ test('it totals what every imp takes on its own', async () => {
   const ci = await createImp(ctx.db, {
     name: 'ci',
     imageId: image.id,
+    imageDigest: image.digest,
     vcpus: 1,
     memoryMib: 512,
     slot: 1,
@@ -217,6 +221,7 @@ test('it keeps the last count when a pass fails', async () => {
   const imp = await createImp(ctx.db, {
     name: 'dev',
     imageId: image.id,
+    imageDigest: image.digest,
     vcpus: 1,
     memoryMib: 512,
     slot: 0,
@@ -280,6 +285,7 @@ test('it keeps the last count of an imp a cut-short pass did not reach', async (
   const imp = await createImp(ctx.db, {
     name: 'dev',
     imageId: image.id,
+    imageDigest: image.digest,
     vcpus: 1,
     memoryMib: 512,
     slot: 0,
@@ -333,6 +339,7 @@ test('it stamps a count with the time its pass started, not the time it ended', 
   const imp = await createImp(ctx.db, {
     name: 'dev',
     imageId: image.id,
+    imageDigest: image.digest,
     vcpus: 1,
     memoryMib: 512,
     slot: 0,
@@ -457,6 +464,7 @@ test('it starts a pass a full delay after a refresh asked for while an earlier o
   const imp = await createImp(ctx.db, {
     name: 'dev',
     imageId: image.id,
+    imageDigest: image.digest,
     vcpus: 1,
     memoryMib: 512,
     slot: 0,
