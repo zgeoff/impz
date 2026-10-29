@@ -8,16 +8,11 @@ test.each([
   [1014, 1014],
   [3000, 3000],
   [4999, 4999],
-])('it keeps the sendable code %d', (code, expected) => {
-  expect(toSendableCloseCode(code)).toBe(expected);
-});
-
-test.each([
   [1005, 1000],
   [1006, 1000],
   [1015, 1000],
   [2999, 1000],
   [5000, 1000],
-])('it sends %d, which only describes a close, as 1000', (code, expected) => {
+])('it sends a close with code %d as %d', (code, expected) => {
   expect(toSendableCloseCode(code)).toBe(expected);
 });
