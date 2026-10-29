@@ -1,8 +1,9 @@
 #!/bin/bash
-# Check that a built image holds no login state and no secret: no credential
-# file of Claude Code, gh or git, no token in a text file, and none in the
-# image's env or build history. Every imp booted from the image gets a copy
-# of what it holds, so the broker adds each credential to requests instead.
+# Check a built image for the logins of Claude Code, gh and git: their
+# credential files, and an Anthropic or GitHub token in a text file, the
+# image's env or its build history. It finds no other kind of secret. Every
+# imp booted from the image gets a copy of what it holds, so the broker adds
+# each credential to requests instead.
 #
 #   images/examples/coder/check-no-secrets.sh IMAGE
 #

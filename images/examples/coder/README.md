@@ -54,8 +54,10 @@ imp's requests to their hosts, and the guest holds only a placeholder.
 
 ## Check an image for secrets
 
-[`check-no-secrets.sh`](./check-no-secrets.sh) checks that an image in the local Docker holds no
-login state and no token. Run it on any image you build from this one before you share it:
+[`check-no-secrets.sh`](./check-no-secrets.sh) checks each layer of an image in the local Docker for
+the login files of Claude Code, gh and git, and for Anthropic and GitHub tokens. It checks the
+image's env and build history for them too. It finds no other kind of secret, so check the image for
+any other credential yourself. Run it on any image you build from this one before you share it:
 
 ```bash
 docker build -t coder images/examples/coder
