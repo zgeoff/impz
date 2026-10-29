@@ -37,9 +37,9 @@ export async function startStubPausedSocketGuest(
     port: options.port,
     socket: {
       ...handler,
-      data: (socket, data) => {
+      data: (_socket, data) => {
         if (plain.isRead) {
-          handler.data?.(socket, data);
+          reader.push(data);
         }
       },
     },
