@@ -63,6 +63,71 @@ test('it fills the defaults of a cold header from a source before boots, leases,
   });
 });
 
+test('it reads the cloned digest a header carries for its imp', () => {
+  const result = MoveHeaderSchema.safeParse({
+    version: 1,
+    imp: {
+      id: '0199a000-0000-7000-8000-000000000001',
+      name: 'dev',
+      clonedDigest: 'sha256:older',
+      vcpus: 1,
+      memoryMib: 256,
+      httpPort: 8080,
+      diskBytes: 1024,
+      cpu: { limit: null, weight: 100 },
+      egress: { mode: 'open', allow: [] },
+      grants: [],
+      isIdentityResetPending: false,
+    },
+    image: {
+      name: 'ubuntu',
+      ref: 'ubuntu:latest',
+      digest: 'sha256:ubuntu',
+      sizeBytes: 6,
+      source: 'oci',
+      sourceImp: null,
+      isIncluded: false,
+    },
+    checkpoints: [],
+    streams: null,
+  });
+
+  expect(result.data?.imp.clonedDigest).toBe('sha256:older');
+});
+
+test('it drops an imp field it does not know, as a header from a newer source holds', () => {
+  const result = MoveHeaderSchema.safeParse({
+    version: 1,
+    imp: {
+      id: '0199a000-0000-7000-8000-000000000001',
+      name: 'dev',
+      laterField: 'sha256:older',
+      vcpus: 1,
+      memoryMib: 256,
+      httpPort: 8080,
+      diskBytes: 1024,
+      cpu: { limit: null, weight: 100 },
+      egress: { mode: 'open', allow: [] },
+      grants: [],
+      isIdentityResetPending: false,
+    },
+    image: {
+      name: 'ubuntu',
+      ref: 'ubuntu:latest',
+      digest: 'sha256:ubuntu',
+      sizeBytes: 6,
+      source: 'oci',
+      sourceImp: null,
+      isIncluded: false,
+    },
+    checkpoints: [],
+    streams: null,
+  });
+
+  expect(result.success).toBeTrue();
+  expect(result.data?.imp).not.toContainKey('laterField');
+});
+
 test('it reads the dates of a ZFS warm header with boots, leases and checkpoints', () => {
   const result = MoveHeaderSchema.safeParse({
     version: 1,

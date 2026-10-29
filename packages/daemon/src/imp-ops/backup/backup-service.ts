@@ -207,6 +207,7 @@ export function createBackupService(deps: BackupServiceDeps): BackupService {
           id: imp.id,
           name: imp.name,
           imageDigest: digests.get(imp.imageId) ?? '',
+          clonedDigest: imp.imageDigest,
           vcpus: imp.vcpus,
           memoryMib: imp.memoryMib,
           maxMemoryMib: imp.maxMemoryMib,

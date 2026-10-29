@@ -371,6 +371,7 @@ async function createRestoredImp(
   try {
     return await deps.imps.createImp({
       ...(idHolder === undefined && { id: imp.id }),
+      ...(imp.clonedDigest !== undefined && { imageDigest: imp.clonedDigest }),
       name: target.name,
       networkIds: networks.ids,
       image: target.image,

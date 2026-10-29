@@ -20,8 +20,10 @@ from a separate system drive, so the image needs nothing of impz in it. The
 
 Two names for the same image ID share one file. Each imp records the digest of the file its disk was
 cloned from, so an add that points a name at a new digest leaves the lineage of the older imps as it
-was. When a host has no image at all, impd adds Ubuntu as a default in the background, and the
-health check reports ready once that finishes, whether it worked or not.
+was. A fork, a backup and a move carry that digest to the imp they make. A backup or a move from an
+impd that predates the digest lands the imp with the digest of its image. When a host has no image
+at all, impd adds Ubuntu as a default in the background, and the health check reports ready once
+that finishes, whether it worked or not.
 
 ## Where builds run
 

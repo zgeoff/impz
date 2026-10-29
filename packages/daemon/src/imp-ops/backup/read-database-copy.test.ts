@@ -29,6 +29,7 @@ test('it copies the user imps and leaves out image builders', async () => {
 
   const newDev = buildMockNewImp({
     imageId: image.id,
+    imageDigest: 'sha256:cloned',
     vcpus: 2,
     memoryMib: 1024,
     maxMemoryMib: 2048,
@@ -55,6 +56,7 @@ test('it copies the user imps and leaves out image builders', async () => {
       id: dev.id,
       name: newDev.name,
       imageId: image.id,
+      imageDigest: 'sha256:cloned',
       state: 'creating',
       vcpus: 2,
       memoryMib: 1024,

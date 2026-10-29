@@ -417,6 +417,92 @@ test('#restoreBackup keeps the imp’s id when no imp on the host holds it', asy
   expect(restored?.id).toBe(dev.id);
 });
 
+test('#runBackup records the digest an imp cloned from beside the image digest an older impd restores from', async () => {
+  const ctx = await setupTest();
+
+  const backups = createBackupService({ ...ctx.deps, backup: buildMockBackupConfig() });
+
+  await ctx.createTestImage('base');
+
+  writeFileSync(join(ctx.dataDir, 'images', 'base', 'config.json'), '{}');
+
+  const dev = await ctx.imps.createImp({ name: 'dev' });
+
+  await runSql(ctx.db, 'UPDATE imps SET image_digest = ? WHERE id = ?', ['sha256:older', dev.id]);
+
+  const run = await backups.runBackup();
+
+  const manifestText = readFileSync(join(ctx.repoDir, run.snapshotId, 'manifest.json'), 'utf8');
+  const manifest = BackupManifestSchema.parse(JSON.parse(manifestText));
+
+  expect(manifest.version).toBe(1);
+
+  expect(manifest.imps[0]).toMatchObject({
+    imageDigest: 'sha256:base',
+    clonedDigest: 'sha256:older',
+  });
+});
+
+test('#restoreBackup gives the restored imp the digest it cloned from', async () => {
+  const ctx = await setupTest();
+
+  const backups = createBackupService({ ...ctx.deps, backup: buildMockBackupConfig() });
+
+  await ctx.createTestImage('base');
+
+  writeFileSync(join(ctx.dataDir, 'images', 'base', 'config.json'), '{}');
+
+  const dev = await ctx.imps.createImp({ name: 'dev' });
+
+  await runSql(ctx.db, 'UPDATE imps SET image_digest = ? WHERE id = ?', ['sha256:older', dev.id]);
+
+  await backups.runBackup();
+  await ctx.imps.destroyImp('dev');
+  await backups.restoreBackup({ name: 'dev' });
+
+  const restored = await readImpByName(ctx.db, 'dev');
+
+  expect(restored?.imageDigest).toBe('sha256:older');
+});
+
+test('#restoreBackup gives an imp from a manifest with no cloned digest its image’s digest', async () => {
+  const ctx = await setupTest();
+
+  const backups = createBackupService({ ...ctx.deps, backup: buildMockBackupConfig() });
+
+  await ctx.createTestImage('base');
+
+  writeFileSync(join(ctx.dataDir, 'images', 'base', 'config.json'), '{}');
+
+  const dev = await ctx.imps.createImp({ name: 'dev' });
+
+  await runSql(ctx.db, 'UPDATE imps SET image_digest = ? WHERE id = ?', ['sha256:older', dev.id]);
+
+  const run = await backups.runBackup();
+
+  const manifestPath = join(ctx.repoDir, run.snapshotId, 'manifest.json');
+  const manifest = BackupManifestSchema.parse(JSON.parse(readFileSync(manifestPath, 'utf8')));
+
+  writeFileSync(
+    manifestPath,
+    JSON.stringify({
+      ...manifest,
+      imps: manifest.imps.map((imp) => {
+        const { clonedDigest: _dropped, ...older } = imp;
+
+        return older;
+      }),
+    }),
+  );
+
+  await ctx.imps.destroyImp('dev');
+  await backups.restoreBackup({ name: 'dev' });
+
+  const restored = await readImpByName(ctx.db, 'dev');
+
+  expect(restored?.imageDigest).toBe('sha256:base');
+});
+
 test('#restoreBackup gives a copy restored beside its imp an id of its own', async () => {
   const ctx = await setupTest();
 
