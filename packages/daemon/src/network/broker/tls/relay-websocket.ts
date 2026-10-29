@@ -3,7 +3,7 @@ import { openUpstreamSocket } from '../../../platform/http/open-upstream-socket'
 import type { StartTimer } from '../../../platform/process/clock';
 import { startRealTimer } from '../../../platform/process/start-real-timer';
 import { planUpgrade } from './plan-upgrade';
-import type { UpgradeDeps } from './plan-upgrade';
+import type { UpgradeDeps, UpgradePlan } from './plan-upgrade';
 import type { RelayData } from './relay-socket-handler';
 import type { LiveConnections } from './terminators';
 
@@ -38,7 +38,14 @@ export async function relayWebSocket(
     state.upstream?.close();
   });
 
-  const plan = await planUpgrade(deps, request);
+  let plan: UpgradePlan;
+
+  try {
+    plan = await planUpgrade(deps, request);
+  } catch (error) {
+    untrack();
+    throw error;
+  }
 
   if (plan.kind === 'refused') {
     untrack();

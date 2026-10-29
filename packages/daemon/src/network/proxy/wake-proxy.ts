@@ -128,6 +128,9 @@ export function startWakeProxy(deps: WakeProxyDeps): WakeProxy {
   const syncSlot = createSemaphore(1);
 
   const websocket: WebSocketHandler<SocketData> = {
+    // past the limit Bun drops each message it is asked to send; a closed
+    // connection is better than one that lost a message
+    closeOnBackpressureLimit: true,
     open: (ws) => {
       const upstream = ws.data.upstream;
 

@@ -13,13 +13,17 @@ const HOP_HEADERS = [
   'upgrade',
 ];
 
+// RFC 9110's token: a name outside it can name no header, and Headers
+// throws on it
+const HEADER_NAME = /^[!#$%&'*+.^_`|~0-9a-z-]+$/iu;
+
 export function buildEndToEndHeaders(source: Headers): Headers {
   const headers = new Headers(source);
 
   const named = (source.get('connection') ?? '').split(',').map((name) => name.trim());
 
   for (const name of [...HOP_HEADERS, ...named]) {
-    if (name !== '') {
+    if (HEADER_NAME.test(name)) {
       headers.delete(name);
     }
   }

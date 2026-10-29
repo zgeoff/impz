@@ -13,6 +13,9 @@ export interface RelayData {
 }
 
 export const RELAY_SOCKET_HANDLER: WebSocketHandler<RelayData> = {
+  // past the limit Bun drops each message it is asked to send; a closed
+  // connection is better than one that lost a message
+  closeOnBackpressureLimit: true,
   open: (ws) => {
     const data = ws.data;
 

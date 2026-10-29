@@ -44,6 +44,36 @@ test('it adds the real credential to the upgrade and leaves the handshake to the
   });
 });
 
+test('it skips a name in the Connection header that can name no header', async () => {
+  const plan = await planUpgrade(
+    {
+      impId: 'imp-1',
+      impName: 'dev',
+      host: 'realtime.example.com',
+      findCredential: () =>
+        Promise.resolve(buildMockCredential({ header: 'x-api-key', value: 'real-key' })),
+      resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+      recordAudit: () => {},
+    },
+    new Request('https://realtime.example.com/socket', {
+      headers: {
+        host: 'realtime.example.com',
+        connection: 'Upgrade, bad name, x-trace',
+        upgrade: 'websocket',
+        'x-trace': 'abc',
+        'x-keep': 'kept',
+      },
+    }),
+  );
+
+  invariant(plan.kind === 'open');
+
+  expect(Object.fromEntries(plan.headers)).toStrictEqual({
+    'x-api-key': 'real-key',
+    'x-keep': 'kept',
+  });
+});
+
 test('it offers the upstream the guest’s subprotocols in order', async () => {
   const plan = await planUpgrade(
     {
