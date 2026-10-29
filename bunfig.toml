@@ -8,6 +8,10 @@ exact = true
 # supply-chain guard: only install versions published >= 7 days ago
 minimumReleaseAge = 604800
 
+# @maschwenk/tsrslint 0.1.6 (published 2026-10-26) ages past the gate ~2026-11-02 — remove then
+# @maschwenk/tsrslint-linux-x64 0.1.6 (published 2026-10-26) ages past the gate ~2026-11-02 — remove then
+# @maschwenk/tsrslint-linux-arm64 0.1.6 (published 2026-10-26) ages past the gate ~2026-11-02 — remove then
+# @maschwenk/tsrslint-darwin-arm64 0.1.6 (published 2026-10-26) ages past the gate ~2026-11-02 — remove then
 # first-party packages skip the gate; their own dependencies stay behind it.
 # Renovate bumps @zgeoff packages as soon as they publish, so each one impz
 # uses needs an entry here, or bun install refuses the bump.
@@ -18,19 +22,10 @@ minimumReleaseAgeExcludes = [
   "@zgeoff/kysely-bun-sqlite",
   "@zgeoff/oxlint-config",
   "@zgeoff/skill-gate",
-  # tsrs 0.18.0 and its native packages skip the gate so typecheck can move to
-  # it now; these entries come out on 2026-10-26, once tsrs 0.18.0 is 7 days old
-  "tsrs",
-  "@tsrs/darwin-arm64",
-  "@tsrs/linux-arm64-gnu",
-  "@tsrs/linux-arm64-musl",
-  "@tsrs/linux-x64-gnu",
-  "@tsrs/linux-x64-musl",
-  # happy-dom 21.0.4 (published 2026-10-20, patches GHSA-834v) is the DOM that
-  # @zgeoff/bun-test-react 0.2.2 pins; these entries come out on 2026-10-27,
-  # once happy-dom 21.0.4 is 7 days old
-  "happy-dom",
-  "@happy-dom/global-registrator",
+  "@maschwenk/tsrslint",
+  "@maschwenk/tsrslint-linux-x64",
+  "@maschwenk/tsrslint-linux-arm64",
+  "@maschwenk/tsrslint-darwin-arm64",
 ]
 
 [test]
