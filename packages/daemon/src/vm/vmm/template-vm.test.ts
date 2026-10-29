@@ -528,7 +528,7 @@ test('#loadTemplateVm restores a 2M template through its page handler on 2 MiB p
 
   expect(handler.readStarts()).toStrictEqual([
     {
-      args: ['--socket', paths.uffdSocket, '--uid', '900001', '--gid', '900001'],
+      options: { socket: paths.uffdSocket, uid: '900001', gid: '900001' },
       served: 'template pages',
     },
   ]);

@@ -55,7 +55,7 @@ test('#startUffdHandler starts the handler on the imp socket with the memory fil
   });
 
   expect(handler.readStarts()).toStrictEqual([
-    { args: ['--socket', paths.uffdSocket], served: 'guest pages' },
+    { options: { socket: paths.uffdSocket }, served: 'guest pages' },
   ]);
 
   expect(readFileSync(paths.uffdPidFile, 'utf8')).toBe(`${String(pid)}\n`);
@@ -84,7 +84,7 @@ test('#startUffdHandler hands a jailed imp handler the jail user', async () => {
 
   expect(handler.readStarts()).toStrictEqual([
     {
-      args: ['--socket', paths.uffdSocket, '--uid', '900001', '--gid', '900002'],
+      options: { socket: paths.uffdSocket, uid: '900001', gid: '900002' },
       served: '',
     },
   ]);

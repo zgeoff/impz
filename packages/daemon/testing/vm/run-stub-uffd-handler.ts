@@ -1,16 +1,18 @@
 import { appendFileSync, readFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 
-const [mode = 'serve', record = '', ...args] = process.argv.slice(2);
-
-// the options the real handler's flag parser takes, in either of its forms
+// the wrapper passes the mode and the record file first, then the options the
+// real handler's flag parser takes, in either of its forms
 const parsed = parseArgs({
-  args,
+  args: process.argv.slice(2),
   options: { socket: { type: 'string' }, uid: { type: 'string' }, gid: { type: 'string' } },
+  allowPositionals: true,
   strict: true,
 });
 
-const socket = parsed.values.socket ?? '';
+const [mode = 'serve', record = ''] = parsed.positionals;
+const options = parsed.values;
+const socket = options.socket ?? '';
 
 if (mode === 'refuse') {
   process.stderr.write('not enough 2 MiB pages\n');
@@ -20,7 +22,7 @@ if (mode === 'refuse') {
 // the memory file reaches the handler as descriptor 3, as impd passes it
 appendFileSync(
   record,
-  `${JSON.stringify({ args, served: readFileSync('/dev/fd/3', 'latin1') })}\n`,
+  `${JSON.stringify({ options, served: readFileSync('/dev/fd/3', 'latin1') })}\n`,
 );
 
 Bun.listen({

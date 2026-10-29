@@ -761,7 +761,7 @@ test('#wakeVm loads a 2M snapshot through its page handler on 2 MiB pages, with 
 
   expect(handler.readStarts()).toStrictEqual([
     {
-      args: ['--socket', paths.uffdSocket, '--uid', '900000', '--gid', '900000'],
+      options: { socket: paths.uffdSocket, uid: '900000', gid: '900000' },
       served: 'guest pages',
     },
   ]);

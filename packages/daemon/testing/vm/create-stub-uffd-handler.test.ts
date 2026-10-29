@@ -40,9 +40,7 @@ test('it serves on its socket and records its arguments and the memory file it w
     expect(existsSync(socket)).toBeTrue();
   });
 
-  expect(handler.readStarts()).toStrictEqual([
-    { args: ['--socket', socket], served: 'guest pages' },
-  ]);
+  expect(handler.readStarts()).toStrictEqual([{ options: { socket }, served: 'guest pages' }]);
 });
 
 test('it serves on a socket given in the --socket=<path> form', async () => {
@@ -70,7 +68,7 @@ test('it serves on a socket given in the --socket=<path> form', async () => {
   });
 
   expect(handler.readStarts()).toStrictEqual([
-    { args: [`--socket=${socket}`, '--uid', '100', '--gid', '100'], served: '' },
+    { options: { socket, uid: '100', gid: '100' }, served: '' },
   ]);
 });
 
@@ -84,7 +82,7 @@ test('it exits at its first connection in crash mode', async () => {
 
   const memFd = openSync(memFile, 'r');
 
-  const child = Bun.spawn([handler.path, '--socket', socket], {
+  const child = Bun.spawn([handler.path, `--socket=${socket}`], {
     stdio: ['ignore', 'ignore', 'inherit', memFd],
   });
 

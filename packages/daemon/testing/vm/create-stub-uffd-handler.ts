@@ -6,7 +6,14 @@ import * as z from 'zod';
 // connection, as a handler that dies on a fault; refuse: exits before it binds
 type StubUffdHandlerMode = 'serve' | 'crash' | 'refuse';
 
-const StartSchema = z.object({ args: z.array(z.string()), served: z.string() });
+const StartSchema = z.object({
+  options: z.object({
+    socket: z.string().optional(),
+    uid: z.string().optional(),
+    gid: z.string().optional(),
+  }),
+  served: z.string(),
+});
 
 export function createStubUffdHandler(directory: string, mode: StubUffdHandlerMode = 'serve') {
   const path = join(directory, `uffd-handler-${mode}`);
