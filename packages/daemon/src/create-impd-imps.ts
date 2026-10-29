@@ -29,6 +29,7 @@ import { buildImpPaths } from './vm/storage/data-layout';
 import { createCpuCgroups } from './vm/vmm/cpu-cgroups';
 import { createJails } from './vm/vmm/jail';
 import { checkGuestMemoryMergeable, readKsmProfitMib } from './vm/vmm/ksm';
+import { probeUffdDevice } from './vm/vmm/probe-uffd-device';
 import { readHugePagePool } from './vm/vmm/read-huge-page-pool';
 import { createVmRunner } from './vm/vmm/vm-runner';
 import {
@@ -290,6 +291,7 @@ function resolveImpBoundaries(boundaries: Readonly<ImpBoundaries>) {
         : (pid: number, apiSocket: string) => Promise.resolve(readRam(pid, apiSocket)),
     readUnsharedRamMib: boundaries.readUnsharedRamMib ?? readUnsharedRamMib,
     checkGuestMerge: boundaries.checkGuestMerge ?? checkGuestMemoryMergeable,
+    probeUffdDevice: boundaries.probeUffdDevice ?? (() => probeUffdDevice()),
     readKsmProfitMib: boundaries.readKsmProfitMib ?? readKsmProfitMib,
     readHugePagePool: boundaries.readHugePagePool ?? (() => readHugePagePool()),
     readHugetlbMib:

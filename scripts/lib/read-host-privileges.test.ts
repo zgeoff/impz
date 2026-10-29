@@ -41,7 +41,7 @@ test("it swaps the deployed seccomp profile for the repo's own and adds each pro
   );
 
   expect(
-    readHostPrivileges({ readText: readTextOrNull, probePath: existsSync }, ctx.root),
+    readHostPrivileges({ readText: readTextOrNull, probePath: existsSync }, ctx.root, {}),
   ).toStrictEqual([
     '--cap-drop',
     'ALL',
@@ -54,6 +54,43 @@ test("it swaps the deployed seccomp profile for the repo's own and adds each pro
 
 test('it refuses when the args file cannot be read', () => {
   expect(() =>
-    readHostPrivileges({ readText: () => null, probePath: () => false }, '/w/imp'),
+    readHostPrivileges({ readText: () => null, probePath: () => false }, '/w/imp', {}),
   ).toThrowWithMessage(Error, 'cannot read /w/imp/deploy/imp-host.args.json');
 });
+
+test.each([
+  ['2M', ['--device', '/dev/userfaultfd']],
+  ['off', []],
+  [undefined, []],
+])(
+  'it adds a probed device whose setting is %p only when the setting holds its value',
+  (setting, expected) => {
+    const ctx = setupTest();
+    const present = join(ctx.root, 'present');
+
+    writeFileSync(present, '');
+
+    writeFileSync(
+      join(ctx.root, 'deploy', 'imp-host.args.json'),
+      JSON.stringify({
+        lines: [['--rm', '--name', 'imp-host']],
+        network: { name: 'imp', bridge: 'imp0' },
+        addresses: 'hostname -I',
+        privileges: [['--cap-drop', 'ALL']],
+        probed: [
+          {
+            path: present,
+            args: ['--device', '/dev/userfaultfd'],
+            setting: { name: 'IMP_HUGE_PAGES', value: '2M' },
+          },
+        ],
+      }),
+    );
+
+    expect(
+      readHostPrivileges({ readText: readTextOrNull, probePath: existsSync }, ctx.root, {
+        IMP_HUGE_PAGES: setting,
+      }),
+    ).toStrictEqual(['--cap-drop', 'ALL', ...expected]);
+  },
+);

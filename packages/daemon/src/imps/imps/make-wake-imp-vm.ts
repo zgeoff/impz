@@ -5,6 +5,7 @@ import type { ImpStateChange } from '../../platform/db/update-imp-state';
 import { buildStoppingError } from '../../platform/errors/impd-errors';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
+import { buildUffdDeviceError } from '../../vm/imps-contract/uffd-device-error';
 import {
   readColdBootReason,
   readSnapshotMeta,
@@ -72,8 +73,13 @@ export function makeWakeImpVm(deps: WakeDeps): (imp: LockedImp) => Promise<Locke
       return startColdImpVm(imp, 'wake_fallback', mismatch);
     }
 
-    const cgroup = setupVmCgroup(imp);
     const hugePages = pickWakeHugePages(meta.hugePages, context.config.hugePages !== null);
+
+    if (hugePages === '2M' && !context.probeUffdDevice()) {
+      throw buildUffdDeviceError();
+    }
+
+    const cgroup = setupVmCgroup(imp);
 
     await context.admission?.admit({
       id: imp.id,

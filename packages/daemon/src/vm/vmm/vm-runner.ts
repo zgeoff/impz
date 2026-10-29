@@ -264,6 +264,7 @@ export function createVmRunner(jails: Jails, options: Readonly<VmRunnerOptions> 
 
         setMark('configure');
 
+        jails.removeUffdDevice(plan.paths.impId);
         jails.seal(plan.paths, pid);
 
         await api.instanceStart();
@@ -448,6 +449,7 @@ export function createVmRunner(jails: Jails, options: Readonly<VmRunnerOptions> 
           loadOptions,
         );
 
+        jails.removeUffdDevice(plan.paths.impId);
         jails.seal(plan.paths, pid);
 
         await api.resume();
@@ -538,6 +540,7 @@ export function createVmRunner(jails: Jails, options: Readonly<VmRunnerOptions> 
       // a wake cut short between the load and its seal: seal before the guest
       // runs, and kill a VM that left anything in run/
       try {
+        jails.removeUffdDevice(paths.impId);
         jails.seal(paths, pid);
       } catch (error) {
         await stopVmNow(pid, paths);

@@ -88,10 +88,16 @@ let
   # probed path fails evaluation here until it gets a condition.
   probedWhen = {
     "/dev/zfs" = zfs;
+    # Linux 6.1 added the userfaultfd device
+    "/dev/userfaultfd" = lib.versionAtLeast config.boot.kernelPackages.kernel.version "6.1";
     "/proc/sys/net/ipv6" = config.networking.enableIPv6;
   };
+  # An entry with a setting goes in only where settings give it that value,
+  # as the unit reads it from the env file.
+  probedSettingHolds =
+    entry: !(entry ? setting) || toString (cfg.settings.${entry.setting.name} or "") == entry.setting.value;
   probedArgs = lib.concatMap (
-    entry: lib.optionals probedWhen.${entry.path} entry.args
+    entry: lib.optionals (probedWhen.${entry.path} && probedSettingHolds entry) entry.args
   ) hostArgs.probed;
   stateDir = "/var/lib/imp-host";
   # Secret files outside the store: each is copied before every start to

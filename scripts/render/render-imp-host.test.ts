@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test';
 import { readFileSync, readdirSync } from 'node:fs';
+import { $ } from 'bun';
 import {
   BOOTSTRAP_PARTS,
   parseHostArgs,
@@ -287,6 +288,56 @@ test('#renderProbe escapes its dollars for systemd', () => {
       'cut -d " " -f 4)"; } >/run/imp-host/probed.env\'',
   );
 });
+
+test('#renderProbe adds a probed device only when its setting holds its value too', () => {
+  expect(
+    renderProbe(
+      [
+        {
+          path: '/dev/userfaultfd',
+          args: ['--device', '/dev/userfaultfd'],
+          setting: { name: 'IMP_HUGE_PAGES', value: '2M' },
+        },
+      ],
+      'hostname -I',
+    ),
+  ).toBe(
+    'ExecStartPre=/bin/sh -c \'a=; [ -e /dev/userfaultfd ] && [ "$$IMP_HUGE_PAGES" = 2M ] && ' +
+      'a="$$a --device /dev/userfaultfd"; { echo "IMP_HOST_PROBED=$$a"; ' +
+      'echo "IMP_HOST_ADDRESSES=$$(hostname -I)"; } >/run/imp-host/probed.env\'',
+  );
+});
+
+test.each([
+  ['2M', ' --device /dev/null'],
+  ['off', ''],
+  ['', ''],
+])(
+  '#renderProbe writes a shell that passes the device with the setting at %p as %p',
+  async (setting, expected) => {
+    const unit = renderProbe(
+      [
+        {
+          path: '/dev/null',
+          args: ['--device', '/dev/null'],
+          setting: { name: 'IMP_HUGE_PAGES', value: '2M' },
+        },
+      ],
+      'true',
+    );
+
+    // systemd turns $$ into $ before the shell runs, and the file goes to stdout here
+    const script = (
+      /^ExecStartPre=\/bin\/sh -c '(?<script>.*)'$/u.exec(unit)?.groups?.['script'] ?? ''
+    )
+      .replaceAll('$$', '$')
+      .replace('>/run/imp-host/probed.env', '');
+
+    const probed = await $`sh -c ${script}`.env({ ...process.env, IMP_HUGE_PAGES: setting }).text();
+
+    expect(probed.split('\n')[0]).toBe(`IMP_HOST_PROBED=${expected}`);
+  },
+);
 
 test('#renderNetworkStart makes the network on its bridge, without DNS, when IMP_HOST_NETWORK names it', () => {
   expect(renderNetworkStart({ name: 'imp-host', bridge: 'br-imphost' })).toBe(

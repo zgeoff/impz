@@ -737,6 +737,23 @@ test('#seal hands run/ back to impd with its log and a new pid file', async () =
   expect(readFileSync(imp.paths.pidFile, 'utf8')).toBe('4242\n');
 });
 
+test('#removeUffdDevice removes the userfaultfd node the jailer made and leaves the other devices', async () => {
+  const ctx = setupTest();
+  const imp = ctx.createImpDir('i1');
+
+  writeFileSync(imp.paths.disk, '');
+
+  await ctx.jails.prepare({ impId: 'i1', user: ctx.user, paths: imp.paths, readOnlyFiles: [] });
+
+  mkdirSync(join(imp.root, 'dev'), { recursive: true });
+  writeFileSync(join(imp.root, 'dev', 'userfaultfd'), '');
+  writeFileSync(join(imp.root, 'dev', 'kvm'), '');
+
+  ctx.jails.removeUffdDevice('i1');
+
+  expect(readdirSync(join(imp.root, 'dev'))).toStrictEqual(['kvm']);
+});
+
 test("#seal keeps a page handler's socket and pid file in run/", async () => {
   const ctx = setupTest();
   const imp = ctx.createImpDir('i1');

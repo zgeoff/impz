@@ -147,6 +147,7 @@ async function runBuildVm(
         guestMac: plan.guestMac,
       });
 
+      jails.removeUffdDevice(plan.jailId);
       jails.seal(plan.paths, pid);
 
       await api.instanceStart();
@@ -288,6 +289,7 @@ export async function loadTemplateVm(
     marks.setMark('load');
 
     // the load binds the vsock socket, and the seal lands before guest code runs
+    jails.removeUffdDevice(plan.paths.impId);
     jails.seal(plan.paths, pid);
 
     await api.resume();

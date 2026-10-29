@@ -23,6 +23,8 @@ holds.
 - **Memory settings**: overcommit on and little swapping, and on ZFS a capped ARC. The ARC sits
   outside impd's RAM budget, so the installers set the budget from the host's RAM less a share for
   the host and the ARC cap.
+- **A pool of huge pages**, only for a host that turns huge pages on, which the host reserves at
+  boot ([huge pages](./lifecycle/huge-pages.md)).
 - **A firewall** that leaves the container engine's rules alone and never flushes the whole ruleset,
   since that removes the NAT the container's traffic leaves through.
 - **An uplink** for the container's tailscaled, and nothing inbound.
@@ -46,6 +48,10 @@ instance's list differs. `/proc/sys` is read-only, so the forwarding and tap sys
 container's arguments and the scripts only check them. AppArmor is unconfined, because the engine's
 default profile denies `mount`. The seccomp profile is Docker's default, which Podman reads
 unchanged, with one rule added, `pivot_root`, which the jailer needs.
+
+The container gets the userfaultfd device only when the owner turns
+[huge pages](./lifecycle/huge-pages.md#the-device) on and the host kernel has the device. The device
+reaches more of the kernel than a jailed process otherwise can, so no other host carries it.
 
 Docker opens the ports below 1024 to every process in the container by default, and Podman does not.
 The arguments add the capability to bind them, which opens them to the container's root alone, on

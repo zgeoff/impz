@@ -9,6 +9,7 @@ import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { createSemaphore } from '../../platform/process/semaphore';
 import { isAgentError } from '../../vm/agent-client/is-agent-error';
+import { buildUffdDeviceError } from '../../vm/imps-contract/uffd-device-error';
 import { removeSnapshot } from '../../vm/sleep/snapshot-meta';
 import { writeVmIdentity } from '../../vm/sleep/vm-identity';
 import type { VmIdentity } from '../../vm/sleep/vm-identity';
@@ -139,6 +140,10 @@ export function createImpVmOps(context: ImpContext): ImpVmOps {
     const address = context.findAddress(imp.slot);
     const admitStarted = performance.now();
     const hugePages = pickHugePages(context.config.hugePages !== null, imp);
+
+    if (hugePages === '2M' && !context.probeUffdDevice()) {
+      throw buildUffdDeviceError();
+    }
 
     await context.admission?.admit({
       id: imp.id,

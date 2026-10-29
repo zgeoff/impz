@@ -62,6 +62,8 @@ export interface Jails {
   // a stray entry in run/ means a compromised VM: the seal throws without
   // deleting anything while the VM runs, and the caller must kill the VM
   readonly seal: (paths: RunPaths, pid: number) => void;
+
+  readonly removeUffdDevice: (id: string) => void;
 }
 
 interface ChrootPlan {
@@ -315,6 +317,12 @@ export function createJails(deps: Readonly<JailDeps>): Jails {
       }
 
       writeRegularFile(paths.pidFile, `${String(pid)}\n`);
+    },
+
+    // The jailer makes the node wherever the host kernel has the device. A
+    // snapshot load opens it, and no guest code needs it.
+    removeUffdDevice: (id) => {
+      rmSync(join(getRoot(id), 'dev', 'userfaultfd'), { force: true });
     },
   };
 }

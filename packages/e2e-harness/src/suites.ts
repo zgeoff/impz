@@ -2,6 +2,7 @@ import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { readBackupSuiteSettings } from './backup-drill';
 import { config } from './config';
+import { buildHugePageSettings, checkHostHasHugePagePool } from './huge-page-host';
 import { REPO_ROOT } from './instance';
 import type { DevInstance } from './instance';
 import { checkHostRunsKsm } from './ksm-host';
@@ -242,6 +243,14 @@ export const SUITES: readonly Suite[] = [
     settings: () => buildKsmSettings(checkHostRunsKsm()),
   },
 
+  // Skips unless the host reserved a pool of huge pages, as CI does on one runner.
+  {
+    name: 'huge-pages',
+    prefix: 'e2e-hp-',
+    images: ['e2e-tiny'],
+    settings: () => buildHugePageSettings(checkHostHasHugePagePool()),
+  },
+
   // Last, because they reboot the instance with backups on, then off again.
 
   // Each test starts MinIO afresh for an empty repository, which impd backs up to with no reboot.
@@ -280,7 +289,7 @@ export const FAST_GROUPS: readonly (readonly string[])[] = [
     'boot-templates',
     'socket',
   ],
-  ['sleep', 'reverse', 'jail'],
+  ['sleep', 'reverse', 'jail', 'huge-pages'],
   ['mcp', 'mcp-oauth', 'proxy', 'tokens', 'inner', 'memory', 'ksm'],
   ['tailscale', 'leases', 'egress', 'cpu', 'moves-tailnet'],
 ];

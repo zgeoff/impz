@@ -915,6 +915,72 @@ test('it refuses a 2M imp the pool could hold only with the pages an awake 2M im
   expect(ctx.fake.bootPlans).toHaveLength(1);
 });
 
+test('it refuses a 2M imp on a host container with no userfaultfd device before any VM starts', async () => {
+  updateEnv('IMP_HUGE_PAGES', '2M');
+
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
+  const ctx = await startTestImpd(stack, {
+    env: readImpEnv(),
+    boundaries: {
+      imps: {
+        readHugePagePool: () => ({ totalMib: 4096, freeMib: 4096 }),
+        probeUffdDevice: () => false,
+      },
+    },
+  });
+
+  await ctx.createTestImage('ubuntu');
+
+  expect(ctx.client.imps.create({ name: 'dev', memoryMib: 256 })).rejects.toMatchObject({
+    code: 'PRECONDITION_FAILED',
+    message: expect.toInclude('needs /dev/userfaultfd'),
+  });
+
+  expect(ctx.fake.bootPlans).toBeEmpty();
+});
+
+test('it keeps a 2M imp asleep with its snapshot on a host container with no userfaultfd device', async () => {
+  const device = { isThere: true };
+
+  updateEnv('IMP_HUGE_PAGES', '2M');
+
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
+  const ctx = await startTestImpd(stack, {
+    env: readImpEnv(),
+    boundaries: {
+      imps: {
+        readHugePagePool: () => ({ totalMib: 4096, freeMib: 4096 }),
+        probeUffdDevice: () => device.isThere,
+      },
+    },
+  });
+
+  await ctx.createTestImage('ubuntu');
+
+  const created = await ctx.client.imps.create({ name: 'dev', memoryMib: 256 });
+
+  await ctx.client.imps.sleep({ name: 'dev' });
+
+  device.isThere = false;
+
+  const waking = ctx.client.imps.wake({ name: 'dev' });
+
+  expect(waking).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
+
+  const after = await readImpByName(ctx.db, 'dev');
+
+  expect(after?.state).toBe('sleeping');
+  expect(readSnapshotMeta(buildImpPaths(ctx.dataDir, created.id))).not.toBeNull();
+  expect(ctx.fake.wakePlans).toBeEmpty();
+  expect(ctx.fake.bootPlans).toHaveLength(1);
+});
+
 test('it watches the page handler of each running imp a restarted impd adopts', async () => {
   const ctx = await setupTest();
 

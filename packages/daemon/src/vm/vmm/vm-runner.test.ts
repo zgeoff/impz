@@ -1,5 +1,13 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { create } from '@bufbuild/protobuf';
@@ -512,7 +520,7 @@ test('#resumeVm seals the run dir, then patches the VM to resumed', async () => 
 
   await createVmRunner(stub.jails).resumeVm(vm.pid, paths);
 
-  expect(stub.notes).toStrictEqual(['seal']);
+  expect(stub.notes).toStrictEqual(['remove uffd device vm', 'seal']);
   expect(readFileSync(ctx.logPath, 'utf8')).toBe('PATCH /vm {"state":"Resumed"}\n');
 });
 
@@ -534,7 +542,7 @@ test('#resumeVm kills a VM whose seal finds anything planted in run/, and never 
 
   expect(existsSync(ctx.logPath)).toBeFalse();
   expect(probeProcessAlive(vm.pid, paths.apiSocket)).toBeFalse();
-  expect(stub.notes).toStrictEqual(['seal', 'release vm']);
+  expect(stub.notes).toStrictEqual(['remove uffd device vm', 'seal', 'release vm']);
 });
 
 test('#stopVm releases the jail on a hard stop, as a checkpoint restore asks', async () => {
@@ -676,6 +684,45 @@ test('#wakeVm loads the snapshot with dirty page tracking, so the next sleep tak
   expect(readFileSync(ctx.logPath, 'utf8').trim().split('\n')).toStrictEqual([
     `PUT /snapshot/load {"snapshot_path":"${paths.vmstate}","mem_backend":{"backend_type":"File","backend_path":"${paths.memFile}"},"resume_vm":false,"track_dirty_pages":true}`,
     'PATCH /vm {"state":"Resumed"}',
+  ]);
+});
+
+test('#wakeVm removes the userfaultfd node of the jail after the load and before the seal', () => {
+  const ctx = setupTest();
+  const paths = ctx.createImpDir('vm');
+  const handler = createStubUffdHandler(ctx.directoryPath);
+
+  mkdirSync(paths.snapshotDir, { recursive: true });
+  writeFileSync(paths.memFile, '');
+
+  const stub = buildStubJails({
+    argv: buildStubFirecrackerArgv({
+      apiSocket: paths.apiSocket,
+      logPath: ctx.logPath,
+      failures: ['PATCH /vm'],
+    }),
+    onNote: (note) => {
+      appendFileSync(ctx.logPath, `${note}\n`);
+    },
+  });
+
+  const waking = createVmRunner(stub.jails, { uffdHandlerBin: handler.path }).wakeVm({
+    firecrackerBin: 'firecracker',
+    paths,
+    cgroup: null,
+    jail: { uid: 900_000, gid: 900_000 },
+    readOnlyFiles: [],
+    hugePages: '2M',
+  });
+
+  expect(waking).rejects.toThrow('refused PATCH /vm');
+
+  expect(readFileSync(ctx.logPath, 'utf8').trim().split('\n').slice(1)).toStrictEqual([
+    'PUT /snapshot/load',
+    'remove uffd device vm',
+    'seal',
+    'PATCH /vm',
+    'release vm',
   ]);
 });
 

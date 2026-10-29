@@ -628,6 +628,16 @@ jobs:
           echo 1 | sudo tee /sys/kernel/mm/ksm/run >/dev/null
           grep -H . /sys/kernel/mm/ksm/run /sys/kernel/mm/ksm/pages_to_scan /sys/kernel/mm/ksm/use_zero_pages
 
+      # The huge-pages suite runs in group 2 and skips on a host with no pool,
+      # so only that runner gives up RAM to one: 1 GiB in 2 MiB pages, enough
+      # for its imps one at a time and a template build beside one.
+      - name: Reserve huge pages for the huge-pages suite
+        if: matrix.group == 2
+        run: |
+          echo 512 | sudo tee /proc/sys/vm/nr_hugepages >/dev/null
+          grep -E 'HugePages_(Total|Free)' /proc/meminfo
+          ls -l /dev/userfaultfd
+
       # /mnt is the runner's larger temp disk; the XFS file goes there when
       # the image has one. CI must not pass --clean to the harness: it
       # refuses to wipe a data dir outside .data/ that holds no imp.xfs, and

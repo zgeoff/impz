@@ -12,7 +12,8 @@ unrelated to a template image, which is an image made from an imp's disk
 A template is reused only where a restore inherits exactly what a cold boot would have. Its key is a
 hash of the guest kernel and the system drive, the Firecracker version and snapshot format, the host
 kernel, the CPU model and its flags, the template's kernel command line, the devices, and the vCPU
-count and memory size. The image is not in the key, because a template never opens a user disk.
+count and memory size, and whether the guest runs on [huge pages](./huge-pages.md). The image is not
+in the key, because a template never opens a user disk.
 
 An elastic imp never restores a template: its guest needs a hot-plug region from its boot on, and a
 template has none ([elastic memory](./elastic-memory.md#limits)). At start, impd removes every
@@ -45,9 +46,10 @@ lives on until its last VM exits.
 
 When the shape has a template, a cold boot starts Firecracker in the imp's cgroup and jail, loads
 the template's snapshot paused with the imp's tap and vsock socket in place of the template's, seals
-the jail and resumes. Meanwhile impd readies the imp's disk. Once the parked agent answers and the
-disk is ready, impd points the guest's root drive at the imp's disk, which also tells the guest its
-new size, and sends `claim`.
+the jail and resumes. A template on huge pages loads through a page handler that serves the
+template's memory file ([huge pages](./huge-pages.md#the-page-handler)). Meanwhile impd readies the
+imp's disk. Once the parked agent answers and the disk is ready, impd points the guest's root drive
+at the imp's disk, which also tells the guest its new size, and sends `claim`.
 
 The claim carries the imp's id, hostname, addresses, gateway, DNS servers, MAC, the host's clock and
 a random seed. The agent sets the clock first, so nothing after it stamps the template's time. It

@@ -426,6 +426,18 @@ let
       expr = lib.hasInfix "--device /dev/zfs" unit.serviceConfig.ExecStart;
       expected = true;
     };
+    # zfsHost: module defaults, with huge pages off
+    "test imp-host gets no userfaultfd device with huge pages off" = {
+      expr = lib.hasInfix "/dev/userfaultfd" unit.serviceConfig.ExecStart;
+      expected = false;
+    };
+    "test imp-host gets the userfaultfd device with huge pages on" = {
+      expr =
+        lib.hasInfix "--device /dev/userfaultfd"
+          (host { services.imp.settings.IMP_HUGE_PAGES = "2M"; })
+          .config.systemd.services.imp-host.serviceConfig.ExecStart;
+      expected = true;
+    };
     # xfsHost sets services.imp.storage = "xfs"
     "test XFS passes no /dev/zfs" = {
       expr = lib.hasInfix "/dev/zfs" xfsCfg.systemd.services.imp-host.serviceConfig.ExecStart;

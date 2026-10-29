@@ -39,9 +39,17 @@ const STORAGE_POOL_PROPERTIES = /^readonly ZPOOL_CREATE_PROPERTIES=.*$/mu;
 
 type Lines = readonly (readonly string[])[];
 
+interface ProbedSetting {
+  readonly name: string;
+  readonly value: string;
+}
+
 interface Probed {
   readonly path: string;
   readonly args: readonly string[];
+
+  // the env file setting that must hold this value too, for a device only one feature needs
+  readonly setting?: ProbedSetting | undefined;
 }
 
 interface HostNetwork {
@@ -72,7 +80,16 @@ const LinesSchema = z
   .array(z.array(LineWordSchema).nonempty({ error: 'must be non-empty' }))
   .nonempty({ error: 'must be non-empty' });
 
-const ProbedSchema = z.object({ path: WordSchema, args: z.array(WordSchema).nonempty() });
+const ProbedSettingSchema = z.object({
+  name: z.string().regex(/^[A-Z][A-Z0-9_]*$/u, { error: 'is not a setting name' }),
+  value: WordSchema,
+});
+
+const ProbedSchema = z.object({
+  path: WordSchema,
+  args: z.array(WordSchema).nonempty(),
+  setting: ProbedSettingSchema.optional(),
+});
 
 // Linux limits an interface name, such as a bridge's, to 15 bytes.
 const HostNetworkSchema = z.object({
@@ -128,9 +145,17 @@ export function renderExecStart(args: HostArgs): string {
 
 // The unit reads the host's addresses at each start, because a new DHCP lease can change them.
 export function renderProbe(probed: readonly Probed[], addresses: string): string {
-  const tests = probed.map((entry) => `[ -e ${entry.path} ] && a="$$a ${entry.args.join(' ')}"; `);
+  const tests = probed.map(
+    (entry) =>
+      `[ -e ${entry.path} ] && ${renderSettingTest(entry.setting)}a="$$a ${entry.args.join(' ')}"; `,
+  );
 
   return `ExecStartPre=/bin/sh -c 'a=; ${tests.join('')}{ echo "IMP_HOST_PROBED=$$a"; echo "IMP_HOST_ADDRESSES=$$(${addresses})"; } >${PROBED_FILE}'`;
+}
+
+// The unit reads the env file before its ExecStartPre, so the shell sees the setting.
+function renderSettingTest(setting: Readonly<ProbedSetting> | undefined): string {
+  return setting === undefined ? '' : `[ "$$${setting.name}" = ${setting.value} ] && `;
 }
 
 export function renderNetworkStart(network: HostNetwork): string {

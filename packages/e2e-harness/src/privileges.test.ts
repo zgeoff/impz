@@ -404,7 +404,13 @@ test('#readExpectedPrivileges reads deploy/imp-host.args.json without the module
   expect(expected.caps).not.toContain('CAP_SYS_MODULE');
   expect(expected.securityOpts).toStrictEqual(['apparmor=unconfined']);
   expect(expected.devices).toStrictEqual(['/dev/kvm', '/dev/net/tun']);
-  expect(expected.optionalDevices).toStrictEqual(['/dev/zfs', '/dev/loop-control']);
+
+  expect(expected.optionalDevices).toStrictEqual([
+    '/dev/zfs',
+    '/dev/userfaultfd',
+    '/dev/loop-control',
+  ]);
+
   expect(expected.unlimitedPids).toBe(true);
 });
 

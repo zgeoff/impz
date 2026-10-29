@@ -14,9 +14,11 @@ set size, from the kernel's per-process memory summary. It leaves out clean file
 woken guest maps its memory file privately, so the pages it has only read are clean pages of that
 file, which the host can drop and read again. A guest restored from a
 [boot template](./boot-templates.md#ram) shares its template's file the same way. Counting those
-pages would charge each woken imp for memory the host can take back at any time. The pages impd
-locks for boot templates are the exception: the host cannot drop them, so the governor counts them
-as used beside the VMs.
+pages would charge each woken imp for memory the host can take back at any time. A guest on huge
+pages holds its memory in the host's pool, which neither count includes, so the governor adds the
+VM's pool pages to what it owns ([huge pages](./huge-pages.md#ram)). The pages impd locks for boot
+templates are the exception: the host cannot drop them, so the governor counts them as used beside
+the VMs.
 
 To answer for one VM, the kernel walks every page that VM maps, which takes longer the more memory
 the guest uses. The governor therefore reads every awake VM's summary at once, off impd's event
@@ -55,6 +57,9 @@ them, and the error names the awake imps it could not sleep. An imp whose own me
 the whole budget is never admitted. A refusal that comes later, once a skip or a failure leaves the
 rest short, still costs the sleeps done before it, and each of those imps wakes on its next request.
 A caller of the wake proxy gets a 503 for a refusal; an API caller gets the error.
+
+A boot or wake on huge pages must also fit the free pool of huge pages, and the governor sleeps no
+imp to make pool room ([huge pages](./huge-pages.md#ram)).
 
 Work no caller waits on, such as a boot template's build, is admitted only into free room, never by
 sleeping an imp.

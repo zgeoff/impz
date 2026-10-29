@@ -88,6 +88,7 @@ export interface ImpServiceDeps {
 
   readonly readUnsharedRamMib: (pid: number, apiSocket: string) => number | null;
   readonly checkGuestMerge: (pid: number) => Promise<boolean | null>;
+  readonly probeUffdDevice: () => boolean;
 
   // An older tailnet node can hold the configured name, so the live name can
   // differ from it.
@@ -171,6 +172,7 @@ export interface ImpMemory {
   // wake splits what KSM merged.
   readonly readSleepRamMib: (pid: number, apiSocket: string) => number | null;
   readonly checkGuestMerge: (pid: number) => Promise<boolean | null>;
+  readonly probeUffdDevice: () => boolean;
   readonly mergeFlags: MergeFlags;
   readonly memoryLimit: MemoryLimit;
 
@@ -255,6 +257,7 @@ export function createImpContext(deps: ImpServiceDeps): ImpContext {
     readRssMib: deps.readRssMib,
     readSleepRamMib: deps.config.ksm === null ? deps.readRamMib : deps.readUnsharedRamMib,
     checkGuestMerge: deps.checkGuestMerge,
+    probeUffdDevice: deps.probeUffdDevice,
     mergeFlags: createMergeFlags(),
     memoryLimit: deps.memoryLimit ?? NO_MEMORY_LIMIT,
     pluggedSizes: deps.pluggedSizes ?? createPluggedSizes(),
