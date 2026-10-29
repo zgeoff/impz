@@ -45,6 +45,8 @@ pre-push:
   jobs:
     - name: lint:docs
       run: bun run lint:docs
+    - name: lint:images
+      run: bun run lint:images
     - name: lint:workflows
       run: bun run lint:workflows
     # needs shellcheck on PATH, the version CI pins (0.11.0)

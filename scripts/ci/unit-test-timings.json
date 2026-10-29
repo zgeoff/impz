@@ -723,7 +723,6 @@
     "packages/e2e-harness/src/git-env.test.ts": 12,
     "packages/e2e-harness/src/guest-disk.test.ts": 1,
     "packages/e2e-harness/src/guest-net.test.ts": 7,
-    "packages/e2e-harness/src/hello-image.test.ts": 1,
     "packages/e2e-harness/src/http.test.ts": 1,
     "packages/e2e-harness/src/imp-cli.test.ts": 4,
     "packages/e2e-harness/src/imp-disk-path.test.ts": 5,

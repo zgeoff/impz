@@ -1,5 +1,5 @@
-# hadolint's settings for host/Dockerfile and images/base/Dockerfile, which the
-# shellcheck job in ci.yml lints.
+# hadolint's settings for host/Dockerfile and the Dockerfiles under images/,
+# which the shellcheck job in ci.yml lints.
 ignored:
   # An apt install pins a version only where the Dockerfile says why: the
   # live archives drop a superseded version, so a pin there breaks the build
