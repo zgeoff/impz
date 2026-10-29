@@ -1,4 +1,4 @@
-import { expect, mock, test } from 'bun:test';
+import { expect, mock, onTestFinished, setSystemTime, test } from 'bun:test';
 import invariant from 'tiny-invariant';
 import { buildMockCredential } from '../../../../testing/network/build-mock-credential';
 import type { NewAuditEntry } from '../../../platform/db/broker-audit';
@@ -412,6 +412,44 @@ test('it records the close of a connection once', async () => {
   plan.audit.recordClose();
 
   expect(recordAudit).toHaveBeenCalledTimes(2);
+});
+
+test('it times the close row from the open row, so the open row’s time is the close row’s time minus its duration', async () => {
+  onTestFinished(() => {
+    setSystemTime();
+  });
+
+  const recordAudit = mock<(entry: NewAuditEntry) => void>();
+
+  setSystemTime(new Date('2026-03-01T10:00:00.000Z'));
+
+  const plan = await planUpgrade(
+    {
+      impId: 'imp-1',
+      impName: 'dev',
+      host: 'realtime.example.com',
+      findCredential: () => Promise.resolve(buildMockCredential({ secretName: 'rt' })),
+      resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+      recordAudit,
+    },
+    new Request('https://realtime.example.com/socket', {
+      headers: { host: 'realtime.example.com', connection: 'Upgrade', upgrade: 'websocket' },
+    }),
+  );
+
+  invariant(plan.kind === 'open');
+  setSystemTime(new Date('2026-03-01T10:00:03.000Z'));
+
+  plan.audit.recordOpen();
+
+  setSystemTime(new Date('2026-03-01T10:01:03.000Z'));
+
+  plan.audit.recordClose();
+
+  expect(recordAudit.mock.calls.map((call) => [call[0].at, call[0].durationMs])).toStrictEqual([
+    [new Date('2026-03-01T10:00:03.000Z'), 3000],
+    [new Date('2026-03-01T10:01:03.000Z'), 60_000],
+  ]);
 });
 
 test('it records one row with the upstream’s status when the upstream does not switch', async () => {

@@ -14,6 +14,11 @@ export interface ConnectionAudit {
 
 type UpgradePhase = 'pending' | 'open' | 'done';
 
+interface ByteCounts {
+  readonly requestBytes: number;
+  readonly responseBytes: number;
+}
+
 const SWITCHING_PROTOCOLS = 101;
 
 export type UpgradePlan =
@@ -40,6 +45,7 @@ export interface UpgradeDeps extends AdmitDeps {
 
 export async function planUpgrade(deps: UpgradeDeps, request: Request): Promise<UpgradePlan> {
   const started = performance.now();
+  const requestedAtMs = Date.now();
 
   const admission = await admitRequest(deps, request, started, 'upgrade');
 
@@ -68,28 +74,40 @@ export async function planUpgrade(deps: UpgradeDeps, request: Request): Promise<
     .map((protocol) => protocol.trim())
     .filter((protocol) => protocol !== '');
 
-  const state: { requestBytes: number; responseBytes: number; phase: UpgradePhase } = {
+  const state: {
+    requestBytes: number;
+    responseBytes: number;
+    phase: UpgradePhase;
+    openedAtMs: number;
+  } = {
     requestBytes: 0,
     responseBytes: 0,
     phase: 'pending',
+    openedAtMs: 0,
   };
 
-  const writeRow = (status: number, requestBytes: number, responseBytes: number): void => {
+  const writeRow = (status: number, sinceMs: number, counts: ByteCounts): number => {
+    const atMs = Date.now();
+
     deps.recordAudit({
       impId: deps.impId,
       impName: deps.impName,
       secretName: credential.secretName,
-      at: new Date(),
+      at: new Date(atMs),
       method: request.method,
       host: deps.host,
       path: admission.auditPath,
       status,
-      requestBytes,
-      responseBytes,
-      durationMs: Math.round(performance.now() - started),
+      requestBytes: counts.requestBytes,
+      responseBytes: counts.responseBytes,
+      durationMs: atMs - sinceMs,
       reason: null,
     });
+
+    return atMs;
   };
+
+  const noBytes = { requestBytes: 0, responseBytes: 0 };
 
   return {
     kind: 'open',
@@ -104,8 +122,7 @@ export async function planUpgrade(deps: UpgradeDeps, request: Request): Promise<
         }
 
         state.phase = 'open';
-
-        writeRow(SWITCHING_PROTOCOLS, 0, 0);
+        state.openedAtMs = writeRow(SWITCHING_PROTOCOLS, requestedAtMs, noBytes);
       },
       addRequestBytes: (bytes) => {
         state.requestBytes += bytes;
@@ -120,7 +137,7 @@ export async function planUpgrade(deps: UpgradeDeps, request: Request): Promise<
 
         state.phase = 'done';
 
-        writeRow(SWITCHING_PROTOCOLS, state.requestBytes, state.responseBytes);
+        writeRow(SWITCHING_PROTOCOLS, state.openedAtMs, state);
       },
       recordAnswer: (status) => {
         if (state.phase !== 'pending') {
@@ -129,7 +146,7 @@ export async function planUpgrade(deps: UpgradeDeps, request: Request): Promise<
 
         state.phase = 'done';
 
-        writeRow(status, 0, 0);
+        writeRow(status, requestedAtMs, noBytes);
       },
     },
   };

@@ -468,11 +468,11 @@ an impd that checks. A client that sends the `start` itself must check the same.
 Values are not encrypted at rest: the key would sit on the same disk.
 
 A WebSocket gets two rows in `impz audit`, both with status 101 and the same imp, secret, method,
-host and path. The broker writes the first when the service accepts the connection, with no bytes,
-so the use of the credential is on record while the connection lasts. It writes the second when the
-connection closes, with the message bytes each way and the connection's whole duration. The second
-row's time minus its duration gives the first row's time. A service that refuses the upgrade gets
-one row with status 502.
+host and path. The broker writes the first when the service accepts the connection, with no bytes
+and the time the upgrade took, so the use of the credential is on record while the connection lasts.
+It writes the second when the connection closes, with the message bytes each way and the time since
+the first row, so the second row's time minus its duration gives the first row's time. A service
+that refuses the upgrade gets one row with status 502.
 
 The audit log also records each request the broker refuses: a CONNECT the egress policy or the
 tunnel check turns away, a head that is not a CONNECT, a connection past the imp's cap, and a
