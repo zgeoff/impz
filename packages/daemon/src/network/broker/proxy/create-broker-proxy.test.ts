@@ -2067,6 +2067,144 @@ test('it answers 502 and records the failure when the upstream refuses the webso
   ]);
 });
 
+test('revoking a grant while the service answers the upgrade ends the websocket', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
+  const hold = Promise.withResolvers<void>();
+
+  const upstream = await startStubBrokerSocketUpstream(ctx.stack, {
+    directory: join(ctx.dataDir, 'socket-upstream'),
+    answerAfter: hold.promise,
+  });
+
+  await writeFile(
+    ctx.upstreamsFile,
+    JSON.stringify({ ca: upstream.caPem, upstreams: { 'realtime.example.com': upstream.origin } }),
+  );
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  await ctx.impd.broker.addSecret({
+    name: 'rt',
+    kind: 'custom',
+    value: 'rt-real',
+    rules: [buildMockBrokerRule({ host: 'realtime.example.com' })],
+  });
+
+  await ctx.impd.broker.addGrant('dev', 'rt');
+
+  const bridge = await startStubBrokerGuestBridge(ctx.stack, {
+    proxyPort: ctx.proxyPort,
+    address: '127.0.0.2',
+  });
+
+  const caPem = await readFile(ctx.caFile, 'utf8');
+
+  const socket = new WebSocket('wss://realtime.example.com/v1/stream', {
+    proxy: bridge.proxyURL,
+    tls: { ca: [caPem] },
+  });
+
+  ctx.stack.defer(() => {
+    socket.close();
+  });
+
+  await waitFor(() => {
+    expect(upstream.upgrades).toHaveLength(1);
+  });
+
+  // the revoke's pass waits for the upgrade under way, as for any request
+  const revoking = ctx.impd.broker.removeGrant('dev', 'rt');
+
+  await waitFor(async () => {
+    const names = await listGrantNames(ctx.db, dev.id);
+
+    expect(names).toStrictEqual([]);
+  });
+
+  hold.resolve();
+
+  await revoking;
+
+  await waitFor(() => {
+    expect(socket.readyState).toBe(WebSocket.CLOSED);
+    expect(upstream.closes).toHaveLength(1);
+  });
+});
+
+test('it renews the leaf of a pair with an open websocket and leaves the websocket open', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
+  const upstream = await startStubBrokerSocketUpstream(ctx.stack, {
+    directory: join(ctx.dataDir, 'socket-upstream'),
+  });
+
+  await writeFile(
+    ctx.upstreamsFile,
+    JSON.stringify({ ca: upstream.caPem, upstreams: { 'realtime.example.com': upstream.origin } }),
+  );
+
+  await ctx.client.imps.create({ name: 'dev' });
+
+  await ctx.impd.broker.addSecret({
+    name: 'rt',
+    kind: 'custom',
+    value: 'rt-real',
+    rules: [buildMockBrokerRule({ host: 'realtime.example.com' })],
+  });
+
+  await ctx.impd.broker.addSecret({
+    name: 'other',
+    kind: 'custom',
+    value: 'other-real',
+    rules: [buildMockBrokerRule({ host: 'other.example.com' })],
+  });
+
+  await ctx.impd.broker.addGrant('dev', 'rt');
+  await ctx.impd.broker.addGrant('dev', 'other');
+
+  const bridge = await startStubBrokerGuestBridge(ctx.stack, {
+    proxyPort: ctx.proxyPort,
+    address: '127.0.0.2',
+  });
+
+  const caPem = await readFile(ctx.caFile, 'utf8');
+
+  const socket = new WebSocket('wss://realtime.example.com/v1/stream', {
+    proxy: bridge.proxyURL,
+    tls: { ca: [caPem] },
+  });
+
+  ctx.stack.defer(() => {
+    socket.close();
+  });
+
+  const echoed: unknown[] = [];
+
+  socket.addEventListener('message', (event: MessageEvent<unknown>) => {
+    echoed.push(event.data);
+  });
+
+  await waitFor(() => {
+    expect(socket.readyState).toBe(WebSocket.OPEN);
+  });
+
+  ctx.clock.nowMs += 340 * 86_400_000;
+
+  // the revoke runs the pass that renews the open pair's leaf
+  await ctx.impd.broker.removeGrant('dev', 'other');
+
+  socket.send('still here');
+
+  await waitFor(() => {
+    expect(echoed).toStrictEqual(['still here']);
+  });
+});
+
 test('revoking a grant closes its open websockets', async () => {
   const ctx = await setupTest();
 

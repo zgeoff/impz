@@ -476,13 +476,14 @@ one row with status 502.
 
 The audit log also records each request the broker refuses: a CONNECT the egress policy or the
 tunnel check turns away, a head that is not a CONNECT, a connection past the imp's cap, and a
-request on a granted connection for another host, after a revoke, or outside the grant's
-[filter](#narrow-a-grant). The broker refuses before it adds any credential, so a refused row has no
-secret. `impz audit --kind refused` lists each with its reason, such as `egress-policy`. A head
-without a host leaves the host empty. The log keeps the newest 1000 rows of each kind per imp, sent
-and refused, so a guest's refusals never push out the requests sent with its credentials. Across
-every imp, destroyed ones included, it keeps the newest 100,000 rows. It records at most 20 refusals
-per imp in one second, because a refusal costs the guest almost nothing.
+request on a granted connection for another host, a WebSocket upgrade that is not a `GET`, a request
+after a revoke, or one outside the grant's [filter](#narrow-a-grant). The broker refuses before it
+adds any credential, so a refused row has no secret. `impz audit --kind refused` lists each with its
+reason, such as `egress-policy`. A head without a host leaves the host empty. The log keeps the
+newest 1000 rows of each kind per imp, sent and refused, so a guest's refusals never push out the
+requests sent with its credentials. Across every imp, destroyed ones included, it keeps the newest
+100,000 rows. It records at most 20 refusals per imp in one second, because a refusal costs the
+guest almost nothing.
 
 ## Limits
 

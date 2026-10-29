@@ -173,3 +173,36 @@ test('it hands out each open socket', async () => {
     expect(pushed).toStrictEqual(['from the service']);
   });
 });
+
+test('it records an upgrade at once and answers it only once its hold settles', async () => {
+  const ctx = await setupTest();
+
+  const hold = Promise.withResolvers<void>();
+
+  const upstream = await startStubBrokerSocketUpstream(ctx.stack, {
+    directory: ctx.directoryPath,
+    answerAfter: hold.promise,
+  });
+
+  const socket = new WebSocket(`wss://localhost:${String(upstream.port)}/x`, {
+    tls: { ca: [upstream.caPem] },
+  });
+
+  ctx.stack.defer(() => {
+    socket.close();
+  });
+
+  await waitFor(() => {
+    expect(upstream.upgrades).toHaveLength(1);
+  });
+
+  const stateWhileHeld = socket.readyState;
+
+  hold.resolve();
+
+  await waitFor(() => {
+    expect(socket.readyState).toBe(WebSocket.OPEN);
+  });
+
+  expect(stateWhileHeld).toBe(WebSocket.CONNECTING);
+});

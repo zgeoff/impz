@@ -5,6 +5,9 @@ import { loadOrCreateBrokerCa } from '../../src/network/broker/tls/broker-ca';
 interface StubSocketUpstreamOptions {
   readonly directory: string;
   readonly upgradeHeaders?: Readonly<Record<string, string>>;
+
+  // the service answers each upgrade once this settles
+  readonly answerAfter?: Promise<void>;
 }
 
 interface SeenUpgrade {
@@ -27,7 +30,10 @@ export async function startStubBrokerSocketUpstream(
   const sockets: ServerWebSocket[] = [];
   const closes: { code: number; reason: string }[] = [];
 
-  const answerUpgrade = (request: Request, upgrading: Server<undefined>): Response | undefined => {
+  const answerUpgrade = async (
+    request: Request,
+    upgrading: Server<undefined>,
+  ): Promise<Response | undefined> => {
     const offered = request.headers.get('sec-websocket-protocol');
 
     upgrades.push({
@@ -35,6 +41,8 @@ export async function startStubBrokerSocketUpstream(
       authorization: request.headers.get('authorization'),
       protocols: offered,
     });
+
+    await options.answerAfter;
 
     const picked = offered?.split(',')[0]?.trim() ?? '';
 

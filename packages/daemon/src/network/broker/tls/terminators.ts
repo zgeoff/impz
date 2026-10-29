@@ -93,6 +93,21 @@ export function createTerminators(deps: TerminatorDeps): Terminators {
     },
   });
 
+  // A server whose leaf a new one replaced stops taking connections at once,
+  // but Bun's stop waits for each open one, and an open WebSocket can stay
+  // for hours, so a prune does not wait for it.
+  const retired = new Set<Entry>();
+
+  const retire = async (entry: Entry): Promise<void> => {
+    retired.add(entry);
+
+    try {
+      await entry.stop(false);
+    } finally {
+      retired.delete(entry);
+    }
+  };
+
   const start = async (id: string, key: TerminatorKey): Promise<Entry> => {
     const leaf = await deps.issueLeaf(key.host);
 
@@ -116,9 +131,11 @@ export function createTerminators(deps: TerminatorDeps): Terminators {
       socket,
       leaf,
       stop: async (force) => {
-        await server.stop(force);
+        const drained = server.stop(force);
 
         rmSync(socket, { force: true });
+
+        await drained;
       },
     };
   };
@@ -163,12 +180,15 @@ export function createTerminators(deps: TerminatorDeps): Terminators {
       for (const [id, pending] of entries) {
         const entry = await readSettled(pending);
 
-        if (entry === null || !keep(entry.key) || deps.isLeafDue(entry.leaf)) {
+        if (entry === null || !keep(entry.key)) {
           entries.delete(id);
 
           if (entry !== null) {
             stopping.push(entry.stop(false));
           }
+        } else if (deps.isLeafDue(entry.leaf)) {
+          entries.delete(id);
+          void retire(entry);
         }
       }
 
@@ -181,10 +201,12 @@ export function createTerminators(deps: TerminatorDeps): Terminators {
       pairs.clear();
 
       await Promise.all(
-        all.map(async (entry) => {
+        [...all, ...retired].map(async (entry) => {
           await entry?.stop(true);
         }),
       );
+
+      retired.clear();
 
       rmSync(deps.socketDir, { recursive: true, force: true });
     },

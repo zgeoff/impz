@@ -39,6 +39,7 @@ export async function admitRequest(
   deps: AdmitDeps,
   request: Request,
   started: number,
+  kind: 'request' | 'upgrade',
 ): Promise<Admission> {
   const url = new URL(request.url);
 
@@ -65,6 +66,11 @@ export async function admitRequest(
 
   if (findHostName(request.headers.get('host')) !== deps.host) {
     return refuse(421, `this connection is for ${deps.host}`, 'wrong-host');
+  }
+
+  // the upstream handshake is always a GET, so the filter must see a GET
+  if (kind === 'upgrade' && request.method !== 'GET') {
+    return refuse(400, 'a websocket upgrade must be a GET', 'websocket');
   }
 
   const credential = await deps.findCredential(deps.impId, deps.host);

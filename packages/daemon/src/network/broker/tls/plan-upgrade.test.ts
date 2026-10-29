@@ -208,6 +208,52 @@ test('it refuses an upgrade outside the grant’s filter with 403', async () => 
   expect(text).toBe('the grant for realtime.example.com does not cover GET /admin/socket\n');
 });
 
+test('it refuses an upgrade that is not a GET with 400 before it reads the grant', async () => {
+  const recordAudit = mock<(entry: NewAuditEntry) => void>();
+
+  const findCredential = mock(() =>
+    Promise.resolve(buildMockCredential({ filter: { methods: ['POST'] } })),
+  );
+
+  const plan = await planUpgrade(
+    {
+      impId: 'imp-1',
+      impName: 'dev',
+      host: 'realtime.example.com',
+      findCredential,
+      resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+      recordAudit,
+    },
+    new Request('https://realtime.example.com/socket', {
+      method: 'POST',
+      headers: { host: 'realtime.example.com', connection: 'Upgrade', upgrade: 'websocket' },
+    }),
+  );
+
+  invariant(plan.kind === 'refused');
+
+  const text = await plan.response.text();
+
+  expect(plan.response.status).toBe(400);
+  expect(text).toBe('a websocket upgrade must be a GET\n');
+  expect(findCredential).not.toHaveBeenCalled();
+
+  expect(recordAudit).toHaveBeenCalledExactlyOnceWith({
+    impId: 'imp-1',
+    impName: 'dev',
+    secretName: null,
+    at: expect.toBeValidDate(),
+    method: 'POST',
+    host: 'realtime.example.com',
+    path: '/socket',
+    status: 400,
+    requestBytes: 0,
+    responseBytes: 0,
+    durationMs: expect.toBeNumber(),
+    reason: 'websocket',
+  });
+});
+
 test('it refuses an upgrade with a Host header for another name with 421', async () => {
   const findCredential = mock(() => Promise.resolve(buildMockCredential()));
 

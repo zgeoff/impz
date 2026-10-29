@@ -53,7 +53,7 @@ export function createForwarder(deps: ForwardDeps): (request: Request) => Promis
   return async (request) => {
     const started = performance.now();
 
-    const admission = await admitRequest(deps, request, started);
+    const admission = await admitRequest(deps, request, started, 'request');
 
     if (admission.kind === 'refused') {
       return admission.response;

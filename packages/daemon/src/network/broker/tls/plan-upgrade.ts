@@ -41,7 +41,7 @@ export interface UpgradeDeps extends AdmitDeps {
 export async function planUpgrade(deps: UpgradeDeps, request: Request): Promise<UpgradePlan> {
   const started = performance.now();
 
-  const admission = await admitRequest(deps, request, started);
+  const admission = await admitRequest(deps, request, started, 'upgrade');
 
   if (admission.kind === 'refused') {
     return admission;

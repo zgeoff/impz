@@ -23,9 +23,26 @@ export async function relayWebSocket(
   request: Request,
   server: Server<RelayData>,
 ): Promise<Response | undefined> {
+  const guest: RelayData['guest'] = { socket: null };
+
+  const state: { upstream: WebSocket | null; isGrantGone: boolean } = {
+    upstream: null,
+    isGrantGone: false,
+  };
+
+  // tracked before the grant is read, so a revoke that lands while the
+  // grant is read or the service answers still ends the connection
+  const untrack = deps.connections.track(() => {
+    state.isGrantGone = true;
+    guest.socket?.close(GRANT_GONE_CODE, 'the grant is gone');
+    state.upstream?.close();
+  });
+
   const plan = await planUpgrade(deps, request);
 
   if (plan.kind === 'refused') {
+    untrack();
+
     return plan.response;
   }
 
@@ -38,12 +55,25 @@ export async function relayWebSocket(
       ...(plan.ca !== null && { ca: plan.ca }),
     });
   } catch {
+    untrack();
+
     plan.audit.recordAnswer(502);
 
     return new Response(`could not open a websocket to ${deps.host}\n`, { status: 502 });
   }
 
+  state.upstream = upstream;
+
   plan.audit.recordOpen();
+
+  if (state.isGrantGone) {
+    untrack();
+
+    upstream.close();
+    plan.audit.recordClose();
+
+    return new Response(`no credential is granted for ${deps.host}\n`, { status: 403 });
+  }
 
   const pending: (string | ArrayBuffer)[] = [];
 
@@ -52,13 +82,6 @@ export async function relayWebSocket(
   };
 
   upstream.addEventListener('message', handleEarlyMessage);
-
-  const guest: RelayData['guest'] = { socket: null };
-
-  const untrack = deps.connections.track(() => {
-    guest.socket?.close(GRANT_GONE_CODE, 'the grant is gone');
-    upstream.close();
-  });
 
   const upgraded = server.upgrade(request, {
     data: { upstream, pending, handleEarlyMessage, audit: plan.audit, untrack, guest },
