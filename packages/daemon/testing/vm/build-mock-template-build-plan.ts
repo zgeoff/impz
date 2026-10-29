@@ -25,6 +25,7 @@ export function buildMockTemplateBuildPlan(
     bootArgs: 'console=ttyS0 imp.template=1',
     vcpus: faker.number.int({ min: 1, max: 4 }),
     memoryMib: faker.helpers.arrayElement([128, 256, 512]),
+    hugePages: 'None',
     workDir,
     paths: {
       runDir,

@@ -55,6 +55,30 @@ export function buildRamBudgetError(shortfall: Readonly<RamShortfall>) {
   );
 }
 
+interface HugePoolShortfall {
+  readonly totalMib: number;
+
+  // the pool pages in use, and those every admitted guest on 2 MiB pages may still take
+  readonly committedMib: number;
+  readonly requestedMib: number;
+}
+
+export function buildHugePoolError(shortfall: Readonly<HugePoolShortfall>) {
+  const committed = String(shortfall.committedMib);
+  const total = String(shortfall.totalMib);
+  const requested = String(shortfall.requestedMib);
+
+  return new RamBudgetError(
+    `not enough 2 MiB pages: ${committed} of the host's ${total} MiB pool in use or promised to awake imps, ${requested} MiB requested`,
+    {
+      budgetMib: shortfall.totalMib,
+      usedMib: shortfall.committedMib,
+      requestedMib: shortfall.requestedMib,
+      protected: [],
+    },
+  );
+}
+
 export function buildNeededMib(usedMib: number, requestedMib: number, budgetMib: number): number {
   return Math.max(0, usedMib + requestedMib - budgetMib);
 }

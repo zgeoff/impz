@@ -1,4 +1,4 @@
-import type { FirecrackerClient } from './firecracker-client';
+import type { FirecrackerClient, HugePages } from './firecracker-client';
 
 export function createMarks() {
   const marks: Record<string, number> = {};
@@ -19,6 +19,7 @@ interface VmConfig {
   readonly bootArgs: string;
   readonly vcpus: number;
   readonly memoryMib: number;
+  readonly hugePages: HugePages;
   readonly diskPath: string;
   readonly systemDrivePath: string;
   readonly vsockPath: string;
@@ -51,7 +52,12 @@ export async function setupVm(
   config: Readonly<VmConfig>,
 ): Promise<void> {
   await api.putBootSource({ kernelImagePath: config.kernelPath, bootArgs: config.bootArgs });
-  await api.putMachineConfig({ vcpuCount: config.vcpus, memSizeMib: config.memoryMib });
+
+  await api.putMachineConfig({
+    vcpuCount: config.vcpus,
+    memSizeMib: config.memoryMib,
+    hugePages: config.hugePages,
+  });
 
   // drives enumerate in PUT order: rootfs is vda, the system drive vdb;
   // neither is a Firecracker root device, which would add root=/dev/vda

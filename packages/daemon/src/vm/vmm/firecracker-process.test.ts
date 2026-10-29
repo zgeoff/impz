@@ -11,8 +11,8 @@ import {
   buildSpawnArgv,
   isImpVm,
   listFirecrackers,
-  probeFirecrackerAlive,
   probeJailedFirecracker,
+  probeProcessAlive,
   readLogTail,
   readPidFile,
   readVmOwner,
@@ -47,15 +47,15 @@ test('#listFirecrackers finds a live firecracker with the socket it serves and i
   });
 });
 
-test('#probeFirecrackerAlive finds a live firecracker serving its socket in the host /proc by default', async () => {
+test('#probeProcessAlive finds a live firecracker serving its socket in the host /proc by default', async () => {
   const ctx = setupTest();
 
   const child = await startStubFirecrackerProcess(join(ctx.directoryPath, 'api.sock'));
 
-  expect(probeFirecrackerAlive(child.pid, join(ctx.directoryPath, 'api.sock'))).toBeTrue();
+  expect(probeProcessAlive(child.pid, join(ctx.directoryPath, 'api.sock'))).toBeTrue();
 });
 
-test('#probeFirecrackerAlive finds a running firecracker serving its socket', () => {
+test('#probeProcessAlive finds a running firecracker serving its socket', () => {
   const ctx = setupTest();
 
   mkdirSync(join(ctx.directoryPath, 'proc', '42'), { recursive: true });
@@ -66,10 +66,10 @@ test('#probeFirecrackerAlive finds a running firecracker serving its socket', ()
     'firecracker\0--api-sock\0/run/api.sock\0',
   );
 
-  expect(probeFirecrackerAlive(42, '/run/api.sock', join(ctx.directoryPath, 'proc'))).toBeTrue();
+  expect(probeProcessAlive(42, '/run/api.sock', join(ctx.directoryPath, 'proc'))).toBeTrue();
 });
 
-test('#probeFirecrackerAlive finds no firecracker serving another socket under the pid', () => {
+test('#probeProcessAlive finds no firecracker serving another socket under the pid', () => {
   const ctx = setupTest();
 
   mkdirSync(join(ctx.directoryPath, 'proc', '42'), { recursive: true });
@@ -80,13 +80,13 @@ test('#probeFirecrackerAlive finds no firecracker serving another socket under t
     'firecracker\0--api-sock\0/run/other.sock\0',
   );
 
-  expect(probeFirecrackerAlive(42, '/run/api.sock', join(ctx.directoryPath, 'proc'))).toBeFalse();
+  expect(probeProcessAlive(42, '/run/api.sock', join(ctx.directoryPath, 'proc'))).toBeFalse();
 });
 
 test.each([
   ['a zombie', 'Z'],
   ['dead', 'X'],
-])('#probeFirecrackerAlive finds no firecracker that is %s', (_label, state) => {
+])('#probeProcessAlive finds no firecracker that is %s', (_label, state) => {
   const ctx = setupTest();
 
   mkdirSync(join(ctx.directoryPath, 'proc', '42'), { recursive: true });
@@ -101,10 +101,10 @@ test.each([
     'firecracker\0--api-sock\0/run/api.sock\0',
   );
 
-  expect(probeFirecrackerAlive(42, '/run/api.sock', join(ctx.directoryPath, 'proc'))).toBeFalse();
+  expect(probeProcessAlive(42, '/run/api.sock', join(ctx.directoryPath, 'proc'))).toBeFalse();
 });
 
-test('#probeFirecrackerAlive reads the state past a command name with spaces and parentheses', () => {
+test('#probeProcessAlive reads the state past a command name with spaces and parentheses', () => {
   const ctx = setupTest();
 
   mkdirSync(join(ctx.directoryPath, 'proc', '42'), { recursive: true });
@@ -115,15 +115,15 @@ test('#probeFirecrackerAlive reads the state past a command name with spaces and
     'firecracker\0--api-sock\0/run/api.sock\0',
   );
 
-  expect(probeFirecrackerAlive(42, '/run/api.sock', join(ctx.directoryPath, 'proc'))).toBeTrue();
+  expect(probeProcessAlive(42, '/run/api.sock', join(ctx.directoryPath, 'proc'))).toBeTrue();
 });
 
-test('#probeFirecrackerAlive finds no firecracker once its pid is gone', () => {
+test('#probeProcessAlive finds no firecracker once its pid is gone', () => {
   const ctx = setupTest();
 
   mkdirSync(join(ctx.directoryPath, 'proc'));
 
-  expect(probeFirecrackerAlive(42, '/run/api.sock', join(ctx.directoryPath, 'proc'))).toBeFalse();
+  expect(probeProcessAlive(42, '/run/api.sock', join(ctx.directoryPath, 'proc'))).toBeFalse();
 });
 
 test('#waitForExit resolves true once the firecracker is gone', async () => {

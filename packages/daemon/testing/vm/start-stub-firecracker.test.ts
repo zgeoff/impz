@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { probeFirecrackerAlive } from '../../src/vm/vmm/firecracker-process';
+import { probeProcessAlive } from '../../src/vm/vmm/firecracker-process';
 import { buildStubFirecrackerArgv, startStubFirecracker } from './start-stub-firecracker';
 
 function setupTest() {
@@ -50,6 +50,118 @@ test('it answers that its guest tracks the pages it dirties', async () => {
     smt: false,
     track_dirty_pages: true,
     huge_pages: 'None',
+  });
+});
+
+test('it answers that a 2M guest runs on 2 MiB pages', async () => {
+  const ctx = setupTest();
+
+  await startStubFirecracker({
+    apiSocket: ctx.apiSocket,
+    logPath: ctx.logPath,
+    memory: { pages: 'ab', dirtyPages: [], isTrackingDirtyPages: false, hugePages: '2M' },
+  });
+
+  const response = await fetch('http://localhost/machine-config', { unix: ctx.apiSocket });
+  const body: unknown = await response.json();
+
+  expect(body).toStrictEqual({
+    vcpu_count: 1,
+    mem_size_mib: 128,
+    smt: false,
+    track_dirty_pages: false,
+    huge_pages: '2M',
+  });
+});
+
+test('it writes only the pages a 2M guest holds over a mem file of the guest size on a diff snapshot', async () => {
+  const ctx = setupTest();
+  const memFile = join(ctx.directoryPath, 'mem');
+
+  writeFileSync(memFile, `${'a'.repeat(4096)}${'b'.repeat(4096)}${'c'.repeat(4096)}`);
+
+  await startStubFirecracker({
+    apiSocket: ctx.apiSocket,
+    logPath: ctx.logPath,
+    memory: {
+      pages: 'ABC',
+      dirtyPages: [],
+      isTrackingDirtyPages: false,
+      hugePages: '2M',
+      presentPages: [0, 2],
+    },
+  });
+
+  await fetch('http://localhost/snapshot/create', {
+    unix: ctx.apiSocket,
+    method: 'PUT',
+    body: JSON.stringify({
+      snapshot_type: 'Diff',
+      snapshot_path: join(ctx.directoryPath, 'vmstate'),
+      mem_file_path: memFile,
+    }),
+  });
+
+  expect(readFileSync(memFile, 'latin1')).toBe(
+    `${'A'.repeat(4096)}${'b'.repeat(4096)}${'C'.repeat(4096)}`,
+  );
+});
+
+test('it connects to the page handler on a load from a UFFD backend', async () => {
+  const ctx = setupTest();
+  const handlerSocket = join(ctx.directoryPath, 'uffd.sock');
+  const connected = Promise.withResolvers<null>();
+
+  const handler = Bun.listen({
+    unix: handlerSocket,
+    socket: {
+      data: () => {},
+      open: () => {
+        connected.resolve(null);
+      },
+    },
+  });
+
+  onTestFinished(() => {
+    handler.stop(true);
+  });
+
+  await startStubFirecracker({ apiSocket: ctx.apiSocket, logPath: ctx.logPath });
+
+  const response = await fetch('http://localhost/snapshot/load', {
+    unix: ctx.apiSocket,
+    method: 'PUT',
+    body: JSON.stringify({
+      snapshot_path: join(ctx.directoryPath, 'vmstate'),
+      mem_backend: { backend_type: 'Uffd', backend_path: handlerSocket },
+    }),
+  });
+
+  expect(response.status).toBe(204);
+  expect(connected.promise).resolves.toBeNull();
+});
+
+test('it fails a load from a UFFD backend with no page handler', async () => {
+  const ctx = setupTest();
+  const handlerSocket = join(ctx.directoryPath, 'uffd.sock');
+
+  await startStubFirecracker({ apiSocket: ctx.apiSocket, logPath: ctx.logPath });
+
+  const response = await fetch('http://localhost/snapshot/load', {
+    unix: ctx.apiSocket,
+    method: 'PUT',
+    body: JSON.stringify({
+      snapshot_path: join(ctx.directoryPath, 'vmstate'),
+      mem_backend: { backend_type: 'Uffd', backend_path: handlerSocket },
+    }),
+  });
+
+  const body: unknown = await response.json();
+
+  expect(response.status).toBe(400);
+
+  expect(body).toStrictEqual({
+    fault_message: `Load snapshot error: cannot connect to the page handler at ${handlerSocket}`,
   });
 });
 
@@ -136,7 +248,7 @@ test('it runs as a process the liveness check takes for a Firecracker', async ()
 
   const vm = await startStubFirecracker({ apiSocket: ctx.apiSocket, logPath: ctx.logPath });
 
-  expect(probeFirecrackerAlive(vm.pid, ctx.apiSocket)).toBeTrue();
+  expect(probeProcessAlive(vm.pid, ctx.apiSocket)).toBeTrue();
 });
 
 test('it answers a PUT with 204 and logs its method and path', async () => {

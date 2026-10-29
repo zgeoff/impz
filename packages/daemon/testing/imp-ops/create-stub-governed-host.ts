@@ -3,6 +3,7 @@ import type { RamGovernor, RamGovernorDeps } from '../../src/imp-ops/governor/ra
 import { makeLockFreeSleep } from '../../src/imps/imps/lock-free-sleep';
 import type { SleepOutcome } from '../../src/imps/imps/lock-free-sleep';
 import { buildKeyedMutex } from '../../src/platform/process/keyed-mutex';
+import type { HugePagePool } from '../../src/vm/vmm/read-huge-page-pool';
 
 interface HostImp {
   awake: boolean;
@@ -18,6 +19,10 @@ interface HostImp {
   // A guest whose pages drop and fault back in during a page walk: the next walk sees this many
   // MiB while the resident count before and after it stays the same.
   dipMib: number | null;
+
+  // a guest on 2 MiB pages: its memory, and the pool pages it holds
+  hugePagesMib: number;
+  hugetlbMib: number;
 }
 
 export type HostChange =
@@ -39,7 +44,11 @@ interface StubGovernedHostOptions {
     readonly id: string;
     readonly rssMib: number;
     readonly failsSleep?: boolean;
+    readonly hugePagesMib?: number;
+    readonly hugetlbMib?: number;
   }[];
+
+  readonly hugePool?: HugePagePool;
 }
 
 const HELD_FOREVER = Number.MAX_SAFE_INTEGER;
@@ -62,6 +71,8 @@ export function createStubGovernedHost(options: Readonly<StubGovernedHostOptions
         failsSleep: false,
         spareMib: 0,
         dipMib: null,
+        hugePagesMib: 0,
+        hugetlbMib: 0,
       },
     ]),
   );
@@ -76,6 +87,8 @@ export function createStubGovernedHost(options: Readonly<StubGovernedHostOptions
       failsSleep: imp.failsSleep ?? false,
       spareMib: 0,
       dipMib: null,
+      hugePagesMib: imp.hugePagesMib ?? 0,
+      hugetlbMib: imp.hugetlbMib ?? 0,
     });
   }
 
@@ -144,7 +157,14 @@ export function createStubGovernedHost(options: Readonly<StubGovernedHostOptions
           apiSocket: id,
           lastActiveAt: imp.lastActiveAt,
           holdUntil: imp.held ? HELD_FOREVER : null,
+          hugePagesMib: imp.hugePagesMib,
         }));
+    },
+    readHugePool: (): HugePagePool | null => options.hugePool ?? null,
+    readHugetlbMib: (_pid: number, id: string): Promise<number | null> => {
+      const hugetlbMib = imps.get(id)?.awake === true ? getImp(id).hugetlbMib : null;
+
+      return Promise.resolve(hugetlbMib);
     },
     readRamMib: (pid: number, id: string): Promise<number | null> => {
       const imp = imps.get(id);

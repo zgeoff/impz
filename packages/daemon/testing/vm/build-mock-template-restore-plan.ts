@@ -20,6 +20,7 @@ export function buildMockTemplateRestorePlan(
     paths,
     vmstate: `${templateDir}/vmstate`,
     memFile: `${templateDir}/mem`,
+    hugePages: 'None',
     systemDrivePath: `/data/system/drives/${faker.string.hexadecimal({ length: 64, casing: 'lower', prefix: '' })}.squashfs`,
     placeholderPath: `${templateDir}/placeholder.ext4`,
     diskPath: paths.disk,

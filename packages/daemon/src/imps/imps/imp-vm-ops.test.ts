@@ -18,6 +18,7 @@ import { writeTestSnapshot } from '../../../testing/vm/write-test-snapshot';
 import { createImp, listImps, readImpByName, updateImpActivity } from '../../platform/db/imps';
 import { updateImpState } from '../../platform/db/update-imp-state';
 import { readSnapshotMeta, writeSnapshotMeta } from '../../vm/sleep/snapshot-meta';
+import { readVmIdentity } from '../../vm/sleep/vm-identity';
 import { buildImpPaths } from '../../vm/storage/data-layout';
 
 function setupTest() {
@@ -832,4 +833,155 @@ test('it leaves consistent records after concurrent lifecycle calls on a few imp
     ),
     { numRuns: 25 },
   );
+});
+
+test('it boots a fixed imp on 2 MiB pages with huge pages on, and records them', async () => {
+  updateEnv('IMP_HUGE_PAGES', '2M');
+
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
+  const ctx = await startTestImpd(stack, {
+    env: readImpEnv(),
+    boundaries: { imps: { readHugePagePool: () => ({ totalMib: 4096, freeMib: 4096 }) } },
+  });
+
+  await ctx.createTestImage('ubuntu');
+
+  const created = await ctx.client.imps.create({ name: 'dev', memoryMib: 256 });
+
+  expect(ctx.fake.bootPlans.map((plan) => plan.hugePages)).toStrictEqual(['2M']);
+  expect(readVmIdentity(buildImpPaths(ctx.dataDir, created.id))?.hugePages).toBe('2M');
+});
+
+test('it boots an imp on host pages with huge pages off, and records none', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const created = await ctx.client.imps.create({ name: 'dev', memoryMib: 256 });
+
+  const identity = readVmIdentity(buildImpPaths(ctx.dataDir, created.id));
+
+  invariant(identity);
+
+  expect(ctx.fake.bootPlans.map((plan) => plan.hugePages)).toStrictEqual(['None']);
+  expect(identity).not.toContainKey('hugePages');
+});
+
+test('it refuses a 2M imp the huge page pool cannot hold before any VM starts', async () => {
+  updateEnv('IMP_HUGE_PAGES', '2M');
+
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
+  const ctx = await startTestImpd(stack, {
+    env: readImpEnv(),
+    boundaries: { imps: { readHugePagePool: () => ({ totalMib: 4096, freeMib: 128 }) } },
+  });
+
+  await ctx.createTestImage('ubuntu');
+
+  expect(ctx.client.imps.create({ name: 'dev', memoryMib: 256 })).rejects.toMatchObject({
+    code: 'RAM_BUDGET_EXCEEDED',
+    message: expect.toInclude('not enough 2 MiB pages'),
+  });
+
+  expect(ctx.fake.bootPlans).toBeEmpty();
+});
+
+test('it refuses a 2M imp the pool could hold only with the pages an awake 2M imp has yet to take', async () => {
+  updateEnv('IMP_HUGE_PAGES', '2M');
+
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
+  const ctx = await startTestImpd(stack, {
+    env: readImpEnv(),
+    boundaries: { imps: { readHugePagePool: () => ({ totalMib: 4096, freeMib: 384 }) } },
+  });
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.client.imps.create({ name: 'first', memoryMib: 256 });
+
+  expect(ctx.client.imps.create({ name: 'second', memoryMib: 256 })).rejects.toMatchObject({
+    code: 'RAM_BUDGET_EXCEEDED',
+    message: expect.toInclude('256 MiB requested'),
+  });
+
+  expect(ctx.fake.bootPlans).toHaveLength(1);
+});
+
+test('it watches the page handler of each running imp a restarted impd adopts', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.client.imps.create({ name: 'dev', memoryMib: 256 });
+
+  const running = await readImpByName(ctx.db, 'dev');
+
+  invariant(running?.pid);
+
+  await ctx.restartImpd();
+
+  expect(ctx.fake.handlerWatches).toStrictEqual([{ pid: running.pid, impId: running.id }]);
+});
+
+test('it wakes a 2M imp through its page handler with huge pages on', async () => {
+  updateEnv('IMP_HUGE_PAGES', '2M');
+
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
+  const ctx = await startTestImpd(stack, {
+    env: readImpEnv(),
+    boundaries: { imps: { readHugePagePool: () => ({ totalMib: 4096, freeMib: 4096 }) } },
+  });
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.client.imps.create({ name: 'dev', memoryMib: 256 });
+  await ctx.client.imps.sleep({ name: 'dev' });
+  await ctx.client.imps.wake({ name: 'dev' });
+
+  expect(ctx.fake.wakePlans.map((plan) => plan.hugePages)).toStrictEqual(['2M']);
+});
+
+test('it wakes a 2M imp on host pages with huge pages off, and records none', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const created = await ctx.client.imps.create({ name: 'dev', memoryMib: 256 });
+
+  await ctx.client.imps.sleep({ name: 'dev' });
+
+  const paths = buildImpPaths(ctx.dataDir, created.id);
+  const meta = readSnapshotMeta(paths);
+
+  invariant(meta);
+  writeSnapshotMeta(paths, { ...meta, hugePages: '2M' });
+
+  await ctx.client.imps.wake({ name: 'dev' });
+
+  const identity = readVmIdentity(paths);
+
+  invariant(identity);
+
+  expect(ctx.fake.wakePlans.map((plan) => plan.hugePages)).toStrictEqual(['None']);
+  expect(identity).not.toContainKey('hugePages');
+});
+
+test('it wakes a host-page imp as it always has, with no huge pages asked for', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.client.imps.create({ name: 'dev', memoryMib: 256 });
+  await ctx.client.imps.sleep({ name: 'dev' });
+  await ctx.client.imps.wake({ name: 'dev' });
+
+  expect(ctx.fake.wakePlans.map((plan) => plan.hugePages)).toStrictEqual([undefined]);
 });

@@ -11,6 +11,7 @@ test('it builds a default template build plan', () => {
     bootArgs: 'console=ttyS0 imp.template=1',
     vcpus: expect.toBeNumber(),
     memoryMib: expect.toBeNumber(),
+    hugePages: 'None',
     workDir: expect.toStartWith('/data/templates/.build-'),
     paths: {
       runDir: `${plan.workDir}/run`,
@@ -67,6 +68,7 @@ test('it applies overrides on top of the defaults', () => {
     bootArgs: 'console=ttyS0',
     vcpus: 2,
     memoryMib: 1024,
+    hugePages: '2M',
     workDir: '/w',
     paths,
     placeholderPath: '/p.ext4',
@@ -88,6 +90,7 @@ test('it applies overrides on top of the defaults', () => {
     bootArgs: 'console=ttyS0',
     vcpus: 2,
     memoryMib: 1024,
+    hugePages: '2M',
     workDir: '/w',
     paths,
     placeholderPath: '/p.ext4',

@@ -13,7 +13,7 @@ import type { ImpPaths } from '../storage/data-layout';
 import { VM_DEVICES, createMarks, setupVm } from './configure-vm';
 import type { ImpCgroup } from './cpu-cgroups';
 import { createFirecrackerClient } from './firecracker-client';
-import type { CreateFirecrackerClient } from './firecracker-client';
+import type { CreateFirecrackerClient, HugePages, LoadOptions } from './firecracker-client';
 import {
   buildFirecrackerCommand,
   readLogTail,
@@ -22,6 +22,14 @@ import {
 } from './firecracker-process';
 import { setupTemplateFile } from './jail';
 import type { JailUser, Jails, RunPaths } from './jail';
+import {
+  explainUffdFailure,
+  removeUffdFiles,
+  requireHandlerBin,
+  startUffdHandler,
+  stopUffdHandler,
+} from './uffd-handler';
+import type { UffdWatch } from './uffd-handler';
 import type { StartedVm } from './vm-runner';
 
 const CLAIMED_AGENT_DEADLINE_MS = 10_000;
@@ -37,6 +45,7 @@ export interface TemplateBuildPlan {
   readonly bootArgs: string;
   readonly vcpus: number;
   readonly memoryMib: number;
+  readonly hugePages: HugePages;
   readonly workDir: string;
   readonly paths: RunPaths;
   readonly placeholderPath: string;
@@ -58,6 +67,7 @@ export interface TemplateRestorePlan {
   readonly paths: ImpPaths;
   readonly vmstate: string;
   readonly memFile: string;
+  readonly hugePages: HugePages;
   readonly systemDrivePath: string;
   readonly placeholderPath: string;
   readonly diskPath: string;
@@ -71,6 +81,8 @@ export interface TemplateRestorePlan {
 export interface TemplateVmOptions {
   readonly mergeWrapper?: string | null;
   readonly createClient?: CreateFirecrackerClient;
+  readonly uffdHandlerBin?: string | null;
+  readonly uffdWatch?: UffdWatch;
 }
 
 export async function createTemplateVm(
@@ -127,6 +139,7 @@ async function runBuildVm(
         bootArgs: plan.bootArgs,
         vcpus: plan.vcpus,
         memoryMib: plan.memoryMib,
+        hugePages: plan.hugePages,
         diskPath: plan.placeholderPath,
         systemDrivePath: plan.systemDrivePath,
         vsockPath: plan.paths.vsockSocket,
@@ -161,7 +174,14 @@ async function runBuildVm(
       createOwnedFile(plan.vmstate, owner);
       createOwnedFile(plan.memFile, owner);
 
-      await api.createSnapshot({ snapshotPath: plan.vmstate, memFilePath: plan.memFile }, 'Full');
+      // a Full snapshot of a 2 MiB guest takes a pool page for each block it
+      // never touched, and a Diff into the empty file writes only the rest
+      const snapshotType = plan.hugePages === '2M' ? 'Diff' : 'Full';
+
+      await api.createSnapshot(
+        { snapshotPath: plan.vmstate, memFilePath: plan.memFile },
+        snapshotType,
+      );
     } finally {
       stopPid(pid);
 
@@ -181,6 +201,8 @@ async function startRestoreProcess(
 ): Promise<number> {
   try {
     const argv = await setupRestoreCommand(plan, jails);
+
+    removeUffdFiles(plan.paths);
 
     return await startFirecracker(argv, plan.paths, plan.cgroup?.procsPath ?? null, mergeWrapper);
   } catch (error) {
@@ -236,18 +258,32 @@ export async function loadTemplateVm(
 
   try {
     const api = (options.createClient ?? createFirecrackerClient)(plan.paths.apiSocket);
+    const isUffd = plan.hugePages === '2M';
 
-    await api.loadSnapshot(
-      { snapshotPath: plan.vmstate, memFilePath: plan.memFile },
-      {
-        resumeVm: false,
-        overrides: {
-          ifaceId: VM_DEVICES.iface,
-          hostDevName: plan.tap,
-          vsockPath: plan.paths.vsockSocket,
-        },
-      },
-    );
+    if (isUffd) {
+      await startUffdHandler({
+        handlerBin: requireHandlerBin(options.uffdHandlerBin ?? null),
+        paths: plan.paths,
+        memFile: plan.memFile,
+        jail: plan.jail,
+        cgroup: plan.cgroup,
+      });
+
+      options.uffdWatch?.watch(pid, plan.paths);
+      marks.setMark('handler');
+    }
+
+    const overrides = {
+      ifaceId: VM_DEVICES.iface,
+      hostDevName: plan.tap,
+      vsockPath: plan.paths.vsockSocket,
+    };
+
+    const loadOptions: LoadOptions = isUffd
+      ? { resumeVm: false, overrides, uffdSocket: plan.paths.uffdSocket, hugePages: '2M' }
+      : { resumeVm: false, overrides };
+
+    await api.loadSnapshot({ snapshotPath: plan.vmstate, memFilePath: plan.memFile }, loadOptions);
 
     marks.setMark('load');
 
@@ -301,6 +337,7 @@ export async function loadTemplateVm(
 
     return {
       pid,
+      hugePages: plan.hugePages,
       firecrackerVersion,
       agentVersion: ping.version,
       timings: marks.marks,
@@ -311,14 +348,17 @@ export async function loadTemplateVm(
       bootId: ping.bootId,
     };
   } catch (error) {
+    const reason = explainUffdFailure(plan.paths, '/proc', getErrorMessage(error));
+
     stopPid(pid);
+    stopUffdHandler(plan.paths);
 
     await waitForExit(pid, plan.paths.apiSocket, VM_DEADLINES.killMs);
 
     await jails.release(plan.paths.impId);
 
     throw new TemplateRestoreError(
-      `template restore failed: ${getErrorMessage(error)}\n${readLogTail(plan.paths.logFile, 5)}`,
+      `template restore failed: ${reason}\n${readLogTail(plan.paths.logFile, 5)}`,
       step.isTemplateFault,
       error,
     );

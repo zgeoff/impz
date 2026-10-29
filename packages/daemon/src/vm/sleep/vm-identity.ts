@@ -20,11 +20,15 @@ export const VmIdentitySchema = z.object({
   ipv6Prefix: z.string().nullable().optional(),
   cpuModel: z.string().optional(),
   cpuFlags: z.string().optional(),
+
+  // a VM on 2 MiB pages restores only through a page handler, and holds pool pages
+  hugePages: z.enum(['None', '2M']).optional(),
 });
 
 export type VmIdentity = z.infer<typeof VmIdentitySchema>;
 
-export type HostIdentity = Omit<VmIdentity, 'agentVersion' | 'bootReason'> & CpuIdentity;
+export type HostIdentity = Omit<VmIdentity, 'agentVersion' | 'bootReason' | 'hugePages'> &
+  CpuIdentity;
 
 export function readHostIdentity(
   firecrackerBin: string,

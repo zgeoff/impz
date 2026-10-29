@@ -6,11 +6,13 @@ import { createSemaphore } from '../../platform/process/semaphore';
 import type { GrowRequest } from '../../vm/imps-contract/grow-request';
 import type { AdmissionRequest, RamAdmission } from '../../vm/imps-contract/ram-admission';
 import {
+  buildHugePoolError,
   buildImpOverBudgetError,
   buildNeededMib,
   buildRamBudgetError,
 } from '../../vm/imps-contract/ram-budget-error';
 import type { ProtectedImp } from '../../vm/imps-contract/ram-budget-error';
+import type { HugePagePool } from '../../vm/vmm/read-huge-page-pool';
 import { pickSleepVictims } from './pick-sleep-victims';
 
 // A Firecracker VM that just booted or woke shows a small RSS for some seconds, so its reservation
@@ -27,6 +29,9 @@ interface AwakeImp {
   readonly apiSocket: string;
   readonly lastActiveAt: number;
   readonly holdUntil: number | null;
+
+  // the memory of a guest on 2 MiB pages, all of which it may take from the pool
+  readonly hugePagesMib: number;
 }
 
 interface UsageTotals {
@@ -90,6 +95,11 @@ export interface RamGovernorDeps {
 
   // Locked host memory outside any VM, such as boot templates' pages: no sleep frees it.
   readonly readLockedMib?: () => number;
+
+  // Firecracker maps a 2 MiB guest's memory with MAP_NORESERVE, so a guest that
+  // faults on an empty pool dies of SIGBUS, at any time after its boot.
+  readonly readHugePool?: () => HugePagePool | null;
+  readonly readHugetlbMib?: (pid: number, apiSocket: string) => Promise<number | null>;
   readonly isBusy: (id: string) => boolean;
   readonly trySleepImp: LockFreeSleep;
   readonly readDiskFullError?: () => Error | null;
@@ -113,6 +123,9 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
 
   const now = deps.now ?? Date.now;
   let stuckOver = false;
+
+  // admitted guests on 2 MiB pages that are not awake yet, by imp
+  const pendingHugePages = new Map<string, number>();
 
   const emitDecision = (decision: GovernorDecision): void => {
     deps.events?.publish({
@@ -149,6 +162,10 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
       until: now() + RESERVATION_TTL_MS,
     });
 
+    if ((request.hugePagesMib ?? 0) > 0) {
+      pendingHugePages.set(request.id, request.hugePagesMib ?? 0);
+    }
+
     emitAdmission(request, 'admitted', usedMib);
   };
 
@@ -166,6 +183,60 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
     }
 
     return reservation.mib;
+  };
+
+  // An awake guest may still take every block of its memory it has not touched,
+  // so the pool must hold those as well as the whole of the new guest.
+  const checkHugePool = async (request: AdmissionRequest, hugePagesMib: number): Promise<void> => {
+    const pool = deps.readHugePool?.() ?? null;
+
+    const listed = await deps.listAwake();
+
+    const awake = listed.filter((imp) => imp.id !== request.id);
+
+    for (const imp of awake) {
+      pendingHugePages.delete(imp.id);
+    }
+
+    const onPages = awake.filter((imp) => imp.hugePagesMib > 0);
+
+    const held = await Promise.all(
+      onPages.map((imp) => deps.readHugetlbMib?.(imp.pid, imp.apiSocket) ?? Promise.resolve(0)),
+    );
+
+    const growthMib = onPages.reduce(
+      (sum, imp, index) => sum + Math.max(0, imp.hugePagesMib - (held[index] ?? 0)),
+      0,
+    );
+
+    const pendingMib = [...pendingHugePages]
+      .filter(([id]) => id !== request.id)
+      .reduce((sum, [, mib]) => sum + mib, 0);
+
+    const freeMib = pool?.freeMib ?? 0;
+    const committedMib = (pool?.totalMib ?? 0) - freeMib + growthMib + pendingMib;
+
+    if (growthMib + pendingMib + hugePagesMib <= freeMib) {
+      return;
+    }
+
+    if (request.name !== null) {
+      emitDecision({
+        decision: 'refused',
+        name: request.name,
+        trigger: 'huge page pool',
+        usedMib: committedMib,
+        reserveMib: hugePagesMib,
+        neededMib: growthMib + pendingMib + hugePagesMib - freeMib,
+        protectedCount: 0,
+      });
+    }
+
+    throw buildHugePoolError({
+      totalMib: pool?.totalMib ?? 0,
+      committedMib,
+      requestedMib: hugePagesMib,
+    });
   };
 
   const readEffectiveUsage = async (
@@ -338,6 +409,12 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
           throw buildImpOverBudgetError(deps.budgetMib, usage.effectiveMib, request.memoryMib);
         }
 
+        const hugePagesMib = request.hugePagesMib ?? 0;
+
+        if (hugePagesMib > 0) {
+          await checkHugePool(request, hugePagesMib);
+        }
+
         const bound = await readEffectiveUsage(request.id, deps.readResidentMib);
 
         if (bound.effectiveMib + request.reserveMib <= deps.budgetMib) {
@@ -386,6 +463,7 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
 
     release: (id) => {
       reservations.delete(id);
+      pendingHugePages.delete(id);
     },
 
     admitGrow: (request) =>

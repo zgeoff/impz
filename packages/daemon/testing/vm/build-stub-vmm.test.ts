@@ -9,6 +9,7 @@ import { AgentError } from '../../src/vm/agent-client/agent-connection';
 import { setSnapshotLoading, writeSnapshotMeta } from '../../src/vm/sleep/snapshot-meta';
 import { buildImpPaths, buildSnapshotPaths } from '../../src/vm/storage/data-layout';
 import { TemplateRestoreError } from '../../src/vm/vmm/template-vm';
+import type { TemplateRestorePlan } from '../../src/vm/vmm/template-vm';
 import { buildMockHostIdentity } from './build-mock-host-identity';
 import { STUB_AGENT_VERSION, StubVmError, buildStubBootId, buildStubVmm } from './build-stub-vmm';
 
@@ -90,6 +91,7 @@ test('#buildStubVmm starts a running VM with a boot id from its pid on a boot', 
     firecrackerVersion: 'v1.17.0',
     agentVersion: '0.1.0',
     timings: {},
+    hugePages: 'None',
     guestSteps: {},
     bootId: buildStubBootId(1001),
   });
@@ -281,6 +283,7 @@ test('#buildStubVmm reports an absent identity reset for an agent that leaves it
     firecrackerVersion: 'v1.17.0',
     agentVersion: '0.1.0',
     timings: {},
+    hugePages: 'None',
     guestSteps: {},
     bootId: buildStubBootId(1001),
     identityReset: undefined,
@@ -372,6 +375,7 @@ test('#buildStubVmm keeps the boot id of the socket last boot on a wake', async 
     firecrackerVersion: 'v1.17.0',
     agentVersion: '0.1.0',
     timings: {},
+    hugePages: 'None',
     bootId: buildStubBootId(1001),
   });
 });
@@ -1260,6 +1264,7 @@ test('#buildStubVmm writes the snapshot files on a template build', async () => 
     bootArgs: 'console=ttyS0',
     vcpus: 2,
     memoryMib: 1024,
+    hugePages: 'None',
     workDir: join(ctx.directoryPath, 'build'),
     paths: {
       runDir: join(ctx.directoryPath, 'build', 'run'),
@@ -1300,6 +1305,7 @@ test('#buildStubVmm rejects a failed template build with a fake error', async ()
       bootArgs: 'console=ttyS0',
       vcpus: 2,
       memoryMib: 1024,
+      hugePages: 'None',
       workDir: join(ctx.directoryPath, 'build'),
       paths: {
         runDir: join(ctx.directoryPath, 'build', 'run'),
@@ -1337,6 +1343,7 @@ test('#buildStubVmm writes no snapshot when a template build fails', async () =>
       bootArgs: 'console=ttyS0',
       vcpus: 2,
       memoryMib: 1024,
+      hugePages: 'None',
       workDir: join(ctx.directoryPath, 'build'),
       paths: {
         runDir: join(ctx.directoryPath, 'build', 'run'),
@@ -1374,6 +1381,7 @@ test('#buildStubVmm settles the parked-build signal once a template build of a r
     bootArgs: 'console=ttyS0',
     vcpus: 2,
     memoryMib: 1024,
+    hugePages: 'None',
     workDir: join(ctx.directoryPath, 'build'),
     paths: {
       runDir: join(ctx.directoryPath, 'build', 'run'),
@@ -1414,6 +1422,7 @@ test('#buildStubVmm leaves the parked-build signal pending for a template build 
     bootArgs: 'console=ttyS0',
     vcpus: 2,
     memoryMib: 1024,
+    hugePages: 'None',
     workDir: join(ctx.directoryPath, 'build'),
     paths: {
       runDir: join(ctx.directoryPath, 'build', 'run'),
@@ -1456,11 +1465,12 @@ test('#buildStubVmm rejects the parked-build signal of a runner from another fak
 test('#buildStubVmm starts a running VM and records the claim on a template restore', async () => {
   const ctx = await setupTest();
 
-  const plan = {
+  const plan: TemplateRestorePlan = {
     firecrackerBin: '/usr/bin/firecracker',
     paths: ctx.paths,
     vmstate: '/templates/shape-1/vmstate',
     memFile: '/templates/shape-1/mem',
+    hugePages: 'None',
     systemDrivePath: '/images/system.ext4',
     placeholderPath: '/templates/shape-1/placeholder.ext4',
     diskPath: ctx.paths.disk,
@@ -1489,6 +1499,7 @@ test('#buildStubVmm starts a running VM and records the claim on a template rest
     firecrackerVersion: 'v1.17.0',
     agentVersion: '0.1.0',
     timings: {},
+    hugePages: 'None',
     guestSteps: {},
   });
 
@@ -1509,6 +1520,7 @@ test('#buildStubVmm reports the identity reset on a template restore whose claim
     paths: ctx.paths,
     vmstate: '/templates/shape-1/vmstate',
     memFile: '/templates/shape-1/mem',
+    hugePages: 'None',
     systemDrivePath: '/images/system.ext4',
     placeholderPath: '/templates/shape-1/placeholder.ext4',
     diskPath: ctx.paths.disk,
@@ -1543,6 +1555,7 @@ test('#buildStubVmm rejects a failed template restore as the template fault', as
     paths: ctx.paths,
     vmstate: '/templates/shape-1/vmstate',
     memFile: '/templates/shape-1/mem',
+    hugePages: 'None',
     systemDrivePath: '/images/system.ext4',
     placeholderPath: '/templates/shape-1/placeholder.ext4',
     diskPath: ctx.paths.disk,
@@ -1584,6 +1597,7 @@ test('#buildStubVmm rejects a disk failure on a template restore as the imp faul
     paths: ctx.paths,
     vmstate: '/templates/shape-1/vmstate',
     memFile: '/templates/shape-1/mem',
+    hugePages: 'None',
     systemDrivePath: '/images/system.ext4',
     placeholderPath: '/templates/shape-1/placeholder.ext4',
     diskPath: ctx.paths.disk,
@@ -1621,6 +1635,7 @@ test('#buildStubVmm ends the VM when the disk fails on a template restore', asyn
     paths: ctx.paths,
     vmstate: '/templates/shape-1/vmstate',
     memFile: '/templates/shape-1/mem',
+    hugePages: 'None',
     systemDrivePath: '/images/system.ext4',
     placeholderPath: '/templates/shape-1/placeholder.ext4',
     diskPath: ctx.paths.disk,
@@ -1657,6 +1672,7 @@ test('#buildStubVmm rejects a failed claim on a template restore as the imp faul
     paths: ctx.paths,
     vmstate: '/templates/shape-1/vmstate',
     memFile: '/templates/shape-1/mem',
+    hugePages: 'None',
     systemDrivePath: '/images/system.ext4',
     placeholderPath: '/templates/shape-1/placeholder.ext4',
     diskPath: ctx.paths.disk,
@@ -1693,6 +1709,7 @@ test('#buildStubVmm ends the VM and records no restore when the claim fails on a
       paths: ctx.paths,
       vmstate: '/templates/shape-1/vmstate',
       memFile: '/templates/shape-1/mem',
+      hugePages: 'None',
       systemDrivePath: '/images/system.ext4',
       placeholderPath: '/templates/shape-1/placeholder.ext4',
       diskPath: ctx.paths.disk,

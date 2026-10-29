@@ -29,8 +29,10 @@ import { buildImpPaths } from './vm/storage/data-layout';
 import { createCpuCgroups } from './vm/vmm/cpu-cgroups';
 import { createJails } from './vm/vmm/jail';
 import { checkGuestMemoryMergeable, readKsmProfitMib } from './vm/vmm/ksm';
+import { readHugePagePool } from './vm/vmm/read-huge-page-pool';
 import { createVmRunner } from './vm/vmm/vm-runner';
 import {
+  readHugetlbMibAsync,
   readOwnedRamMib,
   readOwnedRamMibAsync,
   readResidentMibAsync,
@@ -89,13 +91,18 @@ export function createImpdImps(
         run: deps.runCommand ?? runCommand,
         killCgroup: cgroups.kill,
       }),
-      { mergeWrapper: config.ksm?.execBin ?? null },
+      {
+        mergeWrapper: config.ksm?.execBin ?? null,
+        uffdHandlerBin: config.hugePages?.handlerBin ?? null,
+      },
     );
 
   const {
     readRamMibAsync,
     readResidentMib,
     readKsmProfitMib: readProfitMib,
+    readHugePagePool: readHugePool,
+    readHugetlbMib,
     ...host
   } = resolveImpBoundaries(deps.imps ?? {});
 
@@ -201,23 +208,31 @@ export function createImpdImps(
     listAwake: async () => {
       const listed = await listImps(deps.db);
 
-      return listed.flatMap((imp) =>
-        imp.state === 'running' && imp.pid !== null
-          ? [
-              {
-                id: imp.id,
-                name: imp.name,
-                pid: imp.pid,
-                apiSocket: buildImpPaths(config.dataDir, imp.id).apiSocket,
-                lastActiveAt: imp.lastActiveAt.getTime(),
-                holdUntil: imp.holdUntil?.getTime() ?? null,
-              },
-            ]
-          : [],
-      );
+      return listed.flatMap((imp) => {
+        if (imp.state !== 'running' || imp.pid === null) {
+          return [];
+        }
+
+        const paths = buildImpPaths(config.dataDir, imp.id);
+        const isOnHugePages = readVmIdentity(paths)?.hugePages === '2M';
+
+        return [
+          {
+            id: imp.id,
+            name: imp.name,
+            pid: imp.pid,
+            apiSocket: paths.apiSocket,
+            lastActiveAt: imp.lastActiveAt.getTime(),
+            holdUntil: imp.holdUntil?.getTime() ?? null,
+            hugePagesMib: isOnHugePages ? imp.memoryMib : 0,
+          },
+        ];
+      });
     },
     readRamMib: readRamMibAsync,
     readResidentMib,
+    readHugePool,
+    readHugetlbMib,
     readHeadroomMib,
     readLockedMib: () => imps.bootTemplates?.readLockedMib() ?? 0,
     isBusy,
@@ -276,6 +291,10 @@ function resolveImpBoundaries(boundaries: Readonly<ImpBoundaries>) {
     readUnsharedRamMib: boundaries.readUnsharedRamMib ?? readUnsharedRamMib,
     checkGuestMerge: boundaries.checkGuestMerge ?? checkGuestMemoryMergeable,
     readKsmProfitMib: boundaries.readKsmProfitMib ?? readKsmProfitMib,
+    readHugePagePool: boundaries.readHugePagePool ?? (() => readHugePagePool()),
+    readHugetlbMib:
+      boundaries.readHugetlbMib ??
+      ((pid: number, apiSocket: string) => readHugetlbMibAsync(pid, apiSocket)),
     growFilesystem: boundaries.growFilesystem ?? growFilesystem,
     hostCpus: boundaries.hostCpus ?? availableParallelism(),
     sleep: boundaries.sleep ?? Bun.sleep,

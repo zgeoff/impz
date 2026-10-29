@@ -3,6 +3,9 @@ export interface AdmissionRequest {
   readonly name: string | null;
   readonly reserveMib: number;
   readonly memoryMib: number;
+
+  // the memory a guest on 2 MiB pages may take from the host's hugetlb pool
+  readonly hugePagesMib?: number;
   readonly maySleepImps?: boolean;
 }
 

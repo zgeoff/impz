@@ -7,6 +7,7 @@ import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import type { ImpPaths } from '../../vm/storage/data-layout';
 import type { ImpCgroup } from '../../vm/vmm/cpu-cgroups';
+import type { HugePages } from '../../vm/vmm/firecracker-client';
 import { TemplateRestoreError } from '../../vm/vmm/template-vm';
 import type { StartedVm } from '../../vm/vmm/vm-runner';
 import { formatTimings } from './format-timings';
@@ -21,6 +22,7 @@ interface ColdVmStart {
   readonly paths: ImpPaths;
   readonly address: SlotAddress;
   readonly cgroup: ImpCgroup | null;
+  readonly hugePages: HugePages;
 
   readonly hostSteps: Readonly<Record<string, number>>;
   readonly diskReady: Promise<unknown>;
@@ -40,7 +42,11 @@ export async function startColdVm(
   const template =
     imp.maxMemoryMib > imp.memoryMib
       ? null
-      : context.templates?.requestTemplate({ vcpus: imp.vcpus, memoryMib: imp.memoryMib });
+      : context.templates?.requestTemplate({
+          vcpus: imp.vcpus,
+          memoryMib: imp.memoryMib,
+          hugePages: start.hugePages,
+        });
 
   const disk = { isFailed: false };
 
@@ -66,6 +72,7 @@ export async function startColdVm(
         paths,
         vmstate: template.vmstate,
         memFile: template.memFile,
+        hugePages: template.hugePages,
         systemDrivePath: template.systemDrivePath,
         placeholderPath: template.placeholderPath,
         jail: context.findJailUser(imp),
@@ -130,6 +137,7 @@ export async function startColdVm(
     vcpus: imp.vcpus,
     memoryMib: imp.memoryMib,
     maxMemoryMib: imp.maxMemoryMib,
+    hugePages: start.hugePages,
     dns: context.config.dns,
     cgroup,
     isIdentityReset: imp.isIdentityResetPending,

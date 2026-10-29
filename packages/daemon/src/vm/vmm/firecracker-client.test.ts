@@ -97,10 +97,33 @@ test('it sends the machine config', async () => {
   const ctx = setupTest();
   const api = startStubFirecrackerApi(ctx.socket);
 
-  await createFirecrackerClient(ctx.socket).putMachineConfig({ vcpuCount: 2, memSizeMib: 512 });
+  await createFirecrackerClient(ctx.socket).putMachineConfig({
+    vcpuCount: 2,
+    memSizeMib: 512,
+    hugePages: 'None',
+  });
 
   expect(api.calls).toStrictEqual([
     { method: 'PUT', path: '/machine-config', body: { vcpu_count: 2, mem_size_mib: 512 } },
+  ]);
+});
+
+test('it asks for 2 MiB pages in the machine config of a guest on huge pages', async () => {
+  const ctx = setupTest();
+  const api = startStubFirecrackerApi(ctx.socket);
+
+  await createFirecrackerClient(ctx.socket).putMachineConfig({
+    vcpuCount: 2,
+    memSizeMib: 512,
+    hugePages: '2M',
+  });
+
+  expect(api.calls).toStrictEqual([
+    {
+      method: 'PUT',
+      path: '/machine-config',
+      body: { vcpu_count: 2, mem_size_mib: 512, huge_pages: '2M' },
+    },
   ]);
 });
 
@@ -317,7 +340,24 @@ test('it reads that a loaded VM tracks its dirty pages', async () => {
 
   const config = await createFirecrackerClient(ctx.socket).loadMachineConfig();
 
-  expect(config).toStrictEqual({ isTrackingDirtyPages: true });
+  expect(config).toStrictEqual({ isTrackingDirtyPages: true, hugePages: 'None' });
+});
+
+test('it reads that a VM runs on 2 MiB pages', async () => {
+  const ctx = setupTest();
+
+  startStubFirecrackerApi(ctx.socket, {
+    answers: {
+      'GET /machine-config': {
+        status: 200,
+        body: { vcpu_count: 2, mem_size_mib: 2048, smt: false, huge_pages: '2M' },
+      },
+    },
+  });
+
+  const config = await createFirecrackerClient(ctx.socket).loadMachineConfig();
+
+  expect(config).toStrictEqual({ isTrackingDirtyPages: false, hugePages: '2M' });
 });
 
 test('it reads no dirty page tracking from a machine config without the field', async () => {
@@ -331,7 +371,30 @@ test('it reads no dirty page tracking from a machine config without the field', 
 
   const config = await createFirecrackerClient(ctx.socket).loadMachineConfig();
 
-  expect(config).toStrictEqual({ isTrackingDirtyPages: false });
+  expect(config).toStrictEqual({ isTrackingDirtyPages: false, hugePages: 'None' });
+});
+
+test("it loads a snapshot through a page handler's socket on 2 MiB pages", async () => {
+  const ctx = setupTest();
+  const api = startStubFirecrackerApi(ctx.socket);
+
+  await createFirecrackerClient(ctx.socket).loadSnapshot(
+    { snapshotPath: '/i1/vmstate', memFilePath: '/i1/mem' },
+    { resumeVm: false, uffdSocket: '/i1/run/uffd.sock', hugePages: '2M' },
+  );
+
+  expect(api.calls).toStrictEqual([
+    {
+      method: 'PUT',
+      path: '/snapshot/load',
+      body: {
+        snapshot_path: '/i1/vmstate',
+        mem_backend: { backend_type: 'Uffd', backend_path: '/i1/run/uffd.sock' },
+        resume_vm: false,
+        huge_pages: '2M',
+      },
+    },
+  ]);
 });
 
 test('it loads a snapshot with the tap and vsock socket of the snapshot', async () => {

@@ -89,9 +89,47 @@ test('#buildTemplateKey changes with each thing a restore inherits', () => {
     buildTemplateKey({ ...identity, cpuFlags: `${identity.cpuFlags}-other` }, shape),
     buildTemplateKey(identity, { ...shape, vcpus: 2 }),
     buildTemplateKey(identity, { ...shape, memoryMib: 1024 }),
+    buildTemplateKey(identity, { ...shape, hugePages: '2M' }),
   ];
 
   expect(new Set(keys).size).toBe(keys.length);
+});
+
+test('#buildTemplateKey keeps the key of a shape on host pages when it names them', () => {
+  const identity = buildMockHostIdentity();
+
+  expect(buildTemplateKey(identity, { vcpus: 1, memoryMib: 512, hugePages: 'None' })).toBe(
+    buildTemplateKey(identity, { vcpus: 1, memoryMib: 512 }),
+  );
+});
+
+test('#buildTemplate builds a 2M shape on 2 MiB pages and records them in its files', async () => {
+  const ctx = await setupTest();
+
+  const store = createBootTemplates({
+    ...ctx.deps,
+    identity: buildMockHostIdentity(),
+    bootReservePercent: 50,
+  });
+
+  const files = await store.buildTemplate({ vcpus: 1, memoryMib: 512, hugePages: '2M' });
+
+  expect(ctx.vm.builds.map((plan) => plan.hugePages)).toStrictEqual(['2M']);
+  expect(files.hugePages).toBe('2M');
+});
+
+test('#requestTemplate answers no 4 KiB template for a 2M shape', async () => {
+  const ctx = await setupTest();
+
+  const store = createBootTemplates({
+    ...ctx.deps,
+    identity: buildMockHostIdentity(),
+    bootReservePercent: 50,
+  });
+
+  await store.buildTemplate({ vcpus: 1, memoryMib: 512 });
+
+  expect(store.requestTemplate({ vcpus: 1, memoryMib: 512, hugePages: '2M' })).toBeNull();
 });
 
 test('#buildTemplateKey keeps the key when only the drive path changes', () => {
@@ -180,6 +218,28 @@ test('#buildTemplate takes free RAM only, for its boot reserve of its memory', a
     reserveMib: 256,
     memoryMib: 512,
     maySleepImps: false,
+    hugePagesMib: 0,
+  });
+});
+
+test('#buildTemplate admits a 2M template against the huge page pool for all its memory', async () => {
+  const ctx = await setupTest();
+
+  const store = createBootTemplates({
+    ...ctx.deps,
+    identity: buildMockHostIdentity(),
+    bootReservePercent: 50,
+  });
+
+  const files = await store.buildTemplate({ vcpus: 1, memoryMib: 512, hugePages: '2M' });
+
+  expect(ctx.deps.admission.admit).toHaveBeenCalledExactlyOnceWith({
+    id: `template-${files.key.slice(0, 12)}`,
+    name: null,
+    reserveMib: 256,
+    memoryMib: 512,
+    maySleepImps: false,
+    hugePagesMib: 512,
   });
 });
 

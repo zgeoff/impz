@@ -6,7 +6,11 @@ const InstanceInfoSchema = z.object({ state: z.enum(['Not started', 'Running', '
 export type InstanceState = z.infer<typeof InstanceInfoSchema>['state'];
 
 // Firecracker leaves the field out for a VM that does not track dirty pages
-const MachineConfigSchema = z.object({ track_dirty_pages: z.boolean().optional() });
+const MachineConfigSchema = z.object({
+  track_dirty_pages: z.boolean().optional(),
+  huge_pages: z.string().optional(),
+});
+
 const BalloonStatsSchema = z.object({ total_memory: z.number(), available_memory: z.number() });
 
 const HotplugMemorySchema = z.object({
@@ -21,9 +25,14 @@ interface BootSource {
   readonly bootArgs: string;
 }
 
+// Firecracker's page sizes for guest memory: the host's own, or 2 MiB hugetlb
+// pages, which restore only through a UFFD handler.
+export type HugePages = 'None' | '2M';
+
 interface MachineConfig {
   readonly vcpuCount: number;
   readonly memSizeMib: number;
+  readonly hugePages: HugePages;
 }
 
 interface Drive {
@@ -83,14 +92,21 @@ interface SnapshotOverrides {
   readonly vsockPath: string;
 }
 
-interface LoadOptions {
+export interface LoadOptions {
   readonly resumeVm: boolean;
   readonly overrides?: SnapshotOverrides;
   readonly isTrackingDirtyPages?: boolean;
+
+  // a handler's socket in place of the memory file, which then goes unread
+  readonly uffdSocket?: string;
+
+  // the page size of the restored guest, in place of the one the snapshot recorded
+  readonly hugePages?: HugePages;
 }
 
 interface MachineState {
   readonly isTrackingDirtyPages: boolean;
+  readonly hugePages: HugePages;
 }
 
 export interface FirecrackerClient {
@@ -216,11 +232,18 @@ export function createFirecrackerClient(
         boot_args: source.bootArgs,
       }),
     putMachineConfig: (config) =>
-      sendPut('/machine-config', { vcpu_count: config.vcpuCount, mem_size_mib: config.memSizeMib }),
+      sendPut('/machine-config', {
+        vcpu_count: config.vcpuCount,
+        mem_size_mib: config.memSizeMib,
+        ...(config.hugePages === '2M' && { huge_pages: '2M' }),
+      }),
     loadMachineConfig: async () => {
       const parsed = await readAnswer('/machine-config', MachineConfigSchema);
 
-      return { isTrackingDirtyPages: parsed.track_dirty_pages === true };
+      return {
+        isTrackingDirtyPages: parsed.track_dirty_pages === true,
+        hugePages: parsed.huge_pages === '2M' ? '2M' : 'None',
+      };
     },
     putDrive: (drive) =>
       sendPut(`/drives/${drive.driveId}`, {
@@ -294,9 +317,13 @@ export function createFirecrackerClient(
         '/snapshot/load',
         {
           snapshot_path: files.snapshotPath,
-          mem_backend: { backend_type: 'File', backend_path: files.memFilePath },
+          mem_backend:
+            options.uffdSocket === undefined
+              ? { backend_type: 'File', backend_path: files.memFilePath }
+              : { backend_type: 'Uffd', backend_path: options.uffdSocket },
           resume_vm: options.resumeVm,
           ...(options.isTrackingDirtyPages === true && { track_dirty_pages: true }),
+          ...(options.hugePages !== undefined && { huge_pages: options.hugePages }),
           ...(options.overrides !== undefined && {
             network_overrides: [
               { iface_id: options.overrides.ifaceId, host_dev_name: options.overrides.hostDevName },

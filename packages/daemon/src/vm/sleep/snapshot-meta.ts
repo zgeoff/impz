@@ -25,6 +25,7 @@ const SnapshotIdentitySchema = z.object({
   ipv6Prefix: z.string().nullable().optional(),
   cpuModel: z.string().optional(),
   cpuFlags: z.string().optional(),
+  hugePages: z.enum(['None', '2M']).optional(),
 });
 
 const AGENT_RECORD_JSON = { useProtoFieldName: true, alwaysEmitImplicit: true } as const;
@@ -98,6 +99,7 @@ export function buildSnapshotIdentity(
     ...(vm.ipv6Prefix !== undefined && { ipv6Prefix: vm.ipv6Prefix }),
     ...(vm.cpuModel !== undefined && { cpuModel: vm.cpuModel }),
     ...(vm.cpuFlags !== undefined && { cpuFlags: vm.cpuFlags }),
+    ...(vm.hugePages !== undefined && { hugePages: vm.hugePages }),
   };
 }
 

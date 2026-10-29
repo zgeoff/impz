@@ -77,6 +77,8 @@ const EnvSchema = z.object({
   IMP_KSM: z.enum(['0', '1']).default('0'),
   IMP_KSM_EXEC: z.string().default('ksm-exec'),
   IMP_KSM_HEADROOM_PERCENT: z.string().default('100'),
+  IMP_HUGE_PAGES: z.enum(['off', '2M']).default('off'),
+  IMP_UFFD_HANDLER: z.string().default('uffd-handler'),
   IMP_DNS: z.string().default('1.1.1.1,8.8.8.8').transform(splitList).pipe(DnsServersSchema),
   IMP_SUBNET: z.cidrv4().default('10.66.0.0/16'),
   IMP_SUBNET6: z.string().default('auto'),
@@ -312,6 +314,7 @@ export function loadConfig(env: Readonly<Record<string, string | undefined>>): C
     jailerBin: parsed.IMP_JAILER === 'true' ? parsed.IMP_JAILER_BIN : null,
     jailDir: join(parsed.IMP_DATA_DIR, 'jail'),
     ksm: parseKsmConfig(parsed),
+    hugePages: parsed.IMP_HUGE_PAGES === '2M' ? { handlerBin: parsed.IMP_UFFD_HANDLER } : null,
     kernelPath: join(parsed.IMP_DATA_DIR, 'system', 'vmlinux'),
     kernelSource: parsed.IMP_KERNEL ?? null,
     systemDriveSource:

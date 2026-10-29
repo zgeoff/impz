@@ -272,7 +272,8 @@ jobs:
 
       # go.mod lives in agent/, so the version and the module cache key both
       # need pointing there; the key also covers the lint tools, ksm-exec,
-      # oci-fetch, the Dockerfile difftest module and the UFFD spike's harness
+      # oci-fetch, uffd-handler, the Dockerfile difftest module and the UFFD
+      # spike's harness
       - name: Setup Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -282,13 +283,14 @@ jobs:
             agent/tools/go.sum
             host/ksm-exec/go.sum
             host/oci-fetch/go.sum
+            host/uffd-handler/go.sum
             scripts/dockerfile-difftest/go.sum
             docs/design/spikes/uffd-2m-restore/harness/go.sum
 
       # gofmt -l lists unformatted files and exits 0 either way
       - name: Format
         run: |
-          unformatted=$(gofmt -l . ../host/ksm-exec ../host/oci-fetch ../scripts/dockerfile-difftest ../docs/design/spikes/uffd-2m-restore/harness)
+          unformatted=$(gofmt -l . ../host/ksm-exec ../host/oci-fetch ../host/uffd-handler ../scripts/dockerfile-difftest ../docs/design/spikes/uffd-2m-restore/harness)
           if [ -n "$unformatted" ]; then
             echo "::error::gofmt wants to reformat:"
             echo "$unformatted"
@@ -301,6 +303,7 @@ jobs:
           go vet -tags root ./...
           go -C ../host/ksm-exec vet ./...
           go -C ../host/oci-fetch vet ./...
+          go -C ../host/uffd-handler vet ./...
           go -C ../scripts/dockerfile-difftest vet ./...
           go -C ../docs/design/spikes/uffd-2m-restore/harness vet ./...
 
@@ -314,6 +317,8 @@ jobs:
           go tool -modfile=../../agent/tools/go.mod golangci-lint run --config ../../agent/.golangci.yml ./...
           cd ../oci-fetch
           go tool -modfile=../../agent/tools/go.mod golangci-lint run --config ../../agent/.golangci.yml --disable depguard ./...
+          cd ../uffd-handler
+          go tool -modfile=../../agent/tools/go.mod golangci-lint run --config ../../agent/.golangci.yml ./...
           cd ../../scripts/dockerfile-difftest
           go tool -modfile=../../agent/tools/go.mod golangci-lint run --config ../../agent/.golangci.yml --disable depguard ./...
           cd ../../docs/design/spikes/uffd-2m-restore/harness
@@ -326,6 +331,8 @@ jobs:
           go tool -modfile=../../agent/tools/go.mod govulncheck ./...
           cd ../oci-fetch
           go tool -modfile=../../agent/tools/go.mod govulncheck ./...
+          cd ../uffd-handler
+          go tool -modfile=../../agent/tools/go.mod govulncheck ./...
 
       # deadcode lists functions no binary reaches, tests aside, and exits 0
       # either way
@@ -333,7 +340,8 @@ jobs:
         run: |
           unreachable=$(go tool -modfile=tools/go.mod deadcode -test=false ./cmd/... \
             && cd ../host/ksm-exec && go tool -modfile=../../agent/tools/go.mod deadcode -test=false . \
-            && cd ../oci-fetch && go tool -modfile=../../agent/tools/go.mod deadcode -test=false .)
+            && cd ../oci-fetch && go tool -modfile=../../agent/tools/go.mod deadcode -test=false . \
+            && cd ../uffd-handler && go tool -modfile=../../agent/tools/go.mod deadcode -test=false .)
           if [ -n "$unreachable" ]; then
             echo "::error::only tests call these; delete them or move them into the tests:"
             echo "$unreachable"
@@ -347,6 +355,7 @@ jobs:
           ../scripts/test-go.sh
           go -C ../host/ksm-exec test -race ./...
           go -C ../host/oci-fetch test -race ./...
+          go -C ../host/uffd-handler test -race ./...
           go -C ../docs/design/spikes/uffd-2m-restore/harness test -race ./...
         env:
           GO_TEST_JSONFILE: ${{ runner.temp }}/go-test.json

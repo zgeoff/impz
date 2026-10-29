@@ -12,14 +12,18 @@ import {
   removeSnapshotMeta,
   setSnapshotLoading,
 } from '../../vm/sleep/snapshot-meta';
+import { readVmIdentity } from '../../vm/sleep/vm-identity';
+import type { VmIdentity } from '../../vm/sleep/vm-identity';
 import type { ImpPaths } from '../../vm/storage/data-layout';
 import type { ImpCgroup } from '../../vm/vmm/cpu-cgroups';
+import type { HugePages } from '../../vm/vmm/firecracker-client';
 import { checkMergeFlag } from './check-merge-flag';
 import { formatTimings } from './format-timings';
 import type { ImpContext } from './imp-context';
 import { toLockedImp } from './imp-lock';
 import type { LockedImp } from './imp-lock';
 import { OOM_KILL_TRIGGER, startOomWatch } from './oom-kill';
+import { pickWakeHugePages } from './pick-wake-huge-pages';
 import { startCounting } from './read-running-imp-usage';
 import { requireNoOopsHold } from './require-no-oops-hold';
 
@@ -28,6 +32,7 @@ interface WakeDeps {
 
   readonly isStopping: () => boolean;
   readonly updateState: (imp: LockedImp, change: Readonly<ImpStateChange>) => Promise<LockedImp>;
+  readonly writeIdentity: (imp: LockedImp, paths: ImpPaths, identity: VmIdentity) => void;
   readonly setupVmCgroup: (imp: LockedImp) => ImpCgroup | null;
   readonly startColdImpVm: (
     imp: LockedImp,
@@ -68,12 +73,14 @@ export function makeWakeImpVm(deps: WakeDeps): (imp: LockedImp) => Promise<Locke
     }
 
     const cgroup = setupVmCgroup(imp);
+    const hugePages = pickWakeHugePages(meta.hugePages, context.config.hugePages !== null);
 
     await context.admission?.admit({
       id: imp.id,
       name: imp.name,
       reserveMib: Math.max(meta.ramMib, context.config.wakeReserveMib),
       memoryMib: imp.maxMemoryMib,
+      hugePagesMib: hugePages === '2M' ? imp.memoryMib : 0,
     });
 
     // The load restores what the guest held plugged, so the host limit allows it first.
@@ -87,7 +94,10 @@ export function makeWakeImpVm(deps: WakeDeps): (imp: LockedImp) => Promise<Locke
 
     setSnapshotLoading(paths);
 
-    const woken = await loadSnapshot(imp, paths, cgroup, meta.systemDrivePath);
+    const woken = await loadSnapshot(imp, paths, cgroup, {
+      systemDrivePath: meta.systemDrivePath,
+      hugePages,
+    });
 
     if (woken instanceof Error) {
       return startAfterFailedWake(imp, paths, woken);
@@ -114,6 +124,10 @@ export function makeWakeImpVm(deps: WakeDeps): (imp: LockedImp) => Promise<Locke
         wakeMs: String(wakeMs),
         timings: formatTimings(woken.timings),
       });
+
+    if (hugePages === 'None') {
+      writeHostPagesIdentity(imp, paths);
+    }
 
     startCounting(context, imp, woken.pid);
 
@@ -161,11 +175,22 @@ export function makeWakeImpVm(deps: WakeDeps): (imp: LockedImp) => Promise<Locke
     return toLockedImp(imp, { ...imp, isTrustPending: false });
   };
 
+  // the guest left its 2 MiB pages behind, and holds no pool pages from here on
+  const writeHostPagesIdentity = (imp: LockedImp, paths: ImpPaths): void => {
+    const booted = readVmIdentity(paths);
+
+    if (booted !== null) {
+      const { hugePages: _, ...onHostPages } = booted;
+
+      deps.writeIdentity(imp, paths, onHostPages);
+    }
+  };
+
   const loadSnapshot = async (
     imp: LockedImp,
     paths: ImpPaths,
     cgroup: ImpCgroup | null,
-    systemDrivePath: string,
+    snapshot: Readonly<{ systemDrivePath: string; hugePages: HugePages | null }>,
   ) => {
     const hasOomKill = startOomWatch(context.cgroups, imp.id);
 
@@ -179,7 +204,8 @@ export function makeWakeImpVm(deps: WakeDeps): (imp: LockedImp) => Promise<Locke
         paths,
         cgroup,
         jail: context.findJailUser(imp),
-        readOnlyFiles: [systemDrivePath],
+        readOnlyFiles: [snapshot.systemDrivePath],
+        ...(snapshot.hugePages !== null && { hugePages: snapshot.hugePages }),
       });
     } catch (error) {
       const failure = error instanceof Error ? error : new Error(getErrorMessage(error));

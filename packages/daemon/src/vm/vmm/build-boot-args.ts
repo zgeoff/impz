@@ -4,6 +4,7 @@ import type { ImpPaths } from '../storage/data-layout';
 import { BASE_BOOT_ARGS } from './configure-vm';
 import type { ImpCgroup } from './cpu-cgroups';
 import { ONLINE_MOVABLE_ARG, getRegionMib } from './elastic-memory';
+import type { HugePages } from './firecracker-client';
 import type { JailUser } from './jail';
 
 export interface VmPlan {
@@ -17,6 +18,9 @@ export interface VmPlan {
   readonly vcpus: number;
   readonly memoryMib: number;
   readonly maxMemoryMib: number;
+
+  // the host's own pages when left out
+  readonly hugePages?: HugePages;
   readonly dns: readonly string[];
   readonly cgroup: ImpCgroup | null;
   readonly isIdentityReset: boolean;

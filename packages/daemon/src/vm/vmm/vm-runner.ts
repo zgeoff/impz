@@ -17,14 +17,15 @@ import { createFirecrackerClient } from './firecracker-client';
 import type {
   CreateFirecrackerClient,
   HotplugState,
+  HugePages,
   InstanceState,
-  SnapshotType,
+  LoadOptions,
 } from './firecracker-client';
 import type { FoundVm, VmOwner } from './firecracker-process';
 import {
   buildFirecrackerCommand,
   listFirecrackers,
-  probeFirecrackerAlive,
+  probeProcessAlive,
   readLogTail,
   readPidFile,
   readVmOwner,
@@ -35,6 +36,16 @@ import { setupSnapshotFile } from './jail';
 import type { JailUser, Jails } from './jail';
 import { createTemplateVm, loadTemplateVm } from './template-vm';
 import type { TemplateBuildPlan, TemplateRestorePlan } from './template-vm';
+import {
+  buildServedFilePath,
+  createUffdWatch,
+  explainUffdFailure,
+  readHandlerState,
+  removeUffdFiles,
+  requireHandlerBin,
+  startUffdHandler,
+  stopUffdHandler,
+} from './uffd-handler';
 import { writeSnapshotBase } from './write-snapshot-base';
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
@@ -54,6 +65,7 @@ export interface GuestMemory extends HotplugState {
 
 export interface StartedVm {
   readonly pid: number;
+  readonly hugePages: HugePages;
   readonly firecrackerVersion: string;
   readonly agentVersion: string;
   readonly timings: Readonly<Record<string, number>>;
@@ -68,6 +80,11 @@ interface WakePlan {
   readonly cgroup: ImpCgroup | null;
   readonly jail: JailUser | null;
   readonly readOnlyFiles: readonly string[];
+
+  // 2M restores through a page handler, None restores a 2 MiB snapshot on the
+  // host's pages, and a plan without it restores on the page size the snapshot
+  // recorded
+  readonly hugePages?: HugePages;
 }
 
 interface FinishedWake {
@@ -103,10 +120,14 @@ export interface VmRunner {
   readonly loadTemplateVm: (plan: TemplateRestorePlan) => Promise<StartedVm>;
   readonly readGuestMemory: (paths: ImpPaths) => Promise<GuestMemory>;
   readonly requestPluggedMib: (paths: ImpPaths, mib: number) => Promise<void>;
+
+  // a VM that impd did not start in this run, such as one it adopts
+  readonly watchUffdHandler: (pid: number, paths: ImpPaths) => void;
 }
 
 export interface VmRunnerOptions {
   readonly mergeWrapper?: string | null;
+  readonly uffdHandlerBin?: string | null;
   readonly sendUptimePing?: typeof sendPing;
   readonly procRoot?: string;
   readonly createClient?: CreateFirecrackerClient;
@@ -117,7 +138,9 @@ export function createVmRunner(jails: Jails, options: Readonly<VmRunnerOptions> 
   const sendUptimePing = options.sendUptimePing ?? sendPing;
   const procRoot = options.procRoot ?? '/proc';
   const createClient = options.createClient ?? createFirecrackerClient;
-  const templates = { mergeWrapper, createClient };
+  const uffdHandlerBin = options.uffdHandlerBin ?? null;
+  const uffdWatch = createUffdWatch(procRoot);
+  const templates = { mergeWrapper, createClient, uffdHandlerBin, uffdWatch };
   const removeVmMounts = (paths: ImpPaths): Promise<void> => jails.release(paths.impId);
 
   const setupVmCommand = async (
@@ -143,6 +166,8 @@ export function createVmRunner(jails: Jails, options: Readonly<VmRunnerOptions> 
     try {
       const argv = await command();
 
+      removeUffdFiles(paths);
+
       return await startFirecracker(argv, paths, cgroup?.procsPath ?? null, mergeWrapper);
     } catch (error) {
       await removeVmMounts(paths);
@@ -164,7 +189,7 @@ export function createVmRunner(jails: Jails, options: Readonly<VmRunnerOptions> 
   };
 
   const stopVm = async (pid: number, paths: ImpPaths, graceful: boolean): Promise<void> => {
-    if (!probeFirecrackerAlive(pid, paths.apiSocket, procRoot)) {
+    if (!probeProcessAlive(pid, paths.apiSocket, procRoot)) {
       await removeVmMounts(paths);
 
       return;
@@ -217,6 +242,7 @@ export function createVmRunner(jails: Jails, options: Readonly<VmRunnerOptions> 
           bootArgs: buildBootArgs(plan),
           vcpus: plan.vcpus,
           memoryMib: plan.memoryMib,
+          hugePages: plan.hugePages ?? 'None',
           diskPath: plan.paths.disk,
           systemDrivePath: plan.systemDrivePath,
           vsockPath: plan.paths.vsockSocket,
@@ -252,6 +278,7 @@ export function createVmRunner(jails: Jails, options: Readonly<VmRunnerOptions> 
 
         return {
           pid,
+          hugePages: plan.hugePages ?? 'None',
           firecrackerVersion,
           agentVersion: ping.version,
           timings: timer.marks,
@@ -281,19 +308,32 @@ export function createVmRunner(jails: Jails, options: Readonly<VmRunnerOptions> 
       const api = createClient(paths.apiSocket);
       const files = { snapshotPath: `${target.vmstate}.new`, memFilePath: `${target.memFile}.new` };
       const owner = lstatSync(paths.disk);
+      const handler = readHandlerState(paths, procRoot);
+
+      // with no handler, the snapshot's untouched pages would read as zeros
+      if (handler.state === 'gone') {
+        throw new Error('its page handler is gone, so its memory cannot be read');
+      }
 
       mkdirSync(target.snapshotDir, { recursive: true });
       createOwnedFile(files.snapshotPath, owner);
       createOwnedFile(files.memFilePath, owner);
       cgroup?.liftLimit();
 
-      const baseStep = await writeSnapshotBase(api, paths.memFile, files.memFilePath);
+      const base = await writeSnapshotBase(
+        api,
+        {
+          memFile: paths.memFile,
+          servedFile: handler.state === 'alive' ? buildServedFilePath(handler.pid, procRoot) : null,
+        },
+        files.memFilePath,
+      );
 
-      if (baseStep !== null) {
-        setMark(baseStep);
+      if (base.step !== null) {
+        setMark(base.step);
       }
 
-      const type: SnapshotType = baseStep === 'copyBase' ? 'Diff' : 'Full';
+      const type = base.type;
 
       // a pause that times out may still land: resume or kill either way
       try {
@@ -376,12 +416,36 @@ export function createVmRunner(jails: Jails, options: Readonly<VmRunnerOptions> 
 
       try {
         const api = createClient(plan.paths.apiSocket);
+        const isUffd = plan.hugePages === '2M';
+
+        if (isUffd) {
+          await startUffdHandler({
+            handlerBin: requireHandlerBin(uffdHandlerBin),
+            paths: plan.paths,
+            memFile: plan.paths.memFile,
+            jail: plan.jail,
+            cgroup: plan.cgroup,
+          });
+
+          uffdWatch.watch(pid, plan.paths);
+
+          setMark('handler');
+        }
 
         // the load binds the vsock socket, so the jail's seal waits for the load
-        // and lands before the guest runs
+        // and lands before the guest runs; KVM's dirty log maps a 2 MiB guest
+        // in 4 KiB pages, which takes away what its huge pages gain
+        const loadOptions: LoadOptions = isUffd
+          ? { resumeVm: false, uffdSocket: plan.paths.uffdSocket, hugePages: '2M' }
+          : {
+              resumeVm: false,
+              isTrackingDirtyPages: true,
+              ...(plan.hugePages === 'None' && { hugePages: 'None' }),
+            };
+
         await api.loadSnapshot(
           { snapshotPath: plan.paths.vmstate, memFilePath: plan.paths.memFile },
-          { resumeVm: false, isTrackingDirtyPages: true },
+          loadOptions,
         );
 
         jails.seal(plan.paths, pid);
@@ -407,16 +471,19 @@ export function createVmRunner(jails: Jails, options: Readonly<VmRunnerOptions> 
 
         return {
           pid,
+          hugePages: plan.hugePages ?? 'None',
           firecrackerVersion,
           agentVersion: ping.version,
           timings: timer.marks,
           bootId: ping.bootId,
         };
       } catch (error) {
+        const reason = explainUffdFailure(plan.paths, procRoot, getErrorMessage(error));
+
         await stopVmNow(pid, plan.paths);
 
+        stopUffdHandler(plan.paths, procRoot);
         plan.cgroup?.applyLimit();
-        const reason = getErrorMessage(error);
 
         throw new Error(`wake failed: ${reason}\n${readLogTail(plan.paths.logFile, 5)}`, {
           cause: error,
@@ -441,7 +508,7 @@ export function createVmRunner(jails: Jails, options: Readonly<VmRunnerOptions> 
     requestPluggedMib: async (paths, mib) => {
       await createClient(paths.apiSocket, GUEST_MEMORY_TIMEOUTS).patchHotplugMemory(mib);
     },
-    probeVmAlive: (pid, paths) => probeFirecrackerAlive(pid, paths.apiSocket, procRoot),
+    probeVmAlive: (pid, paths) => probeProcessAlive(pid, paths.apiSocket, procRoot),
     probeAgentReady: async (paths, deadlineMs = 2000) => {
       try {
         await waitForAgent(paths.vsockSocket, { deadlineMs });
@@ -497,5 +564,6 @@ export function createVmRunner(jails: Jails, options: Readonly<VmRunnerOptions> 
     },
     createTemplateVm: (plan) => createTemplateVm(plan, jails, templates),
     loadTemplateVm: (plan) => loadTemplateVm(plan, jails, templates),
+    watchUffdHandler: uffdWatch.watch,
   };
 }
