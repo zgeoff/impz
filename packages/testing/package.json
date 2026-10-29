@@ -1,6 +1,6 @@
 {
   "name": "@impz/testing",
-  "version": "6.0.2",
+  "version": "6.1.0",
   "description": "A real impd on stand-ins, for Bun tests of code that drives impd through @impz/client",
   "license": "MIT",
   "repository": {

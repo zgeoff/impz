@@ -1,5 +1,13 @@
 # Changelog
 
+## [6.1.0](https://github.com/zgeoff/impz/compare/v6.0.2...v6.1.0) (2026-10-29)
+
+
+### Features
+
+* **daemon:** relay a websocket to a granted host through the broker ([#781](https://github.com/zgeoff/impz/issues/781)) ([c9d42ac](https://github.com/zgeoff/impz/commit/c9d42ace8e9dda69d17ef05921ad538cab7a9c67))
+* **daemon:** restore and wake imps on huge pages through a page handler ([#779](https://github.com/zgeoff/impz/issues/779)) ([5438f6e](https://github.com/zgeoff/impz/commit/5438f6ee2e3e6a7ba91d501782fb5dec30aac366))
+
 ## [6.0.2](https://github.com/zgeoff/impz/compare/v6.0.1...v6.0.2) (2026-10-28)
 
 ### Bug Fixes
