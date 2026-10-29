@@ -1,6 +1,6 @@
 {
   "name": "@impz/daemon",
-  "version": "6.1.0",
+  "version": "6.1.1",
   "private": true,
   "description": "impd: the imp host daemon",
   "type": "module",

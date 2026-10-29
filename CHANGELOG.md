@@ -1,5 +1,19 @@
 # Changelog
 
+## [6.1.1](https://github.com/zgeoff/impz/compare/v6.1.0...v6.1.1) (2026-10-29)
+
+### Bug Fixes
+
+- **daemon:** close five gaps in admission, locks, state, restore and lineage
+  ([#787](https://github.com/zgeoff/impz/issues/787))
+  ([2c5aad3](https://github.com/zgeoff/impz/commit/2c5aad3de9127a8a793a99486a54f5121b259ea3))
+- **daemon:** keep ordinary-page guests in the memory outside the pool
+  ([#789](https://github.com/zgeoff/impz/issues/789))
+  ([8559750](https://github.com/zgeoff/impz/commit/8559750a3f6d4a01e0e62632d586a17ad56ef3fa))
+- **daemon:** run the identity reset on every fork
+  ([#784](https://github.com/zgeoff/impz/issues/784))
+  ([5ae76d1](https://github.com/zgeoff/impz/commit/5ae76d18e5f00f8e41267dacd5ff0db5bf22e0ae))
+
 ## [6.1.0](https://github.com/zgeoff/impz/compare/v6.0.2...v6.1.0) (2026-10-29)
 
 ### Features
