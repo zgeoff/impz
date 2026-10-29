@@ -75,6 +75,7 @@ each; open one when the task touches its area.
 | Agent Go                    | `scripts/test-go.sh`                                                               | Go from `agent/go.mod`                                       |
 | ksm-exec                    | `cd host/ksm-exec && go test -race ./...`                                          | Linux 6.7 or later with KSM; the exec tests skip elsewhere   |
 | Agent Go, root-only tests   | `cd agent && sudo -E env "PATH=$PATH" go test -tags root -race ./...`              | Root, a writable cgroup2                                     |
+| uffd-handler, root-only     | `cd host/uffd-handler && sudo -E env "PATH=$PATH" go test -tags root -race ./...`  | Root                                                         |
 | Host networking             | `sudo env "PATH=$PATH" IMP_HOST_TESTS=required bun run test:host`                  | Root, `nft`, `iptables`, `ip6tables`, `ip`, `ping`, `sysctl` |
 | ACME issuer                 | `bun run test:pebble`                                                              | Docker                                                       |
 | Headscale join              | `bun run test:headscale`                                                           | Docker, and the network for the client's packages            |

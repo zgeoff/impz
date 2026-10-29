@@ -24,6 +24,9 @@ const (
 	peerSocketEnv     = "UFFD_HANDLER_TEST_PEER_SOCKET"
 	peerAdvertisedEnv = "UFFD_HANDLER_TEST_PEER_ADVERTISED"
 	peerReadsEnv      = "UFFD_HANDLER_TEST_PEER_READS"
+	// the test binary runs as the handler itself too, so a privilege drop
+	// leaves the test process as it was
+	handlerModeEnv = "UFFD_HANDLER_TEST_AS_HANDLER"
 )
 
 // From linux/userfaultfd.h: what Firecracker does to make and register the
@@ -53,6 +56,9 @@ type uffdioRegisterArg struct {
 }
 
 func TestMain(m *testing.M) {
+	if os.Getenv(handlerModeEnv) != "" {
+		main()
+	}
 	if socket := os.Getenv(peerSocketEnv); socket != "" {
 		if err := runPeer(socket); err != nil {
 			os.Stdout.WriteString("error " + err.Error())
