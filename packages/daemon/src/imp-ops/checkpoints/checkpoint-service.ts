@@ -279,7 +279,7 @@ export function createCheckpointService(deps: CheckpointServiceDeps): Checkpoint
 
         const api = await deps.imps.toApi(imp);
 
-        return { imp: api, policy, isBackedUp: imp.isBackedUp };
+        return { imp: api, policy, isBackedUp: imp.isBackedUp, imageDigest: imp.imageDigest };
       });
 
       const made = { forkId: null as string | null, isSourceChanged: false };
@@ -327,6 +327,7 @@ export function createCheckpointService(deps: CheckpointServiceDeps): Checkpoint
         const fork = await deps.imps.createImp({
           name: input.name,
           image: source.imp.image,
+          imageDigest: source.imageDigest,
           vcpus: source.imp.vcpus,
           memoryMib: source.imp.memoryMib,
           maxMemoryMib: source.imp.maxMemoryMib,

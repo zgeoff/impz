@@ -15,7 +15,7 @@ import { runSql } from '../../../testing/platform/run-sql';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { buildStubZfs } from '../../../testing/vm/build-stub-zfs';
 import { createCheckpoint, listCheckpoints } from '../../platform/db/checkpoints';
-import { createImage } from '../../platform/db/images';
+import { createImage, updateImage } from '../../platform/db/images';
 import { createImp, readImpByName } from '../../platform/db/imps';
 import type { ImpRecord } from '../../platform/db/imps';
 import { buildImagePaths, buildImpPaths } from '../../vm/storage/data-layout';
@@ -366,6 +366,31 @@ test('it forks the live disk, frozen, into a new imp with no checkpoints', async
   expect(forked).toMatchObject({ imp: { name: 'now', state: 'running', image: 'base', slot: 1 } });
   expect(readFileSync(buildImpPaths(ctx.dataDir, forked.imp.id).disk, 'utf8')).toBe('a=2');
   expect(forkCheckpoints).toStrictEqual([]);
+});
+
+test('it gives a fork its source’s image digest after the image row takes a new digest', async () => {
+  const ctx = await setupTest({ storage: 'xfs' });
+
+  await Bun.write(join(ctx.dataDir, 'images', 'base', 'rootfs.ext4'), 'rootfs');
+
+  const image = await createImage(
+    ctx.db,
+    buildMockNewImage({ name: 'base', digest: 'sha256:base' }),
+  );
+
+  await ctx.impd.imps.createImp({ name: 'dev', image: 'base' });
+
+  await updateImage(ctx.db, image.id, {
+    ref: image.ref,
+    digest: 'sha256:readded',
+    sizeBytes: image.sizeBytes,
+  });
+
+  await ctx.impd.checkpoints.forkImp({ source: 'dev', name: 'now' });
+
+  const fork = await readImpByName(ctx.db, 'now');
+
+  expect(fork?.imageDigest).toBe('sha256:base');
 });
 
 test('it boots a fork of the live disk with an identity reset and leaves its source as it was', async () => {

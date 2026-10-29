@@ -85,14 +85,14 @@ export async function updateImpState(
       .executeTakeFirst();
 
     if (current === undefined) {
-      return;
+      return null;
     }
 
     if (
       expected !== undefined &&
       (current.state !== expected.state || current.pid !== expected.pid)
     ) {
-      return;
+      return null;
     }
 
     if (change.state !== current.state) {
@@ -107,7 +107,7 @@ export async function updateImpState(
       .executeTakeFirstOrThrow();
   });
 
-  if (row !== undefined) {
+  if (row !== null) {
     return emitChange(db, toImpRecord(row), change);
   }
 

@@ -12,6 +12,7 @@ const CREATE_TRIES = 3;
 
 interface NewImpInput {
   readonly name?: string | undefined;
+  readonly imageDigest?: string | undefined;
   readonly vcpus?: number | undefined;
   readonly memoryMib?: number | undefined;
   readonly maxMemoryMib?: number | undefined;
@@ -46,7 +47,7 @@ export async function createImpRecord(
         id,
         name,
         imageId: image.id,
-        imageDigest: image.digest,
+        imageDigest: input.imageDigest ?? image.digest,
         vcpus: input.vcpus ?? context.config.defaultVcpus,
         memoryMib: input.memoryMib ?? context.config.defaultMemoryMib,
         ...(input.maxMemoryMib !== undefined && { maxMemoryMib: input.maxMemoryMib }),

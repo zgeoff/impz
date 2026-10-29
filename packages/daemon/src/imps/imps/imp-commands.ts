@@ -46,6 +46,8 @@ interface CreateImpInput {
 
   readonly prepareDisk?: (impId: string) => Promise<void>;
 
+  readonly imageDigest?: string;
+
   readonly start?: boolean;
 
   readonly isIdentityResetPending?: boolean;
