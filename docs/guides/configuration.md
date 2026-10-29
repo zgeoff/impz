@@ -91,11 +91,13 @@ fast median wake ([young guests](../architecture/lifecycle/sleep-and-wake.md#you
 With `IMP_HUGE_PAGES=2M`, impd runs each imp of fixed memory on the host's pool of 2 MiB pages
 ([huge pages](../architecture/lifecycle/huge-pages.md)). impd never sizes the pool: the host
 reserves it, and impd refuses a boot or wake the free pool cannot hold. Pool pages leave the host's
-ordinary RAM for good, and KSM cannot merge them. The host needs Linux 6.1 or later, whose
-`/dev/userfaultfd` the unit, `bootstrap.sh`, `dev.sh` and the NixOS module pass into the container
-only while `IMP_HUGE_PAGES=2M` is set. Without the device, impd refuses each boot or wake on huge
-pages with `PRECONDITION_FAILED`. On NixOS, set `IMP_HUGE_PAGES` in `services.imp.settings`, never
-in `environmentFile`, because the module reads the setting to pass the device.
+ordinary RAM for good, and KSM cannot merge them. `IMP_RAM_BUDGET_MIB` counts the pool, so imps on
+ordinary pages, such as elastic imps, share only the budget less the pool
+([huge pages](../architecture/lifecycle/huge-pages.md#ram)). The host needs Linux 6.1 or later,
+whose `/dev/userfaultfd` the unit, `bootstrap.sh`, `dev.sh` and the NixOS module pass into the
+container only while `IMP_HUGE_PAGES=2M` is set. Without the device, impd refuses each boot or wake
+on huge pages with `PRECONDITION_FAILED`. On NixOS, set `IMP_HUGE_PAGES` in `services.imp.settings`,
+never in `environmentFile`, because the module reads the setting to pass the device.
 
 1. Size the pool to the memory of every 2M imp you expect awake at once, plus the memory of the
    largest imp shape, for a template build on huge pages.

@@ -167,13 +167,183 @@ test('it refuses a guest on 2 MiB pages on a host with no pool', () => {
   ).rejects.toMatchObject({ code: 'RAM_BUDGET_EXCEEDED' });
 });
 
-test("it admits a guest on the host's pages with no look at the pool", () => {
+test("it admits a guest on the host's pages on a host with no pool", () => {
   const host = createStubGovernedHost({ budgetMib: 4000, ids: ['x'], awake: [] });
   const governor = createRamGovernor({ ...host.deps });
 
   expect(
     governor.admit({ id: 'x', name: 'x', reserveMib: 64, memoryMib: 128 }),
   ).resolves.toBeUndefined();
+});
+
+test('it admits a guest on 4 KiB pages against the whole budget on a host whose pool has no pages', () => {
+  const host = createStubGovernedHost({
+    budgetMib: 4000,
+    ids: ['a', 'x'],
+    awake: [{ id: 'a', rssMib: 3000 }],
+    hugePool: { totalMib: 0, freeMib: 0 },
+  });
+
+  const governor = createRamGovernor({ ...host.deps });
+
+  expect(
+    governor.admit({ id: 'x', name: 'x', reserveMib: 900, memoryMib: 900, maySleepImps: false }),
+  ).resolves.toBeUndefined();
+});
+
+test('it refuses a guest on 4 KiB pages that fits the whole budget but not the RAM outside the pool, and names that budget', async () => {
+  const host = createStubGovernedHost({
+    budgetMib: 4000,
+    ids: ['a', 'x'],
+    awake: [{ id: 'a', rssMib: 800 }],
+    hugePool: { totalMib: 3000, freeMib: 3000 },
+  });
+
+  const events = createEventBus();
+  const published: ImpEvent[] = [];
+
+  events.subscribe((event) => {
+    published.push(event);
+  });
+
+  const governor = createRamGovernor({ ...host.deps, events });
+
+  const refusal = await governor
+    .admit({ id: 'x', name: 'x', reserveMib: 300, memoryMib: 600, maySleepImps: false })
+    .then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+  expect(refusal).toMatchObject({
+    code: 'RAM_BUDGET_EXCEEDED',
+    message:
+      'not enough RAM outside the huge page pool: 800 of 1000 MiB in use, 300 MiB requested on 4 KiB pages, and no idle imp left to sleep',
+    data: { budgetMib: 1000, usedMib: 800, requestedMib: 300, neededMib: 100 },
+  });
+
+  expect(published.at(-1)).toStrictEqual({
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
+    v: 1,
+    at: new Date(1_000_000),
+    ev: 'GovernorDecision',
+    budgetMib: 4000,
+    decision: 'refused',
+    name: 'x',
+    trigger: 'RAM outside the huge page pool',
+    usedMib: 800,
+    reserveMib: 300,
+    neededMib: 100,
+    protectedCount: 0,
+  });
+});
+
+test('it refuses a guest on 4 KiB pages whose memory is larger than the RAM outside the pool', () => {
+  const host = createStubGovernedHost({
+    budgetMib: 4000,
+    ids: ['x'],
+    awake: [],
+    hugePool: { totalMib: 3500, freeMib: 3500 },
+  });
+
+  const governor = createRamGovernor({ ...host.deps });
+
+  expect(
+    governor.admit({ id: 'x', name: 'x', reserveMib: 300, memoryMib: 600 }),
+  ).rejects.toMatchObject({
+    code: 'RAM_BUDGET_EXCEEDED',
+    message:
+      "the imp's memory, at its max (600 MiB), is larger than the RAM budget outside the huge page pool (500 MiB)",
+    data: { budgetMib: 500, usedMib: 0, requestedMib: 600, neededMib: 100 },
+  });
+});
+
+test('it admits a guest on 2 MiB pages that the pool holds while the RAM outside the pool is full', () => {
+  const host = createStubGovernedHost({
+    budgetMib: 4000,
+    ids: ['a', 'x'],
+    awake: [{ id: 'a', rssMib: 1000 }],
+    hugePool: { totalMib: 3000, freeMib: 3000 },
+  });
+
+  const governor = createRamGovernor({ ...host.deps });
+
+  expect(
+    governor.admit({
+      id: 'x',
+      name: 'x',
+      reserveMib: 512,
+      memoryMib: 1024,
+      hugePagesMib: 1024,
+      maySleepImps: false,
+    }),
+  ).resolves.toBeUndefined();
+});
+
+test('it sleeps an idle guest on 4 KiB pages, never an older one on 2 MiB pages, to make room outside the pool', async () => {
+  const host = createStubGovernedHost({
+    budgetMib: 4000,
+    ids: ['huge', 'small', 'x'],
+    awake: [
+      { id: 'huge', rssMib: 1100, hugePagesMib: 1024, hugetlbMib: 1024 },
+      { id: 'small', rssMib: 900 },
+    ],
+    hugePool: { totalMib: 3000, freeMib: 1976 },
+  });
+
+  const governor = createRamGovernor({ ...host.deps });
+
+  await governor.admit({ id: 'x', name: 'x', reserveMib: 200, memoryMib: 400 });
+
+  expect(host.sleepCalls.map((call) => call.id)).toStrictEqual(['small']);
+});
+
+test('it counts what an awake guest on 2 MiB pages holds beside its pool pages against the RAM outside the pool', () => {
+  const host = createStubGovernedHost({
+    budgetMib: 4000,
+    ids: ['huge', 'x'],
+    awake: [{ id: 'huge', rssMib: 1100, hugePagesMib: 1024, hugetlbMib: 1024 }],
+    hugePool: { totalMib: 3000, freeMib: 1976 },
+  });
+
+  const governor = createRamGovernor({ ...host.deps });
+
+  expect(
+    governor.admit({ id: 'x', name: 'x', reserveMib: 950, memoryMib: 950 }),
+  ).rejects.toMatchObject({
+    code: 'RAM_BUDGET_EXCEEDED',
+    data: { budgetMib: 1000, usedMib: 76, requestedMib: 950 },
+  });
+});
+
+test('it sleeps an idle guest on 4 KiB pages when the RAM outside the pool runs over while the whole budget holds', async () => {
+  const host = createStubGovernedHost({
+    budgetMib: 4000,
+    ids: ['a'],
+    awake: [{ id: 'a', rssMib: 1200 }],
+    hugePool: { totalMib: 3000, freeMib: 3000 },
+  });
+
+  const governor = createRamGovernor({ ...host.deps });
+
+  await governor.enforce();
+
+  expect(host.sleepCalls.map((call) => call.id)).toStrictEqual(['a']);
+});
+
+test('it refuses a grow that the RAM outside the pool cannot hold', async () => {
+  const host = createStubGovernedHost({
+    budgetMib: 4000,
+    ids: ['grower'],
+    awake: [{ id: 'grower', rssMib: 900 }],
+    hugePool: { totalMib: 3000, freeMib: 3000 },
+  });
+
+  const governor = createRamGovernor({ ...host.deps });
+
+  const admitted = await governor.admitGrow({ id: 'grower', name: 'grower', mib: 200 });
+
+  expect(admitted).toBeFalse();
 });
 
 test('it counts the reserve it admitted on the resident counts', async () => {

@@ -5,6 +5,7 @@ import type { ImpStateChange } from '../../platform/db/update-imp-state';
 import { buildStoppingError } from '../../platform/errors/impd-errors';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
+import { isOrdinaryBudgetError } from '../../vm/imps-contract/ram-budget-error';
 import { buildUffdDeviceError } from '../../vm/imps-contract/uffd-device-error';
 import {
   readColdBootReason,
@@ -24,6 +25,7 @@ import type { ImpContext } from './imp-context';
 import { toLockedImp } from './imp-lock';
 import type { LockedImp } from './imp-lock';
 import { OOM_KILL_TRIGGER, startOomWatch } from './oom-kill';
+import { pickHugePages } from './pick-huge-pages';
 import { pickWakeHugePages } from './pick-wake-huge-pages';
 import { startCounting } from './read-running-imp-usage';
 import { requireNoOopsHold } from './require-no-oops-hold';
@@ -81,13 +83,27 @@ export function makeWakeImpVm(deps: WakeDeps): (imp: LockedImp) => Promise<Locke
 
     const cgroup = setupVmCgroup(imp);
 
-    await context.admission.admit({
-      id: imp.id,
-      name: imp.name,
-      reserveMib: Math.max(meta.ramMib, context.config.wakeReserveMib),
-      memoryMib: imp.maxMemoryMib,
-      hugePagesMib: hugePages === '2M' ? imp.memoryMib : 0,
-    });
+    try {
+      await context.admission.admit({
+        id: imp.id,
+        name: imp.name,
+        reserveMib: Math.max(meta.ramMib, context.config.wakeReserveMib),
+        memoryMib: imp.maxMemoryMib,
+        hugePagesMib: hugePages === '2M' ? imp.memoryMib : 0,
+      });
+    } catch (error) {
+      if (!isOrdinaryBudgetError(error) || !canBootOnPool(imp)) {
+        throw error;
+      }
+
+      const reason = `${getErrorMessage(error)}, so it boots on the huge page pool`;
+
+      getImpdLogger('imps')
+        .with({ imp: imp.name })
+        .info('cold boot instead of a wake: {reason}', { reason });
+
+      return startColdImpVm(imp, 'wake_fallback', reason);
+    }
 
     // The load restores what the guest held plugged, so the host limit allows it first.
     context.memoryLimit.setGuestMib(imp.id, imp.memoryMib + (meta.pluggedMib ?? 0));
@@ -180,6 +196,9 @@ export function makeWakeImpVm(deps: WakeDeps): (imp: LockedImp) => Promise<Locke
 
     return toLockedImp(imp, { ...imp, isTrustPending: false });
   };
+
+  const canBootOnPool = (imp: LockedImp): boolean =>
+    pickHugePages(context.config.hugePages !== null, imp) === '2M';
 
   // the guest left its 2 MiB pages behind, and holds no pool pages from here on
   const writeHostPagesIdentity = (imp: LockedImp, paths: ImpPaths): void => {
