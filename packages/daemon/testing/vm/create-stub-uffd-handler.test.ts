@@ -45,6 +45,35 @@ test('it serves on its socket and records its arguments and the memory file it w
   ]);
 });
 
+test('it serves on a socket given in the --socket=<path> form', async () => {
+  const ctx = setupTest();
+  const handler = createStubUffdHandler(ctx.directoryPath);
+  const socket = join(ctx.directoryPath, 'uffd.sock');
+  const memFile = join(ctx.directoryPath, 'mem');
+
+  writeFileSync(memFile, '');
+
+  const memFd = openSync(memFile, 'r');
+
+  const child = Bun.spawn([handler.path, `--socket=${socket}`, '--uid', '100', '--gid', '100'], {
+    stdio: ['ignore', 'ignore', 'inherit', memFd],
+  });
+
+  closeSync(memFd);
+
+  onTestFinished(() => {
+    child.kill('SIGKILL');
+  });
+
+  await waitFor(() => {
+    expect(existsSync(socket)).toBeTrue();
+  });
+
+  expect(handler.readStarts()).toStrictEqual([
+    { args: [`--socket=${socket}`, '--uid', '100', '--gid', '100'], served: '' },
+  ]);
+});
+
 test('it exits at its first connection in crash mode', async () => {
   const ctx = setupTest();
   const handler = createStubUffdHandler(ctx.directoryPath, 'crash');
