@@ -11,6 +11,7 @@ export function buildMockImpRecord(overrides: ImpRecordOverrides = {}): ImpRecor
     id: faker.string.uuid(),
     name: faker.string.alphanumeric({ length: 12, casing: 'lower' }),
     imageId: faker.string.uuid(),
+    imageDigest: `sha256:${faker.string.hexadecimal({ length: 64, casing: 'lower', prefix: '' })}`,
     state: 'running',
     kind: 'user',
     vcpus: faker.number.int({ min: 1, max: 8 }),

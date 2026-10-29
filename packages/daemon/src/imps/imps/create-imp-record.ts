@@ -46,6 +46,7 @@ export async function createImpRecord(
         id,
         name,
         imageId: image.id,
+        imageDigest: image.digest,
         vcpus: input.vcpus ?? context.config.defaultVcpus,
         memoryMib: input.memoryMib ?? context.config.defaultMemoryMib,
         ...(input.maxMemoryMib !== undefined && { maxMemoryMib: input.maxMemoryMib }),

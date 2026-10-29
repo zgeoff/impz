@@ -754,7 +754,7 @@ test('#runMigrations adds only the oops hold column to the imps in the oops hold
     SELECT name, type, "notnull", dflt_value FROM pragma_table_info('imps')
   `.execute(db);
 
-  await runMigrations(db);
+  await runMigrationsTo(db, '033_add_imp_oops_hold');
 
   const after = await sql<{ name: string; type: string; notnull: number; dflt_value: unknown }>`
     SELECT name, type, "notnull", dflt_value FROM pragma_table_info('imps')
@@ -1181,5 +1181,29 @@ test('#runMigrations gives each send in flight the step its marks show in the mo
     { imp_id: 'a', step: 'prepared', halted: 0 },
     { imp_id: 'b', step: 'streaming', halted: 0 },
     { imp_id: 'c', step: 'sent', halted: 0 },
+  ]);
+});
+
+test('#runMigrations gives each existing imp its image row’s digest in the image digest migration', async () => {
+  const db = createUnmigratedDatabase();
+
+  await runMigrationsTo(db, '043_merge_secret_kinds');
+
+  await sql`INSERT INTO images (id, name, ref, digest, size_bytes, created_at)
+    VALUES ('base', 'base', 'imp/base:latest', 'sha256:aaaa', 1, 0),
+      ('tools', 'tools', 'imp/tools:latest', 'sha256:bbbb', 1, 0)`.execute(db);
+
+  await sql`INSERT INTO imps (id, name, image_id, state, vcpus, memory_mib, slot, ip,
+    created_at, last_active_at)
+    VALUES ('a', 'a', 'base', 'stopped', 1, 512, 0, 'ip0', 0, 0),
+      ('b', 'b', 'tools', 'stopped', 1, 512, 1, 'ip1', 0, 0)`.execute(db);
+
+  await runMigrations(db);
+
+  const rows = await db.selectFrom('imps').select(['id', 'image_digest']).orderBy('id').execute();
+
+  expect(rows).toStrictEqual([
+    { id: 'a', image_digest: 'sha256:aaaa' },
+    { id: 'b', image_digest: 'sha256:bbbb' },
   ]);
 });

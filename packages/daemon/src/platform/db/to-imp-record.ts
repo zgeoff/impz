@@ -11,6 +11,7 @@ export function toImpRecord(row: Readonly<ImpRow>): ImpRecord {
     id: row.id,
     name: row.name,
     imageId: row.image_id,
+    imageDigest: row.image_digest,
     state: row.state,
     kind: row.kind,
     vcpus: row.vcpus,

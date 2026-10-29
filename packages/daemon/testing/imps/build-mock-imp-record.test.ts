@@ -7,6 +7,7 @@ test('it builds a default imp record', () => {
     id: expect.toBeString(),
     name: expect.toSatisfy((name: string) => /^[a-z0-9]{12}$/v.test(name)),
     imageId: expect.toBeString(),
+    imageDigest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/v),
     state: 'running',
     kind: 'user',
     vcpus: expect.toBeWithin(1, 9),
