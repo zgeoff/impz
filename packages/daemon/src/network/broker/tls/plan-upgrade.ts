@@ -22,9 +22,17 @@ export type UpgradePlan =
       readonly kind: 'open';
       readonly url: string;
       readonly headers: Headers;
+      readonly protocols: readonly string[];
       readonly ca: readonly string[] | null;
       readonly audit: ConnectionAudit;
     };
+
+const HANDSHAKE_HEADERS = [
+  'sec-websocket-key',
+  'sec-websocket-version',
+  'sec-websocket-extensions',
+  'sec-websocket-protocol',
+];
 
 export interface UpgradeDeps extends AdmitDeps {
   readonly resolveUpstream: ResolveUpstream;
@@ -49,8 +57,16 @@ export async function planUpgrade(deps: UpgradeDeps, request: Request): Promise<
 
   const headers = buildCredentialedHeaders(request.headers, credential);
 
-  headers.set('upgrade', request.headers.get('upgrade') ?? '');
-  headers.set('connection', 'Upgrade');
+  // the upstream client makes its own handshake, offering the guest's
+  // subprotocols
+  for (const name of HANDSHAKE_HEADERS) {
+    headers.delete(name);
+  }
+
+  const protocols = (request.headers.get('sec-websocket-protocol') ?? '')
+    .split(',')
+    .map((protocol) => protocol.trim())
+    .filter((protocol) => protocol !== '');
 
   const state: { requestBytes: number; responseBytes: number; phase: UpgradePhase } = {
     requestBytes: 0,
@@ -77,8 +93,9 @@ export async function planUpgrade(deps: UpgradeDeps, request: Request): Promise<
 
   return {
     kind: 'open',
-    url: `${upstream.origin}${url.pathname}${url.search}`,
+    url: `${toSocketOrigin(upstream.origin)}${url.pathname}${url.search}`,
     headers,
+    protocols,
     ca: upstream.ca,
     audit: {
       recordOpen: () => {
@@ -112,8 +129,12 @@ export async function planUpgrade(deps: UpgradeDeps, request: Request): Promise<
 
         state.phase = 'done';
 
-        writeRow(status, 0, state.responseBytes);
+        writeRow(status, 0, 0);
       },
     },
   };
+}
+
+function toSocketOrigin(origin: string): string {
+  return origin.replace(/^http/u, 'ws');
 }

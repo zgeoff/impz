@@ -10,7 +10,6 @@ import type { Credential } from './admit-request';
 import { buildCredentialedHeaders } from './build-credentialed-headers';
 import { buildEndToEndHeaders } from './build-end-to-end-headers';
 import { isRequestInFilter } from './is-request-in-filter';
-import { isWebSocketUpgrade } from './is-websocket-upgrade';
 
 export interface Upstream {
   readonly origin: string;
@@ -53,29 +52,6 @@ export function createForwarder(deps: ForwardDeps): (request: Request) => Promis
 
   return async (request) => {
     const started = performance.now();
-
-    // answered at once, so a client that tries a WebSocket first falls back to
-    // HTTPS without waiting on a stripped upgrade
-    if (isWebSocketUpgrade(request.headers)) {
-      deps.recordAudit({
-        impId: deps.impId,
-        impName: deps.impName,
-        secretName: null,
-        at: new Date(),
-        method: request.method,
-        host: deps.host,
-        path: new URL(request.url).pathname.slice(0, 512),
-        status: 426,
-        requestBytes: 0,
-        responseBytes: 0,
-        durationMs: Math.round(performance.now() - started),
-        reason: 'websocket',
-      });
-
-      return new Response('websocket upgrades are not supported through the broker\n', {
-        status: 426,
-      });
-    }
 
     const admission = await admitRequest(deps, request, started);
 

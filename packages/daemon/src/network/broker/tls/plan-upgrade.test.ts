@@ -4,7 +4,7 @@ import { buildMockCredential } from '../../../../testing/network/build-mock-cred
 import type { NewAuditEntry } from '../../../platform/db/broker-audit';
 import { planUpgrade } from './plan-upgrade';
 
-test('it adds the real credential to the upgrade and keeps its Upgrade and Connection headers', async () => {
+test('it adds the real credential to the upgrade and leaves the handshake to the upstream client', async () => {
   const plan = await planUpgrade(
     {
       impId: 'imp-1',
@@ -23,8 +23,11 @@ test('it adds the real credential to the upgrade and keeps its Upgrade and Conne
         authorization: 'Bearer imp-broker-placeholder',
         connection: 'keep-alive, Upgrade',
         upgrade: 'websocket',
+        origin: 'https://app.example.com',
         'sec-websocket-key': Buffer.from('imp-test-socket!').toString('base64'),
         'sec-websocket-version': '13',
+        'sec-websocket-extensions': 'permessage-deflate',
+        'sec-websocket-protocol': 'realtime',
         'proxy-authorization': 'Basic Z3Vlc3Q6cHJveHk=',
       },
     }),
@@ -32,16 +35,38 @@ test('it adds the real credential to the upgrade and keeps its Upgrade and Conne
 
   invariant(plan.kind === 'open');
 
-  expect(plan.url).toBe('https://realtime.example.com/v1/stream?model=small');
+  expect(plan.url).toBe('wss://realtime.example.com/v1/stream?model=small');
   expect(plan.ca).toBeNull();
 
   expect(Object.fromEntries(plan.headers)).toStrictEqual({
     authorization: 'Bearer real',
-    connection: 'Upgrade',
-    upgrade: 'websocket',
-    'sec-websocket-key': Buffer.from('imp-test-socket!').toString('base64'),
-    'sec-websocket-version': '13',
+    origin: 'https://app.example.com',
   });
+});
+
+test('it offers the upstream the guest’s subprotocols in order', async () => {
+  const plan = await planUpgrade(
+    {
+      impId: 'imp-1',
+      impName: 'dev',
+      host: 'realtime.example.com',
+      findCredential: () => Promise.resolve(buildMockCredential()),
+      resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+      recordAudit: () => {},
+    },
+    new Request('https://realtime.example.com/socket', {
+      headers: {
+        host: 'realtime.example.com',
+        connection: 'Upgrade',
+        upgrade: 'websocket',
+        'sec-websocket-protocol': 'realtime, , chat.v2',
+      },
+    }),
+  );
+
+  invariant(plan.kind === 'open');
+
+  expect(plan.protocols).toStrictEqual(['realtime', 'chat.v2']);
 });
 
 test('it sends the upgrade to the rule’s upstream', async () => {
@@ -62,7 +87,7 @@ test('it sends the upgrade to the rule’s upstream', async () => {
 
   invariant(plan.kind === 'open');
 
-  expect(plan.url).toBe('http://172.17.0.1:18081/socket');
+  expect(plan.url).toBe('ws://172.17.0.1:18081/socket');
   expect(plan.ca).toBeNull();
 });
 
@@ -83,7 +108,7 @@ test('it sends the upgrade to a test upstream with its CA', async () => {
 
   invariant(plan.kind === 'open');
 
-  expect(plan.url).toBe('https://upstream.test:9443/socket');
+  expect(plan.url).toBe('wss://upstream.test:9443/socket');
   expect(plan.ca).toStrictEqual(['TEST CA']);
 });
 
@@ -116,11 +141,7 @@ test('it drops the method-override headers from an upgrade under a filtered gran
 
   invariant(plan.kind === 'open');
 
-  expect(Object.fromEntries(plan.headers)).toStrictEqual({
-    'x-api-key': 'real-key',
-    connection: 'Upgrade',
-    upgrade: 'websocket',
-  });
+  expect(Object.fromEntries(plan.headers)).toStrictEqual({ 'x-api-key': 'real-key' });
 });
 
 test('it refuses an upgrade with no grant with 403 and a refused audit row', async () => {

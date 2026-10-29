@@ -1,6 +1,9 @@
 import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import type { Server } from 'bun';
 import type { LeafCertificate } from './broker-ca';
+import { RELAY_SOCKET_HANDLER } from './relay-socket-handler';
+import type { RelayData } from './relay-socket-handler';
 
 // One TLS server per imp and host, not one per imp with SNI: Bun serves an
 // unknown SNI with the first certificate, and a reload does not swap
@@ -38,7 +41,7 @@ export interface TerminatorDeps {
   readonly createHandler: (
     key: TerminatorKey,
     connections: LiveConnections,
-  ) => (request: Request) => Promise<Response>;
+  ) => (request: Request, server: Server<RelayData>) => Promise<Response | undefined>;
 }
 
 interface Entry {
@@ -103,7 +106,8 @@ export function createTerminators(deps: TerminatorDeps): Terminators {
       idleTimeout: IDLE_TIMEOUT_S,
       maxRequestBodySize: MAX_REQUEST_BODY_BYTES,
       fetch: deps.createHandler(key, makeConnections(id, key)),
-    } as unknown as Bun.Serve.Options<undefined>;
+      websocket: RELAY_SOCKET_HANDLER,
+    } as unknown as Bun.Serve.Options<RelayData>;
 
     const server = Bun.serve(options);
 

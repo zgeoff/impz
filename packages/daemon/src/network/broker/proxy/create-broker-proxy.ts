@@ -21,6 +21,8 @@ import type { Credential } from '../tls/admit-request';
 import type { BrokerCa } from '../tls/broker-ca';
 import { createForwarder } from '../tls/forward-request';
 import type { ForwardDeps, ResolveUpstream, UpstreamFetch } from '../tls/forward-request';
+import { isWebSocketUpgrade } from '../tls/is-websocket-upgrade';
+import { relayWebSocket } from '../tls/relay-websocket';
 import { createTerminators } from '../tls/terminators';
 import type { TerminatorKey } from '../tls/terminators';
 import { startBrokerFront } from './broker-front';
@@ -134,8 +136,8 @@ export function createBrokerProxy(deps: BrokerProxyDeps): BrokerProxy {
     socketDir: join(config.dataDir, 'broker', 'run'),
     issueLeaf: ca.issueLeaf,
     isLeafDue: (leaf) => ca.isDue(leaf, now()),
-    createHandler: (key) =>
-      createForwarder({
+    createHandler: (key, connections) => {
+      const forward = createForwarder({
         impId: key.impId,
         impName: key.impName,
         host: key.host,
@@ -146,7 +148,25 @@ export function createBrokerProxy(deps: BrokerProxyDeps): BrokerProxy {
         ...(deps.refreshAfterRejection !== undefined && {
           refreshAfterRejection: deps.refreshAfterRejection,
         }),
-      }),
+      });
+
+      return (request, server) =>
+        isWebSocketUpgrade(request.headers)
+          ? relayWebSocket(
+              {
+                impId: key.impId,
+                impName: key.impName,
+                host: key.host,
+                findCredential: readCredential,
+                resolveUpstream: deps.resolveUpstream,
+                recordAudit: writeBudgetedAudit,
+                connections,
+              },
+              request,
+              server,
+            )
+          : forward(request);
+    },
   });
 
   const state: { front: BrokerFront | null; port: number } = {

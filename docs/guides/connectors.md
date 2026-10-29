@@ -467,15 +467,22 @@ an impd that checks. A client that sends the `start` itself must check the same.
 
 Values are not encrypted at rest: the key would sit on the same disk.
 
+A WebSocket gets two rows in `impz audit`, both with status 101 and the same imp, secret, method,
+host and path. The broker writes the first when the service accepts the connection, with no bytes,
+so the use of the credential is on record while the connection lasts. It writes the second when the
+connection closes, with the message bytes each way and the connection's whole duration. The second
+row's time minus its duration gives the first row's time. A service that refuses the upgrade gets
+one row with status 502.
+
 The audit log also records each request the broker refuses: a CONNECT the egress policy or the
 tunnel check turns away, a head that is not a CONNECT, a connection past the imp's cap, and a
-request on a granted connection for another host, for a WebSocket, after a revoke, or outside the
-grant's [filter](#narrow-a-grant). The broker refuses before it adds any credential, so a refused
-row has no secret. `impz audit --kind refused` lists each with its reason, such as `egress-policy`.
-A head without a host leaves the host empty. The log keeps the newest 1000 rows of each kind per
-imp, sent and refused, so a guest's refusals never push out the requests sent with its credentials.
-Across every imp, destroyed ones included, it keeps the newest 100,000 rows. It records at most 20
-refusals per imp in one second, because a refusal costs the guest almost nothing.
+request on a granted connection for another host, after a revoke, or outside the grant's
+[filter](#narrow-a-grant). The broker refuses before it adds any credential, so a refused row has no
+secret. `impz audit --kind refused` lists each with its reason, such as `egress-policy`. A head
+without a host leaves the host empty. The log keeps the newest 1000 rows of each kind per imp, sent
+and refused, so a guest's refusals never push out the requests sent with its credentials. Across
+every imp, destroyed ones included, it keeps the newest 100,000 rows. It records at most 20 refusals
+per imp in one second, because a refusal costs the guest almost nothing.
 
 ## Limits
 
@@ -492,8 +499,11 @@ refusals per imp in one second, because a refusal costs the guest almost nothing
   | A session started before `impz grant`              | `impz attach` joins the process as it started. Start a new session, or exit the shell and open `impz console` again.                                                               |
   | An exec or SSH command started before `impz grant` | The same: start it again.                                                                                                                                                          |
 
-- The terminator serves HTTP/1.1 only, so clients fall back from HTTP/2. WebSocket upgrades to a
-  granted host are not supported: a request with `Upgrade: websocket` gets `426 Upgrade Required`
-  with `websocket upgrades are not supported through the broker`, before any credential lookup and
-  without reaching the host, so a client that tries a WebSocket first falls back to HTTPS at once.
+- The terminator serves HTTP/1.1 only, so clients fall back from HTTP/2.
+- A WebSocket to a granted host is two connections: the guest's to the terminator, and the
+  terminator's own to the service, which carries the credential. The broker relays each message
+  unchanged, but frames, pings and compression belong to each connection. Of the service's `101`
+  answer, the guest gets only the subprotocol the service picked; cookies and other headers stay
+  with the broker. A service that refuses the upgrade gets the guest a `502`, not the service's own
+  status. Revoking the grant closes its open WebSockets with code 1008.
 - A host takes exact names: no wildcards, and no IP addresses.

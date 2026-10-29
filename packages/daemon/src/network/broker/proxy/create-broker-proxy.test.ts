@@ -1,5 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { createConnection } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -12,10 +12,12 @@ import { HttpResponse, http } from 'msw';
 import invariant from 'tiny-invariant';
 import { buildStubBrokerGuest } from '../../../../testing/network/build-stub-broker-guest';
 import { createStubBrokerTokenEndpoint } from '../../../../testing/network/create-stub-broker-token-endpoint';
+import { startStubBrokerGuestBridge } from '../../../../testing/network/start-stub-broker-guest-bridge';
 import { startStubBrokerGuestSocket } from '../../../../testing/network/start-stub-broker-guest-socket';
 import { startStubBrokerHoldTarget } from '../../../../testing/network/start-stub-broker-hold-target';
 import { startStubBrokerPlainUpstream } from '../../../../testing/network/start-stub-broker-plain-upstream';
 import { startStubBrokerReplyTarget } from '../../../../testing/network/start-stub-broker-reply-target';
+import { startStubBrokerSocketUpstream } from '../../../../testing/network/start-stub-broker-socket-upstream';
 import { startStubBrokerTlsUpstream } from '../../../../testing/network/start-stub-broker-tls-upstream';
 import { startStubBrokerTunnel } from '../../../../testing/network/start-stub-broker-tunnel';
 import { buildQueryGate } from '../../../../testing/platform/build-query-gate';
@@ -1655,49 +1657,475 @@ test('it keeps sending the valid access token of a secret that needs a new sign-
   ]);
 });
 
-test('it answers a websocket upgrade 426 and never reaches the upstream', async () => {
+test('it opens a websocket to a granted host with the real credential in place of the placeholder', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
+  const upstream = await startStubBrokerSocketUpstream(ctx.stack, {
+    directory: join(ctx.dataDir, 'socket-upstream'),
+  });
+
+  await writeFile(
+    ctx.upstreamsFile,
+    JSON.stringify({ ca: upstream.caPem, upstreams: { 'realtime.example.com': upstream.origin } }),
+  );
+
+  await ctx.client.imps.create({ name: 'dev' });
+
+  await ctx.impd.broker.addSecret({
+    name: 'rt',
+    kind: 'custom',
+    value: 'rt-real',
+    rules: [buildMockBrokerRule({ host: 'realtime.example.com' })],
+  });
+
+  await ctx.impd.broker.addGrant('dev', 'rt');
+
+  const bridge = await startStubBrokerGuestBridge(ctx.stack, {
+    proxyPort: ctx.proxyPort,
+    address: '127.0.0.2',
+  });
+
+  const caPem = await readFile(ctx.caFile, 'utf8');
+
+  const socket = new WebSocket('wss://realtime.example.com/v1/stream', {
+    proxy: bridge.proxyURL,
+    tls: { ca: [caPem] },
+    headers: { authorization: 'Bearer imp-broker-placeholder' },
+  });
+
+  ctx.stack.defer(() => {
+    socket.close();
+  });
+
+  await waitFor(() => {
+    expect(socket.readyState).toBe(WebSocket.OPEN);
+  });
+
+  expect(upstream.upgrades).toStrictEqual([
+    { path: '/v1/stream', authorization: 'Bearer rt-real', protocols: null },
+  ]);
+});
+
+test('it passes messages both ways unchanged until the guest closes', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
+  const upstream = await startStubBrokerSocketUpstream(ctx.stack, {
+    directory: join(ctx.dataDir, 'socket-upstream'),
+  });
+
+  await writeFile(
+    ctx.upstreamsFile,
+    JSON.stringify({ ca: upstream.caPem, upstreams: { 'realtime.example.com': upstream.origin } }),
+  );
+
+  await ctx.client.imps.create({ name: 'dev' });
+
+  await ctx.impd.broker.addSecret({
+    name: 'rt',
+    kind: 'custom',
+    value: 'rt-real',
+    rules: [buildMockBrokerRule({ host: 'realtime.example.com' })],
+  });
+
+  await ctx.impd.broker.addGrant('dev', 'rt');
+
+  const bridge = await startStubBrokerGuestBridge(ctx.stack, {
+    proxyPort: ctx.proxyPort,
+    address: '127.0.0.2',
+  });
+
+  const caPem = await readFile(ctx.caFile, 'utf8');
+
+  const socket = new WebSocket('wss://realtime.example.com/v1/stream', {
+    proxy: bridge.proxyURL,
+    tls: { ca: [caPem] },
+  });
+
+  socket.binaryType = 'arraybuffer';
+
+  ctx.stack.defer(() => {
+    socket.close();
+  });
+
+  const echoed: (string | number[])[] = [];
+
+  socket.addEventListener('message', (event: MessageEvent<string | ArrayBuffer>) => {
+    const data = typeof event.data === 'string' ? event.data : [...new Uint8Array(event.data)];
+
+    echoed.push(data);
+  });
+
+  await waitFor(() => {
+    expect(socket.readyState).toBe(WebSocket.OPEN);
+  });
+
+  socket.send('{"type":"session.update"}');
+  socket.send(new Uint8Array([0, 1, 254, 255]));
+
+  await waitFor(() => {
+    expect(echoed).toHaveLength(2);
+  });
+
+  socket.close(1000, 'done');
+
+  await waitFor(() => {
+    expect(upstream.closes).toHaveLength(1);
+  });
+
+  expect(upstream.received).toStrictEqual([
+    '{"type":"session.update"}',
+    Buffer.from([0, 1, 254, 255]),
+  ]);
+
+  expect(echoed).toStrictEqual(['{"type":"session.update"}', [0, 1, 254, 255]]);
+  expect(upstream.closes).toStrictEqual([{ code: 1000, reason: 'done' }]);
+});
+
+test('it closes the guest’s websocket with the code the upstream closed with', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
+  const upstream = await startStubBrokerSocketUpstream(ctx.stack, {
+    directory: join(ctx.dataDir, 'socket-upstream'),
+  });
+
+  await writeFile(
+    ctx.upstreamsFile,
+    JSON.stringify({ ca: upstream.caPem, upstreams: { 'realtime.example.com': upstream.origin } }),
+  );
+
+  await ctx.client.imps.create({ name: 'dev' });
+
+  await ctx.impd.broker.addSecret({
+    name: 'rt',
+    kind: 'custom',
+    value: 'rt-real',
+    rules: [buildMockBrokerRule({ host: 'realtime.example.com' })],
+  });
+
+  await ctx.impd.broker.addGrant('dev', 'rt');
+
+  const bridge = await startStubBrokerGuestBridge(ctx.stack, {
+    proxyPort: ctx.proxyPort,
+    address: '127.0.0.2',
+  });
+
+  const caPem = await readFile(ctx.caFile, 'utf8');
+
+  const socket = new WebSocket('wss://realtime.example.com/v1/stream', {
+    proxy: bridge.proxyURL,
+    tls: { ca: [caPem] },
+  });
+
+  ctx.stack.defer(() => {
+    socket.close();
+  });
+
+  const closes: { code: number; reason: string }[] = [];
+
+  socket.addEventListener('close', (event) => {
+    closes.push({ code: event.code, reason: event.reason });
+  });
+
+  await waitFor(() => {
+    expect(upstream.sockets).toHaveLength(1);
+  });
+
+  upstream.sockets[0]?.close(4000, 'session over');
+
+  await waitFor(() => {
+    expect(closes).toHaveLength(1);
+  });
+
+  expect(closes).toStrictEqual([{ code: 4000, reason: 'session over' }]);
+});
+
+test('it gives the guest the subprotocol the upstream picked and none of its cookies', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
+  const upstream = await startStubBrokerSocketUpstream(ctx.stack, {
+    directory: join(ctx.dataDir, 'socket-upstream'),
+    upgradeHeaders: { 'set-cookie': 'edge=abc; Secure', 'x-upstream-trace': 'trace-1' },
+  });
+
+  await writeFile(
+    ctx.upstreamsFile,
+    JSON.stringify({ ca: upstream.caPem, upstreams: { 'realtime.example.com': upstream.origin } }),
+  );
+
+  await ctx.client.imps.create({ name: 'dev' });
+
+  await ctx.impd.broker.addSecret({
+    name: 'rt',
+    kind: 'custom',
+    value: 'rt-real',
+    rules: [buildMockBrokerRule({ host: 'realtime.example.com' })],
+  });
+
+  await ctx.impd.broker.addGrant('dev', 'rt');
+
+  // curl prints the 101 head, then waits on the open socket until --max-time
+  const result = await ctx.guest.curl('https://realtime.example.com/v1/stream', [
+    '-i',
+    '--max-time',
+    '1',
+    '-H',
+    'Connection: Upgrade',
+    '-H',
+    'Upgrade: websocket',
+    '-H',
+    'Sec-WebSocket-Version: 13',
+    '-H',
+    `Sec-WebSocket-Key: ${Buffer.from('imp-test-socket!').toString('base64')}`,
+    '-H',
+    'Sec-WebSocket-Protocol: realtime, chat.v2',
+  ]);
+
+  // the first head is the proxy's answer to the CONNECT
+  const head = result.stdout.split('\r\n\r\n')[1]?.toLowerCase().split('\r\n') ?? [];
+
+  expect(head).toIncludeAllMembers([
+    'http/1.1 101 switching protocols',
+    'sec-websocket-protocol: realtime',
+  ]);
+
+  expect(head).not.toContainEqual(expect.toStartWith('set-cookie'));
+  expect(head).not.toContainEqual(expect.toStartWith('x-upstream-trace'));
+
+  expect(upstream.upgrades).toStrictEqual([
+    { path: '/v1/stream', authorization: 'Bearer rt-real', protocols: 'realtime, chat.v2' },
+  ]);
+});
+
+test('it records an audit row when a websocket opens and another with its bytes when it closes', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
+  const upstream = await startStubBrokerSocketUpstream(ctx.stack, {
+    directory: join(ctx.dataDir, 'socket-upstream'),
+  });
+
+  await writeFile(
+    ctx.upstreamsFile,
+    JSON.stringify({ ca: upstream.caPem, upstreams: { 'realtime.example.com': upstream.origin } }),
+  );
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  await ctx.impd.broker.addSecret({
+    name: 'rt',
+    kind: 'custom',
+    value: 'rt-real',
+    rules: [buildMockBrokerRule({ host: 'realtime.example.com' })],
+  });
+
+  await ctx.impd.broker.addGrant('dev', 'rt');
+
+  const bridge = await startStubBrokerGuestBridge(ctx.stack, {
+    proxyPort: ctx.proxyPort,
+    address: '127.0.0.2',
+  });
+
+  const caPem = await readFile(ctx.caFile, 'utf8');
+
+  const socket = new WebSocket('wss://realtime.example.com/v1/stream?token=abc', {
+    proxy: bridge.proxyURL,
+    tls: { ca: [caPem] },
+  });
+
+  ctx.stack.defer(() => {
+    socket.close();
+  });
+
+  const opened = await waitFor(async () => {
+    const listed = await listAuditEntries(ctx.db, dev.id, 10, null);
+
+    expect(listed).toHaveLength(1);
+
+    return listed;
+  });
+
+  socket.send('12345');
+
+  await waitFor(() => {
+    expect(upstream.received).toHaveLength(1);
+  });
+
+  socket.close();
+
+  const all = await waitFor(async () => {
+    const listed = await listAuditEntries(ctx.db, dev.id, 10, null);
+
+    expect(listed).toHaveLength(2);
+
+    return listed;
+  });
+
+  expect(opened).toStrictEqual([
+    {
+      at: expect.toBeValidDate(),
+      imp: 'dev',
+      secret: 'rt',
+      method: 'GET',
+      host: 'realtime.example.com',
+      path: '/v1/stream',
+      status: 101,
+      requestBytes: 0,
+      responseBytes: 0,
+      durationMs: expect.toBeNumber(),
+    },
+  ]);
+
+  expect(all[0]).toStrictEqual({
+    at: expect.toBeValidDate(),
+    imp: 'dev',
+    secret: 'rt',
+    method: 'GET',
+    host: 'realtime.example.com',
+    path: '/v1/stream',
+    status: 101,
+    requestBytes: 5,
+    responseBytes: 5,
+    durationMs: expect.toBeNumber(),
+  });
+});
+
+test('it answers 502 and records the failure when the upstream refuses the websocket', async () => {
   const ctx = await setupTest();
 
   await ctx.createTestImage('base');
 
   await writeFile(
     ctx.upstreamsFile,
-    JSON.stringify({ ca: ctx.upstreamCaPem, upstreams: { 'api.example.com': ctx.upstreamOrigin } }),
+    JSON.stringify({
+      ca: ctx.upstreamCaPem,
+      upstreams: { 'realtime.example.com': ctx.upstreamOrigin },
+    }),
   );
 
-  const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
+  ctx.answers.set('/v1/stream', () => new Response('no key', { status: 401 }));
 
-  server.use(endpoint.handler);
-  endpoint.issue('fake-refresh-0', { access_token: 'fake-access-1', expires_in: 3600 });
-
-  await ctx.client.imps.create({ name: 'dev' });
+  const dev = await ctx.client.imps.create({ name: 'dev' });
 
   await ctx.impd.broker.addSecret({
-    name: 'codex',
-    kind: 'oauth',
-    value: 'fake-refresh-0',
-    rules: [buildMockBrokerRule({ host: 'api.example.com' })],
-    oauth: buildMockOAuthConfig({ tokenUrl: 'https://auth.example.com/oauth/token' }),
+    name: 'rt',
+    kind: 'custom',
+    value: 'rt-real',
+    rules: [buildMockBrokerRule({ host: 'realtime.example.com' })],
   });
 
-  await ctx.impd.broker.addGrant('dev', 'codex');
+  await ctx.impd.broker.addGrant('dev', 'rt');
 
-  const result = await ctx.guest.curl('https://api.example.com/socket', [
+  const result = await ctx.guest.curl('https://realtime.example.com/v1/stream', [
     '-H',
     'Connection: Upgrade',
     '-H',
     'Upgrade: websocket',
+    '-H',
+    'Sec-WebSocket-Version: 13',
+    '-H',
+    `Sec-WebSocket-Key: ${Buffer.from('imp-test-socket!').toString('base64')}`,
     '-w',
     '%{http_code}',
   ]);
 
+  const entries = await waitFor(async () => {
+    const listed = await listAuditEntries(ctx.db, dev.id, 10, null);
+
+    expect(listed).toHaveLength(1);
+
+    return listed;
+  });
+
   expect(result).toStrictEqual({
     code: 0,
-    stdout: 'websocket upgrades are not supported through the broker\n426',
+    stdout: 'could not open a websocket to realtime.example.com\n502',
     stderr: '',
   });
 
-  expect(ctx.seen).toStrictEqual([]);
+  expect(entries).toStrictEqual([
+    {
+      at: expect.toBeValidDate(),
+      imp: 'dev',
+      secret: 'rt',
+      method: 'GET',
+      host: 'realtime.example.com',
+      path: '/v1/stream',
+      status: 502,
+      requestBytes: 0,
+      responseBytes: 0,
+      durationMs: expect.toBeNumber(),
+    },
+  ]);
+});
+
+test('revoking a grant closes its open websockets', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
+  const upstream = await startStubBrokerSocketUpstream(ctx.stack, {
+    directory: join(ctx.dataDir, 'socket-upstream'),
+  });
+
+  await writeFile(
+    ctx.upstreamsFile,
+    JSON.stringify({ ca: upstream.caPem, upstreams: { 'realtime.example.com': upstream.origin } }),
+  );
+
+  await ctx.client.imps.create({ name: 'dev' });
+
+  await ctx.impd.broker.addSecret({
+    name: 'rt',
+    kind: 'custom',
+    value: 'rt-real',
+    rules: [buildMockBrokerRule({ host: 'realtime.example.com' })],
+  });
+
+  await ctx.impd.broker.addGrant('dev', 'rt');
+
+  const bridge = await startStubBrokerGuestBridge(ctx.stack, {
+    proxyPort: ctx.proxyPort,
+    address: '127.0.0.2',
+  });
+
+  const caPem = await readFile(ctx.caFile, 'utf8');
+
+  const socket = new WebSocket('wss://realtime.example.com/v1/stream', {
+    proxy: bridge.proxyURL,
+    tls: { ca: [caPem] },
+  });
+
+  ctx.stack.defer(() => {
+    socket.close();
+  });
+
+  const closes: { code: number; reason: string }[] = [];
+
+  socket.addEventListener('close', (event) => {
+    closes.push({ code: event.code, reason: event.reason });
+  });
+
+  await waitFor(() => {
+    expect(socket.readyState).toBe(WebSocket.OPEN);
+  });
+
+  await ctx.impd.broker.removeGrant('dev', 'rt');
+
+  await waitFor(() => {
+    expect(closes).toHaveLength(1);
+    expect(upstream.closes).toHaveLength(1);
+  });
+
+  expect(closes).toStrictEqual([{ code: 1008, reason: 'the grant is gone' }]);
 });
 
 test('it refreshes through a token host that the test-upstreams file routes', async () => {
