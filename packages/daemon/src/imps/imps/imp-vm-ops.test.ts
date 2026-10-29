@@ -989,7 +989,7 @@ test('it watches the page handler of each running imp a restarted impd adopts', 
 
   const running = await readImpByName(ctx.db, 'dev');
 
-  invariant(running?.pid);
+  invariant(running !== undefined && running.pid !== null);
 
   await ctx.restartImpd();
 

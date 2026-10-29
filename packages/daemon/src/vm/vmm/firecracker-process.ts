@@ -31,7 +31,6 @@ export function isImpVm(owner: VmOwner, impId: string, jailUid: number | null): 
 
 const SOCKET_WAIT_MS = 3000;
 
-/* @internal */
 export function buildSpawnArgv(
   command: readonly string[],
   cgroupProcs: string | null,

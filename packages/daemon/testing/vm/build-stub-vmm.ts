@@ -482,10 +482,11 @@ export function buildStubVmm() {
           memory.requestedMib = mib;
           memory.pluggedMib = Math.max(mib, Math.min(memory.pluggedMib, memory.unplugFloorMib));
         }),
-      watchUffdHandler: (pid, paths) =>
+      watchUffdHandler: (pid, paths) => {
         withGeneration(() => {
           handlerWatches.push({ pid, impId: paths.impId });
-        }),
+        });
+      },
     };
 
     parkedBuilds.set(runner, parkedBuild.promise);

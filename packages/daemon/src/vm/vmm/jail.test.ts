@@ -751,7 +751,8 @@ test('#removeUffdDevice removes the userfaultfd node the jailer made and leaves 
 
   ctx.jails.removeUffdDevice('i1');
 
-  expect(readdirSync(join(imp.root, 'dev'))).toStrictEqual(['kvm']);
+  expect(existsSync(join(imp.root, 'dev', 'userfaultfd'))).toBeFalse();
+  expect(existsSync(join(imp.root, 'dev', 'kvm'))).toBeTrue();
 });
 
 test("#seal keeps a page handler's socket and pid file in run/", async () => {
