@@ -120,6 +120,27 @@ test('it answers the upgrade with the headers it is given', async () => {
   expect(text.toLowerCase()).toInclude('\r\nset-cookie: edge=abc\r\n');
 });
 
+test('it serves plain HTTP when it is asked to', async () => {
+  const ctx = await setupTest();
+
+  const upstream = await startStubBrokerSocketUpstream(ctx.stack, {
+    directory: ctx.directoryPath,
+    isPlain: true,
+  });
+
+  const socket = new WebSocket(`ws://127.0.0.1:${String(upstream.port)}/x`);
+
+  ctx.stack.defer(() => {
+    socket.close();
+  });
+
+  await waitFor(() => {
+    expect(socket.readyState).toBe(WebSocket.OPEN);
+  });
+
+  expect(upstream.origin).toBe(`http://localhost:${String(upstream.port)}`);
+});
+
 test('it records the code and reason of each close', async () => {
   const ctx = await setupTest();
 

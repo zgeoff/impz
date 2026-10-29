@@ -8,6 +8,7 @@ import type { ImpDatabase } from '../../platform/db/open-database';
 import { isImpdError } from '../../platform/errors/impd-error';
 import { MOVING_RETRY_AFTER_S } from '../../platform/errors/impd-errors';
 import { openUpstreamSocket } from '../../platform/http/open-upstream-socket';
+import { sendOrClose } from '../../platform/http/send-or-close';
 import { stripSessionCookie } from '../../platform/http/session-cookie';
 import { toSendableCloseCode } from '../../platform/http/to-sendable-close-code';
 import type { StartTimer } from '../../platform/process/clock';
@@ -128,20 +129,17 @@ export function startWakeProxy(deps: WakeProxyDeps): WakeProxy {
   const syncSlot = createSemaphore(1);
 
   const websocket: WebSocketHandler<SocketData> = {
-    // past the limit Bun drops each message it is asked to send; a closed
-    // connection is better than one that lost a message
-    closeOnBackpressureLimit: true,
     open: (ws) => {
       const upstream = ws.data.upstream;
 
       upstream.removeEventListener('message', ws.data.handleEarlyMessage);
 
       for (const message of ws.data.pending.splice(0)) {
-        ws.send(message);
+        sendOrClose(ws, message);
       }
 
       upstream.addEventListener('message', (event: MessageEvent<string | ArrayBuffer>) => {
-        ws.send(event.data);
+        sendOrClose(ws, event.data);
       });
 
       // no close can come earlier: Bun runs `open` inside server.upgrade,

@@ -1,4 +1,5 @@
 import type { ServerWebSocket, WebSocketHandler } from 'bun';
+import { sendOrClose } from '../../../platform/http/send-or-close';
 import { toSendableCloseCode } from '../../../platform/http/to-sendable-close-code';
 import type { ConnectionAudit } from './plan-upgrade';
 
@@ -13,9 +14,6 @@ export interface RelayData {
 }
 
 export const RELAY_SOCKET_HANDLER: WebSocketHandler<RelayData> = {
-  // past the limit Bun drops each message it is asked to send; a closed
-  // connection is better than one that lost a message
-  closeOnBackpressureLimit: true,
   open: (ws) => {
     const data = ws.data;
 
@@ -25,12 +23,14 @@ export const RELAY_SOCKET_HANDLER: WebSocketHandler<RelayData> = {
 
     for (const message of data.pending.splice(0)) {
       data.audit.addResponseBytes(measureMessage(message));
-      ws.send(message);
+
+      sendOrClose(ws, message);
     }
 
     data.upstream.addEventListener('message', (event: MessageEvent<string | ArrayBuffer>) => {
       data.audit.addResponseBytes(measureMessage(event.data));
-      ws.send(event.data);
+
+      sendOrClose(ws, event.data);
     });
 
     // no close can come earlier: Bun runs `open` inside server.upgrade, in the

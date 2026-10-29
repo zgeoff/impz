@@ -20,6 +20,7 @@ import { startStubBrokerReplyTarget } from '../../../../testing/network/start-st
 import { startStubBrokerSocketUpstream } from '../../../../testing/network/start-stub-broker-socket-upstream';
 import { startStubBrokerTlsUpstream } from '../../../../testing/network/start-stub-broker-tls-upstream';
 import { startStubBrokerTunnel } from '../../../../testing/network/start-stub-broker-tunnel';
+import { startStubPausedSocketGuest } from '../../../../testing/network/start-stub-paused-socket-guest';
 import { buildQueryGate } from '../../../../testing/platform/build-query-gate';
 import { buildStubHeldAnswer } from '../../../../testing/platform/build-stub-held-answer';
 import { startTestImpd } from '../../../../testing/start-test-impd';
@@ -2203,6 +2204,65 @@ test('it renews the leaf of a pair with an open websocket and leaves the websock
   await waitFor(() => {
     expect(echoed).toStrictEqual(['still here']);
   });
+});
+
+test('it closes a websocket whose guest stops reading once the backlog passes 16 MiB', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
+  const upstream = await startStubBrokerSocketUpstream(ctx.stack, {
+    directory: join(ctx.dataDir, 'socket-upstream'),
+  });
+
+  await writeFile(
+    ctx.upstreamsFile,
+    JSON.stringify({ ca: upstream.caPem, upstreams: { 'realtime.example.com': upstream.origin } }),
+  );
+
+  await ctx.client.imps.create({ name: 'dev' });
+
+  await ctx.impd.broker.addSecret({
+    name: 'rt',
+    kind: 'custom',
+    value: 'rt-real',
+    rules: [buildMockBrokerRule({ host: 'realtime.example.com' })],
+  });
+
+  await ctx.impd.broker.addGrant('dev', 'rt');
+
+  const caPem = await readFile(ctx.caFile, 'utf8');
+
+  const bridge = await startStubBrokerGuestBridge(ctx.stack, {
+    proxyPort: ctx.proxyPort,
+    address: '127.0.0.2',
+  });
+
+  const guest = await startStubPausedSocketGuest(ctx.stack, {
+    port: Number(new URL(bridge.proxyURL).port),
+    host: 'realtime.example.com',
+    path: '/v1/stream',
+    tunnel: { ca: caPem },
+  });
+
+  await waitFor(() => {
+    expect(upstream.sockets).toHaveLength(1);
+  });
+
+  const chunk = Buffer.alloc(1024 * 1024, 7);
+
+  // one MiB each poll: the service's own buffer drops what the broker has
+  // not taken yet, so it sends until the broker closes
+  await waitFor(() => {
+    upstream.sockets[0]?.send(chunk);
+    expect(upstream.closes).toHaveLength(1);
+  });
+
+  guest.resume();
+
+  await guest.closed;
+
+  expect(guest.head).toStartWith('HTTP/1.1 101 ');
 });
 
 test('revoking a grant closes its open websockets', async () => {

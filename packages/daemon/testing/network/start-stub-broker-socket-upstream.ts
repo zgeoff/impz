@@ -8,6 +8,9 @@ interface StubSocketUpstreamOptions {
 
   // the service answers each upgrade once this settles
   readonly answerAfter?: Promise<void>;
+
+  // serve plain HTTP, as an imp's own service does, in place of TLS
+  readonly isPlain?: boolean;
 }
 
 interface SeenUpgrade {
@@ -60,7 +63,7 @@ export async function startStubBrokerSocketUpstream(
   const server = Bun.serve({
     hostname: '127.0.0.1',
     port: 0,
-    tls: { cert: leaf.certPem, key: leaf.keyPem },
+    ...(options.isPlain !== true && { tls: { cert: leaf.certPem, key: leaf.keyPem } }),
     fetch: answerUpgrade,
     websocket: {
       open: (ws) => {
@@ -82,7 +85,7 @@ export async function startStubBrokerSocketUpstream(
 
   return {
     port,
-    origin: `https://localhost:${String(port)}`,
+    origin: `${options.isPlain === true ? 'http' : 'https'}://localhost:${String(port)}`,
     caPem: ca.certPem,
     upgrades,
     received,
