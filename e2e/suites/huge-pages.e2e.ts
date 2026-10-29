@@ -50,17 +50,23 @@ test.skipIf(!checkHostHasHugePagePool())(
 
     const bootedMib = await readVmHugetlbMib(name);
 
-    await runShellInImp(name, 'echo kept > /root/marker');
+    // tmpfs lives in guest RAM, so only the restored memory can bring it back,
+    // and random bytes across several huge pages show a page served wrong
+    const asleepSum = await runShellInImp(
+      name,
+      'dd if=/dev/urandom of=/dev/shm/sentinel bs=1M count=8 2>/dev/null && sha256sum /dev/shm/sentinel',
+    );
+
     await runImp('sleep', name);
 
-    const marker = await runInImp(name, 'cat', '/root/marker');
+    const wokenSum = await runShellInImp(name, 'sha256sum /dev/shm/sentinel');
     const wokenMib = await readVmHugetlbMib(name);
     const handlerPid = await readHandlerPid(name);
 
     writeMetric('huge_pages_hugetlb_mib', { booted: bootedMib, woken: wokenMib });
 
     expect(bootedMib).toBeGreaterThan(0);
-    expect(marker).toBe('kept');
+    expect(wokenSum).toBe(asleepSum);
     expect(wokenMib).toBeGreaterThan(0);
     expect(handlerPid).not.toBeNull();
   },
