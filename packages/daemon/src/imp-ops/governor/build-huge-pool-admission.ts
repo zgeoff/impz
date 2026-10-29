@@ -1,6 +1,6 @@
 import type { HugePagePool } from '../../vm/vmm/read-huge-page-pool';
 
-export interface HugePageGuest {
+interface HugePageGuest {
   readonly hugePagesMib: number;
   readonly heldMib: number;
 }
