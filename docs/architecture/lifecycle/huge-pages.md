@@ -17,8 +17,8 @@ other process can use it. impd only reads the pool's size; the host's own config
 
 impd decides at each cold boot. With huge pages on, an imp of fixed memory whose memory is a whole
 number of huge pages boots on them; any other imp boots on ordinary pages. impd records the choice
-in the imp's VM identity and in each snapshot it takes, because a snapshot of a guest on huge pages
-loads only on huge pages through a page handler.
+in the imp's VM identity and in each snapshot it takes, because a wake back onto huge pages needs a
+page handler, which a snapshot on ordinary pages never starts.
 
 A boot template carries the choice in its key, so an imp on huge pages restores only a template
 built on huge pages ([boot templates](./boot-templates.md#the-key)). A template on ordinary pages
