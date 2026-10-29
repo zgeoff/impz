@@ -36,7 +36,7 @@ test('it fails the named subcommand and never runs the real command', () => {
 
 test('it passes any other subcommand to the real command with its arguments', () => {
   const ctx = setupTest();
-  const real = createStubBin(join(ctx.directory, 'real'), 'docker', 'echo "real ran"');
+  const real = createStubBin(join(ctx.directory, 'real'), 'docker', `printf '<%s>\\n' "$@"`);
   const stub = createStubFailingDockerCommand(ctx.directory, 'history', join(real.bin, 'docker'));
   const result = Bun.spawnSync([join(stub.bin, 'docker'), 'image', 'inspect', 'two words']);
 
@@ -46,9 +46,7 @@ test('it passes any other subcommand to the real command with its arguments', ()
     stderr: result.stderr.toString(),
   }).toStrictEqual({
     exitCode: 0,
-    stdout: 'real ran\n',
+    stdout: '<image>\n<inspect>\n<two words>\n',
     stderr: '',
   });
-
-  expect(Bun.file(real.calls).text()).resolves.toBe('docker image inspect two words\n');
 });
