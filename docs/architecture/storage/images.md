@@ -18,9 +18,10 @@ from a separate system drive, so the image needs nothing of impz in it. The
    snapshot renamed into place on ZFS. A crash during a build leaves only a staging name, which the
    next start removes.
 
-Two names for the same image ID share one file. When a host has no image at all, impd adds Ubuntu as
-a default in the background, and the health check reports ready once that finishes, whether it
-worked or not.
+Two names for the same image ID share one file. Each imp records the digest of the file its disk was
+cloned from, so an add that points a name at a new digest leaves the lineage of the older imps as it
+was. When a host has no image at all, impd adds Ubuntu as a default in the background, and the
+health check reports ready once that finishes, whether it worked or not.
 
 ## Where builds run
 

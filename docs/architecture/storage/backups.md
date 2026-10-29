@@ -72,10 +72,11 @@ template of such an imp is refused, because every run backs up every image.
 1. impd drops stale restic locks and copies the database.
 2. For each imp, under its lock and only for this step: a running imp's guest is frozen around a
    copy of its disk; a stopped, sleeping or failed imp is copied as it is; a creating imp is left
-   out, and an imp created with backup off is never locked or copied. A sleeping imp is not woken to
-   sync, because its disk is as after a power cut, which ext4's journal handles, and the guest's
-   writes are already in the host's page cache, which a clone sees. The manifest marks which copies
-   were synced.
+   out, and an imp created with backup off is never locked or copied. An imp whose lock another job
+   holds is left out with the reason, so the run never waits behind a long hold. A sleeping imp is
+   not woken to sync, because its disk is as after a power cut, which ext4's journal handles, and
+   the guest's writes are already in the host's page cache, which a clone sees. The manifest marks
+   which copies were synced.
 3. The storage backend lays out the tree. On XFS it is reflink clones, and a disk that did not
    change keeps last run's clone, so restic skips it unread. On ZFS it is read-only clones of
    snapshots, mounted at the tree's paths, whose files keep their inodes and times from run to run
@@ -97,11 +98,13 @@ container can drop the locks its crashed restic left; a live lock is never remov
 
 ## Restore
 
-A restore brings one imp back stopped, with a new ID, slot and address, or every imp at once onto a
-new host. Its checkpoints come back oldest first: each is written over the disk, writing only the
-blocks that changed, and checkpointed in turn, so the checkpoints share blocks as they did. The disk
-arrives as a plain sparse file either way, so a backup from an XFS host restores onto ZFS and back.
-restic fetches one file at a time, so a restore needs room for one disk, not one per checkpoint.
+A restore brings one imp back stopped, with a new slot and address, or every imp at once onto a new
+host. The imp keeps the ID its backup recorded, unless an imp on the host holds that ID, as the
+original does when `--as` restores a copy beside it; then the restored imp takes an ID of its own.
+Its checkpoints come back oldest first: each is written over the disk, writing only the blocks that
+changed, and checkpointed in turn, so the checkpoints share blocks as they did. The disk arrives as
+a plain sparse file either way, so a backup from an XFS host restores onto ZFS and back. restic
+fetches one file at a time, so a restore needs room for one disk, not one per checkpoint.
 
 An image with the same digest is reused, and otherwise restored first. The egress policy comes back
 as it was, or as `none` when this impd cannot read it, never more open. Grants come back only for

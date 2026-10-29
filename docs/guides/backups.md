@@ -41,7 +41,9 @@ impz backup restore --all --merge               # add every imp to a host that h
 - `--at` picks the newest restore point at or before the time. **The time is UTC.** A time without a
   zone, such as `2026-10-02T06:00`, is read as UTC, not as the local time of the machine that runs
   the CLI.
-- A restored imp is **stopped**, with a new id, slot and address. `impz start` boots it.
+- A restored imp is **stopped**, with a new slot and address. `impz start` boots it. It keeps its
+  id, unless an imp on the host holds that id, such as the original beside a copy that `--as`
+  restores.
 - A name in use stops the restore with a conflict that names the imp; `--as` picks another name.
 - `--all` refuses a host that has imps, unless `--merge`. With `--merge`, every name is checked
   first, and a clash names the imp; nothing is restored then.
