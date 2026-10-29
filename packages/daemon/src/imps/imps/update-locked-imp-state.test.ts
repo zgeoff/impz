@@ -23,6 +23,7 @@ async function setupTest() {
     images: harness.images,
 
     taps: { setupTap: () => Promise.resolve(), removeTap: () => Promise.resolve() },
+    admission: { admit: () => Promise.resolve(), release: () => {} },
     vms: harness.fake.startGeneration(),
     storage: harness.storage,
     identity: harness.readIdentity(),

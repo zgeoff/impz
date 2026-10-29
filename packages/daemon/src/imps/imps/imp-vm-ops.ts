@@ -145,7 +145,7 @@ export function createImpVmOps(context: ImpContext): ImpVmOps {
       throw buildUffdDeviceError();
     }
 
-    await context.admission?.admit({
+    await context.admission.admit({
       id: imp.id,
       name: imp.name,
       reserveMib: Math.ceil((imp.memoryMib * context.config.bootReservePercent) / 100),
@@ -231,7 +231,7 @@ export function createImpVmOps(context: ImpContext): ImpVmOps {
 
       return reset.isDiskGrowPending ? await setGrowPending(reset, false) : reset;
     } catch (error) {
-      context.admission?.release(imp.id);
+      context.admission.release(imp.id);
 
       await writeFailure(imp, error);
 
@@ -254,7 +254,8 @@ export function createImpVmOps(context: ImpContext): ImpVmOps {
     await context.cgroups.remove(imp.id);
 
     removeSnapshot(paths);
-    context.admission?.release(imp.id);
+
+    context.admission.release(imp.id);
 
     return imp.state === 'stopped'
       ? imp
@@ -345,7 +346,7 @@ export function createImpVmOps(context: ImpContext): ImpVmOps {
       await context.vms.stopVm(imp.pid, context.findPaths(imp.id), false);
     }
 
-    context.admission?.release(imp.id);
+    context.admission.release(imp.id);
 
     const stopped = await updateState(imp, {
       reason: 'stopped',

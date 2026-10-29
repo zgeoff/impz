@@ -5,6 +5,7 @@ import type { Ipv6Plan } from './host-net/net/ipv6-plan';
 import type { TailscaleStatus } from './host-net/net/tailscale-status';
 import { readGuestNetBytes } from './host-net/net/tap-bytes';
 import { createTapDevices } from './host-net/net/tap-devices';
+import { buildDeferredAdmission } from './imp-ops/governor/build-deferred-admission';
 import { createRamGovernor } from './imp-ops/governor/ram-governor';
 import type { RamGovernor } from './imp-ops/governor/ram-governor';
 import { createImpWatchdog } from './imp-ops/watchdog/imp-watchdog';
@@ -19,7 +20,6 @@ import { countImpsByState, listImps } from './platform/db/imps';
 import { getImpdLogger } from './platform/process/get-impd-logger';
 import { runCommand } from './platform/process/run-command';
 import { startImpTelemetry } from './platform/telemetry/imp-telemetry';
-import type { RamAdmission } from './vm/imps-contract/ram-admission';
 import { createMemoryController } from './vm/memory/memory-controller';
 import type { MemoryController } from './vm/memory/memory-controller';
 import { createPluggedSizes } from './vm/memory/plugged-sizes';
@@ -107,15 +107,7 @@ export function createImpdImps(
     ...host
   } = resolveImpBoundaries(deps.imps ?? {});
 
-  const holder: { governor: RamGovernor | null } = { governor: null };
-
-  const admission: RamAdmission = {
-    admit: (request) => holder.governor?.admit(request) ?? Promise.resolve(),
-    release: (id) => {
-      holder.governor?.release(id);
-    },
-  };
-
+  const deferred = buildDeferredAdmission();
   const pluggedSizes = createPluggedSizes();
   const memoryLimit = deps.imps?.memoryLimit ?? cgroups;
 
@@ -143,7 +135,7 @@ export function createImpdImps(
     },
     ...(deps.now !== undefined && { now: deps.now }),
     ...host,
-    admission,
+    admission: deferred.admission,
     pluggedSizes,
   };
 
@@ -193,10 +185,8 @@ export function createImpdImps(
     isLocked: (id) => imps.isImpBusy(id),
     isBusy,
     tryWhileRunning: imps.tryWhileRunning,
-    admitGrow: (request) => holder.governor?.admitGrow(request) ?? Promise.resolve(true),
-    releaseGrow: (id) => {
-      holder.governor?.releaseGrow(id);
-    },
+    admitGrow: deferred.admitGrow,
+    releaseGrow: deferred.releaseGrow,
     limit: memoryLimit,
     readRamMib: (imp) => host.readRamMib(imp.pid, imp.paths.apiSocket),
     setPluggedMib: pluggedSizes.write,
@@ -244,7 +234,7 @@ export function createImpdImps(
     ...(deps.now !== undefined && { now: deps.now }),
   });
 
-  holder.governor = governor;
+  deferred.attach(governor);
 
   startImpTelemetry({
     bus: imps.events,

@@ -132,7 +132,7 @@ export function createImpCommands(parts: ImpCommandParts): ImpCommands {
       checkpoints.map((checkpoint) => checkpoint.id),
     );
 
-    context.admission?.release(imp.id);
+    context.admission.release(imp.id);
 
     await removeImp(context.db, imp.id);
   };

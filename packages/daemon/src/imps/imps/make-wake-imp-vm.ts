@@ -81,7 +81,7 @@ export function makeWakeImpVm(deps: WakeDeps): (imp: LockedImp) => Promise<Locke
 
     const cgroup = setupVmCgroup(imp);
 
-    await context.admission?.admit({
+    await context.admission.admit({
       id: imp.id,
       name: imp.name,
       reserveMib: Math.max(meta.ramMib, context.config.wakeReserveMib),
@@ -234,7 +234,8 @@ export function makeWakeImpVm(deps: WakeDeps): (imp: LockedImp) => Promise<Locke
         .with({ imp: imp.name })
         .warning('could not stop the woken VM: {message}', { message });
 
-      context.admission?.release(imp.id);
+      context.admission.release(imp.id);
+
       removeSnapshot(paths);
 
       await updateState(imp, {
@@ -256,7 +257,8 @@ export function makeWakeImpVm(deps: WakeDeps): (imp: LockedImp) => Promise<Locke
     const failure = error.message.split('\n')[0] ?? '';
 
     getImpdLogger('imps').with({ imp: imp.name }).warning('{failure}; booting cold', { failure });
-    context.admission?.release(imp.id);
+
+    context.admission.release(imp.id);
 
     // The load may have run the guest, which can write its disk, so the
     // snapshot no longer matches it even if the cold boot is turned away.

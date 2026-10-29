@@ -118,7 +118,7 @@ export function createVmReconciler(
         await context.vms.resumeVm(pid, paths);
       }
 
-      await context.admission?.admit({
+      await context.admission.admit({
         id: imp.id,
         name: imp.name,
         reserveMib: Math.max(meta?.ramMib ?? 0, context.config.wakeReserveMib),
@@ -160,7 +160,8 @@ export function createVmReconciler(
           error: getErrorMessage(error),
         });
 
-      context.admission?.release(imp.id);
+      context.admission.release(imp.id);
+
       removeSnapshot(paths);
 
       if (!(await stopOrphan(imp.name, pid, paths))) {
