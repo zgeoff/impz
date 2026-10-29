@@ -30,8 +30,7 @@ test('it passes an image of local files that holds no secret', async () => {
   await writeFile(join(ctx.contextPath, 'root/root/.bashrc'), 'export EDITOR=vi\n');
   await writeFile(join(ctx.contextPath, 'Dockerfile'), 'FROM scratch\nCOPY root/ /\n');
 
-  await $`docker build --quiet --tag ${ctx.tag} ${ctx.contextPath}`.quiet();
-
+  const imageID = await $`docker build --quiet --tag ${ctx.tag} ${ctx.contextPath}`.quiet().text();
   const result = await $`bash ${ctx.scriptPath} ${ctx.tag}`.nothrow().quiet();
 
   expect({
@@ -40,7 +39,7 @@ test('it passes an image of local files that holds no secret', async () => {
     stderr: result.stderr.toString(),
   }).toStrictEqual({
     exitCode: 0,
-    stdout: `check-no-secrets: ok (${ctx.tag})\n`,
+    stdout: `check-no-secrets: ok (${ctx.tag}, ${imageID.trim()})\n`,
     stderr: '',
   });
 });

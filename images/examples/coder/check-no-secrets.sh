@@ -30,14 +30,18 @@ tokens='sk-ant-[a-z]+[0-9]*-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{36,}|github
 # the image would reach every imp that boots it
 credential_vars='ANTHROPIC_API_KEY|ANTHROPIC_AUTH_TOKEN|CLAUDE_CODE_OAUTH_TOKEN|GH_TOKEN|GITHUB_TOKEN'
 
-env=$(docker image inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$image")
+# every later command names the image by this ID, so a build that moves the
+# tag during the check cannot mix two images' metadata and layers
+id=$(docker image inspect --format '{{.Id}}' "$image")
+
+env=$(docker image inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$id")
 if found=$(grep -oE "^($credential_vars)=" <<< "$env"); then
   fail "the image env sets $(paste -sd ' ' <<< "$found")"
 fi
 if grep -qE "$tokens" <<< "$env"; then
   fail "the image env holds a token"
 fi
-if docker history --no-trunc --format '{{.CreatedBy}}' "$image" | grep -qE "$tokens"; then
+if docker history --no-trunc --format '{{.CreatedBy}}' "$id" | grep -qE "$tokens"; then
   fail "the image history holds a token"
 fi
 
@@ -51,11 +55,11 @@ trap cleanup EXIT
 # Each layer on its own, as the saved image holds it: a file that a later
 # layer deletes or overwrites is still in the image anyone pulls.
 mkdir "$root/save" "$root/layers"
-docker image save "$image" | tar -x -C "$root/save"
+docker image save "$id" | tar -x -C "$root/save"
 # a substitution, not a pipe into the loop, so a failed jq stops the check
 layers=$(jq -r '.[0].Layers[]' "$root/save/manifest.json")
 if [ -z "$layers" ]; then
-  echo "check-no-secrets: $image has no layers to scan" >&2
+  echo "check-no-secrets: $image ($id) has no layers to scan" >&2
   exit 1
 fi
 index=0
@@ -90,6 +94,6 @@ elif [ "$scan" != 1 ]; then
 fi
 
 if [ "$status" = 0 ]; then
-  echo "check-no-secrets: ok ($image)"
+  echo "check-no-secrets: ok ($image, $id)"
 fi
 exit "$status"

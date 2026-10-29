@@ -62,4 +62,4 @@ docker build -t coder images/examples/coder
 images/examples/coder/check-no-secrets.sh coder
 ```
 
-Expect: `check-no-secrets: ok (coder)`.
+Expect: `check-no-secrets: ok (coder, sha256:<image_id>)`.
