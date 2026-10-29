@@ -32,6 +32,11 @@ outside it before the credential goes into any header
 also record each request they refuse, with the imp, the reason and the host when the request names
 one. Both refuse before they add any credential, so a refused row never holds one.
 
+A WebSocket upgrade takes the same checks as a request. The terminator then opens its own WebSocket
+to the service with the credential, and relays each message between the guest's connection and its
+own. The terminator tracks each open WebSocket by imp and host, and the pass that stops a terminator
+no grant covers closes them as well, so a revoke ends an open WebSocket as it ends the next request.
+
 Any other host gets a plain tunnel. A tunnel starts inside the host container, past the firewall
 that holds the guests in, so the broker refuses it every private, shared, loopback and link-local
 range, the imp range, the blocked IPv6 ranges, and the container's own addresses, and holds a tunnel

@@ -11,20 +11,19 @@ import type { ImpDatabase } from '../../../platform/db/open-database';
 import { readBrokerPeer } from '../../../platform/db/read-broker-peer';
 import { listGrantedRules } from '../../../platform/db/secrets';
 import type { GrantedRule } from '../../../platform/db/secrets';
+import { openUpstreamSocket } from '../../../platform/http/open-upstream-socket';
 import { getErrorMessage } from '../../../platform/process/get-error-message';
 import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import type { NetworkConfig } from '../../network-config';
 import { renderCredential } from '../secrets/connector-kinds';
 import type { SecretFiles } from '../secrets/secret-files';
 import { SECRET_KINDS } from '../secrets/secret-kinds';
+import type { Credential } from '../tls/admit-request';
 import type { BrokerCa } from '../tls/broker-ca';
 import { createForwarder } from '../tls/forward-request';
-import type {
-  Credential,
-  ForwardDeps,
-  ResolveUpstream,
-  UpstreamFetch,
-} from '../tls/forward-request';
+import type { ForwardDeps, ResolveUpstream, UpstreamFetch } from '../tls/forward-request';
+import { isWebSocketUpgrade } from '../tls/is-websocket-upgrade';
+import { relayWebSocket } from '../tls/relay-websocket';
 import { createTerminators } from '../tls/terminators';
 import type { TerminatorKey } from '../tls/terminators';
 import { startBrokerFront } from './broker-front';
@@ -138,8 +137,8 @@ export function createBrokerProxy(deps: BrokerProxyDeps): BrokerProxy {
     socketDir: join(config.dataDir, 'broker', 'run'),
     issueLeaf: ca.issueLeaf,
     isLeafDue: (leaf) => ca.isDue(leaf, now()),
-    createHandler: (key) =>
-      createForwarder({
+    createHandler: (key, connections) => {
+      const forward = createForwarder({
         impId: key.impId,
         impName: key.impName,
         host: key.host,
@@ -150,7 +149,26 @@ export function createBrokerProxy(deps: BrokerProxyDeps): BrokerProxy {
         ...(deps.refreshAfterRejection !== undefined && {
           refreshAfterRejection: deps.refreshAfterRejection,
         }),
-      }),
+      });
+
+      return (request, server) =>
+        isWebSocketUpgrade(request.headers)
+          ? relayWebSocket(
+              {
+                impId: key.impId,
+                impName: key.impName,
+                host: key.host,
+                findCredential: readCredential,
+                resolveUpstream: deps.resolveUpstream,
+                recordAudit: writeBudgetedAudit,
+                connections,
+                openUpstreamSocket,
+              },
+              request,
+              server,
+            )
+          : forward(request);
+    },
   });
 
   const state: { front: BrokerFront | null; port: number } = {

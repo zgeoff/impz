@@ -7,7 +7,10 @@ import { listImps } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { isImpdError } from '../../platform/errors/impd-error';
 import { MOVING_RETRY_AFTER_S } from '../../platform/errors/impd-errors';
+import { openUpstreamSocket } from '../../platform/http/open-upstream-socket';
+import { sendOrClose } from '../../platform/http/send-or-close';
 import { stripSessionCookie } from '../../platform/http/session-cookie';
+import { toSendableCloseCode } from '../../platform/http/to-sendable-close-code';
 import type { StartTimer } from '../../platform/process/clock';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
@@ -18,7 +21,6 @@ import type { NetworkConfig } from '../network-config';
 import { buildErrorPage } from './error-pages';
 import { PEER_HEADER, isCallerPath } from './forwarded-peers';
 import type { ForwardedPeers } from './forwarded-peers';
-import { openUpstreamSocket } from './open-upstream-socket';
 import { parseHostName } from './parse-host-name';
 
 // hop-by-hop headers (RFC 9110 7.6.1) stay on their own hop
@@ -133,17 +135,17 @@ export function startWakeProxy(deps: WakeProxyDeps): WakeProxy {
       upstream.removeEventListener('message', ws.data.handleEarlyMessage);
 
       for (const message of ws.data.pending.splice(0)) {
-        ws.send(message);
+        sendOrClose(ws, message);
       }
 
       upstream.addEventListener('message', (event: MessageEvent<string | ArrayBuffer>) => {
-        ws.send(event.data);
+        sendOrClose(ws, event.data);
       });
 
       // no close can come earlier: Bun runs `open` inside server.upgrade,
       // in the same task as the upstream's open event
       upstream.addEventListener('close', (event) => {
-        ws.close(toSendableCode(event.code), event.reason);
+        ws.close(toSendableCloseCode(event.code), event.reason);
       });
     },
     message: (ws, message) => {
@@ -153,7 +155,7 @@ export function startWakeProxy(deps: WakeProxyDeps): WakeProxy {
       ws.data.release();
 
       if (ws.data.upstream.readyState <= WebSocket.OPEN) {
-        ws.data.upstream.close(toSendableCode(code), reason);
+        ws.data.upstream.close(toSendableCloseCode(code), reason);
       }
     },
   };
@@ -505,15 +507,6 @@ export function startWakeProxy(deps: WakeProxyDeps): WakeProxy {
       listeners.clear();
     },
   };
-}
-
-// 1005, 1006 and 1015 describe a close; they cannot be sent in one
-function toSendableCode(code: number): number {
-  return code === 1000 ||
-    (code >= 1001 && code <= 1014 && code !== 1005 && code !== 1006) ||
-    (code >= 3000 && code <= 4999)
-    ? code
-    : 1000;
 }
 
 function buildWakeErrorPage(name: string, error: unknown): Response {

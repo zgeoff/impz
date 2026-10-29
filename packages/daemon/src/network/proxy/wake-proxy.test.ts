@@ -3,8 +3,10 @@ import { join } from 'node:path';
 import { claimFreePorts } from '@impz/test-utils/claim-free-ports';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
+import { startStubBrokerSocketUpstream } from '../../../testing/network/start-stub-broker-socket-upstream';
 import { startStubCutStream } from '../../../testing/network/start-stub-cut-stream';
 import { startStubHeaderEcho } from '../../../testing/network/start-stub-header-echo';
+import { startStubPausedSocketGuest } from '../../../testing/network/start-stub-paused-socket-guest';
 import { startStubSilentOrigin } from '../../../testing/network/start-stub-silent-origin';
 import { buildStubClock } from '../../../testing/platform/build-stub-clock';
 import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
@@ -223,6 +225,61 @@ test('it keeps the dashboard session cookie from an imp over a WebSocket', async
 
   expect(opened).toBe('open');
   expect(cookies).toStrictEqual(['a=1']);
+});
+
+test('it closes a WebSocket whose client stops reading once the backlog passes 16 MiB', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const upstream = await startStubBrokerSocketUpstream(ctx.stack, {
+    directory: join(ctx.config.dataDir, 'socket-upstream'),
+    isPlain: true,
+  });
+
+  const proxy = startWakeProxy({
+    config: ctx.config,
+    db: ctx.db,
+    imps: ctx.impd.imps,
+    peers: createForwardedPeers(Date.now),
+    ports: { proxy: 0, slot: () => 0 },
+  });
+
+  ctx.stack.defer(() => proxy.stop());
+
+  const imp = await ctx.impd.imps.createImp({ name: 'web', httpPort: upstream.port });
+
+  await ctx.db.updateTable('imps').set({ ip: '127.0.0.1' }).where('id', '=', imp.id).execute();
+  await proxy.syncListeners();
+
+  const port = proxy.readImpPort(imp.id);
+
+  invariant(port !== null);
+
+  const client = await startStubPausedSocketGuest(ctx.stack, {
+    port,
+    host: `127.0.0.1:${String(port)}`,
+    path: '/',
+  });
+
+  await waitFor(() => {
+    expect(upstream.sockets).toHaveLength(1);
+  });
+
+  const chunk = Buffer.alloc(1024 * 1024, 7);
+
+  // one MiB each poll: the service's own buffer drops what the proxy has
+  // not taken yet, so it sends until the proxy closes
+  await waitFor(() => {
+    upstream.sockets[0]?.send(chunk);
+    expect(upstream.closes).toHaveLength(1);
+  });
+
+  client.resume();
+
+  await client.closed;
+
+  expect(client.head).toStartWith('HTTP/1.1 101 ');
 });
 
 test('it relays WebSocket messages both ways', async () => {

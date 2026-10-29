@@ -1,5 +1,3 @@
-import { METHOD_OVERRIDE_HEADERS } from '@impz/api';
-import type { AuditRefusal, GrantFilter } from '@impz/api';
 import type { Logger } from '@logtape/logtape';
 import type { NewAuditEntry } from '../../../platform/db/broker-audit';
 import { sendWithCA } from '../../../platform/http/send-with-ca';
@@ -7,19 +5,11 @@ import { getErrorMessage } from '../../../platform/process/get-error-message';
 import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import { tapStream } from '../../../platform/process/tap-stream';
 import type { StreamEnd } from '../../../platform/process/tap-stream';
+import { admitRequest } from './admit-request';
+import type { Credential } from './admit-request';
+import { buildCredentialedHeaders } from './build-credentialed-headers';
+import { buildEndToEndHeaders } from './build-end-to-end-headers';
 import { isRequestInFilter } from './is-request-in-filter';
-
-export interface Credential {
-  readonly secretName: string;
-  readonly header: string;
-  readonly value: string;
-
-  readonly upstream: string | null;
-
-  readonly filter: GrantFilter | null;
-
-  readonly oauth: { readonly refreshedAt: number | null } | null;
-}
 
 export interface Upstream {
   readonly origin: string;
@@ -56,8 +46,6 @@ export interface ForwardDeps {
   ) => Promise<boolean>;
 }
 
-const MAX_AUDIT_PATH = 512;
-
 export function createForwarder(deps: ForwardDeps): (request: Request) => Promise<Response> {
   const fetchUpstream = deps.fetch ?? sendWithCA;
   const logger = deps.logger ?? getImpdLogger('broker');
@@ -65,57 +53,15 @@ export function createForwarder(deps: ForwardDeps): (request: Request) => Promis
   return async (request) => {
     const started = performance.now();
 
-    const url = new URL(request.url);
+    const admission = await admitRequest(deps, request, started, 'request');
 
-    const sendRefusal = (status: number, message: string, reason: AuditRefusal): Response => {
-      deps.recordAudit({
-        impId: deps.impId,
-        impName: deps.impName,
-        secretName: null,
-        at: new Date(),
-        method: request.method,
-        host: deps.host,
-        path: url.pathname.slice(0, MAX_AUDIT_PATH),
-        status,
-        requestBytes: 0,
-        responseBytes: 0,
-        durationMs: Math.round(performance.now() - started),
-        reason,
-      });
-
-      return new Response(`${message}\n`, { status });
-    };
-
-    if (findHostName(request.headers.get('host')) !== deps.host) {
-      return sendRefusal(421, `this connection is for ${deps.host}`, 'wrong-host');
+    if (admission.kind === 'refused') {
+      return admission.response;
     }
 
-    // answered at once, so a client that tries a WebSocket first falls back to
-    // HTTPS without waiting on a stripped upgrade
-    if (isWebSocketUpgrade(request.headers)) {
-      return sendRefusal(
-        426,
-        'websocket upgrades are not supported through the broker',
-        'websocket',
-      );
-    }
-
-    const credential = await deps.findCredential(deps.impId, deps.host);
-
-    if (credential === null) {
-      return sendRefusal(403, `no credential is granted for ${deps.host}`, 'no-grant');
-    }
-
-    if (
-      credential.filter !== null &&
-      !isRequestInFilter(credential.filter, request.method, url.pathname)
-    ) {
-      return sendRefusal(
-        403,
-        `the grant for ${deps.host} does not cover ${request.method} ${url.pathname}`,
-        'outside-filter',
-      );
-    }
+    const credential = admission.credential;
+    const url = admission.url;
+    const auditPath = admission.auditPath;
 
     const sendWith = async (sent: Readonly<Credential>): Promise<Response> => {
       const counts = { requestBytes: 0, responseBytes: 0 };
@@ -128,7 +74,7 @@ export function createForwarder(deps: ForwardDeps): (request: Request) => Promis
           at: new Date(),
           method: request.method,
           host: deps.host,
-          path: url.pathname.slice(0, MAX_AUDIT_PATH),
+          path: auditPath,
           status,
           requestBytes: counts.requestBytes,
           responseBytes: counts.responseBytes,
@@ -142,18 +88,6 @@ export function createForwarder(deps: ForwardDeps): (request: Request) => Promis
           ? deps.resolveUpstream(deps.host)
           : { origin: sent.upstream, ca: null };
 
-      const headers = buildEndToEndHeaders(request.headers);
-
-      headers.delete('host');
-
-      if (sent.filter !== null) {
-        for (const name of METHOD_OVERRIDE_HEADERS) {
-          headers.delete(name);
-        }
-      }
-
-      headers.set(sent.header, sent.value);
-
       const body =
         request.body === null
           ? null
@@ -166,7 +100,7 @@ export function createForwarder(deps: ForwardDeps): (request: Request) => Promis
       try {
         response = await fetchUpstream(`${upstream.origin}${url.pathname}${url.search}`, {
           method: request.method,
-          headers,
+          headers: buildCredentialedHeaders(request.headers, sent),
           body,
           redirect: 'manual',
 
@@ -254,51 +188,6 @@ export function createForwarder(deps: ForwardDeps): (request: Request) => Promis
 
     return sendWith(renewed);
   };
-}
-
-function findHostName(value: string | null): string | null {
-  if (value === null) {
-    return null;
-  }
-
-  const lower = value.toLowerCase();
-
-  return lower.endsWith(':443') ? lower.slice(0, -':443'.length) : lower;
-}
-
-function isWebSocketUpgrade(headers: Headers): boolean {
-  return (headers.get('upgrade') ?? '')
-    .split(',')
-    .some((protocol) => protocol.trim().toLowerCase().split('/')[0] === 'websocket');
-}
-
-// Per RFC 9110 these describe one connection, not the message, and the proxy
-// ones are the guest's to its proxy; this hop answers `expect` itself.
-const HOP_HEADERS = [
-  'connection',
-  'expect',
-  'keep-alive',
-  'proxy-authenticate',
-  'proxy-authorization',
-  'proxy-connection',
-  'te',
-  'trailer',
-  'transfer-encoding',
-  'upgrade',
-];
-
-function buildEndToEndHeaders(source: Headers): Headers {
-  const headers = new Headers(source);
-
-  const named = (source.get('connection') ?? '').split(',').map((name) => name.trim());
-
-  for (const name of [...HOP_HEADERS, ...named]) {
-    if (name !== '') {
-      headers.delete(name);
-    }
-  }
-
-  return headers;
 }
 
 function countBytes(
