@@ -1,10 +1,10 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
-import { createConnection, createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { startStubBrokerSocketUpstream } from './start-stub-broker-socket-upstream';
+import { startStubConnectProxy } from './start-stub-connect-proxy';
 import { startStubPausedSocketGuest } from './start-stub-paused-socket-guest';
 
 async function setupTest() {
@@ -83,43 +83,16 @@ test('it reaches the host through a CONNECT and TLS when it is given a tunnel', 
     directory: ctx.directoryPath,
   });
 
-  const connects: string[] = [];
-
-  const proxy = createServer((socket) => {
-    socket.once('data', (head: Buffer) => {
-      connects.push(head.toString().split('\r\n')[0] ?? '');
-
-      const out = createConnection({ host: '127.0.0.1', port: upstream.port }, () => {
-        socket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
-        socket.pipe(out);
-        out.pipe(socket);
-      });
-    });
-  });
-
-  const listening = Promise.withResolvers<void>();
-
-  proxy.listen(0, '127.0.0.1', () => {
-    listening.resolve();
-  });
-
-  await listening.promise;
-
-  ctx.stack.defer(() => {
-    proxy.close();
-  });
-
-  const address = proxy.address();
-  const port = typeof address === 'object' && address !== null ? address.port : 0;
+  const proxy = await startStubConnectProxy(ctx.stack, { targetPort: upstream.port });
 
   const guest = await startStubPausedSocketGuest(ctx.stack, {
-    port,
+    port: proxy.port,
     host: 'localhost',
     path: '/v1/stream',
     tunnel: { ca: upstream.caPem },
   });
 
-  expect(connects).toStrictEqual(['CONNECT localhost:443 HTTP/1.1']);
+  expect(proxy.connects).toStrictEqual(['CONNECT localhost:443 HTTP/1.1']);
   expect(guest.head).toStartWith('HTTP/1.1 101 ');
   expect(upstream.upgrades).toPartiallyContain({ path: '/v1/stream' });
 });
