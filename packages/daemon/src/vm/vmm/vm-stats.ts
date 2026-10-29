@@ -26,13 +26,20 @@ export function readOwnedRamMib(pid: number, apiSocket: string, procRoot = '/pro
   return fields === null ? null : countOwnedMib(fields);
 }
 
+// A VM's RAM with the pool pages it holds, both from one read, so a fault between two reads never
+// shows as RAM outside the pool.
+export interface VmRam {
+  readonly ramMib: number;
+  readonly hugetlbMib: number;
+}
+
 // The kernel walks every page the VM maps to answer smaps_rollup, tens of ms
 // for a guest of some GiB, so this read stays off the event loop.
-export async function readOwnedRamMibAsync(
+export async function readOwnedRamAsync(
   pid: number,
   apiSocket: string,
   procRoot = '/proc',
-): Promise<number | null> {
+): Promise<VmRam | null> {
   if (!probeProcessAlive(pid, apiSocket, procRoot)) {
     return null;
   }
@@ -43,7 +50,12 @@ export async function readOwnedRamMibAsync(
       readFile(`${procRoot}/${String(pid)}/status`, 'utf8'),
     ]);
 
-    return countOwnedMib(addHugetlbPages(parseProcFields(rollup), status));
+    const fields = addHugetlbPages(parseProcFields(rollup), status);
+
+    return {
+      ramMib: countOwnedMib(fields),
+      hugetlbMib: Math.round((fields.get('HugetlbPages') ?? 0) / KIB_PER_MIB),
+    };
   } catch {
     return null;
   }
@@ -51,11 +63,11 @@ export async function readOwnedRamMibAsync(
 
 // The kernel keeps these counters per process, so this read walks no pages. A page's Rss is never
 // less than its Pss, so the sum bounds what smaps_rollup's anonymous and shmem Pss count.
-export async function readResidentMibAsync(
+export async function readResidentRamAsync(
   pid: number,
   apiSocket: string,
   procRoot = '/proc',
-): Promise<number | null> {
+): Promise<VmRam | null> {
   if (!probeProcessAlive(pid, apiSocket, procRoot)) {
     return null;
   }
@@ -64,13 +76,14 @@ export async function readResidentMibAsync(
     const text = await readFile(`${procRoot}/${String(pid)}/status`, 'utf8');
 
     const fields = parseProcFields(text);
+    const hugetlbKb = fields.get('HugetlbPages') ?? 0;
 
-    return Math.round(
-      ((fields.get('RssAnon') ?? 0) +
-        (fields.get('RssShmem') ?? 0) +
-        (fields.get('HugetlbPages') ?? 0)) /
-        KIB_PER_MIB,
-    );
+    return {
+      ramMib: Math.round(
+        ((fields.get('RssAnon') ?? 0) + (fields.get('RssShmem') ?? 0) + hugetlbKb) / KIB_PER_MIB,
+      ),
+      hugetlbMib: Math.round(hugetlbKb / KIB_PER_MIB),
+    };
   } catch {
     return null;
   }

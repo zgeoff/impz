@@ -4,6 +4,7 @@ import { makeLockFreeSleep } from '../../src/imps/imps/lock-free-sleep';
 import type { SleepOutcome } from '../../src/imps/imps/lock-free-sleep';
 import { buildKeyedMutex } from '../../src/platform/process/keyed-mutex';
 import type { HugePagePool } from '../../src/vm/vmm/read-huge-page-pool';
+import type { VmRam } from '../../src/vm/vmm/vm-stats';
 
 interface HostImp {
   awake: boolean;
@@ -142,11 +143,12 @@ export function createStubGovernedHost(options: Readonly<StubGovernedHostOptions
     },
   );
 
-  // The stub has no KSM, so a VM owns every page it holds resident.
-  const readRssMib = (_pid: number, id: string): Promise<number | null> => {
-    const rssMib = imps.get(id)?.awake === true ? getImp(id).rssMib : null;
+  // The stub has no KSM, so a VM owns every page it holds resident, its pool pages among them.
+  const readRss = (_pid: number, id: string): Promise<VmRam | null> => {
+    const imp = imps.get(id);
+    const reading = imp?.awake === true ? { ramMib: imp.rssMib, hugetlbMib: imp.hugetlbMib } : null;
 
-    return Promise.resolve(rssMib);
+    return Promise.resolve(reading);
   };
 
   const deps = {
@@ -186,19 +188,19 @@ export function createStubGovernedHost(options: Readonly<StubGovernedHostOptions
 
       return Promise.resolve(hugetlbMib);
     },
-    readRamMib: (pid: number, id: string): Promise<number | null> => {
+    readVmRam: (pid: number, id: string): Promise<VmRam | null> => {
       const imp = imps.get(id);
       const dipMib = imp?.awake === true ? imp.dipMib : null;
 
       if (imp === undefined || dipMib === null) {
-        return readRssMib(pid, id);
+        return readRss(pid, id);
       }
 
       imp.dipMib = null;
 
-      return Promise.resolve(dipMib);
+      return Promise.resolve({ ramMib: dipMib, hugetlbMib: imp.hugetlbMib });
     },
-    readResidentMib: readRssMib,
+    readResidentRam: readRss,
     isBusy: (id: string): boolean => getImp(id).busy,
     trySleepImp,
 

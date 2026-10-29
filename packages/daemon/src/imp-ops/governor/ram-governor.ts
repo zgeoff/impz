@@ -13,6 +13,7 @@ import {
 } from '../../vm/imps-contract/ram-budget-error';
 import type { ProtectedImp } from '../../vm/imps-contract/ram-budget-error';
 import type { HugePagePool } from '../../vm/vmm/read-huge-page-pool';
+import type { VmRam } from '../../vm/vmm/vm-stats';
 import { buildBudgets } from './build-budgets';
 import type { Budgets } from './build-budgets';
 import { makeCheckHugePool } from './make-check-huge-pool';
@@ -94,11 +95,11 @@ export interface RamGovernor extends RamAdmission {
 export interface RamGovernorDeps {
   readonly budgetMib: number;
   readonly listAwake: () => Promise<AwakeImp[]>;
-  readonly readRamMib: (pid: number, apiSocket: string) => Promise<number | null>;
+  readonly readVmRam: (pid: number, apiSocket: string) => Promise<VmRam | null>;
 
   // The kernel keeps this count per process, so a read walks no pages. A page's share of it is never
   // less than its share of the owned RAM count, KSM or not.
-  readonly readResidentMib: (pid: number, apiSocket: string) => Promise<number | null>;
+  readonly readResidentRam: (pid: number, apiSocket: string) => Promise<VmRam | null>;
 
   // Writes split pages that KSM merged faster than a tick, so a share of what KSM saves stays free.
   readonly readHeadroomMib?: (pids: readonly number[]) => Promise<number>;
@@ -214,7 +215,7 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
 
   const readEffectiveUsage = async (
     excludeId: string | null,
-    readVmMib: RamGovernorDeps['readRamMib'] = deps.readRamMib,
+    readVm: RamGovernorDeps['readVmRam'] = deps.readVmRam,
   ) => {
     const listed = await deps.listAwake();
 
@@ -227,23 +228,18 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
     let effectiveMib = lockedMib;
     let ordinaryUsedMib = lockedMib;
     let ordinaryEffectiveMib = lockedMib;
-    const readHeldMib = deps.readHugetlbMib ?? (() => Promise.resolve(0));
 
-    const [readings, held] = await Promise.all([
-      Promise.all(awake.map((imp) => readVmMib(imp.pid, imp.apiSocket))),
-      Promise.all(
-        awake.map((imp) => (imp.hugePagesMib > 0 ? readHeldMib(imp.pid, imp.apiSocket) : 0)),
-      ),
-    ]);
+    const readings = await Promise.all(awake.map((imp) => readVm(imp.pid, imp.apiSocket)));
 
     for (const [index, imp] of awake.entries()) {
-      const measured = readings[index] ?? 0;
+      const reading = readings[index] ?? null;
+      const measured = reading?.ramMib ?? 0;
       const effective = Math.max(measured, readReservation(imp.id));
 
       // A guest on 2 MiB pages reserves its memory in the pool, so only what it holds beside its
       // pool pages counts outside the pool.
       const ordinary =
-        imp.hugePagesMib > 0 ? Math.max(0, measured - (held[index] ?? 0)) : effective;
+        imp.hugePagesMib > 0 ? Math.max(0, measured - (reading?.hugetlbMib ?? 0)) : effective;
 
       byImp.set(imp.id, effective);
 
@@ -432,7 +428,7 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
           await checkHugePool(request, hugePagesMib);
         }
 
-        const bound = await readEffectiveUsage(request.id, deps.readResidentMib);
+        const bound = await readEffectiveUsage(request.id, deps.readResidentRam);
 
         if (pickEffectiveShortfall(bound, budgets, request.reserveMib).missingMib <= 0) {
           recordAdmission(request, bound.effectiveMib);

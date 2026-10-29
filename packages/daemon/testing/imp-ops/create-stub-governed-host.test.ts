@@ -94,9 +94,22 @@ test('it measures an awake imp', async () => {
     awake: [{ id: 'a', rssMib: 100 }],
   });
 
-  const ramMib = await host.deps.readRamMib(1, 'a');
+  const ramMib = await host.deps.readVmRam(1, 'a');
 
-  expect(ramMib).toBe(100);
+  expect(ramMib).toStrictEqual({ ramMib: 100, hugetlbMib: 0 });
+});
+
+test('it measures the pool pages of an awake imp on 2 MiB pages with its RAM', async () => {
+  const host = createStubGovernedHost({
+    budgetMib: 1000,
+    ids: ['a'],
+    awake: [{ id: 'a', rssMib: 300, hugePagesMib: 512, hugetlbMib: 256 }],
+    hugePool: { totalMib: 1024, freeMib: 768 },
+  });
+
+  const ramMib = await host.deps.readVmRam(1, 'a');
+
+  expect(ramMib).toStrictEqual({ ramMib: 300, hugetlbMib: 256 });
 });
 
 test('it measures nothing for an asleep imp', async () => {
@@ -106,7 +119,7 @@ test('it measures nothing for an asleep imp', async () => {
     awake: [{ id: 'a', rssMib: 100 }],
   });
 
-  const ramMib = await host.deps.readRamMib(2, 'b');
+  const ramMib = await host.deps.readVmRam(2, 'b');
 
   expect(ramMib).toBeNull();
 });
@@ -118,9 +131,9 @@ test('it counts every page an awake imp holds as resident', async () => {
     awake: [{ id: 'a', rssMib: 100 }],
   });
 
-  const residentMib = await host.deps.readResidentMib(1, 'a');
+  const residentMib = await host.deps.readResidentRam(1, 'a');
 
-  expect(residentMib).toBe(100);
+  expect(residentMib).toStrictEqual({ ramMib: 100, hugetlbMib: 0 });
 });
 
 test('it counts nothing resident for an asleep imp', async () => {
@@ -130,7 +143,7 @@ test('it counts nothing resident for an asleep imp', async () => {
     awake: [{ id: 'a', rssMib: 100 }],
   });
 
-  const residentMib = await host.deps.readResidentMib(2, 'b');
+  const residentMib = await host.deps.readResidentRam(2, 'b');
 
   expect(residentMib).toBeNull();
 });
@@ -144,11 +157,11 @@ test('it measures a dip on the next reading of an imp, and its resident count st
 
   host.applyChange({ kind: 'dip', id: 'a', mib: 200 }, { release: () => {} });
 
-  const ramMib = await host.deps.readRamMib(1, 'a');
-  const residentMib = await host.deps.readResidentMib(1, 'a');
+  const ramMib = await host.deps.readVmRam(1, 'a');
+  const residentMib = await host.deps.readResidentRam(1, 'a');
 
-  expect(ramMib).toBe(200);
-  expect(residentMib).toBe(900);
+  expect(ramMib).toStrictEqual({ ramMib: 200, hugetlbMib: 0 });
+  expect(residentMib).toStrictEqual({ ramMib: 900, hugetlbMib: 0 });
 });
 
 test('it measures an imp in full again after its dip', async () => {
@@ -160,11 +173,11 @@ test('it measures an imp in full again after its dip', async () => {
 
   host.applyChange({ kind: 'dip', id: 'a', mib: 200 }, { release: () => {} });
 
-  await host.deps.readRamMib(1, 'a');
+  await host.deps.readVmRam(1, 'a');
 
-  const ramMib = await host.deps.readRamMib(1, 'a');
+  const ramMib = await host.deps.readVmRam(1, 'a');
 
-  expect(ramMib).toBe(900);
+  expect(ramMib).toStrictEqual({ ramMib: 900, hugetlbMib: 0 });
 });
 
 test('it sleeps an awake imp the governor asks for', async () => {

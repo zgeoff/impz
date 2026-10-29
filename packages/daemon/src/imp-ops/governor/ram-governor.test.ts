@@ -7,6 +7,7 @@ import { createStubGovernedHost } from '../../../testing/imp-ops/create-stub-gov
 import type { RoomLeft } from '../../../testing/imp-ops/create-stub-governed-host';
 import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { createEventBus } from '../../platform/events/event-bus';
+import type { VmRam } from '../../vm/vmm/vm-stats';
 import { ENFORCE_INTERVAL_MS, createRamGovernor } from './ram-governor';
 
 test('it enforces the budget every 5 s, as the docs say', () => {
@@ -23,12 +24,12 @@ test('it admits on the resident counts and walks no VM pages while the budget is
     ],
   });
 
-  const readRamMib = mock(host.deps.readRamMib);
-  const governor = createRamGovernor({ ...host.deps, readRamMib });
+  const readVmRam = mock(host.deps.readVmRam);
+  const governor = createRamGovernor({ ...host.deps, readVmRam });
 
   await governor.admit({ id: 'x', name: 'x', reserveMib: 300, memoryMib: 600 });
 
-  expect(readRamMib).not.toHaveBeenCalled();
+  expect(readVmRam).not.toHaveBeenCalled();
 });
 
 test('it admits a guest on 2 MiB pages whose memory fits the free pool beside what awake guests may still take', () => {
@@ -316,6 +317,24 @@ test('it counts what an awake guest on 2 MiB pages holds beside its pool pages a
   });
 });
 
+test("it takes a guest's pool pages from the reading of its RAM, never from a separate read that a fault can outdate", () => {
+  const host = createStubGovernedHost({
+    budgetMib: 4000,
+    ids: ['huge', 'x'],
+    awake: [{ id: 'huge', rssMib: 1100, hugePagesMib: 1024, hugetlbMib: 1024 }],
+    hugePool: { totalMib: 3000, freeMib: 1976 },
+  });
+
+  const governor = createRamGovernor({
+    ...host.deps,
+    readHugetlbMib: () => Promise.resolve(0),
+  });
+
+  expect(
+    governor.admit({ id: 'x', name: 'x', reserveMib: 500, memoryMib: 500, maySleepImps: false }),
+  ).resolves.toBeUndefined();
+});
+
 test('it sleeps an idle guest on 4 KiB pages when the RAM outside the pool runs over while the whole budget holds', async () => {
   const host = createStubGovernedHost({
     budgetMib: 4000,
@@ -372,12 +391,12 @@ test('it walks every VM and makes room when the resident counts leave too little
     ],
   });
 
-  const readRamMib = mock(host.deps.readRamMib);
-  const governor = createRamGovernor({ ...host.deps, readRamMib });
+  const readVmRam = mock(host.deps.readVmRam);
+  const governor = createRamGovernor({ ...host.deps, readVmRam });
 
   await governor.admit({ id: 'x', name: 'x', reserveMib: 500, memoryMib: 600 });
 
-  expect(readRamMib).toHaveBeenCalled();
+  expect(readVmRam).toHaveBeenCalled();
   expect(host.sleepCalls.map((call) => call.id)).toStrictEqual(['old']);
 });
 
@@ -873,12 +892,12 @@ test('it measures every awake imp at once, each read started before any ends', a
     ],
   });
 
-  const pending = new Map<string, PromiseWithResolvers<number | null>>();
+  const pending = new Map<string, PromiseWithResolvers<VmRam | null>>();
 
   const governor = createRamGovernor({
     ...host.deps,
-    readRamMib: (_pid, id) => {
-      const read = Promise.withResolvers<number | null>();
+    readVmRam: (_pid, id) => {
+      const read = Promise.withResolvers<VmRam | null>();
 
       pending.set(id, read);
 
@@ -893,7 +912,7 @@ test('it measures every awake imp at once, each read started before any ends', a
   });
 
   for (const [id, read] of pending) {
-    const ramMib = await host.deps.readRamMib(0, id);
+    const ramMib = await host.deps.readVmRam(0, id);
 
     read.resolve(ramMib);
   }
