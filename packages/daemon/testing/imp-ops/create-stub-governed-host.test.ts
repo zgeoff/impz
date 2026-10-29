@@ -14,9 +14,63 @@ test('it lists the awake imps, least recently active first by their start order'
   const awake = await host.deps.listAwake();
 
   expect(awake).toStrictEqual([
-    { id: 'a', name: 'a', pid: 1, apiSocket: 'a', lastActiveAt: 1, holdUntil: null },
-    { id: 'b', name: 'b', pid: 2, apiSocket: 'b', lastActiveAt: 0, holdUntil: null },
+    {
+      id: 'a',
+      name: 'a',
+      pid: 1,
+      apiSocket: 'a',
+      lastActiveAt: 1,
+      holdUntil: null,
+      hugePagesMib: 0,
+    },
+    {
+      id: 'b',
+      name: 'b',
+      pid: 2,
+      apiSocket: 'b',
+      lastActiveAt: 0,
+      holdUntil: null,
+      hugePagesMib: 0,
+    },
   ]);
+});
+
+test('it lists a guest on 2 MiB pages with its memory and reads the pool pages it holds', async () => {
+  const host = createStubGovernedHost({
+    budgetMib: 1000,
+    ids: ['a'],
+    awake: [{ id: 'a', rssMib: 100, hugePagesMib: 512, hugetlbMib: 70 }],
+    hugePool: { totalMib: 1024, freeMib: 954 },
+  });
+
+  const awake = await host.deps.listAwake();
+  const hugetlbMib = await host.deps.readHugetlbMib(1, 'a');
+
+  expect(awake[0]?.hugePagesMib).toBe(512);
+  expect(hugetlbMib).toBe(70);
+  expect(host.deps.readHugePool()).toStrictEqual({ totalMib: 1024, freeMib: 954 });
+});
+
+test('it moves the pages a guest faults in during a read of its count from the pool to the guest', async () => {
+  const host = createStubGovernedHost({
+    budgetMib: 1000,
+    ids: ['a'],
+    awake: [{ id: 'a', rssMib: 100, hugePagesMib: 512, hugetlbMib: 70, faultMibOnRead: 30 }],
+    hugePool: { totalMib: 1024, freeMib: 954 },
+  });
+
+  const during = await host.deps.readHugetlbMib(1, 'a');
+  const after = await host.deps.readHugetlbMib(1, 'a');
+
+  expect(during).toBe(70);
+  expect(after).toBe(100);
+  expect(host.deps.readHugePool()).toStrictEqual({ totalMib: 1024, freeMib: 924 });
+});
+
+test('it reads no pool on a host given none', () => {
+  const host = createStubGovernedHost({ budgetMib: 1000, ids: ['a'], awake: [] });
+
+  expect(host.deps.readHugePool()).toBeNull();
 });
 
 test('it lists a held imp with a hold that never expires', async () => {
@@ -254,6 +308,9 @@ test('it marks an admitted imp awake, measuring nothing, active now', () => {
     failsSleep: false,
     spareMib: 0,
     dipMib: null,
+    hugePagesMib: 0,
+    hugetlbMib: 0,
+    faultMibOnRead: 0,
   });
 });
 
@@ -297,6 +354,9 @@ test('it reads what an asleep imp holds reserved from the governor usage', async
     failsSleep: false,
     spareMib: 0,
     dipMib: null,
+    hugePagesMib: 0,
+    hugetlbMib: 0,
+    faultMibOnRead: 0,
   });
 });
 

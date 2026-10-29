@@ -130,6 +130,14 @@ test('it notes each release, sweep and remove in order, and hands each note on',
   expect(handed).toStrictEqual(stub.notes);
 });
 
+test('it notes each removal of a jail userfaultfd node', () => {
+  const stub = buildStubJails();
+
+  stub.jails.removeUffdDevice('i1');
+
+  expect(stub.notes).toStrictEqual(['remove uffd device i1']);
+});
+
 test('it finds no orphan jails', async () => {
   const stub = buildStubJails();
 

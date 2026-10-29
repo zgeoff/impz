@@ -9,6 +9,7 @@ import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { createSemaphore } from '../../platform/process/semaphore';
 import { isAgentError } from '../../vm/agent-client/is-agent-error';
+import { buildUffdDeviceError } from '../../vm/imps-contract/uffd-device-error';
 import { removeSnapshot } from '../../vm/sleep/snapshot-meta';
 import { writeVmIdentity } from '../../vm/sleep/vm-identity';
 import type { VmIdentity } from '../../vm/sleep/vm-identity';
@@ -21,6 +22,7 @@ import type { LockedImp } from './imp-lock';
 import { makeSleepImpVm } from './make-sleep-imp-vm';
 import type { YoungGuestWait } from './make-sleep-imp-vm';
 import { makeWakeImpVm } from './make-wake-imp-vm';
+import { pickHugePages } from './pick-huge-pages';
 import { startCounting } from './read-running-imp-usage';
 import { requireNoOopsHold } from './require-no-oops-hold';
 import { findSessionLogImp } from './session-logs/find-session-log-imp';
@@ -137,12 +139,18 @@ export function createImpVmOps(context: ImpContext): ImpVmOps {
     const paths = context.findPaths(imp.id);
     const address = context.findAddress(imp.slot);
     const admitStarted = performance.now();
+    const hugePages = pickHugePages(context.config.hugePages !== null, imp);
+
+    if (hugePages === '2M' && !context.probeUffdDevice()) {
+      throw buildUffdDeviceError();
+    }
 
     await context.admission?.admit({
       id: imp.id,
       name: imp.name,
       reserveMib: Math.ceil((imp.memoryMib * context.config.bootReservePercent) / 100),
       memoryMib: imp.maxMemoryMib,
+      hugePagesMib: hugePages === '2M' ? imp.memoryMib : 0,
     });
 
     const setupStarted = performance.now();
@@ -166,7 +174,15 @@ export function createImpVmOps(context: ImpContext): ImpVmOps {
 
       const cgroup = setupVmCgroup(imp);
 
-      const vm = await startColdVm(context, { imp, paths, address, cgroup, hostSteps, diskReady });
+      const vm = await startColdVm(context, {
+        imp,
+        paths,
+        address,
+        cgroup,
+        hugePages,
+        hostSteps,
+        diskReady,
+      });
 
       startCounting(context, imp, vm.pid);
 
@@ -176,6 +192,7 @@ export function createImpVmOps(context: ImpContext): ImpVmOps {
         ...context.identity,
         agentVersion: vm.agentVersion,
         bootReason: reason,
+        ...(vm.hugePages === '2M' && { hugePages: vm.hugePages }),
       });
 
       await updateImpActivity(context.db, imp.id, new Date());
@@ -297,6 +314,7 @@ export function createImpVmOps(context: ImpContext): ImpVmOps {
     context,
     isStopping: () => isStopping,
     updateState,
+    writeIdentity,
     setupVmCgroup,
     startColdImpVm,
     growGuestDisk,

@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { readStatFields } from '../../platform/process/proc';
-import { probeFirecrackerAlive } from './firecracker-process';
+import { probeProcessAlive } from './firecracker-process';
 
 const KIB_PER_MIB = 1024;
 
@@ -33,14 +33,17 @@ export async function readOwnedRamMibAsync(
   apiSocket: string,
   procRoot = '/proc',
 ): Promise<number | null> {
-  if (!probeFirecrackerAlive(pid, apiSocket, procRoot)) {
+  if (!probeProcessAlive(pid, apiSocket, procRoot)) {
     return null;
   }
 
   try {
-    const text = await readFile(`${procRoot}/${String(pid)}/smaps_rollup`, 'utf8');
+    const [rollup, status] = await Promise.all([
+      readFile(`${procRoot}/${String(pid)}/smaps_rollup`, 'utf8'),
+      readFile(`${procRoot}/${String(pid)}/status`, 'utf8'),
+    ]);
 
-    return countOwnedMib(parseProcFields(text));
+    return countOwnedMib(addHugetlbPages(parseProcFields(rollup), status));
   } catch {
     return null;
   }
@@ -53,7 +56,7 @@ export async function readResidentMibAsync(
   apiSocket: string,
   procRoot = '/proc',
 ): Promise<number | null> {
-  if (!probeFirecrackerAlive(pid, apiSocket, procRoot)) {
+  if (!probeProcessAlive(pid, apiSocket, procRoot)) {
     return null;
   }
 
@@ -62,14 +65,53 @@ export async function readResidentMibAsync(
 
     const fields = parseProcFields(text);
 
-    return Math.round(((fields.get('RssAnon') ?? 0) + (fields.get('RssShmem') ?? 0)) / KIB_PER_MIB);
+    return Math.round(
+      ((fields.get('RssAnon') ?? 0) +
+        (fields.get('RssShmem') ?? 0) +
+        (fields.get('HugetlbPages') ?? 0)) /
+        KIB_PER_MIB,
+    );
+  } catch {
+    return null;
+  }
+}
+
+export async function readHugetlbMibAsync(
+  pid: number,
+  apiSocket: string,
+  procRoot = '/proc',
+): Promise<number | null> {
+  if (!probeProcessAlive(pid, apiSocket, procRoot)) {
+    return null;
+  }
+
+  try {
+    const text = await readFile(`${procRoot}/${String(pid)}/status`, 'utf8');
+
+    return Math.round((parseProcFields(text).get('HugetlbPages') ?? 0) / KIB_PER_MIB);
   } catch {
     return null;
   }
 }
 
 function countOwnedMib(fields: ReadonlyMap<string, number>): number {
-  return Math.round(((fields.get('Pss_Anon') ?? 0) + (fields.get('Pss_Shmem') ?? 0)) / KIB_PER_MIB);
+  return Math.round(
+    ((fields.get('Pss_Anon') ?? 0) +
+      (fields.get('Pss_Shmem') ?? 0) +
+      (fields.get('HugetlbPages') ?? 0)) /
+      KIB_PER_MIB,
+  );
+}
+
+// Rss and Pss leave out the hugetlb pages that back a guest on 2 MiB pages,
+// which the kernel counts apart in the process's status.
+function addHugetlbPages(
+  rollup: ReadonlyMap<string, number>,
+  status: string,
+): ReadonlyMap<string, number> {
+  const hugetlbKb = parseProcFields(status).get('HugetlbPages') ?? 0;
+
+  return new Map([...rollup, ['HugetlbPages', hugetlbKb]]);
 }
 
 export function readUnsharedRamMib(
@@ -87,7 +129,10 @@ export function countUnsharedMib(fields: ReadonlyMap<string, number>): number {
   // KSM splits a merged page's Pss across the VMs that map it, and a write unmerges the page, so a
   // wake reserve counts every page in full.
   return Math.round(
-    ((fields.get('Anonymous') ?? 0) + (fields.get('Pss_Shmem') ?? 0)) / KIB_PER_MIB,
+    ((fields.get('Anonymous') ?? 0) +
+      (fields.get('Pss_Shmem') ?? 0) +
+      (fields.get('HugetlbPages') ?? 0)) /
+      KIB_PER_MIB,
   );
 }
 
@@ -119,12 +164,15 @@ function readVmSmaps(
   apiSocket: string,
   procRoot: string,
 ): ReadonlyMap<string, number> | null {
-  if (!probeFirecrackerAlive(pid, apiSocket, procRoot)) {
+  if (!probeProcessAlive(pid, apiSocket, procRoot)) {
     return null;
   }
 
   try {
-    return parseProcFields(readFileSync(`${procRoot}/${String(pid)}/smaps_rollup`, 'utf8'));
+    const rollup = readFileSync(`${procRoot}/${String(pid)}/smaps_rollup`, 'utf8');
+    const status = readFileSync(`${procRoot}/${String(pid)}/status`, 'utf8');
+
+    return addHugetlbPages(parseProcFields(rollup), status);
   } catch {
     return null;
   }

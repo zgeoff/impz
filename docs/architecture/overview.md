@@ -8,12 +8,12 @@ imp under a RAM budget the owner sets, and sleeps the least recently active ones
 host joins a Tailscale tailnet that the owner runs, and other machines reach impd through that
 tailnet. One exception: an imp the owner makes public takes requests from the internet.
 
-The code is one Bun workspace and the Go modules of the guest agent and the host's ksm-exec and
-oci-fetch. impd is `packages/daemon`. Its typed contract, `packages/api`, is shared with the CLI,
-the npm client, the MCP server and the dashboard. Helpers that know nothing about imps, such as byte
-and duration formats, live in `packages/shared`, which imports no other workspace package and no
-Node module, so the dashboard and the published client can bundle it. impd's side of the vsock
-protocol with the guest agent, the frame codec and the generated message types, lives in
+The code is one Bun workspace and the Go modules of the guest agent and the host's ksm-exec,
+oci-fetch and uffd-handler. impd is `packages/daemon`. Its typed contract, `packages/api`, is shared
+with the CLI, the npm client, the MCP server and the dashboard. Helpers that know nothing about
+imps, such as byte and duration formats, live in `packages/shared`, which imports no other workspace
+package and no Node module, so the dashboard and the published client can bundle it. impd's side of
+the vsock protocol with the guest agent, the frame codec and the generated message types, lives in
 `packages/agent-protocol`, another leaf, which the client's and the CLI's tests use to play the
 agent. The guest agent is `agent/`.
 
@@ -144,8 +144,8 @@ and the imp boots cold.
 
 - `lifecycle/`: [the lifecycle](./lifecycle/lifecycle.md),
   [sleep and wake](./lifecycle/sleep-and-wake.md), [the RAM governor](./lifecycle/ram-governor.md),
-  [elastic memory](./lifecycle/elastic-memory.md) and
-  [boot templates](./lifecycle/boot-templates.md).
+  [elastic memory](./lifecycle/elastic-memory.md), [boot templates](./lifecycle/boot-templates.md)
+  and [huge pages](./lifecycle/huge-pages.md).
 - `guest/`: [the guest agent](./guest/agent.md), [the agent protocol](./guest/protocol.md) and
   [sessions](./guest/sessions.md).
 - `storage/`: [storage](./storage/storage.md), [disk space](./storage/disk-space.md),

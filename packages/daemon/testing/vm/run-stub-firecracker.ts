@@ -25,7 +25,15 @@ const SnapshotCreateSchema = z.object({
   mem_file_path: z.string(),
 });
 
+const SnapshotLoadSchema = z.object({
+  mem_backend: z.object({ backend_type: z.enum(['File', 'Uffd']), backend_path: z.string() }),
+});
+
 const PAGE_BYTES = 4096;
+
+// the connection to the page handler stays open while the VM lives, as
+// Firecracker's does
+const handlerConnections: unknown[] = [];
 
 async function handleRequest(request: Request): Promise<Response> {
   const path = new URL(request.url).pathname;
@@ -50,12 +58,20 @@ async function handleRequest(request: Request): Promise<Response> {
       mem_size_mib: 128,
       smt: false,
       track_dirty_pages: memory.isTrackingDirtyPages,
-      huge_pages: 'None',
+      huge_pages: memory.hugePages ?? 'None',
     });
   }
 
   if (memory !== null && request.method === 'PUT' && path === '/snapshot/create') {
     writeSnapshot(memory, SnapshotCreateSchema.parse(JSON.parse(body)));
+  }
+
+  if (request.method === 'PUT' && path === '/snapshot/load') {
+    const load = SnapshotLoadSchema.parse(JSON.parse(body));
+
+    if (load.mem_backend.backend_type === 'Uffd') {
+      return connectHandler(load.mem_backend.backend_path);
+    }
   }
 
   if (path === '/') {
@@ -97,11 +113,8 @@ function writeSnapshot(
 
   ftruncateSync(fd, sizeBytes);
 
-  const isDiff = params.snapshot_type === 'Diff' && guest.isTrackingDirtyPages;
-
-  const pages = isDiff
-    ? guest.dirtyPages
-    : Array.from({ length: guest.pages.length }, (_, page) => page);
+  const allPages = Array.from({ length: guest.pages.length }, (_, page) => page);
+  const pages = pickSnapshotPages(guest, params.snapshot_type) ?? allPages;
 
   for (const page of pages) {
     writeSync(
@@ -114,4 +127,36 @@ function writeSnapshot(
   }
 
   closeSync(fd);
+}
+
+// A Diff of a VM that tracks dirty pages holds those pages; one of a 2M VM that
+// does not holds the pages mincore(2) finds; any other snapshot holds them all.
+function pickSnapshotPages(
+  guest: Readonly<StubGuestMemory>,
+  type: 'Full' | 'Diff',
+): readonly number[] | null {
+  if (type === 'Full') {
+    return null;
+  }
+
+  if (guest.isTrackingDirtyPages) {
+    return guest.dirtyPages;
+  }
+
+  return guest.hugePages === '2M' ? (guest.presentPages ?? []) : null;
+}
+
+async function connectHandler(socket: string): Promise<Response> {
+  try {
+    const connection = await Bun.connect({ unix: socket, socket: { data: () => {} } });
+
+    handlerConnections.push(connection);
+  } catch {
+    return Response.json(
+      { fault_message: `Load snapshot error: cannot connect to the page handler at ${socket}` },
+      { status: 400 },
+    );
+  }
+
+  return new Response(null, { status: 204 });
 }

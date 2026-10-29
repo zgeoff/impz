@@ -31,7 +31,6 @@ export function isImpVm(owner: VmOwner, impId: string, jailUid: number | null): 
 
 const SOCKET_WAIT_MS = 3000;
 
-/* @internal */
 export function buildSpawnArgv(
   command: readonly string[],
   cgroupProcs: string | null,
@@ -89,7 +88,9 @@ export async function startFirecracker(
   return child.pid;
 }
 
-export function probeFirecrackerAlive(pid: number, apiSocket: string, procRoot = '/proc'): boolean {
+// A process that impd started names its own socket in its arguments, which a
+// recycled pid does not.
+export function probeProcessAlive(pid: number, socket: string, procRoot = '/proc'): boolean {
   const state = readStatFields(pid, procRoot)?.[0];
 
   if (state === undefined || state === 'Z' || state === 'X') {
@@ -99,7 +100,7 @@ export function probeFirecrackerAlive(pid: number, apiSocket: string, procRoot =
   try {
     const cmdline = readFileSync(`${procRoot}/${String(pid)}/cmdline`, 'utf8').split('\0');
 
-    return cmdline.includes(apiSocket);
+    return cmdline.includes(socket);
   } catch {
     return false;
   }
@@ -119,7 +120,7 @@ export async function waitForExit(
   const clock = watch.clock ?? REAL_CLOCK;
   const deadline = clock.now() + timeoutMs;
 
-  while (probeFirecrackerAlive(pid, apiSocket, watch.procRoot)) {
+  while (probeProcessAlive(pid, apiSocket, watch.procRoot)) {
     if (clock.now() > deadline) {
       return false;
     }
@@ -160,7 +161,7 @@ export function listFirecrackers(procRoot = '/proc'): FoundVm[] {
       basename(argv[0] ?? '') === 'firecracker' &&
       flag !== -1 &&
       apiSocket !== undefined &&
-      probeFirecrackerAlive(pid, apiSocket, procRoot)
+      probeProcessAlive(pid, apiSocket, procRoot)
     ) {
       // A jailed process can put any socket in its command line, so only its owner shows whose VM
       // it is.

@@ -227,7 +227,7 @@ async function startHost(dev: Dev, drives: Drives): Promise<void> {
     layout: dev.layout,
     checkout: dev.checkout,
     env: tailscale.env,
-    privileges: readHostPrivileges(dev.io.files, dev.checkout.root),
+    privileges: readHostPrivileges(dev.io.files, dev.checkout.root, dev.env),
     hasEnvFile: dev.io.files.probeFile(join(dev.checkout.root, '.env')),
     tailscale: tailscale.arg,
     tailnetOAuthFile,

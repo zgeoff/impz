@@ -21,8 +21,8 @@ The rules a task needs are not repeated here. Load the skill for the work before
 ## Repo structure
 
 imp is one Bun workspace for its TypeScript, plus a Go module for the guest agent and one each for
-the host's ksm-exec and oci-fetch. Every package takes the name `@impz/<folder>`, and another
-package imports a library as TypeScript source, with no build step.
+the host's ksm-exec, oci-fetch and uffd-handler. Every package takes the name `@impz/<folder>`, and
+another package imports a library as TypeScript source, with no build step.
 
 ```text
 agent/             the guest agent, in Go: imp-agent under cmd/
@@ -45,8 +45,9 @@ packages/
 proto/             the agent protocol; bun run gen:proto generates the Go, TypeScript and
                    docs/reference/agent-protocol.md from it
 host/              the host container image that runs impd; ksm-exec, the Go program that
-                   starts Firecracker with its memory mergeable; and oci-fetch, the Go program
-                   that reads the builder image from its registry
+                   starts Firecracker with its memory mergeable; oci-fetch, the Go program
+                   that reads the builder image from its registry; and uffd-handler, the Go
+                   program that serves a guest's pages on a restore onto huge pages
 images/            the guest images that ship with imp
 kernel/            the guest kernel build
 deploy/            the systemd units, bootstrap and the NixOS module

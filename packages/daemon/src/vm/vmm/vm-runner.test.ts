@@ -1,5 +1,13 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { create } from '@bufbuild/protobuf';
@@ -9,6 +17,7 @@ import { buildMockTemplateBuildPlan } from '../../../testing/vm/build-mock-templ
 import { buildMockTemplateRestorePlan } from '../../../testing/vm/build-mock-template-restore-plan';
 import { buildStubJails } from '../../../testing/vm/build-stub-jails';
 import { createStubKsmExec } from '../../../testing/vm/create-stub-ksm-exec';
+import { createStubUffdHandler } from '../../../testing/vm/create-stub-uffd-handler';
 import { makeRecordingFirecrackerClient } from '../../../testing/vm/make-recording-firecracker-client';
 import { startStubAgent } from '../../../testing/vm/start-stub-agent';
 import {
@@ -21,8 +30,9 @@ import { stopPid } from '../../platform/process/proc';
 import { sendPing } from '../agent-client/agent-requests';
 import { buildImpPaths, buildSnapshotPaths } from '../storage/data-layout';
 import { createFirecrackerClient } from './firecracker-client';
-import { probeFirecrackerAlive } from './firecracker-process';
+import { probeProcessAlive } from './firecracker-process';
 import { buildJailerCommand } from './jail';
+import { readHandlerState, startUffdHandler } from './uffd-handler';
 import { createVmRunner } from './vm-runner';
 
 function setupTest() {
@@ -78,7 +88,7 @@ test('#sleepVm resumes a VM whose pause fails and leaves it running, its limit b
   ]);
 
   expect(limits).toStrictEqual(['lifted', 'applied']);
-  expect(probeFirecrackerAlive(vm.pid, paths.apiSocket)).toBeTrue();
+  expect(probeProcessAlive(vm.pid, paths.apiSocket)).toBeTrue();
 });
 
 test('#sleepVm kills a VM whose pause and resume both fail', async () => {
@@ -95,7 +105,7 @@ test('#sleepVm kills a VM whose pause and resume both fail', async () => {
     createVmRunner(buildStubJails().jails).sleepVm(vm.pid, paths, null, paths),
   ).rejects.toThrow('refused PATCH /vm');
 
-  expect(probeFirecrackerAlive(vm.pid, paths.apiSocket)).toBeFalse();
+  expect(probeProcessAlive(vm.pid, paths.apiSocket)).toBeFalse();
 });
 
 test('#sleepVm writes only the pages a woken VM dirtied, over a copy of the memory file it woke from', async () => {
@@ -237,7 +247,7 @@ test('#sleepVm removes the memory file a woken VM woke from when its snapshot fa
   expect(sleeping).rejects.toThrow('refused PUT /snapshot/create');
   expect(existsSync(paths.memFile)).toBeFalse();
   expect(existsSync(`${paths.memFile}.new`)).toBeFalse();
-  expect(probeFirecrackerAlive(vm.pid, paths.apiSocket)).toBeTrue();
+  expect(probeProcessAlive(vm.pid, paths.apiSocket)).toBeTrue();
 });
 
 test('#sleepVm removes the memory file a VM woke from when a full snapshot fails after its machine config did not answer', async () => {
@@ -510,7 +520,7 @@ test('#resumeVm seals the run dir, then patches the VM to resumed', async () => 
 
   await createVmRunner(stub.jails).resumeVm(vm.pid, paths);
 
-  expect(stub.notes).toStrictEqual(['seal']);
+  expect(stub.notes).toStrictEqual(['remove uffd device vm', 'seal']);
   expect(readFileSync(ctx.logPath, 'utf8')).toBe('PATCH /vm {"state":"Resumed"}\n');
 });
 
@@ -531,8 +541,8 @@ test('#resumeVm kills a VM whose seal finds anything planted in run/, and never 
   );
 
   expect(existsSync(ctx.logPath)).toBeFalse();
-  expect(probeFirecrackerAlive(vm.pid, paths.apiSocket)).toBeFalse();
-  expect(stub.notes).toStrictEqual(['seal', 'release vm']);
+  expect(probeProcessAlive(vm.pid, paths.apiSocket)).toBeFalse();
+  expect(stub.notes).toStrictEqual(['remove uffd device vm', 'seal', 'release vm']);
 });
 
 test('#stopVm releases the jail on a hard stop, as a checkpoint restore asks', async () => {
@@ -545,7 +555,7 @@ test('#stopVm releases the jail on a hard stop, as a checkpoint restore asks', a
 
   await createVmRunner(stub.jails).stopVm(vm.pid, paths, false);
 
-  expect(probeFirecrackerAlive(vm.pid, paths.apiSocket)).toBeFalse();
+  expect(probeProcessAlive(vm.pid, paths.apiSocket)).toBeFalse();
   expect(stub.notes).toStrictEqual(['release vm']);
 });
 
@@ -675,4 +685,288 @@ test('#wakeVm loads the snapshot with dirty page tracking, so the next sleep tak
     `PUT /snapshot/load {"snapshot_path":"${paths.vmstate}","mem_backend":{"backend_type":"File","backend_path":"${paths.memFile}"},"resume_vm":false,"track_dirty_pages":true}`,
     'PATCH /vm {"state":"Resumed"}',
   ]);
+});
+
+test('#wakeVm removes the userfaultfd node of the jail after the load and before the seal', () => {
+  const ctx = setupTest();
+  const paths = ctx.createImpDir('vm');
+  const handler = createStubUffdHandler(ctx.directoryPath);
+
+  mkdirSync(paths.snapshotDir, { recursive: true });
+  writeFileSync(paths.memFile, '');
+
+  const stub = buildStubJails({
+    argv: buildStubFirecrackerArgv({
+      apiSocket: paths.apiSocket,
+      logPath: ctx.logPath,
+      failures: ['PATCH /vm'],
+    }),
+    onNote: (note) => {
+      appendFileSync(ctx.logPath, `${note}\n`);
+    },
+  });
+
+  const waking = createVmRunner(stub.jails, { uffdHandlerBin: handler.path }).wakeVm({
+    firecrackerBin: 'firecracker',
+    paths,
+    cgroup: null,
+    jail: { uid: 900_000, gid: 900_000 },
+    readOnlyFiles: [],
+    hugePages: '2M',
+  });
+
+  expect(waking).rejects.toThrow('refused PATCH /vm');
+
+  expect(readFileSync(ctx.logPath, 'utf8').trim().split('\n').slice(1)).toStrictEqual([
+    'PUT /snapshot/load',
+    'remove uffd device vm',
+    'seal',
+    'PATCH /vm',
+    'release vm',
+  ]);
+});
+
+test('#wakeVm loads a 2M snapshot through its page handler on 2 MiB pages, with no dirty page tracking', () => {
+  const ctx = setupTest();
+  const paths = ctx.createImpDir('vm');
+  const handler = createStubUffdHandler(ctx.directoryPath);
+
+  mkdirSync(paths.snapshotDir, { recursive: true });
+  writeFileSync(paths.memFile, 'guest pages');
+
+  const argv = buildStubFirecrackerArgv({
+    apiSocket: paths.apiSocket,
+    logPath: ctx.logPath,
+    isLoggingBodies: true,
+    failures: ['PATCH /vm'],
+  });
+
+  const waking = createVmRunner(buildStubJails({ argv }).jails, {
+    uffdHandlerBin: handler.path,
+  }).wakeVm({
+    firecrackerBin: 'firecracker',
+    paths,
+    cgroup: null,
+    jail: { uid: 900_000, gid: 900_000 },
+    readOnlyFiles: [],
+    hugePages: '2M',
+  });
+
+  expect(waking).rejects.toThrow('refused PATCH /vm');
+
+  expect(readFileSync(ctx.logPath, 'utf8').trim().split('\n')).toStrictEqual([
+    `PUT /snapshot/load {"snapshot_path":"${paths.vmstate}","mem_backend":{"backend_type":"Uffd","backend_path":"${paths.uffdSocket}"},"resume_vm":false,"huge_pages":"2M"}`,
+    'PATCH /vm {"state":"Resumed"}',
+  ]);
+
+  expect(handler.readStarts()).toStrictEqual([
+    {
+      options: { socket: paths.uffdSocket, uid: '900000', gid: '900000' },
+      served: 'guest pages',
+    },
+  ]);
+});
+
+test('#wakeVm stops the page handler of a 2M wake that fails', async () => {
+  const ctx = setupTest();
+  const paths = ctx.createImpDir('vm');
+  const handler = createStubUffdHandler(ctx.directoryPath);
+
+  mkdirSync(paths.snapshotDir, { recursive: true });
+  writeFileSync(paths.memFile, '');
+
+  const argv = buildStubFirecrackerArgv({
+    apiSocket: paths.apiSocket,
+    logPath: ctx.logPath,
+    failures: ['PATCH /vm'],
+  });
+
+  const waking = createVmRunner(buildStubJails({ argv }).jails, {
+    uffdHandlerBin: handler.path,
+  }).wakeVm({
+    firecrackerBin: 'firecracker',
+    paths,
+    cgroup: null,
+    jail: { uid: 900_000, gid: 900_000 },
+    readOnlyFiles: [],
+    hugePages: '2M',
+  });
+
+  expect(waking).rejects.toThrow('refused PATCH /vm');
+
+  await waitFor(() => {
+    expect(readHandlerState(paths).state).toBe('gone');
+  });
+});
+
+test('#wakeVm refuses a 2M snapshot with no page handler before it loads', () => {
+  const ctx = setupTest();
+  const paths = ctx.createImpDir('vm');
+
+  const argv = buildStubFirecrackerArgv({
+    apiSocket: paths.apiSocket,
+    logPath: ctx.logPath,
+  });
+
+  const waking = createVmRunner(buildStubJails({ argv }).jails).wakeVm({
+    firecrackerBin: 'firecracker',
+    paths,
+    cgroup: null,
+    jail: { uid: 900_000, gid: 900_000 },
+    readOnlyFiles: [],
+    hugePages: '2M',
+  });
+
+  expect(waking).rejects.toThrow('IMP_HUGE_PAGES is off');
+  expect(existsSync(ctx.logPath)).toBeFalse();
+});
+
+test('#wakeVm loads a 2M snapshot on host pages with dirty page tracking when it is asked for none', () => {
+  const ctx = setupTest();
+  const paths = ctx.createImpDir('vm');
+
+  const argv = buildStubFirecrackerArgv({
+    apiSocket: paths.apiSocket,
+    logPath: ctx.logPath,
+    isLoggingBodies: true,
+    failures: ['PATCH /vm'],
+  });
+
+  const waking = createVmRunner(buildStubJails({ argv }).jails).wakeVm({
+    firecrackerBin: 'firecracker',
+    paths,
+    cgroup: null,
+    jail: { uid: 900_000, gid: 900_000 },
+    readOnlyFiles: [],
+    hugePages: 'None',
+  });
+
+  expect(waking).rejects.toThrow('refused PATCH /vm');
+
+  expect(readFileSync(ctx.logPath, 'utf8').trim().split('\n')).toStrictEqual([
+    `PUT /snapshot/load {"snapshot_path":"${paths.vmstate}","mem_backend":{"backend_type":"File","backend_path":"${paths.memFile}"},"resume_vm":false,"track_dirty_pages":true,"huge_pages":"None"}`,
+    'PATCH /vm {"state":"Resumed"}',
+  ]);
+});
+
+test('#sleepVm writes the blocks a woken 2M VM holds over a copy of the file its page handler serves', async () => {
+  const ctx = setupTest();
+  const paths = ctx.createImpDir('vm');
+  const handler = createStubUffdHandler(ctx.directoryPath);
+
+  mkdirSync(paths.snapshotDir, { recursive: true });
+  writeFileSync(paths.memFile, `${'a'.repeat(4096)}${'b'.repeat(4096)}${'c'.repeat(4096)}`);
+
+  const handlerPid = await startUffdHandler({
+    handlerBin: handler.path,
+    paths,
+    memFile: paths.memFile,
+    jail: null,
+    cgroup: null,
+  });
+
+  onTestFinished(() => {
+    stopPid(handlerPid);
+  });
+
+  rmSync(paths.memFile);
+
+  const vm = await startStubFirecracker({
+    apiSocket: paths.apiSocket,
+    logPath: ctx.logPath,
+    isLoggingBodies: true,
+    memory: {
+      pages: 'ABC',
+      dirtyPages: [],
+      isTrackingDirtyPages: false,
+      hugePages: '2M',
+      presentPages: [1],
+    },
+  });
+
+  const timings = await createVmRunner(buildStubJails().jails).sleepVm(vm.pid, paths, null, paths);
+
+  expect(readFileSync(paths.memFile, 'latin1')).toBe(
+    `${'a'.repeat(4096)}${'B'.repeat(4096)}${'c'.repeat(4096)}`,
+  );
+
+  expect(readFileSync(ctx.logPath, 'utf8').trim().split('\n')).toStrictEqual([
+    'GET /machine-config',
+    'PATCH /vm {"state":"Paused"}',
+    `PUT /snapshot/create {"snapshot_type":"Diff","snapshot_path":"${paths.vmstate}.new","mem_file_path":"${paths.memFile}.new","sync_snapshot_files":true}`,
+  ]);
+
+  expect(timings).toContainKey('copyBase');
+});
+
+test('#sleepVm writes the blocks a cold-booted 2M VM holds over an empty memory file', async () => {
+  const ctx = setupTest();
+  const paths = ctx.createImpDir('vm');
+
+  const vm = await startStubFirecracker({
+    apiSocket: paths.apiSocket,
+    logPath: ctx.logPath,
+    isLoggingBodies: true,
+    memory: {
+      pages: 'AB',
+      dirtyPages: [],
+      isTrackingDirtyPages: false,
+      hugePages: '2M',
+      presentPages: [0],
+    },
+  });
+
+  const timings = await createVmRunner(buildStubJails().jails).sleepVm(vm.pid, paths, null, paths);
+
+  expect(readFileSync(paths.memFile, 'latin1')).toBe(`${'A'.repeat(4096)}${'\0'.repeat(4096)}`);
+  expect(readFileSync(ctx.logPath, 'utf8')).toInclude('{"snapshot_type":"Diff"');
+  expect(timings).not.toContainKey('copyBase');
+});
+
+test('#sleepVm refuses a 2M VM whose page handler is gone and leaves it running', async () => {
+  const ctx = setupTest();
+  const paths = ctx.createImpDir('vm');
+
+  const vm = await startStubFirecracker({
+    apiSocket: paths.apiSocket,
+    logPath: ctx.logPath,
+    memory: { pages: 'AB', dirtyPages: [], isTrackingDirtyPages: false, hugePages: '2M' },
+  });
+
+  writeFileSync(paths.uffdPidFile, '999999999\n');
+
+  expect(
+    createVmRunner(buildStubJails().jails).sleepVm(vm.pid, paths, null, paths),
+  ).rejects.toThrowWithMessage(Error, 'its page handler is gone, so its memory cannot be read');
+
+  expect(probeProcessAlive(vm.pid, paths.apiSocket)).toBeTrue();
+  expect(existsSync(paths.memFile)).toBeFalse();
+});
+
+test('#watchUffdHandler stops a VM whose page handler dies', async () => {
+  const ctx = setupTest();
+  const paths = ctx.createImpDir('vm');
+  const handler = createStubUffdHandler(ctx.directoryPath);
+
+  writeFileSync(join(ctx.directoryPath, 'mem'), '');
+
+  const vm = await startStubFirecracker({ apiSocket: paths.apiSocket, logPath: ctx.logPath });
+
+  const handlerPid = await startUffdHandler({
+    handlerBin: handler.path,
+    paths,
+    memFile: join(ctx.directoryPath, 'mem'),
+    jail: null,
+    cgroup: null,
+  });
+
+  onTestFinished(() => {
+    stopPid(handlerPid);
+  });
+
+  createVmRunner(buildStubJails().jails).watchUffdHandler(vm.pid, paths);
+
+  process.kill(handlerPid, 'SIGKILL');
+
+  expect(vm.exited).resolves.not.toBe(0);
 });

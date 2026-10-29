@@ -26,6 +26,7 @@ import type { HostIdentity } from '../sleep/vm-identity';
 import type { DiskBudget } from '../storage/disk-budget';
 import { BASE_BOOT_ARGS, VM_DEVICES } from '../vmm/configure-vm';
 import type { CpuCgroups } from '../vmm/cpu-cgroups';
+import type { HugePages } from '../vmm/firecracker-client';
 import type { JailUser } from '../vmm/jail';
 import type { TemplateBuildPlan } from '../vmm/template-vm';
 import { createTemplateLocks } from './template-locks';
@@ -62,6 +63,7 @@ const TemplateMetaSchema = z.object({
   buildId: z.string(),
   vcpus: z.int().positive(),
   memoryMib: z.int().positive(),
+  hugePages: z.enum(['None', '2M']).default('None'),
   systemDrivePath: z.string(),
 });
 
@@ -70,6 +72,9 @@ type TemplateMeta = z.infer<typeof TemplateMetaSchema>;
 interface TemplateShape {
   readonly vcpus: number;
   readonly memoryMib: number;
+
+  // the host's own pages when left out
+  readonly hugePages?: HugePages;
 }
 
 interface TemplateFiles {
@@ -77,6 +82,7 @@ interface TemplateFiles {
   readonly buildId: string;
   readonly vmstate: string;
   readonly memFile: string;
+  readonly hugePages: HugePages;
 
   // A Firecracker restore reopens the system drive the snapshot booted and the placeholder it saw
   // as its disk.
@@ -142,6 +148,9 @@ export function buildTemplateKey(identity: Readonly<HostIdentity>, shape: Readon
     devices: VM_DEVICES,
     memoryMib: shape.memoryMib,
     vcpus: shape.vcpus,
+
+    // a 4 KiB template keeps the key it had before guests could run on huge pages
+    ...(shape.hugePages === '2M' && { hugePages: shape.hugePages }),
   };
 
   return createHash('sha256').update(JSON.stringify(fields)).digest('hex');
@@ -197,6 +206,7 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
       key,
       buildId: meta.buildId,
       ...files,
+      hugePages: meta.hugePages,
       systemDrivePath: meta.systemDrivePath,
       placeholderPath: placeholder,
     };
@@ -299,6 +309,7 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
         bootArgs: TEMPLATE_BOOT_ARGS,
         vcpus: shape.vcpus,
         memoryMib: shape.memoryMib,
+        hugePages: shape.hugePages ?? 'None',
         workDir: work,
         paths: {
           runDir,
@@ -333,7 +344,9 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
 
     const meta: TemplateMeta = {
       buildId,
-      ...shape,
+      vcpus: shape.vcpus,
+      memoryMib: shape.memoryMib,
+      hugePages: shape.hugePages ?? 'None',
       systemDrivePath: deps.identity.systemDrivePath,
     };
 
@@ -356,6 +369,7 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
       buildId,
       vmstate: join(root, key, 'vmstate'),
       memFile: join(root, key, 'mem'),
+      hugePages: meta.hugePages,
       systemDrivePath: meta.systemDrivePath,
       placeholderPath: placeholder,
     };
@@ -383,6 +397,7 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
         name: null,
         reserveMib: Math.ceil((shape.memoryMib * deps.bootReservePercent) / 100),
         memoryMib: shape.memoryMib,
+        hugePagesMib: shape.hugePages === '2M' ? shape.memoryMib : 0,
         maySleepImps: false,
       });
 

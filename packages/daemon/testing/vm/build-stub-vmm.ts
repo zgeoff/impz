@@ -6,7 +6,7 @@ import type { InstanceState } from '../../src/vm/vmm/firecracker-client';
 import type { VmOwner } from '../../src/vm/vmm/firecracker-process';
 import type { JailUser } from '../../src/vm/vmm/jail';
 import { TemplateRestoreError } from '../../src/vm/vmm/template-vm';
-import type { TemplateRestorePlan } from '../../src/vm/vmm/template-vm';
+import type { TemplateBuildPlan, TemplateRestorePlan } from '../../src/vm/vmm/template-vm';
 import type { VmRunner } from '../../src/vm/vmm/vm-runner';
 
 export const STUB_AGENT_VERSION = '0.1.0';
@@ -78,6 +78,10 @@ export function buildStubVmm() {
   const orphanJails = new Set<string>();
 
   const restorePlans: TemplateRestorePlan[] = [];
+  const bootPlans: Parameters<VmRunner['startVm']>[0][] = [];
+  const wakePlans: Parameters<VmRunner['wakeVm']>[0][] = [];
+  const buildPlans: TemplateBuildPlan[] = [];
+  const handlerWatches: { pid: number; impId: string }[] = [];
   const wakeJails: { jail: JailUser | null; files: string[] }[] = [];
 
   const usedSnapshots = new Set<string>();
@@ -237,11 +241,18 @@ export function buildStubVmm() {
       startVm: (plan) =>
         runInGeneration(async () => {
           boots.push({ hostname: plan.hostname, isIdentityReset: plan.isIdentityReset });
+          bootPlans.push(plan);
 
           const started = await startFakeVm('boot', plan.paths);
 
           const bootId = guest.hasBootId ? buildStubBootId(started.pid) : undefined;
-          const vm = { ...started, bootId, guestSteps: guest.bootSteps };
+
+          const vm = {
+            ...started,
+            hugePages: plan.hugePages ?? 'None',
+            bootId,
+            guestSteps: guest.bootSteps,
+          };
 
           if (bootId !== undefined) {
             bootIds.set(plan.paths.apiSocket, bootId);
@@ -254,6 +265,7 @@ export function buildStubVmm() {
           const files = [plan.paths.disk, plan.paths.vmstate, plan.paths.memFile];
 
           wakeJails.push({ jail: plan.jail, files: files.filter((file) => existsSync(file)) });
+          wakePlans.push(plan);
 
           // A jailed Firecracker sees only what its jail binds, and the load
           // reopens the drive the snapshot names: without it the load fails
@@ -269,7 +281,11 @@ export function buildStubVmm() {
 
             wakes.push(vm.pid);
 
-            return { ...vm, bootId: bootIds.get(plan.paths.apiSocket) };
+            return {
+              ...vm,
+              hugePages: plan.hugePages ?? 'None',
+              bootId: bootIds.get(plan.paths.apiSocket),
+            };
           } finally {
             usedSnapshots.add(plan.paths.snapshotDir);
           }
@@ -411,6 +427,7 @@ export function buildStubVmm() {
           writeFileSync(plan.memFile, 'mem');
 
           templateBuilds.push({ vcpus: plan.vcpus, memoryMib: plan.memoryMib });
+          buildPlans.push(plan);
         }, parkedBuild.resolve),
 
       loadTemplateVm: (plan) =>
@@ -437,7 +454,7 @@ export function buildStubVmm() {
             memFile: plan.memFile,
           });
 
-          const claimed = { ...vm, guestSteps: guest.bootSteps };
+          const claimed = { ...vm, hugePages: plan.hugePages, guestSteps: guest.bootSteps };
 
           return plan.claim.isIdentityReset
             ? { ...claimed, identityReset: guest.identityReset }
@@ -465,6 +482,11 @@ export function buildStubVmm() {
           memory.requestedMib = mib;
           memory.pluggedMib = Math.max(mib, Math.min(memory.pluggedMib, memory.unplugFloorMib));
         }),
+      watchUffdHandler: (pid, paths) => {
+        withGeneration(() => {
+          handlerWatches.push({ pid, impId: paths.impId });
+        });
+      },
     };
 
     parkedBuilds.set(runner, parkedBuild.promise);
@@ -482,6 +504,10 @@ export function buildStubVmm() {
     boots,
     templateBuilds,
     restores,
+    bootPlans,
+    wakePlans,
+    buildPlans,
+    handlerWatches,
     restorePlans,
     wakeJails,
     sweeps,

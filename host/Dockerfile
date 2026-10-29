@@ -27,6 +27,16 @@ COPY host/ksm-exec/*.go ./
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 go build -buildvcs=false -trimpath -ldflags='-s -w' -o /out/ksm-exec .
 
+# --- uffd-handler: serves a 2 MiB guest's memory on demand, when
+# IMP_HUGE_PAGES is 2M (docs/architecture/lifecycle/huge-pages.md) ---
+FROM golang:1.26.8-trixie@sha256:eae2aaa6add2936cbf350dd0d2628b363461542f0c4b3c0b558957e0f2997379 AS uffd-handler
+WORKDIR /src/uffd-handler
+COPY host/uffd-handler/go.mod host/uffd-handler/go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
+COPY host/uffd-handler/*.go ./
+RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 go build -buildvcs=false -trimpath -ldflags='-s -w' -o /out/uffd-handler .
+
 # --- oci-fetch: reads impd's builder image from its registry, with no
 # Docker engine (docs/architecture/storage/images.md) ---
 FROM golang:1.26.8-trixie@sha256:eae2aaa6add2936cbf350dd0d2628b363461542f0c4b3c0b558957e0f2997379 AS oci-fetch
@@ -88,6 +98,7 @@ RUN curl -fsSL -o /tmp/firecracker.tgz "https://github.com/firecracker-microvm/f
 
 COPY --from=ksm-exec /out/ksm-exec /usr/local/bin/ksm-exec
 COPY --from=oci-fetch /out/oci-fetch /usr/local/bin/oci-fetch
+COPY --from=uffd-handler /out/uffd-handler /usr/local/bin/uffd-handler
 
 # the pipe feeds echo into `sha256sum -c`, where only the check can fail
 # hadolint ignore=DL4006

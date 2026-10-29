@@ -19,6 +19,7 @@ import { parseMounts, readMounts as readHostMounts } from '../../platform/proces
 import { listPids, readStatFields } from '../../platform/process/proc';
 import type { CommandRunner } from '../../platform/process/run-command';
 import { writeRegularFile } from '../files/vm-files';
+import { UFFD_RUN_FILES } from '../storage/data-layout';
 import type { FirecrackerPaths, ImpPaths } from '../storage/data-layout';
 import { probeProcessOfUid, stopProcessOfUid } from './process-owner';
 
@@ -61,6 +62,8 @@ export interface Jails {
   // a stray entry in run/ means a compromised VM: the seal throws without
   // deleting anything while the VM runs, and the caller must kill the VM
   readonly seal: (paths: RunPaths, pid: number) => void;
+
+  readonly removeUffdDevice: (id: string) => void;
 }
 
 interface ChrootPlan {
@@ -315,6 +318,12 @@ export function createJails(deps: Readonly<JailDeps>): Jails {
 
       writeRegularFile(paths.pidFile, `${String(pid)}\n`);
     },
+
+    // The jailer makes the node wherever the host kernel has the device. A
+    // snapshot load opens it, and no guest code needs it.
+    removeUffdDevice: (id) => {
+      rmSync(join(getRoot(id), 'dev', 'userfaultfd'), { force: true });
+    },
   };
 }
 
@@ -423,13 +432,15 @@ function setupImpdRunDir(paths: Readonly<RunPaths>): void {
 
 function probeSealedEntry(paths: Readonly<RunPaths>, path: string): boolean {
   const entry = lstatSync(path);
+  const uffdSocket = join(paths.runDir, UFFD_RUN_FILES.socket);
+  const uffdPidFile = join(paths.runDir, UFFD_RUN_FILES.pidFile);
 
-  if (path === paths.apiSocket || path === paths.vsockSocket) {
+  if (path === paths.apiSocket || path === paths.vsockSocket || path === uffdSocket) {
     return entry.isSocket();
   }
 
   return (
-    (path === paths.logFile || path === paths.pidFile) &&
+    (path === paths.logFile || path === paths.pidFile || path === uffdPidFile) &&
     entry.isFile() &&
     entry.uid === IMPD_USER.uid &&
     entry.nlink === 1

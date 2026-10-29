@@ -21,6 +21,7 @@ import type { SystemFiles } from './vm/storage/setup-system-files';
 import type { StorageBackend } from './vm/storage/storage-backend';
 import type { CpuCgroups } from './vm/vmm/cpu-cgroups';
 import type { KsmHostStats } from './vm/vmm/ksm';
+import type { HugePagePool } from './vm/vmm/read-huge-page-pool';
 import type { VmRunner } from './vm/vmm/vm-runner';
 
 type BrokerBoundaries = Pick<
@@ -47,6 +48,7 @@ export type ImpBoundaries = Partial<
     | 'readRssMib'
     | 'readUnsharedRamMib'
     | 'checkGuestMerge'
+    | 'probeUffdDevice'
     | 'growFilesystem'
     | 'hostCpus'
     | 'memoryLimit'
@@ -60,6 +62,8 @@ export type ImpBoundaries = Partial<
   >
 > & {
   readonly readKsmProfitMib?: (pid: number) => Promise<number | null>;
+  readonly readHugePagePool?: () => HugePagePool | null;
+  readonly readHugetlbMib?: (pid: number, apiSocket: string) => Promise<number | null>;
 };
 
 export interface ImpdDeps {

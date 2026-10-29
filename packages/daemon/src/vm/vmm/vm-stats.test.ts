@@ -6,6 +6,7 @@ import {
   countUnsharedMib,
   parseProcFields,
   readCpuTicks,
+  readHugetlbMibAsync,
   readOwnedRamMib,
   readOwnedRamMibAsync,
   readResidentMibAsync,
@@ -66,6 +67,11 @@ test('#readOwnedRamMib counts the anonymous and shmem Pss of a live firecracker'
   writeFileSync(join(ctx.procRoot, '42', 'cmdline'), 'firecracker\0--api-sock\0/run/api.sock\0');
 
   writeFileSync(
+    join(ctx.procRoot, '42', 'status'),
+    'Name:\tfirecracker\nHugetlbPages:\t       0 kB\n',
+  );
+
+  writeFileSync(
     join(ctx.procRoot, '42', 'smaps_rollup'),
     'Rss:              409600 kB\nPss_Anon:          204800 kB\nPss_Shmem:          51200 kB\nAnonymous:         307200 kB\n',
   );
@@ -79,6 +85,11 @@ test('#readOwnedRamMibAsync counts what readOwnedRamMib counts', async () => {
   mkdirSync(join(ctx.procRoot, '42'));
   writeFileSync(join(ctx.procRoot, '42', 'stat'), '42 (firecracker) S 1 42 42 0 -1');
   writeFileSync(join(ctx.procRoot, '42', 'cmdline'), 'firecracker\0--api-sock\0/run/api.sock\0');
+
+  writeFileSync(
+    join(ctx.procRoot, '42', 'status'),
+    'Name:\tfirecracker\nHugetlbPages:\t       0 kB\n',
+  );
 
   writeFileSync(
     join(ctx.procRoot, '42', 'smaps_rollup'),
@@ -99,12 +110,93 @@ test('#readResidentMibAsync counts the resident anonymous and shmem pages of a l
 
   writeFileSync(
     join(ctx.procRoot, '42', 'status'),
+    'Name:\tfirecracker\nHugetlbPages:\t       0 kB\n',
+  );
+
+  writeFileSync(
+    join(ctx.procRoot, '42', 'status'),
     'Name:\tfirecracker\nVmRSS:\t  471040 kB\nRssAnon:\t  307200 kB\nRssFile:\t  102400 kB\nRssShmem:\t   61440 kB\nThreads:\t5\n',
   );
 
   const residentMib = await readResidentMibAsync(42, '/run/api.sock', ctx.procRoot);
 
   expect(residentMib).toBe(360);
+});
+
+test('#readResidentMibAsync counts the hugetlb pages of a firecracker on 2 MiB pages', async () => {
+  const ctx = setupTest();
+
+  mkdirSync(join(ctx.procRoot, '42'));
+  writeFileSync(join(ctx.procRoot, '42', 'stat'), '42 (firecracker) S 1 42 42 0 -1');
+  writeFileSync(join(ctx.procRoot, '42', 'cmdline'), 'firecracker\0--api-sock\0/run/api.sock\0');
+
+  writeFileSync(
+    join(ctx.procRoot, '42', 'status'),
+    'Name:\tfirecracker\nRssAnon:\t   20480 kB\nRssFile:\t  102400 kB\nRssShmem:\t       0 kB\nHugetlbPages:\t   75776 kB\n',
+  );
+
+  const residentMib = await readResidentMibAsync(42, '/run/api.sock', ctx.procRoot);
+
+  expect(residentMib).toBe(94);
+});
+
+test("#readOwnedRamMibAsync counts a 2 MiB guest's memory as its HugetlbPages", async () => {
+  const ctx = setupTest();
+
+  mkdirSync(join(ctx.procRoot, '42'));
+  writeFileSync(join(ctx.procRoot, '42', 'stat'), '42 (firecracker) S 1 42 42 0 -1');
+  writeFileSync(join(ctx.procRoot, '42', 'cmdline'), 'firecracker\0--api-sock\0/run/api.sock\0');
+
+  writeFileSync(
+    join(ctx.procRoot, '42', 'smaps_rollup'),
+    'Rss:               40960 kB\nPss_Anon:              0 kB\nPss_Shmem:             0 kB\nPrivate_Hugetlb:   75776 kB\n',
+  );
+
+  writeFileSync(
+    join(ctx.procRoot, '42', 'status'),
+    'Name:\tfirecracker\nRssAnon:\t       0 kB\nHugetlbPages:\t   75776 kB\n',
+  );
+
+  const ramMib = await readOwnedRamMibAsync(42, '/run/api.sock', ctx.procRoot);
+
+  expect(ramMib).toBe(74);
+});
+
+test("#readUnsharedRamMib counts a 2 MiB guest's hugetlb pages for its next wake", () => {
+  const ctx = setupTest();
+
+  mkdirSync(join(ctx.procRoot, '42'));
+  writeFileSync(join(ctx.procRoot, '42', 'stat'), '42 (firecracker) S 1 42 42 0 -1');
+  writeFileSync(join(ctx.procRoot, '42', 'cmdline'), 'firecracker\0--api-sock\0/run/api.sock\0');
+  writeFileSync(join(ctx.procRoot, '42', 'smaps_rollup'), 'Anonymous:          10240 kB\n');
+  writeFileSync(join(ctx.procRoot, '42', 'status'), 'HugetlbPages:\t   71680 kB\n');
+
+  expect(readUnsharedRamMib(42, '/run/api.sock', ctx.procRoot)).toBe(80);
+});
+
+test('#readHugetlbMibAsync reads the pool pages a firecracker holds', async () => {
+  const ctx = setupTest();
+
+  mkdirSync(join(ctx.procRoot, '42'));
+  writeFileSync(join(ctx.procRoot, '42', 'stat'), '42 (firecracker) S 1 42 42 0 -1');
+  writeFileSync(join(ctx.procRoot, '42', 'cmdline'), 'firecracker\0--api-sock\0/run/api.sock\0');
+
+  writeFileSync(
+    join(ctx.procRoot, '42', 'status'),
+    'RssAnon:\t   20480 kB\nHugetlbPages:\t   71680 kB\n',
+  );
+
+  const hugetlbMib = await readHugetlbMibAsync(42, '/run/api.sock', ctx.procRoot);
+
+  expect(hugetlbMib).toBe(70);
+});
+
+test('#readHugetlbMibAsync reads nothing for a pid that is gone', async () => {
+  const ctx = setupTest();
+
+  const hugetlbMib = await readHugetlbMibAsync(42, '/run/api.sock', ctx.procRoot);
+
+  expect(hugetlbMib).toBeNull();
 });
 
 test('#readResidentMibAsync reads nothing for a pid that serves another socket', async () => {
@@ -140,6 +232,11 @@ test('#readOwnedRamMibAsync reads nothing for a firecracker without smaps_rollup
   writeFileSync(join(ctx.procRoot, '42', 'stat'), '42 (firecracker) S 1 42 42 0 -1');
   writeFileSync(join(ctx.procRoot, '42', 'cmdline'), 'firecracker\0--api-sock\0/run/api.sock\0');
 
+  writeFileSync(
+    join(ctx.procRoot, '42', 'status'),
+    'Name:\tfirecracker\nHugetlbPages:\t       0 kB\n',
+  );
+
   const ramMib = await readOwnedRamMibAsync(42, '/run/api.sock', ctx.procRoot);
 
   expect(ramMib).toBeNull();
@@ -151,6 +248,11 @@ test('#readUnsharedRamMib counts the anonymous pages in full and the shmem Pss',
   mkdirSync(join(ctx.procRoot, '42'));
   writeFileSync(join(ctx.procRoot, '42', 'stat'), '42 (firecracker) S 1 42 42 0 -1');
   writeFileSync(join(ctx.procRoot, '42', 'cmdline'), 'firecracker\0--api-sock\0/run/api.sock\0');
+
+  writeFileSync(
+    join(ctx.procRoot, '42', 'status'),
+    'Name:\tfirecracker\nHugetlbPages:\t       0 kB\n',
+  );
 
   writeFileSync(
     join(ctx.procRoot, '42', 'smaps_rollup'),
@@ -168,6 +270,11 @@ test('#readRssMib reads the resident size of a live firecracker', () => {
   writeFileSync(join(ctx.procRoot, '42', 'cmdline'), 'firecracker\0--api-sock\0/run/api.sock\0');
 
   writeFileSync(
+    join(ctx.procRoot, '42', 'status'),
+    'Name:\tfirecracker\nHugetlbPages:\t       0 kB\n',
+  );
+
+  writeFileSync(
     join(ctx.procRoot, '42', 'smaps_rollup'),
     'Rss:              409600 kB\nPss_Anon:          204800 kB\nPss_Shmem:          51200 kB\nAnonymous:         307200 kB\n',
   );
@@ -181,6 +288,11 @@ test('#readVmMemory reads the counted and the resident size in one read', () => 
   mkdirSync(join(ctx.procRoot, '42'));
   writeFileSync(join(ctx.procRoot, '42', 'stat'), '42 (firecracker) S 1 42 42 0 -1');
   writeFileSync(join(ctx.procRoot, '42', 'cmdline'), 'firecracker\0--api-sock\0/run/api.sock\0');
+
+  writeFileSync(
+    join(ctx.procRoot, '42', 'status'),
+    'Name:\tfirecracker\nHugetlbPages:\t       0 kB\n',
+  );
 
   writeFileSync(
     join(ctx.procRoot, '42', 'smaps_rollup'),
@@ -199,6 +311,12 @@ test('#readOwnedRamMib rounds to whole MiB', () => {
   mkdirSync(join(ctx.procRoot, '42'));
   writeFileSync(join(ctx.procRoot, '42', 'stat'), '42 (firecracker) S 1 42 42 0 -1');
   writeFileSync(join(ctx.procRoot, '42', 'cmdline'), 'firecracker\0--api-sock\0/run/api.sock\0');
+
+  writeFileSync(
+    join(ctx.procRoot, '42', 'status'),
+    'Name:\tfirecracker\nHugetlbPages:\t       0 kB\n',
+  );
+
   writeFileSync(join(ctx.procRoot, '42', 'smaps_rollup'), 'Pss_Anon:            1600 kB\n');
 
   expect(readOwnedRamMib(42, '/run/api.sock', ctx.procRoot)).toBe(2);
@@ -221,6 +339,12 @@ test('#readOwnedRamMib reads nothing for a zombie firecracker', () => {
   mkdirSync(join(ctx.procRoot, '42'));
   writeFileSync(join(ctx.procRoot, '42', 'stat'), '42 (firecracker) Z 1 42 42 0 -1');
   writeFileSync(join(ctx.procRoot, '42', 'cmdline'), 'firecracker\0--api-sock\0/run/api.sock\0');
+
+  writeFileSync(
+    join(ctx.procRoot, '42', 'status'),
+    'Name:\tfirecracker\nHugetlbPages:\t       0 kB\n',
+  );
+
   writeFileSync(join(ctx.procRoot, '42', 'smaps_rollup'), 'Pss_Anon:          204800 kB\n');
 
   expect(readOwnedRamMib(42, '/run/api.sock', ctx.procRoot)).toBeNull();
@@ -232,6 +356,11 @@ test('#readRssMib reads nothing for a firecracker without smaps_rollup', () => {
   mkdirSync(join(ctx.procRoot, '42'));
   writeFileSync(join(ctx.procRoot, '42', 'stat'), '42 (firecracker) S 1 42 42 0 -1');
   writeFileSync(join(ctx.procRoot, '42', 'cmdline'), 'firecracker\0--api-sock\0/run/api.sock\0');
+
+  writeFileSync(
+    join(ctx.procRoot, '42', 'status'),
+    'Name:\tfirecracker\nHugetlbPages:\t       0 kB\n',
+  );
 
   expect(readRssMib(42, '/run/api.sock', ctx.procRoot)).toBeNull();
 });

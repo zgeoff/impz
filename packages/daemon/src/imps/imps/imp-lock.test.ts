@@ -31,6 +31,7 @@ async function setupTest() {
     readVmMemory: () => ({ ramMib: null, rssMib: null }),
     readUnsharedRamMib: () => null,
     checkGuestMerge: () => Promise.resolve(null),
+    probeUffdDevice: () => false,
     growFilesystem: () => Promise.resolve(false),
     sleep: () => Promise.resolve(),
     sleepTiming: { now: () => 0, sleep: () => Promise.resolve() },

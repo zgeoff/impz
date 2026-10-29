@@ -1551,7 +1551,7 @@ ExecStartPre=/bin/sh -c 'case "$$IMP_HOST_NETWORK" in *imp-host*) /usr/bin/podma
 # IMP_HOST_PROBED; systemd reads the file again for ExecStart.
 RuntimeDirectory=imp-host
 EnvironmentFile=-/run/imp-host/probed.env
-ExecStartPre=/bin/sh -c 'a=; [ -e /dev/zfs ] && a="$$a --device /dev/zfs"; [ -e /proc/sys/net/ipv6 ] && a="$$a --sysctl net.ipv6.conf.all.forwarding=1 --sysctl net.ipv6.conf.default.accept_ra=0 --sysctl net.ipv6.conf.default.accept_redirects=0 --sysctl net.ipv6.conf.default.disable_ipv6=0"; { echo "IMP_HOST_PROBED=$$a"; echo "IMP_HOST_ADDRESSES=$$(ip -o addr show scope global | tr -s " " | cut -d " " -f 4 | paste -sd ,)"; } >/run/imp-host/probed.env'
+ExecStartPre=/bin/sh -c 'a=; [ -e /dev/zfs ] && a="$$a --device /dev/zfs"; [ -e /dev/userfaultfd ] && [ "$$IMP_HUGE_PAGES" = 2M ] && a="$$a --device /dev/userfaultfd"; [ -e /proc/sys/net/ipv6 ] && a="$$a --sysctl net.ipv6.conf.all.forwarding=1 --sysctl net.ipv6.conf.default.accept_ra=0 --sysctl net.ipv6.conf.default.accept_redirects=0 --sysctl net.ipv6.conf.default.disable_ipv6=0"; { echo "IMP_HOST_PROBED=$$a"; echo "IMP_HOST_ADDRESSES=$$(ip -o addr show scope global | tr -s " " | cut -d " " -f 4 | paste -sd ,)"; } >/run/imp-host/probed.env'
 # In the foreground and without a podman restart policy: systemd supervises
 # it and restarts it on failure.
 # --hostname: restic's backup locks name the host (docs/architecture/storage/backups.md)

@@ -232,6 +232,7 @@ test('#SUITE_SETS builds the fast set from the groups, in run order', () => {
     'jail',
     'memory',
     'ksm',
+    'huge-pages',
   ]);
 });
 

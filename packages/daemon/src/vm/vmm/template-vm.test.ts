@@ -15,12 +15,13 @@ import { waitFor } from '@impz/test-utils/wait-for';
 import { buildMockTemplateBuildPlan } from '../../../testing/vm/build-mock-template-build-plan';
 import { buildMockTemplateRestorePlan } from '../../../testing/vm/build-mock-template-restore-plan';
 import { buildStubJails } from '../../../testing/vm/build-stub-jails';
+import { createStubUffdHandler } from '../../../testing/vm/create-stub-uffd-handler';
 import { buildStubFirecrackerArgv } from '../../../testing/vm/start-stub-firecracker';
 import { startStubParkedAgent } from '../../../testing/vm/start-stub-parked-agent';
 import { stopPid } from '../../platform/process/proc';
 import { buildImpPaths } from '../storage/data-layout';
 import { createFirecrackerClient } from './firecracker-client';
-import { probeFirecrackerAlive } from './firecracker-process';
+import { probeProcessAlive } from './firecracker-process';
 import { TemplateRestoreError, createTemplateVm, loadTemplateVm } from './template-vm';
 
 function setupTest() {
@@ -85,6 +86,7 @@ test('#loadTemplateVm owns the disk of a jailed restore once the clone is done, 
   expect(readFileSync(ctx.logPath, 'utf8').trim().split('\n')).toStrictEqual([
     'prepare i1 late=true disk=false',
     'PUT /snapshot/load',
+    'remove uffd device i1',
     'seal',
     'PATCH /vm',
     'own disk=true',
@@ -216,7 +218,7 @@ test('#loadTemplateVm kills the VM and releases the jail of a restore that fails
 
   const pid = Number(readFileSync(paths.pidFile, 'utf8'));
 
-  expect(probeFirecrackerAlive(pid, paths.apiSocket)).toBeFalse();
+  expect(probeProcessAlive(pid, paths.apiSocket)).toBeFalse();
   expect(stub.notes.at(-1)).toBe('release i1');
 });
 
@@ -319,6 +321,7 @@ test('#buildTemplateVm releases the jail of a build before its files go to root,
     'PUT /vsock',
     'PUT /network-interfaces/eth0',
     'PUT /balloon',
+    'remove uffd device tpl-build',
     'seal',
     'PUT /actions',
     'PATCH /vm',
@@ -446,4 +449,118 @@ test('#buildTemplateVm releases the jail of a build that fails, and leaves no sn
   expect(createTemplateVm(plan, stub.jails)).rejects.toThrow();
   expect(stub.notes.at(-1)).toBe('release tpl-build');
   expect(existsSync(plan.snapshotDir)).toBeFalse();
+});
+
+test('#buildTemplateVm boots a 2M build on 2 MiB pages and snapshots only the blocks it holds', async () => {
+  const ctx = setupTest();
+
+  const plan = buildMockTemplateBuildPlan({
+    workDir: join(ctx.directoryPath, '.build-1'),
+    jailId: 'tpl-build',
+    jail: { uid: process.getuid?.() ?? 0, gid: process.getgid?.() ?? 0 },
+    hugePages: '2M',
+  });
+
+  mkdirSync(plan.paths.runDir, { recursive: true });
+
+  const stub = buildStubJails({
+    argv: buildStubFirecrackerArgv({
+      apiSocket: plan.paths.apiSocket,
+      logPath: ctx.logPath,
+      isLoggingBodies: true,
+    }),
+  });
+
+  const building = createTemplateVm(plan, stub.jails);
+
+  await waitFor(() => {
+    expect(existsSync(plan.paths.apiSocket)).toBeTrue();
+  });
+
+  await startStubParkedAgent(plan.paths.vsockSocket);
+  await building;
+
+  const calls = readFileSync(ctx.logPath, 'utf8').trim().split('\n');
+
+  expect(calls.find((call) => call.startsWith('PUT /machine-config'))).toInclude(
+    '"huge_pages":"2M"',
+  );
+
+  expect(calls.find((call) => call.startsWith('PUT /snapshot/create'))).toInclude(
+    '"snapshot_type":"Diff"',
+  );
+});
+
+test('#loadTemplateVm restores a 2M template through its page handler on 2 MiB pages', () => {
+  const ctx = setupTest();
+  const paths = buildImpPaths(ctx.directoryPath, 'i1');
+  const handler = createStubUffdHandler(ctx.directoryPath);
+  const memFile = join(ctx.directoryPath, 'mem');
+
+  mkdirSync(paths.runDir, { recursive: true });
+  writeFileSync(memFile, 'template pages');
+
+  const stub = buildStubJails({
+    argv: buildStubFirecrackerArgv({
+      apiSocket: paths.apiSocket,
+      logPath: ctx.logPath,
+      isLoggingBodies: true,
+      failures: ['PATCH /vm'],
+    }),
+  });
+
+  const plan = buildMockTemplateRestorePlan({
+    paths,
+    memFile,
+    hugePages: '2M',
+    tap: 'imp-t1',
+    jail: { uid: 900_001, gid: 900_001 },
+  });
+
+  const restoring = loadTemplateVm(plan, stub.jails, { uffdHandlerBin: handler.path });
+
+  expect(restoring).rejects.toThrow(/^template restore failed: /u);
+
+  expect(readFileSync(ctx.logPath, 'utf8').trim().split('\n')).toStrictEqual([
+    `PUT /snapshot/load {"snapshot_path":"${plan.vmstate}","mem_backend":{"backend_type":"Uffd","backend_path":"${paths.uffdSocket}"},"resume_vm":false,"huge_pages":"2M","network_overrides":[{"iface_id":"eth0","host_dev_name":"imp-t1"}],"vsock_override":{"uds_path":"${paths.vsockSocket}"}}`,
+    'PATCH /vm {"state":"Resumed"}',
+  ]);
+
+  expect(handler.readStarts()).toStrictEqual([
+    {
+      options: { socket: paths.uffdSocket, uid: '900001', gid: '900001' },
+      served: 'template pages',
+    },
+  ]);
+});
+
+test('#loadTemplateVm restores a host-page template from its memory file', () => {
+  const ctx = setupTest();
+  const paths = buildImpPaths(ctx.directoryPath, 'i1');
+
+  mkdirSync(paths.runDir, { recursive: true });
+
+  const stub = buildStubJails({
+    argv: buildStubFirecrackerArgv({
+      apiSocket: paths.apiSocket,
+      logPath: ctx.logPath,
+      isLoggingBodies: true,
+      failures: ['PATCH /vm'],
+    }),
+  });
+
+  const plan = buildMockTemplateRestorePlan({
+    paths,
+    tap: 'imp-t1',
+    jail: { uid: 900_001, gid: 900_001 },
+  });
+
+  const restoring = loadTemplateVm(plan, stub.jails);
+
+  expect(restoring).rejects.toThrow(/^template restore failed: /u);
+
+  expect(readFileSync(ctx.logPath, 'utf8').trim().split('\n')).toStrictEqual([
+    `PUT /snapshot/load {"snapshot_path":"${plan.vmstate}","mem_backend":{"backend_type":"File","backend_path":"${plan.memFile}"},"resume_vm":false,"network_overrides":[{"iface_id":"eth0","host_dev_name":"imp-t1"}],"vsock_override":{"uds_path":"${paths.vsockSocket}"}}`,
+    'PATCH /vm {"state":"Resumed"}',
+  ]);
 });

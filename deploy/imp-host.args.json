@@ -18,6 +18,11 @@
       "args": ["--device", "/dev/zfs"]
     },
     {
+      "path": "/dev/userfaultfd",
+      "args": ["--device", "/dev/userfaultfd"],
+      "setting": { "name": "IMP_HUGE_PAGES", "value": "2M" }
+    },
+    {
       "path": "/proc/sys/net/ipv6",
       "args": [
         "--sysctl",

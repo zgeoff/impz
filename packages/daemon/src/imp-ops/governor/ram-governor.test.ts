@@ -31,6 +31,151 @@ test('it admits on the resident counts and walks no VM pages while the budget is
   expect(readRamMib).not.toHaveBeenCalled();
 });
 
+test('it admits a guest on 2 MiB pages whose memory fits the free pool beside what awake guests may still take', () => {
+  const host = createStubGovernedHost({
+    budgetMib: 4000,
+    ids: ['a', 'x'],
+    awake: [{ id: 'a', rssMib: 300, hugePagesMib: 1024, hugetlbMib: 256 }],
+    hugePool: { totalMib: 2048, freeMib: 1792 },
+  });
+
+  const governor = createRamGovernor({ ...host.deps });
+
+  const admitted = governor.admit({
+    id: 'x',
+    name: 'x',
+    reserveMib: 512,
+    memoryMib: 1024,
+    hugePagesMib: 1024,
+  });
+
+  expect(admitted).resolves.toBeUndefined();
+});
+
+test('it refuses a guest on 2 MiB pages that the pool cannot hold, and sleeps no imp for it', async () => {
+  const host = createStubGovernedHost({
+    budgetMib: 4000,
+    ids: ['a', 'x'],
+    awake: [{ id: 'a', rssMib: 300, hugePagesMib: 1024, hugetlbMib: 256 }],
+    hugePool: { totalMib: 2048, freeMib: 1792 },
+  });
+
+  const governor = createRamGovernor({ ...host.deps });
+
+  const refusal = await governor
+    .admit({ id: 'x', name: 'x', reserveMib: 512, memoryMib: 1026, hugePagesMib: 1026 })
+    .then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+  expect(refusal).toMatchObject({
+    code: 'RAM_BUDGET_EXCEEDED',
+    message:
+      "not enough 2 MiB pages: 1024 of the host's 2048 MiB pool in use or promised to awake imps, 1026 MiB requested",
+  });
+
+  expect(host.sleepCalls).toBeEmpty();
+});
+
+test('it refuses a guest on 2 MiB pages that fits only the pool an awake guest faulted from while its count was read', async () => {
+  const host = createStubGovernedHost({
+    budgetMib: 4000,
+    ids: ['a', 'x'],
+    awake: [{ id: 'a', rssMib: 300, hugePagesMib: 1024, hugetlbMib: 256, faultMibOnRead: 512 }],
+    hugePool: { totalMib: 2048, freeMib: 1792 },
+  });
+
+  const governor = createRamGovernor({ ...host.deps });
+
+  const refusal = await governor
+    .admit({ id: 'x', name: 'x', reserveMib: 512, memoryMib: 1024, hugePagesMib: 1024 })
+    .then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+  expect(refusal).toMatchObject({ code: 'RAM_BUDGET_EXCEEDED' });
+});
+
+test('it counts a guest on 2 MiB pages it admitted against the next one until that guest is awake', async () => {
+  const host = createStubGovernedHost({
+    budgetMib: 4000,
+    ids: ['x', 'y'],
+    awake: [],
+    hugePool: { totalMib: 2048, freeMib: 2048 },
+  });
+
+  const governor = createRamGovernor({ ...host.deps });
+
+  await governor.admit({
+    id: 'x',
+    name: 'x',
+    reserveMib: 512,
+    memoryMib: 1536,
+    hugePagesMib: 1536,
+  });
+
+  const second = governor.admit({
+    id: 'y',
+    name: 'y',
+    reserveMib: 512,
+    memoryMib: 1024,
+    hugePagesMib: 1024,
+  });
+
+  expect(second).rejects.toMatchObject({ code: 'RAM_BUDGET_EXCEEDED' });
+});
+
+test("it gives a refused boot's pool pages back once its admission is released", async () => {
+  const host = createStubGovernedHost({
+    budgetMib: 4000,
+    ids: ['x', 'y'],
+    awake: [],
+    hugePool: { totalMib: 2048, freeMib: 2048 },
+  });
+
+  const governor = createRamGovernor({ ...host.deps });
+
+  await governor.admit({
+    id: 'x',
+    name: 'x',
+    reserveMib: 512,
+    memoryMib: 1536,
+    hugePagesMib: 1536,
+  });
+
+  governor.release('x');
+
+  const second = governor.admit({
+    id: 'y',
+    name: 'y',
+    reserveMib: 512,
+    memoryMib: 1024,
+    hugePagesMib: 1024,
+  });
+
+  expect(second).resolves.toBeUndefined();
+});
+
+test('it refuses a guest on 2 MiB pages on a host with no pool', () => {
+  const host = createStubGovernedHost({ budgetMib: 4000, ids: ['x'], awake: [] });
+  const governor = createRamGovernor({ ...host.deps });
+
+  expect(
+    governor.admit({ id: 'x', name: 'x', reserveMib: 64, memoryMib: 128, hugePagesMib: 128 }),
+  ).rejects.toMatchObject({ code: 'RAM_BUDGET_EXCEEDED' });
+});
+
+test("it admits a guest on the host's pages with no look at the pool", () => {
+  const host = createStubGovernedHost({ budgetMib: 4000, ids: ['x'], awake: [] });
+  const governor = createRamGovernor({ ...host.deps });
+
+  expect(
+    governor.admit({ id: 'x', name: 'x', reserveMib: 64, memoryMib: 128 }),
+  ).resolves.toBeUndefined();
+});
+
 test('it counts the reserve it admitted on the resident counts', async () => {
   const host = createStubGovernedHost({
     budgetMib: 1000,

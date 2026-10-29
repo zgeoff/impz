@@ -70,6 +70,9 @@ export function buildStubJails(options: Readonly<StubJailsOptions> = {}) {
         throw refusals.seal;
       }
     },
+    removeUffdDevice: (id) => {
+      writeNote(`remove uffd device ${id}`);
+    },
   };
 
   return {

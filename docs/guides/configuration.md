@@ -52,6 +52,8 @@ error.
 | `IMP_KSM`                       | none                                      | `1` lets KSM merge identical guest pages: Firecracker, or the jailer that execs it, starts through `ksm-exec`; `0` or unset is off. Linux 6.10 or later; a single-owner trade-off ([KSM](../architecture/lifecycle/ram-governor.md#ksm)).                      |
 | `IMP_KSM_HEADROOM_PERCENT`      | `100`                                     | With `IMP_KSM` (read only then): the share of what KSM saves in the awake VMs that the governor keeps free. 100 is safe; lower fits more imps.                                                                                                                 |
 | `IMP_KSM_EXEC`                  | `ksm-exec`                                | With `IMP_KSM`: the wrapper Firecracker, or the jailer, starts through. It runs outside the jail, so the chroot needs no copy.                                                                                                                                 |
+| `IMP_HUGE_PAGES`                | `off`                                     | `2M` backs each imp of fixed memory with the host's pool of huge pages, and restores and wakes it through a page handler; `off` keeps every imp on ordinary pages. The host must reserve the pool ([huge pages](#huge-pages)).                                 |
+| `IMP_UFFD_HANDLER`              | `uffd-handler`                            | With `IMP_HUGE_PAGES=2M`: the page handler impd starts for each restore and wake.                                                                                                                                                                              |
 | `IMP_STORAGE_BACKEND`           | `xfs`                                     | `xfs` or `zfs` ([storage](../architecture/storage/storage.md)). impd refuses a data dir the other backend wrote.                                                                                                                                               |
 | `IMP_ZFS_ROOT`                  | none                                      | With `zfs`: the dataset mounted on `IMP_DATA_DIR`, such as `tank/imp`. Needed then.                                                                                                                                                                            |
 | `IMP_ZFS_ALLOW_UIOMOVE_BUG`     | `0`                                       | With `zfs`: `1` starts impd on a module with the zfs_uiomove bug, with a warning, where impd refuses it otherwise ([the host](../architecture/host.md#what-the-host-gives)).                                                                                   |
@@ -83,6 +85,42 @@ A host on Linux 6.7 or later does not set a restored TSC back, so it can set
 fast median wake ([young guests](../architecture/lifecycle/sleep-and-wake.md#young-guests)).
 
 [Sleep and wake](../architecture/lifecycle/ram-governor.md) explains the RAM and idle settings.
+
+### Huge pages
+
+With `IMP_HUGE_PAGES=2M`, impd runs each imp of fixed memory on the host's pool of 2 MiB pages
+([huge pages](../architecture/lifecycle/huge-pages.md)). impd never sizes the pool: the host
+reserves it, and impd refuses a boot or wake the free pool cannot hold. Pool pages leave the host's
+ordinary RAM for good, and KSM cannot merge them. The host needs Linux 6.1 or later, whose
+`/dev/userfaultfd` the unit, `bootstrap.sh`, `dev.sh` and the NixOS module pass into the container
+only while `IMP_HUGE_PAGES=2M` is set. Without the device, impd refuses each boot or wake on huge
+pages with `PRECONDITION_FAILED`. On NixOS, set `IMP_HUGE_PAGES` in `services.imp.settings`, never
+in `environmentFile`, because the module reads the setting to pass the device.
+
+1. Size the pool to the memory of every 2M imp you expect awake at once, plus the memory of the
+   largest imp shape, for a template build on huge pages.
+2. Reserve the pool on the host, outside the container. For 8 GiB, which is 4096 pages:
+
+   ```bash
+   echo 'vm.nr_hugepages = 4096' | sudo tee /etc/sysctl.d/60-imp-hugepages.conf
+   sudo sysctl --system
+   ```
+
+   On NixOS, set `boot.kernel.sysctl."vm.nr_hugepages"` instead.
+
+3. Check that the kernel reserved the whole pool:
+
+   ```bash
+   grep -E 'HugePages_(Total|Free)' /proc/meminfo
+   ```
+
+   Expect `HugePages_Total: 4096`. A host whose memory is fragmented reserves fewer pages; reserve
+   them at boot, on the kernel command line with `hugepages=4096`, to get them all.
+
+4. Set `IMP_HUGE_PAGES=2M` in the env file and restart impd.
+
+To turn huge pages off, unset `IMP_HUGE_PAGES` and restart impd. Each imp that slept on huge pages
+wakes on ordinary pages from its memory file.
 
 ### Backups
 
@@ -260,12 +298,12 @@ impd tuning passes through an allowlist. When set on your machine, `dev.sh` pass
 `IMP_DEFAULT_DISK_GIB`, `IMP_DISK_RESERVE_GIB`, `IMP_WATCHDOG_TIMEOUT_S`, `IMP_WATCHDOG_ACTION`,
 `IMP_TAILSCALE_HOSTNAME`, `IMP_TAILNET_IDENTITIES`, `IMP_TAILNET_NAMES`, `IMP_TAILNET_NAME_PREFIX`,
 `IMP_BUILD_CONTEXT_MAX_MIB`, `IMP_BROKER_PORT`, `IMP_KSM`, `IMP_KSM_HEADROOM_PERCENT`,
-`IMP_SSH_AUTHORIZED_KEYS`, `IMP_STORAGE_BACKEND`, `IMP_ZFS_ROOT`, `IMP_ZFS_ALLOW_UIOMOVE_BUG`,
-`IMP_SUBNET6`, `IMP_JAILER`, `IMP_JAILER_BIN`, `IMP_PEER_URL`, `IMP_MOVE_TEST_CIDR`,
-`IMP_BUILD_TEST_REGISTRY` and `IMP_HOST_ADDRESSES` to impd, the `IMP_BACKUP_*` variables, and the
-HTTPS settings except the token: `IMP_DOMAIN`, `IMP_DNS_PROVIDER`, `IMP_DNS_API_URL`,
-`IMP_ACME_DIRECTORY`, `IMP_ACME_EMAIL`, `IMP_HTTPS_PORT`, `IMP_HTTP_PORT`, `IMP_PUBLIC_IP`,
-`IMP_PUBLIC_HTTPS_PORT`, `IMP_PUBLIC_HTTP_PORT`, and `IMP_ACME_CA_FILE` and
+`IMP_HUGE_PAGES`, `IMP_SSH_AUTHORIZED_KEYS`, `IMP_STORAGE_BACKEND`, `IMP_ZFS_ROOT`,
+`IMP_ZFS_ALLOW_UIOMOVE_BUG`, `IMP_SUBNET6`, `IMP_JAILER`, `IMP_JAILER_BIN`, `IMP_PEER_URL`,
+`IMP_MOVE_TEST_CIDR`, `IMP_BUILD_TEST_REGISTRY` and `IMP_HOST_ADDRESSES` to impd, the `IMP_BACKUP_*`
+variables, and the HTTPS settings except the token: `IMP_DOMAIN`, `IMP_DNS_PROVIDER`,
+`IMP_DNS_API_URL`, `IMP_ACME_DIRECTORY`, `IMP_ACME_EMAIL`, `IMP_HTTPS_PORT`, `IMP_HTTP_PORT`,
+`IMP_PUBLIC_IP`, `IMP_PUBLIC_HTTPS_PORT`, `IMP_PUBLIC_HTTP_PORT`, and `IMP_ACME_CA_FILE` and
 `IMP_BUILD_TEST_REGISTRY_CA` as paths under the repo. `IMP_E2E=1` lets impd use the `challtestsrv`
 DNS provider. With `IMP_BUILD_TEST_REGISTRY` set, the container resolves the registry's name to the
 address your machine resolves it to. With `IMP_TAILNET_NAMES=1`, `dev.sh` writes the OAuth client

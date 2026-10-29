@@ -737,6 +737,70 @@ test('#seal hands run/ back to impd with its log and a new pid file', async () =
   expect(readFileSync(imp.paths.pidFile, 'utf8')).toBe('4242\n');
 });
 
+test('#removeUffdDevice removes the userfaultfd node the jailer made and leaves the other devices', async () => {
+  const ctx = setupTest();
+  const imp = ctx.createImpDir('i1');
+
+  writeFileSync(imp.paths.disk, '');
+
+  await ctx.jails.prepare({ impId: 'i1', user: ctx.user, paths: imp.paths, readOnlyFiles: [] });
+
+  mkdirSync(join(imp.root, 'dev'), { recursive: true });
+  writeFileSync(join(imp.root, 'dev', 'userfaultfd'), '');
+  writeFileSync(join(imp.root, 'dev', 'kvm'), '');
+
+  ctx.jails.removeUffdDevice('i1');
+
+  expect(existsSync(join(imp.root, 'dev', 'userfaultfd'))).toBeFalse();
+  expect(existsSync(join(imp.root, 'dev', 'kvm'))).toBeTrue();
+});
+
+test("#seal keeps a page handler's socket and pid file in run/", async () => {
+  const ctx = setupTest();
+  const imp = ctx.createImpDir('i1');
+
+  writeFileSync(imp.paths.disk, '');
+
+  await ctx.jails.prepare({ impId: 'i1', user: ctx.user, paths: imp.paths, readOnlyFiles: [] });
+
+  const handler = Bun.listen({ unix: imp.paths.uffdSocket, socket: { data: () => {} } });
+
+  onTestFinished(() => {
+    handler.stop(true);
+  });
+
+  writeFileSync(imp.paths.logFile, 'boot\n');
+  writeFileSync(imp.paths.uffdPidFile, '4243\n');
+
+  ctx.jails.seal(imp.paths, 4242);
+
+  expect(readdirSync(imp.paths.runDir).toSorted()).toStrictEqual([
+    'firecracker.log',
+    'pid',
+    'uffd.pid',
+    'uffd.sock',
+  ]);
+});
+
+test("#seal refuses a regular file in place of the page handler's socket", async () => {
+  const ctx = setupTest();
+  const imp = ctx.createImpDir('i1');
+
+  writeFileSync(imp.paths.disk, '');
+
+  await ctx.jails.prepare({ impId: 'i1', user: ctx.user, paths: imp.paths, readOnlyFiles: [] });
+
+  writeFileSync(imp.paths.logFile, 'boot\n');
+  writeFileSync(imp.paths.uffdSocket, 'planted');
+
+  expect(() => {
+    ctx.jails.seal(imp.paths, 4242);
+  }).toThrowWithMessage(
+    Error,
+    `${imp.paths.runDir}: the VM left uffd.sock there; a VM that writes there is compromised`,
+  );
+});
+
 test('#seal refuses a dir the VM left in run/ and deletes nothing', async () => {
   const ctx = setupTest();
   const imp = ctx.createImpDir('i1');

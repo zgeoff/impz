@@ -9,6 +9,12 @@ export interface KsmConfig {
   readonly headroomPercent: number;
 }
 
+// Firecracker backs a 2 MiB guest with hugetlb pages, which only a UFFD
+// handler restores.
+interface HugePagesConfig {
+  readonly handlerBin: string;
+}
+
 export interface VmConfig extends HostNetConfig {
   readonly dataDir: string;
   readonly ramBudgetMib: number;
@@ -21,6 +27,7 @@ export interface VmConfig extends HostNetConfig {
   readonly jailerBin: string | null;
   readonly jailDir: string;
   readonly ksm: KsmConfig | null;
+  readonly hugePages: HugePagesConfig | null;
   readonly kernelPath: string;
 
   // impd copies the kernel and system drive in on start, so a rebuild never changes a

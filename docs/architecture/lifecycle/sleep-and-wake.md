@@ -51,8 +51,9 @@ Before the pause, impd copies the old memory file into the new one, with holes k
 blocks shared where the filesystem clones them. The VM never writes into the file it maps, so the
 copy is whole while the guest runs. Firecracker then writes the dirty pages over the copy, and the
 new file holds the full memory, as a full snapshot would. A VM that tracks no dirty pages, such as
-one that booted cold or restored a template, takes a full snapshot. A copy that fails also leads to
-a full snapshot, which writes every page over what the copy left.
+one that booted cold or restored a template, takes a full snapshot. A guest on huge pages tracks no
+dirty pages and takes a diff all the same ([huge pages](./huge-pages.md#sleep)). A copy that fails
+also leads to a full snapshot, which writes every page over what the copy left.
 
 A diff snapshot that fails can fail after Firecracker cleared its dirty page log, and a later diff
 would then miss the pages that log held. So when any snapshot fails, impd removes the memory file

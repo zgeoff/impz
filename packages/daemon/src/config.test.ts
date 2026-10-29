@@ -55,6 +55,7 @@ test('it fills every setting from its default when the env is empty', () => {
     jailerBin: 'jailer',
     jailDir: '/var/lib/imp/jail',
     ksm: null,
+    hugePages: null,
     kernelPath: '/var/lib/imp/system/vmlinux',
     kernelSource: null,
     systemDriveSource: '/var/lib/imp/system/imp-system.squashfs',
@@ -232,6 +233,7 @@ test.each([
   ['IMP_SSH_AUTHORIZED_KEYS', 'no'],
   ['IMP_STORAGE_BACKEND', 'btrfs'],
   ['IMP_KSM', 'yes'],
+  ['IMP_HUGE_PAGES', '1G'],
 ])('it refuses %s=%s', (name, value) => {
   expect(() => loadConfig({ [name]: value })).toThrow(new RegExp(`"path": \\[\\s*"${name}"`, 'u'));
 });
@@ -744,6 +746,27 @@ test('it refuses a KSM headroom above 100 percent', () => {
   expect(() => loadConfig({ IMP_KSM: '1', IMP_KSM_HEADROOM_PERCENT: '101' })).toThrow(
     'IMP_KSM_HEADROOM_PERCENT 101 is not a whole number from 0 to 100',
   );
+});
+
+test('it backs guests with 2 MiB pages through the uffd-handler on PATH when IMP_HUGE_PAGES is 2M', () => {
+  expect(loadConfig({ IMP_HUGE_PAGES: '2M' }).hugePages).toStrictEqual({
+    handlerBin: 'uffd-handler',
+  });
+});
+
+test('it reads the uffd-handler path from IMP_UFFD_HANDLER', () => {
+  const config = loadConfig({
+    IMP_HUGE_PAGES: '2M',
+    IMP_UFFD_HANDLER: '/usr/local/bin/uffd-handler',
+  });
+
+  expect(config.hugePages).toStrictEqual({ handlerBin: '/usr/local/bin/uffd-handler' });
+});
+
+test('it leaves huge pages off when IMP_HUGE_PAGES is off', () => {
+  const config = loadConfig({ IMP_HUGE_PAGES: 'off', IMP_UFFD_HANDLER: '/opt/handler' });
+
+  expect(config.hugePages).toBeNull();
 });
 
 test('it leaves KSM off and reads no headroom when IMP_KSM is 0', () => {

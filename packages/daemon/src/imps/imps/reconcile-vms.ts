@@ -107,6 +107,8 @@ export function createVmReconciler(
 
     const meta = loading ?? readSnapshotMeta(paths);
 
+    context.vms.watchUffdHandler(pid, paths);
+
     try {
       if (state === null) {
         throw new Error('its API does not answer');
@@ -239,7 +241,9 @@ export function createVmReconciler(
         });
       }
 
-      if (imp.state === 'running') {
+      if (imp.state === 'running' && imp.pid !== null) {
+        context.vms.watchUffdHandler(imp.pid, paths);
+
         await checkPaused(imp, paths);
       }
 

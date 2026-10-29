@@ -319,6 +319,13 @@ export async function startTestImpd(
       imps: {
         readRamMib: (pid) => (fake.alive.has(pid) ? FAKE_VM_RAM_MIB : null),
         readRssMib: (pid) => (fake.alive.has(pid) ? FAKE_VM_RSS_MIB : null),
+        readHugePagePool: () => null,
+        probeUffdDevice: () => true,
+        readHugetlbMib: (pid) => {
+          const hugetlbMib = fake.alive.has(pid) ? 0 : null;
+
+          return Promise.resolve(hugetlbMib);
+        },
         growFilesystem: (disk) => {
           filesystemGrows.push(disk);
 

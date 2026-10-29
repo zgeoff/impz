@@ -47,6 +47,7 @@ test('it runs every suite in run order when no suite is named', () => {
     'jail',
     'memory',
     'ksm',
+    'huge-pages',
     'backups',
     'backups-repo',
   ]);
@@ -98,6 +99,7 @@ test('it expands a set and drops a suite the set already holds', () => {
     'jail',
     'memory',
     'ksm',
+    'huge-pages',
   ]);
 });
 
@@ -125,7 +127,7 @@ test.each([
       'socket',
     ],
   ],
-  ['2', ['sleep', 'reverse', 'jail']],
+  ['2', ['sleep', 'reverse', 'jail', 'huge-pages']],
   ['3', ['mcp', 'mcp-oauth', 'proxy', 'tokens', 'inner', 'memory', 'ksm']],
   ['4', ['tailscale', 'leases', 'egress', 'cpu', 'moves-tailnet']],
 ])('it runs fast group %s with --group', (group, suites) => {

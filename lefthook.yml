@@ -65,6 +65,13 @@ pre-push:
         - 'host/ksm-exec/**/*.go'
       root: host/ksm-exec/
       run: test -z "$(gofmt -l {files})" && go vet -p 1 ./...
+    - name: go:fmt-vet-uffd-handler
+      files: bun run --silent files:branch
+      glob:
+        - 'host/uffd-handler/*.go'
+        - 'host/uffd-handler/**/*.go'
+      root: host/uffd-handler/
+      run: test -z "$(gofmt -l {files})" && go vet -p 1 ./...
     - name: go:fmt-vet-oci-fetch
       files: bun run --silent files:branch
       glob:
