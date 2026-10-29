@@ -27,11 +27,18 @@ export interface Terminators {
   readonly stop: () => Promise<void>;
 }
 
+export interface LiveConnections {
+  readonly track: (close: () => void) => () => void;
+}
+
 export interface TerminatorDeps {
   readonly socketDir: string;
   readonly issueLeaf: (host: string) => Promise<LeafCertificate>;
   readonly isLeafDue: (leaf: LeafCertificate) => boolean;
-  readonly createHandler: (key: TerminatorKey) => (request: Request) => Promise<Response>;
+  readonly createHandler: (
+    key: TerminatorKey,
+    connections: LiveConnections,
+  ) => (request: Request) => Promise<Response>;
 }
 
 interface Entry {
@@ -42,11 +49,20 @@ interface Entry {
   readonly stop: (force: boolean) => Promise<void>;
 }
 
+interface Pair {
+  readonly key: TerminatorKey;
+  readonly closers: Set<() => void>;
+}
+
 export function createTerminators(deps: TerminatorDeps): Terminators {
   rmSync(deps.socketDir, { recursive: true, force: true });
   mkdirSync(deps.socketDir, { recursive: true, mode: 0o700 });
 
   const entries = new Map<string, Promise<Entry>>();
+
+  // kept apart from the servers, so a connection on a server that a new leaf
+  // replaced still closes with its pair
+  const pairs = new Map<string, Pair>();
 
   const counter = { next: 0 };
 
@@ -57,7 +73,24 @@ export function createTerminators(deps: TerminatorDeps): Terminators {
     return join(deps.socketDir, `${String(counter.next)}.sock`);
   };
 
-  const start = async (key: TerminatorKey): Promise<Entry> => {
+  const makeConnections = (id: string, key: TerminatorKey): LiveConnections => ({
+    track: (close) => {
+      const pair = pairs.get(id) ?? { key, closers: new Set<() => void>() };
+
+      pairs.set(id, pair);
+      pair.closers.add(close);
+
+      return () => {
+        pair.closers.delete(close);
+
+        if (pair.closers.size === 0 && pairs.get(id) === pair) {
+          pairs.delete(id);
+        }
+      };
+    },
+  });
+
+  const start = async (id: string, key: TerminatorKey): Promise<Entry> => {
     const leaf = await deps.issueLeaf(key.host);
 
     const socket = buildSocketPath();
@@ -69,7 +102,7 @@ export function createTerminators(deps: TerminatorDeps): Terminators {
       tls: { cert: leaf.certPem, key: leaf.keyPem },
       idleTimeout: IDLE_TIMEOUT_S,
       maxRequestBodySize: MAX_REQUEST_BODY_BYTES,
-      fetch: deps.createHandler(key),
+      fetch: deps.createHandler(key, makeConnections(id, key)),
     } as unknown as Bun.Serve.Options<undefined>;
 
     const server = Bun.serve(options);
@@ -97,7 +130,7 @@ export function createTerminators(deps: TerminatorDeps): Terminators {
         return entry.socket;
       }
 
-      const started = start(key);
+      const started = start(id, key);
 
       entries.set(id, started);
 
@@ -111,6 +144,16 @@ export function createTerminators(deps: TerminatorDeps): Terminators {
       }
     },
     prune: async (keep) => {
+      for (const [id, pair] of pairs) {
+        if (!keep(pair.key)) {
+          pairs.delete(id);
+
+          for (const close of pair.closers) {
+            close();
+          }
+        }
+      }
+
       const stopping: Promise<void>[] = [];
 
       for (const [id, pending] of entries) {
@@ -131,6 +174,7 @@ export function createTerminators(deps: TerminatorDeps): Terminators {
       const all = await Promise.all([...entries.values()].map((pending) => readSettled(pending)));
 
       entries.clear();
+      pairs.clear();
 
       await Promise.all(
         all.map(async (entry) => {

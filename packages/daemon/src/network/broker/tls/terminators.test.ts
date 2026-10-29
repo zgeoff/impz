@@ -3,10 +3,11 @@ import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'nod
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import invariant from 'tiny-invariant';
 import { loadOrCreateBrokerCa } from './broker-ca';
 import type { LeafCertificate } from './broker-ca';
 import { createTerminators } from './terminators';
-import type { TerminatorKey } from './terminators';
+import type { TerminatorDeps, TerminatorKey } from './terminators';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();
@@ -259,4 +260,135 @@ test('it removes the socket directory when it stops', async () => {
   await terminators.stop();
 
   expect(existsSync(join(ctx.directoryPath, 'run'))).toBeFalse();
+});
+
+test('it closes the live connections of a pair the prune does not keep', async () => {
+  const ctx = await setupTest();
+
+  const createHandler = mock<TerminatorDeps['createHandler']>(
+    () => () => Promise.resolve(new Response('ok')),
+  );
+
+  const terminators = createTerminators({
+    socketDir: join(ctx.directoryPath, 'run'),
+    issueLeaf: ctx.ca.issueLeaf,
+    isLeafDue: () => false,
+    createHandler,
+  });
+
+  ctx.stack.defer(() => terminators.stop());
+
+  await terminators.open({ impId: 'imp-1', impName: 'dev', host: 'api.github.com' });
+
+  const connections = createHandler.mock.calls[0]?.[1];
+
+  invariant(connections);
+
+  const close = mock(() => {});
+
+  connections.track(close);
+
+  await terminators.prune(() => false);
+
+  expect(close).toHaveBeenCalledOnce();
+});
+
+test('it leaves the live connections of a kept pair open when its leaf is renewed', async () => {
+  const ctx = await setupTest();
+
+  const createHandler = mock<TerminatorDeps['createHandler']>(
+    () => () => Promise.resolve(new Response('ok')),
+  );
+
+  const terminators = createTerminators({
+    socketDir: join(ctx.directoryPath, 'run'),
+    issueLeaf: ctx.ca.issueLeaf,
+    isLeafDue: () => true,
+    createHandler,
+  });
+
+  ctx.stack.defer(() => terminators.stop());
+
+  await terminators.open({ impId: 'imp-1', impName: 'dev', host: 'api.github.com' });
+
+  const connections = createHandler.mock.calls[0]?.[1];
+
+  invariant(connections);
+
+  const close = mock(() => {});
+
+  connections.track(close);
+
+  await terminators.prune(() => true);
+
+  expect(close).not.toHaveBeenCalled();
+});
+
+test('it closes a connection on a server a new leaf replaced once the prune drops its pair', async () => {
+  const ctx = await setupTest();
+
+  const createHandler = mock<TerminatorDeps['createHandler']>(
+    () => () => Promise.resolve(new Response('ok')),
+  );
+
+  const isDue = { value: true };
+
+  const terminators = createTerminators({
+    socketDir: join(ctx.directoryPath, 'run'),
+    issueLeaf: ctx.ca.issueLeaf,
+    isLeafDue: () => isDue.value,
+    createHandler,
+  });
+
+  ctx.stack.defer(() => terminators.stop());
+
+  await terminators.open({ impId: 'imp-1', impName: 'dev', host: 'api.github.com' });
+
+  const connections = createHandler.mock.calls[0]?.[1];
+
+  invariant(connections);
+
+  const close = mock(() => {});
+
+  connections.track(close);
+
+  await terminators.prune(() => true);
+
+  isDue.value = false;
+
+  await terminators.prune(() => false);
+
+  expect(close).toHaveBeenCalledOnce();
+});
+
+test('it leaves a connection that ended out of the prune', async () => {
+  const ctx = await setupTest();
+
+  const createHandler = mock<TerminatorDeps['createHandler']>(
+    () => () => Promise.resolve(new Response('ok')),
+  );
+
+  const terminators = createTerminators({
+    socketDir: join(ctx.directoryPath, 'run'),
+    issueLeaf: ctx.ca.issueLeaf,
+    isLeafDue: () => false,
+    createHandler,
+  });
+
+  ctx.stack.defer(() => terminators.stop());
+
+  await terminators.open({ impId: 'imp-1', impName: 'dev', host: 'api.github.com' });
+
+  const connections = createHandler.mock.calls[0]?.[1];
+
+  invariant(connections);
+
+  const close = mock(() => {});
+  const untrack = connections.track(close);
+
+  untrack();
+
+  await terminators.prune(() => false);
+
+  expect(close).not.toHaveBeenCalled();
 });
