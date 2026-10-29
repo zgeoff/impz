@@ -1,5 +1,4 @@
 import { closeSync, existsSync, openSync, rmSync } from 'node:fs';
-import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { stopPid } from '../../platform/process/proc';
 import { setupLogFile, writeRegularFile } from '../files/vm-files';
 import type { ImpPaths } from '../storage/data-layout';
@@ -11,7 +10,6 @@ import type { JailUser } from './jail';
 // file's name
 const MEM_FILE_FD = 3;
 const SOCKET_WAIT_MS = 3000;
-const WATCH_INTERVAL_MS = 100;
 
 export interface UffdHandlerPlan {
   readonly handlerBin: string;
@@ -101,63 +99,6 @@ export function stopUffdHandler(paths: Readonly<ImpPaths>, procRoot = '/proc'): 
   if (handler.state === 'alive') {
     stopPid(handler.pid);
   }
-}
-
-interface WatchedVm {
-  readonly pid: number;
-  readonly paths: ImpPaths;
-}
-
-export interface UffdWatch {
-  // stops the VM if its handler is already gone, and from then on when it goes
-  readonly watch: (pid: number, paths: ImpPaths) => void;
-}
-
-export function createUffdWatch(procRoot = '/proc', intervalMs = WATCH_INTERVAL_MS): UffdWatch {
-  const watched = new Map<string, WatchedVm>();
-
-  const timer: { current: ReturnType<typeof setInterval> | null } = { current: null };
-
-  const checkVms = (): void => {
-    for (const [impId, vm] of watched) {
-      if (!probeProcessAlive(vm.pid, vm.paths.apiSocket, procRoot)) {
-        watched.delete(impId);
-      } else if (readHandlerState(vm.paths, procRoot).state === 'gone') {
-        watched.delete(impId);
-
-        stopPid(vm.pid);
-
-        getImpdLogger('memory').warning(
-          'imp {impId}: its page handler is gone; stopped firecracker pid {pid}, which would wait on its next page fault',
-          { impId, pid: String(vm.pid) },
-        );
-      }
-    }
-
-    if (watched.size === 0 && timer.current !== null) {
-      clearInterval(timer.current);
-
-      timer.current = null;
-    }
-  };
-
-  return {
-    watch: (pid, paths) => {
-      if (readHandlerState(paths, procRoot).state === 'none') {
-        return;
-      }
-
-      watched.set(paths.impId, { pid, paths });
-
-      if (timer.current === null) {
-        timer.current = setInterval(checkVms, intervalMs);
-
-        timer.current.unref();
-      }
-
-      checkVms();
-    },
-  };
 }
 
 export function requireHandlerBin(handlerBin: string | null): string {

@@ -1,16 +1,14 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { createStubUffdHandler } from '../../../testing/vm/create-stub-uffd-handler';
-import { startStubFirecrackerProcess } from '../../../testing/vm/start-stub-firecracker-process';
 import { stopPid } from '../../platform/process/proc';
 import { buildImpPaths } from '../storage/data-layout';
 import { probeProcessAlive } from './firecracker-process';
 import {
   buildServedFilePath,
-  createUffdWatch,
   explainUffdFailure,
   readHandlerState,
   requireHandlerBin,
@@ -200,59 +198,6 @@ test('#stopUffdHandler stops the handler of an imp', async () => {
   await waitFor(() => {
     expect(probeProcessAlive(pid, paths.uffdSocket)).toBeFalse();
   });
-});
-
-test('#createUffdWatch stops a VM once its page handler dies', async () => {
-  const ctx = setupTest();
-  const paths = ctx.createImpDir('vm');
-  const handler = createStubUffdHandler(ctx.directoryPath);
-  const memFile = join(ctx.directoryPath, 'mem');
-
-  writeFileSync(memFile, '');
-
-  const vm = await startStubFirecrackerProcess(paths.apiSocket);
-
-  const handlerPid = await startUffdHandler({
-    handlerBin: handler.path,
-    paths,
-    memFile,
-    jail: null,
-    cgroup: null,
-  });
-
-  onTestFinished(() => {
-    stopPid(handlerPid);
-  });
-
-  createUffdWatch('/proc', 10).watch(vm.pid, paths);
-
-  process.kill(handlerPid, 'SIGKILL');
-
-  expect(vm.exited).resolves.not.toBe(0);
-});
-
-test('#createUffdWatch stops a VM at once whose page handler is already gone', async () => {
-  const ctx = setupTest();
-  const paths = ctx.createImpDir('vm');
-
-  const vm = await startStubFirecrackerProcess(paths.apiSocket);
-
-  writeFileSync(paths.uffdPidFile, '999999999\n');
-  createUffdWatch('/proc', 10).watch(vm.pid, paths);
-
-  expect(vm.exited).resolves.not.toBe(0);
-});
-
-test('#createUffdWatch leaves a VM that has no page handler', async () => {
-  const ctx = setupTest();
-  const paths = ctx.createImpDir('vm');
-
-  const vm = await startStubFirecrackerProcess(paths.apiSocket);
-
-  createUffdWatch('/proc', 10).watch(vm.pid, paths);
-
-  expect(existsSync(paths.uffdPidFile)).toBeFalse();
-  expect(probeProcessAlive(vm.pid, paths.apiSocket)).toBeTrue();
 });
 
 test('#explainUffdFailure names the page handler of an imp whose handler is gone', () => {

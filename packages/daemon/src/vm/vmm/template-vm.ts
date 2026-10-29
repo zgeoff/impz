@@ -12,6 +12,7 @@ import { waitForGuestAge } from '../sleep/guest-age';
 import type { ImpPaths } from '../storage/data-layout';
 import { VM_DEVICES, createMarks, setupVm } from './configure-vm';
 import type { ImpCgroup } from './cpu-cgroups';
+import type { UffdWatch } from './create-uffd-watch';
 import { createFirecrackerClient } from './firecracker-client';
 import type { CreateFirecrackerClient, HugePages, LoadOptions } from './firecracker-client';
 import {
@@ -29,7 +30,6 @@ import {
   startUffdHandler,
   stopUffdHandler,
 } from './uffd-handler';
-import type { UffdWatch } from './uffd-handler';
 import type { StartedVm } from './vm-runner';
 
 const CLAIMED_AGENT_DEADLINE_MS = 10_000;

@@ -12,6 +12,7 @@ import { buildBootArgs } from './build-boot-args';
 import type { VmPlan } from './build-boot-args';
 import { VM_DEVICES, createMarks, setupVm } from './configure-vm';
 import type { ImpCgroup } from './cpu-cgroups';
+import { createUffdWatch } from './create-uffd-watch';
 import { BLOCK_MIB, SLOT_MIB, getRegionMib } from './elastic-memory';
 import { createFirecrackerClient } from './firecracker-client';
 import type {
@@ -38,7 +39,6 @@ import { createTemplateVm, loadTemplateVm } from './template-vm';
 import type { TemplateBuildPlan, TemplateRestorePlan } from './template-vm';
 import {
   buildServedFilePath,
-  createUffdWatch,
   explainUffdFailure,
   readHandlerState,
   removeUffdFiles,
@@ -49,6 +49,7 @@ import {
 import { writeSnapshotBase } from './write-snapshot-base';
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
+const UFFD_WATCH_INTERVAL_MS = 100;
 const WAKE_AGENT_DEADLINE_MS = 10_000;
 
 // the memory controller asks every 500 ms: a VM that does not answer soon is
@@ -139,7 +140,22 @@ export function createVmRunner(jails: Jails, options: Readonly<VmRunnerOptions> 
   const procRoot = options.procRoot ?? '/proc';
   const createClient = options.createClient ?? createFirecrackerClient;
   const uffdHandlerBin = options.uffdHandlerBin ?? null;
-  const uffdWatch = createUffdWatch(procRoot);
+
+  const uffdWatch = createUffdWatch({
+    probeVmAlive: (pid, paths) => probeProcessAlive(pid, paths.apiSocket, procRoot),
+    readHandlerState: (paths) => readHandlerState(paths, procRoot),
+    stopPid,
+    startTimer: (tick) => {
+      const timer = setInterval(tick, UFFD_WATCH_INTERVAL_MS);
+
+      timer.unref();
+
+      return () => {
+        clearInterval(timer);
+      };
+    },
+  });
+
   const templates = { mergeWrapper, createClient, uffdHandlerBin, uffdWatch };
   const removeVmMounts = (paths: ImpPaths): Promise<void> => jails.release(paths.impId);
 
