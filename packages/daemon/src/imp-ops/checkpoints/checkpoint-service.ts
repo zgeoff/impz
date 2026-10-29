@@ -279,12 +279,7 @@ export function createCheckpointService(deps: CheckpointServiceDeps): Checkpoint
 
         const api = await deps.imps.toApi(imp);
 
-        return {
-          imp: api,
-          policy,
-          isIdentityResetPending: imp.isIdentityResetPending,
-          isBackedUp: imp.isBackedUp,
-        };
+        return { imp: api, policy, isBackedUp: imp.isBackedUp };
       });
 
       const made = { forkId: null as string | null, isSourceChanged: false };
@@ -340,7 +335,7 @@ export function createCheckpointService(deps: CheckpointServiceDeps): Checkpoint
             cpuLimit: source.imp.cpu.limit,
             cpuWeight: source.imp.cpu.weight,
           }),
-          isIdentityResetPending: source.isIdentityResetPending,
+          isIdentityResetPending: true,
           isBackedUp: source.isBackedUp,
           prepareDisk: createForkDisk,
         });

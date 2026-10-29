@@ -14,9 +14,16 @@ import {
   requireImp,
   runImp,
   runInImp,
+  runShellInImp,
   tryImp,
 } from '@impz/e2e-harness/imp-cli';
-import { holdImp, readGuestFile, waitForExec, writeGuestFile } from '@impz/e2e-harness/imps';
+import {
+  holdImp,
+  readGuestFile,
+  readGuestIdentity,
+  waitForExec,
+  writeGuestFile,
+} from '@impz/e2e-harness/imps';
 import { readImpdLoggedMs } from '@impz/e2e-harness/instance';
 import { registerRemoval } from '@impz/e2e-harness/register-removal';
 import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
@@ -188,6 +195,64 @@ test('it makes a fork from a checkpoint and a fork from the live disk independen
   expect(theForks.seenInA).toBe('none');
   expect(theForks.seenInB).toBe('none');
   expect(theForks.ownInB).toBe('b');
+});
+
+test('it gives each fork its own machine-id and SSH host keys, and the source keeps its own across a restart', async () => {
+  const ctx = await setupTest();
+
+  const source = `${ctx.prefix}id-src`;
+  const fromCheckpoint = `${ctx.prefix}id-cp`;
+  const fromLive = `${ctx.prefix}id-live`;
+  const sourceId = 'fedcba9876543210fedcba9876543210';
+
+  await runImp('new', source, '--image', resolveImageName('e2e-git'), '--memory', '512');
+
+  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, source));
+
+  await waitForExec(source);
+  await holdImp(source);
+
+  await runShellInImp(
+    source,
+    `echo ${sourceId} | sudo tee /etc/machine-id >/dev/null && sudo ssh-keygen -A >/dev/null`,
+  );
+
+  const sourceIdentity = await readGuestIdentity(source);
+
+  await runImp('checkpoint', source, 'id1');
+  await runImp('fork', source, fromCheckpoint, '--from', 'id1');
+
+  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, fromCheckpoint));
+
+  await runImp('fork', source, fromLive);
+
+  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, fromLive));
+
+  await waitForExec(fromCheckpoint);
+  await waitForExec(fromLive);
+
+  const checkpointIdentity = await readGuestIdentity(fromCheckpoint);
+  const liveIdentity = await readGuestIdentity(fromLive);
+
+  await runImp('stop', source);
+  await runImp('start', source);
+  await waitForExec(source);
+
+  const restartedSource = await readGuestIdentity(source);
+
+  expect(sourceIdentity.machineId).toBe(sourceId);
+  expect(sourceIdentity.hostKey).toStartWith('SHA256:');
+  expect(checkpointIdentity.machineId).toMatch(/^[\da-f]{32}$/u);
+  expect(checkpointIdentity.machineId).not.toBe(sourceId);
+  expect(checkpointIdentity.hostKey).toStartWith('SHA256:');
+  expect(checkpointIdentity.hostKey).not.toBe(sourceIdentity.hostKey);
+  expect(liveIdentity.machineId).toMatch(/^[\da-f]{32}$/u);
+  expect(liveIdentity.machineId).not.toBe(sourceId);
+  expect(liveIdentity.hostKey).toStartWith('SHA256:');
+  expect(liveIdentity.hostKey).not.toBe(sourceIdentity.hostKey);
+  expect(liveIdentity.machineId).not.toBe(checkpointIdentity.machineId);
+  expect(liveIdentity.hostKey).not.toBe(checkpointIdentity.hostKey);
+  expect(restartedSource).toStrictEqual(sourceIdentity);
 });
 
 test('it lists checkpoints newest first, refuses a label taken, and deletes one with its storage', async () => {

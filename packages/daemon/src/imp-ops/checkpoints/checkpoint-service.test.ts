@@ -368,6 +368,67 @@ test('it forks the live disk, frozen, into a new imp with no checkpoints', async
   expect(forkCheckpoints).toStrictEqual([]);
 });
 
+test('it boots a fork of the live disk with an identity reset and leaves its source as it was', async () => {
+  const ctx = await setupTest({ storage: 'xfs' });
+
+  await Bun.write(join(ctx.dataDir, 'images', 'base', 'rootfs.ext4'), 'rootfs');
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'base', digest: 'sha256:base' }));
+
+  await ctx.impd.imps.createImp({ name: 'dev', image: 'base' });
+
+  const sourceBefore = await readImpByName(ctx.db, 'dev');
+
+  const before = ctx.fake.boots.length;
+
+  await ctx.impd.checkpoints.forkImp({ source: 'dev', name: 'now' });
+
+  const sourceAfter = await readImpByName(ctx.db, 'dev');
+
+  expect(ctx.fake.boots.slice(before)).toStrictEqual([{ hostname: 'now', isIdentityReset: true }]);
+  expect(sourceAfter).toStrictEqual(sourceBefore);
+});
+
+test('it boots a fork of a checkpoint with an identity reset and leaves its source as it was', async () => {
+  const ctx = await setupTest({ storage: 'xfs' });
+
+  await Bun.write(join(ctx.dataDir, 'images', 'base', 'rootfs.ext4'), 'rootfs');
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'base', digest: 'sha256:base' }));
+
+  await ctx.impd.imps.createImp({ name: 'dev', image: 'base' });
+  await ctx.impd.checkpoints.createCheckpoint('dev', 'v1');
+
+  const sourceBefore = await readImpByName(ctx.db, 'dev');
+
+  const before = ctx.fake.boots.length;
+
+  await ctx.impd.checkpoints.forkImp({ source: 'dev', name: 'old', checkpoint: 'v1' });
+
+  const sourceAfter = await readImpByName(ctx.db, 'dev');
+
+  expect(ctx.fake.boots.slice(before)).toStrictEqual([{ hostname: 'old', isIdentityReset: true }]);
+  expect(sourceAfter).toStrictEqual(sourceBefore);
+});
+
+test('it keeps a fork’s identity reset pending until a boot reports it done', async () => {
+  const ctx = await setupTest({ storage: 'xfs' });
+
+  await Bun.write(join(ctx.dataDir, 'images', 'base', 'rootfs.ext4'), 'rootfs');
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'base', digest: 'sha256:base' }));
+
+  await ctx.impd.imps.createImp({ name: 'dev', image: 'base' });
+
+  ctx.fake.setIdentityReset('failed');
+
+  await ctx.impd.checkpoints.forkImp({ source: 'dev', name: 'now' });
+
+  const fork = await readImpByName(ctx.db, 'now');
+
+  expect(fork?.isIdentityResetPending).toBeTrue();
+});
+
 test('it keeps a fork of an imp created with backup off out of backups too', async () => {
   const ctx = await setupTest({ storage: 'xfs' });
 
