@@ -59,7 +59,8 @@ rest short, still costs the sleeps done before it, and each of those imps wakes 
 A caller of the wake proxy gets a 503 for a refusal; an API caller gets the error.
 
 A boot or wake on huge pages must also fit the free pool of huge pages, and the governor sleeps no
-imp to make pool room ([huge pages](./huge-pages.md#ram)).
+imp to make pool room. On a host with a pool, a boot, wake or grow on ordinary pages must also fit
+the budget less the pool ([huge pages](./huge-pages.md#ram)).
 
 Work no caller waits on, such as a boot template's build, is admitted only into free room, never by
 sleeping an imp.

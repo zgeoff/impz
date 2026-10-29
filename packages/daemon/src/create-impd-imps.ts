@@ -34,14 +34,15 @@ import { readHugePagePool } from './vm/vmm/read-huge-page-pool';
 import { createVmRunner } from './vm/vmm/vm-runner';
 import {
   readHugetlbMibAsync,
+  readOwnedRamAsync,
   readOwnedRamMib,
-  readOwnedRamMibAsync,
-  readResidentMibAsync,
+  readResidentRamAsync,
   readRssMib,
   readThreadIds,
   readUnsharedRamMib,
   readVmMemory,
 } from './vm/vmm/vm-stats';
+import type { VmRam } from './vm/vmm/vm-stats';
 
 export interface GovernedParts {
   readonly storage: ImpdStorage;
@@ -99,8 +100,8 @@ export function createImpdImps(
     );
 
   const {
-    readRamMibAsync,
-    readResidentMib,
+    readVmRam,
+    readResidentRam,
     readKsmProfitMib: readProfitMib,
     readHugePagePool: readHugePool,
     readHugetlbMib,
@@ -220,8 +221,8 @@ export function createImpdImps(
         ];
       });
     },
-    readRamMib: readRamMibAsync,
-    readResidentMib,
+    readVmRam,
+    readResidentRam,
     readHugePool,
     readHugetlbMib,
     readHeadroomMib,
@@ -269,16 +270,10 @@ function resolveImpBoundaries(boundaries: Readonly<ImpBoundaries>) {
             ramMib: readRamMib(pid, apiSocket),
             rssMib: (readRss ?? readRssMib)(pid, apiSocket),
           }),
-    readRamMibAsync:
-      readRam === undefined
-        ? readOwnedRamMibAsync
-        : (pid: number, apiSocket: string) => Promise.resolve(readRam(pid, apiSocket)),
+    readVmRam: readRam === undefined ? readOwnedRamAsync : makeStandInVmRam(readRam),
 
     // a stand-in for the RAM reading has no KSM, so a VM owns every page it holds resident
-    readResidentMib:
-      readRam === undefined
-        ? readResidentMibAsync
-        : (pid: number, apiSocket: string) => Promise.resolve(readRam(pid, apiSocket)),
+    readResidentRam: readRam === undefined ? readResidentRamAsync : makeStandInVmRam(readRam),
     readUnsharedRamMib: boundaries.readUnsharedRamMib ?? readUnsharedRamMib,
     checkGuestMerge: boundaries.checkGuestMerge ?? checkGuestMemoryMergeable,
     probeUffdDevice: boundaries.probeUffdDevice ?? (() => probeUffdDevice()),
@@ -296,5 +291,15 @@ function resolveImpBoundaries(boundaries: Readonly<ImpBoundaries>) {
     readNetBytes: boundaries.readNetBytes ?? ((tap: string) => readGuestNetBytes(tap)),
     ...(boundaries.openTap !== undefined && { openTap: boundaries.openTap }),
     ...(boundaries.now !== undefined && { now: boundaries.now }),
+  };
+}
+
+// a stand-in for the RAM reading holds no pool pages
+function makeStandInVmRam(readRam: (pid: number, apiSocket: string) => number | null) {
+  return (pid: number, apiSocket: string): Promise<VmRam | null> => {
+    const ramMib = readRam(pid, apiSocket);
+    const reading = ramMib === null ? null : { ramMib, hugetlbMib: 0 };
+
+    return Promise.resolve(reading);
   };
 }

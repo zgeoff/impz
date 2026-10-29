@@ -1041,6 +1041,146 @@ test('it wakes a 2M imp on host pages with huge pages off, and records none', as
   expect(identity).not.toContainKey('hugePages');
 });
 
+test('it boots a fixed imp cold on the pool when its 4 KiB wake does not fit the RAM outside the pool', async () => {
+  updateEnv('IMP_HUGE_PAGES', '2M');
+  updateEnv('IMP_RAM_BUDGET_MIB', '4096');
+
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
+  const ctx = await startTestImpd(stack, {
+    env: readImpEnv(),
+    boundaries: { imps: { readHugePagePool: () => ({ totalMib: 3968, freeMib: 3968 }) } },
+  });
+
+  await ctx.createTestImage('ubuntu');
+
+  const created = await ctx.client.imps.create({ name: 'dev', memoryMib: 256 });
+
+  await ctx.client.imps.sleep({ name: 'dev' });
+
+  const paths = buildImpPaths(ctx.dataDir, created.id);
+  const meta = readSnapshotMeta(paths);
+
+  invariant(meta);
+
+  const { hugePages: _, ...onHostPages } = meta;
+
+  writeSnapshotMeta(paths, onHostPages);
+
+  const woken = await ctx.client.imps.wake({ name: 'dev' });
+
+  expect(woken.state).toBe('running');
+  expect(ctx.fake.wakePlans).toBeEmpty();
+  expect(ctx.fake.bootPlans.map((plan) => plan.hugePages)).toStrictEqual(['2M', '2M']);
+});
+
+test.each([
+  ['an elastic imp', '2M', { memoryMib: 256, maxMemoryMib: 512 }, 512],
+  ['an imp whose memory is no whole number of huge pages', '2M', { memoryMib: 257 }, 257],
+  ['an imp on a host with huge pages off', 'off', { memoryMib: 256 }, 256],
+])(
+  'it keeps %s asleep with its snapshot, and boots it nowhere, when its wake does not fit the RAM outside the pool',
+  async (_label, hugePages, shape, maxMib) => {
+    updateEnv('IMP_HUGE_PAGES', hugePages);
+    updateEnv('IMP_RAM_BUDGET_MIB', '4096');
+
+    const stack = new AsyncDisposableStack();
+
+    onTestFinished(() => stack.disposeAsync());
+
+    const pool = { totalMib: 0, freeMib: 0 };
+
+    const ctx = await startTestImpd(stack, {
+      env: readImpEnv(),
+      boundaries: { imps: { readHugePagePool: () => pool } },
+    });
+
+    await ctx.createTestImage('ubuntu');
+
+    const created = await ctx.client.imps.create({ name: 'dev', ...shape });
+
+    await ctx.client.imps.sleep({ name: 'dev' });
+
+    Object.assign(pool, { totalMib: 3968, freeMib: 3968 });
+
+    expect(ctx.client.imps.wake({ name: 'dev' })).rejects.toMatchObject({
+      code: 'RAM_BUDGET_EXCEEDED',
+      message: `the imp's memory, at its max (${String(maxMib)} MiB), is larger than the RAM budget outside the huge page pool (128 MiB)`,
+    });
+
+    expect(ctx.fake.wakePlans).toBeEmpty();
+    expect(ctx.fake.bootPlans).toHaveLength(1);
+    expect(existsSync(buildImpPaths(ctx.dataDir, created.id).snapshotMeta)).toBeTrue();
+  },
+);
+
+test('it keeps a fixed imp asleep with its snapshot when the pool is too short for the cold boot its 4 KiB wake falls back to', async () => {
+  updateEnv('IMP_HUGE_PAGES', '2M');
+  updateEnv('IMP_RAM_BUDGET_MIB', '4096');
+
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
+  const pool = { totalMib: 3968, freeMib: 3968 };
+
+  const ctx = await startTestImpd(stack, {
+    env: readImpEnv(),
+    boundaries: { imps: { readHugePagePool: () => pool } },
+  });
+
+  await ctx.createTestImage('ubuntu');
+
+  const created = await ctx.client.imps.create({ name: 'dev', memoryMib: 256 });
+
+  await ctx.client.imps.sleep({ name: 'dev' });
+
+  const paths = buildImpPaths(ctx.dataDir, created.id);
+  const meta = readSnapshotMeta(paths);
+
+  invariant(meta);
+
+  const { hugePages: _, ...onHostPages } = meta;
+
+  writeSnapshotMeta(paths, onHostPages);
+
+  Object.assign(pool, { freeMib: 128 });
+
+  expect(ctx.client.imps.wake({ name: 'dev' })).rejects.toMatchObject({
+    code: 'RAM_BUDGET_EXCEEDED',
+    message: expect.toStartWith('not enough 2 MiB pages'),
+  });
+
+  expect(ctx.fake.wakePlans).toBeEmpty();
+  expect(ctx.fake.bootPlans).toHaveLength(1);
+  expect(existsSync(paths.snapshotMeta)).toBeTrue();
+});
+
+test('it wakes an imp on 4 KiB pages against the whole budget when the host pool has no pages', async () => {
+  updateEnv('IMP_HUGE_PAGES', '2M');
+  updateEnv('IMP_RAM_BUDGET_MIB', '4096');
+
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
+  const ctx = await startTestImpd(stack, {
+    env: readImpEnv(),
+    boundaries: { imps: { readHugePagePool: () => ({ totalMib: 0, freeMib: 0 }) } },
+  });
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.client.imps.create({ name: 'dev', memoryMib: 256, maxMemoryMib: 512 });
+  await ctx.client.imps.sleep({ name: 'dev' });
+
+  const woken = await ctx.client.imps.wake({ name: 'dev' });
+
+  expect(woken.state).toBe('running');
+  expect(ctx.fake.wakePlans).toHaveLength(1);
+});
+
 test('it wakes a host-page imp as it always has, with no huge pages asked for', async () => {
   const ctx = await setupTest();
 

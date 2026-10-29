@@ -97,6 +97,21 @@ It refuses the request with `RAM_BUDGET_EXCEEDED` when the free pool cannot hold
 and the new guest's whole memory. It sleeps no imp to make pool room, because the imps it would
 sleep may hold no pool pages.
 
+The host reserves the pool out of the RAM the budget counts, and a guest on ordinary pages can never
+take a pool page. On a host with a pool, the governor therefore holds a second line: the ordinary
+budget, which is the budget less the whole pool. It counts every guest on ordinary pages, the locked
+pages and the KSM headroom against the ordinary budget, and for a guest on huge pages only what it
+holds beside its pool pages. A boot, wake or grow on ordinary pages must fit both budgets, and
+enforcement sleeps imps while either one is over. A refusal that the ordinary budget makes names
+that budget and its numbers. To make room under the ordinary budget, the governor counts what each
+imp holds outside the pool, so it never counts a guest's pool pages as room that its sleep frees
+there.
+
+A sleeping imp of fixed memory whose snapshot is on ordinary pages, such as one that slept before
+the host turned huge pages on, wakes on ordinary pages. When the ordinary budget refuses that wake,
+impd boots the imp cold onto the pool instead, which costs the guest its memory but not its disk. An
+elastic imp cannot run on the pool, so the refusal stands and it stays asleep with its snapshot.
+
 Firecracker maps the pool without a reservation, so a guest that faults past an empty pool dies of
 SIGBUS. The admission rule keeps that from happening while nothing else on the host takes pool
 pages.

@@ -7,9 +7,9 @@ import {
   parseProcFields,
   readCpuTicks,
   readHugetlbMibAsync,
+  readOwnedRamAsync,
   readOwnedRamMib,
-  readOwnedRamMibAsync,
-  readResidentMibAsync,
+  readResidentRamAsync,
   readRssMib,
   readUnsharedRamMib,
   readVmMemory,
@@ -79,7 +79,7 @@ test('#readOwnedRamMib counts the anonymous and shmem Pss of a live firecracker'
   expect(readOwnedRamMib(42, '/run/api.sock', ctx.procRoot)).toBe(250);
 });
 
-test('#readOwnedRamMibAsync counts what readOwnedRamMib counts', async () => {
+test('#readOwnedRamAsync counts what readOwnedRamMib counts, with no pool pages', async () => {
   const ctx = setupTest();
 
   mkdirSync(join(ctx.procRoot, '42'));
@@ -96,12 +96,12 @@ test('#readOwnedRamMibAsync counts what readOwnedRamMib counts', async () => {
     'Rss:              409600 kB\nPss_Anon:          204800 kB\nPss_Shmem:          51200 kB\n',
   );
 
-  const ramMib = await readOwnedRamMibAsync(42, '/run/api.sock', ctx.procRoot);
+  const ramMib = await readOwnedRamAsync(42, '/run/api.sock', ctx.procRoot);
 
-  expect(ramMib).toBe(250);
+  expect(ramMib).toStrictEqual({ ramMib: 250, hugetlbMib: 0 });
 });
 
-test('#readResidentMibAsync counts the resident anonymous and shmem pages of a live firecracker', async () => {
+test('#readResidentRamAsync counts the resident anonymous and shmem pages of a live firecracker', async () => {
   const ctx = setupTest();
 
   mkdirSync(join(ctx.procRoot, '42'));
@@ -118,12 +118,12 @@ test('#readResidentMibAsync counts the resident anonymous and shmem pages of a l
     'Name:\tfirecracker\nVmRSS:\t  471040 kB\nRssAnon:\t  307200 kB\nRssFile:\t  102400 kB\nRssShmem:\t   61440 kB\nThreads:\t5\n',
   );
 
-  const residentMib = await readResidentMibAsync(42, '/run/api.sock', ctx.procRoot);
+  const residentMib = await readResidentRamAsync(42, '/run/api.sock', ctx.procRoot);
 
-  expect(residentMib).toBe(360);
+  expect(residentMib).toStrictEqual({ ramMib: 360, hugetlbMib: 0 });
 });
 
-test('#readResidentMibAsync counts the hugetlb pages of a firecracker on 2 MiB pages', async () => {
+test('#readResidentRamAsync counts the hugetlb pages of a firecracker on 2 MiB pages, and gives them apart from the same read', async () => {
   const ctx = setupTest();
 
   mkdirSync(join(ctx.procRoot, '42'));
@@ -135,12 +135,12 @@ test('#readResidentMibAsync counts the hugetlb pages of a firecracker on 2 MiB p
     'Name:\tfirecracker\nRssAnon:\t   20480 kB\nRssFile:\t  102400 kB\nRssShmem:\t       0 kB\nHugetlbPages:\t   75776 kB\n',
   );
 
-  const residentMib = await readResidentMibAsync(42, '/run/api.sock', ctx.procRoot);
+  const residentMib = await readResidentRamAsync(42, '/run/api.sock', ctx.procRoot);
 
-  expect(residentMib).toBe(94);
+  expect(residentMib).toStrictEqual({ ramMib: 94, hugetlbMib: 74 });
 });
 
-test("#readOwnedRamMibAsync counts a 2 MiB guest's memory as its HugetlbPages", async () => {
+test("#readOwnedRamAsync counts a 2 MiB guest's memory as its HugetlbPages, and gives them apart from the same read", async () => {
   const ctx = setupTest();
 
   mkdirSync(join(ctx.procRoot, '42'));
@@ -157,9 +157,9 @@ test("#readOwnedRamMibAsync counts a 2 MiB guest's memory as its HugetlbPages", 
     'Name:\tfirecracker\nRssAnon:\t       0 kB\nHugetlbPages:\t   75776 kB\n',
   );
 
-  const ramMib = await readOwnedRamMibAsync(42, '/run/api.sock', ctx.procRoot);
+  const ramMib = await readOwnedRamAsync(42, '/run/api.sock', ctx.procRoot);
 
-  expect(ramMib).toBe(74);
+  expect(ramMib).toStrictEqual({ ramMib: 74, hugetlbMib: 74 });
 });
 
 test("#readUnsharedRamMib counts a 2 MiB guest's hugetlb pages for its next wake", () => {
@@ -199,7 +199,7 @@ test('#readHugetlbMibAsync reads nothing for a pid that is gone', async () => {
   expect(hugetlbMib).toBeNull();
 });
 
-test('#readResidentMibAsync reads nothing for a pid that serves another socket', async () => {
+test('#readResidentRamAsync reads nothing for a pid that serves another socket', async () => {
   const ctx = setupTest();
 
   mkdirSync(join(ctx.procRoot, '42'));
@@ -207,12 +207,12 @@ test('#readResidentMibAsync reads nothing for a pid that serves another socket',
   writeFileSync(join(ctx.procRoot, '42', 'cmdline'), 'firecracker\0--api-sock\0/run/other.sock\0');
   writeFileSync(join(ctx.procRoot, '42', 'status'), 'RssAnon:\t  307200 kB\n');
 
-  const residentMib = await readResidentMibAsync(42, '/run/api.sock', ctx.procRoot);
+  const residentMib = await readResidentRamAsync(42, '/run/api.sock', ctx.procRoot);
 
   expect(residentMib).toBeNull();
 });
 
-test('#readOwnedRamMibAsync reads nothing for a pid that serves another socket', async () => {
+test('#readOwnedRamAsync reads nothing for a pid that serves another socket', async () => {
   const ctx = setupTest();
 
   mkdirSync(join(ctx.procRoot, '42'));
@@ -220,12 +220,12 @@ test('#readOwnedRamMibAsync reads nothing for a pid that serves another socket',
   writeFileSync(join(ctx.procRoot, '42', 'cmdline'), 'firecracker\0--api-sock\0/run/other.sock\0');
   writeFileSync(join(ctx.procRoot, '42', 'smaps_rollup'), 'Pss_Anon:          204800 kB\n');
 
-  const ramMib = await readOwnedRamMibAsync(42, '/run/api.sock', ctx.procRoot);
+  const ramMib = await readOwnedRamAsync(42, '/run/api.sock', ctx.procRoot);
 
   expect(ramMib).toBeNull();
 });
 
-test('#readOwnedRamMibAsync reads nothing for a firecracker without smaps_rollup', async () => {
+test('#readOwnedRamAsync reads nothing for a firecracker without smaps_rollup', async () => {
   const ctx = setupTest();
 
   mkdirSync(join(ctx.procRoot, '42'));
@@ -237,7 +237,7 @@ test('#readOwnedRamMibAsync reads nothing for a firecracker without smaps_rollup
     'Name:\tfirecracker\nHugetlbPages:\t       0 kB\n',
   );
 
-  const ramMib = await readOwnedRamMibAsync(42, '/run/api.sock', ctx.procRoot);
+  const ramMib = await readOwnedRamAsync(42, '/run/api.sock', ctx.procRoot);
 
   expect(ramMib).toBeNull();
 });
