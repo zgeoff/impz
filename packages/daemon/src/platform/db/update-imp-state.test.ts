@@ -28,6 +28,8 @@ test('#updateImpState keeps the fields the change leaves out', async () => {
   const image = await createImage(ctx.db, buildMockNewImage());
   const imp = await createImp(ctx.db, buildMockNewImp({ imageId: image.id }));
 
+  await updateImpState(ctx.db, imp.id, { reason: 'booted', state: 'running', pid: 42 });
+
   await updateImpState(ctx.db, imp.id, {
     reason: 'slept',
     state: 'sleeping',
@@ -55,9 +57,11 @@ test('#updateImpState keeps the oops hold through a change that writes no error'
   const image = await createImage(ctx.db, buildMockNewImage());
   const imp = await createImp(ctx.db, buildMockNewImp({ imageId: image.id }));
 
+  await updateImpState(ctx.db, imp.id, { reason: 'booted', state: 'running', pid: 42 });
+
   await updateImpState(ctx.db, imp.id, {
     reason: 'repaired',
-    state: 'stopped',
+    state: 'running',
     error: 'a kernel oops killed firecracker',
     hasOopsHold: true,
   });
@@ -250,6 +254,18 @@ test('#updateImpState keeps the firecracker version a compare-and-set write carr
   );
 
   expect(running?.firecrackerVersion).toBe('v1.18.2');
+});
+
+test('#updateImpState refuses a move the lifecycle table does not list', async () => {
+  const ctx = await createTestDatabase();
+  const image = await createImage(ctx.db, buildMockNewImage());
+  const imp = await createImp(ctx.db, buildMockNewImp({ imageId: image.id }));
+
+  await updateImpState(ctx.db, imp.id, { reason: 'stopped', state: 'stopped' });
+
+  expect(
+    updateImpState(ctx.db, imp.id, { reason: 'repaired', state: 'sleeping' }),
+  ).rejects.toMatchObject({ code: 'INVALID_STATE' });
 });
 
 test('#updateImpState refuses a compare-and-set move the lifecycle table does not list', async () => {

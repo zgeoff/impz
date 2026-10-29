@@ -1,6 +1,7 @@
 import type { ColdBootCause, ImpChangeReason, ImpEventDetail, ImpState } from '@impz/api';
 import { sql } from 'kysely';
 import type { Updateable } from 'kysely';
+import { buildNotFoundError } from '../errors/impd-errors';
 import { requireTransition } from './imp-transitions';
 import type { ImpRecord } from './imps';
 import type { ImpDatabase } from './open-database';
@@ -76,29 +77,45 @@ export async function updateImpState(
     values.firecracker_version = change.firecrackerVersion;
   }
 
-  let query = db
-    .updateTable('imps')
-    .set({ ...values, ...buildAwakeValues(change), ...buildBootCauseValues(change) })
-    .where('id', '=', id);
+  const row = await db.transaction().execute(async (trx) => {
+    const current = await trx
+      .selectFrom('imps')
+      .select(['state', 'pid'])
+      .where('id', '=', id)
+      .executeTakeFirst();
 
-  if (expected !== undefined) {
-    if (change.state !== expected.state) {
-      requireTransition(expected.state, change.state, `move to ${change.state}`);
+    if (current === undefined) {
+      return;
     }
 
-    const pidOperator = expected.pid === null ? 'is' : '=';
+    if (
+      expected !== undefined &&
+      (current.state !== expected.state || current.pid !== expected.pid)
+    ) {
+      return;
+    }
 
-    query = query.where('state', '=', expected.state).where('pid', pidOperator, expected.pid);
+    if (change.state !== current.state) {
+      requireTransition(current.state, change.state, `move to ${change.state}`);
+    }
+
+    return trx
+      .updateTable('imps')
+      .set({ ...values, ...buildAwakeValues(change), ...buildBootCauseValues(change) })
+      .where('id', '=', id)
+      .returningAll()
+      .executeTakeFirstOrThrow();
+  });
+
+  if (row !== undefined) {
+    return emitChange(db, toImpRecord(row), change);
   }
 
-  const returning = query.returningAll();
+  if (expected === undefined) {
+    throw buildNotFoundError('imp', id);
+  }
 
-  const row =
-    expected === undefined
-      ? await returning.executeTakeFirstOrThrow()
-      : await returning.executeTakeFirst();
-
-  return row === undefined ? undefined : emitChange(db, toImpRecord(row), change);
+  return undefined;
 }
 
 function buildAwakeValues(change: Readonly<ImpStateChange>) {
