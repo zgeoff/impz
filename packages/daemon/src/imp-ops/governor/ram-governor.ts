@@ -13,6 +13,7 @@ import {
 } from '../../vm/imps-contract/ram-budget-error';
 import type { ProtectedImp } from '../../vm/imps-contract/ram-budget-error';
 import type { HugePagePool } from '../../vm/vmm/read-huge-page-pool';
+import { buildHugePoolAdmission } from './build-huge-pool-admission';
 import { pickSleepVictims } from './pick-sleep-victims';
 
 // A Firecracker VM that just booted or woke shows a small RSS for some seconds, so its reservation
@@ -185,8 +186,6 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
     return reservation.mib;
   };
 
-  // An awake guest may still take every block of its memory it has not touched,
-  // so the pool must hold those as well as the whole of the new guest.
   const checkHugePool = async (request: AdmissionRequest, hugePagesMib: number): Promise<void> => {
     const listed = await deps.listAwake();
 
@@ -207,19 +206,17 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
     // as free pool that the guest's count also leaves out.
     const pool = deps.readHugePool?.() ?? null;
 
-    const growthMib = onPages.reduce(
-      (sum, imp, index) => sum + Math.max(0, imp.hugePagesMib - (held[index] ?? 0)),
-      0,
-    );
+    const poolAdmission = buildHugePoolAdmission({
+      pool,
+      awake: onPages.map((imp, index) => ({
+        hugePagesMib: imp.hugePagesMib,
+        heldMib: held[index] ?? 0,
+      })),
+      pendingMib: [...pendingHugePages].filter(([id]) => id !== request.id).map(([, mib]) => mib),
+      requestedMib: hugePagesMib,
+    });
 
-    const pendingMib = [...pendingHugePages]
-      .filter(([id]) => id !== request.id)
-      .reduce((sum, [, mib]) => sum + mib, 0);
-
-    const freeMib = pool?.freeMib ?? 0;
-    const committedMib = (pool?.totalMib ?? 0) - freeMib + growthMib + pendingMib;
-
-    if (growthMib + pendingMib + hugePagesMib <= freeMib) {
+    if (poolAdmission.admitted) {
       return;
     }
 
@@ -228,16 +225,16 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
         decision: 'refused',
         name: request.name,
         trigger: 'huge page pool',
-        usedMib: committedMib,
+        usedMib: poolAdmission.committedMib,
         reserveMib: hugePagesMib,
-        neededMib: growthMib + pendingMib + hugePagesMib - freeMib,
+        neededMib: poolAdmission.neededMib,
         protectedCount: 0,
       });
     }
 
     throw buildHugePoolError({
-      totalMib: pool?.totalMib ?? 0,
-      committedMib,
+      totalMib: poolAdmission.totalMib,
+      committedMib: poolAdmission.committedMib,
       requestedMib: hugePagesMib,
     });
   };
