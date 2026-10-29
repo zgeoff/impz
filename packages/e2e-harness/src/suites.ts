@@ -61,7 +61,7 @@ export const SUITES: readonly Suite[] = [
     settings: (target) =>
       buildRegistrySettings(buildRegistryPlan(target, config.registryName, REPO_ROOT)),
   },
-  { name: 'checkpoints', prefix: 'e2e-cp-', images: ['e2e-tiny'] },
+  { name: 'checkpoints', prefix: 'e2e-cp-', images: ['e2e-tiny', 'e2e-git'] },
   { name: 'disks', prefix: 'e2e-disk-', images: ['e2e-tiny'] },
   {
     name: 'sleep',

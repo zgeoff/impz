@@ -54,7 +54,8 @@ These work the same on both backends; only the clone differs.
   thrown away. A swap that fails after the kill leaves the imp stopped on its old disk, as after a
   power cut, which ext4's journal handles.
 - **Fork.** impd clones a disk or a checkpoint into a new imp. A fork is disk only, because a memory
-  fork would duplicate entropy and IDs across the copies.
+  fork would duplicate entropy and IDs across the copies. Its first boot gives it a new machine-id
+  and new SSH host keys, through the [identity reset](../../guides/templates.md#identity).
 
 A restore keeps every other checkpoint, older and newer: nothing is rolled back, and each stays a
 clone of the disk it was taken from.

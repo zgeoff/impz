@@ -58,8 +58,9 @@ Without `--disk`, the new disk is the larger of `IMP_DEFAULT_DISK_GIB` and the t
 ## Identity
 
 The template holds what the source imp had on its disk, including the files that make a machine
-unique. On the first boot of an imp made from a template, impd adds `imp.reset_identity=1` to the
-kernel command line. Before any service starts, the agent then:
+unique, and so does a fork's disk. On the first boot of an imp made from a template, and of every
+fork from a live imp or a checkpoint, impd adds `imp.reset_identity=1` to the kernel command line.
+Before any service starts, the agent then:
 
 - writes a new random `/etc/machine-id`, and the same ID to `/var/lib/dbus/machine-id` when that is
   a file of its own (a link to `/etc/machine-id` follows it). An empty or missing `/etc/machine-id`
@@ -70,10 +71,9 @@ kernel command line. Before any service starts, the agent then:
   `ssh-keygen` keeps its keys.
 - syncs the disk, and reports `ok` or `failed` in its `ping`.
 
-The hostname and `/etc/hosts` are set from the imp's name on every boot already. impd clears the
-flag only when a boot reports `ok`, so a failed reset or a boot that fails runs the reset again on
-the next boot, and later boots keep the new identity. A fork, and a restore from a backup, carry the
-flag: a fork of a copy that has not reset yet resets on its own first boot, as the copy would.
+The agent sets the hostname and `/etc/hosts` from the imp's name on every boot. impd clears the flag
+only when a boot reports `ok`, so a failed reset or a boot that fails runs the reset again on the
+next boot, and later boots keep the new identity. A restore from a backup carries the flag.
 
 A reset that fails on every boot, such as an `ssh-keygen` that ignores `-f` with `-A`, writes a new
 machine-id on each cold boot while the old host keys stay; impd logs each attempt.

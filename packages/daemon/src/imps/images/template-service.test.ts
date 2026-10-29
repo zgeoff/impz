@@ -660,7 +660,7 @@ test('it resets a fork of a template copy that never booted', async () => {
   expect(ctx.fake.boots.slice(before)).toStrictEqual([{ hostname: 'fork', isIdentityReset: true }]);
 });
 
-test('it boots a fork of a booted template copy without a reset', async () => {
+test('it resets a fork of a template copy that already reset', async () => {
   const ctx = await setupTest();
 
   const baseImage = buildMockNewImage({ name: 'base', sizeBytes: 6 });
@@ -678,7 +678,7 @@ test('it boots a fork of a booted template copy without a reset', async () => {
   await ctx.impd.checkpoints.forkImp({ source: 'copy', name: 'later' });
 
   expect(ctx.fake.boots.slice(before)).toStrictEqual([
-    { hostname: 'later', isIdentityReset: false },
+    { hostname: 'later', isIdentityReset: true },
   ]);
 });
 
