@@ -14,8 +14,10 @@ import { startRealTimer } from './platform/process/start-real-timer';
 import { createApp } from './surface/create-app';
 import type { AppDeps } from './surface/create-app';
 import { createBuildContextRoute } from './surface/images/build-context-route';
+import { readHostInfo } from './surface/read-host-info';
 import { UNKNOWN_VERSION } from './vm/sleep/vm-identity';
 import type { HostIdentity } from './vm/sleep/vm-identity';
+import { readHugePagePool } from './vm/vmm/read-huge-page-pool';
 
 export interface ImpdAppParts {
   readonly storage: Pick<ImpdStorage, 'images' | 'diskBudget'>;
@@ -106,5 +108,11 @@ export function createImpdApp(
     imageKeepaliveMs: keepaliveMs,
     ...(deps.keepaliveRepeat !== undefined && { imageKeepaliveRepeat: deps.keepaliveRepeat }),
     moves: parts.moves,
+    readHostInfo: () =>
+      readHostInfo({
+        isHugePages: config.hugePages !== null,
+        readHugePagePool: deps.imps?.readHugePagePool ?? (() => readHugePagePool()),
+        readBootTemplateCount: parts.imps.bootTemplates?.readReadyCount ?? null,
+      }),
   });
 }

@@ -158,12 +158,14 @@ export function makeSleepImpVm(
 
       const sleepMs = Math.round(context.sleepTiming.now() - started);
       const waited = waitedMs > 0 ? `, waited ${String(waitedMs)}ms for a young guest` : '';
+      const memFileMib = readDiskMib(paths.memFile);
 
       slept.detail = {
         trigger: reason,
         durationMs: sleepMs,
         prepareMs: Math.round(started - options.requestedAt),
         steps: timings,
+        memFileMib,
       };
 
       const plugged = pluggedMib === null ? '' : `, ${String(pluggedMib)} MiB plugged`;
@@ -178,7 +180,7 @@ export function makeSleepImpVm(
             waited,
             ramMib: String(ramMib),
             plugged,
-            memFile: String(readDiskMib(paths.memFile)),
+            memFile: String(memFileMib),
             timings: formatTimings(timings),
           },
         );
