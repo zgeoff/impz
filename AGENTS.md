@@ -101,8 +101,10 @@ with a catch:
 
 - `bun test` skips the dashboard, whose component tests need a DOM. Run them with
   `bun run test:dashboard`.
-- `bun run lint` is plain oxlint. `bun run lint:full` adds the type-aware pass and the type check,
-  and is CI-only: never run it locally.
+- `bun run lint` is plain oxlint. `bun run lint:full` adds the type-aware pass and the type check.
+  oxlint runs both through tsrslint (`@maschwenk/tsrslint`), a Rust port of tsgolint, in tsgolint's
+  place, because stock tsgolint runs out of memory on impz under 2 GiB. `lint:full` is CI-only:
+  never run it locally.
 - lefthook runs the light checks before a commit and a push. Leave the heavier checks to CI, because
   the host may have little memory. `bun run check` runs all of them and needs a large host.
 - For the Go agent, run `gofmt -l .` and `go vet ./...` in [`agent/`](agent/). golangci-lint,
