@@ -11,6 +11,7 @@ import type { ImpDatabase } from '../../../platform/db/open-database';
 import { readBrokerPeer } from '../../../platform/db/read-broker-peer';
 import { listGrantedRules } from '../../../platform/db/secrets';
 import type { GrantedRule } from '../../../platform/db/secrets';
+import { openUpstreamSocket } from '../../../platform/http/open-upstream-socket';
 import { getErrorMessage } from '../../../platform/process/get-error-message';
 import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import type { NetworkConfig } from '../../network-config';
@@ -161,6 +162,7 @@ export function createBrokerProxy(deps: BrokerProxyDeps): BrokerProxy {
                 resolveUpstream: deps.resolveUpstream,
                 recordAudit: writeBudgetedAudit,
                 connections,
+                openUpstreamSocket,
               },
               request,
               server,

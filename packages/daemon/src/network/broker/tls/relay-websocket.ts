@@ -1,5 +1,5 @@
 import type { Server } from 'bun';
-import { openUpstreamSocket } from '../../../platform/http/open-upstream-socket';
+import type { openUpstreamSocket } from '../../../platform/http/open-upstream-socket';
 import { startRealTimer } from '../../../platform/process/start-real-timer';
 import { planUpgrade } from './plan-upgrade';
 import type { UpgradeDeps, UpgradePlan } from './plan-upgrade';
@@ -8,6 +8,7 @@ import type { LiveConnections } from './terminators';
 
 export interface RelayDeps extends UpgradeDeps {
   readonly connections: LiveConnections;
+  readonly openUpstreamSocket: typeof openUpstreamSocket;
 }
 
 const OPEN_TIMEOUT_MS = 10_000;
@@ -53,7 +54,7 @@ export async function relayWebSocket(
   let upstream: WebSocket;
 
   try {
-    upstream = await openUpstreamSocket(plan.url, plan.protocols, plan.headers, {
+    upstream = await deps.openUpstreamSocket(plan.url, plan.protocols, plan.headers, {
       timeoutMs: OPEN_TIMEOUT_MS,
       startTimer: startRealTimer,
       ...(plan.ca !== null && { ca: plan.ca }),
