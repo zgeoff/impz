@@ -118,6 +118,7 @@ How to install, run and use impz.
 - [HTTPS on your own domain](./guides/https.md) — the wildcard certificate, its renewal and the DNS
   records
 - [SSH](./guides/ssh.md) — `ssh box@imp`, keys, and what the gateway supports
+- [Benchmarks](./guides/bench.md) — `impz bench`, its scenarios and report, and comparing two builds
 - [Copying files](./guides/cp.md) — `impz cp` into and out of an imp
 - [Reverse forwards](./guides/reverse-forwards.md) — a port in an imp that reaches one on your
   machine

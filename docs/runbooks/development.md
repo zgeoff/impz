@@ -202,11 +202,11 @@ measure. A suite file also runs on its own against a running instance:
 
 ### Wake bench
 
-`scripts/dev/bench-wake.sh` is a manual check, not part of the harness or CI. It times wakes of an
-imp put to sleep right after a cold boot, which a host kernel before Linux 6.7 makes slow
-([young guests](../architecture/lifecycle/sleep-and-wake.md#young-guests)). It drives impd through
-the CLI only, so it runs against any host, and it fails when the median wake passes `--limit-ms`
-(default 500):
+`scripts/dev/bench-wake.sh` is a manual check, not part of the harness or CI. It runs
+[`impz bench wake-young`](../guides/bench.md) at concurrency 1, which times wakes of an imp put to
+sleep right after a cold boot, the case a host kernel before Linux 6.7 makes slow
+([young guests](../architecture/lifecycle/sleep-and-wake.md#young-guests)). It fails when the median
+wake passes `--limit-ms` (default 500):
 
 ```sh
 scripts/dev/bench-wake.sh --cycles 3       # IMP_URL and IMP_TOKEN, or the saved login
@@ -214,7 +214,7 @@ scripts/dev/bench-wake.sh --cycles 3       # IMP_URL and IMP_TOKEN, or the saved
 
 On the WSL2 dev box (host kernel 6.6.87), the median wake was 793 ms with impd's wait off
 (`IMP_SLEEP_MIN_GUEST_UPTIME_MS=0`) and 142 ms with the default. On a host kernel with the fix, both
-should be fast; record the host's `uname -r` with the result.
+should be fast; the report holds the host's kernel.
 
 ## Worktrees
 
@@ -408,6 +408,37 @@ gh workflow run e2e-images.yml --ref <branch>
 `.github/workflows/reproducible.yml` runs `scripts/release/check-reproducible.sh` (the guest kernel
 and the system drive rebuild to the same bytes). It takes two cold kernel builds, so it runs by
 hand: `gh workflow run reproducible.yml`.
+
+### The bench job
+
+`.github/workflows/bench.yml` runs [`impz bench`](../guides/bench.md) on a KVM runner with the e2e
+groups' caches. It is no required check. A pull request that changes the bench runs a short bench of
+its own head. A push to a `bench/**` branch, or a dispatch, compares a baseline with its own ref:
+
+1. The job checks out the baseline (default `main`) beside the ref, and builds each one's kernel and
+   system drive, so each side boots its own guest agent.
+2. `scripts/bench/run-bench-arms.ts` brings up a dev instance from each checkout in turn, over one
+   data dir. Each side first creates 3 imps that the bench does not time, so its boot template is
+   ready before the timed run starts.
+3. Each side runs once per round, in turn, so a slow stretch of the runner falls on both. The job
+   summary holds a table of each side's median p50, p95 and p99 over its rounds, and the change
+   against the baseline. The `bench-results` artifact holds each run's JSON report and impd's log.
+
+To compare a change, push it to a branch under `bench/`, then delete the branch once you have the
+table:
+
+```bash
+git push origin HEAD:bench/<change>
+gh run list --workflow bench.yml --branch bench/<change>
+git push origin --delete bench/<change>
+```
+
+A `bench/**` branch whose name holds `huge-pages` reserves a 2 MiB pool and runs impd with
+`IMP_HUGE_PAGES=2M`. It also runs `scripts/bench/measure-touched-pages.ts` first, which writes into
+a guest's memory, puts it to sleep, wakes it, reads the same memory back and puts it to sleep again.
+It prints the pool pages the guest held at each sleep, which a 2 MiB sleep's diff writes in full,
+beside the 4 KiB pages whose bytes changed, which a dirty-page diff writes
+([huge pages](../architecture/lifecycle/huge-pages.md#sleep)).
 
 ### The podman job
 

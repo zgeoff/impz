@@ -1,0 +1,191 @@
+name: bench
+
+# `impz bench` on a KVM runner, against a dev instance. A pull request that
+# changes the bench runs a short bench of its own head. A dispatch, or a push to
+# a bench/** branch, compares a baseline ref with its own ref on the one runner,
+# their rounds taken in turn, and writes the table to the job summary. A bench/**
+# branch whose name holds huge-pages runs on 2 MiB pages. It is no required
+# check, so the path filter may skip the whole workflow.
+on:
+  workflow_dispatch:
+    inputs:
+      baseline:
+        description: the ref to compare against
+        default: main
+      scenarios:
+        description: impz bench scenarios, comma-separated
+        default: create,wake,restore
+      concurrency:
+        description: impz bench --concurrency
+        default: 1,4,16,64
+      samples:
+        description: impz bench --samples
+        default: '20'
+      rounds:
+        description: how many times each side runs
+        default: '2'
+      huge-pages:
+        description: back the imps with 2 MiB pages
+        type: boolean
+        default: false
+  push:
+    branches:
+      - bench/**
+  pull_request:
+    paths:
+      - packages/cli/src/bench/**
+      - packages/cli/src/commands/bench-command.ts
+      - scripts/bench/**
+      - scripts/dev/bench-wake.sh
+      - .github/workflows/bench.yml
+
+permissions: {}
+
+concurrency:
+  group: bench-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # CI never commits, but skip hook install/execution regardless
+  LEFTHOOK: 0
+
+jobs:
+  bench:
+    name: bench
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    # two rounds of create, wake and restore at 1, 4, 16 and 64 on each side
+    # take about an hour, and a kernel cache miss adds about 10 minutes
+    timeout-minutes: 120
+    env:
+      # 64 imps of 256 MiB fit a 12 GiB budget once KSM merges them; past it,
+      # the governor's refusals show in the results
+      IMP_RAM_BUDGET_MIB: 12288
+      IMP_KERNEL: .cache/ci/vmlinux
+      IMP_SYSTEM_DRIVE: .cache/ci/imp-system.squashfs
+      IMP_STORAGE_GIB: 60
+      IMP_HOST_IMAGE: imp-host:dev
+      IMP_HOST_IMAGE_READY: 1
+      IS_COMPARE: ${{ github.event_name != 'pull_request' }}
+      IS_HUGE_PAGES: ${{ inputs.huge-pages || contains(github.ref_name, 'huge-pages') }}
+      BASELINE: ${{ inputs.baseline || 'main' }}
+      SCENARIOS: ${{ inputs.scenarios || 'create,wake,restore' }}
+      CONCURRENCY:
+        ${{ inputs.concurrency || (github.event_name == 'pull_request' && '1,4' || '1,4,16,64') }}
+      SAMPLES: ${{ inputs.samples || (github.event_name == 'pull_request' && '4' || '20') }}
+      ROUNDS: ${{ inputs.rounds || '2' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Checkout the baseline
+        if: env.IS_COMPARE == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.BASELINE }}
+          path: .cache/baseline
+          persist-credentials: false
+
+      # first, so a runner without KVM fails before any build
+      - name: Check KVM
+        run: scripts/ci/check-kvm.sh
+
+      - name: Turn KSM on for this runner
+        run: |
+          echo 1 | sudo tee /sys/kernel/mm/ksm/use_zero_pages >/dev/null
+          echo 1 | sudo tee /sys/kernel/mm/ksm/run >/dev/null
+
+      # 6 GiB of 2 MiB pages: 16 imps of 256 MiB awake at once, and a
+      # template build beside them
+      - name: Reserve huge pages
+        if: env.IS_HUGE_PAGES == 'true'
+        run: |
+          echo 3072 | sudo tee /proc/sys/vm/nr_hugepages >/dev/null
+          grep -E 'HugePages_(Total|Free)' /proc/meminfo
+          echo "IMP_HUGE_PAGES=2M" >> "$GITHUB_ENV"
+
+      - name: Pick the data dir
+        run: |
+          if mountpoint -q /mnt; then
+            data=/mnt/imp-bench
+          else
+            data=$GITHUB_WORKSPACE/.data/ci
+          fi
+          sudo mkdir -p "$data"
+          sudo chown "$(id -u):$(id -g)" "$data"
+          echo "IMP_DEV_DATA=$data" >> "$GITHUB_ENV"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Install the baseline
+        if: env.IS_COMPARE == 'true'
+        working-directory: .cache/baseline
+        run: bun install --frozen-lockfile
+
+      # reads the caches that CI's e2e group 1 writes on main
+      - name: Build kernel, system drive and host image
+        uses: ./.github/actions/e2e-build
+        with:
+          write-cache: false
+
+      # the baseline's own guest agent and system drive, from the same cache
+      - name: Build the baseline's kernel and system drive
+        if: env.IS_COMPARE == 'true'
+        working-directory: .cache/baseline
+        run: >-
+          docker buildx build -f host/Dockerfile --target system-files --platform linux/amd64
+          --output type=local,dest=.cache/ci --cache-from type=gha,scope=system-files .
+
+      - name: Measure touched pages
+        if: env.IS_HUGE_PAGES == 'true'
+        run: |
+          mkdir -p .cache/bench
+          scripts/dev/dev.sh up
+          IMP_TOKEN=$(scripts/dev/dev.sh token)
+          IMP_URL=http://localhost:7070 IMP_TOKEN=$IMP_TOKEN \
+            bun scripts/bench/measure-touched-pages.ts | tee .cache/bench/touched-pages.json
+          scripts/dev/dev.sh down
+          { echo '```json'; cat .cache/bench/touched-pages.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Bench this ref
+        if: env.IS_COMPARE != 'true'
+        run: >-
+          bun scripts/bench/run-bench-arms.ts --out .cache/bench --arm candidate=. -- "$SCENARIOS"
+          --concurrency "$CONCURRENCY" --samples "$SAMPLES" --memory 256m
+
+      - name: Compare with the baseline
+        if: env.IS_COMPARE == 'true'
+        run: >-
+          bun scripts/bench/run-bench-arms.ts --out .cache/bench --rounds "$ROUNDS" --arm
+          "baseline=.cache/baseline" --arm candidate=. -- "$SCENARIOS" --concurrency "$CONCURRENCY"
+          --samples "$SAMPLES" --memory 256m
+
+      # The steps below also run after a failure or a timeout, with or
+      # without a container, so none of them may fail the job.
+      - name: Collect logs
+        if: always()
+        run: |
+          mkdir -p .cache/bench
+          docker logs imp-dev >.cache/bench/impd.log 2>&1 || true
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: bench-results
+          path: .cache/bench/
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Remove the dev instance
+        if: always()
+        run: docker rm -f imp-dev || true
