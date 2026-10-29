@@ -10,6 +10,7 @@ import { parseBenchArmsArgs } from './parse-bench-arms-args';
 import type { BenchArm } from './parse-bench-arms-args';
 
 const IMPZ = resolve(import.meta.dir, '..', 'impz');
+const CONTAINER = process.env['IMP_DEV_NAME'] ?? 'imp-dev';
 const READY_TIMEOUT_MS = 600_000;
 const POLL_MS = 2000;
 
@@ -29,16 +30,27 @@ async function main(): Promise<void> {
   mkdirSync(args.out, { recursive: true });
 
   const reports: ArmReport[] = [];
+  const failed: string[] = [];
 
   for (let round = 1; round <= args.rounds; round += 1) {
     for (const arm of args.arms) {
+      const run = `${arm.name}-${String(round)}`;
+
       console.error(`bench arms: round ${String(round)}, ${arm.name}`);
 
-      const json = await runArm(arm, args.benchArgs);
+      const ran = await runArm(arm, args.benchArgs, join(args.out, `${run}.impd.log`));
 
-      writeFileSync(join(args.out, `${arm.name}-${String(round)}.json`), json);
+      if (ran.json === null) {
+        failed.push(run);
+      } else {
+        writeFileSync(join(args.out, `${run}.json`), ran.json);
 
-      reports.push({ arm: arm.name, json });
+        reports.push({ arm: arm.name, json: ran.json });
+      }
+
+      if (!ran.isPassed) {
+        console.error(`bench arms: ${run} failed; its impd log is in ${run}.impd.log`);
+      }
     }
   }
 
@@ -51,9 +63,25 @@ async function main(): Promise<void> {
   if (summary !== undefined) {
     appendFileSync(summary, `${table}\n`);
   }
+
+  if (failed.length > 0) {
+    console.error(`bench arms: no report from ${failed.join(', ')}`);
+    process.exit(1);
+  }
 }
 
-async function runArm(arm: BenchArm, benchArgs: readonly string[]): Promise<string> {
+interface ArmRun {
+  readonly json: string | null;
+  readonly isPassed: boolean;
+}
+
+// A bench that fails still prints its report when it finished, so a failed
+// arm keeps its numbers; one that died mid-run has none.
+async function runArm(
+  arm: BenchArm,
+  benchArgs: readonly string[],
+  logPath: string,
+): Promise<ArmRun> {
   const checkout = resolve(arm.checkout);
   const dev = join(checkout, 'scripts', 'dev', 'dev.sh');
 
@@ -79,8 +107,21 @@ async function runArm(arm: BenchArm, benchArgs: readonly string[]): Promise<stri
 
     await waitForInfo(cliEnv, (info) => (info.host?.bootTemplates ?? 1) > 0);
 
-    return await $`${IMPZ} bench ${benchArgs} --label ${arm.name} --json`.env(cliEnv).text();
+    const bench = await $`${IMPZ} bench ${benchArgs} --label ${arm.name} --json`
+      .env(cliEnv)
+      .quiet()
+      .nothrow();
+
+    process.stderr.write(bench.stderr);
+
+    const json = bench.stdout.toString();
+
+    return { json: json.trim() === '' ? null : json, isPassed: bench.exitCode === 0 };
   } finally {
+    const logs = await $`docker logs ${CONTAINER}`.quiet().nothrow();
+
+    writeFileSync(logPath, Buffer.concat([logs.stdout, logs.stderr]));
+
     await $`${dev} down`.env(devEnv);
   }
 }
