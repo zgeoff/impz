@@ -17,14 +17,10 @@ import type { NetworkConfig } from '../../network-config';
 import { renderCredential } from '../secrets/connector-kinds';
 import type { SecretFiles } from '../secrets/secret-files';
 import { SECRET_KINDS } from '../secrets/secret-kinds';
+import type { Credential } from '../tls/admit-request';
 import type { BrokerCa } from '../tls/broker-ca';
 import { createForwarder } from '../tls/forward-request';
-import type {
-  Credential,
-  ForwardDeps,
-  ResolveUpstream,
-  UpstreamFetch,
-} from '../tls/forward-request';
+import type { ForwardDeps, ResolveUpstream, UpstreamFetch } from '../tls/forward-request';
 import { createTerminators } from '../tls/terminators';
 import type { TerminatorKey } from '../tls/terminators';
 import { startBrokerFront } from './broker-front';

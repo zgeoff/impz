@@ -39,7 +39,12 @@ async function setupTest() {
 
   stack.defer(() => rm(dataDir, { recursive: true, force: true }));
 
-  const tunnelled: { method: string; path: string; authorization: string | null }[] = [];
+  const tunnelled: {
+    method: string;
+    path: string;
+    authorization: string | null;
+    upgrade: string | null;
+  }[] = [];
 
   const tunnelAnswers = new Map<string, () => Response>();
 
@@ -53,6 +58,7 @@ async function setupTest() {
         method: request.method,
         path,
         authorization: request.headers.get('authorization'),
+        upgrade: request.headers.get('upgrade'),
       });
 
       const answer = tunnelAnswers.get(path);
@@ -395,7 +401,45 @@ test('it adds no credential to an ungranted host the guest reaches past the cert
   expect(result).toStrictEqual({ code: 0, stdout: 'from the real host', stderr: '' });
 
   expect(ctx.tunnelled).toStrictEqual([
-    { method: 'GET', path: '/user', authorization: 'Bearer imp-broker-placeholder' },
+    {
+      method: 'GET',
+      path: '/user',
+      authorization: 'Bearer imp-broker-placeholder',
+      upgrade: null,
+    },
+  ]);
+
+  expect(ctx.seen).toStrictEqual([]);
+});
+
+test('it tunnels a websocket upgrade to an ungranted host as sent, with no credential', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
+  ctx.tunnelAnswers.set('/socket', () => new Response('from the real host'));
+
+  await ctx.client.imps.create({ name: 'dev' });
+
+  const result = await ctx.guest.curl('https://api.github.com/socket', [
+    '-k',
+    '-H',
+    'Authorization: Bearer imp-broker-placeholder',
+    '-H',
+    'Connection: Upgrade',
+    '-H',
+    'Upgrade: websocket',
+  ]);
+
+  expect(result).toStrictEqual({ code: 0, stdout: 'from the real host', stderr: '' });
+
+  expect(ctx.tunnelled).toStrictEqual([
+    {
+      method: 'GET',
+      path: '/socket',
+      authorization: 'Bearer imp-broker-placeholder',
+      upgrade: 'websocket',
+    },
   ]);
 
   expect(ctx.seen).toStrictEqual([]);

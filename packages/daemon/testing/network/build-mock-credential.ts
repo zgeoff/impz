@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import type { Credential } from '../../src/network/broker/tls/forward-request';
+import type { Credential } from '../../src/network/broker/tls/admit-request';
 
 export function buildMockCredential(overrides: Partial<Credential> = {}): Credential {
   return {
