@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { $ } from 'bun';
 
 async function setupTest() {
@@ -150,6 +150,33 @@ test('it fails an image that holds a Claude Code credentials file', async () => 
     exitCode: 1,
     stdout: '',
     stderr: 'check-no-secrets: the image holds login state: /root/.claude/.credentials.json\n',
+  });
+});
+
+test.each([
+  ['/root/.claude.json'],
+  ['/root/.config/gh/hosts.yml'],
+  ['/root/.git-credentials'],
+  ['/root/.netrc'],
+])('it fails an image that holds the login file %s', async (loginPath) => {
+  const ctx = await setupTest();
+
+  await mkdir(join(ctx.contextPath, 'root', dirname(loginPath)), { recursive: true });
+  await writeFile(join(ctx.contextPath, 'root', loginPath), '{}\n');
+  await writeFile(join(ctx.contextPath, 'Dockerfile'), 'FROM scratch\nCOPY root/ /\n');
+
+  await $`docker build --quiet --tag ${ctx.tag} ${ctx.contextPath}`.quiet();
+
+  const result = await $`bash ${ctx.scriptPath} ${ctx.tag}`.nothrow().quiet();
+
+  expect({
+    exitCode: result.exitCode,
+    stdout: result.stdout.toString(),
+    stderr: result.stderr.toString(),
+  }).toStrictEqual({
+    exitCode: 1,
+    stdout: '',
+    stderr: `check-no-secrets: the image holds login state: ${loginPath}\n`,
   });
 });
 
