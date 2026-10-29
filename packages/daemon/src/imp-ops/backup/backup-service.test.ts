@@ -397,6 +397,47 @@ test('#restoreBackup restores an imp stopped, with its disk and its checkpoints 
   expect(readdirSync(join(ctx.dataDir, 'backup', 'restore'))).toStrictEqual([]);
 });
 
+test('#restoreBackup keeps the imp’s id when no imp on the host holds it', async () => {
+  const ctx = await setupTest();
+
+  const backups = createBackupService({ ...ctx.deps, backup: buildMockBackupConfig() });
+
+  await ctx.createTestImage('base');
+
+  writeFileSync(join(ctx.dataDir, 'images', 'base', 'config.json'), '{}');
+
+  const dev = await ctx.imps.createImp({ name: 'dev' });
+
+  await backups.runBackup();
+  await ctx.imps.destroyImp('dev');
+  await backups.restoreBackup({ name: 'dev' });
+
+  const restored = await readImpByName(ctx.db, 'dev');
+
+  expect(restored?.id).toBe(dev.id);
+});
+
+test('#restoreBackup gives a copy restored beside its imp an id of its own', async () => {
+  const ctx = await setupTest();
+
+  const backups = createBackupService({ ...ctx.deps, backup: buildMockBackupConfig() });
+
+  await ctx.createTestImage('base');
+
+  writeFileSync(join(ctx.dataDir, 'images', 'base', 'config.json'), '{}');
+
+  const dev = await ctx.imps.createImp({ name: 'dev' });
+
+  await backups.runBackup();
+  await backups.restoreBackup({ name: 'dev', as: 'back' });
+
+  const copy = await readImpByName(ctx.db, 'back');
+
+  invariant(copy);
+
+  expect(copy.id).not.toBe(dev.id);
+});
+
 test('#restoreBackup keeps an old image it reuses when an eviction reaches the restore as it picks the image', async () => {
   updateEnv('IMP_IMAGE_EVICT_HIGH_PERCENT', '80');
   updateEnv('IMP_IMAGE_EVICT_LOW_PERCENT', '60');

@@ -5,7 +5,7 @@ import type { TokenStore } from '../../identity/auth/token-store';
 import type { ImageService } from '../../imps/images/image-service';
 import type { Imps } from '../../imps/imps/imp-service';
 import type { NetworkService } from '../../network/networks/network-service';
-import { listImps, readImpByName } from '../../platform/db/imps';
+import { listImps, readImpById, readImpByName } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { ImpdError } from '../../platform/errors/impd-error';
 import {
@@ -366,9 +366,11 @@ async function createRestoredImp(
   };
 
   const networks = await deps.networks.writeMissingNetworks(imp.networks);
+  const idHolder = await readImpById(deps.db, imp.id);
 
   try {
     return await deps.imps.createImp({
+      ...(idHolder === undefined && { id: imp.id }),
       name: target.name,
       networkIds: networks.ids,
       image: target.image,
