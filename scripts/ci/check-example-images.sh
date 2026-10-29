@@ -31,8 +31,9 @@ for dockerfile in images/examples/*/Dockerfile; do
       fail "$dockerfile runs a curl that writes no file to check: $curl"
       continue
     fi
-    sum_arg=$({ grep -F "  $download\" | sha256sum -c -" <<< "$code" || true; } |
-      sed -nE 's/.*echo "[$]([A-Z0-9_]+_SHA256)  .*/\1/p' | head -n 1)
+    sum_args=$({ grep -F "  $download\" | sha256sum -c -" <<< "$code" || true; } |
+      sed -nE 's/.*echo "[$]([A-Z0-9_]+_SHA256)  .*/\1/p')
+    sum_arg=${sum_args%%$'\n'*}
     if [ -z "$sum_arg" ] || ! grep -qxE "ARG $sum_arg=[0-9a-f]{64}" <<< "$code"; then
       fail "$dockerfile downloads $download with no sha256sum -c against a pinned ARG"
     fi

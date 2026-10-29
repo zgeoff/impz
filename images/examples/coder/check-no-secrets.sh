@@ -42,7 +42,9 @@ fi
 if grep -qE "$tokens" <<< "$env"; then
   fail "the image env holds a token"
 fi
-if docker history --no-trunc --format '{{.CreatedBy}}' "$id" | grep -qE "$tokens"; then
+# an assignment, not a pipe into grep, so a failed docker history stops the check
+history=$(docker history --no-trunc --format '{{.CreatedBy}}' "$id")
+if grep -qE "$tokens" <<< "$history"; then
   fail "the image history holds a token"
 fi
 
