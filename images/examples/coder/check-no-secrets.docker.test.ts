@@ -205,6 +205,32 @@ test('it fails an image whose env sets a credential variable', async () => {
   });
 });
 
+test('it fails an image whose env holds a token under another name', async () => {
+  const ctx = await setupTest();
+
+  await writeFile(join(ctx.contextPath, 'motd'), 'welcome\n');
+
+  await writeFile(
+    join(ctx.contextPath, 'Dockerfile'),
+    'FROM scratch\nENV NOTE=ghp_exampleexampleexampleexampleexample1\nCOPY motd /etc/motd\n',
+  );
+
+  await $`docker build --quiet --tag ${ctx.tag} ${ctx.contextPath}`.quiet();
+
+  const result = await $`bash ${ctx.scriptPath} ${ctx.tag}`.nothrow().quiet();
+
+  expect({
+    exitCode: result.exitCode,
+    stdout: result.stdout.toString(),
+    stderr: result.stderr.toString(),
+  }).toStrictEqual({
+    exitCode: 1,
+    stdout: '',
+    stderr:
+      'check-no-secrets: the image env holds a token\ncheck-no-secrets: the image history holds a token\n',
+  });
+});
+
 test('it fails an image whose build history holds a token', async () => {
   const ctx = await setupTest();
 
