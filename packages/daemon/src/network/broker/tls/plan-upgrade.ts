@@ -4,11 +4,17 @@ import { buildCredentialedHeaders } from './build-credentialed-headers';
 import type { ResolveUpstream, Upstream } from './forward-request';
 
 export interface ConnectionAudit {
+  readonly recordOpen: () => void;
   readonly addRequestBytes: (bytes: number) => void;
   readonly addResponseBytes: (bytes: number) => void;
+  readonly recordClose: () => void;
 
-  readonly recordClose: (status: number) => void;
+  readonly recordAnswer: (status: number) => void;
 }
+
+type UpgradePhase = 'pending' | 'open' | 'done';
+
+const SWITCHING_PROTOCOLS = 101;
 
 export type UpgradePlan =
   | { readonly kind: 'refused'; readonly response: Response }
@@ -46,7 +52,28 @@ export async function planUpgrade(deps: UpgradeDeps, request: Request): Promise<
   headers.set('upgrade', request.headers.get('upgrade') ?? '');
   headers.set('connection', 'Upgrade');
 
-  const state = { requestBytes: 0, responseBytes: 0, isClosed: false };
+  const state: { requestBytes: number; responseBytes: number; phase: UpgradePhase } = {
+    requestBytes: 0,
+    responseBytes: 0,
+    phase: 'pending',
+  };
+
+  const writeRow = (status: number, requestBytes: number, responseBytes: number): void => {
+    deps.recordAudit({
+      impId: deps.impId,
+      impName: deps.impName,
+      secretName: credential.secretName,
+      at: new Date(),
+      method: request.method,
+      host: deps.host,
+      path: admission.auditPath,
+      status,
+      requestBytes,
+      responseBytes,
+      durationMs: Math.round(performance.now() - started),
+      reason: null,
+    });
+  };
 
   return {
     kind: 'open',
@@ -54,33 +81,38 @@ export async function planUpgrade(deps: UpgradeDeps, request: Request): Promise<
     headers,
     ca: upstream.ca,
     audit: {
+      recordOpen: () => {
+        if (state.phase !== 'pending') {
+          return;
+        }
+
+        state.phase = 'open';
+
+        writeRow(SWITCHING_PROTOCOLS, 0, 0);
+      },
       addRequestBytes: (bytes) => {
         state.requestBytes += bytes;
       },
       addResponseBytes: (bytes) => {
         state.responseBytes += bytes;
       },
-      recordClose: (status) => {
-        if (state.isClosed) {
+      recordClose: () => {
+        if (state.phase !== 'open') {
           return;
         }
 
-        state.isClosed = true;
+        state.phase = 'done';
 
-        deps.recordAudit({
-          impId: deps.impId,
-          impName: deps.impName,
-          secretName: credential.secretName,
-          at: new Date(),
-          method: request.method,
-          host: deps.host,
-          path: admission.auditPath,
-          status,
-          requestBytes: state.requestBytes,
-          responseBytes: state.responseBytes,
-          durationMs: Math.round(performance.now() - started),
-          reason: null,
-        });
+        writeRow(SWITCHING_PROTOCOLS, state.requestBytes, state.responseBytes);
+      },
+      recordAnswer: (status) => {
+        if (state.phase !== 'pending') {
+          return;
+        }
+
+        state.phase = 'done';
+
+        writeRow(status, 0, state.responseBytes);
       },
     },
   };

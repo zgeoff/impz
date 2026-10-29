@@ -210,7 +210,7 @@ test('it refuses an upgrade with a Host header for another name with 421', async
   expect(findCredential).not.toHaveBeenCalled();
 });
 
-test('it records one audit row for the connection when it closes, with the bytes each way', async () => {
+test('it records a 101 row with no bytes when the connection opens', async () => {
   const recordAudit = mock<(entry: NewAuditEntry) => void>();
 
   const plan = await planUpgrade(
@@ -229,13 +229,53 @@ test('it records one audit row for the connection when it closes, with the bytes
 
   invariant(plan.kind === 'open');
 
+  plan.audit.recordOpen();
+  plan.audit.addRequestBytes(5);
+
+  expect(recordAudit).toHaveBeenCalledExactlyOnceWith({
+    impId: 'imp-1',
+    impName: 'dev',
+    secretName: 'rt',
+    at: expect.toBeValidDate(),
+    method: 'GET',
+    host: 'realtime.example.com',
+    path: '/v1/stream',
+    status: 101,
+    requestBytes: 0,
+    responseBytes: 0,
+    durationMs: expect.toBeNumber(),
+    reason: null,
+  });
+});
+
+test('it records a second 101 row with the bytes each way when the connection closes', async () => {
+  const recordAudit = mock<(entry: NewAuditEntry) => void>();
+
+  const plan = await planUpgrade(
+    {
+      impId: 'imp-1',
+      impName: 'dev',
+      host: 'realtime.example.com',
+      findCredential: () => Promise.resolve(buildMockCredential({ secretName: 'rt' })),
+      resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+      recordAudit,
+    },
+    new Request('https://realtime.example.com/v1/stream', {
+      headers: { host: 'realtime.example.com', connection: 'Upgrade', upgrade: 'websocket' },
+    }),
+  );
+
+  invariant(plan.kind === 'open');
+
+  plan.audit.recordOpen();
   plan.audit.addRequestBytes(5);
   plan.audit.addResponseBytes(40);
   plan.audit.addRequestBytes(7);
-  plan.audit.recordClose(101);
-  plan.audit.recordClose(101);
+  plan.audit.recordClose();
 
-  expect(recordAudit).toHaveBeenCalledExactlyOnceWith({
+  expect(recordAudit).toHaveBeenCalledTimes(2);
+
+  expect(recordAudit).toHaveBeenLastCalledWith({
     impId: 'imp-1',
     impName: 'dev',
     secretName: 'rt',
@@ -251,7 +291,7 @@ test('it records one audit row for the connection when it closes, with the bytes
   });
 });
 
-test('it records nothing for an open connection', async () => {
+test('it records the close of a connection once', async () => {
   const recordAudit = mock<(entry: NewAuditEntry) => void>();
 
   const plan = await planUpgrade(
@@ -270,7 +310,47 @@ test('it records nothing for an open connection', async () => {
 
   invariant(plan.kind === 'open');
 
-  plan.audit.addRequestBytes(5);
+  plan.audit.recordOpen();
+  plan.audit.recordClose();
+  plan.audit.recordClose();
 
-  expect(recordAudit).not.toHaveBeenCalled();
+  expect(recordAudit).toHaveBeenCalledTimes(2);
+});
+
+test('it records one row with the upstream’s status when the upstream does not switch', async () => {
+  const recordAudit = mock<(entry: NewAuditEntry) => void>();
+
+  const plan = await planUpgrade(
+    {
+      impId: 'imp-1',
+      impName: 'dev',
+      host: 'realtime.example.com',
+      findCredential: () => Promise.resolve(buildMockCredential({ secretName: 'rt' })),
+      resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+      recordAudit,
+    },
+    new Request('https://realtime.example.com/socket', {
+      headers: { host: 'realtime.example.com', connection: 'Upgrade', upgrade: 'websocket' },
+    }),
+  );
+
+  invariant(plan.kind === 'open');
+
+  plan.audit.recordAnswer(401);
+  plan.audit.recordClose();
+
+  expect(recordAudit).toHaveBeenCalledExactlyOnceWith({
+    impId: 'imp-1',
+    impName: 'dev',
+    secretName: 'rt',
+    at: expect.toBeValidDate(),
+    method: 'GET',
+    host: 'realtime.example.com',
+    path: '/socket',
+    status: 401,
+    requestBytes: 0,
+    responseBytes: 0,
+    durationMs: expect.toBeNumber(),
+    reason: null,
+  });
 });
