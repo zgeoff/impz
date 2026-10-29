@@ -78,6 +78,26 @@ test('it refuses a guest on 2 MiB pages that the pool cannot hold, and sleeps no
   expect(host.sleepCalls).toBeEmpty();
 });
 
+test('it refuses a guest on 2 MiB pages that fits only the pool an awake guest faulted from while its count was read', async () => {
+  const host = createStubGovernedHost({
+    budgetMib: 4000,
+    ids: ['a', 'x'],
+    awake: [{ id: 'a', rssMib: 300, hugePagesMib: 1024, hugetlbMib: 256, faultMibOnRead: 512 }],
+    hugePool: { totalMib: 2048, freeMib: 1792 },
+  });
+
+  const governor = createRamGovernor({ ...host.deps });
+
+  const refusal = await governor
+    .admit({ id: 'x', name: 'x', reserveMib: 512, memoryMib: 1024, hugePagesMib: 1024 })
+    .then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+  expect(refusal).toMatchObject({ code: 'RAM_BUDGET_EXCEEDED' });
+});
+
 test('it counts a guest on 2 MiB pages it admitted against the next one until that guest is awake', async () => {
   const host = createStubGovernedHost({
     budgetMib: 4000,

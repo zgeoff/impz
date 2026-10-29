@@ -23,6 +23,9 @@ interface HostImp {
   // a guest on 2 MiB pages: its memory, and the pool pages it holds
   hugePagesMib: number;
   hugetlbMib: number;
+
+  // pool pages the guest faults in while a read of its count runs, taken once
+  faultMibOnRead: number;
 }
 
 export type HostChange =
@@ -46,6 +49,7 @@ interface StubGovernedHostOptions {
     readonly failsSleep?: boolean;
     readonly hugePagesMib?: number;
     readonly hugetlbMib?: number;
+    readonly faultMibOnRead?: number;
   }[];
 
   readonly hugePool?: HugePagePool;
@@ -73,6 +77,7 @@ export function createStubGovernedHost(options: Readonly<StubGovernedHostOptions
         dipMib: null,
         hugePagesMib: 0,
         hugetlbMib: 0,
+        faultMibOnRead: 0,
       },
     ]),
   );
@@ -89,9 +94,11 @@ export function createStubGovernedHost(options: Readonly<StubGovernedHostOptions
       dipMib: null,
       hugePagesMib: imp.hugePagesMib ?? 0,
       hugetlbMib: imp.hugetlbMib ?? 0,
+      faultMibOnRead: imp.faultMibOnRead ?? 0,
     });
   }
 
+  const pool = options.hugePool === undefined ? null : { ...options.hugePool };
   const clock = { now: 1_000_000 };
   const pacer: { pace: () => Promise<void> } = { pace: () => Promise.resolve() };
 
@@ -160,9 +167,22 @@ export function createStubGovernedHost(options: Readonly<StubGovernedHostOptions
           hugePagesMib: imp.hugePagesMib,
         }));
     },
-    readHugePool: (): HugePagePool | null => options.hugePool ?? null,
+    readHugePool: (): HugePagePool | null => (pool === null ? null : { ...pool }),
     readHugetlbMib: (_pid: number, id: string): Promise<number | null> => {
-      const hugetlbMib = imps.get(id)?.awake === true ? getImp(id).hugetlbMib : null;
+      const imp = imps.get(id);
+
+      if (imp?.awake !== true) {
+        return Promise.resolve(null);
+      }
+
+      const hugetlbMib = imp.hugetlbMib;
+
+      if (pool !== null) {
+        pool.freeMib -= imp.faultMibOnRead;
+      }
+
+      imp.hugetlbMib += imp.faultMibOnRead;
+      imp.faultMibOnRead = 0;
 
       return Promise.resolve(hugetlbMib);
     },

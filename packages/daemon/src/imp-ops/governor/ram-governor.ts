@@ -188,8 +188,6 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
   // An awake guest may still take every block of its memory it has not touched,
   // so the pool must hold those as well as the whole of the new guest.
   const checkHugePool = async (request: AdmissionRequest, hugePagesMib: number): Promise<void> => {
-    const pool = deps.readHugePool?.() ?? null;
-
     const listed = await deps.listAwake();
 
     const awake = listed.filter((imp) => imp.id !== request.id);
@@ -203,6 +201,11 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
     const held = await Promise.all(
       onPages.map((imp) => deps.readHugetlbMib?.(imp.pid, imp.apiSocket) ?? Promise.resolve(0)),
     );
+
+    // Guests fault pages in while the reads above run. Read after them, a fault
+    // shows in the pool and the guest's count alike, or only in the pool: never
+    // as free pool that the guest's count also leaves out.
+    const pool = deps.readHugePool?.() ?? null;
 
     const growthMib = onPages.reduce(
       (sum, imp, index) => sum + Math.max(0, imp.hugePagesMib - (held[index] ?? 0)),
