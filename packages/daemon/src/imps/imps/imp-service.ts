@@ -3,6 +3,7 @@ import type { ImpRecord } from '../../platform/db/imps';
 import { createEventBus } from '../../platform/events/event-bus';
 import type { EventBus } from '../../platform/events/event-bus';
 import { startImpEventPublisher } from '../../platform/events/imp-event-publisher';
+import type { TryResult } from '../../platform/process/keyed-mutex';
 import type { ResourceDelta } from '../../platform/telemetry/resource-delta';
 import { readSnapshotMeta } from '../../vm/sleep/snapshot-meta';
 import type { AgentWatchdog } from '../../vm/watchdog/agent-watchdog';
@@ -75,6 +76,11 @@ export interface ImpCheckpointHooks {
     action: (imp: LockedImp | undefined) => Promise<T>,
   ) => Promise<T>;
 
+  readonly tryLockImpId: <T>(
+    id: string,
+    action: (imp: LockedImp | undefined) => Promise<T>,
+  ) => Promise<TryResult<T>>;
+
   readonly haltImp: (imp: LockedImp, graceful?: boolean) => Promise<LockedImp>;
 
   readonly bootImp: (imp: LockedImp) => Promise<LockedImp>;
@@ -138,6 +144,7 @@ export function createImpService(deps: ImpServiceDeps, createWatchdog: CreateImp
     isUnmergeable: (id) => context.mergeFlags.isLost(id),
     lockImp: lock.withImp,
     lockImpId: (id, action) => lock.withImpId(id, action, { isMove: true }),
+    tryLockImpId: lock.tryWithImpId,
     haltImp: ops.stopImpVm,
     bootImp: (imp) => ops.startImpVm(imp, 'restore'),
     requireRunningImp: ops.requireRunningImp,
