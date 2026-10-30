@@ -1,5 +1,12 @@
 # Changelog
 
+## [6.3.0](https://github.com/zgeoff/impz/compare/v6.2.1...v6.3.0) (2026-10-30)
+
+
+### Features
+
+* **cli:** add impz bench to time creates, wakes and restores ([#793](https://github.com/zgeoff/impz/issues/793)) ([870d42d](https://github.com/zgeoff/impz/commit/870d42d99e96a543ed4053f5ceaabc173e6690cf))
+
 ## [6.2.1](https://github.com/zgeoff/impz/compare/v6.2.0...v6.2.1) (2026-10-30)
 
 ### Bug Fixes
