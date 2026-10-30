@@ -1,7 +1,8 @@
 import { join } from 'node:path';
+import { match } from 'ts-pattern';
 
 export interface LogCollectionFacts {
-  readonly engine: string;
+  readonly engine: 'docker' | 'podman';
   readonly container: string;
   readonly owner: string;
   readonly logsDir: string;
@@ -20,16 +21,24 @@ export interface LogCollectionPlan {
 const zfsLogFiles = ['impd.log', 'e2e.log', 'summary.txt'];
 
 export function pickLogCollection(facts: LogCollectionFacts): LogCollectionPlan {
-  const isPodman = facts.engine === 'podman';
   const zfsDir = facts.zfsDir;
 
-  // the Podman proof runs as root and leaves root's files in the logs folder
-  const prepareCommands = isPodman
-    ? [
+  const engineCommands = match(facts.engine)
+    .with('docker', () => ({
+      prepareCommands: [],
+      logsCommand: ['docker', 'logs', facts.container],
+    }))
+    .with('podman', () => ({
+      // the Podman proof runs as root and leaves root's files in the logs folder
+      prepareCommands: [
         ['sudo', 'mkdir', '-p', facts.logsDir],
         ['sudo', 'chown', '-R', facts.owner, facts.logsDir],
-      ]
-    : [];
+      ],
+
+      // rootful Podman's containers are root's to read
+      logsCommand: ['sudo', 'podman', 'logs', facts.container],
+    }))
+    .exhaustive();
 
   // the zfs host test keeps its logs and summary in its work dir
   const copies =
@@ -39,15 +48,15 @@ export function pickLogCollection(facts: LogCollectionFacts): LogCollectionPlan 
           .filter((name) => facts.zfsDirFiles.includes(name))
           .map((name) => ({ from: join(zfsDir, name), to: join(facts.logsDir, name) }));
 
-  // rootful Podman's containers are root's to read
-  const logsCommand = isPodman
-    ? ['sudo', 'podman', 'logs', facts.container]
-    : ['docker', 'logs', facts.container];
-
   const diskCommands = [
     ...(facts.dataDir === null ? [] : [['du', '-h', join(facts.dataDir, 'imp.xfs')]]),
     ['df', '-h', '/', '/mnt'],
   ];
 
-  return { prepareCommands, copies, logsCommand, diskCommands };
+  return {
+    prepareCommands: engineCommands.prepareCommands,
+    copies,
+    logsCommand: engineCommands.logsCommand,
+    diskCommands,
+  };
 }

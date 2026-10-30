@@ -29,8 +29,8 @@ async function main(): Promise<void> {
   const [engine, container, logsDir = join('.cache', 'e2e')] = command.values;
 
   invariant(
-    engine !== undefined && container !== undefined,
-    'the parser asks for an engine and a container',
+    (engine === 'docker' || engine === 'podman') && container !== undefined,
+    'the parser asks for a container and an engine of docker or podman',
   );
 
   const zfsDir = process.env['IMP_ZFS_TEST_DIR'] ?? null;
