@@ -1,10 +1,10 @@
 # Lifecycle bench results
 
-Each table compares two builds of impd that ran on one CI runner, their rounds in turn. A cell holds
-the median of a side's 2 rounds, and the change is against the baseline. The failed columns count
-the steps that failed over both rounds, including the steps that arrange a sample, such as the
-create and sleep before a wake. A level whose samples mostly failed has few latencies left, so its
-change is no measure of either build.
+Each table compares two builds of impd that ran on one CI runner, their rounds in turn, the baseline
+first in each round. A cell holds the median of a side's 2 rounds, and the change is against the
+baseline. The failed columns count the steps that failed over both rounds, including the steps that
+arrange a sample, such as the create and sleep before a wake. A level whose samples mostly failed
+has few latencies left, so its change is no measure of either build.
 
 ## Setup
 
@@ -13,82 +13,84 @@ Every run is on a GitHub-hosted `ubuntu-24.04` runner with nested KVM, 4 vCPUs a
 a RAM budget of 12,288 MiB, 4 KiB guest pages, and KSM off. The bench creates each imp with 256 MiB,
 takes 20 samples at each of the concurrency levels 1, 4, 16 and 64, and runs create, wake and
 restore. A wake wakes an imp that went to sleep after an earlier wake, and a restore restores an
-awake imp to a checkpoint. Before each side's timed run, 3 creates warm its boot template.
+awake imp to a checkpoint. Before each side's timed run, 3 creates of the same size warm its boot
+template.
 
-Each run lands on whichever runner GitHub assigns, so its CPU differs:
+Each run lands on whichever runner GitHub assigns, so its CPU differs. The reuse and tick runs
+predate the fix that makes impd wait for Firecracker's API socket to listen, so their level 64 still
+shows the failures that the socket race caused.
 
-| Run           | Baseline                 | Candidate                         | CPU                       |
-| ------------- | ------------------------ | --------------------------------- | ------------------------- |
-| noise         | the branch               | the same tree, as an empty commit | AMD EPYC 9V45             |
-| reuse         | the branch               | one kept guest connection         | AMD EPYC 9V74             |
-| tick          | the branch               | one shared imp list per tick      | AMD EPYC 7763             |
-| budget        | the branch               | the background work budget        | Intel Xeon Platinum 8370C |
-| touched pages | one build on 2 MiB pages |                                   | AMD EPYC 7763             |
+| Run           | Baseline                            | Candidate                         | CPU                       |
+| ------------- | ----------------------------------- | --------------------------------- | ------------------------- |
+| noise         | the branch                          | the same tree, as an empty commit | Intel Xeon Platinum 8370C |
+| reuse         | the branch before the socket fix    | one kept guest connection         | AMD EPYC 7763             |
+| tick          | the branch before the socket fix    | one shared imp list per tick      | AMD EPYC 7763             |
+| budget        | the branch with the budget reverted | the branch                        | AMD EPYC 9V45             |
+| touched pages | one build on 2 MiB pages            |                                   | AMD EPYC 7763             |
 
 ## Noise
 
 Both sides run the same tree, so every change is the runner's own noise. At concurrency 1 to 16 a
-p50 moves by up to 11%, a p95 by up to 13% and a p99 by up to 24%. At 64 the failures leave each
-side a different set of samples, and the changes there run to 74%. A change at 1 to 16 counts only
-past ±11% on the p50.
+p50 moves by up to 14% and a p95 by up to 18%, and the second side runs slower in most rows. No step
+fails at any level. A change at 1 to 16 counts only past ±14% on the p50.
 
-| scenario | conc | baseline p50 | candidate p50 | baseline p95 | candidate p95 | baseline p99 | candidate p99 | baseline failed | candidate failed |
-| -------- | ---- | ------------ | ------------- | ------------ | ------------- | ------------ | ------------- | --------------- | ---------------- |
-| create   | 1    | 215ms        | 223ms (+4%)   | 242ms        | 241ms (0%)    | 251ms        | 244ms (-3%)   | 0               | 0                |
-| create   | 4    | 480ms        | 535ms (+11%)  | 525ms        | 557ms (+6%)   | 525ms        | 558ms (+6%)   | 0               | 0                |
-| create   | 16   | 1831ms       | 1937ms (+6%)  | 2054ms       | 2238ms (+9%)  | 2056ms       | 2544ms (+24%) | 0               | 0                |
-| create   | 64   | 6291ms       | 5025ms (-20%) | 8365ms       | 8037ms (-4%)  | 8382ms       | 8069ms (-4%)  | 0               | 39               |
-| wake     | 1    | 71ms         | 71ms (0%)     | 76ms         | 86ms (+13%)   | 78ms         | 88ms (+13%)   | 0               | 0                |
-| wake     | 4    | 142ms        | 138ms (-3%)   | 157ms        | 159ms (+1%)   | 164ms        | 170ms (+4%)   | 0               | 0                |
-| wake     | 16   | 511ms        | 506ms (-1%)   | 576ms        | 555ms (-4%)   | 579ms        | 559ms (-3%)   | 0               | 0                |
-| wake     | 64   | 3276ms       | 2746ms (-16%) | 3370ms       | 2839ms (-16%) | 3378ms       | 2849ms (-16%) | 34              | 34               |
-| restore  | 1    | 220ms        | 214ms (-3%)   | 243ms        | 231ms (-5%)   | 250ms        | 242ms (-3%)   | 0               | 0                |
-| restore  | 4    | 458ms        | 453ms (-1%)   | 495ms        | 486ms (-2%)   | 500ms        | 488ms (-2%)   | 0               | 0                |
-| restore  | 16   | 1844ms       | 1874ms (+2%)  | 1926ms       | 2042ms (+6%)  | 1931ms       | 2053ms (+6%)  | 0               | 0                |
-| restore  | 64   | 9378ms       | 2425ms (-74%) | 9784ms       | 2694ms (-72%) | 9797ms       | 2700ms (-72%) | 62              | 43               |
+| scenario | conc | baseline p50 | candidate p50 | baseline p95 | candidate p95  | baseline p99 | candidate p99  | baseline failed | candidate failed |
+| -------- | ---- | ------------ | ------------- | ------------ | -------------- | ------------ | -------------- | --------------- | ---------------- |
+| create   | 1    | 233ms        | 266ms (+14%)  | 254ms        | 286ms (+13%)   | 273ms        | 297ms (+9%)    | 0               | 0                |
+| create   | 4    | 571ms        | 640ms (+12%)  | 596ms        | 703ms (+18%)   | 604ms        | 706ms (+17%)   | 0               | 0                |
+| create   | 16   | 1583ms       | 1691ms (+7%)  | 2383ms       | 2784ms (+17%)  | 2496ms       | 2810ms (+13%)  | 0               | 0                |
+| create   | 64   | 5945ms       | 6656ms (+12%) | 10529ms      | 11791ms (+12%) | 10719ms      | 12519ms (+17%) | 0               | 0                |
+| wake     | 1    | 77ms         | 76ms (-1%)    | 82ms         | 83ms (+1%)     | 86ms         | 91ms (+6%)     | 0               | 0                |
+| wake     | 4    | 161ms        | 161ms (0%)    | 189ms        | 172ms (-9%)    | 194ms        | 172ms (-11%)   | 0               | 0                |
+| wake     | 16   | 351ms        | 361ms (+3%)   | 752ms        | 746ms (-1%)    | 762ms        | 757ms (-1%)    | 0               | 0                |
+| wake     | 64   | 2386ms       | 2003ms (-16%) | 6601ms       | 6105ms (-8%)   | 7129ms       | 6982ms (-2%)   | 0               | 0                |
+| restore  | 1    | 246ms        | 273ms (+11%)  | 270ms        | 296ms (+10%)   | 280ms        | 303ms (+8%)    | 0               | 0                |
+| restore  | 4    | 548ms        | 613ms (+12%)  | 585ms        | 654ms (+12%)   | 590ms        | 672ms (+14%)   | 0               | 0                |
+| restore  | 16   | 1403ms       | 1503ms (+7%)  | 2279ms       | 2641ms (+16%)  | 2337ms       | 2672ms (+14%)  | 0               | 0                |
+| restore  | 64   | 5542ms       | 6185ms (+12%) | 9919ms       | 11523ms (+16%) | 10253ms      | 11931ms (+16%) | 0               | 0                |
 
 ## The kept guest connection
 
 impd keeps one idle connection to each guest's agent for the read-only calls ping, activity and
-`services.list`, and the agent serves requests on a connection until it closes. No p50 at 1 to 16
-moves past the noise except the restore at 16, which rises by 21%. The wake at 64 lost 80 of its
-samples to failed arranges, so its change is no measure of the build. The change is dropped.
+`services.list`, and the agent serves requests on a connection until it closes. One p50 at 1 to 16
+moves past the noise: the wake at 16 falls by 15%, and the wake at 64 rises by 21%. The create p50
+rises by 9 to 12% at 1 and 4. The change is dropped.
 
-| scenario | conc | baseline p50 | candidate p50 | baseline p95 | candidate p95  | baseline p99 | candidate p99  | baseline failed | candidate failed |
-| -------- | ---- | ------------ | ------------- | ------------ | -------------- | ------------ | -------------- | --------------- | ---------------- |
-| create   | 1    | 294ms        | 325ms (+11%)  | 1007ms       | 1078ms (+7%)   | 1258ms       | 1191ms (-5%)   | 0               | 0                |
-| create   | 4    | 691ms        | 745ms (+8%)   | 738ms        | 779ms (+6%)    | 738ms        | 834ms (+13%)   | 0               | 0                |
-| create   | 16   | 3012ms       | 2961ms (-2%)  | 3363ms       | 3346ms (-1%)   | 3374ms       | 3351ms (-1%)   | 0               | 0                |
-| create   | 64   | 8358ms       | 7640ms (-9%)  | 13412ms      | 13366ms (0%)   | 13447ms      | 13831ms (+3%)  | 0               | 47               |
-| wake     | 1    | 100ms        | 93ms (-7%)    | 158ms        | 145ms (-8%)    | 166ms        | 146ms (-12%)   | 0               | 0                |
-| wake     | 4    | 196ms        | 192ms (-2%)   | 230ms        | 244ms (+6%)    | 234ms        | 244ms (+4%)    | 0               | 0                |
-| wake     | 16   | 732ms        | 762ms (+4%)   | 878ms        | 834ms (-5%)    | 882ms        | 1100ms (+25%)  | 0               | 2                |
-| wake     | 64   | 3157ms       | 113ms (-96%)  | 3367ms       | 113ms (-97%)   | 3376ms       | 113ms (-97%)   | 34              | 80               |
-| restore  | 1    | 310ms        | 326ms (+5%)   | 371ms        | 372ms (0%)     | 386ms        | 393ms (+2%)    | 0               | 0                |
-| restore  | 4    | 688ms        | 699ms (+2%)   | 755ms        | 724ms (-4%)    | 785ms        | 731ms (-7%)    | 0               | 0                |
-| restore  | 16   | 3095ms       | 3757ms (+21%) | 7636ms       | 7595ms (-1%)   | 7643ms       | 7604ms (-1%)   | 0               | 0                |
-| restore  | 64   | 14716ms      | 14708ms (0%)  | 22129ms      | 18153ms (-18%) | 22151ms      | 18242ms (-18%) | 64              | 0                |
+| scenario | conc | baseline p50 | candidate p50 | baseline p95 | candidate p95 | baseline p99 | candidate p99 | baseline failed | candidate failed |
+| -------- | ---- | ------------ | ------------- | ------------ | ------------- | ------------ | ------------- | --------------- | ---------------- |
+| create   | 1    | 291ms        | 326ms (+12%)  | 308ms        | 380ms (+23%)  | 324ms        | 437ms (+35%)  | 0               | 0                |
+| create   | 4    | 723ms        | 788ms (+9%)   | 773ms        | 880ms (+14%)  | 783ms        | 892ms (+14%)  | 0               | 0                |
+| create   | 16   | 1938ms       | 1975ms (+2%)  | 3071ms       | 3256ms (+6%)  | 3095ms       | 3291ms (+6%)  | 0               | 0                |
+| create   | 64   | 7578ms       | 8302ms (+10%) | 13264ms      | 14345ms (+8%) | 13449ms      | 14615ms (+9%) | 0               | 0                |
+| wake     | 1    | 98ms         | 97ms (-1%)    | 165ms        | 151ms (-8%)   | 170ms        | 176ms (+4%)   | 0               | 0                |
+| wake     | 4    | 206ms        | 215ms (+4%)   | 283ms        | 246ms (-13%)  | 291ms        | 248ms (-15%)  | 0               | 0                |
+| wake     | 16   | 599ms        | 507ms (-15%)  | 955ms        | 963ms (+1%)   | 968ms        | 971ms (0%)    | 0               | 0                |
+| wake     | 64   | 2253ms       | 2715ms (+21%) | 7950ms       | 8487ms (+7%)  | 8911ms       | 9361ms (+5%)  | 0               | 0                |
+| restore  | 1    | 331ms        | 330ms (0%)    | 404ms        | 373ms (-8%)   | 419ms        | 397ms (-5%)   | 0               | 0                |
+| restore  | 4    | 734ms        | 732ms (0%)    | 827ms        | 870ms (+5%)   | 859ms        | 883ms (+3%)   | 0               | 0                |
+| restore  | 16   | 1917ms       | 1929ms (+1%)  | 3289ms       | 3244ms (-1%)  | 3298ms       | 3259ms (-1%)  | 0               | 0                |
+| restore  | 64   | 7709ms       | 7594ms (-1%)  | 13728ms      | 13203ms (-4%) | 13994ms      | 13736ms (-2%) | 0               | 64               |
 
 ## The shared imp list
 
 The idle, memory, governor and usage tickers read the imp list once per 250 ms window, and any imp
-write starts a new read. The create p50 rises by 9%, 14% and 16% at 1, 4 and 16, and no figure
-improves past the noise. The change is dropped.
+write starts a new read. No p50 at 1 to 16 moves past the noise, and the create p50 rises by 9 to
+11%. The change is dropped.
 
-| scenario | conc | baseline p50 | candidate p50 | baseline p95 | candidate p95  | baseline p99 | candidate p99  | baseline failed | candidate failed |
-| -------- | ---- | ------------ | ------------- | ------------ | -------------- | ------------ | -------------- | --------------- | ---------------- |
-| create   | 1    | 290ms        | 317ms (+9%)   | 411ms        | 387ms (-6%)    | 420ms        | 388ms (-8%)    | 0               | 0                |
-| create   | 4    | 733ms        | 839ms (+14%)  | 769ms        | 899ms (+17%)   | 774ms        | 932ms (+20%)   | 0               | 0                |
-| create   | 16   | 3039ms       | 3523ms (+16%) | 3243ms       | 3768ms (+16%)  | 3244ms       | 3777ms (+16%)  | 0               | 0                |
-| create   | 64   | 10179ms      | 8000ms (-21%) | 14592ms      | 16371ms (+12%) | 14624ms      | 16400ms (+12%) | 0               | 31               |
-| wake     | 1    | 94ms         | 96ms (+2%)    | 157ms        | 126ms (-20%)   | 160ms        | 133ms (-17%)   | 0               | 0                |
-| wake     | 4    | 197ms        | 198ms (+1%)   | 259ms        | 244ms (-6%)    | 282ms        | 245ms (-13%)   | 0               | 0                |
-| wake     | 16   | 714ms        | 737ms (+3%)   | 847ms        | 839ms (-1%)    | 852ms        | 846ms (-1%)    | 0               | 0                |
-| wake     | 64   | 3602ms       | 4111ms (+14%) | 3831ms       | 4396ms (+15%)  | 3847ms       | 4406ms (+15%)  | 34              | 81               |
-| restore  | 1    | 315ms        | 328ms (+4%)   | 354ms        | 405ms (+14%)   | 388ms        | 433ms (+12%)   | 0               | 0                |
-| restore  | 4    | 710ms        | 742ms (+5%)   | 784ms        | 845ms (+8%)    | 803ms        | 851ms (+6%)    | 0               | 0                |
-| restore  | 16   | 2952ms       | 3129ms (+6%)  | 3291ms       | 3359ms (+2%)   | 3297ms       | 3370ms (+2%)   | 0               | 0                |
-| restore  | 64   | 14988ms      | 15198ms (+1%) | 18660ms      | 17655ms (-5%)  | 19022ms      | 17655ms (-7%)  | 29              | 57               |
+| scenario | conc | baseline p50 | candidate p50  | baseline p95 | candidate p95    | baseline p99 | candidate p99    | baseline failed | candidate failed |
+| -------- | ---- | ------------ | -------------- | ------------ | ---------------- | ------------ | ---------------- | --------------- | ---------------- |
+| create   | 1    | 287ms        | 319ms (+11%)   | 318ms        | 392ms (+23%)     | 324ms        | 407ms (+26%)     | 0               | 0                |
+| create   | 4    | 736ms        | 799ms (+9%)    | 789ms        | 864ms (+10%)     | 806ms        | 882ms (+9%)      | 0               | 0                |
+| create   | 16   | 1943ms       | 2145ms (+10%)  | 3107ms       | 3266ms (+5%)     | 3133ms       | 3332ms (+6%)     | 1               | 0                |
+| create   | 64   | 4507ms       | 8028ms (+78%)  | 13295ms      | 13529ms (+2%)    | 13717ms      | 13952ms (+2%)    | 36              | 0                |
+| wake     | 1    | 96ms         | 93ms (-3%)     | 142ms        | 158ms (+11%)     | 179ms        | 160ms (-11%)     | 0               | 0                |
+| wake     | 4    | 201ms        | 203ms (+1%)    | 236ms        | 244ms (+3%)      | 241ms        | 253ms (+5%)      | 0               | 0                |
+| wake     | 16   | 497ms        | 505ms (+2%)    | 888ms        | 867ms (-2%)      | 895ms        | 872ms (-3%)      | 0               | 0                |
+| wake     | 64   | 2775ms       | 2671ms (-4%)   | 8104ms       | 7799ms (-4%)     | 8860ms       | 8532ms (-4%)     | 1               | 0                |
+| restore  | 1    | 324ms        | 304ms (-6%)    | 380ms        | 382ms (+1%)      | 420ms        | 384ms (-9%)      | 0               | 0                |
+| restore  | 4    | 743ms        | 720ms (-3%)    | 822ms        | 767ms (-7%)      | 834ms        | 779ms (-7%)      | 0               | 0                |
+| restore  | 16   | 1851ms       | 1755ms (-5%)   | 3176ms       | 3115ms (-2%)     | 3210ms       | 3168ms (-1%)     | 0               | 0                |
+| restore  | 64   | 1017ms       | 7479ms (+635%) | 1127ms       | 13091ms (+1062%) | 1127ms       | 13452ms (+1094%) | 62              | 0                |
 
 ## The background work budget
 
@@ -98,29 +100,28 @@ at once, in two pools, so a wake that falls back to a template boot never waits 
 wake takes its slot before it checks for a stop, so a wake still queued when impd stops leaves its
 snapshot in place, and a test in `imp-vm-ops.test.ts` pins that every imp is asleep afterwards.
 
-At 16 the p50 falls by 39% for creates, 41% for wakes and 45% for restores, and at 1 and 4 it stays
-within 3%. At 64 the baseline failed 62 creates and 81 wake steps, and the budget failed none. The
+At 16 the p50 falls by 27% for creates and by 36% for wakes and restores. At 64 the baseline refused
+34 wakes for the RAM budget and the budget refused none, the wake p50 falls by 33%, and the restore
+p50 by 47%. At 1 and 4 the p50 moves by 0 to 15%, inside the noise but for one create at 15%. The
 change is kept.
 
-Restores at 64 still fail on both sides. A restore boots the checkpoint's kernel, which the cap does
-not cover, and 64 kernel boots on 4 vCPUs pass the agent's deadline. impd's log shows two more
-effects of that load: an agent timeout counts as a fault of the boot template, so impd removes a
-healthy template while other restores map it, and those restores then boot the kernel too.
+The cap moves time from the middle of a burst to its tail: at 64 the wake p95 rises by 124%, because
+the last wakes of the burst wait for a slot.
 
 | scenario | conc | baseline p50 | candidate p50 | baseline p95 | candidate p95  | baseline p99 | candidate p99  | baseline failed | candidate failed |
 | -------- | ---- | ------------ | ------------- | ------------ | -------------- | ------------ | -------------- | --------------- | ---------------- |
-| create   | 1    | 253ms        | 253ms (0%)    | 743ms        | 775ms (+4%)    | 781ms        | 797ms (+2%)    | 0               | 0                |
-| create   | 4    | 588ms        | 584ms (-1%)   | 647ms        | 637ms (-2%)    | 648ms        | 649ms (0%)     | 0               | 0                |
-| create   | 16   | 2481ms       | 1514ms (-39%) | 2717ms       | 2515ms (-7%)   | 2726ms       | 2591ms (-5%)   | 0               | 0                |
-| create   | 64   | 11568ms      | 6296ms (-46%) | 17206ms      | 10864ms (-37%) | 17220ms      | 11200ms (-35%) | 62              | 0                |
-| wake     | 1    | 77ms         | 77ms (0%)     | 85ms         | 83ms (-2%)     | 98ms         | 98ms (0%)      | 0               | 0                |
-| wake     | 4    | 165ms        | 168ms (+2%)   | 179ms        | 191ms (+7%)    | 186ms        | 200ms (+8%)    | 0               | 0                |
-| wake     | 16   | 645ms        | 379ms (-41%)  | 736ms        | 732ms (-1%)    | 798ms        | 743ms (-7%)    | 0               | 0                |
-| wake     | 64   | 3305ms       | 2787ms (-16%) | 3526ms       | 7347ms (+108%) | 3540ms       | 7931ms (+124%) | 81              | 0                |
-| restore  | 1    | 250ms        | 256ms (+2%)   | 279ms        | 276ms (-1%)    | 281ms        | 280ms (0%)     | 0               | 0                |
-| restore  | 4    | 551ms        | 570ms (+3%)   | 575ms        | 597ms (+4%)    | 594ms        | 616ms (+4%)    | 0               | 0                |
-| restore  | 16   | 2443ms       | 1334ms (-45%) | 2624ms       | 2448ms (-7%)   | 2632ms       | 2464ms (-6%)   | 0               | 0                |
-| restore  | 64   | 13840ms      | 1009ms (-93%) | 15168ms      | 1033ms (-93%)  | 15168ms      | 1033ms (-93%)  | 113             | 125              |
+| create   | 1    | 198ms        | 221ms (+12%)  | 266ms        | 240ms (-10%)   | 268ms        | 242ms (-10%)   | 0               | 0                |
+| create   | 4    | 456ms        | 525ms (+15%)  | 479ms        | 603ms (+26%)   | 513ms        | 609ms (+19%)   | 0               | 0                |
+| create   | 16   | 1762ms       | 1294ms (-27%) | 1978ms       | 2209ms (+12%)  | 1984ms       | 2211ms (+11%)  | 0               | 0                |
+| create   | 64   | 5252ms       | 5302ms (+1%)  | 8662ms       | 9105ms (+5%)   | 8680ms       | 9434ms (+9%)   | 0               | 0                |
+| wake     | 1    | 72ms         | 72ms (0%)     | 78ms         | 78ms (0%)      | 82ms         | 82ms (0%)      | 0               | 0                |
+| wake     | 4    | 143ms        | 143ms (0%)    | 162ms        | 173ms (+7%)    | 169ms        | 177ms (+5%)    | 0               | 0                |
+| wake     | 16   | 511ms        | 327ms (-36%)  | 564ms        | 611ms (+8%)    | 567ms        | 614ms (+8%)    | 0               | 0                |
+| wake     | 64   | 2956ms       | 1988ms (-33%) | 3058ms       | 6839ms (+124%) | 3065ms       | 7513ms (+145%) | 34              | 0                |
+| restore  | 1    | 212ms        | 229ms (+8%)   | 240ms        | 261ms (+9%)    | 246ms        | 281ms (+14%)   | 0               | 0                |
+| restore  | 4    | 464ms        | 496ms (+7%)   | 494ms        | 519ms (+5%)    | 498ms        | 565ms (+13%)   | 0               | 0                |
+| restore  | 16   | 1915ms       | 1228ms (-36%) | 2047ms       | 2053ms (0%)    | 2052ms       | 2110ms (+3%)   | 0               | 0                |
+| restore  | 64   | 9577ms       | 5122ms (-47%) | 9948ms       | 8850ms (-11%)  | 9964ms       | 9058ms (-9%)   | 0               | 0                |
 
 ## Touched pages on a 2 MiB sleep
 
@@ -139,12 +140,21 @@ The woken guest held 220 MiB at its second sleep, while 9.3 MiB of its pages cha
 pages are about 24 times the changed ones, and the changed pages fall in 72 MiB of 2 MiB pages, a
 third of the touched ones.
 
+## Socket race under load
+
+Before the socket fix, most runs failed many steps at 64. impd's logs showed the first Firecracker
+API call of a start refused with `ECONNREFUSED` just after the socket file appeared. A template
+restore counted that as a fault of the template and removed it while other restores mapped it, so
+the rest booted the kernel at once and passed the agent's deadline. impd now connects to the socket
+before its first call, and the noise and budget runs after the fix show no refused call, no removed
+template and no failed step at 64 beyond the RAM refusals.
+
 ## Untested
 
 - Every run is on a nested runner with 4 vCPUs, never on a real host, whose CPUs and disk move each
   figure.
-- Each comparison has 2 rounds of 20 samples on one runner. A gain under the noise needs more rounds
-  to show.
+- Each comparison has 2 rounds of 20 samples on one runner, and the baseline always runs first in a
+  round. A gain under the noise needs more rounds to show.
 - No run uses 2 MiB pages for the latency comparison, or turns KSM on.
 - The concurrency levels stop at 64, and the imps hold 256 MiB each.
 - The touched-page measurement is one run of one workload.

@@ -13,12 +13,12 @@ restores? And does the mincore diff of a 2 MiB sleep write much more than a dirt
 
 ## Answer
 
-- Keep the background work budget. At concurrency 16 it cuts the p50 of creates by 39%, of wakes by
-  41% and of restores by 45%, and at 64 it ends every failed create and wake. At 1 and 4 it stays
-  within 3%.
-- Drop the kept guest connection. No p50 at 1 to 16 improves past the runner's noise of ±11%, and
-  the restore at 16 rises by 21%.
-- Drop the shared imp list. It raises the p50 of creates by 9 to 16% and improves nothing.
+- Keep the background work budget. At concurrency 16 it cuts the p50 of creates by 27% and of wakes
+  and restores by 36%, and at 64 it ends the 34 wakes the RAM budget refused. It raises the wake p95
+  at 64 by 124%, as the last wakes of a burst wait for a slot.
+- Drop the kept guest connection. One p50 at 1 to 16 passes the runner's noise of ±14%, a wake at 16
+  15% faster, and the wake at 64 is 21% slower.
+- Drop the shared imp list. No p50 passes the noise, and creates run 9 to 11% slower.
 - A woken 2 MiB guest that read 128 MiB back held 220 MiB of pool pages at its next sleep, while 9.3
   MiB of its 4 KiB pages changed: the mincore diff writes about 24 times what changed.
 
