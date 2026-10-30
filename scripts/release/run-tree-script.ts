@@ -1,7 +1,8 @@
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { $ } from 'bun';
 import { getStepEnv } from '../lib/get-step-env.ts';
-import { resolveTreeScript } from './resolve-tree-script.ts';
+import { findTreeScript } from './find-tree-script.ts';
 
 async function main(): Promise<void> {
   const tree = getStepEnv(process.env, 'GITHUB_WORKSPACE');
@@ -15,7 +16,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const script = resolveTreeScript(tree, name);
+  const script = findTreeScript(name, (path) => existsSync(join(tree, path)));
 
   if (script === null) {
     console.error(`the checked-out tree has no ${name} in scripts/release, scripts or host`);

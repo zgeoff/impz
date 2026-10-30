@@ -1,9 +1,9 @@
-import { copyFileSync, mkdirSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { $ } from 'bun';
 import { getStepEnv } from '../lib/get-step-env.ts';
 import { writeStepValues } from '../lib/write-step-values.ts';
-import { resolveTreeScript } from './resolve-tree-script.ts';
+import { findTreeScript } from './find-tree-script.ts';
 
 // @impz/testing's check installs the client tarball of the same release, so the client is packed
 // even when only the testing package goes out.
@@ -15,7 +15,7 @@ async function main(): Promise<void> {
   const tarballs = join(tree, 'npm-tarball');
 
   const runTreeScript = (name: string, args: readonly string[]) => {
-    const script = resolveTreeScript(tree, name);
+    const script = findTreeScript(name, (path) => existsSync(join(tree, path)));
 
     if (script === null) {
       throw new Error(`the checked-out tree has no ${name}`);

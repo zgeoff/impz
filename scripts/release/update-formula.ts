@@ -1,8 +1,8 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { $ } from 'bun';
 import { getStepEnv } from '../lib/get-step-env.ts';
-import { resolveTreeScript } from './resolve-tree-script.ts';
+import { findTreeScript } from './find-tree-script.ts';
 
 const classPattern = /^class (?<name>[A-Za-z0-9]+) < Formula$/mu;
 
@@ -13,7 +13,7 @@ async function main(): Promise<void> {
   const version = getStepEnv(process.env, 'VERSION');
   const tree = getStepEnv(process.env, 'GITHUB_WORKSPACE');
   const clone = join(tree, 'tap');
-  const generator = resolveTreeScript(tree, 'build-formula.sh');
+  const generator = findTreeScript('build-formula.sh', (path) => existsSync(join(tree, path)));
 
   if (generator === null) {
     console.error('the checked-out tree has no build-formula.sh');

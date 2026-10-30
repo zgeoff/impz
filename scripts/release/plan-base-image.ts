@@ -1,9 +1,9 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { $ } from 'bun';
 import { getStepEnv } from '../lib/get-step-env.ts';
 import { writeStepValues } from '../lib/write-step-values.ts';
-import { resolveTreeScript } from './resolve-tree-script.ts';
+import { findTreeScript } from './find-tree-script.ts';
 
 const digestPattern = /^sha256:[0-9a-f]{64}$/u;
 
@@ -23,7 +23,7 @@ async function main(): Promise<void> {
   const dockerfile = readFileSync(join(tree, 'images', 'base', 'Dockerfile'), 'utf8');
 
   if (
-    resolveTreeScript(tree, 'check-base-image.sh') === null ||
+    findTreeScript('check-base-image.sh', (path) => existsSync(join(tree, path))) === null ||
     !pinnedBasePattern.test(dockerfile)
   ) {
     console.log(`::notice::this tree predates the published imp-base, so ${ref} is not built`);
