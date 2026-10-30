@@ -125,6 +125,23 @@ test('it reserves 1 GiB of huge pages, and shows the pool and the userfaultfd de
   expect(result.stdout.toString()).toInclude('HugePages_Total:');
 });
 
+test('it reserves the number of huge pages it is given', async () => {
+  const ctx = setupTest();
+
+  createStubBin(ctx.directoryPath, 'stat');
+
+  const result = await $`${process.execPath} ${ctx.scriptPath} reserve-huge-pages 3072`
+    .env({ PATH: ctx.sudo.bin })
+    .nothrow()
+    .quiet();
+
+  expect(result.exitCode).toBe(0);
+
+  expect(readFileSync(ctx.sudo.calls, 'utf8')).toStartWith(
+    'sudo tee /proc/sys/vm/nr_hugepages\n< 3072\n',
+  );
+});
+
 test('it names the e2e registry in /etc/hosts, after the entries there', async () => {
   const ctx = setupTest();
 

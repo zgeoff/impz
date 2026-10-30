@@ -147,11 +147,31 @@ test('it reports a zfs file it cannot copy, and collects the rest all the same',
   );
 });
 
-test('it refuses an extra argument after the container, and collects nothing', async () => {
+test('it writes the logs into the folder it is given', async () => {
+  const ctx = setupTest();
+  const docker = createStubBin(ctx.directoryPath, 'docker', 'echo "impd listening"');
+
+  createStubBin(ctx.directoryPath, 'df');
+
+  const result = await $`${process.execPath} ${ctx.scriptPath} docker imp-dev .cache/bench`
+    .cwd(ctx.checkout)
+    .env({ PATH: docker.bin })
+    .nothrow()
+    .quiet();
+
+  expect(result.exitCode).toBe(0);
+  expect(readdirSync(join(ctx.checkout, '.cache'))).toStrictEqual(['bench']);
+
+  expect(readFileSync(join(ctx.checkout, '.cache', 'bench', 'impd.log'), 'utf8')).toBe(
+    'impd listening\n',
+  );
+});
+
+test('it refuses an extra argument after the logs dir, and collects nothing', async () => {
   const ctx = setupTest();
   const docker = createStubBin(ctx.directoryPath, 'docker');
 
-  const result = await $`${process.execPath} ${ctx.scriptPath} docker imp-dev imp-zfs`
+  const result = await $`${process.execPath} ${ctx.scriptPath} docker imp-dev .cache/bench imp-zfs`
     .cwd(ctx.checkout)
     .env({ PATH: docker.bin })
     .nothrow()
@@ -159,7 +179,7 @@ test('it refuses an extra argument after the container, and collects nothing', a
 
   expect({ exitCode: result.exitCode, stderr: result.stderr.toString() }).toStrictEqual({
     exitCode: 2,
-    stderr: 'usage: collect-e2e-logs.ts <docker|podman> <container>\n',
+    stderr: 'usage: collect-e2e-logs.ts <docker|podman> <container> [logs dir]\n',
   });
 
   expect(readFileSync(docker.calls, 'utf8')).toBe('');

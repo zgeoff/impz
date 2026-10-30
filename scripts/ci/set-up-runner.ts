@@ -13,7 +13,10 @@ interface Task {
 const tasks: Readonly<Record<string, Task>> = {
   'share-cpu': { stepArguments: [], run: shareCPUController },
   'turn-on-ksm': { stepArguments: [], run: turnOnKSM },
-  'reserve-huge-pages': { stepArguments: [], run: reserveHugePages },
+  'reserve-huge-pages': {
+    stepArguments: [{ name: 'pages', isOptional: true }],
+    run: reserveHugePages,
+  },
   'name-e2e-registry': { stepArguments: [], run: nameE2ERegistry },
   'install-zfs': {
     stepArguments: [{ name: 'arc max bytes', isOptional: true }],
@@ -67,10 +70,12 @@ async function turnOnKSM(): Promise<void> {
   await $`grep -H . /sys/kernel/mm/ksm/run /sys/kernel/mm/ksm/pages_to_scan /sys/kernel/mm/ksm/use_zero_pages`;
 }
 
-// 1 GiB in 2 MiB pages: enough for the huge-pages suite's imps one at a time and a template build
-// beside one.
-async function reserveHugePages(): Promise<void> {
-  await writeAsRoot('/proc/sys/vm/nr_hugepages', '512\n');
+// 512 pages of 2 MiB by default: enough for the huge-pages suite's imps one at a time and a
+// template build beside one.
+async function reserveHugePages(args: readonly string[]): Promise<void> {
+  const [pages = '512'] = args;
+
+  await writeAsRoot('/proc/sys/vm/nr_hugepages', `${pages}\n`);
 
   console.log(
     readFileSync('/proc/meminfo', 'utf8')

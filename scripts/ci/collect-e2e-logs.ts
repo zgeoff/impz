@@ -5,14 +5,16 @@ import invariant from 'tiny-invariant';
 import { parseStepCommand } from '../lib/parse-step-command.ts';
 import { pickLogCollection } from './pick-log-collection.ts';
 
-const logsDir = join('.cache', 'e2e');
-
 // Runs after a failure or a timeout too, with or without a container, so nothing it does may fail
 // the job.
 async function main(): Promise<void> {
   const command = parseStepCommand(
     'collect-e2e-logs.ts',
-    [{ name: 'engine', choices: ['docker', 'podman'] }, { name: 'container' }],
+    [
+      { name: 'engine', choices: ['docker', 'podman'] },
+      { name: 'container' },
+      { name: 'logs dir', isOptional: true },
+    ],
     process.argv.slice(2),
   );
 
@@ -24,7 +26,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const [engine, container] = command.values;
+  const [engine, container, logsDir = join('.cache', 'e2e')] = command.values;
 
   invariant(
     engine !== undefined && container !== undefined,
