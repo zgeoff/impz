@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createStubBin } from '@impz/test-utils/create-stub-bin';
 import { $ } from 'bun';
+import { buildStubNpmView } from '../test-utils/build-stub-npm-view';
 
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-plan-npm-'));
@@ -106,12 +107,7 @@ test('it plans the client alone for a tag with no packages/testing', async () =>
 
 test('it skips a package whose version is on npm already', async () => {
   const ctx = setupTest();
-
-  const npm = createStubBin(
-    ctx.directoryPath,
-    'npm',
-    '[ "$2" = @impz/client@2.0.1 ] && echo 2.0.1 && exit 0\nexit 1',
-  );
+  const npm = createStubBin(ctx.directoryPath, 'npm', buildStubNpmView(['@impz/client@2.0.1']));
 
   mkdirSync(join(ctx.tree, 'packages', 'testing'), { recursive: true });
   writeFileSync(join(ctx.tree, 'packages', 'testing', 'package.json'), '{}\n');
