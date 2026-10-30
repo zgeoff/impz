@@ -698,6 +698,36 @@
       "rules": { "zgeoff/test-beside-module": "off" }
     },
     {
+      // a release job runs these from a sparse checkout with no install of its own, beside the
+      // tag's install, so they import only Bun's and Node's built-ins
+      "files": [
+        "scripts/release/*.ts",
+        "scripts/lib/get-step-env.ts",
+        "scripts/lib/format-step-values.ts"
+      ],
+      "excludeFiles": ["**/*.test.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "*",
+                  "!node:*",
+                  "!bun",
+                  "!./*",
+                  "!../lib/get-step-env.ts",
+                  "!../lib/format-step-values.ts"
+                ],
+                "message": "a release tool imports only Bun's and Node's built-ins, because a republish runs it beside an old tag's install"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
       // the cli keeps every error that main.ts maps to an exit code in one module
       "files": ["packages/cli/src/cli/errors.ts"],
       "rules": { "max-classes-per-file": "off" }

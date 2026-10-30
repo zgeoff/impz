@@ -62,6 +62,8 @@ jobs:
       IMP_HOST_IMAGE: imp-host:dev
       IMP_HOST_IMAGE_READY: 1
       IS_HUGE_PAGES: ${{ inputs.huge-pages || contains(github.ref_name, 'huge-pages') }}
+      IMP_HUGE_PAGES:
+        ${{ (inputs.huge-pages || contains(github.ref_name, 'huge-pages')) && '2M' || 'off' }}
       SCENARIOS: ${{ inputs.scenarios || 'create,wake,restore' }}
       CONCURRENCY: ${{ inputs.concurrency || '1,4,16,64' }}
       SAMPLES: ${{ inputs.samples || '20' }}
@@ -92,30 +94,21 @@ jobs:
       - name: Check KVM
         run: scripts/ci/check-kvm.sh
 
-      # 6 GiB of 2 MiB pages: 16 imps of 256 MiB awake at once, and a
-      # template build beside them
-      - name: Reserve huge pages
-        if: env.IS_HUGE_PAGES == 'true'
-        run: |
-          echo 3072 | sudo tee /proc/sys/vm/nr_hugepages >/dev/null
-          grep -E 'HugePages_(Total|Free)' /proc/meminfo
-          echo "IMP_HUGE_PAGES=2M" >> "$GITHUB_ENV"
-
-      - name: Pick the data dir
-        run: |
-          if mountpoint -q /mnt; then
-            data=/mnt/imp-bench
-          else
-            data=$GITHUB_WORKSPACE/.data/ci
-          fi
-          sudo mkdir -p "$data"
-          sudo chown "$(id -u):$(id -g)" "$data"
-          echo "IMP_DEV_DATA=$data" >> "$GITHUB_ENV"
-
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: .bun-version
+
+      # 6 GiB of 2 MiB pages: 16 imps of 256 MiB awake at once, and a
+      # template build beside them
+      - name: Reserve huge pages
+        if: env.IS_HUGE_PAGES == 'true'
+        run: bun run --silent ci:set-up-runner reserve-huge-pages 3072
+
+      - name: Pick the data dir
+        run:
+          bun run --silent ci:pick-data-dir --env IMP_DEV_DATA --mnt /mnt/imp-bench --fallback
+          "$GITHUB_WORKSPACE/.data/ci"
 
       - name: Install
         run: bun install --frozen-lockfile
@@ -139,14 +132,7 @@ jobs:
 
       - name: Measure touched pages
         if: env.IS_HUGE_PAGES == 'true'
-        run: |
-          mkdir -p .cache/bench
-          scripts/dev/dev.sh up
-          IMP_TOKEN=$(scripts/dev/dev.sh token)
-          IMP_URL=http://localhost:7070 IMP_TOKEN=$IMP_TOKEN \
-            bun scripts/bench/measure-touched-pages.ts | tee .cache/bench/touched-pages.json
-          scripts/dev/dev.sh down
-          { echo '```json'; cat .cache/bench/touched-pages.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+        run: bun run --silent ci:touched-pages-bench
 
       - name: Compare with the baseline
         run: >-
@@ -158,9 +144,7 @@ jobs:
       # without a container, so none of them may fail the job.
       - name: Collect logs
         if: always()
-        run: |
-          mkdir -p .cache/bench
-          docker logs imp-dev >.cache/bench/impd.log 2>&1 || true
+        run: bun run --silent ci:collect-e2e-logs docker imp-dev .cache/bench
 
       - name: Upload results
         if: always()
@@ -173,4 +157,5 @@ jobs:
 
       - name: Remove the dev instance
         if: always()
-        run: docker rm -f imp-dev || true
+        continue-on-error: true
+        run: docker rm -f imp-dev

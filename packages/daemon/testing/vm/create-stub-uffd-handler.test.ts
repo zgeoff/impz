@@ -98,6 +98,10 @@ test('it exits at its first connection in crash mode', async () => {
 
   const peer = connect(socket);
 
+  // the handler exits at the connection, so the peer can see ECONNRESET, which an unheard socket
+  // error turns into a failed test
+  peer.on('error', () => {});
+
   onTestFinished(() => {
     peer.destroy();
   });

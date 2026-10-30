@@ -36,6 +36,9 @@ env:
   IMAGE: ghcr.io/${{ github.repository_owner }}/imp-host
   BASE_IMAGE: ghcr.io/${{ github.repository_owner }}/imp-base
 
+# Each job that runs a release script checks out the workflow's own commit,
+# sparse, into .release-tools, and runs the script from there: a republish
+# checks out an old tag, which may predate the scripts.
 jobs:
   assets:
     runs-on: ubuntu-latest
@@ -46,16 +49,6 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       push_tag: ${{ steps.version.outputs.push_tag }}
     steps:
-      - name: Check tag
-        if: inputs.tag != ''
-        env:
-          TAG: ${{ inputs.tag }}
-        run: |
-          if ! [[ $TAG =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "tag $TAG is not vX.Y.Z" >&2
-            exit 1
-          fi
-
       # a republish builds the tag, never main's head
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -63,28 +56,26 @@ jobs:
           ref: ${{ inputs.tag || github.sha }}
           persist-credentials: false
 
-      # A release's version is its tag without the v; package.json must agree,
-      # which the image check enforces. A dry run takes package.json's version
-      # and pushes under a tag of its own.
-      - name: Version
-        id: version
-        env:
-          TAG: ${{ inputs.tag }}
-        run: |
-          if [ -n "$TAG" ]; then
-            version=${TAG#v}
-            push_tag=$version
-          else
-            version=$(jq -r .version package.json)
-            push_tag=dryrun-${GITHUB_SHA::12}
-          fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "push_tag=$push_tag" >> "$GITHUB_OUTPUT"
+      - name: Checkout the release scripts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .release-tools
+          sparse-checkout: |
+            scripts/lib
+            scripts/release
+          persist-credentials: false
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: .bun-version
+
+      - name: Version
+        id: version
+        env:
+          TAG: ${{ inputs.tag }}
+        run: bun run --silent --cwd .release-tools release:plan-version
 
       - name: Install
         run: bun install --frozen-lockfile
@@ -100,12 +91,9 @@ jobs:
       # mode=max keeps the kernel layer, for the image job and the next
       # release
       - name: Build assets
-        # a tag from before scripts/release/ keeps each release script at
-        # its old path, so a republish of one falls back to it
-        run: |
-          script=scripts/release/build-release-assets.sh
-          [ -f "$script" ] || script=scripts/build-release-assets.sh
-          "$script" --cache-from type=gha,scope=system-files --cache-to type=gha,scope=system-files,mode=max
+        run:
+          bun run --silent --cwd .release-tools release:tree-script build-release-assets.sh --
+          --cache-from type=gha,scope=system-files --cache-to type=gha,scope=system-files,mode=max
 
       - name: Upload assets
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -133,34 +121,34 @@ jobs:
             target: darwin-x64
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 10
-    permissions: {}
+    permissions:
+      contents: read
     steps:
+      - name: Checkout the release scripts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          sparse-checkout: |
+            scripts/lib
+            scripts/release
+          persist-credentials: false
+
       - name: Download assets
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: release-assets
           path: dist
 
-      # a tag from before the CLI's rename builds imp-<target>
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+
       - name: Check the binary and its checksum
         env:
           TARGET: ${{ matrix.target }}
           VERSION: ${{ needs.assets.outputs.version }}
-        run: |
-          cd dist
-          BIN=impz-$TARGET
-          [ -f "$BIN" ] || BIN=imp-$TARGET
-          grep "  $BIN\$" SHA256SUMS | shasum -a 256 -c -
-          chmod +x "$BIN"
-          got=$("./$BIN" --version)
-          if [ "$got" != "$VERSION" ]; then
-            echo "$BIN --version is $got, want $VERSION" >&2
-            exit 1
-          fi
-          # the Homebrew formula generates the completions at install time
-          for shell in bash zsh fish; do
-            "./$BIN" completion "$shell" > /dev/null
-          done
+        run: bun run --silent release:check-cli-binary
 
   # Builds the image from the same commit, with the kernel and the drive from
   # the assets job's cache, then checks the image's copies against
@@ -181,11 +169,26 @@ jobs:
           ref: ${{ inputs.tag || github.sha }}
           persist-credentials: false
 
+      - name: Checkout the release scripts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .release-tools
+          sparse-checkout: |
+            scripts/lib
+            scripts/release
+          persist-credentials: false
+
       - name: Download assets
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: release-assets
           path: dist
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
 
       - name: Setup Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
@@ -199,19 +202,18 @@ jobs:
         env:
           IMP_VERSION: ${{ needs.assets.outputs.version }}
           IMP_RELEASE_IMAGE: ${{ env.IMAGE }}
-        run: |
-          script=scripts/release/build-release.sh
-          [ -f "$script" ] || script=host/build-release.sh
-          "$script" --cache-from type=gha,scope=system-files --cache-from type=gha,scope=imp-host \
-            --cache-to type=gha,scope=imp-host,mode=max
+        run:
+          bun run --silent --cwd .release-tools release:tree-script build-release.sh -- --cache-from
+          type=gha,scope=system-files --cache-from type=gha,scope=imp-host --cache-to
+          type=gha,scope=imp-host,mode=max
 
       - name: Check image
         env:
+          IMAGE_REF: ${{ env.IMAGE }}:${{ needs.assets.outputs.version }}
           VERSION: ${{ needs.assets.outputs.version }}
-        run: |
-          script=scripts/release/check-release-image.sh
-          [ -f "$script" ] || script=host/check-release-image.sh
-          "$script" "$IMAGE:$VERSION" "$VERSION" dist/SHA256SUMS
+        run:
+          bun run --silent --cwd .release-tools release:tree-script check-release-image.sh --
+          "$IMAGE_REF" "$VERSION" dist/SHA256SUMS
 
       - name: Log in to GHCR
         uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
@@ -220,20 +222,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
 
-      # The digest comes from the registry, after the push, so the
-      # attestation names exactly what was pushed.
       - name: Push image
         id: push
         env:
-          VERSION: ${{ needs.assets.outputs.version }}
+          BUILT_TAG: ${{ needs.assets.outputs.version }}
           PUSH_TAG: ${{ needs.assets.outputs.push_tag }}
-        run: |
-          if [ "$PUSH_TAG" != "$VERSION" ]; then
-            docker tag "$IMAGE:$VERSION" "$IMAGE:$PUSH_TAG"
-          fi
-          docker push "$IMAGE:$PUSH_TAG"
-          digest=$(docker buildx imagetools inspect "$IMAGE:$PUSH_TAG" --format '{{.Manifest.Digest}}')
-          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+        run: bun run --silent --cwd .release-tools release:push-image
 
       - name: Attest image
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
@@ -253,7 +247,7 @@ jobs:
   # one commit, the job leaves it alone and stays green. It skips a release
   # from before imp-base, and fails on an existing tag that has no
   # attestation. The concurrency group keeps two runs for one tag apart
-  # between the check and the push.
+  # between the plan and the push.
   # imp-base has no `latest`. Publish does not wait for this job: consumers
   # pin a digest, so a base failure must not hold up a release.
   base:
@@ -272,10 +266,25 @@ jobs:
           ref: ${{ inputs.tag || github.sha }}
           persist-credentials: false
 
+      - name: Checkout the release scripts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .release-tools
+          sparse-checkout: |
+            scripts/lib
+            scripts/release
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+
       - name: Setup Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
-      # before the check, so a missing tag answers "not found" rather than an
+      # before the plan, so a missing tag answers "not found" rather than an
       # anonymous token error
       - name: Log in to GHCR
         uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
@@ -284,92 +293,38 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
 
-      # Decides what the job does, before any build:
-      # - skip: the tree predates imp-base (every tag up to v0.27.0 has an
-      #   unpinned images/base and no check script), or the tag exists with
-      #   this repository's attestation;
-      # - push: the registry answers "not found" for the tag.
-      # An existing tag without that attestation fails the job: this
-      # workflow did not vouch for it, so it may not be ours, and attesting
-      # it now would vouch for what nobody checked (docs/runbooks/releasing.md). Any other
-      # registry answer fails too, so a 401, a 403 or a network error never
-      # reads as a missing tag.
+      # Decides, before any build, whether the job pushes or skips.
       - name: Plan
         id: plan
         env:
           PUSH_TAG: ${{ needs.assets.outputs.push_tag }}
           GH_TOKEN: ${{ github.token }}
-        run: |
-          ref=$BASE_IMAGE:$PUSH_TAG
-          if { [ ! -f scripts/release/check-base-image.sh ] && [ ! -f host/check-base-image.sh ]; } || ! grep -q '^ARG DOCKER_CE_VERSION=' images/base/Dockerfile; then
-            echo "::notice::this tree predates the published imp-base, so $ref is not built"
-            echo "action=skip" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          err=$(mktemp)
-          if digest=$(docker buildx imagetools inspect "$ref" --format '{{.Manifest.Digest}}' 2> "$err"); then
-            if ! [[ $digest =~ ^sha256:[0-9a-f]{64}$ ]]; then
-              echo "::error::$ref exists, but the registry gave no valid digest: $digest"
-              exit 1
-            fi
-            if ! verified=$(gh attestation verify "oci://$BASE_IMAGE@$digest" --repo "$GITHUB_REPOSITORY" 2>&1); then
-              echo "$verified" >&2
-              echo "::error::$ref exists at $digest with no attestation from $GITHUB_REPOSITORY; treat it as a possible compromise (docs/runbooks/releasing.md)"
-              exit 1
-            fi
-            echo "::notice::$ref exists already at $digest, attested; a published imp-base never moves, so this run leaves it alone"
-            echo "action=skip" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          if ! grep -qF "$ref: not found" "$err"; then
-            echo "cannot tell whether $ref exists:" >&2
-            cat "$err" >&2
-            exit 1
-          fi
-          echo "action=push" >> "$GITHUB_OUTPUT"
+        run: bun run --silent --cwd .release-tools release:plan-base-image
 
-      # Loads into the runner's docker, so the image checked is the image
-      # pushed. The revision is the commit checked out: on a republish,
-      # github.sha is main's head, not the tag's.
       - name: Build image
         if: steps.plan.outputs.action == 'push'
         env:
           PUSH_TAG: ${{ needs.assets.outputs.push_tag }}
           VERSION: ${{ needs.assets.outputs.version }}
           SOURCE: ${{ github.server_url }}/${{ github.repository }}
-        run: |
-          revision=$(git rev-parse HEAD)
-          docker buildx build images/base --platform linux/amd64 --load \
-            --tag "$BASE_IMAGE:$PUSH_TAG" \
-            --label "org.opencontainers.image.source=$SOURCE" \
-            --label "org.opencontainers.image.revision=$revision" \
-            --label "org.opencontainers.image.version=$VERSION" \
-            --label "org.opencontainers.image.description=imp base image: Ubuntu 24.04 with the Docker engine"
+        run: bun run --silent --cwd .release-tools release:build-base-image
 
       - name: Check image
         if: steps.plan.outputs.action == 'push'
         env:
-          PUSH_TAG: ${{ needs.assets.outputs.push_tag }}
-        run: |
-          script=scripts/release/check-base-image.sh
-          [ -f "$script" ] || script=host/check-base-image.sh
-          "$script" "$BASE_IMAGE:$PUSH_TAG"
+          IMAGE_REF: ${{ env.BASE_IMAGE }}:${{ needs.assets.outputs.push_tag }}
+        run:
+          bun run --silent --cwd .release-tools release:tree-script check-base-image.sh --
+          "$IMAGE_REF"
 
-      # The digest comes from the registry, after the push, so the
-      # attestation names exactly what was pushed.
       - name: Push image
         id: push
         if: steps.plan.outputs.action == 'push'
         env:
+          IMAGE: ${{ env.BASE_IMAGE }}
+          BUILT_TAG: ${{ needs.assets.outputs.push_tag }}
           PUSH_TAG: ${{ needs.assets.outputs.push_tag }}
-        run: |
-          docker push "$BASE_IMAGE:$PUSH_TAG"
-          digest=$(docker buildx imagetools inspect "$BASE_IMAGE:$PUSH_TAG" --format '{{.Manifest.Digest}}')
-          if ! [[ $digest =~ ^sha256:[0-9a-f]{64}$ ]]; then
-            echo "::error::the registry gave no valid digest for $BASE_IMAGE:$PUSH_TAG: $digest"
-            exit 1
-          fi
-          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+        run: bun run --silent --cwd .release-tools release:push-image
 
       - name: Attest image
         if: steps.plan.outputs.action == 'push'
@@ -407,14 +362,10 @@ jobs:
   # names an image whose release has no assets yet. Looked up once, so every
   # job that reads it agrees.
   #
-  # The lookup and the move are one step under a lock across release runs:
-  # the latest-tag group runs one such job at a time, and queue: max keeps
-  # every waiting one, so a later run never cancels it. The newest release
-  # only moves forward, so each holder sees every release before it, and an
-  # older run that holds the lock after a newer one finds itself not the
-  # newest and leaves `latest`. That holds in whatever order GitHub starts the
-  # waiting jobs, which it does not guarantee. actionlint 1.7.12 rejects the
-  # queue key, so .github/actionlint.yaml ignores that error.
+  # The latest-tag group runs one such job at a time across release runs, and
+  # queue: max keeps every waiting one, so a later run never cancels it.
+  # actionlint 1.7.12 rejects the queue key, so .github/actionlint.yaml
+  # ignores that error.
   latest:
     needs: [assets, publish]
     if: inputs.tag != ''
@@ -431,6 +382,20 @@ jobs:
       is_newest: ${{ steps.latest.outputs.is_newest }}
       newest_tag: ${{ steps.latest.outputs.newest_tag }}
     steps:
+      - name: Checkout the release scripts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          sparse-checkout: |
+            scripts/lib
+            scripts/release
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+
       - name: Log in to GHCR
         uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
@@ -444,60 +409,52 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag }}
           VERSION: ${{ needs.assets.outputs.version }}
-        run: |
-          newest=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)
-          echo "newest_tag=$newest" >> "$GITHUB_OUTPUT"
-          if [ "$TAG" != "$newest" ]; then
-            echo "is_newest=false" >> "$GITHUB_OUTPUT"
-            echo "$TAG is not the newest release ($newest); latest stays"
-            exit 0
-          fi
-          echo "is_newest=true" >> "$GITHUB_OUTPUT"
-          docker buildx imagetools create -t "$IMAGE:latest" "$IMAGE:$VERSION"
+        run: bun run --silent release:tag-latest
 
   # Points the Homebrew formula at the release's binaries. The tap is a
   # second repository, so this needs the release App installed on it and the
-  # Actions variable HOMEBREW_TAP naming it (docs/runbooks/releasing.md); without either,
-  # the job is skipped. Only the newest release moves the formula.
+  # Actions variable HOMEBREW_TAP naming it (docs/runbooks/releasing.md);
+  # without either, the job is skipped. Only the newest release moves the
+  # formula, so the job skips an older one, which the latest job reports.
   tap:
     needs: [assets, latest]
-    if: inputs.tag != '' && vars.RELEASE_APP_ID != '' && vars.HOMEBREW_TAP != ''
+    if: >-
+      inputs.tag != '' && vars.RELEASE_APP_ID != '' && vars.HOMEBREW_TAP != '' &&
+      needs.latest.outputs.is_newest == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: read
     steps:
-      - name: Check newest
-        id: newest
-        env:
-          TAG: ${{ inputs.tag }}
-          IS_NEWEST: ${{ needs.latest.outputs.is_newest }}
-          NEWEST: ${{ needs.latest.outputs.newest_tag }}
-        run: |
-          if [ "$IS_NEWEST" != true ]; then
-            echo "$TAG is not the newest release ($NEWEST); the formula stays"
-            echo "update=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "update=true" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Checkout
-        if: steps.newest.outputs.update == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.tag }}
           persist-credentials: false
 
+      - name: Checkout the release scripts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .release-tools
+          sparse-checkout: |
+            scripts/lib
+            scripts/release
+          persist-credentials: false
+
       - name: Download assets
-        if: steps.newest.outputs.update == 'true'
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: release-assets
           path: dist
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+
       - name: Mint tap token
         id: tap-token
-        if: steps.newest.outputs.update == 'true'
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
           client-id: ${{ vars.RELEASE_APP_ID }}
@@ -506,54 +463,18 @@ jobs:
           repositories: ${{ vars.HOMEBREW_TAP }}
           permission-contents: write
 
-      # rebases onto whatever else landed in the tap meanwhile, such as
-      # another project's formula
       - name: Update the formula
-        if: steps.newest.outputs.update == 'true'
         env:
           GH_TOKEN: ${{ steps.tap-token.outputs.token }}
           TAP: ${{ github.repository_owner }}/${{ vars.HOMEBREW_TAP }}
           VERSION: ${{ needs.assets.outputs.version }}
-        run: |
-          # gh hands git the token as a credential helper, so it never lands
-          # in tap/.git/config
-          gh auth setup-git
-          gh repo clone "$TAP" tap
-          mkdir -p tap/Formula
-          formula=scripts/release/build-formula.sh
-          [ -f "$formula" ] || formula=scripts/build-formula.sh
-          "$formula" "$VERSION" dist/SHA256SUMS > formula.rb
-          # The tap offers only impz. Homebrew loads a formula only from the
-          # file its class names, and a tag from before the rename to impz
-          # generates class Imp, so its formula stays out of the tap
-          class=$(sed -n 's/^class \([A-Za-z0-9]*\) < Formula$/\1/p' formula.rb)
-          if [ -z "$class" ]; then
-            echo "$formula printed no formula class" >&2
-            exit 1
-          fi
-          if [ "$class" != Impz ]; then
-            echo "$formula printed class $class; the tap offers only impz, so the formula stays"
-            exit 0
-          fi
-          mv formula.rb tap/Formula/impz.rb
-          cd tap
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Formula/impz.rb
-          if git diff --cached --quiet; then
-            echo "the formula is at $VERSION already"
-            exit 0
-          fi
-          git commit -m "impz $VERSION"
-          git pull --rebase
-          git push
+        run: bun run --silent --cwd .release-tools release:update-formula
 
   # Packs and checks @impz/client and @impz/testing for npm, once the release
   # itself is out. Each is off until the owner sets its Actions variable,
   # NPM_PUBLISH_ENABLED or NPM_TESTING_PUBLISH_ENABLED, to true, after its first
-  # publish by hand (docs/runbooks/releasing.md). A version already on npm is
-  # skipped, so a republish is safe. Building runs here, without the OIDC token;
-  # npm-publish only uploads the checked tarballs.
+  # publish by hand (docs/runbooks/releasing.md). Building runs here, without
+  # the OIDC token; npm-publish only uploads the checked tarballs.
   npm-pack:
     needs: [assets, latest]
     if: inputs.tag != '' && vars.NPM_PUBLISH_ENABLED == 'true'
@@ -564,6 +485,8 @@ jobs:
     outputs:
       publish: ${{ steps.plan.outputs.publish }}
       dist_tag: ${{ steps.plan.outputs.dist_tag }}
+      client_tarball: ${{ steps.pack.outputs.client_tarball }}
+      testing_tarball: ${{ steps.pack.outputs.testing_tarball }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -571,47 +494,28 @@ jobs:
           ref: ${{ inputs.tag }}
           persist-credentials: false
 
-      # npm's `latest` moves only to the newest release, as the image's does;
-      # a republish of an older one goes out under `previous`
-      # an older tag has no packages/testing, so it plans the client alone
+      - name: Checkout the release scripts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .release-tools
+          sparse-checkout: |
+            scripts/lib
+            scripts/release
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+
       - name: Plan
         id: plan
         env:
           VERSION: ${{ needs.assets.outputs.version }}
           IS_NEWEST: ${{ needs.latest.outputs.is_newest }}
           TESTING_ENABLED: ${{ vars.NPM_TESTING_PUBLISH_ENABLED }}
-        run: |
-          plan_package() {
-            if [ "$(npm view "$1@$VERSION" version 2>/dev/null)" = "$VERSION" ]; then
-              echo "$1@$VERSION is on npm already" >&2
-              echo false
-            else
-              echo true
-            fi
-          }
-          client=$(plan_package @impz/client)
-          testing=false
-          if [ "$TESTING_ENABLED" = true ] && [ -f packages/testing/package.json ]; then
-            testing=$(plan_package @impz/testing)
-          fi
-          echo "client=$client" >> "$GITHUB_OUTPUT"
-          echo "testing=$testing" >> "$GITHUB_OUTPUT"
-          if [ "$client" = false ] && [ "$testing" = false ]; then
-            echo "publish=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          if [ "$IS_NEWEST" = true ]; then
-            echo "dist_tag=latest" >> "$GITHUB_OUTPUT"
-          else
-            echo "dist_tag=previous" >> "$GITHUB_OUTPUT"
-          fi
-          echo "publish=true" >> "$GITHUB_OUTPUT"
-
-      - name: Setup Bun
-        if: steps.plan.outputs.publish == 'true'
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version-file: .bun-version
+        run: bun run --silent --cwd .release-tools release:plan-npm
 
       - name: Setup Node
         if: steps.plan.outputs.publish == 'true'
@@ -623,27 +527,13 @@ jobs:
         if: steps.plan.outputs.publish == 'true'
         run: bun install --frozen-lockfile
 
-      # @impz/testing's check installs the client tarball of the same release,
-      # so the client is packed even when only the testing package goes out
       - name: Pack and check
+        id: pack
         if: steps.plan.outputs.publish == 'true'
         env:
           CLIENT: ${{ steps.plan.outputs.client }}
           TESTING: ${{ steps.plan.outputs.testing }}
-        run: |
-          dir=scripts/release
-          [ -f "$dir/pack-client.sh" ] || dir=scripts
-          client=$("$dir/pack-client.sh")
-          "$dir/check-client-package.sh" "$client"
-          mkdir -p npm-tarball
-          if [ "$CLIENT" = true ]; then
-            cp "$client" npm-tarball/
-          fi
-          if [ "$TESTING" = true ]; then
-            testing=$("$dir/pack-testing.sh")
-            "$dir/check-testing-package.sh" "$testing" "$client"
-            cp "$testing" npm-tarball/
-          fi
+        run: bun run --silent --cwd .release-tools release:pack-npm
 
       - name: Upload tarballs
         if: steps.plan.outputs.publish == 'true'
@@ -676,12 +566,18 @@ jobs:
           name: npm-tarball
           path: npm-tarball
 
-      - name: Publish
+      # ./ keeps npm from reading dir/file.tgz as a GitHub user/repo. The
+      # client goes first, because @impz/testing depends on it.
+      - name: Publish @impz/client
+        if: needs.npm-pack.outputs.client_tarball != ''
         env:
           DIST_TAG: ${{ needs.npm-pack.outputs.dist_tag }}
-        # ./ keeps npm from reading dir/file.tgz as a GitHub user/repo; the
-        # glob sorts impz-client before impz-testing, which depends on it
-        run: |
-          for tarball in ./npm-tarball/*.tgz; do
-            npm publish "$tarball" --provenance --access public --tag "$DIST_TAG"
-          done
+          TARBALL: ./npm-tarball/${{ needs.npm-pack.outputs.client_tarball }}
+        run: npm publish "$TARBALL" --provenance --access public --tag "$DIST_TAG"
+
+      - name: Publish @impz/testing
+        if: needs.npm-pack.outputs.testing_tarball != ''
+        env:
+          DIST_TAG: ${{ needs.npm-pack.outputs.dist_tag }}
+          TARBALL: ./npm-tarball/${{ needs.npm-pack.outputs.testing_tarball }}
+        run: npm publish "$TARBALL" --provenance --access public --tag "$DIST_TAG"

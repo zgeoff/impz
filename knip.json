@@ -12,6 +12,13 @@
   // which the go:fmt-vet pre-push job runs, and the tools the Headscale test
   // runs inside its containers
   "ignoreBinaries": ["mkfifo", "gofmt", "apk", "headscale", "tailscale"],
+  // knip reads each piece of a Bun shell template between two interpolations as a command line of
+  // its own, so it takes the arguments the CI and release step scripts and their stand-ins pass, and
+  // the runner tools they call, for binaries, and Go's ./... package pattern for a file
+  "ignoreIssues": {
+    "scripts/{ci,release,test-utils}/**": ["binaries"],
+    "scripts/ci/run-go-checks.ts": ["unresolved"]
+  },
   "workspaces": {
     ".": {
       // run-related-tests.ts is a synced CLI that test:related reaches through
@@ -25,7 +32,9 @@
         "scripts/test-zfs.ts",
         "scripts/zfs-host-test.ts",
         // a protoc plugin buf.gen.yaml runs
-        "scripts/proto/protoc-gen-protocol-reference.ts"
+        "scripts/proto/protoc-gen-protocol-reference.ts",
+        // the measure that scripts/ci/run-touched-pages-bench.ts runs on the bench job
+        "scripts/bench/measure-touched-pages.ts"
       ],
       "project": [
         "e2e/**/*.ts",

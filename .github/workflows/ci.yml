@@ -10,11 +10,8 @@ on:
 
 permissions: {}
 
-# a new push to a PR supersedes its older run; main runs always finish so
-# every commit on main gets a verdict
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+# Each job sets its own concurrency group: a newer push to the same ref
+# cancels the checks of the older run, and the release jobs never cancel.
 
 env:
   # CI never commits, but skip hook install/execution regardless
@@ -22,6 +19,9 @@ env:
 
 jobs:
   gitleaks:
+    concurrency:
+      group: ci-${{ github.ref }}-gitleaks
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 5
     # the action comments findings on the PR, which needs write on pull-requests
@@ -34,6 +34,8 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+          # the scan reads every file of the commits it covers
+          filter: ''
 
       - name: Gitleaks
         uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
@@ -53,6 +55,9 @@ jobs:
   # main run's unit-test-results artifacts:
   # jq -s '{version: 1, files: (map(.files) | add)}' timings-*.json
   checks-unit:
+    concurrency:
+      group: ci-${{ github.ref }}-unit-${{ matrix.shard }}
+      cancel-in-progress: true
     name: checks (unit ${{ matrix.shard }}/2)
     runs-on: ubuntu-latest
     permissions:
@@ -75,16 +80,11 @@ jobs:
         with:
           bun-version-file: .bun-version
 
-      - name: Cache Bun Packages
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('.bun-version', 'bun.lock') }}
-          restore-keys: |
-            bun-${{ runner.os }}-
-
       - name: Install
         run: bun install --frozen-lockfile
+
+      - name: Make the results dir
+        run: mkdir -p "$RUNNER_TEMP/unit-test"
 
       # this shard's files, in a cgroup capped below an imp's 2 GiB with no
       # swap, so a test fails here before it outgrows the imps it runs on; the
@@ -95,12 +95,11 @@ jobs:
       - name: Test
         env:
           SHARD: ${{ matrix.shard }}
-        run: |
-          out="$RUNNER_TEMP/unit-test"
-          mkdir -p "$out"
-          scripts/ci/run-memory-capped.sh 1536 env TMPDIR=/dev/shm bun test --parallel=2 --no-isolate --shard="$SHARD/2" \
-            --timings="$out/timings-$SHARD.json" --timings=scripts/ci/unit-test-timings.json \
-            --update-timings --reporter=junit --reporter-outfile="$out/results-$SHARD.xml"
+        run: >-
+          scripts/ci/run-memory-capped.sh 1536 env TMPDIR=/dev/shm bun test --parallel=2
+          --no-isolate --shard="$SHARD/2" --timings="$RUNNER_TEMP/unit-test/timings-$SHARD.json"
+          --timings=scripts/ci/unit-test-timings.json --update-timings --reporter=junit
+          --reporter-outfile="$RUNNER_TEMP/unit-test/results-$SHARD.xml"
 
       # the per-file times and the JUnit report, for the timings refresh above
       # and the test budget audit
@@ -116,6 +115,9 @@ jobs:
   # The static gates, the generated code and the lane tests: every check but
   # the unit run.
   checks-lanes:
+    concurrency:
+      group: ci-${{ github.ref }}-lanes
+      cancel-in-progress: true
     name: checks (lanes)
     runs-on: ubuntu-latest
     permissions:
@@ -135,16 +137,6 @@ jobs:
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: .bun-version
-
-      # setup-bun caches only the bun binary; this keeps the package tarballs
-      # so an unchanged lockfile installs without the registry
-      - name: Cache Bun Packages
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('.bun-version', 'bun.lock') }}
-          restore-keys: |
-            bun-${{ runner.os }}-
 
       - name: Install
         run: bun install --frozen-lockfile
@@ -167,20 +159,9 @@ jobs:
         run: bash .claude/skills/docs-writing/scripts/check-length.sh --package README.md
 
       # an image build's disk hold against what it really takes, the disk
-      # sampler that measures it, and a moved disk's data blocks, on a small
-      # loop-mounted XFS of its own, as impd's data dir is; the tests skip
-      # without IMP_TEST_SMALL_FS, and the mount needs sudo
+      # sampler that measures it, and a moved disk's data blocks
       - name: Test Small Filesystem
-        run: |
-          command -v mkfs.xfs || { sudo apt-get update && sudo apt-get install -y --no-install-recommends xfsprogs; }
-          fs="$RUNNER_TEMP/small-fs"
-          truncate -s 4G "$fs.img"
-          mkfs.xfs -q "$fs.img"
-          mkdir "$fs"
-          sudo mount -o loop "$fs.img" "$fs"
-          trap 'sudo umount "$fs" && rm -f "$fs.img" && rmdir "$fs"' EXIT
-          sudo chown "$(id -u):$(id -g)" "$fs"
-          IMP_TEST_SMALL_FS="$fs" bun run test:small-fs
+        run: bun run --silent ci:small-fs-tests
 
       # impd's port of the Dockerfile parser against the Go parser it ports,
       # at the commit behind the pinned frontend (scripts/dockerfile-difftest)
@@ -202,14 +183,7 @@ jobs:
           cache-dependency-path: agent/go.sum
 
       - name: Generated Protocol Code
-        run: |
-          bun run gen:proto
-          changed="$(git status --porcelain -- agent/internal/proto packages/agent-protocol/src/gen docs/reference)"
-          if [ -n "$changed" ]; then
-            echo "$changed"
-            echo "::error::the generated protocol code differs from proto/; run bun run gen:proto"
-            exit 1
-          fi
+        run: bun run --silent ci:check-generated-protocol
 
       # buf.yaml's breaking rules (WIRE_JSON) against main: the first parent of
       # a pull request's merge commit, or of a squash merge pushed to main
@@ -241,29 +215,33 @@ jobs:
   # whatever they did, so a job that failed, was cancelled or was skipped fails
   # it, and never passes as a skip.
   checks:
+    concurrency:
+      group: ci-${{ github.ref }}-checks
+      cancel-in-progress: true
     if: always()
     needs: [checks-unit, checks-lanes]
     runs-on: ubuntu-latest
     permissions: {}
     timeout-minutes: 5
     steps:
-      - name: Require the unit shards and the lanes to pass
+      - name: Require the unit shards to pass
         env:
-          UNIT: ${{ needs.checks-unit.result }}
-          LANES: ${{ needs.checks-lanes.result }}
-        run: |
-          echo "unit shards: $UNIT, lanes: $LANES"
-          test "$UNIT" = success
-          test "$LANES" = success
+          RESULT: ${{ needs.checks-unit.result }}
+        run: test "$RESULT" = success
+
+      - name: Require the lanes to pass
+        env:
+          RESULT: ${{ needs.checks-lanes.result }}
+        run: test "$RESULT" = success
 
   go:
+    concurrency:
+      group: ci-${{ github.ref }}-go
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     permissions:
       contents: read
     timeout-minutes: 15
-    defaults:
-      run:
-        working-directory: agent
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -287,87 +265,36 @@ jobs:
             scripts/dockerfile-difftest/go.sum
             docs/design/spikes/uffd-2m-restore/harness/go.sum
 
-      # gofmt -l lists unformatted files and exits 0 either way
+      # the Go checks run from a script, which needs Bun and none of the
+      # workspace's packages
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+
       - name: Format
-        run: |
-          unformatted=$(gofmt -l . ../host/ksm-exec ../host/oci-fetch ../host/uffd-handler ../scripts/dockerfile-difftest ../docs/design/spikes/uffd-2m-restore/harness)
-          if [ -n "$unformatted" ]; then
-            echo "::error::gofmt wants to reformat:"
-            echo "$unformatted"
-            exit 1
-          fi
+        run: bun run --silent ci:go format
 
       - name: Vet
-        run: |
-          go vet ./...
-          go vet -tags root ./...
-          go -C ../host/ksm-exec vet ./...
-          go -C ../host/oci-fetch vet ./...
-          go -C ../host/uffd-handler vet ./...
-          go -C ../host/uffd-handler vet -tags root ./...
-          go -C ../scripts/dockerfile-difftest vet ./...
-          go -C ../docs/design/spikes/uffd-2m-restore/harness vet ./...
+        run: bun run --silent ci:go vet
 
-      # golangci-lint, govulncheck and deadcode are pinned in tools/go.mod, a
-      # module of their own so their dependencies never move the agent's;
-      # the root tag adds the root-only tests to what the lint reads
       - name: Lint
-        run: |
-          go tool -modfile=tools/go.mod golangci-lint run --build-tags root ./...
-          cd ../host/ksm-exec
-          go tool -modfile=../../agent/tools/go.mod golangci-lint run --config ../../agent/.golangci.yml ./...
-          cd ../oci-fetch
-          go tool -modfile=../../agent/tools/go.mod golangci-lint run --config ../../agent/.golangci.yml --disable depguard ./...
-          cd ../uffd-handler
-          go tool -modfile=../../agent/tools/go.mod golangci-lint run --config ../../agent/.golangci.yml --build-tags root ./...
-          cd ../../scripts/dockerfile-difftest
-          go tool -modfile=../../agent/tools/go.mod golangci-lint run --config ../../agent/.golangci.yml --disable depguard ./...
-          cd ../../docs/design/spikes/uffd-2m-restore/harness
-          go tool -modfile=../../../../../agent/tools/go.mod golangci-lint run --config ../../../../../agent/.golangci.yml --disable depguard ./...
+        run: bun run --silent ci:go lint
 
       - name: Vulnerabilities
-        run: |
-          go tool -modfile=tools/go.mod govulncheck ./...
-          cd ../host/ksm-exec
-          go tool -modfile=../../agent/tools/go.mod govulncheck ./...
-          cd ../oci-fetch
-          go tool -modfile=../../agent/tools/go.mod govulncheck ./...
-          cd ../uffd-handler
-          go tool -modfile=../../agent/tools/go.mod govulncheck ./...
+        run: bun run --silent ci:go vulnerabilities
 
-      # deadcode lists functions no binary reaches, tests aside, and exits 0
-      # either way
       - name: Dead Code
-        run: |
-          unreachable=$(go tool -modfile=tools/go.mod deadcode -test=false ./cmd/... \
-            && cd ../host/ksm-exec && go tool -modfile=../../agent/tools/go.mod deadcode -test=false . \
-            && cd ../oci-fetch && go tool -modfile=../../agent/tools/go.mod deadcode -test=false . \
-            && cd ../uffd-handler && go tool -modfile=../../agent/tools/go.mod deadcode -test=false .)
-          if [ -n "$unreachable" ]; then
-            echo "::error::only tests call these; delete them or move them into the tests:"
-            echo "$unreachable"
-            exit 1
-          fi
+        run: bun run --silent ci:go deadcode
 
-      # gotestsum (pinned as a tool in go.mod) runs go test -race and keeps the
-      # JSON event stream, so each run's timings can be compared later
       - name: Test
-        run: |
-          ../scripts/test-go.sh
-          go -C ../host/ksm-exec test -race ./...
-          go -C ../host/oci-fetch test -race ./...
-          go -C ../host/uffd-handler test -race ./...
-          go -C ../docs/design/spikes/uffd-2m-restore/harness test -race ./...
         env:
           GO_TEST_JSONFILE: ${{ runner.temp }}/go-test.json
+        run: bun run --silent ci:go test
 
-      # The tests behind the root build tag change credentials, chown, mknod
-      # and write cgroup.kill, so the whole suite runs again as root. Last: it
-      # leaves root-owned files in the build cache.
+      # last: the root-only tests leave root-owned files in the build cache
       - name: Test as root
-        run: |
-          sudo -E env "PATH=$PATH" go test -tags root -race ./...
-          sudo -E env "PATH=$PATH" go -C ../host/uffd-handler test -tags root -race ./...
+        run: bun run --silent ci:go test-root
 
       - name: Upload Go test results
         if: always()
@@ -379,6 +306,9 @@ jobs:
   # Lints shell, workflows and Dockerfiles. The job keeps its first name,
   # since that name is the required check in .github/rulesets/main.json.
   shellcheck:
+    concurrency:
+      group: ci-${{ github.ref }}-shellcheck
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -400,42 +330,53 @@ jobs:
         with:
           persist-credentials: false
 
-      # pinned releases, checked by sum: the runner's apt shellcheck is older
-      # and reports a different set of findings, and the hooks run these
-      # versions locally
-      - name: Install linters
-        run: |
-          bin="$RUNNER_TEMP/bin"
-          mkdir -p "$bin"
-          cd "$RUNNER_TEMP"
-          fetch() {
-            curl -fsSL --retry 3 -o "$1" "$2"
-            echo "$3  $1" | sha256sum -c -
-          }
-          fetch shellcheck.tar.xz "https://github.com/koalaman/shellcheck/releases/download/$SHELLCHECK_VERSION/shellcheck-$SHELLCHECK_VERSION.linux.x86_64.tar.xz" "$SHELLCHECK_SHA256"
-          tar -xJf shellcheck.tar.xz
-          install "shellcheck-$SHELLCHECK_VERSION/shellcheck" "$bin/"
-          fetch shfmt "https://github.com/mvdan/sh/releases/download/$SHFMT_VERSION/shfmt_${SHFMT_VERSION}_linux_amd64" "$SHFMT_SHA256"
-          install shfmt "$bin/"
-          fetch actionlint.tar.gz "https://github.com/rhysd/actionlint/releases/download/v$ACTIONLINT_VERSION/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" "$ACTIONLINT_SHA256"
-          tar -xzf actionlint.tar.gz actionlint
-          install actionlint "$bin/"
-          fetch zizmor.tar.gz "https://github.com/zizmorcore/zizmor/releases/download/$ZIZMOR_VERSION/zizmor-x86_64-unknown-linux-gnu.tar.gz" "$ZIZMOR_SHA256"
-          tar -xzf zizmor.tar.gz zizmor
-          install zizmor "$bin/"
-          fetch hadolint "https://github.com/hadolint/hadolint/releases/download/$HADOLINT_VERSION/hadolint-linux-x86_64" "$HADOLINT_SHA256"
-          install hadolint "$bin/"
-          echo "$bin" >>"$GITHUB_PATH"
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+
+      - name: Install shellcheck
+        run: bun run --silent ci:install-linter shellcheck
+
+      - name: Install shfmt
+        run: bun run --silent ci:install-linter shfmt
+
+      - name: Install actionlint
+        run: bun run --silent ci:install-linter actionlint
+
+      - name: Install zizmor
+        run: bun run --silent ci:install-linter zizmor
+
+      - name: Install hadolint
+        run: bun run --silent ci:install-linter hadolint
 
       - name: ShellCheck and shfmt
-        run: |
-          shellcheck --version
-          shfmt --version
-          scripts/ci/shellcheck.sh
+        run: scripts/ci/shellcheck.sh
 
       # also runs shellcheck over every run: block
       - name: actionlint
         run: actionlint
+
+      # the shared workflow lint, at the sync tag that repo-sync calls
+      - name: Read the sync tag
+        id: sync-tag
+        run: bun run --silent ci:read-sync-tag
+
+      - name: Checkout the workflow lint
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: zgeoff/tools
+          ref: ${{ steps.sync-tag.outputs.ref }}
+          path: .workflow-lint
+          sparse-checkout: sync/pre-push
+          persist-credentials: false
+
+      # the rules of ci-design's Step scripts section; a public repo's profile
+      # leaves out the heavy-check rule
+      - name: Lint workflows
+        env:
+          CHECKS_PROFILE: public
+        run: bun .workflow-lint/sync/pre-push/run-workflows-check.ts
 
       # GH_TOKEN turns on the audits that ask GitHub, such as known-vulnerable
       # actions and impostor commits
@@ -446,11 +387,6 @@ jobs:
 
       - name: hadolint
         run: hadolint host/Dockerfile images/base/Dockerfile images/examples/*/Dockerfile
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version-file: .bun-version
 
       - name: Install
         run: bun install --frozen-lockfile
@@ -466,6 +402,9 @@ jobs:
   # linux-x64 one. The release workflow runs each binary on its own platform;
   # macOS runners cost too much for every pull request.
   cli:
+    concurrency:
+      group: ci-${{ github.ref }}-cli
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -501,6 +440,9 @@ jobs:
   # it against impd's app under Node, Bun and a compiled Bun binary.
   # Then packs @impz/testing the same way and runs its smoke under bun test.
   client:
+    concurrency:
+      group: ci-${{ github.ref }}-client
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -553,6 +495,9 @@ jobs:
   # each against a dev instance on its own runner's KVM. The `e2e` job below
   # is the required check over all four.
   e2e-group:
+    concurrency:
+      group: ci-${{ github.ref }}-e2e-${{ matrix.group }}
+      cancel-in-progress: true
     name: e2e (group ${{ matrix.group }})
     runs-on: ubuntu-24.04
     permissions:
@@ -564,20 +509,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # the dashboard suite's browser
           - group: 1
-            browser: true
             host-tests: false
           # HOST_TESTS_GROUP in suites.ts: the host tests run once
           - group: 2
-            browser: false
             host-tests: true
           - group: 3
-            browser: false
             host-tests: false
           # the tailnet suites, on a Headscale that the harness starts
           - group: 4
-            browser: false
             host-tests: false
     env:
       # the fast set at reduced size for a 4-core, 16 GB runner
@@ -604,75 +544,46 @@ jobs:
       - name: Check KVM
         run: scripts/ci/check-kvm.sh
 
-      # The cpu suite fails in CI unless a private cgroup namespace gets the
-      # cpu controller. Docker's containers live under system.slice: hand cpu
-      # down to it, then show what a container gets. Never fails by itself; the
-      # image is host/Dockerfile's runtime base, pinned the same.
-      - name: Hand the cpu controller to containers
-        run: |
-          for dir in /sys/fs/cgroup /sys/fs/cgroup/system.slice; do
-            if ! grep -qw cpu "$dir/cgroup.subtree_control"; then
-              echo +cpu | sudo tee "$dir/cgroup.subtree_control" >/dev/null || true
-            fi
-          done
-          docker run --rm --cgroupns=private \
-            debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a \
-            cat /sys/fs/cgroup/cgroup.controllers || true
-
-      # The ksm suite needs ksmd running. KSM is global to the kernel, so it is
-      # turned on here only, on this runner's own VM, and the suite skips on
-      # any host where it is off. The scan rate is high so merges come in
-      # minutes; ubuntu-24.04 runs Linux 6.17, past the 6.10 IMP_KSM needs.
-      - name: Turn KSM on for this runner
-        run: |
-          uname -r
-          echo 1 | sudo tee /sys/kernel/mm/ksm/use_zero_pages >/dev/null
-          echo 1000 | sudo tee /sys/kernel/mm/ksm/pages_to_scan >/dev/null
-          echo 1 | sudo tee /sys/kernel/mm/ksm/run >/dev/null
-          grep -H . /sys/kernel/mm/ksm/run /sys/kernel/mm/ksm/pages_to_scan /sys/kernel/mm/ksm/use_zero_pages
-
-      # The huge-pages suite runs in group 2 and skips on a host with no pool,
-      # so only that runner gives up RAM to one: 1 GiB in 2 MiB pages, enough
-      # for its imps one at a time and a template build beside one.
-      - name: Reserve huge pages for the huge-pages suite
-        if: matrix.group == 2
-        run: |
-          echo 512 | sudo tee /proc/sys/vm/nr_hugepages >/dev/null
-          grep -E 'HugePages_(Total|Free)' /proc/meminfo
-          ls -l /dev/userfaultfd
-
-      # /mnt is the runner's larger temp disk; the XFS file goes there when
-      # the image has one. CI must not pass --clean to the harness: it
-      # refuses to wipe a data dir outside .data/ that holds no imp.xfs, and
-      # a fresh runner has nothing to clean. The moves-tailnet suite's second
-      # host keeps its data beside the instance's, in <data>-mv-b.
-      - name: Pick the data dir
-        run: |
-          df -h / /mnt || true
-          if mountpoint -q /mnt; then
-            data=/mnt/imp-e2e
-          else
-            data=$GITHUB_WORKSPACE/.data/ci
-          fi
-          sudo mkdir -p "$data" "$data-mv-b"
-          sudo chown "$(id -u):$(id -g)" "$data" "$data-mv-b"
-          echo "IMP_DEV_DATA=$data" >> "$GITHUB_ENV"
-
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: .bun-version
 
-      - name: Cache Bun Packages
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('.bun-version', 'bun.lock') }}
-          restore-keys: |
-            bun-${{ runner.os }}-
+      # the cpu suite fails in CI unless a private cgroup namespace gets the
+      # cpu controller
+      - name: Hand the cpu controller to containers
+        run: bun run --silent ci:set-up-runner share-cpu
+
+      # The ksm suite needs ksmd running, and skips on any host where it is
+      # off. ubuntu-24.04 runs Linux 6.17, past the 6.10 IMP_KSM needs.
+      - name: Turn KSM on for this runner
+        run: bun run --silent ci:set-up-runner turn-on-ksm
+
+      # The huge-pages suite runs in group 2 and skips on a host with no pool,
+      # so only that runner gives up RAM to one.
+      - name: Reserve huge pages for the huge-pages suite
+        if: matrix.group == 2
+        run: bun run --silent ci:set-up-runner reserve-huge-pages
+
+      # CI must not pass --clean to the harness: it refuses to wipe a data dir
+      # outside .data/ that holds no imp.xfs, and a fresh runner has nothing
+      # to clean. The moves-tailnet suite's second host keeps its data beside
+      # the instance's, in <data>-mv-b.
+      - name: Pick the data dir
+        run:
+          bun run --silent ci:pick-data-dir --env IMP_DEV_DATA --mnt /mnt/imp-e2e --fallback
+          "$GITHUB_WORKSPACE/.data/ci" --sibling=-mv-b
 
       - name: Install
         run: bun install --frozen-lockfile
+
+      - name: Update the package lists
+        if: matrix.host-tests
+        run: sudo apt-get update
+
+      - name: Install nftables
+        if: matrix.host-tests
+        run: sudo apt-get install -y --no-install-recommends nftables
 
       # The host tests (`bun run test:host`) as root: the real nft and
       # iptables in fresh namespaces, packets between veth pairs included.
@@ -680,54 +591,31 @@ jobs:
       # namespaces; here a skip fails.
       - name: Host networking tests
         if: matrix.host-tests
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends nftables
-          sudo env "PATH=$PATH" IMP_HOST_TESTS=required bun run test:host
+        run: sudo env "PATH=$PATH" IMP_HOST_TESTS=required bun run test:host
 
       - name: Build kernel, system drive and host image
         uses: ./.github/actions/e2e-build
         with:
           write-cache: ${{ env.WRITE_CACHE }}
 
-      # The dashboard suite's browser. The locked Playwright pins its Chromium
-      # build, so its version keys the cache; on a miss the suite downloads it.
-      - name: Read the Playwright version
-        if: matrix.browser
-        id: playwright
-        working-directory: packages/dashboard
-        run:
-          echo "version=$(bun -p "require('@playwright/test/package.json').version")"
-          >>"$GITHUB_OUTPUT"
-
-      - name: Cache Playwright Browsers
-        if: matrix.browser
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
-
-      # The registry suite's registry listens under this name on the gateway of
-      # its own Docker network (packages/e2e-harness/src/registry-plan.ts, port offset 0), which
-      # both this host's engine and impd's builders reach; the suite trusts its
-      # certificate in /etc/docker/certs.d with sudo
+      # the registry suite trusts its registry's certificate in
+      # /etc/docker/certs.d with sudo
       - name: Name the e2e registry
-        run: echo '10.200.0.1 imp-e2e-registry.test' | sudo tee -a /etc/hosts
+        run: bun run --silent ci:set-up-runner name-e2e-registry
 
       # No Tailscale secret here: the tailnet suites join the run's own
       # Headscale, and outside acceptance a missed timing limit only warns.
       - name: End-to-end tests
-        run: e2e/test-e2e.sh --group ${{ matrix.group }}
+        env:
+          GROUP: ${{ matrix.group }}
+        run: e2e/test-e2e.sh --group "$GROUP"
 
       # The steps below also run after a failure or a timeout, with or
       # without a container, so none of them may fail the job.
       - name: Collect logs
         if: always()
-        run: |
-          mkdir -p .cache/e2e
-          docker logs imp-dev >.cache/e2e/impd.log 2>&1 || true
-          du -h "$IMP_DEV_DATA/imp.xfs" || true
-          df -h / /mnt || true
+        continue-on-error: true
+        run: bun run --silent ci:collect-e2e-logs docker imp-dev
 
       - name: Upload results
         if: always()
@@ -744,12 +632,16 @@ jobs:
       # the runner is thrown away, so no sleeping imps to keep
       - name: Remove the dev instance
         if: always()
-        run: docker rm -f imp-dev || true
+        continue-on-error: true
+        run: docker rm -f imp-dev
 
   # The required check and release-please's gate: every e2e group passed. It
   # runs whatever they did, so a group that failed, was cancelled or was
   # skipped fails it, and never passes as a skip.
   e2e:
+    concurrency:
+      group: ci-${{ github.ref }}-e2e
+      cancel-in-progress: true
     if: always()
     needs: [e2e-group]
     runs-on: ubuntu-latest
@@ -759,15 +651,16 @@ jobs:
       - name: Require every e2e group to pass
         env:
           RESULT: ${{ needs.e2e-group.result }}
-        run: |
-          echo "e2e groups: $RESULT"
-          test "$RESULT" = success
+        run: test "$RESULT" = success
 
   # The proof that an imp host runs with no Docker engine: e2e/podman/run-podman-proof.sh
   # starts the dev instance under Docker, masks the runner's Docker, starts it again
   # under rootful Podman on the same data dir, checks what survived, and runs the
   # socket and podman suites. Not a required check, and not in the e2e gate.
   podman:
+    concurrency:
+      group: ci-${{ github.ref }}-podman
+      cancel-in-progress: true
     name: podman (no Docker)
     runs-on: ubuntu-24.04
     permissions:
@@ -792,30 +685,15 @@ jobs:
       - name: Check KVM
         run: scripts/ci/check-kvm.sh
 
-      - name: Pick the data dir
-        run: |
-          df -h / /mnt || true
-          if mountpoint -q /mnt; then
-            data=/mnt/imp-e2e
-          else
-            data=$GITHUB_WORKSPACE/.data/ci
-          fi
-          sudo mkdir -p "$data"
-          sudo chown "$(id -u):$(id -g)" "$data"
-          echo "IMP_DEV_DATA=$data" >> "$GITHUB_ENV"
-
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: .bun-version
 
-      - name: Cache Bun Packages
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('.bun-version', 'bun.lock') }}
-          restore-keys: |
-            bun-${{ runner.os }}-
+      - name: Pick the data dir
+        run:
+          bun run --silent ci:pick-data-dir --env IMP_DEV_DATA --mnt /mnt/imp-e2e --fallback
+          "$GITHUB_WORKSPACE/.data/ci"
 
       - name: Install
         run: bun install --frozen-lockfile
@@ -827,12 +705,7 @@ jobs:
           write-cache: false
 
       - name: Install Podman
-        run: |
-          if ! command -v podman >/dev/null; then
-            sudo apt-get update
-            sudo apt-get install -y --no-install-recommends podman catatonit netavark aardvark-dns
-          fi
-          sudo podman --version
+        run: bun run --silent ci:set-up-runner install-podman
 
       - name: Run the Podman proof
         run: sudo -E env "PATH=$PATH" e2e/podman/run-podman-proof.sh
@@ -841,10 +714,8 @@ jobs:
       # without a container, so none of them may fail the job.
       - name: Collect logs
         if: always()
-        run: |
-          sudo mkdir -p .cache/e2e
-          sudo sh -c 'podman logs imp-dev >.cache/e2e/impd.log 2>&1' || true
-          sudo chown -R "$(id -u):$(id -g)" .cache/e2e || true
+        continue-on-error: true
+        run: bun run --silent ci:collect-e2e-logs podman imp-dev
 
       - name: Upload results
         if: always()
@@ -857,7 +728,8 @@ jobs:
 
       - name: Remove the dev instance
         if: always()
-        run: sudo podman rm -f imp-dev || true
+        continue-on-error: true
+        run: sudo podman rm -f imp-dev
 
   # The ZFS storage backend on real pools, in three shards on three runners:
   # scripts/zfs-host-test.sh runs real imps on a pool in a sparse file, with
@@ -868,6 +740,9 @@ jobs:
   # shards end together. Shard 1 also runs scripts/test-zfs.sh on a throwaway
   # pool of its own. The `zfs` job below is the required check over all three.
   zfs-shard:
+    concurrency:
+      group: ci-${{ github.ref }}-zfs-${{ matrix.shard }}
+      cancel-in-progress: true
     name: zfs (shard ${{ matrix.shard }})
     runs-on: ubuntu-24.04
     permissions:
@@ -915,48 +790,23 @@ jobs:
       - name: Check KVM
         run: scripts/ci/check-kvm.sh
 
-      # the pool files go on /mnt, the runner's larger temp disk, when it has one
-      - name: Pick the work dir
-        run: |
-          df -h / /mnt || true
-          if mountpoint -q /mnt; then
-            work=/mnt/imp-zfs
-          else
-            work=$RUNNER_TEMP/imp-zfs
-          fi
-          sudo mkdir -p "$work"
-          sudo chown "$(id -u):$(id -g)" "$work"
-          echo "IMP_ZFS_TEST_DIR=$work" >> "$GITHUB_ENV"
-
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: .bun-version
 
-      - name: Cache Bun Packages
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('.bun-version', 'bun.lock') }}
-          restore-keys: |
-            bun-${{ runner.os }}-
+      - name: Pick the work dir
+        run:
+          bun run --silent ci:pick-data-dir --env IMP_ZFS_TEST_DIR --mnt /mnt/imp-zfs --fallback
+          "$RUNNER_TEMP/imp-zfs"
 
       - name: Install
         run: bun install --frozen-lockfile
 
-      # ARC defaults to half of RAM; capped, as deploy/bootstrap.sh does, so
-      # the guests keep theirs
+      # the ARC capped at 1 GiB, as deploy/bootstrap.sh caps it, so the guests
+      # keep their memory
       - name: Install ZFS
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends zfsutils-linux
-          # zfs.ko sits in linux-modules-extra on some runner kernels
-          modinfo zfs >/dev/null 2>&1 \
-            || sudo apt-get install -y --no-install-recommends "linux-modules-extra-$(uname -r)"
-          sudo modprobe zfs zfs_arc_max=1073741824
-          echo 1073741824 | sudo tee /sys/module/zfs/parameters/zfs_arc_max >/dev/null
-          # zfsutils 2.2.2-0ubuntu9.5 and later refuse to run as a user
-          sudo zfs version
+        run: bun run --silent ci:set-up-runner install-zfs 1073741824
 
       # the unit part runs here, in its own temp dir, so a failure names it
       - name: ZFS backend tests
@@ -976,24 +826,13 @@ jobs:
       # also after a failed suite: the script writes the summary either way
       - name: Job summary
         if: always()
-        run: |
-          {
-            echo "Nested KVM on a shared runner, a pool in a sparse file and a 1 GiB ARC: these"
-            echo "numbers do not compare directly with XFS ones."
-            echo
-            echo '```text'
-            cat "$IMP_ZFS_TEST_DIR/summary.txt" 2>/dev/null || echo "no summary: the run stopped before it"
-            echo '```'
-          } >>"$GITHUB_STEP_SUMMARY"
+        run: bun run --silent ci:zfs-summary
 
       # also after a failure or a timeout, so none of these may fail the job
       - name: Collect logs
         if: always()
-        run: |
-          mkdir -p .cache/e2e
-          cp "$IMP_ZFS_TEST_DIR"/{impd.log,e2e.log,summary.txt} .cache/e2e/ 2>/dev/null || true
-          docker logs imp-zfs >>.cache/e2e/impd.log 2>&1 || true
-          df -h / /mnt || true
+        continue-on-error: true
+        run: bun run --silent ci:collect-e2e-logs docker imp-zfs
 
       - name: Upload results
         if: always()
@@ -1008,6 +847,9 @@ jobs:
   # shard that failed, was cancelled or was skipped fails it, and never passes
   # as a skip.
   zfs:
+    concurrency:
+      group: ci-${{ github.ref }}-zfs
+      cancel-in-progress: true
     if: always()
     needs: [zfs-shard]
     runs-on: ubuntu-latest
@@ -1017,9 +859,7 @@ jobs:
       - name: Require every zfs shard to pass
         env:
           RESULT: ${{ needs.zfs-shard.result }}
-        run: |
-          echo "zfs shards: $RESULT"
-          test "$RESULT" = success
+        run: test "$RESULT" = success
 
   # Main-only jobs go below with `if: github.event_name == 'push'` and
   # `needs:` on the gates above.
@@ -1040,6 +880,9 @@ jobs:
   # a release PR opened with GITHUB_TOKEN would get no CI, and the repo would
   # need Actions to be allowed to open PRs.
   release:
+    concurrency:
+      group: release-please-${{ github.ref }}
+      cancel-in-progress: false
     if: github.event_name == 'push' && vars.RELEASE_APP_ID != ''
     permissions:
       contents: write
@@ -1066,6 +909,9 @@ jobs:
   # out the tag. A dispatch is the one GITHUB_TOKEN event that starts a
   # workflow.
   start-release:
+    concurrency:
+      group: start-release-${{ github.ref }}
+      cancel-in-progress: false
     needs: [release]
     if: needs.release.outputs.releases_created == 'true'
     runs-on: ubuntu-latest
