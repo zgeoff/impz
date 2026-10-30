@@ -119,26 +119,30 @@ test('it fails a binary that reports another version', async () => {
   });
 });
 
-test('it fails a binary that cannot print a completion', async () => {
-  const ctx = setupTest();
+test.each([['bash'], ['zsh'], ['fish']])(
+  'it fails a binary that cannot print its %s completion',
+  async (shell) => {
+    const ctx = setupTest();
+    const binary = `#!/bin/sh\n[ "$1" = --version ] && echo 2.0.1 && exit 0\n[ "$2" = ${shell} ] && exit 1\nexit 0\n`;
 
-  const binary =
-    '#!/bin/sh\n[ "$1" = --version ] && echo 2.0.1 && exit 0\n[ "$2" = fish ] && exit 1\nexit 0\n';
+    writeFileSync(join(ctx.dist, 'impz-linux-x64'), binary);
 
-  writeFileSync(join(ctx.dist, 'impz-linux-x64'), binary);
+    writeFileSync(
+      join(ctx.dist, 'SHA256SUMS'),
+      `${new Bun.CryptoHasher('sha256').update(binary).digest('hex')}  impz-linux-x64\n`,
+    );
 
-  writeFileSync(
-    join(ctx.dist, 'SHA256SUMS'),
-    `${new Bun.CryptoHasher('sha256').update(binary).digest('hex')}  impz-linux-x64\n`,
-  );
+    const result = await $`bun ${ctx.scriptPath}`
+      .env({ ...process.env, TARGET: 'linux-x64', VERSION: '2.0.1', GITHUB_WORKSPACE: ctx.tree })
+      .nothrow()
+      .quiet();
 
-  const result = await $`bun ${ctx.scriptPath}`
-    .env({ ...process.env, TARGET: 'linux-x64', VERSION: '2.0.1', GITHUB_WORKSPACE: ctx.tree })
-    .nothrow()
-    .quiet();
-
-  expect(result.exitCode).toBe(1);
-});
+    expect({ exitCode: result.exitCode, stdout: result.stdout.toString() }).toStrictEqual({
+      exitCode: 1,
+      stdout: '',
+    });
+  },
+);
 
 test('it fails when dist/ holds no binary for the target', async () => {
   const ctx = setupTest();
