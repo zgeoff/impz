@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { $ } from 'bun';
 
 function setupTest() {
-  const directory = mkdtempSync(join(tmpdir(), 'imp-read-sync-tag-'));
+  const directory = mkdtempSync(join(tmpdir(), 'imp-read-sync-ref-'));
 
   onTestFinished(() => {
     rmSync(directory, { recursive: true, force: true });
@@ -17,16 +17,16 @@ function setupTest() {
   return {
     checkout: join(directory, 'checkout'),
     outputs: join(directory, 'outputs'),
-    scriptPath: join(import.meta.dir, 'read-sync-tag.ts'),
+    scriptPath: join(import.meta.dir, 'read-sync-ref.ts'),
   };
 }
 
-test("it outputs the sync tag that repo-sync's sync job calls", async () => {
+test("it outputs the tools commit that repo-sync's sync job calls", async () => {
   const ctx = setupTest();
 
   writeFileSync(
     join(ctx.checkout, '.github', 'workflows', 'repo-sync.yml'),
-    'jobs:\n  sync:\n    uses: zgeoff/tools/.github/workflows/repo-sync.yml@sync-v41\n',
+    'jobs:\n  sync:\n    uses: zgeoff/tools/.github/workflows/repo-sync.yml@3f9c2e1a7b0d4c6e8f1a2b3c4d5e6f7a8b9c0d1e # main\n',
   );
 
   const result = await $`${process.execPath} ${ctx.scriptPath}`
@@ -36,10 +36,10 @@ test("it outputs the sync tag that repo-sync's sync job calls", async () => {
     .quiet();
 
   expect(result.exitCode).toBe(0);
-  expect(readFileSync(ctx.outputs, 'utf8')).toBe('ref=sync-v41\n');
+  expect(readFileSync(ctx.outputs, 'utf8')).toBe('ref=3f9c2e1a7b0d4c6e8f1a2b3c4d5e6f7a8b9c0d1e\n');
 });
 
-test('it fails, outputting nothing, when the sync job calls no sync tag', async () => {
+test('it fails, outputting nothing, when the sync job calls a branch instead of a commit', async () => {
   const ctx = setupTest();
 
   writeFileSync(
@@ -56,7 +56,7 @@ test('it fails, outputting nothing, when the sync job calls no sync tag', async 
   expect({ exitCode: result.exitCode, stderr: result.stderr.toString() }).toStrictEqual({
     exitCode: 1,
     stderr:
-      "repo-sync.yml's sync job calls no zgeoff/tools sync tag: zgeoff/tools/.github/workflows/repo-sync.yml@main\n",
+      "repo-sync.yml's sync job calls no zgeoff/tools commit: zgeoff/tools/.github/workflows/repo-sync.yml@main\n",
   });
 
   expect(readFileSync(ctx.outputs, 'utf8')).toBe('');

@@ -357,16 +357,16 @@ jobs:
       - name: actionlint
         run: actionlint
 
-      # the shared workflow lint, at the sync tag that repo-sync calls
-      - name: Read the sync tag
-        id: sync-tag
-        run: bun run --silent ci:read-sync-tag
+      # the shared workflow lint, at the tools commit that repo-sync calls
+      - name: Read the sync commit
+        id: sync-ref
+        run: bun run --silent ci:read-sync-ref
 
       - name: Checkout the workflow lint
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: zgeoff/tools
-          ref: ${{ steps.sync-tag.outputs.ref }}
+          ref: ${{ steps.sync-ref.outputs.ref }}
           path: .workflow-lint
           sparse-checkout: sync/pre-push
           persist-credentials: false

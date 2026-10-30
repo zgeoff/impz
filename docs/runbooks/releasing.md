@@ -3,14 +3,14 @@
 Releases come from `main` through [release-please](https://github.com/googleapis/release-please) and
 two workflows. A `feat:` or `fix:` commit on `main` makes the `release` job in CI open or update the
 release PR, which bumps every version, the changelog and the lock file. The `release` job calls the
-shared release-please workflow of `zgeoff/tools` at the repo's sync tag. It merges the release PR
-once every check on the PR passes, and a draft release PR or one labelled `autorelease: hold` stays
-open. The run that merges the release PR tags `vX.Y.Z`, and CI then starts the release workflow for
-the tag, which builds the CLI, the guest kernel, the system drive, the host image, the base image,
-the npm packages and the Homebrew formula, smoke-tests each, and publishes and attests them. Every
-artifact carries the tag's version without the `v`, so a client, an impd and a NixOS flake pinned to
-one tag agree. The workflows' own comments cover each job; this runbook holds the steps they do not
-do.
+shared release-please workflow of `zgeoff/tools` at the commit that repo-sync pins. It merges the
+release PR once every check on the PR passes, and a draft release PR or one labelled
+`autorelease: hold` stays open. The run that merges the release PR tags `vX.Y.Z`, and CI then starts
+the release workflow for the tag, which builds the CLI, the guest kernel, the system drive, the host
+image, the base image, the npm packages and the Homebrew formula, smoke-tests each, and publishes
+and attests them. Every artifact carries the tag's version without the `v`, so a client, an impd and
+a NixOS flake pinned to one tag agree. The workflows' own comments cover each job; this runbook
+holds the steps they do not do.
 
 ## Release changes that open no release PR
 

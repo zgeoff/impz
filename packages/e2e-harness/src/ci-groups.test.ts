@@ -26,7 +26,7 @@ test('it runs one e2e-group job for each fast group, with the host tests in the 
   });
 });
 
-test('it calls the shared release job at the sync tag that repo-sync calls', async () => {
+test('it calls the shared release job at the tools commit that repo-sync calls', async () => {
   const text = await Bun.file(new URL('../../../.github/workflows/ci.yml', import.meta.url)).text();
 
   const workflow = Bun.YAML.parse(text);

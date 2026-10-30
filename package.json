@@ -130,7 +130,7 @@
     "ci:check-generated-protocol": "bun scripts/ci/check-generated-protocol.ts",
     "ci:go": "bun scripts/ci/run-go-checks.ts",
     "ci:install-linter": "bun scripts/ci/install-linter.ts",
-    "ci:read-sync-tag": "bun scripts/ci/read-sync-tag.ts",
+    "ci:read-sync-ref": "bun scripts/ci/read-sync-ref.ts",
     "ci:touched-pages-bench": "bun scripts/ci/run-touched-pages-bench.ts",
     "release:plan-version": "bun scripts/release/plan-version.ts",
     "release:tree-script": "bun scripts/release/run-tree-script.ts",
