@@ -236,8 +236,9 @@ test('#buildFirecrackerCommand names the API socket', () => {
 test('#startFirecracker resolves with the pid and writes it to the pid file once the socket opens', async () => {
   const ctx = setupTest();
   const apiSocket = join(ctx.directoryPath, 'api.sock');
+  const listen = `Bun.listen({ unix: ${JSON.stringify(apiSocket)}, socket: { data() {} } }); await Bun.sleep(30_000);`;
 
-  const pid = await startFirecracker(['sh', '-c', 'touch "$0"; exec sleep 30', apiSocket], {
+  const pid = await startFirecracker([process.execPath, '-e', listen], {
     apiSocket,
     vsockSocket: join(ctx.directoryPath, 'vsock.sock'),
     logFile: join(ctx.directoryPath, 'log'),
@@ -249,6 +250,39 @@ test('#startFirecracker resolves with the pid and writes it to the pid file once
   });
 
   expect(readPidFile(join(ctx.directoryPath, 'pid'))).toBe(pid);
+});
+
+test('#startFirecracker waits past a socket file that refuses connections until the socket listens', async () => {
+  const ctx = setupTest();
+  const apiSocket = join(ctx.directoryPath, 'api.sock');
+  const path = JSON.stringify(apiSocket);
+
+  const listenLate = [
+    `await Bun.write(${path}, '');`,
+    'await Bun.sleep(200);',
+    `require('node:fs').rmSync(${path});`,
+    `Bun.listen({ unix: ${path}, socket: { data() {} } });`,
+    'await Bun.sleep(30_000);',
+  ].join(' ');
+
+  const pid = await startFirecracker([process.execPath, '-e', listenLate], {
+    apiSocket,
+    vsockSocket: join(ctx.directoryPath, 'vsock.sock'),
+    logFile: join(ctx.directoryPath, 'log'),
+    pidFile: join(ctx.directoryPath, 'pid'),
+  });
+
+  onTestFinished(() => {
+    stopPid(pid);
+  });
+
+  const connection = await Bun.connect({ unix: apiSocket, socket: { data: () => {} } });
+
+  onTestFinished(() => {
+    connection.end();
+  });
+
+  expect(connection.readyState).toBe(1);
 });
 
 test('#startFirecracker rejects with the log tail when the process exits before its socket opens', () => {
@@ -292,9 +326,11 @@ test('#isImpVm refuses a VM of another uid in another cgroup', () => {
 });
 
 test('#probeJailedFirecracker finds a process run with --id', async () => {
-  // bash execs a lone last command in place; `; true` stops that, so the argv
-  // keeps --id
-  const child = Bun.spawn(['bash', '-c', 'sleep 30; true', 'x', '--id', 'i1']);
+  // bash's own read waits on the open stdin pipe, so bash keeps this argv and
+  // runs no child that its SIGKILL would orphan
+  const child = Bun.spawn(['bash', '-c', 'read -t 30 || true', 'x', '--id', 'i1'], {
+    stdin: 'pipe',
+  });
 
   onTestFinished(() => {
     child.kill('SIGKILL');

@@ -1,0 +1,75 @@
+import { expect, test } from 'bun:test';
+import { buildStubGatedCall } from '../../../testing/platform/build-stub-gated-call';
+import { createPrioritySemaphore } from './priority-semaphore';
+
+test('it gives a free slot to a waiting foreground task before an older background one', async () => {
+  const semaphore = createPrioritySemaphore(1);
+  const held = Promise.withResolvers<undefined>();
+  const order: string[] = [];
+  const holding = semaphore.run('background', () => held.promise);
+
+  const background = semaphore.run('background', () => {
+    order.push('background');
+
+    return Promise.resolve();
+  });
+
+  const foreground = semaphore.run('foreground', () => {
+    order.push('foreground');
+
+    return Promise.resolve();
+  });
+
+  held.resolve(undefined);
+
+  await Promise.all([holding, background, foreground]);
+
+  expect(order).toStrictEqual(['foreground', 'background']);
+});
+
+test('it frees the slot when a task fails, so the next one runs', async () => {
+  const semaphore = createPrioritySemaphore(1);
+  const failing = semaphore.run('foreground', () => Promise.reject(new Error('refused')));
+  const next = semaphore.run('background', () => Promise.resolve('ran'));
+
+  expect(failing).rejects.toThrow('refused');
+
+  const ran = await next;
+
+  expect(ran).toBe('ran');
+});
+
+test('it runs tasks up to its limit at once, and starts the next only when a slot frees', async () => {
+  const semaphore = createPrioritySemaphore(2);
+  const held = buildStubGatedCall(() => Promise.resolve());
+  const started: string[] = [];
+
+  const first = semaphore.run('background', () => {
+    started.push('first');
+
+    return held.call();
+  });
+
+  const second = semaphore.run('background', () => {
+    started.push('second');
+
+    return held.call();
+  });
+
+  const third = semaphore.run('background', () => {
+    started.push('third');
+
+    return Promise.resolve();
+  });
+
+  await Promise.resolve();
+
+  const startedBefore = [...started];
+
+  held.open();
+
+  await Promise.all([first, second, third]);
+
+  expect(startedBefore).toStrictEqual(['first', 'second']);
+  expect(started).toStrictEqual(['first', 'second', 'third']);
+});

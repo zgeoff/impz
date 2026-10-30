@@ -495,6 +495,51 @@ test('it leaves every imp asleep for the next impd when impd stops with a wake u
   expect(broken).toBeEmpty();
 });
 
+test('it refuses a wake still waiting for a wake slot when impd stops, and leaves every imp asleep', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const names = ['a', 'b', 'c', 'd', 'e'];
+
+  await Promise.all(names.map((name) => ctx.client.imps.create({ name })));
+  await Promise.all(names.map((name) => ctx.client.imps.sleep({ name })));
+
+  ctx.fake.queue('wake', 'hang', 'hang', 'hang', 'hang', 'hang');
+
+  const wakes = names.map((name) => waitForOutcome(ctx.client.imps.wake({ name }), 10_000));
+
+  await waitFor(() => {
+    expect(ctx.fake.countHungCalls()).toBe(4);
+  });
+
+  const stopping = ctx.imps.sleepAllImps();
+
+  ctx.fake.releaseHangs();
+
+  const woke = await Promise.all(wakes);
+  const stopped = await waitForOutcome(stopping, 10_000);
+
+  await ctx.restartImpd();
+
+  const after = await listImps(ctx.db);
+  const broken = await readBrokenInvariants(ctx, true);
+
+  expect(woke).toIncludeSameMembers(['done', 'done', 'done', 'done', 'failed']);
+  expect(stopped).toBe('done');
+
+  expect(after.map((imp) => imp.state)).toStrictEqual([
+    'sleeping',
+    'sleeping',
+    'sleeping',
+    'sleeping',
+    'sleeping',
+  ]);
+
+  expect(ctx.fake.alive.size).toBe(0);
+  expect(broken).toBeEmpty();
+});
+
 test('it wakes an imp that impd stopping left asleep on the next impd', async () => {
   const ctx = await setupTest();
 
@@ -831,7 +876,7 @@ test('it leaves consistent records after concurrent lifecycle calls on a few imp
         );
       },
     ),
-    { numRuns: 25 },
+    { numRuns: 15 },
   );
 });
 

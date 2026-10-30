@@ -10,6 +10,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { setImmediate as setImmediatePromise } from 'node:timers/promises';
 import { create } from '@bufbuild/protobuf';
 import { FRAME_TYPES, PingSchema, encodeMessageFrame } from '@impz/agent-protocol';
 import { waitFor } from '@impz/test-utils/wait-for';
@@ -24,6 +25,7 @@ import {
   buildStubFirecrackerArgv,
   startStubFirecracker,
 } from '../../../testing/vm/start-stub-firecracker';
+import { startStubFirecrackerApi } from '../../../testing/vm/start-stub-firecracker-api';
 import { startStubParkedAgent } from '../../../testing/vm/start-stub-parked-agent';
 import { deriveSlotAddress, parseSubnet } from '../../host-net/net/addressing';
 import { stopPid } from '../../platform/process/proc';
@@ -367,6 +369,69 @@ test('#startVm returns the steps the guest reports for its boot', async () => {
   const vm = await starting;
 
   expect(vm.guestSteps).toStrictEqual({ world: 9, mount: 35, ready: 1 });
+});
+
+test('#startVm fails a boot whose Firecracker API refuses every call, and leaves no rejection unhandled', async () => {
+  const ctx = setupTest();
+  const paths = ctx.createImpDir('vm');
+  const argv = buildStubFirecrackerArgv({ apiSocket: paths.apiSocket, logPath: ctx.logPath });
+  const unhandled: unknown[] = [];
+
+  const recordUnhandled = (reason: unknown): void => {
+    unhandled.push(reason);
+  };
+
+  process.on('unhandledRejection', recordUnhandled);
+
+  onTestFinished(() => {
+    process.off('unhandledRejection', recordUnhandled);
+  });
+
+  const apiSocket = join(ctx.directoryPath, 'refusing.sock');
+
+  // the version read waits on its connection until the setup has failed,
+  // then fails when the connection drops
+  const api = startStubFirecrackerApi(apiSocket, {
+    answers: {
+      'PUT /boot-source': { status: 400, body: { fault_message: 'Invalid kernel path' } },
+    },
+    held: ['GET /version'],
+  });
+
+  const runner = createVmRunner(buildStubJails({ argv }).jails, {
+    createClient: (_, timeouts) => createFirecrackerClient(apiSocket, timeouts),
+  });
+
+  const starting = runner.startVm({
+    firecrackerBin: 'firecracker',
+    kernelPath: '/data/system/vmlinux',
+    systemDrivePath: '/data/system/drives/system.squashfs',
+    paths,
+    address: deriveSlotAddress(3, { subnet: parseSubnet('10.66.0.0/16'), portBase: 20_000 }),
+    impId: 'vm',
+    hostname: 'dev',
+    vcpus: 1,
+    memoryMib: 256,
+    maxMemoryMib: 256,
+    dns: ['1.1.1.1'],
+    cgroup: null,
+    isIdentityReset: false,
+    jail: { uid: 900_000, gid: 900_000 },
+  });
+
+  const failure = await starting.then(
+    () => null,
+    (error: unknown) => error,
+  );
+
+  await api.cut();
+
+  // Bun reports an unhandled rejection once the microtask queue drains,
+  // so one macrotask turn after the reject is enough to see it
+  await setImmediatePromise();
+
+  expect(failure).toBeInstanceOf(Error);
+  expect(unhandled).toStrictEqual([]);
 });
 
 test('#readVmState reads the VM state from the API', async () => {

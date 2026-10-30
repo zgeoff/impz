@@ -5,6 +5,7 @@ import fc from 'fast-check';
 import { buildStubGovernedHostArbitraries } from '../../../testing/imp-ops/build-stub-governed-host-arbitraries';
 import { createStubGovernedHost } from '../../../testing/imp-ops/create-stub-governed-host';
 import type { RoomLeft } from '../../../testing/imp-ops/create-stub-governed-host';
+import { buildStubGatedCall } from '../../../testing/platform/build-stub-gated-call';
 import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { createEventBus } from '../../platform/events/event-bus';
 import type { VmRam } from '../../vm/vmm/vm-stats';
@@ -879,6 +880,72 @@ test('it reports no headroom while KSM saves nothing', async () => {
   const usage = await governor.readUsage();
 
   expect(usage).toStrictEqual({ usedMib: 600, reservedMib: 0, headroomMib: 0 });
+});
+
+test('it admits a waiting foreground admission before background work queued ahead of it', async () => {
+  const host = createStubGovernedHost({
+    budgetMib: 1000,
+    ids: ['a', 'held', 'grown', 'woken'],
+    awake: [{ id: 'a', rssMib: 100 }],
+  });
+
+  const listing = buildStubGatedCall(host.deps.listAwake);
+  const governor = createRamGovernor({ ...host.deps, listAwake: listing.call });
+  const finished: string[] = [];
+  const held = governor.admit({ id: 'held', name: 'held', reserveMib: 50, memoryMib: 100 });
+
+  const background = governor.admit({
+    id: 'grown',
+    name: 'grown',
+    reserveMib: 50,
+    memoryMib: 100,
+    isBackground: true,
+  });
+
+  const foreground = governor.admit({ id: 'woken', name: 'woken', reserveMib: 50, memoryMib: 100 });
+
+  const settled = [held, background, foreground].map(async (admitted, index) => {
+    await admitted;
+
+    finished.push(['held', 'grown', 'woken'][index] ?? '');
+  });
+
+  listing.open();
+
+  await Promise.all(settled);
+
+  expect(finished).toStrictEqual(['held', 'woken', 'grown']);
+});
+
+test('it admits a waiting foreground admission before a grow and an enforce pass queued ahead of it', async () => {
+  const host = createStubGovernedHost({
+    budgetMib: 1000,
+    ids: ['a', 'held', 'woken'],
+    awake: [{ id: 'a', rssMib: 100 }],
+  });
+
+  const listing = buildStubGatedCall(host.deps.listAwake);
+  const governor = createRamGovernor({ ...host.deps, listAwake: listing.call });
+  const finished: string[] = [];
+
+  const queued = [
+    governor.admit({ id: 'held', name: 'held', reserveMib: 50, memoryMib: 100 }),
+    governor.admitGrow({ id: 'a', name: 'a', mib: 50 }),
+    governor.enforce(),
+    governor.admit({ id: 'woken', name: 'woken', reserveMib: 50, memoryMib: 100 }),
+  ];
+
+  const settled = queued.map(async (work, index) => {
+    await work;
+
+    finished.push(['held', 'grow', 'enforce', 'woken'][index] ?? '');
+  });
+
+  listing.open();
+
+  await Promise.all(settled);
+
+  expect(finished).toStrictEqual(['held', 'woken', 'grow', 'enforce']);
 });
 
 test('it measures every awake imp at once, each read started before any ends', async () => {

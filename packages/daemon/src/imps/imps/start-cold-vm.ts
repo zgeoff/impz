@@ -66,6 +66,8 @@ export async function startColdVm(
   void Promise.allSettled([diskBytes]);
 
   if (template !== null && template !== undefined) {
+    const restoredBefore = context.templates?.countRestored(template) ?? 0;
+
     try {
       const vm = await context.vms.loadTemplateVm({
         firecrackerBin: context.config.firecrackerBin,
@@ -118,9 +120,9 @@ export async function startColdVm(
           error: getErrorMessage(error),
         });
 
-      const isTemplateFault = error instanceof TemplateRestoreError && error.isTemplateFault;
+      const fault = error instanceof TemplateRestoreError ? error.fault : null;
 
-      context.templates?.reportFailure(template, isTemplateFault);
+      context.templates?.reportFailure(template, { fault, restoredBefore });
     }
   }
 

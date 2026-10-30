@@ -251,32 +251,35 @@ export function createVmRunner(jails: Jails, options: Readonly<VmRunnerOptions> 
 
       try {
         const api = createClient(plan.paths.apiSocket);
-        const versionPromise = api.readVersion();
 
-        await setupVm(api, {
-          kernelPath: plan.kernelPath,
-          bootArgs: buildBootArgs(plan),
-          vcpus: plan.vcpus,
-          memoryMib: plan.memoryMib,
-          hugePages: plan.hugePages ?? 'None',
-          diskPath: plan.paths.disk,
-          systemDrivePath: plan.systemDrivePath,
-          vsockPath: plan.paths.vsockSocket,
-          tap: plan.address.tap,
-          guestMac: plan.address.guestMac,
-        });
-
-        const regionMib = getRegionMib(plan.memoryMib, plan.maxMemoryMib);
-
-        if (regionMib > 0) {
-          await api.putHotplugMemory({
-            totalSizeMib: regionMib,
-            slotSizeMib: SLOT_MIB,
-            blockSizeMib: BLOCK_MIB,
+        const configure = async (): Promise<void> => {
+          await setupVm(api, {
+            kernelPath: plan.kernelPath,
+            bootArgs: buildBootArgs(plan),
+            vcpus: plan.vcpus,
+            memoryMib: plan.memoryMib,
+            hugePages: plan.hugePages ?? 'None',
+            diskPath: plan.paths.disk,
+            systemDrivePath: plan.systemDrivePath,
+            vsockPath: plan.paths.vsockSocket,
+            tap: plan.address.tap,
+            guestMac: plan.address.guestMac,
           });
-        }
 
-        const firecrackerVersion = await versionPromise;
+          const regionMib = getRegionMib(plan.memoryMib, plan.maxMemoryMib);
+
+          if (regionMib > 0) {
+            await api.putHotplugMemory({
+              totalSizeMib: regionMib,
+              slotSizeMib: SLOT_MIB,
+              blockSizeMib: BLOCK_MIB,
+            });
+          }
+        };
+
+        // Promise.all holds both rejections: a version read left to fail on
+        // its own after the setup threw would end impd as an unhandled one
+        const [firecrackerVersion] = await Promise.all([api.readVersion(), configure()]);
 
         setMark('configure');
 

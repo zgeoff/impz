@@ -33,6 +33,10 @@ import { updateLockedImpState } from './update-locked-imp-state';
 // only a few run at once.
 const SLEEP_CONCURRENCY = 2;
 
+// A wake and a template restore each read their memory file in; past a few at
+// once they slow each other more than they gain.
+const RESTORE_CONCURRENCY = 4;
+
 // cgroup.kill stops every process a guest escape forks, faster than any /proc
 // scan, so a jailed VM never starts without its cgroup.
 const NO_JAIL_CGROUP =
@@ -69,8 +73,22 @@ export interface ImpVmOps {
   readonly stopVmStarts: () => void;
 }
 
-export function createImpVmOps(context: ImpContext): ImpVmOps {
+export function createImpVmOps(host: ImpContext): ImpVmOps {
   const sleepSlots = createSemaphore(SLEEP_CONCURRENCY);
+
+  // A wake that falls back to a template boot holds its wake slot while it
+  // waits for a template slot, so the two pools stay apart.
+  const wakeSlots = createSemaphore(RESTORE_CONCURRENCY);
+  const templateSlots = createSemaphore(RESTORE_CONCURRENCY);
+
+  const context: ImpContext = {
+    ...host,
+    vms: {
+      ...host.vms,
+      loadTemplateVm: (options) => templateSlots.run(() => host.vms.loadTemplateVm(options)),
+    },
+  };
+
   let isStopping = false;
 
   const updateState = async (
@@ -311,7 +329,7 @@ export function createImpVmOps(context: ImpContext): ImpVmOps {
     return imp.isDiskGrowPending ? setGrowPending(imp, false) : imp;
   };
 
-  const wakeImpVm = makeWakeImpVm({
+  const startWake = makeWakeImpVm({
     context,
     isStopping: () => isStopping,
     updateState,
@@ -320,6 +338,10 @@ export function createImpVmOps(context: ImpContext): ImpVmOps {
     startColdImpVm,
     growGuestDisk,
   });
+
+  // the wake checks for a stop first, so a wake still waiting for its slot
+  // when impd stops leaves its snapshot untouched
+  const wakeImpVm = (imp: LockedImp): Promise<LockedImp> => wakeSlots.run(() => startWake(imp));
 
   const requireRunningImp = async (imp: LockedImp): Promise<LockedImp> => {
     if (imp.state === 'running') {
