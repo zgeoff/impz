@@ -83,6 +83,40 @@ test('it never removes or claims an imp of that name that the run did not make',
   expect(kept.name).toBe('bench-taken');
 });
 
+test('it boots a young-wake imp cold again before it sleeps for the timed wake', async () => {
+  const ctx = await setupTest();
+
+  const image = buildMockNewImage({ name: 'base', sizeBytes: 6 });
+
+  await Bun.write(buildImagePaths(ctx.box.dataDir, image.digest).rootfs, 'rootfs');
+
+  await createImage(ctx.box.db, image);
+
+  await ctx.box.client.imps.create({ name: 'bench-young', image: 'base' });
+  await ctx.box.client.imps.sleep({ name: 'bench-young', force: true });
+
+  const young = BENCH_SCENARIOS.find((scenario) => scenario.name === 'wake-young');
+
+  invariant(young);
+
+  await young.arrange({
+    client: ctx.box.client,
+    name: 'bench-young',
+    settings: { memoryMib: null, image: 'base', awakeMs: 0 },
+    wait: () => Promise.resolve(),
+    owned: new Set(['bench-young']),
+  });
+
+  const arranged = await ctx.box.client.imps.get({ name: 'bench-young' });
+
+  expect(ctx.box.fake.boots.map((boot) => boot.hostname)).toStrictEqual([
+    'bench-young',
+    'bench-young',
+  ]);
+
+  expect(arranged.state).toBe('sleeping');
+});
+
 test('it times the wake of an imp that has woken before, even on its first round', async () => {
   const ctx = await setupTest();
 

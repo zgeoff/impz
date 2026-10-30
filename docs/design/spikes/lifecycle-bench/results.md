@@ -1,21 +1,23 @@
 # Lifecycle bench results
 
 Each table compares two builds of impd that ran on one CI runner, their rounds in turn, the baseline
-first in each round. A cell holds the median of a side's 2 rounds, and the change is against the
-baseline. The failed columns count the steps that failed over both rounds, including the steps that
-arrange a sample, such as the create and sleep before a wake. A level whose samples mostly failed
-has few latencies left, so its change is no measure of either build.
+first in each round. A cell holds the lower median of a side's 2 rounds, which is the smaller of the
+two figures, and the change is against the baseline. The failed columns count the steps that failed
+over both rounds, including the steps that arrange a sample, such as the create and sleep before a
+wake. A level whose samples mostly failed has few latencies left, so its change is no measure of
+either build.
 
 ## Setup
 
 Every run is on a GitHub-hosted `ubuntu-24.04` runner with nested KVM, 4 vCPUs and Linux
 7.0.0-1017-azure. impd runs in a dev instance on XFS with Firecracker v1.17.0, guest kernel 6.1.188,
 a RAM budget of 12,288 MiB, 4 KiB guest pages, and KSM off. The bench creates each imp with 256 MiB,
-takes 20 samples at each of the concurrency levels 1, 4, 16 and 64, and runs create, wake and
-restore. A restore restores an awake imp to a checkpoint. In these runs, the first round of each
-level woke imps that had just been created and slept once, and each later round woke imps that had
-woken before. At concurrency 16, half of the wakes are first wakes after a create, and at 64, with
-one round, all of them are. The bench now wakes and sleeps each new imp once before its first timed
+asks for 20 samples at each of the concurrency levels 1, 4, 16 and 64, and runs create, wake and
+restore. The bench times whole bursts, so a round takes 20, 20, 32 and 64 samples at those levels. A
+restore restores an awake imp to a checkpoint. In these runs, the first round of each level woke
+imps that had just been created and slept once, and each later round woke imps that had woken
+before. At concurrency 16, half of the wakes are first wakes after a create, and at 64, with one
+round, all of them are. The bench now wakes and sleeps each new imp once before its first timed
 wake, so a later run times only wakes after an earlier wake. Before each side's timed run, 3 creates
 of the same size warm its boot template.
 
@@ -156,8 +158,8 @@ template and no failed step at 64 beyond the RAM refusals.
 
 - Every run is on a nested runner with 4 vCPUs, never on a real host, whose CPUs and disk move each
   figure.
-- Each comparison has 2 rounds of 20 samples on one runner, and the baseline always runs first in a
-  round. A gain under the noise needs more rounds to show.
+- Each comparison has 2 rounds of 20 to 64 samples on one runner, and the baseline always runs first
+  in a round. A gain under the noise needs more rounds to show.
 - No run uses 2 MiB pages for the latency comparison, or turns KSM on.
 - The concurrency levels stop at 64, and the imps hold 256 MiB each.
 - The touched-page measurement is one run of one workload.

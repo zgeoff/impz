@@ -33,7 +33,7 @@ test('it times each scenario at each concurrency, with the figures impd recorded
   const result = await runCLIInProcess({
     args: [
       'bench',
-      'create,wake',
+      'create,wake,restore',
       '--concurrency',
       '1,2',
       '--samples',
@@ -62,6 +62,8 @@ test('it times each scenario at each concurrency, with the figures impd recorded
     { scenario: 'create', concurrency: 2, ...timed },
     { scenario: 'wake', concurrency: 1, ...timed },
     { scenario: 'wake', concurrency: 2, ...timed },
+    { scenario: 'restore', concurrency: 1, ...timed },
+    { scenario: 'restore', concurrency: 2, ...timed },
   ]);
 });
 

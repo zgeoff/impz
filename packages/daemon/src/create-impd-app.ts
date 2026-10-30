@@ -113,8 +113,8 @@ export function createImpdApp(
     readHostInfo: () =>
       readHostInfo({
         isHugePages: config.hugePages !== null,
-        readKernel: release,
-        readCpuInfo: () => readFileSync('/proc/cpuinfo', 'utf8'),
+        readKernel: () => deps.hostKernelRelease ?? release(),
+        readCpuInfo: deps.readCpuInfo ?? (() => readFileSync('/proc/cpuinfo', 'utf8')),
         readHugePagePool: deps.imps?.readHugePagePool ?? (() => readHugePagePool()),
         readBootTemplateCount: parts.imps.bootTemplates?.readReadyCount ?? null,
       }),

@@ -1,10 +1,11 @@
-import type { ImpEvent, ImpEventDetail } from '@impz/api';
+import type { Imp, ImpEvent, ImpEventDetail } from '@impz/api';
 import { ORPCError } from '@impz/client';
 import type { watchEvents } from '@impz/client';
 import type { ImpClient } from '../config/create-imp-client';
 import type { BenchResult } from './bench-report-schema';
 import type { BenchScenario, BenchSettings } from './bench-scenarios';
 import { buildLatencySummary } from './build-latency-summary';
+import { isStepEvent } from './is-step-event';
 
 export interface BenchPlan {
   readonly runID: string;
@@ -182,11 +183,11 @@ async function runLevel(deps: BenchDeps, run: Readonly<LevelRun>): Promise<Bench
         const startedAt = deps.now();
 
         try {
-          await prepared.step();
+          const stepped = await prepared.step();
 
           latencies.push(Math.round(deps.now() - startedAt));
 
-          return prepared.name;
+          return stepped;
         } catch (error) {
           countFailure(toFailureCode(error));
 
@@ -197,7 +198,7 @@ async function runLevel(deps: BenchDeps, run: Readonly<LevelRun>): Promise<Bench
 
     const details = await waitForDetails(deps, run, {
       mark,
-      names: acted.filter((name): name is string => name !== null),
+      stepped: acted.filter((imp) => imp !== null),
     });
 
     for (const detail of details) {
@@ -228,7 +229,7 @@ function toFailureCode(error: unknown): string {
 
 interface DetailWait {
   readonly mark: number;
-  readonly names: readonly string[];
+  readonly stepped: readonly Imp[];
 }
 
 // impd sends a change event after the call that made the change returns, so
@@ -247,12 +248,10 @@ async function waitForDetails(
     const found = new Map<string, ImpEventDetail>();
 
     for (const event of run.log.events.slice(wanted.mark)) {
-      if (
-        event.ev === 'ImpChanged' &&
-        event.reason === run.scenario.reason &&
-        wanted.names.includes(event.imp.name)
-      ) {
-        found.set(event.imp.name, event.detail ?? {});
+      const stepped = wanted.stepped.find((imp) => isStepEvent(event, run.scenario.reason, imp));
+
+      if (stepped !== undefined && event.ev === 'ImpChanged') {
+        found.set(stepped.id, event.detail ?? {});
       }
     }
 
@@ -263,7 +262,7 @@ async function waitForDetails(
     const found = collect();
     const isStreamDown = run.log.failure !== null;
 
-    if (found.size === wanted.names.length || isStreamDown || deps.now() >= deadline) {
+    if (found.size === wanted.stepped.length || isStreamDown || deps.now() >= deadline) {
       return [...found.values()];
     }
 

@@ -99,6 +99,7 @@ export interface ImpdDeps {
   readonly hostKernelRelease?: string;
   readonly readKsmHostStats?: () => KsmHostStats | null;
   readonly readProcStatus?: () => string;
+  readonly readCpuInfo?: () => string;
   readonly tickerTimer?: TickerTimer;
   readonly buildUploadTimer?: StartTimer;
   readonly proxyPorts?: { readonly proxy: number; readonly slot: (slot: number) => number };

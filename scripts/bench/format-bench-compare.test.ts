@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { formatBenchCompare } from './format-bench-compare';
 
-test('it compares each arm with the first, on the median of its rounds', () => {
+test('it compares each arm with the first, on the lower median of its rounds', () => {
   const table = formatBenchCompare([
     {
       arm: 'baseline',

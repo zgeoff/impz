@@ -925,6 +925,46 @@ test('it admits a waiting foreground admission before background work queued ahe
   expect(finished).toStrictEqual(['held', 'woken', 'grown']);
 });
 
+test('it admits a waiting foreground admission before a grow and an enforce pass queued ahead of it', async () => {
+  const host = createStubGovernedHost({
+    budgetMib: 1000,
+    ids: ['a', 'held', 'woken'],
+    awake: [{ id: 'a', rssMib: 100 }],
+  });
+
+  const gate = Promise.withResolvers<undefined>();
+
+  const governor = createRamGovernor({
+    ...host.deps,
+    listAwake: async () => {
+      await gate.promise;
+
+      return host.deps.listAwake();
+    },
+  });
+
+  const finished: string[] = [];
+
+  const queued = [
+    governor.admit({ id: 'held', name: 'held', reserveMib: 50, memoryMib: 100 }),
+    governor.admitGrow({ id: 'a', name: 'a', mib: 50 }),
+    governor.enforce(),
+    governor.admit({ id: 'woken', name: 'woken', reserveMib: 50, memoryMib: 100 }),
+  ];
+
+  const settled = queued.map(async (work, index) => {
+    await work;
+
+    finished.push(['held', 'grow', 'enforce', 'woken'][index] ?? '');
+  });
+
+  gate.resolve(undefined);
+
+  await Promise.all(settled);
+
+  expect(finished).toStrictEqual(['held', 'woken', 'grow', 'enforce']);
+});
+
 test('it measures every awake imp at once, each read started before any ends', async () => {
   const host = createStubGovernedHost({
     budgetMib: 1000,

@@ -423,8 +423,9 @@ dispatch's `baseline` input (default `main`):
    data dir. Each side first creates 3 imps that the bench does not time, so its boot template is
    ready before the timed run starts.
 3. Each side runs once per round, in turn, so a slow stretch of the runner falls on both. The job
-   summary holds a table of each side's median p50, p95 and p99 over its rounds, and the change
-   against the baseline. The `bench-results` artifact holds each run's JSON report and impd's log.
+   summary holds a table of each side's lower median p50, p95 and p99 over its rounds, and the
+   change against the baseline. The `bench-results` artifact holds each run's JSON report and impd's
+   log.
 
 To compare a change, commit it as one commit on the code it changes, push it to a branch under
 `bench/`, then delete the branch once you have the table. An empty commit

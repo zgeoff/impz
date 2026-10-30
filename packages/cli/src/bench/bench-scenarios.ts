@@ -19,10 +19,10 @@ interface BenchSubject {
   readonly owned: Set<string>;
 }
 
-// A scenario brings one imp to where its timed step starts and returns that
-// step, so the bench times nothing the arrange already did. A new scenario
-// joins the list, and `impz bench <name>` runs it.
-type BenchStep = () => Promise<void>;
+// A scenario returns its timed step, so the bench times nothing the arrange
+// did, and the step resolves to the imp its call returned, which names the
+// change event it caused. `impz bench <name>` runs a scenario on this list.
+type BenchStep = () => Promise<Imp>;
 
 export interface BenchScenario {
   readonly name: string;
@@ -51,12 +51,13 @@ export const BENCH_SCENARIOS: readonly BenchScenario[] = [
 
       if (isNew) {
         await sleepImp(subject);
-        await wakeImp(subject);
+
+        await subject.client.imps.wake({ name: subject.name });
       }
 
       await sleepImp(subject);
 
-      return () => wakeImp(subject);
+      return () => subject.client.imps.wake({ name: subject.name });
     },
   },
   {
@@ -71,7 +72,7 @@ export const BENCH_SCENARIOS: readonly BenchScenario[] = [
 
       await sleepImp(subject);
 
-      return () => wakeImp(subject);
+      return () => subject.client.imps.wake({ name: subject.name });
     },
   },
   {
@@ -83,9 +84,7 @@ export const BENCH_SCENARIOS: readonly BenchScenario[] = [
 
       const checkpoint = await ensureBenchCheckpoint(subject);
 
-      return async () => {
-        await subject.client.checkpoints.restore({ name: subject.name, checkpoint });
-      };
+      return () => subject.client.checkpoints.restore({ name: subject.name, checkpoint });
     },
   },
   {
@@ -97,9 +96,7 @@ export const BENCH_SCENARIOS: readonly BenchScenario[] = [
 
       await subject.wait(subject.settings.awakeMs);
 
-      return async () => {
-        await subject.client.imps.sleep({ name: subject.name, force: true });
-      };
+      return () => subject.client.imps.sleep({ name: subject.name, force: true });
     },
   },
 ];
@@ -124,13 +121,17 @@ async function readImp(subject: BenchSubject): Promise<Imp | null> {
 
 // A create that fails after impd made the imp, such as a boot that fails,
 // leaves an imp the run owns; a refused name belongs to someone else.
-async function createImp(subject: BenchSubject): Promise<void> {
+async function createImp(subject: BenchSubject): Promise<Imp> {
   try {
-    await subject.client.imps.create({
+    const created = await subject.client.imps.create({
       name: subject.name,
       ...(subject.settings.memoryMib !== null && { memoryMib: subject.settings.memoryMib }),
       ...(subject.settings.image !== null && { image: subject.settings.image }),
     });
+
+    subject.owned.add(subject.name);
+
+    return created;
   } catch (error) {
     if (!(error instanceof ORPCError && error.code === 'CONFLICT')) {
       subject.owned.add(subject.name);
@@ -138,8 +139,6 @@ async function createImp(subject: BenchSubject): Promise<void> {
 
     throw error;
   }
-
-  subject.owned.add(subject.name);
 }
 
 // returns whether it created the imp, which has then never woken
@@ -167,10 +166,6 @@ async function bringAwake(subject: BenchSubject): Promise<boolean> {
 async function sleepImp(subject: BenchSubject): Promise<void> {
   await subject.wait(subject.settings.awakeMs);
   await subject.client.imps.sleep({ name: subject.name, force: true });
-}
-
-async function wakeImp(subject: BenchSubject): Promise<void> {
-  await subject.client.imps.wake({ name: subject.name });
 }
 
 const CHECKPOINT_LABEL = 'bench';

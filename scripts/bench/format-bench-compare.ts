@@ -10,7 +10,8 @@ type Figure = 'p50' | 'p95' | 'p99';
 const FIGURES: readonly Figure[] = ['p50', 'p95', 'p99'];
 
 // Each arm ran its rounds in turn with the others on one machine, so a cell
-// holds the median of that arm's rounds and the change is against the first arm.
+// holds the lower median of that arm's rounds, a figure one round measured, and
+// the change is against the first arm.
 export function formatBenchCompare(reports: readonly ArmReport[]): string {
   const arms = [...new Set(reports.map((report) => report.arm))];
   const rows = collectRows(reports);
@@ -27,11 +28,11 @@ export function formatBenchCompare(reports: readonly ArmReport[]): string {
     const reference = row.cells.get(arms[0] ?? '');
 
     for (const figure of FIGURES) {
-      const base = pickMedian(reference?.figures[figure] ?? []);
+      const base = pickLowerMedian(reference?.figures[figure] ?? []);
 
       line.push(
         ...arms.map((arm) => {
-          const value = pickMedian(row.cells.get(arm)?.figures[figure] ?? []);
+          const value = pickLowerMedian(row.cells.get(arm)?.figures[figure] ?? []);
           const against = arm === arms[0] ? null : base;
 
           return formatCell(value, against);
@@ -98,7 +99,7 @@ function collectRows(reports: readonly ArmReport[]): Row[] {
   return [...rows.values()];
 }
 
-function pickMedian(values: readonly number[]): number | null {
+function pickLowerMedian(values: readonly number[]): number | null {
   const sorted = values.toSorted((left, right) => left - right);
 
   return sorted[Math.floor((sorted.length - 1) / 2)] ?? null;
