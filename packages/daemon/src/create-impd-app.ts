@@ -14,6 +14,8 @@ import { startRealTimer } from './platform/process/start-real-timer';
 import { createApp } from './surface/create-app';
 import type { AppDeps } from './surface/create-app';
 import { createBuildContextRoute } from './surface/images/build-context-route';
+import { readHostInfo } from './surface/read-host-info';
+import type { HostInfoSources } from './surface/read-host-info';
 import { UNKNOWN_VERSION } from './vm/sleep/vm-identity';
 import type { HostIdentity } from './vm/sleep/vm-identity';
 
@@ -34,6 +36,7 @@ export interface ImpdAppParts {
   readonly checkDnsToken: AppDeps['checkDnsToken'];
   readonly readTailscale: () => Promise<TailscaleStatus>;
   readonly readTailnetNames: AppDeps['readTailnetNames'];
+  readonly hostReaders: Pick<HostInfoSources, 'readKernel' | 'readCpuInfo' | 'readHugePagePool'>;
   readonly isReady: () => boolean;
   readonly keepaliveMs?: number;
   readonly readKsmHostStats?: AppDeps['readKsmHostStats'];
@@ -106,5 +109,11 @@ export function createImpdApp(
     imageKeepaliveMs: keepaliveMs,
     ...(deps.keepaliveRepeat !== undefined && { imageKeepaliveRepeat: deps.keepaliveRepeat }),
     moves: parts.moves,
+    readHostInfo: () =>
+      readHostInfo({
+        isHugePages: config.hugePages !== null,
+        ...parts.hostReaders,
+        readBootTemplateCount: parts.imps.bootTemplates?.readReadyCount ?? null,
+      }),
   });
 }

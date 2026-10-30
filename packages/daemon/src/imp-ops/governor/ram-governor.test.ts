@@ -882,45 +882,10 @@ test('it reports no headroom while KSM saves nothing', async () => {
   expect(usage).toStrictEqual({ usedMib: 600, reservedMib: 0, headroomMib: 0 });
 });
 
-test('it admits a waiting foreground admission before background work queued ahead of it', async () => {
+test('it admits a waiting foreground admission before a background admission, a grow and an enforce pass queued ahead of it', async () => {
   const host = createStubGovernedHost({
     budgetMib: 1000,
-    ids: ['a', 'held', 'grown', 'woken'],
-    awake: [{ id: 'a', rssMib: 100 }],
-  });
-
-  const listing = buildStubGatedCall(host.deps.listAwake);
-  const governor = createRamGovernor({ ...host.deps, listAwake: listing.call });
-  const finished: string[] = [];
-  const held = governor.admit({ id: 'held', name: 'held', reserveMib: 50, memoryMib: 100 });
-
-  const background = governor.admit({
-    id: 'grown',
-    name: 'grown',
-    reserveMib: 50,
-    memoryMib: 100,
-    isBackground: true,
-  });
-
-  const foreground = governor.admit({ id: 'woken', name: 'woken', reserveMib: 50, memoryMib: 100 });
-
-  const settled = [held, background, foreground].map(async (admitted, index) => {
-    await admitted;
-
-    finished.push(['held', 'grown', 'woken'][index] ?? '');
-  });
-
-  listing.open();
-
-  await Promise.all(settled);
-
-  expect(finished).toStrictEqual(['held', 'woken', 'grown']);
-});
-
-test('it admits a waiting foreground admission before a grow and an enforce pass queued ahead of it', async () => {
-  const host = createStubGovernedHost({
-    budgetMib: 1000,
-    ids: ['a', 'held', 'woken'],
+    ids: ['a', 'held', 'built', 'woken'],
     awake: [{ id: 'a', rssMib: 100 }],
   });
 
@@ -930,6 +895,13 @@ test('it admits a waiting foreground admission before a grow and an enforce pass
 
   const queued = [
     governor.admit({ id: 'held', name: 'held', reserveMib: 50, memoryMib: 100 }),
+    governor.admit({
+      id: 'built',
+      name: 'built',
+      reserveMib: 50,
+      memoryMib: 100,
+      isBackground: true,
+    }),
     governor.admitGrow({ id: 'a', name: 'a', mib: 50 }),
     governor.enforce(),
     governor.admit({ id: 'woken', name: 'woken', reserveMib: 50, memoryMib: 100 }),
@@ -938,14 +910,14 @@ test('it admits a waiting foreground admission before a grow and an enforce pass
   const settled = queued.map(async (work, index) => {
     await work;
 
-    finished.push(['held', 'grow', 'enforce', 'woken'][index] ?? '');
+    finished.push(['held', 'built', 'grow', 'enforce', 'woken'][index] ?? '');
   });
 
   listing.open();
 
   await Promise.all(settled);
 
-  expect(finished).toStrictEqual(['held', 'woken', 'grow', 'enforce']);
+  expect(finished).toStrictEqual(['held', 'woken', 'built', 'grow', 'enforce']);
 });
 
 test('it measures every awake imp at once, each read started before any ends', async () => {

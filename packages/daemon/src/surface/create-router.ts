@@ -1,3 +1,4 @@
+import type { SystemInfo } from '@impz/api';
 import type { TailscaleStatus } from '../host-net/net/tailscale-status';
 import type { TokenStore } from '../identity/auth/token-store';
 import type { McpAuth } from '../identity/oauth/create-mcp-auth';
@@ -66,6 +67,7 @@ export interface RouterDeps {
   readonly systemFiles: SystemFileInfo;
   readonly readKsmHostStats?: () => KsmHostStats | null;
   readonly readTailscale: () => Promise<TailscaleStatus>;
+  readonly readHostInfo: () => NonNullable<SystemInfo['host']>;
   readonly readTailnetNames: (() => TailnetNamesStatus) | null;
   readonly publicRecords: PublicRecordsLink;
   readonly checkDnsToken: (() => Promise<DnsTokenStatus>) | null;

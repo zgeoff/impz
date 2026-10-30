@@ -45,6 +45,8 @@ export const ImpEventDetailSchema = z
     steps: z.record(z.string(), z.int()).readonly().optional(),
 
     released: z.int().positive().optional(),
+
+    memFileMib: z.int().nonnegative().optional(),
   })
   .readonly();
 

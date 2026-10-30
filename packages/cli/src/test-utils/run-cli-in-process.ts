@@ -7,7 +7,11 @@ import type { CommandIO } from '../cli/command-io';
 import { runCLI } from '../main';
 import type { CliResult, StartCliOptions } from './start-cli';
 
-export async function runCLIInProcess(options: Readonly<StartCliOptions>): Promise<CliResult> {
+interface InProcessOptions extends StartCliOptions {
+  readonly sleep?: (durationMs: number) => Promise<void>;
+}
+
+export async function runCLIInProcess(options: Readonly<InProcessOptions>): Promise<CliResult> {
   const home = mkdtempSync(join(tmpdir(), 'impz-cli-home-'));
 
   onTestFinished(() => {
@@ -38,6 +42,7 @@ export async function runCLIInProcess(options: Readonly<StartCliOptions>): Promi
     isStderrTerminal: false,
     readStdin: () => Promise.resolve(options.stdin ?? ''),
     openStdin: () => Readable.from(piped),
+    sleep: options.sleep ?? ((durationMs) => Bun.sleep(durationMs)),
   };
 
   const outcome = await runCLI(options.args, io);

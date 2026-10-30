@@ -8,7 +8,10 @@
   },
   "type": "module",
   "exports": {
-    "./output-schema": "./src/output/build-json-output-schema.ts"
+    "./output-schema": "./src/output/build-json-output-schema.ts",
+    "./bench-report-schema": "./src/bench/bench-report-schema.ts",
+    "./parse-bench-args": "./src/bench/parse-bench-args.ts",
+    "./parse-size": "./src/parse/parse-size.ts"
   },
   "dependencies": {
     "@impz/api": "workspace:*",

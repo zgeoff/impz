@@ -141,6 +141,51 @@ test('#requestTemplate answers the template a build made', async () => {
   expect(store.requestTemplate({ vcpus: 1, memoryMib: 512 })).toStrictEqual(files);
 });
 
+test('#readReadyCount counts each template a build left ready', async () => {
+  const ctx = await setupTest();
+
+  const store = createBootTemplates({
+    ...ctx.deps,
+    identity: buildMockHostIdentity(),
+    bootReservePercent: 50,
+  });
+
+  await store.buildTemplate({ vcpus: 1, memoryMib: 512 });
+  await store.buildTemplate({ vcpus: 2, memoryMib: 1024 });
+
+  expect(store.readReadyCount()).toBe(2);
+});
+
+test('#readReadyCount counts no template before any build', async () => {
+  const ctx = await setupTest();
+
+  const store = createBootTemplates({
+    ...ctx.deps,
+    identity: buildMockHostIdentity(),
+    bootReservePercent: 50,
+  });
+
+  expect(store.readReadyCount()).toBe(0);
+});
+
+test('#readReadyCount leaves out a template whose memory file is gone', async () => {
+  const ctx = await setupTest();
+
+  const store = createBootTemplates({
+    ...ctx.deps,
+    identity: buildMockHostIdentity(),
+    bootReservePercent: 50,
+  });
+
+  await store.buildTemplate({ vcpus: 1, memoryMib: 512 });
+
+  const broken = await store.buildTemplate({ vcpus: 2, memoryMib: 1024 });
+
+  rmSync(broken.memFile);
+
+  expect(store.readReadyCount()).toBe(1);
+});
+
 test('#buildTemplate names the template by its key', async () => {
   const ctx = await setupTest();
 

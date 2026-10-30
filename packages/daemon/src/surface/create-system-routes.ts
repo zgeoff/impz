@@ -89,6 +89,7 @@ async function readSystemInfo(deps: RouterDeps): Promise<SystemInfo> {
     public: readPublicInfo(deps.config, imps, deps.publicRecords.readStatus()),
     https: await readHttpsInfo(deps),
     features: SYSTEM_FEATURES,
+    host: deps.readHostInfo(),
   };
 }
 

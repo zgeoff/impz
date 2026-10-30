@@ -144,6 +144,7 @@
     "@zgeoff/format-codemod": "catalog:",
     "@zgeoff/oxlint-config": "catalog:",
     "@zgeoff/skill-gate": "catalog:",
+    "gunshi": "catalog:",
     "knip": "catalog:",
     "lefthook": "catalog:",
     "oxfmt": "catalog:",
