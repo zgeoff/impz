@@ -49,7 +49,9 @@ async function main(): Promise<void> {
     await $`${prepare}`.nothrow();
   }
 
-  runReported(`cannot create ${logsDir}`, () => mkdirSync(logsDir, { recursive: true }));
+  runReported(`cannot create ${logsDir}`, () => {
+    mkdirSync(logsDir, { recursive: true });
+  });
 
   for (const copy of plan.copies) {
     runReported(`cannot copy ${copy.from}`, () => {
