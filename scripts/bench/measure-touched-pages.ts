@@ -30,12 +30,12 @@ async function main(): Promise<void> {
 
   await waitUntil('impd never added its default image', probeDefaultImage);
 
-  await $`${IMPZ} new ${NAME} --memory ${memory}`.quiet();
+  await $`${IMPZ} ${['new', NAME, '--memory', memory]}`.quiet();
 
   try {
     await waitUntil(`${NAME} never ran a command`, probeExec);
 
-    const shown = await $`${IMPZ} info ${NAME} --json`.json();
+    const shown = await $`${IMPZ} ${['info', NAME, '--json']}`.json();
 
     const directory = `/var/lib/imp/imps/${ImpSchema.parse(shown).id}`;
     const memFile = `${directory}/snapshot/mem`;
@@ -45,13 +45,13 @@ async function main(): Promise<void> {
 
     const coldTouchedMib = await readHugetlbMib(directory);
 
-    await $`${IMPZ} sleep ${NAME}`.quiet();
+    await $`${IMPZ} ${['sleep', NAME]}`.quiet();
 
     const coldFileMib = await readAllocatedMib(memFile);
 
     // every page the woken guest reads back faults in from the handler, so the
     // diff takes it though no byte of it changed
-    await $`${IMPZ} wake ${NAME}`.quiet();
+    await $`${IMPZ} ${['wake', NAME]}`.quiet();
 
     await runInImp('sha256sum /dev/shm/written && sleep 5');
 
@@ -60,7 +60,7 @@ async function main(): Promise<void> {
 
     await readContainer(['cp', '--sparse=always', `/proc/${handlerPid}/fd/3`, BASE_COPY]);
 
-    await $`${IMPZ} sleep ${NAME}`.quiet();
+    await $`${IMPZ} ${['sleep', NAME]}`.quiet();
 
     const wokenFileMib = await readAllocatedMib(memFile);
 
@@ -88,12 +88,12 @@ async function main(): Promise<void> {
     console.log(JSON.stringify(measured, null, 2));
   } finally {
     await $`docker exec ${CONTAINER} rm -f ${BASE_COPY}`.quiet().nothrow();
-    await $`${IMPZ} rm ${NAME}`.quiet().nothrow();
+    await $`${IMPZ} ${['rm', NAME]}`.quiet().nothrow();
   }
 }
 
 async function probeDefaultImage(): Promise<boolean> {
-  const shown = await $`${IMPZ} info --json`.quiet().nothrow();
+  const shown = await $`${IMPZ} ${['info', '--json']}`.quiet().nothrow();
 
   if (shown.exitCode !== 0) {
     return false;
@@ -105,7 +105,7 @@ async function probeDefaultImage(): Promise<boolean> {
 }
 
 async function probeExec(): Promise<boolean> {
-  const ran = await $`${IMPZ} exec ${NAME} -- true`.quiet().nothrow();
+  const ran = await $`${IMPZ} ${['exec', NAME, '--', 'true']}`.quiet().nothrow();
 
   return ran.exitCode === 0;
 }
@@ -123,7 +123,7 @@ async function waitUntil(failure: string, isDone: () => Promise<boolean>): Promi
 }
 
 async function runInImp(script: string): Promise<void> {
-  await $`${IMPZ} exec ${NAME} -- sh -c ${script}`.quiet();
+  await $`${IMPZ} ${['exec', NAME, '--', 'sh', '-c', script]}`.quiet();
 }
 
 async function readContainer(argv: readonly string[]): Promise<string> {

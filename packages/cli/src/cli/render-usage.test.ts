@@ -120,7 +120,7 @@ test('it prints the help of the root with every command and the global flags', a
     .toMatchInlineSnapshot(`
 "Persistent Linux microVMs that sleep when idle and wake on request (impz v<version>)
 
-USAGE impz [OPTIONS] new|ls|rm|start|stop|exec|console|attach|sessions|service|logs|sleep|wake|hold|set|top|url|proxy|cp|policy|expose|unexpose|net|checkpoint|checkpoints|restore|fork|move|disk|gc|db|backup|image|template|secret|grant|revoke|grants|audit|token|events|info|mcp|oauth|login|host|hosts|completion
+USAGE impz [OPTIONS] new|ls|rm|start|stop|exec|console|attach|sessions|service|logs|sleep|wake|hold|set|top|url|proxy|cp|policy|expose|unexpose|net|checkpoint|checkpoints|restore|fork|move|disk|gc|db|backup|image|template|secret|grant|revoke|grants|audit|token|events|info|bench|mcp|oauth|login|host|hosts|completion
 
 OPTIONS
 
@@ -170,6 +170,7 @@ COMMANDS
         token    Manage API tokens and their scopes (needs manage)
        events    Follow impd: every imp, then each change, as one JSON object a line
          info    Show impd version, RAM budget and counts, or one imp with its container
+        bench    Time creates, wakes and restores on this host at rising concurrency
           mcp    Serve imps to a coding agent as MCP tools over stdio. The guard limits which imps the tools touch; it stops mistakes. For a real limit, run it with a scoped token (impz token new).
         oauth    Manage sign-ins to the public MCP route: clients, grants and approvals
         login    Save an impd and its token, and make it the current host
@@ -318,6 +319,7 @@ test('it pins the help of every command in the tree', async () => {
     'impz token whoami',
     'impz events',
     'impz info',
+    'impz bench',
     'impz mcp',
     'impz oauth',
     'impz oauth client',

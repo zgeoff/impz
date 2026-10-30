@@ -91,10 +91,10 @@ async function runArm(
     IMP_SYSTEM_DRIVE: join(checkout, '.cache', 'ci', 'imp-system.squashfs'),
   };
 
-  await $`${dev} up`.env(devEnv);
+  await $`${dev} ${['up']}`.env(devEnv);
 
   try {
-    const shownToken = await $`${dev} token`.env(devEnv).text();
+    const shownToken = await $`${dev} ${['token']}`.env(devEnv).text();
 
     const token = shownToken.trim();
     const cliEnv = { ...process.env, IMP_URL: 'http://localhost:7070', IMP_TOKEN: token };
@@ -103,11 +103,13 @@ async function runArm(
 
     // the warm-up's creates build the boot template, so every arm's timed
     // run starts with the cache warm
-    await $`${IMPZ} bench create --concurrency 1 --samples 3`.env(cliEnv).quiet();
+    await $`${IMPZ} ${['bench', 'create', '--concurrency', '1', '--samples', '3']}`
+      .env(cliEnv)
+      .quiet();
 
     await waitForInfo(cliEnv, (info) => (info.host?.bootTemplates ?? 1) > 0);
 
-    const bench = await $`${IMPZ} bench ${benchArgs} --label ${arm.name} --json`
+    const bench = await $`${IMPZ} ${['bench', ...benchArgs, '--label', arm.name, '--json']}`
       .env(cliEnv)
       .quiet()
       .nothrow();
@@ -122,7 +124,7 @@ async function runArm(
 
     writeFileSync(logPath, Buffer.concat([logs.stdout, logs.stderr]));
 
-    await $`${dev} down`.env(devEnv);
+    await $`${dev} ${['down']}`.env(devEnv);
   }
 }
 
@@ -133,7 +135,7 @@ async function waitForInfo(
   const deadline = Date.now() + READY_TIMEOUT_MS;
 
   for (;;) {
-    const shown = await $`${IMPZ} info --json`.env(env).quiet().nothrow();
+    const shown = await $`${IMPZ} ${['info', '--json']}`.env(env).quiet().nothrow();
 
     const info: unknown = shown.exitCode === 0 ? shown.json() : null;
     const parsed = InfoSchema.safeParse(info);

@@ -2,7 +2,7 @@ import type { SystemInfo } from '@impz/api';
 import type { BenchSettings } from './bench-scenarios';
 import type { BenchResult } from './run-bench';
 
-export interface BenchHost {
+interface BenchHost {
   readonly label: string | null;
   readonly impdVersion: string;
   readonly kernel: string | null;
