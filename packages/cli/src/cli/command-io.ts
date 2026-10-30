@@ -19,6 +19,7 @@ export interface CommandIO {
   readonly isStderrTerminal: boolean;
   readonly readStdin: () => Promise<string>;
   readonly openStdin: () => CommandStdin;
+  readonly sleep: (durationMs: number) => Promise<void>;
 }
 
 // an open stdin keeps the process alive, so nothing opens it until a command
@@ -45,6 +46,7 @@ export function readProcessIO(): CommandIO {
     isStderrTerminal: isatty(2),
     readStdin: () => Bun.stdin.text(),
     openStdin: () => process.stdin,
+    sleep: (durationMs) => Bun.sleep(durationMs),
   };
 }
 

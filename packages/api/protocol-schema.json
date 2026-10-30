@@ -11599,6 +11599,11 @@
                     "type": "integer",
                     "exclusiveMinimum": 0,
                     "maximum": 9007199254740991
+                  },
+                  "memFileMib": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
                   }
                 },
                 "additionalProperties": false
@@ -12839,6 +12844,75 @@
             "required": [
               "sessionOffsets",
               "leases"
+            ],
+            "additionalProperties": false
+          },
+          "host": {
+            "type": "object",
+            "properties": {
+              "kernel": {
+                "type": "string"
+              },
+              "cpuModel": {
+                "type": "string"
+              },
+              "isNested": {
+                "type": "boolean"
+              },
+              "hugePages": {
+                "type": "string",
+                "enum": [
+                  "off",
+                  "2M"
+                ]
+              },
+              "hugePool": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "totalMib": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "freeMib": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      }
+                    },
+                    "required": [
+                      "totalMib",
+                      "freeMib"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "bootTemplates": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "kernel",
+              "cpuModel",
+              "isNested",
+              "hugePages",
+              "hugePool",
+              "bootTemplates"
             ],
             "additionalProperties": false
           }

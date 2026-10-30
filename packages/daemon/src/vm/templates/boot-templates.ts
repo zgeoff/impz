@@ -101,6 +101,7 @@ export interface BootTemplates {
   readonly listDrivePaths: () => string[];
   readonly lockKept: () => Promise<void>;
   readonly readLockedMib: () => number;
+  readonly readReadyCount: () => number;
   readonly stop: () => Promise<void>;
 }
 
@@ -592,6 +593,7 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
       }
     },
     readLockedMib: templateLocks.readLockedMib,
+    readReadyCount: () => listTemplateKeys().filter((key) => readReady(key) !== null).length,
 
     // the locks stop first, so a build that finishes during the wait starts no lock
     stop: async () => {

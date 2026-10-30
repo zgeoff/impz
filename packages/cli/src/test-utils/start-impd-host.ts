@@ -43,6 +43,7 @@ export async function startImpdHost(
     db: harness.db,
     ksm,
     sendRequest,
+    fake: harness.fake,
 
     // impd runs it on a ticker; a test runs one pass when it needs one
     runIdleCheck: () => harness.impd.idle.runCheck(),

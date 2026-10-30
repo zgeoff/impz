@@ -41,7 +41,12 @@ interface SetupOptions {
   readonly readKsmHostStats?: () => KsmHostStats | null;
   readonly boundaries?: Pick<
     ImpdBoundaries,
-    'keepaliveMs' | 'keepaliveRepeat' | 'readProcStatus' | 'images'
+    | 'keepaliveMs'
+    | 'keepaliveRepeat'
+    | 'readProcStatus'
+    | 'readCpuInfo'
+    | 'hostKernelRelease'
+    | 'images'
   >;
   readonly wrapDatabase?: (db: ImpDatabase) => ImpDatabase;
 }
@@ -125,6 +130,23 @@ test('it warns at start that an image with a file capability fails without CAP_S
   expect(ctx.logs).toContain(
     'WARNING impd.image no CAP_SETFCAP, so an image add or build fails on an image with a file capability; imp-host needs CAP_SETFCAP (docs/architecture/host.md#privileges)',
   );
+});
+
+test("it reports the host's kernel and CPU from the readers it was given", async () => {
+  const ctx = await setupTest({
+    boundaries: {
+      hostKernelRelease: '6.12.9-arm64',
+      readCpuInfo: () => 'model name\t: Ampere Altra\nflags\t\t: fp asimd hypervisor\n',
+    },
+  });
+
+  const info = await ctx.client.system.info();
+
+  expect(info.host).toMatchObject({
+    kernel: '6.12.9-arm64',
+    cpuModel: 'Ampere Altra',
+    isNested: true,
+  });
 });
 
 test('it warns at start of each config warning', async () => {

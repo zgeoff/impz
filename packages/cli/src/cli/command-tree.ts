@@ -1,5 +1,6 @@
 import { lazy } from 'gunshi';
 import { backupCommand } from '../commands/backup-command';
+import { benchCommand } from '../commands/bench-command';
 import {
   checkpointCommand,
   checkpointsCommand,
@@ -92,6 +93,7 @@ export const subCommands = {
   token: tokenCommand,
   events: eventsCommand,
   info: infoCommand,
+  bench: benchCommand,
   mcp: mcpCommand,
   oauth: oauthCommand,
   login: loginCommand,

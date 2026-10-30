@@ -173,6 +173,17 @@ test('it removes a template whose restore fails in it, and boots the kernel', as
   expect(readdirSync(join(ctx.dataDir, 'templates'))).not.toContain(key);
 });
 
+test('it counts the template a build left ready in the host info', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.templates.buildTemplate({ vcpus: 1, memoryMib: 256 });
+
+  const info = await ctx.client.system.info();
+
+  expect(info.host?.bootTemplates).toBe(1);
+});
+
 test('it removes a template whose parked agent never answers, though an earlier restore of it succeeded', async () => {
   const ctx = await setupTest();
 
@@ -594,13 +605,15 @@ test('it boots four imps whose wakes failed from a boot template while they hold
   expect(ctx.fake.restorePlans.length - restoresBefore).toBe(4);
 });
 
-test('it restores at most four boot templates at once, and starts a fifth once one ends', async () => {
+test('it holds a fifth template restore until one of four running restores ends', async () => {
   const ctx = await setupTest();
 
   await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'once', vcpus: 1, memoryMib: 256 });
   await ctx.client.imps.create({ name: 'first', vcpus: 1, memoryMib: 256 });
   await ctx.templates.stop();
+
+  const restoresBefore = ctx.fake.restorePlans.length;
 
   ctx.fake.queue('restore', 'hang', 'hang', 'hang', 'hang', 'hang');
 
@@ -618,7 +631,8 @@ test('it restores at most four boot templates at once, and starts a fifth once o
     expect(listed.map((imp) => imp.name)).toIncludeAllMembers(names);
   });
 
-  const heldRestores = ctx.fake.restorePlans.length;
+  const restoresWhileHeld = ctx.fake.restorePlans.length - restoresBefore;
+  const pendingWhileHeld = creates.filter((create) => Bun.peek.status(create) === 'pending');
 
   ctx.fake.releaseHangs();
 
@@ -626,10 +640,14 @@ test('it restores at most four boot templates at once, and starts a fifth once o
     expect(ctx.fake.countHungCalls()).toBe(1);
   });
 
+  const restoresOnceFreed = ctx.fake.restorePlans.length - restoresBefore;
+
   ctx.fake.releaseHangs();
 
   const created = await Promise.all(creates);
 
-  expect(heldRestores).toBe(4);
+  expect(restoresWhileHeld).toBe(4);
+  expect(pendingWhileHeld).toHaveLength(5);
+  expect(restoresOnceFreed).toBe(5);
   expect(created).toStrictEqual(['done', 'done', 'done', 'done', 'done']);
 });

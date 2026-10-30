@@ -101,6 +101,15 @@ const GuestInfoSchema = z.object({
   isClearedOnBoot: z.boolean(),
 });
 
+const HostInfoSchema = z.object({
+  kernel: z.string(),
+  cpuModel: z.string(),
+  isNested: z.boolean(),
+  hugePages: z.enum(['off', '2M']),
+  hugePool: z.object({ totalMib: CountSchema, freeMib: CountSchema }).nullable(),
+  bootTemplates: CountSchema.nullable(),
+});
+
 export const SystemInfoSchema = z.object({
   version: z.string(),
   ramBudgetMib: z.int().nonnegative(),
@@ -174,6 +183,8 @@ export const SystemInfoSchema = z.object({
   https: HttpsInfoSchema.nullable().optional(),
 
   features: SystemFeaturesSchema.optional(),
+
+  host: HostInfoSchema.optional(),
 });
 
 export type SystemInfo = z.infer<typeof SystemInfoSchema>;

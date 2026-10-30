@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { release } from 'node:os';
 import { join } from 'node:path';
 import packageJson from '../package.json' with { type: 'json' };
@@ -46,6 +47,7 @@ import { readLiveStorage } from './vm/storage/read-live-storage';
 import { setupSystemFiles } from './vm/storage/setup-system-files';
 import { writeImageFiles } from './vm/storage/write-image-files';
 import { checkKsmHost, readKsmHostStats } from './vm/vmm/ksm';
+import { readHugePagePool } from './vm/vmm/read-huge-page-pool';
 
 export async function createImpd(config: Config, boundaries: Readonly<ImpdBoundaries> = {}) {
   const plan: ImpdStopParts = {};
@@ -363,6 +365,11 @@ async function startImpdParts(
     checkDnsToken: dnsToken?.check ?? null,
     readTailscale,
     readTailnetNames: tailnetNames === null ? null : tailnetNames.readStatus,
+    hostReaders: {
+      readKernel: () => deps.hostKernelRelease ?? release(),
+      readCpuInfo: deps.readCpuInfo ?? (() => readFileSync('/proc/cpuinfo', 'utf8')),
+      readHugePagePool: deps.imps?.readHugePagePool ?? (() => readHugePagePool()),
+    },
     isReady: () => state.ready,
     readKsmHostStats: readKsmStats,
     ...(deps.keepaliveMs !== undefined && { keepaliveMs: deps.keepaliveMs }),
