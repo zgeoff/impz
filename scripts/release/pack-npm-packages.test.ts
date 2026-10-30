@@ -1,5 +1,13 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { $ } from 'bun';
@@ -139,6 +147,46 @@ test('it packs the client of a tag that keeps its scripts in scripts/', async ()
 
   expect(result.exitCode).toBe(0);
   expect(readFileSync(ctx.outputs, 'utf8')).toBe('client_tarball=impz-client-1.6.0.tgz\n');
+});
+
+test('it fails, naming the script and packing nothing, for a tree without pack-client.sh', async () => {
+  const ctx = setupTest();
+  const folder = join(ctx.tree, 'scripts', 'release');
+
+  mkdirSync(folder, { recursive: true });
+  createStubPackScript(folder, 'pack-testing.sh', 'impz-testing-2.0.1.tgz');
+
+  writeFileSync(
+    join(folder, 'check-client-package.sh'),
+    `#!/bin/sh\necho "client $*" >> '${ctx.checks}'\n`,
+    { mode: 0o755 },
+  );
+
+  writeFileSync(
+    join(folder, 'check-testing-package.sh'),
+    `#!/bin/sh\necho "testing $*" >> '${ctx.checks}'\n`,
+    { mode: 0o755 },
+  );
+
+  const result = await $`bun ${ctx.scriptPath}`
+    .env({
+      ...process.env,
+      CLIENT: 'true',
+      TESTING: 'true',
+      GITHUB_WORKSPACE: ctx.tree,
+      GITHUB_OUTPUT: ctx.outputs,
+    })
+    .nothrow()
+    .quiet();
+
+  expect({ exitCode: result.exitCode, stderr: result.stderr.toString() }).toStrictEqual({
+    exitCode: 1,
+    stderr: 'the checked-out tree has no pack-client.sh\n',
+  });
+
+  expect(readFileSync(ctx.outputs, 'utf8')).toBe('');
+  expect(readdirSync(ctx.tree)).toStrictEqual(['scripts']);
+  expect(existsSync(ctx.checks)).toBeFalse();
 });
 
 test('it hands nothing on when the client fails its check', async () => {

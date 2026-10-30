@@ -1,6 +1,7 @@
 import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { $ } from 'bun';
+import invariant from 'tiny-invariant';
 import { getStepEnv } from '../lib/get-step-env.ts';
 import { writeStepValues } from '../lib/write-step-values.ts';
 import { findTreeScript } from './find-tree-script.ts';
@@ -14,12 +15,30 @@ async function main(): Promise<void> {
   const outputs = getStepEnv(process.env, 'GITHUB_OUTPUT');
   const tarballs = join(tree, 'npm-tarball');
 
-  const runTreeScript = (name: string, args: readonly string[]) => {
-    const script = findTreeScript(name, (path) => existsSync(join(tree, path)));
+  const needed = [
+    'pack-client.sh',
+    'check-client-package.sh',
+    ...(isTestingPlanned ? ['pack-testing.sh', 'check-testing-package.sh'] : []),
+  ];
 
-    if (script === null) {
-      throw new Error(`the checked-out tree has no ${name}`);
-    }
+  const scripts = new Map(
+    needed.map((name) => [name, findTreeScript(name, (path) => existsSync(join(tree, path)))]),
+  );
+
+  const missing = needed.filter((name) => scripts.get(name) === null);
+
+  if (missing.length > 0) {
+    console.error(`the checked-out tree has no ${missing.join(', ')}`);
+
+    process.exitCode = 1;
+
+    return;
+  }
+
+  const runTreeScript = (name: string, args: readonly string[]) => {
+    const script = scripts.get(name);
+
+    invariant(script, `${name} was found before packing`);
 
     return $`${join(tree, script)} ${args}`.cwd(tree);
   };
