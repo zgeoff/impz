@@ -1,7 +1,7 @@
 import type { ImpEvent, ImpEventDetail } from '@impz/api';
 import { ORPCError, watchEvents } from '@impz/client';
 import type { ImpClient } from '../config/create-imp-client';
-import type { BenchScenario, BenchSettings, BenchSubject } from './bench-scenarios';
+import type { BenchScenario, BenchSettings } from './bench-scenarios';
 import { buildLatencySummary } from './build-latency-summary';
 import type { LatencySummary } from './build-latency-summary';
 
@@ -136,9 +136,9 @@ async function runLevel(deps: BenchDeps, run: Readonly<LevelRun>): Promise<Bench
     const arranged = await Promise.all(
       subjects.map(async (subject) => {
         try {
-          await run.scenario.arrange(subject);
+          const step = await run.scenario.arrange(subject);
 
-          return subject;
+          return { name: subject.name, step };
         } catch (error) {
           countFailure(`arrange ${toFailureCode(error)}`);
 
@@ -147,19 +147,19 @@ async function runLevel(deps: BenchDeps, run: Readonly<LevelRun>): Promise<Bench
       }),
     );
 
-    const ready = arranged.filter((subject): subject is BenchSubject => subject !== null);
+    const ready = arranged.filter((prepared) => prepared !== null);
     const mark = run.log.events.length;
 
     const acted = await Promise.all(
-      ready.map(async (subject) => {
+      ready.map(async (prepared) => {
         const startedAt = deps.now();
 
         try {
-          await run.scenario.act(subject);
+          await prepared.step();
 
           latencies.push(Math.round(deps.now() - startedAt));
 
-          return subject.name;
+          return prepared.name;
         } catch (error) {
           countFailure(toFailureCode(error));
 

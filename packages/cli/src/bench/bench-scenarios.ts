@@ -16,14 +16,16 @@ export interface BenchSubject {
   readonly wait: (durationMs: number) => Promise<void>;
 }
 
-// A scenario brings one imp to where its timed step starts, then takes that
-// step. A new scenario joins the list, and `impz bench <name>` runs it.
+// A scenario brings one imp to where its timed step starts and returns that
+// step, so the bench times nothing the arrange already did. A new scenario
+// joins the list, and `impz bench <name>` runs it.
+type BenchStep = () => Promise<void>;
+
 export interface BenchScenario {
   readonly name: string;
   readonly description: string;
   readonly reason: ImpChangeReason;
-  readonly arrange: (subject: BenchSubject) => Promise<void>;
-  readonly act: (subject: BenchSubject) => Promise<void>;
+  readonly arrange: (subject: BenchSubject) => Promise<BenchStep>;
 }
 
 export const BENCH_SCENARIOS: readonly BenchScenario[] = [
@@ -31,8 +33,11 @@ export const BENCH_SCENARIOS: readonly BenchScenario[] = [
     name: 'create',
     description: 'create an imp and boot it',
     reason: 'booted',
-    arrange: (subject) => removeImpIfPresent(subject),
-    act: (subject) => createImp(subject),
+    arrange: async (subject) => {
+      await removeImpIfPresent(subject);
+
+      return () => createImp(subject);
+    },
   },
   {
     name: 'wake',
@@ -41,9 +46,8 @@ export const BENCH_SCENARIOS: readonly BenchScenario[] = [
     arrange: async (subject) => {
       await bringAwake(subject);
       await sleepImp(subject);
-    },
-    act: async (subject) => {
-      await subject.client.imps.wake({ name: subject.name });
+
+      return () => wakeImp(subject);
     },
   },
   {
@@ -57,9 +61,8 @@ export const BENCH_SCENARIOS: readonly BenchScenario[] = [
       await subject.client.imps.start({ name: subject.name });
 
       await sleepImp(subject);
-    },
-    act: async (subject) => {
-      await subject.client.imps.wake({ name: subject.name });
+
+      return () => wakeImp(subject);
     },
   },
   {
@@ -68,12 +71,12 @@ export const BENCH_SCENARIOS: readonly BenchScenario[] = [
     reason: 'restored',
     arrange: async (subject) => {
       await bringAwake(subject);
-      await ensureBenchCheckpoint(subject);
-    },
-    act: async (subject) => {
+
       const checkpoint = await ensureBenchCheckpoint(subject);
 
-      await subject.client.checkpoints.restore({ name: subject.name, checkpoint });
+      return async () => {
+        await subject.client.checkpoints.restore({ name: subject.name, checkpoint });
+      };
     },
   },
   {
@@ -84,9 +87,10 @@ export const BENCH_SCENARIOS: readonly BenchScenario[] = [
       await bringAwake(subject);
 
       await subject.wait(subject.settings.awakeMs);
-    },
-    act: async (subject) => {
-      await subject.client.imps.sleep({ name: subject.name, force: true });
+
+      return async () => {
+        await subject.client.imps.sleep({ name: subject.name, force: true });
+      };
     },
   },
 ];
@@ -139,6 +143,10 @@ async function bringAwake(subject: BenchSubject): Promise<void> {
 async function sleepImp(subject: BenchSubject): Promise<void> {
   await subject.wait(subject.settings.awakeMs);
   await subject.client.imps.sleep({ name: subject.name, force: true });
+}
+
+async function wakeImp(subject: BenchSubject): Promise<void> {
+  await subject.client.imps.wake({ name: subject.name });
 }
 
 const CHECKPOINT_LABEL = 'bench';

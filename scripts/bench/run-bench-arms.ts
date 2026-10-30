@@ -4,6 +4,8 @@ import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { $ } from 'bun';
 import * as z from 'zod';
+import { buildDevLayout } from '../lib/build-dev-layout.ts';
+import { buildWarmUpArgs } from './build-warm-up-args';
 import { formatBenchCompare } from './format-bench-compare';
 import type { ArmReport } from './format-bench-compare';
 import { parseBenchArmsArgs } from './parse-bench-arms-args';
@@ -97,15 +99,14 @@ async function runArm(
     const shownToken = await $`${dev} ${['token']}`.env(devEnv).text();
 
     const token = shownToken.trim();
-    const cliEnv = { ...process.env, IMP_URL: 'http://localhost:7070', IMP_TOKEN: token };
+    const layout = buildDevLayout({ env: devEnv, root: checkout, cwd: process.cwd() });
+    const cliEnv = { ...process.env, IMP_URL: layout.apiURL, IMP_TOKEN: token };
 
     await waitForInfo(cliEnv, (info) => info.defaults?.image !== null);
 
     // the warm-up's creates build the boot template, so every arm's timed
     // run starts with the cache warm
-    await $`${IMPZ} ${['bench', 'create', '--concurrency', '1', '--samples', '3']}`
-      .env(cliEnv)
-      .quiet();
+    await $`${IMPZ} ${buildWarmUpArgs(benchArgs)}`.env(cliEnv).quiet();
 
     await waitForInfo(cliEnv, (info) => (info.host?.bootTemplates ?? 1) > 0);
 
