@@ -146,6 +146,75 @@ test('it reports a zfs file it cannot copy, and collects the rest all the same',
   );
 });
 
+test('it reports an impd.log it cannot write, and still shows the disk use', async () => {
+  const ctx = setupTest();
+  const docker = createStubBin(ctx.directoryPath, 'docker', 'echo "container output"');
+
+  createStubBin(ctx.directoryPath, 'du');
+  createStubBin(ctx.directoryPath, 'df');
+  mkdirSync(join(ctx.checkout, '.cache', 'e2e', 'impd.log'), { recursive: true });
+
+  const result = await $`${process.execPath} ${ctx.scriptPath} docker imp-dev`
+    .cwd(ctx.checkout)
+    .env({ PATH: docker.bin, IMP_DEV_DATA: '/mnt/imp-e2e' })
+    .nothrow()
+    .quiet();
+
+  expect(result.exitCode).toBe(0);
+  expect(result.stderr.toString()).toStartWith('cannot write .cache/e2e/impd.log: ');
+
+  expect(readFileSync(docker.calls, 'utf8')).toBe(
+    ['docker logs imp-dev', 'du -h /mnt/imp-e2e/imp.xfs', 'df -h / /mnt', ''].join('\n'),
+  );
+});
+
+test('it reports a logs folder it cannot create, and still reads the container and shows the disk use', async () => {
+  const ctx = setupTest();
+  const docker = createStubBin(ctx.directoryPath, 'docker', 'echo "container output"');
+
+  createStubBin(ctx.directoryPath, 'df');
+  writeFileSync(join(ctx.checkout, '.cache'), '');
+
+  const result = await $`${process.execPath} ${ctx.scriptPath} docker imp-dev`
+    .cwd(ctx.checkout)
+    .env({ PATH: docker.bin })
+    .nothrow()
+    .quiet();
+
+  expect(result.exitCode).toBe(0);
+  expect(result.stderr.toString()).toStartWith('cannot create .cache/e2e: ');
+
+  expect(readFileSync(docker.calls, 'utf8')).toBe(
+    ['docker logs imp-dev', 'df -h / /mnt', ''].join('\n'),
+  );
+});
+
+test('it reports a zfs work dir it cannot list, and collects the rest all the same', async () => {
+  const ctx = setupTest();
+  const zfsDir = join(ctx.directoryPath, 'imp-zfs');
+  const docker = createStubBin(ctx.directoryPath, 'docker', 'echo "container output"');
+
+  createStubBin(ctx.directoryPath, 'df');
+  writeFileSync(zfsDir, '');
+
+  const result = await $`${process.execPath} ${ctx.scriptPath} docker imp-zfs`
+    .cwd(ctx.checkout)
+    .env({ PATH: docker.bin, IMP_ZFS_TEST_DIR: zfsDir })
+    .nothrow()
+    .quiet();
+
+  expect(result.exitCode).toBe(0);
+  expect(result.stderr.toString()).toStartWith(`cannot list ${zfsDir}: `);
+
+  expect(readFileSync(join(ctx.checkout, '.cache', 'e2e', 'impd.log'), 'utf8')).toBe(
+    'container output\n',
+  );
+
+  expect(readFileSync(docker.calls, 'utf8')).toBe(
+    ['docker logs imp-zfs', 'df -h / /mnt', ''].join('\n'),
+  );
+});
+
 test('it writes the logs into the folder it is given', async () => {
   const ctx = setupTest();
   const docker = createStubBin(ctx.directoryPath, 'docker', 'echo "impd listening"');

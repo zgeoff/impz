@@ -42,29 +42,53 @@ async function main(): Promise<void> {
     logsDir,
     zfsDir,
     dataDir: process.env['IMP_DEV_DATA'] ?? null,
-    zfsDirFiles: zfsDir !== null && existsSync(zfsDir) ? readdirSync(zfsDir) : [],
+    zfsDirFiles: readZfsDirFiles(zfsDir),
   });
 
   for (const prepare of plan.prepareCommands) {
     await $`${prepare}`.nothrow();
   }
 
-  mkdirSync(logsDir, { recursive: true });
+  runReported(`cannot create ${logsDir}`, () => mkdirSync(logsDir, { recursive: true }));
 
   for (const copy of plan.copies) {
-    try {
+    runReported(`cannot copy ${copy.from}`, () => {
       copyFileSync(copy.from, copy.to);
-    } catch (error) {
-      console.error(`cannot copy ${copy.from}: ${String(error)}`);
-    }
+    });
   }
 
   const logs = await $`${plan.logsCommand} 2>&1`.nothrow().quiet();
 
-  appendFileSync(join(logsDir, 'impd.log'), logs.stdout);
+  const impdLog = join(logsDir, 'impd.log');
+
+  runReported(`cannot write ${impdLog}`, () => {
+    appendFileSync(impdLog, logs.stdout);
+  });
 
   for (const disk of plan.diskCommands) {
     await $`${disk}`.nothrow();
+  }
+}
+
+function readZfsDirFiles(zfsDir: string | null): string[] {
+  if (zfsDir === null || !existsSync(zfsDir)) {
+    return [];
+  }
+
+  try {
+    return readdirSync(zfsDir);
+  } catch (error) {
+    console.error(`cannot list ${zfsDir}: ${String(error)}`);
+
+    return [];
+  }
+}
+
+function runReported(failure: string, action: () => void): void {
+  try {
+    action();
+  } catch (error) {
+    console.error(`${failure}: ${String(error)}`);
   }
 }
 
