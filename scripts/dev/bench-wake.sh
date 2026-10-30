@@ -2,11 +2,11 @@
 # Measure wakes of an imp put to sleep right after a cold boot: the case a
 # host kernel before Linux 6.7 makes slow (docs/architecture/lifecycle/sleep-and-wake.md#young-guests).
 #
-#   scripts/dev/bench-wake.sh [--cycles N] [--awake S] [--limit-ms MS] [--memory M]
+#   scripts/dev/bench-wake.sh [--cycles N] [--awake DURATION] [--limit-ms MS] [--memory M]
 #
 # It runs `impz bench wake-young` at concurrency 1: each cycle stops and
-# starts the imp, waits --awake seconds (default 0), sleeps it and times the
-# wake. It fails when the median wake passes --limit-ms (default 500). A slow
+# starts the imp, waits --awake (whole seconds, or a duration such as 30s or
+# 2m; default 0), sleeps it and times the wake. It fails when the median wake passes --limit-ms (default 500). A slow
 # wake takes 700-1100 ms on an affected host; a normal one 100-200 ms.
 #
 # It drives impd through the impz CLI, so it runs against any host: set

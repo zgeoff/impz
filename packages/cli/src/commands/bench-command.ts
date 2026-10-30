@@ -7,14 +7,12 @@ import { formatBenchReport } from '../bench/format-bench-report';
 import { parseBenchLevels } from '../bench/parse-bench-levels';
 import { pickBenchScenarios } from '../bench/pick-bench-scenarios';
 import { runBench } from '../bench/run-bench';
+import { withStopSignal } from '../bench/with-stop-signal';
 import { defineCommand } from '../cli/define-command';
 import { runAction } from '../cli/run-action';
 import { formatJson } from '../output/format-output';
 import { parseDuration } from '../parse/parse-duration';
 import { parseCount, parseSize } from '../parse/parse-size';
-
-// a signal stops the run between rounds, so the bench still removes the imps it made
-const ENDING_SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'] as const;
 
 export const benchCommand = defineCommand({
   name: 'bench',
@@ -78,7 +76,7 @@ export const benchCommand = defineCommand({
 
       const before = await client.system.info();
 
-      const results = await withStopSignal((signal) =>
+      const results = await withStopSignal(process, (signal) =>
         runBench(
           {
             client,
@@ -117,23 +115,3 @@ export const benchCommand = defineCommand({
       }
     }),
 });
-
-async function withStopSignal<T>(run: (signal: AbortSignal) => Promise<T>): Promise<T> {
-  const stopper = new AbortController();
-
-  const abort = (): void => {
-    stopper.abort();
-  };
-
-  for (const signal of ENDING_SIGNALS) {
-    process.once(signal, abort);
-  }
-
-  try {
-    return await run(stopper.signal);
-  } finally {
-    for (const signal of ENDING_SIGNALS) {
-      process.off(signal, abort);
-    }
-  }
-}

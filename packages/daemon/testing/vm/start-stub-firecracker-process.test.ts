@@ -11,6 +11,17 @@ test('it runs under the name firecracker with the API socket in its command line
   expect(cmdline).toContain('/run/imp/i1/api.sock');
 });
 
+test('it runs no child process that its kill would leave behind', async () => {
+  const child = await startStubFirecrackerProcess('/run/imp/i1/api.sock');
+
+  const children = readFileSync(
+    `/proc/${String(child.pid)}/task/${String(child.pid)}/children`,
+    'utf8',
+  );
+
+  expect(children).toBe('');
+});
+
 test('it kills the process when the test ends', async () => {
   const child = await startStubFirecrackerProcess('/run/imp/i1/api.sock');
 

@@ -1,11 +1,13 @@
 import { join } from 'node:path';
+import { BenchReportSchema } from '@impz/cli/bench-report-schema';
+import { parseJSONOrNull } from '../lib/parse-json-or-null.ts';
 import { formatBenchCompare } from './format-bench-compare';
 import type { ArmReport } from './format-bench-compare';
 import type { BenchArmsArgs } from './parse-bench-arms-args';
 import type { ArmPlan, ArmRun } from './run-bench-arm';
 
 export interface BenchComparisonDeps {
-  readonly runArm: (plan: Readonly<Omit<ArmPlan, 'env' | 'cwd'>>) => Promise<ArmRun>;
+  readonly runArm: (plan: Readonly<Omit<ArmPlan, 'impz' | 'env' | 'cwd'>>) => Promise<ArmRun>;
   readonly makeDirectory: (path: string) => void;
   readonly writeReport: (path: string, json: string) => void;
   readonly appendSummary: ((text: string) => void) | null;
@@ -32,20 +34,36 @@ export async function runBenchComparison(
 
       deps.printError(`bench arms: round ${String(round)}, ${arm.name}`);
 
-      const ran = await deps.runArm({
-        arm,
-        commands: args,
-        logPath: join(args.out, `${run}.impd.log`),
-      });
+      // an arm that stops leaves the rest of the rounds to run, and still fails
+      // the comparison
+      const ran = await deps
+        .runArm({ arm, commands: args, logPath: join(args.out, `${run}.impd.log`) })
+        .catch((error: unknown): ArmRun => {
+          const reason = error instanceof Error ? error.message : String(error);
+
+          deps.printError(`bench arms: ${run} stopped: ${reason}`);
+
+          return { json: null, isPassed: false };
+        });
+
+      let isUnreadable = false;
 
       if (ran.json === null) {
         missing.push(run);
       } else {
         deps.writeReport(join(args.out, `${run}.json`), ran.json);
-        reports.push({ arm: arm.name, json: ran.json });
+
+        isUnreadable = !BenchReportSchema.safeParse(parseJSONOrNull(ran.json)).success;
+
+        if (isUnreadable) {
+          deps.printError(`bench arms: ${run} printed a report that does not parse`);
+          missing.push(run);
+        } else {
+          reports.push({ arm: arm.name, json: ran.json });
+        }
       }
 
-      if (!ran.isPassed) {
+      if (!ran.isPassed || isUnreadable) {
         failed.push(run);
         deps.printError(`bench arms: ${run} failed; its impd log is in ${run}.impd.log`);
       }

@@ -1,5 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
+import { ORPCError, createImpClient } from '@impz/client';
 import { buildImagePaths, buildMockNewImage, createImage } from '@impz/daemon/testing';
+import { claimFreePorts } from '@impz/test-utils/claim-free-ports';
 import invariant from 'tiny-invariant';
 import { startImpdHost } from '../test-utils/start-impd-host';
 import { BENCH_SCENARIOS } from './bench-scenarios';
@@ -81,6 +83,55 @@ test('it never removes or claims an imp of that name that the run did not make',
   const kept = await ctx.box.client.imps.get({ name: 'bench-taken' });
 
   expect(kept.name).toBe('bench-taken');
+});
+
+test('it refuses to arrange a wake for an imp whose boot left it in error', async () => {
+  const ctx = await setupTest();
+
+  const image = buildMockNewImage({ name: 'base', sizeBytes: 6 });
+
+  await Bun.write(buildImagePaths(ctx.box.dataDir, image.digest).rootfs, 'rootfs');
+
+  await createImage(ctx.box.db, image);
+
+  ctx.box.fake.queue('boot', 'fail');
+
+  await ctx.box.client.imps.create({ name: 'bench-broken', image: 'base' }).catch(() => null);
+
+  const wake = BENCH_SCENARIOS.find((scenario) => scenario.name === 'wake');
+
+  invariant(wake);
+
+  const arranged = wake.arrange({
+    client: ctx.box.client,
+    name: 'bench-broken',
+    settings: { memoryMib: null, image: 'base', awakeMs: 0 },
+    wait: () => Promise.resolve(),
+    owned: new Set(['bench-broken']),
+  });
+
+  expect(arranged).rejects.toThrowWithMessage(Error, 'bench-broken is error');
+});
+
+test('it fails the arrange at the lookup, and claims no imp, when impd cannot be reached', () => {
+  const sleep = BENCH_SCENARIOS.find((scenario) => scenario.name === 'sleep');
+
+  invariant(sleep);
+
+  const owned = new Set<string>();
+
+  const port = claimFreePorts(1).take();
+
+  const arranged = sleep.arrange({
+    client: createImpClient({ url: `http://127.0.0.1:${String(port)}` }),
+    name: 'bench-unreached',
+    settings: { memoryMib: null, image: 'base', awakeMs: 0 },
+    wait: () => Promise.resolve(),
+    owned,
+  });
+
+  expect(arranged).rejects.not.toBeInstanceOf(ORPCError);
+  expect(owned).toBeEmpty();
 });
 
 test('it boots a young-wake imp cold again before it sleeps for the timed wake', async () => {

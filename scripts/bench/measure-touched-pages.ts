@@ -4,10 +4,12 @@
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
-import { $ } from 'bun';
-import { buildDevLayout } from '../lib/build-dev-layout.ts';
+import { parseSize } from '@impz/cli/parse-size';
+import { REAL_CLOCK } from '@impz/daemon/real-clock';
+import { createInstanceClient, readImpEnv } from '@impz/e2e-harness/imp-cli';
+import { instance, runCommand, runInContainer } from '@impz/e2e-harness/instance';
 import { createDevLock } from '../lib/create-dev-lock.ts';
-import { REPO_ROOT } from '../lib/repo-root.ts';
+import { wireDevLockIO } from '../lib/wire-dev-lock-io.ts';
 import { writeStderr } from '../lib/write-stderr.ts';
 import { writeStdoutLine } from '../lib/write-stdout-line.ts';
 import { runTouchedPages } from './run-touched-pages';
@@ -32,26 +34,25 @@ if (!Number.isInteger(writeMib) || writeMib < 1) {
   process.exit(2);
 }
 
-const layout = buildDevLayout({ env: process.env, root: REPO_ROOT, cwd: process.cwd() });
+const memoryMib = parseSize(parsed.values.memory);
 
-async function runCommand(argv: readonly string[]) {
-  const ran = await $`${argv}`.quiet().nothrow();
-
-  return { exitCode: ran.exitCode, stdout: ran.stdout.toString(), stderr: ran.stderr.toString() };
-}
+// IMP_HOST names a saved host and wins over IMP_URL, so an empty one keeps
+// every command on the dev instance
+const IMPZ_ENV = { IMP_HOST: '', ...(await readImpEnv(instance)) };
 
 const measured = await runTouchedPages(
   {
-    lockDev: () => createDevLock(tmpdir(), layout.name),
-    runImpz: (args) => runCommand([IMPZ, ...args]),
-    runInContainer: (argv) => runCommand([layout.containerCLI, 'exec', layout.name, ...argv]),
-    now: () => Date.now(),
-    wait: (durationMs) => Bun.sleep(durationMs),
+    lockDev: () => createDevLock(wireDevLockIO(), tmpdir(), instance.container),
+    client: await createInstanceClient(instance),
+    runImpz: (args) => runCommand([IMPZ, ...args], { env: IMPZ_ENV }),
+    runInContainer: (argv) => runInContainer(argv, instance),
+    now: REAL_CLOCK.now,
+    sleep: REAL_CLOCK.sleep,
     onStderr: (text) => {
       writeStderr(`${text}\n`);
     },
   },
-  { memory: parsed.values.memory, writeMib },
+  { memory: parsed.values.memory, memoryMib, writeMib },
 );
 
 writeStdoutLine(JSON.stringify(measured, null, 2));

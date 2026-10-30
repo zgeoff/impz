@@ -3,6 +3,7 @@ import { setImmediate as setImmediatePromise } from 'node:timers/promises';
 import { watchEvents } from '@impz/client';
 import { buildImagePaths, buildMockNewImage, createImage } from '@impz/daemon/testing';
 import invariant from 'tiny-invariant';
+import { makeStubEventStream } from '../test-utils/make-stub-event-stream';
 import { startImpdHost } from '../test-utils/start-impd-host';
 import { BENCH_SCENARIOS } from './bench-scenarios';
 import { runBench } from './run-bench';
@@ -112,11 +113,7 @@ test('it fails a run whose event stream broke, since its impd figures are incomp
   const run = runBench(
     {
       client: ctx.box.client,
-      watchEvents: async (_client, options) => {
-        await options.onOpen?.(1);
-
-        throw new Error('the stream reset');
-      },
+      watchEvents: makeStubEventStream(new Error('the stream reset')),
       now: () => performance.now(),
       wait: () => setImmediatePromise(),
       onProgress: () => {},
@@ -136,6 +133,84 @@ test('it fails a run whose event stream broke, since its impd figures are incomp
   );
 });
 
+test('it counts an arrange that failed under its code, times no step for it, and removes the imp', async () => {
+  const ctx = await setupTest();
+
+  const image = buildMockNewImage({ name: 'base', sizeBytes: 6 });
+
+  await Bun.write(buildImagePaths(ctx.box.dataDir, image.digest).rootfs, 'rootfs');
+
+  await createImage(ctx.box.db, image);
+
+  ctx.box.fake.queue('boot', 'fail');
+
+  const wake = BENCH_SCENARIOS.find((scenario) => scenario.name === 'wake');
+
+  invariant(wake);
+
+  const results = await runBench(
+    {
+      client: ctx.box.client,
+      watchEvents,
+      now: () => performance.now(),
+      wait: () => setImmediatePromise(),
+      onProgress: () => {},
+    },
+    {
+      runID: 'a11ce0000b0b',
+      scenarios: [wake],
+      levels: [1],
+      samples: 1,
+      settings: { memoryMib: null, image: 'base', awakeMs: 0 },
+    },
+  );
+
+  const imps = await ctx.box.client.imps.list();
+
+  expect(results).toStrictEqual([
+    {
+      scenario: 'wake',
+      concurrency: 1,
+      samples: 0,
+      failures: { 'arrange INTERNAL_SERVER_ERROR': 1 },
+      impdMs: null,
+      memFileMib: null,
+      latencyMs: null,
+    },
+  ]);
+
+  expect(imps).toStrictEqual([]);
+});
+
+test('it fails with the stream error and makes no imp when the event stream never opens', async () => {
+  const ctx = await setupTest();
+
+  const streamFailure = new Error('connect ECONNREFUSED 127.0.0.1');
+
+  const run = runBench(
+    {
+      client: ctx.box.client,
+      watchEvents: () => Promise.reject(streamFailure),
+      now: () => performance.now(),
+      wait: () => setImmediatePromise(),
+      onProgress: () => {},
+    },
+    {
+      runID: 'b0bca7000001',
+      scenarios: [ctx.create],
+      levels: [1],
+      samples: 1,
+      settings: { memoryMib: null, image: 'base', awakeMs: 0 },
+    },
+  );
+
+  expect(run).rejects.toBe(streamFailure);
+
+  const imps = await ctx.box.client.imps.list();
+
+  expect(imps).toStrictEqual([]);
+});
+
 test('it fails a run whose event stream impd ended cleanly', async () => {
   const ctx = await setupTest();
 
@@ -148,9 +223,7 @@ test('it fails a run whose event stream impd ended cleanly', async () => {
   const run = runBench(
     {
       client: ctx.box.client,
-      watchEvents: async (_client, options) => {
-        await options.onOpen?.(1);
-      },
+      watchEvents: makeStubEventStream(null),
       now: () => performance.now(),
       wait: () => setImmediatePromise(),
       onProgress: () => {},
@@ -168,4 +241,44 @@ test('it fails a run whose event stream impd ended cleanly', async () => {
     Error,
     "bench: impd's event stream failed, so its figures are incomplete",
   );
+});
+
+test('it fails a run that could not remove an imp it made, names it, and reports each failed removal', async () => {
+  const ctx = await setupTest();
+
+  const image = buildMockNewImage({ name: 'base', sizeBytes: 6 });
+
+  await Bun.write(buildImagePaths(ctx.box.dataDir, image.digest).rootfs, 'rootfs');
+
+  await createImage(ctx.box.db, image);
+
+  ctx.box.fake.queue('stop', 'fail', 'fail');
+
+  const lines: string[] = [];
+
+  const run = runBench(
+    {
+      client: ctx.box.client,
+      watchEvents,
+      now: () => performance.now(),
+      wait: () => setImmediatePromise(),
+      onProgress: (line) => {
+        lines.push(line);
+      },
+    },
+    {
+      runID: 'feedface0001',
+      scenarios: [ctx.create],
+      levels: [1],
+      samples: 1,
+      settings: { memoryMib: null, image: 'base', awakeMs: 0 },
+    },
+  );
+
+  expect(run).rejects.toThrowWithMessage(
+    AggregateError,
+    'bench: could not remove bench-feedface0001-1-0, so they are left on the host',
+  );
+
+  expect(lines.filter((line) => line.startsWith('bench: could not remove'))).toHaveLength(2);
 });

@@ -1,5 +1,4 @@
-import { expect, onTestFinished } from 'bun:test';
-import { existsSync } from 'node:fs';
+import { onTestFinished } from 'bun:test';
 import { join } from 'node:path';
 import { waitFor } from '@impz/test-utils/wait-for';
 import type { StubGuestMemory } from './stub-guest-memory-schema';
@@ -42,8 +41,12 @@ export async function startStubFirecracker(options: Readonly<StubFirecrackerOpti
     child.kill('SIGKILL');
   });
 
-  await waitFor(() => {
-    expect(existsSync(options.apiSocket)).toBeTrue();
+  // the socket file appears at bind, before the server listens, so the wait
+  // ends on a connection that the server accepts
+  await waitFor(async () => {
+    const connection = await Bun.connect({ unix: options.apiSocket, socket: { data: () => {} } });
+
+    connection.end();
   });
 
   return { pid: child.pid, exited: child.exited };

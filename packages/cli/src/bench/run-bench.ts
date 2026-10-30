@@ -40,6 +40,7 @@ export async function runBench(deps: BenchDeps, plan: Readonly<BenchPlan>): Prom
   const owned = new Set<string>();
 
   const results: BenchResult[] = [];
+  let cleanupFailure: Error | null = null;
 
   try {
     for (const scenario of plan.scenarios) {
@@ -58,13 +59,21 @@ export async function runBench(deps: BenchDeps, plan: Readonly<BenchPlan>): Prom
         results.push(result);
         deps.onProgress(formatProgress(result));
 
-        await removeOwned(deps.client, owned, names);
+        const leftover = await removeOwned(deps, owned, names);
+
+        if (leftover !== null) {
+          throw leftover;
+        }
       }
     }
   } finally {
     log.stop();
 
-    await removeOwned(deps.client, owned, [...owned]);
+    cleanupFailure = await removeOwned(deps, owned, [...owned]);
+  }
+
+  if (cleanupFailure !== null) {
+    throw cleanupFailure;
   }
 
   if (deps.signal?.aborted === true) {
@@ -283,19 +292,27 @@ function formatProgress(result: Readonly<BenchResult>): string {
   return `bench: ${result.scenario} at ${String(result.concurrency)}: ${figures} over ${String(result.samples)} samples, ${String(failed)} failed`;
 }
 
+// Every destroy runs to its end, so one failure leaves no other removal in
+// flight; each failure is reported, and the run fails once on them all.
 async function removeOwned(
-  client: ImpClient,
+  deps: Readonly<BenchDeps>,
   owned: Set<string>,
   names: readonly string[],
-): Promise<void> {
-  await Promise.all(
+): Promise<Error | null> {
+  const failed: string[] = [];
+
+  const removals = await Promise.allSettled(
     names
       .filter((name) => owned.has(name))
       .map(async (name) => {
         try {
-          await client.imps.destroy({ name });
+          await deps.client.imps.destroy({ name });
         } catch (error) {
           if (!(error instanceof ORPCError && error.code === 'NOT_FOUND')) {
+            const reason = error instanceof Error ? error.message : String(error);
+
+            failed.push(name);
+            deps.onProgress(`bench: could not remove ${name}: ${reason}`);
             throw error;
           }
         }
@@ -303,4 +320,15 @@ async function removeOwned(
         owned.delete(name);
       }),
   );
+
+  const errors = removals.flatMap((removal): unknown[] =>
+    removal.status === 'rejected' ? [removal.reason] : [],
+  );
+
+  return errors.length === 0
+    ? null
+    : new AggregateError(
+        errors,
+        `bench: could not remove ${failed.join(', ')}, so they are left on the host`,
+      );
 }

@@ -1954,6 +1954,11 @@ test('it records an audit row when a websocket opens and another with its bytes 
     return listed;
   });
 
+  // the proxy records the upgrade before the client sees its 101
+  await waitFor(() => {
+    expect(socket.readyState).toBe(WebSocket.OPEN);
+  });
+
   socket.send('12345');
 
   await waitFor(() => {

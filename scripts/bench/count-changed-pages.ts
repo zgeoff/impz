@@ -3,6 +3,9 @@
 //   bun scripts/bench/count-changed-pages.ts <base> <snapshot>
 import { closeSync, fstatSync, openSync, readSync } from 'node:fs';
 import { parseArgs } from 'node:util';
+import { writeStderr } from '../lib/write-stderr.ts';
+import { writeStdoutLine } from '../lib/write-stdout-line.ts';
+import { buildChangedPagesReport } from './build-changed-pages-report';
 
 const PAGE_BYTES = 4096;
 const HUGE_PAGE_BYTES = 2 * 1024 * 1024;
@@ -47,28 +50,39 @@ function toPage(bytes: Uint8Array, start: number): Uint8Array {
   return page;
 }
 
-function readChangedPages(basePath: string, nextPath: string): ChangedPages {
+export function readChangedPages(basePath: string, nextPath: string): ChangedPages {
   const base = openSync(basePath, 'r');
-  const next = openSync(nextPath, 'r');
-  const length = Math.max(fstatSync(base).size, fstatSync(next).size);
-  const total = { pages: 0, hugePages: 0 };
 
   try {
-    for (let offset = 0; offset < length; offset += HUGE_PAGE_BYTES) {
-      const baseChunk = new Uint8Array(HUGE_PAGE_BYTES);
-      const nextChunk = new Uint8Array(HUGE_PAGE_BYTES);
+    const next = openSync(nextPath, 'r');
 
-      readSync(base, baseChunk, 0, HUGE_PAGE_BYTES, offset);
-      readSync(next, nextChunk, 0, HUGE_PAGE_BYTES, offset);
-
-      const counted = countChangedPages(baseChunk, nextChunk);
-
-      total.pages += counted.pages;
-      total.hugePages += counted.hugePages;
+    try {
+      return countChangedChunks(base, next);
+    } finally {
+      closeSync(next);
     }
   } finally {
     closeSync(base);
-    closeSync(next);
+  }
+}
+
+// each 2 MiB chunk is counted on its own, so a snapshot of many GiB never
+// sits in memory whole
+function countChangedChunks(base: number, next: number): ChangedPages {
+  const length = Math.max(fstatSync(base).size, fstatSync(next).size);
+  const total = { pages: 0, hugePages: 0 };
+
+  for (let offset = 0; offset < length; offset += HUGE_PAGE_BYTES) {
+    const baseChunk = new Uint8Array(HUGE_PAGE_BYTES);
+    const nextChunk = new Uint8Array(HUGE_PAGE_BYTES);
+
+    readSync(base, baseChunk, 0, HUGE_PAGE_BYTES, offset);
+    readSync(next, nextChunk, 0, HUGE_PAGE_BYTES, offset);
+
+    const counted = countChangedPages(baseChunk, nextChunk);
+
+    total.pages += counted.pages;
+    total.hugePages += counted.hugePages;
   }
 
   return total;
@@ -79,16 +93,12 @@ if (import.meta.main) {
   const [basePath, nextPath] = parsed.positionals;
 
   if (basePath === undefined || nextPath === undefined || parsed.positionals.length > 2) {
-    console.error('usage: bun scripts/bench/count-changed-pages.ts <base> <snapshot>');
+    writeStderr('usage: bun scripts/bench/count-changed-pages.ts <base> <snapshot>\n');
+
     process.exit(2);
   }
 
   const changed = readChangedPages(basePath, nextPath);
 
-  console.log(
-    JSON.stringify({
-      changedMib: (changed.pages * PAGE_BYTES) / 1_048_576,
-      changedHugeMib: (changed.hugePages * HUGE_PAGE_BYTES) / 1_048_576,
-    }),
-  );
+  writeStdoutLine(JSON.stringify(buildChangedPagesReport(changed)));
 }

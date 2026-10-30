@@ -1,36 +1,22 @@
 import { join, resolve } from 'node:path';
 import { SystemInfoSchema } from '@impz/api';
+import type { CommandResult } from '@impz/e2e-harness/instance';
+import { waitFor } from '@impz/e2e-harness/wait-for';
 import type * as z from 'zod';
 import { buildDevLayout } from '../lib/build-dev-layout.ts';
-import type { ContainerCLI, DevLayout } from '../lib/build-dev-layout.ts';
+import type { DevEnv, DevLayout } from '../lib/build-dev-layout.ts';
 import type { DevLock } from '../lib/create-dev-lock.ts';
 import { parseJSONOrNull } from '../lib/parse-json-or-null.ts';
 import type { BenchArm, BenchArmsArgs } from './parse-bench-arms-args';
 
-type DevCommand = 'up' | 'token' | 'down';
-
-type Env = Readonly<Record<string, string | undefined>>;
-
-export interface CommandRun {
-  readonly exitCode: number;
-  readonly stdout: string;
-  readonly stderr: string;
-}
-
-interface ImpdLogs {
-  readonly exitCode: number;
-  readonly output: Uint8Array;
-}
+type CommandEnv = Readonly<Record<string, string>>;
 
 export interface BenchArmDeps {
   readonly lockDev: (name: string) => DevLock;
-  readonly inspectDev: (cli: ContainerCLI, name: string) => Promise<CommandRun>;
-  readonly runDev: (script: string, command: DevCommand, env: Env) => Promise<string>;
-  readonly runImpz: (args: readonly string[], env: Env) => Promise<CommandRun>;
-  readonly readImpdLogs: (cli: ContainerCLI, name: string) => Promise<ImpdLogs>;
-  readonly writeLog: (path: string, output: Uint8Array) => void;
+  readonly runCommand: (argv: readonly string[], env: CommandEnv) => Promise<CommandResult>;
+  readonly writeLog: (path: string, text: string) => void;
   readonly now: () => number;
-  readonly wait: (durationMs: number) => Promise<void>;
+  readonly sleep: (durationMs: number) => Promise<void>;
   readonly onStderr: (text: string) => void;
 }
 
@@ -43,7 +29,8 @@ export interface ArmPlan {
   readonly arm: BenchArm;
   readonly commands: Pick<BenchArmsArgs, 'benchArgs' | 'warmUpArgs'>;
   readonly logPath: string;
-  readonly env: Env;
+  readonly impz: string;
+  readonly env: DevEnv;
   readonly cwd: string;
 }
 
@@ -52,84 +39,135 @@ export interface ArmPlan {
 // read fails the arm only once the instance is down.
 export async function runBenchArm(deps: BenchArmDeps, plan: Readonly<ArmPlan>): Promise<ArmRun> {
   const checkout = resolve(plan.cwd, plan.arm.checkout);
-  const dev = join(checkout, 'scripts', 'dev', 'dev.sh');
 
   const devEnv = {
-    ...plan.env,
     IMP_KERNEL: join(checkout, '.cache', 'ci', 'vmlinux'),
     IMP_SYSTEM_DRIVE: join(checkout, '.cache', 'ci', 'imp-system.squashfs'),
   };
 
-  const layout = buildDevLayout({ env: devEnv, root: checkout, cwd: plan.cwd });
+  const layout = buildDevLayout({ env: { ...plan.env, ...devEnv }, root: checkout, cwd: plan.cwd });
   const lock = deps.lockDev(layout.name);
 
   try {
-    const inspected = await deps.inspectDev(layout.containerCLI, layout.name);
+    const listed = await deps.runCommand(
+      [
+        layout.containerCLI,
+        'ps',
+        '-a',
+        '--filter',
+        `name=^${layout.name}$`,
+        '--format',
+        '{{.State}}',
+      ],
+      {},
+    );
 
-    if (isDevRunning(inspected, layout)) {
+    if (isDevRunning(listed, layout)) {
       throw new Error(
         `bench arms: ${layout.name} already runs, and dev.sh up would bench it as ${plan.arm.name}; stop it first`,
       );
     }
 
-    return await runLockedArm(deps, { plan, dev, devEnv, layout });
+    const dev = { script: join(checkout, 'scripts', 'dev', 'dev.sh'), env: devEnv };
+
+    return await runLockedArm(deps, { plan, dev, layout });
   } finally {
     lock.release();
   }
 }
 
-// docker and podman both name a missing container "no such object" or
-// "no such container"; any other failed inspect leaves the state unknown
-function isDevRunning(inspected: Readonly<CommandRun>, layout: DevLayout): boolean {
-  if (inspected.exitCode === 0) {
-    return inspected.stdout.trim() === 'true';
+// docker and podman list no line for a missing container, so only a failed
+// list leaves the state unknown
+function isDevRunning(listed: Readonly<CommandResult>, layout: DevLayout): boolean {
+  if (listed.exitCode !== 0) {
+    throw new Error(
+      `bench arms: ${layout.containerCLI} ps ${layout.name} exited ${String(listed.exitCode)}: ${listed.stderr}`,
+    );
   }
 
-  if (/no such (?:object|container)/iu.test(inspected.stderr)) {
-    return false;
-  }
+  return listed.stdout.trim() === 'running';
+}
 
-  throw new Error(
-    `bench arms: ${layout.containerCLI} inspect ${layout.name} exited ${String(inspected.exitCode)}: ${inspected.stderr}`,
-  );
+interface DevScript {
+  readonly script: string;
+  readonly env: CommandEnv;
 }
 
 interface LockedArm {
   readonly plan: Readonly<ArmPlan>;
-  readonly dev: string;
-  readonly devEnv: Env;
+  readonly dev: DevScript;
   readonly layout: DevLayout;
 }
 
+// A cleanup step that fails is reported and fails the arm, but an earlier
+// failure keeps its place as the arm's error.
 async function runLockedArm(deps: BenchArmDeps, locked: Readonly<LockedArm>): Promise<ArmRun> {
   let ran: ArmRun;
-  let logFailure: string | null = null;
+  const cleanupFailures: string[] = [];
 
   try {
-    await deps.runDev(locked.dev, 'up', locked.devEnv);
+    await runDevChecked(deps, locked.dev, 'up');
 
-    const shownToken = await deps.runDev(locked.dev, 'token', locked.devEnv);
+    const shownToken = await runDevChecked(deps, locked.dev, 'token');
 
+    // IMP_HOST names a saved host and wins over IMP_URL, so an empty one keeps
+    // every command on the dev instance
     const cliEnv = {
-      ...locked.plan.env,
+      IMP_HOST: '',
       IMP_URL: locked.layout.apiURL,
       IMP_TOKEN: shownToken.trim(),
     };
 
     ran = await measureArm(deps, locked.plan, cliEnv);
   } finally {
-    try {
-      logFailure = await writeImpdLog(deps, locked.layout, locked.plan.logPath);
-    } finally {
-      await deps.runDev(locked.dev, 'down', locked.devEnv);
+    const logFailure = await writeImpdLog(deps, locked.layout, locked.plan.logPath);
+    const down = await runDev(deps, locked.dev, 'down');
+
+    const failures = [
+      logFailure,
+      down.exitCode === 0
+        ? null
+        : `bench arms: dev.sh down exited ${String(down.exitCode)}, so ${locked.layout.name} may still run`,
+    ].filter((failure) => failure !== null);
+
+    for (const failure of failures) {
+      deps.onStderr(`${failure}\n`);
     }
+
+    cleanupFailures.push(...failures);
   }
 
-  if (logFailure !== null) {
-    throw new Error(logFailure);
+  if (cleanupFailures.length > 0) {
+    throw new Error(cleanupFailures.join('; '));
   }
 
   return ran;
+}
+
+async function runDevChecked(
+  deps: BenchArmDeps,
+  dev: DevScript,
+  command: 'up' | 'token',
+): Promise<string> {
+  const ran = await runDev(deps, dev, command);
+
+  if (ran.exitCode !== 0) {
+    throw new Error(`bench arms: dev.sh ${command} exited ${String(ran.exitCode)}`);
+  }
+
+  return ran.stdout;
+}
+
+function runDev(
+  deps: BenchArmDeps,
+  dev: DevScript,
+  command: 'up' | 'token' | 'down',
+): Promise<CommandResult> {
+  return deps.runCommand([dev.script, command], dev.env).then((ran) => {
+    deps.onStderr(ran.stderr);
+
+    return ran;
+  });
 }
 
 // A failed bench that finished still prints its report, so its arm keeps its
@@ -137,22 +175,30 @@ async function runLockedArm(deps: BenchArmDeps, locked: Readonly<LockedArm>): Pr
 async function measureArm(
   deps: BenchArmDeps,
   plan: Readonly<ArmPlan>,
-  cliEnv: Env,
+  cliEnv: CommandEnv,
 ): Promise<ArmRun> {
-  await waitForInfo(deps, cliEnv, (info) => info.defaults?.image !== null);
+  await waitForInfo(
+    deps,
+    { impz: plan.impz, env: cliEnv, what: "impd's default image" },
+    (info) => (info.defaults?.image ?? null) !== null,
+  );
 
   // the warm-up's creates build the boot template, so every arm's timed
   // run starts with the cache warm
-  const warmUp = await deps.runImpz(plan.commands.warmUpArgs, cliEnv);
+  const warmUp = await deps.runCommand([plan.impz, ...plan.commands.warmUpArgs], cliEnv);
 
   if (warmUp.exitCode !== 0) {
     throw new Error(`bench arms: the warm-up failed: ${warmUp.stderr}`);
   }
 
-  await waitForInfo(deps, cliEnv, (info) => (info.host?.bootTemplates ?? 1) > 0);
+  await waitForInfo(
+    deps,
+    { impz: plan.impz, env: cliEnv, what: 'the boot template the warm-up built' },
+    (info) => (info.host?.bootTemplates ?? 1) > 0,
+  );
 
-  const bench = await deps.runImpz(
-    ['bench', ...plan.commands.benchArgs, '--label', plan.arm.name, '--json'],
+  const bench = await deps.runCommand(
+    [plan.impz, 'bench', ...plan.commands.benchArgs, '--label', plan.arm.name, '--json'],
     cliEnv,
   );
 
@@ -168,29 +214,34 @@ const ReadinessSchema = SystemInfoSchema.pick({ defaults: true, host: true });
 const READY_TIMEOUT_MS = 600_000;
 const POLL_MS = 2000;
 
+interface InfoWait {
+  readonly impz: string;
+  readonly env: CommandEnv;
+  readonly what: string;
+}
+
 async function waitForInfo(
   deps: BenchArmDeps,
-  env: Env,
+  wait: Readonly<InfoWait>,
   isReady: (info: z.infer<typeof ReadinessSchema>) => boolean,
 ): Promise<void> {
-  const deadline = deps.now() + READY_TIMEOUT_MS;
+  await waitFor(
+    `bench arms: ${wait.what}`,
+    async () => {
+      const shown = await deps.runCommand([wait.impz, 'info', '--json'], wait.env);
 
-  for (;;) {
-    const shown = await deps.runImpz(['info', '--json'], env);
+      if (shown.exitCode !== 0) {
+        throw new Error(`impz info exited ${String(shown.exitCode)}: ${shown.stderr}`);
+      }
 
-    const info = shown.exitCode === 0 ? parseJSONOrNull(shown.stdout) : null;
-    const parsed = ReadinessSchema.safeParse(info);
+      const parsed = ReadinessSchema.safeParse(parseJSONOrNull(shown.stdout));
 
-    if (parsed.success && isReady(parsed.data)) {
-      return;
-    }
-
-    if (deps.now() >= deadline) {
-      throw new Error('bench arms: impd never got ready to bench');
-    }
-
-    await deps.wait(POLL_MS);
-  }
+      if (!parsed.success || !isReady(parsed.data)) {
+        throw new Error('impd is not ready yet');
+      }
+    },
+    { intervalMs: POLL_MS, timeoutMs: READY_TIMEOUT_MS, now: deps.now, wait: deps.sleep },
+  );
 }
 
 async function writeImpdLog(
@@ -198,9 +249,17 @@ async function writeImpdLog(
   layout: DevLayout,
   logPath: string,
 ): Promise<string | null> {
-  const logs = await deps.readImpdLogs(layout.containerCLI, layout.name);
+  let logs: CommandResult;
 
-  deps.writeLog(logPath, logs.output);
+  try {
+    logs = await deps.runCommand([layout.containerCLI, 'logs', layout.name], {});
+
+    deps.writeLog(logPath, `${logs.stdout}${logs.stderr}`);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+
+    return `bench arms: could not save the impd log to ${logPath}: ${reason}`;
+  }
 
   return logs.exitCode === 0
     ? null

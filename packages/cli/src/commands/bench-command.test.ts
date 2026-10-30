@@ -3,6 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildImagePaths, buildMockNewImage, createImage } from '@impz/daemon/testing';
+import { waitFor } from '@impz/test-utils/wait-for';
 import * as z from 'zod';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 import { startImpdHost } from '../test-utils/start-impd-host';
@@ -132,6 +133,40 @@ test('it counts each refused step by its code, and fails a concurrency with no s
   ]);
 
   expect(result.stderr).toEndWith('impz: bench: create at 2 took no sample\n');
+});
+
+test('it prints the report and fails a run whose median step took longer than --limit-p50-ms', async () => {
+  const ctx = await setupTest();
+
+  const image = buildMockNewImage({ name: 'base', sizeBytes: 6 });
+
+  await Bun.write(buildImagePaths(ctx.box.dataDir, image.digest).rootfs, 'rootfs');
+
+  await createImage(ctx.box.db, image);
+
+  const boot = ctx.box.fake.hold('boot');
+
+  const running = runCLIInProcess({
+    args: ['bench', 'create', '--concurrency', '1', '--samples', '1', '--limit-p50-ms', '1'],
+    env: { ...ctx.home, IMP_URL: ctx.box.url, IMP_TOKEN: ctx.box.rootToken },
+  });
+
+  await boot.reached;
+
+  const heldAt = performance.now();
+
+  // the timed create waits on the held boot, so its time passes the limit
+  await waitFor(() => {
+    expect(performance.now() - heldAt).toBeGreaterThan(5);
+  });
+
+  boot.release();
+
+  const result = await running;
+
+  expect(result.code).toBe(1);
+  expect(result.stdout).toInclude('create');
+  expect(result.stderr).toMatch(/impz: bench: the median create at 1 took \d+ms, past 1ms\n$/u);
 });
 
 test('it names the host its numbers came from, and the boot templates before and after', async () => {

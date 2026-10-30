@@ -326,9 +326,11 @@ test('#isImpVm refuses a VM of another uid in another cgroup', () => {
 });
 
 test('#probeJailedFirecracker finds a process run with --id', async () => {
-  // bash execs a lone last command in place; `; true` stops that, so the argv
-  // keeps --id
-  const child = Bun.spawn(['bash', '-c', 'sleep 30; true', 'x', '--id', 'i1']);
+  // bash's own read waits on the open stdin pipe, so bash keeps this argv and
+  // runs no child that its SIGKILL would orphan
+  const child = Bun.spawn(['bash', '-c', 'read -t 30 || true', 'x', '--id', 'i1'], {
+    stdin: 'pipe',
+  });
 
   onTestFinished(() => {
     child.kill('SIGKILL');

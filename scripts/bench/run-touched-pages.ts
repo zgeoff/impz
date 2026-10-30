@@ -1,21 +1,29 @@
-import { ImpSchema, SystemInfoSchema } from '@impz/api';
+import { ORPCError } from '@impz/client';
+import type { ImpClient } from '@impz/client';
 import { parseHugetlbMib } from '@impz/e2e-harness/huge-page-host';
-import * as z from 'zod';
+import type { CommandResult } from '@impz/e2e-harness/instance';
+import { waitFor } from '@impz/e2e-harness/wait-for';
 import type { DevLock } from '../lib/create-dev-lock.ts';
-import { parseJSONOrNull } from '../lib/parse-json-or-null.ts';
-import type { CommandRun } from './run-bench-arm';
+import { ChangedPagesReportSchema } from './changed-pages-report-schema';
+
+interface TouchedPagesClient {
+  readonly system: Pick<ImpClient['system'], 'info'>;
+  readonly imps: Pick<ImpClient['imps'], 'get' | 'create' | 'destroy'>;
+}
 
 export interface TouchedPagesDeps {
   readonly lockDev: () => DevLock;
-  readonly runImpz: (args: readonly string[]) => Promise<CommandRun>;
-  readonly runInContainer: (argv: readonly string[]) => Promise<CommandRun>;
+  readonly client: TouchedPagesClient;
+  readonly runImpz: (args: readonly string[]) => Promise<CommandResult>;
+  readonly runInContainer: (argv: readonly string[]) => Promise<CommandResult>;
   readonly now: () => number;
-  readonly wait: (durationMs: number) => Promise<void>;
+  readonly sleep: (durationMs: number) => Promise<void>;
   readonly onStderr: (text: string) => void;
 }
 
 export interface TouchedPagesOptions {
   readonly memory: string;
+  readonly memoryMib: number;
   readonly writeMib: number;
 }
 
@@ -43,31 +51,58 @@ export async function runTouchedPages(
   const lock = deps.lockDev();
 
   try {
-    await waitUntil(deps, 'impd never added its default image', () => probeDefaultImage(deps));
+    await waitForReady(deps, "impd's default image", () => requireDefaultImage(deps));
 
-    const found = await deps.runImpz(['info', NAME, '--json']);
+    const found = await deps.client.imps.get({ name: NAME }).then(
+      () => true,
+      (error: unknown) => {
+        if (isRPCCode(error, 'NOT_FOUND')) {
+          return false;
+        }
 
-    if (found.exitCode === 0 || !/\bNOT_FOUND:/u.test(found.stderr)) {
-      throw new Error(
-        `measure-touched-pages: ${NAME} already exists or could not be looked up, so this run leaves it: ${found.stderr}`,
-      );
+        throw error;
+      },
+    );
+
+    if (found) {
+      throw new Error(`measure-touched-pages: ${NAME} already exists, so this run leaves it`);
     }
 
-    const created = await deps.runImpz(['new', NAME, '--memory', options.memory]);
+    const createFailure = await deps.client.imps
+      .create({ name: NAME, memoryMib: options.memoryMib })
+      .then(
+        () => null,
+        (error: unknown) => error,
+      );
 
-    if (created.exitCode !== 0 && /\bCONFLICT:/u.test(created.stderr)) {
+    if (isRPCCode(createFailure, 'CONFLICT')) {
       throw new Error(
         `measure-touched-pages: ${NAME} appeared during the run, so this run leaves it`,
       );
     }
 
-    try {
-      requireSuccess(created, `impz new ${NAME}`);
+    let measured: TouchedPages;
+    let isClean = false;
 
-      return await measureTouchedPages(deps, options);
+    try {
+      if (createFailure !== null) {
+        throw new Error(`measure-touched-pages: the create of ${NAME} failed`, {
+          cause: createFailure,
+        });
+      }
+
+      measured = await measureTouchedPages(deps, options);
     } finally {
-      await removeLeftovers(deps);
+      isClean = await removeLeftovers(deps);
     }
+
+    if (!isClean) {
+      throw new Error(
+        'measure-touched-pages: the cleanup failed, so the dev instance keeps a leftover',
+      );
+    }
+
+    return measured;
   } finally {
     lock.release();
   }
@@ -76,67 +111,44 @@ export async function runTouchedPages(
 const READY_TIMEOUT_MS = 300_000;
 const POLL_MS = 1000;
 
-async function waitUntil(
+async function waitForReady(
   deps: TouchedPagesDeps,
-  failure: string,
-  isDone: () => Promise<boolean>,
+  what: string,
+  attempt: () => Promise<void>,
 ): Promise<void> {
-  const deadline = deps.now() + READY_TIMEOUT_MS;
+  await waitFor(`measure-touched-pages: ${what}`, attempt, {
+    intervalMs: POLL_MS,
+    timeoutMs: READY_TIMEOUT_MS,
+    now: deps.now,
+    wait: deps.sleep,
+  });
+}
 
-  for (;;) {
-    const done = await isDone();
+async function requireDefaultImage(deps: TouchedPagesDeps): Promise<void> {
+  const info = await deps.client.system.info();
 
-    if (done) {
-      return;
-    }
-
-    if (deps.now() >= deadline) {
-      throw new Error(`measure-touched-pages: ${failure}`);
-    }
-
-    await deps.wait(POLL_MS);
+  if ((info.defaults?.image ?? null) === null) {
+    throw new Error('impd has no default image yet');
   }
 }
 
-const InfoSchema = SystemInfoSchema.pick({ defaults: true });
-
-async function probeDefaultImage(deps: TouchedPagesDeps): Promise<boolean> {
-  const shown = await deps.runImpz(['info', '--json']);
-
-  if (shown.exitCode !== 0) {
-    return false;
-  }
-
-  const info = InfoSchema.safeParse(parseJSONOrNull(shown.stdout));
-
-  return info.success && (info.data.defaults?.image ?? null) !== null;
-}
-
-function requireSuccess(ran: Readonly<CommandRun>, what: string): string {
-  if (ran.exitCode !== 0) {
-    throw new Error(`measure-touched-pages: ${what} exited ${String(ran.exitCode)}: ${ran.stderr}`);
-  }
-
-  return ran.stdout;
+function isRPCCode(error: unknown, code: string): boolean {
+  return error instanceof ORPCError && error.code === code;
 }
 
 const BASE_COPY = '/var/lib/imp/touched-pages-base';
-const ImpIDSchema = ImpSchema.pick({ id: true });
-const ChangedSchema = z.object({ changedMib: z.number(), changedHugeMib: z.number() });
 
 async function measureTouchedPages(
   deps: TouchedPagesDeps,
   options: Readonly<TouchedPagesOptions>,
 ): Promise<TouchedPages> {
-  await waitUntil(deps, `${NAME} never ran a command`, async () => {
-    const ran = await deps.runImpz(['exec', NAME, '--', 'true']);
-
-    return ran.exitCode === 0;
+  await waitForReady(deps, `${NAME} to run a command`, async () => {
+    await runImpzChecked(deps, ['exec', NAME, '--', 'true']);
   });
 
-  const shown = await runImpzChecked(deps, ['info', NAME, '--json']);
+  const imp = await deps.client.imps.get({ name: NAME });
 
-  const directory = `/var/lib/imp/imps/${ImpIDSchema.parse(JSON.parse(shown)).id}`;
+  const directory = `/var/lib/imp/imps/${imp.id}`;
   const memFile = `${directory}/snapshot/mem`;
 
   // a cold boot sleeps as a diff over an empty file
@@ -183,7 +195,7 @@ async function measureTouchedPages(
     memFile,
   ]);
 
-  const changed = ChangedSchema.parse(JSON.parse(counted));
+  const changed = ChangedPagesReportSchema.parse(JSON.parse(counted));
 
   return {
     memory: options.memory,
@@ -202,6 +214,14 @@ async function runImpzChecked(deps: TouchedPagesDeps, args: readonly string[]): 
   const ran = await deps.runImpz(args);
 
   return requireSuccess(ran, `impz ${args.join(' ')}`);
+}
+
+function requireSuccess(ran: Readonly<CommandResult>, what: string): string {
+  if (ran.exitCode !== 0) {
+    throw new Error(`measure-touched-pages: ${what} exited ${String(ran.exitCode)}: ${ran.stderr}`);
+  }
+
+  return ran.stdout;
 }
 
 async function readHugetlbMib(deps: TouchedPagesDeps, directory: string): Promise<number> {
@@ -231,15 +251,29 @@ async function readAllocatedMib(deps: TouchedPagesDeps, path: string): Promise<n
 
 // a remove of an imp that the failed create never recorded finds nothing,
 // which leaves nothing behind
-async function removeLeftovers(deps: TouchedPagesDeps): Promise<void> {
+async function removeLeftovers(deps: TouchedPagesDeps): Promise<boolean> {
   const removedCopy = await deps.runInContainer(['rm', '-f', BASE_COPY]);
-  const removedImp = await deps.runImpz(['rm', NAME]);
 
-  if (removedCopy.exitCode !== 0) {
+  const impFailure = await deps.client.imps.destroy({ name: NAME }).then(
+    () => null,
+    (error: unknown) => {
+      if (isRPCCode(error, 'NOT_FOUND')) {
+        return null;
+      }
+
+      return error instanceof Error ? error.message : String(error);
+    },
+  );
+
+  const isCopyRemoved = removedCopy.exitCode === 0;
+
+  if (!isCopyRemoved) {
     deps.onStderr(`measure-touched-pages: could not remove ${BASE_COPY}: ${removedCopy.stderr}`);
   }
 
-  if (removedImp.exitCode !== 0 && !/\bNOT_FOUND:/u.test(removedImp.stderr)) {
-    deps.onStderr(`measure-touched-pages: could not remove ${NAME}: ${removedImp.stderr}`);
+  if (impFailure !== null) {
+    deps.onStderr(`measure-touched-pages: could not remove ${NAME}: ${impFailure}`);
   }
+
+  return isCopyRemoved && impFailure === null;
 }

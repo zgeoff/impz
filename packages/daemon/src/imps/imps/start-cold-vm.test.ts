@@ -173,6 +173,63 @@ test('it removes a template whose restore fails in it, and boots the kernel', as
   expect(readdirSync(join(ctx.dataDir, 'templates'))).not.toContain(key);
 });
 
+test('it counts the template a build left ready in the host info', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.templates.buildTemplate({ vcpus: 1, memoryMib: 256 });
+
+  const info = await ctx.client.system.info();
+
+  expect(info.host?.bootTemplates).toBe(1);
+});
+
+test('it removes a template whose parked agent never answers, though an earlier restore of it succeeded', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.client.imps.create({ name: 'first', vcpus: 1, memoryMib: 256 });
+  await ctx.templates.buildTemplate({ vcpus: 1, memoryMib: 256 });
+  await ctx.client.imps.create({ name: 'second', vcpus: 1, memoryMib: 256 });
+
+  ctx.fake.queue('parkedAgent', 'fail');
+
+  await ctx.client.imps.create({ name: 'third', vcpus: 1, memoryMib: 256 });
+
+  const key = buildTemplateKey(ctx.readIdentity(), { vcpus: 1, memoryMib: 256 });
+
+  expect(ctx.fake.boots.map((boot) => boot.hostname)).toStrictEqual(['first', 'third']);
+  expect(readdirSync(join(ctx.dataDir, 'templates'))).not.toContain(key);
+});
+
+test('it keeps a template whose parked agent timed out while another restore of it succeeded', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.client.imps.create({ name: 'first', vcpus: 1, memoryMib: 256 });
+  await ctx.templates.buildTemplate({ vcpus: 1, memoryMib: 256 });
+
+  ctx.fake.queue('restore', 'hang', 'ok');
+  ctx.fake.queue('parkedAgent', 'ok', 'fail');
+
+  const slow = ctx.client.imps.create({ name: 'slow', vcpus: 1, memoryMib: 256 });
+
+  await waitFor(() => {
+    expect(ctx.fake.countHungCalls()).toBe(1);
+  });
+
+  await ctx.client.imps.create({ name: 'quick', vcpus: 1, memoryMib: 256 });
+
+  ctx.fake.releaseHangs();
+
+  await slow;
+
+  const key = buildTemplateKey(ctx.readIdentity(), { vcpus: 1, memoryMib: 256 });
+
+  expect(ctx.fake.boots.map((boot) => boot.hostname)).toStrictEqual(['first', 'slow']);
+  expect(readdirSync(join(ctx.dataDir, 'templates'))).toContain(key);
+});
+
 test('it keeps the template for the next imp after a restore fails past the claim', async () => {
   const ctx = await setupTest();
 
