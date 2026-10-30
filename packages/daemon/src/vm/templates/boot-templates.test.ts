@@ -218,6 +218,7 @@ test('#buildTemplate takes free RAM only, for its boot reserve of its memory', a
     reserveMib: 256,
     memoryMib: 512,
     maySleepImps: false,
+    isBackground: true,
     hugePagesMib: 0,
   });
 });
@@ -239,6 +240,7 @@ test('#buildTemplate admits a 2M template against the huge page pool for all its
     reserveMib: 256,
     memoryMib: 512,
     maySleepImps: false,
+    isBackground: true,
     hugePagesMib: 512,
   });
 });

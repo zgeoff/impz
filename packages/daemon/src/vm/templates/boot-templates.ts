@@ -400,6 +400,7 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
         memoryMib: shape.memoryMib,
         hugePagesMib: shape.hugePages === '2M' ? shape.memoryMib : 0,
         maySleepImps: false,
+        isBackground: true,
       });
 
       return await (deps.diskBudget === undefined
