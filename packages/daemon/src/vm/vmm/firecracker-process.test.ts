@@ -236,8 +236,9 @@ test('#buildFirecrackerCommand names the API socket', () => {
 test('#startFirecracker resolves with the pid and writes it to the pid file once the socket opens', async () => {
   const ctx = setupTest();
   const apiSocket = join(ctx.directoryPath, 'api.sock');
+  const listen = `Bun.listen({ unix: ${JSON.stringify(apiSocket)}, socket: { data() {} } }); await Bun.sleep(30_000);`;
 
-  const pid = await startFirecracker(['sh', '-c', 'touch "$0"; exec sleep 30', apiSocket], {
+  const pid = await startFirecracker([process.execPath, '-e', listen], {
     apiSocket,
     vsockSocket: join(ctx.directoryPath, 'vsock.sock'),
     logFile: join(ctx.directoryPath, 'log'),
@@ -249,6 +250,39 @@ test('#startFirecracker resolves with the pid and writes it to the pid file once
   });
 
   expect(readPidFile(join(ctx.directoryPath, 'pid'))).toBe(pid);
+});
+
+test('#startFirecracker waits past a socket file that refuses connections until the socket listens', async () => {
+  const ctx = setupTest();
+  const apiSocket = join(ctx.directoryPath, 'api.sock');
+  const path = JSON.stringify(apiSocket);
+
+  const listenLate = [
+    `await Bun.write(${path}, '');`,
+    'await Bun.sleep(200);',
+    `require('node:fs').rmSync(${path});`,
+    `Bun.listen({ unix: ${path}, socket: { data() {} } });`,
+    'await Bun.sleep(30_000);',
+  ].join(' ');
+
+  const pid = await startFirecracker([process.execPath, '-e', listenLate], {
+    apiSocket,
+    vsockSocket: join(ctx.directoryPath, 'vsock.sock'),
+    logFile: join(ctx.directoryPath, 'log'),
+    pidFile: join(ctx.directoryPath, 'pid'),
+  });
+
+  onTestFinished(() => {
+    stopPid(pid);
+  });
+
+  const connection = await Bun.connect({ unix: apiSocket, socket: { data: () => {} } });
+
+  onTestFinished(() => {
+    connection.end();
+  });
+
+  expect(connection.readyState).toBe(1);
 });
 
 test('#startFirecracker rejects with the log tail when the process exits before its socket opens', () => {

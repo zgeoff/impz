@@ -73,7 +73,9 @@ export async function startFirecracker(
 
   const deadline = Date.now() + SOCKET_WAIT_MS;
 
-  while (!existsSync(paths.apiSocket)) {
+  // the socket file appears at bind(2), before Firecracker's listen(2), and a
+  // call in between is refused; on a loaded host that gap is long enough to hit
+  while (!(await probeListening(paths.apiSocket))) {
     if (child.exitCode !== null || Date.now() > deadline) {
       stopPid(child.pid);
 
@@ -86,6 +88,22 @@ export async function startFirecracker(
   }
 
   return child.pid;
+}
+
+async function probeListening(socketPath: string): Promise<boolean> {
+  if (!existsSync(socketPath)) {
+    return false;
+  }
+
+  try {
+    const connection = await Bun.connect({ unix: socketPath, socket: { data: () => {} } });
+
+    connection.end();
+
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // A process that impd started names its own socket in its arguments, which a
