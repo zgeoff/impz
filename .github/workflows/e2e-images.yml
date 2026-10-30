@@ -67,7 +67,8 @@ jobs:
       # no imp.xfs, and a fresh runner has nothing to clean.
       - name: Pick the data dir
         run:
-          bun run --silent ci:pick-data-dir IMP_DEV_DATA /mnt/imp-e2e "$GITHUB_WORKSPACE/.data/ci"
+          bun run --silent ci:pick-data-dir --env IMP_DEV_DATA --mnt /mnt/imp-e2e --fallback
+          "$GITHUB_WORKSPACE/.data/ci"
 
       - name: Install
         run: bun install --frozen-lockfile

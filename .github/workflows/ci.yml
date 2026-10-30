@@ -568,8 +568,8 @@ jobs:
       # the instance's, in <data>-mv-b.
       - name: Pick the data dir
         run:
-          bun run --silent ci:pick-data-dir IMP_DEV_DATA /mnt/imp-e2e "$GITHUB_WORKSPACE/.data/ci"
-          -mv-b
+          bun run --silent ci:pick-data-dir --env IMP_DEV_DATA --mnt /mnt/imp-e2e --fallback
+          "$GITHUB_WORKSPACE/.data/ci" --sibling=-mv-b
 
       - name: Install
         run: bun install --frozen-lockfile
@@ -689,7 +689,8 @@ jobs:
 
       - name: Pick the data dir
         run:
-          bun run --silent ci:pick-data-dir IMP_DEV_DATA /mnt/imp-e2e "$GITHUB_WORKSPACE/.data/ci"
+          bun run --silent ci:pick-data-dir --env IMP_DEV_DATA --mnt /mnt/imp-e2e --fallback
+          "$GITHUB_WORKSPACE/.data/ci"
 
       - name: Install
         run: bun install --frozen-lockfile
@@ -792,7 +793,9 @@ jobs:
           bun-version-file: .bun-version
 
       - name: Pick the work dir
-        run: bun run --silent ci:pick-data-dir IMP_ZFS_TEST_DIR /mnt/imp-zfs "$RUNNER_TEMP/imp-zfs"
+        run:
+          bun run --silent ci:pick-data-dir --env IMP_ZFS_TEST_DIR --mnt /mnt/imp-zfs --fallback
+          "$RUNNER_TEMP/imp-zfs"
 
       - name: Install
         run: bun install --frozen-lockfile

@@ -30,7 +30,7 @@ test('it puts the data dir and its siblings on /mnt when the runner mounts a dis
   createStubBin(ctx.directoryPath, 'mountpoint');
 
   const result =
-    await $`${process.execPath} ${ctx.scriptPath} IMP_DEV_DATA /mnt/imp-e2e /work/.data/ci -mv-b`
+    await $`${process.execPath} ${ctx.scriptPath} --env IMP_DEV_DATA --mnt /mnt/imp-e2e --fallback /work/.data/ci --sibling=-mv-b`
       .env({ PATH: sudo.bin, GITHUB_ENV: ctx.githubEnv })
       .nothrow()
       .quiet();
@@ -57,7 +57,7 @@ test('it puts the data dir in its fallback when /mnt is no mount point', async (
   createStubBin(ctx.directoryPath, 'mountpoint', 'exit 32');
 
   const result =
-    await $`${process.execPath} ${ctx.scriptPath} IMP_ZFS_TEST_DIR /mnt/imp-zfs /runner/temp/imp-zfs`
+    await $`${process.execPath} ${ctx.scriptPath} --env IMP_ZFS_TEST_DIR --mnt /mnt/imp-zfs --fallback /runner/temp/imp-zfs`
       .env({ PATH: sudo.bin, GITHUB_ENV: ctx.githubEnv })
       .nothrow()
       .quiet();
@@ -84,11 +84,26 @@ test('it fails, naming no data dir, when it cannot make the data dir', async () 
   createStubBin(ctx.directoryPath, 'mountpoint');
 
   const result =
-    await $`${process.execPath} ${ctx.scriptPath} IMP_DEV_DATA /mnt/imp-e2e /work/.data/ci`
+    await $`${process.execPath} ${ctx.scriptPath} --env IMP_DEV_DATA --mnt /mnt/imp-e2e --fallback /work/.data/ci`
       .env({ PATH: sudo.bin, GITHUB_ENV: ctx.githubEnv })
       .nothrow()
       .quiet();
 
   expect(result.exitCode).toBe(1);
   expect(readFileSync(ctx.githubEnv, 'utf8')).toBe('');
+});
+
+test('it prints its usage, and makes no dir, when the step leaves out the fallback dir', async () => {
+  const ctx = setupTest();
+  const sudo = createStubBin(ctx.directoryPath, 'sudo');
+
+  const result =
+    await $`${process.execPath} ${ctx.scriptPath} --env IMP_DEV_DATA --mnt /mnt/imp-e2e`
+      .env({ PATH: sudo.bin, GITHUB_ENV: ctx.githubEnv })
+      .nothrow()
+      .quiet();
+
+  expect(result.exitCode).toBe(2);
+  expect(result.stderr.toString()).toStartWith('usage: pick-data-dir.ts --env <name>');
+  expect(readFileSync(sudo.calls, 'utf8')).toBe('');
 });
