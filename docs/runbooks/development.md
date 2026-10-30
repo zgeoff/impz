@@ -413,11 +413,12 @@ hand: `gh workflow run reproducible.yml`.
 
 `.github/workflows/bench.yml` runs [`impz bench`](../guides/bench.md) on a KVM runner with the e2e
 groups' caches. It is no required check, and no pull request runs it, because a compare outlasts the
-release job's wait on a pull request's checks. A push to a `bench/**` branch, or a dispatch,
-compares a baseline with its own ref:
+release job's wait on a pull request's checks. It compares a baseline with its own ref. On a push to
+a `bench/**` branch, the baseline is the parent of the branch's head, and on a dispatch, it is the
+ref the dispatch names (default `main`):
 
-1. The job checks out the baseline (default `main`) beside the ref, and builds each one's kernel and
-   system drive, so each side boots its own guest agent.
+1. The job checks out the baseline beside the ref, and builds each one's kernel and system drive, so
+   each side boots its own guest agent.
 2. `scripts/bench/run-bench-arms.ts` brings up a dev instance from each checkout in turn, over one
    data dir. Each side first creates 3 imps that the bench does not time, so its boot template is
    ready before the timed run starts.
@@ -425,8 +426,9 @@ compares a baseline with its own ref:
    summary holds a table of each side's median p50, p95 and p99 over its rounds, and the change
    against the baseline. The `bench-results` artifact holds each run's JSON report and impd's log.
 
-To compare a change, push it to a branch under `bench/`, then delete the branch once you have the
-table:
+To compare a change, commit it as one commit on the code it changes, push it to a branch under
+`bench/`, then delete the branch once you have the table. An empty commit
+(`git commit --allow-empty`) compares a ref with itself, which shows the runner's noise:
 
 ```bash
 git push origin HEAD:bench/<change>

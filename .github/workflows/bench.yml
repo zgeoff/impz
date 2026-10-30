@@ -1,8 +1,9 @@
 name: bench
 
-# `impz bench` on a KVM runner, against a dev instance. A dispatch, or a push to
-# a bench/** branch, compares a baseline ref with its own ref on the one runner,
-# their rounds taken in turn, and writes the table to the job summary. A bench/**
+# `impz bench` on a KVM runner, against a dev instance. A push to a bench/**
+# branch compares its head with the head's parent, and a dispatch compares its
+# ref with a baseline ref. Both sides run on the one runner, their rounds taken
+# in turn, and the job summary holds the table. A bench/**
 # branch whose name holds huge-pages runs on 2 MiB pages. No pull request runs
 # it, because a compare outlasts the release wait on a pull request's checks.
 on:
@@ -60,7 +61,6 @@ jobs:
       IMP_HOST_IMAGE: imp-host:dev
       IMP_HOST_IMAGE_READY: 1
       IS_HUGE_PAGES: ${{ inputs.huge-pages || contains(github.ref_name, 'huge-pages') }}
-      BASELINE: ${{ inputs.baseline || 'main' }}
       SCENARIOS: ${{ inputs.scenarios || 'create,wake,restore' }}
       CONCURRENCY: ${{ inputs.concurrency || '1,4,16,64' }}
       SAMPLES: ${{ inputs.samples || '20' }}
@@ -69,12 +69,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 2
           persist-credentials: false
+
+      # a bench/** branch holds the change on top of its parent, so the parent
+      # is the side without it
+      - name: Pick the baseline
+        id: baseline
+        env:
+          BASELINE_INPUT: ${{ inputs.baseline }}
+        run: echo "ref=${BASELINE_INPUT:-$(git rev-parse HEAD~1)}" >> "$GITHUB_OUTPUT"
 
       - name: Checkout the baseline
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ env.BASELINE }}
+          ref: ${{ steps.baseline.outputs.ref }}
           path: .cache/baseline
           persist-credentials: false
 
