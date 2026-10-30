@@ -2,7 +2,9 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { createStubFailingDockerCommand } from '@impz/test-utils/create-stub-failing-docker-command';
 import { $ } from 'bun';
+import invariant from 'tiny-invariant';
 
 async function setupTest() {
   const contextPath = await mkdtemp(join(tmpdir(), 'check-no-secrets-'));
@@ -128,6 +130,37 @@ test('it fails without a verdict when it cannot list the image layers', async ()
     exitCode: 127,
     stdout: '',
     stderr: '',
+  });
+});
+
+test('it fails without a verdict when docker history fails', async () => {
+  const ctx = await setupTest();
+
+  const realDocker = Bun.which('docker');
+
+  invariant(realDocker !== null);
+
+  const stub = createStubFailingDockerCommand(ctx.contextPath, 'history', realDocker);
+
+  await mkdir(join(ctx.contextPath, 'root/root'), { recursive: true });
+  await writeFile(join(ctx.contextPath, 'root/root/.bashrc'), 'export EDITOR=vi\n');
+  await writeFile(join(ctx.contextPath, 'Dockerfile'), 'FROM scratch\nCOPY root/ /\n');
+
+  await $`docker build --quiet --tag ${ctx.tag} ${ctx.contextPath}`.quiet();
+
+  const result = await $`bash ${ctx.scriptPath} ${ctx.tag}`
+    .env({ ...process.env, PATH: `${stub.bin}:${process.env['PATH'] ?? ''}` })
+    .nothrow()
+    .quiet();
+
+  expect({
+    exitCode: result.exitCode,
+    stdout: result.stdout.toString(),
+    stderr: result.stderr.toString(),
+  }).toStrictEqual({
+    exitCode: 1,
+    stdout: '',
+    stderr: 'stub docker: history fails\n',
   });
 });
 
