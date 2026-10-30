@@ -124,6 +124,32 @@ test('it installs nothing from a download whose sum differs from the pinned one'
   expect(readFileSync(ctx.githubPath, 'utf8')).toBe('');
 });
 
+test('it installs nothing when curl fails, even after writing the right bytes', async () => {
+  const ctx = setupTest();
+  const release = join(ctx.directoryPath, 'shfmt');
+  const binary = '#!/bin/sh\necho v3.14.1\n';
+
+  writeFileSync(release, binary);
+
+  const curl = createStubCurl(ctx.directoryPath, { source: release, exitCode: 22 });
+
+  const result = await $`bun ${ctx.scriptPath} shfmt`
+    .env({
+      ...process.env,
+      PATH: `${curl.bin}:${process.env['PATH'] ?? ''}`,
+      SHFMT_VERSION: 'v3.14.1',
+      SHFMT_SHA256: new Bun.CryptoHasher('sha256').update(binary).digest('hex'),
+      RUNNER_TEMP: ctx.runnerTemp,
+      GITHUB_PATH: ctx.githubPath,
+    })
+    .nothrow()
+    .quiet();
+
+  expect(result.exitCode).toBe(1);
+  expect(existsSync(join(ctx.runnerTemp, 'bin', 'shfmt'))).toBeFalse();
+  expect(readFileSync(ctx.githubPath, 'utf8')).toBe('');
+});
+
 test('it refuses a linter it does not pin, with its usage', async () => {
   const ctx = setupTest();
 
