@@ -52,15 +52,23 @@ async function main(): Promise<void> {
       return;
     }
 
-    process.stderr.write(step.stderr);
+    if (step.kind === 'fail') {
+      process.stderr.write(step.stderr);
 
-    if (step.error !== null) {
-      console.log(`::error::${step.error}`);
+      if (step.error !== null) {
+        console.log(`::error::${step.error}`);
+      }
+
+      process.exitCode = 1;
+
+      return;
     }
 
-    process.exitCode = 1;
+    // a release tool cannot import ts-pattern, so this assignment fails the type check instead
+    // when a new step kind has no branch above
+    const unhandled: never = step;
 
-    return;
+    throw new Error(`no branch runs the base image step ${JSON.stringify(unhandled)}`);
   }
 }
 

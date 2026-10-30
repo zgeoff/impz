@@ -44,13 +44,21 @@ async function main(): Promise<void> {
       return;
     }
 
-    const binary = join(dist, step.name);
+    if (step.kind === 'check-completions') {
+      const binary = join(dist, step.name);
 
-    await Promise.all(step.shells.map((shell) => $`${binary} completion ${shell}`.quiet()));
+      await Promise.all(step.shells.map((shell) => $`${binary} completion ${shell}`.quiet()));
 
-    console.log(step.message);
+      console.log(step.message);
 
-    return;
+      return;
+    }
+
+    // a release tool cannot import ts-pattern, so this assignment fails the type check instead
+    // when a new step kind has no branch above
+    const unhandled: never = step;
+
+    throw new Error(`no branch runs the binary check step ${JSON.stringify(unhandled)}`);
   }
 }
 

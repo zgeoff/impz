@@ -62,13 +62,21 @@ async function main(): Promise<void> {
       return;
     }
 
-    await $`git -C ${clone} commit -m ${step.subject}`;
+    if (step.kind === 'publish') {
+      await $`git -C ${clone} commit -m ${step.subject}`;
 
-    // rebases onto whatever else landed in the tap meanwhile, such as another project's formula
-    await $`git -C ${clone} pull --rebase`;
-    await $`git -C ${clone} push`;
+      // rebases onto whatever else landed in the tap meanwhile, such as another project's formula
+      await $`git -C ${clone} pull --rebase`;
+      await $`git -C ${clone} push`;
 
-    return;
+      return;
+    }
+
+    // a release tool cannot import ts-pattern, so this assignment fails the type check instead
+    // when a new step kind has no branch above
+    const unhandled: never = step;
+
+    throw new Error(`no branch runs the formula step ${JSON.stringify(unhandled)}`);
   }
 }
 
