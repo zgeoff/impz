@@ -128,8 +128,28 @@ test('#loadTemplateVm fails a restore whose load fails as a fault of the templat
   );
 
   expect(restoring).rejects.toBeInstanceOf(TemplateRestoreError);
-  expect(restoring).rejects.toMatchObject({ isTemplateFault: true });
+  expect(restoring).rejects.toMatchObject({ fault: 'load' });
   expect(restoring).rejects.toThrow(/^template restore failed: /u);
+});
+
+test('#loadTemplateVm fails a restore whose parked agent never answers as an agent fault', () => {
+  const ctx = setupTest();
+  const paths = buildImpPaths(ctx.directoryPath, 'i1');
+
+  mkdirSync(paths.runDir, { recursive: true });
+
+  const stub = buildStubJails({
+    argv: buildStubFirecrackerArgv({ apiSocket: paths.apiSocket, logPath: ctx.logPath }),
+  });
+
+  const restoring = loadTemplateVm(
+    buildMockTemplateRestorePlan({ paths, jail: { uid: 900_001, gid: 900_001 } }),
+    stub.jails,
+    { parkedAgentMs: 300 },
+  );
+
+  expect(restoring).rejects.toBeInstanceOf(TemplateRestoreError);
+  expect(restoring).rejects.toMatchObject({ fault: 'agent' });
 });
 
 test('#loadTemplateVm fails a restore whose drive patch fails as a fault of the imp', async () => {
@@ -159,7 +179,7 @@ test('#loadTemplateVm fails a restore whose drive patch fails as a fault of the 
   await startStubParkedAgent(paths.vsockSocket);
 
   expect(restoring).rejects.toBeInstanceOf(TemplateRestoreError);
-  expect(restoring).rejects.toMatchObject({ isTemplateFault: false });
+  expect(restoring).rejects.toMatchObject({ fault: null });
 });
 
 test('#loadTemplateVm returns the steps the claimed guest reports for its boot', async () => {

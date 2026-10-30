@@ -1580,7 +1580,7 @@ test('#buildStubVmm rejects a failed template restore as the template fault', as
   expect(restoring).rejects.toThrowWithMessage(TemplateRestoreError, 'restore failed');
 
   expect(restoring).rejects.toMatchObject({
-    isTemplateFault: true,
+    fault: 'load',
     cause: expect.toSatisfy((cause: unknown) => cause instanceof StubVmError),
   });
 });
@@ -1620,7 +1620,7 @@ test('#buildStubVmm rejects a disk failure on a template restore as the imp faul
   });
 
   expect(restoring).rejects.toThrowWithMessage(TemplateRestoreError, 'disk failed');
-  expect(restoring).rejects.toMatchObject({ isTemplateFault: false });
+  expect(restoring).rejects.toMatchObject({ fault: null });
 });
 
 test('#buildStubVmm ends the VM when the disk fails on a template restore', async () => {
@@ -1695,7 +1695,7 @@ test('#buildStubVmm rejects a failed claim on a template restore as the imp faul
   });
 
   expect(restoring).rejects.toThrowWithMessage(TemplateRestoreError, 'claim failed');
-  expect(restoring).rejects.toMatchObject({ isTemplateFault: false });
+  expect(restoring).rejects.toMatchObject({ fault: null });
 });
 
 test('#buildStubVmm ends the VM and records no restore when the claim fails on a template restore', async () => {

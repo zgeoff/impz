@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import {
   existsSync,
   mkdirSync,
@@ -24,16 +23,14 @@ import { createSingleFlight } from '../../platform/process/single-flight';
 import type { RamAdmission } from '../imps-contract/ram-admission';
 import type { HostIdentity } from '../sleep/vm-identity';
 import type { DiskBudget } from '../storage/disk-budget';
-import { BASE_BOOT_ARGS, VM_DEVICES } from '../vmm/configure-vm';
 import type { CpuCgroups } from '../vmm/cpu-cgroups';
 import type { HugePages } from '../vmm/firecracker-client';
 import type { JailUser } from '../vmm/jail';
-import type { TemplateBuildPlan } from '../vmm/template-vm';
+import type { TemplateBuildPlan, TemplateFault } from '../vmm/template-vm';
+import { TEMPLATE_BOOT_ARGS, buildTemplateKey } from './build-template-key';
+import type { TemplateShape } from './build-template-key';
 import { createTemplateLocks } from './template-locks';
 import type { TemplateLockDeps } from './template-locks';
-
-/* @internal */
-export const TEMPLATE_BOOT_ARGS = [...BASE_BOOT_ARGS, 'imp.template=1'].join(' ');
 
 const TEMPLATE_ADDRESS: SlotAddress = {
   slot: -1,
@@ -69,14 +66,6 @@ const TemplateMetaSchema = z.object({
 
 type TemplateMeta = z.infer<typeof TemplateMetaSchema>;
 
-interface TemplateShape {
-  readonly vcpus: number;
-  readonly memoryMib: number;
-
-  // the host's own pages when left out
-  readonly hugePages?: HugePages;
-}
-
 interface TemplateFiles {
   readonly key: string;
   readonly buildId: string;
@@ -90,11 +79,23 @@ interface TemplateFiles {
   readonly placeholderPath: string;
 }
 
+interface RestoreFailure {
+  readonly fault: TemplateFault;
+  readonly restoredBefore: number;
+}
+
 export interface BootTemplates {
   readonly requestTemplate: (shape: Readonly<TemplateShape>) => TemplateFiles | null;
   readonly buildTemplate: (shape: Readonly<TemplateShape>) => Promise<TemplateFiles>;
-  readonly reportFailure: (files: Readonly<TemplateFiles>, isTemplateFault: boolean) => void;
+
+  // restoredBefore is the build's restore count when the failed restore began,
+  // so an agent timeout beside a restore that succeeded reads as a busy host
+  readonly reportFailure: (
+    files: Readonly<TemplateFiles>,
+    failure: Readonly<RestoreFailure>,
+  ) => void;
   readonly reportRestored: (files: Readonly<TemplateFiles>) => void;
+  readonly countRestored: (files: Readonly<TemplateFiles>) => number;
   readonly removeStale: () => string[];
   readonly listDrivePaths: () => string[];
   readonly lockKept: () => Promise<void>;
@@ -133,30 +134,6 @@ interface KeyRecord {
   isOff: boolean;
 }
 
-export function buildTemplateKey(identity: Readonly<HostIdentity>, shape: Readonly<TemplateShape>) {
-  const fields = {
-    guestKernel: identity.guestKernel,
-    systemDrive: identity.systemDrive,
-    firecrackerVersion: identity.firecrackerVersion,
-    snapshotVersion: identity.snapshotVersion,
-    hostKernel: identity.hostKernel,
-
-    // The guest kernel picks its code paths on the CPU it boots on, and a cloud host's CPU can
-    // change at a reboot, which faults a restore.
-    cpuModel: identity.cpuModel,
-    cpuFlags: identity.cpuFlags,
-    bootArgs: TEMPLATE_BOOT_ARGS,
-    devices: VM_DEVICES,
-    memoryMib: shape.memoryMib,
-    vcpus: shape.vcpus,
-
-    // a 4 KiB template keeps the key it had before guests could run on huge pages
-    ...(shape.hugePages === '2M' && { hugePages: shape.hugePages }),
-  };
-
-  return createHash('sha256').update(JSON.stringify(fields)).digest('hex');
-}
-
 export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
   const root = join(deps.dataDir, 'templates');
   const now = deps.now ?? Date.now;
@@ -167,6 +144,7 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
 
   const records = new Map<string, KeyRecord>();
   const lastUsed = new Map<string, number>();
+  const restoredByBuild = new Map<string, number>();
 
   const lane = createSemaphore(1);
 
@@ -527,8 +505,19 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
       return null;
     },
     buildTemplate: createTemplateFiles,
-    reportFailure: (files, isTemplateFault) => {
-      if (!isTemplateFault || readMeta(files.key)?.buildId !== files.buildId) {
+    reportFailure: (files, failure) => {
+      if (failure.fault === null || readMeta(files.key)?.buildId !== files.buildId) {
+        return;
+      }
+
+      const restored = restoredByBuild.get(files.buildId) ?? 0;
+
+      if (failure.fault === 'agent' && restored > failure.restoredBefore) {
+        getImpdLogger('boot').info(
+          'boot template {key} kept: its agent timed out while another restore of it succeeded',
+          { key: files.key.slice(0, 12) },
+        );
+
         return;
       }
 
@@ -549,7 +538,10 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
     },
     reportRestored: (files) => {
       getRecord(files.key).restoreFailures = 0;
+
+      restoredByBuild.set(files.buildId, (restoredByBuild.get(files.buildId) ?? 0) + 1);
     },
+    countRestored: (files) => restoredByBuild.get(files.buildId) ?? 0,
     removeStale: () => {
       if (!existsSync(root)) {
         return [];

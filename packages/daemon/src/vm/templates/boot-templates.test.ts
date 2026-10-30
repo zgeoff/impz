@@ -3,15 +3,14 @@ import { existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { readAgentFixture } from '@impz/test-utils/read-agent-fixture';
 import invariant from 'tiny-invariant';
-import * as z from 'zod';
 import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { buildMockHostIdentity } from '../../../testing/vm/build-mock-host-identity';
 import { buildStubTemplateVm } from '../../../testing/vm/build-stub-template-vm';
 import { createDiskBudget } from '../storage/disk-budget';
-import { TEMPLATE_BOOT_ARGS, buildTemplateKey, createBootTemplates } from './boot-templates';
+import { createBootTemplates } from './boot-templates';
 import type { BootTemplateDeps } from './boot-templates';
+import { buildTemplateKey } from './build-template-key';
 import type { MemoryLockResult } from './create-memory-lock';
 
 async function setupTest() {
@@ -64,45 +63,6 @@ async function setupTest() {
   };
 }
 
-test('#TEMPLATE_BOOT_ARGS is the cmdline the agent reads as a template (agent/internal/contract)', () => {
-  expect(TEMPLATE_BOOT_ARGS).toBe(
-    z.object({ template_boot_args: z.string() }).parse(readAgentFixture('host/cmdline.json'))
-      .template_boot_args,
-  );
-});
-
-test('#buildTemplateKey changes with each thing a restore inherits', () => {
-  const identity = buildMockHostIdentity();
-  const shape = { vcpus: 1, memoryMib: 512 };
-
-  const keys = [
-    buildTemplateKey(identity, shape),
-    buildTemplateKey({ ...identity, guestKernel: `${identity.guestKernel}-other` }, shape),
-    buildTemplateKey({ ...identity, systemDrive: `${identity.systemDrive}-other` }, shape),
-    buildTemplateKey(
-      { ...identity, firecrackerVersion: `${identity.firecrackerVersion}-other` },
-      shape,
-    ),
-    buildTemplateKey({ ...identity, snapshotVersion: `${identity.snapshotVersion}-other` }, shape),
-    buildTemplateKey({ ...identity, hostKernel: `${identity.hostKernel}-other` }, shape),
-    buildTemplateKey({ ...identity, cpuModel: `${identity.cpuModel}-other` }, shape),
-    buildTemplateKey({ ...identity, cpuFlags: `${identity.cpuFlags}-other` }, shape),
-    buildTemplateKey(identity, { ...shape, vcpus: 2 }),
-    buildTemplateKey(identity, { ...shape, memoryMib: 1024 }),
-    buildTemplateKey(identity, { ...shape, hugePages: '2M' }),
-  ];
-
-  expect(new Set(keys).size).toBe(keys.length);
-});
-
-test('#buildTemplateKey keeps the key of a shape on host pages when it names them', () => {
-  const identity = buildMockHostIdentity();
-
-  expect(buildTemplateKey(identity, { vcpus: 1, memoryMib: 512, hugePages: 'None' })).toBe(
-    buildTemplateKey(identity, { vcpus: 1, memoryMib: 512 }),
-  );
-});
-
 test('#buildTemplate builds a 2M shape on 2 MiB pages and records them in its files', async () => {
   const ctx = await setupTest();
 
@@ -130,15 +90,6 @@ test('#requestTemplate answers no 4 KiB template for a 2M shape', async () => {
   await store.buildTemplate({ vcpus: 1, memoryMib: 512 });
 
   expect(store.requestTemplate({ vcpus: 1, memoryMib: 512, hugePages: '2M' })).toBeNull();
-});
-
-test('#buildTemplateKey keeps the key when only the drive path changes', () => {
-  const identity = buildMockHostIdentity();
-  const shape = { vcpus: 1, memoryMib: 512 };
-
-  expect(buildTemplateKey({ ...identity, systemDrivePath: '/elsewhere' }, shape)).toBe(
-    buildTemplateKey(identity, shape),
-  );
 });
 
 test('#requestTemplate answers null and starts no build on the first miss of a shape', async () => {
@@ -739,7 +690,7 @@ test('#reportFailure keeps a template whose restore failed in the imp', async ()
 
   const files = await store.buildTemplate({ vcpus: 1, memoryMib: 512 });
 
-  store.reportFailure(files, false);
+  store.reportFailure(files, { fault: null, restoredBefore: 0 });
 
   expect(existsSync(files.memFile)).toBeTrue();
 });
@@ -755,7 +706,65 @@ test('#reportFailure removes a template whose restore failed in the template', a
 
   const files = await store.buildTemplate({ vcpus: 1, memoryMib: 512 });
 
-  store.reportFailure(files, true);
+  store.reportFailure(files, { fault: 'load', restoredBefore: 0 });
+
+  expect(existsSync(files.memFile)).toBeFalse();
+});
+
+test('#reportFailure keeps a template whose agent timed out while another restore of it succeeded', async () => {
+  const ctx = await setupTest();
+
+  const store = createBootTemplates({
+    ...ctx.deps,
+    identity: buildMockHostIdentity(),
+    bootReservePercent: 50,
+  });
+
+  const files = await store.buildTemplate({ vcpus: 1, memoryMib: 512 });
+
+  const restoredBefore = store.countRestored(files);
+
+  store.reportRestored(files);
+  store.reportFailure(files, { fault: 'agent', restoredBefore });
+
+  expect(existsSync(files.memFile)).toBeTrue();
+});
+
+test('#reportFailure removes a template whose agent timed out with no restore of it succeeding', async () => {
+  const ctx = await setupTest();
+
+  const store = createBootTemplates({
+    ...ctx.deps,
+    identity: buildMockHostIdentity(),
+    bootReservePercent: 50,
+  });
+
+  const files = await store.buildTemplate({ vcpus: 1, memoryMib: 512 });
+
+  store.reportRestored(files);
+
+  const restoredBefore = store.countRestored(files);
+
+  store.reportFailure(files, { fault: 'agent', restoredBefore });
+
+  expect(existsSync(files.memFile)).toBeFalse();
+});
+
+test('#reportFailure removes a template whose load failed, though another restore of it succeeded', async () => {
+  const ctx = await setupTest();
+
+  const store = createBootTemplates({
+    ...ctx.deps,
+    identity: buildMockHostIdentity(),
+    bootReservePercent: 50,
+  });
+
+  const files = await store.buildTemplate({ vcpus: 1, memoryMib: 512 });
+
+  const restoredBefore = store.countRestored(files);
+
+  store.reportRestored(files);
+  store.reportFailure(files, { fault: 'load', restoredBefore });
 
   expect(existsSync(files.memFile)).toBeFalse();
 });
@@ -771,11 +780,11 @@ test('#reportFailure for an older build leaves the rebuilt template', async () =
 
   const first = await store.buildTemplate({ vcpus: 1, memoryMib: 512 });
 
-  store.reportFailure(first, true);
+  store.reportFailure(first, { fault: 'load', restoredBefore: 0 });
 
   const rebuilt = await store.buildTemplate({ vcpus: 1, memoryMib: 512 });
 
-  store.reportFailure(first, true);
+  store.reportFailure(first, { fault: 'load', restoredBefore: 0 });
 
   expect(existsSync(rebuilt.memFile)).toBeTrue();
 });
@@ -792,12 +801,12 @@ test('#reportFailure turns a key off at its third template fault in a row', asyn
   for (let count = 0; count < 2; count += 1) {
     const files = await store.buildTemplate({ vcpus: 1, memoryMib: 512 });
 
-    store.reportFailure(files, true);
+    store.reportFailure(files, { fault: 'load', restoredBefore: 0 });
   }
 
   const files = await store.buildTemplate({ vcpus: 1, memoryMib: 512 });
 
-  store.reportFailure(files, true);
+  store.reportFailure(files, { fault: 'load', restoredBefore: 0 });
 
   expect(ctx.logs.at(-1)).toInclude('off until impd restarts: 3 restores failed');
 });
@@ -814,7 +823,7 @@ test('#buildTemplate refuses a key its restore faults turned off', async () => {
   for (let count = 0; count < 3; count += 1) {
     const files = await store.buildTemplate({ vcpus: 1, memoryMib: 512 });
 
-    store.reportFailure(files, true);
+    store.reportFailure(files, { fault: 'load', restoredBefore: 0 });
   }
 
   const building = store.buildTemplate({ vcpus: 1, memoryMib: 512 });
@@ -837,13 +846,13 @@ test('#reportFailure counts no fault in the imp toward turning the key off', asy
   for (let count = 0; count < 2; count += 1) {
     const files = await store.buildTemplate({ vcpus: 1, memoryMib: 512 });
 
-    store.reportFailure(files, true);
+    store.reportFailure(files, { fault: 'load', restoredBefore: 0 });
   }
 
   const files = await store.buildTemplate({ vcpus: 1, memoryMib: 512 });
 
   for (let count = 0; count < 5; count += 1) {
-    store.reportFailure(files, false);
+    store.reportFailure(files, { fault: null, restoredBefore: 0 });
   }
 
   expect(store.requestTemplate({ vcpus: 1, memoryMib: 512 })).toStrictEqual(files);
@@ -861,17 +870,17 @@ test('#reportRestored starts the count of template faults again', async () => {
   for (let count = 0; count < 2; count += 1) {
     const files = await store.buildTemplate({ vcpus: 1, memoryMib: 512 });
 
-    store.reportFailure(files, true);
+    store.reportFailure(files, { fault: 'load', restoredBefore: 0 });
   }
 
   const restored = await store.buildTemplate({ vcpus: 1, memoryMib: 512 });
 
   store.reportRestored(restored);
-  store.reportFailure(restored, true);
+  store.reportFailure(restored, { fault: 'load', restoredBefore: 0 });
 
   const rebuilt = await store.buildTemplate({ vcpus: 1, memoryMib: 512 });
 
-  store.reportFailure(rebuilt, true);
+  store.reportFailure(rebuilt, { fault: 'load', restoredBefore: 0 });
 
   expect(ctx.logs.join('\n')).not.toInclude('restores failed');
 });
@@ -890,7 +899,7 @@ test('#reportFailure counts no failure for a template evicted before it', async 
 
     rmSync(join(ctx.dataDir, 'templates', files.key), { recursive: true });
 
-    store.reportFailure(files, true);
+    store.reportFailure(files, { fault: 'load', restoredBefore: 0 });
   }
 
   const rebuilt = await store.buildTemplate({ vcpus: 1, memoryMib: 512 });
@@ -1108,7 +1117,7 @@ test('#buildTemplate locks a rebuilt template apart from the lock its removed bu
 
   const removed = await store.buildTemplate({ vcpus: 1, memoryMib: 512 });
 
-  store.reportFailure(removed, true);
+  store.reportFailure(removed, { fault: 'load', restoredBefore: 0 });
 
   const rebuilt = await store.buildTemplate({ vcpus: 1, memoryMib: 512 });
 
@@ -1179,7 +1188,7 @@ test('#reportFailure releases the lock of the template it removes', async () => 
 
   await store.lockKept();
 
-  store.reportFailure(files, true);
+  store.reportFailure(files, { fault: 'load', restoredBefore: 0 });
 
   expect(release).toHaveBeenCalledOnce();
   expect(store.readLockedMib()).toBe(0);
@@ -1200,7 +1209,7 @@ test('#reportFailure releases a lock that finishes after it removed the template
 
   const files = await store.buildTemplate({ vcpus: 1, memoryMib: 512 });
 
-  store.reportFailure(files, true);
+  store.reportFailure(files, { fault: 'load', restoredBefore: 0 });
   pending.resolve({ lock: { lockedBytes: 4096, release } });
 
   await store.stop();

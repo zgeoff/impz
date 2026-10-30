@@ -9,7 +9,7 @@ import { readBrokenInvariants } from '../../../testing/imps/read-broken-invarian
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { buildStubCpuCgroups } from '../../../testing/vm/build-stub-cpu-cgroups';
 import { readImpByName } from '../../platform/db/imps';
-import { buildTemplateKey } from '../../vm/templates/boot-templates';
+import { buildTemplateKey } from '../../vm/templates/build-template-key';
 
 async function setupTest(
   config: Readonly<{
