@@ -52,7 +52,7 @@
     },
     "packages/api": {
       "name": "@impz/api",
-      "version": "6.2.0",
+      "version": "6.2.1",
       "dependencies": {
         "@orpc/client": "catalog:",
         "@orpc/contract": "catalog:",
@@ -65,7 +65,7 @@
     },
     "packages/cli": {
       "name": "@impz/cli",
-      "version": "6.2.0",
+      "version": "6.2.1",
       "bin": {
         "impz": "src/main.ts",
       },
@@ -91,7 +91,7 @@
     },
     "packages/client": {
       "name": "@impz/client",
-      "version": "6.2.0",
+      "version": "6.2.1",
       "dependencies": {
         "@orpc/client": "catalog:",
         "@orpc/contract": "catalog:",
@@ -116,7 +116,7 @@
     },
     "packages/daemon": {
       "name": "@impz/daemon",
-      "version": "6.2.0",
+      "version": "6.2.1",
       "dependencies": {
         "@better-auth/mcp": "catalog:",
         "@better-auth/oauth-provider": "catalog:",
@@ -293,7 +293,7 @@
     },
     "packages/testing": {
       "name": "@impz/testing",
-      "version": "6.2.0",
+      "version": "6.2.1",
       "dependencies": {
         "@impz/client": "workspace:*",
       },
