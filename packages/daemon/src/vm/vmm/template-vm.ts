@@ -83,6 +83,7 @@ export interface TemplateVmOptions {
   readonly createClient?: CreateFirecrackerClient;
   readonly uffdHandlerBin?: string | null;
   readonly uffdWatch?: UffdWatch;
+  readonly parkedAgentMs?: number;
 }
 
 export async function createTemplateVm(
@@ -233,14 +234,19 @@ async function setupRestoreCommand(
   });
 }
 
-export class TemplateRestoreError extends Error {
-  readonly isTemplateFault: boolean;
+// A load or resume failure is the template's own, and so is a parked agent that
+// never answers, unless the host was too busy for it: the template store tells
+// those apart. A failure after the claim is the imp's.
+export type TemplateFault = 'load' | 'agent' | null;
 
-  constructor(message: string, isTemplateFault: boolean, cause: unknown) {
+export class TemplateRestoreError extends Error {
+  readonly fault: TemplateFault;
+
+  constructor(message: string, fault: TemplateFault, cause: unknown) {
     super(message, { cause });
 
     this.name = 'TemplateRestoreError';
-    this.isTemplateFault = isTemplateFault;
+    this.fault = fault;
   }
 }
 
@@ -255,7 +261,7 @@ export async function loadTemplateVm(
 
   marks.setMark('spawn');
 
-  const step = { isTemplateFault: true };
+  const step: { fault: TemplateFault } = { fault: 'load' };
 
   try {
     const api = (options.createClient ?? createFirecrackerClient)(plan.paths.apiSocket);
@@ -296,8 +302,10 @@ export async function loadTemplateVm(
 
     marks.setMark('resume');
 
+    step.fault = 'agent';
+
     await waitForAgent(plan.paths.vsockSocket, {
-      deadlineMs: VM_DEADLINES.agentMs,
+      deadlineMs: options.parkedAgentMs ?? VM_DEADLINES.agentMs,
       attemptMs: 200,
       maxDelayMs: RESTORE_PING_DELAY_MS,
       isParked: true,
@@ -305,7 +313,7 @@ export async function loadTemplateVm(
 
     marks.setMark('parked');
 
-    step.isTemplateFault = false;
+    step.fault = null;
 
     const diskBytes = await plan.diskReady;
 
@@ -361,7 +369,7 @@ export async function loadTemplateVm(
 
     throw new TemplateRestoreError(
       `template restore failed: ${reason}\n${readLogTail(plan.paths.logFile, 5)}`,
-      step.isTemplateFault,
+      step.fault,
       error,
     );
   }

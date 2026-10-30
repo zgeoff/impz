@@ -3,12 +3,12 @@ import { readFileSync } from 'node:fs';
 import { waitFor } from '@impz/test-utils/wait-for';
 
 export async function startStubFirecrackerProcess(apiSocket: string) {
-  const child = Bun.spawn([
-    'bash',
-    '-c',
-    `exec -a firecracker bash -c 'sleep 30; true' x --api-sock "$0"`,
-    apiSocket,
-  ]);
+  // bash's own read waits on the open stdin pipe, so the stand-in runs no
+  // child that its SIGKILL would orphan
+  const child = Bun.spawn(
+    ['bash', '-c', `exec -a firecracker bash -c 'read -t 30 || true' x --api-sock "$0"`, apiSocket],
+    { stdin: 'pipe' },
+  );
 
   onTestFinished(() => {
     child.kill('SIGKILL');

@@ -106,6 +106,39 @@ test('it never answers when wedged', async () => {
   expect(Bun.peek.status(response)).toBe('pending');
 });
 
+test('it holds the calls it is told to hold and answers the rest', async () => {
+  const ctx = setupTest();
+  const api = startStubFirecrackerApi(ctx.socket, { held: ['GET /version'] });
+  const version = fetch('http://localhost/version', { unix: ctx.socket });
+
+  onTestFinished(() => {
+    expect(version).rejects.toMatchObject({ code: 'ECONNRESET' });
+  });
+
+  const state = await fetch('http://localhost/vm', { unix: ctx.socket });
+
+  await waitFor(() => {
+    expect(api.calls).toHaveLength(2);
+  });
+
+  expect(state.status).toBe(200);
+  expect(Bun.peek.status(version)).toBe('pending');
+});
+
+test('it fails each held call on its socket once it is cut', async () => {
+  const ctx = setupTest();
+  const api = startStubFirecrackerApi(ctx.socket, { held: ['GET /version'] });
+  const version = fetch('http://localhost/version', { unix: ctx.socket });
+
+  await waitFor(() => {
+    expect(api.calls).toHaveLength(1);
+  });
+
+  await api.cut();
+
+  expect(version).rejects.toMatchObject({ code: 'ECONNRESET' });
+});
+
 test('it stops when the test ends', () => {
   // an abstract socket has no file, so no temp dir's removal can hide the
   // stop; a name already bound refuses the listen

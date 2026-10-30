@@ -10,6 +10,9 @@ interface StubFirecrackerApiOptions {
   readonly answers?: Readonly<Record<string, StubFirecrackerAnswer>>;
 
   readonly isWedged?: boolean;
+
+  // the calls it never answers, such as `GET /version`, while it answers the rest
+  readonly held?: readonly string[];
 }
 
 interface StubFirecrackerCall {
@@ -31,7 +34,7 @@ export function startStubFirecrackerApi(
 
     calls.push({ method: request.method, path, body: text === '' ? null : JSON.parse(text) });
 
-    if (options.isWedged === true) {
+    if (options.isWedged === true || options.held?.includes(`${request.method} ${path}`) === true) {
       return new Promise<Response>(() => {});
     }
 
@@ -57,5 +60,9 @@ export function startStubFirecrackerApi(
 
   onTestFinished(() => server.stop(true));
 
-  return { calls };
+  // drops every open connection, as a Firecracker that dies does, so each
+  // held call fails on its socket
+  const cut = (): Promise<void> => server.stop(true);
+
+  return { calls, cut };
 }

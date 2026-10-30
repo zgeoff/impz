@@ -1580,7 +1580,7 @@ test('#buildStubVmm rejects a failed template restore as the template fault', as
   expect(restoring).rejects.toThrowWithMessage(TemplateRestoreError, 'restore failed');
 
   expect(restoring).rejects.toMatchObject({
-    isTemplateFault: true,
+    fault: 'load',
     cause: expect.toSatisfy((cause: unknown) => cause instanceof StubVmError),
   });
 });
@@ -1620,7 +1620,7 @@ test('#buildStubVmm rejects a disk failure on a template restore as the imp faul
   });
 
   expect(restoring).rejects.toThrowWithMessage(TemplateRestoreError, 'disk failed');
-  expect(restoring).rejects.toMatchObject({ isTemplateFault: false });
+  expect(restoring).rejects.toMatchObject({ fault: null });
 });
 
 test('#buildStubVmm ends the VM when the disk fails on a template restore', async () => {
@@ -1695,7 +1695,49 @@ test('#buildStubVmm rejects a failed claim on a template restore as the imp faul
   });
 
   expect(restoring).rejects.toThrowWithMessage(TemplateRestoreError, 'claim failed');
-  expect(restoring).rejects.toMatchObject({ isTemplateFault: false });
+  expect(restoring).rejects.toMatchObject({ fault: null });
+});
+
+test('#buildStubVmm rejects a template restore whose parked agent never answers as an agent fault, and ends its VM', async () => {
+  const ctx = await setupTest();
+
+  ctx.fake.queue('parkedAgent', 'fail');
+
+  const restoring = ctx.runner.loadTemplateVm({
+    firecrackerBin: '/usr/bin/firecracker',
+    paths: ctx.paths,
+    vmstate: '/templates/shape-1/vmstate',
+    memFile: '/templates/shape-1/mem',
+    hugePages: 'None',
+    systemDrivePath: '/images/system.ext4',
+    placeholderPath: '/templates/shape-1/placeholder.ext4',
+    diskPath: ctx.paths.disk,
+    tap: 'imp1',
+    cgroup: null,
+    jail: null,
+    diskReady: Promise.resolve(4_294_967_296),
+    claim: {
+      id: 'imp-1',
+      hostname: 'alpha',
+      ip: '10.100.0.2',
+      gw: '10.100.0.1',
+      ip6: null,
+      gw6: null,
+      dns: ['1.1.1.1'],
+      mac: '06:00:0a:64:00:02',
+      seed: new Uint8Array(32),
+      isIdentityReset: false,
+    },
+  });
+
+  const failure = await restoring.then(
+    () => null,
+    (error: unknown) => error,
+  );
+
+  expect(failure).toBeInstanceOf(TemplateRestoreError);
+  expect(failure).toMatchObject({ fault: 'agent', message: 'the parked agent never answered' });
+  expect(ctx.fake.alive).toBeEmpty();
 });
 
 test('#buildStubVmm ends the VM and records no restore when the claim fails on a template restore', async () => {

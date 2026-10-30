@@ -6,10 +6,11 @@ import { ORPCError } from '@orpc/client';
 import invariant from 'tiny-invariant';
 import { buildStubDiskTools } from '../../../testing/imps/build-stub-disk-tools';
 import { readBrokenInvariants } from '../../../testing/imps/read-broken-invariants';
+import { waitForOutcome } from '../../../testing/imps/wait-for-outcome';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { buildStubCpuCgroups } from '../../../testing/vm/build-stub-cpu-cgroups';
-import { readImpByName } from '../../platform/db/imps';
-import { buildTemplateKey } from '../../vm/templates/boot-templates';
+import { listImps, readImpByName } from '../../platform/db/imps';
+import { buildTemplateKey } from '../../vm/templates/build-template-key';
 
 async function setupTest(
   config: Readonly<{
@@ -170,6 +171,52 @@ test('it removes a template whose restore fails in it, and boots the kernel', as
   );
 
   expect(readdirSync(join(ctx.dataDir, 'templates'))).not.toContain(key);
+});
+
+test('it removes a template whose parked agent never answers, though an earlier restore of it succeeded', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.client.imps.create({ name: 'first', vcpus: 1, memoryMib: 256 });
+  await ctx.templates.buildTemplate({ vcpus: 1, memoryMib: 256 });
+  await ctx.client.imps.create({ name: 'second', vcpus: 1, memoryMib: 256 });
+
+  ctx.fake.queue('parkedAgent', 'fail');
+
+  await ctx.client.imps.create({ name: 'third', vcpus: 1, memoryMib: 256 });
+
+  const key = buildTemplateKey(ctx.readIdentity(), { vcpus: 1, memoryMib: 256 });
+
+  expect(ctx.fake.boots.map((boot) => boot.hostname)).toStrictEqual(['first', 'third']);
+  expect(readdirSync(join(ctx.dataDir, 'templates'))).not.toContain(key);
+});
+
+test('it keeps a template whose parked agent timed out while another restore of it succeeded', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.client.imps.create({ name: 'first', vcpus: 1, memoryMib: 256 });
+  await ctx.templates.buildTemplate({ vcpus: 1, memoryMib: 256 });
+
+  ctx.fake.queue('restore', 'hang', 'ok');
+  ctx.fake.queue('parkedAgent', 'ok', 'fail');
+
+  const slow = ctx.client.imps.create({ name: 'slow', vcpus: 1, memoryMib: 256 });
+
+  await waitFor(() => {
+    expect(ctx.fake.countHungCalls()).toBe(1);
+  });
+
+  await ctx.client.imps.create({ name: 'quick', vcpus: 1, memoryMib: 256 });
+
+  ctx.fake.releaseHangs();
+
+  await slow;
+
+  const key = buildTemplateKey(ctx.readIdentity(), { vcpus: 1, memoryMib: 256 });
+
+  expect(ctx.fake.boots.map((boot) => boot.hostname)).toStrictEqual(['first', 'slow']);
+  expect(readdirSync(join(ctx.dataDir, 'templates'))).toContain(key);
 });
 
 test('it keeps the template for the next imp after a restore fails past the claim', async () => {
@@ -475,4 +522,114 @@ test('it overlaps a jailed restore with the grow of its disk', async () => {
 
   expect(second.state).toBe('running');
   expect(ctx.fake.restores.map((restore) => restore.hostname)).toStrictEqual(['second']);
+});
+
+test('it restores a boot template for a create while four wakes hold every wake slot', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.client.imps.create({ name: 'once', vcpus: 1, memoryMib: 256 });
+  await ctx.client.imps.create({ name: 'first', vcpus: 1, memoryMib: 256 });
+  await ctx.templates.stop();
+
+  const sleepers = ['a', 'b', 'c', 'd'];
+
+  await Promise.all(
+    sleepers.map((name) => ctx.client.imps.create({ name, vcpus: 1, memoryMib: 256 })),
+  );
+
+  await Promise.all(sleepers.map((name) => ctx.client.imps.sleep({ name })));
+
+  ctx.fake.queue('wake', 'hang', 'hang', 'hang', 'hang');
+
+  const wakes = sleepers.map((name) => waitForOutcome(ctx.client.imps.wake({ name }), 10_000));
+
+  await waitFor(() => {
+    expect(ctx.fake.countHungCalls()).toBe(4);
+  });
+
+  const restoresBefore = ctx.fake.restorePlans.length;
+
+  const created = await waitForOutcome(
+    ctx.client.imps.create({ name: 'fresh', vcpus: 1, memoryMib: 256 }),
+    5000,
+  );
+
+  const restored = ctx.fake.restorePlans.length - restoresBefore;
+
+  ctx.fake.releaseHangs();
+
+  const woke = await Promise.all(wakes);
+
+  expect(created).toBe('done');
+  expect(restored).toBe(1);
+  expect(woke).toStrictEqual(['done', 'done', 'done', 'done']);
+});
+
+test('it boots four imps whose wakes failed from a boot template while they hold every wake slot', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.client.imps.create({ name: 'once', vcpus: 1, memoryMib: 256 });
+  await ctx.client.imps.create({ name: 'first', vcpus: 1, memoryMib: 256 });
+  await ctx.templates.stop();
+
+  const sleepers = ['a', 'b', 'c', 'd'];
+
+  await Promise.all(
+    sleepers.map((name) => ctx.client.imps.create({ name, vcpus: 1, memoryMib: 256 })),
+  );
+
+  await Promise.all(sleepers.map((name) => ctx.client.imps.sleep({ name })));
+
+  const restoresBefore = ctx.fake.restorePlans.length;
+
+  ctx.fake.queue('wake', 'fail', 'fail', 'fail', 'fail');
+
+  const woke = await Promise.all(
+    sleepers.map((name) => waitForOutcome(ctx.client.imps.wake({ name }), 5000)),
+  );
+
+  expect(woke).toStrictEqual(['done', 'done', 'done', 'done']);
+  expect(ctx.fake.restorePlans.length - restoresBefore).toBe(4);
+});
+
+test('it restores at most four boot templates at once, and starts a fifth once one ends', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.client.imps.create({ name: 'once', vcpus: 1, memoryMib: 256 });
+  await ctx.client.imps.create({ name: 'first', vcpus: 1, memoryMib: 256 });
+  await ctx.templates.stop();
+
+  ctx.fake.queue('restore', 'hang', 'hang', 'hang', 'hang', 'hang');
+
+  const names = ['a', 'b', 'c', 'd', 'e'];
+
+  const creates = names.map((name) =>
+    waitForOutcome(ctx.client.imps.create({ name, vcpus: 1, memoryMib: 256 }), 10_000),
+  );
+
+  await waitFor(async () => {
+    expect(ctx.fake.countHungCalls()).toBe(4);
+
+    const listed = await listImps(ctx.db);
+
+    expect(listed.map((imp) => imp.name)).toIncludeAllMembers(names);
+  });
+
+  const heldRestores = ctx.fake.restorePlans.length;
+
+  ctx.fake.releaseHangs();
+
+  await waitFor(() => {
+    expect(ctx.fake.countHungCalls()).toBe(1);
+  });
+
+  ctx.fake.releaseHangs();
+
+  const created = await Promise.all(creates);
+
+  expect(heldRestores).toBe(4);
+  expect(created).toStrictEqual(['done', 'done', 'done', 'done', 'done']);
 });

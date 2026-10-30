@@ -2,7 +2,8 @@ import { EVENT_VERSION } from '@impz/api';
 import type { LockFreeSleep } from '../../imps/imps/lock-free-sleep';
 import type { EventBus } from '../../platform/events/event-bus';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
-import { createSemaphore } from '../../platform/process/semaphore';
+import { createPrioritySemaphore } from '../../platform/process/priority-semaphore';
+import type { TaskPriority } from '../../platform/process/priority-semaphore';
 import type { GrowRequest } from '../../vm/imps-contract/grow-request';
 import type { AdmissionRequest, RamAdmission } from '../../vm/imps-contract/ram-admission';
 import {
@@ -125,7 +126,7 @@ interface Reservation {
 }
 
 export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
-  const admission = createSemaphore(1);
+  const admission = createPrioritySemaphore(1);
 
   const reservations = new Map<
     string,
@@ -399,7 +400,7 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
 
   return {
     admit: (request) =>
-      admission.run(async () => {
+      admission.run(toTaskPriority(request), async () => {
         const hugePagesMib = request.hugePagesMib ?? 0;
         const hostBudgets = readBudgets();
         const budgets = hugePagesMib > 0 ? { ...hostBudgets, ordinaryMib: null } : hostBudgets;
@@ -486,7 +487,7 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
     },
 
     admitGrow: (request) =>
-      admission.run(async () => {
+      admission.run('background', async () => {
         const listed = await deps.listAwake();
 
         if (!listed.some((imp) => imp.id === request.id)) {
@@ -560,7 +561,7 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
     },
 
     enforce: () =>
-      admission.run(async () => {
+      admission.run('background', async () => {
         const budgets = readBudgets();
 
         const room = await makeRoom({
@@ -605,4 +606,8 @@ function pickEffectiveShortfall(
     budgets,
     requestedMib,
   );
+}
+
+function toTaskPriority(request: Readonly<AdmissionRequest>): TaskPriority {
+  return request.isBackground === true ? 'background' : 'foreground';
 }

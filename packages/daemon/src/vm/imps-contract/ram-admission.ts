@@ -7,6 +7,9 @@ export interface AdmissionRequest {
   // the memory a guest on 2 MiB pages may take from the host's hugetlb pool
   readonly hugePagesMib?: number;
   readonly maySleepImps?: boolean;
+
+  // work no caller waits on, which yields to every waiting foreground admission
+  readonly isBackground?: boolean;
 }
 
 export interface RamAdmission {

@@ -24,6 +24,7 @@ export type VmStep =
   | 'plug'
   | 'template'
   | 'restore'
+  | 'parkedAgent'
   | 'claim';
 
 export type VmOutcome = 'ok' | 'fail' | 'die' | 'hang';
@@ -435,17 +436,22 @@ export function buildStubVmm() {
           restorePlans.push(plan);
 
           const vm = await startFakeVm('restore', plan.paths).catch((error: unknown) => {
-            throw new TemplateRestoreError('restore failed', true, error);
+            throw new TemplateRestoreError('restore failed', 'load', error);
           });
+
+          if ((await chooseOutcome('parkedAgent')) !== 'ok') {
+            alive.delete(vm.pid);
+            throw new TemplateRestoreError('the parked agent never answered', 'agent', null);
+          }
 
           await plan.diskReady.catch((error: unknown) => {
             alive.delete(vm.pid);
-            throw new TemplateRestoreError('disk failed', false, error);
+            throw new TemplateRestoreError('disk failed', null, error);
           });
 
           if ((await chooseOutcome('claim')) !== 'ok') {
             alive.delete(vm.pid);
-            throw new TemplateRestoreError('claim failed', false, null);
+            throw new TemplateRestoreError('claim failed', null, null);
           }
 
           restores.push({
