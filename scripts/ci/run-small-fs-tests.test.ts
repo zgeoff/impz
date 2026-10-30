@@ -1,5 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createStubBin } from '@impz/test-utils/create-stub-bin';
@@ -35,6 +35,8 @@ test('it runs the lane on a loop-mounted XFS of its own, and removes it after', 
     'echo "IMP_TEST_SMALL_FS=$IMP_TEST_SMALL_FS" >>"$STUB_CALLS"',
   );
 
+  writeFileSync(join(ctx.runnerTemp, 'small-fs.img'), 'xfs image');
+
   const result = await $`${process.execPath} ${ctx.scriptPath}`
     .env({ PATH: sudo.bin, RUNNER_TEMP: ctx.runnerTemp })
     .nothrow()
@@ -57,7 +59,7 @@ test('it runs the lane on a loop-mounted XFS of its own, and removes it after', 
     ].join('\n'),
   );
 
-  expect(existsSync(fs)).toBeFalse();
+  expect(readdirSync(ctx.runnerTemp)).toBeEmpty();
 });
 
 test('it installs xfsprogs on a runner without mkfs.xfs', async () => {
@@ -84,6 +86,7 @@ test('it fails with the lane, and unmounts all the same', async () => {
   createStubBin(ctx.directoryPath, 'truncate');
   createStubBin(ctx.directoryPath, 'mkfs.xfs');
   createStubBin(ctx.directoryPath, 'bun', 'exit 1');
+  writeFileSync(join(ctx.runnerTemp, 'small-fs.img'), 'xfs image');
 
   const result = await $`${process.execPath} ${ctx.scriptPath}`
     .env({ PATH: sudo.bin, RUNNER_TEMP: ctx.runnerTemp })
@@ -95,4 +98,6 @@ test('it fails with the lane, and unmounts all the same', async () => {
   expect(readFileSync(sudo.calls, 'utf8')).toEndWith(
     `sudo umount ${join(ctx.runnerTemp, 'small-fs')}\n`,
   );
+
+  expect(readdirSync(ctx.runnerTemp)).toBeEmpty();
 });
