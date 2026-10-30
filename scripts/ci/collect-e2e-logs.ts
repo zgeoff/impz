@@ -1,21 +1,31 @@
 import { appendFileSync, copyFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { $ } from 'bun';
+import invariant from 'tiny-invariant';
+import { parseStepCommand } from '../lib/parse-step-command.ts';
 
 const logsDir = join('.cache', 'e2e');
 
 // Runs after a failure or a timeout too, with or without a container, so nothing it does may fail
 // the job.
 async function main(): Promise<void> {
-  const [engine, container] = process.argv.slice(2);
+  const command = parseStepCommand(
+    'collect-e2e-logs.ts',
+    [{ name: 'engine', choices: ['docker', 'podman'] }, { name: 'container' }],
+    process.argv.slice(2),
+  );
 
-  if ((engine !== 'docker' && engine !== 'podman') || container === undefined) {
-    console.error('usage: collect-e2e-logs.ts <docker|podman> <container>');
+  if (!command.isValid) {
+    console.error(command.usage);
 
     process.exitCode = 2;
 
     return;
   }
+
+  const [engine, container] = command.values;
+
+  invariant(container, 'the parser asks for a container');
 
   // the Podman proof runs as root and leaves root's files in the logs folder
   if (engine === 'podman') {

@@ -1,32 +1,50 @@
 import { readFileSync } from 'node:fs';
 import { $ } from 'bun';
+import invariant from 'tiny-invariant';
+import { parseStepCommand } from '../lib/parse-step-command.ts';
+import type { StepArgument } from '../lib/parse-step-command.ts';
 
-type Task = (args: readonly string[]) => Promise<void>;
+interface Task {
+  readonly stepArguments: readonly StepArgument[];
+  readonly run: (args: readonly string[]) => Promise<void>;
+}
 
 // Each task sets up one thing on a throwaway GitHub-hosted runner, as root through sudo.
 const tasks: Readonly<Record<string, Task>> = {
-  'share-cpu': shareCPUController,
-  'turn-on-ksm': turnOnKSM,
-  'reserve-huge-pages': reserveHugePages,
-  'name-e2e-registry': nameE2ERegistry,
-  'install-zfs': installZfs,
-  'install-podman': installPodman,
-  'open-kvm-to-builders': openKVMToBuilders,
+  'share-cpu': { stepArguments: [], run: shareCPUController },
+  'turn-on-ksm': { stepArguments: [], run: turnOnKSM },
+  'reserve-huge-pages': { stepArguments: [], run: reserveHugePages },
+  'name-e2e-registry': { stepArguments: [], run: nameE2ERegistry },
+  'install-zfs': {
+    stepArguments: [{ name: 'arc max bytes', isOptional: true }],
+    run: installZfs,
+  },
+  'install-podman': { stepArguments: [], run: installPodman },
+  'open-kvm-to-builders': { stepArguments: [], run: openKVMToBuilders },
 };
 
 async function main(): Promise<void> {
-  const [name, ...args] = process.argv.slice(2);
+  const argv = process.argv.slice(2);
+  const [name] = argv;
   const task = name !== undefined && Object.hasOwn(tasks, name) ? tasks[name] : undefined;
 
-  if (task === undefined) {
-    console.error(`usage: set-up-runner.ts <${Object.keys(tasks).join('|')}> [args...]`);
+  const command = parseStepCommand(
+    'set-up-runner.ts',
+    [{ name: 'task', choices: Object.keys(tasks) }, ...(task?.stepArguments ?? [])],
+    argv,
+  );
+
+  if (!command.isValid) {
+    console.error(command.usage);
 
     process.exitCode = 2;
 
     return;
   }
 
-  await task(args);
+  invariant(task, 'the parser accepts only a listed task');
+
+  await task.run(command.values.slice(1));
 }
 
 // The cpu suite fails in CI unless a private cgroup namespace gets the cpu controller, and Docker's

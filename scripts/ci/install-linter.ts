@@ -1,7 +1,9 @@
 import { appendFileSync, chmodSync, copyFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { $ } from 'bun';
+import invariant from 'tiny-invariant';
 import { getStepEnv } from '../lib/get-step-env.ts';
+import { parseStepCommand } from '../lib/parse-step-command.ts';
 
 interface Linter {
   readonly url: (version: string) => string;
@@ -39,16 +41,24 @@ const linters: Readonly<Record<string, Linter>> = {
 };
 
 async function main(): Promise<void> {
-  const [name] = process.argv.slice(2);
-  const linter = name !== undefined && Object.hasOwn(linters, name) ? linters[name] : undefined;
+  const command = parseStepCommand(
+    'install-linter.ts',
+    [{ name: 'linter', choices: Object.keys(linters) }],
+    process.argv.slice(2),
+  );
 
-  if (name === undefined || linter === undefined) {
-    console.error(`usage: install-linter.ts <${Object.keys(linters).join('|')}>`);
+  if (!command.isValid) {
+    console.error(command.usage);
 
     process.exitCode = 2;
 
     return;
   }
+
+  const [name] = command.values;
+  const linter = name === undefined ? undefined : linters[name];
+
+  invariant(name !== undefined && linter, 'the parser accepts only a listed linter');
 
   const prefix = name.toUpperCase();
   const version = getStepEnv(process.env, `${prefix}_VERSION`);

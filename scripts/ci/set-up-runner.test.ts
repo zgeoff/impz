@@ -259,6 +259,40 @@ test('it refuses a task it does not know, with its usage', async () => {
   expect({ exitCode: result.exitCode, stderr: result.stderr.toString() }).toStrictEqual({
     exitCode: 2,
     stderr:
-      'usage: set-up-runner.ts <share-cpu|turn-on-ksm|reserve-huge-pages|name-e2e-registry|install-zfs|install-podman|open-kvm-to-builders> [args...]\n',
+      'usage: set-up-runner.ts <share-cpu|turn-on-ksm|reserve-huge-pages|name-e2e-registry|install-zfs|install-podman|open-kvm-to-builders>\n',
   });
+});
+
+test('it refuses an argument that its task does not take, and sets nothing up', async () => {
+  const ctx = setupTest();
+
+  const result = await $`${process.execPath} ${ctx.scriptPath} turn-on-ksm 1000`
+    .env({ PATH: ctx.sudo.bin })
+    .nothrow()
+    .quiet();
+
+  expect({ exitCode: result.exitCode, stderr: result.stderr.toString() }).toStrictEqual({
+    exitCode: 2,
+    stderr:
+      'usage: set-up-runner.ts <share-cpu|turn-on-ksm|reserve-huge-pages|name-e2e-registry|install-zfs|install-podman|open-kvm-to-builders>\n',
+  });
+
+  expect(readFileSync(ctx.sudo.calls, 'utf8')).toBe('');
+});
+
+test('it refuses a second argument to install-zfs, and installs nothing', async () => {
+  const ctx = setupTest();
+
+  const result = await $`${process.execPath} ${ctx.scriptPath} install-zfs 1073741824 2147483648`
+    .env({ PATH: ctx.sudo.bin })
+    .nothrow()
+    .quiet();
+
+  expect({ exitCode: result.exitCode, stderr: result.stderr.toString() }).toStrictEqual({
+    exitCode: 2,
+    stderr:
+      'usage: set-up-runner.ts <share-cpu|turn-on-ksm|reserve-huge-pages|name-e2e-registry|install-zfs|install-podman|open-kvm-to-builders> [arc max bytes]\n',
+  });
+
+  expect(readFileSync(ctx.sudo.calls, 'utf8')).toBe('');
 });

@@ -137,3 +137,19 @@ test('it refuses a linter it does not pin, with its usage', async () => {
     stderr: 'usage: install-linter.ts <shellcheck|shfmt|actionlint|zizmor|hadolint>\n',
   });
 });
+
+test('it refuses a second linter, and installs nothing', async () => {
+  const ctx = setupTest();
+
+  const result = await $`bun ${ctx.scriptPath} shellcheck shfmt`
+    .env({ ...process.env, RUNNER_TEMP: ctx.runnerTemp, GITHUB_PATH: ctx.githubPath })
+    .nothrow()
+    .quiet();
+
+  expect({ exitCode: result.exitCode, stderr: result.stderr.toString() }).toStrictEqual({
+    exitCode: 2,
+    stderr: 'usage: install-linter.ts <shellcheck|shfmt|actionlint|zizmor|hadolint>\n',
+  });
+
+  expect(readFileSync(ctx.githubPath, 'utf8')).toBe('');
+});

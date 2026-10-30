@@ -258,3 +258,21 @@ test('it refuses a check it does not know, with its usage', async () => {
     stderr: 'usage: run-go-checks.ts <format|vet|lint|vulnerabilities|deadcode|test|test-root>\n',
   });
 });
+
+test('it refuses an extra argument after the check, and runs nothing', async () => {
+  const ctx = setupTest();
+  const go = createStubBin(ctx.directoryPath, 'go');
+
+  const result = await $`${process.execPath} ${ctx.scriptPath} vet extra`
+    .cwd(ctx.checkout)
+    .env({ PATH: go.bin })
+    .nothrow()
+    .quiet();
+
+  expect({ exitCode: result.exitCode, stderr: result.stderr.toString() }).toStrictEqual({
+    exitCode: 2,
+    stderr: 'usage: run-go-checks.ts <format|vet|lint|vulnerabilities|deadcode|test|test-root>\n',
+  });
+
+  expect(readFileSync(go.calls, 'utf8')).toBe('');
+});

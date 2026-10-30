@@ -1,5 +1,7 @@
 import { resolve } from 'node:path';
 import { $ } from 'bun';
+import invariant from 'tiny-invariant';
+import { parseStepCommand } from '../lib/parse-step-command.ts';
 
 // golangci-lint, govulncheck and deadcode are pinned in agent/tools/go.mod, a module of their own
 // so their dependencies never move the agent's. The other modules share the agent's lint config.
@@ -18,16 +20,24 @@ const checks: Readonly<Record<string, () => Promise<void>>> = {
 };
 
 async function main(): Promise<void> {
-  const [name] = process.argv.slice(2);
-  const check = name !== undefined && Object.hasOwn(checks, name) ? checks[name] : undefined;
+  const command = parseStepCommand(
+    'run-go-checks.ts',
+    [{ name: 'check', choices: Object.keys(checks) }],
+    process.argv.slice(2),
+  );
 
-  if (check === undefined) {
-    console.error(`usage: run-go-checks.ts <${Object.keys(checks).join('|')}>`);
+  if (!command.isValid) {
+    console.error(command.usage);
 
     process.exitCode = 2;
 
     return;
   }
+
+  const [name] = command.values;
+  const check = name === undefined ? undefined : checks[name];
+
+  invariant(check, 'the parser accepts only a listed check');
 
   await check();
 }

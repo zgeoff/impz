@@ -114,6 +114,25 @@ test("it keeps the zfs host test's logs and summary, and adds the container's ou
   );
 });
 
+test('it refuses an extra argument after the container, and collects nothing', async () => {
+  const ctx = setupTest();
+  const docker = createStubBin(ctx.directoryPath, 'docker');
+
+  const result = await $`${process.execPath} ${ctx.scriptPath} docker imp-dev imp-zfs`
+    .cwd(ctx.checkout)
+    .env({ PATH: docker.bin })
+    .nothrow()
+    .quiet();
+
+  expect({ exitCode: result.exitCode, stderr: result.stderr.toString() }).toStrictEqual({
+    exitCode: 2,
+    stderr: 'usage: collect-e2e-logs.ts <docker|podman> <container>\n',
+  });
+
+  expect(readFileSync(docker.calls, 'utf8')).toBe('');
+  expect(readdirSync(ctx.checkout)).toStrictEqual([]);
+});
+
 test('it passes when no container is left to read', async () => {
   const ctx = setupTest();
 
