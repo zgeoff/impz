@@ -19,7 +19,7 @@ function main(): void {
       'numbers do not compare directly with XFS ones.',
       '',
       '```text',
-      `${timings.trimEnd()}`,
+      timings.trimEnd(),
       '```',
       '',
     ].join('\n'),
