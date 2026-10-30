@@ -92,7 +92,7 @@ jobs:
       # release
       - name: Build assets
         run:
-          bun run --silent --cwd .release-tools release:tree-script build-release-assets.sh
+          bun run --silent --cwd .release-tools release:tree-script build-release-assets.sh --
           --cache-from type=gha,scope=system-files --cache-to type=gha,scope=system-files,mode=max
 
       - name: Upload assets
@@ -203,7 +203,7 @@ jobs:
           IMP_VERSION: ${{ needs.assets.outputs.version }}
           IMP_RELEASE_IMAGE: ${{ env.IMAGE }}
         run:
-          bun run --silent --cwd .release-tools release:tree-script build-release.sh --cache-from
+          bun run --silent --cwd .release-tools release:tree-script build-release.sh -- --cache-from
           type=gha,scope=system-files --cache-from type=gha,scope=imp-host --cache-to
           type=gha,scope=imp-host,mode=max
 
@@ -212,7 +212,7 @@ jobs:
           IMAGE_REF: ${{ env.IMAGE }}:${{ needs.assets.outputs.version }}
           VERSION: ${{ needs.assets.outputs.version }}
         run:
-          bun run --silent --cwd .release-tools release:tree-script check-release-image.sh
+          bun run --silent --cwd .release-tools release:tree-script check-release-image.sh --
           "$IMAGE_REF" "$VERSION" dist/SHA256SUMS
 
       - name: Log in to GHCR
@@ -314,7 +314,8 @@ jobs:
         env:
           IMAGE_REF: ${{ env.BASE_IMAGE }}:${{ needs.assets.outputs.push_tag }}
         run:
-          bun run --silent --cwd .release-tools release:tree-script check-base-image.sh "$IMAGE_REF"
+          bun run --silent --cwd .release-tools release:tree-script check-base-image.sh --
+          "$IMAGE_REF"
 
       - name: Push image
         id: push

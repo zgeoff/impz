@@ -27,7 +27,7 @@ test('it runs the tree script of an old tag in the tree, with the arguments it w
   );
 
   const result =
-    await $`bun ${ctx.scriptPath} build-release-assets.sh --cache-from ${'type=gha,scope=system files'}`
+    await $`bun ${ctx.scriptPath} build-release-assets.sh -- --cache-from ${'type=gha,scope=system files'}`
       .env({ ...process.env, GITHUB_WORKSPACE: ctx.tree })
       .nothrow()
       .quiet();
@@ -57,6 +57,31 @@ test('it exits with the exit code of a tree script that fails', async () => {
     .quiet();
 
   expect(result.exitCode).toBe(3);
+});
+
+test('it refuses a flag before --, and runs nothing', async () => {
+  const ctx = setupTest();
+
+  mkdirSync(join(ctx.tree, 'scripts'));
+
+  writeFileSync(join(ctx.tree, 'scripts', 'build-release.sh'), '#!/bin/sh\necho built\n', {
+    mode: 0o755,
+  });
+
+  const result = await $`bun ${ctx.scriptPath} build-release.sh --cache-from type=gha`
+    .env({ ...process.env, GITHUB_WORKSPACE: ctx.tree })
+    .nothrow()
+    .quiet();
+
+  expect({
+    exitCode: result.exitCode,
+    stdout: result.stdout.toString(),
+    stderr: result.stderr.toString(),
+  }).toStrictEqual({
+    exitCode: 2,
+    stdout: '',
+    stderr: 'usage: run-tree-script.ts <script name> [-- args...]\n',
+  });
 });
 
 test('it fails for a script the tree lacks', async () => {
