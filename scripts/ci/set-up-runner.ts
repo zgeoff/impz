@@ -51,13 +51,36 @@ async function main(): Promise<void> {
 }
 
 // The cpu suite fails in CI unless a private cgroup namespace gets the cpu controller, and Docker's
-// containers live under system.slice. The task never fails by itself: it shows what a container
-// gets, on host/Dockerfile's runtime base, pinned the same.
+// containers live under system.slice. Before it fails on a refused write, the task shows what a
+// container gets, on host/Dockerfile's runtime base, pinned the same.
 async function shareCPUController(): Promise<void> {
-  await writeAsRoot('/sys/fs/cgroup/cgroup.subtree_control', '+cpu\n').nothrow();
-  await writeAsRoot('/sys/fs/cgroup/system.slice/cgroup.subtree_control', '+cpu\n').nothrow();
+  const controls = [
+    '/sys/fs/cgroup/cgroup.subtree_control',
+    '/sys/fs/cgroup/system.slice/cgroup.subtree_control',
+  ];
+
+  let isRefused = false;
+
+  for (const control of controls) {
+    const listed = await $`grep -qw cpu ${control}`.nothrow();
+
+    if (listed.exitCode !== 0) {
+      const isWritten = await writeAsRoot(control, '+cpu\n').then(
+        () => true,
+        () => false,
+      );
+
+      isRefused ||= !isWritten;
+    }
+  }
 
   await $`docker run --rm --cgroupns=private debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a cat /sys/fs/cgroup/cgroup.controllers`.nothrow();
+
+  if (isRefused) {
+    console.error('the kernel refused the cpu controller, so the cpu suite cannot pass');
+
+    process.exitCode = 1;
+  }
 }
 
 // KSM is global to the kernel, so only a runner's own VM turns it on. The scan rate is high so
@@ -141,8 +164,20 @@ async function openKVMToBuilders(): Promise<void> {
   await $`sudo udevadm trigger --name-match=kvm`;
 }
 
-function writeAsRoot(path: string, text: string): $.ShellPromise {
-  return $`sudo tee ${path} < ${new Response(text)}`.quiet();
+// tee echoes what it writes, so only its stdout is dropped and an error reaches the log. Bun's
+// shell takes one redirect per command, so the write spawns tee with its stdio set.
+async function writeAsRoot(path: string, text: string): Promise<void> {
+  const tee = Bun.spawn(['sudo', 'tee', path], {
+    stdin: Buffer.from(text),
+    stdout: 'ignore',
+    stderr: 'inherit',
+  });
+
+  const exitCode = await tee.exited;
+
+  if (exitCode !== 0) {
+    throw new Error(`sudo tee ${path} exited with ${String(exitCode)}`);
+  }
 }
 
 if (import.meta.main) {

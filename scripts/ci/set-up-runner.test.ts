@@ -23,6 +23,7 @@ function setupTest() {
 test('it hands the cpu controller down to the containers, and shows what one gets', async () => {
   const ctx = setupTest();
 
+  createStubBin(ctx.directoryPath, 'grep', 'exit 1');
   createStubBin(ctx.directoryPath, 'docker');
 
   const result = await $`${process.execPath} ${ctx.scriptPath} share-cpu`
@@ -34,8 +35,10 @@ test('it hands the cpu controller down to the containers, and shows what one get
 
   expect(readFileSync(ctx.sudo.calls, 'utf8')).toBe(
     [
+      'grep -qw cpu /sys/fs/cgroup/cgroup.subtree_control',
       'sudo tee /sys/fs/cgroup/cgroup.subtree_control',
       '< +cpu',
+      'grep -qw cpu /sys/fs/cgroup/system.slice/cgroup.subtree_control',
       'sudo tee /sys/fs/cgroup/system.slice/cgroup.subtree_control',
       '< +cpu',
       'docker run --rm --cgroupns=private debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a cat /sys/fs/cgroup/cgroup.controllers',
@@ -44,11 +47,11 @@ test('it hands the cpu controller down to the containers, and shows what one get
   );
 });
 
-test('it never fails on a cgroup that refuses the cpu controller', async () => {
+test('it writes nothing to a cgroup that hands the cpu controller down already', async () => {
   const ctx = setupTest();
 
-  createStubBin(ctx.directoryPath, 'sudo', 'exit 1');
-  createStubBin(ctx.directoryPath, 'docker', 'exit 125');
+  createStubBin(ctx.directoryPath, 'grep');
+  createStubBin(ctx.directoryPath, 'docker');
 
   const result = await $`${process.execPath} ${ctx.scriptPath} share-cpu`
     .env({ PATH: ctx.sudo.bin })
@@ -56,6 +59,45 @@ test('it never fails on a cgroup that refuses the cpu controller', async () => {
     .quiet();
 
   expect(result.exitCode).toBe(0);
+  expect(readFileSync(ctx.sudo.calls, 'utf8')).not.toInclude('sudo tee');
+});
+
+test('it fails, after showing what a container gets, when the kernel refuses the cpu controller', async () => {
+  const ctx = setupTest();
+
+  createStubSudo(ctx.directoryPath, {
+    refusedTees: ['/sys/fs/cgroup/system.slice/cgroup.subtree_control'],
+  });
+
+  createStubBin(ctx.directoryPath, 'grep', 'exit 1');
+  createStubBin(ctx.directoryPath, 'docker');
+
+  const result = await $`${process.execPath} ${ctx.scriptPath} share-cpu`
+    .env({ PATH: ctx.sudo.bin })
+    .nothrow()
+    .quiet();
+
+  expect({ exitCode: result.exitCode, stderr: result.stderr.toString() }).toStrictEqual({
+    exitCode: 1,
+    stderr: 'the kernel refused the cpu controller, so the cpu suite cannot pass\n',
+  });
+
+  expect(readFileSync(ctx.sudo.calls, 'utf8')).toInclude('docker run --rm --cgroupns=private');
+});
+
+test('it lets the error of a refused write reach the log', async () => {
+  const ctx = setupTest();
+
+  createStubBin(ctx.directoryPath, 'sudo', 'echo "tee: write error: Invalid argument" >&2\nexit 1');
+  createStubBin(ctx.directoryPath, 'uname');
+
+  const result = await $`${process.execPath} ${ctx.scriptPath} turn-on-ksm`
+    .env({ PATH: ctx.sudo.bin })
+    .nothrow()
+    .quiet();
+
+  expect(result.exitCode).toBe(1);
+  expect(result.stderr.toString()).toStartWith('tee: write error: Invalid argument\n');
 });
 
 test('it turns KSM on with a high scan rate', async () => {
