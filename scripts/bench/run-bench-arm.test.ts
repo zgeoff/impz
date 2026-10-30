@@ -1,30 +1,16 @@
-import { expect, mock, onTestFinished, test } from 'bun:test';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { expect, mock, test } from 'bun:test';
 import { buildStubAnswerQueue } from '@impz/test-utils/build-stub-answer-queue';
-import { updateEnv } from '@impz/test-utils/update-env';
 import { runBenchArm } from './run-bench-arm';
-import type { ImpzRun } from './run-bench-arm';
-
-async function setupTest() {
-  const directory = await mkdtemp(join(tmpdir(), 'bench-arm-'));
-
-  onTestFinished(() => rm(directory, { recursive: true, force: true }));
-
-  return { logPath: join(directory, 'candidate-1.impd.log') };
-}
+import type { CommandRun } from './run-bench-arm';
 
 test('it saves the impd log and stops the dev instance after a bench that failed', async () => {
-  const ctx = await setupTest();
-
   const devOutput = { up: '', token: 'token-1\n', down: '' };
 
   const runDev = mock((_script: string, command: 'up' | 'token' | 'down') =>
     Promise.resolve(devOutput[command]),
   );
 
-  const impzRuns: Readonly<Record<string, ImpzRun>> = {
+  const impzRuns: Readonly<Record<string, CommandRun>> = {
     '--json': {
       exitCode: 0,
       stdout:
@@ -35,9 +21,13 @@ test('it saves the impd log and stops the dev instance after a bench that failed
     wake: { exitCode: 1, stdout: '{"results":[]}\n', stderr: 'bench: wake at 4: no sample\n' },
   };
 
+  const writeLog = mock<(path: string, output: Uint8Array) => void>(() => {});
+
   const ran = await runBenchArm(
     {
-      probeDevRunning: () => Promise.resolve(false),
+      lockDev: () => ({ release: () => {} }),
+      inspectDev: () =>
+        Promise.resolve({ exitCode: 1, stdout: '', stderr: 'Error: No such object: imp-dev\n' }),
       runDev,
       runImpz: (args) =>
         Promise.resolve(
@@ -45,26 +35,31 @@ test('it saves the impd log and stops the dev instance after a bench that failed
         ),
       readImpdLogs: () =>
         Promise.resolve({ exitCode: 0, output: new TextEncoder().encode('impd stopped a wake\n') }),
+      writeLog,
+      now: () => 0,
       wait: () => Promise.resolve(),
       onStderr: () => {},
     },
     {
       arm: { name: 'candidate', checkout: '/work/candidate' },
       commands: { warmUpArgs: ['bench', 'create'], benchArgs: ['wake'] },
-      logPath: ctx.logPath,
+      logPath: '/work/out/candidate-1.impd.log',
+      env: {},
+      cwd: '/work',
     },
   );
 
-  const log = await readFile(ctx.logPath, 'utf8');
-
   expect(ran).toStrictEqual({ json: '{"results":[]}\n', isPassed: false });
-  expect(log).toBe('impd stopped a wake\n');
+
+  expect(writeLog).toHaveBeenCalledExactlyOnceWith(
+    '/work/out/candidate-1.impd.log',
+    new TextEncoder().encode('impd stopped a wake\n'),
+  );
+
   expect(runDev.mock.calls.map((call) => call[1])).toStrictEqual(['up', 'token', 'down']);
 });
 
-test('it saves the impd log and stops the dev instance when the dev start fails', async () => {
-  const ctx = await setupTest();
-
+test('it saves the impd log and stops the dev instance when the dev start fails', () => {
   const devRuns = {
     up: () => Promise.reject(new Error('imp-dev never got ready')),
     token: () => Promise.resolve('token-1\n'),
@@ -72,10 +67,13 @@ test('it saves the impd log and stops the dev instance when the dev start fails'
   };
 
   const runDev = mock((_script: string, command: 'up' | 'token' | 'down') => devRuns[command]());
+  const writeLog = mock<(path: string, output: Uint8Array) => void>(() => {});
 
   const ran = runBenchArm(
     {
-      probeDevRunning: () => Promise.resolve(false),
+      lockDev: () => ({ release: () => {} }),
+      inspectDev: () =>
+        Promise.resolve({ exitCode: 1, stdout: '', stderr: 'Error: No such object: imp-dev\n' }),
       runDev,
       runImpz: () => Promise.reject(new Error('no impz call was expected')),
       readImpdLogs: () =>
@@ -83,34 +81,33 @@ test('it saves the impd log and stops the dev instance when the dev start fails'
           exitCode: 0,
           output: new TextEncoder().encode('impd waited for its kernel\n'),
         }),
+      writeLog,
+      now: () => 0,
       wait: () => Promise.resolve(),
       onStderr: () => {},
     },
     {
       arm: { name: 'baseline', checkout: '/work/baseline' },
       commands: { warmUpArgs: ['bench', 'create'], benchArgs: ['wake'] },
-      logPath: ctx.logPath,
+      logPath: '/work/out/baseline-1.impd.log',
+      env: {},
+      cwd: '/work',
     },
   );
 
   expect(ran).rejects.toThrowWithMessage(Error, 'imp-dev never got ready');
-
-  const log = await readFile(ctx.logPath, 'utf8');
-
-  expect(log).toBe('impd waited for its kernel\n');
+  expect(writeLog).toHaveBeenCalledOnce();
   expect(runDev.mock.calls.map((call) => call[1])).toStrictEqual(['up', 'down']);
 });
 
-test('it skips the timed bench after a failed warm-up, and still saves the log and stops', async () => {
-  const ctx = await setupTest();
-
+test('it skips the timed bench after a failed warm-up, and still saves the log and stops', () => {
   const devOutput = { up: '', token: 'token-1\n', down: '' };
 
   const runDev = mock((_script: string, command: 'up' | 'token' | 'down') =>
     Promise.resolve(devOutput[command]),
   );
 
-  const impzRuns: Readonly<Record<string, ImpzRun>> = {
+  const impzRuns: Readonly<Record<string, CommandRun>> = {
     '--json': {
       exitCode: 0,
       stdout:
@@ -127,20 +124,28 @@ test('it skips the timed bench after a failed warm-up, and still saves the log a
     ),
   );
 
+  const writeLog = mock<(path: string, output: Uint8Array) => void>(() => {});
+
   const ran = runBenchArm(
     {
-      probeDevRunning: () => Promise.resolve(false),
+      lockDev: () => ({ release: () => {} }),
+      inspectDev: () =>
+        Promise.resolve({ exitCode: 1, stdout: '', stderr: 'Error: No such object: imp-dev\n' }),
       runDev,
       runImpz,
       readImpdLogs: () =>
         Promise.resolve({ exitCode: 0, output: new TextEncoder().encode('impd refused a boot\n') }),
+      writeLog,
+      now: () => 0,
       wait: () => Promise.resolve(),
       onStderr: () => {},
     },
     {
       arm: { name: 'candidate', checkout: '/work/candidate' },
       commands: { warmUpArgs: ['bench', 'create'], benchArgs: ['wake'] },
-      logPath: ctx.logPath,
+      logPath: '/work/out/candidate-1.impd.log',
+      env: {},
+      cwd: '/work',
     },
   );
 
@@ -149,23 +154,16 @@ test('it skips the timed bench after a failed warm-up, and still saves the log a
     'bench arms: the warm-up failed: bench: create at 1: no sample\n',
   );
 
-  const log = await readFile(ctx.logPath, 'utf8');
-
   expect(runImpz.mock.calls.map((call) => call[0][1])).toStrictEqual(['--json', 'create']);
-  expect(log).toBe('impd refused a boot\n');
+  expect(writeLog).toHaveBeenCalledOnce();
   expect(runDev.mock.calls.map((call) => call[1])).toStrictEqual(['up', 'token', 'down']);
 });
 
-test('it stops the dev instance when the impd log cannot be written', async () => {
-  const ctx = await setupTest();
-
+test('it stops the dev instance and frees its lock when the impd log cannot be written', () => {
   const devOutput = { up: '', token: 'token-1\n', down: '' };
+  const steps: string[] = [];
 
-  const runDev = mock((_script: string, command: 'up' | 'token' | 'down') =>
-    Promise.resolve(devOutput[command]),
-  );
-
-  const impzRuns: Readonly<Record<string, ImpzRun>> = {
+  const impzRuns: Readonly<Record<string, CommandRun>> = {
     '--json': {
       exitCode: 0,
       stdout:
@@ -178,41 +176,52 @@ test('it stops the dev instance when the impd log cannot be written', async () =
 
   const ran = runBenchArm(
     {
-      probeDevRunning: () => Promise.resolve(false),
-      runDev,
+      lockDev: () => ({
+        release: () => {
+          steps.push('release');
+        },
+      }),
+      inspectDev: () =>
+        Promise.resolve({ exitCode: 1, stdout: '', stderr: 'Error: No such object: imp-dev\n' }),
+      runDev: (_script, command) => {
+        steps.push(command);
+
+        return Promise.resolve(devOutput[command]);
+      },
       runImpz: (args) =>
         Promise.resolve(
           impzRuns[args[1] ?? ''] ?? { exitCode: 127, stdout: '', stderr: 'no such command' },
         ),
       readImpdLogs: () =>
         Promise.resolve({ exitCode: 0, output: new TextEncoder().encode('impd woke 4 imps\n') }),
+      writeLog: () => {
+        throw new Error('ENOSPC: no space left on device, write');
+      },
+      now: () => 0,
       wait: () => Promise.resolve(),
       onStderr: () => {},
     },
     {
       arm: { name: 'candidate', checkout: '/work/candidate' },
       commands: { warmUpArgs: ['bench', 'create'], benchArgs: ['wake'] },
-      logPath: join(ctx.logPath, 'missing-dir', 'candidate-1.impd.log'),
+      logPath: '/work/out/candidate-1.impd.log',
+      env: {},
+      cwd: '/work',
     },
   );
 
-  expect(ran).rejects.toMatchObject({ code: 'ENOENT' });
-  expect(runDev.mock.calls.map((call) => call[1])).toStrictEqual(['up', 'token', 'down']);
+  expect(ran).rejects.toThrowWithMessage(Error, 'ENOSPC: no space left on device, write');
+  expect(steps).toStrictEqual(['up', 'token', 'down', 'release']);
 });
 
-test('it reads the impd log through the container CLI the dev instance uses, and fails a failed read', async () => {
-  const ctx = await setupTest();
-
-  updateEnv('IMP_DEV_CONTAINER_CLI', 'podman');
-  updateEnv('IMP_DEV_NAME', 'imp-bench');
-
+test('it reads the impd log through the container CLI the dev instance uses, and fails a failed read', () => {
   const devOutput = { up: '', token: 'token-1\n', down: '' };
 
   const runDev = mock((_script: string, command: 'up' | 'token' | 'down') =>
     Promise.resolve(devOutput[command]),
   );
 
-  const impzRuns: Readonly<Record<string, ImpzRun>> = {
+  const impzRuns: Readonly<Record<string, CommandRun>> = {
     '--json': {
       exitCode: 0,
       stdout:
@@ -229,52 +238,79 @@ test('it reads the impd log through the container CLI the dev instance uses, and
 
   const ran = runBenchArm(
     {
-      probeDevRunning: () => Promise.resolve(false),
+      lockDev: () => ({ release: () => {} }),
+      inspectDev: () =>
+        Promise.resolve({
+          exitCode: 125,
+          stdout: '',
+          stderr: 'Error: no such container imp-bench\n',
+        }),
       runDev,
       runImpz: (args) =>
         Promise.resolve(
           impzRuns[args[1] ?? ''] ?? { exitCode: 127, stdout: '', stderr: 'no such command' },
         ),
       readImpdLogs,
+      writeLog: () => {},
+      now: () => 0,
       wait: () => Promise.resolve(),
       onStderr: () => {},
     },
     {
       arm: { name: 'candidate', checkout: '/work/candidate' },
       commands: { warmUpArgs: ['bench', 'create'], benchArgs: ['wake'] },
-      logPath: ctx.logPath,
+      logPath: '/work/out/candidate-1.impd.log',
+      env: { IMP_DEV_CONTAINER_CLI: 'podman', IMP_DEV_NAME: 'imp-bench' },
+      cwd: '/work',
     },
   );
 
   expect(ran).rejects.toThrowWithMessage(
     Error,
-    `bench arms: podman logs imp-bench exited 125, so ${ctx.logPath} holds no impd log`,
+    'bench arms: podman logs imp-bench exited 125, so /work/out/candidate-1.impd.log holds no impd log',
   );
 
   expect(readImpdLogs).toHaveBeenCalledExactlyOnceWith('podman', 'imp-bench');
   expect(runDev.mock.calls.map((call) => call[1])).toStrictEqual(['up', 'token', 'down']);
 });
 
-test('it refuses an arm while a dev instance of that name already runs, and leaves it up', async () => {
-  const ctx = await setupTest();
-
-  updateEnv('IMP_DEV_NAME', 'imp-bench');
-
-  const runDev = mock(() => Promise.resolve(''));
+test('it refuses an arm while a dev instance of that name already runs, and frees its lock', () => {
+  const steps: string[] = [];
 
   const ran = runBenchArm(
     {
-      probeDevRunning: () => Promise.resolve(true),
-      runDev,
+      lockDev: (name) => {
+        steps.push(`lock ${name}`);
+
+        return {
+          release: () => {
+            steps.push('release');
+          },
+        };
+      },
+      inspectDev: (_cli, name) => {
+        steps.push(`inspect ${name}`);
+
+        return Promise.resolve({ exitCode: 0, stdout: 'true\n', stderr: '' });
+      },
+      runDev: (_script, command) => {
+        steps.push(command);
+
+        return Promise.resolve('');
+      },
       runImpz: () => Promise.reject(new Error('no impz call was expected')),
       readImpdLogs: () => Promise.resolve({ exitCode: 0, output: new Uint8Array() }),
+      writeLog: () => {},
+      now: () => 0,
       wait: () => Promise.resolve(),
       onStderr: () => {},
     },
     {
       arm: { name: 'baseline', checkout: '/work/baseline' },
       commands: { warmUpArgs: ['bench', 'create'], benchArgs: ['wake'] },
-      logPath: ctx.logPath,
+      logPath: '/work/out/baseline-1.impd.log',
+      env: { IMP_DEV_NAME: 'imp-bench' },
+      cwd: '/work',
     },
   );
 
@@ -283,19 +319,86 @@ test('it refuses an arm while a dev instance of that name already runs, and leav
     'bench arms: imp-bench already runs, and dev.sh up would bench it as baseline; stop it first',
   );
 
+  expect(steps).toStrictEqual(['lock imp-bench', 'inspect imp-bench', 'release']);
+});
+
+test('it refuses an arm whose dev instance another bench holds, and touches nothing', () => {
+  const inspectDev = mock(() => Promise.resolve({ exitCode: 1, stdout: '', stderr: '' }));
+  const runDev = mock(() => Promise.resolve(''));
+
+  const ran = runBenchArm(
+    {
+      lockDev: () => {
+        throw new Error('process 4242 holds the dev instance imp-bench');
+      },
+      inspectDev,
+      runDev,
+      runImpz: () => Promise.reject(new Error('no impz call was expected')),
+      readImpdLogs: () => Promise.resolve({ exitCode: 0, output: new Uint8Array() }),
+      writeLog: () => {},
+      now: () => 0,
+      wait: () => Promise.resolve(),
+      onStderr: () => {},
+    },
+    {
+      arm: { name: 'candidate', checkout: '/work/candidate' },
+      commands: { warmUpArgs: ['bench', 'create'], benchArgs: ['wake'] },
+      logPath: '/work/out/candidate-1.impd.log',
+      env: { IMP_DEV_NAME: 'imp-bench' },
+      cwd: '/work',
+    },
+  );
+
+  expect(ran).rejects.toThrowWithMessage(Error, 'process 4242 holds the dev instance imp-bench');
+  expect(inspectDev).not.toHaveBeenCalled();
+  expect(runDev).not.toHaveBeenCalled();
+});
+
+test('it refuses an arm when the container CLI cannot say whether the instance runs', () => {
+  const runDev = mock(() => Promise.resolve(''));
+
+  const ran = runBenchArm(
+    {
+      lockDev: () => ({ release: () => {} }),
+      inspectDev: () =>
+        Promise.resolve({
+          exitCode: 1,
+          stdout: '',
+          stderr: 'Cannot connect to the Docker daemon at unix:///var/run/docker.sock\n',
+        }),
+      runDev,
+      runImpz: () => Promise.reject(new Error('no impz call was expected')),
+      readImpdLogs: () => Promise.resolve({ exitCode: 0, output: new Uint8Array() }),
+      writeLog: () => {},
+      now: () => 0,
+      wait: () => Promise.resolve(),
+      onStderr: () => {},
+    },
+    {
+      arm: { name: 'candidate', checkout: '/work/candidate' },
+      commands: { warmUpArgs: ['bench', 'create'], benchArgs: ['wake'] },
+      logPath: '/work/out/candidate-1.impd.log',
+      env: {},
+      cwd: '/work',
+    },
+  );
+
+  expect(ran).rejects.toThrowWithMessage(
+    Error,
+    'bench arms: docker inspect imp-dev exited 1: Cannot connect to the Docker daemon at unix:///var/run/docker.sock\n',
+  );
+
   expect(runDev).not.toHaveBeenCalled();
 });
 
 test('it starts the timed bench only once the warm-up left a boot template ready', async () => {
-  const ctx = await setupTest();
-
   const devOutput = { up: '', token: 'token-1\n', down: '' };
 
   const runDev = mock((_script: string, command: 'up' | 'token' | 'down') =>
     Promise.resolve(devOutput[command]),
   );
 
-  const infos = buildStubAnswerQueue<ImpzRun>([
+  const infos = buildStubAnswerQueue<CommandRun>([
     {
       exitCode: 0,
       stdout:
@@ -316,7 +419,7 @@ test('it starts the timed bench only once the warm-up left a boot template ready
     },
   ]);
 
-  const impzRuns: Readonly<Record<string, () => ImpzRun>> = {
+  const impzRuns: Readonly<Record<string, () => CommandRun>> = {
     '--json': () => infos.next(),
     create: () => ({ exitCode: 0, stdout: '', stderr: '' }),
     wake: () => ({ exitCode: 0, stdout: '{"results":[]}\n', stderr: '' }),
@@ -324,7 +427,9 @@ test('it starts the timed bench only once the warm-up left a boot template ready
 
   const ran = await runBenchArm(
     {
-      probeDevRunning: () => Promise.resolve(false),
+      lockDev: () => ({ release: () => {} }),
+      inspectDev: () =>
+        Promise.resolve({ exitCode: 1, stdout: '', stderr: 'Error: No such object: imp-dev\n' }),
       runDev,
       runImpz: (args) =>
         Promise.resolve(
@@ -335,13 +440,17 @@ test('it starts the timed bench only once the warm-up left a boot template ready
           exitCode: 0,
           output: new TextEncoder().encode('impd built a template\n'),
         }),
+      writeLog: () => {},
+      now: () => 0,
       wait: () => Promise.resolve(),
       onStderr: () => {},
     },
     {
       arm: { name: 'candidate', checkout: '/work/candidate' },
       commands: { warmUpArgs: ['bench', 'create'], benchArgs: ['wake'] },
-      logPath: ctx.logPath,
+      logPath: '/work/out/candidate-1.impd.log',
+      env: {},
+      cwd: '/work',
     },
   );
 

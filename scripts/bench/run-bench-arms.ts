@@ -1,18 +1,32 @@
-// Each round runs every arm once, in order, so a long run's drift falls on
-// each arm alike; docs/runbooks/development.md#the-bench-job runs it.
+// docs/runbooks/development.md#the-bench-job runs this comparison.
 import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
+import { resolve } from 'node:path';
 import { $ } from 'bun';
+import { createDevLock } from '../lib/create-dev-lock.ts';
 import { writeStderr } from '../lib/write-stderr.ts';
-import { formatBenchCompare } from './format-bench-compare';
-import type { ArmReport } from './format-bench-compare';
+import { writeStdoutLine } from '../lib/write-stdout-line.ts';
+import { writeText } from '../lib/write-text.ts';
 import { parseBenchArmsArgs } from './parse-bench-arms-args';
 import { runBenchArm } from './run-bench-arm';
 import type { BenchArmDeps } from './run-bench-arm';
+import { runBenchComparison } from './run-bench-comparison';
 
 const IMPZ = resolve(import.meta.dir, '..', 'impz');
 
 const ARM_DEPS: BenchArmDeps = {
+  lockDev: (name) => createDevLock(tmpdir(), name),
+  inspectDev: async (cli, name) => {
+    const inspect = await $`${cli} ${['inspect', '-f', '{{.State.Running}}', name]}`
+      .quiet()
+      .nothrow();
+
+    return {
+      exitCode: inspect.exitCode,
+      stdout: inspect.stdout.toString(),
+      stderr: inspect.stderr.toString(),
+    };
+  },
   runDev: (script, command, env) => $`${script} ${[command]}`.env(env).text(),
   runImpz: async (args, env) => {
     const shown = await $`${IMPZ} ${args}`.env(env).quiet().nothrow();
@@ -23,83 +37,48 @@ const ARM_DEPS: BenchArmDeps = {
       stderr: shown.stderr.toString(),
     };
   },
-  probeDevRunning: async (cli, name) => {
-    const inspect = await $`${cli} ${['inspect', '-f', '{{.State.Running}}', name]}`
-      .quiet()
-      .nothrow();
-
-    return inspect.stdout.toString().trim() === 'true';
-  },
   readImpdLogs: async (cli, name) => {
     const logs = await $`${cli} ${['logs', name]}`.quiet().nothrow();
 
     return { exitCode: logs.exitCode, output: Buffer.concat([logs.stdout, logs.stderr]) };
   },
+  writeLog: (path, output) => {
+    writeFileSync(path, output);
+  },
+  now: () => Date.now(),
   wait: (durationMs) => Bun.sleep(durationMs),
   onStderr: writeStderr,
 };
 
-async function main(): Promise<void> {
-  const args = parseBenchArmsArgs(process.argv.slice(2));
+const args = parseBenchArmsArgs(process.argv.slice(2));
 
-  if (typeof args === 'string') {
-    console.error(args);
-    process.exit(2);
-  }
+if (typeof args === 'string') {
+  writeStderr(`${args}\n`);
 
-  mkdirSync(args.out, { recursive: true });
-
-  const reports: ArmReport[] = [];
-  const missing: string[] = [];
-  const failed: string[] = [];
-
-  for (let round = 1; round <= args.rounds; round += 1) {
-    for (const arm of args.arms) {
-      const run = `${arm.name}-${String(round)}`;
-
-      console.error(`bench arms: round ${String(round)}, ${arm.name}`);
-
-      const ran = await runBenchArm(ARM_DEPS, {
-        arm,
-        commands: args,
-        logPath: join(args.out, `${run}.impd.log`),
-      });
-
-      if (ran.json === null) {
-        missing.push(run);
-      } else {
-        writeFileSync(join(args.out, `${run}.json`), ran.json);
-
-        reports.push({ arm: arm.name, json: ran.json });
-      }
-
-      if (!ran.isPassed) {
-        failed.push(run);
-        console.error(`bench arms: ${run} failed; its impd log is in ${run}.impd.log`);
-      }
-    }
-  }
-
-  const table = formatBenchCompare(reports);
-
-  console.log(table);
-
-  const summary = process.env['GITHUB_STEP_SUMMARY'];
-
-  if (summary !== undefined) {
-    appendFileSync(summary, `${table}\n`);
-  }
-
-  if (missing.length > 0) {
-    console.error(`bench arms: no report from ${missing.join(', ')}`);
-  }
-
-  // a bench over its --limit-p50-ms, or with no sample, prints its report
-  // and still fails, so the comparison fails with it
-  if (failed.length > 0) {
-    console.error(`bench arms: ${failed.join(', ')} failed`);
-    process.exit(1);
-  }
+  process.exit(2);
 }
 
-await main();
+const summary = process.env['GITHUB_STEP_SUMMARY'];
+
+const code = await runBenchComparison(
+  {
+    runArm: (plan) => runBenchArm(ARM_DEPS, { ...plan, env: process.env, cwd: process.cwd() }),
+    makeDirectory: (path) => {
+      mkdirSync(path, { recursive: true });
+    },
+    writeReport: writeText,
+    appendSummary:
+      summary === undefined
+        ? null
+        : (text) => {
+            appendFileSync(summary, text);
+          },
+    print: writeStdoutLine,
+    printError: (text) => {
+      writeStderr(`${text}\n`);
+    },
+  },
+  args,
+);
+
+process.exit(code);

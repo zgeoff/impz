@@ -1,16 +1,17 @@
-import { writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { SystemInfoSchema } from '@impz/api';
 import type * as z from 'zod';
 import { buildDevLayout } from '../lib/build-dev-layout.ts';
 import type { ContainerCLI, DevLayout } from '../lib/build-dev-layout.ts';
+import type { DevLock } from '../lib/create-dev-lock.ts';
+import { parseJSONOrNull } from '../lib/parse-json-or-null.ts';
 import type { BenchArm, BenchArmsArgs } from './parse-bench-arms-args';
 
 type DevCommand = 'up' | 'token' | 'down';
 
 type Env = Readonly<Record<string, string | undefined>>;
 
-export interface ImpzRun {
+export interface CommandRun {
   readonly exitCode: number;
   readonly stdout: string;
   readonly stderr: string;
@@ -22,10 +23,13 @@ interface ImpdLogs {
 }
 
 export interface BenchArmDeps {
-  readonly probeDevRunning: (cli: ContainerCLI, name: string) => Promise<boolean>;
+  readonly lockDev: (name: string) => DevLock;
+  readonly inspectDev: (cli: ContainerCLI, name: string) => Promise<CommandRun>;
   readonly runDev: (script: string, command: DevCommand, env: Env) => Promise<string>;
-  readonly runImpz: (args: readonly string[], env: Env) => Promise<ImpzRun>;
+  readonly runImpz: (args: readonly string[], env: Env) => Promise<CommandRun>;
   readonly readImpdLogs: (cli: ContainerCLI, name: string) => Promise<ImpdLogs>;
+  readonly writeLog: (path: string, output: Uint8Array) => void;
+  readonly now: () => number;
   readonly wait: (durationMs: number) => Promise<void>;
   readonly onStderr: (text: string) => void;
 }
@@ -39,45 +43,85 @@ export interface ArmPlan {
   readonly arm: BenchArm;
   readonly commands: Pick<BenchArmsArgs, 'benchArgs' | 'warmUpArgs'>;
   readonly logPath: string;
+  readonly env: Env;
+  readonly cwd: string;
 }
 
 // dev.sh up reuses a running instance, which may run another checkout, so an
-// arm refuses one rather than bench it under its own name. A failed log read
-// fails the arm only once the dev instance is down.
+// arm locks the instance's name and then refuses one that runs. A failed log
+// read fails the arm only once the instance is down.
 export async function runBenchArm(deps: BenchArmDeps, plan: Readonly<ArmPlan>): Promise<ArmRun> {
-  const checkout = resolve(plan.arm.checkout);
+  const checkout = resolve(plan.cwd, plan.arm.checkout);
   const dev = join(checkout, 'scripts', 'dev', 'dev.sh');
 
   const devEnv = {
-    ...process.env,
+    ...plan.env,
     IMP_KERNEL: join(checkout, '.cache', 'ci', 'vmlinux'),
     IMP_SYSTEM_DRIVE: join(checkout, '.cache', 'ci', 'imp-system.squashfs'),
   };
 
-  const layout = buildDevLayout({ env: devEnv, root: checkout, cwd: process.cwd() });
+  const layout = buildDevLayout({ env: devEnv, root: checkout, cwd: plan.cwd });
+  const lock = deps.lockDev(layout.name);
 
-  const isTaken = await deps.probeDevRunning(layout.containerCLI, layout.name);
+  try {
+    const inspected = await deps.inspectDev(layout.containerCLI, layout.name);
 
-  if (isTaken) {
-    throw new Error(
-      `bench arms: ${layout.name} already runs, and dev.sh up would bench it as ${plan.arm.name}; stop it first`,
-    );
+    if (isDevRunning(inspected, layout)) {
+      throw new Error(
+        `bench arms: ${layout.name} already runs, and dev.sh up would bench it as ${plan.arm.name}; stop it first`,
+      );
+    }
+
+    return await runLockedArm(deps, { plan, dev, devEnv, layout });
+  } finally {
+    lock.release();
+  }
+}
+
+// docker and podman both name a missing container "no such object" or
+// "no such container"; any other failed inspect leaves the state unknown
+function isDevRunning(inspected: Readonly<CommandRun>, layout: DevLayout): boolean {
+  if (inspected.exitCode === 0) {
+    return inspected.stdout.trim() === 'true';
   }
 
+  if (/no such (?:object|container)/iu.test(inspected.stderr)) {
+    return false;
+  }
+
+  throw new Error(
+    `bench arms: ${layout.containerCLI} inspect ${layout.name} exited ${String(inspected.exitCode)}: ${inspected.stderr}`,
+  );
+}
+
+interface LockedArm {
+  readonly plan: Readonly<ArmPlan>;
+  readonly dev: string;
+  readonly devEnv: Env;
+  readonly layout: DevLayout;
+}
+
+async function runLockedArm(deps: BenchArmDeps, locked: Readonly<LockedArm>): Promise<ArmRun> {
   let ran: ArmRun;
   let logFailure: string | null = null;
 
   try {
-    await deps.runDev(dev, 'up', devEnv);
+    await deps.runDev(locked.dev, 'up', locked.devEnv);
 
-    const cliEnv = await readCLIEnv(deps, dev, devEnv, layout);
+    const shownToken = await deps.runDev(locked.dev, 'token', locked.devEnv);
 
-    ran = await measureArm(deps, plan, cliEnv);
+    const cliEnv = {
+      ...locked.plan.env,
+      IMP_URL: locked.layout.apiURL,
+      IMP_TOKEN: shownToken.trim(),
+    };
+
+    ran = await measureArm(deps, locked.plan, cliEnv);
   } finally {
     try {
-      logFailure = await writeImpdLog(deps, layout, plan.logPath);
+      logFailure = await writeImpdLog(deps, locked.layout, locked.plan.logPath);
     } finally {
-      await deps.runDev(dev, 'down', devEnv);
+      await deps.runDev(locked.dev, 'down', locked.devEnv);
     }
   }
 
@@ -86,17 +130,6 @@ export async function runBenchArm(deps: BenchArmDeps, plan: Readonly<ArmPlan>): 
   }
 
   return ran;
-}
-
-async function readCLIEnv(
-  deps: BenchArmDeps,
-  dev: string,
-  devEnv: Env,
-  layout: DevLayout,
-): Promise<Env> {
-  const shownToken = await deps.runDev(dev, 'token', devEnv);
-
-  return { ...process.env, IMP_URL: layout.apiURL, IMP_TOKEN: shownToken.trim() };
 }
 
 // A failed bench that finished still prints its report, so its arm keeps its
@@ -140,36 +173,23 @@ async function waitForInfo(
   env: Env,
   isReady: (info: z.infer<typeof ReadinessSchema>) => boolean,
 ): Promise<void> {
-  const deadline = Date.now() + READY_TIMEOUT_MS;
+  const deadline = deps.now() + READY_TIMEOUT_MS;
 
   for (;;) {
     const shown = await deps.runImpz(['info', '--json'], env);
 
-    const parsed = ReadinessSchema.safeParse(parseJSONOrNull(shown));
+    const info = shown.exitCode === 0 ? parseJSONOrNull(shown.stdout) : null;
+    const parsed = ReadinessSchema.safeParse(info);
 
     if (parsed.success && isReady(parsed.data)) {
       return;
     }
 
-    if (Date.now() >= deadline) {
+    if (deps.now() >= deadline) {
       throw new Error('bench arms: impd never got ready to bench');
     }
 
     await deps.wait(POLL_MS);
-  }
-}
-
-function parseJSONOrNull(shown: Readonly<ImpzRun>): unknown {
-  if (shown.exitCode !== 0) {
-    return null;
-  }
-
-  try {
-    const parsed: unknown = JSON.parse(shown.stdout);
-
-    return parsed;
-  } catch {
-    return null;
   }
 }
 
@@ -180,7 +200,7 @@ async function writeImpdLog(
 ): Promise<string | null> {
   const logs = await deps.readImpdLogs(layout.containerCLI, layout.name);
 
-  writeFileSync(logPath, logs.output);
+  deps.writeLog(logPath, logs.output);
 
   return logs.exitCode === 0
     ? null
