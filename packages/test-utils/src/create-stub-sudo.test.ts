@@ -2,6 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createStubBin } from '@impz/test-utils/create-stub-bin';
 import { createStubSudo } from '@impz/test-utils/create-stub-sudo';
 
 function setupTest() {
@@ -45,7 +46,7 @@ test('it records a call to another command without reading its input', () => {
 
 test('it answers with the exit code of its script', () => {
   const ctx = setupTest();
-  const sudo = createStubSudo(ctx.directoryPath, 'exit 4');
+  const sudo = createStubSudo(ctx.directoryPath, { script: 'exit 4' });
 
   const result = Bun.spawnSync(['sudo', 'tee', '/proc/sys/vm/nr_hugepages'], {
     env: { PATH: sudo.bin },
@@ -54,4 +55,16 @@ test('it answers with the exit code of its script', () => {
 
   expect(result.exitCode).toBe(4);
   expect(readFileSync(sudo.calls, 'utf8')).toBe('sudo tee /proc/sys/vm/nr_hugepages\n< 512\n');
+});
+
+test('it hands a command it runs on to the stand-in of that name, and answers with its exit code', () => {
+  const ctx = setupTest();
+  const sudo = createStubSudo(ctx.directoryPath, { runs: ['apt-get'], script: 'exit 4' });
+
+  createStubBin(ctx.directoryPath, 'apt-get', 'exit 7');
+
+  const result = Bun.spawnSync(['sudo', 'apt-get', 'update'], { env: { PATH: sudo.bin } });
+
+  expect(result.exitCode).toBe(7);
+  expect(readFileSync(sudo.calls, 'utf8')).toBe('sudo apt-get update\napt-get update\n');
 });

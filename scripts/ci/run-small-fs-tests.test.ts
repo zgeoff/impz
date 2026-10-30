@@ -2,7 +2,9 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createStubAptGet } from '@impz/test-utils/create-stub-apt-get';
 import { createStubBin } from '@impz/test-utils/create-stub-bin';
+import { createStubSudo } from '@impz/test-utils/create-stub-sudo';
 import { $ } from 'bun';
 
 function setupTest() {
@@ -62,20 +64,37 @@ test('it runs the lane on a loop-mounted XFS of its own, and removes it after', 
   expect(readdirSync(ctx.runnerTemp)).toBeEmpty();
 });
 
-test('it installs xfsprogs on a runner without mkfs.xfs', async () => {
+test('it installs xfsprogs on a runner without mkfs.xfs, then runs the lane', async () => {
   const ctx = setupTest();
-  const sudo = createStubBin(ctx.directoryPath, 'sudo');
+  const sudo = createStubSudo(ctx.directoryPath, { runs: ['apt-get'] });
 
+  createStubAptGet(ctx.directoryPath, ['mkfs.xfs']);
   createStubBin(ctx.directoryPath, 'truncate');
   createStubBin(ctx.directoryPath, 'bun');
 
-  await $`${process.execPath} ${ctx.scriptPath}`
+  const result = await $`${process.execPath} ${ctx.scriptPath}`
     .env({ PATH: sudo.bin, RUNNER_TEMP: ctx.runnerTemp })
     .nothrow()
     .quiet();
 
-  expect(readFileSync(sudo.calls, 'utf8')).toStartWith(
-    'sudo apt-get update\nsudo apt-get install -y --no-install-recommends xfsprogs\n',
+  const fs = join(ctx.runnerTemp, 'small-fs');
+
+  expect(result.exitCode).toBe(0);
+
+  expect(readFileSync(sudo.calls, 'utf8')).toBe(
+    [
+      'sudo apt-get update',
+      'apt-get update',
+      'sudo apt-get install -y --no-install-recommends xfsprogs',
+      'apt-get install -y --no-install-recommends xfsprogs',
+      `truncate -s 4G ${fs}.img`,
+      `mkfs.xfs -q ${fs}.img`,
+      `sudo mount -o loop ${fs}.img ${fs}`,
+      `sudo chown ${ctx.owner} ${fs}`,
+      'bun run test:small-fs',
+      `sudo umount ${fs}`,
+      '',
+    ].join('\n'),
   );
 });
 
