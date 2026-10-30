@@ -1,6 +1,7 @@
+import { appendFileSync } from 'node:fs';
 import { $ } from 'bun';
+import { formatStepValues } from '../lib/format-step-values.ts';
 import { getStepEnv } from '../lib/get-step-env.ts';
-import { writeStepValues } from '../lib/write-step-values.ts';
 
 const digestPattern = /^sha256:[0-9a-f]{64}$/u;
 
@@ -32,7 +33,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  writeStepValues(outputs, { digest });
+  appendFileSync(outputs, formatStepValues({ digest }));
 }
 
 if (import.meta.main) {

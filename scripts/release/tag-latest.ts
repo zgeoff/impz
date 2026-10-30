@@ -1,6 +1,7 @@
+import { appendFileSync } from 'node:fs';
 import { $ } from 'bun';
+import { formatStepValues } from '../lib/format-step-values.ts';
 import { getStepEnv } from '../lib/get-step-env.ts';
-import { writeStepValues } from '../lib/write-step-values.ts';
 
 // The lookup and the move run in one step, under the latest-tag group's lock across release runs.
 // The newest release only moves forward, so a run that holds the lock after a newer one finds
@@ -16,17 +17,17 @@ async function main(): Promise<void> {
 
   const newest = viewed.trim();
 
-  writeStepValues(outputs, { newest_tag: newest });
+  appendFileSync(outputs, formatStepValues({ newest_tag: newest }));
 
   if (tag !== newest) {
-    writeStepValues(outputs, { is_newest: 'false' });
+    appendFileSync(outputs, formatStepValues({ is_newest: 'false' }));
 
     console.log(`${tag} is not the newest release (${newest}); latest stays`);
 
     return;
   }
 
-  writeStepValues(outputs, { is_newest: 'true' });
+  appendFileSync(outputs, formatStepValues({ is_newest: 'true' }));
 
   await $`docker buildx imagetools create -t ${`${image}:latest`} ${`${image}:${version}`}`;
 }

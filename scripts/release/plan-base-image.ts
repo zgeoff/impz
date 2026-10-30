@@ -1,8 +1,8 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { $ } from 'bun';
+import { formatStepValues } from '../lib/format-step-values.ts';
 import { getStepEnv } from '../lib/get-step-env.ts';
-import { writeStepValues } from '../lib/write-step-values.ts';
 import { findTreeScript } from './find-tree-script.ts';
 import { pickBaseImageStep } from './pick-base-image-step.ts';
 import type { BaseImageFacts, CommandResult } from './pick-base-image-step.ts';
@@ -47,7 +47,7 @@ async function main(): Promise<void> {
         console.log(`::notice::${step.notice}`);
       }
 
-      writeStepValues(outputs, { action: step.action });
+      appendFileSync(outputs, formatStepValues({ action: step.action }));
 
       return;
     }

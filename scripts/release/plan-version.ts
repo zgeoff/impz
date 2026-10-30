@@ -1,7 +1,7 @@
-import { readFileSync } from 'node:fs';
+import { appendFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { formatStepValues } from '../lib/format-step-values.ts';
 import { getStepEnv } from '../lib/get-step-env.ts';
-import { writeStepValues } from '../lib/write-step-values.ts';
 
 const tagPattern = /^v(?<version>\d+\.\d+\.\d+)$/u;
 
@@ -29,7 +29,10 @@ function main(): void {
       return;
     }
 
-    writeStepValues(outputs, { version: manifest.version, push_tag: `dryrun-${sha.slice(0, 12)}` });
+    appendFileSync(
+      outputs,
+      formatStepValues({ version: manifest.version, push_tag: `dryrun-${sha.slice(0, 12)}` }),
+    );
 
     return;
   }
@@ -44,7 +47,7 @@ function main(): void {
     return;
   }
 
-  writeStepValues(outputs, { version, push_tag: version });
+  appendFileSync(outputs, formatStepValues({ version, push_tag: version }));
 }
 
 if (import.meta.main) {

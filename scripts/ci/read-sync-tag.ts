@@ -1,7 +1,7 @@
-import { readFileSync } from 'node:fs';
+import { appendFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { formatStepValues } from '../lib/format-step-values.ts';
 import { getStepEnv } from '../lib/get-step-env.ts';
-import { writeStepValues } from '../lib/write-step-values.ts';
 
 const syncTagPattern = /^zgeoff\/tools\/\.github\/workflows\/repo-sync\.yml@(?<tag>sync-v\d+)$/u;
 
@@ -25,7 +25,7 @@ function main(): void {
     return;
   }
 
-  writeStepValues(outputs, { ref: tag });
+  appendFileSync(outputs, formatStepValues({ ref: tag }));
 }
 
 function findSyncUses(workflow: unknown): string | null {

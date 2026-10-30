@@ -1,8 +1,8 @@
-import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
+import { appendFileSync, copyFileSync, existsSync, mkdirSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { $ } from 'bun';
+import { formatStepValues } from '../lib/format-step-values.ts';
 import { getStepEnv } from '../lib/get-step-env.ts';
-import { writeStepValues } from '../lib/write-step-values.ts';
 import { findTreeScript } from './find-tree-script.ts';
 
 // @impz/testing's check installs the client tarball of the same release, so the client is packed
@@ -54,7 +54,7 @@ async function main(): Promise<void> {
 
   if (isClientPlanned) {
     copyFileSync(client, join(tarballs, basename(client)));
-    writeStepValues(outputs, { client_tarball: basename(client) });
+    appendFileSync(outputs, formatStepValues({ client_tarball: basename(client) }));
   }
 
   if (isTestingPlanned) {
@@ -65,7 +65,7 @@ async function main(): Promise<void> {
     await runTreeScript('check-testing-package.sh', [testing, client]);
 
     copyFileSync(testing, join(tarballs, basename(testing)));
-    writeStepValues(outputs, { testing_tarball: basename(testing) });
+    appendFileSync(outputs, formatStepValues({ testing_tarball: basename(testing) }));
   }
 }
 

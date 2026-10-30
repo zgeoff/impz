@@ -703,7 +703,7 @@
       "files": [
         "scripts/release/*.ts",
         "scripts/lib/get-step-env.ts",
-        "scripts/lib/write-step-values.ts"
+        "scripts/lib/format-step-values.ts"
       ],
       "excludeFiles": ["**/*.test.ts"],
       "rules": {
@@ -718,7 +718,7 @@
                   "!bun",
                   "!./*",
                   "!../lib/get-step-env.ts",
-                  "!../lib/write-step-values.ts"
+                  "!../lib/format-step-values.ts"
                 ],
                 "message": "a release tool imports only Bun's and Node's built-ins, because a republish runs it beside an old tag's install"
               }

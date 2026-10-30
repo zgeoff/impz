@@ -1,8 +1,8 @@
-import { existsSync } from 'node:fs';
+import { appendFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { $ } from 'bun';
+import { formatStepValues } from '../lib/format-step-values.ts';
 import { getStepEnv } from '../lib/get-step-env.ts';
-import { writeStepValues } from '../lib/write-step-values.ts';
 
 // A version already on npm is skipped, so a republish is safe. npm's `latest` moves only to the
 // newest release, as the image's does, and a republish of an older one goes out under `previous`.
@@ -20,15 +20,18 @@ async function main(): Promise<void> {
     existsSync(join(tree, 'packages', 'testing', 'package.json')) &&
     !(await probePublished('@impz/testing', version));
 
-  writeStepValues(outputs, { client: String(client), testing: String(testing) });
+  appendFileSync(outputs, formatStepValues({ client: String(client), testing: String(testing) }));
 
   if (!client && !testing) {
-    writeStepValues(outputs, { publish: 'false' });
+    appendFileSync(outputs, formatStepValues({ publish: 'false' }));
 
     return;
   }
 
-  writeStepValues(outputs, { dist_tag: isNewest ? 'latest' : 'previous', publish: 'true' });
+  appendFileSync(
+    outputs,
+    formatStepValues({ dist_tag: isNewest ? 'latest' : 'previous', publish: 'true' }),
+  );
 }
 
 async function probePublished(name: string, version: string): Promise<boolean> {

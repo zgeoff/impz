@@ -1,7 +1,8 @@
+import { appendFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 import { $ } from 'bun';
+import { formatStepValues } from '../lib/format-step-values.ts';
 import { getStepEnv } from '../lib/get-step-env.ts';
-import { writeStepValues } from '../lib/write-step-values.ts';
 
 const USAGE =
   'usage: pick-data-dir.ts --env <name> --mnt <dir on /mnt> --fallback <dir> [--sibling=<suffix>...]';
@@ -41,7 +42,7 @@ async function main(): Promise<void> {
   await $`sudo mkdir -p ${dirs}`;
   await $`sudo chown ${owner} ${dirs}`;
 
-  writeStepValues(githubEnv, { [values.env]: dataDir });
+  appendFileSync(githubEnv, formatStepValues({ [values.env]: dataDir }));
 }
 
 if (import.meta.main) {
