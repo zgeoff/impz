@@ -114,6 +114,39 @@ test("it keeps the zfs host test's logs and summary, and adds the container's ou
   );
 });
 
+test('it reports a zfs file it cannot copy, and collects the rest all the same', async () => {
+  const ctx = setupTest();
+  const zfsDir = join(ctx.directoryPath, 'imp-zfs');
+  const docker = createStubBin(ctx.directoryPath, 'docker', 'echo "container output"');
+
+  createStubBin(ctx.directoryPath, 'df');
+  mkdirSync(join(zfsDir, 'e2e.log'), { recursive: true });
+  writeFileSync(join(zfsDir, 'impd.log'), 'impd started\n');
+  writeFileSync(join(zfsDir, 'summary.txt'), 'pool: 3 s\n');
+
+  const result = await $`${process.execPath} ${ctx.scriptPath} docker imp-zfs`
+    .cwd(ctx.checkout)
+    .env({ PATH: docker.bin, IMP_ZFS_TEST_DIR: zfsDir })
+    .nothrow()
+    .quiet();
+
+  expect(result.exitCode).toBe(0);
+  expect(result.stderr.toString()).toStartWith(`cannot copy ${join(zfsDir, 'e2e.log')}: `);
+
+  expect(readdirSync(join(ctx.checkout, '.cache', 'e2e')).toSorted()).toStrictEqual([
+    'impd.log',
+    'summary.txt',
+  ]);
+
+  expect(readFileSync(join(ctx.checkout, '.cache', 'e2e', 'impd.log'), 'utf8')).toBe(
+    'impd started\ncontainer output\n',
+  );
+
+  expect(readFileSync(docker.calls, 'utf8')).toBe(
+    ['docker logs imp-zfs', 'df -h / /mnt', ''].join('\n'),
+  );
+});
+
 test('it refuses an extra argument after the container, and collects nothing', async () => {
   const ctx = setupTest();
   const docker = createStubBin(ctx.directoryPath, 'docker');

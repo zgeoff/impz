@@ -50,7 +50,11 @@ async function main(): Promise<void> {
   mkdirSync(logsDir, { recursive: true });
 
   for (const copy of plan.copies) {
-    copyFileSync(copy.from, copy.to);
+    try {
+      copyFileSync(copy.from, copy.to);
+    } catch (error) {
+      console.error(`cannot copy ${copy.from}: ${String(error)}`);
+    }
   }
 
   const logs = await $`${plan.logsCommand} 2>&1`.nothrow().quiet();
