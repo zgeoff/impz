@@ -32,7 +32,9 @@
         "scripts/test-zfs.ts",
         "scripts/zfs-host-test.ts",
         // a protoc plugin buf.gen.yaml runs
-        "scripts/proto/protoc-gen-protocol-reference.ts"
+        "scripts/proto/protoc-gen-protocol-reference.ts",
+        // the measure that scripts/ci/run-touched-pages-bench.ts runs on the bench job
+        "scripts/bench/measure-touched-pages.ts"
       ],
       "project": [
         "e2e/**/*.ts",
