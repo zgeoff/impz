@@ -146,6 +146,7 @@ test('it fails when the kernel refuses to turn KSM on', async () => {
 test('it reserves 1 GiB of huge pages, and shows the pool and the userfaultfd device', async () => {
   const ctx = setupTest();
 
+  createStubBin(ctx.directoryPath, 'grep', 'echo "HugePages_Total:     512"');
   createStubBin(ctx.directoryPath, 'stat');
 
   const result = await $`${process.execPath} ${ctx.scriptPath} reserve-huge-pages`
@@ -153,23 +154,26 @@ test('it reserves 1 GiB of huge pages, and shows the pool and the userfaultfd de
     .nothrow()
     .quiet();
 
-  expect(result.exitCode).toBe(0);
+  expect({ exitCode: result.exitCode, stdout: result.stdout.toString() }).toStrictEqual({
+    exitCode: 0,
+    stdout: 'HugePages_Total:     512\n',
+  });
 
   expect(readFileSync(ctx.sudo.calls, 'utf8')).toBe(
     [
       'sudo tee /proc/sys/vm/nr_hugepages',
       '< 512',
+      'grep -E ^HugePages_(Total|Free): /proc/meminfo',
       'stat -c %A %U %G %n /dev/userfaultfd',
       '',
     ].join('\n'),
   );
-
-  expect(result.stdout.toString()).toInclude('HugePages_Total:');
 });
 
 test('it reserves the number of huge pages it is given', async () => {
   const ctx = setupTest();
 
+  createStubBin(ctx.directoryPath, 'grep');
   createStubBin(ctx.directoryPath, 'stat');
 
   const result = await $`${process.execPath} ${ctx.scriptPath} reserve-huge-pages 3072`

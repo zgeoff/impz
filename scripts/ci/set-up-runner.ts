@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import { $ } from 'bun';
 import invariant from 'tiny-invariant';
 import { parseStepCommand } from '../lib/parse-step-command.ts';
@@ -99,14 +98,7 @@ async function reserveHugePages(args: readonly string[]): Promise<void> {
   const [pages = '512'] = args;
 
   await writeAsRoot('/proc/sys/vm/nr_hugepages', `${pages}\n`);
-
-  console.log(
-    readFileSync('/proc/meminfo', 'utf8')
-      .split('\n')
-      .filter((line) => /^HugePages_(?:Total|Free):/u.test(line))
-      .join('\n'),
-  );
-
+  await $`grep -E ${'^HugePages_(Total|Free):'} /proc/meminfo`;
   await $`stat -c ${'%A %U %G %n'} /dev/userfaultfd`;
 }
 
