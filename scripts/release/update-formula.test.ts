@@ -25,6 +25,32 @@ function setupTest() {
   };
 }
 
+test('it fails, running no command, for a tree without build-formula.sh', async () => {
+  const ctx = setupTest();
+  const gh = createStubBin(ctx.directoryPath, 'gh');
+
+  createStubBin(ctx.directoryPath, 'git');
+  writeFileSync(join(ctx.tree, 'dist', 'SHA256SUMS'), '');
+
+  const result = await $`${process.execPath} ${ctx.scriptPath}`
+    .env({
+      ...ctx.env,
+      PATH: gh.bin,
+      TAP: 'zgeoff/homebrew-tap',
+      VERSION: '2.0.1',
+      GITHUB_WORKSPACE: ctx.tree,
+    })
+    .nothrow()
+    .quiet();
+
+  expect({ exitCode: result.exitCode, stderr: result.stderr.toString() }).toStrictEqual({
+    exitCode: 1,
+    stderr: 'the checked-out tree has no build-formula.sh\n',
+  });
+
+  expect(readFileSync(gh.calls, 'utf8')).toBe('');
+});
+
 test('it leaves the formula of a tag from before the rename, class Imp, out of the tap', async () => {
   const ctx = setupTest();
 
