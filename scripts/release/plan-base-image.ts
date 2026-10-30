@@ -1,7 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { $ } from 'bun';
-import { match } from 'ts-pattern';
 import { getStepEnv } from '../lib/get-step-env.ts';
 import { writeStepValues } from '../lib/write-step-values.ts';
 import { findTreeScript } from './find-tree-script.ts';
@@ -43,24 +42,23 @@ async function main(): Promise<void> {
       continue;
     }
 
-    match(step)
-      .with({ kind: 'finish' }, (finish) => {
-        if (finish.notice !== null) {
-          console.log(`::notice::${finish.notice}`);
-        }
+    if (step.kind === 'finish') {
+      if (step.notice !== null) {
+        console.log(`::notice::${step.notice}`);
+      }
 
-        writeStepValues(outputs, { action: finish.action });
-      })
-      .with({ kind: 'fail' }, (failure) => {
-        process.stderr.write(failure.stderr);
+      writeStepValues(outputs, { action: step.action });
 
-        if (failure.error !== null) {
-          console.log(`::error::${failure.error}`);
-        }
+      return;
+    }
 
-        process.exitCode = 1;
-      })
-      .exhaustive();
+    process.stderr.write(step.stderr);
+
+    if (step.error !== null) {
+      console.log(`::error::${step.error}`);
+    }
+
+    process.exitCode = 1;
 
     return;
   }

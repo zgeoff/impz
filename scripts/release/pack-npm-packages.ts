@@ -1,7 +1,6 @@
 import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { $ } from 'bun';
-import invariant from 'tiny-invariant';
 import { getStepEnv } from '../lib/get-step-env.ts';
 import { writeStepValues } from '../lib/write-step-values.ts';
 import { findTreeScript } from './find-tree-script.ts';
@@ -38,7 +37,9 @@ async function main(): Promise<void> {
   const runTreeScript = (name: string, args: readonly string[]) => {
     const script = scripts.get(name);
 
-    invariant(script !== undefined && script !== null, `${name} was found before packing`);
+    if (script === undefined || script === null) {
+      throw new Error(`${name} was not found before packing`);
+    }
 
     return $`${join(tree, script)} ${args}`.cwd(tree);
   };
