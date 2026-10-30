@@ -1,11 +1,10 @@
 name: bench
 
-# `impz bench` on a KVM runner, against a dev instance. A pull request that
-# changes the bench runs a short bench of its own head. A dispatch, or a push to
+# `impz bench` on a KVM runner, against a dev instance. A dispatch, or a push to
 # a bench/** branch, compares a baseline ref with its own ref on the one runner,
 # their rounds taken in turn, and writes the table to the job summary. A bench/**
-# branch whose name holds huge-pages runs on 2 MiB pages. It is no required
-# check, so the path filter may skip the whole workflow.
+# branch whose name holds huge-pages runs on 2 MiB pages. No pull request runs
+# it, because a compare outlasts the release wait on a pull request's checks.
 on:
   workflow_dispatch:
     inputs:
@@ -31,13 +30,6 @@ on:
   push:
     branches:
       - bench/**
-  pull_request:
-    paths:
-      - packages/cli/src/bench/**
-      - packages/cli/src/commands/bench-command.ts
-      - scripts/bench/**
-      - scripts/dev/bench-wake.sh
-      - .github/workflows/bench.yml
 
 permissions: {}
 
@@ -67,13 +59,11 @@ jobs:
       IMP_STORAGE_GIB: 60
       IMP_HOST_IMAGE: imp-host:dev
       IMP_HOST_IMAGE_READY: 1
-      IS_COMPARE: ${{ github.event_name != 'pull_request' }}
       IS_HUGE_PAGES: ${{ inputs.huge-pages || contains(github.ref_name, 'huge-pages') }}
       BASELINE: ${{ inputs.baseline || 'main' }}
       SCENARIOS: ${{ inputs.scenarios || 'create,wake,restore' }}
-      CONCURRENCY:
-        ${{ inputs.concurrency || (github.event_name == 'pull_request' && '1,4' || '1,4,16,64') }}
-      SAMPLES: ${{ inputs.samples || (github.event_name == 'pull_request' && '4' || '20') }}
+      CONCURRENCY: ${{ inputs.concurrency || '1,4,16,64' }}
+      SAMPLES: ${{ inputs.samples || '20' }}
       ROUNDS: ${{ inputs.rounds || '2' }}
     steps:
       - name: Checkout
@@ -82,7 +72,6 @@ jobs:
           persist-credentials: false
 
       - name: Checkout the baseline
-        if: env.IS_COMPARE == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ env.BASELINE }}
@@ -127,7 +116,6 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Install the baseline
-        if: env.IS_COMPARE == 'true'
         working-directory: .cache/baseline
         run: bun install --frozen-lockfile
 
@@ -139,7 +127,6 @@ jobs:
 
       # the baseline's own guest agent and system drive, from the same cache
       - name: Build the baseline's kernel and system drive
-        if: env.IS_COMPARE == 'true'
         working-directory: .cache/baseline
         run: >-
           docker buildx build -f host/Dockerfile --target system-files --platform linux/amd64
@@ -156,14 +143,7 @@ jobs:
           scripts/dev/dev.sh down
           { echo '```json'; cat .cache/bench/touched-pages.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Bench this ref
-        if: env.IS_COMPARE != 'true'
-        run: >-
-          bun scripts/bench/run-bench-arms.ts --out .cache/bench --arm candidate=. -- "$SCENARIOS"
-          --concurrency "$CONCURRENCY" --samples "$SAMPLES" --memory 256m
-
       - name: Compare with the baseline
-        if: env.IS_COMPARE == 'true'
         run: >-
           bun scripts/bench/run-bench-arms.ts --out .cache/bench --rounds "$ROUNDS" --arm
           "baseline=.cache/baseline" --arm candidate=. -- "$SCENARIOS" --concurrency "$CONCURRENCY"

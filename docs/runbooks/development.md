@@ -412,8 +412,9 @@ hand: `gh workflow run reproducible.yml`.
 ### The bench job
 
 `.github/workflows/bench.yml` runs [`impz bench`](../guides/bench.md) on a KVM runner with the e2e
-groups' caches. It is no required check. A pull request that changes the bench runs a short bench of
-its own head. A push to a `bench/**` branch, or a dispatch, compares a baseline with its own ref:
+groups' caches. It is no required check, and no pull request runs it, because a compare outlasts the
+release job's wait on a pull request's checks. A push to a `bench/**` branch, or a dispatch,
+compares a baseline with its own ref:
 
 1. The job checks out the baseline (default `main`) beside the ref, and builds each one's kernel and
    system drive, so each side boots its own guest agent.
