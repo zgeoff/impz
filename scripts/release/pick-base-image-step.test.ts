@@ -29,7 +29,12 @@ test('it skips a tree whose base image is unpinned', () => {
       inspected: null,
       verified: null,
     }),
-  ).toMatchObject({ kind: 'finish', action: 'skip' });
+  ).toStrictEqual({
+    kind: 'finish',
+    action: 'skip',
+    notice:
+      'this tree predates the published imp-base, so ghcr.io/example/imp-base:1.2.3 is not built',
+  });
 });
 
 test('it asks the registry first about a pinned tree', () => {
