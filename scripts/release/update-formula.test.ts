@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { createGitFreeEnv } from '@impz/e2e-harness/git-env';
 import { createStubBin } from '@impz/test-utils/create-stub-bin';
 import { $ } from 'bun';
+import { buildStubGhRepoClone } from '../test-utils/build-stub-gh-repo-clone';
 
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-update-formula-'));
@@ -80,11 +81,7 @@ test('it leaves the formula of a tag from before the rename, class Imp, out of t
 
   writeFileSync(join(ctx.tree, 'dist', 'SHA256SUMS'), '');
 
-  const gh = createStubBin(
-    ctx.directoryPath,
-    'gh',
-    '[ "$1 $2" = "repo clone" ] && exec git clone -q "$STUB_TAP_REMOTE" "$4"\nexit 0',
-  );
+  const gh = createStubBin(ctx.directoryPath, 'gh', buildStubGhRepoClone(ctx.remote));
 
   const result = await $`bun ${ctx.scriptPath}`
     .env({
@@ -93,7 +90,6 @@ test('it leaves the formula of a tag from before the rename, class Imp, out of t
       TAP: 'zgeoff/homebrew-tap',
       VERSION: '1.6.0',
       GITHUB_WORKSPACE: ctx.tree,
-      STUB_TAP_REMOTE: ctx.remote,
     })
     .nothrow()
     .quiet();
@@ -149,11 +145,7 @@ test('it writes the formula of a tag after the rename to impz.rb with the genera
       .join(''),
   );
 
-  const gh = createStubBin(
-    ctx.directoryPath,
-    'gh',
-    '[ "$1 $2" = "repo clone" ] && exec git clone -q "$STUB_TAP_REMOTE" "$4"\nexit 0',
-  );
+  const gh = createStubBin(ctx.directoryPath, 'gh', buildStubGhRepoClone(ctx.remote));
 
   const result = await $`bun ${ctx.scriptPath}`
     .env({
@@ -162,7 +154,6 @@ test('it writes the formula of a tag after the rename to impz.rb with the genera
       TAP: 'zgeoff/homebrew-tap',
       VERSION: '2.0.1',
       GITHUB_WORKSPACE: ctx.tree,
-      STUB_TAP_REMOTE: ctx.remote,
     })
     .nothrow()
     .quiet();
@@ -212,11 +203,7 @@ test('it pushes nothing when the tap holds the formula already', async () => {
 
   writeFileSync(join(ctx.tree, 'dist', 'SHA256SUMS'), '');
 
-  const gh = createStubBin(
-    ctx.directoryPath,
-    'gh',
-    '[ "$1 $2" = "repo clone" ] && exec git clone -q "$STUB_TAP_REMOTE" "$4"\nexit 0',
-  );
+  const gh = createStubBin(ctx.directoryPath, 'gh', buildStubGhRepoClone(ctx.remote));
 
   const result = await $`bun ${ctx.scriptPath}`
     .env({
@@ -225,7 +212,6 @@ test('it pushes nothing when the tap holds the formula already', async () => {
       TAP: 'zgeoff/homebrew-tap',
       VERSION: '2.0.1',
       GITHUB_WORKSPACE: ctx.tree,
-      STUB_TAP_REMOTE: ctx.remote,
     })
     .nothrow()
     .quiet();
@@ -255,11 +241,7 @@ test('it fails the job, moving no formula, when the generator prints no formula 
 
   writeFileSync(join(ctx.tree, 'dist', 'SHA256SUMS'), '');
 
-  const gh = createStubBin(
-    ctx.directoryPath,
-    'gh',
-    '[ "$1 $2" = "repo clone" ] && mkdir -p "$4"\nexit 0',
-  );
+  const gh = createStubBin(ctx.directoryPath, 'gh', buildStubGhRepoClone(null));
 
   const result = await $`bun ${ctx.scriptPath}`
     .env({
