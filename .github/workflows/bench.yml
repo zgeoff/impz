@@ -94,6 +94,11 @@ jobs:
       - name: Check KVM
         run: scripts/ci/check-kvm.sh
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+
       # 6 GiB of 2 MiB pages: 16 imps of 256 MiB awake at once, and a
       # template build beside them
       - name: Reserve huge pages
@@ -104,11 +109,6 @@ jobs:
         run:
           bun run --silent ci:pick-data-dir --env IMP_DEV_DATA --mnt /mnt/imp-bench --fallback
           "$GITHUB_WORKSPACE/.data/ci"
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version-file: .bun-version
 
       - name: Install
         run: bun install --frozen-lockfile
