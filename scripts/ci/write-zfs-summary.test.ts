@@ -46,6 +46,22 @@ test("it adds the zfs host test's timings to the job summary, in a text block", 
   );
 });
 
+test('it says so in the job summary when the run stopped before it picked a work dir', async () => {
+  const ctx = setupTest();
+  const { IMP_ZFS_TEST_DIR: _, ...env } = process.env;
+
+  const result = await $`bun ${ctx.scriptPath}`
+    .env({ ...env, GITHUB_STEP_SUMMARY: ctx.stepSummary })
+    .nothrow()
+    .quiet();
+
+  expect(result.exitCode).toBe(0);
+
+  expect(readFileSync(ctx.stepSummary, 'utf8')).toInclude(
+    '```text\nno summary: the run stopped before it\n```\n',
+  );
+});
+
 test('it says so in the job summary when the run stopped before its summary', async () => {
   const ctx = setupTest();
 
