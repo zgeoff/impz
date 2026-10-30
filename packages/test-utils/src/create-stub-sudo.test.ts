@@ -44,7 +44,7 @@ test('it records a call to another command without reading its input', () => {
   expect(readFileSync(sudo.calls, 'utf8')).toBe('sudo modprobe kvm\n');
 });
 
-test('it refuses a tee to a path it is told to refuse, after recording what it read', () => {
+test('it refuses a tee to a path it is told to refuse, with the error tee prints, after recording what it read', () => {
   const ctx = setupTest();
   const sudo = createStubSudo(ctx.directoryPath, { refusedTees: ['/proc/sys/vm/nr_hugepages'] });
 
@@ -53,7 +53,11 @@ test('it refuses a tee to a path it is told to refuse, after recording what it r
     stdin: Buffer.from('512\n'),
   });
 
-  expect(result.exitCode).toBe(1);
+  expect({ exitCode: result.exitCode, stderr: result.stderr.toString() }).toStrictEqual({
+    exitCode: 1,
+    stderr: 'tee: /proc/sys/vm/nr_hugepages: Invalid argument\n',
+  });
+
   expect(readFileSync(sudo.calls, 'utf8')).toBe('sudo tee /proc/sys/vm/nr_hugepages\n< 512\n');
 });
 

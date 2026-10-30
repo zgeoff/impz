@@ -62,7 +62,7 @@ test('it writes nothing to a cgroup that hands the cpu controller down already',
   expect(readFileSync(ctx.sudo.calls, 'utf8')).not.toInclude('sudo tee');
 });
 
-test('it fails, after showing what a container gets, when the kernel refuses the cpu controller', async () => {
+test('it logs the refused write and still shows what a container gets, when the kernel refuses the cpu controller', async () => {
   const ctx = setupTest();
 
   createStubSudo(ctx.directoryPath, {
@@ -78,8 +78,8 @@ test('it fails, after showing what a container gets, when the kernel refuses the
     .quiet();
 
   expect({ exitCode: result.exitCode, stderr: result.stderr.toString() }).toStrictEqual({
-    exitCode: 1,
-    stderr: 'the kernel refused the cpu controller, so the cpu suite cannot pass\n',
+    exitCode: 0,
+    stderr: 'tee: /sys/fs/cgroup/system.slice/cgroup.subtree_control: Invalid argument\n',
   });
 
   expect(readFileSync(ctx.sudo.calls, 'utf8')).toInclude('docker run --rm --cgroupns=private');

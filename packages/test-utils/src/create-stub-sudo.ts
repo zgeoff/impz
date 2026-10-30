@@ -16,7 +16,8 @@ export function createStubSudo(directory: string, options: StubSudoOptions = {})
   );
 
   const refusals = (options.refusedTees ?? []).map(
-    (path) => `[ "$1" = tee ] && [ "$2" = ${formatShellWord(path)} ] && exit 1`,
+    (path) =>
+      `[ "$1" = tee ] && [ "$2" = ${formatShellWord(path)} ] && { printf 'tee: %s: Invalid argument\\n' "$2" >&2; exit 1; }`,
   );
 
   return createStubBin(

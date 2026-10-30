@@ -50,36 +50,24 @@ async function main(): Promise<void> {
 }
 
 // The cpu suite fails in CI unless a private cgroup namespace gets the cpu controller, and Docker's
-// containers live under system.slice. Before it fails on a refused write, the task shows what a
-// container gets, on host/Dockerfile's runtime base, pinned the same.
+// containers live under system.slice. A refused write is left for the cpu suite to report, after
+// the task shows what a container gets, on host/Dockerfile's runtime base, pinned the same.
 async function shareCPUController(): Promise<void> {
   const controls = [
     '/sys/fs/cgroup/cgroup.subtree_control',
     '/sys/fs/cgroup/system.slice/cgroup.subtree_control',
   ];
 
-  let isRefused = false;
-
   for (const control of controls) {
     const listed = await $`grep -qw cpu ${control}`.nothrow();
 
     if (listed.exitCode !== 0) {
-      const isWritten = await writeAsRoot(control, '+cpu\n').then(
-        () => true,
-        () => false,
-      );
-
-      isRefused ||= !isWritten;
+      // tee's stderr already reached the log, so the rejection carries nothing more to report
+      await writeAsRoot(control, '+cpu\n').catch(() => {});
     }
   }
 
   await $`docker run --rm --cgroupns=private debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a cat /sys/fs/cgroup/cgroup.controllers`.nothrow();
-
-  if (isRefused) {
-    console.error('the kernel refused the cpu controller, so the cpu suite cannot pass');
-
-    process.exitCode = 1;
-  }
 }
 
 // KSM is global to the kernel, so only a runner's own VM turns it on. The scan rate is high so
