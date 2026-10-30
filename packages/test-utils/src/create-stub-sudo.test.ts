@@ -44,22 +44,34 @@ test('it records a call to another command without reading its input', () => {
   expect(readFileSync(sudo.calls, 'utf8')).toBe('sudo modprobe kvm\n');
 });
 
-test('it answers with the exit code of its script', () => {
+test('it refuses a tee to a path it is told to refuse, after recording what it read', () => {
   const ctx = setupTest();
-  const sudo = createStubSudo(ctx.directoryPath, { script: 'exit 4' });
+  const sudo = createStubSudo(ctx.directoryPath, { refusedTees: ['/proc/sys/vm/nr_hugepages'] });
 
   const result = Bun.spawnSync(['sudo', 'tee', '/proc/sys/vm/nr_hugepages'], {
     env: { PATH: sudo.bin },
     stdin: Buffer.from('512\n'),
   });
 
-  expect(result.exitCode).toBe(4);
+  expect(result.exitCode).toBe(1);
   expect(readFileSync(sudo.calls, 'utf8')).toBe('sudo tee /proc/sys/vm/nr_hugepages\n< 512\n');
+});
+
+test('it passes a tee to any other path', () => {
+  const ctx = setupTest();
+  const sudo = createStubSudo(ctx.directoryPath, { refusedTees: ['/proc/sys/vm/nr_hugepages'] });
+
+  const result = Bun.spawnSync(['sudo', 'tee', '/sys/kernel/mm/ksm/run'], {
+    env: { PATH: sudo.bin },
+    stdin: Buffer.from('1\n'),
+  });
+
+  expect(result.exitCode).toBe(0);
 });
 
 test('it hands a command it runs on to the stand-in of that name, and answers with its exit code', () => {
   const ctx = setupTest();
-  const sudo = createStubSudo(ctx.directoryPath, { runs: ['apt-get'], script: 'exit 4' });
+  const sudo = createStubSudo(ctx.directoryPath, { runs: ['apt-get'] });
 
   createStubBin(ctx.directoryPath, 'apt-get', 'exit 7');
 

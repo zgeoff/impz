@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSyn
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createStubBin } from '@impz/test-utils/create-stub-bin';
+import { createStubSudo } from '@impz/test-utils/create-stub-sudo';
 import { $ } from 'bun';
 
 function setupTest() {
@@ -52,12 +53,9 @@ test("it writes the container's output and errors to impd.log, and shows the dis
 
 test('it takes back the logs folder that the Podman proof left as root, and reads the container as root', async () => {
   const ctx = setupTest();
+  const sudo = createStubSudo(ctx.directoryPath, { runs: ['podman'] });
 
-  const sudo = createStubBin(
-    ctx.directoryPath,
-    'sudo',
-    '[ "$1" = podman ] && echo "impd under podman"\nexit 0',
-  );
+  createStubBin(ctx.directoryPath, 'podman', 'echo "impd under podman"');
 
   const owner = `${String(process.getuid?.())}:${String(process.getgid?.())}`;
 
@@ -80,6 +78,7 @@ test('it takes back the logs folder that the Podman proof left as root, and read
       'sudo mkdir -p .cache/e2e',
       `sudo chown -R ${owner} .cache/e2e`,
       'sudo podman logs imp-dev',
+      'podman logs imp-dev',
       'df -h / /mnt',
       '',
     ].join('\n'),

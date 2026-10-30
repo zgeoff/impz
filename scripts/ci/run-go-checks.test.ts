@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createStubBin } from '@impz/test-utils/create-stub-bin';
 import { $ } from 'bun';
+import { buildStubGo } from '../test-utils/build-stub-go';
 
 function setupTest() {
   const created = mkdtempSync(join(tmpdir(), 'imp-go-checks-'));
@@ -110,7 +111,12 @@ test("it lints every Go module with the agent's pinned golangci-lint and config"
 
 test('it stops at the first module that fails its lint', async () => {
   const ctx = setupTest();
-  const go = createStubBin(ctx.directoryPath, 'go', '[ "$2" = host/ksm-exec ] && exit 1\nexit 0');
+
+  const go = createStubBin(
+    ctx.directoryPath,
+    'go',
+    buildStubGo({ 'host/ksm-exec': { exitCode: 1 } }),
+  );
 
   const result = await $`${process.execPath} ${ctx.scriptPath} lint`
     .cwd(ctx.checkout)
@@ -152,7 +158,7 @@ test('it fails the dead code check, listing what only tests call', async () => {
   const go = createStubBin(
     ctx.directoryPath,
     'go',
-    '[ "$2" = host/oci-fetch ] && echo "fetch.go:12:6: unreachable func: parseDigest"\nexit 0',
+    buildStubGo({ 'host/oci-fetch': { stdout: 'fetch.go:12:6: unreachable func: parseDigest' } }),
   );
 
   const result = await $`${process.execPath} ${ctx.scriptPath} deadcode`

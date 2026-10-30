@@ -89,7 +89,7 @@ test('it turns KSM on with a high scan rate', async () => {
 test('it fails when the kernel refuses to turn KSM on', async () => {
   const ctx = setupTest();
 
-  createStubBin(ctx.directoryPath, 'sudo', '[ "$2" = /sys/kernel/mm/ksm/run ] && exit 1\nexit 0');
+  createStubSudo(ctx.directoryPath, { refusedTees: ['/sys/kernel/mm/ksm/run'] });
   createStubBin(ctx.directoryPath, 'uname');
   createStubBin(ctx.directoryPath, 'grep');
 

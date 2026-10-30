@@ -3,8 +3,8 @@ import type { StubBin } from '@impz/test-utils/create-stub-bin';
 import { formatShellWord } from '@impz/test-utils/format-shell-word';
 
 interface StubSudoOptions {
-  readonly script?: string;
   readonly runs?: readonly string[];
+  readonly refusedTees?: readonly string[];
 }
 
 // The stub runs on bash builtins alone, because a test's PATH may hold only the stubs' folder.
@@ -15,9 +15,13 @@ export function createStubSudo(directory: string, options: StubSudoOptions = {})
     (command) => `[ "$1" = ${formatShellWord(command)} ] && exec "$@"`,
   );
 
+  const refusals = (options.refusedTees ?? []).map(
+    (path) => `[ "$1" = tee ] && [ "$2" = ${formatShellWord(path)} ] && exit 1`,
+  );
+
   return createStubBin(
     directory,
     'sudo',
-    [RECORD_TEE_INPUT, ...handOffs, options.script ?? 'exit 0'].join('\n'),
+    [RECORD_TEE_INPUT, ...refusals, ...handOffs, 'exit 0'].join('\n'),
   );
 }

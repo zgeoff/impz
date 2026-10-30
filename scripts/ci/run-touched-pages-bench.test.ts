@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { $ } from 'bun';
+import { createStubDevScript } from '../test-utils/create-stub-dev-script';
 
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-touched-pages-bench-'));
@@ -11,7 +12,6 @@ function setupTest() {
     rmSync(directory, { recursive: true, force: true });
   });
 
-  mkdirSync(join(directory, 'checkout', 'scripts', 'dev'), { recursive: true });
   mkdirSync(join(directory, 'checkout', 'scripts', 'bench'), { recursive: true });
   writeFileSync(join(directory, 'summary'), '');
 
@@ -26,11 +26,7 @@ function setupTest() {
 test('it measures on a dev instance it starts and stops, and writes the result and the job summary', async () => {
   const ctx = setupTest();
 
-  writeFileSync(
-    join(ctx.checkout, 'scripts', 'dev', 'dev.sh'),
-    `#!/bin/sh\necho "dev.sh $1" >> '${ctx.calls}'\n[ "$1" = token ] && echo tok_bench\nexit 0\n`,
-    { mode: 0o755 },
-  );
+  createStubDevScript(ctx.checkout, ctx.calls, 'tok_bench');
 
   writeFileSync(
     join(ctx.checkout, 'scripts', 'bench', 'measure-touched-pages.ts'),
@@ -68,11 +64,7 @@ test('it measures on a dev instance it starts and stops, and writes the result a
 test('it fails, writing no summary, when the measure fails', async () => {
   const ctx = setupTest();
 
-  writeFileSync(
-    join(ctx.checkout, 'scripts', 'dev', 'dev.sh'),
-    `#!/bin/sh\necho "dev.sh $1" >> '${ctx.calls}'\nexit 0\n`,
-    { mode: 0o755 },
-  );
+  createStubDevScript(ctx.checkout, ctx.calls, 'tok_bench');
 
   writeFileSync(
     join(ctx.checkout, 'scripts', 'bench', 'measure-touched-pages.ts'),
