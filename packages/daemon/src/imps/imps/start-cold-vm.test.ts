@@ -6,9 +6,10 @@ import { ORPCError } from '@orpc/client';
 import invariant from 'tiny-invariant';
 import { buildStubDiskTools } from '../../../testing/imps/build-stub-disk-tools';
 import { readBrokenInvariants } from '../../../testing/imps/read-broken-invariants';
+import { waitForOutcome } from '../../../testing/imps/wait-for-outcome';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { buildStubCpuCgroups } from '../../../testing/vm/build-stub-cpu-cgroups';
-import { readImpByName } from '../../platform/db/imps';
+import { listImps, readImpByName } from '../../platform/db/imps';
 import { buildTemplateKey } from '../../vm/templates/build-template-key';
 
 async function setupTest(
@@ -475,4 +476,44 @@ test('it overlaps a jailed restore with the grow of its disk', async () => {
 
   expect(second.state).toBe('running');
   expect(ctx.fake.restores.map((restore) => restore.hostname)).toStrictEqual(['second']);
+});
+
+test('it restores at most four boot templates at once, and starts a fifth once one ends', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.client.imps.create({ name: 'once', vcpus: 1, memoryMib: 256 });
+  await ctx.client.imps.create({ name: 'first', vcpus: 1, memoryMib: 256 });
+  await ctx.templates.stop();
+
+  ctx.fake.queue('restore', 'hang', 'hang', 'hang', 'hang', 'hang');
+
+  const names = ['a', 'b', 'c', 'd', 'e'];
+
+  const creates = names.map((name) =>
+    waitForOutcome(ctx.client.imps.create({ name, vcpus: 1, memoryMib: 256 }), 10_000),
+  );
+
+  await waitFor(async () => {
+    expect(ctx.fake.countHungCalls()).toBe(4);
+
+    const listed = await listImps(ctx.db);
+
+    expect(listed.map((imp) => imp.name)).toIncludeAllMembers(names);
+  });
+
+  const heldRestores = ctx.fake.restorePlans.length;
+
+  ctx.fake.releaseHangs();
+
+  await waitFor(() => {
+    expect(ctx.fake.countHungCalls()).toBe(1);
+  });
+
+  ctx.fake.releaseHangs();
+
+  const created = await Promise.all(creates);
+
+  expect(heldRestores).toBe(4);
+  expect(created).toStrictEqual(['done', 'done', 'done', 'done', 'done']);
 });

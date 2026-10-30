@@ -1,6 +1,6 @@
 import type { SystemInfo } from '@impz/api';
+import type { BenchResult } from './bench-report-schema';
 import type { BenchSettings } from './bench-scenarios';
-import type { BenchResult } from './run-bench';
 
 interface BenchHost {
   readonly label: string | null;

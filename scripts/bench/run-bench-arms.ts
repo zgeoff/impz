@@ -5,11 +5,10 @@ import { join, resolve } from 'node:path';
 import { $ } from 'bun';
 import * as z from 'zod';
 import { buildDevLayout } from '../lib/build-dev-layout.ts';
-import { buildWarmUpArgs } from './build-warm-up-args';
 import { formatBenchCompare } from './format-bench-compare';
 import type { ArmReport } from './format-bench-compare';
 import { parseBenchArmsArgs } from './parse-bench-arms-args';
-import type { BenchArm } from './parse-bench-arms-args';
+import type { BenchArm, BenchArmsArgs } from './parse-bench-arms-args';
 
 const IMPZ = resolve(import.meta.dir, '..', 'impz');
 const CONTAINER = process.env['IMP_DEV_NAME'] ?? 'imp-dev';
@@ -32,6 +31,7 @@ async function main(): Promise<void> {
   mkdirSync(args.out, { recursive: true });
 
   const reports: ArmReport[] = [];
+  const missing: string[] = [];
   const failed: string[] = [];
 
   for (let round = 1; round <= args.rounds; round += 1) {
@@ -40,10 +40,10 @@ async function main(): Promise<void> {
 
       console.error(`bench arms: round ${String(round)}, ${arm.name}`);
 
-      const ran = await runArm(arm, args.benchArgs, join(args.out, `${run}.impd.log`));
+      const ran = await runArm(arm, args, join(args.out, `${run}.impd.log`));
 
       if (ran.json === null) {
-        failed.push(run);
+        missing.push(run);
       } else {
         writeFileSync(join(args.out, `${run}.json`), ran.json);
 
@@ -51,6 +51,7 @@ async function main(): Promise<void> {
       }
 
       if (!ran.isPassed) {
+        failed.push(run);
         console.error(`bench arms: ${run} failed; its impd log is in ${run}.impd.log`);
       }
     }
@@ -66,8 +67,14 @@ async function main(): Promise<void> {
     appendFileSync(summary, `${table}\n`);
   }
 
+  if (missing.length > 0) {
+    console.error(`bench arms: no report from ${missing.join(', ')}`);
+  }
+
+  // a bench over its --limit-p50-ms, or with no sample, prints its report
+  // and still fails, so the comparison fails with it
   if (failed.length > 0) {
-    console.error(`bench arms: no report from ${failed.join(', ')}`);
+    console.error(`bench arms: ${failed.join(', ')} failed`);
     process.exit(1);
   }
 }
@@ -81,7 +88,7 @@ interface ArmRun {
 // arm keeps its numbers; one that died mid-run has none.
 async function runArm(
   arm: BenchArm,
-  benchArgs: readonly string[],
+  commands: Pick<BenchArmsArgs, 'benchArgs' | 'warmUpArgs'>,
   logPath: string,
 ): Promise<ArmRun> {
   const checkout = resolve(arm.checkout);
@@ -106,14 +113,15 @@ async function runArm(
 
     // the warm-up's creates build the boot template, so every arm's timed
     // run starts with the cache warm
-    await $`${IMPZ} ${buildWarmUpArgs(benchArgs)}`.env(cliEnv).quiet();
+    await $`${IMPZ} ${commands.warmUpArgs}`.env(cliEnv).quiet();
 
     await waitForInfo(cliEnv, (info) => (info.host?.bootTemplates ?? 1) > 0);
 
-    const bench = await $`${IMPZ} ${['bench', ...benchArgs, '--label', arm.name, '--json']}`
-      .env(cliEnv)
-      .quiet()
-      .nothrow();
+    const bench =
+      await $`${IMPZ} ${['bench', ...commands.benchArgs, '--label', arm.name, '--json']}`
+        .env(cliEnv)
+        .quiet()
+        .nothrow();
 
     process.stderr.write(bench.stderr);
 

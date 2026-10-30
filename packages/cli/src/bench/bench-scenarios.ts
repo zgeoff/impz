@@ -14,6 +14,9 @@ interface BenchSubject {
   readonly name: string;
   readonly settings: BenchSettings;
   readonly wait: (durationMs: number) => Promise<void>;
+
+  // the names this run created, the only imps the bench may remove
+  readonly owned: Set<string>;
 }
 
 // A scenario brings one imp to where its timed step starts and returns that
@@ -44,7 +47,13 @@ export const BENCH_SCENARIOS: readonly BenchScenario[] = [
     description: 'wake an imp that went to sleep after it woke',
     reason: 'woke',
     arrange: async (subject) => {
-      await bringAwake(subject);
+      const isNew = await bringAwake(subject);
+
+      if (isNew) {
+        await sleepImp(subject);
+        await wakeImp(subject);
+      }
+
       await sleepImp(subject);
 
       return () => wakeImp(subject);
@@ -96,7 +105,7 @@ export const BENCH_SCENARIOS: readonly BenchScenario[] = [
 ];
 
 async function removeImpIfPresent(subject: BenchSubject): Promise<void> {
-  if ((await readImp(subject)) !== null) {
+  if (subject.owned.has(subject.name) && (await readImp(subject)) !== null) {
     await subject.client.imps.destroy({ name: subject.name });
   }
 }
@@ -113,21 +122,34 @@ async function readImp(subject: BenchSubject): Promise<Imp | null> {
   }
 }
 
+// A create that fails after impd made the imp, such as a boot that fails,
+// leaves an imp the run owns; a refused name belongs to someone else.
 async function createImp(subject: BenchSubject): Promise<void> {
-  await subject.client.imps.create({
-    name: subject.name,
-    ...(subject.settings.memoryMib !== null && { memoryMib: subject.settings.memoryMib }),
-    ...(subject.settings.image !== null && { image: subject.settings.image }),
-  });
+  try {
+    await subject.client.imps.create({
+      name: subject.name,
+      ...(subject.settings.memoryMib !== null && { memoryMib: subject.settings.memoryMib }),
+      ...(subject.settings.image !== null && { image: subject.settings.image }),
+    });
+  } catch (error) {
+    if (!(error instanceof ORPCError && error.code === 'CONFLICT')) {
+      subject.owned.add(subject.name);
+    }
+
+    throw error;
+  }
+
+  subject.owned.add(subject.name);
 }
 
-async function bringAwake(subject: BenchSubject): Promise<void> {
+// returns whether it created the imp, which has then never woken
+async function bringAwake(subject: BenchSubject): Promise<boolean> {
   const imp = await readImp(subject);
 
   if (imp === null) {
     await createImp(subject);
 
-    return;
+    return true;
   }
 
   await match(imp.state)
@@ -138,6 +160,8 @@ async function bringAwake(subject: BenchSubject): Promise<void> {
       throw new Error(`${subject.name} is ${state}`);
     })
     .exhaustive();
+
+  return false;
 }
 
 async function sleepImp(subject: BenchSubject): Promise<void> {

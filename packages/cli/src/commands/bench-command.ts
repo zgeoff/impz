@@ -1,3 +1,4 @@
+import { watchEvents } from '@impz/client';
 import { jsonArg } from '../args/common-args';
 import { BENCH_SCENARIOS } from '../bench/bench-scenarios';
 import { buildBenchReport } from '../bench/build-bench-report';
@@ -11,6 +12,9 @@ import { runAction } from '../cli/run-action';
 import { formatJson } from '../output/format-output';
 import { parseDuration } from '../parse/parse-duration';
 import { parseCount, parseSize } from '../parse/parse-size';
+
+// a signal stops the run between rounds, so the bench still removes the imps it made
+const ENDING_SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'] as const;
 
 export const benchCommand = defineCommand({
   name: 'bench',
@@ -68,28 +72,26 @@ export const benchCommand = defineCommand({
         awakeMs: parseDuration(ctx.values.awake) * 1000,
       };
 
-      const runID = Bun.randomUUIDv7().slice(-4);
+      const runID = crypto.randomUUID().replaceAll('-', '').slice(0, 12);
 
       const startedAt = new Date();
 
       const before = await client.system.info();
 
-      const results = await runBench(
-        {
-          client,
-          now: () => performance.now(),
-          wait: (durationMs) => Bun.sleep(durationMs),
-          onProgress: (line) => {
-            io.printError(line);
+      const results = await withStopSignal((signal) =>
+        runBench(
+          {
+            client,
+            watchEvents,
+            now: () => performance.now(),
+            wait: (durationMs) => Bun.sleep(durationMs),
+            onProgress: (line) => {
+              io.printError(line);
+            },
+            signal,
           },
-        },
-        {
-          runID,
-          scenarios,
-          levels,
-          samples,
-          settings,
-        },
+          { runID, scenarios, levels, samples, settings },
+        ),
       );
 
       const after = await client.system.info();
@@ -115,3 +117,23 @@ export const benchCommand = defineCommand({
       }
     }),
 });
+
+async function withStopSignal<T>(run: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  const stopper = new AbortController();
+
+  const abort = (): void => {
+    stopper.abort();
+  };
+
+  for (const signal of ENDING_SIGNALS) {
+    process.once(signal, abort);
+  }
+
+  try {
+    return await run(stopper.signal);
+  } finally {
+    for (const signal of ENDING_SIGNALS) {
+      process.off(signal, abort);
+    }
+  }
+}

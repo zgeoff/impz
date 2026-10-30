@@ -2,6 +2,7 @@
 // it runs where both files are, in the dev container:
 //   bun scripts/bench/count-changed-pages.ts <base> <snapshot>
 import { closeSync, fstatSync, openSync, readSync } from 'node:fs';
+import { parseArgs } from 'node:util';
 
 const PAGE_BYTES = 4096;
 const HUGE_PAGE_BYTES = 2 * 1024 * 1024;
@@ -74,9 +75,10 @@ function readChangedPages(basePath: string, nextPath: string): ChangedPages {
 }
 
 if (import.meta.main) {
-  const [basePath, nextPath] = process.argv.slice(2);
+  const parsed = parseArgs({ args: process.argv.slice(2), allowPositionals: true });
+  const [basePath, nextPath] = parsed.positionals;
 
-  if (basePath === undefined || nextPath === undefined) {
+  if (basePath === undefined || nextPath === undefined || parsed.positionals.length > 2) {
     console.error('usage: bun scripts/bench/count-changed-pages.ts <base> <snapshot>');
     process.exit(2);
   }

@@ -25,6 +25,7 @@ test('it reads the arms in order, the rounds, and the bench arguments after --',
     rounds: 2,
     out: 'results',
     benchArgs: ['wake', '--concurrency', '1,4'],
+    warmUpArgs: ['bench', 'create', '--concurrency', '1', '--samples', '3'],
   });
 });
 
@@ -34,6 +35,27 @@ test('it runs one round and the default bench when it is given neither', () => {
     rounds: 1,
     out: 'results',
     benchArgs: [],
+    warmUpArgs: ['bench', 'create', '--concurrency', '1', '--samples', '3'],
+  });
+});
+
+test('it gives the memory to the warm-up and to the timed run', () => {
+  const args = parseBenchArmsArgs([
+    '--out',
+    'results',
+    '--memory=384m',
+    '--arm',
+    'only=.',
+    '--',
+    'wake',
+  ]);
+
+  expect(args).toStrictEqual({
+    arms: [{ name: 'only', checkout: '.' }],
+    rounds: 1,
+    out: 'results',
+    benchArgs: ['wake', '--memory', '384m'],
+    warmUpArgs: ['bench', 'create', '--concurrency', '1', '--samples', '3', '--memory', '384m'],
   });
 });
 

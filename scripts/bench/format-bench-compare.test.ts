@@ -5,27 +5,27 @@ test('it compares each arm with the first, on the median of its rounds', () => {
   const table = formatBenchCompare([
     {
       arm: 'baseline',
-      json: '{"results":[{"scenario":"wake","concurrency":4,"samples":20,"failures":{},"latencyMs":{"p50":200,"p95":400,"p99":600,"max":600}}]}',
+      json: '{"results":[{"scenario":"wake","concurrency":4,"samples":20,"failures":{},"impdMs":null,"memFileMib":null,"latencyMs":{"p50":200,"p95":400,"p99":600,"max":600}}]}',
     },
     {
       arm: 'candidate',
-      json: '{"results":[{"scenario":"wake","concurrency":4,"samples":20,"failures":{"RAM_BUDGET_EXCEEDED":1},"latencyMs":{"p50":150,"p95":300,"p99":450,"max":450}}]}',
+      json: '{"results":[{"scenario":"wake","concurrency":4,"samples":20,"failures":{"RAM_BUDGET_EXCEEDED":1},"impdMs":null,"memFileMib":null,"latencyMs":{"p50":150,"p95":300,"p99":450,"max":450}}]}',
     },
     {
       arm: 'baseline',
-      json: '{"results":[{"scenario":"wake","concurrency":4,"samples":20,"failures":{},"latencyMs":{"p50":220,"p95":440,"p99":660,"max":660}}]}',
+      json: '{"results":[{"scenario":"wake","concurrency":4,"samples":20,"failures":{},"impdMs":null,"memFileMib":null,"latencyMs":{"p50":220,"p95":440,"p99":660,"max":660}}]}',
     },
     {
       arm: 'candidate',
-      json: '{"results":[{"scenario":"wake","concurrency":4,"samples":20,"failures":{},"latencyMs":{"p50":160,"p95":320,"p99":480,"max":480}}]}',
+      json: '{"results":[{"scenario":"wake","concurrency":4,"samples":20,"failures":{},"impdMs":null,"memFileMib":null,"latencyMs":{"p50":160,"p95":320,"p99":480,"max":480}}]}',
     },
     {
       arm: 'baseline',
-      json: '{"results":[{"scenario":"wake","concurrency":4,"samples":20,"failures":{"RAM_BUDGET_EXCEEDED":2},"latencyMs":{"p50":210,"p95":420,"p99":630,"max":630}}]}',
+      json: '{"results":[{"scenario":"wake","concurrency":4,"samples":20,"failures":{"RAM_BUDGET_EXCEEDED":2},"impdMs":null,"memFileMib":null,"latencyMs":{"p50":210,"p95":420,"p99":630,"max":630}}]}',
     },
     {
       arm: 'candidate',
-      json: '{"results":[{"scenario":"wake","concurrency":4,"samples":20,"failures":{},"latencyMs":{"p50":155,"p95":310,"p99":465,"max":465}}]}',
+      json: '{"results":[{"scenario":"wake","concurrency":4,"samples":20,"failures":{},"impdMs":null,"memFileMib":null,"latencyMs":{"p50":155,"p95":310,"p99":465,"max":465}}]}',
     },
   ]);
 
@@ -40,11 +40,11 @@ test('it shows a dash for an arm that took no sample', () => {
   const table = formatBenchCompare([
     {
       arm: 'baseline',
-      json: '{"results":[{"scenario":"create","concurrency":64,"samples":20,"failures":{},"latencyMs":{"p50":900,"p95":1200,"p99":1500,"max":1500}}]}',
+      json: '{"results":[{"scenario":"create","concurrency":64,"samples":20,"failures":{},"impdMs":null,"memFileMib":null,"latencyMs":{"p50":900,"p95":1200,"p99":1500,"max":1500}}]}',
     },
     {
       arm: 'candidate',
-      json: '{"results":[{"scenario":"create","concurrency":64,"samples":0,"failures":{},"latencyMs":null}]}',
+      json: '{"results":[{"scenario":"create","concurrency":64,"samples":0,"failures":{},"impdMs":null,"memFileMib":null,"latencyMs":null}]}',
     },
   ]);
 

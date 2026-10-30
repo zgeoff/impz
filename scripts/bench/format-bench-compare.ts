@@ -1,4 +1,4 @@
-import * as z from 'zod';
+import { BenchReportSchema } from '@impz/cli/bench-report-schema';
 
 export interface ArmReport {
   readonly arm: string;
@@ -60,23 +60,11 @@ interface Row {
   readonly cells: Map<string, ArmCell>;
 }
 
-const SummarySchema = z.object({ p50: z.number(), p95: z.number(), p99: z.number() }).nullable();
-
-const ResultSchema = z.object({
-  scenario: z.string(),
-  concurrency: z.number(),
-  samples: z.number(),
-  failures: z.record(z.string(), z.number()),
-  latencyMs: SummarySchema,
-});
-
-const ReportSchema = z.object({ results: z.array(ResultSchema) });
-
 function collectRows(reports: readonly ArmReport[]): Row[] {
   const rows = new Map<string, Row>();
 
   for (const report of reports) {
-    const parsed = ReportSchema.parse(JSON.parse(report.json));
+    const parsed = BenchReportSchema.parse(JSON.parse(report.json));
 
     for (const result of parsed.results) {
       const key = `${result.scenario}@${String(result.concurrency)}`;

@@ -1,9 +1,10 @@
 import type { ImpEvent, ImpEventDetail } from '@impz/api';
-import { ORPCError, watchEvents } from '@impz/client';
+import { ORPCError } from '@impz/client';
+import type { watchEvents } from '@impz/client';
 import type { ImpClient } from '../config/create-imp-client';
+import type { BenchResult } from './bench-report-schema';
 import type { BenchScenario, BenchSettings } from './bench-scenarios';
 import { buildLatencySummary } from './build-latency-summary';
-import type { LatencySummary } from './build-latency-summary';
 
 export interface BenchPlan {
   readonly runID: string;
@@ -15,52 +16,64 @@ export interface BenchPlan {
 
 export interface BenchDeps {
   readonly client: ImpClient;
+  readonly watchEvents: typeof watchEvents;
   readonly now: () => number;
   readonly wait: (durationMs: number) => Promise<void>;
   readonly onProgress: (line: string) => void;
-}
 
-export interface BenchResult {
-  readonly scenario: string;
-  readonly concurrency: number;
-  readonly samples: number;
-  readonly failures: Readonly<Record<string, number>>;
-  readonly latencyMs: LatencySummary | null;
-  readonly impdMs: LatencySummary | null;
-  readonly memFileMib: LatencySummary | null;
+  // an abort stops the bench between rounds; it still removes what it made
+  readonly signal?: AbortSignal;
 }
 
 export async function runBench(deps: BenchDeps, plan: Readonly<BenchPlan>): Promise<BenchResult[]> {
-  const log = await createEventLog(deps.client);
+  const prefix = `bench-${plan.runID}-`;
 
-  const made = new Set<string>();
+  const taken = await deps.client.imps.list();
+
+  if (taken.some((imp) => imp.name.startsWith(prefix))) {
+    throw new Error(`bench: imps named ${prefix}* already exist, so this run would not own them`);
+  }
+
+  const log = await createEventLog(deps);
+
+  const owned = new Set<string>();
 
   const results: BenchResult[] = [];
 
   try {
     for (const scenario of plan.scenarios) {
       for (const level of plan.levels) {
-        const names = Array.from(
-          { length: level },
-          (_, index) => `bench-${plan.runID}-${String(level)}-${String(index)}`,
-        );
-
-        for (const name of names) {
-          made.add(name);
+        if (deps.signal?.aborted === true) {
+          break;
         }
 
-        const result = await runLevel(deps, { plan, scenario, names, log });
+        const names = Array.from(
+          { length: level },
+          (_, index) => `${prefix}${String(level)}-${String(index)}`,
+        );
+
+        const result = await runLevel(deps, { plan, scenario, names, log, owned });
 
         results.push(result);
         deps.onProgress(formatProgress(result));
 
-        await removeImps(deps.client, names);
+        await removeOwned(deps.client, owned, names);
       }
     }
   } finally {
     log.stop();
 
-    await removeImps(deps.client, [...made]);
+    await removeOwned(deps.client, owned, [...owned]);
+  }
+
+  if (deps.signal?.aborted === true) {
+    throw new Error('bench: stopped by a signal, and removed the imps it made');
+  }
+
+  if (log.failure !== null) {
+    throw new Error(`bench: impd's event stream failed, so its figures are incomplete`, {
+      cause: log.failure.error,
+    });
   }
 
   return results;
@@ -69,27 +82,44 @@ export async function runBench(deps: BenchDeps, plan: Readonly<BenchPlan>): Prom
 interface EventLog {
   readonly events: ImpEvent[];
   readonly stop: () => void;
+
+  // a stream that fails after it opened, which a bench must not report as complete
+  failure: { readonly error: unknown } | null;
 }
 
-async function createEventLog(client: ImpClient): Promise<EventLog> {
-  const events: ImpEvent[] = [];
-
+async function createEventLog(deps: Readonly<BenchDeps>): Promise<EventLog> {
   const controller = new AbortController();
 
   const opened = Promise.withResolvers<undefined>();
 
+  const log: EventLog = {
+    events: [],
+    failure: null,
+    stop: () => {
+      controller.abort();
+    },
+  };
+
   const watch = async (): Promise<void> => {
     try {
-      await watchEvents(client, {
+      await deps.watchEvents(deps.client, {
         signal: controller.signal,
         onOpen: () => {
           opened.resolve(undefined);
         },
         onEvent: (event) => {
-          events.push(event);
+          log.events.push(event);
         },
       });
+
+      // impd may end the stream cleanly, which leaves the run without figures
+      // all the same; only the bench's own stop ends it on purpose
+      throw new Error("impd's event stream ended");
     } catch (error) {
+      if (!controller.signal.aborted) {
+        log.failure = { error };
+      }
+
       opened.reject(error);
     }
   };
@@ -98,12 +128,7 @@ async function createEventLog(client: ImpClient): Promise<EventLog> {
 
   await opened.promise;
 
-  return {
-    events,
-    stop: () => {
-      controller.abort();
-    },
-  };
+  return log;
 }
 
 interface LevelRun {
@@ -111,6 +136,7 @@ interface LevelRun {
   readonly scenario: BenchScenario;
   readonly names: readonly string[];
   readonly log: EventLog;
+  readonly owned: Set<string>;
 }
 
 async function runLevel(deps: BenchDeps, run: Readonly<LevelRun>): Promise<BenchResult> {
@@ -125,12 +151,13 @@ async function runLevel(deps: BenchDeps, run: Readonly<LevelRun>): Promise<Bench
     failures.set(code, (failures.get(code) ?? 0) + 1);
   };
 
-  for (let round = 0; round < rounds; round += 1) {
+  for (let round = 0; round < rounds && deps.signal?.aborted !== true; round += 1) {
     const subjects = run.names.map((name) => ({
       client: deps.client,
       name,
       settings: run.plan.settings,
       wait: deps.wait,
+      owned: run.owned,
     }));
 
     const arranged = await Promise.all(
@@ -234,8 +261,9 @@ async function waitForDetails(
 
   for (;;) {
     const found = collect();
+    const isStreamDown = run.log.failure !== null;
 
-    if (found.size === wanted.names.length || deps.now() >= deadline) {
+    if (found.size === wanted.names.length || isStreamDown || deps.now() >= deadline) {
       return [...found.values()];
     }
 
@@ -256,16 +284,24 @@ function formatProgress(result: Readonly<BenchResult>): string {
   return `bench: ${result.scenario} at ${String(result.concurrency)}: ${figures} over ${String(result.samples)} samples, ${String(failed)} failed`;
 }
 
-async function removeImps(client: ImpClient, names: readonly string[]): Promise<void> {
+async function removeOwned(
+  client: ImpClient,
+  owned: Set<string>,
+  names: readonly string[],
+): Promise<void> {
   await Promise.all(
-    names.map(async (name) => {
-      try {
-        await client.imps.destroy({ name });
-      } catch (error) {
-        if (!(error instanceof ORPCError && error.code === 'NOT_FOUND')) {
-          throw error;
+    names
+      .filter((name) => owned.has(name))
+      .map(async (name) => {
+        try {
+          await client.imps.destroy({ name });
+        } catch (error) {
+          if (!(error instanceof ORPCError && error.code === 'NOT_FOUND')) {
+            throw error;
+          }
         }
-      }
-    }),
+
+        owned.delete(name);
+      }),
   );
 }

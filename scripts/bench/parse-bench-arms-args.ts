@@ -10,15 +10,19 @@ export interface BenchArmsArgs {
   readonly rounds: number;
   readonly out: string;
   readonly benchArgs: readonly string[];
+  readonly warmUpArgs: readonly string[];
 }
 
 export const BENCH_ARMS_USAGE =
-  'usage: bun scripts/bench/run-bench-arms.ts --out <dir> [--rounds <n>] --arm <name>=<checkout>... [-- <impz bench args>]';
+  'usage: bun scripts/bench/run-bench-arms.ts --out <dir> [--rounds <n>] [--memory <size>] --arm <name>=<checkout>... [-- <impz bench args>]';
 
+// A boot template serves one memory size, so --memory reaches both the
+// warm-up's creates and the timed run, and the warm-up warms the template
+// that run boots from.
 export function parseBenchArmsArgs(argv: readonly string[]): BenchArmsArgs | string {
   const split = argv.indexOf('--');
   const own = split === -1 ? argv : argv.slice(0, split);
-  const benchArgs = split === -1 ? [] : argv.slice(split + 1);
+  const forwarded = split === -1 ? [] : argv.slice(split + 1);
   const parsed = parseOwnArgs(own);
 
   if (parsed === null) {
@@ -46,7 +50,15 @@ export function parseBenchArmsArgs(argv: readonly string[]): BenchArmsArgs | str
     arms.push({ name, checkout });
   }
 
-  return { arms, rounds, out: parsed.out, benchArgs };
+  const memory = parsed.memory === undefined ? [] : ['--memory', parsed.memory];
+
+  return {
+    arms,
+    rounds,
+    out: parsed.out,
+    benchArgs: [...forwarded, ...memory],
+    warmUpArgs: ['bench', 'create', '--concurrency', '1', '--samples', '3', ...memory],
+  };
 }
 
 function parseOwnArgs(own: readonly string[]) {
@@ -57,6 +69,7 @@ function parseOwnArgs(own: readonly string[]) {
         arm: { type: 'string', multiple: true },
         rounds: { type: 'string', default: '1' },
         out: { type: 'string' },
+        memory: { type: 'string' },
       },
     }).values;
   } catch {

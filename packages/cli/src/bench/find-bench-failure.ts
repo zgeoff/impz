@@ -1,4 +1,4 @@
-import type { BenchResult } from './run-bench';
+import type { BenchResult } from './bench-report-schema';
 
 export function findBenchFailure(
   results: readonly BenchResult[],

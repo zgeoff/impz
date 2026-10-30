@@ -1,5 +1,6 @@
+import { formatTable } from '../output/format-output';
+import type { LatencySummary } from './bench-report-schema';
 import type { BenchHostState, BenchReport } from './build-bench-report';
-import type { LatencySummary } from './build-latency-summary';
 
 const HEADER = [
   'scenario',
@@ -42,7 +43,7 @@ export function formatBenchReport(report: Readonly<BenchReport>): string {
     `before: ${formatHostState(report.before)}`,
     `after: ${formatHostState(report.after)}`,
     '',
-    ...formatTable([HEADER, ...rows]),
+    formatTable(HEADER, rows),
   ].join('\n');
 }
 
@@ -76,17 +77,4 @@ function formatHostState(state: Readonly<BenchHostState>): string {
       : `${String(state.hugePoolFreeMib)} MiB pool free`;
 
   return `${templates}, ${pool}, ${String(state.awakeCount)} of ${String(state.impCount)} imps awake`;
-}
-
-function formatTable(rows: readonly (readonly string[])[]): string[] {
-  const widths = HEADER.map((_, column) =>
-    Math.max(...rows.map((row) => row[column]?.length ?? 0)),
-  );
-
-  return rows.map((row) =>
-    row
-      .map((cell, column) => cell.padEnd(widths[column] ?? 0))
-      .join('  ')
-      .trimEnd(),
-  );
 }

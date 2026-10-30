@@ -150,9 +150,9 @@ jobs:
 
       - name: Compare with the baseline
         run: >-
-          bun scripts/bench/run-bench-arms.ts --out .cache/bench --rounds "$ROUNDS" --arm
-          "baseline=.cache/baseline" --arm candidate=. -- "$SCENARIOS" --concurrency "$CONCURRENCY"
-          --samples "$SAMPLES" --memory 256m
+          bun scripts/bench/run-bench-arms.ts --out .cache/bench --rounds "$ROUNDS" --memory 256m
+          --arm "baseline=.cache/baseline" --arm candidate=. -- "$SCENARIOS" --concurrency
+          "$CONCURRENCY" --samples "$SAMPLES"
 
       # The steps below also run after a failure or a timeout, with or
       # without a container, so none of them may fail the job.

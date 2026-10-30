@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { release } from 'node:os';
 import type { Config } from './config';
 import type { ImpdServices } from './create-impd-services';
 import type { ImpdStorage } from './create-impd-storage';
@@ -111,6 +113,8 @@ export function createImpdApp(
     readHostInfo: () =>
       readHostInfo({
         isHugePages: config.hugePages !== null,
+        readKernel: release,
+        readCpuInfo: () => readFileSync('/proc/cpuinfo', 'utf8'),
         readHugePagePool: deps.imps?.readHugePagePool ?? (() => readHugePagePool()),
         readBootTemplateCount: parts.imps.bootTemplates?.readReadyCount ?? null,
       }),

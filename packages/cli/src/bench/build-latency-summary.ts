@@ -1,9 +1,4 @@
-export interface LatencySummary {
-  readonly p50: number;
-  readonly p95: number;
-  readonly p99: number;
-  readonly max: number;
-}
+import type { LatencySummary } from './bench-report-schema';
 
 // nearest rank, so each figure is a sample the bench took and never an
 // interpolation between two

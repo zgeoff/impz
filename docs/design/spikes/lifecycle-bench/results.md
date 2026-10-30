@@ -12,9 +12,12 @@ Every run is on a GitHub-hosted `ubuntu-24.04` runner with nested KVM, 4 vCPUs a
 7.0.0-1017-azure. impd runs in a dev instance on XFS with Firecracker v1.17.0, guest kernel 6.1.188,
 a RAM budget of 12,288 MiB, 4 KiB guest pages, and KSM off. The bench creates each imp with 256 MiB,
 takes 20 samples at each of the concurrency levels 1, 4, 16 and 64, and runs create, wake and
-restore. A wake wakes an imp that went to sleep after an earlier wake, and a restore restores an
-awake imp to a checkpoint. Before each side's timed run, 3 creates of the same size warm its boot
-template.
+restore. A restore restores an awake imp to a checkpoint. In these runs, the first round of each
+level woke imps that had just been created and slept once, and each later round woke imps that had
+woken before. At concurrency 16, half of the wakes are first wakes after a create, and at 64, with
+one round, all of them are. The bench now wakes and sleeps each new imp once before its first timed
+wake, so a later run times only wakes after an earlier wake. Before each side's timed run, 3 creates
+of the same size warm its boot template.
 
 Each run lands on whichever runner GitHub assigns, so its CPU differs. The reuse and tick runs
 predate the fix that makes impd wait for Firecracker's API socket to listen, so their level 64 still
