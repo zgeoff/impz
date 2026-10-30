@@ -26,7 +26,10 @@ async function main(): Promise<void> {
 
   const [engine, container] = command.values;
 
-  invariant(engine && container, 'the parser asks for an engine and a container');
+  invariant(
+    engine !== undefined && container !== undefined,
+    'the parser asks for an engine and a container',
+  );
 
   const zfsDir = process.env['IMP_ZFS_TEST_DIR'] ?? null;
 

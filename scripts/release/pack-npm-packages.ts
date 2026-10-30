@@ -38,7 +38,7 @@ async function main(): Promise<void> {
   const runTreeScript = (name: string, args: readonly string[]) => {
     const script = scripts.get(name);
 
-    invariant(script, `${name} was found before packing`);
+    invariant(script !== undefined && script !== null, `${name} was found before packing`);
 
     return $`${join(tree, script)} ${args}`.cwd(tree);
   };
