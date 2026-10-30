@@ -84,6 +84,20 @@ test('it refuses a flag before --, and runs nothing', async () => {
   });
 });
 
+test('it refuses a lone flag in place of the script name, and looks nothing up', async () => {
+  const ctx = setupTest();
+
+  const result = await $`bun ${ctx.scriptPath} --help`
+    .env({ ...process.env, GITHUB_WORKSPACE: ctx.tree })
+    .nothrow()
+    .quiet();
+
+  expect({ exitCode: result.exitCode, stderr: result.stderr.toString() }).toStrictEqual({
+    exitCode: 2,
+    stderr: 'usage: run-tree-script.ts <script name> [-- args...]\n',
+  });
+});
+
 test('it fails for a script the tree lacks', async () => {
   const ctx = setupTest();
 
