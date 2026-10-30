@@ -1,5 +1,12 @@
 # Changelog
 
+## [6.2.0](https://github.com/zgeoff/impz/compare/v6.1.1...v6.2.0) (2026-10-30)
+
+### Features
+
+- **images:** add a coder example image ([#788](https://github.com/zgeoff/impz/issues/788))
+  ([fe573c4](https://github.com/zgeoff/impz/commit/fe573c48f30bc5db5d8023b45b1f1d440c610120))
+
 ## [6.1.1](https://github.com/zgeoff/impz/compare/v6.1.0...v6.1.1) (2026-10-29)
 
 ### Bug Fixes

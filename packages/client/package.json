@@ -1,6 +1,6 @@
 {
   "name": "@impz/client",
-  "version": "6.1.1",
+  "version": "6.2.0",
   "description": "Typed client for impd, the imp host daemon: imps, checkpoints, images and exec",
   "license": "MIT",
   "repository": {
