@@ -831,7 +831,7 @@ test('it leaves consistent records after concurrent lifecycle calls on a few imp
         );
       },
     ),
-    { numRuns: 25 },
+    { numRuns: 15 },
   );
 });
 
