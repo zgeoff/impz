@@ -26,7 +26,7 @@ test('it runs one e2e-group job for each fast group, with the host tests in the 
   });
 });
 
-test('it calls the shared release job and the workflow lint at the sync tag that repo-sync calls', async () => {
+test('it calls the shared release job at the sync tag that repo-sync calls', async () => {
   const text = await Bun.file(new URL('../../../.github/workflows/ci.yml', import.meta.url)).text();
 
   const workflow = Bun.YAML.parse(text);
@@ -45,7 +45,6 @@ test('it calls the shared release job and the workflow lint at the sync tag that
   expect(workflow).toMatchObject({
     jobs: {
       release: { uses: `zgeoff/tools/.github/workflows/release-please.yml@${syncTag}` },
-      shellcheck: { env: { WORKFLOW_LINT_REF: syncTag } },
     },
   });
 });

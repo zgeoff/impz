@@ -324,8 +324,6 @@ jobs:
       ZIZMOR_SHA256: e65324f4430c2717591937edcec90ccbefaf14c174f8ec9415e03ca875b46e1a
       HADOLINT_VERSION: v2.15.1
       HADOLINT_SHA256: c7187db94eeeeca956519a6af171adc31453941a1e777961f6e680f697c8c507
-      # the shared workflow lint, at the sync tag that repo-sync calls
-      WORKFLOW_LINT_REF: sync-v32
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -359,11 +357,16 @@ jobs:
       - name: actionlint
         run: actionlint
 
+      # the shared workflow lint, at the sync tag that repo-sync calls
+      - name: Read the sync tag
+        id: sync-tag
+        run: bun run --silent ci:read-sync-tag
+
       - name: Checkout the workflow lint
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: zgeoff/tools
-          ref: ${{ env.WORKFLOW_LINT_REF }}
+          ref: ${{ steps.sync-tag.outputs.ref }}
           path: .workflow-lint
           sparse-checkout: sync/pre-push
           persist-credentials: false
