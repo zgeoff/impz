@@ -79,11 +79,13 @@ export async function runBenchArm(deps: BenchArmDeps, plan: Readonly<ArmPlan>): 
       isPassed: bench.exitCode === 0,
     };
   } finally {
-    const logs = await deps.readImpdLogs();
+    try {
+      const logs = await deps.readImpdLogs();
 
-    writeFileSync(plan.logPath, logs);
-
-    await deps.runDev(dev, 'down', devEnv);
+      writeFileSync(plan.logPath, logs);
+    } finally {
+      await deps.runDev(dev, 'down', devEnv);
+    }
   }
 }
 

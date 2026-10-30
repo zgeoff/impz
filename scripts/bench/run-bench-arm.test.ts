@@ -2,6 +2,7 @@ import { expect, mock, onTestFinished, test } from 'bun:test';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { buildStubAnswerQueue } from '@impz/test-utils/build-stub-answer-queue';
 import { runBenchArm } from './run-bench-arm';
 import type { ImpzRun } from './run-bench-arm';
 
@@ -90,4 +91,104 @@ test('it saves the impd log and stops the dev instance when the dev start fails'
 
   expect(log).toBe('impd waited for its kernel\n');
   expect(runDev.mock.calls.map((call) => call[1])).toStrictEqual(['up', 'down']);
+});
+
+test('it stops the dev instance when the impd log cannot be written', async () => {
+  const ctx = await setupTest();
+
+  const devOutput = { up: '', token: 'token-1\n', down: '' };
+
+  const runDev = mock((_script: string, command: 'up' | 'token' | 'down') =>
+    Promise.resolve(devOutput[command]),
+  );
+
+  const impzRuns: Readonly<Record<string, ImpzRun>> = {
+    '--json': {
+      exitCode: 0,
+      stdout:
+        '{"defaults":{"memoryMib":256,"image":"base"},"host":{"kernel":"6.1.0","cpuModel":"EPYC","isNested":true,"hugePages":"off","hugePool":null,"bootTemplates":1}}',
+      stderr: '',
+    },
+    create: { exitCode: 0, stdout: '', stderr: '' },
+    wake: { exitCode: 0, stdout: '{"results":[]}\n', stderr: '' },
+  };
+
+  const ran = runBenchArm(
+    {
+      runDev,
+      runImpz: (args) =>
+        Promise.resolve(
+          impzRuns[args[1] ?? ''] ?? { exitCode: 127, stdout: '', stderr: 'no such command' },
+        ),
+      readImpdLogs: () => Promise.resolve(new TextEncoder().encode('impd woke 4 imps\n')),
+      wait: () => Promise.resolve(),
+      onStderr: () => {},
+    },
+    {
+      arm: { name: 'candidate', checkout: '/work/candidate' },
+      commands: { warmUpArgs: ['bench', 'create'], benchArgs: ['wake'] },
+      logPath: join(ctx.logPath, 'missing-dir', 'candidate-1.impd.log'),
+    },
+  );
+
+  expect(ran).rejects.toMatchObject({ code: 'ENOENT' });
+  expect(runDev.mock.calls.map((call) => call[1])).toStrictEqual(['up', 'token', 'down']);
+});
+
+test('it starts the timed bench only once the warm-up left a boot template ready', async () => {
+  const ctx = await setupTest();
+
+  const devOutput = { up: '', token: 'token-1\n', down: '' };
+
+  const runDev = mock((_script: string, command: 'up' | 'token' | 'down') =>
+    Promise.resolve(devOutput[command]),
+  );
+
+  const infos = buildStubAnswerQueue<ImpzRun>([
+    {
+      exitCode: 0,
+      stdout:
+        '{"defaults":{"memoryMib":256,"image":"base"},"host":{"kernel":"6.1.0","cpuModel":"EPYC","isNested":true,"hugePages":"off","hugePool":null,"bootTemplates":0}}',
+      stderr: '',
+    },
+    {
+      exitCode: 0,
+      stdout:
+        '{"defaults":{"memoryMib":256,"image":"base"},"host":{"kernel":"6.1.0","cpuModel":"EPYC","isNested":true,"hugePages":"off","hugePool":null,"bootTemplates":0}}',
+      stderr: '',
+    },
+    {
+      exitCode: 0,
+      stdout:
+        '{"defaults":{"memoryMib":256,"image":"base"},"host":{"kernel":"6.1.0","cpuModel":"EPYC","isNested":true,"hugePages":"off","hugePool":null,"bootTemplates":1}}',
+      stderr: '',
+    },
+  ]);
+
+  const impzRuns: Readonly<Record<string, () => ImpzRun>> = {
+    '--json': () => infos.next(),
+    create: () => ({ exitCode: 0, stdout: '', stderr: '' }),
+    wake: () => ({ exitCode: 0, stdout: '{"results":[]}\n', stderr: '' }),
+  };
+
+  const ran = await runBenchArm(
+    {
+      runDev,
+      runImpz: (args) =>
+        Promise.resolve(
+          (impzRuns[args[1] ?? ''] ?? (() => ({ exitCode: 127, stdout: '', stderr: '' })))(),
+        ),
+      readImpdLogs: () => Promise.resolve(new TextEncoder().encode('impd built a template\n')),
+      wait: () => Promise.resolve(),
+      onStderr: () => {},
+    },
+    {
+      arm: { name: 'candidate', checkout: '/work/candidate' },
+      commands: { warmUpArgs: ['bench', 'create'], benchArgs: ['wake'] },
+      logPath: ctx.logPath,
+    },
+  );
+
+  expect(ran).toStrictEqual({ json: '{"results":[]}\n', isPassed: true });
+  expect(infos.left).toBe(0);
 });

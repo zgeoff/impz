@@ -10,6 +10,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { setImmediate as setImmediatePromise } from 'node:timers/promises';
 import { create } from '@bufbuild/protobuf';
 import { FRAME_TYPES, PingSchema, encodeMessageFrame } from '@impz/agent-protocol';
 import { waitFor } from '@impz/test-utils/wait-for';
@@ -420,9 +421,7 @@ test('#startVm fails a boot whose Firecracker API refuses every call, and leaves
 
   // Bun reports an unhandled rejection once the microtask queue drains,
   // so one macrotask turn after the reject is enough to see it
-  await new Promise((resolve) => {
-    setImmediate(resolve);
-  });
+  await setImmediatePromise();
 
   expect(failure).toBeInstanceOf(Error);
   expect(unhandled).toStrictEqual([]);

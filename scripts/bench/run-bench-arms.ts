@@ -3,6 +3,7 @@
 import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { $ } from 'bun';
+import { writeStderr } from '../lib/write-stderr.ts';
 import { formatBenchCompare } from './format-bench-compare';
 import type { ArmReport } from './format-bench-compare';
 import { parseBenchArmsArgs } from './parse-bench-arms-args';
@@ -29,9 +30,7 @@ const ARM_DEPS: BenchArmDeps = {
     return Buffer.concat([logs.stdout, logs.stderr]);
   },
   wait: (durationMs) => Bun.sleep(durationMs),
-  onStderr: (text) => {
-    process.stderr.write(text);
-  },
+  onStderr: writeStderr,
 };
 
 async function main(): Promise<void> {

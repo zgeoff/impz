@@ -5,6 +5,7 @@ import fc from 'fast-check';
 import { buildStubGovernedHostArbitraries } from '../../../testing/imp-ops/build-stub-governed-host-arbitraries';
 import { createStubGovernedHost } from '../../../testing/imp-ops/create-stub-governed-host';
 import type { RoomLeft } from '../../../testing/imp-ops/create-stub-governed-host';
+import { buildStubGatedCall } from '../../../testing/platform/build-stub-gated-call';
 import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { createEventBus } from '../../platform/events/event-bus';
 import type { VmRam } from '../../vm/vmm/vm-stats';
@@ -888,17 +889,8 @@ test('it admits a waiting foreground admission before background work queued ahe
     awake: [{ id: 'a', rssMib: 100 }],
   });
 
-  const gate = Promise.withResolvers<undefined>();
-
-  const governor = createRamGovernor({
-    ...host.deps,
-    listAwake: async () => {
-      await gate.promise;
-
-      return host.deps.listAwake();
-    },
-  });
-
+  const listing = buildStubGatedCall(host.deps.listAwake);
+  const governor = createRamGovernor({ ...host.deps, listAwake: listing.call });
   const finished: string[] = [];
   const held = governor.admit({ id: 'held', name: 'held', reserveMib: 50, memoryMib: 100 });
 
@@ -918,7 +910,7 @@ test('it admits a waiting foreground admission before background work queued ahe
     finished.push(['held', 'grown', 'woken'][index] ?? '');
   });
 
-  gate.resolve(undefined);
+  listing.open();
 
   await Promise.all(settled);
 
@@ -932,17 +924,8 @@ test('it admits a waiting foreground admission before a grow and an enforce pass
     awake: [{ id: 'a', rssMib: 100 }],
   });
 
-  const gate = Promise.withResolvers<undefined>();
-
-  const governor = createRamGovernor({
-    ...host.deps,
-    listAwake: async () => {
-      await gate.promise;
-
-      return host.deps.listAwake();
-    },
-  });
-
+  const listing = buildStubGatedCall(host.deps.listAwake);
+  const governor = createRamGovernor({ ...host.deps, listAwake: listing.call });
   const finished: string[] = [];
 
   const queued = [
@@ -958,7 +941,7 @@ test('it admits a waiting foreground admission before a grow and an enforce pass
     finished.push(['held', 'grow', 'enforce', 'woken'][index] ?? '');
   });
 
-  gate.resolve(undefined);
+  listing.open();
 
   await Promise.all(settled);
 

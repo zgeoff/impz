@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { buildStubGatedCall } from '../../../testing/platform/build-stub-gated-call';
 import { createPrioritySemaphore } from './priority-semaphore';
 
 test('it gives a free slot to a waiting foreground task before an older background one', async () => {
@@ -40,26 +41,26 @@ test('it frees the slot when a task fails, so the next one runs', async () => {
 
 test('it runs tasks up to its limit at once', async () => {
   const semaphore = createPrioritySemaphore(2);
-  const held = Promise.withResolvers<undefined>();
+  const held = buildStubGatedCall(() => Promise.resolve());
   const started: string[] = [];
 
-  const first = semaphore.run('background', async () => {
+  const first = semaphore.run('background', () => {
     started.push('first');
 
-    await held.promise;
+    return held.call();
   });
 
-  const second = semaphore.run('background', async () => {
+  const second = semaphore.run('background', () => {
     started.push('second');
 
-    await held.promise;
+    return held.call();
   });
 
   await Promise.resolve();
 
   const startedBefore = [...started];
 
-  held.resolve(undefined);
+  held.open();
 
   await Promise.all([first, second]);
 
