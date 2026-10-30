@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { $ } from 'bun';
+import { buildStubCLIBinary } from '../test-utils/build-stub-cli-binary';
 
 function setupTest() {
   const tree = mkdtempSync(join(tmpdir(), 'imp-check-cli-binary-'));
@@ -22,7 +23,7 @@ function setupTest() {
 
 test('it passes a binary at its version whose sum SHA256SUMS lists', async () => {
   const ctx = setupTest();
-  const binary = '#!/bin/sh\n[ "$1" = --version ] && echo 2.0.1\nexit 0\n';
+  const binary = buildStubCLIBinary({ version: '2.0.1' });
 
   writeFileSync(join(ctx.dist, 'impz-linux-x64'), binary);
 
@@ -44,7 +45,7 @@ test('it passes a binary at its version whose sum SHA256SUMS lists', async () =>
 
 test('it checks the imp binary of a tag from before the rename', async () => {
   const ctx = setupTest();
-  const binary = '#!/bin/sh\n[ "$1" = --version ] && echo 1.6.0\nexit 0\n';
+  const binary = buildStubCLIBinary({ version: '1.6.0' });
 
   writeFileSync(join(ctx.dist, 'imp-darwin-arm64'), binary);
 
@@ -123,7 +124,7 @@ test.each([['bash'], ['zsh'], ['fish']])(
   'it fails a binary that cannot print its %s completion',
   async (shell) => {
     const ctx = setupTest();
-    const binary = `#!/bin/sh\n[ "$1" = --version ] && echo 2.0.1 && exit 0\n[ "$2" = ${shell} ] && exit 1\nexit 0\n`;
+    const binary = buildStubCLIBinary({ version: '2.0.1', failingCompletion: shell });
 
     writeFileSync(join(ctx.dist, 'impz-linux-x64'), binary);
 
