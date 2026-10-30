@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createStubBin } from '@impz/test-utils/create-stub-bin';
 import { $ } from 'bun';
+import { buildStubPushDocker } from '../test-utils/build-stub-push-docker';
 
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-push-image-'));
@@ -28,7 +29,7 @@ test('it pushes a release under its version and outputs the digest the registry 
   const docker = createStubBin(
     ctx.directoryPath,
     'docker',
-    `[ "$1 $2" = "buildx imagetools" ] && echo ${digest}\nexit 0`,
+    buildStubPushDocker({ inspected: digest }),
   );
 
   const result = await $`bun ${ctx.scriptPath}`
@@ -62,7 +63,7 @@ test('it tags a dry run under its push tag before it pushes', async () => {
   const docker = createStubBin(
     ctx.directoryPath,
     'docker',
-    `[ "$1 $2" = "buildx imagetools" ] && echo ${digest}\nexit 0`,
+    buildStubPushDocker({ inspected: digest }),
   );
 
   const result = await $`bun ${ctx.scriptPath}`
@@ -95,7 +96,7 @@ test('it fails, outputting no digest, when the registry gives no valid digest', 
   const docker = createStubBin(
     ctx.directoryPath,
     'docker',
-    '[ "$1 $2" = "buildx imagetools" ] && echo "<no value>"\nexit 0',
+    buildStubPushDocker({ inspected: '<no value>' }),
   );
 
   const result = await $`bun ${ctx.scriptPath}`
@@ -121,7 +122,15 @@ test('it fails, outputting no digest, when the registry gives no valid digest', 
 
 test('it fails, outputting nothing, when the push fails', async () => {
   const ctx = setupTest();
-  const docker = createStubBin(ctx.directoryPath, 'docker', '[ "$1" = push ] && exit 1\nexit 0');
+
+  const docker = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    buildStubPushDocker({
+      inspected: `sha256:${'0123456789abcdef'.repeat(4)}`,
+      isPushRefused: true,
+    }),
+  );
 
   const result = await $`bun ${ctx.scriptPath}`
     .env({
