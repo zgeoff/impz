@@ -817,7 +817,7 @@ test('it keeps every hold when impd starts without the taint file', async () => 
 
   const records = await Promise.all(['dev', 'build'].map((name) => readImpByName(ctx.db, name)));
 
-  expect(records.map((record) => record?.error)).toEqual([
+  expect(records.map((record) => record?.error)).toStrictEqual([
     'a kernel oops killed firecracker',
     'a kernel oops killed firecracker',
   ]);

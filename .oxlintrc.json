@@ -53,8 +53,12 @@
     "typescript/consistent-type-assertions": "off",
     "zgeoff/no-hidden-cast": "off",
     "zgeoff/no-comment-rule-override": "off",
-    // zod's documented import form is `import * as z from 'zod'`
-    "import/no-namespace": "off",
+    // each library's docs import it as one object; an option set here replaces the shared ignore
+    // list, so this list names zod again
+    "import/no-namespace": [
+      "error",
+      { "ignore": ["zod", "zod/*", "dns-packet", "@peculiar/x509", "acme-client"] }
+    ],
     "no-restricted-imports": [
       "error",
       {

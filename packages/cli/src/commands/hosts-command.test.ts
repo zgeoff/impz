@@ -255,7 +255,7 @@ test('#host forgets the current host and clears current on host rm', async () =>
   });
 });
 
-test('#--host sends the saved token over IMP_TOKEN, with a note', async () => {
+test('#hostFlag sends the saved token over IMP_TOKEN, with a note', async () => {
   const ctx = await setupTest();
 
   writeHostConfig(ctx.env, {
@@ -276,7 +276,7 @@ test('#--host sends the saved token over IMP_TOKEN, with a note', async () => {
 });
 
 test.skipIf(!probeUpdateReadOnly())(
-  '#--host reads its saved host when the old token file cannot move, and notes the file it left',
+  '#hostFlag reads its saved host when the old token file cannot move, and notes the file it left',
   async () => {
     const ctx = await setupTest();
 
@@ -318,7 +318,7 @@ test.skipIf(!probeUpdateReadOnly())(
   },
 );
 
-test('#--host names the host in a 401 for a saved token impd refuses', async () => {
+test('#hostFlag names the host in a 401 for a saved token impd refuses', async () => {
   const ctx = await setupTest();
 
   writeHostConfig(ctx.env, { current: null, hosts: { work: { url: ctx.url, token: 'stale' } } });
@@ -332,7 +332,7 @@ test('#--host names the host in a 401 for a saved token impd refuses', async () 
   });
 });
 
-test('#--host names the host when impd refuses the saved token on exec’s socket', async () => {
+test('#hostFlag names the host when impd refuses the saved token on exec’s socket', async () => {
   const ctx = await setupTest();
 
   writeHostConfig(ctx.env, { current: null, hosts: { work: { url: ctx.url, token: 'stale' } } });
@@ -349,7 +349,7 @@ test('#--host names the host when impd refuses the saved token on exec’s socke
   });
 });
 
-test('#--host sends the saved token over IMP_TOKEN on exec’s socket', async () => {
+test('#hostFlag sends the saved token over IMP_TOKEN on exec’s socket', async () => {
   const ctx = await setupTest();
 
   const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
@@ -391,7 +391,7 @@ test('#--host sends the saved token over IMP_TOKEN on exec’s socket', async ()
   });
 });
 
-test('#--host refuses a flag without a saved host name', async () => {
+test('#hostFlag refuses a flag without a saved host name', async () => {
   const ctx = await setupTest();
   const listed = await runCLIInProcess({ args: ['ls', '--host'], env: ctx.env });
 
@@ -402,7 +402,7 @@ test('#--host refuses a flag without a saved host name', async () => {
   });
 });
 
-test('#--host leaves --version to print the version with no saved host', async () => {
+test('#hostFlag leaves --version to print the version with no saved host', async () => {
   const ctx = await setupTest();
 
   const version: unknown = await runCLIInProcess({
@@ -417,7 +417,7 @@ test('#--host leaves --version to print the version with no saved host', async (
   });
 });
 
-test('#--host leaves --help to print the help with no saved host', async () => {
+test('#hostFlag leaves --help to print the help with no saved host', async () => {
   const ctx = await setupTest();
   const help: unknown = await runCLIInProcess({ args: ['--host', 'work', '--help'], env: ctx.env });
 
