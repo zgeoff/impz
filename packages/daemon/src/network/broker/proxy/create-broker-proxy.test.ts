@@ -2073,7 +2073,7 @@ test('it answers 502 and records the failure when the upstream refuses the webso
   ]);
 });
 
-test('revoking a grant while the service answers the upgrade ends the websocket', async () => {
+test('it ends the websocket when its grant is revoked while the service answers the upgrade', async () => {
   const ctx = await setupTest();
 
   await ctx.createTestImage('base');
@@ -2270,7 +2270,7 @@ test('it closes a websocket whose guest stops reading once the backlog passes 16
   expect(guest.head).toStartWith('HTTP/1.1 101 ');
 });
 
-test('revoking a grant closes its open websockets', async () => {
+test('it closes the open websockets of a revoked grant', async () => {
   const ctx = await setupTest();
 
   await ctx.createTestImage('base');
