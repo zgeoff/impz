@@ -11,7 +11,6 @@ import { runBenchArm } from './run-bench-arm';
 import type { BenchArmDeps } from './run-bench-arm';
 
 const IMPZ = resolve(import.meta.dir, '..', 'impz');
-const CONTAINER = process.env['IMP_DEV_NAME'] ?? 'imp-dev';
 
 const ARM_DEPS: BenchArmDeps = {
   runDev: (script, command, env) => $`${script} ${[command]}`.env(env).text(),
@@ -24,10 +23,17 @@ const ARM_DEPS: BenchArmDeps = {
       stderr: shown.stderr.toString(),
     };
   },
-  readImpdLogs: async () => {
-    const logs = await $`docker logs ${CONTAINER}`.quiet().nothrow();
+  probeDevRunning: async (cli, name) => {
+    const inspect = await $`${cli} ${['inspect', '-f', '{{.State.Running}}', name]}`
+      .quiet()
+      .nothrow();
 
-    return Buffer.concat([logs.stdout, logs.stderr]);
+    return inspect.stdout.toString().trim() === 'true';
+  },
+  readImpdLogs: async (cli, name) => {
+    const logs = await $`${cli} ${['logs', name]}`.quiet().nothrow();
+
+    return { exitCode: logs.exitCode, output: Buffer.concat([logs.stdout, logs.stderr]) };
   },
   wait: (durationMs) => Bun.sleep(durationMs),
   onStderr: writeStderr,

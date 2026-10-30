@@ -39,7 +39,7 @@ test('it frees the slot when a task fails, so the next one runs', async () => {
   expect(ran).toBe('ran');
 });
 
-test('it runs tasks up to its limit at once', async () => {
+test('it runs tasks up to its limit at once, and starts the next only when a slot frees', async () => {
   const semaphore = createPrioritySemaphore(2);
   const held = buildStubGatedCall(() => Promise.resolve());
   const started: string[] = [];
@@ -56,13 +56,20 @@ test('it runs tasks up to its limit at once', async () => {
     return held.call();
   });
 
+  const third = semaphore.run('background', () => {
+    started.push('third');
+
+    return Promise.resolve();
+  });
+
   await Promise.resolve();
 
   const startedBefore = [...started];
 
   held.open();
 
-  await Promise.all([first, second]);
+  await Promise.all([first, second, third]);
 
   expect(startedBefore).toStrictEqual(['first', 'second']);
+  expect(started).toStrictEqual(['first', 'second', 'third']);
 });

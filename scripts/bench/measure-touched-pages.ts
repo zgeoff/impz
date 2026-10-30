@@ -3,18 +3,27 @@
 // dirty-page diff would write. docs/runbooks/development.md#the-bench-job runs it.
 import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
+import { ImpSchema, SystemInfoSchema } from '@impz/api';
 import { parseHugetlbMib } from '@impz/e2e-harness/huge-page-host';
 import { $ } from 'bun';
 import * as z from 'zod';
+import { buildDevLayout } from '../lib/build-dev-layout.ts';
+import { writeStderr } from '../lib/write-stderr.ts';
 
 const IMPZ = resolve(import.meta.dir, '..', 'impz');
-const CONTAINER = process.env['IMP_DEV_NAME'] ?? 'imp-dev';
+
+const LAYOUT = buildDevLayout({
+  env: process.env,
+  root: resolve(import.meta.dir, '..', '..'),
+  cwd: process.cwd(),
+});
+
 const NAME = 'touched-pages';
 const BASE_COPY = '/var/lib/imp/touched-pages-base';
 const READY_TIMEOUT_MS = 300_000;
 const ChangedSchema = z.object({ changedMib: z.number(), changedHugeMib: z.number() });
-const ImpSchema = z.looseObject({ id: z.string() });
-const InfoSchema = z.looseObject({ defaults: z.looseObject({ image: z.string().nullable() }) });
+const ImpIDSchema = ImpSchema.pick({ id: true });
+const InfoSchema = SystemInfoSchema.pick({ defaults: true });
 
 async function main(): Promise<void> {
   const parsed = parseArgs({
@@ -37,7 +46,7 @@ async function main(): Promise<void> {
 
     const shown: unknown = await $`${IMPZ} ${['info', NAME, '--json']}`.json();
 
-    const directory = `/var/lib/imp/imps/${ImpSchema.parse(shown).id}`;
+    const directory = `/var/lib/imp/imps/${ImpIDSchema.parse(shown).id}`;
     const memFile = `${directory}/snapshot/mem`;
 
     // a cold boot sleeps as a diff over an empty file
@@ -87,8 +96,23 @@ async function main(): Promise<void> {
 
     console.log(JSON.stringify(measured, null, 2));
   } finally {
-    await $`docker exec ${CONTAINER} rm -f ${BASE_COPY}`.quiet().nothrow();
-    await $`${IMPZ} ${['rm', NAME]}`.quiet().nothrow();
+    const removedCopy =
+      await $`${LAYOUT.containerCLI} ${['exec', LAYOUT.name, 'rm', '-f', BASE_COPY]}`
+        .quiet()
+        .nothrow();
+
+    const removedImp = await $`${IMPZ} ${['rm', NAME]}`.quiet().nothrow();
+
+    for (const [what, removal] of [
+      [BASE_COPY, removedCopy],
+      [NAME, removedImp],
+    ] as const) {
+      if (removal.exitCode !== 0) {
+        writeStderr(
+          `measure-touched-pages: could not remove ${what}: ${removal.stderr.toString()}`,
+        );
+      }
+    }
   }
 }
 
@@ -101,7 +125,7 @@ async function probeDefaultImage(): Promise<boolean> {
 
   const info = InfoSchema.safeParse(shown.json());
 
-  return info.success && info.data.defaults.image !== null;
+  return info.success && (info.data.defaults?.image ?? null) !== null;
 }
 
 async function probeExec(): Promise<boolean> {
@@ -127,7 +151,7 @@ async function runInImp(script: string): Promise<void> {
 }
 
 async function readContainer(argv: readonly string[]): Promise<string> {
-  const text = await $`docker exec ${CONTAINER} ${argv}`.text();
+  const text = await $`${LAYOUT.containerCLI} ${['exec', LAYOUT.name, ...argv]}`.text();
 
   return text.trim();
 }
