@@ -1,5 +1,12 @@
 # Changelog
 
+## [6.2.1](https://github.com/zgeoff/impz/compare/v6.2.0...v6.2.1) (2026-10-30)
+
+
+### Bug Fixes
+
+* **daemon:** favour foreground admissions and cap concurrent restores ([#794](https://github.com/zgeoff/impz/issues/794)) ([79a03cf](https://github.com/zgeoff/impz/commit/79a03cf32622acb3ab683b906d68b2d19a93c755))
+
 ## [6.2.0](https://github.com/zgeoff/impz/compare/v6.1.1...v6.2.0) (2026-10-30)
 
 ### Features
