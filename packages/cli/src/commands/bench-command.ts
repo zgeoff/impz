@@ -79,7 +79,9 @@ export const benchCommand = defineCommand({
           client,
           now: () => performance.now(),
           wait: (durationMs) => Bun.sleep(durationMs),
-          onProgress: (line) => io.printError(line),
+          onProgress: (line) => {
+            io.printError(line);
+          },
         },
         {
           runID,

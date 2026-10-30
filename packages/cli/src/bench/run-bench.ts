@@ -82,7 +82,9 @@ async function createEventLog(client: ImpClient): Promise<EventLog> {
     try {
       await watchEvents(client, {
         signal: controller.signal,
-        onOpen: () => opened.resolve(undefined),
+        onOpen: () => {
+          opened.resolve(undefined);
+        },
         onEvent: (event) => {
           events.push(event);
         },
@@ -96,7 +98,12 @@ async function createEventLog(client: ImpClient): Promise<EventLog> {
 
   await opened.promise;
 
-  return { events, stop: () => controller.abort() };
+  return {
+    events,
+    stop: () => {
+      controller.abort();
+    },
+  };
 }
 
 interface LevelRun {

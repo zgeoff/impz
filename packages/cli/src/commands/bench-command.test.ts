@@ -3,6 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildImagePaths, buildMockNewImage, createImage } from '@impz/daemon/testing';
+import * as z from 'zod';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 import { startImpdHost } from '../test-utils/start-impd-host';
 
@@ -54,7 +55,9 @@ test('it times each scenario at each concurrency, with the figures impd recorded
 
   expect(result.code).toBe(0);
 
-  expect(JSON.parse(result.stdout).results).toStrictEqual([
+  const report = z.looseObject({ results: z.array(z.unknown()) }).parse(JSON.parse(result.stdout));
+
+  expect(report.results).toStrictEqual([
     { scenario: 'create', concurrency: 1, ...timed },
     { scenario: 'create', concurrency: 2, ...timed },
     { scenario: 'wake', concurrency: 1, ...timed },
@@ -97,7 +100,9 @@ test('it reports the memory file of each sleep from impd', async () => {
     env: { ...ctx.home, IMP_URL: ctx.box.url, IMP_TOKEN: ctx.box.rootToken },
   });
 
-  expect(JSON.parse(result.stdout).results).toMatchObject([
+  const report = z.looseObject({ results: z.array(z.unknown()) }).parse(JSON.parse(result.stdout));
+
+  expect(report.results).toMatchObject([
     { scenario: 'sleep', samples: 1, memFileMib: { p50: expect.any(Number) } },
   ]);
 });
@@ -118,7 +123,9 @@ test('it counts each refused step by its code, and fails a concurrency with no s
 
   expect(result.code).toBe(1);
 
-  expect(JSON.parse(result.stdout).results).toMatchObject([
+  const report = z.looseObject({ results: z.array(z.unknown()) }).parse(JSON.parse(result.stdout));
+
+  expect(report.results).toMatchObject([
     { scenario: 'create', samples: 0, failures: { RAM_BUDGET_EXCEEDED: 2 }, latencyMs: null },
   ]);
 
@@ -143,7 +150,9 @@ test('it names the host its numbers came from, and the boot templates before and
     env: { ...ctx.home, IMP_URL: ctx.box.url, IMP_TOKEN: ctx.box.rootToken },
   });
 
-  const report = JSON.parse(result.stdout);
+  const report = z
+    .looseObject({ host: z.unknown(), before: z.unknown() })
+    .parse(JSON.parse(result.stdout));
 
   expect(report.host).toMatchObject({
     label: 'rack-7',

@@ -35,7 +35,7 @@ async function main(): Promise<void> {
   try {
     await waitUntil(`${NAME} never ran a command`, probeExec);
 
-    const shown = await $`${IMPZ} ${['info', NAME, '--json']}`.json();
+    const shown: unknown = await $`${IMPZ} ${['info', NAME, '--json']}`.json();
 
     const directory = `/var/lib/imp/imps/${ImpSchema.parse(shown).id}`;
     const memFile = `${directory}/snapshot/mem`;
