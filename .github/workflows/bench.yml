@@ -52,8 +52,9 @@ jobs:
     # take about an hour, and a kernel cache miss adds about 10 minutes
     timeout-minutes: 120
     env:
-      # 64 imps of 256 MiB fit a 12 GiB budget once KSM merges them; past it,
-      # the governor's refusals show in the results
+      # a 12 GiB budget holds fewer than 64 awake imps of 256 MiB, so the
+      # governor's refusals show at 64; impd runs without KSM, whose scans
+      # would add to the noise
       IMP_RAM_BUDGET_MIB: 12288
       IMP_KERNEL: .cache/ci/vmlinux
       IMP_SYSTEM_DRIVE: .cache/ci/imp-system.squashfs
@@ -90,11 +91,6 @@ jobs:
       # first, so a runner without KVM fails before any build
       - name: Check KVM
         run: scripts/ci/check-kvm.sh
-
-      - name: Turn KSM on for this runner
-        run: |
-          echo 1 | sudo tee /sys/kernel/mm/ksm/use_zero_pages >/dev/null
-          echo 1 | sudo tee /sys/kernel/mm/ksm/run >/dev/null
 
       # 6 GiB of 2 MiB pages: 16 imps of 256 MiB awake at once, and a
       # template build beside them
