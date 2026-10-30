@@ -9,7 +9,7 @@ export interface BenchSettings {
   readonly awakeMs: number;
 }
 
-export interface BenchSubject {
+interface BenchSubject {
   readonly client: ImpClient;
   readonly name: string;
   readonly settings: BenchSettings;
