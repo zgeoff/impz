@@ -415,7 +415,7 @@ hand: `gh workflow run reproducible.yml`.
 groups' caches. It is no required check, and no pull request runs it, because a compare outlasts the
 release job's wait on a pull request's checks. It compares a baseline with its own ref. On a push to
 a `bench/**` branch, the baseline is the parent of the branch's head, and on a dispatch, it is the
-ref the dispatch names (default `main`):
+dispatch's `baseline` input (default `main`):
 
 1. The job checks out the baseline beside the ref, and builds each one's kernel and system drive, so
    each side boots its own guest agent.

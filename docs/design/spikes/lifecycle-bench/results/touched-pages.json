@@ -1,0 +1,14 @@
+{
+  "memory": "1g",
+  "writeMib": 128,
+  "coldSleep": {
+    "touchedMib": 218,
+    "memFileMib": 199
+  },
+  "wokenSleep": {
+    "touchedMib": 220,
+    "changedMib": 9.27734375,
+    "changedHugeMib": 72,
+    "memFileMib": 202
+  }
+}

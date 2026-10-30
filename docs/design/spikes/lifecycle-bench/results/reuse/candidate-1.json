@@ -1,0 +1,269 @@
+{
+  "runID": "ba66",
+  "startedAt": "2026-10-30T00:54:28.499Z",
+  "host": {
+    "label": "candidate",
+    "impdVersion": "6.1.1",
+    "kernel": "7.0.0-1017-azure",
+    "cpuModel": "AMD EPYC 9V74 80-Core Processor",
+    "cpus": 4,
+    "isNested": true,
+    "ramBudgetMib": 12288,
+    "storage": "xfs",
+    "firecracker": "v1.17.0",
+    "guestKernel": "6.1.188",
+    "isKsmRunning": false,
+    "hugePages": "off"
+  },
+  "before": {
+    "bootTemplates": 1,
+    "hugePoolFreeMib": 0,
+    "awakeCount": 0,
+    "impCount": 0
+  },
+  "after": {
+    "bootTemplates": 2,
+    "hugePoolFreeMib": 0,
+    "awakeCount": 0,
+    "impCount": 0
+  },
+  "settings": {
+    "memoryMib": 256,
+    "image": null,
+    "awakeMs": 0,
+    "levels": [1, 4, 16, 64],
+    "samples": 20
+  },
+  "results": [
+    {
+      "scenario": "create",
+      "concurrency": 1,
+      "samples": 20,
+      "failures": {},
+      "latencyMs": {
+        "p50": 325,
+        "p95": 1078,
+        "p99": 1216,
+        "max": 1216
+      },
+      "impdMs": {
+        "p50": 277,
+        "p95": 990,
+        "p99": 1002,
+        "max": 1002
+      },
+      "memFileMib": null
+    },
+    {
+      "scenario": "create",
+      "concurrency": 4,
+      "samples": 20,
+      "failures": {},
+      "latencyMs": {
+        "p50": 745,
+        "p95": 820,
+        "p99": 836,
+        "max": 836
+      },
+      "impdMs": {
+        "p50": 645,
+        "p95": 721,
+        "p99": 744,
+        "max": 744
+      },
+      "memFileMib": null
+    },
+    {
+      "scenario": "create",
+      "concurrency": 16,
+      "samples": 32,
+      "failures": {},
+      "latencyMs": {
+        "p50": 3791,
+        "p95": 7680,
+        "p99": 7735,
+        "max": 7735
+      },
+      "impdMs": {
+        "p50": 2818,
+        "p95": 7367,
+        "p99": 7413,
+        "max": 7413
+      },
+      "memFileMib": null
+    },
+    {
+      "scenario": "create",
+      "concurrency": 64,
+      "samples": 64,
+      "failures": {},
+      "latencyMs": {
+        "p50": 7640,
+        "p95": 13366,
+        "p99": 13831,
+        "max": 13831
+      },
+      "impdMs": {
+        "p50": 4495,
+        "p95": 5614,
+        "p99": 5693,
+        "max": 5693
+      },
+      "memFileMib": null
+    },
+    {
+      "scenario": "wake",
+      "concurrency": 1,
+      "samples": 20,
+      "failures": {},
+      "latencyMs": {
+        "p50": 93,
+        "p95": 145,
+        "p99": 146,
+        "max": 146
+      },
+      "impdMs": {
+        "p50": 86,
+        "p95": 138,
+        "p99": 139,
+        "max": 139
+      },
+      "memFileMib": null
+    },
+    {
+      "scenario": "wake",
+      "concurrency": 4,
+      "samples": 20,
+      "failures": {},
+      "latencyMs": {
+        "p50": 192,
+        "p95": 246,
+        "p99": 250,
+        "max": 250
+      },
+      "impdMs": {
+        "p50": 184,
+        "p95": 235,
+        "p99": 243,
+        "max": 243
+      },
+      "memFileMib": null
+    },
+    {
+      "scenario": "wake",
+      "concurrency": 16,
+      "samples": 32,
+      "failures": {},
+      "latencyMs": {
+        "p50": 782,
+        "p95": 881,
+        "p99": 1100,
+        "max": 1100
+      },
+      "impdMs": {
+        "p50": 755,
+        "p95": 863,
+        "p99": 866,
+        "max": 866
+      },
+      "memFileMib": null
+    },
+    {
+      "scenario": "wake",
+      "concurrency": 64,
+      "samples": 47,
+      "failures": {
+        "RAM_BUDGET_EXCEEDED": 17
+      },
+      "latencyMs": {
+        "p50": 3153,
+        "p95": 3356,
+        "p99": 3366,
+        "max": 3366
+      },
+      "impdMs": {
+        "p50": 3123,
+        "p95": 3294,
+        "p99": 3343,
+        "max": 3343
+      },
+      "memFileMib": null
+    },
+    {
+      "scenario": "restore",
+      "concurrency": 1,
+      "samples": 20,
+      "failures": {},
+      "latencyMs": {
+        "p50": 328,
+        "p95": 372,
+        "p99": 393,
+        "max": 393
+      },
+      "impdMs": {
+        "p50": 324,
+        "p95": 369,
+        "p99": 389,
+        "max": 389
+      },
+      "memFileMib": null
+    },
+    {
+      "scenario": "restore",
+      "concurrency": 4,
+      "samples": 20,
+      "failures": {},
+      "latencyMs": {
+        "p50": 712,
+        "p95": 794,
+        "p99": 808,
+        "max": 808
+      },
+      "impdMs": {
+        "p50": 706,
+        "p95": 787,
+        "p99": 801,
+        "max": 801
+      },
+      "memFileMib": null
+    },
+    {
+      "scenario": "restore",
+      "concurrency": 16,
+      "samples": 32,
+      "failures": {},
+      "latencyMs": {
+        "p50": 3757,
+        "p95": 7687,
+        "p99": 7694,
+        "max": 7694
+      },
+      "impdMs": {
+        "p50": 3737,
+        "p95": 7674,
+        "p99": 7684,
+        "max": 7684
+      },
+      "memFileMib": null
+    },
+    {
+      "scenario": "restore",
+      "concurrency": 64,
+      "samples": 64,
+      "failures": {},
+      "latencyMs": {
+        "p50": 15023,
+        "p95": 21722,
+        "p99": 21838,
+        "max": 21838
+      },
+      "impdMs": {
+        "p50": 14972,
+        "p95": 21648,
+        "p99": 21790,
+        "max": 21790
+      },
+      "memFileMib": null
+    }
+  ]
+}
