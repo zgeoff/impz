@@ -1,0 +1,127 @@
+import { readFileSync } from 'node:fs';
+import { $ } from 'bun';
+
+type Task = (args: readonly string[]) => Promise<void>;
+
+// Each task sets up one thing on a throwaway GitHub-hosted runner, as root through sudo.
+const tasks: Readonly<Record<string, Task>> = {
+  'share-cpu': shareCPUController,
+  'turn-on-ksm': turnOnKSM,
+  'reserve-huge-pages': reserveHugePages,
+  'name-e2e-registry': nameE2ERegistry,
+  'install-zfs': installZfs,
+  'install-podman': installPodman,
+  'open-kvm-to-builders': openKVMToBuilders,
+};
+
+async function main(): Promise<void> {
+  const [name, ...args] = process.argv.slice(2);
+  const task = name !== undefined && Object.hasOwn(tasks, name) ? tasks[name] : undefined;
+
+  if (task === undefined) {
+    console.error(`usage: set-up-runner.ts <${Object.keys(tasks).join('|')}> [args...]`);
+
+    process.exitCode = 2;
+
+    return;
+  }
+
+  await task(args);
+}
+
+// The cpu suite fails in CI unless a private cgroup namespace gets the cpu controller, and Docker's
+// containers live under system.slice. The task never fails by itself: it shows what a container
+// gets, on host/Dockerfile's runtime base, pinned the same.
+async function shareCPUController(): Promise<void> {
+  await writeAsRoot('/sys/fs/cgroup/cgroup.subtree_control', '+cpu\n').nothrow();
+  await writeAsRoot('/sys/fs/cgroup/system.slice/cgroup.subtree_control', '+cpu\n').nothrow();
+
+  await $`docker run --rm --cgroupns=private debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a cat /sys/fs/cgroup/cgroup.controllers`.nothrow();
+}
+
+// KSM is global to the kernel, so only a runner's own VM turns it on. The scan rate is high so
+// merges come in minutes.
+async function turnOnKSM(): Promise<void> {
+  await $`uname -r`;
+  await writeAsRoot('/sys/kernel/mm/ksm/use_zero_pages', '1\n');
+  await writeAsRoot('/sys/kernel/mm/ksm/pages_to_scan', '1000\n');
+  await writeAsRoot('/sys/kernel/mm/ksm/run', '1\n');
+  await $`grep -H . /sys/kernel/mm/ksm/run /sys/kernel/mm/ksm/pages_to_scan /sys/kernel/mm/ksm/use_zero_pages`;
+}
+
+// 1 GiB in 2 MiB pages: enough for the huge-pages suite's imps one at a time and a template build
+// beside one.
+async function reserveHugePages(): Promise<void> {
+  await writeAsRoot('/proc/sys/vm/nr_hugepages', '512\n');
+
+  console.log(
+    readFileSync('/proc/meminfo', 'utf8')
+      .split('\n')
+      .filter((line) => /^HugePages_(?:Total|Free):/u.test(line))
+      .join('\n'),
+  );
+
+  await $`stat -c ${'%A %U %G %n'} /dev/userfaultfd`;
+}
+
+// The registry suite's registry listens under this name on the gateway of its own Docker network
+// (packages/e2e-harness/src/registry-plan.ts, port offset 0), which both this host's engine and
+// impd's builders reach.
+async function nameE2ERegistry(): Promise<void> {
+  await $`sudo tee -a /etc/hosts < ${new Response('10.200.0.1 imp-e2e-registry.test\n')}`;
+}
+
+// zfs.ko sits in linux-modules-extra on some runner kernels. The optional argument caps the ARC in
+// bytes, which defaults to half of RAM.
+async function installZfs(args: readonly string[]): Promise<void> {
+  const [arcMaxBytes] = args;
+
+  await $`sudo apt-get update`;
+  await $`sudo apt-get install -y --no-install-recommends zfsutils-linux`;
+
+  const module = await $`modinfo zfs`.nothrow().quiet();
+
+  if (module.exitCode !== 0) {
+    const kernel = await $`uname -r`.text();
+
+    await $`sudo apt-get install -y --no-install-recommends ${`linux-modules-extra-${kernel.trim()}`}`;
+  }
+
+  if (arcMaxBytes === undefined) {
+    await $`sudo modprobe zfs`;
+  } else {
+    await $`sudo modprobe zfs ${`zfs_arc_max=${arcMaxBytes}`}`;
+    await writeAsRoot('/sys/module/zfs/parameters/zfs_arc_max', `${arcMaxBytes}\n`);
+  }
+
+  // zfsutils 2.2.2-0ubuntu9.5 and later refuse to run as a user
+  await $`sudo zfs version`;
+}
+
+async function installPodman(): Promise<void> {
+  if (Bun.which('podman') === null) {
+    await $`sudo apt-get update`;
+    await $`sudo apt-get install -y --no-install-recommends podman catatonit netavark aardvark-dns`;
+  }
+
+  await $`sudo podman --version`;
+}
+
+// The nix daemon builds as the nixbld users, who must open /dev/kvm.
+async function openKVMToBuilders(): Promise<void> {
+  await writeAsRoot(
+    '/etc/udev/rules.d/99-kvm.rules',
+    'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"\n',
+  );
+
+  await $`sudo udevadm control --reload-rules`;
+  await $`sudo udevadm trigger --name-match=kvm`;
+}
+
+function writeAsRoot(path: string, text: string): $.ShellPromise {
+  return $`sudo tee ${path} < ${new Response(text)}`.quiet();
+}
+
+if (import.meta.main) {
+  await main();
+}

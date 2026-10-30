@@ -17,6 +17,8 @@ on:
       - packages/daemon/src/imps/docker-contract/**
       - host/oci-fetch/**
       - e2e/suites/images-*.e2e.ts
+      - scripts/ci/pick-data-dir.ts
+      - scripts/ci/collect-e2e-logs.ts
       - .github/workflows/e2e-images.yml
 
 permissions: {}
@@ -56,31 +58,16 @@ jobs:
       - name: Check KVM
         run: scripts/ci/check-kvm.sh
 
-      # The harness refuses --clean on a data dir outside .data/ that holds
-      # no imp.xfs, and a fresh runner has nothing to clean.
-      - name: Pick the data dir
-        run: |
-          if mountpoint -q /mnt; then
-            data=/mnt/imp-e2e
-          else
-            data=$GITHUB_WORKSPACE/.data/ci
-          fi
-          sudo mkdir -p "$data"
-          sudo chown "$(id -u):$(id -g)" "$data"
-          echo "IMP_DEV_DATA=$data" >> "$GITHUB_ENV"
-
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: .bun-version
 
-      - name: Cache Bun Packages
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('.bun-version', 'bun.lock') }}
-          restore-keys: |
-            bun-${{ runner.os }}-
+      # The harness refuses --clean on a data dir outside .data/ that holds
+      # no imp.xfs, and a fresh runner has nothing to clean.
+      - name: Pick the data dir
+        run:
+          bun run --silent ci:pick-data-dir IMP_DEV_DATA /mnt/imp-e2e "$GITHUB_WORKSPACE/.data/ci"
 
       - name: Install
         run: bun install --frozen-lockfile
@@ -98,9 +85,8 @@ jobs:
       # without a container, so none of them may fail the job.
       - name: Collect logs
         if: always()
-        run: |
-          mkdir -p .cache/e2e
-          docker logs imp-dev >.cache/e2e/impd.log 2>&1 || true
+        continue-on-error: true
+        run: bun run --silent ci:collect-e2e-logs docker imp-dev
 
       - name: Upload results
         if: always()
@@ -113,4 +99,5 @@ jobs:
 
       - name: Remove the dev instance
         if: always()
-        run: docker rm -f imp-dev || true
+        continue-on-error: true
+        run: docker rm -f imp-dev

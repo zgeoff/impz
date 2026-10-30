@@ -292,7 +292,7 @@ Lefthook installs the hooks with `bun install`.
 | `gitleaks`   | yes      | A secret scan over the history.                                                                                                                                                                                                                                  |
 | `checks`     | yes      | Passes only when the `checks-unit` and `checks-lanes` jobs passed: `bun test` in two shards of two workers, capped at 1536 MiB with no swap, and `bun run audit`, the Bun pin check, `bun run check:static`, the lane tests and the dashboard's tests and build. |
 | `go`         | yes      | In `agent/`, `host/ksm-exec`, `host/oci-fetch` and `host/uffd-handler`: `gofmt`, `go vet`, golangci-lint, govulncheck, deadcode, the tests; the agent's again as root with the `root` tag. Also `gofmt`, vet and lint on the Dockerfile difftest module.         |
-| `shellcheck` | yes      | `bun run lint:shell`, actionlint and zizmor over `.github/`, hadolint over both Dockerfiles, and the tests that shellcheck the shell production code holds as text.                                                                                              |
+| `shellcheck` | yes      | `bun run lint:shell`, actionlint, the shared workflow lint and zizmor over `.github/`, hadolint over both Dockerfiles, and the tests that shellcheck the shell production code holds as text.                                                                    |
 | `cli`        | yes      | Compiles the CLI for every platform and runs the linux-x64 one; builds the release image's compile stage.                                                                                                                                                        |
 | `client`     | yes      | Packs `@impz/client`, installs it on the oldest Node it supports, and smokes it under Node, Bun and a compiled Bun binary.                                                                                                                                       |
 | `e2e`        | yes      | Passes only when every `e2e-group` job passed: the `fast` end-to-end set on real microVMs, in four groups on four runners (below).                                                                                                                               |
@@ -336,13 +336,11 @@ runs first, so a runner without KVM fails in seconds with the reason. The job th
    `scripts/dev/dev.sh` uses that image instead of building it again. Only group 1's run on `main`
    writes these caches, so four writers never race; pull requests only read them. Steps 1 and 2 are
    the composite action `.github/actions/e2e-build`, which the `zfs` job uses too.
-3. restores the Playwright browser cache (`~/.cache/ms-playwright`), keyed on the Playwright version
-   in `bun.lock`, which pins the Chromium build, in the group with the dashboard suite only. The
-   dashboard suite installs that Chromium's headless shell when the cache misses.
-4. runs `e2e/test-e2e.sh --group N` with `E2E_RAM_BUDGET_MIB=4096`, `IMP_DEFAULT_MEMORY_MIB=1024`
+3. runs `e2e/test-e2e.sh --group N` with `E2E_RAM_BUDGET_MIB=4096`, `IMP_DEFAULT_MEMORY_MIB=1024`
    and the XFS file on the runner's `/mnt` disk. No workflow holds a Tailscale secret: group 4's
    tailnet suites join the Headscale tailnet that the harness starts, and a missed timing limit only
-   warns. The host networking tests run in group 2 only (`HOST_TESTS_GROUP`).
+   warns. The host networking tests run in group 2 only (`HOST_TESTS_GROUP`). The dashboard suite
+   installs the Chromium headless shell that the locked Playwright pins.
 
 The ZFS suites run in three `zfs-shard` jobs, each on its own runner, and the `zfs` job is the
 required check over them, as `e2e` is over the groups. Each shard builds the same inputs, reading
@@ -364,9 +362,8 @@ If GitHub-hosted runners lose KVM, move the job to an ephemeral, dedicated self-
 run it only on push to `main`, never on pull requests. Never use the deploy box. The repo is public,
 so a pull request from a fork would get a privileged container with `/dev/kvm` on that runner.
 
-A new push to a pull request cancels its older run. On `main`, a run that has started finishes, but
-a run still waiting behind it is cancelled when a newer push comes, so only the newest push runs
-next.
+Each job sets its own concurrency group, so a new push to a pull request or to `main` cancels the
+checks of the older run. The `release` and `start-release` jobs never cancel.
 
 `.github/workflows/bootstrap.yml` runs `e2e/test-bootstrap.sh --stub --zfs` when a pull request or a
 push to `main` changes `deploy/` or the test ([Bootstrap a server](../guides/install.md#test-it)).

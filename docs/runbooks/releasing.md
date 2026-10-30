@@ -149,16 +149,16 @@ brew install --formula /tmp/impz.rb && brew test impz    # on a machine with bre
 ## Republish
 
 When a release was tagged but its build or publish failed, fix the cause on `main` if it is in the
-workflow, then run the release workflow for the tag:
+workflow or in its step scripts, then run the release workflow for the tag:
 
 ```sh
 gh workflow run release.yml -f tag=vX.Y.Z
 ```
 
-It builds the tag's sources, not `main`'s, and replaces the release assets and the `imp-host:X.Y.Z`
-tag. It publishes `imp-base:X.Y.Z` and the npm packages only where they are missing, and moves
-`latest` only when the tag is the newest release. A fix to the sources needs a new release, not a
-republish.
+It builds the tag's sources, not `main`'s, with `main`'s step scripts, and replaces the release
+assets and the `imp-host:X.Y.Z` tag. It publishes `imp-base:X.Y.Z` and the npm packages only where
+they are missing, and moves `latest` only when the tag is the newest release. A fix to the sources
+needs a new release, not a republish.
 
 ## An unattested imp-base
 
