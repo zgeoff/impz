@@ -1,8 +1,9 @@
-import { appendFileSync, copyFileSync, existsSync, mkdirSync } from 'node:fs';
+import { appendFileSync, copyFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { $ } from 'bun';
 import invariant from 'tiny-invariant';
 import { parseStepCommand } from '../lib/parse-step-command.ts';
+import { pickLogCollection } from './pick-log-collection.ts';
 
 const logsDir = join('.cache', 'e2e');
 
@@ -25,42 +26,37 @@ async function main(): Promise<void> {
 
   const [engine, container] = command.values;
 
-  invariant(container, 'the parser asks for a container');
+  invariant(engine && container, 'the parser asks for an engine and a container');
 
-  // the Podman proof runs as root and leaves root's files in the logs folder
-  if (engine === 'podman') {
-    const owner = `${String(process.getuid?.() ?? 0)}:${String(process.getgid?.() ?? 0)}`;
+  const zfsDir = process.env['IMP_ZFS_TEST_DIR'] ?? null;
 
-    await $`sudo mkdir -p ${logsDir}`.nothrow();
-    await $`sudo chown -R ${owner} ${logsDir}`.nothrow();
+  const plan = pickLogCollection({
+    engine,
+    container,
+    owner: `${String(process.getuid?.() ?? 0)}:${String(process.getgid?.() ?? 0)}`,
+    logsDir,
+    zfsDir,
+    dataDir: process.env['IMP_DEV_DATA'] ?? null,
+    zfsDirFiles: zfsDir !== null && existsSync(zfsDir) ? readdirSync(zfsDir) : [],
+  });
+
+  for (const prepare of plan.prepareCommands) {
+    await $`${prepare}`.nothrow();
   }
 
   mkdirSync(logsDir, { recursive: true });
 
-  // the zfs host test keeps its logs and summary in its work dir
-  const zfsDir = process.env['IMP_ZFS_TEST_DIR'];
-
-  for (const name of ['impd.log', 'e2e.log', 'summary.txt']) {
-    if (zfsDir !== undefined && existsSync(join(zfsDir, name))) {
-      copyFileSync(join(zfsDir, name), join(logsDir, name));
-    }
+  for (const copy of plan.copies) {
+    copyFileSync(copy.from, copy.to);
   }
 
-  // rootful Podman's containers are root's to read
-  const logs =
-    engine === 'podman'
-      ? await $`sudo podman logs ${container} 2>&1`.nothrow().quiet()
-      : await $`docker logs ${container} 2>&1`.nothrow().quiet();
+  const logs = await $`${plan.logsCommand} 2>&1`.nothrow().quiet();
 
   appendFileSync(join(logsDir, 'impd.log'), logs.stdout);
 
-  const dataDir = process.env['IMP_DEV_DATA'];
-
-  if (dataDir !== undefined) {
-    await $`du -h ${join(dataDir, 'imp.xfs')}`.nothrow();
+  for (const disk of plan.diskCommands) {
+    await $`${disk}`.nothrow();
   }
-
-  await $`df -h / /mnt`.nothrow();
 }
 
 if (import.meta.main) {
