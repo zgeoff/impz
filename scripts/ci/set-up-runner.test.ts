@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createStubBin } from '@impz/test-utils/create-stub-bin';
+import { createStubSudo } from '@impz/test-utils/create-stub-sudo';
 import { $ } from 'bun';
 
 function setupTest() {
@@ -12,13 +13,9 @@ function setupTest() {
     rmSync(directory, { recursive: true, force: true });
   });
 
-  // The stand-ins run on bash builtins alone, because PATH holds only their folder, so the host's
-  // own podman or modinfo never answers in their place.
-  const sudo = createStubBin(
-    directory,
-    'sudo',
-    '[ "$1" = tee ] && while IFS= read -r line; do printf \'%s\\n\' "< $line" >>"$STUB_CALLS"; done\nexit 0',
-  );
+  // PATH holds only the stand-ins' folder, so the host's own podman or modinfo never answers in
+  // their place.
+  const sudo = createStubSudo(directory);
 
   return { directoryPath: directory, sudo, scriptPath: join(import.meta.dir, 'set-up-runner.ts') };
 }
