@@ -50,9 +50,16 @@ test("it writes the container's output and errors to impd.log, and shows the dis
   );
 });
 
-test('it reads a Podman container as root', async () => {
+test('it takes back the logs folder that the Podman proof left as root, and reads the container as root', async () => {
   const ctx = setupTest();
-  const sudo = createStubBin(ctx.directoryPath, 'sudo', 'echo "impd under podman"');
+
+  const sudo = createStubBin(
+    ctx.directoryPath,
+    'sudo',
+    '[ "$1" = podman ] && echo "impd under podman"\nexit 0',
+  );
+
+  const owner = `${String(process.getuid?.())}:${String(process.getgid?.())}`;
 
   createStubBin(ctx.directoryPath, 'df');
 
@@ -68,7 +75,15 @@ test('it reads a Podman container as root', async () => {
     'impd under podman\n',
   );
 
-  expect(readFileSync(sudo.calls, 'utf8')).toBe('sudo podman logs imp-dev\ndf -h / /mnt\n');
+  expect(readFileSync(sudo.calls, 'utf8')).toBe(
+    [
+      'sudo mkdir -p .cache/e2e',
+      `sudo chown -R ${owner} .cache/e2e`,
+      'sudo podman logs imp-dev',
+      'df -h / /mnt',
+      '',
+    ].join('\n'),
+  );
 });
 
 test("it keeps the zfs host test's logs and summary, and adds the container's output after them", async () => {

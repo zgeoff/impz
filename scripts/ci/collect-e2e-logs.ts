@@ -17,6 +17,14 @@ async function main(): Promise<void> {
     return;
   }
 
+  // the Podman proof runs as root and leaves root's files in the logs folder
+  if (engine === 'podman') {
+    const owner = `${String(process.getuid?.() ?? 0)}:${String(process.getgid?.() ?? 0)}`;
+
+    await $`sudo mkdir -p ${logsDir}`.nothrow();
+    await $`sudo chown -R ${owner} ${logsDir}`.nothrow();
+  }
+
   mkdirSync(logsDir, { recursive: true });
 
   // the zfs host test keeps its logs and summary in its work dir
