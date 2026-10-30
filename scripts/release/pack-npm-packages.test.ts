@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSyn
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { $ } from 'bun';
+import { createStubPackScript } from '../test-utils/create-stub-pack-script';
 
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-pack-npm-'));
@@ -27,18 +28,8 @@ test('it packs and checks both packages, and hands both tarballs on', async () =
   const folder = join(ctx.tree, 'scripts', 'release');
 
   mkdirSync(folder, { recursive: true });
-
-  writeFileSync(
-    join(folder, 'pack-client.sh'),
-    '#!/bin/sh\nmkdir -p build/npm\necho client > build/npm/impz-client-2.0.1.tgz\necho "$PWD/build/npm/impz-client-2.0.1.tgz"\n',
-    { mode: 0o755 },
-  );
-
-  writeFileSync(
-    join(folder, 'pack-testing.sh'),
-    '#!/bin/sh\nmkdir -p build/npm\necho testing > build/npm/impz-testing-2.0.1.tgz\necho "$PWD/build/npm/impz-testing-2.0.1.tgz"\n',
-    { mode: 0o755 },
-  );
+  createStubPackScript(folder, 'pack-client.sh', 'impz-client-2.0.1.tgz');
+  createStubPackScript(folder, 'pack-testing.sh', 'impz-testing-2.0.1.tgz');
 
   writeFileSync(
     join(folder, 'check-client-package.sh'),
@@ -88,18 +79,8 @@ test('it packs and checks the client for the testing package alone, and hands on
   const folder = join(ctx.tree, 'scripts', 'release');
 
   mkdirSync(folder, { recursive: true });
-
-  writeFileSync(
-    join(folder, 'pack-client.sh'),
-    '#!/bin/sh\nmkdir -p build/npm\necho client > build/npm/impz-client-2.0.1.tgz\necho "$PWD/build/npm/impz-client-2.0.1.tgz"\n',
-    { mode: 0o755 },
-  );
-
-  writeFileSync(
-    join(folder, 'pack-testing.sh'),
-    '#!/bin/sh\nmkdir -p build/npm\necho testing > build/npm/impz-testing-2.0.1.tgz\necho "$PWD/build/npm/impz-testing-2.0.1.tgz"\n',
-    { mode: 0o755 },
-  );
+  createStubPackScript(folder, 'pack-client.sh', 'impz-client-2.0.1.tgz');
+  createStubPackScript(folder, 'pack-testing.sh', 'impz-testing-2.0.1.tgz');
 
   writeFileSync(
     join(folder, 'check-client-package.sh'),
@@ -142,13 +123,7 @@ test('it packs the client of a tag that keeps its scripts in scripts/', async ()
   const folder = join(ctx.tree, 'scripts');
 
   mkdirSync(folder, { recursive: true });
-
-  writeFileSync(
-    join(folder, 'pack-client.sh'),
-    '#!/bin/sh\nmkdir -p build/npm\necho client > build/npm/impz-client-1.6.0.tgz\necho "$PWD/build/npm/impz-client-1.6.0.tgz"\n',
-    { mode: 0o755 },
-  );
-
+  createStubPackScript(folder, 'pack-client.sh', 'impz-client-1.6.0.tgz');
   writeFileSync(join(folder, 'check-client-package.sh'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
 
   const result = await $`bun ${ctx.scriptPath}`
@@ -171,13 +146,7 @@ test('it hands nothing on when the client fails its check', async () => {
   const folder = join(ctx.tree, 'scripts', 'release');
 
   mkdirSync(folder, { recursive: true });
-
-  writeFileSync(
-    join(folder, 'pack-client.sh'),
-    '#!/bin/sh\nmkdir -p build/npm\necho client > build/npm/impz-client-2.0.1.tgz\necho "$PWD/build/npm/impz-client-2.0.1.tgz"\n',
-    { mode: 0o755 },
-  );
-
+  createStubPackScript(folder, 'pack-client.sh', 'impz-client-2.0.1.tgz');
   writeFileSync(join(folder, 'check-client-package.sh'), '#!/bin/sh\nexit 1\n', { mode: 0o755 });
 
   const result = await $`bun ${ctx.scriptPath}`
