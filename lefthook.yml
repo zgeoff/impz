@@ -22,7 +22,9 @@ pre-commit:
       glob: '*.{ts,tsx}'
       exclude:
         - '**/dist/**'
+        - 'dist/**'
         - '**/coverage/**'
+        - 'coverage/**'
         - 'kernel/out/**'
         - '.cache/**'
         - '.claude/**'
