@@ -1,5 +1,13 @@
 # Changelog
 
+## [6.3.2](https://github.com/zgeoff/impz/compare/v6.3.1...v6.3.2) (2026-10-31)
+
+### Bug Fixes
+
+- **hooks:** exclude top-level paths from format-codemod too
+  ([#815](https://github.com/zgeoff/impz/issues/815))
+  ([2f7077f](https://github.com/zgeoff/impz/commit/2f7077fec1f6cbd3720393d132b3cc86b3cd151b))
+
 ## [6.3.1](https://github.com/zgeoff/impz/compare/v6.3.0...v6.3.1) (2026-10-31)
 
 ### Bug Fixes
