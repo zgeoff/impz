@@ -4,8 +4,10 @@
 # branch into a fix pull request, or into a pull request that records an ignore
 # with a reason and an expiry. It runs daily, by hand, and after a PR or
 # dependency-health run on main fails. A failed run on any other branch starts
-# nothing, because the job audits only the default branch. It needs Bun 1.4.0
-# or newer in .bun-version and the repo-sync App secrets.
+# nothing, because the job audits only the default branch. A failed run of a
+# pull request, or from another repository, starts nothing either, because a
+# fork's branch can be named main. It needs Bun 1.4.0 or newer in .bun-version
+# and the repo-sync App secrets.
 name: Audit fix
 
 on:
@@ -24,10 +26,14 @@ concurrency:
 
 jobs:
   audit-fix:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'failure'
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (contains(fromJSON('["push","schedule","workflow_dispatch"]'),
+      github.event.workflow_run.event) && github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.head_repository.full_name == github.repository)
     permissions:
       contents: read
-    uses: zgeoff/tools/.github/workflows/audit-fix.yml@4501c398fd59c2c1b6218ea86a0161103246af62 # main
+    uses: zgeoff/tools/.github/workflows/audit-fix.yml@aaf6a2a72a29ad1edc6c512dd122f0e3d84a0ebf # main
     secrets:
       REPO_SYNC_APP_CLIENT_ID: ${{ secrets.REPO_SYNC_APP_CLIENT_ID }}
       REPO_SYNC_APP_PRIVATE_KEY: ${{ secrets.REPO_SYNC_APP_PRIVATE_KEY }}
