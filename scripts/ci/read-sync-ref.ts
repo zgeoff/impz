@@ -3,10 +3,11 @@ import { join } from 'node:path';
 import { formatStepValues } from '../lib/format-step-values.ts';
 import { getStepEnv } from '../lib/get-step-env.ts';
 
-const syncTagPattern = /^zgeoff\/tools\/\.github\/workflows\/repo-sync\.yml@(?<tag>sync-v\d+)$/u;
+const syncCommitPattern =
+  /^zgeoff\/tools\/\.github\/workflows\/repo-sync\.yml@(?<commit>[0-9a-f]{40})$/u;
 
-// Renovate moves the zgeoff/tools refs in uses lines only, so a job that checks out zgeoff/tools
-// reads its ref from repo-sync's uses line instead of keeping a copy that Renovate leaves behind.
+// The repo-sync pull request moves the zgeoff/tools refs in uses lines only, so a job that checks out zgeoff/tools
+// reads its ref from repo-sync's uses line instead of keeping a copy that the sync leaves behind.
 function main(): void {
   const outputs = getStepEnv(process.env, 'GITHUB_OUTPUT');
 
@@ -15,17 +16,17 @@ function main(): void {
   );
 
   const uses = findSyncUses(workflow);
-  const tag = uses === null ? undefined : syncTagPattern.exec(uses)?.groups?.['tag'];
+  const commit = uses === null ? undefined : syncCommitPattern.exec(uses)?.groups?.['commit'];
 
-  if (tag === undefined) {
-    console.error(`repo-sync.yml's sync job calls no zgeoff/tools sync tag: ${String(uses)}`);
+  if (commit === undefined) {
+    console.error(`repo-sync.yml's sync job calls no zgeoff/tools commit: ${String(uses)}`);
 
     process.exitCode = 1;
 
     return;
   }
 
-  appendFileSync(outputs, formatStepValues({ ref: tag }));
+  appendFileSync(outputs, formatStepValues({ ref: commit }));
 }
 
 function findSyncUses(workflow: unknown): string | null {

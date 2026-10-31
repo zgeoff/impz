@@ -1,16 +1,10 @@
 # zizmor's settings for the workflows and actions under .github/, which the
 # shellcheck job in ci.yml audits.
 rules:
-  # repo-sync.yml, audit-fix.yml and ci.yml's release job call the shared
-  # workflows from zgeoff/tools at a sync tag on purpose, so each run uses the
-  # files that tag holds and the repo moves to a newer tag between sweeps; every
-  # other action stays pinned to a commit
+  # every action and shared workflow stays pinned to a commit
   unpinned-uses:
     config:
       policies:
-        zgeoff/tools/.github/workflows/repo-sync.yml: ref-pin
-        zgeoff/tools/.github/workflows/audit-fix.yml: ref-pin
-        zgeoff/tools/.github/workflows/release-please.yml: ref-pin
         '*': hash-pin
   # audit-fix.yml starts on a failed workflow_run, but the reusable workflow
   # checks out only the default branch, never the run's head, so no pull
@@ -21,4 +15,9 @@ rules:
   # the `uses: $/...` form this audit asks for fails actionlint 1.7.12, which
   # knows only `./...` for an action in this repository
   self-repository:
+    disable: true
+  # repo-sync pins each zgeoff/tools call to a commit with a `# main` comment,
+  # which names a branch and matches no commit once main moves on; Renovate
+  # keeps every other action's version comment in step with its hash
+  ref-version-mismatch:
     disable: true
