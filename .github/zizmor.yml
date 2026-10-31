@@ -16,3 +16,8 @@ rules:
   # knows only `./...` for an action in this repository
   self-repository:
     disable: true
+  # repo-sync pins each zgeoff/tools call to a commit with a `# main` comment,
+  # which names a branch and matches no commit once main moves on; Renovate
+  # keeps every other action's version comment in step with its hash
+  ref-version-mismatch:
+    disable: true
