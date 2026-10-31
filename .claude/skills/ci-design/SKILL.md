@@ -4,8 +4,10 @@ description:
   How CI runs in a zgeoff repo — the public and private job profiles, job timeouts, test budgets and
   the audit data each main run uploads, reusable workflows instead of composite actions, path gates
   on pull requests with a full run on main, which jobs cancel and which never do, building once and
-  passing the result, checkout depth, and triggers that rerun nothing. Load it before adding,
-  changing, or reviewing a workflow, a job, a trigger, or a Renovate setting that starts CI runs.
+  passing the result, checkout depth, triggers that rerun nothing, the dependency gates check, and
+  when a dependency exception is allowed. Load it before adding, changing, or reviewing a workflow,
+  a job, a trigger, a Renovate setting that starts CI runs, or a release-age exclude, an override or
+  an audit ignore.
 ---
 
 # CI design
@@ -14,8 +16,8 @@ This skill holds the patterns that keep a pipeline from running a job whose resu
 Most of the CI time a pipeline loses outside its tests goes to jobs that run too often, such as a
 rerun after a rebase nobody needed, and less goes to slow setup. A job runs when its inputs change,
 builds each result once, and cancels only the runs whose result a newer commit replaces. The shared
-reusable workflows live in zgeoff/tools, and a repo calls them at a sync tag, which Renovate moves
-when a new tag is cut.
+reusable workflows live in zgeoff/tools, and a repo calls them at a commit on its `main`, which the
+repo-sync pull request moves.
 
 ## Key rules
 
@@ -33,6 +35,10 @@ Each line links the section that explains it.
 - [Step scripts](#step-scripts): a `run:` holds one plain command, anything more goes in a
   TypeScript script under `scripts/<area>/`, and the workflow lint checks the rules a parser can
   see.
+- [Dependency gates](#dependency-gates): run the shared check that fails on a stale override,
+  release-age exclude or audit ignore, and never a copy of it.
+- [Dependency exceptions](#dependency-exceptions): add an exclude, an override or an audit ignore
+  only with a named reason, the narrowest scope, provenance for an exclude, and its cleanup record.
 - [Path gates](#path-gates): a pull-request job runs only when its input paths change, through a
   `changes` job, and every push to main runs it in full.
 - [Cancelling runs](#cancelling-runs): checks cancel when a newer commit arrives; release, deploy
@@ -41,7 +47,8 @@ Each line links the section that explains it.
 - [Checkout depth](#checkout-depth): depth 1 for a job that never reads history, a blobless full
   clone for one that does.
 - [No rebase churn](#no-rebase-churn): rebase a bot's pull request only on a conflict, and filter a
-  `workflow_run` trigger to the branch its job acts on.
+  `workflow_run` trigger to the branch its job acts on, with a guard on the run's event and
+  repository where the job holds a secret.
 
 ## Loading the skill
 
@@ -131,9 +138,9 @@ one red line, and a reader opens the action's source to find which command faile
 workflow shows each of its jobs and steps in the run, with its own timings.
 
 A shared reusable workflow lives in zgeoff/tools, and a repo calls it as
-`zgeoff/tools/.github/workflows/<name>.yml@<sync tag>`. A repo-local reusable workflow sits in the
-repo's own `.github/workflows/` and is called by its path. Before writing setup steps by hand, check
-whether a tools reusable workflow covers them, and call it.
+`zgeoff/tools/.github/workflows/<name>.yml@<commit> # main`. A repo-local reusable workflow sits in
+the repo's own `.github/workflows/` and is called by its path. Before writing setup steps by hand,
+check whether a tools reusable workflow covers them, and call it.
 
 ## Step scripts
 
@@ -150,9 +157,12 @@ Logic in a script runs in the script's tests on every pull request, as the testi
 - **Never put a script under `.github/`.** `bun test` skips the hidden folder, so a script and its
   test there never run in the repo's test suite.
 - **A reusable workflow in zgeoff/tools downloads its script at the commit that defines the job.**
-  The caller's checkout lacks the script, so the step reads `job.workflow_repository` and
-  `job.workflow_sha` from the job context and downloads the file from that commit. A caller at a
-  sync tag then runs that tag's script.
+  The caller's checkout lacks the script, so a step builds the commit's raw URL from
+  `job.workflow_repository` and `job.workflow_sha` and downloads
+  [`download-step-scripts.ts`](https://github.com/zgeoff/tools/blob/main/scripts/ci/download-step-scripts.ts)
+  with `curl`. That script downloads the workflow's scripts and every file they import into
+  `$RUNNER_TEMP/tools`, and refuses one that imports a package. A caller pinned to a commit then
+  runs that commit's scripts.
 
 ### The workflow lint
 
@@ -160,23 +170,28 @@ The workflow lint checks the `run:` rule and the rules in this skill that a pars
 exactly. The `Lint workflows` step of `bun-checks.yml` runs it after the actionlint step over the
 repo's workflows and the workflow callers that zgeoff/tools delivers. The pre-push baseline runs it
 over the workflow files a branch changes. It reports each fault as a warning and passes, so a repo
-that Renovate moves to a new sync tag keeps a green run while it clears the warnings.
+that a sync pull request moves to a new commit keeps a green run while it clears the warnings.
 
-| Rule                                    | The lint warns on                                                                                                     |
-| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| [One command per `run:`](#step-scripts) | a `run:` that breaks the rule, where a quoted `;`, `\|` or `&&` is part of a word                                     |
-| [Timeouts](#timeouts)                   | a job without `timeout-minutes`, other than a job that calls a reusable workflow, where GitHub refuses the key        |
-| [Cancelling runs](#cancelling-runs)     | a checks workflow without `cancel-in-progress: true`, or with a group that holds a per-run value such as `github.sha` |
-| [Cancelling runs](#cancelling-runs)     | a release or deploy job without its own group and `cancel-in-progress: false`, or under a workflow-level `true`       |
-| [No rebase churn](#no-rebase-churn)     | a `workflow_run` trigger without a `branches:` filter                                                                 |
-| [Two profiles](#two-profiles)           | a heavy check in a workflow that runs on `pull_request` or `pull_request_target`, unless the run is in a public repo  |
-| [Build once](#build-once)               | an `actions/cache` step in a job that sets up Bun with `oven-sh/setup-bun`                                            |
+| Rule                                    | The lint warns on                                                                                                                   |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| [One command per `run:`](#step-scripts) | a `run:` that breaks the rule, where a quoted `;`, `\|` or `&&` is part of a word                                                   |
+| [Timeouts](#timeouts)                   | a job without `timeout-minutes`, other than a job that calls a reusable workflow, where GitHub refuses the key                      |
+| [Cancelling runs](#cancelling-runs)     | a checks workflow without `cancel-in-progress: true`, other than a gate on main that groups by `github.sha`                         |
+| [Cancelling runs](#cancelling-runs)     | a checks workflow whose group holds a per-run value, such as `github.sha`, other than a gate on main's group that never cancels     |
+| [Cancelling runs](#cancelling-runs)     | a release or deploy job without its own group and `cancel-in-progress: false`, or under a workflow-level `true`                     |
+| [No rebase churn](#no-rebase-churn)     | a `workflow_run` trigger without a `branches:` filter                                                                               |
+| [Two profiles](#two-profiles)           | a heavy check in a workflow that runs on `pull_request` or `pull_request_target`, unless the run is in a public repo                |
+| [Build once](#build-once)               | an `actions/cache` step that caches `~/.bun/install/cache` or `node_modules` in a job that sets up Bun with `oven-sh/setup-bun`     |
+| [Checkout depth](#checkout-depth)       | an `actions/checkout` step with `fetch-depth: 0` and no `filter`, which is `blob:none`, or `''` for a job that reads many old files |
 
-The lint reads three terms by these definitions:
+The lint reads four terms by these definitions:
 
 - **A checks workflow** runs on `pull_request` or `push`. When it holds a release or deploy job,
   each of its other jobs sets its own group with `cancel-in-progress: true`; otherwise the
   workflow-level group, or a group on every job, sets it.
+- **A gate on main** is a checks workflow whose `push` trigger lists only `main` in `branches:`, and
+  which has no `pull_request` or `pull_request_target` trigger. A group that holds `github.sha` and
+  sets `cancel-in-progress: false`, or leaves it out, covers it in place of a cancelling group.
 - **A release or deploy job** has `release`, `deploy` or `migrate` in its id or its name, in any
   case.
 - **A heavy check** is a job whose `runs-on` holds any runner label but a GitHub-hosted Ubuntu
@@ -192,6 +207,54 @@ The heavy-check rule binds a private repo alone. In CI the lint reads the run's 
 the rule in a public repo. The pre-push baseline cannot see the profile, so the hook warns in every
 repo.
 
+## Dependency gates
+
+Run the shared dependency gates check in the pull-request checks of every Bun repo, and never write
+a copy of it. The `Check dependency gates` step of `bun-checks.yml` runs it. A repo with its own
+workflow runs `bun run check:dependency-gates`, a script that the pre-push baseline adds.
+
+A dependency gate holds a package back on purpose: it pins a version, skips the wait for new
+releases, or ignores an advisory. When its reason is gone, the gate keeps holding the package back,
+and nobody notices unless a check fails.
+
+The
+[dependency gates check](https://github.com/zgeoff/tools/blob/main/docs/architecture/dependency-updates.md#the-dependency-gates-check)
+fails on three kinds of stale gate:
+
+- An override whose pinned version every range in the lockfile allows.
+- A release-age exclude whose removal date has passed.
+- An ignored advisory that is gone, or that a release in range fixes.
+
+## Dependency exceptions
+
+A dependency exception is a dependency gate that you add by hand, outside the audit-fix workflow: a
+release-age exclude, a root override, or an audit ignore. Add one only when it is de-risked and
+carries its own cleanup. Every zgeoff repo follows this rule, so a repo's AGENTS.md or project skill
+links here and states no exception rule of its own.
+
+An exception is de-risked when its pull request shows three things:
+
+- A named reason: the change the exception unblocks, such as a fix the repo needs or a tool that
+  nothing older provides. Convenience is no reason: when an older release does the job, pin the
+  newest version that passes the gate.
+- The narrowest scope: each package by its full name, and the catalog or the override pinning one
+  exact version.
+- Provenance for a release-age exclude: every excluded release has an npm provenance attestation, so
+  its publisher built it in CI from a public source. Check each one with
+  `npm view <package>@<version> dist.attestations.provenance`, which prints a `predicateType` for an
+  attested release and nothing for one without. A release with no attestation gets no exclude.
+
+Each kind of exception carries the record that takes it out:
+
+- A release-age exclude carries the dated removal comment that the audit-fix workflow writes, which
+  holds the day the release ages past the gate. The dependency gates check fails on an exclude
+  without the comment, because the audit-fix workflow never removes an exclude without it.
+- An audit ignore carries an `audit-ignores.json` entry with the reason and an expiry, beside the
+  `--ignore` flag. Without the entry, the ignore never expires, and the audit-fix workflow never
+  audits the advisory again.
+- A root override needs no record: the dependency gates check fails once every range in the lockfile
+  admits the pinned version.
+
 ## Path gates
 
 A workflow whose jobs are required checks runs on every pull request. `on.pull_request.paths` skips
@@ -200,7 +263,7 @@ merge blocks. A job skipped by its own `if:` reports success instead. The path g
 `changes` job outputs whether the pull request touches the job's inputs, and each later job reads
 the answer.
 
-Call `zgeoff/tools/.github/workflows/paths-changed.yml@<sync tag>` as the `changes` job:
+Call `zgeoff/tools/.github/workflows/paths-changed.yml@<commit> # main` as the `changes` job:
 
 | Input or output | What it holds                                                                               |
 | --------------- | ------------------------------------------------------------------------------------------- |
@@ -219,7 +282,7 @@ jobs:
   changes:
     permissions:
       contents: read
-    uses: zgeoff/tools/.github/workflows/paths-changed.yml@<sync tag>
+    uses: zgeoff/tools/.github/workflows/paths-changed.yml@<commit> # main
     with:
       paths: |
         services/api/**
@@ -254,6 +317,18 @@ concurrency:
   cancel-in-progress: true
 ```
 
+A gate on main must pass once for each commit on main, so it never cancels. It groups its runs by
+commit, and a newer commit starts its own run beside the older one:
+
+```yaml
+on:
+  push:
+    branches: [main]
+concurrency:
+  group: gate-${{ github.sha }}
+  cancel-in-progress: false
+```
+
 A release, deploy or migrate job never cancels, because a cut-off deploy can leave a target half
 changed. Give each such job its own job-level `concurrency` group with `cancel-in-progress: false`,
 so the checks group can cancel the run's checks without reaching the deploy. A workflow-level
@@ -277,9 +352,12 @@ in one job and passes on through the registry, or through buildx with the GitHub
 of rebuilding them. A file passes on with `actions/upload-artifact` and `actions/download-artifact`.
 
 A Bun job runs `bun install --frozen-lockfile` with no `actions/cache` step for
-`~/.bun/install/cache`. On a GitHub-hosted runner, a restore of that cache takes longer than the
-install it replaces, and a job that misses the cache spends more time to save one. Each job pays for
-its own runner, checkout and install, which [Two profiles](#two-profiles) weighs against wall time.
+`~/.bun/install/cache` or `node_modules`. On a GitHub-hosted runner, a restore of that cache takes
+longer than the install it replaces, and a job that misses the cache spends more time to save one.
+The rule leaves a cache of any other path alone, such as a Nix store, which `bun install` does not
+replace. The lint skips a path line that holds a `${{ }}` expression, because GitHub resolves it
+only when the job runs. Each job pays for its own runner, checkout and install, which
+[Two profiles](#two-profiles) weighs against wall time.
 
 ## Checkout depth
 
@@ -297,8 +375,10 @@ contents:
 
 A blobless clone fetches every commit and tree, and git fetches a file's contents when a command
 first reads them. A history that holds large old files then costs the same to clone as a small one.
-A job that diffs only the pull request against its base needs the merge commit and its parents,
-`fetch-depth: 2`.
+A job that reads many old files, such as one that walks every past version of a file, fetches each
+one on its own from a blobless clone, so it clones the contents too and states that with
+`filter: ''`. A job that diffs only the pull request against its base needs the merge commit and its
+parents, `fetch-depth: 2`.
 
 ## No rebase churn
 
@@ -310,4 +390,15 @@ every open pull request.
 
 A `workflow_run` trigger starts on every completed run of the named workflows, on every branch. A
 job that acts on one branch, such as an audit of the default branch, filters the trigger with
-`branches:` to that branch, so a pull-request run starts nothing.
+`branches:` to that branch, so a run on another branch starts nothing.
+
+The `branches:` filter matches the head branch's name alone, so the run of a fork's pull request
+from a branch named `main` passes `branches: [main]`. A job that holds a secret or writes to the
+repo also checks, in its `if:`, that the triggering run came from an event a fork cannot start and
+from the repo itself:
+
+```yaml
+if: >-
+  contains(fromJSON('["push","schedule"]'), github.event.workflow_run.event) &&
+  github.event.workflow_run.head_repository.full_name == github.repository
+```
