@@ -368,7 +368,7 @@ jobs:
           repository: zgeoff/tools
           ref: ${{ steps.sync-ref.outputs.ref }}
           path: .workflow-lint
-          sparse-checkout: sync/pre-push
+          sparse-checkout: packages/chex/src
           persist-credentials: false
 
       # the rules of ci-design's Step scripts section; a public repo's profile
@@ -376,7 +376,7 @@ jobs:
       - name: Lint workflows
         env:
           CHECKS_PROFILE: public
-        run: bun .workflow-lint/sync/pre-push/run-workflows-check.ts
+        run: bun .workflow-lint/packages/chex/src/run-workflows-check.ts
 
       # GH_TOKEN turns on the audits that ask GitHub, such as known-vulnerable
       # actions and impostor commits
@@ -887,7 +887,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    uses: zgeoff/tools/.github/workflows/release-please.yml@2b4c67b8ca5459c0cbbf4d1823d7ff9ec1d7912c # main
+    uses: zgeoff/tools/.github/workflows/release-please.yml@3e0052ce48171a0d3f7932005e0d9067ccc0d73c # main
     with:
       app-id: ${{ vars.RELEASE_APP_ID }}
       merge: true
