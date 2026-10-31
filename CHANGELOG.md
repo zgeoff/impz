@@ -1,5 +1,12 @@
 # Changelog
 
+## [6.3.1](https://github.com/zgeoff/impz/compare/v6.3.0...v6.3.1) (2026-10-31)
+
+
+### Bug Fixes
+
+* **deps:** update 2 packages, ignore 1 unfixed advisory ([#810](https://github.com/zgeoff/impz/issues/810)) ([f2e2529](https://github.com/zgeoff/impz/commit/f2e2529699244b10e114d73f5eb637af88031d99))
+
 ## [6.3.0](https://github.com/zgeoff/impz/compare/v6.2.1...v6.3.0) (2026-10-30)
 
 ### Features
