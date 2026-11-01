@@ -16,8 +16,6 @@ import {
 } from './zfs-commands';
 import type { ZfsCommands, ZfsEntry } from './zfs-commands';
 
-const ID_ATTEMPTS = 5;
-
 interface ZfsMoveContext {
   readonly zfs: ZfsCommands;
   readonly streams: StreamRunner;
@@ -129,24 +127,6 @@ export function createZfsMoves(
     }
 
     return steps;
-  };
-
-  const pickCheckpointId = (
-    entries: readonly ZfsEntry[],
-    picked: readonly string[],
-    buildId: () => string,
-  ): string => {
-    const tried = { id: '' };
-
-    for (let attempt = 0; attempt < ID_ATTEMPTS; attempt += 1) {
-      tried.id = buildId();
-
-      if (listCheckpointSnapshots(entries, tried.id).length === 0 && !picked.includes(tried.id)) {
-        return tried.id;
-      }
-    }
-
-    throw new CheckpointIdTakenError(tried.id);
   };
 
   const writeReceived = async (
@@ -333,4 +313,24 @@ function checkReceiveSteps(steps: readonly ReceiveStep[]): void {
   if (steps.length === 0) {
     throw new Error('zfs: a move with no steps');
   }
+}
+
+const ID_ATTEMPTS = 5;
+
+function pickCheckpointId(
+  entries: readonly ZfsEntry[],
+  picked: readonly string[],
+  buildId: () => string,
+): string {
+  const tried = { id: '' };
+
+  for (let attempt = 0; attempt < ID_ATTEMPTS; attempt += 1) {
+    tried.id = buildId();
+
+    if (listCheckpointSnapshots(entries, tried.id).length === 0 && !picked.includes(tried.id)) {
+      return tried.id;
+    }
+  }
+
+  throw new CheckpointIdTakenError(tried.id);
 }

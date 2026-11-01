@@ -1942,13 +1942,15 @@ test('it touches neither the disk nor the agent for a session with a hostile gen
     '4f3c0f86-8f8b-4c45-a3b4-8e1c1e9b0d11',
   ];
 
-  const targets = generations
-    .filter((value) => !value.includes('\0'))
-    .flatMap((value) => [
-      resolvePath(ctx.sessionLogsDir, value),
-      resolvePath(ctx.sessionLogsDir, value, 'meta.json'),
-      resolvePath(ctx.sessionLogsDir, '.deleted', value),
-    ]);
+  const targets = generations.flatMap((value) =>
+    value.includes('\0')
+      ? []
+      : [
+          resolvePath(ctx.sessionLogsDir, value),
+          resolvePath(ctx.sessionLogsDir, value, 'meta.json'),
+          resolvePath(ctx.sessionLogsDir, '.deleted', value),
+        ],
+  );
 
   const before = targets.filter((path) => existsSync(path));
 
@@ -2024,13 +2026,15 @@ test('it touches neither the disk nor the agent for a session with a hostile boo
     '4f3c0f868f8b4c45a3b48e1c1e9b0d11',
   ];
 
-  const targets = bootIds
-    .filter((value) => !value.includes('\0'))
-    .flatMap((value) => [
-      resolvePath(ctx.sessionLogsDir, value),
-      resolvePath(ctx.sessionLogsDir, value, 'meta.json'),
-      resolvePath(ctx.sessionLogsDir, '.deleted', value),
-    ]);
+  const targets = bootIds.flatMap((value) =>
+    value.includes('\0')
+      ? []
+      : [
+          resolvePath(ctx.sessionLogsDir, value),
+          resolvePath(ctx.sessionLogsDir, value, 'meta.json'),
+          resolvePath(ctx.sessionLogsDir, '.deleted', value),
+        ],
+  );
 
   const before = targets.filter((path) => existsSync(path));
 
@@ -2105,13 +2109,15 @@ test('it touches neither the disk nor the agent for a session with a hostile nam
     'main.log',
   ];
 
-  const targets = names
-    .filter((value) => !value.includes('\0'))
-    .flatMap((value) => [
-      resolvePath(ctx.sessionLogsDir, value),
-      resolvePath(ctx.sessionLogsDir, value, 'meta.json'),
-      resolvePath(ctx.sessionLogsDir, '.deleted', value),
-    ]);
+  const targets = names.flatMap((value) =>
+    value.includes('\0')
+      ? []
+      : [
+          resolvePath(ctx.sessionLogsDir, value),
+          resolvePath(ctx.sessionLogsDir, value, 'meta.json'),
+          resolvePath(ctx.sessionLogsDir, '.deleted', value),
+        ],
+  );
 
   const before = targets.filter((path) => existsSync(path));
 

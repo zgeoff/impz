@@ -26,29 +26,6 @@ interface StubExecTarget {
 export function startStubExecAgent(path: string, guest: StubExecTarget) {
   const streams = new WeakMap<Socket, Promise<ExecStream>>();
 
-  const sendEvents = async (
-    socket: Socket,
-    pending: Promise<ExecStream>,
-    killGraceMs: number,
-  ): Promise<void> => {
-    const stream = await pending;
-
-    socket.write(
-      encodeMessageFrame(FRAME_TYPES.started, StartedSchema, {
-        pid: stream.pid,
-        ...(stream.session !== null && { session: stream.session }),
-        ...(stream.session !== null && stream.created && { created: true }),
-        ...(stream.groupKill && killGraceMs > 0 && { killGraceMs }),
-      }),
-    );
-
-    for await (const event of stream.events()) {
-      if (!socket.destroyed) {
-        socket.write(encodeEventFrame(event));
-      }
-    }
-  };
-
   return startStubAgent(path, (socket, request, frames) => {
     const pending = streams.get(socket);
     const last = frames.at(-1);
@@ -93,23 +70,6 @@ export function startStubExecAgent(path: string, guest: StubExecTarget) {
   });
 }
 
-function encodeEventFrame(event: Readonly<ExecEvent>): Uint8Array {
-  if (event.type === 'exit') {
-    return encodeMessageFrame(FRAME_TYPES.exit, ExitSchema, {
-      code: event.code,
-      signal: event.signal,
-    });
-  }
-
-  if (event.type === 'detached') {
-    return encodeMessageFrame(FRAME_TYPES.detached, DetachedSchema, { reason: event.reason });
-  }
-
-  const type = event.type === 'stdout' ? FRAME_TYPES.stdout : FRAME_TYPES.stderr;
-
-  return encodeFrame(type, event.data);
-}
-
 async function sendInput(pending: Promise<ExecStream>, frame: AgentFrame): Promise<void> {
   const stream = await pending;
 
@@ -126,6 +86,46 @@ async function stopStream(pending: Promise<ExecStream>): Promise<void> {
   const stream = await pending;
 
   stream.close();
+}
+
+async function sendEvents(
+  socket: Socket,
+  pending: Promise<ExecStream>,
+  killGraceMs: number,
+): Promise<void> {
+  const stream = await pending;
+
+  socket.write(
+    encodeMessageFrame(FRAME_TYPES.started, StartedSchema, {
+      pid: stream.pid,
+      ...(stream.session !== null && { session: stream.session }),
+      ...(stream.session !== null && stream.created && { created: true }),
+      ...(stream.groupKill && killGraceMs > 0 && { killGraceMs }),
+    }),
+  );
+
+  for await (const event of stream.events()) {
+    if (!socket.destroyed) {
+      socket.write(encodeEventFrame(event));
+    }
+  }
+}
+
+function encodeEventFrame(event: Readonly<ExecEvent>): Uint8Array {
+  if (event.type === 'exit') {
+    return encodeMessageFrame(FRAME_TYPES.exit, ExitSchema, {
+      code: event.code,
+      signal: event.signal,
+    });
+  }
+
+  if (event.type === 'detached') {
+    return encodeMessageFrame(FRAME_TYPES.detached, DetachedSchema, { reason: event.reason });
+  }
+
+  const type = event.type === 'stdout' ? FRAME_TYPES.stdout : FRAME_TYPES.stderr;
+
+  return encodeFrame(type, event.data);
 }
 
 const MAX_KILL_GRACE_MS = 60_000;

@@ -178,15 +178,36 @@ export function buildStubVmm() {
     return serving.at(-1)?.[1];
   };
 
+  const waitForever = <T>(onPark?: () => void): Promise<T> => {
+    waiting.parked += 1;
+    onPark?.();
+
+    return new Promise<T>(() => {});
+  };
+
+  const startFakeVm = async (
+    step: 'boot' | 'wake' | 'restore',
+    paths: Readonly<FirecrackerPaths>,
+  ) => {
+    const outcome = await chooseOutcome(step);
+
+    if (outcome === 'fail') {
+      throw new StubVmError(`${step} failed: no agent\nlog tail`);
+    }
+
+    const pid = startPid();
+
+    pidFiles.set(paths.pidFile, pid);
+
+    if (outcome === 'ok') {
+      setVm(pid, paths, 'Running');
+    }
+
+    return { pid, firecrackerVersion: 'v1.17.0', agentVersion: agent.version, timings: {} };
+  };
+
   const buildRunner = (generation: number): VmRunner => {
     const parkedBuild = Promise.withResolvers<void>();
-
-    const waitForever = <T>(onPark?: () => void): Promise<T> => {
-      waiting.parked += 1;
-      onPark?.();
-
-      return new Promise<T>(() => {});
-    };
 
     const runInGeneration = async <T>(call: () => Promise<T>, onPark?: () => void): Promise<T> => {
       if (generation !== counter.generation) {
@@ -215,27 +236,6 @@ export function buildStubVmm() {
       }
 
       return read();
-    };
-
-    const startFakeVm = async (
-      step: 'boot' | 'wake' | 'restore',
-      paths: Readonly<FirecrackerPaths>,
-    ) => {
-      const outcome = await chooseOutcome(step);
-
-      if (outcome === 'fail') {
-        throw new StubVmError(`${step} failed: no agent\nlog tail`);
-      }
-
-      const pid = startPid();
-
-      pidFiles.set(paths.pidFile, pid);
-
-      if (outcome === 'ok') {
-        setVm(pid, paths, 'Running');
-      }
-
-      return { pid, firecrackerVersion: 'v1.17.0', agentVersion: agent.version, timings: {} };
     };
 
     const runner: VmRunner = {

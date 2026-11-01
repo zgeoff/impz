@@ -312,21 +312,20 @@ export function buildStubZfs(options: FakeZfsOptions) {
 
   const listSpace = (root: string): CommandResult => {
     const isInTree = (name: string) => name === root || name.startsWith(`${root}/`);
-    const readCreation = (txg: number) => String(STUB_EPOCH_S + txg * 3600);
 
     const rows = [
       ...[...datasets.entries()]
         .filter(([name]) => isInTree(name))
         .map(
           ([name, dataset]) =>
-            `${name}\t1048576\t3145728\t1048576\t${readCreation(dataset.txg)}\t-`,
+            `${name}\t1048576\t3145728\t1048576\t${formatCreation(dataset.txg)}\t-`,
         ),
       ...[...snapshots.entries()]
         .filter(([name]) => isInTree(name.split('@')[0] ?? ''))
         .map(([name, snapshot]) => {
           const clones = findClonesOf(name);
 
-          return `${name}\t65536\t1048576\t-\t${readCreation(snapshot.txg)}\t${clones.length === 0 ? '-' : clones.join(',')}`;
+          return `${name}\t65536\t1048576\t-\t${formatCreation(snapshot.txg)}\t${clones.length === 0 ? '-' : clones.join(',')}`;
         }),
     ];
 
@@ -578,6 +577,10 @@ function getParent(name: string): string {
 
 function buildSuccess(stdout = ''): CommandResult {
   return { exitCode: 0, stdout, stderr: '' };
+}
+
+function formatCreation(txg: number): string {
+  return String(STUB_EPOCH_S + txg * 3600);
 }
 
 export type StubZfs = ReturnType<typeof buildStubZfs>;

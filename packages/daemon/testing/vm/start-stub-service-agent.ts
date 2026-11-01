@@ -17,7 +17,6 @@ import type { Request, ServiceDef, ServiceStatus } from '@impz/agent-protocol';
 import { startStubAgent } from './start-stub-agent';
 
 const IMAGE_USER = 'dev';
-const LOG_INODE = 7;
 const MAX_LOG_LINES = 100_000;
 
 interface Follow {
@@ -64,24 +63,6 @@ export async function startStubServiceAgent(
         root: (def.user ?? IMAGE_USER) === 'root',
       }),
     });
-
-  const sendLog = (socket: Socket, data: Uint8Array, end: number): void => {
-    socket.write(encodeFrame(FRAME_TYPES.stdout, data));
-
-    socket.write(
-      encodeMessageFrame(FRAME_TYPES.cursor, LogCursorSchema, { inode: LOG_INODE, offset: end }),
-    );
-  };
-
-  const getLogStart = (log: Buffer, request: Request): number => {
-    if (request.cursor === undefined) {
-      return getLastLinesStartOffset(log, request.lines ?? 0);
-    }
-
-    const cursor = request.cursor;
-
-    return cursor.inode === LOG_INODE && cursor.offset <= log.length ? cursor.offset : 0;
-  };
 
   const handleLogs = (socket: Socket, request: Request): void => {
     const service = request.service ?? '';
@@ -252,6 +233,24 @@ export async function startStubServiceAgent(
   };
 }
 
+function sendError(socket: Socket, code: string, message: string): void {
+  socket.end(
+    encodeMessageFrame(FRAME_TYPES.response, ErrorResponseSchema, { error: { code, message } }),
+  );
+}
+
+const LOG_INODE = 7;
+
+function getLogStart(log: Buffer, request: Request): number {
+  if (request.cursor === undefined) {
+    return getLastLinesStartOffset(log, request.lines ?? 0);
+  }
+
+  const cursor = request.cursor;
+
+  return cursor.inode === LOG_INODE && cursor.offset <= log.length ? cursor.offset : 0;
+}
+
 const NEWLINE = 0x0a;
 
 function getLastLinesStartOffset(log: Buffer, count: number): number {
@@ -275,9 +274,11 @@ function getLastLinesStartOffset(log: Buffer, count: number): number {
   return 0;
 }
 
-function sendError(socket: Socket, code: string, message: string): void {
-  socket.end(
-    encodeMessageFrame(FRAME_TYPES.response, ErrorResponseSchema, { error: { code, message } }),
+function sendLog(socket: Socket, data: Uint8Array, end: number): void {
+  socket.write(encodeFrame(FRAME_TYPES.stdout, data));
+
+  socket.write(
+    encodeMessageFrame(FRAME_TYPES.cursor, LogCursorSchema, { inode: LOG_INODE, offset: end }),
   );
 }
 
