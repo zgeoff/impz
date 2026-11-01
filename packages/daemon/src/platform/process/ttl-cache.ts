@@ -8,7 +8,7 @@ interface TtlCacheOptions {
   readonly now: () => number;
 }
 
-export function createTtlCache<K extends NonNullable<unknown>, V extends NonNullable<unknown>>(
+export function createTtlCache<K extends string, V extends object | string | number>(
   options: Readonly<TtlCacheOptions>,
 ): LRUCache<K, V> {
   return new LRUCache<K, V>({
