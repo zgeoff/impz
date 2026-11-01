@@ -23,6 +23,7 @@ const tasks: Readonly<Record<string, Task>> = {
   },
   'install-podman': { stepArguments: [], run: installPodman },
   'open-kvm-to-builders': { stepArguments: [], run: openKVMToBuilders },
+  'free-disk': { stepArguments: [], run: freeDisk },
 };
 
 async function main(): Promise<void> {
@@ -142,6 +143,23 @@ async function openKVMToBuilders(): Promise<void> {
 
   await $`sudo udevadm control --reload-rules`;
   await $`sudo udevadm trigger --name-match=kvm`;
+}
+
+// A runner image without a /mnt temp disk keeps impd's data on /, where a 72 GiB disk has left
+// 6.1 GiB after the builds, short of a move's 5 GiB reserve and its disk. The e2e jobs use none of
+// these preinstalled toolchains.
+const UNUSED_TOOLCHAINS = [
+  '/usr/local/lib/android',
+  '/usr/share/dotnet',
+  '/opt/ghc',
+  '/usr/local/.ghcup',
+  '/opt/hostedtoolcache/CodeQL',
+];
+
+async function freeDisk(): Promise<void> {
+  await $`df -h /`;
+  await $`sudo rm -rf ${UNUSED_TOOLCHAINS}`;
+  await $`df -h /`;
 }
 
 // tee echoes what it writes, so only its stdout is dropped and an error reaches the log. Bun's

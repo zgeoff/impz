@@ -311,6 +311,28 @@ test('it opens KVM to the nix builders through a udev rule', async () => {
   );
 });
 
+test('it removes the toolchains the e2e jobs never use, and shows the free disk before and after', async () => {
+  const ctx = setupTest();
+
+  createStubBin(ctx.directoryPath, 'df');
+
+  const result = await $`${process.execPath} ${ctx.scriptPath} free-disk`
+    .env({ PATH: ctx.sudo.bin })
+    .nothrow()
+    .quiet();
+
+  expect(result.exitCode).toBe(0);
+
+  expect(readFileSync(ctx.sudo.calls, 'utf8')).toBe(
+    [
+      'df -h /',
+      'sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL',
+      'df -h /',
+      '',
+    ].join('\n'),
+  );
+});
+
 test('it refuses a task it does not know, with its usage', async () => {
   const ctx = setupTest();
 
@@ -322,7 +344,7 @@ test('it refuses a task it does not know, with its usage', async () => {
   expect({ exitCode: result.exitCode, stderr: result.stderr.toString() }).toStrictEqual({
     exitCode: 2,
     stderr:
-      'usage: set-up-runner.ts <share-cpu|turn-on-ksm|reserve-huge-pages|name-e2e-registry|install-zfs|install-podman|open-kvm-to-builders>\n',
+      'usage: set-up-runner.ts <share-cpu|turn-on-ksm|reserve-huge-pages|name-e2e-registry|install-zfs|install-podman|open-kvm-to-builders|free-disk>\n',
   });
 });
 
@@ -337,7 +359,7 @@ test('it refuses an argument that its task does not take, and sets nothing up', 
   expect({ exitCode: result.exitCode, stderr: result.stderr.toString() }).toStrictEqual({
     exitCode: 2,
     stderr:
-      'usage: set-up-runner.ts <share-cpu|turn-on-ksm|reserve-huge-pages|name-e2e-registry|install-zfs|install-podman|open-kvm-to-builders>\n',
+      'usage: set-up-runner.ts <share-cpu|turn-on-ksm|reserve-huge-pages|name-e2e-registry|install-zfs|install-podman|open-kvm-to-builders|free-disk>\n',
   });
 
   expect(readFileSync(ctx.sudo.calls, 'utf8')).toBe('');
@@ -354,7 +376,7 @@ test('it refuses a second argument to install-zfs, and installs nothing', async 
   expect({ exitCode: result.exitCode, stderr: result.stderr.toString() }).toStrictEqual({
     exitCode: 2,
     stderr:
-      'usage: set-up-runner.ts <share-cpu|turn-on-ksm|reserve-huge-pages|name-e2e-registry|install-zfs|install-podman|open-kvm-to-builders> [arc max bytes]\n',
+      'usage: set-up-runner.ts <share-cpu|turn-on-ksm|reserve-huge-pages|name-e2e-registry|install-zfs|install-podman|open-kvm-to-builders|free-disk> [arc max bytes]\n',
   });
 
   expect(readFileSync(ctx.sudo.calls, 'utf8')).toBe('');
