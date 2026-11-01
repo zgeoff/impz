@@ -18,7 +18,7 @@
       "@faker-js/faker": "10.6.0",
       "@logtape/logtape": "2.4.2",
       "@maschwenk/tsrslint": "0.1.6",
-      "@modelcontextprotocol/client": "2.3.1",
+      "@modelcontextprotocol/client": "2.4.0",
       "@modelcontextprotocol/server": "2.4.0",
       "@msw/data": "1.1.8",
       "@mswjs/interceptors": "0.41.9",
