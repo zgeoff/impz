@@ -2,7 +2,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'n
 import { join } from 'node:path';
 import { formatShellWord } from '@impz/test-utils/format-shell-word';
 
-export type StubOciFetchAnswer = 'ok' | 'hang' | { readonly stderr: string };
+type StubOciFetchAnswer = 'ok' | 'hang' | { readonly stderr: string };
 
 interface StubOciImage {
   readonly ref: string;

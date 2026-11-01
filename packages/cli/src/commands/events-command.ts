@@ -9,7 +9,7 @@ const HEALTHY_MS = 10_000;
 const FIRST_BACKOFF_MS = 1000;
 const MAX_BACKOFF_MS = 15_000;
 
-export interface EventSource extends ClientEventSource {
+interface EventSource extends ClientEventSource {
   readonly checkServer: () => Promise<Pick<ServerCheck, 'clientVersion' | 'serverVersion'>>;
   readonly now: () => number;
   readonly wait: (durationMs: number) => Promise<void>;
