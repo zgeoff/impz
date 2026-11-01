@@ -173,6 +173,12 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
     }
   };
 
+  const probeCurrent = (name: string): boolean => {
+    const meta = readMeta(name);
+
+    return meta !== null && buildTemplateKey(deps.identity, meta) === name;
+  };
+
   const readReady = (key: string): TemplateFiles | null => {
     const directory = join(root, key);
     const meta = readMeta(key);
@@ -557,12 +563,6 @@ export function createBootTemplates(deps: BootTemplateDeps): BootTemplates {
       }
 
       const live = new Set(building.listKeys());
-
-      const probeCurrent = (name: string) => {
-        const meta = readMeta(name);
-
-        return meta !== null && buildTemplateKey(deps.identity, meta) === name;
-      };
 
       const stale = readdirSync(root).filter(
         (name) =>

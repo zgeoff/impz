@@ -12,7 +12,7 @@ interface StubDockerInspect {
   readonly Size?: number;
 }
 
-export type StubDockerPull = 'ok' | 'lost' | 'hang' | { readonly stderr: string };
+type StubDockerPull = 'ok' | 'lost' | 'hang' | { readonly stderr: string };
 
 export interface StubDockerImage {
   readonly refs: readonly string[];

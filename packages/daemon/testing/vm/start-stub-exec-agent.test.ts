@@ -88,7 +88,7 @@ test('it sends a detach of the guest’s command as a frame', async () => {
 
       return {
         ...stream,
-        events: async function* events() {
+        async *events() {
           yield await Promise.resolve(detached);
         },
       };

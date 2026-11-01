@@ -10,7 +10,6 @@ export interface CpuIdentity {
 
 export const UNKNOWN_CPU = 'unknown';
 
-/* @internal */
 export function parseCpuInfo(text: string): CpuIdentity {
   const first = text.split(/\n\s*\n/u)[0] ?? '';
 

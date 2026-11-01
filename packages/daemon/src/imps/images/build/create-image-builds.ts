@@ -87,69 +87,6 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
   const buildRuns = createBuildRuns(() => deps.clock.now());
   const buildSlots = createBuildSlots();
 
-  const resolvePinnedDockerfile = async (
-    dockerfile: string,
-    images: readonly ExternalImage[],
-    engine: BuildEngine,
-    signal: AbortSignal,
-  ) => {
-    const platform = await engine.readPlatform(signal);
-
-    const pins = new Map<string, string>();
-
-    const used: Pin[] = [];
-
-    const stores = new Set<ImageStore>();
-
-    // A registry tag can move between two inspects, so each image is inspected once whatever
-    // its spellings (`busybox` is `docker.io/library/busybox:latest`).
-    const keys = new Map<string, string>();
-
-    for (const image of images) {
-      if (!ImageRefSchema.safeParse(image.ref).success) {
-        throw new ImpdError('BAD_REQUEST', {
-          message: `${image.use} ${JSON.stringify(image.ref)} is not an image reference`,
-        });
-      }
-
-      // The builder's engine may hold the image already and pull nothing, so impd checks the
-      // registry itself.
-      const registryProblem = checkReferenceRegistry(image.ref);
-
-      if (registryProblem !== null) {
-        throw new ImpdError('BAD_REQUEST', {
-          message: `${image.use} ${image.ref}: ${registryProblem}`,
-        });
-      }
-
-      const key = toImageKey(image.ref);
-      const known = keys.get(key);
-
-      if (known === undefined) {
-        signal.throwIfAborted();
-
-        const inspect = await engine.loadImage(image, signal);
-
-        keys.set(key, pickPin(image, inspect, platform));
-        stores.add(readImageStore(inspect));
-      }
-
-      pins.set(image.ref, keys.get(key) ?? '');
-    }
-
-    for (const image of images) {
-      used.push({ use: image.use, ref: image.ref, pin: pins.get(image.ref) ?? '' });
-    }
-
-    const store = [...stores].find((candidate) => candidate !== 'unknown') ?? 'unknown';
-
-    try {
-      return { dockerfile: renderPinnedDockerfile(dockerfile, pins, platform), pins: used, store };
-    } catch (error) {
-      throw toBadRequest(error);
-    }
-  };
-
   const createFromContext = async (
     tarPath: string,
     name: string,
@@ -374,6 +311,75 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
   };
 }
 
+function toBadRequest(error: unknown): unknown {
+  return error instanceof DockerfileError
+    ? new ImpdError('BAD_REQUEST', { message: `the Dockerfile: ${error.message}` })
+    : error;
+}
+
+async function resolvePinnedDockerfile(
+  dockerfile: string,
+  images: readonly ExternalImage[],
+  engine: BuildEngine,
+  signal: AbortSignal,
+) {
+  const platform = await engine.readPlatform(signal);
+
+  const pins = new Map<string, string>();
+
+  const used: Pin[] = [];
+
+  const stores = new Set<ImageStore>();
+
+  // A registry tag can move between two inspects, so each image is inspected once whatever
+  // its spellings (`busybox` is `docker.io/library/busybox:latest`).
+  const keys = new Map<string, string>();
+
+  for (const image of images) {
+    if (!ImageRefSchema.safeParse(image.ref).success) {
+      throw new ImpdError('BAD_REQUEST', {
+        message: `${image.use} ${JSON.stringify(image.ref)} is not an image reference`,
+      });
+    }
+
+    // The builder's engine may hold the image already and pull nothing, so impd checks the
+    // registry itself.
+    const registryProblem = checkReferenceRegistry(image.ref);
+
+    if (registryProblem !== null) {
+      throw new ImpdError('BAD_REQUEST', {
+        message: `${image.use} ${image.ref}: ${registryProblem}`,
+      });
+    }
+
+    const key = toImageKey(image.ref);
+    const known = keys.get(key);
+
+    if (known === undefined) {
+      signal.throwIfAborted();
+
+      const inspect = await engine.loadImage(image, signal);
+
+      keys.set(key, pickPin(image, inspect, platform));
+      stores.add(readImageStore(inspect));
+    }
+
+    pins.set(image.ref, keys.get(key) ?? '');
+  }
+
+  for (const image of images) {
+    used.push({ use: image.use, ref: image.ref, pin: pins.get(image.ref) ?? '' });
+  }
+
+  const store = [...stores].find((candidate) => candidate !== 'unknown') ?? 'unknown';
+
+  try {
+    return { dockerfile: renderPinnedDockerfile(dockerfile, pins, platform), pins: used, store };
+  } catch (error) {
+    throw toBadRequest(error);
+  }
+}
+
 function toImageKey(ref: string): string {
   const named = parseImageReference(ref);
 
@@ -416,12 +422,6 @@ function pickPin(
   }
 
   return pin;
-}
-
-function toBadRequest(error: unknown): unknown {
-  return error instanceof DockerfileError
-    ? new ImpdError('BAD_REQUEST', { message: `the Dockerfile: ${error.message}` })
-    : error;
 }
 
 /* @internal */

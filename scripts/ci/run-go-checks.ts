@@ -67,36 +67,35 @@ async function runVet(): Promise<void> {
 
 // the root tag adds the root-only tests to what the lint reads
 async function runLint(): Promise<void> {
-  const lint = (directory: string, flags: readonly string[]) =>
-    $`go -C ${directory} tool -modfile=${toolsModfile} golangci-lint run --config ${lintConfig} ${flags} ./...`;
+  await runGolangciLint('agent', ['--build-tags', 'root']);
+  await runGolangciLint('host/ksm-exec', []);
+  await runGolangciLint('host/oci-fetch', ['--disable', 'depguard']);
+  await runGolangciLint('host/uffd-handler', ['--build-tags', 'root']);
+  await runGolangciLint('scripts/dockerfile-difftest', ['--disable', 'depguard']);
+  await runGolangciLint(spikeHarness, ['--disable', 'depguard']);
+}
 
-  await lint('agent', ['--build-tags', 'root']);
-  await lint('host/ksm-exec', []);
-  await lint('host/oci-fetch', ['--disable', 'depguard']);
-  await lint('host/uffd-handler', ['--build-tags', 'root']);
-  await lint('scripts/dockerfile-difftest', ['--disable', 'depguard']);
-  await lint(spikeHarness, ['--disable', 'depguard']);
+async function runGolangciLint(directory: string, flags: readonly string[]): Promise<void> {
+  await $`go -C ${directory} tool -modfile=${toolsModfile} golangci-lint run --config ${lintConfig} ${flags} ./...`;
 }
 
 async function runVulnerabilities(): Promise<void> {
-  const govulncheck = (directory: string) =>
-    $`go -C ${directory} tool -modfile=${toolsModfile} govulncheck ./...`;
+  await runGovulncheck('agent');
+  await runGovulncheck('host/ksm-exec');
+  await runGovulncheck('host/oci-fetch');
+  await runGovulncheck('host/uffd-handler');
+}
 
-  await govulncheck('agent');
-  await govulncheck('host/ksm-exec');
-  await govulncheck('host/oci-fetch');
-  await govulncheck('host/uffd-handler');
+async function runGovulncheck(directory: string): Promise<void> {
+  await $`go -C ${directory} tool -modfile=${toolsModfile} govulncheck ./...`;
 }
 
 // deadcode lists functions no binary reaches, tests aside, and exits 0 either way
 async function checkDeadCode(): Promise<void> {
-  const deadcode = (directory: string, packages: string) =>
-    $`go -C ${directory} tool -modfile=${toolsModfile} deadcode -test=false ${packages}`.text();
-
-  const agent = await deadcode('agent', './cmd/...');
-  const ksmExec = await deadcode('host/ksm-exec', '.');
-  const ociFetch = await deadcode('host/oci-fetch', '.');
-  const uffdHandler = await deadcode('host/uffd-handler', '.');
+  const agent = await runDeadcode('agent', './cmd/...');
+  const ksmExec = await runDeadcode('host/ksm-exec', '.');
+  const ociFetch = await runDeadcode('host/oci-fetch', '.');
+  const uffdHandler = await runDeadcode('host/uffd-handler', '.');
 
   const unreachable = `${agent}${ksmExec}${ociFetch}${uffdHandler}`.trimEnd();
 
@@ -107,6 +106,10 @@ async function checkDeadCode(): Promise<void> {
 
     process.exitCode = 1;
   }
+}
+
+function runDeadcode(directory: string, packages: string): Promise<string> {
+  return $`go -C ${directory} tool -modfile=${toolsModfile} deadcode -test=false ${packages}`.text();
 }
 
 // gotestsum, through scripts/test-go.sh, keeps the agent's JSON event stream, so each run's

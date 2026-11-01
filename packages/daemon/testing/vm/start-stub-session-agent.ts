@@ -143,14 +143,6 @@ export async function startStubSessionAgent(
     });
   };
 
-  const sendInvalidResume = (socket: Socket, offset: number, end: number): void => {
-    sendError(socket, {
-      code: 'INVALID_RESUME',
-      message: `offset ${String(offset)} is past the end of the output, ${String(end)}`,
-      data: { end, bufferStart: 0 },
-    });
-  };
-
   const removeRun = (session: string): void => {
     const run = runs.get(session);
 
@@ -531,6 +523,14 @@ export async function startStubSessionAgent(
 
 function sendError(socket: Socket, error: MessageInitShape<typeof ErrorSchema>): void {
   socket.end(encodeMessageFrame(FRAME_TYPES.response, ErrorResponseSchema, { error }));
+}
+
+function sendInvalidResume(socket: Socket, offset: number, end: number): void {
+  sendError(socket, {
+    code: 'INVALID_RESUME',
+    message: `offset ${String(offset)} is past the end of the output, ${String(end)}`,
+    data: { end, bufferStart: 0 },
+  });
 }
 
 function isExecPayload(payload: JsonValue): boolean {
