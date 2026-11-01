@@ -565,6 +565,13 @@ jobs:
         if: matrix.group == 2
         run: bun run --silent ci:set-up-runner reserve-huge-pages
 
+      # The moves-tailnet suite in group 4 starts a second impd beside the
+      # first, and on a runner without a /mnt disk both keep their data on /,
+      # where a move once found too little room above the disk reserve.
+      - name: Free disk for the second move host
+        if: matrix.group == 4
+        run: bun run --silent ci:set-up-runner free-disk
+
       # CI must not pass --clean to the harness: it refuses to wipe a data dir
       # outside .data/ that holds no imp.xfs, and a fresh runner has nothing
       # to clean. The moves-tailnet suite's second host keeps its data beside
