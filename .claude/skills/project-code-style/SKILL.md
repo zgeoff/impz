@@ -1,39 +1,41 @@
 ---
 name: project-code-style
 description:
-  imp's additions to the shared code-style skill — the meaning of imp's own domain verbs, and where
-  the names a library fixes are exempt. Load it beside code-style before writing, reviewing, or
-  renaming any TypeScript in this repo.
+  "imp's domain verbs, each with its one meaning and an example from the code, and the rule for a
+  method name that a library interface sets. Loaded beside code-style before an agent writes,
+  reviews or renames TypeScript in this repo."
+metadata:
+  kind: rule-set
 ---
 
 # imp code style
 
-The `code-style` skill holds the rules, and its role table decides the verb for every job it lists.
-imp names its other jobs with the domain verbs below. Each is a free verb under the shared skill,
-and imp keeps it to one meaning, so a name that starts with one tells the reader the job without a
-trip to the function.
+## Departures
+
+- Keep a method name that a library interface sets, such as `saveTokens`. The Function naming
+  section of [code-style](../code-style/SKILL.md) asks for another verb or a suffix, but the library
+  calls the method by that name.
+- Keep the name `on` in a stand-in for Node's process or stdin, because the code under test calls
+  the EventEmitter method `on`.
+- List each such name in the `exemptNames` option of `zgeoff/function-verb` in
+  [`.oxlintrc.json`](../../../.oxlintrc.json), with a comment above it that names the interface.
 
 ## Domain verbs
 
-imp's verbs name the lifecycle an imp moves through, its disk, which only grows, and its elastic
-memory, which also shrinks.
+Use these verbs for jobs that code-style's verb table has no verb for. Keep each verb to the one
+meaning in the table.
 
-- `allocate` reserves a slot, an address, or another numbered resource from a pool.
-- `list` returns every record of a kind that the caller may see.
-- `sleep`, `wake` and `hold` move an imp through its lifecycle: `hold` keeps it awake while work
-  runs.
-- `grow` enlarges a disk or an elastic imp's memory, and `shrink` returns memory to the host.
-- `watch` follows impd's event stream and calls back on each change until a signal ends it, opening
-  the stream again when it drops.
-- `dispatch` runs the handler that the first word of a command line names, for a command whose verbs
-  share its arguments.
-- `wire` builds a service from its real dependencies, where the matching `create` function takes
-  them as arguments, so a test calls `create` with stand-ins.
+| Verb                    | Use it for a function that                                                         | Example                                  |
+| ----------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------- |
+| `allocate`              | reserves a numbered resource from a pool, such as a slot or an address             | `allocateSlot`                           |
+| `list`                  | returns every record of one kind, filtered to the records the caller has access to | `listImps`                               |
+| `sleep`, `wake`, `hold` | moves an imp to sleep, wakes it, or keeps it awake while work runs                 | `holdImp`                                |
+| `grow`                  | enlarges a disk, a filesystem or a guest's memory                                  | `growDiskFile`, `growFilesystem`         |
+| `shrink`                | gives a guest's memory back to the host; a disk never shrinks                      | `shrinkGuest`                            |
+| `watch`                 | reads impd's event stream, calls back on each event, and reconnects after a drop   | `watchEvents`                            |
+| `dispatch`              | picks a CLI subcommand's handler from the first operand and runs it                | `dispatchVerb`                           |
+| `wire`                  | builds a service from its real dependencies and passes them to its `create…`       | `wireHttpsService`, `createHttpsService` |
 
-## Names a library fixes
-
-A method whose name a library interface fixes, such as the MCP SDK's `saveTokens`, keeps that name.
-Each such name sits in the `exemptNames` option of `zgeoff/function-verb` in
-[`.oxlintrc.json`](../../../.oxlintrc.json), with a comment that names the interface. The fixed name
-wins over the shared rule that `make`, `with`, `use`, `on` and `to` take a suffix, so a stand-in for
-Node's stdin keeps its bare `on` method.
+- Give a `watch` function an `AbortSignal` that ends it.
+- Put a service's logic in its `create…` function, which takes each dependency as an argument, so a
+  test calls `create…` with stand-ins. Keep the `wire…` function to construction only.
