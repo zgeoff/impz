@@ -54,14 +54,16 @@ test('it writes each file as a hole that takes no disk', async () => {
   expect(Number(du.split('\t')[0])).toBeLessThan(1024 ** 2);
 });
 
-test('it ends a tar that nothing reads when the test ends', async () => {
+test('it kills a tar that the test stopped reading when the test ends', async () => {
   const ctx = await setupTest();
 
   const tar = spawnSparseFilesTar(ctx.directoryPath, { big: 64 * 1024 ** 2 });
 
-  onTestFinished(async () => {
-    const code = await tar.exited;
+  await tar.stdout.next();
 
-    expect(code).not.toBe(0);
+  onTestFinished(async () => {
+    const exit = await tar.exited;
+
+    expect(exit).toStrictEqual({ code: null, signal: 'SIGTERM' });
   });
 });

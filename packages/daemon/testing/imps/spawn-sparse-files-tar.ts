@@ -1,4 +1,5 @@
 import { onTestFinished } from 'bun:test';
+import { spawn } from 'node:child_process';
 import { mkdtempSync, truncateSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -14,9 +15,16 @@ export function spawnSparseFilesTar(directory: string, sizes: Readonly<Record<st
     truncateSync(join(tree, name), bytes);
   }
 
-  const tar = Bun.spawn(['tar', '-C', tree, '-c', ...Object.keys(sizes)], {
-    stdout: 'pipe',
-    stderr: 'ignore',
+  // node:child_process, not Bun.spawn: Bun reads a piped stdout ahead into
+  // memory, so a test that stops reading a 200 MiB tar can still hold all of it
+  const tar = spawn('tar', ['-C', tree, '-c', ...Object.keys(sizes)], {
+    stdio: ['ignore', 'pipe', 'ignore'],
+  });
+
+  const exited = Promise.withResolvers<{ code: number | null; signal: NodeJS.Signals | null }>();
+
+  tar.once('exit', (code, signal) => {
+    exited.resolve({ code, signal });
   });
 
   // a test whose build stops reading leaves tar blocked on its output
@@ -24,11 +32,11 @@ export function spawnSparseFilesTar(directory: string, sizes: Readonly<Record<st
     tar.kill();
   });
 
-  return { stdout: splitChunks(tar.stdout, CHUNK_BYTES), exited: tar.exited };
+  return { stdout: splitChunks(tar.stdout, CHUNK_BYTES), exited: exited.promise };
 }
 
 async function* splitChunks(
-  stream: ReadableStream<Uint8Array>,
+  stream: AsyncIterable<Uint8Array>,
   bytes: number,
 ): AsyncGenerator<Uint8Array, void, undefined> {
   let pending = new Uint8Array(0);

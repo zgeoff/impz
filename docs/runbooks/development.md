@@ -295,8 +295,8 @@ Lefthook installs the hooks with `bun install`.
 | `shellcheck` | yes      | `bun run lint:shell`, actionlint, the shared workflow lint and zizmor over `.github/`, hadolint over both Dockerfiles, and the tests that shellcheck the shell production code holds as text.                                                                    |
 | `cli`        | yes      | Compiles the CLI for every platform and runs the linux-x64 one; builds the release image's compile stage.                                                                                                                                                        |
 | `client`     | yes      | Packs `@impz/client`, installs it on the oldest Node it supports, and smokes it under Node, Bun and a compiled Bun binary.                                                                                                                                       |
-| `e2e`        | yes      | Passes only when every `e2e-group` job passed: the `fast` end-to-end set on real microVMs, in four groups on four runners (below).                                                                                                                               |
-| `zfs`        | yes      | Passes only when every `zfs-shard` job passed: real imps on a ZFS pool in three shards, and `scripts/test-zfs.sh` in one (below).                                                                                                                                |
+| `e2e`        | yes      | Passes only when every `e2e-group` job passed, or when all skipped on a pull request outside their paths: the `fast` end-to-end set on real microVMs, in four groups on four runners (below).                                                                    |
+| `zfs`        | yes      | Passes only when every `zfs-shard` job passed, or when all skipped on a pull request outside their paths: real imps on a ZFS pool in three shards, and `scripts/test-zfs.sh` in one (below).                                                                     |
 | `podman`     | no       | `e2e/podman/run-podman-proof.sh`: the proof that an imp host runs with no Docker engine (below).                                                                                                                                                                 |
 
 The `checks` job also runs the docs-writing skill's scripts. `bun run lint:docs` runs
@@ -322,33 +322,40 @@ On `main`, the `release` job makes releases ([releasing](./releasing.md)).
 
 The `fast` set runs in four groups (`FAST_GROUPS` in `packages/e2e-harness/src/suites.ts`), one
 `e2e-group` job per group, each on its own runner. The `e2e` job is the required check: it fails
-when any group failed, was cancelled or was skipped. Each group boots real Firecracker guests on a
-standard `ubuntu-24.04` runner (4 cores, 16 GB), which exposes `/dev/kvm`. `scripts/ci/check-kvm.sh`
-runs first, so a runner without KVM fails in seconds with the reason. The job then:
+when any group failed, was cancelled or was skipped. It passes a skip in one case: the `changes` job
+found that the pull request changes none of the groups' paths, and every group skipped.
 
-1. builds the guest kernel and the system drive from the `system-files` stage, with the release's
-   GitHub Actions cache (scope `system-files`): the kernel rebuilds only when `kernel/build.sh`,
+The `host-image` job builds the groups' inputs once per run, with the composite action
+`.github/actions/e2e-build`:
+
+1. the guest kernel and the system drive from the `system-files` stage, with the release's GitHub
+   Actions cache (scope `system-files`): the kernel rebuilds only when `kernel/build.sh`,
    `kernel/version` or the kernel config files change, or after GitHub evicts the cache (7 days
    unused, or the repo's 10 GB quota). A cold kernel build takes about 10 minutes, so the job's
    timeout is 25.
-2. builds the dev host image as `imp-host:dev` with a cache of its own (scope `imp-dev`). The `e2e`
-   and `zfs` jobs in `ci.yml` set `IMP_HOST_IMAGE=imp-host:dev` and `IMP_HOST_IMAGE_READY=1`, so
-   `scripts/dev/dev.sh` uses that image instead of building it again. Only group 1's run on `main`
-   writes these caches, so four writers never race; pull requests only read them. Steps 1 and 2 are
-   the composite action `.github/actions/e2e-build`, which the `zfs` job uses too.
-3. runs `e2e/test-e2e.sh --group N` with `E2E_RAM_BUDGET_MIB=4096`, `IMP_DEFAULT_MEMORY_MIB=1024`
-   and the XFS file on the runner's `/mnt` disk. No workflow holds a Tailscale secret: group 4's
-   tailnet suites join the Headscale tailnet that the harness starts, and a missed timing limit only
-   warns. The host networking tests run in group 2 only (`HOST_TESTS_GROUP`). The dashboard suite
-   installs the Chromium headless shell that the locked Playwright pins.
+2. the dev host image as `imp-host:dev`, with a cache of its own (scope `imp-dev`).
+
+Only the `host-image` run on `main` writes these caches; pull requests only read them. The job
+uploads the kernel, the system drive and the saved image as the `e2e-inputs` artifact. Each
+`e2e-group`, `zfs-shard` and `podman` job downloads that artifact and loads the image, and sets
+`IMP_HOST_IMAGE=imp-host:dev` and `IMP_HOST_IMAGE_READY=1`, so `scripts/dev/dev.sh` uses that image
+instead of building it again.
+
+Each group boots real Firecracker guests on a standard `ubuntu-24.04` runner (4 cores, 16 GB), which
+exposes `/dev/kvm`. `scripts/ci/check-kvm.sh` runs first, so a runner without KVM fails in seconds
+with the reason. The job then runs `e2e/test-e2e.sh --group N` with `E2E_RAM_BUDGET_MIB=4096`,
+`IMP_DEFAULT_MEMORY_MIB=1024` and the XFS file on the runner's `/mnt` disk. No workflow holds a
+Tailscale secret: group 4's tailnet suites join the Headscale tailnet that the harness starts, and a
+missed timing limit only warns. The host networking tests run in group 2 only (`HOST_TESTS_GROUP`).
+The dashboard suite installs the Chromium headless shell that the locked Playwright pins.
 
 The ZFS suites run in three `zfs-shard` jobs, each on its own runner, and the `zfs` job is the
-required check over them, as `e2e` is over the groups. Each shard builds the same inputs, reading
-the caches only, caps the ZFS ARC at 1 GiB, and runs the suites in its matrix row on a pool in a
-sparse file through `scripts/zfs-host-test.sh`. The backups suites and the moves suite run in these
-shards alone, so real VMs move between two ZFS hosts there. One shard also runs
-`scripts/test-zfs.sh`. Each shard's job summary shows its ZFS timings, and its `zfs-e2e-results-N`
-artifact holds the logs and `results.json`, where each backup test reports the split of its time.
+required check over them, as `e2e` is over the groups. Each shard loads the same inputs, caps the
+ZFS ARC at 1 GiB, and runs the suites in its matrix row on a pool in a sparse file through
+`scripts/zfs-host-test.sh`. The backups suites and the moves suite run in these shards alone, so
+real VMs move between two ZFS hosts there. One shard also runs `scripts/test-zfs.sh`. Each shard's
+job summary shows its ZFS timings, and its `zfs-e2e-results-N` artifact holds the logs and
+`results.json`, where each backup test reports the split of its time.
 
 After a pass, a failure or a timeout, each group saves an `e2e-results-N` artifact (14 days):
 `results.json`, `metrics.jsonl`, `impd.log` (the dev container's whole log) and the dashboard
@@ -391,7 +398,8 @@ A required check must report on every pull request, because GitHub blocks the me
 check waits for a status. The nix and bootstrap workflows therefore run on every pull request, and a
 first job compares the files the pull request changes against the workflow's path list. When none
 match, the work jobs skip, and GitHub reports a job skipped by its condition as a success. A push to
-`main` keeps its own path filter.
+`main` keeps its own path filter. In `ci.yml`, the `changes` job gates the `host-image`,
+`e2e-group`, `zfs-shard` and `podman` jobs the same way, and a push to `main` runs them all.
 
 `.github/workflows/e2e-images.yml` runs the images suite, which sits outside `FAST_GROUPS`, on a KVM
 runner with the e2e groups' sizes and caches. It runs each day on `main`, and on a pull request that
@@ -443,10 +451,9 @@ beside the 4 KiB pages whose bytes changed, which a dirty-page diff writes
 
 ### The podman job
 
-The `podman` job proves that an imp host runs with no Docker engine. It builds the e2e groups'
-inputs on a KVM runner, reading the caches only, and runs `e2e/podman/run-podman-proof.sh` as root.
-The script fails at the first check that does not hold, with the reason, and at the end prints every
-check it made:
+The `podman` job proves that an imp host runs with no Docker engine. It loads the e2e groups' inputs
+on a KVM runner, and runs `e2e/podman/run-podman-proof.sh` as root. The script fails at the first
+check that does not hold, with the reason, and at the end prints every check it made:
 
 1. It starts the dev instance under Docker, waits for impd to add its builder image and its default
    image, makes the imp `e2e-podman-keep` with a file in it, and records the builder image's id and
