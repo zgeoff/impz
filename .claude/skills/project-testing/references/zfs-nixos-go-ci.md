@@ -1,96 +1,100 @@
 # ZFS, NixOS, agent Go and CI
 
-These four areas each have a test layer outside the plain `bun test` run. This file says which layer
-to use for a change and what each one proves; the scripts and their tests show how each layer runs.
+Test the ZFS backend against the fake first, and a real pool only for what the kernel module
+decides. Run the NixOS, ZFS and root-only layers in CI when this host lacks what they need.
 
 ## ZFS
 
-Test the ZFS backend against the in-memory `zfs` fake,
-[`buildStubZfs`](../../../../packages/daemon/testing/vm/build-stub-zfs.ts), first. The fake models
-datasets, snapshots, clones, promote, deferred destroy and legacy mounts, and it can block, fail or
-crash a command and restart, so a test can stop a backend halfway through an operation. Its space
-numbers are fixed, and it refuses to unmount a dir that is not itself a mount, as util-linux does.
+- Test the ZFS backend against the in-memory `zfs` fake,
+  [`buildStubZfs`](../../../../packages/daemon/testing/vm/build-stub-zfs.ts), first. The fake models
+  datasets, snapshots, clones, promote, deferred destroy and legacy mounts. It can make a command
+  block, fail or crash the backend, and then start the backend again, so a test can stop the backend
+  halfway through an operation.
+- Expect the fake's space figures to stay the same whatever the test writes. The fake also refuses
+  to unmount a folder that is not itself a mount, as util-linux does.
+- Write a real-pool test only for behaviour that the kernel module decides, such as space accounting
+  or a real mount. Put it beside the backend's other tests in
+  [`packages/daemon/src/vm/storage/zfs/`](../../../../packages/daemon/src/vm/storage/zfs/).
+- Make the test's dataset with
+  [`createZfsTestDataset`](../../../../packages/daemon/testing/vm/create-zfs-test-dataset.ts). It
+  makes a dataset under the folder that `IMP_TEST_ZFS_DIR` names, refuses one that already exists,
+  and releases only what it made. The test skips until `IMP_TEST_ZFS_ROOT` and `IMP_TEST_ZFS_DIR`
+  are set.
+- Run the real-pool tests with [`scripts/test-zfs.sh`](../../../../scripts/test-zfs.sh), as root
+  with the zfs module loaded. It makes a throwaway pool in a sparse file, sets both variables, and
+  destroys the pool on exit only when `zpool status` proves the pool is its own.
+- Run [`scripts/zfs-host-test.sh`](../../../../scripts/zfs-host-test.sh) to test the end-to-end
+  suites on a ZFS-backed dev instance. It needs sudo, Docker, KVM and the zfs module. It runs
+  `test-zfs.sh` first, then the suites on a second throwaway pool, and keeps its work folder with a
+  summary of impd's ZFS timings.
 
-Write a real-pool test only for behaviour that depends on the kernel module, such as space
-accounting or a real mount. Real-pool tests skip until their two gates name a dataset and its mount
-dir. Each one makes its own dataset under the mount dir, refuses a dataset that already exists, and
-releases only what it made.
+Each `.sh` runs the TypeScript entry of the same name,
+[`test-zfs.ts`](../../../../scripts/test-zfs.ts) or
+[`zfs-host-test.ts`](../../../../scripts/zfs-host-test.ts), and both entries point at this table for
+the settings they read:
 
-Two scripts run the real-pool layer. Each `.sh` runs the TypeScript entry of the same name, which
-holds the logic:
+| Setting                       | Script             | What it does                                                                                           |
+| ----------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------ |
+| `IMP_ZFS_TEST_DIR`            | both               | The work folder for the pool files; unset or empty makes a new temp folder                             |
+| `IMP_ZFS_TEST_GIB`            | `test-zfs.sh`      | The size of the pool file                                                                              |
+| `IMP_ZFS_BENCH_GIB`           | `zfs-host-test.sh` | The size of the second pool's file                                                                     |
+| `IMP_ZFS_E2E_SUITES`          | `zfs-host-test.sh` | The VM suites to run, in the form `--only` takes; set alone, they run in place of the ZFS lane         |
+| `IMP_ZFS_SHARD`               | `zfs-host-test.sh` | The shard of the ZFS lane to run, as `<n>/<count>`; with neither setting, the whole lane runs          |
+| `IMP_ZFS_TEST_UNIT=0`         | `zfs-host-test.sh` | Skips `test-zfs.sh`, which one CI shard runs                                                           |
+| `IMP_DEV_PORT_OFFSET`         | `zfs-host-test.sh` | The port offset of the `imp-zfs` dev instance                                                          |
+| `IMP_ZFS_ALLOW_UIOMOVE_BUG=0` | `zfs-host-test.sh` | Refuses a module with the zfs_uiomove bug, which the runner's Ubuntu module has; the default allows it |
+| `IMP_ZFS_MODULE_VERSION_FILE` | both               | Where the loaded module's version is read, so a test can fake a loaded module                          |
 
-- **The real-pool script**, [`test-zfs.ts`](../../../../scripts/test-zfs.ts), makes a throwaway
-  sparse-file pool, runs the ZFS backend's tests with both gates set, and destroys the pool on exit
-  when `zpool status` proves the pool is its own.
-- **The ZFS host script**, [`zfs-host-test.ts`](../../../../scripts/zfs-host-test.ts), runs the
-  real-pool script, then runs end-to-end suites on a ZFS-backed dev instance over a second throwaway
-  pool, and writes a summary of impd's ZFS timings into the work dir, which it keeps.
-
-Both take the pool properties from
-[`readZfsPoolProperties`](../../../../scripts/lib/read-zfs-pool-properties.ts), and read these
-settings:
-
-| Setting                       | Script    | What it does                                                                     |
-| ----------------------------- | --------- | -------------------------------------------------------------------------------- |
-| `IMP_ZFS_TEST_DIR`            | both      | The work dir for the pool files; unset or empty makes a new temp dir             |
-| `IMP_ZFS_TEST_GIB`            | real-pool | The size of the pool file                                                        |
-| `IMP_ZFS_BENCH_GIB`           | host      | The size of the second pool's file                                               |
-| `IMP_ZFS_E2E_SUITES`          | host      | Names VM suites to run, as `--only` takes them; alone, in place of the ZFS lane  |
-| `IMP_ZFS_SHARD`               | host      | The lane share to run, `<n>/<count>`; unset, with no suites, runs the whole lane |
-| `IMP_ZFS_TEST_UNIT=0`         | host      | Skips the real-pool script, which one CI shard runs on its own                   |
-| `IMP_DEV_PORT_OFFSET`         | host      | The port offset of the `imp-zfs` dev instance                                    |
-| `IMP_ZFS_ALLOW_UIOMOVE_BUG=0` | host      | Refuses a module with the zfs_uiomove bug, which the runner's Ubuntu module has  |
-| `IMP_ZFS_MODULE_VERSION_FILE` | both      | Where the loaded module's version is read, so the tests can fake a loaded module |
-
-Both scripts have tests that run them against stub binaries; a change to either script's cleanup
-extends those tests. A test that stubs `bun` runs the entry with its own Bun, because the wrapper
-would find the stub on `PATH`. The host script's tests point `IMP_ROOT` at a tree of stub scripts,
-which the entry runs in place of the checkout's `dev.sh`, `test-e2e.sh` and `test-zfs.sh`.
+- When you change either script's cleanup, extend its tests,
+  [`test-zfs.test.ts`](../../../../scripts/test-zfs.test.ts) or
+  [`zfs-host-test.test.ts`](../../../../scripts/zfs-host-test.test.ts), which run it against stub
+  binaries.
+- In a test that stubs `bun`, run the entry with `process.execPath`, because the `.sh` wrapper would
+  find the stub on `PATH`.
+- Point `IMP_ROOT` at a tree of stub scripts to test `zfs-host-test.ts`, which then runs them in
+  place of the checkout's `dev.sh`, `test-e2e.sh` and `test-zfs.sh`.
 
 ## NixOS
 
-The flake has two checks of the NixOS module:
-
-- **The evaluation check** runs nix-unit cases and then builds the generated files and greps them.
-  nix-unit runs only the attributes whose names start with `test`, so each case is named `"test …"`.
-  Hosts that several cases read sit in the file's `let`, because each host is a full NixOS
-  evaluation, and a comment above each such case states the host and the option its expected value
-  depends on. A negative grep passes only on grep's exit status 1, so an unreadable file fails the
+- Add a case of the NixOS module's evaluation to
+  [`eval.nix`](../../../../deploy/nixos/tests/eval.nix), and start its attribute name with `test`,
+  because nix-unit runs only those.
+- Put a host that several cases read in the file's `let`, because each host is a full NixOS
+  evaluation. Above each case that reads one, write a comment that names the host and the option its
+  expected value depends on.
+- Pass a negative grep in that file only on grep's exit status 1, so an unreadable file fails the
   check.
-- **The VM check** is one NixOS test with two nodes. Each scenario that changes the host restores it
-  and checks the restore, so the scenarios after it start from the started host. Every firewall
-  there drops without a reject, so a dropped connection shows as the `timeout` command's exit: 124
-  on a node, and 143 inside the stand-in image, whose busybox `timeout` kills with SIGTERM.
-
-The format check runs `nix fmt -- --check`, and a local `nixfmt` matches it only at the pinned
-nixpkgs' version.
+- In [`vm.nix`](../../../../deploy/nixos/tests/vm.nix), make each scenario that changes the host
+  restore it and check the restore, so the next scenario starts from the host as the test first
+  started it.
+- Expect a connection that a firewall drops in `vm.nix` to show as the exit status of the `timeout`
+  command: 124 on a node, and 143 inside the stand-in image for impd, whose busybox `timeout` kills
+  with SIGTERM.
+- Run the format check with `nix fmt -- --check`. A local `nixfmt` matches it only at the version of
+  the nixpkgs that the flake pins.
 
 ## Agent Go
 
-An agent timer that a test must shorten sits on an unexported field, which the constructor sets from
-the package's constant. A test in the same package changes the field before it starts the work,
-nothing outside the package changes it, and one test per package checks the constructor's default.
-
-The session history's replay is too large to pin inline, so its golden test pins the replay's length
-and SHA-256 over a seeded input that the test file generates. The input changes only by an edit to
-that file, and a changed replay means editing the pinned values on purpose.
-
-A recorder in place of an own package's function fits when that package's kernel edge has its own
-tests and the test asserts only whether and how the call was made. The server's freeze tests record
-disk grow calls this way, because the disk package tests the sysfs and ioctl edge itself.
+- Put a timer of the Go guest agent that a test must shorten on an unexported field, which the
+  constructor sets from a constant. Change the field only from a test in the same package, before
+  the work starts, and check the constructor's default in one test per package.
+- Pin a golden output too large to write inline by its length and SHA-256 over a seeded input that
+  the test file makes, as
+  [`screen_golden_test.go`](../../../../agent/internal/feature/session/screen_golden_test.go) does.
+  When the output changes on purpose, copy the new length and hash from the failing test.
+- Use a recorder in place of a function from another package of the agent when that package tests
+  its own kernel calls, and the test checks only whether and how the call was made. The server's
+  freeze tests record disk grow calls this way, because the disk package tests its sysfs and ioctl
+  calls itself.
 
 ## CI
 
-Every command in the skill's table runs in a CI job, in
-[`ci.yml`](../../../../.github/workflows/ci.yml) or
-[`nix.yml`](../../../../.github/workflows/nix.yml). Two facts about those jobs matter when you
-change a test:
-
-- The end-to-end work runs as three groups on KVM runners, and the required `e2e` check passes only
-  when every group passes. One group also runs the host networking tests as root, and one sets up
-  the dashboard's browser. A unit test pins these roles against the workflow file, so a change to
-  the groups changes both.
-- The ZFS work runs as three `zfs-shard` jobs, and the required `zfs` check passes only when every
-  shard passes. Each shard installs ZFS on its runner and runs its suites; one also runs
+- The end-to-end work runs as the `e2e-group` matrix in
+  [`ci.yml`](../../../../.github/workflows/ci.yml), and the required `e2e` check passes only when
+  every group passes. Some groups have roles, such as the one that runs the host networking tests.
+  [`ci-groups.test.ts`](../../../../packages/e2e-harness/src/ci-groups.test.ts) pins the groups
+  against the workflow file, so a change to the groups changes both.
+- The ZFS work runs as the `zfs-shard` matrix, and the required `zfs` check passes only when every
+  shard passes. Each shard installs ZFS on its runner and runs its suites, and one also runs
   [`scripts/test-zfs.sh`](../../../../scripts/test-zfs.sh). A ZFS failure on a pull request shows
-  there and nowhere else, and a unit test pins the shards against the workflow file.
+  there and nowhere else.

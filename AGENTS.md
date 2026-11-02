@@ -13,9 +13,11 @@ The rules a task needs are not repeated here. Load the skill for the work before
 | Skill                | Load before                                                                          |
 | -------------------- | ------------------------------------------------------------------------------------ |
 | `code-style`         | writing, reviewing, or renaming any TypeScript — the shared function-naming rules    |
-| `project-code-style` | the same, beside `code-style` — imp's domain verbs and the names a library fixes     |
+| `project-code-style` | the same, beside `code-style` — imp's domain verbs and the names a library sets      |
 | `testing`            | designing, writing, or reviewing tests                                               |
-| `project-testing`    | the same, beside `testing` — imp's own test facts                                    |
+| `project-testing`    | the same, beside `testing` — imp's test commands, lanes and test utils               |
+| `ci-design`          | adding or changing a workflow, a job or a step                                       |
+| `project-ci-design`  | the same, beside `ci-design` — imp's test budget, required checks and workflows      |
 | `docs-writing`       | writing or editing any committed prose: [`docs/`](docs/), READMEs, this file, skills |
 
 ## Repo structure
