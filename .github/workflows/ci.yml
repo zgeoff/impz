@@ -686,8 +686,8 @@ jobs:
       - name: Load the host image
         run: docker load -i .cache/ci/imp-host.tar
 
-      # the archive holds the whole image again on /, where a move once found
-      # too little room above the disk reserve
+      # the archive is a second copy of the image on /, where the imps keep
+      # their data on a runner without a /mnt disk
       - name: Remove the host image archive
         run: rm .cache/ci/imp-host.tar
 
