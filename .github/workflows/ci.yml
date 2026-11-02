@@ -357,7 +357,8 @@ jobs:
       - name: actionlint
         run: actionlint
 
-      # the shared workflow lint, at the tools commit that repo-sync calls
+      # the shared workflow lint and dependency-gates check, at the tools
+      # commit that repo-sync calls
       - name: Read the sync commit
         id: sync-ref
         run: bun run --silent ci:read-sync-ref
@@ -368,7 +369,9 @@ jobs:
           repository: zgeoff/tools
           ref: ${{ steps.sync-ref.outputs.ref }}
           path: .workflow-lint
-          sparse-checkout: packages/chex/src
+          sparse-checkout: |
+            packages/chex/src
+            step-bundles/packages/chex/src
           persist-credentials: false
 
       # the rules of ci-design's Step scripts section; a public repo's profile
@@ -390,6 +393,11 @@ jobs:
 
       - name: Install
         run: bun install --frozen-lockfile
+
+      # the shared dependency-gates check, as bun-checks runs it: each
+      # first-party package needs a release-age exclude in bunfig.toml
+      - name: Check dependency gates
+        run: bun .workflow-lint/step-bundles/packages/chex/src/cli.js dependency-gates
 
       # the shell that production code holds as text; plain `bun test` skips
       # these where shellcheck is missing, and here it is the pinned one
