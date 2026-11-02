@@ -311,7 +311,6 @@
   },
   "overrides": {
     "@types/node": "26.6.5",
-    "source-map-js": "1.2.2",
   },
   "catalog": {
     "@ark-ui/react": "5.39.3",
