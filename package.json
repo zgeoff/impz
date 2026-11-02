@@ -91,7 +91,7 @@
   },
   "type": "module",
   "scripts": {
-    "audit": "bun audit --ignore=GHSA-86w9-cpqp-85rv --ignore=GHSA-g3hv-75wg-m249",
+    "audit": "bun audit --ignore=GHSA-g3hv-75wg-m249",
     "build:cli": "./scripts/release/build-cli.sh",
     "build:dashboard": "bun run --cwd packages/dashboard build",
     "deadcode": "knip && knip --production",
@@ -177,8 +177,7 @@
     "zod": "catalog:"
   },
   "overrides": {
-    "@types/node": "26.6.5",
-    "source-map-js": "1.2.2"
+    "@types/node": "26.6.5"
   },
   "packageManager": "bun@1.4.3",
   "patchedDependencies": {
