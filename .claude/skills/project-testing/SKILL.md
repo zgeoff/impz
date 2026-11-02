@@ -30,9 +30,11 @@ metadata:
 
 ## Departures
 
-- Run the unit tests with plain `bun test`, which runs every file in one process. The test run
-  section of [testing](../testing/SKILL.md) asks for `--parallel=<N>` and `--no-isolate`, and this
-  repo has no recorded measurement of the two modes for its suite.
+- Pass `--parallel=2 --no-isolate` in the `checks-unit` job of
+  [`ci.yml`](../../../.github/workflows/ci.yml), not in the `test` script, which stays plain
+  `bun test`. The test run section of [testing](../testing/SKILL.md) asks for the flags in the test
+  script, with the worker count from the shared worker helper. The comment above `checks-unit`
+  records the measurements: four workers outgrow the job's memory cap.
 
 ## Commands and what they need
 
@@ -86,10 +88,6 @@ the result of the CI job that runs the command. CI runs every row but One journe
   it needs. CI splits the lane into shards, longest first, by that figure.
 - Expect a `zfs` shard to also run the VM suites that `IMP_ZFS_E2E_SUITES` names, on the ZFS
   backend. Those tests keep the VM lane's suffix and limit.
-- Never raise a lane's limit to fit a test. When a test runs over the limit, or within 5% of it,
-  give it an `oxlint-disable-next-line zgeoff/max-test-timeout` comment. Write in the comment the
-  measured time and either a ticket that brings it under, or `floor:` and the evidence that the time
-  can't move. Copy the shape of an existing comment: `git grep max-test-timeout -- '*.ts'`.
 
 ## The root preload
 

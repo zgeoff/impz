@@ -22,9 +22,10 @@ metadata:
 - Add each CI job to one of imp's own workflows in
   [`.github/workflows/`](../../../.github/workflows/): most often
   [`ci.yml`](../../../.github/workflows/ci.yml), or [`nix.yml`](../../../.github/workflows/nix.yml)
-  when the job runs `nix`. The Jobs section of [ci-design](../ci-design/SKILL.md) asks for each
-  package script as a job in `bun-checks.yml`, but that workflow has no input for what imp's jobs
-  need: KVM for the microVM suites, Docker, Go, root for the host networking lane, and a ZFS pool.
+  when the job runs `nix`. The Jobs section of [ci-design](../ci-design/SKILL.md) has the repo call
+  `bun-checks.yml` and add CI work as a package script, but that workflow has no input for what
+  imp's jobs need: KVM for the microVM suites, Docker, Go, root for the host networking lane, and a
+  ZFS pool.
 
 ## The required checks
 
@@ -37,8 +38,8 @@ metadata:
   suite to a `zfs-shard` row. The `checks`, `e2e` and `zfs` gates need those jobs, so the work needs
   no new ruleset entry.
 - When a gate waits on other jobs, give it `if: always()` and a step that fails unless each job it
-  needs has the result `success`, as `checks` does. Without `if: always()`, a gate whose job failed
-  shows as skipped, and GitHub counts a skipped check as passed.
-- When a new job must be a gate of its own, add its id to the ruleset in the same pull request.
+  needs has the result `success`, as `checks` does.
+- When a new job must be a gate of its own, add its check name to the ruleset in the same pull
+  request.
 - Put a job that runs only on `main` below the gates in `ci.yml`, with
   `if: github.event_name == 'push'`, as `release` does.
