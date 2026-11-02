@@ -2,8 +2,8 @@
 name: project-code-style
 description:
   "imp's domain verbs, each with its one meaning and an example from the code, and the rule for a
-  method name that a library interface sets. Loaded beside code-style before an agent writes,
-  reviews or renames TypeScript in this repo."
+  method name that a library interface sets. Load it beside code-style before you write, review or
+  rename TypeScript in this repo."
 metadata:
   kind: rule-set
 ---
@@ -17,8 +17,11 @@ metadata:
   calls the method by that name.
 - Keep the name `on` in a stand-in for Node's process or stdin, because the code under test calls
   the EventEmitter method `on`.
-- List each such name in the `exemptNames` option of `zgeoff/function-verb` in
-  [`.oxlintrc.json`](../../../.oxlintrc.json), with a comment above it that names the interface.
+
+## The function-verb lint rule
+
+- List each name that a library interface sets in the `exemptNames` option of `zgeoff/function-verb`
+  in [`.oxlintrc.json`](../../../.oxlintrc.json), with a comment above it that names the interface.
 
 ## Domain verbs
 

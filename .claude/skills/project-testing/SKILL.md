@@ -2,8 +2,8 @@
 name: project-testing
 description:
   "imp's test facts beside the shared testing skill: which command runs which tests and what each
-  needs, the lanes, the root preload's resets, ports, git and tmpfs in tests, and booting impd.
-  Loaded beside testing before an agent designs, writes, runs or reviews a test in this repo."
+  needs, the lanes, the root preload's resets, ports, git and tmpfs in tests, and booting impd. Load
+  it beside testing before you design, write, run or review a test in this repo."
 metadata:
   kind: rule-set
 ---
