@@ -9,6 +9,16 @@
       "separateMajorMinor": false
     },
     {
+      "description": "Hold msw below 3. msw 3 intercepts fetch at node:net, which Bun's own fetch never uses, so the test mock server catches nothing under Bun and the tests reach the real network. Lift this rule once msw's fetch interception works under Bun.",
+      "matchPackageNames": ["msw"],
+      "allowedVersions": "<3"
+    },
+    {
+      "description": "Hold @mswjs/interceptors in the ^0.41 range msw 2.15 depends on, since the msw group would otherwise bring 0.45 alone. A 0.45 FetchInterceptor fails the type msw 2's SetupServerApi takes, and msw intercepts nothing through it. Lift this rule with the msw hold.",
+      "matchPackageNames": ["@mswjs/interceptors"],
+      "allowedVersions": "<0.42"
+    },
+    {
       "description": "Every Go module here holds tool directives, and the go get -t ./... that Renovate runs loads none of their packages, so it leaves their module sums out of go.sum. go mod tidy adds them.",
       "matchManagers": ["gomod"],
       "postUpdateOptions": ["gomodTidy"]
