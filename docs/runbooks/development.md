@@ -403,7 +403,7 @@ match, the work jobs skip, and GitHub reports a job skipped by its condition as 
 
 `.github/workflows/e2e-images.yml` runs the images suite, which sits outside `FAST_GROUPS`, on a KVM
 runner with the e2e groups' sizes and caches. It runs each day on `main`, and on a pull request that
-changes the image code its path list names. Its job is no required check. Run it on a branch by
+changes the image code its path list names. Its job is not a required check. Run it on a branch by
 hand, then download its `e2e-images-results` artifact:
 
 ```bash
