@@ -498,6 +498,77 @@ jobs:
           CLIENT: ${{ steps.pack.outputs.tarball }}
         run: scripts/release/check-testing-package.sh "$TARBALL" "$CLIENT"
 
+  # Whether the pull request changes what the VM legs (e2e-group, podman,
+  # zfs-shard) and their host image read. Only a 'false' skips them, so a
+  # failed changes job runs the legs rather than pass them; a push to main
+  # always runs them.
+  changes:
+    concurrency:
+      group: ci-${{ github.ref }}-changes
+      cancel-in-progress: true
+    permissions:
+      contents: read
+    uses: zgeoff/tools/.github/workflows/paths-changed.yml@931e0b748396d6ed4bca8531eacba01cc506dcb0 # main
+    with:
+      paths: |
+        agent/**
+        deploy/**
+        e2e/**
+        host/**
+        images/**
+        kernel/**
+        packages/**
+        patches/**
+        proto/**
+        scripts/**
+        .bun-version
+        .dockerignore
+        bun.lock
+        bunfig.toml
+        package.json
+        tsconfig.base.json
+        tsconfig.json
+        .github/actions/**
+        .github/workflows/ci.yml
+
+  # The guest kernel, the system drive and the dev host image, built once for
+  # every VM leg, which downloads them as one artifact. PRs read the caches
+  # main writes; their own writes would only crowd the repo's cache quota.
+  host-image:
+    concurrency:
+      group: ci-${{ github.ref }}-host-image
+      cancel-in-progress: true
+    needs: [changes]
+    if: ${{ !cancelled() && needs.changes.outputs.changed != 'false' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    # a cache miss rebuilds the guest kernel, about 10 minutes on 4 cores
+    timeout-minutes: 25
+    env:
+      IMP_HOST_IMAGE: imp-host:dev
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build kernel, system drive and host image
+        uses: ./.github/actions/e2e-build
+        with:
+          write-cache: ${{ github.event_name == 'push' }}
+
+      - name: Save the host image
+        run: docker save -o .cache/ci/imp-host.tar "$IMP_HOST_IMAGE"
+
+      - name: Upload the e2e inputs
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-inputs
+          path: .cache/ci/
+          if-no-files-found: error
+          retention-days: 1
+
   # Boots real microVMs: the fast end-to-end set in its four groups
   # (FAST_GROUPS in packages/e2e-harness/src/suites.ts, e2e/test-e2e.sh --group N),
   # each against a dev instance on its own runner's KVM. The `e2e` job below
@@ -507,11 +578,13 @@ jobs:
       group: ci-${{ github.ref }}-e2e-${{ matrix.group }}
       cancel-in-progress: true
     name: e2e (group ${{ matrix.group }})
+    needs: [host-image]
+    if: ${{ !cancelled() && needs.host-image.result == 'success' }}
     runs-on: ubuntu-24.04
     permissions:
       contents: read
-    # a cache miss rebuilds the guest kernel, about 10 minutes on 4 cores
-    timeout-minutes: 25
+    # a healthy group takes about 7 minutes
+    timeout-minutes: 15
     strategy:
       # every group reports, so one failure does not hide another's
       fail-fast: false
@@ -535,13 +608,9 @@ jobs:
       IMP_SYSTEM_DRIVE: .cache/ci/imp-system.squashfs
       # sparse, so only what the imps write takes disk
       IMP_STORAGE_GIB: 40
-      # the tag e2e-build loads; one checkout per runner needs no tag of its own
+      # the tag host-image saves; one checkout per runner needs no tag of its own
       IMP_HOST_IMAGE: imp-host:dev
       IMP_HOST_IMAGE_READY: 1
-      # PRs read the caches main writes; their own writes would only crowd
-      # the repo's cache quota. One group writes on main, so four writers
-      # never race on the same scopes
-      WRITE_CACHE: ${{ github.event_name == 'push' && matrix.group == 1 }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -608,10 +677,19 @@ jobs:
         if: matrix.host-tests
         run: sudo env "PATH=$PATH" IMP_HOST_TESTS=required bun run test:host
 
-      - name: Build kernel, system drive and host image
-        uses: ./.github/actions/e2e-build
+      - name: Download the e2e inputs
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          write-cache: ${{ env.WRITE_CACHE }}
+          name: e2e-inputs
+          path: .cache/ci
+
+      - name: Load the host image
+        run: docker load -i .cache/ci/imp-host.tar
+
+      # the archive holds the whole image again on /, where a move once found
+      # too little room above the disk reserve
+      - name: Remove the host image archive
+        run: rm .cache/ci/imp-host.tar
 
       # the registry suite trusts its registry's certificate in
       # /etc/docker/certs.d with sudo
@@ -652,21 +730,29 @@ jobs:
 
   # The required check and release-please's gate: every e2e group passed. It
   # runs whatever they did, so a group that failed, was cancelled or was
-  # skipped fails it, and never passes as a skip.
+  # skipped fails it, and never passes as a skip. The one skip it passes is
+  # every group's, on a pull request that changes none of their paths.
   e2e:
     concurrency:
       group: ci-${{ github.ref }}-e2e
       cancel-in-progress: true
     if: always()
-    needs: [e2e-group]
+    needs: [changes, e2e-group]
     runs-on: ubuntu-latest
     permissions: {}
     timeout-minutes: 5
     steps:
       - name: Require every e2e group to pass
+        if: needs.changes.outputs.changed != 'false'
         env:
           RESULT: ${{ needs.e2e-group.result }}
         run: test "$RESULT" = success
+
+      - name: Require every e2e group to skip on a pull request outside their paths
+        if: needs.changes.outputs.changed == 'false'
+        env:
+          RESULT: ${{ needs.e2e-group.result }}
+        run: test "$RESULT" = skipped
 
   # The proof that an imp host runs with no Docker engine: e2e/podman/run-podman-proof.sh
   # starts the dev instance under Docker, masks the runner's Docker, starts it again
@@ -677,12 +763,13 @@ jobs:
       group: ci-${{ github.ref }}-podman
       cancel-in-progress: true
     name: podman (no Docker)
+    needs: [host-image]
+    if: ${{ !cancelled() && needs.host-image.result == 'success' }}
     runs-on: ubuntu-24.04
     permissions:
       contents: read
-    # a cache miss rebuilds the guest kernel, about 10 minutes on 4 cores, and
     # impd builds its default image before the first imp
-    timeout-minutes: 40
+    timeout-minutes: 30
     env:
       E2E_RAM_BUDGET_MIB: 4096
       IMP_DEFAULT_MEMORY_MIB: 1024
@@ -713,11 +800,17 @@ jobs:
       - name: Install
         run: bun install --frozen-lockfile
 
-      # the e2e groups write the caches; this job only reads them
-      - name: Build kernel, system drive and host image
-        uses: ./.github/actions/e2e-build
+      - name: Download the e2e inputs
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          write-cache: false
+          name: e2e-inputs
+          path: .cache/ci
+
+      - name: Load the host image
+        run: docker load -i .cache/ci/imp-host.tar
+
+      - name: Remove the host image archive
+        run: rm .cache/ci/imp-host.tar
 
       - name: Install Podman
         run: bun run --silent ci:set-up-runner install-podman
@@ -759,11 +852,13 @@ jobs:
       group: ci-${{ github.ref }}-zfs-${{ matrix.shard }}
       cancel-in-progress: true
     name: zfs (shard ${{ matrix.shard }})
+    needs: [host-image]
+    if: ${{ !cancelled() && needs.host-image.result == 'success' }}
     runs-on: ubuntu-24.04
     permissions:
       contents: read
-    # a cache miss rebuilds the guest kernel, about 10 minutes on 4 cores
-    timeout-minutes: 30
+    # a healthy shard takes about 6 minutes
+    timeout-minutes: 20
     strategy:
       # every shard reports, so one failure does not hide another's
       fail-fast: false
@@ -787,7 +882,7 @@ jobs:
       IMP_DEFAULT_MEMORY_MIB: 1024
       IMP_KERNEL: .cache/ci/vmlinux
       IMP_SYSTEM_DRIVE: .cache/ci/imp-system.squashfs
-      # the tag e2e-build loads; one checkout per runner needs no tag of its own
+      # the tag host-image saves; one checkout per runner needs no tag of its own
       IMP_HOST_IMAGE: imp-host:dev
       IMP_HOST_IMAGE_READY: 1
       # zfs-host-test runs the lane share and the named suites a row sets
@@ -828,12 +923,17 @@ jobs:
         if: matrix.unit
         run: sudo env "PATH=$PATH" IMP_ZFS_TEST_DIR= scripts/test-zfs.sh
 
-      # reads the caches only: e2e group 1 writes the same scopes on push, and
-      # two writers at once can fail its build
-      - name: Build kernel, system drive and host image
-        uses: ./.github/actions/e2e-build
+      - name: Download the e2e inputs
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          write-cache: false
+          name: e2e-inputs
+          path: .cache/ci
+
+      - name: Load the host image
+        run: docker load -i .cache/ci/imp-host.tar
+
+      - name: Remove the host image archive
+        run: rm .cache/ci/imp-host.tar
 
       - name: Imps on ZFS
         run: scripts/zfs-host-test.sh
@@ -860,21 +960,29 @@ jobs:
 
   # The required check: every zfs shard passed. It runs whatever they did, so a
   # shard that failed, was cancelled or was skipped fails it, and never passes
-  # as a skip.
+  # as a skip. The one skip it passes is every shard's, on a pull request that
+  # changes none of their paths.
   zfs:
     concurrency:
       group: ci-${{ github.ref }}-zfs
       cancel-in-progress: true
     if: always()
-    needs: [zfs-shard]
+    needs: [changes, zfs-shard]
     runs-on: ubuntu-latest
     permissions: {}
     timeout-minutes: 5
     steps:
       - name: Require every zfs shard to pass
+        if: needs.changes.outputs.changed != 'false'
         env:
           RESULT: ${{ needs.zfs-shard.result }}
         run: test "$RESULT" = success
+
+      - name: Require every zfs shard to skip on a pull request outside their paths
+        if: needs.changes.outputs.changed == 'false'
+        env:
+          RESULT: ${{ needs.zfs-shard.result }}
+        run: test "$RESULT" = skipped
 
   # Main-only jobs go below with `if: github.event_name == 'push'` and
   # `needs:` on the gates above.
