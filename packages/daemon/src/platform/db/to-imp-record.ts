@@ -21,6 +21,7 @@ export function toImpRecord(row: Readonly<ImpRow>): ImpRecord {
     ip: row.ip,
     createdAt: new Date(row.created_at),
     lastActiveAt: new Date(row.last_active_at),
+    lastRequestAt: toDate(row.last_request_at),
     sleptAt: toDate(row.slept_at),
     holdUntil: toDate(row.hold_until),
     error: row.error,

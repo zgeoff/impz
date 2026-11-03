@@ -49,7 +49,7 @@ interface SocketData {
 interface WakeProxyDeps {
   readonly config: Pick<NetworkConfig, 'apiPort' | 'proxyPort' | 'subnet' | 'portBase'>;
   readonly db: ImpDatabase;
-  readonly imps: Pick<ImpRuntime, 'requireRunning' | 'tracker' | 'recordActivity'>;
+  readonly imps: Pick<ImpRuntime, 'requireRunning' | 'tracker' | 'recordRequest'>;
 
   readonly logger?: Pick<Logger, 'warning'>;
   readonly peers: ForwardedPeers;
@@ -235,7 +235,7 @@ export function startWakeProxy(deps: WakeProxyDeps): WakeProxy {
     }
 
     try {
-      await deps.imps.recordActivity(name);
+      await deps.imps.recordRequest(imp.id);
     } catch {}
 
     return sendUpstream(request, server, `${imp.ip}:${String(imp.httpPort)}`, {

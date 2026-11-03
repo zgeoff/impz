@@ -1207,3 +1207,25 @@ test('#runMigrations gives each existing imp its image row’s digest in the ima
     { id: 'b', image_digest: 'sha256:bbbb' },
   ]);
 });
+
+test('#runMigrations gives each existing imp no last request time in the last request migration', async () => {
+  const db = createUnmigratedDatabase();
+
+  await runMigrationsTo(db, '044_add_imp_image_digests');
+
+  await sql`INSERT INTO images (id, name, ref, digest, size_bytes, created_at)
+    VALUES ('base', 'base', 'imp/base:latest', 'sha256:aaaa', 1, 0)`.execute(db);
+
+  await sql`INSERT INTO imps (id, name, image_id, state, vcpus, memory_mib, slot, ip,
+    created_at, last_active_at)
+    VALUES ('a', 'a', 'base', 'stopped', 1, 512, 0, 'ip0', 0, 500)`.execute(db);
+
+  await runMigrations(db);
+
+  const imp = await readImpByName(db, 'a');
+
+  expect({ lastActiveAt: imp?.lastActiveAt, lastRequestAt: imp?.lastRequestAt }).toStrictEqual({
+    lastActiveAt: new Date(500),
+    lastRequestAt: null,
+  });
+});

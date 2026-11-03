@@ -17,6 +17,7 @@ test('it builds a default imp record', () => {
     ip: expect.toSatisfy(isIPv4),
     createdAt: expect.toBeValidDate(),
     lastActiveAt: expect.toBeValidDate(),
+    lastRequestAt: null,
     sleptAt: null,
     holdUntil: null,
     error: null,

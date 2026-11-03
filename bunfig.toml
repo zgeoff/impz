@@ -8,10 +8,6 @@ exact = true
 # supply-chain guard: only install versions published >= 7 days ago
 minimumReleaseAge = 604800
 
-# @maschwenk/tsrslint 0.1.6 (published 2026-10-26) ages past the gate ~2026-11-02 — remove then
-# @maschwenk/tsrslint-linux-x64 0.1.6 (published 2026-10-26) ages past the gate ~2026-11-02 — remove then
-# @maschwenk/tsrslint-linux-arm64 0.1.6 (published 2026-10-26) ages past the gate ~2026-11-02 — remove then
-# @maschwenk/tsrslint-darwin-arm64 0.1.6 (published 2026-10-26) ages past the gate ~2026-11-02 — remove then
 # first-party packages skip the gate; their own dependencies stay behind it.
 # Renovate bumps @zgeoff packages as soon as they publish, so each one impz
 # uses needs an entry here, or bun install refuses the bump.
@@ -24,10 +20,6 @@ minimumReleaseAgeExcludes = [
   "@zgeoff/kysely-bun-sqlite",
   "@zgeoff/oxlint-config",
   "@zgeoff/skill-gate",
-  "@maschwenk/tsrslint",
-  "@maschwenk/tsrslint-linux-x64",
-  "@maschwenk/tsrslint-linux-arm64",
-  "@maschwenk/tsrslint-darwin-arm64",
   "node-forge",
 ]
 

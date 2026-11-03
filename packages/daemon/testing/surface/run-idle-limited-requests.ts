@@ -54,7 +54,7 @@ async function startProxy(stack: Readonly<AsyncDisposableStack>, origin: string)
     imps: {
       requireRunning: () => Promise.reject(new Error('no imp behind this proxy')),
       tracker: buildActivityTracker(),
-      recordActivity: () => Promise.resolve(),
+      recordRequest: () => Promise.resolve(),
     },
     peers: createForwardedPeers(Date.now),
     ports: { proxy: 0, slot: () => 0 },

@@ -234,6 +234,10 @@
             "type": "string",
             "format": "date-time"
           },
+          "lastRequestAt": {
+            "type": "string",
+            "format": "date-time"
+          },
           "ramMib": {
             "type": "integer",
             "minimum": 0,
@@ -631,6 +635,10 @@
               "format": "date-time"
             },
             "lastActiveAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "lastRequestAt": {
               "type": "string",
               "format": "date-time"
             },
@@ -1034,6 +1042,10 @@
             "format": "date-time"
           },
           "lastActiveAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastRequestAt": {
             "type": "string",
             "format": "date-time"
           },
@@ -1459,6 +1471,10 @@
             "type": "string",
             "format": "date-time"
           },
+          "lastRequestAt": {
+            "type": "string",
+            "format": "date-time"
+          },
           "ramMib": {
             "type": "integer",
             "minimum": 0,
@@ -1861,6 +1877,10 @@
             "format": "date-time"
           },
           "lastActiveAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastRequestAt": {
             "type": "string",
             "format": "date-time"
           },
@@ -2269,6 +2289,10 @@
             "type": "string",
             "format": "date-time"
           },
+          "lastRequestAt": {
+            "type": "string",
+            "format": "date-time"
+          },
           "ramMib": {
             "type": "integer",
             "minimum": 0,
@@ -2671,6 +2695,10 @@
             "format": "date-time"
           },
           "lastActiveAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastRequestAt": {
             "type": "string",
             "format": "date-time"
           },
@@ -3082,6 +3110,10 @@
             "type": "string",
             "format": "date-time"
           },
+          "lastRequestAt": {
+            "type": "string",
+            "format": "date-time"
+          },
           "ramMib": {
             "type": "integer",
             "minimum": 0,
@@ -3487,6 +3519,10 @@
             "format": "date-time"
           },
           "lastActiveAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastRequestAt": {
             "type": "string",
             "format": "date-time"
           },
@@ -4151,6 +4187,10 @@
             "type": "string",
             "format": "date-time"
           },
+          "lastRequestAt": {
+            "type": "string",
+            "format": "date-time"
+          },
           "ramMib": {
             "type": "integer",
             "minimum": 0,
@@ -4559,6 +4599,10 @@
             "format": "date-time"
           },
           "lastActiveAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastRequestAt": {
             "type": "string",
             "format": "date-time"
           },
@@ -5016,6 +5060,10 @@
             "format": "date-time"
           },
           "lastActiveAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastRequestAt": {
             "type": "string",
             "format": "date-time"
           },
@@ -6517,6 +6565,10 @@
             "type": "string",
             "format": "date-time"
           },
+          "lastRequestAt": {
+            "type": "string",
+            "format": "date-time"
+          },
           "ramMib": {
             "type": "integer",
             "minimum": 0,
@@ -7127,6 +7179,10 @@
                   "format": "date-time"
                 },
                 "lastActiveAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "lastRequestAt": {
                   "type": "string",
                   "format": "date-time"
                 },
@@ -10887,6 +10943,10 @@
                     "type": "string",
                     "format": "date-time"
                   },
+                  "lastRequestAt": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
                   "ramMib": {
                     "type": "integer",
                     "minimum": 0,
@@ -11314,6 +11374,10 @@
                     "format": "date-time"
                   },
                   "lastActiveAt": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "lastRequestAt": {
                     "type": "string",
                     "format": "date-time"
                   },
@@ -11771,6 +11835,10 @@
                     "format": "date-time"
                   },
                   "lastActiveAt": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "lastRequestAt": {
                     "type": "string",
                     "format": "date-time"
                   },

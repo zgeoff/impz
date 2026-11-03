@@ -24,6 +24,9 @@ export interface ImpRecord {
   readonly ip: string;
   readonly createdAt: Date;
   readonly lastActiveAt: Date;
+
+  // null until the first request through the wake proxy
+  readonly lastRequestAt: Date | null;
   readonly sleptAt: Date | null;
   readonly holdUntil: Date | null;
   readonly error: string | null;
@@ -385,6 +388,26 @@ export async function updateImpMove(
 
 export async function updateImpActivity(db: ImpDatabase, id: string, at: Date): Promise<void> {
   await db.updateTable('imps').set({ last_active_at: at.getTime() }).where('id', '=', id).execute();
+}
+
+/* @internal */
+export async function updateImpAddress(db: ImpDatabase, id: string, ip: string): Promise<void> {
+  await db.updateTable('imps').set({ ip }).where('id', '=', id).execute();
+}
+
+export async function updateImpRequest(db: ImpDatabase, id: string, at: Date): Promise<void> {
+  const atMs = at.getTime();
+
+  // the proxy and the idle loop write at once, and the idle loop reads its time before it awaits
+  // the guest, so an older time can land after a newer one
+  await db
+    .updateTable('imps')
+    .set({
+      last_active_at: sql<number>`MAX(last_active_at, ${atMs})`,
+      last_request_at: sql<number>`MAX(COALESCE(last_request_at, 0), ${atMs})`,
+    })
+    .where('id', '=', id)
+    .execute();
 }
 
 export async function updateImpDisk(

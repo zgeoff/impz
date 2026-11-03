@@ -32,7 +32,7 @@ const proxy = startWakeProxy({
   imps: {
     requireRunning: () => Promise.resolve({ imp, wokeMs: null }),
     tracker: buildActivityTracker(),
-    recordActivity: () => Promise.resolve(),
+    recordRequest: () => Promise.resolve(),
   },
   logger: getImpdLogger('proxy'),
   peers: createForwardedPeers(Date.now),

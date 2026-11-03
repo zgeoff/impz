@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { claimFreePorts } from '@impz/test-utils/claim-free-ports';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
+import { seedLoopbackImp } from '../../../testing/imps/seed-loopback-imp';
 import { startStubBrokerSocketUpstream } from '../../../testing/network/start-stub-broker-socket-upstream';
 import { startStubCutStream } from '../../../testing/network/start-stub-cut-stream';
 import { startStubHeaderEcho } from '../../../testing/network/start-stub-header-echo';
@@ -11,7 +12,7 @@ import { startStubSilentOrigin } from '../../../testing/network/start-stub-silen
 import { buildStubClock } from '../../../testing/platform/build-stub-clock';
 import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { startTestImpd } from '../../../testing/start-test-impd';
-import { removeImp, updateImpMove } from '../../platform/db/imps';
+import { readImpByName, removeImp, updateImpActivity, updateImpMove } from '../../platform/db/imps';
 import { PEER_HEADER, createForwardedPeers } from './forwarded-peers';
 import { startWakeProxy } from './wake-proxy';
 
@@ -818,6 +819,111 @@ test('it routes the Host-named imp on the proxy port', async () => {
   const body = await response.text();
 
   expect(body).toBe('imp');
+});
+
+test('it returns the time of the last proxied request as the imp’s lastRequestAt', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const upstream = Bun.serve({
+    port: 0,
+    hostname: '127.0.0.1',
+    routes: { '/*': () => new Response('imp') },
+  });
+
+  ctx.stack.defer(() => upstream.stop(true));
+
+  const proxy = startWakeProxy({
+    config: ctx.config,
+    db: ctx.db,
+    imps: ctx.impd.imps,
+    peers: createForwardedPeers(Date.now),
+    ports: { proxy: 0, slot: () => 0 },
+  });
+
+  ctx.stack.defer(() => proxy.stop());
+
+  await seedLoopbackImp(
+    { db: ctx.db, imps: ctx.impd.imps },
+    { name: 'web', httpPort: upstream.port },
+  );
+
+  const before = ctx.now();
+
+  const response = await fetch(`http://127.0.0.1:${String(proxy.port)}/`, {
+    headers: { host: 'web.imp.localhost' },
+  });
+
+  await response.text();
+
+  const after = ctx.now();
+
+  const shown = await ctx.client.imps.get({ name: 'web' });
+
+  expect(shown.lastRequestAt?.getTime()).toBeWithin(before, after + 1);
+});
+
+test('it moves the imp’s lastActiveAt and lastRequestAt both to the time of a proxied request', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const upstream = Bun.serve({
+    port: 0,
+    hostname: '127.0.0.1',
+    routes: { '/*': () => new Response('imp') },
+  });
+
+  ctx.stack.defer(() => upstream.stop(true));
+
+  const proxy = startWakeProxy({
+    config: ctx.config,
+    db: ctx.db,
+    imps: ctx.impd.imps,
+    peers: createForwardedPeers(Date.now),
+    ports: { proxy: 0, slot: () => 0 },
+  });
+
+  ctx.stack.defer(() => proxy.stop());
+
+  const imp = await seedLoopbackImp(
+    { db: ctx.db, imps: ctx.impd.imps },
+    { name: 'web', httpPort: upstream.port },
+  );
+
+  await updateImpActivity(ctx.db, imp.id, new Date('2026-01-01T00:00:00Z'));
+
+  const before = ctx.now();
+
+  const response = await fetch(`http://127.0.0.1:${String(proxy.port)}/`, {
+    headers: { host: 'web.imp.localhost' },
+  });
+
+  await response.text();
+
+  const after = ctx.now();
+
+  const requested = await readImpByName(ctx.db, 'web');
+
+  expect({
+    lastActiveAt: requested?.lastActiveAt.getTime(),
+    lastRequestAt: requested?.lastRequestAt?.getTime(),
+  }).toStrictEqual({
+    lastActiveAt: expect.toBeWithin(before, after + 1),
+    lastRequestAt: expect.toBeWithin(before, after + 1),
+  });
+});
+
+test('it leaves lastRequestAt off an imp that no proxied request reached', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.impd.imps.createImp({ name: 'web' });
+
+  const shown = await ctx.client.imps.get({ name: 'web' });
+
+  expect(shown).not.toContainKey('lastRequestAt');
 });
 
 test('it answers a Host that names no imp on the proxy port with a 404 that says how', async () => {
