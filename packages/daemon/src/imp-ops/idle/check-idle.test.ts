@@ -16,7 +16,7 @@ test('it sleeps an imp that has been quiet for the timeout', () => {
       },
       { now: 60_000, idleTimeoutMs: 60_000, cpuPercent: 10 },
     ),
-  ).toStrictEqual({ activeReason: null, sleep: true });
+  ).toStrictEqual({ activeReason: null, sleep: true, isRequestOpen: false });
 });
 
 test('it keeps a quiet imp awake until the timeout has passed', () => {
@@ -34,18 +34,18 @@ test('it keeps a quiet imp awake until the timeout has passed', () => {
       },
       { now: 59_999, idleTimeoutMs: 60_000, cpuPercent: 10 },
     ),
-  ).toStrictEqual({ activeReason: null, sleep: false });
+  ).toStrictEqual({ activeReason: null, sleep: false, isRequestOpen: false });
 });
 
 test.each([
-  ['a hold', { holdUntil: 60_001 }, 'hold'],
-  ['an exec session', { execSessions: 1 }, 'exec'],
-  ['proxied connections', { proxyConnections: 2 }, 'proxy'],
-  ['an SSH connection', { sshConnections: 1 }, 'ssh'],
-  ['a tunnel connection', { tunnelConnections: 1 }, 'tunnel'],
-  ['an established TCP connection', { tcpEstablished: 1 }, 'tcp'],
-  ['CPU above the threshold', { cpuPercent: 25 }, 'cpu'],
-])('it keeps an imp awake for %s', (_label, change, reason) => {
+  ['a hold', { holdUntil: 60_001 }, 'hold', false],
+  ['an exec session', { execSessions: 1 }, 'exec', false],
+  ['proxied connections', { proxyConnections: 2 }, 'proxy', true],
+  ['an SSH connection', { sshConnections: 1 }, 'ssh', false],
+  ['a tunnel connection', { tunnelConnections: 1 }, 'tunnel', false],
+  ['an established TCP connection', { tcpEstablished: 1 }, 'tcp', false],
+  ['CPU above the threshold', { cpuPercent: 25 }, 'cpu', false],
+])('it keeps an imp awake for %s', (_label, change, reason, isRequestOpen) => {
   expect(
     checkIdle(
       {
@@ -61,7 +61,25 @@ test.each([
       },
       { now: 60_000, idleTimeoutMs: 60_000, cpuPercent: 10 },
     ),
-  ).toStrictEqual({ activeReason: reason, sleep: false });
+  ).toStrictEqual({ activeReason: reason, sleep: false, isRequestOpen });
+});
+
+test('it reports an open proxied connection while an exec session keeps the imp awake', () => {
+  expect(
+    checkIdle(
+      {
+        execSessions: 1,
+        proxyConnections: 1,
+        sshConnections: 0,
+        tunnelConnections: 0,
+        tcpEstablished: 0,
+        cpuPercent: 1,
+        holdUntil: null,
+        lastActiveAt: 0,
+      },
+      { now: 60_000, idleTimeoutMs: 60_000, cpuPercent: 10 },
+    ),
+  ).toStrictEqual({ activeReason: 'exec', sleep: false, isRequestOpen: true });
 });
 
 test('it ignores an expired hold', () => {
@@ -79,7 +97,7 @@ test('it ignores an expired hold', () => {
       },
       { now: 60_000, idleTimeoutMs: 60_000, cpuPercent: 10 },
     ),
-  ).toStrictEqual({ activeReason: null, sleep: true });
+  ).toStrictEqual({ activeReason: null, sleep: true, isRequestOpen: false });
 });
 
 test('it ignores a first CPU sample', () => {
@@ -97,5 +115,5 @@ test('it ignores a first CPU sample', () => {
       },
       { now: 60_000, idleTimeoutMs: 60_000, cpuPercent: 10 },
     ),
-  ).toStrictEqual({ activeReason: null, sleep: true });
+  ).toStrictEqual({ activeReason: null, sleep: true, isRequestOpen: false });
 });

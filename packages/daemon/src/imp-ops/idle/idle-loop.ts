@@ -1,5 +1,5 @@
 import type { Imps } from '../../imps/imps/imp-service';
-import { listImps, updateImpActivity } from '../../platform/db/imps';
+import { listImps, updateImpActivity, updateImpRequest } from '../../platform/db/imps';
 import type { ImpRecord } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { readCpuTicks } from '../../vm/vmm/vm-stats';
@@ -83,6 +83,12 @@ export function createIdleLoop(deps: IdleLoopDeps): IdleLoop {
         cpuPercent: deps.config.idleCpuPercent,
       },
     );
+
+    if (decision.isRequestOpen) {
+      await updateImpRequest(deps.db, imp.id, new Date(now));
+
+      return;
+    }
 
     if (decision.activeReason !== null) {
       await updateImpActivity(deps.db, imp.id, new Date(now));
