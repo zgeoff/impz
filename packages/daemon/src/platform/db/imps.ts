@@ -24,6 +24,9 @@ export interface ImpRecord {
   readonly ip: string;
   readonly createdAt: Date;
   readonly lastActiveAt: Date;
+
+  // null until the first request through the wake proxy
+  readonly lastRequestAt: Date | null;
   readonly sleptAt: Date | null;
   readonly holdUntil: Date | null;
   readonly error: string | null;
@@ -385,6 +388,14 @@ export async function updateImpMove(
 
 export async function updateImpActivity(db: ImpDatabase, id: string, at: Date): Promise<void> {
   await db.updateTable('imps').set({ last_active_at: at.getTime() }).where('id', '=', id).execute();
+}
+
+export async function updateImpRequest(db: ImpDatabase, id: string, at: Date): Promise<void> {
+  await db
+    .updateTable('imps')
+    .set({ last_active_at: at.getTime(), last_request_at: at.getTime() })
+    .where('id', '=', id)
+    .execute();
 }
 
 export async function updateImpDisk(

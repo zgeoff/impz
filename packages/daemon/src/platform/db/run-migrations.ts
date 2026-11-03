@@ -46,6 +46,7 @@ import { MIGRATION_041_ADD_MOVE_SEND_STEPS } from './migrations/migration-041-ad
 import { MIGRATION_042_ADD_SECRET_ENV } from './migrations/migration-042-add-secret-env';
 import { MIGRATION_043_MERGE_SECRET_KINDS } from './migrations/migration-043-merge-secret-kinds';
 import { MIGRATION_044_ADD_IMP_IMAGE_DIGESTS } from './migrations/migration-044-add-imp-image-digests';
+import { MIGRATION_045_ADD_IMP_LAST_REQUEST } from './migrations/migration-045-add-imp-last-request';
 
 export const MIGRATIONS: Record<string, Migration> = {
   '001_create_initial_schema': MIGRATION_001_CREATE_INITIAL_SCHEMA,
@@ -92,6 +93,7 @@ export const MIGRATIONS: Record<string, Migration> = {
   '042_add_secret_env': MIGRATION_042_ADD_SECRET_ENV,
   '043_merge_secret_kinds': MIGRATION_043_MERGE_SECRET_KINDS,
   '044_add_imp_image_digests': MIGRATION_044_ADD_IMP_IMAGE_DIGESTS,
+  '045_add_imp_last_request': MIGRATION_045_ADD_IMP_LAST_REQUEST,
 };
 
 const PROVIDER: MigrationProvider = {

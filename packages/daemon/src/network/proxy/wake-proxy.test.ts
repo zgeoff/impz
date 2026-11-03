@@ -820,6 +820,59 @@ test('it routes the Host-named imp on the proxy port', async () => {
   expect(body).toBe('imp');
 });
 
+test('it returns the time of the last proxied request as the imp’s lastRequestAt', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const upstream = Bun.serve({
+    port: 0,
+    hostname: '127.0.0.1',
+    routes: { '/*': () => new Response('imp') },
+  });
+
+  ctx.stack.defer(() => upstream.stop(true));
+
+  const proxy = startWakeProxy({
+    config: ctx.config,
+    db: ctx.db,
+    imps: ctx.impd.imps,
+    peers: createForwardedPeers(Date.now),
+    ports: { proxy: 0, slot: () => 0 },
+  });
+
+  ctx.stack.defer(() => proxy.stop());
+
+  const imp = await ctx.impd.imps.createImp({ name: 'web', httpPort: upstream.port });
+
+  await ctx.db.updateTable('imps').set({ ip: '127.0.0.1' }).where('id', '=', imp.id).execute();
+
+  const before = ctx.now();
+
+  const response = await fetch(`http://127.0.0.1:${String(proxy.port)}/`, {
+    headers: { host: 'web.imp.localhost' },
+  });
+
+  await response.text();
+
+  const after = ctx.now();
+
+  const shown = await ctx.client.imps.get({ name: 'web' });
+
+  expect(shown.lastRequestAt?.getTime()).toBeWithin(before, after + 1);
+});
+
+test('it leaves lastRequestAt off an imp that no proxied request reached', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.impd.imps.createImp({ name: 'web' });
+
+  const shown = await ctx.client.imps.get({ name: 'web' });
+
+  expect(shown).not.toContainKey('lastRequestAt');
+});
+
 test('it answers a Host that names no imp on the proxy port with a 404 that says how', async () => {
   const ctx = await setupTest();
 

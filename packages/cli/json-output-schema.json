@@ -807,6 +807,10 @@
             "type": "string",
             "format": "date-time"
           },
+          "lastRequestAt": {
+            "type": "string",
+            "format": "date-time"
+          },
           "ramMib": {
             "type": "integer",
             "minimum": 0,
@@ -1196,6 +1200,10 @@
               "format": "date-time"
             },
             "lastActiveAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "lastRequestAt": {
               "type": "string",
               "format": "date-time"
             },

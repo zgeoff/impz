@@ -54,6 +54,7 @@ export function buildMockImp(overrides: ImpOverrides = {}): Imp {
     public: publicExposure,
     createdAt,
     lastActiveAt,
+    lastRequestAt: lastActiveAt,
     ramMib: faker.number.int({ min: 0, max: 16_384 }),
     rssMib: faker.number.int({ min: 0, max: 16_384 }),
     sleptAt: createdAt,

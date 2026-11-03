@@ -58,6 +58,7 @@ test('#createImp returns a creating imp with the defaults for what it leaves out
     ip: '10.66.0.2',
     createdAt: expect.toBeValidDate(),
     lastActiveAt: expect.toBeValidDate(),
+    lastRequestAt: null,
     sleptAt: null,
     holdUntil: null,
     error: null,

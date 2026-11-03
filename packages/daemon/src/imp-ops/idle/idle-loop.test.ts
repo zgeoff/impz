@@ -1,4 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
+import { buildStubAnswerQueue } from '@impz/test-utils/build-stub-answer-queue';
 import { buildMockLeaseRecord } from '../../../testing/imps/build-mock-lease-record';
 import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
 import { startTestImpd } from '../../../testing/start-test-impd';
@@ -173,4 +174,39 @@ test('it sleeps an idle imp once the earlier of its leases has ended', async () 
   const checked = await readImpByName(ctx.db, 'dev');
 
   expect(checked?.state).toBe('sleeping');
+});
+
+test('it moves the last active time of a busy guest and leaves its last request time unset', async () => {
+  const ctx = await setupTest();
+
+  const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
+
+  await Bun.write(buildImagePaths(ctx.dataDir, image.digest).rootfs, 'rootfs');
+
+  await createImage(ctx.db, image);
+
+  await ctx.impd.imps.createImp({ name: 'dev' });
+
+  const ticks = buildStubAnswerQueue([0, 100]);
+
+  const idle = createIdleLoop({
+    config: { ...ctx.config, idleTimeoutS: 1, idleCpuPercent: 10 },
+    db: ctx.db,
+    imps: ctx.impd.imps,
+    now: ctx.now,
+    readCpuTicks: () => ticks.next(),
+  });
+
+  await idle.runCheck();
+
+  ctx.advance(1000);
+
+  await idle.runCheck();
+
+  const checked = await readImpByName(ctx.db, 'dev');
+
+  expect({
+    lastActiveAt: checked?.lastActiveAt,
+    lastRequestAt: checked?.lastRequestAt,
+  }).toStrictEqual({ lastActiveAt: new Date(ctx.now()), lastRequestAt: null });
 });
