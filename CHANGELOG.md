@@ -1,5 +1,12 @@
 # Changelog
 
+## [6.4.0](https://github.com/zgeoff/impz/compare/v6.3.2...v6.4.0) (2026-11-03)
+
+
+### Features
+
+* **api:** return the time of an imp's last proxied request ([#856](https://github.com/zgeoff/impz/issues/856)) ([c79f12d](https://github.com/zgeoff/impz/commit/c79f12d24065333672eb515521bfd96ee0da9f10))
+
 ## [6.3.2](https://github.com/zgeoff/impz/compare/v6.3.1...v6.3.2) (2026-10-31)
 
 ### Bug Fixes
