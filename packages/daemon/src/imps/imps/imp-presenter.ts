@@ -62,6 +62,10 @@ export function createImpPresenter(
       api.maxMemoryMib = imp.maxMemoryMib;
     }
 
+    if (imp.lastRequestAt !== null) {
+      api.lastRequestAt = imp.lastRequestAt;
+    }
+
     if (imp.sleptAt !== null) {
       api.sleptAt = imp.sleptAt;
     }

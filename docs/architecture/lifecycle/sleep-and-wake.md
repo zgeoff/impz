@@ -130,6 +130,16 @@ An imp with none of these for the idle timeout goes to sleep, unless it turned a
 time the sleep takes its lock. A coding agent that waits on a model API keeps its connection open,
 so it stays awake. A detached session counts only through its CPU and its connections.
 
+The API returns two times on each imp. impd moves `lastActiveAt` on each tick that finds the imp
+active, for any of the reasons above. impd moves `lastRequestAt` only when a request comes in
+through the wake proxy, and on each tick while a proxied response stream or WebSocket stays open.
+The API leaves `lastRequestAt` out of an imp that no proxied request has reached.
+
+A guest that runs its own services, such as a database and a web app, holds connections and CPU on
+every tick, so its `lastActiveAt` never falls behind the clock. A caller that wants to sleep such an
+imp when nobody uses it, such as a preview host with one free slot, measures idle time from
+`lastRequestAt` and calls sleep itself.
+
 ## Young guests
 
 A host kernel before Linux 6.7 wakes a guest slowly when its snapshot was taken less than about a

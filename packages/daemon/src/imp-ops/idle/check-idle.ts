@@ -21,6 +21,9 @@ interface IdleSettings {
 interface IdleDecision {
   readonly activeReason: string | null;
   readonly sleep: boolean;
+
+  // a proxied stream or WebSocket that stays open counts as a request for its whole life
+  readonly isRequestOpen: boolean;
 }
 
 export function checkIdle(signals: IdleSignals, settings: IdleSettings): IdleDecision {
@@ -29,6 +32,7 @@ export function checkIdle(signals: IdleSignals, settings: IdleSettings): IdleDec
   return {
     activeReason,
     sleep: activeReason === null && settings.now - signals.lastActiveAt >= settings.idleTimeoutMs,
+    isRequestOpen: signals.proxyConnections > 0,
   };
 }
 

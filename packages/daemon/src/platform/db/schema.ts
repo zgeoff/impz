@@ -135,6 +135,7 @@ export interface Imps {
   jail_uid: number | null;
   kind: Generated<ImpKind>;
   last_active_at: number;
+  last_request_at: number | null;
   max_memory_mib: number | null;
   memory_mib: number;
   move_state: MoveState | null;

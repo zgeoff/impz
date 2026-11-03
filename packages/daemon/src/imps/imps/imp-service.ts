@@ -50,6 +50,7 @@ export type ImpService = ImpCommands &
     | 'openListener'
     | 'openAccept'
     | 'recordActivity'
+    | 'recordRequest'
   > & {
     readonly countSessions: (imp: ImpRecord) => number | undefined;
     readonly readBootStatus: (imp: ImpRecord) => BootStatus;

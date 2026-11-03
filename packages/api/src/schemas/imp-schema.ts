@@ -76,6 +76,8 @@ export const ImpSchema = z.object({
   createdAt: z.date(),
   lastActiveAt: z.date(),
 
+  lastRequestAt: z.date().optional(),
+
   ramMib: z.int().nonnegative().optional(),
 
   rssMib: z.int().nonnegative().optional(),

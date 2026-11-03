@@ -21,6 +21,7 @@ export function buildMockImpRecord(overrides: ImpRecordOverrides = {}): ImpRecor
     ip: faker.internet.ipv4(),
     createdAt: faker.date.past(),
     lastActiveAt: faker.date.recent(),
+    lastRequestAt: null,
     sleptAt: null,
     holdUntil: null,
     error: null,

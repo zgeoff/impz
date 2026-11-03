@@ -1,6 +1,12 @@
 import type { Activity, InnerStatus } from '@impz/agent-protocol';
 import { listColdBoots } from '../../platform/db/cold-boots';
-import { listImps, readImpById, readImpByName, updateImpActivity } from '../../platform/db/imps';
+import {
+  listImps,
+  readImpById,
+  readImpByName,
+  updateImpActivity,
+  updateImpRequest,
+} from '../../platform/db/imps';
 import type { ImpRecord } from '../../platform/db/imps';
 import { ImpdError } from '../../platform/errors/impd-error';
 import {
@@ -68,6 +74,7 @@ export interface ImpRuntime {
     kind: Extract<ConnectionKind, 'ssh' | 'tunnel'>,
   ) => Promise<DialStream>;
   readonly recordActivity: (name: string) => Promise<void>;
+  readonly recordRequest: (impId: string) => Promise<void>;
 
   readonly openAgentStream: <T extends { readonly close: () => void }>(
     name: string,
@@ -433,6 +440,8 @@ export function createImpRuntime(parts: ImpRuntimeParts): ImpRuntime {
         await updateImpActivity(context.db, imp.id, new Date());
       }
     },
+
+    recordRequest: (impId) => updateImpRequest(context.db, impId, new Date(context.now())),
 
     requireRunning,
 

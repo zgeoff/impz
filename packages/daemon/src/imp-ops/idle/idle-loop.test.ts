@@ -1,19 +1,27 @@
 import { expect, onTestFinished, test } from 'bun:test';
+import { buildStubAnswerQueue } from '@impz/test-utils/build-stub-answer-queue';
 import { buildMockLeaseRecord } from '../../../testing/imps/build-mock-lease-record';
 import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
+import { seedLoopbackImp } from '../../../testing/imps/seed-loopback-imp';
+import { startStubHeaderEcho } from '../../../testing/network/start-stub-header-echo';
 import { startTestImpd } from '../../../testing/start-test-impd';
+import { createForwardedPeers } from '../../network/proxy/forwarded-peers';
+import { startWakeProxy } from '../../network/proxy/wake-proxy';
 import { createImage } from '../../platform/db/images';
 import { readImpByName, updateImpActivity } from '../../platform/db/imps';
 import { writeLease } from '../../platform/db/leases';
 import { buildImagePaths } from '../../vm/storage/data-layout';
 import { createIdleLoop } from './idle-loop';
 
-function setupTest() {
+async function setupTest() {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  return startTestImpd(stack, { frozenClockMs: Date.UTC(2026, 0, 1) });
+  const harness = await startTestImpd(stack, { frozenClockMs: Date.UTC(2026, 0, 1) });
+
+  // assigned, not spread: a spread reads the harness's parts once
+  return Object.assign(harness, { stack });
 }
 
 test('it holds the imp until the end of its earlier lease once the later lease is released', async () => {
@@ -173,4 +181,93 @@ test('it sleeps an idle imp once the earlier of its leases has ended', async () 
   const checked = await readImpByName(ctx.db, 'dev');
 
   expect(checked?.state).toBe('sleeping');
+});
+
+test('it moves the last active time of a busy guest and leaves its last request time unset', async () => {
+  const ctx = await setupTest();
+
+  const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
+
+  await Bun.write(buildImagePaths(ctx.dataDir, image.digest).rootfs, 'rootfs');
+
+  await createImage(ctx.db, image);
+
+  await ctx.impd.imps.createImp({ name: 'dev' });
+
+  const ticks = buildStubAnswerQueue([0, 100]);
+
+  const idle = createIdleLoop({
+    config: { ...ctx.config, idleTimeoutS: 1, idleCpuPercent: 10 },
+    db: ctx.db,
+    imps: ctx.impd.imps,
+    now: ctx.now,
+    readCpuTicks: () => ticks.next(),
+  });
+
+  await idle.runCheck();
+
+  ctx.advance(1000);
+
+  await idle.runCheck();
+
+  const checked = await readImpByName(ctx.db, 'dev');
+
+  expect({
+    lastActiveAt: checked?.lastActiveAt,
+    lastRequestAt: checked?.lastRequestAt,
+  }).toStrictEqual({ lastActiveAt: new Date(ctx.now()), lastRequestAt: null });
+});
+
+test('it moves the last request time while a proxied WebSocket stays open with no new request', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const upstream = startStubHeaderEcho(ctx.stack);
+
+  const proxy = startWakeProxy({
+    config: ctx.config,
+    db: ctx.db,
+    imps: ctx.impd.imps,
+    peers: createForwardedPeers(Date.now),
+    ports: { proxy: 0, slot: () => 0 },
+  });
+
+  ctx.stack.defer(() => proxy.stop());
+
+  const imp = await seedLoopbackImp(
+    { db: ctx.db, imps: ctx.impd.imps },
+    { name: 'web', httpPort: upstream.port },
+  );
+
+  await proxy.syncListeners();
+
+  const socket = new WebSocket(`ws://127.0.0.1:${String(proxy.readImpPort(imp.id))}/`);
+
+  onTestFinished(() => {
+    socket.close();
+  });
+
+  await new Promise((resolve) => {
+    socket.addEventListener('open', resolve);
+  });
+
+  const idle = createIdleLoop({
+    config: { ...ctx.config, idleTimeoutS: 60 },
+    db: ctx.db,
+    imps: ctx.impd.imps,
+    now: ctx.now,
+    readCpuTicks: () => null,
+  });
+
+  ctx.advance(30 * 60_000);
+
+  await idle.runCheck();
+
+  const checked = await readImpByName(ctx.db, 'web');
+
+  expect({ state: checked?.state, lastRequestAt: checked?.lastRequestAt }).toStrictEqual({
+    state: 'running',
+    lastRequestAt: new Date(ctx.now()),
+  });
 });
