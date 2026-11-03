@@ -2,6 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { buildStubAnswerQueue } from '@impz/test-utils/build-stub-answer-queue';
 import { buildMockLeaseRecord } from '../../../testing/imps/build-mock-lease-record';
 import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
+import { seedLoopbackImp } from '../../../testing/imps/seed-loopback-imp';
 import { startStubHeaderEcho } from '../../../testing/network/start-stub-header-echo';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { createForwardedPeers } from '../../network/proxy/forwarded-peers';
@@ -234,9 +235,11 @@ test('it moves the last request time while a proxied WebSocket stays open with n
 
   ctx.stack.defer(() => proxy.stop());
 
-  const imp = await ctx.impd.imps.createImp({ name: 'web', httpPort: upstream.port });
+  const imp = await seedLoopbackImp(
+    { db: ctx.db, imps: ctx.impd.imps },
+    { name: 'web', httpPort: upstream.port },
+  );
 
-  await ctx.db.updateTable('imps').set({ ip: '127.0.0.1' }).where('id', '=', imp.id).execute();
   await proxy.syncListeners();
 
   const socket = new WebSocket(`ws://127.0.0.1:${String(proxy.readImpPort(imp.id))}/`);

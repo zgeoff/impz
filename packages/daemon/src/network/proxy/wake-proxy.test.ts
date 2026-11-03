@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { claimFreePorts } from '@impz/test-utils/claim-free-ports';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
+import { seedLoopbackImp } from '../../../testing/imps/seed-loopback-imp';
 import { startStubBrokerSocketUpstream } from '../../../testing/network/start-stub-broker-socket-upstream';
 import { startStubCutStream } from '../../../testing/network/start-stub-cut-stream';
 import { startStubHeaderEcho } from '../../../testing/network/start-stub-header-echo';
@@ -843,9 +844,10 @@ test('it returns the time of the last proxied request as the imp’s lastRequest
 
   ctx.stack.defer(() => proxy.stop());
 
-  const imp = await ctx.impd.imps.createImp({ name: 'web', httpPort: upstream.port });
-
-  await ctx.db.updateTable('imps').set({ ip: '127.0.0.1' }).where('id', '=', imp.id).execute();
+  await seedLoopbackImp(
+    { db: ctx.db, imps: ctx.impd.imps },
+    { name: 'web', httpPort: upstream.port },
+  );
 
   const before = ctx.now();
 
