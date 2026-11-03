@@ -35,7 +35,12 @@ test('it runs a dashboard test from the dashboard package and every other test f
       'src/a.ts',
       'packages/dashboard/src/view.tsx',
     ],
-    { cwd: ctx.directoryPath, stdout: 'pipe', stderr: 'pipe' },
+    {
+      cwd: ctx.directoryPath,
+      env: { ...process.env, TEST_WORKERS: '1' },
+      stdout: 'pipe',
+      stderr: 'pipe',
+    },
   );
 
   const [stdout, exitCode] = await Promise.all([
@@ -44,7 +49,8 @@ test('it runs a dashboard test from the dashboard package and every other test f
   ]);
 
   expect({ stdout, exitCode }).toStrictEqual({
-    stdout: 'root ./src/a.test.ts\ndashboard ./src/view.test.tsx\n',
+    stdout:
+      'root --parallel=1 --timeout=15000 ./src/a.test.ts\ndashboard --parallel=1 --timeout=15000 ./src/view.test.tsx\n',
     exitCode: 0,
   });
 });
@@ -71,7 +77,12 @@ test('it fails and still runs the dashboard tests when the root tests fail', asy
       'src/a.test.ts',
       'packages/dashboard/src/view.test.tsx',
     ],
-    { cwd: ctx.directoryPath, stdout: 'pipe', stderr: 'pipe' },
+    {
+      cwd: ctx.directoryPath,
+      env: { ...process.env, TEST_WORKERS: '1' },
+      stdout: 'pipe',
+      stderr: 'pipe',
+    },
   );
 
   const [stdout, exitCode] = await Promise.all([
@@ -80,7 +91,7 @@ test('it fails and still runs the dashboard tests when the root tests fail', asy
   ]);
 
   expect({ stdout, exitCode }).toStrictEqual({
-    stdout: 'dashboard ./src/view.test.tsx\n',
+    stdout: 'dashboard --parallel=1 --timeout=15000 ./src/view.test.tsx\n',
     exitCode: 1,
   });
 });
@@ -104,7 +115,12 @@ test('it fails when only the dashboard tests fail', async () => {
       join(import.meta.dir, 'run-branch-tests.ts'),
       'packages/dashboard/src/view.test.tsx',
     ],
-    { cwd: ctx.directoryPath, stdout: 'pipe', stderr: 'pipe' },
+    {
+      cwd: ctx.directoryPath,
+      env: { ...process.env, TEST_WORKERS: '1' },
+      stdout: 'pipe',
+      stderr: 'pipe',
+    },
   );
 
   const [stdout, exitCode] = await Promise.all([
@@ -142,7 +158,12 @@ test('it leaves out a lane file, which runs only in its lane script', async () =
       'src/d.docker.test.ts',
       'src/e.small-fs.test.ts',
     ],
-    { cwd: ctx.directoryPath, stdout: 'pipe', stderr: 'pipe' },
+    {
+      cwd: ctx.directoryPath,
+      env: { ...process.env, TEST_WORKERS: '1' },
+      stdout: 'pipe',
+      stderr: 'pipe',
+    },
   );
 
   const [stdout, exitCode] = await Promise.all([
@@ -151,7 +172,8 @@ test('it leaves out a lane file, which runs only in its lane script', async () =
   ]);
 
   expect({ stdout, exitCode }).toStrictEqual({
-    stdout: 'root ./src/a.test.ts\nrun-related-tests: no related tests\n',
+    stdout:
+      'root --parallel=1 --timeout=15000 ./src/a.test.ts\nrun-related-tests: no related tests\n',
     exitCode: 0,
   });
 });

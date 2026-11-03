@@ -18,10 +18,13 @@
   "workspaces": {
     ".": {
       // run-related-tests.ts is a synced CLI that test:related reaches through
-      // run-branch-tests.ts; its other exports serve the tests in zgeoff/tools
+      // run-branch-tests.ts, and read-branch-base.ts a synced module that
+      // files:branch reaches; their other exports serve the tests in zgeoff/tools
+      // and the other scripts that the pre-push-baseline entry of repo-sync delivers
       "entry": [
         "e2e/suites/*.e2e.ts",
-        "scripts/ci/run-related-tests.ts",
+        "scripts/run-related-tests.ts",
+        "scripts/read-branch-base.ts",
         // the dev CLI that scripts/dev/dev.sh runs
         "scripts/dev/dev.ts",
         // the zfs harnesses that scripts/test-zfs.sh and scripts/zfs-host-test.sh run
