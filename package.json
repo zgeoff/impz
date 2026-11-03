@@ -141,7 +141,14 @@
     "release:tag-latest": "bun scripts/release/tag-latest.ts",
     "release:update-formula": "bun scripts/release/update-formula.ts",
     "release:plan-npm": "bun scripts/release/plan-npm-packages.ts",
-    "release:pack-npm": "bun scripts/release/pack-npm-packages.ts"
+    "release:pack-npm": "bun scripts/release/pack-npm-packages.ts",
+    "check:commits": "bun scripts/run-commits-check.ts",
+    "check:local-paths": "bun scripts/run-local-paths-check.ts",
+    "check:test-timeouts": "bun scripts/run-test-timeouts-check.ts",
+    "check:dependency-gates": "bun scripts/dependency-gates/run-dependency-gates-check.ts",
+    "check:workflows": "bun scripts/run-workflows-check.ts",
+    "check:uncommitted": "bun scripts/run-uncommitted-check.ts",
+    "memory-capped": "bash scripts/run-memory-capped.sh \"$(bun scripts/read-memory-budget.ts)\""
   },
   "devDependencies": {
     "@bufbuild/buf": "1.75.0",
