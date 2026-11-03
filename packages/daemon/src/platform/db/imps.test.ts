@@ -19,6 +19,7 @@ import {
   removeIdentityReset,
   removeImp,
   updateImpActivity,
+  updateImpAddress,
   updateImpCommitted,
   updateImpDisk,
   updateImpMove,
@@ -399,6 +400,18 @@ test('#createImpInFreeSlot refuses a warm move a slot past this host’s slots',
       { count: 4, findIp: (slot) => `10.66.0.${String(slot * 4 + 2)}`, slot: 4 },
     ),
   ).rejects.toThrowWithMessage(SlotTakenError, 'slot 4 is taken on this host');
+});
+
+test('#updateImpAddress records the address the imp answers on', async () => {
+  const ctx = await createTestDatabase();
+  const image = await createImage(ctx.db, buildMockNewImage());
+  const imp = await createImp(ctx.db, buildMockNewImp({ imageId: image.id, ip: '10.66.0.2' }));
+
+  await updateImpAddress(ctx.db, imp.id, '127.0.0.1');
+
+  const moved = await readImpById(ctx.db, imp.id);
+
+  expect(moved?.ip).toBe('127.0.0.1');
 });
 
 test('#updateImpRequest keeps both times when an older request time lands after a newer one', async () => {

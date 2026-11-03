@@ -390,6 +390,10 @@ export async function updateImpActivity(db: ImpDatabase, id: string, at: Date): 
   await db.updateTable('imps').set({ last_active_at: at.getTime() }).where('id', '=', id).execute();
 }
 
+export async function updateImpAddress(db: ImpDatabase, id: string, ip: string): Promise<void> {
+  await db.updateTable('imps').set({ ip }).where('id', '=', id).execute();
+}
+
 export async function updateImpRequest(db: ImpDatabase, id: string, at: Date): Promise<void> {
   const atMs = at.getTime();
 
