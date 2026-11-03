@@ -22,6 +22,7 @@ import {
   updateImpCommitted,
   updateImpDisk,
   updateImpMove,
+  updateImpRequest,
   updateImpSettings,
 } from './imps';
 import { SlotTakenError } from './slot-taken-error';
@@ -398,6 +399,25 @@ test('#createImpInFreeSlot refuses a warm move a slot past this host’s slots',
       { count: 4, findIp: (slot) => `10.66.0.${String(slot * 4 + 2)}`, slot: 4 },
     ),
   ).rejects.toThrowWithMessage(SlotTakenError, 'slot 4 is taken on this host');
+});
+
+test('#updateImpRequest keeps both times when an older request time lands after a newer one', async () => {
+  const ctx = await createTestDatabase();
+  const image = await createImage(ctx.db, buildMockNewImage());
+  const imp = await createImp(ctx.db, buildMockNewImp({ imageId: image.id }));
+
+  await updateImpRequest(ctx.db, imp.id, new Date('2030-10-02T01:05:00Z'));
+  await updateImpRequest(ctx.db, imp.id, new Date('2030-10-02T01:00:00Z'));
+
+  const requested = await readImpById(ctx.db, imp.id);
+
+  expect({
+    lastActiveAt: requested?.lastActiveAt,
+    lastRequestAt: requested?.lastRequestAt,
+  }).toStrictEqual({
+    lastActiveAt: new Date('2030-10-02T01:05:00Z'),
+    lastRequestAt: new Date('2030-10-02T01:05:00Z'),
+  });
 });
 
 test('#updateImpActivity records when the imp was last active', async () => {
