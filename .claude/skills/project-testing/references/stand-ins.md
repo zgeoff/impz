@@ -1,6 +1,6 @@
 # Stand-ins and booting impd
 
-imp has a tested stand-in for nearly every boundary that impd, its clients and its scripts cross.
+A stand-in is a tested test version of a boundary that impd, its clients or its scripts cross.
 Before you write a stand-in, look for one in the test support folder of the package that owns the
 boundary, where the shared naming rule makes the file name say what it impersonates. Each stand-in's
 own test shows what it models and what it refuses. The folders are
@@ -64,9 +64,9 @@ on the next read, and the shrink loop's stand-in unplugs one step per read.
 [`startTestImpd`](../../../../packages/daemon/src/test-utils/start-test-impd.ts), the harness that
 `@impz/daemon/test-utils` exports. The harness runs every startup step that production runs, opens
 the API, the broker and the wake proxy on free ports, and passes a stand-in for each host boundary.
-A test sends RPCs through its root client, or through the real client to its URL, and passes any
-other boundary through its `boundaries` option. No impd ticker runs on its own in the harness: a
-test fires the one it needs.
+A test sends RPCs through the harness's client, which holds the root token, or through the real
+client to its URL, and passes any other boundary through its `boundaries` option. No impd ticker
+runs on its own in the harness: a test fires the one it needs.
 
 The `now` dep reaches leases, the RAM governor, memory control, egress, the broker, tokens, OAuth,
 the audit log, moves and the API. Some components stay on the wall clock: the tailnet names'
