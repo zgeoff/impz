@@ -65,7 +65,7 @@ A small number of templates is kept, and past it the least recently restored one
 
 To see what slowed a restore, read its `restored boot template` line in the host's journal. The line
 holds impd's steps, then the guest's steps after `; guest`, then the host stall after
-`; host stall`. The host stall has four figures in milliseconds. impd counts each one from just
+`; host stall`. The host stall holds these figures, in milliseconds. impd counts each one from just
 before it sets up the imp's network until it writes the line:
 
 - `cpu`, `io` and `memory`: how long at least one task on the host waited for that resource, from
