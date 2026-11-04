@@ -75,7 +75,7 @@ test('it reports the pages a cold and a woken sleep touched, then removes its im
 
   const measured = await runTouchedPages(
     {
-      lockDev: () => ({ release: () => {} }),
+      withDevLock: (run) => run(),
       client: {
         system: {
           info: () => Promise.resolve(buildMockSystemInfo({ defaults: { image: 'base' } })),
@@ -124,7 +124,7 @@ test('it looks for an imp of its name only once impd has its default image', asy
 
   await runTouchedPages(
     {
-      lockDev: () => ({ release: () => {} }),
+      withDevLock: (run) => run(),
       client: {
         system: { info },
         imps: {
@@ -146,13 +146,12 @@ test('it looks for an imp of its name only once impd has its default image', asy
   expect(get).toHaveBeenCalledAfter(info);
 });
 
-test('it removes the imp a failed create left behind, then releases the lock', () => {
+test('it removes the imp a failed create left behind', () => {
   const destroy = mock(() => Promise.resolve({}));
-  const release = mock(() => {});
 
   const measured = runTouchedPages(
     {
-      lockDev: () => ({ release }),
+      withDevLock: (run) => run(),
       client: {
         system: {
           info: () => Promise.resolve(buildMockSystemInfo({ defaults: { image: 'base' } })),
@@ -182,18 +181,16 @@ test('it removes the imp a failed create left behind, then releases the lock', (
   );
 
   expect(destroy).toHaveBeenCalledExactlyOnceWith({ name: 'touched-pages' });
-  expect(release).toHaveBeenCalledAfter(destroy);
 });
 
 test('it leaves an imp of its name that it found before the create', () => {
   const create = mock(() => Promise.resolve(buildMockImp({ name: 'touched-pages' })));
   const destroy = mock(() => Promise.resolve({}));
   const runInContainer = mock(() => Promise.resolve({ exitCode: 0, stdout: '', stderr: '' }));
-  const release = mock(() => {});
 
   const measured = runTouchedPages(
     {
-      lockDev: () => ({ release }),
+      withDevLock: (run) => run(),
       client: {
         system: {
           info: () => Promise.resolve(buildMockSystemInfo({ defaults: { image: 'base' } })),
@@ -221,7 +218,6 @@ test('it leaves an imp of its name that it found before the create', () => {
   expect(create).not.toHaveBeenCalled();
   expect(destroy).not.toHaveBeenCalled();
   expect(runInContainer).not.toHaveBeenCalled();
-  expect(release).toHaveBeenCalledOnce();
 });
 
 test('it leaves an imp of its name that appeared during the run, when impd refuses the create', () => {
@@ -230,7 +226,7 @@ test('it leaves an imp of its name that appeared during the run, when impd refus
 
   const measured = runTouchedPages(
     {
-      lockDev: () => ({ release: () => {} }),
+      withDevLock: (run) => run(),
       client: {
         system: {
           info: () => Promise.resolve(buildMockSystemInfo({ defaults: { image: 'base' } })),
@@ -268,11 +264,10 @@ test('it runs nothing while another bench holds the dev instance', () => {
 
   const measured = runTouchedPages(
     {
-      lockDev: () => {
-        throw new Error(
-          'process 4242 holds the dev instance imp-bench (/run/impz-dev-imp-bench.lock)',
-        );
-      },
+      withDevLock: () =>
+        Promise.reject(
+          new Error('process 4242 holds the dev instance imp-bench (/run/impz-dev-imp-bench.lock)'),
+        ),
       client: {
         system: { info },
         imps: {
@@ -303,7 +298,7 @@ test('it reports a cleanup that failed after a failed create, and keeps the crea
 
   const measured = runTouchedPages(
     {
-      lockDev: () => ({ release: () => {} }),
+      withDevLock: (run) => run(),
       client: {
         system: {
           info: () => Promise.resolve(buildMockSystemInfo({ defaults: { image: 'base' } })),
@@ -365,7 +360,7 @@ test('it fails with the command error when the guest write fails, and removes it
 
   const measured = runTouchedPages(
     {
-      lockDev: () => ({ release: () => {} }),
+      withDevLock: (run) => run(),
       client: {
         system: {
           info: () => Promise.resolve(buildMockSystemInfo({ defaults: { image: 'base' } })),
@@ -422,7 +417,7 @@ test('it keeps the measurement error and still removes its imp when the copy rem
 
   const measured = runTouchedPages(
     {
-      lockDev: () => ({ release: () => {} }),
+      withDevLock: (run) => run(),
       client: {
         system: {
           info: () => Promise.resolve(buildMockSystemInfo({ defaults: { image: 'base' } })),
@@ -478,7 +473,7 @@ test('it fails when stat gives no block count for the memory file, and removes i
 
   const measured = runTouchedPages(
     {
-      lockDev: () => ({ release: () => {} }),
+      withDevLock: (run) => run(),
       client: {
         system: {
           info: () => Promise.resolve(buildMockSystemInfo({ defaults: { image: 'base' } })),
@@ -538,7 +533,7 @@ test('it fails on a changed-page report it cannot read, and removes its imp', ()
 
   const measured = runTouchedPages(
     {
-      lockDev: () => ({ release: () => {} }),
+      withDevLock: (run) => run(),
       client: {
         system: {
           info: () => Promise.resolve(buildMockSystemInfo({ defaults: { image: 'base' } })),
@@ -569,11 +564,10 @@ test('it fails with the lookup error and creates nothing when impd cannot look u
   const lookupFailure = new ORPCError('INTERNAL_SERVER_ERROR', { message: 'the database is busy' });
 
   const create = mock(() => Promise.resolve(buildMockImp({ name: 'touched-pages' })));
-  const release = mock(() => {});
 
   const measured = runTouchedPages(
     {
-      lockDev: () => ({ release }),
+      withDevLock: (run) => run(),
       client: {
         system: {
           info: () => Promise.resolve(buildMockSystemInfo({ defaults: { image: 'base' } })),
@@ -595,45 +589,6 @@ test('it fails with the lookup error and creates nothing when impd cannot look u
 
   expect(measured).rejects.toBe(lookupFailure);
   expect(create).not.toHaveBeenCalled();
-  expect(release).toHaveBeenCalledOnce();
-});
-
-test('it keeps the run error when its lock cannot be released, and reports the lock', () => {
-  const lookupFailure = new ORPCError('INTERNAL_SERVER_ERROR', { message: 'the database is busy' });
-
-  const onStderr = mock<(text: string) => void>(() => {});
-
-  const measured = runTouchedPages(
-    {
-      lockDev: () => ({
-        release: () => {
-          throw new Error('EACCES: permission denied, rm');
-        },
-      }),
-      client: {
-        system: {
-          info: () => Promise.resolve(buildMockSystemInfo({ defaults: { image: 'base' } })),
-        },
-        imps: {
-          get: () => Promise.reject(lookupFailure),
-          create: () => Promise.resolve(buildMockImp({ name: 'touched-pages' })),
-          destroy: () => Promise.resolve({}),
-        },
-      },
-      runImpz: () => Promise.resolve({ exitCode: 0, stdout: '', stderr: '' }),
-      runInContainer: () => Promise.resolve({ exitCode: 0, stdout: '', stderr: '' }),
-      now: () => 0,
-      sleep: () => Promise.resolve(),
-      onStderr,
-    },
-    { memory: '1g', memoryMib: 1024, writeMib: 128 },
-  );
-
-  expect(measured).rejects.toBe(lookupFailure);
-
-  expect(onStderr).toHaveBeenCalledExactlyOnceWith(
-    'measure-touched-pages: could not release the dev lock: EACCES: permission denied, rm',
-  );
 });
 
 test('it fails a measurement whose cleanup left the base copy behind, and says so', () => {
@@ -669,7 +624,7 @@ test('it fails a measurement whose cleanup left the base copy behind, and says s
 
   const measured = runTouchedPages(
     {
-      lockDev: () => ({ release: () => {} }),
+      withDevLock: (run) => run(),
       client: {
         system: {
           info: () => Promise.resolve(buildMockSystemInfo({ defaults: { image: 'base' } })),
@@ -723,7 +678,7 @@ test('it fails a measurement whose cleanup left the imp behind', () => {
 
   const measured = runTouchedPages(
     {
-      lockDev: () => ({ release: () => {} }),
+      withDevLock: (run) => run(),
       client: {
         system: {
           info: () => Promise.resolve(buildMockSystemInfo({ defaults: { image: 'base' } })),

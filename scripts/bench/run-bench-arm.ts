@@ -5,24 +5,23 @@ import { waitFor } from '@impz/e2e-harness/wait-for';
 import type * as z from 'zod';
 import { buildDevLayout } from '../lib/build-dev-layout.ts';
 import type { DevEnv, DevLayout } from '../lib/build-dev-layout.ts';
-import type { DevLock } from '../lib/create-dev-lock.ts';
 import { parseJSONOrNull } from '../lib/parse-json-or-null.ts';
 import type { BenchArm, BenchArmsArgs } from './parse-bench-arms-args';
 
 type CommandEnv = Readonly<Record<string, string>>;
 
+export interface ArmRun {
+  readonly json: string | null;
+  readonly isPassed: boolean;
+}
+
 export interface BenchArmDeps {
-  readonly lockDev: (name: string) => DevLock;
+  readonly withDevLock: (name: string, run: () => Promise<ArmRun>) => Promise<ArmRun>;
   readonly runCommand: (argv: readonly string[], env: CommandEnv) => Promise<CommandResult>;
   readonly writeLog: (path: string, text: string) => void;
   readonly now: () => number;
   readonly sleep: (durationMs: number) => Promise<void>;
   readonly onStderr: (text: string) => void;
-}
-
-export interface ArmRun {
-  readonly json: string | null;
-  readonly isPassed: boolean;
 }
 
 export interface ArmPlan {
@@ -37,7 +36,7 @@ export interface ArmPlan {
 // dev.sh up reuses a running instance, which may run another checkout, so an
 // arm locks the instance's name and then refuses one that runs. A failed log
 // read fails the arm only once the instance is down.
-export async function runBenchArm(deps: BenchArmDeps, plan: Readonly<ArmPlan>): Promise<ArmRun> {
+export function runBenchArm(deps: BenchArmDeps, plan: Readonly<ArmPlan>): Promise<ArmRun> {
   const checkout = resolve(plan.cwd, plan.arm.checkout);
 
   const devEnv = {
@@ -46,9 +45,8 @@ export async function runBenchArm(deps: BenchArmDeps, plan: Readonly<ArmPlan>): 
   };
 
   const layout = buildDevLayout({ env: { ...plan.env, ...devEnv }, root: checkout, cwd: plan.cwd });
-  const lock = deps.lockDev(layout.name);
 
-  try {
+  return deps.withDevLock(layout.name, async () => {
     const listed = await deps.runCommand(
       [
         layout.containerCLI,
@@ -70,10 +68,8 @@ export async function runBenchArm(deps: BenchArmDeps, plan: Readonly<ArmPlan>): 
 
     const dev = { script: join(checkout, 'scripts', 'dev', 'dev.sh'), env: devEnv };
 
-    return await runLockedArm(deps, { plan, dev, layout });
-  } finally {
-    releaseLock(deps, lock, layout.name);
-  }
+    return runLockedArm(deps, { plan, dev, layout });
+  });
 }
 
 // docker and podman list no line for a missing container, so only a failed
@@ -275,16 +271,4 @@ async function stopDev(deps: BenchArmDeps, locked: Readonly<LockedArm>): Promise
   return down.exitCode === 0
     ? null
     : `bench arms: dev.sh down exited ${String(down.exitCode)}, ${stillRuns}`;
-}
-
-// a lock left behind refuses the next bench with its path, so a failed
-// release is reported and never replaces the arm's own error
-function releaseLock(deps: BenchArmDeps, lock: DevLock, name: string): void {
-  try {
-    lock.release();
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
-
-    deps.onStderr(`bench arms: could not release the lock on ${name}: ${reason}\n`);
-  }
 }

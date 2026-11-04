@@ -4,8 +4,7 @@ import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { REAL_CLOCK } from '@impz/daemon/real-clock';
 import { runCommand } from '@impz/e2e-harness/instance';
-import { createDevLock } from '../lib/create-dev-lock.ts';
-import { wireDevLockIO } from '../lib/wire-dev-lock-io.ts';
+import { withDevLock } from '../lib/with-dev-lock.ts';
 import { writeStderr } from '../lib/write-stderr.ts';
 import { writeStdoutLine } from '../lib/write-stdout-line.ts';
 import { writeText } from '../lib/write-text.ts';
@@ -17,7 +16,7 @@ import { runBenchComparison } from './run-bench-comparison';
 const IMPZ = resolve(import.meta.dir, '..', 'impz');
 
 const ARM_DEPS: BenchArmDeps = {
-  lockDev: (name) => createDevLock(wireDevLockIO(), tmpdir(), name),
+  withDevLock: (name, run) => withDevLock(tmpdir(), name, run),
   runCommand: (argv, env) => runCommand(argv, { env }),
   writeLog: writeText,
   now: REAL_CLOCK.now,
