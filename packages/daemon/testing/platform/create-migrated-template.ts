@@ -7,6 +7,8 @@ import {
   readlinkSync,
   renameSync,
   rmSync,
+  statSync,
+  utimesSync,
   writeFileSync,
 } from 'node:fs';
 import { basename, join } from 'node:path';
@@ -14,6 +16,8 @@ import { buildSQLiteDialect } from '@zgeoff/kysely-bun-sqlite';
 import { Kysely } from 'kysely';
 import { runMigrationsTo } from '../../src/platform/db/run-migrations';
 import type { DB } from '../../src/platform/db/schema';
+import { isStaleTemplateFile } from './is-stale-template-file';
+import type { TemplateFile } from './is-stale-template-file';
 
 export async function createMigratedTemplate(
   cacheDirectory: string,
@@ -40,13 +44,18 @@ export async function createMigratedTemplate(
         rmSync(lock, { force: true });
       }
 
-      removeStaleTemplateFiles(cacheDirectory, hash);
-    } else if (probeStaleLock(lock, namespace)) {
+      removeStaleTemplateFiles(cacheDirectory, hash, namespace);
+    } else if (probeStaleTemplateFile(cacheDirectory, basename(lock), hash, namespace)) {
       rmSync(lock, { force: true });
     } else {
       await Bun.sleep(10);
     }
   }
+
+  // a sweep keeps a template that a run used in the last hour
+  const now = new Date();
+
+  utimesSync(template, now, now);
 
   return template;
 }
@@ -107,28 +116,78 @@ async function writeTemplate(path: string, migration: string): Promise<void> {
   }
 }
 
-function removeStaleTemplateFiles(cacheDirectory: string, hash: string): void {
-  for (const name of collectStaleTemplateFiles(readdirSync(cacheDirectory), hash)) {
-    rmSync(join(cacheDirectory, name), { force: true });
+function removeStaleTemplateFiles(cacheDirectory: string, hash: string, namespace: string): void {
+  for (const name of readdirSync(cacheDirectory)) {
+    if (probeStaleTemplateFile(cacheDirectory, name, hash, namespace)) {
+      rmSync(join(cacheDirectory, name), { force: true });
+    }
   }
 }
 
-function collectStaleTemplateFiles(names: readonly string[], hash: string): string[] {
-  return names.filter((name) => !name.includes(`-${hash}.sqlite`));
+function probeStaleTemplateFile(
+  cacheDirectory: string,
+  name: string,
+  hash: string,
+  namespace: string,
+): boolean {
+  const file = readTemplateFile(cacheDirectory, name, namespace);
+
+  return file !== null && isStaleTemplateFile(file, hash);
 }
 
-function probeStaleLock(lock: string, namespace: string): boolean {
-  const holder = parseRunOwner(readLockOwner(lock));
+function readTemplateFile(
+  cacheDirectory: string,
+  name: string,
+  namespace: string,
+): TemplateFile | null {
+  const path = join(cacheDirectory, name);
+  const modifiedMs = readModifiedMs(path);
 
-  if (holder === null || holder.namespace !== namespace) {
-    return false;
+  if (modifiedMs === null) {
+    return null;
   }
 
-  return !probeProcessRunning(holder.pid);
+  const ownerText = name.endsWith('.lock') ? readLockOwner(path) : name;
+  const owner = parseRunOwner(ownerText);
+
+  return {
+    name,
+    ageMs: Date.now() - modifiedMs,
+    isOwnerGone: owner?.namespace === namespace && !probeProcessRunning(owner.pid),
+  };
 }
 
-function parseRunOwner(owner: string): { pid: number; namespace: string } | null {
-  const groups = /^pid(?<pid>\d+)-ns(?<namespace>\d+)$/u.exec(owner)?.groups;
+function readModifiedMs(path: string): number | null {
+  try {
+    return statSync(path).mtimeMs;
+  } catch (error) {
+    if (isMissingFileError(error)) {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
+function isMissingFileError(error: unknown): boolean {
+  return error instanceof Error && 'code' in error && error.code === 'ENOENT';
+}
+
+function readLockOwner(lock: string): string {
+  try {
+    return readFileSync(lock, 'utf8');
+  } catch (error) {
+    if (isMissingFileError(error)) {
+      return '';
+    }
+
+    throw error;
+  }
+}
+
+// a lock holds its owner, and a build's files start with it
+function parseRunOwner(text: string): { pid: number; namespace: string } | null {
+  const groups = /^pid(?<pid>\d+)-ns(?<namespace>\d+)(?:-|$)/u.exec(text)?.groups;
   const pid = groups?.['pid'];
   const namespace = groups?.['namespace'];
 
@@ -137,18 +196,6 @@ function parseRunOwner(owner: string): { pid: number; namespace: string } | null
   }
 
   return { pid: Number(pid), namespace };
-}
-
-function readLockOwner(lock: string): string {
-  try {
-    return readFileSync(lock, 'utf8');
-  } catch (error) {
-    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
-      return '';
-    }
-
-    throw error;
-  }
 }
 
 function probeProcessRunning(pid: number): boolean {
