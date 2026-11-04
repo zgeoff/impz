@@ -659,11 +659,19 @@ test('#sleep sleeps an imp that holds a lease and ends the lease', async () => {
     hosts: { box: { url: box.url, token: box.rootToken } },
   });
 
-  const slept = await runCLIInProcess({ args: ['sleep', 'dev'], env: ctx.home });
-  const imp = await readImpByName(box.db, 'dev');
+  const slept = await runCLIInProcess({ args: ['sleep', 'dev', '--json'], env: ctx.home });
+  const [imp] = await box.client.imps.list();
   const leases = await box.client.leases.list({ name: 'dev' });
 
-  expect(slept.code).toBe(0);
+  // oxlint-disable-next-line unicorn/prefer-structured-clone -- the wire turns dates into strings, as JSON does
+  const sent: unknown = JSON.parse(JSON.stringify(imp));
+
+  expect({ ...slept, stdout: JSON.parse(slept.stdout) as unknown }).toStrictEqual({
+    stdout: sent,
+    stderr: '',
+    code: 0,
+  });
+
   expect(imp?.state).toBe('sleeping');
   expect(leases).toStrictEqual([]);
 });
