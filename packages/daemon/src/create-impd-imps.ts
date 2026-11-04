@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { availableParallelism } from 'node:os';
 import type { Config } from './config';
 import type { ImpdStorage } from './create-impd-storage';
@@ -290,7 +291,14 @@ function resolveImpBoundaries(boundaries: Readonly<ImpBoundaries>) {
     kernelOops: boundaries.kernelOops ?? createKernelOopsWatch(),
     readThreadIds: boundaries.readThreadIds ?? ((pid: number) => readThreadIds(pid)),
     readNetBytes: boundaries.readNetBytes ?? ((tap: string) => readGuestNetBytes(tap)),
-    readHostLoad: boundaries.readHostLoad ?? readHostLoad,
+    readHostLoad:
+      boundaries.readHostLoad ??
+      (() =>
+        readHostLoad({
+          procRoot: '/proc',
+          readFile: (path) => readFileSync(path, 'utf8'),
+          logger: getImpdLogger('imps'),
+        })),
     ...(boundaries.openTap !== undefined && { openTap: boundaries.openTap }),
     ...(boundaries.now !== undefined && { now: boundaries.now }),
   };

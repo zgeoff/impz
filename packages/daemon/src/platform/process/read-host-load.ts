@@ -1,13 +1,18 @@
-import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import type { Logger } from '@logtape/logtape';
 import { findUnexpectedReadCode } from './find-unexpected-read-code';
-import { getImpdLogger } from './get-impd-logger';
 
 export interface HostLoad {
   readonly cpuStallUs: number | null;
   readonly ioStallUs: number | null;
   readonly memoryStallUs: number | null;
   readonly stealUs: number | null;
+}
+
+export interface HostLoadSources {
+  readonly procRoot: string;
+  readonly readFile: (path: string) => string;
+  readonly logger: Pick<Logger, 'warning'>;
 }
 
 export const NO_HOST_LOAD: HostLoad = {
@@ -17,36 +22,36 @@ export const NO_HOST_LOAD: HostLoad = {
   stealUs: null,
 };
 
-export function readHostLoad(procRoot = '/proc'): HostLoad {
+export function readHostLoad(sources: Readonly<HostLoadSources>): HostLoad {
+  const readProc = (...names: readonly string[]) =>
+    readProcFile(sources, join(sources.procRoot, ...names));
+
   return {
-    cpuStallUs: parsePressureTotal(readProcFile(join(procRoot, 'pressure', 'cpu'))),
-    ioStallUs: parsePressureTotal(readProcFile(join(procRoot, 'pressure', 'io'))),
-    memoryStallUs: parsePressureTotal(readProcFile(join(procRoot, 'pressure', 'memory'))),
-    stealUs: parseStealUs(readProcFile(join(procRoot, 'stat'))),
+    cpuStallUs: parsePressureTotal(readProc('pressure', 'cpu')),
+    ioStallUs: parsePressureTotal(readProc('pressure', 'io')),
+    memoryStallUs: parsePressureTotal(readProc('pressure', 'memory')),
+    stealUs: parseStealUs(readProc('stat')),
   };
+}
+
+function readProcFile(sources: Readonly<HostLoadSources>, path: string): string | null {
+  try {
+    return sources.readFile(path);
+  } catch (error) {
+    const code = findUnexpectedReadCode(error);
+
+    if (code !== null) {
+      sources.logger.warning('cannot read {path} for the host stall: {code}', { path, code });
+    }
+
+    return null;
+  }
 }
 
 function parsePressureTotal(pressure: string | null): number | null {
   const total = pressure === null ? undefined : /^some .*total=(?<us>\d+)$/mv.exec(pressure);
 
   return total?.groups?.['us'] === undefined ? null : Number(total.groups['us']);
-}
-
-function readProcFile(path: string): string | null {
-  try {
-    return readFileSync(path, 'utf8');
-  } catch (error) {
-    const code = findUnexpectedReadCode(error);
-
-    if (code !== null) {
-      getImpdLogger('imps').warning('cannot read {path} for the host stall: {code}', {
-        path,
-        code,
-      });
-    }
-
-    return null;
-  }
 }
 
 // The steal column of the `cpu` line, after user, nice, system, idle, iowait,

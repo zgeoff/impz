@@ -1,7 +1,8 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { getImpdLogger } from '../../src/platform/process/get-impd-logger';
 import { readHostLoad } from '../../src/platform/process/read-host-load';
 import { createStubHostLoad } from './create-stub-host-load';
 import { formatRunPrefix } from './format-run-prefix';
@@ -15,7 +16,13 @@ function setupTest() {
     rmSync(procRoot, { recursive: true, force: true });
   });
 
-  return { procRoot };
+  const sources = {
+    procRoot,
+    readFile: (path: string) => readFileSync(path, 'utf8'),
+    logger: getImpdLogger('imps'),
+  };
+
+  return { procRoot, sources };
 }
 
 test('it writes proc files that readHostLoad reads back as the given load', () => {
@@ -28,7 +35,7 @@ test('it writes proc files that readHostLoad reads back as the given load', () =
     stealUs: 640_000,
   });
 
-  expect(readHostLoad(ctx.procRoot)).toStrictEqual({
+  expect(readHostLoad(ctx.sources)).toStrictEqual({
     cpuStallUs: 2_500_000,
     ioStallUs: 31_000,
     memoryStallUs: 0,
