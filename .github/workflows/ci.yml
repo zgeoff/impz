@@ -357,29 +357,16 @@ jobs:
       - name: actionlint
         run: actionlint
 
-      # the shared workflow lint and dependency-gates check, at the tools
-      # commit that repo-sync calls
-      - name: Read the sync commit
-        id: sync-ref
-        run: bun run --silent ci:read-sync-ref
+      - name: Install
+        run: bun install --frozen-lockfile
 
-      - name: Checkout the workflow lint
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: zgeoff/tools
-          ref: ${{ steps.sync-ref.outputs.ref }}
-          path: .workflow-lint
-          sparse-checkout: |
-            packages/chex/src
-            step-bundles/packages/chex/src
-          persist-credentials: false
-
-      # the rules of ci-design's Step scripts section; a public repo's profile
-      # leaves out the heavy-check rule
+      # the shared workflow lint, from the chex release the root package.json
+      # pins: the rules of ci-design's Step scripts section; a public repo's
+      # profile leaves out the heavy-check rule
       - name: Lint workflows
         env:
           CHECKS_PROFILE: public
-        run: bun .workflow-lint/packages/chex/src/run-workflows-check.ts
+        run: bun run --silent ci:check-workflows
 
       # GH_TOKEN turns on the audits that ask GitHub, such as known-vulnerable
       # actions and impostor commits
@@ -391,13 +378,10 @@ jobs:
       - name: hadolint
         run: hadolint host/Dockerfile images/base/Dockerfile images/examples/*/Dockerfile
 
-      - name: Install
-        run: bun install --frozen-lockfile
-
       # the shared dependency-gates check, as bun-checks runs it: each
       # first-party package needs a release-age exclude in bunfig.toml
       - name: Check dependency gates
-        run: bun .workflow-lint/step-bundles/packages/chex/src/cli.js dependency-gates
+        run: bun run --silent ci:check-dependency-gates
 
       # the shell that production code holds as text; plain `bun test` skips
       # these where shellcheck is missing, and here it is the pinned one
