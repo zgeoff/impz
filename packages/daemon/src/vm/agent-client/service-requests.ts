@@ -87,6 +87,7 @@ export interface ServiceLogStream {
 export async function openServiceLogStream(
   vsockPath: string,
   request: Readonly<ServiceLogRequest>,
+  startTimeoutMs = LOGS_START_TIMEOUT_MS,
 ): Promise<ServiceLogStream> {
   const connection = await openAgentConnection(vsockPath);
 
@@ -102,7 +103,7 @@ export async function openServiceLogStream(
     const first = await readFrameWithin(connection, {
       call: 'services.logs start',
       vsockPath,
-      timeoutMs: LOGS_START_TIMEOUT_MS,
+      timeoutMs: startTimeoutMs,
     });
 
     if (first === null) {
