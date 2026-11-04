@@ -5,10 +5,8 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
-  readlinkSync,
   rmSync,
   statSync,
-  utimesSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -22,15 +20,23 @@ function setupTest() {
     rmSync(cacheDirectory, { recursive: true, force: true });
   });
 
-  const pidNamespace = readlinkSync('/proc/self/ns/pid').replaceAll(/\D/gu, '');
+  const dependencies = {
+    owner: { pid: 4182, namespace: '4026531836' },
+    now: Date.now,
+    probeProcessRunning: () => true,
+  };
 
-  return { cacheDirectory, pidNamespace };
+  return { cacheDirectory, dependencies };
 }
 
 test('it migrates the template up to the migration it names', async () => {
   const ctx = setupTest();
 
-  const template = await createMigratedTemplate(ctx.cacheDirectory, '003_add_broker');
+  const template = await createMigratedTemplate(
+    ctx.cacheDirectory,
+    '003_add_broker',
+    ctx.dependencies,
+  );
 
   const opened = new Database(template, { readonly: true });
 
@@ -53,11 +59,19 @@ test('it migrates the template up to the migration it names', async () => {
 test('it reuses the template it built on the next call', async () => {
   const ctx = setupTest();
 
-  const first = await createMigratedTemplate(ctx.cacheDirectory, '003_add_broker');
+  const first = await createMigratedTemplate(
+    ctx.cacheDirectory,
+    '003_add_broker',
+    ctx.dependencies,
+  );
 
   const built = statSync(first).ino;
 
-  const second = await createMigratedTemplate(ctx.cacheDirectory, '003_add_broker');
+  const second = await createMigratedTemplate(
+    ctx.cacheDirectory,
+    '003_add_broker',
+    ctx.dependencies,
+  );
 
   expect(statSync(second).ino).toBe(built);
 });
@@ -65,51 +79,61 @@ test('it reuses the template it built on the next call', async () => {
 test('it marks the template as used on each call', async () => {
   const ctx = setupTest();
 
-  const template = await createMigratedTemplate(ctx.cacheDirectory, '003_add_broker');
+  await createMigratedTemplate(ctx.cacheDirectory, '003_add_broker', ctx.dependencies);
 
-  const twoHoursAgo = new Date(Date.now() - 7_200_000);
+  const template = await createMigratedTemplate(ctx.cacheDirectory, '003_add_broker', {
+    ...ctx.dependencies,
+    now: () => 1_800_000_000_000,
+  });
 
-  utimesSync(template, twoHoursAgo, twoHoursAgo);
-
-  await createMigratedTemplate(ctx.cacheDirectory, '003_add_broker');
-
-  expect(statSync(template).mtimeMs).toBeWithin(Date.now() - 60_000, Date.now() + 1);
+  expect(statSync(template).mtimeMs).toBe(1_800_000_000_000);
 });
 
 test('it removes the files of older migrations unused for an hour when it builds one', async () => {
   const ctx = setupTest();
 
-  const twoHoursAgo = new Date(Date.now() - 7_200_000);
+  writeFileSync(join(ctx.cacheDirectory, '003_add_broker-0123456789abcdef.sqlite'), '');
+  writeFileSync(join(ctx.cacheDirectory, '003_add_broker-0123456789abcdef.sqlite.lock'), '');
 
-  for (const name of [
-    '003_add_broker-0123456789abcdef.sqlite',
-    '003_add_broker-0123456789abcdef.sqlite.lock',
-    `pid${String(process.pid)}-ns${ctx.pidNamespace}-003_add_broker-0123456789abcdef.sqlite`,
-  ]) {
-    writeFileSync(join(ctx.cacheDirectory, name), '');
-    utimesSync(join(ctx.cacheDirectory, name), twoHoursAgo, twoHoursAgo);
-  }
+  writeFileSync(
+    join(ctx.cacheDirectory, 'pid4182-ns4026531836-003_add_broker-0123456789abcdef.sqlite'),
+    '',
+  );
 
-  const template = await createMigratedTemplate(ctx.cacheDirectory, '003_add_broker');
+  const template = await createMigratedTemplate(ctx.cacheDirectory, '003_add_broker', {
+    ...ctx.dependencies,
+    now: () => Date.now() + 7_200_000,
+  });
 
   expect(readdirSync(ctx.cacheDirectory)).toStrictEqual([basename(template)]);
 });
 
 test('it keeps the files of older migrations that a running build holds', async () => {
   const ctx = setupTest();
-  const owner = `pid${String(process.pid)}-ns${ctx.pidNamespace}`;
 
   writeFileSync(join(ctx.cacheDirectory, '003_add_broker-0123456789abcdef.sqlite'), '');
-  writeFileSync(join(ctx.cacheDirectory, '003_add_broker-0123456789abcdef.sqlite.lock'), owner);
-  writeFileSync(join(ctx.cacheDirectory, `${owner}-003_add_broker-0123456789abcdef.sqlite`), '');
 
-  const template = await createMigratedTemplate(ctx.cacheDirectory, '003_add_broker');
+  writeFileSync(
+    join(ctx.cacheDirectory, '003_add_broker-0123456789abcdef.sqlite.lock'),
+    'pid4183-ns4026531836',
+  );
+
+  writeFileSync(
+    join(ctx.cacheDirectory, 'pid4183-ns4026531836-003_add_broker-0123456789abcdef.sqlite'),
+    '',
+  );
+
+  const template = await createMigratedTemplate(
+    ctx.cacheDirectory,
+    '003_add_broker',
+    ctx.dependencies,
+  );
 
   expect(readdirSync(ctx.cacheDirectory).toSorted()).toStrictEqual(
     [
       '003_add_broker-0123456789abcdef.sqlite',
       '003_add_broker-0123456789abcdef.sqlite.lock',
-      `${owner}-003_add_broker-0123456789abcdef.sqlite`,
+      'pid4183-ns4026531836-003_add_broker-0123456789abcdef.sqlite',
       basename(template),
     ].toSorted(),
   );
@@ -118,16 +142,19 @@ test('it keeps the files of older migrations that a running build holds', async 
 test('it builds the template when a killed run left its lock', async () => {
   const ctx = setupTest();
 
-  const template = await createMigratedTemplate(ctx.cacheDirectory, '003_add_broker');
-
-  const exited = Bun.spawn(['true']);
-
-  await exited.exited;
+  const template = await createMigratedTemplate(
+    ctx.cacheDirectory,
+    '003_add_broker',
+    ctx.dependencies,
+  );
 
   rmSync(template);
-  writeFileSync(`${template}.lock`, `pid${String(exited.pid)}-ns${ctx.pidNamespace}`);
+  writeFileSync(`${template}.lock`, 'pid4183-ns4026531836');
 
-  await createMigratedTemplate(ctx.cacheDirectory, '003_add_broker');
+  await createMigratedTemplate(ctx.cacheDirectory, '003_add_broker', {
+    ...ctx.dependencies,
+    probeProcessRunning: (pid) => pid !== 4183,
+  });
 
   expect(existsSync(template)).toBeTrue();
 });
@@ -135,15 +162,19 @@ test('it builds the template when a killed run left its lock', async () => {
 test('it builds the template when a lock is older than 30 s, whatever its owner', async () => {
   const ctx = setupTest();
 
-  const template = await createMigratedTemplate(ctx.cacheDirectory, '003_add_broker');
-
-  const aMinuteAgo = new Date(Date.now() - 60_000);
+  const template = await createMigratedTemplate(
+    ctx.cacheDirectory,
+    '003_add_broker',
+    ctx.dependencies,
+  );
 
   rmSync(template);
   writeFileSync(`${template}.lock`, '');
-  utimesSync(`${template}.lock`, aMinuteAgo, aMinuteAgo);
 
-  await createMigratedTemplate(ctx.cacheDirectory, '003_add_broker');
+  await createMigratedTemplate(ctx.cacheDirectory, '003_add_broker', {
+    ...ctx.dependencies,
+    now: () => Date.now() + 60_000,
+  });
 
   expect(existsSync(template)).toBeTrue();
 });
@@ -151,12 +182,16 @@ test('it builds the template when a lock is older than 30 s, whatever its owner'
 test('it waits for the template that a running build holds the lock for', async () => {
   const ctx = setupTest();
 
-  const template = await createMigratedTemplate(ctx.cacheDirectory, '003_add_broker');
+  const template = await createMigratedTemplate(
+    ctx.cacheDirectory,
+    '003_add_broker',
+    ctx.dependencies,
+  );
 
   rmSync(template);
-  writeFileSync(`${template}.lock`, `pid${String(process.pid)}-ns${ctx.pidNamespace}`);
+  writeFileSync(`${template}.lock`, 'pid4183-ns4026531836');
 
-  const waited = createMigratedTemplate(ctx.cacheDirectory, '003_add_broker');
+  const waited = createMigratedTemplate(ctx.cacheDirectory, '003_add_broker', ctx.dependencies);
 
   writeFileSync(template, 'built by the run that holds the lock');
 
@@ -165,19 +200,26 @@ test('it waits for the template that a running build holds the lock for', async 
   expect(readFileSync(template, 'utf8')).toBe('built by the run that holds the lock');
 });
 
-test('it leaves a fresh lock of a run in another PID namespace', async () => {
+test('it leaves a fresh lock of another PID namespace whose PID is not running here', async () => {
   const ctx = setupTest();
 
-  const template = await createMigratedTemplate(ctx.cacheDirectory, '003_add_broker');
+  const template = await createMigratedTemplate(
+    ctx.cacheDirectory,
+    '003_add_broker',
+    ctx.dependencies,
+  );
 
   rmSync(template);
-  writeFileSync(`${template}.lock`, 'pid1-ns1');
+  writeFileSync(`${template}.lock`, 'pid4183-ns4026532001');
 
-  const waited = createMigratedTemplate(ctx.cacheDirectory, '003_add_broker');
+  const waited = createMigratedTemplate(ctx.cacheDirectory, '003_add_broker', {
+    ...ctx.dependencies,
+    probeProcessRunning: () => false,
+  });
 
   writeFileSync(template, 'built in another sandbox');
 
   await waited;
 
-  expect(readFileSync(`${template}.lock`, 'utf8')).toBe('pid1-ns1');
+  expect(readFileSync(`${template}.lock`, 'utf8')).toBe('pid4183-ns4026532001');
 });

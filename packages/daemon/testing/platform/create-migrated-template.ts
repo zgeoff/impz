@@ -4,56 +4,56 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
-  readlinkSync,
   renameSync,
   rmSync,
   statSync,
   utimesSync,
   writeFileSync,
 } from 'node:fs';
-import { basename, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { buildSQLiteDialect } from '@zgeoff/kysely-bun-sqlite';
 import { Kysely } from 'kysely';
+import { match } from 'ts-pattern';
 import { runMigrationsTo } from '../../src/platform/db/run-migrations';
 import type { DB } from '../../src/platform/db/schema';
 import { isStaleTemplateFile } from './is-stale-template-file';
 import type { TemplateFile } from './is-stale-template-file';
+import { pickTemplateStep } from './pick-template-step';
+import type { TemplateStep } from './pick-template-step';
+
+export interface TemplateDependencies {
+  readonly owner: { readonly pid: number; readonly namespace: string };
+  readonly now: () => number;
+  readonly probeProcessRunning: (pid: number) => boolean;
+}
 
 export async function createMigratedTemplate(
   cacheDirectory: string,
   migration: string,
+  dependencies: TemplateDependencies,
 ): Promise<string> {
   mkdirSync(cacheDirectory, { recursive: true });
 
   const hash = readMigrationsHash();
   const template = join(cacheDirectory, `${migration}-${hash}.sqlite`);
   const lock = `${template}.lock`;
-  const namespace = readPidNamespace();
-  const owner = `pid${String(process.pid)}-ns${namespace}`;
 
-  while (!existsSync(template)) {
-    if (createLock(lock, owner)) {
-      const building = join(cacheDirectory, `${owner}-${basename(template)}`);
-
-      try {
-        await writeTemplate(building, migration);
-
-        renameSync(building, template);
-      } finally {
-        rmSync(building, { force: true });
+  for (
+    let step = readTemplateStep(template, lock, hash, dependencies);
+    step !== 'reuse';
+    step = readTemplateStep(template, lock, hash, dependencies)
+  ) {
+    await match(step)
+      .with('build', () => runTemplateBuild(template, migration, hash, dependencies))
+      .with('remove-lock', () => {
         rmSync(lock, { force: true });
-      }
-
-      removeStaleTemplateFiles(cacheDirectory, hash, namespace);
-    } else if (probeStaleTemplateFile(cacheDirectory, basename(lock), hash, namespace)) {
-      rmSync(lock, { force: true });
-    } else {
-      await Bun.sleep(10);
-    }
+      })
+      .with('wait', () => Bun.sleep(10))
+      .exhaustive();
   }
 
   // a sweep keeps a template that a run used in the last hour
-  const now = new Date();
+  const now = new Date(dependencies.now());
 
   utimesSync(template, now, now);
 
@@ -77,10 +77,104 @@ function readMigrationsHash(): string {
   return hasher.digest('hex').slice(0, 16);
 }
 
-// the PID namespace tells a run in this sandbox from one in another sandbox
-// that shares the folder and reuses the same PIDs
-function readPidNamespace(): string {
-  return readlinkSync('/proc/self/ns/pid').replaceAll(/\D/gu, '');
+function readTemplateStep(
+  template: string,
+  lock: string,
+  hash: string,
+  dependencies: TemplateDependencies,
+): TemplateStep {
+  const lockFile = readTemplateFile(lock, dependencies);
+
+  return pickTemplateStep(existsSync(template), lockFile, hash);
+}
+
+function readTemplateFile(path: string, dependencies: TemplateDependencies): TemplateFile | null {
+  const modifiedMs = readModifiedMs(path);
+
+  if (modifiedMs === null) {
+    return null;
+  }
+
+  const name = basename(path);
+  const ownerText = name.endsWith('.lock') ? readLockOwner(path) : name;
+  const owner = parseRunOwner(ownerText);
+
+  return {
+    name,
+    ageMs: dependencies.now() - modifiedMs,
+    isOwnerGone:
+      owner?.namespace === dependencies.owner.namespace &&
+      !dependencies.probeProcessRunning(owner.pid),
+  };
+}
+
+function readModifiedMs(path: string): number | null {
+  try {
+    return statSync(path).mtimeMs;
+  } catch (error) {
+    if (hasErrorCode(error, 'ENOENT')) {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
+function hasErrorCode(error: unknown, code: string): boolean {
+  return error instanceof Error && 'code' in error && error.code === code;
+}
+
+function readLockOwner(lock: string): string {
+  try {
+    return readFileSync(lock, 'utf8');
+  } catch (error) {
+    if (hasErrorCode(error, 'ENOENT')) {
+      return '';
+    }
+
+    throw error;
+  }
+}
+
+// a lock holds its owner, and a build's files start with it
+function parseRunOwner(text: string): { pid: number; namespace: string } | null {
+  const groups = /^pid(?<pid>\d+)-ns(?<namespace>\d+)(?:-|$)/u.exec(text)?.groups;
+  const pid = groups?.['pid'];
+  const namespace = groups?.['namespace'];
+
+  if (pid === undefined || namespace === undefined) {
+    return null;
+  }
+
+  return { pid: Number(pid), namespace };
+}
+
+async function runTemplateBuild(
+  template: string,
+  migration: string,
+  hash: string,
+  dependencies: TemplateDependencies,
+): Promise<void> {
+  const owner = `pid${String(dependencies.owner.pid)}-ns${dependencies.owner.namespace}`;
+  const lock = `${template}.lock`;
+
+  // another run took the lock first, so the next step waits for its build
+  if (!createLock(lock, owner)) {
+    return;
+  }
+
+  const building = join(dirname(template), `${owner}-${basename(template)}`);
+
+  try {
+    await writeTemplate(building, migration);
+
+    renameSync(building, template);
+  } finally {
+    rmSync(building, { force: true });
+    rmSync(lock, { force: true });
+  }
+
+  removeStaleTemplateFiles(dirname(template), hash, dependencies);
 }
 
 function createLock(lock: string, owner: string): boolean {
@@ -89,7 +183,7 @@ function createLock(lock: string, owner: string): boolean {
 
     return true;
   } catch (error) {
-    if (error instanceof Error && 'code' in error && error.code === 'EEXIST') {
+    if (hasErrorCode(error, 'EEXIST')) {
       return false;
     }
 
@@ -116,94 +210,16 @@ async function writeTemplate(path: string, migration: string): Promise<void> {
   }
 }
 
-function removeStaleTemplateFiles(cacheDirectory: string, hash: string, namespace: string): void {
-  for (const name of readdirSync(cacheDirectory)) {
-    if (probeStaleTemplateFile(cacheDirectory, name, hash, namespace)) {
-      rmSync(join(cacheDirectory, name), { force: true });
-    }
-  }
-}
-
-function probeStaleTemplateFile(
+function removeStaleTemplateFiles(
   cacheDirectory: string,
-  name: string,
   hash: string,
-  namespace: string,
-): boolean {
-  const file = readTemplateFile(cacheDirectory, name, namespace);
+  dependencies: TemplateDependencies,
+): void {
+  const stale = readdirSync(cacheDirectory)
+    .map((name) => readTemplateFile(join(cacheDirectory, name), dependencies))
+    .filter((file): file is TemplateFile => file !== null && isStaleTemplateFile(file, hash));
 
-  return file !== null && isStaleTemplateFile(file, hash);
-}
-
-function readTemplateFile(
-  cacheDirectory: string,
-  name: string,
-  namespace: string,
-): TemplateFile | null {
-  const path = join(cacheDirectory, name);
-  const modifiedMs = readModifiedMs(path);
-
-  if (modifiedMs === null) {
-    return null;
-  }
-
-  const ownerText = name.endsWith('.lock') ? readLockOwner(path) : name;
-  const owner = parseRunOwner(ownerText);
-
-  return {
-    name,
-    ageMs: Date.now() - modifiedMs,
-    isOwnerGone: owner?.namespace === namespace && !probeProcessRunning(owner.pid),
-  };
-}
-
-function readModifiedMs(path: string): number | null {
-  try {
-    return statSync(path).mtimeMs;
-  } catch (error) {
-    if (isMissingFileError(error)) {
-      return null;
-    }
-
-    throw error;
-  }
-}
-
-function isMissingFileError(error: unknown): boolean {
-  return error instanceof Error && 'code' in error && error.code === 'ENOENT';
-}
-
-function readLockOwner(lock: string): string {
-  try {
-    return readFileSync(lock, 'utf8');
-  } catch (error) {
-    if (isMissingFileError(error)) {
-      return '';
-    }
-
-    throw error;
-  }
-}
-
-// a lock holds its owner, and a build's files start with it
-function parseRunOwner(text: string): { pid: number; namespace: string } | null {
-  const groups = /^pid(?<pid>\d+)-ns(?<namespace>\d+)(?:-|$)/u.exec(text)?.groups;
-  const pid = groups?.['pid'];
-  const namespace = groups?.['namespace'];
-
-  if (pid === undefined || namespace === undefined) {
-    return null;
-  }
-
-  return { pid: Number(pid), namespace };
-}
-
-function probeProcessRunning(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-
-    return true;
-  } catch (error) {
-    return !(error instanceof Error && 'code' in error && error.code === 'ESRCH');
+  for (const file of stale) {
+    rmSync(join(cacheDirectory, file.name), { force: true });
   }
 }
