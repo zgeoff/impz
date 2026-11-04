@@ -65,8 +65,9 @@ the result of the CI job that runs the command. CI runs every row but One journe
 ## Where a test lives
 
 - Put a client or MCP server test that needs a real impd beside the module it tests, and boot impd
-  with `startTestImpd` from `@impz/daemon/test-utils`. The package takes `@impz/daemon` as a dev
-  dependency only, so its published build never depends on impd.
+  with [`startTestImpd`](../../../packages/daemon/src/test-utils/start-test-impd.ts) from
+  `@impz/daemon/test-utils`. `@impz/client` and `@impz/mcp` take `@impz/daemon` as a dev dependency
+  only, so neither published build depends on impd.
 - Put a test of the end-to-end or bootstrap harness in
   [`packages/e2e-harness/`](../../../packages/e2e-harness/). It runs in the unit run, with no KVM.
   Keep [`packages/daemon/e2e/`](../../../packages/daemon/e2e/) for the suites and their fixtures.
@@ -86,8 +87,9 @@ the result of the CI job that runs the command. CI runs every row but One journe
   root. `IMP_HOST_TESTS=required`, which CI sets, turns that skip into a failure.
 - Pass a lane's limit to `bun test` with `--timeout` in the lane's script, as the `test:*` scripts
   do.
-- Expect a VM journey file, `<prefix>-<journey>.test.ts`, to get the limit of the `e2e` key in the
-  `lanes` map, and a ZFS journey file, `<prefix>-<journey>.zfs.test.ts`, the limit of the `zfs` key.
+- Keep a test in a VM journey file, `<prefix>-<journey>.test.ts`, under the limit of the `e2e` key
+  in the `lanes` map, and one in a ZFS journey file, `<prefix>-<journey>.zfs.test.ts`, under the
+  limit of the `zfs` key. `zgeoff/max-test-timeout` fails a timeout above it.
 - When you add or slow a ZFS-lane suite, update its `seconds` in
   [`suites.ts`](../../../packages/e2e-harness/src/suites.ts), counting the build of any image only
   it needs. CI splits the lane into shards, longest first, by that figure.
@@ -98,8 +100,10 @@ the result of the CI job that runs the command. CI runs every row but One journe
 
 - Set an impd setting with [`updateEnv`](../../../packages/shared/src/test-utils/update-env.ts)
   before `setupTest()`. The [root preload](../../../packages/shared/src/test-utils/preload.ts)
-  deletes every `IMP_*` variable the shell passed, except the four run gates that
-  [`removeAmbientImpEnv`](../../../packages/shared/src/test-utils/remove-ambient-imp-env.ts) keeps.
+  deletes every `IMP_*` variable the shell passed, except `IMP_HOST_TESTS`, `IMP_TEST_SMALL_FS`,
+  `IMP_TEST_ZFS_ROOT` and `IMP_TEST_ZFS_DIR`, which
+  [`removeAmbientImpEnv`](../../../packages/shared/src/test-utils/remove-ambient-imp-env.ts) keeps
+  for the lanes.
 - Expect every child process to inherit `NO_PROXY=*` from the root preload, which sets it so that
   Bun's `fetch` never sends a loopback request through the shell's `HTTPS_PROXY`. When a test wants
   a child to use a proxy, clear `NO_PROXY` in that child's environment, or pass curl `--noproxy ''`.
