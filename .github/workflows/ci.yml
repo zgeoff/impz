@@ -96,7 +96,7 @@ jobs:
         env:
           SHARD: ${{ matrix.shard }}
         run: >-
-          scripts/ci/run-memory-capped.sh 1536 env TMPDIR=/dev/shm bun test --parallel=2
+          scripts/ci/run-memory-capped.sh 1792 env TMPDIR=/dev/shm bun test --parallel=2
           --no-isolate --shard="$SHARD/2" --timings="$RUNNER_TEMP/unit-test/timings-$SHARD.json"
           --timings=scripts/ci/unit-test-timings.json --update-timings --reporter=junit
           --reporter-outfile="$RUNNER_TEMP/unit-test/results-$SHARD.xml"

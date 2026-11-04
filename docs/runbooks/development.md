@@ -33,7 +33,7 @@ scripts/test-e2e.sh --clean       # end to end, from a clean state
 `bun run check` runs the whole-tree gates of CI's `checks` job: dead code, format, the type-aware
 lint, doc links, types and every test. It needs more memory than a small host has, so run it on a
 large one, or leave it to CI. CI splits `bun test` into two shards on two runners, with two workers
-each, and runs each shard in a cgroup capped at 1536 MiB with no swap, through
+each, and runs each shard in a cgroup capped at 1792 MiB with no swap, through
 `scripts/ci/run-memory-capped.sh`, so a shard fails there before it outgrows a 2 GiB imp.
 `bun run lint:shell` needs shellcheck 0.11.0 and shfmt 3.14.1 on `PATH`, the versions CI pins; the
 shellcheck job in `.github/workflows/ci.yml` pins actionlint, zizmor and hadolint too. Run the
@@ -306,7 +306,7 @@ Lefthook installs the hooks with `bun install`.
 | Job          | Required | What it runs                                                                                                                                                                                                                                                     |
 | ------------ | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `gitleaks`   | yes      | A secret scan over the history.                                                                                                                                                                                                                                  |
-| `checks`     | yes      | Passes only when the `checks-unit` and `checks-lanes` jobs passed: `bun test` in two shards of two workers, capped at 1536 MiB with no swap, and `bun run audit`, the Bun pin check, `bun run check:static`, the lane tests and the dashboard's tests and build. |
+| `checks`     | yes      | Passes only when the `checks-unit` and `checks-lanes` jobs passed: `bun test` in two shards of two workers, capped at 1792 MiB with no swap, and `bun run audit`, the Bun pin check, `bun run check:static`, the lane tests and the dashboard's tests and build. |
 | `go`         | yes      | In `agent/`, `host/ksm-exec`, `host/oci-fetch` and `host/uffd-handler`: `gofmt`, `go vet`, golangci-lint, govulncheck, deadcode, the tests; the agent's again as root with the `root` tag. Also `gofmt`, vet and lint on the Dockerfile difftest module.         |
 | `shellcheck` | yes      | `bun run lint:shell`, actionlint, the shared workflow lint and zizmor over `.github/`, hadolint over both Dockerfiles, and the tests that shellcheck the shell production code holds as text.                                                                    |
 | `cli`        | yes      | Compiles the CLI for every platform and runs the linux-x64 one; builds the release image's compile stage.                                                                                                                                                        |
