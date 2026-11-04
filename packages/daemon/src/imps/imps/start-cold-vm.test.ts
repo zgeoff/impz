@@ -168,6 +168,45 @@ test('it logs the guest steps after the host steps of a kernel boot', async () =
   );
 });
 
+test('it logs the host stall that grew while a kernel boot ran, after its guest steps', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  ctx.fake.setGuestBootSteps({ world: 9, mount: 35 });
+
+  createStubHostLoad(ctx.procRoot, {
+    cpuStallUs: 800_000,
+    ioStallUs: 120_000,
+    memoryStallUs: 0,
+    stealUs: 90_000,
+  });
+
+  const booting = ctx.fake.hold('boot');
+  const once = ctx.client.imps.create({ name: 'once', vcpus: 1, memoryMib: 256 });
+
+  await booting.reached;
+
+  createStubHostLoad(ctx.procRoot, {
+    cpuStallUs: 803_000,
+    ioStallUs: 1_330_000,
+    memoryStallUs: 25_000,
+    stealUs: 100_000,
+  });
+
+  booting.release();
+
+  await once;
+
+  expect(ctx.logs).toSatisfyAny(
+    (line: string) =>
+      line.startsWith('INFO impd.imps imp=once booted pid ') &&
+      line.endsWith(
+        '; guest world=9ms mount=35ms; host stall cpu=3ms io=1210ms memory=25ms steal=10ms',
+      ),
+  );
+});
+
 test('it leaves no broken record behind once a restored imp settles', async () => {
   const ctx = await setupTest();
 
