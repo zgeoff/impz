@@ -8,7 +8,9 @@ import {
   readdirSync,
   renameSync,
   rmSync,
+  statSync,
   symlinkSync,
+  utimesSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -34,7 +36,9 @@ function setupTest() {
     cacheDirectory,
     migrationsHash: '0123456789abcdef',
     owner: { pid: 4182, namespace: '4026531836' },
-    now: () => 1_800_000_000_000,
+
+    // before every real file time, so only a time that a test sets ages a file
+    now: () => 1_000_000_000_000,
     createBuildID: () => buildIDs.next(),
     probeProcessRunning: () => true,
     fileSystem: {
@@ -44,7 +48,7 @@ function setupTest() {
       readdirSync,
       renameSync,
       rmSync,
-      statSync: () => ({ mtimeMs: 1_800_000_000_000 }),
+      statSync,
       writeFileSync,
     },
     writeTemplate: buildStubTemplateWriter({ contents: 'a migrated template' }).writeTemplate,
@@ -151,21 +155,29 @@ test('it builds the template that a sweep removed', async () => {
 test('it removes the files of older migrations over an hour old when it builds one', async () => {
   const ctx = setupTest();
 
+  const twoHoursBefore = new Date(999_992_800_000);
+
   mkdirSync(ctx.cacheDirectory);
   writeFileSync(join(ctx.cacheDirectory, '003_add_broker-fedcba9876543210.sqlite'), '');
+
+  utimesSync(
+    join(ctx.cacheDirectory, '003_add_broker-fedcba9876543210.sqlite'),
+    twoHoursBefore,
+    twoHoursBefore,
+  );
 
   writeFileSync(
     join(ctx.cacheDirectory, 'pid4183-ns4026531836-3f2a-003_add_broker-fedcba9876543210.sqlite'),
     '',
   );
 
-  await copyMigratedTemplate(join(ctx.directory, 'imp.sqlite'), '003_add_broker', {
-    ...ctx.dependencies,
-    fileSystem: {
-      ...ctx.dependencies.fileSystem,
-      statSync: () => ({ mtimeMs: 1_799_992_800_000 }),
-    },
-  });
+  utimesSync(
+    join(ctx.cacheDirectory, 'pid4183-ns4026531836-3f2a-003_add_broker-fedcba9876543210.sqlite'),
+    twoHoursBefore,
+    twoHoursBefore,
+  );
+
+  await copyMigratedTemplate(join(ctx.directory, 'imp.sqlite'), '003_add_broker', ctx.dependencies);
 
   expect(readdirSync(ctx.cacheDirectory)).toStrictEqual(['003_add_broker-0123456789abcdef.sqlite']);
 });
@@ -173,12 +185,26 @@ test('it removes the files of older migrations over an hour old when it builds o
 test('it keeps a template of older migrations built within the hour and a running build', async () => {
   const ctx = setupTest();
 
+  const aMinuteBefore = new Date(999_999_940_000);
+
   mkdirSync(ctx.cacheDirectory);
   writeFileSync(join(ctx.cacheDirectory, '003_add_broker-fedcba9876543210.sqlite'), '');
+
+  utimesSync(
+    join(ctx.cacheDirectory, '003_add_broker-fedcba9876543210.sqlite'),
+    aMinuteBefore,
+    aMinuteBefore,
+  );
 
   writeFileSync(
     join(ctx.cacheDirectory, 'pid4183-ns4026531836-3f2a-003_add_broker-fedcba9876543210.sqlite'),
     '',
+  );
+
+  utimesSync(
+    join(ctx.cacheDirectory, 'pid4183-ns4026531836-3f2a-003_add_broker-fedcba9876543210.sqlite'),
+    aMinuteBefore,
+    aMinuteBefore,
   );
 
   await copyMigratedTemplate(join(ctx.directory, 'imp.sqlite'), '003_add_broker', ctx.dependencies);
@@ -256,11 +282,15 @@ test('it throws when the destination links to a missing path', () => {
 test('it skips a file that leaves the cache while it sweeps', async () => {
   const ctx = setupTest();
 
+  // the listing names a build file that left before the sweep reads its times
   await copyMigratedTemplate(join(ctx.directory, 'imp.sqlite'), '003_add_broker', {
     ...ctx.dependencies,
     fileSystem: {
       ...ctx.dependencies.fileSystem,
-      statSync: (path) => new Map<string, { mtimeMs: number }>().get(path),
+      readdirSync: () => [
+        '003_add_broker-0123456789abcdef.sqlite',
+        'pid4183-ns4026531836-7a7a-003_add_broker-fedcba9876543210.sqlite',
+      ],
     },
   });
 
