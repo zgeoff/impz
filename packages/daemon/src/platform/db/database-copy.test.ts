@@ -7,6 +7,8 @@ import { sql } from 'kysely';
 import invariant from 'tiny-invariant';
 import { createMigratedDatabaseFile } from '../../../testing/platform/create-migrated-database-file';
 import { createUnmigratedDatabase } from '../../../testing/platform/create-unmigrated-database';
+import { formatRunPrefix } from '../../../testing/platform/format-run-prefix';
+import { readRunOwner } from '../../../testing/platform/read-run-owner';
 import { createDiskBudget } from '../../vm/storage/disk-budget';
 import { writeConsistentCopy, writeDatabaseCopy } from './database-copy';
 import { openDatabase } from './open-database';
@@ -19,7 +21,8 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dataDir = mkdtempSync(join(tmpdir(), 'impd-db-copy-'));
+  const prefix = formatRunPrefix(readRunOwner());
+  const dataDir = mkdtempSync(join(tmpdir(), `${prefix}impd-db-copy-`));
 
   stack.defer(() => {
     rmSync(dataDir, { recursive: true, force: true });

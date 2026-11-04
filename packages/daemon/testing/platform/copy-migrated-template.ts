@@ -3,9 +3,11 @@ import type { copyFileSync, existsSync, mkdirSync, renameSync, rmSync } from 'no
 import { basename, dirname, join } from 'node:path';
 import { match } from 'ts-pattern';
 import { collectStaleTemplateFiles } from './collect-stale-template-files';
+import { formatRunPrefix } from './format-run-prefix';
 import type { TemplateFile } from './is-stale-template-file';
 import { isTemplateGoneError } from './is-template-gone-error';
 import { pickCacheAction } from './pick-cache-action';
+import type { RunOwner } from './read-run-owner';
 
 interface StatOptions {
   readonly throwIfNoEntry: false;
@@ -28,7 +30,7 @@ interface TemplateFileSystem {
 export interface TemplateDependencies {
   readonly cacheDirectory: string;
   readonly migrationsHash: string;
-  readonly owner: { readonly pid: number; readonly namespace: string };
+  readonly owner: RunOwner;
   readonly now: () => number;
   readonly probeProcessRunning: (pid: number) => boolean;
   readonly fileSystem: TemplateFileSystem;
@@ -71,8 +73,8 @@ async function runTemplateBuild(
   migration: string,
   dependencies: TemplateDependencies,
 ): Promise<void> {
-  const owner = `pid${String(dependencies.owner.pid)}-ns${dependencies.owner.namespace}`;
-  const building = join(dirname(template), `${owner}-${randomUUID()}-${basename(template)}`);
+  const prefix = formatRunPrefix(dependencies.owner);
+  const building = join(dirname(template), `${prefix}${randomUUID()}-${basename(template)}`);
 
   try {
     await dependencies.writeTemplate(building, migration);

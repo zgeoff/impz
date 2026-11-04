@@ -17,9 +17,12 @@ import { join } from 'node:path';
 import { buildStubAnswerQueue } from '@impz/test-utils/build-stub-answer-queue';
 import { buildStubTemplateWriter } from './build-stub-template-writer';
 import { copyMigratedTemplate } from './copy-migrated-template';
+import { formatRunPrefix } from './format-run-prefix';
+import { readRunOwner } from './read-run-owner';
 
 function setupTest() {
-  const directory = mkdtempSync(join(tmpdir(), 'imp-template-'));
+  const prefix = formatRunPrefix(readRunOwner());
+  const directory = mkdtempSync(join(tmpdir(), `${prefix}imp-template-`));
 
   onTestFinished(() => {
     rmSync(directory, { recursive: true, force: true });

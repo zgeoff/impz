@@ -4,9 +4,12 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createMigratedDatabaseFile } from './create-migrated-database-file';
+import { formatRunPrefix } from './format-run-prefix';
+import { readRunOwner } from './read-run-owner';
 
 function setupTest() {
-  const directory = mkdtempSync(join(tmpdir(), 'imp-migrated-file-'));
+  const prefix = formatRunPrefix(readRunOwner());
+  const directory = mkdtempSync(join(tmpdir(), `${prefix}imp-migrated-file-`));
 
   onTestFinished(() => {
     rmSync(directory, { recursive: true, force: true });

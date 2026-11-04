@@ -3,9 +3,12 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildStubTemplateWriter } from './build-stub-template-writer';
+import { formatRunPrefix } from './format-run-prefix';
+import { readRunOwner } from './read-run-owner';
 
 function setupTest() {
-  const directory = mkdtempSync(join(tmpdir(), 'imp-template-writer-'));
+  const prefix = formatRunPrefix(readRunOwner());
+  const directory = mkdtempSync(join(tmpdir(), `${prefix}imp-template-writer-`));
 
   onTestFinished(() => {
     rmSync(directory, { recursive: true, force: true });

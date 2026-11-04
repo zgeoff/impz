@@ -2,10 +2,13 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { formatRunPrefix } from './format-run-prefix';
 import { readMigrationsHash } from './read-migrations-hash';
+import { readRunOwner } from './read-run-owner';
 
 function setupTest() {
-  const dbDirectory = mkdtempSync(join(tmpdir(), 'imp-migrations-hash-'));
+  const prefix = formatRunPrefix(readRunOwner());
+  const dbDirectory = mkdtempSync(join(tmpdir(), `${prefix}imp-migrations-hash-`));
 
   onTestFinished(() => {
     rmSync(dbDirectory, { recursive: true, force: true });

@@ -9,6 +9,8 @@ import { sql } from 'kysely';
 import invariant from 'tiny-invariant';
 import { createMigratedDatabaseFile } from '../../../testing/platform/create-migrated-database-file';
 import { createUnmigratedDatabase } from '../../../testing/platform/create-unmigrated-database';
+import { formatRunPrefix } from '../../../testing/platform/format-run-prefix';
+import { readRunOwner } from '../../../testing/platform/read-run-owner';
 import { createSecretFiles } from '../../network/broker/secrets/secret-files';
 import { readImpByName } from './imps';
 import { MIGRATIONS, runMigrations, runMigrationsTo } from './run-migrations';
@@ -80,7 +82,8 @@ test('#runMigrations refuses a database a newer impd migrated, naming both versi
 });
 
 test('#runMigrations runs nothing on a database file a newer impd migrated', async () => {
-  const directory = mkdtempSync(join(tmpdir(), 'imp-migrate-'));
+  const prefix = formatRunPrefix(readRunOwner());
+  const directory = mkdtempSync(join(tmpdir(), `${prefix}imp-migrate-`));
 
   onTestFinished(() => {
     rmSync(directory, { recursive: true, force: true });
@@ -333,7 +336,8 @@ test('#runMigrations leaves every existing grant on the whole host in the grant 
 });
 
 test('#runMigrations leaves the broker reading the old value file in the grantable migration', async () => {
-  const dataDir = mkdtempSync(join(tmpdir(), 'imp-migrate-'));
+  const prefix = formatRunPrefix(readRunOwner());
+  const dataDir = mkdtempSync(join(tmpdir(), `${prefix}imp-migrate-`));
 
   onTestFinished(() => {
     rmSync(dataDir, { recursive: true, force: true });
