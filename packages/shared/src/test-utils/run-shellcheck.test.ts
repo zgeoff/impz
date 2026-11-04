@@ -1,8 +1,26 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createStubBin } from './create-stub-bin';
 import { runShellcheck } from './run-shellcheck';
+import { updateEnv } from './update-env';
+
+test('it names the signal that ended shellcheck, with the time it ran', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'imp-shellcheck-killed-'));
+
+  onTestFinished(() => {
+    rmSync(directory, { recursive: true, force: true });
+  });
+
+  const stub = createStubBin(directory, 'shellcheck', 'kill -KILL $$');
+
+  updateEnv('PATH', `${stub.bin}:${process.env['PATH'] ?? ''}`);
+
+  expect(() => runShellcheck('echo "$1"\n', 'sh')).toThrow(
+    /^shellcheck ended on SIGKILL after \d+ ms$/u,
+  );
+});
 
 test.skipIf(Bun.which('shellcheck') === null)('it reports no findings for a clean script', () => {
   expect(runShellcheck('echo "$1"\n', 'sh')).toStrictEqual({ exitCode: 0, output: '' });

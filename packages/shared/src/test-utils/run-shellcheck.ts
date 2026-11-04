@@ -17,9 +17,19 @@ export function runShellcheck(script: string, dialect: 'sh' | 'bash'): Shellchec
 
   writeFileSync(join(directory, 'script'), script);
 
+  const startedMs = performance.now();
+
   const run = Bun.spawnSync(['shellcheck', '--norc', `--shell=${dialect}`, 'script'], {
     cwd: directory,
+    env: process.env,
   });
+
+  // a signal leaves exitCode null whatever its type says, which reads as a finding
+  if (run.signalCode !== undefined) {
+    const elapsedMs = Math.round(performance.now() - startedMs);
+
+    throw new Error(`shellcheck ended on ${String(run.signalCode)} after ${String(elapsedMs)} ms`);
+  }
 
   return { exitCode: run.exitCode, output: run.stdout.toString() };
 }
