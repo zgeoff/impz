@@ -645,12 +645,7 @@ test('#sleep sleeps an imp that holds a lease and ends the lease', async () => {
   const ctx = await setupTest();
   const box = await startImpdHost(ctx.stack, { env: {} });
 
-  const image = buildMockNewImage({ name: 'base', sizeBytes: 6 });
-
-  await Bun.write(buildImagePaths(box.dataDir, image.digest).rootfs, 'rootfs');
-
-  await createImage(box.db, image);
-
+  await box.createTestImage('base');
   await box.client.imps.create({ name: 'dev' });
   await box.client.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 600 });
 
