@@ -290,7 +290,7 @@ function resolveImpBoundaries(boundaries: Readonly<ImpBoundaries>) {
     kernelOops: boundaries.kernelOops ?? createKernelOopsWatch(),
     readThreadIds: boundaries.readThreadIds ?? ((pid: number) => readThreadIds(pid)),
     readNetBytes: boundaries.readNetBytes ?? ((tap: string) => readGuestNetBytes(tap)),
-    readHostLoad: boundaries.readHostLoad ?? (() => readHostLoad()),
+    readHostLoad: boundaries.readHostLoad ?? readHostLoad,
     ...(boundaries.openTap !== undefined && { openTap: boundaries.openTap }),
     ...(boundaries.now !== undefined && { now: boundaries.now }),
   };
