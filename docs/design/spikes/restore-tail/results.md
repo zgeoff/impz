@@ -103,7 +103,7 @@ host stalled as a whole. `handler`, `parked` and `claim` slowed down in only som
 | ----------------------------------------------- | ------------------------------- | ------------------------------------------------------------- | ------------------ |
 | The first restore after impd or the host starts | builder B                       | the first restore after the 15:49 impd restart                | 86 ms              |
 | The first restore after impd or the host starts | preview A                       | the first restore in the window, 30 min after the host booted | 574 ms             |
-| The first restore after impd or the host starts | 2 home imps, outside the window | 08:35, 1 minute after the host booted                         | 2,834 and 1,039 ms |
+| The first restore after impd or the host starts | 2 home imps, outside the window | 08:35, 3 minutes after the host booted                        | 2,834 and 1,039 ms |
 | Several restores at the same time               | home D                          | started about 10 s after home C ended                         | 927 ms             |
 
 A fresh start can come with a slow restore: the first 3 restores after the host boot were slow. The
