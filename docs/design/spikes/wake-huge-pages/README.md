@@ -8,8 +8,8 @@ and resumes its guest, and impd logs each wake's steps in a `woke pid` line of t
 ## Question
 
 Since the host booted onto 2 MiB pages at 08:32 local time on 3 November 2026, the median wake has
-taken 3 times as long. Which step of the wake holds the extra time, and which change at the boot
-caused it?
+taken 678 ms, against 216 ms before. Which step of the wake holds the extra time, and which change
+at the boot caused it?
 
 ## Answer
 
