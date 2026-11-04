@@ -7,6 +7,7 @@ import type { BetterAuthPlugin } from 'better-auth';
 import { getMigrations } from 'better-auth/db/migration';
 import { sql } from 'kysely';
 import invariant from 'tiny-invariant';
+import { createMigratedDatabaseFile } from '../../../testing/platform/create-migrated-database-file';
 import { createUnmigratedDatabase } from '../../../testing/platform/create-unmigrated-database';
 import { createSecretFiles } from '../../network/broker/secrets/secret-files';
 import { readImpByName } from './imps';
@@ -85,13 +86,14 @@ test('#runMigrations runs nothing on a database file a newer impd migrated', asy
     rmSync(directory, { recursive: true, force: true });
   });
 
-  const db = createUnmigratedDatabase(join(directory, 'imp.sqlite'));
   const names = Object.keys(MIGRATIONS).toSorted();
   const older = names.at(-2);
 
   invariant(older !== undefined);
 
-  await runMigrationsTo(db, older);
+  await createMigratedDatabaseFile(join(directory, 'imp.sqlite'), older);
+
+  const db = createUnmigratedDatabase(join(directory, 'imp.sqlite'));
 
   await sql`INSERT INTO kysely_migration (name, timestamp)
     VALUES ('999_from_a_newer_impd', '2030-01-01T00:00:00.000Z')`.execute(db);

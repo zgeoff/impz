@@ -5,11 +5,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { sql } from 'kysely';
 import invariant from 'tiny-invariant';
+import { createMigratedDatabaseFile } from '../../../testing/platform/create-migrated-database-file';
 import { createUnmigratedDatabase } from '../../../testing/platform/create-unmigrated-database';
 import { createDiskBudget } from '../../vm/storage/disk-budget';
 import { writeConsistentCopy, writeDatabaseCopy } from './database-copy';
 import { openDatabase } from './open-database';
-import { MIGRATIONS, runMigrationsTo } from './run-migrations';
+import { MIGRATIONS } from './run-migrations';
 
 // impd keeps its database in WAL mode, so a copy taken while writes run must
 // read past the log
@@ -23,6 +24,12 @@ async function setupTest() {
   stack.defer(() => {
     rmSync(dataDir, { recursive: true, force: true });
   });
+
+  const lastMigration = Object.keys(MIGRATIONS).toSorted().at(-1);
+
+  invariant(lastMigration !== undefined);
+
+  await createMigratedDatabaseFile(join(dataDir, 'imp.sqlite'), lastMigration);
 
   const db = await openDatabase(join(dataDir, 'imp.sqlite'));
 
@@ -285,9 +292,11 @@ test('#writeConsistentCopy writes a copy of an older schema that migrates forwar
   const ctx = await setupTest();
 
   const restored = join(ctx.dataDir, 'restored.sqlite');
+
+  await createMigratedDatabaseFile(join(ctx.dataDir, 'older.sqlite'), '020_add_grantable_secrets');
+
   const older = createUnmigratedDatabase(join(ctx.dataDir, 'older.sqlite'));
 
-  await runMigrationsTo(older, '020_add_grantable_secrets');
   await writeConsistentCopy(older, restored);
 
   const db = await openDatabase(restored);
