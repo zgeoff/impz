@@ -2,12 +2,14 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { existsSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { createImpClient } from '@impz/client';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { IMPD_STARTUP_STEPS } from '../src/impd-startup-steps';
 import { listImps } from '../src/platform/db/imps';
+import { formatRunPrefix } from './platform/format-run-prefix';
+import { readRunOwner } from './platform/read-run-owner';
 import { startTestImpd } from './start-test-impd';
 import { StubVmError } from './vm/build-stub-vmm';
 
@@ -197,6 +199,20 @@ test('it has its data dir removed by the stack', async () => {
   expect(existsSync(harness.dataDir)).toBeFalse();
 });
 
+test('it names its own data dir with the PID and PID namespace of the test process', async () => {
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
+  const owner = readRunOwner();
+
+  const harness = await startTestImpd(stack);
+
+  expect(basename(harness.dataDir)).toStartWith(
+    `pid${String(owner.pid)}-ns${owner.namespace}-impd-test-`,
+  );
+});
+
 test('it has its database closed by the stack', async () => {
   const stack = new AsyncDisposableStack();
 
@@ -215,7 +231,9 @@ test('it keeps a data dir the caller passed', async () => {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const dataDir = await mkdtemp(join(tmpdir(), 'test-imps-'));
+  const prefix = formatRunPrefix(readRunOwner());
+
+  const dataDir = await mkdtemp(join(tmpdir(), `${prefix}test-imps-`));
 
   onTestFinished(() => rm(dataDir, { recursive: true, force: true }));
 
