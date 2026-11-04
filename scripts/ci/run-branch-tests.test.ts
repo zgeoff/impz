@@ -48,9 +48,11 @@ test('it runs a dashboard test from the dashboard package and every other test f
     subprocess.exited,
   ]);
 
+  // The synced related-tests runner owns its bun test flags, and its own tests pin them.
   expect({ stdout, exitCode }).toStrictEqual({
-    stdout:
-      'root --parallel=1 --timeout=15000 ./src/a.test.ts\ndashboard --parallel=1 --timeout=15000 ./src/view.test.tsx\n',
+    stdout: expect.stringMatching(
+      /^root (?:--\S+ )+\.\/src\/a\.test\.ts\ndashboard (?:--\S+ )+\.\/src\/view\.test\.tsx\n$/u,
+    ),
     exitCode: 0,
   });
 });
@@ -91,7 +93,7 @@ test('it fails and still runs the dashboard tests when the root tests fail', asy
   ]);
 
   expect({ stdout, exitCode }).toStrictEqual({
-    stdout: 'dashboard --parallel=1 --timeout=15000 ./src/view.test.tsx\n',
+    stdout: expect.stringMatching(/^dashboard (?:--\S+ )+\.\/src\/view\.test\.tsx\n$/u),
     exitCode: 1,
   });
 });
@@ -172,8 +174,9 @@ test('it leaves out a lane file, which runs only in its lane script', async () =
   ]);
 
   expect({ stdout, exitCode }).toStrictEqual({
-    stdout:
-      'root --parallel=1 --timeout=15000 ./src/a.test.ts\nrun-related-tests: no related tests\n',
+    stdout: expect.stringMatching(
+      /^root (?:--\S+ )+\.\/src\/a\.test\.ts\nrun-related-tests: no related tests\n$/u,
+    ),
     exitCode: 0,
   });
 });
