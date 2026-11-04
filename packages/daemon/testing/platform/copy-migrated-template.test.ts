@@ -9,10 +9,12 @@ import {
   renameSync,
   rmSync,
   statSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { buildStubAnswerQueue } from '@impz/test-utils/build-stub-answer-queue';
 import { copyMigratedTemplate } from './copy-migrated-template';
 
 function setupTest() {
@@ -223,4 +225,66 @@ test('it keeps the build file of another PID namespace whose PID is not running 
     '003_add_broker-0123456789abcdef.sqlite',
     'pid4183-ns4026532001-3f2a-003_add_broker-0123456789abcdef.sqlite',
   ]);
+});
+
+test('it builds the template again when a sweep removes it between the check and the copy', async () => {
+  const ctx = setupTest();
+
+  // present at the check, gone at the copy and after it, then built and copied
+  const templateChecks = buildStubAnswerQueue([true, false, false, true, true]);
+
+  await copyMigratedTemplate(join(ctx.directory, 'imp.sqlite'), '003_add_broker', {
+    ...ctx.dependencies,
+    fileSystem: { ...ctx.dependencies.fileSystem, existsSync: () => templateChecks.next() },
+  });
+
+  expect(readFileSync(join(ctx.directory, 'imp.sqlite'), 'utf8')).toBe(
+    'migrated to 003_add_broker',
+  );
+});
+
+test('it throws when the destination links to a missing path', () => {
+  const ctx = setupTest();
+
+  symlinkSync(join(ctx.directory, 'missing', 'imp.sqlite'), join(ctx.directory, 'imp.sqlite'));
+
+  expect(
+    copyMigratedTemplate(join(ctx.directory, 'imp.sqlite'), '003_add_broker', ctx.dependencies),
+  ).rejects.toThrow('ENOENT');
+});
+
+test('it skips a file that leaves the cache while it sweeps', async () => {
+  const ctx = setupTest();
+
+  await copyMigratedTemplate(join(ctx.directory, 'imp.sqlite'), '003_add_broker', {
+    ...ctx.dependencies,
+    fileSystem: {
+      ...ctx.dependencies.fileSystem,
+      readdirSync: () => [
+        '003_add_broker-0123456789abcdef.sqlite',
+        'pid4183-ns4026531836-3f2a-003_add_broker-0123456789abcdef.sqlite',
+      ],
+    },
+  });
+
+  expect(readFileSync(join(ctx.directory, 'imp.sqlite'), 'utf8')).toBe(
+    'migrated to 003_add_broker',
+  );
+});
+
+test('it leaves no build file when the build fails', async () => {
+  const ctx = setupTest();
+
+  const copied = copyMigratedTemplate(join(ctx.directory, 'imp.sqlite'), '003_add_broker', {
+    ...ctx.dependencies,
+    writeTemplate: (path) => {
+      writeFileSync(path, 'half a template');
+
+      return Promise.reject(new Error('the disk went away'));
+    },
+  });
+
+  await expect(copied).rejects.toThrow('the disk went away');
+
+  expect(readdirSync(ctx.cacheDirectory)).toStrictEqual([]);
 });

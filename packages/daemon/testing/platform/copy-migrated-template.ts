@@ -1,26 +1,28 @@
 import { randomUUID } from 'node:crypto';
-import type {
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  renameSync,
-  rmSync,
-  statSync,
-} from 'node:fs';
+import type { copyFileSync, existsSync, mkdirSync, renameSync, rmSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
+import { match } from 'ts-pattern';
 import { collectStaleTemplateFiles } from './collect-stale-template-files';
 import type { TemplateFile } from './is-stale-template-file';
 import { isTemplateGoneError } from './is-template-gone-error';
+import { pickCacheAction } from './pick-cache-action';
+
+interface StatOptions {
+  readonly throwIfNoEntry: false;
+}
+
+interface FileTimes {
+  readonly mtimeMs: number;
+}
 
 interface TemplateFileSystem {
   readonly copyFileSync: typeof copyFileSync;
   readonly existsSync: typeof existsSync;
   readonly mkdirSync: typeof mkdirSync;
-  readonly readdirSync: typeof readdirSync;
+  readonly readdirSync: (path: string) => string[];
   readonly renameSync: typeof renameSync;
   readonly rmSync: typeof rmSync;
-  readonly statSync: typeof statSync;
+  readonly statSync: (path: string, options: StatOptions) => FileTimes | undefined;
 }
 
 export interface TemplateDependencies {
@@ -46,13 +48,19 @@ export async function copyMigratedTemplate(
   );
 
   let copied = false;
+  let action = pickCacheAction(dependencies.fileSystem.existsSync(template), copied);
 
-  while (!copied) {
-    if (!dependencies.fileSystem.existsSync(template)) {
-      await runTemplateBuild(template, migration, dependencies);
-    }
+  while (action !== 'done') {
+    copied = await match(action)
+      .with('build', async () => {
+        await runTemplateBuild(template, migration, dependencies);
 
-    copied = writeTemplateCopy(template, path, dependencies);
+        return false;
+      })
+      .with('copy', () => writeTemplateCopy(template, path, dependencies))
+      .exhaustive();
+
+    action = pickCacheAction(dependencies.fileSystem.existsSync(template), copied);
   }
 }
 
@@ -131,7 +139,7 @@ function writeTemplateCopy(
 
     return true;
   } catch (error) {
-    if (isTemplateGoneError(error, dependencies.fileSystem.existsSync(dirname(path)))) {
+    if (isTemplateGoneError(error, dependencies.fileSystem.existsSync(template))) {
       return false;
     }
 

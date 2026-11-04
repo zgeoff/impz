@@ -15,6 +15,7 @@ import { Kysely } from 'kysely';
 import { runMigrationsTo } from '../../src/platform/db/run-migrations';
 import type { DB } from '../../src/platform/db/schema';
 import { copyMigratedTemplate } from './copy-migrated-template';
+import { probeProcessRunning } from './probe-process-running';
 import { readMigrationsHash } from './read-migrations-hash';
 
 // on disk, not in tmpdir(), which is a tmpfs that holds each file in RAM on
@@ -45,16 +46,6 @@ export async function createMigratedDatabaseFile(path: string, migration: string
 // that shares the folder and reuses the same PIDs
 function readPidNamespace(): string {
   return readlinkSync('/proc/self/ns/pid').replaceAll(/\D/gu, '');
-}
-
-function probeProcessRunning(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-
-    return true;
-  } catch (error) {
-    return !(error instanceof Error && 'code' in error && error.code === 'ESRCH');
-  }
 }
 
 async function writeTemplate(path: string, migration: string): Promise<void> {
