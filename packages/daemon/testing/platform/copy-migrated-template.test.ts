@@ -9,14 +9,11 @@ import {
   renameSync,
   rmSync,
   statSync,
-  utimesSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { setImmediate } from 'node:timers/promises';
 import { copyMigratedTemplate } from './copy-migrated-template';
-import type { TemplateDependencies } from './copy-migrated-template';
 
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-template-'));
@@ -32,46 +29,22 @@ function setupTest() {
     migrationsHash: '0123456789abcdef',
     owner: { pid: 4182, namespace: '4026531836' },
     now: Date.now,
-    sleep: () => setImmediate(),
     probeProcessRunning: () => true,
-    fileSystem: {
-      copyFileSync,
-      existsSync,
-      mkdirSync,
-      readFileSync,
-      readdirSync,
-      renameSync,
-      rmSync,
-      statSync,
-      utimesSync,
-      writeFileSync,
-    },
-    writeTemplate: (path: string) => {
-      writeFileSync(path, 'a migrated template');
+    fileSystem: { copyFileSync, existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync },
+    writeTemplate: (path: string, migration: string) => {
+      writeFileSync(path, `migrated to ${migration}`);
 
       return Promise.resolve();
     },
   };
 
-  return {
-    directory,
-    cacheDirectory,
-    template: join(cacheDirectory, '003_add_broker-0123456789abcdef.sqlite'),
-    dependencies,
-  };
+  return { directory, cacheDirectory, dependencies };
 }
 
 test('it copies the template it builds to the path', async () => {
   const ctx = setupTest();
 
-  await copyMigratedTemplate(join(ctx.directory, 'imp.sqlite'), '003_add_broker', {
-    ...ctx.dependencies,
-    writeTemplate: (path, migration) => {
-      writeFileSync(path, `migrated to ${migration}`);
-
-      return Promise.resolve();
-    },
-  });
+  await copyMigratedTemplate(join(ctx.directory, 'imp.sqlite'), '003_add_broker', ctx.dependencies);
 
   expect(readFileSync(join(ctx.directory, 'imp.sqlite'), 'utf8')).toBe(
     'migrated to 003_add_broker',
@@ -99,42 +72,7 @@ test('it reuses the template it built on the next call', async () => {
   expect(builds).toHaveLength(1);
 });
 
-test('it builds the template once when two calls race for the lock', async () => {
-  const ctx = setupTest();
-  const builds: string[] = [];
-  const lostRace = Promise.withResolvers<void>();
-
-  const dependencies: TemplateDependencies = {
-    ...ctx.dependencies,
-
-    // both calls read the cache before either takes the lock
-    fileSystem: {
-      ...ctx.dependencies.fileSystem,
-      existsSync: (path) => !String(path).endsWith('.lock') && existsSync(path),
-    },
-    sleep: () => {
-      lostRace.resolve();
-
-      return setImmediate();
-    },
-    writeTemplate: async (path) => {
-      builds.push(path);
-
-      await lostRace.promise;
-
-      writeFileSync(path, 'a migrated template');
-    },
-  };
-
-  await Promise.all([
-    copyMigratedTemplate(join(ctx.directory, 'first.sqlite'), '003_add_broker', dependencies),
-    copyMigratedTemplate(join(ctx.directory, 'second.sqlite'), '003_add_broker', dependencies),
-  ]);
-
-  expect(builds).toHaveLength(1);
-});
-
-test('it builds the template again when a sweep removes it before the copy', async () => {
+test('it builds a fresh template when the migrations change under the same name', async () => {
   const ctx = setupTest();
   const builds: string[] = [];
 
@@ -143,7 +81,7 @@ test('it builds the template again when a sweep removes it before the copy', asy
     writeTemplate: (path: string) => {
       builds.push(path);
 
-      writeFileSync(path, `build ${String(builds.length)}`);
+      writeFileSync(path, 'a migrated template');
 
       return Promise.resolve();
     },
@@ -153,47 +91,70 @@ test('it builds the template again when a sweep removes it before the copy', asy
 
   await copyMigratedTemplate(join(ctx.directory, 'second.sqlite'), '003_add_broker', {
     ...dependencies,
-    fileSystem: {
-      ...dependencies.fileSystem,
-      utimesSync: (path, accessed, modified) => {
-        utimesSync(path, accessed, modified);
-
-        if (builds.length === 1) {
-          rmSync(path);
-        }
-      },
-    },
+    migrationsHash: 'fedcba9876543210',
   });
 
-  expect(readFileSync(join(ctx.directory, 'second.sqlite'), 'utf8')).toBe('build 2');
+  expect(builds).toHaveLength(2);
 });
 
-test('it marks the template as used on each call', async () => {
+test('it gives each of two racing calls a whole copy', async () => {
   const ctx = setupTest();
 
-  await copyMigratedTemplate(
-    join(ctx.directory, 'first.sqlite'),
-    '003_add_broker',
-    ctx.dependencies,
-  );
+  await Promise.all([
+    copyMigratedTemplate(join(ctx.directory, 'first.sqlite'), '003_add_broker', ctx.dependencies),
+    copyMigratedTemplate(join(ctx.directory, 'second.sqlite'), '003_add_broker', ctx.dependencies),
+  ]);
 
-  await copyMigratedTemplate(join(ctx.directory, 'second.sqlite'), '003_add_broker', {
-    ...ctx.dependencies,
-    now: () => 1_800_000_000_000,
-  });
-
-  expect(statSync(ctx.template).mtimeMs).toBe(1_800_000_000_000);
+  expect([
+    readFileSync(join(ctx.directory, 'first.sqlite'), 'utf8'),
+    readFileSync(join(ctx.directory, 'second.sqlite'), 'utf8'),
+  ]).toStrictEqual(['migrated to 003_add_broker', 'migrated to 003_add_broker']);
 });
 
-test('it removes the files of older migrations unused for an hour when it builds one', async () => {
+test('it throws when the destination folder does not exist', () => {
+  const ctx = setupTest();
+
+  expect(
+    copyMigratedTemplate(
+      join(ctx.directory, 'missing', 'imp.sqlite'),
+      '003_add_broker',
+      ctx.dependencies,
+    ),
+  ).rejects.toThrow('ENOENT');
+});
+
+test('it builds the template that a sweep removed', async () => {
+  const ctx = setupTest();
+  const builds: string[] = [];
+
+  const dependencies = {
+    ...ctx.dependencies,
+    writeTemplate: (path: string) => {
+      builds.push(path);
+
+      writeFileSync(path, 'a migrated template');
+
+      return Promise.resolve();
+    },
+  };
+
+  await copyMigratedTemplate(join(ctx.directory, 'first.sqlite'), '003_add_broker', dependencies);
+
+  rmSync(join(ctx.cacheDirectory, '003_add_broker-0123456789abcdef.sqlite'));
+
+  await copyMigratedTemplate(join(ctx.directory, 'second.sqlite'), '003_add_broker', dependencies);
+
+  expect(builds).toHaveLength(2);
+});
+
+test('it removes the files of older migrations over an hour old when it builds one', async () => {
   const ctx = setupTest();
 
   mkdirSync(ctx.cacheDirectory);
   writeFileSync(join(ctx.cacheDirectory, '003_add_broker-fedcba9876543210.sqlite'), '');
-  writeFileSync(join(ctx.cacheDirectory, '003_add_broker-fedcba9876543210.sqlite.lock'), '');
 
   writeFileSync(
-    join(ctx.cacheDirectory, 'pid4182-ns4026531836-003_add_broker-fedcba9876543210.sqlite'),
+    join(ctx.cacheDirectory, 'pid4183-ns4026531836-3f2a-003_add_broker-fedcba9876543210.sqlite'),
     '',
   );
 
@@ -205,19 +166,14 @@ test('it removes the files of older migrations unused for an hour when it builds
   expect(readdirSync(ctx.cacheDirectory)).toStrictEqual(['003_add_broker-0123456789abcdef.sqlite']);
 });
 
-test('it keeps the files of older migrations that a running build holds', async () => {
+test('it keeps a template of older migrations built within the hour and a running build', async () => {
   const ctx = setupTest();
 
   mkdirSync(ctx.cacheDirectory);
   writeFileSync(join(ctx.cacheDirectory, '003_add_broker-fedcba9876543210.sqlite'), '');
 
   writeFileSync(
-    join(ctx.cacheDirectory, '003_add_broker-fedcba9876543210.sqlite.lock'),
-    'pid4183-ns4026531836',
-  );
-
-  writeFileSync(
-    join(ctx.cacheDirectory, 'pid4183-ns4026531836-003_add_broker-fedcba9876543210.sqlite'),
+    join(ctx.cacheDirectory, 'pid4183-ns4026531836-3f2a-003_add_broker-fedcba9876543210.sqlite'),
     '',
   );
 
@@ -226,76 +182,8 @@ test('it keeps the files of older migrations that a running build holds', async 
   expect(readdirSync(ctx.cacheDirectory).toSorted()).toStrictEqual([
     '003_add_broker-0123456789abcdef.sqlite',
     '003_add_broker-fedcba9876543210.sqlite',
-    '003_add_broker-fedcba9876543210.sqlite.lock',
-    'pid4183-ns4026531836-003_add_broker-fedcba9876543210.sqlite',
+    'pid4183-ns4026531836-3f2a-003_add_broker-fedcba9876543210.sqlite',
   ]);
-});
-
-test('it builds the template when a killed run left its lock', async () => {
-  const ctx = setupTest();
-
-  mkdirSync(ctx.cacheDirectory);
-  writeFileSync(`${ctx.template}.lock`, 'pid4183-ns4026531836');
-
-  await copyMigratedTemplate(join(ctx.directory, 'imp.sqlite'), '003_add_broker', {
-    ...ctx.dependencies,
-    probeProcessRunning: (pid) => pid !== 4183,
-  });
-
-  expect(existsSync(ctx.template)).toBeTrue();
-});
-
-test('it builds the template when a lock is older than 30 s, whatever its owner', async () => {
-  const ctx = setupTest();
-
-  mkdirSync(ctx.cacheDirectory);
-  writeFileSync(`${ctx.template}.lock`, '');
-
-  await copyMigratedTemplate(join(ctx.directory, 'imp.sqlite'), '003_add_broker', {
-    ...ctx.dependencies,
-    now: () => Date.now() + 60_000,
-  });
-
-  expect(existsSync(ctx.template)).toBeTrue();
-});
-
-test('it waits for the template that a running build holds the lock for', async () => {
-  const ctx = setupTest();
-
-  mkdirSync(ctx.cacheDirectory);
-  writeFileSync(`${ctx.template}.lock`, 'pid4183-ns4026531836');
-
-  await copyMigratedTemplate(join(ctx.directory, 'imp.sqlite'), '003_add_broker', {
-    ...ctx.dependencies,
-    sleep: () => {
-      writeFileSync(ctx.template, 'built by the run that holds the lock');
-
-      return Promise.resolve();
-    },
-  });
-
-  expect(readFileSync(join(ctx.directory, 'imp.sqlite'), 'utf8')).toBe(
-    'built by the run that holds the lock',
-  );
-});
-
-test('it leaves a fresh lock of another PID namespace whose PID is not running here', async () => {
-  const ctx = setupTest();
-
-  mkdirSync(ctx.cacheDirectory);
-  writeFileSync(`${ctx.template}.lock`, 'pid4183-ns4026532001');
-
-  await copyMigratedTemplate(join(ctx.directory, 'imp.sqlite'), '003_add_broker', {
-    ...ctx.dependencies,
-    probeProcessRunning: () => false,
-    sleep: () => {
-      writeFileSync(ctx.template, 'built in another sandbox');
-
-      return Promise.resolve();
-    },
-  });
-
-  expect(readFileSync(`${ctx.template}.lock`, 'utf8')).toBe('pid4183-ns4026532001');
 });
 
 test('it removes the build file of a run whose process is gone when it builds one', async () => {
@@ -304,7 +192,7 @@ test('it removes the build file of a run whose process is gone when it builds on
   mkdirSync(ctx.cacheDirectory);
 
   writeFileSync(
-    join(ctx.cacheDirectory, 'pid4183-ns4026531836-003_add_broker-0123456789abcdef.sqlite'),
+    join(ctx.cacheDirectory, 'pid4183-ns4026531836-3f2a-003_add_broker-0123456789abcdef.sqlite'),
     '',
   );
 
@@ -314,4 +202,25 @@ test('it removes the build file of a run whose process is gone when it builds on
   });
 
   expect(readdirSync(ctx.cacheDirectory)).toStrictEqual(['003_add_broker-0123456789abcdef.sqlite']);
+});
+
+test('it keeps the build file of another PID namespace whose PID is not running here', async () => {
+  const ctx = setupTest();
+
+  mkdirSync(ctx.cacheDirectory);
+
+  writeFileSync(
+    join(ctx.cacheDirectory, 'pid4183-ns4026532001-3f2a-003_add_broker-0123456789abcdef.sqlite'),
+    '',
+  );
+
+  await copyMigratedTemplate(join(ctx.directory, 'imp.sqlite'), '003_add_broker', {
+    ...ctx.dependencies,
+    probeProcessRunning: () => false,
+  });
+
+  expect(readdirSync(ctx.cacheDirectory).toSorted()).toStrictEqual([
+    '003_add_broker-0123456789abcdef.sqlite',
+    'pid4183-ns4026532001-3f2a-003_add_broker-0123456789abcdef.sqlite',
+  ]);
 });

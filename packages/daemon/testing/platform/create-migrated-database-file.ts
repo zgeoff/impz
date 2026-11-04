@@ -3,14 +3,11 @@ import {
   copyFileSync,
   existsSync,
   mkdirSync,
-  readFileSync,
   readdirSync,
   readlinkSync,
   renameSync,
   rmSync,
   statSync,
-  utimesSync,
-  writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
 import { buildSQLiteDialect } from '@zgeoff/kysely-bun-sqlite';
@@ -18,6 +15,7 @@ import { Kysely } from 'kysely';
 import { runMigrationsTo } from '../../src/platform/db/run-migrations';
 import type { DB } from '../../src/platform/db/schema';
 import { copyMigratedTemplate } from './copy-migrated-template';
+import { readMigrationsHash } from './read-migrations-hash';
 
 // on disk, not in tmpdir(), which is a tmpfs that holds each file in RAM on
 // some hosts
@@ -26,42 +24,21 @@ const CACHE_DIRECTORY = join(import.meta.dir, '../../node_modules/.cache/migrate
 export async function createMigratedDatabaseFile(path: string, migration: string): Promise<void> {
   await copyMigratedTemplate(path, migration, {
     cacheDirectory: CACHE_DIRECTORY,
-    migrationsHash: readMigrationsHash(),
+    migrationsHash: readMigrationsHash(join(import.meta.dir, '../../src/platform/db')),
     owner: { pid: process.pid, namespace: readPidNamespace() },
     now: Date.now,
-    sleep: Bun.sleep,
     probeProcessRunning,
     fileSystem: {
       copyFileSync,
       existsSync,
       mkdirSync,
-      readFileSync,
       readdirSync,
       renameSync,
       rmSync,
       statSync,
-      utimesSync,
-      writeFileSync,
     },
     writeTemplate,
   });
-}
-
-const DB_DIRECTORY = join(import.meta.dir, '../../src/platform/db');
-
-function readMigrationsHash(): string {
-  const hasher = new Bun.CryptoHasher('sha256');
-
-  const migrations = readdirSync(join(DB_DIRECTORY, 'migrations'))
-    .toSorted()
-    .map((name) => join('migrations', name));
-
-  for (const file of ['run-migrations.ts', ...migrations]) {
-    hasher.update(file);
-    hasher.update(readFileSync(join(DB_DIRECTORY, file)));
-  }
-
-  return hasher.digest('hex').slice(0, 16);
 }
 
 // the PID namespace tells a run in this sandbox from one in another sandbox
