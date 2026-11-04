@@ -116,5 +116,5 @@ Find the check that runs a test this host cannot:
 - The `e2e` and `zfs` checks pass only when every job of their matrix passes, so open the failed
   job's log, not the summary check's.
 - When you change the end-to-end groups in `ci.yml`, change
-  [`ci-groups.test.ts`](../../../../packages/e2e-harness/src/ci-groups.test.ts) too. It fails when
-  the groups in the two files differ.
+  [`suites.test.ts`](../../../../packages/e2e-harness/src/suites.test.ts) too. It fails when the
+  groups in the two files differ.

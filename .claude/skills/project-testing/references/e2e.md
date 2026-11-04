@@ -84,10 +84,9 @@ These guest and host facts decide how a journey is built:
 The `acceptance` set is every suite. The `fast` set is the CI subset, split into static groups, one
 for each CI runner with an instance of its own.
 [`suites.test.ts`](../../../../packages/e2e-harness/src/suites.test.ts) pins that no suite sits in
-two groups and that the groups make up the `fast` set, and
-[`ci-groups.test.ts`](../../../../packages/e2e-harness/src/ci-groups.test.ts) pins the groups
-against the workflow file. Change all three together. A run that includes `acceptance` makes the
-timing limits fail the run instead of warning.
+two groups, that the groups make up the `fast` set, and that the workflow file runs each group.
+Change the groups, the test and the workflow file together. A run that includes `acceptance` makes
+the timing limits fail the run instead of warning.
 
 ## Host safety
 

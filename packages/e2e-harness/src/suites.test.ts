@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import invariant from 'tiny-invariant';
 import { config } from './config';
 import { REPO_ROOT, instance } from './instance';
 import type { Suite } from './suites';
@@ -18,6 +19,7 @@ import {
   pickZfsShard,
   readSuiteSettings,
 } from './suites';
+import { findYamlValue } from './test-utils/find-yaml-value';
 
 test('#buildJourneyArgv runs a journey file by a ./ path, which bun test does not read as a name filter', () => {
   expect(buildJourneyArgv('/usr/bin/bun', 'proxy-forwards')).toStrictEqual([
@@ -280,5 +282,89 @@ test("#SUITES gives no suite a prefix that starts another suite's prefix", () =>
 
   expect(prefixes).toSatisfyAll((prefix: string) =>
     prefixes.every((other) => other === prefix || !other.startsWith(prefix)),
+  );
+});
+
+test('#FAST_GROUPS gets one e2e-group job each in ci.yml, with the host tests in the host tests group alone', async () => {
+  const text = await Bun.file(new URL('../../../.github/workflows/ci.yml', import.meta.url)).text();
+
+  const workflow = Bun.YAML.parse(text);
+
+  expect(workflow).toMatchObject({
+    jobs: {
+      'e2e-group': {
+        strategy: {
+          matrix: {
+            include: FAST_GROUPS.map((_, index) => ({
+              group: index + 1,
+              'host-tests': index + 1 === HOST_TESTS_GROUP,
+            })),
+          },
+        },
+      },
+    },
+  });
+});
+
+test('#pickZfsShard runs every ZFS lane suite once over the lane shards ci.yml lists', async () => {
+  const text = await Bun.file(new URL('../../../.github/workflows/ci.yml', import.meta.url)).text();
+
+  const workflow = Bun.YAML.parse(text);
+  const rows = findYamlValue(workflow, ['jobs', 'zfs-shard', 'strategy', 'matrix', 'include']);
+
+  invariant(Array.isArray(rows));
+
+  const lanes = rows
+    .map((row: unknown) => findYamlValue(row, ['lane']))
+    .filter((lane) => typeof lane === 'string');
+
+  const suites = lanes.flatMap((lane) => {
+    const [index, count] = lane.split('/').map(Number);
+
+    return pickZfsShard(index ?? 0, count ?? 0);
+  });
+
+  expect(lanes).toStrictEqual(
+    lanes.map((_, index) => `${String(index + 1)}/${String(lanes.length)}`),
+  );
+
+  expect(suites.toSorted()).toStrictEqual(
+    listZfsSuites()
+      .map((suite) => suite.name)
+      .toSorted(),
+  );
+});
+
+test('#listZfsSuites names no suite that a ZFS backend shard in ci.yml runs', async () => {
+  const text = await Bun.file(new URL('../../../.github/workflows/ci.yml', import.meta.url)).text();
+
+  const workflow = Bun.YAML.parse(text);
+  const rows = findYamlValue(workflow, ['jobs', 'zfs-shard', 'strategy', 'matrix', 'include']);
+
+  invariant(Array.isArray(rows));
+
+  const suites = rows
+    .map((row: unknown) => findYamlValue(row, ['suites']))
+    .filter((list) => typeof list === 'string')
+    .flatMap((list) => list.split(','));
+
+  const lane = new Set(listZfsSuites().map((suite) => suite.name));
+
+  expect(suites).not.toBeEmpty();
+  expect(suites.filter((suite) => lane.has(suite))).toStrictEqual([]);
+  expect(SUITES.map((suite) => suite.name)).toIncludeAllMembers(suites);
+});
+
+test('#pickZfsShard gets a lane share, suites, or both from each zfs shard in ci.yml', async () => {
+  const text = await Bun.file(new URL('../../../.github/workflows/ci.yml', import.meta.url)).text();
+
+  const workflow = Bun.YAML.parse(text);
+  const rows = findYamlValue(workflow, ['jobs', 'zfs-shard', 'strategy', 'matrix', 'include']);
+
+  invariant(Array.isArray(rows));
+
+  expect(rows).toSatisfyAll(
+    (row: unknown) =>
+      findYamlValue(row, ['lane']) !== undefined || findYamlValue(row, ['suites']) !== undefined,
   );
 });
