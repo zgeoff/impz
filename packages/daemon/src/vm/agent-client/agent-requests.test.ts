@@ -123,6 +123,17 @@ test('#readFrameWithin rejects when the agent does not answer within the timeout
   );
 });
 
+test('#sendAgentRequest names the guest and the operation when the agent never answers', async () => {
+  const ctx = setupTest();
+
+  await startStubAgent(ctx.vsockPath, () => {});
+
+  expect(sendAgentRequest(ctx.vsockPath, { op: 'ping' }, 200)).rejects.toThrowWithMessage(
+    Error,
+    `agent at ${ctx.vsockPath} sent no ping response within 200 ms`,
+  );
+});
+
 test('#sendAgentRequest rejects with the error the agent answers', async () => {
   const ctx = setupTest();
 
