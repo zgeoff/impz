@@ -15,6 +15,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildStubAnswerQueue } from '@impz/test-utils/build-stub-answer-queue';
+import { buildStubTemplateWriter } from './build-stub-template-writer';
 import { copyMigratedTemplate } from './copy-migrated-template';
 
 function setupTest() {
@@ -33,11 +34,7 @@ function setupTest() {
     now: Date.now,
     probeProcessRunning: () => true,
     fileSystem: { copyFileSync, existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync },
-    writeTemplate: (path: string, migration: string) => {
-      writeFileSync(path, `migrated to ${migration}`);
-
-      return Promise.resolve();
-    },
+    writeTemplate: buildStubTemplateWriter({ contents: 'a migrated template' }).writeTemplate,
   };
 
   return { directory, cacheDirectory, dependencies };
@@ -48,46 +45,24 @@ test('it copies the template it builds to the path', async () => {
 
   await copyMigratedTemplate(join(ctx.directory, 'imp.sqlite'), '003_add_broker', ctx.dependencies);
 
-  expect(readFileSync(join(ctx.directory, 'imp.sqlite'), 'utf8')).toBe(
-    'migrated to 003_add_broker',
-  );
+  expect(readFileSync(join(ctx.directory, 'imp.sqlite'), 'utf8')).toBe('a migrated template');
 });
 
 test('it reuses the template it built on the next call', async () => {
   const ctx = setupTest();
-  const builds: string[] = [];
-
-  const dependencies = {
-    ...ctx.dependencies,
-    writeTemplate: (path: string) => {
-      builds.push(path);
-
-      writeFileSync(path, 'a migrated template');
-
-      return Promise.resolve();
-    },
-  };
+  const writer = buildStubTemplateWriter({ contents: 'a migrated template' });
+  const dependencies = { ...ctx.dependencies, writeTemplate: writer.writeTemplate };
 
   await copyMigratedTemplate(join(ctx.directory, 'first.sqlite'), '003_add_broker', dependencies);
   await copyMigratedTemplate(join(ctx.directory, 'second.sqlite'), '003_add_broker', dependencies);
 
-  expect(builds).toHaveLength(1);
+  expect(writer.builds).toHaveLength(1);
 });
 
 test('it builds a fresh template when the migrations change under the same name', async () => {
   const ctx = setupTest();
-  const builds: string[] = [];
-
-  const dependencies = {
-    ...ctx.dependencies,
-    writeTemplate: (path: string) => {
-      builds.push(path);
-
-      writeFileSync(path, 'a migrated template');
-
-      return Promise.resolve();
-    },
-  };
+  const writer = buildStubTemplateWriter({ contents: 'a migrated template' });
+  const dependencies = { ...ctx.dependencies, writeTemplate: writer.writeTemplate };
 
   await copyMigratedTemplate(join(ctx.directory, 'first.sqlite'), '003_add_broker', dependencies);
 
@@ -96,21 +71,42 @@ test('it builds a fresh template when the migrations change under the same name'
     migrationsHash: 'fedcba9876543210',
   });
 
-  expect(builds).toHaveLength(2);
+  expect(writer.builds).toHaveLength(2);
 });
 
-test('it gives each of two racing calls a whole copy', async () => {
+test('it gives a call that starts during another build a whole copy', async () => {
   const ctx = setupTest();
+  const release = Promise.withResolvers<void>();
 
-  await Promise.all([
-    copyMigratedTemplate(join(ctx.directory, 'first.sqlite'), '003_add_broker', ctx.dependencies),
-    copyMigratedTemplate(join(ctx.directory, 'second.sqlite'), '003_add_broker', ctx.dependencies),
-  ]);
+  const dependencies = {
+    ...ctx.dependencies,
+    writeTemplate: buildStubTemplateWriter({
+      contents: 'a migrated template',
+      pause: { partial: 'half a template', release: release.promise },
+    }).writeTemplate,
+  };
+
+  // the first call stops after its partial write, before the second starts
+  const first = copyMigratedTemplate(
+    join(ctx.directory, 'first.sqlite'),
+    '003_add_broker',
+    dependencies,
+  );
+
+  const second = copyMigratedTemplate(
+    join(ctx.directory, 'second.sqlite'),
+    '003_add_broker',
+    dependencies,
+  );
+
+  release.resolve();
+
+  await Promise.all([first, second]);
 
   expect([
     readFileSync(join(ctx.directory, 'first.sqlite'), 'utf8'),
     readFileSync(join(ctx.directory, 'second.sqlite'), 'utf8'),
-  ]).toStrictEqual(['migrated to 003_add_broker', 'migrated to 003_add_broker']);
+  ]).toStrictEqual(['a migrated template', 'a migrated template']);
 });
 
 test('it throws when the destination folder does not exist', () => {
@@ -127,18 +123,8 @@ test('it throws when the destination folder does not exist', () => {
 
 test('it builds the template that a sweep removed', async () => {
   const ctx = setupTest();
-  const builds: string[] = [];
-
-  const dependencies = {
-    ...ctx.dependencies,
-    writeTemplate: (path: string) => {
-      builds.push(path);
-
-      writeFileSync(path, 'a migrated template');
-
-      return Promise.resolve();
-    },
-  };
+  const writer = buildStubTemplateWriter({ contents: 'a migrated template' });
+  const dependencies = { ...ctx.dependencies, writeTemplate: writer.writeTemplate };
 
   await copyMigratedTemplate(join(ctx.directory, 'first.sqlite'), '003_add_broker', dependencies);
 
@@ -146,7 +132,7 @@ test('it builds the template that a sweep removed', async () => {
 
   await copyMigratedTemplate(join(ctx.directory, 'second.sqlite'), '003_add_broker', dependencies);
 
-  expect(builds).toHaveLength(2);
+  expect(writer.builds).toHaveLength(2);
 });
 
 test('it removes the files of older migrations over an hour old when it builds one', async () => {
@@ -238,9 +224,7 @@ test('it builds the template again when a sweep removes it between the check and
     fileSystem: { ...ctx.dependencies.fileSystem, existsSync: () => templateChecks.next() },
   });
 
-  expect(readFileSync(join(ctx.directory, 'imp.sqlite'), 'utf8')).toBe(
-    'migrated to 003_add_broker',
-  );
+  expect(readFileSync(join(ctx.directory, 'imp.sqlite'), 'utf8')).toBe('a migrated template');
 });
 
 test('it throws when the destination links to a missing path', () => {
@@ -267,9 +251,7 @@ test('it skips a file that leaves the cache while it sweeps', async () => {
     },
   });
 
-  expect(readFileSync(join(ctx.directory, 'imp.sqlite'), 'utf8')).toBe(
-    'migrated to 003_add_broker',
-  );
+  expect(readFileSync(join(ctx.directory, 'imp.sqlite'), 'utf8')).toBe('a migrated template');
 });
 
 test('it leaves no build file when the build fails', () => {
@@ -277,11 +259,10 @@ test('it leaves no build file when the build fails', () => {
 
   const copied = copyMigratedTemplate(join(ctx.directory, 'imp.sqlite'), '003_add_broker', {
     ...ctx.dependencies,
-    writeTemplate: (path) => {
-      writeFileSync(path, 'half a template');
-
-      return Promise.reject(new Error('the disk went away'));
-    },
+    writeTemplate: buildStubTemplateWriter({
+      contents: 'half a template',
+      failure: new Error('the disk went away'),
+    }).writeTemplate,
   });
 
   expect(copied).rejects.toThrow('the disk went away');
