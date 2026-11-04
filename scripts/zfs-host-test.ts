@@ -262,7 +262,7 @@ async function runE2E(run: PoolRun): Promise<number> {
 
   io.files.writeText(log, '');
 
-  const child = io.spawn([join(run.options.root, 'e2e', 'test-e2e.sh'), '--only', suites], {
+  const child = io.spawn([join(run.options.root, 'scripts', 'test-e2e.sh'), '--only', suites], {
     cwd: run.options.cwd,
     env: run.host.env,
     output: 'pipe',
@@ -302,7 +302,7 @@ async function runE2E(run: PoolRun): Promise<number> {
   return status;
 }
 
-// The ZFS lane is every *.zfs.e2e.ts journey, split into IMP_ZFS_SHARD's shard by recorded time.
+// The ZFS lane is every *.zfs.test.ts journey, split into IMP_ZFS_SHARD's shard by recorded time.
 // IMP_ZFS_E2E_SUITES names VM e2e suites to run on the ZFS backend: alone, it runs only those; beside
 // IMP_ZFS_SHARD, it runs them with that share. Neither set runs the whole lane.
 function pickSuites(env: DevEnv): string {

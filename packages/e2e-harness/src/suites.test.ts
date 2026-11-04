@@ -23,18 +23,22 @@ test('#buildJourneyArgv runs a journey file by a ./ path, which bun test does no
   expect(buildJourneyArgv('/usr/bin/bun', 'proxy-forwards')).toStrictEqual([
     '/usr/bin/bun',
     'test',
-    '--config=e2e/bunfig.toml',
+    '--config=packages/daemon/e2e/bunfig.toml',
     '--bail',
     '--timeout',
     '60000',
-    './e2e/suites/proxy-forwards.e2e.ts',
+    './packages/daemon/e2e/cli-proxy-forwards.test.ts',
   ]);
 });
 
-test('#buildJourneyArgv runs a ZFS lane journey from its .zfs.e2e.ts file', () => {
+test('#buildJourneyArgv runs a ZFS lane journey from its .zfs.test.ts file', () => {
   expect(buildJourneyArgv('/usr/bin/bun', 'moves-cold').at(-1)).toBe(
-    './e2e/suites/moves-cold.zfs.e2e.ts',
+    './packages/daemon/e2e/journey-moves-cold.zfs.test.ts',
   );
+});
+
+test('#buildJourneyArgv throws for a journey with no file', () => {
+  expect(() => buildJourneyArgv('/usr/bin/bun', 'no-such-journey')).toThrow();
 });
 
 test('#listZfsSuites lists the suites whose journey files all carry the .zfs suffix', () => {
@@ -181,12 +185,12 @@ test('#SUITE_SETS runs scale before restart in the acceptance set', () => {
   expect(acceptance.indexOf('restart')).toBe(acceptance.indexOf('scale') + 1);
 });
 
-test('#SUITES runs every journey file under e2e/suites exactly once', () => {
-  const suitesDir = join(import.meta.dir, '..', '..', '..', 'e2e', 'suites');
+test('#SUITES runs every test file in the daemon’s e2e folder exactly once', () => {
+  const suitesDir = join(import.meta.dir, '..', '..', 'daemon', 'e2e');
 
   const files = readdirSync(suitesDir)
-    .filter((file) => file.endsWith('.e2e.ts'))
-    .map((file) => file.replace(/(?:\.zfs)?\.e2e\.ts$/v, ''));
+    .filter((file) => file.endsWith('.test.ts'))
+    .map((file) => file.replace(/^[a-z]+-/v, '').replace(/(?:\.zfs)?\.test\.ts$/v, ''));
 
   const journeys = SUITES.flatMap((suite) => listJourneys(suite));
 

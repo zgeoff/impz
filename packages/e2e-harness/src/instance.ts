@@ -9,7 +9,8 @@ import type { HarnessEnv } from './config';
 import { buildFirecrackerPgrepArgv, readFirecrackerPids } from './firecracker-pids';
 
 export const REPO_ROOT = join(import.meta.dir, '..', '..', '..');
-export const FIXTURES_DIR = join(REPO_ROOT, 'e2e', 'fixtures');
+export const SUITES_DIR = join(REPO_ROOT, 'packages', 'daemon', 'e2e');
+export const FIXTURES_DIR = join(SUITES_DIR, 'fixtures');
 const DEV_SCRIPT = join(REPO_ROOT, 'scripts', 'dev', 'dev.sh');
 
 export interface DevInstance {
@@ -146,7 +147,7 @@ export function readHostImageFromEnv(env: HarnessEnv = process.env): string {
   const image = env['IMP_HOST_IMAGE'] ?? '';
 
   if (image === '') {
-    throw new Error('IMP_HOST_IMAGE is not set: run the suites through e2e/test-e2e.sh');
+    throw new Error('IMP_HOST_IMAGE is not set: run the suites through scripts/test-e2e.sh');
   }
 
   return image;

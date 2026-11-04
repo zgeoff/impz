@@ -50,7 +50,7 @@ test('it moves an imp between two tailnet nodes, past the peer check on their ta
 
       if (!status.stdout.includes(`"${ipA}"`)) {
         throw new Error(
-          `B does not see A (${ipA}): e2e/fixtures/headscale/policy.hujson needs the tag:imp-e2e to tag:imp-e2e tcp:7070 grant`,
+          `B does not see A (${ipA}): packages/daemon/e2e/fixtures/headscale/policy.hujson needs the tag:imp-e2e to tag:imp-e2e tcp:7070 grant`,
         );
       }
     },

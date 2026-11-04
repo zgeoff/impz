@@ -53,6 +53,7 @@
   },
   "devDependencies": {
     "@faker-js/faker": "catalog:",
+    "@impz/e2e-harness": "workspace:*",
     "@modelcontextprotocol/client": "catalog:",
     "@msw/data": "catalog:",
     "@types/dns-packet": "catalog:",

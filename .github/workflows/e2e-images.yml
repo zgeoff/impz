@@ -1,6 +1,6 @@
 name: e2e images
 
-# The images suite (e2e/test-e2e.sh --only images) on a KVM runner: its
+# The images suite (scripts/test-e2e.sh --only images) on a KVM runner: its
 # journeys build images in builder imps and pull from Docker Hub, so the
 # fast set's groups leave it out. It runs each day on main, on dispatch for
 # any branch, and on a pull request that changes how impd builds images. It is
@@ -16,7 +16,7 @@ on:
       - packages/daemon/src/imps/images/**
       - packages/daemon/src/imps/docker-contract/**
       - host/oci-fetch/**
-      - e2e/suites/images-*.e2e.ts
+      - packages/daemon/e2e/*-images-*.test.ts
       - scripts/ci/pick-data-dir.ts
       - scripts/ci/collect-e2e-logs.ts
       - .github/workflows/e2e-images.yml
@@ -80,7 +80,7 @@ jobs:
           write-cache: false
 
       - name: End-to-end tests
-        run: e2e/test-e2e.sh --only images
+        run: scripts/test-e2e.sh --only images
 
       # The steps below also run after a failure or a timeout, with or
       # without a container, so none of them may fail the job.

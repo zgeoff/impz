@@ -47,10 +47,10 @@ packages/
   api/             the oRPC contract, schemas and exec stream framing of the control API
   cli/             impz, the command-line client
   client/          the typed client for impd
-  daemon/          impd, the host daemon
+  daemon/          impd, the host daemon, with its end-to-end suites and their fixtures in e2e/
   dashboard/       the web dashboard that impd serves at /ui/
-  e2e-harness/     the end-to-end and bootstrap harnesses that the scripts in e2e/ run, and the
-                   helpers the suites import
+  e2e-harness/     the end-to-end and bootstrap harnesses that scripts/test-e2e.sh and
+                   scripts/test-bootstrap.sh run, and the helpers the suites import
   local-tar/       local files as a tar, for impz cp and image build contexts
   mcp/             the MCP server: imps, exec, files and checkpoints as tools
   shared/          pure helpers that know nothing about imp, and in src/test-utils/ the test
@@ -65,7 +65,6 @@ host/              the host container image that runs impd; ksm-exec, the Go pro
 images/            the guest images that ship with imp
 kernel/            the guest kernel build
 deploy/            the systemd units, bootstrap and the NixOS module
-e2e/               the end-to-end suites, their fixtures, and the scripts that run them
 scripts/           the ci, dev, release and render scripts
 patches/           bun patches for third-party packages
 docs/

@@ -7,7 +7,7 @@
 # Podman instance on a fresh data dir, which fetches its own builder image,
 # and runs the socket and podman e2e suites on it.
 #
-#   sudo -E env "PATH=$PATH" e2e/podman/run-podman-proof.sh
+#   sudo -E env "PATH=$PATH" scripts/run-podman-proof.sh
 #
 # It masks docker.service and docker.socket and does not unmask them, so it
 # runs only where CI=true says the machine is a throwaway runner. It needs
@@ -15,7 +15,7 @@
 # and system drive that IMP_KERNEL and IMP_SYSTEM_DRIVE name.
 set -euo pipefail
 
-ROOT=$(cd "$(dirname "$0")/../.." && pwd)
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
 DEV="$ROOT/scripts/dev/dev.sh"
 IMPZ="$ROOT/scripts/impz"
 CONTAINER=${IMP_DEV_NAME:-imp-dev}
@@ -133,7 +133,7 @@ wait_for_image imp-builder
 pass "impd fetched imp-builder under Podman, with Docker masked: $(read_image_field imp-builder digest)"
 
 echo "== the socket and podman suites under Podman"
-"$ROOT/e2e/test-e2e.sh" --only socket,podman
+"$ROOT/scripts/test-e2e.sh" --only socket,podman
 pass "the socket and podman suites pass under Podman"
 
 echo "== run-podman-proof checked"

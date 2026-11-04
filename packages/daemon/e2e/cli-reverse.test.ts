@@ -162,6 +162,7 @@ test('it listens again at the same path once the imp wakes, without waking it', 
 
   // The dwell's length is the contract: it outlasts the CLI's retry interval,
   // so a reopen would have woken the imp by now.
+  // oxlint-disable-next-line zgeoff/no-test-sleep -- the elapsed time is the contract
   await Bun.sleep(3000);
 
   const waiting = await requireImp(name);

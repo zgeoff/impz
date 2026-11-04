@@ -346,14 +346,14 @@ the container's address on `imp-host` ([IPv6](../architecture/network/networking
 
 ### Test it
 
-`e2e/test-bootstrap.sh` runs the script in a privileged container with systemd as PID 1, on Debian
-13 and Ubuntu 24.04 and 26.04, with a loop file and Podman inside. It checks `--check` on the fresh
-host, a first run, `--check` and a second run with no change. It fails when the host's `vm.*` and
-`kernel.*` sysctls or loaded modules change. In a container, the script writes the kernel settings
-and does not apply them; `accept_ra`, which is per network namespace, it applies. Each distro runs
-with `--ipv6 on`, as CI has no IPv6 route out. On Debian it also checks a network with another
-subnet, `accept_ra=2` on a dotted interface with a fake router-advert route, `--ipv6 off`, the
-refusal when a client takes the adverts, the `--data-device` refusals and what
+`scripts/test-bootstrap.sh` runs the script in a privileged container with systemd as PID 1, on
+Debian 13 and Ubuntu 24.04 and 26.04, with a loop file and Podman inside. It checks `--check` on the
+fresh host, a first run, `--check` and a second run with no change. It fails when the host's `vm.*`
+and `kernel.*` sysctls or loaded modules change. In a container, the script writes the kernel
+settings and does not apply them; `accept_ra`, which is per network namespace, it applies. Each
+distro runs with `--ipv6 on`, as CI has no IPv6 route out. On Debian it also checks a network with
+another subnet, `accept_ra=2` on a dotted interface with a fake router-advert route, `--ipv6 off`,
+the refusal when a client takes the adverts, the `--data-device` refusals and what
 `--check --storage zfs` plans. With `--stub`, it then installs Docker, runs imp-host under Docker
 with the unit's arguments, and checks that `deploy/upgrade.sh` moves the host to Podman and that the
 moved container reads a file the Docker one wrote to `/var/lib/imp`. With `--health`, an imp also
@@ -362,8 +362,8 @@ pool with a unique name that the test destroys; it needs the zfs module loaded o
 WSL2 does not have.
 
 ```sh
-e2e/test-bootstrap.sh --stub --zfs                        # a stand-in image (what CI runs)
-e2e/test-bootstrap.sh --image imp-host:<tag> --health     # a release image; boots an imp
+scripts/test-bootstrap.sh --stub --zfs                        # a stand-in image (what CI runs)
+scripts/test-bootstrap.sh --image imp-host:<tag> --health     # a release image; boots an imp
 ```
 
 Nothing has run on a real OVH or Vultr server yet.

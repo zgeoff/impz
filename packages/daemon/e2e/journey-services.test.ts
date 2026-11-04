@@ -228,6 +228,7 @@ test('it waits out a sleep in a log follow without waking the imp, and prints ea
 
   // The dwell's length is the contract: it outlasts impd's follow recheck, so
   // a read would have woken the imp by now.
+  // oxlint-disable-next-line zgeoff/no-test-sleep -- the elapsed time is the contract
   await Bun.sleep(6000);
 
   const waiting = await requireImp(name);

@@ -144,6 +144,7 @@ test('it sleeps an idle imp by itself, wakes it intact on a request, and keeps i
 
   // The time asleep is the contract: a guest clock that froze while asleep
   // would be this far behind after the wake.
+  // oxlint-disable-next-line zgeoff/no-test-sleep -- the elapsed time is the contract
   await Bun.sleep(5000);
 
   await runImp('wake', name);

@@ -27,7 +27,7 @@ bun run lint:workflows            # ci.yml's release job waits on no gate and st
 (cd host/uffd-handler && gofmt -l . && go vet ./... && go test ./...)  # uffd-handler, a Go module of its own
 (cd agent && go tool -modfile=tools/go.mod golangci-lint run --build-tags root ./...)   # the lint CI runs
 scripts/test-go.sh                # the agent's Go tests with -race; prints the slowest cases
-e2e/test-e2e.sh --clean       # end to end, from a clean state
+scripts/test-e2e.sh --clean       # end to end, from a clean state
 ```
 
 `bun run check` runs the whole-tree gates of CI's `checks` job: dead code, format, the type-aware
@@ -47,10 +47,10 @@ because the shared lint config bans JSDoc blocks and knip reads a tag from any b
 
 ## End-to-end tests
 
-`e2e/test-e2e.sh` brings up the dev instance (`scripts/dev/dev.sh`), then runs each journey file of
-each suite in `e2e/suites/` as its own `bun test` process, and resets the suite's leftovers after
-each one. Every case drives impd through the `impz` CLI, the way a user would; the dashboard suite
-drives it through a browser. The suites run in this order:
+`scripts/test-e2e.sh` brings up the dev instance (`scripts/dev/dev.sh`), then runs each journey file
+of each suite in `packages/daemon/e2e/` as its own `bun test` process, and resets the suite's
+leftovers after each one. Every case drives impd through the `impz` CLI, the way a user would; the
+dashboard suite drives it through a browser. The suites run in this order:
 
 | Suite            | What it proves                                                                                                                                                                                                                                                                                                                 |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -102,11 +102,11 @@ drives it through a browser. The suites run in this order:
 | `backups-repo`   | an imp left out of backups, a stale lock, a corrupted pack, the database copy                                                                                                                                                                                                                                                  |
 
 ```sh
-e2e/test-e2e.sh                          # the acceptance set: every suite
-e2e/test-e2e.sh --only fast              # the CI subset: every suite in FAST_GROUPS
-e2e/test-e2e.sh --only checkpoints,sleep # named suites, run in the order above
-e2e/test-e2e.sh --group 2                # one group of the CI subset, as one CI runner runs it
-e2e/test-e2e.sh --clean                  # wipe the dev instance's data first
+scripts/test-e2e.sh                          # the acceptance set: every suite
+scripts/test-e2e.sh --only fast              # the CI subset: every suite in FAST_GROUPS
+scripts/test-e2e.sh --only checkpoints,sleep # named suites, run in the order above
+scripts/test-e2e.sh --group 2                # one group of the CI subset, as one CI runner runs it
+scripts/test-e2e.sh --clean                  # wipe the dev instance's data first
 ```
 
 | Flag      | Effect                                                                                                                                                      |
@@ -143,7 +143,7 @@ runs on [the test tailnet](./e2e-tailnet.md#the-test-tailnet), with its two OAut
 `client-id` and `client-secret`). Run it with the vault set:
 
 ```bash
-IMP_OP_VAULT=imp-e2e IMP_E2E_TAILNET_NAMES=1 e2e/test-e2e.sh --only tailnet-names
+IMP_OP_VAULT=imp-e2e IMP_E2E_TAILNET_NAMES=1 scripts/test-e2e.sh --only tailnet-names
 ```
 
 `IMP_DEV_NAME`, `IMP_DEV_PORT_OFFSET` and `IMP_DEV_DATA` pick the dev instance, as for
@@ -199,7 +199,7 @@ usual roots: verification stays on. The suite writes the file and removes it whe
 
 A run writes `.cache/e2e/results.json`: each suite's verdict and time, and the timings the suites
 measure. A suite file also runs on its own against a running instance:
-`bun test --config=e2e/bunfig.toml ./e2e/suites/sleep.e2e.ts`.
+`bun test --config=packages/daemon/e2e/bunfig.toml ./packages/daemon/e2e/journey-sleep-memory.test.ts`.
 
 ### Wake bench
 
@@ -313,7 +313,7 @@ Lefthook installs the hooks with `bun install`.
 | `client`     | yes      | Packs `@impz/client`, installs it on the oldest Node it supports, and smokes it under Node, Bun and a compiled Bun binary.                                                                                                                                       |
 | `e2e`        | yes      | Passes only when every `e2e-group` job passed, or when all skipped on a pull request outside their paths: the `fast` end-to-end set on real microVMs, in four groups on four runners (below).                                                                    |
 | `zfs`        | yes      | Passes only when every `zfs-shard` job passed, or when all skipped on a pull request outside their paths: real imps on a ZFS pool in three shards, and `scripts/test-zfs.sh` in one (below).                                                                     |
-| `podman`     | no       | `e2e/podman/run-podman-proof.sh`: the proof that an imp host runs with no Docker engine (below).                                                                                                                                                                 |
+| `podman`     | no       | `scripts/run-podman-proof.sh`: the proof that an imp host runs with no Docker engine (below).                                                                                                                                                                    |
 
 The `checks` job also runs the docs-writing skill's scripts. `bun run lint:docs` runs
 `check-links.sh`, which fails on a broken relative link or anchor in a README or a page under
@@ -359,7 +359,7 @@ instead of building it again.
 
 Each group boots real Firecracker guests on a standard `ubuntu-24.04` runner (4 cores, 16 GB), which
 exposes `/dev/kvm`. `scripts/ci/check-kvm.sh` runs first, so a runner without KVM fails in seconds
-with the reason. The job then runs `e2e/test-e2e.sh --group N` with `E2E_RAM_BUDGET_MIB=4096`,
+with the reason. The job then runs `scripts/test-e2e.sh --group N` with `E2E_RAM_BUDGET_MIB=4096`,
 `IMP_DEFAULT_MEMORY_MIB=1024` and the XFS file on the runner's `/mnt` disk. No workflow holds a
 Tailscale secret: group 4's tailnet suites join the Headscale tailnet that the harness starts, and a
 missed timing limit only warns. The host networking tests run in group 2 only (`HOST_TESTS_GROUP`).
@@ -388,9 +388,9 @@ so a pull request from a fork would get a privileged container with `/dev/kvm` o
 Each job sets its own concurrency group, so a new push to a pull request or to `main` cancels the
 checks of the older run. The `release` and `start-release` jobs never cancel.
 
-`.github/workflows/bootstrap.yml` runs `e2e/test-bootstrap.sh --stub --zfs` when a pull request or a
-push to `main` changes `deploy/` or the test ([Bootstrap a server](../guides/install.md#test-it)).
-Its job is a required check.
+`.github/workflows/bootstrap.yml` runs `scripts/test-bootstrap.sh --stub --zfs` when a pull request
+or a push to `main` changes `deploy/` or the test
+([Bootstrap a server](../guides/install.md#test-it)). Its job is a required check.
 
 `deploy/bootstrap.sh` is generated, so that a server downloads one file to install. Its sources are
 the parts in `deploy/bootstrap/`, the functions in `deploy/lib/host-env.sh` that `deploy/upgrade.sh`
@@ -468,8 +468,8 @@ beside the 4 KiB pages whose bytes changed, which a dirty-page diff writes
 ### The podman job
 
 The `podman` job proves that an imp host runs with no Docker engine. It loads the e2e groups' inputs
-on a KVM runner, and runs `e2e/podman/run-podman-proof.sh` as root. The script fails at the first
-check that does not hold, with the reason, and at the end prints every check it made:
+on a KVM runner, and runs `scripts/run-podman-proof.sh` as root. The script fails at the first check
+that does not hold, with the reason, and at the end prints every check it made:
 
 1. It starts the dev instance under Docker, waits for impd to add its builder image and its default
    image, makes the imp `e2e-podman-keep` with a file in it, and records the builder image's id and
@@ -483,7 +483,7 @@ check that does not hold, with the reason, and at the end prints every check it 
    and that the builder image keeps its id and digest, so impd did not fetch it again.
 4. It starts a second instance under Podman on a fresh data dir, `<data>-fresh`, and waits for impd
    to fetch its builder image there, with Docker masked.
-5. It runs `e2e/test-e2e.sh --only socket,podman` on that instance.
+5. It runs `scripts/test-e2e.sh --only socket,podman` on that instance.
 
 The script masks Docker for good, so it refuses to run unless `CI=true`. The job uploads an
 `e2e-results-podman` artifact with impd's log under Docker (`impd-docker.log`) and under Podman

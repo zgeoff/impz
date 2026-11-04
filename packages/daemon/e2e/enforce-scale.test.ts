@@ -1,5 +1,4 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { ENFORCE_INTERVAL_MS, loadConfig } from '@impz/daemon/test-utils';
 import { collectOvershoots } from '@impz/e2e-harness/budget-overshoot';
 import { config } from '@impz/e2e-harness/config';
 import { resolveImageName } from '@impz/e2e-harness/fixtures';
@@ -31,6 +30,8 @@ import { buildStats } from '@impz/e2e-harness/stats';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
 import { writeMetric } from '@impz/e2e-harness/write-metric';
 import invariant from 'tiny-invariant';
+import { loadConfig } from '../src/config';
+import { ENFORCE_INTERVAL_MS } from '../src/imp-ops/governor/ram-governor';
 
 // One stack for every release, so the monitor stops and the holds go before
 // the imps they name.

@@ -63,7 +63,7 @@ test("it waits for the release PR's checks longer than any pull request job may 
   ).toBeGreaterThan(longest);
 });
 
-test('it runs the ZFS lane over the lane shards, so every *.zfs.e2e.ts suite runs once', async () => {
+test('it runs the ZFS lane over the lane shards, so every *.zfs.test.ts suite runs once', async () => {
   const text = await Bun.file(new URL('../../../.github/workflows/ci.yml', import.meta.url)).text();
 
   const workflow = Bun.YAML.parse(text);

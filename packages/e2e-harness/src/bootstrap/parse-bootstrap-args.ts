@@ -7,12 +7,12 @@ export const BOOTSTRAP_USAGE = `Run deploy/bootstrap.sh for real inside a throwa
 as PID 1, on Debian 13 and Ubuntu 24.04 and 26.04, and check that a second run
 changes nothing.
 
-  e2e/test-bootstrap.sh --image imp-host:<tag>   a local release image
-  e2e/test-bootstrap.sh --stub                   a stand-in image (CI)
-  e2e/test-bootstrap.sh --image ... --health     also create and exec an imp (needs KVM)
-  e2e/test-bootstrap.sh --distro debian ...      one distro only
-  e2e/test-bootstrap.sh --keep ...               leave a failed container to inspect
-  e2e/test-bootstrap.sh --zfs ...                also a real ZFS run on Ubuntu 24.04 (needs
+  scripts/test-bootstrap.sh --image imp-host:<tag>   a local release image
+  scripts/test-bootstrap.sh --stub                   a stand-in image (CI)
+  scripts/test-bootstrap.sh --image ... --health     also create and exec an imp (needs KVM)
+  scripts/test-bootstrap.sh --distro debian ...      one distro only
+  scripts/test-bootstrap.sh --keep ...               leave a failed container to inspect
+  scripts/test-bootstrap.sh --zfs ...                also a real ZFS run on Ubuntu 24.04 (needs
                                                      the zfs module loaded on this host)`;
 
 export interface BootstrapArgs {
