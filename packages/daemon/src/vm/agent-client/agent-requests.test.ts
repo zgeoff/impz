@@ -115,9 +115,11 @@ test('#readFrameWithin rejects when the agent does not answer within the timeout
     connection.close();
   });
 
-  expect(readFrameWithin(connection, 1)).rejects.toThrowWithMessage(
+  expect(
+    readFrameWithin(connection, { call: 'ping response', vsockPath: ctx.vsockPath, timeoutMs: 1 }),
+  ).rejects.toThrowWithMessage(
     Error,
-    'agent did not answer within 1 ms',
+    `agent at ${ctx.vsockPath} sent no ping response within 1 ms`,
   );
 });
 

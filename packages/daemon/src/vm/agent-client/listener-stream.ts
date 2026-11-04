@@ -39,7 +39,11 @@ function buildListenRequest(spec: ListenSpec): AgentRequest {
   return { op: 'listen', network: 'tcp', address: `127.0.0.1:${String(spec.port)}` };
 }
 
-export async function openListener(vsockPath: string, spec: ListenSpec): Promise<GuestListener> {
+export async function openListener(
+  vsockPath: string,
+  spec: ListenSpec,
+  answerTimeoutMs = ANSWER_TIMEOUT_MS,
+): Promise<GuestListener> {
   const feature = spec.network === 'ssh-agent' ? 'agent-forwarding' : 'reverse-forward';
 
   const connection = await openAgentConnection(vsockPath);
@@ -47,7 +51,11 @@ export async function openListener(vsockPath: string, spec: ListenSpec): Promise
   try {
     sendRequestFrame(connection, buildListenRequest(spec));
 
-    const answer = await readFrameWithin(connection, ANSWER_TIMEOUT_MS);
+    const answer = await readFrameWithin(connection, {
+      call: 'listener answer',
+      vsockPath,
+      timeoutMs: answerTimeoutMs,
+    });
 
     if (answer?.type !== FRAME_TYPES.response) {
       throw new Error('agent closed the listen connection before it answered');

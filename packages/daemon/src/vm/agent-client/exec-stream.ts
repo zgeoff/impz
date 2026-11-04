@@ -154,7 +154,11 @@ async function openStream(
   try {
     sendRequestFrame(connection, request);
 
-    const first = await readFrameWithin(connection, startTimeoutMs);
+    const first = await readFrameWithin(connection, {
+      call: `${request.op} start`,
+      vsockPath,
+      timeoutMs: startTimeoutMs,
+    });
 
     if (first === null) {
       throw new Error('agent closed the exec connection before the process started');

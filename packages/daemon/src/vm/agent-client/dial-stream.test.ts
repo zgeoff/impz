@@ -134,7 +134,7 @@ test('it rejects when the agent does not answer within the answer timeout', asyn
 
   expect(
     openDialStream(ctx.vsockPath, { network: 'tcp', address: '127.0.0.1:8080' }, 1),
-  ).rejects.toThrowWithMessage(Error, 'agent did not answer within 1 ms');
+  ).rejects.toThrowWithMessage(Error, `agent at ${ctx.vsockPath} sent no dial answer within 1 ms`);
 });
 
 test('it ends the events without an eof when the target resets', async () => {

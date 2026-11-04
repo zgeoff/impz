@@ -99,7 +99,11 @@ export async function openServiceLogStream(
       ...(request.cursor !== undefined && { cursor: request.cursor }),
     });
 
-    const first = await readFrameWithin(connection, LOGS_START_TIMEOUT_MS);
+    const first = await readFrameWithin(connection, {
+      call: 'services.logs start',
+      vsockPath,
+      timeoutMs: LOGS_START_TIMEOUT_MS,
+    });
 
     if (first === null) {
       throw new Error('agent closed the log connection before it answered');

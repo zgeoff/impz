@@ -71,7 +71,11 @@ export async function sendAgentRequest(
   try {
     sendRequestFrame(connection, request);
 
-    const frame = await readFrameWithin(connection, timeoutMs);
+    const frame = await readFrameWithin(connection, {
+      call: `${request.op} response`,
+      vsockPath,
+      timeoutMs,
+    });
 
     if (frame?.type !== FRAME_TYPES.response) {
       throw new Error(`agent ${request.op}: no response`);
@@ -181,13 +185,22 @@ export async function sendThaw(vsockPath: string): Promise<void> {
   decodeAgentMessage(OKSchema, response);
 }
 
+interface FrameWait {
+  readonly call: string;
+  readonly vsockPath: string;
+  readonly timeoutMs: number;
+}
+
 export function readFrameWithin(
   connection: AgentConnection,
-  timeoutMs: number,
+  wait: Readonly<FrameWait>,
 ): Promise<AgentFrame | null> {
   return requireWithin(
     connection.next(),
-    timeoutMs,
-    () => new Error(`agent did not answer within ${String(timeoutMs)} ms`),
+    wait.timeoutMs,
+    () =>
+      new Error(
+        `agent at ${wait.vsockPath} sent no ${wait.call} within ${String(wait.timeoutMs)} ms`,
+      ),
   );
 }

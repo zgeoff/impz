@@ -98,7 +98,7 @@ test('#openExecStream rejects and closes its connection when STARTED never comes
 
   expect(
     openExecStream(ctx.vsockPath, { argv: ['sleep'], tty: false }, 1),
-  ).rejects.toThrowWithMessage(Error, 'agent did not answer within 1 ms');
+  ).rejects.toThrowWithMessage(Error, `agent at ${ctx.vsockPath} sent no exec start within 1 ms`);
 
   await expect(closed.promise).toResolve();
 });
