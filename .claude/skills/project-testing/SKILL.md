@@ -64,15 +64,16 @@ the result of the CI job that runs the command. CI runs every row but One journe
 
 ## Where a test lives
 
-- Put a client or MCP server test that needs a real impd beside its module too, and boot impd with
-  `startTestImpd` from `@impz/daemon/test-utils`. The package takes `@impz/daemon` as a dev
+- Put a client or MCP server test that needs a real impd beside the module it tests, and boot impd
+  with `startTestImpd` from `@impz/daemon/test-utils`. The package takes `@impz/daemon` as a dev
   dependency only, so its published build never depends on impd.
 - Put a test of the end-to-end or bootstrap harness in
   [`packages/e2e-harness/`](../../../packages/e2e-harness/). It runs in the unit run, with no KVM.
   Keep [`packages/daemon/e2e/`](../../../packages/daemon/e2e/) for the suites and their fixtures.
-- Name an end-to-end suite `<prefix>-<journey>.test.ts`, with a prefix from the testing skill's
-  [E2e prefixes](../testing/references/system-tests.md#e2e-prefixes). The harness runs a journey by
-  the name after the prefix, which `journeys` in `suites.ts` lists.
+- Name each end-to-end journey file `<prefix>-<journey>.test.ts`, with a prefix from the testing
+  skill's [E2e prefixes](../testing/references/system-tests.md#e2e-prefixes), and add `<journey>` to
+  its suite's `journeys` in [`suites.ts`](../../../packages/e2e-harness/src/suites.ts). The harness
+  finds the file by the name after the prefix.
 - Give a Go test that needs root the `root` build tag.
 - Put only the cases that need a lane's real system in the lane file, such as `<name>.host.test.ts`.
   Keep a case that needs none of it in `<name>.test.ts`.
@@ -85,19 +86,20 @@ the result of the CI job that runs the command. CI runs every row but One journe
   root. `IMP_HOST_TESTS=required`, which CI sets, turns that skip into a failure.
 - Pass a lane's limit to `bun test` with `--timeout` in the lane's script, as the `test:*` scripts
   do.
-- Expect a VM suite to get the limit of the `e2e` key in the `lanes` map, and a ZFS suite, whose
-  file ends in `.zfs.test.ts`, the limit of the `zfs` key.
+- Expect a VM journey file, `<prefix>-<journey>.test.ts`, to get the limit of the `e2e` key in the
+  `lanes` map, and a ZFS journey file, `<prefix>-<journey>.zfs.test.ts`, the limit of the `zfs` key.
 - When you add or slow a ZFS-lane suite, update its `seconds` in
   [`suites.ts`](../../../packages/e2e-harness/src/suites.ts), counting the build of any image only
   it needs. CI splits the lane into shards, longest first, by that figure.
 - Expect a `zfs` shard to also run the VM suites that `IMP_ZFS_E2E_SUITES` names, on the ZFS
-  backend. Those tests keep the VM lane's suffix and limit.
+  backend. Those files keep their name and the `e2e` limit.
 
 ## The root preload
 
 - Set an impd setting with [`updateEnv`](../../../packages/shared/src/test-utils/update-env.ts)
   before `setupTest()`. The [root preload](../../../packages/shared/src/test-utils/preload.ts)
-  deletes every `IMP_*` variable the shell passed, except the four gates in [Lanes](#lanes).
+  deletes every `IMP_*` variable the shell passed, except the four run gates that
+  [`removeAmbientImpEnv`](../../../packages/shared/src/test-utils/remove-ambient-imp-env.ts) keeps.
 - Expect every child process to inherit `NO_PROXY=*` from the root preload, which sets it so that
   Bun's `fetch` never sends a loopback request through the shell's `HTTPS_PROXY`. When a test wants
   a child to use a proxy, clear `NO_PROXY` in that child's environment, or pass curl `--noproxy ''`.
