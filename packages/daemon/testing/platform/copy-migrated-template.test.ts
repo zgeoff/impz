@@ -8,7 +8,6 @@ import {
   readdirSync,
   renameSync,
   rmSync,
-  statSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -29,14 +28,25 @@ function setupTest() {
   });
 
   const cacheDirectory = join(directory, 'cache');
+  const buildIDs = buildStubAnswerQueue(['3f2a', '4c1b', '5d0c', '6e9d']);
 
   const dependencies = {
     cacheDirectory,
     migrationsHash: '0123456789abcdef',
     owner: { pid: 4182, namespace: '4026531836' },
-    now: Date.now,
+    now: () => 1_800_000_000_000,
+    createBuildID: () => buildIDs.next(),
     probeProcessRunning: () => true,
-    fileSystem: { copyFileSync, existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync },
+    fileSystem: {
+      copyFileSync,
+      existsSync,
+      mkdirSync,
+      readdirSync,
+      renameSync,
+      rmSync,
+      statSync: () => ({ mtimeMs: 1_800_000_000_000 }),
+      writeFileSync,
+    },
     writeTemplate: buildStubTemplateWriter({ contents: 'a migrated template' }).writeTemplate,
   };
 
@@ -151,7 +161,10 @@ test('it removes the files of older migrations over an hour old when it builds o
 
   await copyMigratedTemplate(join(ctx.directory, 'imp.sqlite'), '003_add_broker', {
     ...ctx.dependencies,
-    now: () => Date.now() + 7_200_000,
+    fileSystem: {
+      ...ctx.dependencies.fileSystem,
+      statSync: () => ({ mtimeMs: 1_799_992_800_000 }),
+    },
   });
 
   expect(readdirSync(ctx.cacheDirectory)).toStrictEqual(['003_add_broker-0123456789abcdef.sqlite']);
@@ -247,10 +260,7 @@ test('it skips a file that leaves the cache while it sweeps', async () => {
     ...ctx.dependencies,
     fileSystem: {
       ...ctx.dependencies.fileSystem,
-      readdirSync: () => [
-        '003_add_broker-0123456789abcdef.sqlite',
-        'pid4183-ns4026531836-3f2a-003_add_broker-0123456789abcdef.sqlite',
-      ],
+      statSync: (path) => new Map<string, { mtimeMs: number }>().get(path),
     },
   });
 
@@ -270,4 +280,39 @@ test('it leaves no build file when the build fails', () => {
 
   expect(copied).rejects.toThrow('the disk went away');
   expect(readdirSync(ctx.cacheDirectory)).toStrictEqual([]);
+});
+
+test('it fails a build whose build ID another build holds, and leaves that build whole', async () => {
+  const ctx = setupTest();
+  const release = Promise.withResolvers<void>();
+  const buildIDs = buildStubAnswerQueue(['3f2a', '3f2a']);
+
+  const dependencies = {
+    ...ctx.dependencies,
+    createBuildID: () => buildIDs.next(),
+    writeTemplate: buildStubTemplateWriter({
+      contents: 'a migrated template',
+      pause: { partial: 'half a template', release: release.promise },
+    }).writeTemplate,
+  };
+
+  // the first call stops after its partial write, before the second starts
+  const first = copyMigratedTemplate(
+    join(ctx.directory, 'first.sqlite'),
+    '003_add_broker',
+    dependencies,
+  );
+
+  const second = copyMigratedTemplate(
+    join(ctx.directory, 'second.sqlite'),
+    '003_add_broker',
+    dependencies,
+  );
+
+  release.resolve();
+
+  await first;
+
+  expect(second).rejects.toThrow('EEXIST');
+  expect(readFileSync(join(ctx.directory, 'first.sqlite'), 'utf8')).toBe('a migrated template');
 });

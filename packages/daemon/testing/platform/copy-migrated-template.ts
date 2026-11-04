@@ -1,5 +1,11 @@
-import { randomUUID } from 'node:crypto';
-import type { copyFileSync, existsSync, mkdirSync, renameSync, rmSync } from 'node:fs';
+import type {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { match } from 'ts-pattern';
 import { collectStaleTemplateFiles } from './collect-stale-template-files';
@@ -25,6 +31,7 @@ interface TemplateFileSystem {
   readonly renameSync: typeof renameSync;
   readonly rmSync: typeof rmSync;
   readonly statSync: (path: string, options: StatOptions) => FileTimes | undefined;
+  readonly writeFileSync: typeof writeFileSync;
 }
 
 export interface TemplateDependencies {
@@ -32,6 +39,7 @@ export interface TemplateDependencies {
   readonly migrationsHash: string;
   readonly owner: RunOwner;
   readonly now: () => number;
+  readonly createBuildID: () => string;
   readonly probeProcessRunning: (pid: number) => boolean;
   readonly fileSystem: TemplateFileSystem;
   readonly writeTemplate: (path: string, migration: string) => Promise<void>;
@@ -74,7 +82,12 @@ async function runTemplateBuild(
   dependencies: TemplateDependencies,
 ): Promise<void> {
   const prefix = formatRunPrefix(dependencies.owner);
-  const building = join(dirname(template), `${prefix}${randomUUID()}-${basename(template)}`);
+  const buildID = dependencies.createBuildID();
+  const building = join(dirname(template), `${prefix}${buildID}-${basename(template)}`);
+
+  // an exclusive create fails on a build ID another build holds, before this
+  // build can write over that build's file or remove it
+  dependencies.fileSystem.writeFileSync(building, '', { flag: 'wx' });
 
   try {
     await dependencies.writeTemplate(building, migration);
