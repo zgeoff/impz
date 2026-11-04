@@ -40,7 +40,8 @@ imp=<imp> restored boot template c4c480673be5 as pid 26076 admit=3ms setup=192ms
 | `spawn`   | `restored boot template` | impd starts Firecracker                                                              |
 | `handler` | `restored boot template` | impd starts the page handler that serves the template's memory                       |
 | `load`    | `restored boot template` | Firecracker loads the template's snapshot                                            |
-| `parked`  | `restored boot template` | impd resumes the guest and waits for the guest agent, which waits for a claim        |
+| `resume`  | `restored boot template` | Firecracker resumes the guest's vCPUs                                                |
+| `parked`  | `restored boot template` | after the resume, impd waits for the parked guest agent to answer a ping             |
 | `claim`   | `restored boot template` | impd sends the claim and waits for the guest's answer                                |
 | `agent`   | `restored boot template` | impd waits from the guest's answer to the claim until the guest agent answers a ping |
 | `mount`   | after `; guest`          | the guest mounts the imp's disk, from the moment it answers the claim                |
