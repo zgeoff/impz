@@ -216,8 +216,9 @@ opens the paths that the source's snapshot names
 ([trust](../architecture/storage/moves.md#warm-moves)). Move warm only between hosts that trust each
 other.
 
-The target's broker CA goes into the guest at its first wake. A process that loaded the source's CA
-before the move fails TLS to the broker until it restarts. Open connections end, as at any sleep.
+The target's broker CA goes into the guest at the first wake whose install succeeds. A process that
+loaded the source's CA before the move fails TLS to the broker until it restarts. Open connections
+end, as at any sleep.
 
 ### URLs
 

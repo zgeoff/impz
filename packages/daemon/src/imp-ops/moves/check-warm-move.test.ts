@@ -3,6 +3,7 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { create } from '@bufbuild/protobuf';
 import { ServicesListSchema } from '@impz/agent-protocol';
 import { MoveOfferReplySchema } from '@impz/api';
+import { buildStubAnswerQueue } from '@impz/test-utils/build-stub-answer-queue';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import * as z from 'zod';
@@ -653,6 +654,56 @@ test("it installs the target's broker CA once at the first wake after a warm mov
 
   expect(before.trust_pending).toBe(1);
   expect(after.trust_pending).toBe(0);
+});
+
+test('it keeps the broker CA install pending when the push in the first wake after a warm move fails', async () => {
+  const answers = buildStubAnswerQueue([() => Promise.reject(new Error('no /bin/sh'))]);
+
+  const ctx = await setupTest({
+    isShared: true,
+    target: { installBundle: () => answers.next()() },
+  });
+
+  await createUbuntuImage(ctx.source);
+
+  await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
+  await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
+  await ctx.runMove('dev');
+  await ctx.target.broker.addSecret({ name: 'gh', kind: 'github', value: 'ghp_EXAMPLE' });
+  await ctx.target.broker.addGrant('dev', 'gh');
+  await ctx.targetApp.client.imps.wake({ name: 'dev' });
+
+  const moved = await readImpByName(ctx.target.db, 'dev');
+
+  expect(moved?.isTrustPending).toBeTrue();
+});
+
+test('it pushes the broker CA in the next wake after the push in the first wake after a warm move failed', async () => {
+  const answers = buildStubAnswerQueue([
+    () => Promise.reject(new Error('no /bin/sh')),
+    () => Promise.resolve(),
+  ]);
+
+  const ctx = await setupTest({
+    isShared: true,
+    target: { installBundle: () => answers.next()() },
+  });
+
+  await createUbuntuImage(ctx.source);
+
+  await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
+  await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
+  await ctx.runMove('dev');
+  await ctx.target.broker.addSecret({ name: 'gh', kind: 'github', value: 'ghp_EXAMPLE' });
+  await ctx.target.broker.addGrant('dev', 'gh');
+  await ctx.targetApp.client.imps.wake({ name: 'dev' });
+  await ctx.targetApp.client.imps.sleep({ name: 'dev' });
+  await ctx.targetApp.client.imps.wake({ name: 'dev' });
+
+  const moved = await readImpByName(ctx.target.db, 'dev');
+
+  expect(answers.left).toBe(0);
+  expect(moved?.isTrustPending).toBeFalse();
 });
 
 test('it refuses a system drive the target lacks whose sum is not its name', async () => {
