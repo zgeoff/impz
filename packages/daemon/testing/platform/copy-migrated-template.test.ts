@@ -272,7 +272,7 @@ test('it skips a file that leaves the cache while it sweeps', async () => {
   );
 });
 
-test('it leaves no build file when the build fails', async () => {
+test('it leaves no build file when the build fails', () => {
   const ctx = setupTest();
 
   const copied = copyMigratedTemplate(join(ctx.directory, 'imp.sqlite'), '003_add_broker', {
@@ -284,7 +284,6 @@ test('it leaves no build file when the build fails', async () => {
     },
   });
 
-  await expect(copied).rejects.toThrow('the disk went away');
-
+  expect(copied).rejects.toThrow('the disk went away');
   expect(readdirSync(ctx.cacheDirectory)).toStrictEqual([]);
 });

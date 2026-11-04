@@ -34,11 +34,11 @@ test('it writes a database file migrated up to the migration it names', async ()
   expect(names).toStrictEqual(['001_create_initial_schema', '002_add_imp_http_port']);
 });
 
-test('it closes the template database when a migration fails', async () => {
+test('it closes the template database when a migration fails', () => {
   const ctx = setupTest();
   const created = createMigratedDatabaseFile(join(ctx.directory, 'imp.sqlite'), '999_unknown');
 
-  await expect(created).rejects.toThrow('999_unknown');
+  expect(created).rejects.toThrow('999_unknown');
 
   // Linux still lists a removed file that a descriptor holds open
   const descriptors = Bun.spawnSync(['ls', '-l', `/proc/${String(process.pid)}/fd`]);
