@@ -23,8 +23,8 @@ at the boot caused it?
 - Each imp's wakes stay slow long after its first wake on the pool. An imp that wakes often took 104
   to 205 ms in `agent` in 12 wakes before the boot, and 346 to 4,536 ms in 25 wakes after it.
 - On two test imps of 512 MiB, wakes took 219 to 353 ms from the resume to the agent's answer, and
-  starts from a boot template, whose memory file impd keeps in the host page cache, took 104 and 107
-  ms.
+  starts from a boot template, whose memory file impd had locked in the host page cache, took 104
+  and 107 ms.
 - The handler reads each block through a memory map, which faults up to 512 pages of 4 KiB when the
   file is out of the page cache. On a workstation, that read took 15.5 ms a block, and one `pread`
   took 3.2 ms. No run timed the handler on the host, so this cause is suspected.

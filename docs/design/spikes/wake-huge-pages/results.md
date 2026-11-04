@@ -26,8 +26,10 @@ The window starts when impd 6.3.2 started, and ends before the [test imps](#the-
 impd starts an imp from a memory snapshot by a restore or by a wake:
 
 - A restore starts a new imp from a boot template: a memory snapshot of a booted guest that impd
-  keeps for each image. impd locks each template's memory file in the host page cache, so a restore
-  reads its memory from RAM.
+  keeps for each image. impd locks each template's memory file in the host page cache when the lock
+  succeeds and fits in a tenth of the RAM budget. A restore from a locked template reads its memory
+  from RAM. On this host, the journal shows every template locked since 1 November, and no
+  `memory not locked` line.
 - A wake resumes a sleeping imp from the memory snapshot it took when it went to sleep. That memory
   file is new at each sleep, and Firecracker writes it through ZFS, whose cache is not the page
   cache.
