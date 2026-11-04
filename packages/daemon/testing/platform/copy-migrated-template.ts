@@ -17,7 +17,7 @@ import type { TemplateFile } from './is-stale-template-file';
 import { pickTemplateStep } from './pick-template-step';
 import type { TemplateStep } from './pick-template-step';
 
-export interface TemplateFileSystem {
+interface TemplateFileSystem {
   readonly copyFileSync: typeof copyFileSync;
   readonly existsSync: typeof existsSync;
   readonly mkdirSync: typeof mkdirSync;
