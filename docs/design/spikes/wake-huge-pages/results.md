@@ -120,13 +120,15 @@ table below holds the 5 wakes from 09:00 to 18:00 on 3 November, the working hou
 
 At 23:41 on 4 November, two test imps of 512 MiB ran on 2 MiB pages on the target host: one idle,
 and one with 150 MiB of random data in `/dev/shm`. A script ran 5 rounds. In each round it put both
-imps to sleep, waited 30 s, and woke each in turn. Each figure is the `agent` step, in milliseconds.
-`Restore` is the start of each imp from its boot template, when the script created it.
+imps to sleep, waited 30 s, and woke each in turn. Each wake figure is the `agent` step, in
+milliseconds. `Restore` is the start of each imp from its boot template, when the script created it.
+A restore's own `agent` step starts after the claim, so its figure is the sum of the steps from the
+resume to the agent's answer: `parked`, `disk`, `patch`, `claim` and `agent`.
 
 | Imp     | Restore | Wake 1 | Wake 2 | Wake 3 | Wake 4 | Wake 5 | Mem file |
 | ------- | ------- | ------ | ------ | ------ | ------ | ------ | -------- |
-| idle    | 61      | 353    | 325    | 273    | 260    | 294    | 103 MiB  |
-| 150 MiB | 78      | 299    | 266    | 277    | 219    | 295    | 257 MiB  |
+| idle    | 104     | 353    | 325    | 273    | 260    | 294    | 103 MiB  |
+| 150 MiB | 107     | 299    | 266    | 277    | 219    | 295    | 257 MiB  |
 
 The guest does not read the data in `/dev/shm` on a wake, so the size of the memory file alone does
 not set a wake's time. The script slept each imp about a second after its wake, and impd's
@@ -157,12 +159,12 @@ so these figures show how the two reads compare, and give no cost for the target
 
 ## Fix or accept
 
-| Option                                                                         | Effort               | Risk                                                                                                      | Effect                                           |
-| ------------------------------------------------------------------------------ | -------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| A. Accept the slower wakes                                                     | none                 | a conversation waits a median of 484 ms in `agent` on each wake                                           | restores stay at 61 to 78 ms in `agent`          |
-| B. Turn huge pages off on the host                                             | 1 host config change | restores go back to 4 KiB pages, whose agent the UFFD spike timed at a median of 1,500 ms after the claim | wakes go back to 4 KiB pages: a median of 143 ms |
-| C. Log the handler's faults, data blocks and read time with each wake          | 1 small impd PR      | none; one more log field                                                                                  | shows the per-block cost on the target host      |
-| D. Read each block with one `pread`, or load the memory file before the resume | 1 to 2 impd PRs      | a load before the resume adds its time to `load`                                                          | removes the map's faults, if C confirms them     |
+| Option                                                                         | Effort               | Risk                                                                                                      | Effect                                                                          |
+| ------------------------------------------------------------------------------ | -------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| A. Accept the slower wakes                                                     | none                 | a conversation waits a median of 484 ms in `agent` on each wake                                           | restores keep their speed: 104 and 107 ms from resume to agent on the test imps |
+| B. Turn huge pages off on the host                                             | 1 host config change | restores go back to 4 KiB pages, whose agent the UFFD spike timed at a median of 1,500 ms after the claim | wakes go back to 4 KiB pages: a median of 143 ms                                |
+| C. Log the handler's faults, data blocks and read time with each wake          | 1 small impd PR      | none; one more log field                                                                                  | shows the per-block cost on the target host                                     |
+| D. Read each block with one `pread`, or load the memory file before the resume | 1 to 2 impd PRs      | a load before the resume adds its time to `load`                                                          | removes the map's faults, if C confirms them                                    |
 
 The spike recommends C, then D, with huge pages kept on, and B if D does not bring wakes near 143
 ms. If C shows that the handler spends little of the `agent` step on reads, the time goes elsewhere
