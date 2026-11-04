@@ -63,6 +63,20 @@ misses build it again. A failure from the claim on is the imp's own, and the tem
 builds and failed restores back off, and a key that keeps failing is turned off until impd restarts.
 A small number of templates is kept, and past it the least recently restored one goes.
 
+To see what slowed a restore, read its `restored boot template` line in the host's journal. The line
+holds impd's steps, then the guest's steps after `; guest`, then the host stall after
+`; host stall`. The host stall has four figures in milliseconds. impd counts each one from just
+before it sets up the imp's network until it writes the line:
+
+- `cpu`, `io` and `memory`: how long at least one task on the host waited for that resource, from
+  `/proc/pressure`.
+- `steal`: how long the hypervisor under the host ran other work on the host's CPUs, from
+  `/proc/stat`. It adds up every CPU, so it can exceed the restore's own time.
+
+On a kernel without pressure-stall information, the host stall holds only `steal`. When impd boots
+the kernel in place of a restore, the `booted pid` line it writes to the journal ends with the same
+host stall.
+
 ## RAM
 
 The governor counts a restored VM as it counts every VM, without its clean file pages. The pages a
