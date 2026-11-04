@@ -640,3 +640,30 @@ test('#ls names the saved host under --all over a host field that a newer impd a
     code: 0,
   });
 });
+
+test('#sleep sleeps an imp that holds a lease and ends the lease', async () => {
+  const ctx = await setupTest();
+  const box = await startImpdHost(ctx.stack, { env: {} });
+
+  const image = buildMockNewImage({ name: 'base', sizeBytes: 6 });
+
+  await Bun.write(buildImagePaths(box.dataDir, image.digest).rootfs, 'rootfs');
+
+  await createImage(box.db, image);
+
+  await box.client.imps.create({ name: 'dev' });
+  await box.client.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 600 });
+
+  writeHostConfig(ctx.home, {
+    current: 'box',
+    hosts: { box: { url: box.url, token: box.rootToken } },
+  });
+
+  const slept = await runCLIInProcess({ args: ['sleep', 'dev'], env: ctx.home });
+  const imp = await readImpByName(box.db, 'dev');
+  const leases = await box.client.leases.list({ name: 'dev' });
+
+  expect(slept.code).toBe(0);
+  expect(imp?.state).toBe('sleeping');
+  expect(leases).toStrictEqual([]);
+});
