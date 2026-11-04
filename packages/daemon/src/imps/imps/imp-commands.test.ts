@@ -1,4 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
+import invariant from 'tiny-invariant';
 import { updateImage } from '../../platform/db/images';
 import { readImpByName } from '../../platform/db/imps';
 import { startTestImpd } from '../../test-utils/start-test-impd';
@@ -36,4 +37,19 @@ test('it keeps the digest an imp cloned from after its image row takes a new dig
   const imp = await readImpByName(ctx.db, 'dev');
 
   expect(imp?.imageDigest).toBe(image.digest);
+});
+
+test('it removes the tap an imp booted with when it destroys the imp', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.imps.createImp({ name: 'dev' });
+
+  const [booted] = ctx.taps;
+
+  invariant(booted);
+
+  await ctx.imps.destroyImp('dev');
+
+  expect(ctx.removedTaps).toStrictEqual([booted]);
 });

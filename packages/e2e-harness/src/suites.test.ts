@@ -227,7 +227,6 @@ test('#SUITE_SETS builds the fast set from the groups, in run order', () => {
     'proxy',
     'dashboard',
     'tokens',
-    'leases',
     'egress',
     'cpu',
     'templates',

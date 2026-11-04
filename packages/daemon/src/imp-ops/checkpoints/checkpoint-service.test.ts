@@ -522,6 +522,22 @@ test('it deletes a checkpoint by its label and keeps the others', async () => {
   expect(remaining).toStrictEqual([second]);
 });
 
+test('it answers NOT_FOUND to a restore from a deleted checkpoint', async () => {
+  const ctx = await setupTest({ storage: 'xfs' });
+
+  await Bun.write(join(ctx.dataDir, 'images', 'base', 'rootfs.ext4'), 'rootfs');
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'base', digest: 'sha256:base' }));
+
+  await ctx.impd.imps.createImp({ name: 'dev', image: 'base' });
+  await ctx.impd.checkpoints.createCheckpoint('dev', 'one');
+  await ctx.impd.checkpoints.removeCheckpoint('dev', 'one');
+
+  expect(ctx.impd.checkpoints.restoreCheckpoint('dev', 'one')).rejects.toMatchObject({
+    code: 'NOT_FOUND',
+  });
+});
+
 test('it removes an imp’s checkpoints with the imp', async () => {
   const ctx = await setupTest({ storage: 'xfs' });
 

@@ -30,7 +30,6 @@ test('it runs every suite in run order when no suite is named', () => {
     'dashboard',
     'https',
     'tokens',
-    'leases',
     'egress',
     'ipv6',
     'networks',
@@ -88,7 +87,6 @@ test('it expands a set and drops a suite the set already holds', () => {
     'proxy',
     'dashboard',
     'tokens',
-    'leases',
     'egress',
     'cpu',
     'templates',
@@ -129,7 +127,7 @@ test.each([
   ],
   ['2', ['sleep', 'reverse', 'jail', 'huge-pages']],
   ['3', ['mcp', 'mcp-oauth', 'proxy', 'tokens', 'inner', 'memory', 'ksm']],
-  ['4', ['tailscale', 'leases', 'egress', 'cpu', 'moves-tailnet']],
+  ['4', ['tailscale', 'egress', 'cpu', 'moves-tailnet']],
 ])('it runs fast group %s with --group', (group, suites) => {
   expect(parseArgs(['--group', group]).suites).toStrictEqual(suites);
 });

@@ -1425,6 +1425,31 @@ test('it audits an exec on a ticket the token asked for as the token', async () 
   expect(actors).toStrictEqual(['token']);
 });
 
+test('it audits an imp’s create, sleep, wake and destroy as the token, newest first', async () => {
+  const ctx = await setupTest({ cgroups: buildStubCpuCgroups().cgroups });
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.client.imps.create({ name: 'dev', image: 'ubuntu' });
+  await ctx.client.imps.sleep({ name: 'dev' });
+  await ctx.client.imps.wake({ name: 'dev' });
+  await ctx.client.imps.destroy({ name: 'dev' });
+
+  const calls = await waitFor(async () => {
+    const rows = await listApiCalls(ctx.db, 'dev', 10, null);
+
+    expect(rows).toHaveLength(4);
+
+    return rows.map((row) => [row.procedure, row.actor]);
+  });
+
+  expect(calls).toStrictEqual([
+    ['imps.destroy', 'token'],
+    ['imps.wake', 'token'],
+    ['imps.sleep', 'token'],
+    ['imps.create', 'token'],
+  ]);
+});
+
 test('it lets a bearer exec socket start any imp', async () => {
   const ctx = await setupTest({ cgroups: buildStubCpuCgroups().cgroups });
 
