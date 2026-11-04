@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test';
 import type { WarmHost, WarmMove } from '@impz/api';
-import { buildMockWarmHost } from '../../../testing/imp-ops/build-mock-warm-host';
-import { buildMockWarmMove } from '../../../testing/imp-ops/build-mock-warm-move';
 import { parseSubnet } from '../../host-net/net/addressing';
+import { buildMockWarmHost } from '../../test-utils/imp-ops/build-mock-warm-host';
+import { buildMockWarmMove } from '../../test-utils/imp-ops/build-mock-warm-move';
 import { buildWarmMove, collectWarmMismatches, readWarmHost } from './warm-facts';
 
 test('#readWarmHost reports the identity, the config and the storage a warm move needs', () => {

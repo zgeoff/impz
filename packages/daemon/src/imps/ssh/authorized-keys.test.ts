@@ -5,8 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { utils } from 'ssh2';
 import invariant from 'tiny-invariant';
-import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { generateEd25519Key } from '../../surface/ssh/host-key';
+import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
 import { createAuthorizedKeys, formatKeyFingerprint, parseAuthorizedKeys } from './authorized-keys';
 
 async function setupTest() {

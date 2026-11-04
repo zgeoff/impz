@@ -1,29 +1,29 @@
 # Preloads, shared test utils and cleanup
 
-The [root preload](../../../../packages/test-utils/src/preload.ts) owns the shared state of every
-test process, and the dashboard adds
+The [root preload](../../../../packages/shared/src/test-utils/preload.ts) owns the shared state of
+every test process, and the dashboard adds
 [a setup of its own](../../../../packages/dashboard/test-setup.ts) after it. Helpers that every
-package uses live in [the shared test utils](../../../../packages/test-utils/src/), and each package
-keeps its own stand-ins in its `test-utils` folder. Read a helper's own test before you rely on it,
-because that test pins what the helper does.
+package uses live in [the shared test utils](../../../../packages/shared/src/test-utils/), and each
+package keeps its own stand-ins in its `test-utils` folder. Read a helper's own test before you rely
+on it, because that test pins what the helper does.
 
 ## The root preload
 
 The root preload gives each unit test a clean impd environment. It deletes every `IMP_*` variable
 the shell passed in, except the run gates, so a developer's own settings never reach a test. A test
 that needs an impd setting sets it through
-[`updateEnv`](../../../../packages/test-utils/src/update-env.ts) before it calls `setupTest()`, and
-the test's impd then reads it through
-[`readImpEnv`](../../../../packages/test-utils/src/read-imp-env.ts), as production does.
+[`updateEnv`](../../../../packages/shared/src/test-utils/update-env.ts) before it calls
+`setupTest()`, and the test's impd then reads it through
+[`readImpEnv`](../../../../packages/shared/src/test-utils/read-imp-env.ts), as production does.
 
 The end-to-end suites run under a preload of their own, with no MSW server, because each journey
 talks to a real dev instance over the network.
 
 The shared test utils hold the condition wait
-[`waitFor`](../../../../packages/test-utils/src/wait-for.ts) and the scripted answer queue
-[`buildStubAnswerQueue`](../../../../packages/test-utils/src/build-stub-answer-queue.ts). The queue
-hands out a dependency's answers in order and throws on a call past the last one, so a test that
-expects three calls fails on a fourth.
+[`waitFor`](../../../../packages/shared/src/test-utils/wait-for.ts) and the scripted answer queue
+[`buildStubAnswerQueue`](../../../../packages/shared/src/test-utils/build-stub-answer-queue.ts). The
+queue hands out a dependency's answers in order and throws on a call past the last one, so a test
+that expects three calls fails on a fourth.
 
 ## The dashboard's preload
 
@@ -68,5 +68,5 @@ asserts on the image keeps the record the closure returns. A test that asserts a
 harness's frozen clock with `setClock` in its arrange phase.
 
 To test behaviour that spans a whole test process, such as a preload, run the test file in a child
-`bun test` through [`runChildTests`](../../../../packages/test-utils/src/run-child-tests.ts). The
-runner gives the child its own working directory and kills it at a timeout.
+`bun test` through [`runChildTests`](../../../../packages/shared/src/test-utils/run-child-tests.ts).
+The runner gives the child its own working directory and kills it at a timeout.

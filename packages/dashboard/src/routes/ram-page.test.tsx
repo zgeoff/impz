@@ -1,5 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { readImpByName } from '@impz/daemon/testing';
+import { readImpByName } from '@impz/daemon/test-utils';
 import { within } from '@testing-library/react';
 import invariant from 'tiny-invariant';
 import { renderApp } from '../test-utils/render-app';

@@ -1,4 +1,4 @@
-import { formatShellWord } from '@impz/test-utils/format-shell-word';
+import { formatShellWord } from '@impz/shared/test-utils/format-shell-word';
 
 // The message is the one systemd prints when a unit's start job fails.
 export function buildStubFailingSystemctl(verb: string): string {

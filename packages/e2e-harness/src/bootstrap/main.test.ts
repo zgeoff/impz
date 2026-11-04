@@ -2,8 +2,8 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubSlowCommand } from '@impz/test-utils/create-stub-slow-command';
-import { waitFor } from '@impz/test-utils/wait-for';
+import { createStubSlowCommand } from '@impz/shared/test-utils/create-stub-slow-command';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { REPO_ROOT } from '../instance';
 
 // Bun runs onTestFinished callbacks first in, first out; the stack closes last in, first out,

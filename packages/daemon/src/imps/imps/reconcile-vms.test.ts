@@ -1,13 +1,13 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { waitFor } from '@impz/test-utils/wait-for';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import invariant from 'tiny-invariant';
-import { readBrokenInvariants } from '../../../testing/imps/read-broken-invariants';
-import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
-import { startTestImpd } from '../../../testing/start-test-impd';
-import type { TestImpdOptions } from '../../../testing/start-test-impd';
-import { buildStubCpuCgroups } from '../../../testing/vm/build-stub-cpu-cgroups';
 import { readImpByName } from '../../platform/db/imps';
+import { readBrokenInvariants } from '../../test-utils/imps/read-broken-invariants';
+import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
+import { startTestImpd } from '../../test-utils/start-test-impd';
+import type { TestImpdOptions } from '../../test-utils/start-test-impd';
+import { buildStubCpuCgroups } from '../../test-utils/vm/build-stub-cpu-cgroups';
 import {
   readLoadingMeta,
   readSnapshotMeta,

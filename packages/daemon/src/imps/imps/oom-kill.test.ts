@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { startTestImpd } from '../../../testing/start-test-impd';
-import type { TestImpdOptions } from '../../../testing/start-test-impd';
-import { buildStubCpuCgroups } from '../../../testing/vm/build-stub-cpu-cgroups';
+import { startTestImpd } from '../../test-utils/start-test-impd';
+import type { TestImpdOptions } from '../../test-utils/start-test-impd';
+import { buildStubCpuCgroups } from '../../test-utils/vm/build-stub-cpu-cgroups';
 import { OOM_KILL_TRIGGER, startOomWatch } from './oom-kill';
 
 function setupTest(options: TestImpdOptions = {}) {

@@ -12,7 +12,7 @@
     "@impz/daemon": "workspace:*",
     "@impz/local-tar": "workspace:*",
     "@impz/mcp": "workspace:*",
-    "@impz/test-utils": "workspace:*",
+    "@impz/shared": "workspace:*",
     "@modelcontextprotocol/client": "catalog:",
     "@modelcontextprotocol/server": "catalog:",
     "@orpc/client": "catalog:",

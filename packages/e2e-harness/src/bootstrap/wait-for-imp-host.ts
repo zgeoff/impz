@@ -1,4 +1,4 @@
-import { waitFor } from '@impz/test-utils/wait-for';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { readInContainer } from './read-in-container';
 import type { BootstrapRun } from './types';
 

@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
-import { readAgentFixture } from '@impz/test-utils/read-agent-fixture';
+import { readAgentFixture } from '@impz/shared/test-utils/read-agent-fixture';
 import * as z from 'zod';
-import { buildMockHostIdentity } from '../../../testing/vm/build-mock-host-identity';
+import { buildMockHostIdentity } from '../../test-utils/vm/build-mock-host-identity';
 import { TEMPLATE_BOOT_ARGS, buildTemplateKey } from './build-template-key';
 
 test('#TEMPLATE_BOOT_ARGS is the cmdline the agent reads as a template (agent/internal/contract)', () => {

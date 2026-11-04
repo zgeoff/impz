@@ -9,8 +9,8 @@ import {
   createBuilderImage,
   createFilesTar,
   createImage,
-} from '@impz/daemon/testing';
-import { waitFor } from '@impz/test-utils/wait-for';
+} from '@impz/daemon/test-utils';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderApp } from '../test-utils/render-app';

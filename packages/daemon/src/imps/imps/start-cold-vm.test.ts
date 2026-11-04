@@ -2,18 +2,18 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { waitFor } from '@impz/test-utils/wait-for';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { ORPCError } from '@orpc/client';
 import invariant from 'tiny-invariant';
-import { buildStubDiskTools } from '../../../testing/imps/build-stub-disk-tools';
-import { readBrokenInvariants } from '../../../testing/imps/read-broken-invariants';
-import { waitForOutcome } from '../../../testing/imps/wait-for-outcome';
-import { createStubHostLoad } from '../../../testing/platform/create-stub-host-load';
-import { formatRunPrefix } from '../../../testing/platform/format-run-prefix';
-import { readRunOwner } from '../../../testing/platform/read-run-owner';
-import { startTestImpd } from '../../../testing/start-test-impd';
-import { buildStubCpuCgroups } from '../../../testing/vm/build-stub-cpu-cgroups';
 import { listImps, readImpByName } from '../../platform/db/imps';
+import { buildStubDiskTools } from '../../test-utils/imps/build-stub-disk-tools';
+import { readBrokenInvariants } from '../../test-utils/imps/read-broken-invariants';
+import { waitForOutcome } from '../../test-utils/imps/wait-for-outcome';
+import { createStubHostLoad } from '../../test-utils/platform/create-stub-host-load';
+import { formatRunPrefix } from '../../test-utils/platform/format-run-prefix';
+import { readRunOwner } from '../../test-utils/platform/read-run-owner';
+import { startTestImpd } from '../../test-utils/start-test-impd';
+import { buildStubCpuCgroups } from '../../test-utils/vm/build-stub-cpu-cgroups';
 import { buildTemplateKey } from '../../vm/templates/build-template-key';
 
 async function setupTest(

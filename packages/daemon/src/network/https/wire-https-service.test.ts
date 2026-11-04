@@ -2,9 +2,9 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { waitFor } from '@impz/test-utils/wait-for';
-import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
-import { createTestDatabase } from '../../../testing/platform/create-test-database';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
+import { createTestDatabase } from '../../test-utils/platform/create-test-database';
 import { createDnsToken } from './dns/dns-token';
 import { wireHttpsService } from './wire-https-service';
 

@@ -9,24 +9,24 @@ import {
   encodeMessageFrame,
 } from '@impz/agent-protocol';
 import { MoveOfferReplySchema } from '@impz/api';
-import { waitFor } from '@impz/test-utils/wait-for';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import * as z from 'zod';
-import { createUbuntuImage, setupMoveHosts } from '../../../testing/imp-ops/create-move-hosts';
-import type { MoveHostsOptions } from '../../../testing/imp-ops/create-move-hosts';
-import {
-  buildJsonMoveFrame,
-  makeStubMoveStreamRewrite,
-} from '../../../testing/imp-ops/make-stub-move-stream-rewrite';
-import { buildMockAgentSession } from '../../../testing/imps/build-mock-agent-session';
-import { buildStubCpuCgroups } from '../../../testing/vm/build-stub-cpu-cgroups';
-import { buildStubExecReplies } from '../../../testing/vm/build-stub-exec-replies';
-import { startStubAgent } from '../../../testing/vm/start-stub-agent';
 import { runBundleInstall } from '../../network/broker/guest/guest-trust';
 import { listColdBoots, writeUnknownBoot } from '../../platform/db/cold-boots';
 import { JAIL_UIDS, readImpByName, updateImpDisk } from '../../platform/db/imps';
 import { writeMember, writeNetwork } from '../../platform/db/networks';
 import { probeSlotFree } from '../../platform/db/probe-slot-free';
+import { createUbuntuImage, setupMoveHosts } from '../../test-utils/imp-ops/create-move-hosts';
+import type { MoveHostsOptions } from '../../test-utils/imp-ops/create-move-hosts';
+import {
+  buildJsonMoveFrame,
+  makeStubMoveStreamRewrite,
+} from '../../test-utils/imp-ops/make-stub-move-stream-rewrite';
+import { buildMockAgentSession } from '../../test-utils/imps/build-mock-agent-session';
+import { buildStubCpuCgroups } from '../../test-utils/vm/build-stub-cpu-cgroups';
+import { buildStubExecReplies } from '../../test-utils/vm/build-stub-exec-replies';
+import { startStubAgent } from '../../test-utils/vm/start-stub-agent';
 import { readSnapshotMeta, writeSnapshotMeta } from '../../vm/sleep/snapshot-meta';
 import { VmIdentitySchema } from '../../vm/sleep/vm-identity';
 import { MOVE_FRAMES, readJsonPayload } from './move-frames';

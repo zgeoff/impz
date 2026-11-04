@@ -21,9 +21,9 @@ import {
   startStubAgent,
   startTestImpd,
   writeVmIdentity,
-} from '@impz/daemon/testing';
+} from '@impz/daemon/test-utils';
 import { listLocalEntries, writeLocalEntries } from '@impz/local-tar';
-import { waitFor } from '@impz/test-utils/wait-for';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import tar from 'tar-stream';
 import invariant from 'tiny-invariant';
 

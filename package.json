@@ -166,7 +166,6 @@
     "@impz/daemon": "workspace:*",
     "@impz/e2e-harness": "workspace:*",
     "@impz/shared": "workspace:*",
-    "@impz/test-utils": "workspace:*",
     "@maschwenk/tsrslint": "catalog:",
     "@modelcontextprotocol/client": "catalog:",
     "@stylistic/eslint-plugin": "catalog:",

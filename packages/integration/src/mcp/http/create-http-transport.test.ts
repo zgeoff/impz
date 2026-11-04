@@ -1,6 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { createImpClient } from '@impz/client';
-import { buildQueryGate, startTestImpd, waitForOutcome } from '@impz/daemon/testing';
+import { buildQueryGate, startTestImpd, waitForOutcome } from '@impz/daemon/test-utils';
 import { createHttpTransport } from '@impz/mcp';
 import type { McpPrincipal } from '@impz/mcp';
 import { buildMockMcpPrincipal } from '@impz/mcp/test-utils/build-mock-mcp-principal';

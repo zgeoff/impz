@@ -9,9 +9,9 @@ import {
   buildStubExecAgent,
   startStubAgent,
   startTestImpd,
-} from '@impz/daemon/testing';
-import { claimFreePorts } from '@impz/test-utils/claim-free-ports';
-import { server } from '@impz/test-utils/mock-server';
+} from '@impz/daemon/test-utils';
+import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
+import { server } from '@impz/shared/test-utils/mock-server';
 import { http } from 'msw';
 
 async function setupTest() {

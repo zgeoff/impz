@@ -4,6 +4,6 @@
 preload = [
   "@zgeoff/bun-test-extended",
   "@zgeoff/bun-test-react",
-  "../test-utils/src/preload.ts",
+  "../shared/src/test-utils/preload.ts",
   "./test-setup.ts",
 ]

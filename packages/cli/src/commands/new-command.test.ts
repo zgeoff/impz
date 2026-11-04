@@ -9,8 +9,8 @@ import {
   createStubCloudflareApi,
   readImpByName,
   startStubImpdRelease,
-} from '@impz/daemon/testing';
-import { server } from '@impz/test-utils/mock-server';
+} from '@impz/daemon/test-utils';
+import { server } from '@impz/shared/test-utils/mock-server';
 import { writeHostConfig } from '../config/host-store';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 import { startImpdHost } from '../test-utils/start-impd-host';

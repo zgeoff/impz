@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
+import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
 import { createEventBus } from './event-bus';
 
 test('it gives an event to the listeners after one that throws', () => {

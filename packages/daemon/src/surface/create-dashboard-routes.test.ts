@@ -7,8 +7,8 @@ import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
 import invariant from 'tiny-invariant';
-import { startTestImpd } from '../../testing/start-test-impd';
-import { tryExecSocket } from '../../testing/surface/try-impd-sockets';
+import { startTestImpd } from '../test-utils/start-test-impd';
+import { tryExecSocket } from '../test-utils/surface/try-impd-sockets';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

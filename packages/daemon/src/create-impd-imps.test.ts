@@ -1,9 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { readImpEnv } from '@impz/test-utils/read-imp-env';
-import { updateEnv } from '@impz/test-utils/update-env';
-import { waitFor } from '@impz/test-utils/wait-for';
-import { startTestImpd } from '../testing/start-test-impd';
+import { readImpEnv } from '@impz/shared/test-utils/read-imp-env';
+import { updateEnv } from '@impz/shared/test-utils/update-env';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { listImps } from './platform/db/imps';
+import { startTestImpd } from './test-utils/start-test-impd';
 
 // the governor counts each stub VM at 300 MiB
 async function setupTest() {

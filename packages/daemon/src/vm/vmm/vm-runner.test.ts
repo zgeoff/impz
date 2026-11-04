@@ -13,23 +13,23 @@ import { join } from 'node:path';
 import { setImmediate as setImmediatePromise } from 'node:timers/promises';
 import { create } from '@bufbuild/protobuf';
 import { FRAME_TYPES, PingSchema, encodeMessageFrame } from '@impz/agent-protocol';
-import { waitFor } from '@impz/test-utils/wait-for';
-import { buildMockTemplateBuildPlan } from '../../../testing/vm/build-mock-template-build-plan';
-import { buildMockTemplateRestorePlan } from '../../../testing/vm/build-mock-template-restore-plan';
-import { buildStubJails } from '../../../testing/vm/build-stub-jails';
-import { createStubKsmExec } from '../../../testing/vm/create-stub-ksm-exec';
-import { createStubUffdHandler } from '../../../testing/vm/create-stub-uffd-handler';
-import { makeRecordingFirecrackerClient } from '../../../testing/vm/make-recording-firecracker-client';
-import { startStubAgent } from '../../../testing/vm/start-stub-agent';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { deriveSlotAddress, parseSubnet } from '../../host-net/net/addressing';
+import { stopPid } from '../../platform/process/proc';
+import { buildMockTemplateBuildPlan } from '../../test-utils/vm/build-mock-template-build-plan';
+import { buildMockTemplateRestorePlan } from '../../test-utils/vm/build-mock-template-restore-plan';
+import { buildStubJails } from '../../test-utils/vm/build-stub-jails';
+import { createStubKsmExec } from '../../test-utils/vm/create-stub-ksm-exec';
+import { createStubUffdHandler } from '../../test-utils/vm/create-stub-uffd-handler';
+import { makeRecordingFirecrackerClient } from '../../test-utils/vm/make-recording-firecracker-client';
+import { startStubAgent } from '../../test-utils/vm/start-stub-agent';
 import {
   buildStubFirecrackerArgv,
   startStubFirecracker,
-} from '../../../testing/vm/start-stub-firecracker';
-import { startStubFirecrackerApi } from '../../../testing/vm/start-stub-firecracker-api';
-import { startStubParkedAgent } from '../../../testing/vm/start-stub-parked-agent';
-import { writeStubUffdStats } from '../../../testing/vm/write-stub-uffd-stats';
-import { deriveSlotAddress, parseSubnet } from '../../host-net/net/addressing';
-import { stopPid } from '../../platform/process/proc';
+} from '../../test-utils/vm/start-stub-firecracker';
+import { startStubFirecrackerApi } from '../../test-utils/vm/start-stub-firecracker-api';
+import { startStubParkedAgent } from '../../test-utils/vm/start-stub-parked-agent';
+import { writeStubUffdStats } from '../../test-utils/vm/write-stub-uffd-stats';
 import { sendPing } from '../agent-client/agent-requests';
 import { buildImpPaths, buildSnapshotPaths } from '../storage/data-layout';
 import { createFirecrackerClient } from './firecracker-client';

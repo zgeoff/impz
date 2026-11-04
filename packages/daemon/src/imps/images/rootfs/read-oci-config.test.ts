@@ -2,9 +2,9 @@ import { expect, mock, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { updateEnv } from '@impz/test-utils/update-env';
-import { createStubOciFetch } from '../../../../testing/imps/create-stub-oci-fetch';
+import { updateEnv } from '@impz/shared/test-utils/update-env';
 import { runCommand } from '../../../platform/process/run-command';
+import { createStubOciFetch } from '../../../test-utils/imps/create-stub-oci-fetch';
 import { readOciConfig } from './read-oci-config';
 
 async function setupTest() {

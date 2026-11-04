@@ -13,6 +13,6 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@impz/test-utils": "workspace:*"
+    "@impz/shared": "workspace:*"
   }
 }

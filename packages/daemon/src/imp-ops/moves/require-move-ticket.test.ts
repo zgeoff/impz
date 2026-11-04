@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test';
-import { buildMockMoveTicketRow } from '../../../testing/imp-ops/build-mock-move-ticket-row';
-import { createTestDatabase } from '../../../testing/platform/create-test-database';
 import { writeMoveTicket } from '../../platform/db/move-tickets';
 import { hashSecret } from '../../platform/secrets/hash-secret';
+import { buildMockMoveTicketRow } from '../../test-utils/imp-ops/build-mock-move-ticket-row';
+import { createTestDatabase } from '../../test-utils/platform/create-test-database';
 import { requireMoveTicket } from './require-move-ticket';
 
 async function setupTest() {

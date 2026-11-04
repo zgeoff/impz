@@ -23,10 +23,10 @@ metadata:
 
 ## Facts
 
-| Fact       | Where                                                                                                                                |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| Lanes      | the `lanes` map of `zgeoff/max-test-timeout` in [`.oxlintrc.json`](../../../.oxlintrc.json)                                          |
-| Test utils | [`packages/test-utils/src/`](../../../packages/test-utils/src/), then the `test-utils/` or `testing/` folder of the package you test |
+| Fact       | Where                                                                                                                                    |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Lanes      | the `lanes` map of `zgeoff/max-test-timeout` in [`.oxlintrc.json`](../../../.oxlintrc.json)                                              |
+| Test utils | [`packages/shared/src/test-utils/`](../../../packages/shared/src/test-utils/), then the `src/test-utils/` folder of the package you test |
 
 ## Departures
 
@@ -91,9 +91,9 @@ the result of the CI job that runs the command. CI runs every row but One journe
 
 ## The root preload
 
-- Set an impd setting with [`updateEnv`](../../../packages/test-utils/src/update-env.ts) before
-  `setupTest()`. The [root preload](../../../packages/test-utils/src/preload.ts) deletes every
-  `IMP_*` variable the shell passed, except the four gates in [Lanes](#lanes).
+- Set an impd setting with [`updateEnv`](../../../packages/shared/src/test-utils/update-env.ts)
+  before `setupTest()`. The [root preload](../../../packages/shared/src/test-utils/preload.ts)
+  deletes every `IMP_*` variable the shell passed, except the four gates in [Lanes](#lanes).
 - Expect every child process to inherit `NO_PROXY=*` from the root preload, which sets it so that
   Bun's `fetch` never sends a loopback request through the shell's `HTTPS_PROXY`. When a test wants
   a child to use a proxy, clear `NO_PROXY` in that child's environment, or pass curl `--noproxy ''`.
@@ -105,17 +105,18 @@ the result of the CI job that runs the command. CI runs every row but One journe
 - Give a real stand-in server to a `fetch` to loopback or to a unix socket, to a `node:http` client,
   and to a WebSocket. MSW never sees these requests.
 - Look for a stand-in in [Stand-ins](./references/stand-ins.md) before you write one.
-- Boot a real impd with [`startTestImpd`](../../../packages/daemon/testing/start-test-impd.ts),
-  which runs production's startup through `createImpd` on the stand-ins. It sets `defaultDiskBytes`
-  to 0, because its storage clones with `copyFile`, and a full 32 GiB disk makes each checkpoint or
-  fork take minutes.
+- Boot a real impd with
+  [`startTestImpd`](../../../packages/daemon/src/test-utils/start-test-impd.ts), which runs
+  production's startup through `createImpd` on the stand-ins. It sets `defaultDiskBytes` to 0,
+  because its storage clones with `copyFile`, and a full 32 GiB disk makes each checkpoint or fork
+  take minutes.
 - Pass a clock to each component that `createImpd`'s `now` doesn't reach.
   [Booting impd](./references/stand-ins.md#booting-impd) lists them.
 
 ## Host resources
 
-- Take ports from [`claimFreePorts`](../../../packages/test-utils/src/claim-free-ports.ts). It holds
-  each port until the test ends, so two test processes that run at once never share one.
+- Take ports from [`claimFreePorts`](../../../packages/shared/src/test-utils/claim-free-ports.ts).
+  It holds each port until the test ends, so two test processes that run at once never share one.
 - Make a folder under `/var/tmp`, never in the checkout, for a test that needs FIEMAP or another
   disk feature. `tmpdir()` is a tmpfs on some hosts.
 - Run git through the helpers in [`git-env.ts`](../../../packages/e2e-harness/src/git-env.ts):

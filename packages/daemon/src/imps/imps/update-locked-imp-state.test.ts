@@ -1,9 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import invariant from 'tiny-invariant';
-import { buildMockNewImp } from '../../../testing/imps/build-mock-new-imp';
-import { startTestImpd } from '../../../testing/start-test-impd';
 import { createImp, readImpById } from '../../platform/db/imps';
 import { updateImpState } from '../../platform/db/update-imp-state';
+import { buildMockNewImp } from '../../test-utils/imps/build-mock-new-imp';
+import { startTestImpd } from '../../test-utils/start-test-impd';
 import { createCpuCgroups } from '../../vm/vmm/cpu-cgroups';
 import { createImpContext } from './imp-context';
 import { createImpLock } from './imp-lock';

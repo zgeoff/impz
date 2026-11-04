@@ -16,6 +16,6 @@
   },
   "devDependencies": {
     "@faker-js/faker": "catalog:",
-    "@impz/test-utils": "workspace:*"
+    "@impz/shared": "workspace:*"
   }
 }

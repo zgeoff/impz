@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { closeSync, fsyncSync, mkdtempSync, openSync, rmSync, writeSync } from 'node:fs';
 import { join } from 'node:path';
 import invariant from 'tiny-invariant';
-import { buildStubLseek } from '../../../testing/vm/build-stub-lseek';
+import { buildStubLseek } from '../../test-utils/vm/build-stub-lseek';
 import { readDataBlocks } from './read-data-blocks';
 
 // This needs the small real filesystem that IMP_TEST_SMALL_FS names, which CI mounts as a loop

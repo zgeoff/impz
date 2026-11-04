@@ -1,8 +1,8 @@
 import { expect, mock, test } from 'bun:test';
-import { buildMockMoveTicketRow } from '../../../testing/imp-ops/build-mock-move-ticket-row';
 import { MoveRequestError } from '../../imp-ops/moves/move-request-error';
 import { buildPeerRanges } from '../../imp-ops/moves/peer-address';
 import type { AuditedCall } from '../../platform/audit/api-audit';
+import { buildMockMoveTicketRow } from '../../test-utils/imp-ops/build-mock-move-ticket-row';
 import { createMovePeerHandler } from './create-move-peer-handler';
 
 test('it answers the plain JSON offer an older source posts with the offer reply', async () => {

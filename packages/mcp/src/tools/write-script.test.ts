@@ -13,7 +13,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { runShellcheck } from '@impz/test-utils/run-shellcheck';
+import { runShellcheck } from '@impz/shared/test-utils/run-shellcheck';
 import { WRITE_SCRIPT } from './write-script';
 
 // This file runs the script under the host's /bin/sh; the end-to-end suite

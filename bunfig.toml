@@ -25,8 +25,8 @@ minimumReleaseAgeExcludes = [
 
 [test]
 # restores env overrides, seeds faker and runs the MSW server for every test
-# (packages/test-utils), then registers jest-extended matchers
-preload = ["./packages/test-utils/src/preload.ts", "@zgeoff/bun-test-extended"]
+# (packages/shared/src/test-utils), then registers jest-extended matchers
+preload = ["./packages/shared/src/test-utils/preload.ts", "@zgeoff/bun-test-extended"]
 
 # a leak between tests or files that a fixed order hides fails the run, which
 # prints the --seed that repeats the order; CI's unit step runs bun test itself

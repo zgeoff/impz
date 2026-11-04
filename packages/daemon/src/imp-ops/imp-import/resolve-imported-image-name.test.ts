@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
-import { createTestDatabase } from '../../../testing/platform/create-test-database';
 import { createImage } from '../../platform/db/images';
+import { createTestDatabase } from '../../test-utils/platform/create-test-database';
 import { resolveImportedImageName } from './resolve-imported-image-name';
 
 async function setupTest() {

@@ -3,14 +3,14 @@ import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import invariant from 'tiny-invariant';
-import { buildStubHostRoutes } from '../../../../testing/host-net/build-stub-host-routes';
-import { buildStubTickerTimer } from '../../../../testing/platform/build-stub-ticker-timer';
-import { captureImpdLogs } from '../../../../testing/platform/capture-impd-logs';
 import { loadConfig } from '../../../config';
 import { createReachPolicy } from '../../../host-net/net/reach-policy';
 import { writeConsistentCopy } from '../../../platform/db/database-copy';
 import { openDatabase } from '../../../platform/db/open-database';
 import { listFileRemovals, readSecret } from '../../../platform/db/secrets';
+import { buildStubHostRoutes } from '../../../test-utils/host-net/build-stub-host-routes';
+import { buildStubTickerTimer } from '../../../test-utils/platform/build-stub-ticker-timer';
+import { captureImpdLogs } from '../../../test-utils/platform/capture-impd-logs';
 import { createBroker } from '../broker-service';
 import { resolvePublicUpstream } from '../tls/resolve-public-upstream';
 

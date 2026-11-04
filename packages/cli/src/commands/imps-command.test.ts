@@ -13,8 +13,8 @@ import {
   startStubImpdRelease,
   startStubInnerAgent,
   updateImpMove,
-} from '@impz/daemon/testing';
-import { waitFor } from '@impz/test-utils/wait-for';
+} from '@impz/daemon/test-utils';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { writeHostConfig } from '../config/host-store';
 import { buildStubTimeouts } from '../test-utils/build-stub-timeouts';

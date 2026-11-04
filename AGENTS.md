@@ -55,9 +55,9 @@ packages/
                    downstream of the daemon because the daemon depends on both packages
   local-tar/       local files as a tar, for impz cp and image build contexts
   mcp/             the MCP server: imps, exec, files and checkpoints as tools
-  shared/          pure helpers that know nothing about imp
+  shared/          pure helpers that know nothing about imp, and in src/test-utils/ the test
+                   preload and the utils every package's tests share
   testing/         @impz/testing: impd on its stand-ins, published for other repos' tests
-  test-utils/      the test preload and the utils every package's tests share
 proto/             the agent protocol; bun run gen:proto generates the Go, TypeScript and
                    docs/reference/agent-protocol.md from it
 host/              the host container image that runs impd; ksm-exec, the Go program that
@@ -95,7 +95,7 @@ consumer an invented name.
 - Code anywhere in the repo, tests, scripts and e2e suites included, imports a package by its name
   and an entry that its `package.json` exports. `no-restricted-imports` fails a path into another
   package. A test helper that another package needs goes out through that package's test entry, such
-  as `@impz/daemon/testing`.
+  as `@impz/daemon/test-utils`.
 - impd's code in `packages/daemon/src/` sits in one folder per layer, and the `daemon-layer-*`
   entries of `zgeoff/import-zones` give the order: a layer imports only itself and the layers below
   it. The composition root's files sit at the top of `src/`, above every layer. A known upward

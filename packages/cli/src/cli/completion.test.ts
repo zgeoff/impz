@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { runShellcheck } from '@impz/test-utils/run-shellcheck';
+import { runShellcheck } from '@impz/shared/test-utils/run-shellcheck';
 import { define, lazy } from 'gunshi';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 import { mainCommand } from './command-tree';

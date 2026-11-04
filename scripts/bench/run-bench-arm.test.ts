@@ -1,7 +1,7 @@
 import { expect, mock, test } from 'bun:test';
 import { setImmediate } from 'node:timers/promises';
 import type { CommandResult } from '@impz/e2e-harness/instance';
-import { buildStubAnswerQueue } from '@impz/test-utils/build-stub-answer-queue';
+import { buildStubAnswerQueue } from '@impz/shared/test-utils/build-stub-answer-queue';
 import { runBenchArm } from './run-bench-arm';
 import type { BenchArmDeps } from './run-bench-arm';
 

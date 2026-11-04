@@ -1,6 +1,6 @@
 import { expect, mock, test } from 'bun:test';
-import { buildMockImpRecord } from '../../../testing/imps/build-mock-imp-record';
-import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
+import { buildMockImpRecord } from '../../test-utils/imps/build-mock-imp-record';
+import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
 import { createAgentWatchdog } from './agent-watchdog';
 
 function setupTest() {

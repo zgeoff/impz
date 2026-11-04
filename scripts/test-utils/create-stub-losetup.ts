@@ -1,7 +1,7 @@
 import { join } from 'node:path';
-import { createStubBin } from '@impz/test-utils/create-stub-bin';
-import type { StubBin } from '@impz/test-utils/create-stub-bin';
-import { formatShellWord } from '@impz/test-utils/format-shell-word';
+import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
+import type { StubBin } from '@impz/shared/test-utils/create-stub-bin';
+import { formatShellWord } from '@impz/shared/test-utils/format-shell-word';
 
 export interface StubLosetupOptions {
   // what -f prints for the free device; with none, -f fails as on a kernel without one

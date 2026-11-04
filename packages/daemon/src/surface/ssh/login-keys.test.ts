@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import invariant from 'tiny-invariant';
-import { buildMockCaller } from '../../../testing/identity/build-mock-caller';
 import { formatKeyFingerprint, parseAuthorizedKeys } from '../../imps/ssh/authorized-keys';
+import { buildMockCaller } from '../../test-utils/identity/build-mock-caller';
 import { generateEd25519Key } from './host-key';
 import { createLoginKeys } from './login-keys';
 

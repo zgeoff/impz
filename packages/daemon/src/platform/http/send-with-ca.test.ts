@@ -2,7 +2,7 @@ import { expect, mock, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { startStubBrokerTlsUpstream } from '../../../testing/network/start-stub-broker-tls-upstream';
+import { startStubBrokerTlsUpstream } from '../../test-utils/network/start-stub-broker-tls-upstream';
 import { sendWithCA } from './send-with-ca';
 
 async function setupTest() {

@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test';
-import { buildMockCaller } from '../../../testing/identity/build-mock-caller';
-import { buildMockLeaseRecord } from '../../../testing/imps/build-mock-lease-record';
 import { ImpdError } from '../../platform/errors/impd-error';
 import { LeasedError } from '../../platform/errors/leased-error';
+import { buildMockCaller } from '../../test-utils/identity/build-mock-caller';
+import { buildMockLeaseRecord } from '../../test-utils/imps/build-mock-lease-record';
 import { buildRamBudgetError } from '../../vm/imps-contract/ram-budget-error';
 import {
   isLeaseVisible,

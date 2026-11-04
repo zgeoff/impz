@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { buildStubGatedCall } from '../../../testing/platform/build-stub-gated-call';
+import { buildStubGatedCall } from '../../test-utils/platform/build-stub-gated-call';
 import { createPrioritySemaphore } from './priority-semaphore';
 
 test('it gives a free slot to a waiting foreground task before an older background one', async () => {

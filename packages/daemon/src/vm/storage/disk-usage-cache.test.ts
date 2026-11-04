@@ -1,15 +1,15 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
-import { waitFor } from '@impz/test-utils/wait-for';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import invariant from 'tiny-invariant';
-import { buildMockNewCheckpoint } from '../../../testing/imp-ops/build-mock-new-checkpoint';
-import { buildStubClock } from '../../../testing/platform/build-stub-clock';
-import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
-import { createTestDatabase } from '../../../testing/platform/create-test-database';
-import { buildMockImpDiskUsage } from '../../../testing/vm/build-mock-imp-disk-usage';
-import { makeStubSlowMeasure } from '../../../testing/vm/make-stub-slow-measure';
 import { createCheckpoint } from '../../platform/db/checkpoints';
 import { createImage } from '../../platform/db/images';
 import { createImp } from '../../platform/db/imps';
+import { buildMockNewCheckpoint } from '../../test-utils/imp-ops/build-mock-new-checkpoint';
+import { buildStubClock } from '../../test-utils/platform/build-stub-clock';
+import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
+import { createTestDatabase } from '../../test-utils/platform/create-test-database';
+import { buildMockImpDiskUsage } from '../../test-utils/vm/build-mock-imp-disk-usage';
+import { makeStubSlowMeasure } from '../../test-utils/vm/make-stub-slow-measure';
 import { createDiskUsageCache } from './disk-usage-cache';
 import type { DiskUsageReport, StorageBackend } from './storage-backend';
 

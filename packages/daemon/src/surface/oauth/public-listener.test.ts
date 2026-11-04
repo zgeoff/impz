@@ -2,8 +2,8 @@ import { expect, mock, onTestFinished, test } from 'bun:test';
 import { randomUUID } from 'node:crypto';
 import { ApprovalCodeSchema } from '@impz/api';
 import { readMcpAnswer } from '@impz/mcp/test-utils/read-mcp-answer';
-import { claimFreePorts } from '@impz/test-utils/claim-free-ports';
-import { waitFor } from '@impz/test-utils/wait-for';
+import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import {
   Client,
   StreamableHTTPClientTransport,
@@ -16,17 +16,17 @@ import type {
 } from '@modelcontextprotocol/client';
 import invariant from 'tiny-invariant';
 import * as z from 'zod';
-import { createPendingSignIn } from '../../../testing/identity/create-pending-sign-in';
-import { runOAuthSignIn } from '../../../testing/identity/run-oauth-sign-in';
-import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
-import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
-import { startTestImpd } from '../../../testing/start-test-impd';
-import { buildStubMcpTransport } from '../../../testing/surface/build-stub-mcp-transport';
-import { buildStubExecGuest } from '../../../testing/vm/build-stub-exec-guest';
-import { startStubExecAgent } from '../../../testing/vm/start-stub-exec-agent';
 import { listApiCalls } from '../../platform/db/api-audit';
 import { createImage } from '../../platform/db/images';
 import { readImpByName } from '../../platform/db/imps';
+import { createPendingSignIn } from '../../test-utils/identity/create-pending-sign-in';
+import { runOAuthSignIn } from '../../test-utils/identity/run-oauth-sign-in';
+import { buildMockNewImage } from '../../test-utils/imps/build-mock-new-image';
+import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
+import { startTestImpd } from '../../test-utils/start-test-impd';
+import { buildStubMcpTransport } from '../../test-utils/surface/build-stub-mcp-transport';
+import { buildStubExecGuest } from '../../test-utils/vm/build-stub-exec-guest';
+import { startStubExecAgent } from '../../test-utils/vm/start-stub-exec-agent';
 import { buildImagePaths, buildImpPaths } from '../../vm/storage/data-layout';
 import { createPublicHandler, startPublicListener } from './public-listener';
 

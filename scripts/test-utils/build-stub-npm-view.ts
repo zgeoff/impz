@@ -1,4 +1,4 @@
-import { formatShellWord } from '@impz/test-utils/format-shell-word';
+import { formatShellWord } from '@impz/shared/test-utils/format-shell-word';
 
 // `npm view <name>@<version> version` prints the version when the registry holds it, and fails with
 // E404 when it does not.

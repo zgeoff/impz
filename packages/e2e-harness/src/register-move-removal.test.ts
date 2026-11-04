@@ -5,8 +5,8 @@ import {
   createMoveHosts,
   createUbuntuImage,
   makeStubDroppedCommit,
-} from '@impz/daemon/testing';
-import type { MoveHostsOptions } from '@impz/daemon/testing';
+} from '@impz/daemon/test-utils';
+import type { MoveHostsOptions } from '@impz/daemon/test-utils';
 import { registerMoveRemoval } from './register-move-removal';
 
 async function setupTest(options: Readonly<MoveHostsOptions> = {}) {

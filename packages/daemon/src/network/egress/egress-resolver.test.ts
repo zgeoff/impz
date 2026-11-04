@@ -1,15 +1,15 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { connect } from 'node:net';
-import { claimFreePorts } from '@impz/test-utils/claim-free-ports';
-import { waitFor } from '@impz/test-utils/wait-for';
+import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import * as dnsPacket from 'dns-packet';
-import { buildMockDnsQuery } from '../../../testing/network/build-mock-dns-query';
-import { buildMockDnsReply } from '../../../testing/network/build-mock-dns-reply';
-import { buildMockNetworkMember } from '../../../testing/network/build-mock-network-member';
-import { buildStubEgressService } from '../../../testing/network/build-stub-egress-service';
-import { startStubDnsUpstream } from '../../../testing/network/start-stub-dns-upstream';
-import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { parseSubnet } from '../../host-net/net/addressing';
+import { buildMockDnsQuery } from '../../test-utils/network/build-mock-dns-query';
+import { buildMockDnsReply } from '../../test-utils/network/build-mock-dns-reply';
+import { buildMockNetworkMember } from '../../test-utils/network/build-mock-network-member';
+import { buildStubEgressService } from '../../test-utils/network/build-stub-egress-service';
+import { startStubDnsUpstream } from '../../test-utils/network/start-stub-dns-upstream';
+import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
 import { createDnsForward } from './dns-upstream';
 import {
   DEFAULT_TCP_LIMITS,

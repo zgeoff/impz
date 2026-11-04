@@ -1,12 +1,12 @@
 import { expect, test } from 'bun:test';
 import { ApprovalCodeSchema } from '@impz/api';
 import invariant from 'tiny-invariant';
-import { createPendingSignIn } from '../../../testing/identity/create-pending-sign-in';
-import { runOAuthConsent } from '../../../testing/identity/run-oauth-consent';
-import { runOAuthSignIn } from '../../../testing/identity/run-oauth-sign-in';
-import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
-import { createTestDatabase } from '../../../testing/platform/create-test-database';
-import { makeOAuthResponder } from '../../../testing/surface/make-oauth-responder';
+import { createPendingSignIn } from '../../test-utils/identity/create-pending-sign-in';
+import { runOAuthConsent } from '../../test-utils/identity/run-oauth-consent';
+import { runOAuthSignIn } from '../../test-utils/identity/run-oauth-sign-in';
+import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
+import { createTestDatabase } from '../../test-utils/platform/create-test-database';
+import { makeOAuthResponder } from '../../test-utils/surface/make-oauth-responder';
 import { createRevocations } from '../auth/revocations';
 import { loadTokenStore } from '../auth/token-store';
 import { createMcpAuth } from './create-mcp-auth';

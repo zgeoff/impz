@@ -1,10 +1,10 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { EVENT_VERSION } from '@impz/api';
 import { buildMockImp } from '@impz/api/test-utils/build-mock-imp';
-import { spanExporter } from '@impz/test-utils/register-tracing';
+import { spanExporter } from '@impz/shared/test-utils/register-tracing';
 import invariant from 'tiny-invariant';
-import { startInMemoryMetrics } from '../../../testing/platform/start-in-memory-metrics';
-import { buildMockGovernorDecision } from '../../../testing/vm/build-mock-governor-decision';
+import { startInMemoryMetrics } from '../../test-utils/platform/start-in-memory-metrics';
+import { buildMockGovernorDecision } from '../../test-utils/vm/build-mock-governor-decision';
 import { createEventBus } from '../events/event-bus';
 import { startImpTelemetry } from './imp-telemetry';
 import type { ResourceDelta } from './resource-delta';

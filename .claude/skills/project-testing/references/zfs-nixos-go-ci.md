@@ -6,20 +6,20 @@ decides. Run the NixOS, ZFS and root-only layers in CI when this host lacks what
 ## ZFS
 
 - Test the ZFS backend against the in-memory `zfs` fake,
-  [`buildStubZfs`](../../../../packages/daemon/testing/vm/build-stub-zfs.ts), first. The fake models
-  datasets, snapshots, clones, promote, deferred destroy and legacy mounts. It can make a command
-  block, fail or crash the backend, and then start the backend again, so a test can stop the backend
-  halfway through an operation.
+  [`buildStubZfs`](../../../../packages/daemon/src/test-utils/vm/build-stub-zfs.ts), first. The fake
+  models datasets, snapshots, clones, promote, deferred destroy and legacy mounts. It can make a
+  command block, fail or crash the backend, and then start the backend again, so a test can stop the
+  backend halfway through an operation.
 - Expect the fake's space figures to stay the same whatever the test writes. The fake also refuses
   to unmount a folder that is not itself a mount, as util-linux does.
 - Write a real-pool test only for behaviour that the kernel module decides, such as space accounting
   or a real mount. Put it beside the backend's other tests in
   [`packages/daemon/src/vm/storage/zfs/`](../../../../packages/daemon/src/vm/storage/zfs/).
 - Make the test's dataset with
-  [`createZfsTestDataset`](../../../../packages/daemon/testing/vm/create-zfs-test-dataset.ts). It
-  makes a dataset under the folder that `IMP_TEST_ZFS_DIR` names, refuses one that already exists,
-  and releases only what it made. The test skips until `IMP_TEST_ZFS_ROOT` and `IMP_TEST_ZFS_DIR`
-  are set.
+  [`createZfsTestDataset`](../../../../packages/daemon/src/test-utils/vm/create-zfs-test-dataset.ts).
+  It makes a dataset under the folder that `IMP_TEST_ZFS_DIR` names, refuses one that already
+  exists, and releases only what it made. The test skips until `IMP_TEST_ZFS_ROOT` and
+  `IMP_TEST_ZFS_DIR` are set.
 - Run the real-pool tests with [`scripts/test-zfs.sh`](../../../../scripts/test-zfs.sh), as root
   with the zfs module loaded. It makes a throwaway pool in a sparse file, sets both variables, and
   destroys the pool on exit only when `zpool status` proves the pool is its own.

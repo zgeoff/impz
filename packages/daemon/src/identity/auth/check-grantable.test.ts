@@ -6,12 +6,12 @@ import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
 import { utils } from 'ssh2';
 import invariant from 'tiny-invariant';
-import { startTestImpd } from '../../../testing/start-test-impd';
 import { listApiCalls } from '../../platform/db/api-audit';
 import { createForkGrants } from '../../platform/db/create-fork-grants';
 import { readImpByName } from '../../platform/db/imps';
 import { listTokenRecords } from '../../platform/db/tokens';
 import { generateEd25519Key } from '../../surface/ssh/host-key';
+import { startTestImpd } from '../../test-utils/start-test-impd';
 import { checkAccess, findAccess } from './access-policy';
 
 async function setupTest() {

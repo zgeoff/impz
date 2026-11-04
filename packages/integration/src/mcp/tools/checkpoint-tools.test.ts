@@ -1,6 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { createImpClient } from '@impz/client';
-import { startTestImpd } from '@impz/daemon/testing';
+import { startTestImpd } from '@impz/daemon/test-utils';
 import { buildImpGuard } from '@impz/mcp';
 import { createMcpServer } from '@impz/mcp/test-utils/create-mcp-server';
 import * as z from 'zod';

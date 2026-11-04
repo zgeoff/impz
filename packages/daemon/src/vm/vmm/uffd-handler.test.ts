@@ -10,10 +10,10 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { waitFor } from '@impz/test-utils/wait-for';
-import { createStubUffdHandler } from '../../../testing/vm/create-stub-uffd-handler';
-import { writeStubUffdStats } from '../../../testing/vm/write-stub-uffd-stats';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { stopPid } from '../../platform/process/proc';
+import { createStubUffdHandler } from '../../test-utils/vm/create-stub-uffd-handler';
+import { writeStubUffdStats } from '../../test-utils/vm/write-stub-uffd-stats';
 import { buildImpPaths } from '../storage/data-layout';
 import { probeProcessAlive } from './firecracker-process';
 import {

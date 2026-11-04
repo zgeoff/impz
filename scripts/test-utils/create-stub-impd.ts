@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { createStubBin } from '@impz/test-utils/create-stub-bin';
-import { formatShellWord } from '@impz/test-utils/format-shell-word';
+import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
+import { formatShellWord } from '@impz/shared/test-utils/format-shell-word';
 import { match } from 'ts-pattern';
 import { buildStubEnvRecord } from './build-stub-env-record';
 

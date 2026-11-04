@@ -1,0 +1,47 @@
+import { faker } from '@faker-js/faker';
+import type { CpuSettings, ImpRecord } from '../../platform/db/imps';
+
+type ImpRecordOverrides = Partial<Omit<ImpRecord, 'cpu'>> & { readonly cpu?: Partial<CpuSettings> };
+
+export function buildMockImpRecord(overrides: ImpRecordOverrides = {}): ImpRecord {
+  const { cpu, ...rest } = overrides;
+  const memoryMib = rest.memoryMib ?? faker.number.int({ min: 256, max: 8192 });
+
+  return {
+    id: faker.string.uuid(),
+    name: faker.string.alphanumeric({ length: 12, casing: 'lower' }),
+    imageId: faker.string.uuid(),
+    imageDigest: `sha256:${faker.string.hexadecimal({ length: 64, casing: 'lower', prefix: '' })}`,
+    state: 'running',
+    kind: 'user',
+    vcpus: faker.number.int({ min: 1, max: 8 }),
+    memoryMib,
+    maxMemoryMib: memoryMib,
+    slot: faker.number.int({ min: 0, max: 4095 }),
+    ip: faker.internet.ipv4(),
+    createdAt: faker.date.past(),
+    lastActiveAt: faker.date.recent(),
+    lastRequestAt: null,
+    sleptAt: null,
+    holdUntil: null,
+    error: null,
+    hasOopsHold: false,
+    oopsBootId: null,
+    pid: faker.number.int({ min: 2, max: 4_194_304 }),
+    firecrackerVersion: 'v1.17.0',
+    httpPort: faker.internet.port(),
+    diskBytes: faker.number.int({ min: 1024 ** 3, max: 64 * 1024 ** 3 }),
+    isDiskGrowPending: false,
+    publicAuth: null,
+    wakeCount: faker.number.int({ min: 0, max: 100 }),
+    jailUid: faker.number.int({ min: 900_000, max: 965_535 }),
+    awakeMs: faker.number.int({ min: 0, max: 86_400_000 }),
+    awakeSince: faker.date.recent(),
+    isIdentityResetPending: false,
+    isBackedUp: true,
+    isTrustPending: false,
+    moveState: null,
+    ...rest,
+    cpu: { limit: null, weight: 100, ...cpu },
+  };
+}

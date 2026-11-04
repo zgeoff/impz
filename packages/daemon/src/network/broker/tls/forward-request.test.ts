@@ -2,14 +2,14 @@ import { expect, mock, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildStubAnswerQueue } from '@impz/test-utils/build-stub-answer-queue';
-import { server } from '@impz/test-utils/mock-server';
+import { buildStubAnswerQueue } from '@impz/shared/test-utils/build-stub-answer-queue';
+import { server } from '@impz/shared/test-utils/mock-server';
 import { HttpResponse, http } from 'msw';
 import invariant from 'tiny-invariant';
-import { buildMockCredential } from '../../../../testing/network/build-mock-credential';
-import { startStubBrokerTlsUpstream } from '../../../../testing/network/start-stub-broker-tls-upstream';
-import { startStubCutStream } from '../../../../testing/network/start-stub-cut-stream';
 import type { NewAuditEntry } from '../../../platform/db/broker-audit';
+import { buildMockCredential } from '../../../test-utils/network/build-mock-credential';
+import { startStubBrokerTlsUpstream } from '../../../test-utils/network/start-stub-broker-tls-upstream';
+import { startStubCutStream } from '../../../test-utils/network/start-stub-cut-stream';
 import { loadOrCreateBrokerCa } from './broker-ca';
 import { createForwarder } from './forward-request';
 
@@ -444,7 +444,7 @@ test('it logs one impd.broker line that names the imp, and nothing unhandled, wh
   const child = Bun.spawn(
     [
       process.execPath,
-      join(import.meta.dir, '../../../../testing/network/run-cut-broker-stream.ts'),
+      join(import.meta.dir, '../../../test-utils/network/run-cut-broker-stream.ts'),
     ],
     { stdout: 'pipe', stderr: 'pipe' },
   );

@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { buildMockImageUse } from '../../../../testing/imps/build-mock-image-use';
+import { buildMockImageUse } from '../../../test-utils/imps/build-mock-image-use';
 import { pickEvictedImages } from './pick-evicted-images';
 
 test('it evicts nothing while usage is below the high mark', () => {

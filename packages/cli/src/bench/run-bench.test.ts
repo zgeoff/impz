@@ -4,7 +4,7 @@ import { EVENT_VERSION } from '@impz/api';
 import type { Imp } from '@impz/api';
 import { buildMockImp } from '@impz/api/test-utils/build-mock-imp';
 import { createImpClient, watchEvents } from '@impz/client';
-import { buildImagePaths, buildMockNewImage, createImage } from '@impz/daemon/testing';
+import { buildImagePaths, buildMockNewImage, createImage } from '@impz/daemon/test-utils';
 import invariant from 'tiny-invariant';
 import { buildStubEventFeed } from '../test-utils/build-stub-event-feed';
 import { makeLostAnswerFetch } from '../test-utils/make-lost-answer-fetch';

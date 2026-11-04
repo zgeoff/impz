@@ -1,0 +1,95 @@
+import { expect, onTestFinished, test } from 'bun:test';
+import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createImpClient } from '@impz/client';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
+import invariant from 'tiny-invariant';
+import * as z from 'zod';
+
+async function setupTest() {
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
+  const tempDir = await mkdtemp(join(tmpdir(), 'run-stub-impd-'));
+
+  stack.defer(() => rm(tempDir, { recursive: true, force: true }));
+
+  const stdoutPath = join(tempDir, 'stdout');
+
+  const child = Bun.spawn([process.execPath, join(import.meta.dir, 'run-stub-impd.ts')], {
+    env: { ...process.env, TMPDIR: tempDir },
+    stdout: Bun.file(stdoutPath),
+    stderr: 'inherit',
+  });
+
+  stack.defer(async () => {
+    child.kill('SIGKILL');
+
+    await child.exited;
+  });
+
+  const line = await waitFor(
+    async () => {
+      const text = await readFile(stdoutPath, 'utf8');
+
+      const [first, afterFirst] = text.split('\n');
+
+      invariant(afterFirst !== undefined, 'run-stub-impd is not ready yet');
+
+      return first ?? '';
+    },
+    { timeoutMs: 15_000 },
+  );
+
+  const served = z
+    .object({ url: z.string(), prefixedUrl: z.string(), closedUrl: z.string(), token: z.string() })
+    .parse(JSON.parse(line));
+
+  return { child, tempDir, served };
+}
+
+// each test outlives the 15 s startup wait for the child impd, which took over
+// the default 5 s to start on a loaded 2 GiB host
+test('it serves impd with the smoke imp to a client holding its token', async () => {
+  const ctx = await setupTest();
+
+  const client = createImpClient({ url: ctx.served.url, token: ctx.served.token });
+
+  const imps = await client.imps.list({});
+
+  expect(imps.map((imp) => imp.name)).toStrictEqual(['smoke']);
+});
+
+test('it serves impd under the prefix', async () => {
+  const ctx = await setupTest();
+  const health = await fetch(new URL('health', ctx.served.prefixedUrl));
+
+  expect(health.status).toBe(200);
+});
+
+test('it serves nothing outside the prefix', async () => {
+  const ctx = await setupTest();
+  const outside = await fetch(new URL('/rpc', ctx.served.prefixedUrl));
+
+  expect(outside.status).toBe(404);
+});
+
+test('it names a url where nothing listens', async () => {
+  const ctx = await setupTest();
+
+  expect(fetch(ctx.served.closedUrl)).rejects.toThrow();
+});
+
+test('it exits 0 on SIGTERM and leaves only its output in its temp dir', async () => {
+  const ctx = await setupTest();
+
+  ctx.child.kill('SIGTERM');
+
+  const exitCode = await ctx.child.exited;
+  const left = await readdir(ctx.tempDir);
+
+  expect(exitCode).toBe(0);
+  expect(left).toStrictEqual(['stdout']);
+});

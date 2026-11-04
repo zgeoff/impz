@@ -2,8 +2,8 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { probeUpdateReadOnly } from '@impz/test-utils/probe-update-read-only';
-import { updateReadOnly } from '@impz/test-utils/update-read-only';
+import { probeUpdateReadOnly } from '@impz/shared/test-utils/probe-update-read-only';
+import { updateReadOnly } from '@impz/shared/test-utils/update-read-only';
 import { runCLIInProcess } from './test-utils/run-cli-in-process';
 
 function setupTest() {

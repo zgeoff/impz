@@ -4,8 +4,8 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { rootCertificates } from 'node:tls';
-import { captureImpdLogs } from '../testing/platform/capture-impd-logs';
 import { createUpstreamResolver } from './create-upstream-resolver';
+import { captureImpdLogs } from './test-utils/platform/capture-impd-logs';
 
 async function setupTest() {
   const directory = await mkdtemp(join(tmpdir(), 'imp-upstreams-'));

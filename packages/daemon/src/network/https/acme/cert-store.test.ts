@@ -3,8 +3,8 @@ import { existsSync, statSync } from 'node:fs';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createMockCertificate } from '../../../../testing/network/create-mock-certificate';
-import { captureImpdLogs } from '../../../../testing/platform/capture-impd-logs';
+import { createMockCertificate } from '../../../test-utils/network/create-mock-certificate';
+import { captureImpdLogs } from '../../../test-utils/platform/capture-impd-logs';
 import { createCertStore } from './cert-store';
 
 async function setupTest() {

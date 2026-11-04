@@ -1,8 +1,8 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { randomUUID } from 'node:crypto';
 import { ApprovalCodeSchema } from '@impz/api';
-import { startTestImpd } from '@impz/daemon/testing';
-import { claimFreePorts } from '@impz/test-utils/claim-free-ports';
+import { startTestImpd } from '@impz/daemon/test-utils';
+import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
 import {
   Client,
   StreamableHTTPClientTransport,

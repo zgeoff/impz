@@ -2,8 +2,8 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubBin } from '@impz/test-utils/create-stub-bin';
-import { formatShellWord } from '@impz/test-utils/format-shell-word';
+import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
+import { formatShellWord } from '@impz/shared/test-utils/format-shell-word';
 import { $ } from 'bun';
 
 function setupTest() {

@@ -8,7 +8,7 @@ import {
   buildMockNewImage,
   createImage,
   startStubInnerAgent,
-} from '@impz/daemon/testing';
+} from '@impz/daemon/test-utils';
 import { writeHostConfig } from '../config/host-store';
 import { readJsonOutput } from '../test-utils/read-json-output';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';

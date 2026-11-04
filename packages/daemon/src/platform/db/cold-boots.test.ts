@@ -7,11 +7,11 @@ import {
   encodeMessageFrame,
 } from '@impz/agent-protocol';
 import invariant from 'tiny-invariant';
-import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
-import { buildMockNewImp } from '../../../testing/imps/build-mock-new-imp';
-import { startTestImpd } from '../../../testing/start-test-impd';
-import { buildStubBootId } from '../../../testing/vm/build-stub-vmm';
-import { startStubAttachAgent } from '../../../testing/vm/start-stub-attach-agent';
+import { buildMockNewImage } from '../../test-utils/imps/build-mock-new-image';
+import { buildMockNewImp } from '../../test-utils/imps/build-mock-new-imp';
+import { startTestImpd } from '../../test-utils/start-test-impd';
+import { buildStubBootId } from '../../test-utils/vm/build-stub-vmm';
+import { startStubAttachAgent } from '../../test-utils/vm/start-stub-attach-agent';
 import { buildImpPaths } from '../../vm/storage/data-layout';
 import { listColdBoots, writeColdBoot } from './cold-boots';
 import { createImage } from './images';

@@ -8,13 +8,9 @@
     ".": "./src/index.ts",
     "./read-text": "./src/platform/process/read-text.ts",
     "./real-clock": "./src/platform/process/real-clock.ts",
-    "./testing": "./testing/index.ts",
-    "./testing/build-stub-clock": "./testing/platform/build-stub-clock.ts",
-    "./testing/data-layout": "./src/vm/storage/data-layout.ts",
-    "./testing/pebble-images": "./testing/network/pebble-images.ts",
-    "./testing/start-stub-agent": "./testing/vm/start-stub-agent.ts",
-    "./testing/start-test-impd": "./testing/start-test-impd.ts",
-    "./testing/test-token": "./testing/test-token.ts",
+    "./test-utils": "./src/test-utils/index.ts",
+    "./test-utils/data-layout": "./src/vm/storage/data-layout.ts",
+    "./test-utils/*": "./src/test-utils/*.ts",
     "./package.json": "./package.json"
   },
   "dependencies": {
@@ -57,7 +53,6 @@
   },
   "devDependencies": {
     "@faker-js/faker": "catalog:",
-    "@impz/test-utils": "workspace:*",
     "@modelcontextprotocol/client": "catalog:",
     "@msw/data": "catalog:",
     "@types/dns-packet": "catalog:",

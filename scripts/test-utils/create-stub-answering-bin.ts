@@ -1,6 +1,6 @@
-import { createStubBin } from '@impz/test-utils/create-stub-bin';
-import type { StubBin } from '@impz/test-utils/create-stub-bin';
-import { formatShellWord } from '@impz/test-utils/format-shell-word';
+import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
+import type { StubBin } from '@impz/shared/test-utils/create-stub-bin';
+import { formatShellWord } from '@impz/shared/test-utils/format-shell-word';
 
 export interface StubBinAnswer {
   // the leading arguments a call must start with; empty matches every call

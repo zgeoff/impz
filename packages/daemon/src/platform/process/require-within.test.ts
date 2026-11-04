@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { buildStubClock } from '../../../testing/platform/build-stub-clock';
+import { buildStubClock } from '../../test-utils/platform/build-stub-clock';
 import { requireWithin } from './require-within';
 
 test('it resolves with the value of a promise that settles within the time', async () => {

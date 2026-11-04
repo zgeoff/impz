@@ -1,8 +1,8 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { checkImpdAccess, createRpcClient } from '@impz/client/internal';
-import { startTestImpd } from '@impz/daemon/testing';
-import { claimFreePorts } from '@impz/test-utils/claim-free-ports';
-import { server } from '@impz/test-utils/mock-server';
+import { startTestImpd } from '@impz/daemon/test-utils';
+import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
+import { server } from '@impz/shared/test-utils/mock-server';
 import { HttpResponse, http } from 'msw';
 
 async function setupTest() {

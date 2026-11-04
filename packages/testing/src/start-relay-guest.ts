@@ -13,7 +13,7 @@ import {
   encodeMessageFrame,
 } from '@impz/agent-protocol';
 import type { AgentFrame, Request } from '@impz/agent-protocol';
-import { startStubAgent } from '@impz/daemon/testing/start-stub-agent';
+import { startStubAgent } from '@impz/daemon/test-utils/vm/start-stub-agent';
 import type { TestGuest } from './types';
 
 export interface RelayGuest {

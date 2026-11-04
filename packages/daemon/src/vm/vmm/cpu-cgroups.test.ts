@@ -11,7 +11,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import invariant from 'tiny-invariant';
-import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
+import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
 import {
   buildMemoryMax,
   createCpuCgroups,

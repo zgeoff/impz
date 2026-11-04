@@ -6,8 +6,8 @@ import {
   buildStubForwardAgent,
   startStubAgent,
   startTestImpd,
-} from '@impz/daemon/testing';
-import { waitFor } from '@impz/test-utils/wait-for';
+} from '@impz/daemon/test-utils';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 
 // impd listens on a loopback port, as /tunnel needs a real socket.
 async function setupTest() {
