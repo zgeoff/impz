@@ -25,9 +25,14 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@faker-js/faker": "catalog:",
+    "@impz/agent-protocol": "workspace:*",
     "@impz/api": "workspace:*",
+    "@impz/daemon": "workspace:*",
+    "@impz/local-tar": "workspace:*",
     "@impz/shared": "workspace:*",
     "msw": "catalog:",
+    "tar-stream": "catalog:",
     "tiny-invariant": "catalog:",
     "tsdown": "catalog:"
   },

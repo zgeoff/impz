@@ -101,9 +101,14 @@
         "zod": "catalog:",
       },
       "devDependencies": {
+        "@faker-js/faker": "catalog:",
+        "@impz/agent-protocol": "workspace:*",
         "@impz/api": "workspace:*",
+        "@impz/daemon": "workspace:*",
+        "@impz/local-tar": "workspace:*",
         "@impz/shared": "workspace:*",
         "msw": "catalog:",
+        "tar-stream": "catalog:",
         "tiny-invariant": "catalog:",
         "tsdown": "catalog:",
       },
@@ -221,27 +226,6 @@
         "@types/ssh2": "catalog:",
       },
     },
-    "packages/integration": {
-      "name": "@impz/integration",
-      "version": "0.0.0",
-      "devDependencies": {
-        "@faker-js/faker": "catalog:",
-        "@impz/agent-protocol": "workspace:*",
-        "@impz/api": "workspace:*",
-        "@impz/client": "workspace:*",
-        "@impz/daemon": "workspace:*",
-        "@impz/local-tar": "workspace:*",
-        "@impz/mcp": "workspace:*",
-        "@impz/shared": "workspace:*",
-        "@modelcontextprotocol/client": "catalog:",
-        "@modelcontextprotocol/server": "catalog:",
-        "@orpc/client": "catalog:",
-        "msw": "catalog:",
-        "tar-stream": "catalog:",
-        "tiny-invariant": "catalog:",
-        "zod": "catalog:",
-      },
-    },
     "packages/local-tar": {
       "name": "@impz/local-tar",
       "version": "0.0.0",
@@ -266,6 +250,9 @@
       },
       "devDependencies": {
         "@faker-js/faker": "catalog:",
+        "@impz/daemon": "workspace:*",
+        "@modelcontextprotocol/client": "catalog:",
+        "tiny-invariant": "catalog:",
       },
     },
     "packages/shared": {
@@ -539,8 +526,6 @@
     "@impz/dashboard": ["@impz/dashboard@workspace:packages/dashboard"],
 
     "@impz/e2e-harness": ["@impz/e2e-harness@workspace:packages/e2e-harness"],
-
-    "@impz/integration": ["@impz/integration@workspace:packages/integration"],
 
     "@impz/local-tar": ["@impz/local-tar@workspace:packages/local-tar"],
 

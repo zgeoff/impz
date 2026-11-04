@@ -8,10 +8,10 @@ import {
   startStubExecAgent,
   startTestImpd,
 } from '@impz/daemon/test-utils';
-import { buildImpGuard, createPatternGuard } from '@impz/mcp';
-import { createMcpServer } from '@impz/mcp/test-utils/create-mcp-server';
 import invariant from 'tiny-invariant';
 import * as z from 'zod';
+import { buildImpGuard, createPatternGuard } from '../imp-guard';
+import { createMcpServer } from '../test-utils/create-mcp-server';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

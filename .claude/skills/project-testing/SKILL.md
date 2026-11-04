@@ -64,8 +64,9 @@ the result of the CI job that runs the command. CI runs every row but One journe
 
 ## Where a test lives
 
-- Put a client or MCP server test that needs a real impd in
-  [`packages/integration/`](../../../packages/integration/), not beside its module.
+- Put a client or MCP server test that needs a real impd beside its module too, and boot impd with
+  `startTestImpd` from `@impz/daemon/test-utils`. The package takes `@impz/daemon` as a dev
+  dependency only, so its published build never depends on impd.
 - Put a test of the end-to-end or bootstrap harness in
   [`packages/e2e-harness/`](../../../packages/e2e-harness/). It runs in the unit run, with no KVM.
   Keep [`e2e/`](../../../e2e/) for the suites, their fixtures and the scripts that run them.

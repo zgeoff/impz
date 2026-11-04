@@ -2,14 +2,6 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { RequestSchema, encodeAgentMessage } from '@impz/agent-protocol';
 import { CONSOLE_SHELL } from '@impz/api';
 import {
-  ExecError,
-  InvalidResumeError,
-  InvalidStateError,
-  NoSessionError,
-  createImpClient,
-} from '@impz/client';
-import { makeStubImpdWithoutFeature } from '@impz/client/test-utils/make-stub-impd-without-feature';
-import {
   STUB_BOOT_ID,
   STUB_FLOOD_BYTES,
   STUB_GENERATION,
@@ -22,6 +14,12 @@ import { server } from '@impz/shared/test-utils/mock-server';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { ORPCError } from '@orpc/client';
 import { http } from 'msw';
+import { createImpClient } from '../create-imp-client';
+import { makeStubImpdWithoutFeature } from '../test-utils/make-stub-impd-without-feature';
+import { ExecError } from './exec-error';
+import { InvalidResumeError } from './invalid-resume-error';
+import { InvalidStateError } from './invalid-state-error';
+import { NoSessionError } from './no-session-error';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

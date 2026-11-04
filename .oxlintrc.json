@@ -686,13 +686,6 @@
       "rules": { "max-lines": "off" }
     },
     {
-      // the client's and the MCP server's tests against a real impd sit downstream of the
-      // daemon, away from the modules they test, so no package depends on the daemon that
-      // depends on it
-      "files": ["packages/integration/**"],
-      "rules": { "zgeoff/test-beside-module": "off" }
-    },
-    {
       // host/entrypoint has no extension, which the rule needs to match a module
       "files": ["host/entrypoint.test.ts"],
       "rules": { "zgeoff/test-beside-module": "off" }
