@@ -148,7 +148,7 @@ in [`ci.yml`](../../../.github/workflows/ci.yml) and
   production's startup through `createImpd` on the stand-ins. It sets `defaultDiskBytes` to 0,
   because its stand-in storage copies a full 32 GiB disk in minutes.
 - Pass the stub clock directly to each component that keeps a clock of its own.
-  [Booting impd](./references/stand-ins.md#booting-impd) names them.
+  [Booting impd](./references/stand-ins.md#booting-impd) shows how to find them.
 
 ## Host resources
 
