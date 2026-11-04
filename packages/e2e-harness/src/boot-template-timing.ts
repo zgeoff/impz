@@ -4,7 +4,9 @@ export function getU32Span(left: number, right: number): number {
   return Math.min(span, 2 ** 32 - span);
 }
 
-const GUEST_MARK = '; guest ';
+// impd ends a boot line with sections such as `; guest …` and `; host stall …`.
+const SECTION_MARK = '; ';
+const GUEST_LABEL = 'guest ';
 
 export function parseLoggedSteps(
   log: string,
@@ -17,7 +19,7 @@ export function parseLoggedSteps(
     return {};
   }
 
-  const [host = ''] = line.split(GUEST_MARK);
+  const [host = ''] = line.split(SECTION_MARK);
   const steps = parseStepPairs(host);
   const total = /created in (?<ms>\d+)ms/v.exec(host)?.groups?.['ms'];
 
@@ -29,7 +31,8 @@ export function parseLoggedGuestSteps(
   name: string,
   what: string,
 ): Readonly<Record<string, number>> {
-  const [, guest = ''] = findLoggedLine(log, name, what)?.split(GUEST_MARK) ?? [];
+  const sections = findLoggedLine(log, name, what)?.split(SECTION_MARK) ?? [];
+  const guest = sections.find((section) => section.startsWith(GUEST_LABEL)) ?? '';
 
   return parseStepPairs(guest);
 }
