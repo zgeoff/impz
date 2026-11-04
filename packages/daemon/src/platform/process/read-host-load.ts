@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { getImpdLogger } from './get-impd-logger';
 
 export interface HostLoad {
   readonly cpuStallUs: number | null;
@@ -32,10 +33,21 @@ function parsePressureTotal(pressure: string | null): number | null {
 
 // A kernel without PSI has no /proc/pressure, and one booted with psi=0 fails
 // the read with EOPNOTSUPP.
+const UNSUPPORTED_CODES: ReadonlySet<string> = new Set(['ENOENT', 'EOPNOTSUPP']);
+
 function readProcFile(path: string): string | null {
   try {
     return readFileSync(path, 'utf8');
-  } catch {
+  } catch (error) {
+    const code = error instanceof Error && 'code' in error ? String(error.code) : 'unknown';
+
+    if (!UNSUPPORTED_CODES.has(code)) {
+      getImpdLogger('imps').warning('cannot read {path} for the host stall: {code}', {
+        path,
+        code,
+      });
+    }
+
     return null;
   }
 }

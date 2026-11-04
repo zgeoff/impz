@@ -2,6 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { formatRunPrefix } from '../../../testing/platform/format-run-prefix';
 import { readRunOwner } from '../../../testing/platform/read-run-owner';
 import { readHostLoad } from './read-host-load';
@@ -14,7 +15,9 @@ function setupTest() {
     rmSync(procRoot, { recursive: true, force: true });
   });
 
-  return { procRoot };
+  const logs = captureImpdLogs();
+
+  return { procRoot, logs };
 }
 
 test('it reads the stall totals of PSI and the steal of /proc/stat in microseconds', () => {
@@ -61,6 +64,30 @@ test('it gives no stall totals on a kernel without PSI', () => {
     memoryStallUs: null,
     stealUs: 27_540_000,
   });
+});
+
+test('it logs nothing for the stall totals a kernel without PSI lacks', () => {
+  const ctx = setupTest();
+
+  writeFileSync(join(ctx.procRoot, 'stat'), 'cpu  48210 12 20931 4019283 3302 0 1180 2754 0 0\n');
+  readHostLoad(ctx.procRoot);
+
+  expect(ctx.logs).toBeEmpty();
+});
+
+test('it logs the path and code of a proc file it fails to read, and gives no figure for it', () => {
+  const ctx = setupTest();
+
+  mkdirSync(join(ctx.procRoot, 'pressure', 'cpu'), { recursive: true });
+  writeFileSync(join(ctx.procRoot, 'stat'), 'cpu  48210 12 20931 4019283 3302 0 1180 2754 0 0\n');
+
+  const load = readHostLoad(ctx.procRoot);
+
+  expect(load.cpuStallUs).toBeNull();
+
+  expect(ctx.logs).toStrictEqual([
+    `WARNING impd.imps cannot read ${join(ctx.procRoot, 'pressure', 'cpu')} for the host stall: EISDIR`,
+  ]);
 });
 
 test('it gives no steal for a /proc/stat whose cpu line has no steal column', () => {
