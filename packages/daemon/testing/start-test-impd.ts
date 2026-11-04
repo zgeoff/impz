@@ -36,8 +36,10 @@ import type { VmRunner } from '../src/vm/vmm/vm-runner';
 import { readThreadIds } from '../src/vm/vmm/vm-stats';
 import { readNoTailscale } from './network/read-no-tailscale';
 import { buildStubTickerTimer } from './platform/build-stub-ticker-timer';
+import { formatRunPrefix } from './platform/format-run-prefix';
 import { openMigratedCopy } from './platform/open-migrated-copy';
 import { pickImpdPort } from './platform/pick-impd-port';
+import { readRunOwner } from './platform/read-run-owner';
 import { startImpdLogCapture } from './platform/start-impd-log-capture';
 import { TEST_TOKEN } from './test-token';
 import { buildStubVmm } from './vm/build-stub-vmm';
@@ -103,7 +105,8 @@ export async function startTestImpd(
   stack: Readonly<AsyncDisposableStack>,
   options: TestImpdOptions = {},
 ) {
-  const dataDir = options.dataDir ?? mkdtempSync(`${tmpdir()}/impd-test-`);
+  const dataDir =
+    options.dataDir ?? mkdtempSync(`${tmpdir()}/${formatRunPrefix(readRunOwner())}impd-test-`);
 
   if (options.dataDir === undefined) {
     stack.defer(() => rm(dataDir, { recursive: true, force: true }));

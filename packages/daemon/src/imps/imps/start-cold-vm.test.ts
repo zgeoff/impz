@@ -9,6 +9,8 @@ import { buildStubDiskTools } from '../../../testing/imps/build-stub-disk-tools'
 import { readBrokenInvariants } from '../../../testing/imps/read-broken-invariants';
 import { waitForOutcome } from '../../../testing/imps/wait-for-outcome';
 import { createStubHostLoad } from '../../../testing/platform/create-stub-host-load';
+import { formatRunPrefix } from '../../../testing/platform/format-run-prefix';
+import { readRunOwner } from '../../../testing/platform/read-run-owner';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { buildStubCpuCgroups } from '../../../testing/vm/build-stub-cpu-cgroups';
 import { listImps, readImpByName } from '../../platform/db/imps';
@@ -26,7 +28,8 @@ async function setupTest(
   const isJailed = config.isJailed ?? false;
   const cgroups = buildStubCpuCgroups();
   const disk = buildStubDiskTools();
-  const procRoot = mkdtempSync(join(tmpdir(), 'imp-cold-vm-proc-'));
+  const prefix = formatRunPrefix(readRunOwner());
+  const procRoot = mkdtempSync(join(tmpdir(), `${prefix}imp-cold-vm-proc-`));
 
   stack.defer(() => {
     rmSync(procRoot, { recursive: true, force: true });

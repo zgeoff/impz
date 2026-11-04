@@ -4,9 +4,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readHostLoad } from '../../src/platform/process/read-host-load';
 import { createStubHostLoad } from './create-stub-host-load';
+import { formatRunPrefix } from './format-run-prefix';
+import { readRunOwner } from './read-run-owner';
 
 function setupTest() {
-  const procRoot = mkdtempSync(join(tmpdir(), 'imp-stub-host-load-'));
+  const prefix = formatRunPrefix(readRunOwner());
+  const procRoot = mkdtempSync(join(tmpdir(), `${prefix}imp-stub-host-load-`));
 
   onTestFinished(() => {
     rmSync(procRoot, { recursive: true, force: true });

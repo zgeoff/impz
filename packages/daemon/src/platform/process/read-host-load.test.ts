@@ -2,10 +2,13 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { formatRunPrefix } from '../../../testing/platform/format-run-prefix';
+import { readRunOwner } from '../../../testing/platform/read-run-owner';
 import { readHostLoad } from './read-host-load';
 
 function setupTest() {
-  const procRoot = mkdtempSync(join(tmpdir(), 'imp-host-load-'));
+  const prefix = formatRunPrefix(readRunOwner());
+  const procRoot = mkdtempSync(join(tmpdir(), `${prefix}imp-host-load-`));
 
   onTestFinished(() => {
     rmSync(procRoot, { recursive: true, force: true });
