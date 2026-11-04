@@ -5,11 +5,13 @@ import type { SlotAddress } from '../../host-net/net/addressing';
 import { GATEWAY_IP6 } from '../../host-net/net/addressing6';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
+import type { HostLoad } from '../../platform/process/read-host-load';
 import type { ImpPaths } from '../../vm/storage/data-layout';
 import type { ImpCgroup } from '../../vm/vmm/cpu-cgroups';
 import type { HugePages } from '../../vm/vmm/firecracker-client';
 import { TemplateRestoreError } from '../../vm/vmm/template-vm';
 import type { StartedVm } from '../../vm/vmm/vm-runner';
+import { formatHostStall } from './format-host-stall';
 import { formatTimings } from './format-timings';
 import type { ImpHost, ImpVms } from './imp-context';
 import type { LockedImp } from './imp-lock';
@@ -25,6 +27,7 @@ interface ColdVmStart {
   readonly hugePages: HugePages;
 
   readonly hostSteps: Readonly<Record<string, number>>;
+  readonly loadBefore: HostLoad;
   readonly diskReady: Promise<unknown>;
 }
 
@@ -100,11 +103,12 @@ export async function startColdVm(
 
       getImpdLogger('imps')
         .with({ imp: imp.name })
-        .info('restored boot template {key} as pid {pid} {timings}{guestSteps}', {
+        .info('restored boot template {key} as pid {pid} {timings}{guestSteps}{hostStall}', {
           key: template.key.slice(0, 12),
           pid: String(vm.pid),
           timings: formatTimings({ ...hostSteps, ...vm.timings }),
           guestSteps: formatGuestSteps(vm.guestSteps),
+          hostStall: formatHostStall(start.loadBefore, context.readHostLoad()),
         });
 
       return vm;
@@ -148,10 +152,11 @@ export async function startColdVm(
 
   getImpdLogger('imps')
     .with({ imp: imp.name })
-    .info('booted pid {pid} {timings}{guestSteps}', {
+    .info('booted pid {pid} {timings}{guestSteps}{hostStall}', {
       pid: String(vm.pid),
       timings: formatTimings({ ...hostSteps, ...vm.timings }),
       guestSteps: formatGuestSteps(vm.guestSteps),
+      hostStall: formatHostStall(start.loadBefore, context.readHostLoad()),
     });
 
   return vm;

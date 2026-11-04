@@ -2,6 +2,7 @@ import { expect, mock, onTestFinished, test } from 'bun:test';
 import { buildMockNewImp } from '../../../testing/imps/build-mock-new-imp';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { createImp, updateImpMove } from '../../platform/db/imps';
+import { NO_HOST_LOAD } from '../../platform/process/read-host-load';
 import { createCpuCgroups } from '../../vm/vmm/cpu-cgroups';
 import { createImpContext } from './imp-context';
 import { createImpLock } from './imp-lock';
@@ -39,6 +40,7 @@ async function setupTest() {
     kernelOops: NO_KERNEL_OOPS,
     readThreadIds: () => null,
     readNetBytes: () => null,
+    readHostLoad: () => NO_HOST_LOAD,
   });
 
   return {

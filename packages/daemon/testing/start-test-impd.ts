@@ -22,6 +22,7 @@ import type { OAuthFetch } from '../src/network/broker/secrets/oauth-refresher';
 import { createImage } from '../src/platform/db/images';
 import type { ImageRecord } from '../src/platform/db/images';
 import type { ImpDatabase } from '../src/platform/db/open-database';
+import { NO_HOST_LOAD, readHostLoad } from '../src/platform/process/read-host-load';
 import type { HostIdentity } from '../src/vm/sleep/vm-identity';
 import { buildSystemDrivePath, buildSystemDrivesDir } from '../src/vm/storage/data-layout';
 import type { ImpPaths } from '../src/vm/storage/data-layout';
@@ -341,6 +342,8 @@ export async function startTestImpd(
         kernelOops,
         readThreadIds: (pid) =>
           options.procRoot === undefined ? null : readThreadIds(pid, options.procRoot),
+        readHostLoad: () =>
+          options.procRoot === undefined ? NO_HOST_LOAD : readHostLoad(options.procRoot),
         ...(options.readUnsharedRamMib !== undefined && {
           readUnsharedRamMib: options.readUnsharedRamMib,
         }),

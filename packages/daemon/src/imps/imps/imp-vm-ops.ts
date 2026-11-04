@@ -172,6 +172,7 @@ export function createImpVmOps(host: ImpContext): ImpVmOps {
     });
 
     const setupStarted = performance.now();
+    const loadBefore = context.readHostLoad();
 
     try {
       // A memory snapshot loads only with the disk it was taken with. It goes
@@ -199,6 +200,7 @@ export function createImpVmOps(host: ImpContext): ImpVmOps {
         cgroup,
         hugePages,
         hostSteps,
+        loadBefore,
         diskReady,
       });
 
