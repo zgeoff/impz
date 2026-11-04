@@ -8,7 +8,7 @@ require (
 	github.com/charmbracelet/x/ansi v0.11.9
 	github.com/mdlayher/vsock v1.3.0
 	github.com/moby/sys/user v0.4.1
-	github.com/pkg/sftp v1.13.11
+	github.com/pkg/sftp v1.13.12
 	github.com/vishvananda/netlink v1.3.1
 	golang.org/x/sys v0.49.0
 	google.golang.org/protobuf v1.36.12
