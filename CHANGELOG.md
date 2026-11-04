@@ -1,5 +1,15 @@
 # Changelog
 
+## [6.4.1](https://github.com/zgeoff/impz/compare/v6.4.0...v6.4.1) (2026-11-04)
+
+### Bug Fixes
+
+- **deps:** update module github.com/moby/sys/user to v0.5.0
+  ([#854](https://github.com/zgeoff/impz/issues/854))
+  ([bbeae1f](https://github.com/zgeoff/impz/commit/bbeae1f885f0d7c8b8dcf061263b81c3860a4386))
+- **deps:** update patch updates ([#826](https://github.com/zgeoff/impz/issues/826))
+  ([e7a062b](https://github.com/zgeoff/impz/commit/e7a062b114f4dbffc3efaef83c792c6a5f5bea09))
+
 ## [6.4.0](https://github.com/zgeoff/impz/compare/v6.3.2...v6.4.0) (2026-11-03)
 
 ### Features
