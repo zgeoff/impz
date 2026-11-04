@@ -15,10 +15,12 @@ minimumReleaseAgeExcludes = [
   "@zgeoff/agent-hooks",
   "@zgeoff/bun-test-extended",
   "@zgeoff/bun-test-react",
+  "@zgeoff/chex",
   "@zgeoff/format-codemod",
   "@zgeoff/kysely-bun-sqlite",
   "@zgeoff/oxlint-config",
   "@zgeoff/skill-gate",
+  "@zgeoff/std",
 ]
 
 [test]
