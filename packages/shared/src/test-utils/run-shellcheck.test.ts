@@ -6,14 +6,19 @@ import { createStubBin } from './create-stub-bin';
 import { runShellcheck } from './run-shellcheck';
 import { updateEnv } from './update-env';
 
-test('it names the signal that ended shellcheck, with the time it ran', () => {
-  const directory = mkdtempSync(join(tmpdir(), 'imp-shellcheck-killed-'));
+function setupTest() {
+  const directory = mkdtempSync(join(tmpdir(), 'imp-shellcheck-stub-'));
 
   onTestFinished(() => {
     rmSync(directory, { recursive: true, force: true });
   });
 
-  const stub = createStubBin(directory, 'shellcheck', 'kill -KILL $$');
+  return { directory };
+}
+
+test('it names the signal that ended shellcheck, with the time it ran', () => {
+  const ctx = setupTest();
+  const stub = createStubBin(ctx.directory, 'shellcheck', 'kill -KILL $$');
 
   updateEnv('PATH', `${stub.bin}:${process.env['PATH'] ?? ''}`);
 
