@@ -47,7 +47,7 @@ test('it removes the tap an imp booted with when it destroys the imp', async () 
 
   const [booted] = ctx.taps;
 
-  invariant(booted);
+  invariant(booted !== undefined);
 
   await ctx.imps.destroyImp('dev');
 
