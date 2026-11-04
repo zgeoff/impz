@@ -2,12 +2,11 @@
 
 With huge pages on, impd backs each imp of fixed memory with the host's pool of huge pages, the
 large page size the CPU maps with one page table entry. A guest on huge pages takes fewer page
-faults and fewer TLB misses, so a template restore and a wake reach a running agent sooner. Restore
-and wake run through a page handler: a small process per imp that serves each page of the snapshot
-as the guest first touches it. The owner turns huge pages on for the whole host, and off is the
-default. An elastic imp always runs on the host's ordinary pages, because a shrink exists to return
-memory to the host, and a pool page goes back only to the pool
-([elastic memory](./elastic-memory.md)).
+faults and fewer TLB misses, so a template restore reaches a running agent sooner. Restore and wake
+run through a page handler: a small process per imp that serves each page of the snapshot as the
+guest first touches it. The owner turns huge pages on for the whole host, and off is the default. An
+elastic imp always runs on the host's ordinary pages, because a shrink exists to return memory to
+the host, and a pool page goes back only to the pool ([elastic memory](./elastic-memory.md)).
 
 The pool is memory the host reserves for huge pages at boot or through `vm.nr_hugepages`, and no
 other process can use it. impd only reads the pool's size; the host's own config sets it, as
@@ -45,6 +44,10 @@ impd starts one handler per restore or wake, before Firecracker loads the snapsh
    because a boot touches few of the guest's pages.
 5. When the guest gives memory back, the kernel reports the removed range, and the handler stops
    serving it, so a later touch maps a fresh zero page.
+
+Huge pages speed up a template restore and slow down a wake. On a nested production host, a wake on
+huge pages took longer to reach a running agent than a wake on ordinary pages
+([the wake spike](../../design/spikes/wake-huge-pages/README.md)).
 
 ## The device
 
