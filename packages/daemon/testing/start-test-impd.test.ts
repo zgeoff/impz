@@ -13,45 +13,43 @@ import { readRunOwner } from './platform/read-run-owner';
 import { startTestImpd } from './start-test-impd';
 import { StubVmError } from './vm/build-stub-vmm';
 
-test('it runs every startup step that main.ts runs, in order', async () => {
+async function setupTest() {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
   const harness = await startTestImpd(stack);
 
-  expect(harness.impd.startup).toStrictEqual([...IMPD_STARTUP_STEPS]);
+  return Object.assign(harness, { stack });
+}
+
+test('it runs every startup step that main.ts runs, in order', async () => {
+  const ctx = await setupTest();
+
+  expect(ctx.impd.startup).toStrictEqual([...IMPD_STARTUP_STEPS]);
 });
 
 test('it boots imps on the stub VMM', async () => {
-  const stack = new AsyncDisposableStack();
+  const ctx = await setupTest();
 
-  onTestFinished(() => stack.disposeAsync());
+  await ctx.createTestImage('ubuntu');
+  await ctx.imps.createImp({ name: 'dev' });
 
-  const harness = await startTestImpd(stack);
-
-  await harness.createTestImage('ubuntu');
-  await harness.imps.createImp({ name: 'dev' });
-
-  const [imp] = await listImps(harness.db);
+  const [imp] = await listImps(ctx.db);
 
   invariant(typeof imp?.pid === 'number');
 
   expect(imp.state).toBe('running');
-  expect(harness.fake.alive.has(imp.pid)).toBeTrue();
+  expect(ctx.fake.alive.has(imp.pid)).toBeTrue();
 });
 
 test('it serves the API to its root client', async () => {
-  const stack = new AsyncDisposableStack();
+  const ctx = await setupTest();
 
-  onTestFinished(() => stack.disposeAsync());
+  await ctx.createTestImage('ubuntu');
+  await ctx.imps.createImp({ name: 'dev' });
 
-  const harness = await startTestImpd(stack);
-
-  await harness.createTestImage('ubuntu');
-  await harness.imps.createImp({ name: 'dev' });
-
-  const imps = await harness.client.imps.list({});
+  const imps = await ctx.client.imps.list({});
 
   expect(imps.map((imp) => imp.name)).toStrictEqual(['dev']);
 });
@@ -71,51 +69,39 @@ test('it serves the API on a loopback port', async () => {
 });
 
 test('it refuses a client whose token impd never issued', async () => {
-  const stack = new AsyncDisposableStack();
+  const ctx = await setupTest();
 
-  onTestFinished(() => stack.disposeAsync());
-
-  const harness = await startTestImpd(stack);
-
-  expect(harness.buildClient('unknown-token').imps.list({})).rejects.toMatchObject({
+  expect(ctx.buildClient('unknown-token').imps.list({})).rejects.toMatchObject({
     code: 'UNAUTHORIZED',
   });
 });
 
 test('it records an unexpected RPC failure in the harness', async () => {
-  const stack = new AsyncDisposableStack();
+  const ctx = await setupTest();
 
-  onTestFinished(() => stack.disposeAsync());
+  await ctx.createTestImage('ubuntu');
 
-  const harness = await startTestImpd(stack);
+  ctx.fake.queue('boot', 'fail');
 
-  await harness.createTestImage('ubuntu');
-
-  harness.fake.queue('boot', 'fail');
-
-  expect(harness.client.imps.create({ name: 'dev' })).rejects.toMatchObject({
+  expect(ctx.client.imps.create({ name: 'dev' })).rejects.toMatchObject({
     code: 'INTERNAL_SERVER_ERROR',
   });
 
-  expect(harness.rpcFailures).toStrictEqual([expect.any(StubVmError)]);
+  expect(ctx.rpcFailures).toStrictEqual([expect.any(StubVmError)]);
 });
 
 test('it logs an unexpected RPC failure to the harness log', async () => {
-  const stack = new AsyncDisposableStack();
+  const ctx = await setupTest();
 
-  onTestFinished(() => stack.disposeAsync());
+  await ctx.createTestImage('ubuntu');
 
-  const harness = await startTestImpd(stack);
+  ctx.fake.queue('boot', 'fail');
 
-  await harness.createTestImage('ubuntu');
-
-  harness.fake.queue('boot', 'fail');
-
-  expect(harness.client.imps.create({ name: 'dev' })).rejects.toMatchObject({
+  expect(ctx.client.imps.create({ name: 'dev' })).rejects.toMatchObject({
     code: 'INTERNAL_SERVER_ERROR',
   });
 
-  expect(harness.logs).toSatisfyAny(
+  expect(ctx.logs).toSatisfyAny(
     (line: string) =>
       line.startsWith('ERROR impd.api rpc failed: ') &&
       line.includes('StubVmError: boot failed: no agent'),
@@ -123,47 +109,35 @@ test('it logs an unexpected RPC failure to the harness log', async () => {
 });
 
 test('it records no failure the API returns as an expected error', async () => {
-  const stack = new AsyncDisposableStack();
+  const ctx = await setupTest();
 
-  onTestFinished(() => stack.disposeAsync());
-
-  const harness = await startTestImpd(stack);
-
-  expect(harness.client.imps.get({ name: 'missing' })).rejects.toMatchObject({
+  expect(ctx.client.imps.get({ name: 'missing' })).rejects.toMatchObject({
     code: 'NOT_FOUND',
   });
 
-  expect(harness.rpcFailures).toBeEmpty();
+  expect(ctx.rpcFailures).toBeEmpty();
 });
 
 test('it runs a ticker only when the test fires it', async () => {
-  const stack = new AsyncDisposableStack();
+  const ctx = await setupTest();
 
-  onTestFinished(() => stack.disposeAsync());
-
-  const harness = await startTestImpd(stack);
-
-  expect(harness.tickers.readDelays()).toMatchObject({
+  expect(ctx.tickers.readDelays()).toMatchObject({
     idle: 2000,
     governor: expect.any(Number) as unknown,
   });
 });
 
 test('it re-adopts a running VM in the impd that restartImpd starts', async () => {
-  const stack = new AsyncDisposableStack();
+  const ctx = await setupTest();
 
-  onTestFinished(() => stack.disposeAsync());
+  await ctx.createTestImage('ubuntu');
+  await ctx.imps.createImp({ name: 'dev' });
 
-  const harness = await startTestImpd(stack);
+  const [before] = await listImps(ctx.db);
 
-  await harness.createTestImage('ubuntu');
-  await harness.imps.createImp({ name: 'dev' });
+  await ctx.restartImpd();
 
-  const [before] = await listImps(harness.db);
-
-  await harness.restartImpd();
-
-  const [after] = await listImps(harness.db);
+  const [after] = await listImps(ctx.db);
 
   invariant(before);
 
@@ -171,58 +145,42 @@ test('it re-adopts a running VM in the impd that restartImpd starts', async () =
 });
 
 test('it serves the impd that restartImpd starts on the port of the one it replaced', async () => {
-  const stack = new AsyncDisposableStack();
+  const ctx = await setupTest();
 
-  onTestFinished(() => stack.disposeAsync());
+  const replaced = ctx.url;
 
-  const harness = await startTestImpd(stack);
-
-  const replaced = harness.url;
-
-  await harness.restartImpd();
+  await ctx.restartImpd();
 
   const response = await fetch(`${replaced}/health`);
 
-  expect(harness.url).toBe(replaced);
+  expect(ctx.url).toBe(replaced);
   expect(response.status).toBe(200);
 });
 
 test('it has its data dir removed by the stack', async () => {
-  const stack = new AsyncDisposableStack();
+  const ctx = await setupTest();
 
-  onTestFinished(() => stack.disposeAsync());
+  await ctx.stack.disposeAsync();
 
-  const harness = await startTestImpd(stack);
-
-  await stack.disposeAsync();
-
-  expect(existsSync(harness.dataDir)).toBeFalse();
+  expect(existsSync(ctx.dataDir)).toBeFalse();
 });
 
 test('it names its own data dir with the PID and PID namespace of the test process', async () => {
-  const stack = new AsyncDisposableStack();
-
-  onTestFinished(() => stack.disposeAsync());
-
   const owner = readRunOwner();
 
-  const harness = await startTestImpd(stack);
+  const ctx = await setupTest();
 
-  expect(basename(harness.dataDir)).toStartWith(
+  expect(basename(ctx.dataDir)).toStartWith(
     `pid${String(owner.pid)}-ns${owner.namespace}-impd-test-`,
   );
 });
 
 test('it has its database closed by the stack', async () => {
-  const stack = new AsyncDisposableStack();
+  const ctx = await setupTest();
 
-  onTestFinished(() => stack.disposeAsync());
+  await ctx.stack.disposeAsync();
 
-  const harness = await startTestImpd(stack);
-
-  await stack.disposeAsync();
-
-  expect(listImps(harness.db)).rejects.toThrow();
+  expect(listImps(ctx.db)).rejects.toThrow();
 });
 
 test('it keeps a data dir the caller passed', async () => {
@@ -309,35 +267,27 @@ test('it finishes a running template build before it removes its data dir', asyn
 });
 
 test('it serves the API on loopback only', async () => {
-  const stack = new AsyncDisposableStack();
+  const ctx = await setupTest();
 
-  onTestFinished(() => stack.disposeAsync());
-
-  const harness = await startTestImpd(stack);
-
-  expect(harness.impd.app.server?.hostname).toBe('127.0.0.1');
+  expect(ctx.impd.app.server?.hostname).toBe('127.0.0.1');
 });
 
 test('it parks a boot the replaced impd had hung, so the boot never finishes', async () => {
-  const stack = new AsyncDisposableStack();
+  const ctx = await setupTest();
 
-  onTestFinished(() => stack.disposeAsync());
+  await ctx.createTestImage('ubuntu');
 
-  const harness = await startTestImpd(stack);
-
-  await harness.createTestImage('ubuntu');
-
-  harness.fake.queue('boot', 'hang');
-  void Promise.allSettled([harness.imps.createImp({ name: 'dev' })]);
+  ctx.fake.queue('boot', 'hang');
+  void Promise.allSettled([ctx.imps.createImp({ name: 'dev' })]);
 
   await waitFor(() => {
-    expect(harness.fake.countHungCalls()).toBe(1);
+    expect(ctx.fake.countHungCalls()).toBe(1);
   });
 
-  await harness.restartImpd();
+  await ctx.restartImpd();
 
   await waitFor(() => {
-    expect(harness.fake.countParkedCalls()).toBe(1);
+    expect(ctx.fake.countParkedCalls()).toBe(1);
   });
 });
 
