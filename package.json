@@ -56,7 +56,7 @@
       "@zgeoff/format-codemod": "0.3.5",
       "@zgeoff/kysely-bun-sqlite": "0.3.0",
       "@zgeoff/oxlint-config": "0.7.7",
-      "@zgeoff/skill-gate": "0.2.17",
+      "@zgeoff/skill-gate": "0.2.19",
       "acme-client": "5.4.0",
       "better-auth": "1.7.14",
       "gunshi": "1.0.0-rc.1",
