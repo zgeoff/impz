@@ -1,7 +1,13 @@
 import { expect, test } from 'bun:test';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { create } from '@bufbuild/protobuf';
-import { ServicesListSchema } from '@impz/agent-protocol';
+import {
+  ExitSchema,
+  FRAME_TYPES,
+  ServicesListSchema,
+  StartedSchema,
+  encodeMessageFrame,
+} from '@impz/agent-protocol';
 import { MoveOfferReplySchema } from '@impz/api';
 import { waitFor } from '@impz/test-utils/wait-for';
 import invariant from 'tiny-invariant';
@@ -14,6 +20,9 @@ import {
 } from '../../../testing/imp-ops/make-stub-move-stream-rewrite';
 import { buildMockAgentSession } from '../../../testing/imps/build-mock-agent-session';
 import { buildStubCpuCgroups } from '../../../testing/vm/build-stub-cpu-cgroups';
+import { buildStubExecReplies } from '../../../testing/vm/build-stub-exec-replies';
+import { startStubAgent } from '../../../testing/vm/start-stub-agent';
+import { runBundleInstall } from '../../network/broker/guest/guest-trust';
 import { listColdBoots, writeUnknownBoot } from '../../platform/db/cold-boots';
 import { JAIL_UIDS, readImpByName, updateImpDisk } from '../../platform/db/imps';
 import { writeMember, writeNetwork } from '../../platform/db/networks';
@@ -653,6 +662,76 @@ test("it installs the target's broker CA once at the first wake after a warm mov
 
   expect(before.trust_pending).toBe(1);
   expect(after.trust_pending).toBe(0);
+});
+
+test('it keeps the broker CA install pending when the guest fails the push in the first wake after a warm move', async () => {
+  const ctx = await setupTest({ isShared: true, target: { installBundle: runBundleInstall } });
+
+  await createUbuntuImage(ctx.source);
+
+  const created = await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
+
+  await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
+  await ctx.runMove('dev');
+  await ctx.target.broker.addSecret({ name: 'gh', kind: 'github', value: 'ghp_EXAMPLE' });
+  await ctx.target.broker.addGrant('dev', 'gh');
+
+  await startStubAgent(
+    ctx.target.storage.resolveImpPaths(created.id).vsockSocket,
+    buildStubExecReplies({
+      started: [encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 9 })],
+      exited: [encodeMessageFrame(FRAME_TYPES.exit, ExitSchema, { code: 2, signal: 0 })],
+    }),
+  );
+
+  await ctx.targetApp.client.imps.wake({ name: 'dev' });
+
+  const moved = await readImpByName(ctx.target.db, 'dev');
+
+  expect(moved?.isTrustPending).toBeTrue();
+});
+
+test('it pushes the broker CA in the next wake after the guest failed the push in the first wake after a warm move', async () => {
+  const ctx = await setupTest({ isShared: true, target: { installBundle: runBundleInstall } });
+
+  await createUbuntuImage(ctx.source);
+
+  const created = await ctx.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
+
+  const vsockPath = ctx.target.storage.resolveImpPaths(created.id).vsockSocket;
+
+  await ctx.sourceApp.client.imps.sleep({ name: 'dev' });
+  await ctx.runMove('dev');
+  await ctx.target.broker.addSecret({ name: 'gh', kind: 'github', value: 'ghp_EXAMPLE' });
+  await ctx.target.broker.addGrant('dev', 'gh');
+
+  const failing = await startStubAgent(
+    vsockPath,
+    buildStubExecReplies({
+      started: [encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 9 })],
+      exited: [encodeMessageFrame(FRAME_TYPES.exit, ExitSchema, { code: 2, signal: 0 })],
+    }),
+  );
+
+  await ctx.targetApp.client.imps.wake({ name: 'dev' });
+  await ctx.targetApp.client.imps.sleep({ name: 'dev' });
+
+  failing.close();
+
+  const succeeding = await startStubAgent(
+    vsockPath,
+    buildStubExecReplies({
+      started: [encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 9 })],
+      exited: [encodeMessageFrame(FRAME_TYPES.exit, ExitSchema, { code: 0, signal: 0 })],
+    }),
+  );
+
+  await ctx.targetApp.client.imps.wake({ name: 'dev' });
+
+  const moved = await readImpByName(ctx.target.db, 'dev');
+
+  expect(succeeding.received).not.toBeEmpty();
+  expect(moved?.isTrustPending).toBeFalse();
 });
 
 test('it refuses a system drive the target lacks whose sum is not its name', async () => {

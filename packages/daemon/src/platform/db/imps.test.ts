@@ -8,7 +8,6 @@ import { createImage } from './images';
 import type { ImpWrite } from './imp-write-feed';
 import {
   JAIL_UIDS,
-  claimTrustPending,
   countImpsByState,
   countImpsUsingImage,
   createImp,
@@ -18,6 +17,7 @@ import {
   readImpByName,
   removeIdentityReset,
   removeImp,
+  removeTrustPending,
   updateImpActivity,
   updateImpAddress,
   updateImpCommitted,
@@ -620,7 +620,7 @@ test('#updateImpCommitted leaves a cold move’s imp in its state', async () => 
   expect(committed).toMatchObject({ state: 'creating', isTrustPending: false });
 });
 
-test('#claimTrustPending claims a pending trust install', async () => {
+test('#removeTrustPending clears a pending trust install', async () => {
   const ctx = await createTestDatabase();
   const image = await createImage(ctx.db, buildMockNewImage());
   const imp = await createImp(ctx.db, buildMockNewImp({ imageId: image.id }));
@@ -628,32 +628,9 @@ test('#claimTrustPending claims a pending trust install', async () => {
   await updateImpState(ctx.db, imp.id, { reason: 'stopped', state: 'stopped' });
   await updateImpCommitted(ctx.db, imp.id, 1_800_000_000_000, true);
 
-  const isClaimed = await claimTrustPending(ctx.db, imp.id);
+  const removed = await removeTrustPending(ctx.db, imp.id);
 
-  expect(isClaimed).toBeTrue();
-});
-
-test('#claimTrustPending claims a pending trust install only once', async () => {
-  const ctx = await createTestDatabase();
-  const image = await createImage(ctx.db, buildMockNewImage());
-  const imp = await createImp(ctx.db, buildMockNewImp({ imageId: image.id }));
-
-  await updateImpState(ctx.db, imp.id, { reason: 'stopped', state: 'stopped' });
-  await updateImpCommitted(ctx.db, imp.id, 1_800_000_000_000, true);
-  await claimTrustPending(ctx.db, imp.id);
-
-  const isClaimed = await claimTrustPending(ctx.db, imp.id);
-
-  expect(isClaimed).toBeFalse();
-});
-
-test('#claimTrustPending claims nothing for an imp with no pending trust install', async () => {
-  const ctx = await createTestDatabase();
-  const image = await createImage(ctx.db, buildMockNewImage());
-  const imp = await createImp(ctx.db, buildMockNewImp({ imageId: image.id }));
-  const isClaimed = await claimTrustPending(ctx.db, imp.id);
-
-  expect(isClaimed).toBeFalse();
+  expect(removed.isTrustPending).toBeFalse();
 });
 
 test('#removeIdentityReset clears a pending identity reset', async () => {

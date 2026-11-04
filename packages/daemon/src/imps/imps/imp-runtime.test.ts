@@ -1410,7 +1410,7 @@ test('it clears the pending CA install in the wake that does it', async () => {
   expect(record?.isTrustPending).toBeFalse();
 });
 
-test('it wakes the imp, and logs why, when the pending broker CA install cannot be claimed', async () => {
+test('it wakes the imp, and logs why, when the pending broker CA install cannot be cleared', async () => {
   const ctx = await setupTest();
 
   await ctx.createTestImage('ubuntu');

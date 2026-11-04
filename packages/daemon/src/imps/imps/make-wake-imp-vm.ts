@@ -1,6 +1,6 @@
 import type { ColdBootCause } from '@impz/api';
 import { writeUnknownBoot } from '../../platform/db/cold-boots';
-import { claimTrustPending, updateImpActivity } from '../../platform/db/imps';
+import { removeTrustPending, updateImpActivity } from '../../platform/db/imps';
 import type { ImpStateChange } from '../../platform/db/update-imp-state';
 import { buildStoppingError } from '../../platform/errors/impd-errors';
 import { getErrorMessage } from '../../platform/process/get-error-message';
@@ -183,18 +183,22 @@ export function makeWakeImpVm(deps: WakeDeps): (imp: LockedImp) => Promise<Locke
 
   const applyPendingTrust = async (imp: LockedImp, paths: ImpPaths): Promise<LockedImp> => {
     try {
-      if (!(await claimTrustPending(context.db, imp.id))) {
+      const env = await context.readExecEnv(imp, paths.vsockSocket);
+
+      if (env.kind === 'untrusted') {
+        logTrustFailure(imp, env.detail);
+
         return imp;
       }
 
-      await context.readExecEnv(imp, paths.vsockSocket);
-    } catch (error) {
-      getImpdLogger('imps')
-        .with({ imp: imp.name })
-        .warning('broker CA after the wake: {error}', { error: getErrorMessage(error) });
-    }
+      const trusted = await removeTrustPending(context.db, imp.id);
 
-    return toLockedImp(imp, { ...imp, isTrustPending: false });
+      return toLockedImp(imp, trusted);
+    } catch (error) {
+      logTrustFailure(imp, getErrorMessage(error));
+
+      return imp;
+    }
   };
 
   const canBootOnPool = (imp: LockedImp): boolean =>
@@ -294,4 +298,10 @@ export function makeWakeImpVm(deps: WakeDeps): (imp: LockedImp) => Promise<Locke
   };
 
   return wakeImpVm;
+}
+
+function logTrustFailure(imp: LockedImp, error: string): void {
+  getImpdLogger('imps')
+    .with({ imp: imp.name })
+    .warning('broker CA after the wake: {error}', { error });
 }

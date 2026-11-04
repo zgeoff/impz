@@ -338,16 +338,15 @@ export async function updateImpCommitted(
   return imp;
 }
 
-export async function claimTrustPending(db: ImpDatabase, id: string): Promise<boolean> {
-  const taken = await db
+export async function removeTrustPending(db: ImpDatabase, id: string): Promise<ImpRecord> {
+  const row = await db
     .updateTable('imps')
     .set({ trust_pending: 0 })
     .where('id', '=', id)
-    .where('trust_pending', '=', 1)
-    .returning('id')
-    .executeTakeFirst();
+    .returningAll()
+    .executeTakeFirstOrThrow();
 
-  return taken !== undefined;
+  return toImpRecord(row);
 }
 
 export async function updateImpMove(
