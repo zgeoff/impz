@@ -665,8 +665,9 @@ test('#sleep sleeps an imp that holds a lease and ends the lease', async () => {
 
   // oxlint-disable-next-line unicorn/prefer-structured-clone -- the wire turns dates into strings, as JSON does
   const sent: unknown = JSON.parse(JSON.stringify(imp));
+  const printed: unknown = JSON.parse(slept.stdout);
 
-  expect({ ...slept, stdout: JSON.parse(slept.stdout) as unknown }).toStrictEqual({
+  expect({ ...slept, stdout: printed }).toStrictEqual({
     stdout: sent,
     stderr: '',
     code: 0,
