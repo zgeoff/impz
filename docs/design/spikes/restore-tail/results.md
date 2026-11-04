@@ -157,10 +157,9 @@ Every figure is in milliseconds:
 The bench's clones took longer than the window's fast clones. Each one started about 1 s after impd
 destroyed the previous bench imp, and the spike never tested whether that destroy slows the clone.
 
-The bench timed each create from its API call to the imp's change event. The median, 863 ms, is a
-restored create, and it also counts the clone, the disk grow and the event's trip back to the bench.
-The p95, 1,838 ms, is one of the kernel boots.
-[bench-create-idle.json](./results/bench-create-idle.json) holds the bench report.
+The bench timed each create from its API call until that call returned. The median, 863 ms, is a
+restored create, and it also counts the clone and the disk grow. The p95, 1,838 ms, is one of the
+kernel boots. [bench-create-idle.json](./results/bench-create-idle.json) holds the bench report.
 
 ## Untested
 
