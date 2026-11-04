@@ -17,7 +17,7 @@ on:
       - e2e/test-bootstrap.*
       - packages/e2e-harness/src/bootstrap/**
       - packages/e2e-harness/src/read-pool-properties.ts
-      - packages/test-utils/src/wait-for.ts
+      - packages/shared/src/test-utils/wait-for.ts
       - .bun-version
       - scripts/ci/check-kvm.sh
       - scripts/ci/set-up-runner.ts
@@ -54,7 +54,7 @@ jobs:
             e2e/test-bootstrap.*
             packages/e2e-harness/src/bootstrap/**
             packages/e2e-harness/src/read-pool-properties.ts
-            packages/test-utils/src/wait-for.ts
+            packages/shared/src/test-utils/wait-for.ts
             .bun-version
             scripts/ci/check-kvm.sh
             scripts/ci/set-up-runner.ts
