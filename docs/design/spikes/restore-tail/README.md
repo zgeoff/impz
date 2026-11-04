@@ -34,7 +34,8 @@ one after the host or impd starts, or one that runs beside other restores?
   resource that stalls.
 
 The spike recommends that impd keep its restore path and log the host's pressure-stall figures and
-CPU steal time with each restore, so that the next slow restore shows the resource.
+CPU steal time with each restore, so that the next slow restore shows the resource. That change is
+filed as GEO-2260.
 
 ## Run it
 
