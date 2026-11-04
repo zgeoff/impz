@@ -39,20 +39,20 @@ Both sides run the same tree, so every change is the runner's own noise. At conc
 p50 moves by up to 14% and a p95 by up to 18%, and the second side runs slower in most rows. No step
 fails at any level. A change at 1 to 16 counts only past ±14% on the p50.
 
-| scenario | conc | baseline p50 | candidate p50 | baseline p95 | candidate p95  | baseline p99 | candidate p99  | baseline failed | candidate failed |
-| -------- | ---- | ------------ | ------------- | ------------ | -------------- | ------------ | -------------- | --------------- | ---------------- |
-| create   | 1    | 233ms        | 266ms (+14%)  | 254ms        | 286ms (+13%)   | 273ms        | 297ms (+9%)    | 0               | 0                |
-| create   | 4    | 571ms        | 640ms (+12%)  | 596ms        | 703ms (+18%)   | 604ms        | 706ms (+17%)   | 0               | 0                |
-| create   | 16   | 1583ms       | 1691ms (+7%)  | 2383ms       | 2784ms (+17%)  | 2496ms       | 2810ms (+13%)  | 0               | 0                |
-| create   | 64   | 5945ms       | 6656ms (+12%) | 10529ms      | 11791ms (+12%) | 10719ms      | 12519ms (+17%) | 0               | 0                |
-| wake     | 1    | 77ms         | 76ms (-1%)    | 82ms         | 83ms (+1%)     | 86ms         | 91ms (+6%)     | 0               | 0                |
-| wake     | 4    | 161ms        | 161ms (0%)    | 189ms        | 172ms (-9%)    | 194ms        | 172ms (-11%)   | 0               | 0                |
-| wake     | 16   | 351ms        | 361ms (+3%)   | 752ms        | 746ms (-1%)    | 762ms        | 757ms (-1%)    | 0               | 0                |
-| wake     | 64   | 2386ms       | 2003ms (-16%) | 6601ms       | 6105ms (-8%)   | 7129ms       | 6982ms (-2%)   | 0               | 0                |
-| restore  | 1    | 246ms        | 273ms (+11%)  | 270ms        | 296ms (+10%)   | 280ms        | 303ms (+8%)    | 0               | 0                |
-| restore  | 4    | 548ms        | 613ms (+12%)  | 585ms        | 654ms (+12%)   | 590ms        | 672ms (+14%)   | 0               | 0                |
-| restore  | 16   | 1403ms       | 1503ms (+7%)  | 2279ms       | 2641ms (+16%)  | 2337ms       | 2672ms (+14%)  | 0               | 0                |
-| restore  | 64   | 5542ms       | 6185ms (+12%) | 9919ms       | 11523ms (+16%) | 10253ms      | 11931ms (+16%) | 0               | 0                |
+| scenario | conc | baseline p50 | candidate p50  | baseline p95 | candidate p95   | baseline p99 | candidate p99   | baseline failed | candidate failed |
+| -------- | ---- | ------------ | -------------- | ------------ | --------------- | ------------ | --------------- | --------------- | ---------------- |
+| create   | 1    | 233 ms       | 266 ms (+14%)  | 254 ms       | 286 ms (+13%)   | 273 ms       | 297 ms (+9%)    | 0               | 0                |
+| create   | 4    | 571 ms       | 640 ms (+12%)  | 596 ms       | 703 ms (+18%)   | 604 ms       | 706 ms (+17%)   | 0               | 0                |
+| create   | 16   | 1583 ms      | 1691 ms (+7%)  | 2383 ms      | 2784 ms (+17%)  | 2496 ms      | 2810 ms (+13%)  | 0               | 0                |
+| create   | 64   | 5945 ms      | 6656 ms (+12%) | 10529 ms     | 11791 ms (+12%) | 10719 ms     | 12519 ms (+17%) | 0               | 0                |
+| wake     | 1    | 77 ms        | 76 ms (-1%)    | 82 ms        | 83 ms (+1%)     | 86 ms        | 91 ms (+6%)     | 0               | 0                |
+| wake     | 4    | 161 ms       | 161 ms (0%)    | 189 ms       | 172 ms (-9%)    | 194 ms       | 172 ms (-11%)   | 0               | 0                |
+| wake     | 16   | 351 ms       | 361 ms (+3%)   | 752 ms       | 746 ms (-1%)    | 762 ms       | 757 ms (-1%)    | 0               | 0                |
+| wake     | 64   | 2386 ms      | 2003 ms (-16%) | 6601 ms      | 6105 ms (-8%)   | 7129 ms      | 6982 ms (-2%)   | 0               | 0                |
+| restore  | 1    | 246 ms       | 273 ms (+11%)  | 270 ms       | 296 ms (+10%)   | 280 ms       | 303 ms (+8%)    | 0               | 0                |
+| restore  | 4    | 548 ms       | 613 ms (+12%)  | 585 ms       | 654 ms (+12%)   | 590 ms       | 672 ms (+14%)   | 0               | 0                |
+| restore  | 16   | 1403 ms      | 1503 ms (+7%)  | 2279 ms      | 2641 ms (+16%)  | 2337 ms      | 2672 ms (+14%)  | 0               | 0                |
+| restore  | 64   | 5542 ms      | 6185 ms (+12%) | 9919 ms      | 11523 ms (+16%) | 10253 ms     | 11931 ms (+16%) | 0               | 0                |
 
 ## The kept guest connection
 
@@ -61,20 +61,20 @@ impd keeps one idle connection to each guest's agent for the read-only calls pin
 moves past the noise: the wake at 16 falls by 15%, and the wake at 64 rises by 21%. The create p50
 rises by 9 to 12% at 1 and 4. The change is dropped.
 
-| scenario | conc | baseline p50 | candidate p50 | baseline p95 | candidate p95 | baseline p99 | candidate p99 | baseline failed | candidate failed |
-| -------- | ---- | ------------ | ------------- | ------------ | ------------- | ------------ | ------------- | --------------- | ---------------- |
-| create   | 1    | 291ms        | 326ms (+12%)  | 308ms        | 380ms (+23%)  | 324ms        | 437ms (+35%)  | 0               | 0                |
-| create   | 4    | 723ms        | 788ms (+9%)   | 773ms        | 880ms (+14%)  | 783ms        | 892ms (+14%)  | 0               | 0                |
-| create   | 16   | 1938ms       | 1975ms (+2%)  | 3071ms       | 3256ms (+6%)  | 3095ms       | 3291ms (+6%)  | 0               | 0                |
-| create   | 64   | 7578ms       | 8302ms (+10%) | 13264ms      | 14345ms (+8%) | 13449ms      | 14615ms (+9%) | 0               | 0                |
-| wake     | 1    | 98ms         | 97ms (-1%)    | 165ms        | 151ms (-8%)   | 170ms        | 176ms (+4%)   | 0               | 0                |
-| wake     | 4    | 206ms        | 215ms (+4%)   | 283ms        | 246ms (-13%)  | 291ms        | 248ms (-15%)  | 0               | 0                |
-| wake     | 16   | 599ms        | 507ms (-15%)  | 955ms        | 963ms (+1%)   | 968ms        | 971ms (0%)    | 0               | 0                |
-| wake     | 64   | 2253ms       | 2715ms (+21%) | 7950ms       | 8487ms (+7%)  | 8911ms       | 9361ms (+5%)  | 0               | 0                |
-| restore  | 1    | 331ms        | 330ms (0%)    | 404ms        | 373ms (-8%)   | 419ms        | 397ms (-5%)   | 0               | 0                |
-| restore  | 4    | 734ms        | 732ms (0%)    | 827ms        | 870ms (+5%)   | 859ms        | 883ms (+3%)   | 0               | 0                |
-| restore  | 16   | 1917ms       | 1929ms (+1%)  | 3289ms       | 3244ms (-1%)  | 3298ms       | 3259ms (-1%)  | 0               | 0                |
-| restore  | 64   | 7709ms       | 7594ms (-1%)  | 13728ms      | 13203ms (-4%) | 13994ms      | 13736ms (-2%) | 0               | 64               |
+| scenario | conc | baseline p50 | candidate p50  | baseline p95 | candidate p95  | baseline p99 | candidate p99  | baseline failed | candidate failed |
+| -------- | ---- | ------------ | -------------- | ------------ | -------------- | ------------ | -------------- | --------------- | ---------------- |
+| create   | 1    | 291 ms       | 326 ms (+12%)  | 308 ms       | 380 ms (+23%)  | 324 ms       | 437 ms (+35%)  | 0               | 0                |
+| create   | 4    | 723 ms       | 788 ms (+9%)   | 773 ms       | 880 ms (+14%)  | 783 ms       | 892 ms (+14%)  | 0               | 0                |
+| create   | 16   | 1938 ms      | 1975 ms (+2%)  | 3071 ms      | 3256 ms (+6%)  | 3095 ms      | 3291 ms (+6%)  | 0               | 0                |
+| create   | 64   | 7578 ms      | 8302 ms (+10%) | 13264 ms     | 14345 ms (+8%) | 13449 ms     | 14615 ms (+9%) | 0               | 0                |
+| wake     | 1    | 98 ms        | 97 ms (-1%)    | 165 ms       | 151 ms (-8%)   | 170 ms       | 176 ms (+4%)   | 0               | 0                |
+| wake     | 4    | 206 ms       | 215 ms (+4%)   | 283 ms       | 246 ms (-13%)  | 291 ms       | 248 ms (-15%)  | 0               | 0                |
+| wake     | 16   | 599 ms       | 507 ms (-15%)  | 955 ms       | 963 ms (+1%)   | 968 ms       | 971 ms (0%)    | 0               | 0                |
+| wake     | 64   | 2253 ms      | 2715 ms (+21%) | 7950 ms      | 8487 ms (+7%)  | 8911 ms      | 9361 ms (+5%)  | 0               | 0                |
+| restore  | 1    | 331 ms       | 330 ms (0%)    | 404 ms       | 373 ms (-8%)   | 419 ms       | 397 ms (-5%)   | 0               | 0                |
+| restore  | 4    | 734 ms       | 732 ms (0%)    | 827 ms       | 870 ms (+5%)   | 859 ms       | 883 ms (+3%)   | 0               | 0                |
+| restore  | 16   | 1917 ms      | 1929 ms (+1%)  | 3289 ms      | 3244 ms (-1%)  | 3298 ms      | 3259 ms (-1%)  | 0               | 0                |
+| restore  | 64   | 7709 ms      | 7594 ms (-1%)  | 13728 ms     | 13203 ms (-4%) | 13994 ms     | 13736 ms (-2%) | 0               | 64               |
 
 ## The shared imp list
 
@@ -82,20 +82,20 @@ The idle, memory, governor and usage tickers read the imp list once per 250 ms w
 write starts a new read. No p50 at 1 to 16 moves past the noise, and the create p50 rises by 9 to
 11%. The change is dropped.
 
-| scenario | conc | baseline p50 | candidate p50  | baseline p95 | candidate p95    | baseline p99 | candidate p99    | baseline failed | candidate failed |
-| -------- | ---- | ------------ | -------------- | ------------ | ---------------- | ------------ | ---------------- | --------------- | ---------------- |
-| create   | 1    | 287ms        | 319ms (+11%)   | 318ms        | 392ms (+23%)     | 324ms        | 407ms (+26%)     | 0               | 0                |
-| create   | 4    | 736ms        | 799ms (+9%)    | 789ms        | 864ms (+10%)     | 806ms        | 882ms (+9%)      | 0               | 0                |
-| create   | 16   | 1943ms       | 2145ms (+10%)  | 3107ms       | 3266ms (+5%)     | 3133ms       | 3332ms (+6%)     | 1               | 0                |
-| create   | 64   | 4507ms       | 8028ms (+78%)  | 13295ms      | 13529ms (+2%)    | 13717ms      | 13952ms (+2%)    | 36              | 0                |
-| wake     | 1    | 96ms         | 93ms (-3%)     | 142ms        | 158ms (+11%)     | 179ms        | 160ms (-11%)     | 0               | 0                |
-| wake     | 4    | 201ms        | 203ms (+1%)    | 236ms        | 244ms (+3%)      | 241ms        | 253ms (+5%)      | 0               | 0                |
-| wake     | 16   | 497ms        | 505ms (+2%)    | 888ms        | 867ms (-2%)      | 895ms        | 872ms (-3%)      | 0               | 0                |
-| wake     | 64   | 2775ms       | 2671ms (-4%)   | 8104ms       | 7799ms (-4%)     | 8860ms       | 8532ms (-4%)     | 1               | 0                |
-| restore  | 1    | 324ms        | 304ms (-6%)    | 380ms        | 382ms (+1%)      | 420ms        | 384ms (-9%)      | 0               | 0                |
-| restore  | 4    | 743ms        | 720ms (-3%)    | 822ms        | 767ms (-7%)      | 834ms        | 779ms (-7%)      | 0               | 0                |
-| restore  | 16   | 1851ms       | 1755ms (-5%)   | 3176ms       | 3115ms (-2%)     | 3210ms       | 3168ms (-1%)     | 0               | 0                |
-| restore  | 64   | 1017ms       | 7479ms (+635%) | 1127ms       | 13091ms (+1062%) | 1127ms       | 13452ms (+1094%) | 62              | 0                |
+| scenario | conc | baseline p50 | candidate p50   | baseline p95 | candidate p95     | baseline p99 | candidate p99     | baseline failed | candidate failed |
+| -------- | ---- | ------------ | --------------- | ------------ | ----------------- | ------------ | ----------------- | --------------- | ---------------- |
+| create   | 1    | 287 ms       | 319 ms (+11%)   | 318 ms       | 392 ms (+23%)     | 324 ms       | 407 ms (+26%)     | 0               | 0                |
+| create   | 4    | 736 ms       | 799 ms (+9%)    | 789 ms       | 864 ms (+10%)     | 806 ms       | 882 ms (+9%)      | 0               | 0                |
+| create   | 16   | 1943 ms      | 2145 ms (+10%)  | 3107 ms      | 3266 ms (+5%)     | 3133 ms      | 3332 ms (+6%)     | 1               | 0                |
+| create   | 64   | 4507 ms      | 8028 ms (+78%)  | 13295 ms     | 13529 ms (+2%)    | 13717 ms     | 13952 ms (+2%)    | 36              | 0                |
+| wake     | 1    | 96 ms        | 93 ms (-3%)     | 142 ms       | 158 ms (+11%)     | 179 ms       | 160 ms (-11%)     | 0               | 0                |
+| wake     | 4    | 201 ms       | 203 ms (+1%)    | 236 ms       | 244 ms (+3%)      | 241 ms       | 253 ms (+5%)      | 0               | 0                |
+| wake     | 16   | 497 ms       | 505 ms (+2%)    | 888 ms       | 867 ms (-2%)      | 895 ms       | 872 ms (-3%)      | 0               | 0                |
+| wake     | 64   | 2775 ms      | 2671 ms (-4%)   | 8104 ms      | 7799 ms (-4%)     | 8860 ms      | 8532 ms (-4%)     | 1               | 0                |
+| restore  | 1    | 324 ms       | 304 ms (-6%)    | 380 ms       | 382 ms (+1%)      | 420 ms       | 384 ms (-9%)      | 0               | 0                |
+| restore  | 4    | 743 ms       | 720 ms (-3%)    | 822 ms       | 767 ms (-7%)      | 834 ms       | 779 ms (-7%)      | 0               | 0                |
+| restore  | 16   | 1851 ms      | 1755 ms (-5%)   | 3176 ms      | 3115 ms (-2%)     | 3210 ms      | 3168 ms (-1%)     | 0               | 0                |
+| restore  | 64   | 1017 ms      | 7479 ms (+635%) | 1127 ms      | 13091 ms (+1062%) | 1127 ms      | 13452 ms (+1094%) | 62              | 0                |
 
 ## The background work budget
 
@@ -113,20 +113,20 @@ change is kept.
 The cap moves time from the middle of a burst to its tail: at 64 the wake p95 rises by 124%, because
 the last wakes of the burst wait for a slot.
 
-| scenario | conc | baseline p50 | candidate p50 | baseline p95 | candidate p95  | baseline p99 | candidate p99  | baseline failed | candidate failed |
-| -------- | ---- | ------------ | ------------- | ------------ | -------------- | ------------ | -------------- | --------------- | ---------------- |
-| create   | 1    | 198ms        | 221ms (+12%)  | 266ms        | 240ms (-10%)   | 268ms        | 242ms (-10%)   | 0               | 0                |
-| create   | 4    | 456ms        | 525ms (+15%)  | 479ms        | 603ms (+26%)   | 513ms        | 609ms (+19%)   | 0               | 0                |
-| create   | 16   | 1762ms       | 1294ms (-27%) | 1978ms       | 2209ms (+12%)  | 1984ms       | 2211ms (+11%)  | 0               | 0                |
-| create   | 64   | 5252ms       | 5302ms (+1%)  | 8662ms       | 9105ms (+5%)   | 8680ms       | 9434ms (+9%)   | 0               | 0                |
-| wake     | 1    | 72ms         | 72ms (0%)     | 78ms         | 78ms (0%)      | 82ms         | 82ms (0%)      | 0               | 0                |
-| wake     | 4    | 143ms        | 143ms (0%)    | 162ms        | 173ms (+7%)    | 169ms        | 177ms (+5%)    | 0               | 0                |
-| wake     | 16   | 511ms        | 327ms (-36%)  | 564ms        | 611ms (+8%)    | 567ms        | 614ms (+8%)    | 0               | 0                |
-| wake     | 64   | 2956ms       | 1988ms (-33%) | 3058ms       | 6839ms (+124%) | 3065ms       | 7513ms (+145%) | 34              | 0                |
-| restore  | 1    | 212ms        | 229ms (+8%)   | 240ms        | 261ms (+9%)    | 246ms        | 281ms (+14%)   | 0               | 0                |
-| restore  | 4    | 464ms        | 496ms (+7%)   | 494ms        | 519ms (+5%)    | 498ms        | 565ms (+13%)   | 0               | 0                |
-| restore  | 16   | 1915ms       | 1228ms (-36%) | 2047ms       | 2053ms (0%)    | 2052ms       | 2110ms (+3%)   | 0               | 0                |
-| restore  | 64   | 9577ms       | 5122ms (-47%) | 9948ms       | 8850ms (-11%)  | 9964ms       | 9058ms (-9%)   | 0               | 0                |
+| scenario | conc | baseline p50 | candidate p50  | baseline p95 | candidate p95   | baseline p99 | candidate p99   | baseline failed | candidate failed |
+| -------- | ---- | ------------ | -------------- | ------------ | --------------- | ------------ | --------------- | --------------- | ---------------- |
+| create   | 1    | 198 ms       | 221 ms (+12%)  | 266 ms       | 240 ms (-10%)   | 268 ms       | 242 ms (-10%)   | 0               | 0                |
+| create   | 4    | 456 ms       | 525 ms (+15%)  | 479 ms       | 603 ms (+26%)   | 513 ms       | 609 ms (+19%)   | 0               | 0                |
+| create   | 16   | 1762 ms      | 1294 ms (-27%) | 1978 ms      | 2209 ms (+12%)  | 1984 ms      | 2211 ms (+11%)  | 0               | 0                |
+| create   | 64   | 5252 ms      | 5302 ms (+1%)  | 8662 ms      | 9105 ms (+5%)   | 8680 ms      | 9434 ms (+9%)   | 0               | 0                |
+| wake     | 1    | 72 ms        | 72 ms (0%)     | 78 ms        | 78 ms (0%)      | 82 ms        | 82 ms (0%)      | 0               | 0                |
+| wake     | 4    | 143 ms       | 143 ms (0%)    | 162 ms       | 173 ms (+7%)    | 169 ms       | 177 ms (+5%)    | 0               | 0                |
+| wake     | 16   | 511 ms       | 327 ms (-36%)  | 564 ms       | 611 ms (+8%)    | 567 ms       | 614 ms (+8%)    | 0               | 0                |
+| wake     | 64   | 2956 ms      | 1988 ms (-33%) | 3058 ms      | 6839 ms (+124%) | 3065 ms      | 7513 ms (+145%) | 34              | 0                |
+| restore  | 1    | 212 ms       | 229 ms (+8%)   | 240 ms       | 261 ms (+9%)    | 246 ms       | 281 ms (+14%)   | 0               | 0                |
+| restore  | 4    | 464 ms       | 496 ms (+7%)   | 494 ms       | 519 ms (+5%)    | 498 ms       | 565 ms (+13%)   | 0               | 0                |
+| restore  | 16   | 1915 ms      | 1228 ms (-36%) | 2047 ms      | 2053 ms (0%)    | 2052 ms      | 2110 ms (+3%)   | 0               | 0                |
+| restore  | 64   | 9577 ms      | 5122 ms (-47%) | 9948 ms      | 8850 ms (-11%)  | 9964 ms      | 9058 ms (-9%)   | 0               | 0                |
 
 ## Touched pages on a 2 MiB sleep
 
