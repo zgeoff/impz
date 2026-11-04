@@ -1,5 +1,12 @@
 # Changelog
 
+## [6.4.2](https://github.com/zgeoff/impz/compare/v6.4.1...v6.4.2) (2026-11-04)
+
+
+### Bug Fixes
+
+* **daemon:** keep the warm move trust flag until the ca push succeeds ([#867](https://github.com/zgeoff/impz/issues/867)) ([cb0c77c](https://github.com/zgeoff/impz/commit/cb0c77c551cb8c332ff116aa474fab95171af0a3))
+
 ## [6.4.1](https://github.com/zgeoff/impz/compare/v6.4.0...v6.4.1) (2026-11-04)
 
 ### Bug Fixes
