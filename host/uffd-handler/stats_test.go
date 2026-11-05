@@ -32,3 +32,20 @@ func TestHandlerStatsWriteTheLayoutImpdReads(t *testing.T) {
 	assert.NilError(t, err)
 	assert.DeepEqual(t, written, golden)
 }
+
+func TestHandlerStatsCountNoFaultForAPageAnotherFaultCopied(t *testing.T) {
+	dir := t.TempDir()
+	stats, err := openHandlerStats(writeStatsFile(t, dir))
+	assert.NilError(t, err)
+	t.Cleanup(stats.close)
+
+	stats.record(copiedAlready, 3*time.Millisecond)
+
+	written, err := os.ReadFile(filepath.Join(dir, "uffd.stats"))
+	assert.NilError(t, err)
+	assert.DeepEqual(t, written, []byte{
+		0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0,
+		0xc0, 0xc6, 0x2d, 0, 0, 0, 0, 0,
+	})
+}

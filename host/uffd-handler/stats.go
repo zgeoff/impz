@@ -18,6 +18,8 @@ type copyResult int
 
 const (
 	copyRetry copyResult = iota
+	// another fault copied the page first, so this one copied nothing
+	copiedAlready
 	copiedHole
 	copiedData
 )
@@ -49,7 +51,7 @@ func (s *handlerStats) close() {
 }
 
 // record counts one try at a fault: its time always, and the fault and its
-// block only once a copy served it.
+// block only when its own copy served it.
 func (s *handlerStats) record(result copyResult, elapsed time.Duration) {
 	s.add(statsServeNs, uint64(elapsed.Nanoseconds()))
 	switch result {

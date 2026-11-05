@@ -211,8 +211,10 @@ func (h *handler) serveFault(address uint64) (copyResult, error) {
 	}
 	_, _, errno := unix.Syscall(unix.SYS_IOCTL, uintptr(h.uffd), uffdioCopy, uintptr(unsafe.Pointer(&arg)))
 	switch {
-	case errno == 0, errno == unix.EEXIST:
+	case errno == 0:
 		return served, nil
+	case errno == unix.EEXIST:
+		return copiedAlready, nil
 	case errno == unix.EAGAIN, arg.copy == -int64(unix.EAGAIN):
 		return copyRetry, nil
 	default:

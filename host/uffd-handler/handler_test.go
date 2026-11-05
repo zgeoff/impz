@@ -113,6 +113,25 @@ func TestHandlerWakesAFaultThatReachesItAfterItsRangeIsRemoved(t *testing.T) {
 	assert.NilError(t, stop())
 }
 
+func TestServeFaultCopiesNothingIntoAPageAnotherFaultCopied(t *testing.T) {
+	mem, uffd := registerTestMemory(t)
+	dir := t.TempDir()
+	source, err := openMemSource(writeMemFile(t, dir))
+	assert.NilError(t, err)
+	t.Cleanup(source.close)
+	regions := []guestRegion{{BaseHostVirtAddr: uint64(uintptr(unsafe.Pointer(&mem[0]))), Size: testPages * testPage, PageSize: testPage}}
+	h, err := newHandler(uffd, regions, source, nil)
+	assert.NilError(t, err)
+	first, err := h.serveFault(regions[0].BaseHostVirtAddr)
+	assert.NilError(t, err)
+	assert.Equal(t, first, copiedData)
+
+	second, err := h.serveFault(regions[0].BaseHostVirtAddr)
+
+	assert.NilError(t, err)
+	assert.Equal(t, second, copiedAlready)
+}
+
 func TestNewHandlerRefusesRegionsOfMixedPageSizes(t *testing.T) {
 	source, err := openMemSource(writeMemFile(t, t.TempDir()))
 	assert.NilError(t, err)
