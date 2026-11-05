@@ -2,11 +2,13 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { formatRunPrefix, readRunOwner } from '@impz/daemon/test-utils';
 import { $ } from 'bun';
 import { createStubDevScript } from '../test-utils/create-stub-dev-script';
 
 function setupTest() {
-  const directory = mkdtempSync(join(tmpdir(), 'imp-touched-pages-bench-'));
+  const prefix = formatRunPrefix(readRunOwner());
+  const directory = mkdtempSync(join(tmpdir(), `${prefix}imp-touched-pages-bench-`));
 
   onTestFinished(() => {
     rmSync(directory, { recursive: true, force: true });
