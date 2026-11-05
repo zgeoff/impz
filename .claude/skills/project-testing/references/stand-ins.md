@@ -42,14 +42,18 @@ Choose the kind by the boundary that the code under test reaches:
   `@impz/agent-protocol`, as the Go agent does. Write plain JSON only for an older agent's answer
   that leaves out a field the schema always writes.
 - **Command fakes** answer a CLI that impd spawns, such as `zfs`, `nft`, `tailscale`, `restic` or
-  `docker`. Each one keeps a model of the state behind the CLI and records the argv it got. Assert
-  on the resulting state, and on the argv only when the argv is the contract.
+  `docker`. Each is a `build-stub-*` or `create-stub-*` file named for its CLI, such as
+  [`build-stub-zfs.ts`](../../../../packages/daemon/src/test-utils/vm/build-stub-zfs.ts) or
+  [`create-stub-docker-cli.ts`](../../../../packages/daemon/src/test-utils/imps/create-stub-docker-cli.ts).
+  Each one keeps a model of the state behind the CLI and records the argv it got. Assert on the
+  resulting state, and on the argv only when the argv is the contract.
 - **Real servers on loopback or a unix socket** answer a call that MSW can't see: a call over a unix
   socket, from a `node:http` client, over a WebSocket, with real TLS checks, or from a child
-  process. The Docker engine, the Firecracker API, the DNS upstream, SSH, ACME and the broker's
-  upstreams each have a stand-in of this kind. A Docker engine stand-in answers a call it doesn't
-  model with a 500, and adds the call to a list of unexpected calls. Assert that list empty in each
-  test that uses one.
+  process. Each is a `start-stub-*` file in a `src/test-utils/` folder; search there for the
+  service's name before you write one. When a server returns the calls it doesn't model, such as the
+  `unexpected` list of
+  [`startStubAcmeServer`](../../../../packages/daemon/src/test-utils/network/start-stub-acme-server.ts),
+  assert that list empty in each test that uses the server.
 - **MSW handler sets** replace a remote HTTP API that impd calls at its real origin, such as
   Tailscale, Cloudflare or an OAuth token endpoint. Build the set in the test and register it there;
   the preload drops it after the test.
@@ -59,9 +63,12 @@ Choose the kind by the boundary that the code under test reaches:
   [`buildStubClock`](../../../../packages/daemon/src/test-utils/platform/build-stub-clock.ts) for
   its clock, and `buildStubRepeat` or `buildStubTickerTimer`, beside it, for its timer. A test that
   boots impd uses the harness's clock, as [Booting impd](#booting-impd) shows.
-- **Version-skew proxies** sit in front of the real impd app and drop or add fields, procedures or
-  events. The client, CLI and MCP tests use them to check behaviour against an older or a newer
-  impd.
+- **Version-skew proxies** wrap a real impd's answers and drop or add fields or events, to check
+  behaviour against an older or a newer impd. Each is a `make-stub-*` file named for the version it
+  plays, such as
+  [`makeStubImpdWithNewReason`](../../../../packages/client/src/test-utils/make-stub-impd-with-new-reason.ts)
+  or
+  [`makeStubOlderMoveTarget`](../../../../packages/daemon/src/test-utils/imp-ops/make-stub-older-move-target.ts).
 - **Stub binaries on a temporary `PATH`** replace the commands that the shell scripts in `scripts/`
   and `deploy/` run. Each stub logs its calls to one file and answers from a script that the test
   gives it.
@@ -123,11 +130,12 @@ Three harnesses build on `startTestImpd`:
   lends one impd to each case of a property-based test, and removes every imp the case left before
   the next case. When a case shuts impd down, call the `retire` the case receives. The pool then
   drops that impd, and the next case boots a fresh one.
-- **The move hosts**, `setupMoveHosts` in
-  [`create-move-hosts.ts`](../../../../packages/daemon/src/test-utils/imp-ops/create-move-hosts.ts),
-  start a source impd and a target impd for a move. Pass a fetch hook to see every request the
-  source sends to the target. The fake VMM numbers VMs from 1 on each host, so match the two hosts'
-  VMs by imp, never by the VM's number.
+- **The move hosts**,
+  [`createMoveHosts`](../../../../packages/daemon/src/test-utils/imp-ops/create-move-hosts.ts),
+  start a source impd and a target impd for a move. `setupMoveHosts`, in the same file, calls it
+  with a stack it registers itself. Pass a fetch hook to see every request the source sends to the
+  target. The fake VMM numbers VMs from 1 on each host, so match the two hosts' VMs by imp, never by
+  the VM's number.
 - **The CLI's impd host**,
   [`startImpdHost`](../../../../packages/cli/src/test-utils/start-impd-host.ts), runs one real impd
   per saved host, each with its own data dir, database, port and root token, for CLI tests that

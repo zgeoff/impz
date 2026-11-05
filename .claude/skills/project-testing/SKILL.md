@@ -31,12 +31,12 @@ The traps:
 - [The root preload](#the-root-preload): `updateEnv`; reset a leak in a preload `afterEach`.
 - [Boundaries](#boundaries): a real stand-in server where MSW can't see; `startTestImpd`.
 - [Host resources](#host-resources): ports, `/var/tmp` and git.
-- [End to end](#end-to-end): one suite at a time per dev instance.
+- [End to end](#end-to-end): journeys and suites, and one running suite per dev instance.
 
 ## References
 
-- [Preloads and utils](./references/preloads-and-utils.md): the root and dashboard preloads, the two
-  kinds of util for cleanup order, and what a daemon `setupTest()` returns.
+- [Preloads and utils](./references/preloads-and-utils.md): the root and dashboard preloads, how
+  each kind of util releases its resource, and what a daemon `setupTest()` returns.
 - [Stand-ins](./references/stand-ins.md): the kinds of stand-in and when to use each, booting impd
   and its harnesses, Bun's timer and transport facts, and the broker's test upstreams.
 - [End to end](./references/e2e.md): writing a journey, the baseline reset, sets and groups, and
@@ -49,7 +49,8 @@ The traps:
 - Run the unit tests with plain `bun test`, with no `--parallel`. The testing skill's
   [run mode section](../testing/references/slow-tests.md#the-run-mode-and-workers) asks for the
   `rig unit` runner. Here the `checks-unit` job of [`ci.yml`](../../../.github/workflows/ci.yml)
-  passes `--parallel=2 --no-isolate` itself: four workers outgrow the job's memory cap.
+  passes `--parallel=2 --no-isolate` itself, sized to its runner: four workers outgrow the job's
+  memory cap. The `test` script stays plain, so a local run on a small host starts no workers.
 
 ## Commands and what they need
 
@@ -59,29 +60,29 @@ suffix, such as `.host.test.ts`, and its `test:<lane>` script in the root
 [`.oxlintrc.json`](../../../.oxlintrc.json) holds each lane's time limit.
 
 Run a command only where its needs are met. When this host lacks them, push your branch, and read
-the result of the CI job that runs the command. CI runs every row except "One end-to-end journey",
-in [`ci.yml`](../../../.github/workflows/ci.yml) and
-[`nix.yml`](../../../.github/workflows/nix.yml).
+the result of the row's CI job: `eval` and `vm` are in
+[`nix.yml`](../../../.github/workflows/nix.yml), the others in
+[`ci.yml`](../../../.github/workflows/ci.yml).
 
-| Tests                   | Command                                                                                | Needs                                                        |
-| ----------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| Unit                    | `bun test <path>`; `bun test` for all                                                  | bash, git, jq, tar, truncate, mkfs.ext4                      |
-| Dashboard components    | `bun run test:dashboard`                                                               | bash, tar                                                    |
-| Agent Go                | `scripts/test-go.sh`                                                                   | Go from `agent/go.mod`                                       |
-| ksm-exec                | `cd host/ksm-exec && go test -race ./...`                                              | Linux 6.7 or later with KSM; the exec tests skip elsewhere   |
-| Agent Go, root-only     | `cd agent && sudo -E env "PATH=$PATH" go test -tags root -race ./...`                  | root, a writable cgroup2                                     |
-| uffd-handler, root-only | `cd host/uffd-handler && sudo -E env "PATH=$PATH" go test -tags root -race ./...`      | root                                                         |
-| Host networking lane    | `sudo env "PATH=$PATH" IMP_HOST_TESTS=required bun run test:host`                      | root, `nft`, `iptables`, `ip6tables`, `ip`, `ping`, `sysctl` |
-| ACME issuer lane        | `bun run test:pebble`                                                                  | Docker                                                       |
-| Headscale join lane     | `bun run test:headscale`                                                               | Docker, and the network for the client's packages            |
-| Docker build lane       | `bun run test:docker`                                                                  | Docker with buildx                                           |
-| Small filesystem lane   | `IMP_TEST_SMALL_FS=<dir> bun run test:small-fs`                                        | a 4 GiB loop-mounted XFS at `<dir>`; a tiny tmpfs fails      |
-| VM end to end lane      | `scripts/test-e2e.sh [--only <suites> \| --group <1-4>] [--clean \| --reuse] [--keep]` | KVM, Docker; `--help` lists the suites and their needs       |
-| One end-to-end journey  | `bun test --config=packages/daemon/e2e/bunfig.toml ./packages/daemon/e2e/<file>`       | a dev instance from `scripts/dev/dev.sh up`                  |
-| NixOS module evaluation | `nix build -L --no-link .#checks.x86_64-linux.eval`                                    | Nix with flakes                                              |
-| NixOS VMs               | `nix build -L --no-link .#checks.x86_64-linux.vm`                                      | Nix with the `kvm` and `nixos-test` system features          |
-| ZFS on a real pool      | `sudo env "PATH=$PATH" scripts/test-zfs.sh`                                            | root, the zfs module, `zpool`                                |
-| ZFS lane, host with VMs | `scripts/zfs-host-test.sh`, with `IMP_ZFS_SHARD=<n>/<count>` for one shard             | sudo, Docker, KVM, the zfs module                            |
+| Tests                   | Command                                                                                | Needs                                                        | CI job         |
+| ----------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------ | -------------- |
+| Unit                    | `bun test <path>`; `bun test` for all                                                  | bash, git, jq, tar, truncate, mkfs.ext4                      | `checks-unit`  |
+| Dashboard components    | `bun run test:dashboard`                                                               | bash, tar                                                    | `checks-lanes` |
+| Agent Go                | `scripts/test-go.sh`                                                                   | Go from `agent/go.mod`                                       | `go`           |
+| ksm-exec                | `cd host/ksm-exec && go test -race ./...`                                              | Linux 6.7 or later with KSM; the exec tests skip elsewhere   | `go`           |
+| Agent Go, root-only     | `cd agent && sudo -E env "PATH=$PATH" go test -tags root -race ./...`                  | root, a writable cgroup2                                     | `go`           |
+| uffd-handler, root-only | `cd host/uffd-handler && sudo -E env "PATH=$PATH" go test -tags root -race ./...`      | root                                                         | `go`           |
+| Host networking lane    | `sudo env "PATH=$PATH" IMP_HOST_TESTS=required bun run test:host`                      | root, `nft`, `iptables`, `ip6tables`, `ip`, `ping`, `sysctl` | `e2e-group`    |
+| ACME issuer lane        | `bun run test:pebble`                                                                  | Docker                                                       | `checks-lanes` |
+| Headscale join lane     | `bun run test:headscale`                                                               | Docker, and the network for the client's packages            | `checks-lanes` |
+| Docker build lane       | `bun run test:docker`                                                                  | Docker with buildx                                           | `checks-lanes` |
+| Small filesystem lane   | `IMP_TEST_SMALL_FS=<dir> bun run test:small-fs`                                        | a 4 GiB loop-mounted XFS at `<dir>`; a tiny tmpfs fails      | `checks-lanes` |
+| VM end to end lane      | `scripts/test-e2e.sh [--only <suites> \| --group <1-4>] [--clean \| --reuse] [--keep]` | KVM, Docker; `--help` lists the suites and their needs       | `e2e-group`    |
+| One end-to-end journey  | `bun test --config=packages/daemon/e2e/bunfig.toml ./packages/daemon/e2e/<file>`       | a dev instance from `scripts/dev/dev.sh up`                  | none           |
+| NixOS module evaluation | `nix build -L --no-link .#checks.x86_64-linux.eval`                                    | Nix with flakes                                              | `eval`         |
+| NixOS VMs               | `nix build -L --no-link .#checks.x86_64-linux.vm`                                      | Nix with the `kvm` and `nixos-test` system features          | `vm`           |
+| ZFS on a real pool      | `sudo env "PATH=$PATH" scripts/test-zfs.sh`                                            | root, the zfs module, `zpool`                                | `zfs-shard`    |
+| ZFS lane, host with VMs | `scripts/zfs-host-test.sh`, with `IMP_ZFS_SHARD=<n>/<count>` for one shard             | sudo, Docker, KVM, the zfs module                            | `zfs-shard`    |
 
 ## Where a test lives
 
@@ -111,11 +112,8 @@ in [`ci.yml`](../../../.github/workflows/ci.yml) and
 - Keep a test in a VM journey file under the limit of the `e2e` key, and one in a ZFS journey file,
   `<kind>-<journey>.zfs.test.ts`, under the limit of the `zfs` key. `zgeoff/max-test-timeout` fails
   a timeout above it.
-- When you add or slow a ZFS-lane suite, update its `seconds` in
-  [`suites.ts`](../../../packages/e2e-harness/src/suites.ts), counting the build of any image only
-  it needs. CI splits the lane into shards, longest first, by that figure.
-- Expect a CI ZFS shard to also run the VM suites in `IMP_ZFS_E2E_SUITES` on the ZFS backend. Those
-  suites' journey files keep the `e2e` limit.
+- Before you add or slow a ZFS-lane suite, read [CI](./references/zfs-nixos-go-ci.md#ci) for its
+  shards.
 
 ## The root preload
 
@@ -127,8 +125,8 @@ in [`ci.yml`](../../../.github/workflows/ci.yml) and
   - `IMP_TEST_SMALL_FS`;
   - `IMP_TEST_ZFS_ROOT` and `IMP_TEST_ZFS_DIR`.
 - Expect every child process to inherit `NO_PROXY=*` from the root preload. It keeps Bun's `fetch`
-  from sending a loopback request through the shell's `HTTPS_PROXY`. When a test wants a child to
-  use a proxy, clear `NO_PROXY` in that child's environment, or pass curl `--noproxy ''`.
+  from sending a loopback request through the shell's `HTTPS_PROXY`. To send a child's requests
+  through a proxy, clear `NO_PROXY` in that child's environment, or pass curl `--noproxy ''`.
 - When state leaks from one test into the next, reset it in an `afterEach` that the root preload
   registers: add it to the one in
   [`register-run-hooks.ts`](../../../packages/shared/src/test-utils/register-run-hooks.ts).
@@ -145,8 +143,8 @@ in [`ci.yml`](../../../.github/workflows/ci.yml) and
 - Look for a stand-in in [Stand-ins](./references/stand-ins.md) before you write one.
 - Boot a real impd with
   [`startTestImpd`](../../../packages/daemon/src/test-utils/start-test-impd.ts), which runs
-  production's startup through `createImpd` on the stand-ins. It sets `defaultDiskBytes` to 0,
-  because its stand-in storage copies a full 32 GiB disk in minutes.
+  production's startup through `createImpd` on the stand-ins. Leave its `defaultDiskBytes` at 0: its
+  stand-in storage copies each disk in full, and a 32 GiB disk takes minutes.
 - Pass the stub clock directly to each component that keeps a clock of its own.
   [Booting impd](./references/stand-ins.md#booting-impd) shows how to find them.
 
@@ -157,16 +155,14 @@ in [`ci.yml`](../../../.github/workflows/ci.yml) and
   port until the test ends.
 - Make the temporary folder of a test that needs FIEMAP or another disk feature under `/var/tmp`,
   which sits on disk. `tmpdir()` is a tmpfs on some hosts, and a tmpfs has no extents for FIEMAP to
-  map.
+  map. Make it with `mkdtemp`, and remove it in `onTestFinished`.
 - Run git through the helpers in `@impz/e2e-harness/git-env`
   ([`git-env.ts`](../../../packages/e2e-harness/src/git-env.ts)). A git hook leaks `GIT_DIR`, and a
   child git then works on this checkout, whatever path you pass to `-C`.
-  - `runGitChecked` for a command that must succeed;
-  - `runGitCommand` for one whose exit code you check;
-  - `createGitFreeEnv` for the environment of git that you start another way.
 
 ## End to end
 
-- Run one suite at a time on one dev instance. The harness resets the instance after each journey,
-  so a second suite on the same instance loses its imps and settings.
+- Never run two suites at once on one dev instance: give each its own. The harness resets the
+  instance after each journey, so the other suite loses its imps. A suite is an entry in
+  [`suites.ts`](../../../packages/e2e-harness/src/suites.ts) that lists journey files.
 - Follow the steps in [Writing a journey](./references/e2e.md#writing-a-journey).
