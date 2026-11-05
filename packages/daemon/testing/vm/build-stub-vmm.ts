@@ -90,12 +90,18 @@ export function buildStubVmm() {
 
   const counter = { nextPid: 1000, generation: 0 };
 
-  const guest = {
+  const guest: {
+    uptimeMs: number;
+    identityReset: 'ok' | 'failed' | undefined;
+    hasBootId: boolean;
+    bootSteps: Readonly<Record<string, number>>;
+    pageHandler: UffdStats | undefined;
+  } = {
     uptimeMs: 60_000,
-    identityReset: 'ok' as 'ok' | 'failed' | undefined,
+    identityReset: 'ok',
     hasBootId: true,
-    bootSteps: {} as Readonly<Record<string, number>>,
-    pageHandler: undefined as UffdStats | undefined,
+    bootSteps: {},
+    pageHandler: undefined,
   };
 
   const guestMemory = new Map<string, FakeGuestMemory>();
