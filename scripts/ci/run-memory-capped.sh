@@ -7,6 +7,16 @@
 # passwordless sudo, as a GitHub runner has.
 set -euo pipefail
 
+# one sample of the sampler below: raise the peak in <peak file> to the anon
+# line of <memory.stat>
+if [ "${1:-}" = --sample ]; then
+  anon=$(sed -n 's/^anon //p' "$2")
+  if [ "$anon" -gt "$(cat "$3")" ]; then
+    echo "$anon" > "$3"
+  fi
+  exit 0
+fi
+
 # inside the scope, as root: the command as the caller, with the caller's
 # groups such as docker, then the scope's counters while this shell holds it
 if [ "${1:-}" = --inside ]; then
@@ -18,16 +28,9 @@ if [ "${1:-}" = --inside ]; then
   # cap; the anonymous memory, sampled each second, is what it cannot
   anon_file=$(mktemp)
   echo 0 > "$anon_file"
-  (
-    peak=0
-    while sleep 1; do
-      anon=$(sed -n 's/^anon //p' "$cgroup/memory.stat")
-      if [ "$anon" -gt "$peak" ]; then
-        peak=$anon
-        echo "$peak" > "$anon_file"
-      fi
-    done
-  ) &
+  while sleep 1; do
+    "$0" --sample "$cgroup/memory.stat" "$anon_file"
+  done &
   sampler=$!
 
   status=0
