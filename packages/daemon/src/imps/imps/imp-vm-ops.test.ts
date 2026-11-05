@@ -1061,6 +1061,49 @@ test('it wakes a 2M imp through its page handler with huge pages on', async () =
   expect(ctx.fake.wakePlans.map((plan) => plan.hugePages)).toStrictEqual(['2M']);
 });
 
+test("it logs the page handler's faults, data blocks and serve time on a 2M imp's wake line", async () => {
+  updateEnv('IMP_HUGE_PAGES', '2M');
+
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
+  const ctx = await startTestImpd(stack, {
+    env: readImpEnv(),
+    boundaries: { imps: { readHugePagePool: () => ({ totalMib: 4096, freeMib: 4096 }) } },
+  });
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.client.imps.create({ name: 'dev', memoryMib: 256 });
+  await ctx.client.imps.sleep({ name: 'dev' });
+
+  ctx.fake.setPageHandlerStats({ faults: 214, blocks: 151, serveMs: 388 });
+
+  await ctx.client.imps.wake({ name: 'dev' });
+
+  expect(ctx.logs).toSatisfyAny((line: string) =>
+    /^INFO impd\.imps imp=dev woke pid \d+ in \d+ms .*; page handler faults=214 blocks=151 serve=388ms$/u.test(
+      line,
+    ),
+  );
+});
+
+test('it logs no page handler on the wake line of an imp on host pages', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.client.imps.create({ name: 'dev', memoryMib: 256 });
+  await ctx.client.imps.sleep({ name: 'dev' });
+
+  ctx.fake.setPageHandlerStats({ faults: 214, blocks: 151, serveMs: 388 });
+
+  await ctx.client.imps.wake({ name: 'dev' });
+
+  expect(ctx.logs).toSatisfyAny((line: string) =>
+    /^INFO impd\.imps imp=dev woke pid \d+ in \d+ms [^;]*$/u.test(line),
+  );
+});
+
 test('it wakes a 2M imp on host pages with huge pages off, and records none', async () => {
   const ctx = await setupTest();
 

@@ -258,6 +258,13 @@ further CI step compares the schema with main's under buf's `WIRE_JSON` rules an
 that breaks the wire format, binary or JSON, such as a changed field number or JSON name. Run the
 same check before you push with `bun x buf breaking --against '.git#branch=main'`.
 
+After you change the page handler's stats file layout, `host/uffd-handler/stats-layout.json`, run
+`bun run gen:uffd-stats`. It writes the handler's field numbers to
+`host/uffd-handler/stats_layout.go` and impd's byte offsets to
+`packages/daemon/src/vm/vmm/uffd-stats-layout.ts`, and `bun test` fails while either committed file
+differs. Then update `host/uffd-handler/testdata/stats.golden`, which the Go tests and impd's tests
+both check.
+
 The property tests use fast-check. On a failure it prints the seed and the path of the shrunk case.
 Pass both to `fc.assert` as `{ seed, path, endOnFailure: true }` to replay the case.
 

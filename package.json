@@ -106,6 +106,7 @@
     "render:protocol": "bun scripts/render-protocol-schema.ts",
     "render:db-schema": "bun packages/daemon/src/platform/db/dump-schema.ts",
     "gen:proto": "buf lint && buf generate && oxfmt docs/reference/agent-protocol.md",
+    "gen:uffd-stats": "bun scripts/render-uffd-stats-layout.ts",
     "lint:shell": "./scripts/ci/shellcheck.sh",
     "lint:workflows": "bun scripts/ci/check-release-jobs.ts",
     "test": "bun test",

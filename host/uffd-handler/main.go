@@ -19,6 +19,9 @@ import (
 // through /proc after the snapshot that held it is gone.
 const memFileFD = 3
 
+// impd reads the handler's counts for a wake from this descriptor's file.
+const statsFD = 4
+
 // Firecracker connects during its snapshot load, which impd sends right after
 // the socket appears.
 const acceptTimeout = 30 * time.Second
@@ -36,11 +39,11 @@ type options struct {
 func main() {
 	opts, err := parseOptions(os.Args[1:])
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "uffd-handler: %v\nusage: uffd-handler --socket PATH [--uid UID --gid GID] 3<MEMORY_FILE\n", err)
+		fmt.Fprintf(os.Stderr, "uffd-handler: %v\nusage: uffd-handler --socket PATH [--uid UID --gid GID] 3<MEMORY_FILE 4<>STATS_FILE\n", err)
 		os.Exit(2)
 	}
 
-	if err := run(opts, os.NewFile(memFileFD, "memory file")); err != nil {
+	if err := run(opts, os.NewFile(memFileFD, "memory file"), os.NewFile(statsFD, "stats file")); err != nil {
 		fmt.Fprintf(os.Stderr, "uffd-handler: %v\n", err)
 		os.Exit(1)
 	}
@@ -75,12 +78,18 @@ func parseOptions(args []string) (options, error) {
 
 // run serves until Firecracker exits. Firecracker waits forever on a fault
 // that nothing answers, so once it has connected, any failure kills it.
-func run(opts options, memFile *os.File) error {
+func run(opts options, memFile *os.File, statsFile *os.File) error {
 	source, err := openMemSource(memFile)
 	if err != nil {
 		return err
 	}
 	defer source.close()
+
+	stats, err := openHandlerStats(statsFile)
+	if err != nil {
+		return err
+	}
+	defer stats.close()
 
 	listener, err := listen(opts.socket, opts.owner)
 	if err != nil {
@@ -100,7 +109,7 @@ func run(opts options, memFile *os.File) error {
 	}
 	defer unix.Close(conn.pidfd)
 
-	err = serveConn(conn, source)
+	err = serveConn(conn, source, stats)
 	if err != nil {
 		// the peer may already be gone, which leaves nothing to stop
 		_ = unix.PidfdSendSignal(conn.pidfd, unix.SIGKILL, nil, 0)
@@ -108,9 +117,9 @@ func run(opts options, memFile *os.File) error {
 	return err
 }
 
-func serveConn(conn peerConn, source *memSource) error {
+func serveConn(conn peerConn, source *memSource, stats *handlerStats) error {
 	defer unix.Close(conn.uffd)
-	h, err := newHandler(conn.uffd, conn.regions, source)
+	h, err := newHandler(conn.uffd, conn.regions, source, stats)
 	if err != nil {
 		return err
 	}

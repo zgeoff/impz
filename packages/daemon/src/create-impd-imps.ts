@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { availableParallelism } from 'node:os';
 import type { Config } from './config';
 import type { ImpdStorage } from './create-impd-storage';
@@ -98,6 +99,7 @@ export function createImpdImps(
       {
         mergeWrapper: config.ksm?.execBin ?? null,
         uffdHandlerBin: config.hugePages?.handlerBin ?? null,
+        readFile: readFileSync,
       },
     );
 

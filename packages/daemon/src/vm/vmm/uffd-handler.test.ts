@@ -1,9 +1,18 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readlinkSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { createStubUffdHandler } from '../../../testing/vm/create-stub-uffd-handler';
+import { writeStubUffdStats } from '../../../testing/vm/write-stub-uffd-stats';
 import { stopPid } from '../../platform/process/proc';
 import { buildImpPaths } from '../storage/data-layout';
 import { probeProcessAlive } from './firecracker-process';
@@ -11,6 +20,7 @@ import {
   buildServedFilePath,
   explainUffdFailure,
   readHandlerState,
+  readUffdStats,
   requireHandlerBin,
   startUffdHandler,
   stopUffdHandler,
@@ -128,6 +138,49 @@ test('#startUffdHandler removes the files a handler of an earlier run left', asy
   });
 
   expect(readHandlerState(paths)).toStrictEqual({ state: 'alive', pid });
+});
+
+test('#startUffdHandler hands the handler zeroed counts as descriptor 4, over the counts of an earlier run', async () => {
+  const ctx = setupTest();
+  const paths = ctx.createImpDir('vm');
+  const handler = createStubUffdHandler(ctx.directoryPath);
+  const memFile = join(ctx.directoryPath, 'mem');
+
+  writeFileSync(memFile, '');
+  writeStubUffdStats(paths.uffdStatsFile, { faults: 31, blocks: 12, serveNs: 9_000_000 });
+
+  const pid = await startUffdHandler({
+    handlerBin: handler.path,
+    paths,
+    memFile,
+    jail: null,
+    cgroup: null,
+  });
+
+  onTestFinished(() => {
+    stopPid(pid);
+  });
+
+  expect(readlinkSync(`/proc/${String(pid)}/fd/4`)).toBe(paths.uffdStatsFile);
+  expect(readUffdStats(paths, readFileSync)).toStrictEqual({ faults: 0, blocks: 0, serveMs: 0 });
+});
+
+// the handler's Go tests write the same golden file, so the layout matches on
+// both sides
+test('#readUffdStats reads the counts the handler wrote, with its serve time in whole milliseconds', () => {
+  const ctx = setupTest();
+  const paths = ctx.createImpDir('vm');
+
+  copyFileSync(
+    new URL('../../../../../host/uffd-handler/testdata/stats.golden', import.meta.url),
+    paths.uffdStatsFile,
+  );
+
+  expect(readUffdStats(paths, readFileSync)).toStrictEqual({
+    faults: 214,
+    blocks: 151,
+    serveMs: 388,
+  });
 });
 
 test('#readHandlerState reads no handler for an imp with no handler pid file', () => {

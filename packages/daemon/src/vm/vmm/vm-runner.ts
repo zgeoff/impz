@@ -41,11 +41,13 @@ import {
   buildServedFilePath,
   explainUffdFailure,
   readHandlerState,
+  readUffdStats,
   removeUffdFiles,
   requireHandlerBin,
   startUffdHandler,
   stopUffdHandler,
 } from './uffd-handler';
+import type { UffdStats } from './uffd-handler';
 import { writeSnapshotBase } from './write-snapshot-base';
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
@@ -73,6 +75,7 @@ export interface StartedVm {
   readonly guestSteps?: Readonly<Record<string, number>> | undefined;
   readonly identityReset?: string | undefined;
   readonly bootId?: string | undefined;
+  readonly pageHandler?: UffdStats | undefined;
 }
 
 interface WakePlan {
@@ -132,13 +135,15 @@ export interface VmRunnerOptions {
   readonly sendUptimePing?: typeof sendPing;
   readonly procRoot?: string;
   readonly createClient?: CreateFirecrackerClient;
+  readonly readFile: (path: string) => Buffer;
 }
 
-export function createVmRunner(jails: Jails, options: Readonly<VmRunnerOptions> = {}): VmRunner {
+export function createVmRunner(jails: Jails, options: Readonly<VmRunnerOptions>): VmRunner {
   const mergeWrapper = options.mergeWrapper ?? null;
   const sendUptimePing = options.sendUptimePing ?? sendPing;
   const procRoot = options.procRoot ?? '/proc';
   const createClient = options.createClient ?? createFirecrackerClient;
+  const readFile = options.readFile;
   const uffdHandlerBin = options.uffdHandlerBin ?? null;
 
   const uffdWatch = createUffdWatch({
@@ -497,6 +502,7 @@ export function createVmRunner(jails: Jails, options: Readonly<VmRunnerOptions> 
           agentVersion: ping.version,
           timings: timer.marks,
           bootId: ping.bootId,
+          ...(isUffd && { pageHandler: readUffdStats(plan.paths, readFile) }),
         };
       } catch (error) {
         const reason = explainUffdFailure(plan.paths, procRoot, getErrorMessage(error));

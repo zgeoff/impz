@@ -20,6 +20,7 @@ import type { ImpPaths } from '../../vm/storage/data-layout';
 import type { ImpCgroup } from '../../vm/vmm/cpu-cgroups';
 import type { HugePages } from '../../vm/vmm/firecracker-client';
 import { checkMergeFlag } from './check-merge-flag';
+import { formatPageHandler } from './format-page-handler';
 import { formatTimings } from './format-timings';
 import type { ImpContext } from './imp-context';
 import { toLockedImp } from './imp-lock';
@@ -141,10 +142,11 @@ export function makeWakeImpVm(deps: WakeDeps): (imp: LockedImp) => Promise<Locke
 
     getImpdLogger('imps')
       .with({ imp: imp.name })
-      .info('woke pid {pid} in {wakeMs}ms {timings}', {
+      .info('woke pid {pid} in {wakeMs}ms {timings}{pageHandler}', {
         pid: String(woken.pid),
         wakeMs: String(wakeMs),
         timings: formatTimings(woken.timings),
+        pageHandler: formatPageHandler(woken.pageHandler),
       });
 
     if (hugePages === 'None') {

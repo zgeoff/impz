@@ -1,0 +1,7 @@
+{
+  "fields": [
+    { "name": "faults", "description": "the faults the handler served" },
+    { "name": "blocks", "description": "the data blocks it read from the memory file" },
+    { "name": "serveNs", "description": "its nanoseconds serving faults" }
+  ]
+}

@@ -1,10 +1,11 @@
 import { closeSync, existsSync, openSync, rmSync } from 'node:fs';
 import { stopPid } from '../../platform/process/proc';
-import { setupLogFile, writeRegularFile } from '../files/vm-files';
+import { createZeroedFile, setupLogFile, writeRegularFile } from '../files/vm-files';
 import type { ImpPaths } from '../storage/data-layout';
 import type { ImpCgroup } from './cpu-cgroups';
 import { buildSpawnArgv, probeProcessAlive, readLogTail, readPidFile } from './firecracker-process';
 import type { JailUser } from './jail';
+import { UFFD_STATS_BYTES, UFFD_STATS_OFFSETS } from './uffd-stats-layout';
 
 // the descriptor the handler reads the memory file from, which outlives the
 // file's name
@@ -32,13 +33,15 @@ export async function startUffdHandler(plan: Readonly<UffdHandlerPlan>): Promise
   ];
 
   const memFd = openSync(plan.memFile, 'r');
+  const statsFd = createZeroedFile(paths.uffdStatsFile, UFFD_STATS_BYTES);
   const log = setupLogFile(paths.logFile);
 
   const child = Bun.spawn(buildSpawnArgv(command, plan.cgroup?.procsPath ?? null, null), {
-    stdio: ['ignore', log, log, memFd],
+    stdio: ['ignore', log, log, memFd, statsFd],
   });
 
   closeSync(memFd);
+  closeSync(statsFd);
   closeSync(log);
 
   child.unref();
@@ -66,6 +69,28 @@ export function removeUffdFiles(paths: Readonly<ImpPaths>): void {
   rmSync(paths.uffdSocket, { force: true });
   rmSync(`${paths.uffdSocket}.new`, { force: true });
   rmSync(paths.uffdPidFile, { force: true });
+  rmSync(paths.uffdStatsFile, { force: true });
+}
+
+export interface UffdStats {
+  readonly faults: number;
+  readonly blocks: number;
+  readonly serveMs: number;
+}
+
+// The handler counts from its start, and a wake starts a handler of its own,
+// so the counts read at the end of a wake are that wake's.
+export function readUffdStats(
+  paths: Readonly<ImpPaths>,
+  readFile: (path: string) => Buffer,
+): UffdStats {
+  const raw = readFile(paths.uffdStatsFile);
+
+  return {
+    faults: Number(raw.readBigUInt64LE(UFFD_STATS_OFFSETS.faults)),
+    blocks: Number(raw.readBigUInt64LE(UFFD_STATS_OFFSETS.blocks)),
+    serveMs: Math.round(Number(raw.readBigUInt64LE(UFFD_STATS_OFFSETS.serveNs)) / 1_000_000),
+  };
 }
 
 export type HandlerState =

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/unix"
@@ -47,13 +48,14 @@ type handler struct {
 	regions  []guestRegion
 	pageSize uint64
 	source   *memSource
+	stats    *handlerStats
 	data     map[int64]bool
 	zero     []byte
 	// the ranges the guest gave back, which the kernel zero-fills from then on
 	removed []uffdMsg
 }
 
-func newHandler(uffd int, regions []guestRegion, source *memSource) (*handler, error) {
+func newHandler(uffd int, regions []guestRegion, source *memSource, stats *handlerStats) (*handler, error) {
 	pageSize := regions[0].PageSize
 	if pageSize == 0 || pageSize&(pageSize-1) != 0 {
 		return nil, fmt.Errorf("uffd handshake: page size %d is not a power of two", pageSize)
@@ -78,6 +80,7 @@ func newHandler(uffd int, regions []guestRegion, source *memSource) (*handler, e
 		regions:  regions,
 		pageSize: pageSize,
 		source:   source,
+		stats:    stats,
 		data:     data,
 		zero:     make([]byte, pageSize),
 	}, nil
@@ -176,11 +179,13 @@ func (h *handler) serveRound(msgs []uffdMsg) ([]uffdMsg, error) {
 				}
 				continue
 			}
-			copied, err := h.serveFault(msg.address)
+			started := time.Now()
+			result, err := h.serveFault(msg.address)
 			if err != nil {
 				return nil, err
 			}
-			if !copied {
+			h.stats.record(result, time.Since(started))
+			if result == copyRetry {
 				retry = append(retry, msg)
 			}
 		default:
@@ -190,14 +195,14 @@ func (h *handler) serveRound(msgs []uffdMsg) ([]uffdMsg, error) {
 	return retry, nil
 }
 
-func (h *handler) serveFault(address uint64) (bool, error) {
+func (h *handler) serveFault(address uint64) (copyResult, error) {
 	offset, dst, ok := h.findPage(address)
 	if !ok {
-		return false, fmt.Errorf("fault at %#x outside every region", address)
+		return copyRetry, fmt.Errorf("fault at %#x outside every region", address)
 	}
-	source := h.zero
+	source, served := h.zero, copiedHole
 	if h.data[offset] {
-		source = h.source.mapped[offset : offset+int64(h.pageSize)]
+		source, served = h.source.mapped[offset:offset+int64(h.pageSize)], copiedData
 	}
 	arg := uffdioCopyArg{
 		dst: dst,
@@ -206,12 +211,14 @@ func (h *handler) serveFault(address uint64) (bool, error) {
 	}
 	_, _, errno := unix.Syscall(unix.SYS_IOCTL, uintptr(h.uffd), uffdioCopy, uintptr(unsafe.Pointer(&arg)))
 	switch {
-	case errno == 0, errno == unix.EEXIST:
-		return true, nil
+	case errno == 0:
+		return served, nil
+	case errno == unix.EEXIST:
+		return copiedAlready, nil
 	case errno == unix.EAGAIN, arg.copy == -int64(unix.EAGAIN):
-		return false, nil
+		return copyRetry, nil
 	default:
-		return false, fmt.Errorf("UFFDIO_COPY at %#x: %w", dst, errno)
+		return copyRetry, fmt.Errorf("UFFDIO_COPY at %#x: %w", dst, errno)
 	}
 }
 

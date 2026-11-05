@@ -434,13 +434,17 @@ function probeSealedEntry(paths: Readonly<RunPaths>, path: string): boolean {
   const entry = lstatSync(path);
   const uffdSocket = join(paths.runDir, UFFD_RUN_FILES.socket);
   const uffdPidFile = join(paths.runDir, UFFD_RUN_FILES.pidFile);
+  const uffdStatsFile = join(paths.runDir, UFFD_RUN_FILES.statsFile);
 
   if (path === paths.apiSocket || path === paths.vsockSocket || path === uffdSocket) {
     return entry.isSocket();
   }
 
   return (
-    (path === paths.logFile || path === paths.pidFile || path === uffdPidFile) &&
+    (path === paths.logFile ||
+      path === paths.pidFile ||
+      path === uffdPidFile ||
+      path === uffdStatsFile) &&
     entry.isFile() &&
     entry.uid === IMPD_USER.uid &&
     entry.nlink === 1

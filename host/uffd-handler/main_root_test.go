@@ -24,7 +24,7 @@ func TestTheHandlerServesAsTheUserItIsGiven(t *testing.T) {
 	assert.NilError(t, err)
 	cmd := exec.Command(self, "--socket", "uffd.sock", "--uid", "65534", "--gid", "65534")
 	cmd.Env = append(os.Environ(), handlerModeEnv+"=1")
-	cmd.ExtraFiles = []*os.File{writeMemFile(t, dir)}
+	cmd.ExtraFiles = []*os.File{writeMemFile(t, dir), writeStatsFile(t, dir)}
 	assert.NilError(t, cmd.Start())
 	t.Cleanup(func() {
 		_ = cmd.Process.Kill()

@@ -19,6 +19,7 @@ import invariant from 'tiny-invariant';
 import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { buildStubMounts } from '../../../testing/vm/build-stub-mounts';
 import { buildStubUidProcesses } from '../../../testing/vm/build-stub-uid-processes';
+import { writeStubUffdStats } from '../../../testing/vm/write-stub-uffd-stats';
 import { buildImpPaths } from '../storage/data-layout';
 import {
   buildJailerCommand,
@@ -755,7 +756,7 @@ test('#removeUffdDevice removes the userfaultfd node the jailer made and leaves 
   expect(existsSync(join(imp.root, 'dev', 'kvm'))).toBeTrue();
 });
 
-test("#seal keeps a page handler's socket and pid file in run/", async () => {
+test("#seal keeps a page handler's socket, pid file and stats file in run/", async () => {
   const ctx = setupTest();
   const imp = ctx.createImpDir('i1');
 
@@ -771,6 +772,7 @@ test("#seal keeps a page handler's socket and pid file in run/", async () => {
 
   writeFileSync(imp.paths.logFile, 'boot\n');
   writeFileSync(imp.paths.uffdPidFile, '4243\n');
+  writeStubUffdStats(imp.paths.uffdStatsFile, { faults: 0, blocks: 0, serveNs: 0 });
 
   ctx.jails.seal(imp.paths, 4242);
 
@@ -779,6 +781,7 @@ test("#seal keeps a page handler's socket and pid file in run/", async () => {
     'pid',
     'uffd.pid',
     'uffd.sock',
+    'uffd.stats',
   ]);
 });
 

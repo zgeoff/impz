@@ -380,6 +380,39 @@ test('#buildStubVmm keeps the boot id of the socket last boot on a wake', async 
   });
 });
 
+test('#buildStubVmm returns the page handler counts it was given from a 2M wake', async () => {
+  const ctx = await setupTest();
+
+  ctx.fake.setPageHandlerStats({ faults: 57, blocks: 40, serveMs: 96 });
+
+  const vm = await ctx.runner.wakeVm({
+    firecrackerBin: '/usr/bin/firecracker',
+    paths: ctx.paths,
+    cgroup: null,
+    jail: null,
+    readOnlyFiles: ['/images/system.ext4'],
+    hugePages: '2M',
+  });
+
+  expect(vm.pageHandler).toStrictEqual({ faults: 57, blocks: 40, serveMs: 96 });
+});
+
+test('#buildStubVmm returns no page handler counts from a wake on host pages', async () => {
+  const ctx = await setupTest();
+
+  ctx.fake.setPageHandlerStats({ faults: 57, blocks: 40, serveMs: 96 });
+
+  const vm = await ctx.runner.wakeVm({
+    firecrackerBin: '/usr/bin/firecracker',
+    paths: ctx.paths,
+    cgroup: null,
+    jail: null,
+    readOnlyFiles: ['/images/system.ext4'],
+  });
+
+  expect(vm).not.toContainKey('pageHandler');
+});
+
 test('#buildStubVmm starts a running VM and marks its snapshot used on a wake', async () => {
   const ctx = await setupTest();
 

@@ -33,21 +33,40 @@ Firecracker restores a guest on huge pages only through userfaultfd (UFFD): it m
 memory empty and hands a page handler the file descriptor on which the kernel reports each fault.
 impd starts one handler per restore or wake, before Firecracker loads the snapshot.
 
-1. impd opens the snapshot's memory file and starts the handler with the file as an inherited
-   descriptor, inside the imp's cgroup.
+1. impd opens the snapshot's memory file, makes a zeroed stats file in the imp's run directory, and
+   starts the handler with both files as inherited descriptors, inside the imp's cgroup.
 2. The handler binds its socket in the imp's run directory, which the jail binds in, owned by the
    jail's user, and drops its own privileges to that user.
 3. Firecracker connects at the load, sends the guest's memory regions and the UFFD descriptor, and
    the handler checks the peer's process through the socket's credentials.
 4. On each fault, the handler copies the page the guest touched from the memory file into the guest,
    or a zero page past the file's data. It serves faults on demand and never fills memory ahead,
-   because a boot touches few of the guest's pages.
+   because a boot touches few of the guest's pages. After each fault, the handler adds to three
+   counts in the stats file: the faults served, the data blocks read (the faults served from the
+   memory file's data), and the time spent serving.
 5. When the guest gives memory back, the kernel reports the removed range, and the handler stops
    serving it, so a later touch maps a fresh zero page.
 
 Huge pages speed up a template restore and slow down a wake. On a nested production host, a wake on
 huge pages took longer to reach a running agent than a wake on ordinary pages
 ([the wake spike](../../design/spikes/wake-huge-pages/README.md)).
+
+The counts start at zero when a handler starts. At the end of a wake on huge pages, impd reads the
+stats file and adds the counts to the wake's `woke pid` line in the journal. The line's steps before
+the semicolon are impd's, in milliseconds:
+
+```text
+woke pid 4211 in 640ms spawn=58ms handler=14ms load=52ms agent=495ms resumed=11ms; page handler faults=214 blocks=151 serve=388ms
+```
+
+| Field      | Meaning                                                                        |
+| ---------- | ------------------------------------------------------------------------------ |
+| `handler=` | impd's step that starts the handler and waits for its socket                   |
+| `load=`    | the snapshot load and the resume, after which the guest faults in its pages    |
+| `agent=`   | the wait for the guest's agent to answer                                       |
+| `faults=`  | the faults the handler served                                                  |
+| `blocks=`  | the data blocks it read; each other fault got a zero page                      |
+| `serve=`   | the handler's time serving faults, which overlaps impd's steps from `load=` on |
 
 ## The device
 
