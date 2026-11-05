@@ -1,4 +1,4 @@
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import type { Socket } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -23,7 +23,8 @@ import { createImage } from '../src/platform/db/images';
 import type { ImageRecord } from '../src/platform/db/images';
 import type { ImpDatabase } from '../src/platform/db/open-database';
 import { getImpdLogger } from '../src/platform/process/get-impd-logger';
-import { NO_HOST_LOAD, readHostLoad } from '../src/platform/process/read-host-load';
+import { readHostLoad } from '../src/platform/process/read-host-load';
+import { readText } from '../src/platform/process/read-text';
 import type { HostIdentity } from '../src/vm/sleep/vm-identity';
 import { buildSystemDrivePath, buildSystemDrivesDir } from '../src/vm/storage/data-layout';
 import type { ImpPaths } from '../src/vm/storage/data-layout';
@@ -217,6 +218,7 @@ export async function startTestImpd(
 
   const cgroups = options.cgroups ?? createCpuCgroups({ root: '/nonexistent' });
   const extra = options.boundaries ?? {};
+  const procRoot = options.procRoot;
 
   const buildBoundaries = (
     identity: HostIdentity,
@@ -346,17 +348,10 @@ export async function startTestImpd(
         kernelOops,
         readThreadIds: (pid) =>
           options.procRoot === undefined ? null : readThreadIds(pid, options.procRoot),
-        readHostLoad: () => {
-          const procRoot = options.procRoot;
-
-          return procRoot === undefined
-            ? NO_HOST_LOAD
-            : readHostLoad({
-                procRoot,
-                readFile: (path) => readFileSync(path, 'utf8'),
-                logger: getImpdLogger('imps'),
-              });
-        },
+        ...(procRoot !== undefined && {
+          readHostLoad: () =>
+            readHostLoad({ procRoot, readFile: readText, logger: getImpdLogger('imps') }),
+        }),
         ...(options.readUnsharedRamMib !== undefined && {
           readUnsharedRamMib: options.readUnsharedRamMib,
         }),

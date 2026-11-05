@@ -179,3 +179,16 @@ test('it picks again past a failed sleep and fits an admit when the rest is enou
     ['d', 'sleeping'],
   ]);
 });
+
+test('it logs the host stall from the /proc counters with no reader passed in', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.imps.createImp({ name: 'plain' });
+
+  expect(ctx.logs).toSatisfyAny(
+    (line: string) =>
+      line.startsWith('INFO impd.imps imp=plain booted pid ') &&
+      /; host stall .*steal=\d+ms$/u.test(line),
+  );
+});

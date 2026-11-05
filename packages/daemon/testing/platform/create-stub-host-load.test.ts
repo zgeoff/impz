@@ -1,9 +1,10 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { getImpdLogger } from '../../src/platform/process/get-impd-logger';
 import { readHostLoad } from '../../src/platform/process/read-host-load';
+import { readText } from '../../src/platform/process/read-text';
 import { createStubHostLoad } from './create-stub-host-load';
 import { formatRunPrefix } from './format-run-prefix';
 import { readRunOwner } from './read-run-owner';
@@ -18,7 +19,7 @@ function setupTest() {
 
   const sources = {
     procRoot,
-    readFile: (path: string) => readFileSync(path, 'utf8'),
+    readFile: readText,
     logger: getImpdLogger('imps'),
   };
 

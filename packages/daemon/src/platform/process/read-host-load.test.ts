@@ -1,5 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
@@ -7,6 +7,7 @@ import { formatRunPrefix } from '../../../testing/platform/format-run-prefix';
 import { readRunOwner } from '../../../testing/platform/read-run-owner';
 import { getImpdLogger } from './get-impd-logger';
 import { readHostLoad } from './read-host-load';
+import { readText } from './read-text';
 
 function setupTest() {
   const prefix = formatRunPrefix(readRunOwner());
@@ -20,7 +21,7 @@ function setupTest() {
 
   const sources = {
     procRoot,
-    readFile: (path: string) => readFileSync(path, 'utf8'),
+    readFile: readText,
     logger: getImpdLogger('imps'),
   };
 

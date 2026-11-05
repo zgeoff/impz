@@ -1,7 +1,7 @@
 import { accessSync, constants, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { readText } from '../../../../scripts/lib/read-text.ts';
+import { readText } from '@impz/daemon/testing';
 import { runBunShell } from '../../../../scripts/lib/run-bun-shell.ts';
 import { writeStderr } from '../../../../scripts/lib/write-stderr.ts';
 import { writeStdoutLine } from '../../../../scripts/lib/write-stdout-line.ts';

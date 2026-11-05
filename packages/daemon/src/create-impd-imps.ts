@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import { availableParallelism } from 'node:os';
 import type { Config } from './config';
 import type { ImpdStorage } from './create-impd-storage';
@@ -20,6 +19,7 @@ import type { EgressService } from './network/egress/egress-service';
 import { countImpsByState, listImps } from './platform/db/imps';
 import { getImpdLogger } from './platform/process/get-impd-logger';
 import { readHostLoad } from './platform/process/read-host-load';
+import { readText } from './platform/process/read-text';
 import { runCommand } from './platform/process/run-command';
 import { startImpTelemetry } from './platform/telemetry/imp-telemetry';
 import { createMemoryController } from './vm/memory/memory-controller';
@@ -294,11 +294,7 @@ function resolveImpBoundaries(boundaries: Readonly<ImpBoundaries>) {
     readHostLoad:
       boundaries.readHostLoad ??
       (() =>
-        readHostLoad({
-          procRoot: '/proc',
-          readFile: (path) => readFileSync(path, 'utf8'),
-          logger: getImpdLogger('imps'),
-        })),
+        readHostLoad({ procRoot: '/proc', readFile: readText, logger: getImpdLogger('imps') })),
     ...(boundaries.openTap !== undefined && { openTap: boundaries.openTap }),
     ...(boundaries.now !== undefined && { now: boundaries.now }),
   };

@@ -2,12 +2,14 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { readText } from '../../../scripts/lib/read-text.ts';
+import { formatRunPrefix, readRunOwner, readText } from '@impz/daemon/testing';
+import invariant from 'tiny-invariant';
 import { REPO_ROOT } from './instance';
 import { readPoolProperties } from './read-pool-properties';
 
 function setupTest() {
-  const directory = mkdtempSync(join(tmpdir(), 'imp-pool-properties-'));
+  const prefix = formatRunPrefix(readRunOwner());
+  const directory = mkdtempSync(join(tmpdir(), `${prefix}imp-pool-properties-`));
 
   onTestFinished(() => {
     rmSync(directory, { recursive: true, force: true });
@@ -35,9 +37,7 @@ test('it reads each -o word as a zpool property and each -O word as a zfs one', 
 test('it reads the properties deploy/zfs-pool.json gives', () => {
   const read = readPoolProperties(join(REPO_ROOT, 'deploy', 'zfs-pool.json'), readText);
 
-  if (read.kind !== 'read') {
-    throw new Error(read.reason);
-  }
+  invariant(read.kind === 'read', 'deploy/zfs-pool.json gives no properties');
 
   expect(read.properties).not.toBeEmpty();
 });
