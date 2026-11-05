@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"errors"
 	"io"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,6 +20,17 @@ import (
 
 // The reap loop is process-wide, so the package shares one Reaper.
 var testReaper = reaper.New()
+
+// agentEchoEnv makes the test binary, run as the agent, print its arguments.
+const agentEchoEnv = "PROC_TEST_AGENT_ECHO"
+
+func TestMain(m *testing.M) {
+	if os.Getenv(agentEchoEnv) != "" {
+		os.Stdout.WriteString(strings.Join(os.Args[1:], " ") + "\n")
+		os.Exit(0)
+	}
+	os.Exit(m.Run())
+}
 
 func devNull(t *testing.T) *os.File {
 	t.Helper()
@@ -67,11 +77,11 @@ func startGroup(t *testing.T, d *Direct) *Process {
 
 func agentCopy(t *testing.T) (path string, f *os.File) {
 	t.Helper()
-	// /bin/echo is a small binary that needs nothing at a fixed path
-	b, err := os.ReadFile("/bin/echo")
-	if errors.Is(err, fs.ErrNotExist) {
-		t.Skip("needs /bin/echo to stand in for the agent binary")
-	}
+	// the test binary stands in for the agent: /bin/echo can be a multi-call
+	// binary, such as uutils coreutils, that refuses to run under another name
+	self, err := os.Executable()
+	assert.NilError(t, err)
+	b, err := os.ReadFile(self)
 	assert.NilError(t, err)
 	path = filepath.Join(t.TempDir(), "agent")
 	assert.NilError(t, os.WriteFile(path, b, 0o755))
@@ -104,7 +114,7 @@ func TestStartRunsAHelperFromTheAgentsOwnFd(t *testing.T) {
 	bin, f := agentCopy(t)
 	d := &Direct{Reaper: testReaper, Agent: bin, AgentFile: f}
 
-	got := run(t, d, Spec{Argv: []string{"imp-agent", "hello"}, Helper: true})
+	got := run(t, d, Spec{Argv: []string{"imp-agent", "hello"}, Env: []string{agentEchoEnv + "=1"}, Helper: true})
 
 	assert.Equal(t, got, "hello")
 }
@@ -114,7 +124,7 @@ func TestStartRunsTheAgentByItsPathFromItsOwnFd(t *testing.T) {
 	bin, f := agentCopy(t)
 	d := &Direct{Reaper: testReaper, Agent: bin, AgentFile: f}
 
-	got := run(t, d, Spec{Argv: []string{bin, "by path"}})
+	got := run(t, d, Spec{Argv: []string{bin, "by path"}, Env: []string{agentEchoEnv + "=1"}})
 
 	assert.Equal(t, got, "by path")
 }
