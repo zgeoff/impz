@@ -64,7 +64,6 @@
       },
       "devDependencies": {
         "@faker-js/faker": "catalog:",
-        "@impz/test-utils": "workspace:*",
       },
     },
     "packages/cli": {
@@ -273,7 +272,6 @@
       },
       "devDependencies": {
         "@faker-js/faker": "catalog:",
-        "@impz/test-utils": "workspace:*",
       },
     },
     "packages/shared": {
