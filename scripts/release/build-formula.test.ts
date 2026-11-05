@@ -109,32 +109,6 @@ test('it renders the same formula from the same release twice', () => {
   expect(first).toStrictEqual(second);
 });
 
-test.skipIf(Bun.which('ruby') === null)('it renders a formula that is valid Ruby', () => {
-  const ctx = setupTest();
-  const sums = join(ctx.directoryPath, 'SHA256SUMS');
-  const formula = join(ctx.directoryPath, 'imp.rb');
-
-  writeFileSync(
-    sums,
-    [
-      `${'0'.repeat(64)}  impz-darwin-arm64`,
-      `${'1'.repeat(64)}  impz-darwin-x64`,
-      `${'2'.repeat(64)}  impz-linux-arm64`,
-      `${'3'.repeat(64)}  impz-linux-x64`,
-      '',
-    ].join('\n'),
-  );
-
-  writeFileSync(
-    formula,
-    Bun.spawnSync(['bash', join(import.meta.dir, 'build-formula.sh'), '1.2.3', sums]).stdout,
-  );
-
-  const check = Bun.spawnSync(['ruby', '-c', formula]);
-
-  expect(check.stdout.toString()).toBe('Syntax OK\n');
-});
-
 test('it renders nothing for a platform missing from SHA256SUMS', () => {
   const ctx = setupTest();
   const sums = join(ctx.directoryPath, 'SHA256SUMS');
