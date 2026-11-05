@@ -36,7 +36,7 @@ export interface ArmPlan {
 // dev.sh up reuses a running instance, which may run another checkout, so an
 // arm locks the instance's name and then refuses one that runs. A failed log
 // read fails the arm only once the instance is down.
-export function runBenchArm(deps: BenchArmDeps, plan: Readonly<ArmPlan>): Promise<ArmRun> {
+export async function runBenchArm(deps: BenchArmDeps, plan: Readonly<ArmPlan>): Promise<ArmRun> {
   const checkout = resolve(plan.cwd, plan.arm.checkout);
 
   const devEnv = {
@@ -46,7 +46,7 @@ export function runBenchArm(deps: BenchArmDeps, plan: Readonly<ArmPlan>): Promis
 
   const layout = buildDevLayout({ env: { ...plan.env, ...devEnv }, root: checkout, cwd: plan.cwd });
 
-  return deps.withDevLock(layout.name, async () => {
+  const armRun = await deps.withDevLock(layout.name, async () => {
     const listed = await deps.runCommand(
       [
         layout.containerCLI,
@@ -70,6 +70,8 @@ export function runBenchArm(deps: BenchArmDeps, plan: Readonly<ArmPlan>): Promis
 
     return runLockedArm(deps, { plan, dev, layout });
   });
+
+  return armRun;
 }
 
 // docker and podman list no line for a missing container, so only a failed

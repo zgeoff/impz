@@ -877,3 +877,33 @@ test('it starts the timed bench only once the warm-up left a boot template ready
   expect(ran).toStrictEqual({ json: '{"results":[]}\n', isPassed: true });
   expect(infos.left).toBe(0);
 });
+
+test('it rejects an arm whose dev settings are invalid, and locks nothing', () => {
+  const withDevLock = mock<BenchArmDeps['withDevLock']>((_name, run) => run());
+
+  const ran = runBenchArm(
+    {
+      withDevLock,
+      runCommand: () => Promise.resolve({ exitCode: 0, stdout: '', stderr: '' }),
+      writeLog: () => {},
+      now: () => 0,
+      sleep: () => Promise.resolve(),
+      onStderr: () => {},
+    },
+    {
+      arm: { name: 'candidate', checkout: '/work/candidate' },
+      commands: { warmUpArgs: ['bench', 'create'], benchArgs: ['wake'] },
+      logPath: '/work/out/candidate-1.impd.log',
+      impz: '/work/impz',
+      env: { IMP_DEV_PORT_OFFSET: 'invalid' },
+      cwd: '/work',
+    },
+  );
+
+  expect(ran).rejects.toThrowWithMessage(
+    Error,
+    "IMP_DEV_PORT_OFFSET must be a whole number, got 'invalid'",
+  );
+
+  expect(withDevLock).not.toHaveBeenCalled();
+});

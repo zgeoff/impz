@@ -43,11 +43,11 @@ const NAME = 'touched-pages';
 // The dev instance's lock keeps other bench runs off it, and the run refuses
 // an imp of its name that it found, so a record a failed create left under
 // that name is this run's to remove.
-export function runTouchedPages(
+export async function runTouchedPages(
   deps: TouchedPagesDeps,
   options: Readonly<TouchedPagesOptions>,
 ): Promise<TouchedPages> {
-  return deps.withDevLock(async () => {
+  const touchedPages = await deps.withDevLock(async () => {
     await waitForReady(deps, "impd's default image", () => requireDefaultImage(deps));
 
     const found = await deps.client.imps.get({ name: NAME }).then(
@@ -101,6 +101,8 @@ export function runTouchedPages(
 
     return measured;
   });
+
+  return touchedPages;
 }
 
 const READY_TIMEOUT_MS = 300_000;
