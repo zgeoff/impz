@@ -41,20 +41,32 @@ impd starts one handler per restore or wake, before Firecracker loads the snapsh
    the handler checks the peer's process through the socket's credentials.
 4. On each fault, the handler copies the page the guest touched from the memory file into the guest,
    or a zero page past the file's data. It serves faults on demand and never fills memory ahead,
-   because a boot touches few of the guest's pages. The handler counts each fault it serves, each
-   page it reads from the memory file and its time serving them in the stats file.
+   because a boot touches few of the guest's pages. After each fault, the handler adds to three
+   counts in the stats file: the faults served, the data blocks read (the faults served from the
+   memory file's data), and the time spent serving.
 5. When the guest gives memory back, the kernel reports the removed range, and the handler stops
    serving it, so a later touch maps a fresh zero page.
 
 Huge pages speed up a template restore and slow down a wake. On a nested production host, a wake on
 huge pages took longer to reach a running agent than a wake on ordinary pages
-([the wake spike](../../design/spikes/wake-huge-pages/README.md)). A wake starts a handler of its
-own, so impd reads the stats file as the wake ends, and ends the wake's `woke pid` line with the
-handler's share of the wake:
+([the wake spike](../../design/spikes/wake-huge-pages/README.md)).
+
+The counts start at zero when a handler starts. At the end of a wake on huge pages, impd reads the
+stats file and adds the counts to the wake's `woke pid` line in the journal. The line's steps before
+the semicolon are impd's, in milliseconds:
 
 ```text
 woke pid 4211 in 640ms spawn=58ms handler=14ms load=52ms agent=495ms resumed=11ms; page handler faults=214 blocks=151 serve=388ms
 ```
+
+| Field      | Meaning                                                                        |
+| ---------- | ------------------------------------------------------------------------------ |
+| `handler=` | impd's step that starts the handler and waits for its socket                   |
+| `load=`    | the snapshot load and the resume, after which the guest faults in its pages    |
+| `agent=`   | the wait for the guest's agent to answer                                       |
+| `faults=`  | the faults the handler served                                                  |
+| `blocks=`  | the data blocks it read; each other fault got a zero page                      |
+| `serve=`   | the handler's time serving faults, which overlaps impd's steps from `load=` on |
 
 ## The device
 
