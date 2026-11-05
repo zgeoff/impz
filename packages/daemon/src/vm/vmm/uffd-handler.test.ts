@@ -1,5 +1,13 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readlinkSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { waitFor } from '@impz/test-utils/wait-for';
@@ -156,16 +164,16 @@ test('#startUffdHandler hands the handler zeroed counts as descriptor 4, over th
   expect(readUffdStats(paths)).toStrictEqual({ faults: 0, blocks: 0, serveMs: 0 });
 });
 
+// the handler's Go tests write the same golden file, so the layout matches on
+// both sides
 test('#readUffdStats reads the counts the handler wrote, with its serve time in whole milliseconds', () => {
   const ctx = setupTest();
   const paths = ctx.createImpDir('vm');
-  const counts = Buffer.alloc(24);
 
-  counts.writeBigUInt64LE(214n, 0);
-  counts.writeBigUInt64LE(151n, 8);
-  counts.writeBigUInt64LE(388_400_000n, 16);
-
-  writeFileSync(paths.uffdStatsFile, counts);
+  copyFileSync(
+    new URL('../../../../../host/uffd-handler/testdata/stats.golden', import.meta.url),
+    paths.uffdStatsFile,
+  );
 
   expect(readUffdStats(paths)).toStrictEqual({ faults: 214, blocks: 151, serveMs: 388 });
 });
