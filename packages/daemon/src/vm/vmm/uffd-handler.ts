@@ -1,4 +1,4 @@
-import { closeSync, existsSync, openSync, readFileSync, rmSync } from 'node:fs';
+import { closeSync, existsSync, openSync, rmSync } from 'node:fs';
 import { stopPid } from '../../platform/process/proc';
 import { createZeroedFile, setupLogFile, writeRegularFile } from '../files/vm-files';
 import type { ImpPaths } from '../storage/data-layout';
@@ -80,8 +80,11 @@ export interface UffdStats {
 
 // The handler counts from its start, and a wake starts a handler of its own,
 // so the counts read at the end of a wake are that wake's.
-export function readUffdStats(paths: Readonly<ImpPaths>): UffdStats {
-  const raw = readFileSync(paths.uffdStatsFile);
+export function readUffdStats(
+  paths: Readonly<ImpPaths>,
+  readFile: (path: string) => Buffer,
+): UffdStats {
+  const raw = readFile(paths.uffdStatsFile);
 
   return {
     faults: Number(raw.readBigUInt64LE(UFFD_STATS_OFFSETS.faults)),

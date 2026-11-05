@@ -161,7 +161,7 @@ test('#startUffdHandler hands the handler zeroed counts as descriptor 4, over th
   });
 
   expect(readlinkSync(`/proc/${String(pid)}/fd/4`)).toBe(paths.uffdStatsFile);
-  expect(readUffdStats(paths)).toStrictEqual({ faults: 0, blocks: 0, serveMs: 0 });
+  expect(readUffdStats(paths, readFileSync)).toStrictEqual({ faults: 0, blocks: 0, serveMs: 0 });
 });
 
 // the handler's Go tests write the same golden file, so the layout matches on
@@ -175,7 +175,11 @@ test('#readUffdStats reads the counts the handler wrote, with its serve time in 
     paths.uffdStatsFile,
   );
 
-  expect(readUffdStats(paths)).toStrictEqual({ faults: 214, blocks: 151, serveMs: 388 });
+  expect(readUffdStats(paths, readFileSync)).toStrictEqual({
+    faults: 214,
+    blocks: 151,
+    serveMs: 388,
+  });
 });
 
 test('#readHandlerState reads no handler for an imp with no handler pid file', () => {
