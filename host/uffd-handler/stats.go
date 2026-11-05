@@ -10,16 +10,8 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// The stats file holds three little-endian uint64s: the faults served, the
-// data blocks read from the memory file, and the nanoseconds spent serving.
-// impd reads it while the handler runs, so each count is one aligned store.
-const (
-	statsFaults = iota
-	statsBlocks
-	statsServeNs
-	statsFields
-)
-
+// stats_layout.go numbers the fields, from stats-layout.json. impd reads the
+// file while the handler runs, so each count is one aligned store.
 const statsSize = statsFields * 8
 
 type copyResult int
