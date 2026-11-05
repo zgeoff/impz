@@ -1,10 +1,10 @@
 # Agent Guidelines
 
-imp gives you small Linux computers that stay yours: each one is a Firecracker microVM with real
-root, its own kernel and Docker inside.
-[`docs/architecture/overview.md`](docs/architecture/overview.md) explains how the pieces fit, and
-[`docs/runbooks/development.md`](docs/runbooks/development.md) holds the checks, the end-to-end
-harness, worktree dev instances, the hooks, and CI.
+imp gives you small Linux computers. Each one is a Firecracker microVM with real root, its own
+kernel and Docker inside. It sleeps when it is idle, and the next request wakes it with its disk and
+memory as they were. [`docs/architecture/overview.md`](docs/architecture/overview.md) explains how
+the pieces fit, and [`docs/runbooks/development.md`](docs/runbooks/development.md) holds the checks,
+the end-to-end harness, worktree dev instances, the hooks, and CI.
 
 ## Required reading
 
@@ -99,8 +99,9 @@ consumer an invented name.
   `packages/shared/src/test-utils/`.
 - impd's code in `packages/daemon/src/` sits in one folder per layer, and the `daemon-layer-*`
   entries of `zgeoff/import-zones` give the order: a layer imports only itself and the layers below
-  it. The composition root's files sit at the top of `src/`, above every layer. A known upward
-  import carries a disable comment that holds the issue that removes it.
+  it. The files at the top of `src/`, such as `create-impd.ts` and `main.ts`, are the composition
+  root: they build impd from the layers, so they sit above every layer. A known upward import
+  carries a disable comment that holds the issue that removes it.
 - The vm layer's folders, in `packages/daemon/src/vm/`, follow the same rule among themselves: the
   `daemon-vm-folder-*` entries give their order, so no import cycle runs between two vm folders. A
   new vm folder takes a place in that order.
