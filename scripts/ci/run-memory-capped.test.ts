@@ -1,8 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readText } from '@impz/daemon/read-text';
+import { createStubBin } from '@impz/test-utils/create-stub-bin';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { $ } from 'bun';
 
@@ -16,15 +17,11 @@ function setupTest() {
   const scriptPath = join(import.meta.dir, 'run-memory-capped.sh');
   const memoryStatPath = join(directory, 'memory.stat');
   const peakPath = join(directory, 'anon-peak');
-  const stubDirectory = join(directory, 'bin');
-
-  mkdirSync(stubDirectory);
 
   return {
     memoryStatPath,
     peakPath,
-    sleepStubPath: join(stubDirectory, 'sleep'),
-    sleepTicksPath: join(stubDirectory, 'sleep.ticks'),
+    stubDirectory: join(directory, 'stub'),
     runSample: async () => {
       const result = await $`bash ${scriptPath} --sample ${memoryStatPath} ${peakPath}`
         .nothrow()
@@ -36,9 +33,9 @@ function setupTest() {
         stderr: result.stderr.toString(),
       };
     },
-    runSampler: () => {
+    runSampler: (stubBin: string) => {
       const sampler = Bun.spawn(['bash', scriptPath, '--sampler', memoryStatPath, peakPath], {
-        env: { ...process.env, PATH: `${stubDirectory}:${process.env['PATH'] ?? ''}` },
+        env: { ...process.env, PATH: `${stubBin}:${process.env['PATH'] ?? ''}` },
         stdout: 'pipe',
         stderr: 'pipe',
       });
@@ -104,17 +101,11 @@ test('it keeps sampling, and prints nothing, after a sample whose read failed', 
 
   writeFileSync(ctx.peakPath, '4096\n');
 
-  writeFileSync(
-    ctx.sleepStubPath,
-    '#!/usr/bin/env bash\necho tick >> "$0.ticks"\ncommand -p sleep 0.05\n',
-  );
-
-  chmodSync(ctx.sleepStubPath, 0o755);
-
-  const sampler = ctx.runSampler();
+  const sleepStub = createStubBin(ctx.stubDirectory, 'sleep', 'command -p sleep 0.05');
+  const sampler = ctx.runSampler(sleepStub.bin);
 
   await waitFor(() => {
-    expect(readText(ctx.sleepTicksPath)).toStartWith('tick\ntick\n');
+    expect(readText(sleepStub.calls)).toStartWith('sleep 1\nsleep 1\n');
   });
 
   writeFileSync(ctx.memoryStatPath, 'anon 8192\nfile 1024\n');
