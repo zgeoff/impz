@@ -293,3 +293,18 @@ test('it refuses a scenario it does not know, and names the ones it does', async
     code: 2,
   });
 });
+
+test('it refuses a --prefix whose imp names outgrow an imp name, before it calls impd', async () => {
+  const result = await runCLIInProcess({
+    args: ['bench', 'wake', '--concurrency', '1', '--prefix', 'bench-wake-far-too-long-'],
+    env: { IMP_URL: 'http://127.0.0.1:1' },
+  });
+
+  expect(result).toStrictEqual({
+    stdout: '',
+    stderr: expect.stringMatching(
+      /^impz: --prefix bench-wake-far-too-long- gives imp names such as bench-wake-far-too-long-[0-9a-f]{12}-1-0, but an imp name must be a lowercase letter followed by up to 30 lowercase letters, digits or hyphens\n$/u,
+    ),
+    code: 2,
+  });
+});

@@ -4,12 +4,13 @@ import type { watchEvents } from '@impz/client';
 import type { ImpClient } from '../config/create-imp-client';
 import type { BenchResult } from './bench-report-schema';
 import type { BenchScenario, BenchSettings } from './bench-scenarios';
+import { buildBenchImpName } from './build-bench-imp-name';
 import { buildLatencySummary } from './build-latency-summary';
 import { isStepEvent } from './is-step-event';
 import { readImp } from './read-imp';
 
 export interface BenchPlan {
-  readonly runID: string;
+  readonly namePrefix: string;
   readonly scenarios: readonly BenchScenario[];
   readonly levels: readonly number[];
   readonly samples: number;
@@ -28,12 +29,12 @@ export interface BenchDeps {
 }
 
 export async function runBench(deps: BenchDeps, plan: Readonly<BenchPlan>): Promise<BenchResult[]> {
-  const prefix = `bench-${plan.runID}-`;
-
   const taken = await deps.client.imps.list();
 
-  if (taken.some((imp) => imp.name.startsWith(prefix))) {
-    throw new Error(`bench: imps named ${prefix}* already exist, so this run would not own them`);
+  if (taken.some((imp) => imp.name.startsWith(plan.namePrefix))) {
+    throw new Error(
+      `bench: imps named ${plan.namePrefix}* already exist, so this run would not own them`,
+    );
   }
 
   const log = await createEventLog(deps);
@@ -51,9 +52,8 @@ export async function runBench(deps: BenchDeps, plan: Readonly<BenchPlan>): Prom
           break;
         }
 
-        const names = Array.from(
-          { length: level },
-          (_, index) => `${prefix}${String(level)}-${String(index)}`,
+        const names = Array.from({ length: level }, (_, index) =>
+          buildBenchImpName(plan.namePrefix, level, index),
         );
 
         const result = await runLevel(deps, { plan, scenario, names, log, owned, leftovers });

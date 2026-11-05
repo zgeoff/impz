@@ -212,6 +212,13 @@ wake passes `--limit-ms` (default 500):
 scripts/dev/bench-wake.sh --cycles 3       # IMP_URL and IMP_TOKEN, or the saved login
 ```
 
+The script names its imps `bench-wake-<run>-1-<n>`, where `<run>` is the run's ID and `<n>` counts
+from 0. A token limited to them needs the `manage` scope and the pattern `bench-wake-*`:
+
+```sh
+impz token new wake-bench --scope manage --imps 'bench-wake-*'
+```
+
 On the WSL2 dev box (host kernel 6.6.87), the median wake was 793 ms with impd's wait off
 (`IMP_SLEEP_MIN_GUEST_UPTIME_MS=0`) and 142 ms with the default. On a host kernel with the fix, both
 should be fast; the report holds the host's kernel.

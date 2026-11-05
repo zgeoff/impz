@@ -16,10 +16,11 @@ impz bench wake --concurrency 1,8 --samples 50
 impz bench create,sleep --memory 512m --label rack-7 --json > bench.json
 ```
 
-The bench makes its own imps, named `bench-<run>-<concurrency>-<n>`, and removes each of them when a
-concurrency ends and again when the run ends, whether it passes or fails. It leaves every other imp
-alone, but its imps take RAM from them while it runs, so the RAM governor may put idle imps to
-sleep. Run it on a host with no work you need fast.
+The bench makes its own imps, named `<prefix><run>-<concurrency>-<n>`, where `<prefix>` is
+`--prefix` and `<run>` is the run's ID. A token scoped to `<prefix>*` reaches every imp a run makes.
+The bench removes each of them when a concurrency ends and again when the run ends, whether it
+passes or fails. It leaves every other imp alone, but its imps take RAM from them while it runs, so
+the RAM governor may put idle imps to sleep. Run it on a host with no work you need fast.
 
 It prints one line per concurrency to stderr while it runs, then the report to stdout: a table, or
 the whole report as JSON with `--json`.
@@ -50,6 +51,7 @@ times that step as the client sees it.
 | `--memory`       | the host's default | each imp's memory                                              |
 | `--image`        | the host's default | each imp's image                                               |
 | `--awake`        | `0`                | how long an imp stays awake before a scenario puts it to sleep |
+| `--prefix`       | `bench-`           | the start of each imp's name, before the run's ID              |
 | `--label`        | none               | a name for the machine, kept in the report                     |
 | `--limit-p50-ms` | none               | fail when the median of any concurrency passes this many ms    |
 

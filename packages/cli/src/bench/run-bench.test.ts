@@ -48,7 +48,7 @@ test('it refuses a run whose imp names are taken, and leaves those imps alone', 
       onProgress: () => {},
     },
     {
-      runID: 'c0ffee15a7e1',
+      namePrefix: 'bench-c0ffee15a7e1-',
       scenarios: [ctx.create],
       levels: [1],
       samples: 1,
@@ -89,7 +89,7 @@ test('it stops at a signal, fails the run, and removes the imps it made', async 
       signal: stopper.signal,
     },
     {
-      runID: 'deadbeef0042',
+      namePrefix: 'bench-deadbeef0042-',
       scenarios: [ctx.create],
       levels: [1, 2],
       samples: 1,
@@ -140,7 +140,7 @@ test.each([
         },
       },
       {
-        runID: 'c0ffee00a1b2',
+        namePrefix: 'bench-c0ffee00a1b2-',
         scenarios: [ctx.create],
         levels: [1],
         samples: 1,
@@ -194,7 +194,7 @@ test('it leaves the imp made under a name after a destroy whose answer was lost,
       },
     },
     {
-      runID: '0dd0bead0001',
+      namePrefix: 'bench-0dd0bead0001-',
       scenarios: [ctx.create],
       levels: [1],
       samples: 1,
@@ -233,7 +233,7 @@ test('it fails a run whose event stream broke, since its impd figures are incomp
       onProgress: () => {},
     },
     {
-      runID: '5ca1ab1e0007',
+      namePrefix: 'bench-5ca1ab1e0007-',
       scenarios: [ctx.create],
       levels: [1],
       samples: 1,
@@ -275,7 +275,7 @@ test('it counts an arrange whose create failed under its code, times no step, an
       },
     },
     {
-      runID: 'a11ce0000b0b',
+      namePrefix: 'bench-a11ce0000b0b-',
       scenarios: [wake],
       levels: [1],
       samples: 1,
@@ -318,7 +318,7 @@ test('it fails with the stream error and makes no imp when the event stream neve
       onProgress: () => {},
     },
     {
-      runID: 'b0bca7000001',
+      namePrefix: 'bench-b0bca7000001-',
       scenarios: [ctx.create],
       levels: [1],
       samples: 1,
@@ -351,7 +351,7 @@ test('it fails a run whose event stream impd ended cleanly', async () => {
       onProgress: () => {},
     },
     {
-      runID: '0ddba11c0de5',
+      namePrefix: 'bench-0ddba11c0de5-',
       scenarios: [ctx.create],
       levels: [1],
       samples: 1,
@@ -389,7 +389,7 @@ test('it fails a run that could not remove an imp it made, names it, and reports
       },
     },
     {
-      runID: 'feedface0001',
+      namePrefix: 'bench-feedface0001-',
       scenarios: [ctx.create],
       levels: [1],
       samples: 1,
@@ -461,7 +461,7 @@ test("it takes impd's figure from the timed step's event, never from its arrange
       onProgress: () => {},
     },
     {
-      runID: '0ddba11c0001',
+      namePrefix: 'bench-0ddba11c0001-',
       scenarios: [scenario],
       levels: [1],
       samples: 1,

@@ -10,10 +10,12 @@
 # wake takes 700-1100 ms on an affected host; a normal one 100-200 ms.
 #
 # It drives impd through the impz CLI, so it runs against any host: set
-# IMP_URL and IMP_TOKEN, or use the saved login. IMP_BIN picks the CLI
-# (default: scripts/impz from this checkout). To see the effect itself, run
-# impd with IMP_SLEEP_MIN_GUEST_UPTIME_MS=0; with the default, impd waits
-# out the young guest and the wakes stay fast.
+# IMP_URL and IMP_TOKEN, or use the saved login. Its imps are named
+# bench-wake-<run>-1-<n>, so a token made with --scope manage
+# --imps 'bench-wake-*' is enough. IMP_BIN picks the CLI (default:
+# scripts/impz from this checkout). To see the effect itself, run impd with
+# IMP_SLEEP_MIN_GUEST_UPTIME_MS=0; with the default, impd waits out the
+# young guest and the wakes stay fast.
 set -euo pipefail
 
 cycles=3
@@ -36,4 +38,4 @@ while [ $# -gt 0 ]; do
 done
 
 exec "${IMP_BIN:-$(dirname "$0")/../impz}" bench wake-young --concurrency 1 --samples "$cycles" \
-  --awake "$awake" --memory "$memory" --limit-p50-ms "$limit_ms"
+  --awake "$awake" --memory "$memory" --limit-p50-ms "$limit_ms" --prefix bench-wake-
