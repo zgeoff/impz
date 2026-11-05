@@ -1,72 +1,120 @@
 # Preloads, shared test utils and cleanup
 
-The [root preload](../../../../packages/shared/src/test-utils/preload.ts) owns the shared state of
-every test process, and the dashboard adds
-[a setup of its own](../../../../packages/dashboard/test-setup.ts) after it. Helpers that every
-package uses live in [the shared test utils](../../../../packages/shared/src/test-utils/), and each
-package keeps its own stand-ins in its `test-utils` folder. Read a helper's own test before you rely
-on it, because that test pins what the helper does.
+These traps cost the most time:
+
+- The root preload deletes your shell's `IMP_*` settings, so set an impd setting in the test.
+- MSW fails any request that no handler answers, so a request to a real server needs that server on
+  loopback or a unix socket.
+- `onTestFinished` runs its callbacks first registered, first run. A disposable stack releases last
+  deferred, first released. Pick the util by the order you need, as [Cleanup order](#cleanup-order)
+  shows.
+
+Before you rely on a helper, read its test, `<name>.test.ts` beside it. The test shows what the
+helper does.
+
+- [The root preload](#the-root-preload)
+- [Shared test utils](#shared-test-utils)
+- [The dashboard's preload](#the-dashboards-preload)
+- [Cleanup order](#cleanup-order)
+- [What a daemon setupTest returns](#what-a-daemon-setuptest-returns)
 
 ## The root preload
 
-The root preload gives each unit test a clean impd environment. It deletes every `IMP_*` variable
-the shell passed in, except the run gates, so a developer's own settings never reach a test. A test
-that needs an impd setting sets it through
-[`updateEnv`](../../../../packages/shared/src/test-utils/update-env.ts) before it calls
-`setupTest()`, and the test's impd then reads it through
-[`readImpEnv`](../../../../packages/shared/src/test-utils/read-imp-env.ts), as production does.
+The [root preload](../../../../packages/shared/src/test-utils/preload.ts) runs before every test
+file:
 
-The end-to-end suites run under a preload of their own, with no MSW server, because each journey
-talks to a real dev instance over the network.
+- It deletes every `IMP_*` variable the shell passed in, so your own settings never reach a test. It
+  keeps the four that turn on the host networking, small filesystem and real ZFS pool tests:
+  `IMP_HOST_TESTS`, `IMP_TEST_SMALL_FS`, `IMP_TEST_ZFS_ROOT` and `IMP_TEST_ZFS_DIR`.
+- It starts an MSW server that fails each request no handler answers, and resets the handlers after
+  each test.
+- After each test, it puts back every variable that
+  [`updateEnv`](../../../../packages/shared/src/test-utils/update-env.ts) changed, at the value it
+  had before the test.
 
-The shared test utils hold the condition wait
-[`waitFor`](../../../../packages/shared/src/test-utils/wait-for.ts) and the scripted answer queue
-[`buildStubAnswerQueue`](../../../../packages/shared/src/test-utils/build-stub-answer-queue.ts). The
-queue hands out a dependency's answers in order and throws on a call past the last one, so a test
-that expects three calls fails on a fourth.
+To give impd a setting:
+
+1. Call `updateEnv('IMP_<NAME>', '<value>')` at the top of the test, before `setupTest()`.
+2. In `setupTest()`, pass `env: readImpEnv()` to `startTestImpd`.
+   [`readImpEnv`](../../../../packages/shared/src/test-utils/read-imp-env.ts) collects the `IMP_*`
+   variables, and `startTestImpd` loads them into impd's config as production does.
+
+## Shared test utils
+
+Look in [the shared test utils](../../../../packages/shared/src/test-utils/) for a helper that knows
+nothing about imp. Each package keeps its own stand-ins in its `src/test-utils/` folder.
+
+- Wait on a condition with [`waitFor`](../../../../packages/shared/src/test-utils/wait-for.ts).
+- Script a dependency's answers with
+  [`buildStubAnswerQueue`](../../../../packages/shared/src/test-utils/build-stub-answer-queue.ts).
+  It answers in order and throws on a call past the last answer, so a test that expects three calls
+  fails on a fourth.
+- Test behaviour that spans a whole test process, such as a preload, in a child `bun test` through
+  [`runChildTests`](../../../../packages/shared/src/test-utils/run-child-tests.ts). The child gets
+  its own working folder. `runChildTests` kills it after its `timeoutMs` argument, 4000 by default.
+
+The end-to-end suites run under
+[their own preload](../../../../packages/shared/src/test-utils/preload-e2e.ts), with no MSW server,
+because each end-to-end test talks to a running impd over the network.
 
 ## The dashboard's preload
 
-Dashboard component tests run the real SDK against a real impd. The dashboard loads the DOM, then
-the root preload, then its own setup, which points the page at impd's fake origin and adds the
-`Sec-Fetch-Site` header that a browser sends to its own origin, because impd's same-origin check
-reads it.
+Dashboard component tests run the real client, `@impz/client`, against a real impd. The dashboard's
+`bunfig.toml` preloads the DOM, then the root preload, then
+[its own setup](../../../../packages/dashboard/test-setup.ts). That setup points the page at
+`IMPD_ORIGIN`, a made-up origin that `startDashboardImpd` routes to impd, and adds the
+`Sec-Fetch-Site` header that impd's same-origin check reads. A test never touches `IMPD_ORIGIN`.
 
-[`startDashboardImpd`](../../../../packages/dashboard/src/test-utils/start-dashboard-impd.ts) boots
-impd through `startTestImpd` and routes the fake origin to it through MSW. Bun's fetch keeps no
-cookies, so the route keeps the session cookie that impd sets and sends it back, as a browser does.
+To write a dashboard test:
 
-The dashboard's typecheck reads impd's source under lib.dom, where bun-types give way to the DOM's
-types. A daemon module that calls a Bun-only signature therefore types the call so that it checks
-under both.
+1. Boot impd with
+   [`startDashboardImpd`](../../../../packages/dashboard/src/test-utils/start-dashboard-impd.ts). It
+   keeps impd's session cookie and sends it back, as a browser does.
+2. Arrange state through the `harness` it returns: `harness.client`, an RPC client that holds the
+   root token, or the harness's stand-ins.
+3. Log in with that object's `logIn`.
+4. Mount the whole app with
+   [`renderApp`](../../../../packages/dashboard/src/test-utils/render-app.tsx).
+5. Assert on impd's state, never on the arguments that a mock received.
 
-To write a test, boot impd with `startDashboardImpd`, arrange state through the harness's root
-client or its stand-ins, log in with its `logIn`, and mount the whole app through
-[`renderApp`](../../../../packages/dashboard/src/test-utils/render-app.tsx). Assert what the page
-did through impd's own state, never through a call's input.
+The dashboard's type check reads impd's source with the DOM's types in place of Bun's. When daemon
+code calls a function whose Bun signature differs from the DOM's, such as `fetch`, type the call so
+that it checks under both.
 
 ## Cleanup order
 
-`onTestFinished` runs callbacks in the order of registration, so the cleanup order follows from
-which kind of util a test calls:
+Read a util's parameters to tell how it releases its resource:
 
-- **A util that registers its own cleanup** releases its resource before anything that the test
-  registers after the call. The guest agent stand-ins, the SSH and DNS stand-ins, the Firecracker
-  stand-ins, the test databases, the port picker and the in-memory metrics are this kind. A stub
-  agent also accepts a stack, and then defers its close into that stack instead.
-- **A util whose first parameter is a stack** registers nothing itself. The governed-imps harness,
-  the move hosts, the broker's network stand-ins, the echo servers and the ZFS test dataset are this
-  kind. The test creates the stack and registers its disposal on the next line. Anything that must
-  release first, such as a held template build step, defers into the same stack after the util's
-  call.
+- **A util that takes a stack as its first parameter**, such as
+  [`startTestImpd`](../../../../packages/daemon/src/test-utils/start-test-impd.ts), defers its
+  release into that stack and registers nothing. Search the `src/test-utils/` folders for
+  `stack: Readonly<AsyncDisposableStack>` to find the others.
+- **A util with no stack parameter** registers its own `onTestFinished`, so it releases before
+  anything the test registers after the call.
+- **A util with an optional `stack` option**, such as
+  [`startStubAgent`](../../../../packages/daemon/src/test-utils/vm/start-stub-agent.ts), defers into
+  the stack when you pass one, and registers its own `onTestFinished` only when you pass none.
 
-## What a setupTest returns
+When a test uses a stack, create it and register its disposal on the next line, so a throw later in
+`setupTest()` still releases it:
 
-A daemon test file's `setupTest()` returns the harness's `createTestImage` closure and seeds no
-image. Each test that creates an imp calls that closure in its arrange phase, and a test that
-asserts on the image keeps the record the closure returns. A test that asserts a time sets the
-harness's frozen clock with `setClock` in its arrange phase.
+```ts
+const stack = new AsyncDisposableStack();
 
-To test behaviour that spans a whole test process, such as a preload, run the test file in a child
-`bun test` through [`runChildTests`](../../../../packages/shared/src/test-utils/run-child-tests.ts).
-The runner gives the child its own working directory and kills it at a timeout.
+onTestFinished(() => stack.disposeAsync());
+```
+
+The stack releases last deferred, first released. When your resource must be released before the
+util's resource, defer your release into the stack after the util's call. An example is a step that
+the fake VMM, [`buildStubVmm`](../../../../packages/daemon/src/test-utils/vm/build-stub-vmm.ts),
+still holds when impd stops.
+
+## What a daemon setupTest returns
+
+In a daemon test file, write `setupTest()` to create the stack, call `startTestImpd`, and return
+what it returns, the harness. Seed no image in `setupTest()`:
+
+- In each test that creates an imp, call the harness's `createTestImage` in the arrange phase. Keep
+  the image record it returns when the test asserts on the image.
+- To assert a timestamp, pass `frozenClockMs` to `startTestImpd` in `setupTest()`, and move the
+  clock with the harness's `setClock` in the test's arrange phase.
