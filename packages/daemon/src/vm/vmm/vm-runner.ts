@@ -41,11 +41,13 @@ import {
   buildServedFilePath,
   explainUffdFailure,
   readHandlerState,
+  readUffdStats,
   removeUffdFiles,
   requireHandlerBin,
   startUffdHandler,
   stopUffdHandler,
 } from './uffd-handler';
+import type { UffdStats } from './uffd-handler';
 import { writeSnapshotBase } from './write-snapshot-base';
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
@@ -73,6 +75,7 @@ export interface StartedVm {
   readonly guestSteps?: Readonly<Record<string, number>> | undefined;
   readonly identityReset?: string | undefined;
   readonly bootId?: string | undefined;
+  readonly pageHandler?: UffdStats | undefined;
 }
 
 interface WakePlan {
@@ -497,6 +500,7 @@ export function createVmRunner(jails: Jails, options: Readonly<VmRunnerOptions> 
           agentVersion: ping.version,
           timings: timer.marks,
           bootId: ping.bootId,
+          ...(isUffd && { pageHandler: readUffdStats(plan.paths) }),
         };
       } catch (error) {
         const reason = explainUffdFailure(plan.paths, procRoot, getErrorMessage(error));

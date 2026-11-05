@@ -7,6 +7,7 @@ import type { VmOwner } from '../../src/vm/vmm/firecracker-process';
 import type { JailUser } from '../../src/vm/vmm/jail';
 import { TemplateRestoreError } from '../../src/vm/vmm/template-vm';
 import type { TemplateBuildPlan, TemplateRestorePlan } from '../../src/vm/vmm/template-vm';
+import type { UffdStats } from '../../src/vm/vmm/uffd-handler';
 import type { VmRunner } from '../../src/vm/vmm/vm-runner';
 
 export const STUB_AGENT_VERSION = '0.1.0';
@@ -94,6 +95,7 @@ export function buildStubVmm() {
     identityReset: 'ok' as 'ok' | 'failed' | undefined,
     hasBootId: true,
     bootSteps: {} as Readonly<Record<string, number>>,
+    pageHandler: undefined as UffdStats | undefined,
   };
 
   const guestMemory = new Map<string, FakeGuestMemory>();
@@ -286,6 +288,7 @@ export function buildStubVmm() {
               ...vm,
               hugePages: plan.hugePages ?? 'None',
               bootId: bootIds.get(plan.paths.apiSocket),
+              ...(plan.hugePages === '2M' && { pageHandler: guest.pageHandler }),
             };
           } finally {
             usedSnapshots.add(plan.paths.snapshotDir);
@@ -572,6 +575,10 @@ export function buildStubVmm() {
 
     setGuestBootSteps: (steps: Readonly<Record<string, number>>) => {
       guest.bootSteps = steps;
+    },
+
+    setPageHandlerStats: (stats: Readonly<UffdStats>) => {
+      guest.pageHandler = stats;
     },
 
     setIdentityReset: (result: 'ok' | 'failed' | undefined) => {

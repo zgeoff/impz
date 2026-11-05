@@ -14,6 +14,7 @@ export interface ImpPaths extends FirecrackerPaths {
   readonly runDir: string;
   readonly uffdSocket: string;
   readonly uffdPidFile: string;
+  readonly uffdStatsFile: string;
   readonly disk: string;
   readonly snapshotDir: string;
   readonly vmstate: string;
@@ -32,9 +33,14 @@ export interface ImagePaths {
   readonly config: string;
 }
 
-// A 2 MiB guest's page handler listens and records its pid in the run
-// directory, beside its VM's sockets.
-export const UFFD_RUN_FILES = { socket: 'uffd.sock', pidFile: 'uffd.pid' } as const;
+// A 2 MiB guest's page handler listens, records its pid and counts its faults
+// in the run directory, beside its VM's sockets.
+export const UFFD_RUN_FILES = {
+  socket: 'uffd.sock',
+  pidFile: 'uffd.pid',
+  statsFile: 'uffd.stats',
+} as const;
+
 const DATA_DIRS = ['db', 'system', 'images', 'imps'] as const;
 
 export function createDataDirs(dataDir: string): void {
@@ -70,6 +76,7 @@ export function buildImpPaths(dataDir: string, impId: string): ImpPaths {
     pidFile: join(runDir, 'pid'),
     uffdSocket: join(runDir, UFFD_RUN_FILES.socket),
     uffdPidFile: join(runDir, UFFD_RUN_FILES.pidFile),
+    uffdStatsFile: join(runDir, UFFD_RUN_FILES.statsFile),
     ...buildSnapshotPaths(join(directory, 'snapshot')),
     vmIdentity: join(directory, 'vm.json'),
     checkpointsDir: join(directory, 'checkpoints'),

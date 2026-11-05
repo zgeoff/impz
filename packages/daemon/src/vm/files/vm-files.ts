@@ -60,6 +60,15 @@ export function writeRegularFile(path: string, text: string): void {
   }
 }
 
+export function createZeroedFile(path: string, sizeBytes: number): number {
+  const fd = openRegularFile(path, constants.O_RDWR, 0o644);
+
+  ftruncateSync(fd, 0);
+  ftruncateSync(fd, sizeBytes);
+
+  return fd;
+}
+
 export function readRegularFile(path: string): string {
   const fd = openSync(path, constants.O_RDONLY | SAFE_FLAGS);
 

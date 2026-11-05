@@ -755,7 +755,7 @@ test('#removeUffdDevice removes the userfaultfd node the jailer made and leaves 
   expect(existsSync(join(imp.root, 'dev', 'kvm'))).toBeTrue();
 });
 
-test("#seal keeps a page handler's socket and pid file in run/", async () => {
+test("#seal keeps a page handler's socket, pid file and stats file in run/", async () => {
   const ctx = setupTest();
   const imp = ctx.createImpDir('i1');
 
@@ -771,6 +771,7 @@ test("#seal keeps a page handler's socket and pid file in run/", async () => {
 
   writeFileSync(imp.paths.logFile, 'boot\n');
   writeFileSync(imp.paths.uffdPidFile, '4243\n');
+  writeFileSync(imp.paths.uffdStatsFile, Buffer.alloc(24));
 
   ctx.jails.seal(imp.paths, 4242);
 
@@ -779,6 +780,7 @@ test("#seal keeps a page handler's socket and pid file in run/", async () => {
     'pid',
     'uffd.pid',
     'uffd.sock',
+    'uffd.stats',
   ]);
 });
 
