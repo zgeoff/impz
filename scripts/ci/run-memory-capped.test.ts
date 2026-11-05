@@ -3,14 +3,19 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readText } from '@impz/daemon/read-text';
+import { stopSuiteGroup } from '@impz/e2e-harness/run-suite';
 import { createStubBin } from '@impz/test-utils/create-stub-bin';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { $ } from 'bun';
 
 function setupTest() {
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
   const directory = mkdtempSync(join(tmpdir(), 'imp-memory-capped-'));
 
-  onTestFinished(() => {
+  stack.defer(() => {
     rmSync(directory, { recursive: true, force: true });
   });
 
@@ -38,13 +43,21 @@ function setupTest() {
         env: { ...process.env, PATH: `${stubBin}:${process.env['PATH'] ?? ''}` },
         stdout: 'pipe',
         stderr: 'pipe',
+        detached: true,
       });
 
-      onTestFinished(() => {
-        sampler.kill();
-      });
+      const stopSampler = async () => {
+        stopSuiteGroup(sampler.pid, 'SIGTERM');
 
-      return sampler;
+        await sampler.exited;
+      };
+
+      stack.defer(stopSampler);
+
+      return {
+        stop: stopSampler,
+        readStderr: () => new Response(sampler.stderr).text(),
+      };
     },
   };
 }
@@ -114,11 +127,9 @@ test('it keeps sampling, and prints nothing, after a sample whose read failed', 
     expect(readText(ctx.peakPath)).toBe('8192\n');
   });
 
-  sampler.kill();
+  await sampler.stop();
 
-  await sampler.exited;
-
-  const stderr = await new Response(sampler.stderr).text();
+  const stderr = await sampler.readStderr();
 
   expect(stderr).toBe('');
 });

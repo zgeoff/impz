@@ -3,30 +3,44 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readText } from '@impz/daemon/read-text';
+import { stopSuiteGroup } from '@impz/e2e-harness/run-suite';
 import { createStubBin } from '@impz/test-utils/create-stub-bin';
-import { $ } from 'bun';
 
 function setupTest() {
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
   const stubDirectory = mkdtempSync(join(tmpdir(), 'imp-embedded-shell-stub-'));
 
-  onTestFinished(() => {
+  stack.defer(() => {
     rmSync(stubDirectory, { recursive: true, force: true });
   });
 
   return {
     stubDirectory,
     runCheck: async (stubBin: string) => {
-      const result = await $`bun ${join(import.meta.dir, 'check-embedded-shell.ts')}`
-        .cwd(join(import.meta.dir, '..', '..'))
-        .env({ ...process.env, PATH: `${stubBin}:${process.env['PATH'] ?? ''}` })
-        .nothrow()
-        .quiet();
+      const check = Bun.spawn(['bun', join(import.meta.dir, 'check-embedded-shell.ts')], {
+        cwd: join(import.meta.dir, '..', '..'),
+        env: { ...process.env, PATH: `${stubBin}:${process.env['PATH'] ?? ''}` },
+        stdout: 'pipe',
+        stderr: 'pipe',
+        detached: true,
+      });
 
-      return {
-        exitCode: result.exitCode,
-        stdout: result.stdout.toString(),
-        stderr: result.stderr.toString(),
-      };
+      stack.defer(async () => {
+        stopSuiteGroup(check.pid, 'SIGTERM');
+
+        await check.exited;
+      });
+
+      const [exitCode, stdout, stderr] = await Promise.all([
+        check.exited,
+        new Response(check.stdout).text(),
+        new Response(check.stderr).text(),
+      ]);
+
+      return { exitCode, stdout, stderr };
     },
   };
 }
