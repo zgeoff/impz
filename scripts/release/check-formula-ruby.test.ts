@@ -41,6 +41,31 @@ test('it passes a formula that ruby parses, and runs ruby -c on the rendered for
   expect(readFileSync(stub.calls, 'utf8')).toMatch(/^ruby -c \S+\/imp\.rb\n$/v);
 });
 
+test('it fails with the build diagnostic, and runs no ruby, when build-formula.sh fails', async () => {
+  const ctx = setupTest();
+  const ruby = createStubBin(ctx.directoryPath, 'ruby', "echo 'Syntax OK'");
+
+  createStubBin(
+    ctx.directoryPath,
+    'bash',
+    'echo "build-formula: no sha256 for impz-linux-x64" >&2\nexit 1',
+  );
+
+  const result = await ctx.runScript(ruby.bin);
+
+  expect({
+    exitCode: result.exitCode,
+    stderr: result.stderr.toString(),
+    rubyCalls: readFileSync(ruby.calls, 'utf8')
+      .split('\n')
+      .filter((call) => call.startsWith('ruby')),
+  }).toStrictEqual({
+    exitCode: 1,
+    stderr: expect.stringContaining('build-formula: no sha256 for impz-linux-x64'),
+    rubyCalls: [],
+  });
+});
+
 test('it fails with what ruby printed when ruby refuses the formula', async () => {
   const ctx = setupTest();
 

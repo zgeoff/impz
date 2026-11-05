@@ -52,6 +52,77 @@ test('it pulls each image of the lane, then starts one container of each on a ne
   ]);
 });
 
+test('it fails, and makes nothing, when a pull fails', async () => {
+  const ctx = setupTest();
+
+  const stub = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    '[ "$1" = pull ] && { echo "toomanyrequests: rate limit" >&2; exit 1; }\nexit 0',
+  );
+
+  const result = await ctx.runScript(stub.bin, 'pebble');
+
+  expect({
+    exitCode: result.exitCode,
+    stderr: result.stderr.toString(),
+    calls: ctx.readCalls(stub.calls),
+  }).toStrictEqual({
+    exitCode: 1,
+    stderr: expect.stringContaining('toomanyrequests: rate limit'),
+    calls: [expect.stringMatching(/^docker pull --quiet ghcr\.io\/letsencrypt\/pebble:/v), ''],
+  });
+});
+
+test('it fails, and creates no container, when the network will not create', async () => {
+  const ctx = setupTest();
+
+  const stub = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    '[ "$1" = network ] && [ "$2" = create ] && { echo "pool overlaps" >&2; exit 1; }\nexit 0',
+  );
+
+  const result = await ctx.runScript(stub.bin, 'pebble');
+
+  expect({
+    exitCode: result.exitCode,
+    stderr: result.stderr.toString(),
+    lastCalls: ctx.readCalls(stub.calls).slice(-2),
+  }).toStrictEqual({
+    exitCode: 1,
+    stderr: expect.stringContaining('pool overlaps'),
+    lastCalls: ['docker network create imp-pebble-lane-warm-up-<pid>', ''],
+  });
+});
+
+test('it removes its containers and network, and fails, when a container will not create', async () => {
+  const ctx = setupTest();
+
+  const stub = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    '[ "$1" = create ] && { echo "no such image" >&2; exit 1; }\nexit 0',
+  );
+
+  const result = await ctx.runScript(stub.bin, 'pebble');
+
+  expect({
+    exitCode: result.exitCode,
+    stderr: result.stderr.toString(),
+    lastCalls: ctx.readCalls(stub.calls).slice(-4),
+  }).toStrictEqual({
+    exitCode: 1,
+    stderr: expect.stringContaining('no such image'),
+    lastCalls: [
+      expect.stringMatching(/^docker create --name imp-pebble-lane-warm-up-<pid>-pebble /v),
+      'docker rm --force imp-pebble-lane-warm-up-<pid>-pebble imp-pebble-lane-warm-up-<pid>-challtestsrv',
+      'docker network rm imp-pebble-lane-warm-up-<pid>',
+      '',
+    ],
+  });
+});
+
 test('it removes its containers and network when a container will not start', async () => {
   const ctx = setupTest();
   const stub = createStubBin(ctx.directoryPath, 'docker', '[ "$1" = start ] && exit 1\nexit 0');
