@@ -161,6 +161,7 @@
       },
       "devDependencies": {
         "@faker-js/faker": "catalog:",
+        "@impz/cli": "workspace:*",
         "@impz/e2e-harness": "workspace:*",
         "@modelcontextprotocol/client": "catalog:",
         "@msw/data": "catalog:",

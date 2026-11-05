@@ -12,7 +12,7 @@ function setupTest() {
     rmSync(directory, { recursive: true, force: true });
   });
 
-  mkdirSync(join(directory, 'checkout', 'scripts', 'bench'), { recursive: true });
+  mkdirSync(join(directory, 'checkout', 'packages', 'daemon', 'bench'), { recursive: true });
   writeFileSync(join(directory, 'summary'), '');
 
   return {
@@ -29,7 +29,7 @@ test('it measures on a dev instance it starts and stops, and writes the result a
   createStubDevScript(ctx.checkout, ctx.calls, 'tok_bench');
 
   writeFileSync(
-    join(ctx.checkout, 'scripts', 'bench', 'measure-touched-pages.ts'),
+    join(ctx.checkout, 'packages', 'daemon', 'bench', 'measure-touched-pages.ts'),
     `import { appendFileSync } from 'node:fs';\nappendFileSync('${ctx.calls}', \`measure \${process.env['IMP_URL']} \${process.env['IMP_TOKEN']}\\n\`);\nconsole.log('{"touched": 12}');\n`,
   );
 
@@ -67,7 +67,7 @@ test('it fails, writing no summary, when the measure fails', async () => {
   createStubDevScript(ctx.checkout, ctx.calls, 'tok_bench');
 
   writeFileSync(
-    join(ctx.checkout, 'scripts', 'bench', 'measure-touched-pages.ts'),
+    join(ctx.checkout, 'packages', 'daemon', 'bench', 'measure-touched-pages.ts'),
     'process.exit(1);\n',
   );
 

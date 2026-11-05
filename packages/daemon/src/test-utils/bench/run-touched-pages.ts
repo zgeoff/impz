@@ -187,7 +187,7 @@ async function measureTouchedPages(
 
   const counted = await readContainer(deps, [
     'bun',
-    '/src/scripts/bench/count-changed-pages.ts',
+    '/src/packages/daemon/bench/count-changed-pages.ts',
     BASE_COPY,
     memFile,
   ]);

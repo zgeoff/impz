@@ -19,12 +19,12 @@ test.each([
   ['an option it does not know', ['--huge-pages']],
 ])('it answers %s with its usage', (_label, argv) => {
   expect(parseTouchedPagesArgs(argv)).toBe(
-    'usage: bun scripts/bench/measure-touched-pages.ts [--memory <size>] [--write-mib <n>]',
+    'usage: bun packages/daemon/bench/measure-touched-pages.ts [--memory <size>] [--write-mib <n>]',
   );
 });
 
 test('it names a memory size it cannot read, then its usage', () => {
   expect(parseTouchedPagesArgs(['--memory', 'big'])).toBe(
-    'not a size: big (try 512m, 2g, 1t, or MiB as a whole number)\nusage: bun scripts/bench/measure-touched-pages.ts [--memory <size>] [--write-mib <n>]',
+    'not a size: big (try 512m, 2g, 1t, or MiB as a whole number)\nusage: bun packages/daemon/bench/measure-touched-pages.ts [--memory <size>] [--write-mib <n>]',
   );
 });

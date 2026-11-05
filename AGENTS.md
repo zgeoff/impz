@@ -47,7 +47,8 @@ packages/
   api/             the oRPC contract, schemas and exec stream framing of the control API
   cli/             impz, the command-line client
   client/          the typed client for impd
-  daemon/          impd, the host daemon, with its end-to-end suites and their fixtures in e2e/
+  daemon/          impd, the host daemon; e2e/ holds its end-to-end suites and their fixtures,
+                   and bench/ the scripts that the bench workflow, bench.yml, runs
   dashboard/       the web dashboard that impd serves at /ui/
   e2e-harness/     the end-to-end and bootstrap harnesses that scripts/test-e2e.sh and
                    scripts/test-bootstrap.sh run, and the helpers the suites import

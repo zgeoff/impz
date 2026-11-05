@@ -4,16 +4,16 @@ import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { REAL_CLOCK } from '@impz/daemon/real-clock';
 import { runCommand } from '@impz/e2e-harness/instance';
-import { withDevLock } from '../lib/with-dev-lock.ts';
-import { writeStderr } from '../lib/write-stderr.ts';
-import { writeStdoutLine } from '../lib/write-stdout-line.ts';
-import { writeText } from '../lib/write-text.ts';
-import { parseBenchArmsArgs } from './parse-bench-arms-args';
-import { runBenchArm } from './run-bench-arm';
-import type { BenchArmDeps } from './run-bench-arm';
-import { runBenchComparison } from './run-bench-comparison';
+import { withDevLock } from '../../../scripts/lib/with-dev-lock.ts';
+import { writeStderr } from '../../../scripts/lib/write-stderr.ts';
+import { writeStdoutLine } from '../../../scripts/lib/write-stdout-line.ts';
+import { writeText } from '../../../scripts/lib/write-text.ts';
+import { parseBenchArmsArgs } from '../src/test-utils/bench/parse-bench-arms-args';
+import { runBenchArm } from '../src/test-utils/bench/run-bench-arm';
+import type { BenchArmDeps } from '../src/test-utils/bench/run-bench-arm';
+import { runBenchComparison } from '../src/test-utils/bench/run-bench-comparison';
 
-const IMPZ = resolve(import.meta.dir, '..', 'impz');
+const IMPZ = resolve(import.meta.dir, '..', '..', '..', 'scripts', 'impz');
 
 const ARM_DEPS: BenchArmDeps = {
   withDevLock: (name, run) => withDevLock(tmpdir(), name, run),

@@ -151,6 +151,8 @@
               "packages/testing/**",
               "packages/e2e-harness/**",
               "packages/dashboard/e2e/**",
+              // a package's benchmarks of the running program
+              "packages/*/bench/**",
               "**/test-setup.ts"
             ],
             "reason": "production code never imports test support"

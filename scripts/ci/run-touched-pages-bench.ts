@@ -14,7 +14,7 @@ async function main(): Promise<void> {
 
   const printed = await $`scripts/dev/dev.sh token`.text();
 
-  const measured = await $`${process.execPath} scripts/bench/measure-touched-pages.ts`
+  const measured = await $`${process.execPath} packages/daemon/bench/measure-touched-pages.ts`
     .env({ ...process.env, IMP_URL: 'http://localhost:7070', IMP_TOKEN: printed.trim() })
     .text();
 

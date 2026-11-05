@@ -130,10 +130,10 @@ the last wakes of the burst wait for a slot.
 
 ## Touched pages on a 2 MiB sleep
 
-`scripts/bench/measure-touched-pages.ts` writes 128 MiB into a 1 GiB imp, puts it to sleep, wakes
-it, reads the 128 MiB back and puts it to sleep again. A 2 MiB sleep writes a mincore diff, which
-holds every pool page the guest touched, read or written. The measurement compares that with the 4
-KiB pages whose bytes changed between the two sleeps, which a dirty-page diff would write. Its
+`packages/daemon/bench/measure-touched-pages.ts` writes 128 MiB into a 1 GiB imp, puts it to sleep,
+wakes it, reads the 128 MiB back and puts it to sleep again. A 2 MiB sleep writes a mincore diff,
+which holds every pool page the guest touched, read or written. The measurement compares that with
+the 4 KiB pages whose bytes changed between the two sleeps, which a dirty-page diff would write. Its
 output is in [touched-pages.json](./results/touched-pages.json).
 
 | Sleep | Pool pages held | Memory file on disk | Changed 4 KiB pages | Changed, in 2 MiB pages |

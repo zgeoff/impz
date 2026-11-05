@@ -136,7 +136,7 @@ jobs:
 
       - name: Compare with the baseline
         run: >-
-          bun scripts/bench/run-bench-arms.ts --out .cache/bench --rounds "$ROUNDS" --arm
+          bun packages/daemon/bench/run-bench-arms.ts --out .cache/bench --rounds "$ROUNDS" --arm
           "baseline=.cache/baseline" --arm candidate=. -- "$SCENARIOS" --concurrency "$CONCURRENCY"
           --samples "$SAMPLES" --memory 256m
 
