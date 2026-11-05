@@ -67,6 +67,45 @@ test('it removes its containers and network when a container will not start', as
   ]);
 });
 
+test('it still removes its network, and fails, when removing its containers fails', async () => {
+  const ctx = setupTest();
+
+  const stub = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    '[ "$1" = rm ] && { echo "cannot remove a container: device busy" >&2; exit 1; }\nexit 0',
+  );
+
+  const result = await ctx.runScript(stub.bin, 'pebble');
+
+  expect({
+    exitCode: result.exitCode,
+    stderr: result.stderr.toString(),
+    lastCalls: ctx.readCalls(stub.calls).slice(-2),
+  }).toStrictEqual({
+    exitCode: 1,
+    stderr: expect.stringContaining('docker rm --force imp-pebble-lane-warm-up-'),
+    lastCalls: ['docker network rm imp-pebble-lane-warm-up-<pid>', ''],
+  });
+});
+
+test('it fails when removing its network fails, after it removed its containers', async () => {
+  const ctx = setupTest();
+
+  const stub = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    '[ "$1" = network ] && [ "$2" = rm ] && exit 1\nexit 0',
+  );
+
+  const result = await ctx.runScript(stub.bin, 'pebble');
+
+  expect({ exitCode: result.exitCode, stderr: result.stderr.toString() }).toStrictEqual({
+    exitCode: 1,
+    stderr: expect.stringContaining('docker network rm imp-pebble-lane-warm-up-'),
+  });
+});
+
 test('it refuses a lane it has no images for, and runs no docker', async () => {
   const ctx = setupTest();
   const stub = createStubBin(ctx.directoryPath, 'docker');

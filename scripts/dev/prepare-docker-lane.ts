@@ -17,6 +17,8 @@ const started = performance.now();
 
 runDocker(['network', 'create', network]);
 
+let startFailure: unknown = null;
+
 try {
   for (const [key, image] of images) {
     runDocker([
@@ -32,12 +34,27 @@ try {
 
     runDocker(['start', `${network}-${key}`]);
   }
-} finally {
-  Bun.spawnSync(['docker', 'rm', '--force', ...images.map(([key]) => `${network}-${key}`)], {
-    stdout: 'ignore',
-  });
+} catch (error) {
+  startFailure = error;
+}
 
-  Bun.spawnSync(['docker', 'network', 'rm', network], { stdout: 'ignore' });
+const removalFailures = [
+  ['rm', '--force', ...images.map(([key]) => `${network}-${key}`)],
+  ['network', 'rm', network],
+].flatMap((args) => {
+  const removal = Bun.spawnSync(['docker', ...args], { stdout: 'ignore', stderr: 'inherit' });
+
+  return removal.exitCode === 0
+    ? []
+    : [`docker ${args.join(' ')} exited ${String(removal.exitCode)}`];
+});
+
+if (removalFailures.length > 0) {
+  throw new Error(removalFailures.join('\n'), { cause: startFailure });
+}
+
+if (startFailure !== null) {
+  throw startFailure;
 }
 
 const firstContainersMs = Math.round(performance.now() - started);
