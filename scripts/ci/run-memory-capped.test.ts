@@ -1,7 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { readText } from '@impz/daemon/read-text';
+import { waitFor } from '@impz/test-utils/wait-for';
 import { $ } from 'bun';
 
 function setupTest() {
@@ -11,17 +13,22 @@ function setupTest() {
     rmSync(directory, { recursive: true, force: true });
   });
 
+  const scriptPath = join(import.meta.dir, 'run-memory-capped.sh');
   const memoryStatPath = join(directory, 'memory.stat');
   const peakPath = join(directory, 'anon-peak');
+  const stubDirectory = join(directory, 'bin');
+
+  mkdirSync(stubDirectory);
 
   return {
     memoryStatPath,
     peakPath,
+    sleepStubPath: join(stubDirectory, 'sleep'),
+    sleepTicksPath: join(stubDirectory, 'sleep.ticks'),
     runSample: async () => {
-      const result =
-        await $`bash ${join(import.meta.dir, 'run-memory-capped.sh')} --sample ${memoryStatPath} ${peakPath}`
-          .nothrow()
-          .quiet();
+      const result = await $`bash ${scriptPath} --sample ${memoryStatPath} ${peakPath}`
+        .nothrow()
+        .quiet();
 
       return {
         exitCode: result.exitCode,
@@ -29,7 +36,19 @@ function setupTest() {
         stderr: result.stderr.toString(),
       };
     },
-    readPeak: () => readFileSync(peakPath, 'utf8'),
+    runSampler: () => {
+      const sampler = Bun.spawn(['bash', scriptPath, '--sampler', memoryStatPath, peakPath], {
+        env: { ...process.env, PATH: `${stubDirectory}:${process.env['PATH'] ?? ''}` },
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+
+      onTestFinished(() => {
+        sampler.kill();
+      });
+
+      return sampler;
+    },
   };
 }
 
@@ -41,7 +60,7 @@ test('it keeps the peak and prints nothing when memory.stat cannot be read', asy
   const result = await ctx.runSample();
 
   expect(result).toStrictEqual({ exitCode: 0, stdout: '', stderr: '' });
-  expect(ctx.readPeak()).toBe('4096\n');
+  expect(readText(ctx.peakPath)).toBe('4096\n');
 });
 
 test('it keeps the peak and prints nothing when memory.stat holds no anon line', async () => {
@@ -53,7 +72,7 @@ test('it keeps the peak and prints nothing when memory.stat holds no anon line',
   const result = await ctx.runSample();
 
   expect(result).toStrictEqual({ exitCode: 0, stdout: '', stderr: '' });
-  expect(ctx.readPeak()).toBe('4096\n');
+  expect(readText(ctx.peakPath)).toBe('4096\n');
 });
 
 test('it raises the peak to a higher anon reading', async () => {
@@ -65,7 +84,7 @@ test('it raises the peak to a higher anon reading', async () => {
   const result = await ctx.runSample();
 
   expect(result).toStrictEqual({ exitCode: 0, stdout: '', stderr: '' });
-  expect(ctx.readPeak()).toBe('8192\n');
+  expect(readText(ctx.peakPath)).toBe('8192\n');
 });
 
 test('it keeps the peak above a lower anon reading', async () => {
@@ -77,5 +96,38 @@ test('it keeps the peak above a lower anon reading', async () => {
   const result = await ctx.runSample();
 
   expect(result).toStrictEqual({ exitCode: 0, stdout: '', stderr: '' });
-  expect(ctx.readPeak()).toBe('4096\n');
+  expect(readText(ctx.peakPath)).toBe('4096\n');
+});
+
+test('it keeps sampling, and prints nothing, after a sample whose read failed', async () => {
+  const ctx = setupTest();
+
+  writeFileSync(ctx.peakPath, '4096\n');
+
+  writeFileSync(
+    ctx.sleepStubPath,
+    '#!/usr/bin/env bash\necho tick >> "$0.ticks"\ncommand -p sleep 0.05\n',
+  );
+
+  chmodSync(ctx.sleepStubPath, 0o755);
+
+  const sampler = ctx.runSampler();
+
+  await waitFor(() => {
+    expect(readText(ctx.sleepTicksPath)).toStartWith('tick\ntick\n');
+  });
+
+  writeFileSync(ctx.memoryStatPath, 'anon 8192\nfile 1024\n');
+
+  await waitFor(() => {
+    expect(readText(ctx.peakPath)).toBe('8192\n');
+  });
+
+  sampler.kill();
+
+  await sampler.exited;
+
+  const stderr = await new Response(sampler.stderr).text();
+
+  expect(stderr).toBe('');
 });

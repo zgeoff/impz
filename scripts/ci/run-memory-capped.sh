@@ -7,15 +7,25 @@
 # passwordless sudo, as a GitHub runner has.
 set -euo pipefail
 
-# one sample of the sampler below: raise the peak in <peak file> to the anon
-# line of <memory.stat>. Under the cap the read can fail with ENOMEM; that
-# sample is lost, and its error must not reach the command's stderr
+# one sample: raise the peak in <peak file> to the anon line of <memory.stat>.
+# Under the cap the read can fail with ENOMEM; that sample is lost, and its
+# error must not reach the command's stderr
 if [ "${1:-}" = --sample ]; then
   anon=$(sed -n 's/^anon //p' "$2" 2> /dev/null) || true
   if [ -n "$anon" ] && [ "$anon" -gt "$(cat "$3")" ]; then
     echo "$anon" > "$3"
   fi
   exit 0
+fi
+
+# the sampler: one sample each second until killed. Under the cap a fork can
+# fail too, so a failed sample neither ends the loop nor reaches the
+# command's stderr
+if [ "${1:-}" = --sampler ]; then
+  exec 2> /dev/null
+  while sleep 1; do
+    "$0" --sample "$2" "$3" || true
+  done
 fi
 
 # inside the scope, as root: the command as the caller, with the caller's
@@ -29,11 +39,7 @@ if [ "${1:-}" = --inside ]; then
   # cap; the anonymous memory, sampled each second, is what it cannot
   anon_file=$(mktemp)
   echo 0 > "$anon_file"
-  # under the cap a fork can fail too, so a failed sample neither ends the
-  # loop nor reaches the command's stderr
-  while sleep 1; do
-    "$0" --sample "$cgroup/memory.stat" "$anon_file" || true
-  done 2> /dev/null &
+  "$0" --sampler "$cgroup/memory.stat" "$anon_file" &
   sampler=$!
 
   status=0
