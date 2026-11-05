@@ -1,6 +1,7 @@
 // A lane's first test pays for an image pull, and on a fresh CI runner for the engine's first
 // container, 2 to 5 s more than a later test. This pays both before the tests start.
 import { PEBBLE_IMAGES } from '@impz/daemon/testing/pebble-images';
+import invariant from 'tiny-invariant';
 import * as z from 'zod';
 import { HEADSCALE_IMAGES } from './headscale-images';
 
@@ -17,7 +18,7 @@ const started = performance.now();
 
 runDocker(['network', 'create', network]);
 
-let startFailure: unknown = null;
+let startFailure: Error | null = null;
 
 try {
   for (const [key, image] of images) {
@@ -35,6 +36,8 @@ try {
     runDocker(['start', `${network}-${key}`]);
   }
 } catch (error) {
+  invariant(error instanceof Error);
+
   startFailure = error;
 }
 
