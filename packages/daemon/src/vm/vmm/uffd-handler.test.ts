@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { createStubUffdHandler } from '../../../testing/vm/create-stub-uffd-handler';
+import { writeStubUffdStats } from '../../../testing/vm/write-stub-uffd-stats';
 import { stopPid } from '../../platform/process/proc';
 import { buildImpPaths } from '../storage/data-layout';
 import { probeProcessAlive } from './firecracker-process';
@@ -146,7 +147,7 @@ test('#startUffdHandler hands the handler zeroed counts as descriptor 4, over th
   const memFile = join(ctx.directoryPath, 'mem');
 
   writeFileSync(memFile, '');
-  writeFileSync(paths.uffdStatsFile, Buffer.alloc(24, 0x7f));
+  writeStubUffdStats(paths.uffdStatsFile, { faults: 31, blocks: 12, serveNs: 9_000_000 });
 
   const pid = await startUffdHandler({
     handlerBin: handler.path,

@@ -19,6 +19,7 @@ import invariant from 'tiny-invariant';
 import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { buildStubMounts } from '../../../testing/vm/build-stub-mounts';
 import { buildStubUidProcesses } from '../../../testing/vm/build-stub-uid-processes';
+import { writeStubUffdStats } from '../../../testing/vm/write-stub-uffd-stats';
 import { buildImpPaths } from '../storage/data-layout';
 import {
   buildJailerCommand,
@@ -771,7 +772,7 @@ test("#seal keeps a page handler's socket, pid file and stats file in run/", asy
 
   writeFileSync(imp.paths.logFile, 'boot\n');
   writeFileSync(imp.paths.uffdPidFile, '4243\n');
-  writeFileSync(imp.paths.uffdStatsFile, Buffer.alloc(24));
+  writeStubUffdStats(imp.paths.uffdStatsFile, { faults: 0, blocks: 0, serveNs: 0 });
 
   ctx.jails.seal(imp.paths, 4242);
 

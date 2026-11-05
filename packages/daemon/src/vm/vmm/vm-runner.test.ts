@@ -27,6 +27,7 @@ import {
 } from '../../../testing/vm/start-stub-firecracker';
 import { startStubFirecrackerApi } from '../../../testing/vm/start-stub-firecracker-api';
 import { startStubParkedAgent } from '../../../testing/vm/start-stub-parked-agent';
+import { writeStubUffdStats } from '../../../testing/vm/write-stub-uffd-stats';
 import { deriveSlotAddress, parseSubnet } from '../../host-net/net/addressing';
 import { stopPid } from '../../platform/process/proc';
 import { sendPing } from '../agent-client/agent-requests';
@@ -937,11 +938,6 @@ test('#wakeVm returns the counts the page handler of a 2M wake made by the time 
   const ctx = setupTest();
   const paths = ctx.createImpDir('vm');
   const handler = createStubUffdHandler(ctx.directoryPath);
-  const counts = Buffer.alloc(24);
-
-  counts.writeBigUInt64LE(57n, 0);
-  counts.writeBigUInt64LE(40n, 8);
-  counts.writeBigUInt64LE(96_200_000n, 16);
 
   mkdirSync(paths.snapshotDir, { recursive: true });
   writeFileSync(paths.memFile, 'guest pages');
@@ -972,7 +968,7 @@ test('#wakeVm returns the counts the page handler of a 2M wake made by the time 
 
   // a Ping answers the resumed request too: both messages hold ok as field 1
   await startStubAgent(paths.vsockSocket, (socket) => {
-    writeFileSync(paths.uffdStatsFile, counts);
+    writeStubUffdStats(paths.uffdStatsFile, { faults: 57, blocks: 40, serveNs: 96_200_000 });
 
     socket.end(
       encodeMessageFrame(FRAME_TYPES.response, PingSchema, { ok: true, version: '0.1.0' }),
