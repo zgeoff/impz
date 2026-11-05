@@ -22,6 +22,9 @@ import type { OAuthFetch } from '../src/network/broker/secrets/oauth-refresher';
 import { createImage } from '../src/platform/db/images';
 import type { ImageRecord } from '../src/platform/db/images';
 import type { ImpDatabase } from '../src/platform/db/open-database';
+import { getImpdLogger } from '../src/platform/process/get-impd-logger';
+import { readHostLoad } from '../src/platform/process/read-host-load';
+import { readText } from '../src/platform/process/read-text';
 import type { HostIdentity } from '../src/vm/sleep/vm-identity';
 import { buildSystemDrivePath, buildSystemDrivesDir } from '../src/vm/storage/data-layout';
 import type { ImpPaths } from '../src/vm/storage/data-layout';
@@ -35,8 +38,10 @@ import type { VmRunner } from '../src/vm/vmm/vm-runner';
 import { readThreadIds } from '../src/vm/vmm/vm-stats';
 import { readNoTailscale } from './network/read-no-tailscale';
 import { buildStubTickerTimer } from './platform/build-stub-ticker-timer';
+import { formatRunPrefix } from './platform/format-run-prefix';
 import { openMigratedCopy } from './platform/open-migrated-copy';
 import { pickImpdPort } from './platform/pick-impd-port';
+import { readRunOwner } from './platform/read-run-owner';
 import { startImpdLogCapture } from './platform/start-impd-log-capture';
 import { TEST_TOKEN } from './test-token';
 import { buildStubVmm } from './vm/build-stub-vmm';
@@ -102,7 +107,8 @@ export async function startTestImpd(
   stack: Readonly<AsyncDisposableStack>,
   options: TestImpdOptions = {},
 ) {
-  const dataDir = options.dataDir ?? mkdtempSync(`${tmpdir()}/impd-test-`);
+  const dataDir =
+    options.dataDir ?? mkdtempSync(`${tmpdir()}/${formatRunPrefix(readRunOwner())}impd-test-`);
 
   if (options.dataDir === undefined) {
     stack.defer(() => rm(dataDir, { recursive: true, force: true }));
@@ -212,6 +218,7 @@ export async function startTestImpd(
 
   const cgroups = options.cgroups ?? createCpuCgroups({ root: '/nonexistent' });
   const extra = options.boundaries ?? {};
+  const procRoot = options.procRoot;
 
   const buildBoundaries = (
     identity: HostIdentity,
@@ -341,6 +348,10 @@ export async function startTestImpd(
         kernelOops,
         readThreadIds: (pid) =>
           options.procRoot === undefined ? null : readThreadIds(pid, options.procRoot),
+        ...(procRoot !== undefined && {
+          readHostLoad: () =>
+            readHostLoad({ procRoot, readFile: readText, logger: getImpdLogger('imps') }),
+        }),
         ...(options.readUnsharedRamMib !== undefined && {
           readUnsharedRamMib: options.readUnsharedRamMib,
         }),

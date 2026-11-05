@@ -6,6 +6,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./read-text": "./src/platform/process/read-text.ts",
     "./real-clock": "./src/platform/process/real-clock.ts",
     "./testing": "./testing/index.ts",
     "./testing/build-stub-clock": "./testing/platform/build-stub-clock.ts",

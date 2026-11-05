@@ -18,6 +18,8 @@ import type { Broker } from './network/broker/broker-service';
 import type { EgressService } from './network/egress/egress-service';
 import { countImpsByState, listImps } from './platform/db/imps';
 import { getImpdLogger } from './platform/process/get-impd-logger';
+import { readHostLoad } from './platform/process/read-host-load';
+import { readText } from './platform/process/read-text';
 import { runCommand } from './platform/process/run-command';
 import { startImpTelemetry } from './platform/telemetry/imp-telemetry';
 import { createMemoryController } from './vm/memory/memory-controller';
@@ -289,6 +291,10 @@ function resolveImpBoundaries(boundaries: Readonly<ImpBoundaries>) {
     kernelOops: boundaries.kernelOops ?? createKernelOopsWatch(),
     readThreadIds: boundaries.readThreadIds ?? ((pid: number) => readThreadIds(pid)),
     readNetBytes: boundaries.readNetBytes ?? ((tap: string) => readGuestNetBytes(tap)),
+    readHostLoad:
+      boundaries.readHostLoad ??
+      (() =>
+        readHostLoad({ procRoot: '/proc', readFile: readText, logger: getImpdLogger('imps') })),
     ...(boundaries.openTap !== undefined && { openTap: boundaries.openTap }),
     ...(boundaries.now !== undefined && { now: boundaries.now }),
   };

@@ -2,10 +2,13 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { readText } from './read-text.ts';
+import { formatRunPrefix } from '../../../testing/platform/format-run-prefix';
+import { readRunOwner } from '../../../testing/platform/read-run-owner';
+import { readText } from './read-text';
 
 function setupTest() {
-  const directory = mkdtempSync(join(tmpdir(), 'imp-read-text-'));
+  const prefix = formatRunPrefix(readRunOwner());
+  const directory = mkdtempSync(join(tmpdir(), `${prefix}imp-read-text-`));
 
   onTestFinished(() => {
     rmSync(directory, { recursive: true, force: true });

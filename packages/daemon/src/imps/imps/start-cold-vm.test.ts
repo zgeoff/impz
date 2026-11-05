@@ -1,5 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { readdirSync } from 'node:fs';
+import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { ORPCError } from '@orpc/client';
@@ -7,6 +8,9 @@ import invariant from 'tiny-invariant';
 import { buildStubDiskTools } from '../../../testing/imps/build-stub-disk-tools';
 import { readBrokenInvariants } from '../../../testing/imps/read-broken-invariants';
 import { waitForOutcome } from '../../../testing/imps/wait-for-outcome';
+import { createStubHostLoad } from '../../../testing/platform/create-stub-host-load';
+import { formatRunPrefix } from '../../../testing/platform/format-run-prefix';
+import { readRunOwner } from '../../../testing/platform/read-run-owner';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { buildStubCpuCgroups } from '../../../testing/vm/build-stub-cpu-cgroups';
 import { listImps, readImpByName } from '../../platform/db/imps';
@@ -24,8 +28,15 @@ async function setupTest(
   const isJailed = config.isJailed ?? false;
   const cgroups = buildStubCpuCgroups();
   const disk = buildStubDiskTools();
+  const prefix = formatRunPrefix(readRunOwner());
+  const procRoot = mkdtempSync(join(tmpdir(), `${prefix}imp-cold-vm-proc-`));
+
+  stack.defer(() => {
+    rmSync(procRoot, { recursive: true, force: true });
+  });
 
   const harness = await startTestImpd(stack, {
+    procRoot,
     ...(isJailed && { cgroups: cgroups.cgroups }),
     env: {
       IMP_BOOT_TEMPLATES: 'true',
@@ -39,7 +50,7 @@ async function setupTest(
 
   invariant(templates, 'IMP_BOOT_TEMPLATES is on, but impd has no templates');
 
-  return Object.assign(harness, { templates, disk, stack });
+  return Object.assign(harness, { templates, disk, stack, procRoot });
 }
 
 test('it boots the kernel for the first boot of a shape and builds no template', async () => {
@@ -102,6 +113,48 @@ test('it logs the guest steps after the host steps of a restore', async () => {
   );
 });
 
+test('it logs the host stall that grew while a restore ran, after its guest steps', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.client.imps.create({ name: 'once', vcpus: 1, memoryMib: 256 });
+  await ctx.client.imps.create({ name: 'first', vcpus: 1, memoryMib: 256 });
+  await ctx.templates.stop();
+
+  ctx.fake.setGuestBootSteps({ claim: 3, mount: 40 });
+
+  createStubHostLoad(ctx.procRoot, {
+    cpuStallUs: 2_000_000,
+    ioStallUs: 500_000,
+    memoryStallUs: 10_000,
+    stealUs: 3_000_000,
+  });
+
+  const restoring = ctx.fake.hold('restore');
+  const second = ctx.client.imps.create({ name: 'second', vcpus: 1, memoryMib: 256 });
+
+  await restoring.reached;
+
+  createStubHostLoad(ctx.procRoot, {
+    cpuStallUs: 2_412_000,
+    ioStallUs: 504_000,
+    memoryStallUs: 10_000,
+    stealUs: 3_650_000,
+  });
+
+  restoring.release();
+
+  await second;
+
+  expect(ctx.logs).toSatisfyAny(
+    (line: string) =>
+      line.startsWith('INFO impd.imps imp=second restored boot template ') &&
+      line.endsWith(
+        '; guest claim=3ms mount=40ms; host stall cpu=412ms io=4ms memory=0ms steal=650ms',
+      ),
+  );
+});
+
 test('it logs the guest steps after the host steps of a kernel boot', async () => {
   const ctx = await setupTest();
 
@@ -115,6 +168,45 @@ test('it logs the guest steps after the host steps of a kernel boot', async () =
     (line: string) =>
       line.startsWith('INFO impd.imps imp=once booted pid ') &&
       line.endsWith('; guest world=9ms mount=35ms ready=1ms'),
+  );
+});
+
+test('it logs the host stall that grew while a kernel boot ran, after its guest steps', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  ctx.fake.setGuestBootSteps({ world: 9, mount: 35 });
+
+  createStubHostLoad(ctx.procRoot, {
+    cpuStallUs: 800_000,
+    ioStallUs: 120_000,
+    memoryStallUs: 0,
+    stealUs: 90_000,
+  });
+
+  const booting = ctx.fake.hold('boot');
+  const once = ctx.client.imps.create({ name: 'once', vcpus: 1, memoryMib: 256 });
+
+  await booting.reached;
+
+  createStubHostLoad(ctx.procRoot, {
+    cpuStallUs: 803_000,
+    ioStallUs: 1_330_000,
+    memoryStallUs: 25_000,
+    stealUs: 100_000,
+  });
+
+  booting.release();
+
+  await once;
+
+  expect(ctx.logs).toSatisfyAny(
+    (line: string) =>
+      line.startsWith('INFO impd.imps imp=once booted pid ') &&
+      line.endsWith(
+        '; guest world=9ms mount=35ms; host stall cpu=3ms io=1210ms memory=25ms steal=10ms',
+      ),
   );
 });
 

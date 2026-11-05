@@ -59,6 +59,7 @@ export type ImpBoundaries = Partial<
     | 'kernelOops'
     | 'readThreadIds'
     | 'readNetBytes'
+    | 'readHostLoad'
   >
 > & {
   readonly readKsmProfitMib?: (pid: number) => Promise<number | null>;

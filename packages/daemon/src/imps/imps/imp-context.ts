@@ -8,6 +8,7 @@ import { TEMPLATE_BUILD_UID } from '../../platform/db/imps';
 import type { ImpRecord } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import type { EventBus } from '../../platform/events/event-bus';
+import type { HostLoad } from '../../platform/process/read-host-load';
 import type { openTapStream } from '../../vm/agent-client/exec-stream';
 import type { RamAdmission } from '../../vm/imps-contract/ram-admission';
 import { NO_MEMORY_LIMIT } from '../../vm/memory/memory-limit';
@@ -132,12 +133,15 @@ export interface ImpServiceDeps {
   readonly readThreadIds: (pid: number) => readonly number[] | null;
 
   readonly readNetBytes: (tap: string) => GuestNetBytes | null;
+
+  readonly readHostLoad: () => HostLoad;
 }
 
 export interface ImpHost {
   readonly config: ImpsConfig;
   readonly db: ImpDatabase;
   readonly identity: HostIdentity;
+  readonly readHostLoad: () => HostLoad;
 }
 
 export interface ImpClock {
@@ -224,6 +228,7 @@ export function createImpContext(deps: ImpServiceDeps): ImpContext {
     config: deps.config,
     db: deps.db,
     identity: deps.identity,
+    readHostLoad: deps.readHostLoad,
   };
 
   const clock: ImpClock = {

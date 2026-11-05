@@ -1,6 +1,8 @@
 export { startTestImpd } from './start-test-impd';
 export type { TestImpd, TestImpdOptions } from './start-test-impd';
 export { TEST_TOKEN } from './test-token';
+export { formatRunPrefix } from './platform/format-run-prefix';
+export { readRunOwner } from './platform/read-run-owner';
 export { buildStubImpdReleaseFetch } from './surface/build-stub-impd-release-fetch';
 export type { StubImpdReleaseOptions } from './surface/build-stub-impd-release-fetch';
 export { startStubImpdRelease } from './surface/start-stub-impd-release';

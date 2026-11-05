@@ -60,6 +60,26 @@ test('#parseLoggedGuestSteps reads the guest steps of the last line that names t
   });
 });
 
+test('#parseLoggedSteps leaves out the host stall of a line without guest steps', () => {
+  const log =
+    'INFO impd.imps imp=e2e-bt-t0 booted pid 7 setup=6ms boot=210ms; host stall cpu=412ms steal=650ms\n';
+
+  expect(parseLoggedSteps(log, 'e2e-bt-t0', 'booted pid')).toStrictEqual({
+    setup: 6,
+    boot: 210,
+  });
+});
+
+test('#parseLoggedGuestSteps leaves out the host stall after the guest steps', () => {
+  const log =
+    'INFO impd.imps imp=e2e-bt-t0 restored boot template 0123456789ab as pid 7 agent=90ms; guest claim=3ms mount=40ms; host stall cpu=412ms io=4ms\n';
+
+  expect(parseLoggedGuestSteps(log, 'e2e-bt-t0', 'restored boot template')).toStrictEqual({
+    claim: 3,
+    mount: 40,
+  });
+});
+
 test('#parseLoggedGuestSteps reads a line from an agent without guest steps as none', () => {
   const log =
     'INFO impd.imps imp=e2e-bt-t0 restored boot template 0123456789ab as pid 7 agent=90ms\n';

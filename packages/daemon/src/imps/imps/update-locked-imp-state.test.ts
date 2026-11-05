@@ -42,6 +42,7 @@ async function setupTest() {
     kernelOops: NO_KERNEL_OOPS,
     readThreadIds: () => null,
     readNetBytes: () => null,
+    readHostLoad: () => ({ cpuStallUs: null, ioStallUs: null, memoryStallUs: null, stealUs: null }),
   });
 
   return {
