@@ -46,13 +46,18 @@ message Reply {}
 `,
   );
 
-  Bun.spawnSync([
+  const build = Bun.spawnSync([
     'node_modules/.bin/buf',
     'build',
     ctx.directoryPath,
     '-o',
     join(ctx.directoryPath, 'out.binpb'),
   ]);
+
+  expect({ exitCode: build.exitCode, stderr: build.stderr.toString() }).toStrictEqual({
+    exitCode: 0,
+    stderr: '',
+  });
 
   const set = fromBinary(
     FileDescriptorSetSchema,
@@ -112,13 +117,18 @@ message Reply {
 `,
   );
 
-  Bun.spawnSync([
+  const build = Bun.spawnSync([
     'node_modules/.bin/buf',
     'build',
     ctx.directoryPath,
     '-o',
     join(ctx.directoryPath, 'out.binpb'),
   ]);
+
+  expect({ exitCode: build.exitCode, stderr: build.stderr.toString() }).toStrictEqual({
+    exitCode: 0,
+    stderr: '',
+  });
 
   const set = fromBinary(
     FileDescriptorSetSchema,
