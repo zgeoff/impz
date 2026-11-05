@@ -16,11 +16,15 @@ import (
 // fault the handler cannot serve fails the test rather than killing it.
 func serveInProcess(t *testing.T, mem []byte, uffd int, removed []uffdMsg) func() error {
 	t.Helper()
-	source, err := openMemSource(writeMemFile(t, t.TempDir()))
+	dir := t.TempDir()
+	source, err := openMemSource(writeMemFile(t, dir))
 	assert.NilError(t, err)
 	t.Cleanup(source.close)
+	stats, err := openHandlerStats(writeStatsFile(t, dir))
+	assert.NilError(t, err)
+	t.Cleanup(stats.close)
 	regions := []guestRegion{{BaseHostVirtAddr: uint64(uintptr(unsafe.Pointer(&mem[0]))), Size: testPages * testPage, PageSize: testPage}}
-	h, err := newHandler(uffd, regions, source)
+	h, err := newHandler(uffd, regions, source, stats)
 	assert.NilError(t, err)
 	h.removed = removed
 
@@ -118,7 +122,7 @@ func TestNewHandlerRefusesRegionsOfMixedPageSizes(t *testing.T) {
 		{BaseHostVirtAddr: 1 << 30, Size: testPage, Offset: testPage, PageSize: 2 << 20},
 	}
 
-	_, err = newHandler(-1, regions, source)
+	_, err = newHandler(-1, regions, source, nil)
 
 	assert.ErrorContains(t, err, "regions of 4096 and 2097152 byte pages")
 }
