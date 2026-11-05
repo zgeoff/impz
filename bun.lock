@@ -14,6 +14,7 @@
         "@impz/client": "workspace:*",
         "@impz/daemon": "workspace:*",
         "@impz/e2e-harness": "workspace:*",
+        "@impz/mcp": "workspace:*",
         "@impz/shared": "workspace:*",
         "@impz/test-utils": "workspace:*",
         "@maschwenk/tsrslint": "catalog:",
@@ -63,7 +64,6 @@
       },
       "devDependencies": {
         "@faker-js/faker": "catalog:",
-        "@impz/test-utils": "workspace:*",
       },
     },
     "packages/cli": {
@@ -272,7 +272,6 @@
       },
       "devDependencies": {
         "@faker-js/faker": "catalog:",
-        "@impz/test-utils": "workspace:*",
       },
     },
     "packages/shared": {
