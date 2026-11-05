@@ -2,10 +2,11 @@
 
 ## [6.5.0](https://github.com/zgeoff/impz/compare/v6.4.2...v6.5.0) (2026-11-05)
 
-
 ### Features
 
-* **daemon:** log host pressure stall and cpu steal with each cold start ([#891](https://github.com/zgeoff/impz/issues/891)) ([6593995](https://github.com/zgeoff/impz/commit/6593995569f69263d93e99cbbad1f905b05a9669))
+- **daemon:** log host pressure stall and cpu steal with each cold start
+  ([#891](https://github.com/zgeoff/impz/issues/891))
+  ([6593995](https://github.com/zgeoff/impz/commit/6593995569f69263d93e99cbbad1f905b05a9669))
 
 ## [6.4.2](https://github.com/zgeoff/impz/compare/v6.4.1...v6.4.2) (2026-11-04)
 
