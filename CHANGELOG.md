@@ -2,15 +2,17 @@
 
 ## [6.6.0](https://github.com/zgeoff/impz/compare/v6.5.0...v6.6.0) (2026-11-05)
 
-
 ### Features
 
-* **daemon:** log the page handler's faults, blocks and time on a wake ([#896](https://github.com/zgeoff/impz/issues/896)) ([2168736](https://github.com/zgeoff/impz/commit/216873687d0e85bcd97b0626c55f4bfbf9ed9c83))
-
+- **daemon:** log the page handler's faults, blocks and time on a wake
+  ([#896](https://github.com/zgeoff/impz/issues/896))
+  ([2168736](https://github.com/zgeoff/impz/commit/216873687d0e85bcd97b0626c55f4bfbf9ed9c83))
 
 ### Bug Fixes
 
-* **cli:** name bench imps by a --prefix that bench-wake.sh sets ([#898](https://github.com/zgeoff/impz/issues/898)) ([60532c8](https://github.com/zgeoff/impz/commit/60532c815a74a2e96e68d0a849a3aa7d4f6299c4))
+- **cli:** name bench imps by a --prefix that bench-wake.sh sets
+  ([#898](https://github.com/zgeoff/impz/issues/898))
+  ([60532c8](https://github.com/zgeoff/impz/commit/60532c815a74a2e96e68d0a849a3aa7d4f6299c4))
 
 ## [6.5.0](https://github.com/zgeoff/impz/compare/v6.4.2...v6.5.0) (2026-11-05)
 
