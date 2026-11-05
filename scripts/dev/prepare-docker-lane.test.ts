@@ -2,8 +2,8 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubBin } from '@impz/test-utils/create-stub-bin';
 import { $ } from 'bun';
+import { createStubAnsweringBin } from '../test-utils/create-stub-answering-bin';
 
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-prepare-docker-lane-'));
@@ -28,7 +28,7 @@ function setupTest() {
 
 test('it pulls each image of the lane, then starts one container of each on a network it removes', async () => {
   const ctx = setupTest();
-  const stub = createStubBin(ctx.directoryPath, 'docker');
+  const stub = createStubAnsweringBin(ctx.directoryPath, 'docker', []);
 
   const result = await ctx.runScript(stub.bin, 'headscale');
 
@@ -55,11 +55,9 @@ test('it pulls each image of the lane, then starts one container of each on a ne
 test('it fails, and makes nothing, when a pull fails', async () => {
   const ctx = setupTest();
 
-  const stub = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    '[ "$1" = pull ] && { echo "toomanyrequests: rate limit" >&2; exit 1; }\nexit 0',
-  );
+  const stub = createStubAnsweringBin(ctx.directoryPath, 'docker', [
+    { args: ['pull'], exitCode: 1, stderr: 'toomanyrequests: rate limit' },
+  ]);
 
   const result = await ctx.runScript(stub.bin, 'pebble');
 
@@ -77,11 +75,9 @@ test('it fails, and makes nothing, when a pull fails', async () => {
 test('it fails, and creates no container, when the network will not create', async () => {
   const ctx = setupTest();
 
-  const stub = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    '[ "$1" = network ] && [ "$2" = create ] && { echo "pool overlaps" >&2; exit 1; }\nexit 0',
-  );
+  const stub = createStubAnsweringBin(ctx.directoryPath, 'docker', [
+    { args: ['network', 'create'], exitCode: 1, stderr: 'pool overlaps' },
+  ]);
 
   const result = await ctx.runScript(stub.bin, 'pebble');
 
@@ -99,11 +95,9 @@ test('it fails, and creates no container, when the network will not create', asy
 test('it removes its containers and network, and fails, when a container will not create', async () => {
   const ctx = setupTest();
 
-  const stub = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    '[ "$1" = create ] && { echo "no such image" >&2; exit 1; }\nexit 0',
-  );
+  const stub = createStubAnsweringBin(ctx.directoryPath, 'docker', [
+    { args: ['create'], exitCode: 1, stderr: 'no such image' },
+  ]);
 
   const result = await ctx.runScript(stub.bin, 'pebble');
 
@@ -125,7 +119,10 @@ test('it removes its containers and network, and fails, when a container will no
 
 test('it removes its containers and network when a container will not start', async () => {
   const ctx = setupTest();
-  const stub = createStubBin(ctx.directoryPath, 'docker', '[ "$1" = start ] && exit 1\nexit 0');
+
+  const stub = createStubAnsweringBin(ctx.directoryPath, 'docker', [
+    { args: ['start'], exitCode: 1 },
+  ]);
 
   const result = await ctx.runScript(stub.bin, 'pebble');
 
@@ -141,11 +138,9 @@ test('it removes its containers and network when a container will not start', as
 test('it still removes its network, and fails, when removing its containers fails', async () => {
   const ctx = setupTest();
 
-  const stub = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    '[ "$1" = rm ] && { echo "cannot remove a container: device busy" >&2; exit 1; }\nexit 0',
-  );
+  const stub = createStubAnsweringBin(ctx.directoryPath, 'docker', [
+    { args: ['rm'], exitCode: 1, stderr: 'cannot remove a container: device busy' },
+  ]);
 
   const result = await ctx.runScript(stub.bin, 'pebble');
 
@@ -163,11 +158,9 @@ test('it still removes its network, and fails, when removing its containers fail
 test('it fails when removing its network fails, after it removed its containers', async () => {
   const ctx = setupTest();
 
-  const stub = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    '[ "$1" = network ] && [ "$2" = rm ] && exit 1\nexit 0',
-  );
+  const stub = createStubAnsweringBin(ctx.directoryPath, 'docker', [
+    { args: ['network', 'rm'], exitCode: 1 },
+  ]);
 
   const result = await ctx.runScript(stub.bin, 'pebble');
 
@@ -179,7 +172,7 @@ test('it fails when removing its network fails, after it removed its containers'
 
 test('it refuses a lane it has no images for, and runs no docker', async () => {
   const ctx = setupTest();
-  const stub = createStubBin(ctx.directoryPath, 'docker');
+  const stub = createStubAnsweringBin(ctx.directoryPath, 'docker', []);
 
   const result = await ctx.runScript(stub.bin, 'browser');
 

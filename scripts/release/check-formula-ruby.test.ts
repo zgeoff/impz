@@ -2,8 +2,8 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubBin } from '@impz/test-utils/create-stub-bin';
 import { $ } from 'bun';
+import { createStubAnsweringBin } from '../test-utils/create-stub-answering-bin';
 
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-check-formula-ruby-'));
@@ -25,38 +25,40 @@ function setupTest() {
 test('it passes a formula that ruby parses, and runs ruby -c on the rendered formula', async () => {
   const ctx = setupTest();
 
-  const stub = createStubBin(
-    ctx.directoryPath,
-    'ruby',
-    `grep -q '^class Impz < Formula$' "$2" || exit 3\necho 'Syntax OK'`,
-  );
+  const stub = createStubAnsweringBin(ctx.directoryPath, 'ruby', [
+    { args: ['-c'], exitCode: 0, stdout: 'Syntax OK\n' },
+  ]);
 
   const result = await ctx.runScript(stub.bin);
 
-  expect({ exitCode: result.exitCode, stdout: result.stdout.toString() }).toStrictEqual({
+  expect({
+    exitCode: result.exitCode,
+    stdout: result.stdout.toString(),
+    calls: readFileSync(stub.calls, 'utf8'),
+  }).toStrictEqual({
     exitCode: 0,
     stdout: 'formula: Syntax OK\n',
+    calls: expect.stringMatching(/^ruby -c \S+\/imp\.rb\n$/v),
   });
-
-  expect(readFileSync(stub.calls, 'utf8')).toMatch(/^ruby -c \S+\/imp\.rb\n$/v);
 });
 
 test('it fails with the build diagnostic, and runs no ruby, when build-formula.sh fails', async () => {
   const ctx = setupTest();
-  const ruby = createStubBin(ctx.directoryPath, 'ruby', "echo 'Syntax OK'");
 
-  createStubBin(
-    ctx.directoryPath,
-    'bash',
-    'echo "build-formula: no sha256 for impz-linux-x64" >&2\nexit 1',
-  );
+  const stub = createStubAnsweringBin(ctx.directoryPath, 'bash', [
+    { args: [], exitCode: 1, stderr: 'build-formula: no sha256 for impz-linux-x64\n' },
+  ]);
 
-  const result = await ctx.runScript(ruby.bin);
+  createStubAnsweringBin(ctx.directoryPath, 'ruby', [
+    { args: ['-c'], exitCode: 0, stdout: 'Syntax OK\n' },
+  ]);
+
+  const result = await ctx.runScript(stub.bin);
 
   expect({
     exitCode: result.exitCode,
     stderr: result.stderr.toString(),
-    rubyCalls: readFileSync(ruby.calls, 'utf8')
+    rubyCalls: readFileSync(stub.calls, 'utf8')
       .split('\n')
       .filter((call) => call.startsWith('ruby')),
   }).toStrictEqual({
@@ -69,11 +71,9 @@ test('it fails with the build diagnostic, and runs no ruby, when build-formula.s
 test('it fails with what ruby printed when ruby refuses the formula', async () => {
   const ctx = setupTest();
 
-  const stub = createStubBin(
-    ctx.directoryPath,
-    'ruby',
-    `echo 'imp.rb:3: syntax error, unexpected end-of-input' >&2\nexit 1`,
-  );
+  const stub = createStubAnsweringBin(ctx.directoryPath, 'ruby', [
+    { args: ['-c'], exitCode: 1, stderr: 'imp.rb:3: syntax error, unexpected end-of-input\n' },
+  ]);
 
   const result = await ctx.runScript(stub.bin);
 
