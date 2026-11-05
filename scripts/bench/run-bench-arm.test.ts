@@ -3,6 +3,7 @@ import { setImmediate } from 'node:timers/promises';
 import type { CommandResult } from '@impz/e2e-harness/instance';
 import { buildStubAnswerQueue } from '@impz/test-utils/build-stub-answer-queue';
 import { runBenchArm } from './run-bench-arm';
+import type { BenchArmDeps } from './run-bench-arm';
 
 test('it saves the impd log and stops the dev instance after a bench that failed', async () => {
   const runs: Readonly<Record<string, CommandResult>> = {
@@ -37,7 +38,7 @@ test('it saves the impd log and stops the dev instance after a bench that failed
 
   const ran = await runBenchArm(
     {
-      lockDev: () => ({ release: () => {} }),
+      withDevLock: (_name, run) => run(),
       runCommand,
       writeLog,
       now: () => 0,
@@ -101,7 +102,7 @@ test('it points every impz command at the dev instance, past a saved host that I
 
   await runBenchArm(
     {
-      lockDev: () => ({ release: () => {} }),
+      withDevLock: (_name, run) => run(),
       runCommand,
       writeLog: () => {},
       now: () => 0,
@@ -155,7 +156,7 @@ test('it saves the impd log and stops the dev instance when the dev start fails'
 
   const ran = runBenchArm(
     {
-      lockDev: () => ({ release: () => {} }),
+      withDevLock: (_name, run) => run(),
       runCommand,
       writeLog,
       now: () => 0,
@@ -209,7 +210,7 @@ test('it runs no impz command when the dev token cannot be read, and saves the l
 
   const ran = runBenchArm(
     {
-      lockDev: () => ({ release: () => {} }),
+      withDevLock: (_name, run) => run(),
       runCommand,
       writeLog,
       now: () => 0,
@@ -274,7 +275,7 @@ test('it skips the timed bench after a failed warm-up, and still saves the log a
 
   const ran = runBenchArm(
     {
-      lockDev: () => ({ release: () => {} }),
+      withDevLock: (_name, run) => run(),
       runCommand,
       writeLog,
       now: () => 0,
@@ -309,7 +310,7 @@ test('it skips the timed bench after a failed warm-up, and still saves the log a
   expect(writeLog).toHaveBeenCalledOnce();
 });
 
-test('it gives up on an instance that stays unready past the deadline, and saves the log, stops and frees its lock', () => {
+test('it gives up on an instance that stays unready past the deadline, and saves the log and stops', () => {
   const clock = buildStubAnswerQueue([0, 600_000]);
 
   const runs: Readonly<Record<string, CommandResult>> = {
@@ -334,11 +335,10 @@ test('it gives up on an instance that stays unready past the deadline, and saves
   );
 
   const writeLog = mock<(path: string, text: string) => void>(() => {});
-  const release = mock(() => {});
 
   const ran = runBenchArm(
     {
-      lockDev: () => ({ release }),
+      withDevLock: (_name, run) => run(),
       runCommand,
       writeLog,
       now: () => clock.next(),
@@ -369,8 +369,6 @@ test('it gives up on an instance that stays unready past the deadline, and saves
     IMP_KERNEL: '/work/candidate/.cache/ci/vmlinux',
     IMP_SYSTEM_DRIVE: '/work/candidate/.cache/ci/imp-system.squashfs',
   });
-
-  expect(release).toHaveBeenCalledAfter(runCommand);
 });
 
 test('it keeps a failed warm-up as the arm error when dev.sh down fails after it, and reports the down', () => {
@@ -407,7 +405,7 @@ test('it keeps a failed warm-up as the arm error when dev.sh down fails after it
 
   const ran = runBenchArm(
     {
-      lockDev: () => ({ release: () => {} }),
+      withDevLock: (_name, run) => run(),
       runCommand,
       writeLog: () => {},
       now: () => 0,
@@ -456,7 +454,7 @@ test('it keeps a failed warm-up as the arm error when dev.sh down cannot start, 
 
   const ran = runBenchArm(
     {
-      lockDev: () => ({ release: () => {} }),
+      withDevLock: (_name, run) => run(),
       runCommand: (argv) =>
         runs[argv.join(' ')]?.() ?? Promise.resolve({ exitCode: 0, stdout: '', stderr: '' }),
       writeLog: () => {},
@@ -481,49 +479,6 @@ test('it keeps a failed warm-up as the arm error when dev.sh down cannot start, 
 
   expect(onStderr).toHaveBeenCalledWith(
     'bench arms: dev.sh down could not run (spawn /work/candidate/scripts/dev/dev.sh EACCES), so imp-dev may still run\n',
-  );
-});
-
-test('it keeps the arm error when its lock cannot be released, and reports the lock', () => {
-  const runs: Readonly<Record<string, CommandResult>> = {
-    'docker ps -a --filter name=^imp-dev$ --format {{.State}}': {
-      exitCode: 0,
-      stdout: '',
-      stderr: '',
-    },
-    '/work/candidate/scripts/dev/dev.sh up': { exitCode: 1, stdout: '', stderr: '' },
-  };
-
-  const onStderr = mock<(text: string) => void>(() => {});
-
-  const ran = runBenchArm(
-    {
-      lockDev: () => ({
-        release: () => {
-          throw new Error('EACCES: permission denied, rm');
-        },
-      }),
-      runCommand: (argv) =>
-        Promise.resolve(runs[argv.join(' ')] ?? { exitCode: 0, stdout: '', stderr: '' }),
-      writeLog: () => {},
-      now: () => 0,
-      sleep: () => Promise.resolve(),
-      onStderr,
-    },
-    {
-      arm: { name: 'candidate', checkout: '/work/candidate' },
-      commands: { warmUpArgs: ['bench', 'create'], benchArgs: ['wake'] },
-      logPath: '/work/out/candidate-1.impd.log',
-      impz: '/work/impz',
-      env: {},
-      cwd: '/work',
-    },
-  );
-
-  expect(ran).rejects.toThrowWithMessage(Error, 'bench arms: dev.sh up exited 1');
-
-  expect(onStderr).toHaveBeenCalledWith(
-    'bench arms: could not release the lock on imp-dev: EACCES: permission denied, rm\n',
   );
 });
 
@@ -553,7 +508,7 @@ test('it keeps the report of a bench that passed but fails its arm when dev.sh d
 
   const ran = await runBenchArm(
     {
-      lockDev: () => ({ release: () => {} }),
+      withDevLock: (_name, run) => run(),
       runCommand: (argv) =>
         Promise.resolve(runs[argv.join(' ')] ?? { exitCode: 0, stdout: '', stderr: '' }),
       writeLog: () => {},
@@ -611,7 +566,7 @@ test('it starts the warm-up only once impd has its default image', async () => {
 
   await runBenchArm(
     {
-      lockDev: () => ({ release: () => {} }),
+      withDevLock: (_name, run) => run(),
       runCommand,
       writeLog: () => {},
       now: () => 0,
@@ -640,7 +595,7 @@ test('it starts the warm-up only once impd has its default image', async () => {
   ]);
 });
 
-test('it keeps the finished report, fails the arm, stops the dev instance and frees its lock when the impd log cannot be written', async () => {
+test('it keeps the finished report, fails the arm, and stops the dev instance when the impd log cannot be written', async () => {
   const runs: Readonly<Record<string, CommandResult>> = {
     'docker ps -a --filter name=^imp-dev$ --format {{.State}}': {
       exitCode: 0,
@@ -666,12 +621,11 @@ test('it keeps the finished report, fails the arm, stops the dev instance and fr
     Promise.resolve(runs[argv.join(' ')] ?? { exitCode: 0, stdout: '', stderr: '' }),
   );
 
-  const release = mock(() => {});
   const onStderr = mock<(text: string) => void>(() => {});
 
   const ran = await runBenchArm(
     {
-      lockDev: () => ({ release }),
+      withDevLock: (_name, run) => run(),
       runCommand,
       writeLog: () => {
         throw new Error('ENOSPC: no space left on device, write');
@@ -699,8 +653,6 @@ test('it keeps the finished report, fails the arm, stops the dev instance and fr
   expect(runCommand.mock.calls.at(-1)?.[0].join(' ')).toBe(
     '/work/candidate/scripts/dev/dev.sh down',
   );
-
-  expect(release).toHaveBeenCalledAfter(runCommand);
 });
 
 test('it reads the impd log through the container CLI the dev instance uses, and fails a failed read', async () => {
@@ -733,7 +685,7 @@ test('it reads the impd log through the container CLI the dev instance uses, and
 
   const ran = await runBenchArm(
     {
-      lockDev: () => ({ release: () => {} }),
+      withDevLock: (_name, run) => run(),
       runCommand,
       writeLog: () => {},
       now: () => 0,
@@ -761,7 +713,7 @@ test('it reads the impd log through the container CLI the dev instance uses, and
   );
 });
 
-test('it refuses an arm while a dev instance of that name already runs, and frees its lock', () => {
+test('it refuses an arm while a dev instance of that name already runs', () => {
   const runs: Readonly<Record<string, CommandResult>> = {
     'docker ps -a --filter name=^imp-bench$ --format {{.State}}': {
       exitCode: 0,
@@ -774,12 +726,11 @@ test('it refuses an arm while a dev instance of that name already runs, and free
     Promise.resolve(runs[argv.join(' ')] ?? { exitCode: 127, stdout: '', stderr: 'not found' }),
   );
 
-  const release = mock(() => {});
-  const lockDev = mock<(name: string) => { release: () => void }>(() => ({ release }));
+  const withDevLock = mock<BenchArmDeps['withDevLock']>((_name, run) => run());
 
   const ran = runBenchArm(
     {
-      lockDev,
+      withDevLock,
       runCommand,
       writeLog: () => {},
       now: () => 0,
@@ -801,9 +752,8 @@ test('it refuses an arm while a dev instance of that name already runs, and free
     'bench arms: imp-bench already runs, and dev.sh up would bench it as baseline; stop it first',
   );
 
-  expect(lockDev).toHaveBeenCalledExactlyOnceWith('imp-bench');
+  expect(withDevLock).toHaveBeenCalledExactlyOnceWith('imp-bench', expect.any(Function));
   expect(runCommand).toHaveBeenCalledOnce();
-  expect(release).toHaveBeenCalledAfter(runCommand);
 });
 
 test('it refuses an arm whose dev instance another bench holds, and touches nothing', () => {
@@ -811,9 +761,7 @@ test('it refuses an arm whose dev instance another bench holds, and touches noth
 
   const ran = runBenchArm(
     {
-      lockDev: () => {
-        throw new Error('process 4242 holds the dev instance imp-bench');
-      },
+      withDevLock: () => Promise.reject(new Error('process 4242 holds the dev instance imp-bench')),
       runCommand,
       writeLog: () => {},
       now: () => 0,
@@ -845,7 +793,7 @@ test('it refuses an arm when the container CLI cannot say whether the instance r
 
   const ran = runBenchArm(
     {
-      lockDev: () => ({ release: () => {} }),
+      withDevLock: (_name, run) => run(),
       runCommand,
       writeLog: () => {},
       now: () => 0,
@@ -908,7 +856,7 @@ test('it starts the timed bench only once the warm-up left a boot template ready
 
   const ran = await runBenchArm(
     {
-      lockDev: () => ({ release: () => {} }),
+      withDevLock: (_name, run) => run(),
       runCommand: (argv) =>
         Promise.resolve(runs[argv.join(' ')]?.() ?? { exitCode: 0, stdout: '', stderr: '' }),
       writeLog: () => {},
@@ -928,4 +876,34 @@ test('it starts the timed bench only once the warm-up left a boot template ready
 
   expect(ran).toStrictEqual({ json: '{"results":[]}\n', isPassed: true });
   expect(infos.left).toBe(0);
+});
+
+test('it rejects an arm whose dev settings are invalid, and locks nothing', () => {
+  const withDevLock = mock<BenchArmDeps['withDevLock']>((_name, run) => run());
+
+  const ran = runBenchArm(
+    {
+      withDevLock,
+      runCommand: () => Promise.resolve({ exitCode: 0, stdout: '', stderr: '' }),
+      writeLog: () => {},
+      now: () => 0,
+      sleep: () => Promise.resolve(),
+      onStderr: () => {},
+    },
+    {
+      arm: { name: 'candidate', checkout: '/work/candidate' },
+      commands: { warmUpArgs: ['bench', 'create'], benchArgs: ['wake'] },
+      logPath: '/work/out/candidate-1.impd.log',
+      impz: '/work/impz',
+      env: { IMP_DEV_PORT_OFFSET: 'invalid' },
+      cwd: '/work',
+    },
+  );
+
+  expect(ran).rejects.toThrowWithMessage(
+    Error,
+    "IMP_DEV_PORT_OFFSET must be a whole number, got 'invalid'",
+  );
+
+  expect(withDevLock).not.toHaveBeenCalled();
 });

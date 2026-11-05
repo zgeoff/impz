@@ -26,6 +26,7 @@
         "@zgeoff/format-codemod": "catalog:",
         "@zgeoff/oxlint-config": "catalog:",
         "@zgeoff/skill-gate": "catalog:",
+        "@zgeoff/std": "catalog:",
         "gunshi": "catalog:",
         "knip": "catalog:",
         "lefthook": "catalog:",
@@ -362,6 +363,7 @@
     "@zgeoff/kysely-bun-sqlite": "0.3.0",
     "@zgeoff/oxlint-config": "0.8.3",
     "@zgeoff/skill-gate": "0.2.19",
+    "@zgeoff/std": "0.4.1",
     "acme-client": "5.4.0",
     "better-auth": "1.7.14",
     "dns-packet": "5.6.1",
@@ -1221,7 +1223,7 @@
 
     "@zgeoff/skill-gate": ["@zgeoff/skill-gate@0.2.19", "", { "dependencies": { "@zgeoff/agent-hooks": "0.2.3" } }, "sha512-r04itCLxsdvUx7thggMaFx34bRYfULmi3BsJ64EhymR88zs3D34yO6rJUIrVFFvLcomYOIr9Jny+j/xAqattfA=="],
 
-    "@zgeoff/std": ["@zgeoff/std@0.3.2", "", {}, "sha512-nllamYZnSOFvEl6+E9eKYwt+vCIXxxv2hXKBEnlrBd2ay9+liqhcxp0pvNQihefmbMmwRPh8AHmaDuJh2l2u5w=="],
+    "@zgeoff/std": ["@zgeoff/std@0.4.1", "", {}, "sha512-Vr0Y8ZeRjaTmJAT0K+llbXpf5EazkGhL0zV8yRoACbbfqJdR+9Cql2MHqnr96uUSgu5vdqbknrRQtcsJYIa7oA=="],
 
     "acme-client": ["acme-client@5.4.0", "", { "dependencies": { "@peculiar/x509": "^1.11.0", "asn1js": "^3.0.5", "axios": "^1.7.2", "debug": "^4.3.5", "node-forge": "^1.3.1" } }, "sha512-mORqg60S8iML6XSmVjqjGHJkINrCGLMj2QvDmFzI9vIlv1RGlyjmw3nrzaINJjkNsYXC41XhhD5pfy7CtuGcbA=="],
 
@@ -1920,6 +1922,8 @@
     "@testing-library/jest-dom/dom-accessibility-api": ["dom-accessibility-api@0.6.3", "", {}, "sha512-7ZgogeTnjuHbo+ct10G9Ffp0mif17idi0IyWNVA/wcwcm7NPOD/WEHVP3n7n3MhXqxoIYm8d6MuZohYWIZ4T3w=="],
 
     "@types/node/undici-types": ["undici-types@8.9.0", "", {}, "sha512-KTDyRTYX8sWmKXAikPHHSyc63CRPETMctyjKFupcC6OBLXT3xsN0e9aF7m+mIXutFWpUXuedtowG7iLOzp0kQg=="],
+
+    "@zgeoff/chex/@zgeoff/std": ["@zgeoff/std@0.3.2", "", {}, "sha512-nllamYZnSOFvEl6+E9eKYwt+vCIXxxv2hXKBEnlrBd2ay9+liqhcxp0pvNQihefmbMmwRPh8AHmaDuJh2l2u5w=="],
 
     "@zgeoff/format-codemod/oxc-parser": ["oxc-parser@0.155.0", "", { "dependencies": { "@oxc-project/types": "^0.155.0" }, "optionalDependencies": { "@oxc-parser/binding-android-arm-eabi": "0.155.0", "@oxc-parser/binding-android-arm64": "0.155.0", "@oxc-parser/binding-darwin-arm64": "0.155.0", "@oxc-parser/binding-darwin-x64": "0.155.0", "@oxc-parser/binding-freebsd-x64": "0.155.0", "@oxc-parser/binding-linux-arm-gnueabihf": "0.155.0", "@oxc-parser/binding-linux-arm-musleabihf": "0.155.0", "@oxc-parser/binding-linux-arm64-gnu": "0.155.0", "@oxc-parser/binding-linux-arm64-musl": "0.155.0", "@oxc-parser/binding-linux-ppc64-gnu": "0.155.0", "@oxc-parser/binding-linux-riscv64-gnu": "0.155.0", "@oxc-parser/binding-linux-riscv64-musl": "0.155.0", "@oxc-parser/binding-linux-s390x-gnu": "0.155.0", "@oxc-parser/binding-linux-x64-gnu": "0.155.0", "@oxc-parser/binding-linux-x64-musl": "0.155.0", "@oxc-parser/binding-openharmony-arm64": "0.155.0", "@oxc-parser/binding-win32-arm64-msvc": "0.155.0", "@oxc-parser/binding-win32-ia32-msvc": "0.155.0", "@oxc-parser/binding-win32-x64-msvc": "0.155.0" } }, "sha512-C/ReSf1JUFukK/zvk6jhcNibSssvas5+ktIzK7fbKVd3CedWe59C3QwHEOrEZj/4Rt9+xg0Jeis/Jv1F/KM1mw=="],
 

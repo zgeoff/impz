@@ -3,28 +3,11 @@ import type { ImpClient } from '@impz/client';
 import { parseHugetlbMib } from '@impz/e2e-harness/huge-page-host';
 import type { CommandResult } from '@impz/e2e-harness/instance';
 import { waitFor } from '@impz/e2e-harness/wait-for';
-import type { DevLock } from '../lib/create-dev-lock.ts';
 import { ChangedPagesReportSchema } from './changed-pages-report-schema';
 
 interface TouchedPagesClient {
   readonly system: Pick<ImpClient['system'], 'info'>;
   readonly imps: Pick<ImpClient['imps'], 'get' | 'create' | 'destroy'>;
-}
-
-export interface TouchedPagesDeps {
-  readonly lockDev: () => DevLock;
-  readonly client: TouchedPagesClient;
-  readonly runImpz: (args: readonly string[]) => Promise<CommandResult>;
-  readonly runInContainer: (argv: readonly string[]) => Promise<CommandResult>;
-  readonly now: () => number;
-  readonly sleep: (durationMs: number) => Promise<void>;
-  readonly onStderr: (text: string) => void;
-}
-
-export interface TouchedPagesOptions {
-  readonly memory: string;
-  readonly memoryMib: number;
-  readonly writeMib: number;
 }
 
 export interface TouchedPages {
@@ -39,6 +22,22 @@ export interface TouchedPages {
   };
 }
 
+export interface TouchedPagesDeps {
+  readonly withDevLock: (run: () => Promise<TouchedPages>) => Promise<TouchedPages>;
+  readonly client: TouchedPagesClient;
+  readonly runImpz: (args: readonly string[]) => Promise<CommandResult>;
+  readonly runInContainer: (argv: readonly string[]) => Promise<CommandResult>;
+  readonly now: () => number;
+  readonly sleep: (durationMs: number) => Promise<void>;
+  readonly onStderr: (text: string) => void;
+}
+
+export interface TouchedPagesOptions {
+  readonly memory: string;
+  readonly memoryMib: number;
+  readonly writeMib: number;
+}
+
 const NAME = 'touched-pages';
 
 // The dev instance's lock keeps other bench runs off it, and the run refuses
@@ -48,9 +47,7 @@ export async function runTouchedPages(
   deps: TouchedPagesDeps,
   options: Readonly<TouchedPagesOptions>,
 ): Promise<TouchedPages> {
-  const lock = deps.lockDev();
-
-  try {
+  const touchedPages = await deps.withDevLock(async () => {
     await waitForReady(deps, "impd's default image", () => requireDefaultImage(deps));
 
     const found = await deps.client.imps.get({ name: NAME }).then(
@@ -103,9 +100,9 @@ export async function runTouchedPages(
     }
 
     return measured;
-  } finally {
-    releaseLock(deps, lock);
-  }
+  });
+
+  return touchedPages;
 }
 
 const READY_TIMEOUT_MS = 300_000;
@@ -276,14 +273,4 @@ async function removeLeftovers(deps: TouchedPagesDeps): Promise<boolean> {
 
 function formatReason(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-// a lock left behind refuses the next run with its path, so a failed release
-// is reported and never replaces the run's own error
-function releaseLock(deps: TouchedPagesDeps, lock: DevLock): void {
-  try {
-    lock.release();
-  } catch (error) {
-    deps.onStderr(`measure-touched-pages: could not release the dev lock: ${formatReason(error)}`);
-  }
 }

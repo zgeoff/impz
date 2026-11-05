@@ -6,8 +6,7 @@ import { resolve } from 'node:path';
 import { REAL_CLOCK } from '@impz/daemon/real-clock';
 import { createInstanceClient, readImpEnv } from '@impz/e2e-harness/imp-cli';
 import { instance, runCommand, runInContainer } from '@impz/e2e-harness/instance';
-import { createDevLock } from '../lib/create-dev-lock.ts';
-import { wireDevLockIO } from '../lib/wire-dev-lock-io.ts';
+import { withDevLock } from '../lib/with-dev-lock.ts';
 import { writeStderr } from '../lib/write-stderr.ts';
 import { writeStdoutLine } from '../lib/write-stdout-line.ts';
 import { parseTouchedPagesArgs } from './parse-touched-pages-args';
@@ -28,7 +27,7 @@ const IMPZ_ENV = { IMP_HOST: '', ...(await readImpEnv(instance)) };
 
 const measured = await runTouchedPages(
   {
-    lockDev: () => createDevLock(wireDevLockIO(), tmpdir(), instance.container),
+    withDevLock: (run) => withDevLock(tmpdir(), instance.container, run),
     client: await createInstanceClient(instance),
     runImpz: (args) => runCommand([IMPZ, ...args], { env: IMPZ_ENV }),
     runInContainer: (argv) => runInContainer(argv, instance),
