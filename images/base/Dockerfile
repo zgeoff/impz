@@ -2,7 +2,7 @@
 # The agent itself comes from the imp system drive, not from this image.
 # Pinned to the multi-arch index digest, so the published imp-base has a fixed
 # base. Bumping it is a dependency change: review it like one.
-FROM ubuntu:24.04@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac
+FROM ubuntu:24.04@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852
 
 # Docker's packages, at apt's exact versions. A bump is a reviewed dependency
 # change: update these versions, the licence tags they imply and the licence
