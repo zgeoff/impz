@@ -13,7 +13,6 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { runShellcheck } from '@impz/test-utils/run-shellcheck';
 import { WRITE_SCRIPT } from './write-script';
 
 // This file runs the script under the host's /bin/sh; the end-to-end suite
@@ -191,8 +190,4 @@ test('it reads all the content of a write it refuses for a symlink it cannot res
     code: 1,
     stderr: `cannot resolve the symlink ${link}\n`,
   });
-});
-
-test.skipIf(Bun.which('shellcheck') === null)('it passes shellcheck as POSIX sh', () => {
-  expect(runShellcheck(WRITE_SCRIPT, 'sh')).toStrictEqual({ exitCode: 0, output: '' });
 });

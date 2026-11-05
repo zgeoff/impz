@@ -843,7 +843,6 @@
     "packages/test-utils/src/remove-env-overrides.test.ts": 0,
     "packages/test-utils/src/route-fetch.test.ts": 0,
     "packages/test-utils/src/run-child-tests.test.ts": 530,
-    "packages/test-utils/src/run-shellcheck.test.ts": 28,
     "packages/test-utils/src/set-faker-seed.test.ts": 2,
     "packages/test-utils/src/start-stub-github-releases.test.ts": 23,
     "packages/test-utils/src/update-env.test.ts": 1,

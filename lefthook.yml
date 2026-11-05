@@ -64,6 +64,9 @@ pre-push:
     # needs shellcheck on PATH, the version CI pins (0.11.0)
     - name: lint:shell
       run: bun run lint:shell
+    # the shell that production code holds as text; needs shellcheck too
+    - name: lint:embedded-shell
+      run: bun run --silent ci:check-embedded-shell
     # needs ruby on PATH, so it runs only on a branch that changes the formula
     - name: lint:formula
       files: bun run --silent files:branch
