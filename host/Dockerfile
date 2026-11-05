@@ -130,7 +130,7 @@ COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
 # Ubuntu 22.04 gives gcc 11, the same compiler as Firecracker's CI config. The
 # apt sources point at a dated snapshot, so the toolchain stays the same
 # until UBUNTU_SNAPSHOT changes, and so does the kernel it builds.
-FROM ubuntu:22.04@sha256:0a9887931b0e38af2e3487ed39e29436b0535c4f3f52e57745baaf79d1898956 AS kernel-builder
+FROM ubuntu:22.04@sha256:076e7bf82319619f28dd0aa9c02ab34b055ad37100395b4f49a2ffba04fb5e11 AS kernel-builder
 
 ARG UBUNTU_SNAPSHOT=20261001T000000Z
 ARG DEBIAN_FRONTEND=noninteractive
