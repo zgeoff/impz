@@ -147,8 +147,8 @@ jobs:
       - name: Bun Pin
         run: scripts/ci/check-bun-pin.sh
 
-      # the whole-tree gates: dead code, format, type-aware lint, doc links and
-      # types, as package.json's check:static script lists them
+      # the whole-tree gates: dead code, format, type-aware lint, doc links, the
+      # Homebrew formula's Ruby and types, as package.json's check:static script lists them
       - name: Check
         run: bun run check:static
 

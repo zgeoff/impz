@@ -18,6 +18,7 @@ bun run lint:shell                # shellcheck and shfmt over install.sh and the
 actionlint && zizmor --config .github/zizmor.yml .github   # the workflows, as CI lints them
 hadolint host/Dockerfile images/base/Dockerfile images/examples/*/Dockerfile
 bun run lint:docs                 # every docs link, and every docs/ path code cites, resolves
+bun run lint:formula              # ruby parses the Homebrew formula that build-formula.sh prints
 bun run lint:images               # each example image starts from the pinned base and checks its downloads
 bun run lint:workflows            # ci.yml's release job waits on no gate and starts release.yml for its tag
 (cd agent && gofmt -l . && go vet ./...)   # gofmt -l lists unformatted files
@@ -295,7 +296,8 @@ Lefthook installs the hooks with `bun install`.
   tests run from its package. CI's `checks` job runs type-aware lint, deadcode and every test. On a
   branch that changes the agent's, ksm-exec's, oci-fetch's or uffd-handler's Go, pre-push also runs
   `gofmt` on the changed files and `go vet -p 1`, which keeps vet's memory within what a 2 GB imp
-  can spare; the Go lint, vulnerability and dead-code gates run in CI only.
+  can spare; the Go lint, vulnerability and dead-code gates run in CI only. On a branch that changes
+  `build-formula.sh`, pre-push also runs `lint:formula`, which needs ruby on `PATH`.
 
 ## CI
 
