@@ -2,10 +2,11 @@
 
 ## [6.6.1](https://github.com/zgeoff/impz/compare/v6.6.0...v6.6.1) (2026-11-05)
 
-
 ### Bug Fixes
 
-* **ci:** keep the memory sampler's read errors out of stderr ([#909](https://github.com/zgeoff/impz/issues/909)) ([c9370d1](https://github.com/zgeoff/impz/commit/c9370d1ad18eab9bf92bdbb1f1db69cbc33c1bfc))
+- **ci:** keep the memory sampler's read errors out of stderr
+  ([#909](https://github.com/zgeoff/impz/issues/909))
+  ([c9370d1](https://github.com/zgeoff/impz/commit/c9370d1ad18eab9bf92bdbb1f1db69cbc33c1bfc))
 
 ## [6.6.0](https://github.com/zgeoff/impz/compare/v6.5.0...v6.6.0) (2026-11-05)
 
