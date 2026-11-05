@@ -1,4 +1,4 @@
-import { lstatSync, mkdirSync, readFileSync, renameSync, rmSync } from 'node:fs';
+import { lstatSync, mkdirSync, renameSync, rmSync } from 'node:fs';
 import { getErrorMessage } from '../../platform/process/get-error-message';
 import { stopPid } from '../../platform/process/proc';
 import { runCommand } from '../../platform/process/run-command';
@@ -135,15 +135,15 @@ export interface VmRunnerOptions {
   readonly sendUptimePing?: typeof sendPing;
   readonly procRoot?: string;
   readonly createClient?: CreateFirecrackerClient;
-  readonly readFile?: (path: string) => Buffer;
+  readonly readFile: (path: string) => Buffer;
 }
 
-export function createVmRunner(jails: Jails, options: Readonly<VmRunnerOptions> = {}): VmRunner {
+export function createVmRunner(jails: Jails, options: Readonly<VmRunnerOptions>): VmRunner {
   const mergeWrapper = options.mergeWrapper ?? null;
   const sendUptimePing = options.sendUptimePing ?? sendPing;
   const procRoot = options.procRoot ?? '/proc';
   const createClient = options.createClient ?? createFirecrackerClient;
-  const readFile = options.readFile ?? readFileSync;
+  const readFile = options.readFile;
   const uffdHandlerBin = options.uffdHandlerBin ?? null;
 
   const uffdWatch = createUffdWatch({
