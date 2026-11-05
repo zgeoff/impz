@@ -8,6 +8,7 @@ test('it reads the bench options as impz bench does, with its defaults', () => {
     samples: '20',
     memory: '256m',
     awake: '0',
+    prefix: 'bench-',
   });
 });
 

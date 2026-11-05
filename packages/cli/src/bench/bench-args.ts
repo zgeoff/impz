@@ -25,6 +25,11 @@ export const BENCH_ARGS = {
     description: 'how long an imp stays awake before a scenario puts it to sleep (30s, 2m)',
     default: '0',
   },
+  prefix: {
+    type: 'string',
+    description: "the start of each imp's name, before the run's ID",
+    default: 'bench-',
+  },
   label: { type: 'string', description: 'a name for this machine, kept with the results' },
   'limit-p50-ms': {
     type: 'string',

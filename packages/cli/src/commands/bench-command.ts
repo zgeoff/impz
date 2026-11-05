@@ -5,6 +5,7 @@ import { buildBenchReport } from '../bench/build-bench-report';
 import { findBenchFailure } from '../bench/find-bench-failure';
 import { formatBenchReport } from '../bench/format-bench-report';
 import { parseBenchLevels } from '../bench/parse-bench-levels';
+import { parseBenchPrefix } from '../bench/parse-bench-prefix';
 import { pickBenchScenarios } from '../bench/pick-bench-scenarios';
 import { runBench } from '../bench/run-bench';
 import { withStopSignal } from '../bench/with-stop-signal';
@@ -45,6 +46,7 @@ export const benchCommand = defineCommand({
       // whole UUID; the bench refuses names that exist and removes only imps
       // it created, so a shared ID costs a refused run, never another's imp
       const runID = crypto.randomUUID().replaceAll('-', '').slice(0, 12);
+      const namePrefix = parseBenchPrefix(ctx.values.prefix, { runID, levels });
 
       const startedAt = new Date();
 
@@ -62,7 +64,7 @@ export const benchCommand = defineCommand({
             },
             signal,
           },
-          { runID, scenarios, levels, samples, settings },
+          { namePrefix, scenarios, levels, samples, settings },
         ),
       );
 
