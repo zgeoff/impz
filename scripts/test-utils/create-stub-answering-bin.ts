@@ -28,9 +28,12 @@ function formatAnswer(answer: StubBinAnswer): string {
   const test =
     answer.args.length === 0
       ? 'true'
-      : answer.args
-          .map((arg, index) => `[ "\${${String(index + 1)}-}" = ${formatShellWord(arg)} ]`)
-          .join(' && ');
+      : [
+          `[ "$#" -ge ${String(answer.args.length)} ]`,
+          ...answer.args.map(
+            (arg, index) => `[ "\${${String(index + 1)}}" = ${formatShellWord(arg)} ]`,
+          ),
+        ].join(' && ');
 
   return [
     `if ${test}; then`,

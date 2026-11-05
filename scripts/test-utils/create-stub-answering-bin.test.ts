@@ -60,6 +60,21 @@ test('it matches an argument with a space or a quote in it whole', () => {
   expect([matched.stdout.toString(), missed.stdout.toString()]).toStrictEqual(['Syntax OK\n', '']);
 });
 
+test('it skips an answer whose args outnumber the call, even when the missing one is empty', () => {
+  const ctx = setupTest();
+
+  const stub = createStubAnsweringBin(ctx.directoryPath, 'docker', [
+    { args: ['pull', ''], exitCode: 1, stderr: 'matched an argument the call lacks' },
+  ]);
+
+  const result = Bun.spawnSync([join(stub.bin, 'docker'), 'pull']);
+
+  expect({ exitCode: result.exitCode, stderr: result.stderr.toString() }).toStrictEqual({
+    exitCode: 0,
+    stderr: '',
+  });
+});
+
 test('it answers every call with an answer of no args', () => {
   const ctx = setupTest();
 
