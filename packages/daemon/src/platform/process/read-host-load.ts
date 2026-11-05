@@ -15,13 +15,6 @@ export interface HostLoadSources {
   readonly logger: Pick<Logger, 'warning'>;
 }
 
-export const NO_HOST_LOAD: HostLoad = {
-  cpuStallUs: null,
-  ioStallUs: null,
-  memoryStallUs: null,
-  stealUs: null,
-};
-
 export function readHostLoad(sources: Readonly<HostLoadSources>): HostLoad {
   const readProc = (...names: readonly string[]) =>
     readProcFile(sources, join(sources.procRoot, ...names));

@@ -4,7 +4,6 @@ import { buildMockNewImp } from '../../../testing/imps/build-mock-new-imp';
 import { startTestImpd } from '../../../testing/start-test-impd';
 import { createImp, readImpById } from '../../platform/db/imps';
 import { updateImpState } from '../../platform/db/update-imp-state';
-import { NO_HOST_LOAD } from '../../platform/process/read-host-load';
 import { createCpuCgroups } from '../../vm/vmm/cpu-cgroups';
 import { createImpContext } from './imp-context';
 import { createImpLock } from './imp-lock';
@@ -43,7 +42,7 @@ async function setupTest() {
     kernelOops: NO_KERNEL_OOPS,
     readThreadIds: () => null,
     readNetBytes: () => null,
-    readHostLoad: () => NO_HOST_LOAD,
+    readHostLoad: () => ({ cpuStallUs: null, ioStallUs: null, memoryStallUs: null, stealUs: null }),
   });
 
   return {
