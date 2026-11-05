@@ -75,6 +75,63 @@ test('it skips an answer whose args outnumber the call, even when the missing on
   });
 });
 
+test('it matches an empty argument that the call passes', () => {
+  const ctx = setupTest();
+
+  const stub = createStubAnsweringBin(ctx.directoryPath, 'challtestsrv', [
+    { args: ['-defaultIPv6', ''], exitCode: 0, stdout: 'no IPv6\n' },
+  ]);
+
+  const result = Bun.spawnSync([join(stub.bin, 'challtestsrv'), '-defaultIPv6', '']);
+
+  expect(result.stdout.toString()).toBe('no IPv6\n');
+});
+
+test.each([['!'], ['='], ['-n'], ['(']])(
+  'it compares an argument that looks like a test operator, %s, as text',
+  (arg) => {
+    const ctx = setupTest();
+
+    const stub = createStubAnsweringBin(ctx.directoryPath, 'tool', [
+      { args: [arg], exitCode: 0, stdout: 'matched\n' },
+    ]);
+
+    const matched = Bun.spawnSync([join(stub.bin, 'tool'), arg]);
+    const missed = Bun.spawnSync([join(stub.bin, 'tool'), 'other']);
+
+    expect([matched.stdout.toString(), missed.stdout.toString()]).toStrictEqual(['matched\n', '']);
+  },
+);
+
+test('it matches an argument past the ninth', () => {
+  const ctx = setupTest();
+  const args = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'tenth'];
+
+  const stub = createStubAnsweringBin(ctx.directoryPath, 'tool', [
+    { args, exitCode: 0, stdout: 'matched\n' },
+  ]);
+
+  const matched = Bun.spawnSync([join(stub.bin, 'tool'), ...args]);
+  const missed = Bun.spawnSync([join(stub.bin, 'tool'), ...args.slice(0, 9), 'other']);
+
+  expect([matched.stdout.toString(), missed.stdout.toString()]).toStrictEqual(['matched\n', '']);
+});
+
+test('it prints stdout and stderr byte for byte, quotes, percent signs and newlines included', () => {
+  const ctx = setupTest();
+
+  const stub = createStubAnsweringBin(ctx.directoryPath, 'tool', [
+    { args: [], exitCode: 0, stdout: `it's "100%"\n$HOME\n`, stderr: "can't\n\\n" },
+  ]);
+
+  const result = Bun.spawnSync([join(stub.bin, 'tool')]);
+
+  expect({ stdout: result.stdout.toString(), stderr: result.stderr.toString() }).toStrictEqual({
+    stdout: `it's "100%"\n$HOME\n`,
+    stderr: "can't\n\\n",
+  });
+});
+
 test('it answers every call with an answer of no args', () => {
   const ctx = setupTest();
 
