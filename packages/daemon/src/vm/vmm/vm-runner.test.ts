@@ -864,6 +864,60 @@ test('#wakeVm stops the page handler of a 2M wake that fails', async () => {
   });
 });
 
+test('#wakeVm returns the counts the page handler of a 2M wake made by the time the guest answers', async () => {
+  const ctx = setupTest();
+  const paths = ctx.createImpDir('vm');
+  const handler = createStubUffdHandler(ctx.directoryPath);
+  const counts = Buffer.alloc(24);
+
+  counts.writeBigUInt64LE(57n, 0);
+  counts.writeBigUInt64LE(40n, 8);
+  counts.writeBigUInt64LE(96_200_000n, 16);
+
+  mkdirSync(paths.snapshotDir, { recursive: true });
+  writeFileSync(paths.memFile, 'guest pages');
+
+  const argv = buildStubFirecrackerArgv({ apiSocket: paths.apiSocket, logPath: ctx.logPath });
+
+  const waking = createVmRunner(buildStubJails({ argv }).jails, {
+    uffdHandlerBin: handler.path,
+  }).wakeVm({
+    firecrackerBin: 'firecracker',
+    paths,
+    cgroup: null,
+    jail: { uid: 900_000, gid: 900_000 },
+    readOnlyFiles: [],
+    hugePages: '2M',
+  });
+
+  await waitFor(() => {
+    expect(existsSync(paths.uffdPidFile)).toBeTrue();
+  });
+
+  const handlerPid = Number(readFileSync(paths.uffdPidFile, 'utf8'));
+
+  onTestFinished(() => {
+    stopPid(handlerPid);
+  });
+
+  // a Ping answers the resumed request too: both messages hold ok as field 1
+  await startStubAgent(paths.vsockSocket, (socket) => {
+    writeFileSync(paths.uffdStatsFile, counts);
+
+    socket.end(
+      encodeMessageFrame(FRAME_TYPES.response, PingSchema, { ok: true, version: '0.1.0' }),
+    );
+  });
+
+  const vm = await waking;
+
+  onTestFinished(() => {
+    stopPid(vm.pid);
+  });
+
+  expect(vm.pageHandler).toStrictEqual({ faults: 57, blocks: 40, serveMs: 96 });
+});
+
 test('#wakeVm refuses a 2M snapshot with no page handler before it loads', () => {
   const ctx = setupTest();
   const paths = ctx.createImpDir('vm');
