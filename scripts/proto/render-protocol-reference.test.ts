@@ -46,13 +46,22 @@ message Reply {}
 `,
   );
 
-  Bun.spawnSync([
-    'node_modules/.bin/buf',
-    'build',
-    ctx.directoryPath,
-    '-o',
-    join(ctx.directoryPath, 'out.binpb'),
-  ]);
+  // buf caches under the home folder, which a CI runner may not let it read
+  const build = Bun.spawnSync(
+    [
+      'node_modules/.bin/buf',
+      'build',
+      ctx.directoryPath,
+      '-o',
+      join(ctx.directoryPath, 'out.binpb'),
+    ],
+    { env: { ...process.env, BUF_CACHE_DIR: join(ctx.directoryPath, 'buf-cache') } },
+  );
+
+  expect({ exitCode: build.exitCode, stderr: build.stderr.toString() }).toStrictEqual({
+    exitCode: 0,
+    stderr: '',
+  });
 
   const set = fromBinary(
     FileDescriptorSetSchema,
@@ -112,13 +121,22 @@ message Reply {
 `,
   );
 
-  Bun.spawnSync([
-    'node_modules/.bin/buf',
-    'build',
-    ctx.directoryPath,
-    '-o',
-    join(ctx.directoryPath, 'out.binpb'),
-  ]);
+  // buf caches under the home folder, which a CI runner may not let it read
+  const build = Bun.spawnSync(
+    [
+      'node_modules/.bin/buf',
+      'build',
+      ctx.directoryPath,
+      '-o',
+      join(ctx.directoryPath, 'out.binpb'),
+    ],
+    { env: { ...process.env, BUF_CACHE_DIR: join(ctx.directoryPath, 'buf-cache') } },
+  );
+
+  expect({ exitCode: build.exitCode, stderr: build.stderr.toString() }).toStrictEqual({
+    exitCode: 0,
+    stderr: '',
+  });
 
   const set = fromBinary(
     FileDescriptorSetSchema,
