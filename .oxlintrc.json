@@ -631,7 +631,6 @@
               "@impz/daemon",
               "@impz/dashboard",
               "@impz/e2e-harness",
-              "@impz/integration",
               "@impz/local-tar",
               "@impz/mcp",
               "@impz/testing"
