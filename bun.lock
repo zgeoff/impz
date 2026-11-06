@@ -214,6 +214,7 @@
         "kysely": "catalog:",
         "tiny-invariant": "catalog:",
         "ts-pattern": "catalog:",
+        "xstate": "catalog:",
       },
       "devDependencies": {
         "@zgeoff/kysely-bun-sqlite": "catalog:",

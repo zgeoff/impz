@@ -49,3 +49,23 @@ export type { OperationInput, QueueOutcome } from './operations/queue-operation'
 export { readOperation } from './operations/read-operation';
 export type { Operation, OperationError, OperationStep } from './operations/read-operation';
 export { waitForChange } from './operations/wait-for-change';
+export { createReconcilerRunner } from './reconciler/create-reconciler-runner';
+
+export type {
+  ReconcilerRunner,
+  ReconcilerRunnerDeps,
+  ReconcilerStatus,
+  ReconcilerTimer,
+} from './reconciler/create-reconciler-runner';
+
+export { defineReconciler } from './reconciler/define-reconciler';
+
+export type {
+  ReconcileOutcome,
+  ReconcileResult,
+  ReconcilerContext,
+  ReconcilerDefinition,
+  ReconcilerOutcome,
+} from './reconciler/define-reconciler';
+
+export type { ReconcilerResult } from './reconciler/read-reconciler-results';
