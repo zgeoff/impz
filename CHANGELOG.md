@@ -2,12 +2,16 @@
 
 ## [6.7.0](https://github.com/zgeoff/impz/compare/v6.6.1...v6.7.0) (2026-11-06)
 
-
 ### Features
 
-* **durable:** add a package with a sequenced event log ([#918](https://github.com/zgeoff/impz/issues/918)) ([70dfe90](https://github.com/zgeoff/impz/commit/70dfe9006c7e29f6fc5c51752237746ef0e022c6))
-* **durable:** add a reconciler runner ([#920](https://github.com/zgeoff/impz/issues/920)) ([0e6cc9a](https://github.com/zgeoff/impz/commit/0e6cc9a6ba638e1bcf0848600d4a1c8c22da0262))
-* **durable:** add operations that resume or undo after a restart ([#919](https://github.com/zgeoff/impz/issues/919)) ([19f02d9](https://github.com/zgeoff/impz/commit/19f02d90afde98516f7433da8fe7dbd0ef59f1fb))
+- **durable:** add a package with a sequenced event log
+  ([#918](https://github.com/zgeoff/impz/issues/918))
+  ([70dfe90](https://github.com/zgeoff/impz/commit/70dfe9006c7e29f6fc5c51752237746ef0e022c6))
+- **durable:** add a reconciler runner ([#920](https://github.com/zgeoff/impz/issues/920))
+  ([0e6cc9a](https://github.com/zgeoff/impz/commit/0e6cc9a6ba638e1bcf0848600d4a1c8c22da0262))
+- **durable:** add operations that resume or undo after a restart
+  ([#919](https://github.com/zgeoff/impz/issues/919))
+  ([19f02d9](https://github.com/zgeoff/impz/commit/19f02d90afde98516f7433da8fe7dbd0ef59f1fb))
 
 ## [6.6.1](https://github.com/zgeoff/impz/compare/v6.6.0...v6.6.1) (2026-11-05)
 
