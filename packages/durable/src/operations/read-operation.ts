@@ -40,23 +40,45 @@ export interface Operation {
 }
 
 export async function readOperation(db: DurableQueries, id: string): Promise<Operation | null> {
-  const row = await db.selectFrom('operations').selectAll().where('id', '=', id).executeTakeFirst();
-
-  if (row === undefined) {
-    return null;
-  }
-
-  const steps = await db
-    .selectFrom('operation_steps')
-    .selectAll()
-    .where('operation_id', '=', id)
-    .orderBy('position')
+  // one statement reads the operation and its steps from one snapshot, so a commit on another
+  // connection can't land between them
+  const rows = await db
+    .selectFrom('operations')
+    .innerJoin('operation_steps', 'operation_steps.operation_id', 'operations.id')
+    .selectAll('operations')
+    .select([
+      'operation_steps.position as step_position',
+      'operation_steps.name as step_name',
+      'operation_steps.state as step_state',
+      'operation_steps.started_at as step_started_at',
+      'operation_steps.ended_at as step_ended_at',
+      'operation_steps.error_code as step_error_code',
+      'operation_steps.error_message as step_error_message',
+      'operation_steps.undo_record as step_undo_record',
+      'operation_steps.undone_at as step_undone_at',
+    ])
+    .where('operations.id', '=', id)
+    .orderBy('operation_steps.position')
     .execute();
 
-  return toOperation(row, steps);
+  const [first] = rows;
+
+  return first === undefined ? null : toOperation(first, rows);
 }
 
-function toOperation(row: OperationsTable, steps: readonly OperationStepsTable[]): Operation {
+interface JoinedStep {
+  readonly step_position: number;
+  readonly step_name: string;
+  readonly step_state: OperationStepsTable['state'];
+  readonly step_started_at: number | null;
+  readonly step_ended_at: number | null;
+  readonly step_error_code: string | null;
+  readonly step_error_message: string | null;
+  readonly step_undo_record: string | null;
+  readonly step_undone_at: number | null;
+}
+
+function toOperation(row: OperationsTable, steps: readonly JoinedStep[]): Operation {
   return {
     id: row.id,
     kind: row.kind,
@@ -76,14 +98,14 @@ function toOperation(row: OperationsTable, steps: readonly OperationStepsTable[]
     startedAt: row.started_at,
     endedAt: row.ended_at,
     steps: steps.map((step) => ({
-      position: step.position,
-      name: step.name,
-      state: step.state,
-      startedAt: step.started_at,
-      endedAt: step.ended_at,
-      error: toOperationError(step.error_code, step.error_message),
-      undoRecord: step.undo_record === null ? null : parseJson(step.undo_record),
-      undoneAt: step.undone_at,
+      position: step.step_position,
+      name: step.step_name,
+      state: step.step_state,
+      startedAt: step.step_started_at,
+      endedAt: step.step_ended_at,
+      error: toOperationError(step.step_error_code, step.step_error_message),
+      undoRecord: step.step_undo_record === null ? null : parseJson(step.step_undo_record),
+      undoneAt: step.step_undone_at,
     })),
   };
 }
