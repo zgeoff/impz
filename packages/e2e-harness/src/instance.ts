@@ -4,6 +4,7 @@ import * as z from 'zod';
 import { buildDevLayout } from '../../../scripts/lib/build-dev-layout.ts';
 import type { ContainerCLI } from '../../../scripts/lib/build-dev-layout.ts';
 import { readDevCheckout } from '../../../scripts/lib/read-dev-checkout.ts';
+import { CommandTimeoutError } from './command-timeout-error';
 import { config } from './config';
 import type { HarnessEnv } from './config';
 import { buildFirecrackerPgrepArgv, readFirecrackerPids } from './firecracker-pids';
@@ -104,7 +105,11 @@ export interface CommandResult {
 
 export async function runCommand(
   argv: readonly string[],
-  options: Readonly<{ stdin?: string; env?: Readonly<Record<string, string>> }> = {},
+  options: Readonly<{
+    stdin?: string;
+    env?: Readonly<Record<string, string>>;
+    timeoutMs?: number;
+  }> = {},
 ): Promise<CommandResult> {
   const subprocess = Bun.spawn([...argv], {
     stdin: options.stdin === undefined ? 'ignore' : Buffer.from(options.stdin),
@@ -113,11 +118,34 @@ export async function runCommand(
     env: { ...process.env, ...options.env },
   });
 
-  const [stdout, stderr, exitCode] = await Promise.all([
+  const output = Promise.all([
     new Response(subprocess.stdout).text(),
     new Response(subprocess.stderr).text(),
-    subprocess.exited,
   ]);
+
+  // Bun's own spawn timeout leaves no sign of having fired: `killed` is true
+  // after any exit.
+  const limit = { hasFired: false };
+
+  const timer =
+    options.timeoutMs === undefined
+      ? undefined
+      : setTimeout(() => {
+          limit.hasFired = true;
+
+          subprocess.kill('SIGKILL');
+        }, options.timeoutMs);
+
+  const exitCode = await subprocess.exited;
+
+  clearTimeout(timer);
+
+  // A child the limit killed can leave a grandchild that holds the pipes open.
+  if (options.timeoutMs !== undefined && limit.hasFired) {
+    throw new CommandTimeoutError(argv, options.timeoutMs);
+  }
+
+  const [stdout, stderr] = await output;
 
   return { exitCode, stdout, stderr };
 }

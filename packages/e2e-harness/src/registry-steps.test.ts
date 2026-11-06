@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
 import { updateEnv } from '@impz/shared/test-utils/update-env';
+import { CommandTimeoutError } from './command-timeout-error';
 import { instance } from './instance';
 import {
   collectUnpinnedRequests,
@@ -102,6 +103,7 @@ test("#startRegistry runs a registry labelled with the instance on its network's
       gateway: '10.200.0.1',
     },
     'e2e-reg-registry-1',
+    { removalTimeoutMs: 1000 },
   );
 
   const calls = await readFile(docker.calls, 'utf8');
@@ -113,6 +115,7 @@ test("#startRegistry runs a registry labelled with the instance on its network's
     address: 'imp-e2e-registry.test:15443',
     container: 'e2e-reg-registry-1',
     certPath: join(certs, 'cert.pem'),
+    removalTimeoutMs: 1000,
   });
 
   expect(calls.split('\n')).toStrictEqual([
@@ -153,6 +156,7 @@ test('#startRegistry removes the network a stopped run of this instance left, be
       gateway: '10.200.0.1',
     },
     'e2e-reg-registry-1',
+    { removalTimeoutMs: 1000 },
   );
 
   const calls = await readFile(docker.calls, 'utf8');
@@ -191,6 +195,7 @@ test('#startRegistry never removes a network this instance did not label', async
       gateway: '10.200.0.1',
     },
     'e2e-reg-registry-1',
+    { removalTimeoutMs: 1000 },
   ).then(
     () => null,
     (error: unknown) => error,
@@ -235,6 +240,7 @@ test('#startRegistry removes the registry it ran, its certificates and its netwo
       gateway: '10.200.0.1',
     },
     'e2e-reg-registry-1',
+    { removalTimeoutMs: 1000 },
   );
 
   await ctx.stack.disposeAsync();
@@ -272,6 +278,7 @@ test('#startRegistry removes its registry and network with the docker it started
       gateway: '10.200.0.1',
     },
     'e2e-reg-registry-1',
+    { removalTimeoutMs: 1000 },
   );
 
   const other = createStubBin(join(ctx.directoryPath, 'other'), 'docker');
@@ -313,6 +320,7 @@ test('#startRegistry refuses a container name that is taken, before it makes any
       gateway: '10.200.0.1',
     },
     'e2e-reg-registry-1',
+    { removalTimeoutMs: 1000 },
   ).then(
     () => null,
     (error: unknown) => error,
@@ -356,6 +364,7 @@ test('#startRegistry removes no container when the registry does not start', asy
       gateway: '10.200.0.1',
     },
     'e2e-reg-registry-1',
+    { removalTimeoutMs: 1000 },
   ).then(
     () => null,
     (error: unknown) => error,
@@ -420,6 +429,7 @@ test('#createMovedTag moves the tag to new content and pins the old, and removes
     address: 'imp-e2e-registry.test:49153',
     container: 'e2e-reg-registry-1',
     certPath: join(ctx.directoryPath, 'cert.pem'),
+    removalTimeoutMs: 1000,
   };
 
   const moved = await createMovedTag(ctx.stack, registry, ctx.directoryPath, 'e2e/mutable');
@@ -477,6 +487,7 @@ test('#createMovedTag removes both tags with the docker it started with after PA
     address: 'imp-e2e-registry.test:49153',
     container: 'e2e-reg-registry-1',
     certPath: join(ctx.directoryPath, 'cert.pem'),
+    removalTimeoutMs: 1000,
   };
 
   await createMovedTag(ctx.stack, registry, ctx.directoryPath, 'e2e/mutable');
@@ -520,6 +531,7 @@ test('#createMovedTag removes the tag it made when a later step fails', async ()
     address: 'imp-e2e-registry.test:49153',
     container: 'e2e-reg-registry-1',
     certPath: join(ctx.directoryPath, 'cert.pem'),
+    removalTimeoutMs: 1000,
   };
 
   const failure = await createMovedTag(ctx.stack, registry, ctx.directoryPath, 'e2e/mutable').then(
@@ -536,4 +548,111 @@ test('#createMovedTag removes the tag it made when a later step fails', async ()
   expect(calls.split('\n').filter((line) => line.startsWith('docker rmi '))).toStrictEqual([
     'docker rmi imp-e2e-registry.test:49153/e2e/mutable:1',
   ]);
+});
+
+test('#startRegistry fails a removal that never exits at its limit, and still removes the network', async () => {
+  const ctx = await setupTest();
+
+  const docker = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    [
+      'case "$1 $2" in',
+      '  "container inspect"|"network inspect") exit 1 ;;',
+      '  "rm --force") exec sleep 30 ;;',
+      'esac',
+    ].join('\n'),
+  );
+
+  updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
+
+  await startRegistry(
+    ctx.stack,
+    {
+      name: 'imp-e2e-registry.test',
+      port: 15_443,
+      certDirectory: join(ctx.directoryPath, 'registry-tls'),
+      network: 'imp-dev-registry',
+      subnet: '10.200.0.0/24',
+      gateway: '10.200.0.1',
+    },
+    'e2e-reg-registry-1',
+    { removalTimeoutMs: 1000 },
+  );
+
+  const failure = await ctx.stack.disposeAsync().then(
+    () => null,
+    (error: unknown) => error,
+  );
+
+  const calls = await readFile(docker.calls, 'utf8');
+
+  expect(failure).toBeInstanceOf(CommandTimeoutError);
+  expect(calls.split('\n').at(-2)).toBe('docker network rm imp-dev-registry');
+});
+
+test('#createMovedTag fails a removal that never exits at its limit, and still removes the other tag', async () => {
+  const ctx = await setupTest();
+
+  const docker = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    [
+      'case "$*" in',
+      `  'image inspect --format {{json .RepoDigests}} busybox:1.37') echo '["busybox@sha256:aaa"]' ;;`,
+      `  'image inspect --format {{json .RepoDigests}} sha256:new') echo '["imp-e2e-registry.test:49153/e2e/mutable@sha256:ccc"]' ;;`,
+      `  'image inspect'*) echo '["imp-e2e-registry.test:49153/e2e/mutable@sha256:bbb"]' ;;`,
+      `  build*mutable-new) echo sha256:new ;;`,
+      `  'rmi imp-e2e-registry.test:49153/e2e/mutable:kept') exec sleep 30 ;;`,
+      'esac',
+    ].join('\n'),
+  );
+
+  updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
+
+  const registry = {
+    address: 'imp-e2e-registry.test:49153',
+    container: 'e2e-reg-registry-1',
+    certPath: join(ctx.directoryPath, 'cert.pem'),
+    removalTimeoutMs: 1000,
+  };
+
+  await createMovedTag(ctx.stack, registry, ctx.directoryPath, 'e2e/mutable');
+
+  const failure = await ctx.stack.disposeAsync().then(
+    () => null,
+    (error: unknown) => error,
+  );
+
+  const calls = await readFile(docker.calls, 'utf8');
+
+  expect(failure).toBeInstanceOf(CommandTimeoutError);
+  expect(calls.split('\n').at(-2)).toBe('docker rmi imp-e2e-registry.test:49153/e2e/mutable:1');
+});
+
+test('#startRegistry gives each removal 30 s when the caller sets no limit', async () => {
+  const ctx = await setupTest();
+
+  const docker = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    ['case "$1 $2" in', '  "container inspect"|"network inspect") exit 1 ;;', 'esac'].join('\n'),
+  );
+
+  updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
+
+  const registry = await startRegistry(
+    ctx.stack,
+    {
+      name: 'imp-e2e-registry.test',
+      port: 15_443,
+      certDirectory: join(ctx.directoryPath, 'registry-tls'),
+      network: 'imp-dev-registry',
+      subnet: '10.200.0.0/24',
+      gateway: '10.200.0.1',
+    },
+    'e2e-reg-registry-1',
+  );
+
+  expect(registry.removalTimeoutMs).toBe(30_000);
 });
