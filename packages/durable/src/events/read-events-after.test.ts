@@ -175,7 +175,9 @@ test('it never skips an event that a prune on another connection removes during 
   const sqlite = new Database(ctx.path);
   const pruner = new Kysely<DurableTables>({ dialect: buildSQLiteDialect(sqlite) });
 
-  onTestFinished(() => sqlite.close());
+  onTestFinished(() => {
+    sqlite.close();
+  });
 
   await appendEvent(ctx.db, {
     at: 1000,

@@ -22,7 +22,9 @@ test('it returns the log ID a database was made with after a reopen', async () =
 
   const sqlite = new Database(ctx.path);
 
-  onTestFinished(() => sqlite.close());
+  onTestFinished(() => {
+    sqlite.close();
+  });
 
   const after = await readLogId(new Kysely<DurableTables>({ dialect: buildSQLiteDialect(sqlite) }));
 
