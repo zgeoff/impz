@@ -65,11 +65,11 @@ A cancel is saved on the operation row first, so it survives a restart. The runn
 signal of the running step. After the step ends, the undo runs and the operation ends `cancelled`. A
 queued operation ends `cancelled` without running a step.
 
-A caller may give an operation a retry key. The same key with the same kind and params returns the
-operation that holds it, and the same key with another kind or other params is a conflict. The
-params are compared in a canonical form, so the order of their keys makes no difference. A key stays
-taken for `RETRY_KEY_KEEP_MS` after its operation ends, and `pruneOperations` removes an operation
-`OPERATION_KEEP_MS` after it ends.
+A caller may give an operation a retry key. The same key with the same kind, params, target and
+principal returns the operation that holds it. The same key with any of those changed is a conflict.
+The params are compared in a canonical form, so the order of their keys makes no difference. A key
+stays taken for `RETRY_KEY_KEEP_MS` after its operation ends, and `pruneOperations` removes an
+operation `OPERATION_KEEP_MS` after it ends.
 
 `waitForChange` waits for an operation, or any other row, to change. Each commit of the runner
 notifies a change signal that carries no data, and the waiter reads the row again. The waiter takes
