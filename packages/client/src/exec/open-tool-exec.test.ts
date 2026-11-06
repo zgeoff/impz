@@ -12,8 +12,6 @@ import {
   encodeMessageFrame,
 } from '@impz/agent-protocol';
 import { EXEC_MAX_STDIN_FRAME_BYTES, EXEC_STDIN_WINDOW_BYTES } from '@impz/api';
-import { createImpClient, openToolExec } from '@impz/client';
-import { buildStubExecPeer } from '@impz/client/test-utils/build-stub-exec-peer';
 import {
   buildImpPaths,
   buildStubExecReplies,
@@ -26,6 +24,9 @@ import { listLocalEntries, writeLocalEntries } from '@impz/local-tar';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
 import tar from 'tar-stream';
 import invariant from 'tiny-invariant';
+import { createImpClient } from '../create-imp-client';
+import { buildStubExecPeer } from '../test-utils/build-stub-exec-peer';
+import { openToolExec } from './open-tool-exec';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

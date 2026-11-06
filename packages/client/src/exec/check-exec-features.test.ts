@@ -1,10 +1,11 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
-import { checkExecFeatures, createRpcClient } from '@impz/client/internal';
-import { makeStubImpdWithoutFeature } from '@impz/client/test-utils/make-stub-impd-without-feature';
 import { startTestImpd } from '@impz/daemon/test-utils';
 import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
 import { server } from '@impz/shared/test-utils/mock-server';
 import { HttpResponse, http } from 'msw';
+import { createRpcClient } from '../create-rpc-client';
+import { makeStubImpdWithoutFeature } from '../test-utils/make-stub-impd-without-feature';
+import { checkExecFeatures } from './check-exec-features';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

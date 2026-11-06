@@ -17,6 +17,9 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@faker-js/faker": "catalog:"
+    "@faker-js/faker": "catalog:",
+    "@impz/daemon": "workspace:*",
+    "@modelcontextprotocol/client": "catalog:",
+    "tiny-invariant": "catalog:"
   }
 }
