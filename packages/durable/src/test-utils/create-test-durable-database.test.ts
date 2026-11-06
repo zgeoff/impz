@@ -1,6 +1,8 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { existsSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { appendEvent } from '../events/append-event';
+import { readEventsAfter } from '../events/read-events-after';
 import { createTestDurableDatabase } from './create-test-durable-database';
 
 test('it closes the database and removes its folder when the test ends', async () => {
@@ -25,13 +27,16 @@ test('it gives each call a database file of its own', async () => {
   const first = await createTestDurableDatabase();
   const second = await createTestDurableDatabase();
 
-  await first.db
-    .insertInto('events')
-    .values({ at: 1, kind: 'note.added', target_id: null, operation_id: null, payload: '{}' })
-    .execute();
+  await appendEvent(first.db, {
+    at: 1,
+    kind: 'note.added',
+    targetId: null,
+    operationId: null,
+    payload: {},
+  });
 
-  const rows = await second.db.selectFrom('events').selectAll().execute();
+  const read = await readEventsAfter(second.db, { after: 0, limit: 10 });
 
   expect(second.path).not.toBe(first.path);
-  expect(rows).toStrictEqual([]);
+  expect(read).toStrictEqual({ kind: 'events', events: [] });
 });
