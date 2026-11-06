@@ -20,14 +20,16 @@ test('it stores a queued operation with a queued row for each step', async () =>
     [],
   );
 
-  const queued = await queueOperation(ctx.db, shelf, {
-    params: { label: 'oak' },
-    principal: 'owner',
-    targetId: 'shelf-1',
-    parentId: null,
-    retryKey: null,
-    now: 1_800_000_000_000,
-  });
+  const queued = await ctx.db.transaction().execute((trx) =>
+    queueOperation(trx, shelf, {
+      params: { label: 'oak' },
+      principal: 'owner',
+      targetId: 'shelf-1',
+      parentId: null,
+      retryKey: null,
+      now: 1_800_000_000_000,
+    }),
+  );
 
   const operation = await ctx.readOperation(queued.operationId);
 
@@ -79,23 +81,27 @@ test('it matches a retry key whatever the order of the params’ keys', async ()
 
   const shelf = buildRecordingOperation('shelf.build', [buildRecordingStep({ name: 'cut' })], []);
 
-  const first = await queueOperation(ctx.db, shelf, {
-    params: { label: 'oak', widthCm: 80 },
-    principal: 'owner',
-    targetId: null,
-    parentId: null,
-    retryKey: 'key-1',
-    now: 1_800_000_000_000,
-  });
+  const first = await ctx.db.transaction().execute((trx) =>
+    queueOperation(trx, shelf, {
+      params: { label: 'oak', widthCm: 80 },
+      principal: 'owner',
+      targetId: null,
+      parentId: null,
+      retryKey: 'key-1',
+      now: 1_800_000_000_000,
+    }),
+  );
 
-  const second = await queueOperation(ctx.db, shelf, {
-    params: { widthCm: 80, label: 'oak' },
-    principal: 'owner',
-    targetId: null,
-    parentId: null,
-    retryKey: 'key-1',
-    now: 1_800_000_000_000,
-  });
+  const second = await ctx.db.transaction().execute((trx) =>
+    queueOperation(trx, shelf, {
+      params: { widthCm: 80, label: 'oak' },
+      principal: 'owner',
+      targetId: null,
+      parentId: null,
+      retryKey: 'key-1',
+      now: 1_800_000_000_000,
+    }),
+  );
 
   expect(second).toStrictEqual({ kind: 'existing', operationId: first.operationId });
 });
@@ -106,23 +112,27 @@ test('it refuses the key of an operation of another kind as a conflict', async (
   const shelf = buildRecordingOperation('shelf.build', [buildRecordingStep({ name: 'cut' })], []);
   const paint = buildRecordingOperation('shelf.paint', [buildRecordingStep({ name: 'coat' })], []);
 
-  const first = await queueOperation(ctx.db, shelf, {
-    params: { label: 'oak' },
-    principal: 'owner',
-    targetId: null,
-    parentId: null,
-    retryKey: 'key-1',
-    now: 1_800_000_000_000,
-  });
+  const first = await ctx.db.transaction().execute((trx) =>
+    queueOperation(trx, shelf, {
+      params: { label: 'oak' },
+      principal: 'owner',
+      targetId: null,
+      parentId: null,
+      retryKey: 'key-1',
+      now: 1_800_000_000_000,
+    }),
+  );
 
-  const second = await queueOperation(ctx.db, paint, {
-    params: { label: 'oak' },
-    principal: 'owner',
-    targetId: null,
-    parentId: null,
-    retryKey: 'key-1',
-    now: 1_800_000_000_000,
-  });
+  const second = await ctx.db.transaction().execute((trx) =>
+    queueOperation(trx, paint, {
+      params: { label: 'oak' },
+      principal: 'owner',
+      targetId: null,
+      parentId: null,
+      retryKey: 'key-1',
+      now: 1_800_000_000_000,
+    }),
+  );
 
   expect(second).toStrictEqual({ kind: 'conflict', operationId: first.operationId });
 });
@@ -132,23 +142,27 @@ test('it refuses the key of an operation on another target as a conflict', async
 
   const shelf = buildRecordingOperation('shelf.build', [buildRecordingStep({ name: 'cut' })], []);
 
-  const first = await queueOperation(ctx.db, shelf, {
-    params: { label: 'oak' },
-    principal: 'owner',
-    targetId: 'shelf-1',
-    parentId: null,
-    retryKey: 'key-1',
-    now: 1_800_000_000_000,
-  });
+  const first = await ctx.db.transaction().execute((trx) =>
+    queueOperation(trx, shelf, {
+      params: { label: 'oak' },
+      principal: 'owner',
+      targetId: 'shelf-1',
+      parentId: null,
+      retryKey: 'key-1',
+      now: 1_800_000_000_000,
+    }),
+  );
 
-  const second = await queueOperation(ctx.db, shelf, {
-    params: { label: 'oak' },
-    principal: 'owner',
-    targetId: 'shelf-2',
-    parentId: null,
-    retryKey: 'key-1',
-    now: 1_800_000_000_000,
-  });
+  const second = await ctx.db.transaction().execute((trx) =>
+    queueOperation(trx, shelf, {
+      params: { label: 'oak' },
+      principal: 'owner',
+      targetId: 'shelf-2',
+      parentId: null,
+      retryKey: 'key-1',
+      now: 1_800_000_000_000,
+    }),
+  );
 
   expect(second).toStrictEqual({ kind: 'conflict', operationId: first.operationId });
 });

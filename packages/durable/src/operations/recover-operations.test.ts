@@ -264,14 +264,16 @@ test('it runs a queued operation that never started', async () => {
     effects,
   );
 
-  const queued = await queueOperation(ctx.db, shelf, {
-    params: { label: 'oak' },
-    principal: 'owner',
-    targetId: null,
-    parentId: null,
-    retryKey: null,
-    now: 1_800_000_000_000,
-  });
+  const queued = await ctx.db.transaction().execute((trx) =>
+    queueOperation(trx, shelf, {
+      params: { label: 'oak' },
+      principal: 'owner',
+      targetId: null,
+      parentId: null,
+      retryKey: null,
+      now: 1_800_000_000_000,
+    }),
+  );
 
   await ctx.createRunner(ctx.db, [shelf]).recover();
 

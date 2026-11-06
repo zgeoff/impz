@@ -45,8 +45,7 @@ test('it clears the retry key of an operation that ended 24 hours ago', async ()
   });
 
   await runner.run(started.operationId);
-
-  await pruneOperations(ctx.db, 1_800_086_400_000);
+  await ctx.db.transaction().execute((trx) => pruneOperations(trx, 1_800_086_400_000));
 
   const operation = await ctx.readOperation(started.operationId);
 
@@ -68,8 +67,7 @@ test('it keeps the retry key of an operation that ended less than 24 hours ago',
   });
 
   await runner.run(started.operationId);
-
-  await pruneOperations(ctx.db, 1_800_086_399_999);
+  await ctx.db.transaction().execute((trx) => pruneOperations(trx, 1_800_086_399_999));
 
   const operation = await ctx.readOperation(started.operationId);
 
@@ -92,7 +90,10 @@ test('it removes an operation that ended 30 days ago, with its steps', async () 
 
   await runner.run(started.operationId);
 
-  const removed = await pruneOperations(ctx.db, 1_802_592_000_000);
+  const removed = await ctx.db
+    .transaction()
+    .execute((trx) => pruneOperations(trx, 1_802_592_000_000));
+
   const steps = await ctx.db.selectFrom('operation_steps').select('name').execute();
 
   expect(removed).toBe(1);
@@ -115,7 +116,9 @@ test('it keeps an operation that ended less than 30 days ago', async () => {
 
   await runner.run(started.operationId);
 
-  const removed = await pruneOperations(ctx.db, 1_802_591_999_999);
+  const removed = await ctx.db
+    .transaction()
+    .execute((trx) => pruneOperations(trx, 1_802_591_999_999));
 
   expect(removed).toBe(0);
 });
@@ -125,16 +128,18 @@ test('it keeps an open operation however old it is', async () => {
 
   const shelf = buildRecordingOperation('shelf.build', [buildRecordingStep({ name: 'cut' })], []);
 
-  const queued = await queueOperation(ctx.db, shelf, {
-    params: { label: 'oak' },
-    principal: 'owner',
-    targetId: null,
-    parentId: null,
-    retryKey: 'key-1',
-    now: 1_000_000_000_000,
-  });
+  const queued = await ctx.db.transaction().execute((trx) =>
+    queueOperation(trx, shelf, {
+      params: { label: 'oak' },
+      principal: 'owner',
+      targetId: null,
+      parentId: null,
+      retryKey: 'key-1',
+      now: 1_000_000_000_000,
+    }),
+  );
 
-  await pruneOperations(ctx.db, 1_900_000_000_000);
+  await ctx.db.transaction().execute((trx) => pruneOperations(trx, 1_900_000_000_000));
 
   const operation = await ctx.readOperation(queued.operationId);
 
@@ -157,14 +162,16 @@ test('it lets a retry key whose operation ended 24 hours ago start a new operati
 
   await runner.run(first.operationId);
 
-  const second = await queueOperation(ctx.db, shelf, {
-    params: { label: 'pine' },
-    principal: 'owner',
-    targetId: null,
-    parentId: null,
-    retryKey: 'key-1',
-    now: 1_800_086_400_000,
-  });
+  const second = await ctx.db.transaction().execute((trx) =>
+    queueOperation(trx, shelf, {
+      params: { label: 'pine' },
+      principal: 'owner',
+      targetId: null,
+      parentId: null,
+      retryKey: 'key-1',
+      now: 1_800_086_400_000,
+    }),
+  );
 
   expect({ kind: second.kind, isNew: second.operationId !== first.operationId }).toStrictEqual({
     kind: 'queued',

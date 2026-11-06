@@ -26,14 +26,16 @@ test('it reads a null undo record as a record the step wrote', async () => {
 
   const shelf = buildRecordingOperation('shelf.build', [buildRecordingStep({ name: 'cut' })], []);
 
-  const queued = await queueOperation(ctx.db, shelf, {
-    params: { label: 'oak' },
-    principal: 'owner',
-    targetId: null,
-    parentId: null,
-    retryKey: null,
-    now: 1_800_000_000_000,
-  });
+  const queued = await ctx.db.transaction().execute((trx) =>
+    queueOperation(trx, shelf, {
+      params: { label: 'oak' },
+      principal: 'owner',
+      targetId: null,
+      parentId: null,
+      retryKey: null,
+      now: 1_800_000_000_000,
+    }),
+  );
 
   await writeStepUndo(ctx.db, { operationId: queued.operationId, position: 0, record: null });
 
@@ -50,14 +52,16 @@ test('it reads the operation and its steps as one commit left them', async () =>
   const writer = ctx.openWriter();
   const shelf = buildRecordingOperation('shelf.build', [buildRecordingStep({ name: 'cut' })], []);
 
-  const queued = await queueOperation(ctx.db, shelf, {
-    params: { label: 'oak' },
-    principal: 'owner',
-    targetId: null,
-    parentId: null,
-    retryKey: null,
-    now: 1_800_000_000_000,
-  });
+  const queued = await ctx.db.transaction().execute((trx) =>
+    queueOperation(trx, shelf, {
+      params: { label: 'oak' },
+      principal: 'owner',
+      targetId: null,
+      parentId: null,
+      retryKey: null,
+      now: 1_800_000_000_000,
+    }),
+  );
 
   const reader = ctx.db.withPlugin({
     transformQuery: (args) => args.node,

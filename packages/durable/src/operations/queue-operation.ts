@@ -1,4 +1,4 @@
-import type { DurableQueries } from '../durable-tables';
+import type { DurableTransaction } from '../durable-tables';
 import { appendEvent } from '../events/append-event';
 import type { JsonValue } from '../json-value';
 import { toCanonicalJson } from '../to-canonical-json';
@@ -19,7 +19,7 @@ export interface QueueOutcome {
 }
 
 export async function queueOperation<TParams extends JsonValue, TTrx>(
-  db: DurableQueries,
+  trx: DurableTransaction,
   definition: OperationDefinition<TParams, TTrx>,
   input: OperationInput<TParams> & { readonly now: number },
 ): Promise<QueueOutcome> {
@@ -28,7 +28,7 @@ export async function queueOperation<TParams extends JsonValue, TTrx>(
   const holder =
     input.retryKey === null
       ? undefined
-      : await db
+      : await trx
           .selectFrom('operations')
           .select(['id', 'kind', 'params', 'target_id', 'principal', 'ended_at'])
           .where('retry_key', '=', input.retryKey)
@@ -56,20 +56,20 @@ export async function queueOperation<TParams extends JsonValue, TTrx>(
       return { kind: outcome, operationId: holder.id };
     }
 
-    await db
+    await trx
       .updateTable('operations')
       .set({ retry_key: null })
       .where('id', '=', holder.id)
       .execute();
   }
 
-  const operationId = await insertOperation(db, definition, { ...input, params });
+  const operationId = await insertOperation(trx, definition, { ...input, params });
 
   return { kind: 'queued', operationId };
 }
 
 async function insertOperation<TParams extends JsonValue, TTrx>(
-  db: DurableQueries,
+  trx: DurableTransaction,
   definition: OperationDefinition<TParams, TTrx>,
   input: Omit<OperationInput<TParams>, 'params'> & {
     readonly params: string;
@@ -78,7 +78,7 @@ async function insertOperation<TParams extends JsonValue, TTrx>(
 ): Promise<string> {
   const id = Bun.randomUUIDv7('hex', input.now);
 
-  await db
+  await trx
     .insertInto('operations')
     .values({
       id,
@@ -102,7 +102,7 @@ async function insertOperation<TParams extends JsonValue, TTrx>(
     })
     .execute();
 
-  await db
+  await trx
     .insertInto('operation_steps')
     .values(
       definition.steps.map((step, position) => ({
@@ -120,7 +120,7 @@ async function insertOperation<TParams extends JsonValue, TTrx>(
     )
     .execute();
 
-  await appendEvent(db, {
+  await appendEvent(trx, {
     at: input.now,
     kind: 'operation.queued',
     targetId: input.targetId,

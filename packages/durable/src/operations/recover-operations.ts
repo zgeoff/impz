@@ -1,5 +1,5 @@
 import { match } from 'ts-pattern';
-import type { DurableQueries } from '../durable-tables';
+import type { DurableTransaction } from '../durable-tables';
 import type { JsonValue } from '../json-value';
 import { appendOperationEvent } from './append-operation-event';
 import type { ChangeSignal } from './create-change-signal';
@@ -11,14 +11,14 @@ import type { RecoveryMove } from './pick-recovery-move';
 import { readOperation } from './read-operation';
 import type { Operation, OperationError, OperationStep } from './read-operation';
 
-interface RecoveryDeps<TTrx extends DurableQueries> {
+interface RecoveryDeps<TTrx extends DurableTransaction> {
   readonly withTransaction: <T>(run: (trx: TTrx) => Promise<T>) => Promise<T>;
   readonly definitions: ReadonlyMap<string, OperationDefinition<JsonValue, TTrx>>;
   readonly changes: ChangeSignal;
   readonly now: () => number;
 }
 
-export async function recoverOperations<TTrx extends DurableQueries>(
+export async function recoverOperations<TTrx extends DurableTransaction>(
   deps: RecoveryDeps<TTrx>,
   run: (id: string) => Promise<void>,
 ): Promise<void> {
@@ -47,7 +47,7 @@ export async function recoverOperations<TTrx extends DurableQueries>(
   await Promise.all(open.map((row) => run(row.id)));
 }
 
-async function writeRecoveryMove<TTrx extends DurableQueries>(
+async function writeRecoveryMove<TTrx extends DurableTransaction>(
   deps: RecoveryDeps<TTrx>,
   operation: Operation,
   move: RecoveryMove,
@@ -66,7 +66,7 @@ async function writeRecoveryMove<TTrx extends DurableQueries>(
 }
 
 async function writeInterruptedStep(
-  db: DurableQueries,
+  trx: DurableTransaction,
   operation: Operation,
   step: OperationStep,
   at: number,
@@ -76,7 +76,7 @@ async function writeInterruptedStep(
     message: `the process stopped during step ${step.name}`,
   };
 
-  await moveStep(db, {
+  await moveStep(trx, {
     operationId: operation.id,
     position: step.position,
     from: 'running',
@@ -84,14 +84,14 @@ async function writeInterruptedStep(
     set: { ended_at: at, error_code: error.code, error_message: error.message },
   });
 
-  await moveOperation(db, {
+  await moveOperation(trx, {
     id: operation.id,
     from: 'running',
     to: 'running',
     set: { ending: 'failed', error_code: error.code, error_message: error.message },
   });
 
-  await appendOperationEvent(db, operation, {
+  await appendOperationEvent(trx, operation, {
     kind: 'operation.step',
     at,
     state: 'failed',
@@ -101,7 +101,7 @@ async function writeInterruptedStep(
 }
 
 async function writeUnknownStep(
-  db: DurableQueries,
+  trx: DurableTransaction,
   operation: Operation,
   step: OperationStep,
   at: number,
@@ -111,7 +111,7 @@ async function writeUnknownStep(
     message: `the effect of step ${step.name} is unknown`,
   };
 
-  await moveStep(db, {
+  await moveStep(trx, {
     operationId: operation.id,
     position: step.position,
     from: 'running',
@@ -119,14 +119,14 @@ async function writeUnknownStep(
     set: { ended_at: at, error_code: error.code, error_message: error.message },
   });
 
-  await moveOperation(db, {
+  await moveOperation(trx, {
     id: operation.id,
     from: 'running',
     to: 'unknown',
     set: { ended_at: at, error_code: error.code, error_message: error.message },
   });
 
-  await appendOperationEvent(db, operation, {
+  await appendOperationEvent(trx, operation, {
     kind: 'operation.step',
     at,
     state: 'unknown',
@@ -134,7 +134,7 @@ async function writeUnknownStep(
     error,
   });
 
-  await appendOperationEvent(db, operation, {
+  await appendOperationEvent(trx, operation, {
     kind: 'operation.ended',
     at,
     state: 'unknown',

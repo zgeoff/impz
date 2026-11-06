@@ -31,14 +31,16 @@ test('#moveStep moves the step’s state', async () => {
 
   const shelf = buildRecordingOperation('shelf.build', [buildRecordingStep({ name: 'cut' })], []);
 
-  const queued = await queueOperation(ctx.db, shelf, {
-    params: { label: 'oak' },
-    principal: 'owner',
-    targetId: null,
-    parentId: null,
-    retryKey: null,
-    now: 1_800_000_000_000,
-  });
+  const queued = await ctx.db.transaction().execute((trx) =>
+    queueOperation(trx, shelf, {
+      params: { label: 'oak' },
+      principal: 'owner',
+      targetId: null,
+      parentId: null,
+      retryKey: null,
+      now: 1_800_000_000_000,
+    }),
+  );
 
   await moveStep(ctx.db, {
     operationId: queued.operationId,
@@ -60,14 +62,16 @@ test('#moveStep refuses a move from a state the step has left', async () => {
 
   const shelf = buildRecordingOperation('shelf.build', [buildRecordingStep({ name: 'cut' })], []);
 
-  const queued = await queueOperation(ctx.db, shelf, {
-    params: { label: 'oak' },
-    principal: 'owner',
-    targetId: null,
-    parentId: null,
-    retryKey: null,
-    now: 1_800_000_000_000,
-  });
+  const queued = await ctx.db.transaction().execute((trx) =>
+    queueOperation(trx, shelf, {
+      params: { label: 'oak' },
+      principal: 'owner',
+      targetId: null,
+      parentId: null,
+      retryKey: null,
+      now: 1_800_000_000_000,
+    }),
+  );
 
   const move = moveStep(ctx.db, {
     operationId: queued.operationId,
