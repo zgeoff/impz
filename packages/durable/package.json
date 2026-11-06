@@ -1,0 +1,17 @@
+{
+  "name": "@impz/durable",
+  "version": "0.0.0",
+  "private": true,
+  "description": "An event log for programs that keep their state in SQLite",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "kysely": "catalog:"
+  },
+  "devDependencies": {
+    "@zgeoff/kysely-bun-sqlite": "catalog:"
+  }
+}

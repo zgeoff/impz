@@ -17,6 +17,12 @@ the vsock protocol with the guest agent, the frame codec and the generated messa
 `packages/agent-protocol`, another leaf, which the client's and the CLI's tests use to play the
 agent. The guest agent is `agent/`.
 
+With `packages/durable`, a program on SQLite records its changes in an event log that numbers each
+one. Each write of the package goes through the program's own Kysely transaction, so a change and
+its event commit together, or neither commits. The package never refers to an imp concept, so a
+program other than impd can use it. Its event log is a table in the program's own database, apart
+from impd's in-process event bus.
+
 ## The path of a request
 
 Every way into an imp passes impd, and every path that needs the guest wakes it first.
@@ -130,10 +136,12 @@ and the imp boots cold.
   ([the API](./control/api.md#events-audit-and-telemetry)).
 - **Import direction.** The packages form a stack: the leaves at the bottom, then the API contract,
   the published client, the MCP server, and the three apps (the CLI, the dashboard and impd) on top.
-  oxlint refuses an import that points up the stack or across to another app, type-only imports
-  included, so the order cannot drift. It also refuses a Node import in the contract or the client,
-  because the client runs in browsers and in Node alike; a query builder outside the daemon's
-  database module; and production code that imports test support.
+  `packages/durable` sits on the leaves, beside the contract: of the workspace packages it imports
+  only `packages/shared`. oxlint refuses an import that points up the stack or across to another
+  app, type-only imports included, so the order cannot drift. It also refuses a Node import in the
+  contract or the client, because the client runs in browsers and in Node alike; a query builder
+  outside the daemon's database module and `packages/durable`; and production code that imports test
+  support.
 - **One impd per host, permanently.** impd keeps one database connection and every imp's lock in its
   own memory, so a second impd on the same data would break both, and impd has no standby or
   failover. That rules out high availability on purpose. impd scales out instead: each host is its

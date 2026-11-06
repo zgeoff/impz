@@ -49,6 +49,7 @@ packages/
   daemon/          impd, the host daemon; e2e/ holds its end-to-end suites and their fixtures,
                    and bench/ the scripts that the bench workflow, bench.yml, runs
   dashboard/       the web dashboard that impd serves at /ui/
+  durable/         the durable work library for any program on SQLite: an event log
   e2e-harness/     the end-to-end and bootstrap harnesses that scripts/test-e2e.sh and
                    scripts/test-bootstrap.sh run, and the helpers the suites import
   local-tar/       local files as a tar, for impz cp and image build contexts

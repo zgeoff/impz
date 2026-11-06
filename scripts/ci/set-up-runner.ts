@@ -98,20 +98,31 @@ async function nameE2ERegistry(): Promise<void> {
   await $`sudo tee -a /etc/hosts < ${new Response('10.200.0.1 imp-e2e-registry.test\n')}`;
 }
 
+// apt-get waits without end on a download that a mirror stalls, past the job's time limit; the
+// timeout fails the stalled fetch, and the retries fetch it again
+const APT_OPTIONS = [
+  '-o',
+  'Acquire::Retries=3',
+  '-o',
+  'Acquire::http::Timeout=30',
+  '-o',
+  'Acquire::https::Timeout=30',
+];
+
 // zfs.ko sits in linux-modules-extra on some runner kernels. The optional argument caps the ARC in
 // bytes, which defaults to half of RAM.
 async function installZfs(args: readonly string[]): Promise<void> {
   const [arcMaxBytes] = args;
 
-  await $`sudo apt-get update`;
-  await $`sudo apt-get install -y --no-install-recommends zfsutils-linux`;
+  await $`sudo apt-get ${APT_OPTIONS} update`;
+  await $`sudo apt-get ${APT_OPTIONS} install -y --no-install-recommends zfsutils-linux`;
 
   const module = await $`modinfo zfs`.nothrow().quiet();
 
   if (module.exitCode !== 0) {
     const kernel = await $`uname -r`.text();
 
-    await $`sudo apt-get install -y --no-install-recommends ${`linux-modules-extra-${kernel.trim()}`}`;
+    await $`sudo apt-get ${APT_OPTIONS} install -y --no-install-recommends ${`linux-modules-extra-${kernel.trim()}`}`;
   }
 
   if (arcMaxBytes === undefined) {
@@ -127,8 +138,8 @@ async function installZfs(args: readonly string[]): Promise<void> {
 
 async function installPodman(): Promise<void> {
   if (Bun.which('podman') === null) {
-    await $`sudo apt-get update`;
-    await $`sudo apt-get install -y --no-install-recommends podman catatonit netavark aardvark-dns`;
+    await $`sudo apt-get ${APT_OPTIONS} update`;
+    await $`sudo apt-get ${APT_OPTIONS} install -y --no-install-recommends podman catatonit netavark aardvark-dns`;
   }
 
   await $`sudo podman --version`;
