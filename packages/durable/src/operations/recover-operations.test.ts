@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { waitFor } from '@impz/test-utils/wait-for';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import type { Kysely, Transaction } from 'kysely';
 import invariant from 'tiny-invariant';
 import type { DurableTables } from '../durable-tables';

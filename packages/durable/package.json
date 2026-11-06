@@ -15,7 +15,6 @@
     "ts-pattern": "catalog:"
   },
   "devDependencies": {
-    "@impz/test-utils": "workspace:*",
     "@zgeoff/kysely-bun-sqlite": "catalog:"
   }
 }
