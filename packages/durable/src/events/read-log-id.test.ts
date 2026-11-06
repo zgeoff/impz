@@ -1,11 +1,11 @@
 import { Database } from 'bun:sqlite';
 import { expect, onTestFinished, test } from 'bun:test';
-import { buildSQLiteDialect } from '@zgeoff/kysely-bun-sqlite';
-import { Kysely } from 'kysely';
 import { Migrator } from 'kysely/migration';
-import type { DurableTables } from '../durable-tables';
 import { durableMigrations } from '../migrations/durable-migrations';
-import { createTestDurableDatabase } from '../test-utils/create-test-durable-database';
+import {
+  createTestDurableDatabase,
+  openTestConnection,
+} from '../test-utils/create-test-durable-database';
 import { openTestDurableDatabase } from '../test-utils/open-test-durable-database';
 import { readLogId } from './read-log-id';
 
@@ -26,13 +26,8 @@ test('it returns the log ID a database was made with after a reopen', async () =
 });
 
 test('it gives each migrated database a log ID of its own', async () => {
-  const first = new Kysely<DurableTables>({
-    dialect: buildSQLiteDialect(new Database(':memory:')),
-  });
-
-  const second = new Kysely<DurableTables>({
-    dialect: buildSQLiteDialect(new Database(':memory:')),
-  });
+  const first = openTestConnection(new Database(':memory:'));
+  const second = openTestConnection(new Database(':memory:'));
 
   onTestFinished(() => first.destroy());
   onTestFinished(() => second.destroy());

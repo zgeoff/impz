@@ -1,4 +1,4 @@
-import { expect, onTestFinished, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import { appendEvent } from '../events/append-event';
 import { readEventsAfter } from '../events/read-events-after';
 import { createTestDurableDatabase } from './create-test-durable-database';
@@ -7,11 +7,7 @@ import { openTestDurableDatabase } from './open-test-durable-database';
 async function setupTest() {
   const database = await createTestDurableDatabase();
 
-  const stack = new AsyncDisposableStack();
-
-  onTestFinished(() => stack.disposeAsync());
-
-  return { database, stack };
+  return { database };
 }
 
 test('it opens a second connection that sees the first connection’s commits', async () => {
@@ -25,10 +21,10 @@ test('it opens a second connection that sees the first connection’s commits', 
     payload: {},
   });
 
-  const read = await readEventsAfter(openTestDurableDatabase(ctx.stack, ctx.database.path), {
-    after: 0,
-    limit: 10,
-  });
+  const read = await readEventsAfter(
+    openTestDurableDatabase(ctx.database.stack, ctx.database.path),
+    { after: 0, limit: 10 },
+  );
 
   expect(read).toStrictEqual({
     kind: 'events',
@@ -36,12 +32,12 @@ test('it opens a second connection that sees the first connection’s commits', 
   });
 });
 
-test('it closes the second connection when its stack is disposed', async () => {
+test('it closes the second connection when the database’s stack is disposed', async () => {
   const ctx = await setupTest();
 
-  const db = openTestDurableDatabase(ctx.stack, ctx.database.path);
+  const db = openTestDurableDatabase(ctx.database.stack, ctx.database.path);
 
-  await ctx.stack.disposeAsync();
+  await ctx.database.stack.disposeAsync();
 
   const reading = db.selectFrom('event_log').select('log_id').execute();
 
