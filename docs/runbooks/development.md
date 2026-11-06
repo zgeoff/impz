@@ -438,8 +438,9 @@ release job's wait on a pull request's checks. It compares a baseline with its o
 a `bench/**` branch, the baseline is the parent of the branch's head, and on a dispatch, it is the
 dispatch's `baseline` input (default `main`):
 
-1. The job checks out the baseline beside the ref, and builds each one's kernel and system drive, so
-   each side boots its own guest agent.
+1. The job checks out the baseline beside the ref, and builds each one's kernel, system drive and
+   host image, so each side boots its own guest agent and runs its own host binaries, such as the
+   page handler. The arms script runs each side on the host image `imp-host:bench-<arm>`.
 2. `packages/daemon/bench/run-bench-arms.ts` brings up a dev instance from each checkout in turn,
    over one data dir. Each side first creates 3 imps that the bench does not time, so its boot
    template is ready before the timed run starts.

@@ -368,6 +368,58 @@ test('it gives up on an instance that stays unready past the deadline, and saves
   expect(runCommand).toHaveBeenLastCalledWith(['/work/candidate/scripts/dev/dev.sh', 'down'], {
     IMP_KERNEL: '/work/candidate/.cache/ci/vmlinux',
     IMP_SYSTEM_DRIVE: '/work/candidate/.cache/ci/imp-system.squashfs',
+    IMP_HOST_IMAGE: 'imp-host:bench-candidate',
+  });
+});
+
+test("it starts an arm's dev instance on the host image named for the arm, over the shell's IMP_HOST_IMAGE", async () => {
+  const runs: Readonly<Record<string, CommandResult>> = {
+    'docker ps -a --filter name=^imp-dev$ --format {{.State}}': {
+      exitCode: 0,
+      stdout: '',
+      stderr: '',
+    },
+    '/work/baseline/scripts/dev/dev.sh token': { exitCode: 0, stdout: 'token-1\n', stderr: '' },
+    '/work/impz info --json': {
+      exitCode: 0,
+      stdout:
+        '{"defaults":{"memoryMib":256,"image":"base"},"host":{"kernel":"6.1.0","cpuModel":"EPYC","isNested":true,"hugePages":"2M","hugePool":null,"bootTemplates":1}}',
+      stderr: '',
+    },
+    '/work/impz bench wake --label baseline --json': {
+      exitCode: 0,
+      stdout: '{"results":[]}\n',
+      stderr: '',
+    },
+  };
+
+  const runCommand = mock<
+    (argv: readonly string[], env: Readonly<Record<string, string>>) => Promise<CommandResult>
+  >((argv) => Promise.resolve(runs[argv.join(' ')] ?? { exitCode: 0, stdout: '', stderr: '' }));
+
+  await runBenchArm(
+    {
+      withDevLock: (_name, run) => run(),
+      runCommand,
+      writeLog: () => {},
+      now: () => 0,
+      sleep: () => Promise.resolve(),
+      onStderr: () => {},
+    },
+    {
+      arm: { name: 'baseline', checkout: '/work/baseline' },
+      commands: { warmUpArgs: ['bench', 'create'], benchArgs: ['wake'] },
+      logPath: '/work/out/baseline-1.impd.log',
+      impz: '/work/impz',
+      env: { IMP_HOST_IMAGE: 'imp-host:dev' },
+      cwd: '/work',
+    },
+  );
+
+  expect(runCommand).toHaveBeenCalledWith(['/work/baseline/scripts/dev/dev.sh', 'up'], {
+    IMP_KERNEL: '/work/baseline/.cache/ci/vmlinux',
+    IMP_SYSTEM_DRIVE: '/work/baseline/.cache/ci/imp-system.squashfs',
+    IMP_HOST_IMAGE: 'imp-host:bench-baseline',
   });
 });
 
