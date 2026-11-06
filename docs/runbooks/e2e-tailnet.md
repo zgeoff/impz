@@ -19,8 +19,8 @@ and takes it down after the last suite:
 
 1. The harness creates the Docker network `<IMP_DEV_NAME>-ts` if it is missing, and starts Headscale
    on it under the alias `headscale`. Headscale reads its config and policy from
-   [`e2e/fixtures/headscale/`](../../e2e/fixtures/headscale/) and keeps its state on a tmpfs, so
-   each run starts from an empty tailnet.
+   [`packages/daemon/e2e/fixtures/headscale/`](../../packages/daemon/e2e/fixtures/headscale/) and
+   keeps its state on a tmpfs, so each run starts from an empty tailnet.
 2. The harness mints a reusable, ephemeral pre-auth key that carries `tag:imp-e2e`. One key joins
    the dev instance at each start and reboot, and the moves suites' second host. Each impd node
    keeps its state in memory, so a node from an earlier run never comes back.

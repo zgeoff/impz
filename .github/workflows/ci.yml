@@ -96,7 +96,7 @@ jobs:
         env:
           SHARD: ${{ matrix.shard }}
         run: >-
-          scripts/ci/run-memory-capped.sh 1536 env TMPDIR=/dev/shm bun test --parallel=2
+          scripts/ci/run-memory-capped.sh 1792 env TMPDIR=/dev/shm bun test --parallel=2
           --no-isolate --shard="$SHARD/2" --timings="$RUNNER_TEMP/unit-test/timings-$SHARD.json"
           --timings=scripts/ci/unit-test-timings.json --update-timings --reporter=junit
           --reporter-outfile="$RUNNER_TEMP/unit-test/results-$SHARD.xml"
@@ -495,7 +495,6 @@ jobs:
       paths: |
         agent/**
         deploy/**
-        e2e/**
         host/**
         images/**
         kernel/**
@@ -552,7 +551,7 @@ jobs:
           retention-days: 1
 
   # Boots real microVMs: the fast end-to-end set in its four groups
-  # (FAST_GROUPS in packages/e2e-harness/src/suites.ts, e2e/test-e2e.sh --group N),
+  # (FAST_GROUPS in packages/e2e-harness/src/suites.ts, scripts/test-e2e.sh --group N),
   # each against a dev instance on its own runner's KVM. The `e2e` job below
   # is the required check over all four.
   e2e-group:
@@ -683,7 +682,7 @@ jobs:
       - name: End-to-end tests
         env:
           GROUP: ${{ matrix.group }}
-        run: e2e/test-e2e.sh --group "$GROUP"
+        run: scripts/test-e2e.sh --group "$GROUP"
 
       # The steps below also run after a failure or a timeout, with or
       # without a container, so none of them may fail the job.
@@ -736,7 +735,7 @@ jobs:
           RESULT: ${{ needs.e2e-group.result }}
         run: test "$RESULT" = skipped
 
-  # The proof that an imp host runs with no Docker engine: e2e/podman/run-podman-proof.sh
+  # The proof that an imp host runs with no Docker engine: scripts/run-podman-proof.sh
   # starts the dev instance under Docker, masks the runner's Docker, starts it again
   # under rootful Podman on the same data dir, checks what survived, and runs the
   # socket and podman suites. Not a required check, and not in the e2e gate.
@@ -798,7 +797,7 @@ jobs:
         run: bun run --silent ci:set-up-runner install-podman
 
       - name: Run the Podman proof
-        run: sudo -E env "PATH=$PATH" e2e/podman/run-podman-proof.sh
+        run: sudo -E env "PATH=$PATH" scripts/run-podman-proof.sh
 
       # The steps below also run after a failure or a timeout, with or
       # without a container, so none of them may fail the job.
@@ -824,7 +823,7 @@ jobs:
   # The ZFS storage backend on real pools, in three shards on three runners:
   # scripts/zfs-host-test.sh runs real imps on a pool in a sparse file, with
   # the zfs module Ubuntu's kernel ships, and prints the ZFS timings. Shards 1
-  # and 2 split the ZFS lane: every *.zfs.e2e.ts journey, which runs nowhere
+  # and 2 split the ZFS lane: every *.zfs.test.ts journey, which runs nowhere
   # else, split by its suite's recorded time. The `suites` rows run VM e2e
   # suites on the ZFS backend, a backend matrix and not a lane, placed so the
   # shards end together. Shard 1 also runs scripts/test-zfs.sh on a throwaway

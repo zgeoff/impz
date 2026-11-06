@@ -710,7 +710,6 @@
     "packages/e2e-harness/src/chaos.test.ts": 2,
     "packages/e2e-harness/src/check-limit.test.ts": 15,
     "packages/e2e-harness/src/checkpoint-storage.test.ts": 1,
-    "packages/e2e-harness/src/ci-groups.test.ts": 19,
     "packages/e2e-harness/src/config.test.ts": 1,
     "packages/e2e-harness/src/container-https.test.ts": 1,
     "packages/e2e-harness/src/cpu-cgroup.test.ts": 1,

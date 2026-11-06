@@ -587,11 +587,11 @@ test('it runs each journey with its full argv and the env of the instance it set
     argv: [
       '/usr/local/bin/bun',
       'test',
-      '--config=e2e/bunfig.toml',
+      '--config=packages/daemon/e2e/bunfig.toml',
       '--bail',
       '--timeout',
       '60000',
-      './e2e/suites/docker.e2e.ts',
+      './packages/daemon/e2e/journey-docker.test.ts',
     ],
     env: {
       PATH: '/usr/bin',

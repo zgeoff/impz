@@ -21,12 +21,13 @@
       }
     ],
     // each lane's per-test limit, as the project-testing skill's Lanes table states; `e2e/`
-    // holds both the VM and the ZFS lanes
+    // holds the VM lane, and its `.zfs` files the ZFS lane
     "zgeoff/max-test-timeout": [
       "error",
       {
         "lanes": {
           "e2e": 60000,
+          "zfs": 60000,
           "host": 15000,
           "headscale": 15000,
           "pebble": 5000,
@@ -40,6 +41,7 @@
       {
         "lanes": {
           "e2e": 60000,
+          "zfs": 60000,
           "host": 15000,
           "headscale": 15000,
           "pebble": 5000,

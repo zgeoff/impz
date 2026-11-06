@@ -106,6 +106,7 @@ test('it keeps every imp valid, with its disk and the memory no kill could take,
       }),
     );
 
+    // oxlint-disable-next-line zgeoff/no-test-sleep -- the seeded offset of the round's fault
     await Bun.sleep(plan.delayMs);
 
     const inFlight = plan.steps.length - settledSteps;

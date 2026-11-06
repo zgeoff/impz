@@ -28,11 +28,9 @@ function setupTest() {
 
   const root = join(directory, 'root');
   const scripts = join(root, 'scripts');
-  const e2e = join(root, 'e2e');
   const deploy = join(root, 'deploy');
 
   mkdirSync(join(scripts, 'dev'), { recursive: true });
-  mkdirSync(e2e);
   mkdirSync(deploy);
 
   copyFileSync(
@@ -45,13 +43,13 @@ function setupTest() {
 
   createStubZfs(stubs);
   createStubRepoScript(join(scripts, 'dev'), 'dev.sh', sudo.calls);
-  createStubRepoScript(e2e, 'test-e2e.sh', sudo.calls);
+  createStubRepoScript(scripts, 'test-e2e.sh', sudo.calls);
   createStubRepoScript(scripts, 'test-zfs.sh', sudo.calls);
 
   return {
     directoryPath: directory,
     stubs,
-    e2e,
+    scripts,
     moduleVersion: join(directory, 'zfs-version'),
     calls: sudo.calls,
     path: `${sudo.bin}:${process.env['PATH'] ?? ''}`,
@@ -876,7 +874,7 @@ test('it stops the suites, the moves suites’ B, the instance and the pool when
 
   mkdirSync(work);
   createStubZpool(ctx.stubs);
-  createStubRepoScript(ctx.e2e, 'test-e2e.sh', ctx.calls, `: >'${started}'; exec sleep 30`);
+  createStubRepoScript(ctx.scripts, 'test-e2e.sh', ctx.calls, `: >'${started}'; exec sleep 30`);
 
   createStubRepoScript(
     join(ctx.directoryPath, 'root', 'scripts', 'dev'),

@@ -169,7 +169,6 @@
     "@impz/mcp": "workspace:*",
     "@impz/shared": "workspace:*",
     "@maschwenk/tsrslint": "catalog:",
-    "@modelcontextprotocol/client": "catalog:",
     "@stylistic/eslint-plugin": "catalog:",
     "@tsconfig/strictest": "catalog:",
     "@types/bun": "catalog:",

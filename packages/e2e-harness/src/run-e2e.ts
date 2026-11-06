@@ -88,7 +88,7 @@ interface RunE2EOptions {
 
 const USAGE = `imp end-to-end harness: every case drives impd through the CLI.
 
-  e2e/test-e2e.sh [--only SUITES | --group N] [--clean | --reuse] [--keep]
+  scripts/test-e2e.sh [--only SUITES | --group N] [--clean | --reuse] [--keep]
 
   --only    comma-separated suites or sets (default: acceptance)
             suites: ${SUITES.map((suite) => suite.name).join(' ')}

@@ -116,5 +116,11 @@ Find the check that runs a test this host cannot:
 - The `e2e` and `zfs` checks pass only when every job of their matrix passes, so open the failed
   job's log, not the summary check's.
 - When you change the end-to-end groups in `ci.yml`, change
-  [`ci-groups.test.ts`](../../../../packages/e2e-harness/src/ci-groups.test.ts) too. It fails when
-  the groups in the two files differ.
+  [`suites.test.ts`](../../../../packages/e2e-harness/src/suites.test.ts) too. It fails when the
+  groups in the two files differ.
+- When you add or slow a ZFS-lane suite, update its `seconds` in
+  [`suites.ts`](../../../../packages/e2e-harness/src/suites.ts), counting the build of any image
+  only it needs. CI splits the lane into shards, longest first, by that figure.
+- Expect a `zfs-shard` job to also run, on the ZFS backend, the VM suites that its matrix row lists
+  in `suites`, which the job passes as `IMP_ZFS_E2E_SUITES`. Those suites' journey files keep the
+  `e2e` limit.
