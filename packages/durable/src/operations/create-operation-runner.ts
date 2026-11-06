@@ -4,8 +4,8 @@ import { match } from 'ts-pattern';
 import type { DurableTransaction } from '../durable-tables';
 import type { JsonValue } from '../json-value';
 import { appendOperationEvent } from './append-operation-event';
-import { buildStepFailure } from './build-step-failure';
-import type { StepFailure } from './build-step-failure';
+import { buildStepWrites } from './build-step-writes';
+import type { StepWrite } from './build-step-writes';
 import type { ChangeSignal } from './create-change-signal';
 import type { OperationDefinition, RunnableStep, StepOutput } from './define-operation';
 import { moveOperation } from './move-operation';
@@ -253,51 +253,33 @@ export function createOperationRunner<TTrx extends DurableTransaction>(
     const ran = await runEffect(operation, runnable, step, signal);
 
     if (ran.kind === 'failed') {
-      await failStep(
+      await commitStepWrites(
         operation,
         step,
-        buildStepFailure({ cause: ran.error, isAborted: signal.aborted, phase: 'run' }),
+        undefined,
+        buildStepWrites({ kind: 'effect-failed', cause: ran.error, isAborted: signal.aborted }),
       );
 
       return;
     }
 
-    const output = ran.output;
-
     try {
-      await commit(async (trx) => {
-        await moveStep(trx, {
-          operationId: operation.id,
-          position: step.position,
-          from: 'running',
-          to: 'succeeded',
-          set: { ended_at: deps.now() },
-        });
-
-        await output?.write?.(trx);
-
-        if (output?.result !== undefined) {
-          await moveOperation(trx, {
-            id: operation.id,
-            from: 'running',
-            to: 'running',
-            set: { result: JSON.stringify(output.result) },
-          });
-        }
-
-        await appendOperationEvent(trx, operation, {
-          kind: 'operation.step',
-          at: deps.now(),
-          state: 'succeeded',
-          step: step.name,
-          error: null,
-        });
-      });
-    } catch (error) {
-      await failStep(
+      await commitStepWrites(
         operation,
         step,
-        buildStepFailure({ cause: error, isAborted: signal.aborted, phase: 'commit' }),
+        ran.output,
+        buildStepWrites({
+          kind: 'effect-ran',
+          hasWrite: ran.output?.write !== undefined,
+          result: ran.output?.result,
+        }),
+      );
+    } catch (error) {
+      await commitStepWrites(
+        operation,
+        step,
+        undefined,
+        buildStepWrites({ kind: 'commit-failed', cause: error, isAborted: signal.aborted }),
       );
     }
   };
@@ -330,40 +312,66 @@ export function createOperationRunner<TTrx extends DurableTransaction>(
     }
   };
 
-  const failStep = (
+  const commitStepWrites = (
     operation: Operation,
     step: OperationStep,
-    failure: StepFailure,
+    output: StepOutput<TTrx> | undefined,
+    writes: readonly StepWrite[],
   ): Promise<void> =>
     commit(async (trx) => {
-      const error = failure.error;
-
-      if (failure.isEffectDone) {
-        await writeStepEffectDone(trx, { operationId: operation.id, position: step.position });
+      for (const write of writes) {
+        await match(write)
+          .with({ kind: 'mark-effect-done' }, () =>
+            writeStepEffectDone(trx, { operationId: operation.id, position: step.position }),
+          )
+          .with({ kind: 'end-step' }, (end) =>
+            moveStep(trx, {
+              operationId: operation.id,
+              position: step.position,
+              from: 'running',
+              to: end.state,
+              set: {
+                ended_at: deps.now(),
+                ...(end.error === null
+                  ? {}
+                  : { error_code: end.error.code, error_message: end.error.message }),
+              },
+            }),
+          )
+          .with({ kind: 'run-step-write' }, async () => {
+            await output?.write?.(trx);
+          })
+          .with({ kind: 'save-result' }, (save) =>
+            moveOperation(trx, {
+              id: operation.id,
+              from: 'running',
+              to: 'running',
+              set: { result: JSON.stringify(save.result) },
+            }),
+          )
+          .with({ kind: 'set-ending' }, (set) =>
+            moveOperation(trx, {
+              id: operation.id,
+              from: 'running',
+              to: 'running',
+              set: {
+                ending: set.ending,
+                error_code: set.error.code,
+                error_message: set.error.message,
+              },
+            }),
+          )
+          .with({ kind: 'append-event' }, (event) =>
+            appendOperationEvent(trx, operation, {
+              kind: 'operation.step',
+              at: deps.now(),
+              state: event.state,
+              step: step.name,
+              error: event.error,
+            }),
+          )
+          .exhaustive();
       }
-
-      await moveStep(trx, {
-        operationId: operation.id,
-        position: step.position,
-        from: 'running',
-        to: 'failed',
-        set: { ended_at: deps.now(), error_code: error.code, error_message: error.message },
-      });
-
-      await moveOperation(trx, {
-        id: operation.id,
-        from: 'running',
-        to: 'running',
-        set: { ending: failure.ending, error_code: error.code, error_message: error.message },
-      });
-
-      await appendOperationEvent(trx, operation, {
-        kind: 'operation.step',
-        at: deps.now(),
-        state: 'failed',
-        step: step.name,
-        error,
-      });
     });
 
   const undoStep = async (
