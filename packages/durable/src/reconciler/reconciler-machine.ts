@@ -1,6 +1,6 @@
 import { assign, setup } from 'xstate';
 
-export interface ReconcilerMachineInput {
+interface ReconcilerMachineInput {
   readonly startPass: (consecutiveErrors: number) => void;
   readonly pickDelayMs: (consecutiveErrors: number) => number;
 }

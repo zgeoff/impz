@@ -117,7 +117,9 @@ test('it runs a pass once the interval passes', async () => {
 
   ctx.clock.runFor(2000);
 
-  await waitFor(() => expect(passes).toStrictEqual([1_800_000_002_000]));
+  await waitFor(() => {
+    expect(passes).toStrictEqual([1_800_000_002_000]);
+  });
 });
 
 test('it runs a pass at once on a trigger', async () => {
@@ -147,7 +149,9 @@ test('it runs a pass at once on a trigger', async () => {
 
   runner.trigger('disk-usage');
 
-  await waitFor(() => expect(passes).toStrictEqual([1_800_000_000_000]));
+  await waitFor(() => {
+    expect(passes).toStrictEqual([1_800_000_000_000]);
+  });
 });
 
 test('it runs one pass at a time, and one more after a trigger during a pass', async () => {
@@ -187,7 +191,9 @@ test('it runs one pass at a time, and one more after a trigger during a pass', a
   runner.trigger('gc');
   gate.resolve();
 
-  await waitFor(() => expect(load).toStrictEqual({ now: 0, most: 1, passes: 2 }));
+  await waitFor(() => {
+    expect(load).toStrictEqual({ now: 0, most: 1, passes: 2 });
+  });
 });
 
 test('it backs off interval × 2ⁿ, capped at 10 × the interval, after errors in a row', async () => {
@@ -219,7 +225,9 @@ test('it backs off interval × 2ⁿ, capped at 10 × the interval, after errors 
   for (const count of [1, 2, 3, 4, 5]) {
     ctx.clock.runFor(ctx.clock.readPendingMs()[0] ?? 0);
 
-    await waitFor(() => expect(runner.list()[0]?.last?.consecutiveErrors).toBe(count));
+    await waitFor(() => {
+      expect(runner.list()[0]?.last?.consecutiveErrors).toBe(count);
+    });
 
     delaysMs.push(ctx.clock.readPendingMs());
   }
@@ -248,7 +256,9 @@ test('it adds jitter that keeps the delay between half and all of the backoff', 
 
   runner.trigger('backup');
 
-  await waitFor(() => expect(ctx.clock.readPendingMs()).toStrictEqual([2000]));
+  await waitFor(() => {
+    expect(ctx.clock.readPendingMs()).toStrictEqual([2000]);
+  });
 });
 
 test('it waits one interval again after a pass that follows errors succeeds', async () => {
@@ -277,11 +287,15 @@ test('it waits one interval again after a pass that follows errors succeeds', as
 
   runner.trigger('broker');
 
-  await waitFor(() => expect(ctx.clock.readPendingMs()).toStrictEqual([120_000]));
+  await waitFor(() => {
+    expect(ctx.clock.readPendingMs()).toStrictEqual([120_000]);
+  });
 
   runner.trigger('broker');
 
-  await waitFor(() => expect(ctx.clock.readPendingMs()).toStrictEqual([60_000]));
+  await waitFor(() => {
+    expect(ctx.clock.readPendingMs()).toStrictEqual([60_000]);
+  });
 });
 
 test('it saves the first result of a reconciler', async () => {
@@ -341,11 +355,15 @@ test('it skips the save when a pass repeats the saved outcome', async () => {
 
   ctx.clock.runFor(500);
 
-  await waitFor(() => expect(runner.list()[0]?.nextRunAt).toBe(1_800_000_001_000));
+  await waitFor(() => {
+    expect(runner.list()[0]?.nextRunAt).toBe(1_800_000_001_000);
+  });
 
   ctx.clock.runFor(500);
 
-  await waitFor(() => expect(runner.list()[0]?.last?.at).toBe(1_800_000_001_000));
+  await waitFor(() => {
+    expect(runner.list()[0]?.last?.at).toBe(1_800_000_001_000);
+  });
 
   const results = await ctx.readResults();
 
@@ -382,7 +400,9 @@ test('it saves the result when the outcome changes', async () => {
 
   ctx.clock.runFor(1000);
 
-  await waitFor(() => expect(runner.list()[0]?.nextRunAt).toBe(1_800_000_002_000));
+  await waitFor(() => {
+    expect(runner.list()[0]?.nextRunAt).toBe(1_800_000_002_000);
+  });
 
   ctx.clock.runFor(1000);
 
@@ -426,7 +446,9 @@ test('it skips the save on its first pass when the outcome matches the one saved
 
   ctx.clock.runFor(500);
 
-  await waitFor(() => expect(after.list()[0]?.last?.at).toBe(1_800_000_000_500));
+  await waitFor(() => {
+    expect(after.list()[0]?.last?.at).toBe(1_800_000_000_500);
+  });
 
   const results = await ctx.readResults();
 
@@ -454,7 +476,7 @@ test('it lists each reconciler’s last result, errors in a row and next run', a
 
   runner.trigger('backup');
 
-  await waitFor(() =>
+  await waitFor(() => {
     expect(runner.list()).toStrictEqual([
       {
         name: 'backup',
@@ -469,8 +491,8 @@ test('it lists each reconciler’s last result, errors in a row and next run', a
         running: false,
         nextRunAt: 1_800_000_004_000,
       },
-    ]),
-  );
+    ]);
+  });
 });
 
 test('it logs a warning when a pass throws', async () => {
@@ -494,7 +516,9 @@ test('it logs a warning when a pass throws', async () => {
 
   runner.trigger('backup');
 
-  await waitFor(() => expect(ctx.warnings).toStrictEqual(['reconciler {name} failed: {error}']));
+  await waitFor(() => {
+    expect(ctx.warnings).toStrictEqual(['reconciler {name} failed: {error}']);
+  });
 });
 
 test('it lets a pass start an operation', async () => {
@@ -569,7 +593,9 @@ test('it aborts a running pass’s signal on stop and waits for the pass to end'
 
   runner.trigger('proxy');
 
-  await waitFor(() => expect(runner.list()[0]?.running).toBe(true));
+  await waitFor(() => {
+    expect(runner.list()[0]?.running).toBe(true);
+  });
 
   await runner.stop();
 

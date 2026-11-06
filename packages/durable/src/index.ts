@@ -13,6 +13,7 @@ export type {
   EventsTable,
   OperationStepsTable,
   OperationsTable,
+  ReconcilersTable,
 } from './durable-tables';
 
 export type { JsonValue } from './json-value';
