@@ -1,6 +1,7 @@
 import type { Generated, Kysely } from 'kysely';
 import type { OperationEnding, OperationState } from './operations/move-operation';
 import type { StepState } from './operations/move-step';
+import type { ReconcilerOutcome } from './reconciler/define-reconciler';
 
 export interface EventsTable {
   readonly seq: Generated<number>;
@@ -51,11 +52,20 @@ export interface OperationStepsTable {
   readonly undone_at: number | null;
 }
 
+export interface ReconcilersTable {
+  readonly name: string;
+  readonly outcome: ReconcilerOutcome;
+  readonly summary: string;
+  readonly consecutive_errors: number;
+  readonly at: number;
+}
+
 export interface DurableTables {
   readonly events: EventsTable;
   readonly event_log: EventLogTable;
   readonly operations: OperationsTable;
   readonly operation_steps: OperationStepsTable;
+  readonly reconcilers: ReconcilersTable;
 }
 
 // a caller's Transaction<DB> fits this shape where it does not fit Kysely<DurableTables>

@@ -2,7 +2,7 @@
   "name": "@impz/durable",
   "version": "0.0.0",
   "private": true,
-  "description": "An event log and restartable operations for programs that keep their state in SQLite",
+  "description": "An event log, restartable operations and reconcilers for programs that keep their state in SQLite",
   "type": "module",
   "sideEffects": false,
   "exports": {
@@ -12,7 +12,8 @@
     "@impz/shared": "workspace:*",
     "kysely": "catalog:",
     "tiny-invariant": "catalog:",
-    "ts-pattern": "catalog:"
+    "ts-pattern": "catalog:",
+    "xstate": "catalog:"
   },
   "devDependencies": {
     "@zgeoff/kysely-bun-sqlite": "catalog:"

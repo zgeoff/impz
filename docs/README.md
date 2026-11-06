@@ -21,6 +21,8 @@ How impz is built: the parts, what each one owns, and what holds whatever a call
   what keeps one imp from another
 - [The host](./architecture/host.md) — what the host gives, the container's privileges, why it gets
   no Docker socket, and the host firewall
+- [Durable work](./architecture/durable-work.md) — the event log, operations that resume or undo
+  after a restart, and reconcilers
 
 ### Lifecycle
 
