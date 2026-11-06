@@ -10,6 +10,7 @@ import type { ReconcileResult, ReconcilerDefinition } from './define-reconciler'
 import { readReconcilerResults } from './read-reconciler-results';
 import type { ReconcilerResult } from './read-reconciler-results';
 import { reconcilerMachine } from './reconciler-machine';
+import { reconcilerRunnerMachine } from './reconciler-runner-machine';
 import { writeReconcilerResult } from './write-reconciler-result';
 
 export type ReconcilerTimer = (fire: () => void, delayMs: number) => () => void;
@@ -50,8 +51,7 @@ interface Entry<TTrx extends DurableTransaction> {
 export function createReconcilerRunner<TTrx extends DurableTransaction>(
   deps: ReconcilerRunnerDeps<TTrx>,
 ): ReconcilerRunner {
-  const controller = new AbortController();
-
+  const lifecycle = createActor(reconcilerRunnerMachine).start();
   const clock = toMachineClock(deps.startTimer);
 
   const entries = new Map<string, Entry<TTrx>>();
@@ -81,7 +81,7 @@ export function createReconcilerRunner<TTrx extends DurableTransaction>(
   ): Promise<Pick<ReconcilerResult, 'outcome' | 'summary'>> => {
     try {
       const result: ReconcileResult = await definition.reconcile({
-        signal: controller.signal,
+        signal: lifecycle.getSnapshot().context.controller.signal,
         log: deps.log,
         startOperation: deps.startOperation,
       });
@@ -145,7 +145,7 @@ export function createReconcilerRunner<TTrx extends DurableTransaction>(
   const startEntries = async (): Promise<void> => {
     const saved = await deps.withTransaction((trx) => readReconcilerResults(trx));
 
-    if (controller.signal.aborted) {
+    if (lifecycle.getSnapshot().value !== 'starting') {
       return;
     }
 
@@ -164,29 +164,35 @@ export function createReconcilerRunner<TTrx extends DurableTransaction>(
     for (const entry of entries.values()) {
       entry.actor.start();
     }
-  };
 
-  const lifecycle = { started: false, starting: Promise.resolve() };
+    lifecycle.send({ type: 'started' });
+  };
 
   return {
     start: () => {
-      invariant(!lifecycle.started, 'the reconciler runner has already started');
+      invariant(
+        lifecycle.getSnapshot().can({ type: 'start', starting: Promise.resolve() }),
+        'the reconciler runner has already started',
+      );
 
-      lifecycle.started = true;
-      lifecycle.starting = startEntries();
+      const starting = startEntries();
 
-      return lifecycle.starting;
+      lifecycle.send({ type: 'start', starting });
+
+      return starting;
     },
     stop: async () => {
-      controller.abort();
+      lifecycle.send({ type: 'stop' });
 
-      await Promise.allSettled([lifecycle.starting]);
+      await Promise.allSettled([lifecycle.getSnapshot().context.starting]);
 
       for (const entry of entries.values()) {
         entry.actor.send({ type: 'stop' });
       }
 
       await Promise.all([...entries.values()].map((entry) => toPromise(entry.actor)));
+
+      lifecycle.send({ type: 'stopped' });
     },
     trigger: (name) => {
       const entry = entries.get(name);

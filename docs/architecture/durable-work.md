@@ -12,12 +12,12 @@ keeps it free of imp code.
 
 ## One transaction for a change and its record
 
-The package never opens a transaction of its own. Each of its writes goes through a Kysely
-transaction that the program passes in. A change to the program's own rows and the package's record
-of that change therefore commit together, or neither commits. A program that commits a change in one
-transaction and its event in another can lose the event in a crash, and a reader then never learns
-of the change. A function that makes several writes, such as a prune, takes only a transaction, so
-the type check fails a call on a plain connection.
+The package never opens a transaction of its own. A function that makes several writes, such as a
+prune, takes only a transaction, so the type check fails a call on a plain connection. A function
+that makes one write, such as an event append, also accepts a plain connection, so the program must
+pass it the transaction of the change the event describes. The change and its event then commit
+together, or neither commits. A program that commits a change in one transaction and its event in
+another can lose the event in a crash, and a reader then never learns of the change.
 
 ## The event log
 
@@ -83,9 +83,9 @@ fails, when the operation is cancelled, or when a `fail` step was running at a r
 each step that succeeded, for each step that wrote an undo record, and for each step whose effect
 returned but whose success commit failed, the last step first. The runner marks each undo done in
 its own commit, and a crash before that commit makes the undo run again after the restart, so an
-undo must be safe to run twice. When an undo throws, the operation ends `failed` with the error code
-`undo_failed`, and the runner never runs the undos still left. Those steps keep their effects, and a
-reconciler of the program finds them.
+undo must be safe to run twice. When an undo throws, the runner logs a warning and stops that run.
+The operation stays open with its undos unfinished, so the next run, or the recovery at the next
+start, tries the undo again. The operation ends only when every undo has run.
 
 The runner saves a cancel request on the operation row first, so the request survives a restart. The
 runner then aborts the signal it passed to the running step. When the step returns, the undo runs

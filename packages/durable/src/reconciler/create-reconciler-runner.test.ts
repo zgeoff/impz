@@ -1,5 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { once } from 'node:events';
+import { setImmediate } from 'node:timers/promises';
 import { waitFor } from '@impz/test-utils/wait-for';
 import { sql } from 'kysely';
 import type { Transaction } from 'kysely';
@@ -578,6 +579,7 @@ test('it aborts a running pass’s signal on stop and waits for the pass to end'
   const ctx = await setupTest();
 
   const ended: string[] = [];
+  const release = Promise.withResolvers<void>();
 
   const runner = ctx.createRunner(
     [
@@ -588,6 +590,10 @@ test('it aborts a running pass’s signal on stop and waits for the pass to end'
           await once(reconcile.signal, 'abort');
 
           ended.push('aborted');
+
+          await release.promise;
+
+          ended.push('released');
 
           return { outcome: 'unchanged', summary: 'stopped' };
         },
@@ -605,9 +611,23 @@ test('it aborts a running pass’s signal on stop and waits for the pass to end'
     expect(runner.list()[0]?.running).toBe(true);
   });
 
-  await runner.stop();
+  const stopping = (async () => {
+    await runner.stop();
 
-  expect(ended).toStrictEqual(['aborted']);
+    ended.push('stopped');
+  })();
+
+  await waitFor(() => {
+    expect(ended).toStrictEqual(['aborted']);
+  });
+
+  await setImmediate();
+
+  release.resolve();
+
+  await stopping;
+
+  expect(ended).toStrictEqual(['aborted', 'released', 'stopped']);
 });
 
 test('it starts no reconciler when a stop arrives while it starts', async () => {
