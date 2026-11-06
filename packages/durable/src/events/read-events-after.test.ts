@@ -1,4 +1,8 @@
-import { expect, test } from 'bun:test';
+import { Database } from 'bun:sqlite';
+import { expect, onTestFinished, test } from 'bun:test';
+import { buildSQLiteDialect } from '@zgeoff/kysely-bun-sqlite';
+import { Kysely } from 'kysely';
+import type { DurableTables } from '../durable-tables';
 import { createTestDurableDatabase } from '../test-utils/create-test-durable-database';
 import { appendEvent } from './append-event';
 import { pruneEvents } from './prune-events';
@@ -7,7 +11,7 @@ import { readEventsAfter } from './read-events-after';
 async function setupTest() {
   const database = await createTestDurableDatabase();
 
-  return { db: database.db };
+  return { db: database.db, path: database.path };
 }
 
 test('it returns the events after the cursor in sequence order', async () => {
@@ -162,5 +166,46 @@ test('it returns the events for a cursor at the last pruned event', async () => 
   expect(read).toStrictEqual({
     kind: 'events',
     events: [expect.objectContaining({ seq: 2, kind: 'note.archived' })],
+  });
+});
+
+test('it never skips an event that a prune on another connection removes during the read', async () => {
+  const ctx = await setupTest();
+
+  const sqlite = new Database(ctx.path);
+  const pruner = new Kysely<DurableTables>({ dialect: buildSQLiteDialect(sqlite) });
+
+  onTestFinished(() => sqlite.close());
+
+  await appendEvent(ctx.db, {
+    at: 1000,
+    kind: 'note.added',
+    targetId: null,
+    operationId: null,
+    payload: {},
+  });
+
+  await appendEvent(ctx.db, {
+    at: 1_800_000_000_000,
+    kind: 'note.archived',
+    targetId: null,
+    operationId: null,
+    payload: {},
+  });
+
+  const reader = ctx.db.withPlugin({
+    transformQuery: (args) => args.node,
+    transformResult: async (args) => {
+      await pruneEvents(pruner, 1_800_000_000_000);
+
+      return args.result;
+    },
+  });
+
+  const read = await readEventsAfter(reader, { after: 0, limit: 10 });
+
+  expect(read).toStrictEqual({
+    kind: 'events',
+    events: [expect.objectContaining({ seq: 1 }), expect.objectContaining({ seq: 2 })],
   });
 });
