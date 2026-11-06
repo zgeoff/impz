@@ -25,7 +25,7 @@ interface UsageInput {
 }
 
 // the priority imps' RAM that they leave unused in each budget
-export interface KeptMib {
+interface KeptMib {
   readonly ramMib: number;
   readonly ordinaryMib: number;
   readonly poolMib: number;
