@@ -1,5 +1,5 @@
 import { BenchReportSchema } from '@impz/cli/bench-report-schema';
-import { parseJSONOrNull } from '../lib/parse-json-or-null.ts';
+import { parseJSONOrNull } from '../../../../../scripts/lib/parse-json-or-null.ts';
 import type { ArmReport } from './format-bench-compare';
 import type { ArmRun } from './run-bench-arm';
 

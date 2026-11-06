@@ -3,7 +3,7 @@ import { parseSize } from '@impz/cli/parse-size';
 import type { TouchedPagesOptions } from './run-touched-pages';
 
 const USAGE =
-  'usage: bun scripts/bench/measure-touched-pages.ts [--memory <size>] [--write-mib <n>]';
+  'usage: bun packages/daemon/bench/measure-touched-pages.ts [--memory <size>] [--write-mib <n>]';
 
 export function parseTouchedPagesArgs(argv: readonly string[]): TouchedPagesOptions | string {
   let values: { readonly memory: string; readonly 'write-mib': string };

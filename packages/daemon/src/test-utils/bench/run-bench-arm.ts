@@ -3,9 +3,9 @@ import { SystemInfoSchema } from '@impz/api';
 import type { CommandResult } from '@impz/e2e-harness/instance';
 import { waitFor } from '@impz/e2e-harness/wait-for';
 import type * as z from 'zod';
-import { buildDevLayout } from '../lib/build-dev-layout.ts';
-import type { DevEnv, DevLayout } from '../lib/build-dev-layout.ts';
-import { parseJSONOrNull } from '../lib/parse-json-or-null.ts';
+import { buildDevLayout } from '../../../../../scripts/lib/build-dev-layout.ts';
+import type { DevEnv, DevLayout } from '../../../../../scripts/lib/build-dev-layout.ts';
+import { parseJSONOrNull } from '../../../../../scripts/lib/parse-json-or-null.ts';
 import type { BenchArm, BenchArmsArgs } from './parse-bench-arms-args';
 
 type CommandEnv = Readonly<Record<string, string>>;

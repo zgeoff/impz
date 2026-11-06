@@ -53,7 +53,7 @@ test('it reports the pages a cold and a woken sleep touched, then removes its im
       stdout: '',
       stderr: '',
     }),
-    'bun /src/scripts/bench/count-changed-pages.ts /var/lib/imp/touched-pages-base /var/lib/imp/imps/imp_1/snapshot/mem':
+    'bun /src/packages/daemon/bench/count-changed-pages.ts /var/lib/imp/touched-pages-base /var/lib/imp/imps/imp_1/snapshot/mem':
       () => ({ exitCode: 0, stdout: '{"changedMib":130,"changedHugeMib":136}\n', stderr: '' }),
     'rm -f /var/lib/imp/touched-pages-base': () => ({ exitCode: 0, stdout: '', stderr: '' }),
   };
@@ -524,7 +524,7 @@ test('it fails on a changed-page report it cannot read, and removes its imp', ()
       stdout: '',
       stderr: '',
     },
-    'bun /src/scripts/bench/count-changed-pages.ts /var/lib/imp/touched-pages-base /var/lib/imp/imps/imp_1/snapshot/mem':
+    'bun /src/packages/daemon/bench/count-changed-pages.ts /var/lib/imp/touched-pages-base /var/lib/imp/imps/imp_1/snapshot/mem':
       { exitCode: 0, stdout: '{"changedPages":256}\n', stderr: '' },
     'rm -f /var/lib/imp/touched-pages-base': { exitCode: 0, stdout: '', stderr: '' },
   };
@@ -611,7 +611,7 @@ test('it fails a measurement whose cleanup left the base copy behind, and says s
       stdout: '',
       stderr: '',
     },
-    'bun /src/scripts/bench/count-changed-pages.ts /var/lib/imp/touched-pages-base /var/lib/imp/imps/imp_1/snapshot/mem':
+    'bun /src/packages/daemon/bench/count-changed-pages.ts /var/lib/imp/touched-pages-base /var/lib/imp/imps/imp_1/snapshot/mem':
       { exitCode: 0, stdout: '{"changedMib":1,"changedHugeMib":2}\n', stderr: '' },
     'rm -f /var/lib/imp/touched-pages-base': {
       exitCode: 1,
@@ -672,7 +672,7 @@ test('it fails a measurement whose cleanup left the imp behind', () => {
       stderr: '',
     },
     'cat /var/lib/imp/imps/imp_1/run/uffd.pid': { exitCode: 0, stdout: '4343\n', stderr: '' },
-    'bun /src/scripts/bench/count-changed-pages.ts /var/lib/imp/touched-pages-base /var/lib/imp/imps/imp_1/snapshot/mem':
+    'bun /src/packages/daemon/bench/count-changed-pages.ts /var/lib/imp/touched-pages-base /var/lib/imp/imps/imp_1/snapshot/mem':
       { exitCode: 0, stdout: '{"changedMib":1,"changedHugeMib":2}\n', stderr: '' },
   };
 

@@ -2,11 +2,15 @@ import { expect, mock, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { formatRunPrefix } from '../platform/format-run-prefix';
+import { readRunOwner } from '../platform/read-run-owner';
 import { countChangedPages, readChangedPages } from './count-changed-pages';
 import { wireChangedPagesFS } from './wire-changed-pages-fs';
 
 async function setupTest() {
-  const directory = await mkdtemp(join(tmpdir(), 'changed-pages-'));
+  const prefix = formatRunPrefix(readRunOwner());
+
+  const directory = await mkdtemp(join(tmpdir(), `${prefix}changed-pages-`));
 
   onTestFinished(() => rm(directory, { recursive: true, force: true }));
 

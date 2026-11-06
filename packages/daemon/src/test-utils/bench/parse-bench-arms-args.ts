@@ -15,7 +15,7 @@ export interface BenchArmsArgs {
 }
 
 export const BENCH_ARMS_USAGE =
-  'usage: bun scripts/bench/run-bench-arms.ts --out <dir> [--rounds <n>] --arm <name>=<checkout>... [-- <impz bench args>]';
+  'usage: bun packages/daemon/bench/run-bench-arms.ts --out <dir> [--rounds <n>] --arm <name>=<checkout>... [-- <impz bench args>]';
 
 // A boot template serves one memory size, so the timed run's --memory reaches
 // the warm-up's creates too, and the warm-up warms the template that run

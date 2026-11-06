@@ -440,9 +440,9 @@ dispatch's `baseline` input (default `main`):
 
 1. The job checks out the baseline beside the ref, and builds each one's kernel and system drive, so
    each side boots its own guest agent.
-2. `scripts/bench/run-bench-arms.ts` brings up a dev instance from each checkout in turn, over one
-   data dir. Each side first creates 3 imps that the bench does not time, so its boot template is
-   ready before the timed run starts.
+2. `packages/daemon/bench/run-bench-arms.ts` brings up a dev instance from each checkout in turn,
+   over one data dir. Each side first creates 3 imps that the bench does not time, so its boot
+   template is ready before the timed run starts.
 3. Each side runs once per round, in turn, so a slow stretch of the runner falls on both. The job
    summary holds a table of each side's lower median p50, p95 and p99 over its rounds, and the
    change against the baseline. The `bench-results` artifact holds each run's JSON report and impd's
@@ -459,10 +459,10 @@ git push origin --delete bench/<change>
 ```
 
 A `bench/**` branch whose name holds `huge-pages` reserves a 2 MiB pool and runs impd with
-`IMP_HUGE_PAGES=2M`. It also runs `scripts/bench/measure-touched-pages.ts` first, which writes into
-a guest's memory, puts it to sleep, wakes it, reads the same memory back and puts it to sleep again.
-It prints the pool pages the guest held at each sleep, which a 2 MiB sleep's diff writes in full,
-beside the 4 KiB pages whose bytes changed, which a dirty-page diff writes
+`IMP_HUGE_PAGES=2M`. It also runs `packages/daemon/bench/measure-touched-pages.ts` first, which
+writes into a guest's memory, puts it to sleep, wakes it, reads the same memory back and puts it to
+sleep again. It prints the pool pages the guest held at each sleep, which a 2 MiB sleep's diff
+writes in full, beside the 4 KiB pages whose bytes changed, which a dirty-page diff writes
 ([huge pages](../architecture/lifecycle/huge-pages.md#sleep)).
 
 ### The podman job

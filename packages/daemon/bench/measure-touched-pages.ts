@@ -6,13 +6,13 @@ import { resolve } from 'node:path';
 import { REAL_CLOCK } from '@impz/daemon/real-clock';
 import { createInstanceClient, readImpEnv } from '@impz/e2e-harness/imp-cli';
 import { instance, runCommand, runInContainer } from '@impz/e2e-harness/instance';
-import { withDevLock } from '../lib/with-dev-lock.ts';
-import { writeStderr } from '../lib/write-stderr.ts';
-import { writeStdoutLine } from '../lib/write-stdout-line.ts';
-import { parseTouchedPagesArgs } from './parse-touched-pages-args';
-import { runTouchedPages } from './run-touched-pages';
+import { withDevLock } from '../../../scripts/lib/with-dev-lock.ts';
+import { writeStderr } from '../../../scripts/lib/write-stderr.ts';
+import { writeStdoutLine } from '../../../scripts/lib/write-stdout-line.ts';
+import { parseTouchedPagesArgs } from '../src/test-utils/bench/parse-touched-pages-args';
+import { runTouchedPages } from '../src/test-utils/bench/run-touched-pages';
 
-const IMPZ = resolve(import.meta.dir, '..', 'impz');
+const IMPZ = resolve(import.meta.dir, '..', '..', '..', 'scripts', 'impz');
 const options = parseTouchedPagesArgs(process.argv.slice(2));
 
 if (typeof options === 'string') {

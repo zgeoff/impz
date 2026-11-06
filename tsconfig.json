@@ -11,6 +11,7 @@
     "packages/client/smoke/*.ts",
     "packages/testing/smoke/*.ts",
     "packages/daemon/e2e/**/*.ts",
+    "packages/daemon/bench/**/*.ts",
     "scripts/**/*.ts",
     "deploy/**/*.ts",
     "images/**/*.ts",

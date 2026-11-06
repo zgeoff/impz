@@ -1,12 +1,3 @@
-// The pages that differ from the base are what a dirty-page diff would write;
-// it runs where both files are, in the dev container:
-//   bun scripts/bench/count-changed-pages.ts <base> <snapshot>
-import { writeStderr } from '../lib/write-stderr.ts';
-import { writeStdoutLine } from '../lib/write-stdout-line.ts';
-import { buildChangedPagesReport } from './build-changed-pages-report';
-import { parseCountChangedPagesArgs } from './parse-count-changed-pages-args';
-import { wireChangedPagesFS } from './wire-changed-pages-fs';
-
 const PAGE_BYTES = 4096;
 const HUGE_PAGE_BYTES = 2 * 1024 * 1024;
 
@@ -110,18 +101,4 @@ function countChangedChunks(fs: ChangedPagesFS, base: number, next: number): Cha
   }
 
   return total;
-}
-
-if (import.meta.main) {
-  const paths = parseCountChangedPagesArgs(process.argv.slice(2));
-
-  if (typeof paths === 'string') {
-    writeStderr(`count-changed-pages: ${paths}\n`);
-
-    process.exit(2);
-  }
-
-  const changed = readChangedPages(wireChangedPagesFS(), paths.basePath, paths.nextPath);
-
-  writeStdoutLine(JSON.stringify(buildChangedPagesReport(changed)));
 }
