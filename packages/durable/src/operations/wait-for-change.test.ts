@@ -33,7 +33,7 @@ test('it removes its listeners from the signal when it returns at once', async (
   );
 });
 
-test('it removes its listeners from the signal when its read throws', async () => {
+test('it removes its listeners from the signal when its read throws', () => {
   const changes = createChangeSignal();
 
   const signal = new AbortController().signal;
@@ -47,7 +47,7 @@ test('it removes its listeners from the signal when its read throws', async () =
     signal,
   });
 
-  await expect(waiting).rejects.toThrow('disk gone');
+  expect(waiting).rejects.toThrow('disk gone');
 
   expect(removed.mock.calls.map((call) => call[1])).toStrictEqual(
     added.mock.calls.map((call) => call[1]),

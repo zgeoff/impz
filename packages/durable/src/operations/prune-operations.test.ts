@@ -166,8 +166,8 @@ test('it lets a retry key whose operation ended 24 hours ago start a new operati
     now: 1_800_086_400_000,
   });
 
-  expect(second).toStrictEqual({
+  expect({ kind: second.kind, isNew: second.operationId !== first.operationId }).toStrictEqual({
     kind: 'queued',
-    operationId: expect.not.stringMatching(first.operationId),
+    isNew: true,
   });
 });
