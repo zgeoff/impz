@@ -1,5 +1,5 @@
+import { getErrorMessage } from '@impz/shared';
 import { ImpdError } from '../../platform/errors/impd-error';
-import { getErrorMessage } from '../../platform/process/get-error-message';
 import { AgentError } from '../agent-client/agent-connection';
 
 export interface GuestFailure {

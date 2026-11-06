@@ -10,13 +10,13 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
+import { getErrorMessage } from '@impz/shared';
 import { withContext } from '@logtape/logtape';
 import { match } from 'ts-pattern';
 import * as z from 'zod';
 import type { SlotAddress } from '../../host-net/net/addressing';
 import type { TapDevices } from '../../host-net/net/tap-devices';
 import { buildBackoffMs } from '../../platform/process/build-backoff-ms';
-import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { runCommand } from '../../platform/process/run-command';
 import { createSemaphore } from '../../platform/process/semaphore';

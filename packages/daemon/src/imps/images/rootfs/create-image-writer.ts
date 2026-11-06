@@ -1,10 +1,10 @@
 import { existsSync, mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { getErrorMessage } from '@impz/shared';
 import type { ImageRecord } from '../../../platform/db/images';
 import type { ImpDatabase } from '../../../platform/db/open-database';
 import { buildConflictError } from '../../../platform/errors/impd-errors';
 import type { Clock } from '../../../platform/process/clock';
-import { getErrorMessage } from '../../../platform/process/get-error-message';
 import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import { buildKeyedMutex } from '../../../platform/process/keyed-mutex';
 import { runChecked } from '../../../platform/process/run-command';

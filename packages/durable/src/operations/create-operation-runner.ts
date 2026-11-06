@@ -1,3 +1,4 @@
+import { getErrorMessage } from '@impz/shared';
 import invariant from 'tiny-invariant';
 import { match } from 'ts-pattern';
 import type { DurableQueries } from '../durable-tables';
@@ -87,7 +88,7 @@ export function createOperationRunner<TTrx extends DurableQueries>(
     } catch (error) {
       deps.log.warning('operation {operationId} stopped: {error}', {
         operationId: id,
-        error: toErrorMessage(error),
+        error: getErrorMessage(error),
       });
     }
   };
@@ -281,7 +282,7 @@ export function createOperationRunner<TTrx extends DurableQueries>(
 
       await failStep(operation, step, ending, {
         code: signal.aborted ? 'cancelled' : 'step_failed',
-        message: toErrorMessage(error),
+        message: getErrorMessage(error),
       });
     }
   };
@@ -335,12 +336,12 @@ export function createOperationRunner<TTrx extends DurableQueries>(
       deps.log.warning('the undo of step {step} of operation {operationId} failed: {error}', {
         step: step.name,
         operationId: operation.id,
-        error: toErrorMessage(error),
+        error: getErrorMessage(error),
       });
 
       await endOperation(operation, 'running', 'failed', {
         code: 'undo_failed',
-        message: `the undo of step ${step.name} failed: ${toErrorMessage(error)}`,
+        message: `the undo of step ${step.name} failed: ${getErrorMessage(error)}`,
       });
 
       return;
@@ -408,10 +409,6 @@ export function createOperationRunner<TTrx extends DurableQueries>(
     },
     recover: () => recoverOperations({ ...deps, definitions }, run),
   };
-}
-
-function toErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function collectUndoable<TTrx>(steps: readonly RunnableStep<TTrx>[]): ReadonlySet<string> {

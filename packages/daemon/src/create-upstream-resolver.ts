@@ -1,9 +1,9 @@
 import { readFileSync, statSync } from 'node:fs';
 import { rootCertificates } from 'node:tls';
+import { getErrorMessage } from '@impz/shared';
 import * as z from 'zod';
 import type { ResolveUpstream } from './network/broker/tls/forward-request';
 import { resolvePublicUpstream } from './network/broker/tls/resolve-public-upstream';
-import { getErrorMessage } from './platform/process/get-error-message';
 import { getImpdLogger } from './platform/process/get-impd-logger';
 
 const FileSchema = z.object({

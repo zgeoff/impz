@@ -1,12 +1,12 @@
 import { EVENT_VERSION } from '@impz/api';
 import type { Imp, ImpEvent } from '@impz/api';
+import { getErrorMessage } from '@impz/shared';
 import { P, match } from 'ts-pattern';
 import { toApiCheckpoint } from '../db/checkpoints';
 import type { ImpWrite } from '../db/imp-write-feed';
 import { readImpById } from '../db/imps';
 import type { ImpRecord } from '../db/imps';
 import type { ImpDatabase } from '../db/open-database';
-import { getErrorMessage } from '../process/get-error-message';
 import { getImpdLogger } from '../process/get-impd-logger';
 import type { EventBus } from './event-bus';
 

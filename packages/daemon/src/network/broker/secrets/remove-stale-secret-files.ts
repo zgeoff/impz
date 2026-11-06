@@ -1,6 +1,6 @@
+import { getErrorMessage } from '@impz/shared';
 import type { ImpDatabase } from '../../../platform/db/open-database';
 import { listFileRemovals, listValueFiles, removeFileRemoval } from '../../../platform/db/secrets';
-import { getErrorMessage } from '../../../platform/process/get-error-message';
 import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import type { SecretFiles } from './secret-files';
 

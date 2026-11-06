@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { release } from 'node:os';
 import { join } from 'node:path';
+import { getErrorMessage } from '@impz/shared';
 import packageJson from '../package.json' with { type: 'json' };
 import type { Config } from './config';
 import { createImpdApp } from './create-impd-app';
@@ -32,7 +33,6 @@ import type { TailnetNames } from './network/tailnet-names/tailnet-names';
 import { wireTailnetNames } from './network/tailnet-names/wire-tailnet-names';
 import { isImpSetWrite } from './platform/db/is-imp-set-write';
 import { openDatabase } from './platform/db/open-database';
-import { getErrorMessage } from './platform/process/get-error-message';
 import { getImpdLogger } from './platform/process/get-impd-logger';
 import { startOtlpExport } from './platform/telemetry/start-otlp-export';
 import { startImpdListeners } from './start-impd-listeners';

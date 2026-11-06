@@ -1,10 +1,10 @@
 import type { OAuthConfig } from '@impz/api';
+import { getErrorMessage } from '@impz/shared';
 import type { ImpDatabase } from '../../../platform/db/open-database';
 import { listSecrets, readSecret } from '../../../platform/db/secrets';
 import type { SecretRecord } from '../../../platform/db/secrets';
 import { sendWithCA } from '../../../platform/http/send-with-ca';
 import { buildBackoffMs } from '../../../platform/process/build-backoff-ms';
-import { getErrorMessage } from '../../../platform/process/get-error-message';
 import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import { buildKeyedMutex } from '../../../platform/process/keyed-mutex';
 import { createSingleFlight } from '../../../platform/process/single-flight';

@@ -1,7 +1,7 @@
 import { rmSync } from 'node:fs';
+import { getErrorMessage } from '@impz/shared';
 import { writeUnknownBoot } from '../../platform/db/cold-boots';
 import { updateImpActivity } from '../../platform/db/imps';
-import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import {
   readLoadingMeta,

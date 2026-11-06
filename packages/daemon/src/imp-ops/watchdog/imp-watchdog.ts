@@ -1,7 +1,7 @@
+import { getErrorMessage } from '@impz/shared';
 import type { ImpClock, ImpDisk, ImpHost, ImpVms } from '../../imps/imps/imp-context';
 import type { ImpLock } from '../../imps/imps/imp-lock';
 import type { ImpVmOps } from '../../imps/imps/imp-vm-ops';
-import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { createAgentWatchdog } from '../../vm/watchdog/agent-watchdog';
 import type { AgentWatchdog } from '../../vm/watchdog/agent-watchdog';

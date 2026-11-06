@@ -1,4 +1,5 @@
 import type { Activity, InnerStatus } from '@impz/agent-protocol';
+import { getErrorMessage } from '@impz/shared';
 import { listColdBoots } from '../../platform/db/cold-boots';
 import {
   listImps,
@@ -14,7 +15,6 @@ import {
   buildInvalidStateError,
   isMovingError,
 } from '../../platform/errors/impd-errors';
-import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import type { AgentFeature } from '../../vm/agent-client/agent-outdated';
 import { sendActivity, sendPing } from '../../vm/agent-client/agent-requests';

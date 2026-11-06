@@ -210,6 +210,7 @@
       "name": "@impz/durable",
       "version": "0.0.0",
       "dependencies": {
+        "@impz/shared": "workspace:*",
         "kysely": "catalog:",
         "tiny-invariant": "catalog:",
         "ts-pattern": "catalog:",

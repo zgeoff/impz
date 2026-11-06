@@ -12,7 +12,7 @@ import {
   truncateSync,
 } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
-import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getErrorMessage } from '@impz/shared';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { IMPD_USER } from '../../platform/process/impd-user';
 import { parseMounts, readMounts as readHostMounts } from '../../platform/process/mounts';

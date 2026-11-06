@@ -1,5 +1,5 @@
+import { getErrorMessage } from '@impz/shared';
 import { buildInvalidStateError } from '../../platform/errors/impd-errors';
-import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { sendFreeze, sendThaw } from '../../vm/agent-client/agent-requests';
 import type { StorageBackend } from '../../vm/storage/storage-backend';

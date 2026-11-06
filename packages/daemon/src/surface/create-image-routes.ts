@@ -1,11 +1,11 @@
 import type { ImageBuildPhase } from '@impz/api';
+import { getErrorMessage } from '@impz/shared';
 import { ORPCError } from '@orpc/server';
 import invariant from 'tiny-invariant';
 import { runImageOp } from '../imps/images/build/image-op-stream';
 import type { ImageOpStreamOptions } from '../imps/images/build/image-op-stream';
 import { findImpName } from '../platform/audit/api-audit';
 import { ImpdError } from '../platform/errors/impd-error';
-import { getErrorMessage } from '../platform/process/get-error-message';
 import { mergeSignals } from '../platform/process/merge-signals';
 import type { AuditDetail, RpcContext, RpcImplementer } from './create-implementer';
 import type { RouterDeps } from './create-router';

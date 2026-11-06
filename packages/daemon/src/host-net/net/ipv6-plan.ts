@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getErrorMessage } from '@impz/shared';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { runCommand } from '../../platform/process/run-command';
 import type { CommandRunner } from '../../platform/process/run-command';

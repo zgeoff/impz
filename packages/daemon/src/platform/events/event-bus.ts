@@ -1,5 +1,5 @@
 import type { ImpEvent } from '@impz/api';
-import { getErrorMessage } from '../process/get-error-message';
+import { getErrorMessage } from '@impz/shared';
 import { getImpdLogger } from '../process/get-impd-logger';
 
 export interface EventBus<T = Readonly<ImpEvent>> {

@@ -1,9 +1,9 @@
+import { getErrorMessage } from '@impz/shared';
 import * as dnsPacket from 'dns-packet';
 import type { Answer } from 'dns-packet';
 import { findGuestSlot } from '../../host-net/net/addressing';
 import type { Subnet } from '../../host-net/net/addressing';
 import { createCountedLimit } from '../../platform/process/counted-limit';
-import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { createTokenBuckets } from '../../platform/process/token-buckets';
 import type { BucketSpec } from '../../platform/process/token-buckets';

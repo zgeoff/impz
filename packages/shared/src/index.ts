@@ -2,6 +2,7 @@ export { buildWithout } from './build-without';
 export { formatBytes } from './format-bytes';
 export { formatDuration } from './format-duration';
 export { formatMib } from './format-mib';
+export { getErrorMessage } from './get-error-message';
 export { mergeBytes } from './merge-bytes';
 export { readLines } from './read-lines';
 export { splitLines } from './split-lines';

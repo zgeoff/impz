@@ -1,4 +1,4 @@
-import { getErrorMessage } from '../../../platform/process/get-error-message';
+import { getErrorMessage } from '@impz/shared';
 import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import type { IssueCertificate } from './acme-issuer';
 import type { CertStore, Certificate } from './cert-store';

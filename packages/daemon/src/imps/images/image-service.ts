@@ -1,3 +1,4 @@
+import { getErrorMessage } from '@impz/shared';
 import {
   listImages,
   readImageByName,
@@ -15,7 +16,6 @@ import {
   buildNotFoundError,
 } from '../../platform/errors/impd-errors';
 import type { Clock } from '../../platform/process/clock';
-import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { REAL_CLOCK } from '../../platform/process/real-clock';
 import type { StreamedRunner } from '../../platform/process/run-streamed';

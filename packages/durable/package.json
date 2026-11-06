@@ -9,6 +9,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@impz/shared": "workspace:*",
     "kysely": "catalog:",
     "tiny-invariant": "catalog:",
     "ts-pattern": "catalog:"

@@ -1,9 +1,9 @@
 import { readFileSync } from 'node:fs';
+import { getErrorMessage } from '@impz/shared';
 import { readServePorts } from '../../host-net/net/tailscale-serve';
 import type { TailscaleStatus } from '../../host-net/net/tailscale-status';
 import { listPublicImpNames, readPublicImp } from '../../platform/db/exposure';
 import type { ImpDatabase } from '../../platform/db/open-database';
-import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import type { WakeProxy } from '../proxy/wake-proxy';
 import { createAcmeIssuer } from './acme/acme-issuer';
