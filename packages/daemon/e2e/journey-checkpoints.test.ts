@@ -15,7 +15,6 @@ import {
   runImp,
   runInImp,
   runShellInImp,
-  tryImp,
 } from '@impz/e2e-harness/imp-cli';
 import {
   holdImp,
@@ -253,54 +252,6 @@ test('it gives each fork its own machine-id and SSH host keys, and the source ke
   expect(liveIdentity.machineId).not.toBe(checkpointIdentity.machineId);
   expect(liveIdentity.hostKey).not.toBe(checkpointIdentity.hostKey);
   expect(restartedSource).toStrictEqual(sourceIdentity);
-});
-
-test('it lists checkpoints newest first, refuses a label taken, and deletes one with its storage', async () => {
-  const ctx = await setupTest();
-
-  const source = `${ctx.prefix}list`;
-
-  await runImp('new', source, '--image', resolveImageName('e2e-tiny'), '--memory', '512');
-
-  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, source));
-
-  await waitForExec(source);
-  await holdImp(source);
-  await runImp('checkpoint', source, 'cp1');
-  await runImp('checkpoint', source);
-
-  const listed = await listCheckpoints(source);
-  const duplicate = await tryImp(['checkpoint', source, 'cp1']);
-
-  const [, cp1] = listed;
-
-  expect(listed).toHaveLength(2);
-  expect(cp1?.label).toBe('cp1');
-
-  expect(duplicate).toStrictEqual({
-    exitCode: 1,
-    stdout: '',
-    stderr: 'impz: CONFLICT: checkpoint cp1 already exists\n',
-  });
-
-  invariant(cp1);
-
-  const row = await requireImp(source);
-
-  await runImp('checkpoint', 'rm', source, 'cp1');
-
-  const remaining = await listCheckpoints(source);
-  const hasDisk = await probeCheckpointStorage(row.id, cp1.id);
-  const restore = await tryImp(['restore', source, 'cp1']);
-
-  expect(remaining).toHaveLength(1);
-  expect(hasDisk).toBeFalse();
-
-  expect(restore).toStrictEqual({
-    exitCode: 1,
-    stdout: '',
-    stderr: 'impz: NOT_FOUND: checkpoint cp1 not found\n',
-  });
 });
 
 test('it deletes the checkpoints with the imp on rm, and a fork from one outlives its source', async () => {

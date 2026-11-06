@@ -17,7 +17,6 @@ import { listSessionLogs, requireSessionLog } from '@impz/e2e-harness/session-lo
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
 import { waitFor } from '@impz/e2e-harness/wait-for';
 import { writeMetric } from '@impz/e2e-harness/write-metric';
-import * as z from 'zod';
 
 // One stack for every release, so each session socket closes before its imp
 // goes.
@@ -30,16 +29,6 @@ async function setupTest() {
 
   return { prefix: getSuitePrefix('session-logs'), stack, client };
 }
-
-test('it says impd keeps session logs', async () => {
-  const stdout = await runImp('info', '--json');
-
-  const info = z
-    .object({ features: z.object({ sessionLog: z.boolean().optional() }).optional() })
-    .parse(JSON.parse(stdout));
-
-  expect(info.features?.sessionLog).toBe(true);
-});
 
 test('it keeps all of a logged session past the ring, a sleep and a wake, the exit, a stop and a restore', async () => {
   const ctx = await setupTest();

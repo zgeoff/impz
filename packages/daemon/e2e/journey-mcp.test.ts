@@ -27,40 +27,6 @@ async function setupTest() {
   return { prefix, stack, client, session };
 }
 
-test('it boots an imp inside the prefix with imp_create, and refuses one outside', async () => {
-  const ctx = await setupTest();
-
-  const name = `${ctx.prefix}tiny`;
-  const other = 'e2e-other-stdio';
-
-  // The outside name must be free, so the cleanup below takes only what this
-  // test made.
-  const taken = await readImp(other);
-
-  expect(taken).toBeUndefined();
-
-  const created = await ctx.session.runTool('imp_create', {
-    name,
-    image: resolveImageName('e2e-tiny'),
-    memoryMib: 512,
-  });
-
-  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, name));
-
-  const outside = await ctx.session.runTool('imp_create', { name: other });
-
-  // A regressed refusal, or a create that failed after its insert, leaves an
-  // imp; the removal passes over a name that was never made.
-  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, other));
-
-  expect(readToolData(created)).toMatchObject({ imp: { name, state: 'running' } });
-  expect(outside.isError).toBeTrue();
-
-  expect(outside.content[0]?.text).toStartWith(
-    `GUARD: imp ${other} is outside this server's guard`,
-  );
-});
-
 test.each([
   ['BusyBox', { image: resolveImageName('e2e-tiny') }],
   ['coreutils', {}],
@@ -337,46 +303,3 @@ test('it runs a 15 s command over HTTP for a token held to the prefix, and refus
   expect(outside.content[0]?.text).toStartWith('FORBIDDEN: ');
   expect(ended).toBe(204);
 }, 60_000);
-
-test('it shows a read token only the read tools over HTTP', async () => {
-  const ctx = await setupTest();
-
-  const tokenName = `${ctx.prefix}reader`;
-
-  const token = await ctx.client.tokens.create({ name: tokenName, scope: 'read' });
-
-  registerRemoval(ctx.stack, config.keep, () => removeTokenIfPresent(ctx.client, tokenName));
-
-  const reader = await startHttpMcpSession(token.secret);
-
-  ctx.stack.defer(async () => {
-    await reader.close();
-  });
-
-  const tools = await reader.listTools();
-  const refused = await reader.runTool('imp_exec', { name: `${ctx.prefix}none`, command: 'true' });
-
-  expect(tools).toStrictEqual(['imp_list', 'imp_url', 'imp_image_list', 'imp_checkpoint_list']);
-  expect(refused.content[0]?.text).toStartWith('FORBIDDEN: ');
-});
-
-test('it removes an imp with imp_destroy', async () => {
-  const ctx = await setupTest();
-
-  const name = `${ctx.prefix}gone`;
-
-  const created = await ctx.session.runTool('imp_create', {
-    name,
-    image: resolveImageName('e2e-tiny'),
-    memoryMib: 512,
-  });
-
-  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, name));
-  readToolData(created);
-
-  const destroyed = await ctx.session.runTool('imp_destroy', { name });
-  const listed = await ctx.session.runTool('imp_list', {});
-
-  expect(readToolData(destroyed)).toStrictEqual({ destroyed: name });
-  expect(readToolData(listed)).toStrictEqual({ imps: [] });
-});

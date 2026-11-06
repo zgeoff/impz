@@ -242,3 +242,14 @@ test('#openAccept rejects with NO_CONNECTION for a client that is gone', async (
     detail: 'no waiting connection 7',
   });
 });
+
+test('#openListener names the guest and the listener answer when the agent never answers', async () => {
+  const ctx = setupTest();
+
+  await startStubAgent(ctx.vsockPath, () => {});
+
+  expect(openListener(ctx.vsockPath, { network: 'ssh-agent' }, 1)).rejects.toThrowWithMessage(
+    Error,
+    `agent at ${ctx.vsockPath} sent no listener answer within 1 ms`,
+  );
+});

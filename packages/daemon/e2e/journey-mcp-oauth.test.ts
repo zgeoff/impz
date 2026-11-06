@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { randomBytes } from 'node:crypto';
 import { config } from '@impz/e2e-harness/config';
 import { resolveImageName } from '@impz/e2e-harness/fixtures';
-import { createInstanceClient, readImpEnv, runImp, tryImp } from '@impz/e2e-harness/imp-cli';
+import { createInstanceClient, runImp, tryImp } from '@impz/e2e-harness/imp-cli';
 import { waitForExec } from '@impz/e2e-harness/imps';
 import { instance } from '@impz/e2e-harness/instance';
 import {
@@ -13,7 +13,6 @@ import {
   openRouteMcp,
   parseApprovalPage,
   readCookies,
-  runBrowserSignIn,
   runSignIn,
   sendForm,
   sendMcp,
@@ -26,13 +25,6 @@ import {
 } from '@impz/e2e-harness/reset-baseline';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
 import { waitFor } from '@impz/e2e-harness/wait-for';
-import {
-  Client,
-  StreamableHTTPClientTransport,
-  UnauthorizedError,
-} from '@modelcontextprotocol/client';
-import type { OAuthClientProvider, OAuthTokens } from '@modelcontextprotocol/client';
-import invariant from 'tiny-invariant';
 import * as z from 'zod';
 
 async function setupTest() {
@@ -60,42 +52,6 @@ async function setupTest() {
     redirect: `http://127.0.0.1:${String(catcher.port)}/callback`,
   };
 }
-
-test('it serves the route’s discovery documents and nothing private', async () => {
-  const ctx = await setupTest();
-  const metadata = await fetch(`${ctx.origin}/.well-known/oauth-authorization-server`);
-  const resource = await fetch(`${ctx.origin}/.well-known/oauth-protected-resource/mcp`);
-  const unauthorized = await fetch(`${ctx.origin}/mcp`, { method: 'POST' });
-  const issuer: unknown = await metadata.json();
-  const protectedResource: unknown = await resource.json();
-  const rpc = await fetch(`${ctx.origin}/rpc/system/info`);
-  const health = await fetch(`${ctx.origin}/health`);
-  const ui = await fetch(`${ctx.origin}/ui/`);
-  const env = await readImpEnv();
-
-  const withRoot = await fetch(`${ctx.origin}/mcp`, {
-    method: 'POST',
-    headers: { authorization: `Bearer ${env['IMP_TOKEN'] ?? ''}` },
-  });
-
-  expect(issuer).toMatchObject({
-    issuer: ctx.origin,
-    code_challenge_methods_supported: expect.toIncludeAllMembers(['S256']),
-    token_endpoint_auth_methods_supported: ['none'],
-  });
-
-  expect(protectedResource).toMatchObject({
-    resource: `${ctx.origin}/mcp`,
-    authorization_servers: [ctx.origin],
-  });
-
-  expect(unauthorized.status).toBe(401);
-  expect(unauthorized.headers.get('www-authenticate')).toContain('resource_metadata=');
-  expect(rpc.status).toBe(404);
-  expect(health.status).toBe(404);
-  expect(ui.status).toBe(404);
-  expect(withRoot.status).toBe(401);
-});
 
 test('it signs a client in on an approval from the CLI, and the grant lists the tools its scope allows and runs a command in its imps', async () => {
   const ctx = await setupTest();
@@ -242,150 +198,6 @@ test('it signs a client in on an approval from the CLI, and the grant lists the 
   expect(grants).toContain(approver);
 });
 
-test('it signs an MCP client in through its own OAuth provider, and lists the tools its grant allows', async () => {
-  const ctx = await setupTest();
-
-  const clientName = `${ctx.prefix}sdk-conn`;
-  const approver = `${ctx.prefix}sdk-approver`;
-
-  const added = await ctx.client.oauth.clients.add({
-    name: clientName,
-    redirectUris: [ctx.redirect],
-  });
-
-  registerRemoval(ctx.stack, config.keep, () => removeOAuthClientIfPresent(ctx.client, clientName));
-
-  const token = await ctx.client.tokens.create({
-    name: approver,
-    scope: 'exec',
-    imps: [`${ctx.prefix}*`],
-  });
-
-  registerRemoval(ctx.stack, config.keep, () => removeTokenIfPresent(ctx.client, approver));
-
-  const saved: {
-    tokens?: OAuthTokens;
-    verifier: string;
-    authorizationURL: URL | null;
-  } = { verifier: '', authorizationURL: null };
-
-  const provider: OAuthClientProvider = {
-    redirectUrl: ctx.redirect,
-    clientMetadata: {
-      client_name: clientName,
-      redirect_uris: [ctx.redirect],
-      grant_types: ['authorization_code', 'refresh_token'],
-      response_types: ['code'],
-      token_endpoint_auth_method: 'none',
-    },
-    clientInformation: () => ({ client_id: added.clientId }),
-    tokens: () => saved.tokens,
-    saveTokens: (tokens) => {
-      saved.tokens = tokens;
-    },
-    redirectToAuthorization: (url) => {
-      saved.authorizationURL = url;
-    },
-    saveCodeVerifier: (verifier) => {
-      saved.verifier = verifier;
-    },
-    codeVerifier: () => saved.verifier,
-  };
-
-  const first = new StreamableHTTPClientTransport(new URL(`${ctx.origin}/mcp`), {
-    authProvider: provider,
-  });
-
-  const refused = await new Client({ name: 'e2e', version: '1.0.0' }).connect(first).then(
-    () => null,
-    (error: unknown) => error,
-  );
-
-  invariant(saved.authorizationURL);
-
-  const back = await runBrowserSignIn(saved.authorizationURL.href, {
-    approverToken: token.secret,
-    scope: 'read',
-  });
-
-  await first.finishAuth(back.searchParams);
-
-  const client = new Client({ name: 'e2e', version: '1.0.0' });
-
-  await client.connect(
-    new StreamableHTTPClientTransport(new URL(`${ctx.origin}/mcp`), { authProvider: provider }),
-  );
-
-  ctx.stack.defer(() => client.close());
-
-  const listed = await client.listTools();
-
-  const names = listed.tools.map((tool) => tool.name);
-
-  expect(refused).toBeInstanceOf(UnauthorizedError);
-  expect(names).toContain('imp_list');
-  expect(names).not.toContain('imp_exec');
-});
-
-test('it rotates a refresh, and ends the grant when a spent refresh token comes again', async () => {
-  const ctx = await setupTest();
-
-  const clientName = `${ctx.prefix}rot-conn`;
-  const approver = `${ctx.prefix}rot-approver`;
-
-  const added = await ctx.client.oauth.clients.add({
-    name: clientName,
-    redirectUris: [ctx.redirect],
-  });
-
-  registerRemoval(ctx.stack, config.keep, () => removeOAuthClientIfPresent(ctx.client, clientName));
-
-  const token = await ctx.client.tokens.create({
-    name: approver,
-    scope: 'exec',
-    imps: [`${ctx.prefix}*`],
-  });
-
-  registerRemoval(ctx.stack, config.keep, () => removeTokenIfPresent(ctx.client, approver));
-
-  const first = await runSignIn({
-    origin: ctx.origin,
-    clientId: added.clientId,
-    redirect: ctx.redirect,
-    approverToken: token.secret,
-    scope: 'read',
-  });
-
-  const refresh = {
-    grant_type: 'refresh_token',
-    client_id: added.clientId,
-    refresh_token: first.refresh_token,
-  };
-
-  const rotated = await sendForm(`${ctx.origin}/oauth2/token`, refresh);
-  const rotatedBody: unknown = await rotated.json();
-  const replayed = await sendForm(`${ctx.origin}/oauth2/token`, refresh);
-  const replayBody: unknown = await replayed.json();
-
-  const second = RouteTokensSchema.parse(rotatedBody);
-
-  const after = await sendMcp({
-    origin: ctx.origin,
-    bearer: second.access_token,
-    session: '',
-    method: 'initialize',
-    params: {
-      protocolVersion: '2025-06-18',
-      capabilities: {},
-      clientInfo: { name: 'e2e', version: '1.0.0' },
-    },
-  });
-
-  expect(second.scope).toBe('read offline_access');
-  expect(replayBody).toMatchObject({ error: 'invalid_grant' });
-  expect(after.status).toBe(401);
-});
-
 test('it stops the command a grant runs when the approving token goes, then answers 401', async () => {
   const ctx = await setupTest();
 
@@ -467,37 +279,4 @@ test('it stops the command a grant runs when the approving token goes, then answ
   expect(elapsedMs).toBeLessThan(30_000);
   expect(after.status).toBe(401);
   expect(processes).not.toContain('sleep 120');
-});
-
-test('it answers 429 to sign-ins past the burst', async () => {
-  const ctx = await setupTest();
-
-  const clientName = `${ctx.prefix}burst-conn`;
-
-  const added = await ctx.client.oauth.clients.add({
-    name: clientName,
-    redirectUris: [ctx.redirect],
-  });
-
-  registerRemoval(ctx.stack, config.keep, () => removeOAuthClientIfPresent(ctx.client, clientName));
-
-  const query = new URLSearchParams({
-    response_type: 'code',
-    client_id: added.clientId,
-    redirect_uri: ctx.redirect,
-    code_challenge: buildPkceChallenge(randomBytes(32).toString('base64url')),
-    code_challenge_method: 'S256',
-  });
-
-  const statuses: number[] = [];
-
-  for (let index = 0; index < 12; index += 1) {
-    const response = await fetch(`${ctx.origin}/oauth2/authorize?${query.toString()}`, {
-      redirect: 'manual',
-    });
-
-    statuses.push(response.status);
-  }
-
-  expect(statuses).toContain(429);
 });

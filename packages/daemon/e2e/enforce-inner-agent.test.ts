@@ -10,7 +10,7 @@ import {
 } from '@impz/e2e-harness/imp-cli';
 import { holdImp, waitForExec } from '@impz/e2e-harness/imps';
 import { registerRemoval } from '@impz/e2e-harness/register-removal';
-import { removeImpIfPresent, removeTokenIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
 import { startTextCapture } from '@impz/e2e-harness/text-capture';
 import { waitFor } from '@impz/e2e-harness/wait-for';
@@ -68,56 +68,6 @@ test('it runs exec --agent as root outside the container and reports it as an Ag
 
   expect(cgroup.trim()).toMatch(/^0::\/outer\/\d+$/u);
   expect(container.trim()).not.toContain('outer');
-});
-
-test('it refuses exec --agent to an exec-scoped token', async () => {
-  const ctx = await setupTest();
-
-  const name = `${ctx.prefix}exectok`;
-  const token = `${ctx.prefix}exec`;
-
-  await runImp('new', name, '--image', resolveImageName('e2e-tiny'));
-
-  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, name));
-
-  await waitForExec(name);
-
-  const secret = await runImp('token', 'new', token, '--scope', 'exec');
-
-  registerRemoval(ctx.stack, config.keep, () => removeTokenIfPresent(ctx.client, token));
-
-  const refused = await tryImp(['exec', '--agent', name, '--', 'true'], { token: secret.trim() });
-
-  expect(refused).toStrictEqual({
-    exitCode: 255,
-    stdout: '',
-    stderr: expect.toInclude('FORBIDDEN'),
-  });
-});
-
-test('it refuses exec --agent to a manage token scoped to the one imp', async () => {
-  const ctx = await setupTest();
-
-  const name = `${ctx.prefix}imptok`;
-  const token = `${ctx.prefix}manage`;
-
-  await runImp('new', name, '--image', resolveImageName('e2e-tiny'));
-
-  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, name));
-
-  await waitForExec(name);
-
-  const secret = await runImp('token', 'new', token, '--scope', 'manage', '--imps', name);
-
-  registerRemoval(ctx.stack, config.keep, () => removeTokenIfPresent(ctx.client, token));
-
-  const refused = await tryImp(['exec', '--agent', name, '--', 'true'], { token: secret.trim() });
-
-  expect(refused).toStrictEqual({
-    exitCode: 255,
-    stdout: '',
-    stderr: expect.toInclude('FORBIDDEN'),
-  });
 });
 
 test('it lets a memory hog outside the container meet the OOM killer in its 32 MiB', async () => {

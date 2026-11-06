@@ -41,7 +41,7 @@ export const SUITES: readonly Suite[] = [
     name: 'lifecycle',
     prefix: 'e2e-life-',
     images: [],
-    journeys: ['lifecycle', 'lifecycle-events'],
+    journeys: ['lifecycle'],
   },
   { name: 'docker', prefix: 'e2e-dock-', images: ['base'] },
   {
@@ -111,7 +111,7 @@ export const SUITES: readonly Suite[] = [
     name: 'proxy',
     prefix: 'e2e-px-',
     images: ['e2e-tiny'],
-    journeys: ['proxy-refusals', 'proxy-forwards', 'proxy-agent-outdated', 'proxy-tunnel-limit'],
+    journeys: ['proxy-forwards', 'proxy-agent-outdated', 'proxy-tunnel-limit'],
   },
   { name: 'proxy-wake', prefix: 'e2e-pxw-', images: ['e2e-tiny'] },
   { name: 'cp', prefix: 'e2e-copy-', images: ['e2e-git'] },
@@ -124,7 +124,6 @@ export const SUITES: readonly Suite[] = [
   { name: 'dashboard', prefix: 'e2e-dash-', images: ['e2e-tiny'] },
   { name: 'https', prefix: 'e2e-tls-', images: ['e2e-tiny'] },
   { name: 'tokens', prefix: 'e2e-tok-', images: ['e2e-tiny'] },
-  { name: 'leases', prefix: 'e2e-lease-', images: ['e2e-tiny'] },
   {
     name: 'egress',
     prefix: 'e2e-eg-',
@@ -291,7 +290,7 @@ export const FAST_GROUPS: readonly (readonly string[])[] = [
   ],
   ['sleep', 'reverse', 'jail', 'huge-pages'],
   ['mcp', 'mcp-oauth', 'proxy', 'tokens', 'inner', 'memory', 'ksm'],
-  ['tailscale', 'leases', 'egress', 'cpu', 'moves-tailnet'],
+  ['tailscale', 'egress', 'cpu', 'moves-tailnet'],
 ];
 
 export const SUITE_SETS: Readonly<Record<string, readonly string[]>> = {

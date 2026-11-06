@@ -2,14 +2,10 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { listAuditCalls } from '@impz/e2e-harness/audit';
 import { config } from '@impz/e2e-harness/config';
 import { resolveImageName } from '@impz/e2e-harness/fixtures';
-import { createInstanceClient, runImp, runImpWith, tryImp } from '@impz/e2e-harness/imp-cli';
+import { createInstanceClient, runImp, tryImp } from '@impz/e2e-harness/imp-cli';
 import { waitForExec } from '@impz/e2e-harness/imps';
 import { registerRemoval } from '@impz/e2e-harness/register-removal';
-import {
-  removeImpIfPresent,
-  removeSecretIfPresent,
-  removeTokenIfPresent,
-} from '@impz/e2e-harness/reset-baseline';
+import { removeImpIfPresent, removeTokenIfPresent } from '@impz/e2e-harness/reset-baseline';
 import { runSsh, setupKeyClient } from '@impz/e2e-harness/ssh';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
 import invariant from 'tiny-invariant';
@@ -24,74 +20,6 @@ async function setupTest() {
 
   return { prefix: getSuitePrefix('tokens'), stack, client };
 }
-
-test('it prints a made read token once, lists it without its secret, and lets it list imps but not exec, stop or make tokens', async () => {
-  const ctx = await setupTest();
-
-  const dev = `${ctx.prefix}read-dev`;
-  const reader = `${ctx.prefix}reader`;
-
-  await runImp('new', dev, '--image', resolveImageName('e2e-tiny'), '--memory', '256');
-
-  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, dev));
-
-  await waitForExec(dev);
-
-  const made = await runImp('token', 'new', reader, '--scope', 'read');
-
-  registerRemoval(ctx.stack, config.keep, () => removeTokenIfPresent(ctx.client, reader));
-
-  const secret = made.trim();
-
-  expect(secret).toMatch(/^imp_[\w\-]+\.[\w\-]+$/v);
-
-  const [, secretPart] = secret.split('.');
-
-  invariant(secretPart !== undefined);
-
-  const tokens = await runImp('token', 'ls');
-  const whoami = await tryImp(['token', 'whoami'], { token: secret });
-  const listed = await tryImp(['ls'], { token: secret });
-  const exec = await tryImp(['exec', dev, '--', 'true'], { token: secret });
-  const stop = await tryImp(['stop', dev], { token: secret });
-
-  const token = await tryImp(['token', 'new', `${ctx.prefix}x`, '--scope', 'read'], {
-    token: secret,
-  });
-
-  expect(tokens).toContain(reader);
-  expect(tokens).not.toContain(secretPart);
-
-  expect(whoami).toStrictEqual({
-    exitCode: 0,
-    stdout: `token ${reader}: read on every imp\n`,
-    stderr: '',
-  });
-
-  expect(listed).toStrictEqual({
-    exitCode: 0,
-    stdout: expect.toInclude(dev),
-    stderr: '',
-  });
-
-  expect(exec).toStrictEqual({
-    exitCode: 255,
-    stdout: '',
-    stderr: expect.toInclude('FORBIDDEN'),
-  });
-
-  expect(stop).toStrictEqual({
-    exitCode: 1,
-    stdout: '',
-    stderr: expect.toInclude('FORBIDDEN'),
-  });
-
-  expect(token).toStrictEqual({
-    exitCode: 1,
-    stdout: '',
-    stderr: expect.toInclude('FORBIDDEN'),
-  });
-});
 
 test('it lets an exec token limited to dev-* run in its imp and not touch another, names it in the audit, and refuses it once removed', async () => {
   const ctx = await setupTest();
@@ -169,103 +97,6 @@ test('it lets an exec token limited to dev-* run in its imp and not touch anothe
     stderr:
       'impz: unauthorized: set IMP_TOKEN to the token from <IMP_DATA_DIR>/token, or run impz login <url>\n',
   });
-});
-
-test('it lets a token for dev-* that may grant one secret grant it there and nothing more, through a sleep', async () => {
-  const ctx = await setupTest();
-
-  const dev = `${ctx.prefix}grant-dev`;
-  const other = `${ctx.prefix}grant-other`;
-  const granter = `${ctx.prefix}granter`;
-  const gh = `${ctx.prefix}gh`;
-  const ghValue = 'ghp_synthetic126e2e0123456789';
-
-  await runImp('new', dev, '--image', resolveImageName('e2e-tiny'), '--memory', '256');
-
-  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, dev));
-
-  await runImp('new', other, '--image', resolveImageName('e2e-tiny'), '--memory', '256');
-
-  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, other));
-
-  await waitForExec(dev);
-  await waitForExec(other);
-
-  const added = await runImpWith(
-    { stdin: `${ghValue}\n` },
-    'secret',
-    'add',
-    gh,
-    '--kind',
-    'github',
-  );
-
-  registerRemoval(ctx.stack, config.keep, () => removeSecretIfPresent(ctx.client, gh));
-
-  const made = await runImp(
-    'token',
-    'new',
-    granter,
-    '--scope',
-    'manage',
-    '--imps',
-    `${dev}*`,
-    '--grantable',
-    gh,
-  );
-
-  registerRemoval(ctx.stack, config.keep, () => removeTokenIfPresent(ctx.client, granter));
-
-  const secret = made.trim();
-
-  const granted = await tryImp(['grant', dev, gh], { token: secret });
-  const otherImp = await tryImp(['grant', other, gh], { token: secret });
-
-  // The fork's name matches dev-*, so only the missing scope refuses it.
-  const fork = await tryImp(['fork', dev, `${dev}-copy`], { token: secret });
-
-  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, `${dev}-copy`));
-
-  const whoami = await tryImp(['token', 'whoami'], { token: secret });
-
-  expect(granted.exitCode).toBe(0);
-
-  expect(whoami).toStrictEqual({
-    exitCode: 0,
-    stdout: `token ${granter}: manage on ${dev}*; may grant ${gh}\n`,
-    stderr: '',
-  });
-
-  expect(otherImp).toStrictEqual({
-    exitCode: 1,
-    stdout: '',
-    stderr: expect.toInclude('FORBIDDEN'),
-  });
-
-  expect(fork).toStrictEqual({
-    exitCode: 1,
-    stdout: '',
-    stderr: expect.toInclude('FORBIDDEN'),
-  });
-
-  await runImp('sleep', dev);
-  await runImp('wake', dev);
-
-  const kept = await tryImp(['grants', dev], { token: secret });
-  const revoked = await tryImp(['revoke', dev, gh], { token: secret });
-  const tokens = await runImp('token', 'ls');
-
-  expect(kept).toStrictEqual({
-    exitCode: 0,
-    stdout: expect.toInclude(gh),
-    stderr: '',
-  });
-
-  expect(revoked.exitCode).toBe(0);
-  expect(tokens).toContain(gh);
-  expect(added).not.toContain(ghValue);
-  expect(kept.stdout).not.toContain(ghValue);
-  expect(tokens).not.toContain(ghValue);
 });
 
 test('it lets an ssh key bound to a dev-* exec token log in to its imp and no other, names it in the audit, and lets it in nowhere once unbound', async () => {

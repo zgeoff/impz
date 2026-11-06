@@ -640,3 +640,34 @@ test('#ls names the saved host under --all over a host field that a newer impd a
     code: 0,
   });
 });
+
+test('#sleep sleeps an imp that holds a lease and ends the lease', async () => {
+  const ctx = await setupTest();
+  const box = await startImpdHost(ctx.stack, { env: {} });
+
+  await box.createTestImage('base');
+  await box.client.imps.create({ name: 'dev' });
+  await box.client.leases.acquire({ name: 'dev', label: 'job', ttlSeconds: 600 });
+
+  writeHostConfig(ctx.home, {
+    current: 'box',
+    hosts: { box: { url: box.url, token: box.rootToken } },
+  });
+
+  const slept = await runCLIInProcess({ args: ['sleep', 'dev', '--json'], env: ctx.home });
+  const [imp] = await box.client.imps.list();
+  const leases = await box.client.leases.list({ name: 'dev' });
+
+  // oxlint-disable-next-line unicorn/prefer-structured-clone -- the wire turns dates into strings, as JSON does
+  const sent: unknown = JSON.parse(JSON.stringify(imp));
+  const printed: unknown = JSON.parse(slept.stdout);
+
+  expect({ ...slept, stdout: printed }).toStrictEqual({
+    stdout: sent,
+    stderr: '',
+    code: 0,
+  });
+
+  expect(imp?.state).toBe('sleeping');
+  expect(leases).toStrictEqual([]);
+});

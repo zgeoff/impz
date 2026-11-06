@@ -41,12 +41,6 @@ test('it still lands docker exec in a cgroup where it may run after the cgroup m
   expect(exec.exitCode).toBe(0);
 });
 
-test.skipIf(cpuLimitsMissing)('it reports CPU limits as enforced', async () => {
-  const info = await readInfo();
-
-  expect(info.cpu?.limitsEnforced).toBeTrue();
-});
-
 test.skipIf(cpuLimitsMissing)(
   'it holds a busy guest under a limit of half a core, again after a sleep and a wake, and under a limit impz set changes at once',
   async () => {

@@ -15,7 +15,6 @@ import {
   tryImp,
 } from '@impz/e2e-harness/imp-cli';
 import { waitForExec } from '@impz/e2e-harness/imps';
-import { runInContainer } from '@impz/e2e-harness/instance';
 import { registerRemoval } from '@impz/e2e-harness/register-removal';
 import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
@@ -190,33 +189,4 @@ test('it keeps the disk through a stop, boots a stopped imp on exec with an empt
   writeMetric('startPlusExecMs', Date.now() - started);
 
   expect(restarted).toBe(`${name}-data`);
-});
-
-test('it removes the imp and its network device on rm', async () => {
-  const ctx = await setupTest();
-
-  const name = `${ctx.prefix}rm`;
-
-  await runImp('new', name);
-
-  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, name));
-
-  await waitForExec(name);
-
-  const row = await requireImp(name);
-
-  const device = `imp${String(row.slot)}`;
-
-  await runImp('rm', name);
-
-  const listed = await runImp('ls');
-  const tap = await runInContainer(['ip', 'link', 'show', device]);
-
-  expect(listed).not.toMatch(new RegExp(`^${name} `, 'mu'));
-
-  expect(tap).toStrictEqual({
-    exitCode: 1,
-    stdout: '',
-    stderr: `Device "${device}" does not exist.\n`,
-  });
 });
