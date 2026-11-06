@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readText } from '@impz/daemon/read-text';
 import { stopSuiteGroup } from '@impz/e2e-harness/run-suite';
-import { createStubBin } from '@impz/test-utils/create-stub-bin';
+import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
 
 function setupTest() {
   const stack = new AsyncDisposableStack();
