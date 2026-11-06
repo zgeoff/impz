@@ -211,8 +211,11 @@
       "version": "0.0.0",
       "dependencies": {
         "kysely": "catalog:",
+        "tiny-invariant": "catalog:",
+        "ts-pattern": "catalog:",
       },
       "devDependencies": {
+        "@impz/test-utils": "workspace:*",
         "@zgeoff/kysely-bun-sqlite": "catalog:",
       },
     },
