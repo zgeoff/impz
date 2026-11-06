@@ -3,9 +3,11 @@ import type { DurableQueries } from '../durable-tables';
 import type { JsonValue } from '../json-value';
 import { appendOperationEvent } from './append-operation-event';
 import type { ChangeSignal } from './create-change-signal';
-import type { OperationDefinition, RestartRule } from './define-operation';
+import type { OperationDefinition } from './define-operation';
 import { moveOperation } from './move-operation';
 import { moveStep } from './move-step';
+import { pickRecoveryMove } from './pick-recovery-move';
+import type { RecoveryMove } from './pick-recovery-move';
 import { readOperation } from './read-operation';
 import type { Operation, OperationError, OperationStep } from './read-operation';
 
@@ -43,28 +45,6 @@ export async function recoverOperations<TTrx extends DurableQueries>(
   }
 
   await Promise.all(open.map((row) => run(row.id)));
-}
-
-export type RecoveryMove =
-  | { readonly kind: 'resume' }
-  | { readonly kind: 'fail-step'; readonly step: OperationStep }
-  | { readonly kind: 'unknown-step'; readonly step: OperationStep };
-
-export function pickRecoveryMove(
-  operation: Operation,
-  restartRules: ReadonlyMap<string, RestartRule>,
-): RecoveryMove {
-  const step = operation.steps.find((candidate) => candidate.state === 'running');
-
-  if (operation.state !== 'running' || operation.ending !== null || step === undefined) {
-    return { kind: 'resume' };
-  }
-
-  return match(restartRules.get(step.name) ?? 'rerun')
-    .with('rerun', () => ({ kind: 'resume' as const }))
-    .with('fail', () => ({ kind: 'fail-step' as const, step }))
-    .with('unknown', () => ({ kind: 'unknown-step' as const, step }))
-    .exhaustive();
 }
 
 async function writeRecoveryMove<TTrx extends DurableQueries>(

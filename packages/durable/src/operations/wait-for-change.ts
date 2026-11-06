@@ -12,7 +12,9 @@ export async function waitForChange<T>(
 ): Promise<T> {
   const wait = new AbortController();
 
-  const stop = (): void => wait.abort();
+  const stop = (): void => {
+    wait.abort();
+  };
 
   input.signal.addEventListener('abort', stop, { once: true });
 

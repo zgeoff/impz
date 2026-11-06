@@ -39,7 +39,9 @@ export type {
   UndoContext,
 } from './operations/define-operation';
 
+export { canMoveOperation } from './operations/move-operation';
 export type { OperationEnding, OperationState } from './operations/move-operation';
+export { canMoveStep } from './operations/move-step';
 export type { StepState } from './operations/move-step';
 export { pruneOperations } from './operations/prune-operations';
 export { queueOperation } from './operations/queue-operation';

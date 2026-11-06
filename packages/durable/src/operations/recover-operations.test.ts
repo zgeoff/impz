@@ -70,7 +70,9 @@ test('it reruns a step that reruns when the process stopped before the step’s 
     retryKey: null,
   });
 
-  await waitFor(() => expect(effects).toContain('cut'));
+  await waitFor(() => {
+    expect(effects).toContain('cut');
+  });
 
   const db = ctx.reopen();
 
@@ -121,7 +123,9 @@ test('it fails the operation and undoes the steps up to one that fails on a rest
     retryKey: null,
   });
 
-  await waitFor(() => expect(effects).toContain('cut'));
+  await waitFor(() => {
+    expect(effects).toContain('cut');
+  });
 
   const db = ctx.reopen();
 
@@ -172,7 +176,9 @@ test('it ends the operation unknown and reruns nothing when a step with an unkno
     retryKey: null,
   });
 
-  await waitFor(() => expect(effects).toContain('cut'));
+  await waitFor(() => {
+    expect(effects).toContain('cut');
+  });
 
   const db = ctx.reopen();
 
@@ -227,7 +233,9 @@ test('it runs the undo again when the process stopped before the undo’s commit
     retryKey: null,
   });
 
-  await waitFor(() => expect(effects).toContain('undo measure'));
+  await waitFor(() => {
+    expect(effects).toContain('undo measure');
+  });
 
   const db = ctx.reopen();
 
