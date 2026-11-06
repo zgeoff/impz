@@ -217,8 +217,8 @@ test('it installs ZFS from the kernel modules that the runner has, with the ARC 
 
   expect(readFileSync(ctx.sudo.calls, 'utf8')).toBe(
     [
-      'sudo apt-get update',
-      'sudo apt-get install -y --no-install-recommends zfsutils-linux',
+      'sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update',
+      'sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y --no-install-recommends zfsutils-linux',
       'modinfo zfs',
       'sudo modprobe zfs zfs_arc_max=1073741824',
       'sudo tee /sys/module/zfs/parameters/zfs_arc_max',
@@ -244,11 +244,11 @@ test("it installs the kernel's extra modules when the runner lacks the zfs modul
 
   expect(readFileSync(ctx.sudo.calls, 'utf8')).toBe(
     [
-      'sudo apt-get update',
-      'sudo apt-get install -y --no-install-recommends zfsutils-linux',
+      'sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update',
+      'sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y --no-install-recommends zfsutils-linux',
       'modinfo zfs',
       'uname -r',
-      'sudo apt-get install -y --no-install-recommends linux-modules-extra-6.17.0-1010-azure',
+      'sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y --no-install-recommends linux-modules-extra-6.17.0-1010-azure',
       'sudo modprobe zfs',
       'sudo zfs version',
       '',
@@ -268,8 +268,8 @@ test('it installs Podman on a runner without it', async () => {
 
   expect(readFileSync(ctx.sudo.calls, 'utf8')).toBe(
     [
-      'sudo apt-get update',
-      'sudo apt-get install -y --no-install-recommends podman catatonit netavark aardvark-dns',
+      'sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update',
+      'sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y --no-install-recommends podman catatonit netavark aardvark-dns',
       'sudo podman --version',
       '',
     ].join('\n'),
