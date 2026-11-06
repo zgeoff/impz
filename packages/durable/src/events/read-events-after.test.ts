@@ -106,7 +106,7 @@ test('it returns no events for a cursor at the head', async () => {
   expect(read).toStrictEqual({ kind: 'events', events: [] });
 });
 
-test('it returns a reset for a cursor before a pruned event', async () => {
+test('it returns a reset with the prune mark for a cursor before a pruned event', async () => {
   const ctx = await setupTest();
 
   await appendEvent(ctx.db, {
@@ -137,7 +137,7 @@ test('it returns a reset for a cursor before a pruned event', async () => {
 
   const read = await readEventsAfter(ctx.db, { after: 1, limit: 10 });
 
-  expect(read).toStrictEqual({ kind: 'reset' });
+  expect(read).toStrictEqual({ kind: 'reset', prunedThrough: 2 });
 });
 
 test('it returns the events for a cursor at the last pruned event', async () => {

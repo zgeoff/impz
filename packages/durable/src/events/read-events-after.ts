@@ -11,7 +11,7 @@ export interface StoredEvent {
 
 export type EventsAfter =
   | { readonly kind: 'events'; readonly events: readonly StoredEvent[] }
-  | { readonly kind: 'reset' };
+  | { readonly kind: 'reset'; readonly prunedThrough: number };
 
 interface ReadEventsAfterInput {
   readonly after: number;
@@ -41,8 +41,10 @@ export async function readEventsAfter(
     .limit(input.limit)
     .execute();
 
-  if (input.after < (rows[0]?.pruned_through ?? 0)) {
-    return { kind: 'reset' };
+  const prunedThrough = rows[0]?.pruned_through ?? 0;
+
+  if (input.after < prunedThrough) {
+    return { kind: 'reset', prunedThrough };
   }
 
   return {
