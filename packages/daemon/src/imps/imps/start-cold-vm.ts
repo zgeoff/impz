@@ -1,9 +1,9 @@
 import { randomBytes } from 'node:crypto';
 import { statSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { getErrorMessage } from '@impz/shared';
 import type { SlotAddress } from '../../host-net/net/addressing';
 import { GATEWAY_IP6 } from '../../host-net/net/addressing6';
-import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import type { HostLoad } from '../../platform/process/read-host-load';
 import type { ImpPaths } from '../../vm/storage/data-layout';

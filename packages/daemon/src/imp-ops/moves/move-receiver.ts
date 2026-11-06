@@ -8,6 +8,7 @@ import type {
   WarmHost,
   WarmMove,
 } from '@impz/api';
+import { getErrorMessage } from '@impz/shared';
 import type * as z from 'zod';
 import type { ImageService } from '../../imps/images/image-service';
 import type { Imps } from '../../imps/imps/imp-service';
@@ -29,7 +30,6 @@ import type { MoveTicketRow, NewMoveTicketRow } from '../../platform/db/move-tic
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { SlotTakenError } from '../../platform/db/slot-taken-error';
 import { ImpdError } from '../../platform/errors/impd-error';
-import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { hashSecret } from '../../platform/secrets/hash-secret';
 import { mintOpaqueToken } from '../../platform/secrets/mint-opaque-token';

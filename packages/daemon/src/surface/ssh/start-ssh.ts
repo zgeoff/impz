@@ -1,3 +1,4 @@
+import { getErrorMessage } from '@impz/shared';
 import type { Revocations } from '../../identity/auth/revocations';
 import type { TokenStore } from '../../identity/auth/token-store';
 import type { ImpRuntime } from '../../imps/imps/imp-runtime';
@@ -5,7 +6,6 @@ import type { ImpService } from '../../imps/imps/imp-service';
 import type { AuthorizedKeys } from '../../imps/ssh/authorized-keys';
 import { withAuditedOpen } from '../../platform/audit/api-audit';
 import type { ApiAudit } from '../../platform/audit/api-audit';
-import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import type { SurfaceConfig } from '../surface-config';
 import { loadOrCreateHostKey, readFingerprint, setupSshDir } from './host-key';

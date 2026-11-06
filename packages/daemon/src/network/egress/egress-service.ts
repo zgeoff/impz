@@ -1,5 +1,6 @@
 import { EGRESS_MODE_TRAITS } from '@impz/api';
 import type { EgressPolicy } from '@impz/api';
+import { getErrorMessage } from '@impz/shared';
 import { formatSubnet, parseIpv4 } from '../../host-net/net/addressing';
 import { deriveGuestIp6 } from '../../host-net/net/addressing6';
 import type { Ipv6Plan } from '../../host-net/net/ipv6-plan';
@@ -14,7 +15,6 @@ import type { NetworkMember } from '../../platform/db/networks';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { ImpdError } from '../../platform/errors/impd-error';
 import { buildNotFoundError } from '../../platform/errors/impd-errors';
-import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { buildKeyedMutex } from '../../platform/process/keyed-mutex';
 import { startInterval } from '../../platform/process/start-interval';

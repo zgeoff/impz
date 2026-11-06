@@ -1,6 +1,6 @@
 import { rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { getErrorMessage } from '../../../platform/process/get-error-message';
+import { getErrorMessage } from '@impz/shared';
 import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import { BACKUP_TREE, buildBackupPaths, toDigestHex } from '../data-layout';
 import type { StorageBackend } from '../storage-backend';

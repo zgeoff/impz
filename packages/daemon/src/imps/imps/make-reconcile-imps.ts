@@ -1,8 +1,8 @@
+import { getErrorMessage } from '@impz/shared';
 import { writeUnknownBoot } from '../../platform/db/cold-boots';
 import { listImps } from '../../platform/db/imps';
 import type { ImpRecord } from '../../platform/db/imps';
 import { updateImpState } from '../../platform/db/update-imp-state';
-import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { sendPing } from '../../vm/agent-client/agent-requests';
 import type { ImpPaths } from '../../vm/storage/data-layout';

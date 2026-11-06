@@ -1,9 +1,9 @@
 import type { ImpChangeReason } from '@impz/api';
+import { getErrorMessage } from '@impz/shared';
 import { listCheckpoints } from '../../platform/db/checkpoints';
 import { listImps } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import type { StartTimer } from '../../platform/process/clock';
-import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { startRealTimer } from '../../platform/process/start-real-timer';
 import type { ImpDiskUsage, StorageBackend } from './storage-backend';

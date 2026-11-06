@@ -21,6 +21,7 @@ export interface Registry {
   readonly container: string;
 
   readonly certPath: string;
+  readonly removalTimeoutMs: number;
 }
 
 export interface MovedTag {
@@ -93,6 +94,11 @@ export async function checkRegistryReady(plan: Readonly<RegistryPlan>): Promise<
 }
 
 const REGISTRY_OWNER_LABEL = 'imp-e2e-instance';
+const REMOVAL_TIMEOUT_MS = 30_000;
+
+interface RemovalOptions {
+  readonly removalTimeoutMs?: number;
+}
 
 // The stack removes the plan's network and its certificate directory, which
 // impd reads for each builder, with the registry.
@@ -100,7 +106,11 @@ export async function startRegistry(
   stack: Readonly<Pick<AsyncDisposableStack, 'defer'>>,
   plan: Readonly<RegistryPlan>,
   container: string,
+  options: RemovalOptions = {},
 ): Promise<Registry> {
+  const docker = resolveDocker();
+  const timeoutMs = options.removalTimeoutMs ?? REMOVAL_TIMEOUT_MS;
+
   const taken = await runCommand(['docker', 'container', 'inspect', container]);
 
   if (taken.exitCode === 0) {
@@ -143,7 +153,7 @@ export async function startRegistry(
   ]);
 
   stack.defer(async () => {
-    await runCommand(['docker', 'network', 'rm', plan.network]);
+    await runCommand([docker, 'network', 'rm', plan.network], { timeoutMs });
   });
 
   mkdirSync(certs, { recursive: true });
@@ -181,14 +191,22 @@ export async function startRegistry(
   ]);
 
   stack.defer(async () => {
-    await runCommand(['docker', 'rm', '--force', '--volumes', container]);
+    await runCommand([docker, 'rm', '--force', '--volumes', container], { timeoutMs });
   });
 
   return {
     address: `${name}:${String(plan.port)}`,
     container,
     certPath: join(certs, 'cert.pem'),
+    removalTimeoutMs: timeoutMs,
   };
+}
+
+// A stack can go after PATH changes, as a cut-off test cleanup does in the next
+// test, and must still reach the docker that made its things. Bun.which reads
+// the PATH the process started with unless it gets the current one.
+function resolveDocker(): string {
+  return Bun.which('docker', { PATH: process.env['PATH'] ?? '' }) ?? 'docker';
 }
 
 export interface StaleRegistries {
@@ -321,6 +339,9 @@ export async function createMovedTag(
   directory: string,
   repository: string,
 ): Promise<MovedTag> {
+  const docker = resolveDocker();
+  const timeoutMs = registry.removalTimeoutMs;
+
   const busybox = await readBusyboxDigest();
 
   const tag = `${registry.address}/${repository}:1`;
@@ -329,7 +350,7 @@ export async function createMovedTag(
   await createPushedImage(writeContext(directory, `${repository}-old`, from, 'old'), tag);
 
   stack.defer(async () => {
-    await runCommand(['docker', 'rmi', tag]);
+    await runCommand([docker, 'rmi', tag], { timeoutMs });
   });
 
   // The containerd store drops an image whose last tag moves.
@@ -338,7 +359,7 @@ export async function createMovedTag(
   await runChecked(['docker', 'tag', tag, kept]);
 
   stack.defer(async () => {
-    await runCommand(['docker', 'rmi', kept]);
+    await runCommand([docker, 'rmi', kept], { timeoutMs });
   });
 
   const repoDigests = await runChecked([

@@ -1,4 +1,5 @@
 import type { MovePlan, MoveState, MoveStatus, WarmHost } from '@impz/api';
+import { getErrorMessage } from '@impz/shared';
 import invariant from 'tiny-invariant';
 import { match } from 'ts-pattern';
 import type { LockedImp } from '../../imps/imps/imp-lock';
@@ -19,7 +20,6 @@ import type { ImpDatabase } from '../../platform/db/open-database';
 import { ImpdError, isImpdError } from '../../platform/errors/impd-error';
 import { buildInvalidStateError, buildNotFoundError } from '../../platform/errors/impd-errors';
 import type { StartTimer } from '../../platform/process/clock';
-import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import type { MoveMode, StorageBackend } from '../../vm/storage/storage-backend';
 import type { ImpGrants } from '../imp-grants';

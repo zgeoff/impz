@@ -1,8 +1,8 @@
 import { chmodSync, lchownSync, mkdirSync, rmSync } from 'node:fs';
+import { getErrorMessage } from '@impz/shared';
 import type { ImpDisk, ImpHost, ImpVms } from '../../imps/imps/imp-context';
 import type { LockedImp } from '../../imps/imps/imp-lock';
 import type { ImpVmOps } from '../../imps/imps/imp-vm-ops';
-import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { IMPD_USER } from '../../platform/process/impd-user';
 import { buildSnapshotIdentity, writeSnapshotMeta } from '../../vm/sleep/snapshot-meta';

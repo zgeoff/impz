@@ -1,8 +1,8 @@
 import { MCP_PATH } from '@impz/api';
 import type { HttpTransport } from '@impz/mcp';
+import { getErrorMessage } from '@impz/shared';
 import { Elysia } from 'elysia';
 import type { OAuthHandlers } from '../../identity/oauth/create-oauth-handlers';
-import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 
 // parse: 'none' leaves each body unread for the handler that reads it.

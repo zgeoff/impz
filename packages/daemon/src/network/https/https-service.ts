@@ -1,6 +1,6 @@
+import { getErrorMessage } from '@impz/shared';
 import type { TailscaleStatus } from '../../host-net/net/tailscale-status';
 import type { PublicImp } from '../../platform/db/exposure';
-import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { createSemaphore } from '../../platform/process/semaphore';
 import type { Ticker, TickerTimer } from '../../platform/process/ticker';

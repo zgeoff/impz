@@ -1,4 +1,5 @@
 import type { Secret, SecretAdd, SecretAdded } from '@impz/api';
+import { getErrorMessage } from '@impz/shared';
 import type { ImpDatabase } from '../../../platform/db/open-database';
 import {
   createSecret,
@@ -11,7 +12,6 @@ import {
 import type { NewSecret, SecretRecord } from '../../../platform/db/secrets';
 import { ImpdError } from '../../../platform/errors/impd-error';
 import { buildConflictError, buildNotFoundError } from '../../../platform/errors/impd-errors';
-import { getErrorMessage } from '../../../platform/process/get-error-message';
 import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import { buildStoredBinding } from './build-stored-binding';
 import type { OAuthRefresher } from './oauth-refresher';

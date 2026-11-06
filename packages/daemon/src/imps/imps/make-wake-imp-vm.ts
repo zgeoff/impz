@@ -1,9 +1,9 @@
 import type { ColdBootCause } from '@impz/api';
+import { getErrorMessage } from '@impz/shared';
 import { writeUnknownBoot } from '../../platform/db/cold-boots';
 import { removeTrustPending, updateImpActivity } from '../../platform/db/imps';
 import type { ImpStateChange } from '../../platform/db/update-imp-state';
 import { buildStoppingError } from '../../platform/errors/impd-errors';
-import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { isOrdinaryBudgetError } from '../../vm/imps-contract/ram-budget-error';
 import { buildUffdDeviceError } from '../../vm/imps-contract/uffd-device-error';

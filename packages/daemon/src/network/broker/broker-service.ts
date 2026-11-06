@@ -11,6 +11,7 @@ import type {
   SecretAdd,
   SecretAdded,
 } from '@impz/api';
+import { getErrorMessage } from '@impz/shared';
 import { match } from 'ts-pattern';
 import { deriveSlotAddress } from '../../host-net/net/addressing';
 import type { ReachPolicy } from '../../host-net/net/reach-policy';
@@ -38,7 +39,6 @@ import {
   buildMovingError,
   buildNotFoundError,
 } from '../../platform/errors/impd-errors';
-import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import type { TickerTimer } from '../../platform/process/ticker';
 import type { NetworkConfig } from '../network-config';

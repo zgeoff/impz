@@ -1,7 +1,7 @@
+import { getErrorMessage } from '@impz/shared';
 import type { ServedServices } from '../../host-net/net/tailscale-serve';
 import { listImps } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
-import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { createSemaphore } from '../../platform/process/semaphore';
 import { listServeEntries } from './service-serve';

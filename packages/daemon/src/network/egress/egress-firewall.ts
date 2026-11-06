@@ -1,4 +1,4 @@
-import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getErrorMessage } from '@impz/shared';
 import { buildExitError } from '../../platform/process/run-command';
 
 export type NftRunner = (script: string) => Promise<void>;

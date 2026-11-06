@@ -1,6 +1,6 @@
 import type { Ping } from '@impz/agent-protocol';
+import { getErrorMessage } from '@impz/shared';
 import type { Clock } from '../../platform/process/clock';
-import { getErrorMessage } from '../../platform/process/get-error-message';
 import { REAL_CLOCK } from '../../platform/process/real-clock';
 import { sendPing } from './agent-requests';
 

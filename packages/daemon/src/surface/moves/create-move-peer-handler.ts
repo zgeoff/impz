@@ -1,4 +1,5 @@
 import { MOVE_RECEIVE_PATH, movePeerContract } from '@impz/api';
+import { getErrorMessage } from '@impz/shared';
 import { OpenAPIHandler } from '@orpc/openapi/fetch';
 import { ORPCError, implement, onError } from '@orpc/server';
 import { match } from 'ts-pattern';
@@ -6,7 +7,6 @@ import type { MovePeerCalls } from '../../imp-ops/moves/move-receiver';
 import { MoveRequestError } from '../../imp-ops/moves/move-request-error';
 import type { CheckedTicket } from '../../imp-ops/moves/require-move-ticket';
 import type { ApiAudit } from '../../platform/audit/api-audit';
-import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { toORPCError } from '../to-orpc-error';
 

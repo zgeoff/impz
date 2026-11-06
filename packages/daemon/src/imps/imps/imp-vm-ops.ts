@@ -1,11 +1,11 @@
 import type { ColdBootCause } from '@impz/api';
+import { getErrorMessage } from '@impz/shared';
 import { removeNextBootCause, writeColdBoot } from '../../platform/db/cold-boots';
 import { requireTransition } from '../../platform/db/imp-transitions';
 import { removeIdentityReset, updateImpActivity, updateImpDisk } from '../../platform/db/imps';
 import type { ImpStateChange } from '../../platform/db/update-imp-state';
 import { ImpdError } from '../../platform/errors/impd-error';
 import { buildAgentOutdatedApiError, buildStoppingError } from '../../platform/errors/impd-errors';
-import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { createSemaphore } from '../../platform/process/semaphore';
 import { isAgentError } from '../../vm/agent-client/is-agent-error';

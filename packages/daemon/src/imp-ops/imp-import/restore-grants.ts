@@ -1,5 +1,5 @@
 import type { GrantFilter } from '@impz/api';
-import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getErrorMessage } from '@impz/shared';
 import type { ImpGrants } from '../imp-grants';
 
 interface ImportedGrants {

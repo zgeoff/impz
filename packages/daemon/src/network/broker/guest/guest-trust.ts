@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { rootCertificates } from 'node:tls';
+import { getErrorMessage } from '@impz/shared';
 import { PROXY_VARIABLE } from '../../../imps/exec/broker-exec-env';
 import type { StartTimer } from '../../../platform/process/clock';
-import { getErrorMessage } from '../../../platform/process/get-error-message';
 import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import { buildExitError } from '../../../platform/process/run-command';
 import { startRealTimer } from '../../../platform/process/start-real-timer';

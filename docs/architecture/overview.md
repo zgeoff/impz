@@ -18,10 +18,10 @@ the vsock protocol with the guest agent, the frame codec and the generated messa
 agent. The guest agent is `agent/`.
 
 With `packages/durable`, a program on SQLite records its changes in an event log that numbers each
-one. Each write of the package goes through the program's own Kysely transaction, so a change and
-its event commit together, or neither commits. The package never refers to an imp concept, so a
-program other than impd can use it. Its event log is a table in the program's own database, apart
-from impd's in-process event bus.
+one, and runs operations that resume or undo their steps after a restart. Each write of the package
+goes through the program's own Kysely transaction, so a change and its record commit together, or
+neither commits. The package never refers to an imp concept, so a program other than impd can use
+it. Its event log is a table in the program's own database, apart from impd's in-process event bus.
 
 ## The path of a request
 

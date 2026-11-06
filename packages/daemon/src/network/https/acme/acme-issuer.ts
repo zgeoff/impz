@@ -1,7 +1,7 @@
 import { Agent } from 'node:https';
+import { getErrorMessage } from '@impz/shared';
 import type * as AcmeClient from 'acme-client';
 import type { Challenge } from 'acme-client/types/rfc8555';
-import { getErrorMessage } from '../../../platform/process/get-error-message';
 import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import type { DnsProvider, TxtRecord } from '../dns/dns-provider';
 import type { CertStore, Certificate } from './cert-store';

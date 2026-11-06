@@ -1,3 +1,4 @@
+import { getErrorMessage } from '@impz/shared';
 import type { Logger } from '@logtape/logtape';
 import type { Server, WebSocketHandler } from 'bun';
 import { deriveSlotAddress } from '../../host-net/net/addressing';
@@ -12,7 +13,6 @@ import { sendOrClose } from '../../platform/http/send-or-close';
 import { stripSessionCookie } from '../../platform/http/session-cookie';
 import { toSendableCloseCode } from '../../platform/http/to-sendable-close-code';
 import type { StartTimer } from '../../platform/process/clock';
-import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { createSemaphore } from '../../platform/process/semaphore';
 import { startRealTimer } from '../../platform/process/start-real-timer';

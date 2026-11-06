@@ -1,5 +1,5 @@
 import { mkdirSync, rmSync } from 'node:fs';
-import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getErrorMessage } from '@impz/shared';
 import { IMPD_USER } from '../../platform/process/impd-user';
 import { stopPid } from '../../platform/process/proc';
 import { VM_DEADLINES } from '../../platform/process/vm-deadlines';

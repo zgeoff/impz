@@ -1,5 +1,6 @@
 import { mkdirSync, rmSync } from 'node:fs';
 import type { EgressPolicy, Imp, ImpKind } from '@impz/api';
+import { getErrorMessage } from '@impz/shared';
 import { listCheckpoints } from '../../platform/db/checkpoints';
 import type { ImageRecord } from '../../platform/db/images';
 import { requireTransition } from '../../platform/db/imp-transitions';
@@ -12,7 +13,6 @@ import {
 } from '../../platform/db/imps';
 import type { ImpRecord } from '../../platform/db/imps';
 import { buildInvalidStateError } from '../../platform/errors/impd-errors';
-import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { isRamBudgetError } from '../../vm/imps-contract/ram-budget-error';
 import { buildImagePaths } from '../../vm/storage/data-layout';

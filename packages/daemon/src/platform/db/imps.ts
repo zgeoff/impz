@@ -1,6 +1,6 @@
 import type { EgressPolicy, ImpKind, ImpState, MoveState, PublicAuth } from '@impz/api';
+import { getErrorMessage } from '@impz/shared';
 import { sql } from 'kysely';
-import { getErrorMessage } from '../process/get-error-message';
 import { allocateSlot } from './allocate-slot';
 import { ImpClashError } from './imp-clash-error';
 import { requireTransition } from './imp-transitions';

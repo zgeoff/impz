@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { getErrorMessage } from '../../../platform/process/get-error-message';
+import { getErrorMessage } from '@impz/shared';
 
 export type DnsTokenSource =
   | { readonly kind: 'value'; readonly value: string }

@@ -1,5 +1,6 @@
 import { rmSync } from 'node:fs';
 import type { Checkpoint, Imp } from '@impz/api';
+import { getErrorMessage } from '@impz/shared';
 import { customAlphabet, customRandom } from 'nanoid';
 import { createConsistentDisk } from '../../imps/imps/consistent-disk';
 import type { DiskFreezer } from '../../imps/imps/consistent-disk';
@@ -25,7 +26,6 @@ import {
   buildInvalidStateError,
   buildNotFoundError,
 } from '../../platform/errors/impd-errors';
-import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import type { DiskBudget } from '../../vm/storage/disk-budget';
 import { CheckpointIdTakenError } from '../../vm/storage/storage-backend';

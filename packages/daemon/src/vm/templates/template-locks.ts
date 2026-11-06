@@ -1,6 +1,6 @@
+import { getErrorMessage } from '@impz/shared';
 import type { Logger } from '@logtape/logtape';
 import { match } from 'ts-pattern';
-import { getErrorMessage } from '../../platform/process/get-error-message';
 import { createSingleFlight } from '../../platform/process/single-flight';
 import { canAdmitLock } from './can-admit-lock';
 import type { MemoryLock, MemoryLockResult } from './create-memory-lock';

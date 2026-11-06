@@ -1,7 +1,7 @@
+import { getErrorMessage } from '@impz/shared';
 import type { Imps } from '../../imps/imps/imp-service';
 import { readImpById } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
-import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 
 interface StagedImpDeps {

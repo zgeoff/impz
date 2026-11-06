@@ -9,6 +9,7 @@ import {
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { BackupRestore, BackupRun, BackupStatus, ImpState } from '@impz/api';
+import { getErrorMessage } from '@impz/shared';
 import * as z from 'zod';
 import type { TokenStore } from '../../identity/auth/token-store';
 import type { ImageService } from '../../imps/images/image-service';
@@ -22,7 +23,6 @@ import type { ImpDatabase } from '../../platform/db/open-database';
 import { ImpdError } from '../../platform/errors/impd-error';
 import { NOT_BACKED_UP_REASON } from '../../platform/errors/impd-errors';
 import { buildBackoffMs } from '../../platform/process/build-backoff-ms';
-import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { buildKeyedMutex } from '../../platform/process/keyed-mutex';
 import { writeFileDurably } from '../../platform/process/write-file-durably';

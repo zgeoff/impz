@@ -1,8 +1,8 @@
 import { statSync } from 'node:fs';
 import type { ImpEventDetail } from '@impz/api';
+import { getErrorMessage } from '@impz/shared';
 import { requireTransition } from '../../platform/db/imp-transitions';
 import type { ImpStateChange } from '../../platform/db/update-imp-state';
-import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { sendActivity } from '../../vm/agent-client/agent-requests';
 import { toSeenSessions } from '../../vm/agent-client/seen-session';

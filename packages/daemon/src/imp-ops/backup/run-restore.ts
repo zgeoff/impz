@@ -1,6 +1,7 @@
 import { rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { BackupRestore, Imp } from '@impz/api';
+import { getErrorMessage } from '@impz/shared';
 import type { TokenStore } from '../../identity/auth/token-store';
 import type { ImageService } from '../../imps/images/image-service';
 import type { Imps } from '../../imps/imps/imp-service';
@@ -13,7 +14,6 @@ import {
   buildNotBackedUpError,
   buildNotFoundError,
 } from '../../platform/errors/impd-errors';
-import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { BACKUP_TREE } from '../../vm/storage/data-layout';
 import type { buildBackupPaths } from '../../vm/storage/data-layout';

@@ -1,4 +1,5 @@
 import { MoveCommitReplySchema, movePeerContract } from '@impz/api';
+import { getErrorMessage } from '@impz/shared';
 import {
   ORPCError,
   createORPCClient,
@@ -12,7 +13,6 @@ import * as z from 'zod';
 import type { ConnectMovePeer } from '../../imp-ops/moves/move-peer';
 import { sendToPeer } from '../../imp-ops/moves/send-to-peer';
 import type { PeerDeps } from '../../imp-ops/moves/send-to-peer';
-import { getErrorMessage } from '../../platform/process/get-error-message';
 
 type MovePeerClient = ContractRouterClient<typeof movePeerContract>;
 

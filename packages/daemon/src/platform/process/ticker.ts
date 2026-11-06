@@ -1,4 +1,4 @@
-import { getErrorMessage } from './get-error-message';
+import { getErrorMessage } from '@impz/shared';
 import { getImpdLogger } from './get-impd-logger';
 
 export interface Ticker {

@@ -1,7 +1,7 @@
+import { getErrorMessage } from '@impz/shared';
 import { listImps } from '../../../platform/db/imps';
 import type { ImpDatabase } from '../../../platform/db/open-database';
 import type { Clock, StartTimer } from '../../../platform/process/clock';
-import { getErrorMessage } from '../../../platform/process/get-error-message';
 import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import { REAL_CLOCK } from '../../../platform/process/real-clock';
 import { startRealTimer } from '../../../platform/process/start-real-timer';

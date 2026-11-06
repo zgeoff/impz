@@ -1,6 +1,6 @@
 import { lookup } from 'node:dns/promises';
 import { networkInterfaces } from 'node:os';
-import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getErrorMessage } from '@impz/shared';
 import { parseIpv4 } from './addressing';
 import { findMappedIpv4, formatIpv6, parseIpv6 } from './addressing6';
 

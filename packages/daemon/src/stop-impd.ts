@@ -1,5 +1,5 @@
+import { getErrorMessage } from '@impz/shared';
 import type { Imps } from './imps/imps/imp-service';
-import { getErrorMessage } from './platform/process/get-error-message';
 import { getImpdLogger } from './platform/process/get-impd-logger';
 import type { Ticker } from './platform/process/ticker';
 import { waitWithin } from './platform/process/wait-within';

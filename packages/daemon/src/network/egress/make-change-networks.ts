@@ -1,5 +1,5 @@
+import { getErrorMessage } from '@impz/shared';
 import type { NetworkMember } from '../../platform/db/networks';
-import { getErrorMessage } from '../../platform/process/get-error-message';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import type { KeyedMutex } from '../../platform/process/keyed-mutex';
 

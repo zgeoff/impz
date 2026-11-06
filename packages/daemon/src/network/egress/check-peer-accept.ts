@@ -1,4 +1,4 @@
-import { getErrorMessage } from '../../platform/process/get-error-message';
+import { getErrorMessage } from '@impz/shared';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { isPeerAccept } from './is-peer-accept';
 

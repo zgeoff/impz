@@ -4,6 +4,7 @@ import * as z from 'zod';
 import { buildDevLayout } from '../../../scripts/lib/build-dev-layout.ts';
 import type { ContainerCLI } from '../../../scripts/lib/build-dev-layout.ts';
 import { readDevCheckout } from '../../../scripts/lib/read-dev-checkout.ts';
+import { CommandTimeoutError } from './command-timeout-error';
 import { config } from './config';
 import type { HarnessEnv } from './config';
 import { buildFirecrackerPgrepArgv, readFirecrackerPids } from './firecracker-pids';
@@ -104,7 +105,11 @@ export interface CommandResult {
 
 export async function runCommand(
   argv: readonly string[],
-  options: Readonly<{ stdin?: string; env?: Readonly<Record<string, string>> }> = {},
+  options: Readonly<{
+    stdin?: string;
+    env?: Readonly<Record<string, string>>;
+    timeoutMs?: number;
+  }> = {},
 ): Promise<CommandResult> {
   const subprocess = Bun.spawn([...argv], {
     stdin: options.stdin === undefined ? 'ignore' : Buffer.from(options.stdin),
@@ -113,13 +118,75 @@ export async function runCommand(
     env: { ...process.env, ...options.env },
   });
 
-  const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(subprocess.stdout).text(),
-    new Response(subprocess.stderr).text(),
+  const reading = new AbortController();
+
+  const finished = readCommandResult(
+    subprocess.stdout,
+    subprocess.stderr,
     subprocess.exited,
+    reading.signal,
+  );
+
+  if (options.timeoutMs === undefined) {
+    return finished;
+  }
+
+  // The limit covers the output too: a child of the command can hold the pipes
+  // open after the command exits, and an open read keeps the process alive.
+  // Bun's own spawn timeout covers the exit only.
+  const limit = Promise.withResolvers<'timed-out'>();
+
+  const timer = setTimeout(() => {
+    subprocess.kill('SIGKILL');
+    reading.abort();
+    limit.resolve('timed-out');
+  }, options.timeoutMs);
+
+  const outcome = await Promise.race([finished, limit.promise]);
+
+  clearTimeout(timer);
+
+  if (outcome === 'timed-out') {
+    throw new CommandTimeoutError(argv, options.timeoutMs);
+  }
+
+  return outcome;
+}
+
+async function readCommandResult(
+  stdout: ReadableStream<Uint8Array>,
+  stderr: ReadableStream<Uint8Array>,
+  exited: Promise<number>,
+  signal: AbortSignal,
+): Promise<CommandResult> {
+  const [out, err, exitCode] = await Promise.all([
+    readStreamText(stdout, signal),
+    readStreamText(stderr, signal),
+    exited,
   ]);
 
-  return { exitCode, stdout, stderr };
+  return { exitCode, stdout: out, stderr: err };
+}
+
+async function readStreamText(
+  stream: ReadableStream<Uint8Array>,
+  signal: AbortSignal,
+): Promise<string> {
+  const reader = stream.getReader();
+
+  const decoder = new TextDecoder();
+
+  signal.addEventListener('abort', () => void reader.cancel(), { once: true });
+
+  const chunks: string[] = [];
+
+  for (let read = await reader.read(); !read.done; read = await reader.read()) {
+    chunks.push(decoder.decode(read.value, { stream: true }));
+  }
+
+  chunks.push(decoder.decode());
+
+  return chunks.join('');
 }
 
 export async function runChecked(argv: readonly string[]): Promise<string> {

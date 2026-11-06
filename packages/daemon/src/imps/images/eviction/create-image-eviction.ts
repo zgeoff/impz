@@ -1,4 +1,4 @@
-import { formatBytes } from '@impz/shared';
+import { formatBytes, getErrorMessage } from '@impz/shared';
 import {
   listImageRemovals,
   listImageUses,
@@ -9,7 +9,6 @@ import {
 import type { ImageUse } from '../../../platform/db/images';
 import type { ImpDatabase } from '../../../platform/db/open-database';
 import type { Clock } from '../../../platform/process/clock';
-import { getErrorMessage } from '../../../platform/process/get-error-message';
 import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import type { StorageBackend } from '../../../vm/storage/storage-backend';
 import type { StorageGate } from '../../../vm/storage/storage-gate';

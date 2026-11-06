@@ -1,8 +1,8 @@
 import type { ApiCall } from '@impz/api';
+import { getErrorMessage } from '@impz/shared';
 import { listApiCalls, writeApiCall } from '../db/api-audit';
 import type { ImpDatabase } from '../db/open-database';
 import type { AuditActor } from '../principal/caller';
-import { getErrorMessage } from '../process/get-error-message';
 import { getImpdLogger } from '../process/get-impd-logger';
 
 const IMP_NAMESPACES: ReadonlySet<string> = new Set([
