@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createImpClient } from '@impz/client';
-import { startStubImpdRelease, startTestImpd } from '@impz/daemon/testing';
+import { startStubImpdRelease, startTestImpd } from '@impz/daemon/test-utils';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 import { startStubInfoFaultImpd } from '../test-utils/start-stub-info-fault-impd';
 

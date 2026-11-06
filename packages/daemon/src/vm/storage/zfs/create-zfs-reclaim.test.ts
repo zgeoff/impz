@@ -1,5 +1,5 @@
 import { expect, mock, test } from 'bun:test';
-import { captureImpdLogs } from '../../../../testing/platform/capture-impd-logs';
+import { captureImpdLogs } from '../../../test-utils/platform/capture-impd-logs';
 import { createZfsReclaim } from './create-zfs-reclaim';
 import { createZfsCommands } from './zfs-commands';
 

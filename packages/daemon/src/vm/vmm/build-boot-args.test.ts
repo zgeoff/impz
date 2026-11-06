@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { readAgentFixture } from '@impz/test-utils/read-agent-fixture';
+import { readAgentFixture } from '@impz/shared/test-utils/read-agent-fixture';
 import * as z from 'zod';
 import { deriveSlotAddress, parseSubnet } from '../../host-net/net/addressing';
 import { parsePrefix64 } from '../../host-net/net/addressing6';

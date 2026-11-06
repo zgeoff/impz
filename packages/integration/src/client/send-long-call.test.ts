@@ -1,6 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { createImpClient } from '@impz/client';
-import { buildStubClock, startStubSilentOrigin } from '@impz/daemon/testing';
+import { buildStubClock, startStubSilentOrigin } from '@impz/daemon/test-utils';
 import invariant from 'tiny-invariant';
 
 function setupTest() {

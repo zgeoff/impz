@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { buildStubClock } from '../../../testing/platform/build-stub-clock';
+import { buildStubClock } from '../../test-utils/platform/build-stub-clock';
 import { startTimerAt } from './start-timer-at';
 
 test('it does not fire before a time 30 days off', () => {

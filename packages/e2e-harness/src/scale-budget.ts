@@ -1,4 +1,4 @@
-import type { WaitForOptions } from '@impz/test-utils/wait-for';
+import type { WaitForOptions } from '@impz/shared/test-utils/wait-for';
 import { collectBudgetBreaches, readMaxOpenMs } from './budget-overshoot';
 import type { BudgetCheck, Overshoot, OvershootLimits, SleepSpan } from './budget-overshoot';
 import {

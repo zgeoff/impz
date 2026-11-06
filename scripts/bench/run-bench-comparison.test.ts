@@ -1,5 +1,5 @@
 import { expect, mock, test } from 'bun:test';
-import { buildStubAnswerQueue } from '@impz/test-utils/build-stub-answer-queue';
+import { buildStubAnswerQueue } from '@impz/shared/test-utils/build-stub-answer-queue';
 import { runBenchComparison } from './run-bench-comparison';
 
 test('it saves the report of an arm that failed, and fails the comparison', async () => {

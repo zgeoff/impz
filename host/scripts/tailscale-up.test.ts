@@ -2,8 +2,8 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubBin } from '@impz/test-utils/create-stub-bin';
-import { waitFor } from '@impz/test-utils/wait-for';
+import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { createStubTailscale } from '../../scripts/test-utils/create-stub-tailscale';
 
 // The output goes to files, so a wait the script leaves in the background
@@ -784,16 +784,14 @@ test('it takes a saved node down that is still not Running after the wait, when 
         IMP_TAILSCALE_HOSTNAME: 'imp',
         TAILSCALE_AUTHKEY: 'fake-key',
         IMP_TAILSCALE_TAGS: 'tag:imp-e2e',
+        IMP_TAILSCALE_WAIT_TRIES: '3',
       },
     },
   );
 
-  await waitFor(
-    () => {
-      expect(ctx.tailscale.readCalls('down')).toHaveLength(1);
-    },
-    { timeoutMs: 20_000 },
-  );
+  await waitFor(() => {
+    expect(ctx.tailscale.readCalls('down')).toHaveLength(1);
+  });
 
   expect(readFileSync(ctx.err, 'utf8')).toBe(
     'tailscale-up: the saved node is still Starting after 30 min; taking it down, since its tags are unchecked\n',

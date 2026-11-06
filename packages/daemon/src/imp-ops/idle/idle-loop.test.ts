@@ -1,15 +1,15 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { buildStubAnswerQueue } from '@impz/test-utils/build-stub-answer-queue';
-import { buildMockLeaseRecord } from '../../../testing/imps/build-mock-lease-record';
-import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
-import { seedLoopbackImp } from '../../../testing/imps/seed-loopback-imp';
-import { startStubHeaderEcho } from '../../../testing/network/start-stub-header-echo';
-import { startTestImpd } from '../../../testing/start-test-impd';
+import { buildStubAnswerQueue } from '@impz/shared/test-utils/build-stub-answer-queue';
 import { createForwardedPeers } from '../../network/proxy/forwarded-peers';
 import { startWakeProxy } from '../../network/proxy/wake-proxy';
 import { createImage } from '../../platform/db/images';
 import { readImpByName, updateImpActivity } from '../../platform/db/imps';
 import { writeLease } from '../../platform/db/leases';
+import { buildMockLeaseRecord } from '../../test-utils/imps/build-mock-lease-record';
+import { buildMockNewImage } from '../../test-utils/imps/build-mock-new-image';
+import { seedLoopbackImp } from '../../test-utils/imps/seed-loopback-imp';
+import { startStubHeaderEcho } from '../../test-utils/network/start-stub-header-echo';
+import { startTestImpd } from '../../test-utils/start-test-impd';
 import { buildImagePaths } from '../../vm/storage/data-layout';
 import { createIdleLoop } from './idle-loop';
 

@@ -2,23 +2,23 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { waitFor } from '@impz/test-utils/wait-for';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import invariant from 'tiny-invariant';
-import { buildMockNewImage } from '../../../../testing/imps/build-mock-new-image';
-import {
-  STUB_BUILDER_CONTAINER,
-  buildStubImageBuilder,
-} from '../../../../testing/imps/build-stub-image-builder';
-import { createBuilderImage } from '../../../../testing/imps/create-builder-image';
-import { makeStubEngineAnswer } from '../../../../testing/imps/make-stub-engine-answer';
-import { buildStubClock } from '../../../../testing/platform/build-stub-clock';
-import { captureImpdLogs } from '../../../../testing/platform/capture-impd-logs';
-import { startTestImpd } from '../../../../testing/start-test-impd';
-import { buildStubGuest } from '../../../../testing/vm/build-stub-guest';
-import { makeStubCommandAnswer } from '../../../../testing/vm/make-stub-command-answer';
 import { createImage } from '../../../platform/db/images';
 import { listImps, readImpByName } from '../../../platform/db/imps';
 import { startRealTimer } from '../../../platform/process/start-real-timer';
+import { buildMockNewImage } from '../../../test-utils/imps/build-mock-new-image';
+import {
+  STUB_BUILDER_CONTAINER,
+  buildStubImageBuilder,
+} from '../../../test-utils/imps/build-stub-image-builder';
+import { createBuilderImage } from '../../../test-utils/imps/create-builder-image';
+import { makeStubEngineAnswer } from '../../../test-utils/imps/make-stub-engine-answer';
+import { buildStubClock } from '../../../test-utils/platform/build-stub-clock';
+import { captureImpdLogs } from '../../../test-utils/platform/capture-impd-logs';
+import { startTestImpd } from '../../../test-utils/start-test-impd';
+import { buildStubGuest } from '../../../test-utils/vm/build-stub-guest';
+import { makeStubCommandAnswer } from '../../../test-utils/vm/make-stub-command-answer';
 import { countTreeBytes } from '../../../vm/storage/count-tree-bytes';
 import { buildImagePaths } from '../../../vm/storage/data-layout';
 import { writeGuestTree } from '../build/guest-build';

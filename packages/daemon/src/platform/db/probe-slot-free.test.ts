@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
-import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
-import { buildMockNewImp } from '../../../testing/imps/build-mock-new-imp';
-import { createTestDatabase } from '../../../testing/platform/create-test-database';
+import { buildMockNewImage } from '../../test-utils/imps/build-mock-new-image';
+import { buildMockNewImp } from '../../test-utils/imps/build-mock-new-imp';
+import { createTestDatabase } from '../../test-utils/platform/create-test-database';
 import { createImage } from './images';
 import { createImp } from './imps';
 import { probeSlotFree } from './probe-slot-free';

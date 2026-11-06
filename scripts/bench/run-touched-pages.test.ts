@@ -3,7 +3,7 @@ import { buildMockImp } from '@impz/api/test-utils/build-mock-imp';
 import { buildMockSystemInfo } from '@impz/api/test-utils/build-mock-system-info';
 import { ORPCError } from '@impz/client';
 import type { CommandResult } from '@impz/e2e-harness/instance';
-import { buildStubAnswerQueue } from '@impz/test-utils/build-stub-answer-queue';
+import { buildStubAnswerQueue } from '@impz/shared/test-utils/build-stub-answer-queue';
 import * as z from 'zod';
 import { runTouchedPages } from './run-touched-pages';
 

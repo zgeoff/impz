@@ -1,7 +1,7 @@
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { buildPebbleNames, readPebbleEndpoints, startPebbleStack } from '@impz/daemon/testing';
-import type { PebbleNames } from '@impz/daemon/testing';
+import { buildPebbleNames, readPebbleEndpoints, startPebbleStack } from '@impz/daemon/test-utils';
+import type { PebbleNames } from '@impz/daemon/test-utils';
 import { REPO_ROOT, instance, runCommand } from './instance';
 
 export const PEBBLE_DOMAIN = 'imp.test';

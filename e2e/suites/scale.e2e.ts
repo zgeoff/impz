@@ -1,5 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { ENFORCE_INTERVAL_MS, loadConfig } from '@impz/daemon/testing';
+import { ENFORCE_INTERVAL_MS, loadConfig } from '@impz/daemon/test-utils';
 import { collectOvershoots } from '@impz/e2e-harness/budget-overshoot';
 import { config } from '@impz/e2e-harness/config';
 import { resolveImageName } from '@impz/e2e-harness/fixtures';

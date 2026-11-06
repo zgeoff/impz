@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { createStubFailingDockerCommand } from '@impz/test-utils/create-stub-failing-docker-command';
+import { createStubFailingDockerCommand } from '@impz/shared/test-utils/create-stub-failing-docker-command';
 import { $ } from 'bun';
 import invariant from 'tiny-invariant';
 

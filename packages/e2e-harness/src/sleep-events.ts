@@ -1,4 +1,4 @@
-import { ENFORCE_TRIGGER } from '@impz/daemon/testing';
+import { ENFORCE_TRIGGER } from '@impz/daemon/test-utils';
 import { readLines } from '@impz/shared';
 import * as z from 'zod';
 import type { SleepSpan } from './budget-overshoot';

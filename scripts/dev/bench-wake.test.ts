@@ -3,9 +3,9 @@ import { readFileSync } from 'node:fs';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { startTestImpd } from '@impz/daemon/testing';
-import { createStubBin } from '@impz/test-utils/create-stub-bin';
-import { waitFor } from '@impz/test-utils/wait-for';
+import { startTestImpd } from '@impz/daemon/test-utils';
+import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { $ } from 'bun';
 
 async function setupTest() {

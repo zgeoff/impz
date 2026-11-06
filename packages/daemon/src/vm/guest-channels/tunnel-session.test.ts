@@ -6,12 +6,12 @@ import {
   TUNNEL_MAX_FRAME_BYTES,
   TUNNEL_WINDOW_BYTES,
 } from '@impz/api';
-import { waitFor } from '@impz/test-utils/wait-for';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import invariant from 'tiny-invariant';
-import { buildStubTunnelPeer } from '../../../testing/imps/build-stub-tunnel-peer';
-import { buildStubDialStream } from '../../../testing/vm/build-stub-dial-stream';
-import { buildStubGuestListener } from '../../../testing/vm/build-stub-guest-listener';
 import { ImpdError } from '../../platform/errors/impd-error';
+import { buildStubTunnelPeer } from '../../test-utils/imps/build-stub-tunnel-peer';
+import { buildStubDialStream } from '../../test-utils/vm/build-stub-dial-stream';
+import { buildStubGuestListener } from '../../test-utils/vm/build-stub-guest-listener';
 import { AgentError } from '../agent-client/agent-connection';
 import type { DialStream } from '../agent-client/dial-stream';
 import type { GuestListener } from '../agent-client/listener-stream';

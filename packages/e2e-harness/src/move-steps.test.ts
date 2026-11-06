@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { faker } from '@faker-js/faker';
 import { createImpClient } from '@impz/client';
-import { createUbuntuImage, startTestImpd } from '@impz/daemon/testing';
-import { createStubBin } from '@impz/test-utils/create-stub-bin';
-import { updateEnv } from '@impz/test-utils/update-env';
+import { createUbuntuImage, startTestImpd } from '@impz/daemon/test-utils';
+import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
+import { updateEnv } from '@impz/shared/test-utils/update-env';
 import { createInstance } from './instance';
 import {
   buildUpstreamsPath,

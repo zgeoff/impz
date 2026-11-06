@@ -1,6 +1,6 @@
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { formatShellWord } from '@impz/test-utils/format-shell-word';
+import { formatShellWord } from '@impz/shared/test-utils/format-shell-word';
 
 // A tree's pack script writes its tarball under build/npm/ of the directory it runs in, and prints
 // the tarball's absolute path as its only output.

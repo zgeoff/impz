@@ -12,21 +12,21 @@ import {
   encodeJsonFrame,
   encodeMessageFrame,
 } from '@impz/agent-protocol';
-import { waitFor } from '@impz/test-utils/wait-for';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import invariant from 'tiny-invariant';
-import { buildMockLeaseRecord } from '../../../testing/imps/build-mock-lease-record';
-import { waitForOutcome } from '../../../testing/imps/wait-for-outcome';
-import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
-import { runSql } from '../../../testing/platform/run-sql';
-import { startTestImpd } from '../../../testing/start-test-impd';
-import type { TestImpdOptions } from '../../../testing/start-test-impd';
-import { buildStubMounts } from '../../../testing/vm/build-stub-mounts';
-import { buildStubUidProcesses } from '../../../testing/vm/build-stub-uid-processes';
-import { startStubAgent } from '../../../testing/vm/start-stub-agent';
-import { startStubInnerAgent } from '../../../testing/vm/start-stub-inner-agent';
-import { startStubSessionAgent } from '../../../testing/vm/start-stub-session-agent';
 import { readImpByName, updateImpActivity } from '../../platform/db/imps';
 import { writeLease } from '../../platform/db/leases';
+import { buildMockLeaseRecord } from '../../test-utils/imps/build-mock-lease-record';
+import { waitForOutcome } from '../../test-utils/imps/wait-for-outcome';
+import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
+import { runSql } from '../../test-utils/platform/run-sql';
+import { startTestImpd } from '../../test-utils/start-test-impd';
+import type { TestImpdOptions } from '../../test-utils/start-test-impd';
+import { buildStubMounts } from '../../test-utils/vm/build-stub-mounts';
+import { buildStubUidProcesses } from '../../test-utils/vm/build-stub-uid-processes';
+import { startStubAgent } from '../../test-utils/vm/start-stub-agent';
+import { startStubInnerAgent } from '../../test-utils/vm/start-stub-inner-agent';
+import { startStubSessionAgent } from '../../test-utils/vm/start-stub-session-agent';
 import { readVmIdentity, writeVmIdentity } from '../../vm/sleep/vm-identity';
 import { buildImpPaths } from '../../vm/storage/data-layout';
 import { createJails } from '../../vm/vmm/jail';

@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readText } from '@impz/daemon/read-text';
 import { stopSuiteGroup } from '@impz/e2e-harness/run-suite';
-import { createStubBin } from '@impz/test-utils/create-stub-bin';
-import { waitFor } from '@impz/test-utils/wait-for';
+import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { $ } from 'bun';
 
 function setupTest() {

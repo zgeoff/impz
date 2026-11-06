@@ -16,7 +16,6 @@
         "@impz/e2e-harness": "workspace:*",
         "@impz/mcp": "workspace:*",
         "@impz/shared": "workspace:*",
-        "@impz/test-utils": "workspace:*",
         "@maschwenk/tsrslint": "catalog:",
         "@modelcontextprotocol/client": "catalog:",
         "@stylistic/eslint-plugin": "catalog:",
@@ -50,7 +49,7 @@
       },
       "devDependencies": {
         "@impz/api": "workspace:*",
-        "@impz/test-utils": "workspace:*",
+        "@impz/shared": "workspace:*",
         "tiny-invariant": "catalog:",
       },
     },
@@ -87,7 +86,6 @@
         "@faker-js/faker": "catalog:",
         "@impz/agent-protocol": "workspace:*",
         "@impz/daemon": "workspace:*",
-        "@impz/test-utils": "workspace:*",
         "msw": "catalog:",
         "tiny-invariant": "catalog:",
       },
@@ -105,7 +103,6 @@
       "devDependencies": {
         "@impz/api": "workspace:*",
         "@impz/shared": "workspace:*",
-        "@impz/test-utils": "workspace:*",
         "msw": "catalog:",
         "tiny-invariant": "catalog:",
         "tsdown": "catalog:",
@@ -160,7 +157,6 @@
       },
       "devDependencies": {
         "@faker-js/faker": "catalog:",
-        "@impz/test-utils": "workspace:*",
         "@modelcontextprotocol/client": "catalog:",
         "@msw/data": "catalog:",
         "@types/dns-packet": "catalog:",
@@ -192,7 +188,6 @@
         "@impz/api": "workspace:*",
         "@impz/daemon": "workspace:*",
         "@impz/shared": "workspace:*",
-        "@impz/test-utils": "workspace:*",
         "@playwright/test": "catalog:",
         "@testing-library/react": "catalog:",
         "@testing-library/user-event": "catalog:",
@@ -215,7 +210,6 @@
         "@impz/client": "workspace:*",
         "@impz/daemon": "workspace:*",
         "@impz/shared": "workspace:*",
-        "@impz/test-utils": "workspace:*",
         "dns-packet": "catalog:",
         "ssh2": "catalog:",
         "tiny-invariant": "catalog:",
@@ -238,7 +232,7 @@
         "@impz/daemon": "workspace:*",
         "@impz/local-tar": "workspace:*",
         "@impz/mcp": "workspace:*",
-        "@impz/test-utils": "workspace:*",
+        "@impz/shared": "workspace:*",
         "@modelcontextprotocol/client": "catalog:",
         "@modelcontextprotocol/server": "catalog:",
         "@orpc/client": "catalog:",
@@ -257,7 +251,7 @@
         "zod": "catalog:",
       },
       "devDependencies": {
-        "@impz/test-utils": "workspace:*",
+        "@impz/shared": "workspace:*",
       },
     },
     "packages/mcp": {
@@ -277,11 +271,7 @@
     "packages/shared": {
       "name": "@impz/shared",
       "version": "0.0.0",
-    },
-    "packages/test-utils": {
-      "name": "@impz/test-utils",
-      "version": "0.0.0",
-      "dependencies": {
+      "devDependencies": {
         "@bufbuild/protobuf": "catalog:",
         "@faker-js/faker": "catalog:",
         "@mswjs/interceptors": "catalog:",
@@ -302,7 +292,7 @@
       "devDependencies": {
         "@impz/agent-protocol": "workspace:*",
         "@impz/daemon": "workspace:*",
-        "@impz/test-utils": "workspace:*",
+        "@impz/shared": "workspace:*",
       },
     },
   },
@@ -557,8 +547,6 @@
     "@impz/mcp": ["@impz/mcp@workspace:packages/mcp"],
 
     "@impz/shared": ["@impz/shared@workspace:packages/shared"],
-
-    "@impz/test-utils": ["@impz/test-utils@workspace:packages/test-utils"],
 
     "@impz/testing": ["@impz/testing@workspace:packages/testing"],
 

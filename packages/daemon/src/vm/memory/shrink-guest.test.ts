@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
-import { buildStubClock } from '../../../testing/platform/build-stub-clock';
-import { buildStubElasticGuest } from '../../../testing/vm/build-stub-elastic-guest';
-import { buildStubGuestMemory } from '../../../testing/vm/build-stub-guest-memory';
+import { buildStubClock } from '../../test-utils/platform/build-stub-clock';
+import { buildStubElasticGuest } from '../../test-utils/vm/build-stub-elastic-guest';
+import { buildStubGuestMemory } from '../../test-utils/vm/build-stub-guest-memory';
 import { buildImpPaths } from '../storage/data-layout';
 import { getShrinkTargetMib, shrinkGuest } from './shrink-guest';
 

@@ -1,6 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { buildMockTokenSshKeyRecord } from '@impz/daemon/testing';
-import { waitFor } from '@impz/test-utils/wait-for';
+import { buildMockTokenSshKeyRecord } from '@impz/daemon/test-utils';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import invariant from 'tiny-invariant';

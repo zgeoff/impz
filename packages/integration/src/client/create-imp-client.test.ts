@@ -9,10 +9,10 @@ import {
   createFilesTar,
   startBuilderImpd,
   startTestImpd,
-} from '@impz/daemon/testing';
-import { claimFreePorts } from '@impz/test-utils/claim-free-ports';
-import { server } from '@impz/test-utils/mock-server';
-import { waitFor } from '@impz/test-utils/wait-for';
+} from '@impz/daemon/test-utils';
+import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
+import { server } from '@impz/shared/test-utils/mock-server';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { ORPCError } from '@orpc/client';
 import { HttpResponse, http } from 'msw';
 

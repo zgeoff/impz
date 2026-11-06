@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { buildMockBrokerRule } from '@impz/api/test-utils/build-mock-broker-rule';
 import invariant from 'tiny-invariant';
-import { startTestImpd } from '../../../testing/start-test-impd';
+import { startTestImpd } from '../../test-utils/start-test-impd';
 import { readImpByName } from './imps';
 import { listGrantNames, listGrantedRules } from './secrets';
 

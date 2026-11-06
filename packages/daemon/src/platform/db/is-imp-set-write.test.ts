@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
-import { buildMockCheckpointRecord } from '../../../testing/imp-ops/build-mock-checkpoint-record';
-import { buildMockImpRecord } from '../../../testing/imps/build-mock-imp-record';
+import { buildMockCheckpointRecord } from '../../test-utils/imp-ops/build-mock-checkpoint-record';
+import { buildMockImpRecord } from '../../test-utils/imps/build-mock-imp-record';
 import { isImpSetWrite } from './is-imp-set-write';
 
 test('it resyncs the imp set for a create', () => {

@@ -1,6 +1,6 @@
 import { expect, mock, test } from 'bun:test';
 import invariant from 'tiny-invariant';
-import { buildStubHostRoutes } from '../../../testing/host-net/build-stub-host-routes';
+import { buildStubHostRoutes } from '../../test-utils/host-net/build-stub-host-routes';
 import { parseSubnet } from './addressing';
 import { parsePrefix64 } from './addressing6';
 import { NO_HOST_ROUTES, createReachPolicy } from './reach-policy';

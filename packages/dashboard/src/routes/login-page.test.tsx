@@ -1,5 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { server } from '@impz/test-utils/mock-server';
+import { server } from '@impz/shared/test-utils/mock-server';
 import userEvent from '@testing-library/user-event';
 import { HttpResponse, http } from 'msw';
 import { IMPD_ORIGIN } from '../test-utils/impd-origin';

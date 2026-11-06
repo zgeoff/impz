@@ -1,8 +1,8 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
-import { buildImpPaths } from '@impz/daemon/testing';
-import { server } from '@impz/test-utils/mock-server';
-import { waitFor } from '@impz/test-utils/wait-for';
+import { buildImpPaths } from '@impz/daemon/test-utils';
+import { server } from '@impz/shared/test-utils/mock-server';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderApp } from '../test-utils/render-app';

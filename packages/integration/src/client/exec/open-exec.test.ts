@@ -17,9 +17,9 @@ import {
   buildStubExecAgent,
   startStubAgent,
   startTestImpd,
-} from '@impz/daemon/testing';
-import { server } from '@impz/test-utils/mock-server';
-import { waitFor } from '@impz/test-utils/wait-for';
+} from '@impz/daemon/test-utils';
+import { server } from '@impz/shared/test-utils/mock-server';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { ORPCError } from '@orpc/client';
 import { http } from 'msw';
 

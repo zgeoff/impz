@@ -1,6 +1,6 @@
 import { expect, mock, test } from 'bun:test';
 import { Procedure, call } from '@orpc/server';
-import { buildMockCaller } from '../../testing/identity/build-mock-caller';
+import { buildMockCaller } from '../test-utils/identity/build-mock-caller';
 import { createImplementer } from './create-implementer';
 
 function setupTest() {

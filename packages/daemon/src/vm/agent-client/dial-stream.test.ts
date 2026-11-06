@@ -11,8 +11,8 @@ import {
   encodeMessageFrame,
 } from '@impz/agent-protocol';
 import invariant from 'tiny-invariant';
-import { startStubAgent } from '../../../testing/vm/start-stub-agent';
-import { startStubDialAgent } from '../../../testing/vm/start-stub-dial-agent';
+import { startStubAgent } from '../../test-utils/vm/start-stub-agent';
+import { startStubDialAgent } from '../../test-utils/vm/start-stub-dial-agent';
 import { openDialStream } from './dial-stream';
 
 function setupTest() {

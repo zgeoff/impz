@@ -3,12 +3,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildStubAnswerQueue } from '@impz/test-utils/build-stub-answer-queue';
-import { buildMockNewImage } from '../../../../testing/imps/build-mock-new-image';
-import { buildMockNewImp } from '../../../../testing/imps/build-mock-new-imp';
-import { captureImpdLogs } from '../../../../testing/platform/capture-impd-logs';
-import { createTestDatabase } from '../../../../testing/platform/create-test-database';
-import { buildStubFiemap } from '../../../../testing/vm/build-stub-fiemap';
+import { buildStubAnswerQueue } from '@impz/shared/test-utils/build-stub-answer-queue';
 import { loadConfig } from '../../../config';
 import {
   createImage,
@@ -21,6 +16,11 @@ import { REAL_CLOCK } from '../../../platform/process/real-clock';
 import { runCommand } from '../../../platform/process/run-command';
 import { runStreamed } from '../../../platform/process/run-streamed';
 import { startRealTimer } from '../../../platform/process/start-real-timer';
+import { buildMockNewImage } from '../../../test-utils/imps/build-mock-new-image';
+import { buildMockNewImp } from '../../../test-utils/imps/build-mock-new-imp';
+import { captureImpdLogs } from '../../../test-utils/platform/capture-impd-logs';
+import { createTestDatabase } from '../../../test-utils/platform/create-test-database';
+import { buildStubFiemap } from '../../../test-utils/vm/build-stub-fiemap';
 import { countTreeBytes } from '../../../vm/storage/count-tree-bytes';
 import { buildImagePaths } from '../../../vm/storage/data-layout';
 import { createDiskBudget } from '../../../vm/storage/disk-budget';

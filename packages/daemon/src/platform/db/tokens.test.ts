@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
-import { buildMockTokenRecord } from '../../../testing/identity/build-mock-token-record';
-import { createTestDatabase } from '../../../testing/platform/create-test-database';
+import { buildMockTokenRecord } from '../../test-utils/identity/build-mock-token-record';
+import { createTestDatabase } from '../../test-utils/platform/create-test-database';
 import { removeTokenRecord, writeTokenRecord } from './tokens';
 
 async function setupTest() {

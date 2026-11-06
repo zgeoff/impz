@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { createImpClient } from '@impz/client';
-import { readInBackground } from '@impz/daemon/testing';
-import { waitFor } from '@impz/test-utils/wait-for';
+import { readInBackground } from '@impz/daemon/test-utils';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { IMPD_ORIGIN } from './impd-origin';
 import { startDashboardImpd } from './start-dashboard-impd';
 

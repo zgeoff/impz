@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { waitFor } from '@impz/test-utils/wait-for';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { createStubImpd } from './create-stub-impd';
 
 function setupTest() {

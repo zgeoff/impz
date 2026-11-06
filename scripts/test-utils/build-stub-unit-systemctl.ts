@@ -1,4 +1,4 @@
-import { formatShellWord } from '@impz/test-utils/format-shell-word';
+import { formatShellWord } from '@impz/shared/test-utils/format-shell-word';
 
 // With envFile, a start or restart runs the unit's ExecStart as systemd would, with the unit's
 // Environment= lines and then envFile's, so a test reads the container's argv from the calls.

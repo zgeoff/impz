@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { waitFor } from '@impz/test-utils/wait-for';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { BootstrapTestError } from './bootstrap-test-error';
 import { ARCHIVE_DIR } from './build-bootstrap-argv';
 import { DISTROS } from './distros';

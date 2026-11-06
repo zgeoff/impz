@@ -168,7 +168,6 @@
     "@impz/e2e-harness": "workspace:*",
     "@impz/mcp": "workspace:*",
     "@impz/shared": "workspace:*",
-    "@impz/test-utils": "workspace:*",
     "@maschwenk/tsrslint": "catalog:",
     "@modelcontextprotocol/client": "catalog:",
     "@stylistic/eslint-plugin": "catalog:",

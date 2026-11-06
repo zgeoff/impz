@@ -6,17 +6,10 @@ import { join } from 'node:path';
 import { connect as connectTls } from 'node:tls';
 import { buildMockBrokerRule } from '@impz/api/test-utils/build-mock-broker-rule';
 import { buildMockOAuthConfig } from '@impz/api/test-utils/build-mock-oauth-config';
-import { server } from '@impz/test-utils/mock-server';
-import { waitFor } from '@impz/test-utils/wait-for';
+import { server } from '@impz/shared/test-utils/mock-server';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { HttpResponse, http } from 'msw';
 import invariant from 'tiny-invariant';
-import { buildStubHostRoutes } from '../../../testing/host-net/build-stub-host-routes';
-import { createStubBrokerTokenEndpoint } from '../../../testing/network/create-stub-broker-token-endpoint';
-import { startStubBrokerGuestSocket } from '../../../testing/network/start-stub-broker-guest-socket';
-import { startStubBrokerReplyTarget } from '../../../testing/network/start-stub-broker-reply-target';
-import { buildMockNewAuditEntry } from '../../../testing/platform/build-mock-new-audit-entry';
-import { runSql } from '../../../testing/platform/run-sql';
-import { startTestImpd } from '../../../testing/start-test-impd';
 import { parsePrefix64 } from '../../host-net/net/addressing6';
 import { createReachPolicy } from '../../host-net/net/reach-policy';
 import {
@@ -27,6 +20,13 @@ import {
 } from '../../platform/db/broker-audit';
 import { readImpByName, updateImpMove } from '../../platform/db/imps';
 import { readSecret } from '../../platform/db/secrets';
+import { buildStubHostRoutes } from '../../test-utils/host-net/build-stub-host-routes';
+import { createStubBrokerTokenEndpoint } from '../../test-utils/network/create-stub-broker-token-endpoint';
+import { startStubBrokerGuestSocket } from '../../test-utils/network/start-stub-broker-guest-socket';
+import { startStubBrokerReplyTarget } from '../../test-utils/network/start-stub-broker-reply-target';
+import { buildMockNewAuditEntry } from '../../test-utils/platform/build-mock-new-audit-entry';
+import { runSql } from '../../test-utils/platform/run-sql';
+import { startTestImpd } from '../../test-utils/start-test-impd';
 import { createBroker } from './broker-service';
 import { resolvePublicUpstream } from './tls/resolve-public-upstream';
 

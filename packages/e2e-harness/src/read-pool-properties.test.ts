@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readText } from '@impz/daemon/read-text';
-import { formatRunPrefix, readRunOwner } from '@impz/daemon/testing';
+import { formatRunPrefix, readRunOwner } from '@impz/daemon/test-utils';
 import invariant from 'tiny-invariant';
 import { REPO_ROOT } from './instance';
 import { readPoolProperties } from './read-pool-properties';

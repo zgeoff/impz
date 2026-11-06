@@ -1,4 +1,4 @@
-import { VmIdentitySchema, buildTemplateKey } from '@impz/daemon/testing';
+import { VmIdentitySchema, buildTemplateKey } from '@impz/daemon/test-utils';
 import { requireImp } from './imp-cli';
 import { runInContainer } from './instance';
 

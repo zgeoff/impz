@@ -2,7 +2,7 @@ import { lookup } from 'node:dns/promises';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ImpClient } from '@impz/client';
-import { createTestCertificates } from '@impz/test-utils/create-test-certificates';
+import { createTestCertificates } from '@impz/shared/test-utils/create-test-certificates';
 import * as z from 'zod';
 import { config } from './config';
 import { runImp } from './imp-cli';

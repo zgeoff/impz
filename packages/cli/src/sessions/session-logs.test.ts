@@ -11,7 +11,7 @@ import {
   createImage,
   startStubImpdRelease,
   startTestImpd,
-} from '@impz/daemon/testing';
+} from '@impz/daemon/test-utils';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 
 async function setupTest() {

@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test';
-import { waitFor } from '@impz/test-utils/wait-for';
-import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
-import { createTestDatabase } from '../../../testing/platform/create-test-database';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { readErrorCode } from '../../surface/read-error-code';
+import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
+import { createTestDatabase } from '../../test-utils/platform/create-test-database';
 import { listApiCalls } from '../db/api-audit';
 import { ImpdError } from '../errors/impd-error';
 import { createApiAudit, findImpName, withAuditedOpen } from './api-audit';

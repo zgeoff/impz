@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { waitFor } from '@impz/test-utils/wait-for';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { applyBootstrap } from './apply-bootstrap';
 import { BootstrapTestError } from './bootstrap-test-error';

@@ -3,23 +3,10 @@ import { existsSync, readFileSync, readdirSync, symlinkSync } from 'node:fs';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildStubAnswerQueue } from '@impz/test-utils/build-stub-answer-queue';
-import { updateEnv } from '@impz/test-utils/update-env';
-import { waitFor } from '@impz/test-utils/wait-for';
+import { buildStubAnswerQueue } from '@impz/shared/test-utils/build-stub-answer-queue';
+import { updateEnv } from '@impz/shared/test-utils/update-env';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import invariant from 'tiny-invariant';
-import { buildMockNewImage } from '../../../../testing/imps/build-mock-new-image';
-import { buildMockNewImp } from '../../../../testing/imps/build-mock-new-imp';
-import {
-  STUB_BUILDER_CONTAINER,
-  buildStubImageBuilder,
-} from '../../../../testing/imps/build-stub-image-builder';
-import { createFilesTar } from '../../../../testing/imps/create-files-tar';
-import { createStubDockerCli } from '../../../../testing/imps/create-stub-docker-cli';
-import { createStubImageMkfs } from '../../../../testing/imps/create-stub-image-mkfs';
-import { spawnSparseFilesTar } from '../../../../testing/imps/spawn-sparse-files-tar';
-import { buildQueryGate } from '../../../../testing/platform/build-query-gate';
-import { captureImpdLogs } from '../../../../testing/platform/capture-impd-logs';
-import { buildStubStoragePressure } from '../../../../testing/vm/build-stub-storage-pressure';
 import { loadConfig } from '../../../config';
 import {
   createImage,
@@ -32,6 +19,19 @@ import { openDatabase } from '../../../platform/db/open-database';
 import { runCommand } from '../../../platform/process/run-command';
 import { runStreamed } from '../../../platform/process/run-streamed';
 import { startRealTimer } from '../../../platform/process/start-real-timer';
+import { buildMockNewImage } from '../../../test-utils/imps/build-mock-new-image';
+import { buildMockNewImp } from '../../../test-utils/imps/build-mock-new-imp';
+import {
+  STUB_BUILDER_CONTAINER,
+  buildStubImageBuilder,
+} from '../../../test-utils/imps/build-stub-image-builder';
+import { createFilesTar } from '../../../test-utils/imps/create-files-tar';
+import { createStubDockerCli } from '../../../test-utils/imps/create-stub-docker-cli';
+import { createStubImageMkfs } from '../../../test-utils/imps/create-stub-image-mkfs';
+import { spawnSparseFilesTar } from '../../../test-utils/imps/spawn-sparse-files-tar';
+import { buildQueryGate } from '../../../test-utils/platform/build-query-gate';
+import { captureImpdLogs } from '../../../test-utils/platform/capture-impd-logs';
+import { buildStubStoragePressure } from '../../../test-utils/vm/build-stub-storage-pressure';
 import { countTreeBytes } from '../../../vm/storage/count-tree-bytes';
 import { buildImagePaths } from '../../../vm/storage/data-layout';
 import { createDiskBudget } from '../../../vm/storage/disk-budget';

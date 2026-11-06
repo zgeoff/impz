@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { faker } from '@faker-js/faker';
-import { buildStubImageBuilder, createFilesTar, startBuilderImpd } from '@impz/daemon/testing';
+import { buildStubImageBuilder, createFilesTar, startBuilderImpd } from '@impz/daemon/test-utils';
 import { runRawBuild, writeBuildContext } from './build-context';
 
 async function setupTest() {

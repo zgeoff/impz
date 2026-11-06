@@ -1,7 +1,7 @@
 import { createImpClient } from '@impz/client';
-import { TEST_TOKEN, startTestImpd } from '@impz/daemon/testing';
-import type { TestImpd, TestImpdOptions } from '@impz/daemon/testing';
-import { server } from '@impz/test-utils/mock-server';
+import { TEST_TOKEN, startTestImpd } from '@impz/daemon/test-utils';
+import type { TestImpd, TestImpdOptions } from '@impz/daemon/test-utils';
+import { server } from '@impz/shared/test-utils/mock-server';
 import { http } from 'msw';
 import { IMPD_ORIGIN } from './impd-origin';
 import { teeFirstChunk } from './tee-first-chunk';

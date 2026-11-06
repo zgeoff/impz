@@ -1,7 +1,7 @@
 import { expect, mock, test } from 'bun:test';
 import invariant from 'tiny-invariant';
-import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
+import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
 import type { MemoryLockResult } from './create-memory-lock';
 import { createTemplateLocks } from './template-locks';
 import type { TemplateLockDeps } from './template-locks';

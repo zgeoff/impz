@@ -13,7 +13,6 @@
     "@impz/client": "workspace:*",
     "@impz/daemon": "workspace:*",
     "@impz/shared": "workspace:*",
-    "@impz/test-utils": "workspace:*",
     "dns-packet": "catalog:",
     "ssh2": "catalog:",
     "tiny-invariant": "catalog:",

@@ -1,19 +1,19 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
 import { createConnection } from 'node:net';
-import { readImpEnv } from '@impz/test-utils/read-imp-env';
-import { updateEnv } from '@impz/test-utils/update-env';
-import { waitFor } from '@impz/test-utils/wait-for';
+import { readImpEnv } from '@impz/shared/test-utils/read-imp-env';
+import { updateEnv } from '@impz/shared/test-utils/update-env';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import invariant from 'tiny-invariant';
-import { buildStubHostRoutes } from '../../../testing/host-net/build-stub-host-routes';
-import { buildStubNft } from '../../../testing/network/build-stub-nft';
-import { startStubEchoServer } from '../../../testing/network/start-stub-echo-server';
-import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
-import { startTestImpd } from '../../../testing/start-test-impd';
 import { parsePrefix64 } from '../../host-net/net/addressing6';
 import { resolveIpv6Plan } from '../../host-net/net/ipv6-plan';
 import type { ImpdDeps } from '../../impd-deps';
 import { readImpByName, updateImpMove } from '../../platform/db/imps';
 import { removeMember, removeNetwork, writeNetwork } from '../../platform/db/networks';
+import { buildStubHostRoutes } from '../../test-utils/host-net/build-stub-host-routes';
+import { buildStubNft } from '../../test-utils/network/build-stub-nft';
+import { startStubEchoServer } from '../../test-utils/network/start-stub-echo-server';
+import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
+import { startTestImpd } from '../../test-utils/start-test-impd';
 import type { EgressDeps } from './egress-service';
 
 interface SetupOptions {

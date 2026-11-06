@@ -1,4 +1,4 @@
-import { formatShellWord } from '@impz/test-utils/format-shell-word';
+import { formatShellWord } from '@impz/shared/test-utils/format-shell-word';
 
 type StubRegistryAnswer =
   | { readonly kind: 'missing' }

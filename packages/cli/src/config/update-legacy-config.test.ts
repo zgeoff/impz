@@ -13,8 +13,8 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { probeUpdateReadOnly } from '@impz/test-utils/probe-update-read-only';
-import { updateReadOnly } from '@impz/test-utils/update-read-only';
+import { probeUpdateReadOnly } from '@impz/shared/test-utils/probe-update-read-only';
+import { updateReadOnly } from '@impz/shared/test-utils/update-read-only';
 import { updateLegacyConfig } from './update-legacy-config';
 
 function setupTest() {

@@ -1,16 +1,16 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
 import { createConnection } from 'node:net';
 import type { EgressMode } from '@impz/api';
-import { claimFreePorts } from '@impz/test-utils/claim-free-ports';
-import { startStubBrokerGuestSocket } from '../../../../testing/network/start-stub-broker-guest-socket';
-import { startStubBrokerReplyTarget } from '../../../../testing/network/start-stub-broker-reply-target';
-import { captureImpdLogs } from '../../../../testing/platform/capture-impd-logs';
+import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
 import { parseSubnet } from '../../../host-net/net/addressing';
 import { buildRangeMatcher } from '../../../host-net/net/range-matcher';
 import { REFUSED_RANGES4 } from '../../../host-net/net/ranges';
 import { TunnelRefusedError, resolveTunnelTarget } from '../../../host-net/net/tunnel-target';
 import type { NewAuditEntry } from '../../../platform/db/broker-audit';
 import type { BrokerPeer } from '../../../platform/db/read-broker-peer';
+import { startStubBrokerGuestSocket } from '../../../test-utils/network/start-stub-broker-guest-socket';
+import { startStubBrokerReplyTarget } from '../../../test-utils/network/start-stub-broker-reply-target';
+import { captureImpdLogs } from '../../../test-utils/platform/capture-impd-logs';
 import { startBrokerFront } from './broker-front';
 
 function setupTest() {

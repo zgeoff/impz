@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
-import { waitFor } from '@impz/test-utils/wait-for';
-import { buildStubClock } from '../../../testing/platform/build-stub-clock';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { buildStubClock } from '../../test-utils/platform/build-stub-clock';
 import { createPartPipe, sendInParts } from './move-parts';
 
 test('#sendInParts splits the frames into bodies of at most the part size', async () => {

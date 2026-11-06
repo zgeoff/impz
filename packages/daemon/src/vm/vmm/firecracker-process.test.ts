@@ -2,10 +2,10 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { waitFor } from '@impz/test-utils/wait-for';
-import { buildStubClock } from '../../../testing/platform/build-stub-clock';
-import { startStubFirecrackerProcess } from '../../../testing/vm/start-stub-firecracker-process';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { stopPid } from '../../platform/process/proc';
+import { buildStubClock } from '../../test-utils/platform/build-stub-clock';
+import { startStubFirecrackerProcess } from '../../test-utils/vm/start-stub-firecracker-process';
 import {
   buildFirecrackerCommand,
   buildSpawnArgv,

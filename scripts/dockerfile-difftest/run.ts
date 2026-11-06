@@ -7,8 +7,8 @@ import {
   parseDockerfile,
   renderPinnedDockerfile,
   splitNameWords,
-} from '@impz/daemon/testing';
-import type { Instruction } from '@impz/daemon/testing';
+} from '@impz/daemon/test-utils';
+import type { Instruction } from '@impz/daemon/test-utils';
 import * as z from 'zod';
 
 const GoInstructionSchema = z.object({

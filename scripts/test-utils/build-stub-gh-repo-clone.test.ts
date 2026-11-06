@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'n
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createGitFreeEnv } from '@impz/e2e-harness/git-env';
-import { createStubBin } from '@impz/test-utils/create-stub-bin';
+import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
 import { $ } from 'bun';
 import { buildStubGhRepoClone } from './build-stub-gh-repo-clone';
 

@@ -26,9 +26,9 @@ import {
   createImage,
   startStubAgent,
   startTestImpd,
-} from '@impz/daemon/testing';
-import { claimFreePorts } from '@impz/test-utils/claim-free-ports';
-import { waitFor } from '@impz/test-utils/wait-for';
+} from '@impz/daemon/test-utils';
+import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { buildStubCongestedSocket } from '../test-utils/build-stub-congested-socket';
 import { buildStubTerminal } from '../test-utils/build-stub-terminal';

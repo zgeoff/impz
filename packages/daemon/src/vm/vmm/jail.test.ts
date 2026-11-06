@@ -16,10 +16,10 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import invariant from 'tiny-invariant';
-import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
-import { buildStubMounts } from '../../../testing/vm/build-stub-mounts';
-import { buildStubUidProcesses } from '../../../testing/vm/build-stub-uid-processes';
-import { writeStubUffdStats } from '../../../testing/vm/write-stub-uffd-stats';
+import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
+import { buildStubMounts } from '../../test-utils/vm/build-stub-mounts';
+import { buildStubUidProcesses } from '../../test-utils/vm/build-stub-uid-processes';
+import { writeStubUffdStats } from '../../test-utils/vm/write-stub-uffd-stats';
 import { buildImpPaths } from '../storage/data-layout';
 import {
   buildJailerCommand,

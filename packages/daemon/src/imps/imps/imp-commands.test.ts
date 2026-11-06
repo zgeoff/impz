@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { startTestImpd } from '../../../testing/start-test-impd';
 import { updateImage } from '../../platform/db/images';
 import { readImpByName } from '../../platform/db/imps';
+import { startTestImpd } from '../../test-utils/start-test-impd';
 
 function setupTest() {
   const stack = new AsyncDisposableStack();

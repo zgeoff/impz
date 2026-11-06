@@ -7,7 +7,7 @@
     "types": ["bun", "vite/client", "@zgeoff/bun-test-extended"]
   },
   // the daemon's declaration for the shell scripts it imports as text, which
-  // the tests reach through impd's testing entry
+  // the tests reach through impd's test-utils entry
   "include": [
     "src/**/*.ts",
     "src/**/*.tsx",

@@ -51,10 +51,10 @@
       "entry": [
         // a pattern ending in ! is production code for knip --production
         "src/main.ts!",
-        "testing/*/run-*.ts",
+        "src/test-utils/*/run-*.ts",
         "src/platform/db/dump-schema.ts"
       ],
-      "project": ["src/**/*.ts!", "testing/**/*.ts"],
+      "project": ["src/**/*.ts!", "!src/test-utils/**!"],
       // kysely-codegen writes every table, used or not
       "ignoreIssues": {
         "src/platform/db/schema.ts": ["types"]

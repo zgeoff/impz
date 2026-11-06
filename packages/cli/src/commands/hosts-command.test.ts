@@ -14,9 +14,9 @@ import {
   startStubExecAgent,
   startTestImpd,
   writeVmIdentity,
-} from '@impz/daemon/testing';
-import { probeUpdateReadOnly } from '@impz/test-utils/probe-update-read-only';
-import { updateReadOnly } from '@impz/test-utils/update-read-only';
+} from '@impz/daemon/test-utils';
+import { probeUpdateReadOnly } from '@impz/shared/test-utils/probe-update-read-only';
+import { updateReadOnly } from '@impz/shared/test-utils/update-read-only';
 import invariant from 'tiny-invariant';
 import { readHostConfig, resolveConfigPath, writeHostConfig } from '../config/host-store';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
