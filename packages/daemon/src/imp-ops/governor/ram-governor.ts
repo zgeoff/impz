@@ -138,10 +138,8 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
   const isPriority = (name: string | null): boolean =>
     priority !== null && name !== null && isImpAllowed(priority.patterns, name);
 
-  const buildKept = (usage: UsageTotals, name: string | null): PriorityRam | null =>
-    priority === null || isPriority(name)
-      ? null
-      : { mib: usage.keptMib, patterns: priority.patterns };
+  const buildKept = (mib: number): PriorityRam | null =>
+    priority === null || mib === 0 ? null : { mib, patterns: priority.patterns };
 
   let stuckOver = false;
 
@@ -241,7 +239,7 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
         id,
         mib: readReservation(id),
         isPriority: reservation.isPriority,
-        isOnPool: pendingHugePages.has(id),
+        poolMib: pendingHugePages.get(id) ?? 0,
       }));
 
     const headroom = deps.readHeadroomMib?.(awake.map((imp) => imp.pid)) ?? Promise.resolve(0);
@@ -412,26 +410,22 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
 
         const bound = await readEffectiveUsage(request.id, deps.readResidentRam);
 
+        const isPriorityRequest = isPriority(request.name);
+
         if (hugePagesMib > 0) {
-          await checkHugePool(request, hugePagesMib, buildKept(bound, request.name));
+          const kept = isPriorityRequest ? null : buildKept(bound.kept.poolMib);
+
+          await checkHugePool(request, hugePagesMib, kept);
         }
 
-        if (
-          pickEffectiveShortfall(bound, budgets, request.reserveMib, buildKept(bound, request.name))
-            .missingMib <= 0
-        ) {
+        const findReserveShortfall = (usage: UsageTotals) =>
+          pickEffectiveShortfall(usage, budgets, request.reserveMib, isPriorityRequest);
+
+        if (findReserveShortfall(bound).missingMib <= 0) {
           recordAdmission(request, bound.effectiveMib);
 
           return;
         }
-
-        const findReserveShortfall = (usage: UsageTotals) =>
-          pickEffectiveShortfall(
-            usage,
-            budgets,
-            request.reserveMib,
-            buildKept(usage, request.name),
-          );
 
         const room =
           request.maySleepImps === false
@@ -441,7 +435,7 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
                 reason: `to make room for ${request.name ?? request.id}`,
                 whenShort: 'giveUp',
                 findShortfall: findReserveShortfall,
-                sparesPriority: !isPriority(request.name),
+                sparesPriority: !isPriorityRequest,
               });
 
         const diskFull = room.diskFull ? (deps.readDiskFullError?.() ?? null) : null;
@@ -455,7 +449,7 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
 
           const shortfall = findReserveShortfall(usage);
           const isOrdinary = shortfall.budget === 'ordinary';
-          const kept = buildKept(usage, request.name);
+          const kept = buildKept(shortfall.keptMib);
 
           emitAdmission(request, 'refused', shortfall.usedMib, {
             neededMib: Math.max(0, shortfall.missingMib),
@@ -493,7 +487,7 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
         const budgets = readBudgets();
 
         const findGrowShortfall = (usage: UsageTotals) =>
-          pickEffectiveShortfall(usage, budgets, request.mib, buildKept(usage, request.name));
+          pickEffectiveShortfall(usage, budgets, request.mib, isPriority(request.name));
 
         const room = await makeRoom({
           excludeId: null,

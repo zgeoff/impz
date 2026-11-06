@@ -11,8 +11,8 @@ interface LiveReservation {
   readonly mib: number;
   readonly isPriority: boolean;
 
-  // an admitted guest on 2 MiB pages, whose memory sits in the pool
-  readonly isOnPool: boolean;
+  // the pool pages an admitted guest on 2 MiB pages may take, 0 for a guest on 4 KiB pages
+  readonly poolMib: number;
 }
 
 interface UsageInput {
@@ -24,6 +24,13 @@ interface UsageInput {
   readonly priorityMib: number;
 }
 
+// the priority imps' RAM that they leave unused in each budget
+export interface KeptMib {
+  readonly ramMib: number;
+  readonly ordinaryMib: number;
+  readonly poolMib: number;
+}
+
 export interface UsageTotals {
   readonly usedMib: number;
   readonly effectiveMib: number;
@@ -31,9 +38,7 @@ export interface UsageTotals {
   // what the host and the guests hold outside the huge page pool
   readonly ordinaryUsedMib: number;
   readonly ordinaryEffectiveMib: number;
-
-  // the priority imps' RAM that they leave unused
-  readonly keptMib: number;
+  readonly kept: KeptMib;
 }
 
 export function buildUsageTotals(
@@ -46,7 +51,7 @@ export function buildUsageTotals(
   let effectiveMib = input.lockedMib + input.headroomMib;
   let ordinaryUsedMib = input.lockedMib;
   let ordinaryEffectiveMib = input.lockedMib + input.headroomMib;
-  let priorityUsedMib = 0;
+  const priority = { ramMib: 0, ordinaryMib: 0, poolMib: 0 };
 
   for (const [index, imp] of input.awake.entries()) {
     const reading = input.readings[index] ?? null;
@@ -64,14 +69,26 @@ export function buildUsageTotals(
     effectiveMib += effective;
     ordinaryUsedMib += imp.hugePagesMib > 0 ? ordinary : measured;
     ordinaryEffectiveMib += ordinary;
-    priorityUsedMib += imp.isPriority ? effective : 0;
+
+    if (imp.isPriority) {
+      priority.ramMib += effective;
+      priority.ordinaryMib += ordinary;
+      priority.poolMib += imp.hugePagesMib;
+    }
   }
 
   for (const reservation of input.reservations) {
     if (!byImp.has(reservation.id)) {
+      const ordinary = reservation.poolMib > 0 ? 0 : reservation.mib;
+
       effectiveMib += reservation.mib;
-      ordinaryEffectiveMib += reservation.isOnPool ? 0 : reservation.mib;
-      priorityUsedMib += reservation.isPriority ? reservation.mib : 0;
+      ordinaryEffectiveMib += ordinary;
+
+      if (reservation.isPriority) {
+        priority.ramMib += reservation.mib;
+        priority.ordinaryMib += ordinary;
+        priority.poolMib += reservation.poolMib;
+      }
     }
   }
 
@@ -81,6 +98,10 @@ export function buildUsageTotals(
     effectiveMib,
     ordinaryUsedMib,
     ordinaryEffectiveMib,
-    keptMib: Math.max(0, input.priorityMib - priorityUsedMib),
+    kept: {
+      ramMib: Math.max(0, input.priorityMib - priority.ramMib),
+      ordinaryMib: Math.max(0, input.priorityMib - priority.ordinaryMib),
+      poolMib: Math.max(0, input.priorityMib - priority.poolMib),
+    },
   };
 }

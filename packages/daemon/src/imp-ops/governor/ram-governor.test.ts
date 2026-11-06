@@ -1697,6 +1697,34 @@ test('it sleeps no priority imp to make room for an imp outside the priority pat
   expect(host.sleepCalls.map((call) => call.id)).toStrictEqual(['agent-a']);
 });
 
+test('it keeps the pool for priority imps while a priority imp on 4 KiB pages uses all their RAM', () => {
+  const host = createStubGovernedHost({
+    budgetMib: 4000,
+    ids: ['chat-a', 'agent-a'],
+    awake: [{ id: 'chat-a', rssMib: 400 }],
+    hugePool: { totalMib: 2048, freeMib: 2048 },
+  });
+
+  const governor = createRamGovernor({
+    ...host.deps,
+    priority: { mib: 400, patterns: ['chat-*'] },
+  });
+
+  expect(
+    governor.admit({
+      id: 'agent-a',
+      name: 'agent-a',
+      reserveMib: 512,
+      memoryMib: 1800,
+      hugePagesMib: 1800,
+    }),
+  ).rejects.toMatchObject({
+    code: 'RAM_BUDGET_EXCEEDED',
+    message:
+      "not enough 2 MiB pages: 0 of the host's 2048 MiB pool in use or promised to awake imps and 400 MiB kept for priority imps (chat-*), 1800 MiB requested",
+  });
+});
+
 test('it refuses to grow an imp outside the priority patterns into the RAM kept for priority imps', () => {
   const host = createStubGovernedHost({
     budgetMib: 1000,
