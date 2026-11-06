@@ -118,36 +118,44 @@ export async function runCommand(
     env: { ...process.env, ...options.env },
   });
 
-  const output = Promise.all([
-    new Response(subprocess.stdout).text(),
-    new Response(subprocess.stderr).text(),
-  ]);
+  const finished = readCommandResult(subprocess.stdout, subprocess.stderr, subprocess.exited);
 
-  // Bun's own spawn timeout leaves no sign of having fired: `killed` is true
-  // after any exit.
-  const limit = { hasFired: false };
+  if (options.timeoutMs === undefined) {
+    return finished;
+  }
 
-  const timer =
-    options.timeoutMs === undefined
-      ? undefined
-      : setTimeout(() => {
-          limit.hasFired = true;
+  // The limit covers the output too: a child of the command can hold the pipes
+  // open after the command exits. Bun's own spawn timeout covers the exit only.
+  const limit = Promise.withResolvers<'timed-out'>();
 
-          subprocess.kill('SIGKILL');
-        }, options.timeoutMs);
+  const timer = setTimeout(() => {
+    subprocess.kill('SIGKILL');
+    limit.resolve('timed-out');
+  }, options.timeoutMs);
 
-  const exitCode = await subprocess.exited;
+  const outcome = await Promise.race([finished, limit.promise]);
 
   clearTimeout(timer);
 
-  // A child the limit killed can leave a grandchild that holds the pipes open.
-  if (options.timeoutMs !== undefined && limit.hasFired) {
+  if (outcome === 'timed-out') {
     throw new CommandTimeoutError(argv, options.timeoutMs);
   }
 
-  const [stdout, stderr] = await output;
+  return outcome;
+}
 
-  return { exitCode, stdout, stderr };
+async function readCommandResult(
+  stdout: ReadableStream<Uint8Array>,
+  stderr: ReadableStream<Uint8Array>,
+  exited: Promise<number>,
+): Promise<CommandResult> {
+  const [out, err, exitCode] = await Promise.all([
+    new Response(stdout).text(),
+    new Response(stderr).text(),
+    exited,
+  ]);
+
+  return { exitCode, stdout: out, stderr: err };
 }
 
 export async function runChecked(argv: readonly string[]): Promise<string> {

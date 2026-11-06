@@ -11,6 +11,15 @@ test('#runCommand kills a command past its limit with a CommandTimeoutError, eve
   );
 });
 
+test('#runCommand fails at its limit when a command exits but leaves a child that holds its output', () => {
+  const running = runCommand(['bash', '-c', 'sleep 3 & exit 0'], { timeoutMs: 200 });
+
+  expect(running).rejects.toThrowWithMessage(
+    CommandTimeoutError,
+    'bash -c sleep 3 & exit 0 ran past its limit of 200 ms and was killed',
+  );
+});
+
 test('#runCommand returns the output of a command that ends inside its limit', async () => {
   const result = await runCommand(['bash', '-c', 'echo sawdust; exit 3'], { timeoutMs: 5000 });
 
