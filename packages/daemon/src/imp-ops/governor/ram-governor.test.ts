@@ -1725,6 +1725,30 @@ test('it keeps the pool for priority imps while a priority imp on 4 KiB pages us
   });
 });
 
+test('it refuses an imp on 4 KiB pages that would take the RAM kept outside the pool, and names that RAM', () => {
+  const host = createStubGovernedHost({
+    budgetMib: 4000,
+    ids: ['agent-a', 'agent-b'],
+    awake: [{ id: 'agent-a', rssMib: 400 }],
+    hugePool: { totalMib: 3000, freeMib: 3000 },
+  });
+
+  const governor = createRamGovernor({
+    ...host.deps,
+    priority: { mib: 400, patterns: ['chat-*'] },
+  });
+
+  host.applyChange({ kind: 'busy', id: 'agent-a', on: true }, governor);
+
+  expect(
+    governor.admit({ id: 'agent-b', name: 'agent-b', reserveMib: 300, memoryMib: 600 }),
+  ).rejects.toMatchObject({
+    code: 'RAM_BUDGET_EXCEEDED',
+    message:
+      'not enough RAM outside the huge page pool: 400 of 1000 MiB in use and 400 MiB kept for priority imps (chat-*), 300 MiB requested on 4 KiB pages, and no idle imp left to sleep',
+  });
+});
+
 test("it counts a priority imp's pool pages as kept after its RAM reservation expires", async () => {
   const host = createStubGovernedHost({
     budgetMib: 4000,
