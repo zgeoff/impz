@@ -1725,6 +1725,42 @@ test('it keeps the pool for priority imps while a priority imp on 4 KiB pages us
   });
 });
 
+test("it counts a priority imp's pool pages as kept after its RAM reservation expires", async () => {
+  const host = createStubGovernedHost({
+    budgetMib: 4000,
+    ids: ['agent-a', 'chat-a', 'agent-b'],
+    awake: [{ id: 'agent-a', rssMib: 512, hugePagesMib: 512, hugetlbMib: 512 }],
+    hugePool: { totalMib: 2048, freeMib: 1536 },
+  });
+
+  const governor = createRamGovernor({
+    ...host.deps,
+    priority: { mib: 1024, patterns: ['chat-*'] },
+  });
+
+  await governor.admit({
+    id: 'chat-a',
+    name: 'chat-a',
+    reserveMib: 256,
+    memoryMib: 512,
+    hugePagesMib: 512,
+  });
+
+  host.applyChange({ kind: 'tick', durationMs: 20_001 }, governor);
+
+  await governor.readUsage();
+
+  expect(
+    governor.admit({
+      id: 'agent-b',
+      name: 'agent-b',
+      reserveMib: 256,
+      memoryMib: 512,
+      hugePagesMib: 512,
+    }),
+  ).resolves.toBeUndefined();
+});
+
 test('it refuses to grow an imp outside the priority patterns into the RAM kept for priority imps', () => {
   const host = createStubGovernedHost({
     budgetMib: 1000,

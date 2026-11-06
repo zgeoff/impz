@@ -146,6 +146,9 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
   // admitted guests on 2 MiB pages that are not awake yet, by imp
   const pendingHugePages = new Map<string, number>();
 
+  // those of them that are priority imps; a pool guest's pages outlast its RAM reservation
+  const pendingPriority = new Set<string>();
+
   const emitDecision = (decision: GovernorDecision): void => {
     deps.events?.publish({
       // oxlint-disable-next-line id-length -- `v` is the event format's version field
@@ -186,6 +189,12 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
 
     if ((request.hugePagesMib ?? 0) > 0) {
       pendingHugePages.set(request.id, request.hugePagesMib ?? 0);
+    }
+
+    if (isPriority(request.name)) {
+      pendingPriority.add(request.id);
+    } else {
+      pendingPriority.delete(request.id);
     }
 
     emitAdmission(request, 'admitted', usedMib);
@@ -239,8 +248,12 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
         id,
         mib: readReservation(id),
         isPriority: reservation.isPriority,
-        poolMib: pendingHugePages.get(id) ?? 0,
+        isOnPool: pendingHugePages.has(id),
       }));
+
+    const pendingPool = [...pendingHugePages]
+      .filter(([id]) => id !== excludeId)
+      .map(([id, mib]) => ({ id, mib, isPriority: pendingPriority.has(id) }));
 
     const headroom = deps.readHeadroomMib?.(awake.map((imp) => imp.pid)) ?? Promise.resolve(0);
 
@@ -250,6 +263,7 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
       awake: awake.map((imp) => ({ ...imp, isPriority: isPriority(imp.name) })),
       readings,
       reservations: live,
+      pendingPool,
       lockedMib,
       headroomMib,
       priorityMib: priority?.mib ?? 0,
@@ -474,6 +488,7 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
     release: (id) => {
       reservations.delete(id);
       pendingHugePages.delete(id);
+      pendingPriority.delete(id);
     },
 
     admitGrow: (request) =>

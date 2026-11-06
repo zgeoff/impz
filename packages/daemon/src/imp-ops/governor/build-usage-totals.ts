@@ -11,14 +11,22 @@ interface LiveReservation {
   readonly mib: number;
   readonly isPriority: boolean;
 
-  // the pool pages an admitted guest on 2 MiB pages may take, 0 for a guest on 4 KiB pages
-  readonly poolMib: number;
+  // an admitted guest on 2 MiB pages, whose memory sits in the pool
+  readonly isOnPool: boolean;
+}
+
+// the pool pages an admitted guest on 2 MiB pages may take until it is awake
+interface PendingPool {
+  readonly id: string;
+  readonly mib: number;
+  readonly isPriority: boolean;
 }
 
 interface UsageInput {
   readonly awake: readonly MeasuredImp[];
   readonly readings: readonly (VmRam | null)[];
   readonly reservations: readonly LiveReservation[];
+  readonly pendingPool: readonly PendingPool[];
   readonly lockedMib: number;
   readonly headroomMib: number;
   readonly priorityMib: number;
@@ -79,7 +87,7 @@ export function buildUsageTotals(
 
   for (const reservation of input.reservations) {
     if (!byImp.has(reservation.id)) {
-      const ordinary = reservation.poolMib > 0 ? 0 : reservation.mib;
+      const ordinary = reservation.isOnPool ? 0 : reservation.mib;
 
       effectiveMib += reservation.mib;
       ordinaryEffectiveMib += ordinary;
@@ -87,8 +95,13 @@ export function buildUsageTotals(
       if (reservation.isPriority) {
         priority.ramMib += reservation.mib;
         priority.ordinaryMib += ordinary;
-        priority.poolMib += reservation.poolMib;
       }
+    }
+  }
+
+  for (const pending of input.pendingPool) {
+    if (pending.isPriority && !byImp.has(pending.id)) {
+      priority.poolMib += pending.mib;
     }
   }
 
