@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { once } from 'node:events';
 import { setImmediate } from 'node:timers/promises';
-import { waitFor } from '@impz/test-utils/wait-for';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { sql } from 'kysely';
 import type { Transaction } from 'kysely';
 import type { DurableTables } from '../durable-tables';
