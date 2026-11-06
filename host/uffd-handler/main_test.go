@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -214,7 +215,8 @@ func startPeer(t *testing.T, socket string, advertisedPages int, reads string) p
 func readPeerBytes(t *testing.T, p peer, n int) []byte {
 	t.Helper()
 	out := make([]byte, n)
-	_, err := p.stdout.Read(out)
+	// the peer writes a byte per page, so one read can return before the last
+	_, err := io.ReadFull(p.stdout, out)
 	assert.NilError(t, err)
 	return out
 }
