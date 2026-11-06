@@ -1,5 +1,5 @@
 import invariant from 'tiny-invariant';
-import type { DurableQueries } from '../durable-tables';
+import type { DurableTransaction } from '../durable-tables';
 import type { DurableLog, OperationRunner } from '../operations/create-operation-runner';
 
 export type ReconcileOutcome = 'changed' | 'unchanged';
@@ -11,19 +11,19 @@ export interface ReconcileResult {
   readonly summary: string;
 }
 
-export interface ReconcilerContext<TTrx extends DurableQueries> {
+export interface ReconcilerContext<TTrx extends DurableTransaction> {
   readonly signal: AbortSignal;
   readonly log: DurableLog;
   readonly startOperation: OperationRunner<TTrx>['start'];
 }
 
-export interface ReconcilerDefinition<TTrx extends DurableQueries = DurableQueries> {
+export interface ReconcilerDefinition<TTrx extends DurableTransaction = DurableTransaction> {
   readonly name: string;
   readonly intervalMs: number;
   readonly reconcile: (ctx: ReconcilerContext<TTrx>) => Promise<ReconcileResult>;
 }
 
-export function defineReconciler<TTrx extends DurableQueries = DurableQueries>(
+export function defineReconciler<TTrx extends DurableTransaction = DurableTransaction>(
   definition: ReconcilerDefinition<TTrx>,
 ): ReconcilerDefinition<TTrx> {
   invariant(definition.name !== '', 'a reconciler needs a name');

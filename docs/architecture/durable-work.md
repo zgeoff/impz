@@ -16,7 +16,8 @@ The package never opens a transaction of its own. Each of its writes goes throug
 transaction that the program passes in. A change to the program's own rows and the package's record
 of that change therefore commit together, or neither commits. A program that commits a change in one
 transaction and its event in another can lose the event in a crash, and a reader then never learns
-of the change.
+of the change. A function that makes several writes, such as a prune, takes only a transaction, so
+the type check fails a call on a plain connection.
 
 ## The event log
 
@@ -79,11 +80,12 @@ create. The undo then finds what to remove even when the process stopped halfway
 The runner never undoes a step that stopped before it succeeded and wrote no undo record, so a
 `fail` step whose undo must run after a restart writes its record first. The undo runs when a step
 fails, when the operation is cancelled, or when a `fail` step was running at a restart. It runs for
-each step that succeeded, and for each step that wrote an undo record, the last step first. The
-runner marks each undo done in its own commit, and a crash before that commit makes the undo run
-again after the restart, so an undo must be safe to run twice. When an undo throws, the operation
-ends `failed` with the error code `undo_failed`, and the runner never runs the undos still left.
-Those steps keep their effects, and a reconciler of the program finds them.
+each step that succeeded, for each step that wrote an undo record, and for each step whose effect
+returned but whose success commit failed, the last step first. The runner marks each undo done in
+its own commit, and a crash before that commit makes the undo run again after the restart, so an
+undo must be safe to run twice. When an undo throws, the operation ends `failed` with the error code
+`undo_failed`, and the runner never runs the undos still left. Those steps keep their effects, and a
+reconciler of the program finds them.
 
 The runner saves a cancel request on the operation row first, so the request survives a restart. The
 runner then aborts the signal it passed to the running step. When the step returns, the undo runs

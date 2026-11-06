@@ -2,7 +2,7 @@ import { getErrorMessage } from '@impz/shared';
 import invariant from 'tiny-invariant';
 import { createActor, toPromise } from 'xstate';
 import type { Actor, ActorOptions } from 'xstate';
-import type { DurableQueries } from '../durable-tables';
+import type { DurableTransaction } from '../durable-tables';
 import type { DurableLog, OperationRunner } from '../operations/create-operation-runner';
 import { buildBackoffDelayMs } from './build-backoff-delay-ms';
 import { buildPassResult } from './build-pass-result';
@@ -14,7 +14,7 @@ import { writeReconcilerResult } from './write-reconciler-result';
 
 export type ReconcilerTimer = (fire: () => void, delayMs: number) => () => void;
 
-export interface ReconcilerRunnerDeps<TTrx extends DurableQueries> {
+export interface ReconcilerRunnerDeps<TTrx extends DurableTransaction> {
   readonly reconcilers: readonly ReconcilerDefinition<TTrx>[];
   readonly withTransaction: <T>(run: (trx: TTrx) => Promise<T>) => Promise<T>;
   readonly startOperation: OperationRunner<TTrx>['start'];
@@ -39,7 +39,7 @@ export interface ReconcilerRunner {
   readonly list: () => ReconcilerStatus[];
 }
 
-interface Entry<TTrx extends DurableQueries> {
+interface Entry<TTrx extends DurableTransaction> {
   readonly definition: ReconcilerDefinition<TTrx>;
   readonly actor: Actor<typeof reconcilerMachine>;
   last: ReconcilerResult | null;
@@ -47,7 +47,7 @@ interface Entry<TTrx extends DurableQueries> {
   nextRunAt: number | null;
 }
 
-export function createReconcilerRunner<TTrx extends DurableQueries>(
+export function createReconcilerRunner<TTrx extends DurableTransaction>(
   deps: ReconcilerRunnerDeps<TTrx>,
 ): ReconcilerRunner {
   const controller = new AbortController();
