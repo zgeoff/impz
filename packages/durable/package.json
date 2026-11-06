@@ -1,0 +1,17 @@
+{
+  "name": "@impz/durable",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Durable work on a caller's SQLite database through Kysely: the sequenced event log, with no imp words in it",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "kysely": "catalog:"
+  },
+  "devDependencies": {
+    "@zgeoff/kysely-bun-sqlite": "catalog:"
+  }
+}

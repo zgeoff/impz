@@ -82,6 +82,7 @@
           "shared": ["packages/shared/**"],
           "agent-protocol": ["packages/agent-protocol/**"],
           "client": ["packages/client/**"],
+          "durable": ["packages/durable/**"],
           "above-client": ["packages/{mcp,cli,daemon,dashboard}/**"],
           "test-utils": ["packages/shared/src/test-utils/**"],
           "runtime-neutral": ["packages/{shared,agent-protocol,api,client}/**"],
@@ -584,7 +585,7 @@
             "name": "kysely",
             "modules": ["kysely", "kysely-codegen", "@zgeoff/kysely-bun-sqlite"],
             "from": ["packages"],
-            "allow": ["db"],
+            "allow": ["db", "durable"],
             "reason": "query through a repository in packages/daemon/src/platform/db instead"
           },
           {
@@ -619,6 +620,25 @@
             "from": ["agent-protocol"],
             "allow": ["tests"],
             "reason": "@impz/agent-protocol imports no @impz/* package"
+          },
+          {
+            "name": "package-order",
+            "modules": [
+              "@impz/agent-protocol",
+              "@impz/api",
+              "@impz/cli",
+              "@impz/client",
+              "@impz/daemon",
+              "@impz/dashboard",
+              "@impz/e2e-harness",
+              "@impz/integration",
+              "@impz/local-tar",
+              "@impz/mcp",
+              "@impz/testing"
+            ],
+            "from": ["durable"],
+            "allow": ["tests"],
+            "reason": "@impz/durable imports only @impz/shared and kysely, so impd and a controller can share it"
           },
           {
             "name": "package-order",
