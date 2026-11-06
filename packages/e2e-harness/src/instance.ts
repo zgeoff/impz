@@ -118,18 +118,27 @@ export async function runCommand(
     env: { ...process.env, ...options.env },
   });
 
-  const finished = readCommandResult(subprocess.stdout, subprocess.stderr, subprocess.exited);
+  const reading = new AbortController();
+
+  const finished = readCommandResult(
+    subprocess.stdout,
+    subprocess.stderr,
+    subprocess.exited,
+    reading.signal,
+  );
 
   if (options.timeoutMs === undefined) {
     return finished;
   }
 
   // The limit covers the output too: a child of the command can hold the pipes
-  // open after the command exits. Bun's own spawn timeout covers the exit only.
+  // open after the command exits, and an open read keeps the process alive.
+  // Bun's own spawn timeout covers the exit only.
   const limit = Promise.withResolvers<'timed-out'>();
 
   const timer = setTimeout(() => {
     subprocess.kill('SIGKILL');
+    reading.abort();
     limit.resolve('timed-out');
   }, options.timeoutMs);
 
@@ -148,14 +157,36 @@ async function readCommandResult(
   stdout: ReadableStream<Uint8Array>,
   stderr: ReadableStream<Uint8Array>,
   exited: Promise<number>,
+  signal: AbortSignal,
 ): Promise<CommandResult> {
   const [out, err, exitCode] = await Promise.all([
-    new Response(stdout).text(),
-    new Response(stderr).text(),
+    readStreamText(stdout, signal),
+    readStreamText(stderr, signal),
     exited,
   ]);
 
   return { exitCode, stdout: out, stderr: err };
+}
+
+async function readStreamText(
+  stream: ReadableStream<Uint8Array>,
+  signal: AbortSignal,
+): Promise<string> {
+  const reader = stream.getReader();
+
+  const decoder = new TextDecoder();
+
+  signal.addEventListener('abort', () => void reader.cancel(), { once: true });
+
+  const chunks: string[] = [];
+
+  for (let read = await reader.read(); !read.done; read = await reader.read()) {
+    chunks.push(decoder.decode(read.value, { stream: true }));
+  }
+
+  chunks.push(decoder.decode());
+
+  return chunks.join('');
 }
 
 export async function runChecked(argv: readonly string[]): Promise<string> {
