@@ -9,7 +9,7 @@ stays PID 1 there, and runs the image filesystem in an
 
 | Image                           | What it is                                                                                                    |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `base/` → `imp/base`            | Ubuntu 24.04, Docker engine (dockerd supervised by the agent), git, curl                                      |
+| `base/` → `imp/base`            | Ubuntu 26.04, Docker engine (dockerd supervised by the agent), git, curl                                      |
 | `examples/hello/` → `imp/hello` | the published base + a tiny HTTP service on :8080 (bring-your-own)                                            |
 | `examples/coder/` → `imp/coder` | the published base + Claude Code and gh, for a coding agent ([README](../../images/examples/coder/README.md)) |
 

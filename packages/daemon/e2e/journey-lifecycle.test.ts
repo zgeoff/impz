@@ -103,7 +103,9 @@ test('it runs exec -t on a pseudo-terminal', async () => {
 
   await waitForExec(name);
 
-  const out = await runImp('exec', '-t', name, '--', 'sh', '-c', 'tty; stty size');
+  // The tty of uutils coreutils before 0.12 prints the name with no newline,
+  // so echo ends the line on GNU and uutils guests alike.
+  const out = await runImp('exec', '-t', name, '--', 'sh', '-c', 'echo "$(tty)"; stty size');
 
   expect(out.replaceAll('\r', '')).toMatch(/^\/dev\/pts\/\d+\n\d+ \d+\n$/u);
 });

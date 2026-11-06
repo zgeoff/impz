@@ -19,6 +19,12 @@
       "allowedVersions": "<0.42"
     },
     {
+      "description": "Hold the kernel-builder stage of host/Dockerfile on Ubuntu 22.04. Its gcc 11 is the compiler kernel/config-base records, its apt sources name jammy, and a new compiler changes the guest kernel's bytes. Digest updates of 22.04 still come.",
+      "matchFileNames": ["host/Dockerfile"],
+      "matchDepNames": ["ubuntu"],
+      "allowedVersions": "/^22\\.04$/"
+    },
+    {
       "description": "Every Go module here holds tool directives, and the go get -t ./... that Renovate runs loads none of their packages, so it leaves their module sums out of go.sum. go mod tidy adds them.",
       "matchManagers": ["gomod"],
       "postUpdateOptions": ["gomodTidy"]
