@@ -30,14 +30,26 @@ export async function queueOperation<TParams extends JsonValue, TTrx>(
       ? undefined
       : await db
           .selectFrom('operations')
-          .select(['id', 'kind', 'params', 'ended_at'])
+          .select(['id', 'kind', 'params', 'target_id', 'principal', 'ended_at'])
           .where('retry_key', '=', input.retryKey)
           .executeTakeFirst();
 
   if (holder !== undefined) {
     const outcome = pickRetryOutcome(
-      { kind: holder.kind, params: holder.params, endedAt: holder.ended_at },
-      { kind: definition.kind, params, now: input.now },
+      {
+        kind: holder.kind,
+        params: holder.params,
+        targetId: holder.target_id,
+        principal: holder.principal,
+        endedAt: holder.ended_at,
+      },
+      {
+        kind: definition.kind,
+        params,
+        targetId: input.targetId,
+        principal: input.principal,
+        now: input.now,
+      },
     );
 
     if (outcome !== 'expired') {

@@ -4,31 +4,31 @@ export interface ChangeSignal {
 }
 
 export function createChangeSignal(): ChangeSignal {
-  let current = Promise.withResolvers<void>();
+  const waiters = new Set<() => void>();
 
   return {
     notify: () => {
-      current.resolve();
-
-      current = Promise.withResolvers<void>();
+      for (const settle of waiters) {
+        settle();
+      }
     },
     next: (signal) => {
-      const changed = current.promise;
-      const aborted = Promise.withResolvers<void>();
-
-      const onAbort = (): void => {
-        aborted.resolve();
-      };
-
       if (signal.aborted) {
         return Promise.resolve();
       }
 
-      signal.addEventListener('abort', onAbort, { once: true });
+      const settled = Promise.withResolvers<void>();
 
-      return Promise.race([changed, aborted.promise]).finally(() => {
-        signal.removeEventListener('abort', onAbort);
-      });
+      const settle = (): void => {
+        waiters.delete(settle);
+        signal.removeEventListener('abort', settle);
+        settled.resolve();
+      };
+
+      waiters.add(settle);
+      signal.addEventListener('abort', settle, { once: true });
+
+      return settled.promise;
     },
   };
 }

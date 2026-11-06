@@ -21,6 +21,29 @@ test('it returns null for an ID no operation has', async () => {
   expect(operation).toBeNull();
 });
 
+test('it reads a null undo record as a record the step wrote', async () => {
+  const ctx = await setupTest();
+
+  const shelf = buildRecordingOperation('shelf.build', [buildRecordingStep({ name: 'cut' })], []);
+
+  const queued = await queueOperation(ctx.db, shelf, {
+    params: { label: 'oak' },
+    principal: 'owner',
+    targetId: null,
+    parentId: null,
+    retryKey: null,
+    now: 1_800_000_000_000,
+  });
+
+  await writeStepUndo(ctx.db, { operationId: queued.operationId, position: 0, record: null });
+
+  const operation = await readOperation(ctx.db, queued.operationId);
+
+  expect(operation?.steps).toStrictEqual([
+    expect.objectContaining({ hasUndoRecord: true, undoRecord: null }),
+  ]);
+});
+
 test('it reads the operation and its steps as one commit left them', async () => {
   const ctx = await setupTest();
 
@@ -53,7 +76,7 @@ test('it reads the operation and its steps as one commit left them', async () =>
   expect(operation).toStrictEqual(
     expect.objectContaining({
       cancelRequested: false,
-      steps: [expect.objectContaining({ undoRecord: null })],
+      steps: [expect.objectContaining({ hasUndoRecord: false, undoRecord: null })],
     }),
   );
 });

@@ -51,5 +51,5 @@ function shouldUndo(step: OperationStep, undoable: ReadonlySet<string>): boolean
     return false;
   }
 
-  return step.state === 'succeeded' || (step.state !== 'queued' && step.undoRecord !== null);
+  return step.state === 'succeeded' || (step.state !== 'queued' && step.hasUndoRecord);
 }

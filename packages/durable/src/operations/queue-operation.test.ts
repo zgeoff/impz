@@ -126,3 +126,29 @@ test('it refuses the key of an operation of another kind as a conflict', async (
 
   expect(second).toStrictEqual({ kind: 'conflict', operationId: first.operationId });
 });
+
+test('it refuses the key of an operation on another target as a conflict', async () => {
+  const ctx = await setupTest();
+
+  const shelf = buildRecordingOperation('shelf.build', [buildRecordingStep({ name: 'cut' })], []);
+
+  const first = await queueOperation(ctx.db, shelf, {
+    params: { label: 'oak' },
+    principal: 'owner',
+    targetId: 'shelf-1',
+    parentId: null,
+    retryKey: 'key-1',
+    now: 1_800_000_000_000,
+  });
+
+  const second = await queueOperation(ctx.db, shelf, {
+    params: { label: 'oak' },
+    principal: 'owner',
+    targetId: 'shelf-2',
+    parentId: null,
+    retryKey: 'key-1',
+    now: 1_800_000_000_000,
+  });
+
+  expect(second).toStrictEqual({ kind: 'conflict', operationId: first.operationId });
+});

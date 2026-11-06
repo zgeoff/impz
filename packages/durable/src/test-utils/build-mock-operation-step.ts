@@ -8,6 +8,7 @@ export function buildMockOperationStep(step: Partial<OperationStep> = {}): Opera
     startedAt: null,
     endedAt: null,
     error: null,
+    hasUndoRecord: false,
     undoRecord: null,
     undoneAt: null,
     ...step,

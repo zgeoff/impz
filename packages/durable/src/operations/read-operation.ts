@@ -14,6 +14,7 @@ export interface OperationStep {
   readonly startedAt: number | null;
   readonly endedAt: number | null;
   readonly error: OperationError | null;
+  readonly hasUndoRecord: boolean;
   readonly undoRecord: unknown;
   readonly undoneAt: number | null;
 }
@@ -104,6 +105,7 @@ function toOperation(row: OperationsTable, steps: readonly JoinedStep[]): Operat
       startedAt: step.step_started_at,
       endedAt: step.step_ended_at,
       error: toOperationError(step.step_error_code, step.step_error_message),
+      hasUndoRecord: step.step_undo_record !== null,
       undoRecord: step.step_undo_record === null ? null : parseJson(step.step_undo_record),
       undoneAt: step.step_undone_at,
     })),

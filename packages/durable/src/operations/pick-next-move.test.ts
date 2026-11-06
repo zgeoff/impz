@@ -83,7 +83,7 @@ test.each([
   { label: 'a failed step with no undo record', step: { state: 'failed' }, undoable: ['cut'] },
   {
     label: 'a queued step',
-    step: { state: 'queued', undoRecord: { step: 'cut' } },
+    step: { state: 'queued', hasUndoRecord: true, undoRecord: { step: 'cut' } },
     undoable: ['cut'],
   },
 ] as const)('it skips $label while an operation ends', (row) => {
@@ -97,8 +97,16 @@ test.each([
   expect(move).toStrictEqual({ kind: 'end', state: 'cancelled' });
 });
 
-test('it picks the undo of a failed step that wrote an undo record', () => {
-  const cut = buildMockOperationStep({ name: 'cut', state: 'failed', undoRecord: { step: 'cut' } });
+test.each([
+  { label: 'an undo record', undoRecord: { step: 'cut' } },
+  { label: 'a null undo record', undoRecord: null },
+])('it picks the undo of a failed step that wrote $label', (row) => {
+  const cut = buildMockOperationStep({
+    name: 'cut',
+    state: 'failed',
+    hasUndoRecord: true,
+    undoRecord: row.undoRecord,
+  });
 
   const move = pickNextMove(
     buildMockOperation({ ending: 'failed', steps: [cut] }),
