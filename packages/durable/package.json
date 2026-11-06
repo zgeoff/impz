@@ -2,7 +2,7 @@
   "name": "@impz/durable",
   "version": "0.0.0",
   "private": true,
-  "description": "Durable work on a program's SQLite database through Kysely, with no imp concept in it: an event log",
+  "description": "An event log for programs that keep their state in SQLite",
   "type": "module",
   "sideEffects": false,
   "exports": {
