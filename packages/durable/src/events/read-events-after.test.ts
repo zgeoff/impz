@@ -1,9 +1,6 @@
-import { Database } from 'bun:sqlite';
-import { expect, onTestFinished, test } from 'bun:test';
-import { buildSQLiteDialect } from '@zgeoff/kysely-bun-sqlite';
-import { Kysely } from 'kysely';
-import type { DurableTables } from '../durable-tables';
+import { expect, test } from 'bun:test';
 import { createTestDurableDatabase } from '../test-utils/create-test-durable-database';
+import { openTestDurableDatabase } from '../test-utils/open-test-durable-database';
 import { appendEvent } from './append-event';
 import { pruneEvents } from './prune-events';
 import { readEventsAfter } from './read-events-after';
@@ -14,7 +11,7 @@ async function setupTest() {
   return {
     prune: (now: number) => database.db.transaction().execute((trx) => pruneEvents(trx, now)),
     db: database.db,
-    path: database.path,
+    openSecondConnection: () => openTestDurableDatabase(database.stack, database.path),
   };
 }
 
@@ -176,12 +173,7 @@ test('it returns the events for a cursor at the last pruned event', async () => 
 test('it never skips an event that a prune on another connection removes during the read', async () => {
   const ctx = await setupTest();
 
-  const sqlite = new Database(ctx.path);
-  const pruner = new Kysely<DurableTables>({ dialect: buildSQLiteDialect(sqlite) });
-
-  onTestFinished(() => {
-    sqlite.close();
-  });
+  const pruner = ctx.openSecondConnection();
 
   await appendEvent(ctx.db, {
     at: 1000,

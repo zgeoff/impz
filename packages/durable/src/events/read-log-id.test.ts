@@ -6,6 +6,7 @@ import { Migrator } from 'kysely/migration';
 import type { DurableTables } from '../durable-tables';
 import { durableMigrations } from '../migrations/durable-migrations';
 import { createTestDurableDatabase } from '../test-utils/create-test-durable-database';
+import { openTestDurableDatabase } from '../test-utils/open-test-durable-database';
 import { readLogId } from './read-log-id';
 
 test('it returns the same log ID on every read of one database', async () => {
@@ -19,14 +20,7 @@ test('it returns the same log ID on every read of one database', async () => {
 test('it returns the log ID a database was made with after a reopen', async () => {
   const ctx = await createTestDurableDatabase();
   const before = await readLogId(ctx.db);
-
-  const sqlite = new Database(ctx.path);
-
-  onTestFinished(() => {
-    sqlite.close();
-  });
-
-  const after = await readLogId(new Kysely<DurableTables>({ dialect: buildSQLiteDialect(sqlite) }));
+  const after = await readLogId(openTestDurableDatabase(ctx.stack, ctx.path));
 
   expect(after).toBe(before);
 });

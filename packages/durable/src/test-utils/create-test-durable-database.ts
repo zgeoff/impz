@@ -12,6 +12,7 @@ import { durableMigrations } from '../migrations/durable-migrations';
 interface TestDurableDatabase {
   readonly path: string;
   readonly db: Kysely<DurableTables>;
+  readonly stack: AsyncDisposableStack;
 }
 
 // a test process migrates once, and each test writes the template's bytes to a file of its own
@@ -38,7 +39,7 @@ export async function createTestDurableDatabase(): Promise<TestDurableDatabase> 
 
   cleanup.defer(() => db.destroy());
 
-  return { path, db };
+  return { path, db, stack: cleanup };
 }
 
 async function serializeMigratedDatabase(): Promise<Uint8Array> {
@@ -64,7 +65,7 @@ async function serializeMigratedDatabase(): Promise<Uint8Array> {
   return bytes;
 }
 
-function openTestConnection(sqlite: Database): Kysely<DurableTables> {
+export function openTestConnection(sqlite: Database): Kysely<DurableTables> {
   sqlite.run('PRAGMA journal_mode = WAL;');
   sqlite.run('PRAGMA synchronous = OFF;');
   sqlite.run('PRAGMA foreign_keys = ON;');
