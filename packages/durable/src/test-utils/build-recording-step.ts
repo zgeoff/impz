@@ -10,6 +10,7 @@ export function buildRecordingStep(
     writesUndo: false,
     result: null,
     writesEvent: null,
+    writeFails: false,
     ...step,
   };
 }

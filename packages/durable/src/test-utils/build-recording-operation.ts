@@ -19,6 +19,7 @@ export interface RecordingStep {
   readonly writesUndo: boolean;
   readonly result: JsonValue | null;
   readonly writesEvent: string | null;
+  readonly writeFails: boolean;
 }
 
 export interface RecordingParams {
@@ -103,11 +104,12 @@ async function runRecordingStep(
 
   return {
     ...(step.result === null ? {} : { result: step.result }),
-    ...(step.writesEvent === null ? {} : { write: makeEventWrite(step.writesEvent, ctx) }),
+    ...(step.writesEvent === null ? {} : { write: makeEventWrite(step, step.writesEvent, ctx) }),
   };
 }
 
 function makeEventWrite(
+  step: RecordingStep,
   kind: string,
   ctx: StepContext<RecordingParams>,
 ): (trx: DurableQueries) => Promise<void> {
@@ -119,5 +121,9 @@ function makeEventWrite(
       operationId: ctx.operationId,
       payload: { label: ctx.params.label },
     });
+
+    if (step.writeFails) {
+      throw new Error(`the write of ${step.name} failed`);
+    }
   };
 }

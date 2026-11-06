@@ -12,6 +12,7 @@ test('it builds a step that reruns, succeeds and has no undo', () => {
     writesUndo: false,
     result: null,
     writesEvent: null,
+    writeFails: false,
   });
 });
 

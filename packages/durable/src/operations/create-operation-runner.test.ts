@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import type { Transaction } from 'kysely';
 import type { DurableTables } from '../durable-tables';
+import { readEventsAfter } from '../events/read-events-after';
 import { buildRecordingOperation } from '../test-utils/build-recording-operation';
 import type { RecordingParams } from '../test-utils/build-recording-operation';
 import { buildRecordingStep } from '../test-utils/build-recording-step';
@@ -38,6 +39,7 @@ async function setupTest() {
         },
       }),
     readOperation: (id: string) => readOperation(database.db, id),
+    readEvents: () => readEventsAfter(database.db, { after: 0, limit: 50 }),
   };
 }
 
@@ -361,6 +363,84 @@ test('it undoes a failed step that wrote an undo record', async () => {
   expect(effects).toStrictEqual(['undo cut']);
 });
 
+test('it rolls back a step’s write and fails the step when the write throws', async () => {
+  const ctx = await setupTest();
+
+  const shelf = buildRecordingOperation(
+    'shelf.build',
+    [buildRecordingStep({ name: 'cut', writesEvent: 'shelf.cut', writeFails: true })],
+    [],
+  );
+
+  const runner = ctx.createRunner([shelf]);
+
+  const started = await runner.start(shelf, {
+    params: { label: 'oak' },
+    principal: 'owner',
+    targetId: null,
+    parentId: null,
+    retryKey: null,
+  });
+
+  await runner.run(started.operationId);
+
+  const events = await ctx.readEvents();
+  const operation = await ctx.readOperation(started.operationId);
+
+  expect({ events, steps: operation?.steps }).toStrictEqual({
+    events: {
+      kind: 'events',
+      events: [
+        expect.objectContaining({ kind: 'operation.queued' }),
+        expect.objectContaining({ kind: 'operation.started' }),
+        expect.objectContaining({
+          kind: 'operation.step',
+          payload: expect.objectContaining({ state: 'running' }),
+        }),
+        expect.objectContaining({
+          kind: 'operation.step',
+          payload: expect.objectContaining({ state: 'failed' }),
+        }),
+        expect.objectContaining({ kind: 'operation.ended' }),
+      ],
+    },
+    steps: [expect.objectContaining({ name: 'cut', state: 'failed' })],
+  });
+});
+
+test('it undoes a step whose effect ran when the step’s success commit fails', async () => {
+  const ctx = await setupTest();
+
+  const effects: string[] = [];
+
+  const shelf = buildRecordingOperation(
+    'shelf.build',
+    [
+      buildRecordingStep({
+        name: 'cut',
+        writesEvent: 'shelf.cut',
+        writeFails: true,
+        undo: 'succeed',
+      }),
+    ],
+    effects,
+  );
+
+  const runner = ctx.createRunner([shelf]);
+
+  const started = await runner.start(shelf, {
+    params: { label: 'oak' },
+    principal: 'owner',
+    targetId: null,
+    parentId: null,
+    retryKey: null,
+  });
+
+  await runner.run(started.operationId);
+
+  expect(effects).toStrictEqual(['cut', 'undo cut']);
+});
+
 test('it skips the undo of a failed step that wrote no undo record', async () => {
   const ctx = await setupTest();
 
@@ -476,14 +556,16 @@ test('it ends a queued operation cancelled without running a step', async () => 
 
   const runner = ctx.createRunner([shelf]);
 
-  const queued = await queueOperation(ctx.db, shelf, {
-    params: { label: 'oak' },
-    principal: 'owner',
-    targetId: null,
-    parentId: null,
-    retryKey: null,
-    now: 1_800_000_000_000,
-  });
+  const queued = await ctx.db.transaction().execute((trx) =>
+    queueOperation(trx, shelf, {
+      params: { label: 'oak' },
+      principal: 'owner',
+      targetId: null,
+      parentId: null,
+      retryKey: null,
+      now: 1_800_000_000_000,
+    }),
+  );
 
   await runner.cancel(queued.operationId);
   await runner.run(queued.operationId);
@@ -551,14 +633,16 @@ test('it ends an operation of a kind the runner doesn’t define failed', async 
   const paint = buildRecordingOperation('shelf.paint', [buildRecordingStep({ name: 'coat' })], []);
   const runner = ctx.createRunner([shelf]);
 
-  const queued = await queueOperation(ctx.db, paint, {
-    params: { label: 'oak' },
-    principal: 'owner',
-    targetId: null,
-    parentId: null,
-    retryKey: null,
-    now: 1_800_000_000_000,
-  });
+  const queued = await ctx.db.transaction().execute((trx) =>
+    queueOperation(trx, paint, {
+      params: { label: 'oak' },
+      principal: 'owner',
+      targetId: null,
+      parentId: null,
+      retryKey: null,
+      now: 1_800_000_000_000,
+    }),
+  );
 
   await runner.run(queued.operationId);
 
@@ -585,14 +669,16 @@ test('it runs an operation once when two callers run it at the same time', async
 
   const runner = ctx.createRunner([shelf]);
 
-  const queued = await queueOperation(ctx.db, shelf, {
-    params: { label: 'oak' },
-    principal: 'owner',
-    targetId: null,
-    parentId: null,
-    retryKey: null,
-    now: 1_800_000_000_000,
-  });
+  const queued = await ctx.db.transaction().execute((trx) =>
+    queueOperation(trx, shelf, {
+      params: { label: 'oak' },
+      principal: 'owner',
+      targetId: null,
+      parentId: null,
+      retryKey: null,
+      now: 1_800_000_000_000,
+    }),
+  );
 
   await Promise.all([runner.run(queued.operationId), runner.run(queued.operationId)]);
 

@@ -1,13 +1,19 @@
 import { expect, test } from 'bun:test';
+import { readEventsAfter } from '../events/read-events-after';
 import { buildRecordingOperation } from './build-recording-operation';
 import { buildRecordingStep } from './build-recording-step';
+import { createTestDurableDatabase } from './create-test-durable-database';
 
-function setupTest() {
+async function setupTest() {
+  const database = await createTestDurableDatabase();
+
   const controller = new AbortController();
 
   const undoRecords: unknown[] = [];
 
   return {
+    db: database.db,
+    readEvents: () => readEventsAfter(database.db, { after: 0, limit: 10 }),
     controller,
     undoRecords,
     step: {
@@ -26,7 +32,8 @@ function setupTest() {
 }
 
 test('it records the step’s name after its effect', async () => {
-  const ctx = setupTest();
+  const ctx = await setupTest();
+
   const effects: string[] = [];
 
   const operation = buildRecordingOperation(
@@ -41,7 +48,7 @@ test('it records the step’s name after its effect', async () => {
 });
 
 test('it returns the step’s result', async () => {
-  const ctx = setupTest();
+  const ctx = await setupTest();
 
   const operation = buildRecordingOperation(
     'shelf.build',
@@ -55,7 +62,7 @@ test('it returns the step’s result', async () => {
 });
 
 test('it writes the undo record before the effect', async () => {
-  const ctx = setupTest();
+  const ctx = await setupTest();
 
   const operation = buildRecordingOperation(
     'shelf.build',
@@ -69,7 +76,8 @@ test('it writes the undo record before the effect', async () => {
 });
 
 test('it throws from a failing step without recording an effect', async () => {
-  const ctx = setupTest();
+  const ctx = await setupTest();
+
   const effects: string[] = [];
 
   const operation = buildRecordingOperation(
@@ -86,8 +94,8 @@ test('it throws from a failing step without recording an effect', async () => {
   expect(effects).toStrictEqual([]);
 });
 
-test('it ends a waiting step with an error once the signal aborts', () => {
-  const ctx = setupTest();
+test('it ends a waiting step with an error once the signal aborts', async () => {
+  const ctx = await setupTest();
 
   const operation = buildRecordingOperation(
     'shelf.build',
@@ -102,8 +110,9 @@ test('it ends a waiting step with an error once the signal aborts', () => {
   expect(run).rejects.toThrowWithMessage(Error, /cut saw the cancel/u);
 });
 
-test('it records the effect of a hung step, which never returns', () => {
-  const ctx = setupTest();
+test('it records the effect of a hung step, which never returns', async () => {
+  const ctx = await setupTest();
+
   const effects: string[] = [];
 
   const operation = buildRecordingOperation(
@@ -180,3 +189,28 @@ test('it refuses params without a label', () => {
 
   expect(() => operation.parseParams({ width: 2 })).toThrowWithMessage(Error, /have no label/u);
 });
+
+test.each([
+  { writeFails: false, status: 'fulfilled' },
+  { writeFails: true, status: 'rejected' },
+])(
+  'it appends the step’s event from a write with writeFails $writeFails, which ends $status',
+  async (row) => {
+    const ctx = await setupTest();
+
+    const operation = buildRecordingOperation(
+      'shelf.build',
+      [buildRecordingStep({ name: 'cut', writesEvent: 'shelf.cut', writeFails: row.writeFails })],
+      [],
+    );
+
+    const output = await operation.steps[0]?.run(ctx.step);
+    const settled = await Promise.allSettled([output?.write?.(ctx.db)]);
+    const events = await ctx.readEvents();
+
+    expect({ status: settled[0]?.status, events }).toStrictEqual({
+      status: row.status,
+      events: { kind: 'events', events: [expect.objectContaining({ kind: 'shelf.cut' })] },
+    });
+  },
+);

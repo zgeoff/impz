@@ -1,11 +1,11 @@
 import { getErrorMessage } from '@impz/shared';
 import invariant from 'tiny-invariant';
 import { match } from 'ts-pattern';
-import type { DurableQueries } from '../durable-tables';
+import type { DurableTransaction } from '../durable-tables';
 import type { JsonValue } from '../json-value';
 import { appendOperationEvent } from './append-operation-event';
 import type { ChangeSignal } from './create-change-signal';
-import type { OperationDefinition, RunnableStep } from './define-operation';
+import type { OperationDefinition, RunnableStep, StepOutput } from './define-operation';
 import { moveOperation } from './move-operation';
 import { moveStep } from './move-step';
 import { pickNextMove } from './pick-next-move';
@@ -16,6 +16,7 @@ import { readOperation } from './read-operation';
 import type { Operation, OperationError, OperationStep } from './read-operation';
 import { recoverOperations } from './recover-operations';
 import { writeCancelRequest } from './write-cancel-request';
+import { writeStepEffectDone } from './write-step-effect-done';
 import { writeStepUndo } from './write-step-undo';
 import { writeStepUndone } from './write-step-undone';
 
@@ -23,7 +24,7 @@ export interface DurableLog {
   readonly warning: (message: string, properties: Readonly<Record<string, unknown>>) => void;
 }
 
-export interface OperationRunnerDeps<TTrx extends DurableQueries> {
+export interface OperationRunnerDeps<TTrx extends DurableTransaction> {
   readonly withTransaction: <T>(run: (trx: TTrx) => Promise<T>) => Promise<T>;
   readonly definitions: readonly OperationDefinition<JsonValue, TTrx>[];
   readonly changes: ChangeSignal;
@@ -31,7 +32,7 @@ export interface OperationRunnerDeps<TTrx extends DurableQueries> {
   readonly log: DurableLog;
 }
 
-export interface OperationRunner<TTrx extends DurableQueries> {
+export interface OperationRunner<TTrx extends DurableTransaction> {
   readonly start: <TParams extends JsonValue>(
     definition: OperationDefinition<TParams, TTrx>,
     input: OperationInput<TParams>,
@@ -46,7 +47,13 @@ interface ActiveRun {
   readonly controller: AbortController;
 }
 
-export function createOperationRunner<TTrx extends DurableQueries>(
+interface StepFailure {
+  readonly cause: unknown;
+  readonly signal: AbortSignal;
+  readonly isEffectDone: boolean;
+}
+
+export function createOperationRunner<TTrx extends DurableTransaction>(
   deps: OperationRunnerDeps<TTrx>,
 ): OperationRunner<TTrx> {
   const definitions = new Map(deps.definitions.map((definition) => [definition.kind, definition]));
@@ -236,19 +243,17 @@ export function createOperationRunner<TTrx extends DurableQueries>(
       });
     }
 
-    try {
-      const output = await runnable.run({
-        operationId: operation.id,
-        targetId: operation.targetId,
-        params: operation.params,
-        signal,
-        undoRecord: step.undoRecord,
-        writeUndo: (record) =>
-          commit((trx) =>
-            writeStepUndo(trx, { operationId: operation.id, position: step.position, record }),
-          ),
-      });
+    const ran = await runEffect(operation, runnable, step, signal);
 
+    if (ran.kind === 'failed') {
+      await failStep(operation, step, { cause: ran.error, signal, isEffectDone: false });
+
+      return;
+    }
+
+    const output = ran.output;
+
+    try {
       await commit(async (trx) => {
         await moveStep(trx, {
           operationId: operation.id,
@@ -278,22 +283,55 @@ export function createOperationRunner<TTrx extends DurableQueries>(
         });
       });
     } catch (error) {
-      const ending = signal.aborted ? 'cancelled' : 'failed';
+      await failStep(operation, step, { cause: error, signal, isEffectDone: true });
+    }
+  };
 
-      await failStep(operation, step, ending, {
-        code: signal.aborted ? 'cancelled' : 'step_failed',
-        message: getErrorMessage(error),
+  const runEffect = async (
+    operation: Operation,
+    runnable: RunnableStep<TTrx>,
+    step: OperationStep,
+    signal: AbortSignal,
+  ): Promise<
+    | { readonly kind: 'ran'; readonly output: StepOutput<TTrx> | undefined }
+    | { readonly kind: 'failed'; readonly error: unknown }
+  > => {
+    try {
+      const output = await runnable.run({
+        operationId: operation.id,
+        targetId: operation.targetId,
+        params: operation.params,
+        signal,
+        undoRecord: step.undoRecord,
+        writeUndo: (record) =>
+          commit((trx) =>
+            writeStepUndo(trx, { operationId: operation.id, position: step.position, record }),
+          ),
       });
+
+      return { kind: 'ran', output };
+    } catch (error) {
+      return { kind: 'failed', error };
     }
   };
 
   const failStep = (
     operation: Operation,
     step: OperationStep,
-    ending: 'failed' | 'cancelled',
-    error: OperationError,
+    failure: StepFailure,
   ): Promise<void> =>
     commit(async (trx) => {
+      const ending = failure.signal.aborted ? 'cancelled' : 'failed';
+
+      const error: OperationError = {
+        code: failure.signal.aborted ? 'cancelled' : 'step_failed',
+        message: getErrorMessage(failure.cause),
+      };
+
+      if (failure.isEffectDone) {
+        await writeStepEffectDone(trx, { operationId: operation.id, position: step.position });
+      }
+
       await moveStep(trx, {
         operationId: operation.id,
         position: step.position,
