@@ -69,20 +69,24 @@ sleeping an imp.
 
 The owner can keep part of the budget for priority imps, the imps whose names match
 `IMP_PRIORITY_IMPS` ([configuration](../../guides/configuration.md)). An imp that serves people
-waiting on it, such as a chat assistant's sandbox, then wakes even when batch imps fill the rest of
-the host. In each budget, the kept RAM is `IMP_PRIORITY_RAM_MIB` less what the awake and admitted
-priority imps measure and reserve in that budget.
+waiting on it, such as a chat assistant's sandbox, then wakes even when the other imps fill the rest
+of the host.
 
-- A boot, wake or grow of any other imp counts the kept RAM as in use, in the whole budget, in the
-  budget less the pool and in the pool of huge pages. The governor refuses it with
-  `RAM_BUDGET_EXCEEDED` when it fits only by taking the kept RAM, and the error names the kept RAM
-  and the patterns.
-- To make room for any other imp, the governor never sleeps a priority imp. A sleeping priority imp
-  frees its RAM into the kept RAM, where the other imp may not use it.
-- A priority imp may use the whole budget, and the governor sleeps any idle imp to make room for it.
+The governor checks an admission against up to three limits: the whole budget, and on a host with a
+pool, the budget less the pool and the pool itself. Each limit keeps the full
+`IMP_PRIORITY_RAM_MIB`, less what the awake and admitted priority imps measure and reserve against
+that limit. The pool and the budget less the pool share no pages, so a priority imp on ordinary
+pages takes nothing from the RAM kept in the pool.
 
-The pool and the budget less the pool share no pages, so a host with a pool keeps the RAM in each of
-them. A priority imp on ordinary pages then takes nothing from the RAM kept in the pool.
+- A boot, wake or grow of an imp outside the patterns counts the kept RAM of each limit as in use.
+  When it fits only by taking kept RAM, the governor refuses it with `RAM_BUDGET_EXCEEDED`, and
+  writes the kept RAM and the patterns in the error message.
+- To make room for an imp outside the patterns, the governor never sleeps a priority imp. A sleeping
+  priority imp frees its RAM into the kept RAM, which the other imp cannot use.
+- A priority imp can use the whole budget. To make room for it, the governor sleeps any imp that
+  step 2 of the admission allows, priority imps included.
+
+The kept RAM counts only at admission. [Enforcement](#enforcement) treats every imp alike.
 
 ## Enforcement
 
