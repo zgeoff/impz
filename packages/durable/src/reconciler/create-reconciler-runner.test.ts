@@ -1,6 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { once } from 'node:events';
 import { waitFor } from '@impz/test-utils/wait-for';
+import { sql } from 'kysely';
 import type { Transaction } from 'kysely';
 import type { DurableTables } from '../durable-tables';
 import { createChangeSignal } from '../operations/create-change-signal';
@@ -33,6 +34,7 @@ async function setupTest() {
   };
 
   return {
+    db: database.db,
     clock,
     warnings,
     createRunner: (
@@ -235,31 +237,37 @@ test('it backs off interval × 2ⁿ, capped at 10 × the interval, after errors 
   expect(delaysMs).toStrictEqual([[4000], [8000], [16_000], [20_000], [20_000]]);
 });
 
-test('it adds jitter that keeps the delay between half and all of the backoff', async () => {
-  const ctx = await setupTest();
+test.each([
+  { random: 0.25, delayMs: 2500 },
+  { random: 0.75, delayMs: 3500 },
+])(
+  'it waits $delayMs ms after an error for a random draw of $random, between half and all of the backoff',
+  async (row) => {
+    const ctx = await setupTest();
 
-  const runner = ctx.createRunner(
-    [
-      defineReconciler({
-        name: 'backup',
-        intervalMs: 2000,
-        reconcile: () => Promise.reject(new Error('the backup target is unreachable')),
-      }),
-    ],
-    [],
-    0,
-  );
+    const runner = ctx.createRunner(
+      [
+        defineReconciler({
+          name: 'backup',
+          intervalMs: 2000,
+          reconcile: () => Promise.reject(new Error('the backup target is unreachable')),
+        }),
+      ],
+      [],
+      row.random,
+    );
 
-  await runner.start();
+    await runner.start();
 
-  onTestFinished(() => runner.stop());
+    onTestFinished(() => runner.stop());
 
-  runner.trigger('backup');
+    runner.trigger('backup');
 
-  await waitFor(() => {
-    expect(ctx.clock.readPendingMs()).toStrictEqual([2000]);
-  });
-});
+    await waitFor(() => {
+      expect(ctx.clock.readPendingMs()).toStrictEqual([row.delayMs]);
+    });
+  },
+);
 
 test('it waits one interval again after a pass that follows errors succeeds', async () => {
   const ctx = await setupTest();
@@ -600,4 +608,76 @@ test('it aborts a running pass’s signal on stop and waits for the pass to end'
   await runner.stop();
 
   expect(ended).toStrictEqual(['aborted']);
+});
+
+test('it starts no reconciler when a stop arrives while it starts', async () => {
+  const ctx = await setupTest();
+
+  const runner = ctx.createRunner(
+    [
+      defineReconciler({
+        name: 'idle',
+        intervalMs: 2000,
+        reconcile: () => Promise.resolve({ outcome: 'unchanged', summary: 'no imp is idle' }),
+      }),
+    ],
+    [],
+    1,
+  );
+
+  const starting = runner.start();
+
+  await runner.stop();
+
+  await starting;
+
+  expect(ctx.clock.readPendingMs()).toStrictEqual([]);
+});
+
+test('it saves a result on the next pass after a save fails', async () => {
+  const ctx = await setupTest();
+
+  const runner = ctx.createRunner(
+    [
+      defineReconciler({
+        name: 'backup',
+        intervalMs: 2000,
+        reconcile: () => Promise.resolve({ outcome: 'changed', summary: 'pruned 3 backups' }),
+      }),
+    ],
+    [],
+    1,
+  );
+
+  await sql`create trigger refuse_results before insert on reconcilers begin select raise(abort, 'the disk is full'); end`.execute(
+    ctx.db,
+  );
+
+  await runner.start();
+
+  onTestFinished(() => runner.stop());
+
+  runner.trigger('backup');
+
+  await waitFor(() => {
+    expect(ctx.warnings).toStrictEqual(['the result of reconciler {name} was not saved: {error}']);
+  });
+
+  await sql`drop trigger refuse_results`.execute(ctx.db);
+
+  runner.trigger('backup');
+
+  await waitFor(async () => {
+    const results = await ctx.readResults();
+
+    expect(results).toStrictEqual([
+      {
+        name: 'backup',
+        outcome: 'changed',
+        summary: 'pruned 3 backups',
+        consecutiveErrors: 0,
+        at: 1_800_000_000_000,
+      },
+    ]);
+  });
 });

@@ -1,9 +1,11 @@
+import { getErrorMessage } from '@impz/shared';
 import invariant from 'tiny-invariant';
 import { createActor, toPromise } from 'xstate';
 import type { Actor, ActorOptions } from 'xstate';
 import type { DurableQueries } from '../durable-tables';
 import type { DurableLog, OperationRunner } from '../operations/create-operation-runner';
 import { buildBackoffDelayMs } from './build-backoff-delay-ms';
+import { buildPassResult } from './build-pass-result';
 import type { ReconcileResult, ReconcilerDefinition } from './define-reconciler';
 import { readReconcilerResults } from './read-reconciler-results';
 import type { ReconcilerResult } from './read-reconciler-results';
@@ -57,24 +59,21 @@ export function createReconcilerRunner<TTrx extends DurableQueries>(
   const runPass = async (entry: Entry<TTrx>, consecutiveErrors: number): Promise<void> => {
     const passed = await runReconcile(entry.definition);
 
-    const errors = passed.outcome === 'error' ? consecutiveErrors + 1 : 0;
-
-    const result = {
+    const pass = buildPassResult({
       name: entry.definition.name,
-      ...passed,
-      consecutiveErrors: errors,
-      at: deps.now(),
-    };
+      passed,
+      consecutiveErrors,
+      savedOutcome: entry.savedOutcome,
+      now: deps.now(),
+    });
 
-    entry.last = result;
+    entry.last = pass.result;
 
-    if (entry.savedOutcome !== result.outcome) {
-      const saved = await writeResult(result);
+    const saved = pass.shouldSave ? await writeResult(pass.result) : false;
 
-      entry.savedOutcome = saved ? result.outcome : entry.savedOutcome;
-    }
+    entry.savedOutcome = saved ? pass.result.outcome : entry.savedOutcome;
 
-    entry.actor.send({ type: 'passed', consecutiveErrors: errors });
+    entry.actor.send({ type: 'passed', consecutiveErrors: pass.result.consecutiveErrors });
   };
 
   const runReconcile = async (
@@ -91,10 +90,10 @@ export function createReconcilerRunner<TTrx extends DurableQueries>(
     } catch (error) {
       deps.log.warning('reconciler {name} failed: {error}', {
         name: definition.name,
-        error: toErrorMessage(error),
+        error: getErrorMessage(error),
       });
 
-      return { outcome: 'error', summary: toErrorMessage(error) };
+      return { outcome: 'error', summary: getErrorMessage(error) };
     }
   };
 
@@ -106,7 +105,7 @@ export function createReconcilerRunner<TTrx extends DurableQueries>(
     } catch (error) {
       deps.log.warning('the result of reconciler {name} was not saved: {error}', {
         name: result.name,
-        error: toErrorMessage(error),
+        error: getErrorMessage(error),
       });
 
       return false;
@@ -143,30 +142,45 @@ export function createReconcilerRunner<TTrx extends DurableQueries>(
     return entry;
   };
 
+  const startEntries = async (): Promise<void> => {
+    const saved = await deps.withTransaction((trx) => readReconcilerResults(trx));
+
+    if (controller.signal.aborted) {
+      return;
+    }
+
+    for (const definition of deps.reconcilers) {
+      invariant(!entries.has(definition.name), `two reconcilers are named ${definition.name}`);
+
+      entries.set(
+        definition.name,
+        createEntry(
+          definition,
+          saved.find((result) => result.name === definition.name),
+        ),
+      );
+    }
+
+    for (const entry of entries.values()) {
+      entry.actor.start();
+    }
+  };
+
+  const lifecycle = { started: false, starting: Promise.resolve() };
+
   return {
-    start: async () => {
-      invariant(entries.size === 0, 'the reconciler runner has already started');
+    start: () => {
+      invariant(!lifecycle.started, 'the reconciler runner has already started');
 
-      const saved = await deps.withTransaction((trx) => readReconcilerResults(trx));
+      lifecycle.started = true;
+      lifecycle.starting = startEntries();
 
-      for (const definition of deps.reconcilers) {
-        invariant(!entries.has(definition.name), `two reconcilers are named ${definition.name}`);
-
-        entries.set(
-          definition.name,
-          createEntry(
-            definition,
-            saved.find((result) => result.name === definition.name),
-          ),
-        );
-      }
-
-      for (const entry of entries.values()) {
-        entry.actor.start();
-      }
+      return lifecycle.starting;
     },
     stop: async () => {
       controller.abort();
+
+      await Promise.allSettled([lifecycle.starting]);
 
       for (const entry of entries.values()) {
         entry.actor.send({ type: 'stop' });
@@ -223,8 +237,4 @@ function toMachineClock(startTimer: ReconcilerTimer): MachineClock {
       }
     },
   };
-}
-
-function toErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

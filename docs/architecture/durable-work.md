@@ -68,7 +68,7 @@ its next step. For a step that was running, the runner follows the restart rule 
 | Rule      | Use it for a step that…                                       | After a restart                                                                |
 | --------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------ |
 | `rerun`   | gives the same result when it runs twice                      | the step runs again, and the operation goes on                                 |
-| `fail`    | can't run twice, but its effect can be undone                 | the operation fails with the error code `interrupted`, and the undo runs       |
+| `fail`    | can't run twice, and writes an undo record before its effect  | the operation fails with the error code `interrupted`, and the undo runs       |
 | `unknown` | has an effect nobody can check, such as a command inside a VM | the operation ends `unknown`; the runner never reruns the step or runs an undo |
 
 An operation that ends `unknown` needs a check from outside the runner, such as a reconciler of the
@@ -76,12 +76,14 @@ program, to find what the step did.
 
 A step may write an undo record before its effect, such as the name of the file it is about to
 create. The undo then finds what to remove even when the process stopped halfway through the step.
-The undo runs when a step fails, when the operation is cancelled, or when a `fail` step was running
-at a restart. It runs for each step that succeeded, and for each step that wrote an undo record, the
-last step first. The runner marks each undo done in its own commit, and a crash before that commit
-makes the undo run again after the restart, so an undo must be safe to run twice. When an undo
-throws, the operation ends `failed` with the error code `undo_failed`, and the runner never runs the
-undos still left. Those steps keep their effects, and a reconciler of the program finds them.
+The runner never undoes a step that stopped before it succeeded and wrote no undo record, so a
+`fail` step whose undo must run after a restart writes its record first. The undo runs when a step
+fails, when the operation is cancelled, or when a `fail` step was running at a restart. It runs for
+each step that succeeded, and for each step that wrote an undo record, the last step first. The
+runner marks each undo done in its own commit, and a crash before that commit makes the undo run
+again after the restart, so an undo must be safe to run twice. When an undo throws, the operation
+ends `failed` with the error code `undo_failed`, and the runner never runs the undos still left.
+Those steps keep their effects, and a reconciler of the program finds them.
 
 The runner saves a cancel request on the operation row first, so the request survives a restart. The
 runner then aborts the signal it passed to the running step. When the step returns, the undo runs
