@@ -11,7 +11,10 @@ import { writeStepUndo } from './write-step-undo';
 async function setupTest() {
   const database = await createTestDurableDatabase();
 
-  return { db: database.db, openWriter: () => openTestDurableDatabase(database.path) };
+  return {
+    db: database.db,
+    openWriter: () => openTestDurableDatabase(database.stack, database.path),
+  };
 }
 
 test('it returns null for an ID no operation has', async () => {

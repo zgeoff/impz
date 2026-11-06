@@ -4,6 +4,8 @@ import { match } from 'ts-pattern';
 import type { DurableTransaction } from '../durable-tables';
 import type { JsonValue } from '../json-value';
 import { appendOperationEvent } from './append-operation-event';
+import { buildStepFailure } from './build-step-failure';
+import type { StepFailure } from './build-step-failure';
 import type { ChangeSignal } from './create-change-signal';
 import type { OperationDefinition, RunnableStep, StepOutput } from './define-operation';
 import { moveOperation } from './move-operation';
@@ -45,12 +47,6 @@ export interface OperationRunner<TTrx extends DurableTransaction> {
 interface ActiveRun {
   readonly promise: Promise<void>;
   readonly controller: AbortController;
-}
-
-interface StepFailure {
-  readonly cause: unknown;
-  readonly signal: AbortSignal;
-  readonly isEffectDone: boolean;
 }
 
 export function createOperationRunner<TTrx extends DurableTransaction>(
@@ -101,6 +97,8 @@ export function createOperationRunner<TTrx extends DurableTransaction>(
   };
 
   const runToEnd = async (id: string, signal: AbortSignal): Promise<void> => {
+    const attemptedUndos = new Set<number>();
+
     for (;;) {
       const operation = await deps.withTransaction((trx) => readOperation(trx, id));
 
@@ -120,6 +118,15 @@ export function createOperationRunner<TTrx extends DurableTransaction>(
 
       if (move.kind === 'done') {
         return;
+      }
+
+      // an undo picked twice in one run failed the first time; the next run or recovery retries it
+      if (move.kind === 'undo-step') {
+        if (attemptedUndos.has(move.step.position)) {
+          return;
+        }
+
+        attemptedUndos.add(move.step.position);
       }
 
       await applyMove(operation, definition, move, signal);
@@ -246,7 +253,11 @@ export function createOperationRunner<TTrx extends DurableTransaction>(
     const ran = await runEffect(operation, runnable, step, signal);
 
     if (ran.kind === 'failed') {
-      await failStep(operation, step, { cause: ran.error, signal, isEffectDone: false });
+      await failStep(
+        operation,
+        step,
+        buildStepFailure({ cause: ran.error, isAborted: signal.aborted, phase: 'run' }),
+      );
 
       return;
     }
@@ -283,7 +294,11 @@ export function createOperationRunner<TTrx extends DurableTransaction>(
         });
       });
     } catch (error) {
-      await failStep(operation, step, { cause: error, signal, isEffectDone: true });
+      await failStep(
+        operation,
+        step,
+        buildStepFailure({ cause: error, isAborted: signal.aborted, phase: 'commit' }),
+      );
     }
   };
 
@@ -321,12 +336,7 @@ export function createOperationRunner<TTrx extends DurableTransaction>(
     failure: StepFailure,
   ): Promise<void> =>
     commit(async (trx) => {
-      const ending = failure.signal.aborted ? 'cancelled' : 'failed';
-
-      const error: OperationError = {
-        code: failure.signal.aborted ? 'cancelled' : 'step_failed',
-        message: getErrorMessage(failure.cause),
-      };
+      const error = failure.error;
 
       if (failure.isEffectDone) {
         await writeStepEffectDone(trx, { operationId: operation.id, position: step.position });
@@ -344,7 +354,7 @@ export function createOperationRunner<TTrx extends DurableTransaction>(
         id: operation.id,
         from: 'running',
         to: 'running',
-        set: { ending, error_code: error.code, error_message: error.message },
+        set: { ending: failure.ending, error_code: error.code, error_message: error.message },
       });
 
       await appendOperationEvent(trx, operation, {
@@ -375,11 +385,6 @@ export function createOperationRunner<TTrx extends DurableTransaction>(
         step: step.name,
         operationId: operation.id,
         error: getErrorMessage(error),
-      });
-
-      await endOperation(operation, 'running', 'failed', {
-        code: 'undo_failed',
-        message: `the undo of step ${step.name} failed: ${getErrorMessage(error)}`,
       });
 
       return;

@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { readEventsAfter } from '../events/read-events-after';
 import { buildRecordingOperation } from '../test-utils/build-recording-operation';
 import { buildRecordingStep } from '../test-utils/build-recording-step';
 import { createTestDurableDatabase } from '../test-utils/create-test-durable-database';
@@ -8,7 +9,11 @@ import { readOperation } from './read-operation';
 async function setupTest() {
   const database = await createTestDurableDatabase();
 
-  return { db: database.db, readOperation: (id: string) => readOperation(database.db, id) };
+  return {
+    db: database.db,
+    readOperation: (id: string) => readOperation(database.db, id),
+    readEvents: () => readEventsAfter(database.db, { after: 0, limit: 10 }),
+  };
 }
 
 test('it stores a queued operation with a queued row for each step', async () => {
@@ -69,11 +74,11 @@ test('it writes nothing when the caller’s transaction rolls back', async () =>
   const rows = [
     await ctx.db.selectFrom('operations').select('id').execute(),
     await ctx.db.selectFrom('operation_steps').select('name').execute(),
-    await ctx.db.selectFrom('events').select('kind').execute(),
+    await ctx.readEvents(),
   ];
 
   expect(write).rejects.toThrowWithMessage(Error, /the domain write failed/u);
-  expect(rows).toStrictEqual([[], [], []]);
+  expect(rows).toStrictEqual([[], [], { kind: 'events', events: [] }]);
 });
 
 test('it matches a retry key whatever the order of the params’ keys', async () => {

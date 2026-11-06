@@ -176,44 +176,53 @@ test('it writes an event for each change of the operation, in order', async () =
 
   await runner.run(started.operationId);
 
-  const events = await ctx.db
-    .selectFrom('events')
-    .select(['kind', 'target_id', 'operation_id', 'payload'])
-    .orderBy('seq')
-    .execute();
+  const events = await ctx.readEvents();
 
-  expect(events).toStrictEqual([
-    {
-      kind: 'operation.queued',
-      target_id: 'shelf-1',
-      operation_id: started.operationId,
-      payload: '{"kind":"shelf.build"}',
-    },
-    {
-      kind: 'operation.started',
-      target_id: 'shelf-1',
-      operation_id: started.operationId,
-      payload: '{"kind":"shelf.build","state":"running","step":null,"error":null}',
-    },
-    {
-      kind: 'operation.step',
-      target_id: 'shelf-1',
-      operation_id: started.operationId,
-      payload: '{"kind":"shelf.build","state":"running","step":"cut","error":null}',
-    },
-    {
-      kind: 'operation.step',
-      target_id: 'shelf-1',
-      operation_id: started.operationId,
-      payload: '{"kind":"shelf.build","state":"succeeded","step":"cut","error":null}',
-    },
-    {
-      kind: 'operation.ended',
-      target_id: 'shelf-1',
-      operation_id: started.operationId,
-      payload: '{"kind":"shelf.build","state":"succeeded","step":null,"error":null}',
-    },
-  ]);
+  expect(events).toStrictEqual({
+    kind: 'events',
+    events: [
+      {
+        seq: expect.any(Number),
+        at: 1_800_000_000_000,
+        kind: 'operation.queued',
+        targetId: 'shelf-1',
+        operationId: started.operationId,
+        payload: { kind: 'shelf.build' },
+      },
+      {
+        seq: expect.any(Number),
+        at: 1_800_000_000_000,
+        kind: 'operation.started',
+        targetId: 'shelf-1',
+        operationId: started.operationId,
+        payload: { kind: 'shelf.build', state: 'running', step: null, error: null },
+      },
+      {
+        seq: expect.any(Number),
+        at: 1_800_000_000_000,
+        kind: 'operation.step',
+        targetId: 'shelf-1',
+        operationId: started.operationId,
+        payload: { kind: 'shelf.build', state: 'running', step: 'cut', error: null },
+      },
+      {
+        seq: expect.any(Number),
+        at: 1_800_000_000_000,
+        kind: 'operation.step',
+        targetId: 'shelf-1',
+        operationId: started.operationId,
+        payload: { kind: 'shelf.build', state: 'succeeded', step: 'cut', error: null },
+      },
+      {
+        seq: expect.any(Number),
+        at: 1_800_000_000_000,
+        kind: 'operation.ended',
+        targetId: 'shelf-1',
+        operationId: started.operationId,
+        payload: { kind: 'shelf.build', state: 'succeeded', step: null, error: null },
+      },
+    ],
+  });
 });
 
 test('it commits a step’s write with the step’s success', async () => {
@@ -237,16 +246,19 @@ test('it commits a step’s write with the step’s success', async () => {
 
   await runner.run(started.operationId);
 
-  const kinds = await ctx.db.selectFrom('events').select('kind').orderBy('seq').execute();
+  const events = await ctx.readEvents();
 
-  expect(kinds.map((row) => row.kind)).toStrictEqual([
-    'operation.queued',
-    'operation.started',
-    'operation.step',
-    'shelf.cut',
-    'operation.step',
-    'operation.ended',
-  ]);
+  expect(events).toStrictEqual({
+    kind: 'events',
+    events: [
+      expect.objectContaining({ kind: 'operation.queued' }),
+      expect.objectContaining({ kind: 'operation.started' }),
+      expect.objectContaining({ kind: 'operation.step' }),
+      expect.objectContaining({ kind: 'shelf.cut' }),
+      expect.objectContaining({ kind: 'operation.step' }),
+      expect.objectContaining({ kind: 'operation.ended' }),
+    ],
+  });
 });
 
 test('it saves the result a step returns', async () => {
@@ -467,16 +479,19 @@ test('it skips the undo of a failed step that wrote no undo record', async () =>
   expect(effects).toStrictEqual([]);
 });
 
-test('it ends the operation failed and logs a warning when an undo fails', async () => {
+test('it leaves the operation open with its undos unfinished when an undo throws', async () => {
   const ctx = await setupTest();
+
+  const effects: string[] = [];
 
   const shelf = buildRecordingOperation(
     'shelf.build',
     [
-      buildRecordingStep({ name: 'measure', undo: 'fail' }),
-      buildRecordingStep({ name: 'cut', run: 'fail' }),
+      buildRecordingStep({ name: 'measure', undo: 'succeed' }),
+      buildRecordingStep({ name: 'cut', undo: 'fail' }),
+      buildRecordingStep({ name: 'assemble', run: 'fail' }),
     ],
-    [],
+    effects,
   );
 
   const runner = ctx.createRunner([shelf]);
@@ -493,14 +508,65 @@ test('it ends the operation failed and logs a warning when an undo fails', async
 
   const operation = await ctx.readOperation(started.operationId);
 
-  expect(operation?.error).toStrictEqual({
-    code: 'undo_failed',
-    message: 'the undo of step measure failed: the undo of measure failed',
+  expect({
+    effects,
+    warnings: ctx.warnings,
+    state: operation?.state,
+    ending: operation?.ending,
+    undone: operation?.steps.map((step) => step.undoneAt),
+  }).toStrictEqual({
+    effects: ['measure', 'cut'],
+    warnings: ['the undo of step {step} of operation {operationId} failed: {error}'],
+    state: 'running',
+    ending: 'failed',
+    undone: [null, null, null],
+  });
+});
+
+test('it retries the unfinished undos when it recovers an operation an undo left open', async () => {
+  const ctx = await setupTest();
+
+  const effects: string[] = [];
+
+  const jammed = buildRecordingOperation(
+    'shelf.build',
+    [
+      buildRecordingStep({ name: 'measure', undo: 'succeed' }),
+      buildRecordingStep({ name: 'cut', undo: 'fail' }),
+      buildRecordingStep({ name: 'assemble', run: 'fail' }),
+    ],
+    [],
+  );
+
+  const fixed = buildRecordingOperation(
+    'shelf.build',
+    [
+      buildRecordingStep({ name: 'measure', undo: 'succeed' }),
+      buildRecordingStep({ name: 'cut', undo: 'succeed' }),
+      buildRecordingStep({ name: 'assemble', run: 'fail' }),
+    ],
+    effects,
+  );
+
+  const before = ctx.createRunner([jammed]);
+
+  const started = await before.start(jammed, {
+    params: { label: 'oak' },
+    principal: 'owner',
+    targetId: null,
+    parentId: null,
+    retryKey: null,
   });
 
-  expect(ctx.warnings).toStrictEqual([
-    'the undo of step {step} of operation {operationId} failed: {error}',
-  ]);
+  await before.run(started.operationId);
+  await ctx.createRunner([fixed]).recover();
+
+  const operation = await ctx.readOperation(started.operationId);
+
+  expect({ effects, state: operation?.state }).toStrictEqual({
+    effects: ['undo cut', 'undo measure'],
+    state: 'failed',
+  });
 });
 
 test('it undoes the steps that ran and ends cancelled when cancelled during a step', async () => {
