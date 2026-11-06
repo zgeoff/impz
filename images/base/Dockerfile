@@ -1,4 +1,4 @@
-# imp base image: Ubuntu 24.04 with the Docker engine, supervised by imp-agent.
+# imp base image: Ubuntu 26.04 with the Docker engine, supervised by imp-agent.
 # The agent itself comes from the imp system drive, not from this image.
 # Pinned to the multi-arch index digest, so the published imp-base has a fixed
 # base. Bumping it is a dependency change: review it like one.
@@ -7,10 +7,10 @@ FROM ubuntu:26.04@sha256:6a06111c3b0a8600feadb270aec771dc239bf407b25625f93f44ab0
 # Docker's packages, at apt's exact versions. A bump is a reviewed dependency
 # change: update these versions, the licence tags they imply and the licence
 # sums below together. scripts/release/check-base-image.sh checks the image against them.
-ARG DOCKER_CE_VERSION=5:29.8.2-1~ubuntu.24.04~noble
-ARG DOCKER_CE_CLI_VERSION=5:29.8.2-1~ubuntu.24.04~noble
-ARG CONTAINERD_VERSION=2.3.6-1~ubuntu.24.04~noble
-ARG BUILDX_VERSION=0.37.1-1~ubuntu.24.04~noble
+ARG DOCKER_CE_VERSION=5:29.8.2-1~ubuntu.26.04~resolute
+ARG DOCKER_CE_CLI_VERSION=5:29.8.2-1~ubuntu.26.04~resolute
+ARG CONTAINERD_VERSION=2.3.6-1~ubuntu.26.04~resolute
+ARG BUILDX_VERSION=0.37.1-1~ubuntu.26.04~resolute
 
 # sha256 of Docker's apt signing key (fingerprint 9DC8 5822 9FC7 DD38 854A
 # E2D8 8D81 803C 0EBF CD88), the key apt trusts for the packages above
@@ -28,7 +28,7 @@ RUN apt-get update \
  && install -m 0755 -d /etc/apt/keyrings \
  && curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc \
  && echo "$DOCKER_APT_GPG_SHA256  /etc/apt/keyrings/docker.asc" | sha256sum -c - \
- && echo "deb [signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable" \
+ && echo "deb [signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu resolute stable" \
       > /etc/apt/sources.list.d/docker.list \
  && apt-get update \
  && apt-get install -y --no-install-recommends \
