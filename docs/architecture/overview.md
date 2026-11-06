@@ -19,11 +19,11 @@ agent. The guest agent is `agent/`.
 
 With `packages/durable`, a program on SQLite records its changes in an event log that numbers each
 one, runs operations that resume or undo their steps after a restart, and runs reconcilers that
-check the system on a timer. [Durable work](./durable-work.md) explains all three. Each write of the
-package goes through the program's own Kysely transaction, so a change and its record commit
-together, or neither commits. The package never refers to an imp concept, so a program other than
-impd can use it. Its event log is a table in the program's own database, apart from impd's
-in-process event bus.
+check the system on a timer. [Durable work](./durable-work.md) explains all three. The package opens
+no transaction of its own. A program passes the transaction of a change to the event append, so the
+change and its event commit together; an append on a plain connection commits on its own. The
+package never refers to an imp concept, so a program other than impd can use it. Its event log is a
+table in the program's own database, apart from impd's in-process event bus.
 
 ## The path of a request
 
