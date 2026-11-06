@@ -101,6 +101,8 @@ export async function startRegistry(
   plan: Readonly<RegistryPlan>,
   container: string,
 ): Promise<Registry> {
+  const docker = resolveDocker();
+
   const taken = await runCommand(['docker', 'container', 'inspect', container]);
 
   if (taken.exitCode === 0) {
@@ -143,7 +145,7 @@ export async function startRegistry(
   ]);
 
   stack.defer(async () => {
-    await runCommand(['docker', 'network', 'rm', plan.network]);
+    await runCommand([docker, 'network', 'rm', plan.network]);
   });
 
   mkdirSync(certs, { recursive: true });
@@ -181,7 +183,7 @@ export async function startRegistry(
   ]);
 
   stack.defer(async () => {
-    await runCommand(['docker', 'rm', '--force', '--volumes', container]);
+    await runCommand([docker, 'rm', '--force', '--volumes', container]);
   });
 
   return {
@@ -189,6 +191,13 @@ export async function startRegistry(
     container,
     certPath: join(certs, 'cert.pem'),
   };
+}
+
+// A stack can go after PATH changes, as a cut-off test cleanup does in the next
+// test, and must still reach the docker that made its things. Bun.which reads
+// the PATH the process started with unless it gets the current one.
+function resolveDocker(): string {
+  return Bun.which('docker', { PATH: process.env['PATH'] ?? '' }) ?? 'docker';
 }
 
 export interface StaleRegistries {
@@ -321,6 +330,8 @@ export async function createMovedTag(
   directory: string,
   repository: string,
 ): Promise<MovedTag> {
+  const docker = resolveDocker();
+
   const busybox = await readBusyboxDigest();
 
   const tag = `${registry.address}/${repository}:1`;
@@ -329,7 +340,7 @@ export async function createMovedTag(
   await createPushedImage(writeContext(directory, `${repository}-old`, from, 'old'), tag);
 
   stack.defer(async () => {
-    await runCommand(['docker', 'rmi', tag]);
+    await runCommand([docker, 'rmi', tag]);
   });
 
   // The containerd store drops an image whose last tag moves.
@@ -338,7 +349,7 @@ export async function createMovedTag(
   await runChecked(['docker', 'tag', tag, kept]);
 
   stack.defer(async () => {
-    await runCommand(['docker', 'rmi', kept]);
+    await runCommand([docker, 'rmi', kept]);
   });
 
   const repoDigests = await runChecked([

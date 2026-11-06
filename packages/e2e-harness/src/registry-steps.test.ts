@@ -250,6 +250,49 @@ test('#startRegistry removes the registry it ran, its certificates and its netwo
   expect(existsSync(certs)).toBeFalse();
 });
 
+test('#startRegistry removes its registry and network with the docker it started with after PATH changes', async () => {
+  const ctx = await setupTest();
+
+  const docker = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    ['case "$1 $2" in', '  "container inspect"|"network inspect") exit 1 ;;', 'esac'].join('\n'),
+  );
+
+  updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
+
+  await startRegistry(
+    ctx.stack,
+    {
+      name: 'imp-e2e-registry.test',
+      port: 15_443,
+      certDirectory: join(ctx.directoryPath, 'registry-tls'),
+      network: 'imp-dev-registry',
+      subnet: '10.200.0.0/24',
+      gateway: '10.200.0.1',
+    },
+    'e2e-reg-registry-1',
+  );
+
+  const other = createStubBin(join(ctx.directoryPath, 'other'), 'docker');
+
+  updateEnv('PATH', `${other.bin}:${process.env['PATH'] ?? ''}`);
+
+  await ctx.stack.disposeAsync();
+
+  const calls = await readFile(docker.calls, 'utf8');
+  const otherCalls = await readFile(other.calls, 'utf8');
+
+  expect({ removals: calls.split('\n').slice(-3), otherCalls }).toStrictEqual({
+    removals: [
+      'docker rm --force --volumes e2e-reg-registry-1',
+      'docker network rm imp-dev-registry',
+      '',
+    ],
+    otherCalls: '',
+  });
+});
+
 test('#startRegistry refuses a container name that is taken, before it makes anything', async () => {
   const ctx = await setupTest();
 
@@ -410,6 +453,51 @@ test('#createMovedTag moves the tag to new content and pins the old, and removes
     `docker rmi ${tag}`,
     '',
   ]);
+});
+
+test('#createMovedTag removes both tags with the docker it started with after PATH changes', async () => {
+  const ctx = await setupTest();
+
+  const docker = createStubBin(
+    ctx.directoryPath,
+    'docker',
+    [
+      'case "$*" in',
+      `  'image inspect --format {{json .RepoDigests}} busybox:1.37') echo '["busybox@sha256:aaa"]' ;;`,
+      `  'image inspect --format {{json .RepoDigests}} sha256:new') echo '["imp-e2e-registry.test:49153/e2e/mutable@sha256:ccc"]' ;;`,
+      `  'image inspect'*) echo '["imp-e2e-registry.test:49153/e2e/mutable@sha256:bbb"]' ;;`,
+      `  build*mutable-new) echo sha256:new ;;`,
+      'esac',
+    ].join('\n'),
+  );
+
+  updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
+
+  const registry = {
+    address: 'imp-e2e-registry.test:49153',
+    container: 'e2e-reg-registry-1',
+    certPath: join(ctx.directoryPath, 'cert.pem'),
+  };
+
+  await createMovedTag(ctx.stack, registry, ctx.directoryPath, 'e2e/mutable');
+
+  const other = createStubBin(join(ctx.directoryPath, 'other'), 'docker');
+
+  updateEnv('PATH', `${other.bin}:${process.env['PATH'] ?? ''}`);
+
+  await ctx.stack.disposeAsync();
+
+  const calls = await readFile(docker.calls, 'utf8');
+  const otherCalls = await readFile(other.calls, 'utf8');
+
+  expect({ removals: calls.split('\n').slice(-3), otherCalls }).toStrictEqual({
+    removals: [
+      'docker rmi imp-e2e-registry.test:49153/e2e/mutable:kept',
+      'docker rmi imp-e2e-registry.test:49153/e2e/mutable:1',
+      '',
+    ],
+    otherCalls: '',
+  });
 });
 
 test('#createMovedTag removes the tag it made when a later step fails', async () => {
