@@ -15,9 +15,16 @@ interface HugePagesConfig {
   readonly handlerBin: string;
 }
 
+// the RAM the budget keeps for the imps whose names match a pattern
+export interface PriorityRam {
+  readonly mib: number;
+  readonly patterns: readonly string[];
+}
+
 export interface VmConfig extends HostNetConfig {
   readonly dataDir: string;
   readonly ramBudgetMib: number;
+  readonly priorityRam: PriorityRam | null;
 
   // how long an elastic guest could give back a step before impd unplugs it
   readonly memoryShrinkAfterMs: number;

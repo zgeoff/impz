@@ -960,6 +960,99 @@ test('it refuses a 2M imp the pool could hold only with the pages an awake 2M im
   expect(ctx.fake.bootPlans).toHaveLength(1);
 });
 
+test('it wakes and creates priority imps up to their kept RAM after other imps try to fill the huge page pool', async () => {
+  updateEnv('IMP_HUGE_PAGES', '2M');
+  updateEnv('IMP_RAM_BUDGET_MIB', '4096');
+  updateEnv('IMP_PRIORITY_RAM_MIB', '1024');
+  updateEnv('IMP_PRIORITY_IMPS', 'chat-*');
+
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
+  const ctx = await startTestImpd(stack, {
+    env: readImpEnv(),
+    boundaries: { imps: { readHugePagePool: () => ({ totalMib: 2048, freeMib: 2048 }) } },
+  });
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.client.imps.create({ name: 'chat-a', memoryMib: 256 });
+  await ctx.client.imps.sleep({ name: 'chat-a' });
+
+  await Promise.allSettled(
+    ['agent-a', 'agent-b', 'agent-c', 'agent-d', 'agent-e', 'agent-f', 'agent-g', 'agent-h'].map(
+      (name) => ctx.client.imps.create({ name, memoryMib: 256 }),
+    ),
+  );
+
+  const outcomes = await Promise.allSettled([
+    ctx.client.imps.wake({ name: 'chat-a' }),
+    ctx.client.imps.create({ name: 'chat-b', memoryMib: 256 }),
+    ctx.client.imps.create({ name: 'chat-c', memoryMib: 256 }),
+    ctx.client.imps.create({ name: 'chat-d', memoryMib: 256 }),
+  ]);
+
+  expect(outcomes.map((outcome) => outcome.status)).toStrictEqual([
+    'fulfilled',
+    'fulfilled',
+    'fulfilled',
+    'fulfilled',
+  ]);
+});
+
+test('it refuses to create an imp outside the priority patterns into the pool kept for priority imps, and names that RAM', async () => {
+  updateEnv('IMP_HUGE_PAGES', '2M');
+  updateEnv('IMP_RAM_BUDGET_MIB', '4096');
+  updateEnv('IMP_PRIORITY_RAM_MIB', '1024');
+  updateEnv('IMP_PRIORITY_IMPS', 'chat-*');
+
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
+  const ctx = await startTestImpd(stack, {
+    env: readImpEnv(),
+    boundaries: { imps: { readHugePagePool: () => ({ totalMib: 2048, freeMib: 2048 }) } },
+  });
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.client.imps.create({ name: 'agent-a', memoryMib: 512 });
+  await ctx.client.imps.create({ name: 'agent-b', memoryMib: 512 });
+
+  expect(ctx.client.imps.create({ name: 'agent-c', memoryMib: 256 })).rejects.toMatchObject({
+    code: 'RAM_BUDGET_EXCEEDED',
+    message:
+      "not enough 2 MiB pages: 1024 of the host's 2048 MiB pool in use or promised to awake imps and 1024 MiB kept for priority imps (chat-*), 256 MiB requested",
+  });
+});
+
+test('it refuses to wake an imp outside the priority patterns into the pool kept for priority imps', async () => {
+  updateEnv('IMP_HUGE_PAGES', '2M');
+  updateEnv('IMP_RAM_BUDGET_MIB', '4096');
+  updateEnv('IMP_PRIORITY_RAM_MIB', '1024');
+  updateEnv('IMP_PRIORITY_IMPS', 'chat-*');
+
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
+  const ctx = await startTestImpd(stack, {
+    env: readImpEnv(),
+    boundaries: { imps: { readHugePagePool: () => ({ totalMib: 2048, freeMib: 2048 }) } },
+  });
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.client.imps.create({ name: 'agent-a', memoryMib: 256 });
+  await ctx.client.imps.sleep({ name: 'agent-a' });
+  await ctx.client.imps.create({ name: 'agent-b', memoryMib: 512 });
+  await ctx.client.imps.create({ name: 'agent-c', memoryMib: 512 });
+
+  expect(ctx.client.imps.wake({ name: 'agent-a' })).rejects.toMatchObject({
+    code: 'RAM_BUDGET_EXCEEDED',
+    message: expect.toInclude('and 1024 MiB kept for priority imps (chat-*)'),
+  });
+});
+
 test('it refuses a 2M imp on a host container with no userfaultfd device before any VM starts', async () => {
   updateEnv('IMP_HUGE_PAGES', '2M');
 

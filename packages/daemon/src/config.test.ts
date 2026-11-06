@@ -18,6 +18,7 @@ test('it fills every setting from its default when the env is empty', () => {
     hostAddresses: [],
     brokerTestUpstreams: null,
     ramBudgetMib: 16_384,
+    priorityRam: null,
     idleTimeoutS: 60,
     idleCpuPercent: 10,
     memoryShrinkAfterMs: 60_000,
@@ -209,6 +210,37 @@ test('it reads and coerces values from the env', () => {
   expect(config.sleepMinGuestUptimeMs).toBe(0);
 });
 
+test('it reads the RAM kept for priority imps and their name patterns', () => {
+  const config = loadConfig({
+    IMP_RAM_BUDGET_MIB: '8192',
+    IMP_PRIORITY_RAM_MIB: '2048',
+    IMP_PRIORITY_IMPS: 'chat-*, ops',
+  });
+
+  expect(config.priorityRam).toStrictEqual({ mib: 2048, patterns: ['chat-*', 'ops'] });
+});
+
+test.each([
+  ['IMP_PRIORITY_RAM_MIB', { IMP_PRIORITY_RAM_MIB: '2048' }],
+  ['IMP_PRIORITY_IMPS', { IMP_PRIORITY_IMPS: 'chat-*' }],
+])('it refuses %s set without its partner', (_name, env) => {
+  expect(() => loadConfig(env)).toThrow(
+    'IMP_PRIORITY_RAM_MIB and IMP_PRIORITY_IMPS go together; set both or neither',
+  );
+});
+
+test('it refuses RAM kept for priority imps that fills the whole budget', () => {
+  expect(() =>
+    loadConfig({
+      IMP_RAM_BUDGET_MIB: '4096',
+      IMP_PRIORITY_RAM_MIB: '4096',
+      IMP_PRIORITY_IMPS: 'chat-*',
+    }),
+  ).toThrow(
+    'IMP_PRIORITY_RAM_MIB 4096 leaves no room for other imps in the 4096 MiB IMP_RAM_BUDGET_MIB',
+  );
+});
+
 test('it reads the memory shrink delay in seconds', () => {
   expect(loadConfig({ IMP_MEMORY_SHRINK_AFTER_S: '10' }).memoryShrinkAfterMs).toBe(10_000);
 });
@@ -234,6 +266,8 @@ test.each([
   ['IMP_STORAGE_BACKEND', 'btrfs'],
   ['IMP_KSM', 'yes'],
   ['IMP_HUGE_PAGES', '1G'],
+  ['IMP_PRIORITY_RAM_MIB', '0'],
+  ['IMP_PRIORITY_IMPS', 'Chat_*'],
 ])('it refuses %s=%s', (name, value) => {
   expect(() => loadConfig({ [name]: value })).toThrow(new RegExp(`"path": \\[\\s*"${name}"`, 'u'));
 });

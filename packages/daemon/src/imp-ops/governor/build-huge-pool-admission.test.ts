@@ -8,6 +8,7 @@ test('it admits a guest whose memory fits the free pool', () => {
       awake: [],
       pendingMib: [],
       requestedMib: 512,
+      keptMib: 0,
     }),
   ).toStrictEqual({ admitted: true });
 });
@@ -19,6 +20,7 @@ test('it refuses a guest one block larger than the free pool', () => {
       awake: [],
       pendingMib: [],
       requestedMib: 514,
+      keptMib: 0,
     }),
   ).toStrictEqual({ admitted: false, totalMib: 1024, committedMib: 512, neededMib: 2 });
 });
@@ -30,6 +32,7 @@ test('it counts the memory an awake guest has not touched yet as promised', () =
       awake: [{ hugePagesMib: 512, heldMib: 256 }],
       pendingMib: [],
       requestedMib: 514,
+      keptMib: 0,
     }),
   ).toStrictEqual({ admitted: false, totalMib: 1024, committedMib: 512, neededMib: 2 });
 });
@@ -41,6 +44,7 @@ test('it counts no growth for an awake guest that holds all its memory', () => {
       awake: [{ hugePagesMib: 512, heldMib: 512 }],
       pendingMib: [],
       requestedMib: 512,
+      keptMib: 0,
     }),
   ).toStrictEqual({ admitted: true });
 });
@@ -52,12 +56,25 @@ test('it counts the memory of each admission still under way as promised', () =>
       awake: [],
       pendingMib: [256, 512],
       requestedMib: 512,
+      keptMib: 0,
     }),
   ).toStrictEqual({ admitted: false, totalMib: 1024, committedMib: 768, neededMib: 256 });
 });
 
+test('it refuses a guest that fits the free pool only by taking the RAM kept for priority imps', () => {
+  expect(
+    buildHugePoolAdmission({
+      pool: { totalMib: 1024, freeMib: 768 },
+      awake: [],
+      pendingMib: [],
+      requestedMib: 512,
+      keptMib: 512,
+    }),
+  ).toStrictEqual({ admitted: false, totalMib: 1024, committedMib: 256, neededMib: 256 });
+});
+
 test('it refuses every guest when the host has no pool', () => {
   expect(
-    buildHugePoolAdmission({ pool: null, awake: [], pendingMib: [], requestedMib: 2 }),
+    buildHugePoolAdmission({ pool: null, awake: [], pendingMib: [], requestedMib: 2, keptMib: 0 }),
   ).toStrictEqual({ admitted: false, totalMib: 0, committedMib: 0, neededMib: 2 });
 });

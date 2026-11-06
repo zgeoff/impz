@@ -1,4 +1,5 @@
 import { ImpdError, isImpdError } from '../../platform/errors/impd-error';
+import type { PriorityRam } from '../vm-config';
 
 export interface ProtectedImp {
   readonly name: string;
@@ -12,6 +13,9 @@ export interface RamShortfall {
   readonly usedMib: number;
   readonly requestedMib: number;
   readonly protected: readonly ProtectedImp[];
+
+  // the priority imps' RAM that they leave unused, which the refused imp may not take
+  readonly kept?: PriorityRam;
 }
 
 // the whole budget, the part of it outside the host's huge page pool, or the pool
@@ -32,7 +36,11 @@ export class RamBudgetError extends ImpdError<'RAM_BUDGET_EXCEEDED'> {
         budgetMib: shortfall.budgetMib,
         usedMib: shortfall.usedMib,
         requestedMib: shortfall.requestedMib,
-        neededMib: buildNeededMib(shortfall.usedMib, shortfall.requestedMib, shortfall.budgetMib),
+        neededMib: buildNeededMib(
+          shortfall.usedMib + (shortfall.kept?.mib ?? 0),
+          shortfall.requestedMib,
+          shortfall.budgetMib,
+        ),
         protected: [],
         protectedHidden: shortfall.protected.length,
       },
@@ -63,9 +71,10 @@ export function buildRamBudgetError(shortfall: Readonly<RamShortfall>) {
   const used = String(shortfall.usedMib);
   const budget = String(shortfall.budgetMib);
   const requested = String(shortfall.requestedMib);
+  const kept = formatKept(shortfall.kept);
 
   return new RamBudgetError(
-    `not enough RAM: ${used} of ${budget} MiB in use, ${requested} MiB requested, and no idle imp left to sleep`,
+    `not enough RAM: ${used} of ${budget} MiB in use${kept}, ${requested} MiB requested, and no idle imp left to sleep`,
     shortfall,
     'ram',
   );
@@ -75,9 +84,10 @@ export function buildOrdinaryBudgetError(shortfall: Readonly<RamShortfall>) {
   const used = String(shortfall.usedMib);
   const budget = String(shortfall.budgetMib);
   const requested = String(shortfall.requestedMib);
+  const kept = formatKept(shortfall.kept);
 
   return new RamBudgetError(
-    `not enough RAM outside the huge page pool: ${used} of ${budget} MiB in use, ${requested} MiB requested on 4 KiB pages, and no idle imp left to sleep`,
+    `not enough RAM outside the huge page pool: ${used} of ${budget} MiB in use${kept}, ${requested} MiB requested on 4 KiB pages, and no idle imp left to sleep`,
     shortfall,
     'ordinary',
   );
@@ -89,23 +99,34 @@ interface HugePoolShortfall {
   // the pool pages in use, and those every admitted guest on 2 MiB pages may still take
   readonly committedMib: number;
   readonly requestedMib: number;
+  readonly kept?: PriorityRam;
 }
 
 export function buildHugePoolError(shortfall: Readonly<HugePoolShortfall>) {
   const committed = String(shortfall.committedMib);
   const total = String(shortfall.totalMib);
   const requested = String(shortfall.requestedMib);
+  const kept = formatKept(shortfall.kept);
 
   return new RamBudgetError(
-    `not enough 2 MiB pages: ${committed} of the host's ${total} MiB pool in use or promised to awake imps, ${requested} MiB requested`,
+    `not enough 2 MiB pages: ${committed} of the host's ${total} MiB pool in use or promised to awake imps${kept}, ${requested} MiB requested`,
     {
       budgetMib: shortfall.totalMib,
       usedMib: shortfall.committedMib,
       requestedMib: shortfall.requestedMib,
       protected: [],
+      ...(shortfall.kept !== undefined && { kept: shortfall.kept }),
     },
     'pool',
   );
+}
+
+function formatKept(kept: Readonly<PriorityRam> | undefined): string {
+  if (kept === undefined || kept.mib === 0) {
+    return '';
+  }
+
+  return ` and ${String(kept.mib)} MiB kept for priority imps (${kept.patterns.join(', ')})`;
 }
 
 export function buildNeededMib(usedMib: number, requestedMib: number, budgetMib: number): number {
