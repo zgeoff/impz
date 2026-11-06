@@ -11,7 +11,11 @@ import { readEventsAfter } from './read-events-after';
 async function setupTest() {
   const database = await createTestDurableDatabase();
 
-  return { db: database.db, path: database.path };
+  return {
+    prune: (now: number) => database.db.transaction().execute((trx) => pruneEvents(trx, now)),
+    db: database.db,
+    path: database.path,
+  };
 }
 
 test('it returns the events after the cursor in sequence order', async () => {
@@ -133,7 +137,7 @@ test('it returns a reset with the prune mark for a cursor before a pruned event'
     payload: {},
   });
 
-  await pruneEvents(ctx.db, 1_800_000_000_000);
+  await ctx.prune(1_800_000_000_000);
 
   const read = await readEventsAfter(ctx.db, { after: 1, limit: 10 });
 
@@ -159,7 +163,7 @@ test('it returns the events for a cursor at the last pruned event', async () => 
     payload: {},
   });
 
-  await pruneEvents(ctx.db, 1_800_000_000_000);
+  await ctx.prune(1_800_000_000_000);
 
   const read = await readEventsAfter(ctx.db, { after: 1, limit: 10 });
 
@@ -198,7 +202,7 @@ test('it never skips an event that a prune on another connection removes during 
   const reader = ctx.db.withPlugin({
     transformQuery: (args) => args.node,
     transformResult: async (args) => {
-      await pruneEvents(pruner, 1_800_000_000_000);
+      await pruner.transaction().execute((trx) => pruneEvents(trx, 1_800_000_000_000));
 
       return args.result;
     },

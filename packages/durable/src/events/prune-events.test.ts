@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { sql } from 'kysely';
 import { createTestDurableDatabase } from '../test-utils/create-test-durable-database';
 import { appendEvent } from './append-event';
 import { pruneEvents } from './prune-events';
@@ -6,8 +7,38 @@ import { pruneEvents } from './prune-events';
 async function setupTest() {
   const database = await createTestDurableDatabase();
 
-  return { db: database.db };
+  return {
+    prune: (now: number) => database.db.transaction().execute((trx) => pruneEvents(trx, now)),
+    db: database.db,
+  };
 }
+
+test('it keeps the events and the prune mark when the mark fails to save', async () => {
+  const ctx = await setupTest();
+
+  await appendEvent(ctx.db, {
+    at: 1000,
+    kind: 'note.added',
+    targetId: null,
+    operationId: null,
+    payload: {},
+  });
+
+  await sql`create trigger refuse_mark before update on event_log begin select raise(abort, 'the disk is full'); end`.execute(
+    ctx.db,
+  );
+
+  const pruning = ctx.prune(1_800_000_000_000);
+
+  expect(pruning).rejects.toThrow('the disk is full');
+
+  const kept = {
+    events: await ctx.db.selectFrom('events').select('seq').execute(),
+    log: await ctx.db.selectFrom('event_log').select('pruned_through').execute(),
+  };
+
+  expect(kept).toStrictEqual({ events: [{ seq: 1 }], log: [{ pruned_through: 0 }] });
+});
 
 test('it removes the events older than 7 days', async () => {
   const ctx = await setupTest();
@@ -30,7 +61,7 @@ test('it removes the events older than 7 days', async () => {
     payload: {},
   });
 
-  await pruneEvents(ctx.db, now);
+  await ctx.prune(now);
 
   const rows = await ctx.db.selectFrom('events').select('kind').execute();
 
@@ -56,7 +87,7 @@ test('it returns the number of events it removed', async () => {
     payload: {},
   });
 
-  const removed = await pruneEvents(ctx.db, 1_800_000_000_000);
+  const removed = await ctx.prune(1_800_000_000_000);
 
   expect(removed).toBe(2);
 });
@@ -78,7 +109,7 @@ test('it keeps the newest 100,000 events when more are younger than 7 days', asy
     }
   });
 
-  await pruneEvents(ctx.db, now);
+  await ctx.prune(now);
 
   const kept = await ctx.db
     .selectFrom('events')
@@ -99,7 +130,7 @@ test('it removes nothing and returns 0 when every event is young', async () => {
     payload: {},
   });
 
-  const removed = await pruneEvents(ctx.db, 1_800_000_000_000);
+  const removed = await ctx.prune(1_800_000_000_000);
 
   expect(removed).toBe(0);
 });

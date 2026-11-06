@@ -25,3 +25,6 @@ export type DurableQueries = Pick<
   Kysely<DurableTables>,
   'selectFrom' | 'insertInto' | 'updateTable' | 'deleteFrom'
 >;
+
+// Kysely types isTransaction as true only on a Transaction, so a plain connection fails to fit
+export type DurableTransaction = DurableQueries & { readonly isTransaction: true };

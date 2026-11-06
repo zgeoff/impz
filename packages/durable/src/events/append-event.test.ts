@@ -6,7 +6,10 @@ import { pruneEvents } from './prune-events';
 async function setupTest() {
   const database = await createTestDurableDatabase();
 
-  return { db: database.db };
+  return {
+    prune: (now: number) => database.db.transaction().execute((trx) => pruneEvents(trx, now)),
+    db: database.db,
+  };
 }
 
 test('it gives each event the next sequence number', async () => {
@@ -106,7 +109,7 @@ test('it never reuses the sequence number of a pruned event', async () => {
     payload: {},
   });
 
-  await pruneEvents(ctx.db, 1_800_000_000_000);
+  await ctx.prune(1_800_000_000_000);
 
   const seq = await appendEvent(ctx.db, {
     at: 1_800_000_000_000,
