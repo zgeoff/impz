@@ -17,9 +17,10 @@ the vsock protocol with the guest agent, the frame codec and the generated messa
 `packages/agent-protocol`, another leaf, which the client's and the CLI's tests use to play the
 agent. The guest agent is `agent/`.
 
-`packages/durable` holds durable work with no imp words in it: the sequenced event log. It imports
-only `@impz/shared` and Kysely. Each of its writes runs on the caller's Kysely transaction, so a
-domain write and the event row for it commit together, or neither commits.
+`packages/durable` holds durable work with no imp words in it: the sequenced event log. Of the
+workspace packages it may import only `@impz/shared`, so a program other than impd can use it too.
+Each of its writes runs on the caller's Kysely transaction, so a domain write and the event row for
+it commit together, or neither commits.
 
 ## The path of a request
 

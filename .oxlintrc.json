@@ -638,7 +638,7 @@
             ],
             "from": ["durable"],
             "allow": ["tests"],
-            "reason": "@impz/durable imports only @impz/shared and kysely, so impd and a controller can share it"
+            "reason": "@impz/durable imports no @impz package but @impz/shared, so a program other than impd can use it"
           },
           {
             "name": "package-order",
