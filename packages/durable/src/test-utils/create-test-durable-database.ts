@@ -22,7 +22,11 @@ export async function createTestDurableDatabase(): Promise<TestDurableDatabase> 
 
   const directory = await mkdtemp(join(tmpdir(), 'durable-'));
 
-  onTestFinished(() => rm(directory, { recursive: true, force: true }));
+  const cleanup = new AsyncDisposableStack();
+
+  onTestFinished(() => cleanup.disposeAsync());
+
+  cleanup.defer(() => rm(directory, { recursive: true, force: true }));
 
   const path = join(directory, 'durable.db');
 
@@ -32,7 +36,7 @@ export async function createTestDurableDatabase(): Promise<TestDurableDatabase> 
 
   const db = openTestConnection(new Database(path));
 
-  onTestFinished(() => db.destroy());
+  cleanup.defer(() => db.destroy());
 
   return { path, db };
 }

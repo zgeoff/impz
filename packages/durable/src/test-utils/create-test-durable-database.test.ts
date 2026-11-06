@@ -1,5 +1,18 @@
-import { expect, test } from 'bun:test';
+import { expect, onTestFinished, test } from 'bun:test';
+import { existsSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { createTestDurableDatabase } from './create-test-durable-database';
+
+test('it closes the database and removes its folder when the test ends', async () => {
+  const ctx = await createTestDurableDatabase();
+
+  onTestFinished(() => {
+    const reading = ctx.db.selectFrom('event_log').select('log_id').execute();
+
+    expect(reading).rejects.toThrow();
+    expect(existsSync(dirname(ctx.path))).toBe(false);
+  });
+});
 
 test('it gives a test a migrated database with one event log row', async () => {
   const ctx = await createTestDurableDatabase();
