@@ -21,12 +21,20 @@ import { readSnapshotMeta, writeSnapshotMeta } from '../../vm/sleep/snapshot-met
 import { readVmIdentity } from '../../vm/sleep/vm-identity';
 import { buildImpPaths } from '../../vm/storage/data-layout';
 
-function setupTest() {
+async function setupTest() {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  return startTestImpd(stack, { env: readImpEnv() });
+  // the host's pool of 2 MiB pages, empty until a test sizes it
+  const hugePool = { totalMib: 0, freeMib: 0 };
+
+  const harness = await startTestImpd(stack, {
+    env: readImpEnv(),
+    boundaries: { imps: { readHugePagePool: () => ({ ...hugePool }) } },
+  });
+
+  return Object.assign(harness, { hugePool });
 }
 
 test('it lets a restore waiting for admission past the governor sleeping its imp', async () => {
@@ -966,14 +974,9 @@ test('it wakes and creates priority imps up to their kept RAM after other imps t
   updateEnv('IMP_PRIORITY_RAM_MIB', '1024');
   updateEnv('IMP_PRIORITY_IMPS', 'chat-*');
 
-  const stack = new AsyncDisposableStack();
+  const ctx = await setupTest();
 
-  onTestFinished(() => stack.disposeAsync());
-
-  const ctx = await startTestImpd(stack, {
-    env: readImpEnv(),
-    boundaries: { imps: { readHugePagePool: () => ({ totalMib: 2048, freeMib: 2048 }) } },
-  });
+  Object.assign(ctx.hugePool, { totalMib: 2048, freeMib: 2048 });
 
   await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'chat-a', memoryMib: 256 });
@@ -1006,14 +1009,9 @@ test('it refuses to create an imp outside the priority patterns into the pool ke
   updateEnv('IMP_PRIORITY_RAM_MIB', '1024');
   updateEnv('IMP_PRIORITY_IMPS', 'chat-*');
 
-  const stack = new AsyncDisposableStack();
+  const ctx = await setupTest();
 
-  onTestFinished(() => stack.disposeAsync());
-
-  const ctx = await startTestImpd(stack, {
-    env: readImpEnv(),
-    boundaries: { imps: { readHugePagePool: () => ({ totalMib: 2048, freeMib: 2048 }) } },
-  });
+  Object.assign(ctx.hugePool, { totalMib: 2048, freeMib: 2048 });
 
   await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'agent-a', memoryMib: 512 });
@@ -1032,14 +1030,9 @@ test('it refuses to wake an imp outside the priority patterns into the pool kept
   updateEnv('IMP_PRIORITY_RAM_MIB', '1024');
   updateEnv('IMP_PRIORITY_IMPS', 'chat-*');
 
-  const stack = new AsyncDisposableStack();
+  const ctx = await setupTest();
 
-  onTestFinished(() => stack.disposeAsync());
-
-  const ctx = await startTestImpd(stack, {
-    env: readImpEnv(),
-    boundaries: { imps: { readHugePagePool: () => ({ totalMib: 2048, freeMib: 2048 }) } },
-  });
+  Object.assign(ctx.hugePool, { totalMib: 2048, freeMib: 2048 });
 
   await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'agent-a', memoryMib: 256 });
