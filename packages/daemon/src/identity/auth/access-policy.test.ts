@@ -2,8 +2,8 @@ import { expect, mock, test } from 'bun:test';
 import { callerContract } from '@impz/api';
 import type { Scope } from '@impz/api';
 import { traverseContractProcedures } from '@orpc/server';
-import { buildMockCaller } from '../../../testing/identity/build-mock-caller';
 import type { Caller } from '../../platform/principal/caller';
+import { buildMockCaller } from '../../test-utils/identity/build-mock-caller';
 import {
   PROCEDURE_ACCESS,
   checkAccess,

@@ -1,6 +1,6 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
 import { rmSync } from 'node:fs';
-import { buildStubAnswerQueue } from '@impz/test-utils/build-stub-answer-queue';
+import { buildStubAnswerQueue } from '@impz/shared/test-utils/build-stub-answer-queue';
 import {
   buildBackupEnv,
   createBackupDrill,

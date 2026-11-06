@@ -1,7 +1,7 @@
 import { expect, mock, test } from 'bun:test';
-import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
-import { buildMockElasticImp } from '../../../testing/vm/build-mock-elastic-imp';
-import { buildStubGuestMemory } from '../../../testing/vm/build-stub-guest-memory';
+import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
+import { buildMockElasticImp } from '../../test-utils/vm/build-mock-elastic-imp';
+import { buildStubGuestMemory } from '../../test-utils/vm/build-stub-guest-memory';
 import { createMemoryController } from './memory-controller';
 import type { ElasticImp, MemoryControllerDeps } from './memory-controller';
 

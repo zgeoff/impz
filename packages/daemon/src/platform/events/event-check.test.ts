@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test';
 import { EVENT_VERSION } from '@impz/api';
-import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
-import { startInMemoryMetrics } from '../../../testing/platform/start-in-memory-metrics';
-import { buildMockGovernorDecision } from '../../../testing/vm/build-mock-governor-decision';
+import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
+import { startInMemoryMetrics } from '../../test-utils/platform/start-in-memory-metrics';
+import { buildMockGovernorDecision } from '../../test-utils/vm/build-mock-governor-decision';
 import { createEventCheck } from './event-check';
 
 function setupTest() {

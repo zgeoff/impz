@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { createTestCertificates } from '@impz/test-utils/create-test-certificates';
+import { createTestCertificates } from '@impz/shared/test-utils/create-test-certificates';
 import { readCertificateInfo } from './read-certificate-info';
 
 test('it reads the validity and every name of the leaf, once each', async () => {

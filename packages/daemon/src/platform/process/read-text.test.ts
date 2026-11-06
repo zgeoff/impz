@@ -2,8 +2,8 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { formatRunPrefix } from '../../../testing/platform/format-run-prefix';
-import { readRunOwner } from '../../../testing/platform/read-run-owner';
+import { formatRunPrefix } from '../../test-utils/platform/format-run-prefix';
+import { readRunOwner } from '../../test-utils/platform/read-run-owner';
 import { readText } from './read-text';
 
 function setupTest() {

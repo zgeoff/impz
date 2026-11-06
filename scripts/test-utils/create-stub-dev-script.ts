@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { formatShellWord } from '@impz/test-utils/format-shell-word';
+import { formatShellWord } from '@impz/shared/test-utils/format-shell-word';
 
 // A checkout's scripts/dev/dev.sh that records each command it gets in the calls file, and prints
 // the given token for `dev.sh token`.

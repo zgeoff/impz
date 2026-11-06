@@ -8,10 +8,10 @@
   },
   "include": [
     "packages/*/src/**/*.ts",
-    "packages/daemon/testing/**/*.ts",
     "packages/client/smoke/*.ts",
     "packages/testing/smoke/*.ts",
-    "e2e/**/*.ts",
+    "packages/daemon/e2e/**/*.ts",
+    "packages/daemon/bench/**/*.ts",
     "scripts/**/*.ts",
     "deploy/**/*.ts",
     "images/**/*.ts",

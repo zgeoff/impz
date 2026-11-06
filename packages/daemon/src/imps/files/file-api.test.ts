@@ -1,6 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { startTestImpd } from '../../../testing/start-test-impd';
-import { startStubFilesAgent } from '../../../testing/vm/start-stub-files-agent';
+import { startTestImpd } from '../../test-utils/start-test-impd';
+import { startStubFilesAgent } from '../../test-utils/vm/start-stub-files-agent';
 import { buildImpPaths } from '../../vm/storage/data-layout';
 
 async function setupTest() {

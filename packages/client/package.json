@@ -1,6 +1,6 @@
 {
   "name": "@impz/client",
-  "version": "6.6.0",
+  "version": "6.6.1",
   "description": "Typed client for impd, the imp host daemon: imps, checkpoints, images and exec",
   "license": "MIT",
   "repository": {
@@ -25,10 +25,14 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@faker-js/faker": "catalog:",
+    "@impz/agent-protocol": "workspace:*",
     "@impz/api": "workspace:*",
+    "@impz/daemon": "workspace:*",
+    "@impz/local-tar": "workspace:*",
     "@impz/shared": "workspace:*",
-    "@impz/test-utils": "workspace:*",
     "msw": "catalog:",
+    "tar-stream": "catalog:",
     "tiny-invariant": "catalog:",
     "tsdown": "catalog:"
   },

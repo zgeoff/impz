@@ -1,5 +1,5 @@
 import { expect, mock, test } from 'bun:test';
-import { waitFor } from '@impz/test-utils/wait-for';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { createAckSender } from './create-ack-sender';
 
 test('it counts the bytes received and not yet acked', () => {

@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
-import { probeUnshare } from '../../../testing/host-net/probe-unshare';
-import { runInNetns } from '../../../testing/host-net/run-in-netns';
+import { probeUnshare } from '../../test-utils/host-net/probe-unshare';
+import { runInNetns } from '../../test-utils/host-net/run-in-netns';
 import { buildNat66Removal, buildNat66Ruleset } from './nat66-ruleset';
 
 test('#buildNat66Removal deletes the NAT66 table whether or not it exists', () => {

@@ -1,0 +1,194 @@
+import { expect, onTestFinished, test } from 'bun:test';
+import { checkLimit } from '@impz/e2e-harness/check-limit';
+import { config } from '@impz/e2e-harness/config';
+import { runConsole } from '@impz/e2e-harness/console';
+import {
+  createInstanceClient,
+  parseImp,
+  readImpUrls,
+  readInfo,
+  readState,
+  requireImp,
+  runImp,
+  runInImp,
+  runShellInImp,
+  tryImp,
+} from '@impz/e2e-harness/imp-cli';
+import { waitForExec } from '@impz/e2e-harness/imps';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import { writeMetric } from '@impz/e2e-harness/write-metric';
+
+async function setupTest() {
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
+  const client = await createInstanceClient();
+
+  return { prefix: getSuitePrefix('lifecycle'), stack, client };
+}
+
+test('it boots the default image on impz new and answers the first exec within the limit', async () => {
+  const ctx = await setupTest();
+
+  const name = `${ctx.prefix}a`;
+  const started = Date.now();
+
+  const out = await runImp('new', name, '--json');
+
+  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, name));
+
+  await runInImp(name, 'true');
+
+  const durationMs = Date.now() - started;
+
+  writeMetric('newPlusExecMs', durationMs);
+  checkLimit('impz new + first exec', durationMs, config.maxNewMs);
+
+  const row = await requireImp(name);
+  const urls = await readImpUrls(name);
+  const uname = await runInImp(name, 'uname', '-a');
+  const info = await readInfo();
+
+  const created = parseImp(out);
+
+  expect(created.name).toBe(name);
+  expect(created.url).toBe(row.url);
+  expect(row.url).toMatch(new RegExp(`^http://${name}\\.imp\\.localhost:\\d+$`, 'u'));
+  expect(row.state).toBe('running');
+  expect(urls.local).toBe(row.url);
+  expect(uname).toStartWith(`Linux ${name} `);
+  expect(info.impCount).toBeGreaterThanOrEqual(1);
+});
+
+test('it passes stdout, stdin, stderr and exit codes through exec', async () => {
+  const ctx = await setupTest();
+
+  const name = `${ctx.prefix}io`;
+
+  await runImp('new', name);
+
+  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, name));
+
+  await waitForExec(name);
+
+  const echoed = await runInImp(name, 'echo', 'hello-stdout');
+  const stdin = await tryImp(['exec', name, '--', 'cat'], { stdin: 'hello stdin\n' });
+
+  const lines = Array.from({ length: 20_000 }, (_, index) => String(index + 1)).join('\n');
+
+  const large = await tryImp(['exec', name, '--', 'wc', '-l'], { stdin: `${lines}\n` });
+  const failed = await tryImp(['exec', name, '--', 'sh', '-c', 'echo to-stderr >&2; exit 7']);
+  const signalled = await tryImp(['exec', name, '--', 'sh', '-c', 'kill -TERM $$']);
+  const missing = await tryImp(['exec', name, '--', '/no/such/binary']);
+
+  expect(echoed).toBe('hello-stdout');
+  expect(stdin).toStrictEqual({ exitCode: 0, stdout: 'hello stdin\n', stderr: '' });
+  expect(large).toStrictEqual({ exitCode: 0, stdout: '20000\n', stderr: '' });
+  expect(failed).toStrictEqual({ exitCode: 7, stdout: '', stderr: 'to-stderr\n' });
+  expect(signalled.exitCode).toBe(143);
+  expect(missing.exitCode).toBe(127);
+});
+
+test('it runs exec -t on a pseudo-terminal', async () => {
+  const ctx = await setupTest();
+
+  const name = `${ctx.prefix}tty`;
+
+  await runImp('new', name);
+
+  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, name));
+
+  await waitForExec(name);
+
+  // The tty of uutils coreutils before 0.12 prints the name with no newline,
+  // so echo ends the line on GNU and uutils guests alike.
+  const out = await runImp('exec', '-t', name, '--', 'sh', '-c', 'echo "$(tty)"; stty size');
+
+  expect(out.replaceAll('\r', '')).toMatch(/^\/dev\/pts\/\d+\n\d+ \d+\n$/u);
+});
+
+test('it runs commands in a console shell and returns its exit code', async () => {
+  const ctx = await setupTest();
+
+  const name = `${ctx.prefix}con`;
+
+  await runImp('new', name);
+
+  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, name));
+
+  await waitForExec(name);
+
+  const session = await runConsole(name, [
+    { after: null, line: 'echo console-$((40 + 2))' },
+    { after: 'console-42', line: 'exit 5' },
+  ]);
+
+  expect(session.output).toContain('console-42');
+  expect(session.exitCode).toBe(5);
+});
+
+test('it resolves names and reaches the internet from the guest', async () => {
+  const ctx = await setupTest();
+
+  const name = `${ctx.prefix}net`;
+
+  await runImp('new', name);
+
+  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, name));
+
+  await waitForExec(name);
+
+  // bash's /dev/tcp: the default image may have no HTTP client.
+  const request = String.raw`printf "HEAD / HTTP/1.0\r\nHost: example.com\r\n\r\n" >&3`;
+
+  const status = await runInImp(
+    name,
+    'bash',
+    '-c',
+    `getent hosts example.com >/dev/null && exec 3<>/dev/tcp/example.com/80 && ${request} && head -1 <&3`,
+  );
+
+  // any status proves egress: example.com has answered 503
+  expect(status).toMatch(/^HTTP\/1\.[01] \d{3} /u);
+});
+
+test('it keeps the disk through a stop, boots a stopped imp on exec with an empty /run, and again on start', async () => {
+  const ctx = await setupTest();
+
+  const name = `${ctx.prefix}stop`;
+
+  await runImp('new', name);
+
+  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, name));
+
+  await waitForExec(name);
+  await runShellInImp(name, `echo ${name}-data > /root/persist && touch /run/stale && sync`);
+  await runImp('stop', name);
+
+  const stopped = await readState(name);
+
+  expect(stopped).toBe('stopped');
+
+  const persisted = await runInImp(name, 'cat', '/root/persist');
+  const booted = await readState(name);
+  const run = await runShellInImp(name, 'test -e /run/stale && echo stale || echo fresh');
+
+  expect(persisted).toBe(`${name}-data`);
+  expect(booted).toBe('running');
+  expect(run).toBe('fresh');
+
+  await runImp('stop', name);
+
+  const started = Date.now();
+
+  await runImp('start', name);
+
+  const restarted = await runInImp(name, 'cat', '/root/persist');
+
+  writeMetric('startPlusExecMs', Date.now() - started);
+
+  expect(restarted).toBe(`${name}-data`);
+});

@@ -8,8 +8,8 @@ import {
   createStubBrokerTokenEndpoint,
   startStubImpdRelease,
   startTestImpd,
-} from '@impz/daemon/testing';
-import { server } from '@impz/test-utils/mock-server';
+} from '@impz/daemon/test-utils';
+import { server } from '@impz/shared/test-utils/mock-server';
 import { HttpResponse, http } from 'msw';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 import { startStubInfoFaultImpd } from '../test-utils/start-stub-info-fault-impd';

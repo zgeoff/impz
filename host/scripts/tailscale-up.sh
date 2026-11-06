@@ -30,6 +30,8 @@ state_dir=${IMP_TAILSCALE_STATE_DIR:-/var/lib/imp/tailscale}
 # a test points these at its own files
 sock=${IMP_TAILSCALE_SOCKET:-/var/run/tailscale/tailscaled.sock}
 resolv_conf=${IMP_RESOLV_CONF:-/etc/resolv.conf}
+# the checks of wait_later, 5 s apart
+wait_later_tries=${IMP_TAILSCALE_WAIT_TRIES:-360}
 
 key_file=${IMP_TAILSCALE_AUTHKEY_FILE:-}
 # A missing bind-mount source makes docker create an empty directory there.
@@ -192,7 +194,7 @@ needs_login() { case $1 in NeedsLogin | NeedsMachineAuth | Stopped) return 0 ;; 
 # Running. Every 5 s, for 30 min.
 wait_later() {
   local state
-  for _ in $(seq 360); do
+  for _ in $(seq "$wait_later_tries"); do
     state=$(backend)
     if [ "$state" = Running ]; then
       echo "tailscale-up: the saved node is Running"

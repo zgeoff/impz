@@ -3,41 +3,41 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { copyFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { MoveState } from '@impz/api';
-import { waitFor } from '@impz/test-utils/wait-for';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import invariant from 'tiny-invariant';
-import { buildMockMoveTicketRow } from '../../../testing/imp-ops/build-mock-move-ticket-row';
-import { buildStubOverlappingMove } from '../../../testing/imp-ops/build-stub-overlapping-move';
-import {
-  SOURCE_PEER,
-  TARGET_URL,
-  createUbuntuImage,
-  createZfsUbuntuImage,
-  setupMoveHosts,
-} from '../../../testing/imp-ops/create-move-hosts';
-import type { MoveHostsOptions } from '../../../testing/imp-ops/create-move-hosts';
-import { makeStubDroppedCommit } from '../../../testing/imp-ops/make-stub-dropped-commit';
-import {
-  buildJsonMoveFrame,
-  makeStubMoveStreamRewrite,
-} from '../../../testing/imp-ops/make-stub-move-stream-rewrite';
-import { makeStubOlderMoveTarget } from '../../../testing/imp-ops/make-stub-older-move-target';
-import { makeStubSwitchedStorageTarget } from '../../../testing/imp-ops/make-stub-switched-storage-target';
-import { buildStubTailscale } from '../../../testing/network/build-stub-tailscale';
-import { buildQueryGate } from '../../../testing/platform/build-query-gate';
-import { buildStubClock } from '../../../testing/platform/build-stub-clock';
-import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
-import { runSql } from '../../../testing/platform/run-sql';
-import { TEST_TOKEN } from '../../../testing/test-token';
-import { buildStubPublishHook } from '../../../testing/vm/build-stub-publish-hook';
-import { buildStubStorageFaults } from '../../../testing/vm/build-stub-storage-faults';
-import { buildStubStoragePressure } from '../../../testing/vm/build-stub-storage-pressure';
-import { buildStubZfsStorage } from '../../../testing/vm/build-stub-zfs-storage';
 import { listImages, readImageByDigest, readImageByName } from '../../platform/db/images';
 import type { ImpWrite } from '../../platform/db/imp-write-feed';
 import { listImps, readImpByName, updateImpExposure, updateImpMove } from '../../platform/db/imps';
 import { readMoveSend, updateMoveSendStep } from '../../platform/db/move-sends';
 import { listMoveTickets } from '../../platform/db/move-tickets';
 import { MOVE_TRANSITIONS } from '../../platform/db/move-transitions';
+import { buildMockMoveTicketRow } from '../../test-utils/imp-ops/build-mock-move-ticket-row';
+import { buildStubOverlappingMove } from '../../test-utils/imp-ops/build-stub-overlapping-move';
+import {
+  SOURCE_PEER,
+  TARGET_URL,
+  createUbuntuImage,
+  createZfsUbuntuImage,
+  setupMoveHosts,
+} from '../../test-utils/imp-ops/create-move-hosts';
+import type { MoveHostsOptions } from '../../test-utils/imp-ops/create-move-hosts';
+import { makeStubDroppedCommit } from '../../test-utils/imp-ops/make-stub-dropped-commit';
+import {
+  buildJsonMoveFrame,
+  makeStubMoveStreamRewrite,
+} from '../../test-utils/imp-ops/make-stub-move-stream-rewrite';
+import { makeStubOlderMoveTarget } from '../../test-utils/imp-ops/make-stub-older-move-target';
+import { makeStubSwitchedStorageTarget } from '../../test-utils/imp-ops/make-stub-switched-storage-target';
+import { buildStubTailscale } from '../../test-utils/network/build-stub-tailscale';
+import { buildQueryGate } from '../../test-utils/platform/build-query-gate';
+import { buildStubClock } from '../../test-utils/platform/build-stub-clock';
+import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
+import { runSql } from '../../test-utils/platform/run-sql';
+import { TEST_TOKEN } from '../../test-utils/test-token';
+import { buildStubPublishHook } from '../../test-utils/vm/build-stub-publish-hook';
+import { buildStubStorageFaults } from '../../test-utils/vm/build-stub-storage-faults';
+import { buildStubStoragePressure } from '../../test-utils/vm/build-stub-storage-pressure';
+import { buildStubZfsStorage } from '../../test-utils/vm/build-stub-zfs-storage';
 import { buildImagePaths } from '../../vm/storage/data-layout';
 import { createXfsBackend } from '../../vm/storage/xfs-backend';
 import { FileEndSchema, MOVE_FRAMES, MoveFileSchema, readJsonPayload } from './move-frames';

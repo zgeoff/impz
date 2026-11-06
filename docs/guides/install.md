@@ -114,7 +114,7 @@ to the server and run it as root. Take it from a release tag: it runs the image 
 <!-- x-release-please-start-version -->
 
 ```sh
-curl -fsSLO https://raw.githubusercontent.com/zgeoff/impz/v6.6.0/deploy/bootstrap.sh
+curl -fsSLO https://raw.githubusercontent.com/zgeoff/impz/v6.6.1/deploy/bootstrap.sh
 install -m 0600 /dev/null /root/ts-key && vi /root/ts-key        # the auth key, one line
 bash bootstrap.sh --dry-run --data-device /dev/nvme1n1 --tailscale-authkey-file /root/ts-key
 bash bootstrap.sh --yes --data-device /dev/nvme1n1 --tailscale-authkey-file /root/ts-key
@@ -346,14 +346,14 @@ the container's address on `imp-host` ([IPv6](../architecture/network/networking
 
 ### Test it
 
-`e2e/test-bootstrap.sh` runs the script in a privileged container with systemd as PID 1, on Debian
-13 and Ubuntu 24.04 and 26.04, with a loop file and Podman inside. It checks `--check` on the fresh
-host, a first run, `--check` and a second run with no change. It fails when the host's `vm.*` and
-`kernel.*` sysctls or loaded modules change. In a container, the script writes the kernel settings
-and does not apply them; `accept_ra`, which is per network namespace, it applies. Each distro runs
-with `--ipv6 on`, as CI has no IPv6 route out. On Debian it also checks a network with another
-subnet, `accept_ra=2` on a dotted interface with a fake router-advert route, `--ipv6 off`, the
-refusal when a client takes the adverts, the `--data-device` refusals and what
+`scripts/test-bootstrap.sh` runs the script in a privileged container with systemd as PID 1, on
+Debian 13 and Ubuntu 24.04 and 26.04, with a loop file and Podman inside. It checks `--check` on the
+fresh host, a first run, `--check` and a second run with no change. It fails when the host's `vm.*`
+and `kernel.*` sysctls or loaded modules change. In a container, the script writes the kernel
+settings and does not apply them; `accept_ra`, which is per network namespace, it applies. Each
+distro runs with `--ipv6 on`, as CI has no IPv6 route out. On Debian it also checks a network with
+another subnet, `accept_ra=2` on a dotted interface with a fake router-advert route, `--ipv6 off`,
+the refusal when a client takes the adverts, the `--data-device` refusals and what
 `--check --storage zfs` plans. With `--stub`, it then installs Docker, runs imp-host under Docker
 with the unit's arguments, and checks that `deploy/upgrade.sh` moves the host to Podman and that the
 moved container reads a file the Docker one wrote to `/var/lib/imp`. With `--health`, an imp also
@@ -362,8 +362,8 @@ pool with a unique name that the test destroys; it needs the zfs module loaded o
 WSL2 does not have.
 
 ```sh
-e2e/test-bootstrap.sh --stub --zfs                        # a stand-in image (what CI runs)
-e2e/test-bootstrap.sh --image imp-host:<tag> --health     # a release image; boots an imp
+scripts/test-bootstrap.sh --stub --zfs                        # a stand-in image (what CI runs)
+scripts/test-bootstrap.sh --image imp-host:<tag> --health     # a release image; boots an imp
 ```
 
 Nothing has run on a real OVH or Vultr server yet.
@@ -430,7 +430,7 @@ gh attestation verify oci://ghcr.io/zgeoff/imp-host:<version> -R zgeoff/impz
 <!-- x-release-please-start-version -->
 
 ```sh
-podman pull ghcr.io/zgeoff/imp-host:6.6.0
+podman pull ghcr.io/zgeoff/imp-host:6.6.1
 gh release download -R zgeoff/impz -p 'impz-linux-x64' -p SHA256SUMS
 sha256sum -c --ignore-missing SHA256SUMS && install -m 0755 impz-linux-x64 ~/.local/bin/impz
 ```

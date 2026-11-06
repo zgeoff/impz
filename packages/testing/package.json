@@ -1,6 +1,6 @@
 {
   "name": "@impz/testing",
-  "version": "6.6.0",
+  "version": "6.6.1",
   "description": "A real impd on stand-ins, for Bun tests of code that drives impd through @impz/client",
   "license": "MIT",
   "repository": {
@@ -18,7 +18,7 @@
   "devDependencies": {
     "@impz/agent-protocol": "workspace:*",
     "@impz/daemon": "workspace:*",
-    "@impz/test-utils": "workspace:*"
+    "@impz/shared": "workspace:*"
   },
   "engines": {
     "bun": ">=1.4.3"

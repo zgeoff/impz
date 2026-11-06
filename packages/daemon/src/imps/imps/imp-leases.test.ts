@@ -1,16 +1,16 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import type { ImpEvent } from '@impz/api';
 import { createImpClient } from '@impz/client';
-import { readImpEnv } from '@impz/test-utils/read-imp-env';
-import { updateEnv } from '@impz/test-utils/update-env';
-import { waitFor } from '@impz/test-utils/wait-for';
+import { readImpEnv } from '@impz/shared/test-utils/read-imp-env';
+import { updateEnv } from '@impz/shared/test-utils/update-env';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import invariant from 'tiny-invariant';
-import { buildMockLeaseRecord } from '../../../testing/imps/build-mock-lease-record';
-import { buildQueryGate } from '../../../testing/platform/build-query-gate';
-import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
-import { startTestImpd } from '../../../testing/start-test-impd';
-import { TEST_TOKEN } from '../../../testing/test-token';
 import { listLeases, writeLease } from '../../platform/db/leases';
+import { buildMockLeaseRecord } from '../../test-utils/imps/build-mock-lease-record';
+import { buildQueryGate } from '../../test-utils/platform/build-query-gate';
+import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
+import { startTestImpd } from '../../test-utils/start-test-impd';
+import { TEST_TOKEN } from '../../test-utils/test-token';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

@@ -1,14 +1,14 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
-import { claimFreePorts } from '@impz/test-utils/claim-free-ports';
-import { buildMockMoveTicketRow } from '../../../testing/imp-ops/build-mock-move-ticket-row';
-import { startStubMovePeer } from '../../../testing/imp-ops/start-stub-move-peer';
-import { createTestDatabase } from '../../../testing/platform/create-test-database';
+import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
 import type { MovePeerCalls } from '../../imp-ops/moves/move-receiver';
 import { MoveRequestError } from '../../imp-ops/moves/move-request-error';
 import { buildPeerRanges } from '../../imp-ops/moves/peer-address';
 import { requireMoveTicket } from '../../imp-ops/moves/require-move-ticket';
 import { writeMoveTicket } from '../../platform/db/move-tickets';
 import { hashSecret } from '../../platform/secrets/hash-secret';
+import { buildMockMoveTicketRow } from '../../test-utils/imp-ops/build-mock-move-ticket-row';
+import { startStubMovePeer } from '../../test-utils/imp-ops/start-stub-move-peer';
+import { createTestDatabase } from '../../test-utils/platform/create-test-database';
 import { createMovePeerHandler } from './create-move-peer-handler';
 import { makeConnectMovePeer } from './make-connect-move-peer';
 

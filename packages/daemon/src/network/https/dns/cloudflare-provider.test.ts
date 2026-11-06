@@ -1,8 +1,8 @@
 import { expect, mock, test } from 'bun:test';
-import { server } from '@impz/test-utils/mock-server';
+import { server } from '@impz/shared/test-utils/mock-server';
 import { HttpResponse, http } from 'msw';
-import { createStubCloudflareApi } from '../../../../testing/network/create-stub-cloudflare-api';
-import { captureImpdLogs } from '../../../../testing/platform/capture-impd-logs';
+import { createStubCloudflareApi } from '../../../test-utils/network/create-stub-cloudflare-api';
+import { captureImpdLogs } from '../../../test-utils/platform/capture-impd-logs';
 import { createCloudflareProvider } from './cloudflare-provider';
 import { buildPublicOwner } from './dns-provider';
 

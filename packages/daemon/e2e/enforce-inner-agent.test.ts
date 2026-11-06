@@ -1,0 +1,110 @@
+import { expect, onTestFinished, test } from 'bun:test';
+import { config } from '@impz/e2e-harness/config';
+import { resolveImageName } from '@impz/e2e-harness/fixtures';
+import {
+  createInstanceClient,
+  runImp,
+  runInImp,
+  startImp,
+  tryImp,
+} from '@impz/e2e-harness/imp-cli';
+import { holdImp, waitForExec } from '@impz/e2e-harness/imps';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import { startTextCapture } from '@impz/e2e-harness/text-capture';
+import { waitFor } from '@impz/e2e-harness/wait-for';
+
+async function setupTest() {
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
+  const client = await createInstanceClient();
+
+  return { prefix: getSuitePrefix('inner'), stack, client };
+}
+
+test('it runs exec --agent as root outside the container and reports it as an AgentExec event', async () => {
+  const ctx = await setupTest();
+
+  const name = `${ctx.prefix}agent`;
+
+  await runImp('new', name, '--image', resolveImageName('e2e-tiny'));
+
+  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, name));
+
+  await waitForExec(name);
+  await holdImp(name);
+
+  const events = await startImp(['events', name]);
+
+  ctx.stack.defer(async () => {
+    events.kill();
+
+    await events.exited;
+  });
+
+  const seen = startTextCapture(events.stdout);
+
+  // The shell computes the line, so the terminal's echo of the input does not
+  // match it.
+  const shell = await tryImp(['exec', '--agent', '-t', name, '--', 'sh'], {
+    stdin: 'echo outer-$((20 + 22)) $(id -u) $(cat /proc/self/oom_score_adj)\nexit\n',
+  });
+
+  const cgroup = await runImp('exec', '--agent', name, '--', 'cat', '/proc/self/cgroup');
+  const container = await runInImp(name, 'cat', '/proc/self/cgroup');
+
+  await waitFor('the AgentExec event', () => {
+    expect(seen.read()).toContain('"ev":"AgentExec"');
+  });
+
+  expect(shell).toStrictEqual({
+    exitCode: 0,
+    stdout: expect.toInclude('outer-42 0 0'),
+    stderr: expect.toBeString(),
+  });
+
+  expect(cgroup.trim()).toMatch(/^0::\/outer\/\d+$/u);
+  expect(container.trim()).not.toContain('outer');
+});
+
+test('it lets a memory hog outside the container meet the OOM killer in its 32 MiB', async () => {
+  const ctx = await setupTest();
+
+  const name = `${ctx.prefix}outoom`;
+
+  await runImp('new', name, '--image', resolveImageName('e2e-tiny'));
+
+  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, name));
+
+  await waitForExec(name);
+  await holdImp(name);
+
+  const hog = await tryImp([
+    'exec',
+    '--agent',
+    name,
+    '--',
+    'awk',
+    'BEGIN { s = "x"; while (1) s = s s }',
+  ]);
+
+  const events = await runImp(
+    'exec',
+    '--agent',
+    name,
+    '--',
+    'cat',
+    '/sys/fs/cgroup/outer/memory.events',
+  );
+
+  const answered = await tryImp(['exec', name, '--', 'true']);
+
+  const kills = Number(/^oom_kill (?<count>\d+)$/mu.exec(events)?.groups?.['count']);
+
+  expect(hog.exitCode).toBe(137);
+  expect(kills).toBeGreaterThan(0);
+  expect(answered.exitCode).toBe(0);
+});

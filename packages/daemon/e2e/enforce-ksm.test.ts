@@ -1,0 +1,209 @@
+import { expect, onTestFinished, test } from 'bun:test';
+import { config } from '@impz/e2e-harness/config';
+import { resolveImageName } from '@impz/e2e-harness/fixtures';
+import { readPluggedMib } from '@impz/e2e-harness/guest-memory';
+import {
+  createInstanceClient,
+  listImps,
+  readInfo,
+  runImp,
+  runShellInImp,
+} from '@impz/e2e-harness/imp-cli';
+import { holdImp, waitForExec } from '@impz/e2e-harness/imps';
+import {
+  checkHostRunsKsm,
+  readGuestMappings,
+  readKsmdCpuMs,
+  readMergingPages,
+  readVmPssMib,
+} from '@impz/e2e-harness/ksm-host';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import { waitFor } from '@impz/e2e-harness/wait-for';
+import { writeMetric } from '@impz/e2e-harness/write-metric';
+import { ENFORCE_INTERVAL_MS } from '../src/imp-ops/governor/ram-governor';
+
+async function setupTest() {
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
+  const client = await createInstanceClient();
+
+  return { prefix: getSuitePrefix('ksm'), stack, client };
+}
+
+test.skipIf(!checkHostRunsKsm())(
+  'it merges the pages two guests hold alike, and the governor keeps the budget once their own writes split them',
+  async () => {
+    const ctx = await setupTest();
+
+    const image = resolveImageName('e2e-tiny');
+    const firstName = `${ctx.prefix}a`;
+    const secondName = `${ctx.prefix}b`;
+    const cpuBefore = readKsmdCpuMs();
+
+    await runImp('new', firstName, '--image', image, '--memory', '512m');
+
+    registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, firstName));
+
+    await waitForExec(firstName);
+    await holdImp(firstName);
+    await runImp('new', secondName, '--image', image, '--memory', '512m');
+
+    registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, secondName));
+
+    await waitForExec(secondName);
+    await holdImp(secondName);
+
+    const mappingsA = await readGuestMappings(firstName);
+    const mappingsB = await readGuestMappings(secondName);
+
+    expect(new Set([...mappingsA, ...mappingsB])).toStrictEqual(new Set(['rw-p mg']));
+
+    const beforeA = await readVmPssMib(firstName);
+    const beforeB = await readVmPssMib(secondName);
+
+    // The same in both guests but no two pages alike within one, so only a merge
+    // across the guests counts.
+    const fill = `seq -w 1 ${String(Math.floor((96 * 1024 ** 2) / 9))} > /dev/shm/fill`;
+
+    await runShellInImp(firstName, fill);
+    await runShellInImp(secondName, fill);
+
+    const merge = await waitFor(
+      'KSM to merge the guests',
+      async () => {
+        const pagesA = await readMergingPages(firstName);
+        const pagesB = await readMergingPages(secondName);
+        const pssA = await readVmPssMib(firstName);
+        const pssB = await readVmPssMib(secondName);
+
+        // Unmerged, the fills add 192 MiB, and the shared fill counts half in each
+        // guest.
+        if (Math.min(pagesA, pagesB) <= (96 * 256) / 2 || pssA + pssB >= beforeA + beforeB + 144) {
+          throw new Error(
+            `merging ${String(pagesA)} and ${String(pagesB)} pages, Pss ${String(pssA + pssB)} MiB`,
+          );
+        }
+
+        return { merged: [pagesA, pagesB], after: [pssA, pssB] };
+      },
+      { timeoutMs: 300_000, intervalMs: 2000 },
+    );
+
+    const info = await readInfo();
+
+    writeMetric('ksm_merging_pages', merge.merged);
+    writeMetric('ksm_pss_before_fill_mib', [beforeA, beforeB]);
+    writeMetric('ksm_pss_after_mib', merge.after);
+    writeMetric('ksm_ksmd_cpu_ms', readKsmdCpuMs() - cpuBefore);
+    writeMetric('ksm_info', info.ksm);
+    writeMetric('ksm_unmergeable', info.ksm?.unmergeable);
+
+    expect(info.ksm?.headroomMib).toBeGreaterThan(0);
+
+    await runImp('hold', firstName, '0');
+    await runImp('hold', secondName, '0');
+
+    // The fill goes first, so the merged pages split. /dev/shm grows past half
+    // the guest's RAM, and busybox head takes no 'M'.
+    const ownWrite = [
+      'rm /dev/shm/fill',
+      'mount -o remount,size=320m /dev/shm',
+      'dd if=/dev/urandom of=/dev/shm/own bs=1M count=288',
+    ].join(' && ');
+
+    await runShellInImp(firstName, ownWrite);
+    await runShellInImp(secondName, ownWrite);
+
+    // Two enforce passes, and 2 s to read every guest's Pss: the most a breach
+    // may last after the last write.
+    const awakeMib = await waitFor(
+      'the governor to keep the guests within the budget',
+      async () => {
+        const rows = await listImps();
+
+        const awake = rows.filter(
+          (row) => [firstName, secondName].includes(row.name) && row.state === 'running',
+        );
+
+        const pss = await Promise.all(awake.map((row) => readVmPssMib(row.name)));
+
+        const mib = pss.reduce((sum, one) => sum + one, 0);
+
+        if (mib > 512) {
+          throw new Error(`${String(mib)} MiB awake, over the 512 MiB budget`);
+        }
+
+        return mib;
+      },
+      { timeoutMs: 2 * ENFORCE_INTERVAL_MS + 2000, intervalMs: 500 },
+    );
+
+    const rows = await listImps();
+
+    const states = rows
+      .filter((row) => [firstName, secondName].includes(row.name))
+      .map((row) => row.state);
+
+    writeMetric('ksm_after_split', { awakeMib, states });
+
+    expect(awakeMib).toBeLessThanOrEqual(512);
+  },
+);
+
+test.skipIf(!checkHostRunsKsm())(
+  'it makes the memory an elastic guest grows into private and mergeable, as its boot memory is',
+  async () => {
+    const ctx = await setupTest();
+
+    const name = `${ctx.prefix}grow`;
+
+    await runImp(
+      'new',
+      name,
+      '--image',
+      resolveImageName('e2e-tiny'),
+      '--memory',
+      '192m',
+      '--max-memory',
+      '448m',
+    );
+
+    registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, name));
+
+    await waitForExec(name);
+    await holdImp(name);
+
+    await runShellInImp(
+      name,
+      'mkdir -p /mnt/fill && mount -t tmpfs -o size=200m tmpfs /mnt/fill && ' +
+        'i=0; while [ $i -lt 6 ]; do dd if=/dev/zero of=/mnt/fill/$i bs=1M count=20 2>/dev/null || exit 1; i=$((i+1)); sleep 1; done',
+    );
+
+    const growStarted = performance.now();
+
+    // The grow can land after the fill ends.
+    await waitFor(
+      `${name} to grow under the fill`,
+      async () => {
+        const pluggedMib = await readPluggedMib(name);
+
+        if (pluggedMib < 256) {
+          throw new Error(`${String(pluggedMib)} MiB plugged`);
+        }
+      },
+      { timeoutMs: 30_000, intervalMs: 200 },
+    );
+
+    writeMetric('ksm_grow_after_fill_ms', Math.round(performance.now() - growStarted));
+
+    const mappings = await readGuestMappings(name);
+
+    writeMetric('ksm_elastic_mappings', mappings);
+
+    expect(new Set(mappings)).toStrictEqual(new Set(['rw-p mg']));
+  },
+);

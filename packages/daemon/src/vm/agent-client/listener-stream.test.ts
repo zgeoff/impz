@@ -12,7 +12,7 @@ import {
   encodeMessageFrame,
 } from '@impz/agent-protocol';
 import invariant from 'tiny-invariant';
-import { startStubAgent } from '../../../testing/vm/start-stub-agent';
+import { startStubAgent } from '../../test-utils/vm/start-stub-agent';
 import { openAccept, openListener } from './listener-stream';
 
 function setupTest() {
@@ -241,4 +241,15 @@ test('#openAccept rejects with NO_CONNECTION for a client that is gone', async (
     code: 'NO_CONNECTION',
     detail: 'no waiting connection 7',
   });
+});
+
+test('#openListener names the guest and the listener answer when the agent never answers', async () => {
+  const ctx = setupTest();
+
+  await startStubAgent(ctx.vsockPath, () => {});
+
+  expect(openListener(ctx.vsockPath, { network: 'ssh-agent' }, 1)).rejects.toThrowWithMessage(
+    Error,
+    `agent at ${ctx.vsockPath} sent no listener answer within 1 ms`,
+  );
 });

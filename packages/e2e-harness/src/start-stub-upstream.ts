@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createTestCertificates } from '@impz/test-utils/create-test-certificates';
+import { createTestCertificates } from '@impz/shared/test-utils/create-test-certificates';
 import * as z from 'zod';
 import { createGitFreeEnv, runGitChecked } from './git-env';
 

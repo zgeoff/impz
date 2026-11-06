@@ -1,4 +1,4 @@
-import { formatShellWord } from '@impz/test-utils/format-shell-word';
+import { formatShellWord } from '@impz/shared/test-utils/format-shell-word';
 
 interface StubPushDockerOptions {
   // what `docker buildx imagetools inspect` prints, a digest or anything the registry gives

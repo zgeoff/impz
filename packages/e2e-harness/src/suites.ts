@@ -1,9 +1,9 @@
 import { readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { readBackupSuiteSettings } from './backup-drill';
 import { config } from './config';
 import { buildHugePageSettings, checkHostHasHugePagePool } from './huge-page-host';
-import { REPO_ROOT } from './instance';
+import { REPO_ROOT, SUITES_DIR } from './instance';
 import type { DevInstance } from './instance';
 import { checkHostRunsKsm } from './ksm-host';
 import { buildMoveSettings, readMoveOptions } from './move-hosts';
@@ -41,7 +41,7 @@ export const SUITES: readonly Suite[] = [
     name: 'lifecycle',
     prefix: 'e2e-life-',
     images: [],
-    journeys: ['lifecycle', 'lifecycle-events'],
+    journeys: ['lifecycle'],
   },
   { name: 'docker', prefix: 'e2e-dock-', images: ['base'] },
   {
@@ -111,7 +111,7 @@ export const SUITES: readonly Suite[] = [
     name: 'proxy',
     prefix: 'e2e-px-',
     images: ['e2e-tiny'],
-    journeys: ['proxy-refusals', 'proxy-forwards', 'proxy-agent-outdated', 'proxy-tunnel-limit'],
+    journeys: ['proxy-forwards', 'proxy-agent-outdated', 'proxy-tunnel-limit'],
   },
   { name: 'proxy-wake', prefix: 'e2e-pxw-', images: ['e2e-tiny'] },
   { name: 'cp', prefix: 'e2e-copy-', images: ['e2e-git'] },
@@ -124,7 +124,6 @@ export const SUITES: readonly Suite[] = [
   { name: 'dashboard', prefix: 'e2e-dash-', images: ['e2e-tiny'] },
   { name: 'https', prefix: 'e2e-tls-', images: ['e2e-tiny'] },
   { name: 'tokens', prefix: 'e2e-tok-', images: ['e2e-tiny'] },
-  { name: 'leases', prefix: 'e2e-lease-', images: ['e2e-tiny'] },
   {
     name: 'egress',
     prefix: 'e2e-eg-',
@@ -291,7 +290,7 @@ export const FAST_GROUPS: readonly (readonly string[])[] = [
   ],
   ['sleep', 'reverse', 'jail', 'huge-pages'],
   ['mcp', 'mcp-oauth', 'proxy', 'tokens', 'inner', 'memory', 'ksm'],
-  ['tailscale', 'leases', 'egress', 'cpu', 'moves-tailnet'],
+  ['tailscale', 'egress', 'cpu', 'moves-tailnet'],
 ];
 
 export const SUITE_SETS: Readonly<Record<string, readonly string[]>> = {
@@ -354,30 +353,46 @@ export function buildKsmSettings(isKsmRunning: boolean): Readonly<Record<string,
 // the e2e lane's limit on one journey test, as zgeoff/max-test-timeout declares it
 const JOURNEY_TIMEOUT_MS = 60_000;
 
-// Plain `bun test` skips *.e2e.ts; a ./ path runs one anyway, where a bare
-// path is a name filter.
+// The root bunfig skips the e2e folder; a ./ path runs one file anyway, where a bare path is a name
+// filter.
 export function buildJourneyArgv(bunPath: string, journey: string): readonly string[] {
-  const suffix = ZFS_JOURNEYS.has(journey) ? ZFS_SUFFIX : '.e2e.ts';
-
   return [
     bunPath,
     'test',
-    '--config=e2e/bunfig.toml',
+    `--config=${relative(REPO_ROOT, join(SUITES_DIR, 'bunfig.toml'))}`,
     '--bail',
     '--timeout',
     String(JOURNEY_TIMEOUT_MS),
-    `./e2e/suites/${journey}${suffix}`,
+    `./${relative(REPO_ROOT, join(SUITES_DIR, getJourneyFile(journey)))}`,
   ];
 }
 
-// A journey file named *.zfs.e2e.ts belongs to the ZFS lane, which scripts/zfs-host-test.sh runs
-// on a real pool, and a suite of such journeys runs nowhere else.
-const ZFS_SUFFIX = '.zfs.e2e.ts';
+function getJourneyFile(journey: string): string {
+  const file = JOURNEY_FILES.get(journey);
+
+  if (file === undefined) {
+    throw new Error(`no journey file for ${journey} in ${SUITES_DIR}`);
+  }
+
+  return file;
+}
+
+// A journey's file is <prefix>-<journey>.test.ts, where the prefix says what kind of end-to-end
+// check it is. A file with the .zfs lane suffix belongs to the ZFS lane, which
+// scripts/zfs-host-test.sh runs on a real pool, and a suite of such journeys runs nowhere else.
+const JOURNEY_FILE_PATTERN =
+  /^(?:start|stop|recover|cli|build|runtime|enforce|compat|journey)-(?<journey>.+?)(?:\.zfs)?\.test\.ts$/u;
+
+const JOURNEY_FILES: ReadonlyMap<string, string> = new Map(
+  readdirSync(SUITES_DIR).flatMap((file) => {
+    const journey = JOURNEY_FILE_PATTERN.exec(file)?.groups?.['journey'];
+
+    return journey === undefined ? [] : [[journey, file] as const];
+  }),
+);
 
 const ZFS_JOURNEYS: ReadonlySet<string> = new Set(
-  readdirSync(join(REPO_ROOT, 'e2e', 'suites'))
-    .filter((file) => file.endsWith(ZFS_SUFFIX))
-    .map((file) => file.slice(0, -ZFS_SUFFIX.length)),
+  [...JOURNEY_FILES].flatMap(([journey, file]) => (file.endsWith('.zfs.test.ts') ? [journey] : [])),
 );
 
 export function listZfsSuites(): readonly Suite[] {

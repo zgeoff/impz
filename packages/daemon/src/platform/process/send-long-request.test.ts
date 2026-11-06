@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { join } from 'node:path';
-import { startStubSilentOrigin } from '../../../testing/network/start-stub-silent-origin';
-import { buildStubClock } from '../../../testing/platform/build-stub-clock';
+import { startStubSilentOrigin } from '../../test-utils/network/start-stub-silent-origin';
+import { buildStubClock } from '../../test-utils/platform/build-stub-clock';
 import { sendLongRequest } from './send-long-request';
 
 function setupTest() {
@@ -106,7 +106,7 @@ test('it gets an answer that stays silent past Bun’s idle limit, where a plain
   const child = Bun.spawn(
     [
       process.execPath,
-      join(import.meta.dir, '../../../testing/surface/run-idle-limited-requests.ts'),
+      join(import.meta.dir, '../../test-utils/surface/run-idle-limited-requests.ts'),
       JSON.stringify({ origin: ctx.origin.origin, via: 'long-request' }),
     ],
     {

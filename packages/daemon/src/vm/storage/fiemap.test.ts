@@ -1,5 +1,5 @@
 import { expect, mock, test } from 'bun:test';
-import { buildStubAnswerQueue } from '@impz/test-utils/build-stub-answer-queue';
+import { buildStubAnswerQueue } from '@impz/shared/test-utils/build-stub-answer-queue';
 import { readOpenFileExtents } from './fiemap';
 import type { ExtentBatchRead, ReadExtentBatch } from './fiemap';
 

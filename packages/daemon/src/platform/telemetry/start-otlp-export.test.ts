@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { runChildTests } from '@impz/test-utils/run-child-tests';
+import { runChildTests } from '@impz/shared/test-utils/run-child-tests';
 import { startOtlpExport } from './start-otlp-export';
 
 // A started export sets the global meter and tracer providers, which the
@@ -16,7 +16,9 @@ async function setupTest() {
     directoryPath: directory,
     exportPath: JSON.stringify(join(import.meta.dir, 'start-otlp-export.ts')),
     apiPath: JSON.stringify(Bun.resolveSync('@opentelemetry/api', import.meta.dir)),
-    updateEnvPath: JSON.stringify(Bun.resolveSync('@impz/test-utils/update-env', import.meta.dir)),
+    updateEnvPath: JSON.stringify(
+      Bun.resolveSync('@impz/shared/test-utils/update-env', import.meta.dir),
+    ),
     invariantPath: JSON.stringify(Bun.resolveSync('tiny-invariant', import.meta.dir)),
 
     matchersPath: JSON.stringify(Bun.resolveSync('@zgeoff/bun-test-extended', import.meta.dir)),

@@ -1,7 +1,7 @@
 import { expect, mock, onTestFinished, setSystemTime, test } from 'bun:test';
 import invariant from 'tiny-invariant';
-import { buildMockCredential } from '../../../../testing/network/build-mock-credential';
 import type { NewAuditEntry } from '../../../platform/db/broker-audit';
+import { buildMockCredential } from '../../../test-utils/network/build-mock-credential';
 import { planUpgrade } from './plan-upgrade';
 
 test('it adds the real credential to the upgrade and leaves the handshake to the upstream client', async () => {

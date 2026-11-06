@@ -1,6 +1,6 @@
 import { chmodSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { formatShellWord } from '@impz/test-utils/format-shell-word';
+import { formatShellWord } from '@impz/shared/test-utils/format-shell-word';
 
 export function createStubRepoScript(
   scripts: string,

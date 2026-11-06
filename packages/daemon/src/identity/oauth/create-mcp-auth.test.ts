@@ -1,12 +1,12 @@
 import { expect, test } from 'bun:test';
 import { ApprovalCodeSchema } from '@impz/api';
 import invariant from 'tiny-invariant';
-import { createPendingSignIn } from '../../../testing/identity/create-pending-sign-in';
-import { runOAuthConsent } from '../../../testing/identity/run-oauth-consent';
-import { runOAuthSignIn } from '../../../testing/identity/run-oauth-sign-in';
-import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
-import { createTestDatabase } from '../../../testing/platform/create-test-database';
-import { makeOAuthResponder } from '../../../testing/surface/make-oauth-responder';
+import { createPendingSignIn } from '../../test-utils/identity/create-pending-sign-in';
+import { runOAuthConsent } from '../../test-utils/identity/run-oauth-consent';
+import { runOAuthSignIn } from '../../test-utils/identity/run-oauth-sign-in';
+import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
+import { createTestDatabase } from '../../test-utils/platform/create-test-database';
+import { makeOAuthResponder } from '../../test-utils/surface/make-oauth-responder';
 import { createRevocations } from '../auth/revocations';
 import { loadTokenStore } from '../auth/token-store';
 import { createMcpAuth } from './create-mcp-auth';
@@ -303,6 +303,58 @@ test('it refreshes a grant’s tokens and refuses its spent refresh token', asyn
 
   expect(first.status).toBe(200);
   expect(second.status).toBe(400);
+});
+
+test('it ends the grant when its spent refresh token comes again after the refresh', async () => {
+  const ctx = await setupTest();
+  const client = await ctx.auth.addClient('conn', ['https://client.example/callback']);
+  const made = await ctx.tokens.create({ name: 'laptop', scope: 'manage', imps: null });
+
+  const approver = ctx.tokens.authenticate(made.secret);
+
+  invariant(approver);
+
+  const issued = await runOAuthSignIn(
+    {
+      respond: ctx.respond,
+      origin: 'http://127.0.0.1:7171',
+      clientID: client.clientId,
+      redirectURI: 'https://client.example/callback',
+      scope: 'read',
+    },
+    (code) => {
+      ctx.auth.approve(ApprovalCodeSchema.parse(code), approver, 'read', undefined);
+    },
+  );
+
+  const sendRefresh = () =>
+    ctx.respond(
+      new Request('http://127.0.0.1:7171/oauth2/token', {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'refresh_token',
+          client_id: client.clientId,
+          refresh_token: issued.refresh_token,
+        }),
+      }),
+    );
+
+  const rotated = await sendRefresh();
+  const tokens: unknown = await rotated.json();
+
+  invariant(rotated.status === 200);
+  invariant(typeof tokens === 'object' && tokens !== null && 'access_token' in tokens);
+  invariant(typeof tokens.access_token === 'string');
+
+  const replayed = await sendRefresh();
+  const refusal: unknown = await replayed.json();
+  const caller = await ctx.auth.resolveAccess(tokens.access_token);
+  const grants = await ctx.auth.listGrants();
+
+  expect(refusal).toMatchObject({ error: 'invalid_grant' });
+  expect(caller).toBeNull();
+  expect(grants).toStrictEqual([]);
 });
 
 test('it keeps the grant when another client presents its spent refresh token', async () => {

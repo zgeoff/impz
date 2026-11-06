@@ -3,14 +3,14 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { waitFor } from '@impz/test-utils/wait-for';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { startRealTimer } from '../../../platform/process/start-real-timer';
 import {
   STUB_BUILDER_CONTAINER,
   buildStubImageBuilder,
-} from '../../../../testing/imps/build-stub-image-builder';
-import { buildStubClock } from '../../../../testing/platform/build-stub-clock';
-import { buildStubGuest } from '../../../../testing/vm/build-stub-guest';
-import { startRealTimer } from '../../../platform/process/start-real-timer';
+} from '../../../test-utils/imps/build-stub-image-builder';
+import { buildStubClock } from '../../../test-utils/platform/build-stub-clock';
+import { buildStubGuest } from '../../../test-utils/vm/build-stub-guest';
 import { countTreeBytes } from '../../../vm/storage/count-tree-bytes';
 import { DOCKERFILE_FRONTEND } from '../../docker-contract/dockerfile-frontend';
 import { createGuestExec } from '../builders/guest-exec';

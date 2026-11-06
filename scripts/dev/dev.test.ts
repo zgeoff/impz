@@ -2,7 +2,7 @@ import { expect, mock, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubBin } from '@impz/test-utils/create-stub-bin';
+import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
 import { buildDevImageTag } from '../lib/build-dev-image-tag.ts';
 import { buildStubDevDocker } from '../test-utils/build-stub-dev-docker';
 import { buildStubDevHostDocker } from '../test-utils/build-stub-dev-host-docker';

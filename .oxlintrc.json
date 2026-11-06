@@ -21,12 +21,13 @@
       }
     ],
     // each lane's per-test limit, as the project-testing skill's Lanes table states; `e2e/`
-    // holds both the VM and the ZFS lanes
+    // holds the VM lane, and its `.zfs` files the ZFS lane
     "zgeoff/max-test-timeout": [
       "error",
       {
         "lanes": {
           "e2e": 60000,
+          "zfs": 60000,
           "host": 15000,
           "headscale": 15000,
           "pebble": 5000,
@@ -40,6 +41,7 @@
       {
         "lanes": {
           "e2e": 60000,
+          "zfs": 60000,
           "host": 15000,
           "headscale": 15000,
           "pebble": 5000,
@@ -81,14 +83,13 @@
           "agent-protocol": ["packages/agent-protocol/**"],
           "client": ["packages/client/**"],
           "above-client": ["packages/{mcp,cli,daemon,dashboard}/**"],
-          "test-utils": ["packages/test-utils/**"],
+          "test-utils": ["packages/shared/src/test-utils/**"],
           "runtime-neutral": ["packages/{shared,agent-protocol,api,client}/**"],
           // the daemon's own test helpers build queries against real databases
-          "db": ["packages/daemon/src/platform/db/**", "packages/daemon/testing/**"],
+          "db": ["packages/daemon/src/platform/db/**", "packages/daemon/src/test-utils/**"],
           "tests": [
             "**/*.{test,e2e}.{ts,tsx}",
             "**/{test-utils,smoke,mocks}/**",
-            "packages/daemon/testing/**",
             // impd's harness, published for the tests of code that drives impd
             "packages/testing/**",
             // the end-to-end harness that the suites in e2e/ run on
@@ -109,6 +110,7 @@
           "daemon-identity": ["packages/daemon/src/identity/**"],
           "daemon-imp-ops": ["packages/daemon/src/imp-ops/**"],
           "daemon-surface": ["packages/daemon/src/surface/**"],
+          "daemon-test-utils": ["packages/daemon/src/test-utils/**"],
           // the vm layer's folders from the bottom up, with vm-config.ts at the bottom
           "daemon-vm-config": ["packages/daemon/src/vm/*.ts"],
           "daemon-vm-files": ["packages/daemon/src/vm/files/**"],
@@ -146,10 +148,11 @@
             "ignore": [
               "**/*.{test,e2e}.{ts,tsx}",
               "**/{test-utils,smoke,mocks}/**",
-              "packages/daemon/testing/**",
               "packages/testing/**",
               "packages/e2e-harness/**",
               "packages/dashboard/e2e/**",
+              // a package's benchmarks of the running program
+              "packages/*/bench/**",
               "**/test-setup.ts"
             ],
             "reason": "production code never imports test support"
@@ -540,9 +543,10 @@
               "daemon-network",
               "daemon-identity",
               "daemon-imp-ops",
-              "daemon-surface"
+              "daemon-surface",
+              "daemon-test-utils"
             ],
-            "reason": "a daemon file sits in a layer folder, or at the top of src as part of the composition root"
+            "reason": "a daemon file sits in a layer folder, in src/test-utils as a test helper, or at the top of src as part of the composition root"
           },
           {
             "name": "daemon-vm-folder",
@@ -586,10 +590,10 @@
           {
             "name": "test-support",
             "modules": [
-              "@impz/test-utils",
+              "@impz/shared/test-utils",
               "@impz/api/test-utils",
               "@impz/client/test-utils",
-              "@impz/daemon/testing"
+              "@impz/daemon/test-utils"
             ],
             "from": ["packages"],
             "allow": ["tests"],
@@ -658,7 +662,7 @@
             ],
             "from": ["test-utils"],
             "allow": ["daemon-surface"],
-            "reason": "@impz/test-utils is a leaf: it imports only @impz/shared"
+            "reason": "@impz/shared's test utils are a leaf: they import no other @impz package"
           }
         ]
       }
@@ -682,15 +686,8 @@
     {
       // the daemon's stand-in for the VM runner answers a whole contract in one
       // module, so its line count runs past the limit
-      "files": ["packages/daemon/testing/vm/build-stub-vmm.ts"],
+      "files": ["packages/daemon/src/test-utils/vm/build-stub-vmm.ts"],
       "rules": { "max-lines": "off" }
-    },
-    {
-      // the client's and the MCP server's tests against a real impd sit downstream of the
-      // daemon, away from the modules they test, so no package depends on the daemon that
-      // depends on it
-      "files": ["packages/integration/**"],
-      "rules": { "zgeoff/test-beside-module": "off" }
     },
     {
       // host/entrypoint has no extension, which the rule needs to match a module

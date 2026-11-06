@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { buildMockExtent } from '../../../testing/vm/build-mock-extent';
+import { buildMockExtent } from '../../test-utils/vm/build-mock-extent';
 import { countOwnerBytes } from './count-owner-bytes';
 import { EXTENT_FLAGS } from './fiemap';
 

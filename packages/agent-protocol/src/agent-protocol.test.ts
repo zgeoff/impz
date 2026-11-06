@@ -9,8 +9,8 @@ import {
   SESSION_NAME_PATTERN,
   TAR_TOTAL_RECORD,
 } from '@impz/api';
-import { listAgentFixtures } from '@impz/test-utils/list-agent-fixtures';
-import { readAgentFixture } from '@impz/test-utils/read-agent-fixture';
+import { listAgentFixtures } from '@impz/shared/test-utils/list-agent-fixtures';
+import { readAgentFixture } from '@impz/shared/test-utils/read-agent-fixture';
 import { AGENT_ERROR_CODES } from './agent-error-codes';
 import {
   ActivitySchema,

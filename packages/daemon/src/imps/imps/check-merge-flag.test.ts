@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
-import { startTestImpd } from '../../../testing/start-test-impd';
-import type { TestImpdOptions } from '../../../testing/start-test-impd';
+import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
+import { startTestImpd } from '../../test-utils/start-test-impd';
+import type { TestImpdOptions } from '../../test-utils/start-test-impd';
 import { readSnapshotMeta } from '../../vm/sleep/snapshot-meta';
 import { buildImpPaths } from '../../vm/storage/data-layout';
 

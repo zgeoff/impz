@@ -12,8 +12,8 @@ import {
   encodeMessageFrame,
 } from '@impz/agent-protocol';
 import invariant from 'tiny-invariant';
-import { startStubAgent } from '../../../testing/vm/start-stub-agent';
-import { startStubEchoExecAgent } from '../../../testing/vm/start-stub-echo-exec-agent';
+import { startStubAgent } from '../../test-utils/vm/start-stub-agent';
+import { startStubEchoExecAgent } from '../../test-utils/vm/start-stub-echo-exec-agent';
 import { openAttachStream, openExecStream, openTapStream } from './exec-stream';
 
 function setupTest() {
@@ -98,7 +98,7 @@ test('#openExecStream rejects and closes its connection when STARTED never comes
 
   expect(
     openExecStream(ctx.vsockPath, { argv: ['sleep'], tty: false }, 1),
-  ).rejects.toThrowWithMessage(Error, 'agent did not answer within 1 ms');
+  ).rejects.toThrowWithMessage(Error, `agent at ${ctx.vsockPath} sent no exec start within 1 ms`);
 
   await expect(closed.promise).toResolve();
 });

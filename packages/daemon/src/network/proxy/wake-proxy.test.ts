@@ -1,18 +1,18 @@
 import { expect, jest, mock, onTestFinished, test } from 'bun:test';
 import { join } from 'node:path';
-import { claimFreePorts } from '@impz/test-utils/claim-free-ports';
-import { waitFor } from '@impz/test-utils/wait-for';
+import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import invariant from 'tiny-invariant';
-import { seedLoopbackImp } from '../../../testing/imps/seed-loopback-imp';
-import { startStubBrokerSocketUpstream } from '../../../testing/network/start-stub-broker-socket-upstream';
-import { startStubCutStream } from '../../../testing/network/start-stub-cut-stream';
-import { startStubHeaderEcho } from '../../../testing/network/start-stub-header-echo';
-import { startStubPausedSocketGuest } from '../../../testing/network/start-stub-paused-socket-guest';
-import { startStubSilentOrigin } from '../../../testing/network/start-stub-silent-origin';
-import { buildStubClock } from '../../../testing/platform/build-stub-clock';
-import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
-import { startTestImpd } from '../../../testing/start-test-impd';
 import { readImpByName, removeImp, updateImpActivity, updateImpMove } from '../../platform/db/imps';
+import { seedLoopbackImp } from '../../test-utils/imps/seed-loopback-imp';
+import { startStubBrokerSocketUpstream } from '../../test-utils/network/start-stub-broker-socket-upstream';
+import { startStubCutStream } from '../../test-utils/network/start-stub-cut-stream';
+import { startStubHeaderEcho } from '../../test-utils/network/start-stub-header-echo';
+import { startStubPausedSocketGuest } from '../../test-utils/network/start-stub-paused-socket-guest';
+import { startStubSilentOrigin } from '../../test-utils/network/start-stub-silent-origin';
+import { buildStubClock } from '../../test-utils/platform/build-stub-clock';
+import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
+import { startTestImpd } from '../../test-utils/start-test-impd';
 import { PEER_HEADER, createForwardedPeers } from './forwarded-peers';
 import { startWakeProxy } from './wake-proxy';
 
@@ -505,7 +505,7 @@ test('it passes on an API answer that stays silent past Bun’s idle limit, wher
   const child = Bun.spawn(
     [
       process.execPath,
-      join(import.meta.dir, '../../../testing/surface/run-idle-limited-requests.ts'),
+      join(import.meta.dir, '../../test-utils/surface/run-idle-limited-requests.ts'),
       JSON.stringify({ origin: origin.origin, via: 'wake-proxy' }),
     ],
     {
@@ -1216,7 +1216,7 @@ test('it stops the request to the imp when the client goes away', async () => {
 // the test reads
 test('it logs one impd.proxy line that names the imp, and nothing unhandled, when the imp’s server closes a stream', async () => {
   const child = Bun.spawn(
-    [process.execPath, join(import.meta.dir, '../../../testing/network/run-cut-proxied-stream.ts')],
+    [process.execPath, join(import.meta.dir, '../../test-utils/network/run-cut-proxied-stream.ts')],
     { stdout: 'pipe', stderr: 'pipe' },
   );
 

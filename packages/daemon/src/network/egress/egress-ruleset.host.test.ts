@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test';
-import { probeUnshare } from '../../../testing/host-net/probe-unshare';
-import { runInNetns } from '../../../testing/host-net/run-in-netns';
-import { buildStubPublicNetwork } from '../../../testing/network/build-stub-public-network';
 import { BLOCKED_RANGES6, DOCUMENTATION_RANGES6, REFUSED_RANGES4 } from '../../host-net/net/ranges';
+import { probeUnshare } from '../../test-utils/host-net/probe-unshare';
+import { runInNetns } from '../../test-utils/host-net/run-in-netns';
+import { buildStubPublicNetwork } from '../../test-utils/network/build-stub-public-network';
 import { buildElementChange, buildRuleset } from './egress-ruleset';
 
 test.skipIf(!probeUnshare(['nft', 'list', 'ruleset']))(

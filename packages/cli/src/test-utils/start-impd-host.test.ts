@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { stat } from 'node:fs/promises';
 import { createImpClient } from '@impz/client';
-import { buildImagePaths, buildMockNewImage, createImage } from '@impz/daemon/testing';
+import { buildImagePaths, buildMockNewImage, createImage } from '@impz/daemon/test-utils';
 import invariant from 'tiny-invariant';
 import { startImpdHost } from './start-impd-host';
 
@@ -61,6 +61,18 @@ test('it reports the KSM saving the test sets for an awake imp', async () => {
   invariant(info.ksm);
 
   expect(info.ksm.headroomMib).toBe(16_000);
+});
+
+test('it creates a test image that a new imp boots from', async () => {
+  const ctx = setupTest();
+
+  const host = await startImpdHost(ctx.stack, { env: {} });
+
+  await host.createTestImage('base');
+
+  const imp = await host.client.imps.create({ name: 'dev' });
+
+  expect(imp.state).toBe('running');
 });
 
 test('it closes its listener and removes its data dir with the stack', async () => {

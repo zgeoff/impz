@@ -2,8 +2,8 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildStubClock } from '../../../testing/platform/build-stub-clock';
-import { startStubParkedAgent } from '../../../testing/vm/start-stub-parked-agent';
+import { buildStubClock } from '../../test-utils/platform/build-stub-clock';
+import { startStubParkedAgent } from '../../test-utils/vm/start-stub-parked-agent';
 import { waitForAgent } from './wait-for-agent';
 
 function setupTest() {

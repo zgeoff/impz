@@ -2,9 +2,9 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubDockerCli } from '../../../../testing/imps/create-stub-docker-cli';
-import { captureImpdLogs } from '../../../../testing/platform/capture-impd-logs';
 import { runCommand } from '../../../platform/process/run-command';
+import { createStubDockerCli } from '../../../test-utils/imps/create-stub-docker-cli';
+import { captureImpdLogs } from '../../../test-utils/platform/capture-impd-logs';
 import { DOCKERFILE_FRONTEND } from '../../docker-contract/dockerfile-frontend';
 import { createBuildEngine } from './build-engine';
 

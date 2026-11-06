@@ -2,8 +2,8 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubBin } from '@impz/test-utils/create-stub-bin';
-import { updateEnv } from '@impz/test-utils/update-env';
+import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
+import { updateEnv } from '@impz/shared/test-utils/update-env';
 import { probeTailscaleE2EKey, readTailscaleE2EAuthKey } from './tailscale-key';
 
 function setupTest() {

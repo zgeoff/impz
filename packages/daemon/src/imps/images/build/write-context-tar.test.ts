@@ -4,7 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { listLocalEntries } from '@impz/local-tar';
-import { captureImpdLogs } from '../../../../testing/platform/capture-impd-logs';
+import { captureImpdLogs } from '../../../test-utils/platform/capture-impd-logs';
 import { writeContextTar } from './write-context-tar';
 
 async function setupTest() {

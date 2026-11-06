@@ -1,22 +1,22 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { createImpClient } from '@impz/client';
 import { readMcpAnswer } from '@impz/mcp/test-utils/read-mcp-answer';
-import { claimFreePorts } from '@impz/test-utils/claim-free-ports';
-import { readImpEnv } from '@impz/test-utils/read-imp-env';
-import { updateEnv } from '@impz/test-utils/update-env';
-import { waitFor } from '@impz/test-utils/wait-for';
+import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
+import { readImpEnv } from '@impz/shared/test-utils/read-imp-env';
+import { updateEnv } from '@impz/shared/test-utils/update-env';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import invariant from 'tiny-invariant';
-import { buildStubTailscale } from '../../../testing/network/build-stub-tailscale';
-import { startTestImpd } from '../../../testing/start-test-impd';
-import { TEST_TOKEN } from '../../../testing/test-token';
-import { buildStubExecGuest } from '../../../testing/vm/build-stub-exec-guest';
-import { startStubExecAgent } from '../../../testing/vm/start-stub-exec-agent';
 import { runWhois } from '../../identity/auth/tailnet-identity';
 import { PEER_HEADER } from '../../network/proxy/forwarded-peers';
 import { startWakeProxy } from '../../network/proxy/wake-proxy';
 import { listApiCalls } from '../../platform/db/api-audit';
 import { readImpByName } from '../../platform/db/imps';
+import { buildStubTailscale } from '../../test-utils/network/build-stub-tailscale';
+import { startTestImpd } from '../../test-utils/start-test-impd';
+import { TEST_TOKEN } from '../../test-utils/test-token';
+import { buildStubExecGuest } from '../../test-utils/vm/build-stub-exec-guest';
+import { startStubExecAgent } from '../../test-utils/vm/start-stub-exec-agent';
 import { buildImpPaths } from '../../vm/storage/data-layout';
 
 interface SetupOptions {

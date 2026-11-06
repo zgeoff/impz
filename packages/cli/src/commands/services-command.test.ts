@@ -7,8 +7,8 @@ import {
   sendServicesAdd,
   startStubServiceAgent,
   startTestImpd,
-} from '@impz/daemon/testing';
-import { waitFor } from '@impz/test-utils/wait-for';
+} from '@impz/daemon/test-utils';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { UsageError } from '../cli/errors';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 import { buildServiceDef, createLogPrinter, formatLogEvent } from './services-command';

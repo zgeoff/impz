@@ -4,7 +4,7 @@ import { EVENT_VERSION } from '@impz/api';
 import type { ImpEvent } from '@impz/api';
 import { buildMockCheckpoint } from '@impz/api/test-utils/build-mock-checkpoint';
 import { buildMockImp } from '@impz/api/test-utils/build-mock-imp';
-import { buildStubAnswerQueue } from '@impz/test-utils/build-stub-answer-queue';
+import { buildStubAnswerQueue } from '@impz/shared/test-utils/build-stub-answer-queue';
 import { ORPCError } from '@orpc/client';
 import { UnknownProcedureError } from '../unknown-procedure-error';
 import { watchEvents } from './watch-events';

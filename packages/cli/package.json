@@ -1,6 +1,6 @@
 {
   "name": "@impz/cli",
-  "version": "6.6.0",
+  "version": "6.6.1",
   "private": true,
   "description": "impz: the command-line client for impd",
   "bin": {
@@ -28,7 +28,6 @@
     "@faker-js/faker": "catalog:",
     "@impz/agent-protocol": "workspace:*",
     "@impz/daemon": "workspace:*",
-    "@impz/test-utils": "workspace:*",
     "msw": "catalog:",
     "tiny-invariant": "catalog:"
   }

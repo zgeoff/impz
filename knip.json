@@ -22,19 +22,15 @@
       // files:branch reaches; their other exports serve the tests in zgeoff/tools
       // and the other scripts that the pre-push-baseline entry of repo-sync delivers
       "entry": [
-        "e2e/suites/*.e2e.ts",
         "scripts/run-related-tests.ts",
         "scripts/read-branch-base.ts",
         // the dev CLI that scripts/dev/dev.sh runs
         "scripts/dev/dev.ts",
         // the zfs harnesses that scripts/test-zfs.sh and scripts/zfs-host-test.sh run
         "scripts/test-zfs.ts",
-        "scripts/zfs-host-test.ts",
-        // the measure that scripts/ci/run-touched-pages-bench.ts runs on the bench job
-        "scripts/bench/measure-touched-pages.ts"
+        "scripts/zfs-host-test.ts"
       ],
       "project": [
-        "e2e/**/*.ts",
         "scripts/**/*.ts",
         "deploy/**/*.ts",
         "host/**/*.ts",
@@ -47,14 +43,17 @@
     },
     "packages/daemon": {
       // impd, which host/Dockerfile compiles, the scripts a test runs in a
-      // child Bun, and render:db-schema's dump
+      // child Bun, render:db-schema's dump, and the bench scripts that
+      // bench.yml and the dev container run
       "entry": [
         // a pattern ending in ! is production code for knip --production
         "src/main.ts!",
-        "testing/*/run-*.ts",
-        "src/platform/db/dump-schema.ts"
+        "e2e/*.test.ts",
+        "src/test-utils/*/run-*.ts",
+        "src/platform/db/dump-schema.ts",
+        "bench/*.ts"
       ],
-      "project": ["src/**/*.ts!", "testing/**/*.ts"],
+      "project": ["src/**/*.ts!", "!src/test-utils/**!", "e2e/**/*.ts", "bench/**/*.ts"],
       // kysely-codegen writes every table, used or not
       "ignoreIssues": {
         "src/platform/db/schema.ts": ["types"]

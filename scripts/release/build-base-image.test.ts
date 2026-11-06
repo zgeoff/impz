@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createGitFreeEnv } from '@impz/e2e-harness/git-env';
-import { createStubBin } from '@impz/test-utils/create-stub-bin';
+import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
 import { $ } from 'bun';
 
 function setupTest() {

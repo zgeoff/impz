@@ -2,9 +2,9 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubAptGet } from '@impz/test-utils/create-stub-apt-get';
-import { createStubBin } from '@impz/test-utils/create-stub-bin';
-import { createStubSudo } from '@impz/test-utils/create-stub-sudo';
+import { createStubAptGet } from '@impz/shared/test-utils/create-stub-apt-get';
+import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
+import { createStubSudo } from '@impz/shared/test-utils/create-stub-sudo';
 import { $ } from 'bun';
 
 function setupTest() {

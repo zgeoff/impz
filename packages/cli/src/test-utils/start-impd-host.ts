@@ -1,7 +1,7 @@
 import { faker } from '@faker-js/faker';
 import { createImpClient } from '@impz/client';
-import { startTestImpd } from '@impz/daemon/testing';
-import type { TestImpd } from '@impz/daemon/testing';
+import { startTestImpd } from '@impz/daemon/test-utils';
+import type { TestImpd } from '@impz/daemon/test-utils';
 
 interface ImpdHostOptions {
   readonly env: Readonly<Record<string, string>>;
@@ -44,6 +44,7 @@ export async function startImpdHost(
     ksm,
     sendRequest,
     fake: harness.fake,
+    createTestImage: harness.createTestImage,
 
     // impd runs it on a ticker; a test runs one pass when it needs one
     runIdleCheck: () => harness.impd.idle.runCheck(),

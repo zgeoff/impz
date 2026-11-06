@@ -1,0 +1,200 @@
+import { expect, onTestFinished, test } from 'bun:test';
+import { createConnection, createServer } from 'node:net';
+import type { Socket } from 'node:net';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
+import invariant from 'tiny-invariant';
+import { z } from 'zod';
+import { startStubSilentTcpProxy } from './start-stub-silent-tcp-proxy';
+
+async function setupTest() {
+  const received: string[] = [];
+  const sockets: Socket[] = [];
+
+  const target = createServer((socket) => {
+    sockets.push(socket);
+
+    socket.on('data', (data: Buffer) => {
+      received.push(data.toString());
+    });
+
+    socket.on('error', () => {});
+  });
+
+  await new Promise<void>((resolve) => {
+    target.listen(0, '127.0.0.1', resolve);
+  });
+
+  onTestFinished(() => {
+    for (const socket of sockets) {
+      socket.destroy();
+    }
+
+    target.close();
+  });
+
+  const address = z.object({ port: z.number() }).parse(target.address());
+
+  return { targetPort: address.port, received, sockets };
+}
+
+test('it passes the client’s bytes on to the target and the target’s back', async () => {
+  const ctx = await setupTest();
+  const proxy = await startStubSilentTcpProxy(ctx.targetPort);
+
+  const back: string[] = [];
+  const client = createConnection({ host: '127.0.0.1', port: proxy.port });
+
+  onTestFinished(() => {
+    client.destroy();
+  });
+
+  client.on('data', (data: Buffer) => {
+    back.push(data.toString());
+  });
+
+  client.write('ping');
+
+  const socket = await waitFor(() => {
+    expect(ctx.received.join('')).toBe('ping');
+
+    const [first] = ctx.sockets;
+
+    invariant(first);
+
+    return first;
+  });
+
+  socket.write('pong');
+
+  await waitFor(() => {
+    expect(back).not.toBeEmpty();
+  });
+
+  expect(back.join('')).toBe('pong');
+  expect(ctx.received).toStrictEqual(['ping']);
+});
+
+test('it counts each chunk of the client’s bytes it passes on, and none it drops', async () => {
+  const ctx = await setupTest();
+  const proxy = await startStubSilentTcpProxy(ctx.targetPort);
+
+  const client = createConnection({ host: '127.0.0.1', port: proxy.port });
+
+  onTestFinished(() => {
+    client.destroy();
+  });
+
+  client.write('one');
+
+  await waitFor(() => {
+    expect(ctx.received.join('')).toBe('one');
+  });
+
+  client.write('two');
+
+  await waitFor(() => {
+    expect(ctx.received.join('')).toBe('onetwo');
+  });
+
+  proxy.silence();
+  client.write('three');
+
+  await waitFor(() => {
+    expect(proxy.readDropped()).toBe(5);
+  });
+
+  expect(proxy.readPassedChunks()).toBe(2);
+});
+
+test('it drops the client’s bytes once silent', async () => {
+  const ctx = await setupTest();
+  const proxy = await startStubSilentTcpProxy(ctx.targetPort);
+
+  const client = createConnection({ host: '127.0.0.1', port: proxy.port });
+
+  onTestFinished(() => {
+    client.destroy();
+  });
+
+  client.write('before');
+
+  await waitFor(() => {
+    expect(ctx.received.join('')).toBe('before');
+  });
+
+  proxy.silence();
+  client.write('after');
+
+  await waitFor(() => {
+    expect(proxy.readDropped()).toBe(5);
+  });
+
+  expect(ctx.received.join('')).toBe('before');
+});
+
+test('it still passes the target’s bytes to the client once silent', async () => {
+  const ctx = await setupTest();
+  const proxy = await startStubSilentTcpProxy(ctx.targetPort);
+
+  const back: string[] = [];
+  const client = createConnection({ host: '127.0.0.1', port: proxy.port });
+
+  onTestFinished(() => {
+    client.destroy();
+  });
+
+  client.on('data', (data: Buffer) => {
+    back.push(data.toString());
+  });
+
+  const socket = await waitFor(() => {
+    const [first] = ctx.sockets;
+
+    invariant(first);
+
+    return first;
+  });
+
+  proxy.silence();
+  socket.write('still here');
+
+  await waitFor(() => {
+    expect(back).not.toBeEmpty();
+  });
+
+  expect(back.join('')).toBe('still here');
+});
+
+test('it stops listening and drops its connections when the test finishes', async () => {
+  const ctx = await setupTest();
+  const proxy = await startStubSilentTcpProxy(ctx.targetPort);
+
+  const closed = Promise.withResolvers<void>();
+  const client = createConnection({ host: '127.0.0.1', port: proxy.port });
+
+  client.on('error', () => {});
+  client.once('close', closed.resolve);
+
+  await waitFor(() => {
+    expect(ctx.sockets).toHaveLength(1);
+  });
+
+  // Bun runs this after the proxy's own cleanup, which registered first.
+  onTestFinished(async () => {
+    await closed.promise;
+
+    const connected = new Promise<void>((resolve, reject) => {
+      const probe = createConnection({ host: '127.0.0.1', port: proxy.port });
+
+      probe.once('connect', () => {
+        probe.destroy();
+
+        resolve();
+      });
+
+      probe.once('error', reject);
+    });
+
+    expect(connected).rejects.toThrow('ECONNREFUSED');
+  });
+});

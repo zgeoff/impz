@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import type { Scope } from '@impz/api';
-import { buildMockCaller } from '../../testing/identity/build-mock-caller';
+import { buildMockCaller } from '../test-utils/identity/build-mock-caller';
 import { requireNamedImp } from './require-named-imp';
 
 interface RequireNamedImpRow {

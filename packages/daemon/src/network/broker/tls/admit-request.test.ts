@@ -1,7 +1,7 @@
 import { expect, mock, test } from 'bun:test';
 import invariant from 'tiny-invariant';
-import { buildMockCredential } from '../../../../testing/network/build-mock-credential';
 import type { NewAuditEntry } from '../../../platform/db/broker-audit';
+import { buildMockCredential } from '../../../test-utils/network/build-mock-credential';
 import { admitRequest } from './admit-request';
 
 test('it admits a request for its host with the granted credential', async () => {

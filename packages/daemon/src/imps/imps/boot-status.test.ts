@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ImpState } from '@impz/api';
-import { writeTestSnapshot } from '../../../testing/vm/write-test-snapshot';
+import { writeTestSnapshot } from '../../test-utils/vm/write-test-snapshot';
 import { writeVmIdentity } from '../../vm/sleep/vm-identity';
 import { buildImpPaths } from '../../vm/storage/data-layout';
 import { countBootStatuses, readBootStatus } from './boot-status';

@@ -1,11 +1,11 @@
 import { expect, test } from 'bun:test';
-import { claimFreePorts } from '@impz/test-utils/claim-free-ports';
-import { waitFor } from '@impz/test-utils/wait-for';
+import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import * as dnsPacket from 'dns-packet';
 import invariant from 'tiny-invariant';
-import { buildMockDnsQuery } from '../../../testing/network/build-mock-dns-query';
-import { startStubDnsUpstream } from '../../../testing/network/start-stub-dns-upstream';
-import { buildStubClock } from '../../../testing/platform/build-stub-clock';
+import { buildMockDnsQuery } from '../../test-utils/network/build-mock-dns-query';
+import { startStubDnsUpstream } from '../../test-utils/network/start-stub-dns-upstream';
+import { buildStubClock } from '../../test-utils/platform/build-stub-clock';
 import { createDnsForward } from './dns-upstream';
 
 test('it returns the upstream answer under the id the guest chose', async () => {

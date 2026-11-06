@@ -1,9 +1,9 @@
 import { expect, mock, test } from 'bun:test';
 import type { ImpEvent } from '@impz/api';
-import { buildStubExecBackend } from '../../../testing/imps/build-stub-exec-backend';
-import { buildStubAgentExecStream } from '../../../testing/vm/build-stub-agent-exec-stream';
 import type { ApiAudit } from '../../platform/audit/api-audit';
 import { createEventBus } from '../../platform/events/event-bus';
+import { buildStubExecBackend } from '../../test-utils/imps/build-stub-exec-backend';
+import { buildStubAgentExecStream } from '../../test-utils/vm/build-stub-agent-exec-stream';
 import { buildAuditedBackend } from './audited-backend';
 
 test('it audits a terminal exec as a console, with what it failed with', () => {

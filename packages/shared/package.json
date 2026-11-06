@@ -2,10 +2,22 @@
   "name": "@impz/shared",
   "version": "0.0.0",
   "private": true,
-  "description": "Pure helpers that know nothing about imp: byte and duration formats, a newline splitter and byte merging",
+  "description": "Pure helpers that know nothing about imp: byte and duration formats, a newline splitter and byte merging; and, in src/test-utils, the test run's preload and the test utils every package shares",
   "type": "module",
   "sideEffects": false,
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./test-utils/*": "./src/test-utils/*.ts"
+  },
+  "devDependencies": {
+    "@bufbuild/protobuf": "catalog:",
+    "@faker-js/faker": "catalog:",
+    "@mswjs/interceptors": "catalog:",
+    "@opentelemetry/api": "catalog:",
+    "@opentelemetry/sdk-trace-base": "catalog:",
+    "@peculiar/x509": "catalog:",
+    "msw": "catalog:",
+    "reflect-metadata": "catalog:",
+    "zod": "catalog:"
   }
 }

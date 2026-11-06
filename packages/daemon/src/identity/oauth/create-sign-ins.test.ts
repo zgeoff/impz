@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import invariant from 'tiny-invariant';
-import { buildMockCaller } from '../../../testing/identity/build-mock-caller';
+import { buildMockCaller } from '../../test-utils/identity/build-mock-caller';
 import { ROOT_TOKEN_ID } from '../auth/token-store';
 import { createSignIns } from './create-sign-ins';
 

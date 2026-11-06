@@ -14,7 +14,7 @@
   },
   "devDependencies": {
     "@impz/api": "workspace:*",
-    "@impz/test-utils": "workspace:*",
+    "@impz/shared": "workspace:*",
     "tiny-invariant": "catalog:"
   }
 }

@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test';
 import invariant from 'tiny-invariant';
-import { buildMockCaller } from '../../../testing/identity/build-mock-caller';
-import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
-import { createTestDatabase } from '../../../testing/platform/create-test-database';
+import { buildMockCaller } from '../../test-utils/identity/build-mock-caller';
+import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
+import { createTestDatabase } from '../../test-utils/platform/create-test-database';
 import { createOAuthHandlers } from './create-oauth-handlers';
 import { createSignIns } from './create-sign-ins';
 

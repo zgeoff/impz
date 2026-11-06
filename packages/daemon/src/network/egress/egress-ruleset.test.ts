@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { buildMockFirewallSlot } from '../../../testing/network/build-mock-firewall-slot';
+import { buildMockFirewallSlot } from '../../test-utils/network/build-mock-firewall-slot';
 import { buildElementChange, buildRuleset } from './egress-ruleset';
 
 test('#buildRuleset writes the whole table for one slot of each mode and a network', () => {

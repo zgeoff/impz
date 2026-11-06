@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { buildMockCaller } from '../../testing/identity/build-mock-caller';
+import { buildMockCaller } from '../test-utils/identity/build-mock-caller';
 import { findImpRefusal } from './find-imp-refusal';
 
 test('it lets a caller with the scope through to an imp within its patterns', () => {

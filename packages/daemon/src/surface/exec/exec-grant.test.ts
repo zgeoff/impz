@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
-import { buildMockCaller } from '../../../testing/identity/build-mock-caller';
-import { buildStubExecBackend } from '../../../testing/imps/build-stub-exec-backend';
-import { buildStubAgentExecStream } from '../../../testing/vm/build-stub-agent-exec-stream';
+import { buildMockCaller } from '../../test-utils/identity/build-mock-caller';
+import { buildStubExecBackend } from '../../test-utils/imps/build-stub-exec-backend';
+import { buildStubAgentExecStream } from '../../test-utils/vm/build-stub-agent-exec-stream';
 import { buildRamBudgetError } from '../../vm/imps-contract/ram-budget-error';
 import { buildGrantedBackend } from './exec-grant';
 

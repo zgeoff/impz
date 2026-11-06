@@ -4,20 +4,20 @@ import { copyFile, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { Imp } from '@impz/api';
-import { buildStubAnswerQueue } from '@impz/test-utils/build-stub-answer-queue';
+import { buildStubAnswerQueue } from '@impz/shared/test-utils/build-stub-answer-queue';
 import invariant from 'tiny-invariant';
-import { buildMockNewCheckpoint } from '../../../testing/imp-ops/build-mock-new-checkpoint';
-import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
-import { buildMockNewImp } from '../../../testing/imps/build-mock-new-imp';
-import { buildQueryGate } from '../../../testing/platform/build-query-gate';
-import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
-import { runSql } from '../../../testing/platform/run-sql';
-import { startTestImpd } from '../../../testing/start-test-impd';
-import { buildStubZfs } from '../../../testing/vm/build-stub-zfs';
 import { createCheckpoint, listCheckpoints } from '../../platform/db/checkpoints';
 import { createImage, updateImage } from '../../platform/db/images';
 import { createImp, readImpByName } from '../../platform/db/imps';
 import type { ImpRecord } from '../../platform/db/imps';
+import { buildMockNewCheckpoint } from '../../test-utils/imp-ops/build-mock-new-checkpoint';
+import { buildMockNewImage } from '../../test-utils/imps/build-mock-new-image';
+import { buildMockNewImp } from '../../test-utils/imps/build-mock-new-imp';
+import { buildQueryGate } from '../../test-utils/platform/build-query-gate';
+import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
+import { runSql } from '../../test-utils/platform/run-sql';
+import { startTestImpd } from '../../test-utils/start-test-impd';
+import { buildStubZfs } from '../../test-utils/vm/build-stub-zfs';
 import { buildImagePaths, buildImpPaths } from '../../vm/storage/data-layout';
 import { CheckpointIdTakenError } from '../../vm/storage/storage-backend';
 import { createXfsBackend } from '../../vm/storage/xfs-backend';
@@ -520,6 +520,22 @@ test('it deletes a checkpoint by its label and keeps the others', async () => {
 
   expect(existsSync(join(checkpointsDir, first.id))).toBe(false);
   expect(remaining).toStrictEqual([second]);
+});
+
+test('it answers NOT_FOUND to a restore from a deleted checkpoint', async () => {
+  const ctx = await setupTest({ storage: 'xfs' });
+
+  await Bun.write(join(ctx.dataDir, 'images', 'base', 'rootfs.ext4'), 'rootfs');
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'base', digest: 'sha256:base' }));
+
+  await ctx.impd.imps.createImp({ name: 'dev', image: 'base' });
+  await ctx.impd.checkpoints.createCheckpoint('dev', 'one');
+  await ctx.impd.checkpoints.removeCheckpoint('dev', 'one');
+
+  expect(ctx.impd.checkpoints.restoreCheckpoint('dev', 'one')).rejects.toMatchObject({
+    code: 'NOT_FOUND',
+  });
 });
 
 test('it removes an imp’s checkpoints with the imp', async () => {

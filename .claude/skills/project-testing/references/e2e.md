@@ -1,107 +1,151 @@
-# The end-to-end harness
+# End-to-end journeys
 
-The harness runs each journey file as its own `bun test` process against one dev instance, and it
-returns the instance to a baseline after every journey. A journey therefore starts clean whatever
-the journey before it did. The
+A journey is one file in [`packages/daemon/e2e/`](../../../../packages/daemon/e2e/), named
+`<kind>-<journey>.test.ts`, where `<kind>` is one of the testing skill's e2e prefixes, such as
+`journey` or `enforce`. The harness runs it as its own `bun test` process against one
+[dev instance](../../../../scripts/dev/dev.sh). A suite in
+[`suites.ts`](../../../../packages/e2e-harness/src/suites.ts) lists the journey's name in its
+`journeys`, and the harness finds the file by the name after `<kind>-`. The
 [development runbook](../../../../docs/runbooks/development.md#end-to-end-tests) owns how to run the
-harness: the suites, the flags, the tuning variables, the moves suites' second host and the tailnet
-suites. This file covers what a journey author needs. The harness code and its unit tests live in
-[`packages/e2e-harness/src/`](../../../../packages/e2e-harness/src/), and the unit tests run in
-plain `bun test` without KVM.
+harness, [`scripts/test-e2e.sh`](../../../../scripts/test-e2e.sh), and its flags.
 
-- [A run, stage by stage](#a-run-stage-by-stage)
-- [What the baseline reset covers](#what-the-baseline-reset-covers)
+The traps:
+
+- Start the name of everything the journey makes with the suite's name prefix, its `prefix` field.
+  The harness removes only what carries it.
+- When a journey changes impd's settings, put them back in the journey. The next journey runs on the
+  same instance.
+- Before you run a journey alone, run its suite once through `scripts/test-e2e.sh --only <suite>`. A
+  journey you run alone gets no reset before it and no fixture image build.
+- A burst of connections, a long socket path or an exec during an idle wait each fail a journey in a
+  way that looks like an impd bug. [Guest and host facts](#guest-and-host-facts) gives the fix.
+
+## Contents
+
+- [Suite fields](#suite-fields)
 - [Writing a journey](#writing-a-journey)
+- [Guest and host facts](#guest-and-host-facts)
+- [Around each journey](#around-each-journey)
+- [The baseline reset](#the-baseline-reset)
 - [Sets, groups and acceptance](#sets-groups-and-acceptance)
-- [Host safety](#host-safety)
+- [Timing limits](#timing-limits)
+- [Resources outside the instance](#resources-outside-the-instance)
 
-## A run, stage by stage
+## Suite fields
 
-1. The harness brings the dev instance up, checks its container's privileges against the deploy
-   files, reads the root token, resets the baseline for every suite prefix, and builds each fixture
-   image that impd lacks.
-2. For each suite, the harness reboots the instance onto the suite's own impd settings when the
-   suite declares any, and starts the suite's fixtures, such as the second host of the moves suites.
-3. After each journey, whether it passed, failed or was stopped, the harness resets the baseline for
-   the suite's prefix and resets the suite's fixtures. After a failed journey, it first reboots the
-   instance onto the suite's settings, because the journey may have left impd on settings of its
-   own.
-4. When a reset or a reboot fails, the harness fails the suite and makes the instance anew before
-   the next journey. When that fails too, the run stops.
-5. After the last journey of a suite, the harness reboots the instance back onto the run's settings
-   and stops the suite's fixtures.
-6. At the end, unless `--keep`, the harness removes every `e2e-` imp and image and writes the
-   results file.
-
-One exception to the reset after each journey: a passing `scale` keeps its fleet for `restart`,
-which checks that impd adopts the whole fleet again. The instance also stays on scale's settings
-until restart ends.
-
-## What the baseline reset covers
-
-The baseline reset removes every imp, network, secret, OAuth client, token, image and template whose
-name starts with the suite's prefix, and the broker's test-upstreams file. Before that, it aborts
-any move a failed journey left marked, because impd refuses to remove an imp in the middle of a
-move. A removal that impd refuses fails the reset, and so the suite.
-
-The reset leaves three things alone:
-
-- The instance's own settings. The reboot after a failed journey restores those.
-- A registry container or an SSH key that a journey made. The journey removes it itself.
-- A fixture image, whose name carries a hash of its sources instead of a suite prefix. A changed
-  fixture therefore builds anew, and an unchanged one survives every reset.
+| Field      | Holds                                                                                                 |
+| ---------- | ----------------------------------------------------------------------------------------------------- |
+| `prefix`   | the start of every name the suite's journeys make, such as `e2e-mv-`                                  |
+| `images`   | the fixture images the suite needs: images the harness builds once per run, such as `e2e-tiny`        |
+| `journeys` | the journey names, in run order                                                                       |
+| `fixtures` | the extra hosts the harness starts for the suite, such as `host-b`, a second impd that a move goes to |
+| `settings` | the impd settings, by `IMP_*` variable, the harness reboots the instance onto for the suite           |
 
 ## Writing a journey
 
-A journey's `setupTest()` creates one stack, registers its disposal, and returns the run's client
-and the suite's prefix. Name everything the journey makes with that prefix, so the baseline reset
-can find it after a crash. Register each removal through
-[`registerRemoval`](../../../../packages/e2e-harness/src/register-removal.ts) on the line after the
-act that made the thing. The stack then removes an imp before the template it boots and the network
-it joins. Under `--keep` the helper defers no removal, so the imps and images stay for a look
-afterwards, while the other releases, such as a proxy process, still run.
+1. Copy `setupTest()` from a journey of the same suite, or of any suite when you add a suite. It
+   creates an `AsyncDisposableStack`, registers its disposal with `onTestFinished`, and returns the
+   stack, a client for the instance, and the suite's name prefix from `getSuitePrefix`. Each test
+   binds the result to `const ctx`.
+2. Start the name of each imp, network, secret, OAuth client, token, image and template the journey
+   makes with the name prefix.
+3. Register the removal of each one with
+   [`registerRemoval`](../../../../packages/e2e-harness/src/register-removal.ts), directly after the
+   call that makes it. The stack runs removals in reverse order, so an imp goes before the template
+   it boots and the network it joins.
+4. Remove anything the baseline reset leaves, such as a registry container or an SSH key, with
+   `ctx.stack.defer`.
+5. Put a setting that every journey of the suite needs in the suite's `settings`. For a setting only
+   one journey needs, import `runDevScript` and `instance` from `@impz/e2e-harness/instance`. Call
+   `runDevScript('reboot', instance, { IMP_IDLE_TIMEOUT_S: '5' })` in the journey, with the `IMP_*`
+   variables it needs. Then defer a reboot back onto the suite's `settings`, or a bare
+   `runDevScript('reboot')` when the suite has none.
 
-Put impd settings that every journey of a suite needs on the suite itself rather than in a journey.
-A journey that needs settings only it uses reboots onto them over the suite's settings and defers a
-reboot back, so the journeys after it run on the suite's settings.
+When you pass `--keep` to the harness, `registerRemoval` registers nothing, so the imps and images
+stay for a look after the run. A removal you defer on the stack yourself still runs.
 
-These guest and host facts decide how a journey is built:
+## Guest and host facts
 
-- A burst of connections past a guest server's accept backlog leaves some that the agent dialed but
-  the server never accepted. The guest kernel drops them about 17 s later, and `impz proxy` reports
-  a lost connection. A journey that holds many connections uses an echo server and proves each
-  connection with a round trip before it opens the next.
-- A unix socket path holds at most 107 bytes, which a worktree's cache directory can exceed. Put
-  ssh-agent and forward sockets in a temporary directory under `TMPDIR`.
+- A burst of connections past a guest server's accept backlog leaves connections that the guest
+  agent opened and the server never accepted. The guest kernel drops them about 17 s later, and
+  `impz proxy` reports a lost connection. For a journey that holds many connections, use an echo
+  server, and prove each connection with a round trip before you open the next.
+- A unix socket path holds at most 107 bytes, and a session's `TMPDIR` alone can pass 80. Put the
+  socket of an ssh-agent, or of an SSH unix-socket forward, in a directory under `/tmp`, as
+  `startLocalSshAgent` in [`ssh.ts`](../../../../packages/e2e-harness/src/ssh.ts) does.
 - To prove that something keeps an imp awake past its idle timeout, use
-  [`waitAwakePastIdle`](../../../../packages/e2e-harness/src/awake-past-idle.ts), and run no exec in
-  the imp during it, because an exec records activity.
-- Run alone, a journey file gets no baseline reset and no fixture build, and the shell's
-  `IMP_RAM_BUDGET_MIB` and `IMP_IDLE_TIMEOUT_S` override the run's values.
+  [`waitAwakePastIdle`](../../../../packages/e2e-harness/src/awake-past-idle.ts). Run no exec in the
+  imp while it waits: impd counts an exec as activity.
+
+## Around each journey
+
+- Before the first suite, the harness resets the baseline for every suite and builds each fixture
+  image that impd lacks.
+- After each journey, the harness resets the baseline for the suite's prefix. After a failed
+  journey, it first reboots the instance onto the suite's settings.
+- When that reset or reboot fails, the suite fails. The harness recreates the instance, and the
+  suite's next journey runs on the new one. When the recreate fails, the run stops.
+- When the `scale` suite passes, the harness skips its reset. The `restart` suite then runs on the
+  imps and settings that `scale` left, and checks that impd adopts those imps again. No other suite
+  carries state to the next.
+
+To run one journey file alone, use the "One end-to-end journey" command in
+[the skill](../SKILL.md#commands-and-what-they-need). The journey runs on whatever the instance
+holds. The e2e preload keeps the shell's `IMP_*` variables, so a reboot in the journey takes the
+shell's `IMP_RAM_BUDGET_MIB` and `IMP_IDLE_TIMEOUT_S` in place of the harness's values.
+
+## The baseline reset
+
+The baseline reset removes each imp, network, secret, OAuth client, token, image and template whose
+name starts with the suite's prefix. It also deletes `broker-test-upstreams.json` from the
+instance's data dir; a journey writes that file to point the broker at its test servers. First the
+reset aborts any move a failed journey left open, because impd refuses to remove an imp in the
+middle of a move. When impd refuses a removal, the reset fails.
+
+The reset leaves these alone:
+
+- The instance's settings.
+- A registry container or an SSH key that a journey made.
+- A fixture image. Its name holds a hash of its sources, so a changed fixture image builds anew and
+  an unchanged one stays.
 
 ## Sets, groups and acceptance
 
-The `acceptance` set is every suite. The `fast` set is the CI subset, split into static groups, one
-for each CI runner with an instance of its own.
-[`suites.test.ts`](../../../../packages/e2e-harness/src/suites.test.ts) pins that no suite sits in
-two groups and that the groups make up the `fast` set, and
-[`ci-groups.test.ts`](../../../../packages/e2e-harness/src/ci-groups.test.ts) pins the groups
-against the workflow file. Change all three together. A run that includes `acceptance` makes the
-timing limits fail the run instead of warning.
+The `acceptance` set is every suite. The `fast` set is the subset that CI runs, split into groups,
+one per CI job, each with its own instance.
 
-## Host safety
+- `FAST_GROUPS` in [`suites.ts`](../../../../packages/e2e-harness/src/suites.ts) holds the groups.
+- The `e2e-group` matrix in [`ci.yml`](../../../../.github/workflows/ci.yml) runs one job per group.
+- [`suites.test.ts`](../../../../packages/e2e-harness/src/suites.test.ts) lists each set's suites,
+  and checks that each suite sits in one group at most, that the groups make up the `fast` set, and
+  that `ci.yml` runs each group.
 
-The harness touches machine-global resources only where it can prove they are its own:
+When CI should run a new suite, add it to a group in `suites.ts`, and to the `fast` set's list in
+`suites.test.ts`. Change `ci.yml` only when the number of groups changes. A suite outside every
+group runs only in `acceptance`.
 
-- A wipe deletes a data dir as root, so the harness wipes only a dir under `.data/`, a dir that
-  holds the instance's XFS file, or a ZFS root that the ZFS host script's owner file proves.
-- The `registry` suite trusts its registry's certificate through Docker's fixed per-registry
-  directory. It makes that directory without `--parents`, writes an owner file with its process's
-  pid and start time, and removes a stale directory only when the owner file proves that its process
-  is gone.
+## Timing limits
+
+A journey checks a measured duration against a limit with
+[`checkLimit`](../../../../packages/e2e-harness/src/check-limit.ts). An overrun prints a warning. In
+a run that includes `acceptance`, an overrun fails the journey.
+
+## Resources outside the instance
+
+Touch a resource outside the instance only when the journey can prove it made the resource. For a
+new one, write an owner file beside it, as the `registry` suite does. The harness's own checks:
+
+- When the harness resets an instance, it deletes the instance's data dir as root.
+  [`wipe-target.ts`](../../../../packages/e2e-harness/src/wipe-target.ts) decides which data dirs
+  and ZFS roots it may delete.
+- The `registry` suite marks Docker's per-registry certificate directory with an owner file, and
+  removes a stale directory only when that file's process is gone.
 - The `boot-templates` suite drops the machine's caches and sets `primarycache` on the ZFS root only
-  when `E2E_OWNS_ZFS_HOST=1` says the run has the machine and the root to itself, as each CI ZFS
-  shard has.
-- The tailnet suites join as `tag:imp-e2e`, never `tag:imp`, so a test node cannot reach a live
-  impd. The Headscale suites join a control server in a container that the run starts and removes,
-  and read and fetch through a member container, never this machine's own tailscaled.
+  when `E2E_OWNS_ZFS_HOST=1`. Set that variable only where the run has the machine and the ZFS root
+  to itself. The `zfs-shard` job in `ci.yml` sets it.
+- A tailnet journey joins as `tag:imp-e2e`, never `tag:imp`, so a test node cannot reach a live
+  impd. When the run's suites need Headscale, as
+  [`pick-run-tailnet.ts`](../../../../packages/e2e-harness/src/pick-run-tailnet.ts) decides, the run
+  starts Headscale in a container, and a second container that joins it as a tailnet member. A
+  journey reads that member with `readTailnetMember`, and reaches the tailnet through it, never
+  through this machine's own tailscaled.

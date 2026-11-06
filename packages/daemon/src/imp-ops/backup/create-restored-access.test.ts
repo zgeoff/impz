@@ -3,15 +3,15 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import invariant from 'tiny-invariant';
-import { buildMockTokenRecord } from '../../../testing/identity/build-mock-token-record';
-import { createTestDatabase } from '../../../testing/platform/create-test-database';
-import { createUnmigratedDatabase } from '../../../testing/platform/create-unmigrated-database';
-import { runSql } from '../../../testing/platform/run-sql';
 import { loadTokenStore } from '../../identity/auth/token-store';
 import { writeConsistentCopy } from '../../platform/db/database-copy';
 import { runMigrationsTo } from '../../platform/db/run-migrations';
 import { createSecret, readSecret } from '../../platform/db/secrets';
 import { writeTokenRecord } from '../../platform/db/tokens';
+import { buildMockTokenRecord } from '../../test-utils/identity/build-mock-token-record';
+import { createTestDatabase } from '../../test-utils/platform/create-test-database';
+import { createUnmigratedDatabase } from '../../test-utils/platform/create-unmigrated-database';
+import { runSql } from '../../test-utils/platform/run-sql';
 import { createRestoredAccess } from './create-restored-access';
 
 async function setupTest() {

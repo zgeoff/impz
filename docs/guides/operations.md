@@ -44,8 +44,8 @@ in the image you take it from:
 <!-- x-release-please-start-version -->
 
 ```sh
-podman pull ghcr.io/zgeoff/imp-host:6.6.0
-podman run --rm ghcr.io/zgeoff/imp-host:6.6.0 tar -cf - -C /usr/local/share/imp deploy | tar -xf -
+podman pull ghcr.io/zgeoff/imp-host:6.6.1
+podman run --rm ghcr.io/zgeoff/imp-host:6.6.1 tar -cf - -C /usr/local/share/imp deploy | tar -xf -
 bash deploy/upgrade.sh
 ```
 
@@ -316,7 +316,7 @@ What the restored database means at start:
 
 ## Checks
 
-`e2e/test-e2e.sh --clean` drives a real instance through every feature, one suite each: the
+`scripts/test-e2e.sh --clean` drives a real instance through every feature, one suite each: the
 [development guide](../runbooks/development.md#end-to-end-tests) lists them, from the lifecycle and
 the scale test to the chaos suite and the backup restore drill. The development guide lists the
 other checks.

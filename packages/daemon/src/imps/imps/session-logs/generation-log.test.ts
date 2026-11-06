@@ -3,11 +3,11 @@ import { appendFileSync, existsSync, readFileSync, readdirSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { waitFor } from '@impz/test-utils/wait-for';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import invariant from 'tiny-invariant';
-import { buildStubClock } from '../../../../testing/platform/build-stub-clock';
-import { buildStubRoomCheck } from '../../../../testing/vm/build-stub-room-check';
 import { ImpdError } from '../../../platform/errors/impd-error';
+import { buildStubClock } from '../../../test-utils/platform/build-stub-clock';
+import { buildStubRoomCheck } from '../../../test-utils/vm/build-stub-room-check';
 import {
   createGenerationLog,
   getGenerationBounds,

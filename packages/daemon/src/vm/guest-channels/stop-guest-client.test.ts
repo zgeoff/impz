@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { buildStubDialStream } from '../../../testing/vm/build-stub-dial-stream';
+import { buildStubDialStream } from '../../test-utils/vm/build-stub-dial-stream';
 import { stopGuestClient } from './stop-guest-client';
 
 test('it accepts the guest client and closes it at once', async () => {

@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { buildStubTailscaleServe } from '../../../testing/network/build-stub-tailscale-serve';
+import { buildStubTailscaleServe } from '../../test-utils/network/build-stub-tailscale-serve';
 import { parseServeStatus, readServePorts } from './tailscale-serve';
 
 test('#parseServeStatus reads the ports tailscale serve holds, and each served service as its ports and proxy targets', () => {

@@ -2,7 +2,6 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { runShellcheck } from '@impz/test-utils/run-shellcheck';
 import { define, lazy } from 'gunshi';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 import { mainCommand } from './command-tree';
@@ -201,19 +200,6 @@ test.each(['bash', 'zsh', 'fish'] as const)(
     const tree = await readCompletionTree(mainCommand);
 
     expect(renderCompletion(shell, tree)).toBe(renderCompletion(shell, tree));
-  },
-);
-
-// shellcheck reads no zsh or fish, so only the bash script gets this check
-test.skipIf(Bun.which('shellcheck') === null)(
-  '#renderCompletion renders a bash script for the whole CLI that passes shellcheck',
-  async () => {
-    const tree = await readCompletionTree(mainCommand);
-
-    expect(runShellcheck(renderCompletion('bash', tree), 'bash')).toStrictEqual({
-      exitCode: 0,
-      output: '',
-    });
   },
 );
 

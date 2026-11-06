@@ -96,7 +96,7 @@ jobs:
         env:
           SHARD: ${{ matrix.shard }}
         run: >-
-          scripts/ci/run-memory-capped.sh 1536 env TMPDIR=/dev/shm bun test --parallel=2
+          scripts/ci/run-memory-capped.sh 1792 env TMPDIR=/dev/shm bun test --parallel=2
           --no-isolate --shard="$SHARD/2" --timings="$RUNNER_TEMP/unit-test/timings-$SHARD.json"
           --timings=scripts/ci/unit-test-timings.json --update-timings --reporter=junit
           --reporter-outfile="$RUNNER_TEMP/unit-test/results-$SHARD.xml"
@@ -147,8 +147,8 @@ jobs:
       - name: Bun Pin
         run: scripts/ci/check-bun-pin.sh
 
-      # the whole-tree gates: dead code, format, type-aware lint, doc links and
-      # types, as package.json's check:static script lists them
+      # the whole-tree gates: dead code, format, type-aware lint, doc links, the
+      # Homebrew formula's Ruby and types, as package.json's check:static script lists them
       - name: Check
         run: bun run check:static
 
@@ -383,12 +383,10 @@ jobs:
       - name: Check dependency gates
         run: bun run --silent ci:check-dependency-gates
 
-      # the shell that production code holds as text; plain `bun test` skips
-      # these where shellcheck is missing, and here it is the pinned one
+      # the shell that production code holds as text, through the pinned
+      # shellcheck
       - name: Embedded shell
-        run: >-
-          bun test -t shellcheck ./packages/api/src/protocols/login-shell.test.ts
-          ./packages/mcp/src/tools/write-script.test.ts ./packages/cli/src/cli/completion.test.ts
+        run: bun run --silent ci:check-embedded-shell
 
   # Compiles the CLI for every platform, as a release does, and runs the
   # linux-x64 one. The release workflow runs each binary on its own platform;
@@ -492,12 +490,11 @@ jobs:
       cancel-in-progress: true
     permissions:
       contents: read
-    uses: zgeoff/tools/.github/workflows/paths-changed.yml@ef73394880cff46db558b7110feb063723749fec # main
+    uses: zgeoff/tools/.github/workflows/paths-changed.yml@da150db37d32fbc5c29fcce9fb3f5ba3761c4355 # main
     with:
       paths: |
         agent/**
         deploy/**
-        e2e/**
         host/**
         images/**
         kernel/**
@@ -554,7 +551,7 @@ jobs:
           retention-days: 1
 
   # Boots real microVMs: the fast end-to-end set in its four groups
-  # (FAST_GROUPS in packages/e2e-harness/src/suites.ts, e2e/test-e2e.sh --group N),
+  # (FAST_GROUPS in packages/e2e-harness/src/suites.ts, scripts/test-e2e.sh --group N),
   # each against a dev instance on its own runner's KVM. The `e2e` job below
   # is the required check over all four.
   e2e-group:
@@ -685,7 +682,7 @@ jobs:
       - name: End-to-end tests
         env:
           GROUP: ${{ matrix.group }}
-        run: e2e/test-e2e.sh --group "$GROUP"
+        run: scripts/test-e2e.sh --group "$GROUP"
 
       # The steps below also run after a failure or a timeout, with or
       # without a container, so none of them may fail the job.
@@ -738,7 +735,7 @@ jobs:
           RESULT: ${{ needs.e2e-group.result }}
         run: test "$RESULT" = skipped
 
-  # The proof that an imp host runs with no Docker engine: e2e/podman/run-podman-proof.sh
+  # The proof that an imp host runs with no Docker engine: scripts/run-podman-proof.sh
   # starts the dev instance under Docker, masks the runner's Docker, starts it again
   # under rootful Podman on the same data dir, checks what survived, and runs the
   # socket and podman suites. Not a required check, and not in the e2e gate.
@@ -800,7 +797,7 @@ jobs:
         run: bun run --silent ci:set-up-runner install-podman
 
       - name: Run the Podman proof
-        run: sudo -E env "PATH=$PATH" e2e/podman/run-podman-proof.sh
+        run: sudo -E env "PATH=$PATH" scripts/run-podman-proof.sh
 
       # The steps below also run after a failure or a timeout, with or
       # without a container, so none of them may fail the job.
@@ -826,7 +823,7 @@ jobs:
   # The ZFS storage backend on real pools, in three shards on three runners:
   # scripts/zfs-host-test.sh runs real imps on a pool in a sparse file, with
   # the zfs module Ubuntu's kernel ships, and prints the ZFS timings. Shards 1
-  # and 2 split the ZFS lane: every *.zfs.e2e.ts journey, which runs nowhere
+  # and 2 split the ZFS lane: every *.zfs.test.ts journey, which runs nowhere
   # else, split by its suite's recorded time. The `suites` rows run VM e2e
   # suites on the ZFS backend, a backend matrix and not a lane, placed so the
   # shards end together. Shard 1 also runs scripts/test-zfs.sh on a throwaway
@@ -994,7 +991,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    uses: zgeoff/tools/.github/workflows/release-please.yml@ef73394880cff46db558b7110feb063723749fec # main
+    uses: zgeoff/tools/.github/workflows/release-please.yml@da150db37d32fbc5c29fcce9fb3f5ba3761c4355 # main
     with:
       app-id: ${{ vars.RELEASE_APP_ID }}
       merge: true

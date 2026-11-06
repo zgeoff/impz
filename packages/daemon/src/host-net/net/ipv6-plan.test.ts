@@ -3,8 +3,8 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import invariant from 'tiny-invariant';
-import { buildStubIpCommand } from '../../../testing/host-net/build-stub-ip-command';
-import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
+import { buildStubIpCommand } from '../../test-utils/host-net/build-stub-ip-command';
+import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
 import { parsePrefix64 } from './addressing6';
 import {
   checkHostRules6,

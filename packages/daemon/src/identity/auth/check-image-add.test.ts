@@ -2,10 +2,10 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { readImpEnv } from '@impz/test-utils/read-imp-env';
-import { buildStubImageBuilder } from '../../../testing/imps/build-stub-image-builder';
-import { createFilesTar } from '../../../testing/imps/create-files-tar';
-import { startBuilderImpd } from '../../../testing/imps/start-builder-impd';
+import { readImpEnv } from '@impz/shared/test-utils/read-imp-env';
+import { buildStubImageBuilder } from '../../test-utils/imps/build-stub-image-builder';
+import { createFilesTar } from '../../test-utils/imps/create-files-tar';
+import { startBuilderImpd } from '../../test-utils/imps/start-builder-impd';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

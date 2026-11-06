@@ -1,6 +1,6 @@
 import { expect, mock, test } from 'bun:test';
 import { SYSTEM_FEATURES } from '@impz/api';
-import { server } from '@impz/test-utils/mock-server';
+import { server } from '@impz/shared/test-utils/mock-server';
 import { HttpResponse, http } from 'msw';
 import { createRpcClient } from './create-rpc-client';
 

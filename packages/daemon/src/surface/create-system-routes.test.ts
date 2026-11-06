@@ -4,13 +4,13 @@ import { statSync } from 'node:fs';
 import { join } from 'node:path';
 import { SYSTEM_FEATURES } from '@impz/api';
 import { createImpClient } from '@impz/client';
-import { waitFor } from '@impz/test-utils/wait-for';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import packageJson from '../../package.json' with { type: 'json' };
-import { startTestImpd } from '../../testing/start-test-impd';
-import { TEST_TOKEN } from '../../testing/test-token';
 import { listApiCalls } from '../platform/db/api-audit';
 import { MIGRATIONS } from '../platform/db/run-migrations';
+import { startTestImpd } from '../test-utils/start-test-impd';
+import { TEST_TOKEN } from '../test-utils/test-token';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

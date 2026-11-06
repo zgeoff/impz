@@ -1,0 +1,237 @@
+import type { Server } from 'bun';
+import type { AgentExecRequest, ExecEvent, ExecStream } from '../../vm/agent-client/exec-stream';
+import { startTestImpd } from '../start-test-impd';
+import { TEST_TOKEN } from '../test-token';
+
+const PREFIX = '/impd';
+
+const stack = new AsyncDisposableStack();
+
+const served = await startOrRelease();
+
+process.on('SIGTERM', () => {
+  void stopAndExit();
+});
+
+console.log(JSON.stringify(served));
+
+async function startOrRelease() {
+  try {
+    return await startStubImpd();
+  } catch (error) {
+    await stack.disposeAsync();
+
+    throw error;
+  }
+}
+
+async function stopAndExit(): Promise<void> {
+  await stack.disposeAsync();
+
+  process.exit(0);
+}
+
+async function startStubImpd() {
+  const harness = await startTestImpd(stack, {
+    onLog: (message) => {
+      if (message.startsWith('impd: rpc failed: ')) {
+        console.error(message);
+      }
+    },
+    boundaries: {
+      agent: { openExec: (_name, request) => Promise.resolve(createFakeStream(request)) },
+    },
+  });
+
+  const url = harness.url;
+  const proxy = startPrefixProxy(url);
+
+  stack.defer(() => proxy.stop(true));
+
+  const closedUrl = await readClosedUrl();
+
+  await harness.createTestImage('ubuntu');
+  await harness.client.imps.create({ name: 'smoke' });
+
+  return { url, prefixedUrl: `${proxy.url.origin}${PREFIX}/`, closedUrl, token: TEST_TOKEN };
+}
+
+function createFakeStream(request: Readonly<AgentExecRequest>): ExecStream {
+  const encoder = new TextEncoder();
+
+  const queue: EventQueue = { events: [], wake: null };
+
+  const emitEvent = (event: ExecEvent): void => {
+    queue.events.push(event);
+    queue.wake?.();
+  };
+
+  const emitText = (text: string): void => {
+    emitEvent({ type: 'stdout', data: encoder.encode(text) });
+  };
+
+  const waitForEvent = async (): Promise<ExecEvent> => {
+    for (;;) {
+      const event = queue.events.shift();
+
+      if (event !== undefined) {
+        return event;
+      }
+
+      await new Promise<void>((resolve) => {
+        queue.wake = resolve;
+      });
+    }
+  };
+
+  if (request.tty) {
+    emitText(`tty ${String(request.cols)}x${String(request.rows)}\n`);
+  }
+
+  return {
+    pid: 7,
+    session: null,
+    created: false,
+    groupKill: false,
+    output: null,
+    writeStdin: (data) => {
+      const text = new TextDecoder().decode(data);
+
+      if (request.tty && text.includes('\u0003')) {
+        emitEvent({ type: 'exit', code: 130, signal: 2 });
+      } else {
+        emitEvent({ type: 'stdout', data });
+      }
+    },
+    stdinDrained: () => Promise.resolve(),
+    closeStdin: () => {
+      emitEvent({ type: 'exit', code: 0, signal: 0 });
+    },
+    resize: (cols, rows) => {
+      emitText(`resize ${String(cols)}x${String(rows)}\n`);
+    },
+    sendSignal: (signal) => {
+      emitEvent({ type: 'exit', code: 128 + signal, signal });
+    },
+    events: () => readEvents(waitForEvent),
+    close: () => {},
+  };
+}
+
+interface EventQueue {
+  readonly events: ExecEvent[];
+  wake: (() => void) | null;
+}
+
+async function* readEvents(
+  next: () => Promise<ExecEvent>,
+): AsyncGenerator<ExecEvent, void, undefined> {
+  for (;;) {
+    const event = await next();
+
+    yield event;
+
+    if (event.type === 'exit') {
+      return;
+    }
+  }
+}
+
+interface ProxySocket {
+  readonly upstreamUrl: string;
+  upstream: WebSocket | null;
+  readonly pending: (string | Uint8Array)[];
+}
+
+function startPrefixProxy(upstreamBase: string): Server<ProxySocket> {
+  const handleRequest = (request: Request, server: Server<ProxySocket>) => {
+    const incoming = new URL(request.url);
+
+    if (!incoming.pathname.startsWith(`${PREFIX}/`)) {
+      return new Response('not under the prefix', { status: 404 });
+    }
+
+    const target = new URL(
+      `${incoming.pathname.slice(PREFIX.length)}${incoming.search}`,
+      upstreamBase,
+    );
+
+    if (request.headers.get('upgrade')?.toLowerCase() !== 'websocket') {
+      return fetch(new Request(target.href, request));
+    }
+
+    target.protocol = 'ws:';
+
+    const data: ProxySocket = { upstreamUrl: target.href, upstream: null, pending: [] };
+
+    return server.upgrade(request, { data })
+      ? undefined
+      : new Response('upgrade failed', { status: 400 });
+  };
+
+  return Bun.serve<ProxySocket>({
+    hostname: '127.0.0.1',
+    port: 0,
+    fetch: handleRequest,
+    websocket: {
+      open: (socket) => {
+        const upstream = new WebSocket(socket.data.upstreamUrl);
+
+        upstream.binaryType = 'arraybuffer';
+        socket.data.upstream = upstream;
+
+        upstream.addEventListener('open', () => {
+          for (const data of socket.data.pending.splice(0)) {
+            upstream.send(data);
+          }
+        });
+
+        upstream.addEventListener('message', (event: MessageEvent<string | ArrayBuffer>) => {
+          const data = typeof event.data === 'string' ? event.data : new Uint8Array(event.data);
+
+          socket.send(data);
+        });
+
+        upstream.addEventListener('close', (event) => {
+          stopSocket(socket, event.code, event.reason);
+        });
+      },
+      message: (socket, message) => {
+        const data = typeof message === 'string' ? message : new Uint8Array(message);
+
+        if (socket.data.upstream?.readyState === WebSocket.OPEN) {
+          socket.data.upstream.send(data);
+        } else {
+          socket.data.pending.push(data);
+        }
+      },
+      close: (socket, code, reason) => {
+        stopSocket(socket.data.upstream, code, reason);
+      },
+    },
+  });
+}
+
+// The WebSocket codes 1005 and 1006 report a close with no frame, and
+// neither may be sent.
+function stopSocket(socket: Pick<WebSocket, 'close'> | null, code: number, reason: string): void {
+  if (code === 1005 || code === 1006) {
+    socket?.close();
+  } else {
+    socket?.close(code, reason);
+  }
+}
+
+async function readClosedUrl(): Promise<string> {
+  const server = Bun.serve({
+    hostname: '127.0.0.1',
+    port: 0,
+    routes: { '/*': () => new Response() },
+  });
+
+  const closed = `http://127.0.0.1:${String(server.port)}`;
+
+  await server.stop(true);
+
+  return closed;
+}

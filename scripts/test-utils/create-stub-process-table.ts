@@ -1,8 +1,8 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { createStubBin } from '@impz/test-utils/create-stub-bin';
-import type { StubBin } from '@impz/test-utils/create-stub-bin';
-import { formatShellWord } from '@impz/test-utils/format-shell-word';
+import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
+import type { StubBin } from '@impz/shared/test-utils/create-stub-bin';
+import { formatShellWord } from '@impz/shared/test-utils/format-shell-word';
 
 export interface StubProcessTableOptions {
   // the state ps -C <name> -o stat= prints for each process, until pkill -x <name> ends it

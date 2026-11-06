@@ -10,11 +10,11 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createCommandLinks } from '@impz/test-utils/create-command-links';
-import { createStubGhAttestation } from '@impz/test-utils/create-stub-gh-attestation';
-import { createStubShasum } from '@impz/test-utils/create-stub-shasum';
-import { createStubUname } from '@impz/test-utils/create-stub-uname';
-import { startStubGithubReleases } from '@impz/test-utils/start-stub-github-releases';
+import { createCommandLinks } from '@impz/shared/test-utils/create-command-links';
+import { createStubGhAttestation } from '@impz/shared/test-utils/create-stub-gh-attestation';
+import { createStubShasum } from '@impz/shared/test-utils/create-stub-shasum';
+import { createStubUname } from '@impz/shared/test-utils/create-stub-uname';
+import { startStubGithubReleases } from '@impz/shared/test-utils/start-stub-github-releases';
 import { $ } from 'bun';
 
 function setupTest() {

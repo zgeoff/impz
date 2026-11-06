@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { buildStubTailscaleServe } from '../../../testing/network/build-stub-tailscale-serve';
+import { buildStubTailscaleServe } from '../../test-utils/network/build-stub-tailscale-serve';
 import { createServiceServe, listServeEntries } from './service-serve';
 
 test('it lists HTTPS on 443 and HTTP on 80 as what a service to a target serves', () => {

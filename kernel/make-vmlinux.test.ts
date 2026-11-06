@@ -10,7 +10,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubBin } from '@impz/test-utils/create-stub-bin';
+import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
 import { buildStubEnvRecord } from '../scripts/test-utils/build-stub-env-record';
 import { createStubRepoScript } from '../scripts/test-utils/create-stub-repo-script';
 

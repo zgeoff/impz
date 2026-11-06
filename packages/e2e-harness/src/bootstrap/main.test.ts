@@ -2,8 +2,8 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubSlowCommand } from '@impz/test-utils/create-stub-slow-command';
-import { waitFor } from '@impz/test-utils/wait-for';
+import { createStubSlowCommand } from '@impz/shared/test-utils/create-stub-slow-command';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { REPO_ROOT } from '../instance';
 
 // Bun runs onTestFinished callbacks first in, first out; the stack closes last in, first out,
@@ -31,7 +31,7 @@ test.each([
   ],
   ['an unknown flag', ['--stub', '--foo'], 'test-bootstrap: unknown argument: --foo\n'],
 ])('it exits 2 through the bash wrapper for %s', (_label, argv, stderr) => {
-  const result = Bun.spawnSync(['bash', join(REPO_ROOT, 'e2e', 'test-bootstrap.sh'), ...argv]);
+  const result = Bun.spawnSync(['bash', join(REPO_ROOT, 'scripts', 'test-bootstrap.sh'), ...argv]);
 
   expect({
     exitCode: result.exitCode,
@@ -41,7 +41,7 @@ test.each([
 });
 
 test('it prints the usage through the bash wrapper for --help', () => {
-  const result = Bun.spawnSync(['bash', join(REPO_ROOT, 'e2e', 'test-bootstrap.sh'), '--help']);
+  const result = Bun.spawnSync(['bash', join(REPO_ROOT, 'scripts', 'test-bootstrap.sh'), '--help']);
 
   expect({ exitCode: result.exitCode, stdout: result.stdout.toString() }).toStrictEqual({
     exitCode: 0,
@@ -54,7 +54,7 @@ test('it lets the running command finish on SIGTERM, then runs no other and exit
   const docker = createStubSlowCommand(ctx.directoryPath, 'docker');
 
   const harness = Bun.spawn(
-    ['bash', join(REPO_ROOT, 'e2e', 'test-bootstrap.sh'), '--image', 'imp-host:dev-test'],
+    ['bash', join(REPO_ROOT, 'scripts', 'test-bootstrap.sh'), '--image', 'imp-host:dev-test'],
     { env: { ...process.env, PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` } },
   );
 

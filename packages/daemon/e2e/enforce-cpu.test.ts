@@ -1,0 +1,143 @@
+import { expect, onTestFinished, test } from 'bun:test';
+import { config } from '@impz/e2e-harness/config';
+import { readContainerFile, readImpCgroupDir, runBusyLoop } from '@impz/e2e-harness/cpu-cgroup';
+import { resolveImageName } from '@impz/e2e-harness/fixtures';
+import {
+  assertState,
+  createInstanceClient,
+  readInfo,
+  requireImp,
+  runImp,
+} from '@impz/e2e-harness/imp-cli';
+import { holdImp, waitForExec } from '@impz/e2e-harness/imps';
+import { runInContainer } from '@impz/e2e-harness/instance';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import { waitFor } from '@impz/e2e-harness/wait-for';
+import { writeMetric } from '@impz/e2e-harness/write-metric';
+
+// Where Docker does not delegate the cpu controller to a private cgroup
+// namespace, impd reports limits not enforced and the limit tests skip.
+
+// collection-time gate: Bun's skipIf takes a boolean and has no in-body skip
+const startInfo = await readInfo();
+
+const cpuLimitsMissing = startInfo.cpu?.limitsEnforced !== true && (process.env['CI'] ?? '') === '';
+
+async function setupTest() {
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
+  const client = await createInstanceClient();
+
+  return { prefix: getSuitePrefix('cpu'), stack, client };
+}
+
+test('it still lands docker exec in a cgroup where it may run after the cgroup move', async () => {
+  const exec = await runInContainer(['true']);
+
+  expect(exec.exitCode).toBe(0);
+});
+
+test.skipIf(cpuLimitsMissing)(
+  'it holds a busy guest under a limit of half a core, again after a sleep and a wake, and under a limit impz set changes at once',
+  async () => {
+    const ctx = await setupTest();
+
+    const name = `${ctx.prefix}box`;
+
+    await runImp('new', name, '--image', resolveImageName('e2e-tiny'), '--cpu-limit', '0.5');
+
+    registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, name));
+
+    await waitForExec(name);
+    await holdImp(name);
+
+    const directory = await readImpCgroupDir(name);
+    const cpuMax = await readContainerFile(`${directory}/cpu.max`);
+    const procs = await readContainerFile(`${directory}/cgroup.procs`);
+    const busy = await runBusyLoop(name, 5);
+
+    writeMetric('cpuLimitedShare', busy.share);
+
+    expect(cpuMax.trim()).toBe('50000 100000');
+    expect(procs.trim()).not.toBe('');
+    expect(busy.share).toBeLessThanOrEqual(0.55);
+    expect(busy.throttledUsec).toBeGreaterThan(0);
+
+    await runImp('sleep', name);
+    await assertState(name, 'sleeping');
+    await runImp('wake', name);
+    await waitForExec(name);
+
+    const wokeDir = await readImpCgroupDir(name);
+    const wokeCpuMax = await readContainerFile(`${wokeDir}/cpu.max`);
+    const wokeBusy = await runBusyLoop(name, 5);
+    const woke = await requireImp(name);
+
+    expect(wokeCpuMax.trim()).toBe('50000 100000');
+    expect(wokeBusy.share).toBeLessThanOrEqual(0.55);
+    expect(woke.resources?.wakeCount).toBe(1);
+
+    await runImp('set', name, '--cpu-limit', '0.25', '--cpu-weight', '50');
+
+    const setCpuMax = await readContainerFile(`${wokeDir}/cpu.max`);
+    const setCpuWeight = await readContainerFile(`${wokeDir}/cpu.weight`);
+    const setBusy = await runBusyLoop(name, 5);
+
+    expect(setCpuMax.trim()).toBe('25000 100000');
+    expect(setCpuWeight.trim()).toBe('50');
+    expect(setBusy.share).toBeLessThanOrEqual(0.3);
+
+    await runImp('set', name, '--cpu-limit', 'none');
+
+    const unlimited = await readContainerFile(`${wokeDir}/cpu.max`);
+
+    expect(unlimited.trim()).toBe('max 100000');
+  },
+);
+
+test.skipIf(cpuLimitsMissing)(
+  'it prints the imp in impz top with its sampled throttling and weight',
+  async () => {
+    const ctx = await setupTest();
+
+    const name = `${ctx.prefix}top`;
+
+    await runImp(
+      'new',
+      name,
+      '--image',
+      resolveImageName('e2e-tiny'),
+      '--cpu-limit',
+      '0.5',
+      '--cpu-weight',
+      '50',
+    );
+
+    registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, name));
+
+    await waitForExec(name);
+    await holdImp(name);
+
+    await waitFor(`a resource sample for ${name}`, async () => {
+      const row = await requireImp(name);
+
+      if (row.resources?.sample === undefined) {
+        throw new Error(`${name} has no sample yet`);
+      }
+    });
+
+    const top = await runImp('top', '--once');
+
+    const line = top.split('\n').find((candidate) => candidate.startsWith(`${name} `)) ?? '';
+    const columns = line.split(/\s{2,}/v);
+
+    expect(columns[0]).toBe(name);
+    expect(columns[1]).toBe('running');
+    expect(columns[3]).toBe('50');
+    expect(columns[4]).not.toBe('-');
+  },
+);

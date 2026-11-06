@@ -11,7 +11,7 @@ import {
   createUbuntuImage,
   makeStubStalledMovePart,
   startTestImpd,
-} from '@impz/daemon/testing';
+} from '@impz/daemon/test-utils';
 import {
   removeImageIfPresent,
   removeImpIfPresent,

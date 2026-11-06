@@ -12,7 +12,7 @@ import {
   createFilesTar,
   createImage,
   startBuilderImpd,
-} from '@impz/daemon/testing';
+} from '@impz/daemon/test-utils';
 import { runImageAdd, runOnHostBuild } from './run-image-op';
 
 async function setupTest() {

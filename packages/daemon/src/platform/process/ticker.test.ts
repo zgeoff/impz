@@ -1,6 +1,6 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
-import { buildStubTickerTimer } from '../../../testing/platform/build-stub-ticker-timer';
-import { captureImpdLogs } from '../../../testing/platform/capture-impd-logs';
+import { buildStubTickerTimer } from '../../test-utils/platform/build-stub-ticker-timer';
+import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
 import { startTicker } from './ticker';
 
 test('it waits one interval before the first run', () => {

@@ -1,0 +1,12 @@
+import { faker } from '@faker-js/faker';
+import type { NewCheckpoint } from '../../platform/db/checkpoints';
+
+export function buildMockNewCheckpoint(overrides: Partial<NewCheckpoint> = {}): NewCheckpoint {
+  return {
+    id: faker.string.alphanumeric({ length: 12, casing: 'lower' }),
+    impId: faker.string.uuid(),
+    label: faker.word.noun(),
+    sizeBytes: faker.number.int({ min: 1, max: 1024 ** 3 }),
+    ...overrides,
+  };
+}

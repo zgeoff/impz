@@ -4,28 +4,28 @@ import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ImpContract } from '@impz/api';
-import { server } from '@impz/test-utils/mock-server';
-import { readImpEnv } from '@impz/test-utils/read-imp-env';
-import { updateEnv } from '@impz/test-utils/update-env';
-import { waitFor } from '@impz/test-utils/wait-for';
+import { server } from '@impz/shared/test-utils/mock-server';
+import { readImpEnv } from '@impz/shared/test-utils/read-imp-env';
+import { updateEnv } from '@impz/shared/test-utils/update-env';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
 import invariant from 'tiny-invariant';
 import packageJson from '../../package.json' with { type: 'json' };
-import { buildMockNewImage } from '../../testing/imps/build-mock-new-image';
-import { buildStubImageBuilder } from '../../testing/imps/build-stub-image-builder';
-import { createBuilderImage } from '../../testing/imps/create-builder-image';
-import { createFilesTar } from '../../testing/imps/create-files-tar';
-import { createStubCloudflareApi } from '../../testing/network/create-stub-cloudflare-api';
-import { startTestImpd } from '../../testing/start-test-impd';
-import { tryExecSocket, tryTunnelSocket } from '../../testing/surface/try-impd-sockets';
-import { buildStubCpuCgroups } from '../../testing/vm/build-stub-cpu-cgroups';
-import { buildStubZfsStorage } from '../../testing/vm/build-stub-zfs-storage';
 import type { ImpService } from '../imps/imps/imp-service';
 import { listApiCalls } from '../platform/db/api-audit';
 import { createImage } from '../platform/db/images';
 import { readImpByName } from '../platform/db/imps';
+import { buildMockNewImage } from '../test-utils/imps/build-mock-new-image';
+import { buildStubImageBuilder } from '../test-utils/imps/build-stub-image-builder';
+import { createBuilderImage } from '../test-utils/imps/create-builder-image';
+import { createFilesTar } from '../test-utils/imps/create-files-tar';
+import { createStubCloudflareApi } from '../test-utils/network/create-stub-cloudflare-api';
+import { startTestImpd } from '../test-utils/start-test-impd';
+import { tryExecSocket, tryTunnelSocket } from '../test-utils/surface/try-impd-sockets';
+import { buildStubCpuCgroups } from '../test-utils/vm/build-stub-cpu-cgroups';
+import { buildStubZfsStorage } from '../test-utils/vm/build-stub-zfs-storage';
 import { buildImagePaths } from '../vm/storage/data-layout';
 import type { StorageBackend } from '../vm/storage/storage-backend';
 import type { CpuCgroups } from '../vm/vmm/cpu-cgroups';
@@ -1423,6 +1423,31 @@ test('it audits an exec on a ticket the token asked for as the token', async () 
   });
 
   expect(actors).toStrictEqual(['token']);
+});
+
+test('it audits an imp’s create, sleep, wake and destroy as the token, newest first', async () => {
+  const ctx = await setupTest({ cgroups: buildStubCpuCgroups().cgroups });
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.client.imps.create({ name: 'dev', image: 'ubuntu' });
+  await ctx.client.imps.sleep({ name: 'dev' });
+  await ctx.client.imps.wake({ name: 'dev' });
+  await ctx.client.imps.destroy({ name: 'dev' });
+
+  const calls = await waitFor(async () => {
+    const rows = await listApiCalls(ctx.db, 'dev', 10, null);
+
+    expect(rows).toHaveLength(4);
+
+    return rows.map((row) => [row.procedure, row.actor]);
+  });
+
+  expect(calls).toStrictEqual([
+    ['imps.destroy', 'token'],
+    ['imps.wake', 'token'],
+    ['imps.sleep', 'token'],
+    ['imps.create', 'token'],
+  ]);
 });
 
 test('it lets a bearer exec socket start any imp', async () => {

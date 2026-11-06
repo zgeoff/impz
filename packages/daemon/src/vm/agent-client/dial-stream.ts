@@ -46,7 +46,11 @@ export async function openRelayStream(
   try {
     sendRequestFrame(connection, request);
 
-    const answer = await readFrameWithin(connection, answerTimeoutMs);
+    const answer = await readFrameWithin(connection, {
+      call: `${request.op} answer`,
+      vsockPath,
+      timeoutMs: answerTimeoutMs,
+    });
 
     if (answer?.type !== FRAME_TYPES.response) {
       throw new Error(`agent closed the ${request.op} connection before it answered`);

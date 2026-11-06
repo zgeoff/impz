@@ -1,8 +1,8 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import invariant from 'tiny-invariant';
-import { buildMockNewImage } from '../../../testing/imps/build-mock-new-image';
-import { buildMockNewImp } from '../../../testing/imps/build-mock-new-imp';
-import { createTestDatabase } from '../../../testing/platform/create-test-database';
+import { buildMockNewImage } from '../../test-utils/imps/build-mock-new-image';
+import { buildMockNewImp } from '../../test-utils/imps/build-mock-new-imp';
+import { createTestDatabase } from '../../test-utils/platform/create-test-database';
 import { createImage } from './images';
 import type { ImpWrite } from './imp-write-feed';
 import { createImp } from './imps';
