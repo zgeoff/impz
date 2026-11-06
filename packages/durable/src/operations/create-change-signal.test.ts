@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { setImmediate } from 'node:timers/promises';
 import { createChangeSignal } from './create-change-signal';
 
 test('it settles a wait on the next notify', async () => {
@@ -29,15 +30,28 @@ test('it settles a wait at once for a signal that already aborted', async () => 
   await expect(next).toResolve();
 });
 
-test('it leaves a wait that starts after a notify for the next notify', async () => {
+test('it leaves a wait that starts after a notify pending until the next notify', async () => {
   const changes = createChangeSignal();
+  const settled: string[] = [];
 
   changes.notify();
 
-  const first = await Promise.race([
-    changes.next(new AbortController().signal).then(() => 'notified'),
-    Promise.resolve('waiting'),
-  ]);
+  const waiting = (async () => {
+    await changes.next(new AbortController().signal);
 
-  expect(first).toBe('waiting');
+    settled.push('notified');
+  })();
+
+  await setImmediate();
+
+  const beforeNotify = [...settled];
+
+  changes.notify();
+
+  await waiting;
+
+  expect({ beforeNotify, afterNotify: settled }).toStrictEqual({
+    beforeNotify: [],
+    afterNotify: ['notified'],
+  });
 });
