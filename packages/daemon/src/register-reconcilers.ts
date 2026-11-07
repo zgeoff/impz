@@ -3,12 +3,13 @@ import type { ReconcilerRunner } from '@impz/durable';
 import { createEventLogPruner } from './platform/db/create-event-log-pruner';
 import type { ImpDatabase } from './platform/db/open-database';
 import type { ImpTransaction } from './platform/db/with-imp-transaction';
+import type { StartTimer } from './platform/process/clock';
 import { getImpdLogger } from './platform/process/get-impd-logger';
-import { startRealTimer } from './platform/process/start-real-timer';
 
 interface ReconcilerDeps {
   readonly db: ImpDatabase;
   readonly now: () => number;
+  readonly startTimer: StartTimer;
 }
 
 // every reconciler impd runs, in one table
@@ -33,6 +34,6 @@ export function registerReconcilers(deps: ReconcilerDeps): ReconcilerRunner {
     log,
     now: deps.now,
     random: Math.random,
-    startTimer: startRealTimer,
+    startTimer: deps.startTimer,
   });
 }

@@ -824,3 +824,31 @@ test('it sends a build stream its progress at the keepalive gap it is given', as
     { type: 'progress', phase: 'build', elapsedMs: 0 },
   ]);
 });
+
+test('it prunes an event older than 7 days once the hourly prune comes round', async () => {
+  const harness = await setupTest();
+
+  await harness.db.log.write(
+    {
+      ev: 'GovernorDecision',
+      decision: 'admitted',
+      name: 'old',
+      trigger: 'wake',
+      usedMib: 512,
+      budgetMib: 4096,
+    },
+    harness.now(),
+  );
+
+  harness.advance(7 * 86_400_000 + 3_600_000);
+
+  const kind = await waitFor(async () => {
+    const after = await harness.db.log.readAfter(0, 10);
+
+    expect(after.kind).toBe('reset');
+
+    return after.kind;
+  });
+
+  expect(kind).toBe('reset');
+});

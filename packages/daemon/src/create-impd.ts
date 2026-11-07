@@ -34,6 +34,7 @@ import { wireTailnetNames } from './network/tailnet-names/wire-tailnet-names';
 import { isImpSetChange } from './platform/db/is-imp-set-change';
 import { openDatabase } from './platform/db/open-database';
 import { getImpdLogger } from './platform/process/get-impd-logger';
+import { startRealTimer } from './platform/process/start-real-timer';
 import { startOtlpExport } from './platform/telemetry/start-otlp-export';
 import { registerReconcilers } from './register-reconcilers';
 import { startImpdListeners } from './start-impd-listeners';
@@ -424,7 +425,11 @@ async function startImpdParts(
   plan.tickers = tickers;
 
   const reconcilers = await runStep('reconcilers', async () => {
-    const runner = registerReconcilers({ db, now });
+    const runner = registerReconcilers({
+      db,
+      now,
+      startTimer: deps.reconcilerTimer ?? startRealTimer,
+    });
 
     await runner.start();
 

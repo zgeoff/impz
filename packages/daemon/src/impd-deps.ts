@@ -103,6 +103,7 @@ export interface ImpdDeps {
   readonly readCpuInfo?: () => string;
   readonly tickerTimer?: TickerTimer;
   readonly buildUploadTimer?: StartTimer;
+  readonly reconcilerTimer?: StartTimer;
   readonly proxyPorts?: { readonly proxy: number; readonly slot: (slot: number) => number };
 
   // Elysia's own default is 30 s
