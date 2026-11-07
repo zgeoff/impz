@@ -166,7 +166,6 @@ export function createImpVmOps(host: ImpContext): ImpVmOps {
     await context.admission.admit({
       id: imp.id,
       name: imp.name,
-      priorityName: context.priorityNames.get(imp.id),
       reserveMib: Math.ceil((imp.memoryMib * context.config.bootReservePercent) / 100),
       memoryMib: imp.maxMemoryMib,
       hugePagesMib: hugePages === '2M' ? imp.memoryMib : 0,

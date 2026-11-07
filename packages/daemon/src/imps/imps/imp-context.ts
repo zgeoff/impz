@@ -269,8 +269,17 @@ export function createImpContext(deps: ImpServiceDeps): ImpContext {
     kernelOops: deps.kernelOops,
   };
 
+  const priorityNames = new Map<string, string>();
+
   const memory: ImpMemory = {
-    admission: deps.admission,
+    admission: {
+      ...deps.admission,
+      admit: (request) =>
+        deps.admission.admit({
+          ...request,
+          priorityName: request.priorityName ?? priorityNames.get(request.id),
+        }),
+    },
     readRamMib: deps.readRamMib,
     readRssMib: deps.readRssMib,
     readSleepRamMib: deps.config.ksm === null ? deps.readRamMib : deps.readUnsharedRamMib,
@@ -278,7 +287,7 @@ export function createImpContext(deps: ImpServiceDeps): ImpContext {
     probeUffdDevice: deps.probeUffdDevice,
     mergeFlags: createMergeFlags(),
     memoryLimit: deps.memoryLimit ?? NO_MEMORY_LIMIT,
-    priorityNames: new Map(),
+    priorityNames,
     pluggedSizes: deps.pluggedSizes ?? createPluggedSizes(),
     resources: createResourceSampler({
       now,
