@@ -202,12 +202,12 @@ summary.
 
 The warm step and the prefetch leave a restore's path as it is. The readahead runs at every handler
 start, restores included, and there it asks the kernel to read a template's memory file that sits
-locked in the page cache. The restores of all three moved by −3% to +8%. One `pread` per block
-changes a restore's reads too. A template's memory file sits locked in the page cache. Through the
-map, the handler copies each block once, from the page cache into the guest. With `pread`, it copies
-each block from the page cache into a buffer, and again into the guest. On ZFS, its restores took
-24% longer with one at a time and 11% longer with four. On XFS, they took 5% and 1% less time, so
-the second copy's cost is not settled.
+locked in the page cache. The restores of all three moved by −3% to +8%, and the readahead's restore
+figures include that extra call. One `pread` per block changes a restore's reads too. A template's
+memory file sits locked in the page cache. Through the map, the handler copies each block once, from
+the page cache into the guest. With `pread`, it copies each block from the page cache into a buffer,
+and again into the guest. On ZFS, its restores took 24% longer with one at a time and 11% longer
+with four. On XFS, they took 5% and 1% less time, so the second copy's cost is not settled.
 
 ## Pick a design
 
