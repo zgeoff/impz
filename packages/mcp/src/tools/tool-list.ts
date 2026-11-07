@@ -1,7 +1,14 @@
 import { CHECKPOINT_TOOLS } from './checkpoint-tools';
 import type { Tool } from './define-tool';
+import { EVENT_TOOL } from './event-tool';
 import { EXEC_TOOL } from './exec-tool';
 import { FILE_TOOLS } from './file-tools';
 import { IMP_TOOLS } from './imp-tools';
 
-export const TOOLS: readonly Tool[] = [...IMP_TOOLS, EXEC_TOOL, ...FILE_TOOLS, ...CHECKPOINT_TOOLS];
+export const TOOLS: readonly Tool[] = [
+  ...IMP_TOOLS,
+  EXEC_TOOL,
+  ...FILE_TOOLS,
+  ...CHECKPOINT_TOOLS,
+  EVENT_TOOL,
+];

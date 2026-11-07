@@ -1,14 +1,18 @@
-import type { ImpEvent } from '@impz/api';
+import type { EventCursor, ImpEvent } from '@impz/api';
 import { ORPCError } from '@orpc/client';
 import pRetry, { AbortError } from 'p-retry';
 import type { RetryContext } from 'p-retry';
 import { P, match } from 'ts-pattern';
 import type { CallOptions } from '../types';
 import { UnknownProcedureError } from '../unknown-procedure-error';
+import { pickNextCursor } from './pick-next-cursor';
 
 export interface EventSource {
   readonly events: {
-    readonly stream: (input?: undefined, options?: CallOptions) => Promise<AsyncIterable<ImpEvent>>;
+    readonly stream: (
+      input?: EventCursor,
+      options?: CallOptions,
+    ) => Promise<AsyncIterable<ImpEvent>>;
   };
 }
 
@@ -32,9 +36,12 @@ export async function watchEvents(
   const signal = options.signal;
   const reconnect = options.reconnect;
   const callOptions: CallOptions = signal === undefined ? {} : { signal };
+  const position: { cursor: EventCursor } = { cursor: {} };
 
   const readStream = async (attempt: number): Promise<void> => {
-    const stream = await client.events.stream(undefined, callOptions).catch((error: unknown) => {
+    const input = position.cursor.after === undefined ? undefined : position.cursor;
+
+    const stream = await client.events.stream(input, callOptions).catch((error: unknown) => {
       throw new StreamEndError(error);
     });
 
@@ -57,6 +64,8 @@ export async function watchEvents(
         if (isDeliveredEvent(next.value, options.name)) {
           await runCallback(() => options.onEvent(next.value));
         }
+
+        position.cursor = pickNextCursor(position.cursor, next.value);
       }
     } finally {
       if (!reading.done) {

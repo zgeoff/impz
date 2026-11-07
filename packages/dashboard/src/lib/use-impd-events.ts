@@ -15,10 +15,30 @@ export function useImpdEvents(): void {
     const controller = new AbortController();
 
     const signal = controller.signal;
+    const opened = { attempt: 0, isSnapshotApplied: false };
 
     const applyEvent = async (event: Readonly<ImpEvent>): Promise<void> => {
+      // the reader missed events, so any query may be stale
+      if (event.ev === 'Reset') {
+        await queryClient.invalidateQueries();
+
+        return;
+      }
+
+      // a snapshot on a reopen means the watch had no cursor to resume from
+      if (event.ev === 'ImpAdded' && event.reason === 'snapshot') {
+        if (opened.attempt > 1 && !opened.isSnapshotApplied) {
+          opened.isSnapshotApplied = true;
+
+          await queryClient.invalidateQueries({ queryKey: impd.query.imps.key() });
+          await queryClient.invalidateQueries({ queryKey: impd.query.system.key() });
+        }
+
+        return;
+      }
+
       // an exec in an imp's agent changes nothing the dashboard shows
-      if ((event.ev === 'ImpAdded' && event.reason === 'snapshot') || event.ev === 'AgentExec') {
+      if (event.ev === 'AgentExec') {
         return;
       }
 
@@ -40,11 +60,9 @@ export function useImpdEvents(): void {
         await watchEvents(impd.client, {
           signal,
           reconnect: { delayMs: RECONNECT_MS, shouldRetry: (error) => !isUnauthorized(error) },
-          onOpen: async (attempt) => {
-            // impd sends an event only to the streams open at the time
-            if (attempt > 1) {
-              await queryClient.invalidateQueries();
-            }
+          onOpen: (attempt) => {
+            opened.attempt = attempt;
+            opened.isSnapshotApplied = false;
           },
           onEvent: applyEvent,
         });

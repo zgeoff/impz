@@ -38,6 +38,7 @@ export { runInNetns } from './host-net/run-in-netns';
 export { buildQueryGate } from './platform/build-query-gate';
 export { buildStubClock } from './platform/build-stub-clock';
 export { readInBackground } from './platform/read-in-background';
+export { runEventPrune } from './platform/run-event-prune';
 
 export {
   STUB_BOOT_ID,
