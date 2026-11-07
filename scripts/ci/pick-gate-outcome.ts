@@ -29,6 +29,7 @@ export function pickGateOutcome(needs: Readonly<GateNeeds>): GateOutcome {
   return every.has('cancelled') && !every.has('failure') ? 'replaced' : 'fail';
 }
 
-export function isRunReplaced(runIds: readonly number[], runId: number): boolean {
-  return runIds.some((id) => id > runId);
+// run IDs grow, so a newer run has a higher one
+export function findNewerRunId(runIds: readonly number[], runId: number): number | null {
+  return runIds.find((id) => id > runId) ?? null;
 }

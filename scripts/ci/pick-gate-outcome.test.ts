@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { isRunReplaced, pickGateOutcome } from './pick-gate-outcome';
+import { findNewerRunId, pickGateOutcome } from './pick-gate-outcome';
 
 test.each([
   {
@@ -69,9 +69,9 @@ test.each([
 });
 
 test.each([
-  { title: 'a newer run', runIds: [40, 41, 42], replaced: true },
-  { title: 'only this run and older ones', runIds: [40, 41], replaced: false },
-  { title: 'no run', runIds: [], replaced: false },
-])('#isRunReplaced answers $replaced for run 41 with $title', (row) => {
-  expect(isRunReplaced(row.runIds, 41)).toBe(row.replaced);
+  { title: 'a newer run', runIds: [42, 41, 40], newer: 42 },
+  { title: 'only this run and older ones', runIds: [41, 40], newer: null },
+  { title: 'no run', runIds: [], newer: null },
+])('#findNewerRunId finds $newer for run 41 with $title', (row) => {
+  expect(findNewerRunId(row.runIds, 41)).toBe(row.newer);
 });

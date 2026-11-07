@@ -1,6 +1,6 @@
 import * as z from 'zod';
 import { getStepEnv } from '../lib/get-step-env.ts';
-import { GateNeedsSchema, isRunReplaced, pickGateOutcome } from './pick-gate-outcome.ts';
+import { GateNeedsSchema, findNewerRunId, pickGateOutcome } from './pick-gate-outcome.ts';
 
 const RunSchema = z.looseObject({ workflow_id: z.number(), head_branch: z.string() });
 const RunIdSchema = z.looseObject({ id: z.number() });
@@ -27,15 +27,16 @@ async function main(): Promise<void> {
 
   const runIds = await readBranchRunIds(env, runId);
 
-  const isReplaced = isRunReplaced(runIds, runId);
+  const newerRunId = findNewerRunId(runIds, runId);
 
-  const verdict = isReplaced
-    ? 'a job was cancelled, and a newer run on the branch reports this gate'
-    : 'a job was cancelled, and no newer run on the branch replaces this one';
+  const verdict =
+    newerRunId === null
+      ? 'a job was cancelled, and no newer run on the branch replaces this one'
+      : `a job was cancelled, and run ${String(newerRunId)} on the branch reports this gate`;
 
   console.log(`require-gate: ${verdict}`);
 
-  process.exitCode = isReplaced ? 0 : 1;
+  process.exitCode = newerRunId === null ? 1 : 0;
 }
 
 async function readBranchRunIds(
