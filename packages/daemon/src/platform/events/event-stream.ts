@@ -73,8 +73,12 @@ export async function* openEventStream(options: EventStreamOptions): AsyncGenera
       yield buildCursorEvent('Reset', { seq: head, logId, at: options.now() });
     }
 
+    // a reader that opened with no cursor may be a client that knows no Reset or Position, and
+    // an unknown event kind fails its stream
+    const knowsCursorEvents = options.cursor.after !== undefined;
+
     if (opening.hasSnapshot) {
-      yield* readSnapshotAt(options, head, logId);
+      yield* readSnapshotAt(options, { head, logId, knowsCursorEvents });
     }
 
     let after = opening.after;
@@ -87,22 +91,22 @@ export async function* openEventStream(options: EventStreamOptions): AsyncGenera
         signal: stop.signal,
       });
 
-      const reset = yield* presentPages(pages, options, logId, stop.signal);
+      const reset = yield* presentPages(pages, options, {
+        logId,
+        knowsCursorEvents,
+        signal: stop.signal,
+      });
 
-      if (reset === null) {
-        return;
-      }
-
-      // a reader that opened with no cursor may know no Reset, so its stream ends here, and its
-      // reconnect takes the snapshot
-      if (options.cursor.after === undefined) {
+      // a reader with no cursor gets no Reset, so its stream ends here, and its reconnect takes
+      // the snapshot
+      if (reset === null || !knowsCursorEvents) {
         return;
       }
 
       after = await options.readHead();
 
       yield buildCursorEvent('Reset', { seq: after, logId, at: options.now() });
-      yield* readSnapshotAt(options, after, logId);
+      yield* readSnapshotAt(options, { head: after, logId, knowsCursorEvents });
     }
   } finally {
     options.signal?.removeEventListener('abort', stopStream);
@@ -111,25 +115,31 @@ export async function* openEventStream(options: EventStreamOptions): AsyncGenera
   }
 }
 
+interface StreamPlace {
+  readonly logId: string;
+  readonly knowsCursorEvents: boolean;
+}
+
 // The snapshot ends with the head it was read at, so a reader that sees no imp still has a cursor.
 async function* readSnapshotAt(
   reads: EventLogReads,
-  head: number,
-  logId: string,
+  place: Readonly<StreamPlace & { head: number }>,
 ): AsyncGenerator<ImpEvent> {
-  yield* await reads.readSnapshot(head, logId);
-  yield buildCursorEvent('Position', { seq: head, logId, at: reads.now() });
+  yield* await reads.readSnapshot(place.head, place.logId);
+
+  if (place.knowsCursorEvents) {
+    yield buildCursorEvent('Position', { seq: place.head, logId: place.logId, at: reads.now() });
+  }
 }
 
-// Yields each event of the tail's pages that the reader may see, then a position past the events
-// of a page that the reader may not see, so its cursor moves past them. It returns the tail's
-// reset, or null once the stream stops.
 async function* presentPages(
   pages: AsyncGenerator<readonly LoggedImpEvent[], ImpEventsReset | null>,
   reads: EventLogReads,
-  logId: string,
-  signal: AbortSignal,
+  place: Readonly<StreamPlace & { signal: AbortSignal }>,
 ): AsyncGenerator<ImpEvent, ImpEventsReset | null> {
+  const logId = place.logId;
+  const signal = place.signal;
+
   try {
     let step = await pages.next();
 
@@ -151,7 +161,7 @@ async function* presentPages(
 
       const readSeq = step.value.at(-1)?.seq ?? null;
 
-      if (readSeq !== null && readSeq !== sentSeq) {
+      if (place.knowsCursorEvents && readSeq !== null && readSeq !== sentSeq) {
         yield buildCursorEvent('Position', { seq: readSeq, logId, at: reads.now() });
       }
 
