@@ -83,9 +83,9 @@ event stream presents it in the contract's shape as it reads the row, so the liv
 
 After each commit, impd wakes the readers of the table through a signal in memory that carries no
 event. Each reader then reads the rows past its own cursor, so no event data passes through memory
-and a stop right after a commit loses no event. One follower inside impd reads from the head at
-start and feeds the proxy's and the broker's resync when an imp comes or goes, the disk usage
-refresh, the service log follows and the telemetry.
+and the log keeps the event of a commit even when impd stops right after it. One follower inside
+impd reads from the head at start and feeds the proxy's and the broker's resync when an imp comes or
+goes, the disk usage refresh, the service log follows and the telemetry.
 
 The event stream takes the head `seq` before it reads its snapshot of the caller's imps, so no write
 falls in between, then reads the table from that `seq` at its own pace, filtered to those imps. A

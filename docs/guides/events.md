@@ -73,8 +73,8 @@ reader's imps, not its fields, so it carries no lease owners ([leases](./leases.
 
 - impd writes each event in the same database transaction as the change it describes, from the one
   place that writes the imp or checkpoint row, so every change reaches the stream, including impd's
-  own repairs, and an impd that stops right after a commit still sends its event. A change to an
-  imp's last activity is not an event.
+  own repairs, and the log keeps the event of a commit even when impd stops right after it. A change
+  to an imp's last activity is not an event.
 - Events leave in the order the writes landed.
 - The stream marks its place in the log before it reads the snapshot, so no change falls between the
   two. A change under way may come in the snapshot and again after it; each event carries the whole
