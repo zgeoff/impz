@@ -122,7 +122,14 @@ export async function startTestImpd(
 
   const uffdHandler = createStubUffdHandler(handlerDir);
 
-  const db = await openMigratedCopy();
+  const clock: { frozenAt: number | undefined; offsetMs: number } = {
+    frozenAt: options.frozenClockMs,
+    offsetMs: 0,
+  };
+
+  const readClock = () => (clock.frozenAt ?? Date.now()) + clock.offsetMs;
+
+  const db = await openMigratedCopy(readClock);
 
   stack.defer(async () => {
     await db.destroy();
@@ -158,13 +165,6 @@ export async function startTestImpd(
   const removedTaps: string[] = [];
   const logs: string[] = [];
   const filesystemGrows: string[] = [];
-
-  const clock: { frozenAt: number | undefined; offsetMs: number } = {
-    frozenAt: options.frozenClockMs,
-    offsetMs: 0,
-  };
-
-  const readClock = () => (clock.frozenAt ?? Date.now()) + clock.offsetMs;
 
   const cloneDisk =
     options.cloneDisk ??

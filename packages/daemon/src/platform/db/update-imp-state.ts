@@ -79,7 +79,7 @@ export async function updateImpState(
     values.firecracker_version = change.firecrackerVersion;
   }
 
-  const changed = await withImpTransaction(db, async (trx) => {
+  const changed = await withImpTransaction(db, async (trx, at) => {
     const current = await trx
       .selectFrom('imps')
       .select(['state', 'pid'])
@@ -108,7 +108,7 @@ export async function updateImpState(
       .returningAll()
       .executeTakeFirstOrThrow();
 
-    return appendImpChange(trx, toImpRecord(row), change);
+    return appendImpChange(trx, at, toImpRecord(row), change);
   });
 
   if (changed !== null) {

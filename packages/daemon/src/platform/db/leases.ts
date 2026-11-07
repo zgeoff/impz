@@ -67,7 +67,7 @@ export function writeLease(
   lease: Readonly<LeaseRecord>,
   write: Readonly<LeaseWrite>,
 ): Promise<ImpRecord> {
-  return withImpTransaction(db, async (trx) => {
+  return withImpTransaction(db, async (trx, at) => {
     await removeEndedLeases(trx, lease.impId, write.at);
 
     await trx
@@ -94,7 +94,7 @@ export function writeLease(
       return imp;
     }
 
-    return appendImpChange(trx, imp, { reason: write.reason });
+    return appendImpChange(trx, at, imp, { reason: write.reason });
   });
 }
 
@@ -104,7 +104,7 @@ export function removeLeases(
   which: LeaseSelection,
   write: Readonly<LeaseWrite>,
 ): Promise<{ readonly removed: number; readonly imp: ImpRecord }> {
-  return withImpTransaction(db, async (trx) => {
+  return withImpTransaction(db, async (trx, at) => {
     await removeEndedLeases(trx, impId, write.at);
 
     let query = trx.deleteFrom('imp_leases').where('imp_id', '=', impId);
@@ -128,7 +128,7 @@ export function removeLeases(
       return result;
     }
 
-    await appendImpChange(trx, result.imp, {
+    await appendImpChange(trx, at, result.imp, {
       reason: write.reason,
       ...(write.reason === 'released' && { detail: { released: result.removed } }),
     });

@@ -11,6 +11,7 @@ interface ImpChange {
 // Run it in the transaction that changed the imp's row.
 export async function appendImpChange(
   db: ImpQueries,
+  at: number,
   imp: ImpRecord,
   change: ImpChange,
 ): Promise<ImpRecord> {
@@ -22,7 +23,7 @@ export async function appendImpChange(
       reason: change.reason,
       ...(change.detail !== undefined && { detail: change.detail }),
     },
-    Date.now(),
+    at,
   );
 
   return imp;

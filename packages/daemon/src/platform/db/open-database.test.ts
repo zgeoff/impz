@@ -3,16 +3,20 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pruneEvents } from '@impz/durable';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { buildSQLiteDialect } from '@zgeoff/kysely-bun-sqlite';
-import { Kysely } from 'kysely';
+import { Kysely, sql } from 'kysely';
 import { buildMockNewImage } from '../../test-utils/imps/build-mock-new-image';
 import { buildMockNewImp } from '../../test-utils/imps/build-mock-new-imp';
+import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
+import { appendImpEvent } from './append-imp-event';
 import { createImage } from './images';
 import type { LoggedImpEvent } from './imp-log-entry';
 import { createImp } from './imps';
 import { openDatabase } from './open-database';
 import { updateImpState } from './update-imp-state';
+import { withImpTransaction } from './with-imp-transaction';
 
 function setupTest() {
   const stack = new AsyncDisposableStack();
@@ -164,4 +168,153 @@ test('it keeps the event of a committed write when impd stops right after the co
     throughSeq: 1,
     hasMore: false,
   });
+});
+
+test('it stamps each event with the clock it was opened with', async () => {
+  const db = await openDatabase(':memory:', () => 1_800_000_000_000);
+
+  onTestFinished(() => db.destroy());
+
+  const image = await createImage(db, buildMockNewImage());
+
+  await createImp(db, buildMockNewImp({ imageId: image.id }));
+
+  const read = await db.log.readAfter(0, 10);
+
+  expect(read).toStrictEqual({
+    kind: 'events',
+    events: [expect.objectContaining({ at: new Date(1_800_000_000_000) })],
+    throughSeq: 1,
+    hasMore: false,
+  });
+});
+
+test("it tells impd's own followers every event of a burst longer than one read", async () => {
+  const db = await openDatabase(':memory:');
+
+  onTestFinished(() => db.destroy());
+
+  const seen: LoggedImpEvent[] = [];
+
+  onTestFinished(
+    db.log.subscribe((event) => {
+      seen.push(event);
+    }),
+  );
+
+  await withImpTransaction(db, async (trx, at) => {
+    for (let count = 1; count <= 600; count += 1) {
+      await appendImpEvent(
+        trx,
+        {
+          ev: 'GovernorDecision',
+          decision: 'admitted',
+          name: 'busy-imp',
+          trigger: 'wake',
+          usedMib: 512,
+          budgetMib: 4096,
+        },
+        at,
+      );
+    }
+  });
+
+  await waitFor(() => expect(seen).toHaveLength(600));
+
+  expect(seen.map((event) => event.seq)).toStrictEqual(
+    Array.from({ length: 600 }, (_unused, index) => index + 1),
+  );
+});
+
+test("it moves impd's own followers past events a prune removed before they read them", async () => {
+  const db = await openDatabase(':memory:', () => Date.UTC(2026, 9, 2));
+
+  onTestFinished(() => db.destroy());
+
+  const lines = captureImpdLogs();
+  const seen: LoggedImpEvent[] = [];
+
+  onTestFinished(
+    db.log.subscribe((event) => {
+      seen.push(event);
+    }),
+  );
+
+  await withImpTransaction(db, async (trx) => {
+    await appendImpEvent(
+      trx,
+      {
+        ev: 'GovernorDecision',
+        decision: 'admitted',
+        name: 'pruned-imp',
+        trigger: 'wake',
+        usedMib: 512,
+        budgetMib: 4096,
+      },
+      Date.UTC(2026, 8, 1),
+    );
+
+    await pruneEvents(trx, Date.UTC(2026, 9, 2));
+  });
+
+  await db.log.write(
+    {
+      ev: 'GovernorDecision',
+      decision: 'admitted',
+      name: 'kept-imp',
+      trigger: 'wake',
+      usedMib: 512,
+      budgetMib: 4096,
+    },
+    Date.UTC(2026, 9, 2),
+  );
+
+  await waitFor(() => expect(seen).toHaveLength(1));
+
+  expect(seen).toStrictEqual([expect.objectContaining({ name: 'kept-imp', seq: 2 })]);
+
+  expect(lines).toSatisfyAny((line: string) =>
+    line.includes("a prune passed impd's own followers"),
+  );
+});
+
+test("it keeps impd's own followers going after a read of the log fails", async () => {
+  const db = await openDatabase(':memory:');
+
+  onTestFinished(() => db.destroy());
+
+  const lines = captureImpdLogs();
+  const seen: LoggedImpEvent[] = [];
+
+  onTestFinished(
+    db.log.subscribe((event) => {
+      seen.push(event);
+    }),
+  );
+
+  await sql`ALTER TABLE events RENAME TO events_away`.execute(db);
+
+  db.log.changes.notify();
+
+  await waitFor(() =>
+    expect(lines).toSatisfyAny((line: string) => line.includes('failed to read the log')),
+  );
+
+  await sql`ALTER TABLE events_away RENAME TO events`.execute(db);
+
+  await db.log.write(
+    {
+      ev: 'GovernorDecision',
+      decision: 'admitted',
+      name: 'after-imp',
+      trigger: 'wake',
+      usedMib: 512,
+      budgetMib: 4096,
+    },
+    1_800_000_000_000,
+  );
+
+  await waitFor(() => expect(seen).toHaveLength(1));
+
+  expect(seen).toStrictEqual([expect.objectContaining({ name: 'after-imp', seq: 1 })]);
 });

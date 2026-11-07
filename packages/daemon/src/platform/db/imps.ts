@@ -125,10 +125,10 @@ async function allocateJailUid(db: ImpQueries): Promise<number> {
 }
 
 export function createImp(db: ImpDatabase, imp: NewImp): Promise<ImpRecord> {
-  return withImpTransaction(db, (trx) => writeImpRow(trx, imp));
+  return withImpTransaction(db, (trx, at) => writeImpRow(trx, imp, at));
 }
 
-async function writeImpRow(db: ImpQueries, imp: NewImp): Promise<ImpRecord> {
+async function writeImpRow(db: ImpQueries, imp: NewImp, at: number): Promise<ImpRecord> {
   const now = Date.now();
 
   const jailUid = await allocateJailUid(db);
@@ -179,7 +179,7 @@ async function writeImpRow(db: ImpQueries, imp: NewImp): Promise<ImpRecord> {
 
   const created = toImpRecord(row);
 
-  await appendImpEvent(db, { ev: 'ImpAdded', imp: created }, now);
+  await appendImpEvent(db, { ev: 'ImpAdded', imp: created }, at);
 
   return created;
 }
@@ -212,11 +212,11 @@ export function createImpInFreeSlot(
   imp: Omit<NewImp, 'slot' | 'ip'>,
   slots: FreeSlots,
 ): Promise<ImpRecord> {
-  return withImpTransaction(db, async (trx) => {
+  return withImpTransaction(db, async (trx, at) => {
     if (slots.slot === undefined) {
       const slot = await allocateSlot(trx, slots.count, (slots.now ?? Date.now)());
 
-      return writeImpRow(trx, { ...imp, slot, ip: slots.findIp(slot) });
+      return writeImpRow(trx, { ...imp, slot, ip: slots.findIp(slot) }, at);
     }
 
     const holder = await trx
@@ -229,7 +229,7 @@ export function createImpInFreeSlot(
       throw new SlotTakenError(slots.slot);
     }
 
-    return writeImpRow(trx, { ...imp, slot: slots.slot, ip: slots.findIp(slots.slot) });
+    return writeImpRow(trx, { ...imp, slot: slots.slot, ip: slots.findIp(slots.slot) }, at);
   });
 }
 
@@ -274,7 +274,7 @@ export function updateImpSettings(
 ): Promise<ImpRecord> {
   const cpu = settings.cpu;
 
-  return withImpTransaction(db, async (trx) => {
+  return withImpTransaction(db, async (trx, at) => {
     const row = await trx
       .updateTable('imps')
       .set({
@@ -287,7 +287,7 @@ export function updateImpSettings(
       .returningAll()
       .executeTakeFirstOrThrow();
 
-    return appendImpChange(trx, toImpRecord(row), { reason: 'updated' });
+    return appendImpChange(trx, at, toImpRecord(row), { reason: 'updated' });
   });
 }
 
@@ -297,7 +297,7 @@ export function updateImpCommitted(
   committedAt: number,
   isWarm = false,
 ): Promise<ImpRecord> {
-  return withImpTransaction(db, async (trx) => {
+  return withImpTransaction(db, async (trx, at) => {
     if (isWarm) {
       const received = await trx
         .selectFrom('imps')
@@ -324,14 +324,14 @@ export function updateImpCommitted(
       .where('imp_id', '=', id)
       .execute();
 
-    const committed = await appendImpChange(trx, toImpRecord(updated), { reason: 'updated' });
+    const committed = await appendImpChange(trx, at, toImpRecord(updated), { reason: 'updated' });
 
     // the leases came with the move, so this host's readers learn of them only now
     if (updated.hold_until === null || updated.hold_until <= committedAt) {
       return committed;
     }
 
-    return appendImpChange(trx, committed, { reason: 'held' });
+    return appendImpChange(trx, at, committed, { reason: 'held' });
   });
 }
 
@@ -351,7 +351,7 @@ export function updateImpMove(
   id: string,
   moveState: MoveState | null,
 ): Promise<ImpRecord> {
-  return withImpTransaction(db, async (trx) => {
+  return withImpTransaction(db, async (trx, at) => {
     const current = await trx
       .selectFrom('imps')
       .select('move_state')
@@ -374,7 +374,7 @@ export function updateImpMove(
       .returningAll()
       .executeTakeFirstOrThrow();
 
-    return appendImpChange(trx, toImpRecord(row), { reason: 'updated' });
+    return appendImpChange(trx, at, toImpRecord(row), { reason: 'updated' });
   });
 }
 
@@ -407,7 +407,7 @@ export function updateImpDisk(
   id: string,
   disk: Readonly<{ diskBytes: number; isGrowPending: boolean }>,
 ): Promise<ImpRecord> {
-  return withImpTransaction(db, async (trx) => {
+  return withImpTransaction(db, async (trx, at) => {
     const before = await readImpById(trx, id);
 
     const row = await trx
@@ -423,7 +423,7 @@ export function updateImpDisk(
       return sized;
     }
 
-    return appendImpChange(trx, sized, { reason: 'resized' });
+    return appendImpChange(trx, at, sized, { reason: 'resized' });
   });
 }
 
@@ -458,7 +458,7 @@ export function updateImpExposure(
   id: string,
   exposure: StoredPublicAuth | null,
 ): Promise<ImpRecord | undefined> {
-  return withImpTransaction(db, async (trx) => {
+  return withImpTransaction(db, async (trx, at) => {
     const row = await trx
       .updateTable('imps')
       .set({
@@ -476,19 +476,19 @@ export function updateImpExposure(
       return;
     }
 
-    return appendImpChange(trx, toImpRecord(row), { reason: 'exposed' });
+    return appendImpChange(trx, at, toImpRecord(row), { reason: 'exposed' });
   });
 }
 
 export function removeImp(db: ImpDatabase, id: string): Promise<boolean> {
-  return withImpTransaction(db, async (trx) => {
+  return withImpTransaction(db, async (trx, at) => {
     const row = await trx.deleteFrom('imps').where('id', '=', id).returningAll().executeTakeFirst();
 
     if (row === undefined) {
       return false;
     }
 
-    await appendImpEvent(trx, { ev: 'ImpRemoved', imp: toImpRecord(row) }, Date.now());
+    await appendImpEvent(trx, { ev: 'ImpRemoved', imp: toImpRecord(row) }, at);
 
     return true;
   });

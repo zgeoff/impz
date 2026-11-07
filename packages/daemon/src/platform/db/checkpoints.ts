@@ -29,7 +29,7 @@ export function createCheckpoint(
   db: ImpDatabase,
   checkpoint: NewCheckpoint,
 ): Promise<CheckpointRecord> {
-  return withImpTransaction(db, async (trx) => {
+  return withImpTransaction(db, async (trx, at) => {
     const row = await trx
       .insertInto('checkpoints')
       .values({
@@ -45,7 +45,7 @@ export function createCheckpoint(
 
     const created = toCheckpointRecord(row);
 
-    await appendCheckpointEvent(trx, 'CheckpointAdded', created);
+    await appendCheckpointEvent(trx, at, 'CheckpointAdded', created);
 
     return created;
   });
@@ -79,7 +79,7 @@ export async function readCheckpoint(
 }
 
 export function removeCheckpoint(db: ImpDatabase, id: string): Promise<boolean> {
-  return withImpTransaction(db, async (trx) => {
+  return withImpTransaction(db, async (trx, at) => {
     const row = await trx
       .deleteFrom('checkpoints')
       .where('id', '=', id)
@@ -90,7 +90,7 @@ export function removeCheckpoint(db: ImpDatabase, id: string): Promise<boolean> 
       return false;
     }
 
-    await appendCheckpointEvent(trx, 'CheckpointRemoved', toCheckpointRecord(row));
+    await appendCheckpointEvent(trx, at, 'CheckpointRemoved', toCheckpointRecord(row));
 
     return true;
   });
@@ -98,6 +98,7 @@ export function removeCheckpoint(db: ImpDatabase, id: string): Promise<boolean> 
 
 async function appendCheckpointEvent(
   db: ImpQueries,
+  at: number,
   ev: 'CheckpointAdded' | 'CheckpointRemoved',
   checkpoint: CheckpointRecord,
 ): Promise<void> {
@@ -111,7 +112,7 @@ async function appendCheckpointEvent(
     return;
   }
 
-  await appendImpEvent(db, { ev, name: imp.name, checkpoint }, Date.now());
+  await appendImpEvent(db, { ev, name: imp.name, checkpoint }, at);
 }
 
 function toCheckpointRecord(row: Readonly<Selectable<DB['checkpoints']>>): CheckpointRecord {

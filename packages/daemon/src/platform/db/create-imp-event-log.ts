@@ -14,8 +14,12 @@ export interface ImpEventLog {
   // a writer notifies after each commit; a reader of the table waits on it, and reads again
   readonly changes: ChangeSignal;
 
-  // impd's own followers, each from the head at the time it subscribes
+  // impd's own followers share one cursor, taken at start, so a new follower may get events
+  // committed before it subscribed
   readonly subscribe: EventBus<LoggedImpEvent>['subscribe'];
+
+  // impd's clock, which stamps each event a transaction appends
+  readonly now: () => number;
 
   // for an event no row of impd's describes, such as a decision of the RAM governor; it logs a
   // failure and never rejects
@@ -29,7 +33,7 @@ export interface ImpEventLog {
   readonly stop: () => Promise<void>;
 }
 
-export function createImpEventLog(db: ImpQueries): ImpEventLog {
+export function createImpEventLog(db: ImpQueries, now: () => number): ImpEventLog {
   const changes = createChangeSignal();
   const followers = createEventBus<LoggedImpEvent>();
 
@@ -40,6 +44,7 @@ export function createImpEventLog(db: ImpQueries): ImpEventLog {
   return {
     changes,
     subscribe: followers.subscribe,
+    now,
     write: async (entry, at) => {
       try {
         await appendImpEvent(db, entry, at);

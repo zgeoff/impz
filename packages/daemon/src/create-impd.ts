@@ -126,7 +126,7 @@ async function startImpdParts(
 
   const db = await runStep(
     'database',
-    () => boundaries.db ?? openDatabase(join(config.dataDir, 'db', 'imp.sqlite')),
+    () => boundaries.db ?? openDatabase(join(config.dataDir, 'db', 'imp.sqlite'), now),
   );
 
   plan.db = boundaries.db === undefined ? db : null;

@@ -10,7 +10,10 @@ export type ImpDatabase = Kysely<DB> & { readonly log: ImpEventLog };
 
 export type ImpQueries = Kysely<DB>;
 
-export async function openDatabase(source: string | Database): Promise<ImpDatabase> {
+export async function openDatabase(
+  source: string | Database,
+  now: () => number = Date.now,
+): Promise<ImpDatabase> {
   const sqlite = typeof source === 'string' ? new Database(source, { create: true }) : source;
 
   sqlite.run('PRAGMA journal_mode = WAL;');
@@ -19,7 +22,7 @@ export async function openDatabase(source: string | Database): Promise<ImpDataba
   const builder = new Kysely<DB>({ dialect: buildSQLiteDialect(sqlite) });
 
   const destroyDriver = builder.destroy.bind(builder);
-  const log = createImpEventLog(builder);
+  const log = createImpEventLog(builder, now);
 
   // the shared driver's destroy leaves the handle open for its opener to close
   const db = Object.assign(builder, {
