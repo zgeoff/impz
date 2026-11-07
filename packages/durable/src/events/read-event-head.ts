@@ -13,5 +13,7 @@ export async function readEventHead(db: DurableQueries): Promise<number> {
     .where('event_log.id', '=', 1)
     .executeTakeFirstOrThrow();
 
-  return row.last ?? row.pruned_through;
+  // a prune removes by age, so a newer event with an older time can go while an older one stays;
+  // a reader started below the prune mark would get a reset on every read
+  return Math.max(row.last ?? 0, row.pruned_through);
 }
