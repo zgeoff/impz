@@ -1,5 +1,12 @@
 # Changelog
 
+## [6.7.1](https://github.com/zgeoff/impz/compare/v6.7.0...v6.7.1) (2026-11-07)
+
+
+### Bug Fixes
+
+* **daemon:** keep memory for priority imps when others fill the budget ([#926](https://github.com/zgeoff/impz/issues/926)) ([64aa960](https://github.com/zgeoff/impz/commit/64aa960b20fe9d5b52c3ada5161196f4affeff47))
+
 ## [6.7.0](https://github.com/zgeoff/impz/compare/v6.6.1...v6.7.0) (2026-11-06)
 
 ### Features
