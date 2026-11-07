@@ -112,8 +112,9 @@ async function runCallback(run: () => Promise<void> | void): Promise<void> {
   }
 }
 
-// a position names no change, only how far the stream has read; a reset concerns every imp, so it
-// reaches a watch of one imp too
+// A position names no change, only how far the stream has read; a reset concerns every imp, so it
+// reaches a watch of one imp too. No schema parses an event off the wire, and a newer impd may
+// send a kind this client does not know, which it skips.
 function isDeliveredEvent(event: Readonly<ImpEvent>, name: string | undefined): boolean {
   return match(event)
     .with({ ev: 'Position' }, () => false)
@@ -126,7 +127,7 @@ function isDeliveredEvent(event: Readonly<ImpEvent>, name: string | undefined): 
       { ev: P.union('CheckpointAdded', 'CheckpointRemoved', 'GovernorDecision', 'AgentExec') },
       (named) => name === undefined || named.name === name,
     )
-    .exhaustive();
+    .otherwise(() => false);
 }
 
 async function disposeEvents(events: AsyncIterator<ImpEvent>): Promise<void> {
