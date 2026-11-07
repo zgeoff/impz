@@ -132,6 +132,7 @@ test('it serves system.info from config and the database', async () => {
       guestScratch: true,
       imagePins: true,
       buildContextUpload: true,
+      destroyIdCheck: true,
     },
     ksm: null,
   });

@@ -32,6 +32,13 @@ export function buildConflictError(kind: ResourceKind, name: string, message?: s
   });
 }
 
+export function buildIdChangedError(name: string, id: string) {
+  return new ImpdError('CONFLICT', {
+    message: `imp ${name} is no longer the imp with id ${id}`,
+    data: { kind: 'imp', name, reason: 'id_changed' },
+  });
+}
+
 export const NOT_BACKED_UP_REASON = 'created with backup off';
 
 export function buildNotBackedUpError(name: string, refusal: string) {

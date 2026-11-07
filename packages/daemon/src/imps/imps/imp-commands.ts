@@ -12,7 +12,7 @@ import {
   updateImpSettings,
 } from '../../platform/db/imps';
 import type { ImpRecord } from '../../platform/db/imps';
-import { buildInvalidStateError } from '../../platform/errors/impd-errors';
+import { buildIdChangedError, buildInvalidStateError } from '../../platform/errors/impd-errors';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { isRamBudgetError } from '../../vm/imps-contract/ram-budget-error';
 import { buildImagePaths } from '../../vm/storage/data-layout';
@@ -64,6 +64,7 @@ interface CreateImpInput {
 
 interface DestroyOptions {
   readonly isMove?: boolean;
+  readonly id?: string | undefined;
 }
 
 interface ImpUpdate {
@@ -350,7 +351,17 @@ export function createImpCommands(parts: ImpCommandParts): ImpCommands {
       }),
 
     destroyImp: async (name, options = {}) => {
-      await lock.withImp(name, removeLockedImp, options);
+      await lock.withImp(
+        name,
+        async (imp) => {
+          if (options.id !== undefined && imp.id !== options.id) {
+            throw buildIdChangedError(name, options.id);
+          }
+
+          await removeLockedImp(imp);
+        },
+        options,
+      );
     },
 
     destroyImpId: async (id, kind) => {

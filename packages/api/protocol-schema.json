@@ -1304,6 +1304,9 @@
           "name": {
             "type": "string",
             "pattern": "^[a-z][a-z0-9-]{0,30}$"
+          },
+          "id": {
+            "type": "string"
           }
         },
         "required": [
@@ -12917,6 +12920,9 @@
               },
               "buildContextUpload": {
                 "type": "boolean"
+              },
+              "destroyIdCheck": {
+                "type": "boolean"
               }
             },
             "required": [
@@ -13099,6 +13105,9 @@
                 "type": "boolean"
               },
               "buildContextUpload": {
+                "type": "boolean"
+              },
+              "destroyIdCheck": {
                 "type": "boolean"
               }
             },
@@ -15136,7 +15145,8 @@
           "reason": {
             "type": "string",
             "enum": [
-              "binding_changed"
+              "binding_changed",
+              "id_changed"
             ]
           }
         },
@@ -15178,7 +15188,8 @@
           "reason": {
             "type": "string",
             "enum": [
-              "binding_changed"
+              "binding_changed",
+              "id_changed"
             ]
           }
         },
