@@ -41,7 +41,7 @@ export const infoCommand = defineCommand({
         ['boot status', formatBootStatus(info.bootStatus, info.version)],
         [
           'ram',
-          `${String(info.ramUsedMib)} / ${String(info.ramBudgetMib)} MiB (${String(info.ramReservedMib)} reserved, ${String(info.ramCommittedMib)} committed${formatSleeping(info.ramSleepingMib)})`,
+          `${String(info.ramUsedMib)} / ${String(info.ramBudgetMib)} MiB (${String(info.ramReservedMib)} reserved, ${String(info.ramCommittedMib)} committed${formatSleeping(info.ramSleepingMib)}${formatPriorityKept(info.ramPriorityKeptMib)})`,
         ],
         ['firecracker', info.firecrackerVersion ?? 'unknown'],
         [
@@ -75,6 +75,10 @@ export const infoCommand = defineCommand({
 
 function formatSleeping(mib: number | undefined): string {
   return mib === undefined ? '' : `, ${String(mib)} asleep`;
+}
+
+function formatPriorityKept(mib: number | undefined): string {
+  return mib === undefined || mib === 0 ? '' : `, ${String(mib)} kept for priority imps`;
 }
 
 function formatGib(bytes: number): string {

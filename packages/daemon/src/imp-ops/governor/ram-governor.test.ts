@@ -379,7 +379,12 @@ test('it counts the reserve it admitted on the resident counts', async () => {
 
   const usage = await governor.readUsage();
 
-  expect(usage).toStrictEqual({ usedMib: 200, reservedMib: 300, headroomMib: 0 });
+  expect(usage).toStrictEqual({
+    usedMib: 200,
+    reservedMib: 300,
+    headroomMib: 0,
+    priorityKeptMib: 0,
+  });
 });
 
 test('it walks every VM and makes room when the resident counts leave too little', async () => {
@@ -879,7 +884,7 @@ test('it reports no headroom while KSM saves nothing', async () => {
 
   const usage = await governor.readUsage();
 
-  expect(usage).toStrictEqual({ usedMib: 600, reservedMib: 0, headroomMib: 0 });
+  expect(usage).toStrictEqual({ usedMib: 600, reservedMib: 0, headroomMib: 0, priorityKeptMib: 0 });
 });
 
 test('it admits a waiting foreground admission before a background admission, a grow and an enforce pass queued ahead of it', async () => {
@@ -958,7 +963,12 @@ test('it measures every awake imp at once, each read started before any ends', a
 
   const measured = await usage;
 
-  expect(measured).toStrictEqual({ usedMib: 600, reservedMib: 0, headroomMib: 0 });
+  expect(measured).toStrictEqual({
+    usedMib: 600,
+    reservedMib: 0,
+    headroomMib: 0,
+    priorityKeptMib: 0,
+  });
 });
 
 test('it reports the KSM headroom in the usage', async () => {
@@ -978,7 +988,12 @@ test('it reports the KSM headroom in the usage', async () => {
 
   const usage = await governor.readUsage();
 
-  expect(usage).toStrictEqual({ usedMib: 600, reservedMib: 0, headroomMib: 300 });
+  expect(usage).toStrictEqual({
+    usedMib: 600,
+    reservedMib: 0,
+    headroomMib: 300,
+    priorityKeptMib: 0,
+  });
 });
 
 test('it reports locked host memory as used', async () => {
@@ -992,7 +1007,7 @@ test('it reports locked host memory as used', async () => {
 
   const usage = await governor.readUsage();
 
-  expect(usage).toStrictEqual({ usedMib: 390, reservedMib: 0, headroomMib: 0 });
+  expect(usage).toStrictEqual({ usedMib: 390, reservedMib: 0, headroomMib: 0, priorityKeptMib: 0 });
 });
 
 test('it counts locked host memory against the budget, so an admission makes room for it', async () => {
@@ -1095,7 +1110,12 @@ test('it counts a grow as reserved until the grower measures it', async () => {
 
   const usage = await governor.readUsage();
 
-  expect(usage).toStrictEqual({ usedMib: 600, reservedMib: 260, headroomMib: 0 });
+  expect(usage).toStrictEqual({
+    usedMib: 600,
+    reservedMib: 260,
+    headroomMib: 0,
+    priorityKeptMib: 0,
+  });
 });
 
 test('it sleeps no imp when an unplug the reclaim did not count made room', async () => {
@@ -1135,7 +1155,12 @@ test('it puts back the wake reservation that a released grow counted in', async 
 
   const usage = await governor.readUsage();
 
-  expect(usage).toStrictEqual({ usedMib: 300, reservedMib: 200, headroomMib: 0 });
+  expect(usage).toStrictEqual({
+    usedMib: 300,
+    reservedMib: 200,
+    headroomMib: 0,
+    priorityKeptMib: 0,
+  });
 });
 
 test('it reserves nothing once a grow with no reservation before it is released', async () => {
@@ -1153,7 +1178,7 @@ test('it reserves nothing once a grow with no reservation before it is released'
 
   const usage = await governor.readUsage();
 
-  expect(usage).toStrictEqual({ usedMib: 300, reservedMib: 0, headroomMib: 0 });
+  expect(usage).toStrictEqual({ usedMib: 300, reservedMib: 0, headroomMib: 0, priorityKeptMib: 0 });
 });
 
 test('it keeps a wake reservation made after a grow when the grow is released', async () => {
@@ -1172,7 +1197,12 @@ test('it keeps a wake reservation made after a grow when the grow is released', 
 
   const usage = await governor.readUsage();
 
-  expect(usage).toStrictEqual({ usedMib: 300, reservedMib: 200, headroomMib: 0 });
+  expect(usage).toStrictEqual({
+    usedMib: 300,
+    reservedMib: 200,
+    headroomMib: 0,
+    priorityKeptMib: 0,
+  });
 });
 
 test('it refuses a grow when only busy imps could make room, and publishes why', async () => {
@@ -1251,7 +1281,7 @@ test('it makes no room and reserves nothing for a grow of an imp that is no long
   expect(admitted).toBeFalse();
   expect(reclaims).toStrictEqual([]);
   expect(host.sleepCalls).toStrictEqual([]);
-  expect(usage).toStrictEqual({ usedMib: 600, reservedMib: 0, headroomMib: 0 });
+  expect(usage).toStrictEqual({ usedMib: 600, reservedMib: 0, headroomMib: 0, priorityKeptMib: 0 });
 });
 
 test('it counts the KSM headroom for a grow, as for a boot or a wake', async () => {

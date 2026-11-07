@@ -120,6 +120,10 @@ export const SystemInfoSchema = z.object({
 
   ramCommittedMib: z.int().nonnegative(),
 
+  // the RAM kept for priority imps that they leave unused, which no other imp may take; an older
+  // impd leaves it out
+  ramPriorityKeptMib: z.int().nonnegative().optional(),
+
   ramSleepingMib: z.int().nonnegative().optional(),
   awakeCount: z.int().nonnegative(),
   impCount: z.int().nonnegative(),

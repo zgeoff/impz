@@ -347,13 +347,15 @@ test('it reads what an asleep imp holds reserved from the governor usage', async
   const host = createStubGovernedHost({ budgetMib: 1000, ids: ['a'], awake: [] });
 
   const usage = [
-    { usedMib: 0, reservedMib: 300, headroomMib: 0 },
-    { usedMib: 1_000_000, reservedMib: 0, headroomMib: 0 },
+    { usedMib: 0, reservedMib: 300, headroomMib: 0, priorityKeptMib: 0 },
+    { usedMib: 1_000_000, reservedMib: 0, headroomMib: 0, priorityKeptMib: 0 },
   ];
 
   const reserved = await host.readReservation('a', {
     readUsage: () =>
-      Promise.resolve(usage.shift() ?? { usedMib: 0, reservedMib: 0, headroomMib: 0 }),
+      Promise.resolve(
+        usage.shift() ?? { usedMib: 0, reservedMib: 0, headroomMib: 0, priorityKeptMib: 0 },
+      ),
   });
 
   expect(reserved).toBe(300);
@@ -381,7 +383,8 @@ test('it reads no reservation for an awake imp', async () => {
   });
 
   const reserved = await host.readReservation('a', {
-    readUsage: () => Promise.resolve({ usedMib: 0, reservedMib: 300, headroomMib: 0 }),
+    readUsage: () =>
+      Promise.resolve({ usedMib: 0, reservedMib: 300, headroomMib: 0, priorityKeptMib: 0 }),
   });
 
   expect(reserved).toBe(0);

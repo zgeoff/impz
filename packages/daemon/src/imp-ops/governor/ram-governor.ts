@@ -82,6 +82,9 @@ interface RamUsage {
   readonly usedMib: number;
   readonly reservedMib: number;
   readonly headroomMib: number;
+
+  // the priority imps' RAM that they leave unused in the whole budget
+  readonly priorityKeptMib: number;
 }
 
 export interface RamGovernor extends RamAdmission {
@@ -566,6 +569,7 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
         usedMib: usage.usedMib,
         reservedMib: usage.effectiveMib - usage.usedMib - usage.headroomMib,
         headroomMib: usage.headroomMib,
+        priorityKeptMib: usage.kept.ramMib,
       };
     },
 
