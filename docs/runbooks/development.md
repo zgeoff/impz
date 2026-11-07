@@ -31,8 +31,8 @@ scripts/test-e2e.sh --clean       # end to end, from a clean state
 ```
 
 `bun run check` runs the whole-tree gates of CI's `checks` job: dead code, format, the type-aware
-lint, doc links, types and every test. It needs more memory than a small host has, so run it on a
-large one, or leave it to CI. CI splits `bun run test` into two shards on two runners, with two
+lint, the docs checks, types and every test. It needs more memory than a small host has, so run it
+on a large one, or leave it to CI. CI splits `bun run test` into two shards on two runners, with two
 workers each, and runs each shard in a cgroup capped at 1792 MiB with no swap, through `diet`, so a
 shard fails there before it outgrows a 2 GiB imp. `bun run lint:shell` needs shellcheck 0.11.0 and
 shfmt 3.14.1 on `PATH`, the versions CI pins; the shellcheck job in `.github/workflows/ci.yml` pins
@@ -343,13 +343,13 @@ no swap. The `checks-lanes` job runs:
 - the `test:<lane>` scripts;
 - the dashboard's tests and build.
 
-Through `bun run check:static`, the `checks-lanes` job also runs the doc check scripts in
-`.claude/skills/docs-writing/scripts/`. `bun run lint:docs` runs `check-links.sh`, which fails on a
-broken relative link or anchor in a README or a page under `docs/`. It then runs
-`scripts/ci/check-doc-citations.ts`, which fails on a `docs/` path or anchor cited outside Markdown
-that does not resolve, such as a code comment that names a page a docs rewrite moved.
-`check-length.sh` reports README and docs/ lengths and runs `check-prose.sh`, without failing the
-job.
+Through `bun run check:static`, the `checks-lanes` job also runs the docs checks of `@zgeoff/chex`.
+`bun run lint:docs` runs `chex links`, which fails on a broken relative link or anchor in a README
+or a page under `docs/`. It then runs `scripts/ci/check-doc-citations.ts`, which fails on a `docs/`
+path or anchor cited outside Markdown that does not resolve, such as a code comment that names a
+page a docs rewrite moved. `bun run check:docs` runs `chex prose length links skill`, which fails on
+a prose fault, a README over its line limit or a skill fault, and only warns on a `docs/` page over
+its cap.
 
 `bun run audit` ignores one advisory by its ID. GHSA-86w9-cpqp-85rv is a flaw in node-forge's RSA
 signature verification, and the locked node-forge has it. acme-client loads node-forge, but impd

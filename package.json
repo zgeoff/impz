@@ -114,7 +114,7 @@
     "lint:workflows": "bun scripts/ci/check-release-jobs.ts",
     "test": "rig unit",
     "check": "bun run check:static && bun run test",
-    "check:static": "bun run deadcode && bun run format:check && bun run lint:full && bun run lint:docs && bun run lint:formula && bun run lint:images && bun run lint:workflows && bun run typecheck",
+    "check:static": "bun run deadcode && bun run format:check && bun run lint:full && bun run lint:docs && bun run check:docs && bun run lint:formula && bun run lint:images && bun run lint:workflows && bun run typecheck",
     "test:host": "rig host",
     "test:headscale": "rig headscale",
     "test:pebble": "rig pebble",

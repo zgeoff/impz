@@ -155,10 +155,6 @@ jobs:
       - name: Check
         run: bun run check:static
 
-      # the docs checks that check:docs names, from chex
-      - name: Docs
-        run: bun run --silent check:docs
-
       # an image build's disk hold against what it really takes, the disk
       # sampler that measures it, and a moved disk's data blocks
       - name: Test Small Filesystem

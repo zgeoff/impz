@@ -86,7 +86,8 @@ pre-push:
     # needs ruby on PATH, so it runs only on a branch that changes the formula
     - name: lint:formula
       files:
-        bun "$(git rev-parse --show-toplevel)/node_modules/@zgeoff/chex/src/read-branch-files.ts"
+        unset $(git rev-parse --local-env-vars); bun "$(git rev-parse
+        --show-toplevel)/node_modules/@zgeoff/chex/src/read-branch-files.ts"
       glob: 'scripts/release/build-formula.sh'
       run: bun run lint:formula
     # the agent's gofmt and vet, on a branch that changes its Go; -p 1 keeps
@@ -94,13 +95,15 @@ pre-push:
     # race tests are CI's alone: each needs more than a 2 GB imp can spare.
     - name: go:fmt-vet
       files:
-        bun "$(git rev-parse --show-toplevel)/node_modules/@zgeoff/chex/src/read-branch-files.ts"
+        unset $(git rev-parse --local-env-vars); bun "$(git rev-parse
+        --show-toplevel)/node_modules/@zgeoff/chex/src/read-branch-files.ts"
       glob: 'agent/**/*.go'
       root: agent/
       run: test -z "$(gofmt -l {files})" && go vet -p 1 ./...
     - name: go:fmt-vet-ksm-exec
       files:
-        bun "$(git rev-parse --show-toplevel)/node_modules/@zgeoff/chex/src/read-branch-files.ts"
+        unset $(git rev-parse --local-env-vars); bun "$(git rev-parse
+        --show-toplevel)/node_modules/@zgeoff/chex/src/read-branch-files.ts"
       glob:
         - 'host/ksm-exec/*.go'
         - 'host/ksm-exec/**/*.go'
@@ -108,7 +111,8 @@ pre-push:
       run: test -z "$(gofmt -l {files})" && go vet -p 1 ./...
     - name: go:fmt-vet-uffd-handler
       files:
-        bun "$(git rev-parse --show-toplevel)/node_modules/@zgeoff/chex/src/read-branch-files.ts"
+        unset $(git rev-parse --local-env-vars); bun "$(git rev-parse
+        --show-toplevel)/node_modules/@zgeoff/chex/src/read-branch-files.ts"
       glob:
         - 'host/uffd-handler/*.go'
         - 'host/uffd-handler/**/*.go'
@@ -116,7 +120,8 @@ pre-push:
       run: test -z "$(gofmt -l {files})" && go vet -p 1 ./...
     - name: go:fmt-vet-oci-fetch
       files:
-        bun "$(git rev-parse --show-toplevel)/node_modules/@zgeoff/chex/src/read-branch-files.ts"
+        unset $(git rev-parse --local-env-vars); bun "$(git rev-parse
+        --show-toplevel)/node_modules/@zgeoff/chex/src/read-branch-files.ts"
       glob:
         - 'host/oci-fetch/*.go'
         - 'host/oci-fetch/**/*.go'
@@ -124,7 +129,8 @@ pre-push:
       run: test -z "$(gofmt -l {files})" && go vet -p 1 ./...
     - name: go:fmt-vet-uffd-spike
       files:
-        bun "$(git rev-parse --show-toplevel)/node_modules/@zgeoff/chex/src/read-branch-files.ts"
+        unset $(git rev-parse --local-env-vars); bun "$(git rev-parse
+        --show-toplevel)/node_modules/@zgeoff/chex/src/read-branch-files.ts"
       glob:
         - 'docs/design/spikes/uffd-2m-restore/harness/*.go'
         - 'docs/design/spikes/uffd-2m-restore/harness/**/*.go'
