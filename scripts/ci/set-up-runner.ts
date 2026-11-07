@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, readFileSync } from 'node:fs';
+import { appendFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { $ } from 'bun';
 import invariant from 'tiny-invariant';
@@ -6,6 +6,7 @@ import { formatStepValues } from '../lib/format-step-values.ts';
 import { getStepEnv } from '../lib/get-step-env.ts';
 import { parseStepCommand } from '../lib/parse-step-command.ts';
 import type { StepArgument } from '../lib/parse-step-command.ts';
+import { readTextOrNull } from '../lib/read-text-or-null.ts';
 import { readZfsPoolProperties } from '../lib/read-zfs-pool-properties.ts';
 
 interface Task {
@@ -154,7 +155,7 @@ async function createZfsPool(args: readonly string[]): Promise<void> {
   invariant(pool !== undefined && file !== undefined && sizeGib !== undefined);
 
   const properties = readZfsPoolProperties(
-    { readText: (path) => (existsSync(path) ? readFileSync(path, 'utf8') : null) },
+    { readText: readTextOrNull },
     join(import.meta.dir, '..', '..'),
   );
 
