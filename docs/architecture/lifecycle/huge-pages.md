@@ -50,8 +50,8 @@ impd starts one handler per restore or wake, before Firecracker loads the snapsh
 Huge pages speed up a template restore and slow down a wake. On a nested production host, a wake on
 huge pages took longer to reach a running agent than a wake on ordinary pages
 ([the wake spike](../../design/spikes/wake-huge-pages/README.md)). On ZFS, a sleep leaves the new
-memory file out of the page cache, so the handler's first read of each block through its map takes
-about 8 ms on the production host
+memory file out of the page cache, so the handler's first read of each block through its map goes to
+the filesystem, and a wake's reads make up most of its `agent` step
 ([the cold reads spike](../../design/spikes/wake-cold-reads/README.md)).
 
 The counts start at zero when a handler starts. At the end of a wake on huge pages, impd reads the
