@@ -16,22 +16,23 @@ design brings it to 143 ms or less, with restores as fast as before?
 ## Answer
 
 - When the page cache lacks the memory file, the handler's reads of the file take nearly all of the
-  `agent` step. With the file in the page cache, a wake on a CI runner took 13 to 26 ms in `agent`.
+  `agent` step. With the file in the page cache, a CI wake took 13 to 27 ms in `agent`, one at a
+  time.
 - On ZFS, Firecracker writes the memory file at a sleep into ZFS's own cache and none of it into the
-  page cache, so the handler reads every block cold at the next wake: about 7 ms a block in CI, and
-  461 ms for 58 blocks in one production wake. On XFS, the file stays in the page cache.
-- Each row compares one runner's code without the design and with it (without → with), in median ms
-  with one wake at a time. Compare within a row:
+  page cache, so the handler reads every block cold at the next wake: 3.8 to 7.1 ms a block in CI,
+  and 461 ms for 58 blocks in one production wake. On XFS, the file stays in the page cache.
+- Each row compares one runner without → with the design, in median ms, one wake at a time:
 
-  | Design                                                        | Filesystem | `agent`     | Whole wake    | Restore   |
-  | ------------------------------------------------------------- | ---------- | ----------- | ------------- | --------- |
-  | Read the file's data into the page cache after a sleep        | ZFS        | 217.5 → 13  | 280 → 65      | 59 → 61   |
-  | At a wake, read the blocks the last wake touched, in parallel | ZFS        | 112 → 16    | 165 → 81      | 73 → 74.5 |
-  | The same, on a guest that reads 100 MiB every 200 ms          | XFS        | 146 → 151.5 | 229 → 256.5   | 69 → 71.5 |
-  | Read each block with one `pread`, in place of the map         | ZFS        | 200 → 71    | 273.5 → 136.5 | 76 → 94.5 |
+  | Design                                                        | Filesystem      | `agent`     | Whole wake    | Restore   |
+  | ------------------------------------------------------------- | --------------- | ----------- | ------------- | --------- |
+  | Read the file's data into the page cache after a sleep        | ZFS             | 217.5 → 13  | 280 → 65      | 59 → 61   |
+  | The same                                                      | XFS, hot cache  | 27 → 15     | 70 → 56       | 93 → 92   |
+  | At a wake, read the blocks the last wake touched, in parallel | ZFS             | 112 → 16    | 165 → 81      | 73 → 74.5 |
+  | The same, on a guest that reads 100 MiB every 200 ms          | XFS, cold cache | 146 → 151.5 | 229 → 256.5   | 69 → 71.5 |
+  | Read each block with one `pread`, in place of the map         | ZFS             | 200 → 71    | 273.5 → 136.5 | 76 → 94.5 |
 
-- In the prototype, the read after a sleep added a median of 237 ms to each sleep. It holds page
-  cache equal to the file's data until the kernel takes it back under memory pressure.
+- The read after a sleep added a median of 237 ms to a sleep on ZFS and 23 ms on XFS. It holds at
+  least the file's data in page cache until the kernel takes it back.
 - The runs never measured the production host. An estimate: the production wake of 58 blocks, at the
   0.4 ms a warm block cost in CI (13 ms for 31 blocks), takes about 25 ms.
 
@@ -61,8 +62,7 @@ the versions.
 
 ## Results
 
-- [results.md](./results.md): every run, the page cache each design costs, restores, and the
-  sections of the issue that builds the pick.
+- [results.md](./results.md): every run, page cache costs, restores and the issue to file.
 
 ## Untested
 

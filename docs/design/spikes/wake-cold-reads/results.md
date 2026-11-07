@@ -23,15 +23,16 @@ median of 143 ms in `agent` on 4 KiB pages and 509 ms on 2 MiB pages.
 ## Setup
 
 Every run used the bench job, `.github/workflows/bench.yml`, on a GitHub `ubuntu-24.04` runner with
-4 vCPUs, 15,983 MiB of memory, Linux 7.0.0-1017-azure and KVM. The job compares the last commit of a
-`bench/**` branch, the candidate, with that commit's parent, the baseline. A branch name that holds
-`huge-pages` reserves 3,072 pages of 2 MiB and runs impd with `IMP_HUGE_PAGES=2M`. Each side built
-its own host image, so each side ran its own page handler.
+4 vCPUs, 15,982 to 15,983 MiB of memory, Linux 7.0.0-1017-azure and KVM. The job compares the last
+commit of a `bench/**` branch, the candidate, with that commit's parent, the baseline. A branch name
+that holds `huge-pages` reserves 3,072 pages of 2 MiB and runs impd with `IMP_HUGE_PAGES=2M`. Each
+side built its own host image, so each side ran its own page handler.
 
-Each run took 3 rounds of `impz bench create,wake --concurrency 1,4 --samples 20 --memory 256m`.
-That gives 60 timed wakes a side with one wake at a time, and 60 with four at a time. The bench
-wakes each imp once before it times any wake, and the tables leave that wake out. Each imp went to
-sleep as soon as it woke.
+Each run ran
+`bun packages/daemon/bench/run-bench-arms.ts --out .cache/bench --rounds 3 --arm baseline=.cache/baseline --arm candidate=. -- create,wake --concurrency 1,4 --samples 20 --memory 256m`,
+with `--memory 512m` in [xfs-busy-prefetch][bw]. That gives 60 timed wakes a side with one wake at a
+time, and 60 with four at a time. The bench wakes each imp once before it times any wake, and the
+tables leave that wake out. Each imp went to sleep as soon as it woke.
 
 The bench changes for these runs sat in the baseline commit, so both sides of a run ran them. The
 [prototypes](./prototypes/) folder holds each change as a diff:
@@ -67,6 +68,9 @@ The runs, each named for its filesystem, its cache and its candidate:
 | [xfs-hot-prefetch][hot]  | cold, hot                   | working-set prefetch        |
 | [xfs-busy-prefetch][bw]  | cold, busy guest            | working-set prefetch        |
 | [xfs-cold-readahead][cn] | cold                        | readahead of the whole file |
+| [xfs-hot-warm][hw]       | cold, hot                   | warm after the sleep        |
+| [xfs-hot-pread][hp]      | cold, hot                   | one `pread` per block       |
+| [xfs-hot-readahead][hr]  | cold, hot                   | readahead of the whole file |
 
 The figures come from impd's `woke pid`, `asleep in` and `restored boot template` lines in the
 `bench-results` artifact of each run:
@@ -124,25 +128,44 @@ Each cell is the median in milliseconds, baseline to candidate. `Whole wake` is 
 | [xfs-busy-prefetch][bw]  | 4               | 716.5 → 1,097.5 | 35 → 216     | 576.5 → 765.5 | 632 → 872.5   |
 | [xfs-cold-readahead][cn] | 1               | 136 → 133.5     | 15 → 11      | 68 → 68       | 74 → 72       |
 | [xfs-cold-readahead][cn] | 4               | 420 → 423.5     | 34 → 21.5    | 315 → 330.5   | 329.5 → 335.5 |
+| [xfs-hot-warm][hw]       | 1               | 70 → 56         | 10 → 6       | 27 → 15       | 28 → 13       |
+| [xfs-hot-warm][hw]       | 4               | 134 → 100.5     | 25 → 13      | 47 → 26       | 55 → 25       |
+| [xfs-hot-pread][hp]      | 1               | 52.5 → 59.5     | 6 → 8        | 19 → 19       | 17 → 19       |
+| [xfs-hot-pread][hp]      | 4               | 112.5 → 116     | 13 → 18      | 50.5 → 50.5   | 46.5 → 52     |
+| [xfs-hot-readahead][hr]  | 1               | 71 → 70.5       | 10 → 8       | 27 → 27       | 28 → 27       |
+| [xfs-hot-readahead][hr]  | 4               | 132.5 → 129.5   | 24 → 22      | 51.5 → 50     | 53 → 52       |
 
-The warm step cut every figure on ZFS. The prefetch cut `agent` on ZFS, but its reads ran beside the
-snapshot load, and `load` grew 1.6 to 2 times. On XFS with the cache dropped, the baseline read 31
-blocks in 80 ms, at about 800 MB/s, and the suspected cause of the prefetch's small gain is that the
-runner's disk gives parallel reads no more throughput; no run measured the disk alone. `load` grew
-2.4 to 3.2 times. With the XFS cache as the sleep left it, the prefetch's reads still ran beside the
-snapshot load, and the whole wake took 39% longer with four at a time. In the busy guest, the
-prefetch's list grew to as many as 87 blocks, about twice what a wake faulted, and the whole wake
-took 53% longer with four at a time.
+Each idea's `agent` median with one wake at a time, baseline to candidate, on a cold and on a hot
+page cache:
+
+| Idea                        | Cold, ZFS                     | Cold, XFS                             | Hot, XFS                            |
+| --------------------------- | ----------------------------- | ------------------------------------- | ----------------------------------- |
+| warm after the sleep        | 217.5 → 13 ([zfs-warm][zm])   | not run                               | 27 → 15 ([xfs-hot-warm][hw])        |
+| working-set prefetch        | 112 → 16 ([zfs-prefetch][zw]) | 74.5 → 59.5 ([xfs-cold-prefetch][cw]) | 26 → 25.5 ([xfs-hot-prefetch][hot]) |
+| one `pread` per block       | 200 → 71 ([zfs-pread][zp])    | not run                               | 19 → 19 ([xfs-hot-pread][hp])       |
+| readahead of the whole file | not run                       | 68 → 68 ([xfs-cold-readahead][cn])    | 27 → 27 ([xfs-hot-readahead][hr])   |
+
+The warm step cut every figure on ZFS, and on XFS with a hot cache it cut `agent` from 27 to 15 ms.
+The runs never found why the step helps on XFS, where the file already sat in the page cache. The
+prefetch cut `agent` on ZFS, but its reads ran beside the snapshot load, and `load` grew 1.6 to 2
+times. On XFS with the cache dropped, the baseline read 31 blocks in 80 ms, at about 800 MB/s, and
+the suspected cause of the prefetch's small gain is that the runner's disk gives parallel reads no
+more throughput; no run measured the disk alone. `load` grew 2.4 to 3.2 times. With the XFS cache as
+the sleep left it, the prefetch's reads still ran beside the snapshot load, and the whole wake took
+39.5% longer with four at a time. In the busy guest, the prefetch's list grew to as many as 87
+blocks, about twice what a wake faulted, and the whole wake took 53% longer with four at a time.
 
 ## The cost of a hot cache
 
-| What                        | Figure                                                        | Source                                     |
-| --------------------------- | ------------------------------------------------------------- | ------------------------------------------ |
-| The warm step of each sleep | median 237 ms, p90 261 ms, in 135 sleeps                      | [zfs-warm][zm], `warm=`                    |
-| A sleep's whole time        | median 416 ms → 722 ms, over the sleeps at both concurrencies | [zfs-warm][zm], `asleep in`                |
-| Data in one memory file     | 31 to 32 data blocks: 54 MiB on XFS, 20 MiB on ZFS with `lz4` | every run's `asleep in`                    |
-| Data in a busy guest's file | 162 MiB on XFS                                                | [xfs-busy-prefetch][bw]                    |
-| Page cache per sleeping imp | its data blocks times 2 MiB: 62 to 64 MiB in these runs       | `blocks=` of each wake after the warm step |
+| What                             | Figure                                                                                                  | Source                          |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| The warm step of each sleep, ZFS | median 237 ms, p90 261 ms, in 135 sleeps                                                                | [zfs-warm][zm], `warm=`         |
+| The warm step of each sleep, XFS | median 23 ms, p90 28 ms, in 135 sleeps                                                                  | [xfs-hot-warm][hw], `warm=`     |
+| A sleep's whole time, ZFS        | median 416 ms → 722 ms, over the sleeps at both concurrencies                                           | [zfs-warm][zm], `asleep in`     |
+| A sleep's whole time, XFS        | median 202 ms → 221 ms, over the sleeps at both concurrencies                                           | [xfs-hot-warm][hw], `asleep in` |
+| Data in one memory file          | 54 MiB on XFS, 20 MiB on ZFS with `lz4`                                                                 | every run's `asleep in`         |
+| Data in a busy guest's file      | 162 MiB on XFS                                                                                          | [xfs-busy-prefetch][bw]         |
+| Page cache per sleeping imp      | at least the data in its memory file: 54 MiB in these runs; the runs never counted a file's data blocks | the XFS `asleep in` lines       |
 
 In the prototype, the warm step ran inside impd's sleep, before the `asleep in` line, and so it
 added its whole time to each sleep. impd holds the imp's lock for a sleep, so a request to wake the
@@ -173,25 +196,29 @@ summary.
 | [xfs-cold-prefetch][cw]  | 89 → 94       | 191 → 185      | 176 → 182 |
 | [xfs-hot-prefetch][hot]  | 88 → 93       | 178 → 179.5    | 172 → 173 |
 | [xfs-cold-readahead][cn] | 73 → 72       | 154 → 158      | 142 → 143 |
+| [xfs-hot-warm][hw]       | 93 → 92       | 175.5 → 179    | 176 → 175 |
+| [xfs-hot-pread][hp]      | 70 → 66.5     | 137 → 136      | 142 → 136 |
+| [xfs-hot-readahead][hr]  | 86 → 91.5     | 181.5 → 186    | 172 → 174 |
 
-The warm step and the prefetch leave a restore's path as it is, and their restores moved by −3% to
-+8%. One `pread` per block changes a restore's reads too. A template's memory file sits locked in
-the page cache. Through the map, the handler copies each block once, from the page cache into the
-guest. With `pread`, it copies each block from the page cache into a buffer, and again into the
-guest. Its restores took 24% longer with one at a time and 11% longer with four.
+The warm step, the prefetch and the readahead leave a restore's path as it is, and their restores
+moved by −3% to +8%. One `pread` per block changes a restore's reads too. A template's memory file
+sits locked in the page cache. Through the map, the handler copies each block once, from the page
+cache into the guest. With `pread`, it copies each block from the page cache into a buffer, and
+again into the guest. On ZFS, its restores took 24% longer with one at a time and 11% longer with
+four. On XFS, they took 5% and 1% less time, so the second copy's cost is not settled.
 
 ## Pick a design
 
 Each cut is the change in the whole wake on ZFS against its own run's baseline, so the cuts compare
 across runs.
 
-| Design                        | Effort                                                   | Risk                                                                                                                                                                          | Whole-wake cut, one at a time | Whole-wake cut, four at a time |
-| ----------------------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | ------------------------------ |
-| Warm after the sleep          | 1 impd PR and a handler mode, about 150 lines with tests | page cache of at least 196 MiB per sleeping conversation imp; a cold wake once the kernel takes it back                                                                       | 77%                           | 67%                            |
-| Working-set prefetch          | 1 handler PR and 1 impd PR, about 400 lines with tests   | whole wakes on XFS up to 53% longer; a list file to keep beside each snapshot                                                                                                 | 51%                           | 26%                            |
-| One `pread` per block         | 1 handler PR, about 10 lines                             | restores 11% to 24% longer; on XFS with a hot cache, `agent` went from 37.5 to 44 ms in [an earlier bench run][pr]                                                            | 50%                           | 35%                            |
-| Lock each sleeping imp's file | 1 impd PR, beside the template lock                      | the RAM leaves the host for as long as each imp sleeps                                                                                                                        | not measured                  | not measured                   |
-| Turn huge pages off           | 1 host config change                                     | wakes go back to the 143 ms `agent` median of 4 KiB pages, and restores to a median `agent` of about 1,500 ms ([the wake spike](../wake-huge-pages/results.md#fix-or-accept)) | not measured                  | not measured                   |
+| Design                        | Effort                                                   | Risk                                                                                                                                                                                       | Whole-wake cut, one at a time | Whole-wake cut, four at a time |
+| ----------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------- | ------------------------------ |
+| Warm after the sleep          | 1 impd PR and a handler mode, about 150 lines with tests | page cache of at least 196 MiB per sleeping conversation imp; a cold wake once the kernel takes it back; restores 3% longer with one at a time and 8% with four, within the runner's noise | 77%                           | 67%                            |
+| Working-set prefetch          | 1 handler PR and 1 impd PR, about 400 lines with tests   | whole wakes on XFS up to 53% longer; a list file to keep beside each snapshot                                                                                                              | 51%                           | 26%                            |
+| One `pread` per block         | 1 handler PR, about 10 lines                             | restores on ZFS 11% to 24% longer; on XFS with a hot cache, the whole wake 13% longer with one at a time, and `agent` 37.5 to 44 ms in [an earlier bench run][pr]                          | 50%                           | 35%                            |
+| Lock each sleeping imp's file | 1 impd PR, beside the template lock                      | the RAM leaves the host for as long as each imp sleeps                                                                                                                                     | not measured                  | not measured                   |
+| Turn huge pages off           | 1 host config change                                     | wakes go back to the 143 ms `agent` median of 4 KiB pages, and restores to a median `agent` of about 1,500 ms ([the wake spike](../wake-huge-pages/results.md#fix-or-accept))              | not measured                  | not measured                   |
 
 Pick: warm after the sleep. It made the largest cut at both concurrencies, and it leaves restores
 and the handler's fault path as they are. Start the warm step after the sleep returns, so that it
@@ -221,12 +248,12 @@ and its `prototypes/warm-after-sleep.diff`.
 ### Scope
 
 - In: a warm step that reads each data block of a slept imp's memory file through a map, on the 2
-  MiB path of a ZFS host, started after the sleep returns. It logs its time and the blocks it read,
-  and it stops when the imp wakes or impd destroys the imp before the step ends.
+  MiB path, started after the sleep returns. It logs its time and the blocks it read, and it stops
+  when the imp wakes or impd destroys the imp before the step ends.
 - In: a test on impd's stand-ins for each behaviour in the bullet above, and a run of the bench job
-  on a ZFS pool that shows the wake's figures.
-- Out: the warm step on XFS, where the file stays in the page cache after a sleep; locking the
-  pages; a list of the last wake's blocks; any change to the handler's fault path or to restores.
+  on a ZFS pool and one on XFS that show the wake's figures.
+- Out: locking the pages; a list of the last wake's blocks; any change to the handler's fault path
+  or to restores.
 
 ### Acceptance
 
@@ -243,9 +270,7 @@ and its `prototypes/warm-after-sleep.diff`.
 - The runs never woke a busy guest on ZFS, whose memory file holds more data blocks. To settle it,
   run the bench with [bench-busy-guest.diff](./prototypes/bench-busy-guest.diff) on top of
   [bench-zfs-pool.diff](./prototypes/bench-zfs-pool.diff).
-- The runs never ran the warm step on XFS, or locked the pages. To settle the first, run the bench
-  with [warm-after-sleep.diff](./prototypes/warm-after-sleep.diff) on top of
-  [bench-hot-cache.diff](./prototypes/bench-hot-cache.diff).
+- The runs never locked the pages of a sleeping imp's memory file.
 - The runs never measured how long the production host's page cache keeps a warmed file. To settle
   it, read the `woke pid` lines after the release: a wake whose `serve` per block is near 8 ms read
   cold.
@@ -264,3 +289,6 @@ and its `prototypes/warm-after-sleep.diff`.
 [zp]: https://github.com/zgeoff/impz/actions/runs/42326454179
 [zm]: https://github.com/zgeoff/impz/actions/runs/42326510676
 [pr]: https://github.com/zgeoff/impz/actions/runs/42316397486
+[hw]: https://github.com/zgeoff/impz/actions/runs/42329924367
+[hp]: https://github.com/zgeoff/impz/actions/runs/42329977898
+[hr]: https://github.com/zgeoff/impz/actions/runs/42329874417
