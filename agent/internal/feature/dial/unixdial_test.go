@@ -89,10 +89,30 @@ func startFaultyHelper(t *testing.T, fault string) (<-chan reaper.Status, int) {
 		exit <- <-p.Done
 	}()
 	t.Cleanup(func() {
-		p.Kill()
-		<-gone
+		killErr := p.Kill()
+		if waitGone(gone) {
+			return
+		}
+		// a kill that misses the helper would hold the package until the
+		// test timeout; the helper leads its own process group, which a
+		// kill reaches without the pidfd
+		groupErr := syscall.Kill(-p.Pid, syscall.SIGKILL)
+		if !waitGone(gone) {
+			t.Errorf("helper %d outlived its kills: pidfd %v, group %v", p.Pid, killErr, groupErr)
+			return
+		}
+		t.Logf("helper %d needed its group killed: pidfd kill %v", p.Pid, killErr)
 	})
 	return exit, pair[0]
+}
+
+func waitGone(gone <-chan struct{}) bool {
+	select {
+	case <-gone:
+		return true
+	case <-time.After(10 * time.Second):
+		return false
+	}
 }
 
 type helperAnswer struct {
