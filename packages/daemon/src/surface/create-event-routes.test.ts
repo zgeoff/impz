@@ -6,6 +6,7 @@ import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
 import invariant from 'tiny-invariant';
+import { P, match } from 'ts-pattern';
 import { ROOT_TOKEN_ID } from '../identity/auth/token-store';
 import { listApiCalls } from '../platform/db/api-audit';
 import { readImpByName } from '../platform/db/imps';
@@ -636,4 +637,46 @@ test('it lists a reset, then the snapshot, for a cursor older than the oldest ev
     logId: seen.logId,
     hasMore: false,
   });
+});
+
+test('it lists only the imps a limited token may see in a snapshot', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.client.imps.create({ name: 'dev-a' });
+  await ctx.client.imps.create({ name: 'prod' });
+
+  const made = await ctx.client.tokens.create({ name: 'dev', scope: 'read', imps: ['dev-*'] });
+  const page = await ctx.buildClient(made.secret).events.list({});
+
+  expect(page.events).toStrictEqual([
+    expect.objectContaining({ ev: 'ImpAdded', imp: expect.objectContaining({ name: 'dev-a' }) }),
+  ]);
+});
+
+test('it lists only the events of the imps a limited token may see after a cursor', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const made = await ctx.client.tokens.create({ name: 'dev', scope: 'read', imps: ['dev-*'] });
+
+  const dev = ctx.buildClient(made.secret);
+
+  const seen = await dev.events.list({});
+
+  await ctx.client.imps.create({ name: 'dev-a' });
+  await ctx.client.imps.create({ name: 'prod' });
+
+  const page = await dev.events.list({ after: seen.after, logId: seen.logId });
+
+  const names = page.events.map((event) =>
+    match(event)
+      .with({ ev: 'Reset' }, () => 'reset')
+      .with({ ev: P.union('ImpAdded', 'ImpChanged', 'ImpRemoved') }, (changed) => changed.imp.name)
+      .otherwise((named) => named.name),
+  );
+
+  expect(names).toSatisfyAll((name: string) => name === 'dev-a');
+  expect(page.events).toPartiallyContain({ ev: 'ImpAdded', reason: 'created' });
 });
