@@ -37,17 +37,23 @@ async function removeCopyLogId(path: string): Promise<void> {
   const copy = new Kysely<DB>({ dialect: buildSQLiteDialect(new Database(path)) });
 
   try {
-    const tables = await sql<{ name: string }>`
-      SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'event_log'
-    `.execute(copy);
+    const hasEventLog = await probeEventLogTable(copy);
 
     // a copy of a database from before the event log gets its log ID when it first migrates
-    if (tables.rows.length > 0) {
+    if (hasEventLog) {
       await removeLogId(copy);
     }
   } finally {
     await copy.destroy();
   }
+}
+
+async function probeEventLogTable(copy: Kysely<DB>): Promise<boolean> {
+  const tables = await sql<{ name: string }>`
+    SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'event_log'
+  `.execute(copy);
+
+  return tables.rows.length > 0;
 }
 
 function buildDatabaseCopyPath(dataDir: string, name: string): string {
