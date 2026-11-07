@@ -127,9 +127,13 @@ test('it prints the RAM kept for priority imps in impd’s --json output', async
     hosts: { box: { url: box.url, token: box.rootToken } },
   });
 
+  const info = await box.client.system.info();
   const shown = await runCLIInProcess({ args: ['info', '--json'], env: ctx.home });
 
-  expect(JSON.parse(shown.stdout)).toMatchObject({ ramPriorityKeptMib: 1024 });
+  expect(JSON.parse(shown.stdout)).toStrictEqual({
+    ...info,
+    ramPriorityKeptMib: 1024,
+  });
 });
 
 test('it shows the RAM kept for priority imps on impd’s ram line', async () => {
