@@ -3,7 +3,7 @@ import invariant from 'tiny-invariant';
 import { match } from 'ts-pattern';
 import * as z from 'zod';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
-import { buildExitError } from '../../platform/process/run-command';
+import { runChecked } from '../../platform/process/run-command';
 import type { CommandRunner } from '../../platform/process/run-command';
 import { createSemaphore } from '../../platform/process/semaphore';
 
@@ -77,13 +77,9 @@ export function createMemoryWarm(deps: Readonly<MemoryWarmDeps>): MemoryWarm {
 
     const argv = [deps.handlerBin, mode, memFile];
 
-    const result = await deps.run(argv, { signal });
+    const stdout = await runChecked(argv, { signal }, deps.run);
 
-    if (result.exitCode !== 0) {
-      throw buildExitError(argv, result);
-    }
-
-    return WarmReportSchema.parse(JSON.parse(result.stdout)).blocks;
+    return WarmReportSchema.parse(JSON.parse(stdout)).blocks;
   };
 
   const runWarm = async (memFile: string, signal: AbortSignal): Promise<WarmOutcome> => {
