@@ -52,7 +52,7 @@ test('it refuses a run whose imp names are taken, and leaves those imps alone', 
       scenarios: [ctx.create],
       levels: [1],
       samples: 1,
-      settings: { memoryMib: null, image: 'base', awakeMs: 0 },
+      settings: { memoryMib: null, image: 'base', awakeMs: 0, asleepMs: 0 },
     },
   );
 
@@ -93,7 +93,7 @@ test('it stops at a signal, fails the run, and removes the imps it made', async 
       scenarios: [ctx.create],
       levels: [1, 2],
       samples: 1,
-      settings: { memoryMib: null, image: 'base', awakeMs: 0 },
+      settings: { memoryMib: null, image: 'base', awakeMs: 0, asleepMs: 0 },
     },
   );
 
@@ -144,7 +144,7 @@ test.each([
         scenarios: [ctx.create],
         levels: [1],
         samples: 1,
-        settings: { memoryMib: null, image: 'base', awakeMs: 0 },
+        settings: { memoryMib: null, image: 'base', awakeMs: 0, asleepMs: 0 },
       },
     );
 
@@ -198,7 +198,7 @@ test('it leaves the imp made under a name after a destroy whose answer was lost,
       scenarios: [ctx.create],
       levels: [1],
       samples: 1,
-      settings: { memoryMib: null, image: 'base', awakeMs: 0 },
+      settings: { memoryMib: null, image: 'base', awakeMs: 0, asleepMs: 0 },
     },
   ).then(
     () => null,
@@ -237,7 +237,7 @@ test('it fails a run whose event stream broke, since its impd figures are incomp
       scenarios: [ctx.create],
       levels: [1],
       samples: 1,
-      settings: { memoryMib: null, image: 'base', awakeMs: 0 },
+      settings: { memoryMib: null, image: 'base', awakeMs: 0, asleepMs: 0 },
     },
   );
 
@@ -279,7 +279,7 @@ test('it counts an arrange whose create failed under its code, times no step, an
       scenarios: [wake],
       levels: [1],
       samples: 1,
-      settings: { memoryMib: null, image: 'base', awakeMs: 0 },
+      settings: { memoryMib: null, image: 'base', awakeMs: 0, asleepMs: 0 },
     },
   );
 
@@ -322,7 +322,7 @@ test('it fails with the stream error and makes no imp when the event stream neve
       scenarios: [ctx.create],
       levels: [1],
       samples: 1,
-      settings: { memoryMib: null, image: 'base', awakeMs: 0 },
+      settings: { memoryMib: null, image: 'base', awakeMs: 0, asleepMs: 0 },
     },
   );
 
@@ -355,7 +355,7 @@ test('it fails a run whose event stream impd ended cleanly', async () => {
       scenarios: [ctx.create],
       levels: [1],
       samples: 1,
-      settings: { memoryMib: null, image: 'base', awakeMs: 0 },
+      settings: { memoryMib: null, image: 'base', awakeMs: 0, asleepMs: 0 },
     },
   );
 
@@ -393,7 +393,7 @@ test('it fails a run that could not remove an imp it made, names it, and reports
       scenarios: [ctx.create],
       levels: [1],
       samples: 1,
-      settings: { memoryMib: null, image: 'base', awakeMs: 0 },
+      settings: { memoryMib: null, image: 'base', awakeMs: 0, asleepMs: 0 },
     },
   );
 
@@ -465,7 +465,7 @@ test("it takes impd's figure from the timed step's event, never from its arrange
       scenarios: [scenario],
       levels: [1],
       samples: 1,
-      settings: { memoryMib: null, image: null, awakeMs: 0 },
+      settings: { memoryMib: null, image: null, awakeMs: 0, asleepMs: 0 },
     },
   );
 

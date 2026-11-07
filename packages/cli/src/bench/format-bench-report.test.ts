@@ -21,7 +21,14 @@ test('it lays out the host, its state and one row per scenario and concurrency',
     },
     before: { bootTemplates: 0, hugePoolFreeMib: 1024, awakeCount: 0, impCount: 0 },
     after: { bootTemplates: 2, hugePoolFreeMib: 1024, awakeCount: 0, impCount: 0 },
-    settings: { memoryMib: 256, image: null, awakeMs: 0, levels: [1, 64], samples: 20 },
+    settings: {
+      memoryMib: 256,
+      image: null,
+      awakeMs: 0,
+      asleepMs: 0,
+      levels: [1, 64],
+      samples: 20,
+    },
     results: [
       {
         scenario: 'sleep',

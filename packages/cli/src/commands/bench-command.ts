@@ -40,6 +40,7 @@ export const benchCommand = defineCommand({
         memoryMib: ctx.values.memory === undefined ? null : parseSize(ctx.values.memory),
         image: ctx.values.image ?? null,
         awakeMs: parseDuration(ctx.values.awake) * 1000,
+        asleepMs: parseDuration(ctx.values.asleep) * 1000,
       };
 
       // an imp name is a DNS label of at most 31 characters, too short for a
