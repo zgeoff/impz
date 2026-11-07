@@ -41,7 +41,7 @@ impz runs on one Linux machine, in one host container, in one of two ways:
    ```
 
 2. Build the guest kernel. The first build takes about 9 minutes; the
-   [kernel README](../../kernel/README.md) has the details.
+   [kernel runbook](../runbooks/kernel.md) has the details.
 
    ```sh
    kernel/build.sh

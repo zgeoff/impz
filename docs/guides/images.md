@@ -7,11 +7,11 @@ no init system: the guest kernel boots `imp-agent` from the read-only imp system
 stays PID 1 there, and runs the image filesystem in an
 [inner container](../architecture/guest/agent.md#the-inner-container).
 
-| Image                           | What it is                                                                                                    |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `base/` → `imp/base`            | Ubuntu 26.04, Docker engine (dockerd supervised by the agent), git, curl                                      |
-| `examples/hello/` → `imp/hello` | the published base + a tiny HTTP service on :8080 (bring-your-own)                                            |
-| `examples/coder/` → `imp/coder` | the published base + Claude Code and gh, for a coding agent ([README](../../images/examples/coder/README.md)) |
+| Image                           | What it is                                                                      |
+| ------------------------------- | ------------------------------------------------------------------------------- |
+| `base/` → `imp/base`            | Ubuntu 26.04, Docker engine (dockerd supervised by the agent), git, curl        |
+| `examples/hello/` → `imp/hello` | the published base + a tiny HTTP service on :8080 (bring-your-own)              |
+| `examples/coder/` → `imp/coder` | the published base + Claude Code and gh, for a coding agent ([guide](coder.md)) |
 
 ```sh
 impz image build images/examples/hello --name hello   # FROM the published base, by digest

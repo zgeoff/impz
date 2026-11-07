@@ -393,4 +393,4 @@ firewall; `deploy/bootstrap.sh` reads it, and impd ignores it
 `IMP_HOST_SUBNET6` and `IMP_HOST_NETWORK` put `imp-host` on a Podman network with IPv6; the unit and
 `bootstrap.sh` read them, and impd ignores them ([IPv6](./install.md#ipv6)). `IMP_VERSION` and
 `IMP_RELEASE_IMAGE` name the image `scripts/release/build-release.sh` builds. `KVER` and `KSHA256`
-pick the kernel source for `kernel/build.sh` ([kernel README](../../kernel/README.md)).
+pick the kernel source for `kernel/build.sh` ([kernel runbook](../runbooks/kernel.md)).

@@ -347,9 +347,9 @@ Through `bun run check:static`, the `checks-lanes` job also runs the docs checks
 `bun run lint:docs` runs `chex links`, which fails on a broken relative link or anchor in a README
 or a page under `docs/`. It then runs `scripts/ci/check-doc-citations.ts`, which fails on a `docs/`
 path or anchor cited outside Markdown that does not resolve, such as a code comment that names a
-page a docs rewrite moved. `bun run check:docs` runs `chex prose length links skill`, which fails on
-a prose fault, a README over its line limit or a skill fault, and only warns on a `docs/` page over
-its cap.
+page a docs rewrite moved. `bun run check:docs` runs `chex prose length links readmes skill`, which
+fails on a prose fault, a README over its line limit or of none of the five kinds, or a skill fault,
+and only warns on a `docs/` page over its cap.
 
 `bun run audit` ignores one advisory by its ID. GHSA-86w9-cpqp-85rv is a flaw in node-forge's RSA
 signature verification, and the locked node-forge has it. acme-client loads node-forge, but impd
