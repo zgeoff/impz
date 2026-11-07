@@ -52,7 +52,11 @@ async function readSystemInfo(deps: RouterDeps): Promise<SystemInfo> {
   ]);
 
   const running = imps.filter((imp) => imp.state === 'running');
-  const sleeping = imps.filter((imp) => imp.state === 'sleeping');
+
+  // a sleeper that the governor admitted to wake already counts in its reservation
+  const sleeping = imps.filter(
+    (imp) => imp.state === 'sleeping' && !deps.governor.isAdmitted(imp.id),
+  );
 
   return {
     version: packageJson.version,

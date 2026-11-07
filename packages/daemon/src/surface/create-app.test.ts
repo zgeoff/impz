@@ -189,6 +189,32 @@ test('it reports the memory of sleeping priority imps apart from every sleeper',
   );
 });
 
+test('it counts a waking imp in its reservation and not among the sleepers', async () => {
+  updateEnv('IMP_DEFAULT_MEMORY_MIB', '512');
+  updateEnv('IMP_WAKE_RESERVE_MIB', '700');
+
+  const ctx = await setupTest({ cgroups: buildStubCpuCgroups().cgroups });
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.client.imps.create({ name: 'dev' });
+  await ctx.client.imps.create({ name: 'idle' });
+  await ctx.client.imps.sleep({ name: 'dev' });
+  await ctx.client.imps.sleep({ name: 'idle' });
+
+  const gate = ctx.fake.hold('wake');
+  const waking = ctx.client.imps.wake({ name: 'dev' });
+
+  await gate.reached;
+
+  const info = await ctx.client.system.info();
+
+  gate.release();
+
+  await waking;
+
+  expect([info.ramSleepingMib, info.ramReservedMib]).toStrictEqual([512, 700]);
+});
+
 test('it reports cpu limits as not enforced on a host without a cpu controller', async () => {
   const ctx = await setupTest({ cgroups: buildStubCpuCgroups({ isEnforced: false }).cgroups });
   const info = await ctx.client.system.info();

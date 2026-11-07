@@ -46,11 +46,12 @@ free = ramBudgetMib - ramUsedMib - ramReservedMib
 ```
 
 `ramSleepingMib` is the memory of every sleeping imp on the host, since any request to a sleeper
-wakes it. `ramPriorityKeptMib` is the
+wakes it. An imp that is waking counts in `ramReservedMib` in its place. `ramPriorityKeptMib` is the
 [priority RAM](../architecture/lifecycle/ram-governor.md#priority-imps) that the host's priority
 imps leave unused, which the governor never admits another imp into. `ramPrioritySleepingMib` is the
 part of `ramSleepingMib` that sleeping priority imps hold. A sleeping priority imp wakes into the
 kept RAM, so the score counts only the larger of `ramPriorityKeptMib` and `ramPrioritySleepingMib`.
+
 impd does not report its priority patterns, so the CLI scores every host as if the new imp is not a
 priority imp. A priority imp can then rank a host too low, but the CLI still tries that host when
 each host above it refuses for RAM. When a host's impd does not report `ramSleepingMib`,

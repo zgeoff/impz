@@ -88,6 +88,7 @@ interface RamUsage {
 export interface RamGovernor extends RamAdmission {
   readonly readUsage: () => Promise<RamUsage>;
   readonly isPriority: (name: string | null) => boolean;
+  readonly isAdmitted: (id: string) => boolean;
   readonly admitGrow: (request: GrowRequest) => Promise<boolean>;
   readonly releaseGrow: (id: string) => void;
   readonly enforce: () => Promise<void>;
@@ -202,7 +203,7 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
     emitAdmission(request, 'admitted', usedMib);
   };
 
-  const readReservation = (id: string): number => {
+  const getReservationMib = (id: string): number => {
     const reservation = reservations.get(id);
 
     if (reservation === undefined) {
@@ -248,7 +249,7 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
       .filter((id) => id !== excludeId)
       .map((id) => ({
         id,
-        mib: readReservation(id),
+        mib: getReservationMib(id),
         isPriority: admittedPriority.has(id),
         isOnPool: pendingHugePages.has(id),
       }));
@@ -562,6 +563,7 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
     },
 
     isPriority,
+    isAdmitted: (id) => getReservationMib(id) > 0,
 
     readUsage: async () => {
       const usage = await readEffectiveUsage(null);
