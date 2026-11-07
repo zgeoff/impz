@@ -407,6 +407,23 @@ test('it drops an event that fails the schema and goes on', async () => {
 
   const stream = readInBackground(events);
 
+  // the stream reads from the head it takes as it opens, so an event shows only once it reads
+  await waitFor(async () => {
+    await ctx.impd.imps.events.write(
+      {
+        ev: 'GovernorDecision',
+        decision: 'admitted',
+        name: 'before',
+        trigger: 'wake',
+        usedMib: 512,
+        budgetMib: 4096,
+      },
+      ctx.now(),
+    );
+
+    expect(stream.items).not.toBeEmpty();
+  });
+
   // no imp is named with a space
   await ctx.impd.imps.events.write(
     {
@@ -433,12 +450,14 @@ test('it drops an event that fails the schema and goes on', async () => {
   );
 
   await waitFor(() => {
-    expect(stream.items).not.toBeEmpty();
+    expect(stream.items).toPartiallyContain({ name: 'after' });
   });
 
   controller.abort();
 
-  expect(stream.items).toMatchObject([{ ev: 'GovernorDecision', name: 'after' }]);
+  expect(stream.items.map((event) => ('name' in event ? event.name : event.ev))).not.toContain(
+    'boot template',
+  );
 
   expect(ctx.logs.filter((line) => line.includes('fail the event schema'))).toStrictEqual([
     'INFO impd.events dropped 1 GovernorDecision event(s) that fail the event schema; the latest at name: must be a lowercase letter followed by up to 30 lowercase letters, digits or hyphens',
