@@ -44,5 +44,5 @@ function isAllowedEvent(guard: ImpGuard, event: ImpEvent): boolean {
       { ev: P.union('CheckpointAdded', 'CheckpointRemoved', 'GovernorDecision', 'AgentExec') },
       (named) => guard.isAllowed(named.name),
     )
-    .exhaustive();
+    .otherwise(() => false);
 }

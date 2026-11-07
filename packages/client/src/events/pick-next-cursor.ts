@@ -1,8 +1,9 @@
 import type { EventCursor, ImpEvent } from '@impz/api';
 import { P, match } from 'ts-pattern';
 
-// Each snapshot event carries the head seq, so a cursor taken from one would skip the rest of a
-// snapshot that a drop cut short; a reset clears the cursor for the same reason.
+// A snapshot event carries the head seq, so a cursor taken from one would skip the rest of a
+// snapshot that a drop cut short. A reset clears the cursor for the same reason, and a kind from a
+// newer impd, whose seq may be of either sort, keeps it.
 export function pickNextCursor(
   cursor: Readonly<EventCursor>,
   event: Readonly<ImpEvent>,
@@ -25,5 +26,5 @@ export function pickNextCursor(
       },
       (logged) => ({ after: logged.seq, logId: logged.logId }),
     )
-    .exhaustive();
+    .otherwise(() => cursor);
 }

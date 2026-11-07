@@ -91,6 +91,75 @@ test('it lists the events after a cursor of the imps its guard allows', async ()
   ]);
 });
 
+test('it leaves out an event kind it does not know', async () => {
+  const ctx = await setupTest();
+
+  const page = Response.json({
+    json: {
+      events: [
+        // oxlint-disable-next-line id-length -- `v` is the event format's version field
+        { v: 1, at: '2026-10-02T12:00:00.000Z', seq: 4, logId: 'log-a', ev: 'KilnFired' },
+        {
+          // oxlint-disable-next-line id-length -- `v` is the event format's version field
+          v: 1,
+          at: '2026-10-02T12:00:00.000Z',
+          seq: 5,
+          logId: 'log-a',
+          ev: 'GovernorDecision',
+          decision: 'admitted',
+          name: 'home-dev',
+          trigger: 'wake',
+          usedMib: 512,
+          budgetMib: 4096,
+        },
+      ],
+      after: 5,
+      logId: 'log-a',
+      hasMore: false,
+    },
+  });
+
+  const answerPage = () => Promise.resolve(page);
+
+  await ctx.mcp.receive(
+    JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: { name: 'imp_event_list', arguments: { after: 3, logId: 'log-a' } },
+    }),
+    {
+      reply: ctx.reply,
+      client: createImpClient({ url: 'http://impd.test', token: 'root-token', fetch: answerPage }),
+      guard: buildImpGuard({ prefix: 'home-' }),
+      scope: 'read',
+    },
+  );
+
+  expect(ctx.sent).toStrictEqual([
+    {
+      jsonrpc: '2.0',
+      id: 1,
+      result: {
+        content: [{ type: 'text', text: expect.any(String) as unknown }],
+        structuredContent: {
+          events: [
+            expect.objectContaining({
+              ev: 'GovernorDecision',
+              name: 'home-dev',
+              seq: 5,
+            }) as unknown,
+          ],
+          after: 5,
+          logId: 'log-a',
+          hasMore: false,
+        },
+        isError: false,
+      },
+    },
+  ]);
+});
+
 // an impd without the event list answers its path with a plain-text 404
 test('it fails with the missing procedure on an impd that has no event list', async () => {
   const ctx = await setupTest();

@@ -290,6 +290,56 @@ test('it opens the next stream after a position, and passes no position on', asy
   expect(onEvent).not.toHaveBeenCalled();
 });
 
+test('it keeps its cursor through an event kind it does not know', async () => {
+  const controller = new AbortController();
+
+  const changed: ImpEvent = {
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
+    v: EVENT_VERSION,
+    at: new Date(),
+    seq: 41,
+    logId: 'log-a',
+    ev: 'ImpChanged',
+    reason: 'slept',
+    imp: buildMockImp({ name: 'box', state: 'sleeping' }),
+  };
+
+  const unknown = {
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
+    v: EVENT_VERSION,
+    at: new Date(),
+    seq: 90,
+    logId: 'log-a',
+    ev: 'KilnFired',
+  };
+
+  const streams = buildStubAnswerQueue([
+    () => Promise.resolve(Readable.from([changed, unknown])),
+    () => Promise.resolve(Readable.from([])),
+  ]);
+
+  const stream = mock<EventSource['events']['stream']>(() => streams.next()());
+
+  await watchEvents(
+    { events: { stream } },
+    {
+      onEvent: () => {},
+      onOpen: (attempt) => {
+        if (attempt === 2) {
+          controller.abort();
+        }
+      },
+      signal: controller.signal,
+      reconnect: { delayMs: 1 },
+    },
+  );
+
+  expect(stream.mock.calls.map((call) => call[0])).toStrictEqual([
+    undefined,
+    { after: 41, logId: 'log-a' },
+  ]);
+});
+
 test('it opens with an empty cursor before it has read a logged event', async () => {
   const controller = new AbortController();
 
