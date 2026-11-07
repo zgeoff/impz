@@ -210,30 +210,38 @@ jobs:
 
   # The required check: both unit shards and the lanes job passed. It runs
   # whatever they did, so a job that failed, was cancelled or was skipped fails
-  # it, and never passes as a skip. The one run it skips is one a newer push
-  # superseded: the newer run's concurrency cancelled both jobs, and the newer
-  # run's own check reports in its place.
+  # it, and never passes as a skip. A cancelled job passes it only when a newer
+  # run on the branch reports the check in its place (scripts/ci/require-gate.ts).
   checks:
     concurrency:
       group: ci-${{ github.ref }}-checks
       cancel-in-progress: true
-    if:
-      ${{ always() && !(needs.checks-unit.result == 'cancelled' && needs.checks-lanes.result ==
-      'cancelled') }}
+    if: always()
     needs: [checks-unit, checks-lanes]
     runs-on: ubuntu-latest
-    permissions: {}
+    permissions:
+      actions: read
+      contents: read
     timeout-minutes: 5
     steps:
-      - name: Require the unit shards to pass
-        env:
-          RESULT: ${{ needs.checks-unit.result }}
-        run: test "$RESULT" = success
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - name: Require the lanes to pass
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Require the unit shards and the lanes to pass
         env:
-          RESULT: ${{ needs.checks-lanes.result }}
-        run: test "$RESULT" = success
+          NEEDS: ${{ toJSON(needs) }}
+          GH_TOKEN: ${{ github.token }}
+        run: bun run --silent ci:require-gate
 
   go:
     concurrency:
@@ -713,30 +721,39 @@ jobs:
   # The required check and release-please's gate: every e2e group passed. It
   # runs whatever they did, so a group that failed, was cancelled or was
   # skipped fails it, and never passes as a skip. The one skip it passes is
-  # every group's, on a pull request that changes none of their paths. It skips
-  # itself in a run a newer push superseded, whose concurrency cancelled the
-  # changes job; the newer run's own check reports in its place.
+  # every group's, on a pull request that changes none of their paths. A
+  # cancelled group passes it only when a newer run on the branch reports the
+  # check in its place (scripts/ci/require-gate.ts).
   e2e:
     concurrency:
       group: ci-${{ github.ref }}-e2e
       cancel-in-progress: true
-    if: ${{ always() && needs.changes.result != 'cancelled' }}
+    if: always()
     needs: [changes, e2e-group]
     runs-on: ubuntu-latest
-    permissions: {}
+    permissions:
+      actions: read
+      contents: read
     timeout-minutes: 5
     steps:
-      - name: Require every e2e group to pass
-        if: needs.changes.outputs.changed != 'false'
-        env:
-          RESULT: ${{ needs.e2e-group.result }}
-        run: test "$RESULT" = success
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - name: Require every e2e group to skip on a pull request outside their paths
-        if: needs.changes.outputs.changed == 'false'
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Require every e2e group to pass, or to skip outside their paths
         env:
-          RESULT: ${{ needs.e2e-group.result }}
-        run: test "$RESULT" = skipped
+          NEEDS: ${{ toJSON(needs) }}
+          GH_TOKEN: ${{ github.token }}
+        run: bun run --silent ci:require-gate
 
   # The proof that an imp host runs with no Docker engine: scripts/run-podman-proof.sh
   # starts the dev instance under Docker, masks the runner's Docker, starts it again
@@ -945,30 +962,38 @@ jobs:
   # The required check: every zfs shard passed. It runs whatever they did, so a
   # shard that failed, was cancelled or was skipped fails it, and never passes
   # as a skip. The one skip it passes is every shard's, on a pull request that
-  # changes none of their paths. It skips itself in a run a newer push
-  # superseded, whose concurrency cancelled the changes job; the newer run's
-  # own check reports in its place.
+  # changes none of their paths. A cancelled shard passes it only when a newer
+  # run on the branch reports the check in its place (scripts/ci/require-gate.ts).
   zfs:
     concurrency:
       group: ci-${{ github.ref }}-zfs
       cancel-in-progress: true
-    if: ${{ always() && needs.changes.result != 'cancelled' }}
+    if: always()
     needs: [changes, zfs-shard]
     runs-on: ubuntu-latest
-    permissions: {}
+    permissions:
+      actions: read
+      contents: read
     timeout-minutes: 5
     steps:
-      - name: Require every zfs shard to pass
-        if: needs.changes.outputs.changed != 'false'
-        env:
-          RESULT: ${{ needs.zfs-shard.result }}
-        run: test "$RESULT" = success
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - name: Require every zfs shard to skip on a pull request outside their paths
-        if: needs.changes.outputs.changed == 'false'
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Require every zfs shard to pass, or to skip outside their paths
         env:
-          RESULT: ${{ needs.zfs-shard.result }}
-        run: test "$RESULT" = skipped
+          NEEDS: ${{ toJSON(needs) }}
+          GH_TOKEN: ${{ github.token }}
+        run: bun run --silent ci:require-gate
 
   # Main-only jobs go below with `if: github.event_name == 'push'` and
   # `needs:` on the gates above.
