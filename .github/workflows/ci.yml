@@ -155,11 +155,9 @@ jobs:
       - name: Check
         run: bun run check:static
 
-      # Some READMEs and docs/ pages fail the shared length or prose rules, so this step reports
-      # its findings without failing the run.
-      - name: Doc length and prose
-        continue-on-error: true
-        run: bash .claude/skills/docs-writing/scripts/check-length.sh --package README.md
+      # the docs checks that check:docs names, from chex
+      - name: Docs
+        run: bun run --silent check:docs
 
       # an image build's disk hold against what it really takes, the disk
       # sampler that measures it, and a moved disk's data blocks

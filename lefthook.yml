@@ -1,13 +1,21 @@
 # Git hooks. pre-commit fixes staged files only (fast); pre-push comes from
-# the shared baseline, which runs its jobs one at a time and lints and tests
+# the chex baseline, which runs its jobs one at a time and lints and tests
 # only what the branch changes. CI runs every whole-tree check.
 
 extends:
-  - .lefthook/pre-push-baseline.yml
+  - node_modules/@zgeoff/chex/lefthook.yml
 
 pre-commit:
   piped: true
   jobs:
+    - name: chex-baseline
+      files: echo package.json
+      run: |
+        if [ ! -f node_modules/@zgeoff/chex/lefthook.yml ]; then
+          echo "chex-baseline: node_modules/@zgeoff/chex/lefthook.yml is missing, so lefthook runs none of the chex baseline's jobs; run bun install, then try again"
+          exit 1
+        fi
+        # {files}
     - name: oxlint --fix
       glob: '*.{js,mjs,cjs,jsx,ts,mts,cts,tsx}'
       run: node_modules/.bin/oxlint --fix --no-error-on-unmatched-pattern {staged_files}
@@ -55,6 +63,14 @@ commit-msg:
 # imp's own pre-push jobs; they run before the baseline's
 pre-push:
   jobs:
+    - name: chex-baseline
+      files: echo package.json
+      run: |
+        if [ ! -f node_modules/@zgeoff/chex/lefthook.yml ]; then
+          echo "chex-baseline: node_modules/@zgeoff/chex/lefthook.yml is missing, so lefthook runs none of the chex baseline's jobs; run bun install, then try again"
+          exit 1
+        fi
+        # {files}
     - name: lint:docs
       run: bun run lint:docs
     - name: lint:images
@@ -69,40 +85,40 @@ pre-push:
       run: bun run --silent ci:check-embedded-shell
     # needs ruby on PATH, so it runs only on a branch that changes the formula
     - name: lint:formula
-      files: bun run --silent files:branch
+      files: bun node_modules/@zgeoff/chex/src/read-branch-files.ts
       glob: 'scripts/release/build-formula.sh'
       run: bun run lint:formula
     # the agent's gofmt and vet, on a branch that changes its Go; -p 1 keeps
     # vet to about 335 MB cold. golangci-lint, govulncheck, deadcode and the
     # race tests are CI's alone: each needs more than a 2 GB imp can spare.
     - name: go:fmt-vet
-      files: bun run --silent files:branch
+      files: bun node_modules/@zgeoff/chex/src/read-branch-files.ts
       glob: 'agent/**/*.go'
       root: agent/
       run: test -z "$(gofmt -l {files})" && go vet -p 1 ./...
     - name: go:fmt-vet-ksm-exec
-      files: bun run --silent files:branch
+      files: bun node_modules/@zgeoff/chex/src/read-branch-files.ts
       glob:
         - 'host/ksm-exec/*.go'
         - 'host/ksm-exec/**/*.go'
       root: host/ksm-exec/
       run: test -z "$(gofmt -l {files})" && go vet -p 1 ./...
     - name: go:fmt-vet-uffd-handler
-      files: bun run --silent files:branch
+      files: bun node_modules/@zgeoff/chex/src/read-branch-files.ts
       glob:
         - 'host/uffd-handler/*.go'
         - 'host/uffd-handler/**/*.go'
       root: host/uffd-handler/
       run: test -z "$(gofmt -l {files})" && go vet -p 1 ./...
     - name: go:fmt-vet-oci-fetch
-      files: bun run --silent files:branch
+      files: bun node_modules/@zgeoff/chex/src/read-branch-files.ts
       glob:
         - 'host/oci-fetch/*.go'
         - 'host/oci-fetch/**/*.go'
       root: host/oci-fetch/
       run: test -z "$(gofmt -l {files})" && go vet -p 1 ./...
     - name: go:fmt-vet-uffd-spike
-      files: bun run --silent files:branch
+      files: bun node_modules/@zgeoff/chex/src/read-branch-files.ts
       glob:
         - 'docs/design/spikes/uffd-2m-restore/harness/*.go'
         - 'docs/design/spikes/uffd-2m-restore/harness/**/*.go'

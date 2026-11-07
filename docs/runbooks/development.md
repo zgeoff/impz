@@ -306,10 +306,10 @@ Lefthook installs the hooks with `bun install`.
 - **pre-push** runs one job at a time:
   - `lint:docs`, `lint:images`, `lint:workflows`, shellcheck, and shellcheck over the shell that
     production code holds as text;
-  - the shared baseline in `.lefthook/pre-push-baseline.yml`, which repo-sync delivers from
-    zgeoff/tools. It checks the format and the types of the whole tree, and lints and tests only the
-    files the branch changes since its merge base with `origin/main`. A dashboard file's tests run
-    from its package;
+  - the shared baseline from `@zgeoff/chex`, which `lefthook.yml` extends from `node_modules`. It
+    checks the format and the types of the whole tree, runs the docs checks that `check:docs` names,
+    and lints and tests only the files the branch changes since its merge base with `origin/main`.
+    rig leaves the dashboard's tests out, so CI runs them;
   - on a branch that changes the agent's, ksm-exec's, oci-fetch's or uffd-handler's Go, `gofmt` on
     the changed files and `go vet -p 1`, which keeps vet's memory within what a 2 GB imp can spare;
   - on a branch that changes `build-formula.sh`, `lint:formula`, which needs ruby on `PATH`.
