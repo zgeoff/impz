@@ -2,8 +2,8 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "ignoreDependencies": [
     "@stylistic/eslint-plugin",
-    // the synced skill-gate hook in .claude/ imports it, outside every project pattern
-    "@zgeoff/skill-gate"
+    // the synced start-up stub in .claude/ imports it, outside every project pattern
+    "@zgeoff/agent-hooks"
   ],
   // a POSIX tool the tests run through Bun's shell
   "ignoreBinaries": ["mkfifo"],

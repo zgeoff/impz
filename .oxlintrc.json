@@ -749,7 +749,7 @@
       "rules": { "max-classes-per-file": "off" }
     }
   ],
-  // .claude/** holds the skill-gate hook, which repo-sync delivers from
+  // .claude/** holds the agent hooks' start-up stub, which repo-sync delivers from
   // zgeoff/tools: a fix lands upstream, never here
   "ignorePatterns": [
     ".claude/**",
