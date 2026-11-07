@@ -141,6 +141,7 @@ export function createImpCommands(parts: ImpCommandParts): ImpCommands {
     );
 
     context.admission.release(imp.id);
+    context.priorityNames.delete(imp.id);
 
     await removeImp(context.db, imp.id);
   };
@@ -176,6 +177,10 @@ export function createImpCommands(parts: ImpCommandParts): ImpCommands {
 
       return lock.withNewImp(id, writeRecord, async (imp) => {
         const paths = context.findPaths(imp.id);
+
+        if (input.priorityName !== undefined) {
+          context.priorityNames.set(imp.id, input.priorityName);
+        }
 
         context.sessionLogs.admitImp(imp.id);
 
@@ -270,10 +275,7 @@ export function createImpCommands(parts: ImpCommandParts): ImpCommands {
         try {
           const bootStarted = performance.now();
 
-          const running = await ops.startNewImpVm(imp, {
-            diskReady: sizing,
-            priorityName: input.priorityName,
-          });
+          const running = await ops.startNewImpVm(imp, sizing);
 
           const bootMs = Math.round(performance.now() - bootStarted);
 
@@ -299,6 +301,8 @@ export function createImpCommands(parts: ImpCommandParts): ImpCommands {
           await Promise.allSettled([sizing]);
 
           if (isRamBudgetError(error)) {
+            context.priorityNames.delete(imp.id);
+
             await removeImpFiles(context, imp.id, []);
             await removeImp(context.db, imp.id);
           }

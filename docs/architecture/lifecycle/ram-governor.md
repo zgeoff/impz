@@ -74,10 +74,9 @@ of the host.
 
 For each image add or image build, impd boots a builder imp, which pulls or builds the image, and
 removes the builder when the image is written. The governor matches the image's name against the
-same patterns as an imp's name, and counts the builder as a priority imp when the image's name
-matches, from the builder's admission until it sleeps or impd removes it. An image named like a
-priority imp, such as `chat-notes` under the pattern `chat-*`, then adds even when the other imps
-fill the rest of the host.
+same patterns as an imp's name, and counts the builder as a priority imp at each boot when the
+image's name matches. An image named like a priority imp, such as `chat-notes` under the pattern
+`chat-*`, then adds or builds even when the other imps fill the rest of the host.
 
 The governor checks an admission against up to three limits: the whole budget, and on a host with a
 pool, the budget less the pool and the pool itself. Each limit keeps the full

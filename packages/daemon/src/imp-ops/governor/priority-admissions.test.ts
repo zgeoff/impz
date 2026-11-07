@@ -19,7 +19,7 @@ test.each([
   },
   { request: { id: 'a', name: 'imp-build-a', reserveMib: 100, memoryMib: 200 }, isPriority: false },
 ])(
-  '#isPriorityRequest matches the priority name of $request.name in its place: $isPriority',
+  '#isPriorityRequest matches priority name $request.priorityName, else name $request.name: $isPriority',
   (row) => {
     const admissions = createPriorityAdmissions({ mib: 400, patterns: ['chat-*'] });
 
@@ -70,7 +70,7 @@ test('it no longer counts an imp as priority after an admission outside the patt
 
   admissions.recordAdmission({ id: 'a', name: 'imp-build-a', reserveMib: 100, memoryMib: 200 });
 
-  expect(admissions.isAdmitted('a')).toBeFalse();
+  expect(admissions.isPriorityImp({ id: 'a', name: 'imp-build-a' })).toBeFalse();
 });
 
 test('it counts no imp as priority when the host keeps no RAM for priority imps', () => {

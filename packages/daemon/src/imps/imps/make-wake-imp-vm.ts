@@ -90,6 +90,7 @@ export function makeWakeImpVm(deps: WakeDeps): (imp: LockedImp) => Promise<Locke
       await context.admission.admit({
         id: imp.id,
         name: imp.name,
+        priorityName: context.priorityNames.get(imp.id),
         reserveMib: Math.max(meta.ramMib, context.config.wakeReserveMib),
         memoryMib: imp.maxMemoryMib,
         hugePagesMib: hugePages === '2M' ? imp.memoryMib : 0,

@@ -186,6 +186,10 @@ export interface ImpMemory {
   readonly mergeFlags: MergeFlags;
   readonly memoryLimit: MemoryLimit;
 
+  // by imp, the name its admissions match against the priority patterns in place of its own, such
+  // as the image a builder adds, until the imp is removed
+  readonly priorityNames: Map<string, string>;
+
   readonly pluggedSizes: PluggedSizes;
 
   readonly resources: ResourceSampler;
@@ -274,6 +278,7 @@ export function createImpContext(deps: ImpServiceDeps): ImpContext {
     probeUffdDevice: deps.probeUffdDevice,
     mergeFlags: createMergeFlags(),
     memoryLimit: deps.memoryLimit ?? NO_MEMORY_LIMIT,
+    priorityNames: new Map(),
     pluggedSizes: deps.pluggedSizes ?? createPluggedSizes(),
     resources: createResourceSampler({
       now,

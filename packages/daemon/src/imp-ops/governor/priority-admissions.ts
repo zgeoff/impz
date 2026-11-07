@@ -11,7 +11,7 @@ export interface PriorityAdmissions {
   readonly isPriority: (name: string | null) => boolean;
   readonly isPriorityRequest: (request: Readonly<AdmissionRequest>) => boolean;
   readonly isPriorityImp: (imp: Readonly<NamedImp>) => boolean;
-  readonly isAdmitted: (id: string) => boolean;
+  readonly isAdmittedPriority: (id: string) => boolean;
   readonly recordAdmission: (request: Readonly<AdmissionRequest>) => void;
   readonly release: (id: string) => void;
 }
@@ -31,7 +31,7 @@ export function createPriorityAdmissions(priority: PriorityRam | null): Priority
     isPriority,
     isPriorityRequest,
     isPriorityImp: (imp) => admitted.has(imp.id) || isPriority(imp.name),
-    isAdmitted: (id) => admitted.has(id),
+    isAdmittedPriority: (id) => admitted.has(id),
     recordAdmission: (request) => {
       if (isPriorityRequest(request)) {
         admitted.add(request.id);

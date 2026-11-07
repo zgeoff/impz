@@ -243,13 +243,13 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
       .map((id) => ({
         id,
         mib: getReservationMib(id),
-        isPriority: admittedPriority.isAdmitted(id),
+        isPriority: admittedPriority.isAdmittedPriority(id),
         isOnPool: pendingHugePages.has(id),
       }));
 
     const pendingPool = [...pendingHugePages]
       .filter(([id]) => id !== excludeId)
-      .map(([id, mib]) => ({ id, mib, isPriority: admittedPriority.isAdmitted(id) }));
+      .map(([id, mib]) => ({ id, mib, isPriority: admittedPriority.isAdmittedPriority(id) }));
 
     const headroom = deps.readHeadroomMib?.(awake.map((imp) => imp.pid)) ?? Promise.resolve(0);
 
