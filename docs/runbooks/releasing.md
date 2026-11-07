@@ -49,6 +49,9 @@ rules:
 
 - What a client sends must still pass: impd must accept every input it accepted before. A new
   required field, a tighter bound, a dropped enum value, or a field impd no longer reads breaks a
+  client. An input that a call may leave out carries `"x-optional": true`, and the check reads that
+  key apart from the schema. A procedure with no input schema renders as `{}`, and a typed client of
+  it sends no input, so it may gain an input marked optional. An input that loses the mark breaks a
   client.
 - What impd sends must still make sense to an older client. A field that may now be missing, a
   changed type, a looser bound, or a variant of a tagged union that impd stops sending breaks a
