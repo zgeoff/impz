@@ -90,3 +90,45 @@ test('it lists the events after a cursor of the imps its guard allows', async ()
     },
   ]);
 });
+
+// an impd without the event list answers its path with a plain-text 404
+test('it fails with the missing procedure on an impd that has no event list', async () => {
+  const ctx = await setupTest();
+
+  const notFound = new Response('NOT_FOUND', {
+    status: 404,
+    headers: { 'content-type': 'text/plain' },
+  });
+
+  const answerNotFound = () => Promise.resolve(notFound);
+
+  await ctx.mcp.receive(
+    JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: { name: 'imp_event_list', arguments: {} },
+    }),
+    {
+      reply: ctx.reply,
+      client: createImpClient({
+        url: 'http://impd.test',
+        token: 'root-token',
+        fetch: answerNotFound,
+      }),
+      guard: buildImpGuard({ prefix: 'home-' }),
+      scope: 'read',
+    },
+  );
+
+  expect(ctx.sent).toStrictEqual([
+    {
+      jsonrpc: '2.0',
+      id: 1,
+      result: {
+        content: [{ type: 'text', text: 'impd has no procedure events.list' }],
+        isError: true,
+      },
+    },
+  ]);
+});
