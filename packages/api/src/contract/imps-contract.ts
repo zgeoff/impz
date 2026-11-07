@@ -26,7 +26,10 @@ export const impsContract = {
 
   get: base.meta(ACCESS.readImp).input(NameInputSchema).output(ImpSchema),
 
-  destroy: base.meta(ACCESS.manageImp).input(NameInputSchema).output(EmptySchema),
+  destroy: base
+    .meta(ACCESS.manageImp)
+    .input(z.object({ name: NameSchema, id: z.string().optional() }))
+    .output(EmptySchema),
 
   start: base.meta(ACCESS.execImp).input(NameInputSchema).output(ImpSchema),
 

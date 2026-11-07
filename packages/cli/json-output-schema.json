@@ -577,6 +577,9 @@
               },
               "buildContextUpload": {
                 "type": "boolean"
+              },
+              "destroyIdCheck": {
+                "type": "boolean"
               }
             },
             "required": [

@@ -236,3 +236,53 @@ test('#imps.destroy removes a builder', async () => {
 
   expect(gone).toBeUndefined();
 });
+
+test('#imps.destroy refuses the id of an imp that a new imp under the name replaced, and keeps the new imp', async () => {
+  const ctx = await setupTest();
+
+  await Bun.write(buildImagePaths(ctx.dataDir, 'sha256:base').rootfs, 'rootfs');
+
+  await createImage(
+    ctx.db,
+    buildMockNewImage({ name: 'base', digest: 'sha256:base', sizeBytes: 6 }),
+  );
+
+  const first = await ctx.client.imps.create({ name: 'scratch', image: 'base' });
+
+  await ctx.client.imps.destroy({ name: 'scratch' });
+
+  const second = await ctx.client.imps.create({ name: 'scratch', image: 'base' });
+
+  const failure = await ctx.client.imps.destroy({ name: 'scratch', id: first.id }).then(
+    () => null,
+    (error: unknown) => error,
+  );
+
+  const kept = await readImpByName(ctx.db, 'scratch');
+
+  expect(failure).toMatchObject({
+    code: 'CONFLICT',
+    data: { kind: 'imp', name: 'scratch', reason: 'id_changed' },
+  });
+
+  expect(kept?.id).toBe(second.id);
+});
+
+test('#imps.destroy removes the imp whose id the call names', async () => {
+  const ctx = await setupTest();
+
+  await Bun.write(buildImagePaths(ctx.dataDir, 'sha256:base').rootfs, 'rootfs');
+
+  await createImage(
+    ctx.db,
+    buildMockNewImage({ name: 'base', digest: 'sha256:base', sizeBytes: 6 }),
+  );
+
+  const created = await ctx.client.imps.create({ name: 'scratch', image: 'base' });
+
+  await ctx.client.imps.destroy({ name: 'scratch', id: created.id });
+
+  const gone = await readImpByName(ctx.db, 'scratch');
+
+  expect(gone).toBeUndefined();
+});

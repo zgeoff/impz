@@ -3,6 +3,7 @@ import { match } from 'ts-pattern';
 import type { ImpClient } from '../config/create-imp-client';
 import { pickCreatedName } from './pick-created-name';
 import { readImp } from './read-imp';
+import { removeOwnedImp } from './remove-owned-imp';
 
 export interface BenchSettings {
   readonly memoryMib: number | null;
@@ -113,17 +114,21 @@ export const BENCH_SCENARIOS: readonly BenchScenario[] = [
 // a removed name is no longer the run's, so another run may take it before
 // the next create, which then fails as CONFLICT and claims nothing
 async function removeImpIfPresent(subject: BenchSubject): Promise<void> {
-  if (!subject.owned.has(subject.name)) {
+  const id = subject.owned.get(subject.name);
+
+  if (id === undefined) {
     return;
   }
 
-  const imp = await readImp(subject.client, subject.name);
+  const removal = await removeOwnedImp(subject.client, subject.name, id);
 
-  if (imp !== null && subject.owned.get(subject.name) === imp.id) {
-    await subject.client.imps.destroy({ name: subject.name });
-  } else if (imp !== null) {
-    subject.leftovers.add(subject.name);
-  }
+  match(removal.outcome)
+    .with('failed', () => {
+      throw removal.error;
+    })
+    .with('replaced', () => subject.leftovers.add(subject.name))
+    .with('removed', () => null)
+    .exhaustive();
 
   subject.owned.delete(subject.name);
 }

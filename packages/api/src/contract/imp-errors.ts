@@ -27,7 +27,7 @@ const ResourceDataSchema = z.object({
   kind: ResourceKindSchema,
   name: z.string(),
 
-  reason: z.enum(['binding_changed']).optional(),
+  reason: z.enum(['binding_changed', 'id_changed']).optional(),
 });
 
 const ForbiddenReasonSchema = z.enum(['imp_out_of_scope', 'not_grantable', 'scope']);

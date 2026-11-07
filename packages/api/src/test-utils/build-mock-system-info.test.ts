@@ -72,6 +72,7 @@ test('it builds a default system info', () => {
       guestScratch: true,
       imagePins: true,
       buildContextUpload: true,
+      destroyIdCheck: true,
     },
   });
 
@@ -157,6 +158,7 @@ test('it applies overrides on top of the defaults', () => {
       guestScratch: true,
       imagePins: true,
       buildContextUpload: true,
+      destroyIdCheck: true,
     },
   });
 });

@@ -50,7 +50,7 @@ export function createImpRoutes(os: RpcImplementer, deps: RouterDeps, views: Cal
       views.readCallerImp(context.context.caller, deps.imps.readImp(context.input.name)),
     ),
     destroy: os.imps.destroy.handler(async (context) => {
-      await deps.imps.destroyImp(context.input.name);
+      await deps.imps.destroyImp(context.input.name, { id: context.input.id });
 
       return {};
     }),

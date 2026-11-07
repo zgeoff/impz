@@ -3,8 +3,13 @@ import { setImmediate as setImmediatePromise } from 'node:timers/promises';
 import { EVENT_VERSION } from '@impz/api';
 import type { Imp } from '@impz/api';
 import { buildMockImp } from '@impz/api/test-utils/build-mock-imp';
-import { createImpClient, watchEvents } from '@impz/client';
-import { buildImagePaths, buildMockNewImage, createImage } from '@impz/daemon/test-utils';
+import { MissingFeatureError, createImpClient, watchEvents } from '@impz/client';
+import {
+  buildImagePaths,
+  buildMockNewImage,
+  buildStubImpdReleaseFetch,
+  createImage,
+} from '@impz/daemon/test-utils';
 import invariant from 'tiny-invariant';
 import { buildStubEventFeed } from '../test-utils/build-stub-event-feed';
 import { makeLostAnswerFetch } from '../test-utils/make-lost-answer-fetch';
@@ -64,6 +69,51 @@ test('it refuses a run whose imp names are taken, and leaves those imps alone', 
   const imps = await ctx.box.client.imps.list();
 
   expect(imps.map((imp) => imp.name)).toStrictEqual(['bench-c0ffee15a7e1-1-0']);
+});
+
+test('it refuses a run on an impd that cannot check the id on a destroy, and makes no imp', async () => {
+  const ctx = await setupTest();
+
+  const image = buildMockNewImage({ name: 'base', sizeBytes: 6 });
+
+  await Bun.write(buildImagePaths(ctx.box.dataDir, image.digest).rootfs, 'rootfs');
+
+  await createImage(ctx.box.db, image);
+
+  const older = buildStubImpdReleaseFetch(ctx.box.sendRequest, {
+    withoutFeatures: ['destroyIdCheck'],
+  });
+
+  const client = createImpClient({
+    url: 'http://impd.test',
+    token: ctx.box.rootToken,
+    fetch: older.fetch,
+  });
+
+  const failure = await runBench(
+    {
+      client,
+      watchEvents,
+      now: () => performance.now(),
+      wait: () => setImmediatePromise(),
+      onProgress: () => {},
+    },
+    {
+      namePrefix: 'bench-0ld1mpd00001-',
+      scenarios: [ctx.create],
+      levels: [1],
+      samples: 1,
+      settings: { memoryMib: null, image: 'base', awakeMs: 0, asleepMs: 0 },
+    },
+  ).then(
+    () => null,
+    (error: unknown) => error,
+  );
+
+  const imps = await ctx.box.client.imps.list();
+
+  expect(failure).toBeInstanceOf(MissingFeatureError);
+  expect(imps).toStrictEqual([]);
 });
 
 test('it stops at a signal, fails the run, and removes the imps it made', async () => {

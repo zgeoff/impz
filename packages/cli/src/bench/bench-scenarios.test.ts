@@ -3,6 +3,7 @@ import { createImpClient } from '@impz/client';
 import { buildImagePaths, buildMockNewImage, createImage } from '@impz/daemon/test-utils';
 import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
 import invariant from 'tiny-invariant';
+import { makeRacedCallFetch } from '../test-utils/make-raced-call-fetch';
 import { startImpdHost } from '../test-utils/start-impd-host';
 import { BENCH_SCENARIOS } from './bench-scenarios';
 
@@ -125,6 +126,56 @@ test('it gives up the name of an imp it removed, so it never claims the imp anot
   expect(ownedAfterRemoval).toStrictEqual([]);
   expect(failure).toMatchObject({ code: 'CONFLICT' });
   expect(owned).toBeEmpty();
+});
+
+test('it keeps and reports the imp that replaced its own under the name just before its destroy arrived, and gives up the name', async () => {
+  const ctx = await setupTest();
+
+  const image = buildMockNewImage({ name: 'base', sizeBytes: 6 });
+
+  await Bun.write(buildImagePaths(ctx.box.dataDir, image.digest).rootfs, 'rootfs');
+
+  await createImage(ctx.box.db, image);
+
+  const first = await ctx.box.client.imps.create({ name: 'bench-swapped', image: 'base' });
+
+  const replaced: string[] = [];
+
+  const racedFetch = makeRacedCallFetch(ctx.box.sendRequest, '/rpc/imps/destroy', async () => {
+    await ctx.box.client.imps.destroy({ name: 'bench-swapped' });
+
+    const second = await ctx.box.client.imps.create({ name: 'bench-swapped', image: 'base' });
+
+    replaced.push(second.id);
+  });
+
+  const client = createImpClient({
+    url: 'http://impd.test',
+    token: ctx.box.rootToken,
+    fetch: racedFetch,
+  });
+
+  const create = BENCH_SCENARIOS.find((scenario) => scenario.name === 'create');
+
+  invariant(create);
+
+  const owned = new Map([['bench-swapped', first.id]]);
+  const leftovers = new Set<string>();
+
+  await create.arrange({
+    client,
+    name: 'bench-swapped',
+    settings: { memoryMib: null, image: 'base', awakeMs: 0, asleepMs: 0 },
+    wait: () => Promise.resolve(),
+    owned,
+    leftovers,
+  });
+
+  const kept = await ctx.box.client.imps.get({ name: 'bench-swapped' });
+
+  expect([kept.id]).toStrictEqual(replaced);
+  expect(owned).toBeEmpty();
+  expect(leftovers).toStrictEqual(new Set(['bench-swapped']));
 });
 
 test.each(['wake', 'wake-young'])(

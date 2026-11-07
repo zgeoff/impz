@@ -46,6 +46,24 @@ test('it runs the lost hook after the send and before it throws', async () => {
   expect(failure).toBe(reset);
 });
 
+test('it answers a retry on the lost path as impd does', async () => {
+  const answer = new Response('{}');
+
+  const send = mock<(request: Request) => Promise<Response>>(() => Promise.resolve(answer));
+  const reset = Object.assign(new TypeError('socket closed'), { code: 'ECONNRESET' });
+  const lostFetch = makeLostAnswerFetch(send, '/rpc/imps/destroy', reset);
+
+  await lostFetch(new Request('http://impd.test/rpc/imps/destroy', { method: 'POST' })).catch(
+    () => null,
+  );
+
+  const retried = await lostFetch(
+    new Request('http://impd.test/rpc/imps/destroy', { method: 'POST' }),
+  );
+
+  expect(retried).toBe(answer);
+});
+
 test('it answers a call on any other path as impd does', async () => {
   const answer = new Response('{"name":"fern"}');
 

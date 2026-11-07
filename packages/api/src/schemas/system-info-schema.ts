@@ -94,6 +94,10 @@ const SystemFeaturesSchema = z.object({
   imagePins: z.boolean().optional(),
 
   buildContextUpload: z.boolean().optional(),
+
+  // An impd without this drops a destroy's `id` unread and destroys whatever
+  // imp holds the name.
+  destroyIdCheck: z.boolean().optional(),
 });
 
 const GuestInfoSchema = z.object({

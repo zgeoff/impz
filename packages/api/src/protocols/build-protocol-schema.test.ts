@@ -6,6 +6,9 @@ test('it renders a procedure under its RPC path as JSON Schema', () => {
     {
       "input": {
         "properties": {
+          "id": {
+            "type": "string",
+          },
           "name": {
             "pattern": "^[a-z][a-z0-9-]{0,30}$",
             "type": "string",

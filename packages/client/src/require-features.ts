@@ -33,6 +33,7 @@ const FEATURE_GAPS = {
   guestScratch: 'does not name the guest scratch folder',
   imagePins: 'has no image pins',
   buildContextUpload: 'has no build context upload',
+  destroyIdCheck: 'has no id check on destroy',
 } as const satisfies Record<ImpdFeature, string>;
 
 export interface FeatureSource {

@@ -86,6 +86,7 @@ test('it accepts the system info of a host with every part turned on', () => {
       guestScratch: true,
       imagePins: true,
       buildContextUpload: true,
+      destroyIdCheck: true,
     },
   } as const;
 
