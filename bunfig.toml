@@ -16,6 +16,7 @@ minimumReleaseAgeExcludes = [
   "@zgeoff/bun-test-extended",
   "@zgeoff/bun-test-react",
   "@zgeoff/chex",
+  "@zgeoff/diet",
   "@zgeoff/format-codemod",
   "@zgeoff/kysely-bun-sqlite",
   "@zgeoff/oxlint-config",
