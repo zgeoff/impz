@@ -65,10 +65,13 @@ test('it sends a keepalive comment every 5 s through a stream with no event', as
 
   const queued = await readQueuedText(reader, 1000);
 
-  const keepalives = queued.split('\n\n').filter(Boolean);
+  // the stream's first read may leave the position after the empty snapshot queued
+  const frames = queued
+    .split('\n\n')
+    .filter((frame) => frame !== '' && !frame.includes('Position'));
 
-  expect(keepalives).toHaveLength(80);
-  expect(keepalives).toSatisfyAll((frame: string) => frame === ': ');
+  expect(frames).toHaveLength(80);
+  expect(frames).toSatisfyAll((frame: string) => frame === ': ');
 });
 
 test('it sends the snapshot, then each change with its reason', async () => {
@@ -102,6 +105,7 @@ test('it sends the snapshot, then each change with its reason', async () => {
 
   expect(stream.items).toMatchObject([
     { ev: 'ImpAdded', reason: 'snapshot', imp: { name: 'old' } },
+    { ev: 'Position' },
     { ev: 'ImpAdded', reason: 'created', imp: { name: 'dev' } },
     { ev: 'GovernorDecision', decision: 'admitted', name: 'dev' },
     {
@@ -396,11 +400,10 @@ test('it ends a dashboard stream at any logout, and leaves a token’s stream op
   expect(logout).toStrictEqual({});
   expect(dashboardEnded).toBeNull();
 
-  expect(tokenStream.items[0]).toMatchObject({
-    ev: 'ImpAdded',
-    reason: 'created',
-    imp: { name: 'dev' },
-  });
+  expect(tokenStream.items.slice(0, 2)).toMatchObject([
+    { ev: 'Position' },
+    { ev: 'ImpAdded', reason: 'created', imp: { name: 'dev' } },
+  ]);
 });
 
 test('it drops an event that fails the schema and goes on', async () => {
@@ -508,13 +511,14 @@ test('it drops a snapshot imp that fails the schema and goes on', async () => {
   );
 
   await waitFor(() => {
-    expect(stream.items).toHaveLength(2);
+    expect(stream.items).toHaveLength(3);
   });
 
   controller.abort();
 
   expect(stream.items).toMatchObject([
     { ev: 'ImpAdded', reason: 'snapshot', imp: { name: 'good' } },
+    { ev: 'Position' },
     { ev: 'GovernorDecision', name: 'later' },
   ]);
 });
@@ -672,11 +676,47 @@ test('it lists only the events of the imps a limited token may see after a curso
 
   const names = page.events.map((event) =>
     match(event)
-      .with({ ev: 'Reset' }, () => 'reset')
+      .with({ ev: P.union('Reset', 'Position') }, (cursor) => cursor.ev)
       .with({ ev: P.union('ImpAdded', 'ImpChanged', 'ImpRemoved') }, (changed) => changed.imp.name)
       .otherwise((named) => named.name),
   );
 
   expect(names).toSatisfyAll((name: string) => name === 'dev-a');
   expect(page.events).toPartiallyContain({ ev: 'ImpAdded', reason: 'created' });
+});
+
+test('it sends a limited token the position past the events it may not see', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const made = await ctx.client.tokens.create({ name: 'dev', scope: 'read', imps: ['dev-*'] });
+
+  const controller = new AbortController();
+
+  onTestFinished(() => {
+    controller.abort();
+  });
+
+  const events = await ctx
+    .buildClient(made.secret)
+    .events.stream(undefined, { signal: controller.signal });
+
+  const stream = readInBackground(events);
+
+  await waitFor(() => {
+    expect(stream.items).toPartiallyContain({ ev: 'Position' });
+  });
+
+  await ctx.client.imps.create({ name: 'prod' });
+
+  const head = await ctx.readHead();
+
+  await waitFor(() => {
+    expect(stream.items.at(-1)).toMatchObject({ ev: 'Position', seq: head });
+  });
+
+  controller.abort();
+
+  expect(stream.items).toSatisfyAll((event: ImpEvent) => event.ev === 'Position');
 });

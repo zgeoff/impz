@@ -76,7 +76,7 @@ export function createEventRoutes(os: RpcImplementer, deps: RouterDeps, views: C
 
 function isCallerEvent(caller: Readonly<Caller>, event: ImpEvent): boolean {
   return match(event)
-    .with({ ev: 'Reset' }, () => true)
+    .with({ ev: P.union('Reset', 'Position') }, () => true)
     .with({ ev: P.union('ImpAdded', 'ImpChanged', 'ImpRemoved') }, (changed) =>
       isImpAllowed(caller.imps, changed.imp.name),
     )

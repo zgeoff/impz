@@ -89,9 +89,11 @@ goes, the disk usage refresh, the service log follows and the telemetry.
 
 The event stream takes the head `seq` before it reads its snapshot of the caller's imps, so no write
 falls in between, then reads the table from that `seq` at its own pace, filtered to those imps. A
-slow reader falls behind and loses nothing. A reader that passes the `seq` and `logId` of its last
-event skips the snapshot and reads on from there, across impd restarts. The `logId` lives in the
-database. A copy that impd writes holds none, and impd writes a new one each time it opens a
+slow reader falls behind and loses nothing. After the snapshot, and after each read that held events
+the caller may not see, the stream sends a `Position` with the `seq` it read through, so a limited
+caller's cursor moves past the events it is not shown. A reader that passes the `seq` and `logId` of
+its last event skips the snapshot and reads on from there, across impd restarts. The `logId` lives
+in the database. A copy that impd writes holds none, and impd writes a new one each time it opens a
 database without one, so a cursor from before a restore does not match. A reconciler prunes the
 oldest rows by age and by count. A cursor that a prune passed, or that carries another log's ID or a
 `seq` past the head, gets `Reset` and a new snapshot. A stream opened without a cursor knows no

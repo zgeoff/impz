@@ -12455,6 +12455,39 @@
               "ev"
             ],
             "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "v": {
+                "type": "number",
+                "const": 1
+              },
+              "at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "seq": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "logId": {
+                "type": "string"
+              },
+              "ev": {
+                "type": "string",
+                "const": "Position"
+              }
+            },
+            "required": [
+              "v",
+              "at",
+              "seq",
+              "logId",
+              "ev"
+            ],
+            "additionalProperties": false
           }
         ]
       },
@@ -14134,6 +14167,39 @@
                     "ev": {
                       "type": "string",
                       "const": "Reset"
+                    }
+                  },
+                  "required": [
+                    "v",
+                    "at",
+                    "seq",
+                    "logId",
+                    "ev"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "v": {
+                      "type": "number",
+                      "const": 1
+                    },
+                    "at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "seq": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "logId": {
+                      "type": "string"
+                    },
+                    "ev": {
+                      "type": "string",
+                      "const": "Position"
                     }
                   },
                   "required": [

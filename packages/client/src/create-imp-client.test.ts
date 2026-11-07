@@ -540,6 +540,8 @@ test('#events.stream passes on an event whose reason this client does not know',
 
   onTestFinished(() => reading.return?.());
 
+  // the snapshot of dev, then the position after it
+  await reading.next();
   await reading.next();
   await ctx.client.imps.sleep({ name: 'dev' });
 

@@ -113,6 +113,10 @@ export const ImpEventSchema = z.discriminatedUnion('ev', [
 
   // the reader's cursor names no event this log still holds; a snapshot follows
   z.object({ ...envelope, ev: z.literal('Reset') }),
+
+  // the stream has read the log through this seq, past events this reader may not see; a reader
+  // resumes after it
+  z.object({ ...envelope, ev: z.literal('Position') }),
 ]);
 
 export type ImpEvent = z.infer<typeof ImpEventSchema>;

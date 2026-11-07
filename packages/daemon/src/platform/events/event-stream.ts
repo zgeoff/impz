@@ -7,7 +7,7 @@ import { tailImpEvents } from '../db/tail-imp-events';
 import type { ImpEventsReset } from '../db/tail-imp-events';
 import type { StartTimer } from '../process/clock';
 import { startTimerAt } from '../process/start-timer-at';
-import { buildResetEvent } from './build-reset-event';
+import { buildCursorEvent } from './build-cursor-event';
 import { pickStreamStart } from './pick-stream-start';
 
 export interface EventLogReads {
@@ -70,11 +70,11 @@ export async function* openEventStream(options: EventStreamOptions): AsyncGenera
       .exhaustive();
 
     if (opening.isReset) {
-      yield buildResetEvent({ seq: head, logId, at: options.now() });
+      yield buildCursorEvent('Reset', { seq: head, logId, at: options.now() });
     }
 
     if (opening.hasSnapshot) {
-      yield* await options.readSnapshot(head, logId);
+      yield* readSnapshotAt(options, head, logId);
     }
 
     let after = opening.after;
@@ -101,8 +101,8 @@ export async function* openEventStream(options: EventStreamOptions): AsyncGenera
 
       after = await options.readHead();
 
-      yield buildResetEvent({ seq: after, logId, at: options.now() });
-      yield* await options.readSnapshot(after, logId);
+      yield buildCursorEvent('Reset', { seq: after, logId, at: options.now() });
+      yield* readSnapshotAt(options, after, logId);
     }
   } finally {
     options.signal?.removeEventListener('abort', stopStream);
@@ -111,8 +111,19 @@ export async function* openEventStream(options: EventStreamOptions): AsyncGenera
   }
 }
 
-// Yields each event of the tail's pages that the reader may see, and returns the tail's reset, or
-// null once the stream stops.
+// The snapshot ends with the head it was read at, so a reader that sees no imp still has a cursor.
+async function* readSnapshotAt(
+  reads: EventLogReads,
+  head: number,
+  logId: string,
+): AsyncGenerator<ImpEvent> {
+  yield* await reads.readSnapshot(head, logId);
+  yield buildCursorEvent('Position', { seq: head, logId, at: reads.now() });
+}
+
+// Yields each event of the tail's pages that the reader may see, then a position past the events
+// of a page that the reader may not see, so its cursor moves past them. It returns the tail's
+// reset, or null once the stream stops.
 async function* presentPages(
   pages: AsyncGenerator<readonly LoggedImpEvent[], ImpEventsReset | null>,
   reads: EventLogReads,
@@ -123,6 +134,8 @@ async function* presentPages(
     let step = await pages.next();
 
     while (step.done !== true) {
+      let sentSeq: number | null = null;
+
       for (const logged of step.value) {
         const event = await reads.present(logged, logId);
 
@@ -131,8 +144,15 @@ async function* presentPages(
         }
 
         if (event !== null && (reads.accepts?.(event) ?? true)) {
+          sentSeq = logged.seq;
           yield event;
         }
+      }
+
+      const readSeq = step.value.at(-1)?.seq ?? null;
+
+      if (readSeq !== null && readSeq !== sentSeq) {
+        yield buildCursorEvent('Position', { seq: readSeq, logId, at: reads.now() });
       }
 
       step = await pages.next();

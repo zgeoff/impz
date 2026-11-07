@@ -1,6 +1,6 @@
 import type { EventCursor, EventPage, ImpEvent } from '@impz/api';
 import { match } from 'ts-pattern';
-import { buildResetEvent } from './build-reset-event';
+import { buildCursorEvent } from './build-cursor-event';
 import type { EventLogReads } from './event-stream';
 import { pickStreamStart } from './pick-stream-start';
 
@@ -35,7 +35,7 @@ async function readSnapshotPage(
   const snapshot = await reads.readSnapshot(position.head, position.logId);
 
   const reset = position.isReset
-    ? [buildResetEvent({ seq: position.head, logId: position.logId, at: reads.now() })]
+    ? [buildCursorEvent('Reset', { seq: position.head, logId: position.logId, at: reads.now() })]
     : [];
 
   return {

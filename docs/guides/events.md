@@ -44,22 +44,27 @@ snapshot.
 default and 1,000 at most. It returns the events, `hasMore`, and the `after` and `logId` to pass on
 the next call. With no `after`, it returns the snapshot and the head `seq`.
 
+A reader resumes from the `seq` of the last event it received, `Position` included. A token limited
+to some imps then skips the events of the others on its next resume, and a reader that sees no imp
+still holds a cursor.
+
 ### Events
 
 Every event has `v` (the format version, now `1`), `at` (when impd wrote it), `seq` (its place in
 impd's log), `logId` (the log it comes from) and `ev` (its kind). A snapshot event carries the `seq`
 of the newest event at the time of the snapshot. A reader skips a kind or a field it does not know.
 
-| `ev`                | Fields                                                   | When                                                                                   |
-| ------------------- | -------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `ImpAdded`          | `reason` (`snapshot` or `created`), `imp`                | Each imp as the stream opens, then each new imp.                                       |
-| `ImpChanged`        | `reason`, `imp`, `detail` for a timed change             | A change to an imp's record: its state, pid, leases or error.                          |
-| `ImpRemoved`        | `imp`, as its record was last                            | `impz rm`: the VM, the disk and the checkpoints are gone.                              |
-| `CheckpointAdded`   | `name` (the imp's), `checkpoint`                         | A checkpoint.                                                                          |
-| `CheckpointRemoved` | `name`, `checkpoint`                                     | A checkpoint deleted.                                                                  |
-| `GovernorDecision`  | `decision`, `name`, `trigger`, `usedMib`, `budgetMib`, … | The RAM governor admitted or refused a boot or a wake, or slept an imp to make room.   |
-| `AgentExec`         | `name`, `actor`, `actorName`, `tty`, `command`           | The imp's agent took an `impz exec --agent`; `command` is the program, never its args. |
-| `Reset`             | none                                                     | impd no longer holds the events after the reader's cursor; the snapshot follows.       |
+| `ev`                | Fields                                                   | When                                                                                                                  |
+| ------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `ImpAdded`          | `reason` (`snapshot` or `created`), `imp`                | Each imp as the stream opens, then each new imp.                                                                      |
+| `ImpChanged`        | `reason`, `imp`, `detail` for a timed change             | A change to an imp's record: its state, pid, leases or error.                                                         |
+| `ImpRemoved`        | `imp`, as its record was last                            | `impz rm`: the VM, the disk and the checkpoints are gone.                                                             |
+| `CheckpointAdded`   | `name` (the imp's), `checkpoint`                         | A checkpoint.                                                                                                         |
+| `CheckpointRemoved` | `name`, `checkpoint`                                     | A checkpoint deleted.                                                                                                 |
+| `GovernorDecision`  | `decision`, `name`, `trigger`, `usedMib`, `budgetMib`, … | The RAM governor admitted or refused a boot or a wake, or slept an imp to make room.                                  |
+| `AgentExec`         | `name`, `actor`, `actorName`, `tty`, `command`           | The imp's agent took an `impz exec --agent`; `command` is the program, never its args.                                |
+| `Reset`             | none                                                     | impd no longer holds the events after the reader's cursor; the snapshot follows.                                      |
+| `Position`          | none                                                     | The stream has read the log through `seq`; it follows the snapshot, and each read past events the reader may not see. |
 
 `imp` has the shape `impz ls --json` prints, so a reader keeps its own copy with no second call. An
 `ImpChanged` reason says why the record changed:

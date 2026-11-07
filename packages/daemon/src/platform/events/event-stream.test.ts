@@ -49,6 +49,7 @@ test('it sends the snapshot, then each event written after the stream opened', a
   });
 
   const first = await stream.next();
+  const position = await stream.next();
 
   await ctx.db.log.write(
     {
@@ -67,6 +68,18 @@ test('it sends the snapshot, then each event written after the stream opened', a
   controller.abort();
 
   expect(first).toStrictEqual({ done: false, value: snapshot });
+
+  expect(position).toStrictEqual({
+    done: false,
+    value: {
+      // oxlint-disable-next-line id-length -- `v` is the event format's version field
+      v: 1,
+      at: new Date(Date.UTC(2026, 9, 2, 12)),
+      seq: 0,
+      logId: expect.toBeString(),
+      ev: 'Position',
+    },
+  });
 
   expect(second).toStrictEqual({
     done: false,
@@ -112,12 +125,13 @@ test('it sends an event written while the snapshot is read after the snapshot', 
     signal: controller.signal,
   });
 
-  const sent = [await stream.next(), await stream.next()];
+  const sent = [await stream.next(), await stream.next(), await stream.next()];
 
   controller.abort();
 
   expect(sent).toMatchObject([
     { done: false, value: { name: 'snapshot' } },
+    { done: false, value: { ev: 'Position', seq: 0 } },
     { done: false, value: { name: 'during' } },
   ]);
 });
@@ -152,6 +166,8 @@ test('it sends every event to a reader 5,000 events behind', async () => {
     signal: controller.signal,
   });
 
+  const position = await stream.next();
+
   const sent: ImpEvent[] = [];
 
   for (let count = 1; count <= 5000; count += 1) {
@@ -163,6 +179,8 @@ test('it sends every event to a reader 5,000 events behind', async () => {
   }
 
   controller.abort();
+
+  expect(position).toMatchObject({ done: false, value: { ev: 'Position', seq: 0 } });
 
   expect(sent).toStrictEqual(
     Array.from({ length: 5000 }, (_unused, index) => ({
@@ -214,7 +232,8 @@ test('it waits on one change at a time while it reads a backlog of several pages
     signal: controller.signal,
   });
 
-  for (let count = 1; count <= 6; count += 1) {
+  // the position after the empty snapshot, then the six events
+  for (let count = 1; count <= 7; count += 1) {
     await stream.next();
   }
 
@@ -254,11 +273,52 @@ test('it leaves out the events its reader may not see', async () => {
     accepts: (event) => event.ev === 'GovernorDecision' && event.name !== 'hidden',
   });
 
-  const first = await stream.next();
+  const sent = [await stream.next(), await stream.next()];
 
   controller.abort();
 
-  expect(first).toMatchObject({ done: false, value: { name: 'shown' } });
+  expect(sent).toMatchObject([
+    { done: false, value: { ev: 'Position', seq: 0 } },
+    { done: false, value: { name: 'shown', seq: 2 } },
+  ]);
+});
+
+test('it sends the position past a page whose last events its reader may not see', async () => {
+  const ctx = await setupTest();
+
+  const controller = new AbortController();
+
+  const stream = ctx.open({
+    readSnapshot: async () => {
+      for (const name of ['shown', 'hidden']) {
+        await ctx.db.log.write(
+          {
+            ev: 'GovernorDecision',
+            decision: 'admitted',
+            name,
+            trigger: 'wake',
+            usedMib: 512,
+            budgetMib: 4096,
+          },
+          Date.UTC(2026, 9, 2, 12),
+        );
+      }
+
+      return [];
+    },
+    signal: controller.signal,
+    accepts: (event) => event.ev === 'GovernorDecision' && event.name !== 'hidden',
+  });
+
+  const sent = [await stream.next(), await stream.next(), await stream.next()];
+
+  controller.abort();
+
+  expect(sent).toMatchObject([
+    { done: false, value: { ev: 'Position', seq: 0 } },
+    { done: false, value: { name: 'shown', seq: 1 } },
+    { done: false, value: { ev: 'Position', seq: 2 } },
+  ]);
 });
 
 test('it sends a reset and a new snapshot when a prune passes the cursor it resumed from', async () => {
@@ -336,7 +396,7 @@ test('it ends when a prune passes the place of a stream opened with no cursor', 
 
   const streamed = await Array.fromAsync(stream);
 
-  expect(streamed).toStrictEqual([]);
+  expect(streamed).toMatchObject([{ ev: 'Position', seq: 0 }]);
 });
 
 test('it resumes after its cursor with no snapshot', async () => {
@@ -487,6 +547,8 @@ test('it ends at its abort', async () => {
 
   const first = await stream.next();
 
+  await stream.next();
+
   const waiting = stream.next();
 
   controller.abort();
@@ -506,6 +568,8 @@ test('it ends at its end time', async () => {
     endsAt: Date.UTC(2026, 9, 2, 12) + 50,
     startTimer: timers.startTimer,
   });
+
+  await stream.next();
 
   const waiting = stream.next();
   const pendingMs = timers.readPendingMs();
@@ -537,6 +601,8 @@ test('it stays open when the longest timer fires short of a 30-day end, and wait
   });
 
   const first = await stream.next();
+
+  await stream.next();
 
   const clampedMs = timers.readPendingMs();
 
@@ -586,6 +652,7 @@ test('it ends at a 30-day end once the timer after the longest one fires', async
     startTimer: timers.startTimer,
   });
 
+  await stream.next();
   await stream.next();
 
   clock.at = Date.UTC(2026, 9, 2, 12) + 2 ** 31 - 1;
