@@ -94,8 +94,7 @@ export function buildRanking(
 
 // system.info leaves out the priority patterns, so every imp scores as a non-priority
 // imp; a priority imp still tries each ranked host in turn
-/* @internal */
-export function getFreeMib(info: SystemInfo): number {
+function getFreeMib(info: SystemInfo): number {
   return (
     info.ramBudgetMib -
     info.ramUsedMib -
