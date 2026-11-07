@@ -2,10 +2,11 @@
 
 ## [6.10.1](https://github.com/zgeoff/impz/compare/v6.10.0...v6.10.1) (2026-11-07)
 
-
 ### Bug Fixes
 
-* **daemon:** let a priority image's builder use the kept memory ([#963](https://github.com/zgeoff/impz/issues/963)) ([c8aad3a](https://github.com/zgeoff/impz/commit/c8aad3a98edffc2f65df81163deafce33cd341a5))
+- **daemon:** let a priority image's builder use the kept memory
+  ([#963](https://github.com/zgeoff/impz/issues/963))
+  ([c8aad3a](https://github.com/zgeoff/impz/commit/c8aad3a98edffc2f65df81163deafce33cd341a5))
 
 ## [6.10.0](https://github.com/zgeoff/impz/compare/v6.9.1...v6.10.0) (2026-11-07)
 
