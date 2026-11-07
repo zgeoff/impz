@@ -543,15 +543,15 @@ test('it sends a stream that resumes across an impd restart every event it misse
     { signal: controller.signal },
   );
 
-  const missed: ImpEvent[] = [];
+  const read = readInBackground(stream);
 
-  for await (const event of stream) {
-    missed.push(event);
+  const missed = await waitFor(() => {
+    expect(read.items).toHaveLength(head - seen.after);
 
-    if (event.seq === head) {
-      break;
-    }
-  }
+    return read.items;
+  });
+
+  controller.abort();
 
   expect(missed.map((event) => event.seq)).toStrictEqual(
     Array.from({ length: head - seen.after }, (_unused, index) => seen.after + 1 + index),
