@@ -31,25 +31,31 @@ export async function readImpEventsAfter(
     return read;
   }
 
+  const events: LoggedImpEvent[] = [];
+
+  for (const stored of read.events) {
+    const logged = findLoggedEvent(stored);
+
+    if (logged === null) {
+      getImpdLogger('events').warning('skipped event {seq}, a {kind} that impd cannot read', {
+        seq: stored.seq,
+        kind: stored.kind,
+      });
+    } else {
+      events.push(logged);
+    }
+  }
+
   return {
     kind: 'events',
-    events: read.events.flatMap((stored) => toLoggedEvents(stored)),
+    events,
     throughSeq: read.events.at(-1)?.seq ?? input.after,
     hasMore: read.events.length === input.limit,
   };
 }
 
-function toLoggedEvents(stored: StoredEvent): LoggedImpEvent[] {
+function findLoggedEvent(stored: StoredEvent): LoggedImpEvent | null {
   const parsed = ImpLogEntrySchema.safeParse(stored.payload);
 
-  if (!parsed.success) {
-    getImpdLogger('events').warning('skipped event {seq}, a {kind} that impd cannot read', {
-      seq: stored.seq,
-      kind: stored.kind,
-    });
-
-    return [];
-  }
-
-  return [{ ...parsed.data, seq: stored.seq, at: new Date(stored.at) }];
+  return parsed.success ? { ...parsed.data, seq: stored.seq, at: new Date(stored.at) } : null;
 }
