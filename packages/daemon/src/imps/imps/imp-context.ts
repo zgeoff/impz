@@ -9,7 +9,7 @@ import type { ImpRecord } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import type { EventBus } from '../../platform/events/event-bus';
 import type { HostLoad } from '../../platform/process/read-host-load';
-import { runCommand } from '../../platform/process/run-command';
+import type { CommandRunner } from '../../platform/process/run-command';
 import type { openTapStream } from '../../vm/agent-client/exec-stream';
 import type { RamAdmission } from '../../vm/imps-contract/ram-admission';
 import { NO_MEMORY_LIMIT } from '../../vm/memory/memory-limit';
@@ -138,6 +138,9 @@ export interface ImpServiceDeps {
   readonly readNetBytes: (tap: string) => GuestNetBytes | null;
 
   readonly readHostLoad: () => HostLoad;
+
+  // runs the page handler's warm of a memory file after a sleep
+  readonly runCommand: CommandRunner;
 }
 
 export interface ImpHost {
@@ -286,7 +289,7 @@ export function createImpContext(deps: ImpServiceDeps): ImpContext {
         : createMemoryWarm({
             handlerBin: deps.config.hugePages.handlerBin,
             capMib: deps.config.hugePages.warmCapMib,
-            run: runCommand,
+            run: deps.runCommand,
           }),
   };
 

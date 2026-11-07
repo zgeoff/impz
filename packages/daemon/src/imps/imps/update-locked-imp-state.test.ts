@@ -43,6 +43,7 @@ async function setupTest() {
     readThreadIds: () => null,
     readNetBytes: () => null,
     readHostLoad: () => ({ cpuStallUs: null, ioStallUs: null, memoryStallUs: null, stealUs: null }),
+    runCommand: () => Promise.resolve({ exitCode: 127, stdout: '', stderr: 'no command here' }),
   });
 
   return {

@@ -128,6 +128,7 @@ export function createImpdImps(
     cgroups,
     memoryLimit,
     readExecEnv: parts.broker.readExecEnv,
+    runCommand: deps.runCommand ?? runCommand,
     storageGate: parts.storage.storageGate,
     diskBudget: parts.storage.diskBudget,
     readDiskUsage: parts.storage.diskUsage.read,
