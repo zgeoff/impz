@@ -368,6 +368,122 @@ test('#collectBreakingChanges reports an input property that becomes required', 
   ]);
 });
 
+test('#collectBreakingChanges passes an input that a procedure with none gains, when a call may still send none', () => {
+  const base = {
+    procedures: {
+      'notes.watch': { input: {}, output: { type: 'object' }, stream: true },
+    },
+    messages: {},
+    errors: {},
+    constants: {},
+  };
+
+  const head = {
+    procedures: {
+      'notes.watch': {
+        input: { type: 'object', properties: { after: { type: 'integer' } }, 'x-optional': true },
+        output: { type: 'object' },
+        stream: true,
+      },
+    },
+    messages: {},
+    errors: {},
+    constants: {},
+  };
+
+  expect(collectBreakingChanges(base, head)).toStrictEqual([]);
+});
+
+test('#collectBreakingChanges reports an input that a procedure with none gains, when a call must send it', () => {
+  const base = {
+    procedures: {
+      'notes.watch': { input: {}, output: { type: 'object' }, stream: true },
+    },
+    messages: {},
+    errors: {},
+    constants: {},
+  };
+
+  const head = {
+    procedures: {
+      'notes.watch': {
+        input: { type: 'object', properties: { after: { type: 'integer' } } },
+        output: { type: 'object' },
+        stream: true,
+      },
+    },
+    messages: {},
+    errors: {},
+    constants: {},
+  };
+
+  expect(collectBreakingChanges(base, head)).toStrictEqual([
+    'procedure notes.watch input: accepts any value → some values',
+  ]);
+});
+
+test('#collectBreakingChanges reports an optional input that becomes required', () => {
+  const base = {
+    procedures: {
+      'notes.list': {
+        input: { type: 'object', properties: { limit: { type: 'integer' } }, 'x-optional': true },
+        output: { type: 'object' },
+        stream: false,
+      },
+    },
+    messages: {},
+    errors: {},
+    constants: {},
+  };
+
+  const head = {
+    procedures: {
+      'notes.list': {
+        input: { type: 'object', properties: { limit: { type: 'integer' } } },
+        output: { type: 'object' },
+        stream: false,
+      },
+    },
+    messages: {},
+    errors: {},
+    constants: {},
+  };
+
+  expect(collectBreakingChanges(base, head)).toStrictEqual([
+    'procedure notes.list input: now required',
+  ]);
+});
+
+test('#collectBreakingChanges passes an input that becomes optional', () => {
+  const base = {
+    procedures: {
+      'notes.list': {
+        input: { type: 'object', properties: { limit: { type: 'integer' } } },
+        output: { type: 'object' },
+        stream: false,
+      },
+    },
+    messages: {},
+    errors: {},
+    constants: {},
+  };
+
+  const head = {
+    procedures: {
+      'notes.list': {
+        input: { type: 'object', properties: { limit: { type: 'integer' } }, 'x-optional': true },
+        output: { type: 'object' },
+        stream: false,
+      },
+    },
+    messages: {},
+    errors: {},
+    constants: {},
+  };
+
+  expect(collectBreakingChanges(base, head)).toStrictEqual([]);
+});
+
 test('#collectBreakingChanges passes a new optional input property', () => {
   const base = {
     procedures: {

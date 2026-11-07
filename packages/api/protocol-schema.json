@@ -493,7 +493,8 @@
           "builders": {
             "type": "boolean"
           }
-        }
+        },
+        "x-optional": true
       },
       "output": {
         "type": "array",
@@ -10791,7 +10792,8 @@
           "logId": {
             "type": "string"
           }
-        }
+        },
+        "x-optional": true
       },
       "output": {
         "oneOf": [
