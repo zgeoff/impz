@@ -40,12 +40,19 @@ Each dropped host gets one line on stderr, `imp: <host>: skipped: <why>`. The re
 free RAM, and a tie goes to the host first in name order:
 
 ```text
-free = ramBudgetMib - ramUsedMib - ramReservedMib - ramSleepingMib
+free = ramBudgetMib - ramUsedMib - ramReservedMib - ramSleepingMib - ramPriorityKeptMib
 ```
 
 `ramSleepingMib` is the memory of every sleeping imp on the host, since any request to a sleeper
-wakes it. The score does not count the idle imps the governor could put to sleep to make room, so it
-errs low on a busy host. `impz info --json` shows each number.
+wakes it. `ramPriorityKeptMib` is the
+[priority RAM](../architecture/lifecycle/ram-governor.md#priority-imps) that the host's priority
+imps leave unused, which the governor never admits another imp into. impd does not report its
+priority patterns, so the CLI scores every host as if the new imp is not a priority imp. A priority
+imp can then rank a host too low, but the CLI still tries that host when each host above it refuses
+for RAM. When a host's impd does not report `ramSleepingMib` or `ramPriorityKeptMib`, the CLI counts
+that number as 0. The score does not count the idle imps the governor could put to sleep to make
+room, so it errs low on a busy host. It also errs low on a host with a sleeping priority imp, whose
+memory counts once as a sleeper and again inside the kept RAM. `impz info --json` shows each number.
 
 The CLI creates on the first host. When that host's governor turns the boot away
 (`RAM_BUDGET_EXCEEDED`), impd removes the imp before it answers, and the CLI tries the next host.
