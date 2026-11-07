@@ -98,7 +98,7 @@
     "audit": "bun audit --ignore=GHSA-g3hv-75wg-m249",
     "build:cli": "./scripts/release/build-cli.sh",
     "build:dashboard": "bun run --cwd packages/dashboard build",
-    "deadcode": "knip && knip --production",
+    "deadcode": "bash scripts/run-knip.sh && bash scripts/run-knip.sh --production",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
     "lint:full": "tsgolint=$(tsrslint-path) && OXLINT_TSGOLINT_PATH=$tsgolint oxlint --type-aware --type-check --report-unused-disable-directives-severity error",
