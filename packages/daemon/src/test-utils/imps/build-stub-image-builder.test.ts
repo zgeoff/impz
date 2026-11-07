@@ -64,11 +64,13 @@ test('it records the Dockerfile of each context a build gets on stdin', async ()
     'Dockerfile',
   ]);
 
-  const answered = await builder.builders.withBuilder(new AbortController().signal, (exec) =>
-    exec(['docker', 'build', '-'], {
-      signal: new AbortController().signal,
-      stdinPath: join(ctx.directoryPath, 'context.tar'),
-    }),
+  const answered = await builder.builders.withBuilder(
+    { signal: new AbortController().signal, imageName: 'box' },
+    (exec) =>
+      exec(['docker', 'build', '-'], {
+        signal: new AbortController().signal,
+        stdinPath: join(ctx.directoryPath, 'context.tar'),
+      }),
   );
 
   expect(answered.exitCode).toBe(0);
@@ -93,11 +95,13 @@ test('it records the whole context tar each build gets on stdin', async () => {
     'note',
   ]);
 
-  await builder.builders.withBuilder(new AbortController().signal, (exec) =>
-    exec(['docker', 'build', '-'], {
-      signal: new AbortController().signal,
-      stdinPath: join(ctx.directoryPath, 'context.tar'),
-    }),
+  await builder.builders.withBuilder(
+    { signal: new AbortController().signal, imageName: 'box' },
+    (exec) =>
+      exec(['docker', 'build', '-'], {
+        signal: new AbortController().signal,
+        stdinPath: join(ctx.directoryPath, 'context.tar'),
+      }),
   );
 
   const note = Bun.spawnSync(['tar', '-xO', '-f', '-', 'note'], {
@@ -128,11 +132,13 @@ test('it writes the plain progress a test gives to the stderr of a build', async
     'Dockerfile',
   ]);
 
-  const answered = await builder.builders.withBuilder(new AbortController().signal, (exec) =>
-    exec(['docker', 'build', '-'], {
-      signal: new AbortController().signal,
-      stdinPath: join(ctx.directoryPath, 'context.tar'),
-    }),
+  const answered = await builder.builders.withBuilder(
+    { signal: new AbortController().signal, imageName: 'box' },
+    (exec) =>
+      exec(['docker', 'build', '-'], {
+        signal: new AbortController().signal,
+        stdinPath: join(ctx.directoryPath, 'context.tar'),
+      }),
   );
 
   expect(answered.stderr).toBe('#4 [2/2] RUN make all\n#4 DONE 0.5s\n');
@@ -141,11 +147,23 @@ test('it writes the plain progress a test gives to the stderr of a build', async
 test('it names its builder as a real builder imp is named', async () => {
   const builder = buildStubImageBuilder({ exported: [], repoDigest: 'sha256:1' });
 
-  const name = await builder.builders.withBuilder(new AbortController().signal, (_exec, named) =>
-    Promise.resolve(named),
+  const name = await builder.builders.withBuilder(
+    { signal: new AbortController().signal, imageName: 'box' },
+    (_exec, named) => Promise.resolve(named),
   );
 
   expect(name).toMatch(/^imp-build-[a-z]{8}$/v);
+});
+
+test('it records the image name of each builder request', async () => {
+  const builder = buildStubImageBuilder({ exported: [], repoDigest: 'sha256:1' });
+
+  await builder.builders.withBuilder(
+    { signal: new AbortController().signal, imageName: 'chat-notes' },
+    () => Promise.resolve(),
+  );
+
+  expect(builder.builderImageNames).toStrictEqual(['chat-notes']);
 });
 
 test('it streams its export chunks for the container its create made', async () => {
@@ -200,11 +218,13 @@ test('it answers a build as the test says, after it records the Dockerfile', asy
     'Dockerfile',
   ]);
 
-  const answered = await builder.builders.withBuilder(new AbortController().signal, (exec) =>
-    exec(['docker', 'build', '-'], {
-      signal: new AbortController().signal,
-      stdinPath: join(ctx.directoryPath, 'context.tar'),
-    }),
+  const answered = await builder.builders.withBuilder(
+    { signal: new AbortController().signal, imageName: 'box' },
+    (exec) =>
+      exec(['docker', 'build', '-'], {
+        signal: new AbortController().signal,
+        stdinPath: join(ctx.directoryPath, 'context.tar'),
+      }),
   );
 
   expect(answered.exitCode).toBe(1);
@@ -224,9 +244,12 @@ test('it fails a call it does not model and names it', async () => {
 test('it counts each builder booted and lets it go when its build fails', async () => {
   const builder = buildStubImageBuilder({ exported: [], repoDigest: 'sha256:1' });
 
-  const building = builder.builders.withBuilder(new AbortController().signal, () => {
-    throw new Error('failed');
-  });
+  const building = builder.builders.withBuilder(
+    { signal: new AbortController().signal, imageName: 'box' },
+    () => {
+      throw new Error('failed');
+    },
+  );
 
   await building.catch(() => {});
 
@@ -238,8 +261,9 @@ test('it counts each builder booted and lets it go when its build fails', async 
 test('it keeps a builder live while its build runs', async () => {
   const builder = buildStubImageBuilder({ exported: [], repoDigest: 'sha256:1' });
 
-  const live = await builder.builders.withBuilder(new AbortController().signal, () =>
-    Promise.resolve(builder.readLive()),
+  const live = await builder.builders.withBuilder(
+    { signal: new AbortController().signal, imageName: 'box' },
+    () => Promise.resolve(builder.readLive()),
   );
 
   expect(live).toBe(1);

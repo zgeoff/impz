@@ -1047,6 +1047,48 @@ test('it refuses to wake an imp outside the priority patterns into the pool kept
   });
 });
 
+test('it starts an imp created under a priority name into the kept RAM again after a stop', async () => {
+  updateEnv('IMP_RAM_BUDGET_MIB', '2048');
+  updateEnv('IMP_BOOT_RESERVE_PERCENT', '100');
+  updateEnv('IMP_PRIORITY_RAM_MIB', '512');
+  updateEnv('IMP_PRIORITY_IMPS', 'chat-*');
+
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.impd.imps.createImp({ name: 'build-a', memoryMib: 512, priorityName: 'chat-notes' });
+  await ctx.impd.imps.stopImp('build-a');
+  await ctx.client.imps.create({ name: 'agent-a', memoryMib: 768 });
+  await ctx.client.imps.create({ name: 'agent-b', memoryMib: 768 });
+  await ctx.client.leases.acquire({ name: 'agent-a', label: 'job', ttlSeconds: 600 });
+  await ctx.client.leases.acquire({ name: 'agent-b', label: 'job', ttlSeconds: 600 });
+
+  const started = await ctx.impd.imps.startImp('build-a');
+
+  expect(started.state).toBe('running');
+});
+
+test('it wakes an imp created under a priority name into the kept RAM', async () => {
+  updateEnv('IMP_RAM_BUDGET_MIB', '2048');
+  updateEnv('IMP_BOOT_RESERVE_PERCENT', '100');
+  updateEnv('IMP_PRIORITY_RAM_MIB', '512');
+  updateEnv('IMP_PRIORITY_IMPS', 'chat-*');
+
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.impd.imps.createImp({ name: 'build-a', memoryMib: 512, priorityName: 'chat-notes' });
+  await ctx.client.imps.sleep({ name: 'build-a' });
+  await ctx.client.imps.create({ name: 'agent-a', memoryMib: 768 });
+  await ctx.client.imps.create({ name: 'agent-b', memoryMib: 768 });
+  await ctx.client.leases.acquire({ name: 'agent-a', label: 'job', ttlSeconds: 600 });
+  await ctx.client.leases.acquire({ name: 'agent-b', label: 'job', ttlSeconds: 600 });
+
+  const woken = await ctx.client.imps.wake({ name: 'build-a' });
+
+  expect(woken.state).toBe('running');
+});
+
 test('it refuses a 2M imp on a host container with no userfaultfd device before any VM starts', async () => {
   updateEnv('IMP_HUGE_PAGES', '2M');
 

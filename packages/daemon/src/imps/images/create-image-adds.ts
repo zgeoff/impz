@@ -79,7 +79,7 @@ export function createImageAdds(deps: ImageAddsDeps, writer: ImageWriter): Image
 
     const explicitRef = formatExplicitRef(ref);
 
-    return builders.withBuilder(signal, async (exec) => {
+    return builders.withBuilder({ signal, imageName }, async (exec) => {
       const started = deps.clock.now();
 
       const platform = await createBuildEngine(toEngineRun(exec)).readPlatform(signal);

@@ -46,6 +46,7 @@ const STUB_BUILDER_NAME = 'imp-build-stubstub';
 
 export function buildStubImageBuilder(options: Readonly<StubImageBuilderOptions>) {
   const builtDockerfiles: string[] = [];
+  const builderImageNames: string[] = [];
   const builtContexts: Uint8Array[] = [];
   const counts = { boots: 0, live: 0 };
 
@@ -178,7 +179,9 @@ export function buildStubImageBuilder(options: Readonly<StubImageBuilderOptions>
   const guest = buildStubGuest(answerRun);
 
   const builders: Builders = {
-    withBuilder: (_signal, run) => {
+    withBuilder: (request, run) => {
+      builderImageNames.push(request.imageName);
+
       counts.boots += 1;
       counts.live += 1;
 
@@ -193,6 +196,7 @@ export function buildStubImageBuilder(options: Readonly<StubImageBuilderOptions>
     guest,
     builders,
     builtDockerfiles,
+    builderImageNames,
     builtContexts,
 
     readBoots: () => counts.boots,

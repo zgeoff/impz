@@ -1,4 +1,4 @@
-import { EVENT_VERSION, isImpAllowed } from '@impz/api';
+import { EVENT_VERSION } from '@impz/api';
 import type { LockFreeSleep } from '../../imps/imps/lock-free-sleep';
 import type { EventBus } from '../../platform/events/event-bus';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
@@ -25,6 +25,7 @@ import { pickEffectiveShortfall } from './pick-effective-shortfall';
 import { pickShortfall } from './pick-shortfall';
 import type { Shortfall } from './pick-shortfall';
 import { pickSleepVictims } from './pick-sleep-victims';
+import { createPriorityAdmissions } from './priority-admissions';
 
 // A Firecracker VM that just booted or woke shows a small RSS for some seconds, so its reservation
 // counts until the measurement catches up.
@@ -137,9 +138,9 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
 
   const now = deps.now ?? Date.now;
   const priority = deps.priority ?? null;
-
-  const isPriority = (name: string | null): boolean =>
-    priority !== null && name !== null && isImpAllowed(priority.patterns, name);
+  const admittedPriority = createPriorityAdmissions(priority);
+  const isPriority = admittedPriority.isPriority;
+  const isPriorityImp = admittedPriority.isPriorityImp;
 
   const buildKept = (mib: number): PriorityRam | null =>
     priority === null || mib === 0 ? null : { mib, patterns: priority.patterns };
@@ -148,10 +149,6 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
 
   // admitted guests on 2 MiB pages that are not awake yet, by imp
   const pendingHugePages = new Map<string, number>();
-
-  // the admitted priority imps, whose reservations and pool pages count against the kept RAM
-  // until each is awake
-  const admittedPriority = new Set<string>();
 
   const emitDecision = (decision: GovernorDecision): void => {
     deps.events?.publish({
@@ -194,11 +191,7 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
       pendingHugePages.set(request.id, request.hugePagesMib ?? 0);
     }
 
-    if (isPriority(request.name)) {
-      admittedPriority.add(request.id);
-    } else {
-      admittedPriority.delete(request.id);
-    }
+    admittedPriority.recordAdmission(request);
 
     emitAdmission(request, 'admitted', usedMib);
   };
@@ -250,20 +243,20 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
       .map((id) => ({
         id,
         mib: getReservationMib(id),
-        isPriority: admittedPriority.has(id),
+        isPriority: admittedPriority.isAdmittedPriority(id),
         isOnPool: pendingHugePages.has(id),
       }));
 
     const pendingPool = [...pendingHugePages]
       .filter(([id]) => id !== excludeId)
-      .map(([id, mib]) => ({ id, mib, isPriority: admittedPriority.has(id) }));
+      .map(([id, mib]) => ({ id, mib, isPriority: admittedPriority.isAdmittedPriority(id) }));
 
     const headroom = deps.readHeadroomMib?.(awake.map((imp) => imp.pid)) ?? Promise.resolve(0);
 
     const headroomMib = await headroom;
 
     const totals = buildUsageTotals({
-      awake: awake.map((imp) => ({ ...imp, isPriority: isPriority(imp.name) })),
+      awake: awake.map((imp) => ({ ...imp, isPriority: isPriorityImp(imp) })),
       readings,
       reservations: live,
       pendingPool,
@@ -316,7 +309,7 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
 
       const sleepable = usage.awake
         .filter((imp) => !isOrdinary || imp.hugePagesMib === 0)
-        .filter((imp) => !options.sparesPriority || !isPriority(imp.name));
+        .filter((imp) => !options.sparesPriority || !isPriorityImp(imp));
 
       if (missingMib <= 0) {
         return {
@@ -427,16 +420,16 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
 
         const bound = await readEffectiveUsage(request.id, deps.readResidentRam);
 
-        const isPriorityRequest = isPriority(request.name);
+        const isPriorityAdmission = admittedPriority.isPriorityRequest(request);
 
         if (hugePagesMib > 0) {
-          const kept = isPriorityRequest ? null : buildKept(bound.kept.poolMib);
+          const kept = isPriorityAdmission ? null : buildKept(bound.kept.poolMib);
 
           await checkHugePool(request, hugePagesMib, kept);
         }
 
         const findReserveShortfall = (usage: UsageTotals) =>
-          pickEffectiveShortfall(usage, budgets, request.reserveMib, isPriorityRequest);
+          pickEffectiveShortfall(usage, budgets, request.reserveMib, isPriorityAdmission);
 
         if (findReserveShortfall(bound).missingMib <= 0) {
           recordAdmission(request, bound.effectiveMib);
@@ -452,7 +445,7 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
                 reason: `to make room for ${request.name ?? request.id}`,
                 whenShort: 'giveUp',
                 findShortfall: findReserveShortfall,
-                sparesPriority: !isPriorityRequest,
+                sparesPriority: !isPriorityAdmission,
               });
 
         const diskFull = room.diskFull ? (deps.readDiskFullError?.() ?? null) : null;
@@ -491,7 +484,7 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
     release: (id) => {
       reservations.delete(id);
       pendingHugePages.delete(id);
-      admittedPriority.delete(id);
+      admittedPriority.release(id);
     },
 
     admitGrow: (request) =>
@@ -503,9 +496,10 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
         }
 
         const budgets = readBudgets();
+        const isPriorityGrow = isPriorityImp(request);
 
         const findGrowShortfall = (usage: UsageTotals) =>
-          pickEffectiveShortfall(usage, budgets, request.mib, isPriority(request.name));
+          pickEffectiveShortfall(usage, budgets, request.mib, isPriorityGrow);
 
         const room = await makeRoom({
           excludeId: null,
@@ -513,7 +507,7 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
           whenShort: 'giveUp',
           findShortfall: findGrowShortfall,
           protectedId: request.id,
-          sparesPriority: !isPriority(request.name),
+          sparesPriority: !isPriorityGrow,
         });
 
         const usage = await readEffectiveUsage(null);

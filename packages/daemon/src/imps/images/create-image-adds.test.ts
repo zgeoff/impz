@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildStubAnswerQueue } from '@impz/shared/test-utils/build-stub-answer-queue';
+import { readImpEnv } from '@impz/shared/test-utils/read-imp-env';
 import { updateEnv } from '@impz/shared/test-utils/update-env';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { loadConfig } from '../../config';
@@ -45,6 +46,7 @@ async function setupTest() {
 
   const harness = await startTestImpd(stack, {
     dataDir,
+    env: readImpEnv(),
 
     cloneDisk: async (source, target) => {
       await runChecked(['cp', '--sparse=always', source, target]);
@@ -695,6 +697,118 @@ test('it fails the add of a builder the governor refuses, with no host engine ca
   expect(builder.guest.runs).toStrictEqual([]);
   expect(box).toBe(undefined);
   expect(ctx.docker.readCalls()).toStrictEqual([]);
+});
+
+test('it adds an image whose name matches IMP_PRIORITY_IMPS from the RAM kept for priority imps', async () => {
+  updateEnv('IMP_RAM_BUDGET_MIB', '2048');
+  updateEnv('IMP_BOOT_RESERVE_PERCENT', '100');
+  updateEnv('IMP_PRIORITY_RAM_MIB', '512');
+  updateEnv('IMP_PRIORITY_IMPS', 'chat-*');
+
+  const ctx = await setupTest();
+
+  const config = loadConfig({
+    IMP_DATA_DIR: ctx.dataDir,
+    IMP_BUILD_MEMORY_MIB: '512',
+    IMP_BUILD_DISK_GIB: '4',
+  });
+
+  await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: config.build.image });
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.client.imps.create({ name: 'agent-a', memoryMib: 768 });
+  await ctx.client.imps.create({ name: 'agent-b', memoryMib: 768 });
+  await ctx.client.leases.acquire({ name: 'agent-a', label: 'job', ttlSeconds: 600 });
+  await ctx.client.leases.acquire({ name: 'agent-b', label: 'job', ttlSeconds: 600 });
+
+  const builder = buildStubImageBuilder({
+    exported: [createFilesTar(ctx.dataDir, { hello: 'pulled\n' })],
+    repoDigest: `sha256:${'b'.repeat(64)}`,
+  });
+
+  const images = createImageService({
+    config,
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
+    db: ctx.db,
+    storage: ctx.storage,
+    storageGate: ctx.impd.storageGate,
+    diskBudget: ctx.impd.diskBudget,
+    readBuilders: () => builders,
+  });
+
+  const builders = createBuilders({
+    config,
+    db: ctx.db,
+    imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
+    ensureImage: (signal) => images.ensureBuilderImage(signal),
+  });
+
+  const image = await images.addImage('busybox', 'chat-notes');
+
+  expect(image).toStrictEqual({
+    id: expect.toBeString(),
+    name: 'chat-notes',
+    ref: 'busybox',
+    digest: expect.stringMatching(/^imp-build-[a-f0-9]{64}$/v),
+    receivedDigest: null,
+    source: 'oci',
+    sourceImp: null,
+    sizeBytes: expect.toBeNumber(),
+    createdAt: expect.toBeValidDate(),
+    isPinned: false,
+  });
+});
+
+test('it refuses with RAM_BUDGET_EXCEEDED the add of an image outside IMP_PRIORITY_IMPS when only the kept RAM is left', async () => {
+  updateEnv('IMP_RAM_BUDGET_MIB', '2048');
+  updateEnv('IMP_BOOT_RESERVE_PERCENT', '100');
+  updateEnv('IMP_PRIORITY_RAM_MIB', '512');
+  updateEnv('IMP_PRIORITY_IMPS', 'chat-*');
+
+  const ctx = await setupTest();
+
+  const config = loadConfig({
+    IMP_DATA_DIR: ctx.dataDir,
+    IMP_BUILD_MEMORY_MIB: '512',
+    IMP_BUILD_DISK_GIB: '4',
+  });
+
+  await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: config.build.image });
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.client.imps.create({ name: 'agent-a', memoryMib: 768 });
+  await ctx.client.imps.create({ name: 'agent-b', memoryMib: 768 });
+  await ctx.client.leases.acquire({ name: 'agent-a', label: 'job', ttlSeconds: 600 });
+  await ctx.client.leases.acquire({ name: 'agent-b', label: 'job', ttlSeconds: 600 });
+
+  const builder = buildStubImageBuilder({ exported: [], repoDigest: `sha256:${'b'.repeat(64)}` });
+
+  const images = createImageService({
+    config,
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
+    db: ctx.db,
+    storage: ctx.storage,
+    storageGate: ctx.impd.storageGate,
+    diskBudget: ctx.impd.diskBudget,
+    readBuilders: () => builders,
+  });
+
+  const builders = createBuilders({
+    config,
+    db: ctx.db,
+    imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
+    ensureImage: (signal) => images.ensureBuilderImage(signal),
+  });
+
+  expect(images.addImage('busybox', 'box')).rejects.toMatchObject({ code: 'RAM_BUDGET_EXCEEDED' });
 });
 
 test('it fails the add with SERVICE_UNAVAILABLE when the registry cannot give the builder image', async () => {

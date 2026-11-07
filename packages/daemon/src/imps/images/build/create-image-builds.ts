@@ -159,7 +159,7 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
           throw new ImpdError('SERVICE_UNAVAILABLE', { message: 'impd is starting; try again' });
         }
 
-        return builders.withBuilder(signal, async (exec, builderName) => {
+        return builders.withBuilder({ signal, imageName }, async (exec, builderName) => {
           options.setBuilder?.(builderName);
           const started = deps.clock.now();
 
