@@ -46,12 +46,12 @@ name for the run:
 
 ```sh
 git switch -c bench/huge-pages-<name> origin/main
-git apply docs/design/spikes/wake-cold-reads/prototypes/bench-cold-cache.diff
-git commit -am "chore(bench): wake from a cold page cache"
-git apply docs/design/spikes/wake-cold-reads/prototypes/bench-zfs-pool.diff
-git commit -am "chore(bench): run the imps on a zfs pool"
-git apply docs/design/spikes/wake-cold-reads/prototypes/warm-after-sleep.diff
-git commit -am "perf(daemon): read a slept imp's memory file into the page cache"
+git apply --index docs/design/spikes/wake-cold-reads/prototypes/bench-cold-cache.diff
+git commit -m "chore(bench): wake from a cold page cache"
+git apply --index docs/design/spikes/wake-cold-reads/prototypes/bench-zfs-pool.diff
+git commit -m "chore(bench): run the imps on a zfs pool"
+git apply --index docs/design/spikes/wake-cold-reads/prototypes/warm-after-sleep.diff
+git commit -m "perf(daemon): read a slept imp's memory file into the page cache"
 git push origin HEAD
 ```
 
