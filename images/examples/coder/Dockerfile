@@ -1,6 +1,6 @@
 # Coding imp example: images/base plus Claude Code and gh, for an agent that
 # works on a repo. The broker adds the Claude and GitHub credentials to each
-# request (README.md), so the image holds none.
+# request (docs/guides/coder.md), so the image holds none.
 #   impz image build images/examples/coder --name coder
 # The published images/base, pinned by digest, which brings git and curl.
 FROM ghcr.io/zgeoff/imp-base:0.29.0@sha256:1851f631ea77f3a99b6f1f9af8ca8868434f4cd066158bcf9def8678c29b0c21

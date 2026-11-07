@@ -105,6 +105,8 @@ How to install, run and use impz.
   instance and the CLI
 - [The CLI](./guides/cli.md) — every command, sizes, exit codes and the console
 - [Images](./guides/images.md) — the shipped images, what a guest takes from an image, and your own
+- [A coding imp](./guides/coder.md) — the coder image, its credentials, and checking an image for
+  secrets
 - [Services and logs](./guides/services.md) — the processes an imp keeps running, and their logs
 - [Templates](./guides/templates.md) — an image made from an imp's disk, and what each copy gets of
   its own
@@ -146,6 +148,8 @@ How to install, run and use impz.
   tailnet
 - [Releasing](./runbooks/releasing.md) — what release-please and the release workflow do, and the
   steps they leave to you
+- [The guest kernel](./runbooks/kernel.md) — building the kernel, its pinned version, and checking
+  its config
 
 ## Reference
 

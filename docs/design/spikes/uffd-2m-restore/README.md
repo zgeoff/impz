@@ -1,4 +1,4 @@
-# UFFD restore on 2 MiB pages
+# Spike: UFFD restore on 2 MiB pages
 
 This spike measures whether a boot template restored through a userfaultfd (UFFD) page handler on 2
 MiB pages brings an imp's agent up in under 250 ms after the claim. impd restores a template from a

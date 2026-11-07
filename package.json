@@ -147,7 +147,7 @@
     "release:update-formula": "bun scripts/release/update-formula.ts",
     "release:plan-npm": "bun scripts/release/plan-npm-packages.ts",
     "release:pack-npm": "bun scripts/release/pack-npm-packages.ts",
-    "check:docs": "chex prose length links skill"
+    "check:docs": "chex prose length links readmes skill"
   },
   "devDependencies": {
     "@bufbuild/buf": "1.75.0",
