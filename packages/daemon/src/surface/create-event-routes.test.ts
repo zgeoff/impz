@@ -621,7 +621,7 @@ test('it lists a reset, then the snapshot, for a cursor older than the oldest ev
   const seen = await ctx.client.events.list({});
 
   await ctx.client.imps.create({ name: 'dev' });
-  await ctx.pruneEvents(Date.now() + 8 * 86_400_000);
+  await ctx.pruneEvents(ctx.now() + 8 * 86_400_000);
 
   const head = await ctx.readHead();
   const page = await ctx.client.events.list({ after: seen.after, logId: seen.logId });
