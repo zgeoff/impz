@@ -1,0 +1,31 @@
+diff --git a/host/uffd-handler/handler.go b/host/uffd-handler/handler.go
+index 907df7a3..3a0c4b27 100644
+--- a/host/uffd-handler/handler.go
++++ b/host/uffd-handler/handler.go
+@@ -51,6 +51,8 @@ type handler struct {
+ 	stats    *handlerStats
+ 	data     map[int64]bool
+ 	zero     []byte
++	// prototype: each data block is read with one pread into this buffer
++	readBuf []byte
+ 	// the ranges the guest gave back, which the kernel zero-fills from then on
+ 	removed []uffdMsg
+ }
+@@ -83,6 +85,7 @@ func newHandler(uffd int, regions []guestRegion, source *memSource, stats *handl
+ 		stats:    stats,
+ 		data:     data,
+ 		zero:     make([]byte, pageSize),
++		readBuf:  make([]byte, pageSize),
+ 	}, nil
+ }
+ 
+@@ -203,6 +206,9 @@ func (h *handler) serveFault(address uint64) (copyResult, error) {
+ 	source, served := h.zero, copiedHole
+ 	if h.data[offset] {
+ 		source, served = h.source.mapped[offset:offset+int64(h.pageSize)], copiedData
++		if _, err := h.source.file.ReadAt(h.readBuf, offset); err == nil {
++			source = h.readBuf
++		}
+ 	}
+ 	arg := uffdioCopyArg{
+ 		dst: dst,

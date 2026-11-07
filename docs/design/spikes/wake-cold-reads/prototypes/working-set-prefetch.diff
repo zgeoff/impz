@@ -1,0 +1,364 @@
+diff --git a/host/uffd-handler/handler.go b/host/uffd-handler/handler.go
+index 907df7a3..18ee912a 100644
+--- a/host/uffd-handler/handler.go
++++ b/host/uffd-handler/handler.go
+@@ -49,13 +49,14 @@ type handler struct {
+ 	pageSize uint64
+ 	source   *memSource
+ 	stats    *handlerStats
++	ws       *workingSet
+ 	data     map[int64]bool
+ 	zero     []byte
+ 	// the ranges the guest gave back, which the kernel zero-fills from then on
+ 	removed []uffdMsg
+ }
+ 
+-func newHandler(uffd int, regions []guestRegion, source *memSource, stats *handlerStats) (*handler, error) {
++func newHandler(uffd int, regions []guestRegion, source *memSource, stats *handlerStats, ws *workingSet) (*handler, error) {
+ 	pageSize := regions[0].PageSize
+ 	if pageSize == 0 || pageSize&(pageSize-1) != 0 {
+ 		return nil, fmt.Errorf("uffd handshake: page size %d is not a power of two", pageSize)
+@@ -81,6 +82,7 @@ func newHandler(uffd int, regions []guestRegion, source *memSource, stats *handl
+ 		pageSize: pageSize,
+ 		source:   source,
+ 		stats:    stats,
++		ws:       ws,
+ 		data:     data,
+ 		zero:     make([]byte, pageSize),
+ 	}, nil
+@@ -203,6 +205,11 @@ func (h *handler) serveFault(address uint64) (copyResult, error) {
+ 	source, served := h.zero, copiedHole
+ 	if h.data[offset] {
+ 		source, served = h.source.mapped[offset:offset+int64(h.pageSize)], copiedData
++		if h.pageSize == workingSetBlock {
++			if buf := h.ws.take(offset); buf != nil {
++				source = buf
++			}
++		}
+ 	}
+ 	arg := uffdioCopyArg{
+ 		dst: dst,
+@@ -212,6 +219,9 @@ func (h *handler) serveFault(address uint64) (copyResult, error) {
+ 	_, _, errno := unix.Syscall(unix.SYS_IOCTL, uintptr(h.uffd), uffdioCopy, uintptr(unsafe.Pointer(&arg)))
+ 	switch {
+ 	case errno == 0:
++		if served == copiedData && h.pageSize == workingSetBlock {
++			h.ws.served(offset)
++		}
+ 		return served, nil
+ 	case errno == unix.EEXIST:
+ 		return copiedAlready, nil
+diff --git a/host/uffd-handler/handler_test.go b/host/uffd-handler/handler_test.go
+index 1d9dea44..696bc0d6 100644
+--- a/host/uffd-handler/handler_test.go
++++ b/host/uffd-handler/handler_test.go
+@@ -24,7 +24,7 @@ func serveInProcess(t *testing.T, mem []byte, uffd int, removed []uffdMsg) func(
+ 	assert.NilError(t, err)
+ 	t.Cleanup(stats.close)
+ 	regions := []guestRegion{{BaseHostVirtAddr: uint64(uintptr(unsafe.Pointer(&mem[0]))), Size: testPages * testPage, PageSize: testPage}}
+-	h, err := newHandler(uffd, regions, source, stats)
++	h, err := newHandler(uffd, regions, source, stats, nil)
+ 	assert.NilError(t, err)
+ 	h.removed = removed
+ 
+@@ -120,7 +120,7 @@ func TestServeFaultCopiesNothingIntoAPageAnotherFaultCopied(t *testing.T) {
+ 	assert.NilError(t, err)
+ 	t.Cleanup(source.close)
+ 	regions := []guestRegion{{BaseHostVirtAddr: uint64(uintptr(unsafe.Pointer(&mem[0]))), Size: testPages * testPage, PageSize: testPage}}
+-	h, err := newHandler(uffd, regions, source, nil)
++	h, err := newHandler(uffd, regions, source, nil, nil)
+ 	assert.NilError(t, err)
+ 	first, err := h.serveFault(regions[0].BaseHostVirtAddr)
+ 	assert.NilError(t, err)
+@@ -141,7 +141,7 @@ func TestNewHandlerRefusesRegionsOfMixedPageSizes(t *testing.T) {
+ 		{BaseHostVirtAddr: 1 << 30, Size: testPage, Offset: testPage, PageSize: 2 << 20},
+ 	}
+ 
+-	_, err = newHandler(-1, regions, source, nil)
++	_, err = newHandler(-1, regions, source, nil, nil)
+ 
+ 	assert.ErrorContains(t, err, "regions of 4096 and 2097152 byte pages")
+ }
+diff --git a/host/uffd-handler/main.go b/host/uffd-handler/main.go
+index eb700022..7c88bdf9 100644
+--- a/host/uffd-handler/main.go
++++ b/host/uffd-handler/main.go
+@@ -32,8 +32,9 @@ type owner struct {
+ }
+ 
+ type options struct {
+-	socket string
+-	owner  *owner
++	socket     string
++	owner      *owner
++	workingSet string
+ }
+ 
+ func main() {
+@@ -54,6 +55,7 @@ func parseOptions(args []string) (options, error) {
+ 	socket := flags.String("socket", "", "the path Firecracker's Uffd backend connects to")
+ 	uid := flags.String("uid", "", "the uid to serve as, the jail's")
+ 	gid := flags.String("gid", "", "the gid to serve as, the jail's")
++	workingSet := flags.String("working-set", "", "the file of the blocks the last wake touched")
+ 	if err := flags.Parse(args); err != nil {
+ 		return options{}, err
+ 	}
+@@ -63,7 +65,7 @@ func parseOptions(args []string) (options, error) {
+ 	if (*uid == "") != (*gid == "") {
+ 		return options{}, errors.New("--uid and --gid go together")
+ 	}
+-	opts := options{socket: *socket}
++	opts := options{socket: *socket, workingSet: *workingSet}
+ 	if *uid == "" {
+ 		return opts, nil
+ 	}
+@@ -85,6 +87,15 @@ func run(opts options, memFile *os.File, statsFile *os.File) error {
+ 	}
+ 	defer source.close()
+ 
++	var ws *workingSet
++	if opts.workingSet != "" {
++		ws, err = openWorkingSet(opts.workingSet, memFile, int64(len(source.mapped)))
++		if err != nil {
++			fmt.Fprintf(os.Stderr, "uffd-handler: working set: %v\n", err)
++			ws = nil
++		}
++	}
++
+ 	stats, err := openHandlerStats(statsFile)
+ 	if err != nil {
+ 		return err
+@@ -109,7 +120,7 @@ func run(opts options, memFile *os.File, statsFile *os.File) error {
+ 	}
+ 	defer unix.Close(conn.pidfd)
+ 
+-	err = serveConn(conn, source, stats)
++	err = serveConn(conn, source, stats, ws)
+ 	if err != nil {
+ 		// the peer may already be gone, which leaves nothing to stop
+ 		_ = unix.PidfdSendSignal(conn.pidfd, unix.SIGKILL, nil, 0)
+@@ -117,9 +128,9 @@ func run(opts options, memFile *os.File, statsFile *os.File) error {
+ 	return err
+ }
+ 
+-func serveConn(conn peerConn, source *memSource, stats *handlerStats) error {
++func serveConn(conn peerConn, source *memSource, stats *handlerStats, ws *workingSet) error {
+ 	defer unix.Close(conn.uffd)
+-	h, err := newHandler(conn.uffd, conn.regions, source, stats)
++	h, err := newHandler(conn.uffd, conn.regions, source, stats, ws)
+ 	if err != nil {
+ 		return err
+ 	}
+diff --git a/host/uffd-handler/workingset.go b/host/uffd-handler/workingset.go
+new file mode 100644
+index 00000000..55a916cb
+--- /dev/null
++++ b/host/uffd-handler/workingset.go
+@@ -0,0 +1,155 @@
++package main
++
++import (
++	"encoding/binary"
++	"io"
++	"os"
++	"sync"
++	"time"
++
++	"golang.org/x/sys/unix"
++)
++
++// Prototype: the working set is the list of 2 MiB data blocks that the guest
++// faulted in the first second of its last wake, in fault order. A wake reads
++// those blocks in parallel into buffers before the guest asks, and serves each
++// fault from its buffer; it records this wake's list for the next one.
++const (
++	workingSetBlock   = 2 << 20
++	workingSetReaders = 8
++	workingSetCap     = 1024
++	workingSetWindow  = time.Second
++)
++
++type prefetched struct {
++	offset int64
++	ready  chan struct{}
++	buf    []byte
++}
++
++type workingSet struct {
++	file     *os.File
++	blocks   map[int64]*prefetched
++	recorded map[int64]bool
++	count    int64
++	started  time.Time
++	released bool
++	wg       sync.WaitGroup
++}
++
++// openWorkingSet reads the last wake's list, starts the reads, and empties the
++// file for this wake's list.
++func openWorkingSet(path string, mem *os.File, memSize int64) (*workingSet, error) {
++	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o600)
++	if err != nil {
++		return nil, err
++	}
++	raw, err := io.ReadAll(file)
++	if err != nil {
++		file.Close()
++		return nil, err
++	}
++	if err := file.Truncate(0); err != nil {
++		file.Close()
++		return nil, err
++	}
++	ws := &workingSet{file: file, blocks: map[int64]*prefetched{}, recorded: map[int64]bool{}}
++	var order []*prefetched
++	for i := 0; i+8 <= len(raw); i += 8 {
++		offset := int64(binary.LittleEndian.Uint64(raw[i:]))
++		if offset < 0 || offset%workingSetBlock != 0 || offset+workingSetBlock > memSize || ws.blocks[offset] != nil {
++			continue
++		}
++		block := &prefetched{offset: offset, ready: make(chan struct{})}
++		ws.blocks[offset] = block
++		order = append(order, block)
++	}
++	jobs := make(chan *prefetched, len(order))
++	for _, block := range order {
++		jobs <- block
++	}
++	close(jobs)
++	for range workingSetReaders {
++		ws.wg.Add(1)
++		go func() {
++			defer ws.wg.Done()
++			for block := range jobs {
++				block.read(mem)
++			}
++		}()
++	}
++	return ws, nil
++}
++
++func (block *prefetched) read(mem *os.File) {
++	defer close(block.ready)
++	buf, err := unix.Mmap(-1, 0, workingSetBlock, unix.PROT_READ|unix.PROT_WRITE, unix.MAP_PRIVATE|unix.MAP_ANONYMOUS)
++	if err != nil {
++		return
++	}
++	if _, err := mem.ReadAt(buf, block.offset); err != nil {
++		_ = unix.Munmap(buf)
++		return
++	}
++	block.buf = buf
++}
++
++// take returns the block's buffer once its read ends, or nil when the last
++// wake did not touch it or its read failed.
++func (ws *workingSet) take(offset int64) []byte {
++	if ws == nil || ws.released {
++		return nil
++	}
++	block := ws.blocks[offset]
++	if block == nil {
++		return nil
++	}
++	<-block.ready
++	return block.buf
++}
++
++// served frees the block's buffer and records the block, in the window.
++func (ws *workingSet) served(offset int64) {
++	if ws == nil {
++		return
++	}
++	if block := ws.blocks[offset]; block != nil && !ws.released {
++		<-block.ready
++		if block.buf != nil {
++			_ = unix.Munmap(block.buf)
++		}
++		delete(ws.blocks, offset)
++	}
++	now := time.Now()
++	if ws.started.IsZero() {
++		ws.started = now
++	}
++	if now.Sub(ws.started) > workingSetWindow {
++		ws.release()
++		return
++	}
++	if ws.recorded[offset] || ws.count >= workingSetCap {
++		return
++	}
++	var entry [8]byte
++	binary.LittleEndian.PutUint64(entry[:], uint64(offset))
++	if _, err := ws.file.WriteAt(entry[:], ws.count*8); err == nil {
++		ws.recorded[offset] = true
++		ws.count++
++	}
++}
++
++// release frees the buffers of blocks this wake never touched.
++func (ws *workingSet) release() {
++	if ws.released {
++		return
++	}
++	ws.released = true
++	ws.wg.Wait()
++	for offset, block := range ws.blocks {
++		if block.buf != nil {
++			_ = unix.Munmap(block.buf)
++		}
++		delete(ws.blocks, offset)
++	}
++}
+diff --git a/packages/daemon/src/test-utils/vm/run-stub-uffd-handler.ts b/packages/daemon/src/test-utils/vm/run-stub-uffd-handler.ts
+index 492f9a4e..4ad4f22b 100644
+--- a/packages/daemon/src/test-utils/vm/run-stub-uffd-handler.ts
++++ b/packages/daemon/src/test-utils/vm/run-stub-uffd-handler.ts
+@@ -5,7 +5,12 @@ import { parseArgs } from 'node:util';
+ // real handler's flag parser takes, in either of its forms
+ const parsed = parseArgs({
+   args: process.argv.slice(2),
+-  options: { socket: { type: 'string' }, uid: { type: 'string' }, gid: { type: 'string' } },
++  options: {
++    socket: { type: 'string' },
++    uid: { type: 'string' },
++    gid: { type: 'string' },
++    'working-set': { type: 'string' },
++  },
+   allowPositionals: true,
+   strict: true,
+ });
+diff --git a/packages/daemon/src/vm/vmm/uffd-handler.ts b/packages/daemon/src/vm/vmm/uffd-handler.ts
+index c4f7ec0f..613405a8 100644
+--- a/packages/daemon/src/vm/vmm/uffd-handler.ts
++++ b/packages/daemon/src/vm/vmm/uffd-handler.ts
+@@ -18,6 +18,9 @@ export interface UffdHandlerPlan {
+   readonly memFile: string;
+   readonly jail: JailUser | null;
+   readonly cgroup: ImpCgroup | null;
++
++  // prototype: the file of the blocks the last wake touched, on a wake only
++  readonly workingSet?: string;
+ }
+ 
+ export async function startUffdHandler(plan: Readonly<UffdHandlerPlan>): Promise<number> {
+@@ -30,6 +33,7 @@ export async function startUffdHandler(plan: Readonly<UffdHandlerPlan>): Promise
+     '--socket',
+     paths.uffdSocket,
+     ...(plan.jail === null ? [] : ['--uid', String(plan.jail.uid), '--gid', String(plan.jail.gid)]),
++    ...(plan.workingSet === undefined ? [] : ['--working-set', plan.workingSet]),
+   ];
+ 
+   const memFd = openSync(plan.memFile, 'r');
+diff --git a/packages/daemon/src/vm/vmm/vm-runner.ts b/packages/daemon/src/vm/vmm/vm-runner.ts
+index fc53f3ef..b37ce8cc 100644
+--- a/packages/daemon/src/vm/vmm/vm-runner.ts
++++ b/packages/daemon/src/vm/vmm/vm-runner.ts
+@@ -450,6 +450,7 @@ export function createVmRunner(jails: Jails, options: Readonly<VmRunnerOptions>)
+             memFile: plan.paths.memFile,
+             jail: plan.jail,
+             cgroup: plan.cgroup,
++            workingSet: `${plan.paths.snapshotDir}/working-set`,
+           });
+ 
+           uffdWatch.watch(pid, plan.paths);

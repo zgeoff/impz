@@ -1,0 +1,13 @@
+diff --git a/.github/workflows/bench.yml b/.github/workflows/bench.yml
+index 0b303f34..782618d7 100644
+--- a/.github/workflows/bench.yml
++++ b/.github/workflows/bench.yml
+@@ -71,7 +71,7 @@ jobs:
+       SAMPLES: ${{ inputs.samples || '20' }}
+       ROUNDS: ${{ inputs.rounds || '3' }}
+       # throwaway: 1 drops each memory file from the page cache before a timed wake
+-      BENCH_EVICT: '1'
++      BENCH_EVICT: '0'
+     steps:
+       - name: Checkout
+         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
