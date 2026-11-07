@@ -149,6 +149,20 @@ test('it shows the RAM kept for priority imps on impd’s ram line', async () =>
   expect(shown.stdout).toInclude(', 1024 kept for priority imps)');
 });
 
+test('it leaves the RAM kept for priority imps off impd’s ram line when none is kept', async () => {
+  const ctx = await setupTest();
+  const box = await startImpdHost(ctx.stack, { env: {} });
+
+  writeHostConfig(ctx.home, {
+    current: 'box',
+    hosts: { box: { url: box.url, token: box.rootToken } },
+  });
+
+  const shown = await runCLIInProcess({ args: ['info'], env: ctx.home });
+
+  expect(shown.stdout).not.toInclude('kept for priority imps');
+});
+
 test('it prints an imp’s --json output in the shape of the committed schema', async () => {
   const ctx = await setupTest();
   const box = await startImpdHost(ctx.stack, { env: {} });

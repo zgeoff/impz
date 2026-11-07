@@ -78,7 +78,7 @@ function formatSleeping(mib: number | undefined): string {
 }
 
 function formatPriorityKept(mib: number | undefined): string {
-  return mib === undefined || mib === 0 ? '' : `, ${String(mib)} kept for priority imps`;
+  return (mib ?? 0) === 0 ? '' : `, ${String(mib)} kept for priority imps`;
 }
 
 function formatGib(bytes: number): string {
