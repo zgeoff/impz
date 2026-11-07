@@ -290,6 +290,42 @@ test('it opens the next stream after a position, and passes no position on', asy
   expect(onEvent).not.toHaveBeenCalled();
 });
 
+test('it opens with an empty cursor before it has read a logged event', async () => {
+  const controller = new AbortController();
+
+  const snapshot: ImpEvent = {
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
+    v: EVENT_VERSION,
+    at: new Date(),
+    seq: 41,
+    logId: 'log-a',
+    ev: 'ImpAdded',
+    reason: 'snapshot',
+    imp: buildMockImp({ name: 'box' }),
+  };
+
+  const streams = buildStubAnswerQueue([
+    () => Promise.resolve(Readable.from([snapshot])),
+    () => Promise.resolve(Readable.from([])),
+  ]);
+
+  const onOpen = mock<NonNullable<WatchEventsOptions['onOpen']>>((attempt) => {
+    if (attempt === 2) {
+      controller.abort();
+    }
+  });
+
+  await watchEvents(
+    { events: { stream: () => streams.next()() } },
+    { onEvent: () => {}, onOpen, signal: controller.signal, reconnect: { delayMs: 1 } },
+  );
+
+  expect(onOpen.mock.calls).toStrictEqual([
+    [1, {}],
+    [2, {}],
+  ]);
+});
+
 test('it tells each open the cursor its stream starts at', async () => {
   const controller = new AbortController();
 
