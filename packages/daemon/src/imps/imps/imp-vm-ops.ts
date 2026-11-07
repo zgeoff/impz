@@ -42,6 +42,13 @@ const RESTORE_CONCURRENCY = 4;
 const NO_JAIL_CGROUP =
   'a jailed VM starts only in its own cgroup, and it has none: the cpu controller is not delegated to /sys/fs/cgroup/imps, or the setup of imps/<id> failed (see the log); set IMP_JAILER=false on a host without cgroup delegation';
 
+interface NewBoot {
+  readonly diskReady?: Promise<unknown>;
+
+  // the name the RAM governor matches against the priority patterns in place of the imp's own
+  readonly priorityName?: string | undefined;
+}
+
 export interface ImpVmOps {
   readonly updateState: (imp: LockedImp, change: Readonly<ImpStateChange>) => Promise<LockedImp>;
 
@@ -52,7 +59,7 @@ export interface ImpVmOps {
     cause: Extract<ColdBootCause, 'start' | 'restore'>,
   ) => Promise<LockedImp>;
 
-  readonly startNewImpVm: (imp: LockedImp, diskReady: Promise<unknown>) => Promise<LockedImp>;
+  readonly startNewImpVm: (imp: LockedImp, boot: Readonly<NewBoot>) => Promise<LockedImp>;
 
   readonly stopImpVm: (imp: LockedImp, graceful?: boolean) => Promise<LockedImp>;
 
@@ -136,7 +143,7 @@ export function createImpVmOps(host: ImpContext): ImpVmOps {
     imp: LockedImp,
     cause: Exclude<ColdBootCause, 'recovery' | 'unknown'>,
     reason: string | null,
-    diskReady: Promise<unknown> = Promise.resolve(),
+    boot: Readonly<NewBoot> = {},
   ): Promise<LockedImp> => {
     const isWake = cause === 'wake_fallback';
 
@@ -166,6 +173,7 @@ export function createImpVmOps(host: ImpContext): ImpVmOps {
     await context.admission.admit({
       id: imp.id,
       name: imp.name,
+      ...(boot.priorityName !== undefined && { priorityName: boot.priorityName }),
       reserveMib: Math.ceil((imp.memoryMib * context.config.bootReservePercent) / 100),
       memoryMib: imp.maxMemoryMib,
       hugePagesMib: hugePages === '2M' ? imp.memoryMib : 0,
@@ -201,7 +209,7 @@ export function createImpVmOps(host: ImpContext): ImpVmOps {
         hugePages,
         hostSteps,
         loadBefore,
-        diskReady,
+        diskReady: boot.diskReady ?? Promise.resolve(),
       });
 
       startCounting(context, imp, vm.pid);
@@ -261,8 +269,8 @@ export function createImpVmOps(host: ImpContext): ImpVmOps {
 
   const startImpVm: ImpVmOps['startImpVm'] = (imp, cause) => startColdImpVm(imp, cause, null);
 
-  const startNewImpVm = (imp: LockedImp, diskReady: Promise<unknown>): Promise<LockedImp> =>
-    startColdImpVm(imp, 'start', null, diskReady);
+  const startNewImpVm: ImpVmOps['startNewImpVm'] = (imp, boot) =>
+    startColdImpVm(imp, 'start', null, boot);
 
   const stopImpVm = async (imp: LockedImp, graceful = true): Promise<LockedImp> => {
     const paths = context.findPaths(imp.id);

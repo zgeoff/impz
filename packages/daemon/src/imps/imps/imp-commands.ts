@@ -60,6 +60,9 @@ interface CreateImpInput {
   readonly isDiskGrowPending?: boolean;
 
   readonly kind?: ImpKind;
+
+  // the name the RAM governor matches against the priority patterns in place of the imp's own
+  readonly priorityName?: string;
 }
 
 interface DestroyOptions {
@@ -267,7 +270,10 @@ export function createImpCommands(parts: ImpCommandParts): ImpCommands {
         try {
           const bootStarted = performance.now();
 
-          const running = await ops.startNewImpVm(imp, sizing);
+          const running = await ops.startNewImpVm(imp, {
+            diskReady: sizing,
+            priorityName: input.priorityName,
+          });
 
           const bootMs = Math.round(performance.now() - bootStarted);
 

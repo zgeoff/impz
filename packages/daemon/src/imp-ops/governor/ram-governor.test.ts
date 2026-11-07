@@ -1755,6 +1755,60 @@ test.each([
   },
 );
 
+test('it admits an imp whose priority name matches the patterns into the RAM kept for priority imps', () => {
+  const host = createStubGovernedHost({
+    budgetMib: 1000,
+    ids: ['agent-a', 'imp-build-a'],
+    awake: [{ id: 'agent-a', rssMib: 600 }],
+  });
+
+  const governor = createRamGovernor({
+    ...host.deps,
+    priority: { mib: 400, patterns: ['chat-*'] },
+  });
+
+  host.applyChange({ kind: 'busy', id: 'agent-a', on: true }, governor);
+
+  expect(
+    governor.admit({
+      id: 'imp-build-a',
+      name: 'imp-build-a',
+      priorityName: 'chat-notes',
+      reserveMib: 300,
+      memoryMib: 600,
+    }),
+  ).resolves.toBeUndefined();
+});
+
+test('it counts the RAM of an awake imp admitted under a priority name against the kept RAM', async () => {
+  const host = createStubGovernedHost({
+    budgetMib: 1000,
+    ids: ['agent-a', 'imp-build-a'],
+    awake: [{ id: 'agent-a', rssMib: 300 }],
+  });
+
+  const governor = createRamGovernor({
+    ...host.deps,
+    priority: { mib: 400, patterns: ['chat-*'] },
+  });
+
+  await governor.admit({
+    id: 'imp-build-a',
+    name: 'imp-build-a',
+    priorityName: 'chat-notes',
+    reserveMib: 300,
+    memoryMib: 600,
+  });
+
+  host.markAdmitted('imp-build-a');
+  host.applyChange({ kind: 'rss', id: 'imp-build-a', mib: 300 }, governor);
+  host.applyChange({ kind: 'tick', durationMs: 60_000 }, governor);
+
+  const usage = await governor.readUsage();
+
+  expect(usage.priorityKeptMib).toBe(100);
+});
+
 test('it sleeps no priority imp to make room for an imp outside the priority patterns', async () => {
   const host = createStubGovernedHost({
     budgetMib: 1000,

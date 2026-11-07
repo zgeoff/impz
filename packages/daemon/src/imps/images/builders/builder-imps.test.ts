@@ -50,11 +50,14 @@ test('it gives a build a public builder of the build size', async () => {
     },
   });
 
-  const builder = await builders.withBuilder(new AbortController().signal, async () => {
-    const imps = await listImps(ctx.db);
+  const builder = await builders.withBuilder(
+    { signal: new AbortController().signal, imageName: 'box' },
+    async () => {
+      const imps = await listImps(ctx.db);
 
-    return imps.find((imp) => imp.kind === 'builder');
-  });
+      return imps.find((imp) => imp.kind === 'builder');
+    },
+  );
 
   expect(builder).toMatchObject({
     kind: 'builder',
@@ -81,13 +84,16 @@ test('it holds the public egress policy for the builder while the build runs', a
     },
   });
 
-  const policy = await builders.withBuilder(new AbortController().signal, async () => {
-    const [builder] = await listImps(ctx.db);
+  const policy = await builders.withBuilder(
+    { signal: new AbortController().signal, imageName: 'box' },
+    async () => {
+      const [builder] = await listImps(ctx.db);
 
-    invariant(builder);
+      invariant(builder);
 
-    return ctx.impd.egress.readPolicy(builder.name);
-  });
+      return ctx.impd.egress.readPolicy(builder.name);
+    },
+  );
 
   expect(policy).toStrictEqual({ mode: 'public', allow: [] });
 });
@@ -109,13 +115,16 @@ test('it removes the builder and its egress policy when the build ends', async (
     },
   });
 
-  const name = await builders.withBuilder(new AbortController().signal, async () => {
-    const [builder] = await listImps(ctx.db);
+  const name = await builders.withBuilder(
+    { signal: new AbortController().signal, imageName: 'box' },
+    async () => {
+      const [builder] = await listImps(ctx.db);
 
-    invariant(builder);
+      invariant(builder);
 
-    return builder.name;
-  });
+      return builder.name;
+    },
+  );
 
   const imps = await listImps(ctx.db);
 
@@ -151,7 +160,9 @@ test('it adds the builder image before the builder starts', async () => {
     },
   });
 
-  await builders.withBuilder(new AbortController().signal, () => Promise.resolve());
+  await builders.withBuilder({ signal: new AbortController().signal, imageName: 'box' }, () =>
+    Promise.resolve(),
+  );
 
   expect(ensured).toStrictEqual(['imp-builder']);
 });
@@ -175,11 +186,14 @@ test('it asks the builder engine again, a poll later, until it answers, then run
     clock,
   });
 
-  const ran = await builders.withBuilder(new AbortController().signal, async (exec) => {
-    const answered = await exec(['echo'], { signal: new AbortController().signal });
+  const ran = await builders.withBuilder(
+    { signal: new AbortController().signal, imageName: 'box' },
+    async (exec) => {
+      const answered = await exec(['echo'], { signal: new AbortController().signal });
 
-    return answered.stdout;
-  });
+      return answered.stdout;
+    },
+  );
 
   expect(ran).toBe('ok');
   expect(clock.sleeps).toStrictEqual([500]);
@@ -212,7 +226,9 @@ test('it logs the time its builder took to answer, on its clock', async () => {
     pickBuilderName: () => 'imp-build-timed',
   });
 
-  await builders.withBuilder(new AbortController().signal, () => Promise.resolve());
+  await builders.withBuilder({ signal: new AbortController().signal, imageName: 'box' }, () =>
+    Promise.resolve(),
+  );
 
   expect(logs).toContain(
     'INFO impd.image imp=imp-build-timed image build: the builder is ready in 500ms',
@@ -237,8 +253,9 @@ test('it names each builder with its name picker', async () => {
     pickBuilderName: () => 'imp-build-picked',
   });
 
-  const name = await builders.withBuilder(new AbortController().signal, (_exec, builder) =>
-    Promise.resolve(builder),
+  const name = await builders.withBuilder(
+    { signal: new AbortController().signal, imageName: 'box' },
+    (_exec, builder) => Promise.resolve(builder),
   );
 
   expect(name).toBe('imp-build-picked');
@@ -268,7 +285,7 @@ test('it writes the test registry into the builder, once its engine answers and 
     },
   });
 
-  await builders.withBuilder(new AbortController().signal, (exec) =>
+  await builders.withBuilder({ signal: new AbortController().signal, imageName: 'box' }, (exec) =>
     exec(['echo'], { signal: new AbortController().signal }),
   );
 
@@ -319,8 +336,9 @@ test('it fails the build when the builder refuses the test registry, and removes
     },
   });
 
-  const building = builders.withBuilder(new AbortController().signal, () =>
-    Promise.resolve('built'),
+  const building = builders.withBuilder(
+    { signal: new AbortController().signal, imageName: 'box' },
+    () => Promise.resolve('built'),
   );
 
   const failure = await building.then(
@@ -358,8 +376,9 @@ test('it fails the build when the builder engine does not answer in 60 s, and re
     clock,
   });
 
-  const building = builders.withBuilder(new AbortController().signal, () =>
-    Promise.resolve('built'),
+  const building = builders.withBuilder(
+    { signal: new AbortController().signal, imageName: 'box' },
+    () => Promise.resolve('built'),
   );
 
   expect(building).rejects.toThrowWithMessage(
@@ -395,8 +414,9 @@ test("it gives the tail of the builder engine's log when the engine does not ans
     clock: buildStubClock(),
   });
 
-  const building = builders.withBuilder(new AbortController().signal, () =>
-    Promise.resolve('built'),
+  const building = builders.withBuilder(
+    { signal: new AbortController().signal, imageName: 'box' },
+    () => Promise.resolve('built'),
   );
 
   expect(building).rejects.toThrowWithMessage(
@@ -427,8 +447,9 @@ test('it removes the builder of a failed build and rethrows the build error', as
     },
   });
 
-  const building = builders.withBuilder(new AbortController().signal, () =>
-    Promise.reject(new Error('the build failed')),
+  const building = builders.withBuilder(
+    { signal: new AbortController().signal, imageName: 'box' },
+    () => Promise.reject(new Error('the build failed')),
   );
 
   expect(building).rejects.toThrowWithMessage(Error, 'the build failed');
@@ -492,8 +513,9 @@ test('it keeps the build of a builder that survives its removal, and logs the su
 
   ctx.fake.queue('stop', 'fail');
 
-  const built = await builders.withBuilder(new AbortController().signal, () =>
-    Promise.resolve('built'),
+  const built = await builders.withBuilder(
+    { signal: new AbortController().signal, imageName: 'box' },
+    () => Promise.resolve('built'),
   );
 
   const survivors = await listImps(ctx.db);
@@ -532,7 +554,9 @@ test('it removes a builder that survived its removal on a later retry', async ()
 
   ctx.fake.queue('stop', 'fail');
 
-  await builders.withBuilder(new AbortController().signal, () => Promise.resolve());
+  await builders.withBuilder({ signal: new AbortController().signal, imageName: 'box' }, () =>
+    Promise.resolve(),
+  );
 
   const survivors = await listImps(ctx.db);
 
@@ -696,16 +720,18 @@ test('it ends an export over its file limit and removes its builder, with no cli
     },
   });
 
-  const exporting = builders.withBuilder(new AbortController().signal, (exec) =>
-    writeGuestTree({
-      exec,
-      root: join(tree, 'root'),
-      limits: { maxBytes: 1024 ** 3, maxFiles: 1 },
-      signal: new AbortController().signal,
-      startTar: startTarProcess,
-      startTimer: startRealTimer,
-      countTreeBytes,
-    }),
+  const exporting = builders.withBuilder(
+    { signal: new AbortController().signal, imageName: 'box' },
+    (exec) =>
+      writeGuestTree({
+        exec,
+        root: join(tree, 'root'),
+        limits: { maxBytes: 1024 ** 3, maxFiles: 1 },
+        signal: new AbortController().signal,
+        startTar: startTarProcess,
+        startTimer: startRealTimer,
+        countTreeBytes,
+      }),
   );
 
   expect(exporting).rejects.toThrowWithMessage(
@@ -756,17 +782,19 @@ test('it ends an export stopped while its exec opens, closes the exec and remove
     },
   });
 
-  const exporting = builders.withBuilder(new AbortController().signal, (exec) =>
-    writeGuestTree({
-      exec,
-      root: join(tree, 'root'),
-      limits: { maxBytes: 1024 ** 3, maxFiles: 1000 },
-      signal: new AbortController().signal,
-      grow: () => Promise.resolve(),
-      startTimer: timers.startTimer,
-      startTar: startTarProcess,
-      countTreeBytes,
-    }),
+  const exporting = builders.withBuilder(
+    { signal: new AbortController().signal, imageName: 'box' },
+    (exec) =>
+      writeGuestTree({
+        exec,
+        root: join(tree, 'root'),
+        limits: { maxBytes: 1024 ** 3, maxFiles: 1000 },
+        signal: new AbortController().signal,
+        grow: () => Promise.resolve(),
+        startTimer: timers.startTimer,
+        startTar: startTarProcess,
+        countTreeBytes,
+      }),
   );
 
   await waitFor(() => {
@@ -838,8 +866,9 @@ test('it leaves the imp that holds a name a builder create fails on', async () =
     buildMockNewImage({ name: 'base', digest: 'sha256:base', sizeBytes: 6 }),
   );
 
-  const building = builders.withBuilder(new AbortController().signal, () =>
-    Promise.resolve('built'),
+  const building = builders.withBuilder(
+    { signal: new AbortController().signal, imageName: 'box' },
+    () => Promise.resolve('built'),
   );
 
   expect(building).rejects.toMatchObject({ code: 'CONFLICT' });

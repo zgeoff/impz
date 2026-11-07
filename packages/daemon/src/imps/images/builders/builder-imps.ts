@@ -16,9 +16,16 @@ const ENGINE_POLL_MS = 500;
 const NAME_ALPHABET = 'abcdefghijkmnpqrstuvwxyz23456789';
 const REMOVE_RETRY_MS = 30_000;
 
+interface BuilderRequest {
+  readonly signal: AbortSignal;
+
+  // the image the builder adds or builds, whose name the RAM governor admits the builder under
+  readonly imageName: string;
+}
+
 export interface Builders {
   readonly withBuilder: <T>(
-    signal: AbortSignal,
+    request: Readonly<BuilderRequest>,
     run: (exec: GuestExec, name: string) => Promise<T>,
   ) => Promise<T>;
 
@@ -199,7 +206,9 @@ export function createBuilders(deps: BuildersDeps): Builders {
   };
 
   return {
-    withBuilder: async (signal, run) => {
+    withBuilder: async (builderRequest, run) => {
+      const signal = builderRequest.signal;
+
       await deps.ensureImage(signal);
 
       signal.throwIfAborted();
@@ -217,6 +226,7 @@ export function createBuilders(deps: BuildersDeps): Builders {
           diskMib: Math.ceil(deps.config.build.diskBytes / 1024 ** 2),
           policy: { mode: 'public', allow: [] },
           kind: 'builder',
+          priorityName: builderRequest.imageName,
         });
 
         const exec = createGuestExec((request) => deps.imps.openBuilderExec(name, request));
