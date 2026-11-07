@@ -1611,3 +1611,332 @@ test('it keeps a grow within the budget, never sleeps its grower, and sleeps onl
     { numRuns: 500 },
   );
 });
+
+test('it admits a priority imp into the RAM kept for it after an imp outside the patterns asked for that RAM', async () => {
+  const host = createStubGovernedHost({
+    budgetMib: 1000,
+    ids: ['agent-a', 'agent-b', 'chat-a'],
+    awake: [{ id: 'agent-a', rssMib: 300 }],
+  });
+
+  const governor = createRamGovernor({
+    ...host.deps,
+    priority: { mib: 400, patterns: ['chat-*'] },
+  });
+
+  host.applyChange({ kind: 'busy', id: 'agent-a', on: true }, governor);
+
+  await Promise.allSettled([
+    governor.admit({ id: 'agent-b', name: 'agent-b', reserveMib: 400, memoryMib: 600 }),
+  ]);
+
+  expect(
+    governor.admit({ id: 'chat-a', name: 'chat-a', reserveMib: 400, memoryMib: 600 }),
+  ).resolves.toBeUndefined();
+});
+
+test('it refuses an imp outside the priority patterns that would take the RAM kept for priority imps, and names that RAM', () => {
+  const host = createStubGovernedHost({
+    budgetMib: 1000,
+    ids: ['agent-a', 'agent-b'],
+    awake: [{ id: 'agent-a', rssMib: 300 }],
+  });
+
+  const governor = createRamGovernor({
+    ...host.deps,
+    priority: { mib: 400, patterns: ['chat-*'] },
+  });
+
+  host.applyChange({ kind: 'busy', id: 'agent-a', on: true }, governor);
+
+  expect(
+    governor.admit({ id: 'agent-b', name: 'agent-b', reserveMib: 400, memoryMib: 600 }),
+  ).rejects.toMatchObject({
+    code: 'RAM_BUDGET_EXCEEDED',
+    message:
+      'not enough RAM: 300 of 1000 MiB in use and 400 MiB kept for priority imps (chat-*), 400 MiB requested, and no idle imp left to sleep',
+    data: { neededMib: 100 },
+  });
+});
+
+test.each([
+  { reserveMib: 300, outcome: 'fulfilled' },
+  { reserveMib: 301, outcome: 'rejected' },
+])(
+  'it counts only the kept RAM that awake priority imps leave unused, so $reserveMib MiB is $outcome',
+  async (row) => {
+    const host = createStubGovernedHost({
+      budgetMib: 1000,
+      ids: ['chat-a', 'agent-a', 'agent-b'],
+      awake: [
+        { id: 'chat-a', rssMib: 300 },
+        { id: 'agent-a', rssMib: 300 },
+      ],
+    });
+
+    const governor = createRamGovernor({
+      ...host.deps,
+      priority: { mib: 400, patterns: ['chat-*'] },
+    });
+
+    host.applyChange({ kind: 'busy', id: 'agent-a', on: true }, governor);
+
+    const outcomes = await Promise.allSettled([
+      governor.admit({
+        id: 'agent-b',
+        name: 'agent-b',
+        reserveMib: row.reserveMib,
+        memoryMib: 600,
+      }),
+    ]);
+
+    expect(outcomes.map((outcome) => outcome.status)).toStrictEqual([row.outcome]);
+  },
+);
+
+test('it sleeps no priority imp to make room for an imp outside the priority patterns', async () => {
+  const host = createStubGovernedHost({
+    budgetMib: 1000,
+    ids: ['chat-a', 'agent-a', 'agent-b'],
+    awake: [
+      { id: 'chat-a', rssMib: 300 },
+      { id: 'agent-a', rssMib: 300 },
+    ],
+  });
+
+  const governor = createRamGovernor({
+    ...host.deps,
+    priority: { mib: 400, patterns: ['chat-*'] },
+  });
+
+  await governor.admit({ id: 'agent-b', name: 'agent-b', reserveMib: 400, memoryMib: 600 });
+
+  expect(host.sleepCalls.map((call) => call.id)).toStrictEqual(['agent-a']);
+});
+
+test('it keeps the pool for priority imps while a priority imp on 4 KiB pages uses all their RAM', () => {
+  const host = createStubGovernedHost({
+    budgetMib: 4000,
+    ids: ['chat-a', 'agent-a'],
+    awake: [{ id: 'chat-a', rssMib: 400 }],
+    hugePool: { totalMib: 2048, freeMib: 2048 },
+  });
+
+  const governor = createRamGovernor({
+    ...host.deps,
+    priority: { mib: 400, patterns: ['chat-*'] },
+  });
+
+  expect(
+    governor.admit({
+      id: 'agent-a',
+      name: 'agent-a',
+      reserveMib: 512,
+      memoryMib: 1800,
+      hugePagesMib: 1800,
+    }),
+  ).rejects.toMatchObject({
+    code: 'RAM_BUDGET_EXCEEDED',
+    message:
+      "not enough 2 MiB pages: 0 of the host's 2048 MiB pool in use or promised to awake imps and 400 MiB kept for priority imps (chat-*), 1800 MiB requested",
+  });
+});
+
+test('it refuses an imp on 4 KiB pages that would take the RAM kept outside the pool, and names that RAM', () => {
+  const host = createStubGovernedHost({
+    budgetMib: 4000,
+    ids: ['agent-a', 'agent-b'],
+    awake: [{ id: 'agent-a', rssMib: 400 }],
+    hugePool: { totalMib: 3000, freeMib: 3000 },
+  });
+
+  const governor = createRamGovernor({
+    ...host.deps,
+    priority: { mib: 400, patterns: ['chat-*'] },
+  });
+
+  host.applyChange({ kind: 'busy', id: 'agent-a', on: true }, governor);
+
+  expect(
+    governor.admit({ id: 'agent-b', name: 'agent-b', reserveMib: 300, memoryMib: 600 }),
+  ).rejects.toMatchObject({
+    code: 'RAM_BUDGET_EXCEEDED',
+    message:
+      'not enough RAM outside the huge page pool: 400 of 1000 MiB in use and 400 MiB kept for priority imps (chat-*), 300 MiB requested on 4 KiB pages, and no idle imp left to sleep',
+  });
+});
+
+test("it counts a priority imp's pool pages as kept after its RAM reservation expires", async () => {
+  const host = createStubGovernedHost({
+    budgetMib: 4000,
+    ids: ['agent-a', 'chat-a', 'agent-b'],
+    awake: [{ id: 'agent-a', rssMib: 512, hugePagesMib: 512, hugetlbMib: 512 }],
+    hugePool: { totalMib: 2048, freeMib: 1536 },
+  });
+
+  const governor = createRamGovernor({
+    ...host.deps,
+    priority: { mib: 1024, patterns: ['chat-*'] },
+  });
+
+  await governor.admit({
+    id: 'chat-a',
+    name: 'chat-a',
+    reserveMib: 256,
+    memoryMib: 512,
+    hugePagesMib: 512,
+  });
+
+  host.applyChange({ kind: 'tick', durationMs: 20_001 }, governor);
+
+  await governor.readUsage();
+
+  expect(
+    governor.admit({
+      id: 'agent-b',
+      name: 'agent-b',
+      reserveMib: 256,
+      memoryMib: 512,
+      hugePagesMib: 512,
+    }),
+  ).resolves.toBeUndefined();
+});
+
+test('it refuses to grow an imp outside the priority patterns into the RAM kept for priority imps', () => {
+  const host = createStubGovernedHost({
+    budgetMib: 1000,
+    ids: ['agent-a'],
+    awake: [{ id: 'agent-a', rssMib: 300 }],
+  });
+
+  const governor = createRamGovernor({
+    ...host.deps,
+    priority: { mib: 400, patterns: ['chat-*'] },
+  });
+
+  expect(governor.admitGrow({ id: 'agent-a', name: 'agent-a', mib: 400 })).resolves.toBeFalse();
+});
+
+test('it grows a priority imp into the RAM kept for priority imps', () => {
+  const host = createStubGovernedHost({
+    budgetMib: 1000,
+    ids: ['chat-a', 'agent-a'],
+    awake: [
+      { id: 'chat-a', rssMib: 300 },
+      { id: 'agent-a', rssMib: 300 },
+    ],
+  });
+
+  const governor = createRamGovernor({
+    ...host.deps,
+    priority: { mib: 400, patterns: ['chat-*'] },
+  });
+
+  host.applyChange({ kind: 'busy', id: 'agent-a', on: true }, governor);
+
+  expect(governor.admitGrow({ id: 'chat-a', name: 'chat-a', mib: 400 })).resolves.toBeTrue();
+});
+
+test('it sleeps no priority imp to grow an imp outside the priority patterns', async () => {
+  const host = createStubGovernedHost({
+    budgetMib: 1000,
+    ids: ['chat-a', 'agent-b', 'agent-a'],
+    awake: [
+      { id: 'chat-a', rssMib: 300 },
+      { id: 'agent-b', rssMib: 300 },
+      { id: 'agent-a', rssMib: 300 },
+    ],
+  });
+
+  const governor = createRamGovernor({
+    ...host.deps,
+    priority: { mib: 400, patterns: ['chat-*'] },
+  });
+
+  await governor.admitGrow({ id: 'agent-a', name: 'agent-a', mib: 100 });
+
+  expect(host.sleepCalls.map((call) => call.id)).toStrictEqual(['agent-b']);
+});
+
+test('it sleeps an idle priority imp to grow another priority imp', async () => {
+  const host = createStubGovernedHost({
+    budgetMib: 1000,
+    ids: ['chat-b', 'agent-a', 'chat-a'],
+    awake: [
+      { id: 'chat-b', rssMib: 300 },
+      { id: 'agent-a', rssMib: 300 },
+      { id: 'chat-a', rssMib: 300 },
+    ],
+  });
+
+  const governor = createRamGovernor({
+    ...host.deps,
+    priority: { mib: 400, patterns: ['chat-*'] },
+  });
+
+  host.applyChange({ kind: 'busy', id: 'agent-a', on: true }, governor);
+
+  await governor.admitGrow({ id: 'chat-a', name: 'chat-a', mib: 200 });
+
+  expect(host.sleepCalls.map((call) => call.id)).toStrictEqual(['chat-b']);
+});
+
+test('it sleeps an idle priority imp to make room for another priority imp', async () => {
+  const host = createStubGovernedHost({
+    budgetMib: 1000,
+    ids: ['chat-a', 'agent-a', 'chat-b'],
+    awake: [
+      { id: 'chat-a', rssMib: 300 },
+      { id: 'agent-a', rssMib: 300 },
+    ],
+  });
+
+  const governor = createRamGovernor({
+    ...host.deps,
+    priority: { mib: 400, patterns: ['chat-*'] },
+  });
+
+  host.applyChange({ kind: 'busy', id: 'agent-a', on: true }, governor);
+
+  await governor.admit({ id: 'chat-b', name: 'chat-b', reserveMib: 600, memoryMib: 600 });
+
+  expect(host.sleepCalls.map((call) => call.id)).toStrictEqual(['chat-a']);
+});
+
+test('it counts an admitted priority imp that is not awake yet against the RAM kept for priority imps', async () => {
+  const host = createStubGovernedHost({
+    budgetMib: 1000,
+    ids: ['agent-a', 'chat-a', 'agent-b'],
+    awake: [{ id: 'agent-a', rssMib: 300 }],
+  });
+
+  const governor = createRamGovernor({
+    ...host.deps,
+    priority: { mib: 400, patterns: ['chat-*'] },
+  });
+
+  host.applyChange({ kind: 'busy', id: 'agent-a', on: true }, governor);
+
+  await governor.admit({ id: 'chat-a', name: 'chat-a', reserveMib: 400, memoryMib: 600 });
+
+  expect(
+    governor.admit({ id: 'agent-b', name: 'agent-b', reserveMib: 300, memoryMib: 600 }),
+  ).resolves.toBeUndefined();
+});
+
+test('it sleeps a priority imp like any other imp while measured use is over the budget', async () => {
+  const host = createStubGovernedHost({
+    budgetMib: 500,
+    ids: ['chat-a'],
+    awake: [{ id: 'chat-a', rssMib: 600 }],
+  });
+
+  const governor = createRamGovernor({
+    ...host.deps,
+    priority: { mib: 400, patterns: ['chat-*'] },
+  });
+
+  await governor.enforce();
+
+  expect(host.sleepCalls.map((call) => call.id)).toStrictEqual(['chat-a']);
+});

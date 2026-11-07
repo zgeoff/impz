@@ -10,6 +10,9 @@ export interface HugePoolInput {
   readonly awake: readonly HugePageGuest[];
   readonly pendingMib: readonly number[];
   readonly requestedMib: number;
+
+  // the priority imps' RAM that they leave unused, which the new guest may not take
+  readonly keptMib: number;
 }
 
 export type HugePoolAdmission =
@@ -33,8 +36,9 @@ export function buildHugePoolAdmission(input: HugePoolInput): HugePoolAdmission 
   const totalMib = input.pool?.totalMib ?? 0;
   const freeMib = input.pool?.freeMib ?? 0;
   const promisedMib = growthMib + pendingMib;
+  const wantedMib = promisedMib + input.keptMib + input.requestedMib;
 
-  if (promisedMib + input.requestedMib <= freeMib) {
+  if (wantedMib <= freeMib) {
     return { admitted: true };
   }
 
@@ -42,6 +46,6 @@ export function buildHugePoolAdmission(input: HugePoolInput): HugePoolAdmission 
     admitted: false,
     totalMib,
     committedMib: totalMib - freeMib + promisedMib,
-    neededMib: promisedMib + input.requestedMib - freeMib,
+    neededMib: wantedMib - freeMib,
   };
 }

@@ -201,6 +201,7 @@ export function createImpdImps(
 
   const governor = createRamGovernor({
     budgetMib: config.ramBudgetMib,
+    priority: config.priorityRam,
     listAwake: async () => {
       const listed = await listImps(deps.db);
 

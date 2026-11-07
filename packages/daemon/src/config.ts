@@ -1,4 +1,5 @@
 import { join } from 'node:path';
+import { ImpPatternSchema } from '@impz/api';
 import * as z from 'zod';
 import { countSlots, formatCidr4, isTailnetOverlap, parseSubnet } from './host-net/net/addressing';
 import { formatCidr6 } from './host-net/net/addressing6';
@@ -17,7 +18,7 @@ import {
   parseTailnetNamesConfig,
 } from './network/tailnet-names/tailnet-names-config';
 import type { SurfaceConfig } from './surface/surface-config';
-import type { KsmConfig } from './vm/vm-config';
+import type { KsmConfig, PriorityRam } from './vm/vm-config';
 
 const PortSchema = z.coerce.number().pipe(z.int().min(1).max(65_535));
 const CountSchema = z.coerce.number().pipe(z.int().positive());
@@ -41,6 +42,8 @@ const EnvSchema = z.object({
   // Docker host's networks are invisible from impd's container.
   IMP_HOST_ADDRESSES: z.string().default(''),
   IMP_RAM_BUDGET_MIB: CountSchema.default(16_384),
+  IMP_PRIORITY_RAM_MIB: CountSchema.optional(),
+  IMP_PRIORITY_IMPS: z.string().transform(splitList).pipe(z.array(ImpPatternSchema)).optional(),
   IMP_IDLE_TIMEOUT_S: CountSchema.default(60),
   IMP_IDLE_CPU_PERCENT: z.coerce.number().nonnegative().default(10),
   IMP_MEMORY_SHRINK_AFTER_S: CountSchema.default(60),
@@ -274,6 +277,7 @@ export function loadConfig(env: Readonly<Record<string, string | undefined>>): C
     hostAddresses,
     brokerTestUpstreams: parsed.IMP_BROKER_TEST_UPSTREAMS ?? null,
     ramBudgetMib: parsed.IMP_RAM_BUDGET_MIB,
+    priorityRam: parsePriorityRam(parsed),
     idleTimeoutS: parsed.IMP_IDLE_TIMEOUT_S,
     idleCpuPercent: parsed.IMP_IDLE_CPU_PERCENT,
     memoryShrinkAfterMs: parsed.IMP_MEMORY_SHRINK_AFTER_S * 1000,
@@ -334,6 +338,27 @@ export function loadConfig(env: Readonly<Record<string, string | undefined>>): C
     moves: { peerUrl: parsed.IMP_PEER_URL ?? null, testCidr: parsed.IMP_MOVE_TEST_CIDR ?? null },
     warnings: listHttpsWarnings(parsed),
   };
+}
+
+function parsePriorityRam(parsed: z.infer<typeof EnvSchema>): PriorityRam | null {
+  const mib = parsed.IMP_PRIORITY_RAM_MIB;
+  const patterns = parsed.IMP_PRIORITY_IMPS;
+
+  if (mib === undefined && patterns === undefined) {
+    return null;
+  }
+
+  if (mib === undefined || patterns === undefined) {
+    throw new Error('IMP_PRIORITY_RAM_MIB and IMP_PRIORITY_IMPS go together; set both or neither');
+  }
+
+  if (mib >= parsed.IMP_RAM_BUDGET_MIB) {
+    throw new Error(
+      `IMP_PRIORITY_RAM_MIB ${String(mib)} leaves no room for other imps in the ${String(parsed.IMP_RAM_BUDGET_MIB)} MiB IMP_RAM_BUDGET_MIB`,
+    );
+  }
+
+  return { mib, patterns };
 }
 
 function parseTestRegistry(parsed: z.infer<typeof EnvSchema>): TestRegistryConfig | null {

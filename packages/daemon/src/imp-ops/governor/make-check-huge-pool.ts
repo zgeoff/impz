@@ -1,5 +1,6 @@
 import type { AdmissionRequest } from '../../vm/imps-contract/ram-admission';
 import { buildHugePoolError } from '../../vm/imps-contract/ram-budget-error';
+import type { PriorityRam } from '../../vm/vm-config';
 import type { HugePagePool } from '../../vm/vmm/read-huge-page-pool';
 import { buildHugePoolAdmission } from './build-huge-pool-admission';
 
@@ -29,10 +30,10 @@ interface CheckHugePoolDeps {
 
 export function makeCheckHugePool(
   deps: CheckHugePoolDeps,
-): (request: AdmissionRequest, hugePagesMib: number) => Promise<void> {
+): (request: AdmissionRequest, hugePagesMib: number, kept: PriorityRam | null) => Promise<void> {
   const pendingHugePages = deps.pendingHugePages;
 
-  return async (request, hugePagesMib) => {
+  return async (request, hugePagesMib, kept) => {
     const listed = await deps.listAwake();
 
     const awake = listed.filter((imp) => imp.id !== request.id);
@@ -60,6 +61,7 @@ export function makeCheckHugePool(
       })),
       pendingMib: [...pendingHugePages].filter(([id]) => id !== request.id).map(([, mib]) => mib),
       requestedMib: hugePagesMib,
+      keptMib: kept?.mib ?? 0,
     });
 
     if (poolAdmission.admitted) {
@@ -79,6 +81,7 @@ export function makeCheckHugePool(
       totalMib: poolAdmission.totalMib,
       committedMib: poolAdmission.committedMib,
       requestedMib: hugePagesMib,
+      ...(kept !== null && { kept }),
     });
   };
 }

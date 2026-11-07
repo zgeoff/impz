@@ -65,6 +65,29 @@ the budget less the pool ([huge pages](./huge-pages.md#ram)).
 Work no caller waits on, such as a boot template's build, is admitted only into free room, never by
 sleeping an imp.
 
+### Priority imps
+
+The owner can keep part of the budget for priority imps, the imps whose names match
+`IMP_PRIORITY_IMPS` ([configuration](../../guides/configuration.md)). An imp that serves people
+waiting on it, such as a chat assistant's sandbox, then wakes even when the other imps fill the rest
+of the host.
+
+The governor checks an admission against up to three limits: the whole budget, and on a host with a
+pool, the budget less the pool and the pool itself. Each limit keeps the full
+`IMP_PRIORITY_RAM_MIB`, less what the awake and admitted priority imps measure and reserve against
+that limit. The pool and the budget less the pool share no pages, so a priority imp on ordinary
+pages takes nothing from the RAM kept in the pool.
+
+- A boot, wake or grow of an imp outside the patterns counts the kept RAM of each limit as in use.
+  When it fits only by taking kept RAM, the governor refuses it with `RAM_BUDGET_EXCEEDED`, and
+  writes the kept RAM and the patterns in the error message.
+- To make room for an imp outside the patterns, the governor never sleeps a priority imp. A sleeping
+  priority imp frees its RAM into the kept RAM, which the other imp cannot use.
+- A priority imp can use the whole budget. To make room for it, the governor sleeps any imp that
+  step 2 of the admission allows, priority imps included.
+
+The kept RAM counts only at admission. [Enforcement](#enforcement) treats every imp alike.
+
 ## Enforcement
 
 A guest can grow past its reservation, so measured use can pass the budget between admissions. On a
