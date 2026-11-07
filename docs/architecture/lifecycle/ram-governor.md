@@ -72,6 +72,14 @@ The owner can keep part of the budget for priority imps, the imps whose names ma
 waiting on it, such as a chat assistant's sandbox, then wakes even when the other imps fill the rest
 of the host.
 
+For each image add or image build, impd boots a builder imp, which pulls or builds the image, and
+removes the builder when the add or build ends. The governor matches the image's name against the
+same patterns as an imp's name. When the name matches, the governor counts the builder as a priority
+imp at each of its boots, and the builder draws on the kept RAM like any other priority imp. An
+image named like a priority imp, such as `chat-notes` under the pattern `chat-*`, then adds or
+builds even when the other imps fill the rest of the host. impd keeps the image's name only in
+memory, and removes any builder left from before a restart.
+
 The governor checks an admission against up to three limits: the whole budget, and on a host with a
 pool, the budget less the pool and the pool itself. Each limit keeps the full
 `IMP_PRIORITY_RAM_MIB`, less what the awake and admitted priority imps measure and reserve against

@@ -1,6 +1,7 @@
 export interface AdmissionRequest {
   readonly id: string;
   readonly name: string | null;
+  readonly priorityName?: string | undefined;
   readonly reserveMib: number;
   readonly memoryMib: number;
 

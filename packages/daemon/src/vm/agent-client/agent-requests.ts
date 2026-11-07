@@ -14,6 +14,7 @@ import { requireWithin } from '../../platform/process/require-within';
 import { AgentError, openAgentConnection } from './agent-connection';
 import type { AgentConnection } from './agent-connection';
 import { handleUnknownOp } from './agent-outdated';
+import { AgentWaitError } from './agent-wait-error';
 import { parseAgentActivity } from './parse-agent-activity';
 
 const CLAIM_TIMEOUT_MS = 5000;
@@ -199,7 +200,7 @@ export function readFrameWithin(
     connection.next(),
     wait.timeoutMs,
     () =>
-      new Error(
+      new AgentWaitError(
         `agent at ${wait.vsockPath} sent no ${wait.call} within ${String(wait.timeoutMs)} ms`,
       ),
   );

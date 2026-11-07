@@ -186,6 +186,45 @@ test('it pins, builds and exports in its builder, with no host engine call', asy
   ]);
 });
 
+test('it asks for its builder under the name of the image it builds', async () => {
+  const ctx = await setupTest();
+
+  const builder = buildStubImageBuilder({
+    exported: [createFilesTar(ctx.directoryPath, { hello: 'from the builder\n' })],
+    repoDigest: `sha256:${'a'.repeat(64)}`,
+  });
+
+  const images = createImageService({
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
+    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
+    db: ctx.db,
+    storage: ctx.storage,
+    storageGate: createStorageGate(),
+    diskBudget: ctx.recordedBudget,
+    readBuilders: () => builder.builders,
+  });
+
+  await Bun.write(
+    join(ctx.directoryPath, 'context.tar'),
+    createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
+  );
+
+  await images.buildImageFromContext(
+    join(ctx.directoryPath, 'context.tar'),
+    'chat-web',
+    undefined,
+    {
+      signal: new AbortController().signal,
+    },
+  );
+
+  expect(builder.builderImageNames).toStrictEqual(['chat-web']);
+});
+
 test('it logs the pins of a build and the time of each phase on its clock', async () => {
   const ctx = await setupTest();
 

@@ -5,6 +5,7 @@ import type { Clock, StartTimer } from '../../../platform/process/clock';
 import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import { REAL_CLOCK } from '../../../platform/process/real-clock';
 import { startRealTimer } from '../../../platform/process/start-real-timer';
+import { AgentWaitError } from '../../../vm/agent-client/agent-wait-error';
 import type { ImpsConfig } from '../../imps-config';
 import type { ImpService } from '../../imps/imp-service';
 import { createGuestExec } from './guest-exec';
@@ -16,9 +17,14 @@ const ENGINE_POLL_MS = 500;
 const NAME_ALPHABET = 'abcdefghijkmnpqrstuvwxyz23456789';
 const REMOVE_RETRY_MS = 30_000;
 
+interface BuilderRequest {
+  readonly signal: AbortSignal;
+  readonly imageName: string;
+}
+
 export interface Builders {
   readonly withBuilder: <T>(
-    signal: AbortSignal,
+    request: Readonly<BuilderRequest>,
     run: (exec: GuestExec, name: string) => Promise<T>,
   ) => Promise<T>;
 
@@ -64,9 +70,17 @@ async function waitForEngine(
   const deadline = clock.now() + ENGINE_READY_MS;
 
   for (;;) {
+    // Just after a boot on a loaded CI host, the agent has sent no exec start inside its 10 s limit,
+    // so that wait counts as one more poll that missed.
     const info = await exec(['docker', 'info', '--format', '{{.ServerVersion}}'], {
       signal,
       timeoutMs: ENGINE_READY_MS,
+    }).catch((error: unknown) => {
+      if (!(error instanceof AgentWaitError)) {
+        throw error;
+      }
+
+      return { exitCode: -1, stdout: '', stderr: error.message };
     });
 
     if (info.exitCode === 0) {
@@ -90,11 +104,19 @@ const ENGINE_LOG_PATH = '/var/log/imp/docker.log';
 const ENGINE_LOG_LINES = 20;
 
 async function readEngineLog(exec: GuestExec, signal: AbortSignal): Promise<string> {
-  const tail = await exec(['tail', '-n', String(ENGINE_LOG_LINES), ENGINE_LOG_PATH], { signal });
+  const tail = await exec(['tail', '-n', String(ENGINE_LOG_LINES), ENGINE_LOG_PATH], {
+    signal,
+  }).catch((error: unknown) => {
+    if (!(error instanceof AgentWaitError)) {
+      throw error;
+    }
 
-  const lines = tail.stdout.trim();
+    return null;
+  });
 
-  if (tail.exitCode !== 0 || lines === '') {
+  const lines = tail?.stdout.trim() ?? '';
+
+  if (tail?.exitCode !== 0 || lines === '') {
     return '';
   }
 
@@ -199,7 +221,9 @@ export function createBuilders(deps: BuildersDeps): Builders {
   };
 
   return {
-    withBuilder: async (signal, run) => {
+    withBuilder: async (builderRequest, run) => {
+      const signal = builderRequest.signal;
+
       await deps.ensureImage(signal);
 
       signal.throwIfAborted();
@@ -217,6 +241,7 @@ export function createBuilders(deps: BuildersDeps): Builders {
           diskMib: Math.ceil(deps.config.build.diskBytes / 1024 ** 2),
           policy: { mode: 'public', allow: [] },
           kind: 'builder',
+          priorityName: builderRequest.imageName,
         });
 
         const exec = createGuestExec((request) => deps.imps.openBuilderExec(name, request));

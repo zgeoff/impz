@@ -1,5 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { readImpEnv } from '@impz/shared/test-utils/read-imp-env';
+import { updateEnv } from '@impz/shared/test-utils/update-env';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { readImpByName } from '../../platform/db/imps';
@@ -156,6 +158,39 @@ test('it adopts a VM a cut wake left running with its memory', async () => {
   expect(imp).toMatchObject({ state: 'running', pid });
   expect(existsSync(paths.snapshotMeta)).toBeFalse();
   expect(broken).toBeEmpty();
+});
+
+test('it adopts the VM a cut wake left of an imp with a priority name into the kept RAM', async () => {
+  updateEnv('IMP_RAM_BUDGET_MIB', '2048');
+  updateEnv('IMP_BOOT_RESERVE_PERCENT', '100');
+  updateEnv('IMP_PRIORITY_RAM_MIB', '512');
+  updateEnv('IMP_PRIORITY_IMPS', 'chat-*');
+
+  const ctx = await setupTest({ env: readImpEnv() });
+
+  await ctx.createTestImage('ubuntu');
+
+  const created = await ctx.impd.imps.createImp({
+    name: 'build-a',
+    memoryMib: 512,
+    priorityName: 'chat-notes',
+  });
+
+  const paths = buildImpPaths(ctx.dataDir, created.id);
+
+  await ctx.client.imps.sleep({ name: 'build-a' });
+  await ctx.client.imps.create({ name: 'agent-a', memoryMib: 768 });
+  await ctx.client.imps.create({ name: 'agent-b', memoryMib: 768 });
+  await ctx.client.leases.acquire({ name: 'agent-a', label: 'job', ttlSeconds: 600 });
+  await ctx.client.leases.acquire({ name: 'agent-b', label: 'job', ttlSeconds: 600 });
+
+  ctx.fake.spawnOrphan({ paths });
+
+  await ctx.imps.reconcileImps();
+
+  const imp = await readImpByName(ctx.db, 'build-a');
+
+  expect(imp?.state).toBe('running');
 });
 
 test('it kills a VM a cut wake left before its load, and keeps the snapshot', async () => {
