@@ -2,6 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { buildStubAnswerQueue } from '@impz/shared/test-utils/build-stub-answer-queue';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { createImage } from '../../../platform/db/images';
@@ -389,6 +390,66 @@ test('it fails the build when the builder engine does not answer in 60 s, and re
   const imps = await listImps(ctx.db);
 
   expect(imps).toStrictEqual([]);
+});
+
+test('it asks the builder engine again when the agent sends no exec start in time', async () => {
+  const ctx = await setupTest();
+
+  const guest = buildStubGuest(() => ({ stdout: 'ok' }));
+
+  const opens = buildStubAnswerQueue([
+    () => Promise.reject(new Error('agent at builder.sock sent no exec start within 10000 ms')),
+    guest.open,
+    guest.open,
+  ]);
+
+  const builders = createBuilders({
+    config: ctx.config,
+    db: ctx.db,
+    imps: {
+      ...ctx.impd.imps,
+      openBuilderExec: (_name, request) => opens.next()(request),
+    },
+    ensureImage: async () => {
+      await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: ctx.config.build.image });
+    },
+    clock: buildStubClock(),
+  });
+
+  const built = await builders.withBuilder(
+    { signal: new AbortController().signal, imageName: 'box' },
+    () => Promise.resolve('built'),
+  );
+
+  expect(built).toBe('built');
+});
+
+test('it fails the build in 60 s when the agent never sends an exec start', async () => {
+  const ctx = await setupTest();
+
+  const builders = createBuilders({
+    config: ctx.config,
+    db: ctx.db,
+    imps: {
+      ...ctx.impd.imps,
+      openBuilderExec: () =>
+        Promise.reject(new Error('agent at builder.sock sent no exec start within 10000 ms')),
+    },
+    ensureImage: async () => {
+      await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: ctx.config.build.image });
+    },
+    clock: buildStubClock(),
+  });
+
+  const building = builders.withBuilder(
+    { signal: new AbortController().signal, imageName: 'box' },
+    () => Promise.resolve('built'),
+  );
+
+  expect(building).rejects.toThrowWithMessage(
+    Error,
+    "the builder's engine did not answer in 60 s: agent at builder.sock sent no exec start within 10000 ms",
+  );
 });
 
 test("it gives the tail of the builder engine's log when the engine does not answer in 60 s", async () => {

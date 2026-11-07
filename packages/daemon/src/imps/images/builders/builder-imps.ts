@@ -71,9 +71,15 @@ async function waitForEngine(
   const deadline = clock.now() + ENGINE_READY_MS;
 
   for (;;) {
+    // Just after a boot on a loaded CI host, the agent has sent no exec start inside its 10 s limit,
+    // so a failed open counts as one more poll that missed.
     const info = await exec(['docker', 'info', '--format', '{{.ServerVersion}}'], {
       signal,
       timeoutMs: ENGINE_READY_MS,
+    }).catch((error: unknown) => {
+      signal.throwIfAborted();
+
+      return { exitCode: -1, stdout: '', stderr: getErrorMessage(error) };
     });
 
     if (info.exitCode === 0) {
@@ -97,11 +103,13 @@ const ENGINE_LOG_PATH = '/var/log/imp/docker.log';
 const ENGINE_LOG_LINES = 20;
 
 async function readEngineLog(exec: GuestExec, signal: AbortSignal): Promise<string> {
-  const tail = await exec(['tail', '-n', String(ENGINE_LOG_LINES), ENGINE_LOG_PATH], { signal });
+  const tail = await exec(['tail', '-n', String(ENGINE_LOG_LINES), ENGINE_LOG_PATH], {
+    signal,
+  }).catch(() => null);
 
-  const lines = tail.stdout.trim();
+  const lines = tail?.stdout.trim() ?? '';
 
-  if (tail.exitCode !== 0 || lines === '') {
+  if (tail === null || tail.exitCode !== 0 || lines === '') {
     return '';
   }
 
