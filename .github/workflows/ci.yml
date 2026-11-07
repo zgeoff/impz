@@ -210,12 +210,16 @@ jobs:
 
   # The required check: both unit shards and the lanes job passed. It runs
   # whatever they did, so a job that failed, was cancelled or was skipped fails
-  # it, and never passes as a skip.
+  # it, and never passes as a skip. The one run it skips is one a newer push
+  # superseded: the newer run's concurrency cancelled both jobs, and the newer
+  # run's own check reports in its place.
   checks:
     concurrency:
       group: ci-${{ github.ref }}-checks
       cancel-in-progress: true
-    if: always()
+    if:
+      ${{ always() && !(needs.checks-unit.result == 'cancelled' && needs.checks-lanes.result ==
+      'cancelled') }}
     needs: [checks-unit, checks-lanes]
     runs-on: ubuntu-latest
     permissions: {}
@@ -709,12 +713,14 @@ jobs:
   # The required check and release-please's gate: every e2e group passed. It
   # runs whatever they did, so a group that failed, was cancelled or was
   # skipped fails it, and never passes as a skip. The one skip it passes is
-  # every group's, on a pull request that changes none of their paths.
+  # every group's, on a pull request that changes none of their paths. It skips
+  # itself in a run a newer push superseded, whose concurrency cancelled the
+  # changes job; the newer run's own check reports in its place.
   e2e:
     concurrency:
       group: ci-${{ github.ref }}-e2e
       cancel-in-progress: true
-    if: always()
+    if: ${{ always() && needs.changes.result != 'cancelled' }}
     needs: [changes, e2e-group]
     runs-on: ubuntu-latest
     permissions: {}
@@ -939,12 +945,14 @@ jobs:
   # The required check: every zfs shard passed. It runs whatever they did, so a
   # shard that failed, was cancelled or was skipped fails it, and never passes
   # as a skip. The one skip it passes is every shard's, on a pull request that
-  # changes none of their paths.
+  # changes none of their paths. It skips itself in a run a newer push
+  # superseded, whose concurrency cancelled the changes job; the newer run's
+  # own check reports in its place.
   zfs:
     concurrency:
       group: ci-${{ github.ref }}-zfs
       cancel-in-progress: true
-    if: always()
+    if: ${{ always() && needs.changes.result != 'cancelled' }}
     needs: [changes, zfs-shard]
     runs-on: ubuntu-latest
     permissions: {}

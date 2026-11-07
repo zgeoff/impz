@@ -367,7 +367,10 @@ On `main`, the `release` job makes releases ([releasing](./releasing.md)).
 The `fast` set runs in four groups (`FAST_GROUPS` in `packages/e2e-harness/src/suites.ts`), one
 `e2e-group` job per group, each on its own runner. The `e2e` job is the required check: it fails
 when any group failed, was cancelled or was skipped. It passes a skip in one case: the `changes` job
-found that the pull request changes none of the groups' paths, and every group skipped.
+found that the pull request changes none of the groups' paths, and every group skipped. The job
+skips itself in a run that a newer push superseded: the newer run's concurrency groups cancel the
+older run's `changes` job, and the newer run's `e2e` job reports in its place. The `checks` and
+`zfs` jobs skip the same way.
 
 The `host-image` job builds the groups' inputs once per run, with the composite action
 `.github/actions/e2e-build`:
