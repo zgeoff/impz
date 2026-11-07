@@ -93,8 +93,8 @@ export async function* openEventStream(options: EventStreamOptions): AsyncGenera
         return;
       }
 
-      // a reader that opened with no cursor may know no Reset, so its stream ends as it always
-      // has, and its reconnect takes the snapshot
+      // a reader that opened with no cursor may know no Reset, so its stream ends here, and its
+      // reconnect takes the snapshot
       if (options.cursor.after === undefined) {
         return;
       }
