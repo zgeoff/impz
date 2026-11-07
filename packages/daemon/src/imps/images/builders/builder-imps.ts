@@ -5,6 +5,7 @@ import type { Clock, StartTimer } from '../../../platform/process/clock';
 import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import { REAL_CLOCK } from '../../../platform/process/real-clock';
 import { startRealTimer } from '../../../platform/process/start-real-timer';
+import { AgentWaitError } from '../../../vm/agent-client/agent-wait-error';
 import type { ImpsConfig } from '../../imps-config';
 import type { ImpService } from '../../imps/imp-service';
 import { createGuestExec } from './guest-exec';
@@ -70,14 +71,16 @@ async function waitForEngine(
 
   for (;;) {
     // Just after a boot on a loaded CI host, the agent has sent no exec start inside its 10 s limit,
-    // so a failed open counts as one more poll that missed.
+    // so that wait counts as one more poll that missed.
     const info = await exec(['docker', 'info', '--format', '{{.ServerVersion}}'], {
       signal,
       timeoutMs: ENGINE_READY_MS,
     }).catch((error: unknown) => {
-      signal.throwIfAborted();
+      if (!(error instanceof AgentWaitError)) {
+        throw error;
+      }
 
-      return { exitCode: -1, stdout: '', stderr: getErrorMessage(error) };
+      return { exitCode: -1, stdout: '', stderr: error.message };
     });
 
     if (info.exitCode === 0) {
@@ -103,11 +106,17 @@ const ENGINE_LOG_LINES = 20;
 async function readEngineLog(exec: GuestExec, signal: AbortSignal): Promise<string> {
   const tail = await exec(['tail', '-n', String(ENGINE_LOG_LINES), ENGINE_LOG_PATH], {
     signal,
-  }).catch(() => null);
+  }).catch((error: unknown) => {
+    if (!(error instanceof AgentWaitError)) {
+      throw error;
+    }
+
+    return null;
+  });
 
   const lines = tail?.stdout.trim() ?? '';
 
-  if (tail === null || tail.exitCode !== 0 || lines === '') {
+  if (tail?.exitCode !== 0 || lines === '') {
     return '';
   }
 

@@ -20,6 +20,7 @@ import { captureImpdLogs } from '../../../test-utils/platform/capture-impd-logs'
 import { startTestImpd } from '../../../test-utils/start-test-impd';
 import { buildStubGuest } from '../../../test-utils/vm/build-stub-guest';
 import { makeStubCommandAnswer } from '../../../test-utils/vm/make-stub-command-answer';
+import { AgentWaitError } from '../../../vm/agent-client/agent-wait-error';
 import { countTreeBytes } from '../../../vm/storage/count-tree-bytes';
 import { buildImagePaths } from '../../../vm/storage/data-layout';
 import { writeGuestTree } from '../build/guest-build';
@@ -398,7 +399,10 @@ test('it asks the builder engine again when the agent sends no exec start in tim
   const guest = buildStubGuest(() => ({ stdout: 'ok' }));
 
   const opens = buildStubAnswerQueue([
-    () => Promise.reject(new Error('agent at builder.sock sent no exec start within 10000 ms')),
+    () =>
+      Promise.reject(
+        new AgentWaitError('agent at builder.sock sent no exec start within 10000 ms'),
+      ),
     guest.open,
     guest.open,
   ]);
@@ -433,7 +437,9 @@ test('it fails the build in 60 s when the agent never sends an exec start', asyn
     imps: {
       ...ctx.impd.imps,
       openBuilderExec: () =>
-        Promise.reject(new Error('agent at builder.sock sent no exec start within 10000 ms')),
+        Promise.reject(
+          new AgentWaitError('agent at builder.sock sent no exec start within 10000 ms'),
+        ),
     },
     ensureImage: async () => {
       await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: ctx.config.build.image });
@@ -450,6 +456,30 @@ test('it fails the build in 60 s when the agent never sends an exec start', asyn
     Error,
     "the builder's engine did not answer in 60 s: agent at builder.sock sent no exec start within 10000 ms",
   );
+});
+
+test('it fails the build at once with the error of an exec open that is no late answer', async () => {
+  const ctx = await setupTest();
+
+  const builders = createBuilders({
+    config: ctx.config,
+    db: ctx.db,
+    imps: {
+      ...ctx.impd.imps,
+      openBuilderExec: () => Promise.reject(new Error('imp imp-build-a is in error')),
+    },
+    ensureImage: async () => {
+      await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: ctx.config.build.image });
+    },
+    clock: buildStubClock(),
+  });
+
+  const building = builders.withBuilder(
+    { signal: new AbortController().signal, imageName: 'box' },
+    () => Promise.resolve('built'),
+  );
+
+  expect(building).rejects.toThrowWithMessage(Error, 'imp imp-build-a is in error');
 });
 
 test("it gives the tail of the builder engine's log when the engine does not answer in 60 s", async () => {
