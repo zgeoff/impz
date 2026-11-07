@@ -92,9 +92,17 @@ export function buildRanking(
   return { ranked: ranked.toSorted((first, second) => second.freeMib - first.freeMib), dropped };
 }
 
+// system.info leaves out the priority patterns, so every imp scores as a non-priority
+// imp; a priority imp still tries each ranked host in turn
 /* @internal */
 export function getFreeMib(info: SystemInfo): number {
-  return info.ramBudgetMib - info.ramUsedMib - info.ramReservedMib - (info.ramSleepingMib ?? 0);
+  return (
+    info.ramBudgetMib -
+    info.ramUsedMib -
+    info.ramReservedMib -
+    (info.ramSleepingMib ?? 0) -
+    (info.ramPriorityKeptMib ?? 0)
+  );
 }
 
 // impd removes the imp before it answers that the governor turned the boot

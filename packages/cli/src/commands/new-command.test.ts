@@ -248,6 +248,58 @@ test('#new skips a host without the image and moves past a RAM refusal under --p
   expect(bareDev).toBeUndefined();
 });
 
+test('#new places on the other host under --place when one has free RAM only in its kept priority RAM', async () => {
+  const ctx = await setupTest();
+
+  const kept = await startImpdHost(ctx.stack, {
+    env: {
+      IMP_RAM_BUDGET_MIB: '16384',
+      IMP_PRIORITY_RAM_MIB: '15872',
+      IMP_PRIORITY_IMPS: 'ci-*',
+    },
+  });
+
+  const open = await startImpdHost(ctx.stack, { env: { IMP_RAM_BUDGET_MIB: '8192' } });
+
+  const keptImage = buildMockNewImage({ name: 'base', sizeBytes: 6 });
+
+  await Bun.write(buildImagePaths(kept.dataDir, keptImage.digest).rootfs, 'rootfs');
+
+  await createImage(kept.db, keptImage);
+
+  const openImage = buildMockNewImage({ name: 'base', sizeBytes: 6 });
+
+  await Bun.write(buildImagePaths(open.dataDir, openImage.digest).rootfs, 'rootfs');
+
+  await createImage(open.db, openImage);
+
+  writeHostConfig(ctx.home, {
+    current: 'kept',
+    hosts: {
+      kept: { url: kept.url, token: kept.rootToken },
+      open: { url: open.url, token: open.rootToken },
+    },
+  });
+
+  const placed = await runCLIInProcess({
+    args: ['new', 'dev', '--image', 'base', '--place', '--json'],
+    env: ctx.home,
+  });
+
+  const body: unknown = JSON.parse(placed.stdout);
+
+  const created = await open.client.imps.get({ name: 'dev' });
+
+  // oxlint-disable-next-line unicorn/prefer-structured-clone -- the wire turns dates into strings, as JSON does
+  const sent: unknown = JSON.parse(JSON.stringify({ host: 'open', imp: created }));
+
+  expect({ ...placed, stdout: body }).toStrictEqual({
+    stdout: sent,
+    stderr: 'impz: placing on open\n',
+    code: 0,
+  });
+});
+
 test('#new places on a reachable host under --place when another saved host does not answer', async () => {
   const ctx = await setupTest();
   const box = await startImpdHost(ctx.stack, { env: {} });
