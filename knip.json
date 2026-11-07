@@ -7,6 +7,8 @@
   ],
   // a POSIX tool the tests run through Bun's shell
   "ignoreBinaries": ["mkfifo"],
+  // the Bun plugin takes its test files from a `bun test` script, and rig runs the root's tests
+  "bun": { "entry": ["**/*.test.{ts,tsx}"] },
   // knip reads each piece of a Bun shell template between two interpolations as a command line of
   // its own, so it takes the arguments the CI and release step scripts and their stand-ins pass, and
   // the runner tools they call, for binaries, and Go's ./... package pattern and a shell script's
@@ -24,6 +26,9 @@
       "entry": [
         "scripts/run-related-tests.ts",
         "scripts/read-branch-base.ts",
+        // rig loads its config, and a lane's start hook by the path the config names
+        "rig.config.ts",
+        "scripts/dev/prepare-docker-lane.ts",
         // the dev CLI that scripts/dev/dev.sh runs
         "scripts/dev/dev.ts",
         // the zfs harnesses that scripts/test-zfs.sh and scripts/zfs-host-test.sh run

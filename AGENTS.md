@@ -120,7 +120,8 @@ consumer an invented name.
 [`docs/runbooks/development.md`](docs/runbooks/development.md) lists every check. These are the ones
 with a catch:
 
-- `bun test` skips the dashboard, whose component tests need a DOM. Run them with
+- Run the unit tests with `bun run test`. A bare `bun test` skips the dashboard, whose component
+  tests need a DOM, but runs every lane's files too. Run the dashboard with
   `bun run test:dashboard`.
 - `bun run lint` is plain oxlint. `bun run lint:full` adds the type-aware pass and the type check.
   oxlint runs both through tsrslint (`@maschwenk/tsrslint`), a Rust port of tsgolint, in tsgolint's

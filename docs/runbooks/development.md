@@ -6,7 +6,7 @@ How to check a change before you push it, and what CI and the branch rules do wi
 ## Checks
 
 ```sh
-bun run typecheck && bun run lint && bun test
+bun run typecheck && bun run lint && bun run test
 bun run test:dashboard            # the dashboard's component tests, in their own run
 bun run test:host                 # nft and iptables in namespaces; IMP_HOST_TESTS=required fails a skip
 bun run test:pebble               # the ACME issuer against Pebble in Docker
@@ -32,10 +32,10 @@ scripts/test-e2e.sh --clean       # end to end, from a clean state
 
 `bun run check` runs the whole-tree gates of CI's `checks` job: dead code, format, the type-aware
 lint, doc links, types and every test. It needs more memory than a small host has, so run it on a
-large one, or leave it to CI. CI splits `bun test` into two shards on two runners, with two workers
-each, and runs each shard in a cgroup capped at 1792 MiB with no swap, through `diet`, so a shard
-fails there before it outgrows a 2 GiB imp. `bun run lint:shell` needs shellcheck 0.11.0 and shfmt
-3.14.1 on `PATH`, the versions CI pins; the shellcheck job in `.github/workflows/ci.yml` pins
+large one, or leave it to CI. CI splits `bun run test` into two shards on two runners, with two
+workers each, and runs each shard in a cgroup capped at 1792 MiB with no swap, through `diet`, so a
+shard fails there before it outgrows a 2 GiB imp. `bun run lint:shell` needs shellcheck 0.11.0 and
+shfmt 3.14.1 on `PATH`, the versions CI pins; the shellcheck job in `.github/workflows/ci.yml` pins
 actionlint, zizmor and hadolint too. When a change touches the lifecycle, the agent or the host, run
 the end-to-end harness against a real instance.
 
@@ -333,8 +333,8 @@ Lefthook installs the hooks with `bun install`.
 | `zfs`        | yes      | Passes only when every `zfs-shard` job passed, or when all skipped on a pull request outside their paths: real imps on a ZFS pool in three shards, and `scripts/test-zfs.sh` in one (below).                                                                              |
 | `podman`     | no       | `scripts/run-podman-proof.sh`: the proof that an imp host runs with no Docker engine (below).                                                                                                                                                                             |
 
-The `checks-unit` job runs `bun test` in two shards of two workers, each capped at 1792 MiB with no
-swap. The `checks-lanes` job runs:
+The `checks-unit` job runs `bun run test` in two shards of two workers, each capped at 1792 MiB with
+no swap. The `checks-lanes` job runs:
 
 - `bun run audit`;
 - `scripts/ci/check-bun-pin.sh`, which checks for one Bun version across the repo and the host
