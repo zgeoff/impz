@@ -2,10 +2,10 @@
 
 ## [6.10.0](https://github.com/zgeoff/impz/compare/v6.9.1...v6.10.0) (2026-11-07)
 
-
 ### Features
 
-* **api:** check the imp's id on a destroy ([#960](https://github.com/zgeoff/impz/issues/960)) ([070cbc9](https://github.com/zgeoff/impz/commit/070cbc9ba8fac7b43c550e6301f667347d9dc04a))
+- **api:** check the imp's id on a destroy ([#960](https://github.com/zgeoff/impz/issues/960))
+  ([070cbc9](https://github.com/zgeoff/impz/commit/070cbc9ba8fac7b43c550e6301f667347d9dc04a))
 
 ## [6.9.1](https://github.com/zgeoff/impz/compare/v6.9.0...v6.9.1) (2026-11-07)
 
