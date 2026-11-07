@@ -54,9 +54,10 @@ never retried.
 `watchEvents(imp, { onEvent })` follows `events.stream`: every imp first, then each change. `name`
 keeps one imp's events, and `reconnect: { delayMs }` opens a fresh stream whenever one ends, until
 impd refuses the call or `signal` aborts. A reconnect resumes after the last event the watch read,
-across impd restarts, so `onEvent` misses nothing. The watch also reads impd's `Position` events,
-which move its cursor past the events of imps the token may not see, and passes none of them on.
-When impd no longer holds the events since then, `onEvent` gets `Reset` and then every imp again.
+across impd restarts, so `onEvent` misses nothing. On a resumed stream, the watch also reads impd's
+`Position` events, which move its cursor past the events of imps the token may not see, and passes
+none of them on. It passes over an event kind it does not know, which a newer impd may send. When
+impd no longer holds the events since then, `onEvent` gets `Reset` and then every imp again.
 `onOpen` runs as each stream opens, with the cursor it opens at: a stream with no `after` starts
 with every imp, and the caller may have missed what changed while it was away.
 
