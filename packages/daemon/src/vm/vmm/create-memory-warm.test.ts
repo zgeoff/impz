@@ -127,6 +127,19 @@ test('it ends every running warm at impd stop', async () => {
   );
 });
 
+test('it starts no warm for a sleep that ends after impd stop, and logs why', async () => {
+  const ctx = setupTest();
+
+  await ctx.warm.stopAll();
+
+  ctx.warm.start({ impId: 'imp-1', name: 'dev', memFile: join(ctx.directoryPath, 'mem') });
+
+  await ctx.warm.stopAll();
+
+  expect(ctx.handler.readWarmRuns()).toStrictEqual([]);
+  expect(ctx.logs).toContain('INFO impd.imps imp=dev left the memory file cold: impd is stopping');
+});
+
 test('it logs a warning when the page handler cannot run', async () => {
   const ctx = setupTest();
 

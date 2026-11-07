@@ -125,9 +125,10 @@ writes the file into the ARC, ZFS's own cache, and leaves none of it in the page
 3. For a file within the cap, impd runs `uffd-handler --warm <memory file>`, which reads each data
    block through a map of the file, as a wake's handler reads it.
 
-A wake, a stop or a destroy of the imp ends its warm first, and impd's own stop ends every warm.
-impd runs at most two warms at once, and a third waits for one of them to end. The kernel can take
-back the page cache that a warm filled, because nothing locks it, and a wake after that reads cold.
+A wake, a stop or a destroy of the imp ends its warm first. impd's own stop ends every warm and
+starts none after it. impd runs at most two warms at once, and a third waits for one of them to end.
+The kernel can take back the page cache that a warm filled, because nothing locks it, and a wake
+after that reads cold.
 
 impd logs the outcome of each warm in the journal, on a line with the imp's name:
 

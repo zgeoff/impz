@@ -30,7 +30,7 @@ export interface MemoryWarm {
   // ends the imp's warm, if one runs, and resolves once its handler is gone
   readonly stop: (impId: string, end: WarmEnd) => Promise<void>;
 
-  // ends every warm that runs
+  // ends every warm that runs, and starts none after
   readonly stopAll: () => Promise<void>;
 }
 
@@ -44,6 +44,7 @@ type WarmOutcome =
   | { readonly kind: 'warmed'; readonly blocks: number; readonly warmMs: number }
   | { readonly kind: 'overCap'; readonly blocks: number }
   | { readonly kind: 'ended'; readonly end: WarmEnd; readonly warmMs: number }
+  | { readonly kind: 'closed' }
   | { readonly kind: 'failed'; readonly error: string };
 
 // queued: waits for a slot, with no handler started, so a stop ends it at once;
@@ -63,6 +64,8 @@ const WarmReportSchema = z.object({ blocks: z.int().nonnegative() });
 export function createMemoryWarm(deps: Readonly<MemoryWarmDeps>): MemoryWarm {
   const running = new Map<string, RunningWarm>();
 
+  // a sleep that outlasts impd's stop step still ends later and starts a warm
+  const lifetime = { isStopped: false };
   const slots = createSemaphore(WARM_CONCURRENCY);
 
   const readBlocks = async (
@@ -127,6 +130,12 @@ export function createMemoryWarm(deps: Readonly<MemoryWarmDeps>): MemoryWarm {
 
   return {
     start: (target) => {
+      if (lifetime.isStopped) {
+        logWarm(target, { kind: 'closed' }, deps.capMib);
+
+        return;
+      }
+
       invariant(!running.has(target.impId), `imp ${target.impId} slept with its warm running`);
 
       const controller = new AbortController();
@@ -167,6 +176,8 @@ export function createMemoryWarm(deps: Readonly<MemoryWarmDeps>): MemoryWarm {
     },
     stop,
     stopAll: async () => {
+      lifetime.isStopped = true;
+
       await Promise.all([...running.keys()].map((impId) => stop(impId, 'impdStopped')));
     },
   };
@@ -193,6 +204,9 @@ function logWarm(target: Readonly<WarmTarget>, outcome: WarmOutcome, capMib: num
         warmMs: String(ended.warmMs),
         reason: formatWarmEnd(ended.end),
       });
+    })
+    .with({ kind: 'closed' }, () => {
+      logger.info('left the memory file cold: impd is stopping');
     })
     .with({ kind: 'failed' }, (failed) => {
       logger.warning("the memory file's warm failed: {error}", { error: failed.error });
