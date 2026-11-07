@@ -1,7 +1,7 @@
 import { Database } from 'bun:sqlite';
 import { chmodSync, closeSync, mkdirSync, openSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { writeNewLogId } from '@impz/durable';
+import { removeLogId } from '@impz/durable';
 import { buildSQLiteDialect } from '@zgeoff/kysely-bun-sqlite';
 import { Kysely, sql } from 'kysely';
 import * as z from 'zod';
@@ -29,11 +29,11 @@ const SizeRowSchema = z.object({ bytes: z.int().nonnegative() });
 export async function writeConsistentCopy(db: ImpQueries, path: string): Promise<void> {
   await sql`VACUUM INTO ${path}`.execute(db);
 
-  await writeCopyLogId(path);
+  await removeCopyLogId(path);
 }
 
-// A restored copy takes a log ID of its own, so a reader's cursor from the live log gets a reset.
-async function writeCopyLogId(path: string): Promise<void> {
+// Each open of a restored copy gives its log a new ID, so a reader's cursor from before gets a reset.
+async function removeCopyLogId(path: string): Promise<void> {
   const copy = new Kysely<DB>({ dialect: buildSQLiteDialect(new Database(path)) });
 
   try {
@@ -43,7 +43,7 @@ async function writeCopyLogId(path: string): Promise<void> {
 
     // a copy of a database from before the event log gets its log ID when it first migrates
     if (tables.rows.length > 0) {
-      await writeNewLogId(copy);
+      await removeLogId(copy);
     }
   } finally {
     await copy.destroy();
