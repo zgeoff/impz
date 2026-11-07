@@ -25,13 +25,13 @@ export function useImpdEvents(): void {
         return;
       }
 
-      // a snapshot on a reopen means the watch had no cursor to resume from
+      // a snapshot on a reopen means the watch had no cursor to resume from, so it may have
+      // missed any event
       if (event.ev === 'ImpAdded' && event.reason === 'snapshot') {
         if (opened.attempt > 1 && !opened.isSnapshotApplied) {
           opened.isSnapshotApplied = true;
 
-          await queryClient.invalidateQueries({ queryKey: impd.query.imps.key() });
-          await queryClient.invalidateQueries({ queryKey: impd.query.system.key() });
+          await queryClient.invalidateQueries();
         }
 
         return;
