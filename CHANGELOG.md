@@ -1,5 +1,13 @@
 # Changelog
 
+## [6.9.1](https://github.com/zgeoff/impz/compare/v6.9.0...v6.9.1) (2026-11-07)
+
+### Bug Fixes
+
+- **cli:** count a sleeping priority imp's memory once in host placement
+  ([#944](https://github.com/zgeoff/impz/issues/944))
+  ([be99c00](https://github.com/zgeoff/impz/commit/be99c004b0392d9669f0f00cecf4996b33effd37))
+
 ## [6.9.0](https://github.com/zgeoff/impz/compare/v6.8.1...v6.9.0) (2026-11-07)
 
 ### Features
