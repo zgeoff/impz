@@ -33,11 +33,11 @@ scripts/test-e2e.sh --clean       # end to end, from a clean state
 `bun run check` runs the whole-tree gates of CI's `checks` job: dead code, format, the type-aware
 lint, doc links, types and every test. It needs more memory than a small host has, so run it on a
 large one, or leave it to CI. CI splits `bun test` into two shards on two runners, with two workers
-each, and runs each shard in a cgroup capped at 1792 MiB with no swap, through
-`scripts/ci/run-memory-capped.sh`, so a shard fails there before it outgrows a 2 GiB imp.
-`bun run lint:shell` needs shellcheck 0.11.0 and shfmt 3.14.1 on `PATH`, the versions CI pins; the
-shellcheck job in `.github/workflows/ci.yml` pins actionlint, zizmor and hadolint too. When a change
-touches the lifecycle, the agent or the host, run the end-to-end harness against a real instance.
+each, and runs each shard in a cgroup capped at 1792 MiB with no swap, through `diet`, so a shard
+fails there before it outgrows a 2 GiB imp. `bun run lint:shell` needs shellcheck 0.11.0 and shfmt
+3.14.1 on `PATH`, the versions CI pins; the shellcheck job in `.github/workflows/ci.yml` pins
+actionlint, zizmor and hadolint too. When a change touches the lifecycle, the agent or the host, run
+the end-to-end harness against a real instance.
 
 `bun run deadcode` runs knip twice: over the whole tree, then in production mode, which leaves out
 every test file. The production run fails on an export that only a test imports. Un-export it when

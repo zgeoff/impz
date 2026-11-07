@@ -86,18 +86,19 @@ jobs:
       - name: Make the results dir
         run: mkdir -p "$RUNNER_TEMP/unit-test"
 
-      # this shard's files, in a cgroup capped below an imp's 2 GiB with no
+      # this shard's files, under diet's cgroup cap below an imp's 2 GiB with no
       # swap, so a test fails here before it outgrows the imps it runs on; the
       # first --timings file starts empty and takes this shard's measured times.
       # The tests' temp dirs go on tmpfs, so a test impd's data dir and its
-      # checkpoint copies never wait on the runner's disk; TMPDIR rides in the
-      # command, because glibc drops it from the environment of setuid sudo
+      # checkpoint copies never wait on the runner's disk; diet hands TMPDIR on
+      # to the command, which glibc drops from the environment of setuid sudo
       - name: Test
         env:
           SHARD: ${{ matrix.shard }}
+          TMPDIR: /dev/shm
         run: >-
-          scripts/ci/run-memory-capped.sh 1792 env TMPDIR=/dev/shm bun test --parallel=2
-          --no-isolate --shard="$SHARD/2" --timings="$RUNNER_TEMP/unit-test/timings-$SHARD.json"
+          bun x --no-install diet --budget 1792M -- bun test --parallel=2 --no-isolate
+          --shard="$SHARD/2" --timings="$RUNNER_TEMP/unit-test/timings-$SHARD.json"
           --timings=scripts/ci/unit-test-timings.json --update-timings --reporter=junit
           --reporter-outfile="$RUNNER_TEMP/unit-test/results-$SHARD.xml"
 
