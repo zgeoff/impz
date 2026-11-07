@@ -89,8 +89,12 @@ goes, the disk usage refresh, the service log follows and the telemetry.
 
 The event stream takes the head `seq` before it reads its snapshot of the caller's imps, so no write
 falls in between, then reads the table from that `seq` at its own pace, filtered to those imps. A
-slow reader falls behind and loses nothing. A reconciler prunes the oldest rows by age and by count,
-and a stream whose cursor a prune passes ends; the client reconnects and takes the new snapshot.
+slow reader falls behind and loses nothing. A reader that passes the `seq` and `logId` of its last
+event skips the snapshot and reads on from there, across impd restarts. The `logId` lives in the
+database, and each copy impd writes gets a new one, so a cursor from before a restore does not
+match. A reconciler prunes the oldest rows by age and by count. A cursor that a prune passed, or
+that carries another log's ID or a `seq` past the head, gets `Reset` and a new snapshot.
+`events.list` reads the same way, one page per call.
 
 The audit log writes one row per call that changes something, refused or not, and per exec, console,
 SSH, tunnel and reverse-forward open: the procedure, who called, the imp, the outcome and the time,

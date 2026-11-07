@@ -482,6 +482,8 @@ test("it takes impd's figure from the timed step's event, never from its arrange
           // oxlint-disable-next-line id-length -- `v` is the event format's version field
           v: EVENT_VERSION,
           at: new Date('2026-10-01T10:00:06Z'),
+          seq: 12,
+          logId: 'log-a',
           ev: 'ImpChanged',
           reason: 'woke',
           imp: woken,
@@ -492,6 +494,8 @@ test("it takes impd's figure from the timed step's event, never from its arrange
           // oxlint-disable-next-line id-length -- `v` is the event format's version field
           v: EVENT_VERSION,
           at: new Date('2026-10-01T10:00:01Z'),
+          seq: 12,
+          logId: 'log-a',
           ev: 'ImpChanged',
           reason: 'woke',
           imp: arranged,

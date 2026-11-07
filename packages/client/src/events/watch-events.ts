@@ -54,7 +54,7 @@ export async function watchEvents(
           throw new StreamEndError(null);
         }
 
-        if (options.name === undefined || readEventImpName(next.value) === options.name) {
+        if (options.name === undefined || isNamedEvent(next.value, options.name)) {
           await runCallback(() => options.onEvent(next.value));
         }
       }
@@ -112,12 +112,17 @@ async function runCallback(run: () => Promise<void> | void): Promise<void> {
   }
 }
 
-function readEventImpName(event: Readonly<ImpEvent>): string {
+// a reset concerns every imp, so it reaches a watch of one imp too
+function isNamedEvent(event: Readonly<ImpEvent>, name: string): boolean {
   return match(event)
-    .with({ ev: P.union('ImpAdded', 'ImpChanged', 'ImpRemoved') }, (changed) => changed.imp.name)
+    .with({ ev: 'Reset' }, () => true)
+    .with(
+      { ev: P.union('ImpAdded', 'ImpChanged', 'ImpRemoved') },
+      (changed) => changed.imp.name === name,
+    )
     .with(
       { ev: P.union('CheckpointAdded', 'CheckpointRemoved', 'GovernorDecision', 'AgentExec') },
-      (named) => named.name,
+      (named) => named.name === name,
     )
     .exhaustive();
 }

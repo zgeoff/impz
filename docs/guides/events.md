@@ -26,10 +26,29 @@ for await (const event of events) {
 
 The dashboard follows the same stream ([dashboard](./dashboard.md)).
 
+### Resume from a cursor
+
+To pick up where a reader stopped, pass the `seq` and `logId` of the last event it handled:
+
+```ts
+const events = await client.events.stream({ after: last.seq, logId: last.logId });
+```
+
+impd then sends every event after that `seq`, across its own restarts, and goes on live, with no
+snapshot. When impd no longer holds those events, it sends `Reset` and then the snapshot. That
+happens when a prune passed the cursor, or when the `logId` differs because impd runs on a restored
+copy of its database. An impd without the `eventCursor` feature ignores the cursor and sends the
+snapshot.
+
+`events.list({ after, logId, limit })` reads the same log one page at a time, up to 100 events by
+default and 1,000 at most. It returns the events, `hasMore`, and the `after` and `logId` to pass on
+the next call. With no `after`, it returns the snapshot and the head `seq`.
+
 ### Events
 
-Every event has `v` (the format version, now `1`), `at` (when impd wrote it) and `ev` (its kind). A
-reader skips a kind or a field it does not know.
+Every event has `v` (the format version, now `1`), `at` (when impd wrote it), `seq` (its place in
+impd's log), `logId` (the log it comes from) and `ev` (its kind). A snapshot event carries the `seq`
+of the newest event at the time of the snapshot. A reader skips a kind or a field it does not know.
 
 | `ev`                | Fields                                                   | When                                                                                   |
 | ------------------- | -------------------------------------------------------- | -------------------------------------------------------------------------------------- |
@@ -40,6 +59,7 @@ reader skips a kind or a field it does not know.
 | `CheckpointRemoved` | `name`, `checkpoint`                                     | A checkpoint deleted.                                                                  |
 | `GovernorDecision`  | `decision`, `name`, `trigger`, `usedMib`, `budgetMib`, … | The RAM governor admitted or refused a boot or a wake, or slept an imp to make room.   |
 | `AgentExec`         | `name`, `actor`, `actorName`, `tty`, `command`           | The imp's agent took an `impz exec --agent`; `command` is the program, never its args. |
+| `Reset`             | none                                                     | impd no longer holds the events after the reader's cursor; the snapshot follows.       |
 
 `imp` has the shape `impz ls --json` prints, so a reader keeps its own copy with no second call. An
 `ImpChanged` reason says why the record changed:
@@ -80,8 +100,8 @@ reader's imps, not its fields, so it carries no lease owners ([leases](./leases.
   two. A change under way may come in the snapshot and again after it; each event carries the whole
   imp, so a repeat is harmless.
 - A slow reader gets every event at its own pace, however far behind it falls. impd keeps 7 days of
-  events, at most 100,000; a stream that falls behind the oldest one it keeps ends, and a reconnect
-  sends the whole snapshot again.
+  events, at most 100,000. A stream that falls behind the oldest event impd keeps gets `Reset` and
+  the whole snapshot again.
 - `impz events` reconnects by itself after impd ends the stream, impd restarts or the network drops:
   after 1 s, then twice as long each time, at most 15 s. It gives up after five ends in a row; a
   stream that lasted 10 s starts the count again. Each reconnect prints the snapshot again and a

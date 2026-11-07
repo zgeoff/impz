@@ -23,6 +23,8 @@ test('it opens once and hands each sent event to its watcher', async () => {
     // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: EVENT_VERSION,
     at: new Date('2026-10-01T10:00:00Z'),
+    seq: 12,
+    logId: 'log-a',
     ev: 'ImpChanged',
     reason: 'woke',
     imp: buildMockImp({ name: 'fern' }),
@@ -53,6 +55,8 @@ test('it stays open until its watcher aborts', async () => {
     // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: EVENT_VERSION,
     at: new Date('2026-10-01T10:00:00Z'),
+    seq: 12,
+    logId: 'log-a',
     ev: 'ImpChanged',
     reason: 'woke',
     imp: buildMockImp({ name: 'fern' }),

@@ -135,6 +135,7 @@ test('it serves system.info from config and the database', async () => {
       imagePins: true,
       buildContextUpload: true,
       destroyIdCheck: true,
+      eventCursor: true,
     },
     ksm: null,
   });

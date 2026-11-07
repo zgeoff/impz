@@ -1,5 +1,6 @@
 import { expect, jest, onTestFinished, test } from 'bun:test';
 import type { ImpContract, ImpEvent } from '@impz/api';
+import { pruneEvents } from '@impz/durable';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
@@ -8,19 +9,26 @@ import invariant from 'tiny-invariant';
 import { ROOT_TOKEN_ID } from '../identity/auth/token-store';
 import { listApiCalls } from '../platform/db/api-audit';
 import { readImpByName } from '../platform/db/imps';
+import { withImpTransaction } from '../platform/db/with-imp-transaction';
 import { buildSessionValue } from '../platform/http/session-cookie';
 import { readInBackground } from '../test-utils/platform/read-in-background';
 import { readQueuedText } from '../test-utils/platform/read-queued-text';
 import { startTestImpd } from '../test-utils/start-test-impd';
 
-function setupTest() {
+async function setupTest() {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  return startTestImpd(stack, {
+  const harness = await startTestImpd(stack, {
     frozenClockMs: Date.UTC(2026, 0, 1),
     rootToken: 'root-token',
+  });
+
+  return Object.assign(harness, {
+    readHead: () => harness.impd.db.log.readHead(),
+    pruneEvents: (now: number) =>
+      withImpTransaction(harness.impd.db, (trx) => pruneEvents(trx, now)),
   });
 }
 
@@ -508,4 +516,124 @@ test('it drops a snapshot imp that fails the schema and goes on', async () => {
     { ev: 'ImpAdded', reason: 'snapshot', imp: { name: 'good' } },
     { ev: 'GovernorDecision', name: 'later' },
   ]);
+});
+
+test('it sends a stream that resumes across an impd restart every event it missed', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.client.imps.create({ name: 'dev' });
+
+  const seen = await ctx.client.events.list({});
+
+  await ctx.client.imps.sleep({ name: 'dev' });
+  await ctx.restartImpd();
+  await ctx.client.imps.wake({ name: 'dev' });
+
+  const head = await ctx.readHead();
+
+  const controller = new AbortController();
+
+  onTestFinished(() => {
+    controller.abort();
+  });
+
+  const stream = await ctx.client.events.stream(
+    { after: seen.after, logId: seen.logId },
+    { signal: controller.signal },
+  );
+
+  const missed: ImpEvent[] = [];
+
+  for await (const event of stream) {
+    missed.push(event);
+
+    if (event.seq === head) {
+      break;
+    }
+  }
+
+  expect(missed.map((event) => event.seq)).toStrictEqual(
+    Array.from({ length: head - seen.after }, (_unused, index) => seen.after + 1 + index),
+  );
+});
+
+test('it lists the snapshot at the head for a reader with no cursor', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.client.imps.create({ name: 'dev' });
+
+  const head = await ctx.readHead();
+  const page = await ctx.client.events.list({});
+
+  expect(page).toStrictEqual({
+    events: [
+      expect.objectContaining({ ev: 'ImpAdded', reason: 'snapshot', seq: head, logId: page.logId }),
+    ],
+    after: head,
+    logId: expect.toBeString(),
+    hasMore: false,
+  });
+});
+
+test('it lists the events after a cursor a page at a time', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const seen = await ctx.client.events.list({});
+
+  await ctx.client.imps.create({ name: 'dev' });
+  await ctx.client.imps.sleep({ name: 'dev' });
+
+  const page = await ctx.client.events.list({ after: seen.after, logId: seen.logId, limit: 1 });
+
+  expect(page).toStrictEqual({
+    events: [expect.objectContaining({ ev: 'ImpAdded', reason: 'created', seq: seen.after + 1 })],
+    after: seen.after + 1,
+    logId: seen.logId,
+    hasMore: true,
+  });
+});
+
+test('it lists a reset, then the snapshot, for a cursor from another log', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.client.imps.create({ name: 'dev' });
+
+  const head = await ctx.readHead();
+  const page = await ctx.client.events.list({ after: 1, logId: 'log-from-a-restored-copy' });
+
+  expect(page.events).toStrictEqual([
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
+    { v: 1, at: expect.toBeValidDate(), seq: head, logId: page.logId, ev: 'Reset' },
+    expect.objectContaining({ ev: 'ImpAdded', reason: 'snapshot', seq: head }),
+  ]);
+});
+
+test('it lists a reset, then the snapshot, for a cursor older than the oldest event it keeps', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const seen = await ctx.client.events.list({});
+
+  await ctx.client.imps.create({ name: 'dev' });
+  await ctx.pruneEvents(Date.now() + 8 * 86_400_000);
+
+  const head = await ctx.readHead();
+  const page = await ctx.client.events.list({ after: seen.after, logId: seen.logId });
+
+  expect(page).toStrictEqual({
+    events: [
+      // oxlint-disable-next-line id-length -- `v` is the event format's version field
+      { v: 1, at: expect.toBeValidDate(), seq: head, logId: seen.logId, ev: 'Reset' },
+      expect.objectContaining({ ev: 'ImpAdded', reason: 'snapshot', seq: head }),
+    ],
+    after: head,
+    logId: seen.logId,
+    hasMore: false,
+  });
 });

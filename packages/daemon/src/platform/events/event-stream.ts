@@ -1,30 +1,39 @@
-import type { ImpEvent } from '@impz/api';
+import type { EventCursor, ImpEvent } from '@impz/api';
 import type { ChangeSignal } from '@impz/durable';
 import type { LoggedImpEvent } from '../db/imp-log-entry';
 import type { ImpEventsAfter } from '../db/read-imp-events-after';
 import { tailImpEvents } from '../db/tail-imp-events';
 import type { StartTimer } from '../process/clock';
 import { startTimerAt } from '../process/start-timer-at';
+import { buildResetEvent } from './build-reset-event';
+import { pickStreamStart } from './pick-stream-start';
 
-interface EventStreamOptions {
-  readonly changes: ChangeSignal;
+export interface EventLogReads {
   readonly readHead: () => Promise<number>;
-  readonly readAfter: (after: number) => Promise<ImpEventsAfter>;
+  readonly readLogId: () => Promise<string>;
+  readonly readAfter: (after: number, limit: number) => Promise<ImpEventsAfter>;
 
-  readonly readSnapshot: () => Promise<readonly ImpEvent[]>;
-  readonly present: (event: LoggedImpEvent) => Promise<ImpEvent | null>;
+  readonly readSnapshot: (head: number, logId: string) => Promise<readonly ImpEvent[]>;
+  readonly present: (event: LoggedImpEvent, logId: string) => Promise<ImpEvent | null>;
+  readonly accepts?: (event: ImpEvent) => boolean;
+
+  readonly now: () => number;
+}
+
+interface EventStreamOptions extends EventLogReads {
+  readonly cursor: Readonly<EventCursor>;
+  readonly changes: ChangeSignal;
   readonly signal?: AbortSignal | undefined;
 
   readonly endsAt: number | null;
-  readonly now: () => number;
 
   readonly startTimer?: StartTimer;
-
-  readonly accepts?: (event: ImpEvent) => boolean;
 }
 
+const READ_LIMIT = 500;
+
 // The stream reads the log at its own pace, so a slow reader falls behind and never loses an
-// event; a prune that passes its cursor ends it.
+// event; a prune that passes its cursor sends a reset and a new snapshot.
 export async function* openEventStream(options: EventStreamOptions): AsyncGenerator<ImpEvent> {
   const stop = new AbortController();
 
@@ -43,29 +52,59 @@ export async function* openEventStream(options: EventStreamOptions): AsyncGenera
         });
 
   try {
+    const logId = await options.readLogId();
     const head = await options.readHead();
 
-    yield* await options.readSnapshot();
+    const start = pickStreamStart(options.cursor, { head, logId });
 
-    const pages = tailImpEvents({
-      changes: options.changes,
-      readAfter: options.readAfter,
-      after: head,
-      signal: stop.signal,
-    });
+    if (start.kind === 'reset') {
+      yield buildResetEvent({ seq: head, logId, at: options.now() });
+    }
 
-    for await (const page of pages) {
-      for (const logged of page) {
-        const event = await options.present(logged);
+    if (start.kind !== 'resume') {
+      yield* await options.readSnapshot(head, logId);
+    }
 
-        if (stop.signal.aborted) {
+    let after = start.kind === 'resume' ? start.after : head;
+
+    while (!stop.signal.aborted) {
+      const pages = tailImpEvents({
+        changes: options.changes,
+        readAfter: (cursor) => options.readAfter(cursor, READ_LIMIT),
+        after,
+        signal: stop.signal,
+      });
+
+      try {
+        let step = await pages.next();
+
+        while (step.done !== true) {
+          for (const logged of step.value) {
+            const event = await options.present(logged, logId);
+
+            if (stop.signal.aborted) {
+              return;
+            }
+
+            if (event !== null && (options.accepts?.(event) ?? true)) {
+              yield event;
+            }
+          }
+
+          step = await pages.next();
+        }
+
+        if (step.value === null) {
           return;
         }
-
-        if (event !== null && (options.accepts?.(event) ?? true)) {
-          yield event;
-        }
+      } finally {
+        await pages.return(null);
       }
+
+      after = await options.readHead();
+
+      yield buildResetEvent({ seq: after, logId, at: options.now() });
+      yield* await options.readSnapshot(after, logId);
     }
   } finally {
     options.signal?.removeEventListener('abort', stopStream);

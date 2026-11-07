@@ -34,6 +34,7 @@ const FEATURE_GAPS = {
   imagePins: 'has no image pins',
   buildContextUpload: 'has no build context upload',
   destroyIdCheck: 'has no id check on destroy',
+  eventCursor: 'has no event cursor',
 } as const satisfies Record<ImpdFeature, string>;
 
 export interface FeatureSource {

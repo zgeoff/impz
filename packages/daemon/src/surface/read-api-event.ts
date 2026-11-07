@@ -10,9 +10,10 @@ import type { ImpRecord } from '../platform/db/imps';
 export function readApiEvent(
   event: Readonly<LoggedImpEvent>,
   toApi: (imp: ImpRecord) => Promise<Imp>,
+  logId: string,
 ): Promise<ImpEvent> {
   // oxlint-disable-next-line id-length -- `v` is the event format's version field
-  const envelope = { v: EVENT_VERSION, at: event.at } as const;
+  const envelope = { v: EVENT_VERSION, at: event.at, seq: event.seq, logId } as const;
 
   return match(event)
     .returnType<Promise<ImpEvent>>()
@@ -42,10 +43,8 @@ export function readApiEvent(
         checkpoint: toApiCheckpoint(written.checkpoint),
       }),
     )
-    .with({ ev: P.union('GovernorDecision', 'AgentExec') }, (other) => {
-      const { seq: _seq, at: _at, ...fields } = other;
-
-      return Promise.resolve({ ...envelope, ...fields });
-    })
+    .with({ ev: P.union('GovernorDecision', 'AgentExec') }, (other) =>
+      Promise.resolve({ ...other, ...envelope }),
+    )
     .exhaustive();
 }

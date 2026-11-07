@@ -321,3 +321,20 @@ test('#writeConsistentCopy writes a copy of an older schema that migrates forwar
 
   expect(names).toStrictEqual(Object.keys(MIGRATIONS).toSorted());
 });
+
+test('#writeConsistentCopy gives the copy a log ID of its own', async () => {
+  const ctx = await setupTest();
+
+  const path = join(ctx.dataDir, 'copy.sqlite');
+
+  await writeConsistentCopy(ctx.db, path);
+
+  const copy = await openDatabase(path);
+
+  onTestFinished(() => copy.destroy());
+
+  const copyLogId = await copy.log.readLogId();
+  const liveLogId = await ctx.db.log.readLogId();
+
+  expect(copyLogId).not.toBe(liveLogId);
+});

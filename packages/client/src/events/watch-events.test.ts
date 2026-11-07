@@ -14,6 +14,8 @@ test('it passes each event of the stream in order, then resolves once impd close
     // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: EVENT_VERSION,
     at: new Date(),
+    seq: 12,
+    logId: 'log-a',
     ev: 'ImpAdded',
     reason: 'snapshot',
     imp: buildMockImp({ name: 'box' }),
@@ -23,6 +25,8 @@ test('it passes each event of the stream in order, then resolves once impd close
     // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: EVENT_VERSION,
     at: new Date(),
+    seq: 12,
+    logId: 'log-a',
     ev: 'ImpChanged',
     reason: 'slept',
     imp: buildMockImp({ name: 'box', state: 'sleeping' }),
@@ -43,6 +47,8 @@ test('it passes only the events of the named imp', async () => {
     // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: EVENT_VERSION,
     at: new Date(),
+    seq: 12,
+    logId: 'log-a',
     ev: 'ImpAdded',
     reason: 'created',
     imp: buildMockImp({ name: 'other' }),
@@ -52,6 +58,8 @@ test('it passes only the events of the named imp', async () => {
     // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: EVENT_VERSION,
     at: new Date(),
+    seq: 12,
+    logId: 'log-a',
     ev: 'CheckpointAdded',
     name: 'box',
     checkpoint: buildMockCheckpoint(),
@@ -153,6 +161,8 @@ test('it ends with what an event callback throws, even with a reconnect', () => 
     // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: EVENT_VERSION,
     at: new Date(),
+    seq: 12,
+    logId: 'log-a',
     ev: 'ImpRemoved',
     imp: buildMockImp({ name: 'box' }),
   };
