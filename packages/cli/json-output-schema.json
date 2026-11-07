@@ -580,6 +580,9 @@
               },
               "destroyIdCheck": {
                 "type": "boolean"
+              },
+              "eventCursor": {
+                "type": "boolean"
               }
             },
             "required": [

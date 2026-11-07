@@ -10780,7 +10780,19 @@
       "stream": false
     },
     "events.stream": {
-      "input": {},
+      "input": {
+        "type": "object",
+        "properties": {
+          "after": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "logId": {
+            "type": "string"
+          }
+        }
+      },
       "output": {
         "oneOf": [
           {
@@ -10793,6 +10805,14 @@
               "at": {
                 "type": "string",
                 "format": "date-time"
+              },
+              "seq": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "logId": {
+                "type": "string"
               },
               "ev": {
                 "type": "string",
@@ -11200,6 +11220,8 @@
             "required": [
               "v",
               "at",
+              "seq",
+              "logId",
               "ev",
               "reason",
               "imp"
@@ -11216,6 +11238,14 @@
               "at": {
                 "type": "string",
                 "format": "date-time"
+              },
+              "seq": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "logId": {
+                "type": "string"
               },
               "ev": {
                 "type": "string",
@@ -11679,6 +11709,8 @@
             "required": [
               "v",
               "at",
+              "seq",
+              "logId",
               "ev",
               "reason",
               "imp"
@@ -11695,6 +11727,14 @@
               "at": {
                 "type": "string",
                 "format": "date-time"
+              },
+              "seq": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "logId": {
+                "type": "string"
               },
               "ev": {
                 "type": "string",
@@ -12095,6 +12135,8 @@
             "required": [
               "v",
               "at",
+              "seq",
+              "logId",
               "ev",
               "imp"
             ],
@@ -12110,6 +12152,14 @@
               "at": {
                 "type": "string",
                 "format": "date-time"
+              },
+              "seq": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "logId": {
+                "type": "string"
               },
               "ev": {
                 "type": "string",
@@ -12154,6 +12204,8 @@
             "required": [
               "v",
               "at",
+              "seq",
+              "logId",
               "ev",
               "name",
               "checkpoint"
@@ -12170,6 +12222,14 @@
               "at": {
                 "type": "string",
                 "format": "date-time"
+              },
+              "seq": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "logId": {
+                "type": "string"
               },
               "ev": {
                 "type": "string",
@@ -12214,6 +12274,8 @@
             "required": [
               "v",
               "at",
+              "seq",
+              "logId",
               "ev",
               "name",
               "checkpoint"
@@ -12230,6 +12292,14 @@
               "at": {
                 "type": "string",
                 "format": "date-time"
+              },
+              "seq": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "logId": {
+                "type": "string"
               },
               "ev": {
                 "type": "string",
@@ -12279,6 +12349,8 @@
             "required": [
               "v",
               "at",
+              "seq",
+              "logId",
               "ev",
               "decision",
               "name",
@@ -12298,6 +12370,14 @@
               "at": {
                 "type": "string",
                 "format": "date-time"
+              },
+              "seq": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "logId": {
+                "type": "string"
               },
               "ev": {
                 "type": "string",
@@ -12330,6 +12410,8 @@
             "required": [
               "v",
               "at",
+              "seq",
+              "logId",
               "ev",
               "name",
               "actor",
@@ -12338,10 +12420,1753 @@
               "command"
             ],
             "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "v": {
+                "type": "number",
+                "const": 1
+              },
+              "at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "seq": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "logId": {
+                "type": "string"
+              },
+              "ev": {
+                "type": "string",
+                "const": "Reset"
+              }
+            },
+            "required": [
+              "v",
+              "at",
+              "seq",
+              "logId",
+              "ev"
+            ],
+            "additionalProperties": false
           }
         ]
       },
       "stream": true
+    },
+    "events.list": {
+      "input": {
+        "type": "object",
+        "properties": {
+          "after": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "logId": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "v": {
+                      "type": "number",
+                      "const": 1
+                    },
+                    "at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "seq": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "logId": {
+                      "type": "string"
+                    },
+                    "ev": {
+                      "type": "string",
+                      "const": "ImpAdded"
+                    },
+                    "reason": {
+                      "type": "string",
+                      "enum": [
+                        "snapshot",
+                        "created"
+                      ]
+                    },
+                    "imp": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string",
+                          "pattern": "^[a-z][a-z0-9-]{0,30}$"
+                        },
+                        "image": {
+                          "type": "string",
+                          "pattern": "^[a-z][a-z0-9-]{0,30}$"
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": [
+                            "creating",
+                            "running",
+                            "sleeping",
+                            "stopped",
+                            "error"
+                          ]
+                        },
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "user",
+                            "builder"
+                          ]
+                        },
+                        "vcpus": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "memoryMib": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "maxMemoryMib": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "pluggedMib": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "backup": {
+                          "type": "boolean"
+                        },
+                        "diskMib": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "diskUsage": {
+                          "type": "object",
+                          "properties": {
+                            "exclusiveBytes": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "sharedBytes": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "measuredAt": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "isPartial": {
+                              "type": "boolean"
+                            },
+                            "isUpperBound": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "exclusiveBytes",
+                            "sharedBytes",
+                            "measuredAt",
+                            "isPartial",
+                            "isUpperBound"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "ip": {
+                          "type": "string",
+                          "format": "ipv4",
+                          "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$"
+                        },
+                        "slot": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "port": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "httpPort": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "url": {
+                          "type": "string",
+                          "format": "uri"
+                        },
+                        "public": {
+                          "type": "object",
+                          "properties": {
+                            "auth": {
+                              "type": "string",
+                              "enum": [
+                                "none",
+                                "token",
+                                "basic"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "auth"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "lastActiveAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "lastRequestAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "ramMib": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "rssMib": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "sleptAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "holdUntil": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "leases": {
+                          "type": "object",
+                          "properties": {
+                            "leases": {
+                              "readOnly": true,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "name": {
+                                    "type": "string",
+                                    "pattern": "^[a-z][a-z0-9-]{0,30}$"
+                                  },
+                                  "owner": {
+                                    "type": "object",
+                                    "properties": {
+                                      "principal": {
+                                        "type": "string"
+                                      },
+                                      "display": {
+                                        "type": "string"
+                                      },
+                                      "label": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "principal",
+                                      "display",
+                                      "label"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  "until": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "format": "date-time"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "name",
+                                  "owner",
+                                  "until"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "otherCount": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "leases",
+                            "otherCount"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "error": {
+                          "type": "string"
+                        },
+                        "sessions": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "coldBootReason": {
+                          "type": "string"
+                        },
+                        "agentSilentSince": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "inner": {
+                          "type": "object",
+                          "properties": {
+                            "up": {
+                              "type": "boolean"
+                            },
+                            "restarts": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "lastError": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "up",
+                            "restarts"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "outdated": {
+                          "readOnly": true,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "firecracker",
+                              "kernel",
+                              "agent",
+                              "impd",
+                              "ipv6"
+                            ]
+                          }
+                        },
+                        "cpu": {
+                          "type": "object",
+                          "properties": {
+                            "limit": {
+                              "anyOf": [
+                                {
+                                  "type": "number",
+                                  "exclusiveMinimum": 0
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "weight": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "limit",
+                            "weight"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "resources": {
+                          "type": "object",
+                          "properties": {
+                            "wakeCount": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "awakeMs": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "sample": {
+                              "type": "object",
+                              "properties": {
+                                "measuredAt": {
+                                  "type": "string",
+                                  "format": "date-time"
+                                },
+                                "since": {
+                                  "type": "string",
+                                  "format": "date-time"
+                                },
+                                "cpuPercent": {
+                                  "type": "number",
+                                  "minimum": 0
+                                },
+                                "cpuThrottledMs": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 9007199254740991
+                                },
+                                "netRxBytes": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 9007199254740991
+                                },
+                                "netTxBytes": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 9007199254740991
+                                }
+                              },
+                              "required": [
+                                "measuredAt",
+                                "since",
+                                "cpuThrottledMs",
+                                "netRxBytes",
+                                "netTxBytes"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "required": [
+                            "wakeCount",
+                            "awakeMs"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "move": {
+                          "type": "string",
+                          "enum": [
+                            "sending",
+                            "moved",
+                            "receiving"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "image",
+                        "state",
+                        "vcpus",
+                        "memoryMib",
+                        "diskMib",
+                        "ip",
+                        "slot",
+                        "port",
+                        "httpPort",
+                        "url",
+                        "createdAt",
+                        "lastActiveAt"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "v",
+                    "at",
+                    "seq",
+                    "logId",
+                    "ev",
+                    "reason",
+                    "imp"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "v": {
+                      "type": "number",
+                      "const": 1
+                    },
+                    "at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "seq": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "logId": {
+                      "type": "string"
+                    },
+                    "ev": {
+                      "type": "string",
+                      "const": "ImpChanged"
+                    },
+                    "reason": {
+                      "type": "string",
+                      "enum": [
+                        "booted",
+                        "woke",
+                        "slept",
+                        "stopped",
+                        "failed",
+                        "repaired",
+                        "adopted",
+                        "held",
+                        "restored",
+                        "resized",
+                        "updated",
+                        "exposed",
+                        "released"
+                      ]
+                    },
+                    "imp": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string",
+                          "pattern": "^[a-z][a-z0-9-]{0,30}$"
+                        },
+                        "image": {
+                          "type": "string",
+                          "pattern": "^[a-z][a-z0-9-]{0,30}$"
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": [
+                            "creating",
+                            "running",
+                            "sleeping",
+                            "stopped",
+                            "error"
+                          ]
+                        },
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "user",
+                            "builder"
+                          ]
+                        },
+                        "vcpus": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "memoryMib": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "maxMemoryMib": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "pluggedMib": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "backup": {
+                          "type": "boolean"
+                        },
+                        "diskMib": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "diskUsage": {
+                          "type": "object",
+                          "properties": {
+                            "exclusiveBytes": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "sharedBytes": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "measuredAt": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "isPartial": {
+                              "type": "boolean"
+                            },
+                            "isUpperBound": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "exclusiveBytes",
+                            "sharedBytes",
+                            "measuredAt",
+                            "isPartial",
+                            "isUpperBound"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "ip": {
+                          "type": "string",
+                          "format": "ipv4",
+                          "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$"
+                        },
+                        "slot": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "port": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "httpPort": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "url": {
+                          "type": "string",
+                          "format": "uri"
+                        },
+                        "public": {
+                          "type": "object",
+                          "properties": {
+                            "auth": {
+                              "type": "string",
+                              "enum": [
+                                "none",
+                                "token",
+                                "basic"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "auth"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "lastActiveAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "lastRequestAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "ramMib": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "rssMib": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "sleptAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "holdUntil": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "leases": {
+                          "type": "object",
+                          "properties": {
+                            "leases": {
+                              "readOnly": true,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "name": {
+                                    "type": "string",
+                                    "pattern": "^[a-z][a-z0-9-]{0,30}$"
+                                  },
+                                  "owner": {
+                                    "type": "object",
+                                    "properties": {
+                                      "principal": {
+                                        "type": "string"
+                                      },
+                                      "display": {
+                                        "type": "string"
+                                      },
+                                      "label": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "principal",
+                                      "display",
+                                      "label"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  "until": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "format": "date-time"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "name",
+                                  "owner",
+                                  "until"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "otherCount": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "leases",
+                            "otherCount"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "error": {
+                          "type": "string"
+                        },
+                        "sessions": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "coldBootReason": {
+                          "type": "string"
+                        },
+                        "agentSilentSince": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "inner": {
+                          "type": "object",
+                          "properties": {
+                            "up": {
+                              "type": "boolean"
+                            },
+                            "restarts": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "lastError": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "up",
+                            "restarts"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "outdated": {
+                          "readOnly": true,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "firecracker",
+                              "kernel",
+                              "agent",
+                              "impd",
+                              "ipv6"
+                            ]
+                          }
+                        },
+                        "cpu": {
+                          "type": "object",
+                          "properties": {
+                            "limit": {
+                              "anyOf": [
+                                {
+                                  "type": "number",
+                                  "exclusiveMinimum": 0
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "weight": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "limit",
+                            "weight"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "resources": {
+                          "type": "object",
+                          "properties": {
+                            "wakeCount": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "awakeMs": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "sample": {
+                              "type": "object",
+                              "properties": {
+                                "measuredAt": {
+                                  "type": "string",
+                                  "format": "date-time"
+                                },
+                                "since": {
+                                  "type": "string",
+                                  "format": "date-time"
+                                },
+                                "cpuPercent": {
+                                  "type": "number",
+                                  "minimum": 0
+                                },
+                                "cpuThrottledMs": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 9007199254740991
+                                },
+                                "netRxBytes": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 9007199254740991
+                                },
+                                "netTxBytes": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 9007199254740991
+                                }
+                              },
+                              "required": [
+                                "measuredAt",
+                                "since",
+                                "cpuThrottledMs",
+                                "netRxBytes",
+                                "netTxBytes"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "required": [
+                            "wakeCount",
+                            "awakeMs"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "move": {
+                          "type": "string",
+                          "enum": [
+                            "sending",
+                            "moved",
+                            "receiving"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "image",
+                        "state",
+                        "vcpus",
+                        "memoryMib",
+                        "diskMib",
+                        "ip",
+                        "slot",
+                        "port",
+                        "httpPort",
+                        "url",
+                        "createdAt",
+                        "lastActiveAt"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "detail": {
+                      "readOnly": true,
+                      "type": "object",
+                      "properties": {
+                        "durationMs": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "prepareMs": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "trigger": {
+                          "type": "string"
+                        },
+                        "coldBootReason": {
+                          "type": "string"
+                        },
+                        "steps": {
+                          "readOnly": true,
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          }
+                        },
+                        "released": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "memFileMib": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "v",
+                    "at",
+                    "seq",
+                    "logId",
+                    "ev",
+                    "reason",
+                    "imp"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "v": {
+                      "type": "number",
+                      "const": 1
+                    },
+                    "at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "seq": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "logId": {
+                      "type": "string"
+                    },
+                    "ev": {
+                      "type": "string",
+                      "const": "ImpRemoved"
+                    },
+                    "imp": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string",
+                          "pattern": "^[a-z][a-z0-9-]{0,30}$"
+                        },
+                        "image": {
+                          "type": "string",
+                          "pattern": "^[a-z][a-z0-9-]{0,30}$"
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": [
+                            "creating",
+                            "running",
+                            "sleeping",
+                            "stopped",
+                            "error"
+                          ]
+                        },
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "user",
+                            "builder"
+                          ]
+                        },
+                        "vcpus": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "memoryMib": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "maxMemoryMib": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "pluggedMib": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "backup": {
+                          "type": "boolean"
+                        },
+                        "diskMib": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "diskUsage": {
+                          "type": "object",
+                          "properties": {
+                            "exclusiveBytes": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "sharedBytes": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "measuredAt": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "isPartial": {
+                              "type": "boolean"
+                            },
+                            "isUpperBound": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "exclusiveBytes",
+                            "sharedBytes",
+                            "measuredAt",
+                            "isPartial",
+                            "isUpperBound"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "ip": {
+                          "type": "string",
+                          "format": "ipv4",
+                          "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$"
+                        },
+                        "slot": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "port": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "httpPort": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "url": {
+                          "type": "string",
+                          "format": "uri"
+                        },
+                        "public": {
+                          "type": "object",
+                          "properties": {
+                            "auth": {
+                              "type": "string",
+                              "enum": [
+                                "none",
+                                "token",
+                                "basic"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "auth"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "lastActiveAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "lastRequestAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "ramMib": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "rssMib": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "sleptAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "holdUntil": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "leases": {
+                          "type": "object",
+                          "properties": {
+                            "leases": {
+                              "readOnly": true,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "name": {
+                                    "type": "string",
+                                    "pattern": "^[a-z][a-z0-9-]{0,30}$"
+                                  },
+                                  "owner": {
+                                    "type": "object",
+                                    "properties": {
+                                      "principal": {
+                                        "type": "string"
+                                      },
+                                      "display": {
+                                        "type": "string"
+                                      },
+                                      "label": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "principal",
+                                      "display",
+                                      "label"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  "until": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "format": "date-time"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "name",
+                                  "owner",
+                                  "until"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "otherCount": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "leases",
+                            "otherCount"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "error": {
+                          "type": "string"
+                        },
+                        "sessions": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "coldBootReason": {
+                          "type": "string"
+                        },
+                        "agentSilentSince": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "inner": {
+                          "type": "object",
+                          "properties": {
+                            "up": {
+                              "type": "boolean"
+                            },
+                            "restarts": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "lastError": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "up",
+                            "restarts"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "outdated": {
+                          "readOnly": true,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "firecracker",
+                              "kernel",
+                              "agent",
+                              "impd",
+                              "ipv6"
+                            ]
+                          }
+                        },
+                        "cpu": {
+                          "type": "object",
+                          "properties": {
+                            "limit": {
+                              "anyOf": [
+                                {
+                                  "type": "number",
+                                  "exclusiveMinimum": 0
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "weight": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "limit",
+                            "weight"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "resources": {
+                          "type": "object",
+                          "properties": {
+                            "wakeCount": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "awakeMs": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "sample": {
+                              "type": "object",
+                              "properties": {
+                                "measuredAt": {
+                                  "type": "string",
+                                  "format": "date-time"
+                                },
+                                "since": {
+                                  "type": "string",
+                                  "format": "date-time"
+                                },
+                                "cpuPercent": {
+                                  "type": "number",
+                                  "minimum": 0
+                                },
+                                "cpuThrottledMs": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 9007199254740991
+                                },
+                                "netRxBytes": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 9007199254740991
+                                },
+                                "netTxBytes": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 9007199254740991
+                                }
+                              },
+                              "required": [
+                                "measuredAt",
+                                "since",
+                                "cpuThrottledMs",
+                                "netRxBytes",
+                                "netTxBytes"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "required": [
+                            "wakeCount",
+                            "awakeMs"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "move": {
+                          "type": "string",
+                          "enum": [
+                            "sending",
+                            "moved",
+                            "receiving"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "image",
+                        "state",
+                        "vcpus",
+                        "memoryMib",
+                        "diskMib",
+                        "ip",
+                        "slot",
+                        "port",
+                        "httpPort",
+                        "url",
+                        "createdAt",
+                        "lastActiveAt"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "v",
+                    "at",
+                    "seq",
+                    "logId",
+                    "ev",
+                    "imp"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "v": {
+                      "type": "number",
+                      "const": 1
+                    },
+                    "at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "seq": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "logId": {
+                      "type": "string"
+                    },
+                    "ev": {
+                      "type": "string",
+                      "const": "CheckpointAdded"
+                    },
+                    "name": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9-]{0,30}$"
+                    },
+                    "checkpoint": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "label": {
+                          "type": "string"
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "sizeBytes": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "diskMib": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "createdAt",
+                        "diskMib"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "v",
+                    "at",
+                    "seq",
+                    "logId",
+                    "ev",
+                    "name",
+                    "checkpoint"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "v": {
+                      "type": "number",
+                      "const": 1
+                    },
+                    "at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "seq": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "logId": {
+                      "type": "string"
+                    },
+                    "ev": {
+                      "type": "string",
+                      "const": "CheckpointRemoved"
+                    },
+                    "name": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9-]{0,30}$"
+                    },
+                    "checkpoint": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "label": {
+                          "type": "string"
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "sizeBytes": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "diskMib": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "createdAt",
+                        "diskMib"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "v",
+                    "at",
+                    "seq",
+                    "logId",
+                    "ev",
+                    "name",
+                    "checkpoint"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "v": {
+                      "type": "number",
+                      "const": 1
+                    },
+                    "at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "seq": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "logId": {
+                      "type": "string"
+                    },
+                    "ev": {
+                      "type": "string",
+                      "const": "GovernorDecision"
+                    },
+                    "decision": {
+                      "type": "string",
+                      "enum": [
+                        "admitted",
+                        "refused",
+                        "slept"
+                      ]
+                    },
+                    "name": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9-]{0,30}$"
+                    },
+                    "trigger": {
+                      "type": "string"
+                    },
+                    "usedMib": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "budgetMib": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "reserveMib": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "neededMib": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "protectedCount": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "v",
+                    "at",
+                    "seq",
+                    "logId",
+                    "ev",
+                    "decision",
+                    "name",
+                    "trigger",
+                    "usedMib",
+                    "budgetMib"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "v": {
+                      "type": "number",
+                      "const": 1
+                    },
+                    "at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "seq": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "logId": {
+                      "type": "string"
+                    },
+                    "ev": {
+                      "type": "string",
+                      "const": "AgentExec"
+                    },
+                    "name": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9-]{0,30}$"
+                    },
+                    "actor": {
+                      "type": "string",
+                      "enum": [
+                        "token",
+                        "dashboard",
+                        "ssh",
+                        "tailnet",
+                        "oauth"
+                      ]
+                    },
+                    "actorName": {
+                      "type": "string"
+                    },
+                    "tty": {
+                      "type": "boolean"
+                    },
+                    "command": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "v",
+                    "at",
+                    "seq",
+                    "logId",
+                    "ev",
+                    "name",
+                    "actor",
+                    "actorName",
+                    "tty",
+                    "command"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "v": {
+                      "type": "number",
+                      "const": 1
+                    },
+                    "at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "seq": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "logId": {
+                      "type": "string"
+                    },
+                    "ev": {
+                      "type": "string",
+                      "const": "Reset"
+                    }
+                  },
+                  "required": [
+                    "v",
+                    "at",
+                    "seq",
+                    "logId",
+                    "ev"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "after": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "logId": {
+            "type": "string"
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "events",
+          "after",
+          "logId",
+          "hasMore"
+        ],
+        "additionalProperties": false
+      },
+      "stream": false
     },
     "system.info": {
       "input": {},
@@ -12923,6 +14748,9 @@
               },
               "destroyIdCheck": {
                 "type": "boolean"
+              },
+              "eventCursor": {
+                "type": "boolean"
               }
             },
             "required": [
@@ -13108,6 +14936,9 @@
                 "type": "boolean"
               },
               "destroyIdCheck": {
+                "type": "boolean"
+              },
+              "eventCursor": {
                 "type": "boolean"
               }
             },
