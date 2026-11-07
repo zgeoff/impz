@@ -216,7 +216,7 @@ test('it logs an adopted change when a restarted impd adopts a running VM', asyn
   expect(read.events).toPartiallyContain({
     ev: 'ImpChanged',
     reason: 'adopted',
-    imp: expect.objectContaining({ name: 'alive', state: 'running' }) as unknown,
+    imp: expect.objectContaining({ name: 'alive', state: 'running' }),
   });
 });
 
