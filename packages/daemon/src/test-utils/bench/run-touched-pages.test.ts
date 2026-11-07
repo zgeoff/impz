@@ -113,6 +113,83 @@ test('it reports the pages a cold and a woken sleep touched, then removes its im
   expect(destroy).toHaveBeenCalledExactlyOnceWith({ name: 'touched-pages' });
 });
 
+test("it reads the memory file from impd's memory dataset on a ZFS host", async () => {
+  const shownImp = buildStubAnswerQueue([
+    () => Promise.reject(new ORPCError('NOT_FOUND', { message: 'no imp named touched-pages' })),
+    () => Promise.resolve(buildMockImp({ id: 'imp_2', name: 'touched-pages' })),
+  ]);
+
+  const memBlocks = buildStubAnswerQueue<CommandResult>([
+    { exitCode: 0, stdout: '409600\n', stderr: '' },
+    { exitCode: 0, stdout: '102400\n', stderr: '' },
+  ]);
+
+  const containerRuns: Readonly<Record<string, () => CommandResult>> = {
+    'cat /var/lib/imp/imps/imp_2/run/pid': () => ({ exitCode: 0, stdout: '5151\n', stderr: '' }),
+    'cat /proc/5151/status': () => ({
+      exitCode: 0,
+      stdout: 'Name:\tfirecracker\nHugetlbPages:\t  131072 kB\n',
+      stderr: '',
+    }),
+    'stat -c %b /var/lib/imp/mem/imp_2/mem': () => memBlocks.next(),
+    'cat /var/lib/imp/imps/imp_2/run/uffd.pid': () => ({
+      exitCode: 0,
+      stdout: '5252\n',
+      stderr: '',
+    }),
+    'cp --sparse=always /proc/5252/fd/3 /var/lib/imp/touched-pages-base': () => ({
+      exitCode: 0,
+      stdout: '',
+      stderr: '',
+    }),
+    'bun /src/packages/daemon/bench/count-changed-pages.ts /var/lib/imp/touched-pages-base /var/lib/imp/mem/imp_2/mem':
+      () => ({ exitCode: 0, stdout: '{"changedMib":40,"changedHugeMib":44}\n', stderr: '' }),
+    'rm -f /var/lib/imp/touched-pages-base': () => ({ exitCode: 0, stdout: '', stderr: '' }),
+  };
+
+  const measured = await runTouchedPages(
+    {
+      withDevLock: (run) => run(),
+      client: {
+        system: {
+          info: () =>
+            Promise.resolve(
+              buildMockSystemInfo({
+                defaults: { image: 'base' },
+                storage: { ...buildMockSystemInfo().storage, backend: 'zfs' },
+              }),
+            ),
+        },
+        imps: {
+          get: () => shownImp.next()(),
+          create: () => Promise.resolve(buildMockImp({ id: 'imp_2', name: 'touched-pages' })),
+          destroy: () => Promise.resolve({}),
+        },
+      },
+      runImpz: () => Promise.resolve({ exitCode: 0, stdout: '', stderr: '' }),
+      runInContainer: (argv) =>
+        Promise.resolve(
+          containerRuns[argv.join(' ')]?.() ?? {
+            exitCode: 127,
+            stdout: '',
+            stderr: 'no such command',
+          },
+        ),
+      now: () => 0,
+      sleep: () => Promise.resolve(),
+      onStderr: () => {},
+    },
+    { memory: '512m', memoryMib: 512, writeMib: 64 },
+  );
+
+  expect(measured).toStrictEqual({
+    memory: '512m',
+    writeMib: 64,
+    coldSleep: { touchedMib: 128, memFileMib: 200 },
+    wokenSleep: { touchedMib: 128, changedMib: 40, changedHugeMib: 44, memFileMib: 50 },
+  });
+});
+
 test('it looks for an imp of its name only once impd has its default image', async () => {
   const infos = buildStubAnswerQueue([
     buildMockSystemInfo({ defaults: { image: null } }),
