@@ -149,7 +149,8 @@ When another caller can destroy an imp and make a new one under its name, destro
 Take the id from the imp that `imps.create`, `imps.get` or `imps.list` returned. When the imp under
 the name has another id, impd destroys nothing and fails with `CONFLICT` and
 `data.reason: 'id_changed'`.
-[Stop and destroy](../architecture/lifecycle/lifecycle.md#stop-and-destroy) explains the check.
+[Stop and destroy](../architecture/lifecycle/lifecycle.md#stop-and-destroy) explains the check, and
+the restore and the move that keep an imp's id.
 
 An impd without the `destroyIdCheck` feature drops the `id` unread and destroys whichever imp holds
 the name. Check the feature first, as [Features](#features) shows.

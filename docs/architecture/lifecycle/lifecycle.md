@@ -145,7 +145,9 @@ A caller names the imp to destroy, and can pass the ID it read for that imp too.
 and the destroy, another caller can destroy the imp and make a new one under the same name. impd
 takes the lock of the imp that holds the name, and then compares its ID with the ID the caller
 passed. When the two differ, impd keeps the imp and fails with `CONFLICT`. Because the compare runs
-under the lock, another call cannot replace the imp between the compare and the destroy.
+under the lock, another call cannot replace the imp between the compare and the destroy. A move from
+another host keeps the imp's ID, and so does a restore of a backup when no other imp holds that ID.
+impd destroys an imp that either brings back under the name, as it would the imp the caller read.
 
 ## impd's own stop
 
