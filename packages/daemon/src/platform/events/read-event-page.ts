@@ -1,4 +1,5 @@
 import type { EventCursor, EventPage, ImpEvent } from '@impz/api';
+import { match } from 'ts-pattern';
 import { buildResetEvent } from './build-reset-event';
 import type { EventLogReads } from './event-stream';
 import { pickStreamStart } from './pick-stream-start';
@@ -12,29 +13,13 @@ export async function readEventPage(
   const logId = await reads.readLogId();
   const head = await reads.readHead();
 
-  const start = pickStreamStart(cursor, { head, logId });
-
-  if (start.kind !== 'resume') {
-    return readSnapshotPage(reads, { head, logId, isReset: start.kind === 'reset' });
-  }
-
-  const read = await reads.readAfter(start.after, limit);
-
-  if (read.kind === 'reset') {
-    return readSnapshotPage(reads, { head, logId, isReset: true });
-  }
-
-  const events: ImpEvent[] = [];
-
-  for (const logged of read.events) {
-    const event = await reads.present(logged, logId);
-
-    if (event !== null && (reads.accepts?.(event) ?? true)) {
-      events.push(event);
-    }
-  }
-
-  return { events, after: read.throughSeq, logId, hasMore: read.hasMore };
+  return match(pickStreamStart(cursor, { head, logId }))
+    .with({ kind: 'snapshot' }, () => readSnapshotPage(reads, { head, logId, isReset: false }))
+    .with({ kind: 'reset' }, () => readSnapshotPage(reads, { head, logId, isReset: true }))
+    .with({ kind: 'resume' }, (resume) =>
+      readResumedPage(reads, { head, logId, isReset: false }, resume.after, limit),
+    )
+    .exhaustive();
 }
 
 interface SnapshotPosition {
@@ -59,4 +44,29 @@ async function readSnapshotPage(
     logId: position.logId,
     hasMore: false,
   };
+}
+
+async function readResumedPage(
+  reads: EventLogReads,
+  position: SnapshotPosition,
+  after: number,
+  limit: number,
+): Promise<EventPage> {
+  const read = await reads.readAfter(after, limit);
+
+  if (read.kind === 'reset') {
+    return readSnapshotPage(reads, { ...position, isReset: true });
+  }
+
+  const events: ImpEvent[] = [];
+
+  for (const logged of read.events) {
+    const event = await reads.present(logged, position.logId);
+
+    if (event !== null && (reads.accepts?.(event) ?? true)) {
+      events.push(event);
+    }
+  }
+
+  return { events, after: read.throughSeq, logId: position.logId, hasMore: read.hasMore };
 }

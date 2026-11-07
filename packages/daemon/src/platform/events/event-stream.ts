@@ -1,8 +1,10 @@
 import type { EventCursor, ImpEvent } from '@impz/api';
 import type { ChangeSignal } from '@impz/durable';
+import { match } from 'ts-pattern';
 import type { LoggedImpEvent } from '../db/imp-log-entry';
 import type { ImpEventsAfter } from '../db/read-imp-events-after';
 import { tailImpEvents } from '../db/tail-imp-events';
+import type { ImpEventsReset } from '../db/tail-imp-events';
 import type { StartTimer } from '../process/clock';
 import { startTimerAt } from '../process/start-timer-at';
 import { buildResetEvent } from './build-reset-event';
@@ -57,15 +59,25 @@ export async function* openEventStream(options: EventStreamOptions): AsyncGenera
 
     const start = pickStreamStart(options.cursor, { head, logId });
 
-    if (start.kind === 'reset') {
+    const opening = match(start)
+      .with({ kind: 'snapshot' }, () => ({ isReset: false, hasSnapshot: true, after: head }))
+      .with({ kind: 'reset' }, () => ({ isReset: true, hasSnapshot: true, after: head }))
+      .with({ kind: 'resume' }, (resume) => ({
+        isReset: false,
+        hasSnapshot: false,
+        after: resume.after,
+      }))
+      .exhaustive();
+
+    if (opening.isReset) {
       yield buildResetEvent({ seq: head, logId, at: options.now() });
     }
 
-    if (start.kind !== 'resume') {
+    if (opening.hasSnapshot) {
       yield* await options.readSnapshot(head, logId);
     }
 
-    let after = start.kind === 'resume' ? start.after : head;
+    let after = opening.after;
 
     while (!stop.signal.aborted) {
       const pages = tailImpEvents({
@@ -75,30 +87,10 @@ export async function* openEventStream(options: EventStreamOptions): AsyncGenera
         signal: stop.signal,
       });
 
-      try {
-        let step = await pages.next();
+      const reset = yield* presentPages(pages, options, logId, stop.signal);
 
-        while (step.done !== true) {
-          for (const logged of step.value) {
-            const event = await options.present(logged, logId);
-
-            if (stop.signal.aborted) {
-              return;
-            }
-
-            if (event !== null && (options.accepts?.(event) ?? true)) {
-              yield event;
-            }
-          }
-
-          step = await pages.next();
-        }
-
-        if (step.value === null) {
-          return;
-        }
-      } finally {
-        await pages.return(null);
+      if (reset === null) {
+        return;
       }
 
       // a reader that opened with no cursor may know no Reset, so its stream ends as it always
@@ -116,5 +108,38 @@ export async function* openEventStream(options: EventStreamOptions): AsyncGenera
     options.signal?.removeEventListener('abort', stopStream);
     cancelTimer?.();
     stop.abort();
+  }
+}
+
+// Yields each event of the tail's pages that the reader may see, and returns the tail's reset, or
+// null once the stream stops.
+async function* presentPages(
+  pages: AsyncGenerator<readonly LoggedImpEvent[], ImpEventsReset | null>,
+  reads: EventLogReads,
+  logId: string,
+  signal: AbortSignal,
+): AsyncGenerator<ImpEvent, ImpEventsReset | null> {
+  try {
+    let step = await pages.next();
+
+    while (step.done !== true) {
+      for (const logged of step.value) {
+        const event = await reads.present(logged, logId);
+
+        if (signal.aborted) {
+          return null;
+        }
+
+        if (event !== null && (reads.accepts?.(event) ?? true)) {
+          yield event;
+        }
+      }
+
+      step = await pages.next();
+    }
+
+    return step.value;
+  } finally {
+    await pages.return(null);
   }
 }
