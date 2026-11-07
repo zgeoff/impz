@@ -73,16 +73,24 @@ stopping.
 
 ## Events, audit and telemetry
 
-The database layer emits each write to an imp or checkpoint row after its commit, with the reason
-its caller gives, and no other code writes those rows. A publisher turns the writes into events in
-the contract's shape one at a time, so events keep the order of the writes, and puts them on one
-in-process bus. The governor puts its decisions there too. The bus feeds the event stream, the
-proxy's and the broker's resync when an imp comes or goes, and the telemetry.
+The database layer writes each change to an imp or checkpoint row, with the reason its caller gives,
+and appends an event row for it in the same transaction, and no other code writes those rows. The
+`events` table is impd's outbox, through `packages/durable`: each row has a `seq` that SQLite never
+reuses, the time, the kind and the imp's record as the change left it. The governor's decisions and
+the execs in an agent go into the same table. A row holds impd's own record of the imp, and the
+event stream presents it in the contract's shape as it reads the row, so the live fields of an
+`imp`, such as the RAM it uses, are those of the read.
 
-The event stream subscribes before it reads its snapshot of the caller's imps, so no write falls in
-between, then sends live events filtered to those imps. Delivery is at most once, with no IDs and no
-replay, and a reader that falls too far behind is cut off rather than buffered. A client that needs
-every change reconnects and takes the new snapshot; the dashboard reconnects and refetches.
+After each commit, impd wakes the readers of the table through a signal in memory that carries no
+event. Each reader then reads the rows past its own cursor, so no event data passes through memory
+and a stop right after a commit loses no event. One follower inside impd reads from the head at
+start and feeds the proxy's and the broker's resync when an imp comes or goes, the disk usage
+refresh, the service log follows and the telemetry.
+
+The event stream takes the head `seq` before it reads its snapshot of the caller's imps, so no write
+falls in between, then reads the table from that `seq` at its own pace, filtered to those imps. A
+slow reader falls behind and loses nothing. A reconciler prunes the oldest rows by age and by count,
+and a stream whose cursor a prune passes ends; the client reconnects and takes the new snapshot.
 
 The audit log writes one row per call that changes something, refused or not, and per exec, console,
 SSH, tunnel and reverse-forward open: the procedure, who called, the imp, the outcome and the time,
@@ -91,7 +99,7 @@ of each request it sent with a credential and each it refused.
 
 Telemetry is OpenTelemetry, loaded only when the owner names an OTLP endpoint. It exports lifecycle
 transition counts and durations, governor decisions, RAM, disk, CPU and network use, and spans for
-each boot, wake, sleep and restore with a child span per step, all read from the bus and the
+each boot, wake, sleep and restore with a child span per step, all read from the event log and the
 resource sampler. Metric attributes stay in a closed set, so no imp name multiplies their series.
 
 impd writes its log through LogTape to stdout, which the container runtime collects. Each line

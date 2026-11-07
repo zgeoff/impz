@@ -31,10 +31,11 @@ import { createForwardedPeers } from './network/proxy/forwarded-peers';
 import type { WakeProxy } from './network/proxy/wake-proxy';
 import type { TailnetNames } from './network/tailnet-names/tailnet-names';
 import { wireTailnetNames } from './network/tailnet-names/wire-tailnet-names';
-import { isImpSetWrite } from './platform/db/is-imp-set-write';
+import { isImpSetChange } from './platform/db/is-imp-set-change';
 import { openDatabase } from './platform/db/open-database';
 import { getImpdLogger } from './platform/process/get-impd-logger';
 import { startOtlpExport } from './platform/telemetry/start-otlp-export';
+import { registerReconcilers } from './register-reconcilers';
 import { startImpdListeners } from './start-impd-listeners';
 import { startImpdTickers } from './start-impd-tickers';
 import { stopImpd } from './stop-impd';
@@ -42,7 +43,7 @@ import type { ImpdStopOptions, ImpdStopParts, ImpdStopStep } from './stop-impd';
 import { setupSshDir } from './surface/ssh/host-key';
 import { createStorageBackend } from './vm/storage/create-storage-backend';
 import { createDataDirs } from './vm/storage/data-layout';
-import { CHANGES_USAGE } from './vm/storage/disk-usage-cache';
+import { isUsageChange } from './vm/storage/is-usage-change';
 import { readLiveStorage } from './vm/storage/read-live-storage';
 import { setupSystemFiles } from './vm/storage/setup-system-files';
 import { writeImageFiles } from './vm/storage/write-image-files';
@@ -207,12 +208,12 @@ async function startImpdParts(
     }
   };
 
-  const unsubscribeWrites = db.writes.subscribe((write) => {
-    if (write.kind !== 'changed' || CHANGES_USAGE.has(write.reason)) {
+  const unsubscribeWrites = db.log.subscribe((event) => {
+    if (isUsageChange(event)) {
       diskUsage.requestRefresh();
     }
 
-    if (isImpSetWrite(write)) {
+    if (isImpSetChange(event)) {
       void runWriteWork(proxyHolder.proxy?.syncListeners());
       void runWriteWork(broker.applyGrants());
       void runWriteWork(namesHolder.names?.trySync());
@@ -421,6 +422,16 @@ async function startImpdParts(
   );
 
   plan.tickers = tickers;
+
+  const reconcilers = await runStep('reconcilers', async () => {
+    const runner = registerReconcilers({ db, now });
+
+    await runner.start();
+
+    return runner;
+  });
+
+  plan.reconcilers = reconcilers;
 
   const ready = runStep('default-image', async () => {
     await setupDefaultImage(config, stored.images);

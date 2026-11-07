@@ -183,13 +183,13 @@ test('it holds a select through the database it wraps', async () => {
   expect(Bun.peek.status(held)).toBe('pending');
 });
 
-test('it keeps the wrapped database’s write feed', async () => {
+test('it keeps the wrapped database’s event log', async () => {
   const testDatabase = await createTestDatabase();
 
   const gate = buildQueryGate('images');
   const gated = gate.wrap(testDatabase.db);
 
-  expect(gated.writes).toBe(testDatabase.db.writes);
+  expect(gated.log).toBe(testDatabase.db.log);
 });
 
 test('it releases a held select when the test finishes', async () => {

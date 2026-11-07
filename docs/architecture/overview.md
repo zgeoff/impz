@@ -133,8 +133,9 @@ and the imp boots cold.
 - **The guest is not trusted.** impd checks everything an agent reports before it uses it, a guest
   reaches the host container only on the broker's and the resolver's ports, and a jailed VM can
   touch no files but its own ([isolation](./isolation.md)).
-- **Events.** Every write to an imp or checkpoint row becomes an event on one in-process bus, in
-  write order. The event stream, the proxy, the broker and the telemetry read it
+- **Events.** Every write to an imp or checkpoint row writes an event row to the `events` table in
+  the same transaction, so a change and its event commit together. The event stream, the proxy, the
+  broker and the telemetry read that table in `seq` order
   ([the API](./control/api.md#events-audit-and-telemetry)).
 - **Import direction.** The packages form a stack: the leaves at the bottom, then the API contract,
   the published client, the MCP server, and the three apps (the CLI, the dashboard and impd) on top.

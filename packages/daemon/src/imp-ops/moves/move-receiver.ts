@@ -15,7 +15,6 @@ import type { Imps } from '../../imps/imps/imp-service';
 import type { EgressService } from '../../network/egress/egress-service';
 import { listImps, readImpByName, updateImpCommitted } from '../../platform/db/imps';
 import type { ImpRecord } from '../../platform/db/imps';
-import { listLeases } from '../../platform/db/leases';
 import {
   claimMoveTicketStream,
   createMoveTicketInFreeSlot,
@@ -280,15 +279,9 @@ export function createMoveReceiver(deps: MoveReceiverDeps): MoveReceiver {
       throw new MoveRequestError('CONFLICT', 'the received memory snapshot is not complete');
     }
 
-    const committed = await updateImpCommitted(deps.db, imp.id, deps.now(), isWarm);
+    await updateImpCommitted(deps.db, imp.id, deps.now(), isWarm);
 
     deps.onCommitted(row.name);
-
-    const leases = await listLeases(deps.db, deps.now(), [imp.id]);
-
-    if (leases.length > 0) {
-      deps.db.writes.publish({ kind: 'changed', imp: committed, reason: 'held' });
-    }
 
     getImpdLogger('move').with({ imp: row.name }).info('committed; it lives here now');
   };

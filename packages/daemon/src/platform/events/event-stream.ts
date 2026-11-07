@@ -1,50 +1,35 @@
 import type { ImpEvent } from '@impz/api';
+import type { ChangeSignal } from '@impz/durable';
+import type { LoggedImpEvent } from '../db/imp-log-entry';
+import type { ImpEventsAfter } from '../db/read-imp-events-after';
 import type { StartTimer } from '../process/clock';
 import { startTimerAt } from '../process/start-timer-at';
-import type { EventBus } from './event-bus';
-
-const QUEUE_LIMIT = 1000;
 
 interface EventStreamOptions {
-  readonly bus: EventBus;
+  readonly changes: ChangeSignal;
+  readonly readHead: () => Promise<number>;
+  readonly readAfter: (after: number) => Promise<ImpEventsAfter>;
 
   readonly readSnapshot: () => Promise<readonly ImpEvent[]>;
+  readonly present: (event: LoggedImpEvent) => Promise<ImpEvent | null>;
   readonly signal?: AbortSignal | undefined;
 
   readonly endsAt: number | null;
   readonly now: () => number;
 
   readonly startTimer?: StartTimer;
-  readonly queueLimit?: number;
 
   readonly accepts?: (event: ImpEvent) => boolean;
 }
 
+// The stream reads the log at its own pace, so a slow reader falls behind and never loses an
+// event; a prune that passes its cursor ends it.
 export async function* openEventStream(options: EventStreamOptions): AsyncGenerator<ImpEvent> {
-  const limit = options.queueLimit ?? QUEUE_LIMIT;
-  const queue: ImpEvent[] = [];
-  const state = { ended: false, wake: (): void => {} };
+  const stop = new AbortController();
 
   const stopStream = (): void => {
-    state.ended = true;
-
-    state.wake();
+    stop.abort();
   };
-
-  const unsubscribe = options.bus.subscribe((event) => {
-    if (options.accepts !== undefined && !options.accepts(event)) {
-      return;
-    }
-
-    if (queue.length >= limit) {
-      stopStream();
-
-      return;
-    }
-
-    queue.push(event);
-    state.wake();
-  });
 
   options.signal?.addEventListener('abort', stopStream);
 
@@ -57,33 +42,41 @@ export async function* openEventStream(options: EventStreamOptions): AsyncGenera
         });
 
   try {
-    const snapshot = await options.readSnapshot();
+    let cursor = await options.readHead();
 
-    yield* snapshot;
+    yield* await options.readSnapshot();
 
-    for (;;) {
-      const next = queue.shift();
+    while (!stop.signal.aborted) {
+      // taken before the read, so a commit during the read still wakes the wait
+      const changed = options.changes.next(stop.signal);
 
-      if (state.ended) {
+      const read = await options.readAfter(cursor);
+
+      if (read.kind === 'reset') {
         return;
       }
 
-      if (next !== undefined) {
-        yield next;
-        continue;
+      for (const logged of read.events) {
+        const event = await options.present(logged);
+
+        if (stop.signal.aborted) {
+          return;
+        }
+
+        if (event !== null && (options.accepts?.(event) ?? true)) {
+          yield event;
+        }
       }
 
-      const waiting = Promise.withResolvers<undefined>();
+      cursor = read.throughSeq;
 
-      state.wake = () => {
-        waiting.resolve(undefined);
-      };
-
-      await waiting.promise;
+      if (!read.hasMore) {
+        await changed;
+      }
     }
   } finally {
-    unsubscribe();
     options.signal?.removeEventListener('abort', stopStream);
     cancelTimer?.();
+    stop.abort();
   }
 }

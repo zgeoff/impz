@@ -1,8 +1,6 @@
 import type { Imp } from '@impz/api';
+import type { ImpEventLog } from '../../platform/db/create-imp-event-log';
 import type { ImpRecord } from '../../platform/db/imps';
-import { createEventBus } from '../../platform/events/event-bus';
-import type { EventBus } from '../../platform/events/event-bus';
-import { startImpEventPublisher } from '../../platform/events/imp-event-publisher';
 import type { TryResult } from '../../platform/process/keyed-mutex';
 import type { ResourceDelta } from '../../platform/telemetry/resource-delta';
 import { readSnapshotMeta } from '../../vm/sleep/snapshot-meta';
@@ -36,36 +34,6 @@ export type { ImpServiceDeps } from './imp-context';
 
 type ResourceListener = (deltas: readonly ResourceDelta[]) => void;
 
-export type ImpService = ImpCommands &
-  ImpLeases &
-  SessionService &
-  ServiceApi &
-  FileApi &
-  Pick<
-    ImpRuntime,
-    | 'openExec'
-    | 'openBuilderExec'
-    | 'openAttach'
-    | 'openDial'
-    | 'openListener'
-    | 'openAccept'
-    | 'recordActivity'
-    | 'recordRequest'
-  > & {
-    readonly countSessions: (imp: ImpRecord) => number | undefined;
-    readonly readBootStatus: (imp: ImpRecord) => BootStatus;
-
-    readonly isUnmergeable: (id: string) => boolean;
-
-    readonly events: EventBus;
-
-    readonly sampleResources: () => Promise<void>;
-    readonly subscribeResources: (listener: ResourceListener) => () => void;
-    readonly readCpuHost: () => { readonly hostCpus: number; readonly limitsEnforced: boolean };
-
-    readonly readRebootReason: () => string | null;
-  };
-
 export interface ImpCheckpointHooks {
   readonly createImp: ImpCommands['createImp'];
 
@@ -90,6 +58,37 @@ export interface ImpCheckpointHooks {
   readonly toApi: (imp: ImpRecord) => Promise<Imp>;
 }
 
+export type ImpService = ImpCommands &
+  ImpLeases &
+  SessionService &
+  ServiceApi &
+  FileApi &
+  Pick<
+    ImpRuntime,
+    | 'openExec'
+    | 'openBuilderExec'
+    | 'openAttach'
+    | 'openDial'
+    | 'openListener'
+    | 'openAccept'
+    | 'recordActivity'
+    | 'recordRequest'
+  > & {
+    readonly countSessions: (imp: ImpRecord) => number | undefined;
+    readonly readBootStatus: (imp: ImpRecord) => BootStatus;
+
+    readonly isUnmergeable: (id: string) => boolean;
+
+    readonly events: ImpEventLog;
+    readonly toApi: ImpCheckpointHooks['toApi'];
+
+    readonly sampleResources: () => Promise<void>;
+    readonly subscribeResources: (listener: ResourceListener) => () => void;
+    readonly readCpuHost: () => { readonly hostCpus: number; readonly limitsEnforced: boolean };
+
+    readonly readRebootReason: () => string | null;
+  };
+
 export type Imps = ImpService &
   ImpRuntime &
   ImpCheckpointHooks & {
@@ -108,14 +107,7 @@ export function createImpService(deps: ImpServiceDeps, createWatchdog: CreateImp
   const ops = createImpVmOps(context);
   const watchdog = createWatchdog(context, lock, ops);
   const presenter = createImpPresenter(context, watchdog.readSilentSince);
-  const events = deps.events ?? createEventBus();
-
-  startImpEventPublisher({
-    db: context.db,
-    bus: events,
-    toApi: presenter.readApi,
-    now: context.now,
-  });
+  const events = context.db.log;
 
   const resourceListeners = new Set<ResourceListener>();
 

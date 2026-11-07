@@ -1,125 +1,252 @@
 import { expect, test } from 'bun:test';
 import type { ImpEvent } from '@impz/api';
+import { pruneEvents } from '@impz/durable';
+import invariant from 'tiny-invariant';
+import { readApiEvent } from '../../surface/read-api-event';
 import { buildStubClock } from '../../test-utils/platform/build-stub-clock';
+import { createTestDatabase } from '../../test-utils/platform/create-test-database';
 import { buildMockGovernorDecision } from '../../test-utils/vm/build-mock-governor-decision';
-import { createEventBus } from './event-bus';
+import { appendImpEvent } from '../db/append-imp-event';
+import { withImpTransaction } from '../db/with-imp-transaction';
 import { openEventStream } from './event-stream';
 
-test('it sends an event published while the snapshot is read after the snapshot', async () => {
-  const bus = createEventBus();
+type StreamOptions = Partial<Parameters<typeof openEventStream>[0]>;
+
+async function setupTest() {
+  const database = await createTestDatabase();
+
+  const db = database.db;
+
+  return {
+    db,
+    open: (options: StreamOptions = {}) =>
+      openEventStream({
+        changes: db.log.changes,
+        readHead: db.log.readHead,
+        readAfter: (after) => db.log.readAfter(after, 500),
+        readSnapshot: () => Promise.resolve([]),
+        present: (event) =>
+          readApiEvent(event, () => Promise.reject(new Error('the test logs no imp event'))),
+        endsAt: null,
+        now: () => Date.UTC(2026, 9, 2, 12),
+        ...options,
+      }),
+  };
+}
+
+test('it sends the snapshot, then each event written after the stream opened', async () => {
+  const ctx = await setupTest();
 
   const controller = new AbortController();
 
   const snapshot = buildMockGovernorDecision({ name: 'snapshot' });
-  const during = buildMockGovernorDecision({ name: 'during' });
-  const after = buildMockGovernorDecision({ name: 'after' });
 
-  const stream = openEventStream({
-    bus,
-    readSnapshot: () => {
-      bus.publish(during);
-
-      return Promise.resolve([snapshot]);
-    },
+  const stream = ctx.open({
+    readSnapshot: () => Promise.resolve([snapshot]),
     signal: controller.signal,
-    endsAt: null,
-    now: () => Date.UTC(2026, 9, 2, 12),
   });
 
   const first = await stream.next();
+
+  await ctx.db.log.write(
+    {
+      ev: 'GovernorDecision',
+      decision: 'admitted',
+      name: 'later',
+      trigger: 'wake',
+      usedMib: 512,
+      budgetMib: 4096,
+    },
+    Date.UTC(2026, 9, 2, 12),
+  );
+
   const second = await stream.next();
-
-  bus.publish(after);
-
-  const third = await stream.next();
 
   controller.abort();
 
   expect(first).toStrictEqual({ done: false, value: snapshot });
-  expect(second).toStrictEqual({ done: false, value: during });
-  expect(third).toStrictEqual({ done: false, value: after });
-});
 
-test('it ends a subscriber that falls behind by the queue limit', async () => {
-  const bus = createEventBus();
-
-  const stream = openEventStream({
-    bus,
-    readSnapshot: () => {
-      bus.publish(buildMockGovernorDecision());
-      bus.publish(buildMockGovernorDecision());
-      bus.publish(buildMockGovernorDecision());
-
-      return Promise.resolve([]);
+  expect(second).toStrictEqual({
+    done: false,
+    value: {
+      // oxlint-disable-next-line id-length -- `v` is the event format's version field
+      v: 1,
+      at: new Date(Date.UTC(2026, 9, 2, 12)),
+      ev: 'GovernorDecision',
+      decision: 'admitted',
+      name: 'later',
+      trigger: 'wake',
+      usedMib: 512,
+      budgetMib: 4096,
     },
-    endsAt: null,
-    now: () => Date.UTC(2026, 9, 2, 12),
-    queueLimit: 2,
   });
-
-  const sent = await Array.fromAsync(stream);
-
-  expect(sent).toStrictEqual([]);
 });
 
-test('it leaves out the events its subscriber may not see', async () => {
-  const bus = createEventBus();
+test('it sends an event written while the snapshot is read after the snapshot', async () => {
+  const ctx = await setupTest();
 
   const controller = new AbortController();
 
-  const shown = buildMockGovernorDecision({ name: 'shown' });
+  const snapshot = buildMockGovernorDecision({ name: 'snapshot' });
 
-  const stream = openEventStream({
-    bus,
-    readSnapshot: () => Promise.resolve([]),
+  const stream = ctx.open({
+    readSnapshot: async () => {
+      await ctx.db.log.write(
+        {
+          ev: 'GovernorDecision',
+          decision: 'admitted',
+          name: 'during',
+          trigger: 'wake',
+          usedMib: 512,
+          budgetMib: 4096,
+        },
+        Date.UTC(2026, 9, 2, 12),
+      );
+
+      return [snapshot];
+    },
     signal: controller.signal,
-    endsAt: null,
-    now: () => Date.UTC(2026, 9, 2, 12),
-    accepts: (event) => event.ev === 'GovernorDecision' && event.name !== 'hidden',
   });
 
-  const next = stream.next();
-
-  bus.publish(buildMockGovernorDecision({ name: 'hidden' }));
-  bus.publish(shown);
-
-  const first = await next;
+  const sent = [await stream.next(), await stream.next()];
 
   controller.abort();
 
-  expect(first).toStrictEqual({ done: false, value: shown });
+  expect(sent).toMatchObject([
+    { done: false, value: { name: 'snapshot' } },
+    { done: false, value: { name: 'during' } },
+  ]);
 });
 
-test('it ends at its abort and lets go of the bus', async () => {
-  const bus = createEventBus();
+test('it sends every event to a reader 5,000 events behind', async () => {
+  const ctx = await setupTest();
 
   const controller = new AbortController();
 
-  const subscriptions: string[] = [];
+  // the snapshot read comes after the stream holds its cursor, so these events all follow it
+  const stream = ctx.open({
+    readSnapshot: async () => {
+      await withImpTransaction(ctx.db, async (trx) => {
+        for (let count = 1; count <= 5000; count += 1) {
+          await appendImpEvent(
+            trx,
+            {
+              ev: 'GovernorDecision',
+              decision: 'admitted',
+              name: `imp-${String(count)}`,
+              trigger: 'wake',
+              usedMib: 512,
+              budgetMib: 4096,
+            },
+            Date.UTC(2026, 9, 2, 12),
+          );
+        }
+      });
 
-  const counted = {
-    publish: bus.publish,
-    subscribe: (listener: (event: Readonly<ImpEvent>) => void) => {
-      subscriptions.push('subscribed');
-
-      const unsubscribe = bus.subscribe(listener);
-
-      return () => {
-        subscriptions.push('unsubscribed');
-
-        unsubscribe();
-      };
+      return [];
     },
-  };
+    signal: controller.signal,
+  });
+
+  const sent: ImpEvent[] = [];
+
+  for (let count = 1; count <= 5000; count += 1) {
+    const next = await stream.next();
+
+    invariant(next.done !== true);
+
+    sent.push(next.value);
+  }
+
+  controller.abort();
+
+  expect(sent).toStrictEqual(
+    Array.from({ length: 5000 }, (_unused, index) => ({
+      // oxlint-disable-next-line id-length -- `v` is the event format's version field
+      v: 1,
+      at: new Date(Date.UTC(2026, 9, 2, 12)),
+      ev: 'GovernorDecision',
+      decision: 'admitted',
+      name: `imp-${String(index + 1)}`,
+      trigger: 'wake',
+      usedMib: 512,
+      budgetMib: 4096,
+    })),
+  );
+});
+
+test('it leaves out the events its reader may not see', async () => {
+  const ctx = await setupTest();
+
+  const controller = new AbortController();
+
+  const stream = ctx.open({
+    readSnapshot: async () => {
+      for (const name of ['hidden', 'shown']) {
+        await ctx.db.log.write(
+          {
+            ev: 'GovernorDecision',
+            decision: 'admitted',
+            name,
+            trigger: 'wake',
+            usedMib: 512,
+            budgetMib: 4096,
+          },
+          Date.UTC(2026, 9, 2, 12),
+        );
+      }
+
+      return [];
+    },
+    signal: controller.signal,
+    accepts: (event) => event.ev === 'GovernorDecision' && event.name !== 'hidden',
+  });
+
+  const first = await stream.next();
+
+  controller.abort();
+
+  expect(first).toMatchObject({ done: false, value: { name: 'shown' } });
+});
+
+test('it ends when a prune passes its cursor', async () => {
+  const ctx = await setupTest();
+
+  const stream = ctx.open({
+    readSnapshot: async () => {
+      await ctx.db.log.write(
+        {
+          ev: 'GovernorDecision',
+          decision: 'admitted',
+          name: 'pruned',
+          trigger: 'wake',
+          usedMib: 512,
+          budgetMib: 4096,
+        },
+        Date.UTC(2026, 9, 2, 12),
+      );
+
+      await withImpTransaction(ctx.db, (trx) => pruneEvents(trx, Date.UTC(2026, 9, 20)));
+
+      return [];
+    },
+  });
+
+  const streamed = await Array.fromAsync(stream);
+
+  expect(streamed).toStrictEqual([]);
+});
+
+test('it ends at its abort', async () => {
+  const ctx = await setupTest();
+
+  const controller = new AbortController();
 
   const snapshot = buildMockGovernorDecision();
 
-  const stream = openEventStream({
-    bus: counted,
+  const stream = ctx.open({
     readSnapshot: () => Promise.resolve([snapshot]),
     signal: controller.signal,
-    endsAt: null,
-    now: () => Date.UTC(2026, 9, 2, 12),
   });
 
   const first = await stream.next();
@@ -132,34 +259,15 @@ test('it ends at its abort and lets go of the bus', async () => {
 
   expect(first).toStrictEqual({ done: false, value: snapshot });
   expect(last).toStrictEqual({ done: true, value: undefined });
-  expect(subscriptions).toStrictEqual(['subscribed', 'unsubscribed']);
 });
 
-test('it ends at its end time and lets go of the bus', async () => {
-  const bus = createEventBus();
+test('it ends at its end time', async () => {
+  const ctx = await setupTest();
+
   const timers = buildStubClock();
-  const subscriptions: string[] = [];
 
-  const counted = {
-    publish: bus.publish,
-    subscribe: (listener: (event: Readonly<ImpEvent>) => void) => {
-      subscriptions.push('subscribed');
-
-      const unsubscribe = bus.subscribe(listener);
-
-      return () => {
-        subscriptions.push('unsubscribed');
-
-        unsubscribe();
-      };
-    },
-  };
-
-  const stream = openEventStream({
-    bus: counted,
-    readSnapshot: () => Promise.resolve([]),
+  const stream = ctx.open({
     endsAt: Date.UTC(2026, 9, 2, 12) + 50,
-    now: () => Date.UTC(2026, 9, 2, 12),
     startTimer: timers.startTimer,
   });
 
@@ -172,22 +280,19 @@ test('it ends at its end time and lets go of the bus', async () => {
 
   expect(pendingMs).toStrictEqual([50]);
   expect(last).toStrictEqual({ done: true, value: undefined });
-  expect(subscriptions).toStrictEqual(['subscribed', 'unsubscribed']);
   expect(timers.readPendingMs()).toStrictEqual([]);
 });
 
 test('it stays open when the longest timer fires short of a 30-day end, and waits out the rest', async () => {
-  const bus = createEventBus();
+  const ctx = await setupTest();
 
   const controller = new AbortController();
 
   const timers = buildStubClock();
   const snapshot = buildMockGovernorDecision();
-  const later = buildMockGovernorDecision();
   const clock = { at: Date.UTC(2026, 9, 2, 12) };
 
-  const stream = openEventStream({
-    bus,
+  const stream = ctx.open({
     readSnapshot: () => Promise.resolve([snapshot]),
     signal: controller.signal,
     endsAt: Date.UTC(2026, 9, 2, 12) + 30 * 86_400_000,
@@ -202,7 +307,18 @@ test('it stays open when the longest timer fires short of a 30-day end, and wait
   clock.at = Date.UTC(2026, 9, 2, 12) + 2 ** 31 - 1;
 
   timers.firePending();
-  bus.publish(later);
+
+  await ctx.db.log.write(
+    {
+      ev: 'GovernorDecision',
+      decision: 'admitted',
+      name: 'later',
+      trigger: 'wake',
+      usedMib: 512,
+      budgetMib: 4096,
+    },
+    clock.at,
+  );
 
   const second = await stream.next();
 
@@ -214,20 +330,20 @@ test('it stays open when the longest timer fires short of a 30-day end, and wait
 
   // setTimeout's longest delay: a longer one would fire at once
   expect(clampedMs).toStrictEqual([2 ** 31 - 1]);
-  expect(second).toStrictEqual({ done: false, value: later });
+  expect(second).toMatchObject({ done: false, value: { name: 'later' } });
 
   // 30 days (2_592_000_000 ms) less the longest delay already waited
   expect(pendingMs).toStrictEqual([444_516_353]);
 });
 
 test('it ends at a 30-day end once the timer after the longest one fires', async () => {
-  const bus = createEventBus();
+  const ctx = await setupTest();
+
   const timers = buildStubClock();
   const snapshot = buildMockGovernorDecision();
   const clock = { at: Date.UTC(2026, 9, 2, 12) };
 
-  const stream = openEventStream({
-    bus,
+  const stream = ctx.open({
     readSnapshot: () => Promise.resolve([snapshot]),
     endsAt: Date.UTC(2026, 9, 2, 12) + 30 * 86_400_000,
     now: () => clock.at,

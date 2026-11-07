@@ -171,9 +171,9 @@ export async function createBroker(deps: BrokerDeps): Promise<Broker> {
     deps.installBundle ?? runBundleInstall,
   );
 
-  const unwatch = db.writes.subscribe((write) => {
-    if (write.kind === 'added' || write.kind === 'changed') {
-      trust.observe(write.imp);
+  const unwatch = db.log.subscribe((event) => {
+    if (event.ev === 'ImpAdded' || event.ev === 'ImpChanged') {
+      trust.observe(event.imp);
     }
   });
 

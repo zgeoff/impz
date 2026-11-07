@@ -1,7 +1,9 @@
 import type { Checkpoint } from '@impz/api';
 import type { Selectable } from 'kysely';
-import type { ImpDatabase } from './open-database';
+import { appendImpEvent } from './append-imp-event';
+import type { ImpDatabase, ImpQueries } from './open-database';
 import type { DB } from './schema';
+import { withImpTransaction } from './with-imp-transaction';
 
 export interface CheckpointRecord {
   readonly id: string;
@@ -23,28 +25,30 @@ export interface NewCheckpoint {
   readonly createdAt?: Date;
 }
 
-export async function createCheckpoint(
+export function createCheckpoint(
   db: ImpDatabase,
   checkpoint: NewCheckpoint,
 ): Promise<CheckpointRecord> {
-  const row = await db
-    .insertInto('checkpoints')
-    .values({
-      id: checkpoint.id,
-      imp_id: checkpoint.impId,
-      label: checkpoint.label,
-      created_at: checkpoint.createdAt?.getTime() ?? Date.now(),
-      size_bytes: checkpoint.sizeBytes,
-      ...(checkpoint.diskBytes !== undefined && { disk_bytes: checkpoint.diskBytes }),
-    })
-    .returningAll()
-    .executeTakeFirstOrThrow();
+  return withImpTransaction(db, async (trx) => {
+    const row = await trx
+      .insertInto('checkpoints')
+      .values({
+        id: checkpoint.id,
+        imp_id: checkpoint.impId,
+        label: checkpoint.label,
+        created_at: checkpoint.createdAt?.getTime() ?? Date.now(),
+        size_bytes: checkpoint.sizeBytes,
+        ...(checkpoint.diskBytes !== undefined && { disk_bytes: checkpoint.diskBytes }),
+      })
+      .returningAll()
+      .executeTakeFirstOrThrow();
 
-  const created = toCheckpointRecord(row);
+    const created = toCheckpointRecord(row);
 
-  db.writes.publish({ kind: 'checkpointAdded', checkpoint: created });
+    await appendCheckpointEvent(trx, 'CheckpointAdded', created);
 
-  return created;
+    return created;
+  });
 }
 
 export async function listCheckpoints(db: ImpDatabase, impId: string): Promise<CheckpointRecord[]> {
@@ -74,20 +78,40 @@ export async function readCheckpoint(
   return row === undefined ? undefined : toCheckpointRecord(row);
 }
 
-export async function removeCheckpoint(db: ImpDatabase, id: string): Promise<boolean> {
-  const row = await db
-    .deleteFrom('checkpoints')
-    .where('id', '=', id)
-    .returningAll()
+export function removeCheckpoint(db: ImpDatabase, id: string): Promise<boolean> {
+  return withImpTransaction(db, async (trx) => {
+    const row = await trx
+      .deleteFrom('checkpoints')
+      .where('id', '=', id)
+      .returningAll()
+      .executeTakeFirst();
+
+    if (row === undefined) {
+      return false;
+    }
+
+    await appendCheckpointEvent(trx, 'CheckpointRemoved', toCheckpointRecord(row));
+
+    return true;
+  });
+}
+
+async function appendCheckpointEvent(
+  db: ImpQueries,
+  ev: 'CheckpointAdded' | 'CheckpointRemoved',
+  checkpoint: CheckpointRecord,
+): Promise<void> {
+  const imp = await db
+    .selectFrom('imps')
+    .select('name')
+    .where('id', '=', checkpoint.impId)
     .executeTakeFirst();
 
-  if (row === undefined) {
-    return false;
+  if (imp === undefined) {
+    return;
   }
 
-  db.writes.publish({ kind: 'checkpointRemoved', checkpoint: toCheckpointRecord(row) });
-
-  return true;
+  await appendImpEvent(db, { ev, name: imp.name, checkpoint }, Date.now());
 }
 
 function toCheckpointRecord(row: Readonly<Selectable<DB['checkpoints']>>): CheckpointRecord {

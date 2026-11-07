@@ -59,7 +59,16 @@ export { EGRESS_MODE_TRAITS } from './schemas/egress-mode-traits';
 export type { EgressModeTraits } from './schemas/egress-mode-traits';
 export { EgressModeSchema, EgressPolicySchema } from './schemas/egress-schema';
 export type { EgressMode, EgressPolicy } from './schemas/egress-schema';
-export { EVENT_VERSION, ImpEventSchema } from './schemas/event-schema';
+
+export {
+  AGENT_EXEC_FIELDS,
+  EVENT_VERSION,
+  GOVERNOR_DECISION_FIELDS,
+  ImpChangeReasonSchema,
+  ImpEventDetailSchema,
+  ImpEventSchema,
+} from './schemas/event-schema';
+
 export type { ImpChangeReason, ImpEvent, ImpEventDetail } from './schemas/event-schema';
 
 export {
@@ -98,7 +107,7 @@ export { ImpCreateInputSchema } from './schemas/imp-create-input-schema';
 export { IMP_ERRORS } from './contract/imp-errors';
 export type { ForbiddenReason } from './contract/imp-errors';
 export { isImpAllowed } from './rules/is-imp-allowed';
-export { ImpSchema, ImpStateSchema } from './schemas/imp-schema';
+export { ImpKindSchema, ImpSchema, ImpStateSchema } from './schemas/imp-schema';
 
 export type {
   ForkResult,
@@ -114,7 +123,7 @@ export type { MessageDirection, ProtocolSchema } from './protocols/build-protoco
 export { CONSOLE_SHELL } from './protocols/login-shell';
 export { MCP_PATH } from './protocols/mcp-path';
 export { MOVE_RECEIVE_PATH } from './protocols/move-receive-path';
-export { WarmHostSchema, WarmMoveSchema } from './schemas/move-schema';
+export { MoveStateSchema, WarmHostSchema, WarmMoveSchema } from './schemas/move-schema';
 export { movePeerContract } from './contract/move-peer-contract';
 
 export {

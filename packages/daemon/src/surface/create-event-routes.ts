@@ -1,11 +1,16 @@
 import { EVENT_VERSION, isImpAllowed } from '@impz/api';
 import type { ImpEvent } from '@impz/api';
+import { getErrorMessage } from '@impz/shared';
 import { createEventCheck } from '../platform/events/event-check';
 import { openEventStream } from '../platform/events/event-stream';
+import { getImpdLogger } from '../platform/process/get-impd-logger';
 import { mergeSignals } from '../platform/process/merge-signals';
 import type { CallerImps } from './build-caller-imps';
 import type { RpcImplementer } from './create-implementer';
 import type { RouterDeps } from './create-router';
+import { readApiEvent } from './read-api-event';
+
+const READ_LIMIT = 500;
 
 export function createEventRoutes(os: RpcImplementer, deps: RouterDeps, views: CallerImps) {
   const isEventValid = createEventCheck({ now: deps.now });
@@ -15,7 +20,9 @@ export function createEventRoutes(os: RpcImplementer, deps: RouterDeps, views: C
       const caller = options.context.caller;
 
       return openEventStream({
-        bus: deps.imps.events,
+        changes: deps.imps.events.changes,
+        readHead: deps.imps.events.readHead,
+        readAfter: (after) => deps.imps.events.readAfter(after, READ_LIMIT),
         readSnapshot: async () => {
           const imps = await views.listCallerImps(caller);
 
@@ -27,6 +34,18 @@ export function createEventRoutes(os: RpcImplementer, deps: RouterDeps, views: C
               ({ v: EVENT_VERSION, at, ev: 'ImpAdded', reason: 'snapshot', imp }),
             )
             .filter((event) => isEventValid(event));
+        },
+        present: async (event) => {
+          try {
+            return await readApiEvent(event, deps.imps.toApi);
+          } catch (error) {
+            getImpdLogger('events').warning('left out event {seq}: {error}', {
+              seq: event.seq,
+              error: getErrorMessage(error),
+            });
+
+            return null;
+          }
         },
         signal: mergeSignals(options.signal, options.context.ends),
         endsAt: caller.expiresAt,

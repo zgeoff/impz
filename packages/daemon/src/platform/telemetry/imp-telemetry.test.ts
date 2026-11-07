@@ -1,20 +1,19 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { EVENT_VERSION } from '@impz/api';
-import { buildMockImp } from '@impz/api/test-utils/build-mock-imp';
 import { spanExporter } from '@impz/shared/test-utils/register-tracing';
 import invariant from 'tiny-invariant';
+import { buildMockImpRecord } from '../../test-utils/imps/build-mock-imp-record';
 import { startInMemoryMetrics } from '../../test-utils/platform/start-in-memory-metrics';
-import { buildMockGovernorDecision } from '../../test-utils/vm/build-mock-governor-decision';
+import type { LoggedImpEvent } from '../db/imp-log-entry';
 import { createEventBus } from '../events/event-bus';
 import { startImpTelemetry } from './imp-telemetry';
 import type { ResourceDelta } from './resource-delta';
 
 test('it records imp.lifecycle.transitions per reason', async () => {
   const recorded = startInMemoryMetrics();
-  const bus = createEventBus();
+  const bus = createEventBus<LoggedImpEvent>();
 
   const stop = startImpTelemetry({
-    bus,
+    events: bus,
     readStateCounts: () => Promise.resolve(new Map()),
     readRam: () => Promise.resolve({ usedMib: 0, budgetMib: 4096 }),
   });
@@ -22,34 +21,29 @@ test('it records imp.lifecycle.transitions per reason', async () => {
   onTestFinished(stop);
 
   bus.publish({
-    // oxlint-disable-next-line id-length -- `v` is the event format's version field
-    v: EVENT_VERSION,
+    seq: 1,
     at: new Date(),
     ev: 'ImpAdded',
-    reason: 'created',
-    imp: buildMockImp(),
+    imp: buildMockImpRecord(),
   });
 
   bus.publish({
-    // oxlint-disable-next-line id-length -- `v` is the event format's version field
-    v: EVENT_VERSION,
+    seq: 1,
     at: new Date(),
     ev: 'ImpChanged',
     reason: 'held',
-    imp: buildMockImp(),
+    imp: buildMockImpRecord(),
   });
 
   bus.publish({
-    // oxlint-disable-next-line id-length -- `v` is the event format's version field
-    v: EVENT_VERSION,
+    seq: 1,
     at: new Date(),
     ev: 'ImpChanged',
     reason: 'held',
-    imp: buildMockImp(),
+    imp: buildMockImpRecord(),
   });
 
-  // oxlint-disable-next-line id-length -- `v` is the event format's version field
-  bus.publish({ v: EVENT_VERSION, at: new Date(), ev: 'ImpRemoved', imp: buildMockImp() });
+  bus.publish({ seq: 1, at: new Date(), ev: 'ImpRemoved', imp: buildMockImpRecord() });
 
   stop();
 
@@ -64,10 +58,10 @@ test('it records imp.lifecycle.transitions per reason', async () => {
 
 test('it records imp.lifecycle.duration per timed reason', async () => {
   const recorded = startInMemoryMetrics();
-  const bus = createEventBus();
+  const bus = createEventBus<LoggedImpEvent>();
 
   const stop = startImpTelemetry({
-    bus,
+    events: bus,
     readStateCounts: () => Promise.resolve(new Map()),
     readRam: () => Promise.resolve({ usedMib: 0, budgetMib: 4096 }),
   });
@@ -75,32 +69,29 @@ test('it records imp.lifecycle.duration per timed reason', async () => {
   onTestFinished(stop);
 
   bus.publish({
-    // oxlint-disable-next-line id-length -- `v` is the event format's version field
-    v: EVENT_VERSION,
+    seq: 1,
     at: new Date(),
     ev: 'ImpChanged',
     reason: 'booted',
-    imp: buildMockImp(),
+    imp: buildMockImpRecord(),
     detail: { durationMs: 900 },
   });
 
   bus.publish({
-    // oxlint-disable-next-line id-length -- `v` is the event format's version field
-    v: EVENT_VERSION,
+    seq: 1,
     at: new Date(),
     ev: 'ImpChanged',
     reason: 'woke',
-    imp: buildMockImp(),
+    imp: buildMockImpRecord(),
     detail: { durationMs: 40 },
   });
 
   bus.publish({
-    // oxlint-disable-next-line id-length -- `v` is the event format's version field
-    v: EVENT_VERSION,
+    seq: 1,
     at: new Date(),
     ev: 'ImpChanged',
     reason: 'held',
-    imp: buildMockImp(),
+    imp: buildMockImpRecord(),
     detail: { durationMs: 5 },
   });
 
@@ -116,19 +107,28 @@ test('it records imp.lifecycle.duration per timed reason', async () => {
 
 test('it records imp.governor.decisions per decision', async () => {
   const recorded = startInMemoryMetrics();
-  const bus = createEventBus();
+  const bus = createEventBus<LoggedImpEvent>();
 
   const stop = startImpTelemetry({
-    bus,
+    events: bus,
     readStateCounts: () => Promise.resolve(new Map()),
     readRam: () => Promise.resolve({ usedMib: 0, budgetMib: 4096 }),
   });
 
   onTestFinished(stop);
 
-  bus.publish(buildMockGovernorDecision({ decision: 'refused' }));
-  bus.publish(buildMockGovernorDecision({ decision: 'admitted' }));
-  bus.publish(buildMockGovernorDecision({ decision: 'refused' }));
+  for (const decision of ['refused', 'admitted', 'refused'] as const) {
+    bus.publish({
+      seq: 1,
+      at: new Date(),
+      ev: 'GovernorDecision',
+      decision,
+      name: 'dev',
+      trigger: 'wake',
+      usedMib: 512,
+      budgetMib: 4096,
+    });
+  }
 
   stop();
 
@@ -141,10 +141,10 @@ test('it records imp.governor.decisions per decision', async () => {
 });
 
 test('it records a span per timed transition, with each step a child in turn', () => {
-  const bus = createEventBus();
+  const bus = createEventBus<LoggedImpEvent>();
 
   const stop = startImpTelemetry({
-    bus,
+    events: bus,
     readStateCounts: () => Promise.resolve(new Map()),
     readRam: () => Promise.resolve({ usedMib: 0, budgetMib: 4096 }),
   });
@@ -152,12 +152,11 @@ test('it records a span per timed transition, with each step a child in turn', (
   onTestFinished(stop);
 
   bus.publish({
-    // oxlint-disable-next-line id-length -- `v` is the event format's version field
-    v: EVENT_VERSION,
+    seq: 1,
     at: new Date('2026-10-02T12:00:00.900Z'),
     ev: 'ImpChanged',
     reason: 'booted',
-    imp: buildMockImp({ name: 'dev' }),
+    imp: buildMockImpRecord({ name: 'dev' }),
     detail: { durationMs: 900, steps: { 'boot.tap': 100, 'boot.vm': 800 } },
   });
 
@@ -199,10 +198,10 @@ test('it records a span per timed transition, with each step a child in turn', (
 });
 
 test('it puts the trigger and the cold boot reason on the span', () => {
-  const bus = createEventBus();
+  const bus = createEventBus<LoggedImpEvent>();
 
   const stop = startImpTelemetry({
-    bus,
+    events: bus,
     readStateCounts: () => Promise.resolve(new Map()),
     readRam: () => Promise.resolve({ usedMib: 0, budgetMib: 4096 }),
   });
@@ -210,12 +209,11 @@ test('it puts the trigger and the cold boot reason on the span', () => {
   onTestFinished(stop);
 
   bus.publish({
-    // oxlint-disable-next-line id-length -- `v` is the event format's version field
-    v: EVENT_VERSION,
+    seq: 1,
     at: new Date(),
     ev: 'ImpChanged',
     reason: 'woke',
-    imp: buildMockImp({ name: 'dev' }),
+    imp: buildMockImpRecord({ name: 'dev' }),
     detail: { durationMs: 40, trigger: 'exec', coldBootReason: 'no-snapshot' },
   });
 
@@ -229,10 +227,10 @@ test('it puts the trigger and the cold boot reason on the span', () => {
 });
 
 test('it records no span for a transition without a duration', () => {
-  const bus = createEventBus();
+  const bus = createEventBus<LoggedImpEvent>();
 
   const stop = startImpTelemetry({
-    bus,
+    events: bus,
     readStateCounts: () => Promise.resolve(new Map()),
     readRam: () => Promise.resolve({ usedMib: 0, budgetMib: 4096 }),
   });
@@ -240,12 +238,11 @@ test('it records no span for a transition without a duration', () => {
   onTestFinished(stop);
 
   bus.publish({
-    // oxlint-disable-next-line id-length -- `v` is the event format's version field
-    v: EVENT_VERSION,
+    seq: 1,
     at: new Date(),
     ev: 'ImpChanged',
     reason: 'booted',
-    imp: buildMockImp(),
+    imp: buildMockImpRecord(),
   });
 
   stop();
@@ -257,7 +254,7 @@ test('it reads the imps by state into imp.imps', async () => {
   const recorded = startInMemoryMetrics();
 
   const stop = startImpTelemetry({
-    bus: createEventBus(),
+    events: createEventBus<LoggedImpEvent>(),
     readStateCounts: () => Promise.resolve(new Map([['sleeping', 3]])),
     readRam: () => Promise.resolve({ usedMib: 600, budgetMib: 4096 }),
   });
@@ -279,7 +276,7 @@ test('it reads the RAM in use into imp.ram.used', async () => {
   const recorded = startInMemoryMetrics();
 
   const stop = startImpTelemetry({
-    bus: createEventBus(),
+    events: createEventBus<LoggedImpEvent>(),
     readStateCounts: () => Promise.resolve(new Map()),
     readRam: () => Promise.resolve({ usedMib: 600, budgetMib: 4096 }),
   });
@@ -295,7 +292,7 @@ test('it reads the RAM budget into imp.ram.budget', async () => {
   const recorded = startInMemoryMetrics();
 
   const stop = startImpTelemetry({
-    bus: createEventBus(),
+    events: createEventBus<LoggedImpEvent>(),
     readStateCounts: () => Promise.resolve(new Map()),
     readRam: () => Promise.resolve({ usedMib: 600, budgetMib: 4096 }),
   });
@@ -311,7 +308,7 @@ test('it reads the disk the imps take on their own into imp.disk.used', async ()
   const recorded = startInMemoryMetrics();
 
   const stop = startImpTelemetry({
-    bus: createEventBus(),
+    events: createEventBus<LoggedImpEvent>(),
     readStateCounts: () => Promise.resolve(new Map()),
     readRam: () => Promise.resolve({ usedMib: 0, budgetMib: 4096 }),
     readDiskUsedBytes: () => 3_221_225_472,
@@ -328,7 +325,7 @@ test('it reads 1 into imp.host.reboot_needed while a kernel oops needs a reboot'
   const recorded = startInMemoryMetrics();
 
   const stop = startImpTelemetry({
-    bus: createEventBus(),
+    events: createEventBus<LoggedImpEvent>(),
     readStateCounts: () => Promise.resolve(new Map()),
     readRam: () => Promise.resolve({ usedMib: 0, budgetMib: 4096 }),
     readRebootReason: () => 'a kernel oops',
@@ -345,7 +342,7 @@ test('it reads 0 into imp.host.reboot_needed while the host needs no reboot', as
   const recorded = startInMemoryMetrics();
 
   const stop = startImpTelemetry({
-    bus: createEventBus(),
+    events: createEventBus<LoggedImpEvent>(),
     readStateCounts: () => Promise.resolve(new Map()),
     readRam: () => Promise.resolve({ usedMib: 0, budgetMib: 4096 }),
     readRebootReason: () => null,
@@ -362,7 +359,7 @@ test('it reads no gauge once stopped', async () => {
   const recorded = startInMemoryMetrics();
 
   const stop = startImpTelemetry({
-    bus: createEventBus(),
+    events: createEventBus<LoggedImpEvent>(),
     readStateCounts: () => Promise.resolve(new Map([['running', 2]])),
     readRam: () => Promise.resolve({ usedMib: 600, budgetMib: 4096 }),
   });
@@ -380,7 +377,7 @@ test('it feeds each sampler pass to the CPU, network and awake instruments', asy
   const listeners: ((deltas: readonly ResourceDelta[]) => void)[] = [];
 
   const stop = startImpTelemetry({
-    bus: createEventBus(),
+    events: createEventBus<LoggedImpEvent>(),
     readStateCounts: () => Promise.resolve(new Map()),
     readRam: () => Promise.resolve({ usedMib: 0, budgetMib: 4096 }),
     subscribeResources: (listener) => {
@@ -438,10 +435,10 @@ test('it feeds each sampler pass to the CPU, network and awake instruments', asy
 });
 
 test('it stays inert without a registered meter provider', () => {
-  const bus = createEventBus();
+  const bus = createEventBus<LoggedImpEvent>();
 
   const stop = startImpTelemetry({
-    bus,
+    events: bus,
     readStateCounts: () => Promise.resolve(new Map()),
     readRam: () => Promise.resolve({ usedMib: 0, budgetMib: 4096 }),
   });
@@ -450,12 +447,11 @@ test('it stays inert without a registered meter provider', () => {
 
   expect(() => {
     bus.publish({
-      // oxlint-disable-next-line id-length -- `v` is the event format's version field
-      v: EVENT_VERSION,
+      seq: 1,
       at: new Date(),
       ev: 'ImpChanged',
       reason: 'booted',
-      imp: buildMockImp(),
+      imp: buildMockImpRecord(),
       detail: { durationMs: 900, steps: { 'boot.vm': 900 } },
     });
 

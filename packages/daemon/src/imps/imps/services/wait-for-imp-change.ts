@@ -1,9 +1,8 @@
-import type { ImpEvent } from '@impz/api';
-import type { EventBus } from '../../../platform/events/event-bus';
+import type { ImpEventLog } from '../../../platform/db/create-imp-event-log';
 import type { StartTimer } from '../../../platform/process/clock';
 
 export function waitForImpChange(
-  context: Readonly<{ events: Pick<EventBus, 'subscribe'>; startTimer: StartTimer }>,
+  context: Readonly<{ events: Pick<ImpEventLog, 'subscribe'>; startTimer: StartTimer }>,
   name: string,
   signal: Readonly<AbortSignal>,
   timeoutMs: number,
@@ -22,7 +21,7 @@ export function waitForImpChange(
     waiting.resolve();
   };
 
-  const unsubscribe = context.events.subscribe((event: Readonly<ImpEvent>) => {
+  const unsubscribe = context.events.subscribe((event) => {
     if ('imp' in event && event.imp.name === name) {
       stopWaiting();
     }

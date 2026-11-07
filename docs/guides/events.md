@@ -28,7 +28,7 @@ The dashboard follows the same stream ([dashboard](./dashboard.md)).
 
 ### Events
 
-Every event has `v` (the format version, now `1`), `at` (when impd sent it) and `ev` (its kind). A
+Every event has `v` (the format version, now `1`), `at` (when impd wrote it) and `ev` (its kind). A
 reader skips a kind or a field it does not know.
 
 | `ev`                | Fields                                                   | When                                                                                   |
@@ -71,15 +71,17 @@ reader's imps, not its fields, so it carries no lease owners ([leases](./leases.
 
 ### Guarantees
 
-- impd sends an event after the database write commits, from the one place that writes the imp or
-  checkpoint row, so every change reaches the stream, including impd's own repairs. A change to an
+- impd writes each event in the same database transaction as the change it describes, from the one
+  place that writes the imp or checkpoint row, so every change reaches the stream, including impd's
+  own repairs, and an impd that stops right after a commit still sends its event. A change to an
   imp's last activity is not an event.
 - Events leave in the order the writes landed.
-- The stream subscribes before it reads the snapshot, so no change falls between the two. A change
-  under way may come in the snapshot and again after it; each event carries the whole imp, so a
-  repeat is harmless.
-- A reader that falls 1000 events behind is ended, not waited for. A reconnect sends the whole
-  snapshot again, so a reader rebuilds its copy from it instead of trusting what it held.
+- The stream marks its place in the log before it reads the snapshot, so no change falls between the
+  two. A change under way may come in the snapshot and again after it; each event carries the whole
+  imp, so a repeat is harmless.
+- A slow reader gets every event at its own pace, however far behind it falls. impd keeps 7 days of
+  events, at most 100,000; a stream that falls behind the oldest one it keeps ends, and a reconnect
+  sends the whole snapshot again.
 - `impz events` reconnects by itself after impd ends the stream, impd restarts or the network drops:
   after 1 s, then twice as long each time, at most 15 s. It gives up after five ends in a row; a
   stream that lasted 10 s starts the count again. Each reconnect prints the snapshot again and a

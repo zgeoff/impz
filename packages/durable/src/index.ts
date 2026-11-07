@@ -3,7 +3,9 @@ export type { NewEvent } from './events/append-event';
 export { pruneEvents } from './events/prune-events';
 export { readEventsAfter } from './events/read-events-after';
 export type { EventsAfter, StoredEvent } from './events/read-events-after';
+export { readEventHead } from './events/read-event-head';
 export { readLogId } from './events/read-log-id';
+export { writeNewLogId } from './events/write-new-log-id';
 
 export type {
   DurableQueries,

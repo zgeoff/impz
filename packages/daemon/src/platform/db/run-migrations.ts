@@ -1,3 +1,4 @@
+import { durableMigrations } from '@impz/durable';
 import { sql } from 'kysely';
 import type { Kysely } from 'kysely';
 import { Migrator } from 'kysely/migration';
@@ -96,18 +97,67 @@ export const MIGRATIONS: Record<string, Migration> = {
   '045_add_imp_last_request': MIGRATION_045_ADD_IMP_LAST_REQUEST,
 };
 
-const PROVIDER: MigrationProvider = {
-  getMigrations: () => Promise.resolve(MIGRATIONS),
-};
+// the durable package numbers its migrations apart from impd's, so they keep a table of their own:
+// in one table, impd's next migration would sort before the durable ones that already ran
+export const DURABLE_MIGRATION_TABLE = 'kysely_migration_durable';
 
 export async function runMigrations<T>(db: Kysely<T>): Promise<void> {
-  await requireKnownMigrations(db);
+  await requireKnownMigrations(db, 'kysely_migration', MIGRATIONS);
+  await requireKnownMigrations(db, DURABLE_MIGRATION_TABLE, durableMigrations);
 
-  const migrator = new Migrator({ db, provider: PROVIDER });
+  const impd = new Migrator({ db, provider: buildProvider(MIGRATIONS) });
 
-  const result = await migrator.migrateToLatest();
+  const impdResult = await impd.migrateToLatest();
 
-  requireMigrated(result);
+  requireMigrated(impdResult);
+
+  const durable = new Migrator({
+    db,
+    provider: buildProvider(durableMigrations),
+    migrationTableName: DURABLE_MIGRATION_TABLE,
+    migrationLockTableName: `${DURABLE_MIGRATION_TABLE}_lock`,
+  });
+
+  const durableResult = await durable.migrateToLatest();
+
+  requireMigrated(durableResult);
+}
+
+// Kysely's own refusal names only the missing migration, not both schema
+// versions.
+async function requireKnownMigrations<T>(
+  db: Kysely<T>,
+  table: string,
+  migrations: Readonly<Record<string, Migration>>,
+): Promise<void> {
+  const found = await sql<{ name: string }>`
+    SELECT name FROM sqlite_master WHERE type = 'table' AND name = ${table}
+  `.execute(db);
+
+  if (found.rows.length === 0) {
+    return;
+  }
+
+  const executed = await sql<{ name: string }>`SELECT name FROM ${sql.table(table)}`.execute(db);
+
+  const unknown = executed.rows
+    .map((row) => row.name)
+    .filter((name) => !Object.hasOwn(migrations, name));
+
+  if (unknown.length === 0) {
+    return;
+  }
+
+  const newest = unknown.toSorted().at(-1) ?? '';
+  const known = Object.keys(migrations).toSorted().at(-1) ?? '';
+
+  throw new Error(
+    `the database is at migration ${newest}, newer than this impd's last, ${known}: start the impd that wrote it or a newer one, or restore an older database copy (docs/guides/operations.md#database-copy-and-restore)`,
+  );
+}
+
+function buildProvider(migrations: Readonly<Record<string, Migration>>): MigrationProvider {
+  return { getMigrations: () => Promise.resolve({ ...migrations }) };
 }
 
 /* @internal */
@@ -116,43 +166,11 @@ export async function runMigrationsTo<T>(
   name: string,
   migrations: Readonly<Record<string, Readonly<Migration>>> = MIGRATIONS,
 ): Promise<void> {
-  const migrator = new Migrator({
-    db,
-    provider: { getMigrations: () => Promise.resolve({ ...migrations }) },
-  });
+  const migrator = new Migrator({ db, provider: buildProvider(migrations) });
 
   const result = await migrator.migrateTo(name);
 
   requireMigrated(result);
-}
-
-// Kysely's own refusal names only the missing migration, not both schema
-// versions.
-async function requireKnownMigrations<T>(db: Kysely<T>): Promise<void> {
-  const table = await sql<{ name: string }>`
-    SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'kysely_migration'
-  `.execute(db);
-
-  if (table.rows.length === 0) {
-    return;
-  }
-
-  const executed = await sql<{ name: string }>`SELECT name FROM kysely_migration`.execute(db);
-
-  const unknown = executed.rows
-    .map((row) => row.name)
-    .filter((name) => !Object.hasOwn(MIGRATIONS, name));
-
-  if (unknown.length === 0) {
-    return;
-  }
-
-  const newest = unknown.toSorted().at(-1) ?? '';
-  const known = Object.keys(MIGRATIONS).toSorted().at(-1) ?? '';
-
-  throw new Error(
-    `the database is at migration ${newest}, newer than this impd's last, ${known}: start the impd that wrote it or a newer one, or restore an older database copy (docs/guides/operations.md#database-copy-and-restore)`,
-  );
 }
 
 function requireMigrated(result: MigrationResultSet): void {

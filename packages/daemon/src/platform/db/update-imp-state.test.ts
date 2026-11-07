@@ -1,11 +1,12 @@
-import { expect, onTestFinished, test } from 'bun:test';
+import { expect, test } from 'bun:test';
+import { sql } from 'kysely';
 import invariant from 'tiny-invariant';
 import { buildMockNewImage } from '../../test-utils/imps/build-mock-new-image';
 import { buildMockNewImp } from '../../test-utils/imps/build-mock-new-imp';
 import { createTestDatabase } from '../../test-utils/platform/create-test-database';
+import { readLoggedEvents } from '../../test-utils/platform/read-logged-events';
 import { createImage } from './images';
-import type { ImpWrite } from './imp-write-feed';
-import { createImp } from './imps';
+import { createImp, readImpById } from './imps';
 import { updateImpState } from './update-imp-state';
 
 test('#updateImpState sets the state and the fields the change names', async () => {
@@ -92,22 +93,36 @@ test('#updateImpState ends the oops hold with an error write that does not set i
   expect(failed).toMatchObject({ hasOopsHold: false, error: 'boot timed out' });
 });
 
-test('#updateImpState emits the change with its reason', async () => {
+test('#updateImpState logs the change with its reason', async () => {
+  const ctx = await createTestDatabase();
+  const image = await createImage(ctx.db, buildMockNewImage());
+  const imp = await createImp(ctx.db, buildMockNewImp({ imageId: image.id }));
+  const head = await ctx.db.log.readHead();
+  const running = await updateImpState(ctx.db, imp.id, { reason: 'booted', state: 'running' });
+  const logged = await readLoggedEvents(ctx.db, head);
+
+  expect(logged).toStrictEqual([
+    { ev: 'ImpChanged', imp: running, reason: 'booted', seq: head + 1, at: expect.any(Date) },
+  ]);
+});
+
+test('#updateImpState leaves the imp as it was when its event fails to write', async () => {
   const ctx = await createTestDatabase();
   const image = await createImage(ctx.db, buildMockNewImage());
   const imp = await createImp(ctx.db, buildMockNewImp({ imageId: image.id }));
 
-  const writes: ImpWrite[] = [];
+  await sql`
+    CREATE TRIGGER fail_point BEFORE INSERT ON events
+    BEGIN SELECT RAISE(ABORT, 'fail point'); END
+  `.execute(ctx.db);
 
-  const unsubscribe = ctx.db.writes.subscribe((write) => {
-    writes.push(write);
-  });
+  const update = updateImpState(ctx.db, imp.id, { reason: 'booted', state: 'running' });
 
-  onTestFinished(unsubscribe);
+  expect(update).rejects.toThrow('fail point');
 
-  const running = await updateImpState(ctx.db, imp.id, { reason: 'booted', state: 'running' });
+  const after = await readImpById(ctx.db, imp.id);
 
-  expect(writes).toStrictEqual([{ kind: 'changed', imp: running, reason: 'booted' }]);
+  expect(after?.state).toBe('creating');
 });
 
 test('#updateImpState counts a wake', async () => {

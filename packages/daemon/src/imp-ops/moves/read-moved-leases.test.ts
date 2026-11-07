@@ -1,9 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { writeFileSync } from 'node:fs';
 import { copyFile } from 'node:fs/promises';
-import type { ImpEvent } from '@impz/api';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
 import invariant from 'tiny-invariant';
+import type { LoggedImpEvent } from '../../platform/db/imp-log-entry';
 import { readImpByName, updateImpActivity, updateImpExposure } from '../../platform/db/imps';
 import { listLeases, writeLease } from '../../platform/db/leases';
 import { createUbuntuImage, setupMoveHosts } from '../../test-utils/imp-ops/create-move-hosts';
@@ -119,7 +119,7 @@ test('it ends the leases from leases.* on a forced stop move, and moves the hold
 
   const sourceNow = ctx.source.now();
   const targetStart = ctx.target.now();
-  const events: ImpEvent[] = [];
+  const events: LoggedImpEvent[] = [];
 
   const unsubscribe = ctx.source.imps.events.subscribe((event) => {
     events.push(event);
@@ -356,7 +356,7 @@ test('it keeps the hold of a stopped imp on a cold move, and says the commit is 
 
   const sourceNow = ctx.source.now();
   const targetStart = ctx.target.now();
-  const events: ImpEvent[] = [];
+  const events: LoggedImpEvent[] = [];
 
   const unsubscribe = ctx.target.imps.events.subscribe((event) => {
     events.push(event);

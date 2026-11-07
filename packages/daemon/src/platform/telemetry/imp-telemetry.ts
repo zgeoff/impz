@@ -1,8 +1,9 @@
 import { ImpStateSchema } from '@impz/api';
-import type { ImpEvent, ImpState } from '@impz/api';
+import type { ImpState } from '@impz/api';
 import { ROOT_CONTEXT, metrics, trace } from '@opentelemetry/api';
 import type { BatchObservableCallback } from '@opentelemetry/api';
-import type { EventBus } from '../events/event-bus';
+import type { ImpEventLog } from '../db/create-imp-event-log';
+import type { LoggedImpEvent } from '../db/imp-log-entry';
 import type { ResourceDelta } from './resource-delta';
 import { SCOPE } from './scope';
 
@@ -22,7 +23,7 @@ interface RamReading {
 }
 
 interface TelemetryDeps {
-  readonly bus: EventBus;
+  readonly events: Pick<ImpEventLog, 'subscribe'>;
   readonly readStateCounts: () => Promise<ReadonlyMap<ImpState, number>>;
   readonly readRam: () => Promise<RamReading>;
 
@@ -143,14 +144,14 @@ export function startImpTelemetry(deps: TelemetryDeps): () => void {
 
   meter.addBatchObservableCallback(readGauges, gauges);
 
-  const handleEvent = (event: Readonly<ImpEvent>): void => {
+  const handleEvent = (event: Readonly<LoggedImpEvent>): void => {
     if (event.ev === 'GovernorDecision') {
       decisions.add(1, { decision: event.decision });
 
       return;
     }
 
-    if (event.ev === 'ImpAdded' && event.reason === 'created') {
+    if (event.ev === 'ImpAdded') {
       transitions.add(1, { reason: 'created' });
     }
 
@@ -199,7 +200,7 @@ export function startImpTelemetry(deps: TelemetryDeps): () => void {
     span.end(endMs);
   };
 
-  const unsubscribe = deps.bus.subscribe(handleEvent);
+  const unsubscribe = deps.events.subscribe(handleEvent);
   const unsubscribeResources = deps.subscribeResources?.(handlePass);
 
   return () => {

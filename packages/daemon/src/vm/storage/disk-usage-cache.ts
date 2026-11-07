@@ -1,4 +1,3 @@
-import type { ImpChangeReason } from '@impz/api';
 import { getErrorMessage } from '@impz/shared';
 import { listCheckpoints } from '../../platform/db/checkpoints';
 import { listImps } from '../../platform/db/imps';
@@ -9,14 +8,6 @@ import { startRealTimer } from '../../platform/process/start-real-timer';
 import type { ImpDiskUsage, StorageBackend } from './storage-backend';
 
 const REFRESH_DELAY_MS = 10_000;
-
-// a stop or a sleep changes disk use too, as the guest writes its cache and memory out
-export const CHANGES_USAGE: ReadonlySet<ImpChangeReason> = new Set([
-  'resized',
-  'restored',
-  'stopped',
-  'slept',
-]);
 
 export interface CachedDiskUsage extends ImpDiskUsage {
   readonly measuredAt: Date;

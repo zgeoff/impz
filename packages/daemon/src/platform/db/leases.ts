@@ -1,9 +1,11 @@
 import type { ImpChangeReason } from '@impz/api';
 import type { Selectable } from 'kysely';
+import { appendImpChange } from './append-imp-change';
 import { updateImpHold } from './imps';
 import type { ImpRecord } from './imps';
 import type { ImpDatabase, ImpQueries } from './open-database';
 import type { ImpLeases } from './schema';
+import { withImpTransaction } from './with-imp-transaction';
 
 export const LEGACY_PRINCIPAL = 'legacy';
 export const HOLD_LABEL = 'hold';
@@ -60,12 +62,12 @@ export async function listLeases(
   return rows.map((row) => toLeaseRecord(row));
 }
 
-export async function writeLease(
+export function writeLease(
   db: ImpDatabase,
   lease: Readonly<LeaseRecord>,
   write: Readonly<LeaseWrite>,
 ): Promise<ImpRecord> {
-  const imp = await db.transaction().execute(async (trx) => {
+  return withImpTransaction(db, async (trx) => {
     await removeEndedLeases(trx, lease.impId, write.at);
 
     await trx
@@ -86,23 +88,23 @@ export async function writeLease(
       )
       .execute();
 
-    return updateImpHold(trx, lease.impId);
+    const imp = await updateImpHold(trx, lease.impId);
+
+    if (write.reason === null) {
+      return imp;
+    }
+
+    return appendImpChange(trx, imp, { reason: write.reason });
   });
-
-  if (write.reason !== null) {
-    db.writes.publish({ kind: 'changed', imp, reason: write.reason });
-  }
-
-  return imp;
 }
 
-export async function removeLeases(
+export function removeLeases(
   db: ImpDatabase,
   impId: string,
   which: LeaseSelection,
   write: Readonly<LeaseWrite>,
 ): Promise<{ readonly removed: number; readonly imp: ImpRecord }> {
-  const result = await db.transaction().execute(async (trx) => {
+  return withImpTransaction(db, async (trx) => {
     await removeEndedLeases(trx, impId, write.at);
 
     let query = trx.deleteFrom('imp_leases').where('imp_id', '=', impId);
@@ -120,20 +122,19 @@ export async function removeLeases(
 
     const isNone = which !== 'blocking' && which.length === 0;
     const deleted = isNone ? [] : await query.returning('label').execute();
+    const result = { removed: deleted.length, imp: await updateImpHold(trx, impId) };
 
-    return { removed: deleted.length, imp: await updateImpHold(trx, impId) };
-  });
+    if (write.reason === null || (result.removed === 0 && write.isEmittedWhenNone !== true)) {
+      return result;
+    }
 
-  if (write.reason !== null && (result.removed > 0 || write.isEmittedWhenNone === true)) {
-    db.writes.publish({
-      kind: 'changed',
-      imp: result.imp,
+    await appendImpChange(trx, result.imp, {
       reason: write.reason,
       ...(write.reason === 'released' && { detail: { released: result.removed } }),
     });
-  }
 
-  return result;
+    return result;
+  });
 }
 
 export async function writeMovedLeases(
