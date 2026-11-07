@@ -28,13 +28,13 @@ export const EVENT_TOOL: Tool = defineTool({
     return {
       data: {
         ...page,
-        events: page.events.filter((event) => isGuardedEvent(context.guard, event)),
+        events: page.events.filter((event) => isAllowedEvent(context.guard, event)),
       },
     };
   },
 });
 
-function isGuardedEvent(guard: ImpGuard, event: ImpEvent): boolean {
+function isAllowedEvent(guard: ImpGuard, event: ImpEvent): boolean {
   return match(event)
     .with({ ev: P.union('Reset', 'Position') }, () => true)
     .with({ ev: P.union('ImpAdded', 'ImpChanged', 'ImpRemoved') }, (changed) =>
