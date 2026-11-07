@@ -44,8 +44,8 @@ in the image you take it from:
 <!-- x-release-please-start-version -->
 
 ```sh
-podman pull ghcr.io/zgeoff/imp-host:6.7.1
-podman run --rm ghcr.io/zgeoff/imp-host:6.7.1 tar -cf - -C /usr/local/share/imp deploy | tar -xf -
+podman pull ghcr.io/zgeoff/imp-host:6.8.0
+podman run --rm ghcr.io/zgeoff/imp-host:6.8.0 tar -cf - -C /usr/local/share/imp deploy | tar -xf -
 bash deploy/upgrade.sh
 ```
 
