@@ -472,11 +472,9 @@ export function updateImpExposure(
       .returningAll()
       .executeTakeFirst();
 
-    if (row === undefined) {
-      return;
-    }
-
-    return appendImpChange(trx, at, toImpRecord(row), { reason: 'exposed' });
+    return row === undefined
+      ? undefined
+      : appendImpChange(trx, at, toImpRecord(row), { reason: 'exposed' });
   });
 }
 
