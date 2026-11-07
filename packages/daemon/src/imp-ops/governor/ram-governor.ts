@@ -82,8 +82,6 @@ interface RamUsage {
   readonly usedMib: number;
   readonly reservedMib: number;
   readonly headroomMib: number;
-
-  // the priority imps' RAM that they leave unused in the whole budget
   readonly priorityKeptMib: number;
 }
 
