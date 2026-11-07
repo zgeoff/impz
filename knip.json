@@ -19,13 +19,7 @@
   },
   "workspaces": {
     ".": {
-      // run-related-tests.ts is a synced CLI that test:related reaches through
-      // run-branch-tests.ts, and read-branch-base.ts a synced module that
-      // files:branch reaches; their other exports serve the tests in zgeoff/tools
-      // and the other scripts that the pre-push-baseline entry of repo-sync delivers
       "entry": [
-        "scripts/run-related-tests.ts",
-        "scripts/read-branch-base.ts",
         // rig loads its config, and a lane's start hook by the path the config names
         "rig.config.ts",
         "scripts/dev/prepare-docker-lane.ts",

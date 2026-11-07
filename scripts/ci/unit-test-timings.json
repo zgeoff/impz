@@ -853,7 +853,6 @@
     "scripts/ci/check-doc-citations.test.ts": 11,
     "scripts/ci/collect-breaking-changes.test.ts": 16,
     "scripts/ci/is-marked-breaking.test.ts": 3,
-    "scripts/ci/run-branch-tests.test.ts": 60,
     "scripts/dev/build-host-run-args.test.ts": 2,
     "scripts/dev/dev.test.ts": 4943,
     "scripts/dev/parse-dev-command.test.ts": 1,
