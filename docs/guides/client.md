@@ -121,15 +121,15 @@ after the start it ends the session as `CLOSED`.
 A failed call throws an `ORPCError`, or an `UnknownProcedureError` for a procedure that an older
 impd lacks. impd's errors carry a `code` and typed `data`:
 
-| Code                  | When                                                 | `data`                                 |
-| --------------------- | ---------------------------------------------------- | -------------------------------------- |
-| `NOT_FOUND`           | No imp, image, checkpoint or session has that name.  | `{ kind, name }`                       |
-| `CONFLICT`            | The name is taken.                                   | `{ kind, name }`                       |
-| `INVALID_STATE`       | The imp's state does not allow the call.             | `{ state, allowed, coldBoots? }`       |
-| `RAM_BUDGET_EXCEEDED` | The host has no room, even after sleeping idle imps. | `{ budgetMib, usedMib, requestedMib }` |
-| `SERVICE_UNAVAILABLE` | impd is stopping.                                    |                                        |
-| `FORBIDDEN`           | An exec ticket was used for another imp.             |                                        |
-| `AGENT_OUTDATED`      | The imp's agent has no sessions; stop and start it.  |                                        |
+| Code                  | When                                                                                                | `data`                                 |
+| --------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| `NOT_FOUND`           | No imp, image, checkpoint or session has that name.                                                 | `{ kind, name }`                       |
+| `CONFLICT`            | The name is taken, or the imp under the name has another id than the `id` passed to `imps.destroy`. | `{ kind, name, reason? }`              |
+| `INVALID_STATE`       | The imp's state does not allow the call.                                                            | `{ state, allowed, coldBoots? }`       |
+| `RAM_BUDGET_EXCEEDED` | The host has no room, even after sleeping idle imps.                                                | `{ budgetMib, usedMib, requestedMib }` |
+| `SERVICE_UNAVAILABLE` | impd is stopping.                                                                                   |                                        |
+| `FORBIDDEN`           | An exec ticket was used for another imp.                                                            |                                        |
+| `AGENT_OUTDATED`      | The imp's agent has no sessions; stop and start it.                                                 |                                        |
 
 ```ts
 import { isDefinedError, safe } from '@impz/client';
@@ -143,6 +143,29 @@ if (isDefinedError(error) && error.code === 'RAM_BUDGET_EXCEEDED') {
 
 A 401 means the token is wrong.
 
+## Destroy an imp by its id
+
+When another caller can destroy an imp and make a new one under its name, destroy by name and id.
+Take the id from the imp that `imps.create`, `imps.get` or `imps.list` returned. When the imp under
+the name has another id, impd destroys nothing and fails with `CONFLICT` and
+`data.reason: 'id_changed'`.
+[Stop and destroy](../architecture/lifecycle/lifecycle.md#stop-and-destroy) explains the check.
+
+An impd without the `destroyIdCheck` feature drops the `id` unread and destroys whichever imp holds
+the name. Check the feature first, as [Features](#features) shows.
+
+```ts
+await requireFeatures(imp, { destroyIdCheck: "destroy another caller's imp" });
+
+const created = await imp.imps.create({ name: 'dev' });
+
+const [error] = await safe(imp.imps.destroy({ name: 'dev', id: created.id }));
+
+if (isDefinedError(error) && error.code === 'CONFLICT' && error.data.reason === 'id_changed') {
+  console.log('dev is another imp now, so it stays');
+}
+```
+
 ## Features
 
 An older impd drops an input field it does not know, and the call succeeds without it. Check its
@@ -154,6 +177,7 @@ features before you send a field that a later impd added:
 | `rebind` on `secrets.add` (`replace`)             | `secretRebind`    | 0.27.0 |
 | `require` on `openExec`                           | `execRequire`     | 0.30.0 |
 | `secretFiles`, `removeSecretFiles` on `system.gc` | `secretFilesGc`   | 0.31.0 |
+| `id` on `imps.destroy`                            | `destroyIdCheck`  | 6.10.0 |
 
 `requireFeatures` reads the flags once, from `system.features`, or from `system.info` on an impd
 older than it. It throws a `MissingFeatureError` for the first feature missing, with what that impd
