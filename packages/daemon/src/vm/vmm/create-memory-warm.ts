@@ -46,9 +46,15 @@ type WarmOutcome =
   | { readonly kind: 'ended'; readonly end: WarmEnd; readonly warmMs: number }
   | { readonly kind: 'failed'; readonly error: string };
 
+// queued: waits for a slot, with no handler started, so a stop ends it at once;
+// running: its handler reads the file, and a stop waits for the handler to exit
+type WarmPhase = 'queued' | 'running';
+
 interface RunningWarm {
+  readonly target: Readonly<WarmTarget>;
   readonly controller: AbortController;
-  readonly ended: { end: WarmEnd | null };
+  readonly state: { phase: WarmPhase; end: WarmEnd | null };
+  readonly startedMs: number;
   readonly done: Promise<void>;
 }
 
@@ -102,11 +108,21 @@ export function createMemoryWarm(deps: Readonly<MemoryWarmDeps>): MemoryWarm {
       return;
     }
 
-    warm.ended.end = end;
+    warm.state.end = end;
 
     warm.controller.abort();
 
-    await warm.done;
+    if (warm.state.phase === 'running') {
+      await warm.done;
+
+      return;
+    }
+
+    running.delete(impId);
+
+    const warmMs = Math.round(performance.now() - warm.startedMs);
+
+    logWarm(warm.target, { kind: 'ended', end, warmMs }, deps.capMib);
   };
 
   return {
@@ -115,25 +131,39 @@ export function createMemoryWarm(deps: Readonly<MemoryWarmDeps>): MemoryWarm {
 
       const controller = new AbortController();
 
-      const ended: RunningWarm['ended'] = { end: null };
+      const state: RunningWarm['state'] = { phase: 'queued', end: null };
       const startedMs = performance.now();
 
-      const runAndLog = async (): Promise<void> => {
-        try {
-          const outcome = await slots.run(() => runWarm(target.memFile, controller.signal));
-
-          const end = ended.end;
-          const warmMs = Math.round(performance.now() - startedMs);
-          const isEnded = outcome.kind === 'failed' && end !== null;
-          const logged: WarmOutcome = isEnded ? { kind: 'ended', end, warmMs } : outcome;
-
-          logWarm(target, logged, deps.capMib);
-        } finally {
-          running.delete(target.impId);
+      // a warm stopped while queued is gone from the map and logged, so its
+      // slot runs nothing
+      const runInSlot = (): Promise<WarmOutcome | null> => {
+        if (controller.signal.aborted) {
+          return Promise.resolve(null);
         }
+
+        state.phase = 'running';
+
+        return runWarm(target.memFile, controller.signal);
       };
 
-      running.set(target.impId, { controller, ended, done: runAndLog() });
+      const runAndLog = async (): Promise<void> => {
+        const outcome = await slots.run(runInSlot);
+
+        if (outcome === null) {
+          return;
+        }
+
+        running.delete(target.impId);
+
+        const end = state.end;
+        const warmMs = Math.round(performance.now() - startedMs);
+        const isEnded = outcome.kind === 'failed' && end !== null;
+        const logged: WarmOutcome = isEnded ? { kind: 'ended', end, warmMs } : outcome;
+
+        logWarm(target, logged, deps.capMib);
+      };
+
+      running.set(target.impId, { target, controller, state, startedMs, done: runAndLog() });
     },
     stop,
     stopAll: async () => {
