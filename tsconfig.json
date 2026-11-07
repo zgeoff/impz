@@ -18,6 +18,7 @@
     "host/**/*.ts",
     "kernel/**/*.ts",
     "*.test.ts",
+    "rig.config.ts",
     // a wildcard skips a dot-named file
     ".oxfmtrc.test.ts"
   ],

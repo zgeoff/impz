@@ -10,29 +10,6 @@ metadata:
 
 # imp tests
 
-Write, place and run imp's tests by the testing skill, with the facts below for this repo. Hand back
-each test command you ran and its result, or the CI job that ran a command this host can't.
-
-The traps:
-
-- Set an impd setting with `updateEnv`. The [root preload](#the-root-preload) deletes your shell's
-  `IMP_*` variables.
-- Run git through the [git helpers](#host-resources). A git hook leaks `GIT_DIR` into a child git.
-- Test a guest's disk contents in an end-to-end journey. A test impd runs no guest, and its imp
-  disks start empty.
-
-## Key rules
-
-- [Departures](#departures): plain `bun test`; CI sets `--parallel`.
-- [Commands and what they need](#commands-and-what-they-need): run a command where its needs are
-  met, else read its CI job.
-- [Where a test lives](#where-a-test-lives): beside its module; journeys in `packages/daemon/e2e/`.
-- [Lanes](#lanes): skips, limits and ZFS shards.
-- [The root preload](#the-root-preload): `updateEnv`; reset a leak in a preload `afterEach`.
-- [Boundaries](#boundaries): a real stand-in server where MSW can't see; `startTestImpd`.
-- [Host resources](#host-resources): ports, `/var/tmp` and git.
-- [End to end](#end-to-end): journeys and suites, and one running suite per dev instance.
-
 ## References
 
 - [Preloads and utils](./references/preloads-and-utils.md): the root and dashboard preloads, how
@@ -44,20 +21,31 @@ The traps:
 - [ZFS, NixOS, Go and CI](./references/zfs-nixos-go-ci.md): the ZFS fake or a real pool, the NixOS
   checks, agent Go timer and golden tests, and the CI facts a test change touches.
 
+## Facts
+
+| Fact       | Where                                                                                                                                                                                                       |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Lanes      | [`rig.config.ts`](../../../rig.config.ts): each lane's suffix, time limit and start hook; [`packages/daemon/e2e/`](../../../packages/daemon/e2e/) holds the e2e and zfs journeys                            |
+| Test utils | [`packages/shared/src/test-utils/`](../../../packages/shared/src/test-utils/) for a util that knows nothing about imp, then the `src/test-utils/` folder of the package whose code the util starts or fakes |
+
 ## Departures
 
-- Run the unit tests with plain `bun test`, with no `--parallel`. The testing skill's
-  [run mode section](../testing/references/slow-tests.md#the-run-mode-and-workers) asks for the
-  `rig unit` runner. Here the `checks-unit` job of [`ci.yml`](../../../.github/workflows/ci.yml)
-  passes `--parallel=2 --no-isolate` itself, sized to its runner: four workers outgrow the job's
-  memory cap. The `test` script stays plain, so a local run on a small host starts no workers.
+- Run the VM and ZFS journeys through [`test-e2e.sh`](../../../scripts/test-e2e.sh) and
+  [`zfs-host-test.sh`](../../../scripts/zfs-host-test.sh), never `rig e2e` or `rig zfs`, in place of
+  the rig run in the testing skill's [Lanes](../testing/references/slow-tests.md#lanes) section. A
+  journey is one test file under `packages/daemon/e2e/`, and it drives a dev instance: a running
+  impd and its VMs. rig starts no dev instance. Each harness starts its own. To run one journey by
+  hand, start a dev instance with `scripts/dev/dev.sh up` first.
+- Keep each `test()` in a journey under 60 s, in place of the 15 s of the e2e lane in
+  [Lanes](../testing/references/slow-tests.md#lanes). A journey drives a real VM. `rig.config.ts`
+  declares the `e2e` and `zfs` lanes only to hold the 60 s, which `zgeoff/max-test-timeout` reads.
 
 ## Commands and what they need
 
-A lane is a set of tests that need one real system, such as Docker. Its tests sit in files with its
-suffix, such as `.host.test.ts`, and its `test:<lane>` script in the root
-[`package.json`](../../../package.json) runs them. The `lanes` map of `zgeoff/max-test-timeout` in
-[`.oxlintrc.json`](../../../.oxlintrc.json) holds each lane's time limit.
+Each lane but `e2e` and `zfs` runs through its `test:<lane>` script in the root
+[`package.json`](../../../package.json), which calls `rig <lane>`. A lane's files carry its suffix,
+such as `.host.test.ts`. Pull no image in a headscale or pebble test: those lanes' start hook pulls
+them before the first test.
 
 Run a command only where its needs are met. When this host lacks them, push your branch, and read
 the result of the row's CI job: `eval` and `vm` are in
@@ -66,7 +54,7 @@ the result of the row's CI job: `eval` and `vm` are in
 
 | Tests                   | Command                                                                                | Needs                                                        | CI job         |
 | ----------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------ | -------------- |
-| Unit                    | `bun test <path>`; `bun test` for all                                                  | bash, git, jq, tar, truncate, mkfs.ext4                      | `checks-unit`  |
+| Unit                    | `bun run test <path>`; `bun run test` for all                                          | bash, git, jq, tar, truncate, mkfs.ext4                      | `checks-unit`  |
 | Dashboard components    | `bun run test:dashboard`                                                               | bash, tar                                                    | `checks-lanes` |
 | Agent Go                | `scripts/test-go.sh`                                                                   | Go from `agent/go.mod`                                       | `go`           |
 | ksm-exec                | `cd host/ksm-exec && go test -race ./...`                                              | Linux 6.7 or later with KSM; the exec tests skip elsewhere   | `go`           |
@@ -86,17 +74,17 @@ the result of the row's CI job: `eval` and `vm` are in
 
 ## Where a test lives
 
-- Look for a test util in
-  [`packages/shared/src/test-utils/`](../../../packages/shared/src/test-utils/) first, then in the
-  `src/test-utils/` folder of the package you test. Put a new util in that package's folder.
+- Search both folders in the Test utils row of [Facts](#facts) before you write a test util, and put
+  a new one in the folder that row names for it.
 - Put a client or MCP server test that needs a real impd beside the module it tests, and boot impd
-  with [`startTestImpd`](../../../packages/daemon/src/test-utils/start-test-impd.ts) from
-  `@impz/daemon/test-utils`. Keep `@impz/daemon` a dev dependency of `@impz/client` and `@impz/mcp`,
-  so neither published build depends on impd.
+  by the rule in [Boundaries](#boundaries), from `@impz/daemon/test-utils`. Keep `@impz/daemon` a
+  dev dependency of `@impz/client` and `@impz/mcp`, so neither published build depends on impd.
 - Put a test of the end-to-end or bootstrap harness in
   [`packages/e2e-harness/`](../../../packages/e2e-harness/). It runs in the unit run, with no KVM.
-  Keep [`packages/daemon/e2e/`](../../../packages/daemon/e2e/) for the suites and their fixtures.
-- Name an end-to-end journey file by the rule at the top of [End to end](./references/e2e.md).
+  Keep [`packages/daemon/e2e/`](../../../packages/daemon/e2e/) for the journeys and their fixtures.
+- Name a journey file by the rule at the top of the [End to end reference](./references/e2e.md).
+- Test a guest's disk contents in a journey. A test impd runs no guest, and its imp disks start
+  empty.
 - Give a Go test that needs root the `root` build tag.
 - Put only the cases that need a lane's real system in the lane file, such as `<name>.host.test.ts`.
   Keep a case that needs none of it in `<name>.test.ts`.
@@ -105,38 +93,42 @@ the result of the row's CI job: `eval` and `vm` are in
 
 - Expect the real-pool ZFS tests in the unit run to skip until `IMP_TEST_ZFS_ROOT` and
   `IMP_TEST_ZFS_DIR` are set, and the small-filesystem tests to skip until `IMP_TEST_SMALL_FS` is.
-- Expect a host networking test to skip where it can't make a network namespace, such as without
-  root. `IMP_HOST_TESTS=required`, which CI sets, turns that skip into a failure.
-- When you add a lane, add its key to the `lanes` map, and a `test:<lane>` script that passes the
-  same limit to `bun test` with `--timeout`.
-- Keep a test in a VM journey file under the limit of the `e2e` key, and one in a ZFS journey file,
-  `<kind>-<journey>.zfs.test.ts`, under the limit of the `zfs` key. `zgeoff/max-test-timeout` fails
-  a timeout above it.
+  [`test-zfs.sh`](../../../scripts/test-zfs.sh) sets the two ZFS variables for its pool.
+- Skip a host networking test with `test.skipIf(!probeUnshare([...]))`, from
+  [`probe-unshare.ts`](../../../packages/daemon/src/test-utils/host-net/probe-unshare.ts). It skips
+  where the test can't make a network namespace, such as without root. `IMP_HOST_TESTS=required`,
+  which CI sets, turns that skip into a failure.
+- When you add a lane, declare it in `rig.config.ts` with its limit, its suffix when it differs from
+  `.<lane>`, and a start hook when its system needs one. Add a `test:<lane>` script that runs
+  `rig <lane>`, and add it to a CI job by the rules of the `project-ci-design` skill.
 - Before you add or slow a ZFS-lane suite, read [CI](./references/zfs-nixos-go-ci.md#ci) for its
   shards.
 
 ## The root preload
 
-- Set an impd setting with [`updateEnv`](../../../packages/shared/src/test-utils/update-env.ts)
-  before `setupTest()`. The [root preload](../../../packages/shared/src/test-utils/preload.ts)
-  deletes every `IMP_*` variable the shell passed.
-- Expect the root preload to keep the run gates, the variables that turn the lanes on:
+- Set an `IMP_*` variable, which impd reads as a setting, with
+  [`updateEnv`](../../../packages/shared/src/test-utils/update-env.ts) before `setupTest()`. The
+  [root preload](../../../packages/shared/src/test-utils/preload.ts) deletes every `IMP_*` variable
+  the shell passed.
+- Expect the root preload to keep the variables that run a lane's tests or turn their skip into a
+  failure:
   - `IMP_HOST_TESTS`;
   - `IMP_TEST_SMALL_FS`;
   - `IMP_TEST_ZFS_ROOT` and `IMP_TEST_ZFS_DIR`.
 - Expect every child process to inherit `NO_PROXY=*` from the root preload. It keeps Bun's `fetch`
   from sending a loopback request through the shell's `HTTPS_PROXY`. To send a child's requests
   through a proxy, clear `NO_PROXY` in that child's environment, or pass curl `--noproxy ''`.
-- When state leaks from one test into the next, reset it in an `afterEach` that the root preload
-  registers: add it to the one in
-  [`register-run-hooks.ts`](../../../packages/shared/src/test-utils/register-run-hooks.ts).
+- When state leaks from one test into the next, add its reset to the `afterEach` in
+  [`register-run-hooks.ts`](../../../packages/shared/src/test-utils/register-run-hooks.ts), which
+  the root preload registers.
 - Repeat a failing order with the `--seed=<n>` that the run prints. The root `bunfig.toml` runs
   files and tests in random order.
 
 ## Boundaries
 
-- Start a real stand-in server, a test server in place of the real one, for a request that MSW (Mock
-  Service Worker) never sees:
+- Start a stand-in server, a local test server in place of the remote one, for a request that MSW
+  (Mock Service Worker) never sees. Read why for each case in
+  [Kinds of stand-in](./references/stand-ins.md#kinds-of-stand-in):
   - a `fetch` to loopback or to a unix socket;
   - a request from a `node:http` client;
   - a WebSocket.
@@ -145,8 +137,9 @@ the result of the row's CI job: `eval` and `vm` are in
   [`startTestImpd`](../../../packages/daemon/src/test-utils/start-test-impd.ts), which runs
   production's startup through `createImpd` on the stand-ins. Leave its `defaultDiskBytes` at 0: its
   stand-in storage copies each disk in full, and a 32 GiB disk takes minutes.
-- Pass the stub clock directly to each component that keeps a clock of its own.
-  [Booting impd](./references/stand-ins.md#booting-impd) shows how to find them.
+- Pass the stub clock of `startTestImpd` directly to each component that keeps a clock of its own.
+  Find those components, and where the clock comes from, in
+  [Booting impd](./references/stand-ins.md#booting-impd).
 
 ## Host resources
 
@@ -162,7 +155,8 @@ the result of the row's CI job: `eval` and `vm` are in
 
 ## End to end
 
-- Never run two suites at once on one dev instance: give each its own. The harness resets the
-  instance after each journey, so the other suite loses its imps. A suite is an entry in
-  [`suites.ts`](../../../packages/e2e-harness/src/suites.ts) that lists journey files.
+- Never run two suites at once on one dev instance. A suite is an entry in
+  [`suites.ts`](../../../packages/e2e-harness/src/suites.ts) that lists journey files. The harness
+  resets the instance after each journey, so the other suite loses its imps. Give each suite its own
+  instance, with its own `IMP_DEV_NAME` and `IMP_DEV_PORT_OFFSET`.
 - Follow the steps in [Writing a journey](./references/e2e.md#writing-a-journey).

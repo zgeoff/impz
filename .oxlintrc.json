@@ -20,36 +20,6 @@
         ]
       }
     ],
-    // each lane's per-test limit, as the project-testing skill's Lanes table states; `e2e/`
-    // holds the VM lane, and its `.zfs` files the ZFS lane
-    "zgeoff/max-test-timeout": [
-      "error",
-      {
-        "lanes": {
-          "e2e": 60000,
-          "zfs": 60000,
-          "host": 15000,
-          "headscale": 15000,
-          "pebble": 5000,
-          "docker": 15000,
-          "small-fs": 15000
-        }
-      }
-    ],
-    "zgeoff/test-beside-module": [
-      "error",
-      {
-        "lanes": {
-          "e2e": 60000,
-          "zfs": 60000,
-          "host": 15000,
-          "headscale": 15000,
-          "pebble": 5000,
-          "docker": 15000,
-          "small-fs": 15000
-        }
-      }
-    ],
     // the shared cast ban stays off until the repo's casts go, and the lock that refuses this
     // setting goes with it; GEO-1468's PRs for impz remove the casts and turn all three back on
     "typescript/consistent-type-assertions": "off",

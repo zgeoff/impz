@@ -6,28 +6,28 @@ import type { WorkerCountSources } from '../read-worker-count.ts';
 import type { RelatedTestSources } from '../run-related-tests.ts';
 import { runRelatedTests } from '../run-related-tests.ts';
 
-// The root bun test skips the dashboard through bunfig.toml, so a dashboard file's tests run from
-// its package.
+// A dashboard file's tests need the DOM that the dashboard package's preload registers, so they run
+// from that package. rig related runs every other test from the root, and its own ignore patterns
+// replace the bunfig.toml list that leaves the dashboard out of a root bun test.
 const dashboardPrefix = 'packages/dashboard/';
-
-// bunfig.toml leaves a lane file out of every root bun test, even one named by its path, so a
-// lane file runs in its lane's script and never here.
-const lanePattern = /\.(?:host|headscale|pebble|docker|small-fs)\.test\.ts$/u;
 
 export async function runBranchTests(
   paths: readonly string[],
   sources: Readonly<RelatedTestSources>,
   workerSources: Readonly<WorkerCountSources>,
 ): Promise<number> {
-  const unitPaths = paths.filter((path) => !lanePattern.test(path));
-
-  const dashboard = unitPaths
+  const dashboard = paths
     .filter((path) => path.startsWith(dashboardPrefix))
     .map((path) => path.slice(dashboardPrefix.length));
 
-  const root = unitPaths.filter((path) => !path.startsWith(dashboardPrefix));
+  const root = paths.filter((path) => !path.startsWith(dashboardPrefix));
 
-  const rootExitCode = await runRelatedTests(root, sources, workerSources);
+  const rootExitCode = await Bun.spawn(['rig', 'related', ...root], {
+    cwd: sources.cwd,
+    stdin: 'inherit',
+    stdout: 'inherit',
+    stderr: 'inherit',
+  }).exited;
 
   const dashboardExitCode = await runRelatedTests(
     dashboard,
