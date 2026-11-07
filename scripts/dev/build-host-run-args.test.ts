@@ -159,6 +159,31 @@ test('it passes IMP_HOST_ADDRESSES, which the egress suite lists a host address 
   expect(args.join(' ')).toInclude(' -e IMP_HOST_ADDRESSES=192.0.2.7/32 ');
 });
 
+test('it passes the warm cap of a slept memory file, IMP_WARM_CAP_MIB', () => {
+  const args = buildHostRunArgs({
+    layout: buildDevLayout({ env: {}, root: '/w/imp', cwd: '/w' }),
+    checkout: {
+      root: '/w/imp',
+      rootPhysical: '/w/imp',
+      hostImage: 'imp-host:dev-test',
+      buildDir: '/w/imp/build',
+    },
+    env: { IMP_WARM_CAP_MIB: '96' },
+    privileges: [],
+    hasEnvFile: false,
+    tailscale: 'none',
+    tailnetOAuthFile: null,
+    acmeCAFile: null,
+    registryCAFile: null,
+    registryHost: null,
+    kernel: '/src/kernel/out/vmlinux',
+    systemDrive: '/src/build/imp-system.squashfs',
+    uplinkMTU: '1500',
+  });
+
+  expect(args.join(' ')).toInclude(' -e IMP_WARM_CAP_MIB=96 ');
+});
+
 test.each([
   ['off', '-e TAILSCALE_AUTHKEY= '],
   ['key', '-e TAILSCALE_AUTHKEY '],

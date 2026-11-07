@@ -49,10 +49,11 @@ impd starts one handler per restore or wake, before Firecracker loads the snapsh
 
 Huge pages speed up a template restore and slow down a wake. On a nested production host, a wake on
 huge pages took longer to reach a running agent than a wake on ordinary pages
-([the wake spike](../../design/spikes/wake-huge-pages/README.md)). On ZFS, a sleep leaves the new
-memory file out of the page cache, so the handler's first read of each block through its map goes to
-the filesystem, and a wake's reads make up most of its `agent` step
-([the cold reads spike](../../design/spikes/wake-cold-reads/README.md)).
+([the wake spike](../../design/spikes/wake-huge-pages/README.md)). When the page cache holds none of
+the memory file, the handler reads each block through the filesystem, and in a bench on ZFS those
+reads took longer than the wait for the guest's agent to answer
+([the cold reads spike](../../design/spikes/wake-cold-reads/results.md#where-a-wakes-time-goes)). So
+impd [warms the file after each sleep](#the-warm-after-a-sleep).
 
 The counts start at zero when a handler starts. At the end of a wake on huge pages, impd reads the
 stats file and adds the counts to the wake's `woke pid` line in the journal. The line's steps before
@@ -107,6 +108,34 @@ so the diff goes over an empty file. impd refuses to sleep an imp whose handler 
 whose handler is gone, because the diff would then miss the pages that handler served.
 
 A template build on huge pages snapshots the same way, as a diff into an empty file.
+
+## The warm after a sleep
+
+After each sleep on huge pages, impd reads the new memory file's data blocks into the page cache, so
+that the next wake's handler copies them from memory. The warm matters most on ZFS: a sleep there
+writes the file into the ARC, ZFS's own cache, and leaves none of it in the page cache.
+
+1. Once the imp is asleep, impd runs the handler's program, with no guest to serve, as
+   `uffd-handler --count-data <memory file>`. It counts the blocks of the file that hold data, one
+   block per huge page.
+2. impd multiplies that count by the huge page size and compares the result with the cap that
+   `IMP_WARM_CAP_MIB` sets ([the configuration guide](../../guides/configuration.md#impd)). A file
+   that holds more stays cold, so that one large imp never pushes the other imps' warmed files out
+   of the page cache.
+3. For a file within the cap, impd runs `uffd-handler --warm <memory file>`, which reads each data
+   block through a map of the file, as a wake's handler reads it.
+
+A wake, a stop or a destroy of the imp ends its warm first, and impd's own stop ends every warm.
+impd runs at most two warms at once, and a third waits for one of them to end. The kernel can take
+back the page cache that a warm filled, because nothing locks it, and a wake after that reads cold.
+
+impd logs the outcome of each warm in the journal, on a line with the imp's name:
+
+```text
+warmed the memory file in 41ms: 27 blocks of 2 MiB
+left the memory file cold: its 862 MiB of data pass the warm cap of 256 MiB
+stopped the memory file's warm after 12ms: the imp woke
+```
 
 ## RAM
 

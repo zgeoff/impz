@@ -56,6 +56,7 @@ error.
 | `IMP_KSM_EXEC`                  | `ksm-exec`                                | With `IMP_KSM`: the wrapper Firecracker, or the jailer, starts through. It runs outside the jail, so the chroot needs no copy.                                                                                                                                 |
 | `IMP_HUGE_PAGES`                | `off`                                     | `2M` backs each imp of fixed memory with the host's pool of huge pages, and restores and wakes it through a page handler; `off` keeps every imp on ordinary pages. The host must reserve the pool ([huge pages](#huge-pages)).                                 |
 | `IMP_UFFD_HANDLER`              | `uffd-handler`                            | With `IMP_HUGE_PAGES=2M`: the page handler impd starts for each restore and wake.                                                                                                                                                                              |
+| `IMP_WARM_CAP_MIB`              | `256`                                     | With `IMP_HUGE_PAGES=2M`: impd reads a slept imp's memory file into RAM for its next wake when the file's data, its blocks other than holes, is this many MiB or fewer ([warm after a sleep](../architecture/lifecycle/huge-pages.md#the-warm-after-a-sleep)). |
 | `IMP_STORAGE_BACKEND`           | `xfs`                                     | `xfs` or `zfs` ([storage](../architecture/storage/storage.md)). impd refuses a data dir the other backend wrote.                                                                                                                                               |
 | `IMP_ZFS_ROOT`                  | none                                      | With `zfs`: the dataset mounted on `IMP_DATA_DIR`, such as `tank/imp`. Needed then.                                                                                                                                                                            |
 | `IMP_ZFS_ALLOW_UIOMOVE_BUG`     | `0`                                       | With `zfs`: `1` starts impd on a module with the zfs_uiomove bug, with a warning, where impd refuses it otherwise ([the host](../architecture/host.md#what-the-host-gives)).                                                                                   |
@@ -302,20 +303,20 @@ impd tuning passes through an allowlist. When set on your machine, `dev.sh` pass
 `IMP_DEFAULT_DISK_GIB`, `IMP_DISK_RESERVE_GIB`, `IMP_WATCHDOG_TIMEOUT_S`, `IMP_WATCHDOG_ACTION`,
 `IMP_TAILSCALE_HOSTNAME`, `IMP_TAILNET_IDENTITIES`, `IMP_TAILNET_NAMES`, `IMP_TAILNET_NAME_PREFIX`,
 `IMP_BUILD_CONTEXT_MAX_MIB`, `IMP_BROKER_PORT`, `IMP_KSM`, `IMP_KSM_HEADROOM_PERCENT`,
-`IMP_HUGE_PAGES`, `IMP_SSH_AUTHORIZED_KEYS`, `IMP_STORAGE_BACKEND`, `IMP_ZFS_ROOT`,
-`IMP_ZFS_ALLOW_UIOMOVE_BUG`, `IMP_SUBNET6`, `IMP_JAILER`, `IMP_JAILER_BIN`, `IMP_PEER_URL`,
-`IMP_MOVE_TEST_CIDR`, `IMP_BUILD_TEST_REGISTRY` and `IMP_HOST_ADDRESSES` to impd, the `IMP_BACKUP_*`
-variables, and the HTTPS settings except the token: `IMP_DOMAIN`, `IMP_DNS_PROVIDER`,
-`IMP_DNS_API_URL`, `IMP_ACME_DIRECTORY`, `IMP_ACME_EMAIL`, `IMP_HTTPS_PORT`, `IMP_HTTP_PORT`,
-`IMP_PUBLIC_IP`, `IMP_PUBLIC_HTTPS_PORT`, `IMP_PUBLIC_HTTP_PORT`, and `IMP_ACME_CA_FILE` and
-`IMP_BUILD_TEST_REGISTRY_CA` as paths under the repo. `IMP_E2E=1` lets impd use the `challtestsrv`
-DNS provider. With `IMP_BUILD_TEST_REGISTRY` set, the container resolves the registry's name to the
-address your machine resolves it to. With `IMP_TAILNET_NAMES=1`, `dev.sh` writes the OAuth client
-from 1Password into the data directory and sets `IMP_TAILNET_OAUTH_FILE`. `IMP_DEV_NETWORK` puts the
-container on that Docker network. `IMP_DEV_BACKUP_ENV_FILE` names a Docker env file with the
-repository's `AWS_*` keys, so the keys in your own shell never reach the container. Other impd
-variables keep their defaults in the dev container. A ZFS dev instance needs the zfs module on the
-machine; `scripts/zfs-host-test.sh` runs one on a throwaway pool.
+`IMP_HUGE_PAGES`, `IMP_WARM_CAP_MIB`, `IMP_SSH_AUTHORIZED_KEYS`, `IMP_STORAGE_BACKEND`,
+`IMP_ZFS_ROOT`, `IMP_ZFS_ALLOW_UIOMOVE_BUG`, `IMP_SUBNET6`, `IMP_JAILER`, `IMP_JAILER_BIN`,
+`IMP_PEER_URL`, `IMP_MOVE_TEST_CIDR`, `IMP_BUILD_TEST_REGISTRY` and `IMP_HOST_ADDRESSES` to impd,
+the `IMP_BACKUP_*` variables, and the HTTPS settings except the token: `IMP_DOMAIN`,
+`IMP_DNS_PROVIDER`, `IMP_DNS_API_URL`, `IMP_ACME_DIRECTORY`, `IMP_ACME_EMAIL`, `IMP_HTTPS_PORT`,
+`IMP_HTTP_PORT`, `IMP_PUBLIC_IP`, `IMP_PUBLIC_HTTPS_PORT`, `IMP_PUBLIC_HTTP_PORT`, and
+`IMP_ACME_CA_FILE` and `IMP_BUILD_TEST_REGISTRY_CA` as paths under the repo. `IMP_E2E=1` lets impd
+use the `challtestsrv` DNS provider. With `IMP_BUILD_TEST_REGISTRY` set, the container resolves the
+registry's name to the address your machine resolves it to. With `IMP_TAILNET_NAMES=1`, `dev.sh`
+writes the OAuth client from 1Password into the data directory and sets `IMP_TAILNET_OAUTH_FILE`.
+`IMP_DEV_NETWORK` puts the container on that Docker network. `IMP_DEV_BACKUP_ENV_FILE` names a
+Docker env file with the repository's `AWS_*` keys, so the keys in your own shell never reach the
+container. Other impd variables keep their defaults in the dev container. A ZFS dev instance needs
+the zfs module on the machine; `scripts/zfs-host-test.sh` runs one on a throwaway pool.
 
 ## CLI
 
