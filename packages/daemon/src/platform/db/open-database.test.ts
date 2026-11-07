@@ -78,7 +78,9 @@ test("it tells impd's own followers each imp write once it commits", async () =>
   const image = await createImage(db, buildMockNewImage());
   const imp = await createImp(db, buildMockNewImp({ imageId: image.id }));
 
-  await waitFor(() => expect(seen).toHaveLength(1));
+  await waitFor(() => {
+    expect(seen).toHaveLength(1);
+  });
 
   expect(seen).toStrictEqual([{ ev: 'ImpAdded', imp, seq: 1, at: expect.any(Date) }]);
 });
@@ -106,7 +108,9 @@ test('it tells the other followers when one of them throws', async () => {
   const imp = await createImp(db, buildMockNewImp({ imageId: image.id }));
   const stopped = await updateImpState(db, imp.id, { reason: 'stopped', state: 'stopped' });
 
-  await waitFor(() => expect(seen).toHaveLength(2));
+  await waitFor(() => {
+    expect(seen).toHaveLength(2);
+  });
 
   expect(seen).toStrictEqual([
     { ev: 'ImpAdded', imp, seq: 1, at: expect.any(Date) },
@@ -141,7 +145,9 @@ test('it gives each database a log of its own', async () => {
     buildMockNewImp({ name: 'bold-wren', imageId: secondImage.id }),
   );
 
-  await waitFor(() => expect(seen).toHaveLength(1));
+  await waitFor(() => {
+    expect(seen).toHaveLength(1);
+  });
 
   expect(seen).toStrictEqual([{ ev: 'ImpAdded', imp, seq: 1, at: expect.any(Date) }]);
 });
@@ -219,7 +225,9 @@ test("it tells impd's own followers every event of a burst longer than one read"
     }
   });
 
-  await waitFor(() => expect(seen).toHaveLength(600));
+  await waitFor(() => {
+    expect(seen).toHaveLength(600);
+  });
 
   expect(seen.map((event) => event.seq)).toStrictEqual(
     Array.from({ length: 600 }, (_unused, index) => index + 1),
@@ -269,7 +277,9 @@ test("it moves impd's own followers past events a prune removed before they read
     Date.UTC(2026, 9, 2),
   );
 
-  await waitFor(() => expect(seen).toHaveLength(1));
+  await waitFor(() => {
+    expect(seen).toHaveLength(1);
+  });
 
   expect(seen).toStrictEqual([expect.objectContaining({ name: 'kept-imp', seq: 2 })]);
 
@@ -296,9 +306,9 @@ test("it keeps impd's own followers going after a read of the log fails", async 
 
   db.log.changes.notify();
 
-  await waitFor(() =>
-    expect(lines).toSatisfyAny((line: string) => line.includes('failed to read the log')),
-  );
+  await waitFor(() => {
+    expect(lines).toSatisfyAny((line: string) => line.includes('failed to read the log'));
+  });
 
   await sql`ALTER TABLE events_away RENAME TO events`.execute(db);
 
@@ -314,7 +324,9 @@ test("it keeps impd's own followers going after a read of the log fails", async 
     1_800_000_000_000,
   );
 
-  await waitFor(() => expect(seen).toHaveLength(1));
+  await waitFor(() => {
+    expect(seen).toHaveLength(1);
+  });
 
   expect(seen).toStrictEqual([expect.objectContaining({ name: 'after-imp', seq: 1 })]);
 });

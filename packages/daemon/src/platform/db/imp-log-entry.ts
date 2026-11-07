@@ -54,7 +54,7 @@ const StoredImpSchema = z.object({
   isBackedUp: z.boolean(),
   isTrustPending: z.boolean(),
   moveState: MoveStateSchema.nullable(),
-}) satisfies z.ZodType<ImpRecord, unknown>;
+}) satisfies z.ZodType<ImpRecord>;
 
 const StoredCheckpointSchema = z.object({
   id: z.string(),
@@ -63,7 +63,7 @@ const StoredCheckpointSchema = z.object({
   createdAt: StoredDateSchema,
   sizeBytes: z.number().nullable(),
   diskBytes: z.number(),
-}) satisfies z.ZodType<CheckpointRecord, unknown>;
+}) satisfies z.ZodType<CheckpointRecord>;
 
 export const ImpLogEntrySchema = z.discriminatedUnion('ev', [
   z.object({ ev: z.literal('ImpAdded'), imp: StoredImpSchema }),
