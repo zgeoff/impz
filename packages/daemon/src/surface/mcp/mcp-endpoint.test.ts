@@ -340,6 +340,7 @@ test('it lists only the read tools to a read token', async () => {
         { name: 'imp_url' },
         { name: 'imp_image_list' },
         { name: 'imp_checkpoint_list' },
+        { name: 'imp_event_list' },
       ],
     },
   });
