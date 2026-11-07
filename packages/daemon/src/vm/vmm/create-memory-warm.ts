@@ -14,9 +14,9 @@ const BLOCK_MIB = 2;
 // restore and wake figures hold for two warms at once
 const WARM_CONCURRENCY = 2;
 
-export type WarmEnd = 'woke' | 'stopped' | 'destroyed' | 'impdStopped';
+type WarmEnd = 'woke' | 'stopped' | 'destroyed' | 'impdStopped';
 
-export interface WarmTarget {
+interface WarmTarget {
   readonly impId: string;
   readonly name: string;
   readonly memFile: string;

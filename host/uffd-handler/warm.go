@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 )
 
 // warmBlock is the page the guest's memory is served in on the 2 MiB path,
@@ -25,10 +26,6 @@ type warmReport struct {
 	Blocks int `json:"blocks"`
 }
 
-// warmSink keeps each read: the compiler may drop a load whose value goes
-// nowhere.
-var warmSink byte
-
 func parseWarmMode(args []string) (warmMode, string, bool) {
 	if len(args) != 2 {
 		return "", "", false
@@ -42,7 +39,7 @@ func parseWarmMode(args []string) (warmMode, string, bool) {
 
 // runWarm writes one JSON line with the file's data blocks to out.
 func runWarm(mode warmMode, path string, out io.Writer) error {
-	file, err := os.Open(path)
+	file, err := os.Open(path) //nolint:gosec // G703: impd passes the memory file of an imp it slept, not input
 	if err != nil {
 		return fmt.Errorf("memory file: %w", err)
 	}
@@ -73,5 +70,6 @@ func (s *memSource) readThroughMap(blocks map[int64]bool, pageSize int) {
 			sum += s.mapped[page]
 		}
 	}
-	warmSink = sum
+	// the compiler may drop a load whose value goes nowhere
+	runtime.KeepAlive(sum)
 }
