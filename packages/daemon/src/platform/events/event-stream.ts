@@ -44,11 +44,14 @@ export async function* openEventStream(options: EventStreamOptions): AsyncGenera
   try {
     let cursor = await options.readHead();
 
+    let changed: Promise<void> | null = null;
+
     yield* await options.readSnapshot();
 
     while (!stop.signal.aborted) {
-      // taken before the read, so a commit during the read still wakes the wait
-      const changed = options.changes.next(stop.signal);
+      // taken before the read, so a commit during the read still wakes the wait; kept across
+      // the reads of a backlog, so each pass adds no abort listener to the signal
+      changed ??= options.changes.next(stop.signal);
 
       const read = await options.readAfter(cursor);
 
@@ -72,6 +75,8 @@ export async function* openEventStream(options: EventStreamOptions): AsyncGenera
 
       if (!read.hasMore) {
         await changed;
+
+        changed = null;
       }
     }
   } finally {

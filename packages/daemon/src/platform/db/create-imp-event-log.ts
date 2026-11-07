@@ -82,10 +82,12 @@ const READ_LIMIT = 500;
 
 async function runFollower(db: ImpQueries, parts: FollowerParts, head: number): Promise<void> {
   let cursor = head;
+  let changed: Promise<void> | null = null;
 
   while (!parts.signal.aborted) {
-    // taken before the read, so a commit during the read still wakes the next wait
-    const changed = parts.changes.next(parts.signal);
+    // taken before the read, so a commit during the read still wakes the next wait; kept across
+    // the reads of a backlog, so each pass adds no abort listener to the signal
+    changed ??= parts.changes.next(parts.signal);
 
     try {
       const read = await readImpEventsAfter(db, { after: cursor, limit: READ_LIMIT });
@@ -115,5 +117,7 @@ async function runFollower(db: ImpQueries, parts: FollowerParts, head: number): 
     }
 
     await changed;
+
+    changed = null;
   }
 }

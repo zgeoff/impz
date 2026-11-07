@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { expect, mock, test } from 'bun:test';
 import type { ImpEvent } from '@impz/api';
 import { pruneEvents } from '@impz/durable';
 import invariant from 'tiny-invariant';
@@ -173,6 +173,52 @@ test('it sends every event to a reader 5,000 events behind', async () => {
       budgetMib: 4096,
     })),
   );
+});
+
+test('it waits on one change at a time while it reads a backlog of several pages', async () => {
+  const ctx = await setupTest();
+
+  const controller = new AbortController();
+
+  const next = mock(ctx.db.log.changes.next);
+
+  const stream = ctx.open({
+    changes: { notify: ctx.db.log.changes.notify, next },
+    readAfter: (after) => ctx.db.log.readAfter(after, 2),
+    readSnapshot: async () => {
+      await withImpTransaction(ctx.db, async (trx) => {
+        for (let count = 1; count <= 6; count += 1) {
+          await appendImpEvent(
+            trx,
+            {
+              ev: 'GovernorDecision',
+              decision: 'admitted',
+              name: `imp-${String(count)}`,
+              trigger: 'wake',
+              usedMib: 512,
+              budgetMib: 4096,
+            },
+            Date.UTC(2026, 9, 2, 12),
+          );
+        }
+      });
+
+      return [];
+    },
+    signal: controller.signal,
+  });
+
+  for (let count = 1; count <= 6; count += 1) {
+    await stream.next();
+  }
+
+  const waiting = stream.next();
+
+  controller.abort();
+
+  await waiting;
+
+  expect(next).toHaveBeenCalledOnce();
 });
 
 test('it leaves out the events its reader may not see', async () => {
