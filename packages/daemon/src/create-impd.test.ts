@@ -826,9 +826,9 @@ test('it sends a build stream its progress at the keepalive gap it is given', as
 });
 
 test('it prunes an event older than 7 days once the hourly prune comes round', async () => {
-  const harness = await setupTest();
+  const ctx = await setupTest();
 
-  await harness.db.log.write(
+  await ctx.db.log.write(
     {
       ev: 'GovernorDecision',
       decision: 'admitted',
@@ -837,13 +837,13 @@ test('it prunes an event older than 7 days once the hourly prune comes round', a
       usedMib: 512,
       budgetMib: 4096,
     },
-    harness.now(),
+    ctx.now(),
   );
 
-  harness.advance(7 * 86_400_000 + 3_600_000);
+  ctx.advance(7 * 86_400_000 + 3_600_000);
 
   const kind = await waitFor(async () => {
-    const after = await harness.db.log.readAfter(0, 10);
+    const after = await ctx.db.log.readAfter(0, 10);
 
     expect(after.kind).toBe('reset');
 
