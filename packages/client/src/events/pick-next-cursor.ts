@@ -20,6 +20,7 @@ export function pickNextCursor(
           'CheckpointRemoved',
           'GovernorDecision',
           'AgentExec',
+          'Position',
         ),
       },
       (logged) => ({ after: logged.seq, logId: logged.logId }),

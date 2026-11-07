@@ -36,7 +36,7 @@ export const EVENT_TOOL: Tool = defineTool({
 
 function isGuardedEvent(guard: ImpGuard, event: ImpEvent): boolean {
   return match(event)
-    .with({ ev: 'Reset' }, () => true)
+    .with({ ev: P.union('Reset', 'Position') }, () => true)
     .with({ ev: P.union('ImpAdded', 'ImpChanged', 'ImpRemoved') }, (changed) =>
       guard.isAllowed(changed.imp.name),
     )

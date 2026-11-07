@@ -248,6 +248,48 @@ test('it opens each later stream after the last event it read', async () => {
   ]);
 });
 
+test('it opens the next stream after a position, and passes no position on', async () => {
+  const controller = new AbortController();
+
+  const position: ImpEvent = {
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
+    v: EVENT_VERSION,
+    at: new Date(),
+    seq: 90,
+    logId: 'log-a',
+    ev: 'Position',
+  };
+
+  const streams = buildStubAnswerQueue([
+    () => Promise.resolve(Readable.from([position])),
+    () => Promise.resolve(Readable.from([])),
+  ]);
+
+  const stream = mock<EventSource['events']['stream']>(() => streams.next()());
+  const onEvent = mock(() => {});
+
+  await watchEvents(
+    { events: { stream } },
+    {
+      onEvent,
+      onOpen: (attempt) => {
+        if (attempt === 2) {
+          controller.abort();
+        }
+      },
+      signal: controller.signal,
+      reconnect: { delayMs: 1 },
+    },
+  );
+
+  expect(stream.mock.calls.map((call) => call[0])).toStrictEqual([
+    undefined,
+    { after: 90, logId: 'log-a' },
+  ]);
+
+  expect(onEvent).not.toHaveBeenCalled();
+});
+
 test('it tells each open the cursor its stream starts at', async () => {
   const controller = new AbortController();
 

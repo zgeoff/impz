@@ -54,10 +54,11 @@ never retried.
 `watchEvents(imp, { onEvent })` follows `events.stream`: every imp first, then each change. `name`
 keeps one imp's events, and `reconnect: { delayMs }` opens a fresh stream whenever one ends, until
 impd refuses the call or `signal` aborts. A reconnect resumes after the last event the watch read,
-across impd restarts, so `onEvent` misses nothing. When impd no longer holds the events since then,
-`onEvent` gets `Reset` and then every imp again. `onOpen` runs as each stream opens, with the cursor
-it opens at: a stream with no `after` starts with every imp, and the caller may have missed what
-changed while it was away.
+across impd restarts, so `onEvent` misses nothing. The watch also reads impd's `Position` events,
+which move its cursor past the events of imps the token may not see, and passes none of them on.
+When impd no longer holds the events since then, `onEvent` gets `Reset` and then every imp again.
+`onOpen` runs as each stream opens, with the cursor it opens at: a stream with no `after` starts
+with every imp, and the caller may have missed what changed while it was away.
 
 `openForwardTunnel` relays one connection to a port in the imp over `/tunnel`, and
 `openReverseForward` listens in the imp and relays each client back. `openToolExec` runs an agent
