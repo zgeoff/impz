@@ -347,7 +347,7 @@
     "@vitejs/plugin-react": "6.1.2",
     "@xterm/addon-fit": "0.11.0",
     "@xterm/xterm": "6.0.0",
-    "@zgeoff/agent-hooks": "0.2.6",
+    "@zgeoff/agent-hooks": "0.2.7",
     "@zgeoff/bun-test-extended": "0.2.3",
     "@zgeoff/bun-test-react": "0.2.3",
     "@zgeoff/chex": "0.0.14",
@@ -1197,7 +1197,7 @@
 
     "@zag-js/utils": ["@zag-js/utils@1.47.0", "", {}, "sha512-vD4JoPJkFBGA2C5/HcfKrhkxqjFlJrfQj0wSoypvYghP1nJYaa6PNJs0zo3EeI4/NJ0EuJSnUg0zsCo+Dhm4iQ=="],
 
-    "@zgeoff/agent-hooks": ["@zgeoff/agent-hooks@0.2.6", "", { "bin": { "agent-hooks": "dist/cli.js" } }, "sha512-Ex99nLNCeeVG6GkbjJYKCpepr8VRESSB9SJaA7mRwt6Ls9ndtB+Qps4BbYg5oKueiYZoT3lvNZWzv/Mygv8x5A=="],
+    "@zgeoff/agent-hooks": ["@zgeoff/agent-hooks@0.2.7", "", { "bin": { "agent-hooks": "dist/cli.js" } }, "sha512-QPJyecm1fbVZhMxUuoWNGN/ubtAJKOqp/ftWXEYfCf33tsfTDmE+QJYCZtdfFb6SoEfeTFvCoXhtuMhVvsGRfQ=="],
 
     "@zgeoff/bun-test-extended": ["@zgeoff/bun-test-extended@0.2.3", "", { "dependencies": { "jest-extended": "7.0.0", "jest-matcher-utils": "30.5.2" } }, "sha512-4ZNPft3LunVKp+s2esoJXSe64EaEywsu3z6Cg5/s/MJcdygmrQeAyfECioePCo5RuAIcaPfgF3lhYsPKcmVJ4w=="],
 
