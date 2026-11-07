@@ -1,5 +1,5 @@
 import type { Imp, ImpEvent, ImpEventDetail } from '@impz/api';
-import { ORPCError } from '@impz/client';
+import { ORPCError, requireFeatures } from '@impz/client';
 import type { watchEvents } from '@impz/client';
 import type { ImpClient } from '../config/create-imp-client';
 import type { BenchResult } from './bench-report-schema';
@@ -7,7 +7,7 @@ import type { BenchScenario, BenchSettings } from './bench-scenarios';
 import { buildBenchImpName } from './build-bench-imp-name';
 import { buildLatencySummary } from './build-latency-summary';
 import { isStepEvent } from './is-step-event';
-import { readImp } from './read-imp';
+import { removeOwnedImp } from './remove-owned-imp';
 
 export interface BenchPlan {
   readonly namePrefix: string;
@@ -29,6 +29,10 @@ export interface BenchDeps {
 }
 
 export async function runBench(deps: BenchDeps, plan: Readonly<BenchPlan>): Promise<BenchResult[]> {
+  await requireFeatures(deps.client, {
+    destroyIdCheck: "destroy another run's imp that took a name this run left",
+  });
+
   const taken = await deps.client.imps.list();
 
   if (taken.some((imp) => imp.name.startsWith(plan.namePrefix))) {
@@ -344,34 +348,4 @@ async function removeOwned(
         failures.map((failure) => failure.error),
         `bench: could not remove ${failures.map((failure) => failure.name).join(', ')}, so they are left on the host`,
       );
-}
-
-interface Removal {
-  readonly name: string;
-
-  // replaced: another imp now holds the name, and the bench leaves it alone
-  readonly outcome: 'removed' | 'replaced' | 'failed';
-  readonly error: unknown;
-}
-
-// impd destroys by name, so a retry after a destroy whose answer was lost
-// checks the id first, and leaves alone an imp made under the name since
-async function removeOwnedImp(client: ImpClient, name: string, id: string): Promise<Removal> {
-  try {
-    const imp = await readImp(client, name);
-
-    if (imp !== null && imp.id !== id) {
-      return { name, outcome: 'replaced', error: null };
-    }
-
-    if (imp !== null) {
-      await client.imps.destroy({ name });
-    }
-
-    return { name, outcome: 'removed', error: null };
-  } catch (error) {
-    const isGone = error instanceof ORPCError && error.code === 'NOT_FOUND';
-
-    return { name, outcome: isGone ? 'removed' : 'failed', error };
-  }
 }

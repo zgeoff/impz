@@ -8,10 +8,14 @@ export function makeLostAnswerFetch(
   error: Error,
   onLost: () => Promise<unknown> = () => Promise.resolve(),
 ): SendRequest {
+  let isLost = false;
+
   return async (request) => {
     const response = await send(request);
 
-    if (new URL(request.url).pathname === lostPath) {
+    if (!isLost && new URL(request.url).pathname === lostPath) {
+      isLost = true;
+
       await onLost();
 
       throw error;

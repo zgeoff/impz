@@ -127,6 +127,44 @@ test('it gives up the name of an imp it removed, so it never claims the imp anot
   expect(owned).toBeEmpty();
 });
 
+test('it keeps and reports the imp that replaced its own under the name before its removal, and gives up the name', async () => {
+  const ctx = await setupTest();
+
+  const image = buildMockNewImage({ name: 'base', sizeBytes: 6 });
+
+  await Bun.write(buildImagePaths(ctx.box.dataDir, image.digest).rootfs, 'rootfs');
+
+  await createImage(ctx.box.db, image);
+
+  const first = await ctx.box.client.imps.create({ name: 'bench-swapped', image: 'base' });
+
+  await ctx.box.client.imps.destroy({ name: 'bench-swapped' });
+
+  const second = await ctx.box.client.imps.create({ name: 'bench-swapped', image: 'base' });
+
+  const create = BENCH_SCENARIOS.find((scenario) => scenario.name === 'create');
+
+  invariant(create);
+
+  const owned = new Map([['bench-swapped', first.id]]);
+  const leftovers = new Set<string>();
+
+  await create.arrange({
+    client: ctx.box.client,
+    name: 'bench-swapped',
+    settings: { memoryMib: null, image: 'base', awakeMs: 0, asleepMs: 0 },
+    wait: () => Promise.resolve(),
+    owned,
+    leftovers,
+  });
+
+  const kept = await ctx.box.client.imps.get({ name: 'bench-swapped' });
+
+  expect(kept.id).toBe(second.id);
+  expect(owned).toBeEmpty();
+  expect(leftovers).toStrictEqual(new Set(['bench-swapped']));
+});
+
 test.each(['wake', 'wake-young'])(
   'it waits the asleep time with the imp asleep before the timed wake of %s',
   async (name) => {
