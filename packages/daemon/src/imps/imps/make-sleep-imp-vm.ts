@@ -232,7 +232,7 @@ export function makeSleepImpVm(
     // On ZFS a sleep leaves the new file out of the page cache, so the next
     // wake's handler would read each block cold.
     if (slept.isOnHugePages) {
-      context.memoryWarm?.start({ impId: imp.id, name: imp.name, memFile: paths.memFile });
+      context.memoryWarm?.start({ impID: imp.id, name: imp.name, memFile: paths.memFile });
     }
 
     return sleeping;

@@ -224,10 +224,10 @@ function requireSuccess(ran: Readonly<CommandResult>, what: string): string {
 }
 
 // a ZFS host keeps every memory file in a dataset of its own, apart from the imps' directories
-function pickMemFile(backend: 'xfs' | 'zfs', impId: string): string {
+function pickMemFile(backend: 'xfs' | 'zfs', impID: string): string {
   return match(backend)
-    .with('xfs', () => `/var/lib/imp/imps/${impId}/snapshot/mem`)
-    .with('zfs', () => `/var/lib/imp/mem/${impId}/mem`)
+    .with('xfs', () => `/var/lib/imp/imps/${impID}/snapshot/mem`)
+    .with('zfs', () => `/var/lib/imp/mem/${impID}/mem`)
     .exhaustive();
 }
 

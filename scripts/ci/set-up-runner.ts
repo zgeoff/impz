@@ -29,7 +29,7 @@ const tasks: Readonly<Record<string, Task>> = {
   },
   'create-zfs-pool': {
     stepArguments: [{ name: 'pool' }, { name: 'file' }, { name: 'size gib' }],
-    run: createZfsPool,
+    run: createZFSPool,
   },
   'install-podman': { stepArguments: [], run: installPodman },
   'open-kvm-to-builders': { stepArguments: [], run: openKVMToBuilders },
@@ -149,7 +149,7 @@ async function installZfs(args: readonly string[]): Promise<void> {
 // A pool in a sparse file, with the properties a host's pool takes, and impd's root dataset in it,
 // which impd mounts on its data dir. The runner's zfs 2.2 has the uiomove bug that impd refuses
 // without leave.
-async function createZfsPool(args: readonly string[]): Promise<void> {
+async function createZFSPool(args: readonly string[]): Promise<void> {
   const [pool, file, sizeGib] = args;
 
   invariant(pool !== undefined && file !== undefined && sizeGib !== undefined);

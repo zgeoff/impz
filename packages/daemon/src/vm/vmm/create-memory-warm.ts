@@ -17,7 +17,7 @@ const WARM_CONCURRENCY = 2;
 type WarmEnd = 'woke' | 'stopped' | 'destroyed' | 'impdStopped';
 
 interface WarmTarget {
-  readonly impId: string;
+  readonly impID: string;
   readonly name: string;
   readonly memFile: string;
 }
@@ -28,7 +28,7 @@ export interface MemoryWarm {
   readonly start: (target: Readonly<WarmTarget>) => void;
 
   // ends the imp's warm, if one runs, and resolves once its handler is gone
-  readonly stop: (impId: string, end: WarmEnd) => Promise<void>;
+  readonly stop: (impID: string, end: WarmEnd) => Promise<void>;
 
   // ends every warm that runs, and starts none after
   readonly stopAll: () => Promise<void>;
@@ -100,8 +100,8 @@ export function createMemoryWarm(deps: Readonly<MemoryWarmDeps>): MemoryWarm {
     }
   };
 
-  const stop = async (impId: string, end: WarmEnd): Promise<void> => {
-    const warm = running.get(impId);
+  const stop = async (impID: string, end: WarmEnd): Promise<void> => {
+    const warm = running.get(impID);
 
     if (warm === undefined) {
       return;
@@ -117,7 +117,7 @@ export function createMemoryWarm(deps: Readonly<MemoryWarmDeps>): MemoryWarm {
       return;
     }
 
-    running.delete(impId);
+    running.delete(impID);
 
     const warmMs = Math.round(performance.now() - warm.startedMs);
 
@@ -132,7 +132,7 @@ export function createMemoryWarm(deps: Readonly<MemoryWarmDeps>): MemoryWarm {
         return;
       }
 
-      invariant(!running.has(target.impId), `imp ${target.impId} slept with its warm running`);
+      invariant(!running.has(target.impID), `imp ${target.impID} slept with its warm running`);
 
       const controller = new AbortController();
 
@@ -158,7 +158,7 @@ export function createMemoryWarm(deps: Readonly<MemoryWarmDeps>): MemoryWarm {
           return;
         }
 
-        running.delete(target.impId);
+        running.delete(target.impID);
 
         const end = state.end;
         const warmMs = Math.round(performance.now() - startedMs);
@@ -168,13 +168,13 @@ export function createMemoryWarm(deps: Readonly<MemoryWarmDeps>): MemoryWarm {
         logWarm(target, logged, deps.capMib);
       };
 
-      running.set(target.impId, { target, controller, state, startedMs, done: runAndLog() });
+      running.set(target.impID, { target, controller, state, startedMs, done: runAndLog() });
     },
     stop,
     stopAll: async () => {
       lifetime.isStopped = true;
 
-      await Promise.all([...running.keys()].map((impId) => stop(impId, 'impdStopped')));
+      await Promise.all([...running.keys()].map((impID) => stop(impID, 'impdStopped')));
     },
   };
 }

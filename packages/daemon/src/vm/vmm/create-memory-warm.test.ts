@@ -30,7 +30,7 @@ test('it warms a memory file whose data fills the cap, and logs its time and blo
   const memFile = join(ctx.directoryPath, 'mem');
 
   ctx.handler.answerWarm({ blocks: 128 });
-  ctx.warm.start({ impId: 'imp-1', name: 'dev', memFile });
+  ctx.warm.start({ impID: 'imp-1', name: 'dev', memFile });
 
   await waitFor(() => {
     expect(ctx.logs).toSatisfyAny((line: string) =>
@@ -48,7 +48,7 @@ test('it leaves cold a memory file whose data passes the cap, and logs its size'
   const ctx = setupTest();
 
   ctx.handler.answerWarm({ blocks: 129 });
-  ctx.warm.start({ impId: 'imp-1', name: 'dev', memFile: join(ctx.directoryPath, 'mem') });
+  ctx.warm.start({ impID: 'imp-1', name: 'dev', memFile: join(ctx.directoryPath, 'mem') });
 
   await waitFor(() => {
     expect(ctx.logs).toContain(
@@ -63,7 +63,7 @@ test('it ends a running warm at a stop, and logs why', async () => {
   const ctx = setupTest();
 
   ctx.handler.answerWarm({ blocks: 64, hangs: true });
-  ctx.warm.start({ impId: 'imp-1', name: 'dev', memFile: join(ctx.directoryPath, 'mem') });
+  ctx.warm.start({ impID: 'imp-1', name: 'dev', memFile: join(ctx.directoryPath, 'mem') });
 
   await waitFor(() => {
     expect(ctx.handler.readWarmRuns()).toHaveLength(2);
@@ -84,14 +84,14 @@ test('it ends a warm that waits for a slot at once, and starts no handler for it
   const ctx = setupTest();
 
   ctx.handler.answerWarm({ blocks: 64, hangs: true });
-  ctx.warm.start({ impId: 'imp-1', name: 'dev', memFile: join(ctx.directoryPath, 'mem-1') });
-  ctx.warm.start({ impId: 'imp-2', name: 'web', memFile: join(ctx.directoryPath, 'mem-2') });
+  ctx.warm.start({ impID: 'imp-1', name: 'dev', memFile: join(ctx.directoryPath, 'mem-1') });
+  ctx.warm.start({ impID: 'imp-2', name: 'web', memFile: join(ctx.directoryPath, 'mem-2') });
 
   await waitFor(() => {
     expect(ctx.handler.readWarmRuns().filter((run) => run.mode === '--warm')).toHaveLength(2);
   });
 
-  ctx.warm.start({ impId: 'imp-3', name: 'docs', memFile: join(ctx.directoryPath, 'mem-3') });
+  ctx.warm.start({ impID: 'imp-3', name: 'docs', memFile: join(ctx.directoryPath, 'mem-3') });
 
   await ctx.warm.stop('imp-3', 'woke');
 
@@ -112,7 +112,7 @@ test('it ends every running warm at impd stop', async () => {
   const ctx = setupTest();
 
   ctx.handler.answerWarm({ blocks: 64, hangs: true });
-  ctx.warm.start({ impId: 'imp-1', name: 'dev', memFile: join(ctx.directoryPath, 'mem') });
+  ctx.warm.start({ impID: 'imp-1', name: 'dev', memFile: join(ctx.directoryPath, 'mem') });
 
   await waitFor(() => {
     expect(ctx.handler.readWarmRuns()).toHaveLength(2);
@@ -132,7 +132,7 @@ test('it starts no warm for a sleep that ends after impd stop, and logs why', as
 
   await ctx.warm.stopAll();
 
-  ctx.warm.start({ impId: 'imp-1', name: 'dev', memFile: join(ctx.directoryPath, 'mem') });
+  ctx.warm.start({ impID: 'imp-1', name: 'dev', memFile: join(ctx.directoryPath, 'mem') });
 
   await ctx.warm.stopAll();
 
@@ -149,7 +149,7 @@ test('it logs a warning when the page handler cannot run', async () => {
     run: runCommand,
   });
 
-  warm.start({ impId: 'imp-1', name: 'dev', memFile: join(ctx.directoryPath, 'mem') });
+  warm.start({ impID: 'imp-1', name: 'dev', memFile: join(ctx.directoryPath, 'mem') });
 
   await waitFor(() => {
     expect(ctx.logs).toSatisfyAny((line: string) =>
