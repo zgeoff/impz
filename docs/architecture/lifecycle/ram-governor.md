@@ -88,6 +88,10 @@ pages takes nothing from the RAM kept in the pool.
 
 The kept RAM counts only at admission. [Enforcement](#enforcement) treats every imp alike.
 
+`system.info` reports the kept RAM of the whole budget as `ramPriorityKeptMib`, which is 0 when
+`IMP_PRIORITY_RAM_MIB` is unset, so a caller can hold a launch of another imp that would not fit
+beside it. `impz info --json` prints it.
+
 ## Enforcement
 
 A guest can grow past its reservation, so measured use can pass the budget between admissions. On a

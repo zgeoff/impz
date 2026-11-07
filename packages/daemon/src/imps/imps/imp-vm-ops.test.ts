@@ -100,7 +100,7 @@ test('it leaves an imp whose boot fails in error with no VM and no reservation',
   const broken = await readBrokenInvariants(ctx, false);
 
   expect(imp?.state).toBe('error');
-  expect(usage).toStrictEqual({ usedMib: 0, reservedMib: 0, headroomMib: 0 });
+  expect(usage).toStrictEqual({ usedMib: 0, reservedMib: 0, headroomMib: 0, priorityKeptMib: 0 });
   expect(broken).toBeEmpty();
 });
 
@@ -252,7 +252,7 @@ test('it releases the reservation of a cold boot that fails after its admit', as
   const broken = await readBrokenInvariants(ctx, false);
 
   expect(imp?.state).toBe('error');
-  expect(usage).toStrictEqual({ usedMib: 0, reservedMib: 0, headroomMib: 0 });
+  expect(usage).toStrictEqual({ usedMib: 0, reservedMib: 0, headroomMib: 0, priorityKeptMib: 0 });
   expect(broken).toBeEmpty();
 });
 

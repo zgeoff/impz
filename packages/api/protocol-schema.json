@@ -12368,6 +12368,11 @@
             "minimum": 0,
             "maximum": 9007199254740991
           },
+          "ramPriorityKeptMib": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
           "ramSleepingMib": {
             "type": "integer",
             "minimum": 0,

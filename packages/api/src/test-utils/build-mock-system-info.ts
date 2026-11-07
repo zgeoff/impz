@@ -74,6 +74,7 @@ export function buildMockSystemInfo(overrides: SystemInfoOverrides = {}): System
     ramUsedMib: faker.number.int({ min: 0, max: 4096 }),
     ramReservedMib: faker.number.int({ min: 0, max: 1024 }),
     ramCommittedMib: faker.number.int({ min: 0, max: 8192 }),
+    ramPriorityKeptMib: faker.number.int({ min: 0, max: 2048 }),
     ramSleepingMib: faker.number.int({ min: 0, max: 8192 }),
     awakeCount: faker.number.int({ min: 0, max: 30 }),
     impCount: faker.number.int({ min: 0, max: 60 }),
