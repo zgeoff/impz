@@ -1,5 +1,12 @@
 # Changelog
 
+## [6.8.1](https://github.com/zgeoff/impz/compare/v6.8.0...v6.8.1) (2026-11-07)
+
+
+### Bug Fixes
+
+* **cli:** rank hosts without the memory kept for priority imps ([#938](https://github.com/zgeoff/impz/issues/938)) ([c867ac5](https://github.com/zgeoff/impz/commit/c867ac58dfc4c9d6d2e680558f58adeb04a13256))
+
 ## [6.8.0](https://github.com/zgeoff/impz/compare/v6.7.1...v6.8.0) (2026-11-07)
 
 ### Features
