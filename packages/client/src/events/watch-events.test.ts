@@ -8,7 +8,7 @@ import { buildStubAnswerQueue } from '@impz/shared/test-utils/build-stub-answer-
 import { ORPCError } from '@orpc/client';
 import { UnknownProcedureError } from '../unknown-procedure-error';
 import { watchEvents } from './watch-events';
-import type { EventSource } from './watch-events';
+import type { EventSource, WatchEventsOptions } from './watch-events';
 
 test('it passes each event of the stream in order, then resolves once impd closes it', async () => {
   const added: ImpEvent = {
@@ -245,6 +245,42 @@ test('it opens each later stream after the last event it read', async () => {
   expect(stream.mock.calls.map((call) => call[0])).toStrictEqual([
     undefined,
     { after: 41, logId: 'log-a' },
+  ]);
+});
+
+test('it tells each open the cursor its stream starts at', async () => {
+  const controller = new AbortController();
+
+  const changed: ImpEvent = {
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
+    v: EVENT_VERSION,
+    at: new Date(),
+    seq: 41,
+    logId: 'log-a',
+    ev: 'ImpChanged',
+    reason: 'slept',
+    imp: buildMockImp({ name: 'box', state: 'sleeping' }),
+  };
+
+  const streams = buildStubAnswerQueue([
+    () => Promise.resolve(Readable.from([changed])),
+    () => Promise.resolve(Readable.from([])),
+  ]);
+
+  const onOpen = mock<NonNullable<WatchEventsOptions['onOpen']>>((attempt) => {
+    if (attempt === 2) {
+      controller.abort();
+    }
+  });
+
+  await watchEvents(
+    { events: { stream: () => streams.next()() } },
+    { onEvent: () => {}, onOpen, signal: controller.signal, reconnect: { delayMs: 1 } },
+  );
+
+  expect(onOpen.mock.calls).toStrictEqual([
+    [1, {}],
+    [2, { after: 41, logId: 'log-a' }],
   ]);
 });
 

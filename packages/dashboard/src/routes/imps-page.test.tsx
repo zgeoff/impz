@@ -321,3 +321,25 @@ test('it shows an imp made while its stream was down, before it had a cursor', a
 
   expect(row).toBeInTheDocument();
 });
+
+test('it drops an imp removed while its stream was down, before it had a cursor', async () => {
+  const ctx = await setupTest();
+
+  await ctx.harness.createTestImage('base');
+  await ctx.client.imps.create({ name: 'web' });
+  await ctx.logIn();
+
+  const rendered = renderApp();
+
+  await rendered.findByRole('row', { name: /web/u });
+  await ctx.waitForEventStream();
+
+  ctx.dropEventStreams();
+
+  await ctx.client.imps.destroy({ name: 'web' });
+
+  // the dashboard waits 2 s before it opens the stream again
+  const empty = await rendered.findByText(/no imps yet/iu, {}, { timeout: 4000 });
+
+  expect(empty).toBeInTheDocument();
+});

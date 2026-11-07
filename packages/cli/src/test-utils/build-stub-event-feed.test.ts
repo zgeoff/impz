@@ -37,7 +37,7 @@ test('it opens once and hands each sent event to its watcher', async () => {
 
   await watching;
 
-  expect(onOpen).toHaveBeenCalledExactlyOnceWith(1);
+  expect(onOpen).toHaveBeenCalledExactlyOnceWith(1, {});
   expect(onEvent).toHaveBeenCalledExactlyOnceWith(event);
 });
 

@@ -25,7 +25,10 @@ export interface WatchEventsOptions {
   readonly onEvent: (event: ImpEvent) => Promise<void> | void;
   readonly name?: string;
   readonly signal?: AbortSignal;
-  readonly onOpen?: (attempt: number) => Promise<void> | void;
+
+  // `cursor` is where the stream starts; with no `after`, it starts with every imp, and the caller
+  // may have missed what changed while it was away
+  readonly onOpen?: (attempt: number, cursor: Readonly<EventCursor>) => Promise<void> | void;
   readonly reconnect?: WatchReconnect;
 }
 
@@ -49,7 +52,7 @@ export async function watchEvents(
     const reading = { done: false };
 
     try {
-      await runCallback(() => options.onOpen?.(attempt));
+      await runCallback(() => options.onOpen?.(attempt, input ?? {}));
 
       for (;;) {
         const next = await events.next().catch((error: unknown) => {
