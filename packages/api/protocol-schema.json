@@ -12378,6 +12378,11 @@
             "minimum": 0,
             "maximum": 9007199254740991
           },
+          "ramPrioritySleepingMib": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
           "awakeCount": {
             "type": "integer",
             "minimum": 0,

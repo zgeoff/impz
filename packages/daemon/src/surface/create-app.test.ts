@@ -82,6 +82,7 @@ test('it serves system.info from config and the database', async () => {
     ramCommittedMib: 0,
     ramPriorityKeptMib: 0,
     ramSleepingMib: 0,
+    ramPrioritySleepingMib: 0,
     awakeCount: 0,
     impCount: 0,
     sessionCount: 0,
@@ -166,6 +167,52 @@ test('it reports no RAM kept for priority imps once awake priority imps use all 
   const info = await ctx.client.system.info();
 
   expect(info.ramPriorityKeptMib).toBe(0);
+});
+
+test('it reports the memory of sleeping priority imps apart from every sleeper', async () => {
+  updateEnv('IMP_DEFAULT_MEMORY_MIB', '512');
+  updateEnv('IMP_PRIORITY_RAM_MIB', '500');
+  updateEnv('IMP_PRIORITY_IMPS', 'chat-*');
+
+  const ctx = await setupTest({ cgroups: buildStubCpuCgroups().cgroups });
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.client.imps.create({ name: 'chat-a' });
+  await ctx.client.imps.create({ name: 'agent-a' });
+  await ctx.client.imps.sleep({ name: 'chat-a' });
+  await ctx.client.imps.sleep({ name: 'agent-a' });
+
+  const info = await ctx.client.system.info();
+
+  expect([info.ramSleepingMib, info.ramPrioritySleepingMib, info.ramPriorityKeptMib]).toStrictEqual(
+    [1024, 512, 500],
+  );
+});
+
+test('it counts a waking imp in its reservation and not among the sleepers', async () => {
+  updateEnv('IMP_DEFAULT_MEMORY_MIB', '512');
+  updateEnv('IMP_WAKE_RESERVE_MIB', '700');
+
+  const ctx = await setupTest({ cgroups: buildStubCpuCgroups().cgroups });
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.client.imps.create({ name: 'dev' });
+  await ctx.client.imps.create({ name: 'idle' });
+  await ctx.client.imps.sleep({ name: 'dev' });
+  await ctx.client.imps.sleep({ name: 'idle' });
+
+  const gate = ctx.fake.hold('wake');
+  const waking = ctx.client.imps.wake({ name: 'dev' });
+
+  await gate.reached;
+
+  const info = await ctx.client.system.info();
+
+  gate.release();
+
+  await waking;
+
+  expect([info.ramSleepingMib, info.ramReservedMib]).toStrictEqual([512, 700]);
 });
 
 test('it reports cpu limits as not enforced on a host without a cpu controller', async () => {

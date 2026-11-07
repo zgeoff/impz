@@ -124,6 +124,9 @@ export const SystemInfoSchema = z.object({
   ramPriorityKeptMib: z.int().nonnegative().optional(),
 
   ramSleepingMib: z.int().nonnegative().optional(),
+
+  ramPrioritySleepingMib: z.int().nonnegative().optional(),
+
   awakeCount: z.int().nonnegative(),
   impCount: z.int().nonnegative(),
 

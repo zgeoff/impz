@@ -4,7 +4,13 @@ import { buildMockHostProbe } from '../test-utils/build-mock-host-probe';
 import { buildRanking, createPlaced } from './place-imp';
 
 test('#buildRanking ranks the host with the most free RAM first, a tie in name order', () => {
-  const ram = { ramUsedMib: 0, ramReservedMib: 0, ramSleepingMib: 0, ramPriorityKeptMib: 0 };
+  const ram = {
+    ramUsedMib: 0,
+    ramReservedMib: 0,
+    ramSleepingMib: 0,
+    ramPrioritySleepingMib: 0,
+    ramPriorityKeptMib: 0,
+  };
 
   const ranking = buildRanking(
     [
@@ -52,7 +58,12 @@ test('#buildRanking ranks the host with the most free RAM first, a tie in name o
 });
 
 test('#buildRanking ranks a host below another when the RAM it keeps for priority imps leaves less free', () => {
-  const ram = { ramUsedMib: 1000, ramReservedMib: 500, ramSleepingMib: 0 };
+  const ram = {
+    ramUsedMib: 1000,
+    ramReservedMib: 500,
+    ramSleepingMib: 0,
+    ramPrioritySleepingMib: 0,
+  };
 
   const ranking = buildRanking(
     [
@@ -98,7 +109,7 @@ test('#buildRanking counts no sleepers for a host from before ramSleepingMib', (
             ramReservedMib: 500,
             ramPriorityKeptMib: 0,
           },
-          withoutInfo: ['ramSleepingMib'],
+          withoutInfo: ['ramSleepingMib', 'ramPrioritySleepingMib'],
         }),
       },
     ],
@@ -117,7 +128,13 @@ test('#buildRanking counts no sleepers for a host from before ramSleepingMib', (
 });
 
 test('#buildRanking ranks a host from before ramPriorityKeptMib by its other RAM numbers', () => {
-  const ram = { ramBudgetMib: 8192, ramUsedMib: 0, ramReservedMib: 0, ramSleepingMib: 0 };
+  const ram = {
+    ramBudgetMib: 8192,
+    ramUsedMib: 0,
+    ramReservedMib: 0,
+    ramSleepingMib: 0,
+    ramPrioritySleepingMib: 0,
+  };
 
   const ranking = buildRanking(
     [
@@ -158,6 +175,7 @@ test('#buildRanking ranks a host below another when its sleepers take more RAM',
             ramUsedMib: 1000,
             ramReservedMib: 500,
             ramSleepingMib: 4096,
+            ramPrioritySleepingMib: 0,
             ramPriorityKeptMib: 0,
           },
         }),
@@ -170,6 +188,7 @@ test('#buildRanking ranks a host below another when its sleepers take more RAM',
             ramUsedMib: 4096,
             ramReservedMib: 0,
             ramSleepingMib: 0,
+            ramPrioritySleepingMib: 0,
             ramPriorityKeptMib: 0,
           },
         }),
@@ -190,6 +209,87 @@ test('#buildRanking ranks a host below another when its sleepers take more RAM',
     { host: 'busy', freeMib: 4096 },
     { host: 'sleepy', freeMib: 2596 },
   ]);
+});
+
+test.each([
+  { keptMib: 4096, sleepingMib: 2048, prioritySleepingMib: 2048, freeMib: 4096 },
+  { keptMib: 1024, sleepingMib: 4096, prioritySleepingMib: 3072, freeMib: 4096 },
+])('#buildRanking counts a sleeping priority imp once beside $keptMib MiB of kept RAM', (row) => {
+  const ranking = buildRanking(
+    [
+      {
+        host: 'kept',
+        value: buildMockHostProbe({
+          info: {
+            ramBudgetMib: 8192,
+            ramUsedMib: 0,
+            ramReservedMib: 0,
+            ramSleepingMib: row.sleepingMib,
+            ramPrioritySleepingMib: row.prioritySleepingMib,
+            ramPriorityKeptMib: row.keptMib,
+          },
+        }),
+      },
+      {
+        host: 'open',
+        value: buildMockHostProbe({
+          info: {
+            ramBudgetMib: 8192,
+            ramUsedMib: 5120,
+            ramReservedMib: 0,
+            ramSleepingMib: 0,
+            ramPrioritySleepingMib: 0,
+            ramPriorityKeptMib: 0,
+          },
+        }),
+      },
+    ],
+    {
+      name: 'dev',
+      image: null,
+      memoryMib: null,
+      cpuLimit: null,
+      policyMode: null,
+      networks: [],
+      needsWholeHost: false,
+    },
+  );
+
+  expect(ranking.ranked).toStrictEqual([
+    { host: 'kept', freeMib: row.freeMib },
+    { host: 'open', freeMib: 3072 },
+  ]);
+});
+
+test('#buildRanking counts every sleeper and the kept RAM for a host from before ramPrioritySleepingMib', () => {
+  const ranking = buildRanking(
+    [
+      {
+        host: 'older',
+        value: buildMockHostProbe({
+          info: {
+            ramBudgetMib: 8192,
+            ramUsedMib: 0,
+            ramReservedMib: 0,
+            ramSleepingMib: 2048,
+            ramPriorityKeptMib: 4096,
+          },
+          withoutInfo: ['ramPrioritySleepingMib'],
+        }),
+      },
+    ],
+    {
+      name: 'dev',
+      image: null,
+      memoryMib: null,
+      cpuLimit: null,
+      policyMode: null,
+      networks: [],
+      needsWholeHost: false,
+    },
+  );
+
+  expect(ranking.ranked).toStrictEqual([{ host: 'older', freeMib: 2048 }]);
 });
 
 test('#buildRanking drops a host that did not answer, with its error', () => {

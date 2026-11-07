@@ -680,6 +680,37 @@ test('it counts a reservation until its 20 s run out, and not a moment longer', 
   expect(after.reservedMib).toBe(0);
 });
 
+test('it reports an imp as admitted while its reservation counts', async () => {
+  const host = createStubGovernedHost({ budgetMib: 1000, ids: ['x', 'y'], awake: [] });
+  const governor = createRamGovernor({ ...host.deps });
+
+  await governor.admit({ id: 'x', name: 'x', reserveMib: 400, memoryMib: 800 });
+
+  expect([governor.isAdmitted('x'), governor.isAdmitted('y')]).toStrictEqual([true, false]);
+});
+
+test('it reports an imp as not admitted once its reservation is released', async () => {
+  const host = createStubGovernedHost({ budgetMib: 1000, ids: ['x'], awake: [] });
+  const governor = createRamGovernor({ ...host.deps });
+
+  await governor.admit({ id: 'x', name: 'x', reserveMib: 400, memoryMib: 800 });
+
+  governor.release('x');
+
+  expect(governor.isAdmitted('x')).toBeFalse();
+});
+
+test('it reports an imp as not admitted once its reservation runs out', async () => {
+  const host = createStubGovernedHost({ budgetMib: 1000, ids: ['x'], awake: [] });
+  const governor = createRamGovernor({ ...host.deps });
+
+  await governor.admit({ id: 'x', name: 'x', reserveMib: 400, memoryMib: 800 });
+
+  host.applyChange({ kind: 'tick', durationMs: 20_001 }, governor);
+
+  expect(governor.isAdmitted('x')).toBeFalse();
+});
+
 test('it sleeps every idle imp, oldest first, when together they cannot reach the budget', async () => {
   const host = createStubGovernedHost({
     budgetMib: 1000,
