@@ -60,6 +60,8 @@ export function makeWakeImpVm(deps: WakeDeps): (imp: LockedImp) => Promise<Locke
 
     requireNoOopsHold(context, imp);
 
+    await context.memoryWarm?.stop(imp.id, 'woke');
+
     const paths = context.findPaths(imp.id);
     const meta = readSnapshotMeta(paths);
 

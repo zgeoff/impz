@@ -1,6 +1,8 @@
 // uffd-handler serves one Firecracker's guest memory from a snapshot's memory
 // file, on demand, through the userfaultfd that Firecracker's Uffd backend
-// sends it. impd starts one per VM that restores on 2 MiB pages.
+// sends it. impd starts one per VM that restores on 2 MiB pages. After a sleep
+// on 2 MiB pages, impd also runs it with --count-data and --warm, which read
+// the new memory file's data blocks into the page cache for the next wake.
 package main
 
 import (
@@ -37,9 +39,17 @@ type options struct {
 }
 
 func main() {
+	if mode, path, ok := parseWarmMode(os.Args[1:]); ok {
+		if err := runWarm(mode, path, os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "uffd-handler: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	opts, err := parseOptions(os.Args[1:])
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "uffd-handler: %v\nusage: uffd-handler --socket PATH [--uid UID --gid GID] 3<MEMORY_FILE 4<>STATS_FILE\n", err)
+		fmt.Fprintf(os.Stderr, "uffd-handler: %v\nusage: uffd-handler --socket PATH [--uid UID --gid GID] 3<MEMORY_FILE 4<>STATS_FILE\n       uffd-handler --count-data|--warm MEMORY_FILE\n", err)
 		os.Exit(2)
 	}
 

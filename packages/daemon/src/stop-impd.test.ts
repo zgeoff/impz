@@ -24,6 +24,11 @@ function setupTest() {
       sleepAllImps: mock(() => Promise.resolve()),
       waitForLifecycle: mock(() => Promise.resolve()),
       bootTemplates: null,
+      memoryWarm: {
+        start: mock(() => {}),
+        stop: mock(() => Promise.resolve()),
+        stopAll: mock(() => Promise.resolve()),
+      },
     },
     storage: { stop: mock(() => Promise.resolve()) },
     stopTelemetry: mock(() => Promise.resolve()),
@@ -54,6 +59,7 @@ test('it stops every part in order, sleeps the imps, then closes the database', 
     { step: 'api', outcome: 'stopped' },
     { step: 'sleep', outcome: 'stopped' },
     { step: 'templates', outcome: 'stopped' },
+    { step: 'memory-warms', outcome: 'stopped' },
     { step: 'storage', outcome: 'stopped' },
     { step: 'telemetry', outcome: 'stopped' },
     { step: 'database', outcome: 'stopped' },
@@ -78,6 +84,7 @@ test('it calls the stop of every part once, in order', async () => {
   expect(ctx.parts.publicMcp.stop).toHaveBeenCalledOnce();
   expect(ctx.parts.api.stop).toHaveBeenCalledOnce();
   expect(ctx.parts.imps.sleepAllImps).toHaveBeenCalledOnce();
+  expect(ctx.parts.imps.memoryWarm.stopAll).toHaveBeenCalledOnce();
   expect(ctx.parts.storage.stop).toHaveBeenCalledOnce();
   expect(ctx.parts.stopTelemetry).toHaveBeenCalledOnce();
   expect(ctx.parts.db.destroy).toHaveBeenCalledOnce();
@@ -92,6 +99,8 @@ test('it calls the stop of every part once, in order', async () => {
   expect(ctx.parts.closeExecSessions).toHaveBeenCalledBefore(ctx.parts.publicMcp.stop);
   expect(ctx.parts.publicMcp.stop).toHaveBeenCalledBefore(ctx.parts.api.stop);
   expect(ctx.parts.api.stop).toHaveBeenCalledBefore(ctx.parts.imps.sleepAllImps);
+  expect(ctx.parts.imps.sleepAllImps).toHaveBeenCalledBefore(ctx.parts.imps.memoryWarm.stopAll);
+  expect(ctx.parts.imps.memoryWarm.stopAll).toHaveBeenCalledBefore(ctx.parts.storage.stop);
   expect(ctx.parts.storage.stop).toHaveBeenCalledBefore(ctx.parts.stopTelemetry);
   expect(ctx.parts.stopTelemetry).toHaveBeenCalledBefore(ctx.parts.db.destroy);
 });
@@ -164,6 +173,7 @@ test('it skips the parts the config leaves off, and leaves a caller database ope
     'api',
     'sleep',
     'templates',
+    'memory-warms',
     'storage',
   ]);
 });

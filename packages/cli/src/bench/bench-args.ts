@@ -25,6 +25,11 @@ export const BENCH_ARGS = {
     description: 'how long an imp stays awake before a scenario puts it to sleep (30s, 2m)',
     default: '0',
   },
+  asleep: {
+    type: 'string',
+    description: 'how long an imp sleeps before a wake scenario times its wake (1s, 30s)',
+    default: '0',
+  },
   prefix: {
     type: 'string',
     description: "the start of each imp's name, before the run's ID",

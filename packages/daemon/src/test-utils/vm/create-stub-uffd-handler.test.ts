@@ -127,3 +127,63 @@ test('it exits before it binds its socket in refuse mode', async () => {
   expect(existsSync(socket)).toBeFalse();
   expect(handler.readStarts()).toStrictEqual([]);
 });
+
+test('it answers a count of the data blocks with one block until a test sets the answer', async () => {
+  const ctx = setupTest();
+  const handler = createStubUffdHandler(ctx.directoryPath);
+  const memFile = join(ctx.directoryPath, 'mem');
+
+  const child = Bun.spawn([handler.path, '--count-data', memFile], {
+    stdio: ['ignore', 'pipe', 'inherit'],
+  });
+
+  const exitCode = await child.exited;
+
+  const stdout = await new Response(child.stdout).text();
+
+  expect({ exitCode, stdout }).toStrictEqual({ exitCode: 0, stdout: '{"blocks":1}\n' });
+
+  expect(handler.readWarmRuns()).toStrictEqual([
+    { mode: '--count-data', memFile, pid: expect.any(Number) },
+  ]);
+});
+
+test('it answers a warm with the blocks a test sets', async () => {
+  const ctx = setupTest();
+  const handler = createStubUffdHandler(ctx.directoryPath);
+
+  handler.answerWarm({ blocks: 40 });
+
+  const child = Bun.spawn([handler.path, '--warm', join(ctx.directoryPath, 'mem')], {
+    stdio: ['ignore', 'pipe', 'inherit'],
+  });
+
+  const exitCode = await child.exited;
+
+  const stdout = await new Response(child.stdout).text();
+
+  expect({ exitCode, stdout }).toStrictEqual({ exitCode: 0, stdout: '{"blocks":40}\n' });
+});
+
+test('it runs a warm until it is killed when a test sets it to hang', async () => {
+  const ctx = setupTest();
+  const handler = createStubUffdHandler(ctx.directoryPath);
+
+  handler.answerWarm({ blocks: 40, hangs: true });
+
+  const child = Bun.spawn([handler.path, '--warm', join(ctx.directoryPath, 'mem')], {
+    stdio: ['ignore', 'pipe', 'inherit'],
+  });
+
+  onTestFinished(() => {
+    child.kill('SIGKILL');
+  });
+
+  await waitFor(() => {
+    expect(handler.readWarmRuns()).toHaveLength(1);
+  });
+
+  child.kill('SIGTERM');
+
+  expect(child.exited).resolves.toBe(143);
+});

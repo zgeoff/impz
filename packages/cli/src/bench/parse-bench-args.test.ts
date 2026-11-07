@@ -8,6 +8,18 @@ test('it reads the bench options as impz bench does, with its defaults', () => {
     samples: '20',
     memory: '256m',
     awake: '0',
+    asleep: '0',
+    prefix: 'bench-',
+  });
+});
+
+test('it reads how long a wake scenario sleeps before its timed wake', () => {
+  expect(parseBenchArgs(['wake', '--asleep', '2s'])).toStrictEqual({
+    scenarios: 'wake',
+    concurrency: '1,4,16,64',
+    samples: '20',
+    awake: '0',
+    asleep: '2s',
     prefix: 'bench-',
   });
 });

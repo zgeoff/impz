@@ -48,7 +48,7 @@ test('it names the host from impd before the run, and the state on both sides of
     label: null,
     before: info,
     after,
-    settings: { memoryMib: null, image: null, awakeMs: 0, levels: [1], samples: 1 },
+    settings: { memoryMib: null, image: null, awakeMs: 0, asleepMs: 0, levels: [1], samples: 1 },
     results: [],
   });
 
@@ -71,7 +71,7 @@ test('it names the host from impd before the run, and the state on both sides of
     },
     before: { bootTemplates: 0, hugePoolFreeMib: 1024, awakeCount: 0, impCount: 1 },
     after: { bootTemplates: 1, hugePoolFreeMib: 768, awakeCount: 1, impCount: 1 },
-    settings: { memoryMib: null, image: null, awakeMs: 0, levels: [1], samples: 1 },
+    settings: { memoryMib: null, image: null, awakeMs: 0, asleepMs: 0, levels: [1], samples: 1 },
     results: [],
   });
 });
@@ -108,7 +108,7 @@ test('it reads an impd from before the host facts as a host it cannot name', () 
     label: 'old-box',
     before: info,
     after: info,
-    settings: { memoryMib: null, image: null, awakeMs: 0, levels: [1], samples: 1 },
+    settings: { memoryMib: null, image: null, awakeMs: 0, asleepMs: 0, levels: [1], samples: 1 },
     results: [],
   });
 

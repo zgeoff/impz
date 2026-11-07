@@ -32,7 +32,7 @@ test('it restores the checkpoint that the restore arrange found, with no lookup 
   const step = await restore.arrange({
     client: ctx.box.client,
     name: 'bench-restore',
-    settings: { memoryMib: null, image: 'base', awakeMs: 0 },
+    settings: { memoryMib: null, image: 'base', awakeMs: 0, asleepMs: 0 },
     wait: () => Promise.resolve(),
     owned: new Map(),
     leftovers: new Set(),
@@ -68,7 +68,7 @@ test('it never removes or claims an imp of that name that the run did not make',
   const step = await create.arrange({
     client: ctx.box.client,
     name: 'bench-taken',
-    settings: { memoryMib: null, image: 'base', awakeMs: 0 },
+    settings: { memoryMib: null, image: 'base', awakeMs: 0, asleepMs: 0 },
     wait: () => Promise.resolve(),
     owned,
     leftovers: new Set(),
@@ -107,7 +107,7 @@ test('it gives up the name of an imp it removed, so it never claims the imp anot
   const step = await create.arrange({
     client: ctx.box.client,
     name: 'bench-reused',
-    settings: { memoryMib: null, image: 'base', awakeMs: 0 },
+    settings: { memoryMib: null, image: 'base', awakeMs: 0, asleepMs: 0 },
     wait: () => Promise.resolve(),
     owned,
     leftovers: new Set(),
@@ -127,6 +127,42 @@ test('it gives up the name of an imp it removed, so it never claims the imp anot
   expect(owned).toBeEmpty();
 });
 
+test.each(['wake', 'wake-young'])(
+  'it waits the asleep time with the imp asleep before the timed wake of %s',
+  async (name) => {
+    const ctx = await setupTest();
+
+    const image = buildMockNewImage({ name: 'base', sizeBytes: 6 });
+
+    await Bun.write(buildImagePaths(ctx.box.dataDir, image.digest).rootfs, 'rootfs');
+
+    await createImage(ctx.box.db, image);
+
+    const scenario = BENCH_SCENARIOS.find((candidate) => candidate.name === name);
+
+    invariant(scenario);
+
+    const waits: { durationMs: number; state: string }[] = [];
+
+    const owned = new Map<string, string>();
+
+    await scenario.arrange({
+      client: ctx.box.client,
+      name: 'bench-nap',
+      settings: { memoryMib: null, image: 'base', awakeMs: 0, asleepMs: 1500 },
+      wait: async (durationMs) => {
+        const imp = await ctx.box.client.imps.get({ name: 'bench-nap' });
+
+        waits.push({ durationMs, state: imp.state });
+      },
+      owned,
+      leftovers: new Set(),
+    });
+
+    expect(waits.at(-1)).toStrictEqual({ durationMs: 1500, state: 'sleeping' });
+  },
+);
+
 test('it refuses to arrange a wake on an imp of that name that the run did not create, and leaves it awake', async () => {
   const ctx = await setupTest();
 
@@ -145,7 +181,7 @@ test('it refuses to arrange a wake on an imp of that name that the run did not c
   const arranging = wake.arrange({
     client: ctx.box.client,
     name: 'bench-other',
-    settings: { memoryMib: null, image: 'base', awakeMs: 0 },
+    settings: { memoryMib: null, image: 'base', awakeMs: 0, asleepMs: 0 },
     wait: () => Promise.resolve(),
     owned: new Map(),
     leftovers: new Set(),
@@ -188,7 +224,7 @@ test('it refuses to arrange a wake on an imp made under a name after the imp the
     .arrange({
       client: ctx.box.client,
       name: 'bench-swapped',
-      settings: { memoryMib: null, image: 'base', awakeMs: 0 },
+      settings: { memoryMib: null, image: 'base', awakeMs: 0, asleepMs: 0 },
       wait: () => Promise.resolve(),
       owned,
       leftovers,
@@ -233,7 +269,7 @@ test.each(['sleep', 'wake'])(
       .arrange({
         client: ctx.box.client,
         name: 'bench-waited',
-        settings: { memoryMib: null, image: 'base', awakeMs: 0 },
+        settings: { memoryMib: null, image: 'base', awakeMs: 0, asleepMs: 0 },
         wait: replace,
         owned,
         leftovers,
@@ -274,7 +310,7 @@ test('it fails a sleep arrange whose imp went while it waited, and gives up the 
   const arranged = sleep.arrange({
     client: ctx.box.client,
     name: 'bench-gone',
-    settings: { memoryMib: null, image: 'base', awakeMs: 0 },
+    settings: { memoryMib: null, image: 'base', awakeMs: 0, asleepMs: 0 },
     wait: async () => {
       await ctx.box.client.imps.destroy({ name: 'bench-gone' });
     },
@@ -313,7 +349,7 @@ test('it refuses to arrange a wake for an imp whose boot left it in error', asyn
   const arranged = wake.arrange({
     client: ctx.box.client,
     name: 'bench-broken',
-    settings: { memoryMib: null, image: 'base', awakeMs: 0 },
+    settings: { memoryMib: null, image: 'base', awakeMs: 0, asleepMs: 0 },
     wait: () => Promise.resolve(),
     owned: new Map([['bench-broken', broken.id]]),
     leftovers: new Set(),
@@ -344,7 +380,7 @@ test("it claims no name when its create never reaches impd, so another run's imp
   const step = await create.arrange({
     client: createImpClient({ url: `http://127.0.0.1:${String(port)}` }),
     name: 'bench-theirs',
-    settings: { memoryMib: null, image: 'base', awakeMs: 0 },
+    settings: { memoryMib: null, image: 'base', awakeMs: 0, asleepMs: 0 },
     wait: () => Promise.resolve(),
     owned,
     leftovers: new Set(),
@@ -374,7 +410,7 @@ test('it fails the arrange at the lookup, and claims no imp, when impd cannot be
   const arranged = sleep.arrange({
     client: createImpClient({ url: `http://127.0.0.1:${String(port)}` }),
     name: 'bench-unreached',
-    settings: { memoryMib: null, image: 'base', awakeMs: 0 },
+    settings: { memoryMib: null, image: 'base', awakeMs: 0, asleepMs: 0 },
     wait: () => Promise.resolve(),
     owned,
     leftovers: new Set(),
@@ -404,7 +440,7 @@ test("it boots a young-wake imp cold before each round's sleep, and its timed st
   const subject = {
     client: ctx.box.client,
     name: 'bench-young',
-    settings: { memoryMib: null, image: 'base', awakeMs: 0 },
+    settings: { memoryMib: null, image: 'base', awakeMs: 0, asleepMs: 0 },
     wait: () => Promise.resolve(),
     owned: new Map([['bench-young', created.id]]),
     leftovers: new Set<string>(),
@@ -462,7 +498,7 @@ test('it times the wake of an imp that has woken before, even on its first round
   await wake.arrange({
     client: ctx.box.client,
     name: 'bench-wake',
-    settings: { memoryMib: null, image: 'base', awakeMs: 0 },
+    settings: { memoryMib: null, image: 'base', awakeMs: 0, asleepMs: 0 },
     wait: () => Promise.resolve(),
     owned: new Map(),
     leftovers: new Set(),

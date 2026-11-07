@@ -164,6 +164,38 @@ test('it keeps each imp awake for --awake before the timed sleep', async () => {
   expect(sleep).toHaveBeenCalledWith(30_000);
 });
 
+test('it keeps each imp asleep for --asleep before the timed wake', async () => {
+  const ctx = await setupTest();
+
+  const image = buildMockNewImage({ name: 'base', sizeBytes: 6 });
+
+  await Bun.write(buildImagePaths(ctx.box.dataDir, image.digest).rootfs, 'rootfs');
+
+  await createImage(ctx.box.db, image);
+
+  const sleep = mock<(durationMs: number) => Promise<void>>(() => setImmediatePromise());
+
+  const result = await runCLIInProcess({
+    args: [
+      'bench',
+      'wake',
+      '--concurrency',
+      '1',
+      '--samples',
+      '1',
+      '--image',
+      'base',
+      '--asleep',
+      '2s',
+    ],
+    env: { ...ctx.home, IMP_URL: ctx.box.url, IMP_TOKEN: ctx.box.rootToken },
+    sleep,
+  });
+
+  expect(result.code).toBe(0);
+  expect(sleep).toHaveBeenCalledWith(2000);
+});
+
 test('it reports the memory file of each sleep from impd', async () => {
   const ctx = await setupTest();
 

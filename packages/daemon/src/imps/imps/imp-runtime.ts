@@ -32,6 +32,7 @@ import { toSeenSessions } from '../../vm/agent-client/seen-session';
 import type { ImpPaths } from '../../vm/storage/data-layout';
 import { isDiskFullError } from '../../vm/storage/disk-full-error';
 import type { BootTemplates } from '../../vm/templates/boot-templates';
+import type { MemoryWarm } from '../../vm/vmm/create-memory-warm';
 import type { ActivityTracker, ConnectionKind } from './activity-tracker';
 import type { ImpClock, ImpGuest, ImpHost, ImpMemory, ImpVms } from './imp-context';
 import type { ImpLock, LockedImp } from './imp-lock';
@@ -121,6 +122,8 @@ export interface ImpRuntime {
   readonly tracker: ActivityTracker;
 
   readonly bootTemplates: BootTemplates | null;
+
+  readonly memoryWarm: MemoryWarm | null;
 
   readonly readDiskFullError: () => Error | null;
 }
@@ -500,6 +503,7 @@ export function createImpRuntime(parts: ImpRuntimeParts): ImpRuntime {
 
     tracker: context.tracker,
     bootTemplates: context.templates,
+    memoryWarm: context.memoryWarm,
     readDiskFullError: () => lastDiskFull.error,
   };
 }

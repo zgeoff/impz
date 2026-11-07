@@ -4,7 +4,8 @@ name: bench
 # branch compares its head with the head's parent, and a dispatch compares its
 # ref with a baseline ref. Both sides run on the one runner, their rounds taken
 # in turn, and the job summary holds the table. A bench/**
-# branch whose name holds huge-pages runs on 2 MiB pages. No pull request runs
+# branch whose name holds huge-pages runs on 2 MiB pages, and one whose name
+# holds zfs keeps the imps on a ZFS pool. No pull request runs
 # it, because a compare outlasts the release wait on a pull request's checks.
 on:
   workflow_dispatch:
@@ -24,8 +25,15 @@ on:
       rounds:
         description: how many times each side runs
         default: '2'
+      asleep:
+        description: impz bench --asleep, how long an imp sleeps before a timed wake
+        default: '0'
       huge-pages:
         description: back the imps with 2 MiB pages
+        type: boolean
+        default: false
+      zfs:
+        description: keep the imps on a ZFS pool, as a ZFS host does
         type: boolean
         default: false
   push:
@@ -66,10 +74,12 @@ jobs:
       IS_HUGE_PAGES: ${{ inputs.huge-pages || contains(github.ref_name, 'huge-pages') }}
       IMP_HUGE_PAGES:
         ${{ (inputs.huge-pages || contains(github.ref_name, 'huge-pages')) && '2M' || 'off' }}
+      IS_ZFS: ${{ inputs.zfs || contains(github.ref_name, 'zfs') }}
       SCENARIOS: ${{ inputs.scenarios || 'create,wake,restore' }}
       CONCURRENCY: ${{ inputs.concurrency || '1,4,16,64' }}
       SAMPLES: ${{ inputs.samples || '20' }}
       ROUNDS: ${{ inputs.rounds || '2' }}
+      ASLEEP: ${{ inputs.asleep || '0' }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -115,6 +125,16 @@ jobs:
       - name: Install
         run: bun install --frozen-lockfile
 
+      # the ARC, ZFS's own cache, capped as on a host that leaves the rest of
+      # its RAM to the imps
+      - name: Install ZFS
+        if: env.IS_ZFS == 'true'
+        run: bun run --silent ci:set-up-runner install-zfs 1073741824
+
+      - name: Create the pool
+        if: env.IS_ZFS == 'true'
+        run: bun run --silent ci:set-up-runner create-zfs-pool benchpool /mnt/imp-bench-pool.img 60
+
       - name: Install the baseline
         working-directory: .cache/baseline
         run: bun install --frozen-lockfile
@@ -146,7 +166,7 @@ jobs:
         run: >-
           bun packages/daemon/bench/run-bench-arms.ts --out .cache/bench --rounds "$ROUNDS" --arm
           "baseline=.cache/baseline" --arm candidate=. -- "$SCENARIOS" --concurrency "$CONCURRENCY"
-          --samples "$SAMPLES" --memory 256m
+          --samples "$SAMPLES" --asleep "$ASLEEP" --memory 256m
 
       # The steps below also run after a failure or a timeout, with or
       # without a container, so none of them may fail the job.

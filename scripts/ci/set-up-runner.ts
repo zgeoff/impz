@@ -1,7 +1,13 @@
+import { appendFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { $ } from 'bun';
 import invariant from 'tiny-invariant';
+import { formatStepValues } from '../lib/format-step-values.ts';
+import { getStepEnv } from '../lib/get-step-env.ts';
 import { parseStepCommand } from '../lib/parse-step-command.ts';
 import type { StepArgument } from '../lib/parse-step-command.ts';
+import { readTextOrNull } from '../lib/read-text-or-null.ts';
+import { readZfsPoolProperties } from '../lib/read-zfs-pool-properties.ts';
 
 interface Task {
   readonly stepArguments: readonly StepArgument[];
@@ -20,6 +26,10 @@ const tasks: Readonly<Record<string, Task>> = {
   'install-zfs': {
     stepArguments: [{ name: 'arc max bytes', isOptional: true }],
     run: installZfs,
+  },
+  'create-zfs-pool': {
+    stepArguments: [{ name: 'pool' }, { name: 'file' }, { name: 'size gib' }],
+    run: createZFSPool,
   },
   'install-podman': { stepArguments: [], run: installPodman },
   'open-kvm-to-builders': { stepArguments: [], run: openKVMToBuilders },
@@ -134,6 +144,35 @@ async function installZfs(args: readonly string[]): Promise<void> {
 
   // zfsutils 2.2.2-0ubuntu9.5 and later refuse to run as a user
   await $`sudo zfs version`;
+}
+
+// A pool in a sparse file, with the properties a host's pool takes, and impd's root dataset in it,
+// which impd mounts on its data dir. The runner's zfs 2.2 has the uiomove bug that impd refuses
+// without leave.
+async function createZFSPool(args: readonly string[]): Promise<void> {
+  const [pool, file, sizeGib] = args;
+
+  invariant(pool !== undefined && file !== undefined && sizeGib !== undefined);
+
+  const properties = readZfsPoolProperties(
+    { readText: readTextOrNull },
+    join(import.meta.dir, '..', '..'),
+  );
+
+  const root = `${pool}/imp`;
+
+  await $`sudo truncate -s ${`${sizeGib}G`} ${file}`;
+  await $`sudo zpool create ${properties} ${pool} ${file}`;
+  await $`sudo zfs create -o mountpoint=legacy ${root}`;
+
+  appendFileSync(
+    getStepEnv(process.env, 'GITHUB_ENV'),
+    formatStepValues({
+      IMP_STORAGE_BACKEND: 'zfs',
+      IMP_ZFS_ROOT: root,
+      IMP_ZFS_ALLOW_UIOMOVE_BUG: '1',
+    }),
+  );
 }
 
 async function installPodman(): Promise<void> {

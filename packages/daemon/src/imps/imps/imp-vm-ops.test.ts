@@ -12,6 +12,7 @@ import { buildMockNewImp } from '../../test-utils/imps/build-mock-new-imp';
 import { createTestImpdPool } from '../../test-utils/imps/create-test-impd-pool';
 import { readBrokenInvariants } from '../../test-utils/imps/read-broken-invariants';
 import { waitForOutcome } from '../../test-utils/imps/wait-for-outcome';
+import { probeProcessRunning } from '../../test-utils/platform/probe-process-running';
 import { runWithStack } from '../../test-utils/platform/run-with-stack';
 import { startTestImpd } from '../../test-utils/start-test-impd';
 import { StubVmError } from '../../test-utils/vm/build-stub-vmm';
@@ -1145,6 +1146,129 @@ test('it wakes a 2M imp through its page handler with huge pages on', async () =
   await ctx.client.imps.wake({ name: 'dev' });
 
   expect(ctx.fake.wakePlans.map((plan) => plan.hugePages)).toStrictEqual(['2M']);
+});
+
+test("it warms a 2M imp's memory file after its sleep when its data fills the cap, and logs the blocks it read", async () => {
+  updateEnv('IMP_HUGE_PAGES', '2M');
+  updateEnv('IMP_WARM_CAP_MIB', '64');
+
+  const ctx = await setupTest();
+
+  ctx.hugePool.totalMib = 4096;
+  ctx.hugePool.freeMib = 4096;
+
+  ctx.uffdHandler.answerWarm({ blocks: 32 });
+
+  await ctx.createTestImage('ubuntu');
+
+  const created = await ctx.client.imps.create({ name: 'dev', memoryMib: 256 });
+
+  await ctx.client.imps.sleep({ name: 'dev' });
+
+  await waitFor(() => {
+    expect(ctx.logs).toSatisfyAny((line: string) =>
+      /^INFO impd\.imps imp=dev warmed the memory file in \d+ms: 32 blocks of 2 MiB$/u.test(line),
+    );
+  });
+
+  const memFile = buildImpPaths(ctx.dataDir, created.id).memFile;
+
+  expect(ctx.uffdHandler.readWarmRuns().map((run) => [run.mode, run.memFile])).toStrictEqual([
+    ['--count-data', memFile],
+    ['--warm', memFile],
+  ]);
+});
+
+test("it leaves a 2M imp's memory file cold after its sleep when its data passes the cap", async () => {
+  updateEnv('IMP_HUGE_PAGES', '2M');
+  updateEnv('IMP_WARM_CAP_MIB', '64');
+
+  const ctx = await setupTest();
+
+  ctx.hugePool.totalMib = 4096;
+  ctx.hugePool.freeMib = 4096;
+
+  ctx.uffdHandler.answerWarm({ blocks: 33 });
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.client.imps.create({ name: 'dev', memoryMib: 256 });
+  await ctx.client.imps.sleep({ name: 'dev' });
+
+  await waitFor(() => {
+    expect(ctx.logs).toContain(
+      'INFO impd.imps imp=dev left the memory file cold: its 66 MiB of data pass the warm cap of 64 MiB',
+    );
+  });
+
+  expect(ctx.uffdHandler.readWarmRuns().map((run) => run.mode)).toStrictEqual(['--count-data']);
+});
+
+test('it warms the memory file of no imp that slept on host pages', async () => {
+  updateEnv('IMP_HUGE_PAGES', '2M');
+
+  const ctx = await setupTest();
+
+  ctx.hugePool.totalMib = 4096;
+  ctx.hugePool.freeMib = 4096;
+
+  await ctx.createTestImage('ubuntu');
+
+  const elastic = await ctx.client.imps.create({ name: 'web', memoryMib: 256, maxMemoryMib: 512 });
+  const fixed = await ctx.client.imps.create({ name: 'dev', memoryMib: 256 });
+
+  await ctx.client.imps.sleep({ name: 'web' });
+  await ctx.client.imps.sleep({ name: 'dev' });
+
+  await waitFor(() => {
+    expect(ctx.logs).toSatisfyAny((line: string) =>
+      line.startsWith('INFO impd.imps imp=dev warmed the memory file in '),
+    );
+  });
+
+  const warmedFiles = new Set(ctx.uffdHandler.readWarmRuns().map((run) => run.memFile));
+
+  expect(warmedFiles).toStrictEqual(new Set([buildImpPaths(ctx.dataDir, fixed.id).memFile]));
+  expect(warmedFiles).not.toContain(buildImpPaths(ctx.dataDir, elastic.id).memFile);
+});
+
+test.each([
+  ['wakes', 'the imp woke'],
+  ['stops', 'the imp stopped'],
+  ['is destroyed', 'the imp is destroyed'],
+] as const)("it stops a 2M imp's running warm when the imp %s", async (action, reason) => {
+  updateEnv('IMP_HUGE_PAGES', '2M');
+
+  const ctx = await setupTest();
+
+  ctx.hugePool.totalMib = 4096;
+  ctx.hugePool.freeMib = 4096;
+
+  ctx.uffdHandler.answerWarm({ blocks: 32, hangs: true });
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.client.imps.create({ name: 'dev', memoryMib: 256 });
+  await ctx.client.imps.sleep({ name: 'dev' });
+
+  await waitFor(() => {
+    expect(ctx.uffdHandler.readWarmRuns()).toHaveLength(2);
+  });
+
+  await match(action)
+    .with('wakes', () => ctx.client.imps.wake({ name: 'dev' }))
+    .with('stops', () => ctx.client.imps.stop({ name: 'dev' }))
+    .with('is destroyed', () => ctx.client.imps.destroy({ name: 'dev' }))
+    .exhaustive();
+
+  const warmPid = ctx.uffdHandler.readWarmRuns()[1]?.pid ?? 0;
+
+  expect(probeProcessRunning(warmPid)).toBeFalse();
+
+  expect(ctx.logs).toSatisfyAny((line: string) =>
+    new RegExp(
+      `^INFO impd\\.imps imp=dev stopped the memory file's warm after \\d+ms: ${reason}$`,
+      'u',
+    ).test(line),
+  );
 });
 
 test("it logs the page handler's faults, data blocks and serve time on a 2M imp's wake line", async () => {

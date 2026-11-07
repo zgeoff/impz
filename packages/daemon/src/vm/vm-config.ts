@@ -13,6 +13,9 @@ export interface KsmConfig {
 // handler restores.
 interface HugePagesConfig {
   readonly handlerBin: string;
+
+  // the most data a slept imp's memory file may hold for impd to warm it
+  readonly warmCapMib: number;
 }
 
 // the RAM the budget keeps for the imps whose names match a pattern

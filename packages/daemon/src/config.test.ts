@@ -785,6 +785,7 @@ test('it refuses a KSM headroom above 100 percent', () => {
 test('it backs guests with 2 MiB pages through the uffd-handler on PATH when IMP_HUGE_PAGES is 2M', () => {
   expect(loadConfig({ IMP_HUGE_PAGES: '2M' }).hugePages).toStrictEqual({
     handlerBin: 'uffd-handler',
+    warmCapMib: 256,
   });
 });
 
@@ -794,7 +795,20 @@ test('it reads the uffd-handler path from IMP_UFFD_HANDLER', () => {
     IMP_UFFD_HANDLER: '/usr/local/bin/uffd-handler',
   });
 
-  expect(config.hugePages).toStrictEqual({ handlerBin: '/usr/local/bin/uffd-handler' });
+  expect(config.hugePages).toStrictEqual({
+    handlerBin: '/usr/local/bin/uffd-handler',
+    warmCapMib: 256,
+  });
+});
+
+test('it reads the warm cap of a slept memory file from IMP_WARM_CAP_MIB', () => {
+  const config = loadConfig({ IMP_HUGE_PAGES: '2M', IMP_WARM_CAP_MIB: '96' });
+
+  expect(config.hugePages?.warmCapMib).toBe(96);
+});
+
+test('it refuses a warm cap of 0 MiB', () => {
+  expect(() => loadConfig({ IMP_HUGE_PAGES: '2M', IMP_WARM_CAP_MIB: '0' })).toThrow();
 });
 
 test('it leaves huge pages off when IMP_HUGE_PAGES is off', () => {

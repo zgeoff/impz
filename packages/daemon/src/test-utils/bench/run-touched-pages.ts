@@ -3,6 +3,7 @@ import type { ImpClient } from '@impz/client';
 import { parseHugetlbMib } from '@impz/e2e-harness/huge-page-host';
 import type { CommandResult } from '@impz/e2e-harness/instance';
 import { waitFor } from '@impz/e2e-harness/wait-for';
+import { match } from 'ts-pattern';
 import { ChangedPagesReportSchema } from './changed-pages-report-schema';
 
 interface TouchedPagesClient {
@@ -144,9 +145,10 @@ async function measureTouchedPages(
   });
 
   const imp = await deps.client.imps.get({ name: NAME });
+  const info = await deps.client.system.info();
 
   const directory = `/var/lib/imp/imps/${imp.id}`;
-  const memFile = `${directory}/snapshot/mem`;
+  const memFile = pickMemFile(info.storage.backend, imp.id);
 
   // a cold boot sleeps as a diff over an empty file
   await runImpzChecked(deps, [
@@ -219,6 +221,14 @@ function requireSuccess(ran: Readonly<CommandResult>, what: string): string {
   }
 
   return ran.stdout;
+}
+
+// a ZFS host keeps every memory file in a dataset of its own, apart from the imps' directories
+function pickMemFile(backend: 'xfs' | 'zfs', impID: string): string {
+  return match(backend)
+    .with('xfs', () => `/var/lib/imp/imps/${impID}/snapshot/mem`)
+    .with('zfs', () => `/var/lib/imp/mem/${impID}/mem`)
+    .exhaustive();
 }
 
 async function readHugetlbMib(deps: TouchedPagesDeps, directory: string): Promise<number> {

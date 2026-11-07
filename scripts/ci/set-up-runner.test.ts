@@ -1,5 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
@@ -344,8 +344,36 @@ test('it refuses a task it does not know, with its usage', async () => {
   expect({ exitCode: result.exitCode, stderr: result.stderr.toString() }).toStrictEqual({
     exitCode: 2,
     stderr:
-      'usage: set-up-runner.ts <share-cpu|turn-on-ksm|reserve-huge-pages|name-e2e-registry|install-zfs|install-podman|open-kvm-to-builders|free-disk>\n',
+      'usage: set-up-runner.ts <share-cpu|turn-on-ksm|reserve-huge-pages|name-e2e-registry|install-zfs|create-zfs-pool|install-podman|open-kvm-to-builders|free-disk>\n',
   });
+});
+
+test("it creates a pool in a sparse file with deploy's properties, and points impd at its dataset", async () => {
+  const ctx = setupTest();
+  const githubEnv = join(ctx.directoryPath, 'env');
+
+  writeFileSync(githubEnv, '');
+
+  const result =
+    await $`${process.execPath} ${ctx.scriptPath} create-zfs-pool benchpool /mnt/bench.img 60`
+      .env({ PATH: ctx.sudo.bin, GITHUB_ENV: githubEnv })
+      .nothrow()
+      .quiet();
+
+  expect(result.exitCode).toBe(0);
+
+  expect(readFileSync(ctx.sudo.calls, 'utf8')).toBe(
+    [
+      'sudo truncate -s 60G /mnt/bench.img',
+      'sudo zpool create -o ashift=12 -O compression=lz4 -O atime=off -O xattr=sa -O mountpoint=none benchpool /mnt/bench.img',
+      'sudo zfs create -o mountpoint=legacy benchpool/imp',
+      '',
+    ].join('\n'),
+  );
+
+  expect(readFileSync(githubEnv, 'utf8')).toBe(
+    'IMP_STORAGE_BACKEND=zfs\nIMP_ZFS_ROOT=benchpool/imp\nIMP_ZFS_ALLOW_UIOMOVE_BUG=1\n',
+  );
 });
 
 test('it refuses an argument that its task does not take, and sets nothing up', async () => {
@@ -359,7 +387,7 @@ test('it refuses an argument that its task does not take, and sets nothing up', 
   expect({ exitCode: result.exitCode, stderr: result.stderr.toString() }).toStrictEqual({
     exitCode: 2,
     stderr:
-      'usage: set-up-runner.ts <share-cpu|turn-on-ksm|reserve-huge-pages|name-e2e-registry|install-zfs|install-podman|open-kvm-to-builders|free-disk>\n',
+      'usage: set-up-runner.ts <share-cpu|turn-on-ksm|reserve-huge-pages|name-e2e-registry|install-zfs|create-zfs-pool|install-podman|open-kvm-to-builders|free-disk>\n',
   });
 
   expect(readFileSync(ctx.sudo.calls, 'utf8')).toBe('');
@@ -376,7 +404,7 @@ test('it refuses a second argument to install-zfs, and installs nothing', async 
   expect({ exitCode: result.exitCode, stderr: result.stderr.toString() }).toStrictEqual({
     exitCode: 2,
     stderr:
-      'usage: set-up-runner.ts <share-cpu|turn-on-ksm|reserve-huge-pages|name-e2e-registry|install-zfs|install-podman|open-kvm-to-builders|free-disk> [arc max bytes]\n',
+      'usage: set-up-runner.ts <share-cpu|turn-on-ksm|reserve-huge-pages|name-e2e-registry|install-zfs|create-zfs-pool|install-podman|open-kvm-to-builders|free-disk> [arc max bytes]\n',
   });
 
   expect(readFileSync(ctx.sudo.calls, 'utf8')).toBe('');

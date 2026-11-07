@@ -42,6 +42,11 @@ times that step as the client sees it.
 `wake-young` run with no wait times the wake that
 [young guests](../architecture/lifecycle/sleep-and-wake.md#young-guests) describes.
 
+`--asleep <duration>` keeps the imp asleep that long before `wake` or `wake-young` times its wake.
+Give it at least a second on 2 MiB pages: impd reads the memory file into the page cache after each
+sleep, and a wake ends that read
+([the warm after a sleep](../architecture/lifecycle/huge-pages.md#the-warm-after-a-sleep)).
+
 ## Settings
 
 | Flag             | Default            | Effect                                                         |
@@ -51,6 +56,7 @@ times that step as the client sees it.
 | `--memory`       | the host's default | each imp's memory                                              |
 | `--image`        | the host's default | each imp's image                                               |
 | `--awake`        | `0`                | how long an imp stays awake before a scenario puts it to sleep |
+| `--asleep`       | `0`                | how long an imp sleeps before a wake scenario times its wake   |
 | `--prefix`       | `bench-`           | the start of each imp's name, before the run's ID              |
 | `--label`        | none               | a name for the machine, kept in the report                     |
 | `--limit-p50-ms` | none               | fail when the median of any concurrency passes this many ms    |

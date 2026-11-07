@@ -8,6 +8,9 @@ export interface BenchSettings {
   readonly memoryMib: number | null;
   readonly image: string | null;
   readonly awakeMs: number;
+
+  // how long a wake scenario's imp sleeps before its timed wake
+  readonly asleepMs: number;
 }
 
 interface BenchSubject {
@@ -62,7 +65,7 @@ export const BENCH_SCENARIOS: readonly BenchScenario[] = [
         await subject.client.imps.wake({ name: subject.name });
       }
 
-      await sleepImp(subject);
+      await sleepBeforeWake(subject);
 
       return () => subject.client.imps.wake({ name: subject.name });
     },
@@ -77,7 +80,7 @@ export const BENCH_SCENARIOS: readonly BenchScenario[] = [
       await subject.client.imps.stop({ name: subject.name, force: true });
       await subject.client.imps.start({ name: subject.name });
 
-      await sleepImp(subject);
+      await sleepBeforeWake(subject);
 
       return () => subject.client.imps.wake({ name: subject.name });
     },
@@ -207,6 +210,15 @@ async function waitOwned(subject: BenchSubject): Promise<void> {
   if ((await readOwnedImp(subject)) === null) {
     throw new Error(`${subject.name} went while the bench waited`);
   }
+}
+
+// impd's work after a sleep, such as the read of a memory file into the page
+// cache, runs while the imp sleeps, so a timed wake that follows at once never
+// sees it done
+async function sleepBeforeWake(subject: BenchSubject): Promise<void> {
+  await sleepImp(subject);
+
+  await subject.wait(subject.settings.asleepMs);
 }
 
 const CHECKPOINT_LABEL = 'bench';
