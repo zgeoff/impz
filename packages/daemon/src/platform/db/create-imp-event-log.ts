@@ -9,6 +9,7 @@ import type { ImpLogEntry, LoggedImpEvent } from './imp-log-entry';
 import type { ImpQueries } from './open-database';
 import { readImpEventsAfter } from './read-imp-events-after';
 import type { ImpEventsAfter } from './read-imp-events-after';
+import { tailImpEvents } from './tail-imp-events';
 
 export interface ImpEventLog {
   // a writer notifies after each commit; a reader of the table waits on it, and reads again
@@ -81,43 +82,39 @@ interface FollowerParts {
 const READ_LIMIT = 500;
 
 async function runFollower(db: ImpQueries, parts: FollowerParts, head: number): Promise<void> {
-  let cursor = head;
-  let changed: Promise<void> | null = null;
+  let after = head;
 
   while (!parts.signal.aborted) {
-    // taken before the read, so a commit during the read still wakes the next wait; kept across
-    // the reads of a backlog, so each pass adds no abort listener to the signal
-    changed ??= parts.changes.next(parts.signal);
-
-    try {
-      const read = await readImpEventsAfter(db, { after: cursor, limit: READ_LIMIT });
-
-      if (read.kind === 'reset') {
-        getImpdLogger('events').warning("a prune passed impd's own followers at {seq}", {
-          seq: read.prunedThrough,
+    const tail = tailImpEvents({
+      changes: parts.changes,
+      readAfter: (cursor) => readImpEventsAfter(db, { after: cursor, limit: READ_LIMIT }),
+      after,
+      signal: parts.signal,
+      onReadError: (error) => {
+        getImpdLogger('events').warning("impd's own followers failed to read the log: {error}", {
+          error: getErrorMessage(error),
         });
+      },
+    });
 
-        cursor = read.prunedThrough;
-        continue;
-      }
+    let step = await tail.next();
 
-      for (const event of read.events) {
+    while (step.done !== true) {
+      for (const event of step.value) {
         parts.followers.publish(event);
       }
 
-      cursor = read.throughSeq;
-
-      if (read.hasMore) {
-        continue;
-      }
-    } catch (error) {
-      getImpdLogger('events').warning("impd's own followers failed to read the log: {error}", {
-        error: getErrorMessage(error),
-      });
+      step = await tail.next();
     }
 
-    await changed;
+    if (step.value === null) {
+      return;
+    }
 
-    changed = null;
+    getImpdLogger('events').warning("a prune passed impd's own followers at {seq}", {
+      seq: step.value.prunedThrough,
+    });
+
+    after = step.value.prunedThrough;
   }
 }

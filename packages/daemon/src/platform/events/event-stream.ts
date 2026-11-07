@@ -2,6 +2,7 @@ import type { ImpEvent } from '@impz/api';
 import type { ChangeSignal } from '@impz/durable';
 import type { LoggedImpEvent } from '../db/imp-log-entry';
 import type { ImpEventsAfter } from '../db/read-imp-events-after';
+import { tailImpEvents } from '../db/tail-imp-events';
 import type { StartTimer } from '../process/clock';
 import { startTimerAt } from '../process/start-timer-at';
 
@@ -42,24 +43,19 @@ export async function* openEventStream(options: EventStreamOptions): AsyncGenera
         });
 
   try {
-    let cursor = await options.readHead();
-
-    let changed: Promise<void> | null = null;
+    const head = await options.readHead();
 
     yield* await options.readSnapshot();
 
-    while (!stop.signal.aborted) {
-      // taken before the read, so a commit during the read still wakes the wait; kept across
-      // the reads of a backlog, so each pass adds no abort listener to the signal
-      changed ??= options.changes.next(stop.signal);
+    const pages = tailImpEvents({
+      changes: options.changes,
+      readAfter: options.readAfter,
+      after: head,
+      signal: stop.signal,
+    });
 
-      const read = await options.readAfter(cursor);
-
-      if (read.kind === 'reset') {
-        return;
-      }
-
-      for (const logged of read.events) {
+    for await (const page of pages) {
+      for (const logged of page) {
         const event = await options.present(logged);
 
         if (stop.signal.aborted) {
@@ -69,14 +65,6 @@ export async function* openEventStream(options: EventStreamOptions): AsyncGenera
         if (event !== null && (options.accepts?.(event) ?? true)) {
           yield event;
         }
-      }
-
-      cursor = read.throughSeq;
-
-      if (!read.hasMore) {
-        await changed;
-
-        changed = null;
       }
     }
   } finally {
