@@ -129,7 +129,7 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
 
   const reservations = new Map<
     string,
-    Reservation & { readonly isPriority: boolean; readonly beforeGrow?: Reservation | null }
+    Reservation & { readonly beforeGrow?: Reservation | null }
   >();
 
   const now = deps.now ?? Date.now;
@@ -146,8 +146,9 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
   // admitted guests on 2 MiB pages that are not awake yet, by imp
   const pendingHugePages = new Map<string, number>();
 
-  // those of them that are priority imps; a pool guest's pages outlast its RAM reservation
-  const pendingPriority = new Set<string>();
+  // the admitted priority imps, whose reservations and pool pages count against the kept RAM
+  // until each is awake
+  const admittedPriority = new Set<string>();
 
   const emitDecision = (decision: GovernorDecision): void => {
     deps.events?.publish({
@@ -184,7 +185,6 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
     reservations.set(request.id, {
       mib: request.reserveMib,
       until: now() + RESERVATION_TTL_MS,
-      isPriority: isPriority(request.name),
     });
 
     if ((request.hugePagesMib ?? 0) > 0) {
@@ -192,9 +192,9 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
     }
 
     if (isPriority(request.name)) {
-      pendingPriority.add(request.id);
+      admittedPriority.add(request.id);
     } else {
-      pendingPriority.delete(request.id);
+      admittedPriority.delete(request.id);
     }
 
     emitAdmission(request, 'admitted', usedMib);
@@ -242,18 +242,18 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
 
     const readings = await Promise.all(awake.map((imp) => readVm(imp.pid, imp.apiSocket)));
 
-    const live = [...reservations]
-      .filter(([id]) => id !== excludeId)
-      .map(([id, reservation]) => ({
+    const live = [...reservations.keys()]
+      .filter((id) => id !== excludeId)
+      .map((id) => ({
         id,
         mib: readReservation(id),
-        isPriority: reservation.isPriority,
+        isPriority: admittedPriority.has(id),
         isOnPool: pendingHugePages.has(id),
       }));
 
     const pendingPool = [...pendingHugePages]
       .filter(([id]) => id !== excludeId)
-      .map(([id, mib]) => ({ id, mib, isPriority: pendingPriority.has(id) }));
+      .map(([id, mib]) => ({ id, mib, isPriority: admittedPriority.has(id) }));
 
     const headroom = deps.readHeadroomMib?.(awake.map((imp) => imp.pid)) ?? Promise.resolve(0);
 
@@ -488,7 +488,7 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
     release: (id) => {
       reservations.delete(id);
       pendingHugePages.delete(id);
-      pendingPriority.delete(id);
+      admittedPriority.delete(id);
     },
 
     admitGrow: (request) =>
@@ -539,7 +539,6 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
         reservations.set(request.id, {
           mib: (usage.byImp.get(request.id) ?? 0) + request.mib,
           until: now() + RESERVATION_TTL_MS,
-          isPriority: isPriority(request.name),
           beforeGrow: before === undefined ? null : { mib: before.mib, until: before.until },
         });
 
@@ -556,7 +555,7 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
       if (reservation.beforeGrow === null) {
         reservations.delete(id);
       } else {
-        reservations.set(id, { ...reservation.beforeGrow, isPriority: reservation.isPriority });
+        reservations.set(id, reservation.beforeGrow);
       }
     },
 
