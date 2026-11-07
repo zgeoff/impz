@@ -99,7 +99,7 @@ export const MIGRATIONS: Record<string, Migration> = {
 
 // the durable package numbers its migrations apart from impd's, so they keep a table of their own:
 // in one table, impd's next migration would sort before the durable ones that already ran
-export const DURABLE_MIGRATION_TABLE = 'kysely_migration_durable';
+const DURABLE_MIGRATION_TABLE = 'kysely_migration_durable';
 
 export async function runMigrations<T>(db: Kysely<T>): Promise<void> {
   await requireKnownMigrations(db, 'kysely_migration', MIGRATIONS);

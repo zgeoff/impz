@@ -7,7 +7,6 @@ import { NameSchema } from './name-schema';
 // A reader ignores event fields it does not know.
 export const EVENT_VERSION = 1;
 
-/* @internal */
 export const ImpChangeReasonSchema = z.enum([
   'booted',
   'woke',
@@ -32,7 +31,6 @@ export const ImpChangeReasonSchema = z.enum([
 
 export type ImpChangeReason = z.infer<typeof ImpChangeReasonSchema>;
 
-/* @internal */
 export const ImpEventDetailSchema = z
   .object({
     durationMs: z.int().nonnegative().optional(),
@@ -55,7 +53,6 @@ export type ImpEventDetail = z.infer<typeof ImpEventDetailSchema>;
 // oxlint-disable-next-line id-length -- `v` is the event format's version field
 const envelope = { v: z.literal(EVENT_VERSION), at: z.date() };
 
-/* @internal */
 export const GOVERNOR_DECISION_FIELDS = {
   ev: z.literal('GovernorDecision'),
   decision: z.enum(['admitted', 'refused', 'slept']),
@@ -71,7 +68,6 @@ export const GOVERNOR_DECISION_FIELDS = {
   protectedCount: z.int().nonnegative().optional(),
 };
 
-/* @internal */
 export const AGENT_EXEC_FIELDS = {
   ev: z.literal('AgentExec'),
   name: NameSchema,
