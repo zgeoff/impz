@@ -1,0 +1,14 @@
+diff --git a/host/uffd-handler/main.go b/host/uffd-handler/main.go
+index eb700022..5ec1246e 100644
+--- a/host/uffd-handler/main.go
++++ b/host/uffd-handler/main.go
+@@ -85,6 +85,9 @@ func run(opts options, memFile *os.File, statsFile *os.File) error {
+ 	}
+ 	defer source.close()
+ 
++	// prototype: start the kernel's readahead of the whole memory file
++	go func() { _ = unix.Fadvise(int(memFile.Fd()), 0, 0, unix.FADV_WILLNEED) }()
++
+ 	stats, err := openHandlerStats(statsFile)
+ 	if err != nil {
+ 		return err

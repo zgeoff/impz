@@ -1,0 +1,79 @@
+diff --git a/host/uffd-handler/main.go b/host/uffd-handler/main.go
+index eb700022..72d00c0d 100644
+--- a/host/uffd-handler/main.go
++++ b/host/uffd-handler/main.go
+@@ -37,6 +37,13 @@ type options struct {
+ }
+ 
+ func main() {
++	if len(os.Args) == 3 && os.Args[1] == "--warm" {
++		if err := warmMemFile(os.Args[2]); err != nil {
++			fmt.Fprintf(os.Stderr, "uffd-handler: warm: %v\n", err)
++			os.Exit(1)
++		}
++		return
++	}
+ 	opts, err := parseOptions(os.Args[1:])
+ 	if err != nil {
+ 		fmt.Fprintf(os.Stderr, "uffd-handler: %v\nusage: uffd-handler --socket PATH [--uid UID --gid GID] 3<MEMORY_FILE 4<>STATS_FILE\n", err)
+diff --git a/host/uffd-handler/warm.go b/host/uffd-handler/warm.go
+new file mode 100644
+index 00000000..0bf36a72
+--- /dev/null
++++ b/host/uffd-handler/warm.go
+@@ -0,0 +1,35 @@
++package main
++
++import (
++	"fmt"
++	"os"
++)
++
++// Prototype: warmMemFile reads each 2 MiB block of the memory file that holds
++// data through a map of the file, so the page cache holds it at the next wake.
++func warmMemFile(path string) error {
++	file, err := os.Open(path)
++	if err != nil {
++		return err
++	}
++	source, err := openMemSource(file)
++	if err != nil {
++		return err
++	}
++	defer source.close()
++	data, err := source.readDataPages(workingSetBlock)
++	if err != nil {
++		return err
++	}
++	var sum byte
++	for offset := range data {
++		end := min(offset+workingSetBlock, int64(len(source.mapped)))
++		for page := offset; page < end; page += 4096 {
++			sum += source.mapped[page]
++		}
++	}
++	fmt.Fprintf(os.Stderr, "uffd-handler: warmed %d blocks (%d)\n", len(data), sum)
++	return nil
++}
++
++const workingSetBlock = 2 << 20
+diff --git a/packages/daemon/src/vm/vmm/vm-runner.ts b/packages/daemon/src/vm/vmm/vm-runner.ts
+index fc53f3ef..601a0627 100644
+--- a/packages/daemon/src/vm/vmm/vm-runner.ts
++++ b/packages/daemon/src/vm/vmm/vm-runner.ts
+@@ -417,6 +417,15 @@ export function createVmRunner(jails: Jails, options: Readonly<VmRunnerOptions>)
+       writeToDisk([target.vmstate, target.memFile, target.snapshotDir]);
+       setMark('flush');
+ 
++      // prototype: read the new memory file's data into the page cache
++      if (uffdHandlerBin !== null) {
++        const warmed = await runCommand([uffdHandlerBin, '--warm', target.memFile]);
++
++        const warmStep = warmed.exitCode === 0 ? 'warm' : 'warmFailed';
++
++        setMark(warmStep);
++      }
++
+       return timer.marks;
+     },
+     wakeVm: async (plan) => {

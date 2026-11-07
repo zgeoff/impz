@@ -1,0 +1,60 @@
+diff --git a/.github/workflows/bench.yml b/.github/workflows/bench.yml
+index 0b303f34..c98290f4 100644
+--- a/.github/workflows/bench.yml
++++ b/.github/workflows/bench.yml
+@@ -71,7 +71,7 @@ jobs:
+       SAMPLES: ${{ inputs.samples || '20' }}
+       ROUNDS: ${{ inputs.rounds || '3' }}
+       # throwaway: 1 drops each memory file from the page cache before a timed wake
+-      BENCH_EVICT: '1'
++      BENCH_EVICT: '0'
+     steps:
+       - name: Checkout
+         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+@@ -117,6 +117,22 @@ jobs:
+       - name: Install
+         run: bun install --frozen-lockfile
+ 
++      # throwaway: imps on a ZFS pool, as on the production host, whose ARC
++      # and not the page cache holds a memory file the sleep wrote
++      - name: Install ZFS
++        run: bun run --silent ci:set-up-runner install-zfs 1073741824
++
++      - name: Create the pool
++        run: |
++          sudo truncate -s 60G /mnt/imp-bench-pool.img
++          sudo zpool create -o ashift=12 -O compression=lz4 -O atime=off -O xattr=sa -O mountpoint=none benchpool /mnt/imp-bench-pool.img
++          sudo zfs create -o mountpoint=legacy benchpool/imp
++          {
++            echo IMP_STORAGE_BACKEND=zfs
++            echo IMP_ZFS_ROOT=benchpool/imp
++            echo IMP_ZFS_ALLOW_UIOMOVE_BUG=1
++          } >> "$GITHUB_ENV"
++
+       - name: Install the baseline
+         working-directory: .cache/baseline
+         run: bun install --frozen-lockfile
+@@ -140,10 +156,6 @@ jobs:
+           docker buildx build -f host/Dockerfile --target dev -t imp-host:bench-baseline --load
+           --cache-from type=gha,scope=imp-dev .
+ 
+-      - name: Measure touched pages
+-        if: env.IS_HUGE_PAGES == 'true'
+-        run: bun run --silent ci:touched-pages-bench
+-
+       - name: Compare with the baseline
+         run: >-
+           bun packages/daemon/bench/run-bench-arms.ts --out .cache/bench --rounds "$ROUNDS" --arm
+diff --git a/packages/cli/src/bench/bench-scenarios.ts b/packages/cli/src/bench/bench-scenarios.ts
+index 995c9e96..2d19078f 100644
+--- a/packages/cli/src/bench/bench-scenarios.ts
++++ b/packages/cli/src/bench/bench-scenarios.ts
+@@ -215,7 +215,7 @@ async function waitOwned(subject: BenchSubject): Promise<void> {
+ // file from the page cache before a timed wake, so the wake reads it cold. It
+ // prints each memory file's data and working set, for the RAM cost.
+ const EVICT_SCRIPT = `
+-for f in $(find $(findmnt -t xfs -n -o TARGET) -path '*/snapshot/mem' -type f); do
++for f in $(find $(findmnt -t xfs,zfs -n -o TARGET) -path '*/snapshot/mem' -type f | sort -u); do
+   if [ "$BENCH_EVICT" = 1 ]; then
+     dd if=/dev/null of="$f" oflag=nocache conv=notrunc,fdatasync count=0 status=none
+   fi

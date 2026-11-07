@@ -1,0 +1,48 @@
+diff --git a/.github/workflows/bench.yml b/.github/workflows/bench.yml
+index 0b303f34..0bfeaffc 100644
+--- a/.github/workflows/bench.yml
++++ b/.github/workflows/bench.yml
+@@ -148,7 +148,7 @@ jobs:
+         run: >-
+           bun packages/daemon/bench/run-bench-arms.ts --out .cache/bench --rounds "$ROUNDS" --arm
+           "baseline=.cache/baseline" --arm candidate=. -- "$SCENARIOS" --concurrency "$CONCURRENCY"
+-          --samples "$SAMPLES" --memory 256m
++          --samples "$SAMPLES" --memory 512m
+ 
+       # The steps below also run after a failure or a timeout, with or
+       # without a container, so none of them may fail the job.
+diff --git a/packages/cli/src/bench/bench-scenarios.ts b/packages/cli/src/bench/bench-scenarios.ts
+index 995c9e96..6e4b6587 100644
+--- a/packages/cli/src/bench/bench-scenarios.ts
++++ b/packages/cli/src/bench/bench-scenarios.ts
+@@ -58,6 +58,7 @@ export const BENCH_SCENARIOS: readonly BenchScenario[] = [
+       const isNew = await bringAwake(subject);
+ 
+       if (isNew) {
++        await startMemoryToucher(subject.name);
+         await sleepImp(subject);
+ 
+         await subject.client.imps.wake({ name: subject.name });
+@@ -196,6 +197,22 @@ async function readOwnedImp(subject: BenchSubject): Promise<Imp | null> {
+   return imp;
+ }
+ 
++// Throwaway bench harness: a guest that reads 100 MiB of its memory every
++// 200 ms, so a wake faults far more blocks than an idle guest's.
++const TOUCHER_SCRIPT =
++  'head -c 100M /dev/urandom > /dev/shm/blob && setsid nohup sh -c "while :; do cat /dev/shm/blob > /dev/null; sleep 0.2; done" > /dev/null 2>&1 &';
++
++async function startMemoryToucher(name: string): Promise<void> {
++  const started = Bun.spawn(['scripts/impz', 'exec', name, '--', 'sh', '-c', TOUCHER_SCRIPT], {
++    stdout: 'inherit',
++    stderr: 'inherit',
++  });
++
++  if ((await started.exited) !== 0) {
++    throw new Error(`the memory toucher in ${name} did not start`);
++  }
++}
++
+ async function sleepImp(subject: BenchSubject): Promise<void> {
+   await waitOwned(subject);
+ 

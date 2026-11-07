@@ -1,0 +1,95 @@
+diff --git a/.github/workflows/bench.yml b/.github/workflows/bench.yml
+index 8b0089f5..0b303f34 100644
+--- a/.github/workflows/bench.yml
++++ b/.github/workflows/bench.yml
+@@ -66,10 +66,12 @@ jobs:
+       IS_HUGE_PAGES: ${{ inputs.huge-pages || contains(github.ref_name, 'huge-pages') }}
+       IMP_HUGE_PAGES:
+         ${{ (inputs.huge-pages || contains(github.ref_name, 'huge-pages')) && '2M' || 'off' }}
+-      SCENARIOS: ${{ inputs.scenarios || 'create,wake,restore' }}
+-      CONCURRENCY: ${{ inputs.concurrency || '1,4,16,64' }}
++      SCENARIOS: ${{ inputs.scenarios || 'create,wake' }}
++      CONCURRENCY: ${{ inputs.concurrency || '1,4' }}
+       SAMPLES: ${{ inputs.samples || '20' }}
+-      ROUNDS: ${{ inputs.rounds || '2' }}
++      ROUNDS: ${{ inputs.rounds || '3' }}
++      # throwaway: 1 drops each memory file from the page cache before a timed wake
++      BENCH_EVICT: '1'
+     steps:
+       - name: Checkout
+         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+diff --git a/packages/cli/src/bench/bench-scenarios.ts b/packages/cli/src/bench/bench-scenarios.ts
+index 50106eb9..995c9e96 100644
+--- a/packages/cli/src/bench/bench-scenarios.ts
++++ b/packages/cli/src/bench/bench-scenarios.ts
+@@ -1,3 +1,4 @@
++import { appendFileSync, mkdirSync } from 'node:fs';
+ import type { Imp, ImpChangeReason } from '@impz/api';
+ import { match } from 'ts-pattern';
+ import type { ImpClient } from '../config/create-imp-client';
+@@ -63,6 +64,7 @@ export const BENCH_SCENARIOS: readonly BenchScenario[] = [
+       }
+ 
+       await sleepImp(subject);
++      await evictMemFiles();
+ 
+       return () => subject.client.imps.wake({ name: subject.name });
+     },
+@@ -209,6 +211,57 @@ async function waitOwned(subject: BenchSubject): Promise<void> {
+   }
+ }
+ 
++// Throwaway bench harness: with BENCH_EVICT=1, drop every sleeping imp's memory
++// file from the page cache before a timed wake, so the wake reads it cold. It
++// prints each memory file's data and working set, for the RAM cost.
++const EVICT_SCRIPT = `
++for f in $(find $(findmnt -t xfs -n -o TARGET) -path '*/snapshot/mem' -type f); do
++  if [ "$BENCH_EVICT" = 1 ]; then
++    dd if=/dev/null of="$f" oflag=nocache conv=notrunc,fdatasync count=0 status=none
++  fi
++  ws="$(dirname "$f")/working-set"
++  echo "bench-evict mem_kib=$(du -k "$f" | cut -f1) ws_bytes=$(stat -c %s "$ws" 2>/dev/null || echo 0)" >&2
++done
++`;
++
++async function evictMemFiles(): Promise<void> {
++  if (process.env['BENCH_EVICT'] === undefined) {
++    return;
++  }
++
++  const shell = Bun.spawn(
++    [
++      'docker',
++      'exec',
++      '-i',
++      '-e',
++      `BENCH_EVICT=${process.env['BENCH_EVICT']}`,
++      'imp-dev',
++      'sh',
++      '-s',
++    ],
++    { stdin: new TextEncoder().encode(EVICT_SCRIPT), stdout: 'inherit', stderr: 'pipe' },
++  );
++
++  const sizes = await new Response(shell.stderr).text();
++
++  await shell.exited;
++
++  mkdirSync('.cache/bench', { recursive: true });
++  appendFileSync('.cache/bench/evict.log', sizes);
++
++  if (process.env['BENCH_EVICT'] !== '1') {
++    return;
++  }
++
++  const dropped = Bun.spawn(['sudo', 'sh', '-c', 'sync && echo 1 > /proc/sys/vm/drop_caches'], {
++    stdout: 'inherit',
++    stderr: 'inherit',
++  });
++
++  await dropped.exited;
++}
++
+ const CHECKPOINT_LABEL = 'bench';
+ 
+ async function ensureBenchCheckpoint(subject: BenchSubject): Promise<string> {
