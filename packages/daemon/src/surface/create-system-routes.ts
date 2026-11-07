@@ -62,6 +62,9 @@ async function readSystemInfo(deps: RouterDeps): Promise<SystemInfo> {
     ramCommittedMib: running.reduce((sum, imp) => sum + imp.maxMemoryMib, 0),
     ramPriorityKeptMib: usage.priorityKeptMib,
     ramSleepingMib: sleeping.reduce((sum, imp) => sum + imp.memoryMib, 0),
+    ramPrioritySleepingMib: sleeping
+      .filter((imp) => deps.governor.isPriority(imp.name))
+      .reduce((sum, imp) => sum + imp.memoryMib, 0),
     awakeCount: running.length,
     impCount: imps.length,
     sessionCount: imps.reduce((sum, imp) => sum + (deps.imps.countSessions(imp) ?? 0), 0),

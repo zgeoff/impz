@@ -87,6 +87,7 @@ interface RamUsage {
 
 export interface RamGovernor extends RamAdmission {
   readonly readUsage: () => Promise<RamUsage>;
+  readonly isPriority: (name: string | null) => boolean;
   readonly admitGrow: (request: GrowRequest) => Promise<boolean>;
   readonly releaseGrow: (id: string) => void;
   readonly enforce: () => Promise<void>;
@@ -559,6 +560,8 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
         reservations.set(id, reservation.beforeGrow);
       }
     },
+
+    isPriority,
 
     readUsage: async () => {
       const usage = await readEffectiveUsage(null);

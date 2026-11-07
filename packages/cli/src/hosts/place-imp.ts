@@ -95,12 +95,16 @@ export function buildRanking(
 // a host does not report which imp names are priority, so every imp scores as a
 // non-priority imp; a priority imp still tries each ranked host in turn
 function getFreeMib(info: SystemInfo): number {
+  const prioritySleepingMib = info.ramPrioritySleepingMib ?? 0;
+
+  // a sleeping priority imp wakes into the kept RAM, so only its memory past the kept RAM
+  // leaves less free
   return (
     info.ramBudgetMib -
     info.ramUsedMib -
     info.ramReservedMib -
-    (info.ramSleepingMib ?? 0) -
-    (info.ramPriorityKeptMib ?? 0)
+    ((info.ramSleepingMib ?? 0) - prioritySleepingMib) -
+    Math.max(info.ramPriorityKeptMib ?? 0, prioritySleepingMib)
   );
 }
 
