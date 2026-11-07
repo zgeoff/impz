@@ -39,9 +39,12 @@ export interface ArmPlan {
 export async function runBenchArm(deps: BenchArmDeps, plan: Readonly<ArmPlan>): Promise<ArmRun> {
   const checkout = resolve(plan.cwd, plan.arm.checkout);
 
+  // the host image holds the page handler and the other host binaries, so an
+  // image that both arms shared would bench a host change against itself
   const devEnv = {
     IMP_KERNEL: join(checkout, '.cache', 'ci', 'vmlinux'),
     IMP_SYSTEM_DRIVE: join(checkout, '.cache', 'ci', 'imp-system.squashfs'),
+    IMP_HOST_IMAGE: `imp-host:bench-${plan.arm.name}`,
   };
 
   const layout = buildDevLayout({ env: { ...plan.env, ...devEnv }, root: checkout, cwd: plan.cwd });

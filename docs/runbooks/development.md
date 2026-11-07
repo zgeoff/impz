@@ -36,9 +36,8 @@ large one, or leave it to CI. CI splits `bun test` into two shards on two runner
 each, and runs each shard in a cgroup capped at 1792 MiB with no swap, through
 `scripts/ci/run-memory-capped.sh`, so a shard fails there before it outgrows a 2 GiB imp.
 `bun run lint:shell` needs shellcheck 0.11.0 and shfmt 3.14.1 on `PATH`, the versions CI pins; the
-shellcheck job in `.github/workflows/ci.yml` pins actionlint, zizmor and hadolint too. Run the
-end-to-end harness against a real instance when a change touches the lifecycle, the agent or the
-host.
+shellcheck job in `.github/workflows/ci.yml` pins actionlint, zizmor and hadolint too. When a change
+touches the lifecycle, the agent or the host, run the end-to-end harness against a real instance.
 
 `bun run deadcode` runs knip twice: over the whole tree, then in production mode, which leaves out
 every test file. The production run fails on an export that only a test imports. Un-export it when
@@ -48,57 +47,61 @@ because the shared lint config bans JSDoc blocks and knip reads a tag from any b
 ## End-to-end tests
 
 `scripts/test-e2e.sh` brings up the dev instance (`scripts/dev/dev.sh`), then runs each journey file
-of each suite in `packages/daemon/e2e/` as its own `bun test` process, and resets the suite's
-leftovers after each one. Every case drives impd through the `impz` CLI, the way a user would; the
-dashboard suite drives it through a browser. The suites run in this order:
+of each suite as its own `bun test` process, and resets the suite's leftovers after each one. A
+journey file is one `<kind>-<journey>.test.ts` file in `packages/daemon/e2e/`, such as
+`journey-sleep-memory.test.ts`. Every case drives impd through the `impz` CLI, the way a user would;
+the dashboard suite drives it through a browser. The suites run in this order:
 
-| Suite            | What it proves                                                                                                                                                                                                                                                                                                                 |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `lifecycle`      | new, exec (stdin, stderr, exit codes, `-t`), console, egress, stop and start                                                                                                                                                                                                                                                   |
-| `docker`         | Docker in an `images/base` imp: run, build, a published port, egress, a cold boot                                                                                                                                                                                                                                              |
-| `images`         | `impz image build`, the image's files, ENV and WORKDIR, image rm                                                                                                                                                                                                                                                               |
-| `registry`       | `impz image build` from a TLS registry on a Docker network of its own, which impd opens to builders: a moved tag builds the registry's content by digest; a multi-platform image binds the host's variant; skips unless its name resolves to that network's gateway (`10.200.0.1` at port offset 0) and sudo needs no password |
-| `checkpoints`    | checkpoint, restore (running and stopped), forks, deletion with the imp                                                                                                                                                                                                                                                        |
-| `disks`          | a disk past its image, grown while running, asleep and stopped; fsck after                                                                                                                                                                                                                                                     |
-| `sleep`          | idle sleep, wake by HTTP, API and WebSocket, memory kept, the WebSocket relay                                                                                                                                                                                                                                                  |
-| `scale`          | many imps under the RAM budget, LRU sleep, wake on request, an oversized imp refused                                                                                                                                                                                                                                           |
-| `restart`        | an impd restart re-adopts VMs; stopping the instance sleeps every imp                                                                                                                                                                                                                                                          |
-| `tailscale`      | an imp answers tailnet members, a tailnet request wakes it, a rule gives a member the API without a token                                                                                                                                                                                                                      |
-| `mcp`            | `impz mcp` over stdio: odd file paths, modes, a timeout's group kill                                                                                                                                                                                                                                                           |
-| `mcp-oauth`      | the public MCP route: a sign-in approved with `impz oauth approve`, tools by scope, a removed token stopping a command                                                                                                                                                                                                         |
-| `sessions`       | detach, attach after sleep, takeover, idle and busy sessions, kill                                                                                                                                                                                                                                                             |
-| `offsets`        | output offsets: a gap past the ring, exact after a wake, cold-boot causes, `wake: false`                                                                                                                                                                                                                                       |
-| `session-logs`   | session logs: 1 MiB kept past the ring, through a sleep and a wake to the exit, read with the imp stopped, kept through a restore, deleted                                                                                                                                                                                     |
-| `services`       | `impz service` and `impz logs`: a service the proxy reaches, logs and a follow across a sleep, restarts, a reboot, `--http-port`, remove                                                                                                                                                                                       |
-| `ssh`            | `ssh`, `scp`, `sftp`, forwards, a VS Code-style SOCKS forward, the broker env, the firewall                                                                                                                                                                                                                                    |
-| `ssh-wake`       | a login wakes a sleeping imp, a refused one does not, a connection keeps it awake                                                                                                                                                                                                                                              |
-| `ssh-agent`      | `ssh -A`: `ssh-add -l` and a signed `git push` from the imp, the socket's owner and lifetime, no key in the imp                                                                                                                                                                                                                |
-| `reverse`        | `impz proxy --reverse` and `ssh -R`: a socket and a port on this machine from the imp, refusals, sleep and wake, keep-awake                                                                                                                                                                                                    |
-| `proxy`          | `impz proxy`: both loopbacks, a guest-loopback server, a half-close, an old agent, the tunnel cap                                                                                                                                                                                                                              |
-| `proxy-wake`     | a proxy connection keeps the imp awake and wakes it; a forced sleep resets it and the next one wakes the imp                                                                                                                                                                                                                   |
-| `cp`             | `impz cp` on a non-root image: owner, modes, symlinks, a 48 MiB round trip, a symlink trap, an old agent                                                                                                                                                                                                                       |
-| `connectors`     | a secret through the broker: an API call, a git push, tunnels, an oauth secret's refresh, no secret in memory                                                                                                                                                                                                                  |
-| `dashboard`      | the web dashboard in headless Chromium: login, create, console, sleep, destroy                                                                                                                                                                                                                                                 |
-| `https`          | a wildcard certificate from Pebble, an imp at `https://<name>.<domain>`, a wake                                                                                                                                                                                                                                                |
-| `tokens`         | scoped tokens: an exec token for some imps cannot touch another, the audit log, a removed token                                                                                                                                                                                                                                |
-| `egress`         | open, public, box and none policies: an allow-list, a refused name, the source check, a cut flow, a public imp's refusals                                                                                                                                                                                                      |
-| `networks`       | two imps on a network across open and box, names, a peer DNS port, a reset on leave                                                                                                                                                                                                                                            |
-| `ipv6`           | a /128 per imp, NAT66 and a routed /64, policies over IPv6, packet-too-big, a guest's router advertisement                                                                                                                                                                                                                     |
-| `cpu`            | CPU limits: half a core holds a busy guest, again after a sleep and a wake, `impz set` at once, `impz top`, `docker exec` after the cgroup move                                                                                                                                                                                |
-| `templates`      | `impz template`: copies of a running imp's disk, a new machine-id and ssh host keys per copy, kept after a reboot, rm                                                                                                                                                                                                          |
-| `boot-templates` | a cold boot restored from a boot template: its own name, MAC, disk size and TCP ISN secret; a sleep and wake after                                                                                                                                                                                                             |
-| `inner`          | the inner container: PID 1 inside, signals, `kill -9 -1`, a memory hog, a reboot and the listeners after it, `rm -rf /`, a wiped root                                                                                                                                                                                          |
-| `socket`         | no Docker in the dev container: no `docker.sock`, no `/run/imp-docker` and no `docker` binary                                                                                                                                                                                                                                  |
-| `podman`         | the builder image that impd fetched by digest, and `impz image build` of a two-line Dockerfile whose file an imp from the image holds; the `podman` CI job runs it under Podman                                                                                                                                                |
-| `moves`          | `impz move` to a second instance on a Docker network: cold with a checkpoint, an abort, warm moves of an open and a box imp that keep tmpfs and processes and reach DNS, HTTP and the broker at once                                                                                                                           |
-| `moves-tailnet`  | `impz move` between two tailnet nodes: the real peer check on their tailnet addresses                                                                                                                                                                                                                                          |
-| `tailnet-names`  | per-imp tailnet names on the test tailnet: an imp's own name, which wakes it, and goes with it on a move; skips unless `IMP_E2E_TAILNET_NAMES=1`                                                                                                                                                                               |
-| `chaos`          | kills of impd, Firecracker and the container mid-operation; the watchdog; a full disk                                                                                                                                                                                                                                          |
-| `jail`           | the jailer: its own uid, no capabilities, seccomp, a memory cap; sleep, wake and re-adopt jailed; rollback and upgrade between jailed and unjailed                                                                                                                                                                             |
-| `memory`         | elastic memory: a guest grows under a gradual allocation, shrinks to its use, and a sleep unplugs spare memory first                                                                                                                                                                                                           |
-| `ksm`            | with KSM on the host (CI's runner only): two jailed guests merge the same pages, their Pss falls, the budget holds after they diverge; skips elsewhere                                                                                                                                                                         |
-| `backups`        | backups of running and stopped imps and checkpoints, restores, forget and prune                                                                                                                                                                                                                                                |
-| `backups-repo`   | an imp left out of backups, a stale lock, a corrupted pack, the database copy                                                                                                                                                                                                                                                  |
+| Suite            | What it proves                                                                                                                                                                                                                                |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lifecycle`      | new, exec (stdin, stderr, exit codes, `-t`), console, egress, stop and start                                                                                                                                                                  |
+| `docker`         | Docker in an `images/base` imp: run, build, a published port, egress, a cold boot                                                                                                                                                             |
+| `images`         | `impz image build`, the image's files, ENV and WORKDIR, image rm                                                                                                                                                                              |
+| `registry`       | `impz image build` from a TLS registry on a Docker network of its own, which impd lets builders reach: a tag the registry moved builds from the registry's content, fetched by digest; a multi-platform image builds from the host's platform |
+| `checkpoints`    | checkpoint, restore (running and stopped), forks, deletion with the imp                                                                                                                                                                       |
+| `disks`          | a disk past its image, grown while running, asleep and stopped; fsck after                                                                                                                                                                    |
+| `sleep`          | idle sleep, wake by HTTP, API and WebSocket, memory kept, the WebSocket relay                                                                                                                                                                 |
+| `scale`          | many imps under the RAM budget, LRU sleep, wake on request, an oversized imp refused                                                                                                                                                          |
+| `restart`        | an impd restart re-adopts VMs; stopping the instance sleeps every imp                                                                                                                                                                         |
+| `tailscale`      | an imp answers tailnet members, a tailnet request wakes it, a rule gives a member the API without a token                                                                                                                                     |
+| `mcp`            | `impz mcp` over stdio: odd file paths, modes, a timeout's group kill                                                                                                                                                                          |
+| `mcp-oauth`      | the public MCP route: a sign-in approved with `impz oauth approve`, tools by scope, a removed token stopping a command                                                                                                                        |
+| `sessions`       | detach, attach after sleep, takeover, idle and busy sessions, kill                                                                                                                                                                            |
+| `offsets`        | output offsets: a gap past the ring, exact after a wake, cold-boot causes, `wake: false`                                                                                                                                                      |
+| `session-logs`   | session logs: 1 MiB kept past the ring, through a sleep and a wake to the exit, read with the imp stopped, kept through a restore, deleted                                                                                                    |
+| `services`       | `impz service` and `impz logs`: a service the proxy reaches, logs and a follow across a sleep, restarts, a reboot, `--http-port`, remove                                                                                                      |
+| `ssh`            | `ssh`, `scp`, `sftp`, forwards, a VS Code-style SOCKS forward, the broker env, the firewall                                                                                                                                                   |
+| `ssh-wake`       | a login wakes a sleeping imp, a refused one does not, a connection keeps it awake                                                                                                                                                             |
+| `ssh-agent`      | `ssh -A`: `ssh-add -l` and a signed `git push` from the imp, the socket's owner and lifetime, no key in the imp                                                                                                                               |
+| `reverse`        | `impz proxy --reverse` and `ssh -R`: a socket and a port on this machine from the imp, refusals, sleep and wake, keep-awake                                                                                                                   |
+| `proxy`          | `impz proxy`: both loopbacks, a guest-loopback server, a half-close, an old agent, the tunnel cap                                                                                                                                             |
+| `proxy-wake`     | a proxy connection keeps the imp awake and wakes it; a forced sleep resets it and the next one wakes the imp                                                                                                                                  |
+| `cp`             | `impz cp` on a non-root image: owner, modes, symlinks, a 48 MiB round trip, a symlink trap, an old agent                                                                                                                                      |
+| `connectors`     | a secret through the broker: an API call, a git push, tunnels, an oauth secret's refresh, no secret in memory                                                                                                                                 |
+| `dashboard`      | the web dashboard in headless Chromium: login, create, console, sleep, destroy                                                                                                                                                                |
+| `https`          | a wildcard certificate from Pebble, an imp at `https://<name>.<domain>`, a wake                                                                                                                                                               |
+| `tokens`         | scoped tokens: an exec token for some imps cannot touch another, the audit log, a removed token                                                                                                                                               |
+| `egress`         | open, public, box and none policies: an allow-list, a refused name, the source check, a cut flow, a public imp's refusals                                                                                                                     |
+| `networks`       | two imps on a network across open and box, names, a peer DNS port, a reset on leave                                                                                                                                                           |
+| `ipv6`           | a /128 per imp, NAT66 and a routed /64, policies over IPv6, packet-too-big, a guest's router advertisement                                                                                                                                    |
+| `cpu`            | CPU limits: half a core holds a busy guest, again after a sleep and a wake, `impz set` at once, `impz top`, `docker exec` after the cgroup move                                                                                               |
+| `templates`      | `impz template`: copies of a running imp's disk, a new machine-id and ssh host keys per copy, kept after a reboot, rm                                                                                                                         |
+| `boot-templates` | a cold boot restored from a boot template: its own name, MAC, disk size and TCP ISN secret; a sleep and wake after                                                                                                                            |
+| `inner`          | the inner container: PID 1 inside, signals, `kill -9 -1`, a memory hog, a reboot and the listeners after it, `rm -rf /`, a wiped root                                                                                                         |
+| `socket`         | no Docker in the dev container: no `docker.sock`, no `/run/imp-docker` and no `docker` binary                                                                                                                                                 |
+| `podman`         | the builder image that impd fetched by digest, and `impz image build` of a two-line Dockerfile, with an imp from the built image that holds the file the build wrote; the `podman` CI job runs it under Podman                                |
+| `moves`          | `impz move` to a second instance on a Docker network: cold with a checkpoint, an abort, warm moves of an open and a box imp that keep tmpfs and processes and reach DNS, HTTP and the broker at once                                          |
+| `moves-tailnet`  | `impz move` between two tailnet nodes: the real peer check on their tailnet addresses                                                                                                                                                         |
+| `tailnet-names`  | per-imp tailnet names on the test tailnet: an imp's own name, which wakes it, and goes with it on a move; skips unless `IMP_E2E_TAILNET_NAMES=1`                                                                                              |
+| `chaos`          | kills of impd, Firecracker and the container mid-operation; the watchdog; a full disk                                                                                                                                                         |
+| `jail`           | the jailer: its own uid, no capabilities, seccomp, a memory cap; sleep, wake and re-adopt jailed; rollback and upgrade between jailed and unjailed                                                                                            |
+| `memory`         | elastic memory: a guest grows under a gradual allocation, shrinks to its use, and a sleep unplugs spare memory first                                                                                                                          |
+| `ksm`            | with KSM on the host (CI's runner only): two jailed guests merge the same pages, their Pss falls, the budget holds after they diverge; skips elsewhere                                                                                        |
+| `backups`        | backups of running and stopped imps and checkpoints, restores, forget and prune                                                                                                                                                               |
+| `backups-repo`   | an imp left out of backups, a stale lock, a corrupted pack, the database copy                                                                                                                                                                 |
+
+The `registry` suite skips unless the registry's name resolves to that network's gateway
+(`10.200.0.1` at port offset 0) and sudo needs no password.
 
 ```sh
 scripts/test-e2e.sh                          # the acceptance set: every suite
@@ -116,20 +119,19 @@ scripts/test-e2e.sh --clean                  # wipe the dev instance's data firs
 | `--reuse` | Keeps a running dev instance instead of restarting it with the run's settings. A run with a Headscale suite restarts it anyway, onto the run's new tailnet. |
 | `--keep`  | Leaves the run's imps and fixture images in place for a look afterwards.                                                                                    |
 
-The `acceptance` set is the definition of done: the timing limits fail the run, where any other set
-only warns about a missed limit. The harness starts Pebble for the https suite, which needs no
-domain and reboots the instance with HTTPS on, then off again
+The `acceptance` set is the definition of done: a missed timing limit, such as `E2E_MAX_NEW_MS`
+(below), fails the run, where any other set only warns. For the https suite, the harness starts
+Pebble, so the suite needs no domain. The suite reboots the instance with HTTPS on, then off again
 ([HTTPS](../guides/https.md#testing-with-pebble)). The `fast` set takes about 4.5 minutes, most of
 it idle timeouts in the sleep suite and the jail suite's two reboots. The full set adds the suites
-outside `FAST_GROUPS`; at its defaults the scale suite alone took about 75 seconds in the last
-acceptance run.
+outside `FAST_GROUPS`; at its defaults the scale suite alone takes about 75 seconds.
 
 The moves suites start a second instance, `<IMP_DEV_NAME>-mv-b`, with its data in
-`<IMP_DEV_DATA>-mv-b`, and reboot the run's instance onto a network of their own and back. Each
-instance gets a 2 GiB RAM budget there, so a run stays inside one ordinary run's memory. On ZFS the
-second instance runs on the root dataset `<IMP_ZFS_ROOT>-mv-b`, so two impds never share one
-dataset; `scripts/zfs-host-test.sh` makes it, and a manual run makes it the same way
-(`zfs create -o mountpoint=legacy`).
+`<IMP_DEV_DATA>-mv-b`, and reboot the run's instance onto a network of their own and back. In the
+moves suites, each of the two instances gets a 2 GiB RAM budget, so together they fit in the memory
+that one instance of another run uses. On ZFS the second instance runs on the root dataset
+`<IMP_ZFS_ROOT>-mv-b`, so two impds never share one dataset; `scripts/zfs-host-test.sh` makes it,
+and a manual run makes it the same way (`zfs create -o mountpoint=legacy`).
 
 The tailscale, egress and moves-tailnet suites need no secret: the harness starts a Headscale
 tailnet of the run's own, and removes it at the end ([the e2e tailnet](./e2e-tailnet.md)). The
@@ -168,22 +170,30 @@ The scale suite needs the budget plus 2 GiB of free host memory, and free disk o
 for a memory snapshot of each imp (count × memory). It restarts the instance with a 600 s idle
 timeout, so the RAM governor, not idleness, decides which imps sleep; the suites after it keep that
 timeout. On a smaller machine, lower the budget and the count, for example
-`E2E_RAM_BUDGET_MIB=2560 E2E_SCALE_COUNT=12`. The count must pass the number of imps that fit, or
+`E2E_RAM_BUDGET_MIB=2560 E2E_SCALE_COUNT=12`. The count must exceed the number of imps that fit, or
 the governor sleeps none and the suite fails at once: an imp restored from a warm boot template owns
 about 280 MiB at the default sizes, so 9 fit in 2560 MiB, and a cold-booted one about 320 MiB.
 
-The scale suite holds what the Firecrackers own (`Pss_Anon` + `Pss_Shmem`, read from `smaps_rollup`
-without impd) to the budget, and reports their full PSS, which also has clean file pages the
-governor does not count
+The scale suite checks the memory that the Firecracker processes own against the budget. It reads
+that figure, `Pss_Anon` + `Pss_Shmem`, from `smaps_rollup` without impd, and reports their full PSS,
+which also has clean file pages the governor does not count
 ([what the governor measures](../architecture/lifecycle/ram-governor.md#what-it-measures)). A guest
-grows past its boot reserve after admission, so use may pass the budget until a governor sleep ends.
+grows past its boot reserve after admission, so memory use can exceed the budget until a governor
+sleep ends.
 
-The scale suite follows every imp's sleep in the event stream (`ImpChanged slept`, which started
-`detail.durationMs` plus `detail.prepareMs` before its time). Use may fall back under the budget for
-any reason. It fails when impd's figure or the owned figure goes over by more than a guest can grow
-past its reserve, or stays over for one enforce period plus one sample with no enforce sleep
-(`detail.trigger` `RAM over budget`) started by then, or is still over after that sleep ends, or
-when the sleep takes more than 30 s.
+An enforce sleep is a sleep that the governor starts because RAM is over the budget: its
+`ImpChanged slept` event has `detail.trigger` `RAM over budget`. The governor checks the budget
+every 5 s, and the suite samples impd's figure and the owned figure every 500 ms. From each sleep's
+event, the suite works out when the sleep started: `detail.durationMs` plus `detail.prepareMs`
+before the event's time. Memory use can drop under the budget for any reason. The suite fails when
+either figure:
+
+- goes over the budget by more than one imp's memory less its boot reserve
+  (`IMP_BOOT_RESERVE_PERCENT`), which is how far a guest can grow after admission;
+- stays over the budget for 5.5 s, with no enforce sleep started by then;
+- is still over the budget after that enforce sleep ends.
+
+The suite also fails when an enforce sleep takes more than 30 s.
 
 The connectors suite runs a fake github.com on this machine, which the dev container reaches on its
 default gateway. A dev instance reads `<IMP_DEV_DATA>/broker-test-upstreams.json` when it exists
@@ -212,16 +222,17 @@ wake passes `--limit-ms` (default 500):
 scripts/dev/bench-wake.sh --cycles 3       # IMP_URL and IMP_TOKEN, or the saved login
 ```
 
-The script names its imps `bench-wake-<run>-1-<n>`, where `<run>` is the run's ID and `<n>` counts
-from 0. A token limited to them needs the `manage` scope and the pattern `bench-wake-*`:
+The script names its imps `bench-wake-<run>-1-<n>`, where `<run>` is the run's ID, `1` is the
+concurrency, and `<n>` counts from 0. A token limited to them needs the `manage` scope and the
+pattern `bench-wake-*`:
 
 ```sh
 impz token new wake-bench --scope manage --imps 'bench-wake-*'
 ```
 
-On the WSL2 dev box (host kernel 6.6.87), the median wake was 793 ms with impd's wait off
-(`IMP_SLEEP_MIN_GUEST_UPTIME_MS=0`) and 142 ms with the default. On a host kernel with the fix, both
-should be fast; the report holds the host's kernel.
+A sleep first waits until the guest has been up for `IMP_SLEEP_MIN_GUEST_UPTIME_MS`. On a WSL2 host
+with Linux 6.6.87, the median wake took 793 ms with that wait off (`0`), and 142 ms with the
+default. On Linux 6.7 or later, both are fast. The report holds the host's kernel.
 
 ## Worktrees
 
@@ -237,12 +248,13 @@ stays behind. `scripts/dev/dev.sh prune` removes the images whose checkout direc
 that no container uses, and the untagged images that rebuilds leave. It finds them by two labels:
 the checkout's path (`imp.worktree`) and the machine's `/etc/machine-id` (`imp.machine`), because
 Docker Desktop shares one daemon across WSL distros and devcontainers. Without a machine id, a build
-gets no `imp.machine` label, so no prune ever removes it, and prune itself stops with an error. It
-removes only the checkout's own tag, keeps every live checkout's image, and never touches an image
-without the labels. An image built under an `IMP_HOST_IMAGE` override keeps that tag, so prune
-leaves it; remove it by hand, as you would an `imp-host:<worktree>-dev` tag from the old workaround.
-An `imp-host:dev` image from before the per-checkout tags has no label, so remove it by hand too:
-`docker image rm imp-host:dev`.
+gets no `imp.machine` label, so prune never removes it, and prune itself stops with an error. For
+each checkout that is gone, prune removes only that checkout's own tag, keeps every live checkout's
+image, and never touches an image without the labels.
+
+An image built under an `IMP_HOST_IMAGE` override keeps that tag, and an image that `dev.sh` did not
+build, such as CI's `imp-host:dev`, carries no labels, so prune leaves both. Remove such an image by
+hand, with `docker image rm <tag>`.
 
 ## Daemon tests
 
@@ -251,8 +263,9 @@ through the same startup as production, over an in-memory database and a stub VM
 (`src/test-utils/vm/build-stub-vmm.ts`). A test scripts what the next boot, wake, sleep, stop or
 agent check does (succeed, fail, die or hang), holds a step until it releases it, and restarts impd
 over the same database and VMs. Another package's tests import the harness from
-`@impz/daemon/test-utils`. `readBrokenInvariants` reads the raw records, because a read through the
-service repairs what it finds.
+`@impz/daemon/test-utils`. To check that impd left no dead VM or lost snapshot on its records, a
+test calls `readBrokenInvariants`. It reads the records raw, because a read through the service
+repairs what it finds.
 
 After you add a migration, run `bun run render:db-schema`: kysely-codegen writes the daemon's typed
 schema from a freshly migrated database, and `bun test` fails while the committed file differs.
@@ -269,8 +282,10 @@ After you change the page handler's stats file layout, `host/uffd-handler/stats-
 `bun run gen:uffd-stats`. It writes the handler's field numbers to
 `host/uffd-handler/stats_layout.go` and impd's byte offsets to
 `packages/daemon/src/vm/vmm/uffd-stats-layout.ts`, and `bun test` fails while either committed file
-differs. Then update `host/uffd-handler/testdata/stats.golden`, which the Go tests and impd's tests
-both check.
+differs. Then rewrite `host/uffd-handler/testdata/stats.golden`, which no command writes. It holds
+the bytes that `TestHandlerStatsWriteTheLayoutImpdReads` writes, and the Go tests and impd's tests
+both compare against it. Make the bytes from that test's counts with the new layout, for example
+with `xxd -r -p`, then run both tests. Expect: both pass.
 
 The property tests use fast-check. On a failure it prints the seed and the path of the shrunk case.
 Pass both to `fc.assert` as `{ seed, path, endOnFailure: true }` to replay the case.
@@ -288,45 +303,58 @@ Lefthook installs the hooks with `bun install`.
   files), then runs gitleaks on them. gitleaks and shfmt must be on `PATH`.
 - **commit-msg** runs commitlint: conventional commits, lowercase, a header of 72 characters or
   fewer.
-- **pre-push** runs one job at a time: `lint:docs`, `lint:images`, `lint:workflows`, shellcheck, and
-  shellcheck over the shell that production code holds as text, then the shared baseline in
-  `.lefthook/pre-push-baseline.yml`, which repo-sync delivers from zgeoff/tools. The baseline checks
-  the format and the types of the whole tree, and lints and tests only the files the branch changes
-  since its merge base with `origin/main`. A dashboard file's tests run from its package. CI's
-  `checks` job runs type-aware lint, deadcode and every test. On a branch that changes the agent's,
-  ksm-exec's, oci-fetch's or uffd-handler's Go, pre-push also runs `gofmt` on the changed files and
-  `go vet -p 1`, which keeps vet's memory within what a 2 GB imp can spare; the Go lint,
-  vulnerability and dead-code gates run in CI only. On a branch that changes `build-formula.sh`,
-  pre-push also runs `lint:formula`, which needs ruby on `PATH`.
+- **pre-push** runs one job at a time:
+  - `lint:docs`, `lint:images`, `lint:workflows`, shellcheck, and shellcheck over the shell that
+    production code holds as text;
+  - the shared baseline in `.lefthook/pre-push-baseline.yml`, which repo-sync delivers from
+    zgeoff/tools. It checks the format and the types of the whole tree, and lints and tests only the
+    files the branch changes since its merge base with `origin/main`. A dashboard file's tests run
+    from its package;
+  - on a branch that changes the agent's, ksm-exec's, oci-fetch's or uffd-handler's Go, `gofmt` on
+    the changed files and `go vet -p 1`, which keeps vet's memory within what a 2 GB imp can spare;
+  - on a branch that changes `build-formula.sh`, `lint:formula`, which needs ruby on `PATH`.
+
+  CI's `checks` job runs type-aware lint, deadcode and every test, and the Go lint, vulnerability
+  and dead-code gates run in CI only.
 
 ## CI
 
 `.github/workflows/ci.yml` runs these jobs on every push to `main` and every pull request:
 
-| Job          | Required | What it runs                                                                                                                                                                                                                                                     |
-| ------------ | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `gitleaks`   | yes      | A secret scan over the history.                                                                                                                                                                                                                                  |
-| `checks`     | yes      | Passes only when the `checks-unit` and `checks-lanes` jobs passed: `bun test` in two shards of two workers, capped at 1792 MiB with no swap, and `bun run audit`, the Bun pin check, `bun run check:static`, the lane tests and the dashboard's tests and build. |
-| `go`         | yes      | In `agent/`, `host/ksm-exec`, `host/oci-fetch` and `host/uffd-handler`: `gofmt`, `go vet`, golangci-lint, govulncheck, deadcode, the tests; the agent's again as root with the `root` tag. Also `gofmt`, vet and lint on the Dockerfile difftest module.         |
-| `shellcheck` | yes      | `bun run lint:shell`, actionlint, the shared workflow lint and zizmor over `.github/`, hadolint over both Dockerfiles, and the tests that shellcheck the shell production code holds as text.                                                                    |
-| `cli`        | yes      | Compiles the CLI for every platform and runs the linux-x64 one; builds the release image's compile stage.                                                                                                                                                        |
-| `client`     | yes      | Packs `@impz/client`, installs it on the oldest Node it supports, and smokes it under Node, Bun and a compiled Bun binary.                                                                                                                                       |
-| `e2e`        | yes      | Passes only when every `e2e-group` job passed, or when all skipped on a pull request outside their paths: the `fast` end-to-end set on real microVMs, in four groups on four runners (below).                                                                    |
-| `zfs`        | yes      | Passes only when every `zfs-shard` job passed, or when all skipped on a pull request outside their paths: real imps on a ZFS pool in three shards, and `scripts/test-zfs.sh` in one (below).                                                                     |
-| `podman`     | no       | `scripts/run-podman-proof.sh`: the proof that an imp host runs with no Docker engine (below).                                                                                                                                                                    |
+| Job          | Required | What it runs                                                                                                                                                                                                                                                              |
+| ------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `gitleaks`   | yes      | A secret scan over the history.                                                                                                                                                                                                                                           |
+| `checks`     | yes      | Passes only when the `checks-unit` and `checks-lanes` jobs passed (below the table).                                                                                                                                                                                      |
+| `go`         | yes      | In `agent/`, `host/ksm-exec`, `host/oci-fetch` and `host/uffd-handler`: `gofmt`, `go vet`, golangci-lint, govulncheck, deadcode, the tests; the agent's again as root with the `root` tag. Also `gofmt`, vet and lint on the Go module in `scripts/dockerfile-difftest/`. |
+| `shellcheck` | yes      | `bun run lint:shell`, actionlint, the shared workflow lint and zizmor over `.github/`, hadolint over both Dockerfiles, and the tests that shellcheck the shell production code holds as text.                                                                             |
+| `cli`        | yes      | Compiles the CLI for every platform and runs the linux-x64 one; builds the release image's compile stage.                                                                                                                                                                 |
+| `client`     | yes      | Packs `@impz/client`, installs it on the oldest Node it supports, and smokes it under Node, Bun and a compiled Bun binary.                                                                                                                                                |
+| `e2e`        | yes      | Passes only when every `e2e-group` job passed, or when all skipped on a pull request outside their paths: the `fast` end-to-end set on real microVMs, in four groups on four runners (below).                                                                             |
+| `zfs`        | yes      | Passes only when every `zfs-shard` job passed, or when all skipped on a pull request outside their paths: real imps on a ZFS pool in three shards, and `scripts/test-zfs.sh` in one (below).                                                                              |
+| `podman`     | no       | `scripts/run-podman-proof.sh`: the proof that an imp host runs with no Docker engine (below).                                                                                                                                                                             |
 
-The `checks` job also runs the docs-writing skill's scripts. `bun run lint:docs` runs
-`check-links.sh`, which fails on a broken relative link or anchor in a README or a page under
-`docs/`. It then runs `scripts/ci/check-doc-citations.ts`, which fails on a `docs/` path or anchor
-cited outside Markdown that does not resolve, such as a code comment that names a page a docs
-rewrite moved. `check-length.sh` reports README and docs/ lengths and runs `check-prose.sh`, without
-failing the job.
+The `checks-unit` job runs `bun test` in two shards of two workers, each capped at 1792 MiB with no
+swap. The `checks-lanes` job runs:
+
+- `bun run audit`;
+- `scripts/ci/check-bun-pin.sh`, which checks for one Bun version across the repo and the host
+  image;
+- `bun run check:static`;
+- the `test:<lane>` scripts;
+- the dashboard's tests and build.
+
+Through `bun run check:static`, the `checks-lanes` job also runs the doc check scripts in
+`.claude/skills/docs-writing/scripts/`. `bun run lint:docs` runs `check-links.sh`, which fails on a
+broken relative link or anchor in a README or a page under `docs/`. It then runs
+`scripts/ci/check-doc-citations.ts`, which fails on a `docs/` path or anchor cited outside Markdown
+that does not resolve, such as a code comment that names a page a docs rewrite moved.
+`check-length.sh` reports README and docs/ lengths and runs `check-prose.sh`, without failing the
+job.
 
 `bun run audit` ignores one advisory by its ID. GHSA-86w9-cpqp-85rv is a flaw in node-forge's RSA
-signature verification, and no fixed node-forge exists (all versions up to 1.4.0). acme-client loads
-node-forge, but impd uses only `acme.crypto`, which runs on Node's own crypto and never calls
-node-forge to verify a signature. Drop the ignore when a fixed node-forge or an acme-client without
-it ships.
+signature verification, and the locked node-forge has it. acme-client loads node-forge, but impd
+uses only `acme.crypto`, which runs on Node's own crypto and never calls node-forge to verify a
+signature. Keep the ignore only while acme-client loads a node-forge with the flaw.
 
 `package.json` pins `source-map-js` to 1.2.2 through `overrides`, so every copy in the tree resolves
 to it. Version 1.2.2 fixes GHSA-68fv-2mgg-jv7q, which reaches the dashboard through vite and
@@ -348,7 +376,7 @@ The `host-image` job builds the groups' inputs once per run, with the composite 
    Actions cache (scope `system-files`): the kernel rebuilds only when `kernel/build.sh`,
    `kernel/version` or the kernel config files change, or after GitHub evicts the cache (7 days
    unused, or the repo's 10 GB quota). A cold kernel build takes about 10 minutes, so the job's
-   timeout is 25.
+   timeout is 25 minutes.
 2. the dev host image as `imp-host:dev`, with a cache of its own (scope `imp-dev`).
 
 Only the `host-image` run on `main` writes these caches; pull requests only read them. The job
@@ -360,10 +388,11 @@ instead of building it again.
 Each group boots real Firecracker guests on a standard `ubuntu-24.04` runner (4 cores, 16 GB), which
 exposes `/dev/kvm`. `scripts/ci/check-kvm.sh` runs first, so a runner without KVM fails in seconds
 with the reason. The job then runs `scripts/test-e2e.sh --group N` with `E2E_RAM_BUDGET_MIB=4096`,
-`IMP_DEFAULT_MEMORY_MIB=1024` and the XFS file on the runner's `/mnt` disk. No workflow holds a
-Tailscale secret: group 4's tailnet suites join the Headscale tailnet that the harness starts, and a
-missed timing limit only warns. The host networking tests run in group 2 only (`HOST_TESTS_GROUP`).
-The dashboard suite installs the Chromium headless shell that the locked Playwright pins.
+`IMP_DEFAULT_MEMORY_MIB=1024` and its data dir in an XFS image file on the runner's `/mnt` disk. No
+workflow holds a Tailscale secret: group 4's tailnet suites join the Headscale tailnet that the
+harness starts, and a missed timing limit only warns. The host networking tests run in group 2 only
+(`HOST_TESTS_GROUP`). The dashboard suite installs the Chromium headless shell that the locked
+Playwright pins.
 
 The ZFS suites run in three `zfs-shard` jobs, each on its own runner, and the `zfs` job is the
 required check over them, as `e2e` is over the groups. Each shard loads the same inputs, caps the
@@ -378,23 +407,28 @@ After a pass, a failure or a timeout, each group saves an `e2e-results-N` artifa
 suite's Playwright traces and screenshots. A failed suite also prints the last 40 lines of impd's
 log inline. Download one with `gh run download <run-id> -n e2e-results-1`.
 
-The `e2e` job is a required check, and the release job merges a release PR only after it passes. It
-became one after it passed on every push to `main` from its first run (#2).
+The job runs on GitHub-hosted runners, which have KVM. A self-hosted runner for it must be ephemeral
+and dedicated, run the job only on push to `main`, never on pull requests, and never be a host that
+serves imps. The repo is public, so a pull request from a fork would get a privileged container with
+`/dev/kvm` on that runner.
 
-If GitHub-hosted runners lose KVM, move the job to an ephemeral, dedicated self-hosted runner and
-run it only on push to `main`, never on pull requests. Never use the deploy box. The repo is public,
-so a pull request from a fork would get a privileged container with `/dev/kvm` on that runner.
+### Other workflows
 
 Each job sets its own concurrency group, so a new push to a pull request or to `main` cancels the
-checks of the older run. The `release` and `start-release` jobs never cancel.
+checks of the older run. The `release` and `start-release` jobs, which cut a release on a push to
+`main` ([releasing](./releasing.md)), never cancel.
 
 `.github/workflows/bootstrap.yml` runs `scripts/test-bootstrap.sh --stub --zfs` when a pull request
 or a push to `main` changes `deploy/` or the test
 ([Bootstrap a server](../guides/install.md#test-it)). Its job is a required check.
 
-`deploy/bootstrap.sh` is generated, so that a server downloads one file to install. Its sources are
-the parts in `deploy/bootstrap/`, the functions in `deploy/lib/host-env.sh` that `deploy/upgrade.sh`
-and the NixOS module source as well, and the units and env template it installs.
+`deploy/bootstrap.sh` is generated, so that a server downloads one file to install. Its sources are:
+
+- the parts in `deploy/bootstrap/`;
+- the functions in `deploy/lib/host-env.sh`, which `deploy/upgrade.sh` and the NixOS module also
+  load with `source`;
+- the units and the env template that the bootstrap installs.
+
 `deploy/imp-host.args.json` holds the `podman run` arguments of imp-host, with the name and bridge
 of the IPv6 network and the pipeline that reads the host's addresses. After an edit to any of these,
 `bun run render:deploy` writes the unit, the network lines of `deploy/lib/host-env.sh` and
@@ -419,7 +453,7 @@ match, the work jobs skip, and GitHub reports a job skipped by its condition as 
 
 `.github/workflows/e2e-images.yml` runs the images suite, which sits outside `FAST_GROUPS`, on a KVM
 runner with the e2e groups' sizes and caches. It runs each day on `main`, and on a pull request that
-changes the image code its path list names. Its job is no required check. Run it on a branch by
+changes the image code its path list names. Its job is not a required check. Run it on a branch by
 hand, then download its `e2e-images-results` artifact:
 
 ```bash
@@ -433,37 +467,43 @@ hand: `gh workflow run reproducible.yml`.
 ### The bench job
 
 `.github/workflows/bench.yml` runs [`impz bench`](../guides/bench.md) on a KVM runner with the e2e
-groups' caches. It is no required check, and no pull request runs it, because a compare outlasts the
-release job's wait on a pull request's checks. It compares a baseline with its own ref. On a push to
-a `bench/**` branch, the baseline is the parent of the branch's head, and on a dispatch, it is the
-dispatch's `baseline` input (default `main`):
+groups' caches. It is not a required check, and no pull request runs it. A workflow that runs on
+pull requests also runs on each release PR, the release job merges a release PR only once every
+check on it passes, and a comparison takes longer than that wait. It compares a baseline with its
+own ref. On a push to a `bench/**` branch, the baseline is the parent of the branch's head, and on a
+dispatch, it is the dispatch's `baseline` input (default `main`):
 
-1. The job checks out the baseline beside the ref, and builds each one's kernel and system drive, so
-   each side boots its own guest agent.
-2. `packages/daemon/bench/run-bench-arms.ts` brings up a dev instance from each checkout in turn,
-   over one data dir. Each side first creates 3 imps that the bench does not time, so its boot
-   template is ready before the timed run starts.
+1. The job checks out the baseline beside the ref, and builds each side's kernel, system drive and
+   host image, so each side boots its own guest agent and runs its own host binaries, such as the
+   page handler.
+2. `packages/daemon/bench/run-bench-arms.ts` brings up a dev instance from each side's checkout in
+   turn, over one data dir, on the host image `imp-host:bench-baseline` or
+   `imp-host:bench-candidate`. Each side's bench removes its imps when it ends. Each side first
+   creates 3 imps that the bench does not time, so its boot template is ready before the timed run
+   starts.
 3. Each side runs once per round, in turn, so a slow stretch of the runner falls on both. The job
-   summary holds a table of each side's lower median p50, p95 and p99 over its rounds, and the
-   change against the baseline. The `bench-results` artifact holds each run's JSON report and impd's
-   log.
+   summary holds a table of each side's p50, p95 and p99, and the change against the baseline. Each
+   cell is the median over the side's rounds, the lower of the two middle rounds when the count is
+   even, so it is a figure that one round measured. The `bench-results` artifact holds each run's
+   JSON report and impd's log.
 
-To compare a change, commit it as one commit on the code it changes, push it to a branch under
-`bench/`, then delete the branch once you have the table. An empty commit
-(`git commit --allow-empty`) compares a ref with itself, which shows the runner's noise:
+To compare a change, with `<change>` as a short name for it:
 
-```bash
-git push origin HEAD:bench/<change>
-gh run list --workflow bench.yml --branch bench/<change>
-git push origin --delete bench/<change>
-```
+1. Commit the change as one commit on the code it changes. An empty commit
+   (`git commit --allow-empty`) compares a ref with itself, which shows the runner's noise.
+2. Push it to a branch under `bench/`: `git push origin HEAD:bench/<change>`.
+3. Find the run with `gh run list --workflow bench.yml --branch bench/<change>`, and wait for it to
+   end. Expect: the job summary holds the table.
+4. Delete the branch: `git push origin --delete bench/<change>`.
 
 A `bench/**` branch whose name holds `huge-pages` reserves a 2 MiB pool and runs impd with
-`IMP_HUGE_PAGES=2M`. It also runs `packages/daemon/bench/measure-touched-pages.ts` first, which
-writes into a guest's memory, puts it to sleep, wakes it, reads the same memory back and puts it to
-sleep again. It prints the pool pages the guest held at each sleep, which a 2 MiB sleep's diff
-writes in full, beside the 4 KiB pages whose bytes changed, which a dirty-page diff writes
-([huge pages](../architecture/lifecycle/huge-pages.md#sleep)).
+`IMP_HUGE_PAGES=2M`. Such a branch first runs `packages/daemon/bench/measure-touched-pages.ts`,
+which writes into a guest's memory, puts it to sleep, wakes it, reads the same memory back and puts
+it to sleep again. At each sleep, the script prints two counts
+([huge pages](../architecture/lifecycle/huge-pages.md#sleep)):
+
+- the pool pages the guest held, which a 2 MiB sleep's diff writes in full;
+- the 4 KiB pages whose bytes changed, which a dirty-page diff writes.
 
 ### The podman job
 
@@ -487,7 +527,7 @@ that does not hold, with the reason, and at the end prints every check it made:
 
 The script masks Docker for good, so it refuses to run unless `CI=true`. The job uploads an
 `e2e-results-podman` artifact with impd's log under Docker (`impd-docker.log`) and under Podman
-(`impd.log`). It is no required check, and the `e2e` job does not wait for it.
+(`impd.log`). It is not a required check, and the `e2e` job does not wait for it.
 
 ## Branch rules
 

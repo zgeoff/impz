@@ -59,7 +59,9 @@ jobs:
       IMP_KERNEL: .cache/ci/vmlinux
       IMP_SYSTEM_DRIVE: .cache/ci/imp-system.squashfs
       IMP_STORAGE_GIB: 60
-      IMP_HOST_IMAGE: imp-host:dev
+      # the candidate's host image; the arms script names each arm's image
+      # imp-host:bench-<arm>, so the baseline runs its own page handler
+      IMP_HOST_IMAGE: imp-host:bench-candidate
       IMP_HOST_IMAGE_READY: 1
       IS_HUGE_PAGES: ${{ inputs.huge-pages || contains(github.ref_name, 'huge-pages') }}
       IMP_HUGE_PAGES:
@@ -129,6 +131,12 @@ jobs:
         run: >-
           docker buildx build -f host/Dockerfile --target system-files --platform linux/amd64
           --output type=local,dest=.cache/ci --cache-from type=gha,scope=system-files .
+
+      - name: Build the baseline's host image
+        working-directory: .cache/baseline
+        run: >-
+          docker buildx build -f host/Dockerfile --target dev -t imp-host:bench-baseline --load
+          --cache-from type=gha,scope=imp-dev .
 
       - name: Measure touched pages
         if: env.IS_HUGE_PAGES == 'true'
