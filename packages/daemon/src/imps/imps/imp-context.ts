@@ -9,6 +9,7 @@ import type { ImpRecord } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import type { EventBus } from '../../platform/events/event-bus';
 import type { HostLoad } from '../../platform/process/read-host-load';
+import { runCommand } from '../../platform/process/run-command';
 import type { openTapStream } from '../../vm/agent-client/exec-stream';
 import type { RamAdmission } from '../../vm/imps-contract/ram-admission';
 import { NO_MEMORY_LIMIT } from '../../vm/memory/memory-limit';
@@ -27,6 +28,8 @@ import { createBootTemplates } from '../../vm/templates/boot-templates';
 import type { BootTemplates } from '../../vm/templates/boot-templates';
 import { createMemoryLock } from '../../vm/templates/create-memory-lock';
 import type { CpuCgroups } from '../../vm/vmm/cpu-cgroups';
+import { createMemoryWarm } from '../../vm/vmm/create-memory-warm';
+import type { MemoryWarm } from '../../vm/vmm/create-memory-warm';
 import type { JailUser } from '../../vm/vmm/jail';
 import type { VmRunner } from '../../vm/vmm/vm-runner';
 import { readCpuTicks } from '../../vm/vmm/vm-stats';
@@ -183,6 +186,9 @@ export interface ImpMemory {
   readonly pluggedSizes: PluggedSizes;
 
   readonly resources: ResourceSampler;
+
+  // reads a memory file into the page cache after a sleep on 2 MiB pages
+  readonly memoryWarm: MemoryWarm | null;
 }
 
 export interface ImpGuest {
@@ -274,6 +280,14 @@ export function createImpContext(deps: ImpServiceDeps): ImpContext {
       readMemory: deps.readVmMemory,
       readThreadIds: deps.readThreadIds,
     }),
+    memoryWarm:
+      deps.config.hugePages === null
+        ? null
+        : createMemoryWarm({
+            handlerBin: deps.config.hugePages.handlerBin,
+            capMib: deps.config.hugePages.warmCapMib,
+            run: runCommand,
+          }),
   };
 
   const guest: ImpGuest = {

@@ -267,6 +267,8 @@ export function createImpVmOps(host: ImpContext): ImpVmOps {
   const stopImpVm = async (imp: LockedImp, graceful = true): Promise<LockedImp> => {
     const paths = context.findPaths(imp.id);
 
+    await context.memoryWarm?.stop(imp.id, 'stopped');
+
     if (imp.pid !== null) {
       await context.vms.stopVm(imp.pid, paths, graceful);
     }

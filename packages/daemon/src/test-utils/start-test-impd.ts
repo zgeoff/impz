@@ -45,6 +45,7 @@ import { readRunOwner } from './platform/read-run-owner';
 import { startImpdLogCapture } from './platform/start-impd-log-capture';
 import { TEST_TOKEN } from './test-token';
 import { buildStubVmm } from './vm/build-stub-vmm';
+import { createStubUffdHandler } from './vm/create-stub-uffd-handler';
 
 export interface TestImpdOptions {
   readonly env?: Readonly<Record<string, string>>;
@@ -114,6 +115,13 @@ export async function startTestImpd(
     stack.defer(() => rm(dataDir, { recursive: true, force: true }));
   }
 
+  // the stand-in VMs serve no pages, so impd runs the handler only for a warm
+  const handlerDir = mkdtempSync(`${tmpdir()}/${formatRunPrefix(readRunOwner())}uffd-handler-`);
+
+  stack.defer(() => rm(handlerDir, { recursive: true, force: true }));
+
+  const uffdHandler = createStubUffdHandler(handlerDir);
+
   const db = await openMigratedCopy();
 
   stack.defer(async () => {
@@ -138,6 +146,7 @@ export async function startTestImpd(
       IMP_BROKER_PORT: String(ports.take()),
       IMP_EGRESS_DNS_PORT: String(ports.take()),
       IMP_SSH_PORT: '0',
+      IMP_UFFD_HANDLER: uffdHandler.path,
       ...options.env,
     }),
     defaultDiskBytes: 0,
@@ -429,6 +438,7 @@ export async function startTestImpd(
     db,
     dataDir,
     fake,
+    uffdHandler,
     tickers,
     taps,
     removedTaps,

@@ -29,7 +29,7 @@ export interface ImpdStopParts {
   releaseBuildUploads?: () => void;
   publicMcp?: Stoppable | null;
   api?: { readonly stop: (closeActiveConnections: boolean) => Promise<void> };
-  imps?: Pick<Imps, 'sleepAllImps' | 'waitForLifecycle' | 'bootTemplates'>;
+  imps?: Pick<Imps, 'sleepAllImps' | 'waitForLifecycle' | 'bootTemplates' | 'memoryWarm'>;
   storage?: Stoppable;
   stopTelemetry?: (() => Promise<void>) | null;
   db?: { readonly destroy: () => Promise<void> } | null;
@@ -184,6 +184,9 @@ export async function stopImpd(
       : await runStep('lifecycle', readLeftMs(), () => imps.waitForLifecycle());
 
     await runStep('templates', readStepMs(), () => imps.bootTemplates?.stop());
+
+    // a warm left running outlives impd and reads a file the next start may replace
+    await runStep('memory-warms', readStepMs(), () => imps.memoryWarm?.stopAll());
 
     if (options.sleepImps) {
       const sleptMs = Math.round(performance.now() - started);

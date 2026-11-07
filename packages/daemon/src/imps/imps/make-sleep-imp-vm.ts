@@ -127,7 +127,11 @@ export function makeSleepImpVm(
     );
 
     const started = context.sleepTiming.now();
-    const slept: { detail: ImpEventDetail } = { detail: { trigger: reason } };
+
+    const slept: { detail: ImpEventDetail; isOnHugePages: boolean } = {
+      detail: { trigger: reason },
+      isOnHugePages: false,
+    };
 
     removeSnapshotMeta(paths);
 
@@ -141,6 +145,8 @@ export function makeSleepImpVm(
       );
 
       const booted = readVmIdentity(paths);
+
+      slept.isOnHugePages = booted?.hugePages === '2M';
 
       writeSnapshotMeta(paths, {
         ...buildSnapshotIdentity(booted, context.identity),
@@ -215,13 +221,21 @@ export function makeSleepImpVm(
 
     context.admission.release(imp.id);
 
-    return updateState(imp, {
+    const sleeping = await updateState(imp, {
       reason: 'slept',
       detail: slept.detail,
       state: 'sleeping',
       pid: null,
       sleptAt: new Date(),
     });
+
+    // On ZFS a sleep leaves the new file out of the page cache, so the next
+    // wake's handler would read each block cold (docs/design/spikes/wake-cold-reads).
+    if (slept.isOnHugePages) {
+      context.memoryWarm?.start({ impId: imp.id, name: imp.name, memFile: paths.memFile });
+    }
+
+    return sleeping;
   };
 
   const sleepImpVm = async (

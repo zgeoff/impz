@@ -116,6 +116,8 @@ export function createImpCommands(parts: ImpCommandParts): ImpCommands {
   const removeLockedImp = async (imp: LockedImp): Promise<void> => {
     const paths = context.findPaths(imp.id);
 
+    await context.memoryWarm?.stop(imp.id, 'destroyed');
+
     if (imp.pid !== null) {
       await context.vms.stopVm(imp.pid, paths, false);
     }

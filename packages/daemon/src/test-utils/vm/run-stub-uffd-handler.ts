@@ -17,7 +17,7 @@ if ((warmMode === '--count-data' || warmMode === '--warm') && memFile !== undefi
   );
 
   if (warmMode === '--warm' && answer.hangs) {
-    // the real warm's reads take this long on a large file; impd's stop kills it
+    // keeps the process alive, as a warm of a large file is, until impd kills it
     setInterval(() => {}, 60_000);
   } else {
     process.stdout.write(`${JSON.stringify({ blocks: answer.blocks })}\n`);
