@@ -15,9 +15,6 @@ interface TailImpEventsOptions {
   readonly onReadError?: (error: unknown) => void;
 }
 
-// Yields each page of the log after the cursor that holds an event, then each such page that a
-// later commit adds. It returns the reset when a prune passes its cursor, and null once its
-// signal aborts.
 export async function* tailImpEvents(
   options: TailImpEventsOptions,
 ): AsyncGenerator<readonly LoggedImpEvent[], ImpEventsReset | null> {
