@@ -100,8 +100,9 @@ reader's imps, not its fields, so it carries no lease owners ([leases](./leases.
   two. A change under way may come in the snapshot and again after it; each event carries the whole
   imp, so a repeat is harmless.
 - A slow reader gets every event at its own pace, however far behind it falls. impd keeps 7 days of
-  events, at most 100,000. A stream that falls behind the oldest event impd keeps gets `Reset` and
-  the whole snapshot again.
+  events, at most 100,000. When a stream falls behind the oldest event impd keeps, a stream opened
+  with a cursor gets `Reset` and the whole snapshot again. A stream opened without one ends, and a
+  reconnect sends the snapshot.
 - `impz events` reconnects by itself after impd ends the stream, impd restarts or the network drops:
   after 1 s, then twice as long each time, at most 15 s. It gives up after five ends in a row; a
   stream that lasted 10 s starts the count again. Each reconnect prints the snapshot again and a

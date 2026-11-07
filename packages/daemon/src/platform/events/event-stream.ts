@@ -101,6 +101,12 @@ export async function* openEventStream(options: EventStreamOptions): AsyncGenera
         await pages.return(null);
       }
 
+      // a reader that opened with no cursor may know no Reset, so its stream ends as it always
+      // has, and its reconnect takes the snapshot
+      if (options.cursor.after === undefined) {
+        return;
+      }
+
       after = await options.readHead();
 
       yield buildResetEvent({ seq: after, logId, at: options.now() });

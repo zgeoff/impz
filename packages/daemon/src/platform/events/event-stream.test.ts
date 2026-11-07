@@ -261,19 +261,61 @@ test('it leaves out the events its reader may not see', async () => {
   expect(first).toMatchObject({ done: false, value: { name: 'shown' } });
 });
 
-test('it sends a reset and a new snapshot when a prune passes its cursor', async () => {
+test('it sends a reset and a new snapshot when a prune passes the cursor it resumed from', async () => {
   const ctx = await setupTest();
 
   const controller = new AbortController();
 
-  const reads = { snapshots: 0 };
+  const logId = await ctx.db.log.readLogId();
 
   const stream = ctx.open({
-    readSnapshot: async (head, logId) => {
-      reads.snapshots += 1;
+    cursor: { after: 0, logId },
+    readSnapshot: (head) =>
+      Promise.resolve([buildMockGovernorDecision({ name: 'snapshot', seq: head, logId })]),
+    signal: controller.signal,
+  });
 
-      if (reads.snapshots === 1) {
-        await ctx.db.log.write(
+  const waiting = stream.next();
+
+  await withImpTransaction(ctx.db, async (trx) => {
+    await appendImpEvent(
+      trx,
+      {
+        ev: 'GovernorDecision',
+        decision: 'admitted',
+        name: 'pruned',
+        trigger: 'wake',
+        usedMib: 512,
+        budgetMib: 4096,
+      },
+      Date.UTC(2026, 8, 1),
+    );
+
+    await pruneEvents(trx, Date.UTC(2026, 9, 2, 12));
+  });
+
+  const sent = [await waiting, await stream.next()];
+
+  controller.abort();
+
+  expect(sent).toStrictEqual([
+    {
+      done: false,
+      // oxlint-disable-next-line id-length -- `v` is the event format's version field
+      value: { v: 1, at: new Date(Date.UTC(2026, 9, 2, 12)), seq: 1, logId, ev: 'Reset' },
+    },
+    { done: false, value: expect.objectContaining({ name: 'snapshot', seq: 1 }) },
+  ]);
+});
+
+test('it ends when a prune passes the place of a stream opened with no cursor', async () => {
+  const ctx = await setupTest();
+
+  const stream = ctx.open({
+    readSnapshot: async () => {
+      await withImpTransaction(ctx.db, async (trx) => {
+        await appendImpEvent(
+          trx,
           {
             ev: 'GovernorDecision',
             decision: 'admitted',
@@ -282,32 +324,19 @@ test('it sends a reset and a new snapshot when a prune passes its cursor', async
             usedMib: 512,
             budgetMib: 4096,
           },
-          Date.UTC(2026, 9, 2, 12),
+          Date.UTC(2026, 8, 1),
         );
 
-        await withImpTransaction(ctx.db, (trx) => pruneEvents(trx, Date.UTC(2026, 9, 20)));
-      }
+        await pruneEvents(trx, Date.UTC(2026, 9, 2, 12));
+      });
 
-      return [buildMockGovernorDecision({ name: 'snapshot', seq: head, logId })];
+      return [];
     },
-    signal: controller.signal,
   });
 
-  const sent = [await stream.next(), await stream.next(), await stream.next()];
+  const streamed = await Array.fromAsync(stream);
 
-  controller.abort();
-
-  const logId = await ctx.db.log.readLogId();
-
-  expect(sent).toStrictEqual([
-    { done: false, value: expect.objectContaining({ name: 'snapshot', seq: 0 }) },
-    {
-      done: false,
-      // oxlint-disable-next-line id-length -- `v` is the event format's version field
-      value: { v: 1, at: new Date(Date.UTC(2026, 9, 2, 12)), seq: 1, logId, ev: 'Reset' },
-    },
-    { done: false, value: expect.objectContaining({ name: 'snapshot', seq: 1 }) },
-  ]);
+  expect(streamed).toStrictEqual([]);
 });
 
 test('it resumes after its cursor with no snapshot', async () => {
