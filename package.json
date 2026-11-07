@@ -54,7 +54,7 @@
       "@zgeoff/bun-test-extended": "0.2.3",
       "@zgeoff/bun-test-react": "0.2.3",
       "@zgeoff/chex": "0.0.14",
-      "@zgeoff/diet": "0.2.1",
+      "@zgeoff/diet": "0.2.2",
       "@zgeoff/format-codemod": "0.3.5",
       "@zgeoff/kysely-bun-sqlite": "0.3.0",
       "@zgeoff/oxlint-config": "0.8.6",
