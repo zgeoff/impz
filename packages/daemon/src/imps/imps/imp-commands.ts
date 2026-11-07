@@ -60,8 +60,6 @@ interface CreateImpInput {
   readonly isDiskGrowPending?: boolean;
 
   readonly kind?: ImpKind;
-
-  // the name the RAM governor matches against the priority patterns in place of the imp's own
   readonly priorityName?: string;
 }
 

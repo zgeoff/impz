@@ -1,8 +1,6 @@
 export interface AdmissionRequest {
   readonly id: string;
   readonly name: string | null;
-
-  // the name the priority patterns match in place of the imp's own, such as the image a builder adds
   readonly priorityName?: string | undefined;
   readonly reserveMib: number;
   readonly memoryMib: number;

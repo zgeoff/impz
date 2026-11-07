@@ -17,8 +17,6 @@ export interface PriorityAdmissions {
 }
 
 export function createPriorityAdmissions(priority: PriorityRam | null): PriorityAdmissions {
-  // the admitted priority imps, whose reservations, pool pages and RAM count against the kept RAM
-  // until each is released
   const admitted = new Set<string>();
 
   const isPriority = (name: string | null): boolean =>

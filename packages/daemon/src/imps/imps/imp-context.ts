@@ -185,9 +185,6 @@ export interface ImpMemory {
   readonly probeUffdDevice: () => boolean;
   readonly mergeFlags: MergeFlags;
   readonly memoryLimit: MemoryLimit;
-
-  // by imp, the name its admissions match against the priority patterns in place of its own, such
-  // as the image a builder adds, until the imp is removed
   readonly priorityNames: Map<string, string>;
 
   readonly pluggedSizes: PluggedSizes;

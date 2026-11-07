@@ -18,8 +18,6 @@ const REMOVE_RETRY_MS = 30_000;
 
 interface BuilderRequest {
   readonly signal: AbortSignal;
-
-  // the image the builder adds or builds, whose name the RAM governor admits the builder under
   readonly imageName: string;
 }
 
