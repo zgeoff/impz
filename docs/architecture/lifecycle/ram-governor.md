@@ -109,7 +109,7 @@ sleeps all of them, to get as close as it can. This trades availability for the 
 served a request a moment ago can go to sleep. While use stays over, every boot and wake fails with
 `RAM_BUDGET_EXCEEDED`, so an imp the governor slept does not wake only to sleep again.
 
-Each decision goes on the event bus as a `GovernorDecision`, with the imps it slept and why.
+impd writes each decision to the event log as a `GovernorDecision`, with the imps it slept and why.
 
 ## KSM
 

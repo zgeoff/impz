@@ -23,7 +23,7 @@ check the system on a timer. [Durable work](./durable-work.md) explains all thre
 no transaction of its own. A program passes the transaction of a change to the event append, so the
 change and its event commit together; an append on a plain connection commits on its own. The
 package never refers to an imp concept, so a program other than impd can use it. Its event log is a
-table in the program's own database, apart from impd's in-process event bus.
+table in the program's own database, and impd writes each imp event to it.
 
 ## The path of a request
 
