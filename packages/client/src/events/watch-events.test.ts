@@ -75,6 +75,26 @@ test('it passes only the events of the named imp', async () => {
   expect(onEvent).toHaveBeenCalledExactlyOnceWith(checkpoint);
 });
 
+test('it passes a reset to a watch of one imp', async () => {
+  const reset: ImpEvent = {
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
+    v: EVENT_VERSION,
+    at: new Date(),
+    seq: 90,
+    logId: 'log-a',
+    ev: 'Reset',
+  };
+
+  const onEvent = mock<(event: ImpEvent) => void>();
+
+  await watchEvents(
+    { events: { stream: () => Promise.resolve(Readable.from([reset])) } },
+    { onEvent, name: 'box' },
+  );
+
+  expect(onEvent).toHaveBeenCalledExactlyOnceWith(reset);
+});
+
 test('it rejects with the stream’s failure when it has no reconnect', () => {
   const failure = new TypeError('Unable to connect');
 
