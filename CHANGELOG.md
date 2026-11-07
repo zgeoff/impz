@@ -1,5 +1,13 @@
 # Changelog
 
+## [6.9.0](https://github.com/zgeoff/impz/compare/v6.8.1...v6.9.0) (2026-11-07)
+
+### Features
+
+- **daemon:** warm a slept imp's memory file after a huge page sleep
+  ([#936](https://github.com/zgeoff/impz/issues/936))
+  ([496ce0e](https://github.com/zgeoff/impz/commit/496ce0e1b05f39015e21f2c75682cd1259ff1f33))
+
 ## [6.8.1](https://github.com/zgeoff/impz/compare/v6.8.0...v6.8.1) (2026-11-07)
 
 ### Bug Fixes
