@@ -2,10 +2,11 @@
 
 ## [6.8.0](https://github.com/zgeoff/impz/compare/v6.7.1...v6.8.0) (2026-11-07)
 
-
 ### Features
 
-* **api:** report the kept priority memory in system info ([#928](https://github.com/zgeoff/impz/issues/928)) ([c352cdc](https://github.com/zgeoff/impz/commit/c352cdcb4ea8c22558aa580a711d6e27140ff1ab))
+- **api:** report the kept priority memory in system info
+  ([#928](https://github.com/zgeoff/impz/issues/928))
+  ([c352cdc](https://github.com/zgeoff/impz/commit/c352cdcb4ea8c22558aa580a711d6e27140ff1ab))
 
 ## [6.7.1](https://github.com/zgeoff/impz/compare/v6.7.0...v6.7.1) (2026-11-07)
 
