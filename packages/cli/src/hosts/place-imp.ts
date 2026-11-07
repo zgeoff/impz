@@ -92,8 +92,8 @@ export function buildRanking(
   return { ranked: ranked.toSorted((first, second) => second.freeMib - first.freeMib), dropped };
 }
 
-// system.info leaves out the priority patterns, so every imp scores as a non-priority
-// imp; a priority imp still tries each ranked host in turn
+// a host does not report which imp names are priority, so every imp scores as a
+// non-priority imp; a priority imp still tries each ranked host in turn
 function getFreeMib(info: SystemInfo): number {
   return (
     info.ramBudgetMib -

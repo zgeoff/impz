@@ -421,8 +421,8 @@ test('#new passes over a host whose token is limited, then exposes, under --plac
 
   server.use(...cloudflare.handlers);
 
-  // a domain and a public address, so imps.expose works; a closed ACME port, so
-  // impd's certificate order never leaves the host
+  // a domain and a public address, so impd can expose the imp; a closed ACME
+  // port, so impd's certificate order never leaves the host
   const small = await startImpdHost(ctx.stack, {
     env: {
       IMP_ACME_DIRECTORY: 'http://127.0.0.1:1/directory',
