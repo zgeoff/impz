@@ -19,7 +19,7 @@ export interface BranchRuns {
 
 export async function readBranchRuns(
   env: Readonly<Record<string, string | undefined>>,
-  runId: number,
+  runID: number,
 ): Promise<BranchRuns> {
   const api = `${getStepEnv(env, 'GITHUB_API_URL')}/repos/${getStepEnv(env, 'GITHUB_REPOSITORY')}`;
 
@@ -28,7 +28,7 @@ export async function readBranchRuns(
     authorization: `Bearer ${getStepEnv(env, 'GH_TOKEN')}`,
   };
 
-  const runBody = await readJSON(`${api}/actions/runs/${String(runId)}`, headers);
+  const runBody = await readJSON(`${api}/actions/runs/${String(runID)}`, headers);
 
   const run = BranchRunSchema.parse(runBody);
   const branch = encodeURIComponent(run.head_branch);

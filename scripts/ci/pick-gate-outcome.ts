@@ -37,7 +37,7 @@ export interface GateRun {
 
 // Run IDs grow, so a newer run has a higher one. A fork's branch can share a name with one of
 // this repo's, so a run replaces another only from the same event and head repository.
-export function findNewerRunId(runs: readonly GateRun[], run: Readonly<GateRun>): number | null {
+export function findNewerRunID(runs: readonly GateRun[], run: Readonly<GateRun>): number | null {
   const newer = runs.find(
     (each) =>
       each.id > run.id &&

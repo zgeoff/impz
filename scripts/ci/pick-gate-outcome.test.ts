@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { findNewerRunId, pickGateOutcome } from './pick-gate-outcome';
+import { findNewerRunID, pickGateOutcome } from './pick-gate-outcome';
 
 test.each([
   {
@@ -101,8 +101,8 @@ test.each([
     runs: [{ id: 42, event: 'pull_request', headRepositoryID: null }],
     newer: null,
   },
-])('#findNewerRunId finds $newer for a pull request run 41 with $title', (row) => {
+])('#findNewerRunID finds $newer for a pull request run 41 with $title', (row) => {
   const run = { id: 41, event: 'pull_request', headRepositoryID: 7 };
 
-  expect(findNewerRunId(row.runs, run)).toBe(row.newer);
+  expect(findNewerRunID(row.runs, run)).toBe(row.newer);
 });

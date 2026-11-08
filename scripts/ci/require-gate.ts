@@ -1,5 +1,5 @@
 import { getStepEnv } from '../lib/get-step-env.ts';
-import { GateNeedsSchema, findNewerRunId, pickGateOutcome } from './pick-gate-outcome.ts';
+import { GateNeedsSchema, findNewerRunID, pickGateOutcome } from './pick-gate-outcome.ts';
 import { readBranchRuns } from './read-branch-runs.ts';
 
 // A required gate: it passes when the jobs it needs passed, and when they were cancelled only if a
@@ -19,20 +19,20 @@ async function main(): Promise<void> {
     return;
   }
 
-  const runId = Number(getStepEnv(env, 'GITHUB_RUN_ID'));
+  const runID = Number(getStepEnv(env, 'GITHUB_RUN_ID'));
 
-  const branchRuns = await readBranchRuns(env, runId);
+  const branchRuns = await readBranchRuns(env, runID);
 
-  const newerRunId = findNewerRunId(branchRuns.runs, branchRuns.run);
+  const newerRunID = findNewerRunID(branchRuns.runs, branchRuns.run);
 
   const verdict =
-    newerRunId === null
+    newerRunID === null
       ? 'a job was cancelled, and no newer run on the branch replaces this one'
-      : `a job was cancelled, and run ${String(newerRunId)} on the branch reports this gate`;
+      : `a job was cancelled, and run ${String(newerRunID)} on the branch reports this gate`;
 
   console.log(`require-gate: ${verdict}`);
 
-  process.exitCode = newerRunId === null ? 1 : 0;
+  process.exitCode = newerRunID === null ? 1 : 0;
 }
 
 await main();
