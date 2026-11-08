@@ -2,11 +2,14 @@ import * as z from 'zod';
 import { getStepEnv } from '../lib/get-step-env.ts';
 import type { GateRun } from './pick-gate-outcome.ts';
 
+const PullRequestSchema = z.looseObject({ number: z.number() });
+
 // A deleted fork leaves a run with no head repository.
 const RunSchema = z.looseObject({
   id: z.number(),
   event: z.string(),
   head_repository: z.looseObject({ id: z.number() }).nullable(),
+  pull_requests: z.array(PullRequestSchema),
 });
 
 const RunsSchema = z.looseObject({ workflow_runs: z.array(RunSchema) });
@@ -57,5 +60,10 @@ async function readJSON(url: string, headers: Readonly<Record<string, string>>):
 }
 
 function toGateRun(run: Readonly<z.infer<typeof RunSchema>>): GateRun {
-  return { id: run.id, event: run.event, headRepositoryID: run.head_repository?.id ?? null };
+  return {
+    id: run.id,
+    event: run.event,
+    headRepositoryID: run.head_repository?.id ?? null,
+    pullRequestNumbers: run.pull_requests.map((pullRequest) => pullRequest.number),
+  };
 }

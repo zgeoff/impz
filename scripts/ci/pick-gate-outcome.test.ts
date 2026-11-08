@@ -97,39 +97,56 @@ test.each([
 
 test.each([
   {
-    title: 'a newer run',
+    title: 'a newer run of the same pull request',
     runs: [
-      { id: 42, event: 'pull_request', headRepositoryID: 7 },
-      { id: 41, event: 'pull_request', headRepositoryID: 7 },
+      { id: 42, event: 'pull_request', headRepositoryID: 7, pullRequestNumbers: [5] },
+      { id: 41, event: 'pull_request', headRepositoryID: 7, pullRequestNumbers: [5] },
     ],
     newer: 42,
   },
   {
     title: 'only this run and older ones',
     runs: [
-      { id: 41, event: 'pull_request', headRepositoryID: 7 },
-      { id: 40, event: 'pull_request', headRepositoryID: 7 },
+      { id: 41, event: 'pull_request', headRepositoryID: 7, pullRequestNumbers: [5] },
+      { id: 40, event: 'pull_request', headRepositoryID: 7, pullRequestNumbers: [5] },
     ],
     newer: null,
   },
   { title: 'no run', runs: [], newer: null },
   {
     title: 'a newer run from another event',
-    runs: [{ id: 42, event: 'push', headRepositoryID: 7 }],
+    runs: [{ id: 42, event: 'push', headRepositoryID: 7, pullRequestNumbers: [] }],
     newer: null,
   },
   {
     title: 'a newer run from another head repository',
-    runs: [{ id: 42, event: 'pull_request', headRepositoryID: 9 }],
+    runs: [{ id: 42, event: 'pull_request', headRepositoryID: 9, pullRequestNumbers: [5] }],
     newer: null,
   },
   {
     title: 'a newer run from a deleted fork',
-    runs: [{ id: 42, event: 'pull_request', headRepositoryID: null }],
+    runs: [{ id: 42, event: 'pull_request', headRepositoryID: null, pullRequestNumbers: [5] }],
     newer: null,
   },
-])('#findNewerRunID finds $newer for a pull request run 41 with $title', (row) => {
-  const run = { id: 41, event: 'pull_request', headRepositoryID: 7 };
+  {
+    title: 'a newer run of another pull request from the same branch',
+    runs: [{ id: 42, event: 'pull_request', headRepositoryID: 7, pullRequestNumbers: [6] }],
+    newer: null,
+  },
+  {
+    title: 'a newer run that lists no pull request, as a fork run does',
+    runs: [{ id: 42, event: 'pull_request', headRepositoryID: 7, pullRequestNumbers: [] }],
+    newer: null,
+  },
+])('#findNewerRunID finds $newer for run 41 of pull request 5 with $title', (row) => {
+  const run = { id: 41, event: 'pull_request', headRepositoryID: 7, pullRequestNumbers: [5] };
 
   expect(findNewerRunID(row.runs, run)).toBe(row.newer);
+});
+
+test('#findNewerRunID finds a newer push run on the branch, which lists no pull request', () => {
+  const run = { id: 41, event: 'push', headRepositoryID: 7, pullRequestNumbers: [] };
+  const runs = [{ id: 42, event: 'push', headRepositoryID: 7, pullRequestNumbers: [] }];
+
+  expect(findNewerRunID(runs, run)).toBe(42);
 });

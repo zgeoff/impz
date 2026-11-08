@@ -22,6 +22,7 @@ test('it reads the run and the runs of its workflow on its branch', async () => 
         id: 41,
         event: 'pull_request',
         head_repository: { id: 7 },
+        pull_requests: [{ number: 5 }],
         workflow_id: 3,
         head_branch: 'glaze/blue',
       }),
@@ -29,8 +30,13 @@ test('it reads the run and the runs of its workflow on its branch', async () => 
     http.get('https://api.github.test/repos/acme/kiln/actions/workflows/3/runs', () =>
       HttpResponse.json({
         workflow_runs: [
-          { id: 42, event: 'pull_request', head_repository: { id: 7 } },
-          { id: 40, event: 'pull_request', head_repository: null },
+          {
+            id: 42,
+            event: 'pull_request',
+            head_repository: { id: 7 },
+            pull_requests: [{ number: 5 }],
+          },
+          { id: 40, event: 'pull_request', head_repository: null, pull_requests: [] },
         ],
       }),
     ),
@@ -39,10 +45,10 @@ test('it reads the run and the runs of its workflow on its branch', async () => 
   const branchRuns = await readBranchRuns(ctx.env, 41);
 
   expect(branchRuns).toStrictEqual({
-    run: { id: 41, event: 'pull_request', headRepositoryID: 7 },
+    run: { id: 41, event: 'pull_request', headRepositoryID: 7, pullRequestNumbers: [5] },
     runs: [
-      { id: 42, event: 'pull_request', headRepositoryID: 7 },
-      { id: 40, event: 'pull_request', headRepositoryID: null },
+      { id: 42, event: 'pull_request', headRepositoryID: 7, pullRequestNumbers: [5] },
+      { id: 40, event: 'pull_request', headRepositoryID: null, pullRequestNumbers: [] },
     ],
   });
 });
@@ -57,6 +63,7 @@ test('it asks for the runs of the same event on the branch of the run', async ()
         id: 41,
         event: 'pull_request',
         head_repository: { id: 7 },
+        pull_requests: [{ number: 5 }],
         workflow_id: 3,
         head_branch: 'glaze/blue',
       }),

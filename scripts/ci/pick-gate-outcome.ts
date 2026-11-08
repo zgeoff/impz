@@ -33,6 +33,7 @@ export interface GateRun {
   readonly id: number;
   readonly event: string;
   readonly headRepositoryID: number | null;
+  readonly pullRequestNumbers: readonly number[];
 }
 
 // Run IDs grow, so a newer run has a higher one. A fork's branch can share a name with one of
@@ -43,8 +44,16 @@ export function findNewerRunID(runs: readonly GateRun[], run: Readonly<GateRun>)
       each.id > run.id &&
       each.event === run.event &&
       each.headRepositoryID !== null &&
-      each.headRepositoryID === run.headRepositoryID,
+      each.headRepositoryID === run.headRepositoryID &&
+      (run.event !== 'pull_request' || hasSharedPullRequest(each, run)),
   );
 
   return newer?.id ?? null;
+}
+
+// A pull request's runs cancel each other by its merge ref, so two pull requests from one branch,
+// such as one into main and one into a release branch, never replace each other's runs. GitHub
+// lists no pull request on a fork's run, so a fork's cancelled run is never replaced.
+function hasSharedPullRequest(run: Readonly<GateRun>, other: Readonly<GateRun>): boolean {
+  return run.pullRequestNumbers.some((number) => other.pullRequestNumbers.includes(number));
 }
