@@ -372,7 +372,9 @@ cancelled group in one case too: a newer run of the workflow exists on the same 
 same event and the same head repository. That run's concurrency groups cancelled the older run's
 jobs, and its own `e2e` job reports in their place. A fork's branch can share a name with one of
 this repo's, so a run from another repository never counts. `scripts/ci/require-gate.ts` asks GitHub
-for that run. The `checks` and `zfs` jobs follow the same rule.
+for that run. The `e2e` and `zfs` jobs also wait on `host-image`, because a cancelled build skips
+every group after it, and only the build shows the cancel. The `checks` and `zfs` jobs follow the
+same rule.
 
 The `host-image` job builds the groups' inputs once per run, with the composite action
 `.github/actions/e2e-build`:

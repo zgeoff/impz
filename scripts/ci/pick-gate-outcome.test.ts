@@ -60,6 +60,33 @@ test.each([
     outcome: 'replaced',
   },
   {
+    title: 'the host image build was cancelled and the groups after it skipped',
+    needs: {
+      changes: { result: 'success', outputs: { changed: 'true' } },
+      'host-image': { result: 'cancelled' },
+      'e2e-group': { result: 'skipped' },
+    },
+    outcome: 'replaced',
+  },
+  {
+    title: 'the host image build failed and the groups after it skipped',
+    needs: {
+      changes: { result: 'success', outputs: { changed: 'true' } },
+      'host-image': { result: 'failure' },
+      'e2e-group': { result: 'skipped' },
+    },
+    outcome: 'fail',
+  },
+  {
+    title: 'no path changed, so the host image build and the groups skipped',
+    needs: {
+      changes: { result: 'success', outputs: { changed: 'false' } },
+      'host-image': { result: 'skipped' },
+      'e2e-group': { result: 'skipped' },
+    },
+    outcome: 'pass',
+  },
+  {
     title: 'the changes job failed and the jobs after it skipped',
     needs: { changes: { result: 'failure' }, 'e2e-group': { result: 'skipped' } },
     outcome: 'fail',

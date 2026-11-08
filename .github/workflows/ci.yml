@@ -729,7 +729,7 @@ jobs:
       group: ci-${{ github.ref }}-e2e
       cancel-in-progress: true
     if: always()
-    needs: [changes, e2e-group]
+    needs: [changes, host-image, e2e-group]
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -969,7 +969,7 @@ jobs:
       group: ci-${{ github.ref }}-zfs
       cancel-in-progress: true
     if: always()
-    needs: [changes, zfs-shard]
+    needs: [changes, host-image, zfs-shard]
     runs-on: ubuntu-latest
     permissions:
       actions: read
