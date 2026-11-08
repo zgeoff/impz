@@ -279,6 +279,7 @@
       "devDependencies": {
         "@bufbuild/protobuf": "catalog:",
         "@faker-js/faker": "catalog:",
+        "@msw/data": "catalog:",
         "@mswjs/interceptors": "catalog:",
         "@opentelemetry/api": "catalog:",
         "@opentelemetry/sdk-trace-base": "catalog:",

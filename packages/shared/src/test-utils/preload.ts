@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeAll } from 'bun:test';
 import { bypassAmbientProxy } from './bypass-ambient-proxy';
+import { githubRuns } from './github-actions-api';
 import { server } from './mock-server';
 import { registerRunHooks } from './register-run-hooks';
 import { registerTracing } from './register-tracing';
@@ -21,6 +22,7 @@ beforeAll(() => {
 
 afterEach(() => {
   server.resetHandlers();
+  githubRuns.clear();
 });
 
 afterAll(() => {
