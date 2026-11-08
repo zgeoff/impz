@@ -2,12 +2,17 @@
 
 ## [6.11.0](https://github.com/zgeoff/impz/compare/v6.10.1...v6.11.0) (2026-11-08)
 
-
 ### Features
 
-* **api:** resume the event stream from a seq cursor ([#969](https://github.com/zgeoff/impz/issues/969)) ([712fa80](https://github.com/zgeoff/impz/commit/712fa8014b842f9ac189226de005b421299aff2d))
-* **client:** resume the event watch from the last event it read ([#970](https://github.com/zgeoff/impz/issues/970)) ([57c7bd9](https://github.com/zgeoff/impz/commit/57c7bd98805beabd15b58157deea91f496fc1362))
-* **daemon:** write imp events to an outbox in the same transaction ([#968](https://github.com/zgeoff/impz/issues/968)) ([ea82873](https://github.com/zgeoff/impz/commit/ea8287314a8f538d9bf343a5b175a57cc97c4604))
+- **api:** resume the event stream from a seq cursor
+  ([#969](https://github.com/zgeoff/impz/issues/969))
+  ([712fa80](https://github.com/zgeoff/impz/commit/712fa8014b842f9ac189226de005b421299aff2d))
+- **client:** resume the event watch from the last event it read
+  ([#970](https://github.com/zgeoff/impz/issues/970))
+  ([57c7bd9](https://github.com/zgeoff/impz/commit/57c7bd98805beabd15b58157deea91f496fc1362))
+- **daemon:** write imp events to an outbox in the same transaction
+  ([#968](https://github.com/zgeoff/impz/issues/968))
+  ([ea82873](https://github.com/zgeoff/impz/commit/ea8287314a8f538d9bf343a5b175a57cc97c4604))
 
 ## [6.10.1](https://github.com/zgeoff/impz/compare/v6.10.0...v6.10.1) (2026-11-07)
 
