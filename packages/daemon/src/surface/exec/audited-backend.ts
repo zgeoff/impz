@@ -1,8 +1,7 @@
-import { EVENT_VERSION } from '@impz/api';
 import type { ExecBackend } from '../../imps/exec/exec-session';
 import { withAuditedOpen } from '../../platform/audit/api-audit';
 import type { ApiAudit } from '../../platform/audit/api-audit';
-import type { EventBus } from '../../platform/events/event-bus';
+import type { ImpEventLog } from '../../platform/db/create-imp-event-log';
 import type { AuditActor } from '../../platform/principal/caller';
 import type { AgentFeature } from '../../vm/agent-client/agent-outdated';
 import type { AgentExecRequest } from '../../vm/agent-client/exec-stream';
@@ -11,7 +10,7 @@ interface BuildAuditedBackendOptions {
   readonly backend: ExecBackend;
   readonly audit: Pick<ApiAudit, 'record'>;
   readonly actor: AuditActor;
-  readonly events: EventBus;
+  readonly events: Pick<ImpEventLog, 'write'>;
   readonly now: () => number;
 }
 
@@ -38,17 +37,17 @@ export function buildAuditedBackend(options: BuildAuditedBackendOptions): ExecBa
       );
 
       if (request.outer === true) {
-        events.publish({
-          // oxlint-disable-next-line id-length -- `v` is the event format's version field
-          v: EVENT_VERSION,
-          at: new Date(now()),
-          ev: 'AgentExec',
-          name,
-          actor: actor.kind,
-          actorName: actor.name,
-          tty: request.tty,
-          command: request.argv[0] ?? '',
-        });
+        void events.write(
+          {
+            ev: 'AgentExec',
+            name,
+            actor: actor.kind,
+            actorName: actor.name,
+            tty: request.tty,
+            command: request.argv[0] ?? '',
+          },
+          now(),
+        );
       }
 
       return stream;

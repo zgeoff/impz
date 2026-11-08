@@ -39,8 +39,7 @@ export function buildQueryGate(name: string) {
   return {
     plugin,
 
-    wrap: (db: ImpDatabase): ImpDatabase =>
-      Object.assign(db.withPlugin(plugin), { writes: db.writes }),
+    wrap: (db: ImpDatabase): ImpDatabase => Object.assign(db.withPlugin(plugin), { log: db.log }),
     arm: (armedName: string = name) => {
       state.name = armedName;
       state.armed = true;

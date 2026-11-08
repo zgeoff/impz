@@ -5,7 +5,7 @@ import { buildMockNewImp } from '../../test-utils/imps/build-mock-new-imp';
 import { createTestDatabase } from '../../test-utils/platform/create-test-database';
 import { allocateSlot } from './allocate-slot';
 import { createImage } from './images';
-import { createImp } from './imps';
+import { createImp, createImpInFreeSlot } from './imps';
 
 test('#allocateSlot takes the lowest free slot, reusing a gap', async () => {
   const ctx = await createTestDatabase();
@@ -25,14 +25,11 @@ test('#allocateSlot gives concurrent creates distinct slots', async () => {
 
   const imps = await Promise.all(
     ['a', 'b', 'c', 'd'].map((name) =>
-      ctx.db.transaction().execute(async (trx) => {
-        const slot = await allocateSlot(trx, 16);
-
-        return createImp(
-          Object.assign(trx, { writes: ctx.db.writes }),
-          buildMockNewImp({ name, imageId: image.id, slot, ip: `10.66.0.${String(slot + 2)}` }),
-        );
-      }),
+      createImpInFreeSlot(
+        ctx.db,
+        { name, imageId: image.id, imageDigest: image.digest, vcpus: 1, memoryMib: 512 },
+        { count: 16, findIp: (slot) => `10.66.0.${String(slot + 2)}` },
+      ),
     ),
   );
 

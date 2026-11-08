@@ -6,7 +6,7 @@ import type { MoveState } from '@impz/api';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { listImages, readImageByDigest, readImageByName } from '../../platform/db/images';
-import type { ImpWrite } from '../../platform/db/imp-write-feed';
+import type { LoggedImpEvent } from '../../platform/db/imp-log-entry';
 import { listImps, readImpByName, updateImpExposure, updateImpMove } from '../../platform/db/imps';
 import { readMoveSend, updateMoveSendStep } from '../../platform/db/move-sends';
 import { listMoveTickets } from '../../platform/db/move-tickets';
@@ -32,6 +32,7 @@ import { buildStubTailscale } from '../../test-utils/network/build-stub-tailscal
 import { buildQueryGate } from '../../test-utils/platform/build-query-gate';
 import { buildStubClock } from '../../test-utils/platform/build-stub-clock';
 import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
+import { readLoggedEvents } from '../../test-utils/platform/read-logged-events';
 import { runSql } from '../../test-utils/platform/run-sql';
 import { TEST_TOKEN } from '../../test-utils/test-token';
 import { buildStubPublishHook } from '../../test-utils/vm/build-stub-publish-hook';
@@ -3218,32 +3219,23 @@ test('it moves an imp from an XFS host to a ZFS host as files, its checkpoints a
 test('it writes each move mark MOVE_TRANSITIONS holds, and no other, on both hosts', async () => {
   const ctx = await setupTest({ hook: makeStubDroppedCommit() });
 
-  const marks = new Map<string, MoveState | null>();
-
   const written: (readonly [MoveState | null, MoveState | null])[] = [];
 
-  const makeRecorder =
-    (host: string) =>
-    (write: ImpWrite): void => {
-      if (write.kind === 'added' || write.kind === 'changed') {
-        const key = `${host}/${write.imp.id}`;
-        const from = marks.get(key) ?? null;
+  const collectMarks = (events: readonly LoggedImpEvent[]): void => {
+    const marks = new Map<string, MoveState | null>();
 
-        if (from !== write.imp.moveState) {
-          written.push([from, write.imp.moveState]);
+    for (const event of events) {
+      if (event.ev === 'ImpAdded' || event.ev === 'ImpChanged') {
+        const from = marks.get(event.imp.id) ?? null;
+
+        if (from !== event.imp.moveState) {
+          written.push([from, event.imp.moveState]);
         }
 
-        marks.set(key, write.imp.moveState);
+        marks.set(event.imp.id, event.imp.moveState);
       }
-    };
-
-  const stopSource = ctx.source.db.writes.subscribe(makeRecorder('source'));
-  const stopTarget = ctx.target.db.writes.subscribe(makeRecorder('target'));
-
-  onTestFinished(() => {
-    stopSource();
-    stopTarget();
-  });
+    }
+  };
 
   await createUbuntuImage(ctx.source);
   await createUbuntuImage(ctx.target);
@@ -3257,6 +3249,12 @@ test('it writes each move mark MOVE_TRANSITIONS holds, and no other, on both hos
   await ctx.sourceApp.client.imps.create({ name: 'web', image: 'ubuntu' });
   await ctx.sourceApp.client.imps.stop({ name: 'web' });
   await ctx.runMove('web');
+
+  const sourceEvents = await readLoggedEvents(ctx.source.db, 0);
+  const targetEvents = await readLoggedEvents(ctx.target.db, 0);
+
+  collectMarks(sourceEvents);
+  collectMarks(targetEvents);
 
   expect(new Set(written.map(([from, to]) => `${String(from)} → ${String(to)}`))).toStrictEqual(
     new Set(MOVE_TRANSITIONS.map(([from, to]) => `${String(from)} → ${String(to)}`)),

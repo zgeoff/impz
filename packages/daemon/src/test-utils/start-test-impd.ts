@@ -37,6 +37,7 @@ import type { KsmHostStats } from '../vm/vmm/ksm';
 import type { VmRunner } from '../vm/vmm/vm-runner';
 import { readThreadIds } from '../vm/vmm/vm-stats';
 import { readNoTailscale } from './network/read-no-tailscale';
+import { buildStubClock } from './platform/build-stub-clock';
 import { buildStubTickerTimer } from './platform/build-stub-ticker-timer';
 import { formatRunPrefix } from './platform/format-run-prefix';
 import { openMigratedCopy } from './platform/open-migrated-copy';
@@ -122,7 +123,14 @@ export async function startTestImpd(
 
   const uffdHandler = createStubUffdHandler(handlerDir);
 
-  const db = await openMigratedCopy();
+  const clock: { frozenAt: number | undefined; offsetMs: number } = {
+    frozenAt: options.frozenClockMs,
+    offsetMs: 0,
+  };
+
+  const readClock = () => (clock.frozenAt ?? Date.now()) + clock.offsetMs;
+
+  const db = await openMigratedCopy(readClock);
 
   stack.defer(async () => {
     await db.destroy();
@@ -154,17 +162,11 @@ export async function startTestImpd(
 
   const fake = buildStubVmm();
   const tickers = buildStubTickerTimer();
+  const reconcilerTimers = buildStubClock();
   const taps: string[] = [];
   const removedTaps: string[] = [];
   const logs: string[] = [];
   const filesystemGrows: string[] = [];
-
-  const clock: { frozenAt: number | undefined; offsetMs: number } = {
-    frozenAt: options.frozenClockMs,
-    offsetMs: 0,
-  };
-
-  const readClock = () => (clock.frozenAt ?? Date.now()) + clock.offsetMs;
 
   const cloneDisk =
     options.cloneDisk ??
@@ -265,6 +267,7 @@ export async function startTestImpd(
       hostKernelRelease: extra.hostKernelRelease ?? KSM_KERNEL,
       readKsmHostStats: options.readKsmHostStats ?? (() => IDLE_KSM),
       tickerTimer: tickers.timer,
+      reconcilerTimer: reconcilerTimers.startTimer,
       proxyPorts: extra.proxyPorts ?? { proxy: 0, slot: () => 0 },
 
       // loopback only, because the fixed test token is root to anyone who reaches the API
@@ -453,8 +456,12 @@ export async function startTestImpd(
     bundleInstalls,
     diskUsage,
     now: readClock,
+
+    // the reconcilers' timers run on the same clock, so each one due in the advance fires
     advance: (durationMs: number) => {
       clock.offsetMs += durationMs;
+
+      reconcilerTimers.runFor(durationMs);
     },
     setClock: (nowMs: number) => {
       invariant(options.frozenClockMs !== undefined, 'setClock needs a frozen clock');

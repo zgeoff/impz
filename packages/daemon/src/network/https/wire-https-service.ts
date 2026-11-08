@@ -50,8 +50,8 @@ export function wireHttpsService(options: BuildHttpsOptions): HttpsService {
     readPublicImpByName: (name) => readPublicImp(options.db, name),
   });
 
-  const unsubscribe = options.db.writes.subscribe((write) => {
-    if (write.kind === 'removed' && write.imp.publicAuth !== null) {
+  const unsubscribe = options.db.log.subscribe((event) => {
+    if (event.ev === 'ImpRemoved' && event.imp.publicAuth !== null) {
       void service.updatePublicRecords();
     }
   });

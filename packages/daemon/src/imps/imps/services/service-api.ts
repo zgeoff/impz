@@ -2,6 +2,7 @@ import type { LogCursor, ServiceStatus, ServicesList } from '@impz/agent-protoco
 import { ServiceRestartSchema, ServiceStateSchema } from '@impz/api';
 import type { Service, ServiceDef, ServiceList, ServiceLog } from '@impz/api';
 import { match } from 'ts-pattern';
+import type { ImpEventLog } from '../../../platform/db/create-imp-event-log';
 import type { ImpRecord } from '../../../platform/db/imps';
 import { ImpdError, isImpdError } from '../../../platform/errors/impd-error';
 import {
@@ -11,7 +12,6 @@ import {
   buildInvalidStateError,
   buildNotFoundError,
 } from '../../../platform/errors/impd-errors';
-import type { EventBus } from '../../../platform/events/event-bus';
 import type { StartTimer } from '../../../platform/process/clock';
 import { startRealTimer } from '../../../platform/process/start-real-timer';
 import { AgentError } from '../../../vm/agent-client/agent-connection';
@@ -60,7 +60,7 @@ export interface ServiceApi {
 
 interface ServiceApiParts {
   readonly runtime: Pick<ImpRuntime, 'sendToAgent' | 'openAgentStream' | 'readAgent'>;
-  readonly events: Pick<EventBus, 'subscribe'>;
+  readonly events: Pick<ImpEventLog, 'subscribe'>;
 
   readonly readSleptServices: (imp: ImpRecord) => ServicesList | undefined;
 
@@ -83,7 +83,7 @@ interface FollowControl {
 }
 
 interface FollowContext extends WaitContext {
-  readonly events: Pick<EventBus, 'subscribe'>;
+  readonly events: Pick<ImpEventLog, 'subscribe'>;
   readonly restart: { readonly started: boolean };
 }
 

@@ -9,7 +9,6 @@ export const ImpStateSchema = z.enum(['creating', 'running', 'sleeping', 'stoppe
 
 export type ImpState = z.infer<typeof ImpStateSchema>;
 
-/* @internal */
 export const ImpKindSchema = z.enum(['user', 'builder']);
 
 export type ImpKind = z.infer<typeof ImpKindSchema>;

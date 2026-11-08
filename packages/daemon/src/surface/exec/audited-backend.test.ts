@@ -1,8 +1,7 @@
 import { expect, mock, test } from 'bun:test';
-import type { ImpEvent } from '@impz/api';
 import type { ApiAudit } from '../../platform/audit/api-audit';
-import { createEventBus } from '../../platform/events/event-bus';
 import { buildStubExecBackend } from '../../test-utils/imps/build-stub-exec-backend';
+import { buildStubEventWriter } from '../../test-utils/platform/build-stub-event-writer';
 import { buildStubAgentExecStream } from '../../test-utils/vm/build-stub-agent-exec-stream';
 import { buildAuditedBackend } from './audited-backend';
 
@@ -16,7 +15,7 @@ test('it audits a terminal exec as a console, with what it failed with', () => {
     backend: stub.backend,
     audit: { record },
     actor: { kind: 'dashboard', name: 'laptop' },
-    events: createEventBus(),
+    events: buildStubEventWriter(),
     now: () => 5,
   });
 
@@ -41,7 +40,7 @@ test('it audits a plain exec as an exec, with no failure once it opens', async (
     backend: stub.backend,
     audit: { record },
     actor: { kind: 'dashboard', name: 'laptop' },
-    events: createEventBus(),
+    events: buildStubEventWriter(),
     now: () => 5,
   });
 
@@ -66,7 +65,7 @@ test('it audits the tar tool as cp', async () => {
     backend: stub.backend,
     audit: { record },
     actor: { kind: 'dashboard', name: 'laptop' },
-    events: createEventBus(),
+    events: buildStubEventWriter(),
     now: () => 5,
   });
 
@@ -93,7 +92,7 @@ test('it audits an attach as an attach', () => {
     backend: stub.backend,
     audit: { record },
     actor: { kind: 'dashboard', name: 'laptop' },
-    events: createEventBus(),
+    events: buildStubEventWriter(),
     now: () => 5,
   });
 
@@ -118,7 +117,7 @@ test('it audits an exec in the agent as exec-agent', async () => {
     backend: stub.backend,
     audit: { record },
     actor: { kind: 'token', name: 'admin' },
-    events: createEventBus(),
+    events: buildStubEventWriter(),
     now: () => 5,
   });
 
@@ -137,18 +136,13 @@ test('it audits an exec in the agent as exec-agent', async () => {
 
 test('it publishes an exec in the agent once the agent took it, naming only the command', async () => {
   const stub = buildStubExecBackend({ exec: buildStubAgentExecStream().stream });
-  const bus = createEventBus();
-  const events: ImpEvent[] = [];
-
-  bus.subscribe((event) => {
-    events.push(event);
-  });
+  const events = buildStubEventWriter();
 
   const audited = buildAuditedBackend({
     backend: stub.backend,
     audit: { record: mock<ApiAudit['record']>() },
     actor: { kind: 'token', name: 'admin' },
-    events: bus,
+    events,
     now: () => 5,
   });
 
@@ -158,11 +152,9 @@ test('it publishes an exec in the agent once the agent took it, naming only the 
     'outer-exec',
   );
 
-  expect(events).toStrictEqual([
+  expect(events.written).toStrictEqual([
     {
-      // oxlint-disable-next-line id-length -- `v` is the event format's version field
-      v: 1,
-      at: new Date(5),
+      at: 5,
       ev: 'AgentExec',
       name: 'dev',
       actor: 'token',
@@ -177,18 +169,13 @@ test('it publishes nothing for an exec in the agent that the agent refused', () 
   const failure = new Error('AGENT_OUTDATED');
 
   const stub = buildStubExecBackend({ exec: failure });
-  const bus = createEventBus();
-  const events: ImpEvent[] = [];
-
-  bus.subscribe((event) => {
-    events.push(event);
-  });
+  const events = buildStubEventWriter();
 
   const audited = buildAuditedBackend({
     backend: stub.backend,
     audit: { record: mock<ApiAudit['record']>() },
     actor: { kind: 'token', name: 'admin' },
-    events: bus,
+    events,
     now: () => 5,
   });
 
@@ -196,27 +183,22 @@ test('it publishes nothing for an exec in the agent that the agent refused', () 
     audited.openExec('dev', { argv: ['sh'], tty: true, outer: true }, 'outer-exec'),
   ).rejects.toBe(failure);
 
-  expect(events).toStrictEqual([]);
+  expect(events.written).toStrictEqual([]);
 });
 
 test('it publishes nothing for a plain exec', async () => {
   const stub = buildStubExecBackend({ exec: buildStubAgentExecStream().stream });
-  const bus = createEventBus();
-  const events: ImpEvent[] = [];
-
-  bus.subscribe((event) => {
-    events.push(event);
-  });
+  const events = buildStubEventWriter();
 
   const audited = buildAuditedBackend({
     backend: stub.backend,
     audit: { record: mock<ApiAudit['record']>() },
     actor: { kind: 'token', name: 'admin' },
-    events: bus,
+    events,
     now: () => 5,
   });
 
   await audited.openExec('dev', { argv: ['ls'], tty: false });
 
-  expect(events).toStrictEqual([]);
+  expect(events.written).toStrictEqual([]);
 });

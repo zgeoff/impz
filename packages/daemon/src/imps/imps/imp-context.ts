@@ -7,7 +7,6 @@ import type { TapDevices } from '../../host-net/net/tap-devices';
 import { TEMPLATE_BUILD_UID } from '../../platform/db/imps';
 import type { ImpRecord } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
-import type { EventBus } from '../../platform/events/event-bus';
 import type { HostLoad } from '../../platform/process/read-host-load';
 import type { CommandRunner } from '../../platform/process/run-command';
 import type { openTapStream } from '../../vm/agent-client/exec-stream';
@@ -99,8 +98,6 @@ export interface ImpServiceDeps {
   readonly readTailnetHostname?: () => Promise<string | null>;
 
   readonly readServiceUrl?: (name: string) => string | null;
-
-  readonly events?: EventBus;
 
   readonly now?: () => number;
 

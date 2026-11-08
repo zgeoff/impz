@@ -244,7 +244,7 @@ export function createImpdImps(
   deferred.attach(governor);
 
   startImpTelemetry({
-    bus: imps.events,
+    events: imps.events,
     subscribeResources: imps.subscribeResources,
     readDiskUsedBytes: parts.storage.diskUsage.readExclusiveTotal,
     readStateCounts: () => countImpsByState(deps.db),

@@ -1,6 +1,5 @@
-import { EVENT_VERSION } from '@impz/api';
 import type { LockFreeSleep } from '../../imps/imps/lock-free-sleep';
-import type { EventBus } from '../../platform/events/event-bus';
+import type { ImpEventLog } from '../../platform/db/create-imp-event-log';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { createPrioritySemaphore } from '../../platform/process/priority-semaphore';
 import type { TaskPriority } from '../../platform/process/priority-semaphore';
@@ -118,7 +117,7 @@ export interface RamGovernorDeps {
   readonly trySleepImp: LockFreeSleep;
   readonly readDiskFullError?: () => Error | null;
   readonly now?: () => number;
-  readonly events?: EventBus;
+  readonly events?: Pick<ImpEventLog, 'write'>;
   readonly reclaim?: (excludeId: string | null) => Promise<number>;
   readonly priority?: PriorityRam | null;
 }
@@ -151,14 +150,10 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
   const pendingHugePages = new Map<string, number>();
 
   const emitDecision = (decision: GovernorDecision): void => {
-    deps.events?.publish({
-      // oxlint-disable-next-line id-length -- `v` is the event format's version field
-      v: EVENT_VERSION,
-      at: new Date(now()),
-      ev: 'GovernorDecision',
-      budgetMib: deps.budgetMib,
-      ...decision,
-    });
+    void deps.events?.write(
+      { ev: 'GovernorDecision', budgetMib: deps.budgetMib, ...decision },
+      now(),
+    );
   };
 
   const emitAdmission = (

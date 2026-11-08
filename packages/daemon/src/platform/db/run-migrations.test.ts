@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { mcp } from '@better-auth/mcp';
+import { durableMigrations } from '@impz/durable';
 import type { BetterAuthPlugin } from 'better-auth';
 import { getMigrations } from 'better-auth/db/migration';
 import { sql } from 'kysely';
@@ -79,6 +80,29 @@ test('#runMigrations refuses a database a newer impd migrated, naming both versi
     Error,
     `the database is at migration 999_from_a_newer_impd, newer than this impd's last, ${last}: start the impd that wrote it or a newer one, or restore an older database copy (docs/guides/operations.md#database-copy-and-restore)`,
   );
+});
+
+test('#runMigrations runs the durable migrations into a table of their own', async () => {
+  const db = createUnmigratedDatabase();
+
+  await runMigrations(db);
+
+  const ran = await sql<{ name: string }>`
+    SELECT name FROM kysely_migration_durable ORDER BY name
+  `.execute(db);
+
+  expect(ran.rows.map((row) => row.name)).toStrictEqual(Object.keys(durableMigrations).toSorted());
+});
+
+test('#runMigrations refuses a database with a durable migration this impd does not know', async () => {
+  const db = createUnmigratedDatabase();
+
+  await runMigrations(db);
+
+  await sql`INSERT INTO kysely_migration_durable (name, timestamp)
+    VALUES ('durable_999_from_a_newer_impd', '2030-01-01T00:00:00.000Z')`.execute(db);
+
+  expect(runMigrations(db)).rejects.toThrow(/durable_999_from_a_newer_impd/u);
 });
 
 test('#runMigrations runs nothing on a database file a newer impd migrated', async () => {

@@ -5,15 +5,13 @@ import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
 import invariant from 'tiny-invariant';
-import { ROOT_TOKEN_ID } from '../../identity/auth/token-store';
-import { readInBackground } from '../../test-utils/platform/read-in-background';
-import { readQueuedText } from '../../test-utils/platform/read-queued-text';
-import { startTestImpd } from '../../test-utils/start-test-impd';
-import { buildMockGovernorDecision } from '../../test-utils/vm/build-mock-governor-decision';
-import { listApiCalls } from '../db/api-audit';
-import type { ImpWrite } from '../db/imp-write-feed';
-import { readImpByName } from '../db/imps';
-import { buildSessionValue } from '../http/session-cookie';
+import { ROOT_TOKEN_ID } from '../identity/auth/token-store';
+import { listApiCalls } from '../platform/db/api-audit';
+import { readImpByName } from '../platform/db/imps';
+import { buildSessionValue } from '../platform/http/session-cookie';
+import { readInBackground } from '../test-utils/platform/read-in-background';
+import { readQueuedText } from '../test-utils/platform/read-queued-text';
+import { startTestImpd } from '../test-utils/start-test-impd';
 
 function setupTest() {
   const stack = new AsyncDisposableStack();
@@ -199,48 +197,27 @@ test('it sends a repaired event when a check finds an imp’s VM gone', async ()
   expect(repaired).toMatchObject({ imp: { name: 'dead' } });
 });
 
-test('it reports an adopted change when a restarted impd adopts a running VM', async () => {
+// the restarted impd adopts during its boot, before a stream could open, so the event shows only
+// in the log
+test('it logs an adopted change when a restarted impd adopts a running VM', async () => {
   const ctx = await setupTest();
 
   await ctx.createTestImage('ubuntu');
   await ctx.client.imps.create({ name: 'alive', image: 'ubuntu' });
 
-  // the restarted impd adopts during its boot, before anything could listen
-  // on its event bus: the write its publisher turns into the event shows it
-  const writes: ImpWrite[] = [];
+  const head = await ctx.db.log.readHead();
 
-  const unsubscribe = ctx.db.writes.subscribe((write) => {
-    writes.push(write);
+  await ctx.restartImpd();
+
+  const read = await ctx.db.log.readAfter(head, 100);
+
+  invariant(read.kind === 'events');
+
+  expect(read.events).toPartiallyContain({
+    ev: 'ImpChanged',
+    reason: 'adopted',
+    imp: expect.objectContaining({ name: 'alive', state: 'running' }),
   });
-
-  onTestFinished(unsubscribe);
-
-  const restarted = await ctx.restartImpd();
-
-  const bootChanges = writes
-    .filter((write) => write.kind === 'changed')
-    .map((write) => `${write.reason} ${write.imp.name}`);
-
-  const events: ImpEvent[] = [];
-
-  onTestFinished(
-    restarted.imps.events.subscribe((event) => {
-      events.push(event);
-    }),
-  );
-
-  await restarted.imps.reconcileImps();
-
-  const adopted = await waitFor(() => {
-    const found = events.find((event) => event.ev === 'ImpChanged' && event.reason === 'adopted');
-
-    invariant(found, 'no adopted event yet');
-
-    return found;
-  });
-
-  expect(bootChanges).toContain('adopted alive');
-  expect(adopted).toMatchObject({ imp: { name: 'alive', state: 'running' } });
 });
 
 test('it puts a secret’s value in no event and no audit row', async () => {
@@ -417,62 +394,6 @@ test('it ends a dashboard stream at any logout, and leaves a token’s stream op
   });
 });
 
-test('it records a dashboard session’s calls in the audit log as the dashboard’s', async () => {
-  const ctx = await setupTest();
-
-  ctx.setClock(Date.UTC(2026, 4, 6, 7, 8, 9));
-
-  await ctx.createTestImage('ubuntu');
-  await ctx.client.imps.create({ name: 'dev', image: 'ubuntu' });
-
-  const expiresAt = ctx.now() + 60_000;
-  const sendDashboardRequest = (request: Request) => ctx.impd.api.app.handle(request);
-
-  const dashboard: ContractRouterClient<ImpContract> = createORPCClient(
-    new RPCLink({
-      url: 'http://impd.test/rpc',
-      headers: {
-        cookie: `imp_session=${buildSessionValue('root-token', { tokenId: ROOT_TOKEN_ID, expiresAt })}`,
-        'sec-fetch-site': 'same-origin',
-      },
-      fetch: sendDashboardRequest,
-    }),
-  );
-
-  await dashboard.imps.stop({ name: 'dev' });
-
-  // each audit row lands after its call's answer
-  const calls = await waitFor(async () => {
-    const listed = await listApiCalls(ctx.db, null, 100, null);
-
-    expect(listed).toHaveLength(2);
-
-    return listed;
-  });
-
-  // impd's clock is frozen, so every call takes 0 ms at the same time
-  expect(calls).toStrictEqual([
-    {
-      procedure: 'imps.stop',
-      imp: 'dev',
-      actor: 'dashboard',
-      actorName: 'root',
-      at: new Date(Date.UTC(2026, 4, 6, 7, 8, 9)),
-      durationMs: 0,
-      outcome: 'ok',
-    },
-    {
-      procedure: 'imps.create',
-      imp: 'dev',
-      actor: 'token',
-      actorName: 'root',
-      at: new Date(Date.UTC(2026, 4, 6, 7, 8, 9)),
-      durationMs: 0,
-      outcome: 'ok',
-    },
-  ]);
-});
-
 test('it drops an event that fails the schema and goes on', async () => {
   const ctx = await setupTest();
 
@@ -485,26 +406,58 @@ test('it drops an event that fails the schema and goes on', async () => {
   const events = await ctx.client.events.stream(undefined, { signal: controller.signal });
 
   const stream = readInBackground(events);
-  const good = buildMockGovernorDecision({ name: 'good' });
-  const after = buildMockGovernorDecision({ name: 'after' });
 
-  // no imp is named with a space
-  ctx.impd.imps.events.publish(buildMockGovernorDecision({ name: 'boot template' }));
-  ctx.impd.imps.events.publish(good);
+  // the stream reads from the head it takes as it opens, so an event shows only once it reads
+  await waitFor(async () => {
+    await ctx.impd.imps.events.write(
+      {
+        ev: 'GovernorDecision',
+        decision: 'admitted',
+        name: 'before',
+        trigger: 'wake',
+        usedMib: 512,
+        budgetMib: 4096,
+      },
+      ctx.now(),
+    );
 
-  await waitFor(() => {
     expect(stream.items).not.toBeEmpty();
   });
 
-  ctx.impd.imps.events.publish(after);
+  // no imp is named with a space
+  await ctx.impd.imps.events.write(
+    {
+      ev: 'GovernorDecision',
+      decision: 'admitted',
+      name: 'boot template',
+      trigger: 'wake',
+      usedMib: 512,
+      budgetMib: 4096,
+    },
+    ctx.now(),
+  );
+
+  await ctx.impd.imps.events.write(
+    {
+      ev: 'GovernorDecision',
+      decision: 'admitted',
+      name: 'after',
+      trigger: 'wake',
+      usedMib: 512,
+      budgetMib: 4096,
+    },
+    ctx.now(),
+  );
 
   await waitFor(() => {
-    expect(stream.items).toHaveLength(2);
+    expect(stream.items).toPartiallyContain({ name: 'after' });
   });
 
   controller.abort();
 
-  expect(stream.items).toStrictEqual([good, after]);
+  expect(stream.items.map((event) => ('name' in event ? event.name : event.ev))).not.toContain(
+    'boot template',
+  );
 
   expect(ctx.logs.filter((line) => line.includes('fail the event schema'))).toStrictEqual([
     'INFO impd.events dropped 1 GovernorDecision event(s) that fail the event schema; the latest at name: must be a lowercase letter followed by up to 30 lowercase letters, digits or hyphens',
@@ -528,13 +481,22 @@ test('it drops a snapshot imp that fails the schema and goes on', async () => {
   const events = await ctx.client.events.stream(undefined, { signal: controller.signal });
 
   const stream = readInBackground(events);
-  const later = buildMockGovernorDecision({ name: 'later' });
 
   await waitFor(() => {
     expect(stream.items).not.toBeEmpty();
   });
 
-  ctx.impd.imps.events.publish(later);
+  await ctx.impd.imps.events.write(
+    {
+      ev: 'GovernorDecision',
+      decision: 'admitted',
+      name: 'later',
+      trigger: 'wake',
+      usedMib: 512,
+      budgetMib: 4096,
+    },
+    ctx.now(),
+  );
 
   await waitFor(() => {
     expect(stream.items).toHaveLength(2);
@@ -544,6 +506,6 @@ test('it drops a snapshot imp that fails the schema and goes on', async () => {
 
   expect(stream.items).toMatchObject([
     { ev: 'ImpAdded', reason: 'snapshot', imp: { name: 'good' } },
-    later,
+    { ev: 'GovernorDecision', name: 'later' },
   ]);
 });

@@ -9,7 +9,8 @@ import {
 } from '@impz/agent-protocol';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
 import invariant from 'tiny-invariant';
-import { updateImpActivity } from '../../../platform/db/imps';
+import type { LoggedImpEvent } from '../../../platform/db/imp-log-entry';
+import { createEventBus } from '../../../platform/events/event-bus';
 import { buildStubClock } from '../../../test-utils/platform/build-stub-clock';
 import { readInBackground } from '../../../test-utils/platform/read-in-background';
 import { readQueuedText } from '../../../test-utils/platform/read-queued-text';
@@ -1072,17 +1073,14 @@ test('it goes on with a follow when the wake’s event comes before the wake let
 
   await ctx.client.services.add({ name: 'dev', service: { name: 'web', argv: ['httpd'] } });
 
-  const unsubscribe = ctx.db.writes.subscribe(() => {
-    void updateImpActivity(ctx.db, imp.id, new Date());
-  });
-
-  onTestFinished(unsubscribe);
-
   const timers = buildStubClock();
+
+  // the test sends the follow its imp events, so one can come while the imp's lock is held
+  const events = createEventBus<LoggedImpEvent>();
 
   const api = createServiceApi({
     runtime: ctx.impd.imps,
-    events: ctx.impd.imps.events,
+    events,
     readSleptServices: (record) =>
       readSnapshotMeta(buildImpPaths(ctx.dataDir, record.id))?.services,
     startTimer: timers.startTimer,
@@ -1110,9 +1108,21 @@ test('it goes on with a follow when the wake’s event comes before the wake let
 
   const waking = stream.next();
 
+  await waitFor(() => {
+    expect(timers.readPendingMs()).toStrictEqual([5000]);
+  });
+
   await ctx.client.imps.wake({ name: 'dev' });
 
-  const pendingMs = timers.readPendingMs();
+  const pendingMs = await ctx.impd.imps.lockImp('dev', (held) => {
+    events.publish({ ev: 'ImpChanged', imp: held, reason: 'woke', seq: 1, at: new Date() });
+
+    return waitFor(() => {
+      expect(timers.readPendingMs()).toStrictEqual([500]);
+
+      return timers.readPendingMs();
+    });
+  });
 
   timers.firePending();
 

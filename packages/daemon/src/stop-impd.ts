@@ -20,6 +20,7 @@ export interface ImpdStopParts {
   dbWrites?: Stoppable;
   diskUsage?: { readonly stop: () => void };
   tickers?: readonly Ticker[];
+  reconcilers?: Stoppable;
   https?: Stoppable | null;
   proxy?: Stoppable;
   broker?: Stoppable;
@@ -110,6 +111,12 @@ export async function stopImpd(
     await runStep('tickers', readStepMs(), () =>
       Promise.all(tickers.map((ticker) => ticker.stop())),
     );
+  }
+
+  const reconcilers = parts.reconcilers;
+
+  if (reconcilers !== undefined) {
+    await runStep('reconcilers', readStepMs(), () => reconcilers.stop());
   }
 
   const https = parts.https;

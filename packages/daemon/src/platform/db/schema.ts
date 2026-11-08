@@ -68,6 +68,21 @@ export interface Checkpoints {
   size_bytes: number | null;
 }
 
+export interface EventLog {
+  id: Generated<number>;
+  log_id: string;
+  pruned_through: number;
+}
+
+export interface Events {
+  at: number;
+  kind: string;
+  operation_id: string | null;
+  payload: string;
+  seq: Generated<number>;
+  target_id: string | null;
+}
+
 export interface Grants {
   filter: string | null;
   imp_id: string;
@@ -316,6 +331,48 @@ export interface OauthResource {
   updatedAt: string | null;
 }
 
+export interface Operations {
+  cancel_requested: number;
+  created_at: number;
+  current_step: string | null;
+  ended_at: number | null;
+  ending: string | null;
+  error_code: string | null;
+  error_message: string | null;
+  id: string;
+  kind: string;
+  params: string;
+  parent_id: string | null;
+  principal: string;
+  result: string | null;
+  retry_key: string | null;
+  revision: number;
+  started_at: number | null;
+  state: string;
+  target_id: string | null;
+}
+
+export interface OperationSteps {
+  ended_at: number | null;
+  error_code: string | null;
+  error_message: string | null;
+  name: string;
+  operation_id: string;
+  position: number;
+  started_at: number | null;
+  state: string;
+  undo_record: string | null;
+  undone_at: number | null;
+}
+
+export interface Reconcilers {
+  at: number;
+  consecutive_errors: number;
+  name: string;
+  outcome: string;
+  summary: string;
+}
+
 export interface SecretFileRemovals {
   created_at: number;
   value_file: string;
@@ -391,6 +448,8 @@ export interface DB {
   broker_audit: BrokerAudit;
   broker_sessions: BrokerSessions;
   checkpoints: Checkpoints;
+  event_log: EventLog;
+  events: Events;
   grants: Grants;
   image_removals: ImageRemovals;
   images: Images;
@@ -408,6 +467,9 @@ export interface DB {
   oauthConsent: OauthConsent;
   oauthRefreshToken: OauthRefreshToken;
   oauthResource: OauthResource;
+  operation_steps: OperationSteps;
+  operations: Operations;
+  reconcilers: Reconcilers;
   secret_file_removals: SecretFileRemovals;
   secrets: Secrets;
   session: Session;
