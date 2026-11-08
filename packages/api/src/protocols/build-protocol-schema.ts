@@ -120,7 +120,7 @@ function collectProcedures(
 
     return {
       [path.join('.')]: {
-        input: buildJsonSchema(definition.inputSchema, 'input'),
+        input: buildInputSchema(definition.inputSchema),
         output: buildJsonSchema(output, 'output'),
         stream: events !== undefined,
       },
@@ -150,6 +150,16 @@ function isProcedure(node: unknown): node is Procedure {
 }
 
 type JsonSchema = z.infer<typeof JsonSchemaSchema>;
+
+// JSON Schema cannot say that a call may send no input, and a procedure with no input schema
+// renders as `{}`, so an input schema that accepts none says so in a key of its own.
+function buildInputSchema(schema: AnySchema | undefined): JsonSchema {
+  const json = buildJsonSchema(schema, 'input');
+
+  return schema instanceof z.ZodType && schema.safeParse(undefined).success
+    ? { ...json, 'x-optional': true }
+    : json;
+}
 
 // oRPC's serializer carries a Date as itself, and JSON Schema cannot express
 // a custom type or a transform.

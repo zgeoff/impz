@@ -63,13 +63,21 @@ export type { EgressMode, EgressPolicy } from './schemas/egress-schema';
 export {
   AGENT_EXEC_FIELDS,
   EVENT_VERSION,
+  EventCursorSchema,
+  EventPageSchema,
   GOVERNOR_DECISION_FIELDS,
   ImpChangeReasonSchema,
   ImpEventDetailSchema,
   ImpEventSchema,
 } from './schemas/event-schema';
 
-export type { ImpChangeReason, ImpEvent, ImpEventDetail } from './schemas/event-schema';
+export type {
+  EventCursor,
+  EventPage,
+  ImpChangeReason,
+  ImpEvent,
+  ImpEventDetail,
+} from './schemas/event-schema';
 
 export {
   TUNNEL_CLOSE_LOST,

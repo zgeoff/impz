@@ -14,6 +14,8 @@ test('it passes each event of the stream in order, then resolves once impd close
     // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: EVENT_VERSION,
     at: new Date(),
+    seq: 12,
+    logId: 'log-a',
     ev: 'ImpAdded',
     reason: 'snapshot',
     imp: buildMockImp({ name: 'box' }),
@@ -23,6 +25,8 @@ test('it passes each event of the stream in order, then resolves once impd close
     // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: EVENT_VERSION,
     at: new Date(),
+    seq: 12,
+    logId: 'log-a',
     ev: 'ImpChanged',
     reason: 'slept',
     imp: buildMockImp({ name: 'box', state: 'sleeping' }),
@@ -43,6 +47,8 @@ test('it passes only the events of the named imp', async () => {
     // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: EVENT_VERSION,
     at: new Date(),
+    seq: 12,
+    logId: 'log-a',
     ev: 'ImpAdded',
     reason: 'created',
     imp: buildMockImp({ name: 'other' }),
@@ -52,6 +58,8 @@ test('it passes only the events of the named imp', async () => {
     // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: EVENT_VERSION,
     at: new Date(),
+    seq: 12,
+    logId: 'log-a',
     ev: 'CheckpointAdded',
     name: 'box',
     checkpoint: buildMockCheckpoint(),
@@ -65,6 +73,95 @@ test('it passes only the events of the named imp', async () => {
   );
 
   expect(onEvent).toHaveBeenCalledExactlyOnceWith(checkpoint);
+});
+
+test.each([
+  { title: 'every imp', name: undefined },
+  { title: 'one imp', name: 'box' },
+])('it passes the snapshot and no position to a watch of $title', async (row) => {
+  const added: ImpEvent = {
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
+    v: EVENT_VERSION,
+    at: new Date(),
+    seq: 12,
+    logId: 'log-a',
+    ev: 'ImpAdded',
+    reason: 'snapshot',
+    imp: buildMockImp({ name: 'box' }),
+  };
+
+  const position: ImpEvent = {
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
+    v: EVENT_VERSION,
+    at: new Date(),
+    seq: 12,
+    logId: 'log-a',
+    ev: 'Position',
+  };
+
+  const onEvent = mock<(event: ImpEvent) => void>();
+
+  await watchEvents(
+    { events: { stream: () => Promise.resolve(Readable.from([added, position])) } },
+    { onEvent, ...(row.name !== undefined && { name: row.name }) },
+  );
+
+  expect(onEvent).toHaveBeenCalledExactlyOnceWith(added);
+});
+
+test.each([
+  { title: 'every imp', name: undefined },
+  { title: 'one imp', name: 'box' },
+])('it skips an event kind it does not know in a watch of $title', async (row) => {
+  const unknown = {
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
+    v: EVENT_VERSION,
+    at: new Date(),
+    seq: 13,
+    logId: 'log-a',
+    ev: 'KilnFired',
+    name: 'box',
+  };
+
+  const changed: ImpEvent = {
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
+    v: EVENT_VERSION,
+    at: new Date(),
+    seq: 14,
+    logId: 'log-a',
+    ev: 'ImpChanged',
+    reason: 'slept',
+    imp: buildMockImp({ name: 'box', state: 'sleeping' }),
+  };
+
+  const onEvent = mock<(event: ImpEvent) => void>();
+
+  await watchEvents(
+    { events: { stream: () => Promise.resolve(Readable.from([unknown, changed])) } },
+    { onEvent, ...(row.name !== undefined && { name: row.name }) },
+  );
+
+  expect(onEvent).toHaveBeenCalledExactlyOnceWith(changed);
+});
+
+test('it passes a reset to a watch of one imp', async () => {
+  const reset: ImpEvent = {
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
+    v: EVENT_VERSION,
+    at: new Date(),
+    seq: 90,
+    logId: 'log-a',
+    ev: 'Reset',
+  };
+
+  const onEvent = mock<(event: ImpEvent) => void>();
+
+  await watchEvents(
+    { events: { stream: () => Promise.resolve(Readable.from([reset])) } },
+    { onEvent, name: 'box' },
+  );
+
+  expect(onEvent).toHaveBeenCalledExactlyOnceWith(reset);
 });
 
 test('it rejects with the stream’s failure when it has no reconnect', () => {
@@ -153,6 +250,8 @@ test('it ends with what an event callback throws, even with a reconnect', () => 
     // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: EVENT_VERSION,
     at: new Date(),
+    seq: 12,
+    logId: 'log-a',
     ev: 'ImpRemoved',
     imp: buildMockImp({ name: 'box' }),
   };

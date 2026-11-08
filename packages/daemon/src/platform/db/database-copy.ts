@@ -1,11 +1,14 @@
 import { Database } from 'bun:sqlite';
 import { chmodSync, closeSync, mkdirSync, openSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { sql } from 'kysely';
+import { removeLogId } from '@impz/durable';
+import { buildSQLiteDialect } from '@zgeoff/kysely-bun-sqlite';
+import { Kysely, sql } from 'kysely';
 import * as z from 'zod';
 import { buildConflictError } from '../errors/impd-errors';
 import type { DiskRoom } from '../process/disk-room';
 import type { ImpQueries } from './open-database';
+import type { DB } from './schema';
 
 export interface DatabaseCopyFile {
   readonly path: string;
@@ -25,6 +28,32 @@ const SizeRowSchema = z.object({ bytes: z.int().nonnegative() });
 // writes run meanwhile; its target must be absent or empty.
 export async function writeConsistentCopy(db: ImpQueries, path: string): Promise<void> {
   await sql`VACUUM INTO ${path}`.execute(db);
+
+  await removeCopyLogId(path);
+}
+
+// Each open of a restored copy gives its log a new ID, so a reader's cursor from before gets a reset.
+async function removeCopyLogId(path: string): Promise<void> {
+  const copy = new Kysely<DB>({ dialect: buildSQLiteDialect(new Database(path)) });
+
+  try {
+    const hasEventLog = await probeEventLogTable(copy);
+
+    // a copy of a database from before the event log gets its log ID when it first migrates
+    if (hasEventLog) {
+      await removeLogId(copy);
+    }
+  } finally {
+    await copy.destroy();
+  }
+}
+
+async function probeEventLogTable(copy: Kysely<DB>): Promise<boolean> {
+  const tables = await sql<{ name: string }>`
+    SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'event_log'
+  `.execute(copy);
+
+  return tables.rows.length > 0;
 }
 
 function buildDatabaseCopyPath(dataDir: string, name: string): string {

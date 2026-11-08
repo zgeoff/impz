@@ -10,6 +10,8 @@ test('it builds a default governor decision', () => {
     // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: 1,
     at: expect.toBeValidDate() as unknown,
+    seq: expect.toBeWithin(1, 100_001) as unknown,
+    logId: expect.toBeString() as unknown,
     ev: 'GovernorDecision',
     decision: 'admitted',
     name: expect.stringMatching(/^[a-z][a-z0-9-]{2,12}$/u) as unknown,
@@ -28,6 +30,8 @@ test('it applies overrides on top of the defaults', () => {
     // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: 1,
     at: expect.toBeValidDate() as unknown,
+    seq: expect.toBeWithin(1, 100_001) as unknown,
+    logId: expect.toBeString() as unknown,
     ev: 'GovernorDecision',
     decision: 'refused',
     name: 'dev',

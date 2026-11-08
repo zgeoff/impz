@@ -73,6 +73,7 @@ test('it builds a default system info', () => {
       imagePins: true,
       buildContextUpload: true,
       destroyIdCheck: true,
+      eventCursor: true,
     },
   });
 
@@ -159,6 +160,7 @@ test('it applies overrides on top of the defaults', () => {
       imagePins: true,
       buildContextUpload: true,
       destroyIdCheck: true,
+      eventCursor: true,
     },
   });
 });

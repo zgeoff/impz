@@ -61,3 +61,29 @@ test('it returns the last pruned seq once a prune removes every event', async ()
 
   expect(head).toBe(1);
 });
+
+test('it returns the prune mark when a prune removes the last event and keeps an earlier one', async () => {
+  const ctx = await setupTest();
+
+  await appendEvent(ctx.db, {
+    at: 1_800_000_000_000,
+    kind: 'note.added',
+    targetId: 'note-1',
+    operationId: null,
+    payload: { title: 'Groceries' },
+  });
+
+  await appendEvent(ctx.db, {
+    at: 1_700_000_000_000,
+    kind: 'note.added',
+    targetId: 'note-2',
+    operationId: null,
+    payload: { title: 'Plants' },
+  });
+
+  await ctx.prune(1_800_000_000_000);
+
+  const head = await readEventHead(ctx.db);
+
+  expect(head).toBe(2);
+});

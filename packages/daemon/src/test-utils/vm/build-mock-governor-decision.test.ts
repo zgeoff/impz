@@ -9,6 +9,8 @@ test('it builds a default governor decision', () => {
     // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: EVENT_VERSION,
     at: expect.toBeValidDate(),
+    seq: expect.toBeWithin(1, 100_001),
+    logId: expect.toBeString(),
     ev: 'GovernorDecision',
     decision: 'admitted',
     name: expect.toSatisfy((value: string) => /^[a-z]{8}$/u.test(value)),
@@ -23,6 +25,8 @@ test('it builds a default governor decision', () => {
 test('it applies overrides on top of the defaults', () => {
   const event = buildMockGovernorDecision({
     at: new Date('2026-10-02T12:00:00Z'),
+    seq: 7,
+    logId: 'log-a',
     decision: 'refused',
     name: 'dev',
     trigger: 'wake',
@@ -35,6 +39,8 @@ test('it applies overrides on top of the defaults', () => {
     // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: EVENT_VERSION,
     at: new Date('2026-10-02T12:00:00Z'),
+    seq: 7,
+    logId: 'log-a',
     ev: 'GovernorDecision',
     decision: 'refused',
     name: 'dev',

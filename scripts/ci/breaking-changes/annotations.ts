@@ -9,4 +9,5 @@ export const ANNOTATIONS = new Set([
   'deprecated',
   'readOnly',
   'writeOnly',
+  'x-optional',
 ]);

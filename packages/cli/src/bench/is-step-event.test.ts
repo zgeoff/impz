@@ -11,6 +11,8 @@ test('it matches the wake event of the imp that the timed wake returned', () => 
     // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: EVENT_VERSION,
     at: new Date(),
+    seq: 12,
+    logId: 'log-a',
     ev: 'ImpChanged',
     reason: 'woke',
     imp: woken,
@@ -26,6 +28,8 @@ test("it never matches the arrange's earlier wake of the same imp", () => {
     // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: EVENT_VERSION,
     at: new Date(),
+    seq: 12,
+    logId: 'log-a',
     ev: 'ImpChanged',
     reason: 'woke',
     imp: { ...woken, resources: { wakeCount: 1, awakeMs: 20 } },
@@ -41,6 +45,8 @@ test('it never matches an earlier sleep of the same imp', () => {
     // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: EVENT_VERSION,
     at: new Date(),
+    seq: 12,
+    logId: 'log-a',
     ev: 'ImpChanged',
     reason: 'slept',
     imp: { ...slept, sleptAt: new Date('2026-03-04T05:06:07.000Z') },
@@ -56,6 +62,8 @@ test('it never matches the boot of an earlier imp of the same name', () => {
     // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: EVENT_VERSION,
     at: new Date(),
+    seq: 12,
+    logId: 'log-a',
     ev: 'ImpChanged',
     reason: 'booted',
     imp: { ...created, id: 'imp-3' },

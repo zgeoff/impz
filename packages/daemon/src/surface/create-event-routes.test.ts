@@ -1,26 +1,36 @@
 import { expect, jest, onTestFinished, test } from 'bun:test';
 import type { ImpContract, ImpEvent } from '@impz/api';
+import { pruneEvents } from '@impz/durable';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
 import invariant from 'tiny-invariant';
+import { P, match } from 'ts-pattern';
 import { ROOT_TOKEN_ID } from '../identity/auth/token-store';
 import { listApiCalls } from '../platform/db/api-audit';
 import { readImpByName } from '../platform/db/imps';
+import { withImpTransaction } from '../platform/db/with-imp-transaction';
 import { buildSessionValue } from '../platform/http/session-cookie';
 import { readInBackground } from '../test-utils/platform/read-in-background';
 import { readQueuedText } from '../test-utils/platform/read-queued-text';
 import { startTestImpd } from '../test-utils/start-test-impd';
 
-function setupTest() {
+async function setupTest() {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  return startTestImpd(stack, {
+  const harness = await startTestImpd(stack, {
     frozenClockMs: Date.UTC(2026, 0, 1),
     rootToken: 'root-token',
+  });
+
+  return Object.assign(harness, {
+    readHead: () => harness.impd.db.log.readHead(),
+    readLogId: () => harness.impd.db.log.readLogId(),
+    pruneEvents: (now: number) =>
+      withImpTransaction(harness.impd.db, (trx) => pruneEvents(trx, now)),
   });
 }
 
@@ -56,13 +66,13 @@ test('it sends a keepalive comment every 5 s through a stream with no event', as
 
   const queued = await readQueuedText(reader, 1000);
 
-  const keepalives = queued.split('\n\n').filter(Boolean);
+  const frames = queued.split('\n\n').filter((frame) => frame !== '');
 
-  expect(keepalives).toHaveLength(80);
-  expect(keepalives).toSatisfyAll((frame: string) => frame === ': ');
+  expect(frames).toHaveLength(80);
+  expect(frames).toSatisfyAll((frame: string) => frame === ': ');
 });
 
-test('it sends the snapshot, then each change with its reason', async () => {
+test('it sends a stream with no cursor the snapshot, then each change with its reason, and no position', async () => {
   const ctx = await setupTest();
 
   await ctx.createTestImage('ubuntu');
@@ -387,11 +397,9 @@ test('it ends a dashboard stream at any logout, and leaves a token’s stream op
   expect(logout).toStrictEqual({});
   expect(dashboardEnded).toBeNull();
 
-  expect(tokenStream.items[0]).toMatchObject({
-    ev: 'ImpAdded',
-    reason: 'created',
-    imp: { name: 'dev' },
-  });
+  expect(tokenStream.items.slice(0, 1)).toMatchObject([
+    { ev: 'ImpAdded', reason: 'created', imp: { name: 'dev' } },
+  ]);
 });
 
 test('it drops an event that fails the schema and goes on', async () => {
@@ -508,4 +516,200 @@ test('it drops a snapshot imp that fails the schema and goes on', async () => {
     { ev: 'ImpAdded', reason: 'snapshot', imp: { name: 'good' } },
     { ev: 'GovernorDecision', name: 'later' },
   ]);
+});
+
+test('it sends a stream that resumes across an impd restart every event it missed', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.client.imps.create({ name: 'dev' });
+
+  const seen = await ctx.client.events.list({});
+
+  await ctx.client.imps.sleep({ name: 'dev' });
+  await ctx.restartImpd();
+  await ctx.client.imps.wake({ name: 'dev' });
+
+  const head = await ctx.readHead();
+
+  const controller = new AbortController();
+
+  onTestFinished(() => {
+    controller.abort();
+  });
+
+  const stream = await ctx.client.events.stream(
+    { after: seen.after, logId: seen.logId },
+    { signal: controller.signal },
+  );
+
+  const read = readInBackground(stream);
+
+  const missed = await waitFor(() => {
+    expect(read.items).toHaveLength(head - seen.after);
+
+    return read.items;
+  });
+
+  controller.abort();
+
+  expect(missed.map((event) => event.seq)).toStrictEqual(
+    Array.from({ length: head - seen.after }, (_unused, index) => seen.after + 1 + index),
+  );
+});
+
+test('it lists the snapshot at the head for a reader with no cursor', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.client.imps.create({ name: 'dev' });
+
+  const head = await ctx.readHead();
+  const page = await ctx.client.events.list({});
+
+  expect(page).toStrictEqual({
+    events: [
+      expect.objectContaining({ ev: 'ImpAdded', reason: 'snapshot', seq: head, logId: page.logId }),
+    ],
+    after: head,
+    logId: expect.toBeString(),
+    hasMore: false,
+  });
+});
+
+test('it lists the events after a cursor a page at a time', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const seen = await ctx.client.events.list({});
+
+  await ctx.client.imps.create({ name: 'dev' });
+  await ctx.client.imps.sleep({ name: 'dev' });
+
+  const page = await ctx.client.events.list({ after: seen.after, logId: seen.logId, limit: 1 });
+
+  expect(page).toStrictEqual({
+    events: [expect.objectContaining({ ev: 'ImpAdded', reason: 'created', seq: seen.after + 1 })],
+    after: seen.after + 1,
+    logId: seen.logId,
+    hasMore: true,
+  });
+});
+
+test('it lists a reset, then the snapshot, for a cursor from another log', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.client.imps.create({ name: 'dev' });
+
+  const head = await ctx.readHead();
+  const page = await ctx.client.events.list({ after: 1, logId: 'log-from-a-restored-copy' });
+
+  expect(page.events).toStrictEqual([
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
+    { v: 1, at: expect.toBeValidDate(), seq: head, logId: page.logId, ev: 'Reset' },
+    expect.objectContaining({ ev: 'ImpAdded', reason: 'snapshot', seq: head }),
+  ]);
+});
+
+test('it lists a reset, then the snapshot, for a cursor older than the oldest event it keeps', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const seen = await ctx.client.events.list({});
+
+  await ctx.client.imps.create({ name: 'dev' });
+  await ctx.pruneEvents(ctx.now() + 8 * 86_400_000);
+
+  const head = await ctx.readHead();
+  const page = await ctx.client.events.list({ after: seen.after, logId: seen.logId });
+
+  expect(page).toStrictEqual({
+    events: [
+      // oxlint-disable-next-line id-length -- `v` is the event format's version field
+      { v: 1, at: expect.toBeValidDate(), seq: head, logId: seen.logId, ev: 'Reset' },
+      expect.objectContaining({ ev: 'ImpAdded', reason: 'snapshot', seq: head }),
+    ],
+    after: head,
+    logId: seen.logId,
+    hasMore: false,
+  });
+});
+
+test('it lists only the imps a limited token may see in a snapshot', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.client.imps.create({ name: 'dev-a' });
+  await ctx.client.imps.create({ name: 'prod' });
+
+  const made = await ctx.client.tokens.create({ name: 'dev', scope: 'read', imps: ['dev-*'] });
+  const page = await ctx.buildClient(made.secret).events.list({});
+
+  expect(page.events).toStrictEqual([
+    expect.objectContaining({ ev: 'ImpAdded', imp: expect.objectContaining({ name: 'dev-a' }) }),
+  ]);
+});
+
+test('it lists only the events of the imps a limited token may see after a cursor', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const made = await ctx.client.tokens.create({ name: 'dev', scope: 'read', imps: ['dev-*'] });
+
+  const dev = ctx.buildClient(made.secret);
+
+  const seen = await dev.events.list({});
+
+  await ctx.client.imps.create({ name: 'dev-a' });
+  await ctx.client.imps.create({ name: 'prod' });
+
+  const page = await dev.events.list({ after: seen.after, logId: seen.logId });
+
+  const names = page.events.map((event) =>
+    match(event)
+      .with({ ev: P.union('Reset', 'Position') }, (cursor) => cursor.ev)
+      .with({ ev: P.union('ImpAdded', 'ImpChanged', 'ImpRemoved') }, (changed) => changed.imp.name)
+      .otherwise((named) => named.name),
+  );
+
+  expect(names).toSatisfyAll((name: string) => name === 'dev-a');
+  expect(page.events).toPartiallyContain({ ev: 'ImpAdded', reason: 'created' });
+});
+
+test('it sends a limited token the position past the events it may not see', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const made = await ctx.client.tokens.create({ name: 'dev', scope: 'read', imps: ['dev-*'] });
+
+  const controller = new AbortController();
+
+  onTestFinished(() => {
+    controller.abort();
+  });
+
+  const cursor = { after: await ctx.readHead(), logId: await ctx.readLogId() };
+
+  const events = await ctx
+    .buildClient(made.secret)
+    .events.stream(cursor, { signal: controller.signal });
+
+  const stream = readInBackground(events);
+
+  await ctx.client.imps.create({ name: 'prod' });
+
+  const head = await ctx.readHead();
+
+  await waitFor(() => {
+    expect(stream.items.at(-1)).toMatchObject({ ev: 'Position', seq: head });
+  });
+
+  controller.abort();
+
+  expect(stream.items).toSatisfyAll((event: ImpEvent) => event.ev === 'Position');
 });

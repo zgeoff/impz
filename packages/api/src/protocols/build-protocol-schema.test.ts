@@ -54,6 +54,22 @@ test('it tags a type that JSON Schema cannot express', () => {
   expect(output?.['properties']).toMatchObject({ data: { 'x-unrepresentable': 'custom' } });
 });
 
+test('it marks an input that a call may leave out as optional', () => {
+  const input = buildProtocolSchema().procedures['events.stream']?.input;
+
+  expect(input?.['x-optional']).toBe(true);
+});
+
+test('it leaves the optional mark off an input that a call must send', () => {
+  const input = buildProtocolSchema().procedures['imps.get']?.input;
+
+  expect(input).not.toContainKey('x-optional');
+});
+
+test('it renders a procedure with no input schema as any value, with no optional mark', () => {
+  expect(buildProtocolSchema().procedures['system.info']?.input).toStrictEqual({});
+});
+
 test('it renders a property that must stay absent as a schema nothing matches', () => {
   const input = buildProtocolSchema().procedures['secrets.add']?.input;
 

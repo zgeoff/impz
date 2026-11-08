@@ -1,4 +1,5 @@
 import { Database } from 'bun:sqlite';
+import { writeNewLogId } from '@impz/durable';
 import { buildSQLiteDialect } from '@zgeoff/kysely-bun-sqlite';
 import { Kysely } from 'kysely';
 import { createImpEventLog } from './create-imp-event-log';
@@ -38,6 +39,7 @@ export async function openDatabase(
 
   try {
     await runMigrations(db);
+    await writeNewLogId(db);
 
     await log.start();
   } catch (error) {

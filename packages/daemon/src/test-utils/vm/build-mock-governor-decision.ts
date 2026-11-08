@@ -11,6 +11,8 @@ export function buildMockGovernorDecision(
     // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: EVENT_VERSION,
     at: faker.date.recent(),
+    seq: faker.number.int({ min: 1, max: 100_000 }),
+    logId: faker.string.uuid(),
     ev: 'GovernorDecision',
     decision: 'admitted',
     name: faker.string.alpha({ length: 8, casing: 'lower' }),

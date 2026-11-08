@@ -21,12 +21,14 @@ async function setupTest() {
     db,
     open: (options: StreamOptions = {}) =>
       openEventStream({
+        cursor: {},
         changes: db.log.changes,
         readHead: db.log.readHead,
-        readAfter: (after) => db.log.readAfter(after, 500),
+        readLogId: db.log.readLogId,
+        readAfter: db.log.readAfter,
         readSnapshot: () => Promise.resolve([]),
-        present: (event) =>
-          readApiEvent(event, () => Promise.reject(new Error('the test logs no imp event'))),
+        present: (event, logId) =>
+          readApiEvent(event, () => Promise.reject(new Error('the test logs no imp event')), logId),
         endsAt: null,
         now: () => Date.UTC(2026, 9, 2, 12),
         ...options,
@@ -72,6 +74,8 @@ test('it sends the snapshot, then each event written after the stream opened', a
       // oxlint-disable-next-line id-length -- `v` is the event format's version field
       v: 1,
       at: new Date(Date.UTC(2026, 9, 2, 12)),
+      seq: 1,
+      logId: expect.toBeString(),
       ev: 'GovernorDecision',
       decision: 'admitted',
       name: 'later',
@@ -165,6 +169,8 @@ test('it sends every event to a reader 5,000 events behind', async () => {
       // oxlint-disable-next-line id-length -- `v` is the event format's version field
       v: 1,
       at: new Date(Date.UTC(2026, 9, 2, 12)),
+      seq: index + 1,
+      logId: expect.toBeString(),
       ev: 'GovernorDecision',
       decision: 'admitted',
       name: `imp-${String(index + 1)}`,
@@ -248,31 +254,175 @@ test('it leaves out the events its reader may not see', async () => {
     accepts: (event) => event.ev === 'GovernorDecision' && event.name !== 'hidden',
   });
 
-  const first = await stream.next();
+  const sent = await stream.next();
 
   controller.abort();
 
-  expect(first).toMatchObject({ done: false, value: { name: 'shown' } });
+  expect(sent).toMatchObject({ done: false, value: { name: 'shown', seq: 2 } });
 });
 
-test('it ends when a prune passes its cursor', async () => {
+test('it sends the position past a page whose last events its reader may not see', async () => {
+  const ctx = await setupTest();
+
+  const controller = new AbortController();
+
+  for (const name of ['shown', 'hidden']) {
+    await ctx.db.log.write(
+      {
+        ev: 'GovernorDecision',
+        decision: 'admitted',
+        name,
+        trigger: 'wake',
+        usedMib: 512,
+        budgetMib: 4096,
+      },
+      Date.UTC(2026, 9, 2, 12),
+    );
+  }
+
+  const logId = await ctx.db.log.readLogId();
+
+  const stream = ctx.open({
+    cursor: { after: 0, logId },
+    signal: controller.signal,
+    accepts: (event) => event.ev === 'GovernorDecision' && event.name !== 'hidden',
+  });
+
+  const sent = [await stream.next(), await stream.next()];
+
+  controller.abort();
+
+  expect(sent).toMatchObject([
+    { done: false, value: { name: 'shown', seq: 1 } },
+    { done: false, value: { ev: 'Position', seq: 2 } },
+  ]);
+});
+
+test('it sends a stream opened with no cursor no position, after the snapshot or past a hidden event', async () => {
+  const ctx = await setupTest();
+
+  const controller = new AbortController();
+
+  const stream = ctx.open({
+    readSnapshot: async () => {
+      for (const name of ['shown', 'hidden']) {
+        await ctx.db.log.write(
+          {
+            ev: 'GovernorDecision',
+            decision: 'admitted',
+            name,
+            trigger: 'wake',
+            usedMib: 512,
+            budgetMib: 4096,
+          },
+          Date.UTC(2026, 9, 2, 12),
+        );
+      }
+
+      return [buildMockGovernorDecision({ name: 'snapshot' })];
+    },
+    signal: controller.signal,
+    accepts: (event) => event.ev === 'GovernorDecision' && event.name !== 'hidden',
+  });
+
+  const sent = [await stream.next(), await stream.next()];
+
+  await ctx.db.log.write(
+    {
+      ev: 'GovernorDecision',
+      decision: 'admitted',
+      name: 'later',
+      trigger: 'wake',
+      usedMib: 512,
+      budgetMib: 4096,
+    },
+    Date.UTC(2026, 9, 2, 12),
+  );
+
+  const later = await stream.next();
+
+  controller.abort();
+
+  expect([...sent, later]).toMatchObject([
+    { done: false, value: { name: 'snapshot' } },
+    { done: false, value: { name: 'shown', seq: 1 } },
+    { done: false, value: { name: 'later', seq: 3 } },
+  ]);
+});
+
+test('it sends a reset and a new snapshot when a prune passes the cursor it resumed from', async () => {
+  const ctx = await setupTest();
+
+  const controller = new AbortController();
+
+  const logId = await ctx.db.log.readLogId();
+
+  const stream = ctx.open({
+    cursor: { after: 0, logId },
+    readSnapshot: (head) =>
+      Promise.resolve([buildMockGovernorDecision({ name: 'snapshot', seq: head, logId })]),
+    signal: controller.signal,
+  });
+
+  const waiting = stream.next();
+
+  await withImpTransaction(ctx.db, async (trx) => {
+    await appendImpEvent(
+      trx,
+      {
+        ev: 'GovernorDecision',
+        decision: 'admitted',
+        name: 'pruned',
+        trigger: 'wake',
+        usedMib: 512,
+        budgetMib: 4096,
+      },
+      Date.UTC(2026, 8, 1),
+    );
+
+    await pruneEvents(trx, Date.UTC(2026, 9, 2, 12));
+  });
+
+  const sent = [await waiting, await stream.next(), await stream.next()];
+
+  controller.abort();
+
+  expect(sent).toStrictEqual([
+    {
+      done: false,
+      // oxlint-disable-next-line id-length -- `v` is the event format's version field
+      value: { v: 1, at: new Date(Date.UTC(2026, 9, 2, 12)), seq: 1, logId, ev: 'Reset' },
+    },
+    { done: false, value: expect.objectContaining({ name: 'snapshot', seq: 1 }) },
+    {
+      done: false,
+      // oxlint-disable-next-line id-length -- `v` is the event format's version field
+      value: { v: 1, at: new Date(Date.UTC(2026, 9, 2, 12)), seq: 1, logId, ev: 'Position' },
+    },
+  ]);
+});
+
+test('it ends when a prune passes the place of a stream opened with no cursor', async () => {
   const ctx = await setupTest();
 
   const stream = ctx.open({
     readSnapshot: async () => {
-      await ctx.db.log.write(
-        {
-          ev: 'GovernorDecision',
-          decision: 'admitted',
-          name: 'pruned',
-          trigger: 'wake',
-          usedMib: 512,
-          budgetMib: 4096,
-        },
-        Date.UTC(2026, 9, 2, 12),
-      );
+      await withImpTransaction(ctx.db, async (trx) => {
+        await appendImpEvent(
+          trx,
+          {
+            ev: 'GovernorDecision',
+            decision: 'admitted',
+            name: 'pruned',
+            trigger: 'wake',
+            usedMib: 512,
+            budgetMib: 4096,
+          },
+          Date.UTC(2026, 8, 1),
+        );
 
-      await withImpTransaction(ctx.db, (trx) => pruneEvents(trx, Date.UTC(2026, 9, 20)));
+        await pruneEvents(trx, Date.UTC(2026, 9, 2, 12));
+      });
 
       return [];
     },
@@ -281,6 +431,140 @@ test('it ends when a prune passes its cursor', async () => {
   const streamed = await Array.fromAsync(stream);
 
   expect(streamed).toStrictEqual([]);
+});
+
+test('it resumes after its cursor with no snapshot', async () => {
+  const ctx = await setupTest();
+
+  const controller = new AbortController();
+
+  for (const name of ['seen', 'missed']) {
+    await ctx.db.log.write(
+      {
+        ev: 'GovernorDecision',
+        decision: 'admitted',
+        name,
+        trigger: 'wake',
+        usedMib: 512,
+        budgetMib: 4096,
+      },
+      Date.UTC(2026, 9, 2, 12),
+    );
+  }
+
+  const logId = await ctx.db.log.readLogId();
+
+  const stream = ctx.open({
+    cursor: { after: 1, logId },
+    readSnapshot: () => Promise.reject(new Error('a resume reads no snapshot')),
+    signal: controller.signal,
+  });
+
+  const first = await stream.next();
+
+  controller.abort();
+
+  expect(first).toStrictEqual({
+    done: false,
+    value: {
+      // oxlint-disable-next-line id-length -- `v` is the event format's version field
+      v: 1,
+      at: new Date(Date.UTC(2026, 9, 2, 12)),
+      seq: 2,
+      logId,
+      ev: 'GovernorDecision',
+      decision: 'admitted',
+      name: 'missed',
+      trigger: 'wake',
+      usedMib: 512,
+      budgetMib: 4096,
+    },
+  });
+});
+
+test.each([
+  { title: 'another log ID', cursor: { after: 0, logId: 'log-from-a-restored-copy' } },
+  { title: 'a seq past the head', cursor: { after: 9 } },
+])('it sends a reset, then the snapshot, for a cursor with $title', async (row) => {
+  const ctx = await setupTest();
+
+  const controller = new AbortController();
+
+  const stream = ctx.open({
+    cursor: row.cursor,
+    readSnapshot: (head, logId) =>
+      Promise.resolve([buildMockGovernorDecision({ name: 'snapshot', seq: head, logId })]),
+    signal: controller.signal,
+  });
+
+  const sent = [await stream.next(), await stream.next()];
+
+  controller.abort();
+
+  const logId = await ctx.db.log.readLogId();
+
+  expect(sent).toStrictEqual([
+    {
+      done: false,
+      // oxlint-disable-next-line id-length -- `v` is the event format's version field
+      value: { v: 1, at: new Date(Date.UTC(2026, 9, 2, 12)), seq: 0, logId, ev: 'Reset' },
+    },
+    { done: false, value: expect.objectContaining({ name: 'snapshot', seq: 0, logId }) },
+  ]);
+});
+
+test('it sends a reset, then the snapshot, for a cursor older than the oldest event it keeps', async () => {
+  const ctx = await setupTest();
+
+  const controller = new AbortController();
+
+  await ctx.db.log.write(
+    {
+      ev: 'GovernorDecision',
+      decision: 'admitted',
+      name: 'pruned',
+      trigger: 'wake',
+      usedMib: 512,
+      budgetMib: 4096,
+    },
+    Date.UTC(2026, 8, 1),
+  );
+
+  await ctx.db.log.write(
+    {
+      ev: 'GovernorDecision',
+      decision: 'admitted',
+      name: 'kept',
+      trigger: 'wake',
+      usedMib: 512,
+      budgetMib: 4096,
+    },
+    Date.UTC(2026, 9, 2, 12),
+  );
+
+  await withImpTransaction(ctx.db, (trx) => pruneEvents(trx, Date.UTC(2026, 9, 2, 12)));
+
+  const logId = await ctx.db.log.readLogId();
+
+  const stream = ctx.open({
+    cursor: { after: 0, logId },
+    readSnapshot: (head) =>
+      Promise.resolve([buildMockGovernorDecision({ name: 'snapshot', seq: head, logId })]),
+    signal: controller.signal,
+  });
+
+  const sent = [await stream.next(), await stream.next()];
+
+  controller.abort();
+
+  expect(sent).toStrictEqual([
+    {
+      done: false,
+      // oxlint-disable-next-line id-length -- `v` is the event format's version field
+      value: { v: 1, at: new Date(Date.UTC(2026, 9, 2, 12)), seq: 2, logId, ev: 'Reset' },
+    },
+    { done: false, value: expect.objectContaining({ name: 'snapshot', seq: 2 }) },
+  ]);
 });
 
 test('it ends at its abort', async () => {

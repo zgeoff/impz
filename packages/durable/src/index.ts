@@ -5,6 +5,8 @@ export { readEventsAfter } from './events/read-events-after';
 export type { EventsAfter, StoredEvent } from './events/read-events-after';
 export { readEventHead } from './events/read-event-head';
 export { readLogId } from './events/read-log-id';
+export { removeLogId } from './events/remove-log-id';
+export { writeNewLogId } from './events/write-new-log-id';
 
 export type {
   DurableQueries,

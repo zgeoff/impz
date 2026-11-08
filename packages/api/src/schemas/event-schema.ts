@@ -50,8 +50,10 @@ export const ImpEventDetailSchema = z
 
 export type ImpEventDetail = z.infer<typeof ImpEventDetailSchema>;
 
+const SeqSchema = z.int().nonnegative();
+
 // oxlint-disable-next-line id-length -- `v` is the event format's version field
-const envelope = { v: z.literal(EVENT_VERSION), at: z.date() };
+const envelope = { v: z.literal(EVENT_VERSION), at: z.date(), seq: SeqSchema, logId: z.string() };
 
 export const GOVERNOR_DECISION_FIELDS = {
   ev: z.literal('GovernorDecision'),
@@ -108,6 +110,29 @@ export const ImpEventSchema = z.discriminatedUnion('ev', [
 
   z.object({ ...envelope, ...GOVERNOR_DECISION_FIELDS }),
   z.object({ ...envelope, ...AGENT_EXEC_FIELDS }),
+
+  // the reader's cursor names no event this log still holds; a snapshot follows
+  z.object({ ...envelope, ev: z.literal('Reset') }),
+
+  // the stream has read the log through this seq, past events this reader may not see; a reader
+  // resumes after it
+  z.object({ ...envelope, ev: z.literal('Position') }),
 ]);
 
 export type ImpEvent = z.infer<typeof ImpEventSchema>;
+
+export const EventCursorSchema = z.object({
+  after: SeqSchema.optional(),
+  logId: z.string().optional(),
+});
+
+export type EventCursor = z.infer<typeof EventCursorSchema>;
+
+export const EventPageSchema = z.object({
+  events: z.array(ImpEventSchema),
+  after: SeqSchema,
+  logId: z.string(),
+  hasMore: z.boolean(),
+});
+
+export type EventPage = z.infer<typeof EventPageSchema>;
