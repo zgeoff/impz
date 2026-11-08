@@ -2,10 +2,11 @@
 
 ## [6.11.2](https://github.com/zgeoff/impz/compare/v6.11.1...v6.11.2) (2026-11-08)
 
-
 ### Bug Fixes
 
-* **deps:** update module github.com/mdlayher/vsock to v1.4.0 ([#978](https://github.com/zgeoff/impz/issues/978)) ([f58de6f](https://github.com/zgeoff/impz/commit/f58de6fad8210ae7e9808383a7e10f3daeecc3e4))
+- **deps:** update module github.com/mdlayher/vsock to v1.4.0
+  ([#978](https://github.com/zgeoff/impz/issues/978))
+  ([f58de6f](https://github.com/zgeoff/impz/commit/f58de6fad8210ae7e9808383a7e10f3daeecc3e4))
 
 ## [6.11.1](https://github.com/zgeoff/impz/compare/v6.11.0...v6.11.1) (2026-11-08)
 
