@@ -452,6 +452,7 @@ test('it lists only the read tools to a read caller', async () => {
     'imp_url',
     'imp_image_list',
     'imp_checkpoint_list',
+    'imp_event_list',
   ]);
 });
 
@@ -2121,6 +2122,7 @@ test('it lists only the read tools to a read caller over the 2026-07-28 protocol
     'imp_url',
     'imp_image_list',
     'imp_checkpoint_list',
+    'imp_event_list',
   ]);
 
   expect(sessions).toSatisfyAll((session: string | null) => session === null);

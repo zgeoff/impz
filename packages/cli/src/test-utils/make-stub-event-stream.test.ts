@@ -11,7 +11,7 @@ test('it opens the stream once, on its first attempt, and sends no event', async
     onEvent,
   });
 
-  expect(onOpen).toHaveBeenCalledExactlyOnceWith(1);
+  expect(onOpen).toHaveBeenCalledExactlyOnceWith(1, {});
   expect(onEvent).not.toHaveBeenCalled();
 });
 

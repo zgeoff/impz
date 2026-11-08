@@ -20,6 +20,7 @@
     "@impz/agent-protocol": "workspace:*",
     "@impz/api": "workspace:*",
     "@impz/client": "workspace:*",
+    "@impz/durable": "workspace:*",
     "@impz/local-tar": "workspace:*",
     "@impz/mcp": "workspace:*",
     "@impz/shared": "workspace:*",

@@ -1,10 +1,10 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import type { ImpEvent } from '@impz/api';
 import { createImpClient } from '@impz/client';
 import { readImpEnv } from '@impz/shared/test-utils/read-imp-env';
 import { updateEnv } from '@impz/shared/test-utils/update-env';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
 import invariant from 'tiny-invariant';
+import type { LoggedImpEvent } from '../../platform/db/imp-log-entry';
 import { listLeases, writeLease } from '../../platform/db/leases';
 import { buildMockLeaseRecord } from '../../test-utils/imps/build-mock-lease-record';
 import { buildQueryGate } from '../../test-utils/platform/build-query-gate';
@@ -25,7 +25,7 @@ async function setupTest() {
     wrapDatabase: leaseReads.wrap,
   });
 
-  const events: ImpEvent[] = [];
+  const events: LoggedImpEvent[] = [];
 
   const unsubscribe = harness.imps.events.subscribe((event) => {
     events.push(event);
@@ -316,12 +316,14 @@ test('it emits held with the lease counts but no owners on an acquire', async ()
   const held = await waitFor(() => {
     const found = ctx.events.find((event) => event.ev === 'ImpChanged' && event.reason === 'held');
 
-    expect(found).toBeDefined();
+    invariant(found?.ev === 'ImpChanged');
 
     return found;
   });
 
-  expect(held).toMatchObject({ imp: { leases: { leases: [], otherCount: 1 } } });
+  const presented = await ctx.imps.toApi(held.imp);
+
+  expect(presented).toMatchObject({ leases: { leases: [], otherCount: 1 } });
 });
 
 test('it refuses a lease with the label hold', async () => {

@@ -1,11 +1,10 @@
 import { expect, mock, test } from 'bun:test';
-import type { ImpEvent } from '@impz/api';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
 import fc from 'fast-check';
-import { createEventBus } from '../../platform/events/event-bus';
 import { buildStubGovernedHostArbitraries } from '../../test-utils/imp-ops/build-stub-governed-host-arbitraries';
 import { createStubGovernedHost } from '../../test-utils/imp-ops/create-stub-governed-host';
 import type { RoomLeft } from '../../test-utils/imp-ops/create-stub-governed-host';
+import { buildStubEventWriter } from '../../test-utils/platform/build-stub-event-writer';
 import { buildStubGatedCall } from '../../test-utils/platform/build-stub-gated-call';
 import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
 import type { VmRam } from '../../vm/vmm/vm-stats';
@@ -201,13 +200,7 @@ test('it refuses a guest on 4 KiB pages that fits the whole budget but not the R
     hugePool: { totalMib: 3000, freeMib: 3000 },
   });
 
-  const events = createEventBus();
-  const published: ImpEvent[] = [];
-
-  events.subscribe((event) => {
-    published.push(event);
-  });
-
+  const events = buildStubEventWriter();
   const governor = createRamGovernor({ ...host.deps, events });
 
   const refusal = await governor
@@ -224,10 +217,8 @@ test('it refuses a guest on 4 KiB pages that fits the whole budget but not the R
     data: { budgetMib: 1000, usedMib: 800, requestedMib: 300, neededMib: 100 },
   });
 
-  expect(published.at(-1)).toStrictEqual({
-    // oxlint-disable-next-line id-length -- `v` is the event format's version field
-    v: 1,
-    at: new Date(1_000_000),
+  expect(events.written.at(-1)).toStrictEqual({
+    at: 1_000_000,
     ev: 'GovernorDecision',
     budgetMib: 4000,
     decision: 'refused',
@@ -471,24 +462,16 @@ test('it publishes the sleep it made room with and the admission', async () => {
     ],
   });
 
-  const events = createEventBus();
-  const published: ImpEvent[] = [];
-
-  events.subscribe((event) => {
-    published.push(event);
-  });
-
+  const events = buildStubEventWriter();
   const governor = createRamGovernor({ ...host.deps, events });
 
   host.applyChange({ kind: 'busy', id: 'pinned', on: true }, governor);
 
   await governor.admit({ id: 'x', name: 'x', reserveMib: 300, memoryMib: 600 });
 
-  expect(published).toStrictEqual([
+  expect(events.written).toStrictEqual([
     {
-      // oxlint-disable-next-line id-length -- `v` is the event format's version field
-      v: 1,
-      at: new Date(1_000_000),
+      at: 1_000_000,
       ev: 'GovernorDecision',
       budgetMib: 1000,
       decision: 'slept',
@@ -497,9 +480,7 @@ test('it publishes the sleep it made room with and the admission', async () => {
       usedMib: 900,
     },
     {
-      // oxlint-disable-next-line id-length -- `v` is the event format's version field
-      v: 1,
-      at: new Date(1_000_000),
+      at: 1_000_000,
       ev: 'GovernorDecision',
       budgetMib: 1000,
       decision: 'admitted',
@@ -522,13 +503,7 @@ test('it refuses an admit that sleeping the other idle imps cannot make room for
     ],
   });
 
-  const events = createEventBus();
-  const published: ImpEvent[] = [];
-
-  events.subscribe((event) => {
-    published.push(event);
-  });
-
+  const events = buildStubEventWriter();
   const governor = createRamGovernor({ ...host.deps, events });
 
   host.applyChange({ kind: 'busy', id: 'pinned', on: true }, governor);
@@ -541,10 +516,8 @@ test('it refuses an admit that sleeping the other idle imps cannot make room for
 
   expect(host.sleepCalls.map((call) => call.id)).toStrictEqual(['old']);
 
-  expect(published.at(-1)).toStrictEqual({
-    // oxlint-disable-next-line id-length -- `v` is the event format's version field
-    v: 1,
-    at: new Date(1_000_000),
+  expect(events.written.at(-1)).toStrictEqual({
+    at: 1_000_000,
     ev: 'GovernorDecision',
     budgetMib: 1000,
     decision: 'refused',
@@ -851,13 +824,7 @@ test('it admits an admission that may not sleep imps into free room, and publish
     awake: [{ id: 'idle', rssMib: 600 }],
   });
 
-  const events = createEventBus();
-  const published: ImpEvent[] = [];
-
-  events.subscribe((event) => {
-    published.push(event);
-  });
-
+  const events = buildStubEventWriter();
   const governor = createRamGovernor({ ...host.deps, events });
 
   await governor.admit({
@@ -871,7 +838,7 @@ test('it admits an admission that may not sleep imps into free room, and publish
   const usage = await governor.readUsage();
 
   expect(usage.reservedMib).toBe(300);
-  expect(published).toStrictEqual([]);
+  expect(events.written).toStrictEqual([]);
 });
 
 test('it refuses an admission that may not sleep imps once the free room is gone, and sleeps none', async () => {
@@ -1247,13 +1214,7 @@ test('it refuses a grow when only busy imps could make room, and publishes why',
     ],
   });
 
-  const events = createEventBus();
-  const published: ImpEvent[] = [];
-
-  events.subscribe((event) => {
-    published.push(event);
-  });
-
+  const events = buildStubEventWriter();
   const governor = createRamGovernor({ ...host.deps, events });
 
   host.applyChange({ kind: 'busy', id: 'old', on: true }, governor);
@@ -1264,11 +1225,9 @@ test('it refuses a grow when only busy imps could make room, and publishes why',
   expect(admitted).toBeFalse();
   expect(host.sleepCalls).toStrictEqual([]);
 
-  expect(published).toStrictEqual([
+  expect(events.written).toStrictEqual([
     {
-      // oxlint-disable-next-line id-length -- `v` is the event format's version field
-      v: 1,
-      at: new Date(1_000_000),
+      at: 1_000_000,
       ev: 'GovernorDecision',
       budgetMib: 1000,
       decision: 'refused',

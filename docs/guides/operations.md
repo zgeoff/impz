@@ -162,6 +162,12 @@ not match the hashes in the new snapshot records, and every sleeping imp boots c
 happens once the other way: an older impd hashed the drive with another hash and wrote no drive
 path, so its snapshots boot cold with `the snapshot is from an older impd`.
 
+An impd without the `eventCursor` feature writes no events to the event log. After a rollback to one
+and an upgrade back, the log keeps its log ID but lacks every change the older impd made, so a
+client that resumes the event stream from its saved cursor misses those changes. After the upgrade
+back, make each such client do a full resync: drop its saved cursor and open the stream with none,
+so it reads a new snapshot. A dashboard tab does this when you reload it.
+
 **CAUTION:** An image whose `imp.host-contract` label is not `no-docker` needs Docker, which
 `podman tag` does not bring back; upgrade.sh refuses it. Run `deploy/bootstrap.sh` of that release
 with the old image instead, on a host with Docker, after `systemctl stop imp-host`: it writes the

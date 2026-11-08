@@ -194,15 +194,15 @@ test('it names the guard in the instructions it gives at initialize', async () =
 test.each([
   [
     'read',
-    'imp runs persistent Linux microVMs ("imps") that sleep when idle and wake on use. This server may touch imps named home-*. This caller has the read scope, so it can only look: list imps, their URLs, the images and the checkpoints. Running commands, reading or writing files, and creating, checkpointing, forking or destroying an imp need a wider grant: exec or manage. Its tools: imp_list, imp_url, imp_image_list, imp_checkpoint_list.',
+    'imp runs persistent Linux microVMs ("imps") that sleep when idle and wake on use. This server may touch imps named home-*. This caller has the read scope, so it can only look: list imps, their URLs, the images, the checkpoints and what happened to the imps. Running commands, reading or writing files, and creating, checkpointing, forking or destroying an imp need a wider grant: exec or manage. Its tools: imp_list, imp_url, imp_image_list, imp_checkpoint_list, imp_event_list.',
   ],
   [
     'exec',
-    'imp runs persistent Linux microVMs ("imps") that sleep when idle and wake on use. This server may touch imps named home-*. This caller has the exec scope: list imps, their URLs, the images and the checkpoints, run commands and read and write files in an imp, and put one to sleep. Creating, checkpointing, restoring, forking or destroying an imp needs a manage grant. Its tools: imp_list, imp_sleep, imp_url, imp_image_list, imp_exec, imp_read_file, imp_write_file, imp_checkpoint_list.',
+    'imp runs persistent Linux microVMs ("imps") that sleep when idle and wake on use. This server may touch imps named home-*. This caller has the exec scope: list imps, their URLs, the images, the checkpoints and what happened to the imps, run commands and read and write files in an imp, and put one to sleep. Creating, checkpointing, restoring, forking or destroying an imp needs a manage grant. Its tools: imp_list, imp_sleep, imp_url, imp_image_list, imp_exec, imp_read_file, imp_write_file, imp_checkpoint_list, imp_event_list.',
   ],
   [
     'manage',
-    'imp runs persistent Linux microVMs ("imps") that sleep when idle and wake on use. This server may touch imps named home-*. Create an imp, run commands and read and write files in it, checkpoint before a risky change, fork to try two fixes, and destroy what you no longer need. Its tools: imp_list, imp_create, imp_destroy, imp_sleep, imp_url, imp_fork, imp_image_list, imp_exec, imp_read_file, imp_write_file, imp_checkpoint, imp_checkpoint_list, imp_restore, imp_checkpoint_delete.',
+    'imp runs persistent Linux microVMs ("imps") that sleep when idle and wake on use. This server may touch imps named home-*. Create an imp, run commands and read and write files in it, checkpoint before a risky change, fork to try two fixes, read what happened to the imps, and destroy what you no longer need. Its tools: imp_list, imp_create, imp_destroy, imp_sleep, imp_url, imp_fork, imp_image_list, imp_exec, imp_read_file, imp_write_file, imp_checkpoint, imp_checkpoint_list, imp_restore, imp_checkpoint_delete, imp_event_list.',
   ],
 ] as const)(
   'it names only the %s tools in the instructions it gives at initialize',
@@ -281,6 +281,7 @@ test('it lists every tool to a manage caller', async () => {
     'imp_checkpoint_list',
     'imp_restore',
     'imp_checkpoint_delete',
+    'imp_event_list',
   ]);
 });
 
@@ -315,6 +316,7 @@ test('it lists only the read tools to a read caller on a server a manage caller 
     'imp_url',
     'imp_image_list',
     'imp_checkpoint_list',
+    'imp_event_list',
   ]);
 });
 

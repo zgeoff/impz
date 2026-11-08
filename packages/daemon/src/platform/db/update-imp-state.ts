@@ -2,11 +2,13 @@ import type { ColdBootCause, ImpChangeReason, ImpEventDetail, ImpState } from '@
 import { sql } from 'kysely';
 import type { Updateable } from 'kysely';
 import { buildNotFoundError } from '../errors/impd-errors';
+import { appendImpChange } from './append-imp-change';
 import { requireTransition } from './imp-transitions';
 import type { ImpRecord } from './imps';
 import type { ImpDatabase } from './open-database';
 import type { DB } from './schema';
 import { toImpRecord } from './to-imp-record';
+import { withImpTransaction } from './with-imp-transaction';
 
 export interface ImpStateChange {
   readonly reason: ImpChangeReason;
@@ -77,7 +79,7 @@ export async function updateImpState(
     values.firecracker_version = change.firecrackerVersion;
   }
 
-  const row = await db.transaction().execute(async (trx) => {
+  const changed = await withImpTransaction(db, async (trx, at) => {
     const current = await trx
       .selectFrom('imps')
       .select(['state', 'pid'])
@@ -99,16 +101,18 @@ export async function updateImpState(
       requireTransition(current.state, change.state, `move to ${change.state}`);
     }
 
-    return trx
+    const row = await trx
       .updateTable('imps')
       .set({ ...values, ...buildAwakeValues(change), ...buildBootCauseValues(change) })
       .where('id', '=', id)
       .returningAll()
       .executeTakeFirstOrThrow();
+
+    return appendImpChange(trx, at, toImpRecord(row), change);
   });
 
-  if (row !== null) {
-    return emitChange(db, toImpRecord(row), change);
+  if (changed !== null) {
+    return changed;
   }
 
   if (expected === undefined) {
@@ -140,19 +144,4 @@ function buildAwakeValues(change: Readonly<ImpStateChange>) {
 
 function buildBootCauseValues(change: Readonly<ImpStateChange>) {
   return change.nextBootCause === undefined ? {} : { next_boot_cause: change.nextBootCause };
-}
-
-function emitChange(
-  db: ImpDatabase,
-  imp: Readonly<ImpRecord>,
-  change: Readonly<ImpStateChange>,
-): ImpRecord {
-  db.writes.publish({
-    kind: 'changed',
-    imp,
-    reason: change.reason,
-    ...(change.detail !== undefined && { detail: change.detail }),
-  });
-
-  return imp;
 }

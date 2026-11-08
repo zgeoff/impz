@@ -1,22 +1,19 @@
 import { Database } from 'bun:sqlite';
+import { writeNewLogId } from '@impz/durable';
 import { buildSQLiteDialect } from '@zgeoff/kysely-bun-sqlite';
 import { Kysely } from 'kysely';
-import { createEventBus } from '../events/event-bus';
-import type { ImpWrite, ImpWriteFeed } from './imp-write-feed';
+import { createImpEventLog } from './create-imp-event-log';
+import type { ImpEventLog } from './create-imp-event-log';
 import { runMigrations } from './run-migrations';
 import type { DB } from './schema';
 
-export type ImpDatabase = Kysely<DB> & { readonly writes: ImpWriteFeed };
+export type ImpDatabase = Kysely<DB> & { readonly log: ImpEventLog };
 
 export type ImpQueries = Kysely<DB>;
 
-interface OpenOptions {
-  readonly writes?: ImpWriteFeed;
-}
-
 export async function openDatabase(
   source: string | Database,
-  options: OpenOptions = {},
+  now: () => number = Date.now,
 ): Promise<ImpDatabase> {
   const sqlite = typeof source === 'string' ? new Database(source, { create: true }) : source;
 
@@ -26,11 +23,14 @@ export async function openDatabase(
   const builder = new Kysely<DB>({ dialect: buildSQLiteDialect(sqlite) });
 
   const destroyDriver = builder.destroy.bind(builder);
+  const log = createImpEventLog(builder, now);
 
   // the shared driver's destroy leaves the handle open for its opener to close
   const db = Object.assign(builder, {
-    writes: options.writes ?? createEventBus<ImpWrite>(),
+    log,
     destroy: async () => {
+      await log.stop();
+
       await destroyDriver();
 
       sqlite.close();
@@ -39,6 +39,9 @@ export async function openDatabase(
 
   try {
     await runMigrations(db);
+    await writeNewLogId(db);
+
+    await log.start();
   } catch (error) {
     sqlite.close();
     throw error;

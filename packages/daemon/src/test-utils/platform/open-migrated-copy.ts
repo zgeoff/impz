@@ -6,10 +6,10 @@ import type { ImpDatabase } from '../../platform/db/open-database';
 // test process migrates once
 const TEMPLATE: { bytes?: Promise<Buffer> } = {};
 
-export function openMigratedCopy(): Promise<ImpDatabase> {
+export function openMigratedCopy(now?: () => number): Promise<ImpDatabase> {
   TEMPLATE.bytes ??= serializeMigratedDatabase();
 
-  return TEMPLATE.bytes.then((bytes) => openDatabase(Database.deserialize(bytes)));
+  return TEMPLATE.bytes.then((bytes) => openDatabase(Database.deserialize(bytes), now));
 }
 
 async function serializeMigratedDatabase(): Promise<Buffer> {

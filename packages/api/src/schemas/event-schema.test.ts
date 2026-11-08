@@ -85,6 +85,8 @@ test('#ImpEventSchema accepts an imp added as the stream opens', () => {
     // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: 1,
     at: new Date('2026-01-02T03:04:05.000Z'),
+    seq: 12,
+    logId: 'log-a',
     ev: 'ImpAdded',
     reason: 'snapshot',
     imp: {
@@ -115,6 +117,8 @@ test('#ImpEventSchema accepts an imp that changed, with its detail', () => {
     // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: 1,
     at: new Date('2026-01-02T03:04:05.000Z'),
+    seq: 12,
+    logId: 'log-a',
     ev: 'ImpChanged',
     reason: 'slept',
     imp: {
@@ -146,6 +150,8 @@ test('#ImpEventSchema accepts an imp removed', () => {
     // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: 1,
     at: new Date('2026-01-02T03:04:05.000Z'),
+    seq: 12,
+    logId: 'log-a',
     ev: 'ImpRemoved',
     imp: {
       id: 'imp-1',
@@ -175,6 +181,8 @@ test('#ImpEventSchema accepts a checkpoint added', () => {
     // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: 1,
     at: new Date('2026-01-02T03:04:05.000Z'),
+    seq: 12,
+    logId: 'log-a',
     ev: 'CheckpointAdded',
     name: 'dev',
     checkpoint: { id: 'ck-1', createdAt: new Date('2026-01-02T03:04:05.000Z'), diskMib: 1024 },
@@ -190,6 +198,8 @@ test('#ImpEventSchema accepts a checkpoint removed', () => {
     // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: 1,
     at: new Date('2026-01-02T03:04:05.000Z'),
+    seq: 12,
+    logId: 'log-a',
     ev: 'CheckpointRemoved',
     name: 'dev',
     checkpoint: { id: 'ck-1', createdAt: new Date('2026-01-02T03:04:05.000Z'), diskMib: 1024 },
@@ -205,6 +215,8 @@ test('#ImpEventSchema accepts a refused boot with what it lacked', () => {
     // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: 1,
     at: new Date('2026-01-02T03:04:05.000Z'),
+    seq: 12,
+    logId: 'log-a',
     ev: 'GovernorDecision',
     decision: 'refused',
     name: 'dev',
@@ -226,6 +238,8 @@ test('#ImpEventSchema accepts an agent exec', () => {
     // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: 1,
     at: new Date('2026-01-02T03:04:05.000Z'),
+    seq: 12,
+    logId: 'log-a',
     ev: 'AgentExec',
     name: 'dev',
     actor: 'token',
@@ -239,11 +253,28 @@ test('#ImpEventSchema accepts an agent exec', () => {
   expect(result.data).toStrictEqual(payload);
 });
 
+test('#ImpEventSchema accepts a reset', () => {
+  const payload = {
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
+    v: 1,
+    at: new Date('2026-01-02T03:04:05.000Z'),
+    seq: 9120,
+    logId: 'log-a',
+    ev: 'Reset',
+  } as const;
+
+  const result = ImpEventSchema.safeParse(payload);
+
+  expect(result.data).toStrictEqual(payload);
+});
+
 test('#ImpEventSchema rejects an event of an unknown kind', () => {
   const result = ImpEventSchema.safeParse({
     // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: 1,
     at: new Date('2026-01-02T03:04:05.000Z'),
+    seq: 12,
+    logId: 'log-a',
     ev: 'ImpMoved',
     name: 'dev',
     actor: 'token',
@@ -260,6 +291,8 @@ test('#ImpEventSchema rejects an event of another version', () => {
     // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: 2,
     at: new Date('2026-01-02T03:04:05.000Z'),
+    seq: 12,
+    logId: 'log-a',
     ev: 'ImpAdded',
     reason: 'created',
     imp: {
@@ -288,6 +321,8 @@ test('#ImpEventSchema rejects an imp added for an unknown reason', () => {
     // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: 1,
     at: new Date('2026-01-02T03:04:05.000Z'),
+    seq: 12,
+    logId: 'log-a',
     ev: 'ImpAdded',
     reason: 'imported',
     imp: {
@@ -316,6 +351,8 @@ test('#ImpEventSchema rejects an imp that changed for an unknown reason', () => 
     // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: 1,
     at: new Date('2026-01-02T03:04:05.000Z'),
+    seq: 12,
+    logId: 'log-a',
     ev: 'ImpChanged',
     reason: 'moved',
     imp: {
@@ -344,6 +381,8 @@ test('#ImpEventSchema rejects a governor decision of an unknown kind', () => {
     // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: 1,
     at: new Date('2026-01-02T03:04:05.000Z'),
+    seq: 12,
+    logId: 'log-a',
     ev: 'GovernorDecision',
     decision: 'deferred',
     name: 'dev',
@@ -360,6 +399,8 @@ test('#ImpEventSchema rejects a governor decision with negative used memory', ()
     // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: 1,
     at: new Date('2026-01-02T03:04:05.000Z'),
+    seq: 12,
+    logId: 'log-a',
     ev: 'GovernorDecision',
     decision: 'refused',
     name: 'dev',
@@ -376,6 +417,8 @@ test('#ImpEventSchema rejects a governor decision with no budget', () => {
     // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: 1,
     at: new Date('2026-01-02T03:04:05.000Z'),
+    seq: 12,
+    logId: 'log-a',
     ev: 'GovernorDecision',
     decision: 'refused',
     name: 'dev',
@@ -392,6 +435,8 @@ test('#ImpEventSchema rejects an agent exec by an unknown actor', () => {
     // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: 1,
     at: new Date('2026-01-02T03:04:05.000Z'),
+    seq: 12,
+    logId: 'log-a',
     ev: 'AgentExec',
     name: 'dev',
     actor: 'robot',

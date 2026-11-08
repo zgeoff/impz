@@ -98,6 +98,9 @@ const SystemFeaturesSchema = z.object({
   // An impd without this drops a destroy's `id` unread and destroys whatever
   // imp holds the name.
   destroyIdCheck: z.boolean().optional(),
+
+  // An impd without this drops the stream's cursor unread and starts each stream with a snapshot.
+  eventCursor: z.boolean().optional(),
 });
 
 const GuestInfoSchema = z.object({

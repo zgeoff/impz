@@ -36,9 +36,11 @@ so a reader must apply an event twice with no harm.
 
 The first migration gives each database a random log ID. A reader compares the log ID with the one
 it saw before. A different ID shows that the database file was replaced, so the reader drops its
-sequence number. A copy of the file keeps the log ID of the original. After a copy is restored over
-the file, new events take numbers the reader has already seen, and the reader skips them. Whoever
-restores a copy must therefore restart its readers from the current state.
+sequence number. A plain copy of the file keeps the log ID of the original, so after a restore, new
+events take numbers the reader has already seen, and the reader skips them. A program avoids this in
+two steps. It clears the log ID of each copy it makes with `removeLogId`. It calls `writeNewLogId`
+each time it opens the file, which gives a file with no ID a new random one. Each restore of one
+copy then gets an ID of its own, and every reader drops its sequence number.
 
 ## Operations
 

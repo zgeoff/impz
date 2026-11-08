@@ -1,4 +1,5 @@
-import { expect, onTestFinished, test } from 'bun:test';
+import { expect, onTestFinished, spyOn, test } from 'bun:test';
+import { runEventPrune } from '@impz/daemon/test-utils';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -17,6 +18,7 @@ async function setupTest() {
     client: dashboardImpd.harness.client,
     logIn: dashboardImpd.logIn,
     waitForEventStream: dashboardImpd.waitForEventStream,
+    dropEventStreams: dashboardImpd.dropEventStreams,
   };
 }
 
@@ -234,4 +236,110 @@ test('it shows a change impd streams without waiting for the next poll', async (
   const state = await within(row).findByText('sleeping');
 
   expect(state).toBeInTheDocument();
+});
+
+test('it resumes its event stream after impd restarts, with no refetch of every query', async () => {
+  const ctx = await setupTest();
+
+  await ctx.harness.createTestImage('base');
+  await ctx.client.imps.create({ name: 'web' });
+  await ctx.logIn();
+
+  const rendered = renderApp();
+
+  const row = await rendered.findByRole('row', { name: /web/u });
+
+  await ctx.waitForEventStream();
+  await ctx.client.imps.sleep({ name: 'web' });
+
+  await within(row).findByText('sleeping');
+
+  const invalidate = spyOn(rendered.queryClient, 'invalidateQueries');
+
+  ctx.dropEventStreams();
+
+  await ctx.harness.restartImpd();
+  await ctx.client.imps.wake({ name: 'web' });
+
+  // the dashboard waits 2 s before it opens the stream again
+  const state = await within(row).findByText('running', {}, { timeout: 4000 });
+
+  expect(state).toBeInTheDocument();
+  expect(invalidate.mock.calls).toSatisfyAll((call: readonly unknown[]) => call[0] !== undefined);
+});
+
+test('it refetches every query when impd resets its stream', async () => {
+  const ctx = await setupTest();
+
+  await ctx.harness.createTestImage('base');
+  await ctx.client.imps.create({ name: 'web' });
+  await ctx.logIn();
+
+  const rendered = renderApp();
+
+  const row = await rendered.findByRole('row', { name: /web/u });
+
+  await ctx.waitForEventStream();
+  await ctx.client.imps.sleep({ name: 'web' });
+
+  await within(row).findByText('sleeping');
+
+  const invalidate = spyOn(rendered.queryClient, 'invalidateQueries');
+
+  ctx.dropEventStreams();
+
+  await ctx.client.imps.wake({ name: 'web' });
+
+  await runEventPrune(ctx.harness.db, Date.now() + 8 * 86_400_000);
+
+  // the dashboard waits 2 s before it opens the stream again
+  await waitFor(
+    () => {
+      expect(invalidate.mock.calls).toContainEqual([]);
+    },
+    { timeoutMs: 4000 },
+  );
+});
+
+test('it shows an imp made while its stream was down, before it had a cursor', async () => {
+  const ctx = await setupTest();
+
+  await ctx.harness.createTestImage('base');
+  await ctx.logIn();
+
+  const rendered = renderApp();
+
+  await rendered.findByText(/no imps yet/iu);
+  await ctx.waitForEventStream();
+
+  ctx.dropEventStreams();
+
+  await ctx.client.imps.create({ name: 'web' });
+
+  // the dashboard waits 2 s before it opens the stream again
+  const row = await rendered.findByRole('row', { name: /web/u }, { timeout: 4000 });
+
+  expect(row).toBeInTheDocument();
+});
+
+test('it drops an imp removed while its stream was down, before it had a cursor', async () => {
+  const ctx = await setupTest();
+
+  await ctx.harness.createTestImage('base');
+  await ctx.client.imps.create({ name: 'web' });
+  await ctx.logIn();
+
+  const rendered = renderApp();
+
+  await rendered.findByRole('row', { name: /web/u });
+  await ctx.waitForEventStream();
+
+  ctx.dropEventStreams();
+
+  await ctx.client.imps.destroy({ name: 'web' });
+
+  // the dashboard waits 2 s before it opens the stream again
+  const empty = await rendered.findByText(/no imps yet/iu, {}, { timeout: 4000 });
+
+  expect(empty).toBeInTheDocument();
 });

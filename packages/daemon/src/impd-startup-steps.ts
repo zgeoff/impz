@@ -20,6 +20,7 @@ export const IMPD_STARTUP_STEPS = [
   'broker',
   'ssh',
   'tickers',
+  'reconcilers',
   'default-image',
 ] as const;
 

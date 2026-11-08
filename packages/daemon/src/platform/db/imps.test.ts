@@ -1,11 +1,12 @@
-import { expect, onTestFinished, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import { sql } from 'kysely';
 import { buildMockMoveTicketRow } from '../../test-utils/imp-ops/build-mock-move-ticket-row';
+import { buildMockLeaseRecord } from '../../test-utils/imps/build-mock-lease-record';
 import { buildMockNewImage } from '../../test-utils/imps/build-mock-new-image';
 import { buildMockNewImp } from '../../test-utils/imps/build-mock-new-imp';
 import { createTestDatabase } from '../../test-utils/platform/create-test-database';
+import { readLoggedEvents } from '../../test-utils/platform/read-logged-events';
 import { createImage } from './images';
-import type { ImpWrite } from './imp-write-feed';
 import {
   JAIL_UIDS,
   countImpsByState,
@@ -26,6 +27,7 @@ import {
   updateImpRequest,
   updateImpSettings,
 } from './imps';
+import { writeMovedLeases } from './leases';
 import { SlotTakenError } from './slot-taken-error';
 import { updateImpState } from './update-imp-state';
 
@@ -107,18 +109,11 @@ test('#createImp keeps the memory a guest may grow to', async () => {
 test('#createImp emits one ImpAdded', async () => {
   const ctx = await createTestDatabase();
   const image = await createImage(ctx.db, buildMockNewImage());
-
-  const writes: ImpWrite[] = [];
-
-  const unsubscribe = ctx.db.writes.subscribe((write) => {
-    writes.push(write);
-  });
-
-  onTestFinished(unsubscribe);
-
+  const head = await ctx.db.log.readHead();
   const imp = await createImp(ctx.db, buildMockNewImp({ imageId: image.id }));
+  const logged = await readLoggedEvents(ctx.db, head);
 
-  expect(writes).toStrictEqual([{ kind: 'added', imp }]);
+  expect(logged).toStrictEqual([{ ev: 'ImpAdded', imp, seq: head + 1, at: expect.any(Date) }]);
 });
 
 test('#createImp rejects a duplicate name with a clash naming the column', async () => {
@@ -135,21 +130,16 @@ test('#createImp rejects a duplicate name with a clash naming the column', async
   ).rejects.toMatchObject({ name: 'ImpClashError', column: 'name' });
 });
 
-test('#createImp rejects a jail uid another imp holds with a clash naming the column', async () => {
+test('#createImp gives two creates at once a jail uid each', async () => {
   const ctx = await createTestDatabase();
   const image = await createImage(ctx.db, buildMockNewImage());
 
-  // two creates outside a transaction both read the lowest free uid before
-  // either inserts
-  const created = await Promise.allSettled([
+  const created = await Promise.all([
     createImp(ctx.db, buildMockNewImp({ imageId: image.id, slot: 0, ip: '10.66.0.2' })),
     createImp(ctx.db, buildMockNewImp({ imageId: image.id, slot: 1, ip: '10.66.0.3' })),
   ]);
 
-  expect(created).toMatchObject([
-    { status: 'fulfilled' },
-    { status: 'rejected', reason: { name: 'ImpClashError', column: 'jail_uid' } },
-  ]);
+  expect(created.map((imp) => imp.jailUid)).toStrictEqual([JAIL_UIDS.first, JAIL_UIDS.first + 1]);
 });
 
 test('#createImp rejects a duplicate slot with a clash naming the column', async () => {
@@ -316,14 +306,7 @@ test('#createImpInFreeSlot puts the imp in the lowest free slot', async () => {
 test('#createImpInFreeSlot emits one ImpAdded, once it commits', async () => {
   const ctx = await createTestDatabase();
   const image = await createImage(ctx.db, buildMockNewImage());
-
-  const writes: ImpWrite[] = [];
-
-  const unsubscribe = ctx.db.writes.subscribe((write) => {
-    writes.push(write);
-  });
-
-  onTestFinished(unsubscribe);
+  const head = await ctx.db.log.readHead();
 
   const imp = await createImpInFreeSlot(
     ctx.db,
@@ -331,7 +314,9 @@ test('#createImpInFreeSlot emits one ImpAdded, once it commits', async () => {
     { count: 16, findIp: (slot) => `10.66.0.${String(slot * 4 + 2)}` },
   );
 
-  expect(writes).toStrictEqual([{ kind: 'added', imp }]);
+  const logged = await readLoggedEvents(ctx.db, head);
+
+  expect(logged).toStrictEqual([{ ev: 'ImpAdded', imp, seq: head + 1, at: expect.any(Date) }]);
 });
 
 test('#createImpInFreeSlot leaves a slot a live ticket keeps to a new imp', async () => {
@@ -449,36 +434,26 @@ test('#updateImpDisk emits ImpChanged resized for a new disk size', async () => 
   const ctx = await createTestDatabase();
   const image = await createImage(ctx.db, buildMockNewImage());
   const imp = await createImp(ctx.db, buildMockNewImp({ imageId: image.id, diskBytes: 1024 }));
-
-  const writes: ImpWrite[] = [];
-
-  const unsubscribe = ctx.db.writes.subscribe((write) => {
-    writes.push(write);
-  });
-
-  onTestFinished(unsubscribe);
-
+  const head = await ctx.db.log.readHead();
   const sized = await updateImpDisk(ctx.db, imp.id, { diskBytes: 2048, isGrowPending: true });
+  const logged = await readLoggedEvents(ctx.db, head);
 
-  expect(writes).toStrictEqual([{ kind: 'changed', imp: sized, reason: 'resized' }]);
+  expect(logged).toStrictEqual([
+    { ev: 'ImpChanged', imp: sized, reason: 'resized', seq: head + 1, at: expect.any(Date) },
+  ]);
 });
 
 test('#updateImpDisk emits nothing for a pending grow alone', async () => {
   const ctx = await createTestDatabase();
   const image = await createImage(ctx.db, buildMockNewImage());
   const imp = await createImp(ctx.db, buildMockNewImp({ imageId: image.id, diskBytes: 1024 }));
-
-  const writes: ImpWrite[] = [];
-
-  const unsubscribe = ctx.db.writes.subscribe((write) => {
-    writes.push(write);
-  });
-
-  onTestFinished(unsubscribe);
+  const head = await ctx.db.log.readHead();
 
   await updateImpDisk(ctx.db, imp.id, { diskBytes: 1024, isGrowPending: true });
 
-  expect(writes).toStrictEqual([]);
+  const logged = await readLoggedEvents(ctx.db, head);
+
+  expect(logged).toStrictEqual([]);
 });
 
 test('#updateImpDisk records a grow the guest still owes', async () => {
@@ -508,14 +483,7 @@ test('#updateImpSettings emits ImpChanged updated', async () => {
   const ctx = await createTestDatabase();
   const image = await createImage(ctx.db, buildMockNewImage());
   const imp = await createImp(ctx.db, buildMockNewImp({ imageId: image.id }));
-
-  const writes: ImpWrite[] = [];
-
-  const unsubscribe = ctx.db.writes.subscribe((write) => {
-    writes.push(write);
-  });
-
-  onTestFinished(unsubscribe);
+  const head = await ctx.db.log.readHead();
 
   const updated = await updateImpSettings(ctx.db, imp.id, {
     cpu: { limit: null, weight: 100 },
@@ -523,7 +491,11 @@ test('#updateImpSettings emits ImpChanged updated', async () => {
     httpPort: 8080,
   });
 
-  expect(writes).toStrictEqual([{ kind: 'changed', imp: updated, reason: 'updated' }]);
+  const logged = await readLoggedEvents(ctx.db, head);
+
+  expect(logged).toStrictEqual([
+    { ev: 'ImpChanged', imp: updated, reason: 'updated', seq: head + 1, at: expect.any(Date) },
+  ]);
 });
 
 test('#updateImpCommitted takes the move mark off and commits the imp’s tickets', async () => {
@@ -550,6 +522,45 @@ test('#updateImpCommitted takes the move mark off and commits the imp’s ticket
 
   expect(committed.moveState).toBeNull();
   expect(ticket.committed_at).toBe(1_800_000_000_000);
+});
+
+test('#updateImpCommitted logs the commit, then a held change for the leases the move brought', async () => {
+  const ctx = await createTestDatabase();
+  const image = await createImage(ctx.db, buildMockNewImage());
+
+  const imp = await createImp(
+    ctx.db,
+    buildMockNewImp({ imageId: image.id, moveState: 'receiving' }),
+  );
+
+  await writeMovedLeases(ctx.db, imp.id, [buildMockLeaseRecord({ until: null })]);
+
+  const head = await ctx.db.log.readHead();
+  const committed = await updateImpCommitted(ctx.db, imp.id, 1_800_000_000_000);
+  const logged = await readLoggedEvents(ctx.db, head);
+
+  expect(logged).toStrictEqual([
+    { ev: 'ImpChanged', imp: committed, reason: 'updated', seq: head + 1, at: expect.any(Date) },
+    { ev: 'ImpChanged', imp: committed, reason: 'held', seq: head + 2, at: expect.any(Date) },
+  ]);
+});
+
+test('#updateImpCommitted logs only the commit for an imp with no lease', async () => {
+  const ctx = await createTestDatabase();
+  const image = await createImage(ctx.db, buildMockNewImage());
+
+  const imp = await createImp(
+    ctx.db,
+    buildMockNewImp({ imageId: image.id, moveState: 'receiving' }),
+  );
+
+  const head = await ctx.db.log.readHead();
+  const committed = await updateImpCommitted(ctx.db, imp.id, 1_800_000_000_000);
+  const logged = await readLoggedEvents(ctx.db, head);
+
+  expect(logged).toStrictEqual([
+    { ev: 'ImpChanged', imp: committed, reason: 'updated', seq: head + 1, at: expect.any(Date) },
+  ]);
 });
 
 test('#updateImpCommitted leaves a warm move’s imp asleep on its memory, trust pending', async () => {
@@ -660,18 +671,13 @@ test('#removeImp emits one ImpRemoved', async () => {
   const ctx = await createTestDatabase();
   const image = await createImage(ctx.db, buildMockNewImage());
   const imp = await createImp(ctx.db, buildMockNewImp({ imageId: image.id }));
-
-  const writes: ImpWrite[] = [];
-
-  const unsubscribe = ctx.db.writes.subscribe((write) => {
-    writes.push(write);
-  });
-
-  onTestFinished(unsubscribe);
+  const head = await ctx.db.log.readHead();
 
   await removeImp(ctx.db, imp.id);
 
-  expect(writes).toStrictEqual([{ kind: 'removed', imp }]);
+  const logged = await readLoggedEvents(ctx.db, head);
+
+  expect(logged).toStrictEqual([{ ev: 'ImpRemoved', imp, seq: head + 1, at: expect.any(Date) }]);
 });
 
 test('#removeImp reports an imp that is gone already as not removed', async () => {

@@ -16,7 +16,7 @@ interface DropLog {
 }
 
 // oRPC ends a stream on an event that fails the schema, so such an event
-// stays off the wire; impd's own subscribers still get it from the bus.
+// stays off the wire; impd's own followers still read it from the log.
 export function createEventCheck(deps: EventCheckDeps): (event: Readonly<ImpEvent>) => boolean {
   const dropped = metrics.getMeter(SCOPE).createCounter('imp.events.dropped', {
     description: 'events the stream dropped because they fail the event schema, a bug in impd',

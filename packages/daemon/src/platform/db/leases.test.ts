@@ -1,11 +1,11 @@
-import { expect, onTestFinished, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import { buildMockLeaseRecord } from '../../test-utils/imps/build-mock-lease-record';
 import { buildMockNewImage } from '../../test-utils/imps/build-mock-new-image';
 import { buildMockNewImp } from '../../test-utils/imps/build-mock-new-imp';
 import { createTestDatabase } from '../../test-utils/platform/create-test-database';
 import { createUnmigratedDatabase } from '../../test-utils/platform/create-unmigrated-database';
+import { readLoggedEvents } from '../../test-utils/platform/read-logged-events';
 import { createImage } from './images';
-import type { ImpWrite } from './imp-write-feed';
 import { createImp, readImpById, removeImp } from './imps';
 import { isBlockingLease, listLeases, removeLeases, writeLease, writeMovedLeases } from './leases';
 import { runMigrations, runMigrationsTo } from './run-migrations';
@@ -112,42 +112,34 @@ test('#writeLease emits nothing for a renew', async () => {
   const ctx = await createTestDatabase();
   const image = await createImage(ctx.db, buildMockNewImage());
   const imp = await createImp(ctx.db, buildMockNewImp({ imageId: image.id }));
-
-  const writes: ImpWrite[] = [];
-
-  const unsubscribe = ctx.db.writes.subscribe((write) => {
-    writes.push(write);
-  });
-
-  onTestFinished(unsubscribe);
+  const head = await ctx.db.log.readHead();
 
   await writeLease(ctx.db, buildMockLeaseRecord({ impId: imp.id }), {
     at: 1_800_000_000_000,
     reason: null,
   });
 
-  expect(writes).toStrictEqual([]);
+  const logged = await readLoggedEvents(ctx.db, head);
+
+  expect(logged).toStrictEqual([]);
 });
 
 test('#writeLease emits ImpChanged with its reason', async () => {
   const ctx = await createTestDatabase();
   const image = await createImage(ctx.db, buildMockNewImage());
   const imp = await createImp(ctx.db, buildMockNewImp({ imageId: image.id }));
-
-  const writes: ImpWrite[] = [];
-
-  const unsubscribe = ctx.db.writes.subscribe((write) => {
-    writes.push(write);
-  });
-
-  onTestFinished(unsubscribe);
+  const head = await ctx.db.log.readHead();
 
   const held = await writeLease(ctx.db, buildMockLeaseRecord({ impId: imp.id }), {
     at: 1_800_000_000_000,
     reason: 'held',
   });
 
-  expect(writes).toStrictEqual([{ kind: 'changed', imp: held, reason: 'held' }]);
+  const logged = await readLoggedEvents(ctx.db, head);
+
+  expect(logged).toStrictEqual([
+    { ev: 'ImpChanged', imp: held, reason: 'held', seq: head + 1, at: expect.any(Date) },
+  ]);
 });
 
 test('#writeLease writes an ended lease anew, with a new start', async () => {
@@ -338,35 +330,23 @@ test('#removeLeases emits nothing for a removal that took nothing', async () => 
   const ctx = await createTestDatabase();
   const image = await createImage(ctx.db, buildMockNewImage());
   const imp = await createImp(ctx.db, buildMockNewImp({ imageId: image.id }));
-
-  const writes: ImpWrite[] = [];
-
-  const unsubscribe = ctx.db.writes.subscribe((write) => {
-    writes.push(write);
-  });
-
-  onTestFinished(unsubscribe);
+  const head = await ctx.db.log.readHead();
 
   await removeLeases(ctx.db, imp.id, [{ principal: 'token:b', label: 'job' }], {
     at: 1_800_000_000_000,
     reason: 'held',
   });
 
-  expect(writes).toStrictEqual([]);
+  const logged = await readLoggedEvents(ctx.db, head);
+
+  expect(logged).toStrictEqual([]);
 });
 
 test('#removeLeases emits for a removal that took nothing when told to', async () => {
   const ctx = await createTestDatabase();
   const image = await createImage(ctx.db, buildMockNewImage());
   const imp = await createImp(ctx.db, buildMockNewImp({ imageId: image.id }));
-
-  const writes: ImpWrite[] = [];
-
-  const unsubscribe = ctx.db.writes.subscribe((write) => {
-    writes.push(write);
-  });
-
-  onTestFinished(unsubscribe);
+  const head = await ctx.db.log.readHead();
 
   const removed = await removeLeases(ctx.db, imp.id, [], {
     at: 1_800_000_000_000,
@@ -374,7 +354,11 @@ test('#removeLeases emits for a removal that took nothing when told to', async (
     isEmittedWhenNone: true,
   });
 
-  expect(writes).toStrictEqual([{ kind: 'changed', imp: removed.imp, reason: 'held' }]);
+  const logged = await readLoggedEvents(ctx.db, head);
+
+  expect(logged).toStrictEqual([
+    { ev: 'ImpChanged', imp: removed.imp, reason: 'held', seq: head + 1, at: expect.any(Date) },
+  ]);
 });
 
 test('#removeLeases takes only the leases made through leases.* on a forced clear', async () => {
@@ -417,21 +401,24 @@ test('#removeLeases emits how many leases a forced clear released', async () => 
     { at: 1_800_000_000_000, reason: null },
   );
 
-  const writes: ImpWrite[] = [];
-
-  const unsubscribe = ctx.db.writes.subscribe((write) => {
-    writes.push(write);
-  });
-
-  onTestFinished(unsubscribe);
+  const head = await ctx.db.log.readHead();
 
   const cleared = await removeLeases(ctx.db, imp.id, 'blocking', {
     at: 1_800_000_000_000,
     reason: 'released',
   });
 
-  expect(writes).toStrictEqual([
-    { kind: 'changed', imp: cleared.imp, reason: 'released', detail: { released: 1 } },
+  const logged = await readLoggedEvents(ctx.db, head);
+
+  expect(logged).toStrictEqual([
+    {
+      ev: 'ImpChanged',
+      imp: cleared.imp,
+      reason: 'released',
+      detail: { released: 1 },
+      seq: head + 1,
+      at: expect.any(Date),
+    },
   ]);
 });
 
@@ -495,14 +482,7 @@ test('#writeMovedLeases emits nothing', async () => {
   const ctx = await createTestDatabase();
   const image = await createImage(ctx.db, buildMockNewImage());
   const imp = await createImp(ctx.db, buildMockNewImp({ imageId: image.id }));
-
-  const writes: ImpWrite[] = [];
-
-  const unsubscribe = ctx.db.writes.subscribe((write) => {
-    writes.push(write);
-  });
-
-  onTestFinished(unsubscribe);
+  const head = await ctx.db.log.readHead();
 
   await writeMovedLeases(ctx.db, imp.id, [
     {
@@ -514,7 +494,9 @@ test('#writeMovedLeases emits nothing', async () => {
     },
   ]);
 
-  expect(writes).toStrictEqual([]);
+  const logged = await readLoggedEvents(ctx.db, head);
+
+  expect(logged).toStrictEqual([]);
 });
 
 test.each([

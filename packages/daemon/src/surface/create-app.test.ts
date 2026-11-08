@@ -13,10 +13,12 @@ import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
 import invariant from 'tiny-invariant';
 import packageJson from '../../package.json' with { type: 'json' };
+import { ROOT_TOKEN_ID } from '../identity/auth/token-store';
 import type { ImpService } from '../imps/imps/imp-service';
 import { listApiCalls } from '../platform/db/api-audit';
 import { createImage } from '../platform/db/images';
 import { readImpByName } from '../platform/db/imps';
+import { buildSessionValue } from '../platform/http/session-cookie';
 import { buildMockNewImage } from '../test-utils/imps/build-mock-new-image';
 import { buildStubImageBuilder } from '../test-utils/imps/build-stub-image-builder';
 import { createBuilderImage } from '../test-utils/imps/create-builder-image';
@@ -133,6 +135,7 @@ test('it serves system.info from config and the database', async () => {
       imagePins: true,
       buildContextUpload: true,
       destroyIdCheck: true,
+      eventCursor: true,
     },
     ksm: null,
   });
@@ -1713,4 +1716,60 @@ test('it restarts an imp in error on a wake', async () => {
   const restarted = await ctx.client.imps.wake({ name: 'dev' });
 
   expect(restarted.state).toBe('running');
+});
+
+test('it records a dashboard session’s calls in the audit log as the dashboard’s', async () => {
+  const ctx = await setupTest({ cgroups: buildStubCpuCgroups().cgroups });
+
+  ctx.setClock(Date.UTC(2026, 4, 6, 7, 8, 9));
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.client.imps.create({ name: 'dev', image: 'ubuntu' });
+
+  const expiresAt = ctx.now() + 60_000;
+  const sendDashboardRequest = (request: Request) => ctx.impd.api.app.handle(request);
+
+  const dashboard: ContractRouterClient<ImpContract> = createORPCClient(
+    new RPCLink({
+      url: 'http://impd.test/rpc',
+      headers: {
+        cookie: `imp_session=${buildSessionValue('root-token', { tokenId: ROOT_TOKEN_ID, expiresAt })}`,
+        'sec-fetch-site': 'same-origin',
+      },
+      fetch: sendDashboardRequest,
+    }),
+  );
+
+  await dashboard.imps.stop({ name: 'dev' });
+
+  // each audit row lands after its call's answer
+  const calls = await waitFor(async () => {
+    const listed = await listApiCalls(ctx.db, null, 100, null);
+
+    expect(listed).toHaveLength(2);
+
+    return listed;
+  });
+
+  // impd's clock is frozen, so every call takes 0 ms at the same time
+  expect(calls).toStrictEqual([
+    {
+      procedure: 'imps.stop',
+      imp: 'dev',
+      actor: 'dashboard',
+      actorName: 'root',
+      at: new Date(Date.UTC(2026, 4, 6, 7, 8, 9)),
+      durationMs: 0,
+      outcome: 'ok',
+    },
+    {
+      procedure: 'imps.create',
+      imp: 'dev',
+      actor: 'token',
+      actorName: 'root',
+      at: new Date(Date.UTC(2026, 4, 6, 7, 8, 9)),
+      durationMs: 0,
+      outcome: 'ok',
+    },
+  ]);
 });

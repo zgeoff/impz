@@ -16,7 +16,7 @@ export function buildStubEventFeed(): StubEventFeed {
     watchEvents: async (_client, options) => {
       listeners.push(options.onEvent);
 
-      await options.onOpen?.(1);
+      await options.onOpen?.(1, {});
 
       if (options.signal !== undefined && !options.signal.aborted) {
         await once(options.signal, 'abort');

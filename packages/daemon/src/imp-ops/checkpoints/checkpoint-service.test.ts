@@ -8,7 +8,7 @@ import { buildStubAnswerQueue } from '@impz/shared/test-utils/build-stub-answer-
 import invariant from 'tiny-invariant';
 import { createCheckpoint, listCheckpoints } from '../../platform/db/checkpoints';
 import { createImage, updateImage } from '../../platform/db/images';
-import { createImp, readImpByName } from '../../platform/db/imps';
+import { createImp, readImpById, readImpByName } from '../../platform/db/imps';
 import type { ImpRecord } from '../../platform/db/imps';
 import { buildMockNewCheckpoint } from '../../test-utils/imp-ops/build-mock-new-checkpoint';
 import { buildMockNewImage } from '../../test-utils/imps/build-mock-new-image';
@@ -788,33 +788,50 @@ test('it leaves an imp that took a refused fork’s name before the fork’s cle
 
   await ctx.impd.imps.createImp({ name: 'dev', image: 'base' });
 
+  const queued: {
+    row?: ImpRecord | undefined;
+    removed?: Promise<void>;
+    taker?: Promise<Imp>;
+  } = {};
+
+  const checkpoints = createCheckpointService({
+    config: ctx.config,
+    db: ctx.db,
+
+    // once the fork's row is written, and before its disk is, another call removes the row and
+    // queues a create of an imp by the fork's name
+    imps: {
+      ...ctx.impd.imps,
+      createImp: (input) =>
+        ctx.impd.imps.createImp({
+          ...input,
+          prepareDisk: async (forkId) => {
+            queued.row = await readImpById(ctx.db, forkId);
+
+            queued.removed = ctx.impd.imps.destroyImpId(forkId);
+
+            queued.taker = ctx.impd.imps.lockImpId(forkId, () =>
+              ctx.impd.imps.createImp({ name: 'copy', image: image.name }),
+            );
+
+            await input.prepareDisk?.(forkId);
+          },
+        }),
+    },
+    storage: ctx.storage,
+    diskBudget: ctx.impd.diskBudget,
+
+    freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
+  });
+
   ctx.gate.arm();
 
-  const fork = ctx.impd.checkpoints.forkImp({ source: 'dev', name: 'copy' });
+  const fork = checkpoints.forkImp({ source: 'dev', name: 'copy' });
 
   await ctx.gate.reached;
 
   await ctx.impd.imps.destroyImp('dev');
   await ctx.impd.imps.createImp({ name: 'dev', image: 'base' });
-
-  const queued: { row?: ImpRecord; removed?: Promise<void>; taker?: Promise<Imp> } = {};
-
-  const unwatch = ctx.db.writes.subscribe((write) => {
-    unwatch();
-
-    if (write.kind !== 'added') {
-      throw new Error(`the first write was ${write.kind}, not the fork's row`);
-    }
-
-    queued.row = write.imp;
-    queued.removed = ctx.impd.imps.destroyImpId(write.imp.id);
-
-    queued.taker = ctx.impd.imps.lockImpId(write.imp.id, () =>
-      ctx.impd.imps.createImp({ name: 'copy', image: image.name }),
-    );
-  });
-
-  onTestFinished(unwatch);
 
   ctx.gate.release();
 
@@ -903,7 +920,23 @@ test('it draws a new id when a deleted checkpoint’s snapshot stays for a fork'
   const checkpoints = createCheckpointService({
     config: ctx.config,
     db: ctx.db,
-    imps: ctx.impd.imps,
+
+    // the fork's disk file is in place once its row is, before its disk is made
+    imps: {
+      ...ctx.impd.imps,
+      createImp: (input) =>
+        ctx.impd.imps.createImp({
+          ...input,
+          prepareDisk: async (forkId) => {
+            const forkDisk = ctx.storage.resolveImpPaths(forkId).disk;
+
+            mkdirSync(dirname(forkDisk), { recursive: true });
+            writeFileSync(forkDisk, 'rootfs');
+
+            await input.prepareDisk?.(forkId);
+          },
+        }),
+    },
     storage: ctx.storage,
     diskBudget: ctx.impd.diskBudget,
 
@@ -912,22 +945,6 @@ test('it draws a new id when a deleted checkpoint’s snapshot stays for a fork'
   });
 
   await checkpoints.createCheckpoint('dev', 'v1');
-
-  const unwatch = ctx.db.writes.subscribe((write) => {
-    unwatch();
-
-    if (write.kind !== 'added') {
-      throw new Error(`the first write was ${write.kind}, not the fork's row`);
-    }
-
-    const forkDisk = ctx.storage.resolveImpPaths(write.imp.id).disk;
-
-    mkdirSync(dirname(forkDisk), { recursive: true });
-    writeFileSync(forkDisk, 'rootfs');
-  });
-
-  onTestFinished(unwatch);
-
   await checkpoints.forkImp({ source: 'dev', name: 'copy', checkpoint: 'v1' });
   await checkpoints.removeCheckpoint('dev', 'v1');
 

@@ -49,12 +49,17 @@ rules:
 
 - What a client sends must still pass: impd must accept every input it accepted before. A new
   required field, a tighter bound, a dropped enum value, or a field impd no longer reads breaks a
+  client. An input that a call may leave out carries `"x-optional": true`, and the check reads that
+  key apart from the schema. A procedure with no input schema renders as `{}`, and a typed client of
+  it sends no input, so it may gain an input marked optional. An input that loses the mark breaks a
   client.
 - What impd sends must still make sense to an older client. A field that may now be missing, a
   changed type, a looser bound, or a variant of a tagged union that impd stops sending breaks a
   client. A new field, a new value of an enum, and a new variant of a tagged union do not, because a
   client passes over what it does not know. The union's tag is its discriminator: the property each
-  variant fixes to its own value, such as `type`.
+  variant fixes to its own value, such as `type`. The client passes over an unknown event kind from
+  the release that added `Position` on. An older client fails on one, so impd sends a new kind to it
+  only behind an input it could not have sent, such as the event stream's cursor.
 - A removed procedure, message, error code or constant, a changed error status, and a procedure that
   changes between one answer and an event stream all break a client.
 

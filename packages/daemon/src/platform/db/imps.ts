@@ -2,12 +2,15 @@ import type { EgressPolicy, ImpKind, ImpState, MoveState, PublicAuth } from '@im
 import { getErrorMessage } from '@impz/shared';
 import { sql } from 'kysely';
 import { allocateSlot } from './allocate-slot';
+import { appendImpChange } from './append-imp-change';
+import { appendImpEvent } from './append-imp-event';
 import { ImpClashError } from './imp-clash-error';
 import { requireTransition } from './imp-transitions';
 import { MOVE_TRANSITIONS } from './move-transitions';
 import type { ImpDatabase, ImpQueries } from './open-database';
 import { SlotTakenError } from './slot-taken-error';
 import { toImpRecord } from './to-imp-record';
+import { withImpTransaction } from './with-imp-transaction';
 
 export interface ImpRecord {
   readonly id: string;
@@ -121,16 +124,11 @@ async function allocateJailUid(db: ImpQueries): Promise<number> {
   return uid;
 }
 
-export async function createImp(db: ImpDatabase, imp: NewImp): Promise<ImpRecord> {
-  const created = await writeImpRow(db, imp);
-
-  db.writes.publish({ kind: 'added', imp: created });
-
-  return created;
+export function createImp(db: ImpDatabase, imp: NewImp): Promise<ImpRecord> {
+  return withImpTransaction(db, (trx, at) => writeImpRow(trx, imp, at));
 }
 
-// emits nothing: the caller emits once the row is committed
-async function writeImpRow(db: ImpQueries, imp: NewImp): Promise<ImpRecord> {
+async function writeImpRow(db: ImpQueries, imp: NewImp, at: number): Promise<ImpRecord> {
   const now = Date.now();
 
   const jailUid = await allocateJailUid(db);
@@ -179,7 +177,11 @@ async function writeImpRow(db: ImpQueries, imp: NewImp): Promise<ImpRecord> {
       .execute();
   }
 
-  return toImpRecord(row);
+  const created = toImpRecord(row);
+
+  await appendImpEvent(db, { ev: 'ImpAdded', imp: created }, at);
+
+  return created;
 }
 
 // SQLite names the column in its message: `UNIQUE constraint failed: imps.name`
@@ -205,16 +207,16 @@ interface FreeSlots {
   readonly now?: () => number;
 }
 
-export async function createImpInFreeSlot(
+export function createImpInFreeSlot(
   db: ImpDatabase,
   imp: Omit<NewImp, 'slot' | 'ip'>,
   slots: FreeSlots,
 ): Promise<ImpRecord> {
-  const created = await db.transaction().execute(async (trx) => {
+  return withImpTransaction(db, async (trx, at) => {
     if (slots.slot === undefined) {
       const slot = await allocateSlot(trx, slots.count, (slots.now ?? Date.now)());
 
-      return writeImpRow(trx, { ...imp, slot, ip: slots.findIp(slot) });
+      return writeImpRow(trx, { ...imp, slot, ip: slots.findIp(slot) }, at);
     }
 
     const holder = await trx
@@ -227,12 +229,8 @@ export async function createImpInFreeSlot(
       throw new SlotTakenError(slots.slot);
     }
 
-    return writeImpRow(trx, { ...imp, slot: slots.slot, ip: slots.findIp(slots.slot) });
+    return writeImpRow(trx, { ...imp, slot: slots.slot, ip: slots.findIp(slots.slot) }, at);
   });
-
-  db.writes.publish({ kind: 'added', imp: created });
-
-  return created;
 }
 
 export async function readImpByName(db: ImpDatabase, name: string): Promise<ImpRecord | undefined> {
@@ -241,7 +239,7 @@ export async function readImpByName(db: ImpDatabase, name: string): Promise<ImpR
   return row === undefined ? undefined : toImpRecord(row);
 }
 
-export async function readImpById(db: ImpDatabase, id: string): Promise<ImpRecord | undefined> {
+export async function readImpById(db: ImpQueries, id: string): Promise<ImpRecord | undefined> {
   const row = await db.selectFrom('imps').selectAll().where('id', '=', id).executeTakeFirst();
 
   return row === undefined ? undefined : toImpRecord(row);
@@ -269,39 +267,37 @@ interface ImpSettings {
   readonly httpPort: number;
 }
 
-export async function updateImpSettings(
+export function updateImpSettings(
   db: ImpDatabase,
   id: string,
   settings: Readonly<ImpSettings>,
 ): Promise<ImpRecord> {
   const cpu = settings.cpu;
 
-  const row = await db
-    .updateTable('imps')
-    .set({
-      cpu_limit: cpu.limit,
-      cpu_weight: cpu.weight,
-      vcpus: settings.vcpus,
-      http_port: settings.httpPort,
-    })
-    .where('id', '=', id)
-    .returningAll()
-    .executeTakeFirstOrThrow();
+  return withImpTransaction(db, async (trx, at) => {
+    const row = await trx
+      .updateTable('imps')
+      .set({
+        cpu_limit: cpu.limit,
+        cpu_weight: cpu.weight,
+        vcpus: settings.vcpus,
+        http_port: settings.httpPort,
+      })
+      .where('id', '=', id)
+      .returningAll()
+      .executeTakeFirstOrThrow();
 
-  const imp = toImpRecord(row);
-
-  db.writes.publish({ kind: 'changed', imp, reason: 'updated' });
-
-  return imp;
+    return appendImpChange(trx, at, toImpRecord(row), { reason: 'updated' });
+  });
 }
 
-export async function updateImpCommitted(
+export function updateImpCommitted(
   db: ImpDatabase,
   id: string,
   committedAt: number,
   isWarm = false,
 ): Promise<ImpRecord> {
-  const row = await db.transaction().execute(async (trx) => {
+  return withImpTransaction(db, async (trx, at) => {
     if (isWarm) {
       const received = await trx
         .selectFrom('imps')
@@ -328,14 +324,15 @@ export async function updateImpCommitted(
       .where('imp_id', '=', id)
       .execute();
 
-    return updated;
+    const committed = await appendImpChange(trx, at, toImpRecord(updated), { reason: 'updated' });
+
+    // the leases came with the move, so this host's readers learn of them only now
+    if (updated.hold_until === null || updated.hold_until <= committedAt) {
+      return committed;
+    }
+
+    return appendImpChange(trx, at, committed, { reason: 'held' });
   });
-
-  const imp = toImpRecord(row);
-
-  db.writes.publish({ kind: 'changed', imp, reason: 'updated' });
-
-  return imp;
 }
 
 export async function removeTrustPending(db: ImpDatabase, id: string): Promise<ImpRecord> {
@@ -349,12 +346,12 @@ export async function removeTrustPending(db: ImpDatabase, id: string): Promise<I
   return toImpRecord(row);
 }
 
-export async function updateImpMove(
+export function updateImpMove(
   db: ImpDatabase,
   id: string,
   moveState: MoveState | null,
 ): Promise<ImpRecord> {
-  const row = await db.transaction().execute(async (trx) => {
+  return withImpTransaction(db, async (trx, at) => {
     const current = await trx
       .selectFrom('imps')
       .select('move_state')
@@ -370,19 +367,15 @@ export async function updateImpMove(
       );
     }
 
-    return trx
+    const row = await trx
       .updateTable('imps')
       .set({ move_state: moveState })
       .where('id', '=', id)
       .returningAll()
       .executeTakeFirstOrThrow();
+
+    return appendImpChange(trx, at, toImpRecord(row), { reason: 'updated' });
   });
-
-  const imp = toImpRecord(row);
-
-  db.writes.publish({ kind: 'changed', imp, reason: 'updated' });
-
-  return imp;
 }
 
 export async function updateImpActivity(db: ImpDatabase, id: string, at: Date): Promise<void> {
@@ -409,27 +402,29 @@ export async function updateImpRequest(db: ImpDatabase, id: string, at: Date): P
     .execute();
 }
 
-export async function updateImpDisk(
+export function updateImpDisk(
   db: ImpDatabase,
   id: string,
   disk: Readonly<{ diskBytes: number; isGrowPending: boolean }>,
 ): Promise<ImpRecord> {
-  const before = await readImpById(db, id);
+  return withImpTransaction(db, async (trx, at) => {
+    const before = await readImpById(trx, id);
 
-  const row = await db
-    .updateTable('imps')
-    .set({ disk_bytes: disk.diskBytes, disk_grow_pending: disk.isGrowPending ? 1 : 0 })
-    .where('id', '=', id)
-    .returningAll()
-    .executeTakeFirstOrThrow();
+    const row = await trx
+      .updateTable('imps')
+      .set({ disk_bytes: disk.diskBytes, disk_grow_pending: disk.isGrowPending ? 1 : 0 })
+      .where('id', '=', id)
+      .returningAll()
+      .executeTakeFirstOrThrow();
 
-  const sized = toImpRecord(row);
+    const sized = toImpRecord(row);
 
-  if (before?.diskBytes !== sized.diskBytes) {
-    db.writes.publish({ kind: 'changed', imp: sized, reason: 'resized' });
-  }
+    if (before?.diskBytes === sized.diskBytes) {
+      return sized;
+    }
 
-  return sized;
+    return appendImpChange(trx, at, sized, { reason: 'resized' });
+  });
 }
 
 // A lease with no end counts as one that ends at the last time a Date holds.
@@ -458,45 +453,43 @@ export interface StoredPublicAuth {
   readonly hash: string | null;
 }
 
-export async function updateImpExposure(
+export function updateImpExposure(
   db: ImpDatabase,
   id: string,
   exposure: StoredPublicAuth | null,
 ): Promise<ImpRecord | undefined> {
-  const row = await db
-    .updateTable('imps')
-    .set({
-      exposure: exposure === null ? 'tailnet' : 'public',
-      public_auth: exposure?.auth ?? null,
-      public_user: exposure?.user ?? null,
-      public_hash: exposure?.hash ?? null,
-    })
-    .where('id', '=', id)
-    .where('move_state', 'is', null)
-    .returningAll()
-    .executeTakeFirst();
+  return withImpTransaction(db, async (trx, at) => {
+    const row = await trx
+      .updateTable('imps')
+      .set({
+        exposure: exposure === null ? 'tailnet' : 'public',
+        public_auth: exposure?.auth ?? null,
+        public_user: exposure?.user ?? null,
+        public_hash: exposure?.hash ?? null,
+      })
+      .where('id', '=', id)
+      .where('move_state', 'is', null)
+      .returningAll()
+      .executeTakeFirst();
 
-  if (row === undefined) {
-    return undefined;
-  }
-
-  const changed = toImpRecord(row);
-
-  db.writes.publish({ kind: 'changed', imp: changed, reason: 'exposed' });
-
-  return changed;
+    return row === undefined
+      ? undefined
+      : appendImpChange(trx, at, toImpRecord(row), { reason: 'exposed' });
+  });
 }
 
-export async function removeImp(db: ImpDatabase, id: string): Promise<boolean> {
-  const row = await db.deleteFrom('imps').where('id', '=', id).returningAll().executeTakeFirst();
+export function removeImp(db: ImpDatabase, id: string): Promise<boolean> {
+  return withImpTransaction(db, async (trx, at) => {
+    const row = await trx.deleteFrom('imps').where('id', '=', id).returningAll().executeTakeFirst();
 
-  if (row === undefined) {
-    return false;
-  }
+    if (row === undefined) {
+      return false;
+    }
 
-  db.writes.publish({ kind: 'removed', imp: toImpRecord(row) });
+    await appendImpEvent(trx, { ev: 'ImpRemoved', imp: toImpRecord(row) }, at);
 
-  return true;
+    return true;
+  });
 }
 
 export async function removeIdentityReset(db: ImpDatabase, id: string): Promise<ImpRecord> {

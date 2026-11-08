@@ -42,12 +42,7 @@ function collectProcedureChanges(base: ProtocolSchema, head: ProtocolSchema): st
       changes.push(`${label}: removed`);
     } else if (before.stream === after.stream) {
       changes.push(
-        ...collectSchemaChanges({
-          label: `${label} input`,
-          direction: 'toServer',
-          before: before.input,
-          after: after.input,
-        }),
+        ...collectInputChanges(label, before.input, after.input),
         ...collectSchemaChanges({
           label: `${label} output`,
           direction: 'toClient',
@@ -61,6 +56,33 @@ function collectProcedureChanges(base: ProtocolSchema, head: ProtocolSchema): st
   }
 
   return changes;
+}
+
+type InputSchema = ProtocolSchema['procedures'][string]['input'];
+
+// A procedure with no input schema renders as `{}`, and a typed client of it sends no input, so
+// a new input that still accepts none breaks no client.
+function collectInputChanges(label: string, before: InputSchema, after: InputSchema): string[] {
+  if (Object.keys(before).length === 0 && isOptionalInput(after)) {
+    return [];
+  }
+
+  const required =
+    isOptionalInput(before) && !isOptionalInput(after) ? [`${label} input: now required`] : [];
+
+  return [
+    ...required,
+    ...collectSchemaChanges({
+      label: `${label} input`,
+      direction: 'toServer',
+      before,
+      after,
+    }),
+  ];
+}
+
+function isOptionalInput(input: InputSchema): boolean {
+  return input['x-optional'] === true;
 }
 
 function formatStream(stream: boolean): string {

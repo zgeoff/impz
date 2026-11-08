@@ -785,6 +785,7 @@ test('it signs an MCP client in through its OAuth provider and lists the tools i
     'imp_url',
     'imp_image_list',
     'imp_checkpoint_list',
+    'imp_event_list',
   ]);
 });
 
@@ -1250,6 +1251,7 @@ test('it lists only the read tools to a read grant', async () => {
     'imp_url',
     'imp_image_list',
     'imp_checkpoint_list',
+    'imp_event_list',
   ]);
 });
 
@@ -1303,7 +1305,7 @@ test('it names only the read tools in the instructions it gives a read grant', a
   const initialized = z.object({ result: z.object({ instructions: z.string() }) }).parse(json);
 
   expect(initialized.result.instructions).toBe(
-    'imp runs persistent Linux microVMs ("imps") that sleep when idle and wake on use. This server may touch imps matching home-*. This caller has the read scope, so it can only look: list imps, their URLs, the images and the checkpoints. Running commands, reading or writing files, and creating, checkpointing, forking or destroying an imp need a wider grant: exec or manage. Its tools: imp_list, imp_url, imp_image_list, imp_checkpoint_list.',
+    'imp runs persistent Linux microVMs ("imps") that sleep when idle and wake on use. This server may touch imps matching home-*. This caller has the read scope, so it can only look: list imps, their URLs, the images, the checkpoints and what happened to the imps. Running commands, reading or writing files, and creating, checkpointing, forking or destroying an imp need a wider grant: exec or manage. Its tools: imp_list, imp_url, imp_image_list, imp_checkpoint_list, imp_event_list.',
   );
 });
 

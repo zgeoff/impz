@@ -1,6 +1,14 @@
 import { Database } from 'bun:sqlite';
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { sql } from 'kysely';
@@ -320,4 +328,45 @@ test('#writeConsistentCopy writes a copy of an older schema that migrates forwar
     .map((row) => row.name);
 
   expect(names).toStrictEqual(Object.keys(MIGRATIONS).toSorted());
+});
+
+test('#writeConsistentCopy gives the copy a log ID of its own', async () => {
+  const ctx = await setupTest();
+
+  const path = join(ctx.dataDir, 'copy.sqlite');
+
+  await writeConsistentCopy(ctx.db, path);
+
+  const copy = await openDatabase(path);
+
+  onTestFinished(() => copy.destroy());
+
+  const copyLogId = await copy.log.readLogId();
+  const liveLogId = await ctx.db.log.readLogId();
+
+  expect(copyLogId).not.toBe(liveLogId);
+});
+
+test('#writeConsistentCopy gives each restore of one copy a log ID of its own', async () => {
+  const ctx = await setupTest();
+
+  const path = join(ctx.dataDir, 'copy.sqlite');
+  const again = join(ctx.dataDir, 'copy-again.sqlite');
+
+  await writeConsistentCopy(ctx.db, path);
+
+  copyFileSync(path, again);
+
+  const first = await openDatabase(path);
+
+  onTestFinished(() => first.destroy());
+
+  const second = await openDatabase(again);
+
+  onTestFinished(() => second.destroy());
+
+  const firstLogId = await first.log.readLogId();
+  const secondLogId = await second.log.readLogId();
+
+  expect(firstLogId).not.toBe(secondLogId);
 });

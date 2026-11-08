@@ -1,9 +1,10 @@
-import { expect, onTestFinished, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import { buildMockCheckpointRecord } from '../../test-utils/imp-ops/build-mock-checkpoint-record';
 import { buildMockNewCheckpoint } from '../../test-utils/imp-ops/build-mock-new-checkpoint';
 import { buildMockNewImage } from '../../test-utils/imps/build-mock-new-image';
 import { buildMockNewImp } from '../../test-utils/imps/build-mock-new-imp';
 import { createTestDatabase } from '../../test-utils/platform/create-test-database';
+import { readLoggedEvents } from '../../test-utils/platform/read-logged-events';
 import {
   createCheckpoint,
   listCheckpoints,
@@ -12,7 +13,6 @@ import {
   toApiCheckpoint,
 } from './checkpoints';
 import { createImage } from './images';
-import type { ImpWrite } from './imp-write-feed';
 import { createImp, removeImp } from './imps';
 
 test('#createCheckpoint returns the stored checkpoint, made now on a 32 GiB disk', async () => {
@@ -63,18 +63,13 @@ test('#createCheckpoint emits one checkpointAdded', async () => {
   const ctx = await createTestDatabase();
   const image = await createImage(ctx.db, buildMockNewImage());
   const imp = await createImp(ctx.db, buildMockNewImp({ imageId: image.id }));
-
-  const writes: ImpWrite[] = [];
-
-  const unsubscribe = ctx.db.writes.subscribe((write) => {
-    writes.push(write);
-  });
-
-  onTestFinished(unsubscribe);
-
+  const head = await ctx.db.log.readHead();
   const checkpoint = await createCheckpoint(ctx.db, buildMockNewCheckpoint({ impId: imp.id }));
+  const logged = await readLoggedEvents(ctx.db, head);
 
-  expect(writes).toStrictEqual([{ kind: 'checkpointAdded', checkpoint }]);
+  expect(logged).toStrictEqual([
+    { ev: 'CheckpointAdded', name: imp.name, checkpoint, seq: head + 1, at: expect.any(Date) },
+  ]);
 });
 
 test('#createCheckpoint rejects a duplicate label on one imp', async () => {
@@ -235,18 +230,15 @@ test('#removeCheckpoint emits one checkpointRemoved', async () => {
   const image = await createImage(ctx.db, buildMockNewImage());
   const imp = await createImp(ctx.db, buildMockNewImp({ imageId: image.id }));
   const checkpoint = await createCheckpoint(ctx.db, buildMockNewCheckpoint({ impId: imp.id }));
-
-  const writes: ImpWrite[] = [];
-
-  const unsubscribe = ctx.db.writes.subscribe((write) => {
-    writes.push(write);
-  });
-
-  onTestFinished(unsubscribe);
+  const head = await ctx.db.log.readHead();
 
   await removeCheckpoint(ctx.db, checkpoint.id);
 
-  expect(writes).toStrictEqual([{ kind: 'checkpointRemoved', checkpoint }]);
+  const logged = await readLoggedEvents(ctx.db, head);
+
+  expect(logged).toStrictEqual([
+    { ev: 'CheckpointRemoved', name: imp.name, checkpoint, seq: head + 1, at: expect.any(Date) },
+  ]);
 });
 
 test('#removeCheckpoint reports a checkpoint that does not exist as not removed', async () => {
@@ -258,18 +250,13 @@ test('#removeCheckpoint reports a checkpoint that does not exist as not removed'
 
 test('#removeCheckpoint emits nothing for a checkpoint that does not exist', async () => {
   const ctx = await createTestDatabase();
-
-  const writes: ImpWrite[] = [];
-
-  const unsubscribe = ctx.db.writes.subscribe((write) => {
-    writes.push(write);
-  });
-
-  onTestFinished(unsubscribe);
+  const head = await ctx.db.log.readHead();
 
   await removeCheckpoint(ctx.db, 'cp-missing');
 
-  expect(writes).toStrictEqual([]);
+  const logged = await readLoggedEvents(ctx.db, head);
+
+  expect(logged).toStrictEqual([]);
 });
 
 test('#removeImp removes the imp’s checkpoints with it', async () => {

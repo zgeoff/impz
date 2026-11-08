@@ -11,7 +11,7 @@ import {
 import { CheckpointRefSchema } from '../schemas/checkpoint-ref-schema';
 import { CheckpointSchema } from '../schemas/checkpoint-schema';
 import { EmptySchema } from '../schemas/empty-schema';
-import { ImpEventSchema } from '../schemas/event-schema';
+import { EventCursorSchema, EventPageSchema, ImpEventSchema } from '../schemas/event-schema';
 import { FileContentSchema, FilePathSchema } from '../schemas/file-schema';
 import { ImageBuildRunSchema } from '../schemas/image-build-run-schema';
 import { ImageOpEventSchema } from '../schemas/image-op-event-schema';
@@ -429,7 +429,15 @@ export const callerContract = {
   },
 
   events: {
-    stream: base.meta(ACCESS.readAny).output(eventIterator(ImpEventSchema)),
+    stream: base
+      .meta(ACCESS.readAny)
+      .input(EventCursorSchema.optional())
+      .output(eventIterator(ImpEventSchema)),
+
+    list: base
+      .meta(ACCESS.readAny)
+      .input(EventCursorSchema.extend({ limit: z.int().min(1).max(1000).optional() }))
+      .output(EventPageSchema),
   },
 
   system: {
