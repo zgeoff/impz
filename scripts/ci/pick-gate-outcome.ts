@@ -24,9 +24,9 @@ export function pickGateOutcome(needs: Readonly<GateNeeds>): GateOutcome {
     return 'pass';
   }
 
-  const every = new Set([changes?.result, ...results]);
+  const seenResults = new Set([changes?.result, ...results]);
 
-  return every.has('cancelled') && !every.has('failure') ? 'replaced' : 'fail';
+  return seenResults.has('cancelled') && !seenResults.has('failure') ? 'replaced' : 'fail';
 }
 
 export interface GateRun {
