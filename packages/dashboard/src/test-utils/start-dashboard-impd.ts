@@ -10,6 +10,7 @@ export interface DashboardImpd {
   readonly harness: TestImpd;
   readonly logIn: (token?: string) => Promise<void>;
   readonly waitForEventStream: () => Promise<void>;
+  readonly dropEventStreams: () => void;
 }
 
 const EVENT_STREAM_PATH = '/rpc/events/stream';
@@ -25,6 +26,7 @@ export async function startDashboardImpd(
   const cookies = new Map<string, string>();
 
   const streamed = Promise.withResolvers<Error | null>();
+  const drops = { controller: new AbortController() };
 
   server.use(
     http.all(`${IMPD_ORIGIN}/*`, async (info) => {
@@ -50,13 +52,13 @@ export async function startDashboardImpd(
         return response;
       }
 
-      // impd subscribes a stream to its events before it sends the stream's first
-      // bytes, so an event published after them reaches the page
+      // impd takes a stream's place in its event log before it sends the stream's
+      // first bytes, so an event written after them reaches the page
       const teed = teeFirstChunk(response);
 
       streamed.resolve(teed.firstChunk);
 
-      return teed.response;
+      return dropOnAbort(teed.response, drops.controller.signal);
     }),
   );
 
@@ -68,11 +70,42 @@ export async function startDashboardImpd(
     }
   };
 
-  return { harness, logIn, waitForEventStream };
+  // as a dropped connection would, so the page's watch opens the stream again
+  const dropEventStreams = (): void => {
+    drops.controller.abort();
+
+    drops.controller = new AbortController();
+  };
+
+  return { harness, logIn, waitForEventStream, dropEventStreams };
 }
 
 function formatCookies(cookies: ReadonlyMap<string, string>): string {
   return [...cookies].map(([name, value]) => `${name}=${value}`).join('; ');
+}
+
+function dropOnAbort(response: Response, signal: AbortSignal): Response {
+  if (response.body === null) {
+    return response;
+  }
+
+  const relay = new TransformStream<Uint8Array, Uint8Array>();
+
+  void runRelay(response.body, relay.writable, signal);
+
+  return new Response(relay.readable, response);
+}
+
+async function runRelay(
+  body: ReadableStream<Uint8Array>,
+  writable: WritableStream<Uint8Array>,
+  signal: AbortSignal,
+): Promise<void> {
+  try {
+    await body.pipeTo(writable, { signal });
+  } catch {
+    // the drop errors the page's side of the relay
+  }
 }
 
 async function logIn(token = TEST_TOKEN): Promise<void> {

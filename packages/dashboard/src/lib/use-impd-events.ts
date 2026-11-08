@@ -17,6 +17,13 @@ export function useImpdEvents(): void {
     const signal = controller.signal;
 
     const applyEvent = async (event: Readonly<ImpEvent>): Promise<void> => {
+      // the reader missed events, so any query may be stale
+      if (event.ev === 'Reset') {
+        await queryClient.invalidateQueries();
+
+        return;
+      }
+
       // an exec in an imp's agent changes nothing the dashboard shows
       if ((event.ev === 'ImpAdded' && event.reason === 'snapshot') || event.ev === 'AgentExec') {
         return;
@@ -40,9 +47,10 @@ export function useImpdEvents(): void {
         await watchEvents(impd.client, {
           signal,
           reconnect: { delayMs: RECONNECT_MS, shouldRetry: (error) => !isUnauthorized(error) },
-          onOpen: async (attempt) => {
-            // impd sends an event only to the streams open at the time
-            if (attempt > 1) {
+
+          // a reopen with no cursor may have missed any event; one with a cursor replays them
+          onOpen: async (attempt, cursor) => {
+            if (attempt > 1 && cursor.after === undefined) {
               await queryClient.invalidateQueries();
             }
           },

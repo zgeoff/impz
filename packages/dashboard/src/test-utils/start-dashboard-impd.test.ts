@@ -64,6 +64,20 @@ test('it waits until an event stream has started, so an event published after re
   });
 });
 
+test('it fails the open event streams at a drop', async () => {
+  const ctx = await setupTest();
+
+  await ctx.dashboardImpd.logIn();
+
+  const events = await ctx.client.events.stream();
+
+  await ctx.dashboardImpd.waitForEventStream();
+
+  ctx.dashboardImpd.dropEventStreams();
+
+  expect(Array.fromAsync(events)).rejects.toThrow();
+});
+
 test('it refuses a login with a token impd does not know', async () => {
   const ctx = await setupTest();
 

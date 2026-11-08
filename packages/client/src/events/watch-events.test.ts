@@ -8,6 +8,7 @@ import { buildStubAnswerQueue } from '@impz/shared/test-utils/build-stub-answer-
 import { ORPCError } from '@orpc/client';
 import { UnknownProcedureError } from '../unknown-procedure-error';
 import { watchEvents } from './watch-events';
+import type { EventSource, WatchEventsOptions } from './watch-events';
 
 test('it passes each event of the stream in order, then resolves once impd closes it', async () => {
   const added: ImpEvent = {
@@ -204,6 +205,211 @@ test('it opens a fresh stream after one ends, numbering each open', async () => 
 
   expect(onOpen.mock.calls).toStrictEqual([[1], [3]]);
   expect(streams.left).toBe(0);
+});
+
+test('it opens each later stream after the last event it read', async () => {
+  const controller = new AbortController();
+
+  const changed: ImpEvent = {
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
+    v: EVENT_VERSION,
+    at: new Date(),
+    seq: 41,
+    logId: 'log-a',
+    ev: 'ImpChanged',
+    reason: 'slept',
+    imp: buildMockImp({ name: 'box', state: 'sleeping' }),
+  };
+
+  const streams = buildStubAnswerQueue([
+    () => Promise.resolve(Readable.from([changed])),
+    () => Promise.resolve(Readable.from([])),
+  ]);
+
+  const stream = mock<EventSource['events']['stream']>(() => streams.next()());
+
+  await watchEvents(
+    { events: { stream } },
+    {
+      onEvent: () => {},
+      onOpen: (attempt) => {
+        if (attempt === 2) {
+          controller.abort();
+        }
+      },
+      signal: controller.signal,
+      reconnect: { delayMs: 1 },
+    },
+  );
+
+  expect(stream.mock.calls.map((call) => call[0])).toStrictEqual([
+    undefined,
+    { after: 41, logId: 'log-a' },
+  ]);
+});
+
+test('it opens the next stream after a position, and passes no position on', async () => {
+  const controller = new AbortController();
+
+  const position: ImpEvent = {
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
+    v: EVENT_VERSION,
+    at: new Date(),
+    seq: 90,
+    logId: 'log-a',
+    ev: 'Position',
+  };
+
+  const streams = buildStubAnswerQueue([
+    () => Promise.resolve(Readable.from([position])),
+    () => Promise.resolve(Readable.from([])),
+  ]);
+
+  const stream = mock<EventSource['events']['stream']>(() => streams.next()());
+  const onEvent = mock(() => {});
+
+  await watchEvents(
+    { events: { stream } },
+    {
+      onEvent,
+      onOpen: (attempt) => {
+        if (attempt === 2) {
+          controller.abort();
+        }
+      },
+      signal: controller.signal,
+      reconnect: { delayMs: 1 },
+    },
+  );
+
+  expect(stream.mock.calls.map((call) => call[0])).toStrictEqual([
+    undefined,
+    { after: 90, logId: 'log-a' },
+  ]);
+
+  expect(onEvent).not.toHaveBeenCalled();
+});
+
+test('it keeps its cursor through an event kind it does not know', async () => {
+  const controller = new AbortController();
+
+  const changed: ImpEvent = {
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
+    v: EVENT_VERSION,
+    at: new Date(),
+    seq: 41,
+    logId: 'log-a',
+    ev: 'ImpChanged',
+    reason: 'slept',
+    imp: buildMockImp({ name: 'box', state: 'sleeping' }),
+  };
+
+  const unknown = {
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
+    v: EVENT_VERSION,
+    at: new Date(),
+    seq: 90,
+    logId: 'log-a',
+    ev: 'KilnFired',
+  };
+
+  const streams = buildStubAnswerQueue([
+    () => Promise.resolve(Readable.from([changed, unknown])),
+    () => Promise.resolve(Readable.from([])),
+  ]);
+
+  const stream = mock<EventSource['events']['stream']>(() => streams.next()());
+
+  await watchEvents(
+    { events: { stream } },
+    {
+      onEvent: () => {},
+      onOpen: (attempt) => {
+        if (attempt === 2) {
+          controller.abort();
+        }
+      },
+      signal: controller.signal,
+      reconnect: { delayMs: 1 },
+    },
+  );
+
+  expect(stream.mock.calls.map((call) => call[0])).toStrictEqual([
+    undefined,
+    { after: 41, logId: 'log-a' },
+  ]);
+});
+
+test('it opens with an empty cursor before it has read a logged event', async () => {
+  const controller = new AbortController();
+
+  const snapshot: ImpEvent = {
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
+    v: EVENT_VERSION,
+    at: new Date(),
+    seq: 41,
+    logId: 'log-a',
+    ev: 'ImpAdded',
+    reason: 'snapshot',
+    imp: buildMockImp({ name: 'box' }),
+  };
+
+  const streams = buildStubAnswerQueue([
+    () => Promise.resolve(Readable.from([snapshot])),
+    () => Promise.resolve(Readable.from([])),
+  ]);
+
+  const onOpen = mock<NonNullable<WatchEventsOptions['onOpen']>>((attempt) => {
+    if (attempt === 2) {
+      controller.abort();
+    }
+  });
+
+  await watchEvents(
+    { events: { stream: () => streams.next()() } },
+    { onEvent: () => {}, onOpen, signal: controller.signal, reconnect: { delayMs: 1 } },
+  );
+
+  expect(onOpen.mock.calls).toStrictEqual([
+    [1, {}],
+    [2, {}],
+  ]);
+});
+
+test('it tells each open the cursor its stream starts at', async () => {
+  const controller = new AbortController();
+
+  const changed: ImpEvent = {
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
+    v: EVENT_VERSION,
+    at: new Date(),
+    seq: 41,
+    logId: 'log-a',
+    ev: 'ImpChanged',
+    reason: 'slept',
+    imp: buildMockImp({ name: 'box', state: 'sleeping' }),
+  };
+
+  const streams = buildStubAnswerQueue([
+    () => Promise.resolve(Readable.from([changed])),
+    () => Promise.resolve(Readable.from([])),
+  ]);
+
+  const onOpen = mock<NonNullable<WatchEventsOptions['onOpen']>>((attempt) => {
+    if (attempt === 2) {
+      controller.abort();
+    }
+  });
+
+  await watchEvents(
+    { events: { stream: () => streams.next()() } },
+    { onEvent: () => {}, onOpen, signal: controller.signal, reconnect: { delayMs: 1 } },
+  );
+
+  expect(onOpen.mock.calls).toStrictEqual([
+    [1, {}],
+    [2, { after: 41, logId: 'log-a' }],
+  ]);
 });
 
 test('it ends with impd’s refusal of the stream, without opening another', () => {

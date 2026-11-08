@@ -128,7 +128,9 @@ reader's imps, not its fields, so it carries no lease owners ([leases](./leases.
   record fails the schema is left out of every snapshot too, so it stays hidden across reconnects,
   and each stream that opens adds 1 to the counter for it.
 - A dashboard stream ends when its session expires and at any logout. The browser reconnects if its
-  session is still valid.
+  session is still valid, and resumes after the last event it read that set its cursor, so it
+  refetches only what the replayed events change. After a `Reset`, or a reconnect before any event
+  set its cursor, it refetches everything.
 - oRPC sends a keep-alive comment every 5 s, so an idle stream stays open through a proxy. Measured
   on 2 October 2026 with two 25 s gaps between events: through the [HTTPS](./https.md) listener,
   each event came 5–14 ms after its change; over the tailnet to impd's API, 73–91 ms. Neither path

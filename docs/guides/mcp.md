@@ -49,6 +49,7 @@ the server. The boundary is the token's scope, which impd enforces. Run `impz mc
 | `imp_checkpoint_list`   | the imp's checkpoints                                                              | read-only   |
 | `imp_restore`           | put the disk back to a checkpoint; later writes and memory are lost                | destructive |
 | `imp_checkpoint_delete` | delete one checkpoint                                                              | destructive |
+| `imp_event_list`        | what happened to the imps since a cursor, one page per call                        | read-only   |
 
 Each result carries the data twice: as `structuredContent`, and as the same JSON in a text block. A
 failed call (impd's `NOT_FOUND`, a guard refusal, bad arguments) is a result with `isError: true`,
