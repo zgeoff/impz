@@ -1,5 +1,13 @@
 # Changelog
 
+## [6.11.1](https://github.com/zgeoff/impz/compare/v6.11.0...v6.11.1) (2026-11-08)
+
+### Bug Fixes
+
+- **ci:** pass a cancelled gate only when a newer run replaces it
+  ([#974](https://github.com/zgeoff/impz/issues/974))
+  ([4fb310d](https://github.com/zgeoff/impz/commit/4fb310d42185fec48afde872ce603c356a833df7))
+
 ## [6.11.0](https://github.com/zgeoff/impz/compare/v6.10.1...v6.11.0) (2026-11-08)
 
 ### Features
