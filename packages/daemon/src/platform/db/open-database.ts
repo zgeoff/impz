@@ -1,7 +1,7 @@
 import { Database } from 'bun:sqlite';
 import {
   createOutsideWriteTriggers,
-  removeLogIdAfterOutsideWrites,
+  removeLogIDAfterOutsideWrites,
   writeNewLogId,
 } from '@impz/durable';
 import { buildSQLiteDialect } from '@zgeoff/kysely-bun-sqlite';
@@ -46,7 +46,7 @@ export async function openDatabase(
   try {
     await runMigrations(db);
     await createOutsideWriteTriggers(db, LOGGED_TABLES);
-    await removeLogIdAfterOutsideWrites(db);
+    await removeLogIDAfterOutsideWrites(db);
     await writeNewLogId(db);
 
     await log.start();

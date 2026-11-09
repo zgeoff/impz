@@ -7,7 +7,7 @@ export { readEventHead } from './events/read-event-head';
 export { readLogId } from './events/read-log-id';
 export { removeLogId } from './events/remove-log-id';
 export { createOutsideWriteTriggers } from './events/create-outside-write-triggers';
-export { removeLogIdAfterOutsideWrites } from './events/remove-log-id-after-outside-writes';
+export { removeLogIDAfterOutsideWrites } from './events/remove-log-id-after-outside-writes';
 export { writeNewLogId } from './events/write-new-log-id';
 
 export type {

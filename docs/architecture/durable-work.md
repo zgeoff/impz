@@ -60,7 +60,7 @@ those changes. Each time the program opens the file, it calls these, in order:
      described tables;
    - a temporary trigger, on the program's own connection only, that runs before each such insert
      and makes SQLite skip it with `RAISE(IGNORE)`.
-2. `removeLogIdAfterOutsideWrites`, which clears the log ID when a mark row exists, and removes the
+2. `removeLogIDAfterOutsideWrites`, which clears the log ID when a mark row exists, and removes the
    mark.
 3. `writeNewLogId`.
 

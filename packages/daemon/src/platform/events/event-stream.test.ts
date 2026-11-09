@@ -585,12 +585,12 @@ test('it sends a reset to a cursor from before an impd that logs no events chang
 
   controller.abort();
 
-  const logId = await reupgraded.log.readLogId();
+  const logID = await reupgraded.log.readLogId();
 
   expect(sent).toStrictEqual({
     done: false,
     // oxlint-disable-next-line id-length -- `v` is the event format's version field
-    value: { v: 1, at: new Date(Date.UTC(2026, 9, 2, 12)), seq: 2, logId, ev: 'Reset' },
+    value: { v: 1, at: new Date(Date.UTC(2026, 9, 2, 12)), seq: 2, logId: logID, ev: 'Reset' },
   });
 });
 

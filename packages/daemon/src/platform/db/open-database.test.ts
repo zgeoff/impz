@@ -190,7 +190,7 @@ test('it keeps the log ID across opens when only impd wrote the imps', async () 
 
   await updateImpState(before, imp.id, { reason: 'stopped', state: 'stopped' });
 
-  const logId = await before.log.readLogId();
+  const logID = await before.log.readLogId();
 
   await before.destroy();
 
@@ -198,9 +198,9 @@ test('it keeps the log ID across opens when only impd wrote the imps', async () 
 
   ctx.stack.defer(() => after.destroy());
 
-  const reopenedLogId = await after.log.readLogId();
+  const reopenedLogID = await after.log.readLogId();
 
-  expect(reopenedLogId).toBe(logId);
+  expect(reopenedLogID).toBe(logID);
 });
 
 test.each([
@@ -222,7 +222,7 @@ test.each([
 
     await createCheckpoint(before, { id: 'cp-calm', impId: imp.id, label: null, sizeBytes: null });
 
-    const logId = await before.log.readLogId();
+    const logID = await before.log.readLogId();
 
     await before.destroy();
 
@@ -239,9 +239,9 @@ test.each([
 
     ctx.stack.defer(() => after.destroy());
 
-    const reopenedLogId = await after.log.readLogId();
+    const reopenedLogID = await after.log.readLogId();
 
-    expect(reopenedLogId).not.toBeOneOf(['', logId]);
+    expect(reopenedLogID).not.toBeOneOf(['', logID]);
   },
 );
 
@@ -257,7 +257,7 @@ test('it keeps the log ID that an impd which logs events but makes no triggers r
 
   await createImp(upgraded, buildMockNewImp({ imageId: image.id }));
 
-  const logId = await upgraded.log.readLogId();
+  const logID = await upgraded.log.readLogId();
 
   await upgraded.destroy();
 
@@ -271,7 +271,7 @@ test('it keeps the log ID that an impd which logs events but makes no triggers r
 
   const seen = older.query('SELECT log_id FROM event_log WHERE id = 1').get();
 
-  expect(seen).toStrictEqual({ log_id: logId });
+  expect(seen).toStrictEqual({ log_id: logID });
 });
 
 test('it stamps each event with the clock it was opened with', async () => {

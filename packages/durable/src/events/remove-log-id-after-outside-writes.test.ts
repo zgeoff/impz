@@ -4,7 +4,7 @@ import { createTestDurableDatabase } from '../test-utils/create-test-durable-dat
 import { openTestDurableDatabase } from '../test-utils/open-test-durable-database';
 import { createOutsideWriteTriggers } from './create-outside-write-triggers';
 import { readLogId } from './read-log-id';
-import { removeLogIdAfterOutsideWrites } from './remove-log-id-after-outside-writes';
+import { removeLogIDAfterOutsideWrites } from './remove-log-id-after-outside-writes';
 
 async function setupTest() {
   const ctx = await createTestDurableDatabase();
@@ -20,11 +20,11 @@ test('it keeps the log ID when no outside write left a mark', async () => {
   const ctx = await setupTest();
   const before = await readLogId(ctx.db);
 
-  await removeLogIdAfterOutsideWrites(ctx.db);
+  await removeLogIDAfterOutsideWrites(ctx.db);
 
-  const logId = await readLogId(ctx.db);
+  const logID = await readLogId(ctx.db);
 
-  expect(logId).toBe(before);
+  expect(logID).toBe(before);
 });
 
 test('it removes the log ID and the mark when an outside write left one', async () => {
@@ -34,10 +34,10 @@ test('it removes the log ID and the mark when an outside write left one', async 
 
   await sql`INSERT INTO notes (id, body) VALUES (1, 'buy pears')`.execute(other);
 
-  await removeLogIdAfterOutsideWrites(ctx.db);
+  await removeLogIDAfterOutsideWrites(ctx.db);
 
-  const logId = await readLogId(ctx.db);
+  const logID = await readLogId(ctx.db);
   const marks = await ctx.db.selectFrom('event_log_outside_writes').selectAll().execute();
 
-  expect({ logId, marks }).toStrictEqual({ logId: '', marks: [] });
+  expect({ logID, marks }).toStrictEqual({ logID: '', marks: [] });
 });

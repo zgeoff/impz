@@ -1,7 +1,7 @@
 import type { DurableQueries } from '../durable-tables';
 
 // a crash between the two writes leaves the mark, which costs the readers one more reset at most
-export async function removeLogIdAfterOutsideWrites(db: DurableQueries): Promise<void> {
+export async function removeLogIDAfterOutsideWrites(db: DurableQueries): Promise<void> {
   await db
     .updateTable('event_log')
     .set({ log_id: '' })

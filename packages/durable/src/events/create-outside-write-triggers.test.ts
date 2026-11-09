@@ -5,7 +5,7 @@ import { openTestDurableDatabase } from '../test-utils/open-test-durable-databas
 import { createOutsideWriteTriggers } from './create-outside-write-triggers';
 import { readLogId } from './read-log-id';
 import { removeLogId } from './remove-log-id';
-import { removeLogIdAfterOutsideWrites } from './remove-log-id-after-outside-writes';
+import { removeLogIDAfterOutsideWrites } from './remove-log-id-after-outside-writes';
 import { writeNewLogId } from './write-new-log-id';
 
 async function setupTest() {
@@ -16,7 +16,7 @@ async function setupTest() {
   return {
     ...ctx,
     reopen: async () => {
-      await removeLogIdAfterOutsideWrites(ctx.db);
+      await removeLogIDAfterOutsideWrites(ctx.db);
       await writeNewLogId(ctx.db);
     },
   };
@@ -41,9 +41,9 @@ test.each([
     await sql.raw(statement).execute(other);
     await ctx.reopen();
 
-    const logId = await readLogId(ctx.db);
+    const logID = await readLogId(ctx.db);
 
-    expect(logId).not.toBeOneOf(['', before]);
+    expect(logID).not.toBeOneOf(['', before]);
   },
 );
 
@@ -63,9 +63,9 @@ test.each([
     await sql.raw(statement).execute(ctx.db);
     await ctx.reopen();
 
-    const logId = await readLogId(ctx.db);
+    const logID = await readLogId(ctx.db);
 
-    expect(logId).toBe(before);
+    expect(logID).toBe(before);
   },
 );
 
@@ -79,9 +79,9 @@ test('it keeps the log ID that a connection without the triggers reads after its
 
   await sql`INSERT INTO notes (id, body) VALUES (1, 'buy pears')`.execute(other);
 
-  const logId = await readLogId(other);
+  const logID = await readLogId(other);
 
-  expect(logId).toBe(before);
+  expect(logID).toBe(before);
 });
 
 test('it gives the log one new ID for the writes before an open, and none at the open after', async () => {
@@ -98,9 +98,9 @@ test('it gives the log one new ID for the writes before an open, and none at the
 
   await ctx.reopen();
 
-  const logId = await readLogId(ctx.db);
+  const logID = await readLogId(ctx.db);
 
-  expect(logId).toBe(rotated);
+  expect(logID).toBe(rotated);
 });
 
 test('it lets the connection that made the triggers remove the log ID', async () => {
@@ -109,9 +109,9 @@ test('it lets the connection that made the triggers remove the log ID', async ()
   await createOutsideWriteTriggers(ctx.db, ['notes']);
   await removeLogId(ctx.db);
 
-  const logId = await readLogId(ctx.db);
+  const logID = await readLogId(ctx.db);
 
-  expect(logId).toBe('');
+  expect(logID).toBe('');
 });
 
 test('it keeps the triggers working when a later connection makes them again', async () => {
@@ -129,7 +129,7 @@ test('it keeps the triggers working when a later connection makes them again', a
   await sql`INSERT INTO notes (id, body) VALUES (1, 'buy pears')`.execute(other);
   await ctx.reopen();
 
-  const logId = await readLogId(ctx.db);
+  const logID = await readLogId(ctx.db);
 
-  expect(logId).not.toBeOneOf(['', before]);
+  expect(logID).not.toBeOneOf(['', before]);
 });
