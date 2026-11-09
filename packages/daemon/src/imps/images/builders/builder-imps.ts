@@ -70,8 +70,8 @@ async function waitForEngine(
   const deadline = clock.now() + ENGINE_READY_MS;
 
   for (;;) {
-    // Just after a boot on a loaded CI host, the agent has sent no exec start inside its 10 s limit,
-    // so that wait counts as one more poll that missed.
+    // Just after a boot on a loaded CI host, the agent has sent no exec start inside its limit, so
+    // that wait counts as one more poll that missed.
     const info = await exec(['docker', 'info', '--format', '{{.ServerVersion}}'], {
       signal,
       timeoutMs: ENGINE_READY_MS,

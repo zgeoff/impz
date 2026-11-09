@@ -1,5 +1,6 @@
-import { expect, onTestFinished, test } from 'bun:test';
+import { expect, jest, onTestFinished, test } from 'bun:test';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import type { Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -688,6 +689,47 @@ test.each([
   ).rejects.toMatchObject({ code: 'AGENT_OUTDATED' });
 
   expect(agent.received).toBeEmpty();
+});
+
+test("it keeps a builder exec open past 10 s for its agent's start", async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const imp = await ctx.imps.createImp({ name: 'dev' });
+
+  const paths = buildImpPaths(ctx.dataDir, imp.id);
+  const requested = Promise.withResolvers<Socket>();
+
+  await startStubAgent(
+    paths.vsockSocket,
+    (socket) => {
+      requested.resolve(socket);
+    },
+    { stack: ctx.stack },
+  );
+
+  jest.useFakeTimers();
+
+  onTestFinished(() => {
+    jest.useRealTimers();
+  });
+
+  const opening = ctx.imps.openBuilderExec('dev', { argv: ['docker', 'build', '.'], tty: false });
+
+  const socket = await requested.promise;
+
+  jest.advanceTimersByTime(10_001);
+  jest.useRealTimers();
+  socket.write(encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 9 }));
+
+  const stream = await opening;
+
+  ctx.stack.defer(() => {
+    stream.close();
+  });
+
+  expect(stream.pid).toBe(9);
 });
 
 test('it sends an outer exec to an agent from 0.16.0', async () => {

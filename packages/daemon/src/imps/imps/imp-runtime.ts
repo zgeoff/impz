@@ -136,6 +136,10 @@ interface ImpRuntimeParts {
 
 const INNER_PING_TIMEOUT_MS = 1000;
 
+// a builder is ready about 2.5 s after its boot on a CI host, yet its agent once sent no exec start
+// within the default 10 s; an exec with no start is not resent, since it may run twice
+const BUILDER_EXEC_START_TIMEOUT_MS = 30_000;
+
 interface OpenStreamOptions<T extends { readonly close: () => void }> {
   readonly name: string;
   readonly kind: ConnectionKind | null;
@@ -317,7 +321,7 @@ export function createImpRuntime(parts: ImpRuntimeParts): ImpRuntime {
       openStream({
         name,
         kind: 'exec',
-        open: (paths) => openExecStream(paths.vsockSocket, request),
+        open: (paths) => openExecStream(paths.vsockSocket, request, BUILDER_EXEC_START_TIMEOUT_MS),
         wake: true,
         isBuilderAllowed: true,
       }),
