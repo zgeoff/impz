@@ -785,7 +785,7 @@ test('it refuses a KSM headroom above 100 percent', () => {
 test('it backs guests with 2 MiB pages through the uffd-handler on PATH when IMP_HUGE_PAGES is 2M', () => {
   expect(loadConfig({ IMP_HUGE_PAGES: '2M' }).hugePages).toStrictEqual({
     handlerBin: 'uffd-handler',
-    warmCapMib: 256,
+    warmCapMib: 2048,
   });
 });
 
@@ -797,7 +797,7 @@ test('it reads the uffd-handler path from IMP_UFFD_HANDLER', () => {
 
   expect(config.hugePages).toStrictEqual({
     handlerBin: '/usr/local/bin/uffd-handler',
-    warmCapMib: 256,
+    warmCapMib: 2048,
   });
 });
 

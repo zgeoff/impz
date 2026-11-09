@@ -16,6 +16,7 @@ import { FRAME_TYPES, PingSchema, encodeMessageFrame } from '@impz/agent-protoco
 import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { deriveSlotAddress, parseSubnet } from '../../host-net/net/addressing';
 import { stopPid } from '../../platform/process/proc';
+import { buildStubClock } from '../../test-utils/platform/build-stub-clock';
 import { buildMockTemplateBuildPlan } from '../../test-utils/vm/build-mock-template-build-plan';
 import { buildMockTemplateRestorePlan } from '../../test-utils/vm/build-mock-template-restore-plan';
 import { buildStubJails } from '../../test-utils/vm/build-stub-jails';
@@ -651,6 +652,18 @@ test('#resumeVm seals the run dir, then patches the VM to resumed', async () => 
   expect(readFileSync(ctx.logPath, 'utf8')).toBe('PATCH /vm {"state":"Resumed"}\n');
 });
 
+test('#finishWake waits 15 s for the agent, so a guest that reads its memory file cold can answer', () => {
+  const ctx = setupTest();
+  const paths = ctx.createImpDir('vm');
+
+  const finishing = createVmRunner(buildStubJails().jails, {
+    readFile: readFileSync,
+    clock: buildStubClock(),
+  }).finishWake(paths);
+
+  expect(finishing).rejects.toThrow(/^agent did not answer within 15000 ms \(last error: /u);
+});
+
 test('#resumeVm kills a VM whose seal finds anything planted in run/, and never resumes it', async () => {
   const ctx = setupTest();
   const paths = ctx.createImpDir('vm');
@@ -815,6 +828,27 @@ test('#wakeVm loads the snapshot with dirty page tracking, so the next sleep tak
     `PUT /snapshot/load {"snapshot_path":"${paths.vmstate}","mem_backend":{"backend_type":"File","backend_path":"${paths.memFile}"},"resume_vm":false,"track_dirty_pages":true}`,
     'PATCH /vm {"state":"Resumed"}',
   ]);
+});
+
+test('#wakeVm waits 15 s for the agent of a resumed guest before it fails the wake', () => {
+  const ctx = setupTest();
+  const paths = ctx.createImpDir('vm');
+  const argv = buildStubFirecrackerArgv({ apiSocket: paths.apiSocket, logPath: ctx.logPath });
+
+  const waking = createVmRunner(buildStubJails({ argv }).jails, {
+    readFile: readFileSync,
+    clock: buildStubClock(),
+  }).wakeVm({
+    firecrackerBin: 'firecracker',
+    paths,
+    cgroup: null,
+    jail: { uid: 900_000, gid: 900_000 },
+    readOnlyFiles: [],
+  });
+
+  expect(waking).rejects.toThrow(
+    /^wake failed: agent did not answer within 15000 ms \(last error: /u,
+  );
 });
 
 test('#wakeVm removes the userfaultfd node of the jail after the load and before the seal', () => {

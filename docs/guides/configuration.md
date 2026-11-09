@@ -56,7 +56,7 @@ error.
 | `IMP_KSM_EXEC`                  | `ksm-exec`                                | With `IMP_KSM`: the wrapper Firecracker, or the jailer, starts through. It runs outside the jail, so the chroot needs no copy.                                                                                                                                 |
 | `IMP_HUGE_PAGES`                | `off`                                     | `2M` backs each imp of fixed memory with the host's pool of huge pages, and restores and wakes it through a page handler; `off` keeps every imp on ordinary pages. The host must reserve the pool ([huge pages](#huge-pages)).                                 |
 | `IMP_UFFD_HANDLER`              | `uffd-handler`                            | With `IMP_HUGE_PAGES=2M`: the page handler impd starts for each restore and wake.                                                                                                                                                                              |
-| `IMP_WARM_CAP_MIB`              | `256`                                     | With `IMP_HUGE_PAGES=2M`: impd reads a slept imp's memory file into RAM for its next wake when the file's data, its blocks other than holes, is this many MiB or fewer ([warm after a sleep](../architecture/lifecycle/huge-pages.md#the-warm-after-a-sleep)). |
+| `IMP_WARM_CAP_MIB`              | `2048`                                    | With `IMP_HUGE_PAGES=2M`: impd reads a slept imp's memory file into RAM for its next wake when the file's data, its blocks other than holes, is this many MiB or fewer ([warm after a sleep](../architecture/lifecycle/huge-pages.md#the-warm-after-a-sleep)). |
 | `IMP_STORAGE_BACKEND`           | `xfs`                                     | `xfs` or `zfs` ([storage](../architecture/storage/storage.md)). impd refuses a data dir the other backend wrote.                                                                                                                                               |
 | `IMP_ZFS_ROOT`                  | none                                      | With `zfs`: the dataset mounted on `IMP_DATA_DIR`, such as `tank/imp`. Needed then.                                                                                                                                                                            |
 | `IMP_ZFS_ALLOW_UIOMOVE_BUG`     | `0`                                       | With `zfs`: `1` starts impd on a module with the zfs_uiomove bug, with a warning, where impd refuses it otherwise ([the host](../architecture/host.md#what-the-host-gives)).                                                                                   |
@@ -123,6 +123,9 @@ never in `environmentFile`, because the module reads the setting to pass the dev
    them at boot, on the kernel command line with `hugepages=4096`, to get them all.
 
 4. Set `IMP_HUGE_PAGES=2M` in the env file and restart impd.
+
+The default `IMP_WARM_CAP_MIB` warms the whole memory file of a 2 GiB guest. Keep the cap below the
+page cache that the host has beside the pool and, on ZFS, the ARC.
 
 To turn huge pages off, unset `IMP_HUGE_PAGES` and restart impd. Each imp that slept on huge pages
 wakes on ordinary pages from its memory file.
