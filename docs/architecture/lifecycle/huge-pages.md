@@ -121,7 +121,8 @@ writes the file into the ARC, ZFS's own cache, and leaves none of it in the page
 2. impd multiplies that count by the huge page size and compares the result with the cap that
    `IMP_WARM_CAP_MIB` sets ([the configuration guide](../../guides/configuration.md#impd)). A file
    that holds more stays cold, so that one large imp never pushes the other imps' warmed files out
-   of the page cache.
+   of the page cache. The default of 2048 MiB warms the whole file of a guest of 2 GiB. Set the cap
+   below the page cache that the host keeps beside its huge page pool and, on ZFS, the ARC.
 3. For a file within the cap, impd runs `uffd-handler --warm <memory file>`, which reads each data
    block through a map of the file, as a wake's handler reads it.
 
@@ -134,7 +135,7 @@ impd logs the outcome of each warm in the journal, on a line with the imp's name
 
 ```text
 warmed the memory file in 41ms: 27 blocks of 2 MiB
-left the memory file cold: its 862 MiB of data pass the warm cap of 256 MiB
+left the memory file cold: its 3862 MiB of data pass the warm cap of 2048 MiB
 stopped the memory file's warm after 12ms: the imp woke
 ```
 
