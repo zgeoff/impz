@@ -1,4 +1,3 @@
-import { Database } from 'bun:sqlite';
 import { expect, mock, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -11,10 +10,11 @@ import { buildMockNewImage } from '../../test-utils/imps/build-mock-new-image';
 import { buildMockNewImp } from '../../test-utils/imps/build-mock-new-imp';
 import { buildStubClock } from '../../test-utils/platform/build-stub-clock';
 import { createTestDatabase } from '../../test-utils/platform/create-test-database';
+import { createUnmigratedDatabase } from '../../test-utils/platform/create-unmigrated-database';
 import { buildMockGovernorDecision } from '../../test-utils/vm/build-mock-governor-decision';
 import { appendImpEvent } from '../db/append-imp-event';
 import { createImage } from '../db/images';
-import { createImp } from '../db/imps';
+import { createImp, updateImpActivity } from '../db/imps';
 import { openDatabase } from '../db/open-database';
 import { withImpTransaction } from '../db/with-imp-transaction';
 import { openEventStream } from './event-stream';
@@ -539,20 +539,18 @@ test('it sends a reset to a cursor from before an impd that logs no events chang
 
   const image = await createImage(upgraded, buildMockNewImage());
 
-  await createImp(upgraded, buildMockNewImp({ name: 'quiet-heron', imageId: image.id }));
+  const imp = await createImp(
+    upgraded,
+    buildMockNewImp({ name: 'quiet-heron', imageId: image.id }),
+  );
 
   const cursor = { after: await upgraded.log.readHead(), logId: await upgraded.log.readLogId() };
 
   await upgraded.destroy();
 
-  const older = new Database(path);
+  const older = createUnmigratedDatabase(path);
 
-  onTestFinished(() => {
-    older.close();
-  });
-
-  older.run(`UPDATE imps SET state = 'stopped' WHERE name = 'quiet-heron'`);
-  older.close();
+  await updateImpActivity(older, imp.id, new Date(Date.UTC(2026, 9, 1)));
 
   const reupgraded = await openDatabase(path);
 

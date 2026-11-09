@@ -10,12 +10,14 @@ import { Kysely, sql } from 'kysely';
 import { buildMockNewImage } from '../../test-utils/imps/build-mock-new-image';
 import { buildMockNewImp } from '../../test-utils/imps/build-mock-new-imp';
 import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
+import { createUnmigratedDatabase } from '../../test-utils/platform/create-unmigrated-database';
 import { appendImpEvent } from './append-imp-event';
-import { createCheckpoint } from './checkpoints';
+import { createCheckpoint, removeCheckpoint } from './checkpoints';
 import { createImage } from './images';
 import type { LoggedImpEvent } from './imp-log-entry';
-import { createImp } from './imps';
+import { createImp, removeImp, updateImpActivity } from './imps';
 import { openDatabase } from './open-database';
+import type { ImpDatabase } from './open-database';
 import { updateImpState } from './update-imp-state';
 import { withImpTransaction } from './with-imp-transaction';
 
@@ -204,12 +206,16 @@ test('it keeps the log ID across opens when only impd wrote the imps', async () 
 });
 
 test.each([
-  ['changed an imp', `UPDATE imps SET state = 'stopped'`],
-  ['removed an imp', `DELETE FROM imps`],
-  ['removed a checkpoint', `DELETE FROM checkpoints`],
+  [
+    'changed an imp',
+    (older: ImpDatabase, impID: string) =>
+      updateImpActivity(older, impID, new Date(Date.UTC(2026, 9, 1))),
+  ],
+  ['removed an imp', (older: ImpDatabase, impID: string) => removeImp(older, impID)],
+  ['removed a checkpoint', (older: ImpDatabase) => removeCheckpoint(older, 'cp-calm')],
 ])(
-  'it gives the log a new ID when an impd that logs no events %s between two opens',
-  async (_write, statement) => {
+  'it gives the log a new ID when another impd %s between two opens',
+  async (_write, writeAsOlderImpd) => {
     const ctx = setupTest();
     const path = join(ctx.directory, 'imp.sqlite');
 
@@ -226,14 +232,9 @@ test.each([
 
     await before.destroy();
 
-    const older = new Database(path);
+    const older = createUnmigratedDatabase(path);
 
-    ctx.stack.defer(() => {
-      older.close();
-    });
-
-    older.run(statement);
-    older.close();
+    await writeAsOlderImpd(older, imp.id);
 
     const after = await openDatabase(path);
 
@@ -254,24 +255,18 @@ test('it keeps the log ID that an impd which logs events but makes no triggers r
   ctx.stack.defer(() => upgraded.destroy());
 
   const image = await createImage(upgraded, buildMockNewImage());
-
-  await createImp(upgraded, buildMockNewImp({ imageId: image.id }));
-
+  const imp = await createImp(upgraded, buildMockNewImp({ imageId: image.id }));
   const logID = await upgraded.log.readLogId();
 
   await upgraded.destroy();
 
-  const older = new Database(path);
+  const older = createUnmigratedDatabase(path);
 
-  ctx.stack.defer(() => {
-    older.close();
-  });
+  await updateImpState(older, imp.id, { reason: 'stopped', state: 'stopped' });
 
-  older.run(`UPDATE imps SET state = 'stopped'`);
+  const seenLogID = await older.log.readLogId();
 
-  const seen = older.query('SELECT log_id FROM event_log WHERE id = 1').get();
-
-  expect(seen).toStrictEqual({ log_id: logID });
+  expect(seenLogID).toBe(logID);
 });
 
 test('it stamps each event with the clock it was opened with', async () => {
