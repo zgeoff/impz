@@ -140,9 +140,10 @@ the start and the readiness wait included, upgrade.sh prints the rollback for wh
 far.
 
 After a rollback and the upgrade back, a client that resumes the event stream from its saved cursor
-gets a `Reset` event and then the state of every imp
-([Resume from a cursor](./events.md#resume-from-a-cursor)). impd makes this work with database
-triggers that it adds each time it opens the database
+misses no change. When the older impd changed an imp or a checkpoint, the client gets a `Reset`
+event and then the state of every imp ([Resume from a cursor](./events.md#resume-from-a-cursor)).
+Otherwise it gets the events after its cursor. impd tells the two cases apart with database triggers
+that it adds each time it opens the database
 ([Durable work](../architecture/durable-work.md#the-event-log)).
 
 Releases 6.11.0, 6.11.1 and 6.11.2 add no such triggers. After a rollback from one of them, before
