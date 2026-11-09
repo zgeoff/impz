@@ -1,5 +1,12 @@
 # Changelog
 
+## [6.11.4](https://github.com/zgeoff/impz/compare/v6.11.3...v6.11.4) (2026-11-09)
+
+
+### Bug Fixes
+
+* **daemon:** warm large guests after a sleep, and wait out a cold wake ([#991](https://github.com/zgeoff/impz/issues/991)) ([054fe20](https://github.com/zgeoff/impz/commit/054fe20a23dd379d7991f024e6cff823dae0d919))
+
 ## [6.11.3](https://github.com/zgeoff/impz/compare/v6.11.2...v6.11.3) (2026-11-09)
 
 ### Bug Fixes
