@@ -252,7 +252,11 @@ test.each([
 
     const older = createUnmigratedDatabase(path);
 
+    ctx.stack.defer(() => older.destroy());
+
     await writeAsOlderImpd(older, imp.id);
+
+    await older.destroy();
 
     const after = await openDatabase(path);
 
@@ -279,6 +283,8 @@ test('it keeps the log ID that an impd which logs events but makes no triggers r
   await upgraded.destroy();
 
   const older = createUnmigratedDatabase(path);
+
+  ctx.stack.defer(() => older.destroy());
 
   await updateImpState(older, imp.id, { reason: 'stopped', state: 'stopped' });
 

@@ -33,6 +33,23 @@ test('it opens the file at the path it is given', () => {
   expect(existsSync(join(directory, 'older.sqlite'))).toBeTrue();
 });
 
+test('it closes the database file when it is destroyed', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'imp-unmigrated-'));
+
+  onTestFinished(() => {
+    rmSync(directory, { recursive: true, force: true });
+  });
+
+  const db = createUnmigratedDatabase(join(directory, 'older.sqlite'));
+
+  await sql`CREATE TABLE notes (id INTEGER PRIMARY KEY)`.execute(db);
+  await db.destroy();
+
+  const descriptors = Bun.spawnSync(['ls', '-l', `/proc/${String(process.pid)}/fd`]);
+
+  expect(descriptors.stdout.toString()).not.toInclude(join(directory, 'older.sqlite'));
+});
+
 test('it closes the database file when the test finishes, even one no query opened', () => {
   const directory = mkdtempSync(join(tmpdir(), 'imp-unmigrated-'));
 

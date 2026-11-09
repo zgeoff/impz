@@ -25,15 +25,21 @@ async function setupTest() {
   const database = await createTestDatabase();
 
   const db = database.db;
+
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
   const directory = mkdtempSync(join(tmpdir(), 'imp-event-stream-'));
 
-  onTestFinished(() => {
+  stack.defer(() => {
     rmSync(directory, { recursive: true, force: true });
   });
 
   return {
     db,
     directory,
+    stack,
     open: (options: StreamOptions = {}) =>
       openEventStream({
         cursor: {},
@@ -535,7 +541,7 @@ test('it sends a reset to a cursor from before an impd that logs no events chang
 
   const upgraded = await openDatabase(path);
 
-  onTestFinished(() => upgraded.destroy());
+  ctx.stack.defer(() => upgraded.destroy());
 
   const image = await createImage(upgraded, buildMockNewImage());
 
@@ -550,11 +556,15 @@ test('it sends a reset to a cursor from before an impd that logs no events chang
 
   const older = createUnmigratedDatabase(path);
 
+  ctx.stack.defer(() => older.destroy());
+
   await updateImpActivity(older, imp.id, new Date(Date.UTC(2026, 9, 1)));
+
+  await older.destroy();
 
   const reupgraded = await openDatabase(path);
 
-  onTestFinished(() => reupgraded.destroy());
+  ctx.stack.defer(() => reupgraded.destroy());
 
   await reupgraded.log.write(
     {
