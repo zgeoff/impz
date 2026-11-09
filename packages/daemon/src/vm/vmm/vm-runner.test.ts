@@ -16,6 +16,7 @@ import { FRAME_TYPES, PingSchema, encodeMessageFrame } from '@impz/agent-protoco
 import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { deriveSlotAddress, parseSubnet } from '../../host-net/net/addressing';
 import { stopPid } from '../../platform/process/proc';
+import { buildStubClock } from '../../test-utils/platform/build-stub-clock';
 import { buildMockTemplateBuildPlan } from '../../test-utils/vm/build-mock-template-build-plan';
 import { buildMockTemplateRestorePlan } from '../../test-utils/vm/build-mock-template-restore-plan';
 import { buildStubJails } from '../../test-utils/vm/build-stub-jails';
@@ -649,6 +650,18 @@ test('#resumeVm seals the run dir, then patches the VM to resumed', async () => 
 
   expect(stub.notes).toStrictEqual(['remove uffd device vm', 'seal']);
   expect(readFileSync(ctx.logPath, 'utf8')).toBe('PATCH /vm {"state":"Resumed"}\n');
+});
+
+test('#finishWake waits 30 s for the agent, so a guest that reads its memory file cold can answer', () => {
+  const ctx = setupTest();
+  const paths = ctx.createImpDir('vm');
+
+  const finishing = createVmRunner(buildStubJails().jails, {
+    readFile: readFileSync,
+    clock: buildStubClock(),
+  }).finishWake(paths);
+
+  expect(finishing).rejects.toThrow(/^agent did not answer within 30000 ms \(last error: /u);
 });
 
 test('#resumeVm kills a VM whose seal finds anything planted in run/, and never resumes it', async () => {

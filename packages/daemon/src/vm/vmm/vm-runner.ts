@@ -1,6 +1,8 @@
 import { lstatSync, mkdirSync, renameSync, rmSync } from 'node:fs';
 import { getErrorMessage } from '@impz/shared';
+import type { Clock } from '../../platform/process/clock';
 import { stopPid } from '../../platform/process/proc';
+import { REAL_CLOCK } from '../../platform/process/real-clock';
 import { runCommand } from '../../platform/process/run-command';
 import { VM_DEADLINES } from '../../platform/process/vm-deadlines';
 import { writeToDisk } from '../../platform/process/write-file-durably';
@@ -52,7 +54,11 @@ import { writeSnapshotBase } from './write-snapshot-base';
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 const UFFD_WATCH_INTERVAL_MS = 100;
-const WAKE_AGENT_DEADLINE_MS = 10_000;
+
+// a wake that finds its memory file cold reads each 2 MiB block in about
+// 11 ms on ZFS, so a guest of 2 GiB can take 12 s to answer; a wake that runs
+// out of time boots cold and loses the guest's memory
+const WAKE_AGENT_DEADLINE_MS = 30_000;
 
 // the memory controller asks every 500 ms: a VM that does not answer soon is
 // asked again on the next tick
@@ -136,6 +142,7 @@ export interface VmRunnerOptions {
   readonly procRoot?: string;
   readonly createClient?: CreateFirecrackerClient;
   readonly readFile: (path: string) => Buffer;
+  readonly clock?: Pick<Clock, 'now' | 'sleep'>;
 }
 
 export function createVmRunner(jails: Jails, options: Readonly<VmRunnerOptions>): VmRunner {
@@ -145,6 +152,7 @@ export function createVmRunner(jails: Jails, options: Readonly<VmRunnerOptions>)
   const createClient = options.createClient ?? createFirecrackerClient;
   const readFile = options.readFile;
   const uffdHandlerBin = options.uffdHandlerBin ?? null;
+  const clock = options.clock ?? REAL_CLOCK;
 
   const uffdWatch = createUffdWatch({
     probeVmAlive: (pid, paths) => probeProcessAlive(pid, paths.apiSocket, procRoot),
@@ -485,6 +493,7 @@ export function createVmRunner(jails: Jails, options: Readonly<VmRunnerOptions>)
         const ping = await waitForAgent(plan.paths.vsockSocket, {
           deadlineMs: WAKE_AGENT_DEADLINE_MS,
           attemptMs: 200,
+          clock,
         });
 
         setMark('agent');
@@ -582,6 +591,7 @@ export function createVmRunner(jails: Jails, options: Readonly<VmRunnerOptions>)
       const ping = await waitForAgent(paths.vsockSocket, {
         deadlineMs: WAKE_AGENT_DEADLINE_MS,
         attemptMs: 200,
+        clock,
       });
 
       await sendResumed(paths.vsockSocket, Date.now());
