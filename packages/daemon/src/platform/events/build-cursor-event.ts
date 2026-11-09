@@ -3,7 +3,7 @@ import type { ImpEvent } from '@impz/api';
 
 interface CursorPosition {
   readonly seq: number;
-  readonly logId: string;
+  readonly logID: string;
   readonly at: number;
 }
 
@@ -14,7 +14,7 @@ export function buildCursorEvent(ev: 'Reset' | 'Position', position: CursorPosit
     v: EVENT_VERSION,
     at: new Date(position.at),
     seq: position.seq,
-    logId: position.logId,
+    logId: position.logID,
     ev,
   };
 }

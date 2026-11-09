@@ -13,20 +13,18 @@ export async function readEventPage(
   const logID = await reads.readLogID();
   const head = await reads.readHead();
 
-  return match(pickStreamStart(cursor, { head, logId: logID }))
-    .with({ kind: 'snapshot' }, () =>
-      readSnapshotPage(reads, { head, logId: logID, isReset: false }),
-    )
-    .with({ kind: 'reset' }, () => readSnapshotPage(reads, { head, logId: logID, isReset: true }))
+  return match(pickStreamStart(cursor, { head, logID }))
+    .with({ kind: 'snapshot' }, () => readSnapshotPage(reads, { head, logID, isReset: false }))
+    .with({ kind: 'reset' }, () => readSnapshotPage(reads, { head, logID, isReset: true }))
     .with({ kind: 'resume' }, (resume) =>
-      readResumedPage(reads, { head, logId: logID, isReset: false }, resume.after, limit),
+      readResumedPage(reads, { head, logID, isReset: false }, resume.after, limit),
     )
     .exhaustive();
 }
 
 interface SnapshotPosition {
   readonly head: number;
-  readonly logId: string;
+  readonly logID: string;
   readonly isReset: boolean;
 }
 
@@ -34,16 +32,16 @@ async function readSnapshotPage(
   reads: EventLogReads,
   position: SnapshotPosition,
 ): Promise<EventPage> {
-  const snapshot = await reads.readSnapshot(position.head, position.logId);
+  const snapshot = await reads.readSnapshot(position.head, position.logID);
 
   const reset = position.isReset
-    ? [buildCursorEvent('Reset', { seq: position.head, logId: position.logId, at: reads.now() })]
+    ? [buildCursorEvent('Reset', { seq: position.head, logID: position.logID, at: reads.now() })]
     : [];
 
   return {
     events: [...reset, ...snapshot],
     after: position.head,
-    logId: position.logId,
+    logId: position.logID,
     hasMore: false,
   };
 }
@@ -63,12 +61,12 @@ async function readResumedPage(
   const events: ImpEvent[] = [];
 
   for (const logged of read.events) {
-    const event = await reads.present(logged, position.logId);
+    const event = await reads.present(logged, position.logID);
 
     if (event !== null && (reads.accepts?.(event) ?? true)) {
       events.push(event);
     }
   }
 
-  return { events, after: read.throughSeq, logId: position.logId, hasMore: read.hasMore };
+  return { events, after: read.throughSeq, logId: position.logID, hasMore: read.hasMore };
 }

@@ -30,5 +30,5 @@ test.each([
   },
   { title: 'a reset for a cursor past the head', cursor: { after: 41 }, start: { kind: 'reset' } },
 ])('it picks $title', (row) => {
-  expect(pickStreamStart(row.cursor, { head: 40, logId: 'log-a' })).toStrictEqual(row.start);
+  expect(pickStreamStart(row.cursor, { head: 40, logID: 'log-a' })).toStrictEqual(row.start);
 });
