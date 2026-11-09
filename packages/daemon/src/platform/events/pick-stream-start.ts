@@ -7,7 +7,7 @@ export type StreamStart =
 
 interface LogPosition {
   readonly head: number;
-  readonly logId: string;
+  readonly logID: string;
 }
 
 // A cursor past the head comes from another log, such as one from before a restore; a cursor the
@@ -17,7 +17,7 @@ export function pickStreamStart(cursor: Readonly<EventCursor>, log: LogPosition)
     return { kind: 'snapshot' };
   }
 
-  const isOtherLog = cursor.logId !== undefined && cursor.logId !== log.logId;
+  const isOtherLog = cursor.logId !== undefined && cursor.logId !== log.logID;
 
   return isOtherLog || cursor.after > log.head
     ? { kind: 'reset' }

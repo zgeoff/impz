@@ -1,14 +1,14 @@
 import { expect, test } from 'bun:test';
 import { createTestDurableDatabase } from '../test-utils/create-test-durable-database';
-import { readLogId } from './read-log-id';
-import { removeLogId } from './remove-log-id';
+import { readLogID } from './read-log-id';
+import { removeLogID } from './remove-log-id';
 
 test('it leaves the log with an empty log ID', async () => {
   const ctx = await createTestDurableDatabase();
 
-  await removeLogId(ctx.db);
+  await removeLogID(ctx.db);
 
-  const logId = await readLogId(ctx.db);
+  const logID = await readLogID(ctx.db);
 
-  expect(logId).toBe('');
+  expect(logID).toBe('');
 });
