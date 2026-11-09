@@ -323,6 +323,8 @@ jobs:
       contents: read
     timeout-minutes: 10
     env:
+      # ci:install-linter downloads each pinned release through gh, as an authenticated call
+      GH_TOKEN: ${{ github.token }}
       SHELLCHECK_VERSION: v0.11.0
       SHELLCHECK_SHA256: 8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198
       SHFMT_VERSION: v3.14.1

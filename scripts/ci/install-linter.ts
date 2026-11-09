@@ -6,7 +6,9 @@ import { getStepEnv } from '../lib/get-step-env.ts';
 import { parseStepCommand } from '../lib/parse-step-command.ts';
 
 interface Linter {
-  readonly url: (version: string) => string;
+  readonly repo: string;
+  readonly tag: (version: string) => string;
+  readonly asset: (version: string) => string;
 
   // the binary's path inside the archive; a linter released as a bare binary has none
   readonly member?: (version: string) => string;
@@ -16,27 +18,32 @@ interface Linter {
 // of findings, and the hooks run these versions locally.
 const linters: Readonly<Record<string, Linter>> = {
   shellcheck: {
-    url: (version) =>
-      `https://github.com/koalaman/shellcheck/releases/download/${version}/shellcheck-${version}.linux.x86_64.tar.xz`,
+    repo: 'koalaman/shellcheck',
+    tag: (version) => version,
+    asset: (version) => `shellcheck-${version}.linux.x86_64.tar.xz`,
     member: (version) => `shellcheck-${version}/shellcheck`,
   },
   shfmt: {
-    url: (version) =>
-      `https://github.com/mvdan/sh/releases/download/${version}/shfmt_${version}_linux_amd64`,
+    repo: 'mvdan/sh',
+    tag: (version) => version,
+    asset: (version) => `shfmt_${version}_linux_amd64`,
   },
   actionlint: {
-    url: (version) =>
-      `https://github.com/rhysd/actionlint/releases/download/v${version}/actionlint_${version}_linux_amd64.tar.gz`,
+    repo: 'rhysd/actionlint',
+    tag: (version) => `v${version}`,
+    asset: (version) => `actionlint_${version}_linux_amd64.tar.gz`,
     member: () => 'actionlint',
   },
   zizmor: {
-    url: (version) =>
-      `https://github.com/zizmorcore/zizmor/releases/download/${version}/zizmor-x86_64-unknown-linux-gnu.tar.gz`,
+    repo: 'zizmorcore/zizmor',
+    tag: (version) => version,
+    asset: () => 'zizmor-x86_64-unknown-linux-gnu.tar.gz',
     member: () => 'zizmor',
   },
   hadolint: {
-    url: (version) =>
-      `https://github.com/hadolint/hadolint/releases/download/${version}/hadolint-linux-x86_64`,
+    repo: 'hadolint/hadolint',
+    tag: (version) => version,
+    asset: () => 'hadolint-linux-x86_64',
   },
 };
 
@@ -72,7 +79,9 @@ async function main(): Promise<void> {
   mkdirSync(work, { recursive: true });
   mkdirSync(bin, { recursive: true });
 
-  await $`curl -fsSL --retry 3 -o ${download} ${linter.url(version)}`;
+  // through gh with the job's token: under load, GitHub answers an anonymous release download with
+  // a 504 Gateway Timeout for as long as the load lasts
+  await $`gh release download ${linter.tag(version)} --repo ${linter.repo} --pattern ${linter.asset(version)} --output ${download}`;
 
   const downloaded = new Bun.CryptoHasher('sha256').update(readFileSync(download)).digest('hex');
 
