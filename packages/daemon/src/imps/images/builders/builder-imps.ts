@@ -67,7 +67,8 @@ async function waitForEngine(
   signal: AbortSignal,
   clock: Pick<Clock, 'now' | 'sleep'>,
 ): Promise<void> {
-  const deadline = clock.now() + ENGINE_READY_MS;
+  const startedMs = clock.now();
+  const deadline = startedMs + ENGINE_READY_MS;
 
   for (;;) {
     // Just after a boot on a loaded CI host, the agent has sent no exec start inside its limit, so
@@ -87,11 +88,14 @@ async function waitForEngine(
       return;
     }
 
+    // a poll whose exec start stalls ends past the deadline, so the error names the time it took
     if (clock.now() > deadline) {
+      const waitedS = Math.floor((clock.now() - startedMs) / 1000);
+
       const log = await readEngineLog(exec, signal);
 
       throw new Error(
-        `the builder's engine did not answer in ${String(ENGINE_READY_MS / 1000)} s: ${info.stderr.trim()}${log}`,
+        `the builder's engine did not answer in ${String(waitedS)} s: ${info.stderr.trim()}${log}`,
       );
     }
 

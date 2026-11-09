@@ -1,4 +1,4 @@
-import { expect, jest, onTestFinished, test } from 'bun:test';
+import { expect, onTestFinished, test } from 'bun:test';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import type { Socket } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -19,6 +19,7 @@ import { readImpByName, updateImpActivity } from '../../platform/db/imps';
 import { writeLease } from '../../platform/db/leases';
 import { buildMockLeaseRecord } from '../../test-utils/imps/build-mock-lease-record';
 import { waitForOutcome } from '../../test-utils/imps/wait-for-outcome';
+import { buildStubClock } from '../../test-utils/platform/build-stub-clock';
 import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
 import { runSql } from '../../test-utils/platform/run-sql';
 import { startTestImpd } from '../../test-utils/start-test-impd';
@@ -57,9 +58,15 @@ async function setupTest(
     ...processes.deps,
   });
 
-  const harness = await startTestImpd(stack, { ...options, jails });
+  const execClock = buildStubClock();
 
-  return Object.assign(harness, { stack, chrootBase, processes });
+  const harness = await startTestImpd(stack, {
+    ...options,
+    jails,
+    boundaries: { imps: { execStartTimer: execClock.startTimer } },
+  });
+
+  return Object.assign(harness, { stack, chrootBase, processes, execClock });
 }
 
 test('it skips an idle sleep of an imp held after the idle loop looked', async () => {
@@ -709,18 +716,11 @@ test("it keeps a builder exec open past 10 s for its agent's start", async () =>
     { stack: ctx.stack },
   );
 
-  jest.useFakeTimers();
-
-  onTestFinished(() => {
-    jest.useRealTimers();
-  });
-
   const opening = ctx.imps.openBuilderExec('dev', { argv: ['docker', 'build', '.'], tty: false });
 
   const socket = await requested.promise;
 
-  jest.advanceTimersByTime(10_001);
-  jest.useRealTimers();
+  ctx.execClock.runFor(10_001);
   socket.write(encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 9 }));
 
   const stream = await opening;
@@ -730,6 +730,33 @@ test("it keeps a builder exec open past 10 s for its agent's start", async () =>
   });
 
   expect(stream.pid).toBe(9);
+});
+
+test('it gives up a builder exec when its agent sends no start within 30 s', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const imp = await ctx.imps.createImp({ name: 'dev' });
+
+  const paths = buildImpPaths(ctx.dataDir, imp.id);
+  const requested = Promise.withResolvers<void>();
+
+  await startStubAgent(
+    paths.vsockSocket,
+    () => {
+      requested.resolve();
+    },
+    { stack: ctx.stack },
+  );
+
+  const opening = ctx.imps.openBuilderExec('dev', { argv: ['docker', 'build', '.'], tty: false });
+
+  await requested.promise;
+
+  ctx.execClock.runFor(30_000);
+
+  expect(opening).rejects.toThrow(/sent no exec start within 30000 ms$/u);
 });
 
 test('it sends an outer exec to an agent from 0.16.0', async () => {

@@ -18,6 +18,8 @@ import type {
   ResumeResult,
   SessionOutput,
 } from '@impz/api';
+import type { StartTimer } from '../../platform/process/clock';
+import { startRealTimer } from '../../platform/process/start-real-timer';
 import { AgentError, openAgentConnection } from './agent-connection';
 import type { AgentConnection } from './agent-connection';
 import { buildAgentOutdatedError, handleUnknownOp } from './agent-outdated';
@@ -78,6 +80,7 @@ export async function openExecStream(
   vsockPath: string,
   request: Readonly<AgentExecRequest>,
   startTimeoutMs = EXEC_START_TIMEOUT_MS,
+  startTimer: StartTimer = startRealTimer,
 ): Promise<ExecStream> {
   const { argv, env, resumeFrom, outer, require: _checked, ...rest } = request;
   const op = outer === true ? 'exec.outer' : 'exec';
@@ -92,6 +95,7 @@ export async function openExecStream(
       ...(resumeFrom !== undefined && { resumeFrom }),
     },
     startTimeoutMs,
+    startTimer,
   );
 
   const stream = await (outer === true ? opening.catch(handleUnknownOp('outer-exec')) : opening);
@@ -145,6 +149,7 @@ async function openStream(
   vsockPath: string,
   request: AgentRequest,
   startTimeoutMs: number,
+  startTimer: StartTimer = startRealTimer,
 ): Promise<ExecStream> {
   const connection = await openAgentConnection(vsockPath);
 
@@ -158,6 +163,7 @@ async function openStream(
       call: `${request.op} start`,
       vsockPath,
       timeoutMs: startTimeoutMs,
+      startTimer,
     });
 
     if (first === null) {

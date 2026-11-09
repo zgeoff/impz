@@ -7,8 +7,10 @@ import type { TapDevices } from '../../host-net/net/tap-devices';
 import { TEMPLATE_BUILD_UID } from '../../platform/db/imps';
 import type { ImpRecord } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
+import type { StartTimer } from '../../platform/process/clock';
 import type { HostLoad } from '../../platform/process/read-host-load';
 import type { CommandRunner } from '../../platform/process/run-command';
+import { startRealTimer } from '../../platform/process/start-real-timer';
 import type { openTapStream } from '../../vm/agent-client/exec-stream';
 import type { RamAdmission } from '../../vm/imps-contract/ram-admission';
 import { NO_MEMORY_LIMIT } from '../../vm/memory/memory-limit';
@@ -105,6 +107,8 @@ export interface ImpServiceDeps {
 
   readonly sleepTiming: SleepTiming;
 
+  readonly execStartTimer?: StartTimer;
+
   readonly readExecEnv?: (imp: ImpRecord, vsockPath: string) => Promise<BrokerExecEnv>;
 
   readonly storageGate?: StorageGate;
@@ -151,6 +155,7 @@ export interface ImpClock {
   readonly now: () => number;
   readonly sleep: (durationMs: number) => Promise<void>;
   readonly sleepTiming: SleepTiming;
+  readonly execStartTimer: StartTimer;
 }
 
 export interface ImpVms {
@@ -242,6 +247,7 @@ export function createImpContext(deps: ImpServiceDeps): ImpContext {
     now,
     sleep: deps.sleep,
     sleepTiming: deps.sleepTiming,
+    execStartTimer: deps.execStartTimer ?? startRealTimer,
   };
 
   const vms: ImpVms = {

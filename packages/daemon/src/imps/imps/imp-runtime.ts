@@ -321,7 +321,13 @@ export function createImpRuntime(parts: ImpRuntimeParts): ImpRuntime {
       openStream({
         name,
         kind: 'exec',
-        open: (paths) => openExecStream(paths.vsockSocket, request, BUILDER_EXEC_START_TIMEOUT_MS),
+        open: (paths) =>
+          openExecStream(
+            paths.vsockSocket,
+            request,
+            BUILDER_EXEC_START_TIMEOUT_MS,
+            context.execStartTimer,
+          ),
         wake: true,
         isBuilderAllowed: true,
       }),

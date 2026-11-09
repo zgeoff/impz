@@ -10,6 +10,7 @@ import {
   encodeAgentMessage,
 } from '@impz/agent-protocol';
 import type { Activity, AgentFrame, ErrorResponse, Ping } from '@impz/agent-protocol';
+import type { StartTimer } from '../../platform/process/clock';
 import { requireWithin } from '../../platform/process/require-within';
 import { AgentError, openAgentConnection } from './agent-connection';
 import type { AgentConnection } from './agent-connection';
@@ -190,6 +191,7 @@ interface FrameWait {
   readonly call: string;
   readonly vsockPath: string;
   readonly timeoutMs: number;
+  readonly startTimer?: StartTimer;
 }
 
 export function readFrameWithin(
@@ -203,5 +205,6 @@ export function readFrameWithin(
       new AgentWaitError(
         `agent at ${wait.vsockPath} sent no ${wait.call} within ${String(wait.timeoutMs)} ms`,
       ),
+    wait.startTimer,
   );
 }
