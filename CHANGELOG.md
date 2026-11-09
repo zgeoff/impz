@@ -1,5 +1,12 @@
 # Changelog
 
+## [6.11.5](https://github.com/zgeoff/impz/compare/v6.11.4...v6.11.5) (2026-11-09)
+
+
+### Bug Fixes
+
+* **daemon:** give a builder exec 30 s to start ([#994](https://github.com/zgeoff/impz/issues/994)) ([7244c9c](https://github.com/zgeoff/impz/commit/7244c9c759233e4502e498ec207b52ca64ad7b46))
+
 ## [6.11.4](https://github.com/zgeoff/impz/compare/v6.11.3...v6.11.4) (2026-11-09)
 
 ### Bug Fixes
