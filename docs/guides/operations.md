@@ -25,7 +25,7 @@ asleep. A VM that the dead impd left behind is adopted or killed, so no imp ends
 
 `deploy/upgrade.sh` moves a server to a new release image, under the systemd unit and Podman. It
 needs `podman`, `curl` and `jq`, and `docker` only to move a host that runs under Docker. It takes
-no arguments: the Compose recipe is gone, and `--compose` is refused.
+no arguments, and it refuses `--compose`.
 
 ```sh
 deploy/upgrade.sh
@@ -37,9 +37,9 @@ accepts that major. A client accepts only an impd of its own major version
 impd.
 
 Take `upgrade.sh` from the new image, not from the release the host runs, with the `lib/host-env.sh`
-beside it that it sources. A host that runs under Docker must, since its own `upgrade.sh` cannot
-move it to Podman. Each release's `upgrade.sh` moves the host to that release, so pick the release
-in the image you take it from:
+beside it that it sources. A host that runs under Docker needs the new image's `upgrade.sh`, because
+the `upgrade.sh` of the release it runs cannot move it to Podman. Each release's `upgrade.sh` moves
+the host to that release, so pick the release in the image you take it from:
 
 <!-- x-release-please-start-version -->
 
@@ -51,17 +51,21 @@ bash deploy/upgrade.sh
 
 <!-- x-release-please-end -->
 
-1. It pulls the image of its own release with Podman, unless `IMP_HOST_IMAGE` names another: from
-   the environment, else a pin in `/etc/imp/imp-host.env`. When the host already runs that image
-   under Podman, it still installs the image lines and files of step 3, so the next restart keeps
-   that image, and still retires `imp-docker-proxy` as step 3 does, but restarts nothing. It refuses
-   an image from the environment that `imp-host.service` (drop-ins included) would not run: pin it
-   in the env file instead. It refuses an env file whose last `IMP_HOST_IMAGE=` is empty, which
-   would give the unit no image. It refuses an image whose `imp.host-contract` label is not
-   `no-docker`: that image needs a Docker socket, which a Podman host does not give. To go back to
-   one, see [roll back](#roll-back).
+1. It pulls the image of its own release with Podman. `IMP_HOST_IMAGE` names another image, from the
+   environment, else from a pin in `/etc/imp/imp-host.env`. upgrade.sh stops with nothing changed in
+   these cases:
+   - `IMP_HOST_IMAGE` comes from the environment, and `imp-host.service` (drop-ins included) would
+     not run that image. Pin it in the env file instead.
+   - The env file's last `IMP_HOST_IMAGE=` line is empty, which would give the unit no image.
+   - The image's `imp.host-contract` label is not `no-docker`. Such an image needs a Docker socket,
+     which a Podman host does not give. [Roll back](#roll-back) covers a return to such an image.
+
+   When the host already runs the pulled image under Podman, upgrade.sh does step 3, so the next
+   restart keeps that image, and then exits with no restart.
+
 2. It sleeps every awake imp through the API, one at a time. If the list or one sleep fails, it
-   stops and the host keeps the old image. The stop would sleep them too, but only within its 120 s.
+   stops and the host keeps the old image. The restart in step 4 stops impd, which sleeps the imps
+   too, but only those it sleeps within the stop's 120 s.
 3. It installs the new image's seccomp profile in `/etc/imp/imp-host.seccomp.json` and its
    `imp-host.service`, so a change to the [privileges](../architecture/host.md#privileges) reaches
    the server. A unit it replaces stays as `imp-host.service.bak-<time>`. Keep local changes to the
@@ -70,12 +74,12 @@ bash deploy/upgrade.sh
    the proxy holds the host's Docker socket, and keeps its unit as
    `imp-docker-proxy.service.bak-<time>`.
 
-   An env file line `IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:latest`, which every env file had before
-   the unit named its release, is the old template's and no pin. It becomes the commented pin, so
-   the unit runs its release's image. This happens before the unit is installed, and the file before
-   stays as `imp-host.env.bak-<time>`, mode `0600`; upgrade.sh prints its path. Any other value is a
-   pin and stays. To follow `latest` on purpose, pin `IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host`, which
-   Podman reads as `latest`.
+   It turns the env file line `IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:latest` into a comment, so the
+   unit runs its release's image: upgrade.sh reads that exact line as a default an older env file
+   template wrote, not as a pin. upgrade.sh rewrites the env file before it installs the unit. It
+   keeps the env file it read as `imp-host.env.bak-<time>`, mode `0600`, and prints that path. Any
+   other value is a pin and stays. To follow `latest` on purpose, pin
+   `IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host`, which Podman reads as `latest`.
 
 4. It restarts the host, waits for `/health` to report ready, prints how to roll back, prints the
    boot status counts from `impz info`, and lists the imps. When impd is not ready in time, it
@@ -103,6 +107,21 @@ host needs them.
 
 ### Roll back
 
+**CAUTION:** An image whose `imp.host-contract` label is not `no-docker` needs Docker, which
+`podman tag` does not bring back, and upgrade.sh refuses it. To roll back to such an image, use a
+host with Docker and do these steps:
+
+1. Run `systemctl stop imp-host`.
+2. On a host with IPv6, run `podman network rm imp-host`. Podman makes that network only with IPv6.
+3. Run the `deploy/bootstrap.sh` of the old image's release, with the old image. It writes the unit
+   that image needs.
+
+**CAUTION:** `deploy/bootstrap.sh` blanks the spent Tailscale key once the node has joined, and the
+image starts `tailscaled` from its saved state. An image without the `imp.tailscale-keyless` label
+skips `tailscaled` with a blank key, so a rollback to one takes the node off the tailnet at its next
+start. Put a new key in `/etc/imp/imp-host.env` first
+([the Tailscale key](./install.md#the-tailscale-key)).
+
 On a Podman host, roll back with `podman tag <old image ID> <image>`, then
 `systemctl restart imp-host`; upgrade.sh prints both.
 
@@ -110,13 +129,31 @@ After a move from Docker, upgrade.sh prints the rollback with the exact paths it
 imp-host, remove Podman's `imp-host` network when imp-host started under Podman on a host with IPv6,
 move each `.bak-<time>` unit back, `systemctl daemon-reload`, `docker tag <old image ID> <image>`
 for the image that the restored unit runs, `systemctl enable --now imp-docker-proxy` when its unit
-came back, and start imp-host. The tag matters when the env file pins the new image: without it,
-Docker would pull that image and start it again, for the proxy too, and the new image has no proxy.
-A step that fails after the old host stopped, the start and the readiness wait included, prints the
-rollback for what it changed so far.
+came back, and start imp-host. Run the `docker tag` even when the env file pins the new image.
+Without the tag, Docker pulls the pinned new image and starts it again for imp-host and for
+`imp-docker-proxy`, and the new image has no proxy. When a step fails after the old host stopped,
+the start and the readiness wait included, upgrade.sh prints the rollback for what it changed so
+far.
 
-Imps then wake on demand. Each sleeping imp either restores its memory or boots its disk cold. The
-disk is never touched.
+After a rollback and the upgrade back, a client that resumes the event stream from its saved cursor
+gets a `Reset` event and then the state of every imp
+([Resume from a cursor](./events.md#resume-from-a-cursor)). impd makes this work with database
+triggers that it adds each time it opens the database
+([Durable work](../architecture/durable-work.md#the-event-log)).
+
+Releases 6.11.0, 6.11.1 and 6.11.2 add no such triggers. After a rollback from one of them, before
+any later release opened the database, do a full resync of each client of the event stream once the
+upgrade back is done:
+
+1. Drop the client's saved cursor.
+2. Open the stream with no cursor. Expect: the stream starts with the state of every imp.
+
+A dashboard tab does both when you reload it.
+
+### Imps after an upgrade or a rollback
+
+After an upgrade or a rollback, imps wake on demand. Each sleeping imp either restores its memory or
+boots its disk cold. The disk is never touched.
 [Snapshot identity](../architecture/lifecycle/sleep-and-wake.md#snapshot-identity) has the full
 rule:
 
@@ -134,54 +171,33 @@ load or is gone. A running imp counts when it runs an older Firecracker or an ol
 its next sleep writes a snapshot the host cannot load. `impz info --json` has the same numbers under
 `bootStatus`.
 
-`impz ls` says what an upgrade means for each imp in its NOTE column:
+In its NOTE column, `impz ls` shows what an upgrade means for each imp:
 
-| NOTE                                                | Meaning                                                                                         |
-| --------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `boots cold: <reason>`                              | A sleeping imp whose snapshot cannot load; its next wake boots the disk.                        |
-| `booted cold: <reason>`                             | An awake imp whose last wake became a cold boot, and why. Its next sleep clears it.             |
-| `outdated: agent`                                   | The imp runs an older agent, kernel or Firecracker than the host has now.                       |
-| `booted by an older impd; its next wake boots cold` | An awake imp whose VM an impd from before this scheme booted. Its snapshot cannot name a drive. |
+| NOTE                                                | Meaning                                                                                      |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `boots cold: <reason>`                              | A sleeping imp whose snapshot cannot load; its next wake boots the disk.                     |
+| `booted cold: <reason>`                             | An awake imp whose last wake became a cold boot, and why. Its next sleep clears it.          |
+| `outdated: <parts>`                                 | The imp runs an older version of each part listed, such as `outdated: agent, kernel`.        |
+| `booted by an older impd; its next wake boots cold` | An awake imp that an impd without `system/drives/` booted. Its snapshot cannot name a drive. |
 
 To pick up the new agent or kernel in an outdated imp, run `impz stop <name>` and
 `impz start <name>`. It loses its memory, not its disk. impd deletes the old drive on its next
 start, once no imp uses it.
 
-An imp still on an agent from before protocol `0.8.0` (release v0.7.0 or older) cannot kill the rest
-of a stopped command's process group. When `impz mcp` stops such a command on a timeout or a cancel,
-a child that ignores SIGTERM (a `nohup` job, say) keeps running until the imp restarts. An agent
-from before `0.11.0` kills only the process group, so a child that left it with `setsid` lives on
-([MCP](./mcp.md)).
+An imp that runs an agent with a protocol older than `0.8.0` (release v0.7.0 or older) cannot kill
+the rest of a stopped command's process group. When `impz mcp` stops such a command on a timeout or
+a cancel, a child that ignores SIGTERM (a `nohup` job, say) keeps running until the imp restarts. An
+agent with a protocol older than `0.11.0` kills only the process group, so a child that left it with
+`setsid` lives on ([MCP](./mcp.md)).
 
-An impd from before this scheme kept the drive at `/var/lib/imp/system/imp-system.squashfs`, and a
+An impd without `system/drives/` kept the drive at `/var/lib/imp/system/imp-system.squashfs`, and a
 VM it booted still runs from that file. impd leaves the file alone. Remove it once no such VM runs:
 `impz ls` shows none with `booted by an older impd`.
 
-A rollback to an impd from before this upgrade scheme (the first release with `system/drives/`) does
-not match the hashes in the new snapshot records, and every sleeping imp boots cold once. The same
-happens once the other way: an older impd hashed the drive with another hash and wrote no drive
-path, so its snapshots boot cold with `the snapshot is from an older impd`.
-
-An impd without the `eventCursor` feature writes no events to the event log, but each write it makes
-to an imp or a checkpoint clears the log ID. After the upgrade back, impd gives the log a new ID, so
-a client that resumes the event stream from its saved cursor gets `Reset` and reads a new snapshot.
-The database triggers that clear the ID
-([Durable work](../architecture/durable-work.md#the-event-log)) come with the first impd that opens
-it, so they miss a rollback from an impd that predates them. After such a rollback and the upgrade
-back, make each client do a full resync: drop its saved cursor and open the stream with none, so it
-reads a new snapshot. A dashboard tab does this when you reload it.
-
-**CAUTION:** An image whose `imp.host-contract` label is not `no-docker` needs Docker, which
-`podman tag` does not bring back; upgrade.sh refuses it. Run `deploy/bootstrap.sh` of that release
-with the old image instead, on a host with Docker, after `systemctl stop imp-host`: it writes the
-unit that image needs. On a host with IPv6, run `podman network rm imp-host` before bootstrap.sh,
-because Podman makes that network only with IPv6.
-
-**CAUTION:** `deploy/bootstrap.sh` blanks the spent Tailscale key once the node has joined, and the
-image starts `tailscaled` from its saved state. An image without the `imp.tailscale-keyless` label
-skips `tailscaled` with a blank key, so a rollback to one takes the node off the tailnet at its next
-start. Put a new key in `/etc/imp/imp-host.env` first
-([the Tailscale key](./install.md#the-tailscale-key)).
+An impd without `system/drives/` hashes the drive with another hash and writes no drive path in a
+snapshot record. After a rollback to such an impd, the hashes in the snapshot records that a later
+impd wrote do not match, and every sleeping imp boots cold once. After the upgrade back, each
+snapshot that the older impd wrote boots cold once too, with `the snapshot is from an older impd`.
 
 ## The RAM budget
 
@@ -246,10 +262,11 @@ alone leaves these directories.
 
 The API is `system.gc` with `{ dryRun?, orphans?, secretFiles?, removeSecretFiles? }`. It returns
 `dryRun`, `dropped` (each `kind` and `id`) and `kept` (each orphan's `kind`, `id`, `location`,
-`bytes`, `createdAt` and `snapshots`). Kind `secrets` comes only with `secretFiles` or
-`removeSecretFiles`, which `system.info` reports as `features.secretFilesGc`: its entries carry
-`files`, and only a call with `removeSecretFiles` and `orphans` deletes them. An older impd drops
-both fields, and lists and deletes none.
+`bytes`, `createdAt` and `snapshots`). impd returns entries of kind `secrets` only for a call with
+`secretFiles` or `removeSecretFiles`. Each `secrets` entry carries `files`. impd deletes the
+directories of those entries only for a call with both `removeSecretFiles` and `orphans`.
+`system.info` reports the two fields as `features.secretFilesGc`. An impd without that feature
+ignores both fields: it returns no `secrets` entries and deletes none.
 
 ## Database copy and restore
 
@@ -358,21 +375,28 @@ and either one ends the imp.
 ## A kernel oops
 
 A kernel oops kills its task inside the kernel, and the locks and holds that task had stay until the
-host reboots. When the task is an imp's Firecracker, as a ZFS oops in `zfs_read` can make it, the
-imp's disk stays busy, and no stop, retry or remove frees it. impd reads the kernel's taint flag `D`
-(value 128 in `/proc/sys/kernel/tainted`) at start and whenever it finds a VM gone. While the flag
-is set:
+host reboots. A ZFS oops in `zfs_read` is one oops that can kill an imp's Firecracker. When the task
+is an imp's Firecracker, the imp's disk stays busy, and no stop, retry or remove frees it. impd
+reads the kernel's taint flag `D` (value 128 in `/proc/sys/kernel/tainted`) at start and whenever it
+finds a VM gone. While the flag is set:
 
 - `/health` lists `host needs a reboot: a kernel oops` under `warnings`, the dashboard shows the
   same line on every page, `system.info` returns `rebootReason: "a kernel oops"`, and the
   `imp.host.reboot_needed` gauge reads 1.
-- An imp whose VM ran when impd saw the flag go from clear to set, and was lost after it, shows the
-  error `a kernel oops killed firecracker` when its Firecracker owned the thread the oops killed.
-  impd reads that thread from the oops header in `/dev/kmsg`. Every such imp shows the error when
-  impd runs outside the host's PID namespace, as it does in the imp-host container, when it cannot
-  read `/dev/kmsg`, or when no VM owned the thread. A start or a wake of it fails with
-  `PRECONDITION_FAILED`:
+- impd shows the error `a kernel oops killed firecracker` on an imp when all of these hold:
+  - the imp's VM ran when impd saw the flag go from clear to set;
+  - the VM was lost after that;
+  - the imp's Firecracker owned the thread that the oops killed.
+
+  impd reads that thread from the oops header in `/dev/kmsg`. impd cannot tell the thread in these
+  cases, so it shows the error on every imp that meets the first two conditions:
+  - impd runs outside the host's PID namespace, which it does in the imp-host container;
+  - impd cannot read `/dev/kmsg`;
+  - no VM owned the thread.
+
+  A start or a wake of an imp with the error fails with `PRECONDITION_FAILED`:
   `the host needs a reboot: a kernel oops holds the disk of <name>; reboot the host, then start it`.
+
 - On ZFS, a reclaim that meets the held dataset logs `WARNING impd.zfs reclaim failed: …` once for
   that dataset, and tries again on each pass without a log line.
 
@@ -407,10 +431,10 @@ To recover:
 
 ## Troubleshooting
 
-| Symptom                                   | Cause and fix                                                                                                             |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `unauthorized` from the CLI               | Log in again: `impz login <url> --name <host>` with the token from `<IMP_DATA_DIR>/token` (`scripts/dev/dev.sh token`).   |
-| A wake logs `cold boot instead of a wake` | The snapshot cannot load on this host; the log and `impz ls` say why. Expected after some upgrades ([upgrade](#upgrade)). |
-| An imp never sleeps                       | Something keeps it active: an open connection in the guest, CPU above `IMP_IDLE_CPU_PERCENT`, or a hold.                  |
-| TLS downloads stall in a guest            | The uplink MTU is smaller than 1500. `dev.sh` sets `IMP_UPLINK_MTU`; set it by hand elsewhere.                            |
-| The tailnet node is `imp-1`               | An old node holds the name. The [Tailscale guide](./tailscale.md#state-and-ephemeral-keys) covers it.                     |
+| Symptom                                   | Cause and fix                                                                                                                     |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `unauthorized` from the CLI               | Log in again: `impz login <url> --name <host>` with the token from `<IMP_DATA_DIR>/token` (`scripts/dev/dev.sh token`).           |
+| A wake logs `cold boot instead of a wake` | The snapshot cannot load on this host. impd logs why, and `impz ls` shows it. Expected after some upgrades ([upgrade](#upgrade)). |
+| An imp never sleeps                       | Something keeps it active: an open connection in the guest, CPU above `IMP_IDLE_CPU_PERCENT`, or a hold.                          |
+| TLS downloads stall in a guest            | The uplink MTU is smaller than 1500. `dev.sh` sets `IMP_UPLINK_MTU`; set it by hand elsewhere.                                    |
+| The tailnet node is `imp-1`               | An old node holds the name. The [Tailscale guide](./tailscale.md#state-and-ephemeral-keys) covers it.                             |
