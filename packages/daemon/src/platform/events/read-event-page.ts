@@ -10,14 +10,16 @@ export async function readEventPage(
   cursor: Readonly<EventCursor>,
   limit: number,
 ): Promise<EventPage> {
-  const logId = await reads.readLogID();
+  const logID = await reads.readLogID();
   const head = await reads.readHead();
 
-  return match(pickStreamStart(cursor, { head, logId }))
-    .with({ kind: 'snapshot' }, () => readSnapshotPage(reads, { head, logId, isReset: false }))
-    .with({ kind: 'reset' }, () => readSnapshotPage(reads, { head, logId, isReset: true }))
+  return match(pickStreamStart(cursor, { head, logId: logID }))
+    .with({ kind: 'snapshot' }, () =>
+      readSnapshotPage(reads, { head, logId: logID, isReset: false }),
+    )
+    .with({ kind: 'reset' }, () => readSnapshotPage(reads, { head, logId: logID, isReset: true }))
     .with({ kind: 'resume' }, (resume) =>
-      readResumedPage(reads, { head, logId, isReset: false }, resume.after, limit),
+      readResumedPage(reads, { head, logId: logID, isReset: false }, resume.after, limit),
     )
     .exhaustive();
 }

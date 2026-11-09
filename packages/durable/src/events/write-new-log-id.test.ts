@@ -11,9 +11,9 @@ test('it gives a log with no log ID a new one', async () => {
   await removeLogID(ctx.db);
   await writeNewLogID(ctx.db);
 
-  const logId = await readLogID(ctx.db);
+  const logID = await readLogID(ctx.db);
 
-  expect(logId).not.toBeOneOf(['', before]);
+  expect(logID).not.toBeOneOf(['', before]);
 });
 
 test('it keeps the log ID a log already has', async () => {
@@ -22,7 +22,7 @@ test('it keeps the log ID a log already has', async () => {
 
   await writeNewLogID(ctx.db);
 
-  const logId = await readLogID(ctx.db);
+  const logID = await readLogID(ctx.db);
 
-  expect(logId).toBe(before);
+  expect(logID).toBe(before);
 });

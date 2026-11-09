@@ -23,21 +23,27 @@ export function createEventRoutes(os: RpcImplementer, deps: RouterDeps, views: C
     readHead: deps.imps.events.readHead,
     readLogID: deps.imps.events.readLogID,
     readAfter: deps.imps.events.readAfter,
-    readSnapshot: async (head, logId) => {
+    readSnapshot: async (head, logID) => {
       const imps = await views.listCallerImps(caller);
 
       const at = new Date(deps.now());
 
       return imps
-        .map((imp): ImpEvent =>
+        .map((imp): ImpEvent => ({
           // oxlint-disable-next-line id-length -- `v` is the event format's version field
-          ({ v: EVENT_VERSION, at, seq: head, logId, ev: 'ImpAdded', reason: 'snapshot', imp }),
-        )
+          v: EVENT_VERSION,
+          at,
+          seq: head,
+          logId: logID,
+          ev: 'ImpAdded',
+          reason: 'snapshot',
+          imp,
+        }))
         .filter((event) => isEventValid(event));
     },
-    present: async (event, logId) => {
+    present: async (event, logID) => {
       try {
-        return await readApiEvent(event, deps.imps.toApi, logId);
+        return await readApiEvent(event, deps.imps.toApi, logID);
       } catch (error) {
         getImpdLogger('events').warning('left out event {seq}: {error}', {
           seq: event.seq,

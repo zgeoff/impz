@@ -15,8 +15,8 @@ export interface EventLogReads {
   readonly readLogID: () => Promise<string>;
   readonly readAfter: (after: number, limit: number) => Promise<ImpEventsAfter>;
 
-  readonly readSnapshot: (head: number, logId: string) => Promise<readonly ImpEvent[]>;
-  readonly present: (event: LoggedImpEvent, logId: string) => Promise<ImpEvent | null>;
+  readonly readSnapshot: (head: number, logID: string) => Promise<readonly ImpEvent[]>;
+  readonly present: (event: LoggedImpEvent, logID: string) => Promise<ImpEvent | null>;
   readonly accepts?: (event: ImpEvent) => boolean;
 
   readonly now: () => number;
@@ -54,10 +54,10 @@ export async function* openEventStream(options: EventStreamOptions): AsyncGenera
         });
 
   try {
-    const logId = await options.readLogID();
+    const logID = await options.readLogID();
     const head = await options.readHead();
 
-    const start = pickStreamStart(options.cursor, { head, logId });
+    const start = pickStreamStart(options.cursor, { head, logId: logID });
 
     const opening = match(start)
       .with({ kind: 'snapshot' }, () => ({ isReset: false, hasSnapshot: true, after: head }))
@@ -70,7 +70,7 @@ export async function* openEventStream(options: EventStreamOptions): AsyncGenera
       .exhaustive();
 
     if (opening.isReset) {
-      yield buildCursorEvent('Reset', { seq: head, logId, at: options.now() });
+      yield buildCursorEvent('Reset', { seq: head, logId: logID, at: options.now() });
     }
 
     // a reader that opened with no cursor may be a client that knows no Reset or Position, and
@@ -78,7 +78,7 @@ export async function* openEventStream(options: EventStreamOptions): AsyncGenera
     const knowsCursorEvents = options.cursor.after !== undefined;
 
     if (opening.hasSnapshot) {
-      yield* readSnapshotAt(options, { head, logId, knowsCursorEvents });
+      yield* readSnapshotAt(options, { head, logId: logID, knowsCursorEvents });
     }
 
     let after = opening.after;
@@ -92,7 +92,7 @@ export async function* openEventStream(options: EventStreamOptions): AsyncGenera
       });
 
       const reset = yield* presentPages(pages, options, {
-        logId,
+        logId: logID,
         knowsCursorEvents,
         signal: stop.signal,
       });
@@ -105,8 +105,8 @@ export async function* openEventStream(options: EventStreamOptions): AsyncGenera
 
       after = await options.readHead();
 
-      yield buildCursorEvent('Reset', { seq: after, logId, at: options.now() });
-      yield* readSnapshotAt(options, { head: after, logId, knowsCursorEvents });
+      yield buildCursorEvent('Reset', { seq: after, logId: logID, at: options.now() });
+      yield* readSnapshotAt(options, { head: after, logId: logID, knowsCursorEvents });
     }
   } finally {
     options.signal?.removeEventListener('abort', stopStream);
@@ -137,7 +137,7 @@ async function* presentPages(
   reads: EventLogReads,
   place: Readonly<StreamPlace & { signal: AbortSignal }>,
 ): AsyncGenerator<ImpEvent, ImpEventsReset | null> {
-  const logId = place.logId;
+  const logID = place.logId;
   const signal = place.signal;
 
   try {
@@ -147,7 +147,7 @@ async function* presentPages(
       let sentSeq: number | null = null;
 
       for (const logged of step.value) {
-        const event = await reads.present(logged, logId);
+        const event = await reads.present(logged, logID);
 
         if (signal.aborted) {
           return null;
@@ -162,7 +162,7 @@ async function* presentPages(
       const readSeq = step.value.at(-1)?.seq ?? null;
 
       if (place.knowsCursorEvents && readSeq !== null && readSeq !== sentSeq) {
-        yield buildCursorEvent('Position', { seq: readSeq, logId, at: reads.now() });
+        yield buildCursorEvent('Position', { seq: readSeq, logId: logID, at: reads.now() });
       }
 
       step = await pages.next();

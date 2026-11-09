@@ -8,7 +8,7 @@ test('it leaves the log with an empty log ID', async () => {
 
   await removeLogID(ctx.db);
 
-  const logId = await readLogID(ctx.db);
+  const logID = await readLogID(ctx.db);
 
-  expect(logId).toBe('');
+  expect(logID).toBe('');
 });
