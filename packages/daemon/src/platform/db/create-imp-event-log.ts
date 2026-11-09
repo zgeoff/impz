@@ -1,4 +1,4 @@
-import { createChangeSignal, readEventHead, readLogId } from '@impz/durable';
+import { createChangeSignal, readEventHead, readLogID } from '@impz/durable';
 import type { ChangeSignal } from '@impz/durable';
 import { getErrorMessage } from '@impz/shared';
 import { createEventBus } from '../events/event-bus';
@@ -27,7 +27,7 @@ export interface ImpEventLog {
   readonly write: (entry: Readonly<ImpLogEntry>, at: number) => Promise<void>;
 
   readonly readHead: () => Promise<number>;
-  readonly readLogId: () => Promise<string>;
+  readonly readLogID: () => Promise<string>;
   readonly readAfter: (after: number, limit: number) => Promise<ImpEventsAfter>;
 
   // resolves once the follower holds its cursor, so it misses no write that comes after
@@ -60,7 +60,7 @@ export function createImpEventLog(db: ImpQueries, now: () => number): ImpEventLo
       }
     },
     readHead: () => readEventHead(db),
-    readLogId: () => readLogId(db),
+    readLogID: () => readLogID(db),
     readAfter: (after, limit) => readImpEventsAfter(db, { after, limit }),
     start: async () => {
       const head = await readEventHead(db);

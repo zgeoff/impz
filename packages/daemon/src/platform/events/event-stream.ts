@@ -12,7 +12,7 @@ import { pickStreamStart } from './pick-stream-start';
 
 export interface EventLogReads {
   readonly readHead: () => Promise<number>;
-  readonly readLogId: () => Promise<string>;
+  readonly readLogID: () => Promise<string>;
   readonly readAfter: (after: number, limit: number) => Promise<ImpEventsAfter>;
 
   readonly readSnapshot: (head: number, logId: string) => Promise<readonly ImpEvent[]>;
@@ -54,7 +54,7 @@ export async function* openEventStream(options: EventStreamOptions): AsyncGenera
         });
 
   try {
-    const logId = await options.readLogId();
+    const logId = await options.readLogID();
     const head = await options.readHead();
 
     const start = pickStreamStart(options.cursor, { head, logId });

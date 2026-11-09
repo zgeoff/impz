@@ -341,10 +341,10 @@ test('#writeConsistentCopy gives the copy a log ID of its own', async () => {
 
   onTestFinished(() => copy.destroy());
 
-  const copyLogId = await copy.log.readLogId();
-  const liveLogId = await ctx.db.log.readLogId();
+  const copyLogID = await copy.log.readLogID();
+  const liveLogID = await ctx.db.log.readLogID();
 
-  expect(copyLogId).not.toBe(liveLogId);
+  expect(copyLogID).not.toBe(liveLogID);
 });
 
 test('#writeConsistentCopy gives each restore of one copy a log ID of its own', async () => {
@@ -365,8 +365,8 @@ test('#writeConsistentCopy gives each restore of one copy a log ID of its own', 
 
   onTestFinished(() => second.destroy());
 
-  const firstLogId = await first.log.readLogId();
-  const secondLogId = await second.log.readLogId();
+  const firstLogID = await first.log.readLogID();
+  const secondLogID = await second.log.readLogID();
 
-  expect(firstLogId).not.toBe(secondLogId);
+  expect(firstLogID).not.toBe(secondLogID);
 });

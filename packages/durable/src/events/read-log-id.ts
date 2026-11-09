@@ -1,6 +1,6 @@
 import type { DurableQueries } from '../durable-tables';
 
-export async function readLogId(db: DurableQueries): Promise<string> {
+export async function readLogID(db: DurableQueries): Promise<string> {
   const row = await db
     .selectFrom('event_log')
     .select('log_id')

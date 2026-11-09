@@ -21,7 +21,7 @@ export function createEventRoutes(os: RpcImplementer, deps: RouterDeps, views: C
 
   const buildCallerReads = (caller: Readonly<Caller>): EventLogReads => ({
     readHead: deps.imps.events.readHead,
-    readLogId: deps.imps.events.readLogId,
+    readLogID: deps.imps.events.readLogID,
     readAfter: deps.imps.events.readAfter,
     readSnapshot: async (head, logId) => {
       const imps = await views.listCallerImps(caller);

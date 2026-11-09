@@ -10,7 +10,7 @@ export async function readEventPage(
   cursor: Readonly<EventCursor>,
   limit: number,
 ): Promise<EventPage> {
-  const logId = await reads.readLogId();
+  const logId = await reads.readLogID();
   const head = await reads.readHead();
 
   return match(pickStreamStart(cursor, { head, logId }))

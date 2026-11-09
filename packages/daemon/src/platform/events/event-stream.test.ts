@@ -45,7 +45,7 @@ async function setupTest() {
         cursor: {},
         changes: db.log.changes,
         readHead: db.log.readHead,
-        readLogId: db.log.readLogId,
+        readLogID: db.log.readLogID,
         readAfter: db.log.readAfter,
         readSnapshot: () => Promise.resolve([]),
         present: (event, logId) =>
@@ -301,7 +301,7 @@ test('it sends the position past a page whose last events its reader may not see
     );
   }
 
-  const logId = await ctx.db.log.readLogId();
+  const logId = await ctx.db.log.readLogID();
 
   const stream = ctx.open({
     cursor: { after: 0, logId },
@@ -376,7 +376,7 @@ test('it sends a reset and a new snapshot when a prune passes the cursor it resu
 
   const controller = new AbortController();
 
-  const logId = await ctx.db.log.readLogId();
+  const logId = await ctx.db.log.readLogID();
 
   const stream = ctx.open({
     cursor: { after: 0, logId },
@@ -473,7 +473,7 @@ test('it resumes after its cursor with no snapshot', async () => {
     );
   }
 
-  const logId = await ctx.db.log.readLogId();
+  const logId = await ctx.db.log.readLogID();
 
   const stream = ctx.open({
     cursor: { after: 1, logId },
@@ -522,7 +522,7 @@ test.each([
 
   controller.abort();
 
-  const logId = await ctx.db.log.readLogId();
+  const logId = await ctx.db.log.readLogID();
 
   expect(sent).toStrictEqual([
     {
@@ -550,7 +550,7 @@ test('it sends a reset to a cursor from before an impd that logs no events chang
     buildMockNewImp({ name: 'quiet-heron', imageId: image.id }),
   );
 
-  const cursor = { after: await upgraded.log.readHead(), logId: await upgraded.log.readLogId() };
+  const cursor = { after: await upgraded.log.readHead(), logId: await upgraded.log.readLogID() };
 
   await upgraded.destroy();
 
@@ -584,7 +584,7 @@ test('it sends a reset to a cursor from before an impd that logs no events chang
     cursor,
     changes: reupgraded.log.changes,
     readHead: reupgraded.log.readHead,
-    readLogId: reupgraded.log.readLogId,
+    readLogID: reupgraded.log.readLogID,
     readAfter: reupgraded.log.readAfter,
     signal: controller.signal,
   });
@@ -593,7 +593,7 @@ test('it sends a reset to a cursor from before an impd that logs no events chang
 
   controller.abort();
 
-  const logID = await reupgraded.log.readLogId();
+  const logID = await reupgraded.log.readLogID();
 
   expect(sent).toStrictEqual({
     done: false,
@@ -633,7 +633,7 @@ test('it sends a reset, then the snapshot, for a cursor older than the oldest ev
 
   await withImpTransaction(ctx.db, (trx) => pruneEvents(trx, Date.UTC(2026, 9, 2, 12)));
 
-  const logId = await ctx.db.log.readLogId();
+  const logId = await ctx.db.log.readLogID();
 
   const stream = ctx.open({
     cursor: { after: 0, logId },

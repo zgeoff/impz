@@ -46,8 +46,8 @@ later restore that copy in place of the file. A plain copy keeps the log ID of t
 restored file would give new events numbers a reader has already seen, and the reader would skip
 those events. The program prevents this:
 
-1. It calls `removeLogId` on each copy it makes, which clears the copy's log ID.
-2. It calls `writeNewLogId` each time it opens the file, which gives a file with no log ID a new
+1. It calls `removeLogID` on each copy it makes, which clears the copy's log ID.
+2. It calls `writeNewLogID` each time it opens the file, which gives a file with no log ID a new
    random one.
 
 An operator who rolls the program back to an older release runs that release on the same file, and a
@@ -62,7 +62,7 @@ those changes. Each time the program opens the file, it calls these, in order:
      mark row and skips that insert with `RAISE(IGNORE)`.
 2. `removeLogIDAfterOutsideWrites`, which clears the log ID when a mark row exists, and removes the
    mark.
-3. `writeNewLogId`.
+3. `writeNewLogID`.
 
 The program's own writes leave no mark. Another release's connection has no temporary trigger, so
 its writes leave one, and the program's next open gives the log a new ID. That release keeps the log
