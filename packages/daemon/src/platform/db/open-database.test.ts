@@ -10,11 +10,14 @@ import { Kysely, sql } from 'kysely';
 import { buildMockNewImage } from '../../test-utils/imps/build-mock-new-image';
 import { buildMockNewImp } from '../../test-utils/imps/build-mock-new-imp';
 import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
+import { createUnmigratedDatabase } from '../../test-utils/platform/create-unmigrated-database';
 import { appendImpEvent } from './append-imp-event';
+import { createCheckpoint, removeCheckpoint } from './checkpoints';
 import { createImage } from './images';
 import type { LoggedImpEvent } from './imp-log-entry';
-import { createImp } from './imps';
+import { createImp, removeImp, updateImpActivity } from './imps';
 import { openDatabase } from './open-database';
+import type { ImpDatabase } from './open-database';
 import { updateImpState } from './update-imp-state';
 import { withImpTransaction } from './with-imp-transaction';
 
@@ -174,6 +177,120 @@ test('it keeps the event of a committed write when impd stops right after the co
     throughSeq: 1,
     hasMore: false,
   });
+});
+
+test('it gives the log one new ID after another impd wrote, and keeps it after impd writes', async () => {
+  const ctx = setupTest();
+  const path = join(ctx.directory, 'imp.sqlite');
+
+  const first = await openDatabase(path);
+
+  ctx.stack.defer(() => first.destroy());
+
+  const image = await createImage(first, buildMockNewImage());
+  const imp = await createImp(first, buildMockNewImp({ imageId: image.id }));
+  const firstLogID = await first.log.readLogId();
+
+  await first.destroy();
+
+  const older = createUnmigratedDatabase(path);
+
+  ctx.stack.defer(() => older.destroy());
+
+  await updateImpActivity(older, imp.id, new Date(Date.UTC(2026, 9, 1)));
+
+  await older.destroy();
+
+  const second = await openDatabase(path);
+
+  ctx.stack.defer(() => second.destroy());
+
+  await updateImpState(second, imp.id, { reason: 'stopped', state: 'stopped' });
+
+  const secondLogID = await second.log.readLogId();
+
+  await second.destroy();
+
+  const third = await openDatabase(path);
+
+  ctx.stack.defer(() => third.destroy());
+
+  const thirdLogID = await third.log.readLogId();
+
+  expect({ isRotated: secondLogID !== firstLogID, thirdLogID }).toStrictEqual({
+    isRotated: true,
+    thirdLogID: secondLogID,
+  });
+});
+
+test.each([
+  [
+    'changed an imp',
+    (older: ImpDatabase, impID: string) =>
+      updateImpActivity(older, impID, new Date(Date.UTC(2026, 9, 1))),
+  ],
+  ['removed an imp', (older: ImpDatabase, impID: string) => removeImp(older, impID)],
+  ['removed a checkpoint', (older: ImpDatabase) => removeCheckpoint(older, 'cp-calm')],
+])(
+  'it gives the log a new ID when another impd %s between two opens',
+  async (_write, writeAsOlderImpd) => {
+    const ctx = setupTest();
+    const path = join(ctx.directory, 'imp.sqlite');
+
+    const before = await openDatabase(path);
+
+    ctx.stack.defer(() => before.destroy());
+
+    const image = await createImage(before, buildMockNewImage());
+    const imp = await createImp(before, buildMockNewImp({ imageId: image.id }));
+
+    await createCheckpoint(before, { id: 'cp-calm', impId: imp.id, label: null, sizeBytes: null });
+
+    const logID = await before.log.readLogId();
+
+    await before.destroy();
+
+    const older = createUnmigratedDatabase(path);
+
+    ctx.stack.defer(() => older.destroy());
+
+    await writeAsOlderImpd(older, imp.id);
+
+    await older.destroy();
+
+    const after = await openDatabase(path);
+
+    ctx.stack.defer(() => after.destroy());
+
+    const reopenedLogID = await after.log.readLogId();
+
+    expect(reopenedLogID).not.toBeOneOf(['', logID]);
+  },
+);
+
+test('it keeps the log ID that an impd which logs events but makes no triggers reads after its write', async () => {
+  const ctx = setupTest();
+  const path = join(ctx.directory, 'imp.sqlite');
+
+  const upgraded = await openDatabase(path);
+
+  ctx.stack.defer(() => upgraded.destroy());
+
+  const image = await createImage(upgraded, buildMockNewImage());
+  const imp = await createImp(upgraded, buildMockNewImp({ imageId: image.id }));
+  const logID = await upgraded.log.readLogId();
+
+  await upgraded.destroy();
+
+  const older = createUnmigratedDatabase(path);
+
+  ctx.stack.defer(() => older.destroy());
+
+  await updateImpState(older, imp.id, { reason: 'stopped', state: 'stopped' });
+
+  const seenLogID = await older.log.readLogId();
+
+  expect(seenLogID).toBe(logID);
 });
 
 test('it stamps each event with the clock it was opened with', async () => {

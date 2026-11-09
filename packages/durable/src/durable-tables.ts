@@ -60,9 +60,15 @@ export interface ReconcilersTable {
   readonly at: number;
 }
 
+// holds a row once a connection without the program's TEMP trigger wrote a logged table
+export interface EventLogOutsideWritesTable {
+  readonly id: number;
+}
+
 export interface DurableTables {
   readonly events: EventsTable;
   readonly event_log: EventLogTable;
+  readonly event_log_outside_writes: EventLogOutsideWritesTable;
   readonly operations: OperationsTable;
   readonly operation_steps: OperationStepsTable;
   readonly reconcilers: ReconcilersTable;

@@ -14,15 +14,20 @@ export function createUnmigratedDatabase(path = ':memory:'): ImpDatabase {
 
   const builder = new Kysely<DB>({ dialect: buildSQLiteDialect(sqlite) });
 
-  // its log never starts: it has no events table until a test runs the migrations
-  const db = Object.assign(builder, { log: createImpEventLog(builder, Date.now) });
+  const destroyDriver = builder.destroy.bind(builder);
 
-  // the shared driver's destroy leaves the handle open for its opener to close
-  onTestFinished(async () => {
-    await db.destroy();
+  // its log never starts: it has no events table until a test runs the migrations; the shared
+  // driver's destroy leaves the handle open for its opener to close
+  const db = Object.assign(builder, {
+    log: createImpEventLog(builder, Date.now),
+    destroy: async () => {
+      await destroyDriver();
 
-    sqlite.close();
+      sqlite.close();
+    },
   });
+
+  onTestFinished(() => db.destroy());
 
   return db;
 }

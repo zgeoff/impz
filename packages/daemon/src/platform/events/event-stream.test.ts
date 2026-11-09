@@ -1,12 +1,21 @@
-import { expect, mock, test } from 'bun:test';
+import { expect, mock, onTestFinished, test } from 'bun:test';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { ImpEvent } from '@impz/api';
 import { pruneEvents } from '@impz/durable';
 import invariant from 'tiny-invariant';
 import { readApiEvent } from '../../surface/read-api-event';
+import { buildMockNewImage } from '../../test-utils/imps/build-mock-new-image';
+import { buildMockNewImp } from '../../test-utils/imps/build-mock-new-imp';
 import { buildStubClock } from '../../test-utils/platform/build-stub-clock';
 import { createTestDatabase } from '../../test-utils/platform/create-test-database';
+import { createUnmigratedDatabase } from '../../test-utils/platform/create-unmigrated-database';
 import { buildMockGovernorDecision } from '../../test-utils/vm/build-mock-governor-decision';
 import { appendImpEvent } from '../db/append-imp-event';
+import { createImage } from '../db/images';
+import { createImp, updateImpActivity } from '../db/imps';
+import { openDatabase } from '../db/open-database';
 import { withImpTransaction } from '../db/with-imp-transaction';
 import { openEventStream } from './event-stream';
 
@@ -17,8 +26,20 @@ async function setupTest() {
 
   const db = database.db;
 
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
+  const directory = mkdtempSync(join(tmpdir(), 'imp-event-stream-'));
+
+  stack.defer(() => {
+    rmSync(directory, { recursive: true, force: true });
+  });
+
   return {
     db,
+    directory,
+    stack,
     open: (options: StreamOptions = {}) =>
       openEventStream({
         cursor: {},
@@ -511,6 +532,74 @@ test.each([
     },
     { done: false, value: expect.objectContaining({ name: 'snapshot', seq: 0, logId }) },
   ]);
+});
+
+test('it sends a reset to a cursor from before an impd that logs no events changed an imp', async () => {
+  const ctx = await setupTest();
+
+  const path = join(ctx.directory, 'imp.sqlite');
+
+  const upgraded = await openDatabase(path);
+
+  ctx.stack.defer(() => upgraded.destroy());
+
+  const image = await createImage(upgraded, buildMockNewImage());
+
+  const imp = await createImp(
+    upgraded,
+    buildMockNewImp({ name: 'quiet-heron', imageId: image.id }),
+  );
+
+  const cursor = { after: await upgraded.log.readHead(), logId: await upgraded.log.readLogId() };
+
+  await upgraded.destroy();
+
+  const older = createUnmigratedDatabase(path);
+
+  ctx.stack.defer(() => older.destroy());
+
+  await updateImpActivity(older, imp.id, new Date(Date.UTC(2026, 9, 1)));
+
+  await older.destroy();
+
+  const reupgraded = await openDatabase(path);
+
+  ctx.stack.defer(() => reupgraded.destroy());
+
+  await reupgraded.log.write(
+    {
+      ev: 'GovernorDecision',
+      decision: 'admitted',
+      name: 'quiet-heron',
+      trigger: 'wake',
+      usedMib: 512,
+      budgetMib: 4096,
+    },
+    Date.UTC(2026, 9, 2),
+  );
+
+  const controller = new AbortController();
+
+  const stream = ctx.open({
+    cursor,
+    changes: reupgraded.log.changes,
+    readHead: reupgraded.log.readHead,
+    readLogId: reupgraded.log.readLogId,
+    readAfter: reupgraded.log.readAfter,
+    signal: controller.signal,
+  });
+
+  const sent = await stream.next();
+
+  controller.abort();
+
+  const logID = await reupgraded.log.readLogId();
+
+  expect(sent).toStrictEqual({
+    done: false,
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
+    value: { v: 1, at: new Date(Date.UTC(2026, 9, 2, 12)), seq: 2, logId: logID, ev: 'Reset' },
+  });
 });
 
 test('it sends a reset, then the snapshot, for a cursor older than the oldest event it keeps', async () => {

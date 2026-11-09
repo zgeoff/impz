@@ -74,6 +74,10 @@ export interface EventLog {
   pruned_through: number;
 }
 
+export interface EventLogOutsideWrites {
+  id: Generated<number>;
+}
+
 export interface Events {
   at: number;
   kind: string;
@@ -449,6 +453,7 @@ export interface DB {
   broker_sessions: BrokerSessions;
   checkpoints: Checkpoints;
   event_log: EventLog;
+  event_log_outside_writes: EventLogOutsideWrites;
   events: Events;
   grants: Grants;
   image_removals: ImageRemovals;
