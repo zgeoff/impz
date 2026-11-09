@@ -179,30 +179,48 @@ test('it keeps the event of a committed write when impd stops right after the co
   });
 });
 
-test('it keeps the log ID across opens when only impd wrote the imps', async () => {
+test('it gives the log one new ID after another impd wrote, and keeps it after impd writes', async () => {
   const ctx = setupTest();
   const path = join(ctx.directory, 'imp.sqlite');
 
-  const before = await openDatabase(path);
+  const first = await openDatabase(path);
 
-  ctx.stack.defer(() => before.destroy());
+  ctx.stack.defer(() => first.destroy());
 
-  const image = await createImage(before, buildMockNewImage());
-  const imp = await createImp(before, buildMockNewImp({ imageId: image.id }));
+  const image = await createImage(first, buildMockNewImage());
+  const imp = await createImp(first, buildMockNewImp({ imageId: image.id }));
+  const firstLogID = await first.log.readLogId();
 
-  await updateImpState(before, imp.id, { reason: 'stopped', state: 'stopped' });
+  await first.destroy();
 
-  const logID = await before.log.readLogId();
+  const older = createUnmigratedDatabase(path);
 
-  await before.destroy();
+  ctx.stack.defer(() => older.destroy());
 
-  const after = await openDatabase(path);
+  await updateImpActivity(older, imp.id, new Date(Date.UTC(2026, 9, 1)));
 
-  ctx.stack.defer(() => after.destroy());
+  await older.destroy();
 
-  const reopenedLogID = await after.log.readLogId();
+  const second = await openDatabase(path);
 
-  expect(reopenedLogID).toBe(logID);
+  ctx.stack.defer(() => second.destroy());
+
+  await updateImpState(second, imp.id, { reason: 'stopped', state: 'stopped' });
+
+  const secondLogID = await second.log.readLogId();
+
+  await second.destroy();
+
+  const third = await openDatabase(path);
+
+  ctx.stack.defer(() => third.destroy());
+
+  const thirdLogID = await third.log.readLogId();
+
+  expect({ isRotated: secondLogID !== firstLogID, thirdLogID }).toStrictEqual({
+    isRotated: true,
+    thirdLogID: secondLogID,
+  });
 });
 
 test.each([
