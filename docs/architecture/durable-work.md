@@ -58,8 +58,8 @@ those changes. Each time the program opens the file, it calls these, in order:
    `event_log_outside_writes` table and two kinds of trigger:
    - database triggers that put a mark row in that table on each insert, update or delete in the
      described tables;
-   - a temporary trigger, on the program's own connection only, that runs before each such insert
-     and makes SQLite skip it with `RAISE(IGNORE)`.
+   - a temporary trigger, on the program's own connection only, that runs before each insert of a
+     mark row and skips that insert with `RAISE(IGNORE)`.
 2. `removeLogIDAfterOutsideWrites`, which clears the log ID when a mark row exists, and removes the
    mark.
 3. `writeNewLogId`.
