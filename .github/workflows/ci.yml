@@ -499,7 +499,7 @@ jobs:
       cancel-in-progress: true
     permissions:
       contents: read
-    uses: zgeoff/tools/.github/workflows/paths-changed.yml@c9b824d1e456af850913cb4bef28fdbc64402aa3 # main
+    uses: zgeoff/tools/.github/workflows/paths-changed.yml@5d691c1c1b3e508369b22dc918604f5cb5f4e9f6 # main
     with:
       paths: |
         agent/**
@@ -1021,7 +1021,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    uses: zgeoff/tools/.github/workflows/release-please.yml@c9b824d1e456af850913cb4bef28fdbc64402aa3 # main
+    uses: zgeoff/tools/.github/workflows/release-please.yml@5d691c1c1b3e508369b22dc918604f5cb5f4e9f6 # main
     with:
       app-id: ${{ vars.RELEASE_APP_ID }}
       merge: true
