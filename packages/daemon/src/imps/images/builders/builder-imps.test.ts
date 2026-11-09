@@ -458,6 +458,41 @@ test('it fails the build in 60 s when the agent never sends an exec start', asyn
   );
 });
 
+test('it names the time the engine wait took when each exec start stalls past the 60 s', async () => {
+  const ctx = await setupTest();
+
+  const clock = buildStubClock();
+
+  const builders = createBuilders({
+    config: ctx.config,
+    db: ctx.db,
+    imps: {
+      ...ctx.impd.imps,
+      openBuilderExec: () => {
+        clock.runFor(25_000);
+
+        return Promise.reject(
+          new AgentWaitError('agent at builder.sock sent no exec start within 25000 ms'),
+        );
+      },
+    },
+    ensureImage: async () => {
+      await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: ctx.config.build.image });
+    },
+    clock,
+  });
+
+  const building = builders.withBuilder(
+    { signal: new AbortController().signal, imageName: 'box' },
+    () => Promise.resolve('built'),
+  );
+
+  expect(building).rejects.toThrowWithMessage(
+    Error,
+    "the builder's engine did not answer in 76 s: agent at builder.sock sent no exec start within 25000 ms",
+  );
+});
+
 test('it fails the build at once with the error of an exec open that is no late answer', async () => {
   const ctx = await setupTest();
 

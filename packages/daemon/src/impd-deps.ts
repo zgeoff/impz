@@ -55,6 +55,7 @@ export type ImpBoundaries = Partial<
     | 'now'
     | 'sleep'
     | 'sleepTiming'
+    | 'execStartTimer'
     | 'openTap'
     | 'kernelOops'
     | 'readThreadIds'

@@ -301,6 +301,9 @@ function resolveImpBoundaries(boundaries: Readonly<ImpBoundaries>) {
         readHostLoad({ procRoot: '/proc', readFile: readText, logger: getImpdLogger('imps') })),
     ...(boundaries.openTap !== undefined && { openTap: boundaries.openTap }),
     ...(boundaries.now !== undefined && { now: boundaries.now }),
+    ...(boundaries.execStartTimer !== undefined && {
+      execStartTimer: boundaries.execStartTimer,
+    }),
   };
 }
 
