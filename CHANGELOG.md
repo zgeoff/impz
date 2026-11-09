@@ -2,10 +2,11 @@
 
 ## [6.11.3](https://github.com/zgeoff/impz/compare/v6.11.2...v6.11.3) (2026-11-09)
 
-
 ### Bug Fixes
 
-* **daemon:** send a resumed stream a reset after an older impd writes ([#981](https://github.com/zgeoff/impz/issues/981)) ([41f0cde](https://github.com/zgeoff/impz/commit/41f0cdefa43721cfb529e0663dd3c0673f0d857a))
+- **daemon:** send a resumed stream a reset after an older impd writes
+  ([#981](https://github.com/zgeoff/impz/issues/981))
+  ([41f0cde](https://github.com/zgeoff/impz/commit/41f0cdefa43721cfb529e0663dd3c0673f0d857a))
 
 ## [6.11.2](https://github.com/zgeoff/impz/compare/v6.11.1...v6.11.2) (2026-11-08)
 
