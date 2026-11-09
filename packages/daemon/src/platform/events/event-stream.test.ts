@@ -25,9 +25,15 @@ async function setupTest() {
   const database = await createTestDatabase();
 
   const db = database.db;
+  const directory = mkdtempSync(join(tmpdir(), 'imp-event-stream-'));
+
+  onTestFinished(() => {
+    rmSync(directory, { recursive: true, force: true });
+  });
 
   return {
     db,
+    directory,
     open: (options: StreamOptions = {}) =>
       openEventStream({
         cursor: {},
@@ -525,15 +531,12 @@ test.each([
 test('it sends a reset to a cursor from before an impd that logs no events changed an imp', async () => {
   const ctx = await setupTest();
 
-  const directory = mkdtempSync(join(tmpdir(), 'imp-event-stream-'));
-
-  onTestFinished(() => {
-    rmSync(directory, { recursive: true, force: true });
-  });
-
-  const path = join(directory, 'imp.sqlite');
+  const path = join(ctx.directory, 'imp.sqlite');
 
   const upgraded = await openDatabase(path);
+
+  onTestFinished(() => upgraded.destroy());
+
   const image = await createImage(upgraded, buildMockNewImage());
 
   await createImp(upgraded, buildMockNewImp({ name: 'quiet-heron', imageId: image.id }));
@@ -543,6 +546,10 @@ test('it sends a reset to a cursor from before an impd that logs no events chang
   await upgraded.destroy();
 
   const older = new Database(path);
+
+  onTestFinished(() => {
+    older.close();
+  });
 
   older.run(`UPDATE imps SET state = 'stopped' WHERE name = 'quiet-heron'`);
   older.close();

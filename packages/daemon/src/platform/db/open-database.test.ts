@@ -182,6 +182,9 @@ test('it keeps the log ID across opens when only impd wrote the imps', async () 
   const path = join(ctx.directory, 'imp.sqlite');
 
   const before = await openDatabase(path);
+
+  ctx.stack.defer(() => before.destroy());
+
   const image = await createImage(before, buildMockNewImage());
   const imp = await createImp(before, buildMockNewImp({ imageId: image.id }));
 
@@ -211,6 +214,9 @@ test.each([
     const path = join(ctx.directory, 'imp.sqlite');
 
     const before = await openDatabase(path);
+
+    ctx.stack.defer(() => before.destroy());
+
     const image = await createImage(before, buildMockNewImage());
     const imp = await createImp(before, buildMockNewImp({ imageId: image.id }));
 
@@ -221,6 +227,10 @@ test.each([
     await before.destroy();
 
     const older = new Database(path);
+
+    ctx.stack.defer(() => {
+      older.close();
+    });
 
     older.run(statement);
     older.close();
@@ -234,6 +244,35 @@ test.each([
     expect(reopenedLogId).not.toBeOneOf(['', logId]);
   },
 );
+
+test('it keeps the log ID that an impd which logs events but makes no triggers reads after its write', async () => {
+  const ctx = setupTest();
+  const path = join(ctx.directory, 'imp.sqlite');
+
+  const upgraded = await openDatabase(path);
+
+  ctx.stack.defer(() => upgraded.destroy());
+
+  const image = await createImage(upgraded, buildMockNewImage());
+
+  await createImp(upgraded, buildMockNewImp({ imageId: image.id }));
+
+  const logId = await upgraded.log.readLogId();
+
+  await upgraded.destroy();
+
+  const older = new Database(path);
+
+  ctx.stack.defer(() => {
+    older.close();
+  });
+
+  older.run(`UPDATE imps SET state = 'stopped'`);
+
+  const seen = older.query('SELECT log_id FROM event_log WHERE id = 1').get();
+
+  expect(seen).toStrictEqual({ log_id: logId });
+});
 
 test('it stamps each event with the clock it was opened with', async () => {
   const db = await openDatabase(':memory:', () => 1_800_000_000_000);

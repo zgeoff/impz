@@ -38,8 +38,8 @@ so applying an event a second time must do a reader no harm.
 
 The first migration gives each database a random log ID. A reader keeps the log ID beside its
 sequence number, and drops the sequence number when the log ID it reads differs. The program gives
-the log a new ID after a restore and after a write that appends no event, so that its readers start
-again from the program's own rows.
+the log a new ID after a restore, and after another program's write to the tables its events
+describe, so that its readers start again from the program's own rows.
 
 A program copies its database file for a backup, such as impd's database copy, and an operator may
 later restore that copy in place of the file. A plain copy keeps the log ID of the original, so the
@@ -52,17 +52,25 @@ those events. The program prevents this:
 
 An operator who rolls the program back to an older release runs that release on the same file, and a
 release from before the event log changes the tables with no event. A reader would never learn of
-those changes. The program calls `createOutsideWriteTriggers` with the tables its events describe
-each time it opens the file. The call adds these triggers:
+those changes. Each time the program opens the file, it calls these, in order:
 
-- database triggers that clear the log ID on each insert, update or delete in those tables;
-- a temporary trigger, on the program's own connection only, that runs before each such clear and
-  makes SQLite skip it with `RAISE(IGNORE)`.
+1. `createOutsideWriteTriggers`, with the tables its events describe. It adds the
+   `event_log_outside_writes` table and two kinds of trigger:
+   - database triggers that put a mark row in that table on each insert, update or delete in the
+     described tables;
+   - a temporary trigger, on the program's own connection only, that runs before each such insert
+     and makes SQLite skip it with `RAISE(IGNORE)`.
+2. `removeLogIdAfterOutsideWrites`, which clears the log ID when a mark row exists, and removes the
+   mark.
+3. `writeNewLogId`.
 
-The program's own writes keep the log ID. The older release's connection has no temporary trigger,
-so its first write clears the log ID, and `writeNewLogId` gives the log a new one at the program's
-next open. The call adds the triggers without a migration, because an older release refuses a
-database with a migration it does not know. impd passes `imps` and `checkpoints`.
+The program's own writes leave no mark. Another release's connection has no temporary trigger, so
+its writes leave one, and the program's next open gives the log a new ID. That release keeps the log
+ID it reads while it runs, so a release that serves events itself serves a stable ID. A migration
+that changes the described tables leaves a mark too, because the program's migrations run before
+step 1 adds the temporary trigger, and they append no events. `createOutsideWriteTriggers` adds its
+table and triggers without a migration, because an older release refuses a database with a migration
+it does not know. impd passes `imps` and `checkpoints`.
 
 ## Operations
 
@@ -169,10 +177,11 @@ runner aborts the signal of each running pass and waits for the pass to end.
 The program adds the package's migrations to its own migrator. The migration names start with
 `durable_`, so they never clash with the program's names.
 
-| Table             | Owns                                                                    |
-| ----------------- | ----------------------------------------------------------------------- |
-| `events`          | one row per event, with its sequence number                             |
-| `event_log`       | one row: the log ID and the prune mark                                  |
-| `operations`      | one row per operation: its state, its params, its retry key and its end |
-| `operation_steps` | one row per step: its state, its undo record and when it was undone     |
-| `reconcilers`     | one row per reconciler: its last saved outcome and summary              |
+| Table                      | Owns                                                                    |
+| -------------------------- | ----------------------------------------------------------------------- |
+| `events`                   | one row per event, with its sequence number                             |
+| `event_log`                | one row: the log ID and the prune mark                                  |
+| `event_log_outside_writes` | one row, or none: the mark of another program's write                   |
+| `operations`               | one row per operation: its state, its params, its retry key and its end |
+| `operation_steps`          | one row per step: its state, its undo record and when it was undone     |
+| `reconcilers`              | one row per reconciler: its last saved outcome and summary              |

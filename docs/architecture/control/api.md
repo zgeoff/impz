@@ -96,13 +96,14 @@ the `seq` it read through, so a limited caller's cursor moves past the events it
 stream opened without a cursor gets no `Position` and no `Reset`: a client built before the two
 kinds fails on an event kind it does not know.
 
-The `logId` lives in the database. A copy that impd writes holds none, and an older impd's write to
-an imp clears it ([Durable work](../durable-work.md#the-event-log)). impd writes a new one each time
-it opens a database without one, so a cursor from before a restore or a rollback does not match. A
-reconciler prunes the oldest rows by age and by count. A cursor that a prune passed, or that carries
-another log's ID or a `seq` past the head, gets `Reset` and a new snapshot. A stream opened without
-a cursor knows no `Reset`, so a prune that passes it ends it, and the client's reconnect takes the
-snapshot. `events.list` reads the same way, one page per call.
+The `logId` lives in the database. A copy that impd writes holds none, and impd clears it at the
+open after an older impd wrote an imp or a checkpoint
+([Durable work](../durable-work.md#the-event-log)). impd writes a new one each time it opens a
+database without one, so a cursor from before a restore or a rollback does not match. A reconciler
+prunes the oldest rows by age and by count. A cursor that a prune passed, or that carries another
+log's ID or a `seq` past the head, gets `Reset` and a new snapshot. A stream opened without a cursor
+knows no `Reset`, so a prune that passes it ends it, and the client's reconnect takes the snapshot.
+`events.list` reads the same way, one page per call.
 
 The audit log writes one row per call that changes something, refused or not, and per exec, console,
 SSH, tunnel and reverse-forward open: the procedure, who called, the imp, the outcome and the time,

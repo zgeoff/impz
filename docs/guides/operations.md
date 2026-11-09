@@ -59,6 +59,10 @@ bash deploy/upgrade.sh
    - The env file's last `IMP_HOST_IMAGE=` line is empty, which would give the unit no image.
    - The image's `imp.host-contract` label is not `no-docker`. Such an image needs a Docker socket,
      which a Podman host does not give. [Roll back](#roll-back) covers a return to such an image.
+   - upgrade.sh cannot read the image's seccomp profile or `imp-host.service`, or reads one empty.
+   - The image's `imp-host.service` does not run Podman.
+   - On a Docker host with IPv6, another container is on Docker's `imp-host` network
+     ([From Docker to Podman](#from-docker-to-podman)).
 
    When the host already runs the pulled image under Podman, upgrade.sh does step 3, so the next
    restart keeps that image, and then exits with no restart.
@@ -263,10 +267,10 @@ alone leaves these directories.
 The API is `system.gc` with `{ dryRun?, orphans?, secretFiles?, removeSecretFiles? }`. It returns
 `dryRun`, `dropped` (each `kind` and `id`) and `kept` (each orphan's `kind`, `id`, `location`,
 `bytes`, `createdAt` and `snapshots`). impd returns entries of kind `secrets` only for a call with
-`secretFiles` or `removeSecretFiles`. Each `secrets` entry carries `files`. impd deletes the
-directories of those entries only for a call with both `removeSecretFiles` and `orphans`.
-`system.info` reports the two fields as `features.secretFilesGc`. An impd without that feature
-ignores both fields: it returns no `secrets` entries and deletes none.
+`secretFiles` or `removeSecretFiles`. Each kept `secrets` entry carries `files`. impd deletes the
+directories of those entries only for a call with both `removeSecretFiles` and `orphans`, and no
+`dryRun`. `system.info` reports the two fields as `features.secretFilesGc`. An impd without that
+feature ignores both fields: it returns no `secrets` entries and deletes none.
 
 ## Database copy and restore
 
@@ -388,10 +392,11 @@ finds a VM gone. While the flag is set:
   - the VM was lost after that;
   - the imp's Firecracker owned the thread that the oops killed.
 
-  impd reads that thread from the oops header in `/dev/kmsg`. impd cannot tell the thread in these
-  cases, so it shows the error on every imp that meets the first two conditions:
+  impd reads that thread from the oops header in `/dev/kmsg`. impd shows the error on every imp that
+  meets the first two conditions in these cases:
   - impd runs outside the host's PID namespace, which it does in the imp-host container;
   - impd cannot read `/dev/kmsg`;
+  - the kernel log no longer holds every oops since boot, or does not tie an oops to a thread;
   - no VM owned the thread.
 
   A start or a wake of an imp with the error fails with `PRECONDITION_FAILED`:

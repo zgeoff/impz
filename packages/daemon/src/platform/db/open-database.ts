@@ -1,5 +1,9 @@
 import { Database } from 'bun:sqlite';
-import { createOutsideWriteTriggers, writeNewLogId } from '@impz/durable';
+import {
+  createOutsideWriteTriggers,
+  removeLogIdAfterOutsideWrites,
+  writeNewLogId,
+} from '@impz/durable';
 import { buildSQLiteDialect } from '@zgeoff/kysely-bun-sqlite';
 import { Kysely } from 'kysely';
 import { createImpEventLog } from './create-imp-event-log';
@@ -42,6 +46,7 @@ export async function openDatabase(
   try {
     await runMigrations(db);
     await createOutsideWriteTriggers(db, LOGGED_TABLES);
+    await removeLogIdAfterOutsideWrites(db);
     await writeNewLogId(db);
 
     await log.start();
