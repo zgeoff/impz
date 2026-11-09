@@ -1,12 +1,21 @@
-import { expect, mock, test } from 'bun:test';
+import { Database } from 'bun:sqlite';
+import { expect, mock, onTestFinished, test } from 'bun:test';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { ImpEvent } from '@impz/api';
 import { pruneEvents } from '@impz/durable';
 import invariant from 'tiny-invariant';
 import { readApiEvent } from '../../surface/read-api-event';
+import { buildMockNewImage } from '../../test-utils/imps/build-mock-new-image';
+import { buildMockNewImp } from '../../test-utils/imps/build-mock-new-imp';
 import { buildStubClock } from '../../test-utils/platform/build-stub-clock';
 import { createTestDatabase } from '../../test-utils/platform/create-test-database';
 import { buildMockGovernorDecision } from '../../test-utils/vm/build-mock-governor-decision';
 import { appendImpEvent } from '../db/append-imp-event';
+import { createImage } from '../db/images';
+import { createImp } from '../db/imps';
+import { openDatabase } from '../db/open-database';
 import { withImpTransaction } from '../db/with-imp-transaction';
 import { openEventStream } from './event-stream';
 
@@ -511,6 +520,71 @@ test.each([
     },
     { done: false, value: expect.objectContaining({ name: 'snapshot', seq: 0, logId }) },
   ]);
+});
+
+test('it sends a reset to a cursor from before an impd that logs no events changed an imp', async () => {
+  const ctx = await setupTest();
+
+  const directory = mkdtempSync(join(tmpdir(), 'imp-event-stream-'));
+
+  onTestFinished(() => {
+    rmSync(directory, { recursive: true, force: true });
+  });
+
+  const path = join(directory, 'imp.sqlite');
+
+  const upgraded = await openDatabase(path);
+  const image = await createImage(upgraded, buildMockNewImage());
+
+  await createImp(upgraded, buildMockNewImp({ name: 'quiet-heron', imageId: image.id }));
+
+  const cursor = { after: await upgraded.log.readHead(), logId: await upgraded.log.readLogId() };
+
+  await upgraded.destroy();
+
+  const older = new Database(path);
+
+  older.run(`UPDATE imps SET state = 'stopped' WHERE name = 'quiet-heron'`);
+  older.close();
+
+  const reupgraded = await openDatabase(path);
+
+  onTestFinished(() => reupgraded.destroy());
+
+  await reupgraded.log.write(
+    {
+      ev: 'GovernorDecision',
+      decision: 'admitted',
+      name: 'quiet-heron',
+      trigger: 'wake',
+      usedMib: 512,
+      budgetMib: 4096,
+    },
+    Date.UTC(2026, 9, 2),
+  );
+
+  const controller = new AbortController();
+
+  const stream = ctx.open({
+    cursor,
+    changes: reupgraded.log.changes,
+    readHead: reupgraded.log.readHead,
+    readLogId: reupgraded.log.readLogId,
+    readAfter: reupgraded.log.readAfter,
+    signal: controller.signal,
+  });
+
+  const sent = await stream.next();
+
+  controller.abort();
+
+  const logId = await reupgraded.log.readLogId();
+
+  expect(sent).toStrictEqual({
+    done: false,
+    // oxlint-disable-next-line id-length -- `v` is the event format's version field
+    value: { v: 1, at: new Date(Date.UTC(2026, 9, 2, 12)), seq: 2, logId, ev: 'Reset' },
+  });
 });
 
 test('it sends a reset, then the snapshot, for a cursor older than the oldest event it keeps', async () => {

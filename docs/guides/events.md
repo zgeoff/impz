@@ -37,8 +37,8 @@ const events = await client.events.stream({ after: last.seq, logId: last.logId }
 impd then sends every event after that `seq`, across its own restarts, and goes on live, with no
 snapshot. When impd no longer holds those events, it sends `Reset` and then the snapshot. That
 happens when a prune passed the cursor, or when the `logId` differs because impd runs on a restored
-copy of its database. An impd without the `eventCursor` feature ignores the cursor and sends the
-snapshot.
+copy of its database or an older impd changed imps after a rollback. An impd without the
+`eventCursor` feature ignores the cursor and sends the snapshot.
 
 `events.list({ after, logId, limit })` reads the same log one page at a time, up to 100 events by
 default and 1,000 at most. It returns the events, `hasMore`, and the `after` and `logId` to pass on

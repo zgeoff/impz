@@ -1,5 +1,5 @@
 import { Database } from 'bun:sqlite';
-import { writeNewLogId } from '@impz/durable';
+import { createOutsideWriteTriggers, writeNewLogId } from '@impz/durable';
 import { buildSQLiteDialect } from '@zgeoff/kysely-bun-sqlite';
 import { Kysely } from 'kysely';
 import { createImpEventLog } from './create-imp-event-log';
@@ -10,6 +10,8 @@ import type { DB } from './schema';
 export type ImpDatabase = Kysely<DB> & { readonly log: ImpEventLog };
 
 export type ImpQueries = Kysely<DB>;
+
+const LOGGED_TABLES = ['imps', 'checkpoints'] as const satisfies readonly (keyof DB)[];
 
 export async function openDatabase(
   source: string | Database,
@@ -39,6 +41,7 @@ export async function openDatabase(
 
   try {
     await runMigrations(db);
+    await createOutsideWriteTriggers(db, LOGGED_TABLES);
     await writeNewLogId(db);
 
     await log.start();

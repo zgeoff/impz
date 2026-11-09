@@ -11,6 +11,7 @@ import { buildMockNewImage } from '../../test-utils/imps/build-mock-new-image';
 import { buildMockNewImp } from '../../test-utils/imps/build-mock-new-imp';
 import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
 import { appendImpEvent } from './append-imp-event';
+import { createCheckpoint } from './checkpoints';
 import { createImage } from './images';
 import type { LoggedImpEvent } from './imp-log-entry';
 import { createImp } from './imps';
@@ -175,6 +176,64 @@ test('it keeps the event of a committed write when impd stops right after the co
     hasMore: false,
   });
 });
+
+test('it keeps the log ID across opens when only impd wrote the imps', async () => {
+  const ctx = setupTest();
+  const path = join(ctx.directory, 'imp.sqlite');
+
+  const before = await openDatabase(path);
+  const image = await createImage(before, buildMockNewImage());
+  const imp = await createImp(before, buildMockNewImp({ imageId: image.id }));
+
+  await updateImpState(before, imp.id, { reason: 'stopped', state: 'stopped' });
+
+  const logId = await before.log.readLogId();
+
+  await before.destroy();
+
+  const after = await openDatabase(path);
+
+  ctx.stack.defer(() => after.destroy());
+
+  const reopenedLogId = await after.log.readLogId();
+
+  expect(reopenedLogId).toBe(logId);
+});
+
+test.each([
+  ['changed an imp', `UPDATE imps SET state = 'stopped'`],
+  ['removed an imp', `DELETE FROM imps`],
+  ['removed a checkpoint', `DELETE FROM checkpoints`],
+])(
+  'it gives the log a new ID when an impd that logs no events %s between two opens',
+  async (_write, statement) => {
+    const ctx = setupTest();
+    const path = join(ctx.directory, 'imp.sqlite');
+
+    const before = await openDatabase(path);
+    const image = await createImage(before, buildMockNewImage());
+    const imp = await createImp(before, buildMockNewImp({ imageId: image.id }));
+
+    await createCheckpoint(before, { id: 'cp-calm', impId: imp.id, label: null, sizeBytes: null });
+
+    const logId = await before.log.readLogId();
+
+    await before.destroy();
+
+    const older = new Database(path);
+
+    older.run(statement);
+    older.close();
+
+    const after = await openDatabase(path);
+
+    ctx.stack.defer(() => after.destroy());
+
+    const reopenedLogId = await after.log.readLogId();
+
+    expect(reopenedLogId).not.toBeOneOf(['', logId]);
+  },
+);
 
 test('it stamps each event with the clock it was opened with', async () => {
   const db = await openDatabase(':memory:', () => 1_800_000_000_000);

@@ -42,6 +42,14 @@ two steps. It clears the log ID of each copy it makes with `removeLogId`. It cal
 each time it opens the file, which gives a file with no ID a new random one. Each restore of one
 copy then gets an ID of its own, and every reader drops its sequence number.
 
+A writer that appends no events, such as an older release of the program, leaves the log behind its
+tables, and its readers would skip that writer's changes. Before `writeNewLogId`, the program calls
+`createOutsideWriteTriggers` with the tables its events describe. The call adds database triggers
+that clear the log ID on each insert, update or delete in those tables, so the next open gives the
+log a new ID. On the program's own connection, a temporary trigger drops that clear, so its own
+writes keep the ID. The older writer runs the triggers without knowing of them, and a migration
+would make it refuse the database. impd passes `imps` and `checkpoints`.
+
 ## Operations
 
 The program defines each kind of operation as steps that run in a fixed order, such as the steps of
