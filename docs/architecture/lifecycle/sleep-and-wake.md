@@ -73,11 +73,11 @@ that file. The next sleep has no file to copy and takes a full snapshot.
 4. It makes the tap if it is gone, starts Firecracker in the jail, and loads the snapshot as the
    first API call, paused. It seals the jail, so no guest code runs while the VM can still change
    its files ([isolation](../isolation.md#the-jailer)), and resumes the VM.
-5. It pings the agent until the agent answers, for up to 30 s, and sends it the host's clock.
-   Without that, the guest clock stays behind by the time asleep: the guest's clocksource keeps
-   counting from where the snapshot stopped. The 30 s cover a guest on huge pages whose memory file
-   is cold ([the warm after a sleep](./huge-pages.md#the-warm-after-a-sleep)): its handler reads
-   each 2 MiB block from disk, and a guest of 2 GiB on ZFS can take 12 s to answer.
+5. It pings the agent until the agent answers, and sends it the host's clock. Without that, the
+   guest clock stays behind by the time asleep: the guest's clocksource keeps counting from where
+   the snapshot stopped. The wait's deadline covers a guest on huge pages whose memory file is cold
+   ([the warm after a sleep](./huge-pages.md#the-warm-after-a-sleep)): its handler reads each block
+   from disk before the guest can answer.
 6. It sets the state to `running` and deletes `meta.json.loading`.
 
 If the load, the jail's seal or the agent fails, impd kills the new VM, drops the snapshot and boots
