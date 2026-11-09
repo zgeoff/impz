@@ -58,7 +58,7 @@ const UFFD_WATCH_INTERVAL_MS = 100;
 // a wake that finds its memory file cold reads each 2 MiB block in about
 // 11 ms on ZFS, so a guest of 2 GiB can take 12 s to answer; a wake that runs
 // out of time boots cold and loses the guest's memory
-const WAKE_AGENT_DEADLINE_MS = 30_000;
+const WAKE_AGENT_DEADLINE_MS = VM_DEADLINES.agentMs;
 
 // the memory controller asks every 500 ms: a VM that does not answer soon is
 // asked again on the next tick

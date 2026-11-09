@@ -3,6 +3,7 @@ import type { ImpEventLog } from '../../platform/db/create-imp-event-log';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { createPrioritySemaphore } from '../../platform/process/priority-semaphore';
 import type { TaskPriority } from '../../platform/process/priority-semaphore';
+import { VM_DEADLINES } from '../../platform/process/vm-deadlines';
 import type { GrowRequest } from '../../vm/imps-contract/grow-request';
 import type { AdmissionRequest, RamAdmission } from '../../vm/imps-contract/ram-admission';
 import {
@@ -26,9 +27,9 @@ import type { Shortfall } from './pick-shortfall';
 import { pickSleepVictims } from './pick-sleep-victims';
 import { createPriorityAdmissions } from './priority-admissions';
 
-// A Firecracker VM that just booted or woke shows a small RSS for some seconds, so its reservation
-// counts until the measurement catches up.
-const RESERVATION_TTL_MS = 20_000;
+// A booting or waking imp counts as awake only once its agent answers, and its VM then shows a small
+// RSS for some seconds, so its reservation counts until the measurement catches up.
+const RESERVATION_TTL_MS = VM_DEADLINES.agentMs + 10_000;
 
 export const ENFORCE_INTERVAL_MS = 5000;
 export const ENFORCE_TRIGGER = 'RAM over budget';

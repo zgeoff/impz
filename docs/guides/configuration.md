@@ -124,6 +124,9 @@ never in `environmentFile`, because the module reads the setting to pass the dev
 
 4. Set `IMP_HUGE_PAGES=2M` in the env file and restart impd.
 
+The default `IMP_WARM_CAP_MIB` warms the whole memory file of a 2 GiB guest. Keep the cap below the
+page cache that the host has beside the pool and, on ZFS, the ARC.
+
 To turn huge pages off, unset `IMP_HUGE_PAGES` and restart impd. Each imp that slept on huge pages
 wakes on ordinary pages from its memory file.
 

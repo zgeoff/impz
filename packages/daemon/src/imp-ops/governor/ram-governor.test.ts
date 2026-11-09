@@ -635,13 +635,13 @@ test('it refuses an admit with the disk error when a victim had no room for its 
   ).rejects.toThrowWithMessage(Error, 'the disk has no room for a snapshot');
 });
 
-test('it counts a reservation until its 20 s run out, and not a moment longer', async () => {
+test("it counts a reservation for the agent's 15 s deadline and 10 s more, and not a moment longer", async () => {
   const host = createStubGovernedHost({ budgetMib: 1000, ids: ['x'], awake: [] });
   const governor = createRamGovernor({ ...host.deps });
 
   await governor.admit({ id: 'x', name: 'x', reserveMib: 400, memoryMib: 800 });
 
-  host.applyChange({ kind: 'tick', durationMs: 20_000 }, governor);
+  host.applyChange({ kind: 'tick', durationMs: 25_000 }, governor);
 
   const atDeadline = await governor.readUsage();
 
@@ -679,7 +679,7 @@ test('it reports an imp as not admitted once its reservation runs out', async ()
 
   await governor.admit({ id: 'x', name: 'x', reserveMib: 400, memoryMib: 800 });
 
-  host.applyChange({ kind: 'tick', durationMs: 20_001 }, governor);
+  host.applyChange({ kind: 'tick', durationMs: 25_001 }, governor);
 
   expect(governor.isAdmitted('x')).toBeFalse();
 });
