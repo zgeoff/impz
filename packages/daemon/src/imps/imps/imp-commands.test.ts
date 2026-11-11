@@ -53,3 +53,17 @@ test('it removes the tap an imp booted with when it destroys the imp', async () 
 
   expect(ctx.removedTaps).toStrictEqual([booted]);
 });
+
+test('it keeps the imp’s id through a sleep and a wake', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const created = await ctx.imps.createImp({ name: 'dev' });
+  const slept = await ctx.imps.sleepImp('dev');
+  const woken = await ctx.imps.wakeImp('dev');
+  const record = await readImpByName(ctx.db, 'dev');
+
+  expect([slept.state, woken.state]).toStrictEqual(['sleeping', 'running']);
+  expect([slept.id, woken.id, record?.id]).toStrictEqual([created.id, created.id, created.id]);
+});

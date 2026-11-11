@@ -34,6 +34,7 @@ interface SecretStoreDeps {
   readonly refresher: OAuthRefresher;
 
   readonly applyGrants: () => Promise<void>;
+  readonly isIdentityOn: boolean;
 }
 
 export function createSecretStore(deps: SecretStoreDeps): SecretStore {
@@ -126,6 +127,14 @@ export function createSecretStore(deps: SecretStoreDeps): SecretStore {
   return {
     addSecret: async (input) => {
       const binding = buildStoredBinding(input);
+
+      if (!deps.isIdentityOn && binding.rules.some((rule) => rule.identity === true)) {
+        throw new ImpdError('PRECONDITION_FAILED', {
+          message:
+            'identity is off on this impd; set IMP_IDENTITY_ISSUER and restart it before a secret asks for it',
+        });
+      }
+
       const kind = SECRET_KINDS[binding.kind];
 
       const saved = await refresher.withLock(input.name, async () => {

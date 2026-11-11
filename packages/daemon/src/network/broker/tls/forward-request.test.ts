@@ -2,14 +2,17 @@ import { expect, mock, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { verifyImpIdentity } from '@impz/client/identity';
 import { buildStubAnswerQueue } from '@impz/shared/test-utils/build-stub-answer-queue';
 import { server } from '@impz/shared/test-utils/mock-server';
 import { HttpResponse, http } from 'msw';
 import invariant from 'tiny-invariant';
 import type { NewAuditEntry } from '../../../platform/db/broker-audit';
 import { buildMockCredential } from '../../../test-utils/network/build-mock-credential';
+import { collectIdentityLines } from '../../../test-utils/network/collect-identity-lines';
 import { startStubBrokerTlsUpstream } from '../../../test-utils/network/start-stub-broker-tls-upstream';
 import { startStubCutStream } from '../../../test-utils/network/start-stub-cut-stream';
+import { loadOrCreateIdentity } from '../identity/load-or-create-identity';
 import { loadOrCreateBrokerCa } from './broker-ca';
 import { createForwarder } from './forward-request';
 
@@ -22,7 +25,23 @@ async function setupTest() {
 
   stack.defer(() => rm(directory, { recursive: true, force: true }));
 
-  return { stack, directoryPath: directory };
+  const identity = loadOrCreateIdentity({
+    directory: join(directory, 'identity'),
+    issuer: 'imp-host-a',
+    now: () => Date.now(),
+  });
+
+  const mintIdentityToken = (audience: string): string =>
+    identity.mintToken({ id: 'imp-1', name: 'dev' }, audience);
+
+  const verifyToken = (token: string | null, audience: string) =>
+    verifyImpIdentity(token, {
+      issuers: [identity.readDocument()],
+      audience,
+      nowSeconds: Math.floor(Date.now() / 1000),
+    });
+
+  return { stack, directoryPath: directory, mintIdentityToken, verifyToken };
 }
 
 test('it sends the path and query to the bound host with the method and body', async () => {
@@ -1674,4 +1693,333 @@ test.each([[403], [429]])('it asks for no refresh after a %d to an oauth token',
   );
 
   expect(refreshAfterRejection).not.toHaveBeenCalled();
+});
+
+test('it sends one Imp-Identity header that verifies for the imp and the host, in place of the guest’s', async () => {
+  const ctx = await setupTest();
+
+  const received = mock<(lines: readonly string[]) => void>();
+
+  server.use(
+    http.get('https://tasks.imp.internal/v1/tasks', (info) => {
+      received(collectIdentityLines(info.request.headers));
+
+      return HttpResponse.text('tasks');
+    }),
+  );
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'tasks.imp.internal',
+    findCredential: () => Promise.resolve(buildMockCredential({ identity: true })),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    mintIdentityToken: ctx.mintIdentityToken,
+    recordAudit: () => {},
+  });
+
+  await forward(
+    new Request('https://tasks.imp.internal/v1/tasks', {
+      headers: { host: 'tasks.imp.internal', 'imp-identity': 'forged' },
+    }),
+  );
+
+  const [lines = []] = received.mock.calls[0] ?? [];
+
+  expect(lines).toHaveLength(1);
+  expect(lines).not.toContain('forged');
+
+  const caller = await ctx.verifyToken(lines[0] ?? null, 'tasks.imp.internal');
+
+  expect(caller).toStrictEqual({
+    issuer: 'imp-host-a',
+    id: 'imp-1',
+    name: 'dev',
+  });
+});
+
+test.each(['IMP-IDENTITY', 'imp_identity', 'Imp_Identity'])(
+  'it never sends the guest’s %s header',
+  async (name) => {
+    const ctx = await setupTest();
+
+    const received = mock<(lines: readonly string[]) => void>();
+
+    server.use(
+      http.get('https://tasks.imp.internal/v1/tasks', (info) => {
+        received(collectIdentityLines(info.request.headers));
+
+        return HttpResponse.text('tasks');
+      }),
+    );
+
+    const forward = createForwarder({
+      impId: 'imp-1',
+      impName: 'dev',
+      host: 'tasks.imp.internal',
+      findCredential: () => Promise.resolve(buildMockCredential({ identity: true })),
+      resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+      mintIdentityToken: ctx.mintIdentityToken,
+      recordAudit: () => {},
+    });
+
+    await forward(
+      new Request('https://tasks.imp.internal/v1/tasks', {
+        headers: { host: 'tasks.imp.internal', [name]: 'forged' },
+      }),
+    );
+
+    const [lines = []] = received.mock.calls[0] ?? [];
+
+    expect(lines).toHaveLength(1);
+    expect(lines).not.toContain('forged');
+  },
+);
+
+test('it sends the broker’s token when the guest’s Connection header names Imp-Identity', async () => {
+  const ctx = await setupTest();
+
+  const received = mock<(lines: readonly string[], connection: string | null) => void>();
+
+  server.use(
+    http.get('https://tasks.imp.internal/v1/tasks', (info) => {
+      received(collectIdentityLines(info.request.headers), info.request.headers.get('connection'));
+
+      return HttpResponse.text('tasks');
+    }),
+  );
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'tasks.imp.internal',
+    findCredential: () => Promise.resolve(buildMockCredential({ identity: true })),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    mintIdentityToken: ctx.mintIdentityToken,
+    recordAudit: () => {},
+  });
+
+  await forward(
+    new Request('https://tasks.imp.internal/v1/tasks', {
+      headers: {
+        host: 'tasks.imp.internal',
+        connection: 'keep-alive, imp-identity',
+        'imp-identity': 'forged',
+      },
+    }),
+  );
+
+  const [lines = [], connection = null] = received.mock.calls[0] ?? [];
+
+  const caller = await ctx.verifyToken(lines[0] ?? null, 'tasks.imp.internal');
+
+  expect(lines).toHaveLength(1);
+  expect(caller).toMatchObject({ id: 'imp-1' });
+  expect(connection).toBeNull();
+});
+
+test('it sends none of the guest’s Imp-Identity headers, and adds none, for a rule without identity', async () => {
+  const ctx = await setupTest();
+
+  const received = mock<(lines: readonly string[]) => void>();
+
+  server.use(
+    http.get('https://tasks.imp.internal/v1/tasks', (info) => {
+      received(collectIdentityLines(info.request.headers));
+
+      return HttpResponse.text('tasks');
+    }),
+  );
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'tasks.imp.internal',
+    findCredential: () => Promise.resolve(buildMockCredential({ identity: false })),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    mintIdentityToken: ctx.mintIdentityToken,
+    recordAudit: () => {},
+  });
+
+  await forward(
+    new Request('https://tasks.imp.internal/v1/tasks', {
+      headers: { host: 'tasks.imp.internal', 'imp-identity': 'forged' },
+    }),
+  );
+
+  expect(received).toHaveBeenCalledExactlyOnceWith([]);
+});
+
+test('it adds no token for a rule with identity when impd has no issuer, and still drops the guest’s', async () => {
+  const received = mock<(lines: readonly string[]) => void>();
+
+  server.use(
+    http.get('https://tasks.imp.internal/v1/tasks', (info) => {
+      received(collectIdentityLines(info.request.headers));
+
+      return HttpResponse.text('tasks');
+    }),
+  );
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'tasks.imp.internal',
+    findCredential: () => Promise.resolve(buildMockCredential({ identity: true })),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    recordAudit: () => {},
+  });
+
+  await forward(
+    new Request('https://tasks.imp.internal/v1/tasks', {
+      headers: { host: 'tasks.imp.internal', 'imp-identity': 'forged' },
+    }),
+  );
+
+  expect(received).toHaveBeenCalledExactlyOnceWith([]);
+});
+
+test('it names the guest-facing host in the token of a rule with an upstream', async () => {
+  const ctx = await setupTest();
+
+  const received = mock<(lines: readonly string[]) => void>();
+
+  server.use(
+    http.get('http://192.0.2.10:18090/v1/tasks', (info) => {
+      received(collectIdentityLines(info.request.headers));
+
+      return HttpResponse.text('tasks');
+    }),
+  );
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'tasks.imp.internal',
+    findCredential: () =>
+      Promise.resolve(buildMockCredential({ identity: true, upstream: 'http://192.0.2.10:18090' })),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    mintIdentityToken: ctx.mintIdentityToken,
+    recordAudit: () => {},
+  });
+
+  await forward(
+    new Request('https://tasks.imp.internal/v1/tasks', { headers: { host: 'tasks.imp.internal' } }),
+  );
+
+  const [lines = []] = received.mock.calls[0] ?? [];
+
+  const forAudience = await ctx.verifyToken(lines[0] ?? null, 'tasks.imp.internal');
+  const forUpstream = await ctx.verifyToken(lines[0] ?? null, '192.0.2.10:18090');
+
+  expect(forAudience).toMatchObject({ id: 'imp-1' });
+  expect(forUpstream).toBeNull();
+});
+
+test('it signs each send with its own jti', async () => {
+  const ctx = await setupTest();
+
+  const received = mock<(lines: readonly string[]) => void>();
+
+  server.use(
+    http.get('https://tasks.imp.internal/v1/tasks', (info) => {
+      received(collectIdentityLines(info.request.headers));
+
+      return HttpResponse.text('tasks');
+    }),
+  );
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'tasks.imp.internal',
+    findCredential: () => Promise.resolve(buildMockCredential({ identity: true })),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    mintIdentityToken: ctx.mintIdentityToken,
+    recordAudit: () => {},
+  });
+
+  const send = () =>
+    forward(
+      new Request('https://tasks.imp.internal/v1/tasks', {
+        headers: { host: 'tasks.imp.internal' },
+      }),
+    );
+
+  await send();
+  await send();
+
+  const tokens = received.mock.calls.map(([lines]) => lines[0] ?? '');
+
+  expect(new Set(tokens).size).toBe(2);
+});
+
+test('it mints no token for a request the grant’s filter refuses', async () => {
+  const mintIdentityToken = mock(() => 'token');
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'tasks.imp.internal',
+    findCredential: () =>
+      Promise.resolve(buildMockCredential({ identity: true, filter: { methods: ['GET'] } })),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    mintIdentityToken,
+    recordAudit: () => {},
+  });
+
+  const response = await forward(
+    new Request('https://tasks.imp.internal/v1/tasks', {
+      method: 'POST',
+      headers: { host: 'tasks.imp.internal' },
+    }),
+  );
+
+  expect(response.status).toBe(403);
+  expect(mintIdentityToken).not.toHaveBeenCalled();
+});
+
+test('it signs the send again after a 401 with a new token that verifies', async () => {
+  const ctx = await setupTest();
+
+  const received = mock<(lines: readonly string[]) => void>();
+  const statuses = buildStubAnswerQueue([401, 200]);
+
+  const credentials = buildStubAnswerQueue([
+    buildMockCredential({ identity: true, oauth: { refreshedAt: 1000 } }),
+    buildMockCredential({ identity: true, oauth: { refreshedAt: 2000 } }),
+  ]);
+
+  server.use(
+    http.get('https://tasks.imp.internal/v1/tasks', (info) => {
+      received(collectIdentityLines(info.request.headers));
+
+      return HttpResponse.text('tasks', { status: statuses.next() });
+    }),
+  );
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'tasks.imp.internal',
+    findCredential: () => Promise.resolve(credentials.next()),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    mintIdentityToken: ctx.mintIdentityToken,
+    recordAudit: () => {},
+    refreshAfterRejection: () => Promise.resolve(true),
+  });
+
+  await forward(
+    new Request('https://tasks.imp.internal/v1/tasks', { headers: { host: 'tasks.imp.internal' } }),
+  );
+
+  const [first = [], second = []] = received.mock.calls.map(([lines]) => lines);
+
+  expect(first).toHaveLength(1);
+  expect(second).toHaveLength(1);
+
+  const caller = await ctx.verifyToken(second[0] ?? null, 'tasks.imp.internal');
+
+  expect(second[0]).not.toBe(first[0]);
+  expect(caller).toMatchObject({ id: 'imp-1' });
 });

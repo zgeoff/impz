@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildMockBrokerRule } from '@impz/api/test-utils/build-mock-broker-rule';
 import { buildMockOAuthConfig } from '@impz/api/test-utils/build-mock-oauth-config';
+import { verifyImpIdentity } from '@impz/client/identity';
 import { buildStubAnswerQueue } from '@impz/shared/test-utils/build-stub-answer-queue';
 import { server } from '@impz/shared/test-utils/mock-server';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
@@ -14,7 +15,9 @@ import { listAuditEntries } from '../../../platform/db/broker-audit';
 import { readImpByName } from '../../../platform/db/imps';
 import { listGrantNames, readSecret, removeCheckedGrant } from '../../../platform/db/secrets';
 import { buildStubBrokerGuest } from '../../../test-utils/network/build-stub-broker-guest';
+import { collectIdentityLines } from '../../../test-utils/network/collect-identity-lines';
 import { createStubBrokerTokenEndpoint } from '../../../test-utils/network/create-stub-broker-token-endpoint';
+import { sendStubBrokerRawRequest } from '../../../test-utils/network/send-stub-broker-raw-request';
 import { startStubBrokerGuestBridge } from '../../../test-utils/network/start-stub-broker-guest-bridge';
 import { startStubBrokerGuestSocket } from '../../../test-utils/network/start-stub-broker-guest-socket';
 import { startStubBrokerHoldTarget } from '../../../test-utils/network/start-stub-broker-hold-target';
@@ -78,6 +81,7 @@ async function setupTest() {
   const answers = new Map<string, () => Response | Promise<Response>>();
 
   const credentials: { authorization: string | null; apiKey: string | null }[] = [];
+  const identities: { path: string; lines: string[] }[] = [];
 
   const upstream = await startStubBrokerTlsUpstream(stack, {
     directory: join(dataDir, 'upstream'),
@@ -89,6 +93,11 @@ async function setupTest() {
       credentials.push({
         authorization: request.headers.get('authorization'),
         apiKey: request.headers.get('x-api-key'),
+      });
+
+      identities.push({
+        path,
+        lines: collectIdentityLines(request.headers),
       });
 
       const answer = answers.get(path);
@@ -117,7 +126,11 @@ async function setupTest() {
 
   const harness = await startTestImpd(stack, {
     dataDir,
-    env: { IMP_SUBNET: '127.0.0.0/16', IMP_BROKER_TEST_UPSTREAMS: upstreamsFile },
+    env: {
+      IMP_SUBNET: '127.0.0.0/16',
+      IMP_BROKER_TEST_UPSTREAMS: upstreamsFile,
+      IMP_IDENTITY_ISSUER: 'imp-host-a',
+    },
     brokerNow: () => clock.nowMs,
     resolveTunnelTarget: () => Promise.resolve('127.0.0.1'),
     dialTunnel: (address, port) =>
@@ -138,6 +151,7 @@ async function setupTest() {
     logs: harness.logs,
     seen,
     credentials,
+    identities,
     tunnelled,
     answers,
     tunnelAnswers,
@@ -151,6 +165,13 @@ async function setupTest() {
     createTestImage: harness.createTestImage,
 
     guest: buildStubBrokerGuest({ proxyPort, caFile, address: '127.0.0.2' }),
+
+    verifyToken: async (token: string | null) =>
+      verifyImpIdentity(token, {
+        issuers: [await harness.client.identity.jwks()],
+        audience: 'tasks.imp.internal',
+        nowSeconds: Math.floor(clock.nowMs / 1000),
+      }),
   };
 }
 
@@ -2370,4 +2391,284 @@ test('it refreshes through a token host that the test-upstreams file routes', as
 
   expect(refreshed.oauth?.status).toBe('ready');
   expect(refreshTokens).toStrictEqual(['fake-refresh-0', 'fake-refresh-1']);
+});
+
+test('it sends a secret with identity one Imp-Identity header that the verifier accepts for the imp, and none of the guest’s', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
+  await writeFile(
+    ctx.upstreamsFile,
+    JSON.stringify({
+      ca: ctx.upstreamCaPem,
+      upstreams: { 'tasks.imp.internal': ctx.upstreamOrigin },
+    }),
+  );
+
+  ctx.answers.set('/v1/tasks', () => new Response('tasks'));
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  await ctx.client.secrets.add({
+    name: 'tasks',
+    kind: 'static',
+    value: 'real-token',
+    rules: [buildMockBrokerRule({ host: 'tasks.imp.internal', identity: true })],
+  });
+
+  await ctx.client.grants.add({ name: 'dev', secret: 'tasks' });
+
+  const result = await ctx.guest.curl('https://tasks.imp.internal/v1/tasks', [
+    '-H',
+    'Imp-Identity: forged-1',
+    '-H',
+    'IMP-IDENTITY: forged-2',
+    '-H',
+    'imp_identity: forged-3',
+    '-H',
+    'Imp_Identity: forged-4',
+    '-H',
+    'Connection: keep-alive, imp-identity',
+  ]);
+
+  const [seen] = ctx.identities;
+
+  const caller = await ctx.verifyToken(seen?.lines[0] ?? null);
+
+  expect(result).toStrictEqual({ code: 0, stdout: 'tasks', stderr: '' });
+  expect(seen?.lines).toHaveLength(1);
+  expect(caller).toStrictEqual({ issuer: 'imp-host-a', id: dev.id, name: 'dev' });
+});
+
+test('it sends a secret without identity none of the guest’s Imp-Identity headers and adds none', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
+  await writeFile(
+    ctx.upstreamsFile,
+    JSON.stringify({
+      ca: ctx.upstreamCaPem,
+      upstreams: { 'tasks.imp.internal': ctx.upstreamOrigin },
+    }),
+  );
+
+  ctx.answers.set('/v1/tasks', () => new Response('tasks'));
+
+  await ctx.client.imps.create({ name: 'dev' });
+
+  await ctx.client.secrets.add({
+    name: 'tasks',
+    kind: 'static',
+    value: 'real-token',
+    rules: [buildMockBrokerRule({ host: 'tasks.imp.internal' })],
+  });
+
+  await ctx.client.grants.add({ name: 'dev', secret: 'tasks' });
+
+  await ctx.guest.curl('https://tasks.imp.internal/v1/tasks', [
+    '-H',
+    'Imp-Identity: forged-1',
+    '-H',
+    'imp_identity: forged-2',
+    '-H',
+    'Connection: keep-alive, imp-identity',
+  ]);
+
+  expect(ctx.identities).toStrictEqual([{ path: '/v1/tasks', lines: [] }]);
+});
+
+test('it sends one verified Imp-Identity line for a request the guest wrote with the header twice', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
+  await writeFile(
+    ctx.upstreamsFile,
+    JSON.stringify({
+      ca: ctx.upstreamCaPem,
+      upstreams: { 'tasks.imp.internal': ctx.upstreamOrigin },
+    }),
+  );
+
+  ctx.answers.set('/v1/tasks', () => new Response('tasks'));
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  await ctx.client.secrets.add({
+    name: 'tasks',
+    kind: 'static',
+    value: 'real-token',
+    rules: [buildMockBrokerRule({ host: 'tasks.imp.internal', identity: true })],
+  });
+
+  await ctx.client.grants.add({ name: 'dev', secret: 'tasks' });
+
+  await sendStubBrokerRawRequest({
+    proxyPort: ctx.proxyPort,
+    caFile: ctx.caFile,
+    address: '127.0.0.2',
+    host: 'tasks.imp.internal',
+    raw: [
+      'GET /v1/tasks HTTP/1.1',
+      'Host: tasks.imp.internal',
+      'Imp-Identity: forged-1',
+      'Imp-Identity: forged-2',
+      'Connection: close',
+      '',
+      '',
+    ].join('\r\n'),
+  });
+
+  const [seen] = ctx.identities;
+
+  const caller = await ctx.verifyToken(seen?.lines[0] ?? null);
+
+  expect(ctx.identities).toHaveLength(1);
+  expect(seen?.lines).toHaveLength(1);
+  expect(caller).toMatchObject({ id: dev.id });
+});
+
+test('it sends the service none of the lines of an obs-folded Imp-Identity header', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
+  await writeFile(
+    ctx.upstreamsFile,
+    JSON.stringify({
+      ca: ctx.upstreamCaPem,
+      upstreams: { 'tasks.imp.internal': ctx.upstreamOrigin },
+    }),
+  );
+
+  ctx.answers.set('/v1/tasks', () => new Response('tasks'));
+
+  await ctx.client.imps.create({ name: 'dev' });
+
+  await ctx.client.secrets.add({
+    name: 'tasks',
+    kind: 'static',
+    value: 'real-token',
+    rules: [buildMockBrokerRule({ host: 'tasks.imp.internal', identity: true })],
+  });
+
+  await ctx.client.grants.add({ name: 'dev', secret: 'tasks' });
+
+  await sendStubBrokerRawRequest({
+    proxyPort: ctx.proxyPort,
+    caFile: ctx.caFile,
+    address: '127.0.0.2',
+    host: 'tasks.imp.internal',
+    raw: [
+      'GET /v1/tasks HTTP/1.1',
+      'Host: tasks.imp.internal',
+      'Imp-Identity: forged-3a',
+      ' forged-3b',
+      'Connection: close',
+      '',
+      '',
+    ].join('\r\n'),
+  });
+
+  expect(ctx.identities.flatMap((entry) => entry.lines).join(',')).not.toContain('forged');
+});
+
+test('it records each request of two imps under its sender, whatever id the sender forges', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
+  await writeFile(
+    ctx.upstreamsFile,
+    JSON.stringify({
+      ca: ctx.upstreamCaPem,
+      upstreams: { 'tasks.imp.internal': ctx.upstreamOrigin },
+    }),
+  );
+
+  ctx.answers.set('/v1/tasks', () => new Response('tasks'));
+
+  const first = await ctx.client.imps.create({ name: 'first' });
+  const second = await ctx.client.imps.create({ name: 'second' });
+
+  await ctx.client.secrets.add({
+    name: 'tasks',
+    kind: 'static',
+    value: 'real-token',
+    rules: [buildMockBrokerRule({ host: 'tasks.imp.internal', identity: true })],
+  });
+
+  await ctx.client.grants.add({ name: 'first', secret: 'tasks' });
+  await ctx.client.grants.add({ name: 'second', secret: 'tasks' });
+
+  const secondGuest = buildStubBrokerGuest({
+    proxyPort: ctx.proxyPort,
+    caFile: ctx.caFile,
+    address: '127.0.0.6',
+    gateway: '127.0.0.5',
+  });
+
+  await ctx.guest.curl('https://tasks.imp.internal/v1/tasks', ['-H', `Imp-Identity: ${second.id}`]);
+
+  await secondGuest.curl('https://tasks.imp.internal/v1/tasks', [
+    '-H',
+    `Imp-Identity: ${first.id}`,
+  ]);
+
+  const callers = await Promise.all(
+    ctx.identities.map((entry) => ctx.verifyToken(entry.lines[0] ?? null)),
+  );
+
+  expect(callers.map((caller) => caller?.id)).toStrictEqual([first.id, second.id]);
+});
+
+test('it sends a websocket handshake the token and not the guest’s forged copy', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+
+  await writeFile(
+    ctx.upstreamsFile,
+    JSON.stringify({
+      ca: ctx.upstreamCaPem,
+      upstreams: { 'tasks.imp.internal': ctx.upstreamOrigin },
+    }),
+  );
+
+  ctx.answers.set('/v1/tasks', () => new Response('tasks'));
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  await ctx.client.secrets.add({
+    name: 'tasks',
+    kind: 'static',
+    value: 'real-token',
+    rules: [buildMockBrokerRule({ host: 'tasks.imp.internal', identity: true })],
+  });
+
+  await ctx.client.grants.add({ name: 'dev', secret: 'tasks' });
+
+  await ctx.guest.curl('https://tasks.imp.internal/v1/tasks', [
+    '-H',
+    'Connection: Upgrade',
+    '-H',
+    'Upgrade: websocket',
+    '-H',
+    'Sec-WebSocket-Version: 13',
+    '-H',
+    'Sec-WebSocket-Key: AAAAAAAAAAAAAAAAAAAAAA==',
+    '-H',
+    'Imp-Identity: forged',
+    '--max-time',
+    '2',
+  ]);
+
+  const [seen] = ctx.identities;
+
+  const caller = await ctx.verifyToken(seen?.lines[0] ?? null);
+
+  expect(seen?.lines).toHaveLength(1);
+  expect(caller).toMatchObject({ id: dev.id });
 });

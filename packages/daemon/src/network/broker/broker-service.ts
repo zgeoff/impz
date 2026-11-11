@@ -6,6 +6,7 @@ import type {
   Grant,
   GrantFilter,
   GrantNotCopied,
+  IdentityTrustDocument,
   RefusedRequest,
   Secret,
   SecretAdd,
@@ -49,6 +50,8 @@ import {
   runBundleInstall,
 } from './guest/guest-trust';
 import type { InstallBundle, TrustedImp } from './guest/guest-trust';
+import type { Identity } from './identity/load-or-create-identity';
+import { loadOrCreateIdentity } from './identity/load-or-create-identity';
 import { createBrokerProxy } from './proxy/create-broker-proxy';
 import { PLACEHOLDER, listPlaceholderEnv } from './secrets/connector-kinds';
 import { createSecretStore } from './secrets/create-secret-store';
@@ -119,6 +122,13 @@ export interface Broker {
 
   readonly closeTunnels: (impId: string, keep: (host: string) => boolean) => void;
 
+  // null: the feature is off
+  readonly readIdentityIssuer: () => string | null;
+
+  // These two refuse while the feature is off.
+  readonly readIdentityDocument: () => IdentityTrustDocument;
+  readonly stageIdentityKey: (at: Date) => IdentityTrustDocument;
+
   readonly listen: (port: number) => Promise<number>;
   readonly stop: () => Promise<void>;
 }
@@ -162,6 +172,15 @@ export async function createBroker(deps: BrokerDeps): Promise<Broker> {
 
   const files = deps.secretFiles ?? createSecretFiles(config.dataDir);
 
+  const identity =
+    config.identityIssuer === null
+      ? null
+      : loadOrCreateIdentity({
+          directory: join(config.dataDir, 'broker', 'identity'),
+          issuer: config.identityIssuer,
+          now,
+        });
+
   await removeStaleSecretFiles(db, files, new Date(now()));
 
   const resolveUpstream = deps.resolveUpstream;
@@ -197,6 +216,7 @@ export async function createBroker(deps: BrokerDeps): Promise<Broker> {
     resolveTunnelTarget: deps.resolveTunnelTarget,
     dialTunnel: deps.dialTunnel,
     reach: deps.reach,
+    identity,
     refreshAfterRejection: refresher.refreshAfterRejection,
   });
 
@@ -228,7 +248,13 @@ export async function createBroker(deps: BrokerDeps): Promise<Broker> {
     }
   };
 
-  const secrets = createSecretStore({ db, files, refresher, applyGrants });
+  const secrets = createSecretStore({
+    db,
+    files,
+    refresher,
+    applyGrants,
+    isIdentityOn: identity !== null,
+  });
 
   return {
     addSecret: secrets.addSecret,
@@ -382,6 +408,34 @@ export async function createBroker(deps: BrokerDeps): Promise<Broker> {
 
     applyGrants,
 
+    readIdentityIssuer: () => identity?.issuer ?? null,
+
+    readIdentityDocument: () => requireIdentity(identity).readDocument(),
+
+    stageIdentityKey: (at) => {
+      const live = requireIdentity(identity);
+      const outcome = live.stageKey(Math.floor(at.getTime() / 1000));
+
+      if (outcome.kind === 'staged') {
+        return live.readDocument();
+      }
+
+      throw match(outcome)
+        .with(
+          { kind: 'already-staged' },
+          () =>
+            new ImpdError('CONFLICT', {
+              message:
+                'a key change is already staged; it has no cancel, and the next stage waits for its switch time',
+            }),
+        )
+        .with(
+          { kind: 'not-in-future' },
+          () => new ImpdError('BAD_REQUEST', { message: 'the switch time must be in the future' }),
+        )
+        .exhaustive();
+    },
+
     closeTunnels: proxy.closeTunnels,
 
     isGranted: proxy.isGranted,
@@ -414,4 +468,14 @@ function buildClashError(impName: string, secretName: string, clash: Readonly<Gr
     `${impName}/${secretName}`,
     `secret ${clash.secretName} already gives ${impName} a credential for ${clash.host}`,
   );
+}
+
+function requireIdentity(identity: Identity | null): Identity {
+  if (identity === null) {
+    throw new ImpdError('PRECONDITION_FAILED', {
+      message: 'identity is off on this impd; set IMP_IDENTITY_ISSUER and restart it',
+    });
+  }
+
+  return identity;
 }

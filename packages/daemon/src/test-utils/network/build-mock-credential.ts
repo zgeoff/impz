@@ -7,6 +7,7 @@ export function buildMockCredential(overrides: Partial<Credential> = {}): Creden
     header: 'authorization',
     value: `Bearer ${faker.string.alphanumeric(24)}`,
     upstream: null,
+    identity: false,
     filter: null,
     oauth: null,
     ...overrides,

@@ -464,6 +464,7 @@ function toBindingKey(rules: readonly BrokerRule[]): string {
           rule.scheme,
           rule.user ?? null,
           rule.upstream ?? null,
+          rule.identity === true,
         ] as const,
     )
     .toSorted((x, y) => `${x[0]}\n${x[1]}`.localeCompare(`${y[0]}\n${y[1]}`));

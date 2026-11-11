@@ -14,7 +14,7 @@ export function createSystemRoutes(os: RpcImplementer, deps: RouterDeps) {
     info: os.system.info.handler(() => readSystemInfo(deps)),
     features: os.system.features.handler(() => ({
       version: packageJson.version,
-      features: SYSTEM_FEATURES,
+      features: readFeatures(deps),
     })),
     gc: os.system.gc.handler((context) =>
       deps.gc.runGc({
@@ -96,7 +96,8 @@ async function readSystemInfo(deps: RouterDeps): Promise<SystemInfo> {
     ksm: readKsmInfo(deps, running, usage.headroomMib),
     public: readPublicInfo(deps.config, imps, deps.publicRecords.readStatus()),
     https: await readHttpsInfo(deps),
-    features: SYSTEM_FEATURES,
+    features: readFeatures(deps),
+    ...readIdentityInfo(deps),
     host: deps.readHostInfo(),
   };
 }
@@ -154,6 +155,16 @@ async function readHttpsInfo(deps: RouterDeps): Promise<SystemInfo['https']> {
     dnsToken:
       token === null ? null : { isOk: token.isOk, error: token.error, at: new Date(token.at) },
   };
+}
+
+function readFeatures(deps: RouterDeps): typeof SYSTEM_FEATURES {
+  return { ...SYSTEM_FEATURES, secretIdentity: deps.broker.readIdentityIssuer() !== null };
+}
+
+function readIdentityInfo(deps: RouterDeps): Pick<SystemInfo, 'identity'> {
+  const issuer = deps.broker.readIdentityIssuer();
+
+  return issuer === null ? {} : { identity: { issuer } };
 }
 
 function buildCopyName(now: number): string {

@@ -26,7 +26,7 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const harness = await startTestImpd(stack);
+  const harness = await startTestImpd(stack, { env: { IMP_IDENTITY_ISSUER: 'imp-host-a' } });
 
   const reach = createReachPolicy({
     subnet: harness.config.subnet,
@@ -1545,4 +1545,180 @@ test('it removes on the next start the old file a replace could not, not keeping
   const files = await readdir(join(ctx.dataDir, 'secrets'));
 
   expect(files).toStrictEqual([after.valueFile]);
+});
+
+test('it refuses a secret that asks for identity while impd has no issuer, and stores nothing', async () => {
+  const ctx = await setupTest();
+  const withoutIssuer = await startTestImpd(ctx.stack);
+
+  const refused = withoutIssuer.client.secrets.add({
+    name: 'tasks',
+    kind: 'static',
+    value: 'v1',
+    rules: [buildMockBrokerRule({ host: 'tasks.imp.internal', identity: true })],
+  });
+
+  expect(refused).rejects.toMatchObject({
+    code: 'PRECONDITION_FAILED',
+    message: expect.stringContaining('IMP_IDENTITY_ISSUER') as unknown,
+  });
+
+  const listed = await withoutIssuer.client.secrets.list();
+
+  expect(listed).toStrictEqual([]);
+});
+
+test('it stores a secret without identity while impd has no issuer', async () => {
+  const ctx = await setupTest();
+  const withoutIssuer = await startTestImpd(ctx.stack);
+
+  const added = await withoutIssuer.client.secrets.add({
+    name: 'tasks',
+    kind: 'static',
+    value: 'v1',
+    rules: [buildMockBrokerRule({ host: 'tasks.imp.internal' })],
+  });
+
+  expect(added.rules[0]).not.toHaveProperty('identity');
+});
+
+test('it stores a static secret with identity and lists the rule with it', async () => {
+  const ctx = await setupTest();
+
+  const added = await ctx.client.secrets.add({
+    name: 'tasks',
+    kind: 'static',
+    value: 'v1',
+    rules: [buildMockBrokerRule({ host: 'tasks.imp.internal', identity: true })],
+  });
+
+  expect(added.rules).toStrictEqual([
+    { host: 'tasks.imp.internal', header: 'authorization', scheme: 'bearer', identity: true },
+  ]);
+});
+
+test('it stores an oauth secret with identity', async () => {
+  const ctx = await setupTest();
+
+  const added = await ctx.client.secrets.add({
+    name: 'tasks',
+    kind: 'oauth',
+    value: 'refresh',
+    rules: [buildMockBrokerRule({ host: 'tasks.imp.internal', identity: true })],
+    oauth: { tokenUrl: 'https://auth.example.com/token', clientId: 'c', tokenFormat: 'form' },
+  });
+
+  expect(added.rules[0]?.identity).toBeTrue();
+});
+
+test('it refuses to turn identity on with a replace that keeps the grants', async () => {
+  const ctx = await setupTest();
+
+  await ctx.client.secrets.add({
+    name: 'tasks',
+    kind: 'static',
+    value: 'v1',
+    rules: [buildMockBrokerRule({ host: 'tasks.imp.internal' })],
+  });
+
+  expect(
+    ctx.client.secrets.add({
+      name: 'tasks',
+      kind: 'static',
+      value: 'v2',
+      rules: [buildMockBrokerRule({ host: 'tasks.imp.internal', identity: true })],
+      replace: true,
+    }),
+  ).rejects.toMatchObject({ code: 'CONFLICT', data: { reason: 'binding_changed' } });
+});
+
+test('it refuses to turn identity off with a replace that keeps the grants', async () => {
+  const ctx = await setupTest();
+
+  await ctx.client.secrets.add({
+    name: 'tasks',
+    kind: 'static',
+    value: 'v1',
+    rules: [buildMockBrokerRule({ host: 'tasks.imp.internal', identity: true })],
+  });
+
+  expect(
+    ctx.client.secrets.add({
+      name: 'tasks',
+      kind: 'static',
+      value: 'v2',
+      rules: [buildMockBrokerRule({ host: 'tasks.imp.internal' })],
+      replace: true,
+    }),
+  ).rejects.toMatchObject({ code: 'CONFLICT', data: { reason: 'binding_changed' } });
+});
+
+test('it turns identity on with a rebind, which drops the grants of the imps that held it', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+  await ctx.client.imps.create({ name: 'dev' });
+
+  await ctx.client.secrets.add({
+    name: 'tasks',
+    kind: 'static',
+    value: 'v1',
+    rules: [buildMockBrokerRule({ host: 'tasks.imp.internal' })],
+  });
+
+  await ctx.client.grants.add({ name: 'dev', secret: 'tasks' });
+
+  const rebound = await ctx.client.secrets.add({
+    name: 'tasks',
+    kind: 'static',
+    value: 'v2',
+    rules: [buildMockBrokerRule({ host: 'tasks.imp.internal', identity: true })],
+    replace: true,
+    rebind: true,
+  });
+
+  expect(rebound.droppedGrants).toBe(1);
+
+  const grants = await ctx.client.grants.list({ name: 'dev' });
+
+  expect(grants).toStrictEqual([]);
+});
+
+test('it keeps the grants on a replace that leaves identity as it was', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('base');
+  await ctx.client.imps.create({ name: 'dev' });
+
+  await ctx.client.secrets.add({
+    name: 'tasks',
+    kind: 'static',
+    value: 'v1',
+    rules: [buildMockBrokerRule({ host: 'tasks.imp.internal', identity: true })],
+  });
+
+  await ctx.client.grants.add({ name: 'dev', secret: 'tasks' });
+
+  const rotated = await ctx.client.secrets.add({
+    name: 'tasks',
+    kind: 'static',
+    value: 'v2',
+    rules: [buildMockBrokerRule({ host: 'tasks.imp.internal', identity: true })],
+    replace: true,
+  });
+
+  expect(rotated.droppedGrants).toBe(0);
+});
+
+test('it refuses a rule whose header is imp-identity', async () => {
+  const ctx = await setupTest();
+
+  expect(
+    ctx.client.secrets.add({
+      name: 'tasks',
+      kind: 'static',
+      value: 'v1',
+      rules: [{ host: 'tasks.imp.internal', header: 'imp-identity', scheme: 'raw' }],
+    }),
+  ).rejects.toThrow();
 });

@@ -32,6 +32,7 @@ import { createEventRoutes } from './create-event-routes';
 import { createExecRoutes } from './create-exec-routes';
 import { createFileRoutes } from './create-file-routes';
 import { createGrantRoutes } from './create-grant-routes';
+import { createIdentityRoutes } from './create-identity-routes';
 import { createImageRoutes } from './create-image-routes';
 import { createImpRoutes } from './create-imp-routes';
 import { createImplementer } from './create-implementer';
@@ -104,6 +105,7 @@ export function createRouter(deps: RouterDeps) {
     audit: buildAuditRoutes(os, deps),
     events: createEventRoutes(os, deps, views),
     system: createSystemRoutes(os, deps),
+    identity: createIdentityRoutes(os, deps),
     oauth: createOAuthRoutes(os, deps),
     tokens: createTokenRoutes(os, deps),
   });

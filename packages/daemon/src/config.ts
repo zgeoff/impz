@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { ImpPatternSchema } from '@impz/api';
+import { IdentityIssuerSchema, ImpPatternSchema } from '@impz/api';
 import * as z from 'zod';
 import { countSlots, formatCidr4, isTailnetOverlap, parseSubnet } from './host-net/net/addressing';
 import { formatCidr6 } from './host-net/net/addressing6';
@@ -35,6 +35,7 @@ const EnvSchema = z.object({
   IMP_SSH_AUTHORIZED_KEYS: z.enum(['true', 'false']).default('true'),
   IMP_BROKER_PORT: PortSchema.default(7081),
   IMP_BROKER_TEST_UPSTREAMS: z.string().optional(),
+  IMP_IDENTITY_ISSUER: IdentityIssuerSchema.optional(),
   IMP_EGRESS_DNS_PORT: PortSchema.default(7053),
   IMP_EGRESS_DENY: z.string().default(''),
 
@@ -277,6 +278,7 @@ export function loadConfig(env: Readonly<Record<string, string | undefined>>): C
     ],
     hostAddresses,
     brokerTestUpstreams: parsed.IMP_BROKER_TEST_UPSTREAMS ?? null,
+    identityIssuer: parsed.IMP_IDENTITY_ISSUER ?? null,
     ramBudgetMib: parsed.IMP_RAM_BUDGET_MIB,
     priorityRam: parsePriorityRam(parsed),
     idleTimeoutS: parsed.IMP_IDLE_TIMEOUT_S,

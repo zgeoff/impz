@@ -13,11 +13,13 @@ import {
 import { copyFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { checkSessionImp, verifyImpIdentity } from '@impz/client/identity';
 import { readImpEnv } from '@impz/shared/test-utils/read-imp-env';
 import { updateEnv } from '@impz/shared/test-utils/update-env';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { createTemplateService } from '../../imps/images/template-service';
+import { loadOrCreateIdentity } from '../../network/broker/identity/load-or-create-identity';
 import { createNetworkService } from '../../network/networks/network-service';
 import { createCheckpoint, listCheckpoints } from '../../platform/db/checkpoints';
 import { readImageByName } from '../../platform/db/images';
@@ -63,7 +65,7 @@ async function setupTest() {
           createXfsBackend({ dataDir, cloneFile: (source, target) => copyFile(source, target) }),
         ),
       ),
-    env: readImpEnv(),
+    env: { ...readImpEnv(), IMP_IDENTITY_ISSUER: 'imp-host-a' },
   });
 
   const restic = buildStubRestic({ repoDir, now: () => new Date(host.now()) });
@@ -2703,4 +2705,121 @@ test('#restoreBackup brings back no token or secret in a restore of one imp from
   expect(restored.database).toBeUndefined();
   expect(fresh.tokens.list()).toStrictEqual([]);
   expect(secrets).toStrictEqual([]);
+});
+
+test('#restoreBackup tells two imps with one id on two hosts apart by issuer, and refuses a session record without one', async () => {
+  const ctx = await setupTest();
+
+  const backups = createBackupService({ ...ctx.deps, backup: buildMockBackupConfig() });
+
+  const hostB = await startTestImpd(ctx.stack, {
+    frozenClockMs: Date.UTC(2026, 9, 2),
+    env: { IMP_IDENTITY_ISSUER: 'imp-host-b' },
+  });
+
+  const backupsB = createBackupService({
+    dataDir: hostB.dataDir,
+    backup: buildMockBackupConfig(),
+    db: hostB.db,
+    imps: hostB.imps,
+    grants: hostB.broker,
+    tokens: hostB.tokens,
+    networks: createNetworkService({ db: hostB.db, egress: hostB.egress, imps: hostB.imps }),
+    storage: hostB.storage,
+    images: hostB.images,
+    storageGate: hostB.storageGate,
+    diskBudget: hostB.diskBudget,
+    writeImageFiles,
+    restic: buildStubRestic({ repoDir: ctx.repoDir, now: () => new Date(ctx.now()) }).restic,
+    now: () => new Date(ctx.now()),
+    freezer: { freeze: () => Promise.resolve(), thaw: () => Promise.resolve() },
+  });
+
+  await ctx.createTestImage('base');
+
+  writeFileSync(join(ctx.dataDir, 'images', 'base', 'config.json'), '{}');
+
+  const rule = {
+    host: 'tasks.imp.internal',
+    header: 'authorization',
+    scheme: 'bearer',
+    identity: true,
+  } as const;
+
+  await ctx.client.secrets.add({ name: 'tasks', kind: 'static', value: 'v1', rules: [rule] });
+  await hostB.client.secrets.add({ name: 'tasks', kind: 'static', value: 'v1', rules: [rule] });
+
+  const onA = await ctx.imps.createImp({ name: 'dev' });
+
+  await ctx.client.grants.add({ name: 'dev', secret: 'tasks' });
+
+  // the imp keeps running on host A while its backup restores on host B
+  await backups.runBackup();
+  await backupsB.restoreBackup({ all: true });
+
+  const onB = await readImpByName(hostB.db, 'dev');
+
+  invariant(onB);
+
+  // the same key files that each host's broker signs with
+  const identityA = loadOrCreateIdentity({
+    directory: join(ctx.dataDir, 'broker', 'identity'),
+    issuer: 'imp-host-a',
+    now: ctx.now,
+  });
+
+  const identityB = loadOrCreateIdentity({
+    directory: join(hostB.dataDir, 'broker', 'identity'),
+    issuer: 'imp-host-b',
+    now: hostB.now,
+  });
+
+  const audience = 'tasks.imp.internal';
+  const nowSeconds = Math.floor(ctx.now() / 1000);
+
+  const documentA = await ctx.client.identity.jwks();
+  const documentB = await hostB.client.identity.jwks();
+
+  const options = { issuers: [documentA, documentB], audience, nowSeconds };
+
+  const callerA = await verifyImpIdentity(identityA.mintToken(onA, audience), options);
+  const callerB = await verifyImpIdentity(identityB.mintToken(onB, audience), options);
+  const grantsOnB = await hostB.client.grants.list({ name: 'dev' });
+
+  const record = { impID: onA.id, impIssuer: 'imp-host-a', impName: 'dev' };
+
+  expect(onB.id).toBe(onA.id);
+  expect(grantsOnB).toStrictEqual(['tasks']);
+
+  expect([
+    checkSessionImp(callerA, record),
+    checkSessionImp(callerB, record),
+    checkSessionImp(callerA, { ...record, impIssuer: null }),
+  ]).toStrictEqual([
+    { kind: 'allowed' },
+    { kind: 'refused', reason: 'other-host' },
+    { kind: 'refused', reason: 'imp-issuer-unknown' },
+  ]);
+});
+
+test('#runBackup keeps the identity key out of a snapshot, a staged key as well', async () => {
+  const ctx = await setupTest();
+
+  const backups = createBackupService({ ...ctx.deps, backup: buildMockBackupConfig() });
+
+  await ctx.createTestImage('base');
+
+  writeFileSync(join(ctx.dataDir, 'images', 'base', 'config.json'), '{}');
+
+  await ctx.imps.createImp({ name: 'dev' });
+  await ctx.client.identity.stageKey({ at: new Date(Date.now() + 3_600_000) });
+
+  const run = await backups.runBackup();
+
+  const files = readdirSync(join(ctx.repoDir, run.snapshotId), {
+    recursive: true,
+    encoding: 'utf8',
+  });
+
+  expect(files.filter((file) => /\.pem$|identity/u.test(file))).toStrictEqual([]);
 });

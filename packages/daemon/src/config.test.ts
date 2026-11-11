@@ -17,6 +17,7 @@ test('it fills every setting from its default when the env is empty', () => {
     egressDeny: [],
     hostAddresses: [],
     brokerTestUpstreams: null,
+    identityIssuer: null,
     ramBudgetMib: 16_384,
     priorityRam: null,
     idleTimeoutS: 60,

@@ -45,14 +45,35 @@ async function setupTest() {
   };
 }
 
-test('it answers the features with the impd version and every feature on', async () => {
+test('it answers the features with the impd version and every feature on but identity', async () => {
   const ctx = await setupTest();
   const answer = await ctx.client.system.features();
 
   expect(answer).toStrictEqual({
     version: packageJson.version,
-    features: SYSTEM_FEATURES,
+    features: { ...SYSTEM_FEATURES, secretIdentity: false },
   });
+});
+
+test('it answers no identity in the system info while impd has no issuer', async () => {
+  const ctx = await setupTest();
+  const info = await ctx.client.system.info();
+
+  expect(info).not.toHaveProperty('identity');
+});
+
+test('it refuses the key set while impd has no issuer', async () => {
+  const ctx = await setupTest();
+
+  expect(ctx.client.identity.jwks()).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
+});
+
+test('it refuses a key change while impd has no issuer', async () => {
+  const ctx = await setupTest();
+
+  const staging = ctx.client.identity.stageKey({ at: new Date(Date.UTC(2027, 0, 1)) });
+
+  expect(staging).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
 });
 
 test('it answers the features without measuring an awake imp', async () => {
@@ -80,7 +101,7 @@ test('it answers the features to a read-only token', async () => {
 
   const answer = await reader.system.features();
 
-  expect(answer.features).toStrictEqual(SYSTEM_FEATURES);
+  expect(answer.features).toStrictEqual({ ...SYSTEM_FEATURES, secretIdentity: false });
 });
 
 test('it answers a copy with its fields in the order a restore script reads them', async () => {
