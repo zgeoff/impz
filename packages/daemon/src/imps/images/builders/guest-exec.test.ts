@@ -198,6 +198,41 @@ test('it closes a step whose signal aborts while it opens', () => {
   expect(guest.runs[0]).toMatchObject({ signals: [], closed: true });
 });
 
+test("it fails a step at its signal's abort while the agent has not yet started it", () => {
+  const controller = new AbortController();
+
+  const running = createGuestExec(() => new Promise<never>(() => {}))(['docker', 'build', '.'], {
+    signal: controller.signal,
+  });
+
+  controller.abort();
+
+  expect(running).rejects.toMatchObject({ name: 'AbortError' });
+});
+
+test('it closes a step that the agent starts after its signal aborted', async () => {
+  const guest = buildStubGuest(() => new Promise<StubAnswer>(() => {}));
+  const started = Promise.withResolvers<void>();
+
+  const controller = new AbortController();
+
+  const running = createGuestExec(async (request) => {
+    await started.promise;
+
+    return guest.open(request);
+  })(['docker', 'build', '.'], { signal: controller.signal });
+
+  controller.abort();
+
+  await expect(running).toReject();
+
+  started.resolve();
+
+  await waitFor(() => {
+    expect(guest.runs[0]).toMatchObject({ signals: [], closed: true });
+  });
+});
+
 test('it opens no step once its signal aborted', () => {
   const guest = buildStubGuest(() => ({}));
 

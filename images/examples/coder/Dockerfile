@@ -10,8 +10,8 @@ FROM ghcr.io/zgeoff/imp-base:0.29.0@sha256:1851f631ea77f3a99b6f1f9af8ca8868434f4
 # from the file it downloads.
 # platforms["linux-x64"].checksum in
 # https://downloads.claude.ai/claude-code-releases/<version>/manifest.json
-ARG CLAUDE_CODE_VERSION=2.1.308
-ARG CLAUDE_CODE_SHA256=356733f185fa988e6bf3aa9a555269fdd167982a2e2a80d3c8a78037bb92ad58
+ARG CLAUDE_CODE_VERSION=2.1.322
+ARG CLAUDE_CODE_SHA256=bfb3703ad5380242328459bc62ada4bde8ae7ba57c6e1eeadb9c00e08874c478
 # gh_<version>_checksums.txt in the cli/cli release
 ARG GH_VERSION=2.103.3
 ARG GH_SHA256=4c806978ffce1cec70853302a56d70ac6da4f19bae7adca4e1a8ab00633dd91d

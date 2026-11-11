@@ -1221,6 +1221,27 @@ test("it warms a 2M imp's memory file after its sleep when its data fills the ca
   ]);
 });
 
+test('it warms by default the memory file of a 2M imp of 2 GiB whose data fills most of it', async () => {
+  updateEnv('IMP_HUGE_PAGES', '2M');
+
+  const ctx = await setupTest();
+
+  ctx.hugePool.totalMib = 4096;
+  ctx.hugePool.freeMib = 4096;
+
+  ctx.uffdHandler.answerWarm({ blocks: 955 });
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.client.imps.create({ name: 'dev', memoryMib: 2048 });
+  await ctx.client.imps.sleep({ name: 'dev' });
+
+  await waitFor(() => {
+    expect(ctx.logs).toSatisfyAny((line: string) =>
+      /^INFO impd\.imps imp=dev warmed the memory file in \d+ms: 955 blocks of 2 MiB$/u.test(line),
+    );
+  });
+});
+
 test("it leaves a 2M imp's memory file cold after its sleep when its data passes the cap", async () => {
   updateEnv('IMP_HUGE_PAGES', '2M');
   updateEnv('IMP_WARM_CAP_MIB', '64');

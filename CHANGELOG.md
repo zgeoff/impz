@@ -1,5 +1,28 @@
 # Changelog
 
+## [6.11.5](https://github.com/zgeoff/impz/compare/v6.11.4...v6.11.5) (2026-11-09)
+
+### Bug Fixes
+
+- **daemon:** give a builder exec 30 s to start ([#994](https://github.com/zgeoff/impz/issues/994))
+  ([7244c9c](https://github.com/zgeoff/impz/commit/7244c9c759233e4502e498ec207b52ca64ad7b46))
+
+## [6.11.4](https://github.com/zgeoff/impz/compare/v6.11.3...v6.11.4) (2026-11-09)
+
+### Bug Fixes
+
+- **daemon:** warm large guests after a sleep, and wait out a cold wake
+  ([#991](https://github.com/zgeoff/impz/issues/991))
+  ([054fe20](https://github.com/zgeoff/impz/commit/054fe20a23dd379d7991f024e6cff823dae0d919))
+
+## [6.11.3](https://github.com/zgeoff/impz/compare/v6.11.2...v6.11.3) (2026-11-09)
+
+### Bug Fixes
+
+- **daemon:** send a resumed stream a reset after an older impd writes
+  ([#981](https://github.com/zgeoff/impz/issues/981))
+  ([41f0cde](https://github.com/zgeoff/impz/commit/41f0cdefa43721cfb529e0663dd3c0673f0d857a))
+
 ## [6.11.2](https://github.com/zgeoff/impz/compare/v6.11.1...v6.11.2) (2026-11-08)
 
 ### Bug Fixes

@@ -28,7 +28,7 @@ async function setupTest() {
 
   return Object.assign(harness, {
     readHead: () => harness.impd.db.log.readHead(),
-    readLogId: () => harness.impd.db.log.readLogId(),
+    readLogID: () => harness.impd.db.log.readLogID(),
     pruneEvents: (now: number) =>
       withImpTransaction(harness.impd.db, (trx) => pruneEvents(trx, now)),
   });
@@ -693,7 +693,7 @@ test('it sends a limited token the position past the events it may not see', asy
     controller.abort();
   });
 
-  const cursor = { after: await ctx.readHead(), logId: await ctx.readLogId() };
+  const cursor = { after: await ctx.readHead(), logId: await ctx.readLogID() };
 
   const events = await ctx
     .buildClient(made.secret)

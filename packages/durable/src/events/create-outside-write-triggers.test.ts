@@ -3,10 +3,10 @@ import { sql } from 'kysely';
 import { createTestDurableDatabase } from '../test-utils/create-test-durable-database';
 import { openTestDurableDatabase } from '../test-utils/open-test-durable-database';
 import { createOutsideWriteTriggers } from './create-outside-write-triggers';
-import { readLogId } from './read-log-id';
-import { removeLogId } from './remove-log-id';
+import { readLogID } from './read-log-id';
+import { removeLogID } from './remove-log-id';
 import { removeLogIDAfterOutsideWrites } from './remove-log-id-after-outside-writes';
-import { writeNewLogId } from './write-new-log-id';
+import { writeNewLogID } from './write-new-log-id';
 
 async function setupTest() {
   const ctx = await createTestDurableDatabase();
@@ -17,7 +17,7 @@ async function setupTest() {
     ...ctx,
     reopen: async () => {
       await removeLogIDAfterOutsideWrites(ctx.db);
-      await writeNewLogId(ctx.db);
+      await writeNewLogID(ctx.db);
     },
   };
 }
@@ -30,7 +30,7 @@ test.each([
   'it gives the log a new ID at the next open after %s by a connection without the triggers',
   async (_write, statement) => {
     const ctx = await setupTest();
-    const before = await readLogId(ctx.db);
+    const before = await readLogID(ctx.db);
 
     await createOutsideWriteTriggers(ctx.db, ['notes']);
 
@@ -41,7 +41,7 @@ test.each([
     await sql.raw(statement).execute(other);
     await ctx.reopen();
 
-    const logID = await readLogId(ctx.db);
+    const logID = await readLogID(ctx.db);
 
     expect(logID).not.toBeOneOf(['', before]);
   },
@@ -55,7 +55,7 @@ test.each([
   'it keeps the log ID at the next open after %s by the connection that made the triggers',
   async (_write, statement) => {
     const ctx = await setupTest();
-    const before = await readLogId(ctx.db);
+    const before = await readLogID(ctx.db);
 
     await createOutsideWriteTriggers(ctx.db, ['notes']);
 
@@ -63,7 +63,7 @@ test.each([
     await sql.raw(statement).execute(ctx.db);
     await ctx.reopen();
 
-    const logID = await readLogId(ctx.db);
+    const logID = await readLogID(ctx.db);
 
     expect(logID).toBe(before);
   },
@@ -71,7 +71,7 @@ test.each([
 
 test('it keeps the log ID that a connection without the triggers reads after its own write', async () => {
   const ctx = await setupTest();
-  const before = await readLogId(ctx.db);
+  const before = await readLogID(ctx.db);
 
   await createOutsideWriteTriggers(ctx.db, ['notes']);
 
@@ -79,7 +79,7 @@ test('it keeps the log ID that a connection without the triggers reads after its
 
   await sql`INSERT INTO notes (id, body) VALUES (1, 'buy pears')`.execute(other);
 
-  const logID = await readLogId(other);
+  const logID = await readLogID(other);
 
   expect(logID).toBe(before);
 });
@@ -94,11 +94,11 @@ test('it gives the log one new ID for the writes before an open, and none at the
   await sql`INSERT INTO notes (id, body) VALUES (1, 'buy pears')`.execute(other);
   await ctx.reopen();
 
-  const rotated = await readLogId(ctx.db);
+  const rotated = await readLogID(ctx.db);
 
   await ctx.reopen();
 
-  const logID = await readLogId(ctx.db);
+  const logID = await readLogID(ctx.db);
 
   expect(logID).toBe(rotated);
 });
@@ -107,16 +107,16 @@ test('it lets the connection that made the triggers remove the log ID', async ()
   const ctx = await setupTest();
 
   await createOutsideWriteTriggers(ctx.db, ['notes']);
-  await removeLogId(ctx.db);
+  await removeLogID(ctx.db);
 
-  const logID = await readLogId(ctx.db);
+  const logID = await readLogID(ctx.db);
 
   expect(logID).toBe('');
 });
 
 test('it keeps the triggers working when a later connection makes them again', async () => {
   const ctx = await setupTest();
-  const before = await readLogId(ctx.db);
+  const before = await readLogID(ctx.db);
 
   await createOutsideWriteTriggers(ctx.db, ['notes']);
 
@@ -129,7 +129,7 @@ test('it keeps the triggers working when a later connection makes them again', a
   await sql`INSERT INTO notes (id, body) VALUES (1, 'buy pears')`.execute(other);
   await ctx.reopen();
 
-  const logID = await readLogId(ctx.db);
+  const logID = await readLogID(ctx.db);
 
   expect(logID).not.toBeOneOf(['', before]);
 });

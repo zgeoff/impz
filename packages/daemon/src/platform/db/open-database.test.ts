@@ -189,7 +189,7 @@ test('it gives the log one new ID after another impd wrote, and keeps it after i
 
   const image = await createImage(first, buildMockNewImage());
   const imp = await createImp(first, buildMockNewImp({ imageId: image.id }));
-  const firstLogID = await first.log.readLogId();
+  const firstLogID = await first.log.readLogID();
 
   await first.destroy();
 
@@ -207,7 +207,7 @@ test('it gives the log one new ID after another impd wrote, and keeps it after i
 
   await updateImpState(second, imp.id, { reason: 'stopped', state: 'stopped' });
 
-  const secondLogID = await second.log.readLogId();
+  const secondLogID = await second.log.readLogID();
 
   await second.destroy();
 
@@ -215,7 +215,7 @@ test('it gives the log one new ID after another impd wrote, and keeps it after i
 
   ctx.stack.defer(() => third.destroy());
 
-  const thirdLogID = await third.log.readLogId();
+  const thirdLogID = await third.log.readLogID();
 
   expect({ isRotated: secondLogID !== firstLogID, thirdLogID }).toStrictEqual({
     isRotated: true,
@@ -246,7 +246,7 @@ test.each([
 
     await createCheckpoint(before, { id: 'cp-calm', impId: imp.id, label: null, sizeBytes: null });
 
-    const logID = await before.log.readLogId();
+    const logID = await before.log.readLogID();
 
     await before.destroy();
 
@@ -262,7 +262,7 @@ test.each([
 
     ctx.stack.defer(() => after.destroy());
 
-    const reopenedLogID = await after.log.readLogId();
+    const reopenedLogID = await after.log.readLogID();
 
     expect(reopenedLogID).not.toBeOneOf(['', logID]);
   },
@@ -278,7 +278,7 @@ test('it keeps the log ID that an impd which logs events but makes no triggers r
 
   const image = await createImage(upgraded, buildMockNewImage());
   const imp = await createImp(upgraded, buildMockNewImp({ imageId: image.id }));
-  const logID = await upgraded.log.readLogId();
+  const logID = await upgraded.log.readLogID();
 
   await upgraded.destroy();
 
@@ -288,7 +288,7 @@ test('it keeps the log ID that an impd which logs events but makes no triggers r
 
   await updateImpState(older, imp.id, { reason: 'stopped', state: 'stopped' });
 
-  const seenLogID = await older.log.readLogId();
+  const seenLogID = await older.log.readLogID();
 
   expect(seenLogID).toBe(logID);
 });

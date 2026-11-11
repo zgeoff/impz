@@ -38,7 +38,10 @@ export function createGuestExec(
   return async (argv, options) => {
     options.signal.throwIfAborted();
 
-    const stream = await open({ argv: [...argv], tty: false, user: '0' });
+    const stream = await openUntilAborted(
+      open({ argv: [...argv], tty: false, user: '0' }),
+      options.signal,
+    );
 
     if (options.signal.aborted) {
       stream.close();
@@ -128,6 +131,39 @@ export function createGuestExec(
       stream.close();
     }
   };
+}
+
+// a builder exec waits long for its start, so an abort ends the wait at once, and the stream that
+// opens after it is closed
+async function openUntilAborted(
+  opening: Promise<ExecStream>,
+  signal: AbortSignal,
+): Promise<ExecStream> {
+  const aborted = Promise.withResolvers<never>();
+
+  const rejectOnAbort = () => {
+    aborted.reject(signal.reason);
+  };
+
+  signal.addEventListener('abort', rejectOnAbort, { once: true });
+
+  try {
+    return await Promise.race([opening, aborted.promise]);
+  } catch (error) {
+    if (signal.aborted) {
+      void closeOnceOpen(opening);
+    }
+
+    throw error;
+  } finally {
+    signal.removeEventListener('abort', rejectOnAbort);
+  }
+}
+
+async function closeOnceOpen(opening: Promise<ExecStream>): Promise<void> {
+  const stream = await opening.catch(() => null);
+
+  stream?.close();
 }
 
 async function sendStdin(

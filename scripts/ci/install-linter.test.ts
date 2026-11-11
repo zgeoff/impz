@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { $ } from 'bun';
-import { createStubCurl } from '../test-utils/create-stub-curl';
+import { createStubGhReleaseDownload } from '../test-utils/create-stub-gh-release-download';
 
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-install-linter-'));
@@ -30,12 +30,12 @@ test('it installs a linter released as a bare binary, once its sum matches, and 
 
   writeFileSync(release, binary);
 
-  const curl = createStubCurl(ctx.directoryPath, { source: release });
+  const gh = createStubGhReleaseDownload(ctx.directoryPath, { source: release });
 
   const result = await $`bun ${ctx.scriptPath} shfmt`
     .env({
       ...process.env,
-      PATH: `${curl.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${gh.bin}:${process.env['PATH'] ?? ''}`,
       SHFMT_VERSION: 'v3.14.1',
       SHFMT_SHA256: new Bun.CryptoHasher('sha256').update(binary).digest('hex'),
       RUNNER_TEMP: ctx.runnerTemp,
@@ -49,8 +49,8 @@ test('it installs a linter released as a bare binary, once its sum matches, and 
     stdout: 'v3.14.1\n',
   });
 
-  expect(readFileSync(curl.calls, 'utf8')).toInclude(
-    'https://github.com/mvdan/sh/releases/download/v3.14.1/shfmt_v3.14.1_linux_amd64',
+  expect(readFileSync(gh.calls, 'utf8')).toBe(
+    `gh release download v3.14.1 --repo mvdan/sh --pattern shfmt_v3.14.1_linux_amd64 --output ${join(ctx.runnerTemp, 'shfmt', 'download')}\n`,
   );
 
   expect(readFileSync(ctx.githubPath, 'utf8')).toBe(`${join(ctx.runnerTemp, 'bin')}\n`);
@@ -70,12 +70,12 @@ test('it installs a linter from its release archive', async () => {
 
   await $`tar -czf ${archive} -C ${join(ctx.directoryPath, 'release')} actionlint README.md`.quiet();
 
-  const curl = createStubCurl(ctx.directoryPath, { source: archive });
+  const gh = createStubGhReleaseDownload(ctx.directoryPath, { source: archive });
 
   const result = await $`bun ${ctx.scriptPath} actionlint`
     .env({
       ...process.env,
-      PATH: `${curl.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${gh.bin}:${process.env['PATH'] ?? ''}`,
       ACTIONLINT_VERSION: '1.7.12',
       ACTIONLINT_SHA256: new Bun.CryptoHasher('sha256').update(readFileSync(archive)).digest('hex'),
       RUNNER_TEMP: ctx.runnerTemp,
@@ -89,8 +89,8 @@ test('it installs a linter from its release archive', async () => {
     stdout: '1.7.12\n',
   });
 
-  expect(readFileSync(curl.calls, 'utf8')).toInclude(
-    'https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz',
+  expect(readFileSync(gh.calls, 'utf8')).toBe(
+    `gh release download v1.7.12 --repo rhysd/actionlint --pattern actionlint_1.7.12_linux_amd64.tar.gz --output ${join(ctx.runnerTemp, 'actionlint', 'download')}\n`,
   );
 });
 
@@ -101,12 +101,12 @@ test('it installs nothing from a download whose sum differs from the pinned one'
 
   writeFileSync(release, binary);
 
-  const curl = createStubCurl(ctx.directoryPath, { source: release });
+  const gh = createStubGhReleaseDownload(ctx.directoryPath, { source: release });
 
   const result = await $`bun ${ctx.scriptPath} hadolint`
     .env({
       ...process.env,
-      PATH: `${curl.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${gh.bin}:${process.env['PATH'] ?? ''}`,
       HADOLINT_VERSION: 'v2.15.1',
       HADOLINT_SHA256: '0'.repeat(64),
       RUNNER_TEMP: ctx.runnerTemp,
@@ -124,19 +124,19 @@ test('it installs nothing from a download whose sum differs from the pinned one'
   expect(readFileSync(ctx.githubPath, 'utf8')).toBe('');
 });
 
-test('it installs nothing when curl fails, even after writing the right bytes', async () => {
+test('it installs nothing when the download fails, even after writing the right bytes', async () => {
   const ctx = setupTest();
   const release = join(ctx.directoryPath, 'shfmt');
   const binary = '#!/bin/sh\necho v3.14.1\n';
 
   writeFileSync(release, binary);
 
-  const curl = createStubCurl(ctx.directoryPath, { source: release, exitCode: 22 });
+  const gh = createStubGhReleaseDownload(ctx.directoryPath, { source: release, exitCode: 1 });
 
   const result = await $`bun ${ctx.scriptPath} shfmt`
     .env({
       ...process.env,
-      PATH: `${curl.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${gh.bin}:${process.env['PATH'] ?? ''}`,
       SHFMT_VERSION: 'v3.14.1',
       SHFMT_SHA256: new Bun.CryptoHasher('sha256').update(binary).digest('hex'),
       RUNNER_TEMP: ctx.runnerTemp,

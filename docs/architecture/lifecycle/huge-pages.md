@@ -134,7 +134,7 @@ impd logs the outcome of each warm in the journal, on a line with the imp's name
 
 ```text
 warmed the memory file in 41ms: 27 blocks of 2 MiB
-left the memory file cold: its 862 MiB of data pass the warm cap of 256 MiB
+left the memory file cold: its 3862 MiB of data pass the warm cap of 2048 MiB
 stopped the memory file's warm after 12ms: the imp woke
 ```
 
