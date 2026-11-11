@@ -1,5 +1,13 @@
 # Changelog
 
+## [6.12.0](https://github.com/zgeoff/impz/compare/v6.11.6...v6.12.0) (2026-11-11)
+
+### Features
+
+- **identity:** sign imp identity tokens in the credential broker
+  ([#1003](https://github.com/zgeoff/impz/issues/1003))
+  ([f4304cd](https://github.com/zgeoff/impz/commit/f4304cdd46306d7986c0a03704385020a8a73f20))
+
 ## [6.11.6](https://github.com/zgeoff/impz/compare/v6.11.5...v6.11.6) (2026-11-11)
 
 ### Bug Fixes
