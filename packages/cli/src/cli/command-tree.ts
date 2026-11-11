@@ -14,6 +14,7 @@ import { eventsCommand } from '../commands/events-command';
 import { exposeCommand, unexposeCommand } from '../commands/expose-command';
 import { gcCommand } from '../commands/gc-command';
 import { hostCommand, hostsCommand, loginCommand } from '../commands/hosts-command';
+import { identityCommand } from '../commands/identity-command';
 import { imageCommand, templateCommand } from '../commands/image-command';
 import {
   consoleCommand,
@@ -92,6 +93,7 @@ export const subCommands = {
   audit: auditCommand,
   token: tokenCommand,
   events: eventsCommand,
+  identity: identityCommand,
   info: infoCommand,
   bench: benchCommand,
   mcp: mcpCommand,

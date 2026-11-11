@@ -65,6 +65,7 @@ export const infoCommand = defineCommand({
         ...formatTailnetNames(info.tailscale.names),
         ...formatHttps(info.https),
         ['public', formatPublic(info.public)],
+        ...(info.identity === undefined ? [] : [['identity', info.identity.issuer]]),
       ];
 
       for (const [label = '', value = ''] of lines) {

@@ -306,6 +306,11 @@ test.each([
     'has no secret upstreams and would send the credential to the host itself',
   ],
   [
+    ['secret', 'add', 'tasks', '--kind', 'static', '--hosts', 'tasks.imp.internal', '--identity'],
+    'secretIdentity',
+    'has no identity issuer, or is older than identity tokens and would send the service no token that names the imp',
+  ],
+  [
     ['secret', 'add', 'gh', '--preset', 'github'],
     'secretPresets',
     'has no static secrets or presets and would refuse a preset or a static secret, and drop --env unread',
@@ -356,6 +361,75 @@ test.each([
     expect(older.calls).toStrictEqual(['system/features']);
   },
 );
+
+test('it stores no secret that asks for identity on an impd with no issuer', async () => {
+  const ctx = await setupTest();
+
+  const result = await runCLIInProcess({
+    args: [
+      'secret',
+      'add',
+      'tasks',
+      '--kind',
+      'static',
+      '--hosts',
+      'tasks.imp.internal',
+      '--identity',
+    ],
+    env: { IMP_URL: ctx.url, IMP_TOKEN: ctx.rootToken },
+    stdin: 'fake-secret-value\n',
+  });
+
+  expect(result).toStrictEqual({
+    stdout: '',
+    stderr:
+      'impz: this impd has no identity issuer, or is older than identity tokens and would send the service no token that names the imp; nothing was changed. Upgrade impd, or use an older imp CLI\n',
+    code: 1,
+  });
+
+  const stored = await ctx.client.secrets.list();
+
+  expect(stored).toStrictEqual([]);
+});
+
+test.each([
+  ['a preset', ['--preset', 'github', '--identity']],
+  ['an old preset kind', ['--kind', 'github', '--identity']],
+])('it refuses --identity on %s', async (_title, flags) => {
+  const result = await runCLIInProcess({
+    args: ['secret', 'add', 'gh', ...flags],
+    env: { IMP_URL: 'http://127.0.0.1:1' },
+  });
+
+  expect(result).toStrictEqual({
+    stdout: '',
+    stderr: 'impz: --identity needs --kind static or oauth; a preset takes none\n',
+    code: 2,
+  });
+});
+
+test('it refuses a --header that is imp-identity', async () => {
+  const result = await runCLIInProcess({
+    args: [
+      'secret',
+      'add',
+      'tasks',
+      '--kind',
+      'static',
+      '--hosts',
+      'tasks.imp.internal',
+      '--header',
+      'imp-identity',
+    ],
+    env: { IMP_URL: 'http://127.0.0.1:1' },
+  });
+
+  expect(result).toStrictEqual({
+    stdout: '',
+    stderr: 'impz: --header: must not be imp-identity, which the broker sets to name the imp\n',
+    code: 2,
+  });
+});
 
 test('it replaces no secret on an impd from before SystemInfo.features', async () => {
   const ctx = await setupTest();

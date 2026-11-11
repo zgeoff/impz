@@ -3,6 +3,7 @@ import type {
   AuditEntry,
   BackupRun,
   BackupStatus,
+  BrokerRule,
   Checkpoint,
   Grant,
   Identity,
@@ -223,11 +224,7 @@ export function formatSecrets(secrets: readonly Secret[]): string {
       secret.name,
       secret.kind,
       formatSecretState(secret),
-      secret.rules
-        .map((rule) =>
-          rule.upstream === undefined ? rule.host : `${rule.host} -> ${rule.upstream}`,
-        )
-        .join(','),
+      secret.rules.map((rule) => formatRule(rule)).join(','),
       secret.imps.length === 0 ? '-' : secret.imps.join(','),
     ]),
   );
@@ -454,6 +451,12 @@ function formatLastExit(exit: Service['lastExit']): string {
   }
 
   return exit.signal ?? `code ${String(exit.code)}`;
+}
+
+function formatRule(rule: Readonly<BrokerRule>): string {
+  const target = rule.upstream === undefined ? rule.host : `${rule.host} -> ${rule.upstream}`;
+
+  return rule.identity === true ? `${target} (identity)` : target;
 }
 
 function formatSecretState(secret: Readonly<Secret>): string {
