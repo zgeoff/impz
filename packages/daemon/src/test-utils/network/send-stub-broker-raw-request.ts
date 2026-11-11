@@ -33,7 +33,9 @@ export async function sendStubBrokerRawRequest(
 
     plain.write(`CONNECT ${options.host}:443 HTTP/1.1\r\nHost: ${options.host}:443\r\n\r\n`);
 
-    const [answer] = await once(plain, 'data');
+    const answers: unknown[] = await once(plain, 'data');
+
+    const answer = answers.at(0);
 
     if (!String(answer).startsWith('HTTP/1.1 200')) {
       throw new Error(`the broker refused the CONNECT: ${String(answer)}`);

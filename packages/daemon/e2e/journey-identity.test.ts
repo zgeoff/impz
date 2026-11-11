@@ -8,8 +8,8 @@ import {
   createInstanceClient,
   requireImp,
   runImp,
+  runImpWith,
   runShellInImp,
-  tryImp,
 } from '@impz/e2e-harness/imp-cli';
 import { holdImp, waitForExec } from '@impz/e2e-harness/imps';
 import { readContainerGateway } from '@impz/e2e-harness/instance';
@@ -49,20 +49,18 @@ test('it gives each of two imps its own identity token through a custom connecto
     await holdImp(name);
   }
 
-  const added = await tryImp(
-    [
-      'secret',
-      'add',
-      secret,
-      '--kind',
-      'static',
-      '--hosts',
-      'svc.imp.internal',
-      '--upstream',
-      upstream.plainOrigin,
-      '--identity',
-    ],
+  await runImpWith(
     { stdin: `${token}\n` },
+    'secret',
+    'add',
+    secret,
+    '--kind',
+    'static',
+    '--hosts',
+    'svc.imp.internal',
+    '--upstream',
+    upstream.plainOrigin,
+    '--identity',
   );
 
   registerRemoval(ctx.stack, config.keep, () => removeSecretIfPresent(ctx.client, secret));
@@ -99,7 +97,6 @@ test('it gives each of two imps its own identity token through a custom connecto
     ),
   );
 
-  expect(added.exitCode).toBe(0);
   expect(document.issuer).toBe('e2e-host');
   expect(seen.map((entry) => entry.path)).toStrictEqual(['/svc-e2e/me', '/svc-e2e/me']);
 

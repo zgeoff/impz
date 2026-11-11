@@ -19,7 +19,10 @@ test('it builds a token of three base64url parts whose header names the key', ()
 test('it takes the algorithm named in the header from the caller', () => {
   const key = buildStubIdentityKey('k1');
   const token = buildStubIdentityToken({ key, claims: {}, alg: 'HS256' });
-  const header = JSON.parse(Buffer.from(token.split('.')[0] ?? '', 'base64url').toString());
+
+  const header: unknown = JSON.parse(
+    Buffer.from(token.split('.')[0] ?? '', 'base64url').toString(),
+  );
 
   expect(header).toStrictEqual({
     alg: 'HS256',

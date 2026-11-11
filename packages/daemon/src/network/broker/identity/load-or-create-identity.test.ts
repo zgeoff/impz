@@ -127,7 +127,7 @@ test('it signs claims with a 55 second life and the issuer setting', async () =>
     aud: 'tasks.imp.internal',
     iat: ctx.startSeconds,
     exp: ctx.startSeconds + 55,
-    jti: expect.stringMatching(/^[0-9a-f]{32}$/u) as unknown,
+    jti: expect.stringMatching(/^[0-9a-f]{32}$/u),
     imp_name: ctx.imp.name,
   });
 });

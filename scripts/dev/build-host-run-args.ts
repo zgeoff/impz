@@ -70,6 +70,7 @@ const TUNING_VARIABLES = [
   'IMP_MCP_PUBLIC_PORT',
   'IMP_BUILD_TEST_REGISTRY',
   'IMP_HOST_ADDRESSES',
+  'IMP_IDENTITY_ISSUER',
 ] as const;
 
 export type TailscaleArg = 'off' | 'key' | 'none';

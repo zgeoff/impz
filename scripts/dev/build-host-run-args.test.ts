@@ -159,6 +159,31 @@ test('it passes IMP_HOST_ADDRESSES, which the egress suite lists a host address 
   expect(args.join(' ')).toInclude(' -e IMP_HOST_ADDRESSES=192.0.2.7/32 ');
 });
 
+test('it passes IMP_IDENTITY_ISSUER, which the identity suite turns imp identity on with', () => {
+  const args = buildHostRunArgs({
+    layout: buildDevLayout({ env: {}, root: '/w/imp', cwd: '/w' }),
+    checkout: {
+      root: '/w/imp',
+      rootPhysical: '/w/imp',
+      hostImage: 'imp-host:dev-test',
+      buildDir: '/w/imp/build',
+    },
+    env: { IMP_IDENTITY_ISSUER: 'e2e-host' },
+    privileges: [],
+    hasEnvFile: false,
+    tailscale: 'none',
+    tailnetOAuthFile: null,
+    acmeCAFile: null,
+    registryCAFile: null,
+    registryHost: null,
+    kernel: '/src/kernel/out/vmlinux',
+    systemDrive: '/src/build/imp-system.squashfs',
+    uplinkMTU: '1500',
+  });
+
+  expect(args.join(' ')).toInclude(' -e IMP_IDENTITY_ISSUER=e2e-host ');
+});
+
 test('it passes the warm cap of a slept memory file, IMP_WARM_CAP_MIB', () => {
   const args = buildHostRunArgs({
     layout: buildDevLayout({ env: {}, root: '/w/imp', cwd: '/w' }),

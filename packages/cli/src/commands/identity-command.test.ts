@@ -174,7 +174,7 @@ test('it stages a key for a time and prints both keys with the retire entry', as
     env: { IMP_URL: ctx.url, IMP_TOKEN: ctx.rootToken },
   });
 
-  const printed: { keys: unknown[]; retire: unknown[] } = JSON.parse(result.stdout);
+  const printed = JSON.parse(result.stdout) as { keys: unknown[]; retire: unknown[] };
 
   expect(result.code).toBe(0);
   expect(printed.keys).toHaveLength(2);
