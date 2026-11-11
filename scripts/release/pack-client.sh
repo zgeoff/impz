@@ -27,7 +27,10 @@ jq --slurpfile workspace "$root/package.json" '
     if .value == "catalog:" then .value = "^" + $workspace[0].workspaces.catalog[.key] else . end
   )
   | del(.scripts, .devDependencies)
-  | .exports = { ".": { types: "./dist/index.d.ts", default: "./dist/index.js" } }
+  | .exports = {
+      ".": { types: "./dist/index.d.ts", default: "./dist/index.js" },
+      "./identity": { types: "./dist/identity.d.ts", default: "./dist/identity.js" }
+    }
   | .files = ["dist"]
   | .sideEffects = false
   | .publishConfig = { access: "public" }

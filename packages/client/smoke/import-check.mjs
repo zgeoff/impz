@@ -3,6 +3,7 @@
 // workspace. Argument: the version the package must report.
 import assert from 'node:assert/strict';
 import { CLIENT_VERSION, ExecError, createImpClient, isDefinedError } from '@impz/client';
+import { checkSessionImp, verifyImpIdentity } from '@impz/client/identity';
 
 const imp = createImpClient({ url: 'http://impd.test/', token: 't' });
 
@@ -12,5 +13,8 @@ assert.equal(typeof imp.requireAwake, 'function');
 assert.equal(typeof imp.openExec, 'function');
 assert.equal(typeof ExecError, 'function');
 assert.equal(typeof isDefinedError, 'function');
+
+assert.equal(typeof verifyImpIdentity, 'function');
+assert.equal(typeof checkSessionImp, 'function');
 
 console.log(`imported @impz/client ${CLIENT_VERSION}`);
