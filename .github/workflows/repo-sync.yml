@@ -43,7 +43,7 @@ jobs:
       checks: read
       statuses: read
       actions: read
-    uses: zgeoff/tools/.github/workflows/repo-sync.yml@d79eef37ea4dfd83a577b1c0458ce927cf23111e # main
+    uses: zgeoff/tools/.github/workflows/repo-sync.yml@290fa478c0e159be6c4da242cdd40ac1d511c785 # main
     with:
       ref: ${{ github.event.client_payload.sha }}
       skip: agents, editorconfig, memory-cap

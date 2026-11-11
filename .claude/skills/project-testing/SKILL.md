@@ -32,13 +32,15 @@ metadata:
 
 - Run the VM and ZFS journeys through [`test-e2e.sh`](../../../scripts/test-e2e.sh) and
   [`zfs-host-test.sh`](../../../scripts/zfs-host-test.sh), never `rig e2e` or `rig zfs`, in place of
-  the rig run in the testing skill's [Lanes](../testing/references/slow-tests.md#lanes) section. A
+  the rig run in the testing skill's
+  [Where each test runs](../testing/references/slow-tests.md#where-each-test-runs) section. A
   journey is one test file under `packages/daemon/e2e/`, and it drives a dev instance: a running
   impd and its VMs. rig starts no dev instance. Each harness starts its own. To run one journey by
   hand, start a dev instance with `scripts/dev/dev.sh up` first.
 - Keep each `test()` in a journey under 60 s, in place of the 15 s of the e2e lane in
-  [Lanes](../testing/references/slow-tests.md#lanes). A journey drives a real VM. `rig.config.ts`
-  declares the `e2e` and `zfs` lanes only to hold the 60 s, which `zgeoff/max-test-timeout` reads.
+  [Where each test runs](../testing/references/slow-tests.md#where-each-test-runs). A journey drives
+  a real VM. `rig.config.ts` declares the `e2e` and `zfs` lanes only to hold the 60 s, which
+  `zgeoff/max-test-timeout` reads.
 
 ## Commands and what they need
 
