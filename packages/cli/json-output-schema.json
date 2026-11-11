@@ -581,6 +581,9 @@
               "destroyIdCheck": {
                 "type": "boolean"
               },
+              "secretIdentity": {
+                "type": "boolean"
+              },
               "eventCursor": {
                 "type": "boolean"
               }
@@ -588,6 +591,19 @@
             "required": [
               "sessionOffsets",
               "leases"
+            ],
+            "additionalProperties": false
+          },
+          "identity": {
+            "type": "object",
+            "properties": {
+              "issuer": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9._-]{1,128}$"
+              }
+            },
+            "required": [
+              "issuer"
             ],
             "additionalProperties": false
           },

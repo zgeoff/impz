@@ -9,6 +9,8 @@ export interface Credential {
 
   readonly upstream: string | null;
 
+  readonly identity: boolean;
+
   readonly filter: GrantFilter | null;
 
   readonly oauth: { readonly refreshedAt: number | null } | null;

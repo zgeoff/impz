@@ -489,3 +489,58 @@ test('it records one row with the upstream’s status when the upstream does not
     reason: null,
   });
 });
+
+test('it adds the token to the handshake and drops the guest’s copy', async () => {
+  const plan = await planUpgrade(
+    {
+      impId: 'imp-1',
+      impName: 'dev',
+      host: 'realtime.example.com',
+      findCredential: () => Promise.resolve(buildMockCredential({ identity: true })),
+      resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+      mintIdentityToken: (audience) => `token-for-${audience}`,
+      recordAudit: () => {},
+    },
+    new Request('https://realtime.example.com/socket', {
+      headers: {
+        host: 'realtime.example.com',
+        connection: 'Upgrade',
+        upgrade: 'websocket',
+        'imp-identity': 'forged',
+        imp_identity: 'forged-too',
+      },
+    }),
+  );
+
+  invariant(plan.kind === 'open');
+
+  expect([...plan.headers].filter(([name]) => name.includes('identity'))).toStrictEqual([
+    ['imp-identity', 'token-for-realtime.example.com'],
+  ]);
+});
+
+test('it drops the guest’s copy and adds no token for a rule without identity', async () => {
+  const plan = await planUpgrade(
+    {
+      impId: 'imp-1',
+      impName: 'dev',
+      host: 'realtime.example.com',
+      findCredential: () => Promise.resolve(buildMockCredential({ identity: false })),
+      resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+      mintIdentityToken: () => 'token',
+      recordAudit: () => {},
+    },
+    new Request('https://realtime.example.com/socket', {
+      headers: {
+        host: 'realtime.example.com',
+        connection: 'Upgrade',
+        upgrade: 'websocket',
+        'imp-identity': 'forged',
+      },
+    }),
+  );
+
+  invariant(plan.kind === 'open');
+
+  expect([...plan.headers].filter(([name]) => name.includes('identity'))).toStrictEqual([]);
+});

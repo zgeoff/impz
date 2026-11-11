@@ -999,3 +999,37 @@ test('it gives up after three drawn ids that each name a snapshot in the pool', 
 
   expect(listed).toMatchObject([{ id: 'cp-aaaaaa', label: 'first' }]);
 });
+
+test('it keeps the imp’s id through a restore of a running imp', async () => {
+  const ctx = await setupTest({ storage: 'xfs' });
+
+  await Bun.write(join(ctx.dataDir, 'images', 'base', 'rootfs.ext4'), 'rootfs');
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'base', digest: 'sha256:base' }));
+
+  const imp = await ctx.impd.imps.createImp({ name: 'dev', image: 'base' });
+
+  await ctx.impd.checkpoints.createCheckpoint('dev', 'v1');
+
+  const restored = await ctx.impd.checkpoints.restoreCheckpoint('dev', 'v1');
+  const record = await readImpByName(ctx.db, 'dev');
+
+  expect(restored.id).toBe(imp.id);
+  expect(record?.id).toBe(imp.id);
+});
+
+test('it gives a fork an id of its own, and leaves the source its id', async () => {
+  const ctx = await setupTest({ storage: 'xfs' });
+
+  await Bun.write(join(ctx.dataDir, 'images', 'base', 'rootfs.ext4'), 'rootfs');
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'base', digest: 'sha256:base' }));
+
+  const source = await ctx.impd.imps.createImp({ name: 'dev', image: 'base' });
+  const forked = await ctx.impd.checkpoints.forkImp({ source: 'dev', name: 'copy' });
+  const record = await readImpByName(ctx.db, 'dev');
+
+  expect(forked.imp.id).not.toBe(source.id);
+  expect(forked.imp.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/u);
+  expect(record?.id).toBe(source.id);
+});

@@ -35,6 +35,7 @@ const FEATURE_GAPS = {
   buildContextUpload: 'has no build context upload',
   destroyIdCheck: 'has no id check on destroy',
   eventCursor: 'has no event cursor',
+  secretIdentity: 'has no identity issuer, or is older than identity tokens',
 } as const satisfies Record<ImpdFeature, string>;
 
 export interface FeatureSource {

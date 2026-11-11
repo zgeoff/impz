@@ -119,6 +119,7 @@ export function createImpClient(options: Readonly<ImpClientOptions>): ImpClient 
     audit: rpc.audit,
     events: rpc.events,
     system: rpc.system,
+    identity: rpc.identity,
     tokens: rpc.tokens,
     oauth: rpc.oauth,
     auth: rpc.auth,

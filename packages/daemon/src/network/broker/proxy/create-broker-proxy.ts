@@ -15,6 +15,7 @@ import type { GrantedRule } from '../../../platform/db/secrets';
 import { openUpstreamSocket } from '../../../platform/http/open-upstream-socket';
 import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import type { NetworkConfig } from '../../network-config';
+import type { Identity } from '../identity/load-or-create-identity';
 import { renderCredential } from '../secrets/connector-kinds';
 import type { SecretFiles } from '../secrets/secret-files';
 import { SECRET_KINDS } from '../secrets/secret-kinds';
@@ -54,6 +55,7 @@ interface BrokerProxyDeps {
   readonly resolveTunnelTarget?: ((host: string, mode: EgressMode) => Promise<string>) | undefined;
   readonly dialTunnel?: ((address: string, port: number) => Socket) | undefined;
   readonly reach: ReachPolicy;
+  readonly identity: Identity | null;
 
   readonly refreshAfterRejection?: ForwardDeps['refreshAfterRejection'] | undefined;
 }
@@ -110,6 +112,7 @@ export function createBrokerProxy(deps: BrokerProxyDeps): BrokerProxy {
       header: granted.rule.header,
       value: renderCredential(granted.rule, credential.value),
       upstream: granted.rule.upstream ?? null,
+      identity: granted.rule.identity === true,
       filter: granted.filter,
       oauth: credential.oauth,
     };
@@ -138,7 +141,11 @@ export function createBrokerProxy(deps: BrokerProxyDeps): BrokerProxy {
     issueLeaf: ca.issueLeaf,
     isLeafDue: (leaf) => ca.isDue(leaf, now()),
     createHandler: (key, connections) => {
+      const mintIdentityToken = (audience: string): string | null =>
+        deps.identity?.mintToken({ id: key.impId, name: key.impName }, audience) ?? null;
+
       const forward = createForwarder({
+        mintIdentityToken,
         impId: key.impId,
         impName: key.impName,
         host: key.host,
@@ -160,6 +167,7 @@ export function createBrokerProxy(deps: BrokerProxyDeps): BrokerProxy {
                 host: key.host,
                 findCredential: readCredential,
                 resolveUpstream: deps.resolveUpstream,
+                mintIdentityToken,
                 recordAudit: writeBudgetedAudit,
                 connections,
                 openUpstreamSocket,

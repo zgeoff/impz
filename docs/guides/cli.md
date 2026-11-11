@@ -30,6 +30,7 @@
 | `image build`, `builds`, `add`, `ls`, `rm` | manage images, and list the builds that run now                           |
 | `template create`, `ls`, `rm`              | make an image from an imp's disk, to create imps from                     |
 | `secret add`, `ls`, `refresh`, `rm`        | store API tokens in impd, never in a guest; renew OAuth ones              |
+| `identity jwks`, `identity key stage`      | show the keys that verify imp identity tokens, and change the key         |
 | `grant`, `revoke`, `grants`, `audit`       | let an imp use a token through the host-side broker                       |
 | `events [name]`                            | follow impd's events as JSON lines                                        |
 | `mcp --prefix <p>`                         | serve imps to a coding agent as MCP tools over stdio                      |

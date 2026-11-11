@@ -85,6 +85,10 @@ test.each([
   ['impz token key rm'],
   ['impz token whoami'],
   ['impz events'],
+  ['impz identity'],
+  ['impz identity jwks'],
+  ['impz identity key'],
+  ['impz identity key stage'],
   ['impz info'],
   ['impz mcp'],
   ['impz oauth'],
@@ -120,7 +124,7 @@ test('it prints the help of the root with every command and the global flags', a
     .toMatchInlineSnapshot(`
 "Persistent Linux microVMs that sleep when idle and wake on request (impz v<version>)
 
-USAGE impz [OPTIONS] new|ls|rm|start|stop|exec|console|attach|sessions|service|logs|sleep|wake|hold|set|top|url|proxy|cp|policy|expose|unexpose|net|checkpoint|checkpoints|restore|fork|move|disk|gc|db|backup|image|template|secret|grant|revoke|grants|audit|token|events|info|bench|mcp|oauth|login|host|hosts|completion
+USAGE impz [OPTIONS] new|ls|rm|start|stop|exec|console|attach|sessions|service|logs|sleep|wake|hold|set|top|url|proxy|cp|policy|expose|unexpose|net|checkpoint|checkpoints|restore|fork|move|disk|gc|db|backup|image|template|secret|grant|revoke|grants|audit|token|events|identity|info|bench|mcp|oauth|login|host|hosts|completion
 
 OPTIONS
 
@@ -169,6 +173,7 @@ COMMANDS
         audit    Show requests the broker sent with a credential or refused, or calls to impd, newest first
         token    Manage API tokens and their scopes (needs manage)
        events    Follow impd: every imp, then each change, as one JSON object a line
+     identity    The keys that sign the Imp-Identity token of the credential broker
          info    Show impd version, RAM budget and counts, or one imp with its container
         bench    Time creates, wakes and restores on this host at rising concurrency
           mcp    Serve imps to a coding agent as MCP tools over stdio. The guard limits which imps the tools touch; it stops mistakes. For a real limit, run it with a scoped token (impz token new).
@@ -318,6 +323,10 @@ test('it pins the help of every command in the tree', async () => {
     'impz token key rm',
     'impz token whoami',
     'impz events',
+    'impz identity',
+    'impz identity jwks',
+    'impz identity key',
+    'impz identity key stage',
     'impz info',
     'impz bench',
     'impz mcp',

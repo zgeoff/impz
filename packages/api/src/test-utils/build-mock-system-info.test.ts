@@ -74,6 +74,7 @@ test('it builds a default system info', () => {
       buildContextUpload: true,
       destroyIdCheck: true,
       eventCursor: true,
+      secretIdentity: true,
     },
   });
 
@@ -161,6 +162,7 @@ test('it applies overrides on top of the defaults', () => {
       buildContextUpload: true,
       destroyIdCheck: true,
       eventCursor: true,
+      secretIdentity: true,
     },
   });
 });

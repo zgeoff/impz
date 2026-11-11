@@ -112,3 +112,22 @@ test('it passes its extra arguments to curl', async () => {
 
   expect(result.stdout).toBe('done 000');
 });
+
+test('it reaches the proxy on the gateway it was given', async () => {
+  const ctx = await setupTest();
+
+  ctx.refuseWith('403 Forbidden');
+
+  const guest = buildStubBrokerGuest({
+    proxyPort: ctx.proxyPort,
+    caFile: ctx.caFile,
+    address: '127.0.0.6',
+    gateway: '127.0.0.1',
+  });
+
+  await guest.curl('https://api.example.com/x');
+
+  expect(ctx.seen).toStrictEqual([
+    { address: '127.0.0.6', line: 'CONNECT api.example.com:443 HTTP/1.1' },
+  ]);
+});

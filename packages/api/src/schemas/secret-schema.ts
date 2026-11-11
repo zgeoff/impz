@@ -63,6 +63,10 @@ export const METHOD_OVERRIDE_HEADERS: readonly string[] = [
   'x-method-override',
 ];
 
+// The header the broker sets to name the imp to a service. A guest never
+// sends it through a rule, and the broker removes the guest's copies.
+export const IDENTITY_HEADER = 'imp-identity';
+
 export const BrokerRuleSchema = z.object({
   host: BrokerHostSchema,
   header: z
@@ -75,10 +79,21 @@ export const BrokerRuleSchema = z.object({
           message: `must not be ${header}, which overrides the request's method`,
         });
       }
+
+      if (header === IDENTITY_HEADER) {
+        context.addIssue({
+          code: 'custom',
+          message: `must not be ${header}, which the broker sets to name the imp`,
+        });
+      }
     }),
   scheme: z.enum(['bearer', 'basic', 'raw']),
   user: BasicUserSchema.optional(),
   upstream: BrokerUpstreamSchema.optional(),
+
+  // true: the broker adds a signed Imp-Identity token to each request it sends
+  // for this host. Part of the secret's binding.
+  identity: z.literal(true).optional(),
 });
 
 export type BrokerRule = z.infer<typeof BrokerRuleSchema>;

@@ -3,7 +3,7 @@ import { defineConfig } from 'tsdown';
 // @impz/api and @impz/shared are private, so their code and their types go
 // into the bundle.
 export default defineConfig({
-  entry: ['src/index.ts'],
+  entry: { index: 'src/index.ts', identity: 'src/identity/index.ts' },
   format: 'esm',
   platform: 'neutral',
   target: 'es2022',

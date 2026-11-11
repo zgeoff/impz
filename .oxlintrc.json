@@ -96,6 +96,7 @@
           "daemon-vm-templates": ["packages/daemon/src/vm/templates/**"],
           // the broker's folders from the bottom up, with broker-service.ts above them all
           "daemon-broker": ["packages/daemon/src/network/broker/**"],
+          "daemon-broker-identity": ["packages/daemon/src/network/broker/identity/**"],
           "daemon-broker-guest": ["packages/daemon/src/network/broker/guest/**"],
           "daemon-broker-tls": ["packages/daemon/src/network/broker/tls/**"],
           "daemon-broker-secrets": ["packages/daemon/src/network/broker/secrets/**"],
@@ -448,6 +449,18 @@
             "reason": "a vm folder imports only itself and the folders below it: vm-config.ts, files, imps-contract, storage, agent-client, guest-channels, sleep, vmm, memory, watchdog, templates"
           },
           {
+            "name": "daemon-broker-folder-identity",
+            "from": ["daemon-broker-identity"],
+            "ignore": [
+              "**/*.{test,e2e,pebble,headscale}.{ts,tsx}",
+              "**/{test-utils,smoke,mocks}/**",
+              "**/test-setup.ts"
+            ],
+            "to": ["daemon-broker"],
+            "allow": ["daemon-broker-identity"],
+            "reason": "a broker folder imports only itself and the folders below it: identity, guest, tls, secrets, proxy"
+          },
+          {
             "name": "daemon-broker-folder-guest",
             "from": ["daemon-broker-guest"],
             "ignore": [
@@ -457,7 +470,7 @@
             ],
             "to": ["daemon-broker"],
             "allow": ["daemon-broker-guest"],
-            "reason": "a broker folder imports only itself and the folders below it: guest, tls, secrets, proxy"
+            "reason": "a broker folder imports only itself and the folders below it: identity, guest, tls, secrets, proxy"
           },
           {
             "name": "daemon-broker-folder-tls",
@@ -469,7 +482,7 @@
             ],
             "to": ["daemon-broker"],
             "allow": ["daemon-broker-guest", "daemon-broker-tls"],
-            "reason": "a broker folder imports only itself and the folders below it: guest, tls, secrets, proxy"
+            "reason": "a broker folder imports only itself and the folders below it: identity, guest, tls, secrets, proxy"
           },
           {
             "name": "daemon-broker-folder-secrets",
@@ -481,7 +494,7 @@
             ],
             "to": ["daemon-broker"],
             "allow": ["daemon-broker-guest", "daemon-broker-tls", "daemon-broker-secrets"],
-            "reason": "a broker folder imports only itself and the folders below it: guest, tls, secrets, proxy"
+            "reason": "a broker folder imports only itself and the folders below it: identity, guest, tls, secrets, proxy"
           },
           {
             "name": "daemon-broker-folder-proxy",
@@ -493,12 +506,13 @@
             ],
             "to": ["daemon-broker"],
             "allow": [
+              "daemon-broker-identity",
               "daemon-broker-guest",
               "daemon-broker-tls",
               "daemon-broker-secrets",
               "daemon-broker-proxy"
             ],
-            "reason": "a broker folder imports only itself and the folders below it: guest, tls, secrets, proxy"
+            "reason": "a broker folder imports only itself and the folders below it: identity, guest, tls, secrets, proxy"
           }
         ],
         "unzoned": [

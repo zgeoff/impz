@@ -9,6 +9,7 @@ import { admitRequest } from './admit-request';
 import type { Credential } from './admit-request';
 import { buildCredentialedHeaders } from './build-credentialed-headers';
 import { buildEndToEndHeaders } from './build-end-to-end-headers';
+import { findIdentityToken } from './find-identity-token';
 import { isRequestInFilter } from './is-request-in-filter';
 
 export interface Upstream {
@@ -38,6 +39,9 @@ export interface ForwardDeps {
   readonly resolveUpstream: ResolveUpstream;
   readonly recordAudit: (entry: NewAuditEntry) => void;
   readonly fetch?: UpstreamFetch;
+
+  // null: impd has no issuer, so the rule gets no token
+  readonly mintIdentityToken?: (audience: string) => string | null;
   readonly logger?: Pick<Logger, 'warning'>;
 
   readonly refreshAfterRejection?: (
@@ -100,7 +104,7 @@ export function createForwarder(deps: ForwardDeps): (request: Request) => Promis
       try {
         response = await fetchUpstream(`${upstream.origin}${url.pathname}${url.search}`, {
           method: request.method,
-          headers: buildCredentialedHeaders(request.headers, sent),
+          headers: buildCredentialedHeaders(request.headers, sent, findIdentityToken(deps, sent)),
           body,
           redirect: 'manual',
 

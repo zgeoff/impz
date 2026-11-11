@@ -61,6 +61,12 @@ checks the clash and writes the grant in one transaction. A fork copies its sour
 their filters, as far as the forking caller could make them itself
 ([auth](../control/auth.md#scopes)).
 
+## Naming the imp
+
+A secret can ask the broker to name the imp to the service. The terminator then adds a token that
+impd signs, and it removes the guest's own `Imp-Identity` header on every request, so the guest
+cannot claim another imp's identity ([imp identity](./identity.md)).
+
 ## Who gets the proxy
 
 An exec in an imp with a grant gets the proxy and CA variables once impd has written the CA bundle

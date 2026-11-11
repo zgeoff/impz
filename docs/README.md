@@ -68,6 +68,8 @@ How impz is built: the parts, what each one owns, and what holds whatever a call
   tailnet names, SSH and tunnels
 - [The credential broker](./architecture/network/broker.md) — grants, the broker's front port, and
   secrets that never reach a guest
+- [Imp identity](./architecture/network/identity.md) — the signed token that names the imp to a
+  service, its key and the key change
 
 ### Control
 
@@ -115,6 +117,8 @@ How to install, run and use impz.
 - [More than one host](./guides/hosts.md) — placing imps, listing every host, and moving an imp
 - [Credential connectors](./guides/connectors.md) — secrets and grants, and how the broker adds a
   token to a request
+- [Imp identity for services](./guides/imp-identity.md) — the issuer, `--identity`, the key set and
+  what a service checks
 - [Tokens and identities](./guides/tokens.md) — scopes, imp patterns, tokens and tailnet identity
 - [Leases and holds](./guides/leases.md) — who holds an imp awake, and what a RAM refusal names
 - [Private networks](./guides/networks.md) — which imps reach which, and their internal names

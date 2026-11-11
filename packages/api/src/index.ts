@@ -159,6 +159,7 @@ export {
   BROKER_ENV_NAMES,
   BrokerRuleSchema,
   GrantFilterSchema,
+  IDENTITY_HEADER,
   METHOD_OVERRIDE_HEADERS,
   OAuthConfigSchema,
   SecretEnvSchema,
@@ -168,6 +169,16 @@ export {
 } from './schemas/secret-schema';
 
 export { SECRET_PRESETS } from './schemas/secret-presets';
+
+export {
+  IDENTITY_LEEWAY_S,
+  IDENTITY_TOKEN_LIFE_S,
+  IdentityIssuerSchema,
+  IdentityStageKeyInputSchema,
+  IdentityTrustDocumentSchema,
+} from './schemas/identity-schema';
+
+export type { IdentityJwk, IdentityTrustDocument } from './schemas/identity-schema';
 
 export {
   SecretAddKindSchema,

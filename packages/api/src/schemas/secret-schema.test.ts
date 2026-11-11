@@ -742,3 +742,43 @@ test('#GrantSchema accepts a grant without a filter', () => {
 
   expect(GrantSchema.safeParse(payload).data).toStrictEqual(payload);
 });
+
+test('#BrokerRuleSchema keeps identity true', () => {
+  const result = BrokerRuleSchema.safeParse({
+    host: 'tasks.imp.internal',
+    header: 'authorization',
+    scheme: 'bearer',
+    identity: true,
+  });
+
+  expect(result.data).toStrictEqual({
+    host: 'tasks.imp.internal',
+    header: 'authorization',
+    scheme: 'bearer',
+    identity: true,
+  });
+});
+
+test('#BrokerRuleSchema rejects identity false, which a rule leaves out instead', () => {
+  const result = BrokerRuleSchema.safeParse({
+    host: 'tasks.imp.internal',
+    header: 'authorization',
+    scheme: 'bearer',
+    identity: false,
+  });
+
+  expect(result.error?.issues).toPartiallyContain({ path: ['identity'] });
+});
+
+test('#BrokerRuleSchema rejects the header imp-identity, which the broker sets itself', () => {
+  const result = BrokerRuleSchema.safeParse({
+    host: 'tasks.imp.internal',
+    header: 'imp-identity',
+    scheme: 'raw',
+  });
+
+  expect(result.error?.issues).toPartiallyContain({
+    path: ['header'],
+    message: 'must not be imp-identity, which the broker sets to name the imp',
+  });
+});

@@ -167,6 +167,8 @@ if (isDefinedError(error) && error.code === 'CONFLICT' && error.data.reason === 
 }
 ```
 
+A service that checks [imp identity](./imp-identity.md) tokens imports `@impz/client/identity`.
+
 ## Features
 
 An older impd drops an input field it does not know, and the call succeeds without it. Check its
@@ -179,6 +181,7 @@ features before you send a field that a later impd added:
 | `require` on `openExec`                           | `execRequire`     | 0.30.0 |
 | `secretFiles`, `removeSecretFiles` on `system.gc` | `secretFilesGc`   | 0.31.0 |
 | `id` on `imps.destroy`                            | `destroyIdCheck`  | 6.10.0 |
+| `identity.jwks`, `identity.stageKey`              | `secretIdentity`  | 6.12.0 |
 
 `requireFeatures` reads the flags once, from `system.features`, or from `system.info` on an impd
 older than it. It throws a `MissingFeatureError` for the first feature missing, with what that impd

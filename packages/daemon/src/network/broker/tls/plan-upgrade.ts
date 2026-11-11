@@ -1,6 +1,7 @@
 import { admitRequest } from './admit-request';
 import type { AdmitDeps } from './admit-request';
 import { buildCredentialedHeaders } from './build-credentialed-headers';
+import { findIdentityToken } from './find-identity-token';
 import type { ResolveUpstream, Upstream } from './forward-request';
 
 export interface ConnectionAudit {
@@ -41,6 +42,7 @@ const HANDSHAKE_HEADERS = [
 
 export interface UpgradeDeps extends AdmitDeps {
   readonly resolveUpstream: ResolveUpstream;
+  readonly mintIdentityToken?: (audience: string) => string | null;
 }
 
 export async function planUpgrade(deps: UpgradeDeps, request: Request): Promise<UpgradePlan> {
@@ -61,7 +63,11 @@ export async function planUpgrade(deps: UpgradeDeps, request: Request): Promise<
       ? deps.resolveUpstream(deps.host)
       : { origin: credential.upstream, ca: null };
 
-  const headers = buildCredentialedHeaders(request.headers, credential);
+  const headers = buildCredentialedHeaders(
+    request.headers,
+    credential,
+    findIdentityToken(deps, credential),
+  );
 
   // the upstream client makes its own handshake, offering the guest's
   // subprotocols

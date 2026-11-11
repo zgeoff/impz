@@ -8,6 +8,9 @@ interface StubGuestOptions {
   readonly proxyPort: number;
   readonly caFile: string;
   readonly address: string;
+
+  // the gateway the guest reaches the broker on: one below the guest's address
+  readonly gateway?: string;
 }
 
 export function buildStubBrokerGuest(options: Readonly<StubGuestOptions>) {
@@ -22,7 +25,7 @@ export function buildStubBrokerGuest(options: Readonly<StubGuestOptions>) {
           '--interface',
           options.address,
           '--proxy',
-          `http://127.0.0.1:${String(options.proxyPort)}`,
+          `http://${options.gateway ?? '127.0.0.1'}:${String(options.proxyPort)}`,
 
           // an empty list overrides the NO_PROXY that the test preload sets for every host
           '--noproxy',

@@ -16,6 +16,14 @@ interface SeenRequest {
   readonly authorization: string | null;
 }
 
+interface SeenIdentity {
+  readonly path: string;
+
+  // Headers joins repeated lines with a comma, which a verifier refuses, so a
+  // second Imp-Identity line cannot pass for one token.
+  readonly value: string | null;
+}
+
 interface StubOAuth {
   readonly clientId: string;
 
@@ -37,6 +45,7 @@ export interface StubUpstream {
 
   readonly plainOrigin: string;
   readonly seen: readonly SeenRequest[];
+  readonly seenIdentities: readonly SeenIdentity[];
 
   readonly createRepo: (path: string) => Promise<string>;
 
@@ -49,6 +58,7 @@ export async function startStubUpstream(address: string, token: string): Promise
   const expected = `Basic ${Buffer.from(`x-access-token:${token}`).toString('base64')}`;
   const bearer = `Bearer ${token}`;
   const seen: SeenRequest[] = [];
+  const seenIdentities: SeenIdentity[] = [];
 
   mkdirSync(repos);
 
@@ -139,6 +149,11 @@ export async function startStubUpstream(address: string, token: string): Promise
       authorization: request.headers.get('authorization'),
     });
 
+    seenIdentities.push({
+      path: url.pathname,
+      value: request.headers.get('imp-identity'),
+    });
+
     if (url.pathname === '/oauth/token' && request.method === 'POST') {
       return handleToken(request);
     }
@@ -187,6 +202,7 @@ export async function startStubUpstream(address: string, token: string): Promise
     caPem: certificates.caPem,
     plainOrigin: `http://${address}:${String(plainServer.port)}`,
     seen,
+    seenIdentities,
     createRepo: async (path) => {
       const repo = join(repos, path);
 

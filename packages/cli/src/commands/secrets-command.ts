@@ -32,6 +32,7 @@ interface BindingArgs {
   readonly scheme?: string | undefined;
   readonly user?: string | undefined;
   readonly upstream?: string | undefined;
+  readonly identity?: boolean | undefined;
   readonly env?: string | undefined;
   readonly tokenUrl?: string | undefined;
   readonly clientId?: string | undefined;
@@ -41,6 +42,10 @@ interface BindingArgs {
 function buildSecretBinding(args: BindingArgs): SecretBinding {
   if ((args.kind === undefined) === (args.preset === undefined)) {
     throw new UsageError('give one of --kind and --preset');
+  }
+
+  if (args.identity === true && (args.preset !== undefined || isPresetKind(args.kind))) {
+    throw new UsageError('--identity needs --kind static or oauth; a preset takes none');
   }
 
   const rules = buildRuleFlags(args);
@@ -66,6 +71,10 @@ function buildSecretBinding(args: BindingArgs): SecretBinding {
   return parsed.data;
 }
 
+function isPresetKind(kind: SecretAddKind | undefined): boolean {
+  return kind !== undefined && (SecretPresetSchema.options as readonly string[]).includes(kind);
+}
+
 function isNewBinding(binding: Readonly<SecretBinding>): boolean {
   return (
     binding.kind === undefined ||
@@ -74,8 +83,10 @@ function isNewBinding(binding: Readonly<SecretBinding>): boolean {
   );
 }
 
-function buildRuleFlags(args: BindingArgs): Record<string, string | undefined>[] | undefined {
-  const given = [args.hosts, args.header, args.scheme, args.user, args.upstream];
+function buildRuleFlags(
+  args: BindingArgs,
+): Record<string, string | true | undefined>[] | undefined {
+  const given = [args.hosts, args.header, args.scheme, args.user, args.upstream, args.identity];
 
   if (given.every((arg) => arg === undefined)) {
     return undefined;
@@ -96,6 +107,7 @@ function buildRuleFlags(args: BindingArgs): Record<string, string | undefined>[]
     scheme,
     user: args.user,
     upstream: args.upstream,
+    identity: args.identity === true ? true : undefined,
   }));
 }
 
@@ -120,6 +132,7 @@ const FIELD_FLAGS: Readonly<Record<string, string>> = {
   scheme: '--scheme',
   user: '--user',
   upstream: '--upstream',
+  identity: '--identity',
   tokenUrl: '--token-url',
   clientId: '--client-id',
   tokenFormat: '--token-format',
@@ -202,6 +215,11 @@ const addCommand = defineCommand({
       description:
         'static, one host: send its requests here (http or https origin) instead of the host; the credential goes there',
     },
+    identity: {
+      type: 'boolean',
+      description:
+        'static, oauth: the broker adds a signed Imp-Identity token that names the imp; needs IMP_IDENTITY_ISSUER on impd',
+    },
     env: {
       type: 'string',
       description:
@@ -216,7 +234,8 @@ const addCommand = defineCommand({
     replace: { type: 'boolean', description: 'replace the value of a secret by that name' },
     rebind: {
       type: 'boolean',
-      description: 'with --replace: let the kind or hosts change, and revoke it from every imp',
+      description:
+        'with --replace: let the kind, hosts or --identity change, and revoke it from every imp',
     },
     json: jsonArg,
   },
@@ -244,6 +263,9 @@ const addCommand = defineCommand({
         }),
         ...(ctx.values.upstream !== undefined && {
           secretUpstream: 'send the credential to the host itself',
+        }),
+        ...(ctx.values.identity === true && {
+          secretIdentity: 'send the service no token that names the imp',
         }),
         ...(isOAuth && { oauthSecrets: 'refuse the oauth kind' }),
         ...(isNewBinding(binding) && {
