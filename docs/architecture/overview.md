@@ -113,8 +113,8 @@ All of impd's state lives in one data directory.
 - **Images and templates.** Each OCI image as one ext4 file, the shared parent of every disk made
   from it ([images](./storage/images.md)), and the snapshots of parked guests that cold boots
   restore ([boot templates](./lifecycle/boot-templates.md)).
-- **Secrets and keys.** The root token, the credential broker's values and CA, the SSH host key and
-  the TLS certificate, each a file only root reads. No backup holds them
+- **Secrets and keys.** The root token, the credential broker's values, CA and identity key, the SSH
+  host key and the TLS certificate, each a file only root reads. No backup holds them
   ([backups](./storage/backups.md)).
 
 The disk is the truth about an imp, and a memory snapshot only ever wakes on the disk it was made
@@ -162,7 +162,8 @@ and the imp boots cold.
 - `storage/`: [storage](./storage/storage.md), [disk space](./storage/disk-space.md),
   [images](./storage/images.md), [backups](./storage/backups.md) and [moves](./storage/moves.md).
 - `network/`: [networking](./network/networking.md), [egress](./network/egress.md),
-  [ingress](./network/ingress.md) and [the credential broker](./network/broker.md).
+  [ingress](./network/ingress.md), [the credential broker](./network/broker.md) and
+  [imp identity](./network/identity.md).
 - `control/`: [the API](./control/api.md) and [auth](./control/auth.md).
 - [Isolation](./isolation.md) and [the host](./host.md) cover the boundaries around every imp.
 - [Durable work](./durable-work.md) covers the event log, operations and reconcilers.
