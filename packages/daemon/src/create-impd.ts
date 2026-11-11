@@ -12,6 +12,7 @@ import { createImpdServices } from './create-impd-services';
 import { createImpdStorage } from './create-impd-storage';
 import type { ImpdStorage } from './create-impd-storage';
 import { createTailnetAccess } from './create-tailnet-access';
+import { createWriteWork } from './create-write-work';
 import { readTailscaleStatus } from './host-net/net/tailscale-status';
 import { loadOrCreateToken } from './identity/token';
 import { createBackupService } from './imp-ops/backup/backup-service';
@@ -193,21 +194,7 @@ async function startImpdParts(
 
   plan.imps = imps;
 
-  const writeWork = new Set<Promise<unknown>>();
-
-  const runWriteWork = async (work: Promise<unknown> | undefined): Promise<void> => {
-    if (work === undefined) {
-      return;
-    }
-
-    writeWork.add(work);
-
-    try {
-      await work;
-    } finally {
-      writeWork.delete(work);
-    }
-  };
+  const writeWork = createWriteWork();
 
   const unsubscribeWrites = db.log.subscribe((event) => {
     if (isUsageChange(event)) {
@@ -215,9 +202,9 @@ async function startImpdParts(
     }
 
     if (isImpSetChange(event)) {
-      void runWriteWork(proxyHolder.proxy?.syncListeners());
-      void runWriteWork(broker.applyGrants());
-      void runWriteWork(namesHolder.names?.trySync());
+      writeWork.run(proxyHolder.proxy?.syncListeners());
+      writeWork.run(broker.applyGrants());
+      writeWork.run(namesHolder.names?.trySync());
     }
   });
 
@@ -225,7 +212,7 @@ async function startImpdParts(
     stop: async (): Promise<void> => {
       unsubscribeWrites();
 
-      await Promise.allSettled(writeWork);
+      await writeWork.stop();
     },
   };
 
