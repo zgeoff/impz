@@ -44,8 +44,8 @@ the host to that release, so pick the release in the image you take it from:
 <!-- x-release-please-start-version -->
 
 ```sh
-podman pull ghcr.io/zgeoff/imp-host:6.11.5
-podman run --rm ghcr.io/zgeoff/imp-host:6.11.5 tar -cf - -C /usr/local/share/imp deploy | tar -xf -
+podman pull ghcr.io/zgeoff/imp-host:6.11.6
+podman run --rm ghcr.io/zgeoff/imp-host:6.11.6 tar -cf - -C /usr/local/share/imp deploy | tar -xf -
 bash deploy/upgrade.sh
 ```
 
