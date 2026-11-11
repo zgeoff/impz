@@ -1,5 +1,12 @@
 # Changelog
 
+## [6.11.6](https://github.com/zgeoff/impz/compare/v6.11.5...v6.11.6) (2026-11-11)
+
+
+### Bug Fixes
+
+* **daemon:** log a sync after a database write that fails ([#686](https://github.com/zgeoff/impz/issues/686)) ([03dc0a5](https://github.com/zgeoff/impz/commit/03dc0a5734e48e0e95a1c4aa34f7f48ce4aca1d2))
+
 ## [6.11.5](https://github.com/zgeoff/impz/compare/v6.11.4...v6.11.5) (2026-11-09)
 
 ### Bug Fixes
