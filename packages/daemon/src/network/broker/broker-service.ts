@@ -179,6 +179,7 @@ export async function createBroker(deps: BrokerDeps): Promise<Broker> {
           directory: join(config.dataDir, 'broker', 'identity'),
           issuer: config.identityIssuer,
           now,
+          timer: deps.timer,
         });
 
   await removeStaleSecretFiles(db, files, new Date(now()));
@@ -444,6 +445,7 @@ export async function createBroker(deps: BrokerDeps): Promise<Broker> {
 
     stop: async () => {
       unwatch();
+      identity?.stop();
 
       await refresher.stop();
       await proxy.stop();

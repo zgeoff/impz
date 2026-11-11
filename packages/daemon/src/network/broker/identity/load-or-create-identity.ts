@@ -11,6 +11,7 @@ import {
 import { join } from 'node:path';
 import type { IdentityTrustDocument } from '@impz/api';
 import * as z from 'zod';
+import type { TickerTimer } from '../../../platform/process/ticker';
 import { buildIdentityToken } from './build-identity-token';
 import type { IdentityImp } from './build-identity-token';
 import { buildIdentityKey } from './identity-key';
@@ -30,12 +31,16 @@ export interface Identity {
 
   // A staged change has no cancel: services already hold the `retire` entry.
   readonly stageKey: (atSeconds: number) => StageOutcome;
+
+  // Cancels the timer that applies a staged switch.
+  readonly stop: () => void;
 }
 
 export interface IdentityDeps {
   readonly directory: string;
   readonly issuer: string;
   readonly now: () => number;
+  readonly timer?: TickerTimer | undefined;
 }
 
 interface StagedKey {
@@ -43,9 +48,12 @@ interface StagedKey {
   readonly switchAtSeconds: number;
 }
 
+// A timer longer than this fires at once, so a far switch time waits in steps.
+const MAX_TIMER_MS = 2 ** 30;
+
 // impd signs with exactly one key at any time. The next key's private half
 // sits on disk from the stage on, and at its switch time replaces key.pem,
-// which deletes the old private key.
+// which deletes the old private key. A timer applies the switch on an idle impd.
 export function loadOrCreateIdentity(deps: Readonly<IdentityDeps>): Identity {
   const paths = {
     key: join(deps.directory, 'key.pem'),
@@ -62,11 +70,13 @@ export function loadOrCreateIdentity(deps: Readonly<IdentityDeps>): Identity {
   };
 
   const readNowSeconds = (): number => Math.floor(deps.now() / 1000);
+  const timer = deps.timer ?? startRuntimeTimer;
+  const timerState: { cancel: (() => void) | null } = { cancel: null };
 
-  // Run before each use, so a switch that came due while impd was down or idle
-  // happens before anything is signed or printed.
-  const applyDueSwitch = (): void => {
-    if (state.next === null || readNowSeconds() < state.next.switchAtSeconds) {
+  // The caller reads the clock once and passes the value in, so the key that
+  // is current and the time a token carries come from the same instant.
+  const applyDueSwitch = (nowSeconds: number): void => {
+    if (state.next === null || nowSeconds < state.next.switchAtSeconds) {
       return;
     }
 
@@ -77,37 +87,64 @@ export function loadOrCreateIdentity(deps: Readonly<IdentityDeps>): Identity {
     state.next = null;
   };
 
-  applyDueSwitch();
+  const scheduleSwitch = (): void => {
+    timerState.cancel?.();
+    timerState.cancel = null;
+
+    if (state.next === null) {
+      return;
+    }
+
+    const remainingMs = Math.max(state.next.switchAtSeconds * 1000 - deps.now(), 1);
+
+    timerState.cancel = timer(
+      'identity-key-switch',
+      () => {
+        applyDueSwitch(readNowSeconds());
+        scheduleSwitch();
+
+        return Promise.resolve();
+      },
+      Math.min(remainingMs, MAX_TIMER_MS),
+    );
+  };
+
+  applyDueSwitch(readNowSeconds());
+  scheduleSwitch();
 
   return {
     issuer: deps.issuer,
 
     mintToken: (imp, audience) => {
-      applyDueSwitch();
+      const nowSeconds = readNowSeconds();
+
+      applyDueSwitch(nowSeconds);
 
       return buildIdentityToken({
         key: state.current,
         issuer: deps.issuer,
         imp,
         audience,
-        nowSeconds: readNowSeconds(),
+        nowSeconds,
       });
     },
 
     readDocument: () => {
-      applyDueSwitch();
+      applyDueSwitch(readNowSeconds());
 
       return buildDocument(deps.issuer, state.current, state.next);
     },
 
     stageKey: (atSeconds) => {
-      applyDueSwitch();
+      const nowSeconds = readNowSeconds();
+
+      applyDueSwitch(nowSeconds);
 
       if (state.next !== null) {
         return { kind: 'already-staged' };
       }
 
-      if (atSeconds <= readNowSeconds()) {
+      if (atSeconds <= nowSeconds) {
         return { kind: 'not-in-future' };
       }
 
@@ -121,7 +158,14 @@ export function loadOrCreateIdentity(deps: Readonly<IdentityDeps>): Identity {
 
       state.next = { key, switchAtSeconds: atSeconds };
 
+      scheduleSwitch();
+
       return { kind: 'staged' };
+    },
+
+    stop: () => {
+      timerState.cancel?.();
+      timerState.cancel = null;
     },
   };
 }
@@ -160,6 +204,22 @@ function readStagedKey(paths: Readonly<Record<'next' | 'nextTime', string>>): St
   return {
     key: buildIdentityKey(createPrivateKey(readFileSync(paths.next, 'utf8'))),
     switchAtSeconds: time.switchAtSeconds,
+  };
+}
+
+function startRuntimeTimer(
+  _label: string,
+  run: () => Promise<void>,
+  durationMs: number,
+): () => void {
+  const handle = setTimeout(() => {
+    void run();
+  }, durationMs);
+
+  handle.unref();
+
+  return () => {
+    clearTimeout(handle);
   };
 }
 

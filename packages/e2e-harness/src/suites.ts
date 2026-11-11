@@ -121,6 +121,14 @@ export const SUITES: readonly Suite[] = [
     images: ['base'],
     journeys: ['connectors-github', 'connectors-custom'],
   },
+  {
+    name: 'identity',
+    prefix: 'e2e-id-',
+    images: ['base'],
+
+    // Without an issuer impd runs the broker with identity off.
+    settings: () => ({ IMP_IDENTITY_ISSUER: 'e2e-host' }),
+  },
   { name: 'dashboard', prefix: 'e2e-dash-', images: ['e2e-tiny'] },
   { name: 'https', prefix: 'e2e-tls-', images: ['e2e-tiny'] },
   { name: 'tokens', prefix: 'e2e-tok-', images: ['e2e-tiny'] },
@@ -289,7 +297,7 @@ export const FAST_GROUPS: readonly (readonly string[])[] = [
     'socket',
   ],
   ['sleep', 'reverse', 'jail', 'huge-pages'],
-  ['mcp', 'mcp-oauth', 'proxy', 'tokens', 'inner', 'memory', 'ksm'],
+  ['mcp', 'mcp-oauth', 'proxy', 'identity', 'tokens', 'inner', 'memory', 'ksm'],
   ['tailscale', 'egress', 'cpu', 'moves-tailnet'],
 ];
 

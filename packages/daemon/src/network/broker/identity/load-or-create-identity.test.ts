@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import type { IdentityTrustDocument } from '@impz/api';
 import { verifyImpIdentity } from '@impz/client/identity';
 import { parseStubJwtSegment } from '../../../test-utils/network/parse-stub-jwt-segment';
+import { buildStubTickerTimer } from '../../../test-utils/platform/build-stub-ticker-timer';
 import { loadOrCreateIdentity } from './load-or-create-identity';
 
 async function setupTest() {
@@ -15,11 +16,25 @@ async function setupTest() {
 
   onTestFinished(() => rm(root, { recursive: true, force: true }));
 
-  const clock = { nowMs: startMs };
+  // Each read of the clock moves it on by stepMs, which a test sets to put a
+  // switch time between two reads.
+  const clock = { nowMs: startMs, stepMs: 0 };
+  const tickers = buildStubTickerTimer();
   const directory = join(root, 'broker', 'identity');
 
   const load = () =>
-    loadOrCreateIdentity({ directory, issuer: 'imp-host-a', now: () => clock.nowMs });
+    loadOrCreateIdentity({
+      directory,
+      issuer: 'imp-host-a',
+      now: () => {
+        const readMs = clock.nowMs;
+
+        clock.nowMs += clock.stepMs;
+
+        return readMs;
+      },
+      timer: tickers.timer,
+    });
 
   const verify = (
     token: string,
@@ -31,6 +46,7 @@ async function setupTest() {
   return {
     directory,
     clock,
+    tickers,
     load,
     verify,
     imp: { id: '0192f3a1-7b2c-7d4e-8f10-3a5b6c7d8e9f', name: 'dev-7f3a' },
@@ -225,6 +241,85 @@ test('it deletes the old private key at the switch time and prints the new key o
   expect(existsSync(join(ctx.directory, 'next.json'))).toBeFalse();
   expect(document.keys).toHaveLength(1);
   expect(document.retire).toStrictEqual([]);
+});
+
+test('it deletes the old private key at the switch time with no call to the identity', async () => {
+  const ctx = await setupTest();
+
+  const identity = ctx.load();
+  const switchAt = ctx.startSeconds + 600;
+
+  identity.stageKey(switchAt);
+
+  const newPem = readFileSync(join(ctx.directory, 'next.pem'), 'utf8');
+
+  ctx.clock.nowMs = switchAt * 1000;
+
+  await ctx.tickers.fire('identity-key-switch');
+
+  expect(readFileSync(join(ctx.directory, 'key.pem'), 'utf8')).toBe(newPem);
+  expect(existsSync(join(ctx.directory, 'next.pem'))).toBeFalse();
+  expect(ctx.tickers.readDelays()).toStrictEqual({});
+});
+
+test('it waits for the switch time in a timer that ends at that time', async () => {
+  const ctx = await setupTest();
+
+  ctx.load().stageKey(ctx.startSeconds + 600);
+
+  expect(ctx.tickers.readDelays()).toStrictEqual({ 'identity-key-switch': 600_000 });
+});
+
+test('it waits in steps for a switch time further off than a timer allows', async () => {
+  const ctx = await setupTest();
+
+  const identity = ctx.load();
+  const switchAt = ctx.startSeconds + 20 * 86_400;
+
+  identity.stageKey(switchAt);
+
+  const waits = ctx.tickers.readDelays()['identity-key-switch'] ?? 0;
+
+  ctx.clock.nowMs += waits;
+
+  await ctx.tickers.fire('identity-key-switch');
+
+  expect(ctx.tickers.readDelays()).toStrictEqual({
+    'identity-key-switch': switchAt * 1000 - ctx.clock.nowMs,
+  });
+});
+
+test('it cancels the switch timer when it stops', async () => {
+  const ctx = await setupTest();
+
+  const identity = ctx.load();
+
+  identity.stageKey(ctx.startSeconds + 600);
+  identity.stop();
+
+  expect(ctx.tickers.readDelays()).toStrictEqual({});
+});
+
+test('it signs a token that its verifier accepts when the clock crosses the switch time during the call', async () => {
+  const ctx = await setupTest();
+
+  const identity = ctx.load();
+  const switchAt = ctx.startSeconds + 600;
+
+  identity.stageKey(switchAt);
+
+  const document = identity.readDocument();
+
+  ctx.clock.nowMs = switchAt * 1000 - 1;
+  ctx.clock.stepMs = 1;
+
+  const token = identity.mintToken(ctx.imp, 'tasks.imp.internal');
+
+  expect(ctx.verify(token, document, switchAt)).resolves.toStrictEqual({
+    issuer: 'imp-host-a',
+    id: ctx.imp.id,
+    name: ctx.imp.name,
+  });
 });
 
 test('it accepts a new stage once the switch is done', async () => {
