@@ -1,4 +1,5 @@
 import * as z from 'zod';
+import { IdentityIssuerSchema } from './identity-schema';
 import { NameSchema } from './name-schema';
 
 const CountSchema = z.int().nonnegative();
@@ -99,6 +100,10 @@ const SystemFeaturesSchema = z.object({
   // imp holds the name.
   destroyIdCheck: z.boolean().optional(),
 
+  // True on an impd that reads a rule's `identity` and has an issuer. An impd
+  // without it drops the field unread and sends the guest's own header.
+  secretIdentity: z.boolean().optional(),
+
   // An impd without this drops the stream's cursor unread and starts each stream with a snapshot.
   eventCursor: z.boolean().optional(),
 });
@@ -196,6 +201,9 @@ export const SystemInfoSchema = z.object({
   https: HttpsInfoSchema.nullable().optional(),
 
   features: SystemFeaturesSchema.optional(),
+
+  // Left out while identity is off.
+  identity: z.object({ issuer: IdentityIssuerSchema }).optional(),
 
   host: HostInfoSchema.optional(),
 });

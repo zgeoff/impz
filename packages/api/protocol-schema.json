@@ -9291,6 +9291,10 @@
                     "upstream": {
                       "type": "string",
                       "maxLength": 2048
+                    },
+                    "identity": {
+                      "type": "boolean",
+                      "const": true
                     }
                   },
                   "required": [
@@ -9373,6 +9377,10 @@
                     "upstream": {
                       "type": "string",
                       "maxLength": 2048
+                    },
+                    "identity": {
+                      "type": "boolean",
+                      "const": true
                     }
                   },
                   "required": [
@@ -9557,6 +9565,10 @@
                     "upstream": {
                       "type": "string",
                       "maxLength": 2048
+                    },
+                    "identity": {
+                      "type": "boolean",
+                      "const": true
                     }
                   },
                   "required": [
@@ -9636,6 +9648,10 @@
                 },
                 "upstream": {
                   "x-unrepresentable": "transform"
+                },
+                "identity": {
+                  "type": "boolean",
+                  "const": true
                 }
               },
               "required": [
@@ -9820,6 +9836,10 @@
                   },
                   "upstream": {
                     "x-unrepresentable": "transform"
+                  },
+                  "identity": {
+                    "type": "boolean",
+                    "const": true
                   }
                 },
                 "required": [
@@ -10007,6 +10027,10 @@
                 },
                 "upstream": {
                   "x-unrepresentable": "transform"
+                },
+                "identity": {
+                  "type": "boolean",
+                  "const": true
                 }
               },
               "required": [
@@ -14817,6 +14841,9 @@
               "destroyIdCheck": {
                 "type": "boolean"
               },
+              "secretIdentity": {
+                "type": "boolean"
+              },
               "eventCursor": {
                 "type": "boolean"
               }
@@ -14824,6 +14851,19 @@
             "required": [
               "sessionOffsets",
               "leases"
+            ],
+            "additionalProperties": false
+          },
+          "identity": {
+            "type": "object",
+            "properties": {
+              "issuer": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9._-]{1,128}$"
+              }
+            },
+            "required": [
+              "issuer"
             ],
             "additionalProperties": false
           },
@@ -15004,6 +15044,9 @@
                 "type": "boolean"
               },
               "destroyIdCheck": {
+                "type": "boolean"
+              },
+              "secretIdentity": {
                 "type": "boolean"
               },
               "eventCursor": {
@@ -15195,6 +15238,205 @@
           "impVersion",
           "createdAt",
           "integrity"
+        ],
+        "additionalProperties": false
+      },
+      "stream": false
+    },
+    "identity.jwks": {
+      "input": {},
+      "output": {
+        "type": "object",
+        "properties": {
+          "issuer": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._-]{1,128}$"
+          },
+          "keys": {
+            "readOnly": true,
+            "minItems": 1,
+            "maxItems": 2,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kty": {
+                  "type": "string",
+                  "const": "EC"
+                },
+                "crv": {
+                  "type": "string",
+                  "const": "P-256"
+                },
+                "x": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_-]+$"
+                },
+                "y": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_-]+$"
+                },
+                "kid": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "alg": {
+                  "type": "string",
+                  "const": "ES256"
+                },
+                "use": {
+                  "type": "string",
+                  "const": "sig"
+                }
+              },
+              "required": [
+                "kty",
+                "crv",
+                "x",
+                "y",
+                "kid",
+                "alg",
+                "use"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "retire": {
+            "readOnly": true,
+            "maxItems": 1,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kid": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "at": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "kid",
+                "at"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "issuer",
+          "keys",
+          "retire"
+        ],
+        "additionalProperties": false
+      },
+      "stream": false
+    },
+    "identity.stageKey": {
+      "input": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "at"
+        ]
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "issuer": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._-]{1,128}$"
+          },
+          "keys": {
+            "readOnly": true,
+            "minItems": 1,
+            "maxItems": 2,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kty": {
+                  "type": "string",
+                  "const": "EC"
+                },
+                "crv": {
+                  "type": "string",
+                  "const": "P-256"
+                },
+                "x": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_-]+$"
+                },
+                "y": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_-]+$"
+                },
+                "kid": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "alg": {
+                  "type": "string",
+                  "const": "ES256"
+                },
+                "use": {
+                  "type": "string",
+                  "const": "sig"
+                }
+              },
+              "required": [
+                "kty",
+                "crv",
+                "x",
+                "y",
+                "kid",
+                "alg",
+                "use"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "retire": {
+            "readOnly": true,
+            "maxItems": 1,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kid": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "at": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "kid",
+                "at"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "issuer",
+          "keys",
+          "retire"
         ],
         "additionalProperties": false
       },

@@ -13,6 +13,10 @@ import { CheckpointSchema } from '../schemas/checkpoint-schema';
 import { EmptySchema } from '../schemas/empty-schema';
 import { EventCursorSchema, EventPageSchema, ImpEventSchema } from '../schemas/event-schema';
 import { FileContentSchema, FilePathSchema } from '../schemas/file-schema';
+import {
+  IdentityStageKeyInputSchema,
+  IdentityTrustDocumentSchema,
+} from '../schemas/identity-schema';
 import { ImageBuildRunSchema } from '../schemas/image-build-run-schema';
 import { ImageOpEventSchema } from '../schemas/image-op-event-schema';
 import { ImageRefSchema } from '../schemas/image-ref-schema';
@@ -463,6 +467,16 @@ export const callerContract = {
       .meta(ACCESS.manageHost)
       .input(z.object({ name: NameSchema.optional() }))
       .output(DatabaseCopySchema),
+  },
+
+  identity: {
+    // public keys only
+    jwks: base.meta(ACCESS.readAny).output(IdentityTrustDocumentSchema),
+
+    stageKey: base
+      .meta(ACCESS.manageHost)
+      .input(IdentityStageKeyInputSchema)
+      .output(IdentityTrustDocumentSchema),
   },
 
   oauth: {
