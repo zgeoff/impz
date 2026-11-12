@@ -13,7 +13,7 @@
       "@balena/dockerignore": "1.0.2",
       "@better-auth/mcp": "1.7.15",
       "@better-auth/oauth-provider": "1.7.15",
-      "@bufbuild/protobuf": "2.16.0",
+      "@bufbuild/protobuf": "2.17.0",
       "@commitlint/cli": "21.2.4",
       "@faker-js/faker": "10.6.0",
       "@logtape/logtape": "2.4.2",
