@@ -137,7 +137,9 @@ function keepVerified(
   response: Response,
   reverify: Readonly<Reverify>,
 ): Response {
-  const bearer = /^Bearer (?<token>\S+)$/v.exec(request.headers.get('authorization') ?? '')
+  // The shared adapter reads the scheme in any case, so a stream it let through under `bearer`
+  // must be checked too.
+  const bearer = /^Bearer (?<token>\S+)$/iv.exec(request.headers.get('authorization') ?? '')
     ?.groups?.['token'];
 
   const isStream = response.headers.get('content-type')?.startsWith('text/event-stream') ?? false;

@@ -509,92 +509,95 @@ test('it refuses /mcp to a revoked grant’s session', async () => {
   expect(after.status).toBe(401);
 });
 
-test('it ends an open tool call stream once another process revokes its grant', async () => {
-  const ctx = await setupTest();
+test.each([['Bearer'], ['bearer']])(
+  'it ends an open tool call stream once another process revokes its grant, with the scheme %s',
+  async (scheme) => {
+    const ctx = await setupTest();
 
-  const guest = buildStubExecGuest();
-  const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
+    const guest = buildStubExecGuest();
+    const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
 
-  await Bun.write(buildImagePaths(ctx.dataDir, image.digest).rootfs, 'rootfs');
+    await Bun.write(buildImagePaths(ctx.dataDir, image.digest).rootfs, 'rootfs');
 
-  await createImage(ctx.db, image);
+    await createImage(ctx.db, image);
 
-  await ctx.client.imps.create({ name: 'box' });
+    await ctx.client.imps.create({ name: 'box' });
 
-  const boxImp = await readImpByName(ctx.db, 'box');
+    const boxImp = await readImpByName(ctx.db, 'box');
 
-  invariant(boxImp);
+    invariant(boxImp);
 
-  const boxAgent = await startStubExecAgent(
-    buildImpPaths(ctx.dataDir, boxImp.id).vsockSocket,
-    guest,
-  );
+    const boxAgent = await startStubExecAgent(
+      buildImpPaths(ctx.dataDir, boxImp.id).vsockSocket,
+      guest,
+    );
 
-  ctx.stack.defer(() => {
-    boxAgent.close();
-  });
+    ctx.stack.defer(() => {
+      boxAgent.close();
+    });
 
-  const tokens = await ctx.seed.grant({ scope: 'exec', imps: ['*'] });
+    const tokens = await ctx.seed.grant({ scope: 'exec', imps: ['*'] });
 
-  const handle = createPublicHandler({
-    config: ctx.publicMcp,
-    oauth: ctx.impd.oauth,
-    mcp: ctx.impd.api.publicMcp,
-    reverifyMs: 20,
-  });
+    const handle = createPublicHandler({
+      config: ctx.publicMcp,
+      oauth: ctx.impd.oauth,
+      mcp: ctx.impd.api.publicMcp,
+      reverifyMs: 20,
+    });
 
-  const headers = {
-    host: '127.0.0.1:7171',
-    'content-type': 'application/json',
-    accept: 'application/json, text/event-stream',
-    authorization: `Bearer ${tokens.accessToken}`,
-  };
+    const headers = {
+      host: '127.0.0.1:7171',
+      'content-type': 'application/json',
+      accept: 'application/json, text/event-stream',
+      authorization: `${scheme} ${tokens.accessToken}`,
+    };
 
-  const opened = await handle(
-    new Request('http://127.0.0.1:7171/mcp', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 0,
-        method: 'initialize',
-        params: {
-          protocolVersion: '2025-06-18',
-          capabilities: {},
-          clientInfo: { name: 'test', version: '1.0.0' },
-        },
+    const opened = await handle(
+      new Request('http://127.0.0.1:7171/mcp', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 0,
+          method: 'initialize',
+          params: {
+            protocolVersion: '2025-06-18',
+            capabilities: {},
+            clientInfo: { name: 'test', version: '1.0.0' },
+          },
+        }),
       }),
-    }),
-    null,
-  );
+      null,
+    );
 
-  await opened.text();
+    await opened.text();
 
-  const call = await handle(
-    new Request('http://127.0.0.1:7171/mcp', {
-      method: 'POST',
-      headers: { ...headers, 'mcp-session-id': opened.headers.get('mcp-session-id') ?? '' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'tools/call',
-        params: { name: 'imp_exec', arguments: { name: 'box', command: 'sleepy' } },
+    const call = await handle(
+      new Request('http://127.0.0.1:7171/mcp', {
+        method: 'POST',
+        headers: { ...headers, 'mcp-session-id': opened.headers.get('mcp-session-id') ?? '' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'tools/call',
+          params: { name: 'imp_exec', arguments: { name: 'box', command: 'sleepy' } },
+        }),
       }),
-    }),
-    null,
-  );
+      null,
+    );
 
-  await waitFor(() => {
-    expect(guest.requests).toHaveLength(1);
-  });
+    await waitFor(() => {
+      expect(guest.requests).toHaveLength(1);
+    });
 
-  // A revoke in another process deletes the row and fires no onGrantRevoked here.
-  await ctx.db.deleteFrom('user').where('id', '=', tokens.grantID).execute();
+    // A revoke in another process deletes the row and fires no onGrantRevoked here.
+    await ctx.db.deleteFrom('user').where('id', '=', tokens.grantID).execute();
 
-  const text = await call.text();
+    const text = await call.text();
 
-  expect(text).not.toInclude('"result"');
-});
+    expect(text).not.toInclude('"result"');
+  },
+);
 
 test('it ends the grant a removed token approved, and its running command', async () => {
   const ctx = await setupTest();
