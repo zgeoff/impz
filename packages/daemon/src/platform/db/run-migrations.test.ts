@@ -952,7 +952,7 @@ test('#runMigrations leaves a database the shared OAuth server opens with no set
   await runMigrations(db);
 
   const admin = await openMCPAuthAdmin({
-    database: db.sqlite,
+    database: db,
     scopes: ['read', 'exec', 'manage'],
     tables: { passkey: 'oauth_passkeys', enrollmentToken: 'oauth_enrollment_tokens' },
     clock: { now: Date.now },

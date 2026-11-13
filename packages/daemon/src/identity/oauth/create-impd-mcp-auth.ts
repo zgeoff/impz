@@ -40,7 +40,7 @@ export async function createImpdMcpAuth(deps: Readonly<ImpdMcpAuthDeps>): Promis
   const log = getImpdLogger('oauth');
 
   const options = {
-    database: deps.db.sqlite,
+    database: deps.db,
     scopes: ScopeSchema.options,
     tables: TABLES,
     clock: { now: deps.now },

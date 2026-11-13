@@ -2,6 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import invariant from 'tiny-invariant';
 import { seedOAuthGrant } from '../../test-utils/identity/seed-oauth-grant';
 import { seedTokenOAuthGrant } from '../../test-utils/identity/seed-token-oauth-grant';
+import { buildHeldTransaction } from '../../test-utils/platform/build-held-transaction';
 import { createTestDatabase } from '../../test-utils/platform/create-test-database';
 import { createRevocations } from '../auth/revocations';
 import { loadTokenStore } from '../auth/token-store';
@@ -10,6 +11,7 @@ import { createImpdMcpAuth } from './create-impd-mcp-auth';
 async function setupTest() {
   const database = await createTestDatabase();
 
+  const held = buildHeldTransaction(database.db);
   const revocations = createRevocations();
 
   const grants: { remove: (tokenID: string) => Promise<void> } = {
@@ -26,7 +28,7 @@ async function setupTest() {
   });
 
   const oauth = await createImpdMcpAuth({
-    db: database.db,
+    db: held.db,
     tokens,
     revocations,
     config: { origin: 'https://imp.example', host: 'imp.example', port: 7171 },
@@ -41,7 +43,22 @@ async function setupTest() {
 
   invariant(server);
 
-  return { db: database.db, revocations, tokens, oauth, server };
+  const refresh = (clientID: string, refreshToken: string) =>
+    server.routes.token(
+      new Request(`${server.issuer}${server.paths.machine.token}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'refresh_token',
+          refresh_token: refreshToken,
+          client_id: clientID,
+          resource: server.resource,
+        }),
+      }),
+      { socketAddress: null, connectingIP: null, userAgent: null },
+    );
+
+  return { db: database.db, held, revocations, tokens, oauth, server, refresh };
 }
 
 test('it reads the caller of a grant the owner approved, limited to the imps on the consent page', async () => {
@@ -186,4 +203,38 @@ test('it opens the admin calls alone when impd serves no public route', async ()
     server: null,
     clients: [],
   });
+});
+
+test('it keeps a revoke made while an impd transaction is open, after that transaction rolls back', async () => {
+  const ctx = await setupTest();
+  const grant = await seedOAuthGrant(ctx.server, { scope: 'read', imps: ['*'] });
+
+  await ctx.held.open();
+
+  const revoking = ctx.oauth.admin.grants.revoke(grant.grantID);
+
+  await ctx.held.rollBack();
+
+  await revoking;
+
+  const access = await ctx.server.verify(grant.accessToken);
+
+  expect(access).toBeNull();
+});
+
+test('it keeps a refresh made while an impd transaction is open, after that transaction rolls back', async () => {
+  const ctx = await setupTest();
+  const grant = await seedOAuthGrant(ctx.server, { scope: 'read', imps: ['*'] });
+
+  await ctx.held.open();
+
+  const refreshing = ctx.refresh(grant.clientID, grant.refreshToken);
+
+  await ctx.held.rollBack();
+
+  const answered = await refreshing;
+  const again = await ctx.refresh(grant.clientID, grant.refreshToken);
+
+  expect(answered.status).toBe(200);
+  expect(again.status).toBe(400);
 });
