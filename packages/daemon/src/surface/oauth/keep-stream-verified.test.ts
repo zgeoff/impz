@@ -89,3 +89,20 @@ test('#keepStreamVerified stops checking once its reader cancels', async () => {
     isCancelled: true,
   });
 });
+
+test('#keepStreamVerified stops checking once its source fails', async () => {
+  const ctx = setupTest([]);
+
+  const controller = await ctx.source;
+
+  const read = new Response(ctx.stream).text();
+
+  controller.error(new Error('the source failed'));
+
+  const [outcome] = await Promise.allSettled([read]);
+
+  expect({ outcome, pending: ctx.clock.readPendingMs() }).toStrictEqual({
+    outcome: { status: 'rejected', reason: expect.toBeObject() },
+    pending: [],
+  });
+});

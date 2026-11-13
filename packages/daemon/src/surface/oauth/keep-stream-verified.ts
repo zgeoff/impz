@@ -48,7 +48,10 @@ export function keepStreamVerified(
       arm();
     },
     pull: async (controller) => {
-      const chunk = await reader.read();
+      const chunk = await reader.read().catch((error: unknown) => {
+        stop();
+        throw error;
+      });
 
       if (chunk.done) {
         stop();
