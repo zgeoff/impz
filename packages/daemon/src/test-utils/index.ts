@@ -13,6 +13,7 @@ export { makeStubDroppedCommit } from './imp-ops/make-stub-dropped-commit';
 export { makeStubStalledMovePart } from './imp-ops/make-stub-stalled-move-part';
 export type { MoveHostsOptions } from './imp-ops/create-move-hosts';
 export { buildMockTokenSshKeyRecord } from './identity/build-mock-token-ssh-key-record';
+export { seedUncleanOAuthClient } from './identity/seed-unclean-oauth-client';
 export { buildMockImageUse } from './imps/build-mock-image-use';
 export { buildMockNewImage } from './imps/build-mock-new-image';
 export { buildMockNewImp } from './imps/build-mock-new-imp';

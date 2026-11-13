@@ -1,6 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { faker } from '@faker-js/faker';
-import { startTestImpd } from '@impz/daemon/test-utils';
+import { seedUncleanOAuthClient, startTestImpd } from '@impz/daemon/test-utils';
 import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 
@@ -27,7 +27,11 @@ async function setupTest() {
       env: { IMP_URL: harness.url, IMP_TOKEN: rootToken },
     });
 
-  return { run };
+  return {
+    run,
+    seedUncleanClient: (input: Parameters<typeof seedUncleanOAuthClient>[1]) =>
+      seedUncleanOAuthClient(harness.db, input),
+  };
 }
 
 test('it prints an enrollment token and the page to enter it on', async () => {
@@ -78,4 +82,34 @@ test.each([
   });
 
   expect(result).toStrictEqual({ stdout: '', stderr: `${message}\n`, code: 2 });
+});
+
+test('it refuses a client name that two clients hold, and lists their client IDs', async () => {
+  const ctx = await setupTest();
+
+  await ctx.seedUncleanClient({ clientID: 'impc_tabbed', name: '  Spaced\tOrchard  ' });
+  await ctx.seedUncleanClient({ clientID: 'impc_spaced', name: 'Spaced Orchard' });
+
+  const result = await ctx.run('client', 'rm', 'Spaced Orchard');
+
+  expect(result).toStrictEqual({
+    stdout: '',
+    stderr:
+      'impz: CONFLICT: 2 clients are named Spaced Orchard: impc_tabbed, impc_spaced; name one by its client ID\n',
+    code: 1,
+  });
+});
+
+test('it removes a client by its client ID, and keeps the client whose name cleans alike', async () => {
+  const ctx = await setupTest();
+
+  await ctx.seedUncleanClient({ clientID: 'impc_tabbed', name: '  Spaced\tOrchard  ' });
+  await ctx.seedUncleanClient({ clientID: 'impc_spaced', name: 'Spaced Orchard' });
+  await ctx.run('client', 'rm', 'impc_tabbed');
+
+  const listed = await ctx.run('client', 'ls', '--json');
+
+  expect(JSON.parse(listed.stdout)).toStrictEqual([
+    expect.objectContaining({ clientId: 'impc_spaced', name: 'Spaced Orchard' }),
+  ]);
 });

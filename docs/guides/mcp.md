@@ -279,6 +279,10 @@ Tokens are opaque; impd keeps only their SHA-256. Each grant is one row, which h
 scopes, who approved it and the imps it reaches, with its tokens. A refresh answers with the scope
 the grant holds, for the same resource.
 
+`impz oauth client set` and `impz oauth client rm` take a client ID, or a name that one client
+holds. A database from before impd 7 can hold two names that differ only in whitespace or control
+characters; for those, they refuse the name and list the client IDs, so name the client by its ID.
+
 A grant ends with `impz oauth grant rm <id>`, `impz oauth client rm`, the client's own revocation of
 any of its tokens, or, for a grant an imp token approved, `impz token rm` of that token. Its
 sessions end, its running commands stop as a cancel stops them, its unused exec tickets open

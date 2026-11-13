@@ -1,10 +1,11 @@
 import type { OAuthClient, OAuthGrant } from '@impz/api';
 import { MCPAuthError } from '@zgeoff/mcp-auth';
-import type { ClientView, GrantID, GrantView, PasskeyID } from '@zgeoff/mcp-auth';
+import type { ClientView, GrantID, GrantView, MCPAuthAdmin, PasskeyID } from '@zgeoff/mcp-auth';
 import { toTagged } from '@zgeoff/std';
 import { match } from 'ts-pattern';
 import type { TokenStore } from '../identity/auth/token-store';
 import { pickGrantScope } from '../identity/oauth/grant-limits';
+import { pickOAuthClient } from '../identity/oauth/pick-oauth-client';
 import { ImpdError } from '../platform/errors/impd-error';
 import { buildConflictError, buildNotFoundError } from '../platform/errors/impd-errors';
 import type { RpcImplementer } from './create-implementer';
@@ -29,18 +30,18 @@ export function createOAuthRoutes(os: RpcImplementer, deps: RouterDeps) {
         }),
       ),
       update: os.oauth.clients.update.handler((context) =>
-        withClientErrors(context.input.name, async () => {
-          const updated = await admin.clients.update(
-            context.input.name,
-            context.input.redirectUris,
-          );
+        withClientErrors(context.input.client, async () => {
+          const target = await resolveClient(admin, context.input.client);
+          const updated = await admin.clients.update(target.clientID, context.input.redirectUris);
 
           return toOAuthClient(updated);
         }),
       ),
       delete: os.oauth.clients.delete.handler((context) =>
-        withClientErrors(context.input.name, async () => {
-          await admin.clients.remove(context.input.name);
+        withClientErrors(context.input.client, async () => {
+          const target = await resolveClient(admin, context.input.client);
+
+          await admin.clients.remove(target.clientID);
 
           return {};
         }),
@@ -118,6 +119,27 @@ async function withClientErrors<T>(name: string, run: () => Promise<T>): Promise
       .with('invalid-setup', () => error)
       .exhaustive();
   }
+}
+
+async function resolveClient(admin: MCPAuthAdmin, reference: string): Promise<ClientView> {
+  const clients = await admin.clients.list();
+  const named = await admin.clients.readByName(reference);
+
+  const picked = pickOAuthClient(reference, clients, named);
+
+  return match(picked)
+    .with({ kind: 'found' }, (found) => found.client)
+    .with({ kind: 'missing' }, () => {
+      throw buildNotFoundError('oauth-client', reference);
+    })
+    .with({ kind: 'ambiguous' }, (ambiguous) => {
+      throw buildConflictError(
+        'oauth-client',
+        reference,
+        `${String(ambiguous.clientIDs.length)} clients are named ${reference}: ${ambiguous.clientIDs.join(', ')}; name one by its client ID`,
+      );
+    })
+    .exhaustive();
 }
 
 function toOAuthGrant(

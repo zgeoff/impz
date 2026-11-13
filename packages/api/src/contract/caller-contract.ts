@@ -35,6 +35,7 @@ import { NameInputSchema } from '../schemas/name-input-schema';
 import { NameSchema } from '../schemas/name-schema';
 import { NetworkJoinSchema, NetworkSchema } from '../schemas/network-schema';
 import {
+  OAuthClientReferenceSchema,
   OAuthClientSchema,
   OAuthEnrollmentSchema,
   OAuthGrantSchema,
@@ -486,12 +487,16 @@ export const callerContract = {
         .input(z.object({ name: NameSchema, redirectUris: RedirectUrisSchema }))
         .output(OAuthClientSchema),
 
+      // client: a client ID, or a name that only one client holds
       update: base
         .meta(ACCESS.manageHost)
-        .input(z.object({ name: NameSchema, redirectUris: RedirectUrisSchema }))
+        .input(z.object({ client: OAuthClientReferenceSchema, redirectUris: RedirectUrisSchema }))
         .output(OAuthClientSchema),
 
-      delete: base.meta(ACCESS.manageHost).input(NameInputSchema).output(EmptySchema),
+      delete: base
+        .meta(ACCESS.manageHost)
+        .input(z.object({ client: OAuthClientReferenceSchema }))
+        .output(EmptySchema),
     },
 
     grants: {

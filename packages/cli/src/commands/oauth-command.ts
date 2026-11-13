@@ -13,6 +13,12 @@ import {
 
 const clientArg = { type: 'positional', description: 'client name', required: true } as const;
 
+const clientReferenceArg = {
+  type: 'positional',
+  description: 'client ID, or a name that only one client holds (impz oauth client ls)',
+  required: true,
+} as const;
+
 const redirectArg = {
   type: 'string',
   description: "the client's redirect URIs, matched exactly (comma-separated)",
@@ -36,12 +42,15 @@ const clientAddCommand = defineCommand({
 const clientSetCommand = defineCommand({
   name: 'set',
   description: "Replace a client's redirect URIs; its client ID and grants stay",
-  args: { name: clientArg, 'redirect-uri': redirectArg, json: jsonArg },
+  args: { client: clientReferenceArg, 'redirect-uri': redirectArg, json: jsonArg },
   run: (ctx) =>
     runAction(ctx.extensions.impz, async (client) => {
       const redirectUris = parseRedirectUris(ctx.values['redirect-uri']);
 
-      const updated = await client.oauth.clients.update({ name: ctx.values.name, redirectUris });
+      const updated = await client.oauth.clients.update({
+        client: ctx.values.client,
+        redirectUris,
+      });
 
       ctx.extensions.impz.io.print(formatOutput([updated], ctx.values.json, formatOAuthClients));
     }),
@@ -62,10 +71,10 @@ const clientLsCommand = defineCommand({
 const clientRmCommand = defineCommand({
   name: 'rm',
   description: 'Remove a client; its grants end, and their sessions and commands with them',
-  args: { name: clientArg },
+  args: { client: clientReferenceArg },
   run: (ctx) =>
     runAction(ctx.extensions.impz, async (client) => {
-      await client.oauth.clients.delete({ name: ctx.values.name });
+      await client.oauth.clients.delete({ client: ctx.values.client });
     }),
 });
 

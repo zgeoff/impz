@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import {
   GrantPatternSchema,
+  OAuthClientReferenceSchema,
   OAuthClientSchema,
   OAuthEnrollmentSchema,
   OAuthGrantSchema,
@@ -111,18 +112,31 @@ test('#OAuthClientSchema accepts a client', () => {
   expect(OAuthClientSchema.safeParse(payload).data).toStrictEqual(payload);
 });
 
-test('#OAuthClientSchema rejects a name that is not a valid name', () => {
-  const result = OAuthClientSchema.safeParse({
-    name: 'Claude',
+test('#OAuthClientSchema accepts a stored name that a new client may not take', () => {
+  const payload = {
+    name: 'Spaced Orchard',
     clientId: 'c-123',
     redirectUris: ['https://claude.ai/cb'],
     createdAt: new Date('2026-01-02T03:04:05.000Z'),
-  });
+  };
 
-  expect(result.error?.issues).toPartiallyContain({
-    path: ['name'],
-    message: 'must be a lowercase letter followed by up to 30 lowercase letters, digits or hyphens',
-  });
+  expect(OAuthClientSchema.safeParse(payload).data).toStrictEqual(payload);
+});
+
+test.each(['impc_one', 'conn', 'Spaced Orchard'])(
+  '#OAuthClientReferenceSchema accepts the reference %p',
+  (input) => {
+    expect(OAuthClientReferenceSchema.safeParse(input).data).toBe(input);
+  },
+);
+
+test.each([
+  ['an empty reference', '', 'too_small'],
+  ['a reference of 201 characters', 'a'.repeat(201), 'too_big'],
+])('#OAuthClientReferenceSchema rejects %s', (_case, input, code) => {
+  const result = OAuthClientReferenceSchema.safeParse(input);
+
+  expect(result.error?.issues).toPartiallyContain({ path: [], code });
 });
 
 test.each([['passkey'], ['token:laptop']])(
@@ -141,20 +155,17 @@ test.each([['passkey'], ['token:laptop']])(
   },
 );
 
-test('#OAuthGrantSchema rejects a client that is not a valid name', () => {
-  const result = OAuthGrantSchema.safeParse({
+test('#OAuthGrantSchema accepts a client name that a new client may not take', () => {
+  const payload = {
     id: 'g-1',
-    client: 'Claude',
+    client: 'Spaced Orchard',
     approvedBy: 'passkey',
     scope: 'exec',
     createdAt: new Date('2026-01-02T03:04:05.000Z'),
     lastUsedAt: null,
-  });
+  } as const;
 
-  expect(result.error?.issues).toPartiallyContain({
-    path: ['client'],
-    message: 'must be a lowercase letter followed by up to 30 lowercase letters, digits or hyphens',
-  });
+  expect(OAuthGrantSchema.safeParse(payload).data).toStrictEqual(payload);
 });
 
 test('#OAuthGrantSchema rejects a scope outside the scope list', () => {
@@ -185,19 +196,3 @@ test('#OAuthEnrollmentSchema accepts an enrollment with no page to open', () => 
 
   expect(OAuthEnrollmentSchema.safeParse(payload).data).toStrictEqual(payload);
 });
-
-test.each(['*', 'dev', 'dev-*', 'a*'])('#GrantPatternSchema accepts the pattern %s', (input) => {
-  expect(GrantPatternSchema.safeParse(input).data).toBe(input);
-});
-
-test.each(['', 'Dev', '*dev', 'dev*x', '2dev'])(
-  '#GrantPatternSchema rejects the pattern %s',
-  (input) => {
-    const result = GrantPatternSchema.safeParse(input);
-
-    expect(result.error?.issues).toPartiallyContain({
-      path: [],
-      message: 'must be an imp name, or a name prefix and a trailing *, such as dev-*',
-    });
-  },
-);

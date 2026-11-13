@@ -1,5 +1,4 @@
 import * as z from 'zod';
-import { NameSchema } from './name-schema';
 import { ScopeSchema } from './token-schema';
 
 const MAX_REDIRECT_URIS = 8;
@@ -25,8 +24,12 @@ export const GrantPatternSchema = z
     'must be an imp name, or a name prefix and a trailing *, such as dev-*',
   );
 
+// An older database can hold a client name that a new client may not take, such as one with a
+// space, so a command names a client by its client ID or by any stored name.
+export const OAuthClientReferenceSchema = z.string().min(1).max(200);
+
 export const OAuthClientSchema = z.object({
-  name: NameSchema,
+  name: z.string(),
 
   clientId: z.string(),
   redirectUris: z.array(z.string()).readonly(),
@@ -37,7 +40,7 @@ export type OAuthClient = z.infer<typeof OAuthClientSchema>;
 
 export const OAuthGrantSchema = z.object({
   id: z.string(),
-  client: NameSchema,
+  client: z.string(),
 
   // passkey, or token: and the name of the imp token that approved a grant before the owner's
   // passkey approved each one
