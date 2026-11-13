@@ -1,5 +1,6 @@
 import { TUNNEL_CLOSE_RESTARTING, TUNNEL_PATH } from '@impz/api';
-import { Elysia } from 'elysia';
+import { Elysia, status } from 'elysia';
+import { websocket } from 'elysia/websocket';
 import type { ImpService } from '../imps/imps/imp-service';
 import { withAuditedOpen } from '../platform/audit/api-audit';
 import type { ApiAudit } from '../platform/audit/api-audit';
@@ -10,6 +11,7 @@ import { createTunnelLimits, createTunnelSession } from '../vm/guest-channels/tu
 import type { TunnelSession } from '../vm/guest-channels/tunnel-session';
 import { createSocketRegistry } from './create-socket-registry';
 import { findImpRefusal } from './find-imp-refusal';
+import { getRawSocket } from './get-raw-socket';
 
 // WebSocket's close code for a policy violation.
 const CLOSE_REVOKED = 1008;
@@ -34,36 +36,34 @@ export function createTunnelSocketRoute(deps: TunnelSocketDeps) {
   const tunnelLimits = createTunnelLimits();
   const reverseForwards = createReverseForwards();
 
-  const callers = new WeakMap<Request, Caller>();
+  // Elysia runs a WebSocket route's beforeHandle again on each message, and a
+  // derive only at the upgrade.
+  const authorized = new Elysia().use(websocket()).derive(async (context) => {
+    const caller = await deps.findCaller(context.request, context.server);
 
-  const route = new Elysia().ws(TUNNEL_PATH, {
-    beforeHandle: async (context) => {
-      const caller = await deps.findCaller(context.request, context.server);
+    if (caller === null) {
+      return status(401, { error: 'unauthorized' });
+    }
 
-      if (caller === null) {
-        return Response.json({ error: 'unauthorized' }, { status: 401 });
-      }
+    return { caller };
+  });
 
-      callers.set(context.request, caller);
-
-      // Elysia ends the upgrade on any returned value, null included
-      // oxlint-disable-next-line unicorn/no-useless-undefined
-      return undefined;
-    },
+  const route = authorized.ws(TUNNEL_PATH, {
     open: (ws) => {
-      const caller = callers.get(ws.data.request);
+      const caller = ws.caller;
+      const raw = getRawSocket(ws);
 
       const close = (code: number, reason: string): void => {
-        ws.raw.close(code, reason);
+        raw.close(code, reason);
       };
 
       const session = createTunnelSession(
         {
           sendText: (text) => {
-            ws.raw.send(text);
+            raw.send(text);
           },
           sendBinary: (data) => {
-            ws.raw.send(data);
+            raw.send(data);
           },
           close,
         },
@@ -86,7 +86,7 @@ export function createTunnelSocketRoute(deps: TunnelSocketDeps) {
               deps.audit,
               {
                 procedure: `tunnel:${port}`,
-                actor: caller ?? { kind: 'token', name: 'unknown' },
+                actor: caller,
                 impName: name,
                 startedAt: deps.now(),
               },
@@ -100,7 +100,7 @@ export function createTunnelSocketRoute(deps: TunnelSocketDeps) {
               deps.audit,
               {
                 procedure: `reverse:${where}`,
-                actor: caller ?? { kind: 'token', name: 'unknown' },
+                actor: caller,
                 impName: name,
                 startedAt: deps.now(),
               },
@@ -109,8 +109,7 @@ export function createTunnelSocketRoute(deps: TunnelSocketDeps) {
           },
           openAccept: (name, listener, connection) =>
             deps.imps.openAccept(name, listener, connection, 'tunnel'),
-          owner:
-            caller === undefined ? '' : `${caller.kind}:${caller.name}:${caller.tokenId ?? ''}`,
+          owner: `${caller.kind}:${caller.name}:${caller.tokenId ?? ''}`,
         },
         tunnelLimits,
         reverseForwards,

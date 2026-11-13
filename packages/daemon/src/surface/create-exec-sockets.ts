@@ -1,6 +1,7 @@
 import { EXEC_CLOSE_RESTARTING, EXEC_PATH, EXEC_TICKET_PARAM } from '@impz/api';
 import type { ExecSocket } from '@impz/client';
-import { Elysia } from 'elysia';
+import { Elysia, status } from 'elysia';
+import { websocket } from 'elysia/websocket';
 import { createExecSession } from '../imps/exec/exec-session';
 import type { ExecSession } from '../imps/exec/exec-session';
 import { createInProcessSocket } from '../imps/exec/in-process-socket';
@@ -12,6 +13,7 @@ import { buildAuditedBackend } from './exec/audited-backend';
 import { buildGrantedBackend } from './exec/exec-grant';
 import type { ExecGrant } from './exec/exec-grant';
 import type { ExecTickets } from './exec/exec-tickets';
+import { getRawSocket } from './get-raw-socket';
 import { readBufferedAmount } from './read-buffered-amount';
 
 // WebSocket's close code for a policy violation.
@@ -36,19 +38,14 @@ interface ExecSocketDeps {
 export function createExecSockets(deps: ExecSocketDeps) {
   const sessions = createSocketRegistry<ExecSession>();
 
-  const grants = new WeakMap<Request, ExecGrant>();
-
-  const buildExecBackend = (grant: ExecGrant | undefined) => {
-    const actor = grant?.caller ?? { kind: 'token', name: 'unknown' };
-
-    return buildAuditedBackend({
+  const buildExecBackend = (grant: ExecGrant) =>
+    buildAuditedBackend({
       backend: buildGrantedBackend(deps.imps, grant),
       audit: deps.audit,
-      actor,
+      actor: grant.caller,
       events: deps.imps.events,
       now: deps.now,
     });
-  };
 
   const openExecSocket = (url: string): ExecSocket => {
     const ticket = new URL(url).searchParams.get(EXEC_TICKET_PARAM);
@@ -79,57 +76,54 @@ export function createExecSockets(deps: ExecSocketDeps) {
     });
   };
 
-  const route = new Elysia().ws(EXEC_PATH, {
-    beforeHandle: async (context) => {
-      const ticket = new URL(context.request.url).searchParams.get(EXEC_TICKET_PARAM);
+  // Elysia runs a WebSocket route's beforeHandle again on each message, and a
+  // derive only at the upgrade, so a ticket is redeemed once.
+  const authorized = new Elysia().use(websocket()).derive(async (context) => {
+    const ticket = new URL(context.request.url).searchParams.get(EXEC_TICKET_PARAM);
 
-      if (ticket !== null) {
-        const holder = deps.execTickets.redeem(ticket);
+    if (ticket !== null) {
+      const holder = deps.execTickets.redeem(ticket);
 
-        if (holder === null) {
-          return Response.json({ error: 'unauthorized' }, { status: 401 });
-        }
-
-        grants.set(context.request, { caller: holder.caller, name: holder.name });
-
-        // Elysia ends the upgrade on any returned value, null included
-        // oxlint-disable-next-line unicorn/no-useless-undefined
-        return undefined;
+      if (holder === null) {
+        return status(401, { error: 'unauthorized' });
       }
 
-      const caller = await deps.findCaller(context.request, context.server);
+      return { grant: { caller: holder.caller, name: holder.name } };
+    }
 
-      if (caller === null) {
-        return Response.json({ error: 'unauthorized' }, { status: 401 });
-      }
+    const caller = await deps.findCaller(context.request, context.server);
 
-      grants.set(context.request, { caller, name: null });
+    if (caller === null) {
+      return status(401, { error: 'unauthorized' });
+    }
 
-      // oxlint-disable-next-line unicorn/no-useless-undefined
-      return undefined;
-    },
+    return { grant: { caller, name: null } };
+  });
+
+  const route = authorized.ws(EXEC_PATH, {
     open: (ws) => {
-      const grant = grants.get(ws.data.request);
+      const grant = ws.grant;
+      const raw = getRawSocket(ws);
 
       const close = (code?: number, reason?: string): void => {
-        ws.raw.close(code, reason);
+        raw.close(code, reason);
       };
 
       const session = createExecSession(
         {
           sendText: (text) => {
-            ws.raw.send(text);
+            raw.send(text);
           },
 
           // Bun answers 0 for a message it dropped.
-          sendBinary: (data) => ws.raw.send(data) !== 0,
+          sendBinary: (data) => raw.send(data) !== 0,
           close,
-          readBufferedAmount: () => readBufferedAmount(ws.raw),
+          readBufferedAmount: () => readBufferedAmount(raw),
         },
         buildExecBackend(grant),
       );
 
-      const forget = deps.closeOnRevocation(grant?.caller, () => {
+      const forget = deps.closeOnRevocation(grant.caller, () => {
         close(CLOSE_REVOKED, 'the token was removed');
       });
 
