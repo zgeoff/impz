@@ -113,3 +113,26 @@ test('it removes a client by its client ID, and keeps the client whose name clea
     expect.objectContaining({ clientId: 'impc_spaced', name: 'Spaced Orchard' }),
   ]);
 });
+
+test('it replaces the redirect URIs of a client named by its client ID', async () => {
+  const ctx = await setupTest();
+
+  await ctx.seedUncleanClient({ clientID: 'impc_tabbed', name: '  Spaced\tOrchard  ' });
+  await ctx.seedUncleanClient({ clientID: 'impc_spaced', name: 'Spaced Orchard' });
+
+  const result = await ctx.run(
+    'client',
+    'set',
+    'impc_spaced',
+    '--redirect-uri',
+    'https://client.example/next',
+    '--json',
+  );
+
+  expect(JSON.parse(result.stdout)).toStrictEqual([
+    expect.objectContaining({
+      clientId: 'impc_spaced',
+      redirectUris: ['https://client.example/next'],
+    }),
+  ]);
+});
