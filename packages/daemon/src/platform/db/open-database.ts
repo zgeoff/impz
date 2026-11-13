@@ -11,7 +11,10 @@ import type { ImpEventLog } from './create-imp-event-log';
 import { runMigrations } from './run-migrations';
 import type { DB } from './schema';
 
-export type ImpDatabase = Kysely<DB> & { readonly log: ImpEventLog };
+// sqlite: the handle under the builder. Give a library the builder, not the handle: a second Kysely
+// over the handle keeps a lock of its own, so its writes join an open impd transaction and roll
+// back with it.
+export type ImpDatabase = Kysely<DB> & { readonly log: ImpEventLog; readonly sqlite: Database };
 
 export type ImpQueries = Kysely<DB>;
 
@@ -34,6 +37,7 @@ export async function openDatabase(
   // the shared driver's destroy leaves the handle open for its opener to close
   const db = Object.assign(builder, {
     log,
+    sqlite,
     destroy: async () => {
       await log.stop();
 

@@ -1,13 +1,8 @@
-import { expect, mock, onTestFinished, test } from 'bun:test';
+import { expect, onTestFinished, test } from 'bun:test';
 import { faker } from '@faker-js/faker';
-import { ApprovalCodeSchema } from '@impz/api';
-import { createImpClient } from '@impz/client';
-import { createPendingSignIn, makeOAuthResponder, startTestImpd } from '@impz/daemon/test-utils';
+import { seedUncleanOAuthClient, startTestImpd } from '@impz/daemon/test-utils';
 import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
-import * as z from 'zod';
-import { UsageError } from '../cli/errors';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
-import { runApprove } from './oauth-command';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();
@@ -23,229 +18,50 @@ async function setupTest() {
 
   const harness = await startTestImpd(stack, {
     rootToken,
-    frozenClockMs: Date.UTC(2026, 0, 1),
-    env: {
-      IMP_MCP_PUBLIC_URL: 'http://127.0.0.1:7171',
-      IMP_MCP_PUBLIC_PORT: String(publicPort),
-    },
+    env: { IMP_MCP_PUBLIC_URL: 'https://imp.example', IMP_MCP_PUBLIC_PORT: String(publicPort) },
   });
 
-  const impd = harness.impd;
-  const RpcBodySchema = z.looseObject({ json: z.unknown() });
-  const calls: { readonly path: string; readonly input: unknown }[] = [];
-
-  const sendRecordedRequest = async (request: Request) => {
-    const body: unknown = await request.clone().json();
-
-    calls.push({
-      path: new URL(request.url).pathname.slice('/rpc/'.length),
-      input: RpcBodySchema.parse(body).json,
+  const run = (...args: string[]) =>
+    runCLIInProcess({
+      args: ['oauth', ...args],
+      env: { IMP_URL: harness.url, IMP_TOKEN: rootToken },
     });
 
-    return impd.api.app.handle(request);
-  };
-
   return {
-    rootToken,
-    setClock: harness.setClock,
-    calls,
-    handleRoute: makeOAuthResponder(impd.oauth),
-    connect: (token: string) =>
-      createImpClient({
-        url: 'http://impd.test',
-        token,
-        fetch: sendRecordedRequest,
-      }),
+    run,
+    seedUncleanClient: (input: Parameters<typeof seedUncleanOAuthClient>[1]) =>
+      seedUncleanOAuthClient(harness.db, input),
   };
 }
 
-test('it refuses without a terminal or --yes before it calls impd', () => {
-  const client = createImpClient({ url: 'http://127.0.0.1:1' });
+test('it prints an enrollment token and the page to enter it on', async () => {
+  const ctx = await setupTest();
+  const result = await ctx.run('passkey', 'enroll');
 
-  const prompt = {
-    isTerminal: false,
-    confirm: mock(() => Promise.resolve(true)),
-    show: mock<(line: string) => void>(),
-  };
-
-  expect(
-    runApprove(
-      client,
-      { code: 'ABCDEFGH', scope: 'exec', imps: undefined, isConfirmed: false },
-      prompt,
+  expect(result).toStrictEqual({
+    stdout: expect.stringMatching(
+      /^token: \S+\nopen https:\/\/imp\.example\/enroll, enter the token, and enroll a passkey; the token works once\n$/v,
     ),
-  ).rejects.toThrowWithMessage(
-    UsageError,
-    'impz oauth approve asks before it approves, and stdin is not a terminal; pass --yes to approve without asking',
-  );
-});
-
-test('it shows the sign-in and approves nothing when the answer at a terminal is no', async () => {
-  const ctx = await setupTest();
-
-  ctx.setClock(Date.UTC(2026, 0, 1));
-
-  const root = ctx.connect(ctx.rootToken);
-
-  const added = await root.oauth.clients.add({
-    name: 'conn',
-    redirectUris: ['https://client.example/callback'],
-  });
-
-  const made = await root.tokens.create({ name: 'approver', scope: 'manage' });
-
-  const started = await createPendingSignIn({
-    respond: ctx.handleRoute,
-    origin: 'http://127.0.0.1:7171',
-    clientID: added.clientId,
-    redirectURI: 'https://client.example/callback',
-    scope: 'exec',
-  });
-
-  const code = ApprovalCodeSchema.parse(started.code);
-  const show = mock<(line: string) => void>();
-  const confirm = mock(() => Promise.resolve(false));
-  const approver = ctx.connect(made.secret);
-
-  const approving = runApprove(
-    approver,
-    { code, scope: 'exec', imps: ['dev-*'], isConfirmed: false },
-    { isTerminal: true, confirm, show },
-  );
-
-  expect(approving).rejects.toThrowWithMessage(Error, 'not approved; nothing changed');
-  expect(confirm).toHaveBeenCalledExactlyOnceWith('Approve this sign-in? [y/N] ');
-  expect(ctx.calls.filter((call) => call.path === 'oauth/approvals/approve')).toBeEmpty();
-
-  expect(show.mock.calls).toStrictEqual([
-    [
-      [
-        'client:       conn',
-        'returns to:   https://client.example/callback',
-        'asks for:     up to exec',
-        'started:      2026-01-01T00:00:00.000Z',
-        'ends:         2026-01-01T00:10:00.000Z',
-      ].join('\n'),
-    ],
-    ['it gets:      exec on dev-*'],
-  ]);
-});
-
-test('it approves what it showed when the answer at a terminal is yes', async () => {
-  const ctx = await setupTest();
-
-  const root = ctx.connect(ctx.rootToken);
-
-  const added = await root.oauth.clients.add({
-    name: 'conn',
-    redirectUris: ['https://client.example/callback'],
-  });
-
-  const made = await root.tokens.create({ name: 'approver', scope: 'manage' });
-
-  const started = await createPendingSignIn({
-    respond: ctx.handleRoute,
-    origin: 'http://127.0.0.1:7171',
-    clientID: added.clientId,
-    redirectURI: 'https://client.example/callback',
-    scope: 'exec',
-  });
-
-  const code = ApprovalCodeSchema.parse(started.code);
-  const show = mock<(line: string) => void>();
-  const approver = ctx.connect(made.secret);
-
-  await runApprove(
-    approver,
-    { code, scope: 'exec', imps: ['dev-*'], isConfirmed: false },
-    { isTerminal: true, confirm: () => Promise.resolve(true), show },
-  );
-
-  expect(show).toHaveBeenLastCalledWith(
-    'impz: approved: conn gets exec on dev-*; press Continue on the sign-in page',
-  );
-
-  expect(ctx.calls.filter((call) => call.path === 'oauth/approvals/approve')).toStrictEqual([
-    { path: 'oauth/approvals/approve', input: { code, scope: 'exec', imps: ['dev-*'] } },
-  ]);
-
-  expect(approver.oauth.approvals.approve({ code, scope: 'exec' })).rejects.toMatchObject({
-    code: 'CONFLICT',
+    stderr: '',
+    code: 0,
   });
 });
 
-test.each([
-  ['without', false],
-  ['with', true],
-])('it approves without asking for --yes %s a terminal', async (_case, isTerminal) => {
+test('it lists no passkey before one is enrolled', async () => {
   const ctx = await setupTest();
+  const result = await ctx.run('passkey', 'ls');
 
-  const root = ctx.connect(ctx.rootToken);
-
-  const added = await root.oauth.clients.add({
-    name: 'conn',
-    redirectUris: ['https://client.example/callback'],
-  });
-
-  const made = await root.tokens.create({ name: 'approver', scope: 'manage' });
-
-  const started = await createPendingSignIn({
-    respond: ctx.handleRoute,
-    origin: 'http://127.0.0.1:7171',
-    clientID: added.clientId,
-    redirectURI: 'https://client.example/callback',
-    scope: 'exec',
-  });
-
-  const code = ApprovalCodeSchema.parse(started.code);
-  const confirm = mock(() => Promise.resolve(false));
-  const show = mock<(line: string) => void>();
-
-  await runApprove(
-    ctx.connect(made.secret),
-    { code, scope: 'exec', imps: undefined, isConfirmed: true },
-    { isTerminal, confirm, show },
-  );
-
-  expect(confirm).not.toHaveBeenCalled();
-
-  expect(show).toHaveBeenLastCalledWith(
-    "impz: approved: conn gets exec on the token's imps; press Continue on the sign-in page",
-  );
+  expect(result).toStrictEqual({ stdout: 'ID  CREATED  LAST USED\n', stderr: '', code: 0 });
 });
 
-test('it refuses an approval of more than a read token holds', async () => {
+test('it resets the passkeys', async () => {
   const ctx = await setupTest();
 
-  const root = ctx.connect(ctx.rootToken);
+  await ctx.run('passkey', 'reset');
 
-  const added = await root.oauth.clients.add({
-    name: 'conn',
-    redirectUris: ['https://client.example/callback'],
-  });
+  const listed = await ctx.run('passkey', 'ls');
 
-  const made = await root.tokens.create({ name: 'reader', scope: 'read' });
-
-  const started = await createPendingSignIn({
-    respond: ctx.handleRoute,
-    origin: 'http://127.0.0.1:7171',
-    clientID: added.clientId,
-    redirectURI: 'https://client.example/callback',
-    scope: 'exec',
-  });
-
-  const code = ApprovalCodeSchema.parse(started.code);
-
-  expect(
-    runApprove(
-      ctx.connect(made.secret),
-      { code, scope: 'exec', imps: undefined, isConfirmed: true },
-      { isTerminal: false, confirm: () => Promise.resolve(true), show: () => {} },
-    ),
-  ).rejects.toMatchObject({
-    code: 'FORBIDDEN',
-    message: 'token reader has read, so it may approve that or less',
-  });
+  expect(listed.stdout).toBe('ID  CREATED  LAST USED\n');
 });
 
 test.each([
@@ -259,21 +75,6 @@ test.each([
     ['client', 'set', 'conn', '--redirect-uri', 'https://client.example/cb#x'],
     'impz: --redirect-uri takes https URLs, or http on a loopback host, with no fragment; not https://client.example/cb#x',
   ],
-  [
-    'a code that is not a sign-in code',
-    ['approve', 'ABCD-EFG0'],
-    'impz: ABCD-EFG0 is not a sign-in code; it looks like ABCD-EFGH',
-  ],
-  [
-    'an unknown scope',
-    ['approve', 'ABCD-EFGH', '--scope', 'admin'],
-    'impz: --scope must be one of read, exec, manage',
-  ],
-  [
-    'an imp pattern with an inner star',
-    ['approve', 'ABCD-EFGH', '--imps', 'd*v'],
-    'impz: --imps takes imp names, or a name prefix and a trailing *, such as dev-*; not d*v',
-  ],
 ])('it refuses %s before it calls impd', async (_case, args, message) => {
   const result = await runCLIInProcess({
     args: ['oauth', ...args],
@@ -281,4 +82,57 @@ test.each([
   });
 
   expect(result).toStrictEqual({ stdout: '', stderr: `${message}\n`, code: 2 });
+});
+
+test('it refuses a client name that two clients hold, and lists their client IDs', async () => {
+  const ctx = await setupTest();
+
+  await ctx.seedUncleanClient({ clientID: 'impc_tabbed', name: '  Spaced\tOrchard  ' });
+  await ctx.seedUncleanClient({ clientID: 'impc_spaced', name: 'Spaced Orchard' });
+
+  const result = await ctx.run('client', 'rm', 'Spaced Orchard');
+
+  expect(result).toStrictEqual({
+    stdout: '',
+    stderr:
+      'impz: CONFLICT: 2 clients are named Spaced Orchard: impc_tabbed, impc_spaced; name one by its client ID\n',
+    code: 1,
+  });
+});
+
+test('it removes a client by its client ID, and keeps the client whose name cleans alike', async () => {
+  const ctx = await setupTest();
+
+  await ctx.seedUncleanClient({ clientID: 'impc_tabbed', name: '  Spaced\tOrchard  ' });
+  await ctx.seedUncleanClient({ clientID: 'impc_spaced', name: 'Spaced Orchard' });
+  await ctx.run('client', 'rm', 'impc_tabbed');
+
+  const listed = await ctx.run('client', 'ls', '--json');
+
+  expect(JSON.parse(listed.stdout)).toStrictEqual([
+    expect.objectContaining({ clientId: 'impc_spaced', name: 'Spaced Orchard' }),
+  ]);
+});
+
+test('it replaces the redirect URIs of a client named by its client ID', async () => {
+  const ctx = await setupTest();
+
+  await ctx.seedUncleanClient({ clientID: 'impc_tabbed', name: '  Spaced\tOrchard  ' });
+  await ctx.seedUncleanClient({ clientID: 'impc_spaced', name: 'Spaced Orchard' });
+
+  const result = await ctx.run(
+    'client',
+    'set',
+    'impc_spaced',
+    '--redirect-uri',
+    'https://client.example/next',
+    '--json',
+  );
+
+  expect(JSON.parse(result.stdout)).toStrictEqual([
+    expect.objectContaining({
+      clientId: 'impc_spaced',
+      redirectUris: ['https://client.example/next'],
+    }),
+  ]);
 });

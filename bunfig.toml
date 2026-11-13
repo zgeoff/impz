@@ -19,6 +19,7 @@ minimumReleaseAgeExcludes = [
   "@zgeoff/diet",
   "@zgeoff/format-codemod",
   "@zgeoff/kysely-bun-sqlite",
+  "@zgeoff/mcp-auth",
   "@zgeoff/oxlint-config",
   "@zgeoff/rig",
   "@zgeoff/std",

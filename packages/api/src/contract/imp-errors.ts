@@ -19,7 +19,7 @@ const ResourceKindSchema = z.enum([
   'network',
   'oauth-client',
   'oauth-grant',
-  'oauth-approval',
+  'oauth-passkey',
   'database-copy',
 ]);
 

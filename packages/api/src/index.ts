@@ -257,7 +257,14 @@ export {
 } from './schemas/token-schema';
 
 export type { Identity, Scope, SshKey, Token } from './schemas/token-schema';
-export { ApprovalCodeSchema, GrantPatternSchema, RedirectUriSchema } from './schemas/oauth-schema';
-export type { OAuthApproval, OAuthClient, OAuthGrant } from './schemas/oauth-schema';
+export { GrantPatternSchema, RedirectUriSchema } from './schemas/oauth-schema';
+
+export type {
+  OAuthClient,
+  OAuthEnrollment,
+  OAuthGrant,
+  OAuthPasskey,
+} from './schemas/oauth-schema';
+
 export type { SystemFeaturesInfo, SystemInfo } from './schemas/system-info-schema';
 export { hasScope } from './rules/has-scope';

@@ -14,8 +14,6 @@
     "./package.json": "./package.json"
   },
   "dependencies": {
-    "@better-auth/mcp": "catalog:",
-    "@better-auth/oauth-provider": "catalog:",
     "@bufbuild/protobuf": "catalog:",
     "@impz/agent-protocol": "workspace:*",
     "@impz/api": "workspace:*",
@@ -38,8 +36,9 @@
     "@orpc/server": "catalog:",
     "@peculiar/x509": "catalog:",
     "@zgeoff/kysely-bun-sqlite": "catalog:",
+    "@zgeoff/mcp-auth": "catalog:",
+    "@zgeoff/std": "catalog:",
     "acme-client": "catalog:",
-    "better-auth": "catalog:",
     "dns-packet": "catalog:",
     "elysia": "catalog:",
     "ipaddr.js": "catalog:",

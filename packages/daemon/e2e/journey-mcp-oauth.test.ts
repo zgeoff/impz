@@ -2,29 +2,25 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { randomBytes } from 'node:crypto';
 import { config } from '@impz/e2e-harness/config';
 import { resolveImageName } from '@impz/e2e-harness/fixtures';
-import { createInstanceClient, runImp, tryImp } from '@impz/e2e-harness/imp-cli';
+import { createInstanceClient, runImp } from '@impz/e2e-harness/imp-cli';
 import { waitForExec } from '@impz/e2e-harness/imps';
 import { instance } from '@impz/e2e-harness/instance';
 import {
-  BROWSER_FORM,
   RouteTokensSchema,
   buildPkceChallenge,
   buildRouteOrigin,
+  enrollPasskey,
   openRouteMcp,
-  parseApprovalPage,
-  readCookies,
+  runBrowserSignIn,
   runSignIn,
   sendForm,
   sendMcp,
 } from '@impz/e2e-harness/oauth-route';
 import { registerRemoval } from '@impz/e2e-harness/register-removal';
-import {
-  removeImpIfPresent,
-  removeOAuthClientIfPresent,
-  removeTokenIfPresent,
-} from '@impz/e2e-harness/reset-baseline';
+import { removeImpIfPresent, removeOAuthClientIfPresent } from '@impz/e2e-harness/reset-baseline';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
 import { waitFor } from '@impz/e2e-harness/wait-for';
+import invariant from 'tiny-invariant';
 import * as z from 'zod';
 
 async function setupTest() {
@@ -53,12 +49,11 @@ async function setupTest() {
   };
 }
 
-test('it signs a client in on an approval from the CLI, and the grant lists the tools its scope allows and runs a command in its imps', async () => {
+test('it signs a client in with the owner’s passkey, and the grant lists the tools its scope allows and runs a command in the imps the consent names', async () => {
   const ctx = await setupTest();
 
   const box = `${ctx.prefix}box`;
   const clientName = `${ctx.prefix}conn`;
-  const approver = `${ctx.prefix}approver`;
 
   await runImp('new', box, '--image', resolveImageName('e2e-tiny'), '--memory', '256');
 
@@ -73,13 +68,11 @@ test('it signs a client in on an approval from the CLI, and the grant lists the 
 
   registerRemoval(ctx.stack, config.keep, () => removeOAuthClientIfPresent(ctx.client, clientName));
 
-  const token = await ctx.client.tokens.create({
-    name: approver,
-    scope: 'exec',
-    imps: [`${ctx.prefix}*`],
-  });
+  const authenticator = await enrollPasskey(ctx.origin);
 
-  registerRemoval(ctx.stack, config.keep, () => removeTokenIfPresent(ctx.client, approver));
+  registerRemoval(ctx.stack, config.keep, async () => {
+    await ctx.client.oauth.passkeys.delete({ id: authenticator.credentialID });
+  });
 
   const verifier = randomBytes(32).toString('base64url');
 
@@ -94,63 +87,23 @@ test('it signs a client in on an approval from the CLI, and the grant lists the 
     resource: `${ctx.origin}/mcp`,
   });
 
-  const authorized = await fetch(`${ctx.origin}/oauth2/authorize?${query.toString()}`, {
-    redirect: 'manual',
+  const signedIn = await runBrowserSignIn(`${ctx.origin}/oauth2/authorize?${query.toString()}`, {
+    authenticator,
+    scopes: ['read', 'exec'],
+    imps: `${ctx.prefix}*`,
   });
 
-  const loginURL = new URL(authorized.headers.get('location') ?? '/', ctx.origin);
+  const caught = await fetch(signedIn.back);
 
-  const opened = await fetch(loginURL);
-  const page = await opened.text();
-
-  const approval = parseApprovalPage(page);
-
-  expect(opened.status).toBe(200);
-  expect(opened.headers.get('referrer-policy')).toBe('same-origin');
-
-  const approved = await tryImp(['oauth', 'approve', approval.code, '--scope', 'exec', '--yes'], {
-    token: token.secret,
-  });
-
-  expect(approved).toStrictEqual({
-    exitCode: 0,
-    stdout: expect.toBeString(),
-    stderr: expect.toIncludeMultiple([
-      `client:       ${clientName}`,
-      `returns to:   ${ctx.redirect}`,
-    ]),
-  });
-
-  const continued = await sendForm(
-    `${ctx.origin}/login`,
-    { oauth_query: approval.oauthQuery, action: 'continue' },
-    BROWSER_FORM,
-  );
-
-  const consentURL = new URL(continued.headers.get('location') ?? '/', ctx.origin);
-
-  const consentQuery = consentURL.search.slice(1);
-
-  const allowed = await sendForm(
-    `${ctx.origin}/consent`,
-    { oauth_query: consentQuery, action: 'allow' },
-    { ...BROWSER_FORM, cookie: readCookies(continued) },
-  );
-
-  const location = new URL(allowed.headers.get('location') ?? '');
-
-  const caught = await fetch(location);
-
-  expect(allowed.status).toBe(302);
-  expect(allowed.headers.get('referrer-policy')).toBe('no-referrer');
-  expect(location.searchParams.get('iss')).toBe(ctx.origin);
-  expect(location.searchParams.get('state')).toBe('e2e');
+  expect(signedIn.login.status).toBe(200);
+  expect(signedIn.back.searchParams.get('iss')).toBe(ctx.origin);
+  expect(signedIn.back.searchParams.get('state')).toBe('e2e');
   expect(caught.status).toBe(200);
 
   const exchanged = await sendForm(`${ctx.origin}/oauth2/token`, {
     grant_type: 'authorization_code',
     client_id: added.clientId,
-    code: location.searchParams.get('code') ?? '',
+    code: signedIn.back.searchParams.get('code') ?? '',
     redirect_uri: ctx.redirect,
     code_verifier: verifier,
     resource: `${ctx.origin}/mcp`,
@@ -159,8 +112,6 @@ test('it signs a client in on an approval from the CLI, and the grant lists the 
   const exchangedBody: unknown = await exchanged.json();
 
   const tokens = RouteTokensSchema.parse(exchangedBody);
-
-  expect(tokens.scope).toBe('read exec offline_access');
 
   const session = await openRouteMcp(ctx.origin, tokens.access_token);
 
@@ -195,15 +146,14 @@ test('it signs a client in on an approval from the CLI, and the grant lists the 
   expect(names).not.toContain('imp_create');
   expect(JSON.stringify(ran.body)).toContain('from-the-route');
   expect(grants).toContain(clientName);
-  expect(grants).toContain(approver);
+  expect(grants).toContain('passkey');
 });
 
-test('it stops the command a grant runs when the approving token goes, then answers 401', async () => {
+test('it stops the command a grant runs when the grant is revoked, then answers 401', async () => {
   const ctx = await setupTest();
 
   const box = `${ctx.prefix}stop-box`;
   const clientName = `${ctx.prefix}stop-conn`;
-  const approver = `${ctx.prefix}stop-approver`;
 
   await runImp('new', box, '--image', resolveImageName('e2e-tiny'), '--memory', '256');
 
@@ -218,20 +168,19 @@ test('it stops the command a grant runs when the approving token goes, then answ
 
   registerRemoval(ctx.stack, config.keep, () => removeOAuthClientIfPresent(ctx.client, clientName));
 
-  const token = await ctx.client.tokens.create({
-    name: approver,
-    scope: 'exec',
-    imps: [`${ctx.prefix}*`],
-  });
+  const authenticator = await enrollPasskey(ctx.origin);
 
-  registerRemoval(ctx.stack, config.keep, () => removeTokenIfPresent(ctx.client, approver));
+  registerRemoval(ctx.stack, config.keep, async () => {
+    await ctx.client.oauth.passkeys.delete({ id: authenticator.credentialID });
+  });
 
   const tokens = await runSignIn({
     origin: ctx.origin,
     clientId: added.clientId,
     redirect: ctx.redirect,
-    approverToken: token.secret,
-    scope: 'exec',
+    authenticator,
+    scopes: ['read', 'exec'],
+    imps: `${ctx.prefix}*`,
   });
 
   const session = await openRouteMcp(ctx.origin, tokens.access_token);
@@ -255,9 +204,15 @@ test('it stops the command a grant runs when the approving token goes, then answ
     }
   });
 
+  const grants = await ctx.client.oauth.grants.list();
+
+  const grant = grants.find((listed) => listed.client === clientName);
+
+  invariant(grant);
+
   const started = Date.now();
 
-  await runImp('token', 'rm', approver);
+  await runImp('oauth', 'grant', 'rm', grant.id);
 
   const answered = await call.then(
     (response) => JSON.stringify(response.body).includes('"result"'),

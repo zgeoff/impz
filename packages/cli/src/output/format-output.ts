@@ -10,9 +10,10 @@ import type {
   Image,
   ImageBuildRun,
   Network,
-  OAuthApproval,
   OAuthClient,
+  OAuthEnrollment,
   OAuthGrant,
+  OAuthPasskey,
   OrphanStorage,
   RefusedRequest,
   Secret,
@@ -276,26 +277,36 @@ export function formatOAuthClients(clients: readonly OAuthClient[]): string {
 
 export function formatOAuthGrants(grants: readonly OAuthGrant[]): string {
   return formatTable(
-    ['ID', 'CLIENT', 'TOKEN', 'SCOPE', 'IMPS', 'CREATED', 'LAST USED'],
+    ['ID', 'CLIENT', 'APPROVED BY', 'SCOPE', 'CREATED', 'LAST USED'],
     grants.map((grant) => [
       grant.id,
       grant.client,
-      grant.token,
+      grant.approvedBy,
       grant.scope,
-      grant.imps === null ? '*' : grant.imps.join(','),
       grant.createdAt.toISOString(),
       grant.lastUsedAt?.toISOString() ?? '-',
     ]),
   );
 }
 
-export function formatOAuthApproval(approval: Readonly<OAuthApproval>): string {
+export function formatOAuthPasskeys(passkeys: readonly OAuthPasskey[]): string {
+  return formatTable(
+    ['ID', 'CREATED', 'LAST USED'],
+    passkeys.map((passkey) => [
+      passkey.id,
+      passkey.createdAt.toISOString(),
+      passkey.lastUsedAt?.toISOString() ?? '-',
+    ]),
+  );
+}
+
+export function formatOAuthEnrollment(enrollment: Readonly<OAuthEnrollment>): string {
+  const page =
+    enrollment.url ?? 'the enroll page of the public MCP route, once IMP_MCP_PUBLIC_URL is set';
+
   return [
-    `client:       ${approval.client}`,
-    `returns to:   ${approval.redirectUri}`,
-    `asks for:     up to ${approval.requestedScope}`,
-    `started:      ${approval.requestedAt.toISOString()}`,
-    `ends:         ${approval.expiresAt.toISOString()}`,
+    `token: ${enrollment.token}`,
+    `open ${page}, enter the token, and enroll a passkey; the token works once`,
   ].join('\n');
 }
 

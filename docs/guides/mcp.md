@@ -208,14 +208,15 @@ operator runs. The route is off until `IMP_MCP_PUBLIC_URL` is set.
 | `/.well-known/oauth-authorization-server`              | authorization server metadata (RFC 8414)                 |
 | `/oauth2/authorize`, `/oauth2/token`, `/oauth2/revoke` | authorization, the token endpoint, revocation (RFC 7009) |
 | `/login`, `/consent`                                   | the two sign-in pages                                    |
+| `/enroll`                                              | the page that enrolls the owner's passkey                |
 | `/error`                                               | the page for a sign-in the server refuses to start       |
 
-Every other path gets the same 404, as does a request whose `Host` is not the origin's. The
-authorization server is [better-auth](https://www.better-auth.com/) with its OAuth provider and MCP
-plugins, over impd's own database, and impd serves the pages it sends a browser to. The route
-follows the MCP authorization spec of 2026-07-28: PKCE with S256, a resource indicator (RFC 8707)
-bound to `<origin>/mcp`, and `iss` on the redirect that carries a code (RFC 9207). It has no dynamic
-registration and no client ID metadata documents: the operator adds each client.
+Every other path gets the same 404, and a request whose `Host` is not the origin's gets 403. `/`
+answers as `/mcp`. The authorization server is the shared `@zgeoff/mcp-auth` package over impd's own
+database, and it serves the pages it sends a browser to. The route follows the MCP authorization
+spec of 2026-07-28: PKCE with S256, a resource indicator (RFC 8707) bound to `<origin>/mcp`, and
+`iss` on the redirect that carries a code (RFC 9207). It has no dynamic registration and no client
+ID metadata documents: the operator adds each client.
 
 ### Turn it on
 
@@ -232,7 +233,14 @@ registration and no client ID metadata documents: the operator adds each client.
    impz oauth client add conn --redirect-uri https://client.example/oauth/callback
    ```
 
-5. In the client, give `https://imp.example.com/mcp` and the client ID.
+5. Enroll your passkey. The command prints a one-use token and the enroll page; open the page, enter
+   the token, and let the browser make the passkey.
+
+   ```sh
+   impz oauth passkey enroll
+   ```
+
+6. In the client, give `https://imp.example.com/mcp` and the client ID.
 
 impd takes nothing on the route as an identity but an access token from a grant. It refuses an imp
 token, the dashboard's cookie and a tailnet identity, and never reads `X-Forwarded-*`, `Forwarded`,
@@ -241,33 +249,21 @@ route, client and grant, never per address. impd logs no code, token or query.
 
 ### Sign in
 
-1. The client opens authorization, which sends the browser to the login page. The page names the
-   client, where it returns, the scope it asks for, and a code such as `ABCD-EFGH`.
-2. Approve the code with a named token, over your usual access to impd. The CLI shows the client,
-   its redirect URI, when the sign-in started and what the grant gets, and asks before it approves.
-   `--yes` skips the question; without a terminal on stdin, it is required:
+1. The client opens authorization, which sends the browser to the login page. Sign in with your
+   passkey.
+2. The consent page names the client, where it returns and the scopes it asks for. Untick a scope to
+   leave it out, name the imps the grant reaches, such as `agent-*`, or `*` for every imp, and
+   approve.
 
-   ```sh
-   impz oauth approve ABCD-EFGH --scope exec --imps 'agent-*'
-   ```
+Approve only a sign-in you started: anyone can open the login page for a client impd knows. Each imp
+pattern is an imp name, or a prefix and a trailing `*`; the consent takes at most 32. An OAuth grant
+grants and revokes no secrets.
 
-3. Press Continue. The consent page shows the final scope, imps and redirect URI; press Allow.
+`impz oauth passkey ls` lists the passkeys, `impz oauth passkey rm <id>` removes one, and
+`impz oauth passkey reset` removes them all, with each sign-in in progress.
 
-Approve only a sign-in you started: anyone can open the page for a client impd knows, and ask you to
-approve its code. The code is 8 symbols of 32 (40 bits), lasts 10 minutes, and only a named token
-can try one: after 20 codes from one token that match nothing, impd takes one every 3 s.
-
-A grant is never wider than the token that approved it:
-
-- its scope is at most the token's and at most what the client asked for; `--scope` defaults to
-  `read`;
-- each of its patterns is an imp name or a prefix and a trailing `*`, and equals one of the token's,
-  or one of the token's is `p*` and the pattern starts with `p`. `--imps` defaults to the token's;
-- it grants and revokes no secrets, and meets every refusal its token meets: a token that may grant
-  secrets may not fork or move an imp, and neither may its grants.
-
-impd checks the grant and its token on every request. The root token and a tailnet identity cannot
-approve: neither can be removed on its own, so neither could end its grants.
+A grant that an imp token approved before impd 7 keeps the token's limits: it is never wider than
+that token, and it ends with the token. impd checks it against the token on every request.
 
 ### Tokens and revocation
 
@@ -277,15 +273,24 @@ approve: neither can be removed on its own, so neither could end its grants.
 | refresh token | rotates on each use; a 30-day inactivity timeout, not an absolute grant lifetime |
 | code          | 10 minutes, once                                                                 |
 | sign-in       | 10 minutes; 3 wait for each client, and 16 in all                                |
+| enroll token  | once                                                                             |
 
-Tokens are opaque; impd keeps only their SHA-256. Each approved sign-in is one better-auth user,
-which holds the approving token and the imps the approval gave, and the grant is that user with its
-tokens. A refresh answers with the scope the grant holds, for the same resource.
+Tokens are opaque; impd keeps only their SHA-256. Each grant is one row, which holds the client, the
+scopes, who approved it and the imps it reaches, with its tokens. A refresh answers with the scope
+the grant holds, for the same resource.
 
-A grant ends with `impz oauth grant rm <id>`, `impz token rm` of the token that approved it,
-`impz oauth client rm`, or the client's own revocation of any of its tokens. Its sessions end, its
-running commands stop as a cancel stops them, its unused exec tickets open nothing, and its next
-request gets 401. A code works once: a second exchange gets `invalid_grant`.
+`impz oauth client set` and `impz oauth client rm` take a client ID, or a name that one client
+holds. A database from before impd 7 can hold two names that differ only in whitespace or control
+characters; for those, they refuse the name and list the client IDs, so name the client by its ID.
+
+A grant ends with `impz oauth grant rm <id>`, `impz oauth client rm`, the client's own revocation of
+any of its tokens, or, for a grant an imp token approved, `impz token rm` of that token. Its
+sessions end, its running commands stop as a cancel stops them, its unused exec tickets open
+nothing, and its next request gets 401. A code works once.
+
+An open stream checks its access token again every 10 minutes and ends when the token no longer
+passes, so a revoke from another process, or an expired token, ends it within 10 minutes. A client
+sends a long tool call with a fresh token.
 
 A refresh token is strictly single use, with no grace window. A spent refresh token that comes again
 ends its grant, so two refreshes of one token at once leave the client with no working token. A
@@ -302,10 +307,8 @@ A restart ends the sign-ins in progress and their codes, not the grants.
   stream is no cancel. Send `notifications/cancelled` to stop a call. With every slot taken, a
   notification of at most 16 KiB and a session's `DELETE` still get through, 16 at a time, since
   they start no work.
-- A new sign-in drops the oldest unapproved one of its own client's, never another client's. Past 16
-  in all, a new one gets 429 until one ends.
-- 10 sign-ins per client in a burst, then one every 6 s.
-- 20 approval codes that match nothing per token, then one every 3 s.
+- 16 sign-ins wait at once, and 3 for one client; 10 start per minute. The 5th failed passkey login
+  ends its sign-in.
 - 16 sessions per grant.
 
 Past a limit, impd answers 429 with `Retry-After`. A form is at most 16 KiB, and an idle request

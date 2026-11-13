@@ -48,7 +48,7 @@ export async function resetBaseline(options: Readonly<ResetBaselineOptions>): Pr
   }
 
   for (const name of listOwned(oauthClients)) {
-    await client.oauth.clients.delete({ name });
+    await client.oauth.clients.delete({ client: name });
   }
 
   for (const name of listOwned(tokens)) {
@@ -130,7 +130,7 @@ export async function removeNetworkIfPresent(client: ImpClient, name: string): P
 
 export async function removeOAuthClientIfPresent(client: ImpClient, name: string): Promise<void> {
   try {
-    await client.oauth.clients.delete({ name });
+    await client.oauth.clients.delete({ client: name });
   } catch (error) {
     if (!isNotFound(error)) {
       throw error;

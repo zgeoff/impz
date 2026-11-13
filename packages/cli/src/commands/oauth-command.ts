@@ -1,19 +1,23 @@
-import { ApprovalCodeSchema, GrantPatternSchema, RedirectUriSchema, ScopeSchema } from '@impz/api';
-import type { Scope } from '@impz/api';
+import { RedirectUriSchema } from '@impz/api';
 import { jsonArg } from '../args/common-args';
 import { defineCommand, defineGroup } from '../cli/define-command';
 import { UsageError } from '../cli/errors';
 import { runAction } from '../cli/run-action';
-import type { ImpClient } from '../config/create-imp-client';
 import {
-  formatOAuthApproval,
   formatOAuthClients,
+  formatOAuthEnrollment,
   formatOAuthGrants,
+  formatOAuthPasskeys,
   formatOutput,
 } from '../output/format-output';
-import { readConfirmation } from '../prompts/read-confirmation';
 
 const clientArg = { type: 'positional', description: 'client name', required: true } as const;
+
+const clientReferenceArg = {
+  type: 'positional',
+  description: 'client ID, or a name that only one client holds (impz oauth client ls)',
+  required: true,
+} as const;
 
 const redirectArg = {
   type: 'string',
@@ -38,12 +42,15 @@ const clientAddCommand = defineCommand({
 const clientSetCommand = defineCommand({
   name: 'set',
   description: "Replace a client's redirect URIs; its client ID and grants stay",
-  args: { name: clientArg, 'redirect-uri': redirectArg, json: jsonArg },
+  args: { client: clientReferenceArg, 'redirect-uri': redirectArg, json: jsonArg },
   run: (ctx) =>
     runAction(ctx.extensions.impz, async (client) => {
       const redirectUris = parseRedirectUris(ctx.values['redirect-uri']);
 
-      const updated = await client.oauth.clients.update({ name: ctx.values.name, redirectUris });
+      const updated = await client.oauth.clients.update({
+        client: ctx.values.client,
+        redirectUris,
+      });
 
       ctx.extensions.impz.io.print(formatOutput([updated], ctx.values.json, formatOAuthClients));
     }),
@@ -64,10 +71,10 @@ const clientLsCommand = defineCommand({
 const clientRmCommand = defineCommand({
   name: 'rm',
   description: 'Remove a client; its grants end, and their sessions and commands with them',
-  args: { name: clientArg },
+  args: { client: clientReferenceArg },
   run: (ctx) =>
     runAction(ctx.extensions.impz, async (client) => {
-      await client.oauth.clients.delete({ name: ctx.values.name });
+      await client.oauth.clients.delete({ client: ctx.values.client });
     }),
 });
 
@@ -84,7 +91,7 @@ const clientCommand = defineGroup({
 
 const grantLsCommand = defineCommand({
   name: 'ls',
-  description: 'List grants: their client, approving token, scope and imps',
+  description: 'List grants: their client, what approved them, and their scope',
   args: { json: jsonArg },
   run: (ctx) =>
     runAction(ctx.extensions.impz, async (client) => {
@@ -112,107 +119,70 @@ const grantCommand = defineGroup({
   subCommands: { ls: grantLsCommand, rm: grantRmCommand },
 });
 
-interface ApprovePrompt {
-  readonly isTerminal: boolean;
-  readonly confirm: (question: string) => Promise<boolean>;
-  readonly show: (line: string) => void;
-}
-
-interface ApprovalsClient {
-  readonly oauth: {
-    readonly approvals: Pick<ImpClient['oauth']['approvals'], 'get' | 'approve'>;
-  };
-}
-
-interface ApproveRequest {
-  readonly code: string;
-  readonly scope: Scope;
-  readonly imps: readonly string[] | undefined;
-  readonly isConfirmed: boolean;
-}
-
-/* @internal */
-export async function runApprove(
-  client: Readonly<ApprovalsClient>,
-  request: Readonly<ApproveRequest>,
-  prompt: Readonly<ApprovePrompt>,
-): Promise<void> {
-  if (!request.isConfirmed && !prompt.isTerminal) {
-    throw new UsageError(
-      'impz oauth approve asks before it approves, and stdin is not a terminal; pass --yes to approve without asking',
-    );
-  }
-
-  const approval = await client.oauth.approvals.get({ code: request.code });
-
-  const where = request.imps === undefined ? "the token's imps" : request.imps.join(',');
-
-  prompt.show(formatOAuthApproval(approval));
-  prompt.show(`it gets:      ${request.scope} on ${where}`);
-
-  if (!request.isConfirmed) {
-    const isApproved = await prompt.confirm('Approve this sign-in? [y/N] ');
-
-    if (!isApproved) {
-      throw new Error('not approved; nothing changed');
-    }
-  }
-
-  await client.oauth.approvals.approve({
-    code: request.code,
-    scope: request.scope,
-    ...(request.imps !== undefined && { imps: [...request.imps] }),
-  });
-
-  prompt.show(
-    `impz: approved: ${approval.client} gets ${request.scope} on ${where}; press Continue on the sign-in page`,
-  );
-}
-
-const approveCommand = defineCommand({
-  name: 'approve',
+const passkeyEnrollCommand = defineCommand({
+  name: 'enroll',
   description:
-    'Approve a sign-in by the code its page shows, as this named token; approve only one you started',
+    'Make a one-time enrollment token; open the page it names and enter the token to enroll a passkey',
+  args: { json: jsonArg },
+  run: (ctx) =>
+    runAction(ctx.extensions.impz, async (client) => {
+      const enrollment = await client.oauth.passkeys.enroll();
+
+      ctx.extensions.impz.io.print(
+        formatOutput(enrollment, ctx.values.json, formatOAuthEnrollment),
+      );
+    }),
+});
+
+const passkeyLsCommand = defineCommand({
+  name: 'ls',
+  description: "List the owner's passkeys, which approve each sign-in",
+  args: { json: jsonArg },
+  run: (ctx) =>
+    runAction(ctx.extensions.impz, async (client) => {
+      const passkeys = await client.oauth.passkeys.list();
+
+      ctx.extensions.impz.io.print(formatOutput(passkeys, ctx.values.json, formatOAuthPasskeys));
+    }),
+});
+
+const passkeyRmCommand = defineCommand({
+  name: 'rm',
+  description: 'Remove a passkey; it signs in no more',
   args: {
-    code: { type: 'positional', description: 'the code on the sign-in page', required: true },
-    scope: {
-      type: 'enum',
-      choices: ScopeSchema.options,
-      description: 'read (the default), exec or manage; at most what the client asked for',
-      default: 'read',
-    },
-    imps: {
-      type: 'string',
-      description: "limit it to these imps, such as 'dev-*' (comma-separated; default the token's)",
-    },
-    yes: {
-      type: 'boolean',
-      description: 'approve without asking; needed when stdin is no terminal',
-    },
+    id: { type: 'positional', description: 'passkey ID (impz oauth passkey ls)', required: true },
   },
   run: (ctx) =>
     runAction(ctx.extensions.impz, async (client) => {
-      const request = {
-        code: parseApprovalCode(ctx.values.code),
-        scope: ctx.values.scope,
-        imps: parseGrantPatterns(ctx.values.imps),
-        isConfirmed: ctx.values.yes === true,
-      };
-
-      await runApprove(client, request, {
-        isTerminal: ctx.extensions.impz.io.isStdinTerminal,
-        confirm: (question) => readConfirmation(question),
-        show: (line) => {
-          ctx.extensions.impz.io.printError(line);
-        },
-      });
+      await client.oauth.passkeys.delete({ id: ctx.values.id });
     }),
+});
+
+const passkeyResetCommand = defineCommand({
+  name: 'reset',
+  description: 'Remove every passkey, and end each sign-in in progress; grants stay',
+  args: {},
+  run: (ctx) =>
+    runAction(ctx.extensions.impz, async (client) => {
+      await client.oauth.passkeys.reset();
+    }),
+});
+
+const passkeyCommand = defineGroup({
+  name: 'passkey',
+  description: "Enroll, list or remove the owner's passkeys, which approve each sign-in",
+  subCommands: {
+    enroll: passkeyEnrollCommand,
+    ls: passkeyLsCommand,
+    rm: passkeyRmCommand,
+    reset: passkeyResetCommand,
+  },
 });
 
 export const oauthCommand = defineGroup({
   name: 'oauth',
-  description: 'Manage sign-ins to the public MCP route: clients, grants and approvals',
-  subCommands: { client: clientCommand, grant: grantCommand, approve: approveCommand },
+  description: 'Manage sign-ins to the public MCP route: clients, grants and passkeys',
+  subCommands: { client: clientCommand, grant: grantCommand, passkey: passkeyCommand },
 });
 
 function parseRedirectUris(text: string): string[] {
@@ -230,35 +200,4 @@ function parseRedirectUris(text: string): string[] {
   }
 
   return uris;
-}
-
-function parseApprovalCode(text: string): string {
-  const parsed = ApprovalCodeSchema.safeParse(text);
-
-  if (!parsed.success) {
-    throw new UsageError(`${text} is not a sign-in code; it looks like ABCD-EFGH`);
-  }
-
-  return parsed.data;
-}
-
-function parseGrantPatterns(text: string | undefined): string[] | undefined {
-  if (text === undefined) {
-    return undefined;
-  }
-
-  const patterns = text
-    .split(',')
-    .map((pattern) => pattern.trim())
-    .filter((pattern) => pattern !== '');
-
-  const bad = patterns.find((pattern) => !GrantPatternSchema.safeParse(pattern).success);
-
-  if (patterns.length === 0 || bad !== undefined) {
-    throw new UsageError(
-      `--imps takes imp names, or a name prefix and a trailing *, such as dev-*; not ${bad ?? text}`,
-    );
-  }
-
-  return patterns;
 }

@@ -33,6 +33,7 @@ export interface ImpdStopParts {
   imps?: Pick<Imps, 'sleepAllImps' | 'waitForLifecycle' | 'bootTemplates' | 'memoryWarm'>;
   storage?: Stoppable;
   stopTelemetry?: (() => Promise<void>) | null;
+  oauth?: { readonly close: () => Promise<void> };
   db?: { readonly destroy: () => Promise<void> } | null;
 }
 
@@ -214,6 +215,13 @@ export async function stopImpd(
 
   if (stopTelemetry !== undefined && stopTelemetry !== null) {
     await runStep('telemetry', readStepMs(), stopTelemetry);
+  }
+
+  // the OAuth server holds its own query builder over the database's connection
+  const oauth = parts.oauth;
+
+  if (oauth !== undefined) {
+    await runStep('oauth', readStepMs(), () => oauth.close());
   }
 
   // a sleep still running writes its record later, and closing the database would fail

@@ -1,9 +1,5 @@
-import { GrantPatternSchema, ScopeSchema, hasScope } from '@impz/api';
+import { ScopeSchema, hasScope } from '@impz/api';
 import type { Scope } from '@impz/api';
-
-export function isGrantPattern(pattern: string): boolean {
-  return GrantPatternSchema.safeParse(pattern).success;
-}
 
 export function isPatternsWithin(
   grant: readonly string[] | null,
@@ -30,7 +26,7 @@ function isPatternWithin(pattern: string, own: string): boolean {
   return star === own.length - 1 && pattern.startsWith(own.slice(0, -1));
 }
 
-export function readLowerScope(left: Scope, right: Scope): Scope {
+export function pickLowerScope(left: Scope, right: Scope): Scope {
   return hasScope(left, right) ? right : left;
 }
 

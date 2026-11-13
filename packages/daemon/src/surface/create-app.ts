@@ -9,7 +9,6 @@ import { resolveCaller } from '../identity/auth/authenticate';
 import type { CallerSources } from '../identity/auth/authenticate';
 import { createLogouts } from '../identity/auth/logouts';
 import type { Revocations } from '../identity/auth/revocations';
-import { findBearer } from '../identity/auth/token-store';
 import type { MoveService } from '../imp-ops/moves/move-service';
 import { redeemPeerAddress } from '../network/proxy/forwarded-peers';
 import type { ForwardedPeers } from '../network/proxy/forwarded-peers';
@@ -26,6 +25,7 @@ import { createExecTickets, isCallerLive } from './exec/exec-tickets';
 import type { BuildContextRoute } from './images/build-context-route';
 import { createMcpEndpoint } from './mcp/mcp-endpoint';
 import type { MovePeerHandler } from './moves/create-move-peer-handler';
+import type { PublicMcpTransport } from './oauth/public-listener';
 import { withRetryAfter } from './with-retry-after';
 
 // Bun pings an idle exec socket and closes it when no answer comes, so a
@@ -165,19 +165,32 @@ export function createApp(deps: AppDeps) {
     readEnds,
   });
 
-  const publicMcp = createMcpEndpoint({
-    findCaller: (request) => {
-      const bearer = findBearer(request.headers.get('authorization'));
+  // The public listener checks the bearer token before a request reaches the transport, and
+  // hands over the caller it read with the request.
+  const publicCallers = new WeakMap<Request, Caller>();
 
-      return bearer === null ? Promise.resolve(null) : deps.oauth.resolveAccess(bearer);
-    },
+  const publicOrigin = deps.oauth.server?.issuer ?? null;
+
+  const publicTransport = createMcpEndpoint({
+    findCaller: (request) => Promise.resolve(publicCallers.get(request) ?? null),
     handleRpc,
     connectExec: execSockets.openExecSocket,
     readEnds,
     isCrossOrigin: (request) =>
-      !isAllowedOrigin(request, { kind: 'public-route', origin: deps.oauth.issuer }),
-    challenge: `Bearer resource_metadata="${deps.oauth.issuer}/.well-known/oauth-protected-resource/mcp", scope="read"`,
+      publicOrigin === null ||
+      !isAllowedOrigin(request, { kind: 'public-route', origin: publicOrigin }),
+    challenge: `Bearer resource_metadata="${publicOrigin ?? ''}/.well-known/oauth-protected-resource/mcp"`,
   });
+
+  const publicMcp: PublicMcpTransport = {
+    respond: (request, caller) => {
+      publicCallers.set(request, caller);
+
+      return publicTransport.respond(request);
+    },
+    close: publicTransport.close,
+    readCallEnd: publicTransport.readCallEnd,
+  };
 
   const sessionCalls = createSessionHandler({
     tokens: deps.tokens,

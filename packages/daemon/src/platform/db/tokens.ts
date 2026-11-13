@@ -151,17 +151,10 @@ export async function readTokenGrantable(
   return row === undefined ? null : GrantableSchema.parse(JSON.parse(row.grantable));
 }
 
-export function removeTokenRecord(db: ImpDatabase, id: string): Promise<string[]> {
-  return db.transaction().execute(async (trx) => {
+export async function removeTokenRecord(db: ImpDatabase, id: string): Promise<void> {
+  await db.transaction().execute(async (trx) => {
     await trx.deleteFrom('token_ssh_keys').where('token_id', '=', id).execute();
-
-    const grants = await trx.deleteFrom('user').where('tokenId', '=', id).returning('id').execute();
-
-    const grantIds = grants.map((grant) => grant.id);
-
     await trx.deleteFrom('tokens').where('id', '=', id).execute();
-
-    return grantIds;
   });
 }
 

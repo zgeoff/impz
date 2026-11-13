@@ -15,7 +15,7 @@ type ResourceKind =
   | 'network'
   | 'oauth-client'
   | 'oauth-grant'
-  | 'oauth-approval'
+  | 'oauth-passkey'
   | 'database-copy';
 
 export function buildNotFoundError(kind: ResourceKind, name: string) {

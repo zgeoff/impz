@@ -24,6 +24,7 @@ async function setupTest() {
   const host = await createTestDatabase();
 
   const tokens = await loadTokenStore({
+    removeGrants: () => Promise.resolve(),
     db: host.db,
     rootToken: 'root-secret',
     now: Date.now,

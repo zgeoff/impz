@@ -15450,8 +15450,7 @@
           "type": "object",
           "properties": {
             "name": {
-              "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,30}$"
+              "type": "string"
             },
             "clientId": {
               "type": "string"
@@ -15506,8 +15505,7 @@
         "type": "object",
         "properties": {
           "name": {
-            "type": "string",
-            "pattern": "^[a-z][a-z0-9-]{0,30}$"
+            "type": "string"
           },
           "clientId": {
             "type": "string"
@@ -15538,9 +15536,10 @@
       "input": {
         "type": "object",
         "properties": {
-          "name": {
+          "client": {
             "type": "string",
-            "pattern": "^[a-z][a-z0-9-]{0,30}$"
+            "minLength": 1,
+            "maxLength": 200
           },
           "redirectUris": {
             "minItems": 1,
@@ -15553,7 +15552,7 @@
           }
         },
         "required": [
-          "name",
+          "client",
           "redirectUris"
         ]
       },
@@ -15561,8 +15560,7 @@
         "type": "object",
         "properties": {
           "name": {
-            "type": "string",
-            "pattern": "^[a-z][a-z0-9-]{0,30}$"
+            "type": "string"
           },
           "clientId": {
             "type": "string"
@@ -15593,13 +15591,14 @@
       "input": {
         "type": "object",
         "properties": {
-          "name": {
+          "client": {
             "type": "string",
-            "pattern": "^[a-z][a-z0-9-]{0,30}$"
+            "minLength": 1,
+            "maxLength": 200
           }
         },
         "required": [
-          "name"
+          "client"
         ]
       },
       "output": {
@@ -15620,12 +15619,10 @@
               "type": "string"
             },
             "client": {
-              "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,30}$"
+              "type": "string"
             },
-            "token": {
-              "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{0,30}$"
+            "approvedBy": {
+              "type": "string"
             },
             "scope": {
               "type": "string",
@@ -15633,21 +15630,6 @@
                 "read",
                 "exec",
                 "manage"
-              ]
-            },
-            "imps": {
-              "anyOf": [
-                {
-                  "readOnly": true,
-                  "type": "array",
-                  "items": {
-                    "type": "string",
-                    "pattern": "^(?:\\*|[a-z][a-z0-9-]{0,30}|[a-z][a-z0-9-]{0,29}\\*)$"
-                  }
-                },
-                {
-                  "type": "null"
-                }
               ]
             },
             "createdAt": {
@@ -15669,9 +15651,8 @@
           "required": [
             "id",
             "client",
-            "token",
+            "approvedBy",
             "scope",
-            "imps",
             "createdAt",
             "lastUsedAt"
           ],
@@ -15701,86 +15682,88 @@
       },
       "stream": false
     },
-    "oauth.approvals.get": {
-      "input": {
-        "type": "object",
-        "properties": {
-          "code": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "code"
-        ]
+    "oauth.passkeys.list": {
+      "input": {},
+      "output": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "lastUsedAt": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "createdAt",
+            "lastUsedAt"
+          ],
+          "additionalProperties": false
+        }
       },
+      "stream": false
+    },
+    "oauth.passkeys.enroll": {
+      "input": {},
       "output": {
         "type": "object",
         "properties": {
-          "client": {
-            "type": "string",
-            "pattern": "^[a-z][a-z0-9-]{0,30}$"
-          },
-          "redirectUri": {
+          "token": {
             "type": "string"
           },
-          "requestedScope": {
-            "type": "string",
-            "enum": [
-              "read",
-              "exec",
-              "manage"
+          "url": {
+            "type": [
+              "string",
+              "null"
             ]
-          },
-          "requestedAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "expiresAt": {
-            "type": "string",
-            "format": "date-time"
           }
         },
         "required": [
-          "client",
-          "redirectUri",
-          "requestedScope",
-          "requestedAt",
-          "expiresAt"
+          "token",
+          "url"
         ],
         "additionalProperties": false
       },
       "stream": false
     },
-    "oauth.approvals.approve": {
+    "oauth.passkeys.delete": {
       "input": {
         "type": "object",
         "properties": {
-          "code": {
-            "type": "string"
-          },
-          "scope": {
+          "id": {
             "type": "string",
-            "enum": [
-              "read",
-              "exec",
-              "manage"
-            ]
-          },
-          "imps": {
-            "minItems": 1,
-            "maxItems": 32,
-            "type": "array",
-            "items": {
-              "type": "string",
-              "pattern": "^(?:\\*|[a-z][a-z0-9-]{0,30}|[a-z][a-z0-9-]{0,29}\\*)$"
-            }
+            "minLength": 1,
+            "maxLength": 512
           }
         },
         "required": [
-          "code",
-          "scope"
+          "id"
         ]
       },
+      "output": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "stream": false
+    },
+    "oauth.passkeys.reset": {
+      "input": {},
       "output": {
         "type": "object",
         "properties": {},
@@ -17276,7 +17259,7 @@
               "network",
               "oauth-client",
               "oauth-grant",
-              "oauth-approval",
+              "oauth-passkey",
               "database-copy"
             ]
           },
@@ -17319,7 +17302,7 @@
               "network",
               "oauth-client",
               "oauth-grant",
-              "oauth-approval",
+              "oauth-passkey",
               "database-copy"
             ]
           },

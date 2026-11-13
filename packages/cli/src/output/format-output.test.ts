@@ -15,6 +15,9 @@ import {
   formatHttps,
   formatIdentity,
   formatImages,
+  formatOAuthEnrollment,
+  formatOAuthGrants,
+  formatOAuthPasskeys,
   formatRefusedRequests,
   formatSessions,
   formatSshKey,
@@ -496,4 +499,43 @@ test('#formatHttps names a DNS token that fails as an error, with its file', () 
       'imp.example.com, ERROR: cannot read the DNS API token from /etc/imp/dns-api-token: ENOENT',
     ],
   ]);
+});
+
+test.each([
+  [
+    'https://imp.example/enroll',
+    'token: enroll-token-1\nopen https://imp.example/enroll, enter the token, and enroll a passkey; the token works once',
+  ],
+  [
+    null,
+    'token: enroll-token-1\nopen the enroll page of the public MCP route, once IMP_MCP_PUBLIC_URL is set, enter the token, and enroll a passkey; the token works once',
+  ],
+])('#formatOAuthEnrollment names the page %p', (url, text) => {
+  expect(formatOAuthEnrollment({ token: 'enroll-token-1', url })).toBe(text);
+});
+
+test('#formatOAuthPasskeys prints a passkey never used with a dash', () => {
+  const text = formatOAuthPasskeys([
+    { id: 'cred-1', createdAt: new Date('2026-01-02T03:04:05.000Z'), lastUsedAt: null },
+  ]);
+
+  expect(text.split('\n')).toStrictEqual([
+    'ID      CREATED                   LAST USED',
+    'cred-1  2026-01-02T03:04:05.000Z  -',
+  ]);
+});
+
+test('#formatOAuthGrants prints who approved each grant', () => {
+  const text = formatOAuthGrants([
+    {
+      id: 'g-1',
+      client: 'conn',
+      approvedBy: 'token:laptop',
+      scope: 'exec',
+      createdAt: new Date('2026-01-02T03:04:05.000Z'),
+      lastUsedAt: null,
+    },
+  ]);
+
+  expect(text.split('\n')[1]).toStartWith('g-1  conn    token:laptop');
 });

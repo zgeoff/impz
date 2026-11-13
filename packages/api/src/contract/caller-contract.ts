@@ -35,11 +35,11 @@ import { NameInputSchema } from '../schemas/name-input-schema';
 import { NameSchema } from '../schemas/name-schema';
 import { NetworkJoinSchema, NetworkSchema } from '../schemas/network-schema';
 import {
-  ApprovalCodeSchema,
-  GrantPatternSchema,
-  OAuthApprovalSchema,
+  OAuthClientReferenceSchema,
   OAuthClientSchema,
+  OAuthEnrollmentSchema,
   OAuthGrantSchema,
+  OAuthPasskeySchema,
   RedirectUrisSchema,
 } from '../schemas/oauth-schema';
 import { SecretAddSchema } from '../schemas/secret-add-schema';
@@ -69,7 +69,6 @@ import {
 import { SessionNameSchema, SessionSchema } from '../schemas/session-schema';
 import { DatabaseCopySchema, StorageGcSchema } from '../schemas/storage-schema';
 import { SystemFeaturesInfoSchema, SystemInfoSchema } from '../schemas/system-info-schema';
-import { ScopeSchema } from '../schemas/token-schema';
 import { ACCESS } from './access';
 import { contractBase as base } from './contract-base';
 import { impsContract } from './imps-contract';
@@ -488,12 +487,16 @@ export const callerContract = {
         .input(z.object({ name: NameSchema, redirectUris: RedirectUrisSchema }))
         .output(OAuthClientSchema),
 
+      // client: a client ID, or a name that only one client holds
       update: base
         .meta(ACCESS.manageHost)
-        .input(z.object({ name: NameSchema, redirectUris: RedirectUrisSchema }))
+        .input(z.object({ client: OAuthClientReferenceSchema, redirectUris: RedirectUrisSchema }))
         .output(OAuthClientSchema),
 
-      delete: base.meta(ACCESS.manageHost).input(NameInputSchema).output(EmptySchema),
+      delete: base
+        .meta(ACCESS.manageHost)
+        .input(z.object({ client: OAuthClientReferenceSchema }))
+        .output(EmptySchema),
     },
 
     grants: {
@@ -505,25 +508,19 @@ export const callerContract = {
         .output(EmptySchema),
     },
 
-    // Only a named token approves a sign-in, and never with more than its own
-    // scope and imps.
-    approvals: {
-      get: base
-        .meta(ACCESS.readAny)
-        .input(z.object({ code: ApprovalCodeSchema }))
-        .output(OAuthApprovalSchema),
-      approve: base
-        .meta(ACCESS.readAny)
-        .input(
-          z.object({
-            code: ApprovalCodeSchema,
-            scope: ScopeSchema,
+    // The owner's passkeys, which approve each sign-in on the consent page.
+    passkeys: {
+      list: base.meta(ACCESS.manageHost).output(z.array(OAuthPasskeySchema)),
 
-            // Left out, the grant takes the approver's own imp patterns.
-            imps: z.array(GrantPatternSchema).min(1).max(32).optional(),
-          }),
-        )
+      enroll: base.meta(ACCESS.manageHost).output(OAuthEnrollmentSchema),
+
+      delete: base
+        .meta(ACCESS.manageHost)
+        .input(z.object({ id: z.string().min(1).max(512) }))
         .output(EmptySchema),
+
+      // every passkey, and each sign-in in progress
+      reset: base.meta(ACCESS.manageHost).output(EmptySchema),
     },
   },
 

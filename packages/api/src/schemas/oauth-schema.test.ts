@@ -1,10 +1,11 @@
 import { expect, test } from 'bun:test';
 import {
-  ApprovalCodeSchema,
   GrantPatternSchema,
-  OAuthApprovalSchema,
+  OAuthClientReferenceSchema,
   OAuthClientSchema,
+  OAuthEnrollmentSchema,
   OAuthGrantSchema,
+  OAuthPasskeySchema,
   RedirectUriSchema,
   RedirectUrisSchema,
 } from './oauth-schema';
@@ -100,26 +101,6 @@ test.each(['', 'Dev', '*dev', 'dev*x', '2dev'])(
   },
 );
 
-test.each([
-  ['ABCD-EFGH', 'ABCDEFGH'],
-  [' abcd-efgh ', 'ABCDEFGH'],
-  ['23456789', '23456789'],
-])('#ApprovalCodeSchema reads the code %p as %p', (input, expected) => {
-  expect(ApprovalCodeSchema.safeParse(input).data).toBe(expected);
-});
-
-test.each(['ABCD-EFG', 'ABCD-EFGHI', 'ABCD-EFGI', 'ABCD-EFG0', 'ABCD-EFG1'])(
-  '#ApprovalCodeSchema rejects the code %s',
-  (input) => {
-    const result = ApprovalCodeSchema.safeParse(input);
-
-    expect(result.error?.issues).toPartiallyContain({
-      path: [],
-      message: 'must be the 8-symbol code the sign-in page shows',
-    });
-  },
-);
-
 test('#OAuthClientSchema accepts a client', () => {
   const payload = {
     name: 'claude',
@@ -131,89 +112,68 @@ test('#OAuthClientSchema accepts a client', () => {
   expect(OAuthClientSchema.safeParse(payload).data).toStrictEqual(payload);
 });
 
-test('#OAuthClientSchema rejects a name that is not a valid name', () => {
-  const result = OAuthClientSchema.safeParse({
-    name: 'Claude',
+test('#OAuthClientSchema accepts a stored name that a new client may not take', () => {
+  const payload = {
+    name: 'Spaced Orchard',
     clientId: 'c-123',
     redirectUris: ['https://claude.ai/cb'],
     createdAt: new Date('2026-01-02T03:04:05.000Z'),
-  });
+  };
 
-  expect(result.error?.issues).toPartiallyContain({
-    path: ['name'],
-    message: 'must be a lowercase letter followed by up to 30 lowercase letters, digits or hyphens',
-  });
+  expect(OAuthClientSchema.safeParse(payload).data).toStrictEqual(payload);
 });
 
-test('#OAuthGrantSchema accepts a grant limited to some imps', () => {
+test.each(['impc_one', 'conn', 'Spaced Orchard'])(
+  '#OAuthClientReferenceSchema accepts the reference %p',
+  (input) => {
+    expect(OAuthClientReferenceSchema.safeParse(input).data).toBe(input);
+  },
+);
+
+test.each([
+  ['an empty reference', '', 'too_small'],
+  ['a reference of 201 characters', 'a'.repeat(201), 'too_big'],
+])('#OAuthClientReferenceSchema rejects %s', (_case, input, code) => {
+  const result = OAuthClientReferenceSchema.safeParse(input);
+
+  expect(result.error?.issues).toPartiallyContain({ path: [], code });
+});
+
+test.each([['passkey'], ['token:laptop']])(
+  '#OAuthGrantSchema accepts a grant approved by %s',
+  (approvedBy) => {
+    const payload = {
+      id: 'g-1',
+      client: 'claude',
+      approvedBy,
+      scope: 'exec',
+      createdAt: new Date('2026-01-02T03:04:05.000Z'),
+      lastUsedAt: new Date('2026-01-02T04:05:06.000Z'),
+    } as const;
+
+    expect(OAuthGrantSchema.safeParse(payload).data).toStrictEqual(payload);
+  },
+);
+
+test('#OAuthGrantSchema accepts a client name that a new client may not take', () => {
   const payload = {
     id: 'g-1',
-    client: 'claude',
-    token: 'laptop',
+    client: 'Spaced Orchard',
+    approvedBy: 'passkey',
     scope: 'exec',
-    imps: ['dev-*'],
     createdAt: new Date('2026-01-02T03:04:05.000Z'),
     lastUsedAt: null,
   } as const;
 
   expect(OAuthGrantSchema.safeParse(payload).data).toStrictEqual(payload);
-});
-
-test('#OAuthGrantSchema accepts a grant over every imp', () => {
-  const payload = {
-    id: 'g-1',
-    client: 'claude',
-    token: 'laptop',
-    scope: 'exec',
-    imps: null,
-    createdAt: new Date('2026-01-02T03:04:05.000Z'),
-    lastUsedAt: new Date('2026-01-02T04:05:06.000Z'),
-  } as const;
-
-  expect(OAuthGrantSchema.safeParse(payload).data).toStrictEqual(payload);
-});
-
-test('#OAuthGrantSchema rejects a client that is not a valid name', () => {
-  const result = OAuthGrantSchema.safeParse({
-    id: 'g-1',
-    client: 'Claude',
-    token: 'laptop',
-    scope: 'exec',
-    imps: ['dev-*'],
-    createdAt: new Date('2026-01-02T03:04:05.000Z'),
-    lastUsedAt: null,
-  });
-
-  expect(result.error?.issues).toPartiallyContain({
-    path: ['client'],
-    message: 'must be a lowercase letter followed by up to 30 lowercase letters, digits or hyphens',
-  });
-});
-
-test('#OAuthGrantSchema rejects a token that is not a valid name', () => {
-  const result = OAuthGrantSchema.safeParse({
-    id: 'g-1',
-    client: 'claude',
-    token: 'Laptop',
-    scope: 'exec',
-    imps: ['dev-*'],
-    createdAt: new Date('2026-01-02T03:04:05.000Z'),
-    lastUsedAt: null,
-  });
-
-  expect(result.error?.issues).toPartiallyContain({
-    path: ['token'],
-    message: 'must be a lowercase letter followed by up to 30 lowercase letters, digits or hyphens',
-  });
 });
 
 test('#OAuthGrantSchema rejects a scope outside the scope list', () => {
   const result = OAuthGrantSchema.safeParse({
     id: 'g-1',
     client: 'claude',
-    token: 'laptop',
+    approvedBy: 'passkey',
     scope: 'admin',
-    imps: ['dev-*'],
     createdAt: new Date('2026-01-02T03:04:05.000Z'),
     lastUsedAt: null,
   });
@@ -221,61 +181,18 @@ test('#OAuthGrantSchema rejects a scope outside the scope list', () => {
   expect(result.error?.issues).toPartiallyContain({ path: ['scope'], code: 'invalid_value' });
 });
 
-test('#OAuthGrantSchema rejects an imp pattern that is not a pattern', () => {
-  const result = OAuthGrantSchema.safeParse({
-    id: 'g-1',
-    client: 'claude',
-    token: 'laptop',
-    scope: 'exec',
-    imps: ['*dev'],
+test('#OAuthPasskeySchema accepts a passkey never used', () => {
+  const payload = {
+    id: 'cred-1',
     createdAt: new Date('2026-01-02T03:04:05.000Z'),
     lastUsedAt: null,
-  });
+  };
 
-  expect(result.error?.issues).toPartiallyContain({
-    path: ['imps', 0],
-    message: 'must be an imp name, or a name prefix and a trailing *, such as dev-*',
-  });
+  expect(OAuthPasskeySchema.safeParse(payload).data).toStrictEqual(payload);
 });
 
-test('#OAuthApprovalSchema accepts an approval', () => {
-  const payload = {
-    client: 'claude',
-    redirectUri: 'https://claude.ai/cb',
-    requestedScope: 'manage',
-    requestedAt: new Date('2026-01-02T03:04:05.000Z'),
-    expiresAt: new Date('2026-01-02T04:05:06.000Z'),
-  } as const;
+test('#OAuthEnrollmentSchema accepts an enrollment with no page to open', () => {
+  const payload = { token: 'an-enrollment-token', url: null };
 
-  expect(OAuthApprovalSchema.safeParse(payload).data).toStrictEqual(payload);
-});
-
-test('#OAuthApprovalSchema rejects a client that is not a valid name', () => {
-  const result = OAuthApprovalSchema.safeParse({
-    client: 'Claude',
-    redirectUri: 'https://claude.ai/cb',
-    requestedScope: 'manage',
-    requestedAt: new Date('2026-01-02T03:04:05.000Z'),
-    expiresAt: new Date('2026-01-02T04:05:06.000Z'),
-  });
-
-  expect(result.error?.issues).toPartiallyContain({
-    path: ['client'],
-    message: 'must be a lowercase letter followed by up to 30 lowercase letters, digits or hyphens',
-  });
-});
-
-test('#OAuthApprovalSchema rejects a scope outside the scope list', () => {
-  const result = OAuthApprovalSchema.safeParse({
-    client: 'claude',
-    redirectUri: 'https://claude.ai/cb',
-    requestedScope: 'admin',
-    requestedAt: new Date('2026-01-02T03:04:05.000Z'),
-    expiresAt: new Date('2026-01-02T04:05:06.000Z'),
-  });
-
-  expect(result.error?.issues).toPartiallyContain({
-    path: ['requestedScope'],
-    code: 'invalid_value',
-  });
+  expect(OAuthEnrollmentSchema.safeParse(payload).data).toStrictEqual(payload);
 });

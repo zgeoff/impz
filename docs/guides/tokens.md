@@ -228,7 +228,7 @@ adds, pins or unpins an image, whatever its token may. An impd older than this f
 | SSH key                  | the key; see below                                                                                   |
 | Tailnet peer             | the identity a rule gives it; see below                                                              |
 | Move ticket              | nothing but its one move's `/move/*` steps ([moves](../architecture/storage/moves.md#one-live-copy)) |
-| OAuth access token       | its grant, within the token that approved it; on the public `/mcp` only (see below)                  |
+| OAuth access token       | its grant, within the scopes and imps the consent gave; on the public `/mcp` only (see below)        |
 
 A wrong bearer token is refused outright: it never falls through to the cookie or the tailnet. An
 `/exec` or `/tunnel` socket that a token without `exec` opens is accepted, and each start on it
@@ -256,11 +256,11 @@ per client instead, and its tools follow that token's scope and patterns: see
 
 ### OAuth grants
 
-On the [public MCP route](./mcp.md#public-route), a client signs in and a named token approves it
-with `impz oauth approve`. The grant gets at most that token's scope and patterns, and no secrets.
+On the [public MCP route](./mcp.md#public-route), a client signs in and the owner approves it with a
+passkey on the consent page. The grant gets the scopes and imps the consent names, and no secrets.
 impd checks both on every request, and the audit log names the caller `<client>/<grant id>`.
-Removing the token ends every grant it approved. `impz oauth grant ls` lists the grants, and
-`impz oauth grant rm` ends one.
+Removing a token ends each grant it approved before impd 7. `impz oauth grant ls` lists the grants,
+and `impz oauth grant rm` ends one.
 
 ## Tailnet identity
 

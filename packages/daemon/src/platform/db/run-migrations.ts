@@ -48,6 +48,7 @@ import { MIGRATION_042_ADD_SECRET_ENV } from './migrations/migration-042-add-sec
 import { MIGRATION_043_MERGE_SECRET_KINDS } from './migrations/migration-043-merge-secret-kinds';
 import { MIGRATION_044_ADD_IMP_IMAGE_DIGESTS } from './migrations/migration-044-add-imp-image-digests';
 import { MIGRATION_045_ADD_IMP_LAST_REQUEST } from './migrations/migration-045-add-imp-last-request';
+import { MIGRATION_046_MOVE_GRANTS_TO_MCP_AUTH } from './migrations/migration-046-move-grants-to-mcp-auth';
 
 export const MIGRATIONS: Record<string, Migration> = {
   '001_create_initial_schema': MIGRATION_001_CREATE_INITIAL_SCHEMA,
@@ -95,6 +96,7 @@ export const MIGRATIONS: Record<string, Migration> = {
   '043_merge_secret_kinds': MIGRATION_043_MERGE_SECRET_KINDS,
   '044_add_imp_image_digests': MIGRATION_044_ADD_IMP_IMAGE_DIGESTS,
   '045_add_imp_last_request': MIGRATION_045_ADD_IMP_LAST_REQUEST,
+  '046_move_grants_to_mcp_auth': MIGRATION_046_MOVE_GRANTS_TO_MCP_AUTH,
 };
 
 // the durable package numbers its migrations apart from impd's, so they keep a table of their own:

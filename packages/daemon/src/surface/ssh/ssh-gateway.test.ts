@@ -47,6 +47,7 @@ async function setupTest() {
   const revocations = createRevocations();
 
   const tokens = await loadTokenStore({
+    removeGrants: () => Promise.resolve(),
     db: database.db,
     rootToken: 'root-secret',
     now: Date.now,
