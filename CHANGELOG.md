@@ -2,14 +2,18 @@
 
 ## [7.0.0](https://github.com/zgeoff/impz/compare/v6.12.0...v7.0.0) (2026-11-13)
 
-
 ### ⚠ BREAKING CHANGES
 
-* **auth:** `impz oauth approve` and the `oauth.approvals` calls are gone; `impz oauth passkey enroll|ls|rm|reset` and `oauth.passkeys` take their place. An OAuth grant lists `approvedBy` in place of `token` and `imps`. A request to the public port with a foreign Host gets 403.
+- **auth:** `impz oauth approve` and the `oauth.approvals` calls are gone;
+  `impz oauth passkey enroll|ls|rm|reset` and `oauth.passkeys` take their place. An OAuth grant
+  lists `approvedBy` in place of `token` and `imps`. A request to the public port with a foreign
+  Host gets 403.
 
 ### Features
 
-* **auth:** move the mcp oauth server to @zgeoff/mcp-auth ([#1020](https://github.com/zgeoff/impz/issues/1020)) ([43922cf](https://github.com/zgeoff/impz/commit/43922cf2b0dae0c6a57fd5bc4c87c560e98a4b92))
+- **auth:** move the mcp oauth server to @zgeoff/mcp-auth
+  ([#1020](https://github.com/zgeoff/impz/issues/1020))
+  ([43922cf](https://github.com/zgeoff/impz/commit/43922cf2b0dae0c6a57fd5bc4c87c560e98a4b92))
 
 ## [6.12.0](https://github.com/zgeoff/impz/compare/v6.11.6...v6.12.0) (2026-11-11)
 
