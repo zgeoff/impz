@@ -2,10 +2,8 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { mcp } from '@better-auth/mcp';
 import { durableMigrations } from '@impz/durable';
-import type { BetterAuthPlugin } from 'better-auth';
-import { getMigrations } from 'better-auth/db/migration';
+import { openMCPAuthAdmin } from '@zgeoff/mcp-auth';
 import { sql } from 'kysely';
 import invariant from 'tiny-invariant';
 import { createSecretFiles } from '../../network/broker/secrets/secret-files';
@@ -948,42 +946,24 @@ test('#runMigrations lets a token that approved an old OAuth grant be removed', 
   expect(removed.numDeletedRows).toBe(1n);
 });
 
-test('#runMigrations leaves better-auth no table or column to add', async () => {
+test('#runMigrations leaves a database the shared OAuth server opens with no setup error', async () => {
   const db = createUnmigratedDatabase();
 
   await runMigrations(db);
 
-  const options = {
-    baseURL: 'http://127.0.0.1:7071',
-    basePath: '/',
-    secret: 'a-test-secret-of-at-least-32-characters',
-    database: { db, type: 'sqlite' as const },
-    telemetry: { enabled: false },
-    logger: { disabled: true },
-    user: {
-      additionalFields: {
-        tokenId: { type: 'string' as const, required: true, input: false },
-        imps: { type: 'string' as const, required: false, input: false },
-        lastUsedAt: { type: 'date' as const, required: false, input: false },
-      },
-    },
-    plugins: [
-      // a BetterAuthPlugin at runtime; only its endpoint option types disagree with the stricter
-      // compiler settings
-      mcp({
-        loginPage: '/login',
-        consentPage: '/consent',
-        scopes: ['read', 'exec', 'manage', 'offline_access'],
-        disableJwtPlugin: true,
-        resource: 'http://127.0.0.1:7071/mcp',
-      }) as BetterAuthPlugin,
-    ],
-  };
+  const admin = await openMCPAuthAdmin({
+    database: db.sqlite,
+    scopes: ['read', 'exec', 'manage'],
+    tables: { passkey: 'oauth_passkeys', enrollmentToken: 'oauth_enrollment_tokens' },
+    clock: { now: Date.now },
+    onGrantRevoked: () => {},
+  });
 
-  const pending = await getMigrations(options);
+  onTestFinished(() => admin.close());
 
-  expect(pending.toBeCreated).toStrictEqual([]);
-  expect(pending.toBeAdded).toStrictEqual([]);
+  const grants = await admin.grants.list();
+
+  expect(grants).toStrictEqual([]);
 });
 
 test('#runMigrations takes each image’s last use from its newest imp, or its creation, in the image last-use migration', async () => {

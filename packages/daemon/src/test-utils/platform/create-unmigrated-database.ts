@@ -20,6 +20,7 @@ export function createUnmigratedDatabase(path = ':memory:'): ImpDatabase {
   // driver's destroy leaves the handle open for its opener to close
   const db = Object.assign(builder, {
     log: createImpEventLog(builder, Date.now),
+    sqlite,
     destroy: async () => {
       await destroyDriver();
 

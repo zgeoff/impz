@@ -25,14 +25,6 @@ export const GrantPatternSchema = z
     'must be an imp name, or a name prefix and a trailing *, such as dev-*',
   );
 
-export const ApprovalCodeSchema = z
-  .string()
-  .trim()
-  .transform((code) => code.toUpperCase().replaceAll('-', ''))
-  .pipe(
-    z.string().regex(/^[A-HJ-NP-Z2-9]{8}$/u, 'must be the 8-symbol code the sign-in page shows'),
-  );
-
 export const OAuthClientSchema = z.object({
   name: NameSchema,
 
@@ -47,9 +39,10 @@ export const OAuthGrantSchema = z.object({
   id: z.string(),
   client: NameSchema,
 
-  token: NameSchema,
+  // passkey, or token: and the name of the imp token that approved a grant before the owner's
+  // passkey approved each one
+  approvedBy: z.string(),
   scope: ScopeSchema,
-  imps: z.array(GrantPatternSchema).readonly().nullable(),
   createdAt: z.date(),
 
   lastUsedAt: z.date().nullable(),
@@ -57,16 +50,22 @@ export const OAuthGrantSchema = z.object({
 
 export type OAuthGrant = z.infer<typeof OAuthGrantSchema>;
 
-export const OAuthApprovalSchema = z.object({
-  client: NameSchema,
-  redirectUri: z.string(),
-
-  requestedScope: ScopeSchema,
-  requestedAt: z.date(),
-  expiresAt: z.date(),
+export const OAuthPasskeySchema = z.object({
+  id: z.string(),
+  createdAt: z.date(),
+  lastUsedAt: z.date().nullable(),
 });
 
-export type OAuthApproval = z.infer<typeof OAuthApprovalSchema>;
+export type OAuthPasskey = z.infer<typeof OAuthPasskeySchema>;
+
+// The owner opens the page at url and enters the token, which works once. url is null when impd
+// serves no public MCP route.
+export const OAuthEnrollmentSchema = z.object({
+  token: z.string(),
+  url: z.string().nullable(),
+});
+
+export type OAuthEnrollment = z.infer<typeof OAuthEnrollmentSchema>;
 
 function isAllowedRedirectUri(text: string): boolean {
   let url: URL;

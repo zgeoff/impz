@@ -100,7 +100,11 @@ test.each([
   ['impz oauth grant'],
   ['impz oauth grant ls'],
   ['impz oauth grant rm'],
-  ['impz oauth approve'],
+  ['impz oauth passkey'],
+  ['impz oauth passkey enroll'],
+  ['impz oauth passkey ls'],
+  ['impz oauth passkey rm'],
+  ['impz oauth passkey reset'],
   ['impz login'],
   ['impz host'],
   ['impz host ls'],
@@ -177,7 +181,7 @@ COMMANDS
          info    Show impd version, RAM budget and counts, or one imp with its container
         bench    Time creates, wakes and restores on this host at rising concurrency
           mcp    Serve imps to a coding agent as MCP tools over stdio. The guard limits which imps the tools touch; it stops mistakes. For a real limit, run it with a scoped token (impz token new).
-        oauth    Manage sign-ins to the public MCP route: clients, grants and approvals
+        oauth    Manage sign-ins to the public MCP route: clients, grants and passkeys
         login    Save an impd and its token, and make it the current host
          host    Manage saved impd hosts (see also impz login)
         hosts    List saved hosts (impz host ls)
@@ -339,7 +343,11 @@ test('it pins the help of every command in the tree', async () => {
     'impz oauth grant',
     'impz oauth grant ls',
     'impz oauth grant rm',
-    'impz oauth approve',
+    'impz oauth passkey',
+    'impz oauth passkey enroll',
+    'impz oauth passkey ls',
+    'impz oauth passkey rm',
+    'impz oauth passkey reset',
     'impz login',
     'impz host',
     'impz host ls',

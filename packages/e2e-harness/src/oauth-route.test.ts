@@ -2,8 +2,9 @@ import { expect, mock, onTestFinished, test } from 'bun:test';
 import {
   buildPkceChallenge,
   buildRouteOrigin,
-  parseApprovalPage,
+  parseEnrollmentToken,
   parseMcpBody,
+  parsePasskeyPage,
   readCookies,
   sendMcp,
 } from './oauth-route';
@@ -18,22 +19,29 @@ test('#buildPkceChallenge gives RFC 7636 appendix B challenge', () => {
   );
 });
 
-test('#parseApprovalPage reads the approval code and the signed query, unescaped', () => {
+test('#parsePasskeyPage reads the sign-in options a login page hands the browser', () => {
   const page = [
-    '<p>Run <code>impz oauth approve K7QX-29TB</code> to approve.</p>',
-    '<form method="post" action="/login">',
-    '<input type="hidden" name="oauth_query" value="client_id=impc_a&amp;sig=c2ln">',
-    '</form>',
-  ].join('\n');
+    '<form method="post" action="/login"></form>',
+    '<script type="application/json" id="mcp-auth-passkey">',
+    '{"mode":"get","options":{"challenge":"Y2hhbA","rpId":"imp.example"}}',
+    '</script>',
+  ].join('');
 
-  expect(parseApprovalPage(page)).toStrictEqual({
-    code: 'K7QX-29TB',
-    oauthQuery: 'client_id=impc_a&sig=c2ln',
+  expect(parsePasskeyPage(page)).toStrictEqual({
+    mode: 'get',
+    options: { challenge: 'Y2hhbA', rpId: 'imp.example' },
   });
 });
 
-test('#parseApprovalPage reads a page without the form as empty fields', () => {
-  expect(parseApprovalPage('<p>expired</p>')).toStrictEqual({ code: '', oauthQuery: '' });
+test('#parsePasskeyPage reads a page with no passkey block as null', () => {
+  expect(parsePasskeyPage('<p>expired</p>')).toBeNull();
+});
+
+test.each([
+  ['token: abc_123-x\nopen https://imp.example/enroll\n', 'abc_123-x'],
+  ['no token here\n', ''],
+])('#parseEnrollmentToken reads %p as %p', (stdout, token) => {
+  expect(parseEnrollmentToken(stdout)).toBe(token);
 });
 
 test('#readCookies sends back each cookie a response sets, without its attributes', () => {

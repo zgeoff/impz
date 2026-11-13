@@ -1,8 +1,9 @@
 import { MCP_PATH } from '@impz/api';
-import type { HttpTransport } from '@impz/mcp';
-import type { McpAuth } from '../../identity/oauth/create-mcp-auth';
+import invariant from 'tiny-invariant';
+import type { ImpdMcpAuth } from '../../identity/oauth/create-impd-mcp-auth';
 import type { PublicMcpConfig } from '../../identity/oauth/public-mcp-config';
 import { readBodyText } from '../../identity/oauth/read-body-text';
+import type { Caller } from '../../platform/principal/caller';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { tapStream } from '../../platform/process/tap-stream';
 import { createPublicApp } from './create-public-app';
@@ -15,13 +16,22 @@ const MAX_CONTROL_BYTES = 16 * 1024;
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
 const IDLE_TIMEOUT_S = 30;
 
-export interface PublicListenerDeps {
-  readonly config: PublicMcpConfig;
-  readonly oauth: Pick<McpAuth, 'handlers'>;
-  readonly mcp: HttpTransport;
+export interface PublicMcpTransport {
+  readonly respond: (request: Request, caller: Readonly<Caller>) => Promise<Response>;
+  readonly close: () => Promise<void>;
+
+  // Settles when the tool call ends, which neither a dropped stream nor an aborted request
+  // hastens.
+  readonly readCallEnd: (response: Response) => Promise<void> | null;
 }
 
-type TimeoutServer = Pick<Bun.Server<undefined>, 'timeout'>;
+export interface PublicListenerDeps {
+  readonly config: PublicMcpConfig;
+  readonly oauth: Pick<ImpdMcpAuth, 'server' | 'readCaller'>;
+  readonly mcp: PublicMcpTransport;
+}
+
+type PublicServer = Pick<Bun.Server<undefined>, 'timeout' | 'requestIP'>;
 
 export interface PublicListener {
   readonly port: number;
@@ -31,27 +41,34 @@ export interface PublicListener {
 /* @internal */
 export function createPublicHandler(
   deps: Readonly<PublicListenerDeps>,
-): (request: Request, server: TimeoutServer | null) => Promise<Response> {
+): (request: Request, server: PublicServer | null) => Promise<Response> {
   const state = { open: 0, control: 0 };
 
-  const servers = new WeakMap<Request, TimeoutServer>();
+  const servers = new WeakMap<Request, PublicServer>();
 
-  const host = deps.config.host.toLowerCase();
+  const auth = deps.oauth.server;
+
+  invariant(auth !== null, 'the public listener starts only with the public MCP route set');
 
   const app = createPublicApp({
-    oauth: deps.oauth.handlers,
-    mcp: deps.mcp,
-    holdOpen: (request) => {
+    auth,
+    host: deps.config.host,
+    readCaller: deps.oauth.readCaller,
+    readRequester: (request) => ({
+      socketAddress: servers.get(request)?.requestIP(request)?.address ?? null,
+      connectingIP: null,
+      userAgent: request.headers.get('user-agent'),
+    }),
+
+    // A tool call can run for minutes, so no idle timeout ends it.
+    respond: (request, caller) => {
       servers.get(request)?.timeout(request, 0);
+
+      return deps.mcp.respond(request, caller);
     },
   });
 
-  const handleRequest = (request: Request, server: TimeoutServer | null): Promise<Response> => {
-    // A name the front did not route here, or a page that rebinds DNS.
-    if ((request.headers.get('host') ?? '').toLowerCase() !== host) {
-      return Promise.resolve(new Response('not found', { status: 404 }));
-    }
-
+  const handleRequest = (request: Request, server: PublicServer | null): Promise<Response> => {
     if (server !== null) {
       servers.set(request, server);
     }

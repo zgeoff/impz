@@ -274,6 +274,8 @@ async function startImpdParts(
     loadImpdAccess(config, deps, authorizedKeys.probeListed),
   );
 
+  plan.oauth = access.oauth.admin;
+
   const backups =
     config.backup === null
       ? null
@@ -394,7 +396,7 @@ async function startImpdParts(
       config,
       {
         idle,
-        oauth: access.oauth,
+        oauth: access.oauth.admin,
         governor,
         imps,
         memory: governed.memory,

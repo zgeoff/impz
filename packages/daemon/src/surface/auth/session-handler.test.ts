@@ -11,6 +11,7 @@ async function setupTest() {
   return {
     loadTokens: (rootToken: string) =>
       loadTokenStore({
+        removeGrants: () => Promise.resolve(),
         db: database.db,
         rootToken,
         now: Date.now,

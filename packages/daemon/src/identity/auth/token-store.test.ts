@@ -17,12 +17,14 @@ async function setupTest() {
   const database = await createTestDatabase();
 
   const removed: string[] = [];
+  const grantRemovals: string[] = [];
 
   const fileKeys = new Set<string>();
 
   return {
     db: database.db,
     removed,
+    grantRemovals,
     fileKeys,
 
     load: (rootToken: string, now: () => number = Date.now) =>
@@ -32,6 +34,11 @@ async function setupTest() {
         now,
         onRemove: (id) => {
           removed.push(id);
+        },
+        removeGrants: (tokenID) => {
+          grantRemovals.push(tokenID);
+
+          return Promise.resolve();
         },
         isFileKey: (blob) => fileKeys.has(blob.toString('base64')),
       }),
@@ -266,6 +273,18 @@ test('#remove reports the token’s id so what it opened ends', async () => {
   await tokens.remove('ci');
 
   expect(ctx.removed).toStrictEqual([tokenId]);
+});
+
+test('#remove ends the grants the token approved', async () => {
+  const ctx = await setupTest();
+  const tokens = await ctx.load('root-secret');
+  const made = await tokens.create({ name: 'ci', scope: 'read', imps: null });
+
+  const [tokenId = ''] = made.secret.slice('imp_'.length).split('.');
+
+  await tokens.remove('ci');
+
+  expect(ctx.grantRemovals).toStrictEqual([tokenId]);
 });
 
 test('#remove refuses a name no token has', async () => {
@@ -506,6 +525,7 @@ test('#addKey refuses a key that a group-writable authorized_keys lists', async 
   chmodSync(keysPath, 0o666);
 
   const tokens = await loadTokenStore({
+    removeGrants: () => Promise.resolve(),
     db: ctx.db,
     rootToken: 'root-secret',
     now: Date.now,

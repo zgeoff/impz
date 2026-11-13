@@ -24,6 +24,7 @@ import { mintOpaqueToken } from '../../platform/secrets/mint-opaque-token';
 import { parseOpaqueToken } from '../../platform/secrets/parse-opaque-token';
 
 // A made token's id is 16 characters, so this one never clashes with it.
+/* @internal */
 export const ROOT_TOKEN_ID = 'root';
 const ROOT_NAME = 'root';
 const ROOT_PRINCIPAL = 'root';
@@ -96,6 +97,9 @@ interface TokenStoreDeps {
   readonly now: () => number;
 
   readonly onRemove: (id: string) => void;
+
+  // ends each grant the removed token approved
+  readonly removeGrants: (tokenID: string) => Promise<void>;
 
   readonly isFileKey: (blob: Buffer) => boolean;
 }
@@ -284,7 +288,7 @@ export async function loadTokenStore(deps: Readonly<TokenStoreDeps>): Promise<To
 
       requireNotInFile(listKeys(record.id));
 
-      const grantIds = await removeTokenRecord(deps.db, record.id);
+      await removeTokenRecord(deps.db, record.id);
 
       byId.delete(record.id);
 
@@ -294,9 +298,7 @@ export async function loadTokenStore(deps: Readonly<TokenStoreDeps>): Promise<To
 
       deps.onRemove(record.id);
 
-      for (const grantId of grantIds) {
-        deps.onRemove(grantId);
-      }
+      await deps.removeGrants(record.id);
     },
     addKey: async (name, line) => {
       const record = requireByName(name);

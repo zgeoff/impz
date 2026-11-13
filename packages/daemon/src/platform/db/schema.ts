@@ -425,15 +425,17 @@ export interface TokenSshKeys {
 }
 
 export interface User {
+  approvedBy: string | null;
+  clientId: string | null;
   createdAt: string;
   email: string;
   emailVerified: number;
   id: string;
   image: string | null;
-  imps: string | null;
   lastUsedAt: string | null;
+  limits: string | null;
   name: string;
-  tokenId: string;
+  scopes: string | null;
   updatedAt: string;
 }
 

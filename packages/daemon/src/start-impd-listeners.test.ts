@@ -1,6 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { ApprovalCodeSchema } from '@impz/api';
 import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
 import {
   Client,
@@ -13,6 +12,7 @@ import type {
   OAuthTokens,
 } from '@modelcontextprotocol/client';
 import invariant from 'tiny-invariant';
+import { seedOAuthGrant } from './test-utils/identity/seed-oauth-grant';
 import { captureImpdLogs } from './test-utils/platform/capture-impd-logs';
 import { startTestImpd } from './test-utils/start-test-impd';
 
@@ -74,8 +74,6 @@ test.each([
   ['the tunnel socket', 'GET', '/tunnel', '127.0.0.1:7171'],
   ['the build context upload', 'POST', '/images/build-context?name=web', '127.0.0.1:7171'],
   ['a move step', 'POST', '/move/prepare', '127.0.0.1:7171'],
-  ['an imp’s wake route', 'GET', '/', 'dev.imp.example'],
-  ['an imp’s wake route', 'GET', '/mcp', 'dev.imp.example'],
 ])(
   'it answers %s (%s %s for host %s) on the public port with the same 404, even with the root token',
   async (_route, method, path, host) => {
@@ -97,6 +95,26 @@ test.each([
       status: 404,
       body: 'not found',
     });
+  },
+);
+
+test.each([['/'], ['/mcp']])(
+  'it refuses an imp’s wake route (GET %s for host dev.imp.example) on the public port, even with the root token',
+  async (path) => {
+    const ctx = await setupTest();
+
+    const response = await fetch(`${ctx.publicURL}${path}`, {
+      headers: {
+        host: 'dev.imp.example',
+        authorization: `Bearer ${ctx.rootToken}`,
+        connection: 'upgrade',
+        upgrade: 'websocket',
+        'sec-websocket-version': '13',
+        'sec-websocket-key': randomBytes(16).toString('base64'),
+      },
+    });
+
+    expect(response.status).toBe(403);
   },
 );
 
@@ -153,17 +171,15 @@ test('it stops the API listener again without a failure when impd stops twice', 
   expect(steps).toContainEqual({ step: 'api', outcome: 'stopped' });
 });
 
-test('it signs an MCP SDK client in over impd’s public port, and the grant calls a tool', async () => {
+test('it sends an MCP SDK client with no token to sign in, and a grant’s token calls a tool', async () => {
   const ctx = await setupTest();
 
   const origin = 'http://127.0.0.1:7171';
+  const server = ctx.impd.oauth.server;
 
-  const oauthClient = await ctx.impd.oauth.addClient('conn', ['https://client.example/callback']);
-  const made = await ctx.impd.tokens.create({ name: 'laptop', scope: 'manage', imps: null });
+  invariant(server);
 
-  const approver = ctx.impd.tokens.authenticate(made.secret);
-
-  invariant(approver);
+  const grant = await seedOAuthGrant(server, { scope: 'read', imps: ['*'] });
 
   const sendThroughFront = (url: string | URL, init?: RequestInit): Promise<Response> => {
     const target = new URL(url);
@@ -178,89 +194,62 @@ test('it signs an MCP SDK client in over impd’s public port, and the grant cal
     });
   };
 
-  const saved: {
-    tokens?: OAuthTokens;
-    discovery?: OAuthDiscoveryState;
-    verifier: string;
-    authorizationURL: URL | null;
-  } = { verifier: '', authorizationURL: null };
+  const buildProvider = (tokens: OAuthTokens | undefined) => {
+    const saved: { discovery?: OAuthDiscoveryState; authorizationURL: URL | null } = {
+      authorizationURL: null,
+    };
 
-  const provider: OAuthClientProvider = {
-    redirectUrl: 'https://client.example/callback',
-    clientMetadata: {
-      client_name: 'conn',
-      redirect_uris: ['https://client.example/callback'],
-      grant_types: ['authorization_code', 'refresh_token'],
-      response_types: ['code'],
-      token_endpoint_auth_method: 'none',
-    },
-    clientInformation: () => ({ client_id: oauthClient.clientId }),
-    tokens: () => saved.tokens,
-    saveTokens: (tokens) => {
-      saved.tokens = tokens;
-    },
-    redirectToAuthorization: (url) => {
-      saved.authorizationURL = url;
-    },
-    saveCodeVerifier: (verifier) => {
-      saved.verifier = verifier;
-    },
-    codeVerifier: () => saved.verifier,
-    saveDiscoveryState: (state) => {
-      saved.discovery = state;
-    },
-    discoveryState: () => saved.discovery,
+    const provider: OAuthClientProvider = {
+      redirectUrl: 'https://client.example/callback',
+      clientMetadata: {
+        client_name: 'conn',
+        redirect_uris: ['https://client.example/callback'],
+        grant_types: ['authorization_code', 'refresh_token'],
+        response_types: ['code'],
+        token_endpoint_auth_method: 'none',
+      },
+      clientInformation: () => ({ client_id: grant.clientID }),
+      tokens: () => tokens,
+      saveTokens: () => {},
+      redirectToAuthorization: (url) => {
+        saved.authorizationURL = url;
+      },
+      saveCodeVerifier: () => {},
+      codeVerifier: () => '',
+      saveDiscoveryState: (state) => {
+        saved.discovery = state;
+      },
+      discoveryState: () => saved.discovery,
+    };
+
+    return { provider, saved };
   };
 
-  const first = new StreamableHTTPClientTransport(new URL(`${origin}/mcp`), {
-    authProvider: provider,
-    fetch: sendThroughFront,
+  const unsigned = buildProvider(undefined);
+
+  const refused = await new Client({ name: 'test', version: '1.0.0' })
+    .connect(
+      new StreamableHTTPClientTransport(new URL(`${origin}/mcp`), {
+        authProvider: unsigned.provider,
+        fetch: sendThroughFront,
+      }),
+    )
+    .then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+  const signed = buildProvider({
+    access_token: grant.accessToken,
+    refresh_token: grant.refreshToken,
+    token_type: 'Bearer',
   });
-
-  const refused = await new Client({ name: 'test', version: '1.0.0' }).connect(first).then(
-    () => null,
-    (error: unknown) => error,
-  );
-
-  invariant(saved.authorizationURL);
-
-  const authorized = await sendThroughFront(saved.authorizationURL);
-
-  const loginURL = new URL(authorized.headers.get('location') ?? '', origin);
-
-  const login = await sendThroughFront(loginURL);
-  const loginPage = await login.text();
-
-  const code = /impz oauth approve (?<code>[A-Z0-9\-]+)/v.exec(loginPage)?.groups?.['code'] ?? '';
-
-  ctx.impd.oauth.approve(ApprovalCodeSchema.parse(code), approver, 'read', undefined);
-
-  const continued = await sendThroughFront(`${origin}/login`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded', origin },
-    body: new URLSearchParams({ oauth_query: loginURL.search.slice(1), action: 'continue' }),
-  });
-
-  const consentURL = new URL(continued.headers.get('location') ?? '', origin);
-
-  const cookie = continued.headers
-    .getSetCookie()
-    .map((line) => line.split(';')[0])
-    .join('; ');
-
-  const allowed = await sendThroughFront(`${origin}/consent`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded', origin, cookie },
-    body: new URLSearchParams({ oauth_query: consentURL.search.slice(1), action: 'allow' }),
-  });
-
-  await first.finishAuth(new URL(allowed.headers.get('location') ?? '').searchParams);
 
   const client = new Client({ name: 'test', version: '1.0.0' });
 
   await client.connect(
     new StreamableHTTPClientTransport(new URL(`${origin}/mcp`), {
-      authProvider: provider,
+      authProvider: signed.provider,
       fetch: sendThroughFront,
     }),
   );
@@ -270,6 +259,6 @@ test('it signs an MCP SDK client in over impd’s public port, and the grant cal
   const called = await client.callTool({ name: 'imp_list', arguments: {} });
 
   expect(refused).toBeInstanceOf(UnauthorizedError);
-  expect(saved.tokens?.scope).toBe('read offline_access');
+  expect(unsigned.saved.authorizationURL?.href).toStartWith(`${origin}/oauth2/authorize?`);
   expect(called).toMatchObject({ isError: false });
 });

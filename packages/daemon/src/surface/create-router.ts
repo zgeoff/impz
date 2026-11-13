@@ -1,7 +1,7 @@
 import type { SystemInfo } from '@impz/api';
 import type { TailscaleStatus } from '../host-net/net/tailscale-status';
 import type { TokenStore } from '../identity/auth/token-store';
-import type { McpAuth } from '../identity/oauth/create-mcp-auth';
+import type { ImpdMcpAuth } from '../identity/oauth/create-impd-mcp-auth';
 import type { BackupService } from '../imp-ops/backup/backup-service';
 import type { CheckpointService } from '../imp-ops/checkpoints/checkpoint-service';
 import type { RamGovernor } from '../imp-ops/governor/ram-governor';
@@ -81,7 +81,7 @@ export interface RouterDeps {
   readonly tokens: TokenStore;
   readonly imageKeepaliveMs: number;
   readonly imageKeepaliveRepeat?: Repeat;
-  readonly oauth: McpAuth;
+  readonly oauth: Pick<ImpdMcpAuth, 'admin' | 'server'>;
 }
 
 export function createRouter(deps: RouterDeps) {

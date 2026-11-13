@@ -11,7 +11,8 @@ import type { ImpEventLog } from './create-imp-event-log';
 import { runMigrations } from './run-migrations';
 import type { DB } from './schema';
 
-export type ImpDatabase = Kysely<DB> & { readonly log: ImpEventLog };
+// sqlite: the handle under the builder, for a library that builds its own over the same connection
+export type ImpDatabase = Kysely<DB> & { readonly log: ImpEventLog; readonly sqlite: Database };
 
 export type ImpQueries = Kysely<DB>;
 
@@ -34,6 +35,7 @@ export async function openDatabase(
   // the shared driver's destroy leaves the handle open for its opener to close
   const db = Object.assign(builder, {
     log,
+    sqlite,
     destroy: async () => {
       await log.stop();
 

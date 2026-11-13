@@ -1,27 +1,5 @@
 import { expect, test } from 'bun:test';
-import {
-  formatScopeList,
-  isGrantPattern,
-  isPatternsWithin,
-  pickGrantScope,
-  readLowerScope,
-} from './grant-limits';
-
-test.each([['*'], ['dev'], ['dev-*'], ['a1-b2']])('#isGrantPattern accepts %p', (pattern) => {
-  expect(isGrantPattern(pattern)).toBeTrue();
-});
-
-test.each([
-  ['', 'empty'],
-  ['Dev', 'upper case'],
-  ['*dev', 'a leading *'],
-  ['d*v', 'an inner *'],
-  ['dev-**', 'two *'],
-  ['1dev', 'a leading digit'],
-  [`a${'b'.repeat(31)}`, 'too long'],
-])('#isGrantPattern refuses %p, which has %s', (pattern) => {
-  expect(isGrantPattern(pattern)).toBeFalse();
-});
+import { formatScopeList, isPatternsWithin, pickGrantScope, pickLowerScope } from './grant-limits';
 
 test.each([
   [['dev-1'], ['dev-*']],
@@ -53,8 +31,8 @@ test.each([
   ['exec', 'manage', 'exec'],
   ['read', 'manage', 'read'],
   ['exec', 'exec', 'exec'],
-] as const)('#readLowerScope reads %s and %s as %s', (first, second, lower) => {
-  expect(readLowerScope(first, second)).toBe(lower);
+] as const)('#pickLowerScope picks the lower of %s and %s, %s', (first, second, lower) => {
+  expect(pickLowerScope(first, second)).toBe(lower);
 });
 
 test.each([

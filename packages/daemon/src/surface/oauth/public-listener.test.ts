@@ -1,26 +1,15 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
 import { randomUUID } from 'node:crypto';
-import { ApprovalCodeSchema } from '@impz/api';
 import { readMcpAnswer } from '@impz/mcp/test-utils/read-mcp-answer';
 import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
-import {
-  Client,
-  StreamableHTTPClientTransport,
-  UnauthorizedError,
-} from '@modelcontextprotocol/client';
-import type {
-  OAuthClientProvider,
-  OAuthDiscoveryState,
-  OAuthTokens,
-} from '@modelcontextprotocol/client';
 import invariant from 'tiny-invariant';
 import * as z from 'zod';
 import { listApiCalls } from '../../platform/db/api-audit';
 import { createImage } from '../../platform/db/images';
 import { readImpByName } from '../../platform/db/imps';
-import { createPendingSignIn } from '../../test-utils/identity/create-pending-sign-in';
-import { runOAuthSignIn } from '../../test-utils/identity/run-oauth-sign-in';
+import { seedOAuthGrant } from '../../test-utils/identity/seed-oauth-grant';
+import { seedTokenOAuthGrant } from '../../test-utils/identity/seed-token-oauth-grant';
 import { buildMockNewImage } from '../../test-utils/imps/build-mock-new-image';
 import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
 import { startTestImpd } from '../../test-utils/start-test-impd';
@@ -41,8 +30,7 @@ async function setupTest() {
     pick: () => 10_000 + Math.floor(Math.random() * 10_000),
   }).take();
 
-  // impd keeps the wall clock, because better-auth checks its sessions and
-  // tokens against it.
+  // impd keeps the wall clock, because the OAuth server checks its tokens against it.
   const harness = await startTestImpd(stack, {
     rootToken,
     env: {
@@ -55,10 +43,19 @@ async function setupTest() {
 
   invariant(publicMcp);
 
+  const server = harness.impd.oauth.server;
+
+  invariant(server);
+
   return Object.assign(harness, {
     stack,
     rootToken,
     publicMcp,
+    seed: {
+      grant: (input: Parameters<typeof seedOAuthGrant>[1]) => seedOAuthGrant(server, input),
+      tokenGrant: (input: Parameters<typeof seedTokenOAuthGrant>[2]) =>
+        seedTokenOAuthGrant(server, harness.db, input),
+    },
     handle: createPublicHandler({
       config: publicMcp,
       oauth: harness.impd.oauth,
@@ -84,7 +81,7 @@ test.each([
   ['GET', '/oauth2/revoke', 404],
   ['POST', '/oauth2/authorize', 404],
   ['GET', '/elsewhere', 404],
-  ['GET', '/', 404],
+  ['GET', '/', 401],
 ])('it answers %s %s with %d', async (method, path, status) => {
   const ctx = await setupTest();
 
@@ -156,31 +153,27 @@ test('it serves the authorization server metadata, with public clients only and 
   ).toStrictEqual([]);
 });
 
-test.each([
-  ['/rpc/system/info'],
-  ['/health'],
-  ['/rpc/auth/login'],
-  ['/exec'],
-  ['/'],
-  ['/index.html'],
-])('it answers the private path %s with the same 404, even with the root token', async (path) => {
-  const ctx = await setupTest();
+test.each([['/rpc/system/info'], ['/health'], ['/rpc/auth/login'], ['/exec'], ['/index.html']])(
+  'it answers the private path %s with the same 404, even with the root token',
+  async (path) => {
+    const ctx = await setupTest();
 
-  const response = await ctx.handle(
-    new Request(`http://127.0.0.1:7171${path}`, {
-      headers: { host: '127.0.0.1:7171', authorization: `Bearer ${ctx.rootToken}` },
-    }),
-    null,
-  );
+    const response = await ctx.handle(
+      new Request(`http://127.0.0.1:7171${path}`, {
+        headers: { host: '127.0.0.1:7171', authorization: `Bearer ${ctx.rootToken}` },
+      }),
+      null,
+    );
 
-  expect({ status: response.status, body: await response.text() }).toStrictEqual({
-    status: 404,
-    body: 'not found',
-  });
-});
+    expect({ status: response.status, body: await response.text() }).toStrictEqual({
+      status: 404,
+      body: 'not found',
+    });
+  },
+);
 
 test.each([['evil.example'], ['127.0.0.1:7070'], ['localhost:7171']])(
-  'it answers the host %s, which the front did not route here, with a 404',
+  'it answers the host %s, which the front did not route here, with a 403',
   async (host) => {
     const ctx = await setupTest();
 
@@ -191,7 +184,7 @@ test.each([['evil.example'], ['127.0.0.1:7070'], ['localhost:7171']])(
       null,
     );
 
-    expect(response.status).toBe(404);
+    expect(response.status).toBe(403);
   },
 );
 
@@ -205,7 +198,6 @@ test.each([
     'a client address and a session cookie',
     { 'cf-connecting-ip': '127.0.0.1', cookie: 'imp_session=anything' },
   ],
-  ['a guessed access token', { authorization: 'Bearer impat_guess.wrong' }],
 ])('it refuses /mcp with %s, as it takes only an OAuth access token', async (_what, headers) => {
   const ctx = await setupTest();
 
@@ -224,9 +216,38 @@ test.each([
   }).toStrictEqual({
     status: 401,
     challenge:
-      'Bearer resource_metadata="http://127.0.0.1:7171/.well-known/oauth-protected-resource/mcp", scope="read"',
+      'Bearer resource_metadata="http://127.0.0.1:7171/.well-known/oauth-protected-resource/mcp"',
   });
 });
+
+test.each([['impat_guess.wrong'], [`impat_${'x'.repeat(43)}`]])(
+  'it refuses /mcp with the access token %s, which it never issued',
+  async (token) => {
+    const ctx = await setupTest();
+
+    const response = await ctx.handle(
+      new Request('http://127.0.0.1:7171/mcp', {
+        method: 'POST',
+        headers: {
+          host: '127.0.0.1:7171',
+          'content-type': 'application/json',
+          authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 0, method: 'ping' }),
+      }),
+      null,
+    );
+
+    expect({
+      status: response.status,
+      challenge: response.headers.get('www-authenticate'),
+    }).toStrictEqual({
+      status: 401,
+      challenge:
+        'Bearer error="invalid_token", resource_metadata="http://127.0.0.1:7171/.well-known/oauth-protected-resource/mcp"',
+    });
+  },
+);
 
 test('it refuses /mcp with the root token, as it takes only an OAuth access token', async () => {
   const ctx = await setupTest();
@@ -250,7 +271,7 @@ test('it refuses /mcp with the root token, as it takes only an OAuth access toke
   }).toStrictEqual({
     status: 401,
     challenge:
-      'Bearer resource_metadata="http://127.0.0.1:7171/.well-known/oauth-protected-resource/mcp", scope="read"',
+      'Bearer error="invalid_token", resource_metadata="http://127.0.0.1:7171/.well-known/oauth-protected-resource/mcp"',
   });
 });
 
@@ -277,539 +298,13 @@ test('it refuses /mcp with a named imp token', async () => {
   }).toStrictEqual({
     status: 401,
     challenge:
-      'Bearer resource_metadata="http://127.0.0.1:7171/.well-known/oauth-protected-resource/mcp", scope="read"',
+      'Bearer error="invalid_token", resource_metadata="http://127.0.0.1:7171/.well-known/oauth-protected-resource/mcp"',
   });
-});
-
-test('it sends the sign-in page with headers that keep it from being framed, cached or referred', async () => {
-  const ctx = await setupTest();
-  const oauthClient = await ctx.impd.oauth.addClient('conn', ['https://client.example/callback']);
-
-  const pending = await createPendingSignIn({
-    respond: (request) => ctx.handle(request, null),
-    origin: 'http://127.0.0.1:7171',
-    clientID: oauthClient.clientId,
-    redirectURI: 'https://client.example/callback',
-    scope: 'read',
-  });
-
-  const response = await ctx.handle(
-    new Request(`http://127.0.0.1:7171/login?${pending.oauthQuery}`, {
-      headers: { host: '127.0.0.1:7171' },
-    }),
-    null,
-  );
-
-  expect({
-    status: response.status,
-    referrer: response.headers.get('referrer-policy'),
-    frame: response.headers.get('x-frame-options'),
-    cache: response.headers.get('cache-control'),
-    policy: response.headers.get('content-security-policy'),
-  }).toStrictEqual({
-    status: 200,
-    referrer: 'same-origin',
-    frame: 'DENY',
-    cache: 'no-store',
-    policy:
-      "default-src 'none'; style-src 'unsafe-inline'; form-action 'self' https://client.example; frame-ancestors 'none'; base-uri 'none'",
-  });
-});
-
-test('it escapes the redirect URI that the consent page shows after approval', async () => {
-  const ctx = await setupTest();
-
-  const oauthClient = await ctx.impd.oauth.addClient('conn', [
-    'https://client.example/cb?next=%22%3E&x=<b>"\'',
-  ]);
-
-  const made = await ctx.impd.tokens.create({ name: 'laptop', scope: 'manage', imps: null });
-
-  const approver = ctx.impd.tokens.authenticate(made.secret);
-
-  invariant(approver);
-
-  const pending = await createPendingSignIn({
-    respond: (request) => ctx.handle(request, null),
-    origin: 'http://127.0.0.1:7171',
-    clientID: oauthClient.clientId,
-    redirectURI: 'https://client.example/cb?next=%22%3E&x=<b>"\'',
-    scope: 'read',
-  });
-
-  ctx.impd.oauth.approve(ApprovalCodeSchema.parse(pending.code), approver, 'read', undefined);
-
-  const continued = await ctx.handle(
-    new Request('http://127.0.0.1:7171/login', {
-      method: 'POST',
-      headers: {
-        host: '127.0.0.1:7171',
-        'content-type': 'application/x-www-form-urlencoded',
-        origin: 'http://127.0.0.1:7171',
-      },
-      body: new URLSearchParams({ oauth_query: pending.oauthQuery, action: 'continue' }),
-    }),
-    null,
-  );
-
-  const consentURL = new URL(continued.headers.get('location') ?? '');
-
-  const cookie = continued.headers
-    .getSetCookie()
-    .map((line) => line.split(';')[0])
-    .join('; ');
-
-  const confirmed = await ctx.handle(
-    new Request(consentURL.href, { headers: { host: '127.0.0.1:7171', cookie } }),
-    null,
-  );
-
-  const text = await confirmed.text();
-
-  expect(text).toInclude('<strong>read</strong>');
-  expect(text).toInclude('x=&lt;b&gt;&quot;&#39;');
-  expect(text).not.toInclude('<b>"');
-});
-
-test('it never sends a sign-in for a client it does not know to its redirect URI or the login page', async () => {
-  const ctx = await setupTest();
-
-  const response = await ctx.handle(
-    new Request(
-      `http://127.0.0.1:7171/oauth2/authorize?response_type=code&client_id=impc_guess&redirect_uri=https://evil.example&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&code_challenge_method=S256`,
-      { headers: { host: '127.0.0.1:7171' } },
-    ),
-    null,
-  );
-
-  const location = response.headers.get('location') ?? '';
-
-  expect(response.status).toBeGreaterThanOrEqual(300);
-  expect(location).not.toInclude('evil.example');
-  expect(location).not.toInclude('/login');
-});
-
-test('it answers a too-busy sign-in with a 429 and when to try again', async () => {
-  const ctx = await setupTest();
-  const oauthClient = await ctx.impd.oauth.addClient('conn', ['https://client.example/callback']);
-
-  const query = new URLSearchParams({
-    response_type: 'code',
-    client_id: oauthClient.clientId,
-    redirect_uri: 'https://client.example/callback',
-    code_challenge: 'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM',
-    code_challenge_method: 'S256',
-    scope: 'read',
-  });
-
-  await Promise.all(
-    Array.from({ length: 10 }, async () => {
-      await ctx.handle(
-        new Request(`http://127.0.0.1:7171/oauth2/authorize?${query.toString()}`, {
-          headers: { host: '127.0.0.1:7171' },
-        }),
-        null,
-      );
-    }),
-  );
-
-  const response = await ctx.handle(
-    new Request(`http://127.0.0.1:7171/oauth2/authorize?${query.toString()}`, {
-      headers: { host: '127.0.0.1:7171' },
-    }),
-    null,
-  );
-
-  expect({ status: response.status, retry: response.headers.get('retry-after') }).toStrictEqual({
-    status: 429,
-    retry: '6',
-  });
-});
-
-test.each([
-  [{ origin: 'http://127.0.0.1:7171' }, 200],
-  [{ origin: 'null', 'sec-fetch-site': 'same-origin' }, 200],
-  [{ origin: 'null' }, 400],
-  [{ origin: 'null', 'sec-fetch-site': 'cross-site' }, 400],
-  [{ 'sec-fetch-site': 'same-origin' }, 400],
-  [{ origin: 'https://evil.example', 'sec-fetch-site': 'same-origin' }, 400],
-  [{}, 400],
-])('it answers a sign-in form posted with %p with %p', async (headers, status) => {
-  const ctx = await setupTest();
-  const oauthClient = await ctx.impd.oauth.addClient('conn', ['https://client.example/callback']);
-
-  const pending = await createPendingSignIn({
-    respond: (request) => ctx.handle(request, null),
-    origin: 'http://127.0.0.1:7171',
-    clientID: oauthClient.clientId,
-    redirectURI: 'https://client.example/callback',
-    scope: 'read',
-  });
-
-  const posted = await ctx.handle(
-    new Request('http://127.0.0.1:7171/login', {
-      method: 'POST',
-      headers: {
-        host: '127.0.0.1:7171',
-        'content-type': 'application/x-www-form-urlencoded',
-        ...headers,
-      },
-      body: new URLSearchParams({ oauth_query: pending.oauthQuery, action: 'continue' }),
-    }),
-    null,
-  );
-
-  expect(posted.status).toBe(status);
-});
-
-test('it refuses a sign-in form with an action it does not know', async () => {
-  const ctx = await setupTest();
-  const oauthClient = await ctx.impd.oauth.addClient('conn', ['https://client.example/callback']);
-
-  const pending = await createPendingSignIn({
-    respond: (request) => ctx.handle(request, null),
-    origin: 'http://127.0.0.1:7171',
-    clientID: oauthClient.clientId,
-    redirectURI: 'https://client.example/callback',
-    scope: 'read',
-  });
-
-  const response = await ctx.handle(
-    new Request('http://127.0.0.1:7171/login', {
-      method: 'POST',
-      headers: {
-        host: '127.0.0.1:7171',
-        'content-type': 'application/x-www-form-urlencoded',
-        origin: 'http://127.0.0.1:7171',
-      },
-      body: new URLSearchParams({ oauth_query: pending.oauthQuery, action: 'maybe' }),
-    }),
-    null,
-  );
-
-  expect(response.status).toBe(400);
-});
-
-test('it refuses a token request from a client it does not know', async () => {
-  const ctx = await setupTest();
-
-  const response = await ctx.handle(
-    new Request('http://127.0.0.1:7171/oauth2/token', {
-      method: 'POST',
-      headers: { host: '127.0.0.1:7171', 'content-type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type: 'refresh_token',
-        client_id: 'impc_guess',
-        refresh_token: 'not-a-refresh-token',
-      }),
-    }),
-    null,
-  );
-
-  expect(response.status).toBeOneOf([400, 401]);
-  expect(response.headers.get('cache-control')).toInclude('no-store');
-});
-
-test('it ends the grant whose client revokes its refresh token, and refuses its access token', async () => {
-  const ctx = await setupTest();
-  const oauthClient = await ctx.impd.oauth.addClient('conn', ['https://client.example/callback']);
-  const made = await ctx.impd.tokens.create({ name: 'laptop', scope: 'manage', imps: null });
-
-  const approver = ctx.impd.tokens.authenticate(made.secret);
-
-  invariant(approver);
-
-  const tokens = await runOAuthSignIn(
-    {
-      respond: (request) => ctx.handle(request, null),
-      origin: 'http://127.0.0.1:7171',
-      clientID: oauthClient.clientId,
-      redirectURI: 'https://client.example/callback',
-      scope: 'read',
-    },
-    (code) => {
-      ctx.impd.oauth.approve(ApprovalCodeSchema.parse(code), approver, 'read', undefined);
-    },
-  );
-
-  const revoked = await ctx.handle(
-    new Request('http://127.0.0.1:7171/oauth2/revoke', {
-      method: 'POST',
-      headers: { host: '127.0.0.1:7171', 'content-type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: oauthClient.clientId,
-        token: tokens.refresh_token,
-        token_type_hint: 'refresh_token',
-      }),
-    }),
-    null,
-  );
-
-  const after = await ctx.handle(
-    new Request('http://127.0.0.1:7171/mcp', {
-      method: 'POST',
-      headers: {
-        host: '127.0.0.1:7171',
-        'content-type': 'application/json',
-        authorization: `Bearer ${tokens.access_token}`,
-      },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 0, method: 'ping' }),
-    }),
-    null,
-  );
-
-  const grants = await ctx.impd.oauth.listGrants();
-
-  expect(revoked.status).toBe(200);
-  expect(grants).toStrictEqual([]);
-  expect(after.status).toBe(401);
-});
-
-test('it signs a client in over HTTP to tokens for the approved scope, sending no referrer on the redirect', async () => {
-  const ctx = await setupTest();
-  const oauthClient = await ctx.impd.oauth.addClient('conn', ['https://client.example/callback']);
-  const made = await ctx.impd.tokens.create({ name: 'laptop', scope: 'manage', imps: null });
-
-  const approver = ctx.impd.tokens.authenticate(made.secret);
-
-  invariant(approver);
-
-  const pending = await createPendingSignIn({
-    respond: (request) => ctx.handle(request, null),
-    origin: 'http://127.0.0.1:7171',
-    clientID: oauthClient.clientId,
-    redirectURI: 'https://client.example/callback',
-    scope: 'read exec manage',
-  });
-
-  ctx.impd.oauth.approve(ApprovalCodeSchema.parse(pending.code), approver, 'exec', undefined);
-
-  const continued = await ctx.handle(
-    new Request('http://127.0.0.1:7171/login', {
-      method: 'POST',
-      headers: {
-        host: '127.0.0.1:7171',
-        'content-type': 'application/x-www-form-urlencoded',
-        origin: 'http://127.0.0.1:7171',
-      },
-      body: new URLSearchParams({ oauth_query: pending.oauthQuery, action: 'continue' }),
-    }),
-    null,
-  );
-
-  const consentURL = new URL(continued.headers.get('location') ?? '');
-
-  const cookie = continued.headers
-    .getSetCookie()
-    .map((line) => line.split(';')[0])
-    .join('; ');
-
-  const consentQuery = consentURL.search.slice(1);
-
-  const allowed = await ctx.handle(
-    new Request('http://127.0.0.1:7171/consent', {
-      method: 'POST',
-      headers: {
-        host: '127.0.0.1:7171',
-        'content-type': 'application/x-www-form-urlencoded',
-        origin: 'http://127.0.0.1:7171',
-        cookie,
-      },
-      body: new URLSearchParams({ oauth_query: consentQuery, action: 'allow' }),
-    }),
-    null,
-  );
-
-  const redirect = new URL(allowed.headers.get('location') ?? '');
-
-  const issuedCode = redirect.searchParams.get('code') ?? '';
-
-  const issued = await ctx.handle(
-    new Request('http://127.0.0.1:7171/oauth2/token', {
-      method: 'POST',
-      headers: { host: '127.0.0.1:7171', 'content-type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type: 'authorization_code',
-        client_id: oauthClient.clientId,
-        code: issuedCode,
-        redirect_uri: 'https://client.example/callback',
-        code_verifier: 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk',
-        resource: 'http://127.0.0.1:7171/mcp',
-      }),
-    }),
-    null,
-  );
-
-  const issuedBody: unknown = await issued.json();
-
-  const tokens = z.object({ access_token: z.string(), scope: z.string() }).parse(issuedBody);
-
-  expect(consentURL.pathname).toBe('/consent');
-  expect(allowed.headers.get('referrer-policy')).toBe('no-referrer');
-  expect(`${redirect.origin}${redirect.pathname}`).toBe('https://client.example/callback');
-  expect(tokens.scope).toBe('read exec offline_access');
-});
-
-test('it signs an MCP client in through its OAuth provider and lists the tools its grant allows', async () => {
-  const ctx = await setupTest();
-
-  const origin = 'http://127.0.0.1:7171';
-
-  const oauthClient = await ctx.impd.oauth.addClient('conn', ['https://client.example/callback']);
-  const made = await ctx.impd.tokens.create({ name: 'laptop', scope: 'manage', imps: null });
-
-  const approver = ctx.impd.tokens.authenticate(made.secret);
-
-  invariant(approver);
-
-  const listener = startPublicListener({
-    config: { ...ctx.publicMcp, port: 0 },
-    oauth: ctx.impd.oauth,
-    mcp: ctx.impd.api.publicMcp,
-  });
-
-  ctx.stack.defer(() => listener.stop());
-
-  const sendThroughFront = (url: string | URL, init?: RequestInit): Promise<Response> => {
-    const target = new URL(url);
-
-    target.port = String(listener.port);
-
-    const headers = new Headers(init?.headers);
-
-    headers.set('host', '127.0.0.1:7171');
-
-    return fetch(target, { ...init, headers, redirect: 'manual' });
-  };
-
-  const saved: {
-    tokens?: OAuthTokens;
-    discovery?: OAuthDiscoveryState;
-    verifier: string;
-    authorizationURL: URL | null;
-  } = { verifier: '', authorizationURL: null };
-
-  const provider: OAuthClientProvider = {
-    redirectUrl: 'https://client.example/callback',
-    clientMetadata: {
-      client_name: 'conn',
-      redirect_uris: ['https://client.example/callback'],
-      grant_types: ['authorization_code', 'refresh_token'],
-      response_types: ['code'],
-      token_endpoint_auth_method: 'none',
-      scope: 'read exec',
-    },
-    clientInformation: () => ({ client_id: oauthClient.clientId }),
-    tokens: () => saved.tokens,
-    saveTokens: (tokens) => {
-      saved.tokens = tokens;
-    },
-    redirectToAuthorization: (url) => {
-      saved.authorizationURL = url;
-    },
-    saveCodeVerifier: (verifier) => {
-      saved.verifier = verifier;
-    },
-    codeVerifier: () => saved.verifier,
-    saveDiscoveryState: (state) => {
-      saved.discovery = state;
-    },
-    discoveryState: () => saved.discovery,
-  };
-
-  const unsigned = new Client({ name: 'test', version: '1.0.0' });
-
-  const first = new StreamableHTTPClientTransport(new URL(`${origin}/mcp`), {
-    authProvider: provider,
-    fetch: sendThroughFront,
-  });
-
-  const refused = await unsigned.connect(first).then(
-    () => null,
-    (error: unknown) => error,
-  );
-
-  invariant(saved.authorizationURL);
-
-  const authorized = await sendThroughFront(saved.authorizationURL);
-
-  const loginURL = new URL(authorized.headers.get('location') ?? '', origin);
-
-  const login = await sendThroughFront(loginURL);
-  const loginPage = await login.text();
-
-  const code = /impz oauth approve (?<code>[A-Z0-9\-]+)/v.exec(loginPage)?.groups?.['code'] ?? '';
-
-  ctx.impd.oauth.approve(ApprovalCodeSchema.parse(code), approver, 'read', undefined);
-
-  const continued = await sendThroughFront(`${origin}/login`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded', origin },
-    body: new URLSearchParams({ oauth_query: loginURL.search.slice(1), action: 'continue' }),
-  });
-
-  const consentURL = new URL(continued.headers.get('location') ?? '', origin);
-
-  const cookie = continued.headers
-    .getSetCookie()
-    .map((line) => line.split(';')[0])
-    .join('; ');
-
-  const allowed = await sendThroughFront(`${origin}/consent`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded', origin, cookie },
-    body: new URLSearchParams({ oauth_query: consentURL.search.slice(1), action: 'allow' }),
-  });
-
-  const back = new URL(allowed.headers.get('location') ?? '');
-
-  await first.finishAuth(back.searchParams);
-
-  const client = new Client({ name: 'test', version: '1.0.0' });
-
-  await client.connect(
-    new StreamableHTTPClientTransport(new URL(`${origin}/mcp`), {
-      authProvider: provider,
-      fetch: sendThroughFront,
-    }),
-  );
-
-  ctx.stack.defer(() => client.close());
-
-  const listed = await client.listTools();
-
-  expect(refused).toBeInstanceOf(UnauthorizedError);
-
-  expect(listed.tools.map((tool) => tool.name)).toStrictEqual([
-    'imp_list',
-    'imp_url',
-    'imp_image_list',
-    'imp_checkpoint_list',
-    'imp_event_list',
-  ]);
 });
 
 test('it lists an exec grant’s tools over /mcp, without the manage ones', async () => {
   const ctx = await setupTest();
-  const oauthClient = await ctx.impd.oauth.addClient('conn', ['https://client.example/callback']);
-  const made = await ctx.impd.tokens.create({ name: 'laptop', scope: 'manage', imps: null });
-
-  const approver = ctx.impd.tokens.authenticate(made.secret);
-
-  invariant(approver);
-
-  const tokens = await runOAuthSignIn(
-    {
-      respond: (request) => ctx.handle(request, null),
-      origin: 'http://127.0.0.1:7171',
-      clientID: oauthClient.clientId,
-      redirectURI: 'https://client.example/callback',
-      scope: 'read exec manage',
-    },
-    (code) => {
-      ctx.impd.oauth.approve(ApprovalCodeSchema.parse(code), approver, 'exec', undefined);
-    },
-  );
+  const tokens = await ctx.seed.grant({ scope: 'exec', imps: ['*'] });
 
   const mcpOpened = await ctx.handle(
     new Request(`http://127.0.0.1:7171/mcp`, {
@@ -818,7 +313,7 @@ test('it lists an exec grant’s tools over /mcp, without the manage ones', asyn
         host: '127.0.0.1:7171',
         'content-type': 'application/json',
         accept: 'application/json, text/event-stream',
-        authorization: `Bearer ${tokens.access_token}`,
+        authorization: `Bearer ${tokens.accessToken}`,
       },
       body: JSON.stringify({
         jsonrpc: '2.0',
@@ -845,7 +340,7 @@ test('it lists an exec grant’s tools over /mcp, without the manage ones', asyn
         host: '127.0.0.1:7171',
         'content-type': 'application/json',
         accept: 'application/json, text/event-stream',
-        authorization: `Bearer ${tokens.access_token}`,
+        authorization: `Bearer ${tokens.accessToken}`,
         'mcp-session-id': mcpSession,
       },
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),
@@ -887,25 +382,7 @@ test('it ends a grant’s running command when the grant is revoked', async () =
     boxAgent.close();
   });
 
-  const oauthClient = await ctx.impd.oauth.addClient('conn', ['https://client.example/callback']);
-  const made = await ctx.impd.tokens.create({ name: 'laptop', scope: 'manage', imps: null });
-
-  const approver = ctx.impd.tokens.authenticate(made.secret);
-
-  invariant(approver);
-
-  const tokens = await runOAuthSignIn(
-    {
-      respond: (request) => ctx.handle(request, null),
-      origin: 'http://127.0.0.1:7171',
-      clientID: oauthClient.clientId,
-      redirectURI: 'https://client.example/callback',
-      scope: 'read exec manage',
-    },
-    (code) => {
-      ctx.impd.oauth.approve(ApprovalCodeSchema.parse(code), approver, 'exec', undefined);
-    },
-  );
+  const tokens = await ctx.seed.grant({ scope: 'exec', imps: ['*'] });
 
   const mcpOpened = await ctx.handle(
     new Request(`http://127.0.0.1:7171/mcp`, {
@@ -914,7 +391,7 @@ test('it ends a grant’s running command when the grant is revoked', async () =
         host: '127.0.0.1:7171',
         'content-type': 'application/json',
         accept: 'application/json, text/event-stream',
-        authorization: `Bearer ${tokens.access_token}`,
+        authorization: `Bearer ${tokens.accessToken}`,
       },
       body: JSON.stringify({
         jsonrpc: '2.0',
@@ -942,7 +419,7 @@ test('it ends a grant’s running command when the grant is revoked', async () =
           host: '127.0.0.1:7171',
           'content-type': 'application/json',
           accept: 'application/json, text/event-stream',
-          authorization: `Bearer ${tokens.access_token}`,
+          authorization: `Bearer ${tokens.accessToken}`,
           'mcp-session-id': mcpSession,
         },
         body: JSON.stringify({
@@ -962,11 +439,11 @@ test('it ends a grant’s running command when the grant is revoked', async () =
     expect(guest.requests).toHaveLength(1);
   });
 
-  const [listed] = await ctx.impd.oauth.listGrants();
+  const [listed] = await ctx.impd.oauth.admin.grants.list();
 
   invariant(listed);
 
-  await ctx.impd.oauth.removeGrant(listed.id);
+  await ctx.impd.oauth.admin.grants.revoke(listed.grantID);
 
   const text = await call;
 
@@ -979,25 +456,7 @@ test('it ends a grant’s running command when the grant is revoked', async () =
 
 test('it refuses /mcp to a revoked grant’s session', async () => {
   const ctx = await setupTest();
-  const oauthClient = await ctx.impd.oauth.addClient('conn', ['https://client.example/callback']);
-  const made = await ctx.impd.tokens.create({ name: 'laptop', scope: 'manage', imps: null });
-
-  const approver = ctx.impd.tokens.authenticate(made.secret);
-
-  invariant(approver);
-
-  const tokens = await runOAuthSignIn(
-    {
-      respond: (request) => ctx.handle(request, null),
-      origin: 'http://127.0.0.1:7171',
-      clientID: oauthClient.clientId,
-      redirectURI: 'https://client.example/callback',
-      scope: 'read exec manage',
-    },
-    (code) => {
-      ctx.impd.oauth.approve(ApprovalCodeSchema.parse(code), approver, 'exec', undefined);
-    },
-  );
+  const tokens = await ctx.seed.grant({ scope: 'exec', imps: ['*'] });
 
   const mcpOpened = await ctx.handle(
     new Request(`http://127.0.0.1:7171/mcp`, {
@@ -1006,7 +465,7 @@ test('it refuses /mcp to a revoked grant’s session', async () => {
         host: '127.0.0.1:7171',
         'content-type': 'application/json',
         accept: 'application/json, text/event-stream',
-        authorization: `Bearer ${tokens.access_token}`,
+        authorization: `Bearer ${tokens.accessToken}`,
       },
       body: JSON.stringify({
         jsonrpc: '2.0',
@@ -1026,11 +485,11 @@ test('it refuses /mcp to a revoked grant’s session', async () => {
 
   const mcpSession = mcpOpened.headers.get('mcp-session-id') ?? '';
 
-  const [listed] = await ctx.impd.oauth.listGrants();
+  const [listed] = await ctx.impd.oauth.admin.grants.list();
 
   invariant(listed);
 
-  await ctx.impd.oauth.removeGrant(listed.id);
+  await ctx.impd.oauth.admin.grants.revoke(listed.grantID);
 
   const after = await ctx.handle(
     new Request(`http://127.0.0.1:7171/mcp`, {
@@ -1039,7 +498,7 @@ test('it refuses /mcp to a revoked grant’s session', async () => {
         host: '127.0.0.1:7171',
         'content-type': 'application/json',
         accept: 'application/json, text/event-stream',
-        authorization: `Bearer ${tokens.access_token}`,
+        authorization: `Bearer ${tokens.accessToken}`,
         'mcp-session-id': mcpSession,
       },
       body: JSON.stringify({ jsonrpc: '2.0', id: 9, method: 'ping' }),
@@ -1075,25 +534,18 @@ test('it ends the grant a removed token approved, and its running command', asyn
     boxAgent.close();
   });
 
-  const oauthClient = await ctx.impd.oauth.addClient('conn', ['https://client.example/callback']);
   const made = await ctx.impd.tokens.create({ name: 'laptop', scope: 'manage', imps: null });
 
   const approver = ctx.impd.tokens.authenticate(made.secret);
+  const tokenID = approver?.tokenId ?? null;
 
-  invariant(approver);
+  invariant(tokenID !== null);
 
-  const tokens = await runOAuthSignIn(
-    {
-      respond: (request) => ctx.handle(request, null),
-      origin: 'http://127.0.0.1:7171',
-      clientID: oauthClient.clientId,
-      redirectURI: 'https://client.example/callback',
-      scope: 'read exec manage',
-    },
-    (code) => {
-      ctx.impd.oauth.approve(ApprovalCodeSchema.parse(code), approver, 'exec', undefined);
-    },
-  );
+  const tokens = await ctx.seed.tokenGrant({
+    scope: 'exec',
+    imps: null,
+    tokenID,
+  });
 
   const mcpOpened = await ctx.handle(
     new Request(`http://127.0.0.1:7171/mcp`, {
@@ -1102,7 +554,7 @@ test('it ends the grant a removed token approved, and its running command', asyn
         host: '127.0.0.1:7171',
         'content-type': 'application/json',
         accept: 'application/json, text/event-stream',
-        authorization: `Bearer ${tokens.access_token}`,
+        authorization: `Bearer ${tokens.accessToken}`,
       },
       body: JSON.stringify({
         jsonrpc: '2.0',
@@ -1130,7 +582,7 @@ test('it ends the grant a removed token approved, and its running command', asyn
           host: '127.0.0.1:7171',
           'content-type': 'application/json',
           accept: 'application/json, text/event-stream',
-          authorization: `Bearer ${tokens.access_token}`,
+          authorization: `Bearer ${tokens.accessToken}`,
           'mcp-session-id': mcpSession,
         },
         body: JSON.stringify({
@@ -1159,7 +611,7 @@ test('it ends the grant a removed token approved, and its running command', asyn
         host: '127.0.0.1:7171',
         'content-type': 'application/json',
         accept: 'application/json, text/event-stream',
-        authorization: `Bearer ${tokens.access_token}`,
+        authorization: `Bearer ${tokens.accessToken}`,
         'mcp-session-id': mcpSession,
       },
       body: JSON.stringify({ jsonrpc: '2.0', id: 9, method: 'ping' }),
@@ -1179,25 +631,7 @@ test('it ends the grant a removed token approved, and its running command', asyn
 
 test('it lists only the read tools to a read grant', async () => {
   const ctx = await setupTest();
-  const oauthClient = await ctx.impd.oauth.addClient('conn', ['https://client.example/callback']);
-  const made = await ctx.impd.tokens.create({ name: 'laptop', scope: 'manage', imps: null });
-
-  const approver = ctx.impd.tokens.authenticate(made.secret);
-
-  invariant(approver);
-
-  const tokens = await runOAuthSignIn(
-    {
-      respond: (request) => ctx.handle(request, null),
-      origin: 'http://127.0.0.1:7171',
-      clientID: oauthClient.clientId,
-      redirectURI: 'https://client.example/callback',
-      scope: 'read exec manage',
-    },
-    (code) => {
-      ctx.impd.oauth.approve(ApprovalCodeSchema.parse(code), approver, 'read', undefined);
-    },
-  );
+  const tokens = await ctx.seed.grant({ scope: 'read', imps: ['*'] });
 
   const mcpOpened = await ctx.handle(
     new Request(`http://127.0.0.1:7171/mcp`, {
@@ -1206,7 +640,7 @@ test('it lists only the read tools to a read grant', async () => {
         host: '127.0.0.1:7171',
         'content-type': 'application/json',
         accept: 'application/json, text/event-stream',
-        authorization: `Bearer ${tokens.access_token}`,
+        authorization: `Bearer ${tokens.accessToken}`,
       },
       body: JSON.stringify({
         jsonrpc: '2.0',
@@ -1233,7 +667,7 @@ test('it lists only the read tools to a read grant', async () => {
         host: '127.0.0.1:7171',
         'content-type': 'application/json',
         accept: 'application/json, text/event-stream',
-        authorization: `Bearer ${tokens.access_token}`,
+        authorization: `Bearer ${tokens.accessToken}`,
         'mcp-session-id': mcpSession,
       },
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),
@@ -1257,25 +691,7 @@ test('it lists only the read tools to a read grant', async () => {
 
 test('it names only the read tools in the instructions it gives a read grant', async () => {
   const ctx = await setupTest();
-  const oauthClient = await ctx.impd.oauth.addClient('conn', ['https://client.example/callback']);
-  const made = await ctx.impd.tokens.create({ name: 'laptop', scope: 'manage', imps: null });
-
-  const approver = ctx.impd.tokens.authenticate(made.secret);
-
-  invariant(approver);
-
-  const tokens = await runOAuthSignIn(
-    {
-      respond: (request) => ctx.handle(request, null),
-      origin: 'http://127.0.0.1:7171',
-      clientID: oauthClient.clientId,
-      redirectURI: 'https://client.example/callback',
-      scope: 'read exec manage',
-    },
-    (code) => {
-      ctx.impd.oauth.approve(ApprovalCodeSchema.parse(code), approver, 'read', ['home-*']);
-    },
-  );
+  const tokens = await ctx.seed.grant({ scope: 'read', imps: ['home-*'] });
 
   const opened = await ctx.handle(
     new Request(`http://127.0.0.1:7171/mcp`, {
@@ -1284,7 +700,7 @@ test('it names only the read tools in the instructions it gives a read grant', a
         host: '127.0.0.1:7171',
         'content-type': 'application/json',
         accept: 'application/json, text/event-stream',
-        authorization: `Bearer ${tokens.access_token}`,
+        authorization: `Bearer ${tokens.accessToken}`,
       },
       body: JSON.stringify({
         jsonrpc: '2.0',
@@ -1354,25 +770,7 @@ test.each([
       devaAgent.close();
     });
 
-    const oauthClient = await ctx.impd.oauth.addClient('conn', ['https://client.example/callback']);
-    const made = await ctx.impd.tokens.create({ name: 'laptop', scope: 'manage', imps: null });
-
-    const approver = ctx.impd.tokens.authenticate(made.secret);
-
-    invariant(approver);
-
-    const tokens = await runOAuthSignIn(
-      {
-        respond: (request) => ctx.handle(request, null),
-        origin: 'http://127.0.0.1:7171',
-        clientID: oauthClient.clientId,
-        redirectURI: 'https://client.example/callback',
-        scope: 'read exec manage',
-      },
-      (code) => {
-        ctx.impd.oauth.approve(ApprovalCodeSchema.parse(code), approver, scope, imps);
-      },
-    );
+    const tokens = await ctx.seed.grant({ scope, imps: imps ?? ['*'] });
 
     const mcpOpened = await ctx.handle(
       new Request(`http://127.0.0.1:7171/mcp`, {
@@ -1381,7 +779,7 @@ test.each([
           host: '127.0.0.1:7171',
           'content-type': 'application/json',
           accept: 'application/json, text/event-stream',
-          authorization: `Bearer ${tokens.access_token}`,
+          authorization: `Bearer ${tokens.accessToken}`,
         },
         body: JSON.stringify({
           jsonrpc: '2.0',
@@ -1408,7 +806,7 @@ test.each([
           host: '127.0.0.1:7171',
           'content-type': 'application/json',
           accept: 'application/json, text/event-stream',
-          authorization: `Bearer ${tokens.access_token}`,
+          authorization: `Bearer ${tokens.accessToken}`,
           'mcp-session-id': mcpSession,
         },
         body: JSON.stringify({
@@ -1464,25 +862,7 @@ test('it audits a grant’s change under its client and grant id', async () => {
     devaAgent.close();
   });
 
-  const oauthClient = await ctx.impd.oauth.addClient('conn', ['https://client.example/callback']);
-  const made = await ctx.impd.tokens.create({ name: 'desk', scope: 'manage', imps: null });
-
-  const approver = ctx.impd.tokens.authenticate(made.secret);
-
-  invariant(approver);
-
-  const tokens = await runOAuthSignIn(
-    {
-      respond: (request) => ctx.handle(request, null),
-      origin: 'http://127.0.0.1:7171',
-      clientID: oauthClient.clientId,
-      redirectURI: 'https://client.example/callback',
-      scope: 'read exec manage',
-    },
-    (code) => {
-      ctx.impd.oauth.approve(ApprovalCodeSchema.parse(code), approver, 'exec', ['dev-*']);
-    },
-  );
+  const tokens = await ctx.seed.grant({ scope: 'exec', imps: ['dev-*'] });
 
   const mcpOpened = await ctx.handle(
     new Request(`http://127.0.0.1:7171/mcp`, {
@@ -1491,7 +871,7 @@ test('it audits a grant’s change under its client and grant id', async () => {
         host: '127.0.0.1:7171',
         'content-type': 'application/json',
         accept: 'application/json, text/event-stream',
-        authorization: `Bearer ${tokens.access_token}`,
+        authorization: `Bearer ${tokens.accessToken}`,
       },
       body: JSON.stringify({
         jsonrpc: '2.0',
@@ -1518,7 +898,7 @@ test('it audits a grant’s change under its client and grant id', async () => {
         host: '127.0.0.1:7171',
         'content-type': 'application/json',
         accept: 'application/json, text/event-stream',
-        authorization: `Bearer ${tokens.access_token}`,
+        authorization: `Bearer ${tokens.accessToken}`,
         'mcp-session-id': mcpSession,
       },
       body: JSON.stringify({
@@ -1533,14 +913,14 @@ test('it audits a grant’s change under its client and grant id', async () => {
 
   await slept.text();
 
-  const [listed] = await ctx.impd.oauth.listGrants();
+  const [listed] = await ctx.impd.oauth.admin.grants.list();
   const calls = await listApiCalls(ctx.db, null, 100, null);
 
   invariant(listed);
 
   expect(
     calls.filter((call) => call.actor === 'oauth').map((call) => [call.procedure, call.actorName]),
-  ).toStrictEqual([['imps.sleep', `conn/${listed.id}`]]);
+  ).toStrictEqual([['imps.sleep', `${listed.clientName}/${listed.grantID}`]]);
 });
 
 test('it audits a grant’s change refused past its patterns as FORBIDDEN', async () => {
@@ -1568,25 +948,7 @@ test('it audits a grant’s change refused past its patterns as FORBIDDEN', asyn
     boxAgent.close();
   });
 
-  const oauthClient = await ctx.impd.oauth.addClient('conn', ['https://client.example/callback']);
-  const made = await ctx.impd.tokens.create({ name: 'desk', scope: 'manage', imps: null });
-
-  const approver = ctx.impd.tokens.authenticate(made.secret);
-
-  invariant(approver);
-
-  const tokens = await runOAuthSignIn(
-    {
-      respond: (request) => ctx.handle(request, null),
-      origin: 'http://127.0.0.1:7171',
-      clientID: oauthClient.clientId,
-      redirectURI: 'https://client.example/callback',
-      scope: 'read exec manage',
-    },
-    (code) => {
-      ctx.impd.oauth.approve(ApprovalCodeSchema.parse(code), approver, 'exec', ['dev-*']);
-    },
-  );
+  const tokens = await ctx.seed.grant({ scope: 'exec', imps: ['dev-*'] });
 
   const mcpOpened = await ctx.handle(
     new Request(`http://127.0.0.1:7171/mcp`, {
@@ -1595,7 +957,7 @@ test('it audits a grant’s change refused past its patterns as FORBIDDEN', asyn
         host: '127.0.0.1:7171',
         'content-type': 'application/json',
         accept: 'application/json, text/event-stream',
-        authorization: `Bearer ${tokens.access_token}`,
+        authorization: `Bearer ${tokens.accessToken}`,
       },
       body: JSON.stringify({
         jsonrpc: '2.0',
@@ -1622,7 +984,7 @@ test('it audits a grant’s change refused past its patterns as FORBIDDEN', asyn
         host: '127.0.0.1:7171',
         'content-type': 'application/json',
         accept: 'application/json, text/event-stream',
-        authorization: `Bearer ${tokens.access_token}`,
+        authorization: `Bearer ${tokens.accessToken}`,
         'mcp-session-id': mcpSession,
       },
       body: JSON.stringify({
@@ -1637,7 +999,7 @@ test('it audits a grant’s change refused past its patterns as FORBIDDEN', asyn
 
   const text = await slept.text();
   const calls = await listApiCalls(ctx.db, null, 100, null);
-  const [listed] = await ctx.impd.oauth.listGrants();
+  const [listed] = await ctx.impd.oauth.admin.grants.list();
 
   invariant(listed);
 
@@ -1647,7 +1009,7 @@ test('it audits a grant’s change refused past its patterns as FORBIDDEN', asyn
     calls
       .filter((call) => call.actor === 'oauth')
       .map((call) => [call.procedure, call.actorName, call.outcome]),
-  ).toStrictEqual([['imps.sleep', `conn/${listed.id}`, 'FORBIDDEN']]);
+  ).toStrictEqual([['imps.sleep', `${listed.clientName}/${listed.grantID}`, 'FORBIDDEN']]);
 });
 
 test('it serves the route on its own port, for its own host only', async () => {
@@ -1669,7 +1031,7 @@ test('it serves the route on its own port, for its own host only', async () => {
   ]);
 
   expect(found.status).toBe(200);
-  expect(elsewhere.status).toBe(404);
+  expect(elsewhere.status).toBe(403);
 });
 
 test('it closes the MCP transport when the listener stops', async () => {
@@ -1708,7 +1070,9 @@ test('it logs where the listener serves the route', async () => {
 
 test('it answers a request that throws with a bare 500, and logs the reason', async () => {
   const ctx = await setupTest();
+  const grant = await ctx.seed.grant({ scope: 'exec', imps: ['*'] });
 
+  const bearer = `Bearer ${grant.accessToken}`;
   const logs = captureImpdLogs();
 
   const listener = startPublicListener({
@@ -1721,7 +1085,7 @@ test('it answers a request that throws with a bare 500, and logs the reason', as
 
   const response = await fetch(`http://127.0.0.1:${String(listener.port)}/mcp`, {
     method: 'POST',
-    headers: { host: '127.0.0.1:7171' },
+    headers: { host: '127.0.0.1:7171', authorization: bearer },
   });
 
   const body = await response.text();
@@ -1733,7 +1097,9 @@ test('it answers a request that throws with a bare 500, and logs the reason', as
 
 test('it lifts the idle timeout from a tool call on /mcp', async () => {
   const ctx = await setupTest();
+  const grant = await ctx.seed.grant({ scope: 'exec', imps: ['*'] });
 
+  const bearer = `Bearer ${grant.accessToken}`;
   const timeout = mock((): void => {});
 
   const handle = createPublicHandler({
@@ -1744,10 +1110,10 @@ test('it lifts the idle timeout from a tool call on /mcp', async () => {
 
   const request = new Request('http://127.0.0.1:7171/mcp', {
     method: 'POST',
-    headers: { host: '127.0.0.1:7171' },
+    headers: { host: '127.0.0.1:7171', authorization: bearer },
   });
 
-  const response = await handle(request, { timeout });
+  const response = await handle(request, { timeout, requestIP: () => null });
 
   await response.body?.cancel();
 
@@ -1767,7 +1133,7 @@ test('it keeps the idle timeout on a sign-in page', async () => {
 
   await handle(
     new Request('http://127.0.0.1:7171/login', { headers: { host: '127.0.0.1:7171' } }),
-    { timeout },
+    { timeout, requestIP: () => null },
   );
 
   expect(timeout).not.toHaveBeenCalled();
@@ -1775,6 +1141,9 @@ test('it keeps the idle timeout on a sign-in page', async () => {
 
 test('it takes 64 open tool calls at once', async () => {
   const ctx = await setupTest();
+  const grant = await ctx.seed.grant({ scope: 'exec', imps: ['*'] });
+
+  const bearer = `Bearer ${grant.accessToken}`;
 
   const handle = createPublicHandler({
     config: ctx.publicMcp,
@@ -1787,7 +1156,7 @@ test('it takes 64 open tool calls at once', async () => {
       const response = await handle(
         new Request(`http://127.0.0.1:7171/mcp`, {
           method: 'POST',
-          headers: { host: '127.0.0.1:7171' },
+          headers: { host: '127.0.0.1:7171', authorization: bearer },
         }),
         null,
       );
@@ -1803,7 +1172,9 @@ test('it takes 64 open tool calls at once', async () => {
 
 test('it keeps a tool call’s slot until the tool ends, though its client goes', async () => {
   const ctx = await setupTest();
+  const grant = await ctx.seed.grant({ scope: 'exec', imps: ['*'] });
 
+  const bearer = `Bearer ${grant.accessToken}`;
   const transport = buildStubMcpTransport();
 
   const handle = createPublicHandler({
@@ -1817,7 +1188,7 @@ test('it keeps a tool call’s slot until the tool ends, though its client goes'
       const response = await handle(
         new Request(`http://127.0.0.1:7171/mcp`, {
           method: 'POST',
-          headers: { host: '127.0.0.1:7171' },
+          headers: { host: '127.0.0.1:7171', authorization: bearer },
         }),
         null,
       );
@@ -1829,7 +1200,7 @@ test('it keeps a tool call’s slot until the tool ends, though its client goes'
   const refused = await handle(
     new Request(`http://127.0.0.1:7171/mcp`, {
       method: 'POST',
-      headers: { host: '127.0.0.1:7171' },
+      headers: { host: '127.0.0.1:7171', authorization: bearer },
     }),
     null,
   );
@@ -1839,7 +1210,9 @@ test('it keeps a tool call’s slot until the tool ends, though its client goes'
 
 test('it frees a tool call’s slot once the tool ends', async () => {
   const ctx = await setupTest();
+  const grant = await ctx.seed.grant({ scope: 'exec', imps: ['*'] });
 
+  const bearer = `Bearer ${grant.accessToken}`;
   const transport = buildStubMcpTransport();
 
   const handle = createPublicHandler({
@@ -1853,7 +1226,7 @@ test('it frees a tool call’s slot once the tool ends', async () => {
       const response = await handle(
         new Request(`http://127.0.0.1:7171/mcp`, {
           method: 'POST',
-          headers: { host: '127.0.0.1:7171' },
+          headers: { host: '127.0.0.1:7171', authorization: bearer },
         }),
         null,
       );
@@ -1865,7 +1238,7 @@ test('it frees a tool call’s slot once the tool ends', async () => {
   const refused = await handle(
     new Request(`http://127.0.0.1:7171/mcp`, {
       method: 'POST',
-      headers: { host: '127.0.0.1:7171' },
+      headers: { host: '127.0.0.1:7171', authorization: bearer },
     }),
     null,
   );
@@ -1880,7 +1253,7 @@ test('it frees a tool call’s slot once the tool ends', async () => {
     const response = await handle(
       new Request(`http://127.0.0.1:7171/mcp`, {
         method: 'POST',
-        headers: { host: '127.0.0.1:7171' },
+        headers: { host: '127.0.0.1:7171', authorization: bearer },
       }),
       null,
     );
@@ -1896,7 +1269,9 @@ test('it frees a tool call’s slot once the tool ends', async () => {
 
 test('it reads at most 16 bodies at once for requests past every slot', async () => {
   const ctx = await setupTest();
+  const grant = await ctx.seed.grant({ scope: 'exec', imps: ['*'] });
 
+  const bearer = `Bearer ${grant.accessToken}`;
   const transport = buildStubMcpTransport();
 
   const handle = createPublicHandler({
@@ -1910,7 +1285,7 @@ test('it reads at most 16 bodies at once for requests past every slot', async ()
       const response = await handle(
         new Request(`http://127.0.0.1:7171/mcp`, {
           method: 'POST',
-          headers: { host: '127.0.0.1:7171' },
+          headers: { host: '127.0.0.1:7171', authorization: bearer },
         }),
         null,
       );
@@ -1936,7 +1311,11 @@ test('it reads at most 16 bodies at once for requests past every slot', async ()
 
     const request = new Request('http://127.0.0.1:7171/mcp', {
       method: 'POST',
-      headers: { host: '127.0.0.1:7171', 'content-type': 'application/json' },
+      headers: {
+        host: '127.0.0.1:7171',
+        authorization: bearer,
+        'content-type': 'application/json',
+      },
       body,
     });
 
@@ -1981,25 +1360,7 @@ test('it lets a cancel through with every slot held, which stops its tool and fr
     boxAgent.close();
   });
 
-  const oauthClient = await ctx.impd.oauth.addClient('conn', ['https://client.example/callback']);
-  const made = await ctx.impd.tokens.create({ name: 'laptop', scope: 'manage', imps: null });
-
-  const approver = ctx.impd.tokens.authenticate(made.secret);
-
-  invariant(approver);
-
-  const tokens = await runOAuthSignIn(
-    {
-      respond: (request) => ctx.handle(request, null),
-      origin: 'http://127.0.0.1:7171',
-      clientID: oauthClient.clientId,
-      redirectURI: 'https://client.example/callback',
-      scope: 'read exec manage',
-    },
-    (code) => {
-      ctx.impd.oauth.approve(ApprovalCodeSchema.parse(code), approver, 'exec', undefined);
-    },
-  );
+  const tokens = await ctx.seed.grant({ scope: 'exec', imps: ['*'] });
 
   const mcpOpened = await ctx.handle(
     new Request(`http://127.0.0.1:7171/mcp`, {
@@ -2008,7 +1369,7 @@ test('it lets a cancel through with every slot held, which stops its tool and fr
         host: '127.0.0.1:7171',
         'content-type': 'application/json',
         accept: 'application/json, text/event-stream',
-        authorization: `Bearer ${tokens.access_token}`,
+        authorization: `Bearer ${tokens.accessToken}`,
       },
       body: JSON.stringify({
         jsonrpc: '2.0',
@@ -2037,7 +1398,7 @@ test('it lets a cancel through with every slot held, which stops its tool and fr
             host: '127.0.0.1:7171',
             'content-type': 'application/json',
             accept: 'application/json, text/event-stream',
-            authorization: `Bearer ${tokens.access_token}`,
+            authorization: `Bearer ${tokens.accessToken}`,
             'mcp-session-id': mcpSession,
           },
           body: JSON.stringify({
@@ -2065,7 +1426,7 @@ test('it lets a cancel through with every slot held, which stops its tool and fr
         host: '127.0.0.1:7171',
         'content-type': 'application/json',
         accept: 'application/json, text/event-stream',
-        authorization: `Bearer ${tokens.access_token}`,
+        authorization: `Bearer ${tokens.accessToken}`,
         'mcp-session-id': mcpSession,
       },
       body: JSON.stringify({ jsonrpc: '2.0', id: 100, method: 'ping' }),
@@ -2080,7 +1441,7 @@ test('it lets a cancel through with every slot held, which stops its tool and fr
         host: '127.0.0.1:7171',
         'content-type': 'application/json',
         accept: 'application/json, text/event-stream',
-        authorization: `Bearer ${tokens.access_token}`,
+        authorization: `Bearer ${tokens.accessToken}`,
         'mcp-session-id': mcpSession,
       },
       body: JSON.stringify({
@@ -2104,7 +1465,7 @@ test('it lets a cancel through with every slot held, which stops its tool and fr
           host: '127.0.0.1:7171',
           'content-type': 'application/json',
           accept: 'application/json, text/event-stream',
-          authorization: `Bearer ${tokens.access_token}`,
+          authorization: `Bearer ${tokens.accessToken}`,
           'mcp-session-id': mcpSession,
         },
         body: JSON.stringify({ jsonrpc: '2.0', id: 101, method: 'ping' }),
@@ -2126,7 +1487,9 @@ test('it lets a cancel through with every slot held, which stops its tool and fr
 
 test('it refuses a request that starts work with every slot held', async () => {
   const ctx = await setupTest();
+  const grant = await ctx.seed.grant({ scope: 'exec', imps: ['*'] });
 
+  const bearer = `Bearer ${grant.accessToken}`;
   const transport = buildStubMcpTransport();
 
   const handle = createPublicHandler({
@@ -2140,7 +1503,7 @@ test('it refuses a request that starts work with every slot held', async () => {
       const response = await handle(
         new Request(`http://127.0.0.1:7171/mcp`, {
           method: 'POST',
-          headers: { host: '127.0.0.1:7171' },
+          headers: { host: '127.0.0.1:7171', authorization: bearer },
         }),
         null,
       );
@@ -2152,7 +1515,11 @@ test('it refuses a request that starts work with every slot held', async () => {
   const refused = await handle(
     new Request(`http://127.0.0.1:7171/mcp`, {
       method: 'POST',
-      headers: { host: '127.0.0.1:7171', 'content-type': 'application/json' },
+      headers: {
+        host: '127.0.0.1:7171',
+        authorization: bearer,
+        'content-type': 'application/json',
+      },
       body: JSON.stringify({ jsonrpc: '2.0', id: 100, method: 'ping' }),
     }),
     null,
@@ -2186,25 +1553,7 @@ test('it refuses a signed-in notification too large for the allowance with every
     boxAgent.close();
   });
 
-  const oauthClient = await ctx.impd.oauth.addClient('conn', ['https://client.example/callback']);
-  const made = await ctx.impd.tokens.create({ name: 'laptop', scope: 'manage', imps: null });
-
-  const approver = ctx.impd.tokens.authenticate(made.secret);
-
-  invariant(approver);
-
-  const tokens = await runOAuthSignIn(
-    {
-      respond: (request) => ctx.handle(request, null),
-      origin: 'http://127.0.0.1:7171',
-      clientID: oauthClient.clientId,
-      redirectURI: 'https://client.example/callback',
-      scope: 'read exec manage',
-    },
-    (code) => {
-      ctx.impd.oauth.approve(ApprovalCodeSchema.parse(code), approver, 'exec', undefined);
-    },
-  );
+  const tokens = await ctx.seed.grant({ scope: 'exec', imps: ['*'] });
 
   const mcpOpened = await ctx.handle(
     new Request(`http://127.0.0.1:7171/mcp`, {
@@ -2213,7 +1562,7 @@ test('it refuses a signed-in notification too large for the allowance with every
         host: '127.0.0.1:7171',
         'content-type': 'application/json',
         accept: 'application/json, text/event-stream',
-        authorization: `Bearer ${tokens.access_token}`,
+        authorization: `Bearer ${tokens.accessToken}`,
       },
       body: JSON.stringify({
         jsonrpc: '2.0',
@@ -2242,7 +1591,7 @@ test('it refuses a signed-in notification too large for the allowance with every
             host: '127.0.0.1:7171',
             'content-type': 'application/json',
             accept: 'application/json, text/event-stream',
-            authorization: `Bearer ${tokens.access_token}`,
+            authorization: `Bearer ${tokens.accessToken}`,
             'mcp-session-id': mcpSession,
           },
           body: JSON.stringify({
@@ -2272,7 +1621,7 @@ test('it refuses a signed-in notification too large for the allowance with every
         host: '127.0.0.1:7171',
         'content-type': 'application/json',
         accept: 'application/json, text/event-stream',
-        authorization: `Bearer ${tokens.access_token}`,
+        authorization: `Bearer ${tokens.accessToken}`,
         'mcp-session-id': mcpSession,
       },
       body: JSON.stringify({
@@ -2313,25 +1662,7 @@ test('it ends a signed-in session with its DELETE with every slot held', async (
     boxAgent.close();
   });
 
-  const oauthClient = await ctx.impd.oauth.addClient('conn', ['https://client.example/callback']);
-  const made = await ctx.impd.tokens.create({ name: 'laptop', scope: 'manage', imps: null });
-
-  const approver = ctx.impd.tokens.authenticate(made.secret);
-
-  invariant(approver);
-
-  const tokens = await runOAuthSignIn(
-    {
-      respond: (request) => ctx.handle(request, null),
-      origin: 'http://127.0.0.1:7171',
-      clientID: oauthClient.clientId,
-      redirectURI: 'https://client.example/callback',
-      scope: 'read exec manage',
-    },
-    (code) => {
-      ctx.impd.oauth.approve(ApprovalCodeSchema.parse(code), approver, 'exec', undefined);
-    },
-  );
+  const tokens = await ctx.seed.grant({ scope: 'exec', imps: ['*'] });
 
   const mcpOpened = await ctx.handle(
     new Request(`http://127.0.0.1:7171/mcp`, {
@@ -2340,7 +1671,7 @@ test('it ends a signed-in session with its DELETE with every slot held', async (
         host: '127.0.0.1:7171',
         'content-type': 'application/json',
         accept: 'application/json, text/event-stream',
-        authorization: `Bearer ${tokens.access_token}`,
+        authorization: `Bearer ${tokens.accessToken}`,
       },
       body: JSON.stringify({
         jsonrpc: '2.0',
@@ -2369,7 +1700,7 @@ test('it ends a signed-in session with its DELETE with every slot held', async (
             host: '127.0.0.1:7171',
             'content-type': 'application/json',
             accept: 'application/json, text/event-stream',
-            authorization: `Bearer ${tokens.access_token}`,
+            authorization: `Bearer ${tokens.accessToken}`,
             'mcp-session-id': mcpSession,
           },
           body: JSON.stringify({
@@ -2395,7 +1726,7 @@ test('it ends a signed-in session with its DELETE with every slot held', async (
       method: 'DELETE',
       headers: {
         host: '127.0.0.1:7171',
-        authorization: `Bearer ${tokens.access_token}`,
+        authorization: `Bearer ${tokens.accessToken}`,
         'mcp-session-id': mcpSession,
       },
     }),
