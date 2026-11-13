@@ -354,6 +354,15 @@ test('it answers /health as ready once impd marks itself ready', async () => {
   expect(body).toStrictEqual({ status: 'ok', ready: true, warnings: [] });
 });
 
+test('it answers a HEAD on /health with an empty body', async () => {
+  const ctx = await setupTest({ cgroups: buildStubCpuCgroups().cgroups });
+  const response = await fetch(`http://127.0.0.1:${ctx.port}/health`, { method: 'HEAD' });
+  const body = await response.text();
+
+  expect(response.status).toBe(200);
+  expect(body).toBe('');
+});
+
 test('it creates a running imp on the first slot with its own tap', async () => {
   const ctx = await setupTest({ cgroups: buildStubCpuCgroups().cgroups });
 

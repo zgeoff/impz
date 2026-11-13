@@ -3,6 +3,8 @@ import { ORPCError, onError } from '@orpc/server';
 import { RPCHandler } from '@orpc/server/fetch';
 import { StrictGetMethodPlugin } from '@orpc/server/plugins';
 import { Elysia } from 'elysia';
+import { autoHead } from 'elysia/auto-head';
+import { websocket } from 'elysia/websocket';
 import { resolveCaller } from '../identity/auth/authenticate';
 import type { CallerSources } from '../identity/auth/authenticate';
 import { createLogouts } from '../identity/auth/logouts';
@@ -187,7 +189,10 @@ export function createApp(deps: AppDeps) {
 
   const dashboardRoutes = createDashboardRoutes(deps.config.dashboardDir);
 
-  const app = new Elysia({ websocket: EXEC_SOCKET_OPTIONS })
+  // Elysia answers a HEAD on a GET route only through autoHead.
+  const app = new Elysia()
+    .use(autoHead())
+    .use(websocket(EXEC_SOCKET_OPTIONS))
     .get('/health', () => ({
       status: 'ok',
       ready: deps.isReady(),
@@ -196,66 +201,50 @@ export function createApp(deps: AppDeps) {
     .use(dashboardRoutes)
 
     // parse: 'none' leaves the body unread for oRPC.
-    .all(
-      '/rpc*',
-      async (context) => {
-        const answered = await sessionCalls.respond(context.request);
+    .all('/rpc*', { parse: 'none' }, async (context) => {
+      const answered = await sessionCalls.respond(context.request);
 
-        if (answered !== null) {
-          return answered;
-        }
+      if (answered !== null) {
+        return answered;
+      }
 
-        const caller = await findCaller(context.request, context.server, true);
+      const caller = await findCaller(context.request, context.server, true);
 
-        if (caller === null) {
-          return Response.json({ error: 'unauthorized' }, { status: 401 });
-        }
+      if (caller === null) {
+        return Response.json({ error: 'unauthorized' }, { status: 401 });
+      }
 
-        return handleRpc(context.request, caller);
-      },
-      { parse: 'none' },
-    )
+      return handleRpc(context.request, caller);
+    })
 
     // A tool call can run for minutes, so no idle timeout ends it.
-    .all(
-      MCP_PATH,
-      (context) => {
-        context.server?.timeout(context.request, 0);
-        mcpServers.set(context.request, context.server);
+    .all(MCP_PATH, { parse: 'none' }, (context) => {
+      context.server?.timeout(context.request, 0);
+      mcpServers.set(context.request, context.server);
 
-        return mcp.respond(context.request);
-      },
-      { parse: 'none' },
-    )
+      return mcp.respond(context.request);
+    })
 
-    .post(
-      BUILD_CONTEXT_PATH,
-      async (context) => {
-        const caller = await findCaller(context.request, context.server, true);
+    .post(BUILD_CONTEXT_PATH, { parse: 'none' }, async (context) => {
+      const caller = await findCaller(context.request, context.server, true);
 
-        if (caller === null) {
-          return Response.json({ error: 'unauthorized' }, { status: 401 });
-        }
+      if (caller === null) {
+        return Response.json({ error: 'unauthorized' }, { status: 401 });
+      }
 
-        context.server?.timeout(context.request, 0);
+      context.server?.timeout(context.request, 0);
 
-        return deps.buildContexts.respond(context.request, caller);
-      },
-      { parse: 'none' },
-    )
+      return deps.buildContexts.respond(context.request, caller);
+    })
 
     // The peer is the connected socket's address, never one a proxy
     // forwarded.
-    .post(
-      '/move/:step',
-      (context) => {
-        context.server?.timeout(context.request, 0);
-        const peer = context.server?.requestIP(context.request)?.address ?? null;
+    .post('/move/:step', { parse: 'none' }, (context) => {
+      context.server?.timeout(context.request, 0);
+      const peer = context.server?.requestIP(context.request)?.address ?? null;
 
-        return deps.moves.respond(context.request, peer);
-      },
-      { parse: 'none' },
-    )
+      return deps.moves.respond(context.request, peer);
+    })
 
     .use(execSockets.route)
     .use(tunnelSockets.route);

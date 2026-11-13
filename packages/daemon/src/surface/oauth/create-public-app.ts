@@ -1,7 +1,7 @@
 import { MCP_PATH } from '@impz/api';
 import type { HttpTransport } from '@impz/mcp';
 import { getErrorMessage } from '@impz/shared';
-import { Elysia } from 'elysia';
+import { Elysia, NotFound } from 'elysia';
 import type { OAuthHandlers } from '../../identity/oauth/create-oauth-handlers';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 
@@ -16,18 +16,8 @@ interface PublicAppDeps {
 
 export function createPublicApp(deps: PublicAppDeps) {
   const app = new Elysia({ strictPath: true })
-    .onRequest((context) => {
-      // Elysia answers a HEAD on every GET route, and only /mcp takes one here.
-      if (context.request.method === 'HEAD' && new URL(context.request.url).pathname !== MCP_PATH) {
-        return buildNotFound();
-      }
-
-      // Elysia answers the request on any returned value, null included
-      // oxlint-disable-next-line unicorn/no-useless-undefined
-      return undefined;
-    })
     .onError((context) => {
-      if (context.code === 'NOT_FOUND') {
+      if (context.error instanceof NotFound) {
         return buildNotFound();
       }
 
@@ -39,15 +29,11 @@ export function createPublicApp(deps: PublicAppDeps) {
     })
 
     // A tool call can run for minutes, so no idle timeout ends it.
-    .all(
-      MCP_PATH,
-      (context) => {
-        deps.holdOpen(context.request);
+    .all(MCP_PATH, RAW, (context) => {
+      deps.holdOpen(context.request);
 
-        return deps.mcp.respond(context.request);
-      },
-      RAW,
-    );
+      return deps.mcp.respond(context.request);
+    });
 
   const oauth = deps.oauth;
 
@@ -56,29 +42,23 @@ export function createPublicApp(deps: PublicAppDeps) {
   }
 
   return app
-    .get(
-      '/.well-known/oauth-authorization-server',
-      (context) => oauth.readServerMetadata(context.request),
-      RAW,
+    .get('/.well-known/oauth-authorization-server', RAW, (context) =>
+      oauth.readServerMetadata(context.request),
     )
-    .get(
-      '/.well-known/oauth-protected-resource',
-      (context) => oauth.readResourceMetadata(context.request),
-      RAW,
+    .get('/.well-known/oauth-protected-resource', RAW, (context) =>
+      oauth.readResourceMetadata(context.request),
     )
-    .get(
-      '/.well-known/oauth-protected-resource/mcp',
-      (context) => oauth.readResourceMetadata(context.request),
-      RAW,
+    .get('/.well-known/oauth-protected-resource/mcp', RAW, (context) =>
+      oauth.readResourceMetadata(context.request),
     )
-    .get('/error', (context) => oauth.answerError(context.request), RAW)
-    .get('/oauth2/authorize', (context) => oauth.runAuthorize(context.request), RAW)
-    .post('/oauth2/token', (context) => oauth.runTokenRequest(context.request), RAW)
-    .post('/oauth2/revoke', (context) => oauth.runRevoke(context.request), RAW)
-    .get('/login', (context) => oauth.runLogin(context.request), RAW)
-    .post('/login', (context) => oauth.runLogin(context.request), RAW)
-    .get('/consent', (context) => oauth.runConsent(context.request), RAW)
-    .post('/consent', (context) => oauth.runConsent(context.request), RAW);
+    .get('/error', RAW, (context) => oauth.answerError(context.request))
+    .get('/oauth2/authorize', RAW, (context) => oauth.runAuthorize(context.request))
+    .post('/oauth2/token', RAW, (context) => oauth.runTokenRequest(context.request))
+    .post('/oauth2/revoke', RAW, (context) => oauth.runRevoke(context.request))
+    .get('/login', RAW, (context) => oauth.runLogin(context.request))
+    .post('/login', RAW, (context) => oauth.runLogin(context.request))
+    .get('/consent', RAW, (context) => oauth.runConsent(context.request))
+    .post('/consent', RAW, (context) => oauth.runConsent(context.request));
 }
 
 function buildNotFound(): Response {
