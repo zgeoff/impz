@@ -57,7 +57,7 @@
       "@zgeoff/kysely-bun-sqlite": "0.3.2",
       "@zgeoff/mcp-auth": "0.2.1",
       "@zgeoff/oxlint-config": "0.8.6",
-      "@zgeoff/rig": "0.1.6",
+      "@zgeoff/rig": "0.2.4",
       "@zgeoff/std": "0.4.3",
       "acme-client": "5.4.0",
       "dns-packet": "5.6.1",
@@ -146,7 +146,10 @@
     "release:update-formula": "bun scripts/release/update-formula.ts",
     "release:plan-npm": "bun scripts/release/plan-npm-packages.ts",
     "release:pack-npm": "bun scripts/release/pack-npm-packages.ts",
-    "check:docs": "chex prose length links readmes skill"
+    "check:docs": "chex prose length links readmes skill",
+    "test:related": "rig related",
+    "test:e2e": "rig e2e",
+    "test:zfs": "rig zfs"
   },
   "devDependencies": {
     "@bufbuild/buf": "1.75.0",
