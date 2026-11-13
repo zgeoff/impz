@@ -5,8 +5,10 @@ import type { PublicMcpConfig } from '../../identity/oauth/public-mcp-config';
 import { readBodyText } from '../../identity/oauth/read-body-text';
 import type { Caller } from '../../platform/principal/caller';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
+import { startRealTimer } from '../../platform/process/start-real-timer';
 import { tapStream } from '../../platform/process/tap-stream';
 import { createPublicApp } from './create-public-app';
+import { keepStreamVerified } from './keep-stream-verified';
 
 const MAX_OPEN = 64;
 const MAX_CONTROL = 16;
@@ -15,6 +17,9 @@ const MAX_CONTROL_BYTES = 16 * 1024;
 // A JSON-RPC message carries a file write's content, 4 MiB as text.
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
 const IDLE_TIMEOUT_S = 30;
+
+// An access token lives 15 minutes, so an open stream checks its token again before then.
+const REVERIFY_MS = 10 * 60_000;
 
 export interface PublicMcpTransport {
   readonly respond: (request: Request, caller: Readonly<Caller>) => Promise<Response>;
@@ -29,6 +34,9 @@ export interface PublicListenerDeps {
   readonly config: PublicMcpConfig;
   readonly oauth: Pick<ImpdMcpAuth, 'server' | 'readCaller'>;
   readonly mcp: PublicMcpTransport;
+
+  // how often an open MCP stream checks its access token again
+  readonly reverifyMs?: number;
 }
 
 type PublicServer = Pick<Bun.Server<undefined>, 'timeout' | 'requestIP'>;
@@ -106,12 +114,53 @@ export function createPublicHandler(
     try {
       const response = await handleRequest(request, server);
 
-      return holdUntilDone(request, response, deps.mcp.readCallEnd(response), release);
+      const held = holdUntilDone(request, response, deps.mcp.readCallEnd(response), release);
+
+      return keepVerified(request, held, {
+        verify: auth.verify,
+        everyMs: deps.reverifyMs ?? REVERIFY_MS,
+      });
     } catch (error) {
       release();
       throw error;
     }
   };
+}
+
+interface Reverify {
+  readonly verify: (bearer: string) => Promise<unknown>;
+  readonly everyMs: number;
+}
+
+function keepVerified(
+  request: Request,
+  response: Response,
+  reverify: Readonly<Reverify>,
+): Response {
+  const bearer = /^Bearer (?<token>\S+)$/v.exec(request.headers.get('authorization') ?? '')
+    ?.groups?.['token'];
+
+  const isStream = response.headers.get('content-type')?.startsWith('text/event-stream') ?? false;
+
+  if (bearer === undefined || response.body === null || !isStream) {
+    return response;
+  }
+
+  const body = keepStreamVerified(response.body, {
+    probeToken: async () => {
+      const access = await reverify.verify(bearer);
+
+      return access !== null;
+    },
+    everyMs: reverify.everyMs,
+    startTimer: startRealTimer,
+  });
+
+  return new Response(body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
+  });
 }
 
 function createRelease(release: () => void): () => void {

@@ -284,6 +284,10 @@ any of its tokens, or, for a grant an imp token approved, `impz token rm` of tha
 sessions end, its running commands stop as a cancel stops them, its unused exec tickets open
 nothing, and its next request gets 401. A code works once.
 
+An open stream checks its access token again every 10 minutes and ends when the token no longer
+passes, so a revoke from another process, or an expired token, ends it within 10 minutes. A client
+sends a long tool call with a fresh token.
+
 A refresh token is strictly single use, with no grace window. A spent refresh token that comes again
 ends its grant, so two refreshes of one token at once leave the client with no working token. A
 client must send one refresh at a time. After a lost response or a reuse failure, it signs in again.
