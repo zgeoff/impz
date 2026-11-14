@@ -1,8 +1,11 @@
 # sleep-wake
 
-An imp sleeps when idle and wakes when someone uses it, with its disk as it was. The journey writes
-a file, puts the imp to sleep, and reads the file back with an exec, which wakes the imp. Run it on
-`local-kvm`.
+Run this journey on the `local-kvm` target: run `bun verify use --target local-kvm` and
+`bun verify up` first. `exec-imp` runs a command in a guest VM, which only `local-kvm` boots. The
+journey checks that a sleeping imp wakes when you run a command in it, with its disk as it was.
+
+When a step fails, still run `destroy-imp`, so the next run starts with no `wv-sleep`. It exits 0
+when the imp is already gone, so you can also run it first to clear a leftover from an earlier run.
 
 ## Journey
 
@@ -20,8 +23,8 @@ bun verify action destroy-imp --name wv-sleep
 ## End state
 
 - The first `exec-imp` returns `data.exitCode: 0`.
-- `sleep-imp` returns `data.state` `sleeping`, and the first `imps list` shows `wv-sleep` as
-  `sleeping`.
-- The second `exec-imp` returns `data.exitCode: 0` and `data.stdout` `kept\n`.
-- The second `imps list` shows `wv-sleep` as `running`: the exec woke it.
+- `sleep-imp` returns `data.state: "sleeping"`, and the first `imps list` holds `wv-sleep` with
+  state `sleeping`.
+- The second `exec-imp` returns `data.exitCode: 0` and `data.stdout: "kept\n"`.
+- The second `imps list` holds `wv-sleep` with state `running`: the command woke it.
 - `destroy-imp` returns `data.existed: true`.

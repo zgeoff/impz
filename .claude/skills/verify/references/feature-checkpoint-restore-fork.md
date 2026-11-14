@@ -1,8 +1,13 @@
 # checkpoint-restore-fork
 
-An MCP client checkpoints an imp before a risky change, restores the checkpoint, and forks it into a
-second imp. The journey drives each step as the run's service client, so every imp it makes is named
-`wv-mcp-*`. The file tools run in a real guest VM, so run it on `local-kvm`.
+Run this journey on the `local-kvm` target: run `bun verify use --target local-kvm` and
+`bun verify up` first. `imp_write_file` and `imp_read_file` run commands in a guest VM, which only
+`local-kvm` boots. The journey checks that an MCP client can checkpoint an imp, restore the imp to
+the checkpoint, and fork the checkpoint into a second imp.
+
+`bun verify mcp call` acts as the run's service client, which may touch only imps named `wv-mcp-*`,
+so keep that prefix on any imp you add. When a step fails, still run both `imp_destroy` calls, so
+the next run starts with neither imp.
 
 ## Journey
 
@@ -23,8 +28,13 @@ bun verify imps list
 
 ## End state
 
-- Every call returns `data.isError: false`.
-- `imp_checkpoint` returns a checkpoint with label `first`.
-- The first `imp_read_file`, after the restore, returns content `before`, not `after`.
-- `imp_fork` returns an imp named `wv-mcp-fork`, and its `imp_read_file` returns content `before`.
+Each `mcp call` returns the tool's answer in `data.isError` and in the text of
+`data.content[0].text`.
+
+- Each `mcp call` returns `data.isError: false`.
+- The text of `imp_checkpoint` holds a checkpoint with label `first`.
+- The text of the `imp_read_file` on `wv-mcp-cp` holds content `before`: the restore undid the
+  second write.
+- The text of `imp_fork` names the imp `wv-mcp-fork`, and its `imp_read_file` holds content
+  `before`.
 - `imps list` holds neither imp.

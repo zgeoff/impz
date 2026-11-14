@@ -1,9 +1,14 @@
 # mcp-scope
 
-A service client signs in to impd's public MCP route with client credentials. Its entry in the
-service-clients file lets it touch only imps named `wv-mcp-*`. The journey creates one imp inside
-that scope and one outside it, and checks that the client may act on the first and is refused the
-second. Run it on `local`.
+Run this journey on the `local` target: run `bun verify use --target local` and `bun verify up`
+first. It checks that an MCP client signed in to impd's public MCP route can act only on the imps
+its scope names. `bun verify up` gives each run a service client whose scope is the imps named
+`wv-mcp-*`. `bun verify mcp call` acts as that client, and `bun verify action` acts with impd's root
+token, which sees every imp.
+
+The journey makes `wv-mcp-scope` inside the scope and `wv-outside` outside it. When a step fails,
+still run both destroy steps, so the next run starts with neither imp. `destroy-imp` exits 0 when
+the imp is already gone.
 
 ## Journey
 
@@ -20,8 +25,13 @@ bun verify imps list
 
 ## End state
 
-- `imp_create` returns `data.isError: false`, with an imp named `wv-mcp-scope` in its text.
-- `imp_list` lists `wv-mcp-scope` and no `wv-outside`.
-- `imp_sleep` on `wv-outside` returns `data.isError: true`, with `FORBIDDEN` in its text.
+Each `mcp call` returns the tool's answer in `data.isError` and in the text of
+`data.content[0].text`.
+
+- `imp_create` returns `data.isError: false`, and its text names the imp `wv-mcp-scope`.
+- The text of `imp_list` lists `wv-mcp-scope` and leaves out `wv-outside`: the client sees only its
+  scope.
+- `imp_sleep` on `wv-outside` returns `data.isError: true`, and its text starts `FORBIDDEN`. Any
+  other refusal is a failure.
 - `imp_destroy` returns `data.isError: false`, and `destroy-imp` returns `data.existed: true`.
-- The last `imps list` holds neither imp.
+- `imps list` holds neither imp.
