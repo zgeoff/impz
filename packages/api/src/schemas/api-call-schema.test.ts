@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { ApiActorSchema, ApiCallSchema } from './api-call-schema';
 
-test.each(['token', 'dashboard', 'ssh', 'tailnet', 'oauth'])(
+test.each(['token', 'dashboard', 'ssh', 'tailnet', 'oauth', 'service'])(
   '#ApiActorSchema accepts the %s actor',
   (input) => {
     expect(ApiActorSchema.safeParse(input).data).toBe(input);

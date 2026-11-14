@@ -159,6 +159,7 @@ impz audit box --kind api      # the calls that named box
 | `ssh`       | A session through the [SSH gateway](./ssh.md).                                |
 | `tailnet`   | A call from a [tailnet identity](./tokens.md#tailnet-identity).               |
 | `oauth`     | A call from an MCP client signed in through [impd's OAuth](./mcp.md#sign-in). |
+| `service`   | A call from a [service client](./mcp.md#service-clients) of the public route. |
 
 The `oauth` caller is a sign-in to impd. An `oauth` secret is another thing that shares the word: a
 refresh token the broker trades for access tokens to another service
