@@ -36,7 +36,12 @@ async function setupTest() {
       db,
       tokens,
       revocations,
-      config: { origin: 'http://127.0.0.1:7171', host: '127.0.0.1:7171', port: 7171 },
+      config: {
+        origin: 'http://127.0.0.1:7171',
+        host: '127.0.0.1:7171',
+        port: 7171,
+        serviceFiles: null,
+      },
       now: Date.now,
     });
 

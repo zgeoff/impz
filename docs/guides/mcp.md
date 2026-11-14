@@ -265,6 +265,46 @@ grants and revokes no secrets.
 A grant that an imp token approved before impd 7 keeps the token's limits: it is never wider than
 that token, and it ends with the token. impd checks it against the token on every request.
 
+### Service clients
+
+An agent with no person present, such as a CI job, signs in to the public route with the OAuth
+`client_credentials` grant. Two files describe its clients, and impd reads both at start. Set
+`IMP_MCP_SERVICE_TOKEN_FILE` and `IMP_MCP_SERVICE_CLIENTS_FILE` to their paths
+([configuration](./configuration.md#public-mcp-route)). With neither set, impd serves no service
+clients. With one, it refuses to start and names the other.
+
+The token file is the `@zgeoff/mcp-auth` service-token file. Each client holds one or two secret
+digests, and the scopes its token may carry. `resource` is `<origin>/mcp`.
+
+```json
+{
+  "resource": "https://imp.example.com/mcp",
+  "clients": {
+    "ci-runner": { "scopes": ["read", "exec"], "secretDigests": ["<64 lowercase hex characters>"] }
+  }
+}
+```
+
+The clients file gives the imps each client reaches. `imps` holds 1 to 32 patterns, as the consent
+page takes them, and `*` reaches every imp, so write it where you mean it. It is never `null`.
+
+```json
+{ "clients": { "ci-runner": { "imps": ["ci-*"] } } }
+```
+
+A client the token file names and the clients file does not gets 401 on `/mcp`.
+
+The client sends its ID, `service:<name>`, and its secret in a `client_secret_basic` header to
+`/oauth2/token` with `grant_type=client_credentials`, and gets a 600-second access token capped to
+its scopes. It acts with the highest scope its token holds, on the imps of its entry. Like an OAuth
+grant, it grants and revokes no secrets. impd audits its calls with the actor `service`.
+
+A restart of impd reloads both files: `podman exec imp-host pkill -HUP -x impd` restarts it in
+place, and the new impd reads them again. The restart forgets every access token it issued, so each
+client gets one 401 and asks for a new token. To rotate a secret, add the new digest, restart, move
+the client to the new secret, then drop the old digest and restart again. A client whose digest the
+file drops gets `invalid_client` on its next token request.
+
 ### Tokens and revocation
 
 | Credential    | Lifetime                                                                         |

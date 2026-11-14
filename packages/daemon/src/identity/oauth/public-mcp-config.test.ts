@@ -44,7 +44,12 @@ test('#parsePublicMcpConfig takes a bare https origin', () => {
       [],
       [20_000, 20_999],
     ),
-  ).toStrictEqual({ origin: 'https://imp.example.com', host: 'imp.example.com', port: 7071 });
+  ).toStrictEqual({
+    origin: 'https://imp.example.com',
+    host: 'imp.example.com',
+    port: 7071,
+    serviceFiles: null,
+  });
 });
 
 test('#parsePublicMcpConfig takes an http origin on a loopback host', () => {
@@ -54,7 +59,12 @@ test('#parsePublicMcpConfig takes an http origin on a loopback host', () => {
       [],
       [20_000, 20_999],
     ),
-  ).toStrictEqual({ origin: 'http://127.0.0.1:7171', host: '127.0.0.1:7171', port: 7171 });
+  ).toStrictEqual({
+    origin: 'http://127.0.0.1:7171',
+    host: '127.0.0.1:7171',
+    port: 7171,
+    serviceFiles: null,
+  });
 });
 
 test('#parsePublicMcpConfig refuses a value that is not a URL', () => {
@@ -124,4 +134,53 @@ test('#parsePublicMcpConfig refuses a port among the imps’ ports', () => {
     Error,
     "IMP_MCP_PUBLIC_PORT 20500 is one of the imps' ports, 20000 to 20999",
   );
+});
+
+test('#parsePublicMcpConfig takes both service files', () => {
+  const config = parsePublicMcpConfig(
+    {
+      IMP_MCP_PUBLIC_URL: 'https://imp.example.com',
+      IMP_MCP_PUBLIC_PORT: 7071,
+      IMP_MCP_SERVICE_TOKEN_FILE: '/etc/impz/service-tokens.json',
+      IMP_MCP_SERVICE_CLIENTS_FILE: '/etc/impz/service-clients.json',
+    },
+    [],
+    [20_000, 20_999],
+  );
+
+  expect(config?.serviceFiles).toStrictEqual({
+    tokenFile: '/etc/impz/service-tokens.json',
+    clientsFile: '/etc/impz/service-clients.json',
+  });
+});
+
+test.each([
+  ['IMP_MCP_SERVICE_TOKEN_FILE', 'IMP_MCP_SERVICE_CLIENTS_FILE'],
+  ['IMP_MCP_SERVICE_CLIENTS_FILE', 'IMP_MCP_SERVICE_TOKEN_FILE'],
+] as const)('#parsePublicMcpConfig refuses %s without %s', (given, missing) => {
+  expect(() =>
+    parsePublicMcpConfig(
+      {
+        IMP_MCP_PUBLIC_URL: 'https://imp.example.com',
+        IMP_MCP_PUBLIC_PORT: 7071,
+        [given]: '/etc/impz/file.json',
+      },
+      [],
+      [20_000, 20_999],
+    ),
+  ).toThrowWithMessage(Error, `${given} needs ${missing}`);
+});
+
+test('#parsePublicMcpConfig refuses service files without IMP_MCP_PUBLIC_URL', () => {
+  expect(() =>
+    parsePublicMcpConfig(
+      {
+        IMP_MCP_PUBLIC_PORT: 7071,
+        IMP_MCP_SERVICE_TOKEN_FILE: '/etc/impz/service-tokens.json',
+        IMP_MCP_SERVICE_CLIENTS_FILE: '/etc/impz/service-clients.json',
+      },
+      [],
+      [20_000, 20_999],
+    ),
+  ).toThrow('need IMP_MCP_PUBLIC_URL');
 });
