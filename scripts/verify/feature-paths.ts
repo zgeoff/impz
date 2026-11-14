@@ -14,12 +14,14 @@ const impd = [
   'packages/shared/**',
 ] as const;
 
-// What only a real VM runs: the guest agent and its protocol, the kernel, the host container and
-// its Go programs, the dev instance that `local-kvm` starts, and the image its journeys boot. A
-// change here needs a verdict from a KVM host.
+// What only a real VM runs: the guest agent and its protocol, impd's VM layer, the kernel, the host
+// container and its Go programs, the dev instance that `local-kvm` starts, and the image its
+// journeys boot. Only a change here, or to a KVM feature's own code, needs a KVM host's verdict.
 const vm = [
   'agent/**',
   'proto/**',
+  'packages/agent-protocol/**',
+  'packages/daemon/src/vm/**',
   'kernel/**',
   'host/**',
   '.dockerignore',
@@ -34,13 +36,19 @@ const vm = [
 export const featurePaths = {
   'api-lifecycle': [...impd, 'packages/testing/**', 'packages/cli/**'],
   'mcp-scope': [...impd, 'packages/testing/**'],
-  'cli-create-exec': [...impd, ...vm, 'packages/cli/**'],
-  'sleep-wake': [...impd, ...vm],
-  'checkpoint-restore-fork': [...impd, ...vm],
+  'cli-create-exec': [...vm, 'packages/cli/**', 'packages/daemon/src/imps/exec/**'],
+  'sleep-wake': [...vm, 'packages/daemon/src/imps/exec/**'],
+  'checkpoint-restore-fork': [...vm, 'packages/daemon/src/imp-ops/checkpoints/**'],
 } as const satisfies Record<string, readonly string[]>;
 
-// A change to one of these changes every feature: the verify CLI and its targets' apps.
-export const sharedPaths = ['scripts/verify/**'] as const;
+// A change to one of these changes every feature: the verify CLI and its targets' apps, and the
+// root manifest, lock file and Bun pin, which decide every package's runtime dependencies.
+export const sharedPaths = [
+  'scripts/verify/**',
+  'package.json',
+  'bun.lock',
+  '.bun-version',
+] as const;
 
 // A path that one of these globs matches counts as no change, even where a feature's or a shared
 // glob matches it too.
@@ -92,12 +100,8 @@ export const ignoredPaths = [
   'scripts/release/*.ts',
   'scripts/release/{build-cli,build-formula,build-release-assets,build-release,check-base-image,check-client-package,check-client-runtimes,check-release-image,check-reproducible,check-testing-package,pack-client,pack-testing}.sh',
 
-  // 3. The files that Renovate (the root catalog, the lock file, the Bun pin) and release-please
-  //    (each package's version, the manifest) change. A dependency bump merges on green CI, and
-  //    the verify gate skips both bots' pull requests.
-  '**/package.json',
-  'bun.lock',
-  '.bun-version',
+  // 3. release-please's own files. A package's manifest is no exception: its exports and
+  //    dependencies change what impd runs, so it sits under its package's feature paths.
   '.release-please-manifest.json',
   'release-please-config.json',
 

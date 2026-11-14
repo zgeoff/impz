@@ -15,6 +15,9 @@ export async function runLocalImpd(env: Readonly<Record<string, string | undefin
 
   invariant(directory !== undefined && digest !== undefined, 'the launch plan sets both');
 
+  // Listen first: with no SIGTERM listener, a stop during startup kills the process before
+  // `impd.stop()` removes the harness's temp folders.
+  const stopped = waitForStop();
   const port = readFreePort();
   const origin = `http://127.0.0.1:${String(port)}`;
 
@@ -32,21 +35,23 @@ export async function runLocalImpd(env: Readonly<Record<string, string | undefin
     },
   });
 
-  await impd.seedImage(IMAGE_NAME);
+  try {
+    await impd.seedImage(IMAGE_NAME);
 
-  const home = await createCLIHome(directory, impd.url, TEST_TOKEN);
+    const home = await createCLIHome(directory, impd.url, TEST_TOKEN);
 
-  process.stdout.write(
-    `${JSON.stringify({ event: 'ready', web: impd.url, mcp: origin, ...home })}\n`,
-  );
+    process.stdout.write(
+      `${JSON.stringify({ event: 'ready', web: impd.url, mcp: origin, ...home })}\n`,
+    );
 
-  await waitForStop();
+    await stopped;
 
-  process.stdout.write(
-    `${JSON.stringify({ event: 'peak-memory', ...(await readPeakMemory()) })}\n`,
-  );
+    const peak = await readPeakMemory();
 
-  await impd.stop();
+    process.stdout.write(`${JSON.stringify({ event: 'peak-memory', ...peak })}\n`);
+  } finally {
+    await impd.stop();
+  }
 }
 
 if (import.meta.main) {

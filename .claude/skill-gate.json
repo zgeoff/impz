@@ -29,6 +29,9 @@
     { "match": "scripts/lib/**", "skills": ["verify"] },
     { "match": "scripts/impz", "skills": ["verify"] },
     { "match": "scripts/release/build-system-drive.sh", "skills": ["verify"] },
-    { "match": "scripts/verify/**", "skills": ["verify"] }
+    { "match": "scripts/verify/**", "skills": ["verify"] },
+    { "match": "package.json", "skills": ["verify"] },
+    { "match": "bun.lock", "skills": ["verify"] },
+    { "match": ".bun-version", "skills": ["verify"] }
   ]
 }

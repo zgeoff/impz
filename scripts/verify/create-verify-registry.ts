@@ -6,6 +6,7 @@ import { mcp } from '@wringer/mcp';
 import { stream } from '@wringer/stream';
 import { terminal } from '@wringer/terminal';
 import * as z from 'zod';
+import { buildTerminalConfig } from './build-terminal-config.ts';
 import { checkHost } from './check-host.ts';
 import {
   RUN_DIRECTORY_ENV,
@@ -229,22 +230,8 @@ function buildStreamConfig(ctx: DriverConfigContext) {
   };
 }
 
-// One program, a shell whose `impz` is this checkout's CLI, logged in to the run's impd.
 function readTerminalConfig(ctx: DriverConfigContext) {
-  const run = parseRunEndpoints(ctx.endpoints);
-
-  return {
-    programs: {
-      shell: {
-        command: ['bash', '--norc', '--noprofile'],
-        env: {
-          XDG_CONFIG_HOME: run.configHome,
-          PATH: `${run.bin}:${process.env['PATH'] ?? ''}`,
-          PS1: '$ ',
-        },
-      },
-    },
-  };
+  return buildTerminalConfig(ctx.endpoints, process.env['PATH'] ?? '');
 }
 
 // The MCP tools that read and change nothing, which a read-only target may call.

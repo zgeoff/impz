@@ -26,6 +26,10 @@ export async function runKvmImpd(env: Readonly<Record<string, string | undefined
 
   invariant(directory !== undefined && digest !== undefined, 'the launch plan sets both');
 
+  // Listen first, so a stop during `dev.sh up` still reaches the `finally` that removes the
+  // instance.
+  const stopped = waitForStop();
+
   const blocked = await readKvmBlocker(env);
 
   if (blocked !== null) {
@@ -38,14 +42,14 @@ export async function runKvmImpd(env: Readonly<Record<string, string | undefined
       blocked,
     });
 
-    await waitForStop();
+    await stopped;
 
     return;
   }
 
   try {
     await startInstance(env, directory, digest);
-    await waitForStop();
+    await stopped;
   } finally {
     await removeKvmInstance(directory);
   }
