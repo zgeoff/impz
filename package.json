@@ -56,7 +56,7 @@
       "@zgeoff/format-codemod": "0.3.5",
       "@zgeoff/kysely-bun-sqlite": "0.3.2",
       "@zgeoff/mcp-auth": "0.2.2",
-      "@zgeoff/oxlint-config": "0.8.6",
+      "@zgeoff/oxlint-config": "0.10.7",
       "@zgeoff/rig": "0.1.6",
       "@zgeoff/std": "0.4.3",
       "acme-client": "5.4.0",
