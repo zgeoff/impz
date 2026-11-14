@@ -128,13 +128,13 @@ command points that command alone.
 | `local`     | `bun verify use --target local`, then `bun verify up`     | read-write | impd on stand-in VMs, on any machine.            |
 | `local-kvm` | `bun verify use --target local-kvm`, then `bun verify up` | read-write | A dev instance on real VMs, about 70 s to start. |
 
-Each feature file names its target. To change target, run `bun verify down`, then `use --target`,
-`up` and `doctor` again.
+Each feature file names its target, which counts as your task naming one. To change target, run
+`bun verify down`, then `use --target`, `up` and `doctor`.
 
-`local-kvm` needs `/dev/kvm`, Docker, a guest kernel and the host container image that
-`scripts/dev/dev.sh up` builds for this checkout. When one is missing, the doctor's `host` check
-fails, and its message gives the fix. After a run that crashed, remove each container that
-`docker ps -a --filter name=impz-verify-` lists, with `docker rm -f`.
+`local-kvm` needs `/dev/kvm`, Docker, a guest kernel and the host image that `scripts/dev/dev.sh up`
+builds for this checkout. When one is missing, the doctor's `host` check fails; read the fix in its
+`message`. After a crashed run, `docker rm -f` each container that
+`docker ps -a --filter name=impz-verify-` lists.
 
 <!-- /repo -->
 
@@ -151,11 +151,11 @@ group, such as `action`: run `bun verify <group> --help` for its commands.
 
 - `bun verify action create-imp`, `sleep-imp` and `destroy-imp` act with impd's root token.
   `exec-imp` runs `sh -c` in the imp, on `local-kvm` only.
-- `bun verify mcp call <tool> --args '<json>'` acts as the run's service client, which may touch
-  only imps named `wv-mcp-*`.
+- `bun verify mcp call <tool> --args '<json>'` acts as an MCP client that `up` makes, which may
+  touch only imps named `wv-mcp-*`.
 - `bun verify terminal start shell` opens a shell with this checkout's `impz`, signed in.
 
-Name every imp you create `wv-<name>`, so a leftover is easy to spot, and destroy it before `done`.
+Name every imp you create `wv-<name>`, so a leftover stands out, and destroy it before `done`.
 
 <!-- /repo -->
 

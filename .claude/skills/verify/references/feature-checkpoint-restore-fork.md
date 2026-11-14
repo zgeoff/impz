@@ -1,13 +1,14 @@
 # checkpoint-restore-fork
 
-Run this journey on the `local-kvm` target: run `bun verify use --target local-kvm` and
-`bun verify up` first. `imp_write_file` and `imp_read_file` run commands in a guest VM, which only
-`local-kvm` boots. The journey checks that an MCP client can checkpoint an imp, restore the imp to
-the checkpoint, and fork the checkpoint into a second imp.
+Run this journey on the `local-kvm` target. Before it, run `bun verify use --target local-kvm`,
+`bun verify up` and `bun verify doctor`. Only `local-kvm` boots the guest VM that `imp_write_file`
+and `imp_read_file` need. The journey checks that an MCP client can checkpoint an imp, restore the
+imp to the checkpoint, and fork the checkpoint into a second imp.
 
-`bun verify mcp call` acts as the run's service client, which may touch only imps named `wv-mcp-*`,
-so keep that prefix on any imp you add. When a step fails, still run both `imp_destroy` calls, so
-the next run starts with neither imp.
+`bun verify mcp call` signs in as an MCP client that impd lets touch only imps named `wv-mcp-*`; it
+refuses any other name with `FORBIDDEN`. When a step fails, skip to the two `imp_destroy` calls, so
+the next run starts with neither imp. Ignore `isError: true` from a destroy of an imp that never got
+made.
 
 ## Journey
 
@@ -28,13 +29,13 @@ bun verify imps list
 
 ## End state
 
-Each `mcp call` returns the tool's answer in `data.isError` and in the text of
-`data.content[0].text`.
+Each `mcp call` prints an envelope whose `data.isError` says whether the tool failed, and whose
+`data.content[0].text` holds the tool's JSON result.
 
 - Each `mcp call` returns `data.isError: false`.
-- The text of `imp_checkpoint` holds a checkpoint with label `first`.
-- The text of the `imp_read_file` on `wv-mcp-cp` holds content `before`: the restore undid the
-  second write.
-- The text of `imp_fork` names the imp `wv-mcp-fork`, and its `imp_read_file` holds content
-  `before`.
+- The result of `imp_checkpoint` holds `"label": "first"`.
+- The result of the `imp_read_file` on `wv-mcp-cp` holds `"content": "before"`: the restore undid
+  the second write.
+- The result of `imp_fork` names the imp `wv-mcp-fork`.
+- The result of the `imp_read_file` on `wv-mcp-fork` holds `"content": "before"`.
 - `imps list` holds neither imp.

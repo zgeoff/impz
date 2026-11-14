@@ -1,12 +1,16 @@
 # cli-create-exec
 
-Run this journey on the `local-kvm` target: run `bun verify use --target local-kvm` and
-`bun verify up` first. `impz exec` runs its command in a guest VM, which only `local-kvm` boots. The
-journey checks, in a terminal, that a user can create an imp with `impz new`, run a command in it
-with `impz exec`, and remove it with `impz rm`.
+Run this journey on the `local-kvm` target. Before it, run `bun verify use --target local-kvm`,
+`bun verify up` and `bun verify doctor`. Only `local-kvm` boots the guest VM that `impz exec` needs.
 
-When a step fails, still run `bun verify action destroy-imp --name wv-cli`, so the next run starts
-with no `wv-cli`. It exits 0 when the imp is already gone.
+The journey checks that a user can create an imp with `impz new`, run a command in it with
+`impz exec`, and remove it with `impz rm`. It types each command into `shell`, the terminal program
+the registry declares: a bash shell with the prompt `$ `, whose `impz` is this checkout's CLI,
+signed in to the run's impd.
+
+Run the commands one at a time. When a step gives a result that the end state doesn't expect, run
+`bun verify terminal stop`, then `bun verify action destroy-imp --name wv-cli`, so the next run
+starts with no `wv-cli`. `destroy-imp` exits 0 when the imp is already gone.
 
 ## Journey
 
@@ -32,7 +36,7 @@ bun verify imps list
 ## End state
 
 - The first `terminal wait` passes: `impz new` printed a row for `wv-cli` in state `running`.
-- The second `terminal wait` passes: the guest's hostname, in the `uname -a` line, is the imp's
-  name.
-- In `data.text` of `terminal screen`, no line between `$ impz rm wv-cli` and the last `$` prompt.
-- `imps list` holds no `wv-cli`.
+- The second `terminal wait` passes: the hostname in the `uname -a` line is the imp's name.
+- `impz rm` printed nothing: in `data.text` of `terminal screen`, the `$` prompt comes on the line
+  straight after `$ impz rm wv-cli`.
+- `data.imps` of `imps list` holds no `wv-cli`.
