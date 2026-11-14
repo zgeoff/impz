@@ -317,7 +317,7 @@ test('it reads the caller of a service client from its entry, at the highest sco
     seeded.findSecret('wringer-ro'),
   );
 
-  invariant(token.accessToken);
+  invariant(token.accessToken !== null);
 
   const access = await opened.server.verify(token.accessToken);
 
@@ -372,7 +372,7 @@ test.each([
 
     const opening = ctx.openServiceAuth(seeded.files);
 
-    await expect(opening).rejects.toThrow(variable);
+    expect(opening).rejects.toThrow(variable);
   },
 );
 
@@ -390,5 +390,5 @@ test('it refuses to open when a service file is missing', async () => {
   const missing = { ...seeded.files, clientsFile: `${seeded.files.clientsFile}.missing` };
   const opening = ctx.openServiceAuth(missing);
 
-  await expect(opening).rejects.toThrow('IMP_MCP_SERVICE_CLIENTS_FILE');
+  expect(opening).rejects.toThrow('IMP_MCP_SERVICE_CLIENTS_FILE');
 });

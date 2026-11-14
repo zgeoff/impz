@@ -50,10 +50,10 @@ export async function seedServiceFiles(
   }
 
   const writeTokenFile = async (given: readonly ServiceClientInput[]) => {
-    const entries = given.map((client) => [
-      client.name,
-      { scopes: client.scopes, secretDigests: [digests[client.name]] },
-    ]);
+    const entries = given.map(
+      (client) =>
+        [client.name, { scopes: client.scopes, secretDigests: [digests[client.name]] }] as const,
+    );
 
     await writeFile(
       files.tokenFile,

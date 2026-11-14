@@ -10770,7 +10770,8 @@
                 "dashboard",
                 "ssh",
                 "tailnet",
-                "oauth"
+                "oauth",
+                "service"
               ]
             },
             "actorName": {
@@ -12420,7 +12421,8 @@
                   "dashboard",
                   "ssh",
                   "tailnet",
-                  "oauth"
+                  "oauth",
+                  "service"
                 ]
               },
               "actorName": {
@@ -14142,7 +14144,8 @@
                         "dashboard",
                         "ssh",
                         "tailnet",
-                        "oauth"
+                        "oauth",
+                        "service"
                       ]
                     },
                     "actorName": {
@@ -16256,7 +16259,8 @@
               "dashboard",
               "ssh",
               "tailnet",
-              "oauth"
+              "oauth",
+              "service"
             ]
           },
           "name": {
