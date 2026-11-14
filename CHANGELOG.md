@@ -1,5 +1,12 @@
 # Changelog
 
+## [7.0.1](https://github.com/zgeoff/impz/compare/v7.0.0...v7.0.1) (2026-11-14)
+
+
+### Bug Fixes
+
+* **deps:** update module golang.org/x/sys to v0.50.0 ([#1024](https://github.com/zgeoff/impz/issues/1024)) ([efad637](https://github.com/zgeoff/impz/commit/efad637686637c89635ef234cd09389f54c7182e))
+
 ## [7.0.0](https://github.com/zgeoff/impz/compare/v6.12.0...v7.0.0) (2026-11-13)
 
 ### ⚠ BREAKING CHANGES
