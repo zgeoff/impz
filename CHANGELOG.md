@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.1.0](https://github.com/zgeoff/impz/compare/v7.0.1...v7.1.0) (2026-11-14)
+
+### Features
+
+- **daemon:** serve service clients on the public mcp route
+  ([#1026](https://github.com/zgeoff/impz/issues/1026))
+  ([6b37833](https://github.com/zgeoff/impz/commit/6b3783334c115aed0f16670ae43b34f39189436a))
+
 ## [7.0.1](https://github.com/zgeoff/impz/compare/v7.0.0...v7.0.1) (2026-11-14)
 
 ### Bug Fixes
