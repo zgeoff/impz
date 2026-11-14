@@ -8,7 +8,9 @@ import * as z from 'zod';
 import { listApiCalls } from '../../platform/db/api-audit';
 import { createImage } from '../../platform/db/images';
 import { readImpByName } from '../../platform/db/imps';
+import { readServiceToken } from '../../test-utils/identity/read-service-token';
 import { seedOAuthGrant } from '../../test-utils/identity/seed-oauth-grant';
+import { seedServiceFiles } from '../../test-utils/identity/seed-service-files';
 import { seedTokenOAuthGrant } from '../../test-utils/identity/seed-token-oauth-grant';
 import { buildMockNewImage } from '../../test-utils/imps/build-mock-new-image';
 import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
@@ -26,6 +28,13 @@ async function setupTest() {
 
   const rootToken = randomUUID();
 
+  const service = await seedServiceFiles(stack, 'http://127.0.0.1:7171/mcp', [
+    { name: 'wringer-ro', scopes: ['read'], imps: ['wringer-*'] },
+    { name: 'wringer-rw', scopes: ['exec'], imps: ['wringer-*'] },
+    { name: 'unlisted', scopes: ['read'], imps: null },
+    { name: 'constructor', scopes: ['read'], imps: null },
+  ]);
+
   const publicPort = claimFreePorts(1, {
     pick: () => 10_000 + Math.floor(Math.random() * 10_000),
   }).take();
@@ -36,6 +45,8 @@ async function setupTest() {
     env: {
       IMP_MCP_PUBLIC_URL: 'http://127.0.0.1:7171',
       IMP_MCP_PUBLIC_PORT: String(publicPort),
+      IMP_MCP_SERVICE_TOKEN_FILE: service.files.tokenFile,
+      IMP_MCP_SERVICE_CLIENTS_FILE: service.files.clientsFile,
     },
   });
 
@@ -47,8 +58,66 @@ async function setupTest() {
 
   invariant(server);
 
+  const handle = createPublicHandler({
+    config: publicMcp,
+    oauth: harness.impd.oauth,
+    mcp: harness.impd.api.publicMcp,
+  });
+
+  const send = (bearer: string, body: unknown, session: string | null) =>
+    handle(
+      new Request('http://127.0.0.1:7171/mcp', {
+        method: 'POST',
+        headers: {
+          host: '127.0.0.1:7171',
+          'content-type': 'application/json',
+          accept: 'application/json, text/event-stream',
+          authorization: `Bearer ${bearer}`,
+          ...(session === null ? {} : { 'mcp-session-id': session }),
+        },
+        body: JSON.stringify(body),
+      }),
+      null,
+    );
+
+  const initialize = (bearer: string) =>
+    send(
+      bearer,
+      {
+        jsonrpc: '2.0',
+        id: 0,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-06-18',
+          capabilities: {},
+          clientInfo: { name: 'test', version: '1.0.0' },
+        },
+      },
+      null,
+    );
+
   return Object.assign(harness, {
     stack,
+    initialize,
+    readServiceToken: (name: string) => readServiceToken(server, name, service.findSecret(name)),
+    callTool: async (bearer: string, name: string, args: Record<string, unknown>) => {
+      const opened = await initialize(bearer);
+
+      await opened.text();
+
+      const called = await send(
+        bearer,
+        { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } },
+        opened.headers.get('mcp-session-id') ?? '',
+      );
+
+      const json = await readMcpAnswer(called);
+
+      const item = z.object({ text: z.string() });
+      const result = z.object({ result: z.object({ content: z.array(item) }) }).parse(json);
+
+      return result.result.content[0]?.text;
+    },
     rootToken,
     publicMcp,
     seed: {
@@ -56,11 +125,7 @@ async function setupTest() {
       tokenGrant: (input: Parameters<typeof seedTokenOAuthGrant>[2]) =>
         seedTokenOAuthGrant(server, harness.db, input),
     },
-    handle: createPublicHandler({
-      config: publicMcp,
-      oauth: harness.impd.oauth,
-      mcp: harness.impd.api.publicMcp,
-    }),
+    handle,
   });
 }
 
@@ -122,7 +187,7 @@ test.each([
   ).toStrictEqual([]);
 });
 
-test('it serves the authorization server metadata, with public clients only and nothing on introspection or DPoP', async () => {
+test('it serves the authorization server metadata, with public clients and service clients, and nothing on introspection or DPoP', async () => {
   const ctx = await setupTest();
 
   const response = await ctx.handle(
@@ -144,7 +209,8 @@ test('it serves the authorization server metadata, with public clients only and 
     authorization_endpoint: 'http://127.0.0.1:7171/oauth2/authorize',
     token_endpoint: 'http://127.0.0.1:7171/oauth2/token',
     code_challenge_methods_supported: expect.arrayContaining(['S256']) as unknown,
-    token_endpoint_auth_methods_supported: ['none'],
+    token_endpoint_auth_methods_supported: ['none', 'client_secret_basic'],
+    grant_types_supported: expect.arrayContaining(['client_credentials']) as unknown,
     revocation_endpoint_auth_methods_supported: ['none'],
   });
 
@@ -1824,4 +1890,63 @@ test('it ends a signed-in session with its DELETE with every slot held', async (
   );
 
   expect(ended.status).toBe(204);
+});
+
+test('it lists only the imps that the entry of a service client names', async () => {
+  const ctx = await setupTest();
+
+  const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
+
+  await Bun.write(buildImagePaths(ctx.dataDir, image.digest).rootfs, 'rootfs');
+
+  await createImage(ctx.db, image);
+
+  await ctx.client.imps.create({ name: 'wringer-a' });
+  await ctx.client.imps.create({ name: 'dev-1' });
+
+  const token = await ctx.readServiceToken('wringer-ro');
+
+  invariant(token.accessToken !== null);
+
+  const text = await ctx.callTool(token.accessToken, 'imp_list', {});
+
+  expect(text).toInclude('wringer-a');
+  expect(text).not.toInclude('dev-1');
+});
+
+test.each([['unlisted'], ['constructor']])(
+  'it refuses /mcp to the service client %s, which has a digest and no entry in the clients file',
+  async (client) => {
+    const ctx = await setupTest();
+    const token = await ctx.readServiceToken(client);
+
+    invariant(token.accessToken !== null);
+
+    const response = await ctx.initialize(token.accessToken);
+
+    expect(response.status).toBe(401);
+  },
+);
+
+test.each([
+  ['wringer-rw', 'dev-1', 'a client limited to wringer-*, on dev-1'],
+  ['wringer-ro', 'wringer-a', 'a client with only the read scope, on wringer-a'],
+])('it refuses imp_exec to %s on %s, as %s', async (client, imp) => {
+  const ctx = await setupTest();
+
+  const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
+
+  await Bun.write(buildImagePaths(ctx.dataDir, image.digest).rootfs, 'rootfs');
+
+  await createImage(ctx.db, image);
+
+  await ctx.client.imps.create({ name: imp });
+
+  const token = await ctx.readServiceToken(client);
+
+  invariant(token.accessToken !== null);
+
+  const text = await ctx.callTool(token.accessToken, 'imp_exec', { name: imp, command: 'echo hi' });
+
+  expect(text).toStartWith('FORBIDDEN:');
 });

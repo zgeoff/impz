@@ -80,7 +80,7 @@ export async function checkAccess(
     };
   }
 
-  if (access.on === 'grant' && caller.kind === 'oauth') {
+  if (access.on === 'grant' && (caller.kind === 'oauth' || caller.kind === 'service')) {
     return { message: `${formatCaller(caller)} may not grant or revoke secrets`, reason: null };
   }
 

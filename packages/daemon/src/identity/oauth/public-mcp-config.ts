@@ -3,7 +3,14 @@ import * as z from 'zod';
 export const PublicMcpEnvSchema = z.object({
   IMP_MCP_PUBLIC_URL: z.string().optional(),
   IMP_MCP_PUBLIC_PORT: z.coerce.number().pipe(z.int().min(1).max(65_535)).default(7071),
+  IMP_MCP_SERVICE_TOKEN_FILE: z.string().min(1).optional(),
+  IMP_MCP_SERVICE_CLIENTS_FILE: z.string().min(1).optional(),
 });
+
+export interface ServiceFiles {
+  readonly tokenFile: string;
+  readonly clientsFile: string;
+}
 
 export interface PublicMcpConfig {
   readonly origin: string;
@@ -11,6 +18,9 @@ export interface PublicMcpConfig {
   readonly host: string;
 
   readonly port: number;
+
+  // null when impd serves no service clients
+  readonly serviceFiles: ServiceFiles | null;
 }
 
 // http only on a loopback host, for tests: a front on the internet speaks https
@@ -22,8 +32,15 @@ export function parsePublicMcpConfig(
   slotPorts: readonly [number, number],
 ): PublicMcpConfig | null {
   const text = env.IMP_MCP_PUBLIC_URL;
+  const serviceFiles = parseServiceFiles(env);
 
   if (text === undefined) {
+    if (serviceFiles !== null) {
+      throw new Error(
+        'IMP_MCP_SERVICE_TOKEN_FILE and IMP_MCP_SERVICE_CLIENTS_FILE need IMP_MCP_PUBLIC_URL',
+      );
+    }
+
     return null;
   }
 
@@ -43,7 +60,26 @@ export function parsePublicMcpConfig(
     );
   }
 
-  return { origin: origin.origin, host: origin.host, port };
+  return { origin: origin.origin, host: origin.host, port, serviceFiles };
+}
+
+function parseServiceFiles(env: Readonly<z.infer<typeof PublicMcpEnvSchema>>): ServiceFiles | null {
+  const tokenFile = env.IMP_MCP_SERVICE_TOKEN_FILE;
+  const clientsFile = env.IMP_MCP_SERVICE_CLIENTS_FILE;
+
+  if (tokenFile === undefined && clientsFile === undefined) {
+    return null;
+  }
+
+  if (tokenFile === undefined) {
+    throw new Error('IMP_MCP_SERVICE_CLIENTS_FILE needs IMP_MCP_SERVICE_TOKEN_FILE');
+  }
+
+  if (clientsFile === undefined) {
+    throw new Error('IMP_MCP_SERVICE_TOKEN_FILE needs IMP_MCP_SERVICE_CLIENTS_FILE');
+  }
+
+  return { tokenFile, clientsFile };
 }
 
 function parseOrigin(text: string): URL {

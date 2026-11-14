@@ -181,10 +181,16 @@ tailnet-only and `impz expose` fails.
 With `IMP_MCP_PUBLIC_URL` set, impd serves `/mcp` and its OAuth sign-in to an operator's TLS front
 ([public route](./mcp.md#public-route)). Without it, no listener starts.
 
-| Variable              | Default | Meaning                                                                                                                                                          |
-| --------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `IMP_MCP_PUBLIC_URL`  | none    | The bare origin the front serves, such as `https://imp.example.com`: the OAuth issuer, and `<origin>/mcp` the resource. http only on a loopback host, for tests. |
-| `IMP_MCP_PUBLIC_PORT` | `7071`  | The route's plain-HTTP port in the host container, on every address; publish it on the host's loopback only.                                                     |
+| Variable                       | Default | Meaning                                                                                                                                                          |
+| ------------------------------ | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `IMP_MCP_PUBLIC_URL`           | none    | The bare origin the front serves, such as `https://imp.example.com`: the OAuth issuer, and `<origin>/mcp` the resource. http only on a loopback host, for tests. |
+| `IMP_MCP_PUBLIC_PORT`          | `7071`  | The route's plain-HTTP port in the host container, on every address; publish it on the host's loopback only.                                                     |
+| `IMP_MCP_SERVICE_TOKEN_FILE`   | none    | The path of the service-token file in the host container. Set it with `IMP_MCP_SERVICE_CLIENTS_FILE`, and both need `IMP_MCP_PUBLIC_URL`.                        |
+| `IMP_MCP_SERVICE_CLIENTS_FILE` | none    | The path of the file that limits each service client to imps. Set it with `IMP_MCP_SERVICE_TOKEN_FILE`.                                                          |
+
+With one service file set and not the other, impd refuses to start and names the missing variable. A
+file that fails to parse stops impd at start, with the reason. The files shape and the reload are in
+[service clients](./mcp.md#service-clients).
 
 ### Telemetry
 

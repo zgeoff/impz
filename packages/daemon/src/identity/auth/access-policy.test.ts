@@ -978,3 +978,25 @@ test.each([
 ])('#findField reads from %p the field %s as %p', (input, field, value) => {
   expect(findField(input, field)).toBe(value);
 });
+
+test('#checkAccess refuses a service client a grant of a secret', async () => {
+  const refusal = await checkAccess(
+    findAccess('grants.add'),
+    buildMockCaller({
+      kind: 'service',
+      name: 'service:wringer-rw',
+      scope: 'manage',
+      imps: ['wringer-*'],
+    }),
+    { name: 'wringer-a', secret: 'gh' },
+    {
+      readSecretGeneration: () => Promise.resolve('gen-gh'),
+      readImage: () => Promise.resolve(undefined),
+    },
+  );
+
+  expect(refusal).toStrictEqual({
+    message: 'service service:wringer-rw may not grant or revoke secrets',
+    reason: null,
+  });
+});

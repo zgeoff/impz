@@ -12,7 +12,7 @@ async function setupTest() {
     db: database.db,
     tokens: { findById: () => null },
     revocations: createRevocations(),
-    config: { origin: 'https://imp.example', host: 'imp.example', port: 7171 },
+    config: { origin: 'https://imp.example', host: 'imp.example', port: 7171, serviceFiles: null },
     now: Date.now,
   });
 

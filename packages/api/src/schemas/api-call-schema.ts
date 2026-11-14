@@ -3,7 +3,8 @@ import { NameSchema } from './name-schema';
 
 // `oauth` is a caller that signed in to impd through its own OAuth server. An
 // `oauth` secret kind is another thing: a refresh token for another service.
-export const ApiActorSchema = z.enum(['token', 'dashboard', 'ssh', 'tailnet', 'oauth']);
+// `service` signs in with the client_credentials grant, with no person present.
+export const ApiActorSchema = z.enum(['token', 'dashboard', 'ssh', 'tailnet', 'oauth', 'service']);
 
 export type ApiActor = z.infer<typeof ApiActorSchema>;
 

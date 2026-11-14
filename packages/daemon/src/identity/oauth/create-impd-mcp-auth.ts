@@ -9,8 +9,11 @@ import type { Revocations } from '../auth/revocations';
 import type { TokenStore } from '../auth/token-store';
 import { buildImpGrantLimits } from './build-imp-grant-limits';
 import { buildOAuthCaller } from './build-oauth-caller';
+import { buildServiceCaller } from './build-service-caller';
 import type { ImpLimits } from './imp-limits-schema';
 import type { PublicMcpConfig } from './public-mcp-config';
+import { SERVICE_TOKEN_PREFIX, readServiceSettings } from './read-service-files';
+import type { ServiceClients, ServiceSettings } from './read-service-files';
 import { recordSecurityEvent } from './record-security-event';
 
 // The passkey and enrollment tables are new with the shared OAuth server, so impd names them; the
@@ -53,11 +56,15 @@ export async function createImpdMcpAuth(deps: Readonly<ImpdMcpAuthDeps>): Promis
   const config = deps.config;
 
   // With no public route, impd still keeps the clients, grants and passkeys its CLI manages.
+  const serviceFiles = config?.serviceFiles ?? null;
+  const service = serviceFiles === null ? null : await readServiceSettings(serviceFiles);
+
   const opened =
     config === null
       ? { server: null, admin: await openMCPAuthAdmin(options) }
-      : await openImpdServer(options, config, deps.tokens);
+      : await openImpdServer(options, config, deps.tokens, service);
 
+  const serviceClients: ServiceClients = service?.clients ?? {};
   const server = opened.server;
   const admin = opened.admin;
 
@@ -75,7 +82,7 @@ export async function createImpdMcpAuth(deps: Readonly<ImpdMcpAuthDeps>): Promis
     },
     readCaller: async (access) => {
       if (access.kind === 'service') {
-        return null;
+        return buildServiceCaller(access, serviceClients);
       }
 
       const grant = await deps.db
@@ -105,6 +112,7 @@ async function openImpdServer(
   options: Readonly<MCPAuthAdminOptions<Scope>>,
   config: Readonly<PublicMcpConfig>,
   tokens: Pick<TokenStore, 'findById'>,
+  service: Readonly<ServiceSettings> | null,
 ) {
   const server = await openMCPAuth<Scope, ImpLimits>({
     ...options,
@@ -112,6 +120,9 @@ async function openImpdServer(
     productName: 'imp',
     paths: DEFAULT_PATHS,
     grantLimits: buildImpGrantLimits({ findToken: tokens.findById }),
+    ...(service === null
+      ? {}
+      : { serviceTokens: { prefix: SERVICE_TOKEN_PREFIX, file: service.tokens } }),
     security: { record: recordSecurityEvent },
   });
 
