@@ -11,19 +11,28 @@
         "@commitlint/cli": "catalog:",
         "@impz/api": "workspace:*",
         "@impz/cli": "workspace:*",
+        "@impz/client": "workspace:*",
         "@impz/daemon": "workspace:*",
         "@impz/e2e-harness": "workspace:*",
         "@impz/mcp": "workspace:*",
         "@impz/shared": "workspace:*",
+        "@impz/testing": "workspace:*",
         "@maschwenk/tsrslint": "catalog:",
         "@stylistic/eslint-plugin": "catalog:",
         "@tsconfig/strictest": "catalog:",
         "@types/bun": "catalog:",
+        "@wringer/core": "catalog:",
+        "@wringer/gunshi": "catalog:",
+        "@wringer/http": "catalog:",
+        "@wringer/mcp": "catalog:",
+        "@wringer/stream": "catalog:",
+        "@wringer/terminal": "catalog:",
         "@zgeoff/agent-hooks": "catalog:",
         "@zgeoff/bun-test-extended": "catalog:",
         "@zgeoff/chex": "catalog:",
         "@zgeoff/diet": "catalog:",
         "@zgeoff/format-codemod": "catalog:",
+        "@zgeoff/mcp-auth": "catalog:",
         "@zgeoff/oxlint-config": "catalog:",
         "@zgeoff/rig": "catalog:",
         "@zgeoff/std": "catalog:",
@@ -347,6 +356,12 @@
     "@types/react-dom": "19.3.0",
     "@types/ssh2": "1.15.6",
     "@vitejs/plugin-react": "6.2.0",
+    "@wringer/core": "0.3.0",
+    "@wringer/gunshi": "0.3.1",
+    "@wringer/http": "0.1.3",
+    "@wringer/mcp": "0.1.0",
+    "@wringer/stream": "0.1.3",
+    "@wringer/terminal": "0.1.0",
     "@xterm/addon-fit": "0.11.0",
     "@xterm/xterm": "6.0.0",
     "@zgeoff/agent-hooks": "0.2.12",
@@ -1017,6 +1032,18 @@
     "@typescript/vfs": ["@typescript/vfs@1.6.5", "", { "dependencies": { "debug": "^4.4.3" }, "peerDependencies": { "typescript": "*" } }, "sha512-gobLHQLmvQGJInFk31NvgMd1uYzRXsd8qgnOssyLD055R2QPnw1ubRbBQ4+T+5qC7IQVuYXdvNDE2G7tMDVHgw=="],
 
     "@vitejs/plugin-react": ["@vitejs/plugin-react@6.2.0", "", { "dependencies": { "@rolldown/pluginutils": "^1.0.1" }, "peerDependencies": { "@rolldown/plugin-babel": "^0.1.7 || ^0.2.0 || ^0.3.0", "babel-plugin-react-compiler": "^1.0.0", "oxc-transform-react": ">=0.152.0 <0.157.0", "vite": "^8.0.0" }, "optionalPeers": ["@rolldown/plugin-babel", "babel-plugin-react-compiler", "oxc-transform-react"] }, "sha512-fw7aWcon3u2xOMTN/F9xYBRZ55zEOIpf3EWfWn+bYwVdT1rQfY4wnOICwR760Dx+VLw8haqtmiULb+ROeJVZqw=="],
+
+    "@wringer/core": ["@wringer/core@0.3.0", "", { "dependencies": { "@zgeoff/std": "0.4.3", "ts-pattern": "5.9.2", "xstate": "5.33.3" }, "peerDependencies": { "zod": "^4.0.0" } }, "sha512-3aewxdbASbD96KGHPF1dPHExFGdx8ok1X0BSHTKndOJSewtS4FM2bSch/exIIF+3o55IBwJIhx3N4bWOoQhmaQ=="],
+
+    "@wringer/gunshi": ["@wringer/gunshi@0.3.1", "", { "dependencies": { "gunshi": "0.37.3", "tiny-invariant": "1.3.3", "ts-pattern": "5.9.2" }, "peerDependencies": { "@wringer/core": "0.3.0", "zod": "^4.0.0" }, "bin": { "wringer-gunshi": "src/wringer-gunshi.ts" } }, "sha512-tB0JCE1VXs79x6rlP9LIeFD1hvsXHThrZ9GUcbJLtFa2Q3EX74vmG81FPz3lstTbUdY6xH3iXwtPebq0mFLRCA=="],
+
+    "@wringer/http": ["@wringer/http@0.1.3", "", { "peerDependencies": { "@wringer/core": "0.3.0", "zod": "^4.0.0" } }, "sha512-TKqgwm9p/qYyB6KhBz4Z0nhyHJoliI+QBt/gEXFU/DXjUlBz2IqTiaYM0CtwsdjXv+VIBpEHf/aClko/D8frqA=="],
+
+    "@wringer/mcp": ["@wringer/mcp@0.1.0", "", { "dependencies": { "@modelcontextprotocol/client": "2.4.0" }, "peerDependencies": { "@wringer/core": "0.3.0", "zod": "^4.0.0" } }, "sha512-7qvALnC/15vxn0kpnc6LatmOmNSIBmDl3A3w4kOOTNx+NJo2t0LO9ioz4WpSmOQ/Z9RNDzzEvCFFJyjTUufCmg=="],
+
+    "@wringer/stream": ["@wringer/stream@0.1.3", "", { "dependencies": { "xstate": "5.33.3" }, "peerDependencies": { "@wringer/core": "0.3.0", "zod": "^4.0.0" } }, "sha512-Jusd49O4UaAuu+6q00A0VGkD4OL00KN8UfBvz8Ny/EInrNx+01cvztfJiU4e9gpR7Mxk1bcH+lE8DAF4zAiqFA=="],
+
+    "@wringer/terminal": ["@wringer/terminal@0.1.0", "", { "peerDependencies": { "@wringer/core": "0.3.0", "zod": "^4.0.0" } }, "sha512-BUOg/kmtrG8NSTmyPhtay//kTmUC7qdR9x7KNcx70xl+axHOLH7ZsILQF+2O9qHrxvpZpPV5mkvib2j0Y5RQNg=="],
 
     "@xterm/addon-fit": ["@xterm/addon-fit@0.11.0", "", {}, "sha512-jYcgT6xtVYhnhgxh3QgYDnnNMYTcf8ElbxxFzX0IZo+vabQqSPAjC3c1wJrKB5E19VwQei89QCiZZP86DCPF7g=="],
 
@@ -1897,6 +1924,8 @@
     "@testing-library/dom/pretty-format": ["pretty-format@27.5.1", "", { "dependencies": { "ansi-regex": "^5.0.1", "ansi-styles": "^5.0.0", "react-is": "^17.0.1" } }, "sha512-Qb1gy5OrP5+zDf2Bvnzdl3jsTf1qXVMazbvCoKhtKqVs4/YK4ozX4gKQJJVyNe+cajNPn0KoC0MC3FUmaHWEmQ=="],
 
     "@testing-library/jest-dom/dom-accessibility-api": ["dom-accessibility-api@0.6.3", "", {}, "sha512-7ZgogeTnjuHbo+ct10G9Ffp0mif17idi0IyWNVA/wcwcm7NPOD/WEHVP3n7n3MhXqxoIYm8d6MuZohYWIZ4T3w=="],
+
+    "@wringer/gunshi/gunshi": ["gunshi@0.37.3", "", {}, "sha512-uwm23bguqDcleEetknuQnF5okLcgmQPM3iv4aWVHTPDbiSs9shh02F079NCY0mWkrIRjHqNhgmzW6k0FCXhy1g=="],
 
     "@zgeoff/format-codemod/oxc-parser": ["oxc-parser@0.155.0", "", { "dependencies": { "@oxc-project/types": "^0.155.0" }, "optionalDependencies": { "@oxc-parser/binding-android-arm-eabi": "0.155.0", "@oxc-parser/binding-android-arm64": "0.155.0", "@oxc-parser/binding-darwin-arm64": "0.155.0", "@oxc-parser/binding-darwin-x64": "0.155.0", "@oxc-parser/binding-freebsd-x64": "0.155.0", "@oxc-parser/binding-linux-arm-gnueabihf": "0.155.0", "@oxc-parser/binding-linux-arm-musleabihf": "0.155.0", "@oxc-parser/binding-linux-arm64-gnu": "0.155.0", "@oxc-parser/binding-linux-arm64-musl": "0.155.0", "@oxc-parser/binding-linux-ppc64-gnu": "0.155.0", "@oxc-parser/binding-linux-riscv64-gnu": "0.155.0", "@oxc-parser/binding-linux-riscv64-musl": "0.155.0", "@oxc-parser/binding-linux-s390x-gnu": "0.155.0", "@oxc-parser/binding-linux-x64-gnu": "0.155.0", "@oxc-parser/binding-linux-x64-musl": "0.155.0", "@oxc-parser/binding-openharmony-arm64": "0.155.0", "@oxc-parser/binding-win32-arm64-msvc": "0.155.0", "@oxc-parser/binding-win32-ia32-msvc": "0.155.0", "@oxc-parser/binding-win32-x64-msvc": "0.155.0" } }, "sha512-C/ReSf1JUFukK/zvk6jhcNibSssvas5+ktIzK7fbKVd3CedWe59C3QwHEOrEZj/4Rt9+xg0Jeis/Jv1F/KM1mw=="],
 

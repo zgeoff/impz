@@ -9,6 +9,26 @@
     { "match": "scripts/test-*.sh", "skills": ["testing", "project-testing"] },
     { "match": "deploy/nixos/tests/**", "skills": ["testing", "project-testing"] },
     { "match": "**/skills/*/SKILL.md", "skills": ["skill-writing", "docs-writing", "deslop"] },
-    { "match": "**/skills/*/references/**", "skills": ["skill-writing", "docs-writing", "deslop"] }
+    { "match": "**/skills/*/references/**", "skills": ["skill-writing", "docs-writing", "deslop"] },
+    { "match": "packages/agent-protocol/**", "skills": ["verify"] },
+    { "match": "packages/api/**", "skills": ["verify"] },
+    { "match": "packages/cli/**", "skills": ["verify"] },
+    { "match": "packages/client/**", "skills": ["verify"] },
+    { "match": "packages/daemon/**", "skills": ["verify"] },
+    { "match": "packages/durable/**", "skills": ["verify"] },
+    { "match": "packages/local-tar/**", "skills": ["verify"] },
+    { "match": "packages/mcp/**", "skills": ["verify"] },
+    { "match": "packages/shared/**", "skills": ["verify"] },
+    { "match": "packages/testing/**", "skills": ["verify"] },
+    { "match": "agent/**", "skills": ["verify"] },
+    { "match": "proto/**", "skills": ["verify"] },
+    { "match": "kernel/**", "skills": ["verify"] },
+    { "match": "host/**", "skills": ["verify"] },
+    { "match": ".dockerignore", "skills": ["verify"] },
+    { "match": "scripts/dev/**", "skills": ["verify"] },
+    { "match": "scripts/lib/**", "skills": ["verify"] },
+    { "match": "scripts/impz", "skills": ["verify"] },
+    { "match": "scripts/release/build-system-drive.sh", "skills": ["verify"] },
+    { "match": "scripts/verify/**", "skills": ["verify"] }
   ]
 }

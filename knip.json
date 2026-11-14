@@ -25,6 +25,10 @@
         "scripts/dev/prepare-docker-lane.ts",
         // the dev CLI that scripts/dev/dev.sh runs
         "scripts/dev/dev.ts",
+        // the target apps and the stop command that the verify registry runs by path
+        "scripts/verify/run-local-impd.ts",
+        "scripts/verify/run-kvm-impd.ts",
+        "scripts/verify/remove-kvm-instance.ts",
         // the zfs harnesses that scripts/test-zfs.sh and scripts/zfs-host-test.sh run
         "scripts/test-zfs.ts",
         "scripts/zfs-host-test.ts"

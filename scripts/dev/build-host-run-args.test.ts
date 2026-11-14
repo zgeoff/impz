@@ -134,6 +134,37 @@ test('it publishes the public MCP route on loopback when IMP_MCP_PUBLIC_URL is s
   expect(args.join(' ')).toInclude('-p 127.0.0.1:2222:22 -p 127.0.0.1:7071:7099 ');
 });
 
+test('it passes the service files of the public MCP route, which a verify run signs a client in with', () => {
+  const args = buildHostRunArgs({
+    layout: buildDevLayout({ env: {}, root: '/w/imp', cwd: '/w' }),
+    checkout: {
+      root: '/w/imp',
+      rootPhysical: '/w/imp',
+      hostImage: 'imp-host:dev-test',
+      buildDir: '/w/imp/build',
+    },
+    env: {
+      IMP_MCP_PUBLIC_URL: 'http://127.0.0.1:7171',
+      IMP_MCP_SERVICE_TOKEN_FILE: '/w/imp/.wringer/run/service-tokens.json',
+      IMP_MCP_SERVICE_CLIENTS_FILE: '/w/imp/.wringer/run/service-clients.json',
+    },
+    privileges: [],
+    hasEnvFile: false,
+    tailscale: 'none',
+    tailnetOAuthFile: null,
+    acmeCAFile: null,
+    registryCAFile: null,
+    registryHost: null,
+    kernel: '/src/kernel/out/vmlinux',
+    systemDrive: '/src/build/imp-system.squashfs',
+    uplinkMTU: '1500',
+  });
+
+  expect(args.join(' ')).toInclude(
+    ' -e IMP_MCP_SERVICE_TOKEN_FILE=/w/imp/.wringer/run/service-tokens.json -e IMP_MCP_SERVICE_CLIENTS_FILE=/w/imp/.wringer/run/service-clients.json ',
+  );
+});
+
 test('it passes IMP_HOST_ADDRESSES, which the egress suite lists a host address in', () => {
   const args = buildHostRunArgs({
     layout: buildDevLayout({ env: {}, root: '/w/imp', cwd: '/w' }),
