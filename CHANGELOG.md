@@ -1,5 +1,12 @@
 # Changelog
 
+## [7.2.0](https://github.com/zgeoff/impz/compare/v7.1.0...v7.2.0) (2026-11-14)
+
+### Features
+
+- add the impz verify cli and its ci gate ([#1029](https://github.com/zgeoff/impz/issues/1029))
+  ([a20bd30](https://github.com/zgeoff/impz/commit/a20bd302748aa59a1b10e451f2f21b62eac05d9e))
+
 ## [7.1.0](https://github.com/zgeoff/impz/compare/v7.0.1...v7.1.0) (2026-11-14)
 
 ### Features
