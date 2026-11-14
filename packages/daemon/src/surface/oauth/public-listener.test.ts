@@ -32,6 +32,7 @@ async function setupTest() {
     { name: 'wringer-ro', scopes: ['read'], imps: ['wringer-*'] },
     { name: 'wringer-rw', scopes: ['exec'], imps: ['wringer-*'] },
     { name: 'unlisted', scopes: ['read'], imps: null },
+    { name: 'constructor', scopes: ['read'], imps: null },
   ]);
 
   const publicPort = claimFreePorts(1, {
@@ -1913,16 +1914,19 @@ test('it lists only the imps that the entry of a service client names', async ()
   expect(text).not.toInclude('dev-1');
 });
 
-test('it refuses /mcp to a service client with a digest and no entry in the clients file', async () => {
-  const ctx = await setupTest();
-  const token = await ctx.readServiceToken('unlisted');
+test.each([['unlisted'], ['constructor']])(
+  'it refuses /mcp to the service client %s, which has a digest and no entry in the clients file',
+  async (client) => {
+    const ctx = await setupTest();
+    const token = await ctx.readServiceToken(client);
 
-  invariant(token.accessToken !== null);
+    invariant(token.accessToken !== null);
 
-  const response = await ctx.initialize(token.accessToken);
+    const response = await ctx.initialize(token.accessToken);
 
-  expect(response.status).toBe(401);
-});
+    expect(response.status).toBe(401);
+  },
+);
 
 test.each([
   ['wringer-rw', 'dev-1', 'a client limited to wringer-*, on dev-1'],

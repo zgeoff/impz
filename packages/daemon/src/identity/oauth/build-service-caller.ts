@@ -13,7 +13,10 @@ export function buildServiceCaller(
   access: Readonly<ServiceAccess>,
   clients: ServiceClients,
 ): Caller | null {
-  const entry = clients[access.clientName.slice('service:'.length)];
+  const clientName = access.clientName.slice('service:'.length);
+
+  // an own-property check, so a name such as `constructor` finds no inherited member
+  const entry = Object.hasOwn(clients, clientName) ? clients[clientName] : undefined;
 
   if (entry === undefined || access.scopes.length === 0) {
     return null;
