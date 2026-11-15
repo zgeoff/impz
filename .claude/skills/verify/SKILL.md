@@ -124,17 +124,17 @@ command points that command alone.
 
 <!-- repo: targets -->
 
-| Target      | Start with                                                | Access     | Notes                          |
-| ----------- | --------------------------------------------------------- | ---------- | ------------------------------ |
-| `local`     | `bun verify use --target local`, then `bun verify up`     | read-write | Fake VMs that run no command.  |
-| `local-kvm` | `bun verify use --target local-kvm`, then `bun verify up` | read-write | Real VMs, about 70 s to start. |
-| `prod`      | [On prod](references/feature-mcp-reads.md#on-prod)        | read-only  | The deployed impd. No `done`.  |
+| Target      | Start with                                                | Access     | Notes                         |
+| ----------- | --------------------------------------------------------- | ---------- | ----------------------------- |
+| `local`     | `bun verify use --target local`, then `bun verify up`     | read-write | Fake VMs.                     |
+| `local-kvm` | `bun verify use --target local-kvm`, then `bun verify up` | read-write | Real VMs; 70 s to start.      |
+| `prod`      | [On prod](references/feature-mcp-reads.md#on-prod)        | read-only  | The deployed impd. No `done`. |
 
-To change between `local` and `local-kvm`, run `bun verify down`, then `use --target`, `up` and
-`doctor`.
+A feature file's target counts as your task's. To change between `local` and `local-kvm`, run
+`bun verify down`, then `use --target`, `up` and `doctor`.
 
 `local-kvm` needs `/dev/kvm`, Docker, a guest kernel and this checkout's host image from
-`scripts/dev/dev.sh up`; the doctor's `host` check gives the fix. After a crashed run,
+`scripts/dev/dev.sh up`; read the fix in the `host` check's `message`. After a crashed run,
 `docker rm -f` each container that `docker ps -a --filter name=impz-verify-` lists.
 
 <!-- /repo -->
@@ -156,7 +156,7 @@ only the name of a group, such as `action`: run `bun verify <group> --help` for 
 - `bun verify mcp call <tool> --args '<json>'` acts as the target's service client: on `prod` the
   read client, else a client that reaches only imps named `wv-mcp-*`.
 
-Name every imp you create `wv-<name>`, and destroy it before `done`.
+Name each imp you create `wv-<name>`; destroy it before `done`.
 
 <!-- /repo -->
 
@@ -164,9 +164,9 @@ Name every imp you create `wv-<name>`, and destroy it before `done`.
 
 <!-- repo: registry -->
 
-[create-verify-registry.ts](../../../scripts/verify/create-verify-registry.ts) declares the
-registry. [feature-paths.ts](../../../scripts/verify/feature-paths.ts) holds each feature's `paths`
-and the registry's `.ignore` list.
+The registry is [create-verify-registry.ts](../../../scripts/verify/create-verify-registry.ts).
+[feature-paths.ts](../../../scripts/verify/feature-paths.ts) holds each feature's `paths` and its
+`.ignore` list.
 
 <!-- /repo -->
 
