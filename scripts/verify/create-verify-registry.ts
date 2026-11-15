@@ -6,9 +6,16 @@ import { mcp } from '@wringer/mcp';
 import { stream } from '@wringer/stream';
 import { terminal } from '@wringer/terminal';
 import * as z from 'zod';
+import { buildMCPConfig } from './build-mcp-config.ts';
 import { buildTerminalConfig } from './build-terminal-config.ts';
 import { checkHost } from './check-host.ts';
+import { checkMCPRoute } from './check-mcp-route.ts';
+import { checkServiceClient } from './check-service-client.ts';
 import {
+  LAUNCH_TARGETS,
+  PROD_CLIENT_NAME,
+  PROD_CLIENT_SCOPE,
+  PROD_SECRET_ENV,
   RUN_DIRECTORY_ENV,
   SERVICE_CLIENT_NAME,
   SERVICE_CLIENT_SCOPE,
@@ -18,6 +25,8 @@ import { createImp } from './create-imp.ts';
 import { createServiceClient } from './create-service-client.ts';
 import { featurePaths, ignoredPaths, sharedPaths } from './feature-paths.ts';
 import { listImps } from './list-imps.ts';
+import { makeLaunchCommand } from './make-launch-command.ts';
+import { parseProdEndpoints } from './parse-prod-endpoints.ts';
 import { readImpEvents } from './read-imp-events.ts';
 import { removeImp } from './remove-imp.ts';
 import { parseRunEndpoints } from './run-endpoints.ts';
@@ -47,6 +56,7 @@ const eventStep = z.strictObject({
 const eventsData = z.strictObject({ events: z.array(eventStep) });
 const healthSchema = z.object({ status: z.literal('ok'), ready: z.boolean() });
 const toolsData = z.strictObject({ tools: z.number().int() });
+const routeData = z.strictObject({ url: z.string() });
 
 // The registry's name is not `impz`: gunshi reads a command group named like the program as the
 // program itself.
@@ -65,7 +75,7 @@ export function createVerifyRegistry(): Wringer {
         http: () => ({ healthPath: '/health' }),
         stream: buildStreamConfig,
         terminal: readTerminalConfig,
-        mcp: buildMCPConfig,
+        mcp: buildRunMCPConfig,
       },
     })
     .target('local-kvm', {
@@ -77,13 +87,30 @@ export function createVerifyRegistry(): Wringer {
         http: () => ({ healthPath: '/health' }),
         stream: buildStreamConfig,
         terminal: readTerminalConfig,
-        mcp: buildMCPConfig,
+        mcp: buildRunMCPConfig,
+      },
+    })
+    .target('prod', {
+      mode: 'attach',
+      access: 'read-only',
+      refusalHint:
+        'prod is the deployed impd, and it is read-only. Leave the write undone, run no `done` there, and report the write you needed.',
+      host: local(),
+      endpoints: () => parseProdEndpoints(process.env),
+      drivers: {
+        mcp: (ctx) =>
+          buildMCPConfig(z.url().parse(ctx.endpoints['mcp']), {
+            name: PROD_CLIENT_NAME,
+            secretEnv: PROD_SECRET_ENV,
+            scope: PROD_CLIENT_SCOPE,
+          }),
       },
     })
     .action({
       name: 'create-imp',
       summary: 'Create the imp from the tiny image, as an operator with the root token',
       effect: 'write',
+      targets: LAUNCH_TARGETS,
       input: nameInput,
       data: impData,
       run: (input, ctx) => createImp(ctx.endpoints, input.name),
@@ -92,6 +119,7 @@ export function createVerifyRegistry(): Wringer {
       name: 'sleep-imp',
       summary: 'Put the imp to sleep, as an operator with the root token',
       effect: 'write',
+      targets: LAUNCH_TARGETS,
       input: nameInput,
       data: impData,
       run: (input, ctx) => sleepImp(ctx.endpoints, input.name),
@@ -101,6 +129,7 @@ export function createVerifyRegistry(): Wringer {
       summary:
         'Destroy the imp, as an operator with the root token; an imp already gone is a no-op',
       effect: 'write',
+      targets: LAUNCH_TARGETS,
       input: nameInput,
       data: removedData,
       run: (input, ctx) => removeImp(ctx.endpoints, input.name),
@@ -120,7 +149,7 @@ export function createVerifyRegistry(): Wringer {
       effect: 'read',
       args: noInput,
       data: impsData,
-      run: (_args, ctx) => listImps(ctx.endpoints),
+      run: makeLaunchCommand((_args, ctx) => listImps(ctx.endpoints)),
     })
     .command({
       path: ['imp-events'],
@@ -129,10 +158,11 @@ export function createVerifyRegistry(): Wringer {
       effect: 'read',
       args: nameInput,
       data: eventsData,
-      run: (args, ctx) => readImpEvents(ctx.drivers.stream, args.name),
+      run: makeLaunchCommand((args, ctx) => readImpEvents(ctx.drivers.stream, args.name)),
     })
     .check({
       name: 'host',
+      targets: LAUNCH_TARGETS,
       input: noInput,
       data: z.null(),
       timeoutMs: 1000,
@@ -140,6 +170,7 @@ export function createVerifyRegistry(): Wringer {
     })
     .check({
       name: 'impd-ready',
+      targets: LAUNCH_TARGETS,
       input: noInput,
       data: z.null(),
       timeoutMs: 10_000,
@@ -158,28 +189,35 @@ export function createVerifyRegistry(): Wringer {
       },
     })
     .check({
+      name: 'mcp-route',
+      input: noInput,
+      data: routeData,
+      timeoutMs: 10_000,
+      run: (_input, ctx) => checkMCPRoute(ctx.endpoints, ctx.signal),
+    })
+    .check({
       name: 'service-client',
       input: noInput,
       data: toolsData,
       timeoutMs: 15_000,
-      run: async (_input, ctx) => {
-        const answer = await ctx.drivers.mcp.tools();
-
-        return { tools: answer.tools.length };
-      },
+      run: (_input, ctx) => checkServiceClient(ctx.drivers.mcp),
     })
     .feature(
       {
         name: 'api-lifecycle',
         summary:
-          'Create an imp through the API, list it, sleep it and destroy it, and follow it in `impz events`',
+          'Create, list, sleep and destroy an imp through the API, and follow it in `impz events`',
         paths: featurePaths['api-lifecycle'],
       },
       {
         name: 'mcp-scope',
-        summary:
-          'As a service client on the public MCP route, create an imp in its scope and be refused one outside it',
+        summary: 'As a service client, create an imp in its scope and be refused one outside it',
         paths: featurePaths['mcp-scope'],
+      },
+      {
+        name: 'mcp-reads',
+        summary: 'As a service client on the public MCP route, list the imps, images and events',
+        paths: featurePaths['mcp-reads'],
       },
       {
         name: 'cli-create-exec',
@@ -234,34 +272,10 @@ function readTerminalConfig(ctx: DriverConfigContext) {
   return buildTerminalConfig(ctx.endpoints, process.env['PATH'] ?? '');
 }
 
-// The MCP tools that read and change nothing, which a read-only target may call.
-const READ_TOOLS = [
-  'imp_list',
-  'imp_image_list',
-  'imp_event_list',
-  'imp_checkpoint_list',
-  'imp_read_file',
-  'imp_url',
-];
-
-function buildMCPConfig(ctx: DriverConfigContext) {
-  const run = parseRunEndpoints(ctx.endpoints);
-
-  return {
-    servers: {
-      impz: {
-        transport: 'http' as const,
-        url: `${run.mcp}/mcp`,
-        auth: {
-          clientCredentials: {
-            clientID: `service:${SERVICE_CLIENT_NAME}`,
-            secretEnv: SERVICE_SECRET_ENV,
-            scope: SERVICE_CLIENT_SCOPE,
-            issuer: run.mcp,
-          },
-        },
-        readTools: READ_TOOLS,
-      },
-    },
-  };
+function buildRunMCPConfig(ctx: DriverConfigContext) {
+  return buildMCPConfig(parseRunEndpoints(ctx.endpoints).mcp, {
+    name: SERVICE_CLIENT_NAME,
+    secretEnv: SERVICE_SECRET_ENV,
+    scope: SERVICE_CLIENT_SCOPE,
+  });
 }
