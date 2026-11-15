@@ -6,7 +6,7 @@ description:
   route or the VM stack in a running instance, run the journey of a feature, or put the verdicts in
   a PR.'
 metadata:
-  wringer-template: 'sha256:5ad8a6ead397'
+  wringer-template: 'sha256:97fabc9a9389'
   wringer-command: bun verify
 ---
 
@@ -41,26 +41,25 @@ The mistakes that cost the most time:
 
 ## References
 
-Read a feature's file before you run its journey: what the feature does, how a user reaches it, the
-journey of `bun verify` commands, and the end state that shows it works.
+Read a feature's file before you run its journey.
 
 <!-- wringer:features -->
 
-| Feature                 | Summary                                                                                               | File                                                                                           |
-| ----------------------- | ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| api-lifecycle           | Create an imp through the API, list it, sleep it and destroy it, and follow it in `impz events`       | [references/feature-api-lifecycle.md](references/feature-api-lifecycle.md)                     |
-| mcp-scope               | As a service client on the public MCP route, create an imp in its scope and be refused one outside it | [references/feature-mcp-scope.md](references/feature-mcp-scope.md)                             |
-| cli-create-exec         | Create an imp with `impz new` and run `uname -a` in it with `impz exec`, on a real VM                 | [references/feature-cli-create-exec.md](references/feature-cli-create-exec.md)                 |
-| sleep-wake              | Write a file in an imp, sleep it, wake it with an exec, and read the file back, on a real VM          | [references/feature-sleep-wake.md](references/feature-sleep-wake.md)                           |
-| checkpoint-restore-fork | Checkpoint an imp over MCP, change a file, restore, then fork the checkpoint, on a real VM            | [references/feature-checkpoint-restore-fork.md](references/feature-checkpoint-restore-fork.md) |
+| Feature                 | Summary                                                                                      | File                                                                                           |
+| ----------------------- | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| api-lifecycle           | Create, list, sleep and destroy an imp through the API, and follow it in `impz events`       | [references/feature-api-lifecycle.md](references/feature-api-lifecycle.md)                     |
+| mcp-scope               | As a service client, create an imp in its scope and be refused one outside it                | [references/feature-mcp-scope.md](references/feature-mcp-scope.md)                             |
+| mcp-reads               | As a service client on the public MCP route, list the imps, images and events                | [references/feature-mcp-reads.md](references/feature-mcp-reads.md)                             |
+| cli-create-exec         | Create an imp with `impz new` and run `uname -a` in it with `impz exec`, on a real VM        | [references/feature-cli-create-exec.md](references/feature-cli-create-exec.md)                 |
+| sleep-wake              | Write a file in an imp, sleep it, wake it with an exec, and read the file back, on a real VM | [references/feature-sleep-wake.md](references/feature-sleep-wake.md)                           |
+| checkpoint-restore-fork | Checkpoint an imp over MCP, change a file, restore, then fork the checkpoint, on a real VM   | [references/feature-checkpoint-restore-fork.md](references/feature-checkpoint-restore-fork.md) |
 
 <!-- /wringer:features -->
 
 ## Check a change
 
 1. Run `bun verify report`. A feature in `data.report.features` shows `changed: true` when a file
-   under its `paths` differs from the default branch, committed or not. Each changed feature needs a
-   verdict.
+   under its `paths` differs from the default branch, committed or not.
 2. Unless your task names another target, start a run on `local`, with the commands in the
    [Targets](#targets) table. Expect from `up` or `attach`: `ok: true`, and the app's endpoints in
    `data.endpoints`.
@@ -86,13 +85,14 @@ journey of `bun verify` commands, and the end state that shows it works.
    After `done`, an edit to a file under a feature's `paths` makes its verdict `stale`; a commit
    alone leaves each verdict as it was. Repeat steps 4 to 6 for each stale feature.
 9. Run `bun verify publish`. Expect: `ok: true`, and `data.action` of `created`, `replaced` or
-   `unchanged`. It writes the report into the description of the branch's open PR.
+   `unchanged`. It writes the report into the description of the branch's open PR. Until you run
+   `publish`, each verdict from `done` stays in `.wringer/`, where the gate never looks.
 10. End the run: `bun verify down` after `up`, or `bun verify detach` after `attach`.
 
 ## Read the envelope
 
-Each command prints one JSON envelope as its last line, or text for a person with `--human`. A
-streaming command, such as `doctor`, prints JSON event lines before it. Read these fields:
+Each command prints one JSON envelope as its last line, or text with `--human`. A streaming command,
+such as `doctor`, prints JSON event lines before it. Read these fields:
 
 - `ok`, then `data` on success, or `error.code`, `error.message` and `error.hint` on failure;
 - `evidence`: the files the command kept, under `.wringer/`;
@@ -118,31 +118,33 @@ attach target, an app that runs apart from `bun verify`, with `bun verify attach
 `bun verify detach` leaves it running. Your edits never reach an attach target's app, so check a
 change on a launch target.
 
-Run `bun verify use --target <target>` to point every later command at a target. `--target` on one
+Run `bun verify use --target <target>` to point every later command at a target. `use` saves the
+choice in this worktree's `.wringer/`, so it holds across shells and sessions. `--target` on one
 command points that command alone.
 
 <!-- repo: targets -->
 
-| Target      | Start with                                                | Access     | Notes                                            |
-| ----------- | --------------------------------------------------------- | ---------- | ------------------------------------------------ |
-| `local`     | `bun verify use --target local`, then `bun verify up`     | read-write | impd on stand-in VMs, on any machine.            |
-| `local-kvm` | `bun verify use --target local-kvm`, then `bun verify up` | read-write | A dev instance on real VMs, about 70 s to start. |
+| Target      | Start with                                                | Access     | Notes                         |
+| ----------- | --------------------------------------------------------- | ---------- | ----------------------------- |
+| `local`     | `bun verify use --target local`, then `bun verify up`     | read-write | Fake VMs.                     |
+| `local-kvm` | `bun verify use --target local-kvm`, then `bun verify up` | read-write | Real VMs; 70 s to start.      |
+| `prod`      | [On prod](references/feature-mcp-reads.md#on-prod)        | read-only  | The deployed impd. No `done`. |
 
-Each feature file names its target, which counts as your task naming one. To change target, run
+A feature file's target counts as your task's. To change between `local` and `local-kvm`, run
 `bun verify down`, then `use --target`, `up` and `doctor`.
 
-`local-kvm` needs `/dev/kvm`, Docker, a guest kernel and the host image that `scripts/dev/dev.sh up`
-builds for this checkout. When one is missing, the doctor's `host` check fails; read the fix in its
-`message`. After a crashed run, `docker rm -f` each container that
-`docker ps -a --filter name=impz-verify-` lists.
+`local-kvm` needs `/dev/kvm`, Docker, a guest kernel and this checkout's host image from
+`scripts/dev/dev.sh up`; read the fix in the `host` check's `message`. After a crashed run,
+`docker rm -f` each container that `docker ps -a --filter name=impz-verify-` lists.
 
 <!-- /repo -->
 
 ## Commands
 
-Run `bun verify --help` for the list, with each command marked `[read]` or `[write]`. Run
-`bun verify <command> --help` for a command's flags. The top-level list shows only the name of a
-group, such as `action`: run `bun verify <group> --help` for its commands.
+Run `bun verify --help` for the list, with each command marked `[read]` or `[write]`. A read-only
+target refuses each `[write]` command that writes app data. `up` and `down` are `[read]`, but start
+and stop the app. Run `bun verify <command> --help` for a command's flags. The top-level list shows
+only the name of a group, such as `action`: run `bun verify <group> --help` for its commands.
 
 - Write a negative number with `=`, as in `--offset=-5`.
 - Pass an object as JSON text, as in `--filter '{"shelf":"top"}'`.
@@ -151,11 +153,10 @@ group, such as `action`: run `bun verify <group> --help` for its commands.
 
 - `bun verify action create-imp`, `sleep-imp` and `destroy-imp` act with impd's root token.
   `exec-imp` runs `sh -c` in the imp, on `local-kvm` only.
-- `bun verify mcp call <tool> --args '<json>'` acts as an MCP client that `up` makes, which may
-  touch only imps named `wv-mcp-*`.
-- `bun verify terminal start shell` opens a shell with this checkout's `impz`, signed in.
+- `bun verify mcp call <tool> --args '<json>'` acts as the target's service client: on `prod` the
+  read client, else a client that reaches only imps named `wv-mcp-*`.
 
-Name every imp you create `wv-<name>`, so a leftover stands out, and destroy it before `done`.
+Name each imp you create `wv-<name>`; destroy it before `done`.
 
 <!-- /repo -->
 
@@ -163,9 +164,9 @@ Name every imp you create `wv-<name>`, so a leftover stands out, and destroy it 
 
 <!-- repo: registry -->
 
-The registry, [create-verify-registry.ts](../../../scripts/verify/create-verify-registry.ts),
-declares the targets, actions, commands, doctor checks and features. Each feature's `paths` and the
-ignore list live in [feature-paths.ts](../../../scripts/verify/feature-paths.ts).
+The registry is [create-verify-registry.ts](../../../scripts/verify/create-verify-registry.ts).
+[feature-paths.ts](../../../scripts/verify/feature-paths.ts) holds each feature's `paths` and its
+`.ignore` list.
 
 <!-- /repo -->
 

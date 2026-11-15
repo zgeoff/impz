@@ -161,8 +161,9 @@ claude mcp add --transport http imp https://imp.example.com/mcp \
   `same-origin`, or without it `Origin` must name impd's host and port. Any other such request gets
   403 before impd looks at its token. A client that is not a browser sends neither header.
 - **Tools by scope.** `tools/list` shows only the tools the caller's scope allows: `read` gets
-  `imp_list`, `imp_url`, `imp_image_list` and `imp_checkpoint_list`; `exec` adds `imp_sleep`,
-  `imp_exec` and the file tools; `manage` gets them all. impd refuses the rest with `FORBIDDEN`.
+  `imp_list`, `imp_url`, `imp_image_list`, `imp_checkpoint_list` and `imp_event_list`; `exec` adds
+  `imp_sleep`, `imp_exec` and the file tools; `manage` gets them all. impd refuses the rest with
+  `FORBIDDEN`.
 - **The guard is the token's patterns.** No `--prefix` here. A create without a name works only for
   a caller with exactly one pattern of the form `prefix*`, and gets `prefix` and 8 more characters.
   Any other caller must name the imp, and gets a `GUARD` error that names its patterns. The patterns

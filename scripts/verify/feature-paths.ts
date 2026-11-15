@@ -36,6 +36,7 @@ const vm = [
 export const featurePaths = {
   'api-lifecycle': [...impd, 'packages/testing/**', 'packages/cli/**'],
   'mcp-scope': [...impd, 'packages/testing/**'],
+  'mcp-reads': [...impd, 'packages/testing/**'],
   'cli-create-exec': [...vm, 'packages/cli/**', 'packages/daemon/src/imps/exec/**'],
   'sleep-wake': [...vm, 'packages/daemon/src/imps/exec/**'],
   'checkpoint-restore-fork': [...vm, 'packages/daemon/src/imp-ops/checkpoints/**'],
