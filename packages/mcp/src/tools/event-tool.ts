@@ -19,7 +19,9 @@ export const EVENT_TOOL: Tool = defineTool({
       .min(1)
       .max(1000)
       .optional()
-      .describe('The most events to return, 100 when omitted'),
+      .describe(
+        'The most events to return after a cursor, 100 when omitted. With no after, every imp comes back whatever the limit',
+      ),
   }),
   annotations: { title: 'List imp events', readOnlyHint: true, openWorldHint: false },
   run: async (input, context) => {

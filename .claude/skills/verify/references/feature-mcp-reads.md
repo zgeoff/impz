@@ -25,7 +25,7 @@ bun verify action create-imp --name wv-mcp-reads
 bun verify mcp tools
 bun verify mcp call imp_list
 bun verify mcp call imp_image_list
-bun verify mcp call imp_event_list --args '{"limit":1000}'
+bun verify mcp call imp_event_list
 bun verify action destroy-imp --name wv-mcp-reads
 ```
 
@@ -83,14 +83,14 @@ machine. Run no `action` command and no `done` there.
    `message`. You cannot fix it from here: the deployed impd's service-token file must hold the
    digest in the item's `digest` field, and its service-clients file must name `wringer-ro`.
 
-5. List the tools, then run the three reads. The event read asks for 5 events, enough to show that
-   the log answers.
+5. List the tools, then run the three reads. The event read returns every imp, whatever `limit` you
+   pass.
 
    ```bash
    bun verify mcp tools
    bun verify mcp call imp_list
    bun verify mcp call imp_image_list
-   bun verify mcp call imp_event_list --args '{"limit":5}'
+   bun verify mcp call imp_event_list
    ```
 
    Expect: `mcp tools` gives exactly the five tools of the `read` scope, each with
