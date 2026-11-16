@@ -577,6 +577,27 @@ test('it lists the snapshot at the head for a reader with no cursor', async () =
   });
 });
 
+test('it lists every imp in the snapshot whatever the limit', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.client.imps.create({ name: 'dev' });
+  await ctx.client.imps.create({ name: 'docs' });
+
+  const head = await ctx.readHead();
+  const page = await ctx.client.events.list({ limit: 1 });
+
+  expect(page).toStrictEqual({
+    events: [
+      expect.objectContaining({ ev: 'ImpAdded', imp: expect.objectContaining({ name: 'dev' }) }),
+      expect.objectContaining({ ev: 'ImpAdded', imp: expect.objectContaining({ name: 'docs' }) }),
+    ],
+    after: head,
+    logId: expect.toBeString(),
+    hasMore: false,
+  });
+});
+
 test('it lists the events after a cursor a page at a time', async () => {
   const ctx = await setupTest();
 
