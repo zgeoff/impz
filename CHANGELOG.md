@@ -2,10 +2,11 @@
 
 ## [7.3.0](https://github.com/zgeoff/impz/compare/v7.2.0...v7.3.0) (2026-11-16)
 
-
 ### Features
 
-* **verify:** add a read-only prod target on the public mcp route ([#1032](https://github.com/zgeoff/impz/issues/1032)) ([6c7abac](https://github.com/zgeoff/impz/commit/6c7abaccd4f4502a4dab292e7bffc6fee0b5c092))
+- **verify:** add a read-only prod target on the public mcp route
+  ([#1032](https://github.com/zgeoff/impz/issues/1032))
+  ([6c7abac](https://github.com/zgeoff/impz/commit/6c7abaccd4f4502a4dab292e7bffc6fee0b5c092))
 
 ## [7.2.0](https://github.com/zgeoff/impz/compare/v7.1.0...v7.2.0) (2026-11-14)
 
