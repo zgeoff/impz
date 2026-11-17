@@ -27,11 +27,8 @@ When you write or edit a skill:
 
 1. Load the `skill-writing`, `cold-read` and `deslop` skills from `.claude/skills/`. Install none of
    them yourself: repo-sync, the job that copies shared files into this repo, delivers them there.
-2. Do every step in the "Check it" section of `.claude/skills/skill-writing/SKILL.md`.
-3. In the PR description, after the sections of the repo's PR template, add three `##` headings:
-   - "Skill checks": the check output.
-   - "Cold read": each cold-read finding, and how you answered it.
-   - "Deslop": each change deslop made, or "none".
+2. Do every step in the "Check it" section of `.claude/skills/skill-writing/SKILL.md`. In its last
+   step, you fill in the `## Checks` section of the PR template.
 
 ## Repo structure
 
