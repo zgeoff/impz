@@ -5,6 +5,7 @@
     ".claude/skills/project-testing/SKILL.md"
   ],
   "synced": [
+    ".github/PULL_REQUEST_TEMPLATE.md",
     ".editorconfig",
     "socket.yml",
     ".github/workflows/audit-fix.yml",
