@@ -2,10 +2,11 @@
 
 ## [7.4.0](https://github.com/zgeoff/impz/compare/v7.3.0...v7.4.0) (2026-11-18)
 
-
 ### Features
 
-* **governor:** set the priority ram kept outside the pool ([#1049](https://github.com/zgeoff/impz/issues/1049)) ([e7a1e96](https://github.com/zgeoff/impz/commit/e7a1e9622ee3ed47dee945245b566db99c4a5c8a))
+- **governor:** set the priority ram kept outside the pool
+  ([#1049](https://github.com/zgeoff/impz/issues/1049))
+  ([e7a1e96](https://github.com/zgeoff/impz/commit/e7a1e9622ee3ed47dee945245b566db99c4a5c8a))
 
 ## [7.3.0](https://github.com/zgeoff/impz/compare/v7.2.0...v7.3.0) (2026-11-16)
 
