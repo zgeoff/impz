@@ -904,7 +904,7 @@ test('it reports beside the fork each grant it did not get', async () => {
   // its awake time runs on the wall clock between the answer and the read
   const wire = {
     ...read,
-    resources: { ...read.resources, awakeMs: expect.any(Number) as unknown },
+    resources: { ...read.resources, awakeMs: expect.any(Number) },
   };
 
   expect(sent).toStrictEqual([
@@ -966,7 +966,7 @@ test('it reports an empty grant report beside a fork that got every grant', asyn
   // its awake time runs on the wall clock between the answer and the read
   const wire = {
     ...read,
-    resources: { ...read.resources, awakeMs: expect.any(Number) as unknown },
+    resources: { ...read.resources, awakeMs: expect.any(Number) },
   };
 
   expect(sent).toStrictEqual([
@@ -1029,7 +1029,7 @@ test('it reports beside the fork why it got none of the grants', async () => {
   // its awake time runs on the wall clock between the answer and the read
   const wire = {
     ...read,
-    resources: { ...read.resources, awakeMs: expect.any(Number) as unknown },
+    resources: { ...read.resources, awakeMs: expect.any(Number) },
   };
 
   expect(sent).toStrictEqual([
@@ -1096,7 +1096,7 @@ test('it leaves the grant report out of a fork from an impd that sends none', as
   // its awake time runs on the wall clock between the answer and the read
   const wire = {
     ...read,
-    resources: { ...read.resources, awakeMs: expect.any(Number) as unknown },
+    resources: { ...read.resources, awakeMs: expect.any(Number) },
   };
 
   expect(sent).toStrictEqual([
