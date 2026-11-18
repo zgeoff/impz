@@ -19,6 +19,7 @@ import {
 } from './network/tailnet-names/tailnet-names-config';
 import type { SurfaceConfig } from './surface/surface-config';
 import type { KsmConfig, PriorityRam } from './vm/vm-config';
+import { MAX_GROWTH_FACTOR } from './vm/vmm/elastic-memory';
 
 const PortSchema = z.coerce.number().pipe(z.int().min(1).max(65_535));
 const CountSchema = z.coerce.number().pipe(z.int().positive());
@@ -61,6 +62,7 @@ const EnvSchema = z.object({
   IMP_DISK_RESERVE_GIB: CountSchema.optional(),
   IMP_BUILD_CONTEXT_MAX_MIB: CountSchema.default(1024),
   IMP_BUILD_MEMORY_MIB: CountSchema.default(2048),
+  IMP_BUILD_MAX_MEMORY_MIB: CountSchema.optional(),
   IMP_BUILD_DISK_GIB: CountSchema.default(20),
   IMP_BUILD_IMAGE_MAX_MIB: CountSchema.default(8192),
   IMP_BUILD_IMAGE_MAX_FILES: CountSchema.default(1_000_000),
@@ -299,6 +301,7 @@ export function loadConfig(env: Readonly<Record<string, string | undefined>>): C
     buildContextMaxBytes: parsed.IMP_BUILD_CONTEXT_MAX_MIB * 1024 ** 2,
     build: {
       memoryMib: parsed.IMP_BUILD_MEMORY_MIB,
+      maxMemoryMib: parseBuildMaxMemoryMib(parsed),
       diskBytes: parsed.IMP_BUILD_DISK_GIB * 1024 ** 3,
       imageMaxBytes: parsed.IMP_BUILD_IMAGE_MAX_MIB * 1024 ** 2,
       imageMaxFiles: parsed.IMP_BUILD_IMAGE_MAX_FILES,
@@ -379,6 +382,29 @@ function parsePriorityRam(parsed: z.infer<typeof EnvSchema>): PriorityRam | null
   }
 
   return { mib, patterns, ...(ordinaryMib !== undefined && { ordinaryMib }) };
+}
+
+function parseBuildMaxMemoryMib(parsed: z.infer<typeof EnvSchema>): number | null {
+  const memoryMib = parsed.IMP_BUILD_MEMORY_MIB;
+  const maxMemoryMib = parsed.IMP_BUILD_MAX_MEMORY_MIB;
+
+  if (maxMemoryMib === undefined) {
+    return null;
+  }
+
+  if (maxMemoryMib <= memoryMib) {
+    throw new Error(
+      `IMP_BUILD_MAX_MEMORY_MIB ${String(maxMemoryMib)} is not above the ${String(memoryMib)} MiB IMP_BUILD_MEMORY_MIB`,
+    );
+  }
+
+  if (maxMemoryMib > memoryMib * MAX_GROWTH_FACTOR) {
+    throw new Error(
+      `IMP_BUILD_MAX_MEMORY_MIB ${String(maxMemoryMib)} is more than ${String(MAX_GROWTH_FACTOR)} × the ${String(memoryMib)} MiB IMP_BUILD_MEMORY_MIB`,
+    );
+  }
+
+  return maxMemoryMib;
 }
 
 function parseTestRegistry(parsed: z.infer<typeof EnvSchema>): TestRegistryConfig | null {

@@ -3,6 +3,7 @@ import type { SessionLogLimits } from './imps/session-logs/session-log-service';
 
 interface BuildConfig {
   readonly memoryMib: number;
+  readonly maxMemoryMib: number | null;
   readonly diskBytes: number;
   readonly imageMaxBytes: number;
   readonly imageMaxFiles: number;

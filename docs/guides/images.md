@@ -234,9 +234,14 @@ A build goes:
 1. impd checks the context and the Dockerfile on the host (the guard).
 2. It creates a builder imp, `imp-build-<8 letters>`, from the image `imp-builder`
    (`IMP_BUILD_IMAGE`, the published `imp-base` by digest, which impd adds on the first add or
-   build), with `IMP_BUILD_MEMORY_MIB` (2048) of memory and `IMP_BUILD_DISK_GIB` (20) of disk. The
-   governor and the disk budget admit it as any imp; a refusal fails the build and never falls back
-   to the host. Where nft cannot hold the `public` policy, a build fails with `PRECONDITION_FAILED`.
+   build), with `IMP_BUILD_MEMORY_MIB` (2048) of memory and `IMP_BUILD_DISK_GIB` (20) of disk. With
+   `IMP_BUILD_MAX_MEMORY_MIB` set, the builder
+   [boots elastic](../architecture/lifecycle/elastic-memory.md): it starts at `IMP_BUILD_MEMORY_MIB`
+   and grows up to `IMP_BUILD_MAX_MEMORY_MIB` on the host's ordinary pages, off any
+   [huge page pool](./configuration.md#huge-pages). With the max unset, the builder boots fixed at
+   `IMP_BUILD_MEMORY_MIB`. The governor and the disk budget admit it as any imp; a refusal fails the
+   build and never falls back to the host. Where nft cannot hold the `public` policy, a build fails
+   with `PRECONDITION_FAILED`.
 3. It waits for the builder's dockerd (60 s at most), then pulls and pins each image the Dockerfile
    names on the builder's engine. The builder holds no registry credentials, so a private image does
    not pull, and a registry name that resolves to a private address fails in the builder's resolver.

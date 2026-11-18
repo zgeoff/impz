@@ -36,6 +36,7 @@ test('it fills every setting from its default when the env is empty', () => {
     buildContextMaxBytes: 1024 ** 3,
     build: {
       memoryMib: 2048,
+      maxMemoryMib: null,
       diskBytes: 20 * 1024 ** 3,
       imageMaxBytes: 8192 * 1024 ** 2,
       imageMaxFiles: 1_000_000,
@@ -130,6 +131,31 @@ test('it refuses a test registry whose port is past 65535', () => {
       IMP_E2E: '1',
     }),
   ).toThrow('IMP_BUILD_TEST_REGISTRY has no valid port: registry.example.test:70000');
+});
+
+test('it boots builders elastic from IMP_BUILD_MEMORY_MIB up to IMP_BUILD_MAX_MEMORY_MIB', () => {
+  const config = loadConfig({ IMP_BUILD_MEMORY_MIB: '1024', IMP_BUILD_MAX_MEMORY_MIB: '4096' });
+
+  expect(config.build).toMatchObject({ memoryMib: 1024, maxMemoryMib: 4096 });
+});
+
+test.each([
+  {
+    max: '1024',
+    problem: 'IMP_BUILD_MAX_MEMORY_MIB 1024 is not above the 1024 MiB IMP_BUILD_MEMORY_MIB',
+  },
+  {
+    max: '512',
+    problem: 'IMP_BUILD_MAX_MEMORY_MIB 512 is not above the 1024 MiB IMP_BUILD_MEMORY_MIB',
+  },
+  {
+    max: '4097',
+    problem: 'IMP_BUILD_MAX_MEMORY_MIB 4097 is more than 4 × the 1024 MiB IMP_BUILD_MEMORY_MIB',
+  },
+])('it refuses IMP_BUILD_MAX_MEMORY_MIB=$max over a 1024 MiB builder', (row) => {
+  expect(() =>
+    loadConfig({ IMP_BUILD_MEMORY_MIB: '1024', IMP_BUILD_MAX_MEMORY_MIB: row.max }),
+  ).toThrow(row.problem);
 });
 
 test('it refuses a move test range off the tailnet on a host that is not an e2e host', () => {
@@ -309,6 +335,7 @@ test.each([
   ['IMP_PRIORITY_RAM_MIB', '0'],
   ['IMP_PRIORITY_IMPS', 'Chat_*'],
   ['IMP_PRIORITY_ORDINARY_RAM_MIB', '-1'],
+  ['IMP_BUILD_MAX_MEMORY_MIB', '0'],
 ])('it refuses %s=%s', (name, value) => {
   expect(() => loadConfig({ [name]: value })).toThrow(new RegExp(`"path": \\[\\s*"${name}"`, 'u'));
 });
