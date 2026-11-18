@@ -1,4 +1,4 @@
-import { isUnauthorized } from '../../lib/build-query-client';
+import { isUnauthorized } from '../impd/build-query-client';
 
 export type FailureOutcome =
   | { readonly kind: 'ignore' }

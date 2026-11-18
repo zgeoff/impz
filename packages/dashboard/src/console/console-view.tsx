@@ -4,7 +4,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { Terminal } from '@xterm/xterm';
 import { useEffect, useRef, useState } from 'react';
 import { P, match } from 'ts-pattern';
-import { Button } from '../button';
+import { Button } from '../button/button';
 import styles from './console-view.module.css';
 import { pickFailureOutcome } from './pick-failure-outcome';
 import { setupTerminalBridge } from './setup-terminal-bridge';

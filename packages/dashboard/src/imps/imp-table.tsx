@@ -1,11 +1,11 @@
 import type { Imp } from '@impz/client';
 import { formatMib } from '@impz/shared';
 import { Link } from '@tanstack/react-router';
-import { formatCpuUse, formatDiskUse, formatRelativeTime } from '../lib/format';
+import { formatCpuUse, formatDiskUse, formatRelativeTime } from '../imp-details/format';
+import styles from '../table/table.module.css';
 import { ImpActions } from './imp-actions';
 import { ImpNotes } from './imp-notes';
 import { StateBadge } from './state-badge';
-import styles from './table.module.css';
 
 interface ImpTableProps {
   readonly imps: readonly Imp[];

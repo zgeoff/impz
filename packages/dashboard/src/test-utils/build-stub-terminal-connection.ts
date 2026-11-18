@@ -1,4 +1,4 @@
-import type { TerminalConnection, TerminalSize } from '../components/console/terminal-source';
+import type { TerminalConnection, TerminalSize } from '../console/terminal-source';
 
 interface StubTerminalConnectionOptions {
   readonly write?: (data: string) => Promise<void>;

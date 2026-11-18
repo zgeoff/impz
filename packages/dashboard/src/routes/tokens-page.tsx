@@ -2,17 +2,17 @@ import { ScopeSchema } from '@impz/api';
 import type { Scope, SshKey, Token } from '@impz/client';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Button } from '../components/button';
-import { ConfirmDialog } from '../components/confirm-dialog';
-import { ErrorText } from '../components/error-text';
-import formStyles from '../components/form.module.css';
-import tableStyles from '../components/table.module.css';
-import { formatRelativeTime } from '../lib/format';
-import { useImpd } from '../lib/impd';
-import { SLOW } from '../lib/live';
-import { readText } from '../lib/read-form';
-import { useNow } from '../lib/use-now';
-import { useRefresh } from '../lib/use-refresh';
+import { Button } from '../button/button';
+import { ErrorText } from '../error-text/error-text';
+import formStyles from '../forms/form.module.css';
+import { readText } from '../forms/read-form';
+import { formatRelativeTime } from '../imp-details/format';
+import { useNow } from '../imp-details/use-now';
+import { useImpd } from '../impd/impd';
+import { SLOW } from '../impd/live';
+import { useRefresh } from '../impd/use-refresh';
+import { ConfirmDialog } from '../modal/confirm-dialog';
+import tableStyles from '../table/table.module.css';
 import styles from './page.module.css';
 
 // impd keeps only a hash of a new token's secret, so the page can show the

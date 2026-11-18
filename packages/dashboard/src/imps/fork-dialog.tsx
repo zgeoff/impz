@@ -1,12 +1,12 @@
 import { useMutation } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
-import { useImpd } from '../lib/impd';
-import { readText } from '../lib/read-form';
-import { useRefresh } from '../lib/use-refresh';
-import { Button } from './button';
-import { ErrorText } from './error-text';
-import styles from './form.module.css';
-import { Modal } from './modal';
+import { Button } from '../button/button';
+import { ErrorText } from '../error-text/error-text';
+import styles from '../forms/form.module.css';
+import { readText } from '../forms/read-form';
+import { useImpd } from '../impd/impd';
+import { useRefresh } from '../impd/use-refresh';
+import { Modal } from '../modal/modal';
 
 interface ForkDialogProps {
   readonly open: boolean;

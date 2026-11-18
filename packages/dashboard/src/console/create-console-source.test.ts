@@ -1,6 +1,6 @@
 import { expect, mock, test } from 'bun:test';
 import { ExecError } from '@impz/client';
-import { buildStubExecHandle } from '../../test-utils/build-stub-exec-handle';
+import { buildStubExecHandle } from '../test-utils/build-stub-exec-handle';
 import { createConsoleSource, readTerminalConnection } from './create-console-source';
 
 test('#toTerminalConnection merges stdout and stderr into one output that ends when both do', async () => {
