@@ -157,7 +157,6 @@
     "verify:lint": "bun scripts/verify/verify.ts lint",
     "ci:verify-gate": "bun scripts/verify-gate/run-verify-gate.ts",
     "test:related": "rig related",
-    "test:e2e": "rig e2e",
     "test:zfs": "rig zfs"
   },
   "devDependencies": {
