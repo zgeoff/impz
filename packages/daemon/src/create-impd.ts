@@ -472,7 +472,7 @@ async function setupDefaultImage(
   images: Readonly<ImpdStorage['images']>,
 ): Promise<void> {
   try {
-    await images.seedDefaultImage();
+    await images.addDefaultImage();
 
     const existing = await images.listImages();
 

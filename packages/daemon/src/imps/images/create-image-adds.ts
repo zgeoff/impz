@@ -42,7 +42,7 @@ export interface ImageAdds {
     options?: Readonly<AddImageOptions>,
   ) => Promise<ImageRecord>;
 
-  readonly seedDefaultImage: () => Promise<void>;
+  readonly addDefaultImage: () => Promise<void>;
 
   readonly ensureBuilderImage: (signal?: AbortSignal) => Promise<void>;
 }
@@ -189,7 +189,7 @@ export function createImageAdds(deps: ImageAddsDeps, writer: ImageWriter): Image
       }),
     ensureBuilderImage: loadBuilderImage,
 
-    seedDefaultImage: async () => {
+    addDefaultImage: async () => {
       const images = await listImages(deps.db);
 
       const seedRef = deps.seedRef === undefined ? SEED_REF : deps.seedRef;

@@ -25,6 +25,7 @@ export async function startTestImpd(options: TestImpdOptions = {}): Promise<Test
     return {
       url: harness.url,
       client,
+      // oxlint-disable-next-line zgeoff/function-verb -- seedImage is the published name of this method
       seedImage: async (name) => {
         await harness.createTestImage(name);
       },

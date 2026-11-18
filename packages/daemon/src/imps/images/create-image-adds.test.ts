@@ -1002,7 +1002,7 @@ test('it seeds the default image at first start through a builder', async () => 
     ensureImage: (signal) => images.ensureBuilderImage(signal),
   });
 
-  await images.seedDefaultImage();
+  await images.addDefaultImage();
 
   const seeded = await readImageByName(ctx.db, 'ubuntu');
 
@@ -1049,7 +1049,7 @@ test('it seeds the default image at the next start once the builder image has la
     ensureImage: (signal) => images.ensureBuilderImage(signal),
   });
 
-  await images.seedDefaultImage();
+  await images.addDefaultImage();
 
   const seeded = await readImageByName(ctx.db, 'ubuntu');
 
