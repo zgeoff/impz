@@ -1,15 +1,15 @@
-import type { Config } from './config';
+import type { Config } from '../config';
+import { createCheckpointService } from '../imp-ops/checkpoints/checkpoint-service';
+import { createTemplateService } from '../imps/images/template-service';
+import type { Imps } from '../imps/imps/imp-service';
+import type { SecretFiles } from '../network/broker/secrets/secret-files';
+import type { EgressService } from '../network/egress/egress-service';
+import { createNetworkService } from '../network/networks/network-service';
+import { createApiAudit } from '../platform/audit/api-audit';
+import { readErrorCode } from '../surface/read-error-code';
+import { createStorageGc } from '../vm/storage/storage-gc';
 import type { ImpdStorage } from './create-impd-storage';
-import { createCheckpointService } from './imp-ops/checkpoints/checkpoint-service';
 import type { ImpdDeps } from './impd-deps';
-import { createTemplateService } from './imps/images/template-service';
-import type { Imps } from './imps/imps/imp-service';
-import type { SecretFiles } from './network/broker/secrets/secret-files';
-import type { EgressService } from './network/egress/egress-service';
-import { createNetworkService } from './network/networks/network-service';
-import { createApiAudit } from './platform/audit/api-audit';
-import { readErrorCode } from './surface/read-error-code';
-import { createStorageGc } from './vm/storage/storage-gc';
 
 export function createImpdServices(
   config: Config,

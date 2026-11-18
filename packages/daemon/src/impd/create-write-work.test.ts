@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
+import { captureImpdLogs } from '../test-utils/platform/capture-impd-logs';
 import { createWriteWork } from './create-write-work';
-import { captureImpdLogs } from './test-utils/platform/capture-impd-logs';
 
 test('it logs work that rejects instead of leaving the rejection unhandled', async () => {
   const logs = captureImpdLogs();

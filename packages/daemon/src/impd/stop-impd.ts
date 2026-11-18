@@ -1,8 +1,8 @@
 import { getErrorMessage } from '@impz/shared';
-import type { Imps } from './imps/imps/imp-service';
-import { getImpdLogger } from './platform/process/get-impd-logger';
-import type { Ticker } from './platform/process/ticker';
-import { waitWithin } from './platform/process/wait-within';
+import type { Imps } from '../imps/imps/imp-service';
+import { getImpdLogger } from '../platform/process/get-impd-logger';
+import type { Ticker } from '../platform/process/ticker';
+import { waitWithin } from '../platform/process/wait-within';
 
 // within the 120 s that scripts/dev/dev.sh gives `docker stop`
 const STOP_DEADLINE_MS = 100_000;

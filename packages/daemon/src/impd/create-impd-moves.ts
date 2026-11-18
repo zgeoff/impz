@@ -1,17 +1,17 @@
-import type { Config } from './config';
+import type { Config } from '../config';
+import { createMoveService } from '../imp-ops/moves/move-service';
+import type { MoveService, MoveServiceDeps } from '../imp-ops/moves/move-service';
+import type { PeerDeps } from '../imp-ops/moves/send-to-peer';
+import type { Imps } from '../imps/imps/imp-service';
+import type { EgressService } from '../network/egress/egress-service';
+import type { ApiAudit } from '../platform/audit/api-audit';
+import { createMovePeerHandler } from '../surface/moves/create-move-peer-handler';
+import type { MovePeerHandler } from '../surface/moves/create-move-peer-handler';
+import { makeConnectMovePeer } from '../surface/moves/make-connect-move-peer';
+import type { HostIdentity } from '../vm/sleep/vm-identity';
+import { writeImageFiles } from '../vm/storage/write-image-files';
 import type { ImpdStorage } from './create-impd-storage';
-import { createMoveService } from './imp-ops/moves/move-service';
-import type { MoveService, MoveServiceDeps } from './imp-ops/moves/move-service';
-import type { PeerDeps } from './imp-ops/moves/send-to-peer';
 import type { ImpdDeps } from './impd-deps';
-import type { Imps } from './imps/imps/imp-service';
-import type { EgressService } from './network/egress/egress-service';
-import type { ApiAudit } from './platform/audit/api-audit';
-import { createMovePeerHandler } from './surface/moves/create-move-peer-handler';
-import type { MovePeerHandler } from './surface/moves/create-move-peer-handler';
-import { makeConnectMovePeer } from './surface/moves/make-connect-move-peer';
-import type { HostIdentity } from './vm/sleep/vm-identity';
-import { writeImageFiles } from './vm/storage/write-image-files';
 
 // a caller's commit hook hears each commit after impd's own hook, never in its place
 export type ImpdMoveBoundaries = Partial<

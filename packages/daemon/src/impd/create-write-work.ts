@@ -1,5 +1,5 @@
 import { getErrorMessage } from '@impz/shared';
-import { getImpdLogger } from './platform/process/get-impd-logger';
+import { getImpdLogger } from '../platform/process/get-impd-logger';
 
 export interface WriteWork {
   readonly run: (work: Promise<unknown> | undefined) => void;

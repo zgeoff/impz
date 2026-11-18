@@ -1,17 +1,17 @@
-import type { Config } from './config';
-import type { BackupService } from './imp-ops/backup/backup-service';
-import { ENFORCE_INTERVAL_MS } from './imp-ops/governor/ram-governor';
-import type { RamGovernor } from './imp-ops/governor/ram-governor';
-import type { IdleLoop } from './imp-ops/idle/idle-loop';
-import type { Imps } from './imps/imps/imp-service';
-import type { Broker } from './network/broker/broker-service';
-import type { WakeProxy } from './network/proxy/wake-proxy';
-import type { TailnetNames } from './network/tailnet-names/tailnet-names';
-import { startTicker } from './platform/process/ticker';
-import type { Ticker, TickerTimer } from './platform/process/ticker';
-import type { MemoryController } from './vm/memory/memory-controller';
-import type { DiskUsageCache } from './vm/storage/disk-usage-cache';
-import type { StorageGcService } from './vm/storage/storage-gc';
+import type { Config } from '../config';
+import type { BackupService } from '../imp-ops/backup/backup-service';
+import { ENFORCE_INTERVAL_MS } from '../imp-ops/governor/ram-governor';
+import type { RamGovernor } from '../imp-ops/governor/ram-governor';
+import type { IdleLoop } from '../imp-ops/idle/idle-loop';
+import type { Imps } from '../imps/imps/imp-service';
+import type { Broker } from '../network/broker/broker-service';
+import type { WakeProxy } from '../network/proxy/wake-proxy';
+import type { TailnetNames } from '../network/tailnet-names/tailnet-names';
+import { startTicker } from '../platform/process/ticker';
+import type { Ticker, TickerTimer } from '../platform/process/ticker';
+import type { MemoryController } from '../vm/memory/memory-controller';
+import type { DiskUsageCache } from '../vm/storage/disk-usage-cache';
+import type { StorageGcService } from '../vm/storage/storage-gc';
 
 export interface ImpdTickerParts {
   readonly idle: Pick<IdleLoop, 'runCheck'>;

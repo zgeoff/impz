@@ -25,7 +25,7 @@
     "zgeoff/feature-folders": [
       "error",
       {
-        "pending": ["packages/daemon", "packages/e2e-harness"]
+        "pending": ["packages/e2e-harness"]
       }
     ],
     "zgeoff/file-named-for-export": [
@@ -91,7 +91,7 @@
           ],
           // impd's layers from the bottom up, and the composition root's files above them all
           "daemon-src": ["packages/daemon/src/**"],
-          "daemon-root": ["packages/daemon/src/*.ts"],
+          "daemon-root": ["packages/daemon/src/*.ts", "packages/daemon/src/impd/**"],
           // the version that the system routes and the MCP endpoint report
           "daemon-manifest": ["packages/daemon/package.json"],
           "daemon-platform": ["packages/daemon/src/platform/**"],

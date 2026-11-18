@@ -1,8 +1,8 @@
 import packageJson from '../package.json' with { type: 'json' };
 import { loadConfig } from './config';
-import { createImpd } from './create-impd';
+import { createImpd } from './impd/create-impd';
+import { renderNetworkEnv } from './impd/render-network-env';
 import { setupLogging } from './platform/process/setup-logging';
-import { renderNetworkEnv } from './render-network-env';
 
 async function main(): Promise<void> {
   setupLogging();

@@ -1,8 +1,8 @@
 import { expect, mock, test } from 'bun:test';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { captureImpdLogs } from '../test-utils/platform/capture-impd-logs';
 import { stopImpd } from './stop-impd';
 import type { ImpdStopParts } from './stop-impd';
-import { captureImpdLogs } from './test-utils/platform/capture-impd-logs';
 
 function setupTest() {
   const firstTicker = { stop: mock(() => Promise.resolve()) };

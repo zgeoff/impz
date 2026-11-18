@@ -1,10 +1,10 @@
 import { createOperationRunner, createReconcilerRunner } from '@impz/durable';
 import type { ReconcilerRunner } from '@impz/durable';
-import { createEventLogPruner } from './platform/db/create-event-log-pruner';
-import type { ImpDatabase } from './platform/db/open-database';
-import type { ImpTransaction } from './platform/db/with-imp-transaction';
-import type { StartTimer } from './platform/process/clock';
-import { getImpdLogger } from './platform/process/get-impd-logger';
+import { createEventLogPruner } from '../platform/db/create-event-log-pruner';
+import type { ImpDatabase } from '../platform/db/open-database';
+import type { ImpTransaction } from '../platform/db/with-imp-transaction';
+import type { StartTimer } from '../platform/process/clock';
+import { getImpdLogger } from '../platform/process/get-impd-logger';
 
 interface ReconcilerDeps {
   readonly db: ImpDatabase;

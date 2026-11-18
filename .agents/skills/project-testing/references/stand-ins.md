@@ -86,8 +86,8 @@ each applies it at a different time. Pick the one whose timing the code under te
 
 ## Booting impd
 
-[`createImpd`](../../../../packages/daemon/src/create-impd.ts) builds impd from its config and its
-boundaries; `main.ts` calls it in production. Tests call it through
+[`createImpd`](../../../../packages/daemon/src/impd/create-impd.ts) builds impd from its config and
+its boundaries; `main.ts` calls it in production. Tests call it through
 [`startTestImpd`](../../../../packages/daemon/src/test-utils/start-test-impd.ts), which
 `@impz/daemon/test-utils` exports. `startTestImpd` runs every startup step that production runs,
 opens the API, the broker and the wake proxy on free ports, and passes a stand-in for each host
@@ -111,7 +111,7 @@ component that calls `Date.now()` itself stays on the wall clock, and a test can
 Before you control time in a test, check which kind the code under test is:
 
 ```bash
-grep -nw "now" packages/daemon/src/create-impd.ts
+grep -nw "now" packages/daemon/src/impd/create-impd.ts
 grep -rln "Date.now()" packages/daemon/src --include='*.ts' | grep -v '\.test\.ts$'
 ```
 
