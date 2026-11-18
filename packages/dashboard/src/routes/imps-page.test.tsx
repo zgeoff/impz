@@ -99,7 +99,7 @@ test('it shows the RAM in use against the budget of the host', async () => {
 
   const meter = await rendered.findByRole('meter', { name: 'RAM in use' });
 
-  expect(meter).toHaveAttribute('aria-valuenow', '300');
+  expect(meter).toHaveAttribute('value', '300');
   expect(rendered.getByText('300 MiB of 4.0 GiB')).toBeInTheDocument();
 });
 

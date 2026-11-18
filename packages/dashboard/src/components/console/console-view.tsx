@@ -10,20 +10,39 @@ import { pickFailureOutcome } from './pick-failure-outcome';
 import { setupTerminalBridge } from './setup-terminal-bridge';
 import type { TerminalEnd, TerminalSource } from './terminal-source';
 
-type Status =
-  | { readonly kind: 'connecting' }
-  | { readonly kind: 'open' }
-  | { readonly kind: 'ended'; readonly end: TerminalEnd };
-
 interface ConsoleViewProps {
   // a new source reconnects, so a caller keeps it stable across renders
   readonly source: TerminalSource;
 }
 
 export function ConsoleView(props: ConsoleViewProps) {
+  const [attempt, setAttempt] = useState(0);
+
+  // a new key mounts a fresh session, which connects again from the connecting status
+  return (
+    <ConsoleSession
+      key={attempt}
+      source={props.source}
+      onReconnect={() => {
+        setAttempt((previous) => previous + 1);
+      }}
+    />
+  );
+}
+
+type Status =
+  | { readonly kind: 'connecting' }
+  | { readonly kind: 'open' }
+  | { readonly kind: 'ended'; readonly end: TerminalEnd };
+
+interface ConsoleSessionProps {
+  readonly source: TerminalSource;
+  readonly onReconnect: () => void;
+}
+
+function ConsoleSession(props: ConsoleSessionProps) {
   const container = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<Status>({ kind: 'connecting' });
-  const [attempt, setAttempt] = useState(0);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -55,8 +74,6 @@ export function ConsoleView(props: ConsoleViewProps) {
     });
 
     observer.observe(element);
-
-    setStatus({ kind: 'connecting' });
 
     const startConnection = async (): Promise<void> => {
       try {
@@ -96,24 +113,14 @@ export function ConsoleView(props: ConsoleViewProps) {
 
       terminal.dispose();
     };
-  }, [props.source, attempt, navigate]);
+  }, [props.source, navigate]);
 
   return (
     <div className={styles['console']}>
       <div className={styles['bar']}>
         <span>{props.source.label}</span>
-        <span className={styles['status']} role="status">
-          {formatStatus(status)}
-        </span>
-        {status.kind === 'ended' && (
-          <Button
-            onClick={() => {
-              setAttempt((previous) => previous + 1);
-            }}
-          >
-            Reconnect
-          </Button>
-        )}
+        <output className={styles['status']}>{formatStatus(status)}</output>
+        {status.kind === 'ended' && <Button onClick={props.onReconnect}>Reconnect</Button>}
       </div>
       <div className={styles['screen']} ref={container} data-testid="console-screen" />
     </div>

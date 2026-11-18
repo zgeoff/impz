@@ -1,0 +1,13 @@
+{
+  "$schema": "../../node_modules/oxlint/configuration_schema.json",
+  // the web dashboard: React in a browser. oxlint reads a nested config on its own, and the
+  // shared react overlay turns the react plugin on for every file it reaches, so only this
+  // package extends it
+  "extends": ["../../.oxlintrc.json", "../../node_modules/@zgeoff/oxlint-config/react.json"],
+  "plugins": ["typescript", "unicorn", "oxc", "import", "promise", "react", "jsx-a11y"],
+  "env": { "browser": true },
+  "rules": {
+    // stylesheets are imported for their side effect
+    "import/no-unassigned-import": ["error", { "allow": ["**/*.css"] }]
+  }
+}

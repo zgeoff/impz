@@ -14,14 +14,14 @@ export function RamMeter(props: RamMeterProps) {
 
   return (
     <div className={styles['meter']}>
-      <div
-        className={styles['bar']}
-        role="meter"
+      <meter
+        className={styles['reading']}
         aria-label="RAM in use"
-        aria-valuemin={0}
-        aria-valuemax={info.ramBudgetMib}
-        aria-valuenow={info.ramUsedMib}
-      >
+        min={0}
+        max={info.ramBudgetMib}
+        value={info.ramUsedMib}
+      />
+      <div className={styles['bar']} aria-hidden="true">
         <div className={styles['used']} style={{ width: `${String(used)}%` }} />
         <div className={styles['reserved']} style={{ width: `${String(reserved)}%` }} />
       </div>
