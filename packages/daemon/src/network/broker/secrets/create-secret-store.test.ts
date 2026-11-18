@@ -118,13 +118,13 @@ test('it answers a signed-in oauth secret ready, with its account claims only', 
     rules: [{ host: 'api.example.com', header: 'authorization', scheme: 'bearer' }],
     env: [],
     imps: [],
-    createdAt: expect.any(Date) as unknown,
+    createdAt: expect.any(Date),
     droppedGrants: 0,
     oauth: {
       ...config,
       status: 'ready',
-      expiresAt: expect.any(Date) as unknown,
-      refreshedAt: expect.any(Date) as unknown,
+      expiresAt: expect.any(Date),
+      refreshedAt: expect.any(Date),
       error: null,
       idClaims: { email: 'someone@example.com', sub: 'fake-subject' },
     },
@@ -200,8 +200,8 @@ test('it stores the rotated tokens in the value file', async () => {
     refreshToken: 'fake-refresh-1',
     accessToken: 'fake-access-1',
     idToken: null,
-    expiresAt: expect.any(Number) as unknown,
-    refreshedAt: expect.any(Number) as unknown,
+    expiresAt: expect.any(Number),
+    refreshedAt: expect.any(Number),
     status: 'ready',
     error: null,
   });
@@ -703,8 +703,8 @@ test('it refreshes on request with the rotated token and answers after it', asyn
     refreshToken: 'fake-refresh-2',
     accessToken: 'fake-access-2',
     idToken: null,
-    expiresAt: expect.any(Number) as unknown,
-    refreshedAt: expect.any(Number) as unknown,
+    expiresAt: expect.any(Number),
+    refreshedAt: expect.any(Number),
     status: 'ready',
     error: null,
   });
@@ -866,7 +866,7 @@ test('it holds a replace behind a refresh under way, which never overwrites it',
     accessToken: 'fake-access-3',
     idToken: null,
     expiresAt: null,
-    refreshedAt: expect.any(Number) as unknown,
+    refreshedAt: expect.any(Number),
     status: 'ready',
     error: null,
   });
@@ -1560,7 +1560,7 @@ test('it refuses a secret that asks for identity while impd has no issuer, and s
 
   expect(refused).rejects.toMatchObject({
     code: 'PRECONDITION_FAILED',
-    message: expect.stringContaining('IMP_IDENTITY_ISSUER') as unknown,
+    message: expect.stringContaining('IMP_IDENTITY_ISSUER'),
   });
 
   const listed = await withoutIssuer.client.secrets.list();

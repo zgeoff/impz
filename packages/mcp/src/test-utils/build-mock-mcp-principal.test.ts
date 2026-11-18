@@ -7,10 +7,10 @@ test('it builds a default mcp principal', () => {
   const principal: unknown = buildMockMcpPrincipal();
 
   expect(principal).toStrictEqual({
-    key: expect.any(String) as unknown,
+    key: expect.any(String),
     scope: 'manage',
-    client: expect.objectContaining({ imps: expect.any(Function) as unknown }) as unknown,
-    guard: expect.objectContaining({ summary: 'every imp' }) as unknown,
+    client: expect.objectContaining({ imps: expect.any(Function) }),
+    guard: expect.objectContaining({ summary: 'every imp' }),
     ends: null,
   });
 });

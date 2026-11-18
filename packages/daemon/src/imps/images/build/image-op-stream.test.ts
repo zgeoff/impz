@@ -460,7 +460,7 @@ test('it streams the phases of an add, then the image', async () => {
 
   expect(events.at(-1)).toMatchObject({
     type: 'image',
-    image: { name: 'box', createdAt: expect.any(Date) as unknown },
+    image: { name: 'box', createdAt: expect.any(Date) },
   });
 });
 
@@ -698,13 +698,13 @@ test('it streams the pack, then the build, of a build from a directory', async (
   expect(first.value).toStrictEqual({
     type: 'progress',
     phase: 'pack',
-    elapsedMs: expect.any(Number) as unknown,
+    elapsedMs: expect.any(Number),
   });
 
   expect(second.value).toStrictEqual({
     type: 'progress',
     phase: 'build',
-    elapsedMs: expect.any(Number) as unknown,
+    elapsedMs: expect.any(Number),
   });
 });
 

@@ -33,9 +33,7 @@ test('#runCli pipes stdin into the CLI', async () => {
 
   expect(received).toStrictEqual({
     stdout: '',
-    stderr: expect.stringMatching(
-      /^impz: cannot check the token with http:\/\/127\.0\.0\.1:1: /u,
-    ) as unknown,
+    stderr: expect.stringMatching(/^impz: cannot check the token with http:\/\/127\.0\.0\.1:1: /u),
     code: 1,
   });
 });

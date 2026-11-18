@@ -59,10 +59,10 @@ test('it prints the database copy’s fields in the order a restore script reads
 
   expect(printed).toStrictEqual({
     path: join(ctx.dataDir, 'db-copies', 'before-upgrade.sqlite'),
-    sizeBytes: expect.any(Number) as unknown,
+    sizeBytes: expect.any(Number),
     lastMigration: Object.keys(MIGRATIONS).toSorted().at(-1),
     impVersion: packageJson.version,
-    createdAt: expect.any(String) as unknown,
+    createdAt: expect.any(String),
     integrity: 'ok',
   });
 

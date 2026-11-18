@@ -8,13 +8,13 @@ test('it builds a default token', () => {
   const received: unknown = token;
 
   expect(received).toStrictEqual({
-    name: expect.stringMatching(/^[a-z][a-z0-9-]{2,12}$/u) as unknown,
+    name: expect.stringMatching(/^[a-z][a-z0-9-]{2,12}$/u),
     scope: 'manage',
     imps: null,
     sshKeys: [],
     grantable: [],
     imageRefPrefix: null,
-    createdAt: expect.toBeValidDate() as unknown,
+    createdAt: expect.toBeValidDate(),
   });
 
   expect(parsed).toStrictEqual(token);
@@ -30,6 +30,6 @@ test('it applies overrides on top of the defaults', () => {
     sshKeys: [],
     grantable: [],
     imageRefPrefix: null,
-    createdAt: expect.toBeValidDate() as unknown,
+    createdAt: expect.toBeValidDate(),
   });
 });

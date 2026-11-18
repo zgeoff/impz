@@ -87,7 +87,7 @@ test('it answers an added secret with its hosts and no value', async () => {
     ],
     env: ['GH_TOKEN', 'GITHUB_TOKEN'],
     imps: [],
-    createdAt: expect.any(Date) as unknown,
+    createdAt: expect.any(Date),
     droppedGrants: 0,
   });
 });
@@ -132,7 +132,7 @@ test('it lists a secret with the imps it is granted to', async () => {
       ],
       env: ['GH_TOKEN', 'GITHUB_TOKEN'],
       imps: ['dev'],
-      createdAt: expect.any(Date) as unknown,
+      createdAt: expect.any(Date),
     },
   ]);
 });
@@ -990,7 +990,7 @@ test('it lists only the sent requests in the audit, and only the refused ones as
 
   expect(refused).toStrictEqual([
     {
-      at: expect.toBeValidDate() as unknown,
+      at: expect.toBeValidDate(),
       imp: 'dev',
       method: 'CONNECT',
       host: 'exfil.test',

@@ -345,7 +345,7 @@ test('#ls writes the imps and the errors of every host as JSON for --all --json'
 
   expect(body).toStrictEqual({
     imps: sent,
-    errors: [{ host: 'gone', message: expect.any(String) as unknown }],
+    errors: [{ host: 'gone', message: expect.any(String) }],
   });
 
   expect(listed.code).toBe(3);
@@ -369,16 +369,16 @@ test('#ls writes an empty JSON list and exits 1 when no host answers --all --jso
   expect(body).toStrictEqual({
     imps: [],
     errors: [
-      { host: 'away', message: expect.any(String) as unknown },
-      { host: 'gone', message: expect.any(String) as unknown },
+      { host: 'away', message: expect.any(String) },
+      { host: 'gone', message: expect.any(String) },
     ],
   });
 
   const failed: unknown = listed.stderr.trimEnd().split('\n');
 
   expect(failed).toStrictEqual([
-    expect.stringMatching(/^impz: away: /u) as unknown,
-    expect.stringMatching(/^impz: gone: /u) as unknown,
+    expect.stringMatching(/^impz: away: /u),
+    expect.stringMatching(/^impz: gone: /u),
   ]);
 
   expect(listed.code).toBe(1);
@@ -506,8 +506,9 @@ test('#ls lists the current host alone without --all', async () => {
 
   // oxlint-disable-next-line unicorn/prefer-structured-clone -- the wire turns dates into strings, as JSON does
   const sent: unknown = JSON.parse(JSON.stringify(imps));
+  const stdout: unknown = JSON.parse(listed.stdout);
 
-  expect({ ...listed, stdout: JSON.parse(listed.stdout) as unknown }).toStrictEqual({
+  expect({ ...listed, stdout }).toStrictEqual({
     stdout: sent,
     stderr: '',
     code: 0,
@@ -598,7 +599,9 @@ test('#ls passes through as sent a host field that a newer impd adds to its imps
     JSON.stringify(imps.map((imp) => Object.assign(imp, { host: 'peer' }))),
   );
 
-  expect({ ...listed, stdout: JSON.parse(listed.stdout) as unknown }).toStrictEqual({
+  const stdout: unknown = JSON.parse(listed.stdout);
+
+  expect({ ...listed, stdout }).toStrictEqual({
     stdout: sent,
     stderr: '',
     code: 0,
@@ -634,7 +637,9 @@ test('#ls names the saved host under --all over a host field that a newer impd a
     JSON.stringify(imps.map((imp) => Object.assign(imp, { host: 'box' }))),
   );
 
-  expect({ ...listed, stdout: JSON.parse(listed.stdout) as unknown }).toStrictEqual({
+  const stdout: unknown = JSON.parse(listed.stdout);
+
+  expect({ ...listed, stdout }).toStrictEqual({
     stdout: { imps: sent, errors: [] },
     stderr: '',
     code: 0,

@@ -47,13 +47,13 @@ test('it lets a tansy-* token add tansy-x from a pinned ref under its prefix', a
   const image: unknown = await ctx.buildClient(made.secret).images.add({ ref, name: 'tansy-x' });
 
   expect(image).toStrictEqual({
-    id: expect.any(String) as unknown,
+    id: expect.any(String),
     name: 'tansy-x',
     ref,
-    digest: expect.toStartWith('imp-build-') as unknown,
+    digest: expect.toStartWith('imp-build-'),
     source: 'oci',
-    createdAt: expect.toBeValidDate() as unknown,
-    sizeBytes: expect.any(Number) as unknown,
+    createdAt: expect.toBeValidDate(),
+    sizeBytes: expect.any(Number),
     pinned: false,
   });
 });

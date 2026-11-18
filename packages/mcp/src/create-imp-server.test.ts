@@ -107,7 +107,7 @@ test.each([['2025-11-25'], ['2025-06-18'], ['2025-03-26']])(
           protocolVersion: version,
           capabilities: { tools: { listChanged: false } },
           serverInfo: { name: 'imp', title: 'imp', version: '1.2.3' },
-          instructions: expect.any(String) as unknown,
+          instructions: expect.any(String),
         },
       },
     ]);
@@ -143,7 +143,7 @@ test('it offers the newest protocol version for one it does not support', async 
         protocolVersion: '2025-11-25',
         capabilities: { tools: { listChanged: false } },
         serverInfo: { name: 'imp', title: 'imp', version: '1.2.3' },
-        instructions: expect.any(String) as unknown,
+        instructions: expect.any(String),
       },
     },
   ]);
@@ -183,9 +183,7 @@ test('it names the guard in the instructions it gives at initialize', async () =
         protocolVersion: '2025-11-25',
         capabilities: { tools: { listChanged: false } },
         serverInfo: { name: 'imp', title: 'imp', version: '1.2.3' },
-        instructions: expect.stringContaining(
-          'This server may touch imps named agent-*.',
-        ) as unknown,
+        instructions: expect.stringContaining('This server may touch imps named agent-*.'),
       },
     },
   ]);
@@ -568,7 +566,7 @@ test('it still answers a create whose cancel arrives before the create starts', 
     {
       jsonrpc: '2.0',
       id: 1,
-      result: { content: [{ type: 'text', text: expect.any(String) as unknown }] },
+      result: { content: [{ type: 'text', text: expect.any(String) }] },
     },
   ]);
 });
@@ -685,7 +683,7 @@ test('it runs a call that reuses the id of a call cancelled while its arguments 
       jsonrpc: '2.0',
       id: 7,
       result: {
-        content: [{ type: 'text', text: expect.any(String) as unknown }],
+        content: [{ type: 'text', text: expect.any(String) }],
         structuredContent: { imps: [] },
         isError: false,
       },
@@ -766,13 +764,13 @@ test('it still answers a cancelled create, so the agent learns the name of what 
       jsonrpc: '2.0',
       id: 1,
       result: {
-        content: [{ type: 'text', text: expect.any(String) as unknown }],
+        content: [{ type: 'text', text: expect.any(String) }],
         structuredContent: {
           imp: {
             ...stored,
 
             // its awake time runs on the wall clock between the answer and the read
-            resources: { ...stored.resources, awakeMs: expect.any(Number) as unknown },
+            resources: { ...stored.resources, awakeMs: expect.any(Number) },
           },
         },
         isError: false,
@@ -837,13 +835,13 @@ test('it still answers a cancelled fork, so the agent learns the name of what it
       jsonrpc: '2.0',
       id: 1,
       result: {
-        content: [{ type: 'text', text: expect.any(String) as unknown }],
+        content: [{ type: 'text', text: expect.any(String) }],
         structuredContent: {
           imp: {
             ...stored,
 
             // its awake time runs on the wall clock between the answer and the read
-            resources: { ...stored.resources, awakeMs: expect.any(Number) as unknown },
+            resources: { ...stored.resources, awakeMs: expect.any(Number) },
           },
           grantsNotCopied: [],
         },
@@ -905,13 +903,13 @@ test('it still answers a cancelled restore, so the agent learns the state of the
       jsonrpc: '2.0',
       id: 1,
       result: {
-        content: [{ type: 'text', text: expect.any(String) as unknown }],
+        content: [{ type: 'text', text: expect.any(String) }],
         structuredContent: {
           imp: {
             ...stored,
 
             // its awake time runs on the wall clock between the answer and the read
-            resources: { ...stored.resources, awakeMs: expect.any(Number) as unknown },
+            resources: { ...stored.resources, awakeMs: expect.any(Number) },
           },
         },
         isError: false,
@@ -988,7 +986,7 @@ test('it stops reporting progress for a cancelled call', async () => {
       params: {
         progressToken: 'p',
         progress: 1,
-        message: expect.stringMatching(/^still running after \d+ s$/u) as unknown,
+        message: expect.stringMatching(/^still running after \d+ s$/u),
       },
     },
   ]);

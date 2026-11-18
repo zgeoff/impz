@@ -208,9 +208,9 @@ test('it serves the authorization server metadata, with public clients and servi
     issuer: 'http://127.0.0.1:7171',
     authorization_endpoint: 'http://127.0.0.1:7171/oauth2/authorize',
     token_endpoint: 'http://127.0.0.1:7171/oauth2/token',
-    code_challenge_methods_supported: expect.arrayContaining(['S256']) as unknown,
+    code_challenge_methods_supported: expect.arrayContaining(['S256']),
     token_endpoint_auth_methods_supported: ['none', 'client_secret_basic'],
-    grant_types_supported: expect.arrayContaining(['client_credentials']) as unknown,
+    grant_types_supported: expect.arrayContaining(['client_credentials']),
     revocation_endpoint_auth_methods_supported: ['none'],
   });
 

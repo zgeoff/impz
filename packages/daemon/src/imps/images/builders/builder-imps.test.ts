@@ -63,7 +63,7 @@ test('it gives a build a public builder of the build size', async () => {
 
   expect(builder).toMatchObject({
     kind: 'builder',
-    name: expect.stringMatching(/^imp-build-[a-km-np-z2-9]{8}$/v) as unknown,
+    name: expect.stringMatching(/^imp-build-[a-km-np-z2-9]{8}$/v),
     memoryMib: 512,
     diskBytes: 4 * 1024 ** 3,
   });

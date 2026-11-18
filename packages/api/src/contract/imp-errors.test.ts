@@ -7,7 +7,7 @@ test('#NOT_FOUND carries its message, no status of its own and a data schema', (
 
   expect(error).toStrictEqual({
     message: 'Not found',
-    data: expect.any(z.ZodType) as unknown,
+    data: expect.any(z.ZodType),
   });
 });
 
@@ -48,7 +48,7 @@ test('#CONFLICT carries its message, no status of its own and a data schema', ()
 
   expect(error).toStrictEqual({
     message: 'Already exists',
-    data: expect.any(z.ZodType) as unknown,
+    data: expect.any(z.ZodType),
   });
 });
 
@@ -69,7 +69,7 @@ test('#FORBIDDEN carries its message, no status of its own and a data schema', (
 
   expect(error).toStrictEqual({
     message: 'Not allowed',
-    data: expect.any(z.ZodType) as unknown,
+    data: expect.any(z.ZodType),
   });
 });
 
@@ -97,7 +97,7 @@ test('#PRECONDITION_FAILED carries its message, no status of its own and a data 
 
   expect(error).toStrictEqual({
     message: 'Not possible on this host',
-    data: expect.any(z.ZodType) as unknown,
+    data: expect.any(z.ZodType),
   });
 });
 
@@ -129,7 +129,7 @@ test('#RAM_BUDGET_EXCEEDED carries its message, status 503 and a data schema', (
   expect(error).toStrictEqual({
     message: 'Not enough RAM budget, even after sleeping idle imps',
     status: 503,
-    data: expect.any(z.ZodType) as unknown,
+    data: expect.any(z.ZodType),
   });
 });
 
@@ -274,7 +274,7 @@ test('#INVALID_STATE carries its message, status 409 and a data schema', () => {
   expect(error).toStrictEqual({
     message: 'The imp is not in a state that allows this',
     status: 409,
-    data: expect.any(z.ZodType) as unknown,
+    data: expect.any(z.ZodType),
   });
 });
 
@@ -329,7 +329,7 @@ test('#INVALID_RESUME carries its message, status 409 and a data schema', () => 
   expect(error).toStrictEqual({
     message: 'The resume offset is past the end of the output',
     status: 409,
-    data: expect.any(z.ZodType) as unknown,
+    data: expect.any(z.ZodType),
   });
 });
 
@@ -357,7 +357,7 @@ test('#DISK_FULL carries its message, status 507 and a data schema', () => {
   expect(error).toStrictEqual({
     message: 'Not enough free disk on the host',
     status: 507,
-    data: expect.any(z.ZodType) as unknown,
+    data: expect.any(z.ZodType),
   });
 });
 
@@ -403,7 +403,7 @@ test('#LEASED carries its message, status 409 and a data schema', () => {
   expect(error).toStrictEqual({
     message: 'The imp is leased',
     status: 409,
-    data: expect.any(z.ZodType) as unknown,
+    data: expect.any(z.ZodType),
   });
 });
 
@@ -495,7 +495,7 @@ test('#MOVING carries its message, status 409 and a data schema', () => {
   expect(error).toStrictEqual({
     message: 'The imp is moving between hosts',
     status: 409,
-    data: expect.any(z.ZodType) as unknown,
+    data: expect.any(z.ZodType),
   });
 });
 

@@ -114,8 +114,8 @@ test('it lists a symlink as a link and a file with its exec bits', async () => {
       name: 'Dockerfile',
       kind: 'file',
       size: 12,
-      mode: expect.any(Number) as unknown,
-      mtimeMs: expect.any(Number) as unknown,
+      mode: expect.any(Number),
+      mtimeMs: expect.any(Number),
     },
     {
       path: join(ctx.root, 'run.sh'),
@@ -123,7 +123,7 @@ test('it lists a symlink as a link and a file with its exec bits', async () => {
       kind: 'file',
       size: 10,
       mode: 0o755,
-      mtimeMs: expect.any(Number) as unknown,
+      mtimeMs: expect.any(Number),
     },
     {
       path: join(ctx.root, 'start'),
@@ -131,7 +131,7 @@ test('it lists a symlink as a link and a file with its exec bits', async () => {
       kind: 'symlink',
       size: 6,
       mode: linkMode,
-      mtimeMs: expect.any(Number) as unknown,
+      mtimeMs: expect.any(Number),
     },
   ]);
 });

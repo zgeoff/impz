@@ -155,9 +155,9 @@ test('it prints the key set as a JSON document with the issuer', async () => {
       {
         kty: 'EC',
         crv: 'P-256',
-        x: expect.any(String) as unknown,
-        y: expect.any(String) as unknown,
-        kid: expect.any(String) as unknown,
+        x: expect.any(String),
+        y: expect.any(String),
+        kid: expect.any(String),
         alg: 'ES256',
         use: 'sig',
       },
@@ -180,7 +180,7 @@ test('it stages a key for a time and prints both keys with the retire entry', as
   expect(printed.keys).toHaveLength(2);
 
   expect(printed.retire).toStrictEqual([
-    { kid: expect.any(String) as unknown, at: Date.UTC(2026, 11, 1, 4, 0, 0) / 1000 },
+    { kid: expect.any(String), at: Date.UTC(2026, 11, 1, 4, 0, 0) / 1000 },
   ]);
 });
 

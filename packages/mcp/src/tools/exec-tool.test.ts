@@ -98,7 +98,7 @@ test('it runs a command line through /bin/sh -c and returns its output', async (
       jsonrpc: '2.0',
       id: 1,
       result: {
-        content: [{ type: 'text', text: expect.any(String) as unknown }],
+        content: [{ type: 'text', text: expect.any(String) }],
         structuredContent: {
           exitCode: 0,
           signal: null,
@@ -157,7 +157,7 @@ test('it runs argv as it is, with stdin', async () => {
       jsonrpc: '2.0',
       id: 1,
       result: {
-        content: [{ type: 'text', text: expect.any(String) as unknown }],
+        content: [{ type: 'text', text: expect.any(String) }],
         structuredContent: {
           exitCode: 0,
           signal: null,
@@ -214,7 +214,7 @@ test('it answers a non-zero exit as a result, not a tool error', async () => {
       jsonrpc: '2.0',
       id: 1,
       result: {
-        content: [{ type: 'text', text: expect.any(String) as unknown }],
+        content: [{ type: 'text', text: expect.any(String) }],
         structuredContent: {
           exitCode: 3,
           signal: null,
@@ -327,7 +327,7 @@ test('it runs a command whose broker requirement impd meets, with the broker var
       jsonrpc: '2.0',
       id: 1,
       result: {
-        content: [{ type: 'text', text: expect.any(String) as unknown }],
+        content: [{ type: 'text', text: expect.any(String) }],
         structuredContent: {
           exitCode: 0,
           signal: null,
@@ -345,7 +345,7 @@ test('it runs a command whose broker requirement impd meets, with the broker var
   expect(guest.requests).toMatchObject([
     {
       argv: ['echo', 'hi'],
-      env: expect.arrayContaining([expect.stringMatching(/^HTTPS_PROXY=http:\/\//u)]) as unknown,
+      env: expect.arrayContaining([expect.stringMatching(/^HTTPS_PROXY=http:\/\//u)]),
     },
   ]);
 });
@@ -429,7 +429,7 @@ test('it refuses a call with neither command nor argv', async () => {
         content: [
           {
             type: 'text',
-            text: expect.stringContaining('give either command or argv') as unknown,
+            text: expect.stringContaining('give either command or argv'),
           },
         ],
         isError: true,
@@ -464,7 +464,7 @@ test('it refuses a call with both command and argv', async () => {
         content: [
           {
             type: 'text',
-            text: expect.stringContaining('give either command or argv') as unknown,
+            text: expect.stringContaining('give either command or argv'),
           },
         ],
         isError: true,
@@ -574,7 +574,7 @@ test('it keeps the head and the tail of a large output and counts what it droppe
       jsonrpc: '2.0',
       id: 1,
       result: {
-        content: [{ type: 'text', text: expect.any(String) as unknown }],
+        content: [{ type: 'text', text: expect.any(String) }],
         structuredContent: {
           exitCode: 0,
           signal: null,
@@ -636,7 +636,7 @@ test('it sends SIGTERM to a command at its timeout and reports timedOut', async 
       jsonrpc: '2.0',
       id: 1,
       result: {
-        content: [{ type: 'text', text: expect.any(String) as unknown }],
+        content: [{ type: 'text', text: expect.any(String) }],
         structuredContent: {
           exitCode: null,
           signal: 'SIGTERM',
@@ -710,7 +710,7 @@ test('it opens no second exec to stop a command on an agent from before the grou
       jsonrpc: '2.0',
       id: 1,
       result: {
-        content: [{ type: 'text', text: expect.any(String) as unknown }],
+        content: [{ type: 'text', text: expect.any(String) }],
         structuredContent: {
           exitCode: null,
           signal: 'SIGTERM',
@@ -784,7 +784,7 @@ test('it sends SIGKILL after the grace to a command that ignores SIGTERM', async
       jsonrpc: '2.0',
       id: 1,
       result: {
-        content: [{ type: 'text', text: expect.any(String) as unknown }],
+        content: [{ type: 'text', text: expect.any(String) }],
         structuredContent: {
           exitCode: null,
           signal: 'SIGKILL',
@@ -1027,7 +1027,7 @@ test('it sends a progress notification on each tick while a call with a progress
       params: {
         progressToken: 'p1',
         progress: 1,
-        message: expect.stringMatching(/^still running after \d+ s$/u) as unknown,
+        message: expect.stringMatching(/^still running after \d+ s$/u),
       },
     },
     {
@@ -1036,7 +1036,7 @@ test('it sends a progress notification on each tick while a call with a progress
       params: {
         progressToken: 'p1',
         progress: 2,
-        message: expect.stringMatching(/^still running after \d+ s$/u) as unknown,
+        message: expect.stringMatching(/^still running after \d+ s$/u),
       },
     },
   ]);
@@ -1083,7 +1083,7 @@ test('it boots a stopped imp for an exec', async () => {
       jsonrpc: '2.0',
       id: 1,
       result: {
-        content: [{ type: 'text', text: expect.any(String) as unknown }],
+        content: [{ type: 'text', text: expect.any(String) }],
         structuredContent: {
           exitCode: 0,
           signal: null,

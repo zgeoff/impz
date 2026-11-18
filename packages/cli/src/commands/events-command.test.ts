@@ -94,16 +94,16 @@ test('it prints only the named imp’s events, and reconnects after impd’s con
     /^the event stream ended 5 times in a row: (?:ECONNREFUSED: )?Unable to connect\. Is the computer able to access the url\?$/v,
   );
 
-  expect(print.mock.calls.map(([line]) => JSON.parse(line) as unknown)).toStrictEqual([
+  expect(print.mock.calls.map(([line]): unknown => JSON.parse(line))).toStrictEqual([
     expect.objectContaining({
       ev: 'ImpAdded',
       reason: 'snapshot',
-      imp: expect.objectContaining({ name: 'dev' }) as unknown,
+      imp: expect.objectContaining({ name: 'dev' }),
     }),
     expect.objectContaining({
       ev: 'ImpAdded',
       reason: 'snapshot',
-      imp: expect.objectContaining({ name: 'dev' }) as unknown,
+      imp: expect.objectContaining({ name: 'dev' }),
     }),
   ]);
 
@@ -168,14 +168,14 @@ test('it prints every imp’s events when no imp is named', async () => {
 
   expect(printing).rejects.toThrow();
 
-  expect(lines.map((line) => JSON.parse(line) as unknown)).toStrictEqual([
+  expect(lines.map((line): unknown => JSON.parse(line))).toStrictEqual([
     expect.objectContaining({
       ev: 'ImpAdded',
-      imp: expect.objectContaining({ name: 'dev' }) as unknown,
+      imp: expect.objectContaining({ name: 'dev' }),
     }),
     expect.objectContaining({
       ev: 'ImpAdded',
-      imp: expect.objectContaining({ name: 'web' }) as unknown,
+      imp: expect.objectContaining({ name: 'web' }),
     }),
   ]);
 });

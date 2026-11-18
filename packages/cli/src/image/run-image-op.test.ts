@@ -78,13 +78,13 @@ test('#runImageAdd makes a template from an imp through the stream of a current 
   const received: unknown = image;
 
   expect(received).toStrictEqual({
-    id: expect.any(String) as unknown,
+    id: expect.any(String),
     name: 'tpl',
     ref: 'imp:box',
-    digest: expect.stringMatching(/^imp-/u) as unknown,
+    digest: expect.stringMatching(/^imp-/u),
     source: 'imp',
-    createdAt: expect.toBeValidDate() as unknown,
-    sizeBytes: expect.any(Number) as unknown,
+    createdAt: expect.toBeValidDate(),
+    sizeBytes: expect.any(Number),
     pinned: false,
   });
 
@@ -109,13 +109,13 @@ test('#runOnHostBuild builds an image from a directory on the impd host through 
   const received: unknown = built;
 
   expect(received).toStrictEqual({
-    id: expect.any(String) as unknown,
+    id: expect.any(String),
     name: 'img',
     ref: 'imp/img:latest',
-    digest: expect.stringMatching(/^imp-build-[0-9a-f]{64}$/u) as unknown,
+    digest: expect.stringMatching(/^imp-build-[0-9a-f]{64}$/u),
     source: 'oci',
-    createdAt: expect.toBeValidDate() as unknown,
-    sizeBytes: expect.any(Number) as unknown,
+    createdAt: expect.toBeValidDate(),
+    sizeBytes: expect.any(Number),
     pinned: false,
   });
 
@@ -135,7 +135,7 @@ test('#runOnHostBuild passes on a current impd’s refusal of a context director
     code: 'BAD_REQUEST',
     message: expect.stringContaining(
       'build context /nonexistent/ctx does not exist on the impd host',
-    ) as unknown,
+    ),
   });
 });
 
@@ -162,13 +162,13 @@ test('#runImageAdd adds through the call that answers at the end on an impd from
   const received: unknown = added;
 
   expect(received).toStrictEqual({
-    id: expect.any(String) as unknown,
+    id: expect.any(String),
     name: 'tpl',
     ref: 'imp:box',
-    digest: expect.stringMatching(/^imp-/u) as unknown,
+    digest: expect.stringMatching(/^imp-/u),
     source: 'imp',
-    createdAt: expect.toBeValidDate() as unknown,
-    sizeBytes: expect.any(Number) as unknown,
+    createdAt: expect.toBeValidDate(),
+    sizeBytes: expect.any(Number),
     pinned: false,
   });
 
@@ -197,13 +197,13 @@ test('#runOnHostBuild builds through the call that answers at the end on an impd
   const received: unknown = built;
 
   expect(received).toStrictEqual({
-    id: expect.any(String) as unknown,
+    id: expect.any(String),
     name: 'img',
     ref: 'imp/img:latest',
-    digest: expect.stringMatching(/^imp-build-[0-9a-f]{64}$/u) as unknown,
+    digest: expect.stringMatching(/^imp-build-[0-9a-f]{64}$/u),
     source: 'oci',
-    createdAt: expect.toBeValidDate() as unknown,
-    sizeBytes: expect.any(Number) as unknown,
+    createdAt: expect.toBeValidDate(),
+    sizeBytes: expect.any(Number),
     pinned: false,
   });
 

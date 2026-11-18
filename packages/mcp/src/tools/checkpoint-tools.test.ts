@@ -83,7 +83,7 @@ test.each([
       jsonrpc: '2.0',
       id: 1,
       result: {
-        content: [{ type: 'text', text: expect.any(String) as unknown }],
+        content: [{ type: 'text', text: expect.any(String) }],
         structuredContent: { checkpoint: stored },
         isError: false,
       },
@@ -137,7 +137,7 @@ test.each([
       jsonrpc: '2.0',
       id: 1,
       result: {
-        content: [{ type: 'text', text: expect.any(String) as unknown }],
+        content: [{ type: 'text', text: expect.any(String) }],
         structuredContent: { checkpoints: stored },
         isError: false,
       },
@@ -190,13 +190,13 @@ test.each([
       jsonrpc: '2.0',
       id: 1,
       result: {
-        content: [{ type: 'text', text: expect.any(String) as unknown }],
+        content: [{ type: 'text', text: expect.any(String) }],
         structuredContent: {
           imp: {
             ...stored,
 
             // its awake time runs on the wall clock between the answer and the read
-            resources: { ...stored.resources, awakeMs: expect.any(Number) as unknown },
+            resources: { ...stored.resources, awakeMs: expect.any(Number) },
           },
         },
         isError: false,
@@ -286,7 +286,7 @@ test('it answers a restore to a checkpoint that does not exist with an isError r
       jsonrpc: '2.0',
       id: 1,
       result: {
-        content: [{ type: 'text', text: expect.stringMatching(/^NOT_FOUND: /u) as unknown }],
+        content: [{ type: 'text', text: expect.stringMatching(/^NOT_FOUND: /u) }],
         isError: true,
       },
     },

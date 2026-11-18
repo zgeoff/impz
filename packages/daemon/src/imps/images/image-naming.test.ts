@@ -52,6 +52,6 @@ test('#buildImageRuntimeConfig refuses an OCI config whose Env is not a list of 
   const building = Promise.try(() => buildImageRuntimeConfig({ Env: 'A=1' }));
 
   expect(building).rejects.toMatchObject({
-    issues: expect.toPartiallyContain({ path: ['Env'], code: 'invalid_type' }) as unknown,
+    issues: expect.toPartiallyContain({ path: ['Env'], code: 'invalid_type' }),
   });
 });

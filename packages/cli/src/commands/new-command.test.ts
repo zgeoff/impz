@@ -329,7 +329,9 @@ test('#new places on a reachable host under --place when another saved host does
   const sent: unknown = JSON.parse(JSON.stringify({ host: 'box', imp: created }));
 
   // an older Bun leaves the error's code out of a fetch error's message
-  expect({ ...placed, stdout: JSON.parse(placed.stdout) as unknown }).toStrictEqual({
+  const stdout: unknown = JSON.parse(placed.stdout);
+
+  expect({ ...placed, stdout }).toStrictEqual({
     stdout: sent,
     stderr: expect.stringMatching(
       /^impz: gone: skipped: (?:ECONNREFUSED: )?Unable to connect\. Is the computer able to access the url\?\nimpz: placing on box\n$/v,
@@ -486,7 +488,7 @@ test('#new passes over a host whose token is limited, then exposes, under --plac
       url: 'https://dev.imp.example.com',
       auth: 'token',
       user: null,
-      credential: expect.any(String) as unknown,
+      credential: expect.any(String),
     },
   });
 

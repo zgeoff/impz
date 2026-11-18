@@ -72,14 +72,14 @@ test('it lists the events after a cursor of the imps its guard allows', async ()
       jsonrpc: '2.0',
       id: 1,
       result: {
-        content: [{ type: 'text', text: expect.any(String) as unknown }],
+        content: [{ type: 'text', text: expect.any(String) }],
         structuredContent: {
           events: [
             expect.objectContaining({
               ev: 'ImpChanged',
               reason: 'slept',
-              imp: expect.objectContaining({ name: 'home-dev' }) as unknown,
-            }) as unknown,
+              imp: expect.objectContaining({ name: 'home-dev' }),
+            }),
           ],
           after: unguarded.after,
           logId: seen.logId,
@@ -141,14 +141,14 @@ test('it leaves out an event kind it does not know', async () => {
       jsonrpc: '2.0',
       id: 1,
       result: {
-        content: [{ type: 'text', text: expect.any(String) as unknown }],
+        content: [{ type: 'text', text: expect.any(String) }],
         structuredContent: {
           events: [
             expect.objectContaining({
               ev: 'GovernorDecision',
               name: 'home-dev',
               seq: 5,
-            }) as unknown,
+            }),
           ],
           after: 5,
           logId: 'log-a',

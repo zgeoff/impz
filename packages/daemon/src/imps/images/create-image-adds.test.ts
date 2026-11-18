@@ -317,7 +317,7 @@ test("it returns a registry's refusal of a pull in the builder as the client err
 
   expect(images.addImage('private.test/x:1', 'box')).rejects.toMatchObject({
     code: 'BAD_REQUEST',
-    message: expect.stringContaining('requested access to the resource is denied') as unknown,
+    message: expect.stringContaining('requested access to the resource is denied'),
   });
 });
 
@@ -422,7 +422,7 @@ test('it refuses an export over IMP_BUILD_IMAGE_MAX_MIB', async () => {
 
   expect(images.addImage('busybox:1.37', 'box')).rejects.toMatchObject({
     code: 'BAD_REQUEST',
-    message: expect.stringContaining('IMP_BUILD_IMAGE_MAX_MIB') as unknown,
+    message: expect.stringContaining('IMP_BUILD_IMAGE_MAX_MIB'),
   });
 });
 
@@ -470,7 +470,7 @@ test('it leaves no builder, row or work directory after an export over the limit
 
   expect(adding).rejects.toMatchObject({
     code: 'BAD_REQUEST',
-    message: expect.stringContaining('IMP_BUILD_IMAGE_MAX_MIB') as unknown,
+    message: expect.stringContaining('IMP_BUILD_IMAGE_MAX_MIB'),
   });
 
   const imps = await listImps(ctx.db);
@@ -643,7 +643,7 @@ test.each([
 
   expect(images.addImage(ref, 'box')).rejects.toMatchObject({
     code: 'BAD_REQUEST',
-    message: expect.stringContaining(problem) as unknown,
+    message: expect.stringContaining(problem),
   });
 
   const imps = await listImps(ctx.db);
@@ -845,9 +845,7 @@ test('it fails the add with SERVICE_UNAVAILABLE when the registry cannot give th
 
   expect(images.addImage('busybox:1.37', 'box')).rejects.toMatchObject({
     code: 'SERVICE_UNAVAILABLE',
-    message: expect.stringContaining(
-      `impd cannot add its builder image ${config.build.image}`,
-    ) as unknown,
+    message: expect.stringContaining(`impd cannot add its builder image ${config.build.image}`),
   });
 });
 
@@ -1395,9 +1393,7 @@ test('it names the error of a step after the fetch that fails past the limit, no
 
   expect(ensuring).rejects.toMatchObject({
     code: 'SERVICE_UNAVAILABLE',
-    message: expect.stringMatching(
-      /^(?!.*the fetch did not finish).*no space left on device/sv,
-    ) as unknown,
+    message: expect.stringMatching(/^(?!.*the fetch did not finish).*no space left on device/sv),
   });
 });
 

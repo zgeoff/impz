@@ -104,7 +104,7 @@ test('it adds a template image named for its imp', async () => {
     ref: 'imp:dev',
     source: 'imp',
     sourceImp: 'dev',
-    digest: expect.stringMatching(/^imp-[\da-f\-]{36}$/v) as unknown,
+    digest: expect.stringMatching(/^imp-[\da-f\-]{36}$/v),
   });
 });
 

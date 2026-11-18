@@ -94,7 +94,7 @@ test('it refuses a digest that is not a sha256 digest', async () => {
   expect(
     readOciConfig('registry.test/builder@sha256:1', new AbortController().signal, runCommand),
   ).rejects.toMatchObject({
-    issues: expect.arrayContaining([expect.objectContaining({ path: ['digest'] })]) as unknown,
+    issues: expect.arrayContaining([expect.objectContaining({ path: ['digest'] })]),
   });
 });
 

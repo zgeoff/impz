@@ -145,7 +145,7 @@ test('#login saves nothing when impd is out of reach', async () => {
     stdout: '',
     stderr: expect.stringMatching(
       /^impz: cannot check the token with http:\/\/127\.0\.0\.1:1: .+; nothing saved\n$/u,
-    ) as unknown,
+    ),
     code: 1,
   });
 
@@ -189,7 +189,7 @@ test('#login leaves a damaged config.json as it was and asks impd nothing', asyn
 
   expect(login).toStrictEqual({
     stdout: '',
-    stderr: expect.stringMatching(/is not valid JSON; fix or remove it\n$/u) as unknown,
+    stderr: expect.stringMatching(/is not valid JSON; fix or remove it\n$/u),
     code: 2,
   });
 
@@ -411,7 +411,7 @@ test('#hostFlag leaves --version to print the version with no saved host', async
   });
 
   expect(version).toStrictEqual({
-    stdout: expect.stringMatching(/^\d+\.\d+\.\d+\n$/u) as unknown,
+    stdout: expect.stringMatching(/^\d+\.\d+\.\d+\n$/u),
     stderr: '',
     code: 0,
   });
@@ -422,7 +422,7 @@ test('#hostFlag leaves --help to print the help with no saved host', async () =>
   const help: unknown = await runCLIInProcess({ args: ['--host', 'work', '--help'], env: ctx.env });
 
   expect(help).toStrictEqual({
-    stdout: expect.stringContaining('--host') as unknown,
+    stdout: expect.stringContaining('--host'),
     stderr: '',
     code: 0,
   });
@@ -440,7 +440,7 @@ test('#exec prints one line, not a stack, when it cannot read config.json', asyn
 
   expect(exec).toStrictEqual({
     stdout: '',
-    stderr: expect.stringMatching(/^impz: [^\n]*EISDIR[^\n]*\n$/u) as unknown,
+    stderr: expect.stringMatching(/^impz: [^\n]*EISDIR[^\n]*\n$/u),
     code: 255,
   });
 });

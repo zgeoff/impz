@@ -274,7 +274,7 @@ test('it records an audit row for a forwarded request', async () => {
 
   expect(audit).toStrictEqual([
     {
-      at: expect.toBeValidDate() as unknown,
+      at: expect.toBeValidDate(),
       imp: 'dev',
       secret: 'gh',
       method: 'GET',
@@ -283,7 +283,7 @@ test('it records an audit row for a forwarded request', async () => {
       status: 200,
       requestBytes: 0,
       responseBytes: 'from upstream'.length,
-      durationMs: expect.toBeNumber() as unknown,
+      durationMs: expect.toBeNumber(),
     },
   ]);
 });
@@ -333,7 +333,7 @@ test('it records the audit row of a request that ends after its imp is destroyed
 
   expect(audit).toStrictEqual([
     {
-      at: expect.toBeValidDate() as unknown,
+      at: expect.toBeValidDate(),
       imp: 'dev',
       secret: 'gh',
       method: 'GET',
@@ -342,7 +342,7 @@ test('it records the audit row of a request that ends after its imp is destroyed
       status: 200,
       requestBytes: 0,
       responseBytes: 'from upstream'.length,
-      durationMs: expect.toBeNumber() as unknown,
+      durationMs: expect.toBeNumber(),
     },
   ]);
 
@@ -574,13 +574,13 @@ test('it audits a tunnel the egress policy refuses, with the imp, the host and t
 
   expect(audit).toStrictEqual([
     {
-      at: expect.toBeValidDate() as unknown,
+      at: expect.toBeValidDate(),
       imp: 'dev',
       method: 'CONNECT',
       host: 'plain.test',
       path: null,
       status: 403,
-      durationMs: expect.toBeNumber() as unknown,
+      durationMs: expect.toBeNumber(),
       reason: 'egress-policy',
     },
   ]);
@@ -625,18 +625,18 @@ test('it keeps no credential, header, query or body in the audit row of a refuse
 
   expect(rows).toStrictEqual([
     {
-      id: expect.toBeNumber() as unknown,
+      id: expect.toBeNumber(),
       imp_id: dev.id,
       imp_name: 'dev',
       secret_name: null,
-      at: expect.toBeNumber() as unknown,
+      at: expect.toBeNumber(),
       method: 'POST',
       host: 'api.github.com',
       path: '/repos/x',
       status: 421,
       request_bytes: 0,
       response_bytes: 0,
-      duration_ms: expect.toBeNumber() as unknown,
+      duration_ms: expect.toBeNumber(),
       reason: 'wrong-host',
     },
   ]);
@@ -1354,13 +1354,13 @@ test('it refuses a method outside the grant’s filter and audits it with the re
 
   expect(audit).toStrictEqual([
     {
-      at: expect.toBeValidDate() as unknown,
+      at: expect.toBeValidDate(),
       imp: 'dev',
       method: 'POST',
       host: 'api.github.com',
       path: '/repos/a/b/issues',
       status: 403,
-      durationMs: expect.toBeNumber() as unknown,
+      durationMs: expect.toBeNumber(),
       reason: 'outside-filter',
     },
   ]);
@@ -1408,13 +1408,13 @@ test('it refuses a path outside the grant’s filter and audits it with the reas
 
   expect(audit).toStrictEqual([
     {
-      at: expect.toBeValidDate() as unknown,
+      at: expect.toBeValidDate(),
       imp: 'dev',
       method: 'GET',
       host: 'api.github.com',
       path: '/repos/a/b/collaborators',
       status: 403,
-      durationMs: expect.toBeNumber() as unknown,
+      durationMs: expect.toBeNumber(),
       reason: 'outside-filter',
     },
   ]);

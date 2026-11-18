@@ -183,10 +183,10 @@ test('it names the cause and runs nothing when impd refuses a required broker', 
 
   expect(code).toBe(1);
 
-  expect(ctx.errors as unknown).toStrictEqual([
+  expect(ctx.errors).toStrictEqual([
     expect.stringMatching(
       /^impz: PRECONDITION_FAILED: the broker is not ready for this exec: .*no grant/u,
-    ) as unknown,
+    ),
   ]);
 
   expect(agent.received).toBeEmpty();
@@ -216,7 +216,7 @@ test('it exits 1 from impz exec --require when impd cannot ensure the requiremen
     stdout: '',
     stderr: expect.stringMatching(
       /^impz: PRECONDITION_FAILED: the broker is not ready for this exec: .*no grant.*\n$/u,
-    ) as unknown,
+    ),
     code: 1,
   });
 
@@ -362,10 +362,7 @@ test('it exits 255 and names the refusal for an imp impd does not have', async (
   const code = await runExec({ host: null, name: 'nope', argv: ['cmd'], tty: false }, ctx.io);
 
   expect(code).toBe(255);
-
-  expect(ctx.errors as unknown).toStrictEqual([
-    expect.stringMatching(/^impz: NOT_FOUND: .*nope/u) as unknown,
-  ]);
+  expect(ctx.errors).toStrictEqual([expect.stringMatching(/^impz: NOT_FOUND: .*nope/u)]);
 });
 
 test('it explains INNER_DOWN and exits 255', async () => {
@@ -420,10 +417,7 @@ test('it ends the session and closes the socket when impd faults with a frame on
   );
 
   expect(code).toBe(255);
-
-  expect(errors as unknown).toStrictEqual([
-    expect.stringMatching(/^impz: bad message from impd: /u) as unknown,
-  ]);
+  expect(errors).toStrictEqual([expect.stringMatching(/^impz: bad message from impd: /u)]);
 
   await expect(peer.closed).toResolve();
 });
@@ -452,10 +446,7 @@ test('it ends the session and closes the socket when impd faults with text that 
   );
 
   expect(code).toBe(255);
-
-  expect(errors as unknown).toStrictEqual([
-    expect.stringMatching(/^impz: bad message from impd: /u) as unknown,
-  ]);
+  expect(errors).toStrictEqual([expect.stringMatching(/^impz: bad message from impd: /u)]);
 
   await expect(peer.closed).toResolve();
 });
@@ -484,10 +475,7 @@ test('it ends the session and closes the socket when impd faults with a frame on
   );
 
   expect(code).toBe(255);
-
-  expect(errors as unknown).toStrictEqual([
-    expect.stringMatching(/^impz: bad message from impd: /u) as unknown,
-  ]);
+  expect(errors).toStrictEqual([expect.stringMatching(/^impz: bad message from impd: /u)]);
 
   await expect(peer.closed).toResolve();
 });
@@ -549,10 +537,7 @@ test('it exits 255 with the token hint when impd rejects the token', async () =>
   );
 
   expect(code).toBe(255);
-
-  expect(ctx.errors as unknown).toStrictEqual([
-    expect.stringMatching(/^impz: unauthorized: set IMP_TOKEN/u) as unknown,
-  ]);
+  expect(ctx.errors).toStrictEqual([expect.stringMatching(/^impz: unauthorized: set IMP_TOKEN/u)]);
 });
 
 test('it exits 255 and names the address when nothing listens there', async () => {
@@ -1737,9 +1722,9 @@ test('it sends the detach key as input to a plain exec and never attaches it aga
   expect(code).toBe(255);
 
   expect(
-    agent.received.map((frame) => [frame.type, new TextDecoder().decode(frame.payload)]) as unknown,
+    agent.received.map((frame) => [frame.type, new TextDecoder().decode(frame.payload)]),
   ).toStrictEqual([
-    [FRAME_TYPES.request, expect.any(String) as unknown],
+    [FRAME_TYPES.request, expect.any(String)],
     [FRAME_TYPES.stdin, '\u001D'],
   ]);
 });
