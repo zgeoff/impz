@@ -21,7 +21,7 @@ interface RunTestZfsOptions {
   readonly io: ZfsIO;
 }
 
-// .claude/skills/project-testing/references/zfs-nixos-go-ci.md lists the settings this reads.
+// .agents/skills/project-testing/references/zfs-nixos-go-ci.md lists the settings this reads.
 export async function runTestZfs(options: RunTestZfsOptions): Promise<number> {
   try {
     const host = await checkHost(options);
