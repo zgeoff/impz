@@ -705,20 +705,6 @@
   },
   "overrides": [
     {
-      // the web dashboard: React in a browser
-      "files": ["packages/dashboard/**"],
-      "plugins": ["typescript", "unicorn", "oxc", "import", "promise", "react", "jsx-a11y"],
-      "env": { "browser": true },
-      "rules": {
-        // React 19's JSX runtime needs no React in scope
-        "react/react-in-jsx-scope": "off",
-        "react/jsx-props-no-spreading": "off",
-        "react/jsx-max-depth": "off",
-        // stylesheets are imported for their side effect
-        "import/no-unassigned-import": ["error", { "allow": ["**/*.css"] }]
-      }
-    },
-    {
       // the daemon's stand-in for the VM runner answers a whole contract in one
       // module, so its line count runs past the limit
       "files": ["packages/daemon/src/test-utils/vm/build-stub-vmm.ts"],

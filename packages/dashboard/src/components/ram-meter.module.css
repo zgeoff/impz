@@ -12,6 +12,15 @@
   border-radius: 999px;
 }
 
+/* the meter element is the accessible reading; the bar beside it draws the same figures */
+.reading {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
 .used {
   background: var(--accent);
 }
