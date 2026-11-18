@@ -236,6 +236,34 @@ function toFailure(error: unknown): BuildFailure {
   return { code: String(known.code), message: known.message, status: known.status };
 }
 
+async function* chunksOf(body: ReadableStream<Uint8Array>): AsyncGenerator<Uint8Array> {
+  const reader = body.getReader();
+  let finished = false;
+
+  try {
+    for (;;) {
+      const next = await reader.read();
+
+      if (next.done) {
+        finished = true;
+
+        return;
+      }
+
+      yield next.value;
+    }
+  } catch (error) {
+    finished = true;
+    throw error;
+  } finally {
+    if (!finished) {
+      await reader.cancel();
+    }
+
+    reader.releaseLock();
+  }
+}
+
 async function writeBody(
   request: Request,
   path: string,
@@ -251,7 +279,7 @@ async function writeBody(
   let written = 0;
 
   try {
-    for await (const chunk of request.body) {
+    for await (const chunk of chunksOf(request.body)) {
       written += chunk.byteLength;
 
       if (written > maxBytes) {
