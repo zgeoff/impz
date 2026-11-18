@@ -19,6 +19,6 @@ fi
 
 mkdir -p "$dist"
 for target in "${targets[@]}"; do
-  bun build --compile --target="bun-$target" "$root/packages/cli/src/run-cli.ts" \
+  bun build --compile --target="bun-$target" "$root/packages/cli/src/main.ts" \
     --outfile "$dist/impz-$target"
 done

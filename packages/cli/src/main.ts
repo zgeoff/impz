@@ -20,7 +20,7 @@ interface CliOutcome {
   readonly mustExit: boolean;
 }
 
-export async function runCLI(args: readonly string[], io: CommandIO): Promise<CliOutcome> {
+export async function main(args: readonly string[], io: CommandIO): Promise<CliOutcome> {
   try {
     const rendered = await cli([...args], mainCommand, {
       name: 'impz',
@@ -91,7 +91,7 @@ function formatRefusal(error: AggregateError, command: string): string | null {
 }
 
 if (import.meta.main) {
-  const outcome = await runCLI(process.argv.slice(2), readProcessIO());
+  const outcome = await main(process.argv.slice(2), readProcessIO());
 
   if (outcome.mustExit) {
     process.exit(outcome.code);

@@ -257,7 +257,7 @@ RUN --mount=type=cache,target=/root/.bun/install/cache \
 # --external cpu-features: ssh2 loads this optional native module in a
 # try/catch, and --ignore-scripts leaves its .node file unbuilt.
 RUN bun build --compile --external cpu-features packages/daemon/src/main.ts --outfile /out/impd \
- && bun build --compile packages/cli/src/run-cli.ts --outfile /out/impz
+ && bun build --compile packages/cli/src/main.ts --outfile /out/impz
 
 # --- dashboard: the web dashboard's static files. Its own stage: the build
 # needs the dev dependencies (vite) that the compile stage leaves out. ---

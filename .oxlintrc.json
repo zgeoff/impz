@@ -723,7 +723,7 @@
       }
     },
     {
-      // the cli keeps every error that run-cli.ts maps to an exit code in one module
+      // the cli keeps every error that main.ts maps to an exit code in one module
       "files": ["packages/cli/src/cli/usage-error.ts"],
       "rules": { "max-classes-per-file": "off" }
     }

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import type { CommandIO } from '../cli/command-io';
-import { runCLI } from '../run-cli';
+import { main } from '../main';
 import type { CliResult, StartCliOptions } from './start-cli';
 
 interface InProcessOptions extends StartCliOptions {
@@ -45,7 +45,7 @@ export async function runCLIInProcess(options: Readonly<InProcessOptions>): Prom
     sleep: options.sleep ?? ((durationMs) => Bun.sleep(durationMs)),
   };
 
-  const outcome = await runCLI(options.args, io);
+  const outcome = await main(options.args, io);
 
   return { stdout: output.stdout, stderr: output.stderr, code: outcome.code };
 }

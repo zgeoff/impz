@@ -45,7 +45,7 @@ On a production host, keep it at one create at a time, as below.
 To time 10 creates from a checkout, run the CLI from source, which has the `bench` command:
 
 ```sh
-bun packages/cli/src/run-cli.ts bench create --concurrency 1 --samples 10 --memory 512M --json
+bun packages/cli/src/main.ts bench create --concurrency 1 --samples 10 --memory 512M --json
 ```
 
 Expect: one JSON report on stdout after about 15 s, with the create's p50 and p95 under
