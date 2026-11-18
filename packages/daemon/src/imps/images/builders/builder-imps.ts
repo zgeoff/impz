@@ -242,6 +242,7 @@ export function createBuilders(deps: BuildersDeps): Builders {
           name,
           image: BUILDER_IMAGE,
           memoryMib: deps.config.build.memoryMib,
+          maxMemoryMib: deps.config.build.maxMemoryMib ?? undefined,
           diskMib: Math.ceil(deps.config.build.diskBytes / 1024 ** 2),
           policy: { mode: 'public', allow: [] },
           kind: 'builder',

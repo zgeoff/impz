@@ -42,18 +42,28 @@ async function setupTest() {
   const docker = createStubDockerCli({ directory: dataDir });
   const ociFetch = createStubOciFetch({ directory: dataDir });
 
+  // the host's pool of 2 MiB pages, empty until a test sizes it
+  const hugePool = { totalMib: 0, freeMib: 0 };
+
   updateEnv('PATH', docker.path);
 
   const harness = await startTestImpd(stack, {
     dataDir,
     env: readImpEnv(),
+    boundaries: { imps: { readHugePagePool: () => ({ ...hugePool }) } },
 
     cloneDisk: async (source, target) => {
       await runChecked(['cp', '--sparse=always', source, target]);
     },
   });
 
-  return Object.assign(harness, { stack, docker, ociFetch, lines: captureImpdLogs() });
+  return Object.assign(harness, {
+    stack,
+    docker,
+    ociFetch,
+    hugePool,
+    lines: captureImpdLogs(),
+  });
 }
 
 test('it adds an image through a builder for one platform, with no host engine call', async () => {
@@ -697,6 +707,108 @@ test('it fails the add of a builder the governor refuses, with no host engine ca
   expect(builder.guest.runs).toStrictEqual([]);
   expect(box).toBe(undefined);
   expect(ctx.docker.readCalls()).toStrictEqual([]);
+});
+
+test('it boots an elastic builder on ordinary pages when the free huge page pool is smaller than the build', async () => {
+  updateEnv('IMP_HUGE_PAGES', '2M');
+
+  const ctx = await setupTest();
+
+  Object.assign(ctx.hugePool, { totalMib: 4096, freeMib: 256 });
+
+  const config = loadConfig({
+    IMP_DATA_DIR: ctx.dataDir,
+    IMP_BUILD_MEMORY_MIB: '512',
+    IMP_BUILD_MAX_MEMORY_MIB: '1024',
+    IMP_BUILD_DISK_GIB: '4',
+  });
+
+  await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: config.build.image });
+
+  const builder = buildStubImageBuilder({
+    exported: [createFilesTar(ctx.dataDir, { hello: 'pulled\n' })],
+    repoDigest: `sha256:${'b'.repeat(64)}`,
+  });
+
+  const images = createImageService({
+    config,
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
+    db: ctx.db,
+    storage: ctx.storage,
+    storageGate: ctx.impd.storageGate,
+    diskBudget: ctx.impd.diskBudget,
+    readBuilders: () => builders,
+  });
+
+  const builders = createBuilders({
+    config,
+    db: ctx.db,
+    imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
+    ensureImage: (signal) => images.ensureBuilderImage(signal),
+  });
+
+  const image = await images.addImage('busybox', 'box');
+
+  expect(existsSync(buildImagePaths(ctx.dataDir, image.digest).rootfs)).toBeTrue();
+
+  expect(
+    ctx.fake.bootPlans.map((plan) => ({
+      memoryMib: plan.memoryMib,
+      maxMemoryMib: plan.maxMemoryMib,
+      hugePages: plan.hugePages,
+    })),
+  ).toStrictEqual([{ memoryMib: 512, maxMemoryMib: 1024, hugePages: 'None' }]);
+});
+
+test('it boots a fixed builder on the huge page pool with no IMP_BUILD_MAX_MEMORY_MIB, and fails the add the free pool cannot hold', async () => {
+  updateEnv('IMP_HUGE_PAGES', '2M');
+
+  const ctx = await setupTest();
+
+  Object.assign(ctx.hugePool, { totalMib: 4096, freeMib: 256 });
+
+  const config = loadConfig({
+    IMP_DATA_DIR: ctx.dataDir,
+    IMP_BUILD_MEMORY_MIB: '512',
+    IMP_BUILD_DISK_GIB: '4',
+  });
+
+  await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: config.build.image });
+
+  const builder = buildStubImageBuilder({ exported: [], repoDigest: `sha256:${'b'.repeat(64)}` });
+
+  const images = createImageService({
+    config,
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
+    db: ctx.db,
+    storage: ctx.storage,
+    storageGate: ctx.impd.storageGate,
+    diskBudget: ctx.impd.diskBudget,
+    readBuilders: () => builders,
+  });
+
+  const builders = createBuilders({
+    config,
+    db: ctx.db,
+    imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
+    ensureImage: (signal) => images.ensureBuilderImage(signal),
+  });
+
+  expect(images.addImage('busybox', 'box')).rejects.toMatchObject({
+    code: 'RAM_BUDGET_EXCEEDED',
+    message: expect.toInclude('not enough 2 MiB pages') as unknown,
+  });
+
+  expect(builder.guest.runs).toStrictEqual([]);
+  expect(ctx.fake.bootPlans).toBeEmpty();
 });
 
 test('it adds an image whose name matches IMP_PRIORITY_IMPS from the RAM kept for priority imps', async () => {

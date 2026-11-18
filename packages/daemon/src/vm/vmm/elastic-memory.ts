@@ -2,7 +2,7 @@ import { ImpdError } from '../../platform/errors/impd-error';
 
 // Movable memory cannot hold the kernel's own allocations, so a guest that is mostly hot-plugged
 // memory runs out of kernel memory first.
-const MAX_GROWTH_FACTOR = 4;
+export const MAX_GROWTH_FACTOR = 4;
 
 // Firecracker's virtio-mem device sizes its region in whole slots, and plugs or unplugs whole blocks.
 export const SLOT_MIB = 128;
