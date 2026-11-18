@@ -20,7 +20,7 @@ import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
 import { buildStubMounts } from '../../test-utils/vm/build-stub-mounts';
 import { buildStubUidProcesses } from '../../test-utils/vm/build-stub-uid-processes';
 import { writeStubUffdStats } from '../../test-utils/vm/write-stub-uffd-stats';
-import { buildImpPaths } from '../storage/data-layout';
+import { buildImpPaths } from '../storage/build-imp-paths';
 import {
   buildJailerCommand,
   createJails,

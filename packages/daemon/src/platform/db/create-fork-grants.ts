@@ -1,8 +1,8 @@
 import type { GrantNotCopied } from '@impz/api';
+import { listGrants, readClash, readSecret, writeGrant } from './create-checked-grant';
 import { readTokenGrantable } from './list-token-records';
 import type { GrantableSecret } from './list-token-records';
 import type { ImpDatabase } from './open-database';
-import { listGrants, readClash, readSecret, writeGrant } from './secrets';
 
 export interface ForkAuthority {
   readonly tokenId: string | null;

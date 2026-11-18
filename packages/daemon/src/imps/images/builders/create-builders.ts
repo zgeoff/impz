@@ -1,5 +1,5 @@
 import { getErrorMessage } from '@impz/shared';
-import { listImps } from '../../../platform/db/imps';
+import { listImps } from '../../../platform/db/list-imps';
 import type { ImpDatabase } from '../../../platform/db/open-database';
 import type { Clock, StartTimer } from '../../../platform/process/clock';
 import { getImpdLogger } from '../../../platform/process/get-impd-logger';

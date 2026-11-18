@@ -13,8 +13,8 @@ import { HttpResponse, http } from 'msw';
 import invariant from 'tiny-invariant';
 import { parsePrefix64 } from '../../host-net/net/derive-guest-ip6';
 import { createReachPolicy } from '../../host-net/net/reach-policy';
-import { readImpByName, updateImpMove } from '../../platform/db/imps';
-import { readSecret } from '../../platform/db/secrets';
+import { readSecret } from '../../platform/db/create-checked-grant';
+import { readImpByName, updateImpMove } from '../../platform/db/list-imps';
 import {
   AUDIT_ROWS_PER_IMP,
   listAuditEntries,

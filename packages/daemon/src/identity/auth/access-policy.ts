@@ -1,8 +1,8 @@
 import { callerContract, collectProcedureAccess, hasScope, isImpAllowed } from '@impz/api';
 import type { CallerAccess, ForbiddenReason, ProcedureMeta } from '@impz/api';
+import type { GrantAuthority } from '../../platform/db/create-checked-grant';
 import type { ForkAuthority } from '../../platform/db/create-fork-grants';
 import type { ImageRecord } from '../../platform/db/create-image';
-import type { GrantAuthority } from '../../platform/db/secrets';
 import { formatCaller } from '../../platform/principal/caller';
 import type { Caller } from '../../platform/principal/caller';
 import { checkGrantable } from './check-grantable';

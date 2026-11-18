@@ -15,7 +15,7 @@ import { appendImpEvent } from './append-imp-event';
 import { createCheckpoint, removeCheckpoint } from './create-checkpoint';
 import { createImage } from './create-image';
 import type { LoggedImpEvent } from './imp-log-entry';
-import { createImp, removeImp, updateImpActivity } from './imps';
+import { createImp, removeImp, updateImpActivity } from './list-imps';
 import { openDatabase } from './open-database';
 import type { ImpDatabase } from './open-database';
 import { updateImpState } from './update-imp-state';

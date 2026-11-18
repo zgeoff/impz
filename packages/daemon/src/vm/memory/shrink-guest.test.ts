@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import { buildStubClock } from '../../test-utils/platform/build-stub-clock';
 import { buildStubElasticGuest } from '../../test-utils/vm/build-stub-elastic-guest';
 import { buildStubGuestMemory } from '../../test-utils/vm/build-stub-guest-memory';
-import { buildImpPaths } from '../storage/data-layout';
+import { buildImpPaths } from '../storage/build-imp-paths';
 import { getShrinkTargetMib, shrinkGuest } from './shrink-guest';
 
 test('#findShrinkTargetMib leaves the guest a step more available than its grow mark', () => {

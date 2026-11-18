@@ -6,7 +6,7 @@ import { GATEWAY_IP6 } from '../../host-net/net/derive-guest-ip6';
 import type { SlotAddress } from '../../host-net/net/derive-slot-address';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import type { HostLoad } from '../../platform/process/read-host-load';
-import type { ImpPaths } from '../../vm/storage/data-layout';
+import type { ImpPaths } from '../../vm/storage/build-imp-paths';
 import type { ImpCgroup } from '../../vm/vmm/cpu-cgroups';
 import { TemplateRestoreError } from '../../vm/vmm/create-template-vm';
 import type { HugePages } from '../../vm/vmm/firecracker-client';

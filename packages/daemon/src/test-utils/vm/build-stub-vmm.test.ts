@@ -7,7 +7,7 @@ import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { deriveSlotAddress, parseSubnet } from '../../host-net/net/derive-slot-address';
 import { AgentError } from '../../vm/agent-client/agent-connection';
 import { setSnapshotLoading, writeSnapshotMeta } from '../../vm/sleep/snapshot-meta';
-import { buildImpPaths, buildSnapshotPaths } from '../../vm/storage/data-layout';
+import { buildImpPaths, buildSnapshotPaths } from '../../vm/storage/build-imp-paths';
 import { TemplateRestoreError } from '../../vm/vmm/create-template-vm';
 import type { TemplateRestorePlan } from '../../vm/vmm/create-template-vm';
 import { buildMockHostIdentity } from './build-mock-host-identity';

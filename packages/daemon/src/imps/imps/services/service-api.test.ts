@@ -18,7 +18,7 @@ import { startTestImpd } from '../../../test-utils/start-test-impd';
 import { TEST_TOKEN } from '../../../test-utils/test-token';
 import { startStubServiceAgent } from '../../../test-utils/vm/start-stub-service-agent';
 import { readSnapshotMeta } from '../../../vm/sleep/snapshot-meta';
-import { buildImpPaths } from '../../../vm/storage/data-layout';
+import { buildImpPaths } from '../../../vm/storage/build-imp-paths';
 import { createServiceApi } from './service-api';
 
 async function setupTest() {

@@ -27,7 +27,7 @@ import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { buildKeyedMutex } from '../../platform/process/keyed-mutex';
 import { writeFileDurably } from '../../platform/process/write-file-durably';
 import { sendFreeze, sendThaw } from '../../vm/agent-client/send-agent-request';
-import { BACKUP_TREE, buildBackupPaths } from '../../vm/storage/data-layout';
+import { BACKUP_TREE, buildBackupPaths } from '../../vm/storage/build-imp-paths';
 import type { DiskBudget } from '../../vm/storage/disk-budget';
 import type { BackupTree, StorageBackend } from '../../vm/storage/storage-backend';
 import type { StorageGate } from '../../vm/storage/storage-gate';

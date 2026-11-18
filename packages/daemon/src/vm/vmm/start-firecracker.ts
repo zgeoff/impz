@@ -5,7 +5,7 @@ import { IMPD_USER } from '../../platform/process/impd-user';
 import { listPids, readStatFields, stopPid } from '../../platform/process/read-stat-fields';
 import { REAL_CLOCK } from '../../platform/process/real-clock';
 import { readRegularFile, setupLogFile, writeRegularFile } from '../files/write-regular-file';
-import type { FirecrackerPaths } from '../storage/data-layout';
+import type { FirecrackerPaths } from '../storage/build-imp-paths';
 import { readProcessCgroup, readProcessUid } from './read-process-uid';
 
 // a jailed process cannot change its uid or its cgroup, so ownership rests

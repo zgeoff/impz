@@ -19,8 +19,8 @@ import { parseMounts, readMounts as readHostMounts } from '../../platform/proces
 import { listPids, readStatFields } from '../../platform/process/read-stat-fields';
 import type { CommandRunner } from '../../platform/process/run-command';
 import { writeRegularFile } from '../files/write-regular-file';
-import { UFFD_RUN_FILES } from '../storage/data-layout';
-import type { FirecrackerPaths, ImpPaths } from '../storage/data-layout';
+import { UFFD_RUN_FILES } from '../storage/build-imp-paths';
+import type { FirecrackerPaths, ImpPaths } from '../storage/build-imp-paths';
 import { probeProcessOfUid, stopProcessOfUid } from './read-process-uid';
 
 export interface JailUser {

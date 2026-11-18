@@ -7,8 +7,8 @@ import { waitFor } from '@impz/shared/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import * as z from 'zod';
 import { createImage } from '../../platform/db/create-image';
-import { readImpByName } from '../../platform/db/imps';
 import { listApiCalls } from '../../platform/db/list-api-calls';
+import { readImpByName } from '../../platform/db/list-imps';
 import { readServiceToken } from '../../test-utils/identity/read-service-token';
 import { seedOAuthGrant } from '../../test-utils/identity/seed-oauth-grant';
 import { seedServiceFiles } from '../../test-utils/identity/seed-service-files';
@@ -19,7 +19,7 @@ import { startTestImpd } from '../../test-utils/start-test-impd';
 import { buildStubMcpTransport } from '../../test-utils/surface/build-stub-mcp-transport';
 import { buildStubExecGuest } from '../../test-utils/vm/build-stub-exec-guest';
 import { startStubExecAgent } from '../../test-utils/vm/start-stub-exec-agent';
-import { buildImagePaths, buildImpPaths } from '../../vm/storage/data-layout';
+import { buildImagePaths, buildImpPaths } from '../../vm/storage/build-imp-paths';
 import { createPublicHandler, startPublicListener } from './public-listener';
 
 async function setupTest() {

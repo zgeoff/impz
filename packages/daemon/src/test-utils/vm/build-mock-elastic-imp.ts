@@ -1,6 +1,6 @@
 import { faker } from '@faker-js/faker';
 import type { ElasticImp } from '../../vm/memory/memory-controller';
-import { buildImpPaths } from '../../vm/storage/data-layout';
+import { buildImpPaths } from '../../vm/storage/build-imp-paths';
 
 export function buildMockElasticImp(overrides: Partial<ElasticImp> = {}): ElasticImp {
   const id = overrides.id ?? faker.string.alphanumeric({ length: 12, casing: 'lower' });

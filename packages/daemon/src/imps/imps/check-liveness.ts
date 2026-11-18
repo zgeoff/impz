@@ -1,10 +1,10 @@
-import { readImpById } from '../../platform/db/imps';
-import type { ImpRecord } from '../../platform/db/imps';
+import { readImpById } from '../../platform/db/list-imps';
+import type { ImpRecord } from '../../platform/db/list-imps';
 import { updateImpState } from '../../platform/db/update-imp-state';
 import type { ImpStateChange } from '../../platform/db/update-imp-state';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { probeSnapshot, readLoadingMeta, readSnapshotMeta } from '../../vm/sleep/snapshot-meta';
-import type { ImpPaths } from '../../vm/storage/data-layout';
+import type { ImpPaths } from '../../vm/storage/build-imp-paths';
 import { isImpVm } from '../../vm/vmm/start-firecracker';
 import type { ImpHost, ImpMemory, ImpVms } from './imp-context';
 import { KERNEL_OOPS_TRIGGER } from './kernel-oops-watch';

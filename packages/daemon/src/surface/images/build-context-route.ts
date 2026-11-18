@@ -16,7 +16,7 @@ import { ImpdError } from '../../platform/errors/impd-error';
 import type { Caller } from '../../platform/principal/caller';
 import type { StartTimer } from '../../platform/process/clock';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
-import { buildUploadsDir } from '../../vm/storage/data-layout';
+import { buildUploadsDir } from '../../vm/storage/build-imp-paths';
 import type { DiskBudget } from '../../vm/storage/disk-budget';
 import type { SurfaceConfig } from '../surface-config';
 import { toORPCError } from '../to-orpc-error';

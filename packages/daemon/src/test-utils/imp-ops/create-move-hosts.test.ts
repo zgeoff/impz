@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { existsSync, readFileSync } from 'node:fs';
 import { readImageByName } from '../../platform/db/create-image';
-import { buildImagePaths } from '../../vm/storage/data-layout';
+import { buildImagePaths } from '../../vm/storage/build-imp-paths';
 import { buildStubZfsStorage } from '../vm/build-stub-zfs-storage';
 import {
   TARGET_URL,

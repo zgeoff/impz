@@ -6,7 +6,7 @@ import { buildMockNewImp } from '../../test-utils/imps/build-mock-new-imp';
 import { createTestDatabase } from '../../test-utils/platform/create-test-database';
 import { readLoggedEvents } from '../../test-utils/platform/read-logged-events';
 import { createImage } from './create-image';
-import { createImp, readImpById } from './imps';
+import { createImp, readImpById } from './list-imps';
 import { updateImpState } from './update-imp-state';
 
 test('#updateImpState sets the state and the fields the change names', async () => {

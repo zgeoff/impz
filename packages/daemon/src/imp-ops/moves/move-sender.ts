@@ -6,8 +6,8 @@ import type { LockedImp } from '../../imps/imps/imp-lock';
 import type { Imps } from '../../imps/imps/imp-service';
 import type { EgressService } from '../../network/egress/egress-service';
 import { listCheckpoints } from '../../platform/db/create-checkpoint';
-import { listImps, readImpById, readImpByName, updateImpMove } from '../../platform/db/imps';
-import type { ImpRecord } from '../../platform/db/imps';
+import { listImps, readImpById, readImpByName, updateImpMove } from '../../platform/db/list-imps';
+import type { ImpRecord } from '../../platform/db/list-imps';
 import type { MoveSendStep } from '../../platform/db/move-send-steps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import {

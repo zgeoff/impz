@@ -1,6 +1,6 @@
 import { EGRESS_MODE_TRAITS } from '@impz/api';
 import type { EgressPolicy } from '@impz/api';
-import { readImpByName } from '../../platform/db/imps';
+import { readImpByName } from '../../platform/db/list-imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { readEgressPolicy, writeEgressPolicy } from '../../platform/db/read-egress-policy';
 import { buildMovingError, buildNotFoundError } from '../../platform/errors/build-not-found-error';

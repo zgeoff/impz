@@ -7,7 +7,12 @@ import { buildKeyedMutex } from '../../../platform/process/keyed-mutex';
 import { readMounts as readHostMounts } from '../../../platform/process/read-mounts';
 import { runCommand } from '../../../platform/process/run-command';
 import type { CommandRunner } from '../../../platform/process/run-command';
-import { buildImagePaths, buildImpPaths, buildSnapshotPaths, toDigestHex } from '../data-layout';
+import {
+  buildImagePaths,
+  buildImpPaths,
+  buildSnapshotPaths,
+  toDigestHex,
+} from '../build-imp-paths';
 import { printSweep } from '../print-sweep';
 import type { DiskSource, StorageBackend } from '../storage-backend';
 import { checkZfsVersions } from './check-zfs-versions';

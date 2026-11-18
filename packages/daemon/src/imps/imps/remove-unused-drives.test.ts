@@ -4,7 +4,7 @@ import type { Imp } from '@impz/api';
 import { readImpEnv } from '@impz/shared/test-utils/read-imp-env';
 import { updateEnv } from '@impz/shared/test-utils/update-env';
 import invariant from 'tiny-invariant';
-import { createImp, readImpByName } from '../../platform/db/imps';
+import { createImp, readImpByName } from '../../platform/db/list-imps';
 import { updateImpState } from '../../platform/db/update-imp-state';
 import { buildMockNewImp } from '../../test-utils/imps/build-mock-new-imp';
 import { readBrokenInvariants } from '../../test-utils/imps/read-broken-invariants';
@@ -16,7 +16,7 @@ import { buildStubCpuCgroups } from '../../test-utils/vm/build-stub-cpu-cgroups'
 import { STUB_AGENT_VERSION } from '../../test-utils/vm/build-stub-vmm';
 import { readSnapshotMeta, writeSnapshotMeta } from '../../vm/sleep/snapshot-meta';
 import { readVmIdentity } from '../../vm/sleep/vm-identity';
-import { buildImpPaths, buildSystemDrivePath } from '../../vm/storage/data-layout';
+import { buildImpPaths, buildSystemDrivePath } from '../../vm/storage/build-imp-paths';
 
 async function setupTest(options: Pick<TestImpdOptions, 'cgroups'> = {}) {
   const stack = new AsyncDisposableStack();

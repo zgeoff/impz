@@ -16,7 +16,7 @@ import { tryExecSocket, tryTunnelSocket } from '../../test-utils/surface/try-exe
 import { TEST_TOKEN } from '../../test-utils/test-token';
 import { buildStubExecGuest } from '../../test-utils/vm/build-stub-exec-guest';
 import { startStubExecAgent } from '../../test-utils/vm/start-stub-exec-agent';
-import { buildImpPaths } from '../../vm/storage/data-layout';
+import { buildImpPaths } from '../../vm/storage/build-imp-paths';
 import { listApiCalls } from '../db/list-api-calls';
 import { writeAuditEntry } from '../db/write-audit-entry';
 

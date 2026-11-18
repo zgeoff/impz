@@ -8,7 +8,7 @@ import invariant from 'tiny-invariant';
 import { parsePrefix64 } from '../../host-net/net/derive-guest-ip6';
 import { resolveIpv6Plan } from '../../host-net/net/ipv6-plan';
 import type { ImpdDeps } from '../../impd/impd-deps';
-import { readImpByName, updateImpMove } from '../../platform/db/imps';
+import { readImpByName, updateImpMove } from '../../platform/db/list-imps';
 import { removeMember, removeNetwork, writeNetwork } from '../../platform/db/list-networks';
 import { buildStubHostRoutes } from '../../test-utils/host-net/build-stub-host-routes';
 import { buildStubNft } from '../../test-utils/network/build-stub-nft';

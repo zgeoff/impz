@@ -10,7 +10,7 @@ import {
   buildImpsDir,
   createDataDirs,
   toDigestHex,
-} from './data-layout';
+} from './build-imp-paths';
 
 async function setupTest() {
   const directory = await mkdtemp(join(tmpdir(), 'imp-data-layout-'));

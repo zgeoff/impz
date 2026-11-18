@@ -3,7 +3,7 @@ import type { Imp, ImpEvent } from '@impz/api';
 import { P, match } from 'ts-pattern';
 import { toApiCheckpoint } from '../platform/db/create-checkpoint';
 import type { LoggedImpEvent } from '../platform/db/imp-log-entry';
-import type { ImpRecord } from '../platform/db/imps';
+import type { ImpRecord } from '../platform/db/list-imps';
 
 // the imp is presented as the stream reads the event, so its live fields, such as RAM in use,
 // are those of the read

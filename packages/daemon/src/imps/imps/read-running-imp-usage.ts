@@ -1,4 +1,4 @@
-import { listImps } from '../../platform/db/imps';
+import { listImps } from '../../platform/db/list-imps';
 import type { ResourceDelta } from '../../platform/telemetry/resource-delta';
 import type { ImpHost, ImpMemory, ImpVms } from './imp-context';
 

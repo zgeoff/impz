@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { createImage } from '../../platform/db/create-image';
-import { createImp, removeImp } from '../../platform/db/imps';
+import { createImp, removeImp } from '../../platform/db/list-imps';
 import { buildMockNewImage } from '../imps/build-mock-new-image';
 import { buildMockNewImp } from '../imps/build-mock-new-imp';
 import { createTestDatabase } from './create-test-database';

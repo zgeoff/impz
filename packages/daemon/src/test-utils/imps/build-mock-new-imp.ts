@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import type { NewImp } from '../../platform/db/imps';
+import type { NewImp } from '../../platform/db/list-imps';
 
 // Slot 0 of the default subnet, 10.66.0.0/16, has the guest address 10.66.0.2, so the two
 // go together.

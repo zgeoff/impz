@@ -1,5 +1,5 @@
 import type { Grant, GrantFilter, Secret } from '@impz/api';
-import type { GrantAuthority } from '../platform/db/secrets';
+import type { GrantAuthority } from '../platform/db/create-checked-grant';
 
 export interface ImpGrants {
   readonly addGrant: (

@@ -3,7 +3,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { connect } from 'node:tls';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
 import invariant from 'tiny-invariant';
-import { readImpByName, updateImpExposure } from '../../platform/db/imps';
+import { readImpByName, updateImpExposure } from '../../platform/db/list-imps';
 import { readPublicImp } from '../../platform/db/read-public-imp';
 import { createMockCertificate } from '../../test-utils/network/create-mock-certificate';
 import { startStubHeaderEcho } from '../../test-utils/network/start-stub-header-echo';

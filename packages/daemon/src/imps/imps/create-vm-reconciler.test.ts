@@ -4,7 +4,7 @@ import { readImpEnv } from '@impz/shared/test-utils/read-imp-env';
 import { updateEnv } from '@impz/shared/test-utils/update-env';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
 import invariant from 'tiny-invariant';
-import { readImpByName } from '../../platform/db/imps';
+import { readImpByName } from '../../platform/db/list-imps';
 import { readBrokenInvariants } from '../../test-utils/imps/read-broken-invariants';
 import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
 import { startTestImpd } from '../../test-utils/start-test-impd';
@@ -16,7 +16,7 @@ import {
   setSnapshotLoading,
   writeSnapshotMeta,
 } from '../../vm/sleep/snapshot-meta';
-import { buildImpPaths } from '../../vm/storage/data-layout';
+import { buildImpPaths } from '../../vm/storage/build-imp-paths';
 
 function setupTest(options: TestImpdOptions = {}) {
   const stack = new AsyncDisposableStack();

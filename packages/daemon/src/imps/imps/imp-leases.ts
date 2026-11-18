@@ -1,5 +1,5 @@
 import type { Imp } from '@impz/api';
-import { listImps, updateImpActivity } from '../../platform/db/imps';
+import { listImps, updateImpActivity } from '../../platform/db/list-imps';
 import {
   HOLD_LABEL,
   LEGACY_PRINCIPAL,

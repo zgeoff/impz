@@ -12,10 +12,10 @@ import { buildMockNewImp } from '../../test-utils/imps/build-mock-new-imp';
 import { startTestImpd } from '../../test-utils/start-test-impd';
 import { buildStubBootId } from '../../test-utils/vm/build-stub-vmm';
 import { startStubAttachAgent } from '../../test-utils/vm/start-stub-attach-agent';
-import { buildImpPaths } from '../../vm/storage/data-layout';
+import { buildImpPaths } from '../../vm/storage/build-imp-paths';
 import { createImage } from './create-image';
-import { createImp, readImpByName } from './imps';
 import { listColdBoots, writeColdBoot } from './list-cold-boots';
+import { createImp, readImpByName } from './list-imps';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

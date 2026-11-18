@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import invariant from 'tiny-invariant';
 import { createImage } from '../../../platform/db/create-image';
-import { readImpByName } from '../../../platform/db/imps';
+import { readImpByName } from '../../../platform/db/list-imps';
 import { runChecked } from '../../../platform/process/run-command';
 import { createMoveHosts } from '../../../test-utils/imp-ops/create-move-hosts';
 import { buildMockNewImage } from '../../../test-utils/imps/build-mock-new-image';

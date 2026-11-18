@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import { buildAgentOutdatedError } from '../../vm/agent-client/build-agent-outdated-error';
 import { readLoadingMeta } from '../../vm/sleep/snapshot-meta';
-import type { FirecrackerPaths, ImpPaths } from '../../vm/storage/data-layout';
+import type { FirecrackerPaths, ImpPaths } from '../../vm/storage/build-imp-paths';
 import type { JailUser } from '../../vm/vmm/create-jails';
 import { TemplateRestoreError } from '../../vm/vmm/create-template-vm';
 import type { TemplateBuildPlan, TemplateRestorePlan } from '../../vm/vmm/create-template-vm';

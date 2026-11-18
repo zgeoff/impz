@@ -3,7 +3,7 @@ import { readAgentFixture } from '@impz/shared/test-utils/read-agent-fixture';
 import * as z from 'zod';
 import { parsePrefix64 } from '../../host-net/net/derive-guest-ip6';
 import { deriveSlotAddress, parseSubnet } from '../../host-net/net/derive-slot-address';
-import { buildImpPaths } from '../storage/data-layout';
+import { buildImpPaths } from '../storage/build-imp-paths';
 import { buildBootArgs } from './build-boot-args';
 
 test('#buildBootArgs builds the kernel cmdline with the slot addressing', () => {

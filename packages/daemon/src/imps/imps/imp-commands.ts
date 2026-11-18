@@ -9,8 +9,8 @@ import {
   removeImp,
   updateImpDisk,
   updateImpSettings,
-} from '../../platform/db/imps';
-import type { ImpRecord } from '../../platform/db/imps';
+} from '../../platform/db/list-imps';
+import type { ImpRecord } from '../../platform/db/list-imps';
 import { requireTransition } from '../../platform/db/require-transition';
 import {
   buildIdChangedError,
@@ -18,12 +18,12 @@ import {
 } from '../../platform/errors/build-not-found-error';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { isRamBudgetError } from '../../vm/imps-contract/ram-budget-error';
-import { buildImagePaths } from '../../vm/storage/data-layout';
+import { buildImagePaths } from '../../vm/storage/build-imp-paths';
 import { resolveMaxMemoryMib } from '../../vm/vmm/resolve-max-memory-mib';
 import { checkLiveness } from './check-liveness';
 import { createImpRecord } from './create-imp-record';
+import { MIB, buildDiskTooSmallError, growDiskFile, readFileBytes } from './grow-disk-file';
 import type { ImpContext, ImpGuest, ImpHost, ImpVms } from './imp-context';
-import { MIB, buildDiskTooSmallError, growDiskFile, readFileBytes } from './imp-disk';
 import type { ImpLeases } from './imp-leases';
 import { toLockedImp } from './imp-lock';
 import type { ImpLock, LockedImp } from './imp-lock';

@@ -22,7 +22,7 @@ import { buildStubClock } from '../../test-utils/platform/build-stub-clock';
 import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
 import { runUploadedBuild } from '../../test-utils/surface/run-uploaded-build';
 import type { StubAnswer } from '../../test-utils/vm/build-stub-guest';
-import { buildUploadsDir } from '../../vm/storage/data-layout';
+import { buildUploadsDir } from '../../vm/storage/build-imp-paths';
 import { readErrorCode } from '../read-error-code';
 import { UPLOAD_TTL_MS, createBuildContextRoute } from './build-context-route';
 

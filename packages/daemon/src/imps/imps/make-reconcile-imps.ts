@@ -1,11 +1,11 @@
 import { getErrorMessage } from '@impz/shared';
-import { listImps } from '../../platform/db/imps';
-import type { ImpRecord } from '../../platform/db/imps';
 import { writeUnknownBoot } from '../../platform/db/list-cold-boots';
+import { listImps } from '../../platform/db/list-imps';
+import type { ImpRecord } from '../../platform/db/list-imps';
 import { updateImpState } from '../../platform/db/update-imp-state';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { sendPing } from '../../vm/agent-client/send-agent-request';
-import type { ImpPaths } from '../../vm/storage/data-layout';
+import type { ImpPaths } from '../../vm/storage/build-imp-paths';
 import { probeJailedFirecracker } from '../../vm/vmm/start-firecracker';
 import { checkAdoptedMergeFlag } from './check-merge-flag';
 import { createVmReconciler } from './create-vm-reconciler';

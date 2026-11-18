@@ -1,6 +1,6 @@
 import { faker } from '@faker-js/faker';
 import { buildCredentialHash } from '../../network/https/build-credential-hash';
-import type { StoredPublicAuth } from '../../platform/db/imps';
+import type { StoredPublicAuth } from '../../platform/db/list-imps';
 
 export function buildMockStoredPublicAuth(
   overrides: Partial<StoredPublicAuth> = {},

@@ -19,7 +19,7 @@ import { buildStubJails } from '../../test-utils/vm/build-stub-jails';
 import { createStubUffdHandler } from '../../test-utils/vm/create-stub-uffd-handler';
 import { buildStubFirecrackerArgv } from '../../test-utils/vm/start-stub-firecracker';
 import { startStubParkedAgent } from '../../test-utils/vm/start-stub-parked-agent';
-import { buildImpPaths } from '../storage/data-layout';
+import { buildImpPaths } from '../storage/build-imp-paths';
 import { TemplateRestoreError, createTemplateVm, loadTemplateVm } from './create-template-vm';
 import { createFirecrackerClient } from './firecracker-client';
 import { probeProcessAlive } from './start-firecracker';

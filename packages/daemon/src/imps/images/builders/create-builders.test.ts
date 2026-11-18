@@ -6,7 +6,7 @@ import { buildStubAnswerQueue } from '@impz/shared/test-utils/build-stub-answer-
 import { waitFor } from '@impz/shared/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { createImage } from '../../../platform/db/create-image';
-import { listImps, readImpByName } from '../../../platform/db/imps';
+import { listImps, readImpByName } from '../../../platform/db/list-imps';
 import { startRealTimer } from '../../../platform/process/start-real-timer';
 import { buildMockNewImage } from '../../../test-utils/imps/build-mock-new-image';
 import {
@@ -21,8 +21,8 @@ import { startTestImpd } from '../../../test-utils/start-test-impd';
 import { buildStubGuest } from '../../../test-utils/vm/build-stub-guest';
 import { makeStubCommandAnswer } from '../../../test-utils/vm/make-stub-command-answer';
 import { AgentWaitError } from '../../../vm/agent-client/agent-wait-error';
+import { buildImagePaths } from '../../../vm/storage/build-imp-paths';
 import { countTreeBytes } from '../../../vm/storage/count-tree-bytes';
-import { buildImagePaths } from '../../../vm/storage/data-layout';
 import { writeGuestTree } from '../build/run-guest-build';
 import { startTarProcess } from '../rootfs/start-tar-process';
 import { createBuilders } from './create-builders';

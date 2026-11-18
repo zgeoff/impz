@@ -3,7 +3,7 @@ import { release } from 'node:os';
 import type { OutdatedPart } from '@impz/api';
 import * as z from 'zod';
 import { writeFileDurably } from '../../platform/process/write-file-durably';
-import type { ImpPaths } from '../storage/data-layout';
+import type { ImpPaths } from '../storage/build-imp-paths';
 import type { SystemFiles } from '../storage/setup-system-files';
 import { readCpuIdentity } from './cpu-identity';
 import type { CpuIdentity } from './cpu-identity';

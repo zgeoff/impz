@@ -1,5 +1,5 @@
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
-import type { ImpPaths } from '../storage/data-layout';
+import type { ImpPaths } from '../storage/build-imp-paths';
 import type { HandlerState } from './start-uffd-handler';
 
 export interface UffdWatchDeps {

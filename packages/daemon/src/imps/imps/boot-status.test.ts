@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import type { ImpState } from '@impz/api';
 import { writeTestSnapshot } from '../../test-utils/vm/write-test-snapshot';
 import { writeVmIdentity } from '../../vm/sleep/vm-identity';
-import { buildImpPaths } from '../../vm/storage/data-layout';
+import { buildImpPaths } from '../../vm/storage/build-imp-paths';
 import { countBootStatuses, readBootStatus } from './boot-status';
 import type { BootStatus } from './boot-status';
 

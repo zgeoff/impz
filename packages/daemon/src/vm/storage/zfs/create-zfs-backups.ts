@@ -2,7 +2,7 @@ import { rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { getErrorMessage } from '@impz/shared';
 import { getImpdLogger } from '../../../platform/process/get-impd-logger';
-import { BACKUP_TREE, buildBackupPaths, toDigestHex } from '../data-layout';
+import { BACKUP_TREE, buildBackupPaths, toDigestHex } from '../build-imp-paths';
 import type { StorageBackend } from '../storage-backend';
 import { listCheckpointSnapshots, parseZfsMounts } from './zfs-commands';
 import type { ZfsCommands, ZfsEntry } from './zfs-commands';

@@ -9,7 +9,7 @@ import { HttpResponse, http } from 'msw';
 import invariant from 'tiny-invariant';
 import { deriveSlotAddress } from '../../host-net/net/derive-slot-address';
 import type { TailscaleStatus } from '../../host-net/net/tailscale-status';
-import { readImpByName, updateImpMove } from '../../platform/db/imps';
+import { readImpByName, updateImpMove } from '../../platform/db/list-imps';
 import { buildStubTailscaleServe } from '../../test-utils/network/build-stub-tailscale-serve';
 import { createStubTailscaleApi } from '../../test-utils/network/create-stub-tailscale-api';
 import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';

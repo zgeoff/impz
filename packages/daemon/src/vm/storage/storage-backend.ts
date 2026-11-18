@@ -1,6 +1,6 @@
 import type { StreamedCommand } from '../../platform/process/create-stream-runner';
 import type { StorageBackendKind } from '../vm-config';
-import type { ImpPaths } from './data-layout';
+import type { ImpPaths } from './build-imp-paths';
 
 export type DiskSource =
   | { readonly kind: 'image'; readonly digest: string }

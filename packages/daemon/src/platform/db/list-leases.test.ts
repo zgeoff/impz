@@ -6,7 +6,7 @@ import { createTestDatabase } from '../../test-utils/platform/create-test-databa
 import { createUnmigratedDatabase } from '../../test-utils/platform/create-unmigrated-database';
 import { readLoggedEvents } from '../../test-utils/platform/read-logged-events';
 import { createImage } from './create-image';
-import { createImp, readImpById, removeImp } from './imps';
+import { createImp, readImpById, removeImp } from './list-imps';
 import {
   isBlockingLease,
   listLeases,

@@ -1,11 +1,11 @@
 import type { SessionInfo } from '@impz/agent-protocol';
-import { readImpById } from '../../platform/db/imps';
-import type { ImpRecord } from '../../platform/db/imps';
+import { readImpById } from '../../platform/db/list-imps';
+import type { ImpRecord } from '../../platform/db/list-imps';
 import type { AgentFeature } from '../../vm/agent-client/build-agent-outdated-error';
 import { openExecStream } from '../../vm/agent-client/exec-stream';
 import type { AgentExecRequest, ExecStream } from '../../vm/agent-client/exec-stream';
 import { sendActivity } from '../../vm/agent-client/send-agent-request';
-import type { ImpPaths } from '../../vm/storage/data-layout';
+import type { ImpPaths } from '../../vm/storage/build-imp-paths';
 import { checkBrokerAttach, checkOpenedSession } from '../exec/check-broker-attach';
 import {
   buildBrokerNotReadyError,

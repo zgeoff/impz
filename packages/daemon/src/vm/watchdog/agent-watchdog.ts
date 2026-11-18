@@ -1,4 +1,4 @@
-import type { ImpRecord } from '../../platform/db/imps';
+import type { ImpRecord } from '../../platform/db/list-imps';
 import { buildBackoffMs } from '../../platform/process/build-backoff-ms';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { createSingleFlight } from '../../platform/process/single-flight';

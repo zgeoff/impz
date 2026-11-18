@@ -1,6 +1,6 @@
 import type { Session, SessionLog, SessionLogRead } from '@impz/api';
-import { updateImpActivity } from '../../../platform/db/imps';
-import type { ImpRecord } from '../../../platform/db/imps';
+import { updateImpActivity } from '../../../platform/db/list-imps';
+import type { ImpRecord } from '../../../platform/db/list-imps';
 import {
   buildAgentOutdatedApiError,
   buildNotFoundError,

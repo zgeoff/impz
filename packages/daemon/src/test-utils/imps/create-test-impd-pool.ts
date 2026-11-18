@@ -1,4 +1,4 @@
-import { listImps } from '../../platform/db/imps';
+import { listImps } from '../../platform/db/list-imps';
 import { startTestImpd } from '../start-test-impd';
 import type { TestImpd, TestImpdOptions } from '../start-test-impd';
 

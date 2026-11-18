@@ -1,6 +1,6 @@
 import type { Imps } from '../../imps/imps/imp-service';
-import { listImps, updateImpActivity, updateImpRequest } from '../../platform/db/imps';
-import type { ImpRecord } from '../../platform/db/imps';
+import { listImps, updateImpActivity, updateImpRequest } from '../../platform/db/list-imps';
+import type { ImpRecord } from '../../platform/db/list-imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { readCpuTicks } from '../../vm/vmm/read-vm-memory';
 import type { ImpOpsConfig } from '../imp-ops-config';

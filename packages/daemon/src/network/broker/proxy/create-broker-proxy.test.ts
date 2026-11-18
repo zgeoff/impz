@@ -11,8 +11,12 @@ import { server } from '@impz/shared/test-utils/server';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { HttpResponse, http } from 'msw';
 import invariant from 'tiny-invariant';
-import { readImpByName } from '../../../platform/db/imps';
-import { listGrantNames, readSecret, removeCheckedGrant } from '../../../platform/db/secrets';
+import {
+  listGrantNames,
+  readSecret,
+  removeCheckedGrant,
+} from '../../../platform/db/create-checked-grant';
+import { readImpByName } from '../../../platform/db/list-imps';
 import { listAuditEntries } from '../../../platform/db/write-audit-entry';
 import { buildStubBrokerGuest } from '../../../test-utils/network/build-stub-broker-guest';
 import { collectIdentityLines } from '../../../test-utils/network/collect-identity-lines';

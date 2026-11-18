@@ -16,8 +16,8 @@ import packageJson from '../../package.json' with { type: 'json' };
 import { ROOT_TOKEN_ID } from '../identity/auth/token-store';
 import type { ImpService } from '../imps/imps/imp-service';
 import { createImage } from '../platform/db/create-image';
-import { readImpByName } from '../platform/db/imps';
 import { listApiCalls } from '../platform/db/list-api-calls';
+import { readImpByName } from '../platform/db/list-imps';
 import { buildSessionValue } from '../platform/http/session-cookie';
 import { buildMockNewImage } from '../test-utils/imps/build-mock-new-image';
 import { buildStubImageBuilder } from '../test-utils/imps/build-stub-image-builder';
@@ -28,7 +28,7 @@ import { startTestImpd } from '../test-utils/start-test-impd';
 import { tryExecSocket, tryTunnelSocket } from '../test-utils/surface/try-exec-socket';
 import { buildStubCpuCgroups } from '../test-utils/vm/build-stub-cpu-cgroups';
 import { buildStubZfsStorage } from '../test-utils/vm/build-stub-zfs-storage';
-import { buildImagePaths } from '../vm/storage/data-layout';
+import { buildImagePaths } from '../vm/storage/build-imp-paths';
 import type { StorageBackend } from '../vm/storage/storage-backend';
 import type { CpuCgroups } from '../vm/vmm/cpu-cgroups';
 

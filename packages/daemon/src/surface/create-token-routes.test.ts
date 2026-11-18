@@ -4,9 +4,9 @@ import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
 import invariant from 'tiny-invariant';
-import { readImpByName } from '../platform/db/imps';
+import { readSecret } from '../platform/db/create-checked-grant';
+import { readImpByName } from '../platform/db/list-imps';
 import { listTokenRecords } from '../platform/db/list-token-records';
-import { readSecret } from '../platform/db/secrets';
 import { startTestImpd } from '../test-utils/start-test-impd';
 
 async function setupTest() {

@@ -31,7 +31,7 @@
     "zgeoff/file-named-for-export": [
       "error",
       {
-        "pending": ["packages/daemon", "packages/e2e-harness"]
+        "pending": ["packages/e2e-harness"]
       }
     ],
     // each library's docs import it as one object; an option set here replaces the shared ignore

@@ -9,7 +9,7 @@ import type { Claim } from '../agent-client/send-agent-request';
 import { waitForAgent } from '../agent-client/wait-for-agent';
 import { createOwnedFile } from '../files/write-regular-file';
 import { waitForGuestAge } from '../sleep/wait-for-guest-age';
-import type { ImpPaths } from '../storage/data-layout';
+import type { ImpPaths } from '../storage/build-imp-paths';
 import type { ImpCgroup } from './cpu-cgroups';
 import { setupTemplateFile } from './create-jails';
 import type { JailUser, Jails, RunPaths } from './create-jails';

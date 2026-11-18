@@ -1,7 +1,7 @@
 import { rmSync } from 'node:fs';
 import { getErrorMessage } from '@impz/shared';
-import { updateImpActivity } from '../../platform/db/imps';
 import { writeUnknownBoot } from '../../platform/db/list-cold-boots';
+import { updateImpActivity } from '../../platform/db/list-imps';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import {
   readLoadingMeta,
@@ -10,8 +10,8 @@ import {
   removeSnapshotMeta,
   resetSnapshotLoading,
 } from '../../vm/sleep/snapshot-meta';
-import { buildImpPaths, buildImpsDir, buildWatchdogSlot } from '../../vm/storage/data-layout';
-import type { ImpPaths } from '../../vm/storage/data-layout';
+import { buildImpPaths, buildImpsDir, buildWatchdogSlot } from '../../vm/storage/build-imp-paths';
+import type { ImpPaths } from '../../vm/storage/build-imp-paths';
 import { isImpVm } from '../../vm/vmm/start-firecracker';
 import type { ImpHost, ImpMemory, ImpVms } from './imp-context';
 import type { LockedImp } from './imp-lock';

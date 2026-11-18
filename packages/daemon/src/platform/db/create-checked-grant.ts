@@ -14,20 +14,6 @@ import type { ImpDatabase, ImpQueries } from './open-database';
 
 export type SecretRow = Selectable<DB['secrets']>;
 
-export interface SecretRecord {
-  readonly name: string;
-  readonly kind: SecretKind;
-  readonly rules: readonly BrokerRule[];
-  readonly env: readonly string[];
-
-  readonly oauth: OAuthConfig | null;
-
-  readonly generation: string;
-
-  readonly valueFile: string;
-  readonly createdAt: Date;
-}
-
 export interface NewSecret {
   readonly name: string;
   readonly kind: SecretKind;
@@ -210,14 +196,6 @@ export function removeSecret(db: ImpDatabase, name: string): Promise<string | nu
   });
 }
 
-async function createFileRemoval(db: ImpQueries, valueFile: string): Promise<void> {
-  await db
-    .insertInto('secret_file_removals')
-    .values({ value_file: valueFile, created_at: Date.now() })
-    .onConflict((conflict) => conflict.column('value_file').doNothing())
-    .execute();
-}
-
 export async function listFileRemovals(db: ImpDatabase): Promise<string[]> {
   const rows = await db.selectFrom('secret_file_removals').select('value_file').execute();
 
@@ -263,6 +241,14 @@ export function createCheckedGrant(
 
     return { kind: 'granted' };
   });
+}
+
+async function createFileRemoval(db: ImpQueries, valueFile: string): Promise<void> {
+  await db
+    .insertInto('secret_file_removals')
+    .values({ value_file: valueFile, created_at: Date.now() })
+    .onConflict((conflict) => conflict.column('value_file').doNothing())
+    .execute();
 }
 
 export function removeCheckedGrant(
@@ -374,6 +360,20 @@ function useLiveGrants(db: ImpQueries) {
         .onRef('secrets.name', '=', 'grants.secret_name')
         .onRef('secrets.generation', '=', 'grants.secret_generation'),
     );
+}
+
+export interface SecretRecord {
+  readonly name: string;
+  readonly kind: SecretKind;
+  readonly rules: readonly BrokerRule[];
+  readonly env: readonly string[];
+
+  readonly oauth: OAuthConfig | null;
+
+  readonly generation: string;
+
+  readonly valueFile: string;
+  readonly createdAt: Date;
 }
 
 // The token may have been removed, or the secret deleted or rebound, since

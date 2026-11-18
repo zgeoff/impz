@@ -9,7 +9,7 @@ import { writeToDisk } from '../../platform/process/write-file-durably';
 import { sendGrow, sendPing, sendResumed, sendShutdown } from '../agent-client/send-agent-request';
 import { waitForAgent } from '../agent-client/wait-for-agent';
 import { createOwnedFile } from '../files/write-regular-file';
-import type { ImpPaths, SnapshotPaths } from '../storage/data-layout';
+import type { ImpPaths, SnapshotPaths } from '../storage/build-imp-paths';
 import { buildBootArgs } from './build-boot-args';
 import type { VmPlan } from './build-boot-args';
 import type { ImpCgroup } from './cpu-cgroups';

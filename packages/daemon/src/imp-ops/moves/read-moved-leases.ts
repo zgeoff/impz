@@ -1,4 +1,4 @@
-import type { ImpRecord } from '../../platform/db/imps';
+import type { ImpRecord } from '../../platform/db/list-imps';
 import { listLeases, writeMovedLeases } from '../../platform/db/list-leases';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';

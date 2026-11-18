@@ -1,4 +1,4 @@
-import type { ImpRecord } from '../../platform/db/imps';
+import type { ImpRecord } from '../../platform/db/list-imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import type { SnapshotMeta } from '../../vm/sleep/snapshot-meta';
 import type { MoveMode, StorageBackend } from '../../vm/storage/storage-backend';

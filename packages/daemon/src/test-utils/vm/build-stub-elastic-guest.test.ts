@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { buildImpPaths } from '../../vm/storage/data-layout';
+import { buildImpPaths } from '../../vm/storage/build-imp-paths';
 import { buildStubElasticGuest } from './build-stub-elastic-guest';
 
 test('it reports what the guest holds as Firecracker does', async () => {

@@ -1,8 +1,8 @@
 import type { OAuthConfig } from '@impz/api';
 import { getErrorMessage } from '@impz/shared';
+import { listSecrets, readSecret } from '../../../platform/db/create-checked-grant';
+import type { SecretRecord } from '../../../platform/db/create-checked-grant';
 import type { ImpDatabase } from '../../../platform/db/open-database';
-import { listSecrets, readSecret } from '../../../platform/db/secrets';
-import type { SecretRecord } from '../../../platform/db/secrets';
 import { sendWithCA } from '../../../platform/http/send-with-ca';
 import { buildBackoffMs } from '../../../platform/process/build-backoff-ms';
 import { getImpdLogger } from '../../../platform/process/get-impd-logger';

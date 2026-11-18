@@ -1,6 +1,6 @@
 import type { ExposeResult, PublicAuth } from '@impz/api';
-import { readImpByName, updateImpExposure } from '../../platform/db/imps';
-import type { ImpRecord } from '../../platform/db/imps';
+import { readImpByName, updateImpExposure } from '../../platform/db/list-imps';
+import type { ImpRecord } from '../../platform/db/list-imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { buildMovingError, buildNotFoundError } from '../../platform/errors/build-not-found-error';
 import { ImpdError } from '../../platform/errors/impd-error';

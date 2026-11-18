@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs';
 import { buildStubAnswerQueue } from '@impz/shared/test-utils/build-stub-answer-queue';
 import invariant from 'tiny-invariant';
 import type { Impd } from '../../impd/create-impd';
-import { listImps } from '../../platform/db/imps';
+import { listImps } from '../../platform/db/list-imps';
 import type { TestImpd } from '../start-test-impd';
 import { createTestImpdPool } from './create-test-impd-pool';
 

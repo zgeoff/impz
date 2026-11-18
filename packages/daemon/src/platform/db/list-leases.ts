@@ -2,8 +2,8 @@ import type { ImpChangeReason } from '@impz/api';
 import type { Selectable } from 'kysely';
 import { appendImpChange } from './append-imp-change';
 import type { ImpLeases } from './db';
-import { updateImpHold } from './imps';
-import type { ImpRecord } from './imps';
+import { updateImpHold } from './list-imps';
+import type { ImpRecord } from './list-imps';
 import type { ImpDatabase, ImpQueries } from './open-database';
 import { withImpTransaction } from './with-imp-transaction';
 

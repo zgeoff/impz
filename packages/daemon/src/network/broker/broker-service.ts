@@ -17,11 +17,6 @@ import { match } from 'ts-pattern';
 import { deriveSlotAddress } from '../../host-net/net/derive-slot-address';
 import type { ReachPolicy } from '../../host-net/net/reach-policy';
 import type { BrokerExecEnv } from '../../imps/exec/broker-exec-env';
-import { createForkGrants } from '../../platform/db/create-fork-grants';
-import type { ForkAuthority } from '../../platform/db/create-fork-grants';
-import { listImps, readImpByName } from '../../platform/db/imps';
-import type { ImpRecord } from '../../platform/db/imps';
-import type { ImpDatabase } from '../../platform/db/open-database';
 import {
   createCheckedGrant,
   listAllGrantedRules,
@@ -30,8 +25,13 @@ import {
   listGrants,
   readSecret,
   removeCheckedGrant,
-} from '../../platform/db/secrets';
-import type { GrantAuthority, GrantClash } from '../../platform/db/secrets';
+} from '../../platform/db/create-checked-grant';
+import type { GrantAuthority, GrantClash } from '../../platform/db/create-checked-grant';
+import { createForkGrants } from '../../platform/db/create-fork-grants';
+import type { ForkAuthority } from '../../platform/db/create-fork-grants';
+import { listImps, readImpByName } from '../../platform/db/list-imps';
+import type { ImpRecord } from '../../platform/db/list-imps';
+import type { ImpDatabase } from '../../platform/db/open-database';
 import { listAuditEntries, listRefusedRequests } from '../../platform/db/write-audit-entry';
 import {
   buildConflictError,

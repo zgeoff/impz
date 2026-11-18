@@ -3,6 +3,7 @@ import { MAX_SSH_KEYS } from '@impz/api';
 import type { Scope, SshKey, Token } from '@impz/api';
 import { formatKeyFingerprint, parsePublicKey } from '../../imps/ssh/authorized-keys';
 import type { AuthorizedKey } from '../../imps/ssh/authorized-keys';
+import { readSecret } from '../../platform/db/create-checked-grant';
 import {
   listTokenRecords,
   listTokenSshKeyRecords,
@@ -18,7 +19,6 @@ import type {
   TokenSshKeyRecord,
 } from '../../platform/db/list-token-records';
 import type { ImpDatabase, ImpQueries } from '../../platform/db/open-database';
-import { readSecret } from '../../platform/db/secrets';
 import {
   buildConflictError,
   buildNotFoundError,

@@ -1,6 +1,6 @@
 import { readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { buildSystemDrivesDir } from './data-layout';
+import { buildSystemDrivesDir } from './build-imp-paths';
 
 export function removeUnusedSystemDrives(dataDir: string, keep: ReadonlySet<string>): string[] {
   const directory = buildSystemDrivesDir(dataDir);

@@ -6,7 +6,7 @@ import type { WarmHost, WarmMove } from '@impz/api';
 import { deriveSlotAddress } from '../../host-net/net/derive-slot-address';
 import { readTapMac } from '../../host-net/net/tap-devices';
 import type { EgressService } from '../../network/egress/egress-service';
-import type { ImpRecord } from '../../platform/db/imps';
+import type { ImpRecord } from '../../platform/db/list-imps';
 import { listNetworkMembers } from '../../platform/db/list-networks';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { ImpdError } from '../../platform/errors/impd-error';
@@ -18,7 +18,7 @@ import {
 import type { SnapshotMeta } from '../../vm/sleep/snapshot-meta';
 import { readVmIdentity, writeVmIdentity } from '../../vm/sleep/vm-identity';
 import type { HostIdentity } from '../../vm/sleep/vm-identity';
-import { buildSystemDrivePath } from '../../vm/storage/data-layout';
+import { buildSystemDrivePath } from '../../vm/storage/build-imp-paths';
 import type { StorageBackend } from '../../vm/storage/storage-backend';
 import type { ImpOpsConfig } from '../imp-ops-config';
 import { isSameHash } from './build-ticket-header';

@@ -1,6 +1,6 @@
 import { listCheckpoints } from '../../platform/db/create-checkpoint';
 import { listImages } from '../../platform/db/create-image';
-import { listImps } from '../../platform/db/imps';
+import { listImps } from '../../platform/db/list-imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import type { LiveStorage } from './storage-backend';
 

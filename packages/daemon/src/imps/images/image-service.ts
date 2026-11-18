@@ -8,7 +8,7 @@ import {
   updateImageUse,
 } from '../../platform/db/create-image';
 import type { ImageRecord } from '../../platform/db/create-image';
-import { countImpsUsingImage } from '../../platform/db/imps';
+import { countImpsUsingImage } from '../../platform/db/list-imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import {
   buildConflictError,

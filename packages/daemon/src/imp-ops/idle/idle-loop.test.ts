@@ -3,14 +3,14 @@ import { buildStubAnswerQueue } from '@impz/shared/test-utils/build-stub-answer-
 import { createForwardedPeers } from '../../network/proxy/forwarded-peers';
 import { startWakeProxy } from '../../network/proxy/wake-proxy';
 import { createImage } from '../../platform/db/create-image';
-import { readImpByName, updateImpActivity } from '../../platform/db/imps';
+import { readImpByName, updateImpActivity } from '../../platform/db/list-imps';
 import { writeLease } from '../../platform/db/list-leases';
 import { buildMockLeaseRecord } from '../../test-utils/imps/build-mock-lease-record';
 import { buildMockNewImage } from '../../test-utils/imps/build-mock-new-image';
 import { seedLoopbackImp } from '../../test-utils/imps/seed-loopback-imp';
 import { startStubHeaderEcho } from '../../test-utils/network/start-stub-header-echo';
 import { startTestImpd } from '../../test-utils/start-test-impd';
-import { buildImagePaths } from '../../vm/storage/data-layout';
+import { buildImagePaths } from '../../vm/storage/build-imp-paths';
 import { createIdleLoop } from './idle-loop';
 
 async function setupTest() {

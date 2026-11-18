@@ -1,4 +1,4 @@
-import type { CpuSettings } from '../../platform/db/imps';
+import type { CpuSettings } from '../../platform/db/list-imps';
 import { ImpdError } from '../../platform/errors/impd-error';
 
 // Below this limit the VMM thread starves and a boot times out.

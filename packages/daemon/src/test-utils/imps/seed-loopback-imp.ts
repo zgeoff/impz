@@ -1,7 +1,7 @@
 import invariant from 'tiny-invariant';
 import type { Imps } from '../../imps/imps/imp-service';
-import { readImpByName, updateImpAddress } from '../../platform/db/imps';
-import type { ImpRecord } from '../../platform/db/imps';
+import { readImpByName, updateImpAddress } from '../../platform/db/list-imps';
+import type { ImpRecord } from '../../platform/db/list-imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 
 interface LoopbackImpDeps {

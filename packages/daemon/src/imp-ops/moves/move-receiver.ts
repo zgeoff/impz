@@ -13,8 +13,8 @@ import type * as z from 'zod';
 import type { ImageService } from '../../imps/images/image-service';
 import type { Imps } from '../../imps/imps/imp-service';
 import type { EgressService } from '../../network/egress/egress-service';
-import { listImps, readImpByName, updateImpCommitted } from '../../platform/db/imps';
-import type { ImpRecord } from '../../platform/db/imps';
+import { listImps, readImpByName, updateImpCommitted } from '../../platform/db/list-imps';
+import type { ImpRecord } from '../../platform/db/list-imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import {
   claimMoveTicketStream,
@@ -34,7 +34,7 @@ import { hashSecret } from '../../platform/secrets/hash-secret';
 import { mintOpaqueToken } from '../../platform/secrets/mint-opaque-token';
 import { readSnapshotMeta } from '../../vm/sleep/snapshot-meta';
 import type { HostIdentity } from '../../vm/sleep/vm-identity';
-import { buildSystemDrivePath } from '../../vm/storage/data-layout';
+import { buildSystemDrivePath } from '../../vm/storage/build-imp-paths';
 import type { DiskBudget } from '../../vm/storage/disk-budget';
 import type { StorageBackend } from '../../vm/storage/storage-backend';
 import type { StorageGate } from '../../vm/storage/storage-gate';

@@ -15,7 +15,7 @@ import { createFilesTar } from '../../../test-utils/imps/create-files-tar';
 import { startBuilderImpd } from '../../../test-utils/imps/start-builder-impd';
 import { buildStubRepeat } from '../../../test-utils/platform/build-stub-repeat';
 import { startTestImpd } from '../../../test-utils/start-test-impd';
-import { buildImagePaths } from '../../../vm/storage/data-layout';
+import { buildImagePaths } from '../../../vm/storage/build-imp-paths';
 import { runImageOp } from './run-image-op';
 
 async function setupTest() {

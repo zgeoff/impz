@@ -1,4 +1,4 @@
-import type { ImpRecord } from '../../platform/db/imps';
+import type { ImpRecord } from '../../platform/db/list-imps';
 import type { MovePeer } from './move-peer';
 
 export async function sendMoveAbort(

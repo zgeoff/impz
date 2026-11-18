@@ -14,7 +14,7 @@ import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { stopPid } from '../../platform/process/read-stat-fields';
 import { createStubUffdHandler } from '../../test-utils/vm/create-stub-uffd-handler';
 import { writeStubUffdStats } from '../../test-utils/vm/write-stub-uffd-stats';
-import { buildImpPaths } from '../storage/data-layout';
+import { buildImpPaths } from '../storage/build-imp-paths';
 import { probeProcessAlive } from './start-firecracker';
 import {
   buildServedFilePath,

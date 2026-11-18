@@ -3,12 +3,12 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import invariant from 'tiny-invariant';
-import { readImpByName, updateImpActivity } from '../../platform/db/imps';
+import { readImpByName, updateImpActivity } from '../../platform/db/list-imps';
 import { startTestImpd } from '../../test-utils/start-test-impd';
 import type { TestImpdOptions } from '../../test-utils/start-test-impd';
 import { buildStubCpuCgroups } from '../../test-utils/vm/build-stub-cpu-cgroups';
 import { probeSnapshot } from '../../vm/sleep/snapshot-meta';
-import { buildImpPaths } from '../../vm/storage/data-layout';
+import { buildImpPaths } from '../../vm/storage/build-imp-paths';
 import { createCpuCgroups } from '../../vm/vmm/cpu-cgroups';
 
 function setupTest(

@@ -24,9 +24,9 @@ import { createStubOciFetch } from '../../test-utils/imps/create-stub-oci-fetch'
 import { buildQueryGate } from '../../test-utils/platform/build-query-gate';
 import { buildStubClock } from '../../test-utils/platform/build-stub-clock';
 import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
+import { buildImagePaths } from '../../vm/storage/build-imp-paths';
 import { countTreeBytes } from '../../vm/storage/count-tree-bytes';
 import { createXfsBackend } from '../../vm/storage/create-xfs-backend';
-import { buildImagePaths } from '../../vm/storage/data-layout';
 import { createDiskBudget } from '../../vm/storage/disk-budget';
 import { createStorageGate } from '../../vm/storage/storage-gate';
 import { BUILDER_IMAGE } from './builders/create-builders';

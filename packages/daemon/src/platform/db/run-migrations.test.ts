@@ -11,10 +11,10 @@ import { createMigratedDatabaseFile } from '../../test-utils/platform/create-mig
 import { createUnmigratedDatabase } from '../../test-utils/platform/create-unmigrated-database';
 import { formatRunPrefix } from '../../test-utils/platform/format-run-prefix';
 import { readRunOwner } from '../../test-utils/platform/read-run-owner';
-import { readImpByName } from './imps';
+import { listGrantedRules } from './create-checked-grant';
+import { readImpByName } from './list-imps';
 import { readNames } from './read-names';
 import { MIGRATIONS, runMigrations, runMigrationsTo } from './run-migrations';
-import { listGrantedRules } from './secrets';
 
 test('#runMigrations migrates an empty database to the last migration', async () => {
   const db = createUnmigratedDatabase();

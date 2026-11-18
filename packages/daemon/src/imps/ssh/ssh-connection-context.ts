@@ -1,4 +1,4 @@
-import type { ImpRecord } from '../../platform/db/imps';
+import type { ImpRecord } from '../../platform/db/list-imps';
 import type { AuditActor } from '../../platform/principal/caller';
 import type { AgentFeature } from '../../vm/agent-client/build-agent-outdated-error';
 import type { AgentExecRequest, ExecStream } from '../../vm/agent-client/exec-stream';

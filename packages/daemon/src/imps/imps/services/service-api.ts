@@ -3,7 +3,7 @@ import { ServiceRestartSchema, ServiceStateSchema } from '@impz/api';
 import type { Service, ServiceDef, ServiceList, ServiceLog } from '@impz/api';
 import { match } from 'ts-pattern';
 import type { ImpEventLog } from '../../../platform/db/create-imp-event-log';
-import type { ImpRecord } from '../../../platform/db/imps';
+import type { ImpRecord } from '../../../platform/db/list-imps';
 import {
   buildAgentOutdatedApiError,
   buildConflictError,

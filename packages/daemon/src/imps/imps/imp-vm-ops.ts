@@ -1,7 +1,7 @@
 import type { ColdBootCause } from '@impz/api';
 import { getErrorMessage } from '@impz/shared';
-import { removeIdentityReset, updateImpActivity, updateImpDisk } from '../../platform/db/imps';
 import { removeNextBootCause, writeColdBoot } from '../../platform/db/list-cold-boots';
+import { removeIdentityReset, updateImpActivity, updateImpDisk } from '../../platform/db/list-imps';
 import { requireTransition } from '../../platform/db/require-transition';
 import type { ImpStateChange } from '../../platform/db/update-imp-state';
 import {
@@ -16,7 +16,7 @@ import { buildUffdDeviceError } from '../../vm/imps-contract/build-uffd-device-e
 import { removeSnapshot } from '../../vm/sleep/snapshot-meta';
 import { writeVmIdentity } from '../../vm/sleep/vm-identity';
 import type { VmIdentity } from '../../vm/sleep/vm-identity';
-import type { ImpPaths } from '../../vm/storage/data-layout';
+import type { ImpPaths } from '../../vm/storage/build-imp-paths';
 import type { ImpCgroup } from '../../vm/vmm/cpu-cgroups';
 import { checkMergeFlag } from './check-merge-flag';
 import type { ImpContext } from './imp-context';

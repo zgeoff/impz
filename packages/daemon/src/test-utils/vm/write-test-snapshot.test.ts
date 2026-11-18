@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { probeSnapshot, readSnapshotMeta } from '../../vm/sleep/snapshot-meta';
-import { buildImpPaths } from '../../vm/storage/data-layout';
+import { buildImpPaths } from '../../vm/storage/build-imp-paths';
 import { writeTestSnapshot } from './write-test-snapshot';
 
 async function setupTest() {

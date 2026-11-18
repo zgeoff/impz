@@ -18,7 +18,7 @@ import {
 import { readVmIdentity } from '../../vm/sleep/vm-identity';
 import type { VmIdentity } from '../../vm/sleep/vm-identity';
 import { waitForGuestAge } from '../../vm/sleep/wait-for-guest-age';
-import type { ImpPaths } from '../../vm/storage/data-layout';
+import type { ImpPaths } from '../../vm/storage/build-imp-paths';
 import { formatTimings } from './format-timings';
 import type { ImpContext } from './imp-context';
 import type { LockedImp } from './imp-lock';

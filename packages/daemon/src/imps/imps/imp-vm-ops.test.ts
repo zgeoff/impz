@@ -6,7 +6,7 @@ import { waitFor } from '@impz/shared/test-utils/wait-for';
 import fc from 'fast-check';
 import invariant from 'tiny-invariant';
 import { match } from 'ts-pattern';
-import { createImp, listImps, readImpByName, updateImpActivity } from '../../platform/db/imps';
+import { createImp, listImps, readImpByName, updateImpActivity } from '../../platform/db/list-imps';
 import { updateImpState } from '../../platform/db/update-imp-state';
 import { buildMockNewImp } from '../../test-utils/imps/build-mock-new-imp';
 import { createTestImpdPool } from '../../test-utils/imps/create-test-impd-pool';
@@ -20,7 +20,7 @@ import type { VmOutcome } from '../../test-utils/vm/build-stub-vmm';
 import { writeTestSnapshot } from '../../test-utils/vm/write-test-snapshot';
 import { readSnapshotMeta, writeSnapshotMeta } from '../../vm/sleep/snapshot-meta';
 import { readVmIdentity } from '../../vm/sleep/vm-identity';
-import { buildImpPaths } from '../../vm/storage/data-layout';
+import { buildImpPaths } from '../../vm/storage/build-imp-paths';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

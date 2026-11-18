@@ -11,17 +11,17 @@ import {
 import { basename, dirname, join } from 'node:path';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { runChecked } from '../../platform/process/run-command';
-import { countOwnerBytes } from './count-owner-bytes';
-import type { OwnedFile } from './count-owner-bytes';
-import { createReflinkClone } from './create-reflink-clone';
-import { createXfsBackups } from './create-xfs-backups';
 import {
   buildBackupPaths,
   buildImagePaths,
   buildImagesDir,
   buildImpPaths,
   buildImpsDir,
-} from './data-layout';
+} from './build-imp-paths';
+import { countOwnerBytes } from './count-owner-bytes';
+import type { OwnedFile } from './count-owner-bytes';
+import { createReflinkClone } from './create-reflink-clone';
+import { createXfsBackups } from './create-xfs-backups';
 import { printSweep } from './print-sweep';
 import { listFilesUnder, probeHoldingFiles, readDirectoryOrphan } from './probe-holding-files';
 import { EXTENT_FLAGS, readExtents } from './read-extents';

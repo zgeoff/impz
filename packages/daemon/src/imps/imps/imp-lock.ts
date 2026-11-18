@@ -1,5 +1,5 @@
-import { readImpById, readImpByName } from '../../platform/db/imps';
-import type { ImpRecord } from '../../platform/db/imps';
+import { readImpById, readImpByName } from '../../platform/db/list-imps';
+import type { ImpRecord } from '../../platform/db/list-imps';
 import {
   buildMovingError,
   buildNotFoundError,

@@ -1,7 +1,7 @@
 import { expect, mock, test } from 'bun:test';
 import { loadConfig } from '../../config';
 import { createImage } from '../../platform/db/create-image';
-import { createImp, updateImpExposure, updateImpMove } from '../../platform/db/imps';
+import { createImp, updateImpExposure, updateImpMove } from '../../platform/db/list-imps';
 import { readPublicImp } from '../../platform/db/read-public-imp';
 import { buildMockNewImage } from '../../test-utils/imps/build-mock-new-image';
 import { buildMockNewImp } from '../../test-utils/imps/build-mock-new-imp';

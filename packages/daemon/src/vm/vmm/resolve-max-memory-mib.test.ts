@@ -11,7 +11,7 @@ import { startTestImpd } from '../../test-utils/start-test-impd';
 import type { TestImpdOptions } from '../../test-utils/start-test-impd';
 import { buildStubCpuCgroups } from '../../test-utils/vm/build-stub-cpu-cgroups';
 import { readSnapshotMeta } from '../sleep/snapshot-meta';
-import { buildImpPaths } from '../storage/data-layout';
+import { buildImpPaths } from '../storage/build-imp-paths';
 import { buildMemoryMax, createCpuCgroups } from './cpu-cgroups';
 import {
   getLowMib,

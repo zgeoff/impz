@@ -1,4 +1,4 @@
-import type { ImpPaths } from '../../vm/storage/data-layout';
+import type { ImpPaths } from '../../vm/storage/build-imp-paths';
 import type { GuestMemory } from '../../vm/vmm/vm-runner';
 
 interface StubGuest {

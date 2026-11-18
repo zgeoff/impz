@@ -1,6 +1,6 @@
 import type { ImpChangeReason, ImpEventDetail } from '@impz/api';
 import { appendImpEvent } from './append-imp-event';
-import type { ImpRecord } from './imps';
+import type { ImpRecord } from './list-imps';
 import type { ImpQueries } from './open-database';
 
 interface ImpChange {

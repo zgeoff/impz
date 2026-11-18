@@ -8,7 +8,7 @@ import { buildMockOAuthConfig } from '@impz/api/test-utils/build-mock-oauth-conf
 import { server } from '@impz/shared/test-utils/server';
 import { HttpResponse, delay, http } from 'msw';
 import invariant from 'tiny-invariant';
-import { createSecret, removeSecret } from '../../../platform/db/secrets';
+import { createSecret, removeSecret } from '../../../platform/db/create-checked-grant';
 import { buildMockOAuthStateFile } from '../../../test-utils/identity/build-mock-oauth-state-file';
 import { buildStubBrokerJwt } from '../../../test-utils/network/build-stub-broker-jwt';
 import { createStubBrokerTokenEndpoint } from '../../../test-utils/network/create-stub-broker-token-endpoint';

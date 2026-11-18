@@ -15,7 +15,7 @@ import {
   readImageByName,
   updateImagePin,
 } from '../../../platform/db/create-image';
-import { createImp } from '../../../platform/db/imps';
+import { createImp } from '../../../platform/db/list-imps';
 import { openDatabase } from '../../../platform/db/open-database';
 import { runCommand } from '../../../platform/process/run-command';
 import { runStreamed } from '../../../platform/process/run-streamed';
@@ -33,9 +33,9 @@ import { spawnSparseFilesTar } from '../../../test-utils/imps/spawn-sparse-files
 import { buildQueryGate } from '../../../test-utils/platform/build-query-gate';
 import { captureImpdLogs } from '../../../test-utils/platform/capture-impd-logs';
 import { buildStubStoragePressure } from '../../../test-utils/vm/build-stub-storage-pressure';
+import { buildImagePaths } from '../../../vm/storage/build-imp-paths';
 import { countTreeBytes } from '../../../vm/storage/count-tree-bytes';
 import { createXfsBackend } from '../../../vm/storage/create-xfs-backend';
-import { buildImagePaths } from '../../../vm/storage/data-layout';
 import { createDiskBudget } from '../../../vm/storage/disk-budget';
 import { createStorageGate } from '../../../vm/storage/storage-gate';
 import { createImageService } from '../image-service';

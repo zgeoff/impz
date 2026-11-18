@@ -1,7 +1,7 @@
 import { closeSync, existsSync, openSync, rmSync } from 'node:fs';
 import { stopPid } from '../../platform/process/read-stat-fields';
 import { createZeroedFile, setupLogFile, writeRegularFile } from '../files/write-regular-file';
-import type { ImpPaths } from '../storage/data-layout';
+import type { ImpPaths } from '../storage/build-imp-paths';
 import type { ImpCgroup } from './cpu-cgroups';
 import type { JailUser } from './create-jails';
 import { buildSpawnArgv, probeProcessAlive, readLogTail, readPidFile } from './start-firecracker';

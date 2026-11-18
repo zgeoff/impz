@@ -5,7 +5,7 @@ import {
   hasFeature,
 } from '../agent-client/build-agent-outdated-error';
 import type { GrowRequest } from '../imps-contract/grow-request';
-import type { ImpPaths } from '../storage/data-layout';
+import type { ImpPaths } from '../storage/build-imp-paths';
 import {
   GROW_STEP_MIB,
   getLowMib,

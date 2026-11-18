@@ -1,13 +1,13 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
 import invariant from 'tiny-invariant';
-import { readImpByName } from '../../../platform/db/imps';
+import { readImpByName } from '../../../platform/db/list-imps';
 import { startTestImpd } from '../../../test-utils/start-test-impd';
 import { startStubSessionAgent } from '../../../test-utils/vm/start-stub-session-agent';
 import { openExecStream } from '../../../vm/agent-client/exec-stream';
 import { sendActivity } from '../../../vm/agent-client/send-agent-request';
 import { readSnapshotMeta } from '../../../vm/sleep/snapshot-meta';
-import { buildImpPaths } from '../../../vm/storage/data-layout';
+import { buildImpPaths } from '../../../vm/storage/build-imp-paths';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

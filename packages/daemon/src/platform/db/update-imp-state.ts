@@ -3,7 +3,7 @@ import type { ExpressionBuilder, Updateable } from 'kysely';
 import { buildNotFoundError } from '../errors/build-not-found-error';
 import { appendImpChange } from './append-imp-change';
 import type { DB } from './db';
-import type { ImpRecord } from './imps';
+import type { ImpRecord } from './list-imps';
 import type { ImpDatabase } from './open-database';
 import { requireTransition } from './require-transition';
 import { toImpRecord } from './to-imp-record';

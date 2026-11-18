@@ -5,7 +5,7 @@ import { buildMockNewImp } from '../../test-utils/imps/build-mock-new-imp';
 import { buildMockNetworkRecord } from '../../test-utils/network/build-mock-network-record';
 import { createTestDatabase } from '../../test-utils/platform/create-test-database';
 import { createImage } from './create-image';
-import { createImp, removeImp } from './imps';
+import { createImp, removeImp } from './list-imps';
 import {
   listNetworkMembers,
   listNetworkNames,

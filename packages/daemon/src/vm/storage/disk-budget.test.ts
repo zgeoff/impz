@@ -3,10 +3,10 @@ import { existsSync } from 'node:fs';
 import { readImpEnv } from '@impz/shared/test-utils/read-imp-env';
 import { updateEnv } from '@impz/shared/test-utils/update-env';
 import invariant from 'tiny-invariant';
-import { readImpByName } from '../../platform/db/imps';
+import { readImpByName } from '../../platform/db/list-imps';
 import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
 import { startTestImpd } from '../../test-utils/start-test-impd';
-import { buildImpPaths } from './data-layout';
+import { buildImpPaths } from './build-imp-paths';
 import { createDiskBudget } from './disk-budget';
 
 function setupTest() {

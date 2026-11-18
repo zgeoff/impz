@@ -1,5 +1,5 @@
+import type { SecretRow } from './create-checked-grant';
 import type { ImpDatabase } from './open-database';
-import type { SecretRow } from './secrets';
 
 export function createRestoredSecrets(
   db: ImpDatabase,

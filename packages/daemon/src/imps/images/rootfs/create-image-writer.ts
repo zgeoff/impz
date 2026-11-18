@@ -11,7 +11,7 @@ import { runChecked } from '../../../platform/process/run-command';
 import type { CommandRunner } from '../../../platform/process/run-command';
 import type { StreamedRunner } from '../../../platform/process/run-streamed';
 import { createSingleFlight } from '../../../platform/process/single-flight';
-import { buildImagePaths, buildImagesDir } from '../../../vm/storage/data-layout';
+import { buildImagePaths, buildImagesDir } from '../../../vm/storage/build-imp-paths';
 import type { DiskBudget } from '../../../vm/storage/disk-budget';
 import type { StorageBackend } from '../../../vm/storage/storage-backend';
 import type { StorageGate } from '../../../vm/storage/storage-gate';

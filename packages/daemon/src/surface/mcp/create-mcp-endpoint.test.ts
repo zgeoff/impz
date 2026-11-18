@@ -10,14 +10,14 @@ import invariant from 'tiny-invariant';
 import { runWhois } from '../../identity/auth/create-tailnet-identities';
 import { PEER_HEADER } from '../../network/proxy/forwarded-peers';
 import { startWakeProxy } from '../../network/proxy/wake-proxy';
-import { readImpByName } from '../../platform/db/imps';
 import { listApiCalls } from '../../platform/db/list-api-calls';
+import { readImpByName } from '../../platform/db/list-imps';
 import { buildStubTailscale } from '../../test-utils/network/build-stub-tailscale';
 import { startTestImpd } from '../../test-utils/start-test-impd';
 import { TEST_TOKEN } from '../../test-utils/test-token';
 import { buildStubExecGuest } from '../../test-utils/vm/build-stub-exec-guest';
 import { startStubExecAgent } from '../../test-utils/vm/start-stub-exec-agent';
-import { buildImpPaths } from '../../vm/storage/data-layout';
+import { buildImpPaths } from '../../vm/storage/build-imp-paths';
 
 interface SetupOptions {
   readonly tailscale: Pick<ReturnType<typeof buildStubTailscale>, 'run'>;

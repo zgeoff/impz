@@ -12,6 +12,11 @@ import { SlotTakenError } from './slot-taken-error';
 import { toImpRecord } from './to-imp-record';
 import { withImpTransaction } from './with-imp-transaction';
 
+export interface CpuSettings {
+  readonly limit: number | null;
+  readonly weight: number;
+}
+
 export interface ImpRecord {
   readonly id: string;
   readonly name: string;
@@ -61,11 +66,6 @@ export interface ImpRecord {
   readonly moveState: MoveState | null;
 }
 
-export interface CpuSettings {
-  readonly limit: number | null;
-  readonly weight: number;
-}
-
 export interface NewImp {
   readonly id?: string;
   readonly name: string;
@@ -98,6 +98,12 @@ export interface NewImp {
 /* @internal */
 export const JAIL_UIDS = { first: 900_000, count: 65_536 } as const;
 export const TEMPLATE_BUILD_UID = JAIL_UIDS.first - 1;
+
+export async function listImps(db: ImpDatabase): Promise<ImpRecord[]> {
+  const rows = await db.selectFrom('imps').selectAll().orderBy('name').execute();
+
+  return rows.map((row) => toImpRecord(row));
+}
 
 async function allocateJailUid(db: ImpQueries): Promise<number> {
   const rows = await db
@@ -243,12 +249,6 @@ export async function readImpById(db: ImpQueries, id: string): Promise<ImpRecord
   const row = await db.selectFrom('imps').selectAll().where('id', '=', id).executeTakeFirst();
 
   return row === undefined ? undefined : toImpRecord(row);
-}
-
-export async function listImps(db: ImpDatabase): Promise<ImpRecord[]> {
-  const rows = await db.selectFrom('imps').selectAll().orderBy('name').execute();
-
-  return rows.map((row) => toImpRecord(row));
 }
 
 export async function countImpsByState(db: ImpDatabase): Promise<Map<ImpState, number>> {

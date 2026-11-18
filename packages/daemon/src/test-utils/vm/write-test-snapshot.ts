@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { writeSnapshotMeta } from '../../vm/sleep/snapshot-meta';
 import type { SnapshotIdentity } from '../../vm/sleep/snapshot-meta';
-import type { ImpPaths } from '../../vm/storage/data-layout';
+import type { ImpPaths } from '../../vm/storage/build-imp-paths';
 
 export function writeTestSnapshot(
   paths: Readonly<ImpPaths>,

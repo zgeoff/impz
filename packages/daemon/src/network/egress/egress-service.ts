@@ -7,7 +7,7 @@ import { formatSubnet, parseIpv4 } from '../../host-net/net/derive-slot-address'
 import type { Ipv6Plan } from '../../host-net/net/ipv6-plan';
 import { NO_HOST_ROUTES } from '../../host-net/net/reach-policy';
 import type { HostRoutes, ReachPolicy, ReachRanges } from '../../host-net/net/reach-policy';
-import { readImpByName } from '../../platform/db/imps';
+import { readImpByName } from '../../platform/db/list-imps';
 import { listNetworkMembers, listNetworkNames } from '../../platform/db/list-networks';
 import type { NetworkMember } from '../../platform/db/list-networks';
 import type { ImpDatabase } from '../../platform/db/open-database';

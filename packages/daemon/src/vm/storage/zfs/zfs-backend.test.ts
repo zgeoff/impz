@@ -25,8 +25,8 @@ import { writeSyncedFile } from '../../../test-utils/platform/write-synced-file'
 import { StubZfsCrashError, buildStubZfs } from '../../../test-utils/vm/build-stub-zfs';
 import { createZfsTestDataset } from '../../../test-utils/vm/create-zfs-test-dataset';
 import { readZfsTestPool } from '../../../test-utils/vm/read-zfs-test-pool';
+import { buildWatchdogSlot } from '../build-imp-paths';
 import { countTreeBytes } from '../count-tree-bytes';
-import { buildWatchdogSlot } from '../data-layout';
 import { CheckpointIdTakenError } from '../storage-backend';
 import { createZfsBackend } from './zfs-backend';
 

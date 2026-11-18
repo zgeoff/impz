@@ -1,6 +1,6 @@
 import { GATEWAY_IP6 } from '../../host-net/net/derive-guest-ip6';
 import type { SlotAddress } from '../../host-net/net/derive-slot-address';
-import type { ImpPaths } from '../storage/data-layout';
+import type { ImpPaths } from '../storage/build-imp-paths';
 import type { ImpCgroup } from './cpu-cgroups';
 import type { JailUser } from './create-jails';
 import type { HugePages } from './firecracker-client';

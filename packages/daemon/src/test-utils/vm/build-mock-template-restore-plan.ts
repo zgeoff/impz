@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import { buildImpPaths } from '../../vm/storage/data-layout';
+import { buildImpPaths } from '../../vm/storage/build-imp-paths';
 import type { TemplateRestorePlan } from '../../vm/vmm/create-template-vm';
 
 type TemplateRestorePlanOverrides = Partial<Omit<TemplateRestorePlan, 'paths' | 'claim'>> & {

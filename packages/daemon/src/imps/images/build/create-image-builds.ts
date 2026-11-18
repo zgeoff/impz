@@ -14,7 +14,7 @@ import type { ImageRecord } from '../../../platform/db/create-image';
 import { ImpdError } from '../../../platform/errors/impd-error';
 import type { Clock } from '../../../platform/process/clock';
 import { getImpdLogger } from '../../../platform/process/get-impd-logger';
-import { buildUploadsDir } from '../../../vm/storage/data-layout';
+import { buildUploadsDir } from '../../../vm/storage/build-imp-paths';
 import type { DiskBudget } from '../../../vm/storage/disk-budget';
 import { checkReferenceRegistry } from '../../docker-contract/check-reference-registry';
 import { parseImageReference } from '../../docker-contract/parse-image-reference';

@@ -32,7 +32,7 @@ import { startStubFirecrackerApi } from '../../test-utils/vm/start-stub-firecrac
 import { startStubParkedAgent } from '../../test-utils/vm/start-stub-parked-agent';
 import { writeStubUffdStats } from '../../test-utils/vm/write-stub-uffd-stats';
 import { sendPing } from '../agent-client/send-agent-request';
-import { buildImpPaths, buildSnapshotPaths } from '../storage/data-layout';
+import { buildImpPaths, buildSnapshotPaths } from '../storage/build-imp-paths';
 import { buildJailerCommand } from './create-jails';
 import { createFirecrackerClient } from './firecracker-client';
 import { probeProcessAlive } from './start-firecracker';

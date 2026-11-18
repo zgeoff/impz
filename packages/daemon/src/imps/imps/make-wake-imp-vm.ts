@@ -1,7 +1,7 @@
 import type { ColdBootCause } from '@impz/api';
 import { getErrorMessage } from '@impz/shared';
-import { removeTrustPending, updateImpActivity } from '../../platform/db/imps';
 import { writeUnknownBoot } from '../../platform/db/list-cold-boots';
+import { removeTrustPending, updateImpActivity } from '../../platform/db/list-imps';
 import type { ImpStateChange } from '../../platform/db/update-imp-state';
 import { buildStoppingError } from '../../platform/errors/build-not-found-error';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
@@ -16,7 +16,7 @@ import {
 } from '../../vm/sleep/snapshot-meta';
 import { readVmIdentity } from '../../vm/sleep/vm-identity';
 import type { VmIdentity } from '../../vm/sleep/vm-identity';
-import type { ImpPaths } from '../../vm/storage/data-layout';
+import type { ImpPaths } from '../../vm/storage/build-imp-paths';
 import type { ImpCgroup } from '../../vm/vmm/cpu-cgroups';
 import type { HugePages } from '../../vm/vmm/firecracker-client';
 import { checkMergeFlag } from './check-merge-flag';

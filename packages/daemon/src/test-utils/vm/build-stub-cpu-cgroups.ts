@@ -1,4 +1,4 @@
-import type { CpuSettings } from '../../platform/db/imps';
+import type { CpuSettings } from '../../platform/db/list-imps';
 import type { CpuCgroups, CpuStat, ImpCgroup } from '../../vm/vmm/cpu-cgroups';
 
 interface StubCgroup {

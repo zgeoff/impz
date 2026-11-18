@@ -1,6 +1,5 @@
 import type { Secret, SecretAdd, SecretAdded } from '@impz/api';
 import { getErrorMessage } from '@impz/shared';
-import type { ImpDatabase } from '../../../platform/db/open-database';
 import {
   createSecret,
   listSecrets,
@@ -8,8 +7,9 @@ import {
   removeFileRemoval,
   removeSecret,
   upsertSecret,
-} from '../../../platform/db/secrets';
-import type { NewSecret, SecretRecord } from '../../../platform/db/secrets';
+} from '../../../platform/db/create-checked-grant';
+import type { NewSecret, SecretRecord } from '../../../platform/db/create-checked-grant';
+import type { ImpDatabase } from '../../../platform/db/open-database';
 import {
   buildConflictError,
   buildNotFoundError,

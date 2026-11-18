@@ -14,7 +14,7 @@ import { createUnmigratedDatabase } from '../../test-utils/platform/create-unmig
 import { buildMockGovernorDecision } from '../../test-utils/vm/build-mock-governor-decision';
 import { appendImpEvent } from '../db/append-imp-event';
 import { createImage } from '../db/create-image';
-import { createImp, updateImpActivity } from '../db/imps';
+import { createImp, updateImpActivity } from '../db/list-imps';
 import { openDatabase } from '../db/open-database';
 import { withImpTransaction } from '../db/with-imp-transaction';
 import { openEventStream } from './open-event-stream';

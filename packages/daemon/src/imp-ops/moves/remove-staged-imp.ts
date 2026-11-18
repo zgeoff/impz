@@ -1,6 +1,6 @@
 import { getErrorMessage } from '@impz/shared';
 import type { Imps } from '../../imps/imps/imp-service';
-import { readImpById } from '../../platform/db/imps';
+import { readImpById } from '../../platform/db/list-imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 

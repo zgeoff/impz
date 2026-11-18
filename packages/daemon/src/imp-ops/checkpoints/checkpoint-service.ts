@@ -15,9 +15,9 @@ import {
   toApiCheckpoint,
 } from '../../platform/db/create-checkpoint';
 import type { CheckpointRecord } from '../../platform/db/create-checkpoint';
-import { readImpByName, updateImpDisk } from '../../platform/db/imps';
-import type { ImpRecord } from '../../platform/db/imps';
 import { writeNextBootCause } from '../../platform/db/list-cold-boots';
+import { readImpByName, updateImpDisk } from '../../platform/db/list-imps';
+import type { ImpRecord } from '../../platform/db/list-imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { readEgressPolicy } from '../../platform/db/read-egress-policy';
 import {

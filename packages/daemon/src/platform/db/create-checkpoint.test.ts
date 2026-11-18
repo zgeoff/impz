@@ -13,7 +13,7 @@ import {
   toApiCheckpoint,
 } from './create-checkpoint';
 import { createImage } from './create-image';
-import { createImp, removeImp } from './imps';
+import { createImp, removeImp } from './list-imps';
 
 test('#createCheckpoint returns the stored checkpoint, made now on a 32 GiB disk', async () => {
   const ctx = await createTestDatabase();

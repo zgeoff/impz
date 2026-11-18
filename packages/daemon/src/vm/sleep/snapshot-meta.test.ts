@@ -11,7 +11,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildMockHostIdentity } from '../../test-utils/vm/build-mock-host-identity';
-import { buildImpPaths } from '../storage/data-layout';
+import { buildImpPaths } from '../storage/build-imp-paths';
 import {
   buildSnapshotIdentity,
   probeSnapshot,

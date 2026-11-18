@@ -26,7 +26,7 @@ import {
   updateImpMove,
   updateImpRequest,
   updateImpSettings,
-} from './imps';
+} from './list-imps';
 import { writeMovedLeases } from './list-leases';
 import { SlotTakenError } from './slot-taken-error';
 import { updateImpState } from './update-imp-state';

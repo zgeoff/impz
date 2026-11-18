@@ -19,7 +19,7 @@ import {
   updateImageReceivedDigest,
   updateImageUse,
 } from './create-image';
-import { createImp } from './imps';
+import { createImp } from './list-imps';
 
 test('#createImage returns the stored image, a docker image by default', async () => {
   const ctx = await createTestDatabase();

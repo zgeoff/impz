@@ -7,7 +7,7 @@ import { deriveSlotAddress } from '../../host-net/net/derive-slot-address';
 import { readWarmHost } from '../../imp-ops/moves/read-warm-host';
 import { createImage } from '../../platform/db/create-image';
 import type { StartTimer } from '../../platform/process/clock';
-import { buildImagePaths } from '../../vm/storage/data-layout';
+import { buildImagePaths } from '../../vm/storage/build-imp-paths';
 import { startTestImpd } from '../start-test-impd';
 import type { TestImpd, TestImpdOptions } from '../start-test-impd';
 

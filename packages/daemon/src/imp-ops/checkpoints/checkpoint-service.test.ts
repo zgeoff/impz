@@ -8,8 +8,8 @@ import { buildStubAnswerQueue } from '@impz/shared/test-utils/build-stub-answer-
 import invariant from 'tiny-invariant';
 import { createCheckpoint, listCheckpoints } from '../../platform/db/create-checkpoint';
 import { createImage, updateImage } from '../../platform/db/create-image';
-import { createImp, readImpById, readImpByName } from '../../platform/db/imps';
-import type { ImpRecord } from '../../platform/db/imps';
+import { createImp, readImpById, readImpByName } from '../../platform/db/list-imps';
+import type { ImpRecord } from '../../platform/db/list-imps';
 import { buildMockNewCheckpoint } from '../../test-utils/imp-ops/build-mock-new-checkpoint';
 import { buildMockNewImage } from '../../test-utils/imps/build-mock-new-image';
 import { buildMockNewImp } from '../../test-utils/imps/build-mock-new-imp';
@@ -18,8 +18,8 @@ import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
 import { runSql } from '../../test-utils/platform/run-sql';
 import { startTestImpd } from '../../test-utils/start-test-impd';
 import { buildStubZfs } from '../../test-utils/vm/build-stub-zfs';
+import { buildImagePaths, buildImpPaths } from '../../vm/storage/build-imp-paths';
 import { createXfsBackend } from '../../vm/storage/create-xfs-backend';
-import { buildImagePaths, buildImpPaths } from '../../vm/storage/data-layout';
 import { CheckpointIdTakenError } from '../../vm/storage/storage-backend';
 import { createZfsBackend } from '../../vm/storage/zfs/zfs-backend';
 import {

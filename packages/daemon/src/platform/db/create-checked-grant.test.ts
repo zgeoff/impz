@@ -2,8 +2,8 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { buildMockBrokerRule } from '@impz/api/test-utils/build-mock-broker-rule';
 import invariant from 'tiny-invariant';
 import { startTestImpd } from '../../test-utils/start-test-impd';
-import { readImpByName } from './imps';
-import { listGrantNames, listGrantedRules } from './secrets';
+import { listGrantNames, listGrantedRules } from './create-checked-grant';
+import { readImpByName } from './list-imps';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

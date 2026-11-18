@@ -9,10 +9,10 @@ import {
   requireUplinkRoute,
   resolveTunnelTarget,
 } from '../../../host-net/net/resolve-tunnel-target';
+import { listGrantedRules } from '../../../platform/db/create-checked-grant';
+import type { GrantedRule } from '../../../platform/db/create-checked-grant';
 import type { ImpDatabase } from '../../../platform/db/open-database';
 import { readBrokerPeer } from '../../../platform/db/read-broker-peer';
-import { listGrantedRules } from '../../../platform/db/secrets';
-import type { GrantedRule } from '../../../platform/db/secrets';
 import { writeAuditEntry } from '../../../platform/db/write-audit-entry';
 import type { NewAuditEntry } from '../../../platform/db/write-audit-entry';
 import { openUpstreamSocket } from '../../../platform/http/open-upstream-socket';

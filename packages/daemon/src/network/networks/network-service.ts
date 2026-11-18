@@ -1,7 +1,7 @@
 import { EGRESS_MODE_TRAITS } from '@impz/api';
 import type { EgressMode, Network, NetworkJoin } from '@impz/api';
 import type { ImpCheckpointHooks } from '../../imps/imps/imp-service';
-import { readImpByName } from '../../platform/db/imps';
+import { readImpByName } from '../../platform/db/list-imps';
 import {
   listNetworkMembers,
   listNetworks,

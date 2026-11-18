@@ -1,9 +1,9 @@
 import { listCheckpoints } from '../../platform/db/create-checkpoint';
 import { readImageById } from '../../platform/db/create-image';
-import type { ImpRecord } from '../../platform/db/imps';
+import type { ImpRecord } from '../../platform/db/list-imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import type { StreamedCommand } from '../../platform/process/create-stream-runner';
-import { buildImagePaths } from '../../vm/storage/data-layout';
+import { buildImagePaths } from '../../vm/storage/build-imp-paths';
 import type { MoveMode, StorageBackend } from '../../vm/storage/storage-backend';
 import type { WarmParts } from './check-warm-move';
 import type { MoveFile } from './move-frames';

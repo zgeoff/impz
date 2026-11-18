@@ -1,4 +1,4 @@
-import type { ImpRecord } from '../../platform/db/imps';
+import type { ImpRecord } from '../../platform/db/list-imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { updateImpState } from '../../platform/db/update-imp-state';
 import type { ImpStateChange } from '../../platform/db/update-imp-state';

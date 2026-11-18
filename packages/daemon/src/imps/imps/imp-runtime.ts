@@ -1,14 +1,14 @@
 import type { Activity, InnerStatus } from '@impz/agent-protocol';
 import { getErrorMessage } from '@impz/shared';
+import { listColdBoots } from '../../platform/db/list-cold-boots';
 import {
   listImps,
   readImpById,
   readImpByName,
   updateImpActivity,
   updateImpRequest,
-} from '../../platform/db/imps';
-import type { ImpRecord } from '../../platform/db/imps';
-import { listColdBoots } from '../../platform/db/list-cold-boots';
+} from '../../platform/db/list-imps';
+import type { ImpRecord } from '../../platform/db/list-imps';
 import {
   buildBuilderError,
   buildInvalidStateError,
@@ -29,7 +29,7 @@ import { openAccept, openListener } from '../../vm/agent-client/open-listener';
 import type { GuestListener, ListenSpec } from '../../vm/agent-client/open-listener';
 import { toSeenSessions } from '../../vm/agent-client/seen-session';
 import { sendActivity, sendPing } from '../../vm/agent-client/send-agent-request';
-import type { ImpPaths } from '../../vm/storage/data-layout';
+import type { ImpPaths } from '../../vm/storage/build-imp-paths';
 import { isDiskFullError } from '../../vm/storage/disk-full-error';
 import type { BootTemplates } from '../../vm/templates/boot-templates';
 import type { MemoryWarm } from '../../vm/vmm/create-memory-warm';

@@ -11,7 +11,7 @@ import {
 import type { Clock } from '../../platform/process/clock';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { REAL_CLOCK } from '../../platform/process/real-clock';
-import { buildImagePaths } from '../../vm/storage/data-layout';
+import { buildImagePaths } from '../../vm/storage/build-imp-paths';
 import type { DiskBudget } from '../../vm/storage/disk-budget';
 import type { StorageBackend } from '../../vm/storage/storage-backend';
 import type { StorageGate } from '../../vm/storage/storage-gate';

@@ -8,7 +8,7 @@ import { writeFileDurably, writeRenamed } from '../../platform/process/write-fil
 import { hasAgentNameForms } from '../agent-client/has-agent-name-forms';
 import type { SeenSession } from '../agent-client/seen-session';
 import { readRegularFile } from '../files/write-regular-file';
-import type { ImpPaths } from '../storage/data-layout';
+import type { ImpPaths } from '../storage/build-imp-paths';
 import { findCpuChange } from './cpu-identity';
 import type { HostIdentity, VmIdentity } from './vm-identity';
 

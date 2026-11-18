@@ -3,7 +3,7 @@ import { buildMockNewImage } from '../../test-utils/imps/build-mock-new-image';
 import { buildMockNewImp } from '../../test-utils/imps/build-mock-new-imp';
 import { createTestDatabase } from '../../test-utils/platform/create-test-database';
 import { createImage } from './create-image';
-import { createImp } from './imps';
+import { createImp } from './list-imps';
 import { probeSlotFree } from './probe-slot-free';
 
 test('#probeSlotFree reports a slot an imp holds as taken', async () => {

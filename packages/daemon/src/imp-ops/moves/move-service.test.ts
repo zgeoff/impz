@@ -8,7 +8,12 @@ import { waitFor } from '@impz/shared/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { listImages, readImageByDigest, readImageByName } from '../../platform/db/create-image';
 import type { LoggedImpEvent } from '../../platform/db/imp-log-entry';
-import { listImps, readImpByName, updateImpExposure, updateImpMove } from '../../platform/db/imps';
+import {
+  listImps,
+  readImpByName,
+  updateImpExposure,
+  updateImpMove,
+} from '../../platform/db/list-imps';
 import { MOVE_TRANSITIONS } from '../../platform/db/move-transitions';
 import { readMoveSend, updateMoveSendStep } from '../../platform/db/read-move-send';
 import { listMoveTickets } from '../../platform/db/read-move-ticket';
@@ -40,8 +45,8 @@ import { buildStubPublishHook } from '../../test-utils/vm/build-stub-publish-hoo
 import { buildStubStorageFaults } from '../../test-utils/vm/build-stub-storage-faults';
 import { buildStubStoragePressure } from '../../test-utils/vm/build-stub-storage-pressure';
 import { buildStubZfsStorage } from '../../test-utils/vm/build-stub-zfs-storage';
+import { buildImagePaths } from '../../vm/storage/build-imp-paths';
 import { createXfsBackend } from '../../vm/storage/create-xfs-backend';
-import { buildImagePaths } from '../../vm/storage/data-layout';
 import {
   ReceiptSchema,
   buildReceipt,

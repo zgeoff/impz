@@ -1,4 +1,4 @@
-import type { StoredPublicAuth } from '../../platform/db/imps';
+import type { StoredPublicAuth } from '../../platform/db/list-imps';
 import type { PublicImp } from '../../platform/db/read-public-imp';
 import { hashSecret } from '../../platform/secrets/hash-secret';
 import { isSameDigest } from '../../platform/secrets/is-same-digest';

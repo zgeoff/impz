@@ -5,7 +5,7 @@ import { copyFile } from 'node:fs/promises';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import type { LoggedImpEvent } from '../../platform/db/imp-log-entry';
-import { readImpByName, updateImpActivity, updateImpExposure } from '../../platform/db/imps';
+import { readImpByName, updateImpActivity, updateImpExposure } from '../../platform/db/list-imps';
 import { listLeases, writeLease } from '../../platform/db/list-leases';
 import { createUbuntuImage, setupMoveHosts } from '../../test-utils/imp-ops/create-move-hosts';
 import type { MoveHostsOptions } from '../../test-utils/imp-ops/create-move-hosts';
