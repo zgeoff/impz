@@ -48,56 +48,61 @@ async function setupTest() {
   return { prefix: getSuitePrefix('images'), stack, client, buildRoot };
 }
 
-test('it builds images/examples/hello from its pinned base in a builder, and the imp serves its page through the proxy', async () => {
-  const ctx = await setupTest();
+test(
+  'it builds images/examples/hello from its pinned base in a builder, and the imp serves its page through the proxy',
+  async () => {
+    const ctx = await setupTest();
 
-  const name = `${ctx.prefix}hello`;
-  const helloDir = join(REPO_ROOT, 'images', 'examples', 'hello');
+    const name = `${ctx.prefix}hello`;
+    const helloDir = join(REPO_ROOT, 'images', 'examples', 'hello');
 
-  const dockerfile = await readFile(join(helloDir, 'Dockerfile'), 'utf8');
+    const dockerfile = await readFile(join(helloDir, 'Dockerfile'), 'utf8');
 
-  const ref = /^FROM (?<ref>\S+)$/mv.exec(dockerfile)?.groups?.['ref'] ?? '';
-  const digest = ref.slice(ref.indexOf('@'));
-  const started = Date.now();
+    const ref = /^FROM (?<ref>\S+)$/mv.exec(dockerfile)?.groups?.['ref'] ?? '';
+    const digest = ref.slice(ref.indexOf('@'));
+    const started = Date.now();
 
-  const since = new Date();
+    const since = new Date();
 
-  await runImp('image', 'build', helloDir, '--name', name);
+    await runImp('image', 'build', helloDir, '--name', name);
 
-  registerRemoval(ctx.stack, config.keep, () => removeImageIfPresent(ctx.client, name));
-  writeMetric('imageBuildHelloMs', Date.now() - started);
+    registerRemoval(ctx.stack, config.keep, () => removeImageIfPresent(ctx.client, name));
+    writeMetric('imageBuildHelloMs', Date.now() - started);
 
-  const log = await readImpdLogSince(since);
-  const images = await listImageNames();
+    const log = await readImpdLogSince(since);
+    const images = await listImageNames();
 
-  expect(digest).toStartWith('@sha256:');
-  expect(log).toContain(`pinned FROM ${ref} as ghcr.io/zgeoff/imp-base${digest}`);
-  expect(log).toContain(`INFO impd.image image build ${name}: pins=`);
-  expect(images).toContain(name);
+    expect(digest).toStartWith('@sha256:');
+    expect(log).toContain(`pinned FROM ${ref} as ghcr.io/zgeoff/imp-base${digest}`);
+    expect(log).toContain(`INFO impd.image image build ${name}: pins=`);
+    expect(images).toContain(name);
 
-  await runImp('new', name, '--image', name, '--memory', '1024');
+    await runImp('new', name, '--image', name, '--memory', '1024');
 
-  registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, name));
+    registerRemoval(ctx.stack, config.keep, () => removeImpIfPresent(ctx.client, name));
 
-  await waitForExec(name);
+    await waitForExec(name);
 
-  const row = await requireImp(name);
-  const urls = await readImpUrls(name);
-  const page = await readFile(join(helloDir, 'rootfs', 'srv', 'hello', 'index.html'), 'utf8');
+    const row = await requireImp(name);
+    const urls = await readImpUrls(name);
+    const page = await readFile(join(helloDir, 'rootfs', 'srv', 'hello', 'index.html'), 'utf8');
 
-  const body = await waitFor(`${name} to serve its page`, async () => {
-    const served = await readThroughProxy(name);
+    const body = await waitFor(`${name} to serve its page`, async () => {
+      const served = await readThroughProxy(name);
 
-    if (served !== page.trim()) {
-      throw new Error(`not its page yet: ${served.slice(0, 80)}`);
-    }
+      if (served !== page.trim()) {
+        throw new Error(`not its page yet: ${served.slice(0, 80)}`);
+      }
 
-    return served;
-  });
+      return served;
+    });
 
-  expect(urls.local).toBe(row.url);
-  expect(body).toBe(page.trim());
-});
+    expect(urls.local).toBe(row.url);
+    expect(body).toBe(page.trim());
+  },
+  // oxlint-disable-next-line zgeoff/max-test-timeout -- 29-43 s on CI, past 60 s in 2 of 5 runs; floor: a base pin of about 10 s, then a build whose RUN step runs apt-get from the network
+  { timeout: 120_000 },
+);
 
 test('it brings an uploaded context’s files, ENV and WORKDIR into the imp less what .dockerignore drops, and removes the image only once no imp boots it', async () => {
   const ctx = await setupTest();
