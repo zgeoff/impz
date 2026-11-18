@@ -3,14 +3,22 @@ import type { CpuStat } from '../../vm/vmm/cpu-cgroups';
 import { createResourceSampler } from './resource-sampler';
 
 function setupTest() {
-  const state = {
+  const state: {
+    now: number;
+    cpu: CpuStat | null;
+    ticks: number;
+    net: { rxBytes: number; txBytes: number };
+    memory: { ramMib: number | null; rssMib: number | null };
+    memoryReads: number;
+    threads: number[] | null;
+  } = {
     now: 0,
-    cpu: { usageUsec: 0, throttledUsec: 0 } as CpuStat | null,
+    cpu: { usageUsec: 0, throttledUsec: 0 },
     ticks: 0,
     net: { rxBytes: 0, txBytes: 0 },
-    memory: { ramMib: null as number | null, rssMib: null as number | null },
+    memory: { ramMib: null, rssMib: null },
     memoryReads: 0,
-    threads: [] as number[] | null,
+    threads: [],
   };
 
   const sampler = createResourceSampler({

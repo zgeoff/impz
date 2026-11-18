@@ -282,7 +282,10 @@ export function createCheckpointService(deps: CheckpointServiceDeps): Checkpoint
         return { imp: api, policy, isBackedUp: imp.isBackedUp, imageDigest: imp.imageDigest };
       });
 
-      const made = { forkId: null as string | null, isSourceChanged: false };
+      const made: { forkId: string | null; isSourceChanged: boolean } = {
+        forkId: null,
+        isSourceChanged: false,
+      };
 
       const requireSameSource = (imp: Readonly<ImpRecord> | null): void => {
         if (imp === null || imp.id !== source.imp.id) {

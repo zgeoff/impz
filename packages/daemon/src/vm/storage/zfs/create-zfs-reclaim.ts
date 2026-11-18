@@ -19,7 +19,10 @@ const BUSY_DATASET = /'(?<name>[^']+)': dataset is busy/v;
 export function createZfsReclaim(ctx: ZfsReclaimContext) {
   const oopsHeld = new Set<string>();
 
-  const reclaim = { running: null as Promise<void> | null, isWanted: false };
+  const reclaim: { running: Promise<void> | null; isWanted: boolean } = {
+    running: null,
+    isWanted: false,
+  };
 
   const runReclaimStep = async (): Promise<boolean> => {
     const entries = await ctx.listAll();

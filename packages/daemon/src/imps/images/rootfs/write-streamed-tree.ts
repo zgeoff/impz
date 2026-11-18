@@ -180,7 +180,7 @@ async function countUnpacked(
 
   const counted = { lines: 0, bytes: 0, rest: '' };
 
-  for await (const chunk of stdout as AsyncIterable<Uint8Array>) {
+  for await (const chunk of stdout) {
     const lines = `${counted.rest}${decoder.decode(chunk, { stream: true })}`.split('\n');
 
     counted.rest = lines.pop() ?? '';

@@ -37,7 +37,7 @@ export interface StorageGcService {
 }
 
 export function createStorageGc(deps: StorageGcDeps): StorageGcService {
-  const hourly = { lastKept: null as string | null };
+  const hourly: { lastKept: string | null } = { lastKept: null };
 
   const runAlone = async (options: GcOptions, waitMs: number, isScheduled: boolean) => {
     const result = await deps.storageGate.runAlone(async () => {

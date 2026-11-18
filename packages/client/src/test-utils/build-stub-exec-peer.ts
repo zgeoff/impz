@@ -23,7 +23,7 @@ export function buildStubExecPeer(onMessage: StubExecHandler = () => {}) {
   const openSocket = (url: string): ExecSocket => {
     const target = new EventTarget();
 
-    const state = { readyState: WebSocket.CONNECTING as number };
+    const state: { readyState: ExecSocket['readyState'] } = { readyState: WebSocket.CONNECTING };
 
     urls.push(url);
 
@@ -61,7 +61,7 @@ export function buildStubExecPeer(onMessage: StubExecHandler = () => {}) {
       close: stopSocket,
     };
 
-    const socket = {
+    const socket: ExecSocket = {
       binaryType: 'arraybuffer',
       get readyState() {
         return state.readyState;
@@ -93,8 +93,7 @@ export function buildStubExecPeer(onMessage: StubExecHandler = () => {}) {
       }
     });
 
-    // an EventTarget's listener types are wider than WebSocket's overloads
-    return socket as unknown as ExecSocket;
+    return socket;
   };
 
   return { connect: openSocket, received, urls, closed: closed.promise };

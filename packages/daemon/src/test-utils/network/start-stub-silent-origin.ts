@@ -1,3 +1,5 @@
+import { NO_IDLE_TIMEOUT_S } from '../../platform/http/no-idle-timeout';
+
 interface SilentOriginOptions {
   readonly controlPath?: string;
   readonly answer?: () => Response;
@@ -41,16 +43,14 @@ export function startStubSilentOrigin(
     return isControl ? new Response('too late') : answerLong();
   };
 
-  // Bun's types leave idleTimeout off unix servers, but Bun applies it there
-  // too.
   const listen =
     options.unix === undefined ? { port: 0, hostname: '127.0.0.1' } : { unix: options.unix };
 
   const server = Bun.serve({
     ...listen,
-    idleTimeout: 0,
+    idleTimeout: NO_IDLE_TIMEOUT_S,
     fetch: sendAnswer,
-  } as unknown as Bun.Serve.Options<undefined>);
+  });
 
   stack.defer(() => server.stop(true));
 

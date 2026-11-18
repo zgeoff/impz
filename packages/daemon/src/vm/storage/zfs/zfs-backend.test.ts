@@ -366,7 +366,7 @@ test('#createImage builds and snapshots an image in staging, then renames and mo
   await ctx.backend.start({ impIds: new Set(), checkpointIds: new Set(), imageDigests: new Set() });
 
   const before = ctx.fake.commands.length;
-  const written = { directory: '', mounted: null as string | null };
+  const written: { directory: string; mounted: string | null } = { directory: '', mounted: null };
 
   await ctx.backend.createImage('sha256:9f2c', (directory) => {
     written.directory = directory;
@@ -2228,7 +2228,7 @@ test('#receiveMoveSnapshots lands each checkpoint and the disk a ZFS move sends'
 
   const source = await ctx.backend.openMoveSource('a', ['cp-one', 'cp-two'], 'zfs');
 
-  const closing = { done: null as Promise<void> | null };
+  const closing: { done: Promise<void> | null } = { done: null };
 
   ctx.stack.defer(() => (closing.done ??= source.close()));
 
@@ -2664,7 +2664,7 @@ test('#openMoveSource reads a move to XFS from read-only clones that a GC leaves
 
   const source = await ctx.backend.openMoveSource('a', ['cp-one'], 'files');
 
-  const closing = { done: null as Promise<void> | null };
+  const closing: { done: Promise<void> | null } = { done: null };
 
   ctx.stack.defer(() => (closing.done ??= source.close()));
 

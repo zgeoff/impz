@@ -43,7 +43,12 @@ export function buildStubZfs(options: FakeZfsOptions) {
   }[] = [];
 
   const failures: ((command: string) => boolean)[] = [];
-  const state = { txg: 1, crashAt: null as ((command: string) => boolean) | null, crashed: false };
+
+  const state: { txg: number; crashAt: ((command: string) => boolean) | null; crashed: boolean } = {
+    txg: 1,
+    crashAt: null,
+    crashed: false,
+  };
 
   datasets.set(options.root, { origin: null, txg: 0 });
   mounts.set(options.rootDir, options.root);

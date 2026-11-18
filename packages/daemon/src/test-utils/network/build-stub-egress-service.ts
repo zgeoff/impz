@@ -64,10 +64,13 @@ export function buildStubEgressService(options: Readonly<StubEgressServiceOption
     now: () => clock.nowMs,
   };
 
+  const publishedAdmitted: readonly AdmittedAnswer[] = admitted;
+  const publishedForwarded: readonly string[] = forwarded;
+
   return {
     deps,
-    admitted: admitted as readonly AdmittedAnswer[],
-    forwarded: forwarded as readonly string[],
+    admitted: publishedAdmitted,
+    forwarded: publishedForwarded,
     advance: (durationMs: number): void => {
       clock.nowMs += durationMs;
     },

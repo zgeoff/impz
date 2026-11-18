@@ -1,6 +1,7 @@
 import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Server } from 'bun';
+import { NO_IDLE_TIMEOUT_S } from '../../../platform/http/no-idle-timeout';
 import type { LeafCertificate } from './broker-ca';
 import { RELAY_SOCKET_HANDLER } from './relay-socket-handler';
 import type { RelayData } from './relay-socket-handler';
@@ -8,10 +9,6 @@ import type { RelayData } from './relay-socket-handler';
 // One TLS server per imp and host, not one per imp with SNI: Bun serves an
 // unknown SNI with the first certificate, and a reload does not swap
 // certificates.
-
-// a slow model call that answers in one piece can sit quiet for minutes;
-// the guest's TCP connection decides when it is over
-const IDLE_TIMEOUT_S = 0;
 
 // a git push sends its whole pack in one request body
 const MAX_REQUEST_BODY_BYTES = 8 * 1024 ** 3;
@@ -113,18 +110,17 @@ export function createTerminators(deps: TerminatorDeps): Terminators {
 
     const socket = buildSocketPath();
 
-    // Bun's types leave idleTimeout off unix servers, but it applies there
-    // too (10 s by default, which cuts off a slow model call)
-    const options = {
+    const server = Bun.serve<RelayData>({
       unix: socket,
       tls: { cert: leaf.certPem, key: leaf.keyPem },
-      idleTimeout: IDLE_TIMEOUT_S,
+
+      // a slow model call that answers in one piece can sit quiet for minutes; the guest's TCP
+      // connection decides when it is over
+      idleTimeout: NO_IDLE_TIMEOUT_S,
       maxRequestBodySize: MAX_REQUEST_BODY_BYTES,
       fetch: deps.createHandler(key, makeConnections(id, key)),
       websocket: RELAY_SOCKET_HANDLER,
-    } as unknown as Bun.Serve.Options<RelayData>;
-
-    const server = Bun.serve(options);
+    });
 
     return {
       key,

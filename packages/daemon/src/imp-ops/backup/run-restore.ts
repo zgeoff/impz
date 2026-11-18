@@ -334,7 +334,7 @@ async function createRestoredImp(
   const imp = options.imp;
   const target = options.target;
   const workDir = options.workDir;
-  const created = { id: null as string | null };
+  const created: { id: string | null } = { id: null };
 
   const writeRestoredFile = (file: string, disk: string, sizes: RestoredSizes) => {
     const bytes = sizes.usedBytes === undefined ? sizes.diskBytes : 2 * sizes.usedBytes;

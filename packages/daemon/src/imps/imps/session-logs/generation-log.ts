@@ -203,13 +203,20 @@ function startGenerationLog(options: GenerationLogOptions, initial: GenerationMe
     segments: initial.segments.map((segment) => ({ ...segment })),
   };
 
-  const state = {
-    file: null as FileHandle | null,
+  const state: {
+    file: FileHandle | null;
+    current: StoredMeta['segments'][number] | null;
+    skipTo: number | null;
+    cancelTimer: (() => void) | null;
+    settled: boolean;
+    abandoned: boolean;
+  } = {
+    file: null,
 
-    current: null as StoredMeta['segments'][number] | null,
-    skipTo: null as number | null,
+    current: null,
+    skipTo: null,
 
-    cancelTimer: null as (() => void) | null,
+    cancelTimer: null,
 
     settled: initial.state === 'ended' || initial.stopped !== undefined,
     abandoned: false,

@@ -720,7 +720,9 @@ test('it pauses stdin while the socket buffers more than the high-water mark', a
     },
   );
 
-  const congested = { socket: null as ReturnType<typeof buildStubCongestedSocket> | null };
+  const congested: { socket: ReturnType<typeof buildStubCongestedSocket> | null } = {
+    socket: null,
+  };
 
   void runExec(
     { host: null, name: 'box', argv: ['cmd'], tty: false },
@@ -782,7 +784,9 @@ test('it resumes stdin once the socket buffer drains', async () => {
     },
   );
 
-  const congested = { socket: null as ReturnType<typeof buildStubCongestedSocket> | null };
+  const congested: { socket: ReturnType<typeof buildStubCongestedSocket> | null } = {
+    socket: null,
+  };
 
   const exiting = runExec(
     { host: null, name: 'box', argv: ['cmd'], tty: false },

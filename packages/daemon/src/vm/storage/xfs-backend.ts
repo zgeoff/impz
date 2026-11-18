@@ -206,7 +206,7 @@ export function createXfsBackend(deps: XfsBackendDeps): StorageBackend {
     return [...images, ...tree].filter((file) => existsSync(file.path));
   };
 
-  const usageState = { resumeImpId: null as string | null };
+  const usageState: { resumeImpId: string | null } = { resumeImpId: null };
 
   const setupReserveFile = async (): Promise<void> => {
     const bytes = deps.reserveFileBytes ?? 0;

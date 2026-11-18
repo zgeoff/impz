@@ -335,7 +335,7 @@ test('#backups.run gets an answer that stays silent past Bun’s idle limit, whe
   const lines = output
     .trim()
     .split('\n')
-    .map((line) => JSON.parse(line) as unknown);
+    .map((line): unknown => JSON.parse(line));
 
   expect(lines).toIncludeSameMembers([
     { kind: 'imps.list', isOk: false, error: 'TimeoutError' },

@@ -2,6 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { faker } from '@faker-js/faker';
 import { createImpClient } from '@impz/client';
 import { startTestImpd } from '@impz/daemon/test-utils';
+import * as z from 'zod';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 
 async function setupTest() {
@@ -174,7 +175,9 @@ test('it stages a key for a time and prints both keys with the retire entry', as
     env: { IMP_URL: ctx.url, IMP_TOKEN: ctx.rootToken },
   });
 
-  const printed = JSON.parse(result.stdout) as { keys: unknown[]; retire: unknown[] };
+  const printed = z
+    .object({ keys: z.array(z.unknown()), retire: z.array(z.unknown()) })
+    .parse(JSON.parse(result.stdout));
 
   expect(result.code).toBe(0);
   expect(printed.keys).toHaveLength(2);

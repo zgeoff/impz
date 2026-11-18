@@ -1,5 +1,4 @@
 import { expect, test } from 'bun:test';
-import type { Scope } from '../schemas/token-schema';
 import { hasScope } from './has-scope';
 
 test.each([
@@ -17,15 +16,9 @@ test.each([
 });
 
 test('it refuses a needed scope outside the list, even to manage', () => {
-  // input the contract refuses
-  const unknown = 'admin' as unknown as Scope;
-
-  expect(hasScope('manage', unknown)).toBeFalse();
+  expect(hasScope('manage', 'admin')).toBeFalse();
 });
 
 test('it holds nothing for a granted scope outside the list', () => {
-  // input the contract refuses
-  const unknown = 'admin' as unknown as Scope;
-
-  expect(hasScope(unknown, 'read')).toBeFalse();
+  expect(hasScope('admin', 'read')).toBeFalse();
 });

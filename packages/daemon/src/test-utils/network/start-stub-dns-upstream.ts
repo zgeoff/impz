@@ -99,7 +99,9 @@ export async function startStubDnsUpstream(options: Readonly<StubDnsUpstreamOpti
     tcp.stop(true);
   });
 
-  return { port: udp.port, queries: queries as readonly StubDnsQueryRecord[] };
+  const published: readonly StubDnsQueryRecord[] = queries;
+
+  return { port: udp.port, queries: published };
 }
 
 function getId(query: Uint8Array): number {

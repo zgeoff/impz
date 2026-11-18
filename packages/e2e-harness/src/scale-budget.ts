@@ -130,12 +130,12 @@ export async function startBudgetMonitor(
 
   const samples: BudgetSample[] = [];
 
-  const state = {
+  const state: { isRunning: boolean; stopped: Promise<void> | null; failure: Error | null } = {
     isRunning: true,
-    stopped: null as Promise<void> | null,
+    stopped: null,
 
     // Kept for the stop to rethrow, so it is never an unhandled rejection.
-    failure: null as Error | null,
+    failure: null,
   };
 
   const loop = (async () => {

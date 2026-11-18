@@ -48,6 +48,11 @@ import { TEST_TOKEN } from './test-token';
 import { buildStubVmm } from './vm/build-stub-vmm';
 import { createStubUffdHandler } from './vm/create-stub-uffd-handler';
 
+// a client whose every procedure takes any input
+type UncheckedClient<Client> = Client extends (...rest: never[]) => infer Result
+  ? (input: unknown) => Result
+  : { readonly [Key in keyof Client]: UncheckedClient<Client[Key]> };
+
 export interface TestImpdOptions {
   readonly env?: Readonly<Record<string, string>>;
   readonly dataDir?: string;
@@ -430,6 +435,15 @@ export async function startTestImpd(
 
   const client = buildClient(options.rootToken ?? TEST_TOKEN);
 
+  // takes any input, to send what the contract refuses
+  const uncheckedClient: UncheckedClient<ContractRouterClient<ImpContract>> = createORPCClient(
+    new RPCLink({
+      url: 'http://impd.test/rpc',
+      headers: { authorization: `Bearer ${options.rootToken ?? TEST_TOKEN}` },
+      fetch: sendRequest,
+    }),
+  );
+
   const createTestImage = async (name: string): Promise<ImageRecord> => {
     await Bun.write(`${dataDir}/images/${name}/rootfs.ext4`, 'rootfs');
 
@@ -474,6 +488,7 @@ export async function startTestImpd(
     readIdentity: () => host.identity,
     client,
     buildClient,
+    uncheckedClient,
     get url(): string {
       return `http://127.0.0.1:${String(current.impd.app.server?.port)}`;
     },

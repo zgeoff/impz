@@ -251,7 +251,7 @@ async function writeBody(
   let written = 0;
 
   try {
-    for await (const chunk of request.body as AsyncIterable<Uint8Array>) {
+    for await (const chunk of request.body) {
       written += chunk.byteLength;
 
       if (written > maxBytes) {

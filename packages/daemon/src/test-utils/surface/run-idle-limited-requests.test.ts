@@ -36,7 +36,7 @@ test.each(['long-request', 'wake-proxy'])(
     const lines = output
       .trim()
       .split('\n')
-      .map((line) => JSON.parse(line) as unknown);
+      .map((line): unknown => JSON.parse(line));
 
     expect(lines).toIncludeSameMembers([
       { kind: 'control', isOk: true, status: 200, body: 'answered /control' },
