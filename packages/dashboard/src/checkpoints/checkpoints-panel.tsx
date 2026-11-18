@@ -2,17 +2,17 @@ import type { Checkpoint } from '@impz/client';
 import { formatBytes } from '@impz/shared';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
+import { Button } from '../button/button';
+import { ErrorText } from '../error-text/error-text';
 import { readText } from '../forms/read-form';
 import { formatRelativeTime } from '../imp-details/format';
 import { useImpd } from '../impd/impd';
 import { SLOW } from '../impd/live';
 import { useRefresh } from '../impd/use-refresh';
-import { Button } from './button';
+import { ForkDialog } from '../imps/fork-dialog';
+import { ConfirmDialog } from '../modal/confirm-dialog';
+import tableStyles from '../table/table.module.css';
 import styles from './checkpoints-panel.module.css';
-import { ConfirmDialog } from './confirm-dialog';
-import { ErrorText } from './error-text';
-import { ForkDialog } from './fork-dialog';
-import tableStyles from './table.module.css';
 
 interface CheckpointsPanelProps {
   readonly name: string;

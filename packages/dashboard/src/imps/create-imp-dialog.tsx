@@ -1,11 +1,11 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
+import { Button } from '../button/button';
+import { ErrorText } from '../error-text/error-text';
+import styles from '../forms/form.module.css';
 import { readInteger, readText } from '../forms/read-form';
 import { useImpd } from '../impd/impd';
 import { useRefresh } from '../impd/use-refresh';
-import { Button } from './button';
-import { ErrorText } from './error-text';
-import styles from './form.module.css';
-import { Modal } from './modal';
+import { Modal } from '../modal/modal';
 
 interface CreateImpDialogProps {
   readonly open: boolean;

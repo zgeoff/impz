@@ -2,12 +2,12 @@ import type { Imp } from '@impz/client';
 import { useMutation } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
+import { Button } from '../button/button';
+import { ErrorText } from '../error-text/error-text';
 import type { Impd } from '../impd/impd';
 import { useImpd } from '../impd/impd';
 import { useRefresh } from '../impd/use-refresh';
-import { Button } from './button';
-import { ConfirmDialog } from './confirm-dialog';
-import { ErrorText } from './error-text';
+import { ConfirmDialog } from '../modal/confirm-dialog';
 import styles from './imp-actions.module.css';
 
 interface ImpActionsProps {

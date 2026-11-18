@@ -1,7 +1,7 @@
 import { useMutation } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
-import { Button } from '../components/button';
-import formStyles from '../components/form.module.css';
+import { Button } from '../button/button';
+import formStyles from '../forms/form.module.css';
 import { readText } from '../forms/read-form';
 import { useImpd } from '../impd/impd';
 import { sendLogin } from '../impd/session';

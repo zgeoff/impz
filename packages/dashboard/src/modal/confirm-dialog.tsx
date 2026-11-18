@@ -1,7 +1,7 @@
 import { useMutation } from '@tanstack/react-query';
-import { Button } from './button';
-import { ErrorText } from './error-text';
-import formStyles from './form.module.css';
+import { Button } from '../button/button';
+import { ErrorText } from '../error-text/error-text';
+import formStyles from '../forms/form.module.css';
 import { Modal } from './modal';
 
 interface ConfirmDialogProps {

@@ -2,17 +2,17 @@ import type { Image } from '@impz/client';
 import { formatBytes } from '@impz/shared';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Button } from '../components/button';
-import { ConfirmDialog } from '../components/confirm-dialog';
-import { ErrorText } from '../components/error-text';
-import formStyles from '../components/form.module.css';
-import tableStyles from '../components/table.module.css';
+import { Button } from '../button/button';
+import { ErrorText } from '../error-text/error-text';
+import formStyles from '../forms/form.module.css';
 import { readText } from '../forms/read-form';
 import { formatRelativeTime } from '../imp-details/format';
 import { useNow } from '../imp-details/use-now';
 import { useImpd } from '../impd/impd';
 import { SLOW } from '../impd/live';
 import { useRefresh } from '../impd/use-refresh';
+import { ConfirmDialog } from '../modal/confirm-dialog';
+import tableStyles from '../table/table.module.css';
 import styles from './page.module.css';
 
 export function ImagesPage() {

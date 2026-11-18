@@ -1,13 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Button } from '../components/button';
-import { CreateImpDialog } from '../components/create-imp-dialog';
-import { ErrorText } from '../components/error-text';
-import { ImpTable } from '../components/imp-table';
-import { RamMeter } from '../components/ram-meter';
+import { Button } from '../button/button';
+import { ErrorText } from '../error-text/error-text';
 import { useNow } from '../imp-details/use-now';
 import { useImpd } from '../impd/impd';
 import { LIVE } from '../impd/live';
+import { CreateImpDialog } from '../imps/create-imp-dialog';
+import { ImpTable } from '../imps/imp-table';
+import { RamMeter } from '../ram/ram-meter';
 import styles from './page.module.css';
 
 export function ImpsPage() {

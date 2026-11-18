@@ -1,5 +1,5 @@
-import type { TerminalScreen } from '../components/console/setup-terminal-bridge';
-import type { TerminalSize } from '../components/console/terminal-source';
+import type { TerminalScreen } from '../console/setup-terminal-bridge';
+import type { TerminalSize } from '../console/terminal-source';
 
 export function buildStubTerminalScreen() {
   const written: string[] = [];

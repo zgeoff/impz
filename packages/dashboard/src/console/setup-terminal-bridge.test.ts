@@ -1,7 +1,7 @@
 import { expect, mock, test } from 'bun:test';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
-import { buildStubTerminalConnection } from '../../test-utils/build-stub-terminal-connection';
-import { buildStubTerminalScreen } from '../../test-utils/build-stub-terminal-screen';
+import { buildStubTerminalConnection } from '../test-utils/build-stub-terminal-connection';
+import { buildStubTerminalScreen } from '../test-utils/build-stub-terminal-screen';
 import { setupTerminalBridge } from './setup-terminal-bridge';
 
 test('it copies the output of the connection to the screen', async () => {
