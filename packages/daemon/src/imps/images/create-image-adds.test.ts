@@ -804,7 +804,7 @@ test('it boots a fixed builder on the huge page pool with no IMP_BUILD_MAX_MEMOR
 
   expect(images.addImage('busybox', 'box')).rejects.toMatchObject({
     code: 'RAM_BUDGET_EXCEEDED',
-    message: expect.toInclude('not enough 2 MiB pages') as unknown,
+    message: expect.toInclude('not enough 2 MiB pages'),
   });
 
   expect(builder.guest.runs).toStrictEqual([]);
