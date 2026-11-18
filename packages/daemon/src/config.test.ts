@@ -222,6 +222,45 @@ test('it reads the RAM kept for priority imps and their name patterns', () => {
 });
 
 test.each([
+  { ordinary: '0', ordinaryMib: 0 },
+  { ordinary: '1024', ordinaryMib: 1024 },
+  { ordinary: '2048', ordinaryMib: 2048 },
+])(
+  'it reads IMP_PRIORITY_ORDINARY_RAM_MIB=$ordinary as the priority RAM kept outside the pool',
+  (row) => {
+    const config = loadConfig({
+      IMP_RAM_BUDGET_MIB: '8192',
+      IMP_PRIORITY_RAM_MIB: '2048',
+      IMP_PRIORITY_IMPS: 'chat-*',
+      IMP_PRIORITY_ORDINARY_RAM_MIB: row.ordinary,
+    });
+
+    expect(config.priorityRam).toStrictEqual({
+      mib: 2048,
+      patterns: ['chat-*'],
+      ordinaryMib: row.ordinaryMib,
+    });
+  },
+);
+
+test('it refuses more priority RAM outside the pool than IMP_PRIORITY_RAM_MIB', () => {
+  expect(() =>
+    loadConfig({
+      IMP_RAM_BUDGET_MIB: '8192',
+      IMP_PRIORITY_RAM_MIB: '2048',
+      IMP_PRIORITY_IMPS: 'chat-*',
+      IMP_PRIORITY_ORDINARY_RAM_MIB: '2049',
+    }),
+  ).toThrow('IMP_PRIORITY_ORDINARY_RAM_MIB 2049 is more than the 2048 MiB IMP_PRIORITY_RAM_MIB');
+});
+
+test('it refuses IMP_PRIORITY_ORDINARY_RAM_MIB with no priority imps', () => {
+  expect(() => loadConfig({ IMP_PRIORITY_ORDINARY_RAM_MIB: '0' })).toThrow(
+    'IMP_PRIORITY_ORDINARY_RAM_MIB needs IMP_PRIORITY_RAM_MIB and IMP_PRIORITY_IMPS',
+  );
+});
+
+test.each([
   ['IMP_PRIORITY_RAM_MIB', { IMP_PRIORITY_RAM_MIB: '2048' }],
   ['IMP_PRIORITY_IMPS', { IMP_PRIORITY_IMPS: 'chat-*' }],
 ])('it refuses %s set without its partner', (_name, env) => {
@@ -269,6 +308,7 @@ test.each([
   ['IMP_HUGE_PAGES', '1G'],
   ['IMP_PRIORITY_RAM_MIB', '0'],
   ['IMP_PRIORITY_IMPS', 'Chat_*'],
+  ['IMP_PRIORITY_ORDINARY_RAM_MIB', '-1'],
 ])('it refuses %s=%s', (name, value) => {
   expect(() => loadConfig({ [name]: value })).toThrow(new RegExp(`"path": \\[\\s*"${name}"`, 'u'));
 });

@@ -1840,6 +1840,94 @@ test('it refuses an imp on 4 KiB pages that would take the RAM kept outside the 
   });
 });
 
+test('it admits an elastic imp outside the patterns on 4 KiB pages when the host keeps no priority RAM outside the pool', async () => {
+  const host = createStubGovernedHost({
+    budgetMib: 26_624,
+    ids: ['chat-a', 'chat-b', 'agent-a', 'chat-c'],
+    awake: [
+      { id: 'chat-a', rssMib: 2080, hugePagesMib: 2048, hugetlbMib: 2048 },
+      { id: 'chat-b', rssMib: 1040, hugePagesMib: 1024, hugetlbMib: 1024 },
+    ],
+    hugePool: { totalMib: 20_480, freeMib: 17_408 },
+  });
+
+  const governor = createRamGovernor({
+    ...host.deps,
+    priority: { mib: 6144, patterns: ['chat-*'], ordinaryMib: 0 },
+  });
+
+  await governor.admit({ id: 'agent-a', name: 'agent-a', reserveMib: 1024, memoryMib: 2048 });
+
+  expect(governor.isAdmitted('agent-a')).toBeTrue();
+});
+
+test('it keeps all the priority RAM outside the pool too when the host sets no part for there', () => {
+  const host = createStubGovernedHost({
+    budgetMib: 26_624,
+    ids: ['chat-a', 'chat-b', 'agent-a', 'chat-c'],
+    awake: [
+      { id: 'chat-a', rssMib: 2080, hugePagesMib: 2048, hugetlbMib: 2048 },
+      { id: 'chat-b', rssMib: 1040, hugePagesMib: 1024, hugetlbMib: 1024 },
+    ],
+    hugePool: { totalMib: 20_480, freeMib: 17_408 },
+  });
+
+  const governor = createRamGovernor({
+    ...host.deps,
+    priority: { mib: 6144, patterns: ['chat-*'] },
+  });
+
+  expect(
+    governor.admit({ id: 'agent-a', name: 'agent-a', reserveMib: 1024, memoryMib: 2048 }),
+  ).rejects.toMatchObject({
+    code: 'RAM_BUDGET_EXCEEDED',
+    message:
+      'not enough RAM outside the huge page pool: 48 of 6144 MiB in use and 6096 MiB kept for priority imps (chat-*), 1024 MiB requested on 4 KiB pages, and no idle imp left to sleep',
+  });
+});
+
+test('it admits a priority imp on 4 KiB pages into the RAM kept for it outside the pool', async () => {
+  const host = createStubGovernedHost({
+    budgetMib: 26_624,
+    ids: ['chat-a', 'chat-b', 'agent-a', 'chat-c'],
+    awake: [
+      { id: 'chat-a', rssMib: 2080, hugePagesMib: 2048, hugetlbMib: 2048 },
+      { id: 'chat-b', rssMib: 1040, hugePagesMib: 1024, hugetlbMib: 1024 },
+    ],
+    hugePool: { totalMib: 20_480, freeMib: 17_408 },
+  });
+
+  const governor = createRamGovernor({
+    ...host.deps,
+    priority: { mib: 6144, patterns: ['chat-*'] },
+  });
+
+  await governor.admit({ id: 'chat-c', name: 'chat-c', reserveMib: 1024, memoryMib: 2048 });
+
+  expect(governor.isAdmitted('chat-c')).toBeTrue();
+});
+
+test('it sleeps an idle imp outside the patterns for a priority imp on 4 KiB pages when it keeps no priority RAM outside the pool', async () => {
+  const host = createStubGovernedHost({
+    budgetMib: 4000,
+    ids: ['chat-a', 'agent-a', 'chat-b'],
+    awake: [
+      { id: 'chat-a', rssMib: 1040, hugePagesMib: 1024, hugetlbMib: 1024 },
+      { id: 'agent-a', rssMib: 900 },
+    ],
+    hugePool: { totalMib: 3000, freeMib: 1976 },
+  });
+
+  const governor = createRamGovernor({
+    ...host.deps,
+    priority: { mib: 1024, patterns: ['chat-*'], ordinaryMib: 0 },
+  });
+
+  await governor.admit({ id: 'chat-b', name: 'chat-b', reserveMib: 500, memoryMib: 500 });
+
+  expect(host.sleepCalls.map((call) => call.id)).toStrictEqual(['agent-a']);
+});
+
 test("it counts a priority imp's pool pages as kept after its RAM reservation expires", async () => {
   const host = createStubGovernedHost({
     budgetMib: 4000,

@@ -22,6 +22,9 @@ interface HugePagesConfig {
 export interface PriorityRam {
   readonly mib: number;
   readonly patterns: readonly string[];
+
+  // the part of mib kept in the budget less the huge page pool; unset keeps all of mib there too
+  readonly ordinaryMib?: number;
 }
 
 export interface VmConfig extends HostNetConfig {
