@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { parseHostArgs } from '../render/parse-host-args.ts';
+import { parseHostArgs } from '../render/render-imp-host.ts';
 import { DevError } from './dev-error.ts';
 
 interface HostPrivilegeFiles {

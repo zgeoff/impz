@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import { parseHostArgs } from '../scripts/render/parse-host-args';
+import { parseHostArgs } from '../scripts/render/render-imp-host';
 
 test('it runs nothing --privileged', () => {
   const args = parseHostArgs(readFileSync(new URL('imp-host.args.json', import.meta.url), 'utf8'));

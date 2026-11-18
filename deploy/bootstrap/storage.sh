@@ -121,7 +121,7 @@ storage_zfs() {
         if blkid -p "$data_device" > /dev/null 2>&1; then
           die "$data_device carries a signature (a partition table?); wipe it by hand if it is free"
         fi
-        # shellcheck disable=SC2086 # plain words (parse-host-args.ts checks)
+        # shellcheck disable=SC2086 # plain words (render-imp-host.ts checks)
         change "zpool create $zfs_pool on $data_device" zpool create $ZPOOL_CREATE_PROPERTIES \
           "$zfs_pool" "$data_device"
         ;;

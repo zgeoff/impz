@@ -439,7 +439,7 @@ or a push to `main` changes `deploy/` or the test
 `deploy/imp-host.args.json` holds the `podman run` arguments of imp-host, with the name and bridge
 of the IPv6 network and the pipeline that reads the host's addresses. After an edit to any of these,
 `bun run render:deploy` writes the unit, the network lines of `deploy/lib/host-env.sh` and
-`bootstrap.sh`. `bun test` fails until it has (`scripts/render/parse-host-args.test.ts`), and so
+`bootstrap.sh`. `bun test` fails until it has (`scripts/render/render-imp-host.test.ts`), and so
 does a hand edit to `bootstrap.sh`. The NixOS module reads the arguments file itself.
 
 `.github/workflows/breaking-change.yml` fails a pull request that breaks the protocol between a

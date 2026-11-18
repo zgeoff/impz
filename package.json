@@ -109,7 +109,7 @@
     "lint:docs": "chex links && bun scripts/ci/check-doc-citations.ts",
     "lint:formula": "bun scripts/release/check-formula-ruby.ts",
     "lint:images": "./scripts/ci/check-example-images.sh",
-    "render:deploy": "bun scripts/render/parse-host-args.ts",
+    "render:deploy": "bun scripts/render/render-imp-host.ts",
     "render:protocol": "bun scripts/render-protocol-schema.ts",
     "render:db-schema": "bun packages/daemon/src/platform/db/dump-schema.ts",
     "gen:proto": "buf lint && buf generate && oxfmt docs/reference/agent-protocol.md",

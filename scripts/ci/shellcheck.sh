@@ -11,7 +11,7 @@ cd "$(dirname "$0")/../.."
 vendored=(kernel/check-config.sh)
 
 # deploy/bootstrap.sh's parts share its variables, so each is checked within
-# the whole: deploy/bootstrap.sh, which scripts/render/parse-host-args.ts writes
+# the whole: deploy/bootstrap.sh, which scripts/render/render-imp-host.ts writes
 parts=deploy/bootstrap/
 
 is_excluded() {
