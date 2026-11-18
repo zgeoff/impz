@@ -1,3 +1,4 @@
+// oxlint-disable zgeoff/seed-only -- seeds its rows with direct writes until each owner module has a test-utils seed
 import { expect, jest, onTestFinished, test } from 'bun:test';
 import type { ImpContract, ImpEvent } from '@impz/api';
 import { pruneEvents } from '@impz/durable';

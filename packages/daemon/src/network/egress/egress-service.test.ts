@@ -1,3 +1,4 @@
+// oxlint-disable zgeoff/seed-only -- seeds its rows with direct writes until each owner module has a test-utils seed
 import { expect, mock, onTestFinished, test } from 'bun:test';
 import { createConnection } from 'node:net';
 import { readImpEnv } from '@impz/shared/test-utils/read-imp-env';

@@ -29,7 +29,7 @@ async function setupTest() {
 
   return {
     run,
-    seedUncleanClient: (input: Parameters<typeof seedUncleanOAuthClient>[1]) =>
+    addUncleanClient: (input: Parameters<typeof seedUncleanOAuthClient>[1]) =>
       seedUncleanOAuthClient(harness.db, input),
   };
 }
@@ -87,8 +87,8 @@ test.each([
 test('it refuses a client name that two clients hold, and lists their client IDs', async () => {
   const ctx = await setupTest();
 
-  await ctx.seedUncleanClient({ clientID: 'impc_tabbed', name: '  Spaced\tOrchard  ' });
-  await ctx.seedUncleanClient({ clientID: 'impc_spaced', name: 'Spaced Orchard' });
+  await ctx.addUncleanClient({ clientID: 'impc_tabbed', name: '  Spaced\tOrchard  ' });
+  await ctx.addUncleanClient({ clientID: 'impc_spaced', name: 'Spaced Orchard' });
 
   const result = await ctx.run('client', 'rm', 'Spaced Orchard');
 
@@ -103,8 +103,8 @@ test('it refuses a client name that two clients hold, and lists their client IDs
 test('it removes a client by its client ID, and keeps the client whose name cleans alike', async () => {
   const ctx = await setupTest();
 
-  await ctx.seedUncleanClient({ clientID: 'impc_tabbed', name: '  Spaced\tOrchard  ' });
-  await ctx.seedUncleanClient({ clientID: 'impc_spaced', name: 'Spaced Orchard' });
+  await ctx.addUncleanClient({ clientID: 'impc_tabbed', name: '  Spaced\tOrchard  ' });
+  await ctx.addUncleanClient({ clientID: 'impc_spaced', name: 'Spaced Orchard' });
   await ctx.run('client', 'rm', 'impc_tabbed');
 
   const listed = await ctx.run('client', 'ls', '--json');
@@ -117,8 +117,8 @@ test('it removes a client by its client ID, and keeps the client whose name clea
 test('it replaces the redirect URIs of a client named by its client ID', async () => {
   const ctx = await setupTest();
 
-  await ctx.seedUncleanClient({ clientID: 'impc_tabbed', name: '  Spaced\tOrchard  ' });
-  await ctx.seedUncleanClient({ clientID: 'impc_spaced', name: 'Spaced Orchard' });
+  await ctx.addUncleanClient({ clientID: 'impc_tabbed', name: '  Spaced\tOrchard  ' });
+  await ctx.addUncleanClient({ clientID: 'impc_spaced', name: 'Spaced Orchard' });
 
   const result = await ctx.run(
     'client',

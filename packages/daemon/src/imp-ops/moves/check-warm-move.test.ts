@@ -1,3 +1,4 @@
+// oxlint-disable zgeoff/seed-only -- seeds its rows with direct writes until each owner module has a test-utils seed
 import { expect, test } from 'bun:test';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { create } from '@bufbuild/protobuf';

@@ -63,7 +63,7 @@ async function setupTest() {
   };
 
   // An exec grant on dev-a, signed in once.
-  const seedSignedIn = async (tokenID: string) => {
+  const addSignedInGrant = async (tokenID: string) => {
     await seedLegacyOAuthGrant(db, {
       grantID: 'grant-conn',
       clientID: 'impc_conn',
@@ -95,13 +95,13 @@ async function setupTest() {
     };
   };
 
-  return { db, dayMs, openAuth, writeApprover, seedSignedIn };
+  return { db, dayMs, openAuth, writeApprover, addSignedInGrant };
 }
 
 test('it keeps two grants, one refreshed, whose access tokens pass verify, and a revoke of one ends only it', async () => {
   const ctx = await setupTest();
   const tokenID = await ctx.writeApprover();
-  const first = await ctx.seedSignedIn(tokenID);
+  const first = await ctx.addSignedInGrant(tokenID);
 
   // A read grant on every imp, whose client refreshed it once: the first refresh token is rotated,
   // and the first access token still lives beside the new one.
@@ -192,7 +192,7 @@ test('it names the approving imp token on each grant it keeps', async () => {
   const ctx = await setupTest();
   const tokenID = await ctx.writeApprover();
 
-  await ctx.seedSignedIn(tokenID);
+  await ctx.addSignedInGrant(tokenID);
 
   await runMigrations(ctx.db);
 
@@ -215,7 +215,7 @@ test('it names the approving imp token on each grant it keeps', async () => {
 test('it records that the approving imp token could grant secrets', async () => {
   const ctx = await setupTest();
   const tokenID = await ctx.writeApprover([{ name: 'gh', generation: 'gen-1' }]);
-  const first = await ctx.seedSignedIn(tokenID);
+  const first = await ctx.addSignedInGrant(tokenID);
 
   await runMigrations(ctx.db);
 
@@ -232,7 +232,7 @@ test('it removes a grant with no live token, and its tokens with it', async () =
   const ctx = await setupTest();
   const tokenID = await ctx.writeApprover();
 
-  await ctx.seedSignedIn(tokenID);
+  await ctx.addSignedInGrant(tokenID);
 
   await seedLegacyOAuthGrant(ctx.db, {
     grantID: 'grant-old',
@@ -266,7 +266,7 @@ test('it leaves no foreign key that points at no row', async () => {
   const ctx = await setupTest();
   const tokenID = await ctx.writeApprover();
 
-  await ctx.seedSignedIn(tokenID);
+  await ctx.addSignedInGrant(tokenID);
 
   await runMigrations(ctx.db);
 
@@ -279,7 +279,7 @@ test('it rolls the whole migration back when its foreign key check fails', async
   const ctx = await setupTest();
   const tokenID = await ctx.writeApprover();
 
-  await ctx.seedSignedIn(tokenID);
+  await ctx.addSignedInGrant(tokenID);
 
   // A refresh token whose client no row holds, as a write with foreign keys off leaves it.
   ctx.db.sqlite.run('PRAGMA foreign_keys = OFF');
