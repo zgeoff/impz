@@ -27,7 +27,6 @@
       {
         "pending": [
           "packages/daemon",
-          "packages/shared",
           "packages/client",
           "packages/dashboard",
           "packages/e2e-harness"
