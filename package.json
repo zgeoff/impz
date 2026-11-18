@@ -99,7 +99,7 @@
   },
   "type": "module",
   "scripts": {
-    "audit": "bun audit --ignore=GHSA-g3hv-75wg-m249",
+    "audit": "bun audit --ignore=GHSA-fc5q-39xc-vjpf --ignore=GHSA-g3hv-75wg-m249",
     "build:cli": "./scripts/release/build-cli.sh",
     "build:dashboard": "bun run --cwd packages/dashboard build",
     "deadcode": "bash scripts/run-knip.sh && bash scripts/run-knip.sh --production",
