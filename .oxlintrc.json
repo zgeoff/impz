@@ -25,6 +25,38 @@
     "typescript/consistent-type-assertions": "off",
     "zgeoff/no-hidden-cast": "off",
     "zgeoff/no-comment-rule-override": "off",
+    // packages that have yet to fold their loose modules into feature folders, and to name each
+    // file for its main export; each list shrinks as a package passes
+    "zgeoff/feature-folders": [
+      "error",
+      {
+        "pending": [
+          "packages/daemon",
+          "packages/shared",
+          "packages/client",
+          "packages/dashboard",
+          "packages/e2e-harness"
+        ]
+      }
+    ],
+    "zgeoff/file-named-for-export": [
+      "error",
+      {
+        "pending": [
+          ".",
+          "packages/agent-protocol",
+          "packages/api",
+          "packages/cli",
+          "packages/client",
+          "packages/daemon",
+          "packages/dashboard",
+          "packages/e2e-harness",
+          "packages/local-tar",
+          "packages/mcp",
+          "packages/shared"
+        ]
+      }
+    ],
     // each library's docs import it as one object; an option set here replaces the shared ignore
     // list, so this list names zod again
     "import/no-namespace": [
