@@ -20,11 +20,6 @@
         ]
       }
     ],
-    // the shared cast ban stays off until the repo's casts go, and the lock that refuses this
-    // setting goes with it; GEO-1468's PRs for impz remove the casts and turn all three back on
-    "typescript/consistent-type-assertions": "off",
-    "zgeoff/no-hidden-cast": "off",
-    "zgeoff/no-comment-rule-override": "off",
     // packages that have yet to fold their loose modules into feature folders, and to name each
     // file for its main export; each list shrinks as a package passes
     "zgeoff/feature-folders": [
