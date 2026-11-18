@@ -84,9 +84,9 @@ test('it prints one P-256 key for the issuer, and retires none', async () => {
       {
         kty: 'EC',
         crv: 'P-256',
-        x: expect.any(String) as unknown,
-        y: expect.any(String) as unknown,
-        kid: expect.any(String) as unknown,
+        x: expect.any(String),
+        y: expect.any(String),
+        kid: expect.any(String),
         alg: 'ES256',
         use: 'sig',
       },

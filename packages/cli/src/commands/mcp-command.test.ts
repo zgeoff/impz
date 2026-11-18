@@ -94,8 +94,8 @@ test('it answers initialize over stdio, and nothing for a notification', async (
       result: {
         protocolVersion: '2025-06-18',
         capabilities: { tools: { listChanged: false } },
-        serverInfo: { name: 'imp', title: 'imp', version: expect.any(String) as unknown },
-        instructions: expect.stringContaining('imps named agent-*') as unknown,
+        serverInfo: { name: 'imp', title: 'imp', version: expect.any(String) },
+        instructions: expect.stringContaining('imps named agent-*'),
       },
     },
   ]);
@@ -141,7 +141,7 @@ test('it lists its tools over stdio', async () => {
 
   expect(JSON.parse(listed)).toMatchObject({
     id: 2,
-    result: { tools: expect.toIncludeAllPartialMembers([{ name: 'imp_exec' }]) as unknown },
+    result: { tools: expect.toIncludeAllPartialMembers([{ name: 'imp_exec' }]) },
   });
 });
 

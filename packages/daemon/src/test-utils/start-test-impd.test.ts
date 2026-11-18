@@ -123,7 +123,7 @@ test('it runs a ticker only when the test fires it', async () => {
 
   expect(ctx.tickers.readDelays()).toMatchObject({
     idle: 2000,
-    governor: expect.any(Number) as unknown,
+    governor: expect.any(Number),
   });
 });
 

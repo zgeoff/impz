@@ -235,7 +235,7 @@ test('#ensureBuilderImage reads the builder config through the given command run
   });
 
   expect(run).toHaveBeenCalledExactlyOnceWith(['oci-fetch', 'config', config.build.image], {
-    signal: expect.any(AbortSignal) as unknown,
+    signal: expect.any(AbortSignal),
   });
 
   expect(builder).toBeUndefined();
@@ -581,7 +581,7 @@ test('#runImageBuild refuses a context that is not on the impd host', async () =
 
   expect(building).rejects.toMatchObject({
     code: 'BAD_REQUEST',
-    message: expect.stringContaining('does not exist on the impd host') as unknown,
+    message: expect.stringContaining('does not exist on the impd host'),
   });
 });
 
@@ -606,7 +606,7 @@ test('#runImageBuild refuses a context on the impd host with no Dockerfile', asy
 
   expect(building).rejects.toMatchObject({
     code: 'BAD_REQUEST',
-    message: expect.stringContaining('there is no Dockerfile') as unknown,
+    message: expect.stringContaining('there is no Dockerfile'),
   });
 });
 
@@ -637,9 +637,7 @@ test('#runImageBuild refuses a context over IMP_BUILD_CONTEXT_MAX_MIB before it 
 
   expect(building).rejects.toMatchObject({
     code: 'BAD_REQUEST',
-    message: expect.stringContaining(
-      'over the limit of 1 MiB (IMP_BUILD_CONTEXT_MAX_MIB)',
-    ) as unknown,
+    message: expect.stringContaining('over the limit of 1 MiB (IMP_BUILD_CONTEXT_MAX_MIB)'),
   });
 });
 

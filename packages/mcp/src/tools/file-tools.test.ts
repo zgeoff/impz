@@ -84,7 +84,7 @@ test('it writes a file with the path as one argument of the write script', async
       jsonrpc: '2.0',
       id: 1,
       result: {
-        content: [{ type: 'text', text: expect.any(String) as unknown }],
+        content: [{ type: 'text', text: expect.any(String) }],
         structuredContent: { path: '/root/-odd dir/$(x) file.txt', bytes: 7 },
         isError: false,
       },
@@ -150,7 +150,7 @@ test('it reads a file with head, asking for one byte past maxBytes', async () =>
       jsonrpc: '2.0',
       id: 1,
       result: {
-        content: [{ type: 'text', text: expect.any(String) as unknown }],
+        content: [{ type: 'text', text: expect.any(String) }],
         structuredContent: {
           path: '/root/-odd dir/$(x) file.txt',
           encoding: 'utf8',
@@ -209,7 +209,7 @@ test('it writes bytes given as base64', async () => {
       jsonrpc: '2.0',
       id: 1,
       result: {
-        content: [{ type: 'text', text: expect.any(String) as unknown }],
+        content: [{ type: 'text', text: expect.any(String) }],
         structuredContent: { path: '/bin.dat', bytes: 4 },
         isError: false,
       },
@@ -317,7 +317,7 @@ test('it reads bytes that are not UTF-8 as base64', async () => {
       jsonrpc: '2.0',
       id: 1,
       result: {
-        content: [{ type: 'text', text: expect.any(String) as unknown }],
+        content: [{ type: 'text', text: expect.any(String) }],
         structuredContent: { path: '/bin.dat', encoding: 'base64', bytes: 4, content: 'AP/+Cg==' },
         isError: false,
       },
@@ -417,7 +417,7 @@ test('it reads a file exactly maxBytes long', async () => {
       jsonrpc: '2.0',
       id: 1,
       result: {
-        content: [{ type: 'text', text: expect.any(String) as unknown }],
+        content: [{ type: 'text', text: expect.any(String) }],
         structuredContent: { path: '/big', encoding: 'utf8', bytes: 100, content: 'a'.repeat(100) },
         isError: false,
       },
@@ -628,7 +628,7 @@ test('it refuses a relative path before anything runs', async () => {
         content: [
           {
             type: 'text',
-            text: expect.stringContaining('must be an absolute path') as unknown,
+            text: expect.stringContaining('must be an absolute path'),
           },
         ],
         isError: true,
@@ -685,7 +685,7 @@ test.each([
       jsonrpc: '2.0',
       id: 1,
       result: {
-        content: [{ type: 'text', text: expect.any(String) as unknown }],
+        content: [{ type: 'text', text: expect.any(String) }],
         structuredContent: { path: '/etc/hostname', encoding: 'utf8', bytes: 4, content: 'box\n' },
         isError: false,
       },

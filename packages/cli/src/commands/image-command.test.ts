@@ -238,7 +238,7 @@ test('#imageCommand refuses a build context without a Dockerfile before any uplo
 
   expect(received).toStrictEqual({
     stdout: '',
-    stderr: expect.stringMatching(/^impz: there is no Dockerfile in /u) as unknown,
+    stderr: expect.stringMatching(/^impz: there is no Dockerfile in /u),
     code: 2,
   });
 });

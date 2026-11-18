@@ -9,15 +9,15 @@ test('it builds a default governor decision', () => {
   expect(received).toStrictEqual({
     // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: 1,
-    at: expect.toBeValidDate() as unknown,
-    seq: expect.toBeWithin(1, 100_001) as unknown,
-    logId: expect.toBeString() as unknown,
+    at: expect.toBeValidDate(),
+    seq: expect.toBeWithin(1, 100_001),
+    logId: expect.toBeString(),
     ev: 'GovernorDecision',
     decision: 'admitted',
-    name: expect.stringMatching(/^[a-z][a-z0-9-]{2,12}$/u) as unknown,
+    name: expect.stringMatching(/^[a-z][a-z0-9-]{2,12}$/u),
     trigger: 'admission',
-    usedMib: expect.toBeWithin(0, decision.budgetMib + 1) as unknown,
-    budgetMib: expect.toBeWithin(1024, 65_537) as unknown,
+    usedMib: expect.toBeWithin(0, decision.budgetMib + 1),
+    budgetMib: expect.toBeWithin(1024, 65_537),
   });
 
   expect(ImpEventSchema.parse(decision)).toStrictEqual(decision);
@@ -29,14 +29,14 @@ test('it applies overrides on top of the defaults', () => {
   expect(decision).toStrictEqual({
     // oxlint-disable-next-line id-length -- `v` is the event format's version field
     v: 1,
-    at: expect.toBeValidDate() as unknown,
-    seq: expect.toBeWithin(1, 100_001) as unknown,
-    logId: expect.toBeString() as unknown,
+    at: expect.toBeValidDate(),
+    seq: expect.toBeWithin(1, 100_001),
+    logId: expect.toBeString(),
     ev: 'GovernorDecision',
     decision: 'refused',
     name: 'dev',
     trigger: 'admission',
-    usedMib: expect.any(Number) as unknown,
-    budgetMib: expect.any(Number) as unknown,
+    usedMib: expect.any(Number),
+    budgetMib: expect.any(Number),
   });
 });

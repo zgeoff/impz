@@ -125,7 +125,7 @@ test('it exits 1 with one line when the call fails', async () => {
 
   expect(result).toStrictEqual({
     stdout: '',
-    stderr: expect.stringMatching(/^impz: [^\n]+\n$/u) as unknown,
+    stderr: expect.stringMatching(/^impz: [^\n]+\n$/u),
     code: 1,
   });
 });
@@ -134,7 +134,7 @@ test('it prints its version alone', async () => {
   const result: unknown = await runCLIInProcess({ args: ['--version'] });
 
   expect(result).toStrictEqual({
-    stdout: expect.stringMatching(/^\d+\.\d+\.\d+\n$/u) as unknown,
+    stdout: expect.stringMatching(/^\d+\.\d+\.\d+\n$/u),
     stderr: '',
     code: 0,
   });

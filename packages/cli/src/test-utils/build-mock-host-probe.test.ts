@@ -6,19 +6,19 @@ test('it builds a default host probe', () => {
 
   expect(probe).toStrictEqual({
     info: expect.objectContaining({
-      version: expect.any(String) as unknown,
-      defaults: { memoryMib: expect.any(Number) as unknown, image: expect.any(String) as unknown },
-      features: expect.objectContaining({ publicEgress: true }) as unknown,
-    }) as unknown,
+      version: expect.any(String),
+      defaults: { memoryMib: expect.any(Number), image: expect.any(String) },
+      features: expect.objectContaining({ publicEgress: true }),
+    }),
     identity: {
       kind: 'token',
-      name: expect.any(String) as unknown,
+      name: expect.any(String),
       scope: 'manage',
       imps: null,
       grantable: [],
       imageRefPrefix: null,
     },
-    images: [expect.any(String) as unknown],
+    images: [expect.any(String)],
     imps: [],
     networks: [],
   });
@@ -37,11 +37,11 @@ test('it applies overrides on top of the defaults', () => {
     info: expect.objectContaining({
       version: '0.39.0',
       egress: { isEnforced: false },
-      storage: expect.objectContaining({ backend: 'xfs', isLow: false }) as unknown,
-    }) as unknown,
+      storage: expect.objectContaining({ backend: 'xfs', isLow: false }),
+    }),
     identity: {
       kind: 'token',
-      name: expect.any(String) as unknown,
+      name: expect.any(String),
       scope: 'read',
       imps: null,
       grantable: [],

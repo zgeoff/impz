@@ -6,10 +6,10 @@ test('it builds a default saved target', () => {
   const received: unknown = target;
 
   expect(received).toStrictEqual({
-    host: expect.stringMatching(/^[a-z][a-z0-9-]{2,12}$/u) as unknown,
+    host: expect.stringMatching(/^[a-z][a-z0-9-]{2,12}$/u),
     config: {
-      url: expect.stringMatching(/^https?:\/\/[^/]+$/u) as unknown,
-      token: expect.stringMatching(/^[a-zA-Z0-9]{24}$/u) as unknown,
+      url: expect.stringMatching(/^https?:\/\/[^/]+$/u),
+      token: expect.stringMatching(/^[a-zA-Z0-9]{24}$/u),
       host: target.host,
     },
   });

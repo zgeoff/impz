@@ -100,7 +100,7 @@ test('it names a nameless create under the one prefix its token may touch', asyn
     result: {
       isError: false,
       structuredContent: {
-        imp: { name: expect.stringMatching(/^agent-[a-z0-9]{8}$/u) as unknown },
+        imp: { name: expect.stringMatching(/^agent-[a-z0-9]{8}$/u) },
       },
     },
   });
@@ -287,7 +287,7 @@ test('it refuses a create outside the patterns of its token', async () => {
     id: 1,
     result: {
       isError: true,
-      content: [{ type: 'text', text: expect.stringMatching(/^FORBIDDEN: /u) as unknown }],
+      content: [{ type: 'text', text: expect.stringMatching(/^FORBIDDEN: /u) }],
     },
   });
 });
@@ -471,7 +471,7 @@ test.each([
     id: 1,
     result: {
       isError: true,
-      content: [{ type: 'text', text: expect.stringMatching(/^FORBIDDEN: /u) as unknown }],
+      content: [{ type: 'text', text: expect.stringMatching(/^FORBIDDEN: /u) }],
     },
   });
 
@@ -538,7 +538,7 @@ test('it refuses a fork to a token that may grant secrets', async () => {
     id: 1,
     result: {
       isError: true,
-      content: [{ type: 'text', text: expect.stringMatching(/^FORBIDDEN: /u) as unknown }],
+      content: [{ type: 'text', text: expect.stringMatching(/^FORBIDDEN: /u) }],
     },
   });
 

@@ -9,7 +9,7 @@ test('it builds a default image build progress', () => {
   expect(received).toStrictEqual({
     type: 'progress',
     phase: 'pull',
-    elapsedMs: expect.toBeWithin(0, 3_600_001) as unknown,
+    elapsedMs: expect.toBeWithin(0, 3_600_001),
   });
 
   expect(ImageOpEventSchema.parse(progress)).toStrictEqual(progress);

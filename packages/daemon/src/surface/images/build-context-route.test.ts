@@ -206,7 +206,7 @@ test('it streams progress while the build runs, then the image', async () => {
   expect(first.value).toStrictEqual({
     type: 'progress',
     phase: 'build',
-    elapsedMs: expect.any(Number) as unknown,
+    elapsedMs: expect.any(Number),
   });
 
   expect(rest.at(-1)).toMatchObject({ type: 'image', image: { name: 'web' } });
@@ -273,7 +273,7 @@ test('it streams the step and output of a running build, and lists it in images.
     {
       type: 'progress',
       phase: 'unpack',
-      elapsedMs: expect.any(Number) as unknown,
+      elapsedMs: expect.any(Number),
       step: '[2/3] RUN echo compiling widget && echo second line',
     },
   ]);
@@ -863,7 +863,7 @@ test('it takes an upload through the proxy', async () => {
   const upload: unknown = BuildContextUploadSchema.parse(answer);
 
   expect(upload).toStrictEqual({
-    id: expect.any(String) as unknown,
+    id: expect.any(String),
     expiresAt: expect.toBeValidDate(),
   });
 });
@@ -2349,7 +2349,7 @@ test('it refuses a global ARG that sets the build platform before any call', asy
 
   expect(failure).toMatchObject({
     code: 'BAD_REQUEST',
-    message: expect.stringContaining('line 1: ARG BUILDPLATFORM is refused') as unknown,
+    message: expect.stringContaining('line 1: ARG BUILDPLATFORM is refused'),
   });
 
   expect(builder.guest.runs).toStrictEqual([]);
@@ -2381,7 +2381,7 @@ test('it refuses a stage ARG that sets the target platform before any call', asy
 
   expect(failure).toMatchObject({
     code: 'BAD_REQUEST',
-    message: expect.stringContaining('line 2: ARG TARGETPLATFORM is refused') as unknown,
+    message: expect.stringContaining('line 2: ARG TARGETPLATFORM is refused'),
   });
 
   expect(builder.guest.runs).toStrictEqual([]);
@@ -2413,9 +2413,7 @@ test('it refuses a braced platform variable before any call', async () => {
 
   expect(failure).toMatchObject({
     code: 'BAD_REQUEST',
-    message: expect.stringContaining(
-      ['FROM --platform=$', '{BUILDPLATFORM} is refused'].join(''),
-    ) as unknown,
+    message: expect.stringContaining(['FROM --platform=$', '{BUILDPLATFORM} is refused'].join('')),
   });
 
   expect(builder.guest.runs).toStrictEqual([]);

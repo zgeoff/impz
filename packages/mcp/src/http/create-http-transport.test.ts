@@ -98,7 +98,7 @@ test('it opens a session at initialize and answers with its id', async () => {
       protocolVersion: '2025-06-18',
       capabilities: { tools: { listChanged: false } },
       serverInfo: { name: 'imp', title: 'imp', version: '1.2.3' },
-      instructions: expect.any(String) as unknown,
+      instructions: expect.any(String),
     },
   });
 });
@@ -526,10 +526,8 @@ test('it streams a tool call’s progress and response as server-sent events', a
   const blocks: unknown[] = text.split('\n\n');
 
   expect(blocks).toStrictEqual([
-    expect.stringMatching(
-      /^event: message\ndata: \{.*"method":"notifications\/progress".*\}$/u,
-    ) as unknown,
-    expect.stringMatching(/^event: message\ndata: \{"result":.*"id":1\}$/u) as unknown,
+    expect.stringMatching(/^event: message\ndata: \{.*"method":"notifications\/progress".*\}$/u),
+    expect.stringMatching(/^event: message\ndata: \{"result":.*"id":1\}$/u),
     '',
   ]);
 
@@ -545,7 +543,7 @@ test('it streams a tool call’s progress and response as server-sent events', a
       params: {
         progressToken: 'p',
         progress: 1,
-        message: expect.stringMatching(/^still running after \d+ s$/u) as unknown,
+        message: expect.stringMatching(/^still running after \d+ s$/u),
       },
     },
     {
@@ -2079,7 +2077,7 @@ test('it still answers a cancelled create in a session, so the agent learns what
   expect(answer).toMatchObject({
     jsonrpc: '2.0',
     id: 1,
-    result: { content: [{ type: 'text', text: expect.any(String) as unknown }] },
+    result: { content: [{ type: 'text', text: expect.any(String) }] },
   });
 });
 

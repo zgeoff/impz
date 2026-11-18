@@ -52,7 +52,7 @@ test('it writes an entry without content with mode 0755 and the header it was gi
       name: 'proj/',
       type: 'directory',
       mode: 0o755,
-      pax: expect.objectContaining({ 'IMP.total': '5' }) as unknown,
+      pax: expect.objectContaining({ 'IMP.total': '5' }),
     }),
     expect.objectContaining({ name: 'proj/link', type: 'symlink', linkname: 'run', mode: 0o777 }),
   ]);

@@ -8,11 +8,11 @@ test('it builds a default checkpoint', () => {
   const received: unknown = checkpoint;
 
   expect(received).toStrictEqual({
-    id: expect.stringMatching(/^cp-[a-z0-9]{6}$/u) as unknown,
-    label: expect.any(String) as unknown,
-    createdAt: expect.toBeValidDate() as unknown,
-    sizeBytes: expect.any(Number) as unknown,
-    diskMib: expect.any(Number) as unknown,
+    id: expect.stringMatching(/^cp-[a-z0-9]{6}$/u),
+    label: expect.any(String),
+    createdAt: expect.toBeValidDate(),
+    sizeBytes: expect.any(Number),
+    diskMib: expect.any(Number),
   });
 
   expect(parsed).toStrictEqual(checkpoint);
@@ -23,9 +23,9 @@ test('it applies overrides on top of the defaults', () => {
 
   expect(checkpoint).toStrictEqual({
     id: 'cp-a2b3c4',
-    label: expect.any(String) as unknown,
-    createdAt: expect.toBeValidDate() as unknown,
-    sizeBytes: expect.any(Number) as unknown,
+    label: expect.any(String),
+    createdAt: expect.toBeValidDate(),
+    sizeBytes: expect.any(Number),
     diskMib: 32_768,
   });
 });

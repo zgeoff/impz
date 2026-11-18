@@ -45,7 +45,7 @@ test('it uploads the context, then answers every event of the build stream, the 
   expect(first).toStrictEqual({
     type: 'progress',
     phase: 'build',
-    elapsedMs: expect.any(Number) as unknown,
+    elapsedMs: expect.any(Number),
   });
 
   expect(events.at(-1)).toMatchObject({ type: 'image', image: { name: 'web' } });

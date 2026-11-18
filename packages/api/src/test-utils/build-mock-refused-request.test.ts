@@ -8,13 +8,13 @@ test('it builds a default refused request', () => {
   const received: unknown = refused;
 
   expect(received).toStrictEqual({
-    at: expect.toBeValidDate() as unknown,
-    imp: expect.stringMatching(/^[a-z][a-z0-9-]{2,12}$/u) as unknown,
+    at: expect.toBeValidDate(),
+    imp: expect.stringMatching(/^[a-z][a-z0-9-]{2,12}$/u),
     method: 'CONNECT',
-    host: expect.toBeString() as unknown,
+    host: expect.toBeString(),
     path: null,
     status: 403,
-    durationMs: expect.toBeWithin(0, 60_001) as unknown,
+    durationMs: expect.toBeWithin(0, 60_001),
     reason: 'egress-policy',
   });
 
@@ -31,13 +31,13 @@ test('it applies overrides on top of the defaults', () => {
   });
 
   expect(refused).toStrictEqual({
-    at: expect.toBeValidDate() as unknown,
-    imp: expect.stringMatching(/^[a-z][a-z0-9-]{2,12}$/u) as unknown,
+    at: expect.toBeValidDate(),
+    imp: expect.stringMatching(/^[a-z][a-z0-9-]{2,12}$/u),
     method: 'GET',
     host: 'api.github.com',
     path: '/stream',
     status: 426,
-    durationMs: expect.toBeWithin(0, 60_001) as unknown,
+    durationMs: expect.toBeWithin(0, 60_001),
     reason: 'websocket',
   });
 });

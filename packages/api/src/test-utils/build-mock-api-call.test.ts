@@ -8,13 +8,13 @@ test('it builds a default api call', () => {
   const received: unknown = call;
 
   expect(received).toStrictEqual({
-    at: expect.toBeValidDate() as unknown,
-    procedure: expect.toBeOneOf(['imps.stop', 'imps.start', 'imps.create']) as unknown,
+    at: expect.toBeValidDate(),
+    procedure: expect.toBeOneOf(['imps.stop', 'imps.start', 'imps.create']),
     actor: 'token',
-    actorName: expect.stringMatching(/^[a-z][a-z0-9-]{2,12}$/u) as unknown,
-    imp: expect.stringMatching(/^[a-z][a-z0-9-]{2,12}$/u) as unknown,
+    actorName: expect.stringMatching(/^[a-z][a-z0-9-]{2,12}$/u),
+    imp: expect.stringMatching(/^[a-z][a-z0-9-]{2,12}$/u),
     outcome: 'ok',
-    durationMs: expect.any(Number) as unknown,
+    durationMs: expect.any(Number),
   });
 
   expect(parsed).toStrictEqual(call);
@@ -24,12 +24,12 @@ test('it applies overrides on top of the defaults', () => {
   const call: unknown = buildMockApiCall({ actor: 'dashboard', outcome: 'NOT_FOUND' });
 
   expect(call).toStrictEqual({
-    at: expect.toBeValidDate() as unknown,
-    procedure: expect.toBeOneOf(['imps.stop', 'imps.start', 'imps.create']) as unknown,
+    at: expect.toBeValidDate(),
+    procedure: expect.toBeOneOf(['imps.stop', 'imps.start', 'imps.create']),
     actor: 'dashboard',
-    actorName: expect.stringMatching(/^[a-z][a-z0-9-]{2,12}$/u) as unknown,
-    imp: expect.stringMatching(/^[a-z][a-z0-9-]{2,12}$/u) as unknown,
+    actorName: expect.stringMatching(/^[a-z][a-z0-9-]{2,12}$/u),
+    imp: expect.stringMatching(/^[a-z][a-z0-9-]{2,12}$/u),
     outcome: 'NOT_FOUND',
-    durationMs: expect.any(Number) as unknown,
+    durationMs: expect.any(Number),
   });
 });

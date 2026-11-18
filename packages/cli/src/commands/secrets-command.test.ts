@@ -660,7 +660,7 @@ test('it exits 1 for a refreshed oauth secret that is not ready', async () => {
     rules: [{ host: 'chatgpt.com', header: 'authorization', scheme: 'bearer' }],
     env: [],
     imps: [],
-    createdAt: expect.any(String) as unknown,
+    createdAt: expect.any(String),
     oauth: {
       tokenUrl: 'https://auth.example.com/oauth/token',
       clientId: 'fake-client',
@@ -754,7 +754,7 @@ test('it sends a secret upstream in the rule to an impd that knows it', async ()
       ],
       env: [],
       imps: [],
-      createdAt: expect.toBeValidDate() as unknown,
+      createdAt: expect.toBeValidDate(),
     },
   ]);
 });
@@ -779,7 +779,7 @@ test('it stores a preset as a static secret with the preset’s hosts and variab
       rules: [{ host: 'registry.npmjs.org', header: 'authorization', scheme: 'bearer' }],
       env: ['NPM_TOKEN'],
       imps: [],
-      createdAt: expect.toBeValidDate() as unknown,
+      createdAt: expect.toBeValidDate(),
     },
   ]);
 });
@@ -804,7 +804,7 @@ test('it stores a secret given an older kind name in the new shape', async () =>
       rules: [{ host: 'api.anthropic.com', header: 'x-api-key', scheme: 'raw' }],
       env: ['ANTHROPIC_API_KEY'],
       imps: [],
-      createdAt: expect.toBeValidDate() as unknown,
+      createdAt: expect.toBeValidDate(),
     },
   ]);
 });

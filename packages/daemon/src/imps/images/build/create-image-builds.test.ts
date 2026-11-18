@@ -2070,7 +2070,7 @@ test('it refuses an image whose /etc/imp is a link to a host directory', async (
 
   expect(building).rejects.toMatchObject({
     code: 'BAD_REQUEST',
-    message: expect.stringContaining("the image's /etc/imp is a symlink") as unknown,
+    message: expect.stringContaining("the image's /etc/imp is a symlink"),
   });
 });
 
@@ -2122,7 +2122,7 @@ test('it writes nothing into the host directory an /etc/imp link names', async (
 
   expect(building).rejects.toMatchObject({
     code: 'BAD_REQUEST',
-    message: expect.stringContaining("the image's /etc/imp is a symlink") as unknown,
+    message: expect.stringContaining("the image's /etc/imp is a symlink"),
   });
 
   expect(existsSync(join(hostDir, 'image.json'))).toBeFalse();

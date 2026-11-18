@@ -352,7 +352,7 @@ test('#buildTemplate runs a jailed build as the build uid in a cgroup of its own
     jailId: 'tpl-build',
     jail: { uid: 899_999, gid: 899_999 },
     cgroup: { procsPath: '/cg/tpl-build/cgroup.procs' },
-    workDir: expect.stringContaining(join(ctx.dataDir, 'templates', '.build-')) as unknown,
+    workDir: expect.stringContaining(join(ctx.dataDir, 'templates', '.build-')),
     paths: { runDir: join(plan.workDir, 'run') },
   });
 });

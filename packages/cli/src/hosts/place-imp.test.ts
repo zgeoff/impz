@@ -312,7 +312,7 @@ test('#buildRanking drops a host that did not answer, with its error', () => {
   const received: unknown = ranking;
 
   expect(received).toStrictEqual({
-    ranked: [{ host: 'box', freeMib: expect.any(Number) as unknown }],
+    ranked: [{ host: 'box', freeMib: expect.any(Number) }],
     dropped: [{ host: 'laptop', reason: 'no answer in 5 s' }],
   });
 });
@@ -710,7 +710,7 @@ test("#buildRanking keeps a host whose token patterns match the imp's name", () 
 
   const ranked: unknown = ranking.ranked;
 
-  expect(ranked).toStrictEqual([{ host: 'limited', freeMib: expect.any(Number) as unknown }]);
+  expect(ranked).toStrictEqual([{ host: 'limited', freeMib: expect.any(Number) }]);
 });
 
 test('#buildRanking drops a host whose limited token cannot create an unnamed imp', () => {
@@ -814,7 +814,7 @@ test('#buildRanking leaves a generated name to impd though a host has an imp of 
 
   const ranked: unknown = ranking.ranked;
 
-  expect(ranked).toStrictEqual([{ host: 'b', freeMib: expect.any(Number) as unknown }]);
+  expect(ranked).toStrictEqual([{ host: 'b', freeMib: expect.any(Number) }]);
 });
 
 test('#createPlaced moves on to the next host after a RAM refusal, with one create per host', async () => {

@@ -278,7 +278,7 @@ test('it creates a grantable token on an impd with the feature', async () => {
   const received: unknown = result;
 
   expect(received).toStrictEqual({
-    stdout: expect.stringMatching(/^imp_\S+\n$/u) as unknown,
+    stdout: expect.stringMatching(/^imp_\S+\n$/u),
     stderr: 'impz: token agent made; impd shows its secret only this once\n',
     code: 0,
   });
@@ -291,7 +291,7 @@ test('it creates a grantable token on an impd with the feature', async () => {
       sshKeys: [],
       grantable: ['gh'],
       imageRefPrefix: null,
-      createdAt: expect.toBeValidDate() as unknown,
+      createdAt: expect.toBeValidDate(),
     },
   ]);
 });
@@ -316,7 +316,7 @@ test('it sends the grantable list on token set to an impd with tokens.update', a
     sshKeys: [],
     grantable: ['gh'],
     imageRefPrefix: null,
-    createdAt: expect.any(String) as unknown,
+    createdAt: expect.any(String),
   });
 });
 
@@ -346,7 +346,7 @@ test('it clears the grantable list on token set with an empty --grantable', asyn
     sshKeys: [],
     grantable: [],
     imageRefPrefix: null,
-    createdAt: expect.any(String) as unknown,
+    createdAt: expect.any(String),
   });
 });
 
@@ -379,7 +379,7 @@ test('it creates a token with an image ref prefix and shows it in token ls', asy
     'NAME   SCOPE   IMPS     GRANTABLE  IMAGE REF PREFIX       SSH KEYS  CREATED',
     expect.stringMatching(
       /^tansy {2}manage {2}tansy-\* {2}- {10}ghcr\.io\/zgeoff\/tansy- {2}0 {9}\S+$/u,
-    ) as unknown,
+    ),
     '',
   ]);
 });
@@ -403,7 +403,7 @@ test('it gives a token an image ref prefix on token set', async () => {
     sshKeys: [],
     grantable: [],
     imageRefPrefix: 'ghcr.io/zgeoff/tansy-',
-    createdAt: expect.any(String) as unknown,
+    createdAt: expect.any(String),
   });
 });
 

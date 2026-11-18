@@ -82,13 +82,13 @@ test('it creates an imp and answers with it as impd stores it', async () => {
       jsonrpc: '2.0',
       id: 1,
       result: {
-        content: [{ type: 'text', text: expect.any(String) as unknown }],
+        content: [{ type: 'text', text: expect.any(String) }],
         structuredContent: {
           imp: {
             ...stored,
 
             // its awake time runs on the wall clock between the answer and the read
-            resources: { ...stored.resources, awakeMs: expect.any(Number) as unknown },
+            resources: { ...stored.resources, awakeMs: expect.any(Number) },
           },
         },
         isError: false,
@@ -141,18 +141,18 @@ test('it lists the imps with their state', async () => {
       jsonrpc: '2.0',
       id: 1,
       result: {
-        content: [{ type: 'text', text: expect.any(String) as unknown }],
+        content: [{ type: 'text', text: expect.any(String) }],
         structuredContent: {
           imps: [
             {
               ...storedDev,
 
               // its awake time runs on the wall clock between the answer and the read
-              resources: { ...storedDev.resources, awakeMs: expect.any(Number) as unknown },
+              resources: { ...storedDev.resources, awakeMs: expect.any(Number) },
             },
             {
               ...storedOff,
-              resources: { ...storedOff.resources, awakeMs: expect.any(Number) as unknown },
+              resources: { ...storedOff.resources, awakeMs: expect.any(Number) },
             },
           ],
         },
@@ -223,14 +223,14 @@ test('it hides the imps the guard does not allow from the list', async () => {
       jsonrpc: '2.0',
       id: 1,
       result: {
-        content: [{ type: 'text', text: expect.any(String) as unknown }],
+        content: [{ type: 'text', text: expect.any(String) }],
         structuredContent: {
           imps: [
             {
               ...stored,
 
               // its awake time runs on the wall clock between the answer and the read
-              resources: { ...stored.resources, awakeMs: expect.any(Number) as unknown },
+              resources: { ...stored.resources, awakeMs: expect.any(Number) },
             },
           ],
         },
@@ -290,7 +290,7 @@ test.each([
       jsonrpc: '2.0',
       id: 1,
       result: {
-        content: [{ type: 'text', text: expect.stringMatching(/^GUARD: /u) as unknown }],
+        content: [{ type: 'text', text: expect.stringMatching(/^GUARD: /u) }],
         isError: true,
       },
     },
@@ -326,20 +326,20 @@ test('it names a nameless create under the prefix', async () => {
   const json: unknown = JSON.parse(JSON.stringify(imps));
   const [stored] = z.tuple([z.looseObject({ resources: z.looseObject({}) })]).parse(json);
 
-  expect(imps).toMatchObject([{ name: expect.stringMatching(/^agent-[a-z0-9]{8}$/u) as unknown }]);
+  expect(imps).toMatchObject([{ name: expect.stringMatching(/^agent-[a-z0-9]{8}$/u) }]);
 
   expect(ctx.sent).toStrictEqual([
     {
       jsonrpc: '2.0',
       id: 1,
       result: {
-        content: [{ type: 'text', text: expect.any(String) as unknown }],
+        content: [{ type: 'text', text: expect.any(String) }],
         structuredContent: {
           imp: {
             ...stored,
 
             // its awake time runs on the wall clock between the answer and the read
-            resources: { ...stored.resources, awakeMs: expect.any(Number) as unknown },
+            resources: { ...stored.resources, awakeMs: expect.any(Number) },
           },
         },
         isError: false,
@@ -413,13 +413,13 @@ test('it creates an imp the allow-list names', async () => {
       jsonrpc: '2.0',
       id: 1,
       result: {
-        content: [{ type: 'text', text: expect.any(String) as unknown }],
+        content: [{ type: 'text', text: expect.any(String) }],
         structuredContent: {
           imp: {
             ...stored,
 
             // its awake time runs on the wall clock between the answer and the read
-            resources: { ...stored.resources, awakeMs: expect.any(Number) as unknown },
+            resources: { ...stored.resources, awakeMs: expect.any(Number) },
           },
         },
         isError: false,
@@ -462,13 +462,13 @@ test('it puts an imp to sleep', async () => {
       jsonrpc: '2.0',
       id: 1,
       result: {
-        content: [{ type: 'text', text: expect.any(String) as unknown }],
+        content: [{ type: 'text', text: expect.any(String) }],
         structuredContent: {
           imp: {
             ...stored,
 
             // its awake time runs on the wall clock between the answer and the read
-            resources: { ...stored.resources, awakeMs: expect.any(Number) as unknown },
+            resources: { ...stored.resources, awakeMs: expect.any(Number) },
           },
         },
         isError: false,
@@ -503,7 +503,7 @@ test("it answers with an imp's URLs", async () => {
       jsonrpc: '2.0',
       id: 1,
       result: {
-        content: [{ type: 'text', text: expect.any(String) as unknown }],
+        content: [{ type: 'text', text: expect.any(String) }],
         structuredContent: {
           local: 'http://dev.imp.localhost:7080',
           https: null,
@@ -578,7 +578,7 @@ test("it answers impd's error as an isError result led by its code", async () =>
       jsonrpc: '2.0',
       id: 1,
       result: {
-        content: [{ type: 'text', text: expect.stringMatching(/^NOT_FOUND: /u) as unknown }],
+        content: [{ type: 'text', text: expect.stringMatching(/^NOT_FOUND: /u) }],
         isError: true,
       },
     },
@@ -651,7 +651,7 @@ test('it lists the images', async () => {
       jsonrpc: '2.0',
       id: 1,
       result: {
-        content: [{ type: 'text', text: expect.any(String) as unknown }],
+        content: [{ type: 'text', text: expect.any(String) }],
         structuredContent: { images: stored },
         isError: false,
       },
@@ -732,13 +732,13 @@ test('it forks a sleeping imp from a checkpoint', async () => {
       jsonrpc: '2.0',
       id: 1,
       result: {
-        content: [{ type: 'text', text: expect.any(String) as unknown }],
+        content: [{ type: 'text', text: expect.any(String) }],
         structuredContent: {
           imp: {
             ...stored,
 
             // its awake time runs on the wall clock between the answer and the read
-            resources: { ...stored.resources, awakeMs: expect.any(Number) as unknown },
+            resources: { ...stored.resources, awakeMs: expect.any(Number) },
           },
           grantsNotCopied: [],
         },
@@ -781,13 +781,13 @@ test('it forks a stopped imp as it is now', async () => {
       jsonrpc: '2.0',
       id: 1,
       result: {
-        content: [{ type: 'text', text: expect.any(String) as unknown }],
+        content: [{ type: 'text', text: expect.any(String) }],
         structuredContent: {
           imp: {
             ...stored,
 
             // its awake time runs on the wall clock between the answer and the read
-            resources: { ...stored.resources, awakeMs: expect.any(Number) as unknown },
+            resources: { ...stored.resources, awakeMs: expect.any(Number) },
           },
           grantsNotCopied: [],
         },
@@ -837,13 +837,13 @@ test('it names beside the fork the grants a scoped token could not copy', async 
       jsonrpc: '2.0',
       id: 1,
       result: {
-        content: [{ type: 'text', text: expect.any(String) as unknown }],
+        content: [{ type: 'text', text: expect.any(String) }],
         structuredContent: {
           imp: {
             ...stored,
 
             // its awake time runs on the wall clock between the answer and the read
-            resources: { ...stored.resources, awakeMs: expect.any(Number) as unknown },
+            resources: { ...stored.resources, awakeMs: expect.any(Number) },
           },
           grantsNotCopied: [{ secret: 'gh', reason: 'not-grantable' }],
         },
@@ -912,7 +912,7 @@ test('it reports beside the fork each grant it did not get', async () => {
       jsonrpc: '2.0',
       id: 1,
       result: {
-        content: [{ type: 'text', text: expect.any(String) as unknown }],
+        content: [{ type: 'text', text: expect.any(String) }],
         structuredContent: {
           imp: wire,
           grantsNotCopied: [{ secret: 'gh', reason: 'not-grantable' }],
@@ -974,7 +974,7 @@ test('it reports an empty grant report beside a fork that got every grant', asyn
       jsonrpc: '2.0',
       id: 1,
       result: {
-        content: [{ type: 'text', text: expect.any(String) as unknown }],
+        content: [{ type: 'text', text: expect.any(String) }],
         structuredContent: {
           imp: wire,
           grantsNotCopied: [],
@@ -1037,7 +1037,7 @@ test('it reports beside the fork why it got none of the grants', async () => {
       jsonrpc: '2.0',
       id: 1,
       result: {
-        content: [{ type: 'text', text: expect.any(String) as unknown }],
+        content: [{ type: 'text', text: expect.any(String) }],
         structuredContent: {
           imp: wire,
           grantsNotCopied: [],
@@ -1104,7 +1104,7 @@ test('it leaves the grant report out of a fork from an impd that sends none', as
       jsonrpc: '2.0',
       id: 1,
       result: {
-        content: [{ type: 'text', text: expect.any(String) as unknown }],
+        content: [{ type: 'text', text: expect.any(String) }],
         structuredContent: { imp: wire },
         isError: false,
       },
