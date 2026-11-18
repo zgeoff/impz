@@ -1,4 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
+import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { seedServiceFiles } from './seed-service-files';
@@ -8,7 +9,10 @@ function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  return { stack };
+  return {
+    stack,
+    digestOf: (secret: string) => createHash('sha256').update(secret).digest('hex'),
+  };
 }
 
 test('it writes a token entry per client and a clients entry for each client with imps', async () => {
@@ -22,9 +26,15 @@ test('it writes a token entry per client and a clients entry for each client wit
   const tokensText = await readFile(seeded.files.tokenFile, 'utf8');
   const clientsText = await readFile(seeded.files.clientsFile, 'utf8');
 
-  expect(JSON.parse(tokensText)).toMatchObject({
+  expect(JSON.parse(tokensText)).toStrictEqual({
     resource: 'https://imp.example/mcp',
-    clients: { reader: { scopes: ['read'] }, unlimited: { scopes: ['exec'] } },
+    clients: {
+      reader: { scopes: ['read'], secretDigests: [ctx.digestOf(seeded.findSecret('reader'))] },
+      unlimited: {
+        scopes: ['exec'],
+        secretDigests: [ctx.digestOf(seeded.findSecret('unlimited'))],
+      },
+    },
   });
 
   expect(JSON.parse(clientsText)).toStrictEqual({ clients: { reader: { imps: ['orchard-*'] } } });
@@ -53,18 +63,24 @@ test('it writes the token file again for the clients given', async () => {
 
   const tokensText = await readFile(seeded.files.tokenFile, 'utf8');
 
-  expect(JSON.parse(tokensText)).toMatchObject({ clients: { reader: { scopes: ['read'] } } });
+  expect(JSON.parse(tokensText)).toStrictEqual({
+    resource: 'https://imp.example/mcp',
+    clients: {
+      reader: { scopes: ['read'], secretDigests: [ctx.digestOf(seeded.findSecret('reader'))] },
+    },
+  });
+
   expect(tokensText).not.toContain('writer');
 });
 
 test('it removes the folder that holds the files when the stack disposes', async () => {
-  const stack = new AsyncDisposableStack();
+  const ctx = setupTest();
 
-  const seeded = await seedServiceFiles(stack, 'https://imp.example/mcp', []);
+  const seeded = await seedServiceFiles(ctx.stack, 'https://imp.example/mcp', []);
 
   expect(existsSync(seeded.files.tokenFile)).toBe(true);
 
-  await stack.disposeAsync();
+  await ctx.stack.disposeAsync();
 
   expect(existsSync(seeded.files.tokenFile)).toBe(false);
 });
