@@ -1,5 +1,12 @@
 # Changelog
 
+## [7.5.0](https://github.com/zgeoff/impz/compare/v7.4.0...v7.5.0) (2026-11-18)
+
+
+### Features
+
+* **images:** let image builders boot elastic on ordinary pages ([#1052](https://github.com/zgeoff/impz/issues/1052)) ([25de600](https://github.com/zgeoff/impz/commit/25de600449208b3b1f773e2aad99e93f39826083))
+
 ## [7.4.0](https://github.com/zgeoff/impz/compare/v7.3.0...v7.4.0) (2026-11-18)
 
 ### Features
