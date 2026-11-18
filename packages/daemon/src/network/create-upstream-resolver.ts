@@ -2,9 +2,9 @@ import { readFileSync, statSync } from 'node:fs';
 import { rootCertificates } from 'node:tls';
 import { getErrorMessage } from '@impz/shared';
 import * as z from 'zod';
-import type { ResolveUpstream } from './network/broker/tls/forward-request';
-import { resolvePublicUpstream } from './network/broker/tls/resolve-public-upstream';
-import { getImpdLogger } from './platform/process/get-impd-logger';
+import { getImpdLogger } from '../platform/process/get-impd-logger';
+import type { ResolveUpstream } from './broker/tls/forward-request';
+import { resolvePublicUpstream } from './broker/tls/resolve-public-upstream';
 
 const FileSchema = z.object({
   ca: z.string().includes('-----BEGIN CERTIFICATE-----'),

@@ -98,8 +98,8 @@ consumer an invented name.
   `packages/shared/src/test-utils/`.
 - impd's code in `packages/daemon/src/` sits in one folder per layer, and the `daemon-layer-*`
   entries of `zgeoff/import-zones` give the order: a layer imports only itself and the layers below
-  it. The files at the top of `src/`, such as `create-impd.ts` and `main.ts`, are the composition
-  root: they build impd from the layers, so they sit above every layer.
+  it. The composition root sits above every layer: `main.ts` at the top of `src/`, and
+  `create-impd.ts` with its siblings in `src/impd/`. They build impd from the layers.
 - The vm layer's folders, in `packages/daemon/src/vm/`, follow the same rule among themselves: the
   `daemon-vm-folder-*` entries give their order, so no import cycle runs between two vm folders. A
   new vm folder takes a place in that order.

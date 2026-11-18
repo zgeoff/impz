@@ -1,7 +1,7 @@
-import type { Config } from './config';
-import { createRevocations } from './identity/auth/revocations';
-import { loadTokenStore } from './identity/auth/token-store';
-import { createImpdMcpAuth } from './identity/oauth/create-impd-mcp-auth';
+import type { Config } from '../config';
+import { createRevocations } from '../identity/auth/revocations';
+import { loadTokenStore } from '../identity/auth/token-store';
+import { createImpdMcpAuth } from '../identity/oauth/create-impd-mcp-auth';
 import type { ImpdDeps } from './impd-deps';
 
 interface GrantRemoval {

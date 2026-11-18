@@ -12,9 +12,9 @@ import type {
   OAuthTokens,
 } from '@modelcontextprotocol/client';
 import invariant from 'tiny-invariant';
-import { seedOAuthGrant } from './test-utils/identity/seed-oauth-grant';
-import { captureImpdLogs } from './test-utils/platform/capture-impd-logs';
-import { startTestImpd } from './test-utils/start-test-impd';
+import { seedOAuthGrant } from '../test-utils/identity/seed-oauth-grant';
+import { captureImpdLogs } from '../test-utils/platform/capture-impd-logs';
+import { startTestImpd } from '../test-utils/start-test-impd';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

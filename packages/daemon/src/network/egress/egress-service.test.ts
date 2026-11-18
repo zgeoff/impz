@@ -7,7 +7,7 @@ import { waitFor } from '@impz/shared/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import { parsePrefix64 } from '../../host-net/net/addressing6';
 import { resolveIpv6Plan } from '../../host-net/net/ipv6-plan';
-import type { ImpdDeps } from '../../impd-deps';
+import type { ImpdDeps } from '../../impd/impd-deps';
 import { readImpByName, updateImpMove } from '../../platform/db/imps';
 import { removeMember, removeNetwork, writeNetwork } from '../../platform/db/networks';
 import { buildStubHostRoutes } from '../../test-utils/host-net/build-stub-host-routes';

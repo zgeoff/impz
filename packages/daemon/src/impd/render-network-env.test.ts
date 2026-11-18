@@ -30,7 +30,7 @@ test('it rejects a broker port out of range', () => {
 
 test('it runs as impd --network-env, from the settings in its environment', () => {
   const result = Bun.spawnSync(
-    [process.execPath, new URL('main.ts', import.meta.url).pathname, '--network-env'],
+    [process.execPath, new URL('../main.ts', import.meta.url).pathname, '--network-env'],
     { env: { PATH: process.env['PATH'] ?? '', IMP_BROKER_PORT: '7181' } },
   );
 
@@ -44,7 +44,7 @@ test('it runs as impd --network-env, from the settings in its environment', () =
 // tailnet must not stop it
 test('it runs as impd --network-env with tailnet names on, before the host joins the tailnet', () => {
   const result = Bun.spawnSync(
-    [process.execPath, new URL('main.ts', import.meta.url).pathname, '--network-env'],
+    [process.execPath, new URL('../main.ts', import.meta.url).pathname, '--network-env'],
     { env: { PATH: process.env['PATH'] ?? '', IMP_TAILNET_NAMES: '1' } },
   );
 
