@@ -17,9 +17,9 @@ import type {
 import type { ReadonlyFields } from '@impz/shared';
 import { match } from 'ts-pattern';
 import type * as z from 'zod';
-import { createRpcClient } from '../create-rpc-client';
-import type { FeatureNeeds } from '../require-features';
-import { resolveImpdWebSocketUrl } from '../resolve-impd-web-socket-url';
+import { createRpcClient } from '../connection/create-rpc-client';
+import { resolveImpdWebSocketUrl } from '../connection/resolve-impd-web-socket-url';
+import type { FeatureNeeds } from '../features/require-features';
 import { checkExecFeatures } from './check-exec-features';
 import { checkImpdAccess } from './check-impd-access';
 

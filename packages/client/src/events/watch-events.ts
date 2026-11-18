@@ -3,8 +3,8 @@ import { ORPCError } from '@orpc/client';
 import pRetry, { AbortError } from 'p-retry';
 import type { RetryContext } from 'p-retry';
 import { P, match } from 'ts-pattern';
+import { UnknownProcedureError } from '../connection/unknown-procedure-error';
 import type { CallOptions } from '../types';
-import { UnknownProcedureError } from '../unknown-procedure-error';
 import { pickNextCursor } from './pick-next-cursor';
 
 export interface EventSource {

@@ -4,8 +4,10 @@ import type { ClientContext } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { RPCLinkOptions } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
-import { checkServer } from './check-server';
-import type { CheckServerOptions, ServerCheck } from './check-server';
+import { resolveImpdUrl } from './connection/resolve-impd-url';
+import { LONG_CALL_DEADLINES_MS, sendLongCall } from './connection/send-long-call';
+import type { CallInit, StartTimer } from './connection/send-long-call';
+import { UnknownProcedureError } from './connection/unknown-procedure-error';
 import { openAttach, openConsole, openExec, runCommand } from './exec/open-exec';
 import type {
   AttachOptions,
@@ -17,14 +19,12 @@ import type {
   RunResult,
 } from './exec/open-exec';
 import type { ExecSocket } from './exec/open-exec-session';
+import { checkServer } from './features/check-server';
+import type { CheckServerOptions, ServerCheck } from './features/check-server';
+import { runImageBuild } from './images/run-image-build';
+import type { BuildContext, BuildImageOptions } from './images/run-image-build';
 import { requireAwake } from './require-awake';
 import type { RequireAwakeOptions } from './require-awake';
-import { resolveImpdUrl } from './resolve-impd-url';
-import { runImageBuild } from './run-image-build';
-import type { BuildContext, BuildImageOptions } from './run-image-build';
-import { LONG_CALL_DEADLINES_MS, sendLongCall } from './send-long-call';
-import type { CallInit, StartTimer } from './send-long-call';
-import { UnknownProcedureError } from './unknown-procedure-error';
 
 type RpcClient = ContractRouterClient<ImpContract>;
 

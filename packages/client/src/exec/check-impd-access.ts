@@ -1,5 +1,5 @@
 import { ORPCError } from '@orpc/client';
-import type { FeatureSource } from '../require-features';
+import type { FeatureSource } from '../features/require-features';
 
 export type ImpdAccess = 'unauthorized' | 'unreachable' | 'reachable';
 

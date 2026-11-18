@@ -25,12 +25,7 @@
     "zgeoff/feature-folders": [
       "error",
       {
-        "pending": [
-          "packages/daemon",
-          "packages/client",
-          "packages/dashboard",
-          "packages/e2e-harness"
-        ]
+        "pending": ["packages/daemon", "packages/dashboard", "packages/e2e-harness"]
       }
     ],
     "zgeoff/file-named-for-export": [

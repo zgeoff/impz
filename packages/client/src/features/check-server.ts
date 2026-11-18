@@ -1,6 +1,6 @@
 import type { ImpContract, SystemInfo } from '@impz/api';
 import type { ContractRouterClient } from '@orpc/contract';
-import packageJson from '../package.json' with { type: 'json' };
+import packageJson from '../../package.json' with { type: 'json' };
 
 // The bundler inlines it, so a published build knows its own version.
 export const CLIENT_VERSION = packageJson.version;

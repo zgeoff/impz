@@ -4,8 +4,8 @@ import type { SystemFeaturesInfo, SystemInfo } from '@impz/api';
 import { buildMockSystemInfo } from '@impz/api/test-utils/build-mock-system-info';
 import { ORPCError } from '@orpc/client';
 import invariant from 'tiny-invariant';
+import { UnknownProcedureError } from '../connection/unknown-procedure-error';
 import { collectMissingFeatures, readFeatures, requireFeatures } from './require-features';
-import { UnknownProcedureError } from './unknown-procedure-error';
 
 test('#requireFeatures resolves when impd reports every needed feature on', () => {
   const answer: SystemFeaturesInfo = { version: '2.4.1', features: SYSTEM_FEATURES };

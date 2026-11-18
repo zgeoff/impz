@@ -1,6 +1,6 @@
 import { ORPCError } from '@orpc/client';
-import { MissingFeatureError, requireFeatures } from '../require-features';
-import type { FeatureNeeds, FeatureSource } from '../require-features';
+import { MissingFeatureError, requireFeatures } from '../features/require-features';
+import type { FeatureNeeds, FeatureSource } from '../features/require-features';
 import type { ExecOutcome } from './open-exec-session';
 
 const CHECK_TIMEOUT_MS = 5000;
