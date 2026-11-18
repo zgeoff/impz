@@ -36,7 +36,7 @@ interface RunZfsHostTestOptions {
 }
 
 // .agents/skills/project-testing/references/zfs-nixos-go-ci.md lists the settings this reads.
-export async function runZfsHostTest(options: RunZfsHostTestOptions): Promise<number> {
+export async function zfsHostTest(options: RunZfsHostTestOptions): Promise<number> {
   try {
     const facts = await readHostFacts(options);
 
@@ -448,7 +448,7 @@ if (import.meta.main) {
   // The tests point IMP_ROOT at a tree of stub scripts in place of the checkout's own.
   const root = pickSetting(process.env, 'IMP_ROOT') ?? REPO_ROOT;
 
-  const exitCode = await runZfsHostTest({
+  const exitCode = await zfsHostTest({
     env: process.env,
     root,
     cwd: process.cwd(),

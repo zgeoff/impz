@@ -30,8 +30,8 @@
         "scripts/verify/run-kvm-impd.ts",
         "scripts/verify/remove-kvm-instance.ts",
         // the zfs harnesses that scripts/test-zfs.sh and scripts/zfs-host-test.sh run
-        "scripts/run-test-zfs.ts",
-        "scripts/run-zfs-host-test.ts"
+        "scripts/test-zfs.ts",
+        "scripts/zfs-host-test.ts"
       ],
       "project": [
         "scripts/**/*.ts",

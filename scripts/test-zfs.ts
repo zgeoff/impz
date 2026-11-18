@@ -22,7 +22,7 @@ interface RunTestZfsOptions {
 }
 
 // .agents/skills/project-testing/references/zfs-nixos-go-ci.md lists the settings this reads.
-export async function runTestZfs(options: RunTestZfsOptions): Promise<number> {
+export async function testZfs(options: RunTestZfsOptions): Promise<number> {
   try {
     const host = await checkHost(options);
 
@@ -248,7 +248,7 @@ async function removeMade(run: PoolRun, status: number): Promise<number> {
 }
 
 if (import.meta.main) {
-  const exitCode = await runTestZfs({ env: process.env, root: REPO_ROOT, io: wireZfsIO() });
+  const exitCode = await testZfs({ env: process.env, root: REPO_ROOT, io: wireZfsIO() });
 
   process.exit(exitCode);
 }

@@ -57,7 +57,7 @@ function setupTest() {
     script: new URL('zfs-host-test.sh', import.meta.url).pathname,
 
     // With IMP_ROOT at root, the entry runs the stub scripts there in place of the checkout's own.
-    run: [process.execPath, new URL('run-zfs-host-test.ts', import.meta.url).pathname],
+    run: [process.execPath, new URL('zfs-host-test.ts', import.meta.url).pathname],
   };
 }
 

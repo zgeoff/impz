@@ -31,7 +31,7 @@ function setupTest() {
 
     // The wrapper finds bun on PATH, where a test that stubs bun puts its stub, so such a test runs
     // the entry with this Bun.
-    run: [process.execPath, new URL('run-test-zfs.ts', import.meta.url).pathname],
+    run: [process.execPath, new URL('test-zfs.ts', import.meta.url).pathname],
   };
 }
 
