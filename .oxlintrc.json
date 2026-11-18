@@ -31,19 +31,7 @@
     "zgeoff/file-named-for-export": [
       "error",
       {
-        "pending": [
-          ".",
-          "packages/agent-protocol",
-          "packages/api",
-          "packages/cli",
-          "packages/client",
-          "packages/daemon",
-          "packages/dashboard",
-          "packages/e2e-harness",
-          "packages/local-tar",
-          "packages/mcp",
-          "packages/shared"
-        ]
+        "pending": [".", "packages/api", "packages/cli", "packages/daemon", "packages/e2e-harness"]
       }
     ],
     // each library's docs import it as one object; an option set here replaces the shared ignore

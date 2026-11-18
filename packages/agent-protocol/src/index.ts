@@ -13,6 +13,6 @@ export {
   decodeJsonPayload,
   encodeFrame,
   encodeJsonFrame,
-} from './frame-codec';
+} from './encode-frame';
 
-export type { AgentFrame, FrameDecoder, FrameType } from './frame-codec';
+export type { AgentFrame, FrameDecoder, FrameType } from './encode-frame';

@@ -2,7 +2,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { Button } from '../button/button';
 import { ErrorText } from '../error-text/error-text';
 import styles from '../forms/form.module.css';
-import { readInteger, readText } from '../forms/read-form';
+import { readInteger, readText } from '../forms/read-text';
 import { useImpd } from '../impd/impd';
 import { useRefresh } from '../impd/use-refresh';
 import { Modal } from '../modal/modal';

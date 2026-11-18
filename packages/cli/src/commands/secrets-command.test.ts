@@ -9,7 +9,7 @@ import {
   startStubImpdRelease,
   startTestImpd,
 } from '@impz/daemon/test-utils';
-import { server } from '@impz/shared/test-utils/mock-server';
+import { server } from '@impz/shared/test-utils/server';
 import { HttpResponse, http } from 'msw';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 import { startStubInfoFaultImpd } from '../test-utils/start-stub-info-fault-impd';

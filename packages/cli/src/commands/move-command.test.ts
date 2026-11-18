@@ -8,7 +8,7 @@ import {
   createUbuntuImage,
   startTestImpd,
 } from '@impz/daemon/test-utils';
-import { server } from '@impz/shared/test-utils/mock-server';
+import { server } from '@impz/shared/test-utils/server';
 import { HttpResponse, http } from 'msw';
 import { UsageError } from '../cli/errors';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';

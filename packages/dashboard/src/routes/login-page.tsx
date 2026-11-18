@@ -2,9 +2,9 @@ import { useMutation } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { Button } from '../button/button';
 import formStyles from '../forms/form.module.css';
-import { readText } from '../forms/read-form';
+import { readText } from '../forms/read-text';
 import { useImpd } from '../impd/impd';
-import { sendLogin } from '../impd/session';
+import { sendLogin } from '../impd/send-login';
 import styles from './login-page.module.css';
 
 const MESSAGES = {

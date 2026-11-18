@@ -10,7 +10,7 @@ import {
   readImpByName,
   startStubImpdRelease,
 } from '@impz/daemon/test-utils';
-import { server } from '@impz/shared/test-utils/mock-server';
+import { server } from '@impz/shared/test-utils/server';
 import { writeHostConfig } from '../config/host-store';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 import { startImpdHost } from '../test-utils/start-impd-host';

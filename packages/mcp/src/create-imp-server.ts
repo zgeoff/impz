@@ -10,7 +10,7 @@ import type { McpCaller } from './create-caller-auth';
 import { runOnInterval } from './repeat';
 import type { Repeat } from './repeat';
 import type { Tool, ToolCallRunner } from './tools/define-tool';
-import { TOOLS } from './tools/tool-list';
+import { TOOLS } from './tools/tools';
 
 // Newest first: the SDK answers a client that asks for another version with
 // the first one.

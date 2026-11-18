@@ -1,8 +1,8 @@
 import type { ExecHandle, ExecRequirement, ImpClient } from '@impz/client';
 import { ExecError } from '@impz/client';
 import type { After } from '../after';
-import { createOutputCollector } from './output-cap';
-import type { CappedOutput } from './output-cap';
+import { createOutputCollector } from './create-output-collector';
+import type { CappedOutput } from './create-output-collector';
 
 export interface CappedRunOptions {
   readonly argv: readonly string[];

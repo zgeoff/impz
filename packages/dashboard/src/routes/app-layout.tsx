@@ -4,7 +4,7 @@ import { Button } from '../button/button';
 import { ErrorText } from '../error-text/error-text';
 import { useImpd } from '../impd/impd';
 import { LIVE, SLOW } from '../impd/live';
-import { sendLogout } from '../impd/session';
+import { sendLogout } from '../impd/send-login';
 import { useImpdEvents } from '../impd/use-impd-events';
 import styles from './app-layout.module.css';
 

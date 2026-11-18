@@ -7,7 +7,7 @@ import {
   decodeJsonPayload,
   encodeFrame,
   encodeJsonFrame,
-} from './frame-codec';
+} from './encode-frame';
 
 // The Go agent's codec tests use these same vectors.
 

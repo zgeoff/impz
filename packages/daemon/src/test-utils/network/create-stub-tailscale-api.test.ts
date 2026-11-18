@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { server } from '@impz/shared/test-utils/mock-server';
+import { server } from '@impz/shared/test-utils/server';
 import { z } from 'zod';
 import { createStubTailscaleApi } from './create-stub-tailscale-api';
 

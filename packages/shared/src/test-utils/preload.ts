@@ -1,11 +1,11 @@
 import { afterAll, afterEach, beforeAll } from 'bun:test';
+import { buildRoutedFetch } from './build-routed-fetch';
 import { bypassAmbientProxy } from './bypass-ambient-proxy';
-import { githubRuns } from './github-actions-api';
-import { server } from './mock-server';
+import { githubRuns } from './github-actions-handlers';
 import { registerRunHooks } from './register-run-hooks';
 import { registerTracing } from './register-tracing';
 import { removeAmbientImpEnv } from './remove-ambient-imp-env';
-import { buildRoutedFetch } from './route-fetch';
+import { server } from './server';
 
 const nativeFetch = globalThis.fetch;
 

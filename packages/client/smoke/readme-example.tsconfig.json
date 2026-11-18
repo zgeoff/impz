@@ -10,5 +10,5 @@
     "types": [],
     "noEmit": true
   },
-  "files": ["readme-example.ts"]
+  "files": ["run-readme-example.ts"]
 }

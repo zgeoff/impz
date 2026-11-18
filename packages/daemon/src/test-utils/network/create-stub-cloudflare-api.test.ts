@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { server } from '@impz/shared/test-utils/mock-server';
+import { server } from '@impz/shared/test-utils/server';
 import { createStubCloudflareApi } from './create-stub-cloudflare-api';
 
 test('it lists the zones that have the name asked for', async () => {

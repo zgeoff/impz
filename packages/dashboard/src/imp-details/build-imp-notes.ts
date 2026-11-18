@@ -1,5 +1,5 @@
 import type { Imp } from '@impz/client';
-import { formatRelativeTime } from './format';
+import { formatRelativeTime } from './format-relative-time';
 
 export interface ImpNote {
   readonly tone: 'error' | 'warning' | 'info';

@@ -3,7 +3,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { Button } from '../button/button';
 import { ErrorText } from '../error-text/error-text';
 import styles from '../forms/form.module.css';
-import { readText } from '../forms/read-form';
+import { readText } from '../forms/read-text';
 import { useImpd } from '../impd/impd';
 import { useRefresh } from '../impd/use-refresh';
 import { Modal } from '../modal/modal';

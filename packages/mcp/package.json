@@ -6,7 +6,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./internal": "./src/internal.ts",
+    "./internal": "./src/internal/index.ts",
     "./test-utils/*": "./src/test-utils/*.ts"
   },
   "dependencies": {

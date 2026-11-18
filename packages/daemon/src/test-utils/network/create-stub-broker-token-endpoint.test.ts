@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { server } from '@impz/shared/test-utils/mock-server';
+import { server } from '@impz/shared/test-utils/server';
 import { createStubBrokerTokenEndpoint } from './create-stub-broker-token-endpoint';
 
 test('it answers an issued refresh token with its queued answer', async () => {

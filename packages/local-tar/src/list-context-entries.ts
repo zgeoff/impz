@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { lstat, readFile, readdir } from 'node:fs/promises';
 import { join, posix } from 'node:path';
 import ignore from '@balena/dockerignore';
-import type { LocalEntry } from './pack-local-path';
+import type { LocalEntry } from './list-local-entries';
 import { listDockerfileCandidates } from './write-build-context';
 
 export class MissingDockerfileError extends Error {

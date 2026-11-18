@@ -1,7 +1,11 @@
 import type { Imp } from '@impz/client';
 import { formatMib } from '@impz/shared';
 import { Link } from '@tanstack/react-router';
-import { formatCpuUse, formatDiskUse, formatRelativeTime } from '../imp-details/format';
+import {
+  formatCpuUse,
+  formatDiskUse,
+  formatRelativeTime,
+} from '../imp-details/format-relative-time';
 import styles from '../table/table.module.css';
 import { ImpActions } from './imp-actions';
 import { ImpNotes } from './imp-notes';
