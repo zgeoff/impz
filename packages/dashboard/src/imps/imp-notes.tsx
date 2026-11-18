@@ -1,5 +1,5 @@
 import type { Imp } from '@impz/client';
-import { buildImpNotes } from '../imp-details/imp-notes';
+import { buildImpNotes } from '../imp-details/build-imp-notes';
 import styles from './imp-notes.module.css';
 
 interface ImpNotesProps {

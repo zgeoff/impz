@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { GITHUB_API_URL, githubRuns } from '@impz/shared/test-utils/github-actions-api';
+import { GITHUB_API_URL, githubRuns } from '@impz/shared/test-utils/github-actions-handlers';
 import { runRequireGate } from './run-require-gate';
 
 function setupTest() {

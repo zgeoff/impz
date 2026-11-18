@@ -4,7 +4,7 @@ import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { buildMockBrokerRule } from '@impz/api/test-utils/build-mock-broker-rule';
 import { buildMockOAuthConfig } from '@impz/api/test-utils/build-mock-oauth-config';
-import { server } from '@impz/shared/test-utils/mock-server';
+import { server } from '@impz/shared/test-utils/server';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { HttpResponse, http } from 'msw';
 import invariant from 'tiny-invariant';

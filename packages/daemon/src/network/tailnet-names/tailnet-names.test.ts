@@ -1,8 +1,8 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { server } from '@impz/shared/test-utils/mock-server';
 import { readImpEnv } from '@impz/shared/test-utils/read-imp-env';
+import { server } from '@impz/shared/test-utils/server';
 import { updateEnv } from '@impz/shared/test-utils/update-env';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { HttpResponse, http } from 'msw';

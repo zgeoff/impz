@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { buildMockImp } from '../test-utils/build-mock-imp';
-import { buildImpNotes } from './imp-notes';
+import { buildImpNotes } from './build-imp-notes';
 
 test('it gives a healthy imp no notes', () => {
   const imp = buildMockImp({ name: 'web', state: 'running' });

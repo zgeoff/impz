@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { ErrorResponseSchema, ExitSchema, StartedSchema } from './agent-protocol';
+import { FRAME_TYPES } from './encode-frame';
 import { encodeMessageFrame } from './encode-message-frame';
-import { FRAME_TYPES } from './frame-codec';
 
 test('it frames a message as its JSON under the schema’s field names', () => {
   const bytes = encodeMessageFrame(FRAME_TYPES.started, StartedSchema, {

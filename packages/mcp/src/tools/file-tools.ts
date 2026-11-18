@@ -1,5 +1,5 @@
 import * as z from 'zod';
-import { formatCappedText } from '../exec/output-cap';
+import { formatCappedText } from '../exec/create-output-collector';
 import { runCapped } from '../exec/run-capped';
 import type { CappedRunResult } from '../exec/run-capped';
 import { defineTool } from './define-tool';

@@ -30,7 +30,7 @@ import {
   StartedSchema,
 } from './agent-protocol';
 import { encodeAgentMessage } from './encode-agent-message';
-import { FRAME_TYPES, MAX_PAYLOAD } from './frame-codec';
+import { FRAME_TYPES, MAX_PAYLOAD } from './encode-frame';
 import { collectJsonKeyPaths } from './test-utils/collect-json-key-paths';
 import { collectMessageKeyPaths } from './test-utils/collect-message-key-paths';
 

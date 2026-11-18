@@ -1,14 +1,14 @@
-export { createLocalExtractor } from './extract-local';
-export type { ExtractProgress, LocalExtractor } from './extract-local';
-export { MissingDockerfileError, listContextEntries } from './pack-build-context';
+export { createLocalExtractor } from './create-local-extractor';
+export type { ExtractProgress, LocalExtractor } from './create-local-extractor';
+export { MissingDockerfileError, listContextEntries } from './list-context-entries';
 
 export {
   countFileBytes,
   countTarBytes,
   listLocalEntries,
   writeLocalEntries,
-} from './pack-local-path';
+} from './list-local-entries';
 
-export type { LocalEntry, PackProgress } from './pack-local-path';
+export type { LocalEntry, PackProgress } from './list-local-entries';
 export { BuildContextError, readBuildContext, writeBuildContext } from './write-build-context';
 export type { CheckedContext } from './write-build-context';

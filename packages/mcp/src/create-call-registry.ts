@@ -1,6 +1,6 @@
 import { INVALID_PARAMS, isJSONRPCRequest } from '@modelcontextprotocol/server';
 import type { JSONRPCErrorResponse, RequestId, Transport } from '@modelcontextprotocol/server';
-import { TOOLS } from './tools/tool-list';
+import { TOOLS } from './tools/tools';
 
 interface Call {
   readonly abort: AbortController;

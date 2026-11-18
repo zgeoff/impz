@@ -1,5 +1,5 @@
 import { expect, mock, test } from 'bun:test';
-import { server } from '@impz/shared/test-utils/mock-server';
+import { server } from '@impz/shared/test-utils/server';
 import { HttpResponse, http } from 'msw';
 import { createStubCloudflareApi } from '../../../test-utils/network/create-stub-cloudflare-api';
 import { createDnsProvider } from './create-dns-provider';

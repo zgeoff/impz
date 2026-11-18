@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
-import { GITHUB_API_URL, githubRuns } from '@impz/shared/test-utils/github-actions-api';
-import { server } from '@impz/shared/test-utils/mock-server';
+import { GITHUB_API_URL, githubRuns } from '@impz/shared/test-utils/github-actions-handlers';
+import { server } from '@impz/shared/test-utils/server';
 import { HttpResponse, http } from 'msw';
 import { readBranchRuns } from './read-branch-runs';
 

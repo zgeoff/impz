@@ -3,7 +3,7 @@ import { X509Certificate, randomUUID } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { server } from '@impz/shared/test-utils/mock-server';
+import { server } from '@impz/shared/test-utils/server';
 import invariant from 'tiny-invariant';
 import { createStubCloudflareApi } from '../../../test-utils/network/create-stub-cloudflare-api';
 import { startPebbleStack } from '../../../test-utils/network/start-pebble-stack';

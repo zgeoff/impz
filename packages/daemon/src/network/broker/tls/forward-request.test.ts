@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { verifyImpIdentity } from '@impz/client/identity';
 import { buildStubAnswerQueue } from '@impz/shared/test-utils/build-stub-answer-queue';
-import { server } from '@impz/shared/test-utils/mock-server';
+import { server } from '@impz/shared/test-utils/server';
 import { HttpResponse, http } from 'msw';
 import invariant from 'tiny-invariant';
 import type { NewAuditEntry } from '../../../platform/db/broker-audit';

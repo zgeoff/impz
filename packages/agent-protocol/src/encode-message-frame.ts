@@ -1,7 +1,7 @@
 import { create, toJson } from '@bufbuild/protobuf';
 import type { DescMessage, MessageInitShape } from '@bufbuild/protobuf';
-import { encodeJsonFrame } from './frame-codec';
-import type { FrameType } from './frame-codec';
+import { encodeJsonFrame } from './encode-frame';
+import type { FrameType } from './encode-frame';
 
 export function encodeMessageFrame<Desc extends DescMessage>(
   type: FrameType,

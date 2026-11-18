@@ -22,7 +22,7 @@ echo "node $(node --version)"
 
 # the import under plain Node, and the README's examples against the published
 # declarations only; both run here, where the tarball is installed
-cp "$smoke/import-check.mjs" "$smoke/readme-example.ts" .
+cp "$smoke/import-check.mjs" "$smoke/run-readme-example.ts" .
 cp "$smoke/readme-example.tsconfig.json" tsconfig.json
 node import-check.mjs "$(tar -xOzf "$tarball" package/package.json | jq -r .version)"
 

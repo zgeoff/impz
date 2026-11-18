@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import { buildMockDiskUsage } from '../test-utils/build-mock-disk-usage';
 import { buildMockImp } from '../test-utils/build-mock-imp';
 import { buildMockImpResources } from '../test-utils/build-mock-imp-resources';
-import { formatCpuUse, formatDiskUse, formatRelativeTime } from './format';
+import { formatCpuUse, formatDiskUse, formatRelativeTime } from './format-relative-time';
 
 test.each([
   [-12_000, '12s ago'],

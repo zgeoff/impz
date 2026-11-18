@@ -1,5 +1,5 @@
 import { expect, mock, test } from 'bun:test';
-import { buildRoutedFetch } from './route-fetch';
+import { buildRoutedFetch } from './build-routed-fetch';
 
 function setupTest() {
   const nativeFetch = mock();

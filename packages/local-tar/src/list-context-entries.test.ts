@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { chmod, lstat, mkdtemp, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { MissingDockerfileError, listContextEntries } from './pack-build-context';
+import { MissingDockerfileError, listContextEntries } from './list-context-entries';
 import { createStubTree } from './test-utils/create-stub-tree';
 
 async function setupTest() {

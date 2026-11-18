@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import { create } from '@bufbuild/protobuf';
 import { OKSchema, RequestSchema } from './agent-protocol';
 import { decodeMessageFrame } from './decode-message-frame';
-import { FRAME_TYPES } from './frame-codec';
+import { FRAME_TYPES } from './encode-frame';
 
 test('it decodes a frame’s JSON payload into the schema’s message', () => {
   const frame = {

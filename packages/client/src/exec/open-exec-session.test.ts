@@ -6,7 +6,7 @@ import {
   startTestImpd,
 } from '@impz/daemon/test-utils';
 import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
-import { server } from '@impz/shared/test-utils/mock-server';
+import { server } from '@impz/shared/test-utils/server';
 import { http } from 'msw';
 import { createImpClient } from '../create-imp-client';
 import { createStubUndiciWebSocket } from '../test-utils/create-stub-undici-web-socket';

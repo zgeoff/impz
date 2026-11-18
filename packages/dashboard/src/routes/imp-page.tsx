@@ -7,7 +7,7 @@ import { Button } from '../button/button';
 import { CheckpointsPanel } from '../checkpoints/checkpoints-panel';
 import { CpuPanel } from '../cpu/cpu-panel';
 import { ErrorText } from '../error-text/error-text';
-import { formatDiskUse, formatRelativeTime } from '../imp-details/format';
+import { formatDiskUse, formatRelativeTime } from '../imp-details/format-relative-time';
 import { useNow } from '../imp-details/use-now';
 import { useImpd } from '../impd/impd';
 import { LIVE, SLOW } from '../impd/live';

@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { createOutputCollector, formatCappedText } from './output-cap';
+import { createOutputCollector, formatCappedText } from './create-output-collector';
 
 test('it returns the output whole within the cap', () => {
   const collector = createOutputCollector(10, 4);

@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { HttpResponse, http } from 'msw';
-import { server } from './mock-server';
+import { server } from './server';
 
 test('it answers a request with a handler the test adds', async () => {
   server.use(http.get('https://registry.example.test/v2/', () => HttpResponse.json({ ok: true })));

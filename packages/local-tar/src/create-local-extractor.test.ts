@@ -2,7 +2,7 @@ import { expect, mock, onTestFinished, test } from 'bun:test';
 import { lstat, mkdir, mkdtemp, readFile, readlink, rm, stat, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createLocalExtractor } from './extract-local';
+import { createLocalExtractor } from './create-local-extractor';
 import { createStubAgentTar } from './test-utils/create-stub-agent-tar';
 
 async function setupTest() {

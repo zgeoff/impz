@@ -8,7 +8,7 @@ import {
   countTarBytes,
   listLocalEntries,
   writeLocalEntries,
-} from './pack-local-path';
+} from './list-local-entries';
 import { createStubTree } from './test-utils/create-stub-tree';
 import { readTarEntries } from './test-utils/read-tar-entries';
 

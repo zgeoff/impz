@@ -1,6 +1,6 @@
 import { EXEC_REQUIREMENTS } from '@impz/api';
 import * as z from 'zod';
-import { formatCappedText } from '../exec/output-cap';
+import { formatCappedText } from '../exec/create-output-collector';
 import { runCapped } from '../exec/run-capped';
 import { defineTool } from './define-tool';
 import type { Tool } from './define-tool';
