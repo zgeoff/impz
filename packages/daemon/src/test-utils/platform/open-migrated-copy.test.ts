@@ -3,6 +3,7 @@ import { sql } from 'kysely';
 import { createImage, listImages } from '../../platform/db/images';
 import { createImp } from '../../platform/db/imps';
 import { openDatabase } from '../../platform/db/open-database';
+import { readNames } from '../../platform/db/read-names';
 import { MIGRATIONS } from '../../platform/db/run-migrations';
 import { buildMockNewImage } from '../imps/build-mock-new-image';
 import { buildMockNewImp } from '../imps/build-mock-new-imp';
@@ -13,11 +14,11 @@ test('it opens a copy that has run every migration', async () => {
 
   onTestFinished(() => db.destroy());
 
-  const executed = await sql<{ name: string }>`
+  const executed = await sql`
     SELECT name FROM kysely_migration ORDER BY name
   `.execute(db);
 
-  expect(executed.rows.map((row) => row.name)).toStrictEqual(Object.keys(MIGRATIONS).toSorted());
+  expect(readNames(executed.rows)).toStrictEqual(Object.keys(MIGRATIONS).toSorted());
 });
 
 test('it opens a copy with the schema of a database migrated on open', async () => {
@@ -29,7 +30,7 @@ test('it opens a copy with the schema of a database migrated on open', async () 
 
   onTestFinished(() => fresh.destroy());
 
-  const readSchema = sql<{ type: string; name: string; sql: string | null }>`
+  const readSchema = sql`
     SELECT type, name, sql FROM sqlite_master ORDER BY type, name
   `;
 
@@ -74,7 +75,7 @@ test('it lets a copy grow past the size of the template', async () => {
     SELECT value, randomblob(200) AS payload FROM counter
   `.execute(db);
 
-  const counted = await sql<{ rows: number }>`SELECT count(*) AS rows FROM growth`.execute(db);
+  const counted = await sql`SELECT count(*) AS rows FROM growth`.execute(db);
 
   expect(counted.rows).toStrictEqual([{ rows: 5000 }]);
 });

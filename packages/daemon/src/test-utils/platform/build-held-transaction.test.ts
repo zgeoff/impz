@@ -28,7 +28,7 @@ test('it runs a query made through its database once the transaction has rolled 
 
   await held.open();
 
-  const query = sql<{ one: number }>`SELECT 1 AS one`.execute(held.db);
+  const query = sql`SELECT 1 AS one`.execute(held.db);
 
   await held.rollBack();
 

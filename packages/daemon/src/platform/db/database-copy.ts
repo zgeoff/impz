@@ -49,7 +49,7 @@ async function removeCopyLogID(path: string): Promise<void> {
 }
 
 async function probeEventLogTable(copy: Kysely<DB>): Promise<boolean> {
-  const tables = await sql<{ name: string }>`
+  const tables = await sql`
     SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'event_log'
   `.execute(copy);
 
@@ -111,11 +111,10 @@ export async function writeDatabaseCopy(
 }
 
 async function readDatabaseBytes(db: ImpQueries): Promise<number> {
-  const result = await sql<{
-    bytes: number;
-  }>`SELECT page_count * page_size AS bytes FROM pragma_page_count(), pragma_page_size()`.execute(
-    db,
-  );
+  const result =
+    await sql`SELECT page_count * page_size AS bytes FROM pragma_page_count(), pragma_page_size()`.execute(
+      db,
+    );
 
   return SizeRowSchema.parse(result.rows[0]).bytes;
 }

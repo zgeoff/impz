@@ -3,6 +3,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { readNames } from '../../platform/db/read-names';
 import { copyMigratedTemplate } from './copy-migrated-template';
 import { formatRunPrefix } from './format-run-prefix';
 import { readRunOwner } from './read-run-owner';
@@ -37,10 +38,7 @@ test('it builds a template migrated up to the migration it names', async () => {
     opened.close();
   });
 
-  const names = opened
-    .query<{ name: string }, []>('SELECT name FROM kysely_migration ORDER BY name')
-    .all()
-    .map((row) => row.name);
+  const names = readNames(opened.query('SELECT name FROM kysely_migration ORDER BY name').all());
 
   expect(names).toStrictEqual(['001_create_initial_schema', '002_add_imp_http_port']);
 });
@@ -91,9 +89,7 @@ test('it gives each file a copy that a write to another file leaves alone', asyn
     second.close();
   });
 
-  const notes = second
-    .query<{ name: string }, []>("SELECT name FROM sqlite_master WHERE name = 'notes'")
-    .all();
+  const notes = second.query("SELECT name FROM sqlite_master WHERE name = 'notes'").all();
 
   expect(notes).toStrictEqual([]);
 });

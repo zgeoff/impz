@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { sql } from 'kysely';
 import invariant from 'tiny-invariant';
+import * as z from 'zod';
 import { createMigratedDatabaseFile } from '../../test-utils/platform/create-migrated-database-file';
 import { createUnmigratedDatabase } from '../../test-utils/platform/create-unmigrated-database';
 import { formatRunPrefix } from '../../test-utils/platform/format-run-prefix';
@@ -20,6 +21,7 @@ import { readRunOwner } from '../../test-utils/platform/read-run-owner';
 import { createDiskBudget } from '../../vm/storage/disk-budget';
 import { writeConsistentCopy, writeDatabaseCopy } from './database-copy';
 import { openDatabase } from './open-database';
+import { readNames } from './read-names';
 import { MIGRATIONS } from './run-migrations';
 
 // impd keeps its database in WAL mode, so a copy taken while writes run must
@@ -187,9 +189,9 @@ test('#writeDatabaseCopy holds a prefix of the writes that run meanwhile', async
     opened.close();
   });
 
-  const ats = opened
-    .query<{ at: number }, []>('SELECT at FROM api_audit ORDER BY at')
-    .all()
+  const ats = z
+    .array(z.object({ at: z.number() }))
+    .parse(opened.query('SELECT at FROM api_audit ORDER BY at').all())
     .map((row) => row.at);
 
   expect(ats).toStrictEqual(Array.from({ length: ats.length }, (_, index) => index));
@@ -291,10 +293,7 @@ test('#writeConsistentCopy writes into an empty file that exists', async () => {
     opened.close();
   });
 
-  const names = opened
-    .query<{ name: string }, []>('SELECT name FROM kysely_migration ORDER BY name')
-    .all()
-    .map((row) => row.name);
+  const names = readNames(opened.query('SELECT name FROM kysely_migration ORDER BY name').all());
 
   expect(names).toStrictEqual(Object.keys(MIGRATIONS).toSorted());
 });
@@ -322,10 +321,7 @@ test('#writeConsistentCopy writes a copy of an older schema that migrates forwar
     opened.close();
   });
 
-  const names = opened
-    .query<{ name: string }, []>('SELECT name FROM kysely_migration ORDER BY name')
-    .all()
-    .map((row) => row.name);
+  const names = readNames(opened.query('SELECT name FROM kysely_migration ORDER BY name').all());
 
   expect(names).toStrictEqual(Object.keys(MIGRATIONS).toSorted());
 });
