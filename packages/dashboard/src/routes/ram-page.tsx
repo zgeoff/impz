@@ -6,8 +6,8 @@ import { ErrorText } from '../components/error-text';
 import { RamMeter } from '../components/ram-meter';
 import { StateBadge } from '../components/state-badge';
 import tableStyles from '../components/table.module.css';
-import { useImpd } from '../lib/impd';
-import { LIVE } from '../lib/live';
+import { useImpd } from '../impd/impd';
+import { LIVE } from '../impd/live';
 import styles from './page.module.css';
 
 export function RamPage() {

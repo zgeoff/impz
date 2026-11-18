@@ -5,9 +5,9 @@ import { CreateImpDialog } from '../components/create-imp-dialog';
 import { ErrorText } from '../components/error-text';
 import { ImpTable } from '../components/imp-table';
 import { RamMeter } from '../components/ram-meter';
-import { useImpd } from '../lib/impd';
-import { LIVE } from '../lib/live';
-import { useNow } from '../lib/use-now';
+import { useNow } from '../imp-details/use-now';
+import { useImpd } from '../impd/impd';
+import { LIVE } from '../impd/live';
 import styles from './page.module.css';
 
 export function ImpsPage() {

@@ -2,10 +2,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, Outlet, useNavigate } from '@tanstack/react-router';
 import { Button } from '../components/button';
 import { ErrorText } from '../components/error-text';
-import { useImpd } from '../lib/impd';
-import { LIVE, SLOW } from '../lib/live';
-import { sendLogout } from '../lib/session';
-import { useImpdEvents } from '../lib/use-impd-events';
+import { useImpd } from '../impd/impd';
+import { LIVE, SLOW } from '../impd/live';
+import { sendLogout } from '../impd/session';
+import { useImpdEvents } from '../impd/use-impd-events';
 import styles from './app-layout.module.css';
 
 export function AppLayout() {

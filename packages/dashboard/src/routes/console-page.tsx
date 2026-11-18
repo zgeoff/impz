@@ -2,7 +2,7 @@ import { Link } from '@tanstack/react-router';
 import { useMemo } from 'react';
 import { ConsoleView } from '../components/console/console-view';
 import { createConsoleSource } from '../components/console/create-console-source';
-import { useImpd } from '../lib/impd';
+import { useImpd } from '../impd/impd';
 import styles from './page.module.css';
 
 interface ConsolePageProps {

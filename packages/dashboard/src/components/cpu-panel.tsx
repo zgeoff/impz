@@ -1,10 +1,10 @@
 import type { Imp } from '@impz/client';
 import { formatBytes, formatDuration } from '@impz/shared';
 import { useMutation } from '@tanstack/react-query';
-import { formatCpuUse } from '../lib/format';
-import { useImpd } from '../lib/impd';
-import { readInteger, readText } from '../lib/read-form';
-import { useRefresh } from '../lib/use-refresh';
+import { readInteger, readText } from '../forms/read-form';
+import { formatCpuUse } from '../imp-details/format';
+import { useImpd } from '../impd/impd';
+import { useRefresh } from '../impd/use-refresh';
 import { Button } from './button';
 import styles from './cpu-panel.module.css';
 import { ErrorText } from './error-text';

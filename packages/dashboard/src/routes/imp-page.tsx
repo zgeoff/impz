@@ -11,10 +11,10 @@ import { ForkDialog } from '../components/fork-dialog';
 import { ImpActions } from '../components/imp-actions';
 import { ImpNotes } from '../components/imp-notes';
 import { StateBadge } from '../components/state-badge';
-import { formatDiskUse, formatRelativeTime } from '../lib/format';
-import { useImpd } from '../lib/impd';
-import { LIVE, SLOW } from '../lib/live';
-import { useNow } from '../lib/use-now';
+import { formatDiskUse, formatRelativeTime } from '../imp-details/format';
+import { useNow } from '../imp-details/use-now';
+import { useImpd } from '../impd/impd';
+import { LIVE, SLOW } from '../impd/live';
 import styles from './page.module.css';
 
 interface ImpPageProps {

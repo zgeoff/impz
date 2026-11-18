@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { useImpd } from '../lib/impd';
-import { readInteger, readText } from '../lib/read-form';
-import { useRefresh } from '../lib/use-refresh';
+import { readInteger, readText } from '../forms/read-form';
+import { useImpd } from '../impd/impd';
+import { useRefresh } from '../impd/use-refresh';
 import { Button } from './button';
 import { ErrorText } from './error-text';
 import styles from './form.module.css';
