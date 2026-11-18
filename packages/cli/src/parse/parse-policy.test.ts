@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { UsageError } from '../cli/errors';
+import { UsageError } from '../cli/usage-error';
 import { formatPolicy, parsePolicy } from './parse-policy';
 
 test('#parsePolicy leaves the policy unset when neither flag is given', () => {

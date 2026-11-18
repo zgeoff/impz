@@ -1,5 +1,5 @@
 import * as z from 'zod';
-import { IdentityIssuerSchema } from './identity-schema';
+import { IdentityIssuerSchema } from './identity-trust-document-schema';
 import { NameSchema } from './name-schema';
 
 const CountSchema = z.int().nonnegative();

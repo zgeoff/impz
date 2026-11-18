@@ -1,14 +1,14 @@
 import { integer } from 'gunshi/combinators';
-import { detachKeyArg, jsonArg, nameArg, requireSessionName } from '../args/common-args';
+import { detachKeyArg, jsonArg, nameArg, requireSessionName } from '../args/name-arg';
 import { defineCommand } from '../cli/define-command';
 import { dispatchVerb, listOperands } from '../cli/dispatch-verb';
-import { CommandExitError, UsageError } from '../cli/errors';
 import { runAction } from '../cli/run-action';
-import { DEFAULT_SESSION, parseDetachKey } from '../exec/detach-key';
-import { createExecIO, runExec } from '../exec/exec-client';
+import { CommandExitError, UsageError } from '../cli/usage-error';
+import { createExecIO, runExec } from '../exec/create-exec-io';
+import { DEFAULT_SESSION, parseDetachKey } from '../exec/parse-detach-key';
 import { formatOutput, formatSessions } from '../output/format-output';
+import { listSessionLogs, removeSessionLogs, writeSessionLog } from '../sessions/list-session-logs';
 import { readTermEnv } from '../sessions/read-term-env';
-import { listSessionLogs, removeSessionLogs, writeSessionLog } from '../sessions/session-logs';
 
 export const sessionsCommand = defineCommand({
   name: 'sessions',

@@ -1,6 +1,6 @@
 import { defineCommand, defineGroup } from '../cli/define-command';
-import { UsageError } from '../cli/errors';
 import { runAction } from '../cli/run-action';
+import { UsageError } from '../cli/usage-error';
 import { formatJson } from '../output/format-output';
 
 const jwksCommand = defineCommand({

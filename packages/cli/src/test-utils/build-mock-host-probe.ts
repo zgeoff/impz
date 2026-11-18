@@ -1,7 +1,7 @@
 import type { Identity, SystemInfo } from '@impz/api';
 import { buildMockIdentity } from '@impz/api/test-utils/build-mock-identity';
 import { buildMockSystemInfo } from '@impz/api/test-utils/build-mock-system-info';
-import type { HostProbe } from '../hosts/place-imp';
+import type { HostProbe } from '../hosts/create-placed';
 
 type OptionalInfoKey = {
   [K in keyof SystemInfo]-?: undefined extends SystemInfo[K] ? K : never;

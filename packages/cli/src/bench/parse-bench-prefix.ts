@@ -1,6 +1,6 @@
 import { NameSchema } from '@impz/api';
 import invariant from 'tiny-invariant';
-import { UsageError } from '../cli/errors';
+import { UsageError } from '../cli/usage-error';
 import { buildBenchImpName } from './build-bench-imp-name';
 
 interface BenchNaming {

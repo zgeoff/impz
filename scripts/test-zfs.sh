@@ -1,2 +1,2 @@
 #!/bin/bash
-exec bun "$(dirname "$0")/test-zfs.ts" "$@"
+exec bun "$(dirname "$0")/run-test-zfs.ts" "$@"

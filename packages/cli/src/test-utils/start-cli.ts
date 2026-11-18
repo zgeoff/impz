@@ -14,7 +14,7 @@ export interface CliResult {
   readonly code: number;
 }
 
-const MAIN = join(import.meta.dir, '..', 'main.ts');
+const MAIN = join(import.meta.dir, '..', 'run-cli.ts');
 
 export function startCli(options: StartCliOptions) {
   const home = mkdtempSync(join(tmpdir(), 'impz-cli-home-'));

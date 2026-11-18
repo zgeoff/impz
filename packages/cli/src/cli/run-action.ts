@@ -4,7 +4,7 @@ import { loadCliConfig } from '../config/cli-config';
 import type { CliConfig } from '../config/cli-config';
 import { createImpClient } from '../config/create-imp-client';
 import type { ImpClient } from '../config/create-imp-client';
-import type { ImpzExtension } from './impz-plugin';
+import type { ImpzExtension } from './build-impz-plugin';
 
 const TOKEN_HINT =
   'unauthorized: set IMP_TOKEN to the token from <IMP_DATA_DIR>/token, or run impz login <url>';

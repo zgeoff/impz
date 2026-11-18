@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import type { CommandIO } from '../cli/command-io';
-import { runCLI } from '../main';
+import { runCLI } from '../run-cli';
 import type { CliResult, StartCliOptions } from './start-cli';
 
 interface InProcessOptions extends StartCliOptions {

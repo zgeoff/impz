@@ -8,7 +8,7 @@ import {
   BuildContextErrorSchema,
   BuildContextQuerySchema,
   BuildContextUploadSchema,
-} from './build-context-protocol';
+} from './build-context-query-schema';
 import {
   EXEC_CHANNELS,
   EXEC_CLOSE_RESTARTING,
@@ -19,7 +19,7 @@ import {
   EXEC_TICKET_PARAM,
   ExecClientMessageSchema,
   ExecServerMessageSchema,
-} from './exec-protocol';
+} from './exec-client-message-schema';
 import {
   TUNNEL_CLOSE_LOST,
   TUNNEL_CLOSE_NORMAL,
@@ -30,7 +30,7 @@ import {
   TUNNEL_WINDOW_BYTES,
   TunnelClientMessageSchema,
   TunnelServerMessageSchema,
-} from './tunnel-protocol';
+} from './tunnel-client-message-schema';
 
 const JsonSchemaSchema = z.record(z.string(), z.unknown()).readonly();
 const MessageDirectionSchema = z.enum(['toServer', 'toClient']);

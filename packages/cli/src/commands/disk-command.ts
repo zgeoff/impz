@@ -1,4 +1,4 @@
-import { jsonArg, nameArg } from '../args/common-args';
+import { jsonArg, nameArg } from '../args/name-arg';
 import { defineCommand, defineGroup } from '../cli/define-command';
 import { runAction } from '../cli/run-action';
 import { formatImp } from '../output/format-imp';

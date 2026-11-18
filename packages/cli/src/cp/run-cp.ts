@@ -6,11 +6,11 @@ import {
   listLocalEntries,
   writeLocalEntries,
 } from '@impz/local-tar';
-import { UsageError } from '../cli/errors';
 import { toCallError } from '../cli/run-action';
+import { UsageError } from '../cli/usage-error';
 import { loadCliConfig } from '../config/cli-config';
 import type { CliConfig } from '../config/cli-config';
-import type { CliEnv } from '../config/host-store';
+import type { CliEnv } from '../config/read-host-config';
 import { openBunWebSocket } from '../exec/open-bun-web-socket';
 import { buildTarArgs } from './build-tar-args';
 import { createCopyProgress } from './copy-progress';

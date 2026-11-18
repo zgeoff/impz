@@ -3,7 +3,7 @@ import {
   MoveCommitReplySchema,
   MoveOfferReplySchema,
   MoveOfferSchema,
-} from '../schemas/move-peer-schema';
+} from '../schemas/move-offer-schema';
 
 // The routes are plain JSON POSTs, the wire of an impd that predates the contract, so a source and
 // a target on either side of that change still move imps between them.

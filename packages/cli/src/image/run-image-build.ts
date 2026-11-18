@@ -8,7 +8,7 @@ import {
   writeLocalEntries,
 } from '@impz/local-tar';
 import type { LocalEntry } from '@impz/local-tar';
-import { UsageError } from '../cli/errors';
+import { UsageError } from '../cli/usage-error';
 import type { ImpClient } from '../config/create-imp-client';
 import { createCopyProgress } from '../cp/copy-progress';
 import type { CopyProgress, ProgressOutput } from '../cp/copy-progress';

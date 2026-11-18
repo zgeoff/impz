@@ -4,7 +4,7 @@
   "private": true,
   "description": "impz: the command-line client for impd",
   "bin": {
-    "impz": "src/main.ts"
+    "impz": "src/run-cli.ts"
   },
   "type": "module",
   "exports": {

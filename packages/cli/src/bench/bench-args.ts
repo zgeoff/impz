@@ -1,5 +1,5 @@
 import type { Args } from 'gunshi';
-import { jsonArg } from '../args/common-args';
+import { jsonArg } from '../args/name-arg';
 import { BENCH_SCENARIOS } from './bench-scenarios';
 
 export const BENCH_ARGS = {

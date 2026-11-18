@@ -41,9 +41,9 @@ points at. On a production host, run one imp at a time.
    `impz`:
 
    ```sh
-   bun packages/cli/src/main.ts new wakeprobe-small --memory 512m --no-backup
-   bun packages/cli/src/main.ts sleep wakeprobe-small
-   bun packages/cli/src/main.ts wake wakeprobe-small
+   bun packages/cli/src/run-cli.ts new wakeprobe-small --memory 512m --no-backup
+   bun packages/cli/src/run-cli.ts sleep wakeprobe-small
+   bun packages/cli/src/run-cli.ts wake wakeprobe-small
    ```
 
    Expect: each command exits 0.
@@ -57,7 +57,7 @@ points at. On a production host, run one imp at a time.
    Expect: one line. `handler=` in it means the imp is on 2 MiB pages. Compare its `agent=` with the
    143 ms median on 4 KiB pages.
 
-3. From the checkout, remove the imp with `bun packages/cli/src/main.ts rm wakeprobe-small`.
+3. From the checkout, remove the imp with `bun packages/cli/src/run-cli.ts rm wakeprobe-small`.
 
 ## Results
 

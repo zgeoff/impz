@@ -1,4 +1,4 @@
-import type { StartTimer } from '../hosts/fan-out';
+import type { StartTimer } from '../hosts/run-on-hosts';
 
 interface StubTimeout {
   readonly durationMs: number;

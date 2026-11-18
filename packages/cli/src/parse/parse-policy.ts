@@ -1,6 +1,6 @@
 import { EGRESS_MODE_TRAITS, EgressModeSchema } from '@impz/api';
 import type { EgressPolicy } from '@impz/api';
-import { UsageError } from '../cli/errors';
+import { UsageError } from '../cli/usage-error';
 
 export function parsePolicy(
   mode: string | undefined,

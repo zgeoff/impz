@@ -33,7 +33,7 @@ async function setupTest() {
     dataDir: harness.dataDir,
     home,
     url,
-    main: join(import.meta.dir, '..', 'main.ts'),
+    main: join(import.meta.dir, '..', 'run-cli.ts'),
     client: createImpClient({ url, token: 'root-token' }),
     stack,
   };

@@ -1,4 +1,4 @@
-import { UsageError } from '../cli/errors';
+import { UsageError } from '../cli/usage-error';
 
 export function parseBenchLevels(text: string): number[] {
   const levels = text.split(',').map((part) => part.trim());

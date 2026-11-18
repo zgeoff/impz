@@ -1,5 +1,5 @@
 import { requireFeatures } from '@impz/client';
-import { jsonArg } from '../args/common-args';
+import { jsonArg } from '../args/name-arg';
 import { defineCommand, defineGroup } from '../cli/define-command';
 import { runAction } from '../cli/run-action';
 import { formatOutput } from '../output/format-output';

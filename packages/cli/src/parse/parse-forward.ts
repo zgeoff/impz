@@ -1,4 +1,4 @@
-import { UsageError } from '../cli/errors';
+import { UsageError } from '../cli/usage-error';
 
 export interface Forward {
   readonly local: number;

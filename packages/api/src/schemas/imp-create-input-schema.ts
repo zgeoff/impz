@@ -1,7 +1,7 @@
 import * as z from 'zod';
 import { CpuLimitSchema } from './cpu-limit-schema';
 import { CpuWeightSchema } from './cpu-weight-schema';
-import { EgressPolicySchema } from './egress-schema';
+import { EgressPolicySchema } from './egress-policy-schema';
 import { NameSchema } from './name-schema';
 import { MAX_CREATE_NETWORKS } from './network-schema';
 import { PortSchema } from './port-schema';

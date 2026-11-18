@@ -1,5 +1,5 @@
 import type { ReverseGuest } from '@impz/client';
-import { UsageError } from '../cli/errors';
+import { UsageError } from '../cli/usage-error';
 
 export type ReverseLocal =
   | { readonly network: 'unix'; readonly path: string }

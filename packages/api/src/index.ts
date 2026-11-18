@@ -1,5 +1,5 @@
 export type { ApiActor, ApiCall } from './schemas/api-call-schema';
-export type { BackupRestore, BackupRun, BackupStatus } from './schemas/backup-schema';
+export type { BackupRestore, BackupRun, BackupStatus } from './schemas/backup-status-schema';
 export { CheckpointSchema } from './schemas/checkpoint-schema';
 export { LeaseLabelSchema } from './schemas/lease-schema';
 export type { Lease, LeaseSummary } from './schemas/lease-schema';
@@ -9,9 +9,9 @@ export {
   BuildContextErrorSchema,
   BuildContextQuerySchema,
   BuildContextUploadSchema,
-} from './protocols/build-context-protocol';
+} from './protocols/build-context-query-schema';
 
-export type { BuildContextQuery, BuildContextUpload } from './protocols/build-context-protocol';
+export type { BuildContextQuery, BuildContextUpload } from './protocols/build-context-query-schema';
 export { IMAGE_BUILD_LOG_MAX_CHARS } from './schemas/image-op-event-schema';
 
 export type {
@@ -42,7 +42,7 @@ export {
   TAR_TOTAL_RECORD,
   decodeExecFrame,
   encodeExecFrame,
-} from './protocols/exec-protocol';
+} from './protocols/exec-client-message-schema';
 
 export type {
   DetachReason,
@@ -51,14 +51,14 @@ export type {
   ExecRequirement,
   ExecServerMessage,
   ExecTool,
-} from './protocols/exec-protocol';
+} from './protocols/exec-client-message-schema';
 
 export { PublicAuthSchema } from './schemas/exposure-schema';
 export type { ExposeResult, PublicAuth } from './schemas/exposure-schema';
 export { EGRESS_MODE_TRAITS } from './schemas/egress-mode-traits';
 export type { EgressModeTraits } from './schemas/egress-mode-traits';
-export { EgressModeSchema, EgressPolicySchema } from './schemas/egress-schema';
-export type { EgressMode, EgressPolicy } from './schemas/egress-schema';
+export { EgressModeSchema, EgressPolicySchema } from './schemas/egress-policy-schema';
+export type { EgressMode, EgressPolicy } from './schemas/egress-policy-schema';
 
 export {
   AGENT_EXEC_FIELDS,
@@ -69,7 +69,7 @@ export {
   ImpChangeReasonSchema,
   ImpEventDetailSchema,
   ImpEventSchema,
-} from './schemas/event-schema';
+} from './schemas/imp-event-schema';
 
 export type {
   EventCursor,
@@ -77,7 +77,7 @@ export type {
   ImpChangeReason,
   ImpEvent,
   ImpEventDetail,
-} from './schemas/event-schema';
+} from './schemas/imp-event-schema';
 
 export {
   TUNNEL_CLOSE_LOST,
@@ -89,15 +89,15 @@ export {
   TUNNEL_WINDOW_BYTES,
   TunnelClientMessageSchema,
   TunnelServerMessageSchema,
-} from './protocols/tunnel-protocol';
+} from './protocols/tunnel-client-message-schema';
 
 export type {
   TunnelClientMessage,
   TunnelListen,
   TunnelServerMessage,
-} from './protocols/tunnel-protocol';
+} from './protocols/tunnel-client-message-schema';
 
-export type { DroppedStorage, OrphanStorage, StorageGc } from './schemas/storage-schema';
+export type { DroppedStorage, OrphanStorage, StorageGc } from './schemas/storage-gc-schema';
 export { ImageRefSchema } from './schemas/image-ref-schema';
 export { ImageBuildRunSchema, ImageBuildSourceSchema } from './schemas/image-build-run-schema';
 export type { ImageBuildRun, ImageBuildSource } from './schemas/image-build-run-schema';
@@ -128,10 +128,10 @@ export type {
 
 export { ProtocolSchemaSchema, buildProtocolSchema } from './protocols/build-protocol-schema';
 export type { MessageDirection, ProtocolSchema } from './protocols/build-protocol-schema';
-export { CONSOLE_SHELL } from './protocols/login-shell';
+export { CONSOLE_SHELL } from './protocols/console-shell';
 export { MCP_PATH } from './protocols/mcp-path';
 export { MOVE_RECEIVE_PATH } from './protocols/move-receive-path';
-export { MoveStateSchema, WarmHostSchema, WarmMoveSchema } from './schemas/move-schema';
+export { MoveStateSchema, WarmHostSchema, WarmMoveSchema } from './schemas/move-status-schema';
 export { movePeerContract } from './contract/move-peer-contract';
 
 export {
@@ -139,9 +139,9 @@ export {
   MoveOfferReplySchema,
   MoveOfferSchema,
   SystemDriveSchema,
-} from './schemas/move-peer-schema';
+} from './schemas/move-offer-schema';
 
-export type { MoveCommitReply, MoveOffer, MoveOfferReply } from './schemas/move-peer-schema';
+export type { MoveCommitReply, MoveOffer, MoveOfferReply } from './schemas/move-offer-schema';
 
 export type {
   MovePlan,
@@ -150,7 +150,7 @@ export type {
   MoveTicket,
   WarmHost,
   WarmMove,
-} from './schemas/move-schema';
+} from './schemas/move-status-schema';
 
 export { NameSchema } from './schemas/name-schema';
 export type { Network, NetworkJoin } from './schemas/network-schema';
@@ -176,9 +176,9 @@ export {
   IdentityIssuerSchema,
   IdentityStageKeyInputSchema,
   IdentityTrustDocumentSchema,
-} from './schemas/identity-schema';
+} from './schemas/identity-trust-document-schema';
 
-export type { IdentityJwk, IdentityTrustDocument } from './schemas/identity-schema';
+export type { IdentityJwk, IdentityTrustDocument } from './schemas/identity-trust-document-schema';
 
 export {
   SecretAddKindSchema,
@@ -207,7 +207,7 @@ export {
   FILE_SEGMENT_PATTERN,
   FILES_GUEST_DIR,
   FilePathSchema,
-} from './schemas/file-schema';
+} from './schemas/file-path-schema';
 
 export {
   SERVICE_LOG_MAX_LINES,
@@ -257,14 +257,14 @@ export {
 } from './schemas/token-schema';
 
 export type { Identity, Scope, SshKey, Token } from './schemas/token-schema';
-export { GrantPatternSchema, RedirectUriSchema } from './schemas/oauth-schema';
+export { GrantPatternSchema, RedirectUriSchema } from './schemas/oauth-client-schema';
 
 export type {
   OAuthClient,
   OAuthEnrollment,
   OAuthGrant,
   OAuthPasskey,
-} from './schemas/oauth-schema';
+} from './schemas/oauth-client-schema';
 
 export type { SystemFeaturesInfo, SystemInfo } from './schemas/system-info-schema';
 export { hasScope } from './rules/has-scope';

@@ -1,4 +1,4 @@
-import { UsageError } from '../cli/errors';
+import { UsageError } from '../cli/usage-error';
 import type { BenchScenario } from './bench-scenarios';
 
 export function pickBenchScenarios(

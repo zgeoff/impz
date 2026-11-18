@@ -1,8 +1,8 @@
 import { RedirectUriSchema } from '@impz/api';
-import { jsonArg } from '../args/common-args';
+import { jsonArg } from '../args/name-arg';
 import { defineCommand, defineGroup } from '../cli/define-command';
-import { UsageError } from '../cli/errors';
 import { runAction } from '../cli/run-action';
+import { UsageError } from '../cli/usage-error';
 import {
   formatOAuthClients,
   formatOAuthEnrollment,
