@@ -93,6 +93,7 @@ export const ignoredPaths = [
   'buf.yaml',
   'buf.gen.yaml',
   'agent/.golangci.yml',
+  '.agents/**',
   '.claude/**',
   '.codex/**',
   '.github/**',
