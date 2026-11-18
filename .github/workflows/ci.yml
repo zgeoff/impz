@@ -101,11 +101,11 @@ jobs:
         run: >-
           bun x --no-install diet --budget 1792M -- bun run test --shard="$SHARD/2"
           --timings="$RUNNER_TEMP/unit-test/timings-$SHARD.json"
-          --timings=scripts/ci/unit-test-timings.json --update-timings --reporter=junit
-          --reporter-outfile="$RUNNER_TEMP/unit-test/results-$SHARD.xml"
+          --timings=scripts/ci/unit-test-timings.json --update-timings
 
-      # the per-file times and the JUnit report, for the timings refresh above
-      # and the test budget audit
+      # the per-file times, for the timings refresh above. There is no JUnit
+      # report: --reporter-outfile needs one bun test run, and rig runs each
+      # package's bunfig.toml as its own run
       - name: Upload unit test results
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
