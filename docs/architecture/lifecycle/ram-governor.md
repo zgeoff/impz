@@ -81,10 +81,15 @@ builds even when the other imps fill the rest of the host. impd keeps the image'
 memory, and removes any builder left from before a restart.
 
 The governor checks an admission against up to three limits: the whole budget, and on a host with a
-pool, the budget less the pool and the pool itself. Each limit keeps the full
-`IMP_PRIORITY_RAM_MIB`, less what the awake and admitted priority imps measure and reserve against
-that limit. The pool and the budget less the pool share no pages, so a priority imp on ordinary
-pages takes nothing from the RAM kept in the pool.
+pool, the budget less the pool and the pool itself. The whole budget and the pool each keep the full
+`IMP_PRIORITY_RAM_MIB`, and the budget less the pool keeps `IMP_PRIORITY_ORDINARY_RAM_MIB`, which is
+`IMP_PRIORITY_RAM_MIB` when unset. Each limit keeps that RAM less what the awake and admitted
+priority imps measure and reserve against it. The pool and the budget less the pool share no pages,
+so a priority imp on ordinary pages takes nothing from the RAM kept in the pool.
+
+Set `IMP_PRIORITY_ORDINARY_RAM_MIB` below `IMP_PRIORITY_RAM_MIB` when the priority imps run on the
+pool and elastic imps outside the patterns need the budget less the pool. At 0, a priority imp on
+ordinary pages finds no RAM kept there and makes room by sleeping imps outside the patterns.
 
 - A boot, wake or grow of an imp outside the patterns counts the kept RAM of each limit as in use.
   When it fits only by taking kept RAM, the governor refuses it with `RAM_BUDGET_EXCEEDED`, and

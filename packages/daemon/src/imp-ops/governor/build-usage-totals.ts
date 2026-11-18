@@ -30,6 +30,7 @@ interface UsageInput {
   readonly lockedMib: number;
   readonly headroomMib: number;
   readonly priorityMib: number;
+  readonly priorityOrdinaryMib: number;
 }
 
 // the priority imps' RAM that they leave unused in each budget
@@ -113,7 +114,7 @@ export function buildUsageTotals(
     ordinaryEffectiveMib,
     kept: {
       ramMib: Math.max(0, input.priorityMib - priority.ramMib),
-      ordinaryMib: Math.max(0, input.priorityMib - priority.ordinaryMib),
+      ordinaryMib: Math.max(0, input.priorityOrdinaryMib - priority.ordinaryMib),
       poolMib: Math.max(0, input.priorityMib - priority.poolMib),
     },
   };

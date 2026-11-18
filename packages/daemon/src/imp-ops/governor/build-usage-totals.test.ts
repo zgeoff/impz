@@ -46,6 +46,7 @@ test.each([
     lockedMib: 0,
     headroomMib: 0,
     priorityMib: 400,
+    priorityOrdinaryMib: 400,
   });
 
   expect(totals.kept).toStrictEqual(row.kept);
@@ -60,7 +61,23 @@ test('it keeps no priority RAM once priority imps use more than it', () => {
     lockedMib: 0,
     headroomMib: 0,
     priorityMib: 400,
+    priorityOrdinaryMib: 400,
   });
 
   expect(totals.kept).toStrictEqual({ ramMib: 0, ordinaryMib: 0, poolMib: 400 });
+});
+
+test('it keeps outside the pool only the priority RAM set for there, and all of it in the budget and the pool', () => {
+  const totals = buildUsageTotals({
+    awake: [{ id: 'chat-a', hugePagesMib: 0, isPriority: true }],
+    readings: [{ ramMib: 300, hugetlbMib: 0 }],
+    reservations: [],
+    pendingPool: [],
+    lockedMib: 0,
+    headroomMib: 0,
+    priorityMib: 400,
+    priorityOrdinaryMib: 350,
+  });
+
+  expect(totals.kept).toStrictEqual({ ramMib: 100, ordinaryMib: 50, poolMib: 400 });
 });

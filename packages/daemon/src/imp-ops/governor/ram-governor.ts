@@ -259,6 +259,7 @@ export function createRamGovernor(deps: RamGovernorDeps): RamGovernor {
       lockedMib,
       headroomMib,
       priorityMib: priority?.mib ?? 0,
+      priorityOrdinaryMib: priority?.ordinaryMib ?? priority?.mib ?? 0,
     });
 
     return { awake, headroomMib, ...totals };

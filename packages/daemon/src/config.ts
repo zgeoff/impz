@@ -44,6 +44,7 @@ const EnvSchema = z.object({
   IMP_HOST_ADDRESSES: z.string().default(''),
   IMP_RAM_BUDGET_MIB: CountSchema.default(16_384),
   IMP_PRIORITY_RAM_MIB: CountSchema.optional(),
+  IMP_PRIORITY_ORDINARY_RAM_MIB: z.coerce.number().pipe(z.int().nonnegative()).optional(),
   IMP_PRIORITY_IMPS: z.string().transform(splitList).pipe(z.array(ImpPatternSchema)).optional(),
   IMP_IDLE_TIMEOUT_S: CountSchema.default(60),
   IMP_IDLE_CPU_PERCENT: z.coerce.number().nonnegative().default(10),
@@ -349,8 +350,15 @@ export function loadConfig(env: Readonly<Record<string, string | undefined>>): C
 function parsePriorityRam(parsed: z.infer<typeof EnvSchema>): PriorityRam | null {
   const mib = parsed.IMP_PRIORITY_RAM_MIB;
   const patterns = parsed.IMP_PRIORITY_IMPS;
+  const ordinaryMib = parsed.IMP_PRIORITY_ORDINARY_RAM_MIB;
 
   if (mib === undefined && patterns === undefined) {
+    if (ordinaryMib !== undefined) {
+      throw new Error(
+        'IMP_PRIORITY_ORDINARY_RAM_MIB needs IMP_PRIORITY_RAM_MIB and IMP_PRIORITY_IMPS',
+      );
+    }
+
     return null;
   }
 
@@ -364,7 +372,13 @@ function parsePriorityRam(parsed: z.infer<typeof EnvSchema>): PriorityRam | null
     );
   }
 
-  return { mib, patterns };
+  if (ordinaryMib !== undefined && ordinaryMib > mib) {
+    throw new Error(
+      `IMP_PRIORITY_ORDINARY_RAM_MIB ${String(ordinaryMib)} is more than the ${String(mib)} MiB IMP_PRIORITY_RAM_MIB`,
+    );
+  }
+
+  return { mib, patterns, ...(ordinaryMib !== undefined && { ordinaryMib }) };
 }
 
 function parseTestRegistry(parsed: z.infer<typeof EnvSchema>): TestRegistryConfig | null {
