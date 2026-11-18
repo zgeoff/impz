@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test';
 import packageJson from '../../package.json' with { type: 'json' };
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
-import { mainCommand } from './command-tree';
-import { collectNodes, readCompletionTree } from './completion';
+import { mainCommand } from './main-command';
+import { collectNodes, readCompletionTree } from './read-completion-tree';
 
 test.each([
   ['impz'],

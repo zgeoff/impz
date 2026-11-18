@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { UsageError } from '../cli/errors';
+import { UsageError } from '../cli/usage-error';
 import { parseForward } from './parse-forward';
 
 test.each([

@@ -1,26 +1,26 @@
 import { eventIterator } from '@orpc/contract';
 import * as z from 'zod';
-import { DockerfilePathSchema } from '../protocols/build-context-protocol';
+import { DockerfilePathSchema } from '../protocols/build-context-query-schema';
 import { ApiCallSchema } from '../schemas/api-call-schema';
 import {
   BackupCheckSubsetSchema,
   BackupRestoreSchema,
   BackupRunSchema,
   BackupStatusSchema,
-} from '../schemas/backup-schema';
+} from '../schemas/backup-status-schema';
 import { CheckpointRefSchema } from '../schemas/checkpoint-ref-schema';
 import { CheckpointSchema } from '../schemas/checkpoint-schema';
 import { EmptySchema } from '../schemas/empty-schema';
-import { EventCursorSchema, EventPageSchema, ImpEventSchema } from '../schemas/event-schema';
-import { FileContentSchema, FilePathSchema } from '../schemas/file-schema';
+import { FileContentSchema, FilePathSchema } from '../schemas/file-path-schema';
 import {
   IdentityStageKeyInputSchema,
   IdentityTrustDocumentSchema,
-} from '../schemas/identity-schema';
+} from '../schemas/identity-trust-document-schema';
 import { ImageBuildRunSchema } from '../schemas/image-build-run-schema';
 import { ImageOpEventSchema } from '../schemas/image-op-event-schema';
 import { ImageRefSchema } from '../schemas/image-ref-schema';
 import { ImageSchema } from '../schemas/image-schema';
+import { EventCursorSchema, EventPageSchema, ImpEventSchema } from '../schemas/imp-event-schema';
 import { ImpSchema } from '../schemas/imp-schema';
 import { LeaseLabelSchema, LeaseSchema, LeaseTtlSchema } from '../schemas/lease-schema';
 import {
@@ -30,7 +30,7 @@ import {
   PeerUrlSchema,
   WarmHostSchema,
   WarmMoveSchema,
-} from '../schemas/move-schema';
+} from '../schemas/move-status-schema';
 import { NameInputSchema } from '../schemas/name-input-schema';
 import { NameSchema } from '../schemas/name-schema';
 import { NetworkJoinSchema, NetworkSchema } from '../schemas/network-schema';
@@ -41,7 +41,7 @@ import {
   OAuthGrantSchema,
   OAuthPasskeySchema,
   RedirectUrisSchema,
-} from '../schemas/oauth-schema';
+} from '../schemas/oauth-client-schema';
 import { SecretAddSchema } from '../schemas/secret-add-schema';
 import {
   AuditEntrySchema,
@@ -67,7 +67,7 @@ import {
   SessionLogSchema,
 } from '../schemas/session-log-schema';
 import { SessionNameSchema, SessionSchema } from '../schemas/session-schema';
-import { DatabaseCopySchema, StorageGcSchema } from '../schemas/storage-schema';
+import { DatabaseCopySchema, StorageGcSchema } from '../schemas/storage-gc-schema';
 import { SystemFeaturesInfoSchema, SystemInfoSchema } from '../schemas/system-info-schema';
 import { ACCESS } from './access';
 import { contractBase as base } from './contract-base';

@@ -1,5 +1,5 @@
 import type { SystemInfo } from '@impz/api';
-import { jsonArg } from '../args/common-args';
+import { jsonArg } from '../args/name-arg';
 import { defineCommand } from '../cli/define-command';
 import { runAction } from '../cli/run-action';
 import { formatImpInfo } from '../output/format-imp-info';

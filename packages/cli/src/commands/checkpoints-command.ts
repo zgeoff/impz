@@ -1,8 +1,8 @@
-import { jsonArg, nameArg } from '../args/common-args';
+import { jsonArg, nameArg } from '../args/name-arg';
 import { defineCommand } from '../cli/define-command';
 import { dispatchVerb, listOperands } from '../cli/dispatch-verb';
-import { UsageError } from '../cli/errors';
 import { runAction } from '../cli/run-action';
+import { UsageError } from '../cli/usage-error';
 import { formatImp } from '../output/format-imp';
 import { formatCheckpoints, formatOutput } from '../output/format-output';
 

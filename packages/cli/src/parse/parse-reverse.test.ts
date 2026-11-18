@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { UsageError } from '../cli/errors';
+import { UsageError } from '../cli/usage-error';
 import { parseReverse } from './parse-reverse';
 import type { ReverseSpec } from './parse-reverse';
 

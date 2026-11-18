@@ -1,7 +1,7 @@
 import { writeSync } from 'node:fs';
 import type { Readable } from 'node:stream';
 import { isatty } from 'node:tty';
-import type { CliEnv } from '../config/host-store';
+import type { CliEnv } from '../config/read-host-config';
 import type { ProgressOutput } from '../cp/copy-progress';
 
 export type CommandStdin = Pick<Readable, 'on' | 'off' | 'pause' | 'resume'> & {

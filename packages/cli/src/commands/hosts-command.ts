@@ -1,12 +1,12 @@
 import { ORPCError } from '@impz/client';
-import { jsonArg } from '../args/common-args';
+import { jsonArg } from '../args/name-arg';
 import type { CommandIO } from '../cli/command-io';
 import { defineCommand, defineGroup } from '../cli/define-command';
-import { UsageError } from '../cli/errors';
+import { UsageError } from '../cli/usage-error';
 import { isHttpUrl } from '../config/cli-config';
 import { createImpClient } from '../config/create-imp-client';
-import { checkHostName, readHostConfig, writeHostConfig } from '../config/host-store';
-import type { HostConfig } from '../config/host-store';
+import { checkHostName, readHostConfig, writeHostConfig } from '../config/read-host-config';
+import type { HostConfig } from '../config/read-host-config';
 import { formatJson, formatTable } from '../output/format-output';
 import { buildTokenTerminal, readToken } from '../prompts/read-token';
 

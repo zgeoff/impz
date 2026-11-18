@@ -10,7 +10,7 @@ import {
 } from '@impz/daemon/test-utils';
 import { server } from '@impz/shared/test-utils/server';
 import { HttpResponse, http } from 'msw';
-import { UsageError } from '../cli/errors';
+import { UsageError } from '../cli/usage-error';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 import { startWarmMoveHosts } from '../test-utils/start-warm-move-hosts';
 import { runMove } from './move-command';

@@ -1,0 +1,216 @@
+import { EGRESS_MODE_TRAITS, isImpAllowed } from '@impz/api';
+import type { EgressMode, Identity, SystemInfo } from '@impz/api';
+import { ORPCError, findMissingFeatures } from '@impz/client';
+import type { ImpClient } from '../config/create-imp-client';
+import type { HostAnswer } from './run-on-hosts';
+
+export interface PlaceRequest {
+  readonly name: string | null;
+  readonly image: string | null;
+  readonly memoryMib: number | null;
+  readonly cpuLimit: number | null;
+  readonly policyMode: EgressMode | null;
+  readonly networks: readonly string[];
+
+  readonly needsWholeHost: boolean;
+}
+
+export interface HostProbe {
+  readonly info: SystemInfo;
+  readonly identity: Identity;
+  readonly images: readonly string[];
+  readonly imps: readonly string[];
+  readonly networks: readonly string[];
+}
+
+export interface RankedHost {
+  readonly host: string;
+  readonly freeMib: number;
+}
+
+interface DroppedHost {
+  readonly host: string;
+  readonly reason: string;
+}
+
+export interface Ranking {
+  readonly ranked: readonly RankedHost[];
+  readonly dropped: readonly DroppedHost[];
+}
+
+export async function readHostProbe(
+  client: ImpClient,
+  signal: AbortSignal,
+  request: PlaceRequest,
+): Promise<HostProbe> {
+  const options = { signal };
+
+  const [info, identity, images, imps, networks] = await Promise.all([
+    client.system.info(undefined, options),
+    client.tokens.whoami(undefined, options),
+    client.images.list(undefined, options),
+    client.imps.list(undefined, options),
+    request.networks.length === 0 ? [] : client.networks.list(undefined, options),
+  ]);
+
+  return {
+    info,
+    identity,
+    images: images.map((image) => image.name),
+    imps: imps.map((imp) => imp.name),
+    networks: networks.map((network) => network.name),
+  };
+}
+
+export function buildRanking(
+  answers: readonly HostAnswer<HostProbe>[],
+  request: PlaceRequest,
+): Ranking {
+  const ranked: RankedHost[] = [];
+  const dropped: DroppedHost[] = [];
+
+  for (const answer of answers) {
+    if ('error' in answer) {
+      dropped.push({ host: answer.host, reason: answer.error });
+      continue;
+    }
+
+    if (request.name !== null && answer.value.imps.includes(request.name)) {
+      throw new Error(`${request.name} exists on ${answer.host} already; pick another name`);
+    }
+
+    const reason = findRefusal(answer.value, request);
+
+    if (reason === null) {
+      ranked.push({ host: answer.host, freeMib: getFreeMib(answer.value.info) });
+    } else {
+      dropped.push({ host: answer.host, reason });
+    }
+  }
+
+  // a stable sort: a tie goes to the host first in name order
+  return { ranked: ranked.toSorted((first, second) => second.freeMib - first.freeMib), dropped };
+}
+
+// impd removes the imp before it answers that the governor turned the boot
+// away, so only that refusal tries the next host; any other failure, a
+// timeout too, may leave an imp behind
+export async function createPlaced<T>(
+  ranked: readonly RankedHost[],
+  create: (host: string) => Promise<T>,
+  onRefusal: (host: string, message: string) => void,
+): Promise<{ readonly host: string; readonly value: T }> {
+  for (const candidate of ranked) {
+    const host = candidate.host;
+
+    try {
+      return { host, value: await create(host) };
+    } catch (error) {
+      if (!(error instanceof ORPCError) || error.code !== 'RAM_BUDGET_EXCEEDED') {
+        throw error;
+      }
+
+      onRefusal(host, error.message);
+    }
+  }
+
+  throw new Error('every host that could take the imp turned it away for RAM');
+}
+
+function findRefusal(probe: HostProbe, request: PlaceRequest): string | null {
+  const info = probe.info;
+
+  if (info.defaults === undefined || info.egress === undefined) {
+    return `impd ${info.version} is too old to place on; upgrade it or use --host`;
+  }
+
+  return (
+    findTokenRefusal(probe.identity, request) ??
+    findRamRefusal(info.ramBudgetMib, request.memoryMib ?? info.defaults.memoryMib) ??
+    (info.storage.isLow ? 'its storage is low' : null) ??
+    findCpuRefusal(info.cpu?.hostCpus, request.cpuLimit) ??
+    findImageRefusal(probe.images, request.image ?? info.defaults.image) ??
+    findPolicyRefusal(info, request.policyMode) ??
+    findNetworkRefusal(probe.networks, request.networks)
+  );
+}
+
+function findTokenRefusal(identity: Identity, request: PlaceRequest): string | null {
+  if (identity.scope !== 'manage') {
+    return `its token has ${identity.scope} scope, not manage`;
+  }
+
+  if (identity.imps === null) {
+    return null;
+  }
+
+  if (request.needsWholeHost) {
+    return 'its token is limited to some imps, which --public and --net need it not to be';
+  }
+
+  // impd refuses an unnamed create from a limited token
+  if (request.name === null) {
+    return 'its token is limited to some imps, so the imp needs a name';
+  }
+
+  return isImpAllowed(identity.imps, request.name)
+    ? null
+    : `its token may not touch ${request.name} (${identity.imps.join(', ')})`;
+}
+
+// the governor never admits more memory than the whole budget
+function findRamRefusal(budgetMib: number, memoryMib: number): string | null {
+  return budgetMib < memoryMib
+    ? `its RAM budget of ${String(budgetMib)} MiB is below ${String(memoryMib)} MiB`
+    : null;
+}
+
+function findCpuRefusal(hostCpus: number | undefined, limit: number | null): string | null {
+  return hostCpus !== undefined && limit !== null && limit > hostCpus
+    ? `it has ${String(hostCpus)} cores, fewer than the CPU limit`
+    : null;
+}
+
+function findImageRefusal(images: readonly string[], image: string | null): string | null {
+  if (image === null) {
+    return 'it has no default image; name one with --image';
+  }
+
+  return images.includes(image) ? null : `it has no image ${image}`;
+}
+
+function findPolicyRefusal(info: SystemInfo, mode: EgressMode | null): string | null {
+  if (
+    mode !== null &&
+    EGRESS_MODE_TRAITS[mode].isPublic &&
+    findMissingFeatures(info, ['publicEgress']).length > 0
+  ) {
+    return `impd ${info.version} predates the public egress policy`;
+  }
+
+  return mode === null || !EGRESS_MODE_TRAITS[mode].needsRuleset || info.egress?.isEnforced === true
+    ? null
+    : `it cannot enforce a ${mode} egress policy`;
+}
+
+function findNetworkRefusal(networks: readonly string[], wanted: readonly string[]): string | null {
+  const missing = wanted.filter((network) => !networks.includes(network));
+
+  return missing.length === 0 ? null : `it has no network ${missing.join(', ')}`;
+}
+
+// a host does not report which imp names are priority, so every imp scores as a
+// non-priority imp; a priority imp still tries each ranked host in turn
+function getFreeMib(info: SystemInfo): number {
+  const prioritySleepingMib = info.ramPrioritySleepingMib ?? 0;
+
+  // a sleeping priority imp wakes into the kept RAM, so only its memory past the kept RAM
+  // leaves less free
+  return (
+    info.ramBudgetMib -
+    info.ramUsedMib -
+    info.ramReservedMib -
+    ((info.ramSleepingMib ?? 0) - prioritySleepingMib) -
+    Math.max(info.ramPriorityKeptMib ?? 0, prioritySleepingMib)
+  );
+}

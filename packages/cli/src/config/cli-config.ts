@@ -1,8 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { UsageError } from '../cli/errors';
-import { checkHostName, readHostConfig, resolveConfigDir } from './host-store';
-import type { CliEnv } from './host-store';
+import { UsageError } from '../cli/usage-error';
+import { checkHostName, readHostConfig, resolveConfigDir } from './read-host-config';
+import type { CliEnv } from './read-host-config';
 import { updateLegacyConfig } from './update-legacy-config';
 
 export interface CliConfig {

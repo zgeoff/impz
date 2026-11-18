@@ -1,7 +1,7 @@
 import * as z from 'zod';
 import { PublicAuthSchema } from './exposure-schema';
 import { LeaseSummarySchema } from './lease-schema';
-import { MoveStateSchema } from './move-schema';
+import { MoveStateSchema } from './move-status-schema';
 import { NameSchema } from './name-schema';
 import { SecretNameSchema } from './secret-schema';
 

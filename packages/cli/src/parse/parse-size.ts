@@ -1,4 +1,4 @@
-import { UsageError } from '../cli/errors';
+import { UsageError } from '../cli/usage-error';
 
 const UNIT_MIB: ReadonlyMap<string, number> = new Map([
   ['m', 1],

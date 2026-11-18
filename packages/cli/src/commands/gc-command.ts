@@ -1,7 +1,7 @@
-import { jsonArg } from '../args/common-args';
+import { jsonArg } from '../args/name-arg';
 import { defineCommand } from '../cli/define-command';
-import { UsageError } from '../cli/errors';
 import { runAction } from '../cli/run-action';
+import { UsageError } from '../cli/usage-error';
 import { formatGc, formatOutput } from '../output/format-output';
 
 export const gcCommand = defineCommand({

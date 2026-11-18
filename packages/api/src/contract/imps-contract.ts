@@ -2,7 +2,7 @@ import * as z from 'zod';
 import { CheckpointRefSchema } from '../schemas/checkpoint-ref-schema';
 import { CpuLimitSchema } from '../schemas/cpu-limit-schema';
 import { CpuWeightSchema } from '../schemas/cpu-weight-schema';
-import { EgressPolicySchema } from '../schemas/egress-schema';
+import { EgressPolicySchema } from '../schemas/egress-policy-schema';
 import { EmptySchema } from '../schemas/empty-schema';
 import { ExposeInputSchema, ExposeResultSchema } from '../schemas/exposure-schema';
 import { ImpCreateInputSchema } from '../schemas/imp-create-input-schema';

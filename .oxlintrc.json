@@ -31,7 +31,7 @@
     "zgeoff/file-named-for-export": [
       "error",
       {
-        "pending": [".", "packages/api", "packages/cli", "packages/daemon", "packages/e2e-harness"]
+        "pending": ["packages/daemon", "packages/e2e-harness"]
       }
     ],
     // each library's docs import it as one object; an option set here replaces the shared ignore
@@ -724,7 +724,7 @@
     },
     {
       // the cli keeps every error that main.ts maps to an exit code in one module
-      "files": ["packages/cli/src/cli/errors.ts"],
+      "files": ["packages/cli/src/cli/usage-error.ts"],
       "rules": { "max-classes-per-file": "off" }
     }
   ],

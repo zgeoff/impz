@@ -2,14 +2,14 @@
 import { isCommandNotFoundError } from 'gunshi';
 import { cli } from 'gunshi/bone';
 import packageJson from '../package.json' with { type: 'json' };
+import { buildImpzPlugin } from './cli/build-impz-plugin';
 import { readProcessIO } from './cli/command-io';
 import type { CommandIO } from './cli/command-io';
-import { mainCommand, subCommands } from './cli/command-tree';
-import { CommandExitError, CommandLineError, UsageError } from './cli/errors';
 import { formatValidationError } from './cli/format-validation-error';
-import { buildImpzPlugin } from './cli/impz-plugin';
+import { mainCommand, subCommands } from './cli/main-command';
 import { formatError } from './cli/run-action';
 import { toSignalExitCode } from './cli/to-signal-exit-code';
+import { CommandExitError, CommandLineError, UsageError } from './cli/usage-error';
 import { PromptCancelledError } from './prompts/read-token';
 
 interface CliOutcome {
@@ -20,7 +20,7 @@ interface CliOutcome {
   readonly mustExit: boolean;
 }
 
-export async function runCLI(args: readonly string[], io: CommandIO): Promise<CliOutcome> {
+export async function main(args: readonly string[], io: CommandIO): Promise<CliOutcome> {
   try {
     const rendered = await cli([...args], mainCommand, {
       name: 'impz',
@@ -91,7 +91,7 @@ function formatRefusal(error: AggregateError, command: string): string | null {
 }
 
 if (import.meta.main) {
-  const outcome = await runCLI(process.argv.slice(2), readProcessIO());
+  const outcome = await main(process.argv.slice(2), readProcessIO());
 
   if (outcome.mustExit) {
     process.exit(outcome.code);

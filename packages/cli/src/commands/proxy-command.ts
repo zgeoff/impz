@@ -1,6 +1,6 @@
-import { nameArg } from '../args/common-args';
+import { nameArg } from '../args/name-arg';
 import { defineCommand } from '../cli/define-command';
-import { runProxy } from '../forward/proxy-client';
+import { runProxy } from '../forward/proxy-options';
 
 export const proxyCommand = defineCommand({
   name: 'proxy',

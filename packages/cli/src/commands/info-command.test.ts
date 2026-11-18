@@ -9,7 +9,7 @@ import {
   createImage,
   startStubInnerAgent,
 } from '@impz/daemon/test-utils';
-import { writeHostConfig } from '../config/host-store';
+import { writeHostConfig } from '../config/read-host-config';
 import { readJsonOutput } from '../test-utils/read-json-output';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 import { startImpdHost } from '../test-utils/start-impd-host';

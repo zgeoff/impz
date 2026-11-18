@@ -1,9 +1,9 @@
 import type { MovePlan, MoveStatus, WarmHost } from '@impz/api';
-import { nameArg } from '../args/common-args';
+import { nameArg } from '../args/name-arg';
 import { toProgressOutput } from '../cli/command-io';
 import { defineCommand } from '../cli/define-command';
-import { UsageError } from '../cli/errors';
 import { runAction } from '../cli/run-action';
+import { UsageError } from '../cli/usage-error';
 import { loadCliConfig } from '../config/cli-config';
 import { createImpClient } from '../config/create-imp-client';
 import type { ImpClient } from '../config/create-imp-client';

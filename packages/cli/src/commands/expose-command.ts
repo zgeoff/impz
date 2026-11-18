@@ -1,5 +1,5 @@
 import { authArgs } from '../args/auth-args';
-import { jsonArg, nameArg } from '../args/common-args';
+import { jsonArg, nameArg } from '../args/name-arg';
 import { defineCommand } from '../cli/define-command';
 import { runAction } from '../cli/run-action';
 import { formatExposeResult } from '../output/format-expose-result';

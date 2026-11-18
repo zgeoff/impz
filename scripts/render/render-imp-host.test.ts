@@ -4,17 +4,17 @@ import { $ } from 'bun';
 import {
   BOOTSTRAP_PARTS,
   parseHostArgs,
-  render,
   renderBootstrap,
   renderExecStart,
   renderHostEnv,
+  renderImpHost,
   renderNetworkStart,
   renderProbe,
   renderStorage,
   renderUnit,
 } from './render-imp-host';
 
-test('#render renders every deploy file from one args file', () => {
+test('#renderImpHost renders every deploy file from one args file', () => {
   const argsJson = JSON.stringify({
     privileges: [['--init', '--cap-add', 'KILL']],
     probed: [
@@ -51,7 +51,7 @@ test('#render renders every deploy file from one args file', () => {
     zfsPoolJson: '{"create": ["-o", "ashift=12", "-O", "compression=lz4"]}',
   };
 
-  expect(render(argsJson, current, sources)).toMatchInlineSnapshot(`
+  expect(renderImpHost(argsJson, current, sources)).toMatchInlineSnapshot(`
     {
       "bootstrap": 
     "#!/bin/bash
@@ -128,7 +128,7 @@ test('#render renders every deploy file from one args file', () => {
   `);
 });
 
-test('#render gives the same files for the same input', () => {
+test('#renderImpHost gives the same files for the same input', () => {
   const argsJson =
     '{"privileges": [["--init"]], "probed": [], "lines": [["--name", "x"]], ' +
     '"network": {"name": "n", "bridge": "b"}, "addresses": "ip -o addr"}';
@@ -148,10 +148,12 @@ test('#render gives the same files for the same input', () => {
     zfsPoolJson: '{"create": ["-O", "atime=off"]}',
   };
 
-  expect(render(argsJson, current, sources)).toStrictEqual(render(argsJson, current, sources));
+  expect(renderImpHost(argsJson, current, sources)).toStrictEqual(
+    renderImpHost(argsJson, current, sources),
+  );
 });
 
-test('#render leaves the checked-in unit, host-env.sh and bootstrap.sh as they are', () => {
+test('#renderImpHost leaves the checked-in unit, host-env.sh and bootstrap.sh as they are', () => {
   const current = {
     unit: readFileSync(new URL('../../deploy/imp-host.service', import.meta.url), 'utf8'),
     hostEnv: readFileSync(new URL('../../deploy/lib/host-env.sh', import.meta.url), 'utf8'),
@@ -173,10 +175,10 @@ test('#render leaves the checked-in unit, host-env.sh and bootstrap.sh as they a
     'utf8',
   );
 
-  expect(render(argsJson, current, sources)).toStrictEqual(current);
+  expect(renderImpHost(argsJson, current, sources)).toStrictEqual(current);
 });
 
-test('#render runs bootstrap.sh in the order of BOOTSTRAP_PARTS, with every part of deploy/bootstrap/', () => {
+test('#renderImpHost runs bootstrap.sh in the order of BOOTSTRAP_PARTS, with every part of deploy/bootstrap/', () => {
   const partsDir = new URL('../../deploy/bootstrap/', import.meta.url).pathname;
 
   const parts = readdirSync(partsDir).map((name) => `deploy/bootstrap/${name}`);

@@ -1,4 +1,4 @@
-import type { EgressMode } from './egress-schema';
+import type { EgressMode } from './egress-policy-schema';
 
 export interface EgressModeTraits {
   readonly isOpen: boolean;

@@ -2,9 +2,9 @@ import { expect, mock, onTestFinished, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { UsageError } from '../cli/errors';
+import { UsageError } from '../cli/usage-error';
 import { loadCliConfig } from './cli-config';
-import { writeHostConfig } from './host-store';
+import { writeHostConfig } from './read-host-config';
 
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-cli-'));

@@ -1,8 +1,8 @@
 import type { GuardOptions, ImpGuard } from '@impz/mcp';
 import packageJson from '../../package.json' with { type: 'json' };
 import { defineCommand } from '../cli/define-command';
-import { UsageError } from '../cli/errors';
 import { runAction } from '../cli/run-action';
+import { UsageError } from '../cli/usage-error';
 
 // stdout carries only JSON-RPC messages; anything else goes to stderr
 export const mcpCommand = defineCommand({

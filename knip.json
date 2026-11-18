@@ -24,7 +24,7 @@
         "rig.config.ts",
         "scripts/dev/prepare-docker-lane.ts",
         // the dev CLI that scripts/dev/dev.sh runs
-        "scripts/dev/dev.ts",
+        "scripts/dev/run-dev.ts",
         // the target apps and the stop command that the verify registry runs by path
         "scripts/verify/run-local-impd.ts",
         "scripts/verify/run-kvm-impd.ts",

@@ -1,15 +1,15 @@
 import { isAbsolute } from 'node:path';
 import type { Image } from '@impz/api';
 import { requireFeatures } from '@impz/client';
-import { jsonArg } from '../args/common-args';
+import { jsonArg } from '../args/name-arg';
 import { toProgressOutput } from '../cli/command-io';
 import { defineCommand, defineGroup } from '../cli/define-command';
-import { UsageError } from '../cli/errors';
 import { runAction } from '../cli/run-action';
+import { UsageError } from '../cli/usage-error';
 import type { ImpClient } from '../config/create-imp-client';
 import type { ProgressOutput } from '../cp/copy-progress';
+import { runImageAdd, runOnHostBuild } from '../image/run-image-add';
 import { runImageBuild } from '../image/run-image-build';
-import { runImageAdd, runOnHostBuild } from '../image/run-image-op';
 import { formatImageBuilds, formatImages, formatOutput } from '../output/format-output';
 
 const addCommand = defineCommand({

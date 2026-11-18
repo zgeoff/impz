@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { UsageError } from '../cli/errors';
+import { UsageError } from '../cli/usage-error';
 import { parseCpArgs } from './parse-cp-args';
 
 test('it plans an upload when the target names an imp and a path', () => {

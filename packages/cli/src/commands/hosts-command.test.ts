@@ -18,7 +18,7 @@ import {
 import { probeUpdateReadOnly } from '@impz/shared/test-utils/probe-update-read-only';
 import { updateReadOnly } from '@impz/shared/test-utils/update-read-only';
 import invariant from 'tiny-invariant';
-import { readHostConfig, resolveConfigPath, writeHostConfig } from '../config/host-store';
+import { readHostConfig, resolveConfigPath, writeHostConfig } from '../config/read-host-config';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 
 async function setupTest() {
