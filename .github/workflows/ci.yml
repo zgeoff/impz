@@ -50,11 +50,9 @@ jobs:
   # file took about 6 minutes, the longest job in the run. rig passes
   # --no-isolate, which keeps one global per worker; four workers
   # outgrow the memory cap, and slow a CPU-bound property test past its time
-  # limit. --timings splits the files by the per-file times in
-  # scripts/ci/unit-test-timings.json, and a file it does not list still runs
-  # in one shard. To refresh that file, merge the timings-*.json files of a
-  # main run's unit-test-results artifacts:
-  # jq -s '{version: 1, files: (map(.files) | add)}' timings-*.json
+  # limit. There is no --timings: rig runs each package's bunfig.toml as its
+  # own bun test run, and each run would read the file from its own folder and
+  # write its own file names over the last run's.
   checks-unit:
     concurrency:
       group: ci-${{ github.ref }}-unit-${{ matrix.shard }}
@@ -84,12 +82,8 @@ jobs:
       - name: Install
         run: bun install --frozen-lockfile
 
-      - name: Make the results dir
-        run: mkdir -p "$RUNNER_TEMP/unit-test"
-
       # this shard's files, under diet's cgroup cap below an imp's 2 GiB with no
-      # swap, so a test fails here before it outgrows the imps it runs on; the
-      # first --timings file starts empty and takes this shard's measured times.
+      # swap, so a test fails here before it outgrows the imps it runs on.
       # The tests' temp dirs go on tmpfs, so a test impd's data dir and its
       # checkpoint copies never wait on the runner's disk; diet hands TMPDIR on
       # to the command, which glibc drops from the environment of setuid sudo
@@ -100,20 +94,6 @@ jobs:
           TMPDIR: /dev/shm
         run: >-
           bun x --no-install diet --budget 1792M -- bun run test --shard="$SHARD/2"
-          --timings="$RUNNER_TEMP/unit-test/timings-$SHARD.json"
-          --timings=scripts/ci/unit-test-timings.json --update-timings --reporter=junit
-          --reporter-outfile="$RUNNER_TEMP/unit-test/results-$SHARD.xml"
-
-      # the per-file times and the JUnit report, for the timings refresh above
-      # and the test budget audit
-      - name: Upload unit test results
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: unit-test-results-${{ matrix.shard }}
-          path: ${{ runner.temp }}/unit-test/
-          if-no-files-found: ignore
-          retention-days: 14
 
   # The static gates, the generated code and the lane tests: every check but
   # the unit run.
