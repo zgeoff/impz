@@ -13,8 +13,8 @@ import { server } from '@impz/shared/test-utils/mock-server';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { ORPCError } from '@orpc/client';
 import { HttpResponse, http } from 'msw';
-import { CLIENT_VERSION } from './check-server';
 import { createImpClient } from './create-imp-client';
+import { CLIENT_VERSION } from './features/check-server';
 import { makeStubImpdWithNewReason } from './test-utils/make-stub-impd-with-new-reason';
 
 async function setupTest() {

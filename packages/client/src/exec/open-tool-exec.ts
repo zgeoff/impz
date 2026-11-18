@@ -9,7 +9,7 @@ import {
 } from '@impz/api';
 import type { ExecClientMessage, ExecServerMessage, ExecTool } from '@impz/api';
 import { match } from 'ts-pattern';
-import { resolveImpdWebSocketUrl } from '../resolve-impd-web-socket-url';
+import { resolveImpdWebSocketUrl } from '../connection/resolve-impd-web-socket-url';
 import type { ExecSocket } from './open-exec-session';
 
 export interface ToolExec {

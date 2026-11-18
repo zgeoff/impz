@@ -1,9 +1,9 @@
 import { BUILD_CONTEXT_PATH, BuildContextErrorSchema, BuildContextUploadSchema } from '@impz/api';
 import type { BuildContextUpload, Image, ImageBuildProgress } from '@impz/api';
 import { ORPCError } from '@orpc/client';
-import type { ExecDeps } from './exec/open-exec';
-import { requireFeatures } from './require-features';
-import { resolveImpdUrl } from './resolve-impd-url';
+import { resolveImpdUrl } from '../connection/resolve-impd-url';
+import type { ExecDeps } from '../exec/open-exec';
+import { requireFeatures } from '../features/require-features';
 
 export type BuildContext = Blob | Uint8Array<ArrayBuffer> | ReadableStream<Uint8Array>;
 

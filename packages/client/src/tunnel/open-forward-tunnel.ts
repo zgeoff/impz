@@ -7,7 +7,7 @@ import {
 } from '@impz/api';
 import type { TunnelClientMessage, TunnelServerMessage } from '@impz/api';
 import { P, match } from 'ts-pattern';
-import { resolveImpdWebSocketUrl } from '../resolve-impd-web-socket-url';
+import { resolveImpdWebSocketUrl } from '../connection/resolve-impd-web-socket-url';
 import { parseTunnelServerMessage } from './parse-tunnel-server-message';
 
 export type ForwardTunnelEnd =

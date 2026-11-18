@@ -3,7 +3,7 @@ import { startTestImpd } from '@impz/daemon/test-utils';
 import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
 import { server } from '@impz/shared/test-utils/mock-server';
 import { HttpResponse, http } from 'msw';
-import { createRpcClient } from '../create-rpc-client';
+import { createRpcClient } from '../connection/create-rpc-client';
 import { checkImpdAccess } from './check-impd-access';
 
 async function setupTest() {

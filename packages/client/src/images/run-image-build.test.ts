@@ -9,9 +9,9 @@ import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { ORPCError } from '@orpc/client';
 import { http } from 'msw';
 import invariant from 'tiny-invariant';
-import { createImpClient } from './create-imp-client';
-import { MissingFeatureError } from './require-features';
-import { makeStubImpdWithoutFeature } from './test-utils/make-stub-impd-without-feature';
+import { createImpClient } from '../create-imp-client';
+import { MissingFeatureError } from '../features/require-features';
+import { makeStubImpdWithoutFeature } from '../test-utils/make-stub-impd-without-feature';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

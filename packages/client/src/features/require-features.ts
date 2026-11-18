@@ -1,7 +1,7 @@
 import type { SystemFeaturesInfo, SystemInfo } from '@impz/api';
 import { ORPCError } from '@orpc/client';
-import type { CallOptions } from './types';
-import { UnknownProcedureError } from './unknown-procedure-error';
+import { UnknownProcedureError } from '../connection/unknown-procedure-error';
+import type { CallOptions } from '../types';
 
 export type ImpdFeatures = SystemFeaturesInfo['features'];
 

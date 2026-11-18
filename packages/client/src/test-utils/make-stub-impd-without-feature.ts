@@ -1,6 +1,6 @@
 import { StandardRPCJsonSerializer, StandardRPCSerializer } from '@orpc/client/standard';
 import * as z from 'zod';
-import type { ImpdFeature } from '../require-features';
+import type { ImpdFeature } from '../features/require-features';
 
 const serializer = new StandardRPCSerializer(new StandardRPCJsonSerializer());
 const FEATURE_PATHS = new Set(['/rpc/system/features', '/rpc/system/info']);
