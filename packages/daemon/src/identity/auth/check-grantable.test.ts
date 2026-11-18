@@ -7,11 +7,11 @@ import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
 import { utils } from 'ssh2';
 import invariant from 'tiny-invariant';
-import { listApiCalls } from '../../platform/db/api-audit';
 import { createForkGrants } from '../../platform/db/create-fork-grants';
 import { readImpByName } from '../../platform/db/imps';
-import { listTokenRecords } from '../../platform/db/tokens';
-import { generateEd25519Key } from '../../surface/ssh/host-key';
+import { listApiCalls } from '../../platform/db/list-api-calls';
+import { listTokenRecords } from '../../platform/db/list-token-records';
+import { generateEd25519Key } from '../../surface/ssh/load-or-create-host-key';
 import { startTestImpd } from '../../test-utils/start-test-impd';
 import { checkAccess, findAccess } from './access-policy';
 

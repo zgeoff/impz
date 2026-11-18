@@ -1,6 +1,6 @@
 import type { ImpRecord } from '../../platform/db/imps';
 import type { AuditActor } from '../../platform/principal/caller';
-import type { AgentFeature } from '../../vm/agent-client/agent-outdated';
+import type { AgentFeature } from '../../vm/agent-client/build-agent-outdated-error';
 import type { AgentExecRequest, ExecStream } from '../../vm/agent-client/exec-stream';
 import type { ImpRuntime } from '../imps/imp-runtime';
 import type { AgentForwarding } from './agent-forwarding';

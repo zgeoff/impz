@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { loadConfig } from './config';
-import { buildRangeMatcher } from './host-net/net/range-matcher';
+import { buildRangeMatcher } from './host-net/net/build-range-matcher';
 
 test('it fills every setting from its default when the env is empty', () => {
   const config = loadConfig({});

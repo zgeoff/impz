@@ -1,19 +1,19 @@
 import { getErrorMessage } from '@impz/shared';
 import type { TailscaleStatus } from '../../host-net/net/tailscale-status';
-import type { PublicImp } from '../../platform/db/exposure';
+import type { PublicImp } from '../../platform/db/read-public-imp';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { createSemaphore } from '../../platform/process/semaphore';
 import type { Ticker, TickerTimer } from '../../platform/process/ticker';
 import { startTicker } from '../../platform/process/ticker';
-import type { IssueCertificate } from './acme/acme-issuer';
 import { createCertManager } from './acme/cert-manager';
 import type { CertStore, Certificate } from './acme/cert-store';
+import type { IssueCertificate } from './acme/create-acme-issuer';
+import { createPublicScope } from './build-credential-hash';
 import { buildPublicOwner } from './dns/dns-provider';
 import type { DnsProvider } from './dns/dns-provider';
 import type { HttpsConfig } from './https-config';
 import { createHttpsListeners } from './https-listeners';
 import type { HttpsListeners, ProxyListen } from './https-listeners';
-import { createPublicScope } from './public-auth';
 import { createPublicLimits } from './public-limits';
 
 const RENEW_INTERVAL_MS = 10 * 60_000;

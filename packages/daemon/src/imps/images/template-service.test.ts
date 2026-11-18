@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readImpEnv } from '@impz/shared/test-utils/read-imp-env';
 import { updateEnv } from '@impz/shared/test-utils/update-env';
-import { createImage, readImageByName } from '../../platform/db/images';
+import { createImage, readImageByName } from '../../platform/db/create-image';
 import { createImp, readImpByName } from '../../platform/db/imps';
 import { buildMockNewImage } from '../../test-utils/imps/build-mock-new-image';
 import { buildMockNewImp } from '../../test-utils/imps/build-mock-new-imp';
@@ -14,9 +14,9 @@ import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
 import { runSql } from '../../test-utils/platform/run-sql';
 import { startTestImpd } from '../../test-utils/start-test-impd';
 import { buildStubPressureSwitch } from '../../test-utils/vm/build-stub-pressure-switch';
+import { createXfsBackend } from '../../vm/storage/create-xfs-backend';
 import { buildImagePaths, buildImpPaths } from '../../vm/storage/data-layout';
-import { createXfsBackend } from '../../vm/storage/xfs-backend';
-import { BUILDER_IMAGE } from './builders/builder-imps';
+import { BUILDER_IMAGE } from './builders/create-builders';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

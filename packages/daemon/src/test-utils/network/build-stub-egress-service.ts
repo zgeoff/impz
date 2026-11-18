@@ -1,9 +1,9 @@
 import * as dnsPacket from 'dns-packet';
-import { parseSubnet } from '../../host-net/net/addressing';
-import type { QueryVerdict, ResolverDeps } from '../../network/egress/egress-resolver';
+import { parseSubnet } from '../../host-net/net/derive-slot-address';
+import type { QueryVerdict, ResolverDeps } from '../../network/egress/create-query-handler';
 import type { AddressAnswer } from '../../network/egress/egress-sets';
-import { resolveNetworkName } from '../../network/egress/network-names';
-import type { NetworkMember } from '../../platform/db/networks';
+import { resolveNetworkName } from '../../network/egress/resolve-network-name';
+import type { NetworkMember } from '../../platform/db/list-networks';
 import { buildMockDnsReply } from './build-mock-dns-reply';
 import type { MockDnsRecord } from './build-mock-dns-reply';
 

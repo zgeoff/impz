@@ -1,4 +1,4 @@
-import type { Subnet } from './net/addressing';
+import type { Subnet } from './net/derive-slot-address';
 import type { Ipv6Setting } from './net/ipv6-plan';
 
 export interface HostNetConfig {

@@ -1,10 +1,10 @@
-import { readMoveTicket } from '../../platform/db/move-tickets';
-import type { MoveTicketRow } from '../../platform/db/move-tickets';
 import type { ImpQueries } from '../../platform/db/open-database';
+import { readMoveTicket } from '../../platform/db/read-move-ticket';
+import type { MoveTicketRow } from '../../platform/db/read-move-ticket';
 import { hashSecret } from '../../platform/secrets/hash-secret';
 import type { OpaqueToken } from '../../platform/secrets/parse-opaque-token';
+import { isSameHash, readTicketHeader } from './build-ticket-header';
 import { MoveRequestError } from './move-request-error';
-import { isSameHash, readTicketHeader } from './move-tickets';
 
 export interface CheckedTicket {
   readonly row: MoveTicketRow;

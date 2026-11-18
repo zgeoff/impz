@@ -1,13 +1,13 @@
 import { existsSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
-import { buildAgentOutdatedError } from '../../vm/agent-client/agent-outdated';
+import { buildAgentOutdatedError } from '../../vm/agent-client/build-agent-outdated-error';
 import { readLoadingMeta } from '../../vm/sleep/snapshot-meta';
 import type { FirecrackerPaths, ImpPaths } from '../../vm/storage/data-layout';
+import type { JailUser } from '../../vm/vmm/create-jails';
+import { TemplateRestoreError } from '../../vm/vmm/create-template-vm';
+import type { TemplateBuildPlan, TemplateRestorePlan } from '../../vm/vmm/create-template-vm';
 import type { InstanceState } from '../../vm/vmm/firecracker-client';
-import type { VmOwner } from '../../vm/vmm/firecracker-process';
-import type { JailUser } from '../../vm/vmm/jail';
-import { TemplateRestoreError } from '../../vm/vmm/template-vm';
-import type { TemplateBuildPlan, TemplateRestorePlan } from '../../vm/vmm/template-vm';
-import type { UffdStats } from '../../vm/vmm/uffd-handler';
+import type { VmOwner } from '../../vm/vmm/start-firecracker';
+import type { UffdStats } from '../../vm/vmm/start-uffd-handler';
 import type { VmRunner } from '../../vm/vmm/vm-runner';
 
 export const STUB_AGENT_VERSION = '0.1.0';

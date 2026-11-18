@@ -1,7 +1,7 @@
 import { EVENT_VERSION } from '@impz/api';
 import type { Imp, ImpEvent } from '@impz/api';
 import { P, match } from 'ts-pattern';
-import { toApiCheckpoint } from '../platform/db/checkpoints';
+import { toApiCheckpoint } from '../platform/db/create-checkpoint';
 import type { LoggedImpEvent } from '../platform/db/imp-log-entry';
 import type { ImpRecord } from '../platform/db/imps';
 

@@ -1,7 +1,7 @@
 import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import type { SessionLogState } from './create-session-log-state';
 import { countLogBytes } from './generation-log';
-import { readImpMetas, removeGenerationDir } from './session-log-files';
+import { readImpMetas, removeGenerationDir } from './read-session-log-range';
 import type { LiveLog } from './session-log-machine';
 import type { SessionLogImp, SessionLogLimits } from './session-log-service';
 

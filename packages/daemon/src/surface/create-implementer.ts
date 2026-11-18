@@ -7,10 +7,10 @@ import {
   isAuditedAccess,
   isRefusalAuditedAccess,
 } from '../identity/auth/access-policy';
-import { readChangedImps } from '../identity/auth/builder-calls';
-import { toCallerError } from '../identity/auth/caller-view';
+import { readChangedImps } from '../identity/auth/read-changed-imps';
+import { toCallerError } from '../identity/auth/require-lease-holder';
 import { findImpName } from '../platform/audit/api-audit';
-import { buildBuilderError, buildForbiddenError } from '../platform/errors/impd-errors';
+import { buildBuilderError, buildForbiddenError } from '../platform/errors/build-not-found-error';
 import type { Caller } from '../platform/principal/caller';
 import type { RouterDeps } from './create-router';
 import { toORPCError } from './to-orpc-error';

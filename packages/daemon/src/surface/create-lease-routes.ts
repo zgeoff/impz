@@ -1,4 +1,8 @@
-import { isLeaseVisible, requireLeaseHolder, toApiLease } from '../identity/auth/caller-view';
+import {
+  isLeaseVisible,
+  requireLeaseHolder,
+  toApiLease,
+} from '../identity/auth/require-lease-holder';
 import { isCallerAllowed } from '../platform/principal/caller';
 import type { RpcImplementer } from './create-implementer';
 import type { RouterDeps } from './create-router';

@@ -6,7 +6,7 @@ import { waitFor } from '@impz/shared/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import type { LoggedImpEvent } from '../../platform/db/imp-log-entry';
 import { readImpByName, updateImpActivity, updateImpExposure } from '../../platform/db/imps';
-import { listLeases, writeLease } from '../../platform/db/leases';
+import { listLeases, writeLease } from '../../platform/db/list-leases';
 import { createUbuntuImage, setupMoveHosts } from '../../test-utils/imp-ops/create-move-hosts';
 import type { MoveHostsOptions } from '../../test-utils/imp-ops/create-move-hosts';
 import { makeStubDroppedCommit } from '../../test-utils/imp-ops/make-stub-dropped-commit';
@@ -18,7 +18,7 @@ import { makeStubOlderMoveTarget } from '../../test-utils/imp-ops/make-stub-olde
 import { buildMockLeaseRecord } from '../../test-utils/imps/build-mock-lease-record';
 import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
 import { buildStubStorageFaults } from '../../test-utils/vm/build-stub-storage-faults';
-import { createXfsBackend } from '../../vm/storage/xfs-backend';
+import { createXfsBackend } from '../../vm/storage/create-xfs-backend';
 import { createIdleLoop } from '../idle/idle-loop';
 import { MOVE_FRAMES, readJsonPayload } from './move-frames';
 import { MOVE_PART_HEADER, MoveHeaderSchema } from './move-header';

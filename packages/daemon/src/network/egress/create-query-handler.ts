@@ -1,0 +1,385 @@
+import { getErrorMessage } from '@impz/shared';
+import * as dnsPacket from 'dns-packet';
+import type { Answer } from 'dns-packet';
+import { findGuestSlot } from '../../host-net/net/derive-slot-address';
+import type { Subnet } from '../../host-net/net/derive-slot-address';
+import { createCountedLimit } from '../../platform/process/counted-limit';
+import { createTokenBuckets } from '../../platform/process/create-token-buckets';
+import type { BucketSpec } from '../../platform/process/create-token-buckets';
+import { getImpdLogger } from '../../platform/process/get-impd-logger';
+import { normalizeName } from './build-allow-rules';
+import type { DnsForward } from './create-dns-forward';
+import type { AddressAnswer } from './egress-sets';
+import { EDE_PROHIBITED, RCODE, buildEmptyReply, buildLocalReply, readQuery } from './read-query';
+import type { LocalAnswer } from './resolve-network-name';
+
+export type QueryVerdict = 'admit' | 'answer' | 'screen' | 'refuse';
+
+export interface ResolverDeps {
+  readonly subnet: Subnet;
+
+  readonly ipv6?: boolean;
+
+  readonly resolveLocal: (
+    slot: number,
+    query: Readonly<{ name: string; type: string }>,
+  ) => LocalAnswer | null;
+
+  readonly checkName: (slot: number, name: string) => Promise<QueryVerdict | null>;
+
+  readonly writeAnswers: (
+    slot: number,
+    names: readonly string[],
+    answers: readonly AddressAnswer[],
+  ) => Promise<void>;
+  readonly forward: DnsForward;
+
+  readonly isScreened: (address: string) => boolean;
+
+  readonly maxTtlS: number;
+
+  readonly readRate: (slot: number) => BucketSpec;
+  readonly now: () => number;
+}
+
+export type QueryHandler = (source: string, message: Uint8Array) => Promise<Uint8Array>;
+
+export function createQueryHandler(deps: ResolverDeps): QueryHandler {
+  const tryTakeToken = createTokenBuckets(deps.readRate, deps.now);
+
+  return async (source, message) => {
+    const slot = findGuestSlot(source, deps.subnet);
+
+    if (slot === null) {
+      return buildEmptyReply(message, RCODE.refused, EDE_PROHIBITED);
+    }
+
+    if (!tryTakeToken(slot)) {
+      return buildEmptyReply(message, RCODE.refused);
+    }
+
+    const query = readQuery(message);
+
+    if (query === null) {
+      return buildEmptyReply(message, RCODE.refused);
+    }
+
+    const name = normalizeName(query.name);
+    const local = deps.resolveLocal(slot, { name, type: query.type });
+
+    if (local !== null) {
+      return local.kind === 'nxdomain'
+        ? buildEmptyReply(message, RCODE.nxDomain)
+        : buildLocalReply(query, local.records);
+    }
+
+    const verdict = await deps.checkName(slot, name);
+
+    if (verdict === null || verdict === 'refuse') {
+      return buildEmptyReply(message, RCODE.refused, EDE_PROHIBITED);
+    }
+
+    if (query.type === 'AAAA' && deps.ipv6 !== true) {
+      return buildEmptyReply(message, RCODE.noError);
+    }
+
+    try {
+      const reply = await deps.forward(message);
+
+      if (verdict === 'screen') {
+        return removeScreened(reply, deps.isScreened);
+      }
+
+      if (verdict === 'answer' || (query.type !== 'A' && query.type !== 'AAAA')) {
+        return reply;
+      }
+
+      return await writeAnswers(deps, { slot, name, type: query.type }, reply);
+    } catch (error) {
+      getImpdLogger('egress').warning('{name} for slot {slot}: {error}', {
+        name,
+        slot: String(slot),
+        error: getErrorMessage(error),
+      });
+
+      return buildEmptyReply(message, RCODE.servFail);
+    }
+  };
+}
+
+// the firewall drops these addresses anyway, but a guest that never sees one
+// tries the next address at once
+function removeScreened(reply: Uint8Array, isScreened: (address: string) => boolean): Uint8Array {
+  const packet = dnsPacket.decode(Buffer.from(reply));
+
+  const removeAddresses = (records: readonly Answer[] | undefined): Answer[] | undefined =>
+    records?.filter(
+      (record) => !((record.type === 'A' || record.type === 'AAAA') && isScreened(record.data)),
+    );
+
+  return dnsPacket.encode({
+    ...packet,
+    answers: removeAddresses(packet.answers),
+    authorities: removeAddresses(packet.authorities),
+    additionals: removeAddresses(packet.additionals),
+  });
+}
+
+interface AddressQuery {
+  readonly slot: number;
+  readonly name: string;
+  readonly type: 'A' | 'AAAA';
+}
+
+async function writeAnswers(
+  deps: ResolverDeps,
+  query: AddressQuery,
+  reply: Uint8Array,
+): Promise<Uint8Array> {
+  const packet = dnsPacket.decode(Buffer.from(reply));
+  const records = packet.answers ?? [];
+  const chain = readChain(query.name, records);
+
+  const answers: AddressAnswer[] = records.flatMap((record) =>
+    (record.type === 'A' || record.type === 'AAAA') &&
+    record.type === query.type &&
+    chain.includes(normalizeName(record.name))
+      ? [{ address: record.data, ttlS: record.ttl ?? 0 }]
+      : [],
+  );
+
+  await deps.writeAnswers(query.slot, chain, answers);
+
+  return dnsPacket.encode({
+    ...packet,
+    answers: records.map((record) => toCappedTtl(record, deps.maxTtlS)),
+  });
+}
+
+function readChain(name: string, records: readonly Answer[]): string[] {
+  const chain = [name];
+
+  for (;;) {
+    const last = chain.at(-1);
+
+    const next = records.find(
+      (record) => record.type === 'CNAME' && normalizeName(record.name) === last,
+    );
+
+    if (next?.type !== 'CNAME') {
+      return chain;
+    }
+
+    const target = normalizeName(next.data);
+
+    if (chain.includes(target)) {
+      return chain;
+    }
+
+    chain.push(target);
+  }
+}
+
+function toCappedTtl(record: Answer, maxTtlS: number): Answer {
+  return record.type === 'OPT' ? record : { ...record, ttl: Math.min(record.ttl ?? 0, maxTtlS) };
+}
+
+interface ResolverServerLimits {
+  readonly idleS: number;
+  readonly maxPerSlot: number;
+}
+
+/* @internal */
+export const DEFAULT_TCP_LIMITS: ResolverServerLimits = { idleS: 10, maxPerSlot: 16 };
+
+export interface ResolverServerOptions {
+  readonly now?: () => number;
+  readonly limits?: ResolverServerLimits;
+
+  readonly reportError?: (...args: readonly unknown[]) => void;
+}
+
+// ICMP back for a reply to a guest that went, or to a gateway with no route:
+// Bun marks it `errqueue`
+const ROUTINE_SOCKET_ERRORS = new Set(['ECONNREFUSED', 'EHOSTUNREACH', 'ENETUNREACH']);
+
+/* @internal */
+export function createSocketErrorReport(now: () => number): (...args: readonly unknown[]) => void {
+  const logRoutine = makeLimitedLog(now);
+  const logOther = makeLimitedLog(now);
+
+  return (...args) => {
+    // Bun passes the error alone, not after the socket its types name
+    const error = args.at(-1);
+    const write = isRoutineSocketError(error) ? logRoutine : logOther;
+
+    write(getErrorMessage(error));
+  };
+}
+
+function isRoutineSocketError(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) {
+    return false;
+  }
+
+  const fields: { readonly errqueue?: unknown; readonly code?: unknown } = error;
+
+  return fields.errqueue === true || ROUTINE_SOCKET_ERRORS.has(String(fields.code));
+}
+
+const SOCKET_ERROR_LOG_MS = 60_000;
+
+function makeLimitedLog(now: () => number): (error: string) => void {
+  const state: { loggedAt: number | null; held: number } = { loggedAt: null, held: 0 };
+
+  return (error) => {
+    const at = now();
+
+    if (state.loggedAt !== null && at - state.loggedAt < SOCKET_ERROR_LOG_MS) {
+      state.held += 1;
+
+      return;
+    }
+
+    const held = state.held === 0 ? '' : ` (${String(state.held)} more since the last)`;
+
+    getImpdLogger('egress').warning('resolver socket: {error}{held}', { error, held });
+
+    state.loggedAt = at;
+    state.held = 0;
+  };
+}
+
+export interface ResolverServer {
+  readonly port: number;
+  readonly stop: () => void;
+}
+
+export async function startResolverServer(
+  port: number,
+  subnet: Subnet,
+  handle: QueryHandler,
+  options: Readonly<ResolverServerOptions>,
+): Promise<ResolverServer> {
+  const limits = options.limits ?? DEFAULT_TCP_LIMITS;
+  const open = createCountedLimit(limits.maxPerSlot);
+
+  // an unhandled error would end impd, so every socket error and failed
+  // reply is logged, rate-limited, and the resolver carries on
+  const reportError = options.reportError ?? createSocketErrorReport(options.now ?? Date.now);
+
+  const udp = await Bun.udpSocket({
+    hostname: '0.0.0.0',
+    port,
+    socket: {
+      data: (socket, data, remotePort, address) => {
+        void sendUdpReply(handle, { socket, data, remotePort, address }, reportError);
+      },
+      error: reportError,
+    },
+  });
+
+  const tcp = Bun.listen<{ buffered: Buffer; release: (() => void) | null }>({
+    hostname: '0.0.0.0',
+    port: udp.port,
+    socket: {
+      open: (socket) => {
+        const slot = findGuestSlot(socket.remoteAddress, subnet);
+        const release = slot === null ? null : open.tryClaim(String(slot));
+
+        socket.data = { buffered: Buffer.alloc(0), release };
+
+        if (release === null) {
+          socket.end();
+
+          return;
+        }
+
+        socket.timeout(limits.idleS);
+      },
+      timeout: (socket) => {
+        socket.end();
+      },
+      close: (socket) => {
+        socket.data.release?.();
+      },
+      data: (socket, chunk) => {
+        if (socket.data.release === null) {
+          return;
+        }
+
+        socket.data.buffered = Buffer.concat([socket.data.buffered, chunk]);
+
+        for (;;) {
+          const buffered = socket.data.buffered;
+          const length = buffered.byteLength >= 2 ? buffered.readUInt16BE(0) : -1;
+
+          if (length < 0 || buffered.byteLength < 2 + length) {
+            return;
+          }
+
+          const message = new Uint8Array(buffered.subarray(2, 2 + length));
+
+          socket.data.buffered = buffered.subarray(2 + length);
+          void sendTcpReply(handle, socket, message, reportError);
+        }
+      },
+    },
+  });
+
+  return {
+    port: udp.port,
+    stop: () => {
+      udp.close();
+      tcp.stop(true);
+    },
+  };
+}
+
+interface UdpQuery {
+  readonly socket: { readonly send: (data: Uint8Array, port: number, address: string) => boolean };
+  readonly data: Uint8Array;
+  readonly remotePort: number;
+  readonly address: string;
+}
+
+// Bun throws a pending ICMP error from the next send when that send comes
+// before the loop reads it, so a failed reply goes where socket errors go
+async function sendUdpReply(
+  handle: QueryHandler,
+  query: UdpQuery,
+  reportError: (error: unknown) => void,
+): Promise<void> {
+  try {
+    const reply = await handle(query.address, new Uint8Array(query.data));
+
+    query.socket.send(reply, query.remotePort, query.address);
+  } catch (error) {
+    reportError(error);
+  }
+}
+
+interface TcpClient {
+  readonly remoteAddress: string;
+  readonly write: (data: Uint8Array) => number;
+}
+
+// RFC 1035 4.2.2: each message has a two-byte length in front
+async function sendTcpReply(
+  handle: QueryHandler,
+  socket: TcpClient,
+  message: Uint8Array,
+  reportError: (error: unknown) => void,
+): Promise<void> {
+  try {
+    const reply = await handle(socket.remoteAddress, message);
+
+    const framed = Buffer.alloc(2 + reply.byteLength);
+
+    framed.writeUInt16BE(reply.byteLength, 0);
+    framed.set(reply, 2);
+    socket.write(framed);
+  } catch (error) {
+    reportError(error);
+  }
+}

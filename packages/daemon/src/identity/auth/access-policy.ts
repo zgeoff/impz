@@ -1,7 +1,7 @@
 import { callerContract, collectProcedureAccess, hasScope, isImpAllowed } from '@impz/api';
 import type { CallerAccess, ForbiddenReason, ProcedureMeta } from '@impz/api';
 import type { ForkAuthority } from '../../platform/db/create-fork-grants';
-import type { ImageRecord } from '../../platform/db/images';
+import type { ImageRecord } from '../../platform/db/create-image';
 import type { GrantAuthority } from '../../platform/db/secrets';
 import { formatCaller } from '../../platform/principal/caller';
 import type { Caller } from '../../platform/principal/caller';
@@ -26,7 +26,7 @@ export interface AccessReaders {
 }
 
 /* @internal */
-export const PROCEDURE_ACCESS: Readonly<Record<string, Access>> = Object.fromEntries(
+export const ACCESS_POLICY: Readonly<Record<string, Access>> = Object.fromEntries(
   collectProcedureAccess(callerContract).flatMap((entry) => {
     const access = toCallerAccess(entry.access);
 
@@ -34,7 +34,7 @@ export const PROCEDURE_ACCESS: Readonly<Record<string, Access>> = Object.fromEnt
   }),
 );
 
-const ACCESS_BY_PATH: ReadonlyMap<string, Access> = new Map(Object.entries(PROCEDURE_ACCESS));
+const ACCESS_BY_PATH: ReadonlyMap<string, Access> = new Map(Object.entries(ACCESS_POLICY));
 
 /* @internal */
 export function findAccess(procedure: string): Access | null {

@@ -9,7 +9,7 @@ import {
   PublicAuthSchema,
 } from '@impz/api';
 import * as z from 'zod';
-import type { CheckpointRecord } from './checkpoints';
+import type { CheckpointRecord } from './create-checkpoint';
 import type { ImpRecord } from './imps';
 
 // epoch milliseconds: z.iso.datetime refuses the six-digit year of a lease with no end

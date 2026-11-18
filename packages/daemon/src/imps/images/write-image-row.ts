@@ -1,5 +1,5 @@
-import { createImage, updateImage } from '../../platform/db/images';
-import type { ImageRecord, NewImage } from '../../platform/db/images';
+import { createImage, updateImage } from '../../platform/db/create-image';
+import type { ImageRecord, NewImage } from '../../platform/db/create-image';
 import type { ImpDatabase } from '../../platform/db/open-database';
 
 export function writeImageRow(

@@ -1,7 +1,7 @@
 import type { Revocations } from '../../identity/auth/revocations';
 import type { TokenStore } from '../../identity/auth/token-store';
 import type { Caller } from '../../platform/principal/caller';
-import { createTtlCache } from '../../platform/process/ttl-cache';
+import { createTtlCache } from '../../platform/process/create-ttl-cache';
 import { hashSecret } from '../../platform/secrets/hash-secret';
 import { isSameDigest } from '../../platform/secrets/is-same-digest';
 import { mintOpaqueToken } from '../../platform/secrets/mint-opaque-token';

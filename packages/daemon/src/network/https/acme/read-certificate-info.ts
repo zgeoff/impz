@@ -3,7 +3,7 @@
 // oxlint-disable-next-line import/no-unassigned-import -- a polyfill, loaded for its effect
 import 'reflect-metadata';
 import * as x509 from '@peculiar/x509';
-import type { CertificateInfo } from './renewal-policy';
+import type { CertificateInfo } from './plan-renewal';
 
 export function readCertificateInfo(chainPem: string): CertificateInfo {
   const certificate = new x509.X509Certificate(x509.PemConverter.decodeFirst(chainPem));

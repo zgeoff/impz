@@ -1,4 +1,4 @@
-import type { GuestNetBytes } from '../../host-net/net/tap-bytes';
+import type { GuestNetBytes } from '../../host-net/net/read-guest-net-bytes';
 import type { ResourceDelta } from '../../platform/telemetry/resource-delta';
 import type { CpuStat } from '../../vm/vmm/cpu-cgroups';
 

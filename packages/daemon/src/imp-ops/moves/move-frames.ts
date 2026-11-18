@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import type { Hash } from 'node:crypto';
 import { open } from 'node:fs/promises';
 import * as z from 'zod';
-import type { StreamedCommand } from '../../platform/process/run-stream';
+import type { StreamedCommand } from '../../platform/process/create-stream-runner';
 import { readDataBlocks } from '../../vm/storage/read-data-blocks';
 import { createContentHash } from './create-content-hash';
 import type { ContentHash } from './create-content-hash';

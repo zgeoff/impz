@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { EXEC_PATH, MCP_PATH, TUNNEL_PATH } from '@impz/api';
-import { createTtlCache } from '../../platform/process/ttl-cache';
+import { createTtlCache } from '../../platform/process/create-ttl-cache';
 
 // a random handle the API redeems once, not the address itself, which any
 // client could write into a forwarded header

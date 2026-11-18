@@ -1,5 +1,5 @@
-import type { NetworkMember } from '../../platform/db/networks';
-import type { NetworkPeer } from './egress-ruleset';
+import type { NetworkMember } from '../../platform/db/list-networks';
+import type { NetworkPeer } from './build-ruleset';
 
 export function listPeerGroups(members: readonly NetworkMember[]): NetworkPeer[][] {
   const byNetwork = Map.groupBy(members, (member) => member.network);

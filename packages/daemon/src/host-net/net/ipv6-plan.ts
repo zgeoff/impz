@@ -5,9 +5,9 @@ import { getErrorMessage } from '@impz/shared';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { runCommand } from '../../platform/process/run-command';
 import type { CommandRunner } from '../../platform/process/run-command';
-import { buildUlaPrefix, parsePrefix64 } from './addressing6';
-import type { Prefix64 } from './addressing6';
-import { buildNat66Removal, buildNat66Ruleset } from './nat66-ruleset';
+import { buildNat66Removal, buildNat66Ruleset } from './build-nat66-ruleset';
+import { buildUlaPrefix, parsePrefix64 } from './derive-guest-ip6';
+import type { Prefix64 } from './derive-guest-ip6';
 
 export type Ipv6Setting =
   | { readonly kind: 'auto' }

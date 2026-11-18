@@ -1,8 +1,8 @@
 import type { Config } from '../config';
 import { createStatusCache } from '../host-net/net/tailscale-status';
 import type { TailscaleStatus } from '../host-net/net/tailscale-status';
-import { createKnownHosts } from '../identity/auth/ambient-request';
-import { createTailnetIdentities, runWhois } from '../identity/auth/tailnet-identity';
+import { createTailnetIdentities, runWhois } from '../identity/auth/create-tailnet-identities';
+import { createKnownHosts } from '../identity/auth/is-allowed-ambient-request';
 import type { AppDeps } from '../surface/create-app';
 import type { ImpdDeps } from './impd-deps';
 

@@ -1,15 +1,18 @@
 import type { ColdBootCause } from '@impz/api';
 import { getErrorMessage } from '@impz/shared';
-import { removeNextBootCause, writeColdBoot } from '../../platform/db/cold-boots';
-import { requireTransition } from '../../platform/db/imp-transitions';
 import { removeIdentityReset, updateImpActivity, updateImpDisk } from '../../platform/db/imps';
+import { removeNextBootCause, writeColdBoot } from '../../platform/db/list-cold-boots';
+import { requireTransition } from '../../platform/db/require-transition';
 import type { ImpStateChange } from '../../platform/db/update-imp-state';
+import {
+  buildAgentOutdatedApiError,
+  buildStoppingError,
+} from '../../platform/errors/build-not-found-error';
 import { ImpdError } from '../../platform/errors/impd-error';
-import { buildAgentOutdatedApiError, buildStoppingError } from '../../platform/errors/impd-errors';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { createSemaphore } from '../../platform/process/semaphore';
 import { isAgentError } from '../../vm/agent-client/is-agent-error';
-import { buildUffdDeviceError } from '../../vm/imps-contract/uffd-device-error';
+import { buildUffdDeviceError } from '../../vm/imps-contract/build-uffd-device-error';
 import { removeSnapshot } from '../../vm/sleep/snapshot-meta';
 import { writeVmIdentity } from '../../vm/sleep/vm-identity';
 import type { VmIdentity } from '../../vm/sleep/vm-identity';

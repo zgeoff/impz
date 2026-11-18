@@ -12,7 +12,7 @@ import {
   AgentBootIdSchema,
   AgentGenerationSchema,
   AgentSessionNameSchema,
-} from '../../../vm/agent-client/agent-ids';
+} from '../../../vm/agent-client/is-agent-log-identity';
 import { getLogBounds } from './plan-log-read';
 import type { LogBounds, LogSegment } from './plan-log-read';
 

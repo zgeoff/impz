@@ -1,7 +1,7 @@
 import { getErrorMessage } from '@impz/shared';
 import { getImpdLogger } from '../../../platform/process/get-impd-logger';
+import { planReclaimStep } from './plan-reclaim-step';
 import type { ZfsCommands, ZfsEntry } from './zfs-commands';
-import { planReclaimStep } from './zfs-reclaim';
 
 interface ZfsReclaimContext {
   readonly zfs: ZfsCommands;

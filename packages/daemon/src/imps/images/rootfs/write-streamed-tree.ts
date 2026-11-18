@@ -1,8 +1,8 @@
 import type { StartTimer } from '../../../platform/process/clock';
 import type { CommandResult } from '../../../platform/process/run-command';
 import { ImageLimitError } from '../build/image-limit-error';
-import { planRootfsOverhead } from './rootfs-plan';
-import { UNPACK_TAR_ARGS, assertUnpacked } from './unpack-export';
+import { UNPACK_TAR_ARGS, assertUnpacked } from './assert-unpacked';
+import { planRootfsOverhead } from './plan-rootfs';
 
 export interface TreeLimits {
   readonly maxBytes: number;

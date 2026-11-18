@@ -1,8 +1,8 @@
 import { admitRequest } from './admit-request';
 import type { AdmitDeps } from './admit-request';
 import { buildCredentialedHeaders } from './build-credentialed-headers';
+import type { ResolveUpstream, Upstream } from './create-forwarder';
 import { findIdentityToken } from './find-identity-token';
-import type { ResolveUpstream, Upstream } from './forward-request';
 
 export interface ConnectionAudit {
   readonly recordOpen: () => void;

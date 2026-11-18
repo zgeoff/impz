@@ -1,8 +1,8 @@
 import { FILES_GUEST_DIR } from '@impz/api';
+import { buildAgentOutdatedApiError } from '../../platform/errors/build-not-found-error';
 import { ImpdError } from '../../platform/errors/impd-error';
-import { buildAgentOutdatedApiError } from '../../platform/errors/impd-errors';
-import { sendFilesRemove, sendFilesWrite } from '../../vm/agent-client/file-requests';
 import { isAgentError } from '../../vm/agent-client/is-agent-error';
+import { sendFilesRemove, sendFilesWrite } from '../../vm/agent-client/send-files-write';
 import type { ImpRuntime } from '../imps/imp-runtime';
 
 export interface FileApi {

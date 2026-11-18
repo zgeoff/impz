@@ -3,8 +3,8 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import {
-  checkDockerfile,
-  parseDockerfile,
+  dockerfileCheck,
+  dockerfileParse,
   renderPinnedDockerfile,
   splitNameWords,
 } from '@impz/daemon/test-utils';
@@ -213,7 +213,7 @@ function toGoComparable(instruction: DeepReadonly<GoInstruction>): Comparable {
 
 function readOurs(dockerfile: string) {
   try {
-    const parsed = parseDockerfile(dockerfile);
+    const parsed = dockerfileParse(dockerfile);
 
     return {
       error: null,
@@ -236,10 +236,10 @@ function formatErrorClass(error: string): string {
 }
 
 function renderPinned(dockerfile: string): string | null | Error {
-  let images: ReturnType<typeof checkDockerfile>;
+  let images: ReturnType<typeof dockerfileCheck>;
 
   try {
-    images = checkDockerfile(dockerfile);
+    images = dockerfileCheck(dockerfile);
   } catch {
     return null;
   }

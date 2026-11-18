@@ -30,37 +30,6 @@ export interface ParsedDockerfile {
 const GO_SPACE = String.raw`\t\n\v\f\r \u0085\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000`;
 
 const LEADING_SPACE = new RegExp(`^[${GO_SPACE}]+`, 'v');
-const TRAILING_SPACE = new RegExp(`[${GO_SPACE}]+$`, 'v');
-
-// The parser's reWhitespace, which splits FROM, ADD and COPY arguments.
-const WORD_SPACE = /[\t\v\f\r ]+/v;
-
-// Go's \s in the parser's directive pattern excludes \v.
-const DIRECTIVE =
-  /^#[\t\n\f\r ]*(?<key>[a-zA-Z][a-zA-Z0-9]*)[\t\n\f\r ]*=[\t\n\f\r ]*(?<value>.+?)[\t\n\f\r ]*$/v;
-
-const DIRECTIVE_KEYS = new Set(['syntax', 'escape', 'check']);
-
-const HEREDOC_WORD = /^(?<fd>\d*)<<(?<strip>-?)[\t\n\f\r ]*(?<rest>[^<]*)$/v;
-
-const HEREDOC_KEYWORDS = new Set(['add', 'copy', 'run']);
-const JSON_KEYWORDS = new Set(['add', 'copy', 'volume']);
-const WORD_KEYWORDS = new Set(['from', 'expose']);
-
-// The parser's extractBuilderFlags tests each byte, not each character, with unicode.IsSpace.
-const FLAG_SPACE_BYTES = new Set([0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x20, 0x85, 0xa0]);
-
-function stripGoSpace(text: string): string {
-  return text.replace(LEADING_SPACE, '').replace(TRAILING_SPACE, '');
-}
-
-function stripNewline(line: string): string {
-  return line.replace(/[\r\n]+$/v, '');
-}
-
-function isComment(line: string): boolean {
-  return line.replace(LEADING_SPACE, '').startsWith('#');
-}
 
 export function splitDockerfileLines(text: string): string[] {
   const lines = text.replace(/^\uFEFF/v, '').match(/[^\n]*\n|[^\n]+$/gv) ?? [];
@@ -68,11 +37,169 @@ export function splitDockerfileLines(text: string): string[] {
   return lines;
 }
 
-function buildContinuation(escape: string): RegExp {
-  const token = escape === '`' ? '`' : String.raw`\\`;
+export function splitNameWords(text: string, escape: string): string[] {
+  // Code points, as Go's range over a string gives runes.
+  const chars = text.match(/./gsv) ?? [];
+  const words: string[] = [];
+  let word = '';
+  let phase: 'spaces' | 'word' | 'quote' = 'spaces';
+  let quote = '';
+  let isBlankOk = false;
 
-  return new RegExp(`([^${token}])${token}[ \\t]*$|^${token}[ \\t]*$`, 'v');
+  for (let index = 0; index <= chars.length; index += 1) {
+    const isEnd = index === chars.length;
+    const char = chars[index] ?? '';
+
+    if (phase === 'spaces') {
+      if (isEnd) {
+        break;
+      }
+
+      if (LEADING_SPACE.test(char)) {
+        continue;
+      }
+
+      phase = 'word';
+    }
+
+    if (isEnd) {
+      if (isBlankOk || word.length > 0) {
+        words.push(word);
+      }
+
+      break;
+    }
+
+    if (phase === 'word') {
+      if (LEADING_SPACE.test(char)) {
+        if (isBlankOk || word.length > 0) {
+          words.push(word);
+        }
+
+        phase = 'spaces';
+        word = '';
+        isBlankOk = false;
+        continue;
+      }
+
+      if (char === "'" || char === '"') {
+        quote = char;
+        isBlankOk = true;
+        phase = 'quote';
+      }
+
+      if (char === escape) {
+        if (index + 1 === chars.length) {
+          continue;
+        }
+
+        word += char;
+        index += 1;
+      }
+
+      word += chars[index] ?? '';
+      continue;
+    }
+
+    if (char === quote) {
+      phase = 'word';
+    }
+
+    if (char === escape && quote !== "'") {
+      if (index + 1 === chars.length) {
+        phase = 'word';
+        continue;
+      }
+
+      word += char;
+      index += 1;
+    }
+
+    word += chars[index] ?? '';
+  }
+
+  return words;
 }
+
+export function dockerfileParse(text: string): ParsedDockerfile {
+  const lines = splitDockerfileLines(text);
+  const directives = buildDirectiveReader();
+  const instructions: Instruction[] = [];
+  let index = 0;
+
+  const scanSourceLine = (raw: string, isFirst: boolean): string => {
+    const trimmed = isFirst ? stripNewline(raw).replace(LEADING_SPACE, '') : stripNewline(raw);
+
+    directives.scanLine(trimmed);
+
+    return isComment(trimmed) ? '' : trimmed;
+  };
+
+  while (index < lines.length) {
+    const startLine = index + 1;
+    const first = scanSourceLine(lines[index] ?? '', true);
+
+    index += 1;
+
+    let [joined, isEnd] = directives.splitContinuation(first);
+
+    if (isEnd && joined.length === 0) {
+      continue;
+    }
+
+    while (!isEnd && index < lines.length) {
+      const raw = lines[index] ?? '';
+      const next = scanSourceLine(raw, false);
+
+      index += 1;
+
+      if (isComment(raw) || next.replace(LEADING_SPACE, '').length === 0) {
+        continue;
+      }
+
+      const [part, ended] = directives.splitContinuation(next);
+
+      joined += part;
+      isEnd = ended;
+    }
+
+    const instruction = parseInstruction(joined, directives.escape, startLine, index);
+
+    if (canHoldHeredoc(instruction) && joined.includes('<<')) {
+      for (const heredoc of collectHeredocs(joined, startLine)) {
+        let isTerminated = false;
+
+        while (index < lines.length && !isTerminated) {
+          const body = stripNewline(lines[index] ?? '');
+          const candidate = heredoc.isStripped ? body.replace(/^\t+/v, '') : body;
+
+          index += 1;
+          isTerminated = candidate === heredoc.name;
+        }
+
+        if (!isTerminated) {
+          throw new DockerfileError(
+            `line ${String(startLine)}: the heredoc ${heredoc.name} is not closed`,
+          );
+        }
+      }
+    }
+
+    instructions.push(instruction);
+  }
+
+  if (instructions.length === 0) {
+    throw new DockerfileError('the Dockerfile has no instructions');
+  }
+
+  return { escape: directives.escape, instructions };
+}
+
+// Go's \s in the parser's directive pattern excludes \v.
+const DIRECTIVE =
+  /^#[\t\n\f\r ]*(?<key>[a-zA-Z][a-zA-Z0-9]*)[\t\n\f\r ]*=[\t\n\f\r ]*(?<value>.+?)[\t\n\f\r ]*$/v;
+
+const DIRECTIVE_KEYS = new Set(['syntax', 'escape', 'check']);
 
 function buildDirectiveReader() {
   let escape = '\\';
@@ -129,6 +256,78 @@ function buildDirectiveReader() {
     },
   };
 }
+
+function buildContinuation(escape: string): RegExp {
+  const token = escape === '`' ? '`' : String.raw`\\`;
+
+  return new RegExp(`([^${token}])${token}[ \\t]*$|^${token}[ \\t]*$`, 'v');
+}
+
+function stripNewline(line: string): string {
+  return line.replace(/[\r\n]+$/v, '');
+}
+
+function isComment(line: string): boolean {
+  return line.replace(LEADING_SPACE, '').startsWith('#');
+}
+
+// The parser's reWhitespace, which splits FROM, ADD and COPY arguments.
+const WORD_SPACE = /[\t\v\f\r ]+/v;
+
+function parseInstruction(
+  text: string,
+  escape: string,
+  line: number,
+  endLine: number,
+): Instruction {
+  const trimmed = stripGoSpace(text);
+  const commandEnd = WORD_SPACE.exec(trimmed);
+  const command = commandEnd === null ? trimmed : trimmed.slice(0, commandEnd.index);
+  const rest = commandEnd === null ? '' : trimmed.slice(commandEnd.index + commandEnd[0].length);
+
+  if (command === '') {
+    throw new DockerfileError(`line ${String(line)}: an instruction has no name`);
+  }
+
+  // Go lowercases a few non-ASCII letters to ASCII ones, which would make a keyword impd does
+  // not see.
+  if (!/^[\u0021-\u007E]+$/v.test(command)) {
+    throw new DockerfileError(
+      `line ${String(line)}: the instruction ${JSON.stringify(command)} is not ASCII`,
+    );
+  }
+
+  const keyword = command.toLowerCase();
+  const split = splitFlags(rest, escape);
+  const args = stripGoSpace(split.args);
+
+  const trigger =
+    keyword === 'onbuild' && args !== '' ? parseInstruction(args, escape, line, endLine) : null;
+
+  const read = keyword === 'onbuild' ? { words: [], isJson: false } : parseWords(keyword, args);
+
+  return {
+    keyword,
+    command,
+    flags: split.flags,
+    rawFlags: split.raw,
+    args,
+    words: read.words,
+    isJson: read.isJson,
+    trigger,
+    line,
+    endLine,
+  };
+}
+
+const TRAILING_SPACE = new RegExp(`[${GO_SPACE}]+$`, 'v');
+
+function stripGoSpace(text: string): string {
+  return text.replace(LEADING_SPACE, '').replace(TRAILING_SPACE, '');
+}
+
+// The parser's extractBuilderFlags tests each byte, not each character, with unicode.IsSpace.
+const FLAG_SPACE_BYTES = new Set([0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x20, 0x85, 0xa0]);
 
 interface SplitFlags {
   readonly flags: string[];
@@ -234,6 +433,27 @@ function splitFlags(rest: string, escape: string): SplitFlags {
   return splitAt(bytes.length);
 }
 
+const JSON_KEYWORDS = new Set(['add', 'copy', 'volume']);
+const WORD_KEYWORDS = new Set(['from', 'expose']);
+
+function parseWords(keyword: string, args: string): { words: string[]; isJson: boolean } {
+  if (args === '') {
+    return { words: [], isJson: false };
+  }
+
+  const json = JSON_KEYWORDS.has(keyword) || keyword === 'run' ? parseJsonWords(args) : null;
+
+  if (json !== null) {
+    return { words: json, isJson: true };
+  }
+
+  if (JSON_KEYWORDS.has(keyword) || WORD_KEYWORDS.has(keyword)) {
+    return { words: args.split(WORD_SPACE), isJson: false };
+  }
+
+  return { words: [args], isJson: false };
+}
+
 function parseJsonWords(args: string): string[] | null {
   const text = args.replace(LEADING_SPACE, '');
 
@@ -262,158 +482,47 @@ function parseJsonWords(args: string): string[] | null {
   });
 }
 
-function parseWords(keyword: string, args: string): { words: string[]; isJson: boolean } {
-  if (args === '') {
-    return { words: [], isJson: false };
-  }
-
-  const json = JSON_KEYWORDS.has(keyword) || keyword === 'run' ? parseJsonWords(args) : null;
-
-  if (json !== null) {
-    return { words: json, isJson: true };
-  }
-
-  if (JSON_KEYWORDS.has(keyword) || WORD_KEYWORDS.has(keyword)) {
-    return { words: args.split(WORD_SPACE), isJson: false };
-  }
-
-  return { words: [args], isJson: false };
-}
-
-function parseInstruction(
-  text: string,
-  escape: string,
-  line: number,
-  endLine: number,
-): Instruction {
-  const trimmed = stripGoSpace(text);
-  const commandEnd = WORD_SPACE.exec(trimmed);
-  const command = commandEnd === null ? trimmed : trimmed.slice(0, commandEnd.index);
-  const rest = commandEnd === null ? '' : trimmed.slice(commandEnd.index + commandEnd[0].length);
-
-  if (command === '') {
-    throw new DockerfileError(`line ${String(line)}: an instruction has no name`);
-  }
-
-  // Go lowercases a few non-ASCII letters to ASCII ones, which would make a keyword impd does
-  // not see.
-  if (!/^[\u0021-\u007E]+$/v.test(command)) {
-    throw new DockerfileError(
-      `line ${String(line)}: the instruction ${JSON.stringify(command)} is not ASCII`,
-    );
-  }
-
-  const keyword = command.toLowerCase();
-  const split = splitFlags(rest, escape);
-  const args = stripGoSpace(split.args);
-
-  const trigger =
-    keyword === 'onbuild' && args !== '' ? parseInstruction(args, escape, line, endLine) : null;
-
-  const read = keyword === 'onbuild' ? { words: [], isJson: false } : parseWords(keyword, args);
-
-  return {
-    keyword,
-    command,
-    flags: split.flags,
-    rawFlags: split.raw,
-    args,
-    words: read.words,
-    isJson: read.isJson,
-    trigger,
-    line,
-    endLine,
-  };
-}
-
-export function splitNameWords(text: string, escape: string): string[] {
-  // Code points, as Go's range over a string gives runes.
-  const chars = text.match(/./gsv) ?? [];
-  const words: string[] = [];
-  let word = '';
-  let phase: 'spaces' | 'word' | 'quote' = 'spaces';
-  let quote = '';
-  let isBlankOk = false;
-
-  for (let index = 0; index <= chars.length; index += 1) {
-    const isEnd = index === chars.length;
-    const char = chars[index] ?? '';
-
-    if (phase === 'spaces') {
-      if (isEnd) {
-        break;
-      }
-
-      if (LEADING_SPACE.test(char)) {
-        continue;
-      }
-
-      phase = 'word';
-    }
-
-    if (isEnd) {
-      if (isBlankOk || word.length > 0) {
-        words.push(word);
-      }
-
-      break;
-    }
-
-    if (phase === 'word') {
-      if (LEADING_SPACE.test(char)) {
-        if (isBlankOk || word.length > 0) {
-          words.push(word);
-        }
-
-        phase = 'spaces';
-        word = '';
-        isBlankOk = false;
-        continue;
-      }
-
-      if (char === "'" || char === '"') {
-        quote = char;
-        isBlankOk = true;
-        phase = 'quote';
-      }
-
-      if (char === escape) {
-        if (index + 1 === chars.length) {
-          continue;
-        }
-
-        word += char;
-        index += 1;
-      }
-
-      word += chars[index] ?? '';
-      continue;
-    }
-
-    if (char === quote) {
-      phase = 'word';
-    }
-
-    if (char === escape && quote !== "'") {
-      if (index + 1 === chars.length) {
-        phase = 'word';
-        continue;
-      }
-
-      word += char;
-      index += 1;
-    }
-
-    word += chars[index] ?? '';
-  }
-
-  return words;
-}
+const HEREDOC_KEYWORDS = new Set(['add', 'copy', 'run']);
 
 function canHoldHeredoc(instruction: Readonly<Instruction>): boolean {
   const target = instruction.keyword === 'onbuild' ? instruction.trigger : instruction;
 
   return target !== null && HEREDOC_KEYWORDS.has(target.keyword) && !target.isJson;
+}
+
+const HEREDOC_WORD = /^(?<fd>\d*)<<(?<strip>-?)[\t\n\f\r ]*(?<rest>[^<]*)$/v;
+
+interface Heredoc {
+  readonly name: string;
+  readonly isStripped: boolean;
+}
+
+function collectHeredocs(text: string, line: number): Heredoc[] {
+  // A shell ${...} expansion can hold spaces, which would move the word breaks.
+  if (text.includes('${')) {
+    throw new DockerfileError(
+      `line ${String(line)}: an ambiguous form: \${...} on a line that holds <<`,
+    );
+  }
+
+  const heredocs: Heredoc[] = [];
+
+  for (const word of splitShellWords(text, '\\', true) ?? []) {
+    const match = HEREDOC_WORD.exec(word);
+    const rest = match?.groups?.['rest'] ?? '';
+
+    if (match === null || rest === '') {
+      continue;
+    }
+
+    const names = splitShellWords(rest, '\\', false) ?? [];
+
+    if (names.length === 1) {
+      heredocs.push({ name: names[0] ?? '', isStripped: match.groups?.['strip'] === '-' });
+    }
+  }
+
+  return heredocs;
 }
 
 function splitShellWords(text: string, escape: string, keepQuotes: boolean): string[] | null {
@@ -513,111 +622,4 @@ function removeQuotes(quoted: string): string {
   const inner = quoted.slice(1, -1);
 
   return quoted.startsWith("'") ? inner : inner.replaceAll(/\\(?<char>["$\\])/gv, '$<char>');
-}
-
-interface Heredoc {
-  readonly name: string;
-  readonly isStripped: boolean;
-}
-
-function collectHeredocs(text: string, line: number): Heredoc[] {
-  // A shell ${...} expansion can hold spaces, which would move the word breaks.
-  if (text.includes('${')) {
-    throw new DockerfileError(
-      `line ${String(line)}: an ambiguous form: \${...} on a line that holds <<`,
-    );
-  }
-
-  const heredocs: Heredoc[] = [];
-
-  for (const word of splitShellWords(text, '\\', true) ?? []) {
-    const match = HEREDOC_WORD.exec(word);
-    const rest = match?.groups?.['rest'] ?? '';
-
-    if (match === null || rest === '') {
-      continue;
-    }
-
-    const names = splitShellWords(rest, '\\', false) ?? [];
-
-    if (names.length === 1) {
-      heredocs.push({ name: names[0] ?? '', isStripped: match.groups?.['strip'] === '-' });
-    }
-  }
-
-  return heredocs;
-}
-
-export function parseDockerfile(text: string): ParsedDockerfile {
-  const lines = splitDockerfileLines(text);
-  const directives = buildDirectiveReader();
-  const instructions: Instruction[] = [];
-  let index = 0;
-
-  const scanSourceLine = (raw: string, isFirst: boolean): string => {
-    const trimmed = isFirst ? stripNewline(raw).replace(LEADING_SPACE, '') : stripNewline(raw);
-
-    directives.scanLine(trimmed);
-
-    return isComment(trimmed) ? '' : trimmed;
-  };
-
-  while (index < lines.length) {
-    const startLine = index + 1;
-    const first = scanSourceLine(lines[index] ?? '', true);
-
-    index += 1;
-
-    let [joined, isEnd] = directives.splitContinuation(first);
-
-    if (isEnd && joined.length === 0) {
-      continue;
-    }
-
-    while (!isEnd && index < lines.length) {
-      const raw = lines[index] ?? '';
-      const next = scanSourceLine(raw, false);
-
-      index += 1;
-
-      if (isComment(raw) || next.replace(LEADING_SPACE, '').length === 0) {
-        continue;
-      }
-
-      const [part, ended] = directives.splitContinuation(next);
-
-      joined += part;
-      isEnd = ended;
-    }
-
-    const instruction = parseInstruction(joined, directives.escape, startLine, index);
-
-    if (canHoldHeredoc(instruction) && joined.includes('<<')) {
-      for (const heredoc of collectHeredocs(joined, startLine)) {
-        let isTerminated = false;
-
-        while (index < lines.length && !isTerminated) {
-          const body = stripNewline(lines[index] ?? '');
-          const candidate = heredoc.isStripped ? body.replace(/^\t+/v, '') : body;
-
-          index += 1;
-          isTerminated = candidate === heredoc.name;
-        }
-
-        if (!isTerminated) {
-          throw new DockerfileError(
-            `line ${String(startLine)}: the heredoc ${heredoc.name} is not closed`,
-          );
-        }
-      }
-    }
-
-    instructions.push(instruction);
-  }
-
-  if (instructions.length === 0) {
-    throw new DockerfileError('the Dockerfile has no instructions');
-  }
-
-  return { escape: directives.escape, instructions };
 }

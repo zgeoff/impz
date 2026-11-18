@@ -5,11 +5,11 @@ import { getErrorMessage } from '@impz/shared';
 import packageJson from '../../package.json' with { type: 'json' };
 import type { Config } from '../config';
 import { readTailscaleStatus } from '../host-net/net/tailscale-status';
-import { loadOrCreateToken } from '../identity/token';
+import { token } from '../identity/token';
 import { createBackupService } from '../imp-ops/backup/backup-service';
 import { createIdleLoop } from '../imp-ops/idle/idle-loop';
-import { createBuilders } from '../imps/images/builders/builder-imps';
-import { readSetfcapWarning } from '../imps/images/rootfs/unpack-export';
+import { createBuilders } from '../imps/images/builders/create-builders';
+import { readSetfcapWarning } from '../imps/images/rootfs/assert-unpacked';
 import { createKernelOopsWatch } from '../imps/imps/kernel-oops-watch';
 import { removeUnusedDrives } from '../imps/imps/remove-unused-drives';
 import { createAuthorizedKeys } from '../imps/ssh/authorized-keys';
@@ -25,15 +25,15 @@ import { openDatabase } from '../platform/db/open-database';
 import { getImpdLogger } from '../platform/process/get-impd-logger';
 import { startRealTimer } from '../platform/process/start-real-timer';
 import { startOtlpExport } from '../platform/telemetry/start-otlp-export';
-import { setupSshDir } from '../surface/ssh/host-key';
+import { setupSshDir } from '../surface/ssh/load-or-create-host-key';
 import { createStorageBackend } from '../vm/storage/create-storage-backend';
 import { createDataDirs } from '../vm/storage/data-layout';
 import { isUsageChange } from '../vm/storage/is-usage-change';
 import { readLiveStorage } from '../vm/storage/read-live-storage';
 import { setupSystemFiles } from '../vm/storage/setup-system-files';
 import { writeImageFiles } from '../vm/storage/write-image-files';
-import { checkKsmHost, readKsmHostStats } from '../vm/vmm/ksm';
 import { readHugePagePool } from '../vm/vmm/read-huge-page-pool';
+import { checkKsmHost, readKsmHostStats } from '../vm/vmm/read-ksm-host-stats';
 import { createImpdApp } from './create-impd-app';
 import { createImpdFirewall } from './create-impd-firewall';
 import { createImpdImps } from './create-impd-imps';
@@ -142,7 +142,7 @@ async function startImpdParts(
   const deps: ImpdDeps = {
     ...boundaries,
     db,
-    rootToken: boundaries.rootToken ?? loadOrCreateToken(config.dataDir),
+    rootToken: boundaries.rootToken ?? token(config.dataDir),
     storage,
     systemFiles,
     imps: { ...boundaries.imps, kernelOops },

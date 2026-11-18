@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import type { DiskBudget } from '../../vm/storage/disk-budget';
-import type { TemplateBuildPlan } from '../../vm/vmm/template-vm';
+import type { TemplateBuildPlan } from '../../vm/vmm/create-template-vm';
 
 export function buildStubTemplateVm(diskBudget: Pick<DiskBudget, 'readStatus'>) {
   const builds: TemplateBuildPlan[] = [];

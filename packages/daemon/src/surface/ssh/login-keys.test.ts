@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import invariant from 'tiny-invariant';
 import { formatKeyFingerprint, parseAuthorizedKeys } from '../../imps/ssh/authorized-keys';
 import { buildMockCaller } from '../../test-utils/identity/build-mock-caller';
-import { generateEd25519Key } from './host-key';
+import { generateEd25519Key } from './load-or-create-host-key';
 import { createLoginKeys } from './login-keys';
 
 test('it logs a file key in as its own principal, by fingerprint, shown by its comment', () => {

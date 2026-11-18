@@ -3,7 +3,7 @@ import { existsSync, writeFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { readExtents } from '../../vm/storage/fiemap';
+import { readExtents } from '../../vm/storage/read-extents';
 import { buildStubFiemap } from './build-stub-fiemap';
 
 async function setupTest() {

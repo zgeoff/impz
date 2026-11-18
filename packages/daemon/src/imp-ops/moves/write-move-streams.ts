@@ -1,7 +1,9 @@
-import { createCheckpoint } from '../../platform/db/checkpoints';
+import { createCheckpoint } from '../../platform/db/create-checkpoint';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import type { StorageBackend } from '../../vm/storage/storage-backend';
 import { buildCheckpointId } from '../checkpoints/checkpoint-service';
+import { isSameHash } from './build-ticket-header';
+import type { ReceiptBody } from './build-ticket-header';
 import type { ByteCounter } from './create-byte-counter';
 import {
   FileEndSchema,
@@ -14,8 +16,6 @@ import {
 import type { FrameReader } from './move-frames';
 import type { MoveHeader } from './move-header';
 import { MoveRequestError } from './move-request-error';
-import { isSameHash } from './move-tickets';
-import type { ReceiptBody } from './move-tickets';
 
 interface MoveStreamsDeps {
   readonly db: ImpDatabase;

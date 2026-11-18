@@ -3,7 +3,7 @@ import { createActor } from 'xstate';
 import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import { buildLogKey } from './build-log-key';
 import type { GenerationEnd, GenerationLog, GenerationLogOptions } from './generation-log';
-import { getGenerationDir } from './session-log-files';
+import { getGenerationDir } from './read-session-log-range';
 import { sessionLogMachine } from './session-log-machine';
 import type { LiveLog } from './session-log-machine';
 import type { SessionLogImp, SessionLogLimits } from './session-log-service';

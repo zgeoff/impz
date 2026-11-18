@@ -12,7 +12,7 @@ import {
   listImageRemovals,
   listImageUses,
   readImageByName,
-} from '../../platform/db/images';
+} from '../../platform/db/create-image';
 import { openDatabase } from '../../platform/db/open-database';
 import { runCommand } from '../../platform/process/run-command';
 import { runStreamed } from '../../platform/process/run-streamed';
@@ -25,11 +25,11 @@ import { buildQueryGate } from '../../test-utils/platform/build-query-gate';
 import { buildStubClock } from '../../test-utils/platform/build-stub-clock';
 import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
 import { countTreeBytes } from '../../vm/storage/count-tree-bytes';
+import { createXfsBackend } from '../../vm/storage/create-xfs-backend';
 import { buildImagePaths } from '../../vm/storage/data-layout';
 import { createDiskBudget } from '../../vm/storage/disk-budget';
 import { createStorageGate } from '../../vm/storage/storage-gate';
-import { createXfsBackend } from '../../vm/storage/xfs-backend';
-import { BUILDER_IMAGE } from './builders/builder-imps';
+import { BUILDER_IMAGE } from './builders/create-builders';
 import { createImageService } from './image-service';
 import { startTarProcess } from './rootfs/start-tar-process';
 

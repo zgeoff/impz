@@ -4,10 +4,10 @@ import type { ClientView, GrantID, GrantView, MCPAuthAdmin, PasskeyID } from '@z
 import { toTagged } from '@zgeoff/std';
 import { match } from 'ts-pattern';
 import type { TokenStore } from '../identity/auth/token-store';
-import { pickGrantScope } from '../identity/oauth/grant-limits';
+import { pickGrantScope } from '../identity/oauth/pick-grant-scope';
 import { pickOAuthClient } from '../identity/oauth/pick-oauth-client';
+import { buildConflictError, buildNotFoundError } from '../platform/errors/build-not-found-error';
 import { ImpdError } from '../platform/errors/impd-error';
-import { buildConflictError, buildNotFoundError } from '../platform/errors/impd-errors';
 import type { RpcImplementer } from './create-implementer';
 import type { RouterDeps } from './create-router';
 

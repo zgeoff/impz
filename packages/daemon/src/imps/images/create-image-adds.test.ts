@@ -8,7 +8,7 @@ import { readImpEnv } from '@impz/shared/test-utils/read-imp-env';
 import { updateEnv } from '@impz/shared/test-utils/update-env';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { loadConfig } from '../../config';
-import { createImage, listImages, readImageByName } from '../../platform/db/images';
+import { createImage, listImages, readImageByName } from '../../platform/db/create-image';
 import { listImps } from '../../platform/db/imps';
 import { runChecked, runCommand } from '../../platform/process/run-command';
 import { runStreamed } from '../../platform/process/run-streamed';
@@ -26,7 +26,7 @@ import { startTestImpd } from '../../test-utils/start-test-impd';
 import type { StubAnswer } from '../../test-utils/vm/build-stub-guest';
 import { countTreeBytes } from '../../vm/storage/count-tree-bytes';
 import { buildImagePaths } from '../../vm/storage/data-layout';
-import { BUILDER_IMAGE, createBuilders } from './builders/builder-imps';
+import { BUILDER_IMAGE, createBuilders } from './builders/create-builders';
 import { createImageService } from './image-service';
 import { startTarProcess } from './rootfs/start-tar-process';
 

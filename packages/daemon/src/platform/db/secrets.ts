@@ -8,9 +8,9 @@ import {
 import type { BrokerRule, Grant, GrantFilter, OAuthConfig, SecretKind } from '@impz/api';
 import type { Selectable } from 'kysely';
 import * as z from 'zod';
+import type { DB } from './db';
+import { readTokenGrantable } from './list-token-records';
 import type { ImpDatabase, ImpQueries } from './open-database';
-import type { DB } from './schema';
-import { readTokenGrantable } from './tokens';
 
 export type SecretRow = Selectable<DB['secrets']>;
 

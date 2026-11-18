@@ -10,7 +10,7 @@ import (
 )
 
 // impd's tests read testdata/stats.golden too
-// (packages/daemon/src/vm/vmm/uffd-handler.test.ts), so a change to the
+// (packages/daemon/src/vm/vmm/start-uffd-handler.test.ts), so a change to the
 // layout on either side fails a test.
 func TestHandlerStatsWriteTheLayoutImpdReads(t *testing.T) {
 	dir := t.TempDir()

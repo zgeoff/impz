@@ -5,7 +5,7 @@ import { buildMockNewImage } from '../../test-utils/imps/build-mock-new-image';
 import { buildMockNewImp } from '../../test-utils/imps/build-mock-new-imp';
 import { createTestDatabase } from '../../test-utils/platform/create-test-database';
 import { readLoggedEvents } from '../../test-utils/platform/read-logged-events';
-import { createImage } from './images';
+import { createImage } from './create-image';
 import { createImp, readImpById } from './imps';
 import { updateImpState } from './update-imp-state';
 

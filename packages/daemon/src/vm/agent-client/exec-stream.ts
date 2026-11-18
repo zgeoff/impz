@@ -22,10 +22,10 @@ import type { StartTimer } from '../../platform/process/clock';
 import { startRealTimer } from '../../platform/process/start-real-timer';
 import { AgentError, openAgentConnection } from './agent-connection';
 import type { AgentConnection } from './agent-connection';
-import { buildAgentOutdatedError, handleUnknownOp } from './agent-outdated';
-import { readFrameWithin, requireNoAgentError, sendRequestFrame } from './agent-requests';
-import type { AgentRequest } from './agent-requests';
+import { buildAgentOutdatedError, handleUnknownOp } from './build-agent-outdated-error';
 import { hasAgentNameForms } from './has-agent-name-forms';
+import { readFrameWithin, requireNoAgentError, sendRequestFrame } from './send-agent-request';
+import type { AgentRequest } from './send-agent-request';
 
 export interface AgentExecRequest {
   readonly argv: readonly string[];

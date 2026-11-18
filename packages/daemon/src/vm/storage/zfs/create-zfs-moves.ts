@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import type { StreamRunner } from '../../../platform/process/run-stream';
+import type { StreamRunner } from '../../../platform/process/create-stream-runner';
 import { CheckpointIdTakenError } from '../storage-backend';
 import type {
   MoveSource,

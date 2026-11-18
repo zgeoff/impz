@@ -1,4 +1,7 @@
-import type { ServiceLogChunk, ServiceLogStream } from '../../../vm/agent-client/service-requests';
+import type {
+  ServiceLogChunk,
+  ServiceLogStream,
+} from '../../../vm/agent-client/send-services-list';
 import type { LogDecoders } from './create-log-decoders';
 
 export interface NamedStream {

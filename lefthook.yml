@@ -36,7 +36,7 @@ pre-commit:
         - 'kernel/out/**'
         - '.cache/**'
         - '.claude/**'
-        - 'packages/daemon/src/platform/db/schema.ts'
+        - 'packages/daemon/src/platform/db/db.ts'
         - 'packages/agent-protocol/src/gen/**'
       run: node_modules/.bin/format-codemod --quiet {staged_files}
       stage_fixed: true

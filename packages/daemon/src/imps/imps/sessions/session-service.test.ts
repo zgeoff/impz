@@ -4,8 +4,8 @@ import invariant from 'tiny-invariant';
 import { readImpByName } from '../../../platform/db/imps';
 import { startTestImpd } from '../../../test-utils/start-test-impd';
 import { startStubSessionAgent } from '../../../test-utils/vm/start-stub-session-agent';
-import { sendActivity } from '../../../vm/agent-client/agent-requests';
 import { openExecStream } from '../../../vm/agent-client/exec-stream';
+import { sendActivity } from '../../../vm/agent-client/send-agent-request';
 import { readSnapshotMeta } from '../../../vm/sleep/snapshot-meta';
 import { buildImpPaths } from '../../../vm/storage/data-layout';
 

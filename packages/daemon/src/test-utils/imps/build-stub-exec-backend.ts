@@ -1,7 +1,7 @@
 import type { ExecBackend } from '../../imps/exec/exec-session';
+import { buildInvalidStateError } from '../../platform/errors/build-not-found-error';
 import { ImpdError } from '../../platform/errors/impd-error';
-import { buildInvalidStateError } from '../../platform/errors/impd-errors';
-import type { AgentFeature } from '../../vm/agent-client/agent-outdated';
+import type { AgentFeature } from '../../vm/agent-client/build-agent-outdated-error';
 import type {
   AgentAttachRequest,
   AgentExecRequest,

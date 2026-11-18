@@ -13,8 +13,8 @@ import {
 import { join } from 'node:path';
 import { buildSQLiteDialect } from '@zgeoff/kysely-bun-sqlite';
 import { Kysely } from 'kysely';
+import type { DB } from '../../platform/db/db';
 import { runMigrationsTo } from '../../platform/db/run-migrations';
-import type { DB } from '../../platform/db/schema';
 import type { TemplateDependencies } from './copy-migrated-template';
 import { probeProcessRunning } from './probe-process-running';
 import { readMigrationsHash } from './read-migrations-hash';

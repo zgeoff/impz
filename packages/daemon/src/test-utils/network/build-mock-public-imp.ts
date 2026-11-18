@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import type { PublicImp } from '../../platform/db/exposure';
+import type { PublicImp } from '../../platform/db/read-public-imp';
 import { buildMockStoredPublicAuth } from './build-mock-stored-public-auth';
 
 export function buildMockPublicImp(overrides: Partial<PublicImp> = {}): PublicImp {

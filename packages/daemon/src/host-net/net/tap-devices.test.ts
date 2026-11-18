@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { buildStubIpCommand } from '../../test-utils/host-net/build-stub-ip-command';
-import { deriveSlotAddress, parseSubnet } from './addressing';
-import { parsePrefix64 } from './addressing6';
+import { parsePrefix64 } from './derive-guest-ip6';
+import { deriveSlotAddress, parseSubnet } from './derive-slot-address';
 import { createTapDevices } from './tap-devices';
 
 test('it creates the tap with the host end of the slot /30', async () => {

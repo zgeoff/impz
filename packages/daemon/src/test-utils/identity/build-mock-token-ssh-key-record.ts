@@ -1,7 +1,7 @@
 import { faker } from '@faker-js/faker';
 import { formatKeyFingerprint } from '../../imps/ssh/authorized-keys';
-import type { TokenSshKeyRecord } from '../../platform/db/tokens';
-import { generateEd25519Key } from '../../surface/ssh/host-key';
+import type { TokenSshKeyRecord } from '../../platform/db/list-token-records';
+import { generateEd25519Key } from '../../surface/ssh/load-or-create-host-key';
 
 export function buildMockTokenSshKeyRecord(
   overrides: Partial<TokenSshKeyRecord> = {},

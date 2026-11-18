@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from 'node:util';
 import { DockerfileError } from './dockerfile-error';
-import { parseDockerfile, splitDockerfileLines, splitNameWords } from './dockerfile-parse';
+import { dockerfileParse, splitDockerfileLines, splitNameWords } from './dockerfile-parse';
 import type { Instruction, ParsedDockerfile } from './dockerfile-parse';
 
 type ImageUse = 'FROM' | 'COPY --from' | 'RUN --mount from';
@@ -10,27 +10,93 @@ export interface ExternalImage {
   readonly use: ImageUse;
 }
 
-// ADD fetches a `scheme://` source or git's `user@host:path` from the engine's own network
-// (BuildKit's frontend/dockerfile/dfgitutil).
-const REMOTE_SOURCE = /:\/\/|^[^\/]*@[^\/]*:/v;
+type PickImage = (ref: string, use: ImageUse, line: number) => string;
+
+export function dockerfileCheck(dockerfile: string): ExternalImage[] {
+  const images: ExternalImage[] = [];
+
+  const collectImage: PickImage = (ref, use, line) => {
+    if (ref.includes('$')) {
+      throw buildRefusal(
+        line,
+        `${use} ${ref} names its image with a variable, which impd cannot check`,
+      );
+    }
+
+    if (!images.some((image) => image.ref === ref && image.use === use)) {
+      images.push({ ref, use });
+    }
+
+    return ref;
+  };
+
+  resolveInstructions(dockerfileParse(dockerfile), collectImage, null);
+
+  return images;
+}
 
 function buildRefusal(line: number, message: string): DockerfileError {
   return new DockerfileError(`line ${String(line)}: ${message}`);
 }
 
-// The frontend's shell lexer drops quotes and applies the escape token in every FROM, ADD
-// and COPY word and builder flag, so refusing both makes the word impd checks the word the
-// frontend uses.
-function checkPlain(text: string, escape: string, what: string, line: number): void {
-  const isAmbiguous =
-    text.includes('"') || text.includes("'") || text.includes(escape) || !/^[ -~]*$/v.test(text);
+interface PinnedInstruction {
+  readonly instruction: Instruction;
+  readonly flags: readonly string[];
+  readonly words: readonly string[];
+}
 
-  if (isAmbiguous) {
-    throw buildRefusal(
-      line,
-      `an ambiguous form: ${what} ${JSON.stringify(text)} holds a quote, the escape character or a character that is not printable ASCII`,
-    );
+function resolveInstructions(
+  parsed: Readonly<ParsedDockerfile>,
+  pickImage: PickImage,
+  platform: string | null,
+): PinnedInstruction[] {
+  const stages = {
+    names: listStageNames(parsed.instructions),
+    count: parsed.instructions.filter((instruction) => instruction.keyword === 'from').length,
+  };
+
+  const earlierStages = new Set<string>();
+
+  return parsed.instructions.map((instruction) => {
+    if (instruction.keyword === 'onbuild') {
+      throw buildRefusal(
+        instruction.line,
+        'ONBUILD is refused: impd checks only the instructions this build runs',
+      );
+    }
+
+    if (instruction.keyword === 'arg') {
+      checkArg(instruction, parsed.escape);
+    }
+
+    if (['from', 'add', 'copy', 'run'].includes(instruction.keyword)) {
+      checkWords(instruction, parsed.escape);
+    }
+
+    const pinned = pickInstruction({ instruction, earlierStages, stages, pickImage, platform });
+    const [, as, stage] = instruction.words;
+
+    if (instruction.keyword === 'from' && as?.toLowerCase() === 'as' && stage !== undefined) {
+      earlierStages.add(stage.toLowerCase());
+    }
+
+    return pinned;
+  });
+}
+
+// The frontend matches COPY --from and RUN --mount from against any stage's name, ignoring case.
+function listStageNames(instructions: readonly Instruction[]): Set<string> {
+  const names = new Set<string>();
+
+  for (const instruction of instructions) {
+    const [, as, stage] = instruction.words;
+
+    if (instruction.keyword === 'from' && as?.toLowerCase() === 'as' && stage !== undefined) {
+      names.add(stage.toLowerCase());
+    }
   }
+
+  return names;
 }
 
 const PLATFORM_ARGS = new Set([
@@ -43,19 +109,6 @@ const PLATFORM_ARGS = new Set([
   'TARGETARCH',
   'TARGETVARIANT',
 ]);
-
-// impd sends no platform, so the frontend sets both variables to the host's platform, which
-// is the one impd inspects.
-function resolvePlatform(value: string, platform: string | null, line: number): string {
-  if (value === '$BUILDPLATFORM' || value === '$TARGETPLATFORM') {
-    return platform ?? value;
-  }
-
-  throw buildRefusal(
-    line,
-    `FROM --platform=${value} is refused: impd builds for the host's platform only; use $BUILDPLATFORM or $TARGETPLATFORM, or leave it out`,
-  );
-}
 
 // An ARG of a platform variable would change what --platform reads. The frontend splits ARG
 // into words and lexes each name, dropping its quotes and escapes.
@@ -81,11 +134,9 @@ function checkArg(instruction: Readonly<Instruction>, escape: string): void {
   }
 }
 
-function readFlagValues(instruction: Readonly<Instruction>, name: string): string[] {
-  return instruction.flags
-    .filter((flag) => flag === `--${name}` || flag.startsWith(`--${name}=`))
-    .map((flag) => flag.slice(name.length + 3));
-}
+// ADD fetches a `scheme://` source or git's `user@host:path` from the engine's own network
+// (BuildKit's frontend/dockerfile/dfgitutil).
+const REMOTE_SOURCE = /:\/\/|^[^\/]*@[^\/]*:/v;
 
 function checkWords(instruction: Readonly<Instruction>, escape: string): void {
   const keyword = instruction.keyword;
@@ -131,57 +182,43 @@ function checkWords(instruction: Readonly<Instruction>, escape: string): void {
   }
 }
 
-// The frontend matches COPY --from and RUN --mount from against any stage's name, ignoring case.
-function listStageNames(instructions: readonly Instruction[]): Set<string> {
-  const names = new Set<string>();
+// The frontend's shell lexer drops quotes and applies the escape token in every FROM, ADD
+// and COPY word and builder flag, so refusing both makes the word impd checks the word the
+// frontend uses.
+function checkPlain(text: string, escape: string, what: string, line: number): void {
+  const isAmbiguous =
+    text.includes('"') || text.includes("'") || text.includes(escape) || !/^[ -~]*$/v.test(text);
 
-  for (const instruction of instructions) {
-    const [, as, stage] = instruction.words;
-
-    if (instruction.keyword === 'from' && as?.toLowerCase() === 'as' && stage !== undefined) {
-      names.add(stage.toLowerCase());
-    }
-  }
-
-  return names;
-}
-
-type PickImage = (ref: string, use: ImageUse, line: number) => string;
-
-interface Stages {
-  readonly names: ReadonlySet<string>;
-  readonly count: number;
-}
-
-const INT64_MIN = -(2n ** 63n);
-const INT64_MAX = 2n ** 63n - 1n;
-
-// The frontend takes as a stage index any COPY --from value that Go's strconv.Atoi reads.
-function isStageIndex(from: string): boolean {
-  if (!/^[+\-]?[0-9]+$/v.test(from)) {
-    return false;
-  }
-
-  const value = BigInt(from);
-
-  return value >= INT64_MIN && value <= INT64_MAX;
-}
-
-function checkStageIndex(from: string, count: number, line: number): void {
-  const index = BigInt(from);
-
-  if (index < 0n || index >= BigInt(count)) {
+  if (isAmbiguous) {
     throw buildRefusal(
       line,
-      `COPY --from=${from} names no stage: the Dockerfile has ${String(count)}`,
+      `an ambiguous form: ${what} ${JSON.stringify(text)} holds a quote, the escape character or a character that is not printable ASCII`,
     );
   }
 }
 
-interface PinnedInstruction {
-  readonly instruction: Instruction;
-  readonly flags: readonly string[];
-  readonly words: readonly string[];
+function readFlagValues(instruction: Readonly<Instruction>, name: string): string[] {
+  return instruction.flags
+    .filter((flag) => flag === `--${name}` || flag.startsWith(`--${name}=`))
+    .map((flag) => flag.slice(name.length + 3));
+}
+
+// impd sends no platform, so the frontend sets both variables to the host's platform, which
+// is the one impd inspects.
+function resolvePlatform(value: string, platform: string | null, line: number): string {
+  if (value === '$BUILDPLATFORM' || value === '$TARGETPLATFORM') {
+    return platform ?? value;
+  }
+
+  throw buildRefusal(
+    line,
+    `FROM --platform=${value} is refused: impd builds for the host's platform only; use $BUILDPLATFORM or $TARGETPLATFORM, or leave it out`,
+  );
+}
+
+interface Stages {
+  readonly names: ReadonlySet<string>;
+  readonly count: number;
 }
 
 interface PickInstructionOptions {
@@ -268,66 +305,29 @@ function pickInstruction(options: PickInstructionOptions): PinnedInstruction {
   return { instruction, flags: instruction.flags, words: instruction.words };
 }
 
-function resolveInstructions(
-  parsed: Readonly<ParsedDockerfile>,
-  pickImage: PickImage,
-  platform: string | null,
-): PinnedInstruction[] {
-  const stages = {
-    names: listStageNames(parsed.instructions),
-    count: parsed.instructions.filter((instruction) => instruction.keyword === 'from').length,
-  };
+const INT64_MIN = -(2n ** 63n);
+const INT64_MAX = 2n ** 63n - 1n;
 
-  const earlierStages = new Set<string>();
+// The frontend takes as a stage index any COPY --from value that Go's strconv.Atoi reads.
+function isStageIndex(from: string): boolean {
+  if (!/^[+\-]?[0-9]+$/v.test(from)) {
+    return false;
+  }
 
-  return parsed.instructions.map((instruction) => {
-    if (instruction.keyword === 'onbuild') {
-      throw buildRefusal(
-        instruction.line,
-        'ONBUILD is refused: impd checks only the instructions this build runs',
-      );
-    }
+  const value = BigInt(from);
 
-    if (instruction.keyword === 'arg') {
-      checkArg(instruction, parsed.escape);
-    }
-
-    if (['from', 'add', 'copy', 'run'].includes(instruction.keyword)) {
-      checkWords(instruction, parsed.escape);
-    }
-
-    const pinned = pickInstruction({ instruction, earlierStages, stages, pickImage, platform });
-    const [, as, stage] = instruction.words;
-
-    if (instruction.keyword === 'from' && as?.toLowerCase() === 'as' && stage !== undefined) {
-      earlierStages.add(stage.toLowerCase());
-    }
-
-    return pinned;
-  });
+  return value >= INT64_MIN && value <= INT64_MAX;
 }
 
-export function checkDockerfile(dockerfile: string): ExternalImage[] {
-  const images: ExternalImage[] = [];
+function checkStageIndex(from: string, count: number, line: number): void {
+  const index = BigInt(from);
 
-  const collectImage: PickImage = (ref, use, line) => {
-    if (ref.includes('$')) {
-      throw buildRefusal(
-        line,
-        `${use} ${ref} names its image with a variable, which impd cannot check`,
-      );
-    }
-
-    if (!images.some((image) => image.ref === ref && image.use === use)) {
-      images.push({ ref, use });
-    }
-
-    return ref;
-  };
-
-  resolveInstructions(parseDockerfile(dockerfile), collectImage, null);
-
-  return images;
+  if (index < 0n || index >= BigInt(count)) {
+    throw buildRefusal(
+      line,
+      `COPY --from=${from} names no stage: the Dockerfile has ${String(count)}`,
+    );
+  }
 }
 
 function formatInstruction(pinned: Readonly<PinnedInstruction>): string {
@@ -357,7 +357,7 @@ export function renderPinnedDockerfile(
   pins: ReadonlyMap<string, string>,
   platform: string,
 ): string {
-  const parsed = parseDockerfile(dockerfile);
+  const parsed = dockerfileParse(dockerfile);
 
   const findPin: PickImage = (ref, use, line) => {
     const pin = pins.get(ref);
@@ -388,7 +388,7 @@ export function renderPinnedDockerfile(
   }
 
   const text = lines.join('');
-  const reparsed = parseDockerfile(text);
+  const reparsed = dockerfileParse(text);
 
   const isSame =
     reparsed.escape === parsed.escape &&

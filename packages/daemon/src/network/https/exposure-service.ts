@@ -2,12 +2,12 @@ import type { ExposeResult, PublicAuth } from '@impz/api';
 import { readImpByName, updateImpExposure } from '../../platform/db/imps';
 import type { ImpRecord } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
+import { buildMovingError, buildNotFoundError } from '../../platform/errors/build-not-found-error';
 import { ImpdError } from '../../platform/errors/impd-error';
-import { buildMovingError, buildNotFoundError } from '../../platform/errors/impd-errors';
 import { mintSecret } from '../../platform/secrets/mint-secret';
+import { buildCredentialHash } from './build-credential-hash';
 import type { HttpsConfig } from './https-config';
 import type { RecordsStatus } from './https-service';
-import { buildCredentialHash } from './public-auth';
 
 const DEFAULT_USER = 'imp';
 

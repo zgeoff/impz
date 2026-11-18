@@ -5,8 +5,8 @@ import { DOCKERFILE_FRONTEND } from '../../docker-contract/dockerfile-frontend';
 import type { GuestExec } from '../builders/guest-exec';
 import type { ExternalImage } from '../dockerfile/dockerfile-check';
 import { formatFailureTail } from '../pull/format-failure-tail';
-import { normalizePlatform } from '../pull/image-pin';
-import type { PinInspect } from '../pull/image-pin';
+import { normalizePlatform } from '../pull/pick-repo-digest';
+import type { PinInspect } from '../pull/pick-repo-digest';
 import { readImageInspect } from '../pull/read-image-inspect';
 
 interface EngineResult {

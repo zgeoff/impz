@@ -1,5 +1,5 @@
-import { readImageByName, updateImageUse } from '../../platform/db/images';
-import type { ImageRecord } from '../../platform/db/images';
+import { readImageByName, updateImageUse } from '../../platform/db/create-image';
+import type { ImageRecord } from '../../platform/db/create-image';
 import type { ImpDatabase } from '../../platform/db/open-database';
 
 // The use goes in before the read, so an image eviction either sees it and keeps the row, or

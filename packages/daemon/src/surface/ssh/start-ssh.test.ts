@@ -9,9 +9,9 @@ import invariant from 'tiny-invariant';
 import { createRevocations } from '../../identity/auth/revocations';
 import { createAuthorizedKeys } from '../../imps/ssh/authorized-keys';
 import { createApiAudit } from '../../platform/audit/api-audit';
-import { listApiCalls } from '../../platform/db/api-audit';
-import { createImage } from '../../platform/db/images';
+import { createImage } from '../../platform/db/create-image';
 import { createImp, readImpByName } from '../../platform/db/imps';
+import { listApiCalls } from '../../platform/db/list-api-calls';
 import { buildMockImpRecord } from '../../test-utils/imps/build-mock-imp-record';
 import { buildMockNewImage } from '../../test-utils/imps/build-mock-new-image';
 import { buildMockNewImp } from '../../test-utils/imps/build-mock-new-imp';
@@ -21,7 +21,7 @@ import { createTestDatabase } from '../../test-utils/platform/create-test-databa
 import { openSshChannel } from '../../test-utils/surface/open-ssh-channel';
 import { openSshClient } from '../../test-utils/surface/open-ssh-client';
 import { readErrorCode } from '../read-error-code';
-import { generateEd25519Key, readFingerprint } from './host-key';
+import { generateEd25519Key, readFingerprint } from './load-or-create-host-key';
 import { startSsh } from './start-ssh';
 
 async function setupTest() {

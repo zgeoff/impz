@@ -14,10 +14,9 @@ import type {
 } from '@impz/api';
 import { getErrorMessage } from '@impz/shared';
 import { match } from 'ts-pattern';
-import { deriveSlotAddress } from '../../host-net/net/addressing';
+import { deriveSlotAddress } from '../../host-net/net/derive-slot-address';
 import type { ReachPolicy } from '../../host-net/net/reach-policy';
 import type { BrokerExecEnv } from '../../imps/exec/broker-exec-env';
-import { listAuditEntries, listRefusedRequests } from '../../platform/db/broker-audit';
 import { createForkGrants } from '../../platform/db/create-fork-grants';
 import type { ForkAuthority } from '../../platform/db/create-fork-grants';
 import { listImps, readImpByName } from '../../platform/db/imps';
@@ -33,13 +32,14 @@ import {
   removeCheckedGrant,
 } from '../../platform/db/secrets';
 import type { GrantAuthority, GrantClash } from '../../platform/db/secrets';
-import { ImpdError } from '../../platform/errors/impd-error';
+import { listAuditEntries, listRefusedRequests } from '../../platform/db/write-audit-entry';
 import {
   buildConflictError,
   buildForbiddenError,
   buildMovingError,
   buildNotFoundError,
-} from '../../platform/errors/impd-errors';
+} from '../../platform/errors/build-not-found-error';
+import { ImpdError } from '../../platform/errors/impd-error';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import type { TickerTimer } from '../../platform/process/ticker';
 import type { NetworkConfig } from '../network-config';
@@ -53,15 +53,15 @@ import type { InstallBundle, TrustedImp } from './guest/guest-trust';
 import type { Identity } from './identity/load-or-create-identity';
 import { loadOrCreateIdentity } from './identity/load-or-create-identity';
 import { createBrokerProxy } from './proxy/create-broker-proxy';
-import { PLACEHOLDER, listPlaceholderEnv } from './secrets/connector-kinds';
 import { createSecretStore } from './secrets/create-secret-store';
 import { createOAuthRefresher } from './secrets/oauth-refresher';
 import type { OAuthFetch } from './secrets/oauth-refresher';
 import { removeStaleSecretFiles } from './secrets/remove-stale-secret-files';
+import { PLACEHOLDER, listPlaceholderEnv } from './secrets/render-credential';
 import { createSecretFiles } from './secrets/secret-files';
 import type { SecretFiles } from './secrets/secret-files';
 import { loadOrCreateBrokerCa } from './tls/broker-ca';
-import type { ResolveUpstream, UpstreamFetch } from './tls/forward-request';
+import type { ResolveUpstream, UpstreamFetch } from './tls/create-forwarder';
 
 interface ForkGrantsReport {
   readonly notCopied: readonly GrantNotCopied[];
@@ -73,7 +73,7 @@ interface ForkEnd {
   readonly name: string;
 }
 
-export interface Broker {
+export interface BrokerService {
   readonly addSecret: (input: Readonly<SecretAdd>) => Promise<SecretAdded>;
   readonly listSecrets: () => Promise<Secret[]>;
 
@@ -163,7 +163,7 @@ const FORK_TOKEN_GONE =
 const FORK_COPY_FAILED =
   "the source's grants could not be copied, so the fork has none; impd's log has the cause";
 
-export async function createBroker(deps: BrokerDeps): Promise<Broker> {
+export async function createBroker(deps: BrokerDeps): Promise<BrokerService> {
   const config = deps.config;
   const db = deps.db;
   const now = deps.now ?? Date.now;

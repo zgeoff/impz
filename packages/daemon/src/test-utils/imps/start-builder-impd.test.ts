@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { readImageByName } from '../../platform/db/images';
+import { readImageByName } from '../../platform/db/create-image';
 import { runChecked } from '../../platform/process/run-command';
 import { buildStubImageBuilder } from './build-stub-image-builder';
 import { createFilesTar } from './create-files-tar';

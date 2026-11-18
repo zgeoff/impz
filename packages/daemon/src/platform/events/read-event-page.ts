@@ -1,7 +1,7 @@
 import type { EventCursor, EventPage, ImpEvent } from '@impz/api';
 import { match } from 'ts-pattern';
 import { buildCursorEvent } from './build-cursor-event';
-import type { EventLogReads } from './event-stream';
+import type { EventLogReads } from './open-event-stream';
 import { pickStreamStart } from './pick-stream-start';
 
 // A page with no usable cursor holds the snapshot, after a reset when the reader sent a cursor.

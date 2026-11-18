@@ -1,4 +1,4 @@
-import type { LeaseRecord } from '../db/leases';
+import type { LeaseRecord } from '../db/list-leases';
 import { ImpdError } from './impd-error';
 
 export class LeasedError extends ImpdError<'LEASED'> {

@@ -1,12 +1,12 @@
 import { expect, test } from 'bun:test';
 import invariant from 'tiny-invariant';
 import { buildSessionValue } from '../../platform/http/session-cookie';
-import { generateEd25519Key } from '../../surface/ssh/host-key';
+import { generateEd25519Key } from '../../surface/ssh/load-or-create-host-key';
 import { buildStubTailscale } from '../../test-utils/network/build-stub-tailscale';
 import { createTestDatabase } from '../../test-utils/platform/create-test-database';
-import { createKnownHosts } from './ambient-request';
-import { resolveCaller } from './authenticate';
-import { createTailnetIdentities, runWhois } from './tailnet-identity';
+import { authenticate } from './authenticate';
+import { createTailnetIdentities, runWhois } from './create-tailnet-identities';
+import { createKnownHosts } from './is-allowed-ambient-request';
 import { ROOT_TOKEN_ID, loadTokenStore } from './token-store';
 
 async function setupTest() {
@@ -25,11 +25,11 @@ async function setupTest() {
   };
 }
 
-test('#resolveCaller takes the root token as root, from any origin', async () => {
+test('#authenticate takes the root token as root, from any origin', async () => {
   const ctx = await setupTest();
   const tokens = await ctx.loadTokens('root-secret');
 
-  const caller = await resolveCaller(
+  const caller = await authenticate(
     new Request('http://imp:7070/rpc/imps/list', {
       method: 'POST',
       headers: { host: 'imp:7070', authorization: 'Bearer root-secret', origin: 'http://evil' },
@@ -53,14 +53,14 @@ test('#resolveCaller takes the root token as root, from any origin', async () =>
   });
 });
 
-test('#resolveCaller takes a made token as itself, with its scope and imps', async () => {
+test('#authenticate takes a made token as itself, with its scope and imps', async () => {
   const ctx = await setupTest();
   const tokens = await ctx.loadTokens('root-secret');
   const made = await tokens.create({ name: 'ci', scope: 'exec', imps: ['dev-*'] });
 
   const [tokenId = ''] = made.secret.slice('imp_'.length).split('.');
 
-  const caller = await resolveCaller(
+  const caller = await authenticate(
     new Request('http://imp:7070/rpc/imps/list', {
       method: 'POST',
       headers: { host: 'imp:7070', authorization: `Bearer ${made.secret}` },
@@ -84,7 +84,7 @@ test('#resolveCaller takes a made token as itself, with its scope and imps', asy
   });
 });
 
-test('#resolveCaller makes a token, its dashboard session and its bound key one principal', async () => {
+test('#authenticate makes a token, its dashboard session and its bound key one principal', async () => {
   const ctx = await setupTest();
   const tokens = await ctx.loadTokens('root-secret');
 
@@ -97,7 +97,7 @@ test('#resolveCaller makes a token, its dashboard session and its bound key one 
   const session = buildSessionValue('root-secret', { tokenId, expiresAt: 1_800_000_060_000 });
 
   const [api, dashboard] = await Promise.all([
-    resolveCaller(
+    authenticate(
       new Request('http://imp:7070/rpc/imps/list', {
         method: 'POST',
         headers: { host: 'imp:7070', authorization: `Bearer ${made.secret}` },
@@ -105,7 +105,7 @@ test('#resolveCaller makes a token, its dashboard session and its bound key one 
       sources,
       { peer: null, cookie: true },
     ),
-    resolveCaller(
+    authenticate(
       new Request('http://imp:7070/rpc/imps/list', {
         method: 'POST',
         headers: {
@@ -165,7 +165,7 @@ test('#resolveCaller makes a token, its dashboard session and its bound key one 
   });
 });
 
-test('#resolveCaller makes a new token under a removed token’s name another principal', async () => {
+test('#authenticate makes a new token under a removed token’s name another principal', async () => {
   const ctx = await setupTest();
   const tokens = await ctx.loadTokens('root-secret');
   const first = await tokens.create({ name: 'ci', scope: 'exec', imps: null });
@@ -176,7 +176,7 @@ test('#resolveCaller makes a new token under a removed token’s name another pr
 
   const again = await tokens.create({ name: 'ci', scope: 'exec', imps: null });
 
-  const caller = await resolveCaller(
+  const caller = await authenticate(
     new Request('http://imp:7070/rpc/imps/list', {
       method: 'POST',
       headers: { host: 'imp:7070', authorization: `Bearer ${again.secret}` },
@@ -190,11 +190,11 @@ test('#resolveCaller makes a new token under a removed token’s name another pr
   expect(caller.principal).not.toBe(`token:${firstId}`);
 });
 
-test('#resolveCaller makes a root dashboard session the principal root', async () => {
+test('#authenticate makes a root dashboard session the principal root', async () => {
   const ctx = await setupTest();
   const tokens = await ctx.loadTokens('root-secret');
 
-  const caller = await resolveCaller(
+  const caller = await authenticate(
     new Request('http://imp:7070/rpc/imps/list', {
       method: 'POST',
       headers: {
@@ -211,11 +211,11 @@ test('#resolveCaller makes a root dashboard session the principal root', async (
   expect(caller?.principal).toBe('root');
 });
 
-test('#resolveCaller refuses a wrong bearer token, even with a valid session beside it', async () => {
+test('#authenticate refuses a wrong bearer token, even with a valid session beside it', async () => {
   const ctx = await setupTest();
   const tokens = await ctx.loadTokens('root-secret');
 
-  const caller = await resolveCaller(
+  const caller = await authenticate(
     new Request('http://imp:7070/rpc/imps/list', {
       method: 'POST',
       headers: {
@@ -232,14 +232,14 @@ test('#resolveCaller refuses a wrong bearer token, even with a valid session bes
   expect(caller).toBeNull();
 });
 
-test('#resolveCaller takes a same-origin session as the dashboard, with its token’s scope and the session’s expiry', async () => {
+test('#authenticate takes a same-origin session as the dashboard, with its token’s scope and the session’s expiry', async () => {
   const ctx = await setupTest();
   const tokens = await ctx.loadTokens('root-secret');
   const made = await tokens.create({ name: 'viewer', scope: 'read', imps: null });
 
   const [tokenId = ''] = made.secret.slice('imp_'.length).split('.');
 
-  const caller = await resolveCaller(
+  const caller = await authenticate(
     new Request('http://imp:7070/rpc/imps/list', {
       method: 'POST',
       headers: {
@@ -267,14 +267,14 @@ test('#resolveCaller takes a same-origin session as the dashboard, with its toke
   });
 });
 
-test('#resolveCaller refuses a session at its expiry', async () => {
+test('#authenticate refuses a session at its expiry', async () => {
   const ctx = await setupTest();
   const tokens = await ctx.loadTokens('root-secret');
   const made = await tokens.create({ name: 'viewer', scope: 'read', imps: null });
 
   const [tokenId = ''] = made.secret.slice('imp_'.length).split('.');
 
-  const caller = await resolveCaller(
+  const caller = await authenticate(
     new Request('http://imp:7070/rpc/imps/list', {
       method: 'POST',
       headers: {
@@ -290,7 +290,7 @@ test('#resolveCaller refuses a session at its expiry', async () => {
   expect(caller).toBeNull();
 });
 
-test('#resolveCaller refuses a session whose token was removed', async () => {
+test('#authenticate refuses a session whose token was removed', async () => {
   const ctx = await setupTest();
   const tokens = await ctx.loadTokens('root-secret');
   const made = await tokens.create({ name: 'viewer', scope: 'read', imps: null });
@@ -299,7 +299,7 @@ test('#resolveCaller refuses a session whose token was removed', async () => {
 
   await tokens.remove('viewer');
 
-  const caller = await resolveCaller(
+  const caller = await authenticate(
     new Request('http://imp:7070/rpc/imps/list', {
       method: 'POST',
       headers: {
@@ -315,11 +315,11 @@ test('#resolveCaller refuses a session whose token was removed', async () => {
   expect(caller).toBeNull();
 });
 
-test('#resolveCaller refuses a v1 session from before named tokens', async () => {
+test('#authenticate refuses a v1 session from before named tokens', async () => {
   const ctx = await setupTest();
   const tokens = await ctx.loadTokens('root-secret');
 
-  const caller = await resolveCaller(
+  const caller = await authenticate(
     new Request('http://imp:7070/rpc/imps/list', {
       method: 'POST',
       headers: {
@@ -335,11 +335,11 @@ test('#resolveCaller refuses a v1 session from before named tokens', async () =>
   expect(caller).toBeNull();
 });
 
-test('#resolveCaller finds the real session behind a bad one an imp planted first', async () => {
+test('#authenticate finds the real session behind a bad one an imp planted first', async () => {
   const ctx = await setupTest();
   const tokens = await ctx.loadTokens('root-secret');
 
-  const caller = await resolveCaller(
+  const caller = await authenticate(
     new Request('http://imp:7070/rpc/imps/list', {
       method: 'POST',
       headers: {
@@ -355,11 +355,11 @@ test('#resolveCaller finds the real session behind a bad one an imp planted firs
   expect(caller?.kind).toBe('dashboard');
 });
 
-test('#resolveCaller refuses a session from another port of the same host', async () => {
+test('#authenticate refuses a session from another port of the same host', async () => {
   const ctx = await setupTest();
   const tokens = await ctx.loadTokens('root-secret');
 
-  const caller = await resolveCaller(
+  const caller = await authenticate(
     new Request('http://imp:7070/rpc/imps/list', {
       method: 'POST',
       headers: {
@@ -375,11 +375,11 @@ test('#resolveCaller refuses a session from another port of the same host', asyn
   expect(caller).toBeNull();
 });
 
-test('#resolveCaller refuses a session where cookies do not count', async () => {
+test('#authenticate refuses a session where cookies do not count', async () => {
   const ctx = await setupTest();
   const tokens = await ctx.loadTokens('root-secret');
 
-  const caller = await resolveCaller(
+  const caller = await authenticate(
     new Request('http://imp:7070/rpc/imps/list', {
       method: 'POST',
       headers: {
@@ -395,7 +395,7 @@ test('#resolveCaller refuses a session where cookies do not count', async () => 
   expect(caller).toBeNull();
 });
 
-test('#resolveCaller gives a tailnet peer that a rule matches the rule’s scope and imps', async () => {
+test('#authenticate gives a tailnet peer that a rule matches the rule’s scope and imps', async () => {
   const ctx = await setupTest();
   const tokens = await ctx.loadTokens('root-secret');
 
@@ -403,7 +403,7 @@ test('#resolveCaller gives a tailnet peer that a rule matches the rule’s scope
 
   tailscale.registerPeer('100.101.102.103', { node: 'laptop', login: 'alice@example.com' });
 
-  const caller = await resolveCaller(
+  const caller = await authenticate(
     new Request('http://localhost:7070/rpc/imps/list', {
       method: 'POST',
       headers: { host: 'localhost:7070' },
@@ -440,7 +440,7 @@ test('#resolveCaller gives a tailnet peer that a rule matches the rule’s scope
   });
 });
 
-test('#resolveCaller refuses another user’s tailnet peer that no rule matches', async () => {
+test('#authenticate refuses another user’s tailnet peer that no rule matches', async () => {
   const ctx = await setupTest();
   const tokens = await ctx.loadTokens('root-secret');
 
@@ -448,7 +448,7 @@ test('#resolveCaller refuses another user’s tailnet peer that no rule matches'
 
   tailscale.registerPeer('100.101.102.104', { node: 'desk', login: 'bob@example.com' });
 
-  const caller = await resolveCaller(
+  const caller = await authenticate(
     new Request('http://localhost:7070/rpc/imps/list', {
       method: 'POST',
       headers: { host: 'localhost:7070' },
@@ -473,11 +473,11 @@ test('#resolveCaller refuses another user’s tailnet peer that no rule matches'
   expect(caller).toBeNull();
 });
 
-test('#resolveCaller refuses a tailnet peer when no rule gives the tailnet access', async () => {
+test('#authenticate refuses a tailnet peer when no rule gives the tailnet access', async () => {
   const ctx = await setupTest();
   const tokens = await ctx.loadTokens('root-secret');
 
-  const caller = await resolveCaller(
+  const caller = await authenticate(
     new Request('http://localhost:7070/rpc/imps/list', {
       method: 'POST',
       headers: { host: 'localhost:7070' },
@@ -489,7 +489,7 @@ test('#resolveCaller refuses a tailnet peer when no rule gives the tailnet acces
   expect(caller).toBeNull();
 });
 
-test('#resolveCaller refuses a peer on the docker bridge, whatever whois says', async () => {
+test('#authenticate refuses a peer on the docker bridge, whatever whois says', async () => {
   const ctx = await setupTest();
   const tokens = await ctx.loadTokens('root-secret');
 
@@ -497,7 +497,7 @@ test('#resolveCaller refuses a peer on the docker bridge, whatever whois says', 
 
   tailscale.registerPeer('172.17.0.1', { node: 'laptop', login: 'alice@example.com' });
 
-  const caller = await resolveCaller(
+  const caller = await authenticate(
     new Request('http://localhost:7070/rpc/imps/list', {
       method: 'POST',
       headers: { host: 'localhost:7070' },
@@ -522,13 +522,13 @@ test('#resolveCaller refuses a peer on the docker bridge, whatever whois says', 
   expect(caller).toBeNull();
 });
 
-test('#resolveCaller refuses a request whose peer is unknown, with tailnet rules', async () => {
+test('#authenticate refuses a request whose peer is unknown, with tailnet rules', async () => {
   const ctx = await setupTest();
   const tokens = await ctx.loadTokens('root-secret');
 
   const tailscale = buildStubTailscale();
 
-  const caller = await resolveCaller(
+  const caller = await authenticate(
     new Request('http://localhost:7070/rpc/imps/list', {
       method: 'POST',
       headers: { host: 'localhost:7070' },
@@ -556,7 +556,7 @@ test('#resolveCaller refuses a request whose peer is unknown, with tailnet rules
 test.each([
   [{ host: 'evil.example:7070', origin: 'http://evil.example:7070' }, 'with its origin'],
   [{ host: 'evil.example:7070' }, 'without an origin'],
-])('#resolveCaller refuses a tailnet identity on a rebound host name, %p %s', async (headers) => {
+])('#authenticate refuses a tailnet identity on a rebound host name, %p %s', async (headers) => {
   const ctx = await setupTest();
   const tokens = await ctx.loadTokens('root-secret');
 
@@ -564,7 +564,7 @@ test.each([
 
   tailscale.registerPeer('100.101.102.103', { node: 'laptop', login: 'alice@example.com' });
 
-  const caller = await resolveCaller(
+  const caller = await authenticate(
     new Request(`http://${headers.host}/rpc/imps/list`, { method: 'POST', headers }),
     {
       tokens,
@@ -587,7 +587,7 @@ test.each([
 });
 
 test.each([['imp:7070'], ['imp.tail1234.ts.net:7070'], ['100.64.0.1:7070'], ['imp.example.com']])(
-  '#resolveCaller takes a tailnet identity on the known host %p',
+  '#authenticate takes a tailnet identity on the known host %p',
   async (host) => {
     const ctx = await setupTest();
     const tokens = await ctx.loadTokens('root-secret');
@@ -603,7 +603,7 @@ test.each([['imp:7070'], ['imp.tail1234.ts.net:7070'], ['100.64.0.1:7070'], ['im
 
     tailscale.registerPeer('100.101.102.103', { node: 'laptop', login: 'alice@example.com' });
 
-    const caller = await resolveCaller(
+    const caller = await authenticate(
       new Request(`http://${host}/rpc/imps/list`, { method: 'POST', headers: { host } }),
       {
         tokens,
@@ -633,7 +633,7 @@ test.each([
   [{ origin: 'http://localhost:20001', 'sec-fetch-site': 'same-site' }, 'with fetch metadata'],
   [{ origin: 'http://localhost:20001' }, 'without fetch metadata'],
 ])(
-  '#resolveCaller refuses a tailnet identity to a page on an imp’s port, %p %s',
+  '#authenticate refuses a tailnet identity to a page on an imp’s port, %p %s',
   async (headers) => {
     const ctx = await setupTest();
     const tokens = await ctx.loadTokens('root-secret');
@@ -642,7 +642,7 @@ test.each([
 
     tailscale.registerPeer('100.101.102.103', { node: 'laptop', login: 'alice@example.com' });
 
-    const caller = await resolveCaller(
+    const caller = await authenticate(
       new Request('http://localhost:7070/rpc/imps/list', {
         method: 'POST',
         headers: { host: 'localhost:7070', ...headers },
@@ -668,7 +668,7 @@ test.each([
   },
 );
 
-test('#resolveCaller takes a tailnet identity from the dashboard’s own page', async () => {
+test('#authenticate takes a tailnet identity from the dashboard’s own page', async () => {
   const ctx = await setupTest();
   const tokens = await ctx.loadTokens('root-secret');
 
@@ -676,7 +676,7 @@ test('#resolveCaller takes a tailnet identity from the dashboard’s own page', 
 
   tailscale.registerPeer('100.101.102.103', { node: 'laptop', login: 'alice@example.com' });
 
-  const caller = await resolveCaller(
+  const caller = await authenticate(
     new Request('http://localhost:7070/rpc/imps/list', {
       method: 'POST',
       headers: {

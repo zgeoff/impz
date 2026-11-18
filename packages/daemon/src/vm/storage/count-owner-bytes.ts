@@ -1,5 +1,5 @@
-import { EXTENT_FLAGS } from './fiemap';
-import type { Extent } from './fiemap';
+import { EXTENT_FLAGS } from './read-extents';
+import type { Extent } from './read-extents';
 
 export interface OwnedFile {
   readonly owner: string;

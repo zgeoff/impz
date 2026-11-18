@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DOCKERFILE_FRONTEND } from '../../imps/docker-contract/dockerfile-frontend';
 import { createGuestExec } from '../../imps/images/builders/guest-exec';
-import { PIN_INSPECT_FORMAT } from '../../imps/images/pull/image-pin';
+import { PIN_INSPECT_FORMAT } from '../../imps/images/pull/pick-repo-digest';
 import { STUB_BUILDER_CONTAINER, buildStubImageBuilder } from './build-stub-image-builder';
 
 async function setupTest() {

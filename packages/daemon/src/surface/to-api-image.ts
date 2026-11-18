@@ -1,5 +1,5 @@
 import type { Image } from '@impz/api';
-import type { ImageRecord } from '../platform/db/images';
+import type { ImageRecord } from '../platform/db/create-image';
 
 export function toApiImage(image: ImageRecord): Image {
   return {

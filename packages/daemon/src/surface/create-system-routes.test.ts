@@ -7,7 +7,7 @@ import { createImpClient } from '@impz/client';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import packageJson from '../../package.json' with { type: 'json' };
-import { listApiCalls } from '../platform/db/api-audit';
+import { listApiCalls } from '../platform/db/list-api-calls';
 import { MIGRATIONS } from '../platform/db/run-migrations';
 import { startTestImpd } from '../test-utils/start-test-impd';
 import { TEST_TOKEN } from '../test-utils/test-token';

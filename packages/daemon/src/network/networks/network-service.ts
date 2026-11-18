@@ -1,7 +1,6 @@
 import { EGRESS_MODE_TRAITS } from '@impz/api';
 import type { EgressMode, Network, NetworkJoin } from '@impz/api';
 import type { ImpCheckpointHooks } from '../../imps/imps/imp-service';
-import { listEgressSlots } from '../../platform/db/egress';
 import { readImpByName } from '../../platform/db/imps';
 import {
   listNetworkMembers,
@@ -12,10 +11,14 @@ import {
   writeMember,
   writeNetwork,
   writeNetworkWithMembers,
-} from '../../platform/db/networks';
-import type { NetworkRecord } from '../../platform/db/networks';
+} from '../../platform/db/list-networks';
+import type { NetworkRecord } from '../../platform/db/list-networks';
 import type { ImpDatabase } from '../../platform/db/open-database';
-import { buildConflictError, buildNotFoundError } from '../../platform/errors/impd-errors';
+import { listEgressSlots } from '../../platform/db/read-egress-policy';
+import {
+  buildConflictError,
+  buildNotFoundError,
+} from '../../platform/errors/build-not-found-error';
 import type { EgressService } from '../egress/egress-service';
 
 export interface NetworkDeps {

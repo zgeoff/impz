@@ -1,4 +1,4 @@
-import type { StreamedCommand } from '../../platform/process/run-stream';
+import type { StreamedCommand } from '../../platform/process/create-stream-runner';
 import type { StorageBackendKind } from '../vm-config';
 import type { ImpPaths } from './data-layout';
 

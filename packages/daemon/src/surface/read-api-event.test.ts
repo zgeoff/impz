@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { buildMockImp } from '@impz/api/test-utils/build-mock-imp';
-import { toApiCheckpoint } from '../platform/db/checkpoints';
+import { toApiCheckpoint } from '../platform/db/create-checkpoint';
 import { buildMockCheckpointRecord } from '../test-utils/imp-ops/build-mock-checkpoint-record';
 import { buildMockImpRecord } from '../test-utils/imps/build-mock-imp-record';
 import { readApiEvent } from './read-api-event';

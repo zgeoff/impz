@@ -1,4 +1,4 @@
-import type { OAuthStateFile } from './oauth-state';
+import type { OAuthStateFile } from './parse-oauth-state';
 
 export function isDue(state: Readonly<OAuthStateFile>, at: number): boolean {
   if (state.status === 'needs_login') {

@@ -1,15 +1,14 @@
 import { statSync } from 'node:fs';
 import type { ImpEventDetail } from '@impz/api';
 import { getErrorMessage } from '@impz/shared';
-import { requireTransition } from '../../platform/db/imp-transitions';
+import { requireTransition } from '../../platform/db/require-transition';
 import type { ImpStateChange } from '../../platform/db/update-imp-state';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
-import { sendActivity } from '../../vm/agent-client/agent-requests';
 import { toSeenSessions } from '../../vm/agent-client/seen-session';
 import type { SeenSession } from '../../vm/agent-client/seen-session';
-import { sendServicesList } from '../../vm/agent-client/service-requests';
+import { sendActivity } from '../../vm/agent-client/send-agent-request';
+import { sendServicesList } from '../../vm/agent-client/send-services-list';
 import { shrinkGuest } from '../../vm/memory/shrink-guest';
-import { waitForGuestAge } from '../../vm/sleep/guest-age';
 import {
   buildSnapshotIdentity,
   removeSnapshot,
@@ -18,11 +17,12 @@ import {
 } from '../../vm/sleep/snapshot-meta';
 import { readVmIdentity } from '../../vm/sleep/vm-identity';
 import type { VmIdentity } from '../../vm/sleep/vm-identity';
+import { waitForGuestAge } from '../../vm/sleep/wait-for-guest-age';
 import type { ImpPaths } from '../../vm/storage/data-layout';
 import { formatTimings } from './format-timings';
 import type { ImpContext } from './imp-context';
 import type { LockedImp } from './imp-lock';
-import { OOM_KILL_TRIGGER, startOomWatch } from './oom-kill';
+import { OOM_KILL_TRIGGER, startOomWatch } from './start-oom-watch';
 
 const SLEEP_SHRINK_LIMIT_MS = 2000;
 const SERVICES_FOR_SLEEP_MS = 1000;

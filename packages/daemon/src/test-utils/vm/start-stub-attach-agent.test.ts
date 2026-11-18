@@ -10,8 +10,8 @@ import {
   StartedSchema,
   encodeMessageFrame,
 } from '@impz/agent-protocol';
-import { sendPing } from '../../vm/agent-client/agent-requests';
 import { openAttachStream } from '../../vm/agent-client/exec-stream';
+import { sendPing } from '../../vm/agent-client/send-agent-request';
 import { startStubAttachAgent } from './start-stub-attach-agent';
 
 async function setupTest() {

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { create } from '@bufbuild/protobuf';
 import { ActivitySchema, PingSchema } from '@impz/agent-protocol';
-import { sendActivity, sendAgentRequest, sendPing } from '../../vm/agent-client/agent-requests';
+import { sendActivity, sendAgentRequest, sendPing } from '../../vm/agent-client/send-agent-request';
 import { startStubInnerAgent } from './start-stub-inner-agent';
 
 async function setupTest() {

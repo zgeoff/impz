@@ -1,11 +1,11 @@
 import { EGRESS_MODE_TRAITS } from '@impz/api';
 import type { EgressPolicy } from '@impz/api';
-import { readEgressPolicy, writeEgressPolicy } from '../../platform/db/egress';
 import { readImpByName } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
-import { buildMovingError, buildNotFoundError } from '../../platform/errors/impd-errors';
+import { readEgressPolicy, writeEgressPolicy } from '../../platform/db/read-egress-policy';
+import { buildMovingError, buildNotFoundError } from '../../platform/errors/build-not-found-error';
 import type { KeyedMutex } from '../../platform/process/keyed-mutex';
-import { buildAllowRules, isNameAllowed, isTunnelAllowed } from './egress-rules';
+import { buildAllowRules, isNameAllowed, isTunnelAllowed } from './build-allow-rules';
 import type { EgressSets } from './egress-sets';
 
 interface SetPolicyDeps {

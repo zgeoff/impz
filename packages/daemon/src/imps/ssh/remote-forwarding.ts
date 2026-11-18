@@ -1,7 +1,7 @@
 import { posix } from 'node:path';
 import type { Connection, ServerChannel } from 'ssh2';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
-import type { GuestListener, ListenSpec } from '../../vm/agent-client/listener-stream';
+import type { GuestListener, ListenSpec } from '../../vm/agent-client/open-listener';
 import { formatGuestFailure } from '../../vm/guest-channels/format-guest-failure';
 import { IMP_RUN_DIR } from '../../vm/guest-channels/imp-run-dir';
 import {
@@ -9,7 +9,7 @@ import {
   runGuestListener,
 } from '../../vm/guest-channels/run-guest-listener';
 import { stopGuestClient } from '../../vm/guest-channels/stop-guest-client';
-import { runChannelRelay } from './channel-io';
+import { runChannelRelay } from './run-channel-relay';
 import type { SshBackend } from './ssh-connection-context';
 
 // ssh2 leaves out both callbacks when a global request wants no reply.

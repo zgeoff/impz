@@ -1,6 +1,6 @@
 import type { ApiCall } from '@impz/api';
 import { getErrorMessage } from '@impz/shared';
-import { listApiCalls, writeApiCall } from '../db/api-audit';
+import { listApiCalls, writeApiCall } from '../db/list-api-calls';
 import type { ImpDatabase } from '../db/open-database';
 import type { AuditActor } from '../principal/caller';
 import { getImpdLogger } from '../process/get-impd-logger';

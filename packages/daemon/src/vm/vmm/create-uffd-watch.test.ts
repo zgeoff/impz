@@ -2,7 +2,7 @@ import { expect, mock, test } from 'bun:test';
 import invariant from 'tiny-invariant';
 import { buildImpPaths } from '../storage/data-layout';
 import { createUffdWatch } from './create-uffd-watch';
-import type { HandlerState } from './uffd-handler';
+import type { HandlerState } from './start-uffd-handler';
 
 function setupTest() {
   const stopTimer = mock(() => {});

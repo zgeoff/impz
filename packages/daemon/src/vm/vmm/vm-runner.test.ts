@@ -14,8 +14,8 @@ import { setImmediate as setImmediatePromise } from 'node:timers/promises';
 import { create } from '@bufbuild/protobuf';
 import { FRAME_TYPES, PingSchema, encodeMessageFrame } from '@impz/agent-protocol';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
-import { deriveSlotAddress, parseSubnet } from '../../host-net/net/addressing';
-import { stopPid } from '../../platform/process/proc';
+import { deriveSlotAddress, parseSubnet } from '../../host-net/net/derive-slot-address';
+import { stopPid } from '../../platform/process/read-stat-fields';
 import { buildStubClock } from '../../test-utils/platform/build-stub-clock';
 import { buildMockTemplateBuildPlan } from '../../test-utils/vm/build-mock-template-build-plan';
 import { buildMockTemplateRestorePlan } from '../../test-utils/vm/build-mock-template-restore-plan';
@@ -31,12 +31,12 @@ import {
 import { startStubFirecrackerApi } from '../../test-utils/vm/start-stub-firecracker-api';
 import { startStubParkedAgent } from '../../test-utils/vm/start-stub-parked-agent';
 import { writeStubUffdStats } from '../../test-utils/vm/write-stub-uffd-stats';
-import { sendPing } from '../agent-client/agent-requests';
+import { sendPing } from '../agent-client/send-agent-request';
 import { buildImpPaths, buildSnapshotPaths } from '../storage/data-layout';
+import { buildJailerCommand } from './create-jails';
 import { createFirecrackerClient } from './firecracker-client';
-import { probeProcessAlive } from './firecracker-process';
-import { buildJailerCommand } from './jail';
-import { readHandlerState, startUffdHandler } from './uffd-handler';
+import { probeProcessAlive } from './start-firecracker';
+import { readHandlerState, startUffdHandler } from './start-uffd-handler';
 import { createVmRunner } from './vm-runner';
 
 function setupTest() {

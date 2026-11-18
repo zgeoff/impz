@@ -1,7 +1,7 @@
 import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Server } from 'bun';
-import { NO_IDLE_TIMEOUT_S } from '../../../platform/http/no-idle-timeout';
+import { NO_IDLE_TIMEOUT_S } from '../../../platform/http/no-idle-timeout-s';
 import type { LeafCertificate } from './broker-ca';
 import { RELAY_SOCKET_HANDLER } from './relay-socket-handler';
 import type { RelayData } from './relay-socket-handler';

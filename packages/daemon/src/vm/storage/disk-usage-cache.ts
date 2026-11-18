@@ -1,5 +1,5 @@
 import { getErrorMessage } from '@impz/shared';
-import { listCheckpoints } from '../../platform/db/checkpoints';
+import { listCheckpoints } from '../../platform/db/create-checkpoint';
 import { listImps } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import type { StartTimer } from '../../platform/process/clock';

@@ -2,7 +2,7 @@ import { appendEvent } from '@impz/durable';
 import type { JsonValue } from '@impz/durable';
 import { P, match } from 'ts-pattern';
 import * as z from 'zod';
-import type { CheckpointRecord } from './checkpoints';
+import type { CheckpointRecord } from './create-checkpoint';
 import type { ImpLogEntry, StoredImpLogEntry } from './imp-log-entry';
 import type { ImpRecord } from './imps';
 import type { ImpQueries } from './open-database';

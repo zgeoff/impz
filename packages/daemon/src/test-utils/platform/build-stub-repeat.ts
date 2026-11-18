@@ -1,4 +1,4 @@
-import type { Repeat } from '../../imps/images/build/image-op-stream';
+import type { Repeat } from '../../imps/images/build/run-image-op';
 
 export interface StubRepeat {
   readonly repeat: Repeat;

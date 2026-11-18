@@ -1,5 +1,5 @@
 import { Elysia } from 'elysia';
-import { DASHBOARD_PATH, createDashboardFiles } from './dashboard/dashboard-files';
+import { DASHBOARD_PATH, createDashboardFiles } from './dashboard/create-dashboard-files';
 
 export function createDashboardRoutes(dashboardDir: string | null) {
   const dashboard = createDashboardFiles(dashboardDir);

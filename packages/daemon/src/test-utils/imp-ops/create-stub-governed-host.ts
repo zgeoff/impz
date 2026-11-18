@@ -4,7 +4,7 @@ import { makeLockFreeSleep } from '../../imps/imps/lock-free-sleep';
 import type { SleepOutcome } from '../../imps/imps/lock-free-sleep';
 import { buildKeyedMutex } from '../../platform/process/keyed-mutex';
 import type { HugePagePool } from '../../vm/vmm/read-huge-page-pool';
-import type { VmRam } from '../../vm/vmm/vm-stats';
+import type { VmRam } from '../../vm/vmm/read-vm-memory';
 
 interface HostImp {
   awake: boolean;

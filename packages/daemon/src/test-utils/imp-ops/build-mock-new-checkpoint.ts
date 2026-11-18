@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import type { NewCheckpoint } from '../../platform/db/checkpoints';
+import type { NewCheckpoint } from '../../platform/db/create-checkpoint';
 
 export function buildMockNewCheckpoint(overrides: Partial<NewCheckpoint> = {}): NewCheckpoint {
   return {

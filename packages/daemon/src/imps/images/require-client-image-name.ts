@@ -1,6 +1,6 @@
 import { NameSchema } from '@impz/api';
 import { ImpdError } from '../../platform/errors/impd-error';
-import { BUILDER_IMAGE } from './builders/builder-imps';
+import { BUILDER_IMAGE } from './builders/create-builders';
 
 export function requireClientImageName(name: string): string {
   const imageName = NameSchema.parse(name);

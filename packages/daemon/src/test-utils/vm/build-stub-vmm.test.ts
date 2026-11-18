@@ -4,12 +4,12 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
-import { deriveSlotAddress, parseSubnet } from '../../host-net/net/addressing';
+import { deriveSlotAddress, parseSubnet } from '../../host-net/net/derive-slot-address';
 import { AgentError } from '../../vm/agent-client/agent-connection';
 import { setSnapshotLoading, writeSnapshotMeta } from '../../vm/sleep/snapshot-meta';
 import { buildImpPaths, buildSnapshotPaths } from '../../vm/storage/data-layout';
-import { TemplateRestoreError } from '../../vm/vmm/template-vm';
-import type { TemplateRestorePlan } from '../../vm/vmm/template-vm';
+import { TemplateRestoreError } from '../../vm/vmm/create-template-vm';
+import type { TemplateRestorePlan } from '../../vm/vmm/create-template-vm';
 import { buildMockHostIdentity } from './build-mock-host-identity';
 import { STUB_AGENT_VERSION, StubVmError, buildStubBootId, buildStubVmm } from './build-stub-vmm';
 

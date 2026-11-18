@@ -1,5 +1,5 @@
 import { match } from 'ts-pattern';
-import type { TemplateFault } from '../vmm/template-vm';
+import type { TemplateFault } from '../vmm/create-template-vm';
 
 type RestoreFailureOutcome = 'ignore' | 'keep' | 'remove' | 'disable';
 

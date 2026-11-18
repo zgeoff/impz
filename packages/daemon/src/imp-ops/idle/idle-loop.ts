@@ -2,7 +2,7 @@ import type { Imps } from '../../imps/imps/imp-service';
 import { listImps, updateImpActivity, updateImpRequest } from '../../platform/db/imps';
 import type { ImpRecord } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
-import { readCpuTicks } from '../../vm/vmm/vm-stats';
+import { readCpuTicks } from '../../vm/vmm/read-vm-memory';
 import type { ImpOpsConfig } from '../imp-ops-config';
 import { checkIdle } from './check-idle';
 

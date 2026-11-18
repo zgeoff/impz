@@ -1,0 +1,368 @@
+import { Database } from 'bun:sqlite';
+import { expect, onTestFinished, test } from 'bun:test';
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { sql } from 'kysely';
+import invariant from 'tiny-invariant';
+import * as z from 'zod';
+import { createMigratedDatabaseFile } from '../../test-utils/platform/create-migrated-database-file';
+import { createUnmigratedDatabase } from '../../test-utils/platform/create-unmigrated-database';
+import { formatRunPrefix } from '../../test-utils/platform/format-run-prefix';
+import { readRunOwner } from '../../test-utils/platform/read-run-owner';
+import { createDiskBudget } from '../../vm/storage/disk-budget';
+import { openDatabase } from './open-database';
+import { readNames } from './read-names';
+import { MIGRATIONS } from './run-migrations';
+import { writeConsistentCopy, writeDatabaseCopy } from './write-database-copy';
+
+// impd keeps its database in WAL mode, so a copy taken while writes run must
+// read past the log
+async function setupTest() {
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
+  const prefix = formatRunPrefix(readRunOwner());
+  const dataDir = mkdtempSync(join(tmpdir(), `${prefix}impd-db-copy-`));
+
+  stack.defer(() => {
+    rmSync(dataDir, { recursive: true, force: true });
+  });
+
+  const lastMigration = Object.keys(MIGRATIONS).toSorted().at(-1);
+
+  invariant(lastMigration !== undefined);
+
+  await createMigratedDatabaseFile(join(dataDir, 'imp.sqlite'), lastMigration);
+
+  const db = await openDatabase(join(dataDir, 'imp.sqlite'));
+
+  stack.defer(() => db.destroy());
+
+  return { dataDir, db };
+}
+
+test('#writeDatabaseCopy returns the copy’s path, size, schema version and integrity', async () => {
+  const ctx = await setupTest();
+
+  const budget = createDiskBudget({
+    storage: {
+      readUsage: () => Promise.resolve({ usedBytes: 1024 ** 3, availableBytes: 10 * 1024 ** 3 }),
+    },
+    reserveBytes: 1024 ** 3,
+  });
+
+  const copy = await writeDatabaseCopy(ctx.db, {
+    diskBudget: budget,
+    dataDir: ctx.dataDir,
+    name: 'nightly',
+    now: () => 1_800_000_000_000,
+  });
+
+  const lastMigration = Object.keys(MIGRATIONS).toSorted().at(-1);
+  const written = statSync(join(ctx.dataDir, 'db-copies', 'nightly.sqlite'));
+
+  invariant(lastMigration !== undefined);
+
+  expect(copy).toStrictEqual({
+    path: join(ctx.dataDir, 'db-copies', 'nightly.sqlite'),
+    sizeBytes: written.size,
+    lastMigration,
+    integrity: 'ok',
+    createdAt: new Date(1_800_000_000_000),
+  });
+});
+
+test('#writeDatabaseCopy makes the copy readable by its owner only', async () => {
+  const ctx = await setupTest();
+
+  const budget = createDiskBudget({
+    storage: {
+      readUsage: () => Promise.resolve({ usedBytes: 1024 ** 3, availableBytes: 10 * 1024 ** 3 }),
+    },
+    reserveBytes: 1024 ** 3,
+  });
+
+  await writeDatabaseCopy(ctx.db, {
+    diskBudget: budget,
+    dataDir: ctx.dataDir,
+    name: 'nightly',
+    now: Date.now,
+  });
+
+  expect(statSync(join(ctx.dataDir, 'db-copies', 'nightly.sqlite')).mode & 0o777).toBe(0o600);
+});
+
+test('#writeDatabaseCopy makes an existing copies directory owner-only', async () => {
+  const ctx = await setupTest();
+
+  mkdirSync(join(ctx.dataDir, 'db-copies'), { mode: 0o755 });
+
+  const budget = createDiskBudget({
+    storage: {
+      readUsage: () => Promise.resolve({ usedBytes: 1024 ** 3, availableBytes: 10 * 1024 ** 3 }),
+    },
+    reserveBytes: 1024 ** 3,
+  });
+
+  await writeDatabaseCopy(ctx.db, {
+    diskBudget: budget,
+    dataDir: ctx.dataDir,
+    name: 'mode',
+    now: Date.now,
+  });
+
+  expect(statSync(join(ctx.dataDir, 'db-copies')).mode & 0o777).toBe(0o700);
+});
+
+test('#writeDatabaseCopy takes a whole copy while writes run', async () => {
+  const ctx = await setupTest();
+
+  const budget = createDiskBudget({
+    storage: {
+      readUsage: () => Promise.resolve({ usedBytes: 1024 ** 3, availableBytes: 10 * 1024 ** 3 }),
+    },
+    reserveBytes: 1024 ** 3,
+  });
+
+  const writes = Array.from({ length: 200 }, (_, index) =>
+    sql`INSERT INTO api_audit (at, procedure, actor, outcome, duration_ms)
+      VALUES (${index}, 'test.write', 'token', 'ok', 0)`.execute(ctx.db),
+  );
+
+  const [copy] = await Promise.all([
+    writeDatabaseCopy(ctx.db, {
+      diskBudget: budget,
+      dataDir: ctx.dataDir,
+      name: 'busy',
+      now: Date.now,
+    }),
+    ...writes,
+  ]);
+
+  const opened = new Database(copy.path, { readonly: true });
+
+  onTestFinished(() => {
+    opened.close();
+  });
+
+  expect(opened.query('PRAGMA integrity_check').all()).toStrictEqual([{ integrity_check: 'ok' }]);
+});
+
+test('#writeDatabaseCopy holds a prefix of the writes that run meanwhile', async () => {
+  const ctx = await setupTest();
+
+  const budget = createDiskBudget({
+    storage: {
+      readUsage: () => Promise.resolve({ usedBytes: 1024 ** 3, availableBytes: 10 * 1024 ** 3 }),
+    },
+    reserveBytes: 1024 ** 3,
+  });
+
+  const writes = Array.from({ length: 200 }, (_, index) =>
+    sql`INSERT INTO api_audit (at, procedure, actor, outcome, duration_ms)
+      VALUES (${index}, 'test.write', 'token', 'ok', 0)`.execute(ctx.db),
+  );
+
+  const [copy] = await Promise.all([
+    writeDatabaseCopy(ctx.db, {
+      diskBudget: budget,
+      dataDir: ctx.dataDir,
+      name: 'busy',
+      now: Date.now,
+    }),
+    ...writes,
+  ]);
+
+  const opened = new Database(copy.path, { readonly: true });
+
+  onTestFinished(() => {
+    opened.close();
+  });
+
+  const ats = z
+    .array(z.object({ at: z.number() }))
+    .parse(opened.query('SELECT at FROM api_audit ORDER BY at').all())
+    .map((row) => row.at);
+
+  expect(ats).toStrictEqual(Array.from({ length: ats.length }, (_, index) => index));
+});
+
+test('#writeDatabaseCopy refuses a copy past the disk reserve, and leaves no file', async () => {
+  const ctx = await setupTest();
+
+  const budget = createDiskBudget({
+    storage: {
+      readUsage: () => Promise.resolve({ usedBytes: 1024 ** 3, availableBytes: 1024 ** 3 }),
+    },
+    reserveBytes: 1024 ** 3,
+  });
+
+  const refused = writeDatabaseCopy(ctx.db, {
+    diskBudget: budget,
+    dataDir: ctx.dataDir,
+    name: 'full',
+    now: Date.now,
+  });
+
+  await refused.catch(() => {});
+
+  expect(refused).rejects.toMatchObject({ code: 'DISK_FULL' });
+  expect(readdirSync(join(ctx.dataDir, 'db-copies'))).toStrictEqual([]);
+});
+
+test('#writeDatabaseCopy refuses a name a copy already has, and keeps that copy', async () => {
+  const ctx = await setupTest();
+
+  const budget = createDiskBudget({
+    storage: {
+      readUsage: () => Promise.resolve({ usedBytes: 1024 ** 3, availableBytes: 10 * 1024 ** 3 }),
+    },
+    reserveBytes: 1024 ** 3,
+  });
+
+  mkdirSync(join(ctx.dataDir, 'db-copies'));
+  writeFileSync(join(ctx.dataDir, 'db-copies', 'nightly.sqlite'), 'an earlier copy');
+
+  const refused = writeDatabaseCopy(ctx.db, {
+    diskBudget: budget,
+    dataDir: ctx.dataDir,
+    name: 'nightly',
+    now: Date.now,
+  });
+
+  await refused.catch(() => {});
+
+  expect(refused).rejects.toMatchObject({
+    code: 'CONFLICT',
+    data: { kind: 'database-copy', name: 'nightly' },
+  });
+
+  const kept = await Bun.file(join(ctx.dataDir, 'db-copies', 'nightly.sqlite')).text();
+
+  expect(kept).toBe('an earlier copy');
+});
+
+test('#writeDatabaseCopy removes the half-written copy of a copy that fails', async () => {
+  const ctx = await setupTest();
+
+  const budget = createDiskBudget({
+    storage: {
+      readUsage: () => Promise.resolve({ usedBytes: 1024 ** 3, availableBytes: 10 * 1024 ** 3 }),
+    },
+    reserveBytes: 1024 ** 3,
+  });
+
+  // VACUUM INTO cannot run inside a transaction, so the copy step fails
+  const failed = ctx.db.transaction().execute((trx) =>
+    writeDatabaseCopy(trx, {
+      diskBudget: budget,
+      dataDir: ctx.dataDir,
+      name: 'nightly',
+      now: Date.now,
+    }),
+  );
+
+  await failed.catch(() => {});
+
+  expect(failed).rejects.toThrowWithMessage(Error, /cannot VACUUM from within a transaction/u);
+  expect(readdirSync(join(ctx.dataDir, 'db-copies'))).toStrictEqual([]);
+});
+
+test('#writeConsistentCopy writes into an empty file that exists', async () => {
+  const ctx = await setupTest();
+
+  const path = join(ctx.dataDir, 'empty.sqlite');
+
+  writeFileSync(path, '');
+
+  await writeConsistentCopy(ctx.db, path);
+
+  const opened = new Database(path, { readonly: true });
+
+  onTestFinished(() => {
+    opened.close();
+  });
+
+  const names = readNames(opened.query('SELECT name FROM kysely_migration ORDER BY name').all());
+
+  expect(names).toStrictEqual(Object.keys(MIGRATIONS).toSorted());
+});
+
+test('#writeConsistentCopy writes a copy of an older schema that migrates forward on open', async () => {
+  const ctx = await setupTest();
+
+  const restored = join(ctx.dataDir, 'restored.sqlite');
+
+  await createMigratedDatabaseFile(join(ctx.dataDir, 'older.sqlite'), '020_add_grantable_secrets');
+
+  const older = createUnmigratedDatabase(join(ctx.dataDir, 'older.sqlite'));
+
+  await writeConsistentCopy(older, restored);
+
+  const db = await openDatabase(restored);
+
+  onTestFinished(() => db.destroy());
+
+  await db.destroy();
+
+  const opened = new Database(restored, { readonly: true });
+
+  onTestFinished(() => {
+    opened.close();
+  });
+
+  const names = readNames(opened.query('SELECT name FROM kysely_migration ORDER BY name').all());
+
+  expect(names).toStrictEqual(Object.keys(MIGRATIONS).toSorted());
+});
+
+test('#writeConsistentCopy gives the copy a log ID of its own', async () => {
+  const ctx = await setupTest();
+
+  const path = join(ctx.dataDir, 'copy.sqlite');
+
+  await writeConsistentCopy(ctx.db, path);
+
+  const copy = await openDatabase(path);
+
+  onTestFinished(() => copy.destroy());
+
+  const copyLogID = await copy.log.readLogID();
+  const liveLogID = await ctx.db.log.readLogID();
+
+  expect(copyLogID).not.toBe(liveLogID);
+});
+
+test('#writeConsistentCopy gives each restore of one copy a log ID of its own', async () => {
+  const ctx = await setupTest();
+
+  const path = join(ctx.dataDir, 'copy.sqlite');
+  const again = join(ctx.dataDir, 'copy-again.sqlite');
+
+  await writeConsistentCopy(ctx.db, path);
+
+  copyFileSync(path, again);
+
+  const first = await openDatabase(path);
+
+  onTestFinished(() => first.destroy());
+
+  const second = await openDatabase(again);
+
+  onTestFinished(() => second.destroy());
+
+  const firstLogID = await first.log.readLogID();
+  const secondLogID = await second.log.readLogID();
+
+  expect(firstLogID).not.toBe(secondLogID);
+});

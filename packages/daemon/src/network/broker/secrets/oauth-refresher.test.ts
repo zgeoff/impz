@@ -20,7 +20,7 @@ import { createTestDatabase } from '../../../test-utils/platform/create-test-dat
 import { loadOrCreateBrokerCa } from '../tls/broker-ca';
 import { isDue } from './is-due';
 import { createOAuthRefresher } from './oauth-refresher';
-import { buildPendingState, formatOAuthState, parseOAuthState } from './oauth-state';
+import { buildPendingState, formatOAuthState, parseOAuthState } from './parse-oauth-state';
 import { buildValueFile, createSecretFiles } from './secret-files';
 
 async function setupTest() {

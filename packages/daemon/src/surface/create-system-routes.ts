@@ -4,7 +4,7 @@ import packageJson from '../../package.json' with { type: 'json' };
 import { countBootStatuses } from '../imps/imps/boot-status';
 import type { RecordsStatus } from '../network/https/https-service';
 import type { ImpRecord } from '../platform/db/imps';
-import { readKsmHostStats } from '../vm/vmm/ksm';
+import { readKsmHostStats } from '../vm/vmm/read-ksm-host-stats';
 import type { RpcImplementer } from './create-implementer';
 import type { RouterDeps } from './create-router';
 import type { SurfaceConfig } from './surface-config';

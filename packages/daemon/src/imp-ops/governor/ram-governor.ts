@@ -15,7 +15,7 @@ import {
 import type { ProtectedImp } from '../../vm/imps-contract/ram-budget-error';
 import type { PriorityRam } from '../../vm/vm-config';
 import type { HugePagePool } from '../../vm/vmm/read-huge-page-pool';
-import type { VmRam } from '../../vm/vmm/vm-stats';
+import type { VmRam } from '../../vm/vmm/read-vm-memory';
 import { buildBudgets } from './build-budgets';
 import type { Budgets } from './build-budgets';
 import { buildUsageTotals } from './build-usage-totals';

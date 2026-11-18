@@ -2,10 +2,10 @@ import type { SessionInfo } from '@impz/agent-protocol';
 import type { PreviousGeneration, ResumeFrom, SessionLog, SessionLogRead } from '@impz/api';
 import { PreviousGenerationSchema } from '@impz/api';
 import * as z from 'zod';
-import { isAgentLogIdentity } from '../../../vm/agent-client/agent-ids';
 import { openTapStream } from '../../../vm/agent-client/exec-stream';
 import type { ExecStream } from '../../../vm/agent-client/exec-stream';
 import { isAgentError } from '../../../vm/agent-client/is-agent-error';
+import { isAgentLogIdentity } from '../../../vm/agent-client/is-agent-log-identity';
 import { buildLogKey } from './build-log-key';
 import { createSessionLogState } from './create-session-log-state';
 import {
@@ -27,8 +27,8 @@ import {
   removeTombstone,
   toApiSessionLog,
   writeTombstone,
-} from './session-log-files';
-import type { SessionLogReadRequest } from './session-log-files';
+} from './read-session-log-range';
+import type { SessionLogReadRequest } from './read-session-log-range';
 import type { LiveLog, OpeningTap } from './session-log-machine';
 
 export interface SessionLogLimits {
@@ -55,7 +55,7 @@ export interface SessionLogTarget {
   readonly executionGeneration?: string | undefined;
 }
 
-export interface SessionLogs {
+export interface SessionLogService {
   readonly observe: (imp: SessionLogImp, sessions: readonly SessionInfo[]) => void;
 
   readonly tapNow: (imp: SessionLogImp, session: Readonly<TappedSession>) => void;
@@ -108,7 +108,7 @@ interface OpenEntryTapOptions {
   readonly emitReached: () => void;
 }
 
-export function createSessionLogs(deps: SessionLogDeps): SessionLogs {
+export function createSessionLogs(deps: SessionLogDeps): SessionLogService {
   const openTap = deps.openTap ?? openTapStream;
   const createLog = deps.createLog ?? createGenerationLog;
   const ctx = createSessionLogState(deps);

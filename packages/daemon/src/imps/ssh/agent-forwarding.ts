@@ -1,10 +1,10 @@
 import type { Connection, ServerChannel } from 'ssh2';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
-import type { GuestListener } from '../../vm/agent-client/listener-stream';
+import type { GuestListener } from '../../vm/agent-client/open-listener';
 import { formatGuestFailure } from '../../vm/guest-channels/format-guest-failure';
 import { runGuestListener } from '../../vm/guest-channels/run-guest-listener';
 import { stopGuestClient } from '../../vm/guest-channels/stop-guest-client';
-import { runChannelRelay } from './channel-io';
+import { runChannelRelay } from './run-channel-relay';
 import type { SshBackend } from './ssh-connection-context';
 
 /* @internal */

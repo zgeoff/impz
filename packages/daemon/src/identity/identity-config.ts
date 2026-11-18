@@ -1,5 +1,5 @@
 import type { NetworkConfig } from '../network/network-config';
-import type { TailnetRule } from './auth/tailnet-identity';
+import type { TailnetRule } from './auth/create-tailnet-identities';
 import type { PublicMcpConfig } from './oauth/public-mcp-config';
 
 export interface IdentityConfig extends NetworkConfig {

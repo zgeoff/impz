@@ -16,9 +16,9 @@ import { createStubDockerCli } from '../../../test-utils/imps/create-stub-docker
 import { createTreeTar } from '../../../test-utils/imps/create-tree-tar';
 import { startDiskSampler } from '../../../test-utils/vm/start-disk-sampler';
 import { countTreeBytes } from '../../../vm/storage/count-tree-bytes';
+import { createXfsBackend } from '../../../vm/storage/create-xfs-backend';
 import { createDiskBudget } from '../../../vm/storage/disk-budget';
 import { createStorageGate } from '../../../vm/storage/storage-gate';
-import { createXfsBackend } from '../../../vm/storage/xfs-backend';
 import { createImageService } from '../image-service';
 import { startTarProcess } from '../rootfs/start-tar-process';
 

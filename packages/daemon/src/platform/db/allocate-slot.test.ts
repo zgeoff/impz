@@ -4,7 +4,7 @@ import { buildMockNewImage } from '../../test-utils/imps/build-mock-new-image';
 import { buildMockNewImp } from '../../test-utils/imps/build-mock-new-imp';
 import { createTestDatabase } from '../../test-utils/platform/create-test-database';
 import { allocateSlot } from './allocate-slot';
-import { createImage } from './images';
+import { createImage } from './create-image';
 import { createImp, createImpInFreeSlot } from './imps';
 
 test('#allocateSlot takes the lowest free slot, reusing a gap', async () => {

@@ -1,8 +1,13 @@
 import { hasScope } from '@impz/api';
 import type { GrantCheck, StoredGrant } from '@zgeoff/mcp-auth';
 import type { Caller } from '../../platform/principal/caller';
-import { formatScopeList, isPatternsWithin, pickGrantScope, pickLowerScope } from './grant-limits';
 import type { ImpLimits } from './imp-limits-schema';
+import {
+  formatScopeList,
+  isPatternsWithin,
+  pickGrantScope,
+  pickLowerScope,
+} from './pick-grant-scope';
 
 // A grant an imp token approved, before impd moved its grants to the shared OAuth server, lasts
 // only while that token still covers its scope and imps, and acts with no more than the token's

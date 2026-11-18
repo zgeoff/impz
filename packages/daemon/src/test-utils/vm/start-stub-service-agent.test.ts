@@ -10,14 +10,14 @@ import {
   ServicesListSchema,
 } from '@impz/agent-protocol';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
-import { sendAgentRequest } from '../../vm/agent-client/agent-requests';
+import { sendAgentRequest } from '../../vm/agent-client/send-agent-request';
 import {
   openServiceLogStream,
   sendServicesAdd,
   sendServicesList,
   sendServicesRemove,
   sendServicesRestart,
-} from '../../vm/agent-client/service-requests';
+} from '../../vm/agent-client/send-services-list';
 import { startStubServiceAgent } from './start-stub-service-agent';
 
 async function setupTest() {

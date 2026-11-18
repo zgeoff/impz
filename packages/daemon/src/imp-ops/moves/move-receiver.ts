@@ -15,6 +15,7 @@ import type { Imps } from '../../imps/imps/imp-service';
 import type { EgressService } from '../../network/egress/egress-service';
 import { listImps, readImpByName, updateImpCommitted } from '../../platform/db/imps';
 import type { ImpRecord } from '../../platform/db/imps';
+import type { ImpDatabase } from '../../platform/db/open-database';
 import {
   claimMoveTicketStream,
   createMoveTicketInFreeSlot,
@@ -24,9 +25,8 @@ import {
   removeMoveTickets,
   updateMoveTicket,
   writeMoveTicket,
-} from '../../platform/db/move-tickets';
-import type { MoveTicketRow, NewMoveTicketRow } from '../../platform/db/move-tickets';
-import type { ImpDatabase } from '../../platform/db/open-database';
+} from '../../platform/db/read-move-ticket';
+import type { MoveTicketRow, NewMoveTicketRow } from '../../platform/db/read-move-ticket';
 import { SlotTakenError } from '../../platform/db/slot-taken-error';
 import { ImpdError } from '../../platform/errors/impd-error';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
@@ -42,19 +42,19 @@ import type { ImpGrants } from '../imp-grants';
 import type { ImageImportDeps } from '../imp-import/create-image-from-file';
 import { readImageInUse } from '../imp-import/read-image-in-use';
 import { buildOfferedDigests } from './build-offered-digests';
+import type { PeerRanges } from './build-peer-ranges';
+import { MOVE_TICKET_PREFIX } from './build-ticket-header';
+import type { Receipt } from './build-ticket-header';
 import { COMMIT_WINDOW_MS } from './commit-window-ms';
+import { PART_WAIT_MS, createPartPipe } from './create-part-pipe';
+import type { PartPipe } from './create-part-pipe';
 import { MOVE_FINISH_HEADER, MOVE_PART_HEADER } from './move-header';
-import { PART_WAIT_MS, createPartPipe } from './move-parts';
-import type { PartPipe } from './move-parts';
 import { MoveRequestError } from './move-request-error';
-import { MOVE_TICKET_PREFIX } from './move-tickets';
-import type { Receipt } from './move-tickets';
-import type { PeerRanges } from './peer-address';
 import { readMoveStream } from './read-move-stream';
+import { collectWarmMismatches } from './read-warm-host';
 import { removeStagedImp } from './remove-staged-imp';
 import { requireMoveTicket } from './require-move-ticket';
 import type { CheckedTicket } from './require-move-ticket';
-import { collectWarmMismatches } from './warm-facts';
 
 const STREAM_WINDOW_MS = 10 * 60 * 1000;
 

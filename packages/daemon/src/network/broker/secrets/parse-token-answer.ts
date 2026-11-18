@@ -1,5 +1,5 @@
 import * as z from 'zod';
-import { isHeaderSafeToken } from './oauth-state';
+import { isHeaderSafeToken } from './parse-oauth-state';
 
 export interface TokenResponse {
   readonly accessToken: string | null;

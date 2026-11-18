@@ -1,4 +1,4 @@
-import type { BuilderTestRegistry } from './imps/images/builders/builder-imps';
+import type { BuilderTestRegistry } from './imps/images/builders/create-builders';
 import type { TestRegistryConfig } from './imps/imps-config';
 import { getImpdLogger } from './platform/process/get-impd-logger';
 

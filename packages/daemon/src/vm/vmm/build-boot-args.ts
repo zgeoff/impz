@@ -1,11 +1,11 @@
-import type { SlotAddress } from '../../host-net/net/addressing';
-import { GATEWAY_IP6 } from '../../host-net/net/addressing6';
+import { GATEWAY_IP6 } from '../../host-net/net/derive-guest-ip6';
+import type { SlotAddress } from '../../host-net/net/derive-slot-address';
 import type { ImpPaths } from '../storage/data-layout';
-import { BASE_BOOT_ARGS } from './configure-vm';
 import type { ImpCgroup } from './cpu-cgroups';
-import { ONLINE_MOVABLE_ARG, getRegionMib } from './elastic-memory';
+import type { JailUser } from './create-jails';
 import type { HugePages } from './firecracker-client';
-import type { JailUser } from './jail';
+import { ONLINE_MOVABLE_ARG, getRegionMib } from './resolve-max-memory-mib';
+import { BASE_BOOT_ARGS } from './setup-vm';
 
 export interface VmPlan {
   readonly firecrackerBin: string;

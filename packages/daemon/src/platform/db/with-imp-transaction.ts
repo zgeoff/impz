@@ -1,6 +1,6 @@
 import type { Transaction } from 'kysely';
+import type { DB } from './db';
 import type { ImpDatabase } from './open-database';
-import type { DB } from './schema';
 
 export type ImpTransaction = Transaction<DB>;
 

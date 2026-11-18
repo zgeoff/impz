@@ -1,8 +1,8 @@
 import type { Imp } from '@impz/api';
-import { listImages, readImageById } from '../../platform/db/images';
+import { listImages, readImageById } from '../../platform/db/create-image';
 import type { ImpRecord } from '../../platform/db/imps';
-import { listLeases } from '../../platform/db/leases';
-import type { LeaseRecord } from '../../platform/db/leases';
+import { listLeases } from '../../platform/db/list-leases';
+import type { LeaseRecord } from '../../platform/db/list-leases';
 import type { ImpHttpsConfig } from '../imps-config';
 import { readBootStatus } from './boot-status';
 import type { ImpContext } from './imp-context';

@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import { DNS_CLASS_IN, DNS_TYPE_CODES, encodeDnsName, encodeDnsUint16 } from './write-dns-wire';
+import { DNS_CLASS_IN, DNS_TYPE_CODES, encodeDnsName, encodeDnsUint16 } from './encode-dns-name';
 
 const TYPE_OPT = 41;
 const RD = 0x01_00;

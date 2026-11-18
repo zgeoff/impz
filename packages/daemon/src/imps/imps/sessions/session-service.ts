@@ -4,15 +4,15 @@ import type { ImpRecord } from '../../../platform/db/imps';
 import {
   buildAgentOutdatedApiError,
   buildNotFoundError,
-} from '../../../platform/errors/impd-errors';
-import { sendActivity, sendSessionKill } from '../../../vm/agent-client/agent-requests';
+} from '../../../platform/errors/build-not-found-error';
 import { isAgentError } from '../../../vm/agent-client/is-agent-error';
 import { toSeenSessions } from '../../../vm/agent-client/seen-session';
+import { sendActivity, sendSessionKill } from '../../../vm/agent-client/send-agent-request';
 import type { ImpGuest, ImpHost, ImpVms } from '../imp-context';
 import type { ImpLock } from '../imp-lock';
 import type { ImpRuntime } from '../imp-runtime';
 import { findSessionLogImp } from '../session-logs/find-session-log-imp';
-import type { SessionLogReadRequest } from '../session-logs/session-log-files';
+import type { SessionLogReadRequest } from '../session-logs/read-session-log-range';
 import type { SessionLogTarget } from '../session-logs/session-log-service';
 import { readSeenSessions } from './count-sessions';
 import { toApiSession } from './to-api-session';

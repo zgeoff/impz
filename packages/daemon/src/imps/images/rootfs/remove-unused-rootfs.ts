@@ -1,4 +1,4 @@
-import { countImageDigestUses } from '../../../platform/db/images';
+import { countImageDigestUses } from '../../../platform/db/create-image';
 import type { ImpDatabase } from '../../../platform/db/open-database';
 import type { StorageBackend } from '../../../vm/storage/storage-backend';
 

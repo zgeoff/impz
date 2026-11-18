@@ -8,12 +8,12 @@ import type { Imps } from '../../imps/imps/imp-service';
 import type { NetworkService } from '../../network/networks/network-service';
 import { listImps, readImpById, readImpByName } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
-import { ImpdError } from '../../platform/errors/impd-error';
 import {
   buildConflictError,
   buildNotBackedUpError,
   buildNotFoundError,
-} from '../../platform/errors/impd-errors';
+} from '../../platform/errors/build-not-found-error';
+import { ImpdError } from '../../platform/errors/impd-error';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { BACKUP_TREE } from '../../vm/storage/data-layout';
 import type { buildBackupPaths } from '../../vm/storage/data-layout';

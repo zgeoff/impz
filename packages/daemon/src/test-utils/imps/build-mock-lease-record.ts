@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import type { LeaseRecord } from '../../platform/db/leases';
+import type { LeaseRecord } from '../../platform/db/list-leases';
 
 export function buildMockLeaseRecord(overrides: Partial<LeaseRecord> = {}): LeaseRecord {
   return {

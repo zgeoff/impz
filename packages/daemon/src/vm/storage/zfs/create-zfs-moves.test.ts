@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import invariant from 'tiny-invariant';
-import { createImage } from '../../../platform/db/images';
+import { createImage } from '../../../platform/db/create-image';
 import { readImpByName } from '../../../platform/db/imps';
 import { runChecked } from '../../../platform/process/run-command';
 import { createMoveHosts } from '../../../test-utils/imp-ops/create-move-hosts';

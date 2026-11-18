@@ -1,8 +1,8 @@
 import type { EgressPolicy } from '@impz/api';
-import { deriveSlotAddress } from '../../host-net/net/addressing';
-import type { SlotAddress } from '../../host-net/net/addressing';
+import { deriveSlotAddress } from '../../host-net/net/derive-slot-address';
+import type { SlotAddress } from '../../host-net/net/derive-slot-address';
 import type { Ipv6Plan } from '../../host-net/net/ipv6-plan';
-import type { GuestNetBytes } from '../../host-net/net/tap-bytes';
+import type { GuestNetBytes } from '../../host-net/net/read-guest-net-bytes';
 import type { TapDevices } from '../../host-net/net/tap-devices';
 import { TEMPLATE_BUILD_UID } from '../../platform/db/imps';
 import type { ImpRecord } from '../../platform/db/imps';
@@ -29,11 +29,11 @@ import { createBootTemplates } from '../../vm/templates/boot-templates';
 import type { BootTemplates } from '../../vm/templates/boot-templates';
 import { createMemoryLock } from '../../vm/templates/create-memory-lock';
 import type { CpuCgroups } from '../../vm/vmm/cpu-cgroups';
+import type { JailUser } from '../../vm/vmm/create-jails';
 import { createMemoryWarm } from '../../vm/vmm/create-memory-warm';
 import type { MemoryWarm } from '../../vm/vmm/create-memory-warm';
-import type { JailUser } from '../../vm/vmm/jail';
+import { readCpuTicks } from '../../vm/vmm/read-vm-memory';
 import type { VmRunner } from '../../vm/vmm/vm-runner';
-import { readCpuTicks } from '../../vm/vmm/vm-stats';
 import type { BrokerExecEnv } from '../exec/broker-exec-env';
 import type { ImageService } from '../images/image-service';
 import type { ImpsConfig } from '../imps-config';
@@ -47,7 +47,7 @@ import type { KernelOopsWatch } from './kernel-oops-watch';
 import { createResourceSampler } from './resource-sampler';
 import type { ResourceSampler } from './resource-sampler';
 import { createSessionLogs } from './session-logs/session-log-service';
-import type { SessionLogs } from './session-logs/session-log-service';
+import type { SessionLogService } from './session-logs/session-log-service';
 import { createSessionCache } from './sessions/session-cache';
 import type { SessionCache } from './sessions/session-cache';
 
@@ -202,7 +202,7 @@ export interface ImpGuest {
   readonly tracker: ActivityTracker;
   readonly sessions: SessionCache;
   readonly inners: InnerCache;
-  readonly sessionLogs: SessionLogs;
+  readonly sessionLogs: SessionLogService;
 }
 
 export interface ImpDisk {

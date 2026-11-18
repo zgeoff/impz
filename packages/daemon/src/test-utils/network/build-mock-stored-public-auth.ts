@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import { buildCredentialHash } from '../../network/https/public-auth';
+import { buildCredentialHash } from '../../network/https/build-credential-hash';
 import type { StoredPublicAuth } from '../../platform/db/imps';
 
 export function buildMockStoredPublicAuth(

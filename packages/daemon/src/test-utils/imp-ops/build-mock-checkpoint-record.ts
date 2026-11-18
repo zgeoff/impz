@@ -1,6 +1,6 @@
 import { faker } from '@faker-js/faker';
 import { CHECKPOINT_ID_ALPHABET } from '../../imp-ops/checkpoints/checkpoint-service';
-import type { CheckpointRecord } from '../../platform/db/checkpoints';
+import type { CheckpointRecord } from '../../platform/db/create-checkpoint';
 
 export function buildMockCheckpointRecord(
   overrides: Partial<CheckpointRecord> = {},

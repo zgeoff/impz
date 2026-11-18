@@ -1,6 +1,6 @@
 import { getErrorMessage } from '@impz/shared';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
-import { buildErrorPage } from '../proxy/error-pages';
+import { buildErrorPage } from '../proxy/build-error-page';
 import type { ProxyListenOptions, ProxyRoute } from '../proxy/wake-proxy';
 import type { Certificate } from './acme/cert-store';
 import type { DomainRoute } from './parse-domain-host';

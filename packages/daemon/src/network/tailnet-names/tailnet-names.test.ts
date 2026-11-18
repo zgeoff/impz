@@ -7,7 +7,7 @@ import { updateEnv } from '@impz/shared/test-utils/update-env';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { HttpResponse, http } from 'msw';
 import invariant from 'tiny-invariant';
-import { deriveSlotAddress } from '../../host-net/net/addressing';
+import { deriveSlotAddress } from '../../host-net/net/derive-slot-address';
 import type { TailscaleStatus } from '../../host-net/net/tailscale-status';
 import { readImpByName, updateImpMove } from '../../platform/db/imps';
 import { buildStubTailscaleServe } from '../../test-utils/network/build-stub-tailscale-serve';

@@ -1,7 +1,7 @@
 import { hasScope } from '@impz/api';
-import { toCallerError } from '../../identity/auth/caller-view';
+import { toCallerError } from '../../identity/auth/require-lease-holder';
 import type { ExecBackend } from '../../imps/exec/exec-session';
-import { buildForbiddenError } from '../../platform/errors/impd-errors';
+import { buildForbiddenError } from '../../platform/errors/build-not-found-error';
 import { formatCaller, isCallerAllowed } from '../../platform/principal/caller';
 import type { Caller } from '../../platform/principal/caller';
 import { findImpRefusal } from '../find-imp-refusal';

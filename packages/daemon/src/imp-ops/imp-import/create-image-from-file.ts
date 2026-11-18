@@ -1,6 +1,6 @@
 import type { ImageSource } from '@impz/api';
 import type { ImageService } from '../../imps/images/image-service';
-import { createImage } from '../../platform/db/images';
+import { createImage } from '../../platform/db/create-image';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import type { StorageBackend } from '../../vm/storage/storage-backend';
 import type { ImageFiles } from '../../vm/storage/write-image-files';

@@ -6,7 +6,7 @@ import { buildMockNewImage } from '../../test-utils/imps/build-mock-new-image';
 import { buildMockNewImp } from '../../test-utils/imps/build-mock-new-imp';
 import { createTestDatabase } from '../../test-utils/platform/create-test-database';
 import { readLoggedEvents } from '../../test-utils/platform/read-logged-events';
-import { createImage } from './images';
+import { createImage } from './create-image';
 import {
   JAIL_UIDS,
   countImpsByState,
@@ -27,7 +27,7 @@ import {
   updateImpRequest,
   updateImpSettings,
 } from './imps';
-import { writeMovedLeases } from './leases';
+import { writeMovedLeases } from './list-leases';
 import { SlotTakenError } from './slot-taken-error';
 import { updateImpState } from './update-imp-state';
 

@@ -1,5 +1,5 @@
 import { getErrorMessage } from '@impz/shared';
-import type { ServedServices } from '../../host-net/net/tailscale-serve';
+import type { ServedServices } from '../../host-net/net/read-serve-ports';
 import { listImps } from '../../platform/db/imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';

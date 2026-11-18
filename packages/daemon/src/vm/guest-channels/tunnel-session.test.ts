@@ -14,7 +14,7 @@ import { buildStubDialStream } from '../../test-utils/vm/build-stub-dial-stream'
 import { buildStubGuestListener } from '../../test-utils/vm/build-stub-guest-listener';
 import { AgentError } from '../agent-client/agent-connection';
 import type { DialStream } from '../agent-client/dial-stream';
-import type { GuestListener } from '../agent-client/listener-stream';
+import type { GuestListener } from '../agent-client/open-listener';
 import { createReverseForwards } from './reverse-forwards';
 import { createTunnelLimits, createTunnelSession } from './tunnel-session';
 import type { TunnelBackend } from './tunnel-session';

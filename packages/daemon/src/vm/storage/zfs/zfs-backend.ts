@@ -1,12 +1,12 @@
 import { existsSync, mkdirSync, readFileSync, rmdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { createStreamRunner } from '../../../platform/process/create-stream-runner';
+import type { StreamRunner } from '../../../platform/process/create-stream-runner';
 import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import { buildKeyedMutex } from '../../../platform/process/keyed-mutex';
-import { readMounts as readHostMounts } from '../../../platform/process/mounts';
+import { readMounts as readHostMounts } from '../../../platform/process/read-mounts';
 import { runCommand } from '../../../platform/process/run-command';
 import type { CommandRunner } from '../../../platform/process/run-command';
-import { createStreamRunner } from '../../../platform/process/run-stream';
-import type { StreamRunner } from '../../../platform/process/run-stream';
 import { buildImagePaths, buildImpPaths, buildSnapshotPaths, toDigestHex } from '../data-layout';
 import { printSweep } from '../print-sweep';
 import type { DiskSource, StorageBackend } from '../storage-backend';

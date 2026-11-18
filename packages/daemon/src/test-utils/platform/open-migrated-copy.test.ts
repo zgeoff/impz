@@ -1,6 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { sql } from 'kysely';
-import { createImage, listImages } from '../../platform/db/images';
+import { createImage, listImages } from '../../platform/db/create-image';
 import { createImp } from '../../platform/db/imps';
 import { openDatabase } from '../../platform/db/open-database';
 import { readNames } from '../../platform/db/read-names';

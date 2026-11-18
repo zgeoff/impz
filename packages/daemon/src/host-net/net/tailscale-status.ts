@@ -1,7 +1,7 @@
 import * as z from 'zod';
+import { createTtlCache } from '../../platform/process/create-ttl-cache';
 import { runCommand } from '../../platform/process/run-command';
 import type { CommandRunner } from '../../platform/process/run-command';
-import { createTtlCache } from '../../platform/process/ttl-cache';
 
 export interface TailscaleStatus {
   readonly state: string | null;
