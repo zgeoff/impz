@@ -82,5 +82,5 @@ export function parseBackupKeep(value: string): BackupKeep {
 }
 
 function isKeepBucket(bucket: string): bucket is (typeof KEEP_BUCKETS)[number] {
-  return (KEEP_BUCKETS as readonly string[]).includes(bucket);
+  return KEEP_BUCKETS.some((kept) => kept === bucket);
 }

@@ -139,7 +139,7 @@ function readIfExists(path: string): string | null {
 
 function parseJson(text: string): unknown {
   try {
-    return JSON.parse(text) as unknown;
+    return JSON.parse(text);
   } catch {
     return null;
   }

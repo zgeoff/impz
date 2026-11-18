@@ -14,10 +14,15 @@ export interface StorageGate {
 export function createStorageGate(
   clock: Pick<Clock, 'now' | 'startTimer'> = REAL_CLOCK,
 ): StorageGate {
-  const state = {
+  const state: {
+    inFlight: number;
+    waiting: number;
+    alone: Promise<void> | null;
+    idle: PromiseWithResolvers<void>;
+  } = {
     inFlight: 0,
     waiting: 0,
-    alone: null as Promise<void> | null,
+    alone: null,
     idle: Promise.withResolvers<void>(),
   };
 

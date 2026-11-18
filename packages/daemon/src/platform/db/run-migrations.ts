@@ -49,6 +49,7 @@ import { MIGRATION_043_MERGE_SECRET_KINDS } from './migrations/migration-043-mer
 import { MIGRATION_044_ADD_IMP_IMAGE_DIGESTS } from './migrations/migration-044-add-imp-image-digests';
 import { MIGRATION_045_ADD_IMP_LAST_REQUEST } from './migrations/migration-045-add-imp-last-request';
 import { MIGRATION_046_MOVE_GRANTS_TO_MCP_AUTH } from './migrations/migration-046-move-grants-to-mcp-auth';
+import { readNames } from './read-names';
 
 export const MIGRATIONS: Record<string, Migration> = {
   '001_create_initial_schema': MIGRATION_001_CREATE_INITIAL_SCHEMA,
@@ -132,7 +133,7 @@ async function requireKnownMigrations<T>(
   table: string,
   migrations: Readonly<Record<string, Migration>>,
 ): Promise<void> {
-  const found = await sql<{ name: string }>`
+  const found = await sql`
     SELECT name FROM sqlite_master WHERE type = 'table' AND name = ${table}
   `.execute(db);
 
@@ -140,11 +141,9 @@ async function requireKnownMigrations<T>(
     return;
   }
 
-  const executed = await sql<{ name: string }>`SELECT name FROM ${sql.table(table)}`.execute(db);
+  const executed = await sql`SELECT name FROM ${sql.table(table)}`.execute(db);
 
-  const unknown = executed.rows
-    .map((row) => row.name)
-    .filter((name) => !Object.hasOwn(migrations, name));
+  const unknown = readNames(executed.rows).filter((name) => !Object.hasOwn(migrations, name));
 
   if (unknown.length === 0) {
     return;

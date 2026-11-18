@@ -172,7 +172,7 @@ async function sendStdin(
   signal: AbortSignal,
 ): Promise<Error | null> {
   try {
-    for await (const chunk of Bun.file(path).stream() as AsyncIterable<Uint8Array>) {
+    for await (const chunk of Bun.file(path).stream()) {
       signal.throwIfAborted();
       stream.writeStdin(chunk);
 

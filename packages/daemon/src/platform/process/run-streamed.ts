@@ -22,7 +22,7 @@ export async function runStreamed(
   const stderr = new Response(child.stderr).text();
 
   try {
-    for await (const chunk of child.stdout as AsyncIterable<Uint8Array>) {
+    for await (const chunk of child.stdout) {
       await onStdout(chunk);
     }
   } catch (error) {

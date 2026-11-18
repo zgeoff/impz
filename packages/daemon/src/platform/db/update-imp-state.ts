@@ -1,6 +1,5 @@
 import type { ColdBootCause, ImpChangeReason, ImpEventDetail, ImpState } from '@impz/api';
-import { sql } from 'kysely';
-import type { Updateable } from 'kysely';
+import type { ExpressionBuilder, Updateable } from 'kysely';
 import { buildNotFoundError } from '../errors/impd-errors';
 import { appendImpChange } from './append-imp-change';
 import { requireTransition } from './imp-transitions';
@@ -103,7 +102,11 @@ export async function updateImpState(
 
     const row = await trx
       .updateTable('imps')
-      .set({ ...values, ...buildAwakeValues(change), ...buildBootCauseValues(change) })
+      .set((eb) => ({
+        ...values,
+        ...buildAwakeValues(eb, change),
+        ...buildBootCauseValues(change),
+      }))
       .where('id', '=', id)
       .returningAll()
       .executeTakeFirstOrThrow();
@@ -122,22 +125,28 @@ export async function updateImpState(
   return undefined;
 }
 
-function buildAwakeValues(change: Readonly<ImpStateChange>) {
+function buildAwakeValues(eb: ExpressionBuilder<DB, 'imps'>, change: Readonly<ImpStateChange>) {
   const now = Date.now();
 
   if (change.state === 'running') {
     const isWake = change.reason === 'woke' || change.countsWake === true;
 
     return {
-      awake_since: sql<number>`coalesce(awake_since, ${now})`,
-      ...(isWake && { wake_count: sql<number>`wake_count + 1` }),
+      awake_since: eb.fn.coalesce('awake_since', eb.val(now)),
+      ...(isWake && { wake_count: eb('wake_count', '+', 1) }),
     };
   }
 
   const until = change.awakeUntil?.getTime() ?? now;
 
+  // an imp with no awake_since adds nothing
+  const awakeFor = eb(eb.val(until), '-', eb.ref('awake_since'));
+
+  // oxlint-disable-next-line promise/prefer-await-to-then -- Kysely's case builder names its branch then
+  const counted = eb.case().when(awakeFor, '>', 0).then(awakeFor).else(0).end();
+
   return {
-    awake_ms: sql<number>`awake_ms + coalesce(max(0, ${until} - awake_since), 0)`,
+    awake_ms: eb('awake_ms', '+', counted),
     awake_since: null,
   };
 }

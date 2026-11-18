@@ -72,7 +72,7 @@ function buildSecretBinding(args: BindingArgs): SecretBinding {
 }
 
 function isPresetKind(kind: SecretAddKind | undefined): boolean {
-  return kind !== undefined && (SecretPresetSchema.options as readonly string[]).includes(kind);
+  return kind !== undefined && SecretPresetSchema.options.some((preset) => preset === kind);
 }
 
 function isNewBinding(binding: Readonly<SecretBinding>): boolean {

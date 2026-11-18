@@ -16,8 +16,13 @@ export function buildStubDialStream() {
   const queue: StubDialQueue = { items: [], wake: null };
   const drain = { gate: Promise.resolve() };
 
-  const state = {
-    written: [] as string[],
+  const state: {
+    written: string[];
+    isEnded: boolean;
+    isClosed: boolean;
+    drainWaits: number;
+  } = {
+    written: [],
     isEnded: false,
     isClosed: false,
 

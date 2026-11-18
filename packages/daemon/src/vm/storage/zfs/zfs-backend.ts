@@ -63,7 +63,7 @@ export function createZfsBackend(deps: ZfsBackendDeps): ZfsBackend {
   const mutex = buildKeyedMutex();
   const runSerial = <T>(task: () => Promise<T>) => mutex.runExclusive('zfs', task);
   const runSnapshot = <T>(task: () => Promise<T>) => mutex.runExclusive('snapshot', task);
-  const host = { warnings: [] as string[] };
+  const host: { warnings: string[] } = { warnings: [] };
 
   const datasets = {
     mem: `${deps.root}/mem`,

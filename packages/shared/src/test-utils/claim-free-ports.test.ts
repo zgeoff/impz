@@ -216,7 +216,7 @@ test('it picks two ports and holds them until released', async () => {
   const firstPorts = await waitFor(async (): Promise<unknown> => {
     const picked = await readFile(join(directory, 'first.json'), 'utf8');
 
-    return JSON.parse(picked) as unknown;
+    return JSON.parse(picked);
   });
 
   const second = Bun.spawn([process.execPath, 'test', './picker.test.ts'], {
@@ -233,7 +233,7 @@ test('it picks two ports and holds them until released', async () => {
   const secondPorts = await waitFor(async (): Promise<unknown> => {
     const picked = await readFile(join(directory, 'second.json'), 'utf8');
 
-    return JSON.parse(picked) as unknown;
+    return JSON.parse(picked);
   });
 
   await writeFile(join(directory, 'release'), '');

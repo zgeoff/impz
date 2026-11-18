@@ -12,6 +12,7 @@ import {
 } from 'kysely-codegen';
 import type { PostprocessFunction } from 'kysely-codegen';
 import { openDatabase } from './open-database';
+import { readNames } from './read-names';
 
 const SCHEMA_FILE = join(import.meta.dir, 'schema.ts');
 
@@ -78,11 +79,11 @@ async function normalizePrimaryKeys(
 ): Promise<DatabaseMetadata> {
   const tables = await Promise.all(
     context.metadata.tables.map(async (table) => {
-      const keys = await sql<{ name: string }>`
+      const keys = await sql`
         SELECT name FROM pragma_table_info(${table.name}) WHERE pk > 0
       `.execute(context.db);
 
-      const names = new Set(keys.rows.map((row) => row.name));
+      const names = new Set(readNames(keys.rows));
 
       return {
         name: table.name,

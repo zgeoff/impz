@@ -16,7 +16,7 @@ export interface BuildSteps {
 export function createBuildSteps(setStep: (step: string) => void): BuildSteps {
   const running = new Map<string, string>();
 
-  const state = { current: null as string | null };
+  const state: { current: string | null } = { current: null };
 
   return {
     start: (id, name) => {

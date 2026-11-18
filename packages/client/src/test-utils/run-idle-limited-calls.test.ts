@@ -40,7 +40,7 @@ test('it prints each call’s outcome as a JSON line', async () => {
   const lines = output
     .trim()
     .split('\n')
-    .map((line) => JSON.parse(line) as unknown);
+    .map((line): unknown => JSON.parse(line));
 
   expect(lines).toIncludeSameMembers([
     { kind: 'backups.run', isOk: true, answer: { path: '/rpc/backups/run' } },

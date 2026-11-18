@@ -39,9 +39,13 @@ export async function* runImageOp(
 ): AsyncGenerator<ImageOpEvent> {
   const startedAt = options.now();
 
-  const state = {
+  const state: {
+    phase: ImageBuildPhase;
+    step: string | null;
+    changed: PromiseWithResolvers<void>;
+  } = {
     phase: options.firstPhase,
-    step: null as string | null,
+    step: null,
     changed: Promise.withResolvers<void>(),
   };
 

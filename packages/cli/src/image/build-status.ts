@@ -39,10 +39,16 @@ export function createBuildStatus(
   label: string,
   quiet = false,
 ): BuildStatus {
-  const state = {
+  const state: {
+    drawn: string;
+    phase: ImageBuildPhase | null;
+    step: string | undefined;
+    phaseStartMs: number;
+    printedMs: number;
+  } = {
     drawn: '',
-    phase: null as ImageBuildPhase | null,
-    step: undefined as string | undefined,
+    phase: null,
+    step: undefined,
     phaseStartMs: 0,
     printedMs: Number.NEGATIVE_INFINITY,
   };

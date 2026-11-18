@@ -30,7 +30,12 @@ export function createCopyProgress(
   now = Date.now,
   label = 'impz cp',
 ): CopyProgress {
-  const state = { copied: 0, total: null as number | null, drawnAt: 0, drawn: false };
+  const state: { copied: number; total: number | null; drawnAt: number; drawn: boolean } = {
+    copied: 0,
+    total: null,
+    drawnAt: 0,
+    drawn: false,
+  };
 
   const renderLine = (): void => {
     state.drawnAt = now();

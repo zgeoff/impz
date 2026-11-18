@@ -170,10 +170,12 @@ export function createStubTailscaleApi(options: Readonly<StubTailscaleApiOptions
     }),
   ];
 
+  const published: readonly StubTailscaleRequest[] = requests;
+
   return {
     handlers,
     services,
-    requests: requests as readonly StubTailscaleRequest[],
+    requests: published,
     readIssuedTokens: (): readonly string[] => tokens.all().map((token) => token.value),
 
     revokeTokens: (): void => {

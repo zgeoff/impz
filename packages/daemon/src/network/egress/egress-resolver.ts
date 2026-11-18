@@ -230,7 +230,7 @@ function isRoutineSocketError(error: unknown): boolean {
 const SOCKET_ERROR_LOG_MS = 60_000;
 
 function makeLimitedLog(now: () => number): (error: string) => void {
-  const state = { loggedAt: null as number | null, held: 0 };
+  const state: { loggedAt: number | null; held: number } = { loggedAt: null, held: 0 };
 
   return (error) => {
     const at = now();

@@ -31,7 +31,7 @@ test('#writeAuditEntry removes the oldest rows across every imp past the table c
 
   await writeAuditEntry(ctx.db, buildMockNewAuditEntry({ impName: 'dev', path: '/newest' }));
 
-  const kept = await sql<{ rows: number; oldest: number }>`
+  const kept = await sql`
     SELECT COUNT(*) AS rows, MIN(id) AS oldest FROM broker_audit
   `.execute(ctx.db);
 

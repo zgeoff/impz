@@ -96,7 +96,7 @@ export async function openSessionSocket(open: Readonly<SessionOpen>): Promise<Se
 
   const chunks: Uint8Array[] = [];
   const controls: Control[] = [];
-  const state = { bytes: 0, wake: null as (() => void) | null };
+  const state: { bytes: number; wake: (() => void) | null } = { bytes: 0, wake: null };
 
   socket.binaryType = 'arraybuffer';
 

@@ -12,6 +12,7 @@ import { createUnmigratedDatabase } from '../../test-utils/platform/create-unmig
 import { formatRunPrefix } from '../../test-utils/platform/format-run-prefix';
 import { readRunOwner } from '../../test-utils/platform/read-run-owner';
 import { readImpByName } from './imps';
+import { readNames } from './read-names';
 import { MIGRATIONS, runMigrations, runMigrationsTo } from './run-migrations';
 import { listGrantedRules } from './secrets';
 
@@ -20,11 +21,9 @@ test('#runMigrations migrates an empty database to the last migration', async ()
 
   await runMigrations(db);
 
-  const ran = await sql<{ name: string }>`SELECT name FROM kysely_migration ORDER BY name`.execute(
-    db,
-  );
+  const ran = await sql`SELECT name FROM kysely_migration ORDER BY name`.execute(db);
 
-  expect(ran.rows.map((row) => row.name)).toStrictEqual(Object.keys(MIGRATIONS).toSorted());
+  expect(readNames(ran.rows)).toStrictEqual(Object.keys(MIGRATIONS).toSorted());
 });
 
 test('#runMigrations keeps the name of each migration a released impd ran', () => {
@@ -85,11 +84,11 @@ test('#runMigrations runs the durable migrations into a table of their own', asy
 
   await runMigrations(db);
 
-  const ran = await sql<{ name: string }>`
+  const ran = await sql`
     SELECT name FROM kysely_migration_durable ORDER BY name
   `.execute(db);
 
-  expect(ran.rows.map((row) => row.name)).toStrictEqual(Object.keys(durableMigrations).toSorted());
+  expect(readNames(ran.rows)).toStrictEqual(Object.keys(durableMigrations).toSorted());
 });
 
 test('#runMigrations refuses a database with a durable migration this impd does not know', async () => {
@@ -134,14 +133,9 @@ test('#runMigrations runs nothing on a database file a newer impd migrated', asy
     `the database is at migration 999_from_a_newer_impd, newer than this impd's last, ${last}: start the impd that wrote it or a newer one, or restore an older database copy (docs/guides/operations.md#database-copy-and-restore)`,
   );
 
-  const ran = await sql<{ name: string }>`SELECT name FROM kysely_migration ORDER BY name`.execute(
-    db,
-  );
+  const ran = await sql`SELECT name FROM kysely_migration ORDER BY name`.execute(db);
 
-  expect(ran.rows.map((row) => row.name)).toStrictEqual([
-    ...names.slice(0, -1),
-    '999_from_a_newer_impd',
-  ]);
+  expect(readNames(ran.rows)).toStrictEqual([...names.slice(0, -1), '999_from_a_newer_impd']);
 });
 
 test('#runMigrations rethrows the error of a migration that fails', async () => {
@@ -181,14 +175,9 @@ test('#runMigrationsTo stops at the migration it names', async () => {
 
   await runMigrationsTo(db, '002_add_imp_http_port');
 
-  const ran = await sql<{ name: string }>`SELECT name FROM kysely_migration ORDER BY name`.execute(
-    db,
-  );
+  const ran = await sql`SELECT name FROM kysely_migration ORDER BY name`.execute(db);
 
-  expect(ran.rows.map((row) => row.name)).toStrictEqual([
-    '001_create_initial_schema',
-    '002_add_imp_http_port',
-  ]);
+  expect(readNames(ran.rows)).toStrictEqual(['001_create_initial_schema', '002_add_imp_http_port']);
 });
 
 test('#runMigrations numbers existing imps in order of creation in the jail uid migration', async () => {
@@ -490,7 +479,7 @@ test('#runMigrations keeps the OAuth token indexes in the token cascade migratio
 
   await runMigrationsTo(db, '028_cascade_oauth_tokens');
 
-  const indexes = await sql<{ name: string; sql: string }>`
+  const indexes = await sql`
     SELECT name, sql FROM sqlite_master
     WHERE type = 'index' AND tbl_name = 'oauth_tokens' AND sql IS NOT NULL
     ORDER BY name
@@ -719,7 +708,7 @@ test('#runMigrations keeps the broker audit index through the table copies', asy
 
   await runMigrations(db);
 
-  const indexes = await sql<{ name: string; sql: string }>`
+  const indexes = await sql`
     SELECT name, sql FROM sqlite_master
     WHERE type = 'index' AND tbl_name = 'broker_audit' AND sql IS NOT NULL
   `.execute(db);
@@ -737,13 +726,13 @@ test('#runMigrations adds only the oops boot id column to the imps in the oops b
 
   await runMigrationsTo(db, '031_add_grant_filter');
 
-  const before = await sql<{ name: string; type: string; notnull: number; dflt_value: null }>`
+  const before = await sql`
     SELECT name, type, "notnull", dflt_value FROM pragma_table_info('imps')
   `.execute(db);
 
   await runMigrationsTo(db, '032_add_imp_oops_boot_id');
 
-  const after = await sql<{ name: string; type: string; notnull: number; dflt_value: null }>`
+  const after = await sql`
     SELECT name, type, "notnull", dflt_value FROM pragma_table_info('imps')
   `.execute(db);
 
@@ -778,13 +767,13 @@ test('#runMigrations adds only the oops hold column to the imps in the oops hold
 
   await runMigrationsTo(db, '032_add_imp_oops_boot_id');
 
-  const before = await sql<{ name: string; type: string; notnull: number; dflt_value: unknown }>`
+  const before = await sql`
     SELECT name, type, "notnull", dflt_value FROM pragma_table_info('imps')
   `.execute(db);
 
   await runMigrationsTo(db, '033_add_imp_oops_hold');
 
-  const after = await sql<{ name: string; type: string; notnull: number; dflt_value: unknown }>`
+  const after = await sql`
     SELECT name, type, "notnull", dflt_value FROM pragma_table_info('imps')
   `.execute(db);
 
@@ -854,18 +843,18 @@ test('#runMigrations adds only better-auth’s tables in the better-auth migrati
 
   await runMigrationsTo(db, '033_add_imp_oops_hold');
 
-  const before = await sql<{ name: string }>`
+  const before = await sql`
     SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name
   `.execute(db);
 
   await runMigrationsTo(db, '034_add_better_auth');
 
-  const after = await sql<{ name: string }>`
+  const after = await sql`
     SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name
   `.execute(db);
 
-  expect(after.rows.map((row) => row.name)).toIncludeSameMembers([
-    ...before.rows.map((row) => row.name),
+  expect(readNames(after.rows)).toIncludeSameMembers([
+    ...readNames(before.rows),
     'user',
     'session',
     'account',
@@ -917,7 +906,7 @@ test('#runMigrations drops the old OAuth tables, rows and all', async () => {
 
   await runMigrations(db);
 
-  const tables = await sql<{ name: string }>`
+  const tables = await sql`
     SELECT name FROM sqlite_master
     WHERE type = 'table' AND name IN ('oauth_clients', 'oauth_grants', 'oauth_tokens')
   `.execute(db);

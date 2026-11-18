@@ -8,7 +8,7 @@ function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const state = { reply: '', heads: [] as string[] };
+  const state: { reply: string; heads: string[] } = { reply: '', heads: [] };
 
   const front = Bun.listen({
     hostname: '127.0.0.1',

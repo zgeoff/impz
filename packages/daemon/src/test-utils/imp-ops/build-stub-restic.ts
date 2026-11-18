@@ -14,13 +14,18 @@ export function buildStubRestic(options: Readonly<StubResticOptions>) {
   const calls: string[] = [];
   const restores: string[] = [];
 
-  const state = {
+  const state: {
+    failCheck: boolean;
+    failBackup: boolean;
+    pruneErrors: Error[];
+    onRestore: ((directory: string) => Promise<void>) | null;
+  } = {
     failCheck: false,
     failBackup: false,
 
-    pruneErrors: [] as Error[],
+    pruneErrors: [],
 
-    onRestore: null as ((directory: string) => Promise<void>) | null,
+    onRestore: null,
   };
 
   const readSnapshots = (): ResticSnapshot[] =>

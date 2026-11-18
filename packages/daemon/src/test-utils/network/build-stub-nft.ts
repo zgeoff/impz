@@ -54,10 +54,13 @@ export function buildStubNft() {
     scripts.push(script);
   };
 
+  const publishedScripts: readonly string[] = scripts;
+  const publishedRuns: readonly NftRun[] = runs;
+
   return {
     runNft,
-    scripts: scripts as readonly string[],
-    runs: runs as readonly NftRun[],
+    scripts: publishedScripts,
+    runs: publishedRuns,
     readTable: (): string | null =>
       scripts.findLast((script) => script.startsWith('table inet imp_egress {}\n')) ?? null,
 

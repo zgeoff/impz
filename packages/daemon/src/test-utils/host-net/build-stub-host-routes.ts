@@ -7,7 +7,7 @@ interface StubHostRoutesOptions {
 }
 
 export function buildStubHostRoutes(options: Readonly<StubHostRoutesOptions> = {}) {
-  const state = { failure: null as string | null };
+  const state: { failure: string | null } = { failure: null };
   const uplinks = options.uplinks ?? { ipv4: [], ipv6: [] };
 
   return {

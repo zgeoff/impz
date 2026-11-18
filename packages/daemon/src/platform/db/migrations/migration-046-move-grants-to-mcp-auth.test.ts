@@ -9,6 +9,7 @@ import { createImpdMcpAuth } from '../../../identity/oauth/create-impd-mcp-auth'
 import { buildMockTokenRecord } from '../../../test-utils/identity/build-mock-token-record';
 import { createUnmigratedDatabase } from '../../../test-utils/platform/create-unmigrated-database';
 import { seedLegacyOAuthGrant } from '../../../test-utils/platform/seed-legacy-oauth-grant';
+import { readNames } from '../read-names';
 import { runMigrations, runMigrationsTo } from '../run-migrations';
 import { writeTokenRecord } from '../tokens';
 import type { GrantableSecret } from '../tokens';
@@ -294,9 +295,7 @@ test('it rolls the whole migration back when its foreign key check fails', async
 
   await Promise.allSettled([migrated]);
 
-  const columns = await sql<{
-    name: string;
-  }>`SELECT name FROM pragma_table_info('user')`.execute(ctx.db);
+  const columns = await sql`SELECT name FROM pragma_table_info('user')`.execute(ctx.db);
 
-  expect(columns.rows.map((column) => column.name)).toIncludeAllMembers(['tokenId', 'imps']);
+  expect(readNames(columns.rows)).toIncludeAllMembers(['tokenId', 'imps']);
 });

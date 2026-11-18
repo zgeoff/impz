@@ -100,14 +100,22 @@ export function runExec(
   const modes = createModeWatcher();
   const done = Promise.withResolvers<number>();
 
-  const state = {
+  const state: {
+    ended: boolean;
+    raw: boolean;
+    signalled: boolean;
+    draining: boolean;
+    stdinStarted: boolean;
+    pendingInput: Uint8Array[];
+    pendingBytes: number;
+  } = {
     ended: false,
     raw: false,
     signalled: false,
     draining: false,
     stdinStarted: false,
 
-    pendingInput: [] as Uint8Array[],
+    pendingInput: [],
     pendingBytes: 0,
   };
 

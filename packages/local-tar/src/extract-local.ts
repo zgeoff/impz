@@ -58,8 +58,14 @@ export function createLocalExtractor(
   const dirs: PendingDir[] = [];
   const links: PendingSymlink[] = [];
 
-  const state = {
-    root: null as CopyRoot | null,
+  const state: {
+    root: CopyRoot | null;
+    refused: number;
+    temps: number;
+    first: boolean;
+    stopped: boolean;
+  } = {
+    root: null,
     refused: 0,
     temps: 0,
     first: true,

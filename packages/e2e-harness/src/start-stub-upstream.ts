@@ -64,9 +64,9 @@ export async function startStubUpstream(address: string, token: string): Promise
 
   const certificates = await createTestCertificates({ ipAddresses: [address] });
 
-  const oauthState = {
+  const oauthState: { refreshTokens: string[]; accessTokens: string[]; refused: number } = {
     refreshTokens: [`e2e-refresh-${randomUUID()}`],
-    accessTokens: [] as string[],
+    accessTokens: [],
     refused: 0,
   };
 

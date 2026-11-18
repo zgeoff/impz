@@ -525,7 +525,7 @@ test('it passes on an API answer that stays silent past Bun’s idle limit, wher
   const lines = output
     .trim()
     .split('\n')
-    .map((line) => JSON.parse(line) as unknown);
+    .map((line): unknown => JSON.parse(line));
 
   expect(lines).toIncludeSameMembers([
     { kind: 'control', isOk: false, error: 'TimeoutError' },

@@ -427,14 +427,12 @@ test.each([
 ])('it rejects %s', async (_, oauth, field) => {
   const ctx = await setupTest();
 
-  const added = ctx.client.secrets.add({
+  const added = ctx.uncheckedClient.secrets.add({
     name: 'codex',
     kind: 'oauth',
     value: 'fake-refresh-0',
     rules: [buildMockBrokerRule()],
-
-    // input the contract refuses
-    oauth: oauth as never,
+    oauth,
   });
 
   expect(added).rejects.toMatchObject({
@@ -496,9 +494,7 @@ test.each([
   const ctx = await setupTest();
 
   const input = { name: 'api', value: 'fake-value-1', ...binding };
-
-  // input the contract refuses
-  const added = ctx.client.secrets.add(input as never);
+  const added = ctx.uncheckedClient.secrets.add(input);
 
   expect(added).rejects.toMatchObject({
     code: 'BAD_REQUEST',

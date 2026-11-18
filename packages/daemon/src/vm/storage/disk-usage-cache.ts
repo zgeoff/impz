@@ -36,11 +36,17 @@ export function createDiskUsageCache(deps: DiskUsageCacheDeps): DiskUsageCache {
   const refreshDelayMs = deps.refreshDelayMs ?? REFRESH_DELAY_MS;
   const startTimer = deps.startTimer ?? startRealTimer;
 
-  const state = {
-    usage: new Map<string, CachedDiskUsage>(),
-    running: null as Promise<void> | null,
-    cancelRefresh: null as (() => void) | null,
-    lateDueAtMs: null as number | null,
+  const state: {
+    usage: Map<string, CachedDiskUsage>;
+    running: Promise<void> | null;
+    cancelRefresh: (() => void) | null;
+    lateDueAtMs: number | null;
+    isStopped: boolean;
+  } = {
+    usage: new Map(),
+    running: null,
+    cancelRefresh: null,
+    lateDueAtMs: null,
     isStopped: false,
   };
 

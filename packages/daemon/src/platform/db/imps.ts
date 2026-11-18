@@ -394,9 +394,18 @@ export async function updateImpRequest(db: ImpDatabase, id: string, at: Date): P
   // the guest, so an older time can land after a newer one
   await db
     .updateTable('imps')
-    .set({
-      last_active_at: sql<number>`MAX(last_active_at, ${atMs})`,
-      last_request_at: sql<number>`MAX(COALESCE(last_request_at, 0), ${atMs})`,
+    .set((eb) => {
+      const requestedAt = eb.fn.coalesce('last_request_at', eb.val(0));
+
+      return {
+        last_active_at: eb
+          .case()
+          .when('last_active_at', '>=', atMs)
+          .then(eb.ref('last_active_at'))
+          .else(atMs)
+          .end(),
+        last_request_at: eb.case().when(requestedAt, '>=', atMs).then(requestedAt).else(atMs).end(),
+      };
     })
     .where('id', '=', id)
     .execute();
