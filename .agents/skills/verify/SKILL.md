@@ -101,11 +101,11 @@ Read a feature's file before you run its journey.
     and report it as a blocker. `VERIFY_UPLOAD_URL` is the file host that takes the evidence files.
     `VERIFY_UPLOAD_TOKEN_REF` is the 1Password `op://` reference to the upload token. Never run
     `op read` on its own: it prints the token.
-11. Publish the report, even when you skipped a feature. Pass the token in the same command line, so
-    it never sits in your shell:
+11. Publish the report, even when you skipped a feature. Read the token in a subshell, so it never
+    sits in your shell, and a failed `op read` stops the command before `publish` runs:
 
     ```bash
-    VERIFY_UPLOAD_TOKEN="$(op read "$VERIFY_UPLOAD_TOKEN_REF")" bun verify publish
+    (VERIFY_UPLOAD_TOKEN="$(op read "$VERIFY_UPLOAD_TOKEN_REF")" && export VERIFY_UPLOAD_TOKEN && bun verify publish)
     ```
 
     To write to a PR other than the branch's own, add `--pr <number>`. When `op read` fails, stop
