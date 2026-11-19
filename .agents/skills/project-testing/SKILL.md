@@ -151,9 +151,9 @@ the result of the row's CI job: `eval` and `vm` are in
 - Make the temporary folder of a test that needs FIEMAP or another disk feature under `/var/tmp`,
   which sits on disk. `tmpdir()` is a tmpfs on some hosts, and a tmpfs has no extents for FIEMAP to
   map. Make it with `mkdtemp`, and remove it in `onTestFinished`.
-- Run git through the helpers in `@impz/e2e-harness/git-env`
-  ([`git-env.ts`](../../../packages/e2e-harness/src/git-env.ts)). A git hook leaks `GIT_DIR`, and a
-  child git then works on this checkout, whatever path you pass to `-C`.
+- Run git through the helpers in `@impz/e2e-harness/create-git-free-env`
+  ([`create-git-free-env.ts`](../../../packages/e2e-harness/src/create-git-free-env.ts)). A git hook
+  leaks `GIT_DIR`, and a child git then works on this checkout, whatever path you pass to `-C`.
 
 ## End to end
 
