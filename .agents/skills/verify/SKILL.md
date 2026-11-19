@@ -12,9 +12,10 @@ metadata:
 # Verify impz
 
 Use `bun verify` to start the app, use each feature your change touches the way a user would, and
-record a verdict that it works. Put the report in the PR with the publish command in step 9, and
-hand back the PR link and each feature you could not verify. Leave `bun verify gate` to CI: it reads
-the report from the PR description, and fails a PR that changes a feature with no verdict there.
+record a verdict that it works. Put the report in the PR with step 11 of
+[Check a change](#check-a-change), and hand back the PR link and each feature you could not verify.
+Leave `bun verify gate` to CI: it reads the report from the PR description, and fails a PR that
+changes a feature with no verdict there.
 
 The mistakes that cost the most time:
 
@@ -30,7 +31,7 @@ The mistakes that cost the most time:
 ## Key rules
 
 - [Check a change](#check-a-change): for each changed feature, run its journey, check the end state,
-  then `done`.
+  then `done`; then push and publish with the upload token read inline.
 - [Read the envelope](#read-the-envelope): branch on the exit code and `error.code`, never on the
   message, which can change in any release.
 - [Targets](#targets): check a change on a launch target, a target whose app `bun verify up` starts
@@ -95,23 +96,23 @@ Read a feature's file before you run its journey.
 8. Run `bun verify report --human` to read the report. Expect: `verified` on each changed feature
    you did not skip in step 5. Repeat steps 4 to 6 for each `stale` feature.
 9. Push the branch. When no PR is open for it, open one: without an open PR, `publish` fails and
-   writes nothing. Then publish the report, even when you skipped a feature. `publish` uploads the
-   evidence to the address in `VERIFY_UPLOAD_URL`, with the upload token in `VERIFY_UPLOAD_TOKEN`.
-   Your shell's profile sets `VERIFY_UPLOAD_URL`, and `VERIFY_UPLOAD_TOKEN_REF`, the `op://`
-   reference to that token in 1Password. Never run `op read` on its own, because it prints the
-   token. Read the token into the one command:
+   writes nothing.
+10. Check that `VERIFY_UPLOAD_URL` and `VERIFY_UPLOAD_TOKEN_REF` are set. When either is empty, stop
+    and report it as a blocker. `VERIFY_UPLOAD_URL` is the file host that takes the evidence files.
+    `VERIFY_UPLOAD_TOKEN_REF` is the 1Password `op://` reference to the upload token. Never run
+    `op read` on its own: it prints the token.
+11. Publish the report, even when you skipped a feature. Pass the token in the same command line, so
+    it never sits in your shell:
 
-   ```bash
-   VERIFY_UPLOAD_TOKEN="$(op read "$VERIFY_UPLOAD_TOKEN_REF")" bun verify publish
-   ```
+    ```bash
+    VERIFY_UPLOAD_TOKEN="$(op read "$VERIFY_UPLOAD_TOKEN_REF")" bun verify publish
+    ```
 
-   To write to a PR other than the branch's own, add `--pr <number>`. When either variable is empty,
-   or `op read` fails, stop and report it as a blocker.
+    To write to a PR other than the branch's own, add `--pr <number>`. When `op read` fails, stop
+    and report it as a blocker. Expect: `ok: true`, and `data.action` of `created`, `replaced` or
+    `unchanged`. It writes the report into the PR's description, the only report the gate reads.
 
-   Expect: `ok: true`, and `data.action` of `created`, `replaced` or `unchanged`. It writes the
-   report into the PR's description, the only report the gate reads.
-
-10. End the run: `bun verify down` after `up`, or `bun verify detach` after `attach`.
+12. End the run: `bun verify down` after `up`, or `bun verify detach` after `attach`.
 
 ## Read the envelope
 
