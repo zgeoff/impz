@@ -1,5 +1,12 @@
 # Changelog
 
+## [7.5.1](https://github.com/zgeoff/impz/compare/v7.5.0...v7.5.1) (2026-11-19)
+
+
+### Bug Fixes
+
+* **deps:** update module github.com/moby/buildkit to v0.35.0 ([#1070](https://github.com/zgeoff/impz/issues/1070)) ([17c7d7c](https://github.com/zgeoff/impz/commit/17c7d7c5dbaa50a9cf91c1b43b96f22dc71f1d5f))
+
 ## [7.5.0](https://github.com/zgeoff/impz/compare/v7.4.0...v7.5.0) (2026-11-18)
 
 ### Features
