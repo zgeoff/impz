@@ -1,23 +1,23 @@
 import { copyFileSync, existsSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { readImageById } from '../../platform/db/images';
-import type { ImageRecord } from '../../platform/db/images';
+import { readImageById } from '../../platform/db/create-image';
+import type { ImageRecord } from '../../platform/db/create-image';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import {
   buildConflictError,
   buildInvalidStateError,
   buildNotBackedUpError,
-} from '../../platform/errors/impd-errors';
+} from '../../platform/errors/build-not-found-error';
 import type { Clock } from '../../platform/process/clock';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { REAL_CLOCK } from '../../platform/process/real-clock';
-import { buildImagePaths } from '../../vm/storage/data-layout';
+import { buildImagePaths } from '../../vm/storage/build-imp-paths';
 import type { DiskBudget } from '../../vm/storage/disk-budget';
 import type { StorageBackend } from '../../vm/storage/storage-backend';
 import type { StorageGate } from '../../vm/storage/storage-gate';
 import type { ImpsConfig } from '../imps-config';
-import type { DiskFreezer } from '../imps/consistent-disk';
-import { createConsistentDisk } from '../imps/consistent-disk';
+import type { DiskFreezer } from '../imps/create-consistent-disk';
+import { createConsistentDisk } from '../imps/create-consistent-disk';
 import type { ImpCheckpointHooks } from '../imps/imp-service';
 import { readHeldImage } from './read-held-image';
 import { requireClientImageName } from './require-client-image-name';

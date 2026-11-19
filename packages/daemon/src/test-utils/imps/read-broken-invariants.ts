@@ -1,7 +1,7 @@
-import { listImps } from '../../platform/db/imps';
+import { listImps } from '../../platform/db/list-imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { probeSnapshot } from '../../vm/sleep/snapshot-meta';
-import { buildImpPaths } from '../../vm/storage/data-layout';
+import { buildImpPaths } from '../../vm/storage/build-imp-paths';
 
 interface InvariantParts {
   readonly db: ImpDatabase;

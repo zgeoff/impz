@@ -1,9 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { createImage } from '../platform/db/images';
-import { readImpByName } from '../platform/db/imps';
+import { createImage } from '../platform/db/create-image';
+import { readImpByName } from '../platform/db/list-imps';
 import { buildMockNewImage } from '../test-utils/imps/build-mock-new-image';
 import { startTestImpd } from '../test-utils/start-test-impd';
-import { buildImagePaths } from '../vm/storage/data-layout';
+import { buildImagePaths } from '../vm/storage/build-imp-paths';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { copyFile, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createXfsBackend } from '../../vm/storage/xfs-backend';
+import { createXfsBackend } from '../../vm/storage/create-xfs-backend';
 import { buildStubStorageFaults } from './build-stub-storage-faults';
 
 async function setupTest() {

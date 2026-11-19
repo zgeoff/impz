@@ -3,8 +3,8 @@ import { mkdirSync, rmSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { GrantFilterSchema, ImageSourceSchema } from '@impz/api';
 import * as z from 'zod';
-import { writeConsistentCopy } from '../../platform/db/database-copy';
 import type { ImpDatabase } from '../../platform/db/open-database';
+import { writeConsistentCopy } from '../../platform/db/write-database-copy';
 
 const CopyImpSchema = z.object({
   id: z.string(),

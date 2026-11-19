@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { RequestSchema, encodeAgentMessage } from '@impz/agent-protocol';
 import { openDialStream } from '../../vm/agent-client/dial-stream';
-import { openAccept, openListener } from '../../vm/agent-client/listener-stream';
+import { openAccept, openListener } from '../../vm/agent-client/open-listener';
 import { buildStubForwardAgent } from './build-stub-forward-agent';
 import { startStubAgent } from './start-stub-agent';
 

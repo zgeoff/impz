@@ -1,0 +1,2025 @@
+import { expect, mock, onTestFinished, test } from 'bun:test';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { verifyImpIdentity } from '@impz/client/identity';
+import { buildStubAnswerQueue } from '@impz/shared/test-utils/build-stub-answer-queue';
+import { server } from '@impz/shared/test-utils/server';
+import { HttpResponse, http } from 'msw';
+import invariant from 'tiny-invariant';
+import type { NewAuditEntry } from '../../../platform/db/write-audit-entry';
+import { buildMockCredential } from '../../../test-utils/network/build-mock-credential';
+import { collectIdentityLines } from '../../../test-utils/network/collect-identity-lines';
+import { startStubBrokerTlsUpstream } from '../../../test-utils/network/start-stub-broker-tls-upstream';
+import { startStubCutStream } from '../../../test-utils/network/start-stub-cut-stream';
+import { loadOrCreateIdentity } from '../identity/load-or-create-identity';
+import { loadOrCreateBrokerCa } from './broker-ca';
+import { createForwarder } from './create-forwarder';
+
+async function setupTest() {
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
+  const directory = await mkdtemp(join(tmpdir(), 'forward-request-'));
+
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
+
+  const identity = loadOrCreateIdentity({
+    directory: join(directory, 'identity'),
+    issuer: 'imp-host-a',
+    now: () => Date.now(),
+  });
+
+  const mintIdentityToken = (audience: string): string =>
+    identity.mintToken({ id: 'imp-1', name: 'dev' }, audience);
+
+  const verifyToken = (token: string | null, audience: string) =>
+    verifyImpIdentity(token, {
+      issuers: [identity.readDocument()],
+      audience,
+      nowSeconds: Math.floor(Date.now() / 1000),
+    });
+
+  return { stack, directoryPath: directory, mintIdentityToken, verifyToken };
+}
+
+test('it sends the path and query to the bound host with the method and body', async () => {
+  const received = mock<(sent: Readonly<{ url: string; method: string; body: string }>) => void>();
+
+  server.use(
+    http.post('https://api.github.com/repos/a/b', async (info) => {
+      received({
+        url: info.request.url,
+        method: info.request.method,
+        body: await info.request.text(),
+      });
+
+      return HttpResponse.text('upstream body');
+    }),
+  );
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'api.github.com',
+    findCredential: () =>
+      Promise.resolve(
+        buildMockCredential({ secretName: 'gh', header: 'authorization', value: 'Bearer real' }),
+      ),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    recordAudit: () => {},
+  });
+
+  await forward(
+    new Request('https://api.github.com/repos/a/b?token=secret', {
+      method: 'POST',
+      headers: { host: 'api.github.com' },
+      body: 'payload',
+    }),
+  );
+
+  expect(received).toHaveBeenCalledExactlyOnceWith({
+    url: 'https://api.github.com/repos/a/b?token=secret',
+    method: 'POST',
+    body: 'payload',
+  });
+});
+
+test('it sends the real credential in place of the guest placeholder', async () => {
+  const received = mock<(authorization: string | null) => void>();
+
+  server.use(
+    http.get('https://api.github.com/user', (info) => {
+      received(info.request.headers.get('authorization'));
+
+      return HttpResponse.text('upstream body');
+    }),
+  );
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'api.github.com',
+    findCredential: () =>
+      Promise.resolve(
+        buildMockCredential({ secretName: 'gh', header: 'authorization', value: 'Bearer real' }),
+      ),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    recordAudit: () => {},
+  });
+
+  await forward(
+    new Request('https://api.github.com/user', {
+      headers: { host: 'api.github.com', authorization: 'Bearer imp-broker-placeholder' },
+    }),
+  );
+
+  expect(received).toHaveBeenCalledExactlyOnceWith('Bearer real');
+});
+
+test('it drops hop-by-hop headers and the ones Connection names, and keeps the rest', async () => {
+  const received = mock<(headers: Readonly<Record<string, string | null>>) => void>();
+
+  server.use(
+    http.get('https://api.github.com/user', (info) => {
+      received({
+        'proxy-authorization': info.request.headers.get('proxy-authorization'),
+        connection: info.request.headers.get('connection'),
+        'x-drop': info.request.headers.get('x-drop'),
+        'x-keep': info.request.headers.get('x-keep'),
+      });
+
+      return HttpResponse.text('upstream body');
+    }),
+  );
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'api.github.com',
+    findCredential: () =>
+      Promise.resolve(
+        buildMockCredential({ secretName: 'gh', header: 'authorization', value: 'Bearer real' }),
+      ),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    recordAudit: () => {},
+  });
+
+  await forward(
+    new Request('https://api.github.com/user', {
+      headers: {
+        host: 'api.github.com',
+        'proxy-authorization': 'Basic x',
+        connection: 'keep-alive, x-drop',
+        'x-drop': '1',
+        'x-keep': '1',
+      },
+    }),
+  );
+
+  expect(received).toHaveBeenCalledExactlyOnceWith({
+    'proxy-authorization': null,
+    connection: null,
+    'x-drop': null,
+    'x-keep': '1',
+  });
+});
+
+test('it answers with the upstream status and end-to-end headers, the encoding included', async () => {
+  server.use(
+    http.get(
+      'https://api.github.com/user',
+      () =>
+        new HttpResponse(Bun.gzipSync(Buffer.from('upstream body')), {
+          status: 201,
+          headers: { 'content-encoding': 'gzip', 'x-up': '1', 'x-gone': '1', connection: 'x-gone' },
+        }),
+    ),
+  );
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'api.github.com',
+    findCredential: () =>
+      Promise.resolve(
+        buildMockCredential({ secretName: 'gh', header: 'authorization', value: 'Bearer real' }),
+      ),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    recordAudit: () => {},
+  });
+
+  const response = await forward(
+    new Request('https://api.github.com/user', { headers: { host: 'api.github.com' } }),
+  );
+
+  expect(response.status).toBe(201);
+  expect(response.headers.get('content-encoding')).toBe('gzip');
+  expect(response.headers.get('x-up')).toBe('1');
+  expect(response.headers.get('x-gone')).toBeNull();
+  expect(response.headers.get('connection')).toBeNull();
+});
+
+test('it records an audit row with the path without its query and the bytes each way', async () => {
+  const audits: NewAuditEntry[] = [];
+
+  server.use(
+    http.post('https://api.github.com/repos/a/b', async (info) => {
+      await info.request.text();
+
+      return HttpResponse.text('upstream body');
+    }),
+  );
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'api.github.com',
+    findCredential: () =>
+      Promise.resolve(
+        buildMockCredential({ secretName: 'gh', header: 'authorization', value: 'Bearer real' }),
+      ),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    recordAudit: (entry) => {
+      audits.push(entry);
+    },
+  });
+
+  const response = await forward(
+    new Request('https://api.github.com/repos/a/b?token=secret', {
+      method: 'POST',
+      headers: { host: 'api.github.com' },
+      body: 'payload',
+    }),
+  );
+
+  await response.text();
+
+  expect(audits).toStrictEqual([
+    {
+      impId: 'imp-1',
+      impName: 'dev',
+      secretName: 'gh',
+      at: expect.toBeValidDate(),
+      method: 'POST',
+      host: 'api.github.com',
+      path: '/repos/a/b',
+      status: 200,
+      requestBytes: 'payload'.length,
+      responseBytes: 'upstream body'.length,
+      durationMs: expect.toBeNumber(),
+      reason: null,
+    },
+  ]);
+});
+
+test('it cuts the audit row path at 512 characters', async () => {
+  const audits: NewAuditEntry[] = [];
+  const path = `/${'a'.repeat(600)}`;
+
+  server.use(http.get(`https://api.github.com${path}`, () => HttpResponse.text('upstream body')));
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'api.github.com',
+    findCredential: () =>
+      Promise.resolve(
+        buildMockCredential({ secretName: 'gh', header: 'authorization', value: 'Bearer real' }),
+      ),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    recordAudit: (entry) => {
+      audits.push(entry);
+    },
+  });
+
+  const response = await forward(
+    new Request(`https://api.github.com${path}`, { headers: { host: 'api.github.com' } }),
+  );
+
+  await response.text();
+
+  expect(audits.map((entry) => entry.path)).toStrictEqual([path.slice(0, 512)]);
+});
+
+test('it records an audit row for an answer with no body', async () => {
+  const audits: NewAuditEntry[] = [];
+
+  server.use(
+    http.get('https://api.github.com/none', () => new HttpResponse(null, { status: 204 })),
+  );
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'api.github.com',
+    findCredential: () =>
+      Promise.resolve(
+        buildMockCredential({ secretName: 'gh', header: 'authorization', value: 'Bearer real' }),
+      ),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    recordAudit: (entry) => {
+      audits.push(entry);
+    },
+  });
+
+  await forward(
+    new Request('https://api.github.com/none', { headers: { host: 'api.github.com' } }),
+  );
+
+  expect(audits).toStrictEqual([
+    {
+      impId: 'imp-1',
+      impName: 'dev',
+      secretName: 'gh',
+      at: expect.toBeValidDate(),
+      method: 'GET',
+      host: 'api.github.com',
+      path: '/none',
+      status: 204,
+      requestBytes: 0,
+      responseBytes: 0,
+      durationMs: expect.toBeNumber(),
+      reason: null,
+    },
+  ]);
+});
+
+test('it records an audit row when the upstream body fails midway', async () => {
+  const audits: NewAuditEntry[] = [];
+  const firstRead = Promise.withResolvers<void>();
+
+  server.use(
+    http.get(
+      'https://api.github.com/big',
+      () =>
+        new HttpResponse(
+          new ReadableStream<Uint8Array>({
+            start: (controller) => {
+              controller.enqueue(new TextEncoder().encode('first'));
+            },
+            pull: async (controller) => {
+              await firstRead.promise;
+
+              controller.error(new Error('upstream reset'));
+            },
+          }),
+        ),
+    ),
+  );
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'api.github.com',
+    findCredential: () =>
+      Promise.resolve(
+        buildMockCredential({ secretName: 'gh', header: 'authorization', value: 'Bearer real' }),
+      ),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    recordAudit: (entry) => {
+      audits.push(entry);
+    },
+  });
+
+  const response = await forward(
+    new Request('https://api.github.com/big', { headers: { host: 'api.github.com' } }),
+  );
+
+  invariant(response.body);
+
+  const reader = response.body.getReader();
+
+  await reader.read();
+
+  firstRead.resolve();
+
+  expect(reader.read()).rejects.toBeUndefined();
+
+  expect(audits).toStrictEqual([
+    {
+      impId: 'imp-1',
+      impName: 'dev',
+      secretName: 'gh',
+      at: expect.toBeValidDate(),
+      method: 'GET',
+      host: 'api.github.com',
+      path: '/big',
+      status: 200,
+      requestBytes: 0,
+      responseBytes: 'first'.length,
+      durationMs: expect.toBeNumber(),
+      reason: null,
+    },
+  ]);
+});
+
+test('it records an audit row with the bytes read when the guest hangs up mid-body', async () => {
+  const audits: NewAuditEntry[] = [];
+
+  server.use(
+    http.get(
+      'https://api.github.com/slow',
+      () =>
+        new HttpResponse(
+          new ReadableStream<Uint8Array>({
+            pull: (controller) => {
+              controller.enqueue(new TextEncoder().encode('first'));
+            },
+          }),
+        ),
+    ),
+  );
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'api.github.com',
+    findCredential: () =>
+      Promise.resolve(
+        buildMockCredential({ secretName: 'gh', header: 'authorization', value: 'Bearer real' }),
+      ),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    recordAudit: (entry) => {
+      audits.push(entry);
+    },
+  });
+
+  const response = await forward(
+    new Request('https://api.github.com/slow', { headers: { host: 'api.github.com' } }),
+  );
+
+  invariant(response.body);
+
+  const reader = response.body.getReader();
+
+  await reader.read();
+
+  void reader.cancel();
+
+  expect(audits).toStrictEqual([
+    {
+      impId: 'imp-1',
+      impName: 'dev',
+      secretName: 'gh',
+      at: expect.toBeValidDate(),
+      method: 'GET',
+      host: 'api.github.com',
+      path: '/slow',
+      status: 200,
+      requestBytes: 0,
+      responseBytes: 'first'.length,
+      durationMs: expect.toBeNumber(),
+      reason: null,
+    },
+  ]);
+});
+
+// Bun prints a response body's unhandled error to the process's stderr, out
+// of reach of the test runner, so the broker runs in a child Bun whose stderr
+// the test reads
+test('it logs one impd.broker line that names the imp, and nothing unhandled, when the upstream closes a stream', async () => {
+  const child = Bun.spawn(
+    [
+      process.execPath,
+      join(import.meta.dir, '../../../test-utils/network/run-cut-broker-stream.ts'),
+    ],
+    { stdout: 'pipe', stderr: 'pipe' },
+  );
+
+  onTestFinished(() => {
+    child.kill();
+  });
+
+  const [stdout, stderr] = await Promise.all([
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+  ]);
+
+  // an older Bun leaves the error's code out of a fetch error's message
+  expect(stdout).toMatch(
+    /^WARNING impd\.broker imp=web the upstream closed GET api\.example\.com\/v1\/events mid-stream: (?:ECONNRESET: )?The socket connection was closed unexpectedly\. For more information, pass `verbose: true` in the second argument to fetch\(\)\n\{"client":"ECONNRESET"\}\n$/v,
+  );
+
+  expect(stderr).toBe('');
+});
+
+test('it warns through its logger, naming the imp, when the upstream closes a stream', async () => {
+  const ctx = await setupTest();
+
+  const upstream = startStubCutStream(ctx.stack, 'data: first\n\n');
+  const warning = mock();
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'api.example.com',
+    findCredential: () =>
+      Promise.resolve(
+        buildMockCredential({
+          secretName: 'example',
+          header: 'authorization',
+          value: 'Bearer real',
+        }),
+      ),
+    resolveUpstream: () => ({ origin: `http://127.0.0.1:${String(upstream.port)}`, ca: null }),
+    recordAudit: () => {},
+    logger: { warning },
+  });
+
+  const response = await forward(
+    new Request('https://api.example.com/v1/events', { headers: { host: 'api.example.com' } }),
+  );
+
+  invariant(response.body);
+
+  const reader = response.body.getReader();
+
+  await reader.read();
+
+  upstream.cut();
+
+  await Promise.allSettled([reader.read()]);
+
+  expect(warning).toHaveBeenCalledExactlyOnceWith(
+    'the upstream closed {method} {host}{path} mid-stream: {reason}',
+    {
+      imp: 'dev',
+      method: 'GET',
+      host: 'api.example.com',
+      path: '/v1/events',
+      reason: expect.stringMatching(
+        /^(?:ECONNRESET: )?The socket connection was closed unexpectedly\./v,
+      ),
+    },
+  );
+});
+
+test('it warns nothing when the guest hangs up mid-body', async () => {
+  const warning = mock();
+
+  server.use(
+    http.get(
+      'https://api.github.com/slow',
+      () =>
+        new HttpResponse(
+          new ReadableStream<Uint8Array>({
+            pull: (controller) => {
+              controller.enqueue(new TextEncoder().encode('first'));
+            },
+          }),
+        ),
+    ),
+  );
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'api.github.com',
+    findCredential: () =>
+      Promise.resolve(
+        buildMockCredential({ secretName: 'gh', header: 'authorization', value: 'Bearer real' }),
+      ),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    recordAudit: () => {},
+    logger: { warning },
+  });
+
+  const response = await forward(
+    new Request('https://api.github.com/slow', { headers: { host: 'api.github.com' } }),
+  );
+
+  invariant(response.body);
+
+  const reader = response.body.getReader();
+
+  await reader.read();
+
+  void reader.cancel();
+  expect(warning).not.toHaveBeenCalled();
+});
+
+test('it refuses a Host header for another name with 421', async () => {
+  const reached = mock<(url: string) => void>();
+
+  server.use(
+    http.all('*', (info) => {
+      reached(info.request.url);
+
+      return HttpResponse.text('upstream body');
+    }),
+  );
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'api.github.com',
+    findCredential: () =>
+      Promise.resolve(
+        buildMockCredential({ secretName: 'gh', header: 'authorization', value: 'Bearer real' }),
+      ),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    recordAudit: () => {},
+  });
+
+  const response = await forward(
+    new Request('https://evil.test/x', { headers: { host: 'evil.test' } }),
+  );
+
+  const text = await response.text();
+
+  expect(response.status).toBe(421);
+  expect(text).toBe('this connection is for api.github.com\n');
+  expect(reached).not.toHaveBeenCalled();
+});
+
+test('it refuses a request with no Host header with 421', async () => {
+  const reached = mock<(url: string) => void>();
+
+  server.use(
+    http.all('*', (info) => {
+      reached(info.request.url);
+
+      return HttpResponse.text('upstream body');
+    }),
+  );
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'api.github.com',
+    findCredential: () =>
+      Promise.resolve(
+        buildMockCredential({ secretName: 'gh', header: 'authorization', value: 'Bearer real' }),
+      ),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    recordAudit: () => {},
+  });
+
+  const response = await forward(new Request('https://api.github.com/x'));
+  const text = await response.text();
+
+  expect(response.status).toBe(421);
+  expect(text).toBe('this connection is for api.github.com\n');
+  expect(reached).not.toHaveBeenCalled();
+});
+
+test('it sends an absolute-form target for another host to the bound host', async () => {
+  const received = mock<(url: string) => void>();
+
+  server.use(
+    http.get('https://api.github.com/steal', (info) => {
+      received(info.request.url);
+
+      return HttpResponse.text('upstream body');
+    }),
+  );
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'api.github.com',
+    findCredential: () =>
+      Promise.resolve(
+        buildMockCredential({ secretName: 'gh', header: 'authorization', value: 'Bearer real' }),
+      ),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    recordAudit: () => {},
+  });
+
+  await forward(
+    new Request('https://evil.test/steal', { headers: { host: 'API.github.com:443' } }),
+  );
+
+  expect(received).toHaveBeenCalledExactlyOnceWith('https://api.github.com/steal');
+});
+
+test('it refuses a request with 403 once the grant is gone', async () => {
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'api.github.com',
+    findCredential: () => Promise.resolve(null),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    recordAudit: () => {},
+  });
+
+  const response = await forward(
+    new Request('https://api.github.com/', { headers: { host: 'api.github.com' } }),
+  );
+
+  const text = await response.text();
+
+  expect(response.status).toBe(403);
+  expect(text).toBe('no credential is granted for api.github.com\n');
+});
+
+test('it answers 502 when the upstream cannot be reached', async () => {
+  server.use(http.get('https://api.github.com/x', () => HttpResponse.error()));
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'api.github.com',
+    findCredential: () =>
+      Promise.resolve(
+        buildMockCredential({ secretName: 'gh', header: 'authorization', value: 'Bearer real' }),
+      ),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    recordAudit: () => {},
+  });
+
+  const response = await forward(
+    new Request('https://api.github.com/x', { headers: { host: 'api.github.com' } }),
+  );
+
+  const text = await response.text();
+
+  expect(response.status).toBe(502);
+  expect(text).toBe('could not reach api.github.com\n');
+});
+
+test('it records a 502 audit row when the upstream cannot be reached', async () => {
+  const audits: NewAuditEntry[] = [];
+
+  server.use(http.get('https://api.github.com/x', () => HttpResponse.error()));
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'api.github.com',
+    findCredential: () =>
+      Promise.resolve(
+        buildMockCredential({ secretName: 'gh', header: 'authorization', value: 'Bearer real' }),
+      ),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    recordAudit: (entry) => {
+      audits.push(entry);
+    },
+  });
+
+  await forward(new Request('https://api.github.com/x', { headers: { host: 'api.github.com' } }));
+
+  expect(audits).toStrictEqual([
+    {
+      impId: 'imp-1',
+      impName: 'dev',
+      secretName: 'gh',
+      at: expect.toBeValidDate(),
+      method: 'GET',
+      host: 'api.github.com',
+      path: '/x',
+      status: 502,
+      requestBytes: 0,
+      responseBytes: 0,
+      durationMs: expect.toBeNumber(),
+      reason: null,
+    },
+  ]);
+});
+
+test('it sends a host with a test upstream to the test origin', async () => {
+  const received = mock<(url: string) => void>();
+
+  server.use(
+    http.get('https://upstream.test:9443/x', (info) => {
+      received(info.request.url);
+
+      return HttpResponse.text('upstream body');
+    }),
+  );
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'api.github.com',
+    findCredential: () =>
+      Promise.resolve(
+        buildMockCredential({ secretName: 'gh', header: 'authorization', value: 'Bearer real' }),
+      ),
+    resolveUpstream: () => ({ origin: 'https://upstream.test:9443', ca: ['TEST CA'] }),
+    recordAudit: () => {},
+  });
+
+  await forward(new Request('https://api.github.com/x', { headers: { host: 'api.github.com' } }));
+
+  expect(received).toHaveBeenCalledExactlyOnceWith('https://upstream.test:9443/x');
+});
+
+test('it records a refused audit row for a Host header for another name', async () => {
+  const recordAudit = mock<(entry: NewAuditEntry) => void>();
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'api.github.com',
+    findCredential: () => Promise.resolve(buildMockCredential({ secretName: 'gh' })),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    recordAudit,
+  });
+
+  await forward(new Request('https://evil.test/x', { headers: { host: 'evil.test' } }));
+
+  expect(recordAudit).toHaveBeenCalledExactlyOnceWith({
+    impId: 'imp-1',
+    impName: 'dev',
+    secretName: null,
+    at: expect.toBeValidDate(),
+    method: 'GET',
+    host: 'api.github.com',
+    path: '/x',
+    status: 421,
+    requestBytes: 0,
+    responseBytes: 0,
+    durationMs: expect.toBeNumber(),
+    reason: 'wrong-host',
+  });
+});
+
+test('it records a refused audit row with no secret, header or body once the grant is gone', async () => {
+  const recordAudit = mock<(entry: NewAuditEntry) => void>();
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'api.github.com',
+    findCredential: () => Promise.resolve(null),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    recordAudit,
+  });
+
+  await forward(
+    new Request('https://api.github.com/repos/x/issues?token=query-secret', {
+      method: 'POST',
+      headers: {
+        host: 'api.github.com',
+        authorization: 'Bearer imp-broker-placeholder',
+        cookie: 'session=cookie-secret',
+      },
+      body: 'body-secret',
+    }),
+  );
+
+  expect(recordAudit).toHaveBeenCalledExactlyOnceWith({
+    impId: 'imp-1',
+    impName: 'dev',
+    secretName: null,
+    at: expect.toBeValidDate(),
+    method: 'POST',
+    host: 'api.github.com',
+    path: '/repos/x/issues',
+    status: 403,
+    requestBytes: 0,
+    responseBytes: 0,
+    durationMs: expect.toBeNumber(),
+    reason: 'no-grant',
+  });
+});
+
+test('it forwards an upgrade to another protocol', async () => {
+  server.use(
+    http.get('https://api.github.com/x', () => HttpResponse.text('upstream body', { status: 201 })),
+  );
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'api.github.com',
+    findCredential: () =>
+      Promise.resolve(
+        buildMockCredential({ secretName: 'gh', header: 'authorization', value: 'Bearer real' }),
+      ),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    recordAudit: () => {},
+  });
+
+  const response = await forward(
+    new Request('https://api.github.com/x', {
+      headers: { host: 'api.github.com', upgrade: 'h2c' },
+    }),
+  );
+
+  expect(response.status).toBe(201);
+});
+
+test('it sends the request to the rule’s upstream ahead of a test upstream, with the real credential', async () => {
+  const received = mock<(sent: Readonly<{ url: string; authorization: string | null }>) => void>();
+
+  server.use(
+    http.get('http://172.17.0.1:18081/v1/vaults', (info) => {
+      received({ url: info.request.url, authorization: info.request.headers.get('authorization') });
+
+      return HttpResponse.text('upstream body');
+    }),
+  );
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'svc.imp.internal',
+    findCredential: () =>
+      Promise.resolve(
+        buildMockCredential({
+          secretName: 'op',
+          header: 'authorization',
+          value: 'Bearer real',
+          upstream: 'http://172.17.0.1:18081',
+        }),
+      ),
+    resolveUpstream: () => ({ origin: 'https://test.invalid', ca: ['test-ca'] }),
+    recordAudit: () => {},
+  });
+
+  await forward(
+    new Request('https://svc.imp.internal/v1/vaults?x=1', {
+      headers: { host: 'svc.imp.internal', authorization: 'Bearer imp-broker-placeholder' },
+    }),
+  );
+
+  expect(received).toHaveBeenCalledExactlyOnceWith({
+    url: 'http://172.17.0.1:18081/v1/vaults?x=1',
+    authorization: 'Bearer real',
+  });
+});
+
+test('it records the guest host, not the rule upstream, in the audit row', async () => {
+  const audits: NewAuditEntry[] = [];
+
+  server.use(
+    http.get('http://172.17.0.1:18081/v1/vaults', () => HttpResponse.text('upstream body')),
+  );
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'svc.imp.internal',
+    findCredential: () =>
+      Promise.resolve(
+        buildMockCredential({
+          secretName: 'op',
+          header: 'authorization',
+          value: 'Bearer real',
+          upstream: 'http://172.17.0.1:18081',
+        }),
+      ),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    recordAudit: (entry) => {
+      audits.push(entry);
+    },
+  });
+
+  const response = await forward(
+    new Request('https://svc.imp.internal/v1/vaults?x=1', {
+      headers: { host: 'svc.imp.internal' },
+    }),
+  );
+
+  await response.text();
+
+  expect(audits).toStrictEqual([
+    {
+      impId: 'imp-1',
+      impName: 'dev',
+      secretName: 'op',
+      at: expect.toBeValidDate(),
+      method: 'GET',
+      host: 'svc.imp.internal',
+      path: '/v1/vaults',
+      status: 200,
+      requestBytes: 0,
+      responseBytes: 'upstream body'.length,
+      durationMs: expect.toBeNumber(),
+      reason: null,
+    },
+  ]);
+});
+
+test('it forwards over TLS to a test upstream that the test CA signed', async () => {
+  const ctx = await setupTest();
+
+  const upstream = await startStubBrokerTlsUpstream(ctx.stack, {
+    directory: ctx.directoryPath,
+    respond: (request: Request) =>
+      new Response(`saw ${request.headers.get('authorization') ?? 'none'}`),
+  });
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'api.github.com',
+    findCredential: () =>
+      Promise.resolve(
+        buildMockCredential({ secretName: 'gh', header: 'authorization', value: 'Bearer real' }),
+      ),
+    resolveUpstream: () => ({ origin: upstream.origin, ca: [upstream.caPem] }),
+    recordAudit: () => {},
+  });
+
+  const response = await forward(
+    new Request('https://api.github.com/x', { headers: { host: 'api.github.com' } }),
+  );
+
+  const text = await response.text();
+
+  expect(text).toBe('saw Bearer real');
+});
+
+test('it answers 502 for a test upstream whose certificate the test CA did not sign', async () => {
+  const ctx = await setupTest();
+
+  const reached = mock<(url: string) => void>();
+
+  const upstream = await startStubBrokerTlsUpstream(ctx.stack, {
+    directory: ctx.directoryPath,
+    respond: (request: Request) => {
+      reached(request.url);
+
+      return new Response('reached');
+    },
+  });
+
+  const other = await loadOrCreateBrokerCa(join(ctx.directoryPath, 'other-ca'));
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'api.github.com',
+    findCredential: () =>
+      Promise.resolve(
+        buildMockCredential({ secretName: 'gh', header: 'authorization', value: 'Bearer real' }),
+      ),
+    resolveUpstream: () => ({ origin: upstream.origin, ca: [other.certPem] }),
+    recordAudit: () => {},
+  });
+
+  const response = await forward(
+    new Request('https://api.github.com/x', { headers: { host: 'api.github.com' } }),
+  );
+
+  expect(response.status).toBe(502);
+  expect(reached).not.toHaveBeenCalled();
+});
+
+// a real upstream over the wire: interception would hide both what fetch
+// puts in Host and whether it decompresses the answer
+test('it sends the upstream its own authority as Host, not the guest’s', async () => {
+  const ctx = await setupTest();
+
+  const received = mock<(host: string | null) => void>();
+
+  const upstream = await startStubBrokerTlsUpstream(ctx.stack, {
+    directory: ctx.directoryPath,
+    respond: (request: Request) => {
+      received(request.headers.get('host'));
+
+      return new Response('upstream body');
+    },
+  });
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'api.github.com',
+    findCredential: () =>
+      Promise.resolve(
+        buildMockCredential({ secretName: 'gh', header: 'authorization', value: 'Bearer real' }),
+      ),
+    resolveUpstream: () => ({ origin: upstream.origin, ca: [upstream.caPem] }),
+    recordAudit: () => {},
+  });
+
+  const response = await forward(
+    new Request('https://api.github.com/x', { headers: { host: 'api.github.com' } }),
+  );
+
+  await response.text();
+
+  expect(received).toHaveBeenCalledExactlyOnceWith(`localhost:${String(upstream.port)}`);
+});
+
+test('it passes gzip bytes through unchanged, without decompressing them', async () => {
+  const ctx = await setupTest();
+
+  const gzipped = Bun.gzipSync(Buffer.from('upstream body'));
+
+  const upstream = await startStubBrokerTlsUpstream(ctx.stack, {
+    directory: ctx.directoryPath,
+    respond: () => new Response(gzipped, { headers: { 'content-encoding': 'gzip' } }),
+  });
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'api.github.com',
+    findCredential: () =>
+      Promise.resolve(
+        buildMockCredential({ secretName: 'gh', header: 'authorization', value: 'Bearer real' }),
+      ),
+    resolveUpstream: () => ({ origin: upstream.origin, ca: [upstream.caPem] }),
+    recordAudit: () => {},
+  });
+
+  const response = await forward(
+    new Request('https://api.github.com/x', { headers: { host: 'api.github.com' } }),
+  );
+
+  const body = await response.arrayBuffer();
+
+  expect(new Uint8Array(body)).toStrictEqual(new Uint8Array(gzipped));
+});
+
+test('it sends a request inside the grant’s filter with the real credential', async () => {
+  const received =
+    mock<(sent: Readonly<{ method: string; authorization: string | null }>) => void>();
+
+  server.use(
+    http.get('https://api.github.com/repos/a/b/issues', (info) => {
+      received({
+        method: info.request.method,
+        authorization: info.request.headers.get('authorization'),
+      });
+
+      return HttpResponse.text('upstream body');
+    }),
+  );
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'api.github.com',
+    findCredential: () =>
+      Promise.resolve(
+        buildMockCredential({
+          secretName: 'gh',
+          header: 'authorization',
+          value: 'Bearer real',
+          filter: { methods: ['GET', 'HEAD'], paths: ['/repos/*/*/issues'] },
+        }),
+      ),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    recordAudit: () => {},
+  });
+
+  const response = await forward(
+    new Request('https://api.github.com/repos/a/b/issues', {
+      headers: { host: 'api.github.com', authorization: 'Bearer imp-broker-placeholder' },
+    }),
+  );
+
+  expect(response.status).toBe(200);
+
+  expect(received).toHaveBeenCalledExactlyOnceWith({
+    method: 'GET',
+    authorization: 'Bearer real',
+  });
+});
+
+test('it refuses a method outside the grant’s filter with 403 and sends nothing upstream', async () => {
+  const received = mock();
+
+  server.use(
+    http.all('https://api.github.com/*', () => {
+      received();
+
+      return HttpResponse.text('upstream body');
+    }),
+  );
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'api.github.com',
+    findCredential: () =>
+      Promise.resolve(
+        buildMockCredential({ filter: { methods: ['GET'], paths: ['/repos/*/*/issues'] } }),
+      ),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    recordAudit: () => {},
+  });
+
+  const response = await forward(
+    new Request('https://api.github.com/repos/a/b/issues', {
+      method: 'POST',
+      headers: { host: 'api.github.com' },
+      body: 'payload',
+    }),
+  );
+
+  const text = await response.text();
+
+  expect(response.status).toBe(403);
+  expect(text).toBe('the grant for api.github.com does not cover POST /repos/a/b/issues\n');
+  expect(received).not.toHaveBeenCalled();
+});
+
+test('it refuses a path outside the grant’s filter with 403 and sends nothing upstream', async () => {
+  const received = mock();
+
+  server.use(
+    http.all('https://api.github.com/*', () => {
+      received();
+
+      return HttpResponse.text('upstream body');
+    }),
+  );
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'api.github.com',
+    findCredential: () =>
+      Promise.resolve(
+        buildMockCredential({ filter: { methods: ['GET'], paths: ['/repos/*/*/issues'] } }),
+      ),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    recordAudit: () => {},
+  });
+
+  const response = await forward(
+    new Request('https://api.github.com/repos/a/b/collaborators', {
+      headers: { host: 'api.github.com' },
+    }),
+  );
+
+  const text = await response.text();
+
+  expect(response.status).toBe(403);
+  expect(text).toBe('the grant for api.github.com does not cover GET /repos/a/b/collaborators\n');
+  expect(received).not.toHaveBeenCalled();
+});
+
+test('it records a refused audit row with no secret, header or body for a request outside the filter', async () => {
+  const recordAudit = mock<(entry: NewAuditEntry) => void>();
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'api.github.com',
+    findCredential: () =>
+      Promise.resolve(buildMockCredential({ secretName: 'gh', filter: { methods: ['GET'] } })),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    recordAudit,
+  });
+
+  await forward(
+    new Request('https://api.github.com/repos/x/issues?token=query-secret', {
+      method: 'DELETE',
+      headers: {
+        host: 'api.github.com',
+        authorization: 'Bearer imp-broker-placeholder',
+        cookie: 'session=cookie-secret',
+      },
+    }),
+  );
+
+  expect(recordAudit).toHaveBeenCalledExactlyOnceWith({
+    impId: 'imp-1',
+    impName: 'dev',
+    secretName: null,
+    at: expect.toBeValidDate(),
+    method: 'DELETE',
+    host: 'api.github.com',
+    path: '/repos/x/issues',
+    status: 403,
+    requestBytes: 0,
+    responseBytes: 0,
+    durationMs: expect.toBeNumber(),
+    reason: 'outside-filter',
+  });
+});
+
+test.each([['X-HTTP-Method-Override'], ['X-HTTP-Method'], ['X-Method-Override']])(
+  'it runs an allowed POST carrying %s: DELETE as a POST at an upstream that honours it',
+  async (header) => {
+    const received = mock<(method: string) => void>();
+
+    // an upstream that runs the method the override header names, as some
+    // frameworks do for a POST
+    server.use(
+      http.all('https://api.anthropic.com/v1/messages', (info) => {
+        received(info.request.headers.get(header) ?? info.request.method);
+
+        return HttpResponse.text('upstream body');
+      }),
+    );
+
+    const forward = createForwarder({
+      impId: 'imp-1',
+      impName: 'dev',
+      host: 'api.anthropic.com',
+      findCredential: () =>
+        Promise.resolve(
+          buildMockCredential({ filter: { methods: ['POST'], paths: ['/v1/messages'] } }),
+        ),
+      resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+      recordAudit: () => {},
+    });
+
+    const response = await forward(
+      new Request('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { host: 'api.anthropic.com', [header]: 'DELETE' },
+        body: 'payload',
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(received).toHaveBeenCalledExactlyOnceWith('POST');
+  },
+);
+
+test('it sends a method-override header on a grant with no filter', async () => {
+  const received = mock<(override: string | null) => void>();
+
+  server.use(
+    http.post('https://api.anthropic.com/v1/messages', (info) => {
+      received(info.request.headers.get('x-http-method-override'));
+
+      return HttpResponse.text('upstream body');
+    }),
+  );
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'api.anthropic.com',
+    findCredential: () => Promise.resolve(buildMockCredential({ filter: null })),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    recordAudit: () => {},
+  });
+
+  await forward(
+    new Request('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { host: 'api.anthropic.com', 'x-http-method-override': 'PATCH' },
+      body: 'payload',
+    }),
+  );
+
+  expect(received).toHaveBeenCalledExactlyOnceWith('PATCH');
+});
+
+test('it sends a request without a body again when the body of the 401 fails', async () => {
+  const answers = buildStubAnswerQueue([
+    () =>
+      new HttpResponse(
+        new ReadableStream({
+          pull: (controller) => {
+            controller.error(new Error('the upstream hung up'));
+          },
+        }),
+        { status: 401 },
+      ),
+    () => HttpResponse.text('models'),
+  ]);
+
+  const credentials = buildStubAnswerQueue([
+    buildMockCredential({ secretName: 'codex', oauth: { refreshedAt: 1000 } }),
+    buildMockCredential({ secretName: 'codex', oauth: { refreshedAt: 2000 } }),
+  ]);
+
+  server.use(http.get('https://chatgpt.com/backend-api/codex/models', () => answers.next()()));
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'chatgpt.com',
+    findCredential: () => Promise.resolve(credentials.next()),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    recordAudit: () => {},
+    refreshAfterRejection: () => Promise.resolve(true),
+  });
+
+  const response = await forward(
+    new Request('https://chatgpt.com/backend-api/codex/models', {
+      headers: { host: 'chatgpt.com' },
+    }),
+  );
+
+  expect(response.status).toBe(200);
+});
+
+test('it sends a request without a body again with the new oauth token after a 401', async () => {
+  const received = mock<(authorization: string | null) => void>();
+  const statuses = buildStubAnswerQueue([401, 200]);
+
+  const credentials = buildStubAnswerQueue([
+    buildMockCredential({
+      secretName: 'codex',
+      value: 'Bearer old',
+      oauth: { refreshedAt: 1000 },
+    }),
+    buildMockCredential({
+      secretName: 'codex',
+      value: 'Bearer new',
+      oauth: { refreshedAt: 2000 },
+    }),
+  ]);
+
+  server.use(
+    http.get('https://chatgpt.com/backend-api/codex/models', (info) => {
+      received(info.request.headers.get('authorization'));
+
+      return HttpResponse.text('models', { status: statuses.next() });
+    }),
+  );
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'chatgpt.com',
+    findCredential: () => Promise.resolve(credentials.next()),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    recordAudit: () => {},
+    refreshAfterRejection: () => Promise.resolve(true),
+  });
+
+  const response = await forward(
+    new Request('https://chatgpt.com/backend-api/codex/models', {
+      headers: { host: 'chatgpt.com' },
+    }),
+  );
+
+  expect(response.status).toBe(200);
+  expect(received.mock.calls).toStrictEqual([['Bearer old'], ['Bearer new']]);
+});
+
+test('it asks for a refresh of the rejected token by its secret and refresh time', async () => {
+  const refreshAfterRejection = mock(() => Promise.resolve(false));
+
+  server.use(
+    http.get('https://chatgpt.com/backend-api/codex/models', () =>
+      HttpResponse.text('expired', { status: 401 }),
+    ),
+  );
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'chatgpt.com',
+    findCredential: () =>
+      Promise.resolve(buildMockCredential({ secretName: 'codex', oauth: { refreshedAt: 1000 } })),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    recordAudit: () => {},
+    refreshAfterRejection,
+  });
+
+  await forward(
+    new Request('https://chatgpt.com/backend-api/codex/models', {
+      headers: { host: 'chatgpt.com' },
+    }),
+  );
+
+  expect(refreshAfterRejection).toHaveBeenCalledExactlyOnceWith('codex', 1000);
+});
+
+test('it records an audit row for the rejected send and one for the send again', async () => {
+  const audits: NewAuditEntry[] = [];
+  const statuses = buildStubAnswerQueue([401, 200]);
+
+  const credentials = buildStubAnswerQueue([
+    buildMockCredential({ secretName: 'codex', oauth: { refreshedAt: 1000 } }),
+    buildMockCredential({ secretName: 'codex', oauth: { refreshedAt: 2000 } }),
+  ]);
+
+  server.use(
+    http.get('https://chatgpt.com/backend-api/codex/models', () =>
+      HttpResponse.text('models', { status: statuses.next() }),
+    ),
+  );
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'chatgpt.com',
+    findCredential: () => Promise.resolve(credentials.next()),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    recordAudit: (entry) => {
+      audits.push(entry);
+    },
+    refreshAfterRejection: () => Promise.resolve(true),
+  });
+
+  const response = await forward(
+    new Request('https://chatgpt.com/backend-api/codex/models', {
+      headers: { host: 'chatgpt.com' },
+    }),
+  );
+
+  await response.text();
+
+  expect(audits).toIncludeAllPartialMembers([
+    { secretName: 'codex', path: '/backend-api/codex/models', status: 401 },
+    { secretName: 'codex', path: '/backend-api/codex/models', status: 200 },
+  ]);
+
+  expect(audits).toHaveLength(2);
+});
+
+test('it answers the 401 of a request with a body and still asks for a refresh', async () => {
+  const received = mock<(body: string) => void>();
+  const refreshAfterRejection = mock(() => Promise.resolve(true));
+
+  server.use(
+    http.post('https://chatgpt.com/backend-api/codex/responses', async (info) => {
+      const body = await info.request.text();
+
+      received(body);
+
+      return HttpResponse.text('expired', { status: 401 });
+    }),
+  );
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'chatgpt.com',
+    findCredential: () =>
+      Promise.resolve(buildMockCredential({ secretName: 'codex', oauth: { refreshedAt: 1000 } })),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    recordAudit: () => {},
+    refreshAfterRejection,
+  });
+
+  const response = await forward(
+    new Request('https://chatgpt.com/backend-api/codex/responses', {
+      method: 'POST',
+      headers: { host: 'chatgpt.com' },
+      body: 'payload',
+    }),
+  );
+
+  expect(response.status).toBe(401);
+  expect(received).toHaveBeenCalledExactlyOnceWith('payload');
+  expect(refreshAfterRejection).toHaveBeenCalledOnce();
+});
+
+test('it answers the 401 when no new oauth token is in place', async () => {
+  const received = mock<(authorization: string | null) => void>();
+
+  server.use(
+    http.get('https://chatgpt.com/backend-api/codex/models', (info) => {
+      received(info.request.headers.get('authorization'));
+
+      return HttpResponse.text('expired', { status: 401 });
+    }),
+  );
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'chatgpt.com',
+    findCredential: () =>
+      Promise.resolve(buildMockCredential({ value: 'Bearer old', oauth: { refreshedAt: 1000 } })),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    recordAudit: () => {},
+    refreshAfterRejection: () => Promise.resolve(false),
+  });
+
+  const response = await forward(
+    new Request('https://chatgpt.com/backend-api/codex/models', {
+      headers: { host: 'chatgpt.com' },
+    }),
+  );
+
+  expect(response.status).toBe(401);
+  expect(received).toHaveBeenCalledExactlyOnceWith('Bearer old');
+});
+
+test('it answers the 401 when the grant is gone after the refresh', async () => {
+  const received = mock<(authorization: string | null) => void>();
+
+  const credentials = buildStubAnswerQueue([
+    buildMockCredential({ value: 'Bearer old', oauth: { refreshedAt: 1000 } }),
+    null,
+  ]);
+
+  server.use(
+    http.get('https://chatgpt.com/backend-api/codex/models', (info) => {
+      received(info.request.headers.get('authorization'));
+
+      return HttpResponse.text('expired', { status: 401 });
+    }),
+  );
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'chatgpt.com',
+    findCredential: () => Promise.resolve(credentials.next()),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    recordAudit: () => {},
+    refreshAfterRejection: () => Promise.resolve(true),
+  });
+
+  const response = await forward(
+    new Request('https://chatgpt.com/backend-api/codex/models', {
+      headers: { host: 'chatgpt.com' },
+    }),
+  );
+
+  expect(response.status).toBe(401);
+  expect(received).toHaveBeenCalledExactlyOnceWith('Bearer old');
+});
+
+test('it answers the 401 when the new grant filter does not cover the request', async () => {
+  const received = mock<(authorization: string | null) => void>();
+
+  const credentials = buildStubAnswerQueue([
+    buildMockCredential({ value: 'Bearer old', oauth: { refreshedAt: 1000 } }),
+    buildMockCredential({
+      value: 'Bearer new',
+      oauth: { refreshedAt: 2000 },
+      filter: { methods: ['POST'] },
+    }),
+  ]);
+
+  server.use(
+    http.get('https://chatgpt.com/backend-api/codex/models', (info) => {
+      received(info.request.headers.get('authorization'));
+
+      return HttpResponse.text('expired', { status: 401 });
+    }),
+  );
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'chatgpt.com',
+    findCredential: () => Promise.resolve(credentials.next()),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    recordAudit: () => {},
+    refreshAfterRejection: () => Promise.resolve(true),
+  });
+
+  const response = await forward(
+    new Request('https://chatgpt.com/backend-api/codex/models', {
+      headers: { host: 'chatgpt.com' },
+    }),
+  );
+
+  expect(response.status).toBe(401);
+  expect(received).toHaveBeenCalledExactlyOnceWith('Bearer old');
+});
+
+test('it asks for no refresh after a 401 to a credential that is not oauth', async () => {
+  const refreshAfterRejection = mock(() => Promise.resolve(true));
+
+  server.use(
+    http.get('https://api.github.com/user', () => HttpResponse.text('bad', { status: 401 })),
+  );
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'api.github.com',
+    findCredential: () => Promise.resolve(buildMockCredential({ oauth: null })),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    recordAudit: () => {},
+    refreshAfterRejection,
+  });
+
+  await forward(
+    new Request('https://api.github.com/user', { headers: { host: 'api.github.com' } }),
+  );
+
+  expect(refreshAfterRejection).not.toHaveBeenCalled();
+});
+
+test.each([[403], [429]])('it asks for no refresh after a %d to an oauth token', async (status) => {
+  const refreshAfterRejection = mock(() => Promise.resolve(true));
+
+  server.use(
+    http.get('https://chatgpt.com/backend-api/codex/models', () =>
+      HttpResponse.text('no', { status }),
+    ),
+  );
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'chatgpt.com',
+    findCredential: () => Promise.resolve(buildMockCredential({ oauth: { refreshedAt: 1000 } })),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    recordAudit: () => {},
+    refreshAfterRejection,
+  });
+
+  await forward(
+    new Request('https://chatgpt.com/backend-api/codex/models', {
+      headers: { host: 'chatgpt.com' },
+    }),
+  );
+
+  expect(refreshAfterRejection).not.toHaveBeenCalled();
+});
+
+test('it sends one Imp-Identity header that verifies for the imp and the host, in place of the guest’s', async () => {
+  const ctx = await setupTest();
+
+  const received = mock<(lines: readonly string[]) => void>();
+
+  server.use(
+    http.get('https://tasks.imp.internal/v1/tasks', (info) => {
+      received(collectIdentityLines(info.request.headers));
+
+      return HttpResponse.text('tasks');
+    }),
+  );
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'tasks.imp.internal',
+    findCredential: () => Promise.resolve(buildMockCredential({ identity: true })),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    mintIdentityToken: ctx.mintIdentityToken,
+    recordAudit: () => {},
+  });
+
+  await forward(
+    new Request('https://tasks.imp.internal/v1/tasks', {
+      headers: { host: 'tasks.imp.internal', 'imp-identity': 'forged' },
+    }),
+  );
+
+  const [lines = []] = received.mock.calls[0] ?? [];
+
+  expect(lines).toHaveLength(1);
+  expect(lines).not.toContain('forged');
+
+  const caller = await ctx.verifyToken(lines[0] ?? null, 'tasks.imp.internal');
+
+  expect(caller).toStrictEqual({
+    issuer: 'imp-host-a',
+    id: 'imp-1',
+    name: 'dev',
+  });
+});
+
+test.each(['IMP-IDENTITY', 'imp_identity', 'Imp_Identity'])(
+  'it never sends the guest’s %s header',
+  async (name) => {
+    const ctx = await setupTest();
+
+    const received = mock<(lines: readonly string[]) => void>();
+
+    server.use(
+      http.get('https://tasks.imp.internal/v1/tasks', (info) => {
+        received(collectIdentityLines(info.request.headers));
+
+        return HttpResponse.text('tasks');
+      }),
+    );
+
+    const forward = createForwarder({
+      impId: 'imp-1',
+      impName: 'dev',
+      host: 'tasks.imp.internal',
+      findCredential: () => Promise.resolve(buildMockCredential({ identity: true })),
+      resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+      mintIdentityToken: ctx.mintIdentityToken,
+      recordAudit: () => {},
+    });
+
+    await forward(
+      new Request('https://tasks.imp.internal/v1/tasks', {
+        headers: { host: 'tasks.imp.internal', [name]: 'forged' },
+      }),
+    );
+
+    const [lines = []] = received.mock.calls[0] ?? [];
+
+    expect(lines).toHaveLength(1);
+    expect(lines).not.toContain('forged');
+  },
+);
+
+test('it sends the broker’s token when the guest’s Connection header names Imp-Identity', async () => {
+  const ctx = await setupTest();
+
+  const received = mock<(lines: readonly string[], connection: string | null) => void>();
+
+  server.use(
+    http.get('https://tasks.imp.internal/v1/tasks', (info) => {
+      received(collectIdentityLines(info.request.headers), info.request.headers.get('connection'));
+
+      return HttpResponse.text('tasks');
+    }),
+  );
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'tasks.imp.internal',
+    findCredential: () => Promise.resolve(buildMockCredential({ identity: true })),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    mintIdentityToken: ctx.mintIdentityToken,
+    recordAudit: () => {},
+  });
+
+  await forward(
+    new Request('https://tasks.imp.internal/v1/tasks', {
+      headers: {
+        host: 'tasks.imp.internal',
+        connection: 'keep-alive, imp-identity',
+        'imp-identity': 'forged',
+      },
+    }),
+  );
+
+  const [lines = [], connection = null] = received.mock.calls[0] ?? [];
+
+  const caller = await ctx.verifyToken(lines[0] ?? null, 'tasks.imp.internal');
+
+  expect(lines).toHaveLength(1);
+  expect(caller).toMatchObject({ id: 'imp-1' });
+  expect(connection).toBeNull();
+});
+
+test('it sends none of the guest’s Imp-Identity headers, and adds none, for a rule without identity', async () => {
+  const ctx = await setupTest();
+
+  const received = mock<(lines: readonly string[]) => void>();
+
+  server.use(
+    http.get('https://tasks.imp.internal/v1/tasks', (info) => {
+      received(collectIdentityLines(info.request.headers));
+
+      return HttpResponse.text('tasks');
+    }),
+  );
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'tasks.imp.internal',
+    findCredential: () => Promise.resolve(buildMockCredential({ identity: false })),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    mintIdentityToken: ctx.mintIdentityToken,
+    recordAudit: () => {},
+  });
+
+  await forward(
+    new Request('https://tasks.imp.internal/v1/tasks', {
+      headers: { host: 'tasks.imp.internal', 'imp-identity': 'forged' },
+    }),
+  );
+
+  expect(received).toHaveBeenCalledExactlyOnceWith([]);
+});
+
+test('it adds no token for a rule with identity when impd has no issuer, and still drops the guest’s', async () => {
+  const received = mock<(lines: readonly string[]) => void>();
+
+  server.use(
+    http.get('https://tasks.imp.internal/v1/tasks', (info) => {
+      received(collectIdentityLines(info.request.headers));
+
+      return HttpResponse.text('tasks');
+    }),
+  );
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'tasks.imp.internal',
+    findCredential: () => Promise.resolve(buildMockCredential({ identity: true })),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    recordAudit: () => {},
+  });
+
+  await forward(
+    new Request('https://tasks.imp.internal/v1/tasks', {
+      headers: { host: 'tasks.imp.internal', 'imp-identity': 'forged' },
+    }),
+  );
+
+  expect(received).toHaveBeenCalledExactlyOnceWith([]);
+});
+
+test('it names the guest-facing host in the token of a rule with an upstream', async () => {
+  const ctx = await setupTest();
+
+  const received = mock<(lines: readonly string[]) => void>();
+
+  server.use(
+    http.get('http://192.0.2.10:18090/v1/tasks', (info) => {
+      received(collectIdentityLines(info.request.headers));
+
+      return HttpResponse.text('tasks');
+    }),
+  );
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'tasks.imp.internal',
+    findCredential: () =>
+      Promise.resolve(buildMockCredential({ identity: true, upstream: 'http://192.0.2.10:18090' })),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    mintIdentityToken: ctx.mintIdentityToken,
+    recordAudit: () => {},
+  });
+
+  await forward(
+    new Request('https://tasks.imp.internal/v1/tasks', { headers: { host: 'tasks.imp.internal' } }),
+  );
+
+  const [lines = []] = received.mock.calls[0] ?? [];
+
+  const forAudience = await ctx.verifyToken(lines[0] ?? null, 'tasks.imp.internal');
+  const forUpstream = await ctx.verifyToken(lines[0] ?? null, '192.0.2.10:18090');
+
+  expect(forAudience).toMatchObject({ id: 'imp-1' });
+  expect(forUpstream).toBeNull();
+});
+
+test('it signs each send with its own jti', async () => {
+  const ctx = await setupTest();
+
+  const received = mock<(lines: readonly string[]) => void>();
+
+  server.use(
+    http.get('https://tasks.imp.internal/v1/tasks', (info) => {
+      received(collectIdentityLines(info.request.headers));
+
+      return HttpResponse.text('tasks');
+    }),
+  );
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'tasks.imp.internal',
+    findCredential: () => Promise.resolve(buildMockCredential({ identity: true })),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    mintIdentityToken: ctx.mintIdentityToken,
+    recordAudit: () => {},
+  });
+
+  const send = () =>
+    forward(
+      new Request('https://tasks.imp.internal/v1/tasks', {
+        headers: { host: 'tasks.imp.internal' },
+      }),
+    );
+
+  await send();
+  await send();
+
+  const tokens = received.mock.calls.map(([lines]) => lines[0] ?? '');
+
+  expect(new Set(tokens).size).toBe(2);
+});
+
+test('it mints no token for a request the grant’s filter refuses', async () => {
+  const mintIdentityToken = mock(() => 'token');
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'tasks.imp.internal',
+    findCredential: () =>
+      Promise.resolve(buildMockCredential({ identity: true, filter: { methods: ['GET'] } })),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    mintIdentityToken,
+    recordAudit: () => {},
+  });
+
+  const response = await forward(
+    new Request('https://tasks.imp.internal/v1/tasks', {
+      method: 'POST',
+      headers: { host: 'tasks.imp.internal' },
+    }),
+  );
+
+  expect(response.status).toBe(403);
+  expect(mintIdentityToken).not.toHaveBeenCalled();
+});
+
+test('it signs the send again after a 401 with a new token that verifies', async () => {
+  const ctx = await setupTest();
+
+  const received = mock<(lines: readonly string[]) => void>();
+  const statuses = buildStubAnswerQueue([401, 200]);
+
+  const credentials = buildStubAnswerQueue([
+    buildMockCredential({ identity: true, oauth: { refreshedAt: 1000 } }),
+    buildMockCredential({ identity: true, oauth: { refreshedAt: 2000 } }),
+  ]);
+
+  server.use(
+    http.get('https://tasks.imp.internal/v1/tasks', (info) => {
+      received(collectIdentityLines(info.request.headers));
+
+      return HttpResponse.text('tasks', { status: statuses.next() });
+    }),
+  );
+
+  const forward = createForwarder({
+    impId: 'imp-1',
+    impName: 'dev',
+    host: 'tasks.imp.internal',
+    findCredential: () => Promise.resolve(credentials.next()),
+    resolveUpstream: (host) => ({ origin: `https://${host}`, ca: null }),
+    mintIdentityToken: ctx.mintIdentityToken,
+    recordAudit: () => {},
+    refreshAfterRejection: () => Promise.resolve(true),
+  });
+
+  await forward(
+    new Request('https://tasks.imp.internal/v1/tasks', { headers: { host: 'tasks.imp.internal' } }),
+  );
+
+  const [first = [], second = []] = received.mock.calls.map(([lines]) => lines);
+
+  expect(first).toHaveLength(1);
+  expect(second).toHaveLength(1);
+
+  const caller = await ctx.verifyToken(second[0] ?? null, 'tasks.imp.internal');
+
+  expect(second[0]).not.toBe(first[0]);
+  expect(caller).toMatchObject({ id: 'imp-1' });
+});

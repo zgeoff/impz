@@ -1,5 +1,5 @@
-import type { ImpRecord } from '../../platform/db/imps';
-import { listLeases, writeMovedLeases } from '../../platform/db/leases';
+import type { ImpRecord } from '../../platform/db/list-imps';
+import { listLeases, writeMovedLeases } from '../../platform/db/list-leases';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { MAX_LEASE_REMAINING_MS, MAX_MOVED_LEASES, MovedLeaseOwnerSchema } from './move-header';

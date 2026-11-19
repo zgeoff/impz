@@ -2,8 +2,8 @@ import { rmSync } from 'node:fs';
 import type { Checkpoint, Imp } from '@impz/api';
 import { getErrorMessage } from '@impz/shared';
 import { customAlphabet, customRandom } from 'nanoid';
-import { createConsistentDisk } from '../../imps/imps/consistent-disk';
-import type { DiskFreezer } from '../../imps/imps/consistent-disk';
+import { createConsistentDisk } from '../../imps/imps/create-consistent-disk';
+import type { DiskFreezer } from '../../imps/imps/create-consistent-disk';
 import { toLockedImp } from '../../imps/imps/imp-lock';
 import type { ImpCheckpointHooks } from '../../imps/imps/imp-service';
 import { updateLockedImpState } from '../../imps/imps/update-locked-imp-state';
@@ -13,19 +13,19 @@ import {
   readCheckpoint,
   removeCheckpoint,
   toApiCheckpoint,
-} from '../../platform/db/checkpoints';
-import type { CheckpointRecord } from '../../platform/db/checkpoints';
-import { writeNextBootCause } from '../../platform/db/cold-boots';
-import { readEgressPolicy } from '../../platform/db/egress';
-import { readImpByName, updateImpDisk } from '../../platform/db/imps';
-import type { ImpRecord } from '../../platform/db/imps';
+} from '../../platform/db/create-checkpoint';
+import type { CheckpointRecord } from '../../platform/db/create-checkpoint';
+import { writeNextBootCause } from '../../platform/db/list-cold-boots';
+import { readImpByName, updateImpDisk } from '../../platform/db/list-imps';
+import type { ImpRecord } from '../../platform/db/list-imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
-import { ImpdError, isImpdError } from '../../platform/errors/impd-error';
+import { readEgressPolicy } from '../../platform/db/read-egress-policy';
 import {
   buildConflictError,
   buildInvalidStateError,
   buildNotFoundError,
-} from '../../platform/errors/impd-errors';
+} from '../../platform/errors/build-not-found-error';
+import { ImpdError, isImpdError } from '../../platform/errors/impd-error';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import type { DiskBudget } from '../../vm/storage/disk-budget';
 import { CheckpointIdTakenError } from '../../vm/storage/storage-backend';

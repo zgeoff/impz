@@ -3,11 +3,11 @@ import { existsSync, mkdirSync, renameSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { EGRESS_MODE_TRAITS } from '@impz/api';
 import type { WarmHost, WarmMove } from '@impz/api';
-import { deriveSlotAddress } from '../../host-net/net/addressing';
+import { deriveSlotAddress } from '../../host-net/net/derive-slot-address';
 import { readTapMac } from '../../host-net/net/tap-devices';
 import type { EgressService } from '../../network/egress/egress-service';
-import type { ImpRecord } from '../../platform/db/imps';
-import { listNetworkMembers } from '../../platform/db/networks';
+import type { ImpRecord } from '../../platform/db/list-imps';
+import { listNetworkMembers } from '../../platform/db/list-networks';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { ImpdError } from '../../platform/errors/impd-error';
 import {
@@ -18,14 +18,14 @@ import {
 import type { SnapshotMeta } from '../../vm/sleep/snapshot-meta';
 import { readVmIdentity, writeVmIdentity } from '../../vm/sleep/vm-identity';
 import type { HostIdentity } from '../../vm/sleep/vm-identity';
-import { buildSystemDrivePath } from '../../vm/storage/data-layout';
+import { buildSystemDrivePath } from '../../vm/storage/build-imp-paths';
 import type { StorageBackend } from '../../vm/storage/storage-backend';
 import type { ImpOpsConfig } from '../imp-ops-config';
+import { isSameHash } from './build-ticket-header';
+import type { ReceiptBody } from './build-ticket-header';
 import type { MoveHeader } from './move-header';
 import { MoveRequestError } from './move-request-error';
-import { isSameHash } from './move-tickets';
-import type { ReceiptBody } from './move-tickets';
-import { buildWarmMove, collectWarmMismatches } from './warm-facts';
+import { buildWarmMove, collectWarmMismatches } from './read-warm-host';
 
 interface WarmSendDeps {
   readonly config: Pick<ImpOpsConfig, 'subnet'>;

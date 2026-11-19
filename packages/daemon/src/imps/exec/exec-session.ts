@@ -11,7 +11,7 @@ import {
 } from '@impz/api';
 import type { DetachReason, ExecChannel, ExecServerMessage, SessionOutput } from '@impz/api';
 import { match } from 'ts-pattern';
-import type { AgentFeature } from '../../vm/agent-client/agent-outdated';
+import type { AgentFeature } from '../../vm/agent-client/build-agent-outdated-error';
 import type {
   AgentAttachRequest,
   AgentExecRequest,
@@ -21,8 +21,8 @@ import type {
 import { buildGuestFailure } from '../../vm/guest-channels/build-guest-failure';
 import { createAckSender } from '../../vm/guest-channels/create-ack-sender';
 import { createAckWindow } from '../../vm/guest-channels/create-ack-window';
-import { TOOL_FEATURES, buildToolRequest } from './exec-tools';
-import { findSignalNumber, getSignalName } from './signal-names';
+import { TOOL_FEATURES, buildToolRequest } from './build-tool-request';
+import { findSignalNumber, getSignalName } from './get-signal-name';
 
 export interface ExecPeer {
   readonly sendText: (text: string) => void;

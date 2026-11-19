@@ -1,6 +1,5 @@
 import type { Secret, SecretAdd, SecretAdded } from '@impz/api';
 import { getErrorMessage } from '@impz/shared';
-import type { ImpDatabase } from '../../../platform/db/open-database';
 import {
   createSecret,
   listSecrets,
@@ -8,14 +7,18 @@ import {
   removeFileRemoval,
   removeSecret,
   upsertSecret,
-} from '../../../platform/db/secrets';
-import type { NewSecret, SecretRecord } from '../../../platform/db/secrets';
+} from '../../../platform/db/create-checked-grant';
+import type { NewSecret, SecretRecord } from '../../../platform/db/create-checked-grant';
+import type { ImpDatabase } from '../../../platform/db/open-database';
+import {
+  buildConflictError,
+  buildNotFoundError,
+} from '../../../platform/errors/build-not-found-error';
 import { ImpdError } from '../../../platform/errors/impd-error';
-import { buildConflictError, buildNotFoundError } from '../../../platform/errors/impd-errors';
 import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import { buildStoredBinding } from './build-stored-binding';
 import type { OAuthRefresher } from './oauth-refresher';
-import { findIdClaims, parseOAuthState } from './oauth-state';
+import { findIdClaims, parseOAuthState } from './parse-oauth-state';
 import { buildValueFile } from './secret-files';
 import type { SecretFiles } from './secret-files';
 import { SECRET_KINDS } from './secret-kinds';

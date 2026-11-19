@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { startTestImpd } from '../../test-utils/start-test-impd';
 import { startStubFilesAgent } from '../../test-utils/vm/start-stub-files-agent';
-import { buildImpPaths } from '../../vm/storage/data-layout';
+import { buildImpPaths } from '../../vm/storage/build-imp-paths';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

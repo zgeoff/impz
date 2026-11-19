@@ -16,8 +16,8 @@ import {
 } from '@impz/agent-protocol';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
 import invariant from 'tiny-invariant';
-import { readImpByName, updateImpActivity } from '../../platform/db/imps';
-import { writeLease } from '../../platform/db/leases';
+import { readImpByName, updateImpActivity } from '../../platform/db/list-imps';
+import { writeLease } from '../../platform/db/list-leases';
 import { buildMockLeaseRecord } from '../../test-utils/imps/build-mock-lease-record';
 import { waitForOutcome } from '../../test-utils/imps/wait-for-outcome';
 import { buildStubClock } from '../../test-utils/platform/build-stub-clock';
@@ -31,8 +31,8 @@ import { startStubAgent } from '../../test-utils/vm/start-stub-agent';
 import { startStubInnerAgent } from '../../test-utils/vm/start-stub-inner-agent';
 import { startStubSessionAgent } from '../../test-utils/vm/start-stub-session-agent';
 import { readVmIdentity, writeVmIdentity } from '../../vm/sleep/vm-identity';
-import { buildImpPaths } from '../../vm/storage/data-layout';
-import { createJails } from '../../vm/vmm/jail';
+import { buildImpPaths } from '../../vm/storage/build-imp-paths';
+import { createJails } from '../../vm/vmm/create-jails';
 
 async function setupTest(
   options: Pick<TestImpdOptions, 'env' | 'frozenClockMs' | 'installBundle'> = {},

@@ -1,11 +1,11 @@
 import type { Config } from '../config';
 import type { TailscaleStatus } from '../host-net/net/tailscale-status';
-import { BUILD_KEEPALIVE_MS } from '../imps/images/build/image-op-stream';
+import { BUILD_KEEPALIVE_MS } from '../imps/images/build/run-image-op';
 import type { Imps } from '../imps/imps/imp-service';
-import type { Broker } from '../network/broker/broker-service';
+import type { BrokerService } from '../network/broker/broker-service';
 import type { EgressService } from '../network/egress/egress-service';
 import { createExposureService } from '../network/https/exposure-service';
-import { writeDatabaseCopy } from '../platform/db/database-copy';
+import { writeDatabaseCopy } from '../platform/db/write-database-copy';
 import { startRealTimer } from '../platform/process/start-real-timer';
 import { createApp } from '../surface/create-app';
 import type { AppDeps } from '../surface/create-app';
@@ -25,7 +25,7 @@ export interface ImpdAppParts {
   readonly services: ImpdServices;
   readonly imps: Imps;
   readonly governor: AppDeps['governor'];
-  readonly broker: Broker;
+  readonly broker: BrokerService;
   readonly egress: EgressService;
   readonly identity: HostIdentity;
   readonly peers: AppDeps['peers'];

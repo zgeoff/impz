@@ -1,5 +1,5 @@
 import { createCountedLimit } from '../../platform/process/counted-limit';
-import { createTokenBuckets } from '../../platform/process/token-buckets';
+import { createTokenBuckets } from '../../platform/process/create-token-buckets';
 
 // The limits count by imp, not by client: behind Docker's userland proxy every
 // client can share one source address, so a limit by address would lock

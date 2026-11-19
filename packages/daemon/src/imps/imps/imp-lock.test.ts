@@ -1,5 +1,5 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
-import { createImp, updateImpMove } from '../../platform/db/imps';
+import { createImp, updateImpMove } from '../../platform/db/list-imps';
 import { buildMockNewImp } from '../../test-utils/imps/build-mock-new-imp';
 import { startTestImpd } from '../../test-utils/start-test-impd';
 import { createCpuCgroups } from '../../vm/vmm/cpu-cgroups';

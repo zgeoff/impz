@@ -8,7 +8,7 @@ import { withAuditedOpen } from '../../platform/audit/api-audit';
 import type { ApiAudit } from '../../platform/audit/api-audit';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import type { SurfaceConfig } from '../surface-config';
-import { loadOrCreateHostKey, readFingerprint, setupSshDir } from './host-key';
+import { loadOrCreateHostKey, readFingerprint, setupSshDir } from './load-or-create-host-key';
 import { createLoginKeys } from './login-keys';
 import { startSshGateway } from './ssh-gateway';
 import type { SshGateway } from './ssh-gateway';

@@ -55,25 +55,25 @@ export { startStubDialAgent } from './vm/start-stub-dial-agent';
 export { startStubExecAgent } from './vm/start-stub-exec-agent';
 export { startStubInnerAgent } from './vm/start-stub-inner-agent';
 export { startStubServiceAgent } from './vm/start-stub-service-agent';
-export { buildImagePaths, buildImpPaths } from '../vm/storage/data-layout';
-export { createImage, readImageByName, updateImagePin } from '../platform/db/images';
-export { createImp, readImpByName, updateImpMove } from '../platform/db/imps';
+export { buildImagePaths, buildImpPaths } from '../vm/storage/build-imp-paths';
+export { createImage, readImageByName, updateImagePin } from '../platform/db/create-image';
+export { createImp, readImpByName, updateImpMove } from '../platform/db/list-imps';
 export { MIGRATIONS } from '../platform/db/run-migrations';
 export { loadConfig } from '../config';
 export { openDialStream } from '../vm/agent-client/dial-stream';
-export { openAccept, openListener } from '../vm/agent-client/listener-stream';
-export { sendServicesAdd } from '../vm/agent-client/service-requests';
+export { openAccept, openListener } from '../vm/agent-client/open-listener';
+export { sendServicesAdd } from '../vm/agent-client/send-services-list';
 export { ENFORCE_INTERVAL_MS, ENFORCE_TRIGGER } from '../imp-ops/governor/ram-governor';
 export { VmIdentitySchema, readVmIdentity, writeVmIdentity } from '../vm/sleep/vm-identity';
 export { buildTemplateKey } from '../vm/templates/build-template-key';
 export { createGenerationLog } from '../imps/imps/session-logs/generation-log';
 export { DOCKERFILE_FRONTEND } from '../imps/docker-contract/dockerfile-frontend';
-export { BUILD_KEEPALIVE_MS } from '../imps/images/build/image-op-stream';
+export { BUILD_KEEPALIVE_MS } from '../imps/images/build/run-image-op';
 
 export {
-  checkDockerfile,
+  dockerfileCheck,
   renderPinnedDockerfile,
 } from '../imps/images/dockerfile/dockerfile-check';
 
-export { parseDockerfile, splitNameWords } from '../imps/images/dockerfile/dockerfile-parse';
+export { dockerfileParse, splitNameWords } from '../imps/images/dockerfile/dockerfile-parse';
 export type { Instruction } from '../imps/images/dockerfile/dockerfile-parse';

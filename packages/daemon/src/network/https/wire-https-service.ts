@@ -1,13 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { getErrorMessage } from '@impz/shared';
-import { readServePorts } from '../../host-net/net/tailscale-serve';
+import { readServePorts } from '../../host-net/net/read-serve-ports';
 import type { TailscaleStatus } from '../../host-net/net/tailscale-status';
-import { listPublicImpNames, readPublicImp } from '../../platform/db/exposure';
 import type { ImpDatabase } from '../../platform/db/open-database';
+import { listPublicImpNames, readPublicImp } from '../../platform/db/read-public-imp';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import type { WakeProxy } from '../proxy/wake-proxy';
-import { createAcmeIssuer } from './acme/acme-issuer';
 import { createCertStore } from './acme/cert-store';
+import { createAcmeIssuer } from './acme/create-acme-issuer';
 import { createDnsProvider } from './dns/create-dns-provider';
 import type { DnsToken } from './dns/dns-token';
 import type { HttpsConfig } from './https-config';

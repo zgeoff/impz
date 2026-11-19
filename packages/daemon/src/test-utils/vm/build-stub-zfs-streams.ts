@@ -1,5 +1,5 @@
 import * as z from 'zod';
-import type { StreamRunner } from '../../platform/process/run-stream';
+import type { StreamRunner } from '../../platform/process/create-stream-runner';
 import type { FakeDataset, FakeSnapshot } from './build-stub-zfs';
 
 interface StubZfsStreamContext {

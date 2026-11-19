@@ -1,8 +1,8 @@
-import { isAgentLogIdentity } from '../../../vm/agent-client/agent-ids';
+import { isAgentLogIdentity } from '../../../vm/agent-client/is-agent-log-identity';
 import { buildLogKey } from './build-log-key';
 import type { SessionLogState } from './create-session-log-state';
 import type { GenerationLog, createGenerationLog } from './generation-log';
-import { probeTombstone, removeEmptyDirs, removeGenerationDir } from './session-log-files';
+import { probeTombstone, removeEmptyDirs, removeGenerationDir } from './read-session-log-range';
 import type { LiveLog } from './session-log-machine';
 import type { SessionLogImp, SessionLogLimits } from './session-log-service';
 

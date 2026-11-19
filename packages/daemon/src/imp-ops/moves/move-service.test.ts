@@ -6,12 +6,17 @@ import { join } from 'node:path';
 import type { MoveState } from '@impz/api';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
 import invariant from 'tiny-invariant';
-import { listImages, readImageByDigest, readImageByName } from '../../platform/db/images';
+import { listImages, readImageByDigest, readImageByName } from '../../platform/db/create-image';
 import type { LoggedImpEvent } from '../../platform/db/imp-log-entry';
-import { listImps, readImpByName, updateImpExposure, updateImpMove } from '../../platform/db/imps';
-import { readMoveSend, updateMoveSendStep } from '../../platform/db/move-sends';
-import { listMoveTickets } from '../../platform/db/move-tickets';
+import {
+  listImps,
+  readImpByName,
+  updateImpExposure,
+  updateImpMove,
+} from '../../platform/db/list-imps';
 import { MOVE_TRANSITIONS } from '../../platform/db/move-transitions';
+import { readMoveSend, updateMoveSendStep } from '../../platform/db/read-move-send';
+import { listMoveTickets } from '../../platform/db/read-move-ticket';
 import { buildMockMoveTicketRow } from '../../test-utils/imp-ops/build-mock-move-ticket-row';
 import { buildStubOverlappingMove } from '../../test-utils/imp-ops/build-stub-overlapping-move';
 import {
@@ -40,17 +45,17 @@ import { buildStubPublishHook } from '../../test-utils/vm/build-stub-publish-hoo
 import { buildStubStorageFaults } from '../../test-utils/vm/build-stub-storage-faults';
 import { buildStubStoragePressure } from '../../test-utils/vm/build-stub-storage-pressure';
 import { buildStubZfsStorage } from '../../test-utils/vm/build-stub-zfs-storage';
-import { buildImagePaths } from '../../vm/storage/data-layout';
-import { createXfsBackend } from '../../vm/storage/xfs-backend';
-import { FileEndSchema, MOVE_FRAMES, MoveFileSchema, readJsonPayload } from './move-frames';
-import { MOVE_FINISH_HEADER, MOVE_PART_HEADER, MoveHeaderSchema } from './move-header';
+import { buildImagePaths } from '../../vm/storage/build-imp-paths';
+import { createXfsBackend } from '../../vm/storage/create-xfs-backend';
 import {
   ReceiptSchema,
   buildReceipt,
   buildTicketHeader,
   readReceipt,
   readTicketHeader,
-} from './move-tickets';
+} from './build-ticket-header';
+import { FileEndSchema, MOVE_FRAMES, MoveFileSchema, readJsonPayload } from './move-frames';
+import { MOVE_FINISH_HEADER, MOVE_PART_HEADER, MoveHeaderSchema } from './move-header';
 
 function setupTest(config: Readonly<MoveHostsOptions> = {}) {
   return setupMoveHosts(config);

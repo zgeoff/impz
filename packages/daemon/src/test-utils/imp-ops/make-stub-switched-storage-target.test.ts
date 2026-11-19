@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { buildTicketHeader } from '../../imp-ops/moves/move-tickets';
+import { buildTicketHeader } from '../../imp-ops/moves/build-ticket-header';
 import { SOURCE_PEER, TARGET_URL, setupMoveHosts } from './create-move-hosts';
 import { makeStubSwitchedStorageTarget } from './make-stub-switched-storage-target';
 

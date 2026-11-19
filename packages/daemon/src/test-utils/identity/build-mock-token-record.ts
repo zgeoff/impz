@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import type { TokenRecord } from '../../platform/db/tokens';
+import type { TokenRecord } from '../../platform/db/list-token-records';
 import { hashSecret } from '../../platform/secrets/hash-secret';
 
 export function buildMockTokenRecord(overrides: Partial<TokenRecord> = {}): TokenRecord {

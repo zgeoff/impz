@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { ORPCError } from '@orpc/client';
 import invariant from 'tiny-invariant';
-import { listImps, readImpByName } from '../../platform/db/imps';
+import { listImps, readImpByName } from '../../platform/db/list-imps';
 import { buildStubDiskTools } from '../../test-utils/imps/build-stub-disk-tools';
 import { readBrokenInvariants } from '../../test-utils/imps/read-broken-invariants';
 import { waitForOutcome } from '../../test-utils/imps/wait-for-outcome';

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Make an imp disk from an image as impd's image writer does: export the
-# image's tree, write /etc/imp/image.json, size the ext4 by rootfs-plan.ts's
+# image's tree, write /etc/imp/image.json, size the ext4 by plan-rootfs.ts's
 # rule, mkfs.ext4 -d, then grow the file to impd's default 32 GiB disk and
 # the filesystem with it, offline, as impd's create does.
 #

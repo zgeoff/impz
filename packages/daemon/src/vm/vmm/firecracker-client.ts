@@ -1,5 +1,5 @@
 import * as z from 'zod';
-import { requireSocket } from '../files/vm-files';
+import { requireSocket } from '../files/write-regular-file';
 
 const InstanceInfoSchema = z.object({ state: z.enum(['Not started', 'Running', 'Paused']) });
 

@@ -6,19 +6,19 @@ import { updateEnv } from '@impz/shared/test-utils/update-env';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import * as z from 'zod';
-import { PROCEDURE_ACCESS } from '../../identity/auth/access-policy';
-import { runWhois } from '../../identity/auth/tailnet-identity';
+import { ACCESS_POLICY } from '../../identity/auth/access-policy';
+import { runWhois } from '../../identity/auth/create-tailnet-identities';
 import { PEER_HEADER } from '../../network/proxy/forwarded-peers';
 import { buildStubTailscale } from '../../test-utils/network/build-stub-tailscale';
 import { buildMockNewAuditEntry } from '../../test-utils/platform/build-mock-new-audit-entry';
 import { startTestImpd } from '../../test-utils/start-test-impd';
-import { tryExecSocket, tryTunnelSocket } from '../../test-utils/surface/try-impd-sockets';
+import { tryExecSocket, tryTunnelSocket } from '../../test-utils/surface/try-exec-socket';
 import { TEST_TOKEN } from '../../test-utils/test-token';
 import { buildStubExecGuest } from '../../test-utils/vm/build-stub-exec-guest';
 import { startStubExecAgent } from '../../test-utils/vm/start-stub-exec-agent';
-import { buildImpPaths } from '../../vm/storage/data-layout';
-import { listApiCalls } from '../db/api-audit';
-import { writeAuditEntry } from '../db/broker-audit';
+import { buildImpPaths } from '../../vm/storage/build-imp-paths';
+import { listApiCalls } from '../db/list-api-calls';
+import { writeAuditEntry } from '../db/write-audit-entry';
 
 interface SetupOptions {
   readonly tailscale: Pick<ReturnType<typeof buildStubTailscale>, 'run'>;
@@ -65,7 +65,7 @@ test('it refuses every procedure to a token whose scope is below what it needs',
     }),
   );
 
-  const cases = Object.entries(PROCEDURE_ACCESS).flatMap(([path, access]) =>
+  const cases = Object.entries(ACCESS_POLICY).flatMap(([path, access]) =>
     scopes.slice(0, scopes.indexOf(access.scope)).map((scope) => ({ path, scope })),
   );
 
@@ -114,7 +114,7 @@ test('it refuses every host-wide procedure to a manage token limited to some imp
     fetch: ctx.sendToImpd,
   });
 
-  const hostPaths = Object.entries(PROCEDURE_ACCESS)
+  const hostPaths = Object.entries(ACCESS_POLICY)
     .filter(([, access]) => access.on === 'host')
     .map(([path]) => path);
 

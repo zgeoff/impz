@@ -1,9 +1,9 @@
 import type { OutdatedPart, SystemInfo } from '@impz/api';
-import type { ImpRecord } from '../../platform/db/imps';
+import type { ImpRecord } from '../../platform/db/list-imps';
 import { readColdBootReason, readSnapshotMeta } from '../../vm/sleep/snapshot-meta';
 import { collectOutdatedParts, readVmIdentity } from '../../vm/sleep/vm-identity';
 import type { HostIdentity } from '../../vm/sleep/vm-identity';
-import type { ImpPaths } from '../../vm/storage/data-layout';
+import type { ImpPaths } from '../../vm/storage/build-imp-paths';
 
 export interface BootStatus {
   readonly coldBootReason?: string;

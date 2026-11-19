@@ -11,8 +11,8 @@ import {
   listImageRemovals,
   listImageUses,
   updateImagePin,
-} from '../../../platform/db/images';
-import { createImp } from '../../../platform/db/imps';
+} from '../../../platform/db/create-image';
+import { createImp } from '../../../platform/db/list-imps';
 import { REAL_CLOCK } from '../../../platform/process/real-clock';
 import { runCommand } from '../../../platform/process/run-command';
 import { runStreamed } from '../../../platform/process/run-streamed';
@@ -22,11 +22,11 @@ import { buildMockNewImp } from '../../../test-utils/imps/build-mock-new-imp';
 import { captureImpdLogs } from '../../../test-utils/platform/capture-impd-logs';
 import { createTestDatabase } from '../../../test-utils/platform/create-test-database';
 import { buildStubFiemap } from '../../../test-utils/vm/build-stub-fiemap';
+import { buildImagePaths } from '../../../vm/storage/build-imp-paths';
 import { countTreeBytes } from '../../../vm/storage/count-tree-bytes';
-import { buildImagePaths } from '../../../vm/storage/data-layout';
+import { createXfsBackend } from '../../../vm/storage/create-xfs-backend';
 import { createDiskBudget } from '../../../vm/storage/disk-budget';
 import { createStorageGate } from '../../../vm/storage/storage-gate';
-import { createXfsBackend } from '../../../vm/storage/xfs-backend';
 import { createImageWriter } from '../rootfs/create-image-writer';
 import { startTarProcess } from '../rootfs/start-tar-process';
 import { createImageEviction } from './create-image-eviction';

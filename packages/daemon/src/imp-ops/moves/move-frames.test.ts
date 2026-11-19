@@ -4,7 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import invariant from 'tiny-invariant';
-import { createStreamRunner } from '../../platform/process/run-stream';
+import { createStreamRunner } from '../../platform/process/create-stream-runner';
 import {
   MOVE_BLOCK_BYTES,
   MOVE_FRAMES,

@@ -3,15 +3,15 @@ import { ServiceRestartSchema, ServiceStateSchema } from '@impz/api';
 import type { Service, ServiceDef, ServiceList, ServiceLog } from '@impz/api';
 import { match } from 'ts-pattern';
 import type { ImpEventLog } from '../../../platform/db/create-imp-event-log';
-import type { ImpRecord } from '../../../platform/db/imps';
-import { ImpdError, isImpdError } from '../../../platform/errors/impd-error';
+import type { ImpRecord } from '../../../platform/db/list-imps';
 import {
   buildAgentOutdatedApiError,
   buildConflictError,
   buildForbiddenError,
   buildInvalidStateError,
   buildNotFoundError,
-} from '../../../platform/errors/impd-errors';
+} from '../../../platform/errors/build-not-found-error';
+import { ImpdError, isImpdError } from '../../../platform/errors/impd-error';
 import type { StartTimer } from '../../../platform/process/clock';
 import { startRealTimer } from '../../../platform/process/start-real-timer';
 import { AgentError } from '../../../vm/agent-client/agent-connection';
@@ -21,8 +21,8 @@ import {
   sendServicesList,
   sendServicesRemove,
   sendServicesRestart,
-} from '../../../vm/agent-client/service-requests';
-import { getSignalName } from '../../exec/signal-names';
+} from '../../../vm/agent-client/send-services-list';
+import { getSignalName } from '../../exec/get-signal-name';
 import type { ImpRuntime } from '../imp-runtime';
 import { createLogDecoders } from './create-log-decoders';
 import { mergeLogStreams } from './merge-log-streams';

@@ -1,6 +1,6 @@
 import { findForkAuthority } from '../identity/auth/access-policy';
-import { requireLeaseHolder } from '../identity/auth/caller-view';
-import { buildForbiddenError } from '../platform/errors/impd-errors';
+import { requireLeaseHolder } from '../identity/auth/require-lease-holder';
+import { buildForbiddenError } from '../platform/errors/build-not-found-error';
 import { formatCaller, isCallerAllowed } from '../platform/principal/caller';
 import type { CallerImps } from './build-caller-imps';
 import type { RpcImplementer } from './create-implementer';

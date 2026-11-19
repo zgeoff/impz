@@ -1,5 +1,5 @@
 import { closeSync, fstatSync, openSync } from 'node:fs';
-import { readErrno, readLibc } from '../../platform/process/libc';
+import { readErrno, readLibc } from '../../platform/process/read-libc';
 
 const PROT_READ = 0x1;
 const MAP_SHARED = 0x1;

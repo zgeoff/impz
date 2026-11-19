@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { HostIdentity } from '../sleep/vm-identity';
-import { BASE_BOOT_ARGS, VM_DEVICES } from '../vmm/configure-vm';
 import type { HugePages } from '../vmm/firecracker-client';
+import { BASE_BOOT_ARGS, VM_DEVICES } from '../vmm/setup-vm';
 
 export const TEMPLATE_BOOT_ARGS = [...BASE_BOOT_ARGS, 'imp.template=1'].join(' ');
 

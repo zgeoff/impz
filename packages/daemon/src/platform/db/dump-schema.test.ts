@@ -3,8 +3,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { dumpSchema } from './dump-schema';
 
-test('it matches the committed schema.ts', async () => {
-  const committed = readFileSync(join(import.meta.dir, 'schema.ts'), 'utf8');
+test('it matches the committed db.ts', async () => {
+  const committed = readFileSync(join(import.meta.dir, 'db.ts'), 'utf8');
 
   const rendered = await dumpSchema();
 

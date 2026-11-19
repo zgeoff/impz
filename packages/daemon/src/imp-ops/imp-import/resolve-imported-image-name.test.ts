@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { createImage } from '../../platform/db/images';
+import { createImage } from '../../platform/db/create-image';
 import { createTestDatabase } from '../../test-utils/platform/create-test-database';
 import { resolveImportedImageName } from './resolve-imported-image-name';
 

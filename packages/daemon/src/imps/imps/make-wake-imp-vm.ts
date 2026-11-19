@@ -1,12 +1,12 @@
 import type { ColdBootCause } from '@impz/api';
 import { getErrorMessage } from '@impz/shared';
-import { writeUnknownBoot } from '../../platform/db/cold-boots';
-import { removeTrustPending, updateImpActivity } from '../../platform/db/imps';
+import { writeUnknownBoot } from '../../platform/db/list-cold-boots';
+import { removeTrustPending, updateImpActivity } from '../../platform/db/list-imps';
 import type { ImpStateChange } from '../../platform/db/update-imp-state';
-import { buildStoppingError } from '../../platform/errors/impd-errors';
+import { buildStoppingError } from '../../platform/errors/build-not-found-error';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
+import { buildUffdDeviceError } from '../../vm/imps-contract/build-uffd-device-error';
 import { isOrdinaryBudgetError } from '../../vm/imps-contract/ram-budget-error';
-import { buildUffdDeviceError } from '../../vm/imps-contract/uffd-device-error';
 import {
   readColdBootReason,
   readSnapshotMeta,
@@ -16,7 +16,7 @@ import {
 } from '../../vm/sleep/snapshot-meta';
 import { readVmIdentity } from '../../vm/sleep/vm-identity';
 import type { VmIdentity } from '../../vm/sleep/vm-identity';
-import type { ImpPaths } from '../../vm/storage/data-layout';
+import type { ImpPaths } from '../../vm/storage/build-imp-paths';
 import type { ImpCgroup } from '../../vm/vmm/cpu-cgroups';
 import type { HugePages } from '../../vm/vmm/firecracker-client';
 import { checkMergeFlag } from './check-merge-flag';
@@ -25,11 +25,11 @@ import { formatTimings } from './format-timings';
 import type { ImpContext } from './imp-context';
 import { toLockedImp } from './imp-lock';
 import type { LockedImp } from './imp-lock';
-import { OOM_KILL_TRIGGER, startOomWatch } from './oom-kill';
 import { pickHugePages } from './pick-huge-pages';
 import { pickWakeHugePages } from './pick-wake-huge-pages';
 import { startCounting } from './read-running-imp-usage';
 import { requireNoOopsHold } from './require-no-oops-hold';
+import { OOM_KILL_TRIGGER, startOomWatch } from './start-oom-watch';
 
 interface WakeDeps {
   readonly context: ImpContext;

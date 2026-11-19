@@ -1,9 +1,9 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
 import invariant from 'tiny-invariant';
-import { createCheckpoint } from '../../platform/db/checkpoints';
-import { createImage } from '../../platform/db/images';
-import { createImp } from '../../platform/db/imps';
+import { createCheckpoint } from '../../platform/db/create-checkpoint';
+import { createImage } from '../../platform/db/create-image';
+import { createImp } from '../../platform/db/list-imps';
 import { buildMockNewCheckpoint } from '../../test-utils/imp-ops/build-mock-new-checkpoint';
 import { buildStubClock } from '../../test-utils/platform/build-stub-clock';
 import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';

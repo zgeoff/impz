@@ -1,4 +1,4 @@
-import { parseMounts } from '../../../platform/process/mounts';
+import { parseMounts } from '../../../platform/process/read-mounts';
 import { runChecked } from '../../../platform/process/run-command';
 import type { CommandRunner } from '../../../platform/process/run-command';
 

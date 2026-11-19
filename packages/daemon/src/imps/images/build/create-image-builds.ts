@@ -10,17 +10,17 @@ import {
   readBuildContext,
   writeBuildContext,
 } from '@impz/local-tar';
-import type { ImageRecord } from '../../../platform/db/images';
+import type { ImageRecord } from '../../../platform/db/create-image';
 import { ImpdError } from '../../../platform/errors/impd-error';
 import type { Clock } from '../../../platform/process/clock';
 import { getImpdLogger } from '../../../platform/process/get-impd-logger';
-import { buildUploadsDir } from '../../../vm/storage/data-layout';
+import { buildUploadsDir } from '../../../vm/storage/build-imp-paths';
 import type { DiskBudget } from '../../../vm/storage/disk-budget';
-import { checkReferenceRegistry } from '../../docker-contract/check-registry';
+import { checkReferenceRegistry } from '../../docker-contract/check-reference-registry';
 import { parseImageReference } from '../../docker-contract/parse-image-reference';
 import type { ImpsConfig } from '../../imps-config';
-import type { Builders } from '../builders/builder-imps';
-import { checkDockerfile, renderPinnedDockerfile } from '../dockerfile/dockerfile-check';
+import type { Builders } from '../builders/create-builders';
+import { dockerfileCheck, renderPinnedDockerfile } from '../dockerfile/dockerfile-check';
 import type { ExternalImage } from '../dockerfile/dockerfile-check';
 import { DockerfileError } from '../dockerfile/dockerfile-error';
 import {
@@ -28,8 +28,8 @@ import {
   pickRepoDigest,
   readImageStore,
   requireImagePlatform,
-} from '../pull/image-pin';
-import type { ImageStore, Pin, PinInspect } from '../pull/image-pin';
+} from '../pull/pick-repo-digest';
+import type { ImageStore, Pin, PinInspect } from '../pull/pick-repo-digest';
 import { requireClientImageName } from '../require-client-image-name';
 import type { ImageWriter } from '../rootfs/create-image-writer';
 import { createBuildEngine, toEngineRun } from './build-engine';
@@ -39,7 +39,7 @@ import { createBuildRuns } from './create-build-runs';
 import type { BuildRuns } from './create-build-runs';
 import type { BuildOutput } from './create-build-steps';
 import { DockerBuildError } from './docker-build-error';
-import { runGuestBuild } from './guest-build';
+import { runGuestBuild } from './run-guest-build';
 import { writeContextTar } from './write-context-tar';
 
 const DOCKERFILE_MAX_BYTES = 1024 ** 2;
@@ -118,7 +118,7 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
 
         const named = (() => {
           try {
-            return checkDockerfile(context.dockerfile);
+            return dockerfileCheck(context.dockerfile);
           } catch (error) {
             throw toBadRequest(error);
           }

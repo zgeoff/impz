@@ -8,7 +8,7 @@ import { buildMockOAuthConfig } from '@impz/api/test-utils/build-mock-oauth-conf
 import { server } from '@impz/shared/test-utils/server';
 import { HttpResponse, delay, http } from 'msw';
 import invariant from 'tiny-invariant';
-import { createSecret, removeSecret } from '../../../platform/db/secrets';
+import { createSecret, removeSecret } from '../../../platform/db/create-checked-grant';
 import { buildMockOAuthStateFile } from '../../../test-utils/identity/build-mock-oauth-state-file';
 import { buildStubBrokerJwt } from '../../../test-utils/network/build-stub-broker-jwt';
 import { createStubBrokerTokenEndpoint } from '../../../test-utils/network/create-stub-broker-token-endpoint';
@@ -20,7 +20,7 @@ import { createTestDatabase } from '../../../test-utils/platform/create-test-dat
 import { loadOrCreateBrokerCa } from '../tls/broker-ca';
 import { isDue } from './is-due';
 import { createOAuthRefresher } from './oauth-refresher';
-import { buildPendingState, formatOAuthState, parseOAuthState } from './oauth-state';
+import { buildPendingState, formatOAuthState, parseOAuthState } from './parse-oauth-state';
 import { buildValueFile, createSecretFiles } from './secret-files';
 
 async function setupTest() {

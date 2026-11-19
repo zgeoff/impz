@@ -1,15 +1,15 @@
-import { formatSubnet } from './addressing';
-import type { Subnet } from './addressing';
-import type { Uplinks } from './host-routes';
+import { buildRangeMatcher } from './build-range-matcher';
+import { formatSubnet } from './derive-slot-address';
+import type { Subnet } from './derive-slot-address';
 import type { Ipv6Plan } from './ipv6-plan';
 import { parseAddress } from './parse-address';
-import { buildRangeMatcher } from './range-matcher';
+import type { Uplinks } from './read-uplinks';
 import {
   BLOCKED_RANGES6,
   DOCUMENTATION_RANGES6,
   REFUSED_RANGES4,
   RESERVED_RANGES6,
-} from './ranges';
+} from './refused-ranges4';
 
 const HOST_ROUTES_TTL_MS = 30_000;
 

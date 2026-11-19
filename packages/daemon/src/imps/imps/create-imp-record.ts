@@ -1,12 +1,12 @@
 import type { EgressPolicy, ImpKind } from '@impz/api';
-import { countSlots } from '../../host-net/net/addressing';
-import type { ImageRecord } from '../../platform/db/images';
+import { countSlots } from '../../host-net/net/derive-slot-address';
+import type { ImageRecord } from '../../platform/db/create-image';
 import { ImpClashError } from '../../platform/db/imp-clash-error';
-import { createImpInFreeSlot, readImpByName } from '../../platform/db/imps';
-import type { ImpRecord } from '../../platform/db/imps';
-import { buildConflictError } from '../../platform/errors/impd-errors';
-import { resolveCpuSettings } from './cpu-limit';
+import { createImpInFreeSlot, readImpByName } from '../../platform/db/list-imps';
+import type { ImpRecord } from '../../platform/db/list-imps';
+import { buildConflictError } from '../../platform/errors/build-not-found-error';
 import type { ImpClock, ImpHost, ImpVms } from './imp-context';
+import { resolveCpuSettings } from './resolve-cpu-settings';
 
 const CREATE_TRIES = 3;
 

@@ -1,10 +1,10 @@
 import { getErrorMessage } from '@impz/shared';
 import { getImpdLogger } from '../../../platform/process/get-impd-logger';
-import type { IssueCertificate } from './acme-issuer';
 import type { CertStore, Certificate } from './cert-store';
+import type { IssueCertificate } from './create-acme-issuer';
+import type { CertificateInfo } from './plan-renewal';
+import { planRenewal, readBackoffMs } from './plan-renewal';
 import { readCertificateInfo } from './read-certificate-info';
-import type { CertificateInfo } from './renewal-policy';
-import { planRenewal, readBackoffMs } from './renewal-policy';
 
 export interface CertManager {
   readonly load: () => Certificate | null;

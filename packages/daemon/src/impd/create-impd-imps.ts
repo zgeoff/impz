@@ -2,37 +2,36 @@ import { readFileSync } from 'node:fs';
 import { availableParallelism } from 'node:os';
 import type { Config } from '../config';
 import type { Ipv6Plan } from '../host-net/net/ipv6-plan';
+import { readGuestNetBytes } from '../host-net/net/read-guest-net-bytes';
 import type { TailscaleStatus } from '../host-net/net/tailscale-status';
-import { readGuestNetBytes } from '../host-net/net/tap-bytes';
 import { createTapDevices } from '../host-net/net/tap-devices';
 import { buildDeferredAdmission } from '../imp-ops/governor/build-deferred-admission';
 import { createRamGovernor } from '../imp-ops/governor/ram-governor';
 import type { RamGovernor } from '../imp-ops/governor/ram-governor';
-import { createImpWatchdog } from '../imp-ops/watchdog/imp-watchdog';
-import { growFilesystem } from '../imps/imps/imp-disk';
+import { createImpWatchdog } from '../imp-ops/watchdog/create-imp-watchdog';
+import { growFilesystem } from '../imps/imps/grow-disk-file';
 import { createImpService } from '../imps/imps/imp-service';
 import type { ImpServiceDeps, Imps } from '../imps/imps/imp-service';
 import { createKernelOopsWatch } from '../imps/imps/kernel-oops-watch';
-import type { Broker } from '../network/broker/broker-service';
+import type { BrokerService } from '../network/broker/broker-service';
 import type { EgressService } from '../network/egress/egress-service';
-import { countImpsByState, listImps } from '../platform/db/imps';
+import { countImpsByState, listImps } from '../platform/db/list-imps';
 import { getImpdLogger } from '../platform/process/get-impd-logger';
 import { readHostLoad } from '../platform/process/read-host-load';
 import { readText } from '../platform/process/read-text';
 import { runCommand } from '../platform/process/run-command';
-import { startImpTelemetry } from '../platform/telemetry/imp-telemetry';
+import { startImpTelemetry } from '../platform/telemetry/start-imp-telemetry';
 import { createMemoryController } from '../vm/memory/memory-controller';
 import type { MemoryController } from '../vm/memory/memory-controller';
 import { createPluggedSizes } from '../vm/memory/plugged-sizes';
 import { readHostIdentity, readVmIdentity } from '../vm/sleep/vm-identity';
 import type { HostIdentity } from '../vm/sleep/vm-identity';
-import { buildImpPaths } from '../vm/storage/data-layout';
+import { buildImpPaths } from '../vm/storage/build-imp-paths';
 import { createCpuCgroups } from '../vm/vmm/cpu-cgroups';
-import { createJails } from '../vm/vmm/jail';
-import { checkGuestMemoryMergeable, readKsmProfitMib } from '../vm/vmm/ksm';
+import { createJails } from '../vm/vmm/create-jails';
 import { probeUffdDevice } from '../vm/vmm/probe-uffd-device';
 import { readHugePagePool } from '../vm/vmm/read-huge-page-pool';
-import { createVmRunner } from '../vm/vmm/vm-runner';
+import { checkGuestMemoryMergeable, readKsmProfitMib } from '../vm/vmm/read-ksm-host-stats';
 import {
   readHugetlbMibAsync,
   readOwnedRamAsync,
@@ -42,14 +41,15 @@ import {
   readThreadIds,
   readUnsharedRamMib,
   readVmMemory,
-} from '../vm/vmm/vm-stats';
-import type { VmRam } from '../vm/vmm/vm-stats';
+} from '../vm/vmm/read-vm-memory';
+import type { VmRam } from '../vm/vmm/read-vm-memory';
+import { createVmRunner } from '../vm/vmm/vm-runner';
 import type { ImpdStorage } from './create-impd-storage';
 import type { ImpBoundaries, ImpdDeps } from './impd-deps';
 
 export interface GovernedParts {
   readonly storage: ImpdStorage;
-  readonly broker: Pick<Broker, 'readExecEnv'>;
+  readonly broker: Pick<BrokerService, 'readExecEnv'>;
   readonly egress: EgressService;
   readonly ipv6: Ipv6Plan | null;
   readonly readServiceUrl: (name: string) => string | null;

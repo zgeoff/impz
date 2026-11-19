@@ -1,9 +1,9 @@
 import { isAllowedOrigin } from '../../platform/http/is-allowed-origin';
 import { readSession, readSessionCookies } from '../../platform/http/session-cookie';
 import type { Caller } from '../../platform/principal/caller';
-import { isAllowedAmbientRequest } from './ambient-request';
-import type { KnownHosts } from './ambient-request';
-import type { TailnetIdentities } from './tailnet-identity';
+import type { TailnetIdentities } from './create-tailnet-identities';
+import { isAllowedAmbientRequest } from './is-allowed-ambient-request';
+import type { KnownHosts } from './is-allowed-ambient-request';
 import { findBearer } from './token-store';
 import type { TokenStore } from './token-store';
 
@@ -24,7 +24,7 @@ export interface CallerOptions {
   readonly cookie: boolean;
 }
 
-export async function resolveCaller(
+export async function authenticate(
   request: Request,
   sources: Readonly<CallerSources>,
   options: Readonly<CallerOptions>,

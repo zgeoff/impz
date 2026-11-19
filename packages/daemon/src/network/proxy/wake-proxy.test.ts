@@ -4,7 +4,12 @@ import { join } from 'node:path';
 import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
 import invariant from 'tiny-invariant';
-import { readImpByName, removeImp, updateImpActivity, updateImpMove } from '../../platform/db/imps';
+import {
+  readImpByName,
+  removeImp,
+  updateImpActivity,
+  updateImpMove,
+} from '../../platform/db/list-imps';
 import { seedLoopbackImp } from '../../test-utils/imps/seed-loopback-imp';
 import { startStubBrokerSocketUpstream } from '../../test-utils/network/start-stub-broker-socket-upstream';
 import { startStubCutStream } from '../../test-utils/network/start-stub-cut-stream';

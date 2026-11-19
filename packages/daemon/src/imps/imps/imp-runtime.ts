@@ -1,23 +1,22 @@
 import type { Activity, InnerStatus } from '@impz/agent-protocol';
 import { getErrorMessage } from '@impz/shared';
-import { listColdBoots } from '../../platform/db/cold-boots';
+import { listColdBoots } from '../../platform/db/list-cold-boots';
 import {
   listImps,
   readImpById,
   readImpByName,
   updateImpActivity,
   updateImpRequest,
-} from '../../platform/db/imps';
-import type { ImpRecord } from '../../platform/db/imps';
-import { ImpdError } from '../../platform/errors/impd-error';
+} from '../../platform/db/list-imps';
+import type { ImpRecord } from '../../platform/db/list-imps';
 import {
   buildBuilderError,
   buildInvalidStateError,
   isMovingError,
-} from '../../platform/errors/impd-errors';
+} from '../../platform/errors/build-not-found-error';
+import { ImpdError } from '../../platform/errors/impd-error';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
-import type { AgentFeature } from '../../vm/agent-client/agent-outdated';
-import { sendActivity, sendPing } from '../../vm/agent-client/agent-requests';
+import type { AgentFeature } from '../../vm/agent-client/build-agent-outdated-error';
 import { openDialStream } from '../../vm/agent-client/dial-stream';
 import type { DialStream, DialTarget } from '../../vm/agent-client/dial-stream';
 import { openAttachStream, openExecStream } from '../../vm/agent-client/exec-stream';
@@ -26,10 +25,11 @@ import type {
   AgentExecRequest,
   ExecStream,
 } from '../../vm/agent-client/exec-stream';
-import { openAccept, openListener } from '../../vm/agent-client/listener-stream';
-import type { GuestListener, ListenSpec } from '../../vm/agent-client/listener-stream';
+import { openAccept, openListener } from '../../vm/agent-client/open-listener';
+import type { GuestListener, ListenSpec } from '../../vm/agent-client/open-listener';
 import { toSeenSessions } from '../../vm/agent-client/seen-session';
-import type { ImpPaths } from '../../vm/storage/data-layout';
+import { sendActivity, sendPing } from '../../vm/agent-client/send-agent-request';
+import type { ImpPaths } from '../../vm/storage/build-imp-paths';
 import { isDiskFullError } from '../../vm/storage/disk-full-error';
 import type { BootTemplates } from '../../vm/templates/boot-templates';
 import type { MemoryWarm } from '../../vm/vmm/create-memory-warm';

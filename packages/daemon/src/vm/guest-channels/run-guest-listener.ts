@@ -1,4 +1,4 @@
-import type { GuestListener } from '../agent-client/listener-stream';
+import type { GuestListener } from '../agent-client/open-listener';
 
 export const MAX_RELAYS_PER_FORWARD = 64;
 

@@ -1,4 +1,4 @@
-import type { GuestListener, ListenSpec } from '../../vm/agent-client/listener-stream';
+import type { GuestListener, ListenSpec } from '../../vm/agent-client/open-listener';
 
 interface StubListenerQueue {
   readonly ids: (number | null)[];

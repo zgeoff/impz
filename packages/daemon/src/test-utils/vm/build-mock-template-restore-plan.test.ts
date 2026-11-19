@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { buildImpPaths } from '../../vm/storage/data-layout';
+import { buildImpPaths } from '../../vm/storage/build-imp-paths';
 import { buildMockTemplateRestorePlan } from './build-mock-template-restore-plan';
 
 test('it builds a default template restore plan', () => {

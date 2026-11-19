@@ -1,5 +1,5 @@
 import type { AuditRefusal, GrantFilter } from '@impz/api';
-import type { NewAuditEntry } from '../../../platform/db/broker-audit';
+import type { NewAuditEntry } from '../../../platform/db/write-audit-entry';
 import { isRequestInFilter } from './is-request-in-filter';
 
 export interface Credential {

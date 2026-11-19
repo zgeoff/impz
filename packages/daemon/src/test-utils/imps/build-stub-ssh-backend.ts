@@ -2,12 +2,12 @@ import { buildActivityTracker } from '../../imps/imps/activity-tracker';
 import type { ConnectionKind } from '../../imps/imps/activity-tracker';
 import type { ImpRuntime } from '../../imps/imps/imp-runtime';
 import type { SshBackend } from '../../imps/ssh/ssh-connection-context';
-import type { ImpRecord } from '../../platform/db/imps';
-import { buildNotFoundError } from '../../platform/errors/impd-errors';
+import type { ImpRecord } from '../../platform/db/list-imps';
+import { buildNotFoundError } from '../../platform/errors/build-not-found-error';
 import type { AuditActor } from '../../platform/principal/caller';
 import type { DialEvent, DialStream, DialTarget } from '../../vm/agent-client/dial-stream';
 import type { AgentExecRequest, ExecEvent, ExecStream } from '../../vm/agent-client/exec-stream';
-import type { GuestListener, ListenSpec } from '../../vm/agent-client/listener-stream';
+import type { GuestListener, ListenSpec } from '../../vm/agent-client/open-listener';
 
 interface StubExec {
   readonly request: AgentExecRequest;

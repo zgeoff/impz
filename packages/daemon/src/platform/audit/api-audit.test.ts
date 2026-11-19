@@ -3,7 +3,7 @@ import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { readErrorCode } from '../../surface/read-error-code';
 import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
 import { createTestDatabase } from '../../test-utils/platform/create-test-database';
-import { listApiCalls } from '../db/api-audit';
+import { listApiCalls } from '../db/list-api-calls';
 import { ImpdError } from '../errors/impd-error';
 import { createApiAudit, findImpName, withAuditedOpen } from './api-audit';
 

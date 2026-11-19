@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { runCommand } from '../../platform/process/run-command';
 import type { CommandRunner } from '../../platform/process/run-command';
-import type { SlotAddress } from './addressing';
-import { GATEWAY_IP6 } from './addressing6';
+import { GATEWAY_IP6 } from './derive-guest-ip6';
+import type { SlotAddress } from './derive-slot-address';
 
 export interface TapDevices {
   readonly setupTap: (address: SlotAddress, owner?: TapOwner | null) => Promise<void>;

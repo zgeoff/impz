@@ -1,9 +1,9 @@
 import type { Scope } from '@impz/api';
 import type { Access } from '@zgeoff/mcp-auth';
 import type { Caller } from '../../platform/principal/caller';
-import { pickGrantScope } from './grant-limits';
 import type { ImpLimits } from './imp-limits-schema';
-import type { ServiceClients } from './read-service-files';
+import { pickGrantScope } from './pick-grant-scope';
+import type { ServiceClients } from './read-service-settings';
 
 type ServiceAccess = Extract<Access<Scope, ImpLimits>, { kind: 'service' }>;
 

@@ -1,8 +1,8 @@
 import { expect, mock, test } from 'bun:test';
 import invariant from 'tiny-invariant';
 import { buildStubHostRoutes } from '../../test-utils/host-net/build-stub-host-routes';
-import { parseSubnet } from './addressing';
-import { parsePrefix64 } from './addressing6';
+import { parsePrefix64 } from './derive-guest-ip6';
+import { parseSubnet } from './derive-slot-address';
 import { NO_HOST_ROUTES, createReachPolicy } from './reach-policy';
 
 test('it builds the ranges each imp and each public imp is refused', () => {

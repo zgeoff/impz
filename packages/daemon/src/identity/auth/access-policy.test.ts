@@ -5,7 +5,7 @@ import { traverseContractProcedures } from '@orpc/server';
 import type { Caller } from '../../platform/principal/caller';
 import { buildMockCaller } from '../../test-utils/identity/build-mock-caller';
 import {
-  PROCEDURE_ACCESS,
+  ACCESS_POLICY,
   checkAccess,
   findAccess,
   findDeclaredAccess,
@@ -17,14 +17,14 @@ import {
 } from './access-policy';
 import type { Refusal } from './access-policy';
 
-test('#PROCEDURE_ACCESS has a rule for every procedure a caller reaches, and no stale rule', () => {
+test('#ACCESS_POLICY has a rule for every procedure a caller reaches, and no stale rule', () => {
   const paths: string[] = [];
 
   traverseContractProcedures({ router: callerContract, path: [] }, (procedure) => {
     paths.push(procedure.path.join('.'));
   });
 
-  expect(Object.keys(PROCEDURE_ACCESS)).toIncludeSameMembers(paths);
+  expect(Object.keys(ACCESS_POLICY)).toIncludeSameMembers(paths);
 });
 
 test('#checkAccess refuses a path with no rule to every caller', async () => {
@@ -883,7 +883,7 @@ test.each([
       principal: 'grant:grant-a',
     });
 
-    const paths = Object.keys(PROCEDURE_ACCESS).filter((path) => findAccess(path)?.on !== 'grant');
+    const paths = Object.keys(ACCESS_POLICY).filter((path) => findAccess(path)?.on !== 'grant');
     const inputs = [{ name: 'dev-a', secret: 'gh' }, { name: 'web' }, {}];
 
     const generations = new Map([['gh', 'gen-gh']]);

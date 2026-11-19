@@ -1,4 +1,4 @@
-import type { Uplinks } from '../../host-net/net/host-routes';
+import type { Uplinks } from '../../host-net/net/read-uplinks';
 
 interface StubHostRoutesOptions {
   readonly connected4?: readonly string[];

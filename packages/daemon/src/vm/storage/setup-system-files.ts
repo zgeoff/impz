@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { writeCopyDurably } from '../../platform/process/write-file-durably';
 import type { VmConfig } from '../vm-config';
-import { buildSystemDrivePath } from './data-layout';
+import { buildSystemDrivePath } from './build-imp-paths';
 import { deriveFileSha256, readKernelInfo } from './system-file-info';
 import type { SystemFileInfo } from './system-file-info';
 

@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import type { NetworkMember } from '../../platform/db/networks';
+import type { NetworkMember } from '../../platform/db/list-networks';
 
 export function buildMockNetworkMember(overrides: Partial<NetworkMember> = {}): NetworkMember {
   return {

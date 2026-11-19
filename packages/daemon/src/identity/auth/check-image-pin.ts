@@ -1,5 +1,5 @@
 import { isImpAllowed } from '@impz/api';
-import type { ImageRecord } from '../../platform/db/images';
+import type { ImageRecord } from '../../platform/db/create-image';
 import { formatCaller } from '../../platform/principal/caller';
 import type { Caller } from '../../platform/principal/caller';
 import type { Refusal } from './access-policy';

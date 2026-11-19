@@ -1,5 +1,5 @@
 import type { Config } from '../config';
-import type { Builders } from '../imps/images/builders/builder-imps';
+import type { Builders } from '../imps/images/builders/create-builders';
 import { createImageService } from '../imps/images/image-service';
 import type { ImageService } from '../imps/images/image-service';
 import { startTarProcess } from '../imps/images/rootfs/start-tar-process';

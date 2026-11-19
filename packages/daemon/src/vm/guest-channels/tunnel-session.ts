@@ -11,7 +11,7 @@ import { match } from 'ts-pattern';
 import { ImpdError } from '../../platform/errors/impd-error';
 import { createCountedLimit } from '../../platform/process/counted-limit';
 import type { DialStream, DialTarget } from '../agent-client/dial-stream';
-import type { GuestListener, ListenSpec } from '../agent-client/listener-stream';
+import type { GuestListener, ListenSpec } from '../agent-client/open-listener';
 import { buildGuestFailure } from './build-guest-failure';
 import { createAckSender } from './create-ack-sender';
 import { createAckWindow } from './create-ack-window';

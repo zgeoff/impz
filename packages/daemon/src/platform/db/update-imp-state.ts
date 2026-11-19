@@ -1,11 +1,11 @@
 import type { ColdBootCause, ImpChangeReason, ImpEventDetail, ImpState } from '@impz/api';
 import type { ExpressionBuilder, Updateable } from 'kysely';
-import { buildNotFoundError } from '../errors/impd-errors';
+import { buildNotFoundError } from '../errors/build-not-found-error';
 import { appendImpChange } from './append-imp-change';
-import { requireTransition } from './imp-transitions';
-import type { ImpRecord } from './imps';
+import type { DB } from './db';
+import type { ImpRecord } from './list-imps';
 import type { ImpDatabase } from './open-database';
-import type { DB } from './schema';
+import { requireTransition } from './require-transition';
 import { toImpRecord } from './to-imp-record';
 import { withImpTransaction } from './with-imp-transaction';
 

@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import type { OAuthStateFile } from '../../network/broker/secrets/oauth-state';
+import type { OAuthStateFile } from '../../network/broker/secrets/parse-oauth-state';
 
 const HOUR_MS = 3_600_000;
 

@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import type { NetworkRecord } from '../../platform/db/networks';
+import type { NetworkRecord } from '../../platform/db/list-networks';
 
 export function buildMockNetworkRecord(overrides: Partial<NetworkRecord> = {}): NetworkRecord {
   return {

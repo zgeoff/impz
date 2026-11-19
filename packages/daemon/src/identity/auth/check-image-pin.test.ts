@@ -5,7 +5,7 @@ import {
   readImageByName,
   updateImage,
   updateImagePin,
-} from '../../platform/db/images';
+} from '../../platform/db/create-image';
 import { buildMockCaller } from '../../test-utils/identity/build-mock-caller';
 import { buildMockNewImage } from '../../test-utils/imps/build-mock-new-image';
 import { buildQueryGate } from '../../test-utils/platform/build-query-gate';

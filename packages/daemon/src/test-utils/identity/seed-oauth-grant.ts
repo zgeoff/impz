@@ -1,8 +1,8 @@
 import type { Scope } from '@impz/api';
 import type { MCPAuth } from '@zgeoff/mcp-auth';
 import { authorizeTestClient } from '@zgeoff/mcp-auth/testing';
-import { formatScopeList } from '../../identity/oauth/grant-limits';
 import type { ImpLimits } from '../../identity/oauth/imp-limits-schema';
+import { formatScopeList } from '../../identity/oauth/pick-grant-scope';
 
 interface OAuthGrantInput {
   readonly scope: Scope;

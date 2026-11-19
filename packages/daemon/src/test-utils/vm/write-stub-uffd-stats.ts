@@ -1,5 +1,5 @@
 import { writeFileSync } from 'node:fs';
-import { UFFD_STATS_BYTES, UFFD_STATS_OFFSETS } from '../../vm/vmm/uffd-stats-layout';
+import { UFFD_STATS_BYTES, UFFD_STATS_LAYOUT } from '../../vm/vmm/uffd-stats-layout';
 
 // the counts a page handler writes to its stats file, as the handler keeps them
 export interface StubUffdCounts {
@@ -11,9 +11,9 @@ export interface StubUffdCounts {
 export function writeStubUffdStats(path: string, counts: Readonly<StubUffdCounts>): void {
   const raw = Buffer.alloc(UFFD_STATS_BYTES);
 
-  raw.writeBigUInt64LE(BigInt(counts.faults), UFFD_STATS_OFFSETS.faults);
-  raw.writeBigUInt64LE(BigInt(counts.blocks), UFFD_STATS_OFFSETS.blocks);
-  raw.writeBigUInt64LE(BigInt(counts.serveNs), UFFD_STATS_OFFSETS.serveNs);
+  raw.writeBigUInt64LE(BigInt(counts.faults), UFFD_STATS_LAYOUT.faults);
+  raw.writeBigUInt64LE(BigInt(counts.blocks), UFFD_STATS_LAYOUT.blocks);
+  raw.writeBigUInt64LE(BigInt(counts.serveNs), UFFD_STATS_LAYOUT.serveNs);
 
   writeFileSync(path, raw);
 }

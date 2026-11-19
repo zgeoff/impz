@@ -16,7 +16,7 @@ import { buildStubTickerTimer } from '../../test-utils/platform/build-stub-ticke
 import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
 import type { Certificate } from './acme/cert-store';
 import { createCertStore } from './acme/cert-store';
-import { createCloudflareProvider } from './dns/cloudflare-provider';
+import { createCloudflareProvider } from './dns/create-cloudflare-provider';
 import { createDnsToken } from './dns/dns-token';
 import { createHttpsService } from './https-service';
 

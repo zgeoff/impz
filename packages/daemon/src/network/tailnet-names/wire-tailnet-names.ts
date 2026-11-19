@@ -1,12 +1,12 @@
-import { deriveSlotAddress } from '../../host-net/net/addressing';
+import { deriveSlotAddress } from '../../host-net/net/derive-slot-address';
 import type { TailscaleStatus } from '../../host-net/net/tailscale-status';
 import type { Imps } from '../../imps/imps/imp-service';
-import { readImpByName } from '../../platform/db/imps';
+import { readImpByName } from '../../platform/db/list-imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { runChecked, runCommand } from '../../platform/process/run-command';
 import type { CommandRunner } from '../../platform/process/run-command';
 import type { NetworkConfig } from '../network-config';
-import { loadOrCreateHostId } from './host-id';
+import { loadOrCreateHostId } from './load-or-create-host-id';
 import { readOAuthCredential } from './oauth-credential';
 import { createServiceServe } from './service-serve';
 import { createServicesApi } from './services-api';

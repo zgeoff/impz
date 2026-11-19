@@ -4,14 +4,14 @@ import { ENFORCE_INTERVAL_MS } from '../imp-ops/governor/ram-governor';
 import type { RamGovernor } from '../imp-ops/governor/ram-governor';
 import type { IdleLoop } from '../imp-ops/idle/idle-loop';
 import type { Imps } from '../imps/imps/imp-service';
-import type { Broker } from '../network/broker/broker-service';
+import type { BrokerService } from '../network/broker/broker-service';
 import type { WakeProxy } from '../network/proxy/wake-proxy';
 import type { TailnetNames } from '../network/tailnet-names/tailnet-names';
 import { startTicker } from '../platform/process/ticker';
 import type { Ticker, TickerTimer } from '../platform/process/ticker';
 import type { MemoryController } from '../vm/memory/memory-controller';
+import type { StorageGcService } from '../vm/storage/create-storage-gc';
 import type { DiskUsageCache } from '../vm/storage/disk-usage-cache';
-import type { StorageGcService } from '../vm/storage/storage-gc';
 
 export interface ImpdTickerParts {
   readonly idle: Pick<IdleLoop, 'runCheck'>;
@@ -21,7 +21,7 @@ export interface ImpdTickerParts {
   readonly memory: Pick<MemoryController, 'runTick'>;
   readonly proxy: Pick<WakeProxy, 'syncListeners'>;
   readonly tailnetNames: Pick<TailnetNames, 'runSync'> | null;
-  readonly broker: Pick<Broker, 'applyGrants'>;
+  readonly broker: Pick<BrokerService, 'applyGrants'>;
   readonly gc: Pick<StorageGcService, 'runScheduled'>;
   readonly diskUsage: Pick<DiskUsageCache, 'runPass' | 'requestRefresh'>;
   readonly backups: Pick<BackupService, 'runScheduled'> | null;

@@ -5,9 +5,9 @@ import { StrictGetMethodPlugin } from '@orpc/server/plugins';
 import { Elysia } from 'elysia';
 import { autoHead } from 'elysia/auto-head';
 import { websocket } from 'elysia/websocket';
-import { resolveCaller } from '../identity/auth/authenticate';
+import { authenticate } from '../identity/auth/authenticate';
 import type { CallerSources } from '../identity/auth/authenticate';
-import { createLogouts } from '../identity/auth/logouts';
+import { createLogouts } from '../identity/auth/create-logouts';
 import type { Revocations } from '../identity/auth/revocations';
 import type { MoveService } from '../imp-ops/moves/move-service';
 import { redeemPeerAddress } from '../network/proxy/forwarded-peers';
@@ -15,7 +15,7 @@ import type { ForwardedPeers } from '../network/proxy/forwarded-peers';
 import { isAllowedOrigin } from '../platform/http/is-allowed-origin';
 import type { Caller } from '../platform/principal/caller';
 import { getImpdLogger } from '../platform/process/get-impd-logger';
-import { createSessionHandler } from './auth/session-handler';
+import { createSessionHandler } from './auth/create-session-handler';
 import { createDashboardRoutes } from './create-dashboard-routes';
 import { createExecSockets } from './create-exec-sockets';
 import { createRouter } from './create-router';
@@ -23,7 +23,7 @@ import type { RouterDeps } from './create-router';
 import { createTunnelSocketRoute } from './create-tunnel-socket-route';
 import { createExecTickets, isCallerLive } from './exec/exec-tickets';
 import type { BuildContextRoute } from './images/build-context-route';
-import { createMcpEndpoint } from './mcp/mcp-endpoint';
+import { createMcpEndpoint } from './mcp/create-mcp-endpoint';
 import type { MovePeerHandler } from './moves/create-move-peer-handler';
 import type { PublicMcpTransport } from './oauth/public-listener';
 import { withRetryAfter } from './with-retry-after';
@@ -71,7 +71,7 @@ export function createApp(deps: AppDeps) {
     const socket = server?.requestIP(request)?.address ?? null;
     const peer = redeemPeerAddress(request, socket, deps.peers);
 
-    return resolveCaller(request, sources, { peer, cookie });
+    return authenticate(request, sources, { peer, cookie });
   };
 
   const logRpcFailure =

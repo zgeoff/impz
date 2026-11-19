@@ -1,7 +1,7 @@
 import { DOCKERFILE_FRONTEND } from '../../imps/docker-contract/dockerfile-frontend';
-import type { Builders } from '../../imps/images/builders/builder-imps';
+import type { Builders } from '../../imps/images/builders/create-builders';
 import { createGuestExec } from '../../imps/images/builders/guest-exec';
-import { PIN_INSPECT_FORMAT } from '../../imps/images/pull/image-pin';
+import { PIN_INSPECT_FORMAT } from '../../imps/images/pull/pick-repo-digest';
 import { buildStubGuest } from '../vm/build-stub-guest';
 import type { StubAnswer, StubRun } from '../vm/build-stub-guest';
 

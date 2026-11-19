@@ -1,9 +1,9 @@
 import { basename } from 'node:path';
-import { listImps } from '../../platform/db/imps';
+import { listImps } from '../../platform/db/list-imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { readLoadingMeta, readSnapshotMeta } from '../../vm/sleep/snapshot-meta';
 import { readVmIdentity } from '../../vm/sleep/vm-identity';
-import type { ImpPaths } from '../../vm/storage/data-layout';
+import type { ImpPaths } from '../../vm/storage/build-imp-paths';
 import { removeUnusedSystemDrives } from '../../vm/storage/remove-unused-system-drives';
 
 interface RemoveUnusedDrivesOptions {

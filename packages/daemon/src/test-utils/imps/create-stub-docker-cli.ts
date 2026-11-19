@@ -1,7 +1,7 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { formatShellWord } from '@impz/shared/test-utils/format-shell-word';
-import { PIN_INSPECT_FORMAT } from '../../imps/images/pull/image-pin';
+import { PIN_INSPECT_FORMAT } from '../../imps/images/pull/pick-repo-digest';
 
 interface StubDockerInspect {
   readonly Id: string;

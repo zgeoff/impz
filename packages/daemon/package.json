@@ -9,7 +9,7 @@
     "./read-text": "./src/platform/process/read-text.ts",
     "./real-clock": "./src/platform/process/real-clock.ts",
     "./test-utils": "./src/test-utils/index.ts",
-    "./test-utils/data-layout": "./src/vm/storage/data-layout.ts",
+    "./test-utils/data-layout": "./src/vm/storage/build-imp-paths.ts",
     "./test-utils/*": "./src/test-utils/*.ts",
     "./package.json": "./package.json"
   },

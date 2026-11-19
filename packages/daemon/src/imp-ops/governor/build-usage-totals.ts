@@ -1,4 +1,4 @@
-import type { VmRam } from '../../vm/vmm/vm-stats';
+import type { VmRam } from '../../vm/vmm/read-vm-memory';
 
 interface MeasuredImp {
   readonly id: string;

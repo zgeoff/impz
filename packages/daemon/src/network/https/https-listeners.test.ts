@@ -3,16 +3,16 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { connect } from 'node:tls';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
 import invariant from 'tiny-invariant';
-import { readPublicImp } from '../../platform/db/exposure';
-import { readImpByName, updateImpExposure } from '../../platform/db/imps';
+import { readImpByName, updateImpExposure } from '../../platform/db/list-imps';
+import { readPublicImp } from '../../platform/db/read-public-imp';
 import { createMockCertificate } from '../../test-utils/network/create-mock-certificate';
 import { startStubHeaderEcho } from '../../test-utils/network/start-stub-header-echo';
 import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
 import { startTestImpd } from '../../test-utils/start-test-impd';
 import { createForwardedPeers } from '../proxy/forwarded-peers';
 import { startWakeProxy } from '../proxy/wake-proxy';
+import { buildCredentialHash, createPublicScope } from './build-credential-hash';
 import { createHttpsListeners } from './https-listeners';
-import { buildCredentialHash, createPublicScope } from './public-auth';
 import { createPublicLimits } from './public-limits';
 
 async function setupTest() {

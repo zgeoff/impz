@@ -1,5 +1,5 @@
 import type { Imp } from '@impz/api';
-import { listImps, updateImpActivity } from '../../platform/db/imps';
+import { listImps, updateImpActivity } from '../../platform/db/list-imps';
 import {
   HOLD_LABEL,
   LEGACY_PRINCIPAL,
@@ -7,9 +7,9 @@ import {
   listLeases,
   removeLeases,
   writeLease,
-} from '../../platform/db/leases';
-import type { LeaseRecord } from '../../platform/db/leases';
-import { buildLeaseNotHeldError } from '../../platform/errors/impd-errors';
+} from '../../platform/db/list-leases';
+import type { LeaseRecord } from '../../platform/db/list-leases';
+import { buildLeaseNotHeldError } from '../../platform/errors/build-not-found-error';
 import { LeasedError } from '../../platform/errors/leased-error';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import type { ImpClock, ImpHost } from './imp-context';

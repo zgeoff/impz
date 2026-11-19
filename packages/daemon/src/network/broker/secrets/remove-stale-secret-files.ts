@@ -1,6 +1,10 @@
 import { getErrorMessage } from '@impz/shared';
+import {
+  listFileRemovals,
+  listValueFiles,
+  removeFileRemoval,
+} from '../../../platform/db/create-checked-grant';
 import type { ImpDatabase } from '../../../platform/db/open-database';
-import { listFileRemovals, listValueFiles, removeFileRemoval } from '../../../platform/db/secrets';
 import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import type { SecretFiles } from './secret-files';
 

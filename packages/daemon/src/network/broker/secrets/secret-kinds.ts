@@ -1,5 +1,5 @@
 import type { SecretKind } from '@impz/api';
-import { buildPendingState, formatOAuthState, parseOAuthState } from './oauth-state';
+import { buildPendingState, formatOAuthState, parseOAuthState } from './parse-oauth-state';
 
 interface StoredCredential {
   readonly value: string;

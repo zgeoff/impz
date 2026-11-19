@@ -12,8 +12,8 @@ import { buildOAuthCaller } from './build-oauth-caller';
 import { buildServiceCaller } from './build-service-caller';
 import type { ImpLimits } from './imp-limits-schema';
 import type { PublicMcpConfig } from './public-mcp-config';
-import { SERVICE_TOKEN_PREFIX, readServiceSettings } from './read-service-files';
-import type { ServiceClients, ServiceSettings } from './read-service-files';
+import { SERVICE_TOKEN_PREFIX, readServiceSettings } from './read-service-settings';
+import type { ServiceClients, ServiceSettings } from './read-service-settings';
 import { recordSecurityEvent } from './record-security-event';
 
 // The passkey and enrollment tables are new with the shared OAuth server, so impd names them; the

@@ -1,6 +1,6 @@
 import { expect, mock, test } from 'bun:test';
 import invariant from 'tiny-invariant';
-import type { NewAuditEntry } from '../../../platform/db/broker-audit';
+import type { NewAuditEntry } from '../../../platform/db/write-audit-entry';
 import { buildMockCredential } from '../../../test-utils/network/build-mock-credential';
 import { admitRequest } from './admit-request';
 

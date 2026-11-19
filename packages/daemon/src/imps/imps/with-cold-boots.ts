@@ -1,5 +1,5 @@
-import { listColdBoots } from '../../platform/db/cold-boots';
-import type { ImpRecord } from '../../platform/db/imps';
+import { listColdBoots } from '../../platform/db/list-cold-boots';
+import type { ImpRecord } from '../../platform/db/list-imps';
 import { AgentError } from '../../vm/agent-client/agent-connection';
 import type { ExecStream } from '../../vm/agent-client/exec-stream';
 import { isAgentError } from '../../vm/agent-client/is-agent-error';

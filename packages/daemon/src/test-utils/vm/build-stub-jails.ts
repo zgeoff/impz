@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import type { Jails } from '../../vm/vmm/jail';
+import type { Jails } from '../../vm/vmm/create-jails';
 
 interface StubJailsOptions {
   readonly argv?: readonly string[];

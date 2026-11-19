@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import * as z from 'zod';
-import { buildRangeMatcher } from '../../host-net/net/range-matcher';
+import { buildRangeMatcher } from '../../host-net/net/build-range-matcher';
 import type { DnsTokenSource } from './dns/dns-token';
 
 const LETS_ENCRYPT_DIRECTORY = 'https://acme-v02.api.letsencrypt.org/directory';

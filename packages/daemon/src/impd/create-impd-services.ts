@@ -7,7 +7,7 @@ import type { EgressService } from '../network/egress/egress-service';
 import { createNetworkService } from '../network/networks/network-service';
 import { createApiAudit } from '../platform/audit/api-audit';
 import { readErrorCode } from '../surface/read-error-code';
-import { createStorageGc } from '../vm/storage/storage-gc';
+import { createStorageGc } from '../vm/storage/create-storage-gc';
 import type { ImpdStorage } from './create-impd-storage';
 import type { ImpdDeps } from './impd-deps';
 

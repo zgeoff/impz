@@ -59,7 +59,7 @@
       "project": ["src/**/*.ts!", "!src/test-utils/**!", "e2e/**/*.ts", "bench/**/*.ts"],
       // kysely-codegen writes every table, used or not
       "ignoreIssues": {
-        "src/platform/db/schema.ts": ["types"]
+        "src/platform/db/db.ts": ["types"]
       }
     },
     "packages/agent-protocol": {

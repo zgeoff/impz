@@ -1,32 +1,35 @@
 import { mkdirSync, rmSync } from 'node:fs';
 import type { EgressPolicy, Imp, ImpKind } from '@impz/api';
 import { getErrorMessage } from '@impz/shared';
-import { listCheckpoints } from '../../platform/db/checkpoints';
-import type { ImageRecord } from '../../platform/db/images';
-import { requireTransition } from '../../platform/db/imp-transitions';
+import { listCheckpoints } from '../../platform/db/create-checkpoint';
+import type { ImageRecord } from '../../platform/db/create-image';
 import {
   listImps,
   readImpByName,
   removeImp,
   updateImpDisk,
   updateImpSettings,
-} from '../../platform/db/imps';
-import type { ImpRecord } from '../../platform/db/imps';
-import { buildIdChangedError, buildInvalidStateError } from '../../platform/errors/impd-errors';
+} from '../../platform/db/list-imps';
+import type { ImpRecord } from '../../platform/db/list-imps';
+import { requireTransition } from '../../platform/db/require-transition';
+import {
+  buildIdChangedError,
+  buildInvalidStateError,
+} from '../../platform/errors/build-not-found-error';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { isRamBudgetError } from '../../vm/imps-contract/ram-budget-error';
-import { buildImagePaths } from '../../vm/storage/data-layout';
-import { resolveMaxMemoryMib } from '../../vm/vmm/elastic-memory';
-import { resolveCpuSettings } from './cpu-limit';
+import { buildImagePaths } from '../../vm/storage/build-imp-paths';
+import { resolveMaxMemoryMib } from '../../vm/vmm/resolve-max-memory-mib';
+import { checkLiveness } from './check-liveness';
 import { createImpRecord } from './create-imp-record';
+import { MIB, buildDiskTooSmallError, growDiskFile, readFileBytes } from './grow-disk-file';
 import type { ImpContext, ImpGuest, ImpHost, ImpVms } from './imp-context';
-import { MIB, buildDiskTooSmallError, growDiskFile, readFileBytes } from './imp-disk';
 import type { ImpLeases } from './imp-leases';
-import { checkLiveness } from './imp-liveness';
 import { toLockedImp } from './imp-lock';
 import type { ImpLock, LockedImp } from './imp-lock';
 import type { ImpPresenter, ImpUrls } from './imp-presenter';
 import type { ImpVmOps } from './imp-vm-ops';
+import { resolveCpuSettings } from './resolve-cpu-settings';
 
 interface CreateImpInput {
   readonly name?: string | undefined;

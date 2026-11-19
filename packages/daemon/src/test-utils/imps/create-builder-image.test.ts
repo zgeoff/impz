@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { readImageByName } from '../../platform/db/images';
+import { readImageByName } from '../../platform/db/create-image';
 import { createTestDatabase } from '../platform/create-test-database';
 import { createBuilderImage } from './create-builder-image';
 

@@ -3,10 +3,15 @@ import {
   buildAgentOutdatedError,
   buildAgentUnknownError,
   hasFeature,
-} from '../agent-client/agent-outdated';
+} from '../agent-client/build-agent-outdated-error';
 import type { GrowRequest } from '../imps-contract/grow-request';
-import type { ImpPaths } from '../storage/data-layout';
-import { GROW_STEP_MIB, getLowMib, getRegionMib, getStructPageMib } from '../vmm/elastic-memory';
+import type { ImpPaths } from '../storage/build-imp-paths';
+import {
+  GROW_STEP_MIB,
+  getLowMib,
+  getRegionMib,
+  getStructPageMib,
+} from '../vmm/resolve-max-memory-mib';
 import type { GuestMemory, VmRunner } from '../vmm/vm-runner';
 import type { MemoryLimit } from './memory-limit';
 import { getShrinkTargetMib, shrinkGuest } from './shrink-guest';

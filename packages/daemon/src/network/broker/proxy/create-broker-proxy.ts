@@ -3,26 +3,29 @@ import { join } from 'node:path';
 import { EGRESS_MODE_TRAITS } from '@impz/api';
 import type { EgressMode } from '@impz/api';
 import { getErrorMessage } from '@impz/shared';
-import { readRouteDevice } from '../../../host-net/net/host-routes';
 import type { ReachPolicy } from '../../../host-net/net/reach-policy';
-import { requireUplinkRoute, resolveTunnelTarget } from '../../../host-net/net/tunnel-target';
-import { writeAuditEntry } from '../../../platform/db/broker-audit';
-import type { NewAuditEntry } from '../../../platform/db/broker-audit';
+import { readRouteDevice } from '../../../host-net/net/read-uplinks';
+import {
+  requireUplinkRoute,
+  resolveTunnelTarget,
+} from '../../../host-net/net/resolve-tunnel-target';
+import { listGrantedRules } from '../../../platform/db/create-checked-grant';
+import type { GrantedRule } from '../../../platform/db/create-checked-grant';
 import type { ImpDatabase } from '../../../platform/db/open-database';
 import { readBrokerPeer } from '../../../platform/db/read-broker-peer';
-import { listGrantedRules } from '../../../platform/db/secrets';
-import type { GrantedRule } from '../../../platform/db/secrets';
+import { writeAuditEntry } from '../../../platform/db/write-audit-entry';
+import type { NewAuditEntry } from '../../../platform/db/write-audit-entry';
 import { openUpstreamSocket } from '../../../platform/http/open-upstream-socket';
 import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import type { NetworkConfig } from '../../network-config';
 import type { Identity } from '../identity/load-or-create-identity';
-import { renderCredential } from '../secrets/connector-kinds';
+import { renderCredential } from '../secrets/render-credential';
 import type { SecretFiles } from '../secrets/secret-files';
 import { SECRET_KINDS } from '../secrets/secret-kinds';
 import type { Credential } from '../tls/admit-request';
 import type { BrokerCa } from '../tls/broker-ca';
-import { createForwarder } from '../tls/forward-request';
-import type { ForwardDeps, ResolveUpstream, UpstreamFetch } from '../tls/forward-request';
+import { createForwarder } from '../tls/create-forwarder';
+import type { ForwardDeps, ResolveUpstream, UpstreamFetch } from '../tls/create-forwarder';
 import { isWebSocketUpgrade } from '../tls/is-websocket-upgrade';
 import { relayWebSocket } from '../tls/relay-websocket';
 import { createTerminators } from '../tls/terminators';

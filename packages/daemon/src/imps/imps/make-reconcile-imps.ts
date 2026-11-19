@@ -1,18 +1,18 @@
 import { getErrorMessage } from '@impz/shared';
-import { writeUnknownBoot } from '../../platform/db/cold-boots';
-import { listImps } from '../../platform/db/imps';
-import type { ImpRecord } from '../../platform/db/imps';
+import { writeUnknownBoot } from '../../platform/db/list-cold-boots';
+import { listImps } from '../../platform/db/list-imps';
+import type { ImpRecord } from '../../platform/db/list-imps';
 import { updateImpState } from '../../platform/db/update-imp-state';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
-import { sendPing } from '../../vm/agent-client/agent-requests';
-import type { ImpPaths } from '../../vm/storage/data-layout';
-import { probeJailedFirecracker } from '../../vm/vmm/firecracker-process';
+import { sendPing } from '../../vm/agent-client/send-agent-request';
+import type { ImpPaths } from '../../vm/storage/build-imp-paths';
+import { probeJailedFirecracker } from '../../vm/vmm/start-firecracker';
 import { checkAdoptedMergeFlag } from './check-merge-flag';
+import { createVmReconciler } from './create-vm-reconciler';
 import type { ImpClock, ImpGuest, ImpHost, ImpMemory, ImpVms } from './imp-context';
 import type { ImpLock, LockedImp } from './imp-lock';
 import type { ImpVmOps } from './imp-vm-ops';
 import { startCounting } from './read-running-imp-usage';
-import { createVmReconciler } from './reconcile-vms';
 
 interface ReconcileParts {
   readonly context: ImpHost & ImpClock & ImpVms & ImpMemory & ImpGuest;

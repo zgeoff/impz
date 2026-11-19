@@ -4,8 +4,8 @@ import { buildMockNewImage } from '../../test-utils/imps/build-mock-new-image';
 import { buildMockNewImp } from '../../test-utils/imps/build-mock-new-imp';
 import { createTestDatabase } from '../../test-utils/platform/create-test-database';
 import { createEventLogPruner } from './create-event-log-pruner';
-import { createImage } from './images';
-import { createImp } from './imps';
+import { createImage } from './create-image';
+import { createImp } from './list-imps';
 import type { ImpTransaction } from './with-imp-transaction';
 
 async function setupTest() {

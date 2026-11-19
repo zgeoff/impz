@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { parseTailscaleStatus } from '../../host-net/net/tailscale-status';
-import { isTailnetAddress, parseWhois } from '../../identity/auth/tailnet-identity';
+import { isTailnetAddress, parseWhois } from '../../identity/auth/create-tailnet-identities';
 import { buildStubTailscale } from './build-stub-tailscale';
 
 test('it reports a running node with one tailnet address by default', () => {

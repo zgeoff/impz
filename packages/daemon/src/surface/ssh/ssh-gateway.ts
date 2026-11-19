@@ -7,12 +7,12 @@ import {
   handleForward,
   resolveSocketTarget,
   resolveTcpTarget,
-} from '../../imps/ssh/forward-channel';
+} from '../../imps/ssh/handle-forward';
+import { handleSession } from '../../imps/ssh/handle-session';
 import { createRemoteForwarding } from '../../imps/ssh/remote-forwarding';
 import type { RemoteForwardRequest } from '../../imps/ssh/remote-forwarding';
-import { handleSession } from '../../imps/ssh/session-channel';
 import type { SshBackend, SshConnectionContext } from '../../imps/ssh/ssh-connection-context';
-import type { ImpRecord } from '../../platform/db/imps';
+import type { ImpRecord } from '../../platform/db/list-imps';
 import type { Caller } from '../../platform/principal/caller';
 import type { StartTimer } from '../../platform/process/clock';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';

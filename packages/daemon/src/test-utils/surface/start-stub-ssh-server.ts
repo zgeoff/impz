@@ -2,7 +2,7 @@ import { onTestFinished } from 'bun:test';
 import { Server } from 'ssh2';
 import type { ServerChannel } from 'ssh2';
 import { z } from 'zod';
-import { generateEd25519Key } from '../../surface/ssh/host-key';
+import { generateEd25519Key } from '../../surface/ssh/load-or-create-host-key';
 
 interface StubSshServerOptions {
   readonly password: string;

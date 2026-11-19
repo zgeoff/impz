@@ -7,7 +7,7 @@ import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { IMPD_USER } from '../../platform/process/impd-user';
 import { buildSnapshotIdentity, writeSnapshotMeta } from '../../vm/sleep/snapshot-meta';
 import { readVmIdentity } from '../../vm/sleep/vm-identity';
-import { buildWatchdogSlot } from '../../vm/storage/data-layout';
+import { buildWatchdogSlot } from '../../vm/storage/build-imp-paths';
 import { isDiskFullError } from '../../vm/storage/disk-full-error';
 
 export async function writeWatchdogSnapshot(

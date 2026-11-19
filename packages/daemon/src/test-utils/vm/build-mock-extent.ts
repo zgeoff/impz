@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import type { Extent } from '../../vm/storage/fiemap';
+import type { Extent } from '../../vm/storage/read-extents';
 
 export function buildMockExtent(overrides: Partial<Extent> = {}): Extent {
   return {

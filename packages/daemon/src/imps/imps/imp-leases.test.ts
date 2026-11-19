@@ -5,7 +5,7 @@ import { updateEnv } from '@impz/shared/test-utils/update-env';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
 import invariant from 'tiny-invariant';
 import type { LoggedImpEvent } from '../../platform/db/imp-log-entry';
-import { listLeases, writeLease } from '../../platform/db/leases';
+import { listLeases, writeLease } from '../../platform/db/list-leases';
 import { buildMockLeaseRecord } from '../../test-utils/imps/build-mock-lease-record';
 import { buildQueryGate } from '../../test-utils/platform/build-query-gate';
 import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';

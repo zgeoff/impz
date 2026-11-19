@@ -1,8 +1,8 @@
 import { PublicAuthSchema } from '@impz/api';
 import type { PublicAuth } from '@impz/api';
 import type { Selectable } from 'kysely';
-import type { ImpRecord } from './imps';
-import type { DB } from './schema';
+import type { DB } from './db';
+import type { ImpRecord } from './list-imps';
 
 type ImpRow = Selectable<DB['imps']>;
 

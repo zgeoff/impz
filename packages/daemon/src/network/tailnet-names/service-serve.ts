@@ -1,5 +1,5 @@
-import { parseServeStatus } from '../../host-net/net/tailscale-serve';
-import type { ServedServices } from '../../host-net/net/tailscale-serve';
+import { parseServeStatus } from '../../host-net/net/read-serve-ports';
+import type { ServedServices } from '../../host-net/net/read-serve-ports';
 import { runChecked } from '../../platform/process/run-command';
 
 export interface ServiceServe {

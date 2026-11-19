@@ -1,5 +1,5 @@
 import * as z from 'zod';
-import { buildNotFoundError } from '../../platform/errors/impd-errors';
+import { buildNotFoundError } from '../../platform/errors/build-not-found-error';
 import { runCommand } from '../../platform/process/run-command';
 import type { CommandResult } from '../../platform/process/run-command';
 import type { BackupConfig, BackupKeep } from './backup-config';

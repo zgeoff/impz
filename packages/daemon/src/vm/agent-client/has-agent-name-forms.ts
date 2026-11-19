@@ -1,6 +1,10 @@
 import { isMessage } from '@bufbuild/protobuf';
 import type { Message } from '@bufbuild/protobuf';
-import { AgentBootIdSchema, AgentGenerationSchema, AgentSessionNameSchema } from './agent-ids';
+import {
+  AgentBootIdSchema,
+  AgentGenerationSchema,
+  AgentSessionNameSchema,
+} from './is-agent-log-identity';
 
 export function hasAgentNameForms(message: Message): boolean {
   return Object.entries(message).every(([key, value]) =>

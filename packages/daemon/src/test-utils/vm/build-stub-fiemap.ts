@@ -1,5 +1,5 @@
 import { existsSync, rmSync } from 'node:fs';
-import type { Extent, readExtents } from '../../vm/storage/fiemap';
+import type { Extent, readExtents } from '../../vm/storage/read-extents';
 
 export function buildStubFiemap() {
   const extents = new Map<string, readonly Extent[]>();

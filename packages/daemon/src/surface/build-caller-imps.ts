@@ -1,6 +1,6 @@
 import { isImpAllowed } from '@impz/api';
 import type { Imp } from '@impz/api';
-import { toLeaseSummary } from '../identity/auth/caller-view';
+import { toLeaseSummary } from '../identity/auth/require-lease-holder';
 import { readPresentedLeases } from '../imps/imps/imp-presenter';
 import type { ImpService } from '../imps/imps/imp-service';
 import type { Caller } from '../platform/principal/caller';

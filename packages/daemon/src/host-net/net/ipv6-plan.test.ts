@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import invariant from 'tiny-invariant';
 import { buildStubIpCommand } from '../../test-utils/host-net/build-stub-ip-command';
 import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
-import { parsePrefix64 } from './addressing6';
+import { parsePrefix64 } from './derive-guest-ip6';
 import {
   checkHostRules6,
   parseIpv6Setting,

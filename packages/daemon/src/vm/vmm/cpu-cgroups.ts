@@ -8,9 +8,9 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { getErrorMessage } from '@impz/shared';
-import type { CpuSettings } from '../../platform/db/imps';
+import type { CpuSettings } from '../../platform/db/list-imps';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
-import { readProcessCgroup } from './process-owner';
+import { readProcessCgroup } from './read-process-uid';
 
 const PERIOD_US = 100_000;
 

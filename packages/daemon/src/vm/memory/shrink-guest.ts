@@ -1,4 +1,4 @@
-import { getSpareTotalMib, toWholeBlocks } from '../vmm/elastic-memory';
+import { getSpareTotalMib, toWholeBlocks } from '../vmm/resolve-max-memory-mib';
 import type { GuestMemory, VmRunner } from '../vmm/vm-runner';
 
 const POLL_MS = 100;

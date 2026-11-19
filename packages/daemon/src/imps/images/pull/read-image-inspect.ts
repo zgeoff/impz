@@ -1,6 +1,6 @@
 import type { EngineRun } from '../build/build-engine';
-import { PIN_INSPECT_FORMAT, PinInspectSchema } from './image-pin';
-import type { PinInspect } from './image-pin';
+import { PIN_INSPECT_FORMAT, PinInspectSchema } from './pick-repo-digest';
+import type { PinInspect } from './pick-repo-digest';
 
 export async function readImageInspect(
   run: EngineRun,

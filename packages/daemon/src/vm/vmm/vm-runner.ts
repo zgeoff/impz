@@ -1,21 +1,23 @@
 import { lstatSync, mkdirSync, renameSync, rmSync } from 'node:fs';
 import { getErrorMessage } from '@impz/shared';
 import type { Clock } from '../../platform/process/clock';
-import { stopPid } from '../../platform/process/proc';
+import { stopPid } from '../../platform/process/read-stat-fields';
 import { REAL_CLOCK } from '../../platform/process/real-clock';
 import { runCommand } from '../../platform/process/run-command';
 import { VM_DEADLINES } from '../../platform/process/vm-deadlines';
 import { writeToDisk } from '../../platform/process/write-file-durably';
-import { sendGrow, sendPing, sendResumed, sendShutdown } from '../agent-client/agent-requests';
+import { sendGrow, sendPing, sendResumed, sendShutdown } from '../agent-client/send-agent-request';
 import { waitForAgent } from '../agent-client/wait-for-agent';
-import { createOwnedFile } from '../files/vm-files';
-import type { ImpPaths, SnapshotPaths } from '../storage/data-layout';
+import { createOwnedFile } from '../files/write-regular-file';
+import type { ImpPaths, SnapshotPaths } from '../storage/build-imp-paths';
 import { buildBootArgs } from './build-boot-args';
 import type { VmPlan } from './build-boot-args';
-import { VM_DEVICES, createMarks, setupVm } from './configure-vm';
 import type { ImpCgroup } from './cpu-cgroups';
+import { setupSnapshotFile } from './create-jails';
+import type { JailUser, Jails } from './create-jails';
+import { createTemplateVm, loadTemplateVm } from './create-template-vm';
+import type { TemplateBuildPlan, TemplateRestorePlan } from './create-template-vm';
 import { createUffdWatch } from './create-uffd-watch';
-import { BLOCK_MIB, SLOT_MIB, getRegionMib } from './elastic-memory';
 import { createFirecrackerClient } from './firecracker-client';
 import type {
   CreateFirecrackerClient,
@@ -24,7 +26,9 @@ import type {
   InstanceState,
   LoadOptions,
 } from './firecracker-client';
-import type { FoundVm, VmOwner } from './firecracker-process';
+import { BLOCK_MIB, SLOT_MIB, getRegionMib } from './resolve-max-memory-mib';
+import { VM_DEVICES, createMarks, setupVm } from './setup-vm';
+import type { FoundVm, VmOwner } from './start-firecracker';
 import {
   buildFirecrackerCommand,
   listFirecrackers,
@@ -34,11 +38,7 @@ import {
   readVmOwner,
   startFirecracker,
   waitForExit,
-} from './firecracker-process';
-import { setupSnapshotFile } from './jail';
-import type { JailUser, Jails } from './jail';
-import { createTemplateVm, loadTemplateVm } from './template-vm';
-import type { TemplateBuildPlan, TemplateRestorePlan } from './template-vm';
+} from './start-firecracker';
 import {
   buildServedFilePath,
   explainUffdFailure,
@@ -48,8 +48,8 @@ import {
   requireHandlerBin,
   startUffdHandler,
   stopUffdHandler,
-} from './uffd-handler';
-import type { UffdStats } from './uffd-handler';
+} from './start-uffd-handler';
+import type { UffdStats } from './start-uffd-handler';
 import { writeSnapshotBase } from './write-snapshot-base';
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;

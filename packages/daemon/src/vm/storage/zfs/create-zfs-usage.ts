@@ -1,5 +1,5 @@
 import { existsSync, statSync } from 'node:fs';
-import type { ImpPaths } from '../data-layout';
+import type { ImpPaths } from '../build-imp-paths';
 import type { StorageBackend } from '../storage-backend';
 import { CHECKPOINT_SNAPSHOT, getSnapshotId } from './zfs-commands';
 import type { ZfsCommands } from './zfs-commands';

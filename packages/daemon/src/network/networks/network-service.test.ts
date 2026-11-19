@@ -1,6 +1,6 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
 import invariant from 'tiny-invariant';
-import { listImps, readImpByName, updateImpMove } from '../../platform/db/imps';
+import { listImps, readImpByName, updateImpMove } from '../../platform/db/list-imps';
 import { buildStubNft } from '../../test-utils/network/build-stub-nft';
 import { startTestImpd } from '../../test-utils/start-test-impd';
 

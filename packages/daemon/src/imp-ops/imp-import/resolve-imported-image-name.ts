@@ -1,6 +1,6 @@
-import { readImageByName } from '../../platform/db/images';
+import { readImageByName } from '../../platform/db/create-image';
 import type { ImpDatabase } from '../../platform/db/open-database';
-import { buildConflictError } from '../../platform/errors/impd-errors';
+import { buildConflictError } from '../../platform/errors/build-not-found-error';
 import { buildDigestTag } from './build-digest-tag';
 
 export async function resolveImportedImageName(

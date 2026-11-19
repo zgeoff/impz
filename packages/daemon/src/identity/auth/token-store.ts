@@ -3,8 +3,7 @@ import { MAX_SSH_KEYS } from '@impz/api';
 import type { Scope, SshKey, Token } from '@impz/api';
 import { formatKeyFingerprint, parsePublicKey } from '../../imps/ssh/authorized-keys';
 import type { AuthorizedKey } from '../../imps/ssh/authorized-keys';
-import type { ImpDatabase, ImpQueries } from '../../platform/db/open-database';
-import { readSecret } from '../../platform/db/secrets';
+import { readSecret } from '../../platform/db/create-checked-grant';
 import {
   listTokenRecords,
   listTokenSshKeyRecords,
@@ -13,10 +12,18 @@ import {
   updateTokenRecord,
   writeTokenRecord,
   writeTokenSshKeyRecord,
-} from '../../platform/db/tokens';
-import type { GrantableSecret, TokenRecord, TokenSshKeyRecord } from '../../platform/db/tokens';
+} from '../../platform/db/list-token-records';
+import type {
+  GrantableSecret,
+  TokenRecord,
+  TokenSshKeyRecord,
+} from '../../platform/db/list-token-records';
+import type { ImpDatabase, ImpQueries } from '../../platform/db/open-database';
+import {
+  buildConflictError,
+  buildNotFoundError,
+} from '../../platform/errors/build-not-found-error';
 import { ImpdError } from '../../platform/errors/impd-error';
-import { buildConflictError, buildNotFoundError } from '../../platform/errors/impd-errors';
 import type { Caller } from '../../platform/principal/caller';
 import { hashSecret } from '../../platform/secrets/hash-secret';
 import { isSameDigest } from '../../platform/secrets/is-same-digest';

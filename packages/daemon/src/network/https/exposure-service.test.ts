@@ -1,14 +1,14 @@
 import { expect, mock, test } from 'bun:test';
 import { loadConfig } from '../../config';
-import { readPublicImp } from '../../platform/db/exposure';
-import { createImage } from '../../platform/db/images';
-import { createImp, updateImpExposure, updateImpMove } from '../../platform/db/imps';
+import { createImage } from '../../platform/db/create-image';
+import { createImp, updateImpExposure, updateImpMove } from '../../platform/db/list-imps';
+import { readPublicImp } from '../../platform/db/read-public-imp';
 import { buildMockNewImage } from '../../test-utils/imps/build-mock-new-image';
 import { buildMockNewImp } from '../../test-utils/imps/build-mock-new-imp';
 import { buildQueryGate } from '../../test-utils/platform/build-query-gate';
 import { createTestDatabase } from '../../test-utils/platform/create-test-database';
+import { buildCredentialHash } from './build-credential-hash';
 import { createExposureService } from './exposure-service';
-import { buildCredentialHash } from './public-auth';
 
 async function setupTest() {
   const database = await createTestDatabase();

@@ -1,8 +1,8 @@
-import { BUILDER_IMAGE } from '../../imps/images/builders/builder-imps';
-import { createImage } from '../../platform/db/images';
-import type { ImageRecord } from '../../platform/db/images';
+import { BUILDER_IMAGE } from '../../imps/images/builders/create-builders';
+import { createImage } from '../../platform/db/create-image';
+import type { ImageRecord } from '../../platform/db/create-image';
 import type { ImpDatabase } from '../../platform/db/open-database';
-import { buildImagePaths } from '../../vm/storage/data-layout';
+import { buildImagePaths } from '../../vm/storage/build-imp-paths';
 
 interface BuilderImageOptions {
   readonly db: ImpDatabase;

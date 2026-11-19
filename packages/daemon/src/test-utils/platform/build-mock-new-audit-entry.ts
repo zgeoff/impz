@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import type { NewAuditEntry } from '../../platform/db/broker-audit';
+import type { NewAuditEntry } from '../../platform/db/write-audit-entry';
 
 export function buildMockNewAuditEntry(overrides: Partial<NewAuditEntry> = {}): NewAuditEntry {
   return {

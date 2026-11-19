@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { buildImpPaths, buildImpsDir, toDigestHex } from '../data-layout';
-import { probeHoldingFiles, readDirectoryOrphan } from '../orphan-files';
+import { buildImpPaths, buildImpsDir, toDigestHex } from '../build-imp-paths';
+import { probeHoldingFiles, readDirectoryOrphan } from '../probe-holding-files';
 import type { DroppedStorage, LiveStorage, OrphanStorage, SweepResult } from '../storage-backend';
 import {
   CHECKPOINT_SNAPSHOT,

@@ -1,6 +1,6 @@
 import type { Imp } from '@impz/api';
 import type { ImpEventLog } from '../../platform/db/create-imp-event-log';
-import type { ImpRecord } from '../../platform/db/imps';
+import type { ImpRecord } from '../../platform/db/list-imps';
 import type { TryResult } from '../../platform/process/keyed-mutex';
 import type { ResourceDelta } from '../../platform/telemetry/resource-delta';
 import { readSnapshotMeta } from '../../vm/sleep/snapshot-meta';

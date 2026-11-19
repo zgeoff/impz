@@ -1,9 +1,9 @@
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { StorageBackendKind, VmConfig } from '../vm-config';
-import { buildImpsDir } from './data-layout';
+import { buildImpsDir } from './build-imp-paths';
+import { createXfsBackend } from './create-xfs-backend';
 import type { StorageBackend } from './storage-backend';
-import { createXfsBackend } from './xfs-backend';
 import { createZfsBackend } from './zfs/zfs-backend';
 import type { ZfsBackendDeps } from './zfs/zfs-backend';
 

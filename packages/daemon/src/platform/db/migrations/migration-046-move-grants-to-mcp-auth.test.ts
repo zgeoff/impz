@@ -9,10 +9,10 @@ import { createImpdMcpAuth } from '../../../identity/oauth/create-impd-mcp-auth'
 import { buildMockTokenRecord } from '../../../test-utils/identity/build-mock-token-record';
 import { createUnmigratedDatabase } from '../../../test-utils/platform/create-unmigrated-database';
 import { seedLegacyOAuthGrant } from '../../../test-utils/platform/seed-legacy-oauth-grant';
+import { writeTokenRecord } from '../list-token-records';
+import type { GrantableSecret } from '../list-token-records';
 import { readNames } from '../read-names';
 import { runMigrations, runMigrationsTo } from '../run-migrations';
-import { writeTokenRecord } from '../tokens';
-import type { GrantableSecret } from '../tokens';
 
 async function setupTest() {
   const db = createUnmigratedDatabase();

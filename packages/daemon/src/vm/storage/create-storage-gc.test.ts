@@ -1,0 +1,561 @@
+import { expect, mock, onTestFinished, test } from 'bun:test';
+import { existsSync, readdirSync } from 'node:fs';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { waitFor } from '@impz/shared/test-utils/wait-for';
+import invariant from 'tiny-invariant';
+import { createSecretFiles } from '../../network/broker/secrets/secret-files';
+import { createImage } from '../../platform/db/create-image';
+import { runChecked } from '../../platform/process/run-command';
+import { buildMockNewImage } from '../../test-utils/imps/build-mock-new-image';
+import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
+import { createTestDatabase } from '../../test-utils/platform/create-test-database';
+import { startTestImpd } from '../../test-utils/start-test-impd';
+import { buildStubZfs } from '../../test-utils/vm/build-stub-zfs';
+import { buildImagePaths, buildImpPaths } from './build-imp-paths';
+import { createStorageGc } from './create-storage-gc';
+import { createXfsBackend } from './create-xfs-backend';
+import { readLiveStorage } from './read-live-storage';
+import { createStorageGate } from './storage-gate';
+import { createZfsBackend } from './zfs/zfs-backend';
+
+function setupTest(
+  options: Readonly<{ cloneFile?: (source: string, target: string) => Promise<void> }> = {},
+) {
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
+  return startTestImpd(stack, {
+    createStorage: (dataDir) =>
+      createXfsBackend({
+        dataDir,
+        cloneFile:
+          options.cloneFile ??
+          (async (source, target) => {
+            await runChecked(['cp', '--sparse=always', source, target]);
+          }),
+      }),
+  });
+}
+
+test('it lists what a sweep would drop and keep in a dry run, and removes nothing', async () => {
+  const ctx = await setupTest();
+
+  const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
+
+  await Bun.write(buildImagePaths(ctx.dataDir, image.digest).rootfs, 'rootfs');
+
+  await createImage(ctx.db, image);
+
+  await ctx.client.imps.create({ name: 'dev' });
+
+  const lost = buildImpPaths(ctx.dataDir, 'lost');
+
+  await mkdir(lost.directory, { recursive: true });
+  await writeFile(lost.disk, 'disk');
+
+  const done = buildImpPaths(ctx.dataDir, 'done');
+
+  await mkdir(done.runDir, { recursive: true });
+
+  const listed = await ctx.client.system.gc({ dryRun: true });
+
+  expect(listed).toMatchObject({
+    dryRun: true,
+    dropped: [{ kind: 'imp', id: 'done' }],
+    kept: [{ kind: 'imp', id: 'lost', location: lost.directory }],
+  });
+
+  expect(existsSync(done.directory)).toBeTrue();
+});
+
+test('it removes what a destroy left and keeps an imp no row names', async () => {
+  const ctx = await setupTest();
+
+  const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
+
+  await Bun.write(buildImagePaths(ctx.dataDir, image.digest).rootfs, 'rootfs');
+
+  await createImage(ctx.db, image);
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  const lost = buildImpPaths(ctx.dataDir, 'lost');
+
+  await mkdir(lost.directory, { recursive: true });
+  await writeFile(lost.disk, 'disk');
+  await mkdir(buildImpPaths(ctx.dataDir, 'done').runDir, { recursive: true });
+
+  const swept = await ctx.client.system.gc({});
+
+  expect(swept).toMatchObject({
+    dryRun: false,
+    dropped: [{ kind: 'imp', id: 'done' }],
+    kept: [{ kind: 'imp', id: 'lost', location: lost.directory }],
+  });
+
+  expect(readdirSync(join(ctx.dataDir, 'imps'))).toIncludeSameMembers([dev.id, 'lost']);
+});
+
+test('it lists an imp no row names as dropped in a dry run with orphans, and keeps its disk', async () => {
+  const ctx = await setupTest();
+
+  const lost = buildImpPaths(ctx.dataDir, 'lost');
+
+  await mkdir(lost.directory, { recursive: true });
+  await writeFile(lost.disk, 'disk');
+
+  const listed = await ctx.client.system.gc({ dryRun: true, orphans: true });
+
+  expect(listed).toStrictEqual({ dryRun: true, dropped: [{ kind: 'imp', id: 'lost' }], kept: [] });
+  expect(existsSync(lost.disk)).toBeTrue();
+});
+
+test('it removes an imp no row names when asked for orphans, and keeps a live imp', async () => {
+  const ctx = await setupTest();
+
+  const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
+
+  await Bun.write(buildImagePaths(ctx.dataDir, image.digest).rootfs, 'rootfs');
+
+  await createImage(ctx.db, image);
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  const lost = buildImpPaths(ctx.dataDir, 'lost');
+
+  await mkdir(lost.directory, { recursive: true });
+  await writeFile(lost.disk, 'disk');
+
+  const removed = await ctx.client.system.gc({ orphans: true });
+
+  expect(removed).toStrictEqual({
+    dryRun: false,
+    dropped: [{ kind: 'imp', id: 'lost' }],
+    kept: [],
+  });
+
+  expect(readdirSync(join(ctx.dataDir, 'imps'))).toStrictEqual([dev.id]);
+});
+
+test('it keeps every orphan of a lost database through start, the hourly pass and impz gc', async () => {
+  const ctx = await setupTest();
+
+  const logs = captureImpdLogs();
+
+  const gc = createStorageGc({
+    db: ctx.db,
+    storage: ctx.storage,
+    storageGate: ctx.impd.storageGate,
+  });
+
+  await ctx.storage.createImage('sha256:old', async (directory) => {
+    await Bun.write(join(directory, 'rootfs.ext4'), 'rootfs');
+  });
+
+  for (const impId of ['a', 'b']) {
+    const paths = ctx.storage.resolveImpPaths(impId);
+
+    await ctx.storage.createImpDisk(impId, { kind: 'empty' });
+    await ctx.storage.createCheckpoint(impId, `cp-${impId}`);
+    await Bun.write(paths.vmstate, 'vmstate');
+    await Bun.write(paths.snapshotMeta, '{}');
+  }
+
+  const first = ctx.storage.resolveImpPaths('a');
+  const second = ctx.storage.resolveImpPaths('b');
+
+  const live = await readLiveStorage(ctx.db);
+
+  await ctx.storage.start(live);
+  await gc.runScheduled();
+  await gc.runScheduled();
+
+  const manual = await gc.runGc({ isDryRun: false, isOrphans: false });
+
+  expect([
+    first.disk,
+    first.vmstate,
+    first.snapshotMeta,
+    join(first.checkpointsDir, 'cp-a'),
+    second.disk,
+    second.vmstate,
+    second.snapshotMeta,
+    join(second.checkpointsDir, 'cp-b'),
+    join(ctx.dataDir, 'images', 'old', 'rootfs.ext4'),
+  ]).toSatisfyAll((path: string) => existsSync(path));
+
+  expect(manual.dropped).toStrictEqual([]);
+
+  expect(manual.kept?.map((orphan) => `${orphan.kind} ${orphan.id}`)).toStrictEqual([
+    'image old',
+    'imp a',
+    'imp b',
+  ]);
+
+  const lines = logs.filter((line) => line.startsWith('INFO impd.gc '));
+
+  expect(lines.filter((line) => line.includes('kept orphan imp a '))).toHaveLength(1);
+  expect(lines.filter((line) => line.includes('kept orphan imp b '))).toHaveLength(1);
+  expect(lines.filter((line) => line.includes('kept orphan image old '))).toHaveLength(1);
+  expect(lines.filter((line) => line.includes('kept 3 orphans'))).toHaveLength(2);
+  expect(lines).toHaveLength(5);
+});
+
+test('it keeps what a lost database leaves on ZFS through the hourly pass and impz gc', async () => {
+  const dataDir = await mkdtemp(join(tmpdir(), 'storage-gc-zfs-'));
+
+  onTestFinished(() => rm(dataDir, { recursive: true, force: true }));
+
+  const database = await createTestDatabase();
+
+  const zfs = buildStubZfs({ root: 'tank/imp', rootDir: dataDir });
+  const logs = captureImpdLogs();
+
+  const backend = createZfsBackend({
+    dataDir,
+    root: 'tank/imp',
+    run: zfs.run,
+    readMounts: zfs.readMounts,
+    readModuleVersion: () => '2.4.4',
+  });
+
+  const live = await readLiveStorage(database.db);
+
+  await backend.start(live);
+  await backend.createImage('sha256:old', () => Promise.resolve());
+  await backend.createImpDisk('a', { kind: 'empty' });
+  await backend.createCheckpoint('a', 'cp-1');
+  await Bun.write(backend.resolveImpPaths('a').vmstate, 'vmstate');
+
+  const gc = createStorageGc({
+    db: database.db,
+    storage: backend,
+    storageGate: createStorageGate(),
+  });
+
+  await gc.runScheduled();
+
+  const manual = await gc.runGc({ isDryRun: false, isOrphans: false });
+
+  await backend.waitForReclaim();
+
+  expect(manual.dropped).toStrictEqual([]);
+  expect(zfs.listDatasets()).toIncludeAllMembers(['tank/imp/disks/a', 'tank/imp/images/old']);
+  expect(zfs.listSnapshots()).toStrictEqual(['tank/imp/disks/a@cp-1', 'tank/imp/images/old@base']);
+  expect(zfs.isDeferred('tank/imp/disks/a@cp-1')).toBeFalse();
+  expect(existsSync(backend.resolveImpPaths('a').vmstate)).toBeTrue();
+
+  const lines = logs.filter((line) => line.startsWith('INFO impd.gc '));
+
+  expect(lines).toHaveLength(3);
+
+  expect(lines[0]).toMatch(
+    /^INFO impd\.gc kept orphan imp a \(tank\/imp\/disks\/a\): .+snapshots: cp-1$/u,
+  );
+});
+
+test('it waits for a checkpoint whose clone exists before its row', async () => {
+  const gate = Promise.withResolvers<void>();
+  const reached = Promise.withResolvers<void>();
+
+  onTestFinished(() => {
+    gate.resolve();
+  });
+
+  const hold = { reached: () => {}, gate: Promise.resolve() };
+
+  const ctx = await setupTest({
+    cloneFile: async (source, target) => {
+      await runChecked(['cp', '--sparse=always', source, target]);
+
+      hold.reached();
+
+      await hold.gate;
+    },
+  });
+
+  const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
+
+  await Bun.write(buildImagePaths(ctx.dataDir, image.digest).rootfs, 'rootfs');
+
+  await createImage(ctx.db, image);
+
+  await ctx.client.imps.create({ name: 'dev' });
+
+  hold.reached = reached.resolve;
+  hold.gate = gate.promise;
+
+  const checkpoint = ctx.client.checkpoints.create({ name: 'dev', label: 'held' });
+
+  await reached.promise;
+
+  const gc = ctx.client.system.gc({});
+
+  await waitFor(() => {
+    expect(ctx.impd.storageGate.countWaiting()).toBe(1);
+  });
+
+  const inFlight = ctx.impd.storageGate.countInFlight();
+
+  gate.resolve();
+
+  const made = await checkpoint;
+  const swept = await gc;
+  const listed = await ctx.client.checkpoints.list({ name: 'dev' });
+
+  expect(inFlight).toBe(1);
+  expect(swept.dropped).toStrictEqual([]);
+  expect(listed.map((one) => one.id)).toStrictEqual([made.id]);
+});
+
+test('it waits with orphans for an imp whose disk exists before its row', async () => {
+  const gate = Promise.withResolvers<void>();
+  const reached = Promise.withResolvers<void>();
+
+  onTestFinished(() => {
+    gate.resolve();
+  });
+
+  const ctx = await setupTest({
+    cloneFile: async (source, target) => {
+      await runChecked(['cp', '--sparse=always', source, target]);
+
+      reached.resolve();
+
+      await gate.promise;
+    },
+  });
+
+  const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
+
+  await Bun.write(buildImagePaths(ctx.dataDir, image.digest).rootfs, 'rootfs');
+
+  await createImage(ctx.db, image);
+
+  const created = ctx.client.imps.create({ name: 'dev' });
+
+  await reached.promise;
+
+  const gc = ctx.client.system.gc({ orphans: true });
+
+  await waitFor(() => {
+    expect(ctx.impd.storageGate.countWaiting()).toBe(1);
+  });
+
+  const inFlight = ctx.impd.storageGate.countInFlight();
+
+  gate.resolve();
+
+  const dev = await created;
+  const swept = await gc;
+
+  expect(inFlight).toBe(1);
+  expect(swept).toStrictEqual({ dryRun: false, dropped: [], kept: [] });
+  expect(existsSync(buildImpPaths(ctx.dataDir, dev.id).disk)).toBeTrue();
+});
+
+test('it waits with orphans for a destroy that holds the gate', async () => {
+  const ctx = await setupTest();
+
+  const image = buildMockNewImage({ name: 'ubuntu', sizeBytes: 6 });
+
+  await Bun.write(buildImagePaths(ctx.dataDir, image.digest).rootfs, 'rootfs');
+
+  await createImage(ctx.db, image);
+
+  const dev = await ctx.client.imps.create({ name: 'dev' });
+
+  const stop = ctx.fake.hold('stop');
+
+  onTestFinished(() => {
+    stop.release();
+  });
+
+  const destroyed = ctx.client.imps.destroy({ name: 'dev' });
+
+  await stop.reached;
+
+  const gc = ctx.client.system.gc({ orphans: true });
+
+  await waitFor(() => {
+    expect(ctx.impd.storageGate.countWaiting()).toBe(1);
+  });
+
+  const inFlight = ctx.impd.storageGate.countInFlight();
+  const diskWhileWaiting = existsSync(buildImpPaths(ctx.dataDir, dev.id).disk);
+
+  stop.release();
+
+  await destroyed;
+
+  const swept = await gc;
+
+  expect(inFlight).toBe(1);
+  expect(diskWhileWaiting).toBeTrue();
+  expect(swept).toStrictEqual({ dryRun: false, dropped: [], kept: [] });
+  expect(readdirSync(join(ctx.dataDir, 'imps'))).toStrictEqual([]);
+});
+
+test('it refuses impz gc while operations keep storage busy', async () => {
+  const database = await createTestDatabase();
+
+  const storageGate = createStorageGate();
+  const stuck = Promise.withResolvers<void>();
+
+  onTestFinished(() => {
+    stuck.resolve();
+  });
+
+  void storageGate.join(() => stuck.promise);
+
+  const gc = createStorageGc({
+    db: database.db,
+    storage: { dropUnnamed: mock() },
+    storageGate,
+    manualWaitMs: 0,
+  });
+
+  expect(gc.runGc({ isDryRun: false, isOrphans: false })).rejects.toMatchObject({
+    code: 'PRECONDITION_FAILED',
+    message: 'storage is busy (1 operations in flight, a backup run among them perhaps); try again',
+  });
+});
+
+test('it logs and skips the hourly pass while operations keep storage busy', async () => {
+  const database = await createTestDatabase();
+
+  const storageGate = createStorageGate();
+  const stuck = Promise.withResolvers<void>();
+
+  onTestFinished(() => {
+    stuck.resolve();
+  });
+
+  void storageGate.join(() => stuck.promise);
+  const dropUnnamed = mock();
+  const logs = captureImpdLogs();
+
+  const gc = createStorageGc({
+    db: database.db,
+    storage: { dropUnnamed },
+    storageGate,
+    scheduledWaitMs: 0,
+  });
+
+  await gc.runScheduled();
+
+  expect(logs).toStrictEqual(['INFO impd.gc storage stayed busy; the next pass tries again']);
+  expect(dropUnnamed).not.toHaveBeenCalled();
+});
+
+test('it leaves the secret values kept aside out of a GC that does not ask for them', async () => {
+  const ctx = await setupTest();
+
+  const files = createSecretFiles(ctx.dataDir);
+
+  files.write('late.b2', 'npm_LATE');
+  files.keepOrphansExcept(new Set(), new Date('2026-10-04T05:30:00.000Z'));
+
+  const unasked = await ctx.client.system.gc({ orphans: true });
+
+  invariant(unasked.kept);
+
+  expect(unasked.kept).not.toPartiallyContain({ kind: 'secrets' });
+  expect(unasked.dropped).not.toPartiallyContain({ kind: 'secrets' });
+});
+
+test('it lists the secret values kept aside when asked', async () => {
+  const ctx = await setupTest();
+
+  const files = createSecretFiles(ctx.dataDir);
+
+  files.write('late.b2', 'npm_LATE');
+
+  const kept = files.keepOrphansExcept(new Set(), new Date('2026-10-04T05:30:00.000Z'));
+
+  const listed = await ctx.client.system.gc({ secretFiles: true });
+
+  invariant(kept.directory !== null);
+
+  expect(listed.kept?.filter((orphan) => orphan.kind === 'secrets')).toStrictEqual([
+    {
+      kind: 'secrets',
+      id: '2026-10-04T05-30-00.000Z',
+      location: kept.directory,
+      bytes: 8,
+      createdAt: new Date('2026-10-04T05:30:00.000Z'),
+      snapshots: [],
+      files: ['late.b2'],
+    },
+  ]);
+});
+
+test('it only lists the secret values kept aside when asked for orphans alone', async () => {
+  const ctx = await setupTest();
+
+  const files = createSecretFiles(ctx.dataDir);
+
+  files.write('late.b2', 'npm_LATE');
+
+  const kept = files.keepOrphansExcept(new Set(), new Date('2026-10-04T05:30:00.000Z'));
+
+  const orphans = await ctx.client.system.gc({ secretFiles: true, orphans: true });
+
+  invariant(orphans.kept);
+
+  expect(orphans.kept).toPartiallyContain({ kind: 'secrets', id: '2026-10-04T05-30-00.000Z' });
+  expect(orphans.dropped).not.toPartiallyContain({ kind: 'secrets' });
+
+  invariant(kept.directory !== null);
+
+  expect(existsSync(kept.directory)).toBeTrue();
+});
+
+test('it lists the secret values kept aside as dropped in a dry run told to remove them', async () => {
+  const ctx = await setupTest();
+
+  const files = createSecretFiles(ctx.dataDir);
+
+  files.write('late.b2', 'npm_LATE');
+
+  const kept = files.keepOrphansExcept(new Set(), new Date('2026-10-04T05:30:00.000Z'));
+
+  const dry = await ctx.client.system.gc({
+    secretFiles: true,
+    removeSecretFiles: true,
+    orphans: true,
+    dryRun: true,
+  });
+
+  invariant(kept.directory !== null);
+
+  expect(dry.dropped).toStrictEqual([{ kind: 'secrets', id: '2026-10-04T05-30-00.000Z' }]);
+  expect(existsSync(kept.directory)).toBeTrue();
+});
+
+test('it removes the secret values kept aside when told to with orphans', async () => {
+  const ctx = await setupTest();
+
+  const files = createSecretFiles(ctx.dataDir);
+
+  files.write('late.b2', 'npm_LATE');
+
+  const kept = files.keepOrphansExcept(new Set(), new Date('2026-10-04T05:30:00.000Z'));
+  const lines = captureImpdLogs();
+
+  const removed = await ctx.client.system.gc({
+    secretFiles: true,
+    removeSecretFiles: true,
+    orphans: true,
+  });
+
+  invariant(kept.directory !== null);
+
+  expect(removed.dropped).toStrictEqual([{ kind: 'secrets', id: '2026-10-04T05-30-00.000Z' }]);
+  expect(lines).toContain(`INFO impd.gc removed kept secret values ${kept.directory}`);
+  expect(existsSync(kept.directory)).toBeFalse();
+  expect(files.listKept()).toStrictEqual([]);
+});

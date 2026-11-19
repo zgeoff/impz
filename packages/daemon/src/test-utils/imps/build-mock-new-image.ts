@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import type { NewImage } from '../../platform/db/images';
+import type { NewImage } from '../../platform/db/create-image';
 
 export function buildMockNewImage(overrides: Partial<NewImage> = {}): NewImage {
   return {

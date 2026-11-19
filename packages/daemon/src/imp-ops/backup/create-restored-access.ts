@@ -1,12 +1,12 @@
 import { SecretNameSchema } from '@impz/api';
 import type { BackupRestore } from '@impz/api';
 import type { TokenStore } from '../../identity/auth/token-store';
+import { listSecretRows } from '../../platform/db/create-checked-grant';
+import type { SecretRow } from '../../platform/db/create-checked-grant';
 import { createRestoredSecrets } from '../../platform/db/create-restored-secrets';
+import { listTokenRecords, listTokenSshKeyRecords } from '../../platform/db/list-token-records';
 import { openDatabase } from '../../platform/db/open-database';
 import type { ImpDatabase } from '../../platform/db/open-database';
-import { listSecretRows } from '../../platform/db/secrets';
-import type { SecretRow } from '../../platform/db/secrets';
-import { listTokenRecords, listTokenSshKeyRecords } from '../../platform/db/tokens';
 
 type RestoredAccess = NonNullable<BackupRestore['database']>;
 

@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { buildMockExtent } from '../../test-utils/vm/build-mock-extent';
 import { countOwnerBytes } from './count-owner-bytes';
-import { EXTENT_FLAGS } from './fiemap';
+import { EXTENT_FLAGS } from './read-extents';
 
 test('it counts what only one owner holds as exclusive and the rest as shared', () => {
   const totals = countOwnerBytes([

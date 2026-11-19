@@ -1,6 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { startTestImpd } from '../test-utils/start-test-impd';
-import { tryTunnelSocket } from '../test-utils/surface/try-impd-sockets';
+import { tryTunnelSocket } from '../test-utils/surface/try-exec-socket';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

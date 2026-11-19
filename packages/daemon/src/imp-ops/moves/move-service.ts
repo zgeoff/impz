@@ -2,12 +2,12 @@ import type { WarmHost } from '@impz/api';
 import { ImpdError } from '../../platform/errors/impd-error';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import type { ImpOpsConfig } from '../imp-ops-config';
+import { buildPeerRanges } from './build-peer-ranges';
 import { createMoveReceiver } from './move-receiver';
 import type { MoveReceiver, MoveReceiverDeps } from './move-receiver';
 import { createMoveSender } from './move-sender';
 import type { MoveSender, MoveSenderDeps } from './move-sender';
-import { buildPeerRanges } from './peer-address';
-import { readWarmHost } from './warm-facts';
+import { readWarmHost } from './read-warm-host';
 
 export type MoveService = MoveSender &
   Pick<MoveReceiver, 'issueTicket' | 'reissueTicket' | 'peerCalls'> & {

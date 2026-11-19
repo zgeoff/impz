@@ -11,8 +11,8 @@ import {
 import { basename, dirname, join } from 'node:path';
 import * as z from 'zod';
 import { writeFileDurably } from '../../platform/process/write-file-durably';
-import { BACKUP_TREE, buildBackupPaths, buildImagePaths } from './data-layout';
-import type { ImpPaths } from './data-layout';
+import { BACKUP_TREE, buildBackupPaths, buildImagePaths } from './build-imp-paths';
+import type { ImpPaths } from './build-imp-paths';
 import type { StorageBackend } from './storage-backend';
 
 interface XfsBackupContext {

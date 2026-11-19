@@ -8,8 +8,8 @@ import { buildSQLiteDialect } from '@zgeoff/kysely-bun-sqlite';
 import { Kysely } from 'kysely';
 import { createImpEventLog } from './create-imp-event-log';
 import type { ImpEventLog } from './create-imp-event-log';
+import type { DB } from './db';
 import { runMigrations } from './run-migrations';
-import type { DB } from './schema';
 
 // sqlite: the handle under the builder. Give a library the builder, not the handle: a second Kysely
 // over the handle keeps a lock of its own, so its writes join an open impd transaction and roll

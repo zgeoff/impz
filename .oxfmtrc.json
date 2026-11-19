@@ -6,7 +6,7 @@
     ".cache/**",
     "packages/api/protocol-schema.json",
     "packages/cli/json-output-schema.json",
-    "packages/daemon/src/platform/db/schema.ts",
+    "packages/daemon/src/platform/db/db.ts",
     "packages/agent-protocol/src/gen/**"
   ],
   "proseWrap": "always",

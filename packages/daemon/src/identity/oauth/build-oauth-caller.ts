@@ -1,8 +1,8 @@
 import type { Scope } from '@impz/api';
 import type { Access } from '@zgeoff/mcp-auth';
 import type { Caller } from '../../platform/principal/caller';
-import { pickGrantScope } from './grant-limits';
 import type { ImpLimits } from './imp-limits-schema';
+import { pickGrantScope } from './pick-grant-scope';
 
 type OAuthAccess = Extract<Access<Scope, ImpLimits>, { kind: 'oauth' }>;
 

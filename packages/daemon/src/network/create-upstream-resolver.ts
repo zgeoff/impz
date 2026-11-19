@@ -3,7 +3,7 @@ import { rootCertificates } from 'node:tls';
 import { getErrorMessage } from '@impz/shared';
 import * as z from 'zod';
 import { getImpdLogger } from '../platform/process/get-impd-logger';
-import type { ResolveUpstream } from './broker/tls/forward-request';
+import type { ResolveUpstream } from './broker/tls/create-forwarder';
 import { resolvePublicUpstream } from './broker/tls/resolve-public-upstream';
 
 const FileSchema = z.object({

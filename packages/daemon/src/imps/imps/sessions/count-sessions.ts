@@ -1,4 +1,4 @@
-import type { ImpRecord } from '../../../platform/db/imps';
+import type { ImpRecord } from '../../../platform/db/list-imps';
 import { readSnapshotMeta } from '../../../vm/sleep/snapshot-meta';
 import type { ImpContext } from '../imp-context';
 

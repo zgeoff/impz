@@ -2,30 +2,30 @@ import { lookup } from 'node:dns/promises';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Config } from '../config';
+import { checkHostRules6, readOrCreateUlaPrefix, resolveIpv6Plan } from '../host-net/net/ipv6-plan';
+import type { Ipv6Plan } from '../host-net/net/ipv6-plan';
+import { createReachPolicy } from '../host-net/net/reach-policy';
 import {
   readConnectedPrefixes,
   readIpv6DefaultRoute,
   readUplinks,
-} from '../host-net/net/host-routes';
-import { checkHostRules6, readOrCreateUlaPrefix, resolveIpv6Plan } from '../host-net/net/ipv6-plan';
-import type { Ipv6Plan } from '../host-net/net/ipv6-plan';
-import { createReachPolicy } from '../host-net/net/reach-policy';
-import type { BuilderTestRegistry } from '../imps/images/builders/builder-imps';
+} from '../host-net/net/read-uplinks';
+import type { BuilderTestRegistry } from '../imps/images/builders/create-builders';
 import { createBroker } from '../network/broker/broker-service';
-import type { Broker } from '../network/broker/broker-service';
+import type { BrokerService } from '../network/broker/broker-service';
 import type { SecretFiles } from '../network/broker/secrets/secret-files';
 import { resolvePublicUpstream } from '../network/broker/tls/resolve-public-upstream';
 import { createUpstreamResolver } from '../network/create-upstream-resolver';
-import { runNft } from '../network/egress/egress-firewall';
 import { createEgressService } from '../network/egress/egress-service';
 import type { EgressService } from '../network/egress/egress-service';
+import { runNft } from '../network/egress/run-nft';
 import { resolveTestRegistry } from '../resolve-test-registry';
 import type { ImpdDeps } from './impd-deps';
 import type { ImpdStopParts } from './stop-impd';
 
 export interface ImpdFirewall {
   readonly ipv6: Ipv6Plan | null;
-  readonly broker: Broker;
+  readonly broker: BrokerService;
   readonly egress: EgressService;
   readonly testRegistry: BuilderTestRegistry | null;
 }

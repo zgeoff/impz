@@ -1,4 +1,4 @@
-import type { ImageUse } from '../../../platform/db/images';
+import type { ImageUse } from '../../../platform/db/create-image';
 import type { ImageSpace } from '../../../vm/storage/storage-backend';
 import type { ImageEvictionConfig } from '../../imps-config';
 import { isOverHighMark } from './is-over-high-mark';

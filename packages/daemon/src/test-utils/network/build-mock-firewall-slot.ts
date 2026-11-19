@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import type { FirewallSlot } from '../../network/egress/egress-ruleset';
+import type { FirewallSlot } from '../../network/egress/build-ruleset';
 
 export function buildMockFirewallSlot(overrides: Partial<FirewallSlot> = {}): FirewallSlot {
   const slot = overrides.slot ?? faker.number.int({ min: 0, max: 4095 });

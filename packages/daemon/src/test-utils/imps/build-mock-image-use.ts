@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import type { ImageUse } from '../../platform/db/images';
+import type { ImageUse } from '../../platform/db/create-image';
 
 export function buildMockImageUse(overrides: Partial<ImageUse> = {}): ImageUse {
   return {

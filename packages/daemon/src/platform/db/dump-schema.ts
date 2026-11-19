@@ -14,7 +14,7 @@ import type { PostprocessFunction } from 'kysely-codegen';
 import { openDatabase } from './open-database';
 import { readNames } from './read-names';
 
-const SCHEMA_FILE = join(import.meta.dir, 'schema.ts');
+const SCHEMA_FILE = join(import.meta.dir, 'db.ts');
 
 const CUSTOM_IMPORTS = {
   ApiActor: '@impz/api',

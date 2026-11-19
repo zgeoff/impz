@@ -3,8 +3,8 @@ import { appendEvent, pruneEvents } from '@impz/durable';
 import { buildMockNewImage } from '../../test-utils/imps/build-mock-new-image';
 import { buildMockNewImp } from '../../test-utils/imps/build-mock-new-imp';
 import { createTestDatabase } from '../../test-utils/platform/create-test-database';
-import { createImage } from './images';
-import { createImp, removeImp } from './imps';
+import { createImage } from './create-image';
+import { createImp, removeImp } from './list-imps';
 import { readImpEventsAfter } from './read-imp-events-after';
 
 function setupTest() {

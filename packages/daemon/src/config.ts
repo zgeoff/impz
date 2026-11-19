@@ -1,15 +1,23 @@
 import { join } from 'node:path';
 import { IdentityIssuerSchema, ImpPatternSchema } from '@impz/api';
 import * as z from 'zod';
-import { countSlots, formatCidr4, isTailnetOverlap, parseSubnet } from './host-net/net/addressing';
-import { formatCidr6 } from './host-net/net/addressing6';
+import { buildRangeMatcher } from './host-net/net/build-range-matcher';
+import { formatCidr6 } from './host-net/net/derive-guest-ip6';
+import {
+  countSlots,
+  formatCidr4,
+  isTailnetOverlap,
+  parseSubnet,
+} from './host-net/net/derive-slot-address';
 import { parseIpv6Setting } from './host-net/net/ipv6-plan';
-import { buildRangeMatcher } from './host-net/net/range-matcher';
 import { parseTailnetRules } from './identity/auth/parse-tailnet-rules';
 import { PublicMcpEnvSchema, parsePublicMcpConfig } from './identity/oauth/public-mcp-config';
 import { loadBackupConfig } from './imp-ops/backup/backup-config';
-import { buildPeerRanges, parsePeerUrlAddress } from './imp-ops/moves/peer-address';
-import { BUILD_IMAGE_PATTERN, DEFAULT_BUILD_IMAGE } from './imps/docker-contract/build-image';
+import { buildPeerRanges, parsePeerUrlAddress } from './imp-ops/moves/build-peer-ranges';
+import {
+  BUILD_IMAGE_PATTERN,
+  DEFAULT_BUILD_IMAGE,
+} from './imps/docker-contract/default-build-image';
 import type { ImageEvictionConfig, TestRegistryConfig } from './imps/imps-config';
 import { checkPublicPorts } from './network/https/check-public-ports';
 import { HttpsEnvSchema, listHttpsWarnings, readHttpsConfig } from './network/https/https-config';
@@ -19,7 +27,7 @@ import {
 } from './network/tailnet-names/tailnet-names-config';
 import type { SurfaceConfig } from './surface/surface-config';
 import type { KsmConfig, PriorityRam } from './vm/vm-config';
-import { MAX_GROWTH_FACTOR } from './vm/vmm/elastic-memory';
+import { MAX_GROWTH_FACTOR } from './vm/vmm/resolve-max-memory-mib';
 
 const PortSchema = z.coerce.number().pipe(z.int().min(1).max(65_535));
 const CountSchema = z.coerce.number().pipe(z.int().positive());

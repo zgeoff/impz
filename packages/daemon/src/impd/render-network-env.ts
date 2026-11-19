@@ -1,5 +1,5 @@
 import { NetworkEnvSchema } from '../config';
-import { formatSubnet, parseSubnet } from '../host-net/net/addressing';
+import { formatSubnet, parseSubnet } from '../host-net/net/derive-slot-address';
 
 export function renderNetworkEnv(env: Readonly<Record<string, string | undefined>>): string {
   // an empty variable (`IMP_SUBNET=` in an env file) means unset

@@ -11,16 +11,16 @@ import { server } from '@impz/shared/test-utils/server';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { HttpResponse, http } from 'msw';
 import invariant from 'tiny-invariant';
-import { parsePrefix64 } from '../../host-net/net/addressing6';
+import { parsePrefix64 } from '../../host-net/net/derive-guest-ip6';
 import { createReachPolicy } from '../../host-net/net/reach-policy';
+import { readSecret } from '../../platform/db/create-checked-grant';
+import { readImpByName, updateImpMove } from '../../platform/db/list-imps';
 import {
   AUDIT_ROWS_PER_IMP,
   listAuditEntries,
   listRefusedRequests,
   writeAuditEntry,
-} from '../../platform/db/broker-audit';
-import { readImpByName, updateImpMove } from '../../platform/db/imps';
-import { readSecret } from '../../platform/db/secrets';
+} from '../../platform/db/write-audit-entry';
 import { buildStubHostRoutes } from '../../test-utils/host-net/build-stub-host-routes';
 import { createStubBrokerTokenEndpoint } from '../../test-utils/network/create-stub-broker-token-endpoint';
 import { startStubBrokerGuestSocket } from '../../test-utils/network/start-stub-broker-guest-socket';

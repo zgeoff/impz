@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import type { NewApiCall } from '../../platform/db/api-audit';
+import type { NewApiCall } from '../../platform/db/list-api-calls';
 
 export function buildMockNewApiCall(overrides: Partial<NewApiCall> = {}): NewApiCall {
   return {

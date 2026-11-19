@@ -23,11 +23,11 @@ drive, and a backup restores across backends.
 
 impd keeps everything under one data directory: the database, the system files, the images, a
 directory per imp with its disk, its memory snapshot, its sockets and its session logs, the jails,
-the boot templates, the tailnet node's state and the TLS files. `storage/data-layout.ts` is where
-the code names every path. On ZFS the root dataset is mounted on the data directory, and the disks,
-the images and the memory snapshots live in datasets of their own beneath it, so a checkpoint of a
-disk never holds a stale memory file. Every dataset is mounted by impd inside the container, never
-by the host, and impd mounts them all again at start before it adopts or wakes a VM.
+the boot templates, the tailnet node's state and the TLS files. `storage/build-imp-paths.ts` is
+where the code names every path. On ZFS the root dataset is mounted on the data directory, and the
+disks, the images and the memory snapshots live in datasets of their own beneath it, so a checkpoint
+of a disk never holds a stale memory file. Every dataset is mounted by impd inside the container,
+never by the host, and impd mounts them all again at start before it adopts or wakes a VM.
 
 ## System files
 

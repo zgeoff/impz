@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { writeMoveTicket } from '../../platform/db/move-tickets';
+import { writeMoveTicket } from '../../platform/db/read-move-ticket';
 import { hashSecret } from '../../platform/secrets/hash-secret';
 import { buildMockMoveTicketRow } from '../../test-utils/imp-ops/build-mock-move-ticket-row';
 import { createTestDatabase } from '../../test-utils/platform/create-test-database';

@@ -5,7 +5,7 @@ import type { ImpService } from '../imps/imps/imp-service';
 import { withAuditedOpen } from '../platform/audit/api-audit';
 import type { ApiAudit } from '../platform/audit/api-audit';
 import type { Caller } from '../platform/principal/caller';
-import type { ListenSpec } from '../vm/agent-client/listener-stream';
+import type { ListenSpec } from '../vm/agent-client/open-listener';
 import { createReverseForwards } from '../vm/guest-channels/reverse-forwards';
 import { createTunnelLimits, createTunnelSession } from '../vm/guest-channels/tunnel-session';
 import type { TunnelSession } from '../vm/guest-channels/tunnel-session';

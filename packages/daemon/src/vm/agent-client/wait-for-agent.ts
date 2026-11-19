@@ -2,7 +2,7 @@ import type { Ping } from '@impz/agent-protocol';
 import { getErrorMessage } from '@impz/shared';
 import type { Clock } from '../../platform/process/clock';
 import { REAL_CLOCK } from '../../platform/process/real-clock';
-import { sendPing } from './agent-requests';
+import { sendPing } from './send-agent-request';
 
 export interface WaitOptions {
   readonly deadlineMs: number;

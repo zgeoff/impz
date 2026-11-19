@@ -1,6 +1,6 @@
 import type { Scope } from '@impz/api';
+import { buildForbiddenError } from '../platform/errors/build-not-found-error';
 import type { ImpdError } from '../platform/errors/impd-error';
-import { buildForbiddenError } from '../platform/errors/impd-errors';
 import { formatCaller, isCallerAllowed } from '../platform/principal/caller';
 import type { Caller } from '../platform/principal/caller';
 

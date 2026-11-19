@@ -1,4 +1,4 @@
-import { NO_IDLE_TIMEOUT_S } from '../../platform/http/no-idle-timeout';
+import { NO_IDLE_TIMEOUT_S } from '../../platform/http/no-idle-timeout-s';
 
 interface SilentOriginOptions {
   readonly controlPath?: string;

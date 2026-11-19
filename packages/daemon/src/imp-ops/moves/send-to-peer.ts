@@ -1,7 +1,7 @@
 import { MOVE_RECEIVE_PATH } from '@impz/api';
 import type { StartTimer } from '../../platform/process/clock';
 import { sendLongRequest } from '../../platform/process/send-long-request';
-import { buildTicketHeader } from './move-tickets';
+import { buildTicketHeader } from './build-ticket-header';
 
 export interface PeerDeps {
   readonly startPeerDeadline?: StartTimer;

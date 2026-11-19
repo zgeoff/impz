@@ -6,15 +6,15 @@ import {
   removeImageRemoval,
   updateImagePin,
   updateImageUse,
-} from '../../platform/db/images';
-import type { ImageRecord } from '../../platform/db/images';
-import { countImpsUsingImage } from '../../platform/db/imps';
+} from '../../platform/db/create-image';
+import type { ImageRecord } from '../../platform/db/create-image';
+import { countImpsUsingImage } from '../../platform/db/list-imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import {
   buildConflictError,
   buildForbiddenError,
   buildNotFoundError,
-} from '../../platform/errors/impd-errors';
+} from '../../platform/errors/build-not-found-error';
 import type { Clock } from '../../platform/process/clock';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { REAL_CLOCK } from '../../platform/process/real-clock';
@@ -25,7 +25,7 @@ import type { StorageGate } from '../../vm/storage/storage-gate';
 import type { ImpsConfig } from '../imps-config';
 import { createImageBuilds } from './build/create-image-builds';
 import type { ImageBuilds } from './build/create-image-builds';
-import type { Builders } from './builders/builder-imps';
+import type { Builders } from './builders/create-builders';
 import { FALLBACK_DEFAULT_IMAGE, createImageAdds } from './create-image-adds';
 import type { ImageAdds } from './create-image-adds';
 import { createImageEviction } from './eviction/create-image-eviction';

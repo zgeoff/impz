@@ -1,6 +1,6 @@
 import * as z from 'zod';
-import { TailnetRulesSchema } from './tailnet-identity';
-import type { TailnetRule } from './tailnet-identity';
+import { TailnetRulesSchema } from './create-tailnet-identities';
+import type { TailnetRule } from './create-tailnet-identities';
 
 export function parseTailnetRules(text: string | undefined): readonly TailnetRule[] | null {
   if (text === undefined) {

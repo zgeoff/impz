@@ -6,12 +6,12 @@ import { create } from '@bufbuild/protobuf';
 import { ErrorDataSchema, RequestSchema } from '@impz/agent-protocol';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
 import invariant from 'tiny-invariant';
+import { openAttachStream, openExecStream, openTapStream } from '../../vm/agent-client/exec-stream';
 import {
   sendActivity,
   sendAgentRequest,
   sendSessionKill,
-} from '../../vm/agent-client/agent-requests';
-import { openAttachStream, openExecStream, openTapStream } from '../../vm/agent-client/exec-stream';
+} from '../../vm/agent-client/send-agent-request';
 import { startStubSessionAgent } from './start-stub-session-agent';
 
 async function setupTest() {

@@ -5,8 +5,8 @@ import {
   removeImageRemoval,
   removeUnusedImage,
   updateImageUse,
-} from '../../../platform/db/images';
-import type { ImageUse } from '../../../platform/db/images';
+} from '../../../platform/db/create-image';
+import type { ImageUse } from '../../../platform/db/create-image';
 import type { ImpDatabase } from '../../../platform/db/open-database';
 import type { Clock } from '../../../platform/process/clock';
 import { getImpdLogger } from '../../../platform/process/get-impd-logger';

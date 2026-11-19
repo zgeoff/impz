@@ -7,7 +7,7 @@ import type { RoomLeft } from '../../test-utils/imp-ops/create-stub-governed-hos
 import { buildStubEventWriter } from '../../test-utils/platform/build-stub-event-writer';
 import { buildStubGatedCall } from '../../test-utils/platform/build-stub-gated-call';
 import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
-import type { VmRam } from '../../vm/vmm/vm-stats';
+import type { VmRam } from '../../vm/vmm/read-vm-memory';
 import { ENFORCE_INTERVAL_MS, createRamGovernor } from './ram-governor';
 
 test('it enforces the budget every 5 s, as the docs say', () => {

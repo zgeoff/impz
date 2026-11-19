@@ -1,4 +1,4 @@
-import { toDigestHex } from '../../vm/storage/data-layout';
+import { toDigestHex } from '../../vm/storage/build-imp-paths';
 
 export function buildDigestTag(digest: string): string {
   if (digest.startsWith('imp-')) {

@@ -1,4 +1,4 @@
-import { createCheckpoint } from '../../platform/db/checkpoints';
+import { createCheckpoint } from '../../platform/db/create-checkpoint';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { CheckpointIdTakenError } from '../../vm/storage/storage-backend';
 import type { StorageBackend } from '../../vm/storage/storage-backend';

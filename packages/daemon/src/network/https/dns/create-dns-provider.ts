@@ -1,6 +1,6 @@
 import type { DnsConfig } from '../https-config';
-import { createChalltestsrvProvider } from './challtestsrv-provider';
-import { createCloudflareProvider } from './cloudflare-provider';
+import { createChalltestsrvProvider } from './create-challtestsrv-provider';
+import { createCloudflareProvider } from './create-cloudflare-provider';
 import type { DnsProvider } from './dns-provider';
 import type { DnsToken } from './dns-token';
 
