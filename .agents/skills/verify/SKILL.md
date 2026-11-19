@@ -69,7 +69,7 @@ Read a feature's file before you run its journey.
    [Targets](#targets) table. Run the commands in its row. `up` or `attach` starts a run, which
    lasts until `down` or `detach`. Expect from `up` or `attach`: `ok: true`, and the app's endpoints
    in `data.endpoints`.
-3. Run `bun verify doctor`. Expect: `data.passed: true`. When a check fails, fix its cause, and run
+3. Run `bun verify doctor`. Expect: `data.passed: true`. When a check fails, fix its cause. Then run
    `doctor` again.
 4. Run the journey from the feature's file in [References](#references). Its first line,
    `use --feature`, records each later command under that feature, and leaves the target as it is.
@@ -89,18 +89,24 @@ Read a feature's file before you run its journey.
    Run `bun verify done` to record a verdict for the feature that `use --feature` set. Expect:
    `ok: true`. It fails with `check-failed` until a journey command succeeds after `doctor`.
 7. Repeat steps 4 to 6 for each feature with `changed: true`, and for each feature your task names,
-   in the order of the table in [References](#references). When the [Targets](#targets) section says
-   to run a feature's journey last, run it after every other journey.
+   in the order of the table in [References](#references). When a feature's file says to run part of
+   its journey last, such as [On prod](references/feature-mcp-reads.md#on-prod), run that part after
+   every other journey.
 8. Run `bun verify report --human` to read the report. Expect: `verified` on each changed feature
    you did not skip in step 5. Repeat steps 4 to 6 for each `stale` feature.
-9. Push the branch, and open a PR for it when none is open. Without an open PR, `publish` fails and
-   writes nothing. Publish with the token filled inline, even when you skipped a feature. The
-   machine exports `VERIFY_UPLOAD_URL` and `VERIFY_UPLOAD_TOKEN_REF`, an `op://` reference, so no
-   raw token sits in the shell. To write to a PR other than the branch's own, add `--pr <number>`.
+9. Push the branch. When no PR is open for it, open one: without an open PR, `publish` fails and
+   writes nothing. Then publish the report, even when you skipped a feature. `publish` uploads the
+   evidence to the address in `VERIFY_UPLOAD_URL`, with the upload token in `VERIFY_UPLOAD_TOKEN`.
+   Your shell's profile sets `VERIFY_UPLOAD_URL`, and `VERIFY_UPLOAD_TOKEN_REF`, the `op://`
+   reference to that token in 1Password. Never run `op read` on its own, because it prints the
+   token. Read the token into the one command:
 
    ```bash
    VERIFY_UPLOAD_TOKEN="$(op read "$VERIFY_UPLOAD_TOKEN_REF")" bun verify publish
    ```
+
+   To write to a PR other than the branch's own, add `--pr <number>`. When either variable is empty,
+   or `op read` fails, stop and report it as a blocker.
 
    Expect: `ok: true`, and `data.action` of `created`, `replaced` or `unchanged`. It writes the
    report into the PR's description, the only report the gate reads.
