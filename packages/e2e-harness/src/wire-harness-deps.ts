@@ -1,11 +1,9 @@
 import { mkdirSync, readFileSync, rmSync, statfsSync } from 'node:fs';
 import { createImpClient } from '@impz/client';
 import { readTextOrNull } from '../../../scripts/lib/read-text-or-null.ts';
+import { checkPrivileges } from './check-privileges';
 import type { HarnessEnv } from './config';
-import { createMissingImages } from './fixtures';
-import { startHeadscale, stopHeadscale } from './headscale';
-import { listImageNames, readInfo, runImpWith } from './imp-cli';
-import { removeImpsWithPrefix } from './imps';
+import { createMissingImages } from './create-missing-images';
 import type { DevInstance } from './instance';
 import {
   REPO_ROOT,
@@ -26,17 +24,19 @@ import {
   readMoveOptions,
   removeMoveLeftovers,
 } from './move-hosts';
-import { startPebble, stopPebble } from './pebble';
-import { checkPrivileges } from './privileges';
+import { readTailscaleE2EAuthKey } from './read-tailscale-e2e-auth-key';
 import { removeDataDir } from './remove-data-dir';
 import { resetBaseline } from './reset-baseline';
 import { resolveDataWipe } from './resolve-data-wipe';
 import type { HarnessDeps, HarnessRun } from './run-e2e';
+import { listImageNames, readInfo, runImpWith } from './run-imp';
 import { runSuite, stopSuiteGroup } from './run-suite';
+import { startHeadscale, stopHeadscale } from './start-headscale';
+import { startPebble, stopPebble } from './start-pebble';
 import type { FixtureImage } from './suites';
 import { SUITES } from './suites';
-import { readTailscaleE2EAuthKey } from './tailscale-key';
 import { startTailscaleTailnet, stopTailscaleTailnet } from './tailscale-tailnet';
+import { removeImpsWithPrefix } from './wait-for-exec';
 import { writeResults } from './write-results';
 
 export function wireHarnessDeps(cwd: string): HarnessDeps {

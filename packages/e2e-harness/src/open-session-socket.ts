@@ -1,0 +1,188 @@
+import * as z from 'zod';
+import { instance } from './instance';
+import { readImpEnv } from './run-imp';
+
+const TIMEOUT_MS = 60_000;
+
+const ColdBootSchema = z
+  .object({ bootId: z.string(), cause: z.string(), at: z.string() })
+  .readonly();
+
+const OutputSchema = z
+  .object({
+    continuity: z.literal('offsets'),
+    bootId: z.string(),
+    executionGeneration: z.string(),
+    bufferStart: z.number(),
+    end: z.number(),
+    offset: z.number(),
+    prelude: z.number(),
+    coldBoots: z.array(ColdBootSchema).readonly(),
+    previous: z
+      .object({ executionGeneration: z.string(), end: z.number(), exitCode: z.number().nullable() })
+      .readonly()
+      .optional(),
+    resume: z
+      .object({
+        kind: z.string(),
+        from: z.number().optional(),
+        to: z.number().optional(),
+        executionGeneration: z.string().optional(),
+        firstOffset: z.number().optional(),
+      })
+      .readonly()
+      .optional(),
+    log: z.object({ enabled: z.boolean() }).readonly().optional(),
+  })
+  .readonly();
+
+export type SessionOutput = z.infer<typeof OutputSchema>;
+
+const ControlSchema = z
+  .discriminatedUnion('type', [
+    z.object({ type: z.literal('started'), pid: z.number(), output: OutputSchema }),
+    z.object({ type: z.literal('exit'), offset: z.number().optional() }),
+    z.object({ type: z.literal('detached'), reason: z.string(), offset: z.number().optional() }),
+    z.object({
+      type: z.literal('error'),
+      code: z.string().optional(),
+      message: z.string(),
+      data: z.unknown().optional(),
+    }),
+  ])
+  .readonly();
+
+type Control = z.infer<typeof ControlSchema>;
+
+interface ResumeFrom {
+  readonly executionGeneration: string;
+  readonly offset: number;
+}
+
+export type SessionOpen =
+  | {
+      readonly type: 'start';
+      readonly name: string;
+      readonly session: string;
+      readonly argv: readonly string[];
+      readonly tty: true;
+      readonly resumeFrom?: ResumeFrom;
+      readonly log?: true;
+    }
+  | {
+      readonly type: 'attach';
+      readonly name: string;
+      readonly session: string;
+      readonly resumeFrom?: ResumeFrom;
+      readonly wake?: boolean;
+    };
+
+export interface SessionSocket {
+  readonly first: Control;
+
+  readonly readBytes: (count: number) => Promise<Uint8Array>;
+  readonly received: () => number;
+  readonly close: () => void;
+}
+
+export async function openSessionSocket(open: Readonly<SessionOpen>): Promise<SessionSocket> {
+  const url = `${instance.apiUrl.replace(/^http/v, 'ws')}/exec`;
+
+  const env = await readImpEnv();
+
+  const token = env['IMP_TOKEN'] ?? '';
+
+  const socket = new WebSocket(url, { headers: { authorization: `Bearer ${token}` } });
+
+  const chunks: Uint8Array[] = [];
+  const controls: Control[] = [];
+  const state: { bytes: number; wake: (() => void) | null } = { bytes: 0, wake: null };
+
+  socket.binaryType = 'arraybuffer';
+
+  socket.addEventListener('message', (event) => {
+    const data: unknown = event.data;
+
+    if (data instanceof ArrayBuffer) {
+      const chunk = new Uint8Array(data).subarray(1);
+
+      chunks.push(chunk);
+
+      state.bytes += chunk.byteLength;
+    } else if (typeof data === 'string') {
+      controls.push(ControlSchema.parse(JSON.parse(data)));
+    }
+
+    state.wake?.();
+  });
+
+  socket.addEventListener('open', () => {
+    socket.send(JSON.stringify(open));
+  });
+
+  const waitUntil = async (what: string, check: () => boolean): Promise<void> => {
+    const deadline = Date.now() + TIMEOUT_MS;
+
+    while (!check()) {
+      if (Date.now() > deadline) {
+        throw new Error(`${what} on ${open.session}: timed out after ${String(TIMEOUT_MS)} ms`);
+      }
+
+      await new Promise<void>((resolve) => {
+        state.wake = resolve;
+
+        setTimeout(resolve, 200);
+      });
+    }
+  };
+
+  await waitUntil('the first message', () => controls.length > 0);
+
+  const [first] = controls;
+
+  if (first === undefined) {
+    throw new Error('no first message');
+  }
+
+  return {
+    first,
+    readBytes: async (count) => {
+      await waitUntil(`${String(count)} output bytes`, () => state.bytes >= count);
+
+      return Buffer.concat(chunks);
+    },
+    received: () => state.bytes,
+    close: () => {
+      socket.close();
+    },
+  };
+}
+
+export function requireOutput(opened: Readonly<SessionSocket>): SessionOutput {
+  if (opened.first.type !== 'started') {
+    throw new Error(`expected started, got ${JSON.stringify(opened.first)}`);
+  }
+
+  return opened.first.output;
+}
+
+const SessionErrorDataSchema = z
+  .object({
+    bootId: z.string().optional(),
+    state: z.string().optional(),
+    coldBoots: z.array(ColdBootSchema).readonly(),
+  })
+  .readonly();
+
+export interface SessionError {
+  readonly code: string | undefined;
+  readonly data: z.infer<typeof SessionErrorDataSchema>;
+}
+
+export function requireSessionError(opened: Readonly<SessionSocket>): SessionError {
+  if (opened.first.type !== 'error') {
+    throw new Error(`expected an error, got ${JSON.stringify(opened.first)}`);
+  }
+
+  return { code: opened.first.code, data: SessionErrorDataSchema.parse(opened.first.data) };
+}

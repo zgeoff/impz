@@ -8,7 +8,10 @@ import {
   writeBrokerUpstreams,
 } from '@impz/e2e-harness/broker-upstreams';
 import { config } from '@impz/e2e-harness/config';
-import { resolveImageName } from '@impz/e2e-harness/fixtures';
+import { resolveImageName } from '@impz/e2e-harness/create-missing-images';
+import { readContainerGateway, runChecked, runInContainer } from '@impz/e2e-harness/instance';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent, removeSecretIfPresent } from '@impz/e2e-harness/reset-baseline';
 import {
   createInstanceClient,
   requireImp,
@@ -16,13 +19,10 @@ import {
   runImpWith,
   runShellInImp,
   tryImp,
-} from '@impz/e2e-harness/imp-cli';
-import { holdImp, waitForExec } from '@impz/e2e-harness/imps';
-import { readContainerGateway, runChecked, runInContainer } from '@impz/e2e-harness/instance';
-import { registerRemoval } from '@impz/e2e-harness/register-removal';
-import { removeImpIfPresent, removeSecretIfPresent } from '@impz/e2e-harness/reset-baseline';
+} from '@impz/e2e-harness/run-imp';
 import { startStubUpstream } from '@impz/e2e-harness/start-stub-upstream';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import { holdImp, waitForExec } from '@impz/e2e-harness/wait-for-exec';
 import { writeMetric } from '@impz/e2e-harness/write-metric';
 
 async function setupTest() {

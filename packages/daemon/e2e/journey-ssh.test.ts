@@ -5,22 +5,22 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { config } from '@impz/e2e-harness/config';
-import { resolveImageName } from '@impz/e2e-harness/fixtures';
-import { createInstanceClient, runImp, runImpWith, runShellInImp } from '@impz/e2e-harness/imp-cli';
-import { waitForExec } from '@impz/e2e-harness/imps';
+import { resolveImageName } from '@impz/e2e-harness/create-missing-images';
 import { runCommand } from '@impz/e2e-harness/instance';
 import { registerRemoval } from '@impz/e2e-harness/register-removal';
 import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { createInstanceClient, runImp, runImpWith, runShellInImp } from '@impz/e2e-harness/run-imp';
 import {
   SSH_HOST,
   readTapLinkLocal,
   runSsh,
   setupSshClient,
   startSsh,
-} from '@impz/e2e-harness/ssh';
+} from '@impz/e2e-harness/run-ssh';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
 import { openCommandTerminal } from '@impz/e2e-harness/terminal';
 import { waitFor } from '@impz/e2e-harness/wait-for';
+import { waitForExec } from '@impz/e2e-harness/wait-for-exec';
 import { writeMetric } from '@impz/e2e-harness/write-metric';
 import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
 

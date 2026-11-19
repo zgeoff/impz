@@ -1,13 +1,13 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { buildReachScript } from '@impz/e2e-harness/build-reach-script';
 import { config } from '@impz/e2e-harness/config';
-import { readThroughProxy } from '@impz/e2e-harness/http';
-import { createInstanceClient, runImp, runInImp, runShellInImp } from '@impz/e2e-harness/imp-cli';
-import { holdImp, waitForExec } from '@impz/e2e-harness/imps';
+import { readThroughProxy } from '@impz/e2e-harness/read-through-proxy';
 import { registerRemoval } from '@impz/e2e-harness/register-removal';
 import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { createInstanceClient, runImp, runInImp, runShellInImp } from '@impz/e2e-harness/run-imp';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
 import { waitFor } from '@impz/e2e-harness/wait-for';
+import { holdImp, waitForExec } from '@impz/e2e-harness/wait-for-exec';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

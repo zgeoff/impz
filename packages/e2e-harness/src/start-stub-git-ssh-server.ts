@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Server, utils } from 'ssh2';
 import type { Connection, ServerChannel } from 'ssh2';
-import { createGitFreeEnv, runGitChecked } from './git-env';
+import { createGitFreeEnv, runGitChecked } from './create-git-free-env';
 import { runChecked } from './instance';
 
 export interface StubGitSshServer {

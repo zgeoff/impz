@@ -1,15 +1,15 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
-import { writeBuildContext } from '@impz/e2e-harness/build-context';
 import { config } from '@impz/e2e-harness/config';
-import { createInstanceClient, listImages, runImp, runInImp } from '@impz/e2e-harness/imp-cli';
-import { waitForExec } from '@impz/e2e-harness/imps';
 import { REPO_ROOT } from '@impz/e2e-harness/instance';
 import { registerRemoval } from '@impz/e2e-harness/register-removal';
 import { removeImageIfPresent, removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { createInstanceClient, listImages, runImp, runInImp } from '@impz/e2e-harness/run-imp';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
 import { waitFor } from '@impz/e2e-harness/wait-for';
+import { waitForExec } from '@impz/e2e-harness/wait-for-exec';
+import { writeBuildContext } from '@impz/e2e-harness/write-build-context';
 
 // One stack for every release, so the imp goes before the image it boots.
 async function setupTest() {

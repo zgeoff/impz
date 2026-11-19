@@ -1,23 +1,23 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { config } from '@impz/e2e-harness/config';
-import { resolveImageName } from '@impz/e2e-harness/fixtures';
+import { resolveImageName } from '@impz/e2e-harness/create-missing-images';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImageIfPresent, removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
 import {
   createInstanceClient,
   listImageNames,
   runImp,
   runShellInImp,
   tryImp,
-} from '@impz/e2e-harness/imp-cli';
+} from '@impz/e2e-harness/run-imp';
+import { getSuitePrefix } from '@impz/e2e-harness/suites';
 import {
   holdImp,
   readGuestFile,
   readGuestIdentity,
   waitForExec,
   writeGuestFile,
-} from '@impz/e2e-harness/imps';
-import { registerRemoval } from '@impz/e2e-harness/register-removal';
-import { removeImageIfPresent, removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
-import { getSuitePrefix } from '@impz/e2e-harness/suites';
+} from '@impz/e2e-harness/wait-for-exec';
 
 // One stack for every release, so each imp goes before the template it boots.
 async function setupTest() {

@@ -4,8 +4,8 @@
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { REAL_CLOCK } from '@impz/daemon/real-clock';
-import { createInstanceClient, readImpEnv } from '@impz/e2e-harness/imp-cli';
 import { instance, runCommand, runInContainer } from '@impz/e2e-harness/instance';
+import { createInstanceClient, readImpEnv } from '@impz/e2e-harness/run-imp';
 import { withDevLock } from '../../../scripts/lib/with-dev-lock.ts';
 import { writeStderr } from '../../../scripts/lib/write-stderr.ts';
 import { writeStdoutLine } from '../../../scripts/lib/write-stdout-line.ts';

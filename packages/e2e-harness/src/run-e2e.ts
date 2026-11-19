@@ -1,16 +1,17 @@
 import { join } from 'node:path';
-import { collectBootFallbacks } from './boot-fallbacks';
 import { buildHarnessEnv } from './build-harness-env';
 import type { HarnessTailnet } from './build-harness-env';
+import { collectBootFallbacks } from './collect-boot-fallbacks';
 import { buildConfig } from './config';
 import type { E2EConfig, HarnessEnv } from './config';
-import type { HeadscaleTailnet } from './headscale';
 import type { DevInstance } from './instance';
 import type { HostBFixture } from './move-hosts';
 import type { HarnessArgs } from './parse-args';
 import { parseArgs } from './parse-args';
 import { pickRunTailnet } from './pick-run-tailnet';
+import type { TailscaleE2EKey } from './read-tailscale-e2e-auth-key';
 import { hasRunPassed, runSuites } from './run-suites';
+import type { HeadscaleTailnet } from './start-headscale';
 import {
   FAST_GROUPS,
   SUITES,
@@ -19,7 +20,6 @@ import {
   listJourneys,
   readSuiteSettings,
 } from './suites';
-import type { TailscaleE2EKey } from './tailscale-key';
 import type { TailscaleTailnet } from './tailscale-tailnet';
 import type { ResultsOptions, Section } from './write-results';
 

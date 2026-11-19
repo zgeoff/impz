@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createGitFreeEnv } from '@impz/e2e-harness/git-env';
+import { createGitFreeEnv } from '@impz/e2e-harness/create-git-free-env';
 import { $ } from 'bun';
 
 async function setupTest() {

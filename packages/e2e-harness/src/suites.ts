@@ -1,15 +1,15 @@
 import { readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { readBackupSuiteSettings } from './backup-drill';
+import { buildHugePageSettings, checkHostHasHugePagePool } from './build-huge-page-settings';
 import { config } from './config';
-import { buildHugePageSettings, checkHostHasHugePagePool } from './huge-page-host';
 import { REPO_ROOT, SUITES_DIR } from './instance';
 import type { DevInstance } from './instance';
-import { checkHostRunsKsm } from './ksm-host';
+import { checkHostRunsKsm } from './is-ksm-supported';
 import { buildMoveSettings, readMoveOptions } from './move-hosts';
 import type { HostBFixtureName } from './move-hosts';
-import { buildRouteOrigin } from './oauth-route';
 import { buildRegistryPlan, buildRegistrySettings } from './registry-plan';
+import { buildRouteOrigin } from './run-sign-in';
 
 export type FixtureImage = 'base' | 'e2e-tiny' | 'e2e-bare' | 'e2e-ws' | 'e2e-git' | 'e2e-ra';
 

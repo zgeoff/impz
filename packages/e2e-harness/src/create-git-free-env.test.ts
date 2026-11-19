@@ -1,0 +1,72 @@
+import { expect, onTestFinished, test } from 'bun:test';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { updateEnv } from '@impz/shared/test-utils/update-env';
+import {
+  GIT_REPO_ENV_VARS,
+  createGitFreeEnv,
+  runGitChecked,
+  runGitCommand,
+} from './create-git-free-env';
+
+async function setupTest() {
+  const directory = await mkdtemp(join(tmpdir(), 'git-env-'));
+
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
+
+  return { directoryPath: directory };
+}
+
+test('#GIT_REPO_ENV_VARS holds every variable this git ties to a repository', async () => {
+  const listed = await runGitChecked(['git', 'rev-parse', '--local-env-vars']);
+
+  expect(listed.trim().split('\n').toSorted()).toStrictEqual([...GIT_REPO_ENV_VARS].toSorted());
+});
+
+test('#createGitFreeEnv drops the repository variables and keeps the rest', () => {
+  const env = createGitFreeEnv({
+    PATH: '/usr/bin',
+    GIT_DIR: '/repo/.git',
+    GIT_WORK_TREE: '/repo',
+    GIT_INDEX_FILE: '/repo/.git/index',
+    GIT_AUTHOR_NAME: 'e2e',
+    UNSET: undefined,
+  });
+
+  expect(env).toStrictEqual({ PATH: '/usr/bin', GIT_AUTHOR_NAME: 'e2e' });
+});
+
+test('#runGitCommand runs git in its own repo when this process names another', async () => {
+  const ctx = await setupTest();
+
+  const repo = join(ctx.directoryPath, 'repo');
+  const other = join(ctx.directoryPath, 'other');
+
+  await runGitChecked(['git', 'init', '-q', '-b', 'main', repo]);
+  await runGitChecked(['git', 'init', '-q', '-b', 'main', other]);
+
+  updateEnv('GIT_DIR', join(other, '.git'));
+
+  const result = await runGitCommand(['git', '-C', repo, 'rev-parse', '--absolute-git-dir']);
+
+  expect(result).toStrictEqual({ exitCode: 0, stdout: `${join(repo, '.git')}\n`, stderr: '' });
+});
+
+test('#runGitCommand passes the call’s env over this process’s', async () => {
+  const result = await runGitCommand(['sh', '-c', 'printf %s "$GIT_AUTHOR_NAME"'], {
+    env: { GIT_AUTHOR_NAME: 'e2e' },
+  });
+
+  expect(result.stdout).toBe('e2e');
+});
+
+test('#runGitChecked rejects on a non-zero exit', async () => {
+  const ctx = await setupTest();
+
+  const attempt = runGitChecked(['git', '-C', ctx.directoryPath, 'rev-parse', 'main']);
+
+  await Promise.allSettled([attempt]);
+
+  expect(attempt).rejects.toThrow(/^git -C .* rev-parse main exited 128: /u);
+});

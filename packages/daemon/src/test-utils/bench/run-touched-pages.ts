@@ -1,6 +1,6 @@
 import { ORPCError } from '@impz/client';
 import type { ImpClient } from '@impz/client';
-import { parseHugetlbMib } from '@impz/e2e-harness/huge-page-host';
+import { parseHugetlbMib } from '@impz/e2e-harness/build-huge-page-settings';
 import type { CommandResult } from '@impz/e2e-harness/instance';
 import { waitFor } from '@impz/e2e-harness/wait-for';
 import { match } from 'ts-pattern';

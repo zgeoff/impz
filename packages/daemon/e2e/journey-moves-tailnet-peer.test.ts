@@ -1,14 +1,14 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { config } from '@impz/e2e-harness/config';
-import { resolveImageName } from '@impz/e2e-harness/fixtures';
-import { createInstanceClient, readImp, runImp, runImpWith } from '@impz/e2e-harness/imp-cli';
-import { waitForExec, writeGuestFile } from '@impz/e2e-harness/imps';
+import { resolveImageName } from '@impz/e2e-harness/create-missing-images';
 import { runInContainer } from '@impz/e2e-harness/instance';
 import { HOST_B, readMoveHosts, readMoveOptions } from '@impz/e2e-harness/move-hosts';
 import { registerMoveRemoval } from '@impz/e2e-harness/register-move-removal';
+import { createInstanceClient, readImp, runImp, runImpWith } from '@impz/e2e-harness/run-imp';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
-import { parseSelfTags, waitForTailnetIp } from '@impz/e2e-harness/tailnet';
 import { waitFor } from '@impz/e2e-harness/wait-for';
+import { waitForExec, writeGuestFile } from '@impz/e2e-harness/wait-for-exec';
+import { parseSelfTags, waitForTailnetIp } from '@impz/e2e-harness/wait-for-tailnet-ip';
 
 // One stack for every release, so B's imps go before B.
 async function setupTest() {

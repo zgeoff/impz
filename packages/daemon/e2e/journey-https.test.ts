@@ -1,10 +1,8 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { X509Certificate } from 'node:crypto';
+import { readInContainer, readWakeMs } from '@impz/e2e-harness/build-container-curl-argv';
 import { config } from '@impz/e2e-harness/config';
-import { readInContainer, readWakeMs } from '@impz/e2e-harness/container-https';
-import { resolveImageName } from '@impz/e2e-harness/fixtures';
-import { assertState, createInstanceClient, runImp } from '@impz/e2e-harness/imp-cli';
-import { holdImp, waitForExec } from '@impz/e2e-harness/imps';
+import { resolveImageName } from '@impz/e2e-harness/create-missing-images';
 import {
   instance,
   readImpdLogSince,
@@ -12,17 +10,19 @@ import {
   runDevScript,
   runInContainer,
 } from '@impz/e2e-harness/instance';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { assertState, createInstanceClient, runImp } from '@impz/e2e-harness/run-imp';
 import {
   PEBBLE_DOMAIN,
   PUBLIC_HTTPS_PORT,
   buildPebbleEnv,
   probePebbleRunning,
   writePebbleRoot,
-} from '@impz/e2e-harness/pebble';
-import { registerRemoval } from '@impz/e2e-harness/register-removal';
-import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+} from '@impz/e2e-harness/start-pebble';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
 import { waitFor } from '@impz/e2e-harness/wait-for';
+import { holdImp, waitForExec } from '@impz/e2e-harness/wait-for-exec';
 import { writeMetric } from '@impz/e2e-harness/write-metric';
 import * as z from 'zod';
 

@@ -1,18 +1,18 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { config } from '@impz/e2e-harness/config';
+import { resolveImageName } from '@impz/e2e-harness/create-missing-images';
+import { stopFirecrackerHard } from '@impz/e2e-harness/instance';
 import {
   openSessionSocket,
   requireOutput,
   requireSessionError,
-} from '@impz/e2e-harness/exec-socket';
-import { resolveImageName } from '@impz/e2e-harness/fixtures';
-import { assertState, createInstanceClient, requireImp, runImp } from '@impz/e2e-harness/imp-cli';
-import { waitForExec } from '@impz/e2e-harness/imps';
-import { stopFirecrackerHard } from '@impz/e2e-harness/instance';
+} from '@impz/e2e-harness/open-session-socket';
 import { registerRemoval } from '@impz/e2e-harness/register-removal';
 import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { assertState, createInstanceClient, requireImp, runImp } from '@impz/e2e-harness/run-imp';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
 import { waitFor } from '@impz/e2e-harness/wait-for';
+import { waitForExec } from '@impz/e2e-harness/wait-for-exec';
 import { writeMetric } from '@impz/e2e-harness/write-metric';
 import invariant from 'tiny-invariant';
 

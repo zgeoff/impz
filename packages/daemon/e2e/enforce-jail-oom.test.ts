@@ -1,6 +1,10 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { config } from '@impz/e2e-harness/config';
-import { resolveImageName } from '@impz/e2e-harness/fixtures';
+import { resolveImageName } from '@impz/e2e-harness/create-missing-images';
+import { runInContainer } from '@impz/e2e-harness/instance';
+import { listJailMounts } from '@impz/e2e-harness/read-jail-state';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
 import {
   assertState,
   createInstanceClient,
@@ -8,14 +12,10 @@ import {
   runImp,
   runShellInImp,
   tryImp,
-} from '@impz/e2e-harness/imp-cli';
-import { holdImp, waitForExec } from '@impz/e2e-harness/imps';
-import { runInContainer } from '@impz/e2e-harness/instance';
-import { listJailMounts } from '@impz/e2e-harness/jail-host';
-import { registerRemoval } from '@impz/e2e-harness/register-removal';
-import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+} from '@impz/e2e-harness/run-imp';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
 import { waitFor } from '@impz/e2e-harness/wait-for';
+import { holdImp, waitForExec } from '@impz/e2e-harness/wait-for-exec';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

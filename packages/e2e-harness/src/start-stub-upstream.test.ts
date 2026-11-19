@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { runGitCommand } from './git-env';
+import { runGitCommand } from './create-git-free-env';
 import { startStubUpstream } from './start-stub-upstream';
 
 async function setupTest() {

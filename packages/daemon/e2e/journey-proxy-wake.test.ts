@@ -1,14 +1,15 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { waitAwakePastIdle } from '@impz/e2e-harness/awake-past-idle';
 import { config } from '@impz/e2e-harness/config';
-import { resolveImageName } from '@impz/e2e-harness/fixtures';
+import { resolveImageName } from '@impz/e2e-harness/create-missing-images';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
 import {
   assertState,
   createInstanceClient,
   readState,
   runImp,
   runShellInImp,
-} from '@impz/e2e-harness/imp-cli';
+} from '@impz/e2e-harness/run-imp';
 import {
   GUEST_SERVERS,
   PAGE,
@@ -16,12 +17,11 @@ import {
   readPage,
   sendRequest,
   startProxy,
-} from '@impz/e2e-harness/imp-proxy';
-import { waitForExec } from '@impz/e2e-harness/imps';
-import { registerRemoval } from '@impz/e2e-harness/register-removal';
-import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+} from '@impz/e2e-harness/start-proxy';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import { waitAwakePastIdle } from '@impz/e2e-harness/wait-awake-past-idle';
 import { waitFor } from '@impz/e2e-harness/wait-for';
+import { waitForExec } from '@impz/e2e-harness/wait-for-exec';
 import { writeMetric } from '@impz/e2e-harness/write-metric';
 import invariant from 'tiny-invariant';
 

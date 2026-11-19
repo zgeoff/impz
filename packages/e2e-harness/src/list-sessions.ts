@@ -1,0 +1,36 @@
+import { SessionNameSchema } from '@impz/api';
+import * as z from 'zod';
+import { runImp } from './run-imp';
+
+const SessionRowSchema = z.object({
+  name: SessionNameSchema,
+  pid: z.number(),
+  state: z.string(),
+  attached: z.boolean(),
+  cols: z.number(),
+  rows: z.number(),
+});
+
+export type SessionRow = z.infer<typeof SessionRowSchema>;
+
+export function parseSessions(stdout: string): SessionRow[] {
+  return z.array(SessionRowSchema).parse(JSON.parse(stdout));
+}
+
+export async function listSessions(imp: string): Promise<SessionRow[]> {
+  const stdout = await runImp('sessions', imp, '--json');
+
+  return parseSessions(stdout);
+}
+
+export async function requireSession(imp: string, session: string): Promise<SessionRow> {
+  const sessions = await listSessions(imp);
+
+  const found = sessions.find((row) => row.name === session);
+
+  if (found === undefined) {
+    throw new Error(`no session ${session} in ${imp}: ${JSON.stringify(sessions)}`);
+  }
+
+  return found;
+}

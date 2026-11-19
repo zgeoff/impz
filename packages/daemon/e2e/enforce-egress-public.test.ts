@@ -1,22 +1,22 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { buildReachScript } from '@impz/e2e-harness/build-reach-script';
 import { config } from '@impz/e2e-harness/config';
-import { resolveImageName } from '@impz/e2e-harness/fixtures';
-import { createInstanceClient, runImp, runShellInImp } from '@impz/e2e-harness/imp-cli';
-import { holdImp, waitForExec } from '@impz/e2e-harness/imps';
+import { resolveImageName } from '@impz/e2e-harness/create-missing-images';
 import { readContainerGateway, runInContainer } from '@impz/e2e-harness/instance';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { createInstanceClient, runImp, runShellInImp } from '@impz/e2e-harness/run-imp';
 import {
   LAN,
   readLanConnections,
   runTimedDial,
   startLanNetns,
   stopLanNetns,
-} from '@impz/e2e-harness/lan-netns';
-import { registerRemoval } from '@impz/e2e-harness/register-removal';
-import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+} from '@impz/e2e-harness/start-lan-netns';
 import { startStubPrivateService } from '@impz/e2e-harness/start-stub-private-service';
 import { LISTED_HOST_ADDRESS, getSuitePrefix } from '@impz/e2e-harness/suites';
-import { waitForTailnetIp } from '@impz/e2e-harness/tailnet';
+import { holdImp, waitForExec } from '@impz/e2e-harness/wait-for-exec';
+import { waitForTailnetIp } from '@impz/e2e-harness/wait-for-tailnet-ip';
 import { writeMetric } from '@impz/e2e-harness/write-metric';
 
 async function setupTest() {

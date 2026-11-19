@@ -1,7 +1,7 @@
 import { expect } from 'bun:test';
 import { randomBytes } from 'node:crypto';
-import { readThroughProxy } from './http';
-import { runShellInImp } from './imp-cli';
+import { readThroughProxy } from './read-through-proxy';
+import { runShellInImp } from './run-imp';
 import { waitFor } from './wait-for';
 
 export interface MemoryProof {

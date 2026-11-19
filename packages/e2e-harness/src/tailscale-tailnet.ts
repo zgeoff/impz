@@ -1,8 +1,8 @@
 import { match } from 'ts-pattern';
 import { instance } from './instance';
 import type { CommandResult, CommandRunners } from './instance';
-import { startTailnetMember } from './tailnet-member';
-import type { TailscaleE2EKey } from './tailscale-key';
+import type { TailscaleE2EKey } from './read-tailscale-e2e-auth-key';
+import { startTailnetMember } from './start-tailnet-member';
 
 export interface TailscaleTailnet {
   readonly member: string;

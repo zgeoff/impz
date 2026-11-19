@@ -1,20 +1,20 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { config } from '@impz/e2e-harness/config';
-import { resolveImageName } from '@impz/e2e-harness/fixtures';
-import { readEstabResets, waitForGuestListen } from '@impz/e2e-harness/guest-net';
-import { tryGetFromImp } from '@impz/e2e-harness/guest-probe';
+import { resolveImageName } from '@impz/e2e-harness/create-missing-images';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent, removeNetworkIfPresent } from '@impz/e2e-harness/reset-baseline';
 import {
   createInstanceClient,
   requireImp,
   runImp,
   runShellInImp,
   tryImp,
-} from '@impz/e2e-harness/imp-cli';
-import { holdImp, waitForExec } from '@impz/e2e-harness/imps';
-import { registerRemoval } from '@impz/e2e-harness/register-removal';
-import { removeImpIfPresent, removeNetworkIfPresent } from '@impz/e2e-harness/reset-baseline';
+} from '@impz/e2e-harness/run-imp';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import { tryGetFromImp } from '@impz/e2e-harness/try-in-imp';
 import { waitFor } from '@impz/e2e-harness/wait-for';
+import { holdImp, waitForExec } from '@impz/e2e-harness/wait-for-exec';
+import { readEstabResets, waitForGuestListen } from '@impz/e2e-harness/wait-for-guest-listen';
 
 // One stack for every release, so each imp goes before its network.
 async function setupTest() {

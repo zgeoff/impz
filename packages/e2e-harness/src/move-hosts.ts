@@ -2,9 +2,8 @@ import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { match } from 'ts-pattern';
 import { readTextOrNull } from '../../../scripts/lib/read-text-or-null.ts';
+import { checkPrivileges } from './check-privileges';
 import type { HarnessEnv } from './config';
-import { connectHeadscale, disconnectHeadscale } from './headscale';
-import { createInstanceClient, runImpWith } from './imp-cli';
 import type { DevInstance } from './instance';
 import {
   REPO_ROOT,
@@ -15,10 +14,11 @@ import {
   runCommand,
   runDevScript,
 } from './instance';
-import { checkPrivileges } from './privileges';
 import { removeDataDir } from './remove-data-dir';
 import { resetBaseline } from './reset-baseline';
 import { resolveDataWipe } from './resolve-data-wipe';
+import { createInstanceClient, runImpWith } from './run-imp';
+import { connectHeadscale, disconnectHeadscale } from './start-headscale';
 
 // B's data dir stays between runs, so only its first start seeds the default
 // image.

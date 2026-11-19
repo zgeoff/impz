@@ -1,26 +1,26 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { config } from '@impz/e2e-harness/config';
-import { resolveImageName } from '@impz/e2e-harness/fixtures';
-import { readPluggedMib } from '@impz/e2e-harness/guest-memory';
-import {
-  createInstanceClient,
-  listImps,
-  readInfo,
-  runImp,
-  runShellInImp,
-} from '@impz/e2e-harness/imp-cli';
-import { holdImp, waitForExec } from '@impz/e2e-harness/imps';
+import { resolveImageName } from '@impz/e2e-harness/create-missing-images';
 import {
   checkHostRunsKsm,
   readGuestMappings,
   readKsmdCpuMs,
   readMergingPages,
   readVmPssMib,
-} from '@impz/e2e-harness/ksm-host';
+} from '@impz/e2e-harness/is-ksm-supported';
+import { readPluggedMib } from '@impz/e2e-harness/read-mem-total-mib';
 import { registerRemoval } from '@impz/e2e-harness/register-removal';
 import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import {
+  createInstanceClient,
+  listImps,
+  readInfo,
+  runImp,
+  runShellInImp,
+} from '@impz/e2e-harness/run-imp';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
 import { waitFor } from '@impz/e2e-harness/wait-for';
+import { holdImp, waitForExec } from '@impz/e2e-harness/wait-for-exec';
 import { writeMetric } from '@impz/e2e-harness/write-metric';
 import { ENFORCE_INTERVAL_MS } from '../src/imp-ops/governor/ram-governor';
 

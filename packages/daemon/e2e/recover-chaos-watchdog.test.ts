@@ -1,26 +1,26 @@
 import { expect, onTestFinished, test } from 'bun:test';
+import { config } from '@impz/e2e-harness/config';
+import { resolveImageName } from '@impz/e2e-harness/create-missing-images';
+import { instance, runDevScript, runInContainer } from '@impz/e2e-harness/instance';
+import { checkMemoryKept, startMemoryProof } from '@impz/e2e-harness/memory-proof';
 import {
   collectStrayVms,
   listContainerVms,
   readLoopDevices,
   waitForImpd,
-} from '@impz/e2e-harness/chaos';
-import { config } from '@impz/e2e-harness/config';
-import { resolveImageName } from '@impz/e2e-harness/fixtures';
+} from '@impz/e2e-harness/plan-chaos-round';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
 import {
   createInstanceClient,
   listImps,
   requireImp,
   runImp,
   runInImp,
-} from '@impz/e2e-harness/imp-cli';
-import { holdImp, waitForExec } from '@impz/e2e-harness/imps';
-import { instance, runDevScript, runInContainer } from '@impz/e2e-harness/instance';
-import { checkMemoryKept, startMemoryProof } from '@impz/e2e-harness/memory-proof';
-import { registerRemoval } from '@impz/e2e-harness/register-removal';
-import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+} from '@impz/e2e-harness/run-imp';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
 import { waitFor } from '@impz/e2e-harness/wait-for';
+import { holdImp, waitForExec } from '@impz/e2e-harness/wait-for-exec';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

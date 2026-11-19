@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createGitFreeEnv } from '@impz/e2e-harness/git-env';
+import { createGitFreeEnv } from '@impz/e2e-harness/create-git-free-env';
 import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
 import { $ } from 'bun';
 import { buildStubGhRepoClone } from './build-stub-gh-repo-clone';
