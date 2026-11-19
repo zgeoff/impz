@@ -364,7 +364,7 @@
     "@xterm/xterm": "6.0.0",
     "@zgeoff/agent-hooks": "0.2.13",
     "@zgeoff/bun-test-extended": "0.2.4",
-    "@zgeoff/bun-test-react": "0.2.3",
+    "@zgeoff/bun-test-react": "0.2.4",
     "@zgeoff/chex": "0.3.6",
     "@zgeoff/diet": "0.2.2",
     "@zgeoff/format-codemod": "0.3.6",
@@ -1229,7 +1229,7 @@
 
     "@zgeoff/bun-test-extended": ["@zgeoff/bun-test-extended@0.2.4", "", { "dependencies": { "jest-extended": "7.0.0", "jest-matcher-utils": "30.5.2" } }, "sha512-pjHhfUFSQVOG97CPobmUJ3v1xbigRe5DOD+7VDoe5IIYvAOMkctmkHznj4EKKnZSpQp0b3/jqvYuzIFrpeaZMw=="],
 
-    "@zgeoff/bun-test-react": ["@zgeoff/bun-test-react@0.2.3", "", { "dependencies": { "@happy-dom/global-registrator": "21.0.4", "@testing-library/jest-dom": "7.0.1", "happy-dom": "21.0.4" }, "peerDependencies": { "@testing-library/react": ">=16.0.0", "react": ">=19.0.0", "react-dom": ">=19.0.0", "zustand": ">=5.0.0" }, "optionalPeers": ["zustand"] }, "sha512-rs/N4DUx8Xed9nHSQhH9i2nfJZpTpA8duEA639ClMfKstt/3srm8d6+H53jxhGoD56mMdX/NPW/uIgnOpdIufg=="],
+    "@zgeoff/bun-test-react": ["@zgeoff/bun-test-react@0.2.4", "", { "dependencies": { "@happy-dom/global-registrator": "21.0.4", "@testing-library/jest-dom": "7.0.1", "happy-dom": "21.0.4" }, "peerDependencies": { "@testing-library/react": ">=16.0.0", "react": ">=19.0.0", "react-dom": ">=19.0.0", "zustand": ">=5.0.0" }, "optionalPeers": ["zustand"] }, "sha512-omM4Wf/oy5YHuwnt5OMEOB5ZQZeHNVobj+t88tNf/axKt3VVQVikjHcqFDdnRKTi2IHK97wfO6S/hK3034m+KQ=="],
 
     "@zgeoff/chex": ["@zgeoff/chex@0.3.6", "", { "dependencies": { "@zgeoff/std": "0.4.3", "oxc-parser": "0.158.0", "ts-pattern": "5.9.2" }, "bin": { "chex": "src/cli.ts" } }, "sha512-rLT7OwIk4WWmRJvdJufAzWTg1yDaGUGBtDBgLEUM43/wZAqMe4t66kC4U7tU6OfvhO4BivCBcvkBBRrpyvqnOw=="],
 
