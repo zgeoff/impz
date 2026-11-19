@@ -1,13 +1,13 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { listAuditCalls } from '@impz/e2e-harness/audit';
 import { config } from '@impz/e2e-harness/config';
-import { resolveImageName } from '@impz/e2e-harness/fixtures';
-import { createInstanceClient, runImp, tryImp } from '@impz/e2e-harness/imp-cli';
-import { waitForExec } from '@impz/e2e-harness/imps';
+import { resolveImageName } from '@impz/e2e-harness/create-missing-images';
+import { listAuditCalls } from '@impz/e2e-harness/list-audit-calls';
 import { registerRemoval } from '@impz/e2e-harness/register-removal';
 import { removeImpIfPresent, removeTokenIfPresent } from '@impz/e2e-harness/reset-baseline';
-import { runSsh, setupKeyClient } from '@impz/e2e-harness/ssh';
+import { createInstanceClient, runImp, tryImp } from '@impz/e2e-harness/run-imp';
+import { runSsh, setupKeyClient } from '@impz/e2e-harness/run-ssh';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import { waitForExec } from '@impz/e2e-harness/wait-for-exec';
 import invariant from 'tiny-invariant';
 
 // One stack for every release, so a token goes before the imps it names.

@@ -1,6 +1,10 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { config } from '@impz/e2e-harness/config';
-import { resolveImageName } from '@impz/e2e-harness/fixtures';
+import { resolveImageName } from '@impz/e2e-harness/create-missing-images';
+import { runChecked } from '@impz/e2e-harness/instance';
+import { HOST_B, readMoveHosts, readMoveOptions } from '@impz/e2e-harness/move-hosts';
+import { probeTailscaleE2EKey } from '@impz/e2e-harness/read-tailscale-e2e-auth-key';
+import { registerMoveRemoval } from '@impz/e2e-harness/register-move-removal';
 import {
   createInstanceClient,
   readImpUrls,
@@ -8,21 +12,17 @@ import {
   requireImp,
   runImp,
   runImpWith,
-} from '@impz/e2e-harness/imp-cli';
-import { waitForExec } from '@impz/e2e-harness/imps';
-import { runChecked } from '@impz/e2e-harness/instance';
-import { HOST_B, readMoveHosts, readMoveOptions } from '@impz/e2e-harness/move-hosts';
-import { registerMoveRemoval } from '@impz/e2e-harness/register-move-removal';
+} from '@impz/e2e-harness/run-imp';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import { waitFor } from '@impz/e2e-harness/wait-for';
+import { waitForExec } from '@impz/e2e-harness/wait-for-exec';
 import {
   findServiceUrl,
   isTailnetReady,
   readHarnessMemberStatus,
   readMemberBody,
   readTailnetMember,
-} from '@impz/e2e-harness/tailnet';
-import { probeTailscaleE2EKey } from '@impz/e2e-harness/tailscale-key';
-import { waitFor } from '@impz/e2e-harness/wait-for';
+} from '@impz/e2e-harness/wait-for-tailnet-ip';
 
 // One stack for every release, so B's imps go before B.
 async function setupTest() {

@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import type { ImpRow } from './imp-cli';
+import type { ImpRow } from './run-imp';
 
 export function buildMockImpRow(overrides: Readonly<Partial<ImpRow>> = {}): ImpRow {
   return {

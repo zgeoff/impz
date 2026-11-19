@@ -1,7 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { checkLimit } from '@impz/e2e-harness/check-limit';
 import { config } from '@impz/e2e-harness/config';
-import { runConsole } from '@impz/e2e-harness/console';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { runConsole } from '@impz/e2e-harness/run-console';
 import {
   createInstanceClient,
   parseImp,
@@ -13,11 +15,9 @@ import {
   runInImp,
   runShellInImp,
   tryImp,
-} from '@impz/e2e-harness/imp-cli';
-import { waitForExec } from '@impz/e2e-harness/imps';
-import { registerRemoval } from '@impz/e2e-harness/register-removal';
-import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+} from '@impz/e2e-harness/run-imp';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import { waitForExec } from '@impz/e2e-harness/wait-for-exec';
 import { writeMetric } from '@impz/e2e-harness/write-metric';
 
 async function setupTest() {

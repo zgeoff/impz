@@ -1,9 +1,16 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { randomBytes } from 'node:crypto';
-import { waitAwakePastIdle } from '@impz/e2e-harness/awake-past-idle';
 import { config } from '@impz/e2e-harness/config';
-import { resolveImageName } from '@impz/e2e-harness/fixtures';
-import { readThroughProxy } from '@impz/e2e-harness/http';
+import { resolveImageName } from '@impz/e2e-harness/create-missing-images';
+import {
+  openImpPortSocket,
+  openProxySocket,
+  sendAndRead,
+  sendAndReadBinary,
+} from '@impz/e2e-harness/open-proxy-socket';
+import { readThroughProxy } from '@impz/e2e-harness/read-through-proxy';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
 import {
   assertState,
   createInstanceClient,
@@ -11,18 +18,11 @@ import {
   requireImp,
   runImp,
   runInImp,
-} from '@impz/e2e-harness/imp-cli';
-import { waitForExec } from '@impz/e2e-harness/imps';
-import { registerRemoval } from '@impz/e2e-harness/register-removal';
-import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+} from '@impz/e2e-harness/run-imp';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import { waitAwakePastIdle } from '@impz/e2e-harness/wait-awake-past-idle';
 import { waitFor } from '@impz/e2e-harness/wait-for';
-import {
-  openImpPortSocket,
-  openProxySocket,
-  sendAndRead,
-  sendAndReadBinary,
-} from '@impz/e2e-harness/websocket';
+import { waitForExec } from '@impz/e2e-harness/wait-for-exec';
 import { writeMetric } from '@impz/e2e-harness/write-metric';
 
 // One stack for every release, so each socket closes before its imp goes.

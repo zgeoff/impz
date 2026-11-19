@@ -28,12 +28,7 @@
         "pending": ["packages/e2e-harness"]
       }
     ],
-    "zgeoff/file-named-for-export": [
-      "error",
-      {
-        "pending": ["packages/e2e-harness"]
-      }
-    ],
+    "zgeoff/file-named-for-export": "error",
     // each library's docs import it as one object; an option set here replaces the shared ignore
     // list, so this list names zod again
     "import/no-namespace": [

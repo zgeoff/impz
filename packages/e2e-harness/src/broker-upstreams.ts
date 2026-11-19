@@ -1,8 +1,8 @@
 import { rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import * as z from 'zod';
-import { runImp } from './imp-cli';
 import { instance } from './instance';
+import { runImp } from './run-imp';
 
 export interface BrokerUpstreams {
   readonly ca: string;

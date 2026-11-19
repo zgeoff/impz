@@ -1,14 +1,14 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { config } from '@impz/e2e-harness/config';
-import { resolveImageName } from '@impz/e2e-harness/fixtures';
-import { createInstanceClient, requireImp, runImp } from '@impz/e2e-harness/imp-cli';
-import { openHeldSocket, startProxy } from '@impz/e2e-harness/imp-proxy';
-import { waitForExec } from '@impz/e2e-harness/imps';
+import { resolveImageName } from '@impz/e2e-harness/create-missing-images';
 import { instance, runChecked } from '@impz/e2e-harness/instance';
 import { registerRemoval } from '@impz/e2e-harness/register-removal';
 import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { createInstanceClient, requireImp, runImp } from '@impz/e2e-harness/run-imp';
+import { openHeldSocket, startProxy } from '@impz/e2e-harness/start-proxy';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
 import { waitFor } from '@impz/e2e-harness/wait-for';
+import { waitForExec } from '@impz/e2e-harness/wait-for-exec';
 import invariant from 'tiny-invariant';
 
 // One stack for every release, so the agent version comes back and the proxy

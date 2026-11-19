@@ -72,10 +72,10 @@ stay for a look after the run. A removal you defer on the stack yourself still r
   server, and prove each connection with a round trip before you open the next.
 - A unix socket path holds at most 107 bytes, and a session's `TMPDIR` alone can pass 80. Put the
   socket of an ssh-agent, or of an SSH unix-socket forward, in a directory under `/tmp`, as
-  `startLocalSshAgent` in [`ssh.ts`](../../../../packages/e2e-harness/src/ssh.ts) does.
+  `startLocalSshAgent` in [`run-ssh.ts`](../../../../packages/e2e-harness/src/run-ssh.ts) does.
 - To prove that something keeps an imp awake past its idle timeout, use
-  [`waitAwakePastIdle`](../../../../packages/e2e-harness/src/awake-past-idle.ts). Run no exec in the
-  imp while it waits: impd counts an exec as activity.
+  [`waitAwakePastIdle`](../../../../packages/e2e-harness/src/wait-awake-past-idle.ts). Run no exec
+  in the imp while it waits: impd counts an exec as activity.
 
 ## Around each journey
 

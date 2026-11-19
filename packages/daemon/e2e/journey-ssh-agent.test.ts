@@ -2,8 +2,13 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { buildImpDiskPath } from '@impz/e2e-harness/build-imp-disk-path';
 import { config } from '@impz/e2e-harness/config';
-import { resolveImageName } from '@impz/e2e-harness/fixtures';
+import { resolveImageName } from '@impz/e2e-harness/create-missing-images';
+import { readContainerGateway, runChecked, runCommand } from '@impz/e2e-harness/instance';
+import { countKeyTraces, readKeyPatterns } from '@impz/e2e-harness/key-traces';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
 import {
   createInstanceClient,
   readInfo,
@@ -11,13 +16,7 @@ import {
   runImp,
   runShellInImp,
   tryImp,
-} from '@impz/e2e-harness/imp-cli';
-import { buildImpDiskPath } from '@impz/e2e-harness/imp-disk-path';
-import { waitForExec, waitForGuestPathGone } from '@impz/e2e-harness/imps';
-import { readContainerGateway, runChecked, runCommand } from '@impz/e2e-harness/instance';
-import { countKeyTraces, readKeyPatterns } from '@impz/e2e-harness/key-traces';
-import { registerRemoval } from '@impz/e2e-harness/register-removal';
-import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+} from '@impz/e2e-harness/run-imp';
 import {
   SSH_HOST,
   listAgentThroughUnixForward,
@@ -25,10 +24,11 @@ import {
   setupSshClient,
   startLocalSshAgent,
   startSsh,
-} from '@impz/e2e-harness/ssh';
+} from '@impz/e2e-harness/run-ssh';
 import { startStubGitSshServer } from '@impz/e2e-harness/start-stub-git-ssh-server';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
 import { waitFor } from '@impz/e2e-harness/wait-for';
+import { waitForExec, waitForGuestPathGone } from '@impz/e2e-harness/wait-for-exec';
 
 // One stack for every release, so ssh stops before the agent and the imp go.
 async function setupTest() {

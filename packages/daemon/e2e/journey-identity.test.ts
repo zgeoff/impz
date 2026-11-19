@@ -3,20 +3,20 @@ import { randomUUID } from 'node:crypto';
 import { IdentityTrustDocumentSchema } from '@impz/api';
 import { verifyImpIdentity } from '@impz/client/identity';
 import { config } from '@impz/e2e-harness/config';
-import { resolveImageName } from '@impz/e2e-harness/fixtures';
+import { resolveImageName } from '@impz/e2e-harness/create-missing-images';
+import { readContainerGateway } from '@impz/e2e-harness/instance';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent, removeSecretIfPresent } from '@impz/e2e-harness/reset-baseline';
 import {
   createInstanceClient,
   requireImp,
   runImp,
   runImpWith,
   runShellInImp,
-} from '@impz/e2e-harness/imp-cli';
-import { holdImp, waitForExec } from '@impz/e2e-harness/imps';
-import { readContainerGateway } from '@impz/e2e-harness/instance';
-import { registerRemoval } from '@impz/e2e-harness/register-removal';
-import { removeImpIfPresent, removeSecretIfPresent } from '@impz/e2e-harness/reset-baseline';
+} from '@impz/e2e-harness/run-imp';
 import { startStubUpstream } from '@impz/e2e-harness/start-stub-upstream';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import { holdImp, waitForExec } from '@impz/e2e-harness/wait-for-exec';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

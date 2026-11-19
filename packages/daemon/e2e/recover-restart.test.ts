@@ -1,7 +1,16 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { config } from '@impz/e2e-harness/config';
-import { resolveImageName } from '@impz/e2e-harness/fixtures';
-import { readThroughProxy } from '@impz/e2e-harness/http';
+import { resolveImageName } from '@impz/e2e-harness/create-missing-images';
+import { checkHealthReady, readImpdPid, runDevScript } from '@impz/e2e-harness/instance';
+import { checkMemoryProof, startMemoryProof } from '@impz/e2e-harness/memory-proof';
+import {
+  buildKeptScaleFleet,
+  listAwakeImps,
+  readInventory,
+} from '@impz/e2e-harness/read-inventory';
+import { readThroughProxy } from '@impz/e2e-harness/read-through-proxy';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
 import {
   assertState,
   createInstanceClient,
@@ -9,19 +18,15 @@ import {
   runImp,
   runShellInImp,
   tryImp,
-} from '@impz/e2e-harness/imp-cli';
-import { holdImp, readGuestFile, waitForExec, writeGuestFile } from '@impz/e2e-harness/imps';
-import { checkHealthReady, readImpdPid, runDevScript } from '@impz/e2e-harness/instance';
-import { checkMemoryProof, startMemoryProof } from '@impz/e2e-harness/memory-proof';
-import { registerRemoval } from '@impz/e2e-harness/register-removal';
-import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
-import {
-  buildKeptScaleFleet,
-  listAwakeImps,
-  readInventory,
-} from '@impz/e2e-harness/restart-inventory';
+} from '@impz/e2e-harness/run-imp';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
 import { waitFor } from '@impz/e2e-harness/wait-for';
+import {
+  holdImp,
+  readGuestFile,
+  waitForExec,
+  writeGuestFile,
+} from '@impz/e2e-harness/wait-for-exec';
 import { writeMetric } from '@impz/e2e-harness/write-metric';
 
 async function setupTest() {

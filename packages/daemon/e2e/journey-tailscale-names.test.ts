@@ -1,27 +1,27 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { config } from '@impz/e2e-harness/config';
-import { resolveImageName } from '@impz/e2e-harness/fixtures';
+import { resolveImageName } from '@impz/e2e-harness/create-missing-images';
+import { instance, runChecked, runDevScript } from '@impz/e2e-harness/instance';
+import { probeTailscaleE2EKey } from '@impz/e2e-harness/read-tailscale-e2e-auth-key';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
 import {
   assertState,
   createInstanceClient,
   readImpUrls,
   readInfo,
   runImp,
-} from '@impz/e2e-harness/imp-cli';
-import { waitForExec } from '@impz/e2e-harness/imps';
-import { instance, runChecked, runDevScript } from '@impz/e2e-harness/instance';
-import { registerRemoval } from '@impz/e2e-harness/register-removal';
-import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+} from '@impz/e2e-harness/run-imp';
 import { getSuitePrefix, readSuiteSettings } from '@impz/e2e-harness/suites';
+import { waitFor } from '@impz/e2e-harness/wait-for';
+import { waitForExec } from '@impz/e2e-harness/wait-for-exec';
 import {
   isTailnetReady,
   readHarnessMemberStatus,
   readMemberBody,
   readTailnetMember,
   waitForTailnetIp,
-} from '@impz/e2e-harness/tailnet';
-import { probeTailscaleE2EKey } from '@impz/e2e-harness/tailscale-key';
-import { waitFor } from '@impz/e2e-harness/wait-for';
+} from '@impz/e2e-harness/wait-for-tailnet-ip';
 
 // One stack for every release, so the reboot back to the suite's settings
 // runs once the imp is gone.

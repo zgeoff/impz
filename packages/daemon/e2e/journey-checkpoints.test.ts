@@ -1,12 +1,15 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { checkLimit } from '@impz/e2e-harness/check-limit';
+import { config } from '@impz/e2e-harness/config';
+import { resolveImageName } from '@impz/e2e-harness/create-missing-images';
+import { readImpdLoggedMs } from '@impz/e2e-harness/instance';
 import {
   hasImpDir,
   probeCheckpointStorage,
   writeCrossFiles,
-} from '@impz/e2e-harness/checkpoint-storage';
-import { config } from '@impz/e2e-harness/config';
-import { resolveImageName } from '@impz/e2e-harness/fixtures';
+} from '@impz/e2e-harness/probe-checkpoint-storage';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
 import {
   createInstanceClient,
   listCheckpoints,
@@ -15,18 +18,15 @@ import {
   runImp,
   runInImp,
   runShellInImp,
-} from '@impz/e2e-harness/imp-cli';
+} from '@impz/e2e-harness/run-imp';
+import { getSuitePrefix } from '@impz/e2e-harness/suites';
 import {
   holdImp,
   readGuestFile,
   readGuestIdentity,
   waitForExec,
   writeGuestFile,
-} from '@impz/e2e-harness/imps';
-import { readImpdLoggedMs } from '@impz/e2e-harness/instance';
-import { registerRemoval } from '@impz/e2e-harness/register-removal';
-import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
-import { getSuitePrefix } from '@impz/e2e-harness/suites';
+} from '@impz/e2e-harness/wait-for-exec';
 import { writeMetric } from '@impz/e2e-harness/write-metric';
 import invariant from 'tiny-invariant';
 

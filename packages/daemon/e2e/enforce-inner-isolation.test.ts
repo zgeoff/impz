@@ -3,19 +3,19 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { config } from '@impz/e2e-harness/config';
-import { resolveImageName } from '@impz/e2e-harness/fixtures';
+import { resolveImageName } from '@impz/e2e-harness/create-missing-images';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
 import {
   createInstanceClient,
   runImp,
   runInImp,
   runShellInImp,
   tryImp,
-} from '@impz/e2e-harness/imp-cli';
-import { holdImp, waitForExec, writeGuestFile } from '@impz/e2e-harness/imps';
-import { readInitStart } from '@impz/e2e-harness/inner-container';
-import { registerRemoval } from '@impz/e2e-harness/register-removal';
-import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+} from '@impz/e2e-harness/run-imp';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import { holdImp, waitForExec, writeGuestFile } from '@impz/e2e-harness/wait-for-exec';
+import { readInitStart } from '@impz/e2e-harness/wait-for-inner-init';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

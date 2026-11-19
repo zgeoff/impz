@@ -1,8 +1,16 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { waitAwakePastIdle } from '@impz/e2e-harness/awake-past-idle';
 import { config } from '@impz/e2e-harness/config';
-import { resolveImageName } from '@impz/e2e-harness/fixtures';
-import { readOkBody, sendImpPortRequest, sendProxyRequest } from '@impz/e2e-harness/http';
+import { resolveImageName } from '@impz/e2e-harness/create-missing-images';
+import { findAsleepLine } from '@impz/e2e-harness/find-asleep-line';
+import { checkFirecrackerRunning, readImpdLogSince } from '@impz/e2e-harness/instance';
+import { checkMemoryProof, startMemoryProof } from '@impz/e2e-harness/memory-proof';
+import {
+  readOkBody,
+  sendImpPortRequest,
+  sendProxyRequest,
+} from '@impz/e2e-harness/read-through-proxy';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
 import {
   assertState,
   createInstanceClient,
@@ -13,15 +21,11 @@ import {
   runInImp,
   runShellInImp,
   startImp,
-} from '@impz/e2e-harness/imp-cli';
-import { findAsleepLine } from '@impz/e2e-harness/impd-sleep-log';
-import { holdImp, waitForExec } from '@impz/e2e-harness/imps';
-import { checkFirecrackerRunning, readImpdLogSince } from '@impz/e2e-harness/instance';
-import { checkMemoryProof, startMemoryProof } from '@impz/e2e-harness/memory-proof';
-import { registerRemoval } from '@impz/e2e-harness/register-removal';
-import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+} from '@impz/e2e-harness/run-imp';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import { waitAwakePastIdle } from '@impz/e2e-harness/wait-awake-past-idle';
 import { waitFor } from '@impz/e2e-harness/wait-for';
+import { holdImp, waitForExec } from '@impz/e2e-harness/wait-for-exec';
 import { writeMetric } from '@impz/e2e-harness/write-metric';
 import invariant from 'tiny-invariant';
 

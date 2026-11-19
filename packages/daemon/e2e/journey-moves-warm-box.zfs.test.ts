@@ -2,7 +2,11 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { randomUUID } from 'node:crypto';
 import { rm } from 'node:fs/promises';
 import { config } from '@impz/e2e-harness/config';
-import { resolveImageName } from '@impz/e2e-harness/fixtures';
+import { resolveImageName } from '@impz/e2e-harness/create-missing-images';
+import { HOST_B, readMoveHosts } from '@impz/e2e-harness/move-hosts';
+import { registerMoveRemoval } from '@impz/e2e-harness/register-move-removal';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeSecretIfPresent } from '@impz/e2e-harness/reset-baseline';
 import {
   assertState,
   createInstanceClient,
@@ -10,16 +14,16 @@ import {
   requireImp,
   runImp,
   runImpWith,
-} from '@impz/e2e-harness/imp-cli';
-import { holdImp, waitForExec } from '@impz/e2e-harness/imps';
-import { HOST_B, readMoveHosts } from '@impz/e2e-harness/move-hosts';
-import { buildUpstreamsPath, readAllowSet, writeUpstreamsFile } from '@impz/e2e-harness/move-steps';
-import { registerMoveRemoval } from '@impz/e2e-harness/register-move-removal';
-import { registerRemoval } from '@impz/e2e-harness/register-removal';
-import { removeSecretIfPresent } from '@impz/e2e-harness/reset-baseline';
+} from '@impz/e2e-harness/run-imp';
+import {
+  buildUpstreamsPath,
+  readAllowSet,
+  writeUpstreamsFile,
+} from '@impz/e2e-harness/send-host-rpc';
 import { startStubUpstream } from '@impz/e2e-harness/start-stub-upstream';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
 import { waitFor } from '@impz/e2e-harness/wait-for';
+import { holdImp, waitForExec } from '@impz/e2e-harness/wait-for-exec';
 
 // The stub upstream for api.github.com checks B's token, so it tells which
 // broker sent a call.

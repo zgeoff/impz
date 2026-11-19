@@ -1,12 +1,12 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { config } from '@impz/e2e-harness/config';
-import { resolveImageName } from '@impz/e2e-harness/fixtures';
-import { countGuestSleeps } from '@impz/e2e-harness/guest-processes';
-import { createInstanceClient, readImp } from '@impz/e2e-harness/imp-cli';
-import { startHttpMcpSession, startMcpSession } from '@impz/e2e-harness/mcp';
-import { readToolData } from '@impz/e2e-harness/mcp-result';
+import { countGuestSleeps } from '@impz/e2e-harness/count-guest-sleeps';
+import { resolveImageName } from '@impz/e2e-harness/create-missing-images';
+import { readToolData } from '@impz/e2e-harness/read-tool-data';
 import { registerRemoval } from '@impz/e2e-harness/register-removal';
 import { removeImpIfPresent, removeTokenIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { createInstanceClient, readImp } from '@impz/e2e-harness/run-imp';
+import { startHttpMcpSession, startMcpSession } from '@impz/e2e-harness/start-mcp-session';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
 
 async function setupTest() {

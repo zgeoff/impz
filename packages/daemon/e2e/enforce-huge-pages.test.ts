@@ -1,25 +1,28 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { removeShapeTemplates, waitForShapeTemplate } from '@impz/e2e-harness/boot-template-guest';
-import { config } from '@impz/e2e-harness/config';
-import { resolveImageName } from '@impz/e2e-harness/fixtures';
 import {
   checkHostHasHugePagePool,
   readHandlerPid,
   readVmHugetlbMib,
-} from '@impz/e2e-harness/huge-page-host';
+} from '@impz/e2e-harness/build-huge-page-settings';
+import { config } from '@impz/e2e-harness/config';
+import { resolveImageName } from '@impz/e2e-harness/create-missing-images';
+import { runInContainer } from '@impz/e2e-harness/instance';
+import {
+  removeShapeTemplates,
+  waitForShapeTemplate,
+} from '@impz/e2e-harness/read-shape-template-keys';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
 import {
   createInstanceClient,
   requireImp,
   runImp,
   runInImp,
   runShellInImp,
-} from '@impz/e2e-harness/imp-cli';
-import { waitForExec } from '@impz/e2e-harness/imps';
-import { runInContainer } from '@impz/e2e-harness/instance';
-import { registerRemoval } from '@impz/e2e-harness/register-removal';
-import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+} from '@impz/e2e-harness/run-imp';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
 import { waitFor } from '@impz/e2e-harness/wait-for';
+import { waitForExec } from '@impz/e2e-harness/wait-for-exec';
 import { writeMetric } from '@impz/e2e-harness/write-metric';
 
 // Each test boots a memory size of its own, so a template one test leaves

@@ -1,6 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { config } from '@impz/e2e-harness/config';
-import { resolveImageName } from '@impz/e2e-harness/fixtures';
+import { resolveImageName } from '@impz/e2e-harness/create-missing-images';
+import { runChecked, runInContainer } from '@impz/e2e-harness/instance';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
 import {
   assertState,
   createInstanceClient,
@@ -8,20 +11,17 @@ import {
   readInfo,
   requireImp,
   runImp,
-} from '@impz/e2e-harness/imp-cli';
-import { holdImp, waitForExec } from '@impz/e2e-harness/imps';
-import { runChecked, runInContainer } from '@impz/e2e-harness/instance';
-import { registerRemoval } from '@impz/e2e-harness/register-removal';
-import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+} from '@impz/e2e-harness/run-imp';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import { waitFor } from '@impz/e2e-harness/wait-for';
+import { holdImp, waitForExec } from '@impz/e2e-harness/wait-for-exec';
 import {
   findTailnetNode,
   readMemberBody,
   readMemberStatus,
   readTailnetMember,
   waitForTailnetIp,
-} from '@impz/e2e-harness/tailnet';
-import { waitFor } from '@impz/e2e-harness/wait-for';
+} from '@impz/e2e-harness/wait-for-tailnet-ip';
 import invariant from 'tiny-invariant';
 
 async function setupTest() {

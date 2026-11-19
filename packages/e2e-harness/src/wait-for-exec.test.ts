@@ -1,0 +1,45 @@
+import { expect, onTestFinished, test } from 'bun:test';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { createServer } from 'node:net';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { buildPathGoneCheck } from './wait-for-exec';
+
+async function setupTest() {
+  const directory = await mkdtemp(join(tmpdir(), 'imps-'));
+
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
+
+  return { directoryPath: directory };
+}
+
+test('it reports a unix socket that is still there', async () => {
+  const ctx = await setupTest();
+
+  const socket = join(ctx.directoryPath, 'agent.sock');
+  const server = createServer();
+
+  await new Promise<void>((resolve) => {
+    server.listen(socket, resolve);
+  });
+
+  onTestFinished(() => {
+    server.close();
+  });
+
+  const result = Bun.spawnSync(['sh', '-c', buildPathGoneCheck(socket)]);
+
+  expect(result.stdout.toString()).toBe('there\n');
+});
+
+test('it reports a path with nothing at it as gone', async () => {
+  const ctx = await setupTest();
+
+  const result = Bun.spawnSync([
+    'sh',
+    '-c',
+    buildPathGoneCheck(join(ctx.directoryPath, 'agent.sock')),
+  ]);
+
+  expect(result.stdout.toString()).toBe('gone\n');
+});

@@ -1,12 +1,8 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
-import { writeBuildContext } from '@impz/e2e-harness/build-context';
 import { buildReachScript } from '@impz/e2e-harness/build-reach-script';
 import { config } from '@impz/e2e-harness/config';
-import { createInstanceClient, runImp, runInImp } from '@impz/e2e-harness/imp-cli';
-import { waitForExec } from '@impz/e2e-harness/imps';
-import { parseInet6Addresses } from '@impz/e2e-harness/inet6-addresses';
 import {
   REPO_ROOT,
   readContainerGateway,
@@ -14,10 +10,14 @@ import {
   runCommand,
   runInContainer,
 } from '@impz/e2e-harness/instance';
+import { parseInet6Addresses } from '@impz/e2e-harness/parse-inet6-addresses';
 import { registerRemoval } from '@impz/e2e-harness/register-removal';
 import { removeImageIfPresent, removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { createInstanceClient, runImp, runInImp } from '@impz/e2e-harness/run-imp';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
 import { waitFor } from '@impz/e2e-harness/wait-for';
+import { waitForExec } from '@impz/e2e-harness/wait-for-exec';
+import { writeBuildContext } from '@impz/e2e-harness/write-build-context';
 import * as z from 'zod';
 
 // collection-time gate: Bun's skipIf takes a boolean and has no in-body skip

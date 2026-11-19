@@ -1,20 +1,20 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { readBalloonStats } from '@impz/e2e-harness/balloon-stats';
 import { config } from '@impz/e2e-harness/config';
-import { resolveImageName } from '@impz/e2e-harness/fixtures';
+import { resolveImageName } from '@impz/e2e-harness/create-missing-images';
+import { findAsleepLine } from '@impz/e2e-harness/find-asleep-line';
+import { readImpdLogSince } from '@impz/e2e-harness/instance';
 import {
   readMemAvailableMib,
   readMemTotalMib,
   readPluggedMib,
-} from '@impz/e2e-harness/guest-memory';
-import { createInstanceClient, requireImp, runImp, runShellInImp } from '@impz/e2e-harness/imp-cli';
-import { findAsleepLine } from '@impz/e2e-harness/impd-sleep-log';
-import { holdImp, waitForExec } from '@impz/e2e-harness/imps';
-import { readImpdLogSince } from '@impz/e2e-harness/instance';
+} from '@impz/e2e-harness/read-mem-total-mib';
 import { registerRemoval } from '@impz/e2e-harness/register-removal';
 import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { createInstanceClient, requireImp, runImp, runShellInImp } from '@impz/e2e-harness/run-imp';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
 import { waitFor } from '@impz/e2e-harness/wait-for';
+import { holdImp, waitForExec } from '@impz/e2e-harness/wait-for-exec';
 import { writeMetric } from '@impz/e2e-harness/write-metric';
 import invariant from 'tiny-invariant';
 

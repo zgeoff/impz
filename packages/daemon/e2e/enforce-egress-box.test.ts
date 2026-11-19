@@ -1,20 +1,20 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { randomUUID } from 'node:crypto';
+import { buildTcpQueryOctal, parseTcpReplyHex } from '@impz/e2e-harness/build-tcp-query-octal';
 import { config } from '@impz/e2e-harness/config';
-import { buildTcpQueryOctal, parseTcpReplyHex } from '@impz/e2e-harness/dns-probe';
-import { resolveImageName } from '@impz/e2e-harness/fixtures';
-import { tryDialFromImp, tryGetFromImp, tryInImp } from '@impz/e2e-harness/guest-probe';
-import { createInstanceClient, requireImp, runImp, runShellInImp } from '@impz/e2e-harness/imp-cli';
-import { startReverse } from '@impz/e2e-harness/imp-proxy';
-import { holdImp, waitForExec } from '@impz/e2e-harness/imps';
+import { resolveImageName } from '@impz/e2e-harness/create-missing-images';
 import { readContainerGateway, runInContainer } from '@impz/e2e-harness/instance';
 import { parseWholeNumber } from '@impz/e2e-harness/parse-whole-number';
 import { registerRemoval } from '@impz/e2e-harness/register-removal';
 import { removeImpIfPresent, removeSecretIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { createInstanceClient, requireImp, runImp, runShellInImp } from '@impz/e2e-harness/run-imp';
+import { startReverse } from '@impz/e2e-harness/start-proxy';
 import { startStubPrivateService } from '@impz/e2e-harness/start-stub-private-service';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
-import { waitForTailnetIp } from '@impz/e2e-harness/tailnet';
+import { tryDialFromImp, tryGetFromImp, tryInImp } from '@impz/e2e-harness/try-in-imp';
 import { waitFor } from '@impz/e2e-harness/wait-for';
+import { holdImp, waitForExec } from '@impz/e2e-harness/wait-for-exec';
+import { waitForTailnetIp } from '@impz/e2e-harness/wait-for-tailnet-ip';
 import { writeMetric } from '@impz/e2e-harness/write-metric';
 
 async function setupTest() {

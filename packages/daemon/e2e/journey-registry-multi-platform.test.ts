@@ -4,11 +4,11 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { config } from '@impz/e2e-harness/config';
 import { createRegistryTrust } from '@impz/e2e-harness/create-registry-trust';
-import { createInstanceClient, runImp, runInImp } from '@impz/e2e-harness/imp-cli';
 import { REPO_ROOT, instance, runChecked, runCommand } from '@impz/e2e-harness/instance';
 import { registerRemoval } from '@impz/e2e-harness/register-removal';
-import { writeRegistryIndex } from '@impz/e2e-harness/registry-index';
 import { buildRegistryPlan } from '@impz/e2e-harness/registry-plan';
+import { removeImageIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { createInstanceClient, runImp, runInImp } from '@impz/e2e-harness/run-imp';
 import {
   checkRegistryReady,
   createImageImp,
@@ -19,9 +19,9 @@ import {
   removeStaleRegistries,
   startRegistry,
   writeContext,
-} from '@impz/e2e-harness/registry-steps';
-import { removeImageIfPresent } from '@impz/e2e-harness/reset-baseline';
+} from '@impz/e2e-harness/start-registry';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import { writeRegistryIndex } from '@impz/e2e-harness/write-registry-index';
 
 // collection-time gate: Bun's skipIf takes a boolean and has no in-body skip
 const isReady = await checkRegistryReady(

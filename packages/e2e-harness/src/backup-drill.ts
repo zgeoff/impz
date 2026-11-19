@@ -2,7 +2,6 @@ import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import * as z from 'zod';
-import { runImp } from './imp-cli';
 import {
   REPO_ROOT,
   instance,
@@ -12,6 +11,7 @@ import {
   runInContainer,
 } from './instance';
 import type { DevInstance } from './instance';
+import { runImp } from './run-imp';
 import { waitFor } from './wait-for';
 import { writeMetric } from './write-metric';
 

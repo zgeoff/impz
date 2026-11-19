@@ -1,10 +1,18 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { runRawBuild, writeBuildContext } from '@impz/e2e-harness/build-context';
 import { config } from '@impz/e2e-harness/config';
-import { runConsole } from '@impz/e2e-harness/console';
-import { readThroughProxy } from '@impz/e2e-harness/http';
+import {
+  REPO_ROOT,
+  instance,
+  readImpdLogSince,
+  readToken,
+  runChecked,
+} from '@impz/e2e-harness/instance';
+import { readThroughProxy } from '@impz/e2e-harness/read-through-proxy';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImageIfPresent, removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { runConsole } from '@impz/e2e-harness/run-console';
 import {
   createInstanceClient,
   listImageNames,
@@ -14,19 +22,11 @@ import {
   runInImp,
   runShellInImp,
   tryImp,
-} from '@impz/e2e-harness/imp-cli';
-import { waitForExec } from '@impz/e2e-harness/imps';
-import {
-  REPO_ROOT,
-  instance,
-  readImpdLogSince,
-  readToken,
-  runChecked,
-} from '@impz/e2e-harness/instance';
-import { registerRemoval } from '@impz/e2e-harness/register-removal';
-import { removeImageIfPresent, removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+} from '@impz/e2e-harness/run-imp';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
 import { waitFor } from '@impz/e2e-harness/wait-for';
+import { waitForExec } from '@impz/e2e-harness/wait-for-exec';
+import { runRawBuild, writeBuildContext } from '@impz/e2e-harness/write-build-context';
 import { writeMetric } from '@impz/e2e-harness/write-metric';
 
 // One stack for every release, so each imp goes before the image it boots.

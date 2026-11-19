@@ -1,9 +1,9 @@
 import { buildWithout } from '@impz/shared';
 import { match } from 'ts-pattern';
 import type { E2EConfig, HarnessEnv } from './config';
-import type { HeadscaleTailnet } from './headscale';
-import { HEADSCALE_LOGIN_SERVER, HEADSCALE_TAGS } from './headscale';
-import type { TailscaleE2EKey } from './tailscale-key';
+import type { TailscaleE2EKey } from './read-tailscale-e2e-auth-key';
+import type { HeadscaleTailnet } from './start-headscale';
+import { HEADSCALE_LOGIN_SERVER, HEADSCALE_TAGS } from './start-headscale';
 import type { TailscaleTailnet } from './tailscale-tailnet';
 
 export type HarnessTailnet =

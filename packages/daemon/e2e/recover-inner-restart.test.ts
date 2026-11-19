@@ -1,7 +1,11 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { config } from '@impz/e2e-harness/config';
-import { resolveImageName } from '@impz/e2e-harness/fixtures';
-import { readOkBody, readThroughProxy } from '@impz/e2e-harness/http';
+import { resolveImageName } from '@impz/e2e-harness/create-missing-images';
+import { findSocketListenAgain, parseProxyForwards } from '@impz/e2e-harness/parse-proxy-forwards';
+import { parseWholeNumber } from '@impz/e2e-harness/parse-whole-number';
+import { readOkBody, readThroughProxy } from '@impz/e2e-harness/read-through-proxy';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
 import {
   createInstanceClient,
   runImp,
@@ -9,16 +13,17 @@ import {
   runShellInImp,
   startImp,
   tryImp,
-} from '@impz/e2e-harness/imp-cli';
-import { holdImp, readGuestFile, waitForExec, writeGuestFile } from '@impz/e2e-harness/imps';
-import { readInitStart, readUptime, waitForInnerInit } from '@impz/e2e-harness/inner-container';
-import { parseWholeNumber } from '@impz/e2e-harness/parse-whole-number';
-import { findSocketListenAgain, parseProxyForwards } from '@impz/e2e-harness/proxy-forward-lines';
-import { registerRemoval } from '@impz/e2e-harness/register-removal';
-import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+} from '@impz/e2e-harness/run-imp';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
 import { startTextCapture } from '@impz/e2e-harness/text-capture';
 import { waitFor } from '@impz/e2e-harness/wait-for';
+import {
+  holdImp,
+  readGuestFile,
+  waitForExec,
+  writeGuestFile,
+} from '@impz/e2e-harness/wait-for-exec';
+import { readInitStart, readUptime, waitForInnerInit } from '@impz/e2e-harness/wait-for-inner-init';
 import invariant from 'tiny-invariant';
 import * as z from 'zod';
 

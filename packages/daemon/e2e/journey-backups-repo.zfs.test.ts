@@ -10,16 +10,7 @@ import {
   wireBackupDrill,
 } from '@impz/e2e-harness/backup-drill';
 import { config } from '@impz/e2e-harness/config';
-import { resolveImageName } from '@impz/e2e-harness/fixtures';
-import {
-  createInstanceClient,
-  readState,
-  requireImp,
-  runImp,
-  runImpWith,
-  tryImp,
-} from '@impz/e2e-harness/imp-cli';
-import { waitForExec, writeGuestFile } from '@impz/e2e-harness/imps';
+import { resolveImageName } from '@impz/e2e-harness/create-missing-images';
 import { runInContainer } from '@impz/e2e-harness/instance';
 import { registerRemoval } from '@impz/e2e-harness/register-removal';
 import {
@@ -27,8 +18,17 @@ import {
   removeSecretIfPresent,
   removeTokenIfPresent,
 } from '@impz/e2e-harness/reset-baseline';
+import {
+  createInstanceClient,
+  readState,
+  requireImp,
+  runImp,
+  runImpWith,
+  tryImp,
+} from '@impz/e2e-harness/run-imp';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
 import { waitFor } from '@impz/e2e-harness/wait-for';
+import { waitForExec, writeGuestFile } from '@impz/e2e-harness/wait-for-exec';
 import * as z from 'zod';
 
 async function setupTest() {

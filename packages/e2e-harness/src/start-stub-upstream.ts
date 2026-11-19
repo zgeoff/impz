@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createTestCertificates } from '@impz/shared/test-utils/create-test-certificates';
 import * as z from 'zod';
-import { createGitFreeEnv, runGitChecked } from './git-env';
+import { createGitFreeEnv, runGitChecked } from './create-git-free-env';
 
 const OAUTH_CLIENT_ID = 'e2e-client';
 

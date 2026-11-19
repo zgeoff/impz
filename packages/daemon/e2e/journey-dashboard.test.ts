@@ -1,11 +1,11 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { join } from 'node:path';
 import { config } from '@impz/e2e-harness/config';
-import { resolveImageName } from '@impz/e2e-harness/fixtures';
-import { createInstanceClient, readImpEnv } from '@impz/e2e-harness/imp-cli';
+import { resolveImageName } from '@impz/e2e-harness/create-missing-images';
 import { REPO_ROOT, runChecked } from '@impz/e2e-harness/instance';
 import { registerRemoval } from '@impz/e2e-harness/register-removal';
 import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { createInstanceClient, readImpEnv } from '@impz/e2e-harness/run-imp';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
 import { writeMetric } from '@impz/e2e-harness/write-metric';
 

@@ -7,7 +7,7 @@ import { readDevCheckout } from '../../../scripts/lib/read-dev-checkout.ts';
 import { CommandTimeoutError } from './command-timeout-error';
 import { config } from './config';
 import type { HarnessEnv } from './config';
-import { buildFirecrackerPgrepArgv, readFirecrackerPids } from './firecracker-pids';
+import { buildFirecrackerPgrepArgv, readFirecrackerPids } from './read-firecracker-pids';
 
 export const REPO_ROOT = join(import.meta.dir, '..', '..', '..');
 export const SUITES_DIR = join(REPO_ROOT, 'packages', 'daemon', 'e2e');

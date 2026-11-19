@@ -1,12 +1,12 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { config } from '@impz/e2e-harness/config';
-import { resolveImageName } from '@impz/e2e-harness/fixtures';
-import { createInstanceClient, runImp, runImpWith } from '@impz/e2e-harness/imp-cli';
-import { waitForExec } from '@impz/e2e-harness/imps';
+import { resolveImageName } from '@impz/e2e-harness/create-missing-images';
 import { HOST_B, readMoveHosts } from '@impz/e2e-harness/move-hosts';
-import { listLeasesOn, sendHostRpc } from '@impz/e2e-harness/move-steps';
 import { registerMoveRemoval } from '@impz/e2e-harness/register-move-removal';
+import { createInstanceClient, runImp, runImpWith } from '@impz/e2e-harness/run-imp';
+import { listLeasesOn, sendHostRpc } from '@impz/e2e-harness/send-host-rpc';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import { waitForExec } from '@impz/e2e-harness/wait-for-exec';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

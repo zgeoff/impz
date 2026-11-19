@@ -1,7 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { config } from '@impz/e2e-harness/config';
-import { resolveImageName } from '@impz/e2e-harness/fixtures';
-import { createInstanceClient, runImp, runShellInImp } from '@impz/e2e-harness/imp-cli';
+import { resolveImageName } from '@impz/e2e-harness/create-missing-images';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { createInstanceClient, runImp, runShellInImp } from '@impz/e2e-harness/run-imp';
 import {
   PAGE,
   countMatches,
@@ -9,13 +11,11 @@ import {
   readPage,
   sendOverHeldSocket,
   startProxy,
-} from '@impz/e2e-harness/imp-proxy';
-import type { HeldSocket } from '@impz/e2e-harness/imp-proxy';
-import { waitForExec } from '@impz/e2e-harness/imps';
-import { registerRemoval } from '@impz/e2e-harness/register-removal';
-import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+} from '@impz/e2e-harness/start-proxy';
+import type { HeldSocket } from '@impz/e2e-harness/start-proxy';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
 import { waitFor } from '@impz/e2e-harness/wait-for';
+import { waitForExec } from '@impz/e2e-harness/wait-for-exec';
 import invariant from 'tiny-invariant';
 
 // One stack for every release, so the held connections close and the proxy

@@ -1,6 +1,6 @@
 import { join } from 'node:path';
-import { readImpEnv } from './imp-cli';
 import { REPO_ROOT } from './instance';
+import { readImpEnv } from './run-imp';
 import { waitFor } from './wait-for';
 
 export interface Terminal {

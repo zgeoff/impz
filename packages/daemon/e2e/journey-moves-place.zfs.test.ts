@@ -3,7 +3,11 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { config } from '@impz/e2e-harness/config';
-import { resolveImageName } from '@impz/e2e-harness/fixtures';
+import { resolveImageName } from '@impz/e2e-harness/create-missing-images';
+import { HOST_B, readMoveHosts } from '@impz/e2e-harness/move-hosts';
+import { registerMoveRemoval } from '@impz/e2e-harness/register-move-removal';
+import { registerRemoval } from '@impz/e2e-harness/register-removal';
+import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
 import {
   assertState,
   createInstanceClient,
@@ -12,15 +16,11 @@ import {
   runImp,
   runImpWith,
   tryImp,
-} from '@impz/e2e-harness/imp-cli';
-import { waitForExec } from '@impz/e2e-harness/imps';
-import { HOST_B, readMoveHosts } from '@impz/e2e-harness/move-hosts';
-import { writeBothHostsConfig } from '@impz/e2e-harness/move-steps';
-import { registerMoveRemoval } from '@impz/e2e-harness/register-move-removal';
-import { registerRemoval } from '@impz/e2e-harness/register-removal';
-import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+} from '@impz/e2e-harness/run-imp';
+import { writeBothHostsConfig } from '@impz/e2e-harness/send-host-rpc';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
 import { waitFor } from '@impz/e2e-harness/wait-for';
+import { waitForExec } from '@impz/e2e-harness/wait-for-exec';
 import * as z from 'zod';
 
 async function setupTest() {

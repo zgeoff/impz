@@ -1,20 +1,20 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { waitAwakePastIdle } from '@impz/e2e-harness/awake-past-idle';
 import { config } from '@impz/e2e-harness/config';
-import { resolveImageName } from '@impz/e2e-harness/fixtures';
-import { assertState, createInstanceClient, readState, runImp } from '@impz/e2e-harness/imp-cli';
-import { waitForExec } from '@impz/e2e-harness/imps';
+import { resolveImageName } from '@impz/e2e-harness/create-missing-images';
 import { registerRemoval } from '@impz/e2e-harness/register-removal';
 import { removeImpIfPresent } from '@impz/e2e-harness/reset-baseline';
+import { assertState, createInstanceClient, readState, runImp } from '@impz/e2e-harness/run-imp';
 import {
   SSH_HOST,
   SSH_HOST_OTHER_KEY,
   runSsh,
   setupSshClient,
   startSsh,
-} from '@impz/e2e-harness/ssh';
+} from '@impz/e2e-harness/run-ssh';
 import { getSuitePrefix } from '@impz/e2e-harness/suites';
+import { waitAwakePastIdle } from '@impz/e2e-harness/wait-awake-past-idle';
 import { waitFor } from '@impz/e2e-harness/wait-for';
+import { waitForExec } from '@impz/e2e-harness/wait-for-exec';
 import { writeMetric } from '@impz/e2e-harness/write-metric';
 
 // One stack for every release, so ssh stops before the imp goes.
