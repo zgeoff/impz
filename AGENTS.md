@@ -121,9 +121,10 @@ with a catch:
   tests need a DOM, but runs every lane's files too. Run the dashboard with
   `bun run test:dashboard`.
 - `bun run lint` is plain oxlint. `bun run lint:full` adds the type-aware pass and the type check.
-  oxlint runs both through tsrslint (`@maschwenk/tsrslint`), a Rust port of tsgolint, in tsgolint's
-  place, because stock tsgolint runs out of memory on this repo on a 2 GiB host. `lint:full` is
-  CI-only: never run it locally.
+  oxlint runs both through `tsrs-lint`, which the `tsrs` package ships and oxlint finds on its own,
+  in tsgolint's place, because stock tsgolint runs out of memory on this repo on a 2 GiB host. The
+  script sets `TSRS_FAST=1`, tsrs's fast mode. `bun run typecheck` runs `tsrs --fast`. `lint:full`
+  is CI-only: never run it locally.
 - lefthook runs the checks in [`lefthook.yml`](lefthook.yml) before a commit and a push. On a 2 GiB
   host, leave the other checks to CI. `bun run check` runs every check and needs more memory than a
   2 GiB host has.
