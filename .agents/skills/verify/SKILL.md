@@ -12,9 +12,9 @@ metadata:
 # Verify impz
 
 Use `bun verify` to start the app, use each feature your change touches the way a user would, and
-record a verdict that it works. Put the report in the PR with `bun verify publish`, and hand back
-the PR link and each feature you could not verify. Leave `bun verify gate` to CI: it reads the
-report from the PR description, and fails a PR that changes a feature with no verdict there.
+record a verdict that it works. Put the report in the PR with the publish command in step 9, and
+hand back the PR link and each feature you could not verify. Leave `bun verify gate` to CI: it reads
+the report from the PR description, and fails a PR that changes a feature with no verdict there.
 
 The mistakes that cost the most time:
 
