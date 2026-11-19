@@ -94,10 +94,17 @@ Read a feature's file before you run its journey.
 8. Run `bun verify report --human` to read the report. Expect: `verified` on each changed feature
    you did not skip in step 5. Repeat steps 4 to 6 for each `stale` feature.
 9. Push the branch, and open a PR for it when none is open. Without an open PR, `publish` fails and
-   writes nothing. Run `bun verify publish`, even when you skipped a feature. To write to a PR other
-   than the branch's own, add `--pr <number>`. Expect: `ok: true`, and `data.action` of `created`,
-   `replaced` or `unchanged`. It writes the report into the PR's description, the only report the
-   gate reads.
+   writes nothing. Publish with the token filled inline, even when you skipped a feature. The
+   machine exports `VERIFY_UPLOAD_URL` and `VERIFY_UPLOAD_TOKEN_REF`, an `op://` reference, so no
+   raw token sits in the shell. To write to a PR other than the branch's own, add `--pr <number>`.
+
+   ```bash
+   VERIFY_UPLOAD_TOKEN="$(op read "$VERIFY_UPLOAD_TOKEN_REF")" bun verify publish
+   ```
+
+   Expect: `ok: true`, and `data.action` of `created`, `replaced` or `unchanged`. It writes the
+   report into the PR's description, the only report the gate reads.
+
 10. End the run: `bun verify down` after `up`, or `bun verify detach` after `attach`.
 
 ## Read the envelope
