@@ -12,9 +12,10 @@ metadata:
 # Verify impz
 
 Use `bun verify` to start the app, use each feature your change touches the way a user would, and
-record a verdict that it works. Put the report in the PR with `bun verify publish`, and hand back
-the PR link and each feature you could not verify. Leave `bun verify gate` to CI: it reads the
-report from the PR description, and fails a PR that changes a feature with no verdict there.
+record a verdict that it works. Put the report in the PR with step 11 of
+[Check a change](#check-a-change), and hand back the PR link and each feature you could not verify.
+Leave `bun verify gate` to CI: it reads the report from the PR description, and fails a PR that
+changes a feature with no verdict there.
 
 The mistakes that cost the most time:
 
@@ -30,7 +31,7 @@ The mistakes that cost the most time:
 ## Key rules
 
 - [Check a change](#check-a-change): for each changed feature, run its journey, check the end state,
-  then `done`.
+  then `done`; then push and publish with the upload token read in a subshell.
 - [Read the envelope](#read-the-envelope): branch on the exit code and `error.code`, never on the
   message, which can change in any release.
 - [Targets](#targets): check a change on a launch target, a target whose app `bun verify up` starts
@@ -69,7 +70,7 @@ Read a feature's file before you run its journey.
    [Targets](#targets) table. Run the commands in its row. `up` or `attach` starts a run, which
    lasts until `down` or `detach`. Expect from `up` or `attach`: `ok: true`, and the app's endpoints
    in `data.endpoints`.
-3. Run `bun verify doctor`. Expect: `data.passed: true`. When a check fails, fix its cause, and run
+3. Run `bun verify doctor`. Expect: `data.passed: true`. When a check fails, fix its cause. Then run
    `doctor` again.
 4. Run the journey from the feature's file in [References](#references). Its first line,
    `use --feature`, records each later command under that feature, and leaves the target as it is.
@@ -89,16 +90,31 @@ Read a feature's file before you run its journey.
    Run `bun verify done` to record a verdict for the feature that `use --feature` set. Expect:
    `ok: true`. It fails with `check-failed` until a journey command succeeds after `doctor`.
 7. Repeat steps 4 to 6 for each feature with `changed: true`, and for each feature your task names,
-   in the order of the table in [References](#references). When the [Targets](#targets) section says
-   to run a feature's journey last, run it after every other journey.
+   in the order of the table in [References](#references). When a feature's file says to run part of
+   its journey last, such as [On prod](references/feature-mcp-reads.md#on-prod), run that part after
+   every other journey.
 8. Run `bun verify report --human` to read the report. Expect: `verified` on each changed feature
    you did not skip in step 5. Repeat steps 4 to 6 for each `stale` feature.
-9. Push the branch, and open a PR for it when none is open. Without an open PR, `publish` fails and
-   writes nothing. Run `bun verify publish`, even when you skipped a feature. To write to a PR other
-   than the branch's own, add `--pr <number>`. Expect: `ok: true`, and `data.action` of `created`,
-   `replaced` or `unchanged`. It writes the report into the PR's description, the only report the
-   gate reads.
-10. End the run: `bun verify down` after `up`, or `bun verify detach` after `attach`.
+9. Push the branch. When no PR is open for it, open one: without an open PR, `publish` fails and
+   writes nothing.
+10. Check that `VERIFY_UPLOAD_URL` and `VERIFY_UPLOAD_TOKEN_REF` are set. When either is empty, stop
+    and report it as a blocker. `VERIFY_UPLOAD_URL` is the file host that takes the evidence files.
+    `VERIFY_UPLOAD_TOKEN_REF` is the 1Password `op://` reference to the upload token. Never run
+    `op read` on its own: it prints the token.
+11. Publish the report, even when you skipped a feature. Read the token in a subshell, so it never
+    sits in your shell. Because `&&` joins them, a failed `op read` stops the command before
+    `publish` runs:
+
+    ```bash
+    (VERIFY_UPLOAD_TOKEN="$(op read "$VERIFY_UPLOAD_TOKEN_REF")" && export VERIFY_UPLOAD_TOKEN && bun verify publish)
+    ```
+
+    To write to a PR other than the branch's own, add `--pr <number>`. When `op read` fails, stop
+    and report it as a blocker. Expect: `ok: true`, and `data.action` of `created`, `replaced` or
+    `unchanged`. `publish` writes the report into the PR's description, the only report the gate
+    reads.
+
+12. End the run: `bun verify down` after `up`, or `bun verify detach` after `attach`.
 
 ## Read the envelope
 
