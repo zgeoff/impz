@@ -102,7 +102,8 @@ Read a feature's file before you run its journey.
     `VERIFY_UPLOAD_TOKEN_REF` is the 1Password `op://` reference to the upload token. Never run
     `op read` on its own: it prints the token.
 11. Publish the report, even when you skipped a feature. Read the token in a subshell, so it never
-    sits in your shell. A failed `op read` then stops the command before `publish` runs:
+    sits in your shell. Because `&&` joins them, a failed `op read` stops the command before
+    `publish` runs:
 
     ```bash
     (VERIFY_UPLOAD_TOKEN="$(op read "$VERIFY_UPLOAD_TOKEN_REF")" && export VERIFY_UPLOAD_TOKEN && bun verify publish)
