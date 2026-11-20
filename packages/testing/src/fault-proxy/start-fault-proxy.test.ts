@@ -13,12 +13,13 @@ async function setupTest(options: TestImpdOptions = {}) {
   await impd.seedImage('ubuntu');
   await impd.client.imps.create({ name: 'box', image: 'ubuntu' });
 
-  const openSocket = async (path: string) => {
-    const socket = new WebSocket(`${impd.url.replace('http', 'ws')}${path}`, {
+  const openSocket = async (path: string, baseUrl = impd.url) => {
+    const socket = new WebSocket(`${baseUrl.replace('http', 'ws')}${path}`, {
       headers: { authorization: `Bearer ${TEST_TOKEN}` },
     });
 
     const messages: string[] = [];
+    const pongs: string[] = [];
     const closed = Promise.withResolvers<{ code: number; reason: string }>();
     const opened = Promise.withResolvers<void>();
 
@@ -30,13 +31,17 @@ async function setupTest(options: TestImpdOptions = {}) {
       messages.push(String(event.data));
     });
 
+    socket.addEventListener('pong', (event) => {
+      pongs.push(String(event.data));
+    });
+
     socket.addEventListener('close', (event) => {
       closed.resolve({ code: event.code, reason: event.reason });
     });
 
     await opened.promise;
 
-    return { socket, messages, closed: closed.promise };
+    return { socket, messages, pongs, closed: closed.promise };
   };
 
   const observeUnauthorizedHandshake = async (through: 'impd' | 'proxy'): Promise<string[]> => {
@@ -261,6 +266,58 @@ test('it holds a socket message while frozen and delivers it after thaw', async 
 
   expect(heldBeforeThaw).toStrictEqual([]);
   expect(JSON.parse(exec.messages[0] ?? '')).toMatchObject({ type: 'error' });
+});
+
+test.each(['/exec', '/tunnel'])(
+  'it holds a ping on a %s socket while frozen and answers it after thaw',
+  async (path) => {
+    const ctx = await setupTest();
+    const ws = await ctx.openSocket(path);
+    const direct = await ctx.openSocket(path, ctx.impd.impdUrl);
+
+    ctx.impd.freeze();
+    ws.socket.ping('held');
+
+    // five ping round trips to impd itself, each one hop shorter than a pong from the proxy
+    for (const count of [1, 2, 3, 4, 5]) {
+      direct.socket.ping();
+
+      await waitFor(() => {
+        expect(direct.pongs).toHaveLength(count);
+      });
+    }
+
+    const pongsBeforeThaw = [...ws.pongs];
+
+    ctx.impd.thaw();
+    ws.socket.ping('after');
+
+    await waitFor(() => {
+      expect(ws.pongs).toHaveLength(2);
+    });
+
+    expect(pongsBeforeThaw).toStrictEqual([]);
+    expect(ws.pongs).toStrictEqual(['held', 'after']);
+  },
+);
+
+test('it answers a ping once after a second thaw', async () => {
+  const ctx = await setupTest();
+  const tunnel = await ctx.openSocket('/tunnel');
+
+  ctx.impd.freeze();
+  ctx.impd.thaw();
+  ctx.impd.thaw();
+  tunnel.socket.ping('once');
+
+  await waitFor(() => {
+    expect(tunnel.pongs).toHaveLength(1);
+  });
+
+  // a round trip to impd itself, which takes longer than a second copy of the pong
+  await fetch(`${ctx.impd.impdUrl}/health`);
+
+  expect(tunnel.pongs).toStrictEqual(['once']);
 });
 
 test('it answers the next exec socket with the error frame and closes it', async () => {
