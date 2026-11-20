@@ -54,7 +54,7 @@ packages/
   mcp/             the MCP server: imps, exec, files and checkpoints as tools
   shared/          pure helpers that know nothing about imp, and in src/test-utils/ the test
                    preload and the utils every package's tests share
-  testing/         @impz/testing: impd on the daemon's stand-ins (test versions of its host
+  testing/         @impz/testing: impd on its own stand-ins (test versions of its host
                    boundaries), published for other repos' tests
 proto/             the agent protocol; bun run gen:proto generates the Go, TypeScript and
                    docs/reference/agent-protocol.md from it
