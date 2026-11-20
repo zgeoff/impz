@@ -29,6 +29,7 @@
     "@impz/api": "workspace:*",
     "@impz/daemon": "workspace:*",
     "@impz/shared": "workspace:*",
+    "@impz/testing": "workspace:*",
     "@playwright/test": "catalog:",
     "@testing-library/react": "catalog:",
     "@testing-library/user-event": "catalog:",

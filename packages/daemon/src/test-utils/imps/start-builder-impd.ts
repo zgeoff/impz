@@ -1,6 +1,6 @@
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
+import type { TestImpdOptions } from '@impz/testing/stand-in/start-test-impd';
 import type { AgentExecRequest, ExecStream } from '../../vm/agent-client/exec-stream';
-import { startTestImpd } from '../start-test-impd';
-import type { TestImpdOptions } from '../start-test-impd';
 import { createBuilderImage } from './create-builder-image';
 
 interface StubBuilderGuest {

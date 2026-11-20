@@ -1,5 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { startTestImpd } from '../start-test-impd';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import { seedLoopbackImp } from './seed-loopback-imp';
 
 function setupTest() {

@@ -1,13 +1,13 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { createImpClient } from '@impz/client';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
+import { TEST_TOKEN } from '@impz/testing/test-token';
 import invariant from 'tiny-invariant';
 import { listApiCalls } from '../../platform/db/list-api-calls';
 import { readImpByName } from '../../platform/db/list-imps';
 import { buildImpPaths } from '../../vm/storage/build-imp-paths';
 import { buildQueryGate } from '../platform/build-query-gate';
-import { startTestImpd } from '../start-test-impd';
-import { TEST_TOKEN } from '../test-token';
 import { buildStubExecGuest } from '../vm/build-stub-exec-guest';
 import { startStubExecAgent } from '../vm/start-stub-exec-agent';
 import { buildImpdSocketUrl, tryExecSocket, tryTunnelSocket } from './try-exec-socket';

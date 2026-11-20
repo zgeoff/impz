@@ -2,9 +2,9 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { formatRunPrefix } from './format-run-prefix';
+import { formatRunPrefix } from '@impz/testing/stand-in/platform/format-run-prefix';
+import { readRunOwner } from '@impz/testing/stand-in/platform/read-run-owner';
 import { readMigrationsHash } from './read-migrations-hash';
-import { readRunOwner } from './read-run-owner';
 
 function setupTest() {
   const prefix = formatRunPrefix(readRunOwner());

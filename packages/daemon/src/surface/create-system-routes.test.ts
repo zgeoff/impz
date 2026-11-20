@@ -5,12 +5,12 @@ import { join } from 'node:path';
 import { SYSTEM_FEATURES } from '@impz/api';
 import { createImpClient } from '@impz/client';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
+import { TEST_TOKEN } from '@impz/testing/test-token';
 import invariant from 'tiny-invariant';
 import packageJson from '../../package.json' with { type: 'json' };
 import { listApiCalls } from '../platform/db/list-api-calls';
 import { MIGRATIONS } from '../platform/db/run-migrations';
-import { startTestImpd } from '../test-utils/start-test-impd';
-import { TEST_TOKEN } from '../test-utils/test-token';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

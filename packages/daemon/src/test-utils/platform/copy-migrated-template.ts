@@ -7,13 +7,13 @@ import type {
   writeFileSync,
 } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
+import { formatRunPrefix } from '@impz/testing/stand-in/platform/format-run-prefix';
+import type { RunOwner } from '@impz/testing/stand-in/platform/read-run-owner';
 import { match } from 'ts-pattern';
 import { collectStaleTemplateFiles } from './collect-stale-template-files';
-import { formatRunPrefix } from './format-run-prefix';
 import type { TemplateFile } from './is-stale-template-file';
 import { isTemplateGoneError } from './is-template-gone-error';
 import { pickCacheAction } from './pick-cache-action';
-import type { RunOwner } from './read-run-owner';
 
 interface StatOptions {
   readonly throwIfNoEntry: false;

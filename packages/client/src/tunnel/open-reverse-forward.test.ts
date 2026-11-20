@@ -1,12 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { TUNNEL_CLOSE_RESTARTING } from '@impz/api';
-import {
-  buildImpPaths,
-  buildStubForwardAgent,
-  startStubAgent,
-  startTestImpd,
-} from '@impz/daemon/test-utils';
+import { buildImpPaths, buildStubForwardAgent } from '@impz/daemon/test-utils';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
+import { startStubAgent } from '@impz/testing/stand-in/vm/start-stub-agent';
 import { createImpClient } from '../create-imp-client';
 import { openReverseForward } from './open-reverse-forward';
 

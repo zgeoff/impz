@@ -1,6 +1,6 @@
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
+import type { TestImpd, TestImpdOptions } from '@impz/testing/stand-in/start-test-impd';
 import { listImps } from '../../platform/db/list-imps';
-import { startTestImpd } from '../start-test-impd';
-import type { TestImpd, TestImpdOptions } from '../start-test-impd';
 
 export interface TestImpdPoolOptions {
   readonly impd?: Omit<TestImpdOptions, 'onLog'>;

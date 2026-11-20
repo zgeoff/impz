@@ -10,7 +10,7 @@ import {
 } from '@impz/agent-protocol';
 import type { Request } from '@impz/agent-protocol';
 import { FILE_DATA_MAX_BYTES, FILE_SEGMENT_PATTERN } from '@impz/api';
-import { startStubAgent } from './start-stub-agent';
+import { startStubAgent } from '@impz/testing/stand-in/vm/start-stub-agent';
 
 interface StubFilesAgentOptions {
   readonly knowsFiles: boolean;

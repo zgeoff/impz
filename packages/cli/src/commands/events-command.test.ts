@@ -6,8 +6,8 @@ import {
   buildMockNewImage,
   buildStubImpdReleaseFetch,
   createImage,
-  startTestImpd,
 } from '@impz/daemon/test-utils';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import invariant from 'tiny-invariant';
 import { buildStubBackoffClock } from '../test-utils/build-stub-backoff-clock';
 import { printEvents } from './events-command';

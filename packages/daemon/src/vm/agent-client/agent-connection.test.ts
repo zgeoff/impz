@@ -4,7 +4,7 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FRAME_TYPES, OKSchema, encodeMessageFrame } from '@impz/agent-protocol';
-import { startStubAgent } from '../../test-utils/vm/start-stub-agent';
+import { startStubAgent } from '@impz/testing/stand-in/vm/start-stub-agent';
 import { openAgentConnection } from './agent-connection';
 
 function setupTest() {

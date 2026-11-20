@@ -1,8 +1,8 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import invariant from 'tiny-invariant';
 import { listImps, readImpByName, updateImpMove } from '../../platform/db/list-imps';
 import { buildStubNft } from '../../test-utils/network/build-stub-nft';
-import { startTestImpd } from '../../test-utils/start-test-impd';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

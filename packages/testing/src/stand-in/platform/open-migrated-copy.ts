@@ -1,6 +1,6 @@
 import { Database } from 'bun:sqlite';
-import { openDatabase } from '../../platform/db/open-database';
-import type { ImpDatabase } from '../../platform/db/open-database';
+import { openDatabase } from '@impz/daemon/host/platform/db/open-database';
+import type { ImpDatabase } from '@impz/daemon/host/platform/db/open-database';
 
 // the migrations take about 16 ms per database and a copy about 0.1 ms, so a
 // test process migrates once

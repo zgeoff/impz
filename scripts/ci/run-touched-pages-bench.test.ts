@@ -2,7 +2,8 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { formatRunPrefix, readRunOwner } from '@impz/daemon/test-utils';
+import { formatRunPrefix } from '@impz/testing/stand-in/platform/format-run-prefix';
+import { readRunOwner } from '@impz/testing/stand-in/platform/read-run-owner';
 import { $ } from 'bun';
 import { createStubDevScript } from '../test-utils/create-stub-dev-script';
 

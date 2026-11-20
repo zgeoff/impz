@@ -2,6 +2,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { ImpSchema } from '@impz/api';
 import type { GrantNotCopied, ImpContract } from '@impz/api';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
@@ -12,7 +13,6 @@ import { listApiCalls } from '../../platform/db/list-api-calls';
 import { readImpByName } from '../../platform/db/list-imps';
 import { listTokenRecords } from '../../platform/db/list-token-records';
 import { generateEd25519Key } from '../../surface/ssh/load-or-create-host-key';
-import { startTestImpd } from '../../test-utils/start-test-impd';
 import { checkAccess, findAccess } from './access-policy';
 
 async function setupTest() {

@@ -4,6 +4,9 @@ import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { formatRunPrefix } from '@impz/testing/stand-in/platform/format-run-prefix';
+import { readRunOwner } from '@impz/testing/stand-in/platform/read-run-owner';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import { ORPCError } from '@orpc/client';
 import invariant from 'tiny-invariant';
 import { listImps, readImpByName } from '../../platform/db/list-imps';
@@ -11,9 +14,6 @@ import { buildStubDiskTools } from '../../test-utils/imps/build-stub-disk-tools'
 import { readBrokenInvariants } from '../../test-utils/imps/read-broken-invariants';
 import { waitForOutcome } from '../../test-utils/imps/wait-for-outcome';
 import { createStubHostLoad } from '../../test-utils/platform/create-stub-host-load';
-import { formatRunPrefix } from '../../test-utils/platform/format-run-prefix';
-import { readRunOwner } from '../../test-utils/platform/read-run-owner';
-import { startTestImpd } from '../../test-utils/start-test-impd';
 import { buildStubCpuCgroups } from '../../test-utils/vm/build-stub-cpu-cgroups';
 import { buildTemplateKey } from '../../vm/templates/build-template-key';
 

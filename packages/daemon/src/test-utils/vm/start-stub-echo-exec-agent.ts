@@ -5,7 +5,7 @@ import {
   encodeFrame,
   encodeMessageFrame,
 } from '@impz/agent-protocol';
-import { startStubAgent } from './start-stub-agent';
+import { startStubAgent } from '@impz/testing/stand-in/vm/start-stub-agent';
 
 interface EchoExecScript {
   readonly pid: number;

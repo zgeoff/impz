@@ -1,6 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
+import { getImpdLogger } from '@impz/daemon/host/platform/process/get-impd-logger';
 import { getConfig } from '@logtape/logtape';
-import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { startImpdLogCapture } from './start-impd-log-capture';
 
 test('it hands each impd line to every capture that runs', () => {

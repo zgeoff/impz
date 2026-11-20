@@ -1,10 +1,10 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
 import { existsSync } from 'node:fs';
 import { buildStubAnswerQueue } from '@impz/shared/test-utils/build-stub-answer-queue';
+import type { TestImpd } from '@impz/testing/stand-in/start-test-impd';
 import invariant from 'tiny-invariant';
 import type { Impd } from '../../impd/create-impd';
 import { listImps } from '../../platform/db/list-imps';
-import type { TestImpd } from '../start-test-impd';
 import { createTestImpdPool } from './create-test-impd-pool';
 
 function setupTest() {

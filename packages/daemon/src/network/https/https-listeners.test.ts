@@ -2,13 +2,13 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { connect } from 'node:tls';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import invariant from 'tiny-invariant';
 import { readImpByName, updateImpExposure } from '../../platform/db/list-imps';
 import { readPublicImp } from '../../platform/db/read-public-imp';
 import { createMockCertificate } from '../../test-utils/network/create-mock-certificate';
 import { startStubHeaderEcho } from '../../test-utils/network/start-stub-header-echo';
 import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
-import { startTestImpd } from '../../test-utils/start-test-impd';
 import { createForwardedPeers } from '../proxy/forwarded-peers';
 import { startWakeProxy } from '../proxy/wake-proxy';
 import { buildCredentialHash, createPublicScope } from './build-credential-hash';

@@ -61,7 +61,11 @@
           "test-utils": ["packages/shared/src/test-utils/**"],
           "runtime-neutral": ["packages/{shared,agent-protocol,api,client}/**"],
           // the daemon's own test helpers build queries against real databases
-          "db": ["packages/daemon/src/platform/db/**", "packages/daemon/src/test-utils/**"],
+          "db": [
+            "packages/daemon/src/platform/db/**",
+            "packages/daemon/src/test-utils/**",
+            "packages/testing/src/stand-in/**"
+          ],
           "tests": [
             "**/*.{test,e2e}.{ts,tsx}",
             "**/{test-utils,smoke,mocks}/**",
@@ -677,9 +681,13 @@
   },
   "overrides": [
     {
-      // the daemon's stand-in for the VM runner answers a whole contract in one
-      // module, so its line count runs past the limit
-      "files": ["packages/daemon/src/test-utils/vm/build-stub-vmm.ts"],
+      // the stand-in for the VM runner answers a whole contract in one module, and the one
+      // for impd starts the whole daemon on its stand-ins, so their line counts run past
+      // the limit
+      "files": [
+        "packages/testing/src/stand-in/vm/build-stub-vmm.ts",
+        "packages/testing/src/stand-in/start-test-impd.ts"
+      ],
       "rules": { "max-lines": "off" }
     },
     {

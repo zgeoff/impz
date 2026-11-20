@@ -3,12 +3,12 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { readImpEnv } from '@impz/shared/test-utils/read-imp-env';
 import { updateEnv } from '@impz/shared/test-utils/update-env';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
+import type { TestImpdOptions } from '@impz/testing/stand-in/start-test-impd';
 import invariant from 'tiny-invariant';
 import { readImpByName } from '../../platform/db/list-imps';
 import { readBrokenInvariants } from '../../test-utils/imps/read-broken-invariants';
 import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
-import { startTestImpd } from '../../test-utils/start-test-impd';
-import type { TestImpdOptions } from '../../test-utils/start-test-impd';
 import { buildStubCpuCgroups } from '../../test-utils/vm/build-stub-cpu-cgroups';
 import {
   readLoadingMeta,

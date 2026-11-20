@@ -5,8 +5,12 @@
     "types": ["bun"],
     "declaration": true,
     "emitDeclarationOnly": true,
-    "noEmit": false
+    "noEmit": false,
+    // the shim stands in for the module whose declarations the published package has no use for
+    "paths": {
+      "@impz/testing/stand-in/start-test-impd": ["./testing/declarations/start-test-impd.d.ts"]
+    }
   },
   "include": ["testing/src"],
-  "exclude": ["**/*.test.ts"]
+  "exclude": ["**/*.test.ts", "testing/src/stand-in"]
 }

@@ -3,10 +3,10 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { createStubUffdHandler } from '@impz/testing/stand-in/vm/create-stub-uffd-handler';
 import { runCommand } from '../../platform/process/run-command';
 import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
 import { probeProcessRunning } from '../../test-utils/platform/probe-process-running';
-import { createStubUffdHandler } from '../../test-utils/vm/create-stub-uffd-handler';
 import { createMemoryWarm } from './create-memory-warm';
 
 function setupTest() {

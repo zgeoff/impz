@@ -1,12 +1,8 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { createImpClient } from '@impz/client';
-import {
-  TEST_TOKEN,
-  createMoveHosts,
-  createUbuntuImage,
-  makeStubDroppedCommit,
-} from '@impz/daemon/test-utils';
+import { createMoveHosts, createUbuntuImage, makeStubDroppedCommit } from '@impz/daemon/test-utils';
 import type { MoveHostsOptions } from '@impz/daemon/test-utils';
+import { TEST_TOKEN } from '@impz/testing/test-token';
 import { registerMoveRemoval } from './register-move-removal';
 
 async function setupTest(options: Readonly<MoveHostsOptions> = {}) {

@@ -3,14 +3,14 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { deriveSlotAddress, parseSubnet } from '@impz/daemon/host/host-net/net/derive-slot-address';
+import { AgentError } from '@impz/daemon/host/vm/agent-client/agent-connection';
+import { setSnapshotLoading, writeSnapshotMeta } from '@impz/daemon/host/vm/sleep/snapshot-meta';
+import { buildImpPaths, buildSnapshotPaths } from '@impz/daemon/host/vm/storage/build-imp-paths';
+import { TemplateRestoreError } from '@impz/daemon/host/vm/vmm/create-template-vm';
+import type { TemplateRestorePlan } from '@impz/daemon/host/vm/vmm/create-template-vm';
+import { buildMockHostIdentity } from '@impz/daemon/test-utils/vm/build-mock-host-identity';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
-import { deriveSlotAddress, parseSubnet } from '../../host-net/net/derive-slot-address';
-import { AgentError } from '../../vm/agent-client/agent-connection';
-import { setSnapshotLoading, writeSnapshotMeta } from '../../vm/sleep/snapshot-meta';
-import { buildImpPaths, buildSnapshotPaths } from '../../vm/storage/build-imp-paths';
-import { TemplateRestoreError } from '../../vm/vmm/create-template-vm';
-import type { TemplateRestorePlan } from '../../vm/vmm/create-template-vm';
-import { buildMockHostIdentity } from './build-mock-host-identity';
 import { STUB_AGENT_VERSION, StubVmError, buildStubBootId, buildStubVmm } from './build-stub-vmm';
 
 async function setupTest() {

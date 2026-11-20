@@ -2,14 +2,14 @@ import { onTestFinished } from 'bun:test';
 import { writeFileSync } from 'node:fs';
 import type { MoveStatus } from '@impz/api';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
+import type { TestImpd, TestImpdOptions } from '@impz/testing/stand-in/start-test-impd';
 import invariant from 'tiny-invariant';
 import { deriveSlotAddress } from '../../host-net/net/derive-slot-address';
 import { readWarmHost } from '../../imp-ops/moves/read-warm-host';
 import { createImage } from '../../platform/db/create-image';
 import type { StartTimer } from '../../platform/process/clock';
 import { buildImagePaths } from '../../vm/storage/build-imp-paths';
-import { startTestImpd } from '../start-test-impd';
-import type { TestImpd, TestImpdOptions } from '../start-test-impd';
 
 // a move needs the target's peer URL to be a literal tailnet address
 export const TARGET_URL = 'http://100.100.0.2:7070';

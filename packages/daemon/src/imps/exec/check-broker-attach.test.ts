@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import invariant from 'tiny-invariant';
-import { startTestImpd } from '../../test-utils/start-test-impd';
 import { startStubSessionAgent } from '../../test-utils/vm/start-stub-session-agent';
 import { readVmIdentity, writeVmIdentity } from '../../vm/sleep/vm-identity';
 import { buildImpPaths } from '../../vm/storage/build-imp-paths';

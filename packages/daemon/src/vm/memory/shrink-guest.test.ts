@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { buildStubClock } from '../../test-utils/platform/build-stub-clock';
+import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
 import { buildStubElasticGuest } from '../../test-utils/vm/build-stub-elastic-guest';
 import { buildStubGuestMemory } from '../../test-utils/vm/build-stub-guest-memory';
 import { buildImpPaths } from '../storage/build-imp-paths';

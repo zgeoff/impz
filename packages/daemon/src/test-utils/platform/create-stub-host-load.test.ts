@@ -2,12 +2,12 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { formatRunPrefix } from '@impz/testing/stand-in/platform/format-run-prefix';
+import { readRunOwner } from '@impz/testing/stand-in/platform/read-run-owner';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { readHostLoad } from '../../platform/process/read-host-load';
 import { readText } from '../../platform/process/read-text';
 import { createStubHostLoad } from './create-stub-host-load';
-import { formatRunPrefix } from './format-run-prefix';
-import { readRunOwner } from './read-run-owner';
 
 function setupTest() {
   const prefix = formatRunPrefix(readRunOwner());

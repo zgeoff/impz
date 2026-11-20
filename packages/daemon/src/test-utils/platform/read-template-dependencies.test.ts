@@ -3,10 +3,10 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { formatRunPrefix } from '@impz/testing/stand-in/platform/format-run-prefix';
+import { readRunOwner } from '@impz/testing/stand-in/platform/read-run-owner';
 import { readNames } from '../../platform/db/read-names';
 import { copyMigratedTemplate } from './copy-migrated-template';
-import { formatRunPrefix } from './format-run-prefix';
-import { readRunOwner } from './read-run-owner';
 import { readTemplateDependencies } from './read-template-dependencies';
 
 function setupTest() {

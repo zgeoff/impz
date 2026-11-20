@@ -3,6 +3,7 @@ import { expect, jest, onTestFinished, test } from 'bun:test';
 import type { ImpContract, ImpEvent } from '@impz/api';
 import { pruneEvents } from '@impz/durable';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
@@ -15,7 +16,6 @@ import { withImpTransaction } from '../platform/db/with-imp-transaction';
 import { buildSessionValue } from '../platform/http/session-cookie';
 import { readInBackground } from '../test-utils/platform/read-in-background';
 import { readQueuedText } from '../test-utils/platform/read-queued-text';
-import { startTestImpd } from '../test-utils/start-test-impd';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

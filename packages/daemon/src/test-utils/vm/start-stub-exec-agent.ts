@@ -12,8 +12,8 @@ import {
   encodeMessageFrame,
 } from '@impz/agent-protocol';
 import type { AgentFrame, Request } from '@impz/agent-protocol';
+import { startStubAgent } from '@impz/testing/stand-in/vm/start-stub-agent';
 import type { AgentExecRequest, ExecEvent, ExecStream } from '../../vm/agent-client/exec-stream';
-import { startStubAgent } from './start-stub-agent';
 
 interface StubExecTarget {
   readonly openExec: (name: string, request: Readonly<AgentExecRequest>) => Promise<ExecStream>;

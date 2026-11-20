@@ -4,7 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
-import { buildStubClock } from '../../../test-utils/platform/build-stub-clock';
+import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
 import type { StubAnswer } from '../../../test-utils/vm/build-stub-guest';
 import { buildStubGuest } from '../../../test-utils/vm/build-stub-guest';
 import { GuestOutputError, createGuestExec } from './guest-exec';

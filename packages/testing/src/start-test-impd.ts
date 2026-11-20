@@ -1,7 +1,7 @@
 import { createImpClient, watchEvents } from '@impz/client';
 import type { ImpEvent } from '@impz/client';
-import { buildImpPaths } from '@impz/daemon/test-utils/data-layout';
-import { startTestImpd as startHarness } from '@impz/daemon/test-utils/start-test-impd';
+import { buildImpPaths } from '@impz/daemon/host/vm/storage/build-imp-paths';
+import { startTestImpd as startHarness } from '@impz/testing/stand-in/start-test-impd';
 import { startFaultProxy } from './fault-proxy/start-fault-proxy';
 import { startRelayGuest } from './start-relay-guest';
 import { TEST_TOKEN } from './test-token';

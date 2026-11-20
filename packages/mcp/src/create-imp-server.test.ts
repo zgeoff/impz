@@ -6,9 +6,9 @@ import {
   buildStubExecGuest,
   readImpByName,
   startStubExecAgent,
-  startTestImpd,
 } from '@impz/daemon/test-utils';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import { INVALID_PARAMS, METHOD_NOT_FOUND } from '@modelcontextprotocol/server';
 import invariant from 'tiny-invariant';
 import * as z from 'zod';

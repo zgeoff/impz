@@ -9,6 +9,7 @@ import { verifyImpIdentity } from '@impz/client/identity';
 import { buildStubAnswerQueue } from '@impz/shared/test-utils/build-stub-answer-queue';
 import { server } from '@impz/shared/test-utils/server';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import { HttpResponse, http } from 'msw';
 import invariant from 'tiny-invariant';
 import {
@@ -33,7 +34,6 @@ import { startStubBrokerTunnel } from '../../../test-utils/network/start-stub-br
 import { startStubPausedSocketGuest } from '../../../test-utils/network/start-stub-paused-socket-guest';
 import { buildQueryGate } from '../../../test-utils/platform/build-query-gate';
 import { buildStubHeldAnswer } from '../../../test-utils/platform/build-stub-held-answer';
-import { startTestImpd } from '../../../test-utils/start-test-impd';
 import { loadOrCreateBrokerCa } from '../tls/broker-ca';
 
 async function setupTest() {

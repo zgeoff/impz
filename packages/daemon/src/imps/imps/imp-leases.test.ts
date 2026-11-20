@@ -3,14 +3,14 @@ import { createImpClient } from '@impz/client';
 import { readImpEnv } from '@impz/shared/test-utils/read-imp-env';
 import { updateEnv } from '@impz/shared/test-utils/update-env';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
+import { TEST_TOKEN } from '@impz/testing/test-token';
 import invariant from 'tiny-invariant';
 import type { LoggedImpEvent } from '../../platform/db/imp-log-entry';
 import { listLeases, writeLease } from '../../platform/db/list-leases';
 import { buildMockLeaseRecord } from '../../test-utils/imps/build-mock-lease-record';
 import { buildQueryGate } from '../../test-utils/platform/build-query-gate';
 import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
-import { startTestImpd } from '../../test-utils/start-test-impd';
-import { TEST_TOKEN } from '../../test-utils/test-token';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

@@ -3,10 +3,10 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { RequestSchema, encodeAgentMessage } from '@impz/agent-protocol';
+import { startStubAgent } from '@impz/testing/stand-in/vm/start-stub-agent';
 import { openDialStream } from '../../vm/agent-client/dial-stream';
 import { openAccept, openListener } from '../../vm/agent-client/open-listener';
 import { buildStubForwardAgent } from './build-stub-forward-agent';
-import { startStubAgent } from './start-stub-agent';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

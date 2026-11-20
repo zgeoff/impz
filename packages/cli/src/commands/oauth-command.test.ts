@@ -1,7 +1,8 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { faker } from '@faker-js/faker';
-import { seedUncleanOAuthClient, startTestImpd } from '@impz/daemon/test-utils';
+import { seedUncleanOAuthClient } from '@impz/daemon/test-utils';
 import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 
 async function setupTest() {

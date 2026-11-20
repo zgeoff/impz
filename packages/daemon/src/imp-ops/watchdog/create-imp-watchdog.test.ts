@@ -2,11 +2,11 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { existsSync, statSync } from 'node:fs';
 import { readImpEnv } from '@impz/shared/test-utils/read-imp-env';
 import { updateEnv } from '@impz/shared/test-utils/update-env';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import invariant from 'tiny-invariant';
 import { listColdBoots } from '../../platform/db/list-cold-boots';
 import { readImpByName } from '../../platform/db/list-imps';
 import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
-import { startTestImpd } from '../../test-utils/start-test-impd';
 import { buildImpPaths, buildWatchdogSlot } from '../../vm/storage/build-imp-paths';
 
 async function setupTest() {

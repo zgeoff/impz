@@ -1,4 +1,4 @@
-import type { TickerTimer } from '../../platform/process/ticker';
+import type { TickerTimer } from '@impz/daemon/host/platform/process/ticker';
 
 interface PendingRun {
   readonly run: () => Promise<void>;

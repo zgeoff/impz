@@ -1,5 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { startTestImpd } from '../test-utils/start-test-impd';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import { tryExecSocket } from '../test-utils/surface/try-exec-socket';
 
 async function setupTest() {

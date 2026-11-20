@@ -11,7 +11,9 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./identity": "./src/identity/index.ts"
+    "./identity": "./src/identity/index.ts",
+    "./test-token": "./src/test-token.ts",
+    "./stand-in/*": "./src/stand-in/*.ts"
   },
   "dependencies": {
     "@impz/client": "workspace:*"
@@ -20,7 +22,13 @@
     "@impz/agent-protocol": "workspace:*",
     "@impz/api": "workspace:*",
     "@impz/daemon": "workspace:*",
-    "@impz/shared": "workspace:*"
+    "@impz/shared": "workspace:*",
+    "@logtape/logtape": "catalog:",
+    "@orpc/client": "catalog:",
+    "@orpc/contract": "catalog:",
+    "kysely": "catalog:",
+    "tiny-invariant": "catalog:",
+    "zod": "catalog:"
   },
   "engines": {
     "bun": ">=1.4.3"

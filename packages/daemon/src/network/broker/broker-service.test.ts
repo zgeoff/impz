@@ -9,6 +9,7 @@ import { buildMockBrokerRule } from '@impz/api/test-utils/build-mock-broker-rule
 import { buildMockOAuthConfig } from '@impz/api/test-utils/build-mock-oauth-config';
 import { server } from '@impz/shared/test-utils/server';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import { HttpResponse, http } from 'msw';
 import invariant from 'tiny-invariant';
 import { parsePrefix64 } from '../../host-net/net/derive-guest-ip6';
@@ -27,7 +28,6 @@ import { startStubBrokerGuestSocket } from '../../test-utils/network/start-stub-
 import { startStubBrokerReplyTarget } from '../../test-utils/network/start-stub-broker-reply-target';
 import { buildMockNewAuditEntry } from '../../test-utils/platform/build-mock-new-audit-entry';
 import { runSql } from '../../test-utils/platform/run-sql';
-import { startTestImpd } from '../../test-utils/start-test-impd';
 import { createBroker } from './broker-service';
 import { resolvePublicUpstream } from './tls/resolve-public-upstream';
 

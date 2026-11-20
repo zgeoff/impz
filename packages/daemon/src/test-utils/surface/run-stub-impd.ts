@@ -1,7 +1,7 @@
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
+import { TEST_TOKEN } from '@impz/testing/test-token';
 import type { Server } from 'bun';
 import type { AgentExecRequest, ExecEvent, ExecStream } from '../../vm/agent-client/exec-stream';
-import { startTestImpd } from '../start-test-impd';
-import { TEST_TOKEN } from '../test-token';
 
 const PREFIX = '/impd';
 

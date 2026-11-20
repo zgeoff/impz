@@ -23,7 +23,7 @@ import type {
   ResumeFrom,
   SessionInfoSchema,
 } from '@impz/agent-protocol';
-import { startStubAgent } from './start-stub-agent';
+import { startStubAgent } from '@impz/testing/stand-in/vm/start-stub-agent';
 
 type StubStart = Readonly<{
   tty?: boolean;

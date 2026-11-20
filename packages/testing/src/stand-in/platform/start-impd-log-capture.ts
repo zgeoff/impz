@@ -1,5 +1,5 @@
+import { setupLogging } from '@impz/daemon/host/platform/process/setup-logging';
 import { resetSync } from '@logtape/logtape';
-import { setupLogging } from '../../platform/process/setup-logging';
 
 const listeners = new Set<(line: string) => void>();
 

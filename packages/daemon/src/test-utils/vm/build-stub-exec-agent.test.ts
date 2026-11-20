@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { RequestSchema, encodeAgentMessage } from '@impz/agent-protocol';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { startStubAgent } from '@impz/testing/stand-in/vm/start-stub-agent';
 import { openAttachStream, openExecStream, openTapStream } from '../../vm/agent-client/exec-stream';
 import {
   STUB_BOOT_ID,
@@ -11,7 +12,6 @@ import {
   STUB_GENERATION,
   buildStubExecAgent,
 } from './build-stub-exec-agent';
-import { startStubAgent } from './start-stub-agent';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();
