@@ -64,7 +64,7 @@
     },
     "packages/api": {
       "name": "@impz/api",
-      "version": "7.5.1",
+      "version": "7.6.0",
       "dependencies": {
         "@orpc/client": "catalog:",
         "@orpc/contract": "catalog:",
@@ -76,7 +76,7 @@
     },
     "packages/cli": {
       "name": "@impz/cli",
-      "version": "7.5.1",
+      "version": "7.6.0",
       "bin": {
         "impz": "src/main.ts",
       },
@@ -101,7 +101,7 @@
     },
     "packages/client": {
       "name": "@impz/client",
-      "version": "7.5.1",
+      "version": "7.6.0",
       "dependencies": {
         "@orpc/client": "catalog:",
         "@orpc/contract": "catalog:",
@@ -130,7 +130,7 @@
     },
     "packages/daemon": {
       "name": "@impz/daemon",
-      "version": "7.5.1",
+      "version": "7.6.0",
       "dependencies": {
         "@bufbuild/protobuf": "catalog:",
         "@impz/agent-protocol": "workspace:*",
@@ -299,7 +299,7 @@
     },
     "packages/testing": {
       "name": "@impz/testing",
-      "version": "7.5.1",
+      "version": "7.6.0",
       "dependencies": {
         "@impz/client": "workspace:*",
       },
@@ -1928,9 +1928,9 @@
 
     "@wringer/gunshi/gunshi": ["gunshi@0.37.3", "", {}, "sha512-uwm23bguqDcleEetknuQnF5okLcgmQPM3iv4aWVHTPDbiSs9shh02F079NCY0mWkrIRjHqNhgmzW6k0FCXhy1g=="],
 
-    "@zgeoff/mcp-auth/@zgeoff/std": ["@zgeoff/std@0.4.3", "", {}, "sha512-wCaqH8+vrkR+6R/grWUUDraryyFY1NW0Gjbhg85bXX38k9Q+N3aHFu+Yc+EjzZ/Sp9n5aJnCvZqbO5F2mUjWAg=="],
-
     "@zgeoff/mcp-auth/@zgeoff/kysely-bun-sqlite": ["@zgeoff/kysely-bun-sqlite@0.3.2", "", { "peerDependencies": { "kysely": ">=0.29.5 <0.30.0" } }, "sha512-vPVzoBWIDXrO6VCfHY8XJSCTnRlTgW078HtyjrVSQP9grT8UswGlad2CP+G8D0GzQLfDRwpRWqqsg4LgxgNRoA=="],
+
+    "@zgeoff/mcp-auth/@zgeoff/std": ["@zgeoff/std@0.4.3", "", {}, "sha512-wCaqH8+vrkR+6R/grWUUDraryyFY1NW0Gjbhg85bXX38k9Q+N3aHFu+Yc+EjzZ/Sp9n5aJnCvZqbO5F2mUjWAg=="],
 
     "@zgeoff/rig/@zgeoff/diet": ["@zgeoff/diet@0.2.2", "", { "bin": { "diet": "diet.sh" } }, "sha512-zrToDuLnJJGeSxYOvrydH+AlWdtITX4zNENeVh8Y56e1qbSMZl9UNvIp9x4kcs/dMguQW5ihuAupnqngFBYJ4w=="],
 

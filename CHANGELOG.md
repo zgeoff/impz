@@ -2,10 +2,11 @@
 
 ## [7.6.0](https://github.com/zgeoff/impz/compare/v7.5.1...v7.6.0) (2026-11-20)
 
-
 ### Features
 
-* **testing:** add fault hooks and a test identity issuer ([#1096](https://github.com/zgeoff/impz/issues/1096)) ([6279099](https://github.com/zgeoff/impz/commit/627909950a5bcf9b15af17260f804fdf7e72280d))
+- **testing:** add fault hooks and a test identity issuer
+  ([#1096](https://github.com/zgeoff/impz/issues/1096))
+  ([6279099](https://github.com/zgeoff/impz/commit/627909950a5bcf9b15af17260f804fdf7e72280d))
 
 ## [7.5.1](https://github.com/zgeoff/impz/compare/v7.5.0...v7.5.1) (2026-11-19)
 
