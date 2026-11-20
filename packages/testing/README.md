@@ -35,20 +35,46 @@ test('it creates an imp', async () => {
   optional peer dependency: add `acme-client` or the `@opentelemetry/*` exporters to your dev
   dependencies.
 - `onLog`: a callback for each line impd logs. impd writes nothing to stderr.
+- `version`: the version that `system.info` and `system.features` report, so a client's
+  outdated-impd branch runs.
+- `features`: feature flags merged into what `system.features` reports.
 
 It returns:
 
-| Field                 | What it is                                                          |
-| --------------------- | ------------------------------------------------------------------- |
-| `url`                 | impd's API on a loopback port, for a client the test builds itself  |
-| `client`              | an `@impz/client` client on `url` with `TEST_TOKEN`, the root token |
-| `seedImage(name)`     | adds an image of that name, which `imps.create` boots               |
-| `startGuest(impName)` | starts the stand-in guest of a created imp, for reverse forwards    |
-| `fireTicker(label)`   | runs one of impd's periodic jobs now; no job runs on its own        |
-| `stop()`              | stops impd and removes its data                                     |
+| Field                 | What it is                                                                    |
+| --------------------- | ----------------------------------------------------------------------------- |
+| `url`                 | the fault proxy's API on a loopback port, for a client the test builds itself |
+| `impdUrl`             | impd's own API, which bypasses the proxy                                      |
+| `client`              | an `@impz/client` client on `url` with `TEST_TOKEN`, the root token           |
+| `seedImage(name)`     | adds an image of that name, which `imps.create` boots                         |
+| `startGuest(impName)` | starts the stand-in guest of a created imp, for reverse forwards              |
+| `fireTicker(label)`   | runs one of impd's periodic jobs now; no job runs on its own                  |
+| `stop()`              | stops impd and removes its data                                               |
 
-The client sleeps and wakes an imp as it does on a real host: `client.imps.sleep({ name })` and
-`client.imps.wake({ name })`.
+It also returns the fault hooks `fail`, `stall`, `clearFaults`, `dropConnections`, `freeze`, `thaw`,
+`refuseExec`, `closeTunnels` and the recorded `calls`.
+
+## Faults and identity tokens
+
+`url` and `client` reach impd through a proxy that forwards every request and WebSocket until a test
+sets a fault.
+
+```ts
+impd.fail('imps/sleep', { code: 'CONFLICT', status: 409 }, { times: 1 });
+```
+
+`@impz/testing/identity` makes tokens that `verifyImpIdentity` from `@impz/client/identity` accepts,
+with no impd:
+
+```ts
+import { createTestIdentityIssuer } from '@impz/testing/identity';
+
+const issuer = await createTestIdentityIssuer({ issuer: 'host-a' });
+const token = await issuer.signToken({ id: 'imp-1', name: 'box', audience: 'tasks.imp.internal' });
+```
+
+[Testing against impd](https://github.com/zgeoff/impz/blob/main/docs/guides/testing-impd.md) lists
+each fault and each issuer method.
 
 ## The stand-in guest
 
@@ -58,24 +84,7 @@ forward on that guest port. It returns a Node `Duplex`: what the test writes rea
 local end, and what that end sends back is what the test reads.
 
 ```ts
-import { openReverseForward } from '@impz/client';
-import { TEST_TOKEN } from '@impz/testing';
-
 const guest = await impd.startGuest('box');
-
-const forward = openReverseForward({
-  baseUrl: impd.url,
-  token: TEST_TOKEN,
-  name: 'box',
-  guest: { network: 'tcp', port: 4000 },
-  connect: (url, headers) => new WebSocket(url, { headers: { ...headers } }),
-  onConnection: (accept) => {
-    // relay to the local end, as the app under test does
-  },
-});
-
-await forward.listening;
-
 const stream = await guest.connect(4000);
 ```
 

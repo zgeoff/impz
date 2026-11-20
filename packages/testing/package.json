@@ -10,13 +10,15 @@
   },
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./identity": "./src/identity/index.ts"
   },
   "dependencies": {
     "@impz/client": "workspace:*"
   },
   "devDependencies": {
     "@impz/agent-protocol": "workspace:*",
+    "@impz/api": "workspace:*",
     "@impz/daemon": "workspace:*",
     "@impz/shared": "workspace:*"
   },

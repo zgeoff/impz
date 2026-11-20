@@ -33,6 +33,10 @@ done
 bun build "$package/src/index.ts" --target=bun --format=esm \
   --outfile "$stage/dist/index.js" "${external_args[@]}" >&2
 
+# the test identity issuer is a second entry, so a test that needs no impd loads none of impd
+bun build "$package/src/identity/index.ts" --target=bun --format=esm \
+  --outfile "$stage/dist/identity.js" "${external_args[@]}" >&2
+
 "$root/node_modules/.bin/tsrs" -p "$root/packages/tsconfig.testing-dts.json" \
   --outDir "$declarations" >&2
 
@@ -40,12 +44,18 @@ for name in index start-test-impd test-token types; do
   cp "$declarations/packages/testing/src/$name.d.ts" "$stage/dist/"
 done
 
+mkdir "$stage/dist/identity"
+
+for name in index create-test-identity-issuer; do
+  cp "$declarations/packages/testing/src/identity/$name.d.ts" "$stage/dist/identity/"
+done
+
 cp "$package/README.md" "$root/LICENSE" "$stage/"
 
 # the packages the bundle imports, read from the specifiers that match $1;
 # a name outside the catalog is no package, so the match drops it
 read_imports() {
-  { grep -ohE "($1)\"[^\"./][^\"]*\"" "$stage/dist/index.js" || true; } |
+  { grep -ohE "($1)\"[^\"./][^\"]*\"" "$stage/dist/index.js" "$stage/dist/identity.js" || true; } |
     sed -E "s/^($1)\"//; s/\"\$//" |
     sed -E 's#^(@[^/]+/[^/]+|[^@/][^/]*).*#\1#' | sort -u | jq -R . | jq -s .
 }
@@ -69,7 +79,10 @@ jq --slurpfile workspace "$root/package.json" --argjson imported "$imported" \
   | .peerDependencies = ([$optional[] | { key: ., value: ("^" + $catalog[.]) }] | from_entries)
   | .peerDependenciesMeta = ([$optional[] | { key: ., value: { optional: true } }] | from_entries)
   | del(.scripts, .devDependencies)
-  | .exports = { ".": { types: "./dist/index.d.ts", default: "./dist/index.js" } }
+  | .exports = {
+      ".": { types: "./dist/index.d.ts", default: "./dist/index.js" },
+      "./identity": { types: "./dist/identity/index.d.ts", default: "./dist/identity.js" }
+    }
   | .files = ["dist"]
   | .publishConfig = { access: "public" }
 ' "$package/package.json" > "$stage/package.json"
