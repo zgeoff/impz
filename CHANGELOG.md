@@ -1,5 +1,12 @@
 # Changelog
 
+## [7.6.1](https://github.com/zgeoff/impz/compare/v7.6.0...v7.6.1) (2026-11-20)
+
+
+### Bug Fixes
+
+* **testing:** hold pongs while the fault proxy is frozen ([#1100](https://github.com/zgeoff/impz/issues/1100)) ([5029265](https://github.com/zgeoff/impz/commit/5029265b76154f92878298acd93005d876097d69))
+
 ## [7.6.0](https://github.com/zgeoff/impz/compare/v7.5.1...v7.6.0) (2026-11-20)
 
 ### Features
