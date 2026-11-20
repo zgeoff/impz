@@ -62,7 +62,7 @@
       "@zgeoff/kysely-bun-sqlite": "0.3.3",
       "@zgeoff/mcp-auth": "0.2.3",
       "@zgeoff/oxlint-config": "0.10.10",
-      "@zgeoff/rig": "0.2.5",
+      "@zgeoff/rig": "0.2.6",
       "@zgeoff/std": "0.4.4",
       "acme-client": "5.4.0",
       "dns-packet": "5.6.1",
@@ -156,7 +156,8 @@
     "verify:lint": "bun scripts/verify/verify.ts lint",
     "ci:verify-gate": "bun scripts/verify-gate/run-verify-gate.ts",
     "test:related": "rig related",
-    "test:zfs": "rig zfs"
+    "test:zfs": "rig zfs",
+    "test:e2e": "rig e2e"
   },
   "devDependencies": {
     "@bufbuild/buf": "1.75.0",
