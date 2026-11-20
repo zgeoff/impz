@@ -366,7 +366,7 @@
     "@zgeoff/agent-hooks": "0.2.14",
     "@zgeoff/bun-test-extended": "0.2.4",
     "@zgeoff/bun-test-react": "0.2.4",
-    "@zgeoff/chex": "0.3.13",
+    "@zgeoff/chex": "0.3.14",
     "@zgeoff/diet": "0.2.3",
     "@zgeoff/format-codemod": "0.3.6",
     "@zgeoff/kysely-bun-sqlite": "0.3.3",
@@ -1232,7 +1232,7 @@
 
     "@zgeoff/bun-test-react": ["@zgeoff/bun-test-react@0.2.4", "", { "dependencies": { "@happy-dom/global-registrator": "21.0.4", "@testing-library/jest-dom": "7.0.1", "happy-dom": "21.0.4" }, "peerDependencies": { "@testing-library/react": ">=16.0.0", "react": ">=19.0.0", "react-dom": ">=19.0.0", "zustand": ">=5.0.0" }, "optionalPeers": ["zustand"] }, "sha512-omM4Wf/oy5YHuwnt5OMEOB5ZQZeHNVobj+t88tNf/axKt3VVQVikjHcqFDdnRKTi2IHK97wfO6S/hK3034m+KQ=="],
 
-    "@zgeoff/chex": ["@zgeoff/chex@0.3.13", "", { "dependencies": { "@zgeoff/std": "0.4.4", "oxc-parser": "0.158.0", "ts-pattern": "5.9.2" }, "bin": { "chex": "src/cli.ts" } }, "sha512-8cKimQAzhylNA/h8ji9wRHUXnt290g/nb6mvMSnx0FBHBc3LOJupfVLVhwWY/9zEC308ftEcU9tVjCewXdwyWg=="],
+    "@zgeoff/chex": ["@zgeoff/chex@0.3.14", "", { "dependencies": { "@zgeoff/std": "0.4.4", "oxc-parser": "0.158.0", "ts-pattern": "5.9.2" }, "bin": { "chex": "src/cli.ts" } }, "sha512-3/6TzltFP9dwkpznlkqHLT+YuhIAP9RVdqIg9RtdhXTNAU1UuzfImksbuocryDjJNEst8Ms5NYHKgqBkmF5hMQ=="],
 
     "@zgeoff/diet": ["@zgeoff/diet@0.2.3", "", { "bin": { "diet": "diet.sh" } }, "sha512-/UHiaa0sMLCNtvpr/puCJFRX9OpKJ020OF4STNyc1ncTVGAdPOeSt0TcTeVuU2fqDkl9pHeLgP7dW2MrXoc8Cg=="],
 
