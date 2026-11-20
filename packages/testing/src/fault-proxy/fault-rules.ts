@@ -1,6 +1,6 @@
 import type { DefinedFault, FailOptions, FaultHandle, RawFault } from '../types';
 
-export type FaultAction =
+type FaultAction =
   | { readonly kind: 'answer'; readonly answer: DefinedFault | RawFault }
   | { readonly kind: 'stall' };
 
