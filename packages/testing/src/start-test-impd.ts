@@ -21,7 +21,7 @@ export async function startTestImpd(options: TestImpdOptions = {}): Promise<Test
 
     harness.fake.agent.version = GUEST_AGENT_VERSION;
 
-    const proxy = startFaultProxy(stack, {
+    const proxy = await startFaultProxy(stack, {
       impdUrl: harness.url,
       ...(options.version !== undefined && { version: options.version }),
       ...(options.features !== undefined && { features: options.features }),

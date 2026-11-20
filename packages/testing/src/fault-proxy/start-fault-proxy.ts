@@ -1,3 +1,6 @@
+import events from 'node:events';
+import { connect, createServer } from 'node:net';
+import type { Socket } from 'node:net';
 import { EXEC_PATH, TUNNEL_PATH } from '@impz/api';
 import type { ServerWebSocket } from 'bun';
 import type {
@@ -74,16 +77,17 @@ const HANDSHAKE_HEADERS = new Set([
 
 const NORMAL_CLOSE = 1000;
 
-export function startFaultProxy(
+export async function startFaultProxy(
   stack: Readonly<AsyncDisposableStack>,
   options: Readonly<FaultProxyOptions>,
-): FaultProxy {
+): Promise<FaultProxy> {
   const rules = createFaultRules();
   const gate = createOpenGate();
   const calls: RecordedCall[] = [];
 
   const flights = new Set<Flight>();
   const sockets = new Set<ServerWebSocket<SocketData>>();
+  const clientSockets = new Set<Socket>();
 
   const execRefusals: ExecRefusal[] = [];
 
@@ -189,12 +193,7 @@ export function startFaultProxy(
 
   const answerRequest = async (request: Request, flight: Flight): Promise<Response> => {
     try {
-      const response = await relayRequest(request, flight);
-
-      // no connection outlives its answer, so dropConnections reaches every open socket
-      response.headers.set('connection', 'close');
-
-      return response;
+      return await relayRequest(request, flight);
     } catch (error) {
       return new Response(`the fault proxy failed to reach impd: ${String(error)}`, {
         status: 502,
@@ -374,7 +373,42 @@ export function startFaultProxy(
     error: (error) => new Response(String(error), { status: 500 }),
   });
 
+  // Bun gives a handler no handle on the socket of a kept-alive connection, so a TCP front
+  // owns every client socket and relays bytes to the server unchanged
+  const front = createServer((client) => {
+    const back = connect({ host: '127.0.0.1', port: Number(server.url.port) });
+
+    clientSockets.add(client);
+    client.pipe(back);
+    back.pipe(client);
+    client.on('error', () => {});
+    back.on('error', () => {});
+
+    client.on('close', () => {
+      clientSockets.delete(client);
+      back.destroy();
+    });
+
+    back.on('close', () => {
+      client.destroy();
+    });
+  });
+
+  await events.once(front.listen(0, '127.0.0.1'), 'listening');
+
+  const frontAddress = front.address();
+
+  if (frontAddress === null || typeof frontAddress === 'string') {
+    throw new TypeError('the fault proxy front has no TCP port');
+  }
+
   stack.defer(async () => {
+    for (const client of clientSockets) {
+      client.destroy();
+    }
+
+    front.close();
+
     for (const ws of sockets) {
       ws.data.upstream?.close();
     }
@@ -383,7 +417,7 @@ export function startFaultProxy(
   });
 
   return {
-    url: `http://127.0.0.1:${String(server.port)}`,
+    url: `http://127.0.0.1:${String(frontAddress.port)}`,
     calls,
     fail: (procedure, answer, failOptions) =>
       rules.add(procedure, { kind: 'answer', answer }, failOptions),
@@ -392,6 +426,10 @@ export function startFaultProxy(
       rules.clear();
     },
     dropConnections: () => {
+      for (const client of clientSockets) {
+        client.destroy();
+      }
+
       for (const ws of sockets) {
         ws.data.upstream?.close();
         ws.terminate();

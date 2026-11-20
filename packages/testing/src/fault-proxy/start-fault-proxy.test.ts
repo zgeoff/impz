@@ -368,7 +368,7 @@ test('it holds an injected answer while frozen and sends it after thaw', async (
   expect([settledBeforeThaw, outcome.settled]).toStrictEqual([false, true]);
 });
 
-test('it leaves no idle connection open after a call, so dropConnections reaches them all', async () => {
+test('it keeps a connection alive between calls and destroys it on dropConnections', async () => {
   const ctx = await setupTest();
 
   const socket = connect({ host: '127.0.0.1', port: Number(new URL(ctx.impd.url).port) });
@@ -388,9 +388,21 @@ test('it leaves no idle connection open after a call, so dropConnections reaches
     closed.resolve();
   });
 
-  socket.write('GET /health HTTP/1.1\r\nHost: impd\r\nConnection: keep-alive\r\n\r\n');
+  const request = 'GET /health HTTP/1.1\r\nHost: impd\r\nConnection: keep-alive\r\n\r\n';
+
+  socket.write(request);
+
+  await waitFor(() => expect(received.join('').split('200 OK')).toHaveLength(2));
+
+  socket.write(request);
+
+  await waitFor(() => expect(received.join('').split('200 OK')).toHaveLength(3));
+
+  expect(socket.destroyed).toBe(false);
+
+  ctx.impd.dropConnections();
 
   await closed.promise;
 
-  expect(received.join('')).toContain('200 OK');
+  expect(socket.destroyed).toBe(true);
 });
