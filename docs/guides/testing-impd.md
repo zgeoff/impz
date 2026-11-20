@@ -31,9 +31,21 @@ WebSocket unchanged.
 impd.fail('imps/sleep', { code: 'CONFLICT', status: 409 }, { times: 1 });
 ```
 
-`@impz/testing/identity` makes tokens that `verifyImpIdentity` accepts, with no impd. Its README
-section lists the issuer's methods. The proxy cannot reach a keep-alive connection that no request
-is using, so `dropConnections` ends the requests in flight and the WebSockets.
+The proxy cannot reach a keep-alive connection that no request is using, so `dropConnections` ends
+the requests in flight and the WebSockets.
+
+## The test identity issuer
+
+`@impz/testing/identity` makes tokens that `verifyImpIdentity` accepts, with no impd.
+`createTestIdentityIssuer({ issuer, kid? })` returns an issuer, and `kid` defaults to
+`<issuer>-key-1`.
+
+- `document` is the trust document for `loadIdentityIssuers`, with one key and no retire entry.
+- `signToken({ id, name, audience, iat?, exp?, nowSeconds? })` returns a compact ES256 token as impd
+  mints it, with `exp` 55 s after `iat` by default.
+- `forge(claims)` returns a token that a fresh key signs under the same issuer and kid.
+- `retire(at)` returns a copy of `document` that retires the key at `at`.
+- `IDENTITY_HEADER` is `'imp-identity'`, the header that carries the token.
 
 ## What the stand-in guest copies
 
