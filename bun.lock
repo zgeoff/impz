@@ -305,6 +305,7 @@
       },
       "devDependencies": {
         "@impz/agent-protocol": "workspace:*",
+        "@impz/api": "workspace:*",
         "@impz/daemon": "workspace:*",
         "@impz/shared": "workspace:*",
       },
