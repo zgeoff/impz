@@ -55,6 +55,13 @@ interface SocketData {
   relay: ((event: UpstreamEvent) => void) | null;
 }
 
+// one client connection to the TCP front and its connection on to the server
+interface FrontLink {
+  readonly client: Socket;
+  readonly back: Socket;
+  isWebSocket: boolean;
+}
+
 // a request the proxy has taken and not yet finished answering
 interface Flight {
   readonly upstream: AbortController;
@@ -89,6 +96,10 @@ export async function startFaultProxy(
   const sockets = new Set<ServerWebSocket<SocketData>>();
   const clientSockets = new Set<Socket>();
 
+  // each link by the local port of its connection to the server, which the server sees as the peer
+  const frontLinks = new Map<number, FrontLink>();
+
+  const freezeState = { isFrozen: false };
   const execRefusals: ExecRefusal[] = [];
 
   const relayRequest = async (request: Request, flight: Flight): Promise<Response> => {
@@ -258,9 +269,22 @@ export async function startFaultProxy(
       });
     }
 
-    return server.upgrade(request, { data })
-      ? undefined
-      : new Response('upgrade failed', { status: 400 });
+    // the server no longer knows the peer of a request it has upgraded
+    const link = frontLinks.get(server.requestIP(request)?.port ?? 0);
+
+    if (!server.upgrade(request, { data })) {
+      return new Response('upgrade failed', { status: 400 });
+    }
+
+    if (link !== undefined) {
+      link.isWebSocket = true;
+
+      if (freezeState.isFrozen) {
+        pauseFrontLink(link);
+      }
+    }
+
+    return undefined;
   };
 
   const connectUpstream = (
@@ -378,6 +402,21 @@ export async function startFaultProxy(
   // owns every client socket and relays bytes to the server unchanged
   const front = createServer((client) => {
     const back = connect({ host: '127.0.0.1', port: Number(server.url.port) });
+    const link: FrontLink = { client, back, isWebSocket: false };
+
+    back.once('connect', () => {
+      const port = back.localPort;
+
+      if (port === undefined) {
+        return;
+      }
+
+      frontLinks.set(port, link);
+
+      back.once('close', () => {
+        frontLinks.delete(port);
+      });
+    });
 
     clientSockets.add(client);
     client.pipe(back);
@@ -448,9 +487,30 @@ export async function startFaultProxy(
     },
     freeze: () => {
       gate.close();
+
+      freezeState.isFrozen = true;
+
+      // Bun answers a client's ping itself, so a socket's bytes wait at the front, before Bun
+      for (const link of frontLinks.values()) {
+        if (link.isWebSocket) {
+          pauseFrontLink(link);
+        }
+      }
     },
     thaw: () => {
+      if (!freezeState.isFrozen) {
+        return;
+      }
+
+      freezeState.isFrozen = false;
+
       gate.open();
+
+      for (const link of frontLinks.values()) {
+        if (link.isWebSocket) {
+          resumeFrontLink(link);
+        }
+      }
     },
     refuseExec: (error) => {
       execRefusals.push(error);
@@ -466,9 +526,20 @@ export async function startFaultProxy(
   };
 }
 
+// a stream with no pipe left stops reading, so its bytes wait in the socket until the next pipe
+function pauseFrontLink(link: Readonly<FrontLink>): void {
+  link.client.unpipe(link.back);
+  link.back.unpipe(link.client);
+}
+
 const UPSTREAM_FAILED_CLOSE = 1011;
 
 // 1005, 1006 and 1015 mark a missing or failed close and never go on the wire
 function pickCloseCode(code: number): number {
   return code === 1005 || code === 1006 || code === 1015 ? UPSTREAM_FAILED_CLOSE : code;
+}
+
+function resumeFrontLink(link: Readonly<FrontLink>): void {
+  link.client.pipe(link.back);
+  link.back.pipe(link.client);
 }
