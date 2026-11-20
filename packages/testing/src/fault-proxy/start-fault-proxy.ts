@@ -38,12 +38,18 @@ export interface FaultProxy {
   readonly closeTunnels: (code: number, reason: string) => void;
 }
 
+type UpstreamEvent =
+  | { readonly kind: 'message'; readonly data: string | ArrayBuffer }
+  | { readonly kind: 'close'; readonly code: number; readonly reason: string };
+
 interface SocketData {
   readonly pathname: string;
-  readonly search: string;
-  readonly headers: Record<string, string>;
+  readonly refusal: ExecRefusal | null;
   upstream: WebSocket | null;
-  readonly pending: (string | Buffer)[];
+
+  // what impd sent after it accepted the socket and before the client's socket was open
+  readonly early: UpstreamEvent[];
+  relay: ((event: UpstreamEvent) => void) | null;
 }
 
 // a request the proxy has taken and not yet finished answering
@@ -102,6 +108,8 @@ export function startFaultProxy(
       }
 
       if (action?.kind === 'answer') {
+        await gate.wait();
+
         return buildFaultResponse(action.answer);
       }
     }
@@ -181,10 +189,16 @@ export function startFaultProxy(
 
   const answerRequest = async (request: Request, flight: Flight): Promise<Response> => {
     try {
-      return await relayRequest(request, flight);
+      const response = await relayRequest(request, flight);
+
+      // no connection outlives its answer, so dropConnections reaches every open socket
+      response.headers.set('connection', 'close');
+
+      return response;
     } catch (error) {
       return new Response(`the fault proxy failed to reach impd: ${String(error)}`, {
         status: 502,
+        headers: { connection: 'close' },
       });
     }
   };
@@ -224,53 +238,92 @@ export function startFaultProxy(
       }
     }
 
+    await gate.wait();
+
+    const refusal = url.pathname === EXEC_PATH ? (execRefusals.shift() ?? null) : null;
+
     const data: SocketData = {
       pathname: url.pathname,
-      search: url.search,
-      headers,
+      refusal,
       upstream: null,
-      pending: [],
+      early: [],
+      relay: null,
     };
 
-    await gate.wait();
+    // impd decides whether the socket opens, so a refused handshake never opens it for the client
+    if (refusal === null && !(await connectUpstream(data, url, headers))) {
+      return new Response('impd refused the socket', {
+        status: 502,
+        headers: { connection: 'close' },
+      });
+    }
 
     return server.upgrade(request, { data })
       ? undefined
       : new Response('upgrade failed', { status: 400 });
   };
 
-  const openUpstream = (ws: ServerWebSocket<SocketData>): void => {
-    const data = ws.data;
-
-    const target = new URL(`${data.pathname}${data.search}`, options.impdUrl);
+  const connectUpstream = (
+    data: SocketData,
+    url: URL,
+    headers: Readonly<Record<string, string>>,
+  ): Promise<boolean> => {
+    const target = new URL(`${url.pathname}${url.search}`, options.impdUrl);
 
     target.protocol = 'ws:';
 
-    const upstream = new WebSocket(target.href, { headers: data.headers });
+    const upstream = new WebSocket(target.href, { headers });
 
     upstream.binaryType = 'arraybuffer';
-    data.upstream = upstream;
+
+    const opened = Promise.withResolvers<boolean>();
+
+    const emit = (event: UpstreamEvent): void => {
+      if (data.relay === null) {
+        data.early.push(event);
+      } else {
+        data.relay(event);
+      }
+    };
 
     upstream.addEventListener('open', () => {
-      for (const message of data.pending.splice(0)) {
-        upstream.send(message);
-      }
+      data.upstream = upstream;
+
+      opened.resolve(true);
+    });
+
+    upstream.addEventListener('error', () => {
+      opened.resolve(false);
     });
 
     upstream.addEventListener('message', (event) => {
-      gate.pass(() => {
-        if (sockets.has(ws)) {
-          ws.send(event.data);
-        }
-      });
+      const received: unknown = event.data;
+
+      if (typeof received === 'string' || received instanceof ArrayBuffer) {
+        emit({ kind: 'message', data: received });
+      }
     });
 
     upstream.addEventListener('close', (event) => {
-      gate.pass(() => {
-        if (sockets.has(ws)) {
-          ws.close(pickCloseCode(event.code), event.reason);
-        }
-      });
+      opened.resolve(false);
+
+      emit({ kind: 'close', code: event.code, reason: event.reason });
+    });
+
+    return opened.promise;
+  };
+
+  const relayUpstream = (ws: ServerWebSocket<SocketData>, event: UpstreamEvent): void => {
+    gate.pass(() => {
+      if (!sockets.has(ws)) {
+        return;
+      }
+
+      if (event.kind === 'message') {
+        ws.send(event.data);
+      } else {
+        ws.close(pickCloseCode(event.code), event.reason);
+      }
     });
   };
 
@@ -282,10 +335,16 @@ export function startFaultProxy(
       open: (ws) => {
         sockets.add(ws);
 
-        const refusal = ws.data.pathname === EXEC_PATH ? execRefusals.shift() : undefined;
+        const refusal = ws.data.refusal;
 
-        if (refusal === undefined) {
-          openUpstream(ws);
+        if (refusal === null) {
+          ws.data.relay = (event) => {
+            relayUpstream(ws, event);
+          };
+
+          for (const event of ws.data.early.splice(0)) {
+            relayUpstream(ws, event);
+          }
 
           return;
         }
@@ -301,8 +360,6 @@ export function startFaultProxy(
 
           if (upstream?.readyState === WebSocket.OPEN) {
             upstream.send(message);
-          } else {
-            ws.data.pending.push(message);
           }
         });
       },

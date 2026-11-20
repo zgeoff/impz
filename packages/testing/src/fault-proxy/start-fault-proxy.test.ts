@@ -1,4 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
+import { connect } from 'node:net';
 import { openReverseForward } from '@impz/client';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { TEST_TOKEN, startTestImpd } from '@impz/testing';
@@ -38,7 +39,35 @@ async function setupTest(options: TestImpdOptions = {}) {
     return { socket, messages, closed: closed.promise };
   };
 
-  return { impd, openSocket };
+  const observeUnauthorizedHandshake = async (through: 'impd' | 'proxy'): Promise<string[]> => {
+    const baseUrl = through === 'impd' ? impd.impdUrl : impd.url;
+
+    const socket = new WebSocket(`${baseUrl.replace('http', 'ws')}/exec`, {
+      headers: { authorization: 'Bearer wrong-token' },
+    });
+
+    const events: string[] = [];
+    const closed = Promise.withResolvers<void>();
+
+    socket.addEventListener('open', () => {
+      events.push('open');
+    });
+
+    socket.addEventListener('error', () => {
+      events.push('error');
+    });
+
+    socket.addEventListener('close', (event) => {
+      events.push(`close:${String(event.code)}`);
+      closed.resolve();
+    });
+
+    await closed.promise;
+
+    return events;
+  };
+
+  return { impd, openSocket, observeUnauthorizedHandshake };
 }
 
 test('it answers a call as it does with no fault set', async () => {
@@ -296,4 +325,72 @@ test('it records each call with its procedure, input and token', async () => {
   expect(ctx.impd.calls.slice(before)).toStrictEqual([
     { procedure: 'imps/get', input: { name: 'box' }, authorization: `Bearer ${TEST_TOKEN}` },
   ]);
+});
+
+test('it rejects an unauthorized socket handshake as impd does', async () => {
+  const ctx = await setupTest();
+  const direct = await ctx.observeUnauthorizedHandshake('impd');
+  const proxied = await ctx.observeUnauthorizedHandshake('proxy');
+
+  expect(direct).not.toContain('open');
+  expect(proxied).toStrictEqual(direct);
+});
+
+test('it holds an injected answer while frozen and sends it after thaw', async () => {
+  const ctx = await setupTest();
+
+  const outcome = { settled: false };
+
+  ctx.impd.fail('imps/list', { code: 'CONFLICT', status: 409 });
+  ctx.impd.freeze();
+
+  const call = ctx.impd.client.imps.list();
+
+  const watched = (async () => {
+    await call.catch(() => {});
+
+    outcome.settled = true;
+  })();
+
+  await waitFor(() => expect(ctx.impd.calls.at(-1)?.procedure).toBe('imps/list'));
+
+  // a round trip to impd itself, which takes longer than the proxy needs to answer
+  await fetch(`${ctx.impd.impdUrl}/health`);
+
+  const settledBeforeThaw = outcome.settled;
+
+  ctx.impd.thaw();
+
+  await watched;
+
+  await expect(call).rejects.toMatchObject({ code: 'CONFLICT' });
+
+  expect([settledBeforeThaw, outcome.settled]).toStrictEqual([false, true]);
+});
+
+test('it leaves no idle connection open after a call, so dropConnections reaches them all', async () => {
+  const ctx = await setupTest();
+
+  const socket = connect({ host: '127.0.0.1', port: Number(new URL(ctx.impd.url).port) });
+
+  onTestFinished(() => {
+    socket.destroy();
+  });
+
+  const received: string[] = [];
+  const closed = Promise.withResolvers<void>();
+
+  socket.on('data', (chunk) => {
+    received.push(String(chunk));
+  });
+
+  socket.on('close', () => {
+    closed.resolve();
+  });
+
+  socket.write('GET /health HTTP/1.1\r\nHost: impd\r\nConnection: keep-alive\r\n\r\n');
+
+  await closed.promise;
+
+  expect(received.join('')).toContain('200 OK');
 });
