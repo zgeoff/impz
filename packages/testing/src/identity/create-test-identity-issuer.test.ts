@@ -29,7 +29,7 @@ test('it signs a token that verifyImpIdentity accepts and names the imp', async 
     iat: 1000,
   });
 
-  await expect(ctx.verify(token, 1010)).resolves.toStrictEqual({
+  expect(ctx.verify(token, 1010)).resolves.toStrictEqual({
     issuer: 'host-a',
     id: 'imp-1',
     name: 'dev-7f3a',
@@ -124,7 +124,7 @@ test('it fails a token for another audience', async () => {
     iat: 1000,
   });
 
-  await expect(ctx.verify(token, 1010, { audience: 'other.imp.internal' })).resolves.toBeNull();
+  expect(ctx.verify(token, 1010, { audience: 'other.imp.internal' })).resolves.toBeNull();
 });
 
 test('it fails a token that a forged key signed', async () => {
@@ -137,7 +137,7 @@ test('it fails a token that a forged key signed', async () => {
     iat: 1000,
   });
 
-  await expect(ctx.verify(token, 1010)).resolves.toBeNull();
+  expect(ctx.verify(token, 1010)).resolves.toBeNull();
 });
 
 test('it fails a token whose payload was edited', async () => {
@@ -156,7 +156,7 @@ test('it fails a token whose payload was edited', async () => {
     Buffer.from(claims, 'base64url').toString().replace('dev-7f3a', 'other'),
   ).toString('base64url');
 
-  await expect(ctx.verify(`${header}.${edited}.${signature}`, 1010)).resolves.toBeNull();
+  expect(ctx.verify(`${header}.${edited}.${signature}`, 1010)).resolves.toBeNull();
 });
 
 test('it fails a token of a retired key', async () => {
@@ -169,9 +169,7 @@ test('it fails a token of a retired key', async () => {
     iat: 1000,
   });
 
-  await expect(
-    ctx.verify(token, 1010, { documents: [ctx.issuer.retire(1000)] }),
-  ).resolves.toBeNull();
+  expect(ctx.verify(token, 1010, { documents: [ctx.issuer.retire(1000)] })).resolves.toBeNull();
 });
 
 test('it fails a token past its expiry', async () => {
@@ -184,7 +182,7 @@ test('it fails a token past its expiry', async () => {
     iat: 1000,
   });
 
-  await expect(ctx.verify(token, 1061)).resolves.toBeNull();
+  expect(ctx.verify(token, 1061)).resolves.toBeNull();
 });
 
 test('it keeps the tokens of two issuers apart', async () => {

@@ -85,7 +85,7 @@ test('it refuses one call with a fault and answers the next', async () => {
 
   impd.fail('imps/list', { code: 'CONFLICT', status: 409 }, { times: 1 });
 
-  await expect(impd.client.imps.list()).rejects.toMatchObject({ code: 'CONFLICT', status: 409 });
+  expect(impd.client.imps.list()).rejects.toMatchObject({ code: 'CONFLICT', status: 409 });
 
   const imps = await impd.client.imps.list();
 

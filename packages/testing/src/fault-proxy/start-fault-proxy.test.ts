@@ -88,7 +88,7 @@ test('it refuses one call with a defined error and lets the next reach impd', as
 
   const refused = ctx.impd.client.imps.sleep({ name: 'box' });
 
-  await expect(refused).rejects.toMatchObject({
+  expect(refused).rejects.toMatchObject({
     code: 'CONFLICT',
     status: 409,
     message: 'busy',
@@ -116,7 +116,7 @@ test('it narrows a fault to the calls whose input the predicate accepts', async 
 
   const refused = ctx.impd.client.imps.sleep({ name: 'box' });
 
-  await expect(refused).rejects.toMatchObject({ code: 'CONFLICT' });
+  expect(refused).rejects.toMatchObject({ code: 'CONFLICT' });
 
   const slept = await ctx.impd.client.imps.sleep({ name: 'other' });
 
@@ -128,7 +128,7 @@ test('it answers a raw body that is no oRPC error', async () => {
 
   ctx.impd.fail('imps/list', { status: 500, body: { message: 'boom' } });
 
-  await expect(ctx.impd.client.imps.list()).rejects.toMatchObject({ defined: false, status: 500 });
+  expect(ctx.impd.client.imps.list()).rejects.toMatchObject({ defined: false, status: 500 });
 });
 
 test('it stops answering a call once the fault is cleared', async () => {
@@ -165,7 +165,9 @@ test('it keeps a stalled call pending until its signal aborts', async () => {
     outcome.settled = true;
   })();
 
-  await waitFor(() => expect(ctx.impd.calls.at(-1)?.procedure).toBe('imps/list'));
+  await waitFor(() => {
+    expect(ctx.impd.calls.at(-1)?.procedure).toBe('imps/list');
+  });
 
   const settledBeforeAbort = outcome.settled;
 
@@ -205,11 +207,13 @@ test('it ends a call in flight when it drops connections', async () => {
 
   const call = ctx.impd.client.imps.list();
 
-  await waitFor(() => expect(ctx.impd.calls.at(-1)?.procedure).toBe('imps/list'));
+  await waitFor(() => {
+    expect(ctx.impd.calls.at(-1)?.procedure).toBe('imps/list');
+  });
 
   ctx.impd.dropConnections();
 
-  await expect(call).rejects.toThrow();
+  expect(call).rejects.toThrow();
 });
 
 test('it holds a call while frozen and answers it after thaw', async () => {
@@ -227,7 +231,9 @@ test('it holds a call while frozen and answers it after thaw', async () => {
     outcome.imps = imps.length;
   })();
 
-  await waitFor(() => expect(ctx.impd.calls.at(-1)?.procedure).toBe('imps/list'));
+  await waitFor(() => {
+    expect(ctx.impd.calls.at(-1)?.procedure).toBe('imps/list');
+  });
 
   const heldBeforeThaw = outcome.imps;
 
@@ -249,7 +255,9 @@ test('it holds a socket message while frozen and delivers it after thaw', async 
 
   ctx.impd.thaw();
 
-  await waitFor(() => expect(exec.messages).toHaveLength(1));
+  await waitFor(() => {
+    expect(exec.messages).toHaveLength(1);
+  });
 
   expect(heldBeforeThaw).toStrictEqual([]);
   expect(JSON.parse(exec.messages[0] ?? '')).toMatchObject({ type: 'error' });
@@ -267,7 +275,7 @@ test('it answers the next exec socket with the error frame and closes it', async
   const exec = await ctx.openSocket('/exec');
   const closed = await exec.closed;
 
-  expect(exec.messages.map((message) => JSON.parse(message))).toStrictEqual([
+  expect(exec.messages.map((message): unknown => JSON.parse(message))).toStrictEqual([
     {
       type: 'error',
       code: 'PRECONDITION_FAILED',
@@ -299,7 +307,7 @@ test('it ends a reverse forward with the code and reason it closes tunnels with'
 
   ctx.impd.closeTunnels(4001, 'tunnel gone');
 
-  await expect(forward.ended).resolves.toStrictEqual({
+  expect(forward.ended).resolves.toStrictEqual({
     kind: 'closed',
     code: 4001,
     reason: 'tunnel gone',
@@ -352,7 +360,9 @@ test('it holds an injected answer while frozen and sends it after thaw', async (
     outcome.settled = true;
   })();
 
-  await waitFor(() => expect(ctx.impd.calls.at(-1)?.procedure).toBe('imps/list'));
+  await waitFor(() => {
+    expect(ctx.impd.calls.at(-1)?.procedure).toBe('imps/list');
+  });
 
   // a round trip to impd itself, which takes longer than the proxy needs to answer
   await fetch(`${ctx.impd.impdUrl}/health`);
@@ -363,8 +373,7 @@ test('it holds an injected answer while frozen and sends it after thaw', async (
 
   await watched;
 
-  await expect(call).rejects.toMatchObject({ code: 'CONFLICT' });
-
+  expect(call).rejects.toMatchObject({ code: 'CONFLICT' });
   expect([settledBeforeThaw, outcome.settled]).toStrictEqual([false, true]);
 });
 
@@ -392,11 +401,15 @@ test('it keeps a connection alive between calls and destroys it on dropConnectio
 
   socket.write(request);
 
-  await waitFor(() => expect(received.join('').split('200 OK')).toHaveLength(2));
+  await waitFor(() => {
+    expect(received.join('').split('200 OK')).toHaveLength(2);
+  });
 
   socket.write(request);
 
-  await waitFor(() => expect(received.join('').split('200 OK')).toHaveLength(3));
+  await waitFor(() => {
+    expect(received.join('').split('200 OK')).toHaveLength(3);
+  });
 
   expect(socket.destroyed).toBe(false);
 

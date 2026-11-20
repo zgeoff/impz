@@ -108,7 +108,7 @@ export async function startFaultProxy(
       const action = rules.take(procedure, input);
 
       if (action?.kind === 'stall') {
-        return await new Promise<Response>(() => {});
+        return new Promise<Response>(() => {});
       }
 
       if (action?.kind === 'answer') {
@@ -169,7 +169,8 @@ export async function startFaultProxy(
         flight.controller = controller;
       },
       pull: async (controller) => {
-        const chunk = await source.read();
+        const chunk: { done: true; value?: undefined } | { done: false; value: Uint8Array } =
+          await source.read();
 
         await gate.wait();
 
@@ -224,7 +225,7 @@ export async function startFaultProxy(
     server: Bun.Server<SocketData>,
   ): Promise<Response | undefined> => {
     if (request.headers.get('upgrade')?.toLowerCase() !== 'websocket') {
-      return await takeRequest(request);
+      return takeRequest(request);
     }
 
     const url = new URL(request.url);
