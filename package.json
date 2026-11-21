@@ -18,7 +18,6 @@
       "@modelcontextprotocol/client": "2.4.0",
       "@modelcontextprotocol/server": "2.4.0",
       "@msw/data": "1.1.8",
-      "@mswjs/interceptors": "0.45.11",
       "@opentelemetry/api": "1.10.0",
       "@opentelemetry/exporter-metrics-otlp-proto": "0.301.0",
       "@opentelemetry/exporter-trace-otlp-proto": "0.301.0",

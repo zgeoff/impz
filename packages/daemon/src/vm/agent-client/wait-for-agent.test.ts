@@ -21,10 +21,9 @@ test('it gives up at the deadline of the injected clock, doubling each wait up t
   const ctx = setupTest();
   const waiting = waitForAgent(ctx.vsockPath, { deadlineMs: 300, clock: ctx.clock });
 
-  await expect(awaitWithClock(ctx.clock, waiting)).rejects.toThrow(
-    /^agent did not answer within 300 ms \(last error: /u,
-  );
+  const error = await awaitWithClock(ctx.clock, waiting).catch((error_: unknown) => error_);
 
+  expect(String(error)).toMatch(/^Error: agent did not answer within 300 ms \(last error: /u);
   expect(ctx.clock.delays).toStrictEqual([5, 10, 20, 40, 80, 100, 100]);
 });
 
@@ -55,8 +54,9 @@ test('it waits out the deadline on an agent that stays parked when asked for a c
     clock: ctx.clock,
   });
 
-  await expect(awaitWithClock(ctx.clock, waiting)).rejects.toThrowWithMessage(
-    Error,
-    'agent did not answer within 1000 ms (last error: still parked in the template)',
+  const error = await awaitWithClock(ctx.clock, waiting).catch((error_: unknown) => error_);
+
+  expect(String(error)).toBe(
+    'Error: agent did not answer within 1000 ms (last error: still parked in the template)',
   );
 });

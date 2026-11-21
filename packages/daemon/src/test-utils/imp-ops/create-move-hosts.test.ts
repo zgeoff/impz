@@ -141,7 +141,7 @@ test('#createMoveHosts gives up waiting for a move that never ends', async () =>
   await hosts.sourceApp.client.imps.create({ name: 'dev', image: 'ubuntu' });
   await hosts.sourceApp.client.imps.stop({ name: 'dev' });
 
-  await expect(hosts.runMove('dev')).rejects.toThrow('the move of dev never ended');
+  expect(hosts.runMove('dev')).rejects.toThrow('the move of dev never ended');
 });
 
 test('#setupMoveHosts reports the target warm facts on both hosts when shared', async () => {

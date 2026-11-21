@@ -11,8 +11,5 @@
     "@balena/dockerignore": "catalog:",
     "tar-stream": "catalog:",
     "zod": "catalog:"
-  },
-  "devDependencies": {
-    "@impz/shared": "workspace:*"
   }
 }

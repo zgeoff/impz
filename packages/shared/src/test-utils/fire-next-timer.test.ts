@@ -6,8 +6,13 @@ test('it fires the earliest timer only and moves the clock to its time', () => {
   const clock = createFakeClock({ startMs: 100 });
   const fired: string[] = [];
 
-  clock.schedule(() => fired.push('late'), 500);
-  clock.schedule(() => fired.push('early'), 200);
+  clock.schedule(() => {
+    fired.push('late');
+  }, 500);
+
+  clock.schedule(() => {
+    fired.push('early');
+  }, 200);
 
   fireNextTimer(clock);
 

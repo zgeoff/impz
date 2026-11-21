@@ -267,9 +267,6 @@
         "tar-stream": "catalog:",
         "zod": "catalog:",
       },
-      "devDependencies": {
-        "@impz/shared": "workspace:*",
-      },
     },
     "packages/mcp": {
       "name": "@impz/mcp",
@@ -296,7 +293,6 @@
         "@bufbuild/protobuf": "catalog:",
         "@faker-js/faker": "catalog:",
         "@msw/data": "catalog:",
-        "@mswjs/interceptors": "catalog:",
         "@opentelemetry/api": "catalog:",
         "@opentelemetry/sdk-trace-base": "catalog:",
         "@peculiar/x509": "catalog:",
@@ -315,7 +311,6 @@
         "@impz/agent-protocol": "workspace:*",
         "@impz/api": "workspace:*",
         "@impz/daemon": "workspace:*",
-        "@impz/shared": "workspace:*",
         "@logtape/logtape": "catalog:",
         "@orpc/client": "catalog:",
         "@orpc/contract": "catalog:",
@@ -342,7 +337,6 @@
     "@modelcontextprotocol/client": "2.4.0",
     "@modelcontextprotocol/server": "2.4.0",
     "@msw/data": "1.1.8",
-    "@mswjs/interceptors": "0.45.11",
     "@opentelemetry/api": "1.10.0",
     "@opentelemetry/exporter-metrics-otlp-proto": "0.301.0",
     "@opentelemetry/exporter-trace-otlp-proto": "0.301.0",

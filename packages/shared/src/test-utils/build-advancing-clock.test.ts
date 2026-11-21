@@ -6,7 +6,9 @@ test('it moves the clock by the whole wait of a sleep, fires the timers due in i
   const clock = createFakeClock();
   const fired: number[] = [];
 
-  clock.schedule(() => fired.push(clock.now()), 300);
+  clock.schedule(() => {
+    fired.push(clock.now());
+  }, 300);
 
   await buildAdvancingClock(clock).sleep(500);
 

@@ -23,7 +23,7 @@ export function createStubLosetup(
     options.attached === undefined ? ':' : `echo ${formatShellWord(options.attached)}`;
 
   return createStubBin(directory, 'losetup', {
-    script: `#!/bin/bash\n${`case "$1" in
+    script: `#!/bin/bash\ncase "$1" in
   -f) ${onFree} ;;
   -j) ${onAttached} ;;
   /dev/*)
@@ -31,6 +31,6 @@ export function createStubLosetup(
     echo $((count + 1)) >${attaches}
     [ "$count" -ge ${options.busyAttaches ?? 0} ] || exit 1
     ;;
-esac`}`,
+esac`,
   });
 }
