@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
 import { updateEnv } from '@zgeoff/testing';
 import { createStubBin, readStubCalls } from '@zgeoff/testing/bin';
-import { buildStubDevHostDocker } from '../test-utils/build-stub-dev-host-docker';
+import { buildStubDevHostDocker } from '../src/test-utils/build-stub-dev-host-docker';
 import { ensureHostImage } from './ensure-host-image.ts';
 
 function setupTest() {

@@ -2,11 +2,11 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createStubImpd } from '@impz/scripts/test-utils/create-stub-impd';
+import { createStubShellScript } from '@impz/scripts/test-utils/create-stub-shell-script';
 import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
 import { waitFor } from '@zgeoff/testing';
 import { createStubBin, readStubCalls } from '@zgeoff/testing/bin';
-import { createStubImpd } from '../scripts/test-utils/create-stub-impd';
-import { createStubShellScript } from '../scripts/test-utils/create-stub-shell-script';
 
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-entrypoint-'));

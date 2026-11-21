@@ -16,6 +16,7 @@
     "@opentelemetry/api": "catalog:",
     "@opentelemetry/sdk-trace-base": "catalog:",
     "@peculiar/x509": "catalog:",
+    "@zgeoff/std": "catalog:",
     "msw": "catalog:",
     "reflect-metadata": "catalog:",
     "zod": "catalog:"

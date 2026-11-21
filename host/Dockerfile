@@ -245,6 +245,7 @@ COPY package.json bun.lock bunfig.toml ./
 # patchedDependencies: bun install applies these
 COPY patches/ patches/
 COPY packages/ packages/
+COPY scripts/package.json scripts/package.json
 # --ignore-scripts: the root prepare script installs git hooks. No
 # --production: the CLI builds @impz/client from source, and the client
 # bundles @impz/api for npm, so it lists it only as a devDependency. The
@@ -266,6 +267,7 @@ WORKDIR /src
 COPY package.json bun.lock bunfig.toml tsconfig.base.json ./
 COPY patches/ patches/
 COPY packages/ packages/
+COPY scripts/package.json scripts/package.json
 RUN --mount=type=cache,target=/root/.bun/install/cache \
     bun install --frozen-lockfile --ignore-scripts
 RUN bun run --cwd packages/dashboard build

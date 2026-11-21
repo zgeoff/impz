@@ -6,7 +6,7 @@ import { createGitFreeEnv } from '@impz/e2e-harness/create-git-free-env';
 import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
 import { createStubBin, readStubCalls } from '@zgeoff/testing/bin';
 import { $ } from 'bun';
-import { buildStubGhRepoClone } from '../test-utils/build-stub-gh-repo-clone';
+import { buildStubGhRepoClone } from '../src/test-utils/build-stub-gh-repo-clone';
 
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-update-formula-'));

@@ -14,32 +14,42 @@
   // the runner tools they call, for binaries, and Go's ./... package pattern and a shell script's
   // path for a file
   "ignoreIssues": {
-    "scripts/{ci,release,test-utils}/**": ["binaries"],
+    "scripts/{ci,release,src/test-utils}/**": ["binaries"],
     "scripts/ci/{run-go-checks,run-touched-pages-bench}.ts": ["unresolved"]
   },
   "workspaces": {
     ".": {
       "entry": [
         // rig loads its config, and a lane's start hook by the path the config names
-        "rig.config.ts",
-        "scripts/dev/prepare-docker-lane.ts",
-        // the dev CLI that scripts/dev/dev.sh runs
-        "scripts/dev/run-dev.ts",
-        // the target apps and the stop command that the verify registry runs by path
-        "scripts/verify/run-local-impd.ts",
-        "scripts/verify/run-kvm-impd.ts",
-        "scripts/verify/remove-kvm-instance.ts",
-        // the zfs harnesses that scripts/test-zfs.sh and scripts/zfs-host-test.sh run
-        "scripts/test-zfs.ts",
-        "scripts/zfs-host-test.ts"
+        "rig.config.ts"
       ],
-      "project": [
-        "scripts/**/*.ts",
-        "deploy/**/*.ts",
-        "host/**/*.ts",
-        "kernel/**/*.ts",
-        "*.test.ts"
-      ]
+      "project": ["deploy/**/*.ts", "host/**/*.ts", "kernel/**/*.ts", "*.test.ts"]
+    },
+    "scripts": {
+      "entry": [
+        // the scripts that the root package.json and the workflows run by path
+        "ci/*.ts!",
+        "dockerfile-difftest/run.ts!",
+        "parse-stats-layout.ts!",
+        "proto/*.ts!",
+        "release/*.ts!",
+        "render/render-imp-host.ts!",
+        "render-protocol-schema.ts!",
+        "verify-gate/run-verify-gate.ts!",
+        "verify/verify.ts!",
+        // the dev CLI that scripts/dev/dev.sh runs
+        "dev/run-dev.ts!",
+        "dev/prepare-docker-lane.ts!",
+        // the target apps and the stop command that the verify registry runs by path
+        "verify/run-local-impd.ts!",
+        "verify/run-kvm-impd.ts!",
+        "verify/remove-kvm-instance.ts!",
+        // the zfs harnesses that scripts/test-zfs.sh and scripts/zfs-host-test.sh run
+        "test-zfs.ts!",
+        "zfs-host-test.ts!",
+        "**/*.test.ts"
+      ],
+      "project": ["**/*.ts!", "!src/test-utils/**!"]
     },
     "packages/*": {
       "project": ["src/**/*.ts!", "!src/test-utils/**!"]

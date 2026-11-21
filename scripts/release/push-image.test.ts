@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
 import { createStubBin, readStubCalls } from '@zgeoff/testing/bin';
 import { $ } from 'bun';
-import { buildStubPushDocker } from '../test-utils/build-stub-push-docker';
+import { buildStubPushDocker } from '../src/test-utils/build-stub-push-docker';
 
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-push-image-'));

@@ -14,8 +14,8 @@ import { join } from 'node:path';
 import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
 import { waitFor } from '@zgeoff/testing';
 import { createStubBin, readStubCalls } from '@zgeoff/testing/bin';
-import { createStubZfs } from './test-utils/create-stub-zfs';
-import { createStubZpool } from './test-utils/create-stub-zpool';
+import { createStubZfs } from './src/test-utils/create-stub-zfs';
+import { createStubZpool } from './src/test-utils/create-stub-zpool';
 
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-test-zfs-'));

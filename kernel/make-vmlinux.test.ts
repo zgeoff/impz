@@ -10,9 +10,9 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createStubRepoScript } from '@impz/scripts/test-utils/create-stub-repo-script';
 import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
 import { createStubBin, readStubCalls } from '@zgeoff/testing/bin';
-import { createStubRepoScript } from '../scripts/test-utils/create-stub-repo-script';
 
 // make-vmlinux.sh reads its config inputs beside itself, so each test runs a
 // copy of it in a temp kernel folder, with make and the source tree's

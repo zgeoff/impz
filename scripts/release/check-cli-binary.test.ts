@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { $ } from 'bun';
-import { buildStubCLIBinary } from '../test-utils/build-stub-cli-binary';
+import { buildStubCLIBinary } from '../src/test-utils/build-stub-cli-binary';
 
 function setupTest() {
   const tree = mkdtempSync(join(tmpdir(), 'imp-check-cli-binary-'));
