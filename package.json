@@ -57,7 +57,7 @@
       "@zgeoff/bun-test-extended": "0.2.4",
       "@zgeoff/bun-test-react": "0.2.4",
       "@zgeoff/chex": "0.3.14",
-      "@zgeoff/diet": "0.2.3",
+      "@zgeoff/diet": "0.2.4",
       "@zgeoff/format-codemod": "0.3.6",
       "@zgeoff/kysely-bun-sqlite": "0.3.3",
       "@zgeoff/mcp-auth": "0.2.3",
