@@ -1,8 +1,7 @@
-import { chmodSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { readStubCalls } from '@zgeoff/testing/bin';
+import { createStubBin } from '@zgeoff/testing/bin';
 import * as z from 'zod';
-import { buildRecordCall } from './build-record-call';
 
 interface StubTailscaleNode {
   readonly BackendState: string;
@@ -44,12 +43,9 @@ export function createStubTailscale(directory: string): StubTailscale {
   const status = join(directory, 'tailscale-status.json');
   const starting = join(directory, 'tailscale-starting');
   const prefs = join(directory, 'tailscale-prefs.json');
-  const record = buildRecordCall({ name: 'tailscale', callsFile: join(directory, 'calls.jsonl') });
-  const path = join(directory, 'tailscale');
 
-  writeFileSync(
-    path,
-    `#!/bin/bash\n${record}\n${String.raw`status=${JSON.stringify(status)}
+  const stub = createStubBin(directory, 'tailscale', {
+    script: `#!/bin/bash\n${String.raw`status=${JSON.stringify(status)}
 starting=${JSON.stringify(starting)}
 prefs=${JSON.stringify(prefs)}
 read_prefs() {
@@ -96,9 +92,7 @@ case $1 in
     mv "$status.new" "$status"
     ;;
 esac`}`,
-  );
-
-  chmodSync(path, 0o755);
+  });
 
   return {
     bin: directory,
@@ -116,8 +110,9 @@ esac`}`,
     },
     readNode: () => NodeSchema.parse(JSON.parse(readFileSync(status, 'utf8'))),
     readCalls: (verb) =>
-      readStubCalls(directory)
-        .filter((call) => call.name === 'tailscale' && call.argv[1] === verb)
+      stub
+        .readCalls()
+        .filter((call) => call.argv[1] === verb)
         .map((call) => call.argv.slice(1).join(' ')),
   };
 }

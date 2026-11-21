@@ -12,7 +12,7 @@ import {
 import { tmpdir, userInfo } from 'node:os';
 import { join } from 'node:path';
 import { createStubCurl } from '@impz/scripts/test-utils/create-stub-curl';
-import { createStubRepoScript } from '@impz/scripts/test-utils/create-stub-repo-script';
+import { createStubShellScript } from '@impz/scripts/test-utils/create-stub-shell-script';
 import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
 import { createStubBin, readStubCalls } from '@zgeoff/testing/bin';
 
@@ -324,7 +324,7 @@ test('it runs make-vmlinux.sh on the unpacked source itself with --in-builder', 
   mkdirSync(join(ctx.build, 'linux-6.1.999'), { recursive: true });
   createStubBin(ctx.stubs, 'curl');
   createStubBin(ctx.stubs, 'docker');
-  createStubRepoScript(ctx.kernel, 'make-vmlinux.sh', ctx.stubs, { recordEnv: ['JOBS'] });
+  createStubShellScript(ctx.stubs, 'make-vmlinux', { recordEnv: ['JOBS'] }, ctx.kernel);
 
   const result = Bun.spawnSync([ctx.script, '--in-builder'], {
     env: { PATH: ctx.path, JOBS: '7' },
@@ -337,7 +337,7 @@ test('it runs make-vmlinux.sh on the unpacked source itself with --in-builder', 
   }).toStrictEqual({ exitCode: 0, stdout: '', stderr: '' });
 
   expect(formatStubCalls(readStubCalls(ctx.stubs)).split('\n')).toStrictEqual([
-    `make-vmlinux.sh ${ctx.build}/linux-6.1.999 ${ctx.build}/obj ${ctx.out}`,
+    `make-vmlinux ${ctx.build}/linux-6.1.999 ${ctx.build}/obj ${ctx.out}`,
     '  JOBS=7',
     '',
   ]);
@@ -349,7 +349,7 @@ test('it builds with one job per processor when JOBS is unset', () => {
   writeFileSync(join(ctx.kernel, 'version'), 'KVER=6.1.999\nKSHA256=0\n');
   mkdirSync(join(ctx.build, 'linux-6.1.999'), { recursive: true });
   createStubBin(ctx.stubs, 'nproc', { script: '#!/bin/bash\necho 3' });
-  createStubRepoScript(ctx.kernel, 'make-vmlinux.sh', ctx.stubs, { recordEnv: ['JOBS'] });
+  createStubShellScript(ctx.stubs, 'make-vmlinux', { recordEnv: ['JOBS'] }, ctx.kernel);
 
   const result = Bun.spawnSync([ctx.script, '--in-builder'], { env: { PATH: ctx.path } });
 
@@ -361,7 +361,7 @@ test('it builds with one job per processor when JOBS is unset', () => {
 
   expect(formatStubCalls(readStubCalls(ctx.stubs)).split('\n')).toStrictEqual([
     'nproc ',
-    `make-vmlinux.sh ${ctx.build}/linux-6.1.999 ${ctx.build}/obj ${ctx.out}`,
+    `make-vmlinux ${ctx.build}/linux-6.1.999 ${ctx.build}/obj ${ctx.out}`,
     '  JOBS=3',
     '',
   ]);

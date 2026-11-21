@@ -1,21 +1,15 @@
 import { formatShellWord } from '@impz/shared/test-utils/format-shell-word';
-import { buildRecordCall } from './build-record-call';
 
-// After each call, it records a `unit` call whose argument is the unit's ExecStart line as it is
-// then, or none. With envFile, a start or restart runs the unit's ExecStart as systemd would, with
-// the unit's Environment= lines and then envFile's. callsFile is the folder's calls.jsonl.
+// After each call, it calls the `unit` stand-in at unitStubPath with the unit's ExecStart line as it
+// is then, or none, so the call is listed among the kit's. With envFile, a start or restart runs
+// the unit's ExecStart as systemd would, with the unit's Environment= lines and then envFile's.
 export function buildStubUnitSystemctl(
   unitPath: string,
-  callsFile: string,
+  unitStubPath: string,
   envFile?: string,
 ): string {
   const unit = formatShellWord(unitPath);
-
-  const log = buildRecordCall({
-    name: 'unit',
-    callsFile,
-    args: `"$(grep -m 1 '^ExecStart=' ${unit} 2>/dev/null || echo none)"`,
-  });
+  const log = `${formatShellWord(unitStubPath)} "$(grep -m 1 '^ExecStart=' ${unit} 2>/dev/null || echo none)"`;
 
   if (envFile === undefined) {
     return `#!/bin/bash\n${log}`;

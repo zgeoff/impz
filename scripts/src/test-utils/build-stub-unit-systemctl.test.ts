@@ -21,9 +21,10 @@ function setupTest() {
 test('it records the ExecStart line of the unit as it is at each call', () => {
   const ctx = setupTest();
   const unit = join(ctx.directoryPath, 'imp-host.service');
+  const recorder = createStubBin(ctx.directoryPath, 'unit');
 
   createStubBin(ctx.directoryPath, 'systemctl', {
-    script: buildStubUnitSystemctl(unit, join(ctx.directoryPath, 'calls.jsonl')),
+    script: buildStubUnitSystemctl(unit, recorder.path),
   });
 
   writeFileSync(unit, '[Service]\nExecStart=/usr/bin/docker run imp-host\nExecStart=second\n');
@@ -50,9 +51,10 @@ test("it runs the unit's ExecStart on a start, with the unit's environment and t
   const ctx = setupTest();
   const unit = join(ctx.directoryPath, 'imp-host.service');
   const envFile = join(ctx.directoryPath, 'imp-host.env');
+  const recorder = createStubBin(ctx.directoryPath, 'unit');
 
   createStubBin(ctx.directoryPath, 'systemctl', {
-    script: buildStubUnitSystemctl(unit, join(ctx.directoryPath, 'calls.jsonl'), envFile),
+    script: buildStubUnitSystemctl(unit, recorder.path, envFile),
   });
 
   createStubBin(ctx.directoryPath, 'podman');
@@ -85,12 +87,10 @@ test("it runs the unit's ExecStart on a start, with the unit's environment and t
 
 test('it records none when the unit is missing', () => {
   const ctx = setupTest();
+  const recorder = createStubBin(ctx.directoryPath, 'unit');
 
   createStubBin(ctx.directoryPath, 'systemctl', {
-    script: buildStubUnitSystemctl(
-      join(ctx.directoryPath, 'imp-host.service'),
-      join(ctx.directoryPath, 'calls.jsonl'),
-    ),
+    script: buildStubUnitSystemctl(join(ctx.directoryPath, 'imp-host.service'), recorder.path),
   });
 
   const result = Bun.spawnSync(['systemctl', 'daemon-reload'], {

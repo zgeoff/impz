@@ -391,11 +391,10 @@ test('it moves a Docker host with IPv6 and the proxy to Podman: stop on the old 
     script: buildStubHostDocker({ awakeImps: ['web'], hostNetwork: ['imp-host'] }),
   });
 
+  const unit = createStubBin(ctx.directoryPath, 'unit');
+
   createStubBin(ctx.directoryPath, 'systemctl', {
-    script: buildStubUnitSystemctl(
-      join(ctx.directoryPath, 'imp-host.service'),
-      join(ctx.directoryPath, 'calls.jsonl'),
-    ),
+    script: buildStubUnitSystemctl(join(ctx.directoryPath, 'imp-host.service'), unit.path),
   });
 
   createStubBin(ctx.directoryPath, 'curl', { script: `#!/bin/bash\necho '{"ready":true}'` });
@@ -559,10 +558,12 @@ test("it starts the image's own unit on the Docker host's /var/lib/imp and netwo
 
   createStubBin(ctx.directoryPath, 'curl', { script: `#!/bin/bash\necho '{"ready":true}'` });
 
+  const unit = createStubBin(ctx.directoryPath, 'unit');
+
   createStubBin(ctx.directoryPath, 'systemctl', {
     script: buildStubUnitSystemctl(
       join(ctx.directoryPath, 'imp-host.service'),
-      join(ctx.directoryPath, 'calls.jsonl'),
+      unit.path,
       join(ctx.directoryPath, 'imp-host.env'),
     ),
   });

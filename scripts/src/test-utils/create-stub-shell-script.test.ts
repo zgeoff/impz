@@ -45,3 +45,16 @@ test('it exits 0 with no output for a stand-in with no options', () => {
     stdout: '',
   });
 });
+
+test('it writes the .sh file in the scripts folder it is given, and records the call among the stand-ins', () => {
+  const ctx = setupTest();
+  const stubs = join(ctx.directoryPath, 'stubs');
+  const scripts = join(ctx.directoryPath, 'scripts', 'dev');
+
+  createStubShellScript(stubs, 'dev', { script: '#!/bin/bash\necho "ran $1"' }, scripts);
+
+  const result = Bun.spawnSync([join(scripts, 'dev.sh'), 'down']);
+
+  expect(result.stdout.toString()).toBe('ran down\n');
+  expect(formatStubCalls(readStubCalls(stubs))).toBe('dev down\n');
+});
