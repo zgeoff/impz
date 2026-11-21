@@ -11,7 +11,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { $ } from 'bun';
-import { createStubPackScript } from '../test-utils/create-stub-pack-script';
+import { createStubPackScript } from '../src/test-utils/create-stub-pack-script';
 
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-pack-npm-'));

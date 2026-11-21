@@ -2,8 +2,8 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
 import { randomUUID } from 'node:crypto';
 import { readMcpAnswer } from '@impz/mcp/test-utils/read-mcp-answer';
-import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { claimFreePorts } from '@impz/testing/stand-in/claim-free-ports';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import invariant from 'tiny-invariant';
 import * as z from 'zod';

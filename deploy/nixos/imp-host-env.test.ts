@@ -2,8 +2,8 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { readEnvValues } from '@impz/scripts/test-utils/read-env-values';
 import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
-import { readEnvValues } from '../../scripts/test-utils/read-env-values';
 
 // The NixOS module's env writer, run with bash as the module runs it, with a stub ip for the
 // host's addresses. `nix flake check` covers the rest (deploy/nixos/tests).

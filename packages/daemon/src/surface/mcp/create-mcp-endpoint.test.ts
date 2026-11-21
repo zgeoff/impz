@@ -1,10 +1,10 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { createImpClient } from '@impz/client';
 import { readMcpAnswer } from '@impz/mcp/test-utils/read-mcp-answer';
-import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
 import { readImpEnv } from '@impz/shared/test-utils/read-imp-env';
 import { updateEnv } from '@impz/shared/test-utils/update-env';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { claimFreePorts } from '@impz/testing/stand-in/claim-free-ports';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import { TEST_TOKEN } from '@impz/testing/test-token';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';

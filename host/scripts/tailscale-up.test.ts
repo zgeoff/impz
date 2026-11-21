@@ -2,9 +2,9 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createStubTailscale } from '@impz/scripts/test-utils/create-stub-tailscale';
 import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
-import { createStubTailscale } from '../../scripts/test-utils/create-stub-tailscale';
 
 // The output goes to files, so a wait the script leaves in the background
 // holds no pipe open.

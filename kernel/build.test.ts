@@ -11,10 +11,10 @@ import {
 } from 'node:fs';
 import { tmpdir, userInfo } from 'node:os';
 import { join } from 'node:path';
+import { buildStubEnvRecord } from '@impz/scripts/test-utils/build-stub-env-record';
+import { createStubCurl } from '@impz/scripts/test-utils/create-stub-curl';
+import { createStubRepoScript } from '@impz/scripts/test-utils/create-stub-repo-script';
 import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
-import { buildStubEnvRecord } from '../scripts/test-utils/build-stub-env-record';
-import { createStubCurl } from '../scripts/test-utils/create-stub-curl';
-import { createStubRepoScript } from '../scripts/test-utils/create-stub-repo-script';
 
 // build.sh keeps its sources and output beside itself, so each test runs a
 // copy of it in a temp kernel folder, with curl and docker stubbed on PATH.

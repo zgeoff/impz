@@ -1,7 +1,7 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
 import { createConnection } from 'node:net';
 import type { EgressMode } from '@impz/api';
-import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
+import { claimFreePorts } from '@impz/testing/stand-in/claim-free-ports';
 import { buildRangeMatcher } from '../../../host-net/net/build-range-matcher';
 import { parseSubnet } from '../../../host-net/net/derive-slot-address';
 import { REFUSED_RANGES4 } from '../../../host-net/net/refused-ranges4';

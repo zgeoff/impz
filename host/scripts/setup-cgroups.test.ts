@@ -2,8 +2,8 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createStubCat } from '@impz/scripts/test-utils/create-stub-cat';
 import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
-import { createStubCat } from '../../scripts/test-utils/create-stub-cat';
 
 // A cat stub answers for /proc/self/cgroup, whose real value differs by host.
 function setupTest() {

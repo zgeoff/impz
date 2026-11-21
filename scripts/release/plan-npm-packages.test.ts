@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
 import { $ } from 'bun';
-import { buildStubNpmView } from '../test-utils/build-stub-npm-view';
+import { buildStubNpmView } from '../src/test-utils/build-stub-npm-view';
 
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-plan-npm-'));

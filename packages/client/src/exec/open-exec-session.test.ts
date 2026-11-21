@@ -1,7 +1,7 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
 import { buildImpPaths, buildStubExecAgent } from '@impz/daemon/test-utils';
-import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
 import { server } from '@impz/shared/test-utils/server';
+import { claimFreePorts } from '@impz/testing/stand-in/claim-free-ports';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import { startStubAgent } from '@impz/testing/stand-in/vm/start-stub-agent';
 import { http } from 'msw';

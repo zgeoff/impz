@@ -1,5 +1,5 @@
+import type { ZfsHostFacts } from '@impz/scripts/zfs/types';
 import { match } from 'ts-pattern';
-import type { ZfsHostFacts } from './types.ts';
 
 // A generated or fixed name is not ownership, so a pool, a pool file, a data dir, a container or a
 // network that is already there is refused, never taken over.

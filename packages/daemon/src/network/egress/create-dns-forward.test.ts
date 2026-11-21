@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
-import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { claimFreePorts } from '@impz/testing/stand-in/claim-free-ports';
 import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
 import * as dnsPacket from 'dns-packet';
 import invariant from 'tiny-invariant';

@@ -1,5 +1,5 @@
+import type { VdevUse } from '@impz/scripts/zfs/read-vdev-use';
 import { match } from 'ts-pattern';
-import type { VdevUse } from './read-vdev-use.ts';
 
 interface CommandOutcome {
   readonly exitCode: number;

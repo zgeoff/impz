@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { createImpClient } from '@impz/client';
 import { buildImagePaths, buildMockNewImage, createImage } from '@impz/daemon/test-utils';
-import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
+import { claimFreePorts } from '@impz/testing/stand-in/claim-free-ports';
 import { startImpdHost } from '../test-utils/start-impd-host';
 import { readImp } from './read-imp';
 

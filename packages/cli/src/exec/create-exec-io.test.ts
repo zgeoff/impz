@@ -25,8 +25,8 @@ import {
   buildStubExecReplies,
   createImage,
 } from '@impz/daemon/test-utils';
-import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { claimFreePorts } from '@impz/testing/stand-in/claim-free-ports';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import { startStubAgent } from '@impz/testing/stand-in/vm/start-stub-agent';
 import invariant from 'tiny-invariant';

@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { createImpClient } from '@impz/client';
 import { buildImagePaths, buildMockNewImage, createImage } from '@impz/daemon/test-utils';
-import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
+import { claimFreePorts } from '@impz/testing/stand-in/claim-free-ports';
 import invariant from 'tiny-invariant';
 import { makeRacedCallFetch } from '../test-utils/make-raced-call-fetch';
 import { startImpdHost } from '../test-utils/start-impd-host';

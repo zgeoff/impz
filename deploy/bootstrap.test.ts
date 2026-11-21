@@ -2,14 +2,14 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { buildStubBlockDevices } from '@impz/scripts/test-utils/build-stub-block-devices';
+import { buildStubBootstrapDocker } from '@impz/scripts/test-utils/build-stub-bootstrap-docker';
+import { buildStubBootstrapPodman } from '@impz/scripts/test-utils/build-stub-bootstrap-podman';
+import { readEnvValues } from '@impz/scripts/test-utils/read-env-values';
+import { runSourcedFunction } from '@impz/scripts/test-utils/run-sourced-function';
 import { createCommandLinks } from '@impz/shared/test-utils/create-command-links';
 import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
 import * as z from 'zod';
-import { buildStubBlockDevices } from '../scripts/test-utils/build-stub-block-devices';
-import { buildStubBootstrapDocker } from '../scripts/test-utils/build-stub-bootstrap-docker';
-import { buildStubBootstrapPodman } from '../scripts/test-utils/build-stub-bootstrap-podman';
-import { readEnvValues } from '../scripts/test-utils/read-env-values';
-import { runSourcedFunction } from '../scripts/test-utils/run-sourced-function';
 
 // A function that gets a file through $(...) loses the file's trailing newlines.
 function setupTest() {

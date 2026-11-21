@@ -1,5 +1,5 @@
 import { expect, mock, test } from 'bun:test';
-import { buildStubDockerRunner } from '../../../scripts/test-utils/build-stub-docker-runner';
+import { buildStubDockerRunner } from '@impz/scripts/test-utils/build-stub-docker-runner';
 import { instance } from './instance';
 import type { CommandRunners } from './instance';
 import { MEMBER_OWNER_LABEL, stopTailscaleTailnet } from './tailscale-tailnet';

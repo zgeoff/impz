@@ -2,9 +2,9 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createStubLosetup } from '@impz/scripts/test-utils/create-stub-losetup';
+import { createStubMountpoint } from '@impz/scripts/test-utils/create-stub-mountpoint';
 import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
-import { createStubLosetup } from '../../scripts/test-utils/create-stub-losetup';
-import { createStubMountpoint } from '../../scripts/test-utils/create-stub-mountpoint';
 
 // /dev/zfs is a fixed path, so the zfs steps after its check go untested here.
 // mknod records into its own file, because the script calls it once for each

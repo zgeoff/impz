@@ -52,11 +52,11 @@ let
   '';
 
   # Stands in for the tailscale CLI: the stand-in that
-  # scripts/test-utils/run-stub-vm-tailscale.test.ts tests, on the state dir.
+  # scripts/src/test-utils/run-stub-vm-tailscale.test.ts tests, on the state dir.
   fakeTailscale = pkgs.writeScriptBin "tailscale" ''
     #!${pkgs.bash}/bin/bash
     export STUB_TAILSCALE_DIR=${stateDir}
-    exec ${pkgs.bash}/bin/bash ${../../../scripts/test-utils/run-stub-vm-tailscale.sh} "$@"
+    exec ${pkgs.bash}/bin/bash ${../../../scripts/src/test-utils/run-stub-vm-tailscale.sh} "$@"
   '';
 
   stub = pkgs.dockerTools.buildImage {

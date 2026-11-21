@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
+import { checkReleaseRefs } from '@impz/scripts/test-utils/check-release-refs';
 import * as z from 'zod';
-import { checkReleaseRefs } from './scripts/test-utils/check-release-refs';
 
 // release-please tags from its manifest and rewrites the first X.Y.Z of each marked line in
 // its generic extra-files, so every default image, the NixOS module's included, must sit under
@@ -44,7 +44,7 @@ test('it lists every file with a marker as a generic extra-file', () => {
       'x-release-please-',
       '--',
       ':!*.test.ts',
-      ':!scripts/test-utils/check-release-refs.ts',
+      ':!scripts/src/test-utils/check-release-refs.ts',
       ':!deploy/lib/host-env.sh',
     ],
     { cwd: new URL('.', import.meta.url).pathname },

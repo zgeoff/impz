@@ -12,12 +12,12 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createStubInstanceDocker } from '@impz/scripts/test-utils/create-stub-instance-docker';
+import { createStubRepoScript } from '@impz/scripts/test-utils/create-stub-repo-script';
+import { createStubZfs } from '@impz/scripts/test-utils/create-stub-zfs';
+import { createStubZpool } from '@impz/scripts/test-utils/create-stub-zpool';
 import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
-import { createStubInstanceDocker } from './test-utils/create-stub-instance-docker';
-import { createStubRepoScript } from './test-utils/create-stub-repo-script';
-import { createStubZfs } from './test-utils/create-stub-zfs';
-import { createStubZpool } from './test-utils/create-stub-zpool';
 
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-zfs-host-test-'));
@@ -34,7 +34,7 @@ function setupTest() {
   mkdirSync(deploy);
 
   copyFileSync(
-    new URL('../deploy/zfs-pool.json', import.meta.url).pathname,
+    new URL('../../../deploy/zfs-pool.json', import.meta.url).pathname,
     join(deploy, 'zfs-pool.json'),
   );
 
@@ -54,7 +54,7 @@ function setupTest() {
     calls: sudo.calls,
     path: `${sudo.bin}:${process.env['PATH'] ?? ''}`,
     root,
-    script: new URL('zfs-host-test.sh', import.meta.url).pathname,
+    script: new URL('../../../scripts/zfs-host-test.sh', import.meta.url).pathname,
 
     // With IMP_ROOT at root, the entry runs the stub scripts there in place of the checkout's own.
     run: [process.execPath, new URL('zfs-host-test.ts', import.meta.url).pathname],

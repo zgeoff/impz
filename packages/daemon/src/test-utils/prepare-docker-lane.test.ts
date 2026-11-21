@@ -2,8 +2,8 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createStubAnsweringBin } from '@impz/shared/test-utils/create-stub-answering-bin';
 import type { StubBin } from '@impz/shared/test-utils/create-stub-bin';
-import { createStubAnsweringBin } from '../test-utils/create-stub-answering-bin';
 import prepareDockerLane from './prepare-docker-lane';
 
 function setupTest() {
@@ -24,7 +24,7 @@ function setupTest() {
           limitMs: 5000,
           parallel: 1,
           memory: null,
-          start: 'scripts/dev/prepare-docker-lane.ts',
+          start: 'packages/daemon/src/test-utils/prepare-docker-lane.ts',
           stop: null,
         },
         runID: '4242',
