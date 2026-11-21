@@ -5,6 +5,7 @@
   "description": "The ci, dev, release and render scripts, the lib modules they share, and in src/test-utils the stand-ins that the tests of deploy/, host/, kernel/ and the harness import",
   "type": "module",
   "exports": {
+    "./dev/headscale-images": "./dev/headscale-images.ts",
     "./lib/*": "./lib/*.ts",
     "./test-utils/*": "./src/test-utils/*.ts",
     "./zfs/*": "./zfs/*.ts"

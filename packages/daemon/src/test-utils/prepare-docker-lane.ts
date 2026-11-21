@@ -1,10 +1,10 @@
 // A lane's first test pays for an image pull, and on a fresh CI runner for the engine's first
 // container, 2 to 5 s more than a later test. This pays both before the tests start.
 
+import { HEADSCALE_IMAGES } from '@impz/scripts/dev/headscale-images';
 import type { LaneContext } from '@zgeoff/rig';
 import invariant from 'tiny-invariant';
 import * as z from 'zod';
-import { HEADSCALE_IMAGES } from '../../../../scripts/dev/headscale-images';
 import { PEBBLE_IMAGES } from './network/pebble-images';
 
 const LANE_IMAGES = { pebble: PEBBLE_IMAGES, headscale: HEADSCALE_IMAGES } as const;

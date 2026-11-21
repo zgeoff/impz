@@ -127,6 +127,7 @@
         "@impz/durable": "workspace:*",
         "@impz/local-tar": "workspace:*",
         "@impz/mcp": "workspace:*",
+        "@impz/scripts": "workspace:*",
         "@impz/shared": "workspace:*",
         "@logtape/logtape": "catalog:",
         "@opentelemetry/api": "catalog:",
