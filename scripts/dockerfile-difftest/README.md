@@ -31,6 +31,9 @@ Run it on every change to `DOCKERFILE_FRONTEND` (the `BUILDKIT_SYNTAX` pin in
 
 ## Run
 
+The runner lives in `packages/daemon/src/test-utils/dockerfile-difftest/run.ts`. The `run.ts` here
+forwards to it, because `ci.yml` calls this path and reads this folder's `go.mod` and `go.sum`.
+
 ```sh
 bun scripts/dockerfile-difftest/run.ts            # seed 1, 60000 files
 bun scripts/dockerfile-difftest/run.ts --seed 7 --count 200000

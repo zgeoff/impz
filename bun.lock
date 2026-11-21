@@ -232,6 +232,7 @@
         "@impz/api": "workspace:*",
         "@impz/client": "workspace:*",
         "@impz/daemon": "workspace:*",
+        "@impz/scripts": "workspace:*",
         "@impz/shared": "workspace:*",
         "@zgeoff/mcp-auth": "catalog:",
         "dns-packet": "catalog:",
@@ -241,7 +242,6 @@
         "zod": "catalog:",
       },
       "devDependencies": {
-        "@impz/scripts": "workspace:*",
         "@impz/testing": "workspace:*",
         "@types/dns-packet": "catalog:",
         "@types/ssh2": "catalog:",
