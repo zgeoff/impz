@@ -146,8 +146,8 @@ the result of the row's CI job: `eval` and `vm` are in
 ## Host resources
 
 - Take ports from the port picker,
-  [`claimFreePorts`](../../../packages/shared/src/test-utils/claim-free-ports.ts). It holds each
-  port until the test ends.
+  [`claimFreePorts`](../../../packages/testing/src/stand-in/claim-free-ports.ts). It holds each port
+  until the test ends.
 - Make the temporary folder of a test that needs FIEMAP or another disk feature under `/var/tmp`,
   which sits on disk. `tmpdir()` is a tmpfs on some hosts, and a tmpfs has no extents for FIEMAP to
   map. Make it with `mkdtemp`, and remove it in `onTestFinished`.

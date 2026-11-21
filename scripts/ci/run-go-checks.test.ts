@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
 import { $ } from 'bun';
-import { buildStubGo } from '../test-utils/build-stub-go';
+import { buildStubGo } from '../src/test-utils/build-stub-go';
 
 function setupTest() {
   const created = mkdtempSync(join(tmpdir(), 'imp-go-checks-'));

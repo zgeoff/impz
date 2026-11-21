@@ -13,8 +13,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
-import { createStubZfs } from './test-utils/create-stub-zfs';
-import { createStubZpool } from './test-utils/create-stub-zpool';
+import { createStubZfs } from './src/test-utils/create-stub-zfs';
+import { createStubZpool } from './src/test-utils/create-stub-zpool';
 
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-test-zfs-'));

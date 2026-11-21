@@ -97,8 +97,8 @@ export const ignoredPaths = [
   '.claude/**',
   '.codex/**',
   '.github/**',
-  'scripts/{ci,dockerfile-difftest,proto,render,test-utils,zfs,verify-gate}/**',
-  'scripts/*.{ts,sh}',
+  'scripts/{ci,dockerfile-difftest,proto,render,src,zfs,verify-gate}/**',
+  'scripts/*.{ts,sh,json}',
   'scripts/release/*.ts',
   'scripts/release/{build-cli,build-formula,build-release-assets,build-release,check-base-image,check-client-package,check-client-runtimes,check-release-image,check-reproducible,check-testing-package,pack-client,pack-testing}.sh',
 

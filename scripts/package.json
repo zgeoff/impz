@@ -1,0 +1,37 @@
+{
+  "name": "@impz/scripts",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The ci, dev, release and render scripts, the lib modules they share, and in src/test-utils the stand-ins that the tests of deploy/, host/, kernel/ and the harness import",
+  "type": "module",
+  "exports": {
+    "./lib/*": "./lib/*.ts",
+    "./test-utils/*": "./src/test-utils/*.ts",
+    "./zfs/*": "./zfs/*.ts"
+  },
+  "dependencies": {
+    "@bufbuild/protobuf": "catalog:",
+    "@impz/api": "workspace:*",
+    "@impz/cli": "workspace:*",
+    "@impz/client": "workspace:*",
+    "@impz/daemon": "workspace:*",
+    "@impz/mcp": "workspace:*",
+    "@impz/shared": "workspace:*",
+    "@impz/testing": "workspace:*",
+    "@wringer/core": "catalog:",
+    "@wringer/gunshi": "catalog:",
+    "@wringer/http": "catalog:",
+    "@wringer/mcp": "catalog:",
+    "@wringer/stream": "catalog:",
+    "@wringer/terminal": "catalog:",
+    "@zgeoff/mcp-auth": "catalog:",
+    "@zgeoff/std": "catalog:",
+    "tiny-invariant": "catalog:",
+    "ts-pattern": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@impz/e2e-harness": "workspace:*",
+    "msw": "catalog:"
+  }
+}

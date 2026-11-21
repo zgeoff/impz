@@ -1,8 +1,8 @@
 // oxlint-disable zgeoff/seed-only -- seeds its rows with direct writes until each owner module has a test-utils seed
 import { expect, jest, mock, onTestFinished, test } from 'bun:test';
 import { join } from 'node:path';
-import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { claimFreePorts } from '@impz/testing/stand-in/claim-free-ports';
 import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import invariant from 'tiny-invariant';

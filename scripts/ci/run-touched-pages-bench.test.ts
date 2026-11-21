@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { formatRunPrefix } from '@impz/testing/stand-in/platform/format-run-prefix';
 import { readRunOwner } from '@impz/testing/stand-in/platform/read-run-owner';
 import { $ } from 'bun';
-import { createStubDevScript } from '../test-utils/create-stub-dev-script';
+import { createStubDevScript } from '../src/test-utils/create-stub-dev-script';
 
 function setupTest() {
   const prefix = formatRunPrefix(readRunOwner());

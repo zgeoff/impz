@@ -1,6 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
+import { claimFreePorts } from '@impz/testing/stand-in/claim-free-ports';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import {
   Client,

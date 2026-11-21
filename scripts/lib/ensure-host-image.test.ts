@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
 import { updateEnv } from '@impz/shared/test-utils/update-env';
-import { buildStubDevHostDocker } from '../test-utils/build-stub-dev-host-docker';
+import { buildStubDevHostDocker } from '../src/test-utils/build-stub-dev-host-docker';
 import { ensureHostImage } from './ensure-host-image.ts';
 
 function setupTest() {

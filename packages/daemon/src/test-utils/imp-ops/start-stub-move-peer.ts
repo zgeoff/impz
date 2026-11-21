@@ -1,5 +1,5 @@
 import { onTestFinished } from 'bun:test';
-import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
+import { claimFreePorts } from '@impz/testing/stand-in/claim-free-ports';
 
 interface StubPeerAnswer {
   readonly status?: number;

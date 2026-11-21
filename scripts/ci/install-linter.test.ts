@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { $ } from 'bun';
-import { createStubGhReleaseDownload } from '../test-utils/create-stub-gh-release-download';
+import { createStubGhReleaseDownload } from '../src/test-utils/create-stub-gh-release-download';
 
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-install-linter-'));

@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { faker } from '@faker-js/faker';
 import { seedUncleanOAuthClient } from '@impz/daemon/test-utils';
-import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
+import { claimFreePorts } from '@impz/testing/stand-in/claim-free-ports';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 

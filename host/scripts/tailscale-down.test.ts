@@ -2,8 +2,8 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createStubProcessTable } from '@impz/scripts/test-utils/create-stub-process-table';
 import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
-import { createStubProcessTable } from '../../scripts/test-utils/create-stub-process-table';
 
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-tailscale-down-'));

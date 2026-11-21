@@ -1,5 +1,5 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
-import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
+import { claimFreePorts } from '@impz/testing/stand-in/claim-free-ports';
 import { buildPeerRanges } from '../../imp-ops/moves/build-peer-ranges';
 import type { MovePeerCalls } from '../../imp-ops/moves/move-receiver';
 import { MoveRequestError } from '../../imp-ops/moves/move-request-error';
