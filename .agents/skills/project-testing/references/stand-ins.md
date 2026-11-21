@@ -60,9 +60,8 @@ Choose the kind by the boundary that the code under test reaches:
 - **Temporary directories** replace `/proc`, `/sys` and the cgroup tree. Their readers take a root
   path from the caller.
 - **Timer stand-ins** fire only when the test says so. In a test of one component without impd, use
-  [`buildStubClock`](../../../../packages/testing/src/stand-in/platform/build-stub-clock.ts) for its
-  clock, and `buildStubRepeat` or `buildStubTickerTimer` for its timer. A test that boots impd uses
-  the harness's clock, as [Booting impd](#booting-impd) shows.
+  `buildStubClock` for its clock, and `buildStubRepeat` or `buildStubTickerTimer` for its timer. A
+  test that boots impd uses the harness's clock, as [Booting impd](#booting-impd) shows.
 - **Version-skew proxies** wrap a real impd's answers and drop or add fields or events, to check
   behaviour against an older or a newer impd. Each is a `make-stub-*` file named for the version it
   plays, such as

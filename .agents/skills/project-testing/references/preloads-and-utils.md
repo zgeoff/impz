@@ -28,9 +28,8 @@ file:
   `IMP_HOST_TESTS`, `IMP_TEST_SMALL_FS`, `IMP_TEST_ZFS_ROOT` and `IMP_TEST_ZFS_DIR`.
 - It starts an MSW server that fails each request no handler answers, and resets the handlers after
   each test.
-- After each test, it puts back every variable that
-  [`updateEnv`](../../../../packages/shared/src/test-utils/update-env.ts) changed, at the value it
-  had before the test.
+- After each test, it puts back every variable that `updateEnv` changed, at the value it had before
+  the test.
 
 To give impd a setting:
 
@@ -44,7 +43,7 @@ To give impd a setting:
 Look in [the shared test utils](../../../../packages/shared/src/test-utils/) for a helper that knows
 nothing about imp. Each package keeps its own stand-ins in its `src/test-utils/` folder.
 
-- Wait on a condition with [`waitFor`](../../../../packages/shared/src/test-utils/wait-for.ts).
+- Wait on a condition with `waitFor`.
 - Script a dependency's answers with
   [`buildStubAnswerQueue`](../../../../packages/shared/src/test-utils/build-stub-answer-queue.ts).
   It answers in order and throws on a call past the last answer, so a test that expects three calls
