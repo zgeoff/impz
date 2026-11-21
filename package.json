@@ -53,7 +53,7 @@
       "@wringer/terminal": "0.1.5",
       "@xterm/addon-fit": "0.11.0",
       "@xterm/xterm": "6.0.0",
-      "@zgeoff/agent-hooks": "0.2.14",
+      "@zgeoff/agent-hooks": "0.3.0",
       "@zgeoff/bun-test-extended": "0.2.4",
       "@zgeoff/bun-test-react": "0.2.4",
       "@zgeoff/chex": "0.3.14",
