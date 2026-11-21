@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.7.0](https://github.com/zgeoff/impz/compare/v7.6.1...v7.7.0) (2026-11-21)
+
+### Features
+
+- **verify:** upload evidence from the launch targets
+  ([#1119](https://github.com/zgeoff/impz/issues/1119))
+  ([609a9ba](https://github.com/zgeoff/impz/commit/609a9ba1b7572a4fa8d85c3844eea8bef201b237))
+
 ## [7.6.1](https://github.com/zgeoff/impz/compare/v7.6.0...v7.6.1) (2026-11-20)
 
 ### Bug Fixes
