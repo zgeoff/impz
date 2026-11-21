@@ -1,5 +1,5 @@
 import { expect, mock, test } from 'bun:test';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { waitFor } from '@zgeoff/testing';
 import { captureImpdLogs } from '../test-utils/platform/capture-impd-logs';
 import { stopImpd } from './stop-impd';
 import type { ImpdStopParts } from './stop-impd';

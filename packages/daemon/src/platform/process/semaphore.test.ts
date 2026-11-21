@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { waitFor } from '@zgeoff/testing';
 import { createSemaphore } from './semaphore';
 
 test('it runs no more than its limit of tasks at once', async () => {

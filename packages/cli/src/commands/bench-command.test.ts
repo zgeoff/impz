@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setImmediate as setImmediatePromise } from 'node:timers/promises';
 import { buildImagePaths, buildMockNewImage, createImage } from '@impz/daemon/test-utils';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { waitFor } from '@zgeoff/testing';
 import * as z from 'zod';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 import { startImpdHost } from '../test-utils/start-impd-host';

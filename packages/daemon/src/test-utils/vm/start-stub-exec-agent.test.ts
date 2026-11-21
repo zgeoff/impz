@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FRAME_TYPES, decodeJsonPayload } from '@impz/agent-protocol';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { waitFor } from '@zgeoff/testing';
 import invariant from 'tiny-invariant';
 import { openAgentConnection } from '../../vm/agent-client/agent-connection';
 import { openExecStream } from '../../vm/agent-client/exec-stream';

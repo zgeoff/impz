@@ -3,8 +3,8 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
+import { waitFor } from '@zgeoff/testing';
 import { startRealTimer } from '../../../platform/process/start-real-timer';
 import {
   STUB_BUILDER_CONTAINER,

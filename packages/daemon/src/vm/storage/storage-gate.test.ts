@@ -1,6 +1,6 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
+import { waitFor } from '@zgeoff/testing';
 import { createStorageGate } from './storage-gate';
 
 test('it runs a task alone after the operations in flight, and lets new ones pass while it waits', async () => {

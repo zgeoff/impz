@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { waitFor } from '@zgeoff/testing';
 import { startStubFirecrackerApi } from './start-stub-firecracker-api';
 
 function setupTest() {

@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ImageBuildProgress } from '@impz/api';
 import { buildStubImageBuilder, createFilesTar, startBuilderImpd } from '@impz/daemon/test-utils';
-import { server } from '@impz/shared/test-utils/server';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { network } from '@impz/shared/test-utils/network';
 import { ORPCError } from '@orpc/client';
+import { waitFor } from '@zgeoff/testing';
 import { http } from 'msw';
 import invariant from 'tiny-invariant';
 import { createImpClient } from '../create-imp-client';
@@ -223,7 +223,7 @@ test('it uploads the context under the name, the Dockerfile and the token', asyn
   const tar = Bun.spawnSync(['tar', '-C', join(ctx.workDir, 'context'), '-c', '.']).stdout;
   const received = mock<(url: string, headers: Readonly<Record<string, string>>) => void>();
 
-  server.use(
+  network.use(
     http.post('http://impd.test/images/build-context', (info) => {
       received(info.request.url, Object.fromEntries(info.request.headers));
 
@@ -526,7 +526,7 @@ test('it throws the ORPCError that ends the stream', async () => {
 });
 
 test('it stops waiting on the feature check when the caller aborts', async () => {
-  server.use(
+  network.use(
     http.post('http://impd.test/rpc/system/features', () => Promise.withResolvers<never>().promise),
   );
 
@@ -553,7 +553,7 @@ test('it throws INTERNAL_SERVER_ERROR with the status of an upload failure that 
 
   const host = await ctx.startImpd(builder);
 
-  server.use(
+  network.use(
     http.post(
       'http://impd.test/images/build-context',
       () => new Response('bad gateway', { status: 502 }),
@@ -584,7 +584,7 @@ test('it throws UNAUTHORIZED for an upload refused with a 401 that names no code
 
   const host = await ctx.startImpd(builder);
 
-  server.use(
+  network.use(
     http.post('http://impd.test/images/build-context', () =>
       Response.json({ error: 'unauthorized' }, { status: 401 }),
     ),
@@ -621,7 +621,7 @@ test('it refuses to upload to an impd without the build context upload', async (
 
   const uploads = mock<(url: string) => void>();
 
-  server.use(
+  network.use(
     http.all('http://impd.test/*', (info) => {
       uploads(info.request.url);
 

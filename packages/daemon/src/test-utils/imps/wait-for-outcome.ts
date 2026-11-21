@@ -1,4 +1,4 @@
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { waitFor } from '@zgeoff/testing';
 
 export async function waitForOutcome(
   promise: Promise<unknown>,

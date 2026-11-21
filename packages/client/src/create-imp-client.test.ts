@@ -3,11 +3,11 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildStubImageBuilder, createFilesTar, startBuilderImpd } from '@impz/daemon/test-utils';
-import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
-import { server } from '@impz/shared/test-utils/server';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { network } from '@impz/shared/test-utils/network';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import { ORPCError } from '@orpc/client';
+import { waitFor } from '@zgeoff/testing';
+import { claimFreePorts } from '@zgeoff/testing/process';
 import { HttpResponse, http } from 'msw';
 import { createImpClient } from './create-imp-client';
 import { CLIENT_VERSION } from './features/check-server';
@@ -29,7 +29,9 @@ async function setupTest() {
   const startImpd = async (env: Readonly<Record<string, string>> = {}) => {
     const harness = await startTestImpd(stack, { rootToken, env });
 
-    server.use(http.all('http://impd.test/*', (info) => harness.impd.api.app.handle(info.request)));
+    network.use(
+      http.all('http://impd.test/*', (info) => harness.impd.api.app.handle(info.request)),
+    );
 
     return harness;
   };
@@ -37,7 +39,9 @@ async function setupTest() {
   const startBuildImpd = async (builder: Parameters<typeof startBuilderImpd>[1]) => {
     const harness = await startBuilderImpd(stack, builder, { rootToken });
 
-    server.use(http.all('http://impd.test/*', (info) => harness.impd.api.app.handle(info.request)));
+    network.use(
+      http.all('http://impd.test/*', (info) => harness.impd.api.app.handle(info.request)),
+    );
 
     return harness;
   };
@@ -53,7 +57,7 @@ test('#createImpClient calls the contract under the base url with the bearer tok
 
   const paths = mock<(path: string) => void>();
 
-  server.use(
+  network.use(
     http.all('http://impd.test/*', (info) => {
       paths(new URL(info.request.url).pathname);
 
@@ -83,7 +87,7 @@ test('#createImpClient rejects a procedure impd does not have as an unknown proc
   const ctx = await setupTest();
   const harness = await ctx.startImpd();
 
-  server.use(
+  network.use(
     http.all('http://impd.test/*', (info) =>
       harness.impd.api.app.handle(
         new Request(
@@ -198,7 +202,7 @@ test('#requireAwake passes RAM_BUDGET_EXCEEDED on after one wake', async () => {
 
   const paths = mock<(path: string) => void>();
 
-  server.use(
+  network.use(
     http.all('http://impd.test/*', (info) => {
       paths(new URL(info.request.url).pathname);
 
@@ -242,7 +246,7 @@ test('#requireAwake waits out a stopping impd for the one that replaces it when 
 
   const wakes = mock<(impd: string, status: number) => void>();
 
-  server.use(
+  network.use(
     http.post(
       'http://impd.test/rpc/imps/wake',
       async (info) => {
@@ -292,7 +296,7 @@ test('#requireAwake retries an impd it cannot reach when asked to', async () => 
   await ctx.client.imps.create({ name: 'dev' });
   await ctx.client.imps.sleep({ name: 'dev' });
 
-  server.use(
+  network.use(
     http.post('http://impd.test/rpc/imps/wake', () => HttpResponse.error(), { once: true }),
     http.post('http://impd.test/rpc/imps/wake', () => HttpResponse.error(), { once: true }),
   );
@@ -317,7 +321,7 @@ test('#requireAwake rejects with the abort reason when aborted while it waits to
   const abort = new AbortController();
   const reason = new Error('gave up');
 
-  server.use(
+  network.use(
     http.post('http://impd.test/rpc/imps/wake', () => {
       wakes();
 
@@ -374,7 +378,7 @@ test('#checkServer rejects at the abort of its signal when impd never answers', 
 
   const answer = mock(() => Promise.withResolvers<Response>().promise);
 
-  server.use(http.post('http://impd.test/rpc/system/info', answer));
+  network.use(http.post('http://impd.test/rpc/system/info', answer));
 
   const stopped = new AbortController();
   const reason = new Error('gave up');
@@ -526,7 +530,7 @@ test('#events.stream passes on an event whose reason this client does not know',
     'from-the-future',
   );
 
-  server.use(http.all('http://impd.test/*', (info) => newer(info.request)));
+  network.use(http.all('http://impd.test/*', (info) => newer(info.request)));
 
   await ctx.client.imps.create({ name: 'dev' });
 

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildMockBrokerRule } from '@impz/api/test-utils/build-mock-broker-rule';
 import { buildMockOAuthConfig } from '@impz/api/test-utils/build-mock-oauth-config';
-import { server } from '@impz/shared/test-utils/server';
+import { network } from '@impz/shared/test-utils/network';
 import { buildStubTickerTimer } from '@impz/testing/stand-in/platform/build-stub-ticker-timer';
 import { HttpResponse, delay, http } from 'msw';
 import invariant from 'tiny-invariant';
@@ -42,7 +42,7 @@ test('it sends the refresh token and the client id as a form', async () => {
 
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
   endpoint.issue('fake-refresh-0', { access_token: 'fake-access-1', expires_in: 3600 });
 
   const valueFile = buildValueFile('codex');
@@ -84,7 +84,7 @@ test('it sends a JSON body for the json format', async () => {
 
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
   endpoint.issue('fake-refresh-0', { access_token: 'fake-access-1', expires_in: 60 });
 
   const valueFile = buildValueFile('codex');
@@ -126,7 +126,7 @@ test('it sends the token request to the test upstream that stands in for the tok
 
   const endpoint = createStubBrokerTokenEndpoint('https://upstream.test:9443/oauth/token');
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
   endpoint.issue('fake-refresh-0', { access_token: 'fake-access-1', expires_in: 3600 });
 
   const valueFile = buildValueFile('codex');
@@ -223,7 +223,7 @@ test('it stores the rotated tokens with the expiry expires_in gives', async () =
   const startedAt = Date.parse('2030-01-01T00:00:00Z');
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
 
   endpoint.issue('fake-refresh-0', {
     access_token: 'fake-access-1',
@@ -274,7 +274,7 @@ test('it logs a refresh with whether the token rotated and its expiry, and no to
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
   const logs = captureImpdLogs();
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
 
   endpoint.issue('fake-refresh-0', {
     access_token: 'fake-access-1',
@@ -315,7 +315,7 @@ test('it keeps the old value of a field the answer leaves out', async () => {
   const startedAt = Date.parse('2030-01-01T00:00:00Z');
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
   endpoint.issue('fake-refresh-0', { access_token: 'fake-access-1', expires_in: 3600 });
 
   const valueFile = buildValueFile('codex');
@@ -371,7 +371,7 @@ test('it logs a refresh whose refresh token did not rotate as such', async () =>
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
   const logs = captureImpdLogs();
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
   endpoint.issue('fake-refresh-0', { access_token: 'fake-access-1', expires_in: 3600 });
 
   const valueFile = buildValueFile('codex');
@@ -409,7 +409,7 @@ test('it takes the expiry from expires_in over the access token exp', async () =
   const startedAt = Date.parse('2030-01-01T00:00:00Z');
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
 
   endpoint.issue('fake-refresh-0', {
     access_token: buildStubBrokerJwt({ exp: Math.floor((startedAt + 10 * 3_600_000) / 1000) }),
@@ -446,7 +446,7 @@ test('it takes the expiry from the access token exp without expires_in', async (
   const startedAt = Date.parse('2030-01-01T00:00:00Z');
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
 
   endpoint.issue('fake-refresh-0', {
     access_token: buildStubBrokerJwt({ exp: Math.floor((startedAt + 10 * 3_600_000) / 1000) }),
@@ -483,7 +483,7 @@ test('it stores no expiry for an opaque access token without expires_in', async 
 
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
   endpoint.issue('fake-refresh-0', { access_token: 'fake-access-opaque' });
 
   const valueFile = buildValueFile('codex');
@@ -520,7 +520,7 @@ test('it stores no expiry for an expires_in no date can hold, and keeps the rota
   const startedAt = Date.parse('2030-01-01T00:00:00Z');
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
 
   endpoint.issue('fake-refresh-0', {
     access_token: 'fake-access-1',
@@ -570,7 +570,7 @@ test.each([[0], [-60]])(
     const startedAt = Date.parse('2030-01-01T00:00:00Z');
     const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-    server.use(endpoint.handler);
+    network.use(endpoint.handler);
     endpoint.issue('fake-refresh-0', { access_token: 'fake-access-1', expires_in: expiresIn });
 
     const valueFile = buildValueFile('codex');
@@ -604,7 +604,7 @@ test('it keeps the access token and its expiry when the answer has only a rotate
   const startedAt = Date.parse('2030-01-01T00:00:00Z');
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
   endpoint.issue('fake-refresh-0', { refresh_token: 'fake-refresh-1', expires_in: 3600 });
 
   const valueFile = buildValueFile('codex');
@@ -657,7 +657,7 @@ test('it keeps a rotated refresh token alone on a pending secret and stays pendi
 
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
   endpoint.issue('fake-refresh-0', { refresh_token: 'fake-refresh-1' });
 
   const valueFile = buildValueFile('codex');
@@ -701,7 +701,7 @@ test('it records a 200 with no token as a transient error that changes nothing e
 
   const state = buildMockOAuthStateFile({ status: 'ready', error: null });
 
-  server.use(http.post('https://auth.example.com/oauth/token', () => HttpResponse.json({})));
+  network.use(http.post('https://auth.example.com/oauth/token', () => HttpResponse.json({})));
 
   const valueFile = buildValueFile('codex');
 
@@ -737,7 +737,7 @@ test('it leaves the old expiry when expires_in comes with no new access token', 
   const startedAt = Date.parse('2030-01-01T00:00:00Z');
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
   endpoint.issue('fake-refresh-0', { refresh_token: 'fake-refresh-1', expires_in: 3600 });
 
   const valueFile = buildValueFile('codex');
@@ -860,7 +860,7 @@ test('it refreshes a secret that is due on a tick and leaves one that is not', a
   const startedAt = Date.parse('2030-01-01T00:00:00Z');
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
   endpoint.issue('fake-refresh-due', { access_token: 'fake-access-1', expires_in: 3600 });
 
   const dueFile = buildValueFile('due');
@@ -963,7 +963,7 @@ test('it refreshes a pending secret when its timer fires', async () => {
   const timer = buildStubTickerTimer();
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
   endpoint.issue('fake-refresh-0', { access_token: 'fake-access-1', expires_in: 3600 });
 
   const valueFile = buildValueFile('codex');
@@ -1023,7 +1023,7 @@ test('it sends nothing on the next tick after a refresh', async () => {
   const startedAt = Date.parse('2030-01-01T00:00:00Z');
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
   endpoint.issue('fake-refresh-0', { access_token: 'fake-access-1', expires_in: 3600 });
 
   const valueFile = buildValueFile('codex');
@@ -1061,7 +1061,7 @@ test('it keeps the tokens and the status on a transient error and records the er
     expiresAt: startedAt + 240 * 3_600_000,
   });
 
-  server.use(
+  network.use(
     http.post('https://auth.example.com/oauth/token', () =>
       HttpResponse.json({ error: 'server_error' }, { status: 503 }),
     ),
@@ -1100,7 +1100,7 @@ test('it logs a transient error without the body it came with', async () => {
   const startedAt = Date.parse('2030-01-01T00:00:00Z');
   const logs = captureImpdLogs();
 
-  server.use(
+  network.use(
     http.post('https://auth.example.com/oauth/token', () =>
       HttpResponse.json({ error: 'server_error', detail: 'fake-refresh-0' }, { status: 503 }),
     ),
@@ -1148,7 +1148,7 @@ test('it sends nothing for a minute after a transient error', async () => {
   const clock = { nowMs: startedAt + 230 * 3_600_000 };
   const requests: string[] = [];
 
-  server.use(
+  network.use(
     http.post('https://auth.example.com/oauth/token', (info) => {
       requests.push(info.request.url);
 
@@ -1196,7 +1196,7 @@ test('it tries again a minute after a transient error', async () => {
   const clock = { nowMs: startedAt + 230 * 3_600_000 };
   const requests: string[] = [];
 
-  server.use(
+  network.use(
     http.post('https://auth.example.com/oauth/token', (info) => {
       requests.push(info.request.url);
 
@@ -1244,7 +1244,7 @@ test('it waits two minutes after a second transient error', async () => {
   const clock = { nowMs: startedAt + 230 * 3_600_000 };
   const requests: string[] = [];
 
-  server.use(
+  network.use(
     http.post('https://auth.example.com/oauth/token', (info) => {
       requests.push(info.request.url);
 
@@ -1296,7 +1296,7 @@ test('it caps the wait between transient errors at 30 minutes', async () => {
   const clock = { nowMs: startedAt + 230 * 3_600_000 };
   const logs = captureImpdLogs();
 
-  server.use(
+  network.use(
     http.post('https://auth.example.com/oauth/token', () =>
       HttpResponse.json({ error: 'server_error' }, { status: 503 }),
     ),
@@ -1349,9 +1349,9 @@ test('it clears the error once a refresh after a transient error succeeds', asyn
   const clock = { nowMs: startedAt + 230 * 3_600_000 };
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
 
-  server.use(
+  network.use(
     http.post(
       'https://auth.example.com/oauth/token',
       () => HttpResponse.json({ error: 'server_error' }, { status: 503 }),
@@ -1407,7 +1407,7 @@ test('it clears the error once a refresh after a transient error succeeds', asyn
 test('it leaves a pending secret pending on a network error', async () => {
   const ctx = await setupTest();
 
-  server.use(http.post('https://auth.example.com/oauth/token', () => HttpResponse.error()));
+  network.use(http.post('https://auth.example.com/oauth/token', () => HttpResponse.error()));
 
   const valueFile = buildValueFile('codex');
 
@@ -1442,7 +1442,7 @@ test('it treats a redirect as transient and keeps the live tokens', async () => 
 
   const state = buildMockOAuthStateFile();
 
-  server.use(
+  network.use(
     http.post(
       'https://auth.example.com/oauth/token',
       () =>
@@ -1481,7 +1481,7 @@ test('it treats a redirect as transient and keeps the live tokens', async () => 
 test('it treats an answer that is not JSON as an invalid response and keeps the stored tokens', async () => {
   const ctx = await setupTest();
 
-  server.use(
+  network.use(
     http.post('https://auth.example.com/oauth/token', () => HttpResponse.html('<html>nope</html>')),
   );
 
@@ -1519,7 +1519,7 @@ test.each([['has space'], ['bad\r\nx-evil: 1']])(
   async (accessToken) => {
     const ctx = await setupTest();
 
-    server.use(
+    network.use(
       http.post('https://auth.example.com/oauth/token', () =>
         HttpResponse.json({ access_token: accessToken }),
       ),
@@ -1558,7 +1558,7 @@ test.each([['has space'], ['bad\r\nx-evil: 1']])(
 test('it treats a call that outlasts the timeout as transient', async () => {
   const ctx = await setupTest();
 
-  server.use(
+  network.use(
     http.post('https://auth.example.com/oauth/token', async () => {
       await delay('infinite');
 
@@ -1606,7 +1606,7 @@ test.each([
     const state = buildMockOAuthStateFile({ refreshToken: 'fake-refresh-0' });
     const logs = captureImpdLogs();
 
-    server.use(
+    network.use(
       http.post('https://auth.example.com/oauth/token', () => HttpResponse.json(body, { status })),
     );
 
@@ -1650,7 +1650,7 @@ test('it never sends a secret that needs a new sign-in on a tick', async () => {
   const startedAt = Date.parse('2030-01-01T00:00:00Z');
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
 
   const valueFile = buildValueFile('codex');
 
@@ -1691,7 +1691,7 @@ test('it answers an unforced refresh of a secret that needs a new sign-in withou
 
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
 
   const valueFile = buildValueFile('codex');
 
@@ -1725,7 +1725,7 @@ test('it signs a secret that needs a new sign-in in again on a forced refresh wi
 
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
   endpoint.issue('fake-refresh-0', { access_token: 'fake-access-1', expires_in: 3600 });
 
   const valueFile = buildValueFile('codex');
@@ -1766,7 +1766,7 @@ test('it logs nothing when a secret that already needs a new sign-in is refused 
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
   const logs = captureImpdLogs();
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
 
   const valueFile = buildValueFile('codex');
 
@@ -1808,9 +1808,9 @@ test('it answers a forced refresh while one runs with that one, sending one requ
   const reached = Promise.withResolvers<void>();
   const gate = Promise.withResolvers<void>();
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
 
-  server.use(
+  network.use(
     http.post('https://auth.example.com/oauth/token', async () => {
       reached.resolve();
 
@@ -1864,9 +1864,9 @@ test('it drops a result when the secret was deleted during the call', async () =
   const gate = Promise.withResolvers<void>();
   const logs = captureImpdLogs();
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
 
-  server.use(
+  network.use(
     http.post('https://auth.example.com/oauth/token', async () => {
       reached.resolve();
 
@@ -1922,10 +1922,10 @@ test('it keeps a result it could not write and sends its rotated token on the ne
   const valueFile = buildValueFile('codex');
   const valuePath = join(ctx.dataDir, 'secrets', valueFile);
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
 
   // read by then: a directory where the file goes fails the write's rename
-  server.use(
+  network.use(
     http.post(
       'https://auth.example.com/oauth/token',
       () => {
@@ -1984,10 +1984,10 @@ test('it answers a refresh whose earlier result still cannot be written without 
   const valueFile = buildValueFile('codex');
   const valuePath = join(ctx.dataDir, 'secrets', valueFile);
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
 
   // read by then: a directory where the file goes fails the write's rename
-  server.use(
+  network.use(
     http.post(
       'https://auth.example.com/oauth/token',
       () => {
@@ -2041,10 +2041,10 @@ test('it writes on a tick a result an earlier write failed on, though the secret
   const valueFile = buildValueFile('codex');
   const valuePath = join(ctx.dataDir, 'secrets', valueFile);
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
 
   // read by then: a directory where the file goes fails the write's rename
-  server.use(
+  network.use(
     http.post(
       'https://auth.example.com/oauth/token',
       () => {
@@ -2094,10 +2094,10 @@ test('it writes on stop a result an earlier write failed on', async () => {
   const valueFile = buildValueFile('codex');
   const valuePath = join(ctx.dataDir, 'secrets', valueFile);
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
 
   // read by then: a directory where the file goes fails the write's rename
-  server.use(
+  network.use(
     http.post(
       'https://auth.example.com/oauth/token',
       () => {
@@ -2148,10 +2148,10 @@ test('it never writes an unsaved result for a secret deleted after the tick list
   const valuePath = join(ctx.dataDir, 'secrets', valueFile);
   const gate = buildQueryGate('secrets');
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
 
   // read by then: a directory where the file goes fails the write's rename
-  server.use(
+  network.use(
     http.post(
       'https://auth.example.com/oauth/token',
       () => {
@@ -2211,9 +2211,9 @@ test('it answers stop only after the refresh under way has ended', async () => {
   const gate = Promise.withResolvers<void>();
   const settled: string[] = [];
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
 
-  server.use(
+  network.use(
     http.post('https://auth.example.com/oauth/token', async () => {
       reached.resolve();
 
@@ -2270,7 +2270,7 @@ test('it answers a refresh after stop as transient without a call', async () => 
 
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
 
   const valueFile = buildValueFile('codex');
 
@@ -2303,7 +2303,7 @@ test('it reports a secret whose value file is missing as unreadable without a ca
 
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
 
   await createSecret(ctx.db, {
     name: 'codex',
@@ -2376,7 +2376,7 @@ test('it refreshes a rejected token older than five minutes and answers that a n
   const startedAt = Date.parse('2030-01-01T00:00:00Z');
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
   endpoint.issue('fake-refresh-0', { access_token: 'fake-access-2', expires_in: 3600 });
 
   const valueFile = buildValueFile('codex');
@@ -2421,7 +2421,7 @@ test('it logs a refresh after a rejection without the token', async () => {
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
   const lines = captureImpdLogs();
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
 
   endpoint.issue('fake-refresh-0', {
     access_token: 'fake-access-2',
@@ -2472,7 +2472,7 @@ test('it sends nothing for a rejected token younger than five minutes', async ()
   const startedAt = Date.parse('2030-01-01T00:00:00Z');
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
   endpoint.issue('fake-refresh-0', { access_token: 'fake-access-2', expires_in: 3600 });
 
   const valueFile = buildValueFile('codex');
@@ -2515,7 +2515,7 @@ test('it answers that a new token is in place without a call when a refresh alre
   const startedAt = Date.parse('2030-01-01T00:00:00Z');
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
 
   const valueFile = buildValueFile('codex');
 
@@ -2556,7 +2556,7 @@ test('it sends nothing after a rejection for a secret that needs a new sign-in',
   const startedAt = Date.parse('2030-01-01T00:00:00Z');
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
 
   const valueFile = buildValueFile('codex');
 
@@ -2599,7 +2599,7 @@ test('it sends nothing after a rejection while a transient error holds the secre
   const startedAt = Date.parse('2030-01-01T00:00:00Z');
   const requests: string[] = [];
 
-  server.use(
+  network.use(
     http.post('https://auth.example.com/oauth/token', (info) => {
       requests.push(info.request.url);
 
@@ -2645,7 +2645,7 @@ test('it sends one request for rejections of one token at once', async () => {
   const startedAt = Date.parse('2030-01-01T00:00:00Z');
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
   endpoint.issue('fake-refresh-0', { access_token: 'fake-access-2', expires_in: 3600 });
 
   const valueFile = buildValueFile('codex');
@@ -2694,9 +2694,9 @@ test('it answers a forced refresh during a refresh after a rejection with that o
   const reached = Promise.withResolvers<void>();
   const gate = Promise.withResolvers<void>();
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
 
-  server.use(
+  network.use(
     http.post('https://auth.example.com/oauth/token', async () => {
       reached.resolve();
 
@@ -2756,7 +2756,7 @@ test('it sends its own request for a forced refresh that joined a rejection the 
   const startedAt = Date.parse('2030-01-01T00:00:00Z');
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
   endpoint.issue('fake-refresh-0', { access_token: 'fake-access-2', expires_in: 3600 });
 
   const valueFile = buildValueFile('codex');

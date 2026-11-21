@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { once } from 'node:events';
 import { openReverseForward } from '@impz/client';
 import type { ReverseRelay } from '@impz/client';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { waitFor } from '@zgeoff/testing';
 import { startTestImpd } from './start-test-impd';
 import { TEST_TOKEN } from './test-token';
 

@@ -1,8 +1,8 @@
 // oxlint-disable zgeoff/seed-only -- seeds its rows with direct writes until each owner module has a test-utils seed
 import { expect, onTestFinished, test } from 'bun:test';
 import { connect } from 'node:tls';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
+import { waitFor } from '@zgeoff/testing';
 import invariant from 'tiny-invariant';
 import { readImpByName, updateImpExposure } from '../../platform/db/list-imps';
 import { readPublicImp } from '../../platform/db/read-public-imp';

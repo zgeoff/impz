@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { updateEnv } from '@impz/shared/test-utils/update-env';
+import { updateEnv } from '@zgeoff/testing';
 import {
   GIT_REPO_ENV_VARS,
   createGitFreeEnv,

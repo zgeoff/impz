@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { create } from '@bufbuild/protobuf';
 import { ErrorDataSchema, RequestSchema } from '@impz/agent-protocol';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { waitFor } from '@zgeoff/testing';
 import invariant from 'tiny-invariant';
 import { openAttachStream, openExecStream, openTapStream } from '../../vm/agent-client/exec-stream';
 import {

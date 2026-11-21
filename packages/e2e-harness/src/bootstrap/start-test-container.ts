@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { waitFor } from '@zgeoff/testing';
 import { BootstrapTestError } from './bootstrap-test-error';
 import { ARCHIVE_DIR } from './build-bootstrap-argv';
 import { DISTROS } from './distros';
@@ -97,7 +97,7 @@ async function waitForSystemd(run: BootstrapRun, distro: Distro): Promise<void> 
           throw new Error(state);
         }
       },
-      { intervalMs: 1000, timeoutMs: 60_000, now: run.io.now, wait: run.io.sleep },
+      { intervalMs: 1000, timeoutMs: 60_000, now: run.io.now, sleep: run.io.sleep },
     );
   } catch {
     throw new BootstrapTestError(`[${distro}] systemd did not come up: ${state}`);

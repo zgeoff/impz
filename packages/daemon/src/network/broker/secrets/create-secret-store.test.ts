@@ -4,10 +4,10 @@ import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { buildMockBrokerRule } from '@impz/api/test-utils/build-mock-broker-rule';
 import { buildMockOAuthConfig } from '@impz/api/test-utils/build-mock-oauth-config';
-import { server } from '@impz/shared/test-utils/server';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { network } from '@impz/shared/test-utils/network';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import { TEST_TOKEN } from '@impz/testing/test-token';
+import { waitFor } from '@zgeoff/testing';
 import { HttpResponse, http } from 'msw';
 import invariant from 'tiny-invariant';
 import { createReachPolicy } from '../../../host-net/net/reach-policy';
@@ -45,11 +45,11 @@ test('it sends the first refresh once the row is committed', async () => {
 
   const tokens = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(tokens.handler);
+  network.use(tokens.handler);
 
   const seen: { row: SecretRecord | undefined } = { row: undefined };
 
-  server.use(
+  network.use(
     http.post('https://auth.example.com/oauth/token', async () => {
       seen.row = await readSecret(ctx.db, 'codex');
     }),
@@ -86,7 +86,7 @@ test('it answers a signed-in oauth secret ready, with its account claims only', 
 
   const tokens = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(tokens.handler);
+  network.use(tokens.handler);
 
   tokens.issue('fake-refresh-0', {
     access_token: 'fake-access-1',
@@ -137,7 +137,7 @@ test('it never shows a token of an oauth secret through the API', async () => {
 
   const tokens = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(tokens.handler);
+  network.use(tokens.handler);
 
   const idToken = buildStubBrokerJwt({ email: 'someone@example.com' });
 
@@ -171,7 +171,7 @@ test('it stores the rotated tokens in the value file', async () => {
 
   const tokens = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(tokens.handler);
+  network.use(tokens.handler);
 
   tokens.issue('fake-refresh-0', {
     access_token: 'fake-access-1',
@@ -211,7 +211,7 @@ test('it stores the rotated tokens in the value file', async () => {
 test('it answers an oauth secret whose first refresh fails pending', async () => {
   const ctx = await setupTest();
 
-  server.use(
+  network.use(
     http.post(
       'https://auth.example.com/oauth/token',
       () => HttpResponse.json({ error: 'unavailable' }, { status: 503 }),
@@ -244,7 +244,7 @@ test('it lists an oauth secret whose refresh token is dead as needing a new sign
 
   const tokens = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(tokens.handler);
+  network.use(tokens.handler);
 
   const config = buildMockOAuthConfig({ tokenUrl: 'https://auth.example.com/oauth/token' });
 
@@ -373,7 +373,7 @@ test('it stores an oauth secret with the variables it names', async () => {
 
   const tokens = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(tokens.handler);
+  network.use(tokens.handler);
   tokens.issue('fake-refresh-0', { access_token: 'fake-access-1', expires_in: 3600 });
 
   await ctx.client.secrets.add({
@@ -507,7 +507,7 @@ test('it sends nothing to the token endpoint for a refused oauth secret', async 
 
   const tokens = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(tokens.handler);
+  network.use(tokens.handler);
 
   const added = ctx.client.secrets.add({
     name: 'codex',
@@ -535,7 +535,7 @@ test('it keeps the grant through a new refresh token for the same endpoint', asy
 
   const tokens = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(tokens.handler);
+  network.use(tokens.handler);
 
   const config = buildMockOAuthConfig({ tokenUrl: 'https://auth.example.com/oauth/token' });
 
@@ -579,7 +579,7 @@ test.each([
 
   const tokens = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(tokens.handler);
+  network.use(tokens.handler);
 
   const config = buildMockOAuthConfig({
     tokenUrl: 'https://auth.example.com/oauth/token',
@@ -616,7 +616,7 @@ test('it takes another client and drops the grants on a rebind', async () => {
 
   const tokens = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(tokens.handler);
+  network.use(tokens.handler);
 
   const config = buildMockOAuthConfig({
     tokenUrl: 'https://auth.example.com/oauth/token',
@@ -656,7 +656,7 @@ test('it refreshes on request with the rotated token and answers after it', asyn
 
   const tokens = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(tokens.handler);
+  network.use(tokens.handler);
 
   tokens.issue('fake-refresh-0', {
     access_token: 'fake-access-1',
@@ -712,7 +712,7 @@ test('it answers a forced refresh of a dead refresh token as needing a new sign-
 
   const tokens = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(tokens.handler);
+  network.use(tokens.handler);
   tokens.issue('fake-refresh-0', { access_token: 'fake-access-1', expires_in: 3600 });
 
   await ctx.client.secrets.add({
@@ -723,7 +723,7 @@ test('it answers a forced refresh of a dead refresh token as needing a new sign-
     oauth: buildMockOAuthConfig({ tokenUrl: 'https://auth.example.com/oauth/token' }),
   });
 
-  server.use(
+  network.use(
     http.post('https://auth.example.com/oauth/token', () => HttpResponse.json({}, { status: 401 })),
   );
 
@@ -783,7 +783,7 @@ test('it holds a replace behind a refresh under way, which never overwrites it',
 
   const tokens = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(tokens.handler);
+  network.use(tokens.handler);
 
   const config = buildMockOAuthConfig({ tokenUrl: 'https://auth.example.com/oauth/token' });
 
@@ -803,7 +803,7 @@ test('it holds a replace behind a refresh under way, which never overwrites it',
   const reached = Promise.withResolvers<void>();
   const gate = Promise.withResolvers<void>();
 
-  server.use(
+  network.use(
     http.post(
       'https://auth.example.com/oauth/token',
       async () => {
@@ -874,7 +874,7 @@ test('it holds a delete behind a refresh under way, then removes the secret', as
 
   const tokens = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(tokens.handler);
+  network.use(tokens.handler);
   tokens.issue('fake-refresh-0', { access_token: 'fake-access-1' });
 
   await ctx.client.secrets.add({
@@ -889,7 +889,7 @@ test('it holds a delete behind a refresh under way, then removes the secret', as
   const gate = Promise.withResolvers<void>();
   const seen: { row: SecretRecord | undefined } = { row: undefined };
 
-  server.use(
+  network.use(
     http.post(
       'https://auth.example.com/oauth/token',
       async () => {
@@ -931,7 +931,7 @@ test('it answers not found for a secret deleted outside the lock during its refr
 
   const tokens = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(tokens.handler);
+  network.use(tokens.handler);
   tokens.issue('fake-refresh-0', { access_token: 'fake-access-1' });
 
   await ctx.client.secrets.add({
@@ -945,7 +945,7 @@ test('it answers not found for a secret deleted outside the lock during its refr
   const reached = Promise.withResolvers<void>();
   const gate = Promise.withResolvers<void>();
 
-  server.use(
+  network.use(
     http.post(
       'https://auth.example.com/oauth/token',
       async () => {
@@ -977,7 +977,7 @@ test('it shows an oauth secret whose value file is gone as needing a new sign-in
 
   const tokens = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(tokens.handler);
+  network.use(tokens.handler);
   tokens.issue('fake-refresh-0', { access_token: 'fake-access-1' });
 
   await ctx.client.secrets.add({
@@ -1005,9 +1005,9 @@ test('it refreshes a pending secret when the broker starts', async () => {
 
   const tokens = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(tokens.handler);
+  network.use(tokens.handler);
 
-  server.use(
+  network.use(
     http.post('https://auth.example.com/oauth/token', () => HttpResponse.error(), { once: true }),
   );
 

@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'n
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { waitFor } from '@zgeoff/testing';
 import { buildStubEnvRecord } from '../scripts/test-utils/build-stub-env-record';
 import { createStubImpd } from '../scripts/test-utils/create-stub-impd';
 

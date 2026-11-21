@@ -1,13 +1,13 @@
 import { expect, mock, test } from 'bun:test';
 import { SYSTEM_FEATURES } from '@impz/api';
-import { server } from '@impz/shared/test-utils/server';
+import { network } from '@impz/shared/test-utils/network';
 import { HttpResponse, http } from 'msw';
 import { createRpcClient } from './create-rpc-client';
 
 test('it calls a procedure under the base path with the bearer token', async () => {
   const received = mock<(path: string, authorization: string | null) => void>();
 
-  server.use(
+  network.use(
     http.post('http://impd.test/imp/rpc/system/features', (info) => {
       received(new URL(info.request.url).pathname, info.request.headers.get('authorization'));
 
@@ -25,7 +25,7 @@ test('it calls a procedure under the base path with the bearer token', async () 
 test('it sends no authorization header without a token', async () => {
   const received = mock<(authorization: string | null) => void>();
 
-  server.use(
+  network.use(
     http.post('http://impd.test/rpc/system/features', (info) => {
       received(info.request.headers.get('authorization'));
 
@@ -39,7 +39,7 @@ test('it sends no authorization header without a token', async () => {
 });
 
 test('it rejects a plain-text error answer as an ORPCError with its status', () => {
-  server.use(
+  network.use(
     http.post(
       'http://impd.test/rpc/system/features',
       () => new HttpResponse('down', { status: 503 }),
@@ -56,7 +56,7 @@ test('it rejects a plain-text error answer as an ORPCError with its status', () 
 });
 
 test('it passes impd’s own JSON error through as oRPC reads it', () => {
-  server.use(
+  network.use(
     http.post('http://impd.test/rpc/system/features', () =>
       HttpResponse.json(
         { json: { defined: false, code: 'UNAUTHORIZED', status: 401, message: 'Unauthorized' } },

@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { server } from '@impz/shared/test-utils/server';
+import { network } from '@impz/shared/test-utils/network';
 import { HttpResponse, http } from 'msw';
 import { startStubAcmeServer } from '../../../test-utils/network/start-stub-acme-server';
 import { captureImpdLogs } from '../../../test-utils/platform/capture-impd-logs';
@@ -49,7 +49,7 @@ test('it logs a TXT record it could not remove after an order fails', async () =
 
   const acmeServer = startStubAcmeServer(ctx.stack, { challengeTypes: ['dns-01'] });
 
-  server.use(
+  network.use(
     http.post('http://challtestsrv.test/set-txt', () => new HttpResponse(null, { status: 200 }), {
       once: true,
     }),

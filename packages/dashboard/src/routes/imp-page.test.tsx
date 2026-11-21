@@ -1,10 +1,9 @@
-import { expect, mock, onTestFinished, test } from 'bun:test';
+import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { buildImpPaths } from '@impz/daemon/test-utils';
-import { server } from '@impz/shared/test-utils/server';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { waitFor } from '@zgeoff/testing';
 import { renderApp } from '../test-utils/render-app';
 import { startDashboardImpd } from '../test-utils/start-dashboard-impd';
 
@@ -19,6 +18,7 @@ async function setupTest() {
     harness: dashboardImpd.harness,
     client: dashboardImpd.harness.client,
     logIn: dashboardImpd.logIn,
+    answeredStatuses: dashboardImpd.answeredStatuses,
   };
 }
 
@@ -169,7 +169,6 @@ test('it says so when the imp does not exist', async () => {
 
 test('it goes back to the list without asking for the imp it destroyed', async () => {
   const user = userEvent.setup();
-  const answered = mock<(status: number) => void>();
 
   const ctx = await setupTest();
 
@@ -177,14 +176,7 @@ test('it goes back to the list without asking for the imp it destroyed', async (
   await ctx.client.imps.create({ name: 'web' });
   await ctx.logIn();
 
-  server.events.on('response:mocked', (event: Readonly<Record<'response', Response>>) => {
-    answered(event.response.status);
-  });
-
-  onTestFinished(() => {
-    server.events.removeAllListeners('response:mocked');
-  });
-
+  const answeredBefore = ctx.answeredStatuses.length;
   const rendered = renderApp('/imps/web');
 
   const button = await rendered.findByRole('button', { name: 'Destroy' });
@@ -197,8 +189,11 @@ test('it goes back to the list without asking for the imp it destroyed', async (
   await rendered.findByRole('heading', { name: 'Imps' });
 
   expect(rendered.router.state.location.pathname).toBe('/');
-  expect(answered).toHaveBeenCalledWith(200);
-  expect(answered).not.toHaveBeenCalledWith(404);
+
+  const answered = ctx.answeredStatuses.slice(answeredBefore);
+
+  expect(answered).toContain(200);
+  expect(answered).not.toContain(404);
 });
 
 test('it shows the network use and awake time of the running imp', async () => {

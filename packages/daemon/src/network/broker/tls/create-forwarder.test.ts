@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { verifyImpIdentity } from '@impz/client/identity';
 import { buildStubAnswerQueue } from '@impz/shared/test-utils/build-stub-answer-queue';
-import { server } from '@impz/shared/test-utils/server';
+import { network } from '@impz/shared/test-utils/network';
 import { HttpResponse, http } from 'msw';
 import invariant from 'tiny-invariant';
 import type { NewAuditEntry } from '../../../platform/db/write-audit-entry';
@@ -47,7 +47,7 @@ async function setupTest() {
 test('it sends the path and query to the bound host with the method and body', async () => {
   const received = mock<(sent: Readonly<{ url: string; method: string; body: string }>) => void>();
 
-  server.use(
+  network.use(
     http.post('https://api.github.com/repos/a/b', async (info) => {
       received({
         url: info.request.url,
@@ -89,7 +89,7 @@ test('it sends the path and query to the bound host with the method and body', a
 test('it sends the real credential in place of the guest placeholder', async () => {
   const received = mock<(authorization: string | null) => void>();
 
-  server.use(
+  network.use(
     http.get('https://api.github.com/user', (info) => {
       received(info.request.headers.get('authorization'));
 
@@ -121,7 +121,7 @@ test('it sends the real credential in place of the guest placeholder', async () 
 test('it drops hop-by-hop headers and the ones Connection names, and keeps the rest', async () => {
   const received = mock<(headers: Readonly<Record<string, string | null>>) => void>();
 
-  server.use(
+  network.use(
     http.get('https://api.github.com/user', (info) => {
       received({
         'proxy-authorization': info.request.headers.get('proxy-authorization'),
@@ -167,7 +167,7 @@ test('it drops hop-by-hop headers and the ones Connection names, and keeps the r
 });
 
 test('it answers with the upstream status and end-to-end headers, the encoding included', async () => {
-  server.use(
+  network.use(
     http.get(
       'https://api.github.com/user',
       () =>
@@ -204,7 +204,7 @@ test('it answers with the upstream status and end-to-end headers, the encoding i
 test('it records an audit row with the path without its query and the bytes each way', async () => {
   const audits: NewAuditEntry[] = [];
 
-  server.use(
+  network.use(
     http.post('https://api.github.com/repos/a/b', async (info) => {
       await info.request.text();
 
@@ -258,7 +258,7 @@ test('it cuts the audit row path at 512 characters', async () => {
   const audits: NewAuditEntry[] = [];
   const path = `/${'a'.repeat(600)}`;
 
-  server.use(http.get(`https://api.github.com${path}`, () => HttpResponse.text('upstream body')));
+  network.use(http.get(`https://api.github.com${path}`, () => HttpResponse.text('upstream body')));
 
   const forward = createForwarder({
     impId: 'imp-1',
@@ -286,7 +286,7 @@ test('it cuts the audit row path at 512 characters', async () => {
 test('it records an audit row for an answer with no body', async () => {
   const audits: NewAuditEntry[] = [];
 
-  server.use(
+  network.use(
     http.get('https://api.github.com/none', () => new HttpResponse(null, { status: 204 })),
   );
 
@@ -330,7 +330,7 @@ test('it records an audit row when the upstream body fails midway', async () => 
   const audits: NewAuditEntry[] = [];
   const firstRead = Promise.withResolvers<void>();
 
-  server.use(
+  network.use(
     http.get(
       'https://api.github.com/big',
       () =>
@@ -398,7 +398,7 @@ test('it records an audit row when the upstream body fails midway', async () => 
 test('it records an audit row with the bytes read when the guest hangs up mid-body', async () => {
   const audits: NewAuditEntry[] = [];
 
-  server.use(
+  network.use(
     http.get(
       'https://api.github.com/slow',
       () =>
@@ -539,7 +539,7 @@ test('it warns through its logger, naming the imp, when the upstream closes a st
 test('it warns nothing when the guest hangs up mid-body', async () => {
   const warning = mock();
 
-  server.use(
+  network.use(
     http.get(
       'https://api.github.com/slow',
       () =>
@@ -583,7 +583,7 @@ test('it warns nothing when the guest hangs up mid-body', async () => {
 test('it refuses a Host header for another name with 421', async () => {
   const reached = mock<(url: string) => void>();
 
-  server.use(
+  network.use(
     http.all('*', (info) => {
       reached(info.request.url);
 
@@ -617,7 +617,7 @@ test('it refuses a Host header for another name with 421', async () => {
 test('it refuses a request with no Host header with 421', async () => {
   const reached = mock<(url: string) => void>();
 
-  server.use(
+  network.use(
     http.all('*', (info) => {
       reached(info.request.url);
 
@@ -648,7 +648,7 @@ test('it refuses a request with no Host header with 421', async () => {
 test('it sends an absolute-form target for another host to the bound host', async () => {
   const received = mock<(url: string) => void>();
 
-  server.use(
+  network.use(
     http.get('https://api.github.com/steal', (info) => {
       received(info.request.url);
 
@@ -696,7 +696,7 @@ test('it refuses a request with 403 once the grant is gone', async () => {
 });
 
 test('it answers 502 when the upstream cannot be reached', async () => {
-  server.use(http.get('https://api.github.com/x', () => HttpResponse.error()));
+  network.use(http.get('https://api.github.com/x', () => HttpResponse.error()));
 
   const forward = createForwarder({
     impId: 'imp-1',
@@ -723,7 +723,7 @@ test('it answers 502 when the upstream cannot be reached', async () => {
 test('it records a 502 audit row when the upstream cannot be reached', async () => {
   const audits: NewAuditEntry[] = [];
 
-  server.use(http.get('https://api.github.com/x', () => HttpResponse.error()));
+  network.use(http.get('https://api.github.com/x', () => HttpResponse.error()));
 
   const forward = createForwarder({
     impId: 'imp-1',
@@ -762,7 +762,7 @@ test('it records a 502 audit row when the upstream cannot be reached', async () 
 test('it sends a host with a test upstream to the test origin', async () => {
   const received = mock<(url: string) => void>();
 
-  server.use(
+  network.use(
     http.get('https://upstream.test:9443/x', (info) => {
       received(info.request.url);
 
@@ -858,7 +858,7 @@ test('it records a refused audit row with no secret, header or body once the gra
 });
 
 test('it forwards an upgrade to another protocol', async () => {
-  server.use(
+  network.use(
     http.get('https://api.github.com/x', () => HttpResponse.text('upstream body', { status: 201 })),
   );
 
@@ -886,7 +886,7 @@ test('it forwards an upgrade to another protocol', async () => {
 test('it sends the request to the rule’s upstream ahead of a test upstream, with the real credential', async () => {
   const received = mock<(sent: Readonly<{ url: string; authorization: string | null }>) => void>();
 
-  server.use(
+  network.use(
     http.get('http://172.17.0.1:18081/v1/vaults', (info) => {
       received({ url: info.request.url, authorization: info.request.headers.get('authorization') });
 
@@ -926,7 +926,7 @@ test('it sends the request to the rule’s upstream ahead of a test upstream, wi
 test('it records the guest host, not the rule upstream, in the audit row', async () => {
   const audits: NewAuditEntry[] = [];
 
-  server.use(
+  network.use(
     http.get('http://172.17.0.1:18081/v1/vaults', () => HttpResponse.text('upstream body')),
   );
 
@@ -1113,7 +1113,7 @@ test('it sends a request inside the grant’s filter with the real credential', 
   const received =
     mock<(sent: Readonly<{ method: string; authorization: string | null }>) => void>();
 
-  server.use(
+  network.use(
     http.get('https://api.github.com/repos/a/b/issues', (info) => {
       received({
         method: info.request.method,
@@ -1158,7 +1158,7 @@ test('it sends a request inside the grant’s filter with the real credential', 
 test('it refuses a method outside the grant’s filter with 403 and sends nothing upstream', async () => {
   const received = mock();
 
-  server.use(
+  network.use(
     http.all('https://api.github.com/*', () => {
       received();
 
@@ -1196,7 +1196,7 @@ test('it refuses a method outside the grant’s filter with 403 and sends nothin
 test('it refuses a path outside the grant’s filter with 403 and sends nothing upstream', async () => {
   const received = mock();
 
-  server.use(
+  network.use(
     http.all('https://api.github.com/*', () => {
       received();
 
@@ -1276,7 +1276,7 @@ test.each([['X-HTTP-Method-Override'], ['X-HTTP-Method'], ['X-Method-Override']]
 
     // an upstream that runs the method the override header names, as some
     // frameworks do for a POST
-    server.use(
+    network.use(
       http.all('https://api.anthropic.com/v1/messages', (info) => {
         received(info.request.headers.get(header) ?? info.request.method);
 
@@ -1312,7 +1312,7 @@ test.each([['X-HTTP-Method-Override'], ['X-HTTP-Method'], ['X-Method-Override']]
 test('it sends a method-override header on a grant with no filter', async () => {
   const received = mock<(override: string | null) => void>();
 
-  server.use(
+  network.use(
     http.post('https://api.anthropic.com/v1/messages', (info) => {
       received(info.request.headers.get('x-http-method-override'));
 
@@ -1359,7 +1359,7 @@ test('it sends a request without a body again when the body of the 401 fails', a
     buildMockCredential({ secretName: 'codex', oauth: { refreshedAt: 2000 } }),
   ]);
 
-  server.use(http.get('https://chatgpt.com/backend-api/codex/models', () => answers.next()()));
+  network.use(http.get('https://chatgpt.com/backend-api/codex/models', () => answers.next()()));
 
   const forward = createForwarder({
     impId: 'imp-1',
@@ -1397,7 +1397,7 @@ test('it sends a request without a body again with the new oauth token after a 4
     }),
   ]);
 
-  server.use(
+  network.use(
     http.get('https://chatgpt.com/backend-api/codex/models', (info) => {
       received(info.request.headers.get('authorization'));
 
@@ -1428,7 +1428,7 @@ test('it sends a request without a body again with the new oauth token after a 4
 test('it asks for a refresh of the rejected token by its secret and refresh time', async () => {
   const refreshAfterRejection = mock(() => Promise.resolve(false));
 
-  server.use(
+  network.use(
     http.get('https://chatgpt.com/backend-api/codex/models', () =>
       HttpResponse.text('expired', { status: 401 }),
     ),
@@ -1463,7 +1463,7 @@ test('it records an audit row for the rejected send and one for the send again',
     buildMockCredential({ secretName: 'codex', oauth: { refreshedAt: 2000 } }),
   ]);
 
-  server.use(
+  network.use(
     http.get('https://chatgpt.com/backend-api/codex/models', () =>
       HttpResponse.text('models', { status: statuses.next() }),
     ),
@@ -1501,7 +1501,7 @@ test('it answers the 401 of a request with a body and still asks for a refresh',
   const received = mock<(body: string) => void>();
   const refreshAfterRejection = mock(() => Promise.resolve(true));
 
-  server.use(
+  network.use(
     http.post('https://chatgpt.com/backend-api/codex/responses', async (info) => {
       const body = await info.request.text();
 
@@ -1538,7 +1538,7 @@ test('it answers the 401 of a request with a body and still asks for a refresh',
 test('it answers the 401 when no new oauth token is in place', async () => {
   const received = mock<(authorization: string | null) => void>();
 
-  server.use(
+  network.use(
     http.get('https://chatgpt.com/backend-api/codex/models', (info) => {
       received(info.request.headers.get('authorization'));
 
@@ -1575,7 +1575,7 @@ test('it answers the 401 when the grant is gone after the refresh', async () => 
     null,
   ]);
 
-  server.use(
+  network.use(
     http.get('https://chatgpt.com/backend-api/codex/models', (info) => {
       received(info.request.headers.get('authorization'));
 
@@ -1615,7 +1615,7 @@ test('it answers the 401 when the new grant filter does not cover the request', 
     }),
   ]);
 
-  server.use(
+  network.use(
     http.get('https://chatgpt.com/backend-api/codex/models', (info) => {
       received(info.request.headers.get('authorization'));
 
@@ -1646,7 +1646,7 @@ test('it answers the 401 when the new grant filter does not cover the request', 
 test('it asks for no refresh after a 401 to a credential that is not oauth', async () => {
   const refreshAfterRejection = mock(() => Promise.resolve(true));
 
-  server.use(
+  network.use(
     http.get('https://api.github.com/user', () => HttpResponse.text('bad', { status: 401 })),
   );
 
@@ -1670,7 +1670,7 @@ test('it asks for no refresh after a 401 to a credential that is not oauth', asy
 test.each([[403], [429]])('it asks for no refresh after a %d to an oauth token', async (status) => {
   const refreshAfterRejection = mock(() => Promise.resolve(true));
 
-  server.use(
+  network.use(
     http.get('https://chatgpt.com/backend-api/codex/models', () =>
       HttpResponse.text('no', { status }),
     ),
@@ -1700,7 +1700,7 @@ test('it sends one Imp-Identity header that verifies for the imp and the host, i
 
   const received = mock<(lines: readonly string[]) => void>();
 
-  server.use(
+  network.use(
     http.get('https://tasks.imp.internal/v1/tasks', (info) => {
       received(collectIdentityLines(info.request.headers));
 
@@ -1745,7 +1745,7 @@ test.each(['IMP-IDENTITY', 'imp_identity', 'Imp_Identity'])(
 
     const received = mock<(lines: readonly string[]) => void>();
 
-    server.use(
+    network.use(
       http.get('https://tasks.imp.internal/v1/tasks', (info) => {
         received(collectIdentityLines(info.request.headers));
 
@@ -1781,7 +1781,7 @@ test('it sends the broker’s token when the guest’s Connection header names I
 
   const received = mock<(lines: readonly string[], connection: string | null) => void>();
 
-  server.use(
+  network.use(
     http.get('https://tasks.imp.internal/v1/tasks', (info) => {
       received(collectIdentityLines(info.request.headers), info.request.headers.get('connection'));
 
@@ -1823,7 +1823,7 @@ test('it sends none of the guest’s Imp-Identity headers, and adds none, for a 
 
   const received = mock<(lines: readonly string[]) => void>();
 
-  server.use(
+  network.use(
     http.get('https://tasks.imp.internal/v1/tasks', (info) => {
       received(collectIdentityLines(info.request.headers));
 
@@ -1853,7 +1853,7 @@ test('it sends none of the guest’s Imp-Identity headers, and adds none, for a 
 test('it adds no token for a rule with identity when impd has no issuer, and still drops the guest’s', async () => {
   const received = mock<(lines: readonly string[]) => void>();
 
-  server.use(
+  network.use(
     http.get('https://tasks.imp.internal/v1/tasks', (info) => {
       received(collectIdentityLines(info.request.headers));
 
@@ -1884,7 +1884,7 @@ test('it names the guest-facing host in the token of a rule with an upstream', a
 
   const received = mock<(lines: readonly string[]) => void>();
 
-  server.use(
+  network.use(
     http.get('http://192.0.2.10:18090/v1/tasks', (info) => {
       received(collectIdentityLines(info.request.headers));
 
@@ -1921,7 +1921,7 @@ test('it signs each send with its own jti', async () => {
 
   const received = mock<(lines: readonly string[]) => void>();
 
-  server.use(
+  network.use(
     http.get('https://tasks.imp.internal/v1/tasks', (info) => {
       received(collectIdentityLines(info.request.headers));
 
@@ -1990,7 +1990,7 @@ test('it signs the send again after a 401 with a new token that verifies', async
     buildMockCredential({ identity: true, oauth: { refreshedAt: 2000 } }),
   ]);
 
-  server.use(
+  network.use(
     http.get('https://tasks.imp.internal/v1/tasks', (info) => {
       received(collectIdentityLines(info.request.headers));
 

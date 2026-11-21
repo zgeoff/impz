@@ -1,11 +1,11 @@
 import { expect, test } from 'bun:test';
-import { server } from '@impz/shared/test-utils/server';
+import { network } from '@impz/shared/test-utils/network';
 import { createStubBrokerTokenEndpoint } from './create-stub-broker-token-endpoint';
 
 test('it answers an issued refresh token with its queued answer', async () => {
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
   endpoint.issue('fake-refresh-0', { access_token: 'fake-access-1', expires_in: 3600 });
 
   const response = await fetch('https://auth.example.com/oauth/token', {
@@ -23,7 +23,7 @@ test('it answers an issued refresh token with its queued answer', async () => {
 test('it answers invalid_grant once a refresh token has used its answers', async () => {
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
   endpoint.issue('fake-refresh-0', { access_token: 'fake-access-1' });
 
   await fetch('https://auth.example.com/oauth/token', {
@@ -45,7 +45,7 @@ test('it answers invalid_grant once a refresh token has used its answers', async
 test('it answers a refresh token in the order its answers were queued', async () => {
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
   endpoint.issue('fake-refresh-0', { access_token: 'fake-access-1' });
   endpoint.issue('fake-refresh-0', { access_token: 'fake-access-2' });
 
@@ -70,7 +70,7 @@ test('it answers a refresh token in the order its answers were queued', async ()
 test('it records a JSON request with the refresh token it carries', async () => {
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
 
   await fetch('https://auth.example.com/oauth/token', {
     method: 'POST',

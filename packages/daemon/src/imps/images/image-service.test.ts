@@ -4,9 +4,8 @@ import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { updateEnv } from '@impz/shared/test-utils/update-env';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
+import { updateEnv, waitFor } from '@zgeoff/testing';
 import { loadConfig } from '../../config';
 import {
   createImage,

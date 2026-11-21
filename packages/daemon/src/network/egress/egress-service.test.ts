@@ -2,9 +2,8 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
 import { createConnection } from 'node:net';
 import { readImpEnv } from '@impz/shared/test-utils/read-imp-env';
-import { updateEnv } from '@impz/shared/test-utils/update-env';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
+import { updateEnv, waitFor } from '@zgeoff/testing';
 import invariant from 'tiny-invariant';
 import { parsePrefix64 } from '../../host-net/net/derive-guest-ip6';
 import { resolveIpv6Plan } from '../../host-net/net/ipv6-plan';

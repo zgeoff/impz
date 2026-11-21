@@ -6,7 +6,7 @@ import {
   TUNNEL_MAX_FRAME_BYTES,
   TUNNEL_WINDOW_BYTES,
 } from '@impz/api';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { waitFor } from '@zgeoff/testing';
 import invariant from 'tiny-invariant';
 import { ImpdError } from '../../platform/errors/impd-error';
 import { buildStubTunnelPeer } from '../../test-utils/imps/build-stub-tunnel-peer';

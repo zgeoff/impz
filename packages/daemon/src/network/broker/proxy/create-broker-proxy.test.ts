@@ -7,9 +7,9 @@ import { buildMockBrokerRule } from '@impz/api/test-utils/build-mock-broker-rule
 import { buildMockOAuthConfig } from '@impz/api/test-utils/build-mock-oauth-config';
 import { verifyImpIdentity } from '@impz/client/identity';
 import { buildStubAnswerQueue } from '@impz/shared/test-utils/build-stub-answer-queue';
-import { server } from '@impz/shared/test-utils/server';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { network } from '@impz/shared/test-utils/network';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
+import { waitFor } from '@zgeoff/testing';
 import { HttpResponse, http } from 'msw';
 import invariant from 'tiny-invariant';
 import {
@@ -1104,7 +1104,7 @@ test('it sends the request of a host with no public name to its rule’s upstrea
 
   const received: { authorization: string | null; url: string }[] = [];
 
-  server.use(
+  network.use(
     http.get('http://svc-upstream.test:18081/v1/ping', (info) => {
       received.push({
         authorization: info.request.headers.get('authorization'),
@@ -1175,7 +1175,7 @@ test('it audits a request sent to a rule’s upstream under the guest’s host',
 
   await ctx.createTestImage('base');
 
-  server.use(
+  network.use(
     http.get('http://svc-upstream.test:18081/v1/ping', () =>
       HttpResponse.text('from the rule upstream'),
     ),
@@ -1215,7 +1215,7 @@ test('it sends the next request to the host’s own origin once a rebind drops t
 
   const received: string[] = [];
 
-  server.use(
+  network.use(
     http.get('http://svc-upstream.test:18081/v1/ping', () =>
       HttpResponse.text('from the rule upstream'),
     ),
@@ -1465,7 +1465,7 @@ test('it sends the current access token to the granted host', async () => {
 
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
 
   endpoint.issue('fake-refresh-0', {
     access_token: 'fake-access-1',
@@ -1511,7 +1511,7 @@ test('it sends the new access token after a refresh that used the rotated refres
 
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
 
   endpoint.issue('fake-refresh-0', {
     access_token: 'fake-access-1',
@@ -1565,7 +1565,7 @@ test('it refreshes an access token the granted host revoked and sends the reques
 
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
 
   endpoint.issue('fake-refresh-0', {
     access_token: 'fake-access-1',
@@ -1613,7 +1613,7 @@ test('it gives no credential for a secret with no access token', async () => {
     JSON.stringify({ ca: ctx.upstreamCaPem, upstreams: { 'api.example.com': ctx.upstreamOrigin } }),
   );
 
-  server.use(createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token').handler);
+  network.use(createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token').handler);
 
   await ctx.client.imps.create({ name: 'dev' });
 
@@ -1652,7 +1652,7 @@ test('it keeps sending the valid access token of a secret that needs a new sign-
 
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
 
   endpoint.issue('fake-refresh-0', {
     access_token: 'fake-access-1',

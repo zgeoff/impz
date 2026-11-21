@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
+import { waitFor } from '@zgeoff/testing';
 import { keepStreamVerified } from './keep-stream-verified';
 
 function setupTest(probes: readonly (boolean | Error)[]) {

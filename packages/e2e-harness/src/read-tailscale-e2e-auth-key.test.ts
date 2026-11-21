@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
-import { updateEnv } from '@impz/shared/test-utils/update-env';
+import { updateEnv } from '@zgeoff/testing';
 import { probeTailscaleE2EKey, readTailscaleE2EAuthKey } from './read-tailscale-e2e-auth-key';
 
 function setupTest() {

@@ -22,7 +22,7 @@ import { openCommandTerminal } from '@impz/e2e-harness/terminal';
 import { waitFor } from '@impz/e2e-harness/wait-for';
 import { waitForExec } from '@impz/e2e-harness/wait-for-exec';
 import { writeMetric } from '@impz/e2e-harness/write-metric';
-import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
+import { claimFreePorts } from '@zgeoff/testing/process';
 
 // One stack for every release, so a forward stops before its imp goes.
 async function setupTest() {

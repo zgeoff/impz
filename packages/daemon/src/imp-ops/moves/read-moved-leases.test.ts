@@ -2,7 +2,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { writeFileSync } from 'node:fs';
 import { copyFile } from 'node:fs/promises';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { waitFor } from '@zgeoff/testing';
 import invariant from 'tiny-invariant';
 import type { LoggedImpEvent } from '../../platform/db/imp-log-entry';
 import { readImpByName, updateImpActivity, updateImpExposure } from '../../platform/db/list-imps';

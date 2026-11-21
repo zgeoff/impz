@@ -10,8 +10,8 @@ import {
   encodeMessageFrame,
 } from '@impz/agent-protocol';
 import { MoveOfferReplySchema } from '@impz/api';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { startStubAgent } from '@impz/testing/stand-in/vm/start-stub-agent';
+import { waitFor } from '@zgeoff/testing';
 import invariant from 'tiny-invariant';
 import * as z from 'zod';
 import { runBundleInstall } from '../../network/broker/guest/guest-trust';

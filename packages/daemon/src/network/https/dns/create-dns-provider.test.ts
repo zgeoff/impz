@@ -1,5 +1,5 @@
 import { expect, mock, test } from 'bun:test';
-import { server } from '@impz/shared/test-utils/server';
+import { network } from '@impz/shared/test-utils/network';
 import { HttpResponse, http } from 'msw';
 import { createStubCloudflareApi } from '../../../test-utils/network/create-stub-cloudflare-api';
 import { createDnsProvider } from './create-dns-provider';
@@ -7,7 +7,7 @@ import { createDnsProvider } from './create-dns-provider';
 test('it sends a challtestsrv provider’s records to its API', async () => {
   const received = mock<(path: string) => void>();
 
-  server.use(
+  network.use(
     http.post('http://challtestsrv.test:8055/:command', (info) => {
       received(new URL(info.request.url).pathname);
 
@@ -28,7 +28,7 @@ test('it sends a challtestsrv provider’s records to its API', async () => {
 test('it sends a Cloudflare provider’s calls to Cloudflare with the token', async () => {
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   await api.zones.create({ id: 'z1', name: 'imp.test' });
 
@@ -45,7 +45,7 @@ test('it sends a Cloudflare provider’s calls to Cloudflare with the token', as
 test('it sends a Cloudflare provider’s calls to the API the config names', async () => {
   const received = mock<(url: string) => void>();
 
-  server.use(
+  network.use(
     http.get('https://cloudflare.proxy.test/client/v4/zones', (info) => {
       received(info.request.url);
 

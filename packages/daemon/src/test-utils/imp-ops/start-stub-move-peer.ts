@@ -1,5 +1,5 @@
 import { onTestFinished } from 'bun:test';
-import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
+import { claimFreePorts } from '@zgeoff/testing/process';
 
 interface StubPeerAnswer {
   readonly status?: number;
@@ -43,22 +43,12 @@ export function startStubMovePeer(answers: Readonly<Record<string, StubPeerAnswe
     });
   };
 
-  const releases: (() => void)[] = [];
-
-  const port = claimFreePorts(1, {
-    onRelease: (release) => {
-      releases.push(release);
-    },
-  }).take();
-
+  const ports = claimFreePorts(1);
+  const port = ports.take();
   const server = Bun.serve({ hostname: '127.0.0.1', port, fetch: handleRequest });
 
   onTestFinished(async () => {
     await server.stop(true);
-
-    for (const release of releases) {
-      release();
-    }
   });
 
   return {

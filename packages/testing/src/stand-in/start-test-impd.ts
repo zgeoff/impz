@@ -37,10 +37,10 @@ import type { Jails } from '@impz/daemon/host/vm/vmm/create-jails';
 import type { KsmHostStats } from '@impz/daemon/host/vm/vmm/read-ksm-host-stats';
 import { readThreadIds } from '@impz/daemon/host/vm/vmm/read-vm-memory';
 import type { VmRunner } from '@impz/daemon/host/vm/vmm/vm-runner';
-import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
 import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
+import { claimFreePorts } from '@zgeoff/testing/process';
 import invariant from 'tiny-invariant';
 import { TEST_TOKEN } from '../test-token';
 import { readNoTailscale } from './network/read-no-tailscale';
@@ -48,7 +48,6 @@ import { buildStubClock } from './platform/build-stub-clock';
 import { buildStubTickerTimer } from './platform/build-stub-ticker-timer';
 import { formatRunPrefix } from './platform/format-run-prefix';
 import { openMigratedCopy } from './platform/open-migrated-copy';
-import { pickImpdPort } from './platform/pick-impd-port';
 import { readRunOwner } from './platform/read-run-owner';
 import { startImpdLogCapture } from './platform/start-impd-log-capture';
 import { buildStubVmm } from './vm/build-stub-vmm';
@@ -149,10 +148,9 @@ export async function startTestImpd(
     options.onLog?.('test harness: database closed');
   });
 
-  const ports = claimFreePorts(3, {
-    pick: () => pickImpdPort(Math.random()),
-    onRelease: stack.defer.bind(stack),
-  });
+  const ports = claimFreePorts(3, { cleanup: 'manual' });
+
+  stack.defer(ports.release);
 
   // a new disk stays the size of its image, because the fake clone copies every byte
   const config: Config = {
@@ -165,6 +163,9 @@ export async function startTestImpd(
       IMP_BROKER_PORT: String(ports.take()),
       IMP_EGRESS_DNS_PORT: String(ports.take()),
       IMP_SSH_PORT: '0',
+
+      // the claimed ports run from 10000 to 32767, which the default imp ports overlap
+      IMP_PORT_BASE: '40000',
       IMP_UFFD_HANDLER: uffdHandler.path,
       ...options.env,
     }),

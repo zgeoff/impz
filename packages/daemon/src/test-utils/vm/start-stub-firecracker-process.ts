@@ -1,6 +1,6 @@
 import { onTestFinished } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { waitFor } from '@zgeoff/testing';
 
 export async function startStubFirecrackerProcess(apiSocket: string) {
   // bash's own read waits on the open stdin pipe, so the stand-in runs no

@@ -13,8 +13,8 @@ import {
   startBuilderImpd,
   updateImagePin,
 } from '@impz/daemon/test-utils';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
+import { waitFor } from '@zgeoff/testing';
 import invariant from 'tiny-invariant';
 import * as z from 'zod';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';

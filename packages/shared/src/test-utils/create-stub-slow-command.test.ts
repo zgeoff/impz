@@ -2,8 +2,8 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { waitFor } from '@zgeoff/testing';
 import { createStubSlowCommand } from './create-stub-slow-command';
-import { waitFor } from './wait-for';
 
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'stub-slow-command-'));

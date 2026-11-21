@@ -14,7 +14,7 @@ import {
   startStubInnerAgent,
   updateImpMove,
 } from '@impz/daemon/test-utils';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { waitFor } from '@zgeoff/testing';
 import invariant from 'tiny-invariant';
 import { writeHostConfig } from '../config/read-host-config';
 import { buildStubTimeouts } from '../test-utils/build-stub-timeouts';

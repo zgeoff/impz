@@ -1,12 +1,12 @@
 import { expect, test } from 'bun:test';
-import { server } from '@impz/shared/test-utils/server';
+import { network } from '@impz/shared/test-utils/network';
 import { z } from 'zod';
 import { createStubTailscaleApi } from './create-stub-tailscale-api';
 
 test('it hands an access token to its client by client credentials', async () => {
   const api = createStubTailscaleApi({ client: { clientId: 'kExample', clientSecret: 'secret' } });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   const response = await fetch('https://api.tailscale.com/api/v2/oauth/token', {
     method: 'POST',
@@ -33,7 +33,7 @@ test('it hands an access token to its client by client credentials', async () =>
 test('it lists each access token it handed out', async () => {
   const api = createStubTailscaleApi({ client: { clientId: 'kExample', clientSecret: 'secret' } });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   const response = await fetch('https://api.tailscale.com/api/v2/oauth/token', {
     method: 'POST',
@@ -55,7 +55,7 @@ test('it lists each access token it handed out', async () => {
 test('it refuses a token to another client with a 401', async () => {
   const api = createStubTailscaleApi({ client: { clientId: 'kExample', clientSecret: 'secret' } });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   const response = await fetch('https://api.tailscale.com/api/v2/oauth/token', {
     method: 'POST',
@@ -75,7 +75,7 @@ test('it refuses a token to another client with a 401', async () => {
 test('it answers 401 to a services call with no token it issued', async () => {
   const api = createStubTailscaleApi({ client: { clientId: 'kExample', clientSecret: 'secret' } });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   const response = await fetch('https://api.tailscale.com/api/v2/tailnet/-/services', {
     headers: { authorization: 'Bearer tskey-api-made-up' },
@@ -90,7 +90,7 @@ test('it answers 401 to a services call with no token it issued', async () => {
 test('it answers 401 to a token once the tokens are revoked', async () => {
   const api = createStubTailscaleApi({ client: { clientId: 'kExample', clientSecret: 'secret' } });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   const issued = await fetch('https://api.tailscale.com/api/v2/oauth/token', {
     method: 'POST',
@@ -117,7 +117,7 @@ test('it answers 401 to a token once the tokens are revoked', async () => {
 test('it lists the stored services as vipServices', async () => {
   const api = createStubTailscaleApi({ client: { clientId: 'kExample', clientSecret: 'secret' } });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   await api.services.create({ name: 'svc:box', comment: 'imp host a', tags: ['tag:imp-svc'] });
 
@@ -155,7 +155,7 @@ test('it lists the stored services as vipServices', async () => {
 test('it answers a PUT with the service it wrote over the one under its encoded name', async () => {
   const api = createStubTailscaleApi({ client: { clientId: 'kExample', clientSecret: 'secret' } });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   await api.services.create({
     name: 'svc:box',
@@ -196,7 +196,7 @@ test('it answers a PUT with the service it wrote over the one under its encoded 
 test('it answers 400 to a PUT whose body is not JSON, and stores nothing', async () => {
   const api = createStubTailscaleApi({ client: { clientId: 'kExample', clientSecret: 'secret' } });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   const issued = await fetch('https://api.tailscale.com/api/v2/oauth/token', {
     method: 'POST',
@@ -228,7 +228,7 @@ test('it answers 400 to a PUT whose body is not JSON, and stores nothing', async
 test('it answers 400 to a PUT that leaves out a field, rather than fill it in', async () => {
   const api = createStubTailscaleApi({ client: { clientId: 'kExample', clientSecret: 'secret' } });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   const issued = await fetch('https://api.tailscale.com/api/v2/oauth/token', {
     method: 'POST',
@@ -259,7 +259,7 @@ test('it answers 403 to a write with a token scoped to read services', async () 
     client: { clientId: 'kExample', clientSecret: 'secret', scopes: ['services:read'] },
   });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   const issued = await fetch('https://api.tailscale.com/api/v2/oauth/token', {
     method: 'POST',
@@ -293,7 +293,7 @@ test('it lets a token scoped to read services list them', async () => {
     client: { clientId: 'kExample', clientSecret: 'secret', scopes: ['services:read'] },
   });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   const issued = await fetch('https://api.tailscale.com/api/v2/oauth/token', {
     method: 'POST',
@@ -321,7 +321,7 @@ test('it answers 403 to a services call with a token of another scope', async ()
     client: { clientId: 'kExample', clientSecret: 'secret', scopes: ['devices:core'] },
   });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   const issued = await fetch('https://api.tailscale.com/api/v2/oauth/token', {
     method: 'POST',
@@ -349,7 +349,7 @@ test('it answers 400 to a token request for a scope the client was not granted',
     client: { clientId: 'kExample', clientSecret: 'secret', scopes: ['services:read'] },
   });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   const response = await fetch('https://api.tailscale.com/api/v2/oauth/token', {
     method: 'POST',
@@ -372,7 +372,7 @@ test('it grants a token asked for with no scope every scope of its client', asyn
     client: { clientId: 'kExample', clientSecret: 'secret', scopes: ['services', 'dns:read'] },
   });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   const response = await fetch('https://api.tailscale.com/api/v2/oauth/token', {
     method: 'POST',
@@ -396,7 +396,7 @@ test('it grants a token asked for with no scope every scope of its client', asyn
 test('it answers 404 with a message to a read of a service it does not hold', async () => {
   const api = createStubTailscaleApi({ client: { clientId: 'kExample', clientSecret: 'secret' } });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   const issued = await fetch('https://api.tailscale.com/api/v2/oauth/token', {
     method: 'POST',
@@ -424,7 +424,7 @@ test('it answers 404 with a message to a read of a service it does not hold', as
 test('it answers 404 to a delete of a service it does not hold', async () => {
   const api = createStubTailscaleApi({ client: { clientId: 'kExample', clientSecret: 'secret' } });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   const issued = await fetch('https://api.tailscale.com/api/v2/oauth/token', {
     method: 'POST',
@@ -450,7 +450,7 @@ test('it answers 404 to a delete of a service it does not hold', async () => {
 test('it removes a service a DELETE names', async () => {
   const api = createStubTailscaleApi({ client: { clientId: 'kExample', clientSecret: 'secret' } });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   await api.services.create({ name: 'svc:box' });
 
@@ -479,7 +479,7 @@ test('it removes a service a DELETE names', async () => {
 test('it records each request with its method, path as sent and authorization', async () => {
   const api = createStubTailscaleApi({ client: { clientId: 'kExample', clientSecret: 'secret' } });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   await fetch('https://api.tailscale.com/api/v2/tailnet/-/services/svc%3Abox', {
     headers: { authorization: 'Bearer none' },

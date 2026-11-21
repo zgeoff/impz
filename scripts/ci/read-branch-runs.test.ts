@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { GITHUB_API_URL, githubRuns } from '@impz/shared/test-utils/github-actions-handlers';
-import { server } from '@impz/shared/test-utils/server';
+import { network } from '@impz/shared/test-utils/network';
 import { HttpResponse, http } from 'msw';
 import { readBranchRuns } from './read-branch-runs';
 
@@ -54,7 +54,7 @@ test('it reads the run and the runs of its workflow from the same event on its b
 test('it fails with the URL, status and body when GitHub refuses a request', () => {
   const ctx = setupTest();
 
-  server.use(
+  network.use(
     http.get(`${GITHUB_API_URL}/repos/acme/kiln/actions/runs/41`, () =>
       HttpResponse.text('Resource not accessible by integration', { status: 403 }),
     ),

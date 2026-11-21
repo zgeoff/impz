@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
-import { updateEnv } from '@impz/shared/test-utils/update-env';
+import { updateEnv } from '@zgeoff/testing';
 import { buildPebbleNames } from './build-pebble-names';
 import { parsePublishedPort, readPebbleEndpoints } from './read-pebble-endpoints';
 

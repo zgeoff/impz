@@ -3,8 +3,8 @@ import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve as resolvePath } from 'node:path';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
+import { waitFor } from '@zgeoff/testing';
 import invariant from 'tiny-invariant';
 import { ImpdError } from '../../../platform/errors/impd-error';
 import { buildStubTapOpener } from '../../../test-utils/host-net/build-stub-tap-opener';

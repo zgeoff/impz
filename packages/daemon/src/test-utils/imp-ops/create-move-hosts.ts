@@ -1,9 +1,9 @@
 import { onTestFinished } from 'bun:test';
 import { writeFileSync } from 'node:fs';
 import type { MoveStatus } from '@impz/api';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import type { TestImpd, TestImpdOptions } from '@impz/testing/stand-in/start-test-impd';
+import { waitFor } from '@zgeoff/testing';
 import invariant from 'tiny-invariant';
 import { deriveSlotAddress } from '../../host-net/net/derive-slot-address';
 import { readWarmHost } from '../../imp-ops/moves/read-warm-host';

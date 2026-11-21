@@ -10,7 +10,7 @@ import { buildImpPaths, buildSnapshotPaths } from '@impz/daemon/host/vm/storage/
 import { TemplateRestoreError } from '@impz/daemon/host/vm/vmm/create-template-vm';
 import type { TemplateRestorePlan } from '@impz/daemon/host/vm/vmm/create-template-vm';
 import { buildMockHostIdentity } from '@impz/daemon/test-utils/vm/build-mock-host-identity';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { waitFor } from '@zgeoff/testing';
 import { STUB_AGENT_VERSION, StubVmError, buildStubBootId, buildStubVmm } from './build-stub-vmm';
 
 async function setupTest() {

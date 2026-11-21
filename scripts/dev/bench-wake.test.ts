@@ -4,8 +4,8 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
+import { waitFor } from '@zgeoff/testing';
 import { $ } from 'bun';
 
 async function setupTest() {

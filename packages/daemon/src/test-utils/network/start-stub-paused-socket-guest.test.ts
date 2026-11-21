@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { waitFor } from '@zgeoff/testing';
 import { startStubBrokerSocketUpstream } from './start-stub-broker-socket-upstream';
 import { startStubConnectProxy } from './start-stub-connect-proxy';
 import { startStubPausedSocketGuest } from './start-stub-paused-socket-guest';

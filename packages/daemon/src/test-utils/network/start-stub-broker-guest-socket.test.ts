@@ -1,5 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
+import { claimFreePorts } from '@zgeoff/testing/process';
 import type { Socket } from 'bun';
 import { startStubBrokerGuestSocket } from './start-stub-broker-guest-socket';
 

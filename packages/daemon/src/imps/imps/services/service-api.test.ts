@@ -7,10 +7,10 @@ import {
   ServiceDefSchema,
   ServiceStatusSchema,
 } from '@impz/agent-protocol';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import { TEST_TOKEN } from '@impz/testing/test-token';
+import { waitFor } from '@zgeoff/testing';
 import invariant from 'tiny-invariant';
 import type { LoggedImpEvent } from '../../../platform/db/imp-log-entry';
 import { createEventBus } from '../../../platform/events/event-bus';

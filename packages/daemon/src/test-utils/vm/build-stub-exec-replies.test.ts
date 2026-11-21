@@ -13,8 +13,8 @@ import {
   encodeMessageFrame,
 } from '@impz/agent-protocol';
 import type { AgentFrame } from '@impz/agent-protocol';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { startStubAgent } from '@impz/testing/stand-in/vm/start-stub-agent';
+import { waitFor } from '@zgeoff/testing';
 import { buildStubExecReplies } from './build-stub-exec-replies';
 
 async function setupTest() {

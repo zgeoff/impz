@@ -2,8 +2,8 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { updateEnv } from '@zgeoff/testing';
 import { createStubShasum } from './create-stub-shasum';
-import { updateEnv } from './update-env';
 
 function setupTest() {
   const bin = mkdtempSync(join(tmpdir(), 'stub-shasum-'));

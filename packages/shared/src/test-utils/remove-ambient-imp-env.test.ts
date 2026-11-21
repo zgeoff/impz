@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
+import { updateEnv } from '@zgeoff/testing';
 import { removeAmbientImpEnv } from './remove-ambient-imp-env';
-import { updateEnv } from './update-env';
 
 test('it removes an impd setting from the environment', () => {
   updateEnv('IMP_RAM_BUDGET_MIB', '800');

@@ -1,5 +1,5 @@
 import { expect, mock, test } from 'bun:test';
-import { server } from '@impz/shared/test-utils/server';
+import { network } from '@impz/shared/test-utils/network';
 import { HttpResponse, http } from 'msw';
 import invariant from 'tiny-invariant';
 import { createStubTailscaleApi } from '../../test-utils/network/create-stub-tailscale-api';
@@ -8,7 +8,7 @@ import { createServicesApi } from './services-api';
 test('it asks for a token by client credentials, with the services scope only', async () => {
   const stub = createStubTailscaleApi({ client: { clientId: 'kExample', clientSecret: 'secret' } });
 
-  server.use(...stub.handlers);
+  network.use(...stub.handlers);
 
   const api = createServicesApi({
     readCredential: () => ({ clientId: 'kExample', clientSecret: 'secret' }),
@@ -27,7 +27,7 @@ test('it asks for a token by client credentials, with the services scope only', 
 test('it sends the token it was given as a bearer token', async () => {
   const stub = createStubTailscaleApi({ client: { clientId: 'kExample', clientSecret: 'secret' } });
 
-  server.use(...stub.handlers);
+  network.use(...stub.handlers);
 
   const api = createServicesApi({
     readCredential: () => ({ clientId: 'kExample', clientSecret: 'secret' }),
@@ -45,7 +45,7 @@ test('it sends the token it was given as a bearer token', async () => {
 test('it keeps one token for calls before its last minute', async () => {
   const stub = createStubTailscaleApi({ client: { clientId: 'kExample', clientSecret: 'secret' } });
 
-  server.use(...stub.handlers);
+  network.use(...stub.handlers);
 
   const clock = { now: 0 };
 
@@ -66,7 +66,7 @@ test('it keeps one token for calls before its last minute', async () => {
 test('it asks for a new token in the old one’s last minute', async () => {
   const stub = createStubTailscaleApi({ client: { clientId: 'kExample', clientSecret: 'secret' } });
 
-  server.use(...stub.handlers);
+  network.use(...stub.handlers);
 
   const clock = { now: 0 };
 
@@ -87,7 +87,7 @@ test('it asks for a new token in the old one’s last minute', async () => {
 test('it rejects with the token endpoint’s status and message when the client is refused', () => {
   const stub = createStubTailscaleApi({ client: { clientId: 'kExample', clientSecret: 'secret' } });
 
-  server.use(...stub.handlers);
+  network.use(...stub.handlers);
 
   const api = createServicesApi({
     readCredential: () => ({ clientId: 'kExample', clientSecret: 'rotated-away' }),
@@ -103,7 +103,7 @@ test('it rejects with the token endpoint’s status and message when the client 
 test('it lists the tailnet’s services', async () => {
   const stub = createStubTailscaleApi({ client: { clientId: 'kExample', clientSecret: 'secret' } });
 
-  server.use(...stub.handlers);
+  network.use(...stub.handlers);
 
   await stub.services.create({
     name: 'svc:box',
@@ -131,7 +131,7 @@ test('it lists the tailnet’s services', async () => {
 test('it lists no services when the API answers a null list', async () => {
   const stub = createStubTailscaleApi({ client: { clientId: 'kExample', clientSecret: 'secret' } });
 
-  server.use(
+  network.use(
     http.get('https://api.tailscale.com/api/v2/tailnet/-/services', () =>
       HttpResponse.json({ vipServices: null }),
     ),
@@ -150,7 +150,7 @@ test('it lists no services when the API answers a null list', async () => {
 test('it stores the service it writes', async () => {
   const stub = createStubTailscaleApi({ client: { clientId: 'kExample', clientSecret: 'secret' } });
 
-  server.use(...stub.handlers);
+  network.use(...stub.handlers);
 
   const api = createServicesApi({
     readCredential: () => ({ clientId: 'kExample', clientSecret: 'secret' }),
@@ -178,7 +178,7 @@ test('it stores the service it writes', async () => {
 test('it sends a write to the encoded service path', async () => {
   const stub = createStubTailscaleApi({ client: { clientId: 'kExample', clientSecret: 'secret' } });
 
-  server.use(...stub.handlers);
+  network.use(...stub.handlers);
 
   const api = createServicesApi({
     readCredential: () => ({ clientId: 'kExample', clientSecret: 'secret' }),
@@ -195,7 +195,7 @@ test('it sends a write to the encoded service path', async () => {
 test('it reads a service by name', async () => {
   const stub = createStubTailscaleApi({ client: { clientId: 'kExample', clientSecret: 'secret' } });
 
-  server.use(...stub.handlers);
+  network.use(...stub.handlers);
 
   await stub.services.create({ name: 'svc:box', comment: 'imp host abc', tags: ['tag:imp-svc'] });
 
@@ -216,7 +216,7 @@ test('it reads a service by name', async () => {
 test('it reads a service the API does not have as null', async () => {
   const stub = createStubTailscaleApi({ client: { clientId: 'kExample', clientSecret: 'secret' } });
 
-  server.use(...stub.handlers);
+  network.use(...stub.handlers);
 
   const api = createServicesApi({
     readCredential: () => ({ clientId: 'kExample', clientSecret: 'secret' }),
@@ -230,7 +230,7 @@ test('it reads a service the API does not have as null', async () => {
 test('it rejects a read the API fails with anything but 404', () => {
   const stub = createStubTailscaleApi({ client: { clientId: 'kExample', clientSecret: 'secret' } });
 
-  server.use(
+  network.use(
     http.get('https://api.tailscale.com/api/v2/tailnet/-/services/:name', () =>
       HttpResponse.json({ message: 'internal error' }, { status: 500 }),
     ),
@@ -251,7 +251,7 @@ test('it rejects a read the API fails with anything but 404', () => {
 test('it deletes a service by name', async () => {
   const stub = createStubTailscaleApi({ client: { clientId: 'kExample', clientSecret: 'secret' } });
 
-  server.use(...stub.handlers);
+  network.use(...stub.handlers);
 
   await stub.services.create({ name: 'svc:box' });
 
@@ -267,7 +267,7 @@ test('it deletes a service by name', async () => {
 test('it counts a delete of a service that is already gone as done', async () => {
   const stub = createStubTailscaleApi({ client: { clientId: 'kExample', clientSecret: 'secret' } });
 
-  server.use(...stub.handlers);
+  network.use(...stub.handlers);
 
   const api = createServicesApi({
     readCredential: () => ({ clientId: 'kExample', clientSecret: 'secret' }),
@@ -279,7 +279,7 @@ test('it counts a delete of a service that is already gone as done', async () =>
 test('it rejects a delete the API fails with anything but 404', () => {
   const stub = createStubTailscaleApi({ client: { clientId: 'kExample', clientSecret: 'secret' } });
 
-  server.use(
+  network.use(
     http.delete('https://api.tailscale.com/api/v2/tailnet/-/services/:name', () =>
       HttpResponse.json({ message: 'forbidden' }, { status: 403 }),
     ),
@@ -300,7 +300,7 @@ test('it rejects a delete the API fails with anything but 404', () => {
 test('it rejects a call whose token the API refuses with a 401', async () => {
   const stub = createStubTailscaleApi({ client: { clientId: 'kExample', clientSecret: 'secret' } });
 
-  server.use(...stub.handlers);
+  network.use(...stub.handlers);
 
   const api = createServicesApi({
     readCredential: () => ({ clientId: 'kExample', clientSecret: 'secret' }),
@@ -320,7 +320,7 @@ test('it rejects a call whose token the API refuses with a 401', async () => {
 test('it asks for a new token on the call after a 401', async () => {
   const stub = createStubTailscaleApi({ client: { clientId: 'kExample', clientSecret: 'secret' } });
 
-  server.use(...stub.handlers);
+  network.use(...stub.handlers);
 
   const api = createServicesApi({
     readCredential: () => ({ clientId: 'kExample', clientSecret: 'secret' }),
@@ -345,7 +345,7 @@ test('it keeps the client secret and the token out of an API error', async () =>
 
   const authorized = mock<(authorization: string | null) => void>();
 
-  server.use(
+  network.use(
     http.put('https://api.tailscale.com/api/v2/tailnet/-/services/:name', (info) => {
       authorized(info.request.headers.get('authorization'));
 
@@ -384,7 +384,7 @@ test('it keeps the client secret and the token out of an API error', async () =>
 test('it puts the start of a body that is not Tailscale’s JSON into the error', () => {
   const stub = createStubTailscaleApi({ client: { clientId: 'kExample', clientSecret: 'secret' } });
 
-  server.use(
+  network.use(
     http.get('https://api.tailscale.com/api/v2/tailnet/-/services', () =>
       HttpResponse.text(`<html>${'x'.repeat(300)}</html>`, { status: 502 }),
     ),

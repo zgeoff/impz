@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
-import { server } from '@impz/shared/test-utils/server';
+import { network } from '@impz/shared/test-utils/network';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
+import { claimFreePorts } from '@zgeoff/testing/process';
 import { HttpResponse, http } from 'msw';
 import { createRpcClient } from '../connection/create-rpc-client';
 import { checkImpdAccess } from './check-impd-access';
@@ -15,7 +15,7 @@ async function setupTest() {
 
   const harness = await startTestImpd(stack, { rootToken });
 
-  server.use(http.all('http://impd.test/*', (info) => harness.impd.api.app.handle(info.request)));
+  network.use(http.all('http://impd.test/*', (info) => harness.impd.api.app.handle(info.request)));
 
   return { url: 'http://impd.test', rootToken };
 }
@@ -36,7 +36,7 @@ test('it reports an impd that rejects the token as unauthorized', async () => {
 
 test('it reports an older impd that has no system.features as reachable', async () => {
   // oRPC's router answers a procedure it does not know with NOT_FOUND.
-  server.use(
+  network.use(
     http.post('http://impd.test/rpc/system/features', () =>
       HttpResponse.json(
         { json: { defined: false, code: 'NOT_FOUND', status: 404, message: 'Not found' } },

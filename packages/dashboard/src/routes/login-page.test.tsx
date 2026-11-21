@@ -1,5 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { server } from '@impz/shared/test-utils/server';
+import { network } from '@impz/shared/test-utils/network';
 import userEvent from '@testing-library/user-event';
 import { HttpResponse, http } from 'msw';
 import { IMPD_ORIGIN } from '../test-utils/impd-origin';
@@ -43,7 +43,7 @@ test('it stays on the login page with a message when impd fails the login', asyn
 
   await setupTest();
 
-  server.use(
+  network.use(
     http.post(`${IMPD_ORIGIN}/rpc/auth/login`, () => new HttpResponse(null, { status: 502 })),
   );
 
@@ -103,7 +103,7 @@ test('it says so and stays when the log out fails', async () => {
 
   await ctx.logIn();
 
-  server.use(
+  network.use(
     http.post(`${IMPD_ORIGIN}/rpc/auth/logout`, () => new HttpResponse(null, { status: 502 })),
   );
 

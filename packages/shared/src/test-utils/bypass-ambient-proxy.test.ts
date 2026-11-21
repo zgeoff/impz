@@ -1,6 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
+import { updateEnv } from '@zgeoff/testing';
 import { bypassAmbientProxy } from './bypass-ambient-proxy';
-import { updateEnv } from './update-env';
 
 test('it sends a fetch straight to the server when the shell names a proxy', async () => {
   updateEnv('NO_PROXY', '');

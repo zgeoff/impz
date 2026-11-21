@@ -14,11 +14,11 @@ import {
   encodeJsonFrame,
   encodeMessageFrame,
 } from '@impz/agent-protocol';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import type { TestImpdOptions } from '@impz/testing/stand-in/start-test-impd';
 import { startStubAgent } from '@impz/testing/stand-in/vm/start-stub-agent';
+import { waitFor } from '@zgeoff/testing';
 import invariant from 'tiny-invariant';
 import { readImpByName, updateImpActivity } from '../../platform/db/list-imps';
 import { writeLease } from '../../platform/db/list-leases';

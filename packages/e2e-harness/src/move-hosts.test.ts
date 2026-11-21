@@ -5,7 +5,7 @@ import { BlockList } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildStubAnswerQueue } from '@impz/shared/test-utils/build-stub-answer-queue';
-import { updateEnv } from '@impz/shared/test-utils/update-env';
+import { updateEnv } from '@zgeoff/testing';
 import { REPO_ROOT, instance } from './instance';
 import type { HostBFixtureDeps } from './move-hosts';
 import {

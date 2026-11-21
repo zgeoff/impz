@@ -29,12 +29,19 @@ minimumReleaseAgeExcludes = [
   "@zgeoff/oxlint-config",
   "@zgeoff/rig",
   "@zgeoff/std",
+  "@zgeoff/testing",
 ]
 
 [test]
-# restores env overrides, seeds faker and runs the MSW server for every test
+# restores env overrides, seeds faker and registers a tracer for every test, then
+# starts the test network that fails a request no handler matches
 # (packages/shared/src/test-utils), then registers jest-extended matchers
-preload = ["./packages/shared/src/test-utils/preload.ts", "@zgeoff/bun-test-extended"]
+preload = [
+  "@zgeoff/testing/preload",
+  "./packages/shared/src/test-utils/preload.ts",
+  "./packages/shared/src/test-utils/network.ts",
+  "@zgeoff/bun-test-extended",
+]
 
 # a leak between tests or files that a fixed order hides fails the run, which
 # prints the --seed that repeats the order; rig passes --randomize as well

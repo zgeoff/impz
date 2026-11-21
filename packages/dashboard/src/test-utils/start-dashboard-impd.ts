@@ -1,5 +1,5 @@
 import { createImpClient } from '@impz/client';
-import { server } from '@impz/shared/test-utils/server';
+import { network } from '@impz/shared/test-utils/network';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import type { TestImpd, TestImpdOptions } from '@impz/testing/stand-in/start-test-impd';
 import { TEST_TOKEN } from '@impz/testing/test-token';
@@ -12,6 +12,9 @@ export interface DashboardImpd {
   readonly logIn: (token?: string) => Promise<void>;
   readonly waitForEventStream: () => Promise<void>;
   readonly dropEventStreams: () => void;
+
+  // the status of each response impd gave the page, in order
+  readonly answeredStatuses: readonly number[];
 }
 
 const EVENT_STREAM_PATH = '/rpc/events/stream';
@@ -26,10 +29,11 @@ export async function startDashboardImpd(
 
   const cookies = new Map<string, string>();
 
+  const answeredStatuses: number[] = [];
   const streamed = Promise.withResolvers<Error | null>();
   const drops = { controller: new AbortController() };
 
-  server.use(
+  network.use(
     http.all(`${IMPD_ORIGIN}/*`, async (info) => {
       const request = new Request(info.request);
 
@@ -38,6 +42,8 @@ export async function startDashboardImpd(
       }
 
       const response = await harness.impd.api.app.handle(request);
+
+      answeredStatuses.push(response.status);
 
       for (const header of response.headers.getSetCookie()) {
         const cookie = Bun.Cookie.parse(header);
@@ -78,7 +84,7 @@ export async function startDashboardImpd(
     drops.controller = new AbortController();
   };
 
-  return { harness, logIn, waitForEventStream, dropEventStreams };
+  return { harness, logIn, waitForEventStream, dropEventStreams, answeredStatuses };
 }
 
 function formatCookies(cookies: ReadonlyMap<string, string>): string {

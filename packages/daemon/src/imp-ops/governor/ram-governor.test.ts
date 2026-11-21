@@ -1,5 +1,5 @@
 import { expect, mock, test } from 'bun:test';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { waitFor } from '@zgeoff/testing';
 import fc from 'fast-check';
 import { buildStubGovernedHostArbitraries } from '../../test-utils/imp-ops/build-stub-governed-host-arbitraries';
 import { createStubGovernedHost } from '../../test-utils/imp-ops/create-stub-governed-host';

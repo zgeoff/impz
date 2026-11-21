@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createImpClient } from '@impz/client';
 import { buildStubImpdReleaseFetch, createUbuntuImage } from '@impz/daemon/test-utils';
-import { server } from '@impz/shared/test-utils/server';
+import { network } from '@impz/shared/test-utils/network';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import { HttpResponse, http } from 'msw';
 import { UsageError } from '../cli/usage-error';
@@ -80,7 +80,7 @@ test('it prepares on the source, takes a ticket from the target, then sends', as
   await ctx.from.imps.create({ name: 'dev' });
   await ctx.from.imps.stop({ name: 'dev' });
 
-  server.use(http.all('http://100.100.0.2:7070/*', (info) => ctx.receiveFromSource(info.request)));
+  network.use(http.all('http://100.100.0.2:7070/*', (info) => ctx.receiveFromSource(info.request)));
 
   const print = mock<(line: string) => void>();
 
@@ -120,7 +120,7 @@ test('it draws the send’s progress on a terminal and ends the line', async () 
   await ctx.from.imps.create({ name: 'dev' });
   await ctx.from.imps.stop({ name: 'dev' });
 
-  server.use(http.all('http://100.100.0.2:7070/*', (info) => ctx.receiveFromSource(info.request)));
+  network.use(http.all('http://100.100.0.2:7070/*', (info) => ctx.receiveFromSource(info.request)));
 
   const print = mock<(line: string) => void>();
   const write = mock<(text: string) => void>();
@@ -176,7 +176,7 @@ test('it moves an imp that holds leases for --stop, which ends them as impz stop
 
   const held = await ctx.from.leases.list({ name: 'dev' });
 
-  server.use(http.all('http://100.100.0.2:7070/*', (info) => ctx.receiveFromSource(info.request)));
+  network.use(http.all('http://100.100.0.2:7070/*', (info) => ctx.receiveFromSource(info.request)));
 
   const print = mock<(line: string) => void>();
 
@@ -351,7 +351,7 @@ test('it points at --resume when the target’s commit window ended before the c
 
   // the commit window is 24 hours from the receipt, and the commit lands a
   // second past it
-  server.use(
+  network.use(
     http.post('http://100.100.0.2:7070/move/commit', (info) => {
       ctx.advanceTarget(24 * 60 * 60 * 1000 + 1000);
 
@@ -392,7 +392,7 @@ test('it points at --abort when the network to the target is down', async () => 
   await ctx.from.imps.create({ name: 'dev' });
   await ctx.from.imps.stop({ name: 'dev' });
 
-  server.use(http.all('http://100.100.0.2:7070/*', () => HttpResponse.error()));
+  network.use(http.all('http://100.100.0.2:7070/*', () => HttpResponse.error()));
 
   const print = mock<(line: string) => void>();
 
@@ -428,7 +428,7 @@ test('it commits a verified move with a fresh ticket from the target on --resume
 
   // the first commit lands a second past the 24-hour commit window, so the
   // target holds a verified copy
-  server.use(
+  network.use(
     http.post(
       'http://100.100.0.2:7070/move/commit',
       (info) => {
@@ -493,7 +493,7 @@ test('it says the move is complete when an abort finds the target committed it',
   await ctx.from.imps.create({ name: 'dev' });
   await ctx.from.imps.stop({ name: 'dev' });
 
-  server.use(
+  network.use(
     http.post(
       'http://100.100.0.2:7070/move/commit',
       async (info) => {

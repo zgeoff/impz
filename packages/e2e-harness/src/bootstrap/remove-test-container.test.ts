@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
-import { updateEnv } from '@impz/shared/test-utils/update-env';
+import { updateEnv } from '@zgeoff/testing';
 import { buildStubBootstrapDocker } from '../../../../scripts/test-utils/build-stub-bootstrap-docker';
 import { removeTestContainer } from './remove-test-container';
 import type { BootstrapRun } from './types';

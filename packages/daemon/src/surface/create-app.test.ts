@@ -4,14 +4,13 @@ import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ImpContract } from '@impz/api';
+import { network } from '@impz/shared/test-utils/network';
 import { readImpEnv } from '@impz/shared/test-utils/read-imp-env';
-import { server } from '@impz/shared/test-utils/server';
-import { updateEnv } from '@impz/shared/test-utils/update-env';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
+import { updateEnv, waitFor } from '@zgeoff/testing';
 import invariant from 'tiny-invariant';
 import packageJson from '../../package.json' with { type: 'json' };
 import { ROOT_TOKEN_ID } from '../identity/auth/token-store';
@@ -564,7 +563,7 @@ test('it exposes an imp with a basic credential shown once', async () => {
 
   await cloudflare.zones.create({ name: 'imp.example.com' });
 
-  server.use(...cloudflare.handlers);
+  network.use(...cloudflare.handlers);
 
   await ctx.client.imps.create({ name: 'web' });
 
@@ -651,7 +650,7 @@ test('it counts exposed imps in system.info, with no token check for a token fro
 
   await cloudflare.zones.create({ name: 'imp.example.com' });
 
-  server.use(...cloudflare.handlers);
+  network.use(...cloudflare.handlers);
 
   await ctx.client.imps.create({ name: 'web' });
   await ctx.client.imps.expose({ name: 'web', auth: 'basic' });
@@ -721,7 +720,7 @@ test('it gives a new credential to a second expose', async () => {
 
   await cloudflare.zones.create({ name: 'imp.example.com' });
 
-  server.use(...cloudflare.handlers);
+  network.use(...cloudflare.handlers);
 
   await ctx.client.imps.create({ name: 'web' });
 

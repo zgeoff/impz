@@ -1,5 +1,5 @@
 import { expect, mock, test } from 'bun:test';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { waitFor } from '@zgeoff/testing';
 import { startRealTimer } from './start-real-timer';
 
 test('it fires once after the delay', async () => {

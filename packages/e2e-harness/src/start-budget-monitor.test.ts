@@ -229,7 +229,7 @@ test('#waitForSampleAfter waits until a sample lands the given time past the sta
 
   await waitForSampleAfter({ samples, sleeps: [], stop: () => Promise.resolve() }, 0, 600, {
     now: clock.now,
-    wait: clock.sleep,
+    sleep: clock.sleep,
   });
 
   expect(clock.now()).toBe(1000);
@@ -245,7 +245,7 @@ test('#waitForSampleAfter rejects when no sample lands past the start before the
   expect(
     waitForSampleAfter({ samples, sleeps: [], stop: () => Promise.resolve() }, 0, 600, {
       now: clock.now,
-      wait: clock.sleep,
+      sleep: clock.sleep,
     }),
   ).rejects.toThrowWithMessage(
     Error,
@@ -273,7 +273,7 @@ test('#waitForUnderBudget returns once both figures of the last sample are under
   await waitForUnderBudget(
     { samples, sleeps: [], stop: () => Promise.resolve() },
     { budgetMib: 1000, maxStartMs: 2500, maxOverMib: 100 },
-    { now: clock.now, wait: clock.sleep },
+    { now: clock.now, sleep: clock.sleep },
   );
 
   expect(clock.now()).toBe(1000);
@@ -289,7 +289,7 @@ test('#waitForUnderBudget returns without failing once an overshoot outlasts the
   await waitForUnderBudget(
     { samples, sleeps: [], stop: () => Promise.resolve() },
     { budgetMib: 1000, maxStartMs: 2500, maxOverMib: 100 },
-    { now: clock.now, wait: clock.sleep },
+    { now: clock.now, sleep: clock.sleep },
   );
 
   expect(clock.now()).toBe(32_500);

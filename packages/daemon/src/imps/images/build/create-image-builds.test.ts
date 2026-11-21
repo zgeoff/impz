@@ -5,8 +5,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildStubAnswerQueue } from '@impz/shared/test-utils/build-stub-answer-queue';
-import { updateEnv } from '@impz/shared/test-utils/update-env';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { updateEnv, waitFor } from '@zgeoff/testing';
 import invariant from 'tiny-invariant';
 import { loadConfig } from '../../../config';
 import {

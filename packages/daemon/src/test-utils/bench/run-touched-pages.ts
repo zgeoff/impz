@@ -118,7 +118,7 @@ async function waitForReady(
     intervalMs: POLL_MS,
     timeoutMs: READY_TIMEOUT_MS,
     now: deps.now,
-    wait: deps.sleep,
+    sleep: deps.sleep,
   });
 }
 
