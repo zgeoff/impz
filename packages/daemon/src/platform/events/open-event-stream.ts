@@ -5,7 +5,7 @@ import type { LoggedImpEvent } from '../db/imp-log-entry';
 import type { ImpEventsAfter } from '../db/read-imp-events-after';
 import { tailImpEvents } from '../db/tail-imp-events';
 import type { ImpEventsReset } from '../db/tail-imp-events';
-import type { StartTimer } from '../process/clock';
+import type { StartTimer } from '../process/start-timer';
 import { startTimerAt } from '../process/start-timer-at';
 import { buildCursorEvent } from './build-cursor-event';
 import { pickStreamStart } from './pick-stream-start';

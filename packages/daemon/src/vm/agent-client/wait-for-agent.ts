@@ -1,7 +1,7 @@
 import type { Ping } from '@impz/agent-protocol';
 import { getErrorMessage } from '@impz/shared';
-import type { Clock } from '../../platform/process/clock';
-import { REAL_CLOCK } from '../../platform/process/real-clock';
+import type { Clock } from '@zgeoff/std';
+import { systemClock } from '@zgeoff/std';
 import { sendPing } from './send-agent-request';
 
 export interface WaitOptions {
@@ -19,7 +19,7 @@ export async function waitForAgent(
   vsockPath: string,
   options: Readonly<WaitOptions>,
 ): Promise<Ping> {
-  const clock = options.clock ?? REAL_CLOCK;
+  const clock = options.clock ?? systemClock;
   const deadline = clock.now() + options.deadlineMs;
   const maxDelay = options.maxDelayMs ?? 100;
   let delay = options.firstDelayMs ?? 5;

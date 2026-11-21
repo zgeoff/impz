@@ -1,6 +1,7 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
+import { buildAdvancingClock } from '@impz/shared/test-utils/build-advancing-clock';
 import { buildStubAnswerQueue } from '@impz/shared/test-utils/build-stub-answer-queue';
-import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
+import { createFakeClock } from '@zgeoff/testing/clock';
 import type { BudgetSample } from './start-budget-monitor';
 import {
   buildFillScript,
@@ -211,13 +212,13 @@ test('#startBudgetMonitor stops the sampler and the sleep watch once when stop i
 });
 
 test('#waitForSampleAfter waits until a sample lands the given time past the start', async () => {
-  const clock = buildStubClock();
+  const clock = createFakeClock();
 
   const samples = [
     { at: 100, ramUsedMib: 900, awake: 3, firecrackerPssMib: 950, firecrackerOwnedMib: 900 },
   ];
 
-  clock.startTimer(() => {
+  clock.schedule(() => {
     samples.push({
       at: 700,
       ramUsedMib: 900,
@@ -227,26 +228,30 @@ test('#waitForSampleAfter waits until a sample lands the given time past the sta
     });
   }, 700);
 
-  await waitForSampleAfter({ samples, sleeps: [], stop: () => Promise.resolve() }, 0, 600, {
-    now: clock.now,
-    sleep: clock.sleep,
-  });
+  await waitForSampleAfter(
+    { samples, sleeps: [], stop: () => Promise.resolve() },
+    0,
+    600,
+    buildAdvancingClock(clock),
+  );
 
   expect(clock.now()).toBe(1000);
 });
 
 test('#waitForSampleAfter rejects when no sample lands past the start before the deadline', () => {
-  const clock = buildStubClock();
+  const clock = createFakeClock();
 
   const samples = [
     { at: 100, ramUsedMib: 900, awake: 3, firecrackerPssMib: 950, firecrackerOwnedMib: 900 },
   ];
 
   expect(
-    waitForSampleAfter({ samples, sleeps: [], stop: () => Promise.resolve() }, 0, 600, {
-      now: clock.now,
-      sleep: clock.sleep,
-    }),
+    waitForSampleAfter(
+      { samples, sleeps: [], stop: () => Promise.resolve() },
+      0,
+      600,
+      buildAdvancingClock(clock),
+    ),
   ).rejects.toThrowWithMessage(
     Error,
     'timed out after 60000 ms waiting for a budget sample 600 ms after 0: last sample at 100',
@@ -254,13 +259,13 @@ test('#waitForSampleAfter rejects when no sample lands past the start before the
 });
 
 test('#waitForUnderBudget returns once both figures of the last sample are under the budget', async () => {
-  const clock = buildStubClock();
+  const clock = createFakeClock();
 
   const samples = [
     { at: 0, ramUsedMib: 1100, awake: 3, firecrackerPssMib: 1150, firecrackerOwnedMib: 1100 },
   ];
 
-  clock.startTimer(() => {
+  clock.schedule(() => {
     samples.push({
       at: 700,
       ramUsedMib: 900,
@@ -273,14 +278,14 @@ test('#waitForUnderBudget returns once both figures of the last sample are under
   await waitForUnderBudget(
     { samples, sleeps: [], stop: () => Promise.resolve() },
     { budgetMib: 1000, maxStartMs: 2500, maxOverMib: 100 },
-    { now: clock.now, sleep: clock.sleep },
+    buildAdvancingClock(clock),
   );
 
   expect(clock.now()).toBe(1000);
 });
 
 test('#waitForUnderBudget returns without failing once an overshoot outlasts the start limit and the longest sleep', async () => {
-  const clock = buildStubClock();
+  const clock = createFakeClock();
 
   const samples = [
     { at: 0, ramUsedMib: 900, awake: 3, firecrackerPssMib: 1150, firecrackerOwnedMib: 1100 },
@@ -289,7 +294,7 @@ test('#waitForUnderBudget returns without failing once an overshoot outlasts the
   await waitForUnderBudget(
     { samples, sleeps: [], stop: () => Promise.resolve() },
     { budgetMib: 1000, maxStartMs: 2500, maxOverMib: 100 },
-    { now: clock.now, sleep: clock.sleep },
+    buildAdvancingClock(clock),
   );
 
   expect(clock.now()).toBe(32_500);

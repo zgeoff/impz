@@ -1,3 +1,4 @@
+import { systemClock } from '@zgeoff/std';
 import { formatError } from '../cli/run-action';
 import { UsageError } from '../cli/usage-error';
 import type { CliConfig } from '../config/cli-config';
@@ -8,7 +9,7 @@ import type { CliEnv } from '../config/read-host-config';
 
 const HOST_TIMEOUT_MS = 5000;
 
-export type StartTimer = (durationMs: number, fire: () => void) => () => void;
+export type StartTimer = (fire: () => void, durationMs: number) => () => void;
 
 export interface SavedTarget {
   readonly host: string;
@@ -38,7 +39,7 @@ export function runOnHosts<T>(
   targets: readonly SavedTarget[],
   call: (client: ImpClient, signal: AbortSignal) => Promise<T>,
   timeoutMs = HOST_TIMEOUT_MS,
-  startTimer: StartTimer = startTimeout,
+  startTimer: StartTimer = systemClock.schedule,
 ): Promise<HostAnswer<T>[]> {
   return Promise.all(
     targets.map(async (target): Promise<HostAnswer<T>> => {
@@ -57,14 +58,6 @@ export function runOnHosts<T>(
   );
 }
 
-function startTimeout(durationMs: number, fire: () => void): () => void {
-  const timer = setTimeout(fire, durationMs);
-
-  return () => {
-    clearTimeout(timer);
-  };
-}
-
 // the signal aborts the requests; the race ends the wait even when a call
 // does not watch it. The abort in finally also ends the calls still open
 // after another one failed, so none of them keeps the process alive.
@@ -77,10 +70,10 @@ async function runWithTimeout<T>(
 
   const expired = Promise.withResolvers<never>();
 
-  const cancelTimer = startTimer(timeoutMs, () => {
+  const cancelTimer = startTimer(() => {
     controller.abort();
     expired.reject(new Error(`no answer in ${String(timeoutMs / 1000)} s`));
-  });
+  }, timeoutMs);
 
   try {
     return await Promise.race([call(controller.signal), expired.promise]);

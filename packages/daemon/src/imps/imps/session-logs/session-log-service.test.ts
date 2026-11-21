@@ -3,8 +3,9 @@ import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve as resolvePath } from 'node:path';
-import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
+import { fireNextTimer } from '@impz/shared/test-utils/fire-next-timer';
 import { waitFor } from '@zgeoff/testing';
+import { createFakeClock } from '@zgeoff/testing/clock';
 import invariant from 'tiny-invariant';
 import { ImpdError } from '../../../platform/errors/impd-error';
 import { buildStubTapOpener } from '../../../test-utils/host-net/build-stub-tap-opener';
@@ -35,7 +36,7 @@ async function setupTest() {
     stack,
     root,
     sessionLogsDir: join(root, 'session-logs'),
-    timers: buildStubClock(),
+    timers: createFakeClock(),
     calls: taps.calls,
     answers: taps.answers,
     looks,
@@ -60,7 +61,7 @@ test('it taps a logged session from the start of its ring', async () => {
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => 10_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -116,7 +117,7 @@ test('it ends the log with the final end and exit code when its session exits', 
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => 10_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -192,7 +193,7 @@ test('it reads the logged bytes from the offset asked for', async () => {
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => 10_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -259,7 +260,7 @@ test('it rejects a read past the end of the log', async () => {
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => 10_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -318,7 +319,7 @@ test('it rejects a read of a generation it holds no log of', async () => {
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => 10_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -346,7 +347,7 @@ test('it taps a dropped tap again from the end of its log', async () => {
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => 10_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -433,7 +434,7 @@ test('it leaves a hole for the bytes the ring lost before a tap again', async ()
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => 10_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -535,7 +536,7 @@ test('it ends the log without a final end when its session is no longer listed',
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => 10_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -605,7 +606,7 @@ test('it ends the log with the final end the agent kept when the session is gone
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => 10_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -693,7 +694,7 @@ test('it ends the old log and logs the next generation from its first offset whe
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => 10_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -797,7 +798,7 @@ test('it closes the tap and removes the log when a live log is deleted', async (
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => 10_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -858,7 +859,7 @@ test('it never taps a deleted live log again', async () => {
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => 10_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -925,7 +926,7 @@ test('it taps a deleted ended log no more while the agent still lists its sessio
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => 10_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -1019,7 +1020,7 @@ test("it never deletes another session's log or another imp's logs", async () =>
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => 10_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -1053,7 +1054,7 @@ test("it never deletes another session's log or another imp's logs", async () =>
           maxBytes: 1024,
           requireRoom: () => Promise.resolve(),
           now: () => 9000,
-          startTimer: ctx.timers.startTimer,
+          startTimer: ctx.timers.schedule,
         },
         {
           session: each.session,
@@ -1093,7 +1094,7 @@ test('it ends the live logs of a stopped imp when it sweeps', async () => {
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => 10_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -1154,7 +1155,7 @@ test('it keeps an ended log until it is past its age when it sweeps', async () =
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => clock.now,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -1170,7 +1171,7 @@ test('it keeps an ended log until it is past its age when it sweeps', async () =
       maxBytes: 1024,
       requireRoom: () => Promise.resolve(),
       now: () => 10_000,
-      startTimer: ctx.timers.startTimer,
+      startTimer: ctx.timers.schedule,
     },
     {
       session: 'main',
@@ -1208,7 +1209,7 @@ test('it removes an ended log past its age when it sweeps', async () => {
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => clock.now,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -1224,7 +1225,7 @@ test('it removes an ended log past its age when it sweeps', async () => {
       maxBytes: 1024,
       requireRoom: () => Promise.resolve(),
       now: () => 10_000,
-      startTimer: ctx.timers.startTimer,
+      startTimer: ctx.timers.schedule,
     },
     {
       session: 'main',
@@ -1267,7 +1268,7 @@ test('it never sweeps a live log, a young ended log, or the logs of an imp it wa
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => 100_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -1298,7 +1299,7 @@ test('it never sweeps a live log, a young ended log, or the logs of an imp it wa
           maxBytes: 1024,
           requireRoom: () => Promise.resolve(),
           now: () => each.at,
-          startTimer: ctx.timers.startTimer,
+          startTimer: ctx.timers.schedule,
         },
         {
           session: 'main',
@@ -1347,7 +1348,7 @@ test.each([
       limits: { generationMaxBytes: 1024, impMaxBytes: 1000, impMaxLive: 8, maxAgeMs: 1e9 },
       requireRoom: () => Promise.resolve(),
       now: () => clock.now,
-      startTimer: ctx.timers.startTimer,
+      startTimer: ctx.timers.schedule,
       openTap: ctx.openTap,
       onLookDone: ctx.onLookDone,
     });
@@ -1486,7 +1487,7 @@ test('it stops the log for a full disk and closes its tap', async () => {
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.reject(new ImpdError('DISK_FULL', { message: 'full' })),
     now: () => 10_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -1550,7 +1551,7 @@ test('it never taps a log that stopped for a full disk again', async () => {
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.reject(new ImpdError('DISK_FULL', { message: 'full' })),
     now: () => 10_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -1620,7 +1621,7 @@ test('it taps a live log on from its end after impd restarts', async () => {
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => 10_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -1660,7 +1661,7 @@ test('it taps a live log on from its end after impd restarts', async () => {
     expect(logs.listLogs(imp)[0]?.logEnd).toBe(6);
   });
 
-  ctx.timers.firePending();
+  fireNextTimer(ctx.timers);
 
   const logDir = join(imp.sessionLogsDir, 'a'.repeat(32));
 
@@ -1674,7 +1675,7 @@ test('it taps a live log on from its end after impd restarts', async () => {
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => 10_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -1729,7 +1730,7 @@ test('it keeps the bytes from before an impd restart in the log it goes on with'
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => 10_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -1769,7 +1770,7 @@ test('it keeps the bytes from before an impd restart in the log it goes on with'
     expect(logs.listLogs(imp)[0]?.logEnd).toBe(6);
   });
 
-  ctx.timers.firePending();
+  fireNextTimer(ctx.timers);
 
   const logDir = join(imp.sessionLogsDir, 'a'.repeat(32));
 
@@ -1783,7 +1784,7 @@ test('it keeps the bytes from before an impd restart in the log it goes on with'
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => 10_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -1878,7 +1879,7 @@ test.each([
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => 10_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -1906,7 +1907,7 @@ test('it touches neither the disk nor the agent for a session with a hostile gen
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => 10_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -1992,7 +1993,7 @@ test('it touches neither the disk nor the agent for a session with a hostile boo
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => 10_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -2076,7 +2077,7 @@ test('it touches neither the disk nor the agent for a session with a hostile nam
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => 10_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -2248,7 +2249,7 @@ test.each([
       limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
       requireRoom: () => Promise.resolve(),
       now: () => 10_000,
-      startTimer: ctx.timers.startTimer,
+      startTimer: ctx.timers.schedule,
       openTap: ctx.openTap,
       onLookDone: ctx.onLookDone,
     });
@@ -2349,7 +2350,7 @@ test('it lists no log for a meta on disk that names another generation', async (
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => 10_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -2391,7 +2392,7 @@ test('it leaves a directory alone whose meta names another generation', async ()
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => 10_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -2442,7 +2443,7 @@ test('it logs at most its cap of generations for a forged agent that lists many'
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => 10_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -2495,7 +2496,7 @@ test('it says at most once a minute that an imp has its cap of live logs', async
   const ctx = await setupTest();
 
   const lines = captureImpdLogs();
-  const clock = buildStubClock({ startMs: 100_000 });
+  const clock = createFakeClock({ startMs: 100_000 });
 
   const imp: SessionLogImp = {
     id: 'imp-1',
@@ -2508,7 +2509,7 @@ test('it says at most once a minute that an imp has its cap of live logs', async
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 1, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: clock.now,
-    startTimer: clock.startTimer,
+    startTimer: clock.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -2550,7 +2551,7 @@ test('it says at most once a minute that an imp has its cap of live logs', async
     expect(ctx.looks.done).toBe(1);
   });
 
-  clock.runFor(59_999);
+  clock.advance(59_999);
   logs.observe(imp, sessions);
 
   await waitFor(() => {
@@ -2566,7 +2567,7 @@ test('it says again that an imp has its cap of live logs once a minute has passe
   const ctx = await setupTest();
 
   const lines = captureImpdLogs();
-  const clock = buildStubClock({ startMs: 100_000 });
+  const clock = createFakeClock({ startMs: 100_000 });
 
   const imp: SessionLogImp = {
     id: 'imp-1',
@@ -2579,7 +2580,7 @@ test('it says again that an imp has its cap of live logs once a minute has passe
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 1, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: clock.now,
-    startTimer: clock.startTimer,
+    startTimer: clock.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -2621,7 +2622,7 @@ test('it says again that an imp has its cap of live logs once a minute has passe
     expect(ctx.looks.done).toBe(1);
   });
 
-  clock.runFor(60_000);
+  clock.advance(60_000);
   logs.observe(imp, sessions);
 
   await waitFor(() => {
@@ -2648,7 +2649,7 @@ test('it keeps the imp under its limit while its logs roll past their first segm
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => 10_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -2726,7 +2727,7 @@ test('it keeps the imp under its limit while a log grows within one segment', as
     limits: { generationMaxBytes: 2048, impMaxBytes: 1000, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => 10_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -2824,7 +2825,7 @@ test('it stops the newest live log once only live logs keep the imp past its lim
     limits: { generationMaxBytes: 200, impMaxBytes: 150, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => 10_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -2932,7 +2933,7 @@ test('it never taps a log that stopped at the imp limit again', async () => {
     limits: { generationMaxBytes: 200, impMaxBytes: 150, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => 10_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -3046,7 +3047,7 @@ test('it leaves no directory behind for a log being made when the imp is destroy
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => 10_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -3099,7 +3100,7 @@ test('it writes nothing for work from before a destroy once the imp is moved hom
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => 10_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -3163,7 +3164,7 @@ test('it logs again for an imp moved home under its id after a destroy', async (
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => 10_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -3239,7 +3240,7 @@ test.each([
       limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
       requireRoom: () => Promise.resolve(),
       now: () => 10_000,
-      startTimer: ctx.timers.startTimer,
+      startTimer: ctx.timers.schedule,
       openTap: ctx.openTap,
       onLookDone: ctx.onLookDone,
     });
@@ -3352,7 +3353,7 @@ test('it opens no second tap when a tap from before a destroy fails once the imp
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => 10_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -3459,7 +3460,7 @@ test("it still ends the new life's log once its session is gone after a tap from
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => 10_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -3559,7 +3560,7 @@ test("it frees no slot of the imp's next life for a log made across a destroy an
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => 10_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
     createLog: gate.createLog,
@@ -3669,7 +3670,7 @@ test("it stops no log of the imp's next life for a limit check held across a des
     limits: { generationMaxBytes: 2048, impMaxBytes: 100, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => 10_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
     createLog: gate.createLog,
@@ -3793,7 +3794,7 @@ test("it removes none of the imp's next life's logs for a limit check from befor
     limits: { generationMaxBytes: 2048, impMaxBytes: 100, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => 10_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
     createLog: gate.createLog,
@@ -3842,7 +3843,7 @@ test("it removes none of the imp's next life's logs for a limit check from befor
       maxBytes: 2048,
       requireRoom: () => Promise.resolve(),
       now: () => 1,
-      startTimer: ctx.timers.startTimer,
+      startTimer: ctx.timers.schedule,
     },
     {
       session: 'main',
@@ -3883,7 +3884,7 @@ test('it closes the tap of a next generation whose log cannot be made', async ()
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => 10_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -3979,7 +3980,7 @@ test('it taps a next generation again at the next look once its log can be made'
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => 10_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -4096,7 +4097,7 @@ test('it never taps a deleted live log again after impd restarts', async () => {
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => 10_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -4137,7 +4138,7 @@ test('it never taps a deleted live log again after impd restarts', async () => {
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => 10_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });
@@ -4177,7 +4178,7 @@ test('it removes the tombstone of a deleted generation once the agent no longer 
     limits: { generationMaxBytes: 1024, impMaxBytes: 4096, impMaxLive: 8, maxAgeMs: 1000 },
     requireRoom: () => Promise.resolve(),
     now: () => 10_000,
-    startTimer: ctx.timers.startTimer,
+    startTimer: ctx.timers.schedule,
     openTap: ctx.openTap,
     onLookDone: ctx.onLookDone,
   });

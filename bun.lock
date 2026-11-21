@@ -87,6 +87,7 @@
         "@impz/local-tar": "workspace:*",
         "@impz/mcp": "workspace:*",
         "@impz/shared": "workspace:*",
+        "@zgeoff/std": "catalog:",
         "gunshi": "catalog:",
         "p-retry": "catalog:",
         "ts-pattern": "catalog:",

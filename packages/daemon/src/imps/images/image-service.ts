@@ -1,4 +1,6 @@
 import { getErrorMessage } from '@impz/shared';
+import type { Clock } from '@zgeoff/std';
+import { systemClock } from '@zgeoff/std';
 import {
   listImages,
   readImageByName,
@@ -15,9 +17,7 @@ import {
   buildForbiddenError,
   buildNotFoundError,
 } from '../../platform/errors/build-not-found-error';
-import type { Clock } from '../../platform/process/clock';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
-import { REAL_CLOCK } from '../../platform/process/real-clock';
 import type { StreamedRunner } from '../../platform/process/run-streamed';
 import type { DiskBudget } from '../../vm/storage/disk-budget';
 import type { StorageBackend } from '../../vm/storage/storage-backend';
@@ -84,7 +84,7 @@ export interface ImageServiceDeps {
 }
 
 export function createImageService(deps: ImageServiceDeps): ImageService {
-  const clock = deps.clock ?? REAL_CLOCK;
+  const clock = deps.clock ?? systemClock;
 
   const writer = createImageWriter({
     ...deps,

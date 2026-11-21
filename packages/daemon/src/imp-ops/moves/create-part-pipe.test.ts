@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
-import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
 import { waitFor } from '@zgeoff/testing';
+import { createFakeClock } from '@zgeoff/testing/clock';
 import { createPartPipe, sendInParts } from './create-part-pipe';
 
 test('#sendInParts splits the frames into bodies of at most the part size', async () => {
@@ -71,7 +71,7 @@ test('#sendInParts closes the frames when a post fails, so their files close', (
 });
 
 test('#createPartPipe gives up when the next part does not come before its deadline', async () => {
-  const timer = buildStubClock();
+  const timer = createFakeClock();
   const pipe = createPartPipe(20, timer);
 
   const read = new Response(pipe.stream).bytes();
@@ -80,13 +80,13 @@ test('#createPartPipe gives up when the next part does not come before its deadl
     expect(timer.countPending()).toBe(1);
   });
 
-  timer.runFor(21);
+  timer.advance(21);
 
   expect(read).rejects.toThrowWithMessage(Error, 'the next part of the move stream did not come');
 });
 
 test('#createPartPipe keeps waiting for the next part until its deadline passes', async () => {
-  const timer = buildStubClock();
+  const timer = createFakeClock();
   const pipe = createPartPipe(20, timer);
 
   const read = new Response(pipe.stream).bytes();
@@ -95,7 +95,7 @@ test('#createPartPipe keeps waiting for the next part until its deadline passes'
     expect(timer.countPending()).toBe(1);
   });
 
-  timer.runFor(20);
+  timer.advance(20);
 
   await waitFor(() => {
     expect(timer.countPending()).toBe(1);

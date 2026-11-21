@@ -12,8 +12,8 @@ import {
   buildNotFoundError,
 } from '../../../platform/errors/build-not-found-error';
 import { ImpdError, isImpdError } from '../../../platform/errors/impd-error';
-import type { StartTimer } from '../../../platform/process/clock';
 import { startRealTimer } from '../../../platform/process/start-real-timer';
+import type { StartTimer } from '../../../platform/process/start-timer';
 import { AgentError } from '../../../vm/agent-client/agent-connection';
 import {
   openServiceLogStream,

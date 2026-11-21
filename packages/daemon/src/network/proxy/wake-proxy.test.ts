@@ -1,9 +1,11 @@
 // oxlint-disable zgeoff/seed-only -- seeds its rows with direct writes until each owner module has a test-utils seed
 import { expect, jest, mock, onTestFinished, test } from 'bun:test';
 import { join } from 'node:path';
-import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
+import { fireNextTimer } from '@impz/shared/test-utils/fire-next-timer';
+import { readNextDelayMs } from '@impz/shared/test-utils/read-next-delay-ms';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import { waitFor } from '@zgeoff/testing';
+import { createFakeClock } from '@zgeoff/testing/clock';
 import { claimFreePorts } from '@zgeoff/testing/process';
 import invariant from 'tiny-invariant';
 import {
@@ -1426,7 +1428,7 @@ test('it answers a 502 when the imp’s WebSocket does not open in time', async 
     silent.stop(true);
   });
 
-  const clock = buildStubClock();
+  const clock = createFakeClock();
 
   const proxy = startWakeProxy({
     config: ctx.config,
@@ -1435,7 +1437,7 @@ test('it answers a 502 when the imp’s WebSocket does not open in time', async 
     peers: createForwardedPeers(Date.now),
     ports: { proxy: 0, slot: () => 0 },
     upstreamSocketTimeoutMs: 50,
-    startTimer: clock.startTimer,
+    startTimer: clock.schedule,
   });
 
   ctx.stack.defer(() => proxy.stop());
@@ -1457,10 +1459,10 @@ test('it answers a 502 when the imp’s WebSocket does not open in time', async 
   });
 
   await waitFor(() => {
-    expect(clock.readPendingMs()).toStrictEqual([50]);
+    expect(readNextDelayMs(clock)).toBe(50);
   });
 
-  clock.firePending();
+  fireNextTimer(clock);
 
   const response = await responding;
 

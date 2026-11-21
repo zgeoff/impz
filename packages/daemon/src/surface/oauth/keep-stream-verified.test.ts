@@ -1,12 +1,13 @@
 import { expect, test } from 'bun:test';
-import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
+import { readNextDelayMs } from '@impz/shared/test-utils/read-next-delay-ms';
 import { waitFor } from '@zgeoff/testing';
+import { createFakeClock } from '@zgeoff/testing/clock';
 import { keepStreamVerified } from './keep-stream-verified';
 
 function setupTest(probes: readonly (boolean | Error)[]) {
   const source = Promise.withResolvers<ReadableStreamDefaultController<Uint8Array>>();
   const state = { isCancelled: false, probed: 0 };
-  const clock = buildStubClock();
+  const clock = createFakeClock();
 
   const body = new ReadableStream<Uint8Array>({
     start: (controller) => {
@@ -26,7 +27,7 @@ function setupTest(probes: readonly (boolean | Error)[]) {
       return answer instanceof Error ? Promise.reject(answer) : Promise.resolve(answer);
     },
     everyMs: 600_000,
-    startTimer: clock.startTimer,
+    startTimer: clock.schedule,
   });
 
   return { stream, source: source.promise, state, clock };
@@ -50,13 +51,13 @@ test('#keepStreamVerified checks the token every interval, and ends the stream a
 
   const read = new Response(ctx.stream).text();
 
-  ctx.clock.runFor(600_000);
+  ctx.clock.advance(600_000);
 
   await waitFor(() => {
-    expect(ctx.clock.readPendingMs()).toStrictEqual([600_000]);
+    expect(readNextDelayMs(ctx.clock)).toBe(600_000);
   });
 
-  ctx.clock.runFor(600_000);
+  ctx.clock.advance(600_000);
 
   const text = await read;
 
@@ -72,7 +73,7 @@ test('#keepStreamVerified ends the stream when the check throws', async () => {
 
   const read = new Response(ctx.stream).text();
 
-  ctx.clock.runFor(600_000);
+  ctx.clock.advance(600_000);
 
   const text = await read;
 
@@ -84,10 +85,12 @@ test('#keepStreamVerified stops checking once its reader cancels', async () => {
 
   await ctx.stream.cancel();
 
-  expect({ pending: ctx.clock.readPendingMs(), isCancelled: ctx.state.isCancelled }).toStrictEqual({
-    pending: [],
-    isCancelled: true,
-  });
+  expect({ pending: readNextDelayMs(ctx.clock), isCancelled: ctx.state.isCancelled }).toStrictEqual(
+    {
+      pending: null,
+      isCancelled: true,
+    },
+  );
 });
 
 test('#keepStreamVerified stops checking once its source fails', async () => {
@@ -101,8 +104,8 @@ test('#keepStreamVerified stops checking once its source fails', async () => {
 
   const [outcome] = await Promise.allSettled([read]);
 
-  expect({ outcome, pending: ctx.clock.readPendingMs() }).toStrictEqual({
+  expect({ outcome, pending: readNextDelayMs(ctx.clock) }).toStrictEqual({
     outcome: { status: 'rejected', reason: expect.toBeObject() },
-    pending: [],
+    pending: null,
   });
 });

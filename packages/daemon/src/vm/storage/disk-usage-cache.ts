@@ -2,9 +2,9 @@ import { getErrorMessage } from '@impz/shared';
 import { listCheckpoints } from '../../platform/db/create-checkpoint';
 import { listImps } from '../../platform/db/list-imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
-import type { StartTimer } from '../../platform/process/clock';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { startRealTimer } from '../../platform/process/start-real-timer';
+import type { StartTimer } from '../../platform/process/start-timer';
 import type { ImpDiskUsage, StorageBackend } from './storage-backend';
 
 const REFRESH_DELAY_MS = 10_000;

@@ -1,55 +1,65 @@
 import { expect, mock, test } from 'bun:test';
-import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
+import { awaitWithClock } from '@impz/shared/test-utils/await-with-clock';
+import { createFakeClock } from '@zgeoff/testing/clock';
 import { waitForGuestAge } from './wait-for-guest-age';
 
 test('it sleeps a guest old enough at once without a wait', async () => {
-  const clock = buildStubClock();
+  const clock = createFakeClock();
 
-  const waited = await waitForGuestAge({
-    readUptimeMs: () => Promise.resolve(5000),
-    minUptimeMs: 1500,
-    isWanted: () => Promise.resolve(true),
-    now: clock.now,
-    sleep: clock.sleep,
-  });
+  const waited = await awaitWithClock(
+    clock,
+    waitForGuestAge({
+      readUptimeMs: () => Promise.resolve(5000),
+      minUptimeMs: 1500,
+      isWanted: () => Promise.resolve(true),
+      now: clock.now,
+      sleep: clock.sleep,
+    }),
+  );
 
   expect(waited).toBe(0);
-  expect(clock.sleeps).toStrictEqual([]);
+  expect(clock.delays).toStrictEqual([]);
 });
 
 test('it waits out the rest of the minimum uptime for a young guest', async () => {
-  const clock = buildStubClock();
+  const clock = createFakeClock();
 
-  const waited = await waitForGuestAge({
-    readUptimeMs: () => Promise.resolve(1350),
-    minUptimeMs: 1500,
-    isWanted: () => Promise.resolve(true),
-    now: clock.now,
-    sleep: clock.sleep,
-  });
+  const waited = await awaitWithClock(
+    clock,
+    waitForGuestAge({
+      readUptimeMs: () => Promise.resolve(1350),
+      minUptimeMs: 1500,
+      isWanted: () => Promise.resolve(true),
+      now: clock.now,
+      sleep: clock.sleep,
+    }),
+  );
 
   expect(waited).toBe(150);
 });
 
 test('it checks whether the sleep is still wanted every 50 ms of the wait', async () => {
-  const clock = buildStubClock();
+  const clock = createFakeClock();
   const steps: (number | 'check')[] = [];
 
-  await waitForGuestAge({
-    readUptimeMs: () => Promise.resolve(1380),
-    minUptimeMs: 1500,
-    isWanted: () => {
-      steps.push('check');
+  await awaitWithClock(
+    clock,
+    waitForGuestAge({
+      readUptimeMs: () => Promise.resolve(1380),
+      minUptimeMs: 1500,
+      isWanted: () => {
+        steps.push('check');
 
-      return Promise.resolve(true);
-    },
-    now: clock.now,
-    sleep: (durationMs) => {
-      steps.push(durationMs);
+        return Promise.resolve(true);
+      },
+      now: clock.now,
+      sleep: (durationMs) => {
+        steps.push(durationMs);
 
-      return clock.sleep(durationMs);
-    },
-  });
+        return clock.sleep(durationMs);
+      },
+    }),
+  );
 
   expect(steps).toStrictEqual(['check', 50, 'check', 50, 'check', 20, 'check']);
 });
@@ -78,32 +88,38 @@ test('it lets the sleep go ahead when the agent does not answer', async () => {
 });
 
 test('it gives way during the wait once the sleep is no longer wanted', async () => {
-  const clock = buildStubClock();
+  const clock = createFakeClock();
   const answers = [true, true, false];
 
-  const waited = await waitForGuestAge({
-    readUptimeMs: () => Promise.resolve(0),
-    minUptimeMs: 1500,
-    isWanted: () => Promise.resolve(answers.shift() ?? false),
-    now: clock.now,
-    sleep: clock.sleep,
-  });
+  const waited = await awaitWithClock(
+    clock,
+    waitForGuestAge({
+      readUptimeMs: () => Promise.resolve(0),
+      minUptimeMs: 1500,
+      isWanted: () => Promise.resolve(answers.shift() ?? false),
+      now: clock.now,
+      sleep: clock.sleep,
+    }),
+  );
 
   expect(waited).toBeNull();
   expect(clock.now()).toBe(100);
 });
 
 test('it gives way when the sleep is no longer wanted as the wait ends', async () => {
-  const clock = buildStubClock();
+  const clock = createFakeClock();
   const answers = [true, false];
 
-  const waited = await waitForGuestAge({
-    readUptimeMs: () => Promise.resolve(1450),
-    minUptimeMs: 1500,
-    isWanted: () => Promise.resolve(answers.shift() ?? false),
-    now: clock.now,
-    sleep: clock.sleep,
-  });
+  const waited = await awaitWithClock(
+    clock,
+    waitForGuestAge({
+      readUptimeMs: () => Promise.resolve(1450),
+      minUptimeMs: 1500,
+      isWanted: () => Promise.resolve(answers.shift() ?? false),
+      now: clock.now,
+      sleep: clock.sleep,
+    }),
+  );
 
   expect(waited).toBeNull();
 });

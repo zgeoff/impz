@@ -8,7 +8,7 @@ import { updateImpMove } from '../../platform/db/list-imps';
 import type { ImpRecord } from '../../platform/db/list-imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { updateMoveSendStep } from '../../platform/db/read-move-send';
-import type { StartTimer } from '../../platform/process/clock';
+import type { StartTimer } from '../../platform/process/start-timer';
 import { parseOpaqueToken } from '../../platform/secrets/parse-opaque-token';
 import { encodeSnapshotMeta } from '../../vm/sleep/snapshot-meta';
 import type { MoveMode, StorageBackend } from '../../vm/storage/storage-backend';

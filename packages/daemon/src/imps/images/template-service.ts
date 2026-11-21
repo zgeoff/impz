@@ -1,5 +1,7 @@
 import { copyFileSync, existsSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import type { Clock } from '@zgeoff/std';
+import { systemClock } from '@zgeoff/std';
 import { readImageById } from '../../platform/db/create-image';
 import type { ImageRecord } from '../../platform/db/create-image';
 import type { ImpDatabase } from '../../platform/db/open-database';
@@ -8,9 +10,7 @@ import {
   buildInvalidStateError,
   buildNotBackedUpError,
 } from '../../platform/errors/build-not-found-error';
-import type { Clock } from '../../platform/process/clock';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
-import { REAL_CLOCK } from '../../platform/process/real-clock';
 import { buildImagePaths } from '../../vm/storage/build-imp-paths';
 import type { DiskBudget } from '../../vm/storage/disk-budget';
 import type { StorageBackend } from '../../vm/storage/storage-backend';
@@ -46,7 +46,7 @@ interface TemplateServiceDeps {
 }
 
 export function createTemplateService(deps: TemplateServiceDeps): TemplateService {
-  const clock = deps.clock ?? REAL_CLOCK;
+  const clock = deps.clock ?? systemClock;
   const storage = deps.storage;
 
   const withConsistentDisk = createConsistentDisk({

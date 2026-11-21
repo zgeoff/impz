@@ -1,7 +1,7 @@
 import { connect } from 'node:net';
 import { getErrorMessage } from '@impz/shared';
-import type { StartTimer } from '../../platform/process/clock';
 import { startRealTimer } from '../../platform/process/start-real-timer';
+import type { StartTimer } from '../../platform/process/start-timer';
 
 const UPSTREAM_TIMEOUT_MS = 2000;
 const TC = 0x02_00;

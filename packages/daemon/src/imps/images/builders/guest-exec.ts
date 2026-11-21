@@ -1,5 +1,5 @@
-import type { StartTimer } from '../../../platform/process/clock';
 import { startRealTimer } from '../../../platform/process/start-real-timer';
+import type { StartTimer } from '../../../platform/process/start-timer';
 import type { AgentExecRequest, ExecStream } from '../../../vm/agent-client/exec-stream';
 
 const STDOUT_MAX_BYTES = 1024 ** 2;

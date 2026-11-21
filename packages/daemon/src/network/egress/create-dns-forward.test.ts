@@ -1,6 +1,8 @@
 import { expect, test } from 'bun:test';
-import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
+import { fireNextTimer } from '@impz/shared/test-utils/fire-next-timer';
+import { readNextDelayMs } from '@impz/shared/test-utils/read-next-delay-ms';
 import { waitFor } from '@zgeoff/testing';
+import { createFakeClock } from '@zgeoff/testing/clock';
 import { claimFreePorts } from '@zgeoff/testing/process';
 import * as dnsPacket from 'dns-packet';
 import invariant from 'tiny-invariant';
@@ -116,21 +118,21 @@ test('it rejects with every upstream failure when none answers', async () => {
 test('it gives an upstream 2 s to answer by default', async () => {
   const upstream = await startStubDnsUpstream({ port: claimFreePorts(1).take(), udp: 'drop' });
 
-  const clock = buildStubClock();
-  const forward = createDnsForward(['127.0.0.1'], upstream.port, undefined, clock.startTimer);
+  const clock = createFakeClock();
+  const forward = createDnsForward(['127.0.0.1'], upstream.port, undefined, clock.schedule);
   const forwarded = forward(buildMockDnsQuery({ name: 'example.com', type: 'A' }));
 
   const pendingMs = await waitFor(() => {
-    const pending = clock.readPendingMs();
+    const pending = readNextDelayMs(clock);
 
-    invariant(pending[0] !== undefined);
+    invariant(pending !== null);
 
     return pending;
   });
 
-  clock.firePending();
+  fireNextTimer(clock);
 
-  expect(pendingMs).toStrictEqual([2000]);
+  expect(pendingMs).toBe(2000);
 
   expect(forwarded).rejects.toThrow(
     new Error('no upstream resolver answered (127.0.0.1: timed out)'),

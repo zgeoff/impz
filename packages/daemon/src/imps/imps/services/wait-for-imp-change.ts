@@ -1,5 +1,5 @@
 import type { ImpEventLog } from '../../../platform/db/create-imp-event-log';
-import type { StartTimer } from '../../../platform/process/clock';
+import type { StartTimer } from '../../../platform/process/start-timer';
 
 export function waitForImpChange(
   context: Readonly<{ events: Pick<ImpEventLog, 'subscribe'>; startTimer: StartTimer }>,

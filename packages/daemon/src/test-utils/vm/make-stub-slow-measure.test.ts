@@ -1,10 +1,10 @@
 import { expect, test } from 'bun:test';
-import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
+import { createFakeClock } from '@zgeoff/testing/clock';
 import { buildMockImpDiskUsage } from './build-mock-imp-disk-usage';
 import { makeStubSlowMeasure } from './make-stub-slow-measure';
 
 test('it answers the report it was given', async () => {
-  const clock = buildStubClock();
+  const clock = createFakeClock();
   const report = { imps: new Map([['imp-1', buildMockImpDiskUsage()]]), isPartial: true };
   const measureUsage = makeStubSlowMeasure(clock, 4000, report);
 
@@ -14,7 +14,7 @@ test('it answers the report it was given', async () => {
 });
 
 test('it moves the clock on by its time during each call', async () => {
-  const clock = buildStubClock({ startMs: 5000 });
+  const clock = createFakeClock({ startMs: 5000 });
   const measureUsage = makeStubSlowMeasure(clock, 4000, { imps: new Map(), isPartial: false });
 
   await measureUsage([]);

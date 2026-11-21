@@ -2,10 +2,13 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { buildAdvancingClock } from '@impz/shared/test-utils/build-advancing-clock';
 import { buildStubAnswerQueue } from '@impz/shared/test-utils/build-stub-answer-queue';
-import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
+import { fireNextTimer } from '@impz/shared/test-utils/fire-next-timer';
+import { readNextDelayMs } from '@impz/shared/test-utils/read-next-delay-ms';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import { waitFor } from '@zgeoff/testing';
+import { createFakeClock } from '@zgeoff/testing/clock';
 import invariant from 'tiny-invariant';
 import { createImage } from '../../../platform/db/create-image';
 import { listImps, readImpByName } from '../../../platform/db/list-imps';
@@ -173,7 +176,7 @@ test('it asks the builder engine again, a poll later, until it answers, then run
   const ctx = await setupTest();
 
   const guest = buildStubGuest(makeStubEngineAnswer({ refusals: 1, answer: { stdout: 'ok' } }));
-  const clock = buildStubClock();
+  const clock = createFakeClock();
 
   const builders = createBuilders({
     config: ctx.config,
@@ -185,7 +188,7 @@ test('it asks the builder engine again, a poll later, until it answers, then run
     ensureImage: async () => {
       await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: ctx.config.build.image });
     },
-    clock,
+    clock: buildAdvancingClock(clock),
   });
 
   const ran = await builders.withBuilder(
@@ -198,7 +201,7 @@ test('it asks the builder engine again, a poll later, until it answers, then run
   );
 
   expect(ran).toBe('ok');
-  expect(clock.sleeps).toStrictEqual([500]);
+  expect(clock.delays).toStrictEqual([500]);
 
   expect(guest.runs.map((run) => run.argv.join(' '))).toStrictEqual([
     'docker info --format {{.ServerVersion}}',
@@ -212,7 +215,7 @@ test('it logs the time its builder took to answer, on its clock', async () => {
 
   const logs = captureImpdLogs();
   const guest = buildStubGuest(makeStubEngineAnswer({ refusals: 1, answer: { stdout: 'ok' } }));
-  const clock = buildStubClock();
+  const clock = createFakeClock();
 
   const builders = createBuilders({
     config: ctx.config,
@@ -224,7 +227,7 @@ test('it logs the time its builder took to answer, on its clock', async () => {
     ensureImage: async () => {
       await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: ctx.config.build.image });
     },
-    clock,
+    clock: buildAdvancingClock(clock),
     pickBuilderName: () => 'imp-build-timed',
   });
 
@@ -363,7 +366,7 @@ test('it fails the build when the builder engine does not answer in 60 s, and re
   const ctx = await setupTest();
 
   const guest = buildStubGuest(() => ({ code: 1, stderr: 'Cannot connect to the Docker daemon' }));
-  const clock = buildStubClock();
+  const clock = createFakeClock();
 
   const builders = createBuilders({
     config: ctx.config,
@@ -375,7 +378,7 @@ test('it fails the build when the builder engine does not answer in 60 s, and re
     ensureImage: async () => {
       await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: ctx.config.build.image });
     },
-    clock,
+    clock: buildAdvancingClock(clock),
   });
 
   const building = builders.withBuilder(
@@ -417,7 +420,7 @@ test('it asks the builder engine again when the agent sends no exec start in tim
     ensureImage: async () => {
       await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: ctx.config.build.image });
     },
-    clock: buildStubClock(),
+    clock: buildAdvancingClock(createFakeClock()),
   });
 
   const built = await builders.withBuilder(
@@ -444,7 +447,7 @@ test('it fails the build in 60 s when the agent never sends an exec start', asyn
     ensureImage: async () => {
       await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: ctx.config.build.image });
     },
-    clock: buildStubClock(),
+    clock: buildAdvancingClock(createFakeClock()),
   });
 
   const building = builders.withBuilder(
@@ -461,7 +464,7 @@ test('it fails the build in 60 s when the agent never sends an exec start', asyn
 test('it names the time the engine wait took when each exec start stalls past the 60 s', async () => {
   const ctx = await setupTest();
 
-  const clock = buildStubClock();
+  const clock = createFakeClock();
 
   const builders = createBuilders({
     config: ctx.config,
@@ -469,7 +472,7 @@ test('it names the time the engine wait took when each exec start stalls past th
     imps: {
       ...ctx.impd.imps,
       openBuilderExec: () => {
-        clock.runFor(25_000);
+        clock.advance(25_000);
 
         return Promise.reject(
           new AgentWaitError('agent at builder.sock sent no exec start within 25000 ms'),
@@ -479,7 +482,7 @@ test('it names the time the engine wait took when each exec start stalls past th
     ensureImage: async () => {
       await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: ctx.config.build.image });
     },
-    clock,
+    clock: buildAdvancingClock(clock),
   });
 
   const building = builders.withBuilder(
@@ -506,7 +509,7 @@ test('it fails the build at once with the error of an exec open that is no late 
     ensureImage: async () => {
       await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: ctx.config.build.image });
     },
-    clock: buildStubClock(),
+    clock: buildAdvancingClock(createFakeClock()),
   });
 
   const building = builders.withBuilder(
@@ -537,7 +540,7 @@ test("it gives the tail of the builder engine's log when the engine does not ans
     ensureImage: async () => {
       await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: ctx.config.build.image });
     },
-    clock: buildStubClock(),
+    clock: buildAdvancingClock(createFakeClock()),
   });
 
   const building = builders.withBuilder(
@@ -620,7 +623,7 @@ test('it keeps the build of a builder that survives its removal, and logs the su
   const ctx = await setupTest();
 
   const guest = buildStubGuest(() => ({ stdout: 'ok' }));
-  const timers = buildStubClock();
+  const timers = createFakeClock();
   const logs = captureImpdLogs();
 
   const builders = createBuilders({
@@ -633,7 +636,7 @@ test('it keeps the build of a builder that survives its removal, and logs the su
     ensureImage: async () => {
       await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: ctx.config.build.image });
     },
-    startTimer: timers.startTimer,
+    startTimer: timers.schedule,
     pickBuilderName: () => 'imp-build-survivor',
   });
 
@@ -648,7 +651,7 @@ test('it keeps the build of a builder that survives its removal, and logs the su
 
   expect(built).toBe('built');
   expect(survivors.map((imp) => imp.kind)).toStrictEqual(['builder']);
-  expect(timers.readPendingMs()).toStrictEqual([30_000]);
+  expect(readNextDelayMs(timers)).toBe(30_000);
 
   expect(logs).toContainEqual(
     expect.stringMatching(
@@ -661,7 +664,7 @@ test('it removes a builder that survived its removal on a later retry', async ()
   const ctx = await setupTest();
 
   const guest = buildStubGuest(() => ({ stdout: 'ok' }));
-  const timers = buildStubClock();
+  const timers = createFakeClock();
   const logs = captureImpdLogs();
 
   const builders = createBuilders({
@@ -674,7 +677,7 @@ test('it removes a builder that survived its removal on a later retry', async ()
     ensureImage: async () => {
       await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: ctx.config.build.image });
     },
-    startTimer: timers.startTimer,
+    startTimer: timers.schedule,
     pickBuilderName: () => 'imp-build-survivor',
   });
 
@@ -686,7 +689,7 @@ test('it removes a builder that survived its removal on a later retry', async ()
 
   const survivors = await listImps(ctx.db);
 
-  timers.firePending();
+  fireNextTimer(timers);
 
   await waitFor(() => {
     expect(logs).toContain(
@@ -704,7 +707,7 @@ test('it retries the removal of a leftover builder that survives it at start', a
   const ctx = await setupTest();
 
   const guest = buildStubGuest(() => ({ stdout: 'ok' }));
-  const timers = buildStubClock();
+  const timers = createFakeClock();
   const logs = captureImpdLogs();
 
   const builders = createBuilders({
@@ -715,7 +718,7 @@ test('it retries the removal of a leftover builder that survives it at start', a
       openBuilderExec: (_name, request) => guest.open(request),
     },
     ensureImage: () => Promise.resolve(),
-    startTimer: timers.startTimer,
+    startTimer: timers.schedule,
   });
 
   await Bun.write(buildImagePaths(ctx.dataDir, 'sha256:base').rootfs, 'rootfs');
@@ -731,13 +734,13 @@ test('it retries the removal of a leftover builder that survives it at start', a
 
   await builders.removeLeftovers();
 
-  timers.firePending();
+  fireNextTimer(timers);
 
   await waitFor(() => {
-    expect(timers.readPendingMs()).toStrictEqual([30_000]);
+    expect(readNextDelayMs(timers)).toBe(30_000);
   });
 
-  timers.firePending();
+  fireNextTimer(timers);
 
   await waitFor(() => {
     expect(logs).toContain('INFO impd.image imp=imp-build-left image build: removed the builder');
@@ -757,7 +760,7 @@ test('it never removes a user imp that took the id of a removed builder on a ret
   const ctx = await setupTest();
 
   const guest = buildStubGuest(() => ({ stdout: 'ok' }));
-  const timers = buildStubClock();
+  const timers = createFakeClock();
   const logs = captureImpdLogs();
 
   const builders = createBuilders({
@@ -768,7 +771,7 @@ test('it never removes a user imp that took the id of a removed builder on a ret
       openBuilderExec: (_name, request) => guest.open(request),
     },
     ensureImage: () => Promise.resolve(),
-    startTimer: timers.startTimer,
+    startTimer: timers.schedule,
   });
 
   await Bun.write(buildImagePaths(ctx.dataDir, 'sha256:base').rootfs, 'rootfs');
@@ -796,7 +799,7 @@ test('it never removes a user imp that took the id of a removed builder on a ret
   await ctx.impd.imps.destroyImpId(id);
   await ctx.impd.imps.createImp({ id, name: 'mine', image: 'base' });
 
-  timers.firePending();
+  fireNextTimer(timers);
 
   await waitFor(() => {
     expect(logs).toContain('INFO impd.image imp=imp-build-left image build: removed the builder');
@@ -884,7 +887,7 @@ test('it ends an export stopped while its exec opens, closes the exec and remove
     isExportStalled: true,
   });
 
-  const timers = buildStubClock();
+  const timers = createFakeClock();
   const exportOpen = Promise.withResolvers<void>();
   const reached = { isExportOpening: false };
 
@@ -917,7 +920,7 @@ test('it ends an export stopped while its exec opens, closes the exec and remove
         limits: { maxBytes: 1024 ** 3, maxFiles: 1000 },
         signal: new AbortController().signal,
         grow: () => Promise.resolve(),
-        startTimer: timers.startTimer,
+        startTimer: timers.schedule,
         startTar: startTarProcess,
         countTreeBytes,
       }),
@@ -927,7 +930,8 @@ test('it ends an export stopped while its exec opens, closes the exec and remove
     expect(reached.isExportOpening).toBeTrue();
   });
 
-  timers.firePending();
+  fireNextTimer(timers);
+
   exportOpen.resolve();
 
   expect(exporting).rejects.toThrowWithMessage(

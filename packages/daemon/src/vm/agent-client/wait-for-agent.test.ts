@@ -2,7 +2,8 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
+import { awaitWithClock } from '@impz/shared/test-utils/await-with-clock';
+import { createFakeClock } from '@zgeoff/testing/clock';
 import { startStubParkedAgent } from '../../test-utils/vm/start-stub-parked-agent';
 import { waitForAgent } from './wait-for-agent';
 
@@ -13,15 +14,18 @@ function setupTest() {
     rmSync(directory, { recursive: true, force: true });
   });
 
-  return { vsockPath: join(directory, 'vsock.sock'), clock: buildStubClock() };
+  return { vsockPath: join(directory, 'vsock.sock'), clock: createFakeClock() };
 }
 
-test('it gives up at the deadline of the injected clock, doubling each wait up to its cap', () => {
+test('it gives up at the deadline of the injected clock, doubling each wait up to its cap', async () => {
   const ctx = setupTest();
   const waiting = waitForAgent(ctx.vsockPath, { deadlineMs: 300, clock: ctx.clock });
 
-  expect(waiting).rejects.toThrow(/^agent did not answer within 300 ms \(last error: /u);
-  expect(ctx.clock.sleeps).toStrictEqual([5, 10, 20, 40, 80, 100, 100]);
+  await expect(awaitWithClock(ctx.clock, waiting)).rejects.toThrow(
+    /^agent did not answer within 300 ms \(last error: /u,
+  );
+
+  expect(ctx.clock.delays).toStrictEqual([5, 10, 20, 40, 80, 100, 100]);
 });
 
 test('it returns the ping of an agent parked in its template when asked for one', async () => {
@@ -51,7 +55,7 @@ test('it waits out the deadline on an agent that stays parked when asked for a c
     clock: ctx.clock,
   });
 
-  expect(waiting).rejects.toThrowWithMessage(
+  await expect(awaitWithClock(ctx.clock, waiting)).rejects.toThrowWithMessage(
     Error,
     'agent did not answer within 1000 ms (last error: still parked in the template)',
   );

@@ -10,9 +10,9 @@ import {
   readBuildContext,
   writeBuildContext,
 } from '@impz/local-tar';
+import type { Clock } from '@zgeoff/std';
 import type { ImageRecord } from '../../../platform/db/create-image';
 import { ImpdError } from '../../../platform/errors/impd-error';
-import type { Clock } from '../../../platform/process/clock';
 import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import { buildUploadsDir } from '../../../vm/storage/build-imp-paths';
 import type { DiskBudget } from '../../../vm/storage/disk-budget';

@@ -1,6 +1,6 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
-import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
 import { waitFor } from '@zgeoff/testing';
+import { createFakeClock } from '@zgeoff/testing/clock';
 import invariant from 'tiny-invariant';
 import { createCheckpoint } from '../../platform/db/create-checkpoint';
 import { createImage } from '../../platform/db/create-image';
@@ -82,7 +82,7 @@ test('it keeps each count with the time its pass started', async () => {
   });
 
   const usage = buildMockImpDiskUsage();
-  const clock = buildStubClock({ startMs: 5000 });
+  const clock = createFakeClock({ startMs: 5000 });
 
   const measureUsage = makeStubSlowMeasure(clock, 4000, {
     imps: new Map([[imp.id, usage]]),
@@ -471,7 +471,7 @@ test('it starts a pass a full delay after a refresh asked for while an earlier o
     ip: '10.66.0.2',
   });
 
-  const clock = buildStubClock();
+  const clock = createFakeClock();
 
   const cache = createDiskUsageCache({
     db: ctx.db,
@@ -483,7 +483,7 @@ test('it starts a pass a full delay after a refresh asked for while an earlier o
         }),
     },
     now: () => new Date(clock.now()),
-    startTimer: clock.startTimer,
+    startTimer: clock.schedule,
   });
 
   onTestFinished(() => {
@@ -491,13 +491,13 @@ test('it starts a pass a full delay after a refresh asked for while an earlier o
   });
 
   cache.requestRefresh();
-  clock.runFor(9000);
+  clock.advance(9000);
   cache.requestRefresh();
-  clock.runFor(1000);
+  clock.advance(1000);
 
   await cache.runPass();
 
-  clock.runFor(9000);
+  clock.advance(9000);
 
   const measuredAt = await waitFor(
     () => {

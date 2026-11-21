@@ -1,7 +1,8 @@
-import { readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { createStubBin, readStubCalls } from '@zgeoff/testing/bin';
+import { readStubCalls } from '@zgeoff/testing/bin';
 import * as z from 'zod';
+import { buildRecordCall } from './build-record-call';
 
 interface StubTailscaleNode {
   readonly BackendState: string;
@@ -43,9 +44,12 @@ export function createStubTailscale(directory: string): StubTailscale {
   const status = join(directory, 'tailscale-status.json');
   const starting = join(directory, 'tailscale-starting');
   const prefs = join(directory, 'tailscale-prefs.json');
+  const record = buildRecordCall({ name: 'tailscale', callsFile: join(directory, 'calls.jsonl') });
+  const path = join(directory, 'tailscale');
 
-  createStubBin(directory, 'tailscale', {
-    script: `#!/bin/bash\n${String.raw`status=${JSON.stringify(status)}
+  writeFileSync(
+    path,
+    `#!/bin/bash\n${record}\n${String.raw`status=${JSON.stringify(status)}
 starting=${JSON.stringify(starting)}
 prefs=${JSON.stringify(prefs)}
 read_prefs() {
@@ -92,7 +96,9 @@ case $1 in
     mv "$status.new" "$status"
     ;;
 esac`}`,
-  });
+  );
+
+  chmodSync(path, 0o755);
 
   return {
     bin: directory,

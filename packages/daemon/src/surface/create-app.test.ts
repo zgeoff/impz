@@ -11,6 +11,7 @@ import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
 import { updateEnv, waitFor } from '@zgeoff/testing';
+import { HttpResponse, http } from 'msw';
 import invariant from 'tiny-invariant';
 import packageJson from '../../package.json' with { type: 'json' };
 import { ROOT_TOKEN_ID } from '../identity/auth/token-store';
@@ -41,6 +42,13 @@ async function setupTest(options: SetupOptions) {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
+
+  // a domain makes impd look up its zone and its ACME directory in the background, and neither
+  // answers in a test
+  network.use(
+    http.get('https://acme-v02.api.letsencrypt.org/directory', () => HttpResponse.error()),
+    http.get('https://api.cloudflare.com/client/v4/zones', () => HttpResponse.error()),
+  );
 
   const taintDir = await mkdtemp(join(tmpdir(), 'build-app-taint-'));
 
@@ -380,7 +388,7 @@ test('it creates a running imp on the first slot with its own tap', async () => 
     state: 'running',
     slot: 0,
     ip: '10.66.0.2',
-    port: 20_000,
+    port: 40_000,
     url: 'http://dev.imp.localhost:7080',
     ramMib: 300,
     rssMib: 340,

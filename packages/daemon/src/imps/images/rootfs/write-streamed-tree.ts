@@ -1,5 +1,5 @@
-import type { StartTimer } from '../../../platform/process/clock';
 import type { CommandResult } from '../../../platform/process/run-command';
+import type { StartTimer } from '../../../platform/process/start-timer';
 import { ImageLimitError } from '../build/image-limit-error';
 import { UNPACK_TAR_ARGS, assertUnpacked } from './assert-unpacked';
 import { planRootfsOverhead } from './plan-rootfs';

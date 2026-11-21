@@ -13,10 +13,11 @@ import { join } from 'node:path';
 import { setImmediate as setImmediatePromise } from 'node:timers/promises';
 import { create } from '@bufbuild/protobuf';
 import { FRAME_TYPES, PingSchema, encodeMessageFrame } from '@impz/agent-protocol';
-import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
+import { awaitWithClock } from '@impz/shared/test-utils/await-with-clock';
 import { createStubUffdHandler } from '@impz/testing/stand-in/vm/create-stub-uffd-handler';
 import { startStubAgent } from '@impz/testing/stand-in/vm/start-stub-agent';
 import { waitFor } from '@zgeoff/testing';
+import { createFakeClock } from '@zgeoff/testing/clock';
 import { deriveSlotAddress, parseSubnet } from '../../host-net/net/derive-slot-address';
 import { stopPid } from '../../platform/process/read-stat-fields';
 import { buildMockTemplateBuildPlan } from '../../test-utils/vm/build-mock-template-build-plan';
@@ -652,16 +653,19 @@ test('#resumeVm seals the run dir, then patches the VM to resumed', async () => 
   expect(readFileSync(ctx.logPath, 'utf8')).toBe('PATCH /vm {"state":"Resumed"}\n');
 });
 
-test('#finishWake waits 15 s for the agent, so a guest that reads its memory file cold can answer', () => {
+test('#finishWake waits 15 s for the agent, so a guest that reads its memory file cold can answer', async () => {
   const ctx = setupTest();
   const paths = ctx.createImpDir('vm');
+  const clock = createFakeClock();
 
   const finishing = createVmRunner(buildStubJails().jails, {
     readFile: readFileSync,
-    clock: buildStubClock(),
+    clock,
   }).finishWake(paths);
 
-  expect(finishing).rejects.toThrow(/^agent did not answer within 15000 ms \(last error: /u);
+  await expect(awaitWithClock(clock, finishing)).rejects.toThrow(
+    /^agent did not answer within 15000 ms \(last error: /u,
+  );
 });
 
 test('#resumeVm kills a VM whose seal finds anything planted in run/, and never resumes it', async () => {
@@ -830,14 +834,15 @@ test('#wakeVm loads the snapshot with dirty page tracking, so the next sleep tak
   ]);
 });
 
-test('#wakeVm waits 15 s for the agent of a resumed guest before it fails the wake', () => {
+test('#wakeVm waits 15 s for the agent of a resumed guest before it fails the wake', async () => {
   const ctx = setupTest();
   const paths = ctx.createImpDir('vm');
   const argv = buildStubFirecrackerArgv({ apiSocket: paths.apiSocket, logPath: ctx.logPath });
+  const clock = createFakeClock();
 
   const waking = createVmRunner(buildStubJails({ argv }).jails, {
     readFile: readFileSync,
-    clock: buildStubClock(),
+    clock,
   }).wakeVm({
     firecrackerBin: 'firecracker',
     paths,
@@ -846,7 +851,7 @@ test('#wakeVm waits 15 s for the agent of a resumed guest before it fails the wa
     readOnlyFiles: [],
   });
 
-  expect(waking).rejects.toThrow(
+  await expect(awaitWithClock(clock, waking)).rejects.toThrow(
     /^wake failed: agent did not answer within 15000 ms \(last error: /u,
   );
 });

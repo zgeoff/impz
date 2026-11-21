@@ -22,8 +22,8 @@ import {
   buildNotFoundError,
 } from '../../platform/errors/build-not-found-error';
 import { ImpdError, isImpdError } from '../../platform/errors/impd-error';
-import type { StartTimer } from '../../platform/process/clock';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
+import type { StartTimer } from '../../platform/process/start-timer';
 import type { MoveMode, StorageBackend } from '../../vm/storage/storage-backend';
 import type { ImpGrants } from '../imp-grants';
 import type { ImpOpsConfig } from '../imp-ops-config';

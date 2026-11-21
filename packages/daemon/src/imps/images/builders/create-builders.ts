@@ -1,10 +1,11 @@
 import { getErrorMessage } from '@impz/shared';
+import type { Clock } from '@zgeoff/std';
+import { systemClock } from '@zgeoff/std';
 import { listImps } from '../../../platform/db/list-imps';
 import type { ImpDatabase } from '../../../platform/db/open-database';
-import type { Clock, StartTimer } from '../../../platform/process/clock';
 import { getImpdLogger } from '../../../platform/process/get-impd-logger';
-import { REAL_CLOCK } from '../../../platform/process/real-clock';
 import { startRealTimer } from '../../../platform/process/start-real-timer';
+import type { StartTimer } from '../../../platform/process/start-timer';
 import { AgentWaitError } from '../../../vm/agent-client/agent-wait-error';
 import type { ImpsConfig } from '../../imps-config';
 import type { ImpService } from '../../imps/imp-service';
@@ -57,7 +58,7 @@ export function createBuilders(deps: BuildersDeps): Builders {
   const startTimer: StartTimer =
     deps.startTimer ?? ((fire, durationMs) => startRealTimer(fire, durationMs, { isUnref: true }));
 
-  const clock = deps.clock ?? REAL_CLOCK;
+  const clock = deps.clock ?? systemClock;
   const pickBuilderName = deps.pickBuilderName ?? pickRandomBuilderName;
   const logger = getImpdLogger('image');
 

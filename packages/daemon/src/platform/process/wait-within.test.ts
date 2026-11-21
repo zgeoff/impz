@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
+import { createFakeClock } from '@zgeoff/testing/clock';
 import { waitWithin } from './wait-within';
 
 test('it resolves true for a promise that settles within the time', async () => {
@@ -15,10 +15,10 @@ test('it resolves false for a promise still pending at the deadline', async () =
 });
 
 test('it resolves false at the deadline of the timer it is passed', async () => {
-  const clock = buildStubClock();
-  const waiting = waitWithin(new Promise(() => {}), 50, clock.startTimer);
+  const clock = createFakeClock();
+  const waiting = waitWithin(new Promise(() => {}), 50, clock.schedule);
 
-  clock.runFor(50);
+  clock.advance(50);
 
   const isSettled = await waiting;
 

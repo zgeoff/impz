@@ -1,12 +1,13 @@
+import type { FakeClock } from '@zgeoff/testing/clock';
 import type { DiskUsageReport, StorageBackend } from '../../vm/storage/storage-backend';
 
 export function makeStubSlowMeasure(
-  clock: Readonly<{ runFor: (delayMs: number) => void }>,
+  clock: Pick<FakeClock, 'advance'>,
   durationMs: number,
   report: DiskUsageReport,
 ): StorageBackend['measureUsage'] {
   return () => {
-    clock.runFor(durationMs);
+    clock.advance(durationMs);
 
     return Promise.resolve(report);
   };

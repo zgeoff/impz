@@ -1,8 +1,8 @@
-import type { StartTimer } from '../../platform/process/clock';
 import type { DiskRoom } from '../../platform/process/disk-room';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { buildKeyedMutex } from '../../platform/process/keyed-mutex';
 import { startRealTimer } from '../../platform/process/start-real-timer';
+import type { StartTimer } from '../../platform/process/start-timer';
 import { DiskFullError } from './disk-full-error';
 import type { StorageBackend } from './storage-backend';
 

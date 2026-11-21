@@ -7,7 +7,6 @@
   "exports": {
     ".": "./src/index.ts",
     "./read-text": "./src/platform/process/read-text.ts",
-    "./real-clock": "./src/platform/process/real-clock.ts",
     "./test-utils": "./src/test-utils/index.ts",
     "./test-utils/*": "./src/test-utils/*.ts",
     "./host/config": "./src/config.ts",
@@ -27,7 +26,7 @@
     "./host/platform/db/open-database": "./src/platform/db/open-database.ts",
     "./host/platform/db/read-names": "./src/platform/db/read-names.ts",
     "./host/platform/db/run-migrations": "./src/platform/db/run-migrations.ts",
-    "./host/platform/process/clock": "./src/platform/process/clock.ts",
+    "./host/platform/process/start-timer": "./src/platform/process/start-timer.ts",
     "./host/platform/process/get-impd-logger": "./src/platform/process/get-impd-logger.ts",
     "./host/platform/process/read-host-load": "./src/platform/process/read-host-load.ts",
     "./host/platform/process/read-text": "./src/platform/process/read-text.ts",

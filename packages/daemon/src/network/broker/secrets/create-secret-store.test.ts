@@ -1597,6 +1597,11 @@ test('it stores a static secret with identity and lists the rule with it', async
 test('it stores an oauth secret with identity', async () => {
   const ctx = await setupTest();
 
+  const tokens = createStubBrokerTokenEndpoint('https://auth.example.com/token');
+
+  network.use(tokens.handler);
+  tokens.issue('refresh', { access_token: 'fake-access', expires_in: 3600 });
+
   const added = await ctx.client.secrets.add({
     name: 'tasks',
     kind: 'oauth',

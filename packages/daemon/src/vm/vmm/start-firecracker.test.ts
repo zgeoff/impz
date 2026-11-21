@@ -2,8 +2,9 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
+import { awaitWithClock } from '@impz/shared/test-utils/await-with-clock';
 import { waitFor } from '@zgeoff/testing';
+import { createFakeClock } from '@zgeoff/testing/clock';
 import { stopPid } from '../../platform/process/read-stat-fields';
 import { startStubFirecrackerProcess } from '../../test-utils/vm/start-stub-firecracker-process';
 import { buildJailerCommand } from './create-jails';
@@ -392,7 +393,7 @@ test('#listFirecrackers finds each firecracker in the /proc it is given, with it
 
 test('#waitForExit gives up at the timeout of the injected clock while the firecracker stays', async () => {
   const ctx = setupTest();
-  const clock = buildStubClock();
+  const clock = createFakeClock();
 
   mkdirSync(join(ctx.directoryPath, 'proc', '42'), { recursive: true });
   writeFileSync(join(ctx.directoryPath, 'proc', '42', 'stat'), '42 (firecracker) S 1 42 42 0 -1');
@@ -402,18 +403,21 @@ test('#waitForExit gives up at the timeout of the injected clock while the firec
     'firecracker\0--api-sock\0/run/api.sock\0',
   );
 
-  const exited = await waitForExit(42, '/run/api.sock', 30, {
+  const exited = await awaitWithClock(
     clock,
-    procRoot: join(ctx.directoryPath, 'proc'),
-  });
+    waitForExit(42, '/run/api.sock', 30, {
+      clock,
+      procRoot: join(ctx.directoryPath, 'proc'),
+    }),
+  );
 
   expect(exited).toBeFalse();
-  expect(clock.sleeps).toStrictEqual([10, 10, 10, 10]);
+  expect(clock.delays).toStrictEqual([10, 10, 10, 10]);
 });
 
 test('#waitForExit resolves true at once for a pid gone from the /proc it is given', async () => {
   const ctx = setupTest();
-  const clock = buildStubClock();
+  const clock = createFakeClock();
 
   mkdirSync(join(ctx.directoryPath, 'proc'));
 
@@ -423,5 +427,5 @@ test('#waitForExit resolves true at once for a pid gone from the /proc it is giv
   });
 
   expect(exited).toBeTrue();
-  expect(clock.sleeps).toStrictEqual([]);
+  expect(clock.delays).toStrictEqual([]);
 });
