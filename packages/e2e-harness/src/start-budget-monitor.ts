@@ -1,4 +1,4 @@
-import type { WaitForOptions } from '@impz/shared/test-utils/wait-for';
+import type { WaitForOptions } from '@zgeoff/testing';
 import { collectBudgetBreaches, readMaxOpenMs } from './collect-overshoots';
 import type { BudgetCheck, Overshoot, OvershootLimits, SleepSpan } from './collect-overshoots';
 import {
@@ -181,7 +181,7 @@ export async function waitForSampleAfter(
   monitor: BudgetMonitor,
   since: number,
   afterMs: number,
-  clock: Readonly<Pick<WaitForOptions, 'now' | 'wait'>> = {},
+  clock: Readonly<Pick<WaitForOptions, 'now' | 'sleep'>> = {},
 ): Promise<void> {
   await waitFor(
     `a budget sample ${String(afterMs)} ms after ${String(since)}`,
@@ -199,7 +199,7 @@ export async function waitForSampleAfter(
 export async function waitForUnderBudget(
   monitor: BudgetMonitor,
   limits: OvershootLimits,
-  clock: Readonly<Pick<WaitForOptions, 'now' | 'wait'>> = {},
+  clock: Readonly<Pick<WaitForOptions, 'now' | 'sleep'>> = {},
 ): Promise<void> {
   await waitFor(
     'both budget figures under the budget',

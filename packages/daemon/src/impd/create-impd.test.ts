@@ -5,15 +5,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BUILD_CONTEXT_PATH, BuildContextUploadSchema } from '@impz/api';
 import { buildStubRepeat } from '@impz/mcp/test-utils/build-stub-repeat';
-import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
 import { readImpEnv } from '@impz/shared/test-utils/read-imp-env';
-import { updateEnv } from '@impz/shared/test-utils/update-env';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { readNoTailscale } from '@impz/testing/stand-in/network/read-no-tailscale';
 import { buildStubTickerTimer } from '@impz/testing/stand-in/platform/build-stub-ticker-timer';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import { buildStubVmm } from '@impz/testing/stand-in/vm/build-stub-vmm';
 import { TEST_TOKEN } from '@impz/testing/test-token';
+import { updateEnv, waitFor } from '@zgeoff/testing';
+import { claimFreePorts } from '@zgeoff/testing/process';
 import invariant from 'tiny-invariant';
 import { loadConfig } from '../config';
 import { DEFAULT_BUILD_IMAGE } from '../imps/docker-contract/default-build-image';
@@ -242,8 +241,8 @@ test('it closes the ports it opened when a later startup step fails', async () =
 
   onTestFinished(() => stack.disposeAsync());
 
-  // below the imps' port range, where the config refuses impd's own ports
-  const free = claimFreePorts(3, { pick: () => 10_000 + Math.floor(Math.random() * 10_000) });
+  // the claimed ports run from 10000 to 32767, so the imps' ports start above them
+  const free = claimFreePorts(3);
   const apiPort = free.take();
   const dnsPort = free.take();
   const taken = Bun.listen({ hostname: '0.0.0.0', port: free.take(), socket: { data: () => {} } });
@@ -416,8 +415,8 @@ test('it closes the database it opened itself when it stops', async () => {
 
   stack.defer(() => rm(dataDir, { recursive: true, force: true }));
 
-  // below the imps' port range, where the config refuses impd's own ports
-  const ports = claimFreePorts(3, { pick: () => 10_000 + Math.floor(Math.random() * 10_000) });
+  // the claimed ports run from 10000 to 32767, so the imps' ports start above them
+  const ports = claimFreePorts(3);
 
   const config = {
     ...loadConfig({
@@ -425,6 +424,7 @@ test('it closes the database it opened itself when it stops', async () => {
       IMP_JAILER: 'false',
       IMP_BOOT_TEMPLATES: 'false',
       IMP_SSH_PORT: '0',
+      IMP_PORT_BASE: '40000',
       IMP_API_PORT: String(ports.take()),
       IMP_BROKER_PORT: String(ports.take()),
       IMP_EGRESS_DNS_PORT: String(ports.take()),
@@ -515,8 +515,8 @@ test('it sets a lease end from the wall clock when no clock is given', async () 
 
   stack.defer(() => db.destroy());
 
-  // below the imps' port range, where the config refuses impd's own ports
-  const ports = claimFreePorts(3, { pick: () => 10_000 + Math.floor(Math.random() * 10_000) });
+  // the claimed ports run from 10000 to 32767, so the imps' ports start above them
+  const ports = claimFreePorts(3);
 
   const config = {
     ...loadConfig({
@@ -524,6 +524,7 @@ test('it sets a lease end from the wall clock when no clock is given', async () 
       IMP_JAILER: 'false',
       IMP_BOOT_TEMPLATES: 'false',
       IMP_SSH_PORT: '0',
+      IMP_PORT_BASE: '40000',
       IMP_API_PORT: String(ports.take()),
       IMP_BROKER_PORT: String(ports.take()),
       IMP_EGRESS_DNS_PORT: String(ports.take()),
@@ -647,8 +648,8 @@ test('it answers /health without a token, not ready before the default image is 
 
   stack.defer(() => db.destroy());
 
-  // below the imps' port range, where the config refuses impd's own ports
-  const ports = claimFreePorts(3, { pick: () => 10_000 + Math.floor(Math.random() * 10_000) });
+  // the claimed ports run from 10000 to 32767, so the imps' ports start above them
+  const ports = claimFreePorts(3);
 
   const config = {
     ...loadConfig({
@@ -656,6 +657,7 @@ test('it answers /health without a token, not ready before the default image is 
       IMP_JAILER: 'false',
       IMP_BOOT_TEMPLATES: 'false',
       IMP_SSH_PORT: '0',
+      IMP_PORT_BASE: '40000',
       IMP_API_PORT: String(ports.take()),
       IMP_BROKER_PORT: String(ports.take()),
       IMP_EGRESS_DNS_PORT: String(ports.take()),

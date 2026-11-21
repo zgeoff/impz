@@ -1,6 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { createConnection } from 'node:net';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { waitFor } from '@zgeoff/testing';
 import { Client } from 'ssh2';
 import { startStubSshServer } from './start-stub-ssh-server';
 

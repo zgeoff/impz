@@ -1,7 +1,7 @@
 import { join } from 'node:path';
-import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
-import type { StubBin } from '@impz/shared/test-utils/create-stub-bin';
 import { formatShellWord } from '@impz/shared/test-utils/format-shell-word';
+import { createStubBin } from '@zgeoff/testing/bin';
+import type { StubBin } from '@zgeoff/testing/bin';
 
 export interface StubLosetupOptions {
   // what -f prints for the free device; with none, -f fails as on a kernel without one
@@ -22,10 +22,8 @@ export function createStubLosetup(
   const onAttached =
     options.attached === undefined ? ':' : `echo ${formatShellWord(options.attached)}`;
 
-  return createStubBin(
-    directory,
-    'losetup',
-    `case "$1" in
+  return createStubBin(directory, 'losetup', {
+    script: `#!/bin/bash\ncase "$1" in
   -f) ${onFree} ;;
   -j) ${onAttached} ;;
   /dev/*)
@@ -34,5 +32,5 @@ export function createStubLosetup(
     [ "$count" -ge ${options.busyAttaches ?? 0} ] || exit 1
     ;;
 esac`,
-  );
+  });
 }

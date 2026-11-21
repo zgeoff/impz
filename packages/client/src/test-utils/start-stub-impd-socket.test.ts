@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runChildTests } from '@impz/shared/test-utils/run-child-tests';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { waitFor } from '@zgeoff/testing';
 import { startStubImpdSocket } from './start-stub-impd-socket';
 
 async function setupTest() {

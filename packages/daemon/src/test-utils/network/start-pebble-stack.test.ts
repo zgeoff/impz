@@ -1,9 +1,10 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
-import { updateEnv } from '@impz/shared/test-utils/update-env';
+import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
+import { updateEnv } from '@zgeoff/testing';
+import { createStubBin, readStubCalls } from '@zgeoff/testing/bin';
 import { startPebbleStack } from './start-pebble-stack';
 
 async function setupTest() {
@@ -21,13 +22,11 @@ async function setupTest() {
 test('it refuses a Pebble container name that is taken, before it makes anything', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    ['case "$*" in', '  *-pebble) exit 0 ;;', 'esac', 'exit 1'].join('\n'),
-  );
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: `#!/bin/bash\n${['case "$*" in', '  *-pebble) exit 0 ;;', 'esac', 'exit 1'].join('\n')}`,
+  });
 
-  updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
+  updateEnv('PATH', `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`);
 
   const failure = await startPebbleStack(ctx.stack, 'imp-acme-it-x', {
     minicaDir: join(ctx.directoryPath, 'ca'),
@@ -38,7 +37,7 @@ test('it refuses a Pebble container name that is taken, before it makes anything
 
   await ctx.stack.disposeAsync();
 
-  const calls = await readFile(docker.calls, 'utf8');
+  const calls = formatStubCalls(readStubCalls(ctx.directoryPath));
 
   expect(failure).toMatchObject({
     message: 'a container named imp-acme-it-x-pebble is already there',
@@ -55,13 +54,11 @@ test('it refuses a Pebble container name that is taken, before it makes anything
 test('it refuses a challtestsrv container name that is taken, before it makes anything', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    ['case "$*" in', '  *-challtestsrv) exit 0 ;;', 'esac', 'exit 1'].join('\n'),
-  );
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: `#!/bin/bash\n${['case "$*" in', '  *-challtestsrv) exit 0 ;;', 'esac', 'exit 1'].join('\n')}`,
+  });
 
-  updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
+  updateEnv('PATH', `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`);
 
   const failure = await startPebbleStack(ctx.stack, 'imp-acme-it-x', {
     minicaDir: join(ctx.directoryPath, 'ca'),
@@ -72,7 +69,7 @@ test('it refuses a challtestsrv container name that is taken, before it makes an
 
   await ctx.stack.disposeAsync();
 
-  const calls = await readFile(docker.calls, 'utf8');
+  const calls = formatStubCalls(readStubCalls(ctx.directoryPath));
 
   expect(failure).toMatchObject({
     message: 'a container named imp-acme-it-x-challtestsrv is already there',
@@ -89,13 +86,11 @@ test('it refuses a challtestsrv container name that is taken, before it makes an
 test('it refuses a network name that is taken, before it makes anything', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    ['case "$*" in', '  "network inspect "*) exit 0 ;;', 'esac', 'exit 1'].join('\n'),
-  );
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: `#!/bin/bash\n${['case "$*" in', '  "network inspect "*) exit 0 ;;', 'esac', 'exit 1'].join('\n')}`,
+  });
 
-  updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
+  updateEnv('PATH', `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`);
 
   const failure = await startPebbleStack(ctx.stack, 'imp-acme-it-x', {
     minicaDir: join(ctx.directoryPath, 'ca'),
@@ -106,7 +101,7 @@ test('it refuses a network name that is taken, before it makes anything', async 
 
   await ctx.stack.disposeAsync();
 
-  const calls = await readFile(docker.calls, 'utf8');
+  const calls = formatStubCalls(readStubCalls(ctx.directoryPath));
 
   expect(failure).toMatchObject({ message: 'a network named imp-acme-it-x-acme is already there' });
 
@@ -121,19 +116,17 @@ test('it refuses a network name that is taken, before it makes anything', async 
 test('it joins a network that is there when told to reuse it, and leaves that network in place', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    [
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: `#!/bin/bash\n${[
       'case "$*" in',
       '  "network inspect "*) exit 0 ;;',
       '  *inspect*) exit 1 ;;',
       '  "start imp-acme-it-x-pebble") exit 1 ;;',
       'esac',
-    ].join('\n'),
-  );
+    ].join('\n')}`,
+  });
 
-  updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
+  updateEnv('PATH', `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`);
 
   const failure = await startPebbleStack(ctx.stack, 'imp-acme-it-x', {
     minicaDir: join(ctx.directoryPath, 'ca'),
@@ -145,7 +138,7 @@ test('it joins a network that is there when told to reuse it, and leaves that ne
 
   await ctx.stack.disposeAsync();
 
-  const calls = await readFile(docker.calls, 'utf8');
+  const calls = formatStubCalls(readStubCalls(ctx.directoryPath));
 
   expect(failure).toMatchObject({ message: 'docker start imp-acme-it-x-pebble exited 1: ' });
 
@@ -157,18 +150,16 @@ test('it joins a network that is there when told to reuse it, and leaves that ne
 test('it removes only what it made when the Pebble container is not created', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    [
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: `#!/bin/bash\n${[
       'case "$*" in',
       '  *inspect*) exit 1 ;;',
       '  *"--name imp-acme-it-x-pebble "*) exit 1 ;;',
       'esac',
-    ].join('\n'),
-  );
+    ].join('\n')}`,
+  });
 
-  updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
+  updateEnv('PATH', `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`);
 
   const failure = await startPebbleStack(ctx.stack, 'imp-acme-it-x', {
     minicaDir: join(ctx.directoryPath, 'ca'),
@@ -179,7 +170,7 @@ test('it removes only what it made when the Pebble container is not created', as
 
   await ctx.stack.disposeAsync();
 
-  const calls = await readFile(docker.calls, 'utf8');
+  const calls = formatStubCalls(readStubCalls(ctx.directoryPath));
 
   expect(failure).toBeInstanceOf(Error);
 
@@ -192,18 +183,16 @@ test('it removes only what it made when the Pebble container is not created', as
 test('it removes the Pebble container it created when that container does not start', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    [
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: `#!/bin/bash\n${[
       'case "$*" in',
       '  *inspect*) exit 1 ;;',
       '  "start imp-acme-it-x-pebble") exit 1 ;;',
       'esac',
-    ].join('\n'),
-  );
+    ].join('\n')}`,
+  });
 
-  updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
+  updateEnv('PATH', `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`);
 
   const failure = await startPebbleStack(ctx.stack, 'imp-acme-it-x', {
     minicaDir: join(ctx.directoryPath, 'ca'),
@@ -214,7 +203,7 @@ test('it removes the Pebble container it created when that container does not st
 
   await ctx.stack.disposeAsync();
 
-  const calls = await readFile(docker.calls, 'utf8');
+  const calls = formatStubCalls(readStubCalls(ctx.directoryPath));
 
   expect(failure).toMatchObject({ message: 'docker start imp-acme-it-x-pebble exited 1: ' });
 
@@ -228,13 +217,11 @@ test('it removes the Pebble container it created when that container does not st
 test('it copies the minica PEM into the directory the caller names', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    ['case "$*" in', '  *inspect*|"cp "*) exit 1 ;;', 'esac'].join('\n'),
-  );
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: `#!/bin/bash\n${['case "$*" in', '  *inspect*|"cp "*) exit 1 ;;', 'esac'].join('\n')}`,
+  });
 
-  updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
+  updateEnv('PATH', `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`);
 
   const failure = await startPebbleStack(ctx.stack, 'imp-acme-it-x', {
     minicaDir: join(ctx.directoryPath, 'ca'),
@@ -245,7 +232,7 @@ test('it copies the minica PEM into the directory the caller names', async () =>
 
   await ctx.stack.disposeAsync();
 
-  const calls = await readFile(docker.calls, 'utf8');
+  const calls = formatStubCalls(readStubCalls(ctx.directoryPath));
 
   expect(failure).toBeInstanceOf(Error);
 

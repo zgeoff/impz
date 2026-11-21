@@ -18,8 +18,8 @@ import type {
   ResumeResult,
   SessionOutput,
 } from '@impz/api';
-import type { StartTimer } from '../../platform/process/clock';
 import { startRealTimer } from '../../platform/process/start-real-timer';
+import type { StartTimer } from '../../platform/process/start-timer';
 import { AgentError, openAgentConnection } from './agent-connection';
 import type { AgentConnection } from './agent-connection';
 import { buildAgentOutdatedError, handleUnknownOp } from './build-agent-outdated-error';

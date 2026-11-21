@@ -13,10 +13,11 @@ import { join } from 'node:path';
 import { setImmediate as setImmediatePromise } from 'node:timers/promises';
 import { create } from '@bufbuild/protobuf';
 import { FRAME_TYPES, PingSchema, encodeMessageFrame } from '@impz/agent-protocol';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
-import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
+import { buildAdvancingClock } from '@impz/shared/test-utils/build-advancing-clock';
 import { createStubUffdHandler } from '@impz/testing/stand-in/vm/create-stub-uffd-handler';
 import { startStubAgent } from '@impz/testing/stand-in/vm/start-stub-agent';
+import { waitFor } from '@zgeoff/testing';
+import { createFakeClock } from '@zgeoff/testing/clock';
 import { deriveSlotAddress, parseSubnet } from '../../host-net/net/derive-slot-address';
 import { stopPid } from '../../platform/process/read-stat-fields';
 import { buildMockTemplateBuildPlan } from '../../test-utils/vm/build-mock-template-build-plan';
@@ -655,10 +656,11 @@ test('#resumeVm seals the run dir, then patches the VM to resumed', async () => 
 test('#finishWake waits 15 s for the agent, so a guest that reads its memory file cold can answer', () => {
   const ctx = setupTest();
   const paths = ctx.createImpDir('vm');
+  const clock = createFakeClock();
 
   const finishing = createVmRunner(buildStubJails().jails, {
     readFile: readFileSync,
-    clock: buildStubClock(),
+    clock: buildAdvancingClock(clock),
   }).finishWake(paths);
 
   expect(finishing).rejects.toThrow(/^agent did not answer within 15000 ms \(last error: /u);
@@ -834,10 +836,11 @@ test('#wakeVm waits 15 s for the agent of a resumed guest before it fails the wa
   const ctx = setupTest();
   const paths = ctx.createImpDir('vm');
   const argv = buildStubFirecrackerArgv({ apiSocket: paths.apiSocket, logPath: ctx.logPath });
+  const clock = createFakeClock();
 
   const waking = createVmRunner(buildStubJails({ argv }).jails, {
     readFile: readFileSync,
-    clock: buildStubClock(),
+    clock: buildAdvancingClock(clock),
   }).wakeVm({
     firecrackerBin: 'firecracker',
     paths,

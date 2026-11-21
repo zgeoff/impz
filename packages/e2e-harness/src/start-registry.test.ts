@@ -4,8 +4,9 @@ import { existsSync } from 'node:fs';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
-import { updateEnv } from '@impz/shared/test-utils/update-env';
+import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
+import { updateEnv } from '@zgeoff/testing';
+import { createStubBin, readStubCalls } from '@zgeoff/testing/bin';
 import { CommandTimeoutError } from './command-timeout-error';
 import { instance } from './instance';
 import {
@@ -82,13 +83,11 @@ test('#getDigest refuses a reference with no digest', () => {
 test("#startRegistry runs a registry labelled with the instance on its network's gateway, on a certificate for its name", async () => {
   const ctx = await setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    ['case "$1 $2" in', '  "container inspect"|"network inspect") exit 1 ;;', 'esac'].join('\n'),
-  );
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: `#!/bin/bash\n${['case "$1 $2" in', '  "container inspect"|"network inspect") exit 1 ;;', 'esac'].join('\n')}`,
+  });
 
-  updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
+  updateEnv('PATH', `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`);
 
   const certs = join(ctx.directoryPath, 'registry-tls');
 
@@ -106,7 +105,8 @@ test("#startRegistry runs a registry labelled with the instance on its network's
     { removalTimeoutMs: 1000 },
   );
 
-  const calls = await readFile(docker.calls, 'utf8');
+  const calls = formatStubCalls(readStubCalls(ctx.directoryPath));
+
   const pem = await readFile(join(certs, 'cert.pem'));
 
   const cert = new X509Certificate(pem);
@@ -132,18 +132,16 @@ test("#startRegistry runs a registry labelled with the instance on its network's
 test('#startRegistry removes the network a stopped run of this instance left, before it makes its own', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    [
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: `#!/bin/bash\n${[
       'case "$1 $2" in',
       '  "container inspect") exit 1 ;;',
       `  "network inspect") echo ${instance.container} ;;`,
       'esac',
-    ].join('\n'),
-  );
+    ].join('\n')}`,
+  });
 
-  updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
+  updateEnv('PATH', `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`);
 
   await startRegistry(
     ctx.stack,
@@ -159,7 +157,7 @@ test('#startRegistry removes the network a stopped run of this instance left, be
     { removalTimeoutMs: 1000 },
   );
 
-  const calls = await readFile(docker.calls, 'utf8');
+  const calls = formatStubCalls(readStubCalls(ctx.directoryPath));
 
   expect(calls.split('\n').slice(1, 4)).toStrictEqual([
     'docker network inspect imp-dev-registry --format {{index .Labels "imp-e2e-instance"}}',
@@ -171,18 +169,16 @@ test('#startRegistry removes the network a stopped run of this instance left, be
 test('#startRegistry never removes a network this instance did not label', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    [
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: `#!/bin/bash\n${[
       'case "$1 $2" in',
       '  "container inspect") exit 1 ;;',
       '  "network inspect") echo imp-dev-other ;;',
       'esac',
-    ].join('\n'),
-  );
+    ].join('\n')}`,
+  });
 
-  updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
+  updateEnv('PATH', `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`);
 
   const failure = await startRegistry(
     ctx.stack,
@@ -203,7 +199,7 @@ test('#startRegistry never removes a network this instance did not label', async
 
   await ctx.stack.disposeAsync();
 
-  const calls = await readFile(docker.calls, 'utf8');
+  const calls = formatStubCalls(readStubCalls(ctx.directoryPath));
 
   expect(failure).toMatchObject({
     message: 'a network named imp-dev-registry is there, and this instance did not label it',
@@ -219,13 +215,11 @@ test('#startRegistry never removes a network this instance did not label', async
 test('#startRegistry removes the registry it ran, its certificates and its network once the stack goes', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    ['case "$1 $2" in', '  "container inspect"|"network inspect") exit 1 ;;', 'esac'].join('\n'),
-  );
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: `#!/bin/bash\n${['case "$1 $2" in', '  "container inspect"|"network inspect") exit 1 ;;', 'esac'].join('\n')}`,
+  });
 
-  updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
+  updateEnv('PATH', `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`);
 
   const certs = join(ctx.directoryPath, 'registry-tls');
 
@@ -245,7 +239,7 @@ test('#startRegistry removes the registry it ran, its certificates and its netwo
 
   await ctx.stack.disposeAsync();
 
-  const calls = await readFile(docker.calls, 'utf8');
+  const calls = formatStubCalls(readStubCalls(ctx.directoryPath));
 
   expect(calls.split('\n').slice(-3)).toStrictEqual([
     'docker rm --force --volumes e2e-reg-registry-1',
@@ -259,13 +253,11 @@ test('#startRegistry removes the registry it ran, its certificates and its netwo
 test('#startRegistry removes its registry and network with the docker it started with after PATH changes', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    ['case "$1 $2" in', '  "container inspect"|"network inspect") exit 1 ;;', 'esac'].join('\n'),
-  );
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: `#!/bin/bash\n${['case "$1 $2" in', '  "container inspect"|"network inspect") exit 1 ;;', 'esac'].join('\n')}`,
+  });
 
-  updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
+  updateEnv('PATH', `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`);
 
   await startRegistry(
     ctx.stack,
@@ -281,14 +273,15 @@ test('#startRegistry removes its registry and network with the docker it started
     { removalTimeoutMs: 1000 },
   );
 
-  const other = createStubBin(join(ctx.directoryPath, 'other'), 'docker');
+  const otherDirectory = join(ctx.directoryPath, 'other');
 
-  updateEnv('PATH', `${other.bin}:${process.env['PATH'] ?? ''}`);
+  createStubBin(otherDirectory, 'docker');
+  updateEnv('PATH', `${otherDirectory}:${process.env['PATH'] ?? ''}`);
 
   await ctx.stack.disposeAsync();
 
-  const calls = await readFile(docker.calls, 'utf8');
-  const otherCalls = await readFile(other.calls, 'utf8');
+  const calls = formatStubCalls(readStubCalls(ctx.directoryPath));
+  const otherCalls = formatStubCalls(readStubCalls(otherDirectory));
 
   expect({ removals: calls.split('\n').slice(-3), otherCalls }).toStrictEqual({
     removals: [
@@ -303,9 +296,8 @@ test('#startRegistry removes its registry and network with the docker it started
 test('#startRegistry refuses a container name that is taken, before it makes anything', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubBin(ctx.directoryPath, 'docker', 'exit 0');
-
-  updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
+  createStubBin(ctx.directoryPath, 'docker', { script: '#!/bin/bash\nexit 0' });
+  updateEnv('PATH', `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`);
 
   const certs = join(ctx.directoryPath, 'registry-tls');
 
@@ -328,7 +320,7 @@ test('#startRegistry refuses a container name that is taken, before it makes any
 
   await ctx.stack.disposeAsync();
 
-  const calls = await readFile(docker.calls, 'utf8');
+  const calls = formatStubCalls(readStubCalls(ctx.directoryPath));
 
   expect(failure).toMatchObject({
     message: 'a container named e2e-reg-registry-1 is already there',
@@ -341,17 +333,15 @@ test('#startRegistry refuses a container name that is taken, before it makes any
 test('#startRegistry removes no container when the registry does not start', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    [
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: `#!/bin/bash\n${[
       'case "$1 $2" in',
       '  "container inspect"|"network inspect"|"run --detach") exit 1 ;;',
       'esac',
-    ].join('\n'),
-  );
+    ].join('\n')}`,
+  });
 
-  updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
+  updateEnv('PATH', `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`);
 
   const failure = await startRegistry(
     ctx.stack,
@@ -372,7 +362,7 @@ test('#startRegistry removes no container when the registry does not start', asy
 
   await ctx.stack.disposeAsync();
 
-  const calls = await readFile(docker.calls, 'utf8');
+  const calls = formatStubCalls(readStubCalls(ctx.directoryPath));
 
   expect(failure).toBeInstanceOf(Error);
   expect(calls.split('\n')).toSatisfyAll((line: string) => !line.startsWith('docker rm '));
@@ -381,21 +371,20 @@ test('#startRegistry removes no container when the registry does not start', asy
 test('#removeStaleRegistries never removes a registry container this instance did not label', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    [
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: `#!/bin/bash\n${[
       'case "$*" in',
       '  *label=*) echo e2e-reg-registry-1 ;;',
       String.raw`  ps*) printf 'e2e-reg-registry-1\ne2e-reg-registry-2\n' ;;`,
       'esac',
-    ].join('\n'),
-  );
+    ].join('\n')}`,
+  });
 
-  updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
+  updateEnv('PATH', `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`);
 
   const swept = await removeStaleRegistries('e2e-reg-');
-  const calls = await readFile(docker.calls, 'utf8');
+
+  const calls = formatStubCalls(readStubCalls(ctx.directoryPath));
 
   expect(swept).toStrictEqual({ removed: ['e2e-reg-registry-1'], left: ['e2e-reg-registry-2'] });
 
@@ -410,20 +399,18 @@ test('#removeStaleRegistries never removes a registry container this instance di
 test('#createMovedTag moves the tag to new content and pins the old, and removes both tags with the stack', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    [
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: `#!/bin/bash\n${[
       'case "$*" in',
       `  'image inspect --format {{json .RepoDigests}} busybox:1.37') echo '["busybox@sha256:aaa"]' ;;`,
       `  'image inspect --format {{json .RepoDigests}} sha256:new') echo '["imp-e2e-registry.test:49153/e2e/mutable@sha256:ccc"]' ;;`,
       `  'image inspect'*) echo '["imp-e2e-registry.test:49153/e2e/mutable@sha256:bbb"]' ;;`,
       `  build*mutable-new) echo sha256:new ;;`,
       'esac',
-    ].join('\n'),
-  );
+    ].join('\n')}`,
+  });
 
-  updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
+  updateEnv('PATH', `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`);
 
   const registry = {
     address: 'imp-e2e-registry.test:49153',
@@ -436,8 +423,7 @@ test('#createMovedTag moves the tag to new content and pins the old, and removes
 
   await ctx.stack.disposeAsync();
 
-  const calls = await readFile(docker.calls, 'utf8');
-
+  const calls = formatStubCalls(readStubCalls(ctx.directoryPath));
   const tag = 'imp-e2e-registry.test:49153/e2e/mutable:1';
   const kept = 'imp-e2e-registry.test:49153/e2e/mutable:kept';
 
@@ -468,20 +454,18 @@ test('#createMovedTag moves the tag to new content and pins the old, and removes
 test('#createMovedTag removes both tags with the docker it started with after PATH changes', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    [
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: `#!/bin/bash\n${[
       'case "$*" in',
       `  'image inspect --format {{json .RepoDigests}} busybox:1.37') echo '["busybox@sha256:aaa"]' ;;`,
       `  'image inspect --format {{json .RepoDigests}} sha256:new') echo '["imp-e2e-registry.test:49153/e2e/mutable@sha256:ccc"]' ;;`,
       `  'image inspect'*) echo '["imp-e2e-registry.test:49153/e2e/mutable@sha256:bbb"]' ;;`,
       `  build*mutable-new) echo sha256:new ;;`,
       'esac',
-    ].join('\n'),
-  );
+    ].join('\n')}`,
+  });
 
-  updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
+  updateEnv('PATH', `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`);
 
   const registry = {
     address: 'imp-e2e-registry.test:49153',
@@ -492,14 +476,15 @@ test('#createMovedTag removes both tags with the docker it started with after PA
 
   await createMovedTag(ctx.stack, registry, ctx.directoryPath, 'e2e/mutable');
 
-  const other = createStubBin(join(ctx.directoryPath, 'other'), 'docker');
+  const otherDirectory = join(ctx.directoryPath, 'other');
 
-  updateEnv('PATH', `${other.bin}:${process.env['PATH'] ?? ''}`);
+  createStubBin(otherDirectory, 'docker');
+  updateEnv('PATH', `${otherDirectory}:${process.env['PATH'] ?? ''}`);
 
   await ctx.stack.disposeAsync();
 
-  const calls = await readFile(docker.calls, 'utf8');
-  const otherCalls = await readFile(other.calls, 'utf8');
+  const calls = formatStubCalls(readStubCalls(ctx.directoryPath));
+  const otherCalls = formatStubCalls(readStubCalls(otherDirectory));
 
   expect({ removals: calls.split('\n').slice(-3), otherCalls }).toStrictEqual({
     removals: [
@@ -514,18 +499,16 @@ test('#createMovedTag removes both tags with the docker it started with after PA
 test('#createMovedTag removes the tag it made when a later step fails', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    [
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: `#!/bin/bash\n${[
       'case "$*" in',
       `  'image inspect'*) echo '["busybox@sha256:aaa"]' ;;`,
       '  tag*) exit 1 ;;',
       'esac',
-    ].join('\n'),
-  );
+    ].join('\n')}`,
+  });
 
-  updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
+  updateEnv('PATH', `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`);
 
   const registry = {
     address: 'imp-e2e-registry.test:49153',
@@ -541,7 +524,7 @@ test('#createMovedTag removes the tag it made when a later step fails', async ()
 
   await ctx.stack.disposeAsync();
 
-  const calls = await readFile(docker.calls, 'utf8');
+  const calls = formatStubCalls(readStubCalls(ctx.directoryPath));
 
   expect(failure).toBeInstanceOf(Error);
 
@@ -553,18 +536,16 @@ test('#createMovedTag removes the tag it made when a later step fails', async ()
 test('#startRegistry fails a removal that never exits at its limit, and still removes the network', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    [
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: `#!/bin/bash\n${[
       'case "$1 $2" in',
       '  "container inspect"|"network inspect") exit 1 ;;',
       '  "rm --force") exec sleep 30 ;;',
       'esac',
-    ].join('\n'),
-  );
+    ].join('\n')}`,
+  });
 
-  updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
+  updateEnv('PATH', `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`);
 
   await startRegistry(
     ctx.stack,
@@ -585,7 +566,7 @@ test('#startRegistry fails a removal that never exits at its limit, and still re
     (error: unknown) => error,
   );
 
-  const calls = await readFile(docker.calls, 'utf8');
+  const calls = formatStubCalls(readStubCalls(ctx.directoryPath));
 
   expect(failure).toBeInstanceOf(CommandTimeoutError);
   expect(calls.split('\n').at(-2)).toBe('docker network rm imp-dev-registry');
@@ -594,10 +575,8 @@ test('#startRegistry fails a removal that never exits at its limit, and still re
 test('#createMovedTag fails a removal that never exits at its limit, and still removes the other tag', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    [
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: `#!/bin/bash\n${[
       'case "$*" in',
       `  'image inspect --format {{json .RepoDigests}} busybox:1.37') echo '["busybox@sha256:aaa"]' ;;`,
       `  'image inspect --format {{json .RepoDigests}} sha256:new') echo '["imp-e2e-registry.test:49153/e2e/mutable@sha256:ccc"]' ;;`,
@@ -605,10 +584,10 @@ test('#createMovedTag fails a removal that never exits at its limit, and still r
       `  build*mutable-new) echo sha256:new ;;`,
       `  'rmi imp-e2e-registry.test:49153/e2e/mutable:kept') exec sleep 30 ;;`,
       'esac',
-    ].join('\n'),
-  );
+    ].join('\n')}`,
+  });
 
-  updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
+  updateEnv('PATH', `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`);
 
   const registry = {
     address: 'imp-e2e-registry.test:49153',
@@ -624,7 +603,7 @@ test('#createMovedTag fails a removal that never exits at its limit, and still r
     (error: unknown) => error,
   );
 
-  const calls = await readFile(docker.calls, 'utf8');
+  const calls = formatStubCalls(readStubCalls(ctx.directoryPath));
 
   expect(failure).toBeInstanceOf(CommandTimeoutError);
   expect(calls.split('\n').at(-2)).toBe('docker rmi imp-e2e-registry.test:49153/e2e/mutable:1');
@@ -633,13 +612,11 @@ test('#createMovedTag fails a removal that never exits at its limit, and still r
 test('#startRegistry gives each removal 30 s when the caller sets no limit', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    ['case "$1 $2" in', '  "container inspect"|"network inspect") exit 1 ;;', 'esac'].join('\n'),
-  );
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: `#!/bin/bash\n${['case "$1 $2" in', '  "container inspect"|"network inspect") exit 1 ;;', 'esac'].join('\n')}`,
+  });
 
-  updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
+  updateEnv('PATH', `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`);
 
   const registry = await startRegistry(
     ctx.stack,

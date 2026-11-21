@@ -4,14 +4,14 @@ import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ImpContract } from '@impz/api';
+import { network } from '@impz/shared/test-utils/network';
 import { readImpEnv } from '@impz/shared/test-utils/read-imp-env';
-import { server } from '@impz/shared/test-utils/server';
-import { updateEnv } from '@impz/shared/test-utils/update-env';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
+import { updateEnv, waitFor } from '@zgeoff/testing';
+import { HttpResponse, http } from 'msw';
 import invariant from 'tiny-invariant';
 import packageJson from '../../package.json' with { type: 'json' };
 import { ROOT_TOKEN_ID } from '../identity/auth/token-store';
@@ -42,6 +42,13 @@ async function setupTest(options: SetupOptions) {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
+
+  // a domain makes impd look up its zone and its ACME directory in the background, and neither
+  // answers in a test
+  network.use(
+    http.get('https://acme-v02.api.letsencrypt.org/directory', () => HttpResponse.error()),
+    http.get('https://api.cloudflare.com/client/v4/zones', () => HttpResponse.error()),
+  );
 
   const taintDir = await mkdtemp(join(tmpdir(), 'build-app-taint-'));
 
@@ -381,7 +388,7 @@ test('it creates a running imp on the first slot with its own tap', async () => 
     state: 'running',
     slot: 0,
     ip: '10.66.0.2',
-    port: 20_000,
+    port: 40_000,
     url: 'http://dev.imp.localhost:7080',
     ramMib: 300,
     rssMib: 340,
@@ -564,7 +571,7 @@ test('it exposes an imp with a basic credential shown once', async () => {
 
   await cloudflare.zones.create({ name: 'imp.example.com' });
 
-  server.use(...cloudflare.handlers);
+  network.use(...cloudflare.handlers);
 
   await ctx.client.imps.create({ name: 'web' });
 
@@ -651,7 +658,7 @@ test('it counts exposed imps in system.info, with no token check for a token fro
 
   await cloudflare.zones.create({ name: 'imp.example.com' });
 
-  server.use(...cloudflare.handlers);
+  network.use(...cloudflare.handlers);
 
   await ctx.client.imps.create({ name: 'web' });
   await ctx.client.imps.expose({ name: 'web', auth: 'basic' });
@@ -721,7 +728,7 @@ test('it gives a new credential to a second expose', async () => {
 
   await cloudflare.zones.create({ name: 'imp.example.com' });
 
-  server.use(...cloudflare.handlers);
+  network.use(...cloudflare.handlers);
 
   await ctx.client.imps.create({ name: 'web' });
 

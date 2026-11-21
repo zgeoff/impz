@@ -3,8 +3,8 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { RequestSchema, encodeAgentMessage } from '@impz/agent-protocol';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { startStubAgent } from '@impz/testing/stand-in/vm/start-stub-agent';
+import { waitFor } from '@zgeoff/testing';
 import { openAttachStream, openExecStream, openTapStream } from '../../vm/agent-client/exec-stream';
 import {
   STUB_BOOT_ID,

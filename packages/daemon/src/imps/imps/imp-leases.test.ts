@@ -1,10 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { createImpClient } from '@impz/client';
 import { readImpEnv } from '@impz/shared/test-utils/read-imp-env';
-import { updateEnv } from '@impz/shared/test-utils/update-env';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import { TEST_TOKEN } from '@impz/testing/test-token';
+import { updateEnv, waitFor } from '@zgeoff/testing';
 import invariant from 'tiny-invariant';
 import type { LoggedImpEvent } from '../../platform/db/imp-log-entry';
 import { listLeases, writeLease } from '../../platform/db/list-leases';

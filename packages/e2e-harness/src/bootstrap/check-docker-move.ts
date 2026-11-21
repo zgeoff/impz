@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { waitFor } from '@zgeoff/testing';
 import invariant from 'tiny-invariant';
 import { applyBootstrap } from './apply-bootstrap';
 import { BootstrapTestError } from './bootstrap-test-error';
@@ -116,7 +116,7 @@ async function startRegistry(run: BootstrapRun, distro: Distro): Promise<void> {
       async () => {
         await runInContainer(run, ['curl', '-fsS', `http://${MOVE_REGISTRY}/v2/`]);
       },
-      { intervalMs: 1000, timeoutMs: 30_000, now: run.io.now, wait: run.io.sleep },
+      { intervalMs: 1000, timeoutMs: 30_000, now: run.io.now, sleep: run.io.sleep },
     );
   } catch {
     throw new BootstrapTestError(`[${distro}] the registry for the Docker host move did not start`);
@@ -167,7 +167,7 @@ async function startDockerHost(run: BootstrapRun, distro: Distro): Promise<void>
           throw new Error('imp-host is not running under Docker');
         }
       },
-      { intervalMs: 1000, timeoutMs: 30_000, now: run.io.now, wait: run.io.sleep },
+      { intervalMs: 1000, timeoutMs: 30_000, now: run.io.now, sleep: run.io.sleep },
     );
   } catch {
     const journal = await readInContainer(run, [

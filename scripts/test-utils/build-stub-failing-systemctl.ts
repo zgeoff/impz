@@ -2,7 +2,8 @@ import { formatShellWord } from '@impz/shared/test-utils/format-shell-word';
 
 // The message is the one systemd prints when a unit's start job fails.
 export function buildStubFailingSystemctl(verb: string): string {
-  return `if [ "$1" = ${formatShellWord(verb)} ]; then
+  return `#!/bin/bash
+if [ "$1" = ${formatShellWord(verb)} ]; then
   unit=
   for arg in "\${@:2}"; do
     [[ $arg == -* ]] || unit=$arg

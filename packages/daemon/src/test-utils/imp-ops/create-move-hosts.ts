@@ -1,14 +1,14 @@
 import { onTestFinished } from 'bun:test';
 import { writeFileSync } from 'node:fs';
 import type { MoveStatus } from '@impz/api';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import type { TestImpd, TestImpdOptions } from '@impz/testing/stand-in/start-test-impd';
+import { waitFor } from '@zgeoff/testing';
 import invariant from 'tiny-invariant';
 import { deriveSlotAddress } from '../../host-net/net/derive-slot-address';
 import { readWarmHost } from '../../imp-ops/moves/read-warm-host';
 import { createImage } from '../../platform/db/create-image';
-import type { StartTimer } from '../../platform/process/clock';
+import type { StartTimer } from '../../platform/process/start-timer';
 import { buildImagePaths } from '../../vm/storage/build-imp-paths';
 
 // a move needs the target's peer URL to be a literal tailnet address

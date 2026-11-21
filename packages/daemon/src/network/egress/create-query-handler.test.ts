@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { connect } from 'node:net';
-import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { waitFor } from '@zgeoff/testing';
+import { claimFreePorts } from '@zgeoff/testing/process';
 import * as dnsPacket from 'dns-packet';
 import { parseSubnet } from '../../host-net/net/derive-slot-address';
 import { buildMockDnsQuery } from '../../test-utils/network/build-mock-dns-query';

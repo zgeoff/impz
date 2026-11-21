@@ -1,11 +1,12 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
+import { waitFor } from '@zgeoff/testing';
+import { createStubBin, readStubCalls } from '@zgeoff/testing/bin';
 import { $ } from 'bun';
 
 async function setupTest() {
@@ -26,14 +27,14 @@ async function setupTest() {
 test('it hands its options to impz bench wake-young at concurrency 1', async () => {
   const ctx = await setupTest();
 
-  const impz = createStubBin(ctx.directory, 'impz');
+  createStubBin(ctx.directory, 'impz');
 
   const result = await $`bash ${ctx.scriptPath} --cycles 3 --awake 30s --limit-ms 700 --memory 512m`
-    .env({ ...process.env, IMP_BIN: join(impz.bin, 'impz') })
+    .env({ ...process.env, IMP_BIN: join(ctx.directory, 'impz') })
     .nothrow()
     .quiet();
 
-  const calls = await readFile(impz.calls, 'utf8');
+  const calls = formatStubCalls(readStubCalls(ctx.directory));
 
   expect(result.exitCode).toBe(0);
 
@@ -45,14 +46,14 @@ test('it hands its options to impz bench wake-young at concurrency 1', async () 
 test('it hands impz its defaults when given no options', async () => {
   const ctx = await setupTest();
 
-  const impz = createStubBin(ctx.directory, 'impz');
+  createStubBin(ctx.directory, 'impz');
 
   await $`bash ${ctx.scriptPath}`
-    .env({ ...process.env, IMP_BIN: join(impz.bin, 'impz') })
+    .env({ ...process.env, IMP_BIN: join(ctx.directory, 'impz') })
     .nothrow()
     .quiet();
 
-  const calls = await readFile(impz.calls, 'utf8');
+  const calls = formatStubCalls(readStubCalls(ctx.directory));
 
   expect(calls).toBe(
     'impz bench wake-young --concurrency 1 --samples 3 --awake 0 --memory 1g --limit-p50-ms 500 --prefix bench-wake-\n',
@@ -96,10 +97,10 @@ test("it runs to the end with a token scoped to bench-wake-*, the pattern in the
 test('it exits with the status of the bench', async () => {
   const ctx = await setupTest();
 
-  const impz = createStubBin(ctx.directory, 'impz', 'exit 3');
+  createStubBin(ctx.directory, 'impz', { script: '#!/bin/bash\nexit 3' });
 
   const result = await $`bash ${ctx.scriptPath} --cycles 3`
-    .env({ ...process.env, IMP_BIN: join(impz.bin, 'impz') })
+    .env({ ...process.env, IMP_BIN: join(ctx.directory, 'impz') })
     .nothrow()
     .quiet();
 
@@ -111,18 +112,24 @@ test.each([['SIGINT'], ['SIGTERM']] as const)(
   async (signal) => {
     const ctx = await setupTest();
 
-    const impz = createStubBin(
-      ctx.directory,
-      'impz',
+    // A plain script, in place of a kit stand-in, because the signal must reach the process that
+    // handles it, and a kit stand-in puts one of its own in front of the script.
+    const events = join(ctx.directory, 'events');
+
+    writeFileSync(
+      join(ctx.directory, 'impz'),
       [
-        `trap 'echo stopped >>"$STUB_CALLS"; exit 130' INT TERM`,
-        'echo ready >>"$STUB_CALLS"',
+        '#!/bin/bash',
+        `trap 'echo stopped >>"${events}"; exit 130' INT TERM`,
+        `echo ready >>"${events}"`,
         'for _ in $(seq 100); do sleep 0.05; done',
+        '',
       ].join('\n'),
+      { mode: 0o755 },
     );
 
     const wrapper = Bun.spawn(['bash', ctx.scriptPath], {
-      env: { ...process.env, IMP_BIN: join(impz.bin, 'impz') },
+      env: { ...process.env, IMP_BIN: join(ctx.directory, 'impz') },
       stdout: 'ignore',
       stderr: 'ignore',
     });
@@ -132,7 +139,7 @@ test.each([['SIGINT'], ['SIGTERM']] as const)(
     });
 
     await waitFor(() => {
-      expect(readFileSync(impz.calls, 'utf8')).toEndWith('ready\n');
+      expect(readFileSync(events, 'utf8')).toBe('ready\n');
     });
 
     wrapper.kill(signal);
@@ -140,21 +147,21 @@ test.each([['SIGINT'], ['SIGTERM']] as const)(
     const exitCode = await wrapper.exited;
 
     expect(exitCode).toBe(130);
-    expect(readFileSync(impz.calls, 'utf8')).toEndWith('ready\nstopped\n');
+    expect(readFileSync(events, 'utf8')).toBe('ready\nstopped\n');
   },
 );
 
 test('it refuses an option it does not know, and runs no bench', async () => {
   const ctx = await setupTest();
 
-  const impz = createStubBin(ctx.directory, 'impz');
+  createStubBin(ctx.directory, 'impz');
 
   const result = await $`bash ${ctx.scriptPath} --rounds 3`
-    .env({ ...process.env, IMP_BIN: join(impz.bin, 'impz') })
+    .env({ ...process.env, IMP_BIN: join(ctx.directory, 'impz') })
     .nothrow()
     .quiet();
 
-  const calls = await readFile(impz.calls, 'utf8');
+  const calls = formatStubCalls(readStubCalls(ctx.directory));
 
   expect(result.exitCode).toBe(2);
   expect(result.stderr.toString()).toBe('bench-wake: unknown option --rounds\n');

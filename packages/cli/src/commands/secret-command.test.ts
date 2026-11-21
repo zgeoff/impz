@@ -8,7 +8,7 @@ import {
   createStubBrokerTokenEndpoint,
   startStubImpdRelease,
 } from '@impz/daemon/test-utils';
-import { server } from '@impz/shared/test-utils/server';
+import { network } from '@impz/shared/test-utils/network';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import { HttpResponse, http } from 'msw';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
@@ -515,7 +515,7 @@ test('it says until when an added oauth secret’s access token is valid', async
   const accessToken = `e30.${Buffer.from(JSON.stringify({ exp: 1_893_456_000 })).toString('base64url')}.sig`;
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
   endpoint.issue('fake-refresh', { access_token: accessToken, refresh_token: 'fake-refresh-1' });
 
   const result = await runCLIInProcess({
@@ -554,7 +554,7 @@ test('it says why an added oauth secret failed its sign-in', async () => {
 
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
 
   const result = await runCLIInProcess({
     args: [
@@ -594,7 +594,7 @@ test('it prints a refreshed oauth secret that is ready', async () => {
   const accessToken = `e30.${Buffer.from(JSON.stringify({ exp: 1_893_456_000 })).toString('base64url')}.sig`;
   const endpoint = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(endpoint.handler);
+  network.use(endpoint.handler);
   endpoint.issue('fake-refresh', { access_token: accessToken, refresh_token: 'fake-refresh-1' });
   endpoint.issue('fake-refresh-1', { access_token: accessToken, refresh_token: 'fake-refresh-2' });
 
@@ -629,7 +629,7 @@ test('it prints a refreshed oauth secret that is ready', async () => {
 test('it exits 1 for a refreshed oauth secret that is not ready', async () => {
   const ctx = await setupTest();
 
-  server.use(
+  network.use(
     http.post('https://auth.example.com/oauth/token', () =>
       HttpResponse.json({ error: 'temporarily_unavailable' }, { status: 503 }),
     ),
@@ -680,7 +680,7 @@ test('it exits 1 for a refreshed oauth secret that is not ready', async () => {
 test('it shows a state column on secret ls, with a dash for other kinds', async () => {
   const ctx = await setupTest();
 
-  server.use(
+  network.use(
     http.post('https://auth.example.com/oauth/token', () =>
       HttpResponse.json({ error: 'refresh_token_reused' }, { status: 400 }),
     ),

@@ -1,9 +1,10 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
-import { updateEnv } from '@impz/shared/test-utils/update-env';
+import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
+import { updateEnv } from '@zgeoff/testing';
+import { createStubBin, readStubCalls } from '@zgeoff/testing/bin';
 import { buildMockEd25519Key } from './build-mock-ed25519-key';
 import { instance } from './instance';
 import { countKeyTraces, readKeyPatterns } from './key-traces';
@@ -59,9 +60,11 @@ test('#readKeyPatterns rejects a file that is not a key', async () => {
 test('#countKeyTraces counts the key’s file line and its seed in a file in the container, beside the control', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubBin(ctx.directoryPath, 'docker', 'shift 2\nexec "$@"');
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: '#!/bin/bash\nshift 2\nexec "$@"',
+  });
 
-  updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
+  updateEnv('PATH', `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`);
 
   const key = buildMockEd25519Key();
   const keyPath = join(ctx.directoryPath, 'id');
@@ -81,7 +84,8 @@ test('#countKeyTraces counts the key’s file line and its seed in a file in the
   );
 
   const traces = await countKeyTraces(disk, patterns, 'e2e-control');
-  const calls = await readFile(docker.calls, 'utf8');
+
+  const calls = formatStubCalls(readStubCalls(ctx.directoryPath));
 
   expect(traces).toStrictEqual({ control: true, text: '1', seed: '1' });
   expect(calls).toStartWith(`docker exec ${instance.container} sh -c `);
@@ -90,9 +94,11 @@ test('#countKeyTraces counts the key’s file line and its seed in a file in the
 test('#countKeyTraces finds no control and no trace in a file that holds neither', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubBin(ctx.directoryPath, 'docker', 'shift 2\nexec "$@"');
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: '#!/bin/bash\nshift 2\nexec "$@"',
+  });
 
-  updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
+  updateEnv('PATH', `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`);
 
   const key = buildMockEd25519Key();
   const keyPath = join(ctx.directoryPath, 'id');

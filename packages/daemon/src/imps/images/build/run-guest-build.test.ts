@@ -3,8 +3,10 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
-import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
+import { fireNextTimer } from '@impz/shared/test-utils/fire-next-timer';
+import { readNextDelayMs } from '@impz/shared/test-utils/read-next-delay-ms';
+import { waitFor } from '@zgeoff/testing';
+import { createFakeClock } from '@zgeoff/testing/clock';
 import { startRealTimer } from '../../../platform/process/start-real-timer';
 import {
   STUB_BUILDER_CONTAINER,
@@ -649,7 +651,7 @@ test('#writeGuestTree ends an export that sends nothing for its idle limit', asy
     isExportStalled: true,
   });
 
-  const timers = buildStubClock();
+  const timers = createFakeClock();
 
   const writing = writeGuestTree({
     exec: createGuestExec(builder.guest.open),
@@ -657,16 +659,17 @@ test('#writeGuestTree ends an export that sends nothing for its idle limit', asy
     limits: { maxBytes: 1024 ** 3, maxFiles: 1000 },
     signal: new AbortController().signal,
     grow: () => Promise.resolve(),
-    startTimer: timers.startTimer,
+    startTimer: timers.schedule,
     startTar: startTarProcess,
     countTreeBytes,
   });
 
   await waitFor(() => {
-    expect(timers.readPendingMs()).toStrictEqual([120_000]);
+    expect(timers.countPending()).toBe(1);
+    expect(readNextDelayMs(timers)).toBe(120_000);
   });
 
-  timers.firePending();
+  fireNextTimer(timers);
 
   expect(writing).rejects.toThrowWithMessage(
     Error,

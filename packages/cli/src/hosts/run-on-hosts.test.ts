@@ -3,12 +3,13 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ORPCError } from '@impz/client';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { fireNextTimer } from '@impz/shared/test-utils/fire-next-timer';
+import { waitFor } from '@zgeoff/testing';
+import { createFakeClock } from '@zgeoff/testing/clock';
 import invariant from 'tiny-invariant';
 import { UsageError } from '../cli/usage-error';
 import { writeHostConfig } from '../config/read-host-config';
 import { buildMockSavedTarget } from '../test-utils/build-mock-saved-target';
-import { buildStubTimeouts } from '../test-utils/build-stub-timeouts';
 import { listSavedTargets, runOnHosts } from './run-on-hosts';
 
 function setupTest() {
@@ -23,7 +24,7 @@ function setupTest() {
 
 test('#runOnHosts gives each host its own answer or error, and a silent one the timeout', async () => {
   const signals: AbortSignal[] = [];
-  const timeouts = buildStubTimeouts();
+  const timeouts = createFakeClock();
 
   const replies = [
     () => Promise.resolve('imps'),
@@ -48,18 +49,17 @@ test('#runOnHosts gives each host its own answer or error, and a silent one the 
       return reply();
     },
     50,
-    timeouts.startTimer,
+    timeouts.schedule,
   );
 
   await waitFor(() => {
-    expect(timeouts.timers.map((timer) => timer.state)).toStrictEqual([
-      'cancelled',
-      'pending',
-      'cancelled',
-    ]);
+    expect({ delays: timeouts.delays, pending: timeouts.countPending() }).toStrictEqual({
+      delays: [50, 50, 50],
+      pending: 1,
+    });
   });
 
-  timeouts.firePending();
+  fireNextTimer(timeouts);
 
   const settled = await answers;
 
@@ -75,21 +75,19 @@ test('#runOnHosts gives each host its own answer or error, and a silent one the 
 });
 
 test('#runOnHosts gives each host a timer of the timeout, cancelled once it answers', async () => {
-  const timeouts = buildStubTimeouts();
+  const timeouts = createFakeClock();
 
-  await runOnHosts(
-    [buildMockSavedTarget()],
-    () => Promise.resolve('imps'),
-    50,
-    timeouts.startTimer,
-  );
+  await runOnHosts([buildMockSavedTarget()], () => Promise.resolve('imps'), 50, timeouts.schedule);
 
-  expect(timeouts.timers).toStrictEqual([{ durationMs: 50, state: 'cancelled' }]);
+  expect({ delays: timeouts.delays, pending: timeouts.countPending() }).toStrictEqual({
+    delays: [50],
+    pending: 0,
+  });
 });
 
 test('#runOnHosts aborts each host’s requests once its answer is in, the silent one’s by the timeout', async () => {
   const signals: AbortSignal[] = [];
-  const timeouts = buildStubTimeouts();
+  const timeouts = createFakeClock();
 
   const replies = [
     () => Promise.resolve('imps'),
@@ -109,14 +107,14 @@ test('#runOnHosts aborts each host’s requests once its answer is in, the silen
       return reply();
     },
     50,
-    timeouts.startTimer,
+    timeouts.schedule,
   );
 
   await waitFor(() => {
     expect(signals.filter((signal) => signal.aborted)).toHaveLength(2);
   });
 
-  timeouts.firePending();
+  fireNextTimer(timeouts);
 
   await answers;
 

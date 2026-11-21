@@ -2,9 +2,9 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { readText } from '@impz/daemon/read-text';
 import { stopSuiteGroup } from '@impz/e2e-harness/run-suite';
-import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
+import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
+import { createStubBin, readStubCalls } from '@zgeoff/testing/bin';
 
 function setupTest() {
   const stack = new AsyncDisposableStack();
@@ -47,20 +47,26 @@ function setupTest() {
 
 test('it passes when shellcheck finds nothing in the embedded scripts', async () => {
   const ctx = setupTest();
-  const shellcheck = createStubBin(ctx.stubDirectory, 'shellcheck', 'exit 0');
 
-  const result = await ctx.runCheck(shellcheck.bin);
+  createStubBin(ctx.stubDirectory, 'shellcheck', {
+    script: '#!/bin/bash\nexit 0',
+  });
+
+  const result = await ctx.runCheck(ctx.stubDirectory);
 
   expect(result).toStrictEqual({ exitCode: 0, stdout: '', stderr: '' });
 });
 
 test('it checks each embedded script in its own dialect', async () => {
   const ctx = setupTest();
-  const shellcheck = createStubBin(ctx.stubDirectory, 'shellcheck', 'exit 0');
 
-  await ctx.runCheck(shellcheck.bin);
+  createStubBin(ctx.stubDirectory, 'shellcheck', {
+    script: '#!/bin/bash\nexit 0',
+  });
 
-  expect(readText(shellcheck.calls)).toBe(
+  await ctx.runCheck(ctx.stubDirectory);
+
+  expect(formatStubCalls(readStubCalls(ctx.stubDirectory))).toBe(
     [
       'shellcheck --norc --shell=sh console-shell',
       'shellcheck --norc --shell=sh mcp-write-script',
@@ -72,9 +78,12 @@ test('it checks each embedded script in its own dialect', async () => {
 
 test('it fails and names each embedded script that shellcheck finds a defect in', async () => {
   const ctx = setupTest();
-  const shellcheck = createStubBin(ctx.stubDirectory, 'shellcheck', 'exit 1');
 
-  const result = await ctx.runCheck(shellcheck.bin);
+  createStubBin(ctx.stubDirectory, 'shellcheck', {
+    script: '#!/bin/bash\nexit 1',
+  });
+
+  const result = await ctx.runCheck(ctx.stubDirectory);
 
   expect(result).toStrictEqual({
     exitCode: 1,

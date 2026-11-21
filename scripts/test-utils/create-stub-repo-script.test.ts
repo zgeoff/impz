@@ -1,7 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
+import { createStubBin, readStubCalls } from '@zgeoff/testing/bin';
 import { createStubRepoScript } from './create-stub-repo-script';
 
 function setupTest() {
@@ -11,45 +13,47 @@ function setupTest() {
     rmSync(directory, { recursive: true, force: true });
   });
 
-  return { directoryPath: directory };
+  return { directoryPath: directory, stubs: join(directory, 'stubs') };
 }
 
 test('it returns the path of the script it writes in the scripts dir', () => {
   const ctx = setupTest();
-  const calls = join(ctx.directoryPath, 'calls');
 
-  writeFileSync(calls, '');
-
-  expect(createStubRepoScript(ctx.directoryPath, 'dev.sh', calls)).toBe(
+  expect(createStubRepoScript(ctx.directoryPath, 'dev.sh', ctx.stubs)).toBe(
     join(ctx.directoryPath, 'dev.sh'),
   );
 });
 
-test('it logs each call with its arguments to the calls file', () => {
+test('it records each call with its arguments among the calls of the kit stand-ins', () => {
   const ctx = setupTest();
-  const calls = join(ctx.directoryPath, 'calls');
 
-  writeFileSync(calls, 'zpool list\n');
+  createStubBin(ctx.stubs, 'zpool');
 
-  const script = createStubRepoScript(ctx.directoryPath, 'dev.sh', calls);
+  const script = createStubRepoScript(ctx.directoryPath, 'dev.sh', ctx.stubs);
 
+  Bun.spawnSync([join(ctx.stubs, 'zpool'), 'list']);
   Bun.spawnSync([script, 'down', '--clean']);
 
-  expect(readFileSync(calls, 'utf8')).toBe('zpool list\ndev.sh down --clean\n');
+  expect(formatStubCalls(readStubCalls(ctx.stubs))).toBe('zpool list\ndev.sh down --clean\n');
 });
 
-test('it runs its body with the arguments after logging the call', () => {
+test('it keeps an argument with a quote, a backslash or a space whole', () => {
   const ctx = setupTest();
-  const calls = join(ctx.directoryPath, 'calls');
+  const script = createStubRepoScript(ctx.directoryPath, 'dev.sh', ctx.stubs);
 
-  writeFileSync(calls, '');
+  Bun.spawnSync([script, String.raw`say "hi" \ there`, 'two words']);
 
-  const script = createStubRepoScript(
-    ctx.directoryPath,
-    'test-e2e.sh',
-    calls,
-    'echo "ran $2"; exit 3',
-  );
+  expect(readStubCalls(ctx.stubs).map((call) => call.argv)).toStrictEqual([
+    [String.raw`say "hi" \ there`, 'two words'],
+  ]);
+});
+
+test('it runs its body with the arguments after recording the call', () => {
+  const ctx = setupTest();
+
+  const script = createStubRepoScript(ctx.directoryPath, 'test-e2e.sh', ctx.stubs, {
+    body: 'echo "ran $2"; exit 3',
+  });
 
   const result = Bun.spawnSync([script, '--only', 'sleep']);
 
@@ -57,33 +61,27 @@ test('it runs its body with the arguments after logging the call', () => {
     exitCode: 3,
     stdout: 'ran sleep\n',
   });
+
+  expect(formatStubCalls(readStubCalls(ctx.stubs))).toBe('test-e2e.sh --only sleep\n');
 });
 
-test('it gives its body the calls file as $STUB_CALLS', () => {
+test('it records the variables it was told to, empty when unset', () => {
   const ctx = setupTest();
-  const calls = join(ctx.directoryPath, 'calls');
 
-  writeFileSync(calls, '');
+  const script = createStubRepoScript(ctx.directoryPath, 'make-vmlinux.sh', ctx.stubs, {
+    recordEnv: ['JOBS', 'KBUILD_MISSING'],
+  });
 
-  const script = createStubRepoScript(
-    ctx.directoryPath,
-    'dev.sh',
-    calls,
-    'echo "body ran" >>"$STUB_CALLS"',
+  Bun.spawnSync([script, 'out'], { env: { JOBS: '5' } });
+
+  expect(formatStubCalls(readStubCalls(ctx.stubs))).toBe(
+    'make-vmlinux.sh out\n  JOBS=5 KBUILD_MISSING=\n',
   );
-
-  Bun.spawnSync([script, 'up']);
-
-  expect(readFileSync(calls, 'utf8')).toBe('dev.sh up\nbody ran\n');
 });
 
 test('it exits 0 with no output when it has no body', () => {
   const ctx = setupTest();
-  const calls = join(ctx.directoryPath, 'calls');
-
-  writeFileSync(calls, '');
-
-  const result = Bun.spawnSync([createStubRepoScript(ctx.directoryPath, 'test-zfs.sh', calls)]);
+  const result = Bun.spawnSync([createStubRepoScript(ctx.directoryPath, 'test-zfs.sh', ctx.stubs)]);
 
   expect({ exitCode: result.exitCode, stdout: result.stdout.toString() }).toStrictEqual({
     exitCode: 0,
@@ -91,13 +89,14 @@ test('it exits 0 with no output when it has no body', () => {
   });
 });
 
-test('it logs to a calls file whose path holds a quote', () => {
+test('it records into a folder whose path holds a quote', () => {
   const ctx = setupTest();
-  const calls = join(ctx.directoryPath, "it's calls");
+  const stubs = join(ctx.directoryPath, "it's stubs");
+  const script = createStubRepoScript(ctx.directoryPath, 'dev.sh', stubs);
 
-  writeFileSync(calls, '');
+  createStubBin(stubs, 'zpool');
 
-  Bun.spawnSync([createStubRepoScript(ctx.directoryPath, 'dev.sh', calls), 'up']);
+  Bun.spawnSync([script, 'up']);
 
-  expect(readFileSync(calls, 'utf8')).toBe('dev.sh up\n');
+  expect(formatStubCalls(readStubCalls(stubs))).toBe('dev.sh up\n');
 });

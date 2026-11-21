@@ -1,7 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { once } from 'node:events';
 import { setImmediate } from 'node:timers/promises';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { readNextDelayMs } from '@impz/shared/test-utils/read-next-delay-ms';
+import { waitFor } from '@zgeoff/testing';
+import { createFakeClock } from '@zgeoff/testing/clock';
 import { sql } from 'kysely';
 import type { Transaction } from 'kysely';
 import type { DurableTables } from '../durable-tables';
@@ -12,7 +14,6 @@ import { readOperation } from '../operations/read-operation';
 import { buildRecordingOperation } from '../test-utils/build-recording-operation';
 import type { RecordingParams } from '../test-utils/build-recording-operation';
 import { buildRecordingStep } from '../test-utils/build-recording-step';
-import { buildStubClock } from '../test-utils/build-stub-clock';
 import { createTestDurableDatabase } from '../test-utils/create-test-durable-database';
 import { createReconcilerRunner } from './create-reconciler-runner';
 import { defineReconciler } from './define-reconciler';
@@ -22,7 +23,7 @@ import { readReconcilerResults } from './read-reconciler-results';
 async function setupTest() {
   const database = await createTestDurableDatabase();
 
-  const clock = buildStubClock(1_800_000_000_000);
+  const clock = createFakeClock({ startMs: 1_800_000_000_000 });
   const warnings: string[] = [];
 
   const withTransaction = <T>(run: (trx: Transaction<DurableTables>) => Promise<T>): Promise<T> =>
@@ -56,7 +57,7 @@ async function setupTest() {
         log,
         now: clock.now,
         random: () => random,
-        startTimer: clock.startTimer,
+        startTimer: clock.schedule,
       }),
     readResults: () => readReconcilerResults(database.db),
     readOperation: (id: string) => readOperation(database.db, id),
@@ -88,7 +89,7 @@ test('it runs no pass before the interval passes', async () => {
 
   onTestFinished(() => runner.stop());
 
-  ctx.clock.runFor(1999);
+  ctx.clock.advance(1999);
 
   expect(passes).toStrictEqual([]);
 });
@@ -118,7 +119,7 @@ test('it runs a pass once the interval passes', async () => {
 
   onTestFinished(() => runner.stop());
 
-  ctx.clock.runFor(2000);
+  ctx.clock.advance(2000);
 
   await waitFor(() => {
     expect(passes).toStrictEqual([1_800_000_002_000]);
@@ -202,7 +203,7 @@ test('it runs one pass at a time, and one more after a trigger during a pass', a
 test('it backs off interval × 2ⁿ, capped at 10 × the interval, after errors in a row', async () => {
   const ctx = await setupTest();
 
-  const delaysMs: number[][] = [];
+  const delaysMs: (number | null)[] = [];
   const passes = { count: 0 };
 
   const runner = ctx.createRunner(
@@ -226,16 +227,18 @@ test('it backs off interval × 2ⁿ, capped at 10 × the interval, after errors 
   onTestFinished(() => runner.stop());
 
   for (const count of [1, 2, 3, 4, 5]) {
-    ctx.clock.runFor(ctx.clock.readPendingMs()[0] ?? 0);
+    ctx.clock.advance(readNextDelayMs(ctx.clock) ?? 0);
 
     await waitFor(() => {
       expect(runner.list()[0]?.last?.consecutiveErrors).toBe(count);
     });
 
-    delaysMs.push(ctx.clock.readPendingMs());
+    expect(ctx.clock.countPending()).toBe(1);
+
+    delaysMs.push(readNextDelayMs(ctx.clock));
   }
 
-  expect(delaysMs).toStrictEqual([[4000], [8000], [16_000], [20_000], [20_000]]);
+  expect(delaysMs).toStrictEqual([4000, 8000, 16_000, 20_000, 20_000]);
 });
 
 test.each([
@@ -265,7 +268,8 @@ test.each([
     runner.trigger('backup');
 
     await waitFor(() => {
-      expect(ctx.clock.readPendingMs()).toStrictEqual([row.delayMs]);
+      expect(ctx.clock.countPending()).toBe(1);
+      expect(readNextDelayMs(ctx.clock)).toBe(row.delayMs);
     });
   },
 );
@@ -297,13 +301,15 @@ test('it waits one interval again after a pass that follows errors succeeds', as
   runner.trigger('broker');
 
   await waitFor(() => {
-    expect(ctx.clock.readPendingMs()).toStrictEqual([120_000]);
+    expect(ctx.clock.countPending()).toBe(1);
+    expect(readNextDelayMs(ctx.clock)).toBe(120_000);
   });
 
   runner.trigger('broker');
 
   await waitFor(() => {
-    expect(ctx.clock.readPendingMs()).toStrictEqual([60_000]);
+    expect(ctx.clock.countPending()).toBe(1);
+    expect(readNextDelayMs(ctx.clock)).toBe(60_000);
   });
 });
 
@@ -362,13 +368,13 @@ test('it skips the save when a pass repeats the saved outcome', async () => {
 
   onTestFinished(() => runner.stop());
 
-  ctx.clock.runFor(500);
+  ctx.clock.advance(500);
 
   await waitFor(() => {
     expect(runner.list()[0]?.nextRunAt).toBe(1_800_000_001_000);
   });
 
-  ctx.clock.runFor(500);
+  ctx.clock.advance(500);
 
   await waitFor(() => {
     expect(runner.list()[0]?.last?.at).toBe(1_800_000_001_000);
@@ -407,13 +413,13 @@ test('it saves the result when the outcome changes', async () => {
 
   onTestFinished(() => runner.stop());
 
-  ctx.clock.runFor(1000);
+  ctx.clock.advance(1000);
 
   await waitFor(() => {
     expect(runner.list()[0]?.nextRunAt).toBe(1_800_000_002_000);
   });
 
-  ctx.clock.runFor(1000);
+  ctx.clock.advance(1000);
 
   await waitFor(async () => {
     const results = await ctx.readResults();
@@ -453,7 +459,7 @@ test('it skips the save on its first pass when the outcome matches the one saved
 
   onTestFinished(() => after.stop());
 
-  ctx.clock.runFor(500);
+  ctx.clock.advance(500);
 
   await waitFor(() => {
     expect(after.list()[0]?.last?.at).toBe(1_800_000_000_500);
@@ -651,7 +657,7 @@ test('it starts no reconciler when a stop arrives while it starts', async () => 
 
   await starting;
 
-  expect(ctx.clock.readPendingMs()).toStrictEqual([]);
+  expect(readNextDelayMs(ctx.clock)).toBeNull();
 });
 
 test('it saves a result on the next pass after a save fails', async () => {

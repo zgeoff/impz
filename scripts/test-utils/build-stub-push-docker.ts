@@ -9,7 +9,8 @@ interface StubPushDockerOptions {
 export function buildStubPushDocker(options: StubPushDockerOptions): string {
   const push = options.isPushRefused === true ? 'exit 1' : 'exit 0';
 
-  return `case "$1 $2 $3" in
+  return `#!/bin/bash
+case "$1 $2 $3" in
   "push "*) ${push} ;;
   "buildx imagetools inspect") printf '%s\\n' ${formatShellWord(options.inspected)}; exit 0 ;;
 esac

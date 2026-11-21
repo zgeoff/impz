@@ -233,7 +233,7 @@ async function waitForInfo(
         throw new Error('impd is not ready yet');
       }
     },
-    { intervalMs: POLL_MS, timeoutMs: READY_TIMEOUT_MS, now: deps.now, wait: deps.sleep },
+    { intervalMs: POLL_MS, timeoutMs: READY_TIMEOUT_MS, now: deps.now, sleep: deps.sleep },
   );
 }
 

@@ -6,7 +6,7 @@ import { basename, join } from 'node:path';
 import { createImpClient } from '@impz/client';
 import { IMPD_STARTUP_STEPS } from '@impz/daemon/host/impd/impd-startup-steps';
 import { listImps } from '@impz/daemon/host/platform/db/list-imps';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { waitFor } from '@zgeoff/testing';
 import invariant from 'tiny-invariant';
 import { formatRunPrefix } from './platform/format-run-prefix';
 import { readRunOwner } from './platform/read-run-owner';

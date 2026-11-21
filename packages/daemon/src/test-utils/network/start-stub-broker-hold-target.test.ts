@@ -1,6 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { connect } from 'node:net';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { waitFor } from '@zgeoff/testing';
 import { startStubBrokerHoldTarget } from './start-stub-broker-hold-target';
 
 function setupTest() {

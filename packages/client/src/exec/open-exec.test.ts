@@ -8,11 +8,11 @@ import {
   buildImpPaths,
   buildStubExecAgent,
 } from '@impz/daemon/test-utils';
-import { server } from '@impz/shared/test-utils/server';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { network } from '@impz/shared/test-utils/network';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import { startStubAgent } from '@impz/testing/stand-in/vm/start-stub-agent';
 import { ORPCError } from '@orpc/client';
+import { waitFor } from '@zgeoff/testing';
 import { http } from 'msw';
 import { createImpClient } from '../create-imp-client';
 import { makeStubImpdWithoutFeature } from '../test-utils/make-stub-impd-without-feature';
@@ -32,7 +32,7 @@ async function setupTest() {
 
   const impd = harness.impd;
 
-  server.use(http.all('http://impd.test/*', (info) => impd.api.app.handle(info.request)));
+  network.use(http.all('http://impd.test/*', (info) => impd.api.app.handle(info.request)));
 
   const url = harness.url;
   const client = createImpClient({ url, token: rootToken });
@@ -593,7 +593,7 @@ test('#openExec starts nothing that requires anything on an impd without execReq
     'execRequire',
   );
 
-  server.use(http.all('http://impd.test/*', (info) => older(info.request)));
+  network.use(http.all('http://impd.test/*', (info) => older(info.request)));
 
   const client = createImpClient({
     url: 'http://impd.test/',
@@ -629,7 +629,7 @@ test('#openExec starts nothing that drops CAP_SYS_ADMIN on an impd without execD
     'execDropSysAdmin',
   );
 
-  server.use(http.all('http://impd.test/*', (info) => older(info.request)));
+  network.use(http.all('http://impd.test/*', (info) => older(info.request)));
 
   const client = createImpClient({
     url: 'http://impd.test/',

@@ -1,7 +1,7 @@
 import { onTestFinished } from 'bun:test';
 import { existsSync, rmSync, statfsSync } from 'node:fs';
 import { join } from 'node:path';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { waitFor } from '@zgeoff/testing';
 
 export interface DiskTrial {
   readonly outcome: string;

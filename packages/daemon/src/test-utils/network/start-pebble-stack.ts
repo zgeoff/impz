@@ -1,6 +1,6 @@
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { waitFor } from '@zgeoff/testing';
 import { buildPebbleNames } from './build-pebble-names';
 import type { PebbleNames } from './build-pebble-names';
 import { PEBBLE_IMAGES } from './pebble-images';

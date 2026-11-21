@@ -1,5 +1,5 @@
 import invariant from 'tiny-invariant';
-import type { StartTimer } from '../process/clock';
+import type { StartTimer } from '../process/start-timer';
 
 interface OpenOptions {
   readonly timeoutMs: number;

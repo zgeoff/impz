@@ -1,9 +1,9 @@
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { waitFor } from '@zgeoff/testing';
 
 export async function waitForOutcome(
   promise: Promise<unknown>,
   durationMs: number,
-  clock: Readonly<{ now?: () => number; wait?: (delayMs: number) => Promise<void> }> = {},
+  clock: Readonly<{ now?: () => number; sleep?: (delayMs: number) => Promise<void> }> = {},
 ): Promise<string> {
   const settled = (async () => {
     try {

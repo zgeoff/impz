@@ -2,10 +2,10 @@ import { randomUUID } from 'node:crypto';
 import { rootCertificates } from 'node:tls';
 import { getErrorMessage } from '@impz/shared';
 import { PROXY_VARIABLE } from '../../../imps/exec/broker-exec-env';
-import type { StartTimer } from '../../../platform/process/clock';
 import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import { buildExitError } from '../../../platform/process/run-command';
 import { startRealTimer } from '../../../platform/process/start-real-timer';
+import type { StartTimer } from '../../../platform/process/start-timer';
 import { openExecStream } from '../../../vm/agent-client/exec-stream';
 import installScript from './install-broker-ca.sh' with { type: 'text' };
 

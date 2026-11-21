@@ -2,6 +2,8 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
+import { readStubCalls } from '@zgeoff/testing/bin';
 import { $ } from 'bun';
 import { createStubGhReleaseDownload } from '../test-utils/create-stub-gh-release-download';
 
@@ -29,13 +31,12 @@ test('it installs a linter released as a bare binary, once its sum matches, and 
   const binary = '#!/bin/sh\necho v3.14.1\n';
 
   writeFileSync(release, binary);
-
-  const gh = createStubGhReleaseDownload(ctx.directoryPath, { source: release });
+  createStubGhReleaseDownload(ctx.directoryPath, { source: release });
 
   const result = await $`bun ${ctx.scriptPath} shfmt`
     .env({
       ...process.env,
-      PATH: `${gh.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
       SHFMT_VERSION: 'v3.14.1',
       SHFMT_SHA256: new Bun.CryptoHasher('sha256').update(binary).digest('hex'),
       RUNNER_TEMP: ctx.runnerTemp,
@@ -49,7 +50,7 @@ test('it installs a linter released as a bare binary, once its sum matches, and 
     stdout: 'v3.14.1\n',
   });
 
-  expect(readFileSync(gh.calls, 'utf8')).toBe(
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe(
     `gh release download v3.14.1 --repo mvdan/sh --pattern shfmt_v3.14.1_linux_amd64 --output ${join(ctx.runnerTemp, 'shfmt', 'download')}\n`,
   );
 
@@ -70,12 +71,12 @@ test('it installs a linter from its release archive', async () => {
 
   await $`tar -czf ${archive} -C ${join(ctx.directoryPath, 'release')} actionlint README.md`.quiet();
 
-  const gh = createStubGhReleaseDownload(ctx.directoryPath, { source: archive });
+  createStubGhReleaseDownload(ctx.directoryPath, { source: archive });
 
   const result = await $`bun ${ctx.scriptPath} actionlint`
     .env({
       ...process.env,
-      PATH: `${gh.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
       ACTIONLINT_VERSION: '1.7.12',
       ACTIONLINT_SHA256: new Bun.CryptoHasher('sha256').update(readFileSync(archive)).digest('hex'),
       RUNNER_TEMP: ctx.runnerTemp,
@@ -89,7 +90,7 @@ test('it installs a linter from its release archive', async () => {
     stdout: '1.7.12\n',
   });
 
-  expect(readFileSync(gh.calls, 'utf8')).toBe(
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe(
     `gh release download v1.7.12 --repo rhysd/actionlint --pattern actionlint_1.7.12_linux_amd64.tar.gz --output ${join(ctx.runnerTemp, 'actionlint', 'download')}\n`,
   );
 });
@@ -100,13 +101,12 @@ test('it installs nothing from a download whose sum differs from the pinned one'
   const binary = '#!/bin/sh\necho tampered\n';
 
   writeFileSync(release, binary);
-
-  const gh = createStubGhReleaseDownload(ctx.directoryPath, { source: release });
+  createStubGhReleaseDownload(ctx.directoryPath, { source: release });
 
   const result = await $`bun ${ctx.scriptPath} hadolint`
     .env({
       ...process.env,
-      PATH: `${gh.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
       HADOLINT_VERSION: 'v2.15.1',
       HADOLINT_SHA256: '0'.repeat(64),
       RUNNER_TEMP: ctx.runnerTemp,
@@ -130,13 +130,12 @@ test('it installs nothing when the download fails, even after writing the right 
   const binary = '#!/bin/sh\necho v3.14.1\n';
 
   writeFileSync(release, binary);
-
-  const gh = createStubGhReleaseDownload(ctx.directoryPath, { source: release, exitCode: 1 });
+  createStubGhReleaseDownload(ctx.directoryPath, { source: release, exitCode: 1 });
 
   const result = await $`bun ${ctx.scriptPath} shfmt`
     .env({
       ...process.env,
-      PATH: `${gh.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
       SHFMT_VERSION: 'v3.14.1',
       SHFMT_SHA256: new Bun.CryptoHasher('sha256').update(binary).digest('hex'),
       RUNNER_TEMP: ctx.runnerTemp,

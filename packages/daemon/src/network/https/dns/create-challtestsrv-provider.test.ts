@@ -1,12 +1,12 @@
 import { expect, mock, test } from 'bun:test';
-import { server } from '@impz/shared/test-utils/server';
+import { network } from '@impz/shared/test-utils/network';
 import { HttpResponse, http } from 'msw';
 import { createChalltestsrvProvider } from './create-challtestsrv-provider';
 
 test('it sets a TXT value through the management API, with the name fully qualified', async () => {
   const received = mock<(path: string, body: unknown) => void>();
 
-  server.use(
+  network.use(
     http.post('http://challtestsrv.test:8055/:command', async (info) => {
       const body: unknown = await info.request.json();
 
@@ -35,7 +35,7 @@ test('it sets a TXT value through the management API, with the name fully qualif
 test('it clears every TXT value of the name to remove one', async () => {
   const received = mock<(path: string, body: unknown) => void>();
 
-  server.use(
+  network.use(
     http.post('http://challtestsrv.test:8055/:command', async (info) => {
       const body: unknown = await info.request.json();
 
@@ -55,7 +55,7 @@ test('it clears every TXT value of the name to remove one', async () => {
 });
 
 test('it rejects a command the management API refuses, naming the command and status', () => {
-  server.use(
+  network.use(
     http.post(
       'http://challtestsrv.test:8055/set-txt',
       () => new HttpResponse(null, { status: 400 }),
@@ -79,7 +79,7 @@ test('it waits for nothing before a TXT value counts as set', async () => {
 test('it adds an A record through the management API, with the name fully qualified', async () => {
   const received = mock<(path: string, body: unknown) => void>();
 
-  server.use(
+  network.use(
     http.post('http://challtestsrv.test:8055/:command', async (info) => {
       const body: unknown = await info.request.json();
 
@@ -100,7 +100,7 @@ test('it adds an A record through the management API, with the name fully qualif
 });
 
 test('it rejects an A record the management API refuses, and lists no record for it', async () => {
-  server.use(
+  network.use(
     http.post('http://challtestsrv.test:8055/add-a', () => new HttpResponse(null, { status: 500 })),
   );
 
@@ -121,7 +121,7 @@ test('it rejects an A record the management API refuses, and lists no record for
 });
 
 test('it keeps listing an A record whose clear the management API refuses', async () => {
-  server.use(
+  network.use(
     http.post('http://challtestsrv.test:8055/add-a', () => new HttpResponse(null, { status: 200 })),
     http.post(
       'http://challtestsrv.test:8055/clear-a',
@@ -145,7 +145,7 @@ test('it keeps listing an A record whose clear the management API refuses', asyn
 });
 
 test('it lists the A records it wrote with this owner under the domain', async () => {
-  server.use(
+  network.use(
     http.post('http://challtestsrv.test:8055/add-a', () => new HttpResponse(null, { status: 200 })),
   );
 
@@ -163,7 +163,7 @@ test('it lists the A records it wrote with this owner under the domain', async (
 test('it removes an A record it wrote with this owner', async () => {
   const received = mock<(path: string, body: unknown) => void>();
 
-  server.use(
+  network.use(
     http.post('http://challtestsrv.test:8055/:command', async (info) => {
       const body: unknown = await info.request.json();
 
@@ -187,7 +187,7 @@ test('it removes an A record it wrote with this owner', async () => {
 test('it never removes an A record of another owner', async () => {
   const received = mock<(path: string) => void>();
 
-  server.use(
+  network.use(
     http.post('http://challtestsrv.test:8055/:command', (info) => {
       received(new URL(info.request.url).pathname);
 

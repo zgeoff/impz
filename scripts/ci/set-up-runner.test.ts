@@ -2,9 +2,10 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
-import { createStubSudo } from '@impz/shared/test-utils/create-stub-sudo';
+import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
+import { createStubBin, readStubCalls } from '@zgeoff/testing/bin';
 import { $ } from 'bun';
+import { buildStubSudo } from '../test-utils/build-stub-sudo';
 
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-set-up-runner-'));
@@ -15,25 +16,25 @@ function setupTest() {
 
   // PATH holds only the stand-ins' folder, so the host's own podman or modinfo never answers in
   // their place.
-  const sudo = createStubSudo(directory);
+  createStubBin(directory, 'sudo', { script: buildStubSudo(), recordStdin: true });
 
-  return { directoryPath: directory, sudo, scriptPath: join(import.meta.dir, 'set-up-runner.ts') };
+  return { directoryPath: directory, scriptPath: join(import.meta.dir, 'set-up-runner.ts') };
 }
 
 test('it hands the cpu controller down to the containers, and shows what one gets', async () => {
   const ctx = setupTest();
 
-  createStubBin(ctx.directoryPath, 'grep', 'exit 1');
+  createStubBin(ctx.directoryPath, 'grep', { script: '#!/bin/bash\nexit 1' });
   createStubBin(ctx.directoryPath, 'docker');
 
   const result = await $`${process.execPath} ${ctx.scriptPath} share-cpu`
-    .env({ PATH: ctx.sudo.bin })
+    .env({ PATH: ctx.directoryPath })
     .nothrow()
     .quiet();
 
   expect(result.exitCode).toBe(0);
 
-  expect(readFileSync(ctx.sudo.calls, 'utf8')).toBe(
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe(
     [
       'grep -qw cpu /sys/fs/cgroup/cgroup.subtree_control',
       'sudo tee /sys/fs/cgroup/cgroup.subtree_control',
@@ -54,26 +55,29 @@ test('it writes nothing to a cgroup that hands the cpu controller down already',
   createStubBin(ctx.directoryPath, 'docker');
 
   const result = await $`${process.execPath} ${ctx.scriptPath} share-cpu`
-    .env({ PATH: ctx.sudo.bin })
+    .env({ PATH: ctx.directoryPath })
     .nothrow()
     .quiet();
 
   expect(result.exitCode).toBe(0);
-  expect(readFileSync(ctx.sudo.calls, 'utf8')).not.toInclude('sudo tee');
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).not.toInclude('sudo tee');
 });
 
 test('it logs the refused write and still shows what a container gets, when the kernel refuses the cpu controller', async () => {
   const ctx = setupTest();
 
-  createStubSudo(ctx.directoryPath, {
-    refusedTees: ['/sys/fs/cgroup/system.slice/cgroup.subtree_control'],
+  createStubBin(ctx.directoryPath, 'sudo', {
+    script: buildStubSudo({
+      refusedTees: ['/sys/fs/cgroup/system.slice/cgroup.subtree_control'],
+    }),
+    recordStdin: true,
   });
 
-  createStubBin(ctx.directoryPath, 'grep', 'exit 1');
+  createStubBin(ctx.directoryPath, 'grep', { script: '#!/bin/bash\nexit 1' });
   createStubBin(ctx.directoryPath, 'docker');
 
   const result = await $`${process.execPath} ${ctx.scriptPath} share-cpu`
-    .env({ PATH: ctx.sudo.bin })
+    .env({ PATH: ctx.directoryPath })
     .nothrow()
     .quiet();
 
@@ -82,17 +86,22 @@ test('it logs the refused write and still shows what a container gets, when the 
     stderr: 'tee: /sys/fs/cgroup/system.slice/cgroup.subtree_control: Invalid argument\n',
   });
 
-  expect(readFileSync(ctx.sudo.calls, 'utf8')).toInclude('docker run --rm --cgroupns=private');
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toInclude(
+    'docker run --rm --cgroupns=private',
+  );
 });
 
 test('it lets the error of a refused write reach the log', async () => {
   const ctx = setupTest();
 
-  createStubBin(ctx.directoryPath, 'sudo', 'echo "tee: write error: Invalid argument" >&2\nexit 1');
+  createStubBin(ctx.directoryPath, 'sudo', {
+    script: '#!/bin/bash\necho "tee: write error: Invalid argument" >&2\nexit 1',
+  });
+
   createStubBin(ctx.directoryPath, 'uname');
 
   const result = await $`${process.execPath} ${ctx.scriptPath} turn-on-ksm`
-    .env({ PATH: ctx.sudo.bin })
+    .env({ PATH: ctx.directoryPath })
     .nothrow()
     .quiet();
 
@@ -103,17 +112,17 @@ test('it lets the error of a refused write reach the log', async () => {
 test('it turns KSM on with a high scan rate', async () => {
   const ctx = setupTest();
 
-  createStubBin(ctx.directoryPath, 'uname', 'echo 6.17.0-1010-azure');
+  createStubBin(ctx.directoryPath, 'uname', { script: '#!/bin/bash\necho 6.17.0-1010-azure' });
   createStubBin(ctx.directoryPath, 'grep');
 
   const result = await $`${process.execPath} ${ctx.scriptPath} turn-on-ksm`
-    .env({ PATH: ctx.sudo.bin })
+    .env({ PATH: ctx.directoryPath })
     .nothrow()
     .quiet();
 
   expect(result.exitCode).toBe(0);
 
-  expect(readFileSync(ctx.sudo.calls, 'utf8')).toBe(
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe(
     [
       'uname -r',
       'sudo tee /sys/kernel/mm/ksm/use_zero_pages',
@@ -131,12 +140,16 @@ test('it turns KSM on with a high scan rate', async () => {
 test('it fails when the kernel refuses to turn KSM on', async () => {
   const ctx = setupTest();
 
-  createStubSudo(ctx.directoryPath, { refusedTees: ['/sys/kernel/mm/ksm/run'] });
+  createStubBin(ctx.directoryPath, 'sudo', {
+    script: buildStubSudo({ refusedTees: ['/sys/kernel/mm/ksm/run'] }),
+    recordStdin: true,
+  });
+
   createStubBin(ctx.directoryPath, 'uname');
   createStubBin(ctx.directoryPath, 'grep');
 
   const result = await $`${process.execPath} ${ctx.scriptPath} turn-on-ksm`
-    .env({ PATH: ctx.sudo.bin })
+    .env({ PATH: ctx.directoryPath })
     .nothrow()
     .quiet();
 
@@ -146,11 +159,14 @@ test('it fails when the kernel refuses to turn KSM on', async () => {
 test('it reserves 1 GiB of huge pages, and shows the pool and the userfaultfd device', async () => {
   const ctx = setupTest();
 
-  createStubBin(ctx.directoryPath, 'grep', 'echo "HugePages_Total:     512"');
+  createStubBin(ctx.directoryPath, 'grep', {
+    script: '#!/bin/bash\necho "HugePages_Total:     512"',
+  });
+
   createStubBin(ctx.directoryPath, 'stat');
 
   const result = await $`${process.execPath} ${ctx.scriptPath} reserve-huge-pages`
-    .env({ PATH: ctx.sudo.bin })
+    .env({ PATH: ctx.directoryPath })
     .nothrow()
     .quiet();
 
@@ -159,7 +175,7 @@ test('it reserves 1 GiB of huge pages, and shows the pool and the userfaultfd de
     stdout: 'HugePages_Total:     512\n',
   });
 
-  expect(readFileSync(ctx.sudo.calls, 'utf8')).toBe(
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe(
     [
       'sudo tee /proc/sys/vm/nr_hugepages',
       '< 512',
@@ -177,13 +193,13 @@ test('it reserves the number of huge pages it is given', async () => {
   createStubBin(ctx.directoryPath, 'stat');
 
   const result = await $`${process.execPath} ${ctx.scriptPath} reserve-huge-pages 3072`
-    .env({ PATH: ctx.sudo.bin })
+    .env({ PATH: ctx.directoryPath })
     .nothrow()
     .quiet();
 
   expect(result.exitCode).toBe(0);
 
-  expect(readFileSync(ctx.sudo.calls, 'utf8')).toStartWith(
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toStartWith(
     'sudo tee /proc/sys/vm/nr_hugepages\n< 3072\n',
   );
 });
@@ -192,13 +208,13 @@ test('it names the e2e registry in /etc/hosts, after the entries there', async (
   const ctx = setupTest();
 
   const result = await $`${process.execPath} ${ctx.scriptPath} name-e2e-registry`
-    .env({ PATH: ctx.sudo.bin })
+    .env({ PATH: ctx.directoryPath })
     .nothrow()
     .quiet();
 
   expect(result.exitCode).toBe(0);
 
-  expect(readFileSync(ctx.sudo.calls, 'utf8')).toBe(
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe(
     'sudo tee -a /etc/hosts\n< 10.200.0.1 imp-e2e-registry.test\n',
   );
 });
@@ -209,13 +225,13 @@ test('it installs ZFS from the kernel modules that the runner has, with the ARC 
   createStubBin(ctx.directoryPath, 'modinfo');
 
   const result = await $`${process.execPath} ${ctx.scriptPath} install-zfs 1073741824`
-    .env({ PATH: ctx.sudo.bin })
+    .env({ PATH: ctx.directoryPath })
     .nothrow()
     .quiet();
 
   expect(result.exitCode).toBe(0);
 
-  expect(readFileSync(ctx.sudo.calls, 'utf8')).toBe(
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe(
     [
       'sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update',
       'sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y --no-install-recommends zfsutils-linux',
@@ -232,17 +248,17 @@ test('it installs ZFS from the kernel modules that the runner has, with the ARC 
 test("it installs the kernel's extra modules when the runner lacks the zfs module, and leaves the ARC alone", async () => {
   const ctx = setupTest();
 
-  createStubBin(ctx.directoryPath, 'modinfo', 'exit 1');
-  createStubBin(ctx.directoryPath, 'uname', 'echo 6.17.0-1010-azure');
+  createStubBin(ctx.directoryPath, 'modinfo', { script: '#!/bin/bash\nexit 1' });
+  createStubBin(ctx.directoryPath, 'uname', { script: '#!/bin/bash\necho 6.17.0-1010-azure' });
 
   const result = await $`${process.execPath} ${ctx.scriptPath} install-zfs`
-    .env({ PATH: ctx.sudo.bin })
+    .env({ PATH: ctx.directoryPath })
     .nothrow()
     .quiet();
 
   expect(result.exitCode).toBe(0);
 
-  expect(readFileSync(ctx.sudo.calls, 'utf8')).toBe(
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe(
     [
       'sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update',
       'sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y --no-install-recommends zfsutils-linux',
@@ -260,13 +276,13 @@ test('it installs Podman on a runner without it', async () => {
   const ctx = setupTest();
 
   const result = await $`${process.execPath} ${ctx.scriptPath} install-podman`
-    .env({ PATH: ctx.sudo.bin })
+    .env({ PATH: ctx.directoryPath })
     .nothrow()
     .quiet();
 
   expect(result.exitCode).toBe(0);
 
-  expect(readFileSync(ctx.sudo.calls, 'utf8')).toBe(
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe(
     [
       'sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update',
       'sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y --no-install-recommends podman catatonit netavark aardvark-dns',
@@ -282,25 +298,25 @@ test('it keeps the Podman that the runner has', async () => {
   createStubBin(ctx.directoryPath, 'podman');
 
   const result = await $`${process.execPath} ${ctx.scriptPath} install-podman`
-    .env({ PATH: ctx.sudo.bin })
+    .env({ PATH: ctx.directoryPath })
     .nothrow()
     .quiet();
 
   expect(result.exitCode).toBe(0);
-  expect(readFileSync(ctx.sudo.calls, 'utf8')).toBe('sudo podman --version\n');
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe('sudo podman --version\n');
 });
 
 test('it opens KVM to the nix builders through a udev rule', async () => {
   const ctx = setupTest();
 
   const result = await $`${process.execPath} ${ctx.scriptPath} open-kvm-to-builders`
-    .env({ PATH: ctx.sudo.bin })
+    .env({ PATH: ctx.directoryPath })
     .nothrow()
     .quiet();
 
   expect(result.exitCode).toBe(0);
 
-  expect(readFileSync(ctx.sudo.calls, 'utf8')).toBe(
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe(
     [
       'sudo tee /etc/udev/rules.d/99-kvm.rules',
       '< KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"',
@@ -317,13 +333,13 @@ test('it removes the toolchains the e2e jobs never use, and shows the free disk 
   createStubBin(ctx.directoryPath, 'df');
 
   const result = await $`${process.execPath} ${ctx.scriptPath} free-disk`
-    .env({ PATH: ctx.sudo.bin })
+    .env({ PATH: ctx.directoryPath })
     .nothrow()
     .quiet();
 
   expect(result.exitCode).toBe(0);
 
-  expect(readFileSync(ctx.sudo.calls, 'utf8')).toBe(
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe(
     [
       'df -h /',
       'sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL',
@@ -356,13 +372,13 @@ test("it creates a pool in a sparse file with deploy's properties, and points im
 
   const result =
     await $`${process.execPath} ${ctx.scriptPath} create-zfs-pool benchpool /mnt/bench.img 60`
-      .env({ PATH: ctx.sudo.bin, GITHUB_ENV: githubEnv })
+      .env({ PATH: ctx.directoryPath, GITHUB_ENV: githubEnv })
       .nothrow()
       .quiet();
 
   expect(result.exitCode).toBe(0);
 
-  expect(readFileSync(ctx.sudo.calls, 'utf8')).toBe(
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe(
     [
       'sudo truncate -s 60G /mnt/bench.img',
       'sudo zpool create -o ashift=12 -O compression=lz4 -O atime=off -O xattr=sa -O mountpoint=none benchpool /mnt/bench.img',
@@ -380,7 +396,7 @@ test('it refuses an argument that its task does not take, and sets nothing up', 
   const ctx = setupTest();
 
   const result = await $`${process.execPath} ${ctx.scriptPath} turn-on-ksm 1000`
-    .env({ PATH: ctx.sudo.bin })
+    .env({ PATH: ctx.directoryPath })
     .nothrow()
     .quiet();
 
@@ -390,14 +406,14 @@ test('it refuses an argument that its task does not take, and sets nothing up', 
       'usage: set-up-runner.ts <share-cpu|turn-on-ksm|reserve-huge-pages|name-e2e-registry|install-zfs|create-zfs-pool|install-podman|open-kvm-to-builders|free-disk>\n',
   });
 
-  expect(readFileSync(ctx.sudo.calls, 'utf8')).toBe('');
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe('');
 });
 
 test('it refuses a second argument to install-zfs, and installs nothing', async () => {
   const ctx = setupTest();
 
   const result = await $`${process.execPath} ${ctx.scriptPath} install-zfs 1073741824 2147483648`
-    .env({ PATH: ctx.sudo.bin })
+    .env({ PATH: ctx.directoryPath })
     .nothrow()
     .quiet();
 
@@ -407,5 +423,5 @@ test('it refuses a second argument to install-zfs, and installs nothing', async 
       'usage: set-up-runner.ts <share-cpu|turn-on-ksm|reserve-huge-pages|name-e2e-registry|install-zfs|create-zfs-pool|install-podman|open-kvm-to-builders|free-disk> [arc max bytes]\n',
   });
 
-  expect(readFileSync(ctx.sudo.calls, 'utf8')).toBe('');
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe('');
 });

@@ -1,6 +1,6 @@
 import { MOVE_RECEIVE_PATH } from '@impz/api';
-import type { StartTimer } from '../../platform/process/clock';
 import { sendLongRequest } from '../../platform/process/send-long-request';
+import type { StartTimer } from '../../platform/process/start-timer';
 import { buildTicketHeader } from './build-ticket-header';
 
 export interface PeerDeps {

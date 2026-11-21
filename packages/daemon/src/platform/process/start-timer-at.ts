@@ -1,5 +1,5 @@
-import type { StartTimer } from './clock';
 import { startRealTimer } from './start-real-timer';
+import type { StartTimer } from './start-timer';
 
 // setTimeout's longest delay: a longer one overflows, warns, and fires at once
 const MAX_DELAY_MS = 2 ** 31 - 1;

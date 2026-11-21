@@ -3,10 +3,10 @@ import { mkdir, open, stat, truncate, unlink } from 'node:fs/promises';
 import type { FileHandle } from 'node:fs/promises';
 import { join } from 'node:path';
 import * as z from 'zod';
-import type { StartTimer } from '../../../platform/process/clock';
 import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import { buildKeyedMutex } from '../../../platform/process/keyed-mutex';
 import { startRealTimer } from '../../../platform/process/start-real-timer';
+import type { StartTimer } from '../../../platform/process/start-timer';
 import { writeFileDurablyAsync } from '../../../platform/process/write-file-durably';
 import {
   AgentBootIdSchema,

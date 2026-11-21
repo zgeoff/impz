@@ -2,7 +2,9 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
+import { waitFor } from '@zgeoff/testing';
+import { readStubCalls } from '@zgeoff/testing/bin';
 import { createStubZpool } from './create-stub-zpool';
 
 function setupTest() {
@@ -17,27 +19,44 @@ function setupTest() {
 
 test('it lists no pool before a create', () => {
   const ctx = setupTest();
-  const stub = createStubZpool(ctx.directoryPath);
 
-  expect(Bun.spawnSync([join(stub.bin, 'zpool'), 'list', 'tank']).exitCode).toBe(1);
+  createStubZpool(ctx.directoryPath);
+
+  expect(Bun.spawnSync([join(ctx.directoryPath, 'zpool'), 'list', 'tank']).exitCode).toBe(1);
 });
 
 test('it lists a created pool', () => {
   const ctx = setupTest();
-  const stub = createStubZpool(ctx.directoryPath);
 
-  Bun.spawnSync([join(stub.bin, 'zpool'), 'create', '-O', 'atime=off', 'tank', '/work/pool.img']);
+  createStubZpool(ctx.directoryPath);
 
-  expect(Bun.spawnSync([join(stub.bin, 'zpool'), 'list', 'tank']).exitCode).toBe(0);
+  Bun.spawnSync([
+    join(ctx.directoryPath, 'zpool'),
+    'create',
+    '-O',
+    'atime=off',
+    'tank',
+    '/work/pool.img',
+  ]);
+
+  expect(Bun.spawnSync([join(ctx.directoryPath, 'zpool'), 'list', 'tank']).exitCode).toBe(0);
 });
 
 test('it shows the vdev of a created pool in status -P', () => {
   const ctx = setupTest();
-  const stub = createStubZpool(ctx.directoryPath);
 
-  Bun.spawnSync([join(stub.bin, 'zpool'), 'create', '-O', 'atime=off', 'tank', '/work/pool.img']);
+  createStubZpool(ctx.directoryPath);
 
-  const result = Bun.spawnSync([join(stub.bin, 'zpool'), 'status', '-P', 'tank']);
+  Bun.spawnSync([
+    join(ctx.directoryPath, 'zpool'),
+    'create',
+    '-O',
+    'atime=off',
+    'tank',
+    '/work/pool.img',
+  ]);
+
+  const result = Bun.spawnSync([join(ctx.directoryPath, 'zpool'), 'status', '-P', 'tank']);
 
   expect({ exitCode: result.exitCode, stdout: result.stdout.toString() }).toStrictEqual({
     exitCode: 0,
@@ -47,30 +66,39 @@ test('it shows the vdev of a created pool in status -P', () => {
 
 test('it shows every pool in status -P with no pool named', () => {
   const ctx = setupTest();
-  const stub = createStubZpool(ctx.directoryPath);
 
-  Bun.spawnSync([join(stub.bin, 'zpool'), 'create', 'tank', '/work/a.img']);
-  Bun.spawnSync([join(stub.bin, 'zpool'), 'create', 'bench', '/work/b.img']);
+  createStubZpool(ctx.directoryPath);
 
-  expect(Bun.spawnSync([join(stub.bin, 'zpool'), 'status', '-P']).stdout.toString()).toBe(
+  Bun.spawnSync([join(ctx.directoryPath, 'zpool'), 'create', 'tank', '/work/a.img']);
+  Bun.spawnSync([join(ctx.directoryPath, 'zpool'), 'create', 'bench', '/work/b.img']);
+
+  expect(Bun.spawnSync([join(ctx.directoryPath, 'zpool'), 'status', '-P']).stdout.toString()).toBe(
     '  pool: tank\n\t  /work/a.img  ONLINE  0 0 0\n  pool: bench\n\t  /work/b.img  ONLINE  0 0 0\n',
   );
 });
 
 test('it forgets a destroyed pool', () => {
   const ctx = setupTest();
-  const stub = createStubZpool(ctx.directoryPath);
 
-  Bun.spawnSync([join(stub.bin, 'zpool'), 'create', 'tank', '/work/pool.img']);
-  Bun.spawnSync([join(stub.bin, 'zpool'), 'destroy', '-f', 'tank']);
+  createStubZpool(ctx.directoryPath);
 
-  expect(Bun.spawnSync([join(stub.bin, 'zpool'), 'list', 'tank']).exitCode).toBe(1);
+  Bun.spawnSync([join(ctx.directoryPath, 'zpool'), 'create', 'tank', '/work/pool.img']);
+  Bun.spawnSync([join(ctx.directoryPath, 'zpool'), 'destroy', '-f', 'tank']);
+
+  expect(Bun.spawnSync([join(ctx.directoryPath, 'zpool'), 'list', 'tank']).exitCode).toBe(1);
 });
 
 test('it fails a create when told to', () => {
   const ctx = setupTest();
-  const stub = createStubZpool(ctx.directoryPath, { create: 'fails' });
-  const result = Bun.spawnSync([join(stub.bin, 'zpool'), 'create', 'tank', '/work/pool.img']);
+
+  createStubZpool(ctx.directoryPath, { create: 'fails' });
+
+  const result = Bun.spawnSync([
+    join(ctx.directoryPath, 'zpool'),
+    'create',
+    'tank',
+    '/work/pool.img',
+  ]);
 
   expect({ exitCode: result.exitCode, stderr: result.stderr.toString() }).toStrictEqual({
     exitCode: 1,
@@ -80,19 +108,22 @@ test('it fails a create when told to', () => {
 
 test('it makes no pool when a create fails', () => {
   const ctx = setupTest();
-  const stub = createStubZpool(ctx.directoryPath, { create: 'fails' });
 
-  Bun.spawnSync([join(stub.bin, 'zpool'), 'create', 'tank', '/work/pool.img']);
+  createStubZpool(ctx.directoryPath, { create: 'fails' });
 
-  expect(Bun.spawnSync([join(stub.bin, 'zpool'), 'list', 'tank']).exitCode).toBe(1);
+  Bun.spawnSync([join(ctx.directoryPath, 'zpool'), 'create', 'tank', '/work/pool.img']);
+
+  expect(Bun.spawnSync([join(ctx.directoryPath, 'zpool'), 'list', 'tank']).exitCode).toBe(1);
 });
 
 test('it marks a held create as started and makes no pool before the release', async () => {
   const ctx = setupTest();
   const startedMarker = join(ctx.directoryPath, 'started');
   const release = join(ctx.directoryPath, 'release');
-  const stub = createStubZpool(ctx.directoryPath, { create: { startedMarker, release } });
-  const create = Bun.spawn([join(stub.bin, 'zpool'), 'create', 'tank', '/work/pool.img']);
+
+  createStubZpool(ctx.directoryPath, { create: { startedMarker, release } });
+
+  const create = Bun.spawn([join(ctx.directoryPath, 'zpool'), 'create', 'tank', '/work/pool.img']);
 
   onTestFinished(async () => {
     create.kill('SIGKILL');
@@ -102,15 +133,17 @@ test('it marks a held create as started and makes no pool before the release', a
 
   await waitFor(() => readFileSync(startedMarker), { timeoutMs: 10_000 });
 
-  expect(Bun.spawnSync([join(stub.bin, 'zpool'), 'list', 'tank']).exitCode).toBe(1);
+  expect(Bun.spawnSync([join(ctx.directoryPath, 'zpool'), 'list', 'tank']).exitCode).toBe(1);
 });
 
 test('it makes the pool of a held create once released', async () => {
   const ctx = setupTest();
   const startedMarker = join(ctx.directoryPath, 'started');
   const release = join(ctx.directoryPath, 'release');
-  const stub = createStubZpool(ctx.directoryPath, { create: { startedMarker, release } });
-  const create = Bun.spawn([join(stub.bin, 'zpool'), 'create', 'tank', '/work/pool.img']);
+
+  createStubZpool(ctx.directoryPath, { create: { startedMarker, release } });
+
+  const create = Bun.spawn([join(ctx.directoryPath, 'zpool'), 'create', 'tank', '/work/pool.img']);
 
   onTestFinished(async () => {
     create.kill('SIGKILL');
@@ -125,18 +158,19 @@ test('it makes the pool of a held create once released', async () => {
   const exitCode = await create.exited;
 
   expect(exitCode).toBe(0);
-  expect(Bun.spawnSync([join(stub.bin, 'zpool'), 'list', 'tank']).exitCode).toBe(0);
+  expect(Bun.spawnSync([join(ctx.directoryPath, 'zpool'), 'list', 'tank']).exitCode).toBe(0);
 });
 
 test('it keeps the pool of a held destroy until the release, then destroys it', async () => {
   const ctx = setupTest();
   const startedMarker = join(ctx.directoryPath, 'started');
   const release = join(ctx.directoryPath, 'release');
-  const stub = createStubZpool(ctx.directoryPath, { destroy: { startedMarker, release } });
 
-  Bun.spawnSync([join(stub.bin, 'zpool'), 'create', 'tank', '/work/pool.img']);
+  createStubZpool(ctx.directoryPath, { destroy: { startedMarker, release } });
 
-  const destroy = Bun.spawn([join(stub.bin, 'zpool'), 'destroy', '-f', 'tank']);
+  Bun.spawnSync([join(ctx.directoryPath, 'zpool'), 'create', 'tank', '/work/pool.img']);
+
+  const destroy = Bun.spawn([join(ctx.directoryPath, 'zpool'), 'destroy', '-f', 'tank']);
 
   onTestFinished(async () => {
     destroy.kill('SIGKILL');
@@ -146,7 +180,7 @@ test('it keeps the pool of a held destroy until the release, then destroys it', 
 
   await waitFor(() => readFileSync(startedMarker), { timeoutMs: 10_000 });
 
-  const heldList = Bun.spawnSync([join(stub.bin, 'zpool'), 'list', 'tank']).exitCode;
+  const heldList = Bun.spawnSync([join(ctx.directoryPath, 'zpool'), 'list', 'tank']).exitCode;
 
   writeFileSync(release, '');
 
@@ -154,7 +188,7 @@ test('it keeps the pool of a held destroy until the release, then destroys it', 
 
   expect(heldList).toBe(0);
   expect(exitCode).toBe(0);
-  expect(Bun.spawnSync([join(stub.bin, 'zpool'), 'list', 'tank']).exitCode).toBe(1);
+  expect(Bun.spawnSync([join(ctx.directoryPath, 'zpool'), 'list', 'tank']).exitCode).toBe(1);
 });
 
 test.each([
@@ -163,54 +197,61 @@ test.each([
   ['ignored', 0],
 ] as const)('it answers a destroy that is %s with exit code %d', (destroy, exitCode) => {
   const ctx = setupTest();
-  const stub = createStubZpool(ctx.directoryPath, { destroy });
 
-  Bun.spawnSync([join(stub.bin, 'zpool'), 'create', 'tank', '/work/pool.img']);
+  createStubZpool(ctx.directoryPath, { destroy });
 
-  expect(Bun.spawnSync([join(stub.bin, 'zpool'), 'destroy', '-f', 'tank']).exitCode).toBe(exitCode);
+  Bun.spawnSync([join(ctx.directoryPath, 'zpool'), 'create', 'tank', '/work/pool.img']);
+
+  expect(Bun.spawnSync([join(ctx.directoryPath, 'zpool'), 'destroy', '-f', 'tank']).exitCode).toBe(
+    exitCode,
+  );
 });
 
 test('it says the pool is busy when a busy destroy fails', () => {
   const ctx = setupTest();
-  const stub = createStubZpool(ctx.directoryPath, { destroy: 'busy' });
 
-  Bun.spawnSync([join(stub.bin, 'zpool'), 'create', 'tank', '/work/pool.img']);
+  createStubZpool(ctx.directoryPath, { destroy: 'busy' });
 
-  expect(Bun.spawnSync([join(stub.bin, 'zpool'), 'destroy', '-f', 'tank']).stderr.toString()).toBe(
-    "cannot destroy 'tank': pool is busy\n",
-  );
+  Bun.spawnSync([join(ctx.directoryPath, 'zpool'), 'create', 'tank', '/work/pool.img']);
+
+  expect(
+    Bun.spawnSync([join(ctx.directoryPath, 'zpool'), 'destroy', '-f', 'tank']).stderr.toString(),
+  ).toBe("cannot destroy 'tank': pool is busy\n");
 });
 
 test.each([['fails'], ['busy'], ['ignored']] as const)(
   'it keeps the pool when a destroy is %s',
   (destroy) => {
     const ctx = setupTest();
-    const stub = createStubZpool(ctx.directoryPath, { destroy });
 
-    Bun.spawnSync([join(stub.bin, 'zpool'), 'create', 'tank', '/work/pool.img']);
-    Bun.spawnSync([join(stub.bin, 'zpool'), 'destroy', '-f', 'tank']);
+    createStubZpool(ctx.directoryPath, { destroy });
 
-    expect(Bun.spawnSync([join(stub.bin, 'zpool'), 'list', 'tank']).exitCode).toBe(0);
+    Bun.spawnSync([join(ctx.directoryPath, 'zpool'), 'create', 'tank', '/work/pool.img']);
+    Bun.spawnSync([join(ctx.directoryPath, 'zpool'), 'destroy', '-f', 'tank']);
+
+    expect(Bun.spawnSync([join(ctx.directoryPath, 'zpool'), 'list', 'tank']).exitCode).toBe(0);
   },
 );
 
 test('it logs each call to the shared stub log', () => {
   const ctx = setupTest();
-  const stub = createStubZpool(ctx.directoryPath);
 
-  Bun.spawnSync([join(stub.bin, 'zpool'), 'list', 'tank']);
+  createStubZpool(ctx.directoryPath);
 
-  expect(readFileSync(stub.calls, 'utf8')).toBe('zpool list tank\n');
+  Bun.spawnSync([join(ctx.directoryPath, 'zpool'), 'list', 'tank']);
+
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe('zpool list tank\n');
 });
 
 test('it names every pool in list -H -o name', () => {
   const ctx = setupTest();
-  const stub = createStubZpool(ctx.directoryPath);
 
-  Bun.spawnSync([join(stub.bin, 'zpool'), 'create', 'tank', '/work dir/a.img']);
-  Bun.spawnSync([join(stub.bin, 'zpool'), 'create', 'bench', '/work dir/b.img']);
+  createStubZpool(ctx.directoryPath);
 
-  const result = Bun.spawnSync([join(stub.bin, 'zpool'), 'list', '-H', '-o', 'name']);
+  Bun.spawnSync([join(ctx.directoryPath, 'zpool'), 'create', 'tank', '/work dir/a.img']);
+  Bun.spawnSync([join(ctx.directoryPath, 'zpool'), 'create', 'bench', '/work dir/b.img']);
+
+  const result = Bun.spawnSync([join(ctx.directoryPath, 'zpool'), 'list', '-H', '-o', 'name']);
 
   expect({ exitCode: result.exitCode, stdout: result.stdout.toString() }).toStrictEqual({
     exitCode: 0,
@@ -220,45 +261,54 @@ test('it names every pool in list -H -o name', () => {
 
 test('it keeps a vdev path with spaces whole in status -P', () => {
   const ctx = setupTest();
-  const stub = createStubZpool(ctx.directoryPath);
 
-  Bun.spawnSync([join(stub.bin, 'zpool'), 'create', 'tank', '/work dir/pool.img']);
+  createStubZpool(ctx.directoryPath);
 
-  expect(Bun.spawnSync([join(stub.bin, 'zpool'), 'status', '-P', 'tank']).stdout.toString()).toBe(
-    '  pool: tank\n\t  /work dir/pool.img  ONLINE  0 0 0\n',
-  );
+  Bun.spawnSync([join(ctx.directoryPath, 'zpool'), 'create', 'tank', '/work dir/pool.img']);
+
+  expect(
+    Bun.spawnSync([join(ctx.directoryPath, 'zpool'), 'status', '-P', 'tank']).stdout.toString(),
+  ).toBe('  pool: tank\n\t  /work dir/pool.img  ONLINE  0 0 0\n');
 });
 
 test('it fails status for a pool that is not there', () => {
   const ctx = setupTest();
-  const stub = createStubZpool(ctx.directoryPath);
 
-  expect(Bun.spawnSync([join(stub.bin, 'zpool'), 'status', '-P', 'tank']).exitCode).toBe(1);
+  createStubZpool(ctx.directoryPath);
+
+  expect(Bun.spawnSync([join(ctx.directoryPath, 'zpool'), 'status', '-P', 'tank']).exitCode).toBe(
+    1,
+  );
 });
 
 test('it fails list -H once a pool exists, when told to', () => {
   const ctx = setupTest();
-  const stub = createStubZpool(ctx.directoryPath, { queries: 'fail' });
 
-  Bun.spawnSync([join(stub.bin, 'zpool'), 'create', 'tank', '/work/pool.img']);
+  createStubZpool(ctx.directoryPath, { queries: 'fail' });
 
-  expect(Bun.spawnSync([join(stub.bin, 'zpool'), 'list', '-H', '-o', 'name']).exitCode).toBe(1);
+  Bun.spawnSync([join(ctx.directoryPath, 'zpool'), 'create', 'tank', '/work/pool.img']);
+
+  expect(
+    Bun.spawnSync([join(ctx.directoryPath, 'zpool'), 'list', '-H', '-o', 'name']).exitCode,
+  ).toBe(1);
 });
 
 test('it fails status once a pool exists, when told to', () => {
   const ctx = setupTest();
-  const stub = createStubZpool(ctx.directoryPath, { queries: 'fail' });
 
-  Bun.spawnSync([join(stub.bin, 'zpool'), 'create', 'tank', '/work/pool.img']);
+  createStubZpool(ctx.directoryPath, { queries: 'fail' });
 
-  expect(Bun.spawnSync([join(stub.bin, 'zpool'), 'status', '-P']).exitCode).toBe(1);
+  Bun.spawnSync([join(ctx.directoryPath, 'zpool'), 'create', 'tank', '/work/pool.img']);
+
+  expect(Bun.spawnSync([join(ctx.directoryPath, 'zpool'), 'status', '-P']).exitCode).toBe(1);
 });
 
 test('it still answers list for a named pool when queries fail', () => {
   const ctx = setupTest();
-  const stub = createStubZpool(ctx.directoryPath, { queries: 'fail' });
 
-  Bun.spawnSync([join(stub.bin, 'zpool'), 'create', 'tank', '/work/pool.img']);
+  createStubZpool(ctx.directoryPath, { queries: 'fail' });
 
-  expect(Bun.spawnSync([join(stub.bin, 'zpool'), 'list', 'tank']).exitCode).toBe(0);
+  Bun.spawnSync([join(ctx.directoryPath, 'zpool'), 'create', 'tank', '/work/pool.img']);
+
+  expect(Bun.spawnSync([join(ctx.directoryPath, 'zpool'), 'list', 'tank']).exitCode).toBe(0);
 });

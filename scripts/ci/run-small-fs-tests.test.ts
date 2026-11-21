@@ -1,11 +1,12 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createStubAptGet } from '@impz/shared/test-utils/create-stub-apt-get';
-import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
-import { createStubSudo } from '@impz/shared/test-utils/create-stub-sudo';
+import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
+import { createStubBin, readStubCalls } from '@zgeoff/testing/bin';
 import { $ } from 'bun';
+import { buildStubSudo } from '../test-utils/build-stub-sudo';
 
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-small-fs-'));
@@ -26,21 +27,15 @@ function setupTest() {
 
 test('it runs the lane on a loop-mounted XFS of its own, and removes it after', async () => {
   const ctx = setupTest();
-  const sudo = createStubBin(ctx.directoryPath, 'sudo');
 
+  createStubBin(ctx.directoryPath, 'sudo');
   createStubBin(ctx.directoryPath, 'truncate');
   createStubBin(ctx.directoryPath, 'mkfs.xfs');
-
-  createStubBin(
-    ctx.directoryPath,
-    'bun',
-    'echo "IMP_TEST_SMALL_FS=$IMP_TEST_SMALL_FS" >>"$STUB_CALLS"',
-  );
-
+  createStubBin(ctx.directoryPath, 'bun', { recordEnv: ['IMP_TEST_SMALL_FS'] });
   writeFileSync(join(ctx.runnerTemp, 'small-fs.img'), 'xfs image');
 
   const result = await $`${process.execPath} ${ctx.scriptPath}`
-    .env({ PATH: sudo.bin, RUNNER_TEMP: ctx.runnerTemp })
+    .env({ PATH: ctx.directoryPath, RUNNER_TEMP: ctx.runnerTemp })
     .nothrow()
     .quiet();
 
@@ -48,14 +43,14 @@ test('it runs the lane on a loop-mounted XFS of its own, and removes it after', 
 
   expect(result.exitCode).toBe(0);
 
-  expect(readFileSync(sudo.calls, 'utf8')).toBe(
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe(
     [
       `truncate -s 4G ${fs}.img`,
       `mkfs.xfs -q ${fs}.img`,
       `sudo mount -o loop ${fs}.img ${fs}`,
       `sudo chown ${ctx.owner} ${fs}`,
       'bun run test:small-fs',
-      `IMP_TEST_SMALL_FS=${fs}`,
+      `  IMP_TEST_SMALL_FS=${fs}`,
       `sudo umount ${fs}`,
       '',
     ].join('\n'),
@@ -66,14 +61,14 @@ test('it runs the lane on a loop-mounted XFS of its own, and removes it after', 
 
 test('it installs xfsprogs on a runner without mkfs.xfs, then runs the lane', async () => {
   const ctx = setupTest();
-  const sudo = createStubSudo(ctx.directoryPath, { runs: ['apt-get'] });
 
+  createStubBin(ctx.directoryPath, 'sudo', { script: buildStubSudo({ runs: ['apt-get'] }) });
   createStubAptGet(ctx.directoryPath, ['mkfs.xfs']);
   createStubBin(ctx.directoryPath, 'truncate');
   createStubBin(ctx.directoryPath, 'bun');
 
   const result = await $`${process.execPath} ${ctx.scriptPath}`
-    .env({ PATH: sudo.bin, RUNNER_TEMP: ctx.runnerTemp })
+    .env({ PATH: ctx.directoryPath, RUNNER_TEMP: ctx.runnerTemp })
     .nothrow()
     .quiet();
 
@@ -81,7 +76,7 @@ test('it installs xfsprogs on a runner without mkfs.xfs, then runs the lane', as
 
   expect(result.exitCode).toBe(0);
 
-  expect(readFileSync(sudo.calls, 'utf8')).toBe(
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe(
     [
       'sudo apt-get update',
       'apt-get update',
@@ -100,21 +95,21 @@ test('it installs xfsprogs on a runner without mkfs.xfs, then runs the lane', as
 
 test('it fails with the lane, and unmounts all the same', async () => {
   const ctx = setupTest();
-  const sudo = createStubBin(ctx.directoryPath, 'sudo');
 
+  createStubBin(ctx.directoryPath, 'sudo');
   createStubBin(ctx.directoryPath, 'truncate');
   createStubBin(ctx.directoryPath, 'mkfs.xfs');
-  createStubBin(ctx.directoryPath, 'bun', 'exit 1');
+  createStubBin(ctx.directoryPath, 'bun', { script: '#!/bin/bash\nexit 1' });
   writeFileSync(join(ctx.runnerTemp, 'small-fs.img'), 'xfs image');
 
   const result = await $`${process.execPath} ${ctx.scriptPath}`
-    .env({ PATH: sudo.bin, RUNNER_TEMP: ctx.runnerTemp })
+    .env({ PATH: ctx.directoryPath, RUNNER_TEMP: ctx.runnerTemp })
     .nothrow()
     .quiet();
 
   expect(result.exitCode).toBe(1);
 
-  expect(readFileSync(sudo.calls, 'utf8')).toEndWith(
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toEndWith(
     `sudo umount ${join(ctx.runnerTemp, 'small-fs')}\n`,
   );
 

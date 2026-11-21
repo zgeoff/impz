@@ -21,7 +21,7 @@ test('it retries until the attempt stops throwing and resolves with its value', 
 
       return 'done';
     },
-    { wait: () => Promise.resolve() },
+    { sleep: () => Promise.resolve() },
   );
 
   expect(value).toBe('done');
@@ -42,7 +42,7 @@ test('it waits the interval between retries', async () => {
     },
     {
       intervalMs: 25,
-      wait: (durationMs) => {
+      sleep: (durationMs) => {
         waits.push(durationMs);
 
         return Promise.resolve();
@@ -67,7 +67,7 @@ test('it names what it waited for and the last failure once the deadline passes'
       intervalMs: 20,
       timeoutMs: 60,
       now: () => clock.nowMs,
-      wait: (durationMs) => {
+      sleep: (durationMs) => {
         clock.nowMs += durationMs;
 
         return Promise.resolve();
@@ -77,6 +77,6 @@ test('it names what it waited for and the last failure once the deadline passes'
 
   expect(pending).rejects.toThrowWithMessage(
     Error,
-    'timed out after 60 ms waiting for the flaky thing: attempt 4 failed',
+    'timed out after 60 ms waiting for the flaky thing: attempt 3 failed',
   );
 });

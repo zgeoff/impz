@@ -7,10 +7,12 @@ import {
   ServiceDefSchema,
   ServiceStatusSchema,
 } from '@impz/agent-protocol';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
-import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
+import { fireNextTimer } from '@impz/shared/test-utils/fire-next-timer';
+import { readNextDelayMs } from '@impz/shared/test-utils/read-next-delay-ms';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import { TEST_TOKEN } from '@impz/testing/test-token';
+import { waitFor } from '@zgeoff/testing';
+import { createFakeClock } from '@zgeoff/testing/clock';
 import invariant from 'tiny-invariant';
 import type { LoggedImpEvent } from '../../../platform/db/imp-log-entry';
 import { createEventBus } from '../../../platform/events/event-bus';
@@ -871,14 +873,14 @@ test('it looks again after the short retry, not the long recheck, while a lifecy
 
   await ctx.client.services.add({ name: 'dev', service: { name: 'web', argv: ['httpd'] } });
 
-  const timers = buildStubClock();
+  const timers = createFakeClock();
 
   const api = createServiceApi({
     runtime: ctx.impd.imps,
     events: ctx.impd.imps.events,
     readSleptServices: (record) =>
       readSnapshotMeta(buildImpPaths(ctx.dataDir, record.id))?.services,
-    startTimer: timers.startTimer,
+    startTimer: timers.schedule,
   });
 
   const stream = await api.openServiceLogs('dev', { service: 'web', lines: 100, follow: true });
@@ -895,31 +897,33 @@ test('it looks again after the short retry, not the long recheck, while a lifecy
   const pausing = stream.next();
 
   await waitFor(() => {
-    expect(timers.readPendingMs()).not.toBeEmpty();
+    expect(readNextDelayMs(timers)).not.toBeNull();
   });
 
-  timers.firePending();
+  fireNextTimer(timers);
 
   const paused = await pausing;
 
   const resuming = stream.next();
 
   await waitFor(() => {
-    expect(timers.readPendingMs()).not.toBeEmpty();
+    expect(readNextDelayMs(timers)).not.toBeNull();
   });
 
-  const pendingMs = timers.readPendingMs();
+  expect(timers.countPending()).toBe(1);
+
+  const pendingMs = readNextDelayMs(timers);
 
   release.resolve();
 
   await held;
 
-  timers.firePending();
+  fireNextTimer(timers);
 
   const resumed = await resuming;
 
   expect(paused.value).toStrictEqual({ type: 'sleeping', state: 'running' });
-  expect(pendingMs).toStrictEqual([500]);
+  expect(pendingMs).toBe(500);
   expect(resumed.value).toStrictEqual({ type: 'awake' });
 });
 
@@ -939,14 +943,14 @@ test('it says the imp sleeps when it goes to sleep after a step held it running'
 
   await ctx.client.services.add({ name: 'dev', service: { name: 'web', argv: ['httpd'] } });
 
-  const timers = buildStubClock();
+  const timers = createFakeClock();
 
   const api = createServiceApi({
     runtime: ctx.impd.imps,
     events: ctx.impd.imps.events,
     readSleptServices: (record) =>
       readSnapshotMeta(buildImpPaths(ctx.dataDir, record.id))?.services,
-    startTimer: timers.startTimer,
+    startTimer: timers.schedule,
   });
 
   const stream = await api.openServiceLogs('dev', { service: 'web', lines: 100, follow: true });
@@ -963,17 +967,17 @@ test('it says the imp sleeps when it goes to sleep after a step held it running'
   const pausing = stream.next();
 
   await waitFor(() => {
-    expect(timers.readPendingMs()).not.toBeEmpty();
+    expect(readNextDelayMs(timers)).not.toBeNull();
   });
 
-  timers.firePending();
+  fireNextTimer(timers);
 
   const paused = await pausing;
 
   const sleeping = stream.next();
 
   await waitFor(() => {
-    expect(timers.readPendingMs()).not.toBeEmpty();
+    expect(readNextDelayMs(timers)).not.toBeNull();
   });
 
   release.resolve();
@@ -982,7 +986,7 @@ test('it says the imp sleeps when it goes to sleep after a step held it running'
 
   await ctx.client.imps.sleep({ name: 'dev' });
 
-  timers.firePending();
+  fireNextTimer(timers);
 
   const asleep = await sleeping;
 
@@ -1006,14 +1010,14 @@ test('it says the imp stopped when it stops after a step held it running', async
 
   await ctx.client.services.add({ name: 'dev', service: { name: 'web', argv: ['httpd'] } });
 
-  const timers = buildStubClock();
+  const timers = createFakeClock();
 
   const api = createServiceApi({
     runtime: ctx.impd.imps,
     events: ctx.impd.imps.events,
     readSleptServices: (record) =>
       readSnapshotMeta(buildImpPaths(ctx.dataDir, record.id))?.services,
-    startTimer: timers.startTimer,
+    startTimer: timers.schedule,
   });
 
   const stream = await api.openServiceLogs('dev', { service: 'web', lines: 100, follow: true });
@@ -1030,17 +1034,17 @@ test('it says the imp stopped when it stops after a step held it running', async
   const pausing = stream.next();
 
   await waitFor(() => {
-    expect(timers.readPendingMs()).not.toBeEmpty();
+    expect(readNextDelayMs(timers)).not.toBeNull();
   });
 
-  timers.firePending();
+  fireNextTimer(timers);
 
   const paused = await pausing;
 
   const stopping = stream.next();
 
   await waitFor(() => {
-    expect(timers.readPendingMs()).not.toBeEmpty();
+    expect(readNextDelayMs(timers)).not.toBeNull();
   });
 
   release.resolve();
@@ -1049,7 +1053,7 @@ test('it says the imp stopped when it stops after a step held it running', async
 
   await ctx.client.imps.stop({ name: 'dev' });
 
-  timers.firePending();
+  fireNextTimer(timers);
 
   const stopped = await stopping;
 
@@ -1073,7 +1077,7 @@ test('it goes on with a follow when the wake’s event comes before the wake let
 
   await ctx.client.services.add({ name: 'dev', service: { name: 'web', argv: ['httpd'] } });
 
-  const timers = buildStubClock();
+  const timers = createFakeClock();
 
   // the test sends the follow its imp events, so one can come while the imp's lock is held
   const events = createEventBus<LoggedImpEvent>();
@@ -1083,7 +1087,7 @@ test('it goes on with a follow when the wake’s event comes before the wake let
     events,
     readSleptServices: (record) =>
       readSnapshotMeta(buildImpPaths(ctx.dataDir, record.id))?.services,
-    startTimer: timers.startTimer,
+    startTimer: timers.schedule,
   });
 
   const stream = await api.openServiceLogs('dev', { service: 'web', lines: 100, follow: true });
@@ -1099,17 +1103,18 @@ test('it goes on with a follow when the wake’s event comes before the wake let
   const pausing = stream.next();
 
   await waitFor(() => {
-    expect(timers.readPendingMs()).not.toBeEmpty();
+    expect(readNextDelayMs(timers)).not.toBeNull();
   });
 
-  timers.firePending();
+  fireNextTimer(timers);
 
   const asleep = await pausing;
 
   const waking = stream.next();
 
   await waitFor(() => {
-    expect(timers.readPendingMs()).toStrictEqual([5000]);
+    expect(timers.countPending()).toBe(1);
+    expect(readNextDelayMs(timers)).toBe(5000);
   });
 
   await ctx.client.imps.wake({ name: 'dev' });
@@ -1118,18 +1123,19 @@ test('it goes on with a follow when the wake’s event comes before the wake let
     events.publish({ ev: 'ImpChanged', imp: held, reason: 'woke', seq: 1, at: new Date() });
 
     return waitFor(() => {
-      expect(timers.readPendingMs()).toStrictEqual([500]);
+      expect(timers.countPending()).toBe(1);
+      expect(readNextDelayMs(timers)).toBe(500);
 
-      return timers.readPendingMs();
+      return readNextDelayMs(timers);
     });
   });
 
-  timers.firePending();
+  fireNextTimer(timers);
 
   const awake = await waking;
 
   expect(asleep.value).toStrictEqual({ type: 'sleeping', state: 'sleeping' });
-  expect(pendingMs).toStrictEqual([500]);
+  expect(pendingMs).toBe(500);
   expect(awake.value).toStrictEqual({ type: 'awake' });
 });
 
@@ -1151,14 +1157,14 @@ test('it ends a follow with the error once its log fails to open five times in a
 
   agent.writeLog('web', 'one\n');
 
-  const timers = buildStubClock();
+  const timers = createFakeClock();
 
   const api = createServiceApi({
     runtime: ctx.impd.imps,
     events: ctx.impd.imps.events,
     readSleptServices: (record) =>
       readSnapshotMeta(buildImpPaths(ctx.dataDir, record.id))?.services,
-    startTimer: timers.startTimer,
+    startTimer: timers.schedule,
   });
 
   const stream = await api.openServiceLogs('dev', { service: 'web', lines: 100, follow: true });
@@ -1171,7 +1177,7 @@ test('it ends a follow with the error once its log fails to open five times in a
   const reading = readInBackground(stream);
 
   await waitFor(() => {
-    timers.firePending();
+    fireNextTimer(timers);
 
     expect(agent.requests.filter((request) => request.op === 'services.logs')).toHaveLength(6);
   });
@@ -1204,7 +1210,7 @@ test('it lets a list wait out a step that holds a running imp', async () => {
     create(ServiceStatusSchema, { name: 'web', state: 'running', pid: 40, restarts: 0 }),
   );
 
-  const timers = buildStubClock();
+  const timers = createFakeClock();
 
   const api = createServiceApi({
     runtime: ctx.impd.imps,
@@ -1212,7 +1218,7 @@ test('it lets a list wait out a step that holds a running imp', async () => {
     readSleptServices: (record) =>
       readSnapshotMeta(buildImpPaths(ctx.dataDir, record.id))?.services,
     now: () => 0,
-    startTimer: timers.startTimer,
+    startTimer: timers.schedule,
   });
 
   const release = Promise.withResolvers<void>();
@@ -1220,14 +1226,14 @@ test('it lets a list wait out a step that holds a running imp', async () => {
   const listing = api.listServices('dev');
 
   await waitFor(() => {
-    expect(timers.readPendingMs()).not.toBeEmpty();
+    expect(readNextDelayMs(timers)).not.toBeNull();
   });
 
   release.resolve();
 
   await held;
 
-  timers.firePending();
+  fireNextTimer(timers);
 
   const listed = await listing;
 
@@ -1240,7 +1246,7 @@ test('it refuses a list as INVALID_STATE once a step holds a running imp past 10
   await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'dev' });
 
-  const timers = buildStubClock();
+  const timers = createFakeClock();
   const clock = { durationMs: 0 };
 
   const api = createServiceApi({
@@ -1249,7 +1255,7 @@ test('it refuses a list as INVALID_STATE once a step holds a running imp past 10
     readSleptServices: (record) =>
       readSnapshotMeta(buildImpPaths(ctx.dataDir, record.id))?.services,
     now: () => clock.durationMs,
-    startTimer: timers.startTimer,
+    startTimer: timers.schedule,
   });
 
   const release = Promise.withResolvers<void>();
@@ -1264,12 +1270,12 @@ test('it refuses a list as INVALID_STATE once a step holds a running imp past 10
   const listing = api.listServices('dev');
 
   await waitFor(() => {
-    expect(timers.readPendingMs()).not.toBeEmpty();
+    expect(readNextDelayMs(timers)).not.toBeNull();
   });
 
   clock.durationMs = 10_001;
 
-  timers.firePending();
+  fireNextTimer(timers);
 
   expect(listing).rejects.toMatchObject({ code: 'INVALID_STATE' });
 });

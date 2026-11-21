@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { waitFor } from '@zgeoff/testing';
 import { readErrorCode } from '../../surface/read-error-code';
 import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
 import { createTestDatabase } from '../../test-utils/platform/create-test-database';

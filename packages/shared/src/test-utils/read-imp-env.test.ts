@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
+import { updateEnv } from '@zgeoff/testing';
 import { readImpEnv } from './read-imp-env';
-import { updateEnv } from './update-env';
 
 test('it reads an IMP_ variable the test set', () => {
   updateEnv('IMP_RAM_BUDGET_MIB', '800');

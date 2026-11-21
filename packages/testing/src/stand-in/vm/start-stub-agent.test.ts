@@ -11,7 +11,7 @@ import {
   encodeMessageFrame,
 } from '@impz/agent-protocol';
 import type { AgentFrame } from '@impz/agent-protocol';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { waitFor } from '@zgeoff/testing';
 import { startStubAgent } from './start-stub-agent';
 
 async function setupTest() {

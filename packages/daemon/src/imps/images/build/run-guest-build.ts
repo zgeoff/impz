@@ -1,6 +1,6 @@
 import * as z from 'zod';
 import { ImpdError } from '../../../platform/errors/impd-error';
-import type { StartTimer } from '../../../platform/process/clock';
+import type { StartTimer } from '../../../platform/process/start-timer';
 import { DOCKERFILE_FRONTEND } from '../../docker-contract/dockerfile-frontend';
 import type { GuestExec } from '../builders/guest-exec';
 import { formatFailureTail } from '../pull/format-failure-tail';

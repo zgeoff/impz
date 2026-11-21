@@ -1,8 +1,10 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
+import { waitFor } from '@zgeoff/testing';
+import { readStubCalls } from '@zgeoff/testing/bin';
 import { createStubImpd } from './create-stub-impd';
 
 function setupTest() {
@@ -46,7 +48,7 @@ test('it sends SIGTERM to its parent on a run by default', () => {
   });
 });
 
-test('it logs the variables it was told to record on each run', () => {
+test('it records the variables it was told to record on each run', () => {
   const ctx = setupTest();
 
   const impd = createStubImpd(ctx.directoryPath, {
@@ -57,10 +59,10 @@ test('it logs the variables it was told to record on each run', () => {
   // a trailing command keeps bash from exec-ing the stub, which would signal the test runner
   Bun.spawnSync(['bash', '-c', '"$0"; :', impd.daemon], { env: { IMP_TAILSCALE_NODE: '1' } });
 
-  expect(readFileSync(impd.calls, 'utf8')).toBe('impd \n  IMP_TAILSCALE_NODE=1\n');
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe('impd \n  IMP_TAILSCALE_NODE=1\n');
 });
 
-test('it logs no variables on --network-env', () => {
+test('it records no variables on --network-env', () => {
   const ctx = setupTest();
 
   const impd = createStubImpd(ctx.directoryPath, {
@@ -70,7 +72,7 @@ test('it logs no variables on --network-env', () => {
 
   Bun.spawnSync([impd.daemon, '--network-env']);
 
-  expect(readFileSync(impd.calls, 'utf8')).toBe('impd --network-env\n');
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe('impd --network-env\n');
 });
 
 test('it exits its first runs with the codes it was given, in order, then signals its parent', () => {
@@ -109,7 +111,7 @@ test('it never counts --network-env as a run', () => {
   expect(result.stdout.toString()).toBe('7\n');
 });
 
-test('it runs until SIGTERM, then logs it and exits 0, when told to wait for it', async () => {
+test('it runs until SIGTERM, then notes it and exits 0, when told to wait for it', async () => {
   const ctx = setupTest();
 
   const impd = createStubImpd(ctx.directoryPath, {
@@ -132,7 +134,8 @@ test('it runs until SIGTERM, then logs it and exits 0, when told to wait for it'
   const exitCode = await daemon.exited;
 
   expect(exitCode).toBe(0);
-  expect(readFileSync(impd.calls, 'utf8')).toBe('impd \nimpd got TERM\n');
+  expect(impd.probeTerminated()).toBeTrue();
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe('impd \n');
 });
 
 test('it reports no run before one starts', () => {

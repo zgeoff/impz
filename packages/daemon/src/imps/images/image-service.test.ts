@@ -4,9 +4,9 @@ import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { updateEnv } from '@impz/shared/test-utils/update-env';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
-import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
+import { fireNextTimer } from '@impz/shared/test-utils/fire-next-timer';
+import { updateEnv, waitFor } from '@zgeoff/testing';
+import { createFakeClock } from '@zgeoff/testing/clock';
 import { loadConfig } from '../../config';
 import {
   createImage,
@@ -262,12 +262,12 @@ test('#ensureBuilderImage ends an export that sends nothing on the given timer',
   updateEnv('PATH', ociFetch.path);
   mkdirSync(join(ctx.dataDir, 'images'));
 
-  const timers = buildStubClock();
+  const timers = createFakeClock();
 
   const images = createImageService({
     runCommand,
     startTar: startTarProcess,
-    startTimer: timers.startTimer,
+    startTimer: timers.schedule,
     countTreeBytes,
     runStreamed,
     config,
@@ -284,7 +284,7 @@ test('#ensureBuilderImage ends an export that sends nothing on the given timer',
     expect(ociFetch.readStalledPIDs()).toHaveLength(1);
   });
 
-  timers.firePending();
+  fireNextTimer(timers);
 
   expect(ensuring).rejects.toMatchObject({
     code: 'SERVICE_UNAVAILABLE',

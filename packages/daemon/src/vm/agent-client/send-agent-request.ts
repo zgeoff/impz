@@ -10,8 +10,8 @@ import {
   encodeAgentMessage,
 } from '@impz/agent-protocol';
 import type { Activity, AgentFrame, ErrorResponse, Ping } from '@impz/agent-protocol';
-import type { StartTimer } from '../../platform/process/clock';
 import { requireWithin } from '../../platform/process/require-within';
+import type { StartTimer } from '../../platform/process/start-timer';
 import { AgentError, openAgentConnection } from './agent-connection';
 import type { AgentConnection } from './agent-connection';
 import { AgentWaitError } from './agent-wait-error';

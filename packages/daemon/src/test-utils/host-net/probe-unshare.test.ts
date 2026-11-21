@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { join } from 'node:path';
-import { updateEnv } from '@impz/shared/test-utils/update-env';
+import { updateEnv } from '@zgeoff/testing';
 import { probeUnshare } from './probe-unshare';
 
 test('it answers yes for a failing command when host tests are required', () => {

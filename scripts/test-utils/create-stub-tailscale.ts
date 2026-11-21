@@ -1,7 +1,8 @@
-import { readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
+import { readStubCalls } from '@zgeoff/testing/bin';
 import * as z from 'zod';
+import { buildRecordCall } from './build-record-call';
 
 interface StubTailscaleNode {
   readonly BackendState: string;
@@ -43,11 +44,12 @@ export function createStubTailscale(directory: string): StubTailscale {
   const status = join(directory, 'tailscale-status.json');
   const starting = join(directory, 'tailscale-starting');
   const prefs = join(directory, 'tailscale-prefs.json');
+  const record = buildRecordCall({ name: 'tailscale', callsFile: join(directory, 'calls.jsonl') });
+  const path = join(directory, 'tailscale');
 
-  const stub = createStubBin(
-    directory,
-    'tailscale',
-    String.raw`status=${JSON.stringify(status)}
+  writeFileSync(
+    path,
+    `#!/bin/bash\n${record}\n${String.raw`status=${JSON.stringify(status)}
 starting=${JSON.stringify(starting)}
 prefs=${JSON.stringify(prefs)}
 read_prefs() {
@@ -93,11 +95,13 @@ case $1 in
     jq '.BackendState = "Stopped"' "$status" >"$status.new"
     mv "$status.new" "$status"
     ;;
-esac`,
+esac`}`,
   );
 
+  chmodSync(path, 0o755);
+
   return {
-    bin: stub.bin,
+    bin: directory,
     writeNode: (node) => {
       writeFileSync(status, JSON.stringify(node));
     },
@@ -112,9 +116,8 @@ esac`,
     },
     readNode: () => NodeSchema.parse(JSON.parse(readFileSync(status, 'utf8'))),
     readCalls: (verb) =>
-      readFileSync(stub.calls, 'utf8')
-        .split('\n')
-        .filter((line) => line.startsWith('tailscale ') && line.split(' ')[2] === verb)
-        .map((line) => line.split(' ').slice(2).join(' ')),
+      readStubCalls(directory)
+        .filter((call) => call.name === 'tailscale' && call.argv[1] === verb)
+        .map((call) => call.argv.slice(1).join(' ')),
   };
 }

@@ -1,5 +1,5 @@
 import { expect, mock, test } from 'bun:test';
-import { server } from '@impz/shared/test-utils/server';
+import { network } from '@impz/shared/test-utils/network';
 import { HttpResponse, http } from 'msw';
 import { createStubCloudflareApi } from '../../../test-utils/network/create-stub-cloudflare-api';
 import { captureImpdLogs } from '../../../test-utils/platform/capture-impd-logs';
@@ -9,7 +9,7 @@ import { buildPublicOwner } from './dns-provider';
 test('it adds a TXT value to the zone that holds the name, with a short TTL', async () => {
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   await api.zones.create({ id: 'z1', name: 'example.com' });
 
@@ -40,7 +40,7 @@ test('it adds a TXT value to the zone that holds the name, with a short TTL', as
 test('it keeps two TXT values of one name side by side', async () => {
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   await api.zones.create({ id: 'z1', name: 'example.com' });
 
@@ -58,7 +58,7 @@ test('it keeps two TXT values of one name side by side', async () => {
 test('it removes only the TXT value it is given', async () => {
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   await api.zones.create({ id: 'z1', name: 'example.com' });
 
@@ -75,7 +75,7 @@ test('it removes only the TXT value it is given', async () => {
 test('it finds the zone by walking up the labels, once per name', async () => {
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   await api.zones.create({ id: 'z1', name: 'example.com' });
 
@@ -97,7 +97,7 @@ test('it finds the zone by walking up the labels, once per name', async () => {
 test('it never asks for a wildcard label as a zone', async () => {
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   await api.zones.create({ id: 'z1', name: 'example.com' });
 
@@ -113,7 +113,7 @@ test('it never asks for a wildcard label as a zone', async () => {
 test('it sets an A record DNS only and marked as its own', async () => {
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   await api.zones.create({ id: 'z1', name: 'example.com' });
 
@@ -138,7 +138,7 @@ test('it sets an A record DNS only and marked as its own', async () => {
 test('it changes its own A record in place, and turns proxying off', async () => {
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   await api.zones.create({ id: 'z1', name: 'example.com' });
 
@@ -173,7 +173,7 @@ test('it changes its own A record in place, and turns proxying off', async () =>
 test('it leaves its own A record unwritten when it already holds the address', async () => {
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   await api.zones.create({ id: 'z1', name: 'example.com' });
 
@@ -195,7 +195,7 @@ test('it leaves its own A record unwritten when it already holds the address', a
 test('it turns proxying off on its own A record that already holds the address', async () => {
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   await api.zones.create({ id: 'z1', name: 'example.com' });
 
@@ -230,7 +230,7 @@ test('it turns proxying off on its own A record that already holds the address',
 test('it never replaces an address record it did not make, and names it', async () => {
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   await api.zones.create({ id: 'z1', name: 'example.com' });
 
@@ -257,7 +257,7 @@ test('it warns when it finds more than one A record of its own', async () => {
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
   const logs = captureImpdLogs();
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   await api.zones.create({ id: 'z1', name: 'example.com' });
 
@@ -288,7 +288,7 @@ test('it lists only its owner’s A records under the domain, page by page', asy
   const api = createStubCloudflareApi({ tokens: ['cf-token'], maxPerPage: 2 });
   const owner = buildPublicOwner('pub.example.com');
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   await api.zones.create({ id: 'z1', name: 'example.com' });
 
@@ -361,7 +361,7 @@ test('it lists every page without result_info until a page is short', async () =
   const api = createStubCloudflareApi({ tokens: ['cf-token'], hasResultInfo: false });
   const owner = buildPublicOwner('pub.example.com');
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   await api.zones.create({ id: 'z1', name: 'example.com' });
 
@@ -392,7 +392,7 @@ test('it removes only its owner’s A records of the name', async () => {
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
   const owner = buildPublicOwner('pub.example.com');
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   await api.zones.create({ id: 'z1', name: 'example.com' });
 
@@ -422,7 +422,7 @@ test('it removes only its owner’s A records of the name', async () => {
 test('it never removes another owner’s A record', async () => {
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   await api.zones.create({ id: 'z1', name: 'example.com' });
 
@@ -443,7 +443,7 @@ test('it never removes another owner’s A record', async () => {
 test('it fails with Cloudflare’s status and message for a refused token, without the token', () => {
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   const provider = createCloudflareProvider({ readToken: () => Promise.resolve('wrong-secret') });
 
@@ -456,7 +456,7 @@ test('it fails with Cloudflare’s status and message for a refused token, witho
 test('it rejects a name that no zone the token sees holds', async () => {
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   await api.zones.create({ id: 'z1', name: 'example.com' });
 
@@ -469,7 +469,7 @@ test('it rejects a name that no zone the token sees holds', async () => {
 });
 
 test('it fails with no Cloudflare answer when the body is not JSON', () => {
-  server.use(
+  network.use(
     http.get('https://api.cloudflare.com/client/v4/zones', () =>
       HttpResponse.text('<html>bad gateway</html>', { status: 502 }),
     ),
@@ -484,7 +484,7 @@ test('it fails with no Cloudflare answer when the body is not JSON', () => {
 });
 
 test('it fails with no Cloudflare answer when the JSON is not an envelope', () => {
-  server.use(
+  network.use(
     http.get('https://api.cloudflare.com/client/v4/zones', () => HttpResponse.json({ zones: [] })),
   );
 
@@ -497,7 +497,7 @@ test('it fails with no Cloudflare answer when the JSON is not an envelope', () =
 });
 
 test('it fails with Cloudflare’s messages when an answer with a 2xx status is not a success', () => {
-  server.use(
+  network.use(
     http.get('https://api.cloudflare.com/client/v4/zones', () =>
       HttpResponse.json({
         success: false,
@@ -520,7 +520,7 @@ test('it reads the token at each request, and finds the zone again with a new on
   const api = createStubCloudflareApi({ tokens: ['cf-token', 'cf-rotated'] });
   const current = { token: 'cf-token' };
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   await api.zones.create({ id: 'z1', name: 'example.com' });
 
@@ -553,7 +553,7 @@ test('it writes to the zone a new token sees after one refused call on the old z
 
   const current = { token: 'cf-token' };
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   await api.zones.create({ id: 'z1', name: 'example.com' });
   await api.zones.create({ id: 'z2', name: 'example.com' });
@@ -584,7 +584,7 @@ test('it writes to the zone a new token sees after one refused call on the old z
 test('it fails before any call when the token cannot be read', async () => {
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   const provider = createCloudflareProvider({
     readToken: () =>
@@ -615,11 +615,11 @@ test('it keeps no zone that the old token found after a new one took over', asyn
   const release = Promise.withResolvers<undefined>();
   const held = { isDone: false };
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   await api.zones.create({ id: 'z1', name: 'example.com' });
 
-  server.use(
+  network.use(
     http.get('https://api.cloudflare.com/client/v4/zones', async (info) => {
       const isOld = info.request.headers.get('authorization') === 'Bearer cf-token';
 
@@ -692,7 +692,7 @@ test('it waits for the TXT values on every nameserver of the zone', async () => 
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
   const asked: string[] = [];
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   await api.zones.create({ id: 'z1', name: 'example.com', name_servers: ['ns1.test', 'ns2.test'] });
 

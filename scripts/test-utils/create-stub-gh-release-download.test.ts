@@ -2,6 +2,8 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
+import { readStubCalls } from '@zgeoff/testing/bin';
 import { createStubGhReleaseDownload } from './create-stub-gh-release-download';
 
 function setupTest() {
@@ -20,11 +22,10 @@ test('it writes the source file to the path after --output and exits 0', () => {
   const output = join(ctx.directoryPath, 'download');
 
   writeFileSync(source, 'archive');
-
-  const stub = createStubGhReleaseDownload(ctx.directoryPath, { source });
+  createStubGhReleaseDownload(ctx.directoryPath, { source });
 
   const result = Bun.spawnSync([
-    join(stub.bin, 'gh'),
+    join(ctx.directoryPath, 'gh'),
     'release',
     'download',
     'v1.2.3',
@@ -46,11 +47,10 @@ test('it writes what it had and exits with the code it was given for a failed do
   const output = join(ctx.directoryPath, 'download');
 
   writeFileSync(source, 'partial');
-
-  const stub = createStubGhReleaseDownload(ctx.directoryPath, { source, exitCode: 1 });
+  createStubGhReleaseDownload(ctx.directoryPath, { source, exitCode: 1 });
 
   const result = Bun.spawnSync([
-    join(stub.bin, 'gh'),
+    join(ctx.directoryPath, 'gh'),
     'release',
     'download',
     'v1.2.3',
@@ -70,10 +70,9 @@ test.each([
   const source = join(ctx.directoryPath, 'lint');
 
   writeFileSync(source, 'binary');
+  createStubGhReleaseDownload(ctx.directoryPath, { source });
 
-  const stub = createStubGhReleaseDownload(ctx.directoryPath, { source });
-
-  expect(Bun.spawnSync([join(stub.bin, 'gh'), ...args]).exitCode).toBe(2);
+  expect(Bun.spawnSync([join(ctx.directoryPath, 'gh'), ...args]).exitCode).toBe(2);
 });
 
 test('it logs each call with its arguments', () => {
@@ -81,11 +80,10 @@ test('it logs each call with its arguments', () => {
   const source = join(ctx.directoryPath, 'lint');
 
   writeFileSync(source, 'binary');
-
-  const stub = createStubGhReleaseDownload(ctx.directoryPath, { source });
+  createStubGhReleaseDownload(ctx.directoryPath, { source });
 
   Bun.spawnSync([
-    join(stub.bin, 'gh'),
+    join(ctx.directoryPath, 'gh'),
     'release',
     'download',
     'v1.2.3',
@@ -93,7 +91,7 @@ test('it logs each call with its arguments', () => {
     join(ctx.directoryPath, 'out'),
   ]);
 
-  expect(readFileSync(stub.calls, 'utf8')).toBe(
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe(
     `gh release download v1.2.3 --output ${ctx.directoryPath}/out\n`,
   );
 });

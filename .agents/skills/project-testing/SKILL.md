@@ -108,10 +108,9 @@ the result of the row's CI job: `eval` and `vm` are in
 
 ## The root preload
 
-- Set an `IMP_*` variable, which impd reads as a setting, with
-  [`updateEnv`](../../../packages/shared/src/test-utils/update-env.ts) before `setupTest()`. The
-  [root preload](../../../packages/shared/src/test-utils/preload.ts) deletes every `IMP_*` variable
-  the shell passed.
+- Set an `IMP_*` variable, which impd reads as a setting, with `updateEnv` from `@zgeoff/testing`
+  before `setupTest()`. The [root preload](../../../packages/shared/src/test-utils/preload.ts)
+  deletes every `IMP_*` variable the shell passed.
 - Expect the root preload to keep the variables that run a lane's tests or turn their skip into a
   failure:
   - `IMP_HOST_TESTS`;
@@ -120,9 +119,8 @@ the result of the row's CI job: `eval` and `vm` are in
 - Expect every child process to inherit `NO_PROXY=*` from the root preload. It keeps Bun's `fetch`
   from sending a loopback request through the shell's `HTTPS_PROXY`. To send a child's requests
   through a proxy, clear `NO_PROXY` in that child's environment, or pass curl `--noproxy ''`.
-- When state leaks from one test into the next, add its reset to the `afterEach` in
-  [`register-run-hooks.ts`](../../../packages/shared/src/test-utils/register-run-hooks.ts), which
-  the root preload registers.
+- When state leaks from one test into the next, add its reset to the `afterEach` in the
+  [root preload](../../../packages/shared/src/test-utils/preload.ts).
 - Repeat a failing order with the `--seed=<n>` that the run prints. The root `bunfig.toml` runs
   files and tests in random order.
 
@@ -145,9 +143,7 @@ the result of the row's CI job: `eval` and `vm` are in
 
 ## Host resources
 
-- Take ports from the port picker,
-  [`claimFreePorts`](../../../packages/shared/src/test-utils/claim-free-ports.ts). It holds each
-  port until the test ends.
+- Take ports from `claimFreePorts` in `@zgeoff/testing`. It holds each port until the test ends.
 - Make the temporary folder of a test that needs FIEMAP or another disk feature under `/var/tmp`,
   which sits on disk. `tmpdir()` is a tmpfs on some hosts, and a tmpfs has no extents for FIEMAP to
   map. Make it with `mkdtemp`, and remove it in `onTestFinished`.

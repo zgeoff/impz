@@ -6,7 +6,7 @@ import {
   EXEC_STDOUT_WINDOW_BYTES,
   encodeExecFrame,
 } from '@impz/api';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { waitFor } from '@zgeoff/testing';
 import { ImpdError } from '../../platform/errors/impd-error';
 import { buildMockSessionOutput } from '../../test-utils/imps/build-mock-session-output';
 import { buildStubExecBackend } from '../../test-utils/imps/build-stub-exec-backend';

@@ -1,6 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import {
   Client,
@@ -12,6 +11,7 @@ import type {
   OAuthDiscoveryState,
   OAuthTokens,
 } from '@modelcontextprotocol/client';
+import { claimFreePorts } from '@zgeoff/testing/process';
 import invariant from 'tiny-invariant';
 import { seedOAuthGrant } from '../test-utils/identity/seed-oauth-grant';
 import { captureImpdLogs } from '../test-utils/platform/capture-impd-logs';
@@ -22,10 +22,7 @@ async function setupTest() {
   onTestFinished(() => stack.disposeAsync());
 
   const rootToken = randomUUID();
-
-  const publicPort = claimFreePorts(1, {
-    pick: () => 10_000 + Math.floor(Math.random() * 10_000),
-  }).take();
+  const publicPort = claimFreePorts(1).take();
 
   const harness = await startTestImpd(stack, {
     rootToken,
@@ -123,9 +120,7 @@ test('it opens no public port without IMP_MCP_PUBLIC_URL', async () => {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const publicPort = claimFreePorts(1, {
-    pick: () => 10_000 + Math.floor(Math.random() * 10_000),
-  }).take();
+  const publicPort = claimFreePorts(1).take();
 
   const harness = await startTestImpd(stack, {
     rootToken: randomUUID(),

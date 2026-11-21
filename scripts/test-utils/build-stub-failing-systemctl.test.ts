@@ -1,8 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
+import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
+import { createStubBin, readStubCalls } from '@zgeoff/testing/bin';
 import { buildStubFailingSystemctl } from './build-stub-failing-systemctl';
 
 function setupTest() {
@@ -20,14 +21,12 @@ function setupTest() {
 test('it fails the verb it names with the message systemd prints', () => {
   const ctx = setupTest();
 
-  const systemctl = createStubBin(
-    ctx.directoryPath,
-    'systemctl',
-    buildStubFailingSystemctl('start'),
-  );
+  createStubBin(ctx.directoryPath, 'systemctl', {
+    script: buildStubFailingSystemctl('start'),
+  });
 
   const result = Bun.spawnSync(['systemctl', 'start', 'imp-host'], {
-    env: { PATH: `${systemctl.bin}:${process.env['PATH'] ?? ''}` },
+    env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
   });
 
   expect({
@@ -44,14 +43,12 @@ test('it fails the verb it names with the message systemd prints', () => {
 test('it names the unit after the flags that come before it', () => {
   const ctx = setupTest();
 
-  const systemctl = createStubBin(
-    ctx.directoryPath,
-    'systemctl',
-    buildStubFailingSystemctl('disable'),
-  );
+  createStubBin(ctx.directoryPath, 'systemctl', {
+    script: buildStubFailingSystemctl('disable'),
+  });
 
   const result = Bun.spawnSync(['systemctl', 'disable', '-q', '--now', 'imp-docker-proxy'], {
-    env: { PATH: `${systemctl.bin}:${process.env['PATH'] ?? ''}` },
+    env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
   });
 
   expect({
@@ -69,20 +66,18 @@ test('it names the unit after the flags that come before it', () => {
 test('it answers every other verb with success and records each call', () => {
   const ctx = setupTest();
 
-  const systemctl = createStubBin(
-    ctx.directoryPath,
-    'systemctl',
-    buildStubFailingSystemctl('start'),
-  );
+  createStubBin(ctx.directoryPath, 'systemctl', {
+    script: buildStubFailingSystemctl('start'),
+  });
 
   const result = Bun.spawnSync(
     ['bash', '-c', 'systemctl stop imp-host && systemctl daemon-reload'],
-    { env: { PATH: `${systemctl.bin}:${process.env['PATH'] ?? ''}` } },
+    { env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` } },
   );
 
   expect(result.exitCode).toBe(0);
 
-  expect(readFileSync(systemctl.calls, 'utf8')).toBe(
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe(
     'systemctl stop imp-host\nsystemctl daemon-reload\n',
   );
 });

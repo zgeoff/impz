@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
+import { createStubBin } from '@zgeoff/testing/bin';
 import { buildStubDevDocker } from './build-stub-dev-docker';
 
 function setupTest() {
@@ -18,18 +18,16 @@ function setupTest() {
 test('it lists each image as its tag and id', () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubDevDocker([
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: buildStubDevDocker([
       { tag: 'imp-host:dev-a-1', id: 'id-a', labels: null },
       { tag: 'imp-host:dev-b-2', id: 'id-b', labels: null },
     ]),
-  );
+  });
 
   const result = Bun.spawnSync(
     ['docker', 'image', 'ls', '--filter', 'label=imp.worktree', '--format', '{{.Tag}}'],
-    { env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` } },
+    { env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` } },
   );
 
   expect(result.stdout.toString()).toBe('imp-host:dev-a-1 id-a\nimp-host:dev-b-2 id-b\n');
@@ -37,11 +35,12 @@ test('it lists each image as its tag and id', () => {
 
 test('it lists nothing when there are no images', () => {
   const ctx = setupTest();
-  const docker = createStubBin(ctx.directoryPath, 'docker', buildStubDevDocker([]));
+
+  createStubBin(ctx.directoryPath, 'docker', { script: buildStubDevDocker([]) });
 
   const result = Bun.spawnSync(
     ['docker', 'image', 'ls', '--filter', 'label=imp.worktree', '--format', '{{.Tag}}'],
-    { env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` } },
+    { env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` } },
   );
 
   expect({ exitCode: result.exitCode, stdout: result.stdout.toString() }).toStrictEqual({
@@ -53,16 +52,14 @@ test('it lists nothing when there are no images', () => {
 test('it answers an inspect with the worktree and machine labels, tab-separated', () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubDevDocker([
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: buildStubDevDocker([
       { tag: 'imp-host:dev-a-1', id: 'id-a', labels: { worktree: '/w/a b', machine: 'm1' } },
     ]),
-  );
+  });
 
   const result = Bun.spawnSync(['docker', 'image', 'inspect', '-f', '{{x}}', 'id-a'], {
-    env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
+    env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
   });
 
   expect(result.stdout.toString()).toBe('/w/a b\tm1\n');
@@ -71,14 +68,12 @@ test('it answers an inspect with the worktree and machine labels, tab-separated'
 test('it fails an inspect of an image without labels', () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubDevDocker([{ tag: 'imp-host:dev-a-1', id: 'id-a', labels: null }]),
-  );
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: buildStubDevDocker([{ tag: 'imp-host:dev-a-1', id: 'id-a', labels: null }]),
+  });
 
   const result = Bun.spawnSync(['docker', 'image', 'inspect', '-f', '{{x}}', 'id-a'], {
-    env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
+    env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
   });
 
   expect(result.exitCode).toBe(1);
@@ -87,18 +82,16 @@ test('it fails an inspect of an image without labels', () => {
 test('it answers ps with the container that uses an image, and nothing for another', () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubDevDocker([
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: buildStubDevDocker([
       { tag: 'imp-host:dev-a-1', id: 'id-a', labels: null, container: 'c0ffee' },
       { tag: 'imp-host:dev-b-2', id: 'id-b', labels: null },
     ]),
-  );
+  });
 
   const result = Bun.spawnSync(
     ['bash', '-c', 'docker ps -aq --filter ancestor=id-a; docker ps -aq --filter ancestor=id-b'],
-    { env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` } },
+    { env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` } },
   );
 
   expect(result.stdout.toString()).toBe('c0ffee\n');
@@ -107,17 +100,15 @@ test('it answers ps with the container that uses an image, and nothing for anoth
 test('it fails the rm of a stuck image', () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubDevDocker([
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: buildStubDevDocker([
       { tag: 'imp-host:dev-a-1', id: 'id-a', labels: null, isStuck: true },
       { tag: 'imp-host:dev-b-2', id: 'id-b', labels: null },
     ]),
-  );
+  });
 
   const result = Bun.spawnSync(['docker', 'image', 'rm', 'imp-host:dev-a-1'], {
-    env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
+    env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
   });
 
   expect(result.exitCode).toBe(1);
@@ -126,17 +117,15 @@ test('it fails the rm of a stuck image', () => {
 test('it removes an image that is not stuck beside a stuck one', () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubDevDocker([
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: buildStubDevDocker([
       { tag: 'imp-host:dev-a-1', id: 'id-a', labels: null, isStuck: true },
       { tag: 'imp-host:dev-b-2', id: 'id-b', labels: null },
     ]),
-  );
+  });
 
   const result = Bun.spawnSync(['docker', 'image', 'rm', 'imp-host:dev-b-2'], {
-    env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
+    env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
   });
 
   expect(result.exitCode).toBe(0);
@@ -144,10 +133,11 @@ test('it removes an image that is not stuck beside a stuck one', () => {
 
 test('it fails a call that prune does not make', () => {
   const ctx = setupTest();
-  const docker = createStubBin(ctx.directoryPath, 'docker', buildStubDevDocker([]));
+
+  createStubBin(ctx.directoryPath, 'docker', { script: buildStubDevDocker([]) });
 
   const result = Bun.spawnSync(['docker', 'run', 'busybox'], {
-    env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
+    env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
   });
 
   expect(result.exitCode).toBe(1);

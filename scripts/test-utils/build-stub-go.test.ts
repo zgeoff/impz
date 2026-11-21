@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
+import { createStubBin } from '@zgeoff/testing/bin';
 import { buildStubGo } from './build-stub-go';
 
 function setupTest() {
@@ -18,14 +18,12 @@ function setupTest() {
 test('it answers a call in a listed module with its output and exit code', () => {
   const ctx = setupTest();
 
-  const go = createStubBin(
-    ctx.directoryPath,
-    'go',
-    buildStubGo({ 'host/relay': { stdout: 'relay.go:3:1: unused', exitCode: 3 } }),
-  );
+  createStubBin(ctx.directoryPath, 'go', {
+    script: buildStubGo({ 'host/relay': { stdout: 'relay.go:3:1: unused', exitCode: 3 } }),
+  });
 
   const result = Bun.spawnSync(['go', '-C', 'host/relay', 'vet', './...'], {
-    env: { PATH: go.bin },
+    env: { PATH: ctx.directoryPath },
   });
 
   expect({ exitCode: result.exitCode, stdout: result.stdout.toString() }).toStrictEqual({
@@ -36,8 +34,14 @@ test('it answers a call in a listed module with its output and exit code', () =>
 
 test('it passes a call in a module it does not list, with no output', () => {
   const ctx = setupTest();
-  const go = createStubBin(ctx.directoryPath, 'go', buildStubGo({ 'host/relay': { exitCode: 3 } }));
-  const result = Bun.spawnSync(['go', '-C', 'agent', 'vet', './...'], { env: { PATH: go.bin } });
+
+  createStubBin(ctx.directoryPath, 'go', {
+    script: buildStubGo({ 'host/relay': { exitCode: 3 } }),
+  });
+
+  const result = Bun.spawnSync(['go', '-C', 'agent', 'vet', './...'], {
+    env: { PATH: ctx.directoryPath },
+  });
 
   expect({ exitCode: result.exitCode, stdout: result.stdout.toString() }).toStrictEqual({
     exitCode: 0,
@@ -47,7 +51,10 @@ test('it passes a call in a module it does not list, with no output', () => {
 
 test('it passes a call outside any module', () => {
   const ctx = setupTest();
-  const go = createStubBin(ctx.directoryPath, 'go', buildStubGo({ 'host/relay': { exitCode: 3 } }));
 
-  expect(Bun.spawnSync(['go', 'version'], { env: { PATH: go.bin } }).exitCode).toBe(0);
+  createStubBin(ctx.directoryPath, 'go', {
+    script: buildStubGo({ 'host/relay': { exitCode: 3 } }),
+  });
+
+  expect(Bun.spawnSync(['go', 'version'], { env: { PATH: ctx.directoryPath } }).exitCode).toBe(0);
 });

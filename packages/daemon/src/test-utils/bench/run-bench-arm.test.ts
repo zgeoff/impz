@@ -311,7 +311,7 @@ test('it skips the timed bench after a failed warm-up, and still saves the log a
 });
 
 test('it gives up on an instance that stays unready past the deadline, and saves the log and stops', () => {
-  const clock = buildStubAnswerQueue([0, 600_000]);
+  const clock = buildStubAnswerQueue([0, 0, 600_000]);
 
   const runs: Readonly<Record<string, CommandResult>> = {
     'docker ps -a --filter name=^imp-dev$ --format {{.State}}': {

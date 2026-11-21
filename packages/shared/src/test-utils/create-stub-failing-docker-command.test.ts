@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubBin } from './create-stub-bin';
+import { createStubBin } from '@zgeoff/testing/bin';
 import { createStubFailingDockerCommand } from './create-stub-failing-docker-command';
 
 function setupTest() {
@@ -18,7 +18,7 @@ function setupTest() {
 test('it fails the named subcommand and never runs the real command', () => {
   const ctx = setupTest();
   const real = createStubBin(join(ctx.directory, 'real'), 'docker');
-  const stub = createStubFailingDockerCommand(ctx.directory, 'history', join(real.bin, 'docker'));
+  const stub = createStubFailingDockerCommand(ctx.directory, 'history', real.path);
   const result = Bun.spawnSync([join(stub.bin, 'docker'), 'history', 'sha256:example']);
 
   expect({
@@ -31,13 +31,17 @@ test('it fails the named subcommand and never runs the real command', () => {
     stderr: 'stub docker: history fails\n',
   });
 
-  expect(Bun.file(real.calls).text()).resolves.toBe('');
+  expect(real.readCalls()).toStrictEqual([]);
 });
 
 test('it passes any other subcommand to the real command with its arguments', () => {
   const ctx = setupTest();
-  const real = createStubBin(join(ctx.directory, 'real'), 'docker', `printf '<%s>\\n' "$@"`);
-  const stub = createStubFailingDockerCommand(ctx.directory, 'history', join(real.bin, 'docker'));
+
+  const real = createStubBin(join(ctx.directory, 'real'), 'docker', {
+    script: `#!/bin/bash\nprintf '<%s>\\n' "$@"`,
+  });
+
+  const stub = createStubFailingDockerCommand(ctx.directory, 'history', real.path);
   const result = Bun.spawnSync([join(stub.bin, 'docker'), 'image', 'inspect', 'two words']);
 
   expect({

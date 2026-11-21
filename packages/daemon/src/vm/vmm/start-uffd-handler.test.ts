@@ -10,8 +10,8 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { createStubUffdHandler } from '@impz/testing/stand-in/vm/create-stub-uffd-handler';
+import { waitFor } from '@zgeoff/testing';
 import { stopPid } from '../../platform/process/read-stat-fields';
 import { writeStubUffdStats } from '../../test-utils/vm/write-stub-uffd-stats';
 import { buildImpPaths } from '../storage/build-imp-paths';

@@ -1,8 +1,8 @@
 import { expect, onTestFinished, spyOn, test } from 'bun:test';
 import { runEventPrune } from '@impz/daemon/test-utils';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { waitFor } from '@zgeoff/testing';
 import { renderApp } from '../test-utils/render-app';
 import { startDashboardImpd } from '../test-utils/start-dashboard-impd';
 

@@ -1,9 +1,9 @@
 import { expect, test } from 'bun:test';
-import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
+import { createFakeClock } from '@zgeoff/testing/clock';
 import { startTimerAt } from './start-timer-at';
 
 test('it does not fire before a time 30 days off', () => {
-  const clock = buildStubClock();
+  const clock = createFakeClock();
   const fired: number[] = [];
 
   startTimerAt(
@@ -11,16 +11,16 @@ test('it does not fire before a time 30 days off', () => {
       fired.push(clock.now());
     },
     30 * 86_400_000,
-    { now: clock.now, startTimer: clock.startTimer },
+    { now: clock.now, startTimer: clock.schedule },
   );
 
-  clock.runFor(30 * 86_400_000 - 1);
+  clock.advance(30 * 86_400_000 - 1);
 
   expect(fired).toStrictEqual([]);
 });
 
 test('it fires once at a time 30 days off', () => {
-  const clock = buildStubClock();
+  const clock = createFakeClock();
   const fired: number[] = [];
 
   startTimerAt(
@@ -28,20 +28,20 @@ test('it fires once at a time 30 days off', () => {
       fired.push(clock.now());
     },
     30 * 86_400_000,
-    { now: clock.now, startTimer: clock.startTimer },
+    { now: clock.now, startTimer: clock.schedule },
   );
 
-  clock.runFor(31 * 86_400_000);
+  clock.advance(31 * 86_400_000);
 
   expect(fired).toStrictEqual([30 * 86_400_000]);
 });
 
 test('it waits for a far time in steps no longer than setTimeout can take', () => {
-  const clock = buildStubClock();
+  const clock = createFakeClock();
 
-  startTimerAt(() => {}, 30 * 86_400_000, { now: clock.now, startTimer: clock.startTimer });
+  startTimerAt(() => {}, 30 * 86_400_000, { now: clock.now, startTimer: clock.schedule });
 
-  clock.runFor(30 * 86_400_000);
+  clock.advance(30 * 86_400_000);
 
   // 30 days is more than one of setTimeout's longest steps and less than two
   expect(clock.delays).toHaveLength(2);
@@ -49,7 +49,7 @@ test('it waits for a far time in steps no longer than setTimeout can take', () =
 });
 
 test('it never fires once cancelled between steps', () => {
-  const clock = buildStubClock();
+  const clock = createFakeClock();
   const fired: number[] = [];
 
   const cancel = startTimerAt(
@@ -57,14 +57,14 @@ test('it never fires once cancelled between steps', () => {
       fired.push(clock.now());
     },
     30 * 86_400_000,
-    { now: clock.now, startTimer: clock.startTimer },
+    { now: clock.now, startTimer: clock.schedule },
   );
 
-  clock.runFor(26 * 86_400_000);
+  clock.advance(26 * 86_400_000);
 
   cancel();
 
-  clock.runFor(10 * 86_400_000);
+  clock.advance(10 * 86_400_000);
 
   expect(fired).toStrictEqual([]);
 });
@@ -73,7 +73,7 @@ test.each([
   ['NaN', Number.NaN],
   ['Infinity', Number.POSITIVE_INFINITY],
 ])('it fires at once for a time of %s', (_label, at) => {
-  const clock = buildStubClock();
+  const clock = createFakeClock();
   const fired: number[] = [];
 
   startTimerAt(
@@ -81,10 +81,10 @@ test.each([
       fired.push(clock.now());
     },
     at,
-    { now: clock.now, startTimer: clock.startTimer },
+    { now: clock.now, startTimer: clock.schedule },
   );
 
-  clock.runFor(0);
+  clock.advance(0);
 
   expect(fired).toStrictEqual([0]);
 });

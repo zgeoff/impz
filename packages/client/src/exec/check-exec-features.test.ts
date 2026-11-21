@@ -1,7 +1,7 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
-import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
-import { server } from '@impz/shared/test-utils/server';
+import { network } from '@impz/shared/test-utils/network';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
+import { claimFreePorts } from '@zgeoff/testing/process';
 import { HttpResponse, http } from 'msw';
 import { createRpcClient } from '../connection/create-rpc-client';
 import { makeStubImpdWithoutFeature } from '../test-utils/make-stub-impd-without-feature';
@@ -18,7 +18,7 @@ async function setupTest() {
 
   const impd = harness.impd;
 
-  server.use(http.all('http://impd.test/*', (info) => impd.api.app.handle(info.request)));
+  network.use(http.all('http://impd.test/*', (info) => impd.api.app.handle(info.request)));
 
   return { impd, url: 'http://impd.test', rootToken };
 }
@@ -38,7 +38,7 @@ test('it sends the bearer token with the check', async () => {
 
   const received = mock<(authorization: string | null) => void>();
 
-  server.use(
+  network.use(
     http.post('http://impd.test/rpc/system/features', (info) => {
       received(info.request.headers.get('authorization'));
 
@@ -58,7 +58,7 @@ test('it reads the features once for several needs', async () => {
 
   const received = mock<() => void>();
 
-  server.use(
+  network.use(
     http.post('http://impd.test/rpc/system/features', (info) => {
       received();
 
@@ -94,7 +94,7 @@ test('it refuses an impd from before exec requirements as PRECONDITION_FAILED', 
     'execRequire',
   );
 
-  server.use(http.all('http://impd.test/*', (info) => older(info.request)));
+  network.use(http.all('http://impd.test/*', (info) => older(info.request)));
 
   const rpc = createRpcClient({ url: ctx.url, token: ctx.rootToken });
 
@@ -123,7 +123,7 @@ test('it refuses an impd that cannot drop CAP_SYS_ADMIN as PRECONDITION_FAILED',
     'execDropSysAdmin',
   );
 
-  server.use(http.all('http://impd.test/*', (info) => older(info.request)));
+  network.use(http.all('http://impd.test/*', (info) => older(info.request)));
 
   const rpc = createRpcClient({ url: ctx.url, token: ctx.rootToken });
 
@@ -159,7 +159,7 @@ test('it reports an impd it cannot reach as unreachable', async () => {
 });
 
 test('it refuses a start when impd fails the check', async () => {
-  server.use(
+  network.use(
     http.post(
       'http://impd.test/rpc/system/features',
       () => new HttpResponse('down', { status: 503 }),
@@ -178,7 +178,7 @@ test('it refuses a start when impd fails the check', async () => {
 });
 
 test('it refuses a start when impd answers the check with no feature flags', async () => {
-  server.use(
+  network.use(
     http.post('http://impd.test/rpc/system/features', () =>
       HttpResponse.json({ json: { version: '0.40.1' } }),
     ),

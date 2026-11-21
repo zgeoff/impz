@@ -1,8 +1,8 @@
 import { lstatSync, mkdirSync, renameSync, rmSync } from 'node:fs';
 import { getErrorMessage } from '@impz/shared';
-import type { Clock } from '../../platform/process/clock';
+import type { Clock } from '@zgeoff/std';
+import { systemClock } from '@zgeoff/std';
 import { stopPid } from '../../platform/process/read-stat-fields';
-import { REAL_CLOCK } from '../../platform/process/real-clock';
 import { runCommand } from '../../platform/process/run-command';
 import { VM_DEADLINES } from '../../platform/process/vm-deadlines';
 import { writeToDisk } from '../../platform/process/write-file-durably';
@@ -152,7 +152,7 @@ export function createVmRunner(jails: Jails, options: Readonly<VmRunnerOptions>)
   const createClient = options.createClient ?? createFirecrackerClient;
   const readFile = options.readFile;
   const uffdHandlerBin = options.uffdHandlerBin ?? null;
-  const clock = options.clock ?? REAL_CLOCK;
+  const clock = options.clock ?? systemClock;
 
   const uffdWatch = createUffdWatch({
     probeVmAlive: (pid, paths) => probeProcessAlive(pid, paths.apiSocket, procRoot),

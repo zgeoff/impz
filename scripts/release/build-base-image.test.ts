@@ -1,9 +1,10 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createGitFreeEnv } from '@impz/e2e-harness/create-git-free-env';
-import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
+import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
+import { createStubBin, readStubCalls } from '@zgeoff/testing/bin';
 import { $ } from 'bun';
 
 function setupTest() {
@@ -37,12 +38,13 @@ test('it builds images/base for linux/amd64 alone, labelled with the commit chec
   const head = await $`git -C ${ctx.tree} rev-parse HEAD`.env(ctx.env).text();
 
   const revision = head.trim();
-  const docker = createStubBin(ctx.directoryPath, 'docker', 'echo "$PWD" >> "$STUB_CALLS"');
+
+  createStubBin(ctx.directoryPath, 'docker');
 
   const result = await $`bun ${ctx.scriptPath}`
     .env({
       ...ctx.env,
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
       BASE_IMAGE: 'ghcr.io/zgeoff/imp-base',
       PUSH_TAG: '2.0.1',
       VERSION: '2.0.1',
@@ -54,11 +56,12 @@ test('it builds images/base for linux/amd64 alone, labelled with the commit chec
 
   expect(result.exitCode).toBe(0);
 
-  expect(readFileSync(docker.calls, 'utf8')).toBe(
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe(
     [
       `docker buildx build images/base --platform linux/amd64 --load --tag ghcr.io/zgeoff/imp-base:2.0.1 --label org.opencontainers.image.source=https://github.com/zgeoff/impz --label org.opencontainers.image.revision=${revision} --label org.opencontainers.image.version=2.0.1 --label org.opencontainers.image.description=imp base image: Ubuntu 24.04 with the Docker engine`,
-      ctx.tree,
       '',
     ].join('\n'),
   );
+
+  expect(readStubCalls(ctx.directoryPath).map((call) => call.cwd)).toStrictEqual([ctx.tree]);
 });

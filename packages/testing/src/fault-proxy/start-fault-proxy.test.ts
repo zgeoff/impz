@@ -1,8 +1,8 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { connect } from 'node:net';
 import { openReverseForward } from '@impz/client';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { TEST_TOKEN, startTestImpd } from '@impz/testing';
+import { waitFor } from '@zgeoff/testing';
 import type { TestImpdOptions } from '../types';
 
 async function setupTest(options: TestImpdOptions = {}) {

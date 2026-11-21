@@ -2,9 +2,9 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
 import { randomUUID } from 'node:crypto';
 import { readMcpAnswer } from '@impz/mcp/test-utils/read-mcp-answer';
-import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
+import { waitFor } from '@zgeoff/testing';
+import { claimFreePorts } from '@zgeoff/testing/process';
 import invariant from 'tiny-invariant';
 import * as z from 'zod';
 import { createImage } from '../../platform/db/create-image';
@@ -36,9 +36,7 @@ async function setupTest() {
     { name: 'constructor', scopes: ['read'], imps: null },
   ]);
 
-  const publicPort = claimFreePorts(1, {
-    pick: () => 10_000 + Math.floor(Math.random() * 10_000),
-  }).take();
+  const publicPort = claimFreePorts(1).take();
 
   // impd keeps the wall clock, because the OAuth server checks its tokens against it.
   const harness = await startTestImpd(stack, {

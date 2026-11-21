@@ -10,7 +10,7 @@ import {
   readImpByName,
   startStubImpdRelease,
 } from '@impz/daemon/test-utils';
-import { server } from '@impz/shared/test-utils/server';
+import { network } from '@impz/shared/test-utils/network';
 import { writeHostConfig } from '../config/read-host-config';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 import { startImpdHost } from '../test-utils/start-impd-host';
@@ -421,7 +421,7 @@ test('#new passes over a host whose token is limited, then exposes, under --plac
 
   await cloudflare.zones.create({ name: 'imp.example.com' });
 
-  server.use(...cloudflare.handlers);
+  network.use(...cloudflare.handlers);
 
   // a domain and a public address, so impd can expose the imp; a closed ACME
   // port, so impd's certificate order never leaves the host

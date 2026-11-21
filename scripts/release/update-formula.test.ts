@@ -3,7 +3,8 @@ import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSyn
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createGitFreeEnv } from '@impz/e2e-harness/create-git-free-env';
-import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
+import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
+import { createStubBin, readStubCalls } from '@zgeoff/testing/bin';
 import { $ } from 'bun';
 import { buildStubGhRepoClone } from '../test-utils/build-stub-gh-repo-clone';
 
@@ -28,15 +29,15 @@ function setupTest() {
 
 test('it fails, running no command, for a tree without build-formula.sh', async () => {
   const ctx = setupTest();
-  const gh = createStubBin(ctx.directoryPath, 'gh');
 
+  createStubBin(ctx.directoryPath, 'gh');
   createStubBin(ctx.directoryPath, 'git');
   writeFileSync(join(ctx.tree, 'dist', 'SHA256SUMS'), '');
 
   const result = await $`${process.execPath} ${ctx.scriptPath}`
     .env({
       ...ctx.env,
-      PATH: gh.bin,
+      PATH: ctx.directoryPath,
       TAP: 'zgeoff/homebrew-tap',
       VERSION: '2.0.1',
       GITHUB_WORKSPACE: ctx.tree,
@@ -49,7 +50,7 @@ test('it fails, running no command, for a tree without build-formula.sh', async 
     stderr: 'the checked-out tree has no build-formula.sh\n',
   });
 
-  expect(readFileSync(gh.calls, 'utf8')).toBe('');
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe('');
 });
 
 test('it leaves the formula of a tag from before the rename, class Imp, out of the tap', async () => {
@@ -80,13 +81,12 @@ test('it leaves the formula of a tag from before the rename, class Imp, out of t
   );
 
   writeFileSync(join(ctx.tree, 'dist', 'SHA256SUMS'), '');
-
-  const gh = createStubBin(ctx.directoryPath, 'gh', buildStubGhRepoClone(ctx.remote));
+  createStubBin(ctx.directoryPath, 'gh', { script: buildStubGhRepoClone(ctx.remote) });
 
   const result = await $`bun ${ctx.scriptPath}`
     .env({
       ...ctx.env,
-      PATH: `${gh.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
       TAP: 'zgeoff/homebrew-tap',
       VERSION: '1.6.0',
       GITHUB_WORKSPACE: ctx.tree,
@@ -145,12 +145,12 @@ test('it writes the formula of a tag after the rename to impz.rb with the genera
       .join(''),
   );
 
-  const gh = createStubBin(ctx.directoryPath, 'gh', buildStubGhRepoClone(ctx.remote));
+  createStubBin(ctx.directoryPath, 'gh', { script: buildStubGhRepoClone(ctx.remote) });
 
   const result = await $`bun ${ctx.scriptPath}`
     .env({
       ...ctx.env,
-      PATH: `${gh.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
       TAP: 'zgeoff/homebrew-tap',
       VERSION: '2.0.1',
       GITHUB_WORKSPACE: ctx.tree,
@@ -202,13 +202,12 @@ test('it pushes nothing when the tap holds the formula already', async () => {
   );
 
   writeFileSync(join(ctx.tree, 'dist', 'SHA256SUMS'), '');
-
-  const gh = createStubBin(ctx.directoryPath, 'gh', buildStubGhRepoClone(ctx.remote));
+  createStubBin(ctx.directoryPath, 'gh', { script: buildStubGhRepoClone(ctx.remote) });
 
   const result = await $`bun ${ctx.scriptPath}`
     .env({
       ...ctx.env,
-      PATH: `${gh.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
       TAP: 'zgeoff/homebrew-tap',
       VERSION: '2.0.1',
       GITHUB_WORKSPACE: ctx.tree,
@@ -240,13 +239,12 @@ test('it fails the job, moving no formula, when the generator prints no formula 
   );
 
   writeFileSync(join(ctx.tree, 'dist', 'SHA256SUMS'), '');
-
-  const gh = createStubBin(ctx.directoryPath, 'gh', buildStubGhRepoClone(null));
+  createStubBin(ctx.directoryPath, 'gh', { script: buildStubGhRepoClone(null) });
 
   const result = await $`bun ${ctx.scriptPath}`
     .env({
       ...ctx.env,
-      PATH: `${gh.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
       TAP: 'zgeoff/homebrew-tap',
       VERSION: '2.0.1',
       GITHUB_WORKSPACE: ctx.tree,

@@ -1,4 +1,4 @@
-import type { StartTimer } from '../../platform/process/clock';
+import type { StartTimer } from '../../platform/process/start-timer';
 
 interface StreamCheck {
   // false once the stream's access token no longer passes verify

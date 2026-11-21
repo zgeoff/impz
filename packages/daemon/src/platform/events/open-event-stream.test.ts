@@ -4,7 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ImpEvent } from '@impz/api';
 import { pruneEvents } from '@impz/durable';
-import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
+import { fireNextTimer } from '@impz/shared/test-utils/fire-next-timer';
+import { readNextDelayMs } from '@impz/shared/test-utils/read-next-delay-ms';
+import { createFakeClock } from '@zgeoff/testing/clock';
 import invariant from 'tiny-invariant';
 import { readApiEvent } from '../../surface/read-api-event';
 import { buildMockNewImage } from '../../test-utils/imps/build-mock-new-image';
@@ -683,23 +685,26 @@ test('it ends at its abort', async () => {
 test('it ends at its end time', async () => {
   const ctx = await setupTest();
 
-  const timers = buildStubClock();
+  const timers = createFakeClock();
 
   const stream = ctx.open({
     endsAt: Date.UTC(2026, 9, 2, 12) + 50,
-    startTimer: timers.startTimer,
+    startTimer: timers.schedule,
   });
 
   const waiting = stream.next();
-  const pendingMs = timers.readPendingMs();
 
-  timers.firePending();
+  expect(timers.countPending()).toBe(1);
+
+  const pendingMs = readNextDelayMs(timers);
+
+  fireNextTimer(timers);
 
   const last = await waiting;
 
-  expect(pendingMs).toStrictEqual([50]);
+  expect(pendingMs).toBe(50);
   expect(last).toStrictEqual({ done: true, value: undefined });
-  expect(timers.readPendingMs()).toStrictEqual([]);
+  expect(readNextDelayMs(timers)).toBeNull();
 });
 
 test('it stays open when the longest timer fires short of a 30-day end, and waits out the rest', async () => {
@@ -707,7 +712,7 @@ test('it stays open when the longest timer fires short of a 30-day end, and wait
 
   const controller = new AbortController();
 
-  const timers = buildStubClock();
+  const timers = createFakeClock();
   const snapshot = buildMockGovernorDecision();
   const clock = { at: Date.UTC(2026, 9, 2, 12) };
 
@@ -716,16 +721,18 @@ test('it stays open when the longest timer fires short of a 30-day end, and wait
     signal: controller.signal,
     endsAt: Date.UTC(2026, 9, 2, 12) + 30 * 86_400_000,
     now: () => clock.at,
-    startTimer: timers.startTimer,
+    startTimer: timers.schedule,
   });
 
   const first = await stream.next();
 
-  const clampedMs = timers.readPendingMs();
+  expect(timers.countPending()).toBe(1);
+
+  const clampedMs = readNextDelayMs(timers);
 
   clock.at = Date.UTC(2026, 9, 2, 12) + 2 ** 31 - 1;
 
-  timers.firePending();
+  fireNextTimer(timers);
 
   await ctx.db.log.write(
     {
@@ -741,24 +748,26 @@ test('it stays open when the longest timer fires short of a 30-day end, and wait
 
   const second = await stream.next();
 
-  const pendingMs = timers.readPendingMs();
+  expect(timers.countPending()).toBe(1);
+
+  const pendingMs = readNextDelayMs(timers);
 
   controller.abort();
 
   expect(first).toStrictEqual({ done: false, value: snapshot });
 
   // setTimeout's longest delay: a longer one would fire at once
-  expect(clampedMs).toStrictEqual([2 ** 31 - 1]);
+  expect(clampedMs).toBe(2 ** 31 - 1);
   expect(second).toMatchObject({ done: false, value: { name: 'later' } });
 
   // 30 days (2_592_000_000 ms) less the longest delay already waited
-  expect(pendingMs).toStrictEqual([444_516_353]);
+  expect(pendingMs).toBe(444_516_353);
 });
 
 test('it ends at a 30-day end once the timer after the longest one fires', async () => {
   const ctx = await setupTest();
 
-  const timers = buildStubClock();
+  const timers = createFakeClock();
   const snapshot = buildMockGovernorDecision();
   const clock = { at: Date.UTC(2026, 9, 2, 12) };
 
@@ -766,21 +775,21 @@ test('it ends at a 30-day end once the timer after the longest one fires', async
     readSnapshot: () => Promise.resolve([snapshot]),
     endsAt: Date.UTC(2026, 9, 2, 12) + 30 * 86_400_000,
     now: () => clock.at,
-    startTimer: timers.startTimer,
+    startTimer: timers.schedule,
   });
 
   await stream.next();
 
   clock.at = Date.UTC(2026, 9, 2, 12) + 2 ** 31 - 1;
 
-  timers.firePending();
+  fireNextTimer(timers);
 
   clock.at = Date.UTC(2026, 9, 2, 12) + 30 * 86_400_000;
 
-  timers.firePending();
+  fireNextTimer(timers);
 
   const last = await stream.next();
 
   expect(last).toStrictEqual({ done: true, value: undefined });
-  expect(timers.readPendingMs()).toStrictEqual([]);
+  expect(readNextDelayMs(timers)).toBeNull();
 });

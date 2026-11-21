@@ -3,8 +3,10 @@ import { appendFileSync, existsSync, readFileSync, readdirSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
-import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
+import { fireNextTimer } from '@impz/shared/test-utils/fire-next-timer';
+import { readNextDelayMs } from '@impz/shared/test-utils/read-next-delay-ms';
+import { waitFor } from '@zgeoff/testing';
+import { createFakeClock } from '@zgeoff/testing/clock';
 import invariant from 'tiny-invariant';
 import { ImpdError } from '../../../platform/errors/impd-error';
 import { buildStubRoomCheck } from '../../../test-utils/vm/build-stub-room-check';
@@ -410,7 +412,7 @@ test('it keeps the last segment when asked to remove the oldest', async () => {
 test('it starts a commit one second after an append', async () => {
   const ctx = await setupTest();
 
-  const timers = buildStubClock();
+  const timers = createFakeClock();
 
   const log = await createGenerationLog(
     {
@@ -419,7 +421,7 @@ test('it starts a commit one second after an append', async () => {
       maxBytes: 200,
       requireRoom: () => Promise.resolve(),
       now: () => 1000,
-      startTimer: timers.startTimer,
+      startTimer: timers.schedule,
     },
     {
       session: 'main',
@@ -434,14 +436,15 @@ test('it starts a commit one second after an append', async () => {
 
   await log.append(new TextEncoder().encode('abc'));
 
-  expect(timers.readPendingMs()).toStrictEqual([1000]);
+  expect(timers.countPending()).toBe(1);
+  expect(readNextDelayMs(timers)).toBe(1000);
   expect(readGenerationMeta(ctx.directory)?.segments).toStrictEqual([]);
 });
 
 test('it writes the appended bytes into the meta when the commit timer fires', async () => {
   const ctx = await setupTest();
 
-  const timers = buildStubClock();
+  const timers = createFakeClock();
 
   const log = await createGenerationLog(
     {
@@ -450,7 +453,7 @@ test('it writes the appended bytes into the meta when the commit timer fires', a
       maxBytes: 200,
       requireRoom: () => Promise.resolve(),
       now: () => 1000,
-      startTimer: timers.startTimer,
+      startTimer: timers.schedule,
     },
     {
       session: 'main',
@@ -465,7 +468,7 @@ test('it writes the appended bytes into the meta when the commit timer fires', a
 
   await log.append(new TextEncoder().encode('abc'));
 
-  timers.firePending();
+  fireNextTimer(timers);
 
   await waitFor(() => {
     expect(readGenerationMeta(ctx.directory)?.segments).toStrictEqual([{ start: 0, length: 3 }]);
@@ -475,7 +478,7 @@ test('it writes the appended bytes into the meta when the commit timer fires', a
 test('it cancels the pending commit when the log is abandoned', async () => {
   const ctx = await setupTest();
 
-  const timers = buildStubClock();
+  const timers = createFakeClock();
 
   const log = await createGenerationLog(
     {
@@ -484,7 +487,7 @@ test('it cancels the pending commit when the log is abandoned', async () => {
       maxBytes: 200,
       requireRoom: () => Promise.resolve(),
       now: () => 1000,
-      startTimer: timers.startTimer,
+      startTimer: timers.schedule,
     },
     {
       session: 'main',
@@ -501,7 +504,7 @@ test('it cancels the pending commit when the log is abandoned', async () => {
 
   log.abandon();
 
-  expect(timers.readPendingMs()).toStrictEqual([]);
+  expect(readNextDelayMs(timers)).toBeNull();
 });
 
 test('it rejects an append whose segment opened while the log was abandoned', async () => {

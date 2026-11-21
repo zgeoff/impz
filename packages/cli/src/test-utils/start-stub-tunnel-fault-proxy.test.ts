@@ -1,5 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { waitFor } from '@zgeoff/testing';
 import { startStubTunnelFaultProxy } from './start-stub-tunnel-fault-proxy';
 
 function setupTest() {

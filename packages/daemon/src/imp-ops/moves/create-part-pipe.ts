@@ -1,5 +1,5 @@
-import type { Clock } from '../../platform/process/clock';
-import { REAL_CLOCK } from '../../platform/process/real-clock';
+import type { Clock } from '@zgeoff/std';
+import { systemClock } from '@zgeoff/std';
 
 export const MOVE_PART_BYTES = 256 * 1024 * 1024;
 export const PART_WAIT_MS = 60_000;
@@ -22,7 +22,7 @@ interface Part {
 
 export function createPartPipe(
   waitMs = PART_WAIT_MS,
-  timer: Pick<Clock, 'now' | 'startTimer'> = REAL_CLOCK,
+  timer: Pick<Clock, 'now' | 'schedule'> = systemClock,
 ): PartPipe {
   const parts: Part[] = [];
 
@@ -61,7 +61,7 @@ export function createPartPipe(
 
       state.waiter = waiter;
 
-      const cancel = timer.startTimer(
+      const cancel = timer.schedule(
         () => {
           waiter.resolve();
         },

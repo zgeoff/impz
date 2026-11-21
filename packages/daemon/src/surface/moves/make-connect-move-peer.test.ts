@@ -1,5 +1,5 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
-import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
+import { claimFreePorts } from '@zgeoff/testing/process';
 import { buildPeerRanges } from '../../imp-ops/moves/build-peer-ranges';
 import type { MovePeerCalls } from '../../imp-ops/moves/move-receiver';
 import { MoveRequestError } from '../../imp-ops/moves/move-request-error';
@@ -35,7 +35,11 @@ async function setupTest() {
     now: () => 1_800_000_000_000,
   });
 
-  const port = claimFreePorts(1, { onRelease: stack.defer.bind(stack) }).take();
+  const ports = claimFreePorts(1, { cleanup: 'manual' });
+  const port = ports.take();
+
+  stack.defer(ports.release);
+
   const handleRequest = (request: Request) => handler.respond(request, '100.64.0.1');
   const server = Bun.serve({ hostname: '127.0.0.1', port, fetch: handleRequest });
 

@@ -1,4 +1,4 @@
-import { registerRunHooks } from './register-run-hooks';
+import { setFakerSeed } from './set-faker-seed';
 
-// The end-to-end suites reach real registries, which an MSW server would refuse.
-registerRunHooks();
+// The end-to-end suites reach real registries, which a test network would refuse.
+setFakerSeed();

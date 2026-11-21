@@ -3,7 +3,7 @@ import { closeSync, existsSync, mkdtempSync, openSync, rmSync, writeFileSync } f
 import { connect } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { waitFor } from '@zgeoff/testing';
 import { createStubUffdHandler } from './create-stub-uffd-handler';
 
 function setupTest() {

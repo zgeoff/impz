@@ -14,11 +14,11 @@ import {
   encodeJsonFrame,
   encodeMessageFrame,
 } from '@impz/agent-protocol';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
-import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import type { TestImpdOptions } from '@impz/testing/stand-in/start-test-impd';
 import { startStubAgent } from '@impz/testing/stand-in/vm/start-stub-agent';
+import { waitFor } from '@zgeoff/testing';
+import { createFakeClock } from '@zgeoff/testing/clock';
 import invariant from 'tiny-invariant';
 import { readImpByName, updateImpActivity } from '../../platform/db/list-imps';
 import { writeLease } from '../../platform/db/list-leases';
@@ -59,12 +59,12 @@ async function setupTest(
     ...processes.deps,
   });
 
-  const execClock = buildStubClock();
+  const execClock = createFakeClock();
 
   const harness = await startTestImpd(stack, {
     ...options,
     jails,
-    boundaries: { imps: { execStartTimer: execClock.startTimer } },
+    boundaries: { imps: { execStartTimer: execClock.schedule } },
   });
 
   return Object.assign(harness, { stack, chrootBase, processes, execClock });
@@ -721,7 +721,7 @@ test("it keeps a builder exec open past 10 s for its agent's start", async () =>
 
   const socket = await requested.promise;
 
-  ctx.execClock.runFor(10_001);
+  ctx.execClock.advance(10_001);
   socket.write(encodeMessageFrame(FRAME_TYPES.started, StartedSchema, { pid: 9 }));
 
   const stream = await opening;
@@ -755,7 +755,7 @@ test('it gives up a builder exec when its agent sends no start within 30 s', asy
 
   await requested.promise;
 
-  ctx.execClock.runFor(30_000);
+  ctx.execClock.advance(30_000);
 
   expect(opening).rejects.toThrow(/sent no exec start within 30000 ms$/u);
 });

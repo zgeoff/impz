@@ -11,8 +11,8 @@ import {
 } from 'node:fs';
 import { tmpdir, userInfo } from 'node:os';
 import { join } from 'node:path';
-import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
-import { buildStubEnvRecord } from '../scripts/test-utils/build-stub-env-record';
+import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
+import { createStubBin, readStubCalls } from '@zgeoff/testing/bin';
 import { createStubCurl } from '../scripts/test-utils/create-stub-curl';
 import { createStubRepoScript } from '../scripts/test-utils/create-stub-repo-script';
 
@@ -37,8 +37,7 @@ function setupTest() {
     build: join(kernel, '.build'),
     out: join(kernel, 'out'),
     stubs,
-    calls: join(stubs, 'calls'),
-    path: `${join(stubs, 'bin')}:${process.env['PATH'] ?? ''}`,
+    path: `${stubs}:${process.env['PATH'] ?? ''}`,
     script: join(kernel, 'build.sh'),
   };
 }
@@ -61,7 +60,7 @@ test('it refuses an argument it does not know, before it touches anything', () =
     stderr: 'usage: kernel/build.sh [--fetch | --in-builder]\n',
   });
 
-  expect(readFileSync(ctx.calls, 'utf8')).toBe('');
+  expect(formatStubCalls(readStubCalls(ctx.stubs))).toBe('');
   expect(existsSync(ctx.build)).toBeFalse();
 });
 
@@ -100,7 +99,7 @@ test('it downloads, checks and unpacks the source, then builds it in the kernel-
     '',
   ]);
 
-  expect(readFileSync(ctx.calls, 'utf8').split('\n')).toStrictEqual([
+  expect(formatStubCalls(readStubCalls(ctx.stubs)).split('\n')).toStrictEqual([
     `curl -fL --retry 3 -o ${ctx.build}/linux-6.1.999.tar.xz.part https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.1.999.tar.xz`,
     `docker build -q -t imp-kernel-builder:dev --target kernel-builder -f ${ctx.kernel}/../host/Dockerfile ${ctx.kernel}/..`,
     `docker run --rm --user ${userInfo().uid}:${userInfo().gid} -v ${ctx.kernel}:/k -e JOBS=7 imp-kernel-builder:dev /k/make-vmlinux.sh /k/.build/linux-6.1.999 /k/.build/obj /k/out`,
@@ -147,7 +146,7 @@ test('it stops after unpacking the source with --fetch', () => {
     stderr: '',
   });
 
-  expect(readFileSync(ctx.calls, 'utf8').split('\n')).toStrictEqual([
+  expect(formatStubCalls(readStubCalls(ctx.stubs)).split('\n')).toStrictEqual([
     `curl -fL --retry 3 -o ${ctx.build}/linux-6.1.999.tar.xz.part https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.1.999.tar.xz`,
     '',
   ]);
@@ -196,7 +195,7 @@ test('it checks and unpacks a tarball it downloaded before without downloading i
     stderr: '',
   });
 
-  expect(readFileSync(ctx.calls, 'utf8')).toBe('');
+  expect(formatStubCalls(readStubCalls(ctx.stubs))).toBe('');
   expect(readFileSync(join(ctx.build, 'linux-6.1.999', 'Makefile'), 'utf8')).toBe('VERSION = 6\n');
 });
 
@@ -216,7 +215,7 @@ test('it neither downloads nor checks a tarball when the source is already unpac
     stderr: result.stderr.toString(),
   }).toStrictEqual({ exitCode: 0, stdout: '', stderr: '' });
 
-  expect(readFileSync(ctx.calls, 'utf8')).toBe('');
+  expect(formatStubCalls(readStubCalls(ctx.stubs))).toBe('');
 });
 
 test('it refuses a tarball whose sha256 does not match, and unpacks nothing', () => {
@@ -244,7 +243,7 @@ test('it refuses a tarball whose sha256 does not match, and unpacks nothing', ()
     stderr: 'sha256sum: WARNING: 1 computed checksum did NOT match\n',
   });
 
-  expect(readFileSync(ctx.calls, 'utf8')).toBe('');
+  expect(formatStubCalls(readStubCalls(ctx.stubs))).toBe('');
   expect(readdirSync(ctx.build)).toStrictEqual(['linux-6.1.999.tar.xz']);
 });
 
@@ -283,7 +282,7 @@ test('it takes KVER and KSHA256 from the environment over kernel/version', () =>
     stderr: '',
   });
 
-  expect(readFileSync(ctx.calls, 'utf8').split('\n')).toStrictEqual([
+  expect(formatStubCalls(readStubCalls(ctx.stubs)).split('\n')).toStrictEqual([
     `curl -fL --retry 3 -o ${ctx.build}/linux-6.1.222.tar.xz.part https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.1.222.tar.xz`,
     '',
   ]);
@@ -310,7 +309,7 @@ test('it keeps no tarball from a download that fails, so the next run downloads 
     stderr: result.stderr.toString(),
   }).toStrictEqual({ exitCode: 22, stdout: '', stderr: '' });
 
-  expect(readFileSync(ctx.calls, 'utf8').split('\n')).toStrictEqual([
+  expect(formatStubCalls(readStubCalls(ctx.stubs)).split('\n')).toStrictEqual([
     `curl -fL --retry 3 -o ${ctx.build}/linux-6.1.999.tar.xz.part https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.1.999.tar.xz`,
     '',
   ]);
@@ -325,7 +324,7 @@ test('it runs make-vmlinux.sh on the unpacked source itself with --in-builder', 
   mkdirSync(join(ctx.build, 'linux-6.1.999'), { recursive: true });
   createStubBin(ctx.stubs, 'curl');
   createStubBin(ctx.stubs, 'docker');
-  createStubRepoScript(ctx.kernel, 'make-vmlinux.sh', ctx.calls, buildStubEnvRecord(['JOBS']));
+  createStubRepoScript(ctx.kernel, 'make-vmlinux.sh', ctx.stubs, { recordEnv: ['JOBS'] });
 
   const result = Bun.spawnSync([ctx.script, '--in-builder'], {
     env: { PATH: ctx.path, JOBS: '7' },
@@ -337,7 +336,7 @@ test('it runs make-vmlinux.sh on the unpacked source itself with --in-builder', 
     stderr: result.stderr.toString(),
   }).toStrictEqual({ exitCode: 0, stdout: '', stderr: '' });
 
-  expect(readFileSync(ctx.calls, 'utf8').split('\n')).toStrictEqual([
+  expect(formatStubCalls(readStubCalls(ctx.stubs)).split('\n')).toStrictEqual([
     `make-vmlinux.sh ${ctx.build}/linux-6.1.999 ${ctx.build}/obj ${ctx.out}`,
     '  JOBS=7',
     '',
@@ -349,8 +348,8 @@ test('it builds with one job per processor when JOBS is unset', () => {
 
   writeFileSync(join(ctx.kernel, 'version'), 'KVER=6.1.999\nKSHA256=0\n');
   mkdirSync(join(ctx.build, 'linux-6.1.999'), { recursive: true });
-  createStubBin(ctx.stubs, 'nproc', 'echo 3');
-  createStubRepoScript(ctx.kernel, 'make-vmlinux.sh', ctx.calls, buildStubEnvRecord(['JOBS']));
+  createStubBin(ctx.stubs, 'nproc', { script: '#!/bin/bash\necho 3' });
+  createStubRepoScript(ctx.kernel, 'make-vmlinux.sh', ctx.stubs, { recordEnv: ['JOBS'] });
 
   const result = Bun.spawnSync([ctx.script, '--in-builder'], { env: { PATH: ctx.path } });
 
@@ -360,7 +359,7 @@ test('it builds with one job per processor when JOBS is unset', () => {
     stderr: result.stderr.toString(),
   }).toStrictEqual({ exitCode: 0, stdout: '', stderr: '' });
 
-  expect(readFileSync(ctx.calls, 'utf8').split('\n')).toStrictEqual([
+  expect(formatStubCalls(readStubCalls(ctx.stubs)).split('\n')).toStrictEqual([
     'nproc ',
     `make-vmlinux.sh ${ctx.build}/linux-6.1.999 ${ctx.build}/obj ${ctx.out}`,
     '  JOBS=3',

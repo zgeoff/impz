@@ -1,6 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
+import { waitFor } from '@zgeoff/testing';
 import { updateImpMove } from '../../platform/db/list-imps';
 import { makePresenceCheck } from './wire-tailnet-names';
 

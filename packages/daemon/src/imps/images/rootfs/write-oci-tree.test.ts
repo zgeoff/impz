@@ -3,9 +3,9 @@ import { mkdirSync, readFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { updateEnv } from '@impz/shared/test-utils/update-env';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
-import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
+import { fireNextTimer } from '@impz/shared/test-utils/fire-next-timer';
+import { updateEnv, waitFor } from '@zgeoff/testing';
+import { createFakeClock } from '@zgeoff/testing/clock';
 import invariant from 'tiny-invariant';
 import { runStreamed } from '../../../platform/process/run-streamed';
 import { startRealTimer } from '../../../platform/process/start-real-timer';
@@ -270,7 +270,7 @@ test('it ends an export that sends nothing for its idle limit on the given timer
 
   updateEnv('PATH', ociFetch.path);
 
-  const timers = buildStubClock();
+  const timers = createFakeClock();
 
   const writing = writeOciTree({
     ref: 'registry.test/builder@sha256:1',
@@ -281,14 +281,14 @@ test('it ends an export that sends nothing for its idle limit on the given timer
     runStreamed,
     startTar: startTarProcess,
     countTreeBytes,
-    startTimer: timers.startTimer,
+    startTimer: timers.schedule,
   });
 
   await waitFor(() => {
     expect(ociFetch.readStalledPIDs()).toHaveLength(1);
   });
 
-  timers.firePending();
+  fireNextTimer(timers);
 
   expect(writing).rejects.toThrowWithMessage(
     Error,

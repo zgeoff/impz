@@ -11,8 +11,9 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
+import { waitFor } from '@zgeoff/testing';
+import { createStubBin, readStubCalls } from '@zgeoff/testing/bin';
 import { createStubZfs } from './test-utils/create-stub-zfs';
 import { createStubZpool } from './test-utils/create-stub-zpool';
 
@@ -43,30 +44,23 @@ test('it creates the pool, runs the tests on it, then releases all it made', () 
   const work = join(ctx.directoryPath, 'work');
 
   mkdirSync(work);
-
-  const zpool = createStubZpool(ctx.stubs);
-
-  createStubBin(ctx.stubs, 'id', 'echo 0');
+  createStubZpool(ctx.stubs);
+  createStubBin(ctx.stubs, 'id', { script: '#!/bin/bash\necho 0' });
   createStubZfs(ctx.stubs);
   createStubBin(ctx.stubs, 'mount');
   createStubBin(ctx.stubs, 'umount');
-
-  createStubBin(
-    ctx.stubs,
-    'bun',
-    String.raw`printf "env %s %s\n" "$IMP_TEST_ZFS_ROOT" "$IMP_TEST_ZFS_DIR" >>"$STUB_CALLS"`,
-  );
+  createStubBin(ctx.stubs, 'bun', { recordEnv: ['IMP_TEST_ZFS_ROOT', 'IMP_TEST_ZFS_DIR'] });
 
   const result = Bun.spawnSync(ctx.run, {
     env: {
-      PATH: `${zpool.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.stubs}:${process.env['PATH'] ?? ''}`,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_TEST_GIB: '1',
       IMP_ZFS_MODULE_VERSION_FILE: ctx.moduleVersion,
     },
   });
 
-  const calls = readFileSync(zpool.calls, 'utf8').replaceAll(/imptest\d+/gu, 'imptestPID');
+  const calls = formatStubCalls(readStubCalls(ctx.stubs)).replaceAll(/imptest\d+/gu, 'imptestPID');
 
   expect(result.exitCode).toBe(0);
 
@@ -78,7 +72,7 @@ test('it creates the pool, runs the tests on it, then releases all it made', () 
     'zfs create -o mountpoint=legacy imptestPID/imp',
     `mount -t zfs imptestPID/imp ${work}/mnt`,
     'bun test --timeout=15000 packages/daemon/src/vm/storage/zfs',
-    `env imptestPID/imp ${work}/mnt`,
+    `  IMP_TEST_ZFS_ROOT=imptestPID/imp IMP_TEST_ZFS_DIR=${work}/mnt`,
     `umount -R ${work}/mnt`,
     'zpool list -H -o name',
     'zpool status -P imptestPID',
@@ -99,9 +93,9 @@ test('it removes a work dir it created itself', () => {
   writeFileSync(ctx.moduleVersion, '2.3.4-1\n');
 
   const work = join(ctx.directoryPath, 'work');
-  const zpool = createStubZpool(ctx.stubs);
 
-  createStubBin(ctx.stubs, 'id', 'echo 0');
+  createStubZpool(ctx.stubs);
+  createStubBin(ctx.stubs, 'id', { script: '#!/bin/bash\necho 0' });
   createStubZfs(ctx.stubs);
   createStubBin(ctx.stubs, 'mount');
   createStubBin(ctx.stubs, 'umount');
@@ -109,7 +103,7 @@ test('it removes a work dir it created itself', () => {
 
   const result = Bun.spawnSync(ctx.run, {
     env: {
-      PATH: `${zpool.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.stubs}:${process.env['PATH'] ?? ''}`,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_TEST_GIB: '1',
       IMP_ZFS_MODULE_VERSION_FILE: ctx.moduleVersion,
@@ -128,10 +122,8 @@ test('it refuses a pool name that is taken and touches nothing', () => {
   const work = join(ctx.directoryPath, 'work');
 
   mkdirSync(work);
-
-  const zpool = createStubBin(ctx.stubs, 'zpool');
-
-  createStubBin(ctx.stubs, 'id', 'echo 0');
+  createStubBin(ctx.stubs, 'zpool');
+  createStubBin(ctx.stubs, 'id', { script: '#!/bin/bash\necho 0' });
   createStubZfs(ctx.stubs);
   createStubBin(ctx.stubs, 'mount');
   createStubBin(ctx.stubs, 'umount');
@@ -139,14 +131,14 @@ test('it refuses a pool name that is taken and touches nothing', () => {
 
   const result = Bun.spawnSync(ctx.run, {
     env: {
-      PATH: `${zpool.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.stubs}:${process.env['PATH'] ?? ''}`,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_TEST_GIB: '1',
       IMP_ZFS_MODULE_VERSION_FILE: ctx.moduleVersion,
     },
   });
 
-  const calls = readFileSync(zpool.calls, 'utf8').replaceAll(/imptest\d+/gu, 'imptestPID');
+  const calls = formatStubCalls(readStubCalls(ctx.stubs)).replaceAll(/imptest\d+/gu, 'imptestPID');
 
   expect(result.exitCode).toBe(1);
 
@@ -168,10 +160,8 @@ test('it refuses a work dir that already holds a pool.img and leaves the file as
 
   mkdirSync(work);
   writeFileSync(join(work, 'pool.img'), 'another run');
-
-  const zpool = createStubZpool(ctx.stubs);
-
-  createStubBin(ctx.stubs, 'id', 'echo 0');
+  createStubZpool(ctx.stubs);
+  createStubBin(ctx.stubs, 'id', { script: '#!/bin/bash\necho 0' });
   createStubZfs(ctx.stubs);
   createStubBin(ctx.stubs, 'mount');
   createStubBin(ctx.stubs, 'umount');
@@ -179,14 +169,14 @@ test('it refuses a work dir that already holds a pool.img and leaves the file as
 
   const result = Bun.spawnSync(ctx.run, {
     env: {
-      PATH: `${zpool.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.stubs}:${process.env['PATH'] ?? ''}`,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_TEST_GIB: '1',
       IMP_ZFS_MODULE_VERSION_FILE: ctx.moduleVersion,
     },
   });
 
-  const calls = readFileSync(zpool.calls, 'utf8').replaceAll(/imptest\d+/gu, 'imptestPID');
+  const calls = formatStubCalls(readStubCalls(ctx.stubs)).replaceAll(/imptest\d+/gu, 'imptestPID');
 
   expect(result.exitCode).toBe(1);
 
@@ -208,10 +198,8 @@ test('it refuses a work dir that already holds a mnt and leaves it in place', ()
 
   mkdirSync(join(work, 'mnt'), { recursive: true });
   writeFileSync(join(work, 'mnt', 'kept'), 'another run');
-
-  const zpool = createStubZpool(ctx.stubs);
-
-  createStubBin(ctx.stubs, 'id', 'echo 0');
+  createStubZpool(ctx.stubs);
+  createStubBin(ctx.stubs, 'id', { script: '#!/bin/bash\necho 0' });
   createStubZfs(ctx.stubs);
   createStubBin(ctx.stubs, 'mount');
   createStubBin(ctx.stubs, 'umount');
@@ -219,14 +207,14 @@ test('it refuses a work dir that already holds a mnt and leaves it in place', ()
 
   const result = Bun.spawnSync(ctx.run, {
     env: {
-      PATH: `${zpool.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.stubs}:${process.env['PATH'] ?? ''}`,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_TEST_GIB: '1',
       IMP_ZFS_MODULE_VERSION_FILE: ctx.moduleVersion,
     },
   });
 
-  const calls = readFileSync(zpool.calls, 'utf8').replaceAll(/imptest\d+/gu, 'imptestPID');
+  const calls = formatStubCalls(readStubCalls(ctx.stubs)).replaceAll(/imptest\d+/gu, 'imptestPID');
 
   expect(result.exitCode).toBe(1);
 
@@ -247,10 +235,8 @@ test('it destroys the pool it created and removes its file when the dataset cann
   const work = join(ctx.directoryPath, 'work');
 
   mkdirSync(work);
-
-  const zpool = createStubZpool(ctx.stubs);
-
-  createStubBin(ctx.stubs, 'id', 'echo 0');
+  createStubZpool(ctx.stubs);
+  createStubBin(ctx.stubs, 'id', { script: '#!/bin/bash\necho 0' });
   createStubZfs(ctx.stubs, { create: 'fails' });
   createStubBin(ctx.stubs, 'mount');
   createStubBin(ctx.stubs, 'umount');
@@ -258,14 +244,14 @@ test('it destroys the pool it created and removes its file when the dataset cann
 
   const result = Bun.spawnSync(ctx.run, {
     env: {
-      PATH: `${zpool.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.stubs}:${process.env['PATH'] ?? ''}`,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_TEST_GIB: '1',
       IMP_ZFS_MODULE_VERSION_FILE: ctx.moduleVersion,
     },
   });
 
-  const calls = readFileSync(zpool.calls, 'utf8').replaceAll(/imptest\d+/gu, 'imptestPID');
+  const calls = formatStubCalls(readStubCalls(ctx.stubs)).replaceAll(/imptest\d+/gu, 'imptestPID');
 
   expect(result.exitCode).toBe(1);
 
@@ -296,10 +282,8 @@ test('it never destroys a pool when its own create fails', () => {
   const work = join(ctx.directoryPath, 'work');
 
   mkdirSync(work);
-
-  const zpool = createStubZpool(ctx.stubs, { create: 'fails' });
-
-  createStubBin(ctx.stubs, 'id', 'echo 0');
+  createStubZpool(ctx.stubs, { create: 'fails' });
+  createStubBin(ctx.stubs, 'id', { script: '#!/bin/bash\necho 0' });
   createStubZfs(ctx.stubs);
   createStubBin(ctx.stubs, 'mount');
   createStubBin(ctx.stubs, 'umount');
@@ -307,14 +291,14 @@ test('it never destroys a pool when its own create fails', () => {
 
   const result = Bun.spawnSync(ctx.run, {
     env: {
-      PATH: `${zpool.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.stubs}:${process.env['PATH'] ?? ''}`,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_TEST_GIB: '1',
       IMP_ZFS_MODULE_VERSION_FILE: ctx.moduleVersion,
     },
   });
 
-  const calls = readFileSync(zpool.calls, 'utf8').replaceAll(/imptest\d+/gu, 'imptestPID');
+  const calls = formatStubCalls(readStubCalls(ctx.stubs)).replaceAll(/imptest\d+/gu, 'imptestPID');
 
   expect(result.exitCode).toBe(1);
 
@@ -342,10 +326,8 @@ test('it keeps the pool file and says so when the pool will not go', () => {
   const work = join(ctx.directoryPath, 'work');
 
   mkdirSync(work);
-
-  const zpool = createStubZpool(ctx.stubs, { destroy: 'fails' });
-
-  createStubBin(ctx.stubs, 'id', 'echo 0');
+  createStubZpool(ctx.stubs, { destroy: 'fails' });
+  createStubBin(ctx.stubs, 'id', { script: '#!/bin/bash\necho 0' });
   createStubZfs(ctx.stubs);
   createStubBin(ctx.stubs, 'mount');
   createStubBin(ctx.stubs, 'umount');
@@ -353,7 +335,7 @@ test('it keeps the pool file and says so when the pool will not go', () => {
 
   const result = Bun.spawnSync(ctx.run, {
     env: {
-      PATH: `${zpool.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.stubs}:${process.env['PATH'] ?? ''}`,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_TEST_GIB: '1',
       IMP_ZFS_MODULE_VERSION_FILE: ctx.moduleVersion,
@@ -380,10 +362,8 @@ test('it refuses a pool.img that is a symlink and leaves the link and its target
   mkdirSync(work);
   writeFileSync(target, 'another run');
   symlinkSync(target, join(work, 'pool.img'));
-
-  const zpool = createStubZpool(ctx.stubs);
-
-  createStubBin(ctx.stubs, 'id', 'echo 0');
+  createStubZpool(ctx.stubs);
+  createStubBin(ctx.stubs, 'id', { script: '#!/bin/bash\necho 0' });
   createStubZfs(ctx.stubs);
   createStubBin(ctx.stubs, 'mount');
   createStubBin(ctx.stubs, 'umount');
@@ -391,7 +371,7 @@ test('it refuses a pool.img that is a symlink and leaves the link and its target
 
   const result = Bun.spawnSync(ctx.run, {
     env: {
-      PATH: `${zpool.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.stubs}:${process.env['PATH'] ?? ''}`,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_TEST_GIB: '1',
       IMP_ZFS_MODULE_VERSION_FILE: ctx.moduleVersion,
@@ -418,20 +398,18 @@ test('it stops the test run and releases all it made when it gets SIGTERM', asyn
   const started = join(ctx.directoryPath, 'tests-started');
 
   mkdirSync(work);
-
-  const zpool = createStubZpool(ctx.stubs);
-
-  createStubBin(ctx.stubs, 'id', 'echo 0');
+  createStubZpool(ctx.stubs);
+  createStubBin(ctx.stubs, 'id', { script: '#!/bin/bash\necho 0' });
   createStubZfs(ctx.stubs);
   createStubBin(ctx.stubs, 'mount');
   createStubBin(ctx.stubs, 'umount');
-  createStubBin(ctx.stubs, 'bun', `: >'${started}'; exec sleep 30`);
+  createStubBin(ctx.stubs, 'bun', { script: `#!/bin/bash\n: >'${started}'; exec sleep 30` });
 
   const subprocess = Bun.spawn(ctx.run, {
     stdout: 'ignore',
     stderr: 'ignore',
     env: {
-      PATH: `${zpool.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.stubs}:${process.env['PATH'] ?? ''}`,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_TEST_GIB: '1',
       IMP_ZFS_MODULE_VERSION_FILE: ctx.moduleVersion,
@@ -448,7 +426,7 @@ test('it stops the test run and releases all it made when it gets SIGTERM', asyn
 
   const exitCode = await subprocess.exited;
 
-  const calls = readFileSync(zpool.calls, 'utf8').replaceAll(/imptest\d+/gu, 'imptestPID');
+  const calls = formatStubCalls(readStubCalls(ctx.stubs)).replaceAll(/imptest\d+/gu, 'imptestPID');
 
   expect(exitCode).toBe(143);
 
@@ -476,10 +454,8 @@ test('it destroys the pool and removes its file when SIGTERM comes during the po
   const release = join(ctx.directoryPath, 'create-release');
 
   mkdirSync(work);
-
-  const zpool = createStubZpool(ctx.stubs, { create: { startedMarker, release } });
-
-  createStubBin(ctx.stubs, 'id', 'echo 0');
+  createStubZpool(ctx.stubs, { create: { startedMarker, release } });
+  createStubBin(ctx.stubs, 'id', { script: '#!/bin/bash\necho 0' });
   createStubZfs(ctx.stubs);
   createStubBin(ctx.stubs, 'mount');
   createStubBin(ctx.stubs, 'umount');
@@ -489,7 +465,7 @@ test('it destroys the pool and removes its file when SIGTERM comes during the po
     stdout: 'ignore',
     stderr: 'ignore',
     env: {
-      PATH: `${zpool.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.stubs}:${process.env['PATH'] ?? ''}`,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_TEST_GIB: '1',
       IMP_ZFS_MODULE_VERSION_FILE: ctx.moduleVersion,
@@ -509,7 +485,7 @@ test('it destroys the pool and removes its file when SIGTERM comes during the po
 
   const exitCode = await subprocess.exited;
 
-  const calls = readFileSync(zpool.calls, 'utf8').replaceAll(/imptest\d+/gu, 'imptestPID');
+  const calls = formatStubCalls(readStubCalls(ctx.stubs)).replaceAll(/imptest\d+/gu, 'imptestPID');
 
   expect(exitCode).toBe(143);
 
@@ -535,10 +511,8 @@ test('it keeps the pool file and fails while a pool still uses it', () => {
   const work = join(ctx.directoryPath, 'work');
 
   mkdirSync(work);
-
-  const zpool = createStubZpool(ctx.stubs, { destroy: 'ignored' });
-
-  createStubBin(ctx.stubs, 'id', 'echo 0');
+  createStubZpool(ctx.stubs, { destroy: 'ignored' });
+  createStubBin(ctx.stubs, 'id', { script: '#!/bin/bash\necho 0' });
   createStubZfs(ctx.stubs);
   createStubBin(ctx.stubs, 'mount');
   createStubBin(ctx.stubs, 'umount');
@@ -546,7 +520,7 @@ test('it keeps the pool file and fails while a pool still uses it', () => {
 
   const result = Bun.spawnSync(ctx.run, {
     env: {
-      PATH: `${zpool.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.stubs}:${process.env['PATH'] ?? ''}`,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_TEST_GIB: '1',
       IMP_ZFS_MODULE_VERSION_FILE: ctx.moduleVersion,
@@ -566,11 +540,9 @@ test('it removes its pool file while another pool uses a vdev path that only sta
   const work = join(ctx.directoryPath, 'work');
 
   mkdirSync(work);
-
-  const zpool = createStubZpool(ctx.stubs);
-
+  createStubZpool(ctx.stubs);
   writeFileSync(join(ctx.stubs, 'pools'), `tank ${work}/pool.img old\n`);
-  createStubBin(ctx.stubs, 'id', 'echo 0');
+  createStubBin(ctx.stubs, 'id', { script: '#!/bin/bash\necho 0' });
   createStubZfs(ctx.stubs);
   createStubBin(ctx.stubs, 'mount');
   createStubBin(ctx.stubs, 'umount');
@@ -578,7 +550,7 @@ test('it removes its pool file while another pool uses a vdev path that only sta
 
   const result = Bun.spawnSync(ctx.run, {
     env: {
-      PATH: `${zpool.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.stubs}:${process.env['PATH'] ?? ''}`,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_TEST_GIB: '1',
       IMP_ZFS_MODULE_VERSION_FILE: ctx.moduleVersion,
@@ -602,11 +574,9 @@ test('it keeps the pool file and fails while another pool uses a vdev path equal
   const work = join(ctx.directoryPath, 'work');
 
   mkdirSync(work);
-
-  const zpool = createStubZpool(ctx.stubs);
-
+  createStubZpool(ctx.stubs);
   writeFileSync(join(ctx.stubs, 'pools'), `tank ${work}/pool.img\n`);
-  createStubBin(ctx.stubs, 'id', 'echo 0');
+  createStubBin(ctx.stubs, 'id', { script: '#!/bin/bash\necho 0' });
   createStubZfs(ctx.stubs);
   createStubBin(ctx.stubs, 'mount');
   createStubBin(ctx.stubs, 'umount');
@@ -614,7 +584,7 @@ test('it keeps the pool file and fails while another pool uses a vdev path equal
 
   const result = Bun.spawnSync(ctx.run, {
     env: {
-      PATH: `${zpool.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.stubs}:${process.env['PATH'] ?? ''}`,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_TEST_GIB: '1',
       IMP_ZFS_MODULE_VERSION_FILE: ctx.moduleVersion,
@@ -633,9 +603,9 @@ test('it makes a work dir that does not exist yet, parents included', () => {
   writeFileSync(ctx.moduleVersion, '2.3.4-1\n');
 
   const work = join(ctx.directoryPath, 'not', 'yet', 'work');
-  const zpool = createStubZpool(ctx.stubs);
 
-  createStubBin(ctx.stubs, 'id', 'echo 0');
+  createStubZpool(ctx.stubs);
+  createStubBin(ctx.stubs, 'id', { script: '#!/bin/bash\necho 0' });
   createStubZfs(ctx.stubs);
   createStubBin(ctx.stubs, 'mount');
   createStubBin(ctx.stubs, 'umount');
@@ -643,7 +613,7 @@ test('it makes a work dir that does not exist yet, parents included', () => {
 
   const result = Bun.spawnSync(ctx.run, {
     env: {
-      PATH: `${zpool.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.stubs}:${process.env['PATH'] ?? ''}`,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_TEST_GIB: '1',
       IMP_ZFS_MODULE_VERSION_FILE: ctx.moduleVersion,
@@ -663,10 +633,8 @@ test('it destroys its pool and removes the file when the work dir path holds spa
   const work = join(ctx.directoryPath, 'work dir');
 
   mkdirSync(work);
-
-  const zpool = createStubZpool(ctx.stubs);
-
-  createStubBin(ctx.stubs, 'id', 'echo 0');
+  createStubZpool(ctx.stubs);
+  createStubBin(ctx.stubs, 'id', { script: '#!/bin/bash\necho 0' });
   createStubZfs(ctx.stubs);
   createStubBin(ctx.stubs, 'mount');
   createStubBin(ctx.stubs, 'umount');
@@ -674,7 +642,7 @@ test('it destroys its pool and removes the file when the work dir path holds spa
 
   const result = Bun.spawnSync(ctx.run, {
     env: {
-      PATH: `${zpool.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.stubs}:${process.env['PATH'] ?? ''}`,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_TEST_GIB: '1',
       IMP_ZFS_MODULE_VERSION_FILE: ctx.moduleVersion,
@@ -694,10 +662,8 @@ test('it destroys its pool and removes the file when the work dir path holds a s
   const work = join(ctx.directoryPath, 'work  ONLINE dir');
 
   mkdirSync(work);
-
-  const zpool = createStubZpool(ctx.stubs);
-
-  createStubBin(ctx.stubs, 'id', 'echo 0');
+  createStubZpool(ctx.stubs);
+  createStubBin(ctx.stubs, 'id', { script: '#!/bin/bash\necho 0' });
   createStubZfs(ctx.stubs);
   createStubBin(ctx.stubs, 'mount');
   createStubBin(ctx.stubs, 'umount');
@@ -705,7 +671,7 @@ test('it destroys its pool and removes the file when the work dir path holds a s
 
   const result = Bun.spawnSync(ctx.run, {
     env: {
-      PATH: `${zpool.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.stubs}:${process.env['PATH'] ?? ''}`,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_TEST_GIB: '1',
       IMP_ZFS_MODULE_VERSION_FILE: ctx.moduleVersion,
@@ -725,10 +691,8 @@ test('it keeps the pool file and fails when zpool cannot say what uses it', () =
   const work = join(ctx.directoryPath, 'work');
 
   mkdirSync(work);
-
-  const zpool = createStubZpool(ctx.stubs, { queries: 'fail' });
-
-  createStubBin(ctx.stubs, 'id', 'echo 0');
+  createStubZpool(ctx.stubs, { queries: 'fail' });
+  createStubBin(ctx.stubs, 'id', { script: '#!/bin/bash\necho 0' });
   createStubZfs(ctx.stubs);
   createStubBin(ctx.stubs, 'mount');
   createStubBin(ctx.stubs, 'umount');
@@ -736,7 +700,7 @@ test('it keeps the pool file and fails when zpool cannot say what uses it', () =
 
   const result = Bun.spawnSync(ctx.run, {
     env: {
-      PATH: `${zpool.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.stubs}:${process.env['PATH'] ?? ''}`,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_TEST_GIB: '1',
       IMP_ZFS_MODULE_VERSION_FILE: ctx.moduleVersion,
@@ -755,14 +719,14 @@ test('it keeps the pool file and fails when zpool cannot say what uses it', () =
 test('it refuses to run as a user other than root and touches nothing', () => {
   const ctx = setupTest();
   const work = join(ctx.directoryPath, 'work');
-  const zpool = createStubZpool(ctx.stubs);
 
-  createStubBin(ctx.stubs, 'id', 'echo 1000');
+  createStubZpool(ctx.stubs);
+  createStubBin(ctx.stubs, 'id', { script: '#!/bin/bash\necho 1000' });
   createStubZfs(ctx.stubs);
 
   const result = Bun.spawnSync([ctx.script], {
     env: {
-      PATH: `${zpool.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.stubs}:${process.env['PATH'] ?? ''}`,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_TEST_GIB: '1',
       IMP_ZFS_MODULE_VERSION_FILE: ctx.moduleVersion,
@@ -774,21 +738,21 @@ test('it refuses to run as a user other than root and touches nothing', () => {
     stderr: `test-zfs: run as root: sudo env "PATH=$PATH" ${ctx.script}\n`,
   });
 
-  expect(readFileSync(zpool.calls, 'utf8')).toBe('id -u\n');
+  expect(formatStubCalls(readStubCalls(ctx.stubs))).toBe('id -u\n');
   expect(existsSync(work)).toBeFalse();
 });
 
 test('it refuses to run when the zfs module is not loaded and touches nothing', () => {
   const ctx = setupTest();
   const work = join(ctx.directoryPath, 'work');
-  const zpool = createStubZpool(ctx.stubs);
 
-  createStubBin(ctx.stubs, 'id', 'echo 0');
+  createStubZpool(ctx.stubs);
+  createStubBin(ctx.stubs, 'id', { script: '#!/bin/bash\necho 0' });
   createStubZfs(ctx.stubs);
 
   const result = Bun.spawnSync([ctx.script], {
     env: {
-      PATH: `${zpool.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.stubs}:${process.env['PATH'] ?? ''}`,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_TEST_GIB: '1',
       IMP_ZFS_MODULE_VERSION_FILE: join(ctx.directoryPath, 'no-zfs-module', 'version'),
@@ -800,7 +764,7 @@ test('it refuses to run when the zfs module is not loaded and touches nothing', 
     stderr: 'test-zfs: the zfs kernel module is not loaded (modprobe zfs)\n',
   });
 
-  expect(readFileSync(zpool.calls, 'utf8')).toBe('id -u\n');
+  expect(formatStubCalls(readStubCalls(ctx.stubs))).toBe('id -u\n');
   expect(existsSync(work)).toBeFalse();
 });
 
@@ -810,13 +774,13 @@ test('it refuses to run when zpool is missing and touches nothing', () => {
   writeFileSync(ctx.moduleVersion, '2.3.4-1\n');
 
   const work = join(ctx.directoryPath, 'work');
-  const id = createStubBin(ctx.stubs, 'id', 'echo 0');
 
+  createStubBin(ctx.stubs, 'id', { script: '#!/bin/bash\necho 0' });
   createStubZfs(ctx.stubs);
 
   const result = Bun.spawnSync(ctx.run, {
     env: {
-      PATH: id.bin,
+      PATH: ctx.stubs,
       IMP_ZFS_TEST_DIR: work,
       IMP_ZFS_TEST_GIB: '1',
       IMP_ZFS_MODULE_VERSION_FILE: ctx.moduleVersion,
@@ -828,6 +792,6 @@ test('it refuses to run when zpool is missing and touches nothing', () => {
     stderr: 'test-zfs: zpool is missing; install zfsutils-linux\n',
   });
 
-  expect(readFileSync(id.calls, 'utf8')).toBe('id -u\n');
+  expect(formatStubCalls(readStubCalls(ctx.stubs))).toBe('id -u\n');
   expect(existsSync(work)).toBeFalse();
 });

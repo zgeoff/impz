@@ -1,6 +1,8 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { startStubSilentOrigin } from '@impz/daemon/test-utils';
-import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
+import { fireNextTimer } from '@impz/shared/test-utils/fire-next-timer';
+import { readNextDelayMs } from '@impz/shared/test-utils/read-next-delay-ms';
+import { createFakeClock } from '@zgeoff/testing/clock';
 import invariant from 'tiny-invariant';
 import { createImpClient } from '../create-imp-client';
 
@@ -10,12 +12,12 @@ function setupTest() {
   onTestFinished(() => stack.disposeAsync());
 
   const origin = startStubSilentOrigin(stack, { controlPath: '/rpc/imps/list' });
-  const clock = buildStubClock();
+  const clock = createFakeClock();
 
   const client = createImpClient({
     url: origin.origin,
     token: 'root-token',
-    startTimer: clock.startTimer,
+    startTimer: clock.schedule,
   });
 
   return { stack, origin, clock, client };
@@ -27,11 +29,13 @@ test('#backups.run ends at its 24 hour deadline when impd sends no answer', asyn
 
   await ctx.origin.longHeld;
 
-  const pendingMs = ctx.clock.readPendingMs();
+  expect(ctx.clock.countPending()).toBe(1);
 
-  ctx.clock.firePending();
+  const pendingMs = readNextDelayMs(ctx.clock);
 
-  expect(pendingMs).toStrictEqual([86_400_000]);
+  fireNextTimer(ctx.clock);
+
+  expect(pendingMs).toBe(86_400_000);
 
   expect(call).rejects.toMatchObject({
     name: 'TimeoutError',
@@ -47,11 +51,13 @@ test('#backups.restore ends at its 24 hour deadline when impd sends no answer', 
 
   await ctx.origin.longHeld;
 
-  const pendingMs = ctx.clock.readPendingMs();
+  expect(ctx.clock.countPending()).toBe(1);
 
-  ctx.clock.firePending();
+  const pendingMs = readNextDelayMs(ctx.clock);
 
-  expect(pendingMs).toStrictEqual([86_400_000]);
+  fireNextTimer(ctx.clock);
+
+  expect(pendingMs).toBe(86_400_000);
 
   expect(call).rejects.toMatchObject({
     name: 'TimeoutError',
@@ -65,11 +71,13 @@ test('#backups.check ends at its 24 hour deadline when impd sends no answer', as
 
   await ctx.origin.longHeld;
 
-  const pendingMs = ctx.clock.readPendingMs();
+  expect(ctx.clock.countPending()).toBe(1);
 
-  ctx.clock.firePending();
+  const pendingMs = readNextDelayMs(ctx.clock);
 
-  expect(pendingMs).toStrictEqual([86_400_000]);
+  fireNextTimer(ctx.clock);
+
+  expect(pendingMs).toBe(86_400_000);
 
   expect(call).rejects.toMatchObject({
     name: 'TimeoutError',
@@ -83,11 +91,13 @@ test('#images.add ends at its 6 hour deadline when impd sends no answer', async 
 
   await ctx.origin.longHeld;
 
-  const pendingMs = ctx.clock.readPendingMs();
+  expect(ctx.clock.countPending()).toBe(1);
 
-  ctx.clock.firePending();
+  const pendingMs = readNextDelayMs(ctx.clock);
 
-  expect(pendingMs).toStrictEqual([21_600_000]);
+  fireNextTimer(ctx.clock);
+
+  expect(pendingMs).toBe(21_600_000);
 
   expect(call).rejects.toMatchObject({
     name: 'TimeoutError',
@@ -101,11 +111,13 @@ test('#images.build ends at its 6 hour deadline when impd sends no answer', asyn
 
   await ctx.origin.longHeld;
 
-  const pendingMs = ctx.clock.readPendingMs();
+  expect(ctx.clock.countPending()).toBe(1);
 
-  ctx.clock.firePending();
+  const pendingMs = readNextDelayMs(ctx.clock);
 
-  expect(pendingMs).toStrictEqual([21_600_000]);
+  fireNextTimer(ctx.clock);
+
+  expect(pendingMs).toBe(21_600_000);
 
   expect(call).rejects.toMatchObject({
     name: 'TimeoutError',
@@ -119,11 +131,13 @@ test('#system.gc ends at its one hour deadline when impd sends no answer', async
 
   await ctx.origin.longHeld;
 
-  const pendingMs = ctx.clock.readPendingMs();
+  expect(ctx.clock.countPending()).toBe(1);
 
-  ctx.clock.firePending();
+  const pendingMs = readNextDelayMs(ctx.clock);
 
-  expect(pendingMs).toStrictEqual([3_600_000]);
+  fireNextTimer(ctx.clock);
+
+  expect(pendingMs).toBe(3_600_000);
 
   expect(call).rejects.toMatchObject({
     name: 'TimeoutError',
@@ -137,11 +151,13 @@ test('#moves.abort ends at its one hour deadline when impd sends no answer', asy
 
   await ctx.origin.longHeld;
 
-  const pendingMs = ctx.clock.readPendingMs();
+  expect(ctx.clock.countPending()).toBe(1);
 
-  ctx.clock.firePending();
+  const pendingMs = readNextDelayMs(ctx.clock);
 
-  expect(pendingMs).toStrictEqual([3_600_000]);
+  fireNextTimer(ctx.clock);
+
+  expect(pendingMs).toBe(3_600_000);
 
   expect(call).rejects.toMatchObject({
     name: 'TimeoutError',
@@ -155,11 +171,13 @@ test('#moves.resume ends at its one hour deadline when impd sends no answer', as
 
   await ctx.origin.longHeld;
 
-  const pendingMs = ctx.clock.readPendingMs();
+  expect(ctx.clock.countPending()).toBe(1);
 
-  ctx.clock.firePending();
+  const pendingMs = readNextDelayMs(ctx.clock);
 
-  expect(pendingMs).toStrictEqual([3_600_000]);
+  fireNextTimer(ctx.clock);
+
+  expect(pendingMs).toBe(3_600_000);
 
   expect(call).rejects.toMatchObject({
     name: 'TimeoutError',
@@ -178,7 +196,7 @@ test('#backups.run hands on the answer that comes before its deadline, and stops
   const client = createImpClient({
     url: origin.origin,
     token: 'root-token',
-    startTimer: ctx.clock.startTimer,
+    startTimer: ctx.clock.schedule,
   });
 
   const control = new AbortController();
@@ -220,7 +238,7 @@ test('#backups.run ends at its deadline in a runtime without AbortSignal.any', a
 
   await ctx.origin.longHeld;
 
-  ctx.clock.firePending();
+  fireNextTimer(ctx.clock);
 
   expect('any' in AbortSignal).toBe(false);
 
@@ -258,7 +276,7 @@ test('#backups.run ends when its caller aborts in a runtime without AbortSignal.
 });
 
 test('#backups.run throws the error of a transport that throws at once, and stops its deadline', async () => {
-  const clock = buildStubClock();
+  const clock = createFakeClock();
 
   const transportError = new Error('no transport');
 
@@ -269,7 +287,7 @@ test('#backups.run throws the error of a transport that throws at once, and stop
   const client = createImpClient({
     url: 'http://impd.test',
     token: 'root-token',
-    startTimer: clock.startTimer,
+    startTimer: clock.schedule,
     fetch: sendClientRequest,
   });
 

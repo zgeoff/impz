@@ -1,8 +1,8 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { faker } from '@faker-js/faker';
 import { seedUncleanOAuthClient } from '@impz/daemon/test-utils';
-import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
+import { claimFreePorts } from '@zgeoff/testing/process';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 
 async function setupTest() {
@@ -13,9 +13,7 @@ async function setupTest() {
   const rootToken = faker.string.alphanumeric(32);
 
   // impd's own public listener takes a port below the imps' ports
-  const publicPort = claimFreePorts(1, {
-    pick: () => 10_000 + Math.floor(Math.random() * 10_000),
-  }).take();
+  const publicPort = claimFreePorts(1).take();
 
   const harness = await startTestImpd(stack, {
     rootToken,

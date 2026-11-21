@@ -1,8 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
+import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
+import { createStubBin, readStubCalls } from '@zgeoff/testing/bin';
 import { createStubProcessTable } from '../../scripts/test-utils/create-stub-process-table';
 
 function setupTest() {
@@ -14,8 +15,6 @@ function setupTest() {
 
   return {
     directoryPath: directory,
-    bin: join(directory, 'bin'),
-    calls: join(directory, 'calls'),
     script: new URL('tailscale-down.sh', import.meta.url).pathname,
   };
 }
@@ -28,7 +27,7 @@ test('it logs out, then stops tailscaled and waits until it is gone', () => {
   createStubBin(ctx.directoryPath, 'sleep');
 
   const result = Bun.spawnSync(['bash', ctx.script], {
-    env: { PATH: `${ctx.bin}:${process.env['PATH'] ?? ''}` },
+    env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
   });
 
   expect({
@@ -41,7 +40,7 @@ test('it logs out, then stops tailscaled and waits until it is gone', () => {
     stderr: '',
   });
 
-  expect(readFileSync(ctx.calls, 'utf8').split('\n')).toStrictEqual([
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath)).split('\n')).toStrictEqual([
     'ps -C tailscaled -o stat=',
     'tailscale --socket=/var/run/tailscale/tailscaled.sock logout',
     'pkill -x tailscaled',
@@ -58,7 +57,7 @@ test('it does nothing but report when tailscaled does not run', () => {
   createStubBin(ctx.directoryPath, 'tailscale');
 
   const result = Bun.spawnSync(['bash', ctx.script], {
-    env: { PATH: `${ctx.bin}:${process.env['PATH'] ?? ''}` },
+    env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
   });
 
   expect({
@@ -71,33 +70,37 @@ test('it does nothing but report when tailscaled does not run', () => {
     stderr: '',
   });
 
-  expect(readFileSync(ctx.calls, 'utf8')).toBe('ps -C tailscaled -o stat=\n');
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe('ps -C tailscaled -o stat=\n');
 });
 
 test('it counts a zombie tailscaled as stopped', () => {
   const ctx = setupTest();
 
-  createStubBin(ctx.directoryPath, 'ps', 'echo Z');
+  createStubBin(ctx.directoryPath, 'ps', { script: '#!/bin/bash\necho Z' });
   createStubBin(ctx.directoryPath, 'pkill');
   createStubBin(ctx.directoryPath, 'tailscale');
 
   const result = Bun.spawnSync(['bash', ctx.script], {
-    env: { PATH: `${ctx.bin}:${process.env['PATH'] ?? ''}` },
+    env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
   });
 
   expect(result.exitCode).toBe(0);
-  expect(readFileSync(ctx.calls, 'utf8')).toBe('ps -C tailscaled -o stat=\n');
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe('ps -C tailscaled -o stat=\n');
 });
 
 test('it still stops tailscaled and exits 0 when the logout and the kill fail', () => {
   const ctx = setupTest();
 
   createStubProcessTable(ctx.directoryPath, { processes: { tailscaled: 'S' }, pkillFails: true });
-  createStubBin(ctx.directoryPath, 'tailscale', 'echo "logout failed" >&2; exit 1');
+
+  createStubBin(ctx.directoryPath, 'tailscale', {
+    script: '#!/bin/bash\necho "logout failed" >&2; exit 1',
+  });
+
   createStubBin(ctx.directoryPath, 'sleep');
 
   const result = Bun.spawnSync(['bash', ctx.script], {
-    env: { PATH: `${ctx.bin}:${process.env['PATH'] ?? ''}` },
+    env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
   });
 
   expect({
@@ -110,7 +113,7 @@ test('it still stops tailscaled and exits 0 when the logout and the kill fail', 
     stderr: '',
   });
 
-  expect(readFileSync(ctx.calls, 'utf8').split('\n')).toStrictEqual([
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath)).split('\n')).toStrictEqual([
     'ps -C tailscaled -o stat=',
     'tailscale --socket=/var/run/tailscale/tailscaled.sock logout',
     'pkill -x tailscaled',
@@ -122,18 +125,18 @@ test('it still stops tailscaled and exits 0 when the logout and the kill fail', 
 test('it gives up waiting after 50 checks 0.1 s apart and still exits 0', () => {
   const ctx = setupTest();
 
-  createStubBin(ctx.directoryPath, 'ps', 'echo S');
+  createStubBin(ctx.directoryPath, 'ps', { script: '#!/bin/bash\necho S' });
   createStubBin(ctx.directoryPath, 'pkill');
   createStubBin(ctx.directoryPath, 'tailscale');
   createStubBin(ctx.directoryPath, 'sleep');
 
   const result = Bun.spawnSync(['bash', ctx.script], {
-    env: { PATH: `${ctx.bin}:${process.env['PATH'] ?? ''}` },
+    env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
   });
 
   expect(result.exitCode).toBe(0);
 
-  expect(readFileSync(ctx.calls, 'utf8').split('\n')).toStrictEqual([
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath)).split('\n')).toStrictEqual([
     'ps -C tailscaled -o stat=',
     'tailscale --socket=/var/run/tailscale/tailscaled.sock logout',
     'pkill -x tailscaled',

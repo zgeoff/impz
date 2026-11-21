@@ -2,11 +2,11 @@
 import { expect, jest, onTestFinished, test } from 'bun:test';
 import type { ImpContract, ImpEvent } from '@impz/api';
 import { pruneEvents } from '@impz/durable';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
+import { waitFor } from '@zgeoff/testing';
 import invariant from 'tiny-invariant';
 import { P, match } from 'ts-pattern';
 import { ROOT_TOKEN_ID } from '../identity/auth/token-store';

@@ -2,11 +2,12 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { buildAdvancingClock } from '@impz/shared/test-utils/build-advancing-clock';
 import { readImpEnv } from '@impz/shared/test-utils/read-imp-env';
-import { updateEnv } from '@impz/shared/test-utils/update-env';
-import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import type { TestImpdOptions } from '@impz/testing/stand-in/start-test-impd';
+import { updateEnv } from '@zgeoff/testing';
+import { createFakeClock } from '@zgeoff/testing/clock';
 import invariant from 'tiny-invariant';
 import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
 import { buildStubCpuCgroups } from '../../test-utils/vm/build-stub-cpu-cgroups';
@@ -28,12 +29,12 @@ async function setupTest(options: Pick<TestImpdOptions, 'cgroups'> = {}) {
   onTestFinished(() => stack.disposeAsync());
 
   const cgroups = buildStubCpuCgroups();
-  const clock = buildStubClock({ startMs: Date.UTC(2026, 0, 1) });
+  const clock = createFakeClock({ startMs: Date.UTC(2026, 0, 1) });
 
   const harness = await startTestImpd(stack, {
     env: readImpEnv(),
     cgroups: options.cgroups ?? cgroups.cgroups,
-    boundaries: { imps: { now: clock.now, sleep: clock.sleep } },
+    boundaries: { imps: buildAdvancingClock(clock) },
   });
 
   // Object.assign keeps the harness's getters live, where a spread reads each of them once.

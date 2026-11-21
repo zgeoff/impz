@@ -14,10 +14,11 @@ import {
   startStubInnerAgent,
   updateImpMove,
 } from '@impz/daemon/test-utils';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { fireNextTimer } from '@impz/shared/test-utils/fire-next-timer';
+import { waitFor } from '@zgeoff/testing';
+import { createFakeClock } from '@zgeoff/testing/clock';
 import invariant from 'tiny-invariant';
 import { writeHostConfig } from '../config/read-host-config';
-import { buildStubTimeouts } from '../test-utils/build-stub-timeouts';
 import { readJsonOutput } from '../test-utils/read-json-output';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 import { startImpdHost } from '../test-utils/start-impd-host';
@@ -228,7 +229,7 @@ test('#listAllImps gives up on a host that never answers once its timer runs out
     },
   });
 
-  const timeouts = buildStubTimeouts();
+  const timeouts = createFakeClock();
   const print = mock<(line: string) => void>();
   const printError = mock<(line: string) => void>();
 
@@ -238,14 +239,17 @@ test('#listAllImps gives up on a host that never answers once its timer runs out
     hasBuilders: false,
     print,
     printError,
-    startTimer: timeouts.startTimer,
+    startTimer: timeouts.schedule,
   });
 
   await waitFor(() => {
-    expect(timeouts.timers.map((timer) => timer.state)).toStrictEqual(['cancelled', 'pending']);
+    expect({ delays: timeouts.delays, pending: timeouts.countPending() }).toStrictEqual({
+      delays: [5000, 5000],
+      pending: 1,
+    });
   });
 
-  timeouts.firePending();
+  fireNextTimer(timeouts);
 
   const code = await listing;
 
@@ -263,7 +267,6 @@ test('#listAllImps gives up on a host that never answers once its timer runs out
     ['box', 'web', 'running'],
   ]);
 
-  expect(timeouts.timers.map((timer) => timer.durationMs)).toStrictEqual([5000, 5000]);
   expect(silent.requests).toStrictEqual(['/rpc/imps/list']);
   expect(printError).toHaveBeenCalledExactlyOnceWith('impz: silent: no answer in 5 s');
   expect(code).toBe(3);

@@ -2,7 +2,8 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
+import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
+import { createStubBin, readStubCalls } from '@zgeoff/testing/bin';
 import { readEnvValues } from '../../scripts/test-utils/read-env-values';
 
 // The NixOS module's env writer, run with bash as the module runs it, with a stub ip for the
@@ -21,7 +22,8 @@ function setupTest() {
 
 test('it sizes a zfs host as bootstrap.sh does, and sets the ARC cap it leaves out', () => {
   const ctx = setupTest();
-  const ip = createStubBin(ctx.directoryPath, 'ip');
+
+  createStubBin(ctx.directoryPath, 'ip');
 
   writeFileSync(
     join(ctx.directoryPath, 'settings'),
@@ -39,7 +41,7 @@ test('it sizes a zfs host as bootstrap.sh does, and sets the ARC cap it leaves o
     ],
     {
       env: {
-        PATH: `${ip.bin}:${process.env['PATH'] ?? ''}`,
+        PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
         IMP_SETTINGS: join(ctx.directoryPath, 'settings'),
         IMP_STORAGE: 'zfs',
         IMP_RAM_BUDGET: '',
@@ -63,7 +65,8 @@ test('it sizes a zfs host as bootstrap.sh does, and sets the ARC cap it leaves o
 
 test('it writes the module settings into an env file only its owner reads', () => {
   const ctx = setupTest();
-  const ip = createStubBin(ctx.directoryPath, 'ip');
+
+  createStubBin(ctx.directoryPath, 'ip');
 
   writeFileSync(
     join(ctx.directoryPath, 'settings'),
@@ -81,7 +84,7 @@ test('it writes the module settings into an env file only its owner reads', () =
     ],
     {
       env: {
-        PATH: `${ip.bin}:${process.env['PATH'] ?? ''}`,
+        PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
         IMP_SETTINGS: join(ctx.directoryPath, 'settings'),
         IMP_STORAGE: 'zfs',
         IMP_RAM_BUDGET: '',
@@ -105,7 +108,8 @@ test('it writes the module settings into an env file only its owner reads', () =
 
 test('it keeps an ARC cap already set, and leaves it out of the budget', () => {
   const ctx = setupTest();
-  const ip = createStubBin(ctx.directoryPath, 'ip');
+
+  createStubBin(ctx.directoryPath, 'ip');
 
   writeFileSync(
     join(ctx.directoryPath, 'settings'),
@@ -123,7 +127,7 @@ test('it keeps an ARC cap already set, and leaves it out of the budget', () => {
     ],
     {
       env: {
-        PATH: `${ip.bin}:${process.env['PATH'] ?? ''}`,
+        PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
         IMP_SETTINGS: join(ctx.directoryPath, 'settings'),
         IMP_STORAGE: 'zfs',
         IMP_RAM_BUDGET: '',
@@ -148,7 +152,8 @@ test('it keeps an ARC cap already set, and leaves it out of the budget', () => {
 
 test('it sets arcMaxMiB over an ARC cap already set', () => {
   const ctx = setupTest();
-  const ip = createStubBin(ctx.directoryPath, 'ip');
+
+  createStubBin(ctx.directoryPath, 'ip');
 
   writeFileSync(
     join(ctx.directoryPath, 'settings'),
@@ -166,7 +171,7 @@ test('it sets arcMaxMiB over an ARC cap already set', () => {
     ],
     {
       env: {
-        PATH: `${ip.bin}:${process.env['PATH'] ?? ''}`,
+        PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
         IMP_SETTINGS: join(ctx.directoryPath, 'settings'),
         IMP_STORAGE: 'zfs',
         IMP_RAM_BUDGET: '',
@@ -190,7 +195,8 @@ test('it sets arcMaxMiB over an ARC cap already set', () => {
 
 test('it sets no ARC cap on an xfs host, and leaves none out of the budget', () => {
   const ctx = setupTest();
-  const ip = createStubBin(ctx.directoryPath, 'ip');
+
+  createStubBin(ctx.directoryPath, 'ip');
 
   writeFileSync(
     join(ctx.directoryPath, 'settings'),
@@ -208,7 +214,7 @@ test('it sets no ARC cap on an xfs host, and leaves none out of the budget', () 
     ],
     {
       env: {
-        PATH: `${ip.bin}:${process.env['PATH'] ?? ''}`,
+        PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
         IMP_SETTINGS: join(ctx.directoryPath, 'settings'),
         IMP_STORAGE: 'xfs',
         IMP_RAM_BUDGET: '',
@@ -232,7 +238,8 @@ test('it sets no ARC cap on an xfs host, and leaves none out of the budget', () 
 
 test('it writes a set ramBudgetMiB over the formula', () => {
   const ctx = setupTest();
-  const ip = createStubBin(ctx.directoryPath, 'ip');
+
+  createStubBin(ctx.directoryPath, 'ip');
 
   writeFileSync(
     join(ctx.directoryPath, 'settings'),
@@ -250,7 +257,7 @@ test('it writes a set ramBudgetMiB over the formula', () => {
     ],
     {
       env: {
-        PATH: `${ip.bin}:${process.env['PATH'] ?? ''}`,
+        PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
         IMP_SETTINGS: join(ctx.directoryPath, 'settings'),
         IMP_STORAGE: 'zfs',
         IMP_RAM_BUDGET: '20000',
@@ -273,7 +280,8 @@ test('it writes a set ramBudgetMiB over the formula', () => {
 
 test('it refuses a small host whose budget comes out below the floor, writing nothing', () => {
   const ctx = setupTest();
-  const ip = createStubBin(ctx.directoryPath, 'ip');
+
+  createStubBin(ctx.directoryPath, 'ip');
 
   writeFileSync(
     join(ctx.directoryPath, 'settings'),
@@ -291,7 +299,7 @@ test('it refuses a small host whose budget comes out below the floor, writing no
     ],
     {
       env: {
-        PATH: `${ip.bin}:${process.env['PATH'] ?? ''}`,
+        PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
         IMP_SETTINGS: join(ctx.directoryPath, 'settings'),
         IMP_STORAGE: 'zfs',
         IMP_RAM_BUDGET: '',
@@ -318,7 +326,8 @@ test('it refuses a small host whose budget comes out below the floor, writing no
 
 test('it starts a small host whose ramBudgetMiB is set', () => {
   const ctx = setupTest();
-  const ip = createStubBin(ctx.directoryPath, 'ip');
+
+  createStubBin(ctx.directoryPath, 'ip');
 
   writeFileSync(
     join(ctx.directoryPath, 'settings'),
@@ -336,7 +345,7 @@ test('it starts a small host whose ramBudgetMiB is set', () => {
     ],
     {
       env: {
-        PATH: `${ip.bin}:${process.env['PATH'] ?? ''}`,
+        PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
         IMP_SETTINGS: join(ctx.directoryPath, 'settings'),
         IMP_STORAGE: 'zfs',
         IMP_RAM_BUDGET: '1024',
@@ -359,7 +368,8 @@ test('it starts a small host whose ramBudgetMiB is set', () => {
 
 test('it copies the secrets file in, where a later line replaces an earlier one', () => {
   const ctx = setupTest();
-  const ip = createStubBin(ctx.directoryPath, 'ip');
+
+  createStubBin(ctx.directoryPath, 'ip');
 
   writeFileSync(
     join(ctx.directoryPath, 'settings'),
@@ -382,7 +392,7 @@ test('it copies the secrets file in, where a later line replaces an earlier one'
     ],
     {
       env: {
-        PATH: `${ip.bin}:${process.env['PATH'] ?? ''}`,
+        PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
         IMP_SETTINGS: join(ctx.directoryPath, 'settings'),
         IMP_STORAGE: 'zfs',
         IMP_RAM_BUDGET: '',
@@ -409,7 +419,8 @@ test('it copies the secrets file in, where a later line replaces an earlier one'
 
 test('it leaves out the keys podman run sets with -e, indented or not, whichever file sets them', () => {
   const ctx = setupTest();
-  const ip = createStubBin(ctx.directoryPath, 'ip');
+
+  createStubBin(ctx.directoryPath, 'ip');
 
   writeFileSync(
     join(ctx.directoryPath, 'settings'),
@@ -431,7 +442,7 @@ test('it leaves out the keys podman run sets with -e, indented or not, whichever
     ],
     {
       env: {
-        PATH: `${ip.bin}:${process.env['PATH'] ?? ''}`,
+        PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
         IMP_SETTINGS: join(ctx.directoryPath, 'settings'),
         IMP_STORAGE: 'xfs',
         IMP_RAM_BUDGET: '',
@@ -457,7 +468,8 @@ test('it leaves out the keys podman run sets with -e, indented or not, whichever
 
 test('it refuses a secrets file it cannot read, writing nothing', () => {
   const ctx = setupTest();
-  const ip = createStubBin(ctx.directoryPath, 'ip');
+
+  createStubBin(ctx.directoryPath, 'ip');
 
   writeFileSync(
     join(ctx.directoryPath, 'settings'),
@@ -475,7 +487,7 @@ test('it refuses a secrets file it cannot read, writing nothing', () => {
     ],
     {
       env: {
-        PATH: `${ip.bin}:${process.env['PATH'] ?? ''}`,
+        PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
         IMP_SETTINGS: join(ctx.directoryPath, 'settings'),
         IMP_STORAGE: 'zfs',
         IMP_RAM_BUDGET: '',
@@ -500,7 +512,8 @@ test('it refuses a secrets file it cannot read, writing nothing', () => {
 
 test('it names the backup password file, never the password, when one is staged', () => {
   const ctx = setupTest();
-  const ip = createStubBin(ctx.directoryPath, 'ip');
+
+  createStubBin(ctx.directoryPath, 'ip');
 
   writeFileSync(
     join(ctx.directoryPath, 'settings'),
@@ -525,7 +538,7 @@ test('it names the backup password file, never the password, when one is staged'
     ],
     {
       env: {
-        PATH: `${ip.bin}:${process.env['PATH'] ?? ''}`,
+        PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
         IMP_SETTINGS: join(ctx.directoryPath, 'settings'),
         IMP_STORAGE: 'zfs',
         IMP_RAM_BUDGET: '',
@@ -557,7 +570,8 @@ test('it names the backup password file, never the password, when one is staged'
 
 test('it keeps backups off when the staged backup password is empty', () => {
   const ctx = setupTest();
-  const ip = createStubBin(ctx.directoryPath, 'ip');
+
+  createStubBin(ctx.directoryPath, 'ip');
 
   writeFileSync(
     join(ctx.directoryPath, 'settings'),
@@ -582,7 +596,7 @@ test('it keeps backups off when the staged backup password is empty', () => {
     ],
     {
       env: {
-        PATH: `${ip.bin}:${process.env['PATH'] ?? ''}`,
+        PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
         IMP_SETTINGS: join(ctx.directoryPath, 'settings'),
         IMP_STORAGE: 'zfs',
         IMP_RAM_BUDGET: '',
@@ -608,14 +622,12 @@ test('it keeps backups off when the staged backup password is empty', () => {
 test("it writes the host's own global addresses last, over the secrets file's", () => {
   const ctx = setupTest();
 
-  const ip = createStubBin(
-    ctx.directoryPath,
-    'ip',
-    `cat <<'EOF'
+  createStubBin(ctx.directoryPath, 'ip', {
+    script: `#!/bin/bash\ncat <<'EOF'
 2: eth0    inet 203.0.113.7/24 brd 203.0.113.255 scope global eth0\\       valid_lft forever
 2: eth0    inet6 2001:db8::7/64 scope global \\       valid_lft forever
 EOF`,
-  );
+  });
 
   writeFileSync(
     join(ctx.directoryPath, 'settings'),
@@ -634,7 +646,7 @@ EOF`,
     ],
     {
       env: {
-        PATH: `${ip.bin}:${process.env['PATH'] ?? ''}`,
+        PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
         IMP_SETTINGS: join(ctx.directoryPath, 'settings'),
         IMP_STORAGE: 'zfs',
         IMP_RAM_BUDGET: '',
@@ -653,12 +665,13 @@ EOF`,
 
   expect(result.exitCode).toBe(0);
   expect(readEnvValues(env, 'IMP_HOST_ADDRESSES')).toStrictEqual(['203.0.113.7/24,2001:db8::7/64']);
-  expect(readFileSync(ip.calls, 'utf8')).toBe('ip -o addr show scope global\n');
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe('ip -o addr show scope global\n');
 });
 
 test('it leaves the host addresses empty, with a warning, when ip fails', () => {
   const ctx = setupTest();
-  const ip = createStubBin(ctx.directoryPath, 'ip', 'exit 1');
+
+  createStubBin(ctx.directoryPath, 'ip', { script: '#!/bin/bash\nexit 1' });
 
   writeFileSync(
     join(ctx.directoryPath, 'settings'),
@@ -676,7 +689,7 @@ test('it leaves the host addresses empty, with a warning, when ip fails', () => 
     ],
     {
       env: {
-        PATH: `${ip.bin}:${process.env['PATH'] ?? ''}`,
+        PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
         IMP_SETTINGS: join(ctx.directoryPath, 'settings'),
         IMP_STORAGE: 'zfs',
         IMP_RAM_BUDGET: '',

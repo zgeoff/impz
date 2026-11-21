@@ -1,11 +1,10 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
+import { network } from '@impz/shared/test-utils/network';
 import { readImpEnv } from '@impz/shared/test-utils/read-imp-env';
-import { server } from '@impz/shared/test-utils/server';
-import { updateEnv } from '@impz/shared/test-utils/update-env';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
+import { updateEnv, waitFor } from '@zgeoff/testing';
 import { HttpResponse, http } from 'msw';
 import invariant from 'tiny-invariant';
 import { deriveSlotAddress } from '../../host-net/net/derive-slot-address';
@@ -41,7 +40,7 @@ async function setupTest() {
     client: { clientId: 'kExample', clientSecret: 'secret' },
   });
 
-  server.use(...tailscaleApi.handlers);
+  network.use(...tailscaleApi.handlers);
 
   const namesDeps: Omit<TailnetNamesDeps, 'hostId'> = {
     config: { prefix: '', oauthFile: join(harness.dataDir, 'unused-oauth.json') },
@@ -138,7 +137,7 @@ test('it writes the service before it serves it', async () => {
 
   const servedAtWrite = mock<(calls: readonly (readonly string[])[]) => void>();
 
-  server.use(
+  network.use(
     http.put('https://api.tailscale.com/api/v2/tailnet/-/services/:name', () => {
       servedAtWrite([...ctx.tailscale.calls]);
     }),
@@ -297,7 +296,7 @@ test('it fails a name whose service appears after the list, and never writes it'
   await ctx.tailscaleApi.services.create({ name: 'svc:box', comment: 'someone else', tags: [] });
   await ctx.client.imps.create({ name: 'box' });
 
-  server.use(
+  network.use(
     http.get(
       'https://api.tailscale.com/api/v2/tailnet/-/services',
       () => HttpResponse.json({ vipServices: [] }),
@@ -329,7 +328,7 @@ test('it clears a destroyed imp’s serve config, then deletes its service', asy
 
   const lastServeAtDelete = mock<(argv: readonly string[] | undefined) => void>();
 
-  server.use(
+  network.use(
     http.delete('https://api.tailscale.com/api/v2/tailnet/-/services/:name', () => {
       lastServeAtDelete(ctx.tailscale.calls.at(-1));
     }),
@@ -506,7 +505,7 @@ test('it fails every name with the error while the API is down', async () => {
   await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'box' });
 
-  server.use(
+  network.use(
     http.get('https://api.tailscale.com/api/v2/tailnet/-/services', () =>
       HttpResponse.json({ message: 'unavailable' }, { status: 503 }),
     ),
@@ -550,7 +549,7 @@ test('it logs a failure once while it stays the same', async () => {
   await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'box' });
 
-  server.use(
+  network.use(
     http.get('https://api.tailscale.com/api/v2/tailnet/-/services', () =>
       HttpResponse.json({ message: 'unavailable' }, { status: 503 }),
     ),
@@ -572,7 +571,7 @@ test('it brings a name back on the pass after an outage ends', async () => {
   await ctx.createTestImage('base');
   await ctx.client.imps.create({ name: 'box' });
 
-  server.use(
+  network.use(
     http.get(
       'https://api.tailscale.com/api/v2/tailnet/-/services',
       () => HttpResponse.json({ message: 'unavailable' }, { status: 503 }),
@@ -597,7 +596,7 @@ test('it fails only the imp whose name a device holds, and keeps that imp runnin
 
   await ctx.createTestImage('base');
 
-  server.use(
+  network.use(
     http.put('https://api.tailscale.com/api/v2/tailnet/-/services/svc%3Alaptop', () =>
       HttpResponse.json({ message: 'name in use by a machine' }, { status: 400 }),
     ),
@@ -654,7 +653,7 @@ test('it logs a removal that fails, and goes on with the pass', async () => {
   await names.runSync();
   await ctx.client.imps.destroy({ name: 'box' });
 
-  server.use(
+  network.use(
     http.delete('https://api.tailscale.com/api/v2/tailnet/-/services/:name', () =>
       HttpResponse.json({ message: 'forbidden' }, { status: 403 }),
     ),

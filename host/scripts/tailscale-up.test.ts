@@ -1,9 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { waitFor } from '@zgeoff/testing';
+import { createStubBin } from '@zgeoff/testing/bin';
 import { createStubTailscale } from '../../scripts/test-utils/create-stub-tailscale';
 
 // The output goes to files, so a wait the script leaves in the background
@@ -19,6 +19,10 @@ function setupTest() {
 
   // the script reads it at every start; Docker's embedded DNS needs no change
   writeFileSync(resolvConf, 'nameserver 127.0.0.11\n');
+
+  // The script polls in loops of up to 150 calls with a sleep between them, and a kit stand-in
+  // costs a process of its own on each, so the sleep is the real `true`, which waits for nothing.
+  symlinkSync(Bun.which('true') ?? 'true', join(directory, 'sleep'));
 
   return {
     directoryPath: directory,
@@ -36,8 +40,7 @@ test('it joins again with the key when the saved node holds other tags than it a
   writeFileSync(join(ctx.directoryPath, 'state', 'tailscaled.state'), 'saved');
 
   // tailscaled runs already, and the script's waits pass at once
-  createStubBin(ctx.directoryPath, 'ps', 'echo S');
-  createStubBin(ctx.directoryPath, 'sleep');
+  createStubBin(ctx.directoryPath, 'ps', { script: '#!/bin/bash\necho S' });
 
   ctx.tailscale.writeNode({
     BackendState: 'Running',
@@ -81,8 +84,7 @@ test('it keeps the saved node when it holds the tags it asks for, in any order',
 
   mkdirSync(join(ctx.directoryPath, 'state'));
   writeFileSync(join(ctx.directoryPath, 'state', 'tailscaled.state'), 'saved');
-  createStubBin(ctx.directoryPath, 'ps', 'echo S');
-  createStubBin(ctx.directoryPath, 'sleep');
+  createStubBin(ctx.directoryPath, 'ps', { script: '#!/bin/bash\necho S' });
 
   ctx.tailscale.writeNode({
     BackendState: 'Running',
@@ -124,8 +126,7 @@ test('it keeps a saved tag:imp node with the key when no tags are asked for', ()
 
   mkdirSync(join(ctx.directoryPath, 'state'));
   writeFileSync(join(ctx.directoryPath, 'state', 'tailscaled.state'), 'saved');
-  createStubBin(ctx.directoryPath, 'ps', 'echo S');
-  createStubBin(ctx.directoryPath, 'sleep');
+  createStubBin(ctx.directoryPath, 'ps', { script: '#!/bin/bash\necho S' });
 
   ctx.tailscale.writeNode({
     BackendState: 'Running',
@@ -166,8 +167,7 @@ test('it takes the saved node down and fails without a key when it holds other t
 
   mkdirSync(join(ctx.directoryPath, 'state'));
   writeFileSync(join(ctx.directoryPath, 'state', 'tailscaled.state'), 'saved');
-  createStubBin(ctx.directoryPath, 'ps', 'echo S');
-  createStubBin(ctx.directoryPath, 'sleep');
+  createStubBin(ctx.directoryPath, 'ps', { script: '#!/bin/bash\necho S' });
 
   ctx.tailscale.writeNode({
     BackendState: 'Running',
@@ -214,8 +214,7 @@ test('it fails without a key when the saved node needs a login', () => {
 
   mkdirSync(join(ctx.directoryPath, 'state'));
   writeFileSync(join(ctx.directoryPath, 'state', 'tailscaled.state'), 'saved');
-  createStubBin(ctx.directoryPath, 'ps', 'echo S');
-  createStubBin(ctx.directoryPath, 'sleep');
+  createStubBin(ctx.directoryPath, 'ps', { script: '#!/bin/bash\necho S' });
 
   ctx.tailscale.writeNode({
     BackendState: 'NeedsLogin',
@@ -264,13 +263,14 @@ test('it fails with the log tail when tailscaled does not open its socket', () =
   // no tailscaled runs yet; the one the script starts logs and exits without
   // a socket, and the script's waits for the socket last until it has logged
   createStubBin(ctx.directoryPath, 'ps');
-  createStubBin(ctx.directoryPath, 'tailscaled', "echo 'tailscaled: no tun device'");
 
-  createStubBin(
-    ctx.directoryPath,
-    'sleep',
-    `[ -s '${join(ctx.directoryPath, 'state', 'tailscaled.log')}' ] || /bin/sleep "$@"`,
-  );
+  createStubBin(ctx.directoryPath, 'tailscaled', {
+    script: "#!/bin/bash\necho 'tailscaled: no tun device'",
+  });
+
+  createStubBin(ctx.directoryPath, 'sleep', {
+    script: `#!/bin/bash\n[ -s '${join(ctx.directoryPath, 'state', 'tailscaled.log')}' ] || /bin/sleep "$@"`,
+  });
 
   const result = Bun.spawnSync(
     [
@@ -302,8 +302,7 @@ test('it fails with the log tail when tailscaled does not open its socket', () =
 test('it takes a node in memory down without a key or state when it holds other tags', () => {
   const ctx = setupTest();
 
-  createStubBin(ctx.directoryPath, 'ps', 'echo S');
-  createStubBin(ctx.directoryPath, 'sleep');
+  createStubBin(ctx.directoryPath, 'ps', { script: '#!/bin/bash\necho S' });
 
   ctx.tailscale.writeNode({
     BackendState: 'Running',
@@ -347,8 +346,7 @@ test('it takes a node in memory down without a key or state when it holds other 
 test('it takes a node in memory down without a key or state while it is not Running yet', () => {
   const ctx = setupTest();
 
-  createStubBin(ctx.directoryPath, 'ps', 'echo S');
-  createStubBin(ctx.directoryPath, 'sleep');
+  createStubBin(ctx.directoryPath, 'ps', { script: '#!/bin/bash\necho S' });
 
   ctx.tailscale.writeNode({
     BackendState: 'Running',
@@ -394,8 +392,7 @@ test('it takes a node in memory down without a key or state while it is not Runn
 test('it takes the node down when it is not Running after it joins, when it asks for tags', () => {
   const ctx = setupTest();
 
-  createStubBin(ctx.directoryPath, 'ps', 'echo S');
-  createStubBin(ctx.directoryPath, 'sleep');
+  createStubBin(ctx.directoryPath, 'ps', { script: '#!/bin/bash\necho S' });
 
   ctx.tailscale.writeNode({
     BackendState: 'Running',
@@ -438,8 +435,7 @@ test('it takes the node down when it is not Running after it joins, when it asks
 test('it fails and leaves the node up when it is not Running after it joins, when it asks for no tags', () => {
   const ctx = setupTest();
 
-  createStubBin(ctx.directoryPath, 'ps', 'echo S');
-  createStubBin(ctx.directoryPath, 'sleep');
+  createStubBin(ctx.directoryPath, 'ps', { script: '#!/bin/bash\necho S' });
 
   ctx.tailscale.writeNode({
     BackendState: 'Running',
@@ -479,8 +475,7 @@ test('it exits 0 and waits in the background while the saved node is still Start
 
   mkdirSync(join(ctx.directoryPath, 'state'));
   writeFileSync(join(ctx.directoryPath, 'state', 'tailscaled.state'), 'saved');
-  createStubBin(ctx.directoryPath, 'ps', 'echo S');
-  createStubBin(ctx.directoryPath, 'sleep');
+  createStubBin(ctx.directoryPath, 'ps', { script: '#!/bin/bash\necho S' });
 
   ctx.tailscale.writeNode({
     BackendState: 'Running',
@@ -525,8 +520,7 @@ test('it joins again with the key once a slow saved node is Running with other t
 
   mkdirSync(join(ctx.directoryPath, 'state'));
   writeFileSync(join(ctx.directoryPath, 'state', 'tailscaled.state'), 'saved');
-  createStubBin(ctx.directoryPath, 'ps', 'echo S');
-  createStubBin(ctx.directoryPath, 'sleep');
+  createStubBin(ctx.directoryPath, 'ps', { script: '#!/bin/bash\necho S' });
 
   ctx.tailscale.writeNode({
     BackendState: 'Running',
@@ -588,8 +582,7 @@ test('it takes a slow saved node down without a key once it is Running with othe
 
   mkdirSync(join(ctx.directoryPath, 'state'));
   writeFileSync(join(ctx.directoryPath, 'state', 'tailscaled.state'), 'saved');
-  createStubBin(ctx.directoryPath, 'ps', 'echo S');
-  createStubBin(ctx.directoryPath, 'sleep');
+  createStubBin(ctx.directoryPath, 'ps', { script: '#!/bin/bash\necho S' });
 
   ctx.tailscale.writeNode({
     BackendState: 'Running',
@@ -644,8 +637,7 @@ test('it says without a key that a slow saved node is Running on another control
 
   mkdirSync(join(ctx.directoryPath, 'state'));
   writeFileSync(join(ctx.directoryPath, 'state', 'tailscaled.state'), 'saved');
-  createStubBin(ctx.directoryPath, 'ps', 'echo S');
-  createStubBin(ctx.directoryPath, 'sleep');
+  createStubBin(ctx.directoryPath, 'ps', { script: '#!/bin/bash\necho S' });
 
   ctx.tailscale.writeNode({
     BackendState: 'Running',
@@ -699,8 +691,7 @@ test('it gives up in the background without a key once a slow saved node needs a
 
   mkdirSync(join(ctx.directoryPath, 'state'));
   writeFileSync(join(ctx.directoryPath, 'state', 'tailscaled.state'), 'saved');
-  createStubBin(ctx.directoryPath, 'ps', 'echo S');
-  createStubBin(ctx.directoryPath, 'sleep');
+  createStubBin(ctx.directoryPath, 'ps', { script: '#!/bin/bash\necho S' });
 
   ctx.tailscale.writeNode({
     BackendState: 'NeedsLogin',
@@ -752,8 +743,7 @@ test('it takes a saved node down that is still not Running after the wait, when 
 
   mkdirSync(join(ctx.directoryPath, 'state'));
   writeFileSync(join(ctx.directoryPath, 'state', 'tailscaled.state'), 'saved');
-  createStubBin(ctx.directoryPath, 'ps', 'echo S');
-  createStubBin(ctx.directoryPath, 'sleep');
+  createStubBin(ctx.directoryPath, 'ps', { script: '#!/bin/bash\necho S' });
 
   ctx.tailscale.writeNode({
     BackendState: 'Running',
@@ -803,8 +793,7 @@ test('it never puts the key on the command line', () => {
 
   mkdirSync(join(ctx.directoryPath, 'state'));
   writeFileSync(join(ctx.directoryPath, 'state', 'tailscaled.state'), 'saved');
-  createStubBin(ctx.directoryPath, 'ps', 'echo S');
-  createStubBin(ctx.directoryPath, 'sleep');
+  createStubBin(ctx.directoryPath, 'ps', { script: '#!/bin/bash\necho S' });
 
   ctx.tailscale.writeNode({
     BackendState: 'Running',
@@ -844,8 +833,7 @@ test('it joins Tailscale as tag:imp when no login server is given', () => {
   const ctx = setupTest();
 
   mkdirSync(join(ctx.directoryPath, 'state'));
-  createStubBin(ctx.directoryPath, 'ps', 'echo S');
-  createStubBin(ctx.directoryPath, 'sleep');
+  createStubBin(ctx.directoryPath, 'ps', { script: '#!/bin/bash\necho S' });
 
   ctx.tailscale.writeNode({
     BackendState: 'NeedsLogin',
@@ -886,8 +874,7 @@ test('it keeps the saved node with the key when it is on the login server alread
 
   mkdirSync(join(ctx.directoryPath, 'state'));
   writeFileSync(join(ctx.directoryPath, 'state', 'tailscaled.state'), 'saved');
-  createStubBin(ctx.directoryPath, 'ps', 'echo S');
-  createStubBin(ctx.directoryPath, 'sleep');
+  createStubBin(ctx.directoryPath, 'ps', { script: '#!/bin/bash\necho S' });
 
   ctx.tailscale.writeNode({
     BackendState: 'Running',
@@ -932,8 +919,7 @@ test('it joins the login server again with the key when the saved node is on ano
 
   mkdirSync(join(ctx.directoryPath, 'state'));
   writeFileSync(join(ctx.directoryPath, 'state', 'tailscaled.state'), 'saved');
-  createStubBin(ctx.directoryPath, 'ps', 'echo S');
-  createStubBin(ctx.directoryPath, 'sleep');
+  createStubBin(ctx.directoryPath, 'ps', { script: '#!/bin/bash\necho S' });
 
   ctx.tailscale.writeNode({
     BackendState: 'Running',
@@ -982,8 +968,7 @@ test('it joins the login server again with the key when the saved node is on Tai
 
   mkdirSync(join(ctx.directoryPath, 'state'));
   writeFileSync(join(ctx.directoryPath, 'state', 'tailscaled.state'), 'saved');
-  createStubBin(ctx.directoryPath, 'ps', 'echo S');
-  createStubBin(ctx.directoryPath, 'sleep');
+  createStubBin(ctx.directoryPath, 'ps', { script: '#!/bin/bash\necho S' });
 
   ctx.tailscale.writeNode({
     BackendState: 'Running',
@@ -1030,8 +1015,7 @@ test('it joins the login server again with the key when the saved node is on Tai
 
   mkdirSync(join(ctx.directoryPath, 'state'));
   writeFileSync(join(ctx.directoryPath, 'state', 'tailscaled.state'), 'saved');
-  createStubBin(ctx.directoryPath, 'ps', 'echo S');
-  createStubBin(ctx.directoryPath, 'sleep');
+  createStubBin(ctx.directoryPath, 'ps', { script: '#!/bin/bash\necho S' });
 
   ctx.tailscale.writeNode({
     BackendState: 'Running',
@@ -1078,8 +1062,7 @@ test('it keeps a saved node on Tailscale without a key and says it is not on the
 
   mkdirSync(join(ctx.directoryPath, 'state'));
   writeFileSync(join(ctx.directoryPath, 'state', 'tailscaled.state'), 'saved');
-  createStubBin(ctx.directoryPath, 'ps', 'echo S');
-  createStubBin(ctx.directoryPath, 'sleep');
+  createStubBin(ctx.directoryPath, 'ps', { script: '#!/bin/bash\necho S' });
 
   ctx.tailscale.writeNode({
     BackendState: 'Running',
@@ -1123,8 +1106,7 @@ test('it joins the login server again with the key when a node in memory is on T
   const ctx = setupTest();
 
   mkdirSync(join(ctx.directoryPath, 'state'));
-  createStubBin(ctx.directoryPath, 'ps', 'echo S');
-  createStubBin(ctx.directoryPath, 'sleep');
+  createStubBin(ctx.directoryPath, 'ps', { script: '#!/bin/bash\necho S' });
 
   ctx.tailscale.writeNode({
     BackendState: 'Running',
@@ -1171,8 +1153,7 @@ test('it joins the login server again with the key once a slow saved node is Run
 
   mkdirSync(join(ctx.directoryPath, 'state'));
   writeFileSync(join(ctx.directoryPath, 'state', 'tailscaled.state'), 'saved');
-  createStubBin(ctx.directoryPath, 'ps', 'echo S');
-  createStubBin(ctx.directoryPath, 'sleep');
+  createStubBin(ctx.directoryPath, 'ps', { script: '#!/bin/bash\necho S' });
 
   ctx.tailscale.writeNode({
     BackendState: 'Running',
@@ -1231,8 +1212,7 @@ test('it joins the login server without advertising tags, which its key carries'
   const ctx = setupTest();
 
   mkdirSync(join(ctx.directoryPath, 'state'));
-  createStubBin(ctx.directoryPath, 'ps', 'echo S');
-  createStubBin(ctx.directoryPath, 'sleep');
+  createStubBin(ctx.directoryPath, 'ps', { script: '#!/bin/bash\necho S' });
 
   ctx.tailscale.writeNode({
     BackendState: 'NeedsLogin',

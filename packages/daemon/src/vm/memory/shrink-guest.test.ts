@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test';
-import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
+import { awaitWithClock } from '@impz/shared/test-utils/await-with-clock';
+import { createFakeClock } from '@zgeoff/testing/clock';
 import { buildStubElasticGuest } from '../../test-utils/vm/build-stub-elastic-guest';
 import { buildStubGuestMemory } from '../../test-utils/vm/build-stub-guest-memory';
 import { buildImpPaths } from '../storage/build-imp-paths';
@@ -29,7 +30,7 @@ test('#findShrinkTargetMib keeps 15 % of a large guest free, in whole blocks', (
 });
 
 test('#shrinkGuest waits until the guest gets to the target', async () => {
-  const clock = buildStubClock();
+  const clock = createFakeClock();
 
   const stub = buildStubElasticGuest({
     baseMib: 512,
@@ -40,11 +41,14 @@ test('#shrinkGuest waits until the guest gets to the target', async () => {
     stepMib: 200,
   });
 
-  const shrunk = await shrinkGuest(stub.vm, buildImpPaths('/data', 'dev'), {
-    timeLimitMs: 2000,
-    now: clock.now,
-    sleep: clock.sleep,
-  });
+  const shrunk = await awaitWithClock(
+    clock,
+    shrinkGuest(stub.vm, buildImpPaths('/data', 'dev'), {
+      timeLimitMs: 2000,
+      now: clock.now,
+      sleep: clock.sleep,
+    }),
+  );
 
   expect(shrunk.pluggedMib).toBe(496);
   expect(stub.requests).toStrictEqual([496]);
@@ -52,7 +56,7 @@ test('#shrinkGuest waits until the guest gets to the target', async () => {
 });
 
 test('#shrinkGuest asks an unplug that stops partway back to what it reached', async () => {
-  const clock = buildStubClock();
+  const clock = createFakeClock();
 
   const stub = buildStubElasticGuest({
     baseMib: 512,
@@ -64,11 +68,14 @@ test('#shrinkGuest asks an unplug that stops partway back to what it reached', a
     floorMib: 768,
   });
 
-  const shrunk = await shrinkGuest(stub.vm, buildImpPaths('/data', 'dev'), {
-    timeLimitMs: 2000,
-    now: clock.now,
-    sleep: clock.sleep,
-  });
+  const shrunk = await awaitWithClock(
+    clock,
+    shrinkGuest(stub.vm, buildImpPaths('/data', 'dev'), {
+      timeLimitMs: 2000,
+      now: clock.now,
+      sleep: clock.sleep,
+    }),
+  );
 
   expect(shrunk.pluggedMib).toBe(768);
   expect(stub.requests).toStrictEqual([496, 768]);
@@ -76,7 +83,7 @@ test('#shrinkGuest asks an unplug that stops partway back to what it reached', a
 });
 
 test('#shrinkGuest ends a slow unplug at the time limit with what the guest holds then', async () => {
-  const clock = buildStubClock();
+  const clock = createFakeClock();
 
   const stub = buildStubElasticGuest({
     baseMib: 512,
@@ -87,11 +94,14 @@ test('#shrinkGuest ends a slow unplug at the time limit with what the guest hold
     stepMib: 16,
   });
 
-  const shrunk = await shrinkGuest(stub.vm, buildImpPaths('/data', 'dev'), {
-    timeLimitMs: 2000,
-    now: clock.now,
-    sleep: clock.sleep,
-  });
+  const shrunk = await awaitWithClock(
+    clock,
+    shrinkGuest(stub.vm, buildImpPaths('/data', 'dev'), {
+      timeLimitMs: 2000,
+      now: clock.now,
+      sleep: clock.sleep,
+    }),
+  );
 
   expect(shrunk.pluggedMib).toBe(704);
   expect(clock.now()).toBe(2000);
@@ -135,7 +145,7 @@ test('#shrinkGuest counts a plug under way at its request', async () => {
 });
 
 test('#shrinkGuest reports the most the guest held, when a plug moves after its first read', async () => {
-  const clock = buildStubClock();
+  const clock = createFakeClock();
   const guests = buildStubGuestMemory();
   const paths = buildImpPaths('/data', 'dev');
 
@@ -147,11 +157,14 @@ test('#shrinkGuest reports the most the guest held, when a plug moves after its 
     pluggedOnReads: [64, 256],
   });
 
-  const shrunk = await shrinkGuest(guests.vms, paths, {
-    timeLimitMs: 2000,
-    now: clock.now,
-    sleep: clock.sleep,
-  });
+  const shrunk = await awaitWithClock(
+    clock,
+    shrinkGuest(guests.vms, paths, {
+      timeLimitMs: 2000,
+      now: clock.now,
+      sleep: clock.sleep,
+    }),
+  );
 
   expect(shrunk).toStrictEqual({
     before: { pluggedMib: 64, requestedMib: 256, totalMib: 576, availableMib: 476 },

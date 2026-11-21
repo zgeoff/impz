@@ -7,9 +7,9 @@ import { join } from 'node:path';
 import { connect as connectTls } from 'node:tls';
 import { buildMockBrokerRule } from '@impz/api/test-utils/build-mock-broker-rule';
 import { buildMockOAuthConfig } from '@impz/api/test-utils/build-mock-oauth-config';
-import { server } from '@impz/shared/test-utils/server';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { network } from '@impz/shared/test-utils/network';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
+import { waitFor } from '@zgeoff/testing';
 import { HttpResponse, http } from 'msw';
 import invariant from 'tiny-invariant';
 import { parsePrefix64 } from '../../host-net/net/derive-guest-ip6';
@@ -682,7 +682,7 @@ test('it gives an imp granted an oauth secret the variables the secret names', a
 
   const tokens = createStubBrokerTokenEndpoint('https://auth.example.com/oauth/token');
 
-  server.use(tokens.handler);
+  network.use(tokens.handler);
   tokens.issue('fake-refresh-0', { access_token: 'fake-access-1', expires_in: 3600 });
 
   await ctx.createTestImage('base');
@@ -1250,7 +1250,7 @@ test('it logs an audit row it could not write and still answers the request', as
     BEGIN SELECT RAISE(ABORT, 'forced failure'); END`,
   );
 
-  server.use(http.get('https://api.github.com/user', () => HttpResponse.text('from upstream')));
+  network.use(http.get('https://api.github.com/user', () => HttpResponse.text('from upstream')));
 
   const port = await ctx.impd.broker.listen(0);
   const ca = await readFile(join(ctx.dataDir, 'broker', 'ca', 'ca.pem'), 'utf8');

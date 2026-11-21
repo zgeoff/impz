@@ -1,5 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { waitFor } from '@zgeoff/testing';
 import { Client } from 'ssh2';
 import { openSshClient } from './open-ssh-client';
 import { startStubSshServer } from './start-stub-ssh-server';

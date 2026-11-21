@@ -1,6 +1,6 @@
-import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
-import type { StubBin } from '@impz/shared/test-utils/create-stub-bin';
 import { formatShellWord } from '@impz/shared/test-utils/format-shell-word';
+import { createStubBin } from '@zgeoff/testing/bin';
+import type { StubBin } from '@zgeoff/testing/bin';
 
 export interface StubGhReleaseDownloadOptions {
   // the file whose bytes gh writes to its --output path, whatever the release and asset
@@ -14,10 +14,8 @@ export function createStubGhReleaseDownload(
   directory: string,
   options: Readonly<StubGhReleaseDownloadOptions>,
 ): StubBin {
-  return createStubBin(
-    directory,
-    'gh',
-    `[ "$1 $2" = "release download" ] || exit 2
+  return createStubBin(directory, 'gh', {
+    script: `#!/bin/bash\n[ "$1 $2" = "release download" ] || exit 2
 output=
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -28,5 +26,5 @@ done
 [ -n "$output" ] || exit 2
 command -p cp ${formatShellWord(options.source)} "$output"
 exit ${options.exitCode ?? 0}`,
-  );
+  });
 }

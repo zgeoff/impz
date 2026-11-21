@@ -1,8 +1,7 @@
 import { chmodSync } from 'node:fs';
-import { join } from 'node:path';
-import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
-import type { StubBin } from '@impz/shared/test-utils/create-stub-bin';
 import { formatShellWord } from '@impz/shared/test-utils/format-shell-word';
+import { createStubBin } from '@zgeoff/testing/bin';
+import type { StubBin } from '@zgeoff/testing/bin';
 
 // A command lookup skips a file without its exec bit, so each tool waits in the stubs' folder
 // until apt-get install sets the bit. The stub names chmod by its full path, because a test's
@@ -16,16 +15,13 @@ export function createStubAptGet(directory: string, tools: readonly string[]): S
 
   const files = tools.map((tool) => {
     const stub = createStubBin(directory, tool);
-    const file = join(stub.bin, tool);
 
-    chmodSync(file, 0o644);
+    chmodSync(stub.path, 0o644);
 
-    return formatShellWord(file);
+    return formatShellWord(stub.path);
   });
 
-  return createStubBin(
-    directory,
-    'apt-get',
-    `[ "$1" = install ] && ${formatShellWord(chmodPath)} +x ${files.join(' ')}\nexit 0`,
-  );
+  return createStubBin(directory, 'apt-get', {
+    script: `#!/bin/bash\n[ "$1" = install ] && ${formatShellWord(chmodPath)} +x ${files.join(' ')}\nexit 0`,
+  });
 }

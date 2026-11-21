@@ -22,7 +22,6 @@
     "@impz/agent-protocol": "workspace:*",
     "@impz/api": "workspace:*",
     "@impz/daemon": "workspace:*",
-    "@impz/shared": "workspace:*",
     "@logtape/logtape": "catalog:",
     "@orpc/client": "catalog:",
     "@orpc/contract": "catalog:",

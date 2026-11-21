@@ -1,9 +1,9 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
 import { buildImpPaths, buildStubExecAgent } from '@impz/daemon/test-utils';
-import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
-import { server } from '@impz/shared/test-utils/server';
+import { network } from '@impz/shared/test-utils/network';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import { startStubAgent } from '@impz/testing/stand-in/vm/start-stub-agent';
+import { claimFreePorts } from '@zgeoff/testing/process';
 import { http } from 'msw';
 import { createImpClient } from '../create-imp-client';
 import { createStubUndiciWebSocket } from '../test-utils/create-stub-undici-web-socket';
@@ -23,7 +23,7 @@ async function setupTest() {
 
   const impd = harness.impd;
 
-  server.use(http.all('http://impd.test/*', (info) => impd.api.app.handle(info.request)));
+  network.use(http.all('http://impd.test/*', (info) => impd.api.app.handle(info.request)));
 
   const url = harness.url;
   const client = createImpClient({ url, token: rootToken });
@@ -123,7 +123,7 @@ test('it asks impd before it sends a start that requires anything', async () => 
     'execRequire',
   );
 
-  server.use(
+  network.use(
     http.all('http://impd.test/*', (info) => {
       calls(new URL(info.request.url).pathname);
 
@@ -172,7 +172,7 @@ test('it sends a resize made while the start waits on impd after the start', asy
 
   const held: { session: ExecSession | null } = { session: null };
 
-  server.use(
+  network.use(
     http.post('http://impd.test/rpc/system/features', (info) => {
       const request = info.request;
 
@@ -220,7 +220,7 @@ test('it counts stdin held while the start waits on impd toward backpressure', a
   const held: { session: ExecSession | null } = { session: null };
   const seen = { accepted: true, drainedDuringCheck: true };
 
-  server.use(
+  network.use(
     http.post('http://impd.test/rpc/system/features', async (info) => {
       const request = info.request;
       const session = held.session;

@@ -16,9 +16,7 @@ async function setupTest() {
     directoryPath: directory,
     exportPath: JSON.stringify(join(import.meta.dir, 'start-otlp-export.ts')),
     apiPath: JSON.stringify(Bun.resolveSync('@opentelemetry/api', import.meta.dir)),
-    updateEnvPath: JSON.stringify(
-      Bun.resolveSync('@impz/shared/test-utils/update-env', import.meta.dir),
-    ),
+    updateEnvPath: JSON.stringify(Bun.resolveSync('@zgeoff/testing', import.meta.dir)),
     invariantPath: JSON.stringify(Bun.resolveSync('tiny-invariant', import.meta.dir)),
 
     matchersPath: JSON.stringify(Bun.resolveSync('@zgeoff/bun-test-extended', import.meta.dir)),

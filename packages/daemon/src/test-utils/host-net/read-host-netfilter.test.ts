@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { updateEnv } from '@impz/shared/test-utils/update-env';
+import { updateEnv } from '@zgeoff/testing';
 import { readHostNetfilter } from './read-host-netfilter';
 
 test('it reports every match when host tests are required', () => {

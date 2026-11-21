@@ -1,6 +1,6 @@
 import { createConnection, createServer } from 'node:net';
 import type { Socket } from 'node:net';
-import { updateEnv } from '@impz/shared/test-utils/update-env';
+import { updateEnv } from '@zgeoff/testing';
 
 interface StubGuestBridgeOptions {
   readonly proxyPort: number;

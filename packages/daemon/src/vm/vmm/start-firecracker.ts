@@ -1,9 +1,9 @@
 import { closeSync, existsSync, readFileSync, rmSync } from 'node:fs';
 import { basename } from 'node:path';
-import type { Clock } from '../../platform/process/clock';
+import type { Clock } from '@zgeoff/std';
+import { systemClock } from '@zgeoff/std';
 import { IMPD_USER } from '../../platform/process/impd-user';
 import { listPids, readStatFields, stopPid } from '../../platform/process/read-stat-fields';
-import { REAL_CLOCK } from '../../platform/process/real-clock';
 import { readRegularFile, setupLogFile, writeRegularFile } from '../files/write-regular-file';
 import type { FirecrackerPaths } from '../storage/build-imp-paths';
 import { readProcessCgroup, readProcessUid } from './read-process-uid';
@@ -135,7 +135,7 @@ export async function waitForExit(
   timeoutMs: number,
   watch: Readonly<ExitWatch> = {},
 ): Promise<boolean> {
-  const clock = watch.clock ?? REAL_CLOCK;
+  const clock = watch.clock ?? systemClock;
   const deadline = clock.now() + timeoutMs;
 
   while (probeProcessAlive(pid, apiSocket, watch.procRoot)) {

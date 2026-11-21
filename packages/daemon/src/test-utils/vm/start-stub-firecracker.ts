@@ -1,6 +1,6 @@
 import { onTestFinished } from 'bun:test';
 import { join } from 'node:path';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { waitFor } from '@zgeoff/testing';
 import type { StubGuestMemory } from './stub-guest-memory-schema';
 
 interface StubFirecrackerOptions {

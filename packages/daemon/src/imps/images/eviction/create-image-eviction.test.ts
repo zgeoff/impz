@@ -5,6 +5,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildStubAnswerQueue } from '@impz/shared/test-utils/build-stub-answer-queue';
+import { systemClock } from '@zgeoff/std';
 import { loadConfig } from '../../../config';
 import {
   createImage,
@@ -13,7 +14,6 @@ import {
   updateImagePin,
 } from '../../../platform/db/create-image';
 import { createImp } from '../../../platform/db/list-imps';
-import { REAL_CLOCK } from '../../../platform/process/real-clock';
 import { runCommand } from '../../../platform/process/run-command';
 import { runStreamed } from '../../../platform/process/run-streamed';
 import { startRealTimer } from '../../../platform/process/start-real-timer';
@@ -50,7 +50,7 @@ async function setupTest() {
       storage: { readUsage: () => Promise.resolve({ usedBytes: 0, availableBytes: 1024 ** 4 }) },
       reserveBytes: null,
     }),
-    clock: REAL_CLOCK,
+    clock: systemClock,
     runStreamed,
     runCommand,
     startTar: startTarProcess,

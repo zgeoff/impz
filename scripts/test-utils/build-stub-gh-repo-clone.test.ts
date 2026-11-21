@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'n
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createGitFreeEnv } from '@impz/e2e-harness/create-git-free-env';
-import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
+import { createStubBin } from '@zgeoff/testing/bin';
 import { $ } from 'bun';
 import { buildStubGhRepoClone } from './build-stub-gh-repo-clone';
 
@@ -37,11 +37,12 @@ test('it clones the given remote into the folder gh repo clone names', async () 
 
   await $`git clone -q --bare ${seed} ${remote}`.env(ctx.env).quiet();
 
-  const gh = createStubBin(ctx.directoryPath, 'gh', buildStubGhRepoClone(remote));
+  createStubBin(ctx.directoryPath, 'gh', { script: buildStubGhRepoClone(remote) });
+
   const clone = join(ctx.directoryPath, 'clone');
 
   const result = await $`gh repo clone example/homebrew-tap ${clone}`
-    .env({ ...ctx.env, PATH: `${gh.bin}:${process.env['PATH'] ?? ''}` })
+    .env({ ...ctx.env, PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` })
     .nothrow()
     .quiet();
 
@@ -51,11 +52,13 @@ test('it clones the given remote into the folder gh repo clone names', async () 
 
 test('it makes an empty folder for no remote', async () => {
   const ctx = setupTest();
-  const gh = createStubBin(ctx.directoryPath, 'gh', buildStubGhRepoClone(null));
+
+  createStubBin(ctx.directoryPath, 'gh', { script: buildStubGhRepoClone(null) });
+
   const clone = join(ctx.directoryPath, 'clone');
 
   const result = await $`gh repo clone example/homebrew-tap ${clone}`
-    .env({ ...ctx.env, PATH: `${gh.bin}:${process.env['PATH'] ?? ''}` })
+    .env({ ...ctx.env, PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` })
     .nothrow()
     .quiet();
 
@@ -65,13 +68,20 @@ test('it makes an empty folder for no remote', async () => {
 
 test('it passes any other gh command without cloning', async () => {
   const ctx = setupTest();
-  const gh = createStubBin(ctx.directoryPath, 'gh', buildStubGhRepoClone(null));
+
+  createStubBin(ctx.directoryPath, 'gh', { script: buildStubGhRepoClone(null) });
 
   const result = await $`gh auth setup-git`
-    .env({ ...ctx.env, PATH: `${gh.bin}:${process.env['PATH'] ?? ''}` })
+    .env({ ...ctx.env, PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` })
     .nothrow()
     .quiet();
 
   expect(result.exitCode).toBe(0);
-  expect(readdirSync(ctx.directoryPath).toSorted()).toStrictEqual(['bin', 'calls']);
+
+  // a clone would leave a folder beside the stand-in and its record
+  const folders = readdirSync(ctx.directoryPath).filter(
+    (name) => !name.startsWith('.') && name !== 'gh' && name !== 'calls.jsonl',
+  );
+
+  expect(folders).toStrictEqual([]);
 });

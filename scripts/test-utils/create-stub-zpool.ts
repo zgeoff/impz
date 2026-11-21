@@ -1,7 +1,7 @@
 import { copyFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
-import type { StubBin } from '@impz/shared/test-utils/create-stub-bin';
+import { createStubBin } from '@zgeoff/testing/bin';
+import type { StubBin } from '@zgeoff/testing/bin';
 
 export interface ZpoolStubOptions {
   readonly create?: 'fails' | { readonly startedMarker: string; readonly release: string };
@@ -38,5 +38,7 @@ export function createStubZpool(stubs: string, options: Readonly<ZpoolStubOption
   writeFileSync(join(stubs, 'zpool.queries'), `${options.queries ?? ''}\n`);
   copyFileSync(join(import.meta.dir, 'run-stub-zpool.sh'), join(stubs, 'zpool.sh'));
 
-  return createStubBin(stubs, 'zpool', '. "$(dirname "$STUB_CALLS")/zpool.sh"');
+  return createStubBin(stubs, 'zpool', {
+    script: '#!/bin/bash\n. "$(dirname "$0")/zpool.sh"',
+  });
 }

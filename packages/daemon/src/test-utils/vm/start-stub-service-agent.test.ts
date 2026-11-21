@@ -9,7 +9,7 @@ import {
   ServiceStatusSchema,
   ServicesListSchema,
 } from '@impz/agent-protocol';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { waitFor } from '@zgeoff/testing';
 import { sendAgentRequest } from '../../vm/agent-client/send-agent-request';
 import {
   openServiceLogStream,

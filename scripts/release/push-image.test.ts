@@ -2,7 +2,8 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
+import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
+import { createStubBin, readStubCalls } from '@zgeoff/testing/bin';
 import { $ } from 'bun';
 import { buildStubPushDocker } from '../test-utils/build-stub-push-docker';
 
@@ -26,16 +27,14 @@ test('it pushes a release under its version and outputs the digest the registry 
   const ctx = setupTest();
   const digest = `sha256:${'0123456789abcdef'.repeat(4)}`;
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubPushDocker({ inspected: digest }),
-  );
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: buildStubPushDocker({ inspected: digest }),
+  });
 
   const result = await $`bun ${ctx.scriptPath}`
     .env({
       ...process.env,
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
       IMAGE: 'ghcr.io/zgeoff/imp-host',
       BUILT_TAG: '2.0.1',
       PUSH_TAG: '2.0.1',
@@ -47,7 +46,7 @@ test('it pushes a release under its version and outputs the digest the registry 
   expect(result.exitCode).toBe(0);
   expect(readFileSync(ctx.outputs, 'utf8')).toBe(`digest=${digest}\n`);
 
-  expect(readFileSync(docker.calls, 'utf8')).toBe(
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe(
     [
       'docker push ghcr.io/zgeoff/imp-host:2.0.1',
       'docker buildx imagetools inspect ghcr.io/zgeoff/imp-host:2.0.1 --format {{.Manifest.Digest}}',
@@ -60,16 +59,14 @@ test('it tags a dry run under its push tag before it pushes', async () => {
   const ctx = setupTest();
   const digest = `sha256:${'0123456789abcdef'.repeat(4)}`;
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubPushDocker({ inspected: digest }),
-  );
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: buildStubPushDocker({ inspected: digest }),
+  });
 
   const result = await $`bun ${ctx.scriptPath}`
     .env({
       ...process.env,
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
       IMAGE: 'ghcr.io/zgeoff/imp-host',
       BUILT_TAG: '2.0.1',
       PUSH_TAG: 'dryrun-0123456789ab',
@@ -80,7 +77,7 @@ test('it tags a dry run under its push tag before it pushes', async () => {
 
   expect(result.exitCode).toBe(0);
 
-  expect(readFileSync(docker.calls, 'utf8')).toBe(
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe(
     [
       'docker tag ghcr.io/zgeoff/imp-host:2.0.1 ghcr.io/zgeoff/imp-host:dryrun-0123456789ab',
       'docker push ghcr.io/zgeoff/imp-host:dryrun-0123456789ab',
@@ -93,16 +90,14 @@ test('it tags a dry run under its push tag before it pushes', async () => {
 test('it fails, outputting no digest, when the registry gives no valid digest', async () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubPushDocker({ inspected: '<no value>' }),
-  );
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: buildStubPushDocker({ inspected: '<no value>' }),
+  });
 
   const result = await $`bun ${ctx.scriptPath}`
     .env({
       ...process.env,
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
       IMAGE: 'ghcr.io/zgeoff/imp-base',
       BUILT_TAG: '2.0.1',
       PUSH_TAG: '2.0.1',
@@ -123,19 +118,17 @@ test('it fails, outputting no digest, when the registry gives no valid digest', 
 test('it fails, outputting nothing, when the push fails', async () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubPushDocker({
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: buildStubPushDocker({
       inspected: `sha256:${'0123456789abcdef'.repeat(4)}`,
       isPushRefused: true,
     }),
-  );
+  });
 
   const result = await $`bun ${ctx.scriptPath}`
     .env({
       ...process.env,
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
       IMAGE: 'ghcr.io/zgeoff/imp-host',
       BUILT_TAG: '2.0.1',
       PUSH_TAG: '2.0.1',
@@ -146,5 +139,8 @@ test('it fails, outputting nothing, when the push fails', async () => {
 
   expect(result.exitCode).toBe(1);
   expect(readFileSync(ctx.outputs, 'utf8')).toBe('');
-  expect(readFileSync(docker.calls, 'utf8')).toBe('docker push ghcr.io/zgeoff/imp-host:2.0.1\n');
+
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe(
+    'docker push ghcr.io/zgeoff/imp-host:2.0.1\n',
+  );
 });

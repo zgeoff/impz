@@ -3,9 +3,9 @@
 // dirty-page diff would write. docs/runbooks/development.md#the-bench-job runs it.
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
-import { REAL_CLOCK } from '@impz/daemon/real-clock';
 import { instance, runCommand, runInContainer } from '@impz/e2e-harness/instance';
 import { createInstanceClient, readImpEnv } from '@impz/e2e-harness/run-imp';
+import { systemClock } from '@zgeoff/std';
 import { withDevLock } from '../../../scripts/lib/with-dev-lock.ts';
 import { writeStderr } from '../../../scripts/lib/write-stderr.ts';
 import { writeStdoutLine } from '../../../scripts/lib/write-stdout-line.ts';
@@ -31,8 +31,8 @@ const measured = await runTouchedPages(
     client: await createInstanceClient(instance),
     runImpz: (args) => runCommand([IMPZ, ...args], { env: IMPZ_ENV }),
     runInContainer: (argv) => runInContainer(argv, instance),
-    now: REAL_CLOCK.now,
-    sleep: REAL_CLOCK.sleep,
+    now: systemClock.now,
+    sleep: systemClock.sleep,
     onStderr: (text) => {
       writeStderr(`${text}\n`);
     },

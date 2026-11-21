@@ -4,9 +4,11 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { copyFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { MoveState } from '@impz/api';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
-import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
+import { fireNextTimer } from '@impz/shared/test-utils/fire-next-timer';
+import { readNextDelayMs } from '@impz/shared/test-utils/read-next-delay-ms';
 import { TEST_TOKEN } from '@impz/testing/test-token';
+import { waitFor } from '@zgeoff/testing';
+import { createFakeClock } from '@zgeoff/testing/clock';
 import invariant from 'tiny-invariant';
 import { listImages, readImageByDigest, readImageByName } from '../../platform/db/create-image';
 import type { LoggedImpEvent } from '../../platform/db/imp-log-entry';
@@ -481,11 +483,11 @@ test('it ends a send to a target that is gone with the mark on, and says the abo
 });
 
 test('it ends a move whose target sends no answer to a part within an hour', async () => {
-  const clock = buildStubClock();
+  const clock = createFakeClock();
   const partHeld = Promise.withResolvers<undefined>();
 
   const ctx = await setupTest({
-    startPeerDeadline: clock.startTimer,
+    startPeerDeadline: clock.schedule,
 
     hook: (request, forward) => {
       if (request.headers.get(MOVE_PART_HEADER) !== '0') {
@@ -514,22 +516,24 @@ test('it ends a move whose target sends no answer to a part within an hour', asy
 
   await partHeld.promise;
 
-  const pendingMs = clock.readPendingMs();
+  expect(clock.countPending()).toBe(1);
 
-  clock.firePending();
+  const pendingMs = readNextDelayMs(clock);
+
+  fireNextTimer(clock);
 
   const status = await moved;
 
-  expect(pendingMs).toStrictEqual([3_600_000]);
+  expect(pendingMs).toBe(3_600_000);
   expect(status.error).toContain('/move/receive: the target sent no answer in 60 minutes');
 });
 
 test('it ends a move whose target sends no answer to the finish within an hour', async () => {
-  const clock = buildStubClock();
+  const clock = createFakeClock();
   const finishHeld = Promise.withResolvers<undefined>();
 
   const ctx = await setupTest({
-    startPeerDeadline: clock.startTimer,
+    startPeerDeadline: clock.schedule,
 
     hook: (request, forward) => {
       if (request.headers.get(MOVE_FINISH_HEADER) !== '1') {
@@ -558,22 +562,24 @@ test('it ends a move whose target sends no answer to the finish within an hour',
 
   await finishHeld.promise;
 
-  const pendingMs = clock.readPendingMs();
+  expect(clock.countPending()).toBe(1);
 
-  clock.firePending();
+  const pendingMs = readNextDelayMs(clock);
+
+  fireNextTimer(clock);
 
   const status = await moved;
 
-  expect(pendingMs).toStrictEqual([3_600_000]);
+  expect(pendingMs).toBe(3_600_000);
   expect(status.error).toContain('/move/receive: the target sent no answer in 60 minutes');
 });
 
 test('it keeps both copies when the target sends no answer to the commit within ten minutes', async () => {
-  const clock = buildStubClock();
+  const clock = createFakeClock();
   const commitHeld = Promise.withResolvers<undefined>();
 
   const ctx = await setupTest({
-    startPeerDeadline: clock.startTimer,
+    startPeerDeadline: clock.schedule,
 
     hook: (request, forward) => {
       if (!request.url.endsWith('/move/commit')) {
@@ -602,24 +608,26 @@ test('it keeps both copies when the target sends no answer to the commit within 
 
   await commitHeld.promise;
 
-  const pendingMs = clock.readPendingMs();
+  expect(clock.countPending()).toBe(1);
 
-  clock.firePending();
+  const pendingMs = readNextDelayMs(clock);
+
+  fireNextTimer(clock);
 
   const status = await moved;
   const source = await readImpByName(ctx.source.db, 'dev');
 
-  expect(pendingMs).toStrictEqual([600_000]);
+  expect(pendingMs).toBe(600_000);
   expect(status.error).toContain('/move/commit: the target sent no answer in 10 minutes');
   expect(source?.moveState).toBe('moved');
 });
 
 test('it ends a move whose target sends no answer to the offer within ten minutes', async () => {
-  const clock = buildStubClock();
+  const clock = createFakeClock();
   const offerHeld = Promise.withResolvers<undefined>();
 
   const ctx = await setupTest({
-    startPeerDeadline: clock.startTimer,
+    startPeerDeadline: clock.schedule,
 
     hook: (request, forward) => {
       if (!request.url.endsWith('/move/offer')) {
@@ -648,22 +656,24 @@ test('it ends a move whose target sends no answer to the offer within ten minute
 
   await offerHeld.promise;
 
-  const pendingMs = clock.readPendingMs();
+  expect(clock.countPending()).toBe(1);
 
-  clock.firePending();
+  const pendingMs = readNextDelayMs(clock);
+
+  fireNextTimer(clock);
 
   const status = await moved;
 
-  expect(pendingMs).toStrictEqual([600_000]);
+  expect(pendingMs).toBe(600_000);
   expect(status.error).toContain('/move/offer: the target sent no answer in 10 minutes');
 });
 
 test('it keeps the mark when the target sends no answer to the abort within ten minutes', async () => {
-  const clock = buildStubClock();
+  const clock = createFakeClock();
   const abortHeld = Promise.withResolvers<undefined>();
 
   const ctx = await setupTest({
-    startPeerDeadline: clock.startTimer,
+    startPeerDeadline: clock.schedule,
 
     hook: (request, forward) => {
       if (request.url.endsWith('/move/receive')) {
@@ -696,14 +706,16 @@ test('it keeps the mark when the target sends no answer to the abort within ten 
 
   await abortHeld.promise;
 
-  const pendingMs = clock.readPendingMs();
+  expect(clock.countPending()).toBe(1);
 
-  clock.firePending();
+  const pendingMs = readNextDelayMs(clock);
+
+  fireNextTimer(clock);
 
   const status = await moved;
   const source = await readImpByName(ctx.source.db, 'dev');
 
-  expect(pendingMs).toStrictEqual([600_000]);
+  expect(pendingMs).toBe(600_000);
   expect(status.error).toContain('the target did not confirm the abort');
   expect(source?.moveState).toBe('sending');
 });

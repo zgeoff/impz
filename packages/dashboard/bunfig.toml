@@ -1,9 +1,11 @@
 [test]
-# the root run's preload (env resets, the MSW server, routed fetch), after the
-# DOM, so its fetch is Bun's own
+# the root run's preload (env resets, the test network), after the DOM, so its
+# fetch is Bun's own
 preload = [
   "@zgeoff/bun-test-extended",
   "@zgeoff/bun-test-react",
+  "@zgeoff/testing/preload",
   "../shared/src/test-utils/preload.ts",
+  "../shared/src/test-utils/network.ts",
   "./test-setup.ts",
 ]

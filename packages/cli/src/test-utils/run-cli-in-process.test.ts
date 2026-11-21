@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { updateEnv } from '@impz/shared/test-utils/update-env';
+import { updateEnv } from '@zgeoff/testing';
 import { runCLIInProcess } from './run-cli-in-process';
 
 test('#runCLIInProcess returns the output and exit code of a usage error', async () => {

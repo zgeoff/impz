@@ -1,5 +1,5 @@
-import type { StartTimer } from './clock';
 import { startRealTimer } from './start-real-timer';
+import type { StartTimer } from './start-timer';
 
 interface RequestDeadline {
   readonly delayMs: number;

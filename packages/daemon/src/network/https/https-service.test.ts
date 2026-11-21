@@ -3,10 +3,10 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildStubAnswerQueue } from '@impz/shared/test-utils/build-stub-answer-queue';
-import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
-import { server } from '@impz/shared/test-utils/server';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { network } from '@impz/shared/test-utils/network';
 import { buildStubTickerTimer } from '@impz/testing/stand-in/platform/build-stub-ticker-timer';
+import { waitFor } from '@zgeoff/testing';
+import { claimFreePorts } from '@zgeoff/testing/process';
 import { HttpResponse, http } from 'msw';
 import invariant from 'tiny-invariant';
 import { buildMockPublicImp } from '../../test-utils/network/build-mock-public-imp';
@@ -45,7 +45,7 @@ test('it serves nothing until the first certificate arrives', async () => {
   const issued = Promise.withResolvers<Certificate>();
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   const service = createHttpsService({
     config: {
@@ -93,7 +93,7 @@ test('it serves the certificate on loopback once it arrives', async () => {
   const issued = Promise.withResolvers<Certificate>();
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   const service = createHttpsService({
     config: {
@@ -155,7 +155,7 @@ test('it logs the certificate it got', async () => {
 
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   const service = createHttpsService({
     config: {
@@ -196,7 +196,7 @@ test('it says the domain answers only inside the host container when there is no
 
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   const service = createHttpsService({
     config: {
@@ -235,7 +235,7 @@ test('it serves an expired certificate on disk at start while renewal fails', as
 
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   const expired = await createMockCertificate({
     names: ['imp.test', '*.imp.test'],
@@ -291,7 +291,7 @@ test('it says it serves an expired certificate until a renewal succeeds', async 
 
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   const expired = await createMockCertificate({
     names: ['imp.test', '*.imp.test'],
@@ -338,7 +338,7 @@ test('it logs Cloudflare’s refusal of a bad DNS token', async () => {
 
   const api = createStubCloudflareApi({ tokens: ['the-right-token'] });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   await api.zones.create({ id: 'z1', name: 'imp.test' });
 
@@ -397,7 +397,7 @@ test('it keeps a bad DNS token out of the log', async () => {
 
   const api = createStubCloudflareApi({ tokens: ['the-right-token'] });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   await api.zones.create({ id: 'z1', name: 'imp.test' });
 
@@ -461,7 +461,7 @@ test('it serves nothing on any port without a DNS token file', async () => {
   const publicHttpsPort = free.take();
   const publicHttpPort = free.take();
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   const dnsToken = createDnsToken({ kind: 'file', path: tokenPath }, Date.now);
   const dns = createCloudflareProvider({ readToken: dnsToken.read });
@@ -545,7 +545,7 @@ test('it sends Cloudflare no call without a DNS token file', async () => {
   const tokenPath = join(ctx.directoryPath, 'dns-api-token');
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   const dnsToken = createDnsToken({ kind: 'file', path: tokenPath }, Date.now);
   const dns = createCloudflareProvider({ readToken: dnsToken.read });
@@ -605,7 +605,7 @@ test('it names the missing DNS token file in the log', async () => {
   const tokenPath = join(ctx.directoryPath, 'dns-api-token');
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   const dnsToken = createDnsToken({ kind: 'file', path: tokenPath }, Date.now);
   const dns = createCloudflareProvider({ readToken: dnsToken.read });
@@ -657,7 +657,7 @@ test('it logs a records failure that repeats once, until it changes', async () =
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
   const failure: { message: string | null } = { message: 'DNS down' };
 
-  server.use(
+  network.use(
     http.get('https://api.cloudflare.com/client/v4/zones/:zoneId/dns_records', () =>
       failure.message === null
         ? undefined
@@ -737,7 +737,7 @@ test('it points the domain and its wildcard at the tailnet IP', async () => {
 
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   await api.zones.create({ id: 'z1', name: 'imp.test' });
 
@@ -792,7 +792,7 @@ test('it serves the domain on the tailnet IP', async () => {
 
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   await api.zones.create({ id: 'z1', name: 'imp.test' });
 
@@ -853,7 +853,7 @@ test('it keeps the public records in line with the public imps, and leaves the r
 
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   await api.zones.create({ id: 'z1', name: 'imp.test' });
 
@@ -922,7 +922,7 @@ test('it removes the record of an imp that is no longer public, and says so', as
 
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   await api.zones.create({ id: 'z1', name: 'imp.test' });
 
@@ -970,7 +970,7 @@ test('it serves the public listener on its own port', async () => {
 
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   await api.zones.create({ id: 'z1', name: 'imp.test' });
 
@@ -1027,7 +1027,7 @@ test('it takes the public records impd left when public mode is off', async () =
 
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   await api.zones.create({ id: 'z1', name: 'imp.test' });
 
@@ -1073,7 +1073,7 @@ test('it logs a DNS failure on the public records', async () => {
 
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
-  server.use(
+  network.use(
     http.get('https://api.cloudflare.com/client/v4/zones/:zoneId/dns_records', () =>
       HttpResponse.json(
         {
@@ -1128,7 +1128,7 @@ test('it reports a failed pass over the public records', async () => {
 
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
-  server.use(
+  network.use(
     http.get('https://api.cloudflare.com/client/v4/zones/:zoneId/dns_records', () =>
       HttpResponse.json(
         {
@@ -1186,7 +1186,7 @@ test('it writes the public records on the pass after one that failed', async () 
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
   const outage = { isDown: true };
 
-  server.use(
+  network.use(
     http.get('https://api.cloudflare.com/client/v4/zones/:zoneId/dns_records', () =>
       outage.isDown
         ? HttpResponse.json(
@@ -1250,7 +1250,7 @@ test('it warns that tailscale serve holds the tailnet HTTPS port', async () => {
 
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   await api.zones.create({ id: 'z1', name: 'imp.test' });
 
@@ -1301,7 +1301,7 @@ test('it keeps the tailnet listener and its connections when a tailscale status 
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
   const answers = buildStubAnswerQueue(['127.0.0.2', null, null, '127.0.0.2']);
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   await api.zones.create({ id: 'z1', name: 'imp.test' });
 
@@ -1367,7 +1367,7 @@ test('it logs an address pass that fails', async () => {
 
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   const service = createHttpsService({
     config: {
@@ -1406,7 +1406,7 @@ test('it runs renewal and the public records every 10 minutes, and the addresses
 
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   const service = createHttpsService({
     config: {
@@ -1449,7 +1449,7 @@ test('it asks for a certificate again on each renewal tick', async () => {
   const asked: string[] = [];
   const clock = { now: Date.parse('2030-01-10T00:00:00Z') };
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   const service = createHttpsService({
     config: {
@@ -1499,7 +1499,7 @@ test('it writes the public records again on each public records tick', async () 
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
   const publicImps: string[] = [];
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   await api.zones.create({ id: 'z1', name: 'imp.test' });
 
@@ -1549,7 +1549,7 @@ test('it cancels every pending tick when it stops', async () => {
 
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   const service = createHttpsService({
     config: {
@@ -1597,7 +1597,7 @@ test('it starts no listener for a certificate that arrives after it stopped', as
   const issued = Promise.withResolvers<Certificate>();
   const api = createStubCloudflareApi({ tokens: ['cf-token'] });
 
-  server.use(...api.handlers);
+  network.use(...api.handlers);
 
   const service = createHttpsService({
     config: {

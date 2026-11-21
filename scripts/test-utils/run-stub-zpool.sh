@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # The body of the zpool that createStubZpool writes, which sources this file
-# after it logs the call to $STUB_CALLS. It keeps its pools as `<name> <vdev>`
+# from its stubs directory, where the kit's stand-in puts the script. It keeps its pools as `<name> <vdev>`
 # lines in the stubs directory's pools file, so list, status -P and destroy see
 # what create made. The settings files beside that file, each one line:
 # - zpool.create: `fails`, `held` or empty; a held create writes the path in
@@ -11,7 +11,7 @@
 #   does, on zpool.destroy-started and zpool.destroy-release, then destroys the
 #   pool) or empty
 # - zpool.queries: `fail` makes list -H and status fail once a pool exists
-stubs=${STUB_CALLS%/*}
+stubs=$(dirname "$0")
 pools=$stubs/pools
 touch "$pools"
 

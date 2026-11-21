@@ -1,6 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { join } from 'node:path';
-import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
+import { readNextDelayMs } from '@impz/shared/test-utils/read-next-delay-ms';
+import { createFakeClock } from '@zgeoff/testing/clock';
 import { startStubSilentOrigin } from '../../test-utils/network/start-stub-silent-origin';
 import { sendLongRequest } from './send-long-request';
 
@@ -16,24 +17,26 @@ function setupTest() {
 
 test('it ends a call with no answer at its deadline, and aborts the request', async () => {
   const ctx = setupTest();
-  const clock = buildStubClock();
+  const clock = createFakeClock();
 
   const call = sendLongRequest(
     `${ctx.origin.origin}/long`,
     { method: 'POST', body: 'the long call' },
     {
       deadline: { delayMs: 3_600_000, buildError: () => new Error('no answer in 60 minutes') },
-      startTimer: clock.startTimer,
+      startTimer: clock.schedule,
     },
   );
 
   await ctx.origin.longHeld;
 
-  const pendingMs = clock.readPendingMs();
+  expect(clock.countPending()).toBe(1);
 
-  clock.runFor(3_600_000);
+  const pendingMs = readNextDelayMs(clock);
 
-  expect(pendingMs).toStrictEqual([3_600_000]);
+  clock.advance(3_600_000);
+
+  expect(pendingMs).toBe(3_600_000);
   expect(call).rejects.toThrowWithMessage(Error, 'no answer in 60 minutes');
 
   await expect(ctx.origin.longGone).toResolve();
@@ -41,7 +44,7 @@ test('it ends a call with no answer at its deadline, and aborts the request', as
 
 test('it stops the deadline once the answer comes', async () => {
   const ctx = setupTest();
-  const clock = buildStubClock();
+  const clock = createFakeClock();
 
   const control = new AbortController();
 
@@ -56,7 +59,7 @@ test('it stops the deadline once the answer comes', async () => {
     { method: 'POST', body: 'the long call' },
     {
       deadline: { delayMs: 3_600_000, buildError: () => new Error('no answer in 60 minutes') },
-      startTimer: clock.startTimer,
+      startTimer: clock.schedule,
     },
   );
 
@@ -75,7 +78,7 @@ test('it stops the deadline once the answer comes', async () => {
 
 test('it ends a call when its caller’s signal aborts before the deadline', async () => {
   const ctx = setupTest();
-  const clock = buildStubClock();
+  const clock = createFakeClock();
 
   const caller = new AbortController();
 
@@ -84,7 +87,7 @@ test('it ends a call when its caller’s signal aborts before the deadline', asy
     { method: 'POST', body: 'the long call', signal: caller.signal },
     {
       deadline: { delayMs: 3_600_000, buildError: () => new Error('no answer in 60 minutes') },
-      startTimer: clock.startTimer,
+      startTimer: clock.schedule,
     },
   );
 

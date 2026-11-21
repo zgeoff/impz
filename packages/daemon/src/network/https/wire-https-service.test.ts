@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { waitFor } from '@zgeoff/testing';
 import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
 import { createTestDatabase } from '../../test-utils/platform/create-test-database';
 import { createDnsToken } from './dns/dns-token';

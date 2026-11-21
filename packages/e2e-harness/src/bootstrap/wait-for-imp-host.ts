@@ -1,4 +1,4 @@
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { waitFor } from '@zgeoff/testing';
 import { readInContainer } from './read-in-container';
 import type { BootstrapRun } from './types';
 
@@ -19,7 +19,7 @@ export async function waitForImpHost(run: BootstrapRun): Promise<boolean> {
           throw new Error('imp-host is not running');
         }
       },
-      { intervalMs: 1000, timeoutMs: 30_000, now: run.io.now, wait: run.io.sleep },
+      { intervalMs: 1000, timeoutMs: 30_000, now: run.io.now, sleep: run.io.sleep },
     );
 
     return true;

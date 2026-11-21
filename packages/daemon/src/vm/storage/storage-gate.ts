@@ -1,6 +1,6 @@
-import type { Clock } from '../../platform/process/clock';
+import type { Clock } from '@zgeoff/std';
+import { systemClock } from '@zgeoff/std';
 import type { TryResult } from '../../platform/process/keyed-mutex';
-import { REAL_CLOCK } from '../../platform/process/real-clock';
 
 // Every operation that can make storage before its rows commit runs in `join`,
 // so the GC never sweeps that storage as an orphan.
@@ -12,7 +12,7 @@ export interface StorageGate {
 }
 
 export function createStorageGate(
-  clock: Pick<Clock, 'now' | 'startTimer'> = REAL_CLOCK,
+  clock: Pick<Clock, 'now' | 'schedule'> = systemClock,
 ): StorageGate {
   const state: {
     inFlight: number;
@@ -72,7 +72,7 @@ export function createStorageGate(
 
           const expired = Promise.withResolvers<void>();
 
-          const cancel = clock.startTimer(() => {
+          const cancel = clock.schedule(() => {
             expired.resolve();
           }, left);
 

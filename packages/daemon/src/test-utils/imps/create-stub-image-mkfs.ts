@@ -1,6 +1,6 @@
 import { chmodSync, existsSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { waitFor } from '@zgeoff/testing';
 
 export function createStubImageMkfs(directory: string) {
   const bin = join(directory, 'bin');

@@ -2,8 +2,8 @@
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
-import { REAL_CLOCK } from '@impz/daemon/real-clock';
 import { runCommand } from '@impz/e2e-harness/instance';
+import { systemClock } from '@zgeoff/std';
 import { withDevLock } from '../../../scripts/lib/with-dev-lock.ts';
 import { writeStderr } from '../../../scripts/lib/write-stderr.ts';
 import { writeStdoutLine } from '../../../scripts/lib/write-stdout-line.ts';
@@ -19,8 +19,8 @@ const ARM_DEPS: BenchArmDeps = {
   withDevLock: (name, run) => withDevLock(tmpdir(), name, run),
   runCommand: (argv, env) => runCommand(argv, { env }),
   writeLog: writeText,
-  now: REAL_CLOCK.now,
-  sleep: REAL_CLOCK.sleep,
+  now: systemClock.now,
+  sleep: systemClock.sleep,
   onStderr: writeStderr,
 };
 

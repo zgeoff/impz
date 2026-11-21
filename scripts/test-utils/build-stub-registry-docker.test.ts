@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
+import { createStubBin } from '@zgeoff/testing/bin';
 import { buildStubRegistryDocker } from './build-stub-registry-docker';
 
 function setupTest() {
@@ -18,15 +18,13 @@ function setupTest() {
 test('it fails an inspect of a missing tag with buildx’s not-found error', () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubRegistryDocker({ kind: 'missing' }),
-  );
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: buildStubRegistryDocker({ kind: 'missing' }),
+  });
 
   const result = Bun.spawnSync(
     ['docker', 'buildx', 'imagetools', 'inspect', 'ghcr.io/a/b:1', '--format', '{{x}}'],
-    { env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` } },
+    { env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` } },
   );
 
   expect({ exitCode: result.exitCode, stderr: result.stderr.toString() }).toStrictEqual({
@@ -38,15 +36,13 @@ test('it fails an inspect of a missing tag with buildx’s not-found error', () 
 test('it prints what the registry has for a found tag', () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubRegistryDocker({ kind: 'found', stdout: 'WARN: x\nsha256:abc' }),
-  );
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: buildStubRegistryDocker({ kind: 'found', stdout: 'WARN: x\nsha256:abc' }),
+  });
 
   const result = Bun.spawnSync(
     ['docker', 'buildx', 'imagetools', 'inspect', 'ghcr.io/a/b:1', '--format', '{{x}}'],
-    { env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` } },
+    { env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` } },
   );
 
   expect({ exitCode: result.exitCode, stdout: result.stdout.toString() }).toStrictEqual({
@@ -58,15 +54,13 @@ test('it prints what the registry has for a found tag', () => {
 test('it fails an inspect with the registry’s error on stderr', () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubRegistryDocker({ kind: 'failed', error: "ERROR: it's 403 Forbidden" }),
-  );
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: buildStubRegistryDocker({ kind: 'failed', error: "ERROR: it's 403 Forbidden" }),
+  });
 
   const result = Bun.spawnSync(
     ['docker', 'buildx', 'imagetools', 'inspect', 'ghcr.io/a/b:1', '--format', '{{x}}'],
-    { env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` } },
+    { env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` } },
   );
 
   expect({ exitCode: result.exitCode, stderr: result.stderr.toString() }).toStrictEqual({
@@ -78,14 +72,12 @@ test('it fails an inspect with the registry’s error on stderr', () => {
 test('it fails a call that is not an imagetools inspect', () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubRegistryDocker({ kind: 'found', stdout: 'sha256:abc' }),
-  );
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: buildStubRegistryDocker({ kind: 'found', stdout: 'sha256:abc' }),
+  });
 
   const result = Bun.spawnSync(['docker', 'pull', 'ghcr.io/a/b:1'], {
-    env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
+    env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
   });
 
   expect({ exitCode: result.exitCode, stdout: result.stdout.toString() }).toStrictEqual({

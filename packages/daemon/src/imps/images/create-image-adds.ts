@@ -1,11 +1,11 @@
 import { ImageRefSchema, NameSchema } from '@impz/api';
 import type { ImageBuildPhase } from '@impz/api';
 import { getErrorMessage } from '@impz/shared';
+import type { Clock } from '@zgeoff/std';
 import { listImages, readImageByName } from '../../platform/db/create-image';
 import type { ImageRecord } from '../../platform/db/create-image';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import { ImpdError } from '../../platform/errors/impd-error';
-import type { Clock } from '../../platform/process/clock';
 import { getImpdLogger } from '../../platform/process/get-impd-logger';
 import { createSingleFlight } from '../../platform/process/single-flight';
 import { checkReferenceRegistry } from '../docker-contract/check-reference-registry';

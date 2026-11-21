@@ -1,8 +1,8 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { buildMockTokenSshKeyRecord } from '@impz/daemon/test-utils';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { waitFor } from '@zgeoff/testing';
 import invariant from 'tiny-invariant';
 import { renderApp } from '../test-utils/render-app';
 import { startDashboardImpd } from '../test-utils/start-dashboard-impd';

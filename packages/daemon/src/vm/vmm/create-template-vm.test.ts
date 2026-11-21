@@ -11,8 +11,8 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
 import { createStubUffdHandler } from '@impz/testing/stand-in/vm/create-stub-uffd-handler';
+import { waitFor } from '@zgeoff/testing';
 import { stopPid } from '../../platform/process/read-stat-fields';
 import { buildMockTemplateBuildPlan } from '../../test-utils/vm/build-mock-template-build-plan';
 import { buildMockTemplateRestorePlan } from '../../test-utils/vm/build-mock-template-restore-plan';

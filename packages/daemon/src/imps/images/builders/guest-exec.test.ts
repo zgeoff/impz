@@ -3,8 +3,10 @@ import { writeFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
-import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
+import { fireNextTimer } from '@impz/shared/test-utils/fire-next-timer';
+import { readNextDelayMs } from '@impz/shared/test-utils/read-next-delay-ms';
+import { waitFor } from '@zgeoff/testing';
+import { createFakeClock } from '@zgeoff/testing/clock';
 import type { StubAnswer } from '../../../test-utils/vm/build-stub-guest';
 import { buildStubGuest } from '../../../test-utils/vm/build-stub-guest';
 import { GuestOutputError, createGuestExec } from './guest-exec';
@@ -114,36 +116,38 @@ test('it refuses a step that writes past the stdout impd keeps', () => {
 
 test('it fails a step that does not exit within its timeout', async () => {
   const guest = buildStubGuest(() => new Promise<StubAnswer>(() => {}));
-  const timers = buildStubClock();
+  const timers = createFakeClock();
 
-  const running = createGuestExec(guest.open, timers.startTimer)(['sleep', 'inf'], {
+  const running = createGuestExec(guest.open, timers.schedule)(['sleep', 'inf'], {
     signal: new AbortController().signal,
     timeoutMs: 20,
   });
 
   await waitFor(() => {
-    expect(timers.readPendingMs()).toStrictEqual([20]);
+    expect(timers.countPending()).toBe(1);
+    expect(readNextDelayMs(timers)).toBe(20);
   });
 
-  timers.firePending();
+  fireNextTimer(timers);
 
   expect(running).rejects.toThrowWithMessage(Error, 'sleep inf: no exit in 20 ms');
 });
 
 test('it kills and closes a step that does not exit within its timeout', async () => {
   const guest = buildStubGuest(() => new Promise<StubAnswer>(() => {}));
-  const timers = buildStubClock();
+  const timers = createFakeClock();
 
-  const running = createGuestExec(guest.open, timers.startTimer)(['sleep', 'inf'], {
+  const running = createGuestExec(guest.open, timers.schedule)(['sleep', 'inf'], {
     signal: new AbortController().signal,
     timeoutMs: 20,
   });
 
   await waitFor(() => {
-    expect(timers.readPendingMs()).toStrictEqual([20]);
+    expect(timers.countPending()).toBe(1);
+    expect(readNextDelayMs(timers)).toBe(20);
   });
 
-  timers.firePending();
+  fireNextTimer(timers);
 
   expect(running).rejects.toThrowWithMessage(Error, 'sleep inf: no exit in 20 ms');
   expect(guest.runs[0]).toMatchObject({ signals: [9], closed: true });
@@ -151,14 +155,14 @@ test('it kills and closes a step that does not exit within its timeout', async (
 
 test('it cancels the timeout of a step that exits within it', async () => {
   const guest = buildStubGuest(() => ({ stdout: 'ok' }));
-  const timers = buildStubClock();
+  const timers = createFakeClock();
 
-  await createGuestExec(guest.open, timers.startTimer)(['true'], {
+  await createGuestExec(guest.open, timers.schedule)(['true'], {
     signal: new AbortController().signal,
     timeoutMs: 20,
   });
 
-  expect(timers.readPendingMs()).toStrictEqual([]);
+  expect(readNextDelayMs(timers)).toBeNull();
 });
 
 test('it kills and closes a running step whose signal aborts', async () => {

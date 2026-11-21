@@ -29,7 +29,7 @@ test('it prints the node it was given as its status', () => {
   });
 
   const result = Bun.spawnSync([
-    join(tailscale.bin, 'tailscale'),
+    join(ctx.directoryPath, 'tailscale'),
     '--socket=/run/ts.sock',
     'status',
     '--json',
@@ -48,10 +48,11 @@ test('it prints the node it was given as its status', () => {
 
 test('it fails status before any node is written, as with no tailscaled', () => {
   const ctx = setupTest();
-  const tailscale = createStubTailscale(ctx.directoryPath);
+
+  createStubTailscale(ctx.directoryPath);
 
   const result = Bun.spawnSync([
-    join(tailscale.bin, 'tailscale'),
+    join(ctx.directoryPath, 'tailscale'),
     '--socket=/run/ts.sock',
     'status',
     '--json',
@@ -72,7 +73,7 @@ test('it reports Starting while held, whatever the node says', () => {
   tailscale.holdStart();
 
   const result = Bun.spawnSync([
-    join(tailscale.bin, 'tailscale'),
+    join(ctx.directoryPath, 'tailscale'),
     '--socket=/run/ts.sock',
     'status',
     '--json',
@@ -94,7 +95,7 @@ test('it reports the node again once the start is released', () => {
   tailscale.releaseStart();
 
   const result = Bun.spawnSync([
-    join(tailscale.bin, 'tailscale'),
+    join(ctx.directoryPath, 'tailscale'),
     '--socket=/run/ts.sock',
     'status',
     '--json',
@@ -111,7 +112,7 @@ test('it saves a Running node with the hostname and tags that up names', () => {
   const tailscale = createStubTailscale(ctx.directoryPath);
 
   Bun.spawnSync([
-    join(tailscale.bin, 'tailscale'),
+    join(ctx.directoryPath, 'tailscale'),
     '--socket=/run/ts.sock',
     'up',
     '--reset',
@@ -134,10 +135,11 @@ test('it saves a Running node with the hostname and tags that up names', () => {
 
 test("it prints Tailscale's own server as the control URL before any prefs or up", () => {
   const ctx = setupTest();
-  const tailscale = createStubTailscale(ctx.directoryPath);
+
+  createStubTailscale(ctx.directoryPath);
 
   const result = Bun.spawnSync([
-    join(tailscale.bin, 'tailscale'),
+    join(ctx.directoryPath, 'tailscale'),
     '--socket=/run/ts.sock',
     'debug',
     'prefs',
@@ -155,7 +157,7 @@ test('it prints the prefs it was given', () => {
   tailscale.writePrefs({ ControlURL: 'http://headscale.test:8080' });
 
   const result = Bun.spawnSync([
-    join(tailscale.bin, 'tailscale'),
+    join(ctx.directoryPath, 'tailscale'),
     '--socket=/run/ts.sock',
     'debug',
     'prefs',
@@ -168,10 +170,11 @@ test('it prints the prefs it was given', () => {
 
 test('it saves the login server that up names as the control URL', () => {
   const ctx = setupTest();
-  const tailscale = createStubTailscale(ctx.directoryPath);
+
+  createStubTailscale(ctx.directoryPath);
 
   Bun.spawnSync([
-    join(tailscale.bin, 'tailscale'),
+    join(ctx.directoryPath, 'tailscale'),
     '--socket=/run/ts.sock',
     'up',
     '--hostname=imp',
@@ -179,7 +182,7 @@ test('it saves the login server that up names as the control URL', () => {
   ]);
 
   const result = Bun.spawnSync([
-    join(tailscale.bin, 'tailscale'),
+    join(ctx.directoryPath, 'tailscale'),
     '--socket=/run/ts.sock',
     'debug',
     'prefs',
@@ -200,7 +203,7 @@ test('it refuses to move a Running node to another control server without --forc
   });
 
   const result = Bun.spawnSync([
-    join(tailscale.bin, 'tailscale'),
+    join(ctx.directoryPath, 'tailscale'),
     '--socket=/run/ts.sock',
     'up',
     '--hostname=imp',
@@ -223,7 +226,7 @@ test('it moves a Running node to another control server with --force-reauth', ()
   });
 
   Bun.spawnSync([
-    join(tailscale.bin, 'tailscale'),
+    join(ctx.directoryPath, 'tailscale'),
     '--socket=/run/ts.sock',
     'up',
     '--force-reauth',
@@ -232,7 +235,7 @@ test('it moves a Running node to another control server with --force-reauth', ()
   ]);
 
   const result = Bun.spawnSync([
-    join(tailscale.bin, 'tailscale'),
+    join(ctx.directoryPath, 'tailscale'),
     '--socket=/run/ts.sock',
     'debug',
     'prefs',
@@ -257,7 +260,7 @@ test('it stops the node on down and keeps the rest of it', () => {
     },
   });
 
-  Bun.spawnSync([join(tailscale.bin, 'tailscale'), '--socket=/run/ts.sock', 'down']);
+  Bun.spawnSync([join(ctx.directoryPath, 'tailscale'), '--socket=/run/ts.sock', 'down']);
 
   expect(tailscale.readNode()).toStrictEqual({
     BackendState: 'Stopped',
@@ -274,9 +277,21 @@ test('it reads back the arguments after the socket of each call with one verb, i
   const ctx = setupTest();
   const tailscale = createStubTailscale(ctx.directoryPath);
 
-  Bun.spawnSync([join(tailscale.bin, 'tailscale'), '--socket=/run/ts.sock', 'up', '--hostname=a']);
-  Bun.spawnSync([join(tailscale.bin, 'tailscale'), '--socket=/run/ts.sock', 'down']);
-  Bun.spawnSync([join(tailscale.bin, 'tailscale'), '--socket=/run/ts.sock', 'up', '--hostname=b']);
+  Bun.spawnSync([
+    join(ctx.directoryPath, 'tailscale'),
+    '--socket=/run/ts.sock',
+    'up',
+    '--hostname=a',
+  ]);
+
+  Bun.spawnSync([join(ctx.directoryPath, 'tailscale'), '--socket=/run/ts.sock', 'down']);
+
+  Bun.spawnSync([
+    join(ctx.directoryPath, 'tailscale'),
+    '--socket=/run/ts.sock',
+    'up',
+    '--hostname=b',
+  ]);
 
   expect(tailscale.readCalls('up')).toStrictEqual(['up --hostname=a', 'up --hostname=b']);
 });

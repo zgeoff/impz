@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { createConnection, createServer } from 'node:net';
 import type { Socket } from 'node:net';
-import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { waitFor } from '@zgeoff/testing';
 import invariant from 'tiny-invariant';
 import { z } from 'zod';
 import { startStubSilentTcpProxy } from './start-stub-silent-tcp-proxy';
