@@ -62,7 +62,7 @@
       "@zgeoff/kysely-bun-sqlite": "0.3.3",
       "@zgeoff/mcp-auth": "0.3.0",
       "@zgeoff/oxlint-config": "0.11.3",
-      "@zgeoff/rig": "0.3.0",
+      "@zgeoff/rig": "0.3.2",
       "@zgeoff/std": "0.4.5",
       "@zgeoff/testing": "0.4.1",
       "acme-client": "5.4.0",
