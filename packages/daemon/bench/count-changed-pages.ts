@@ -1,8 +1,8 @@
 // The pages that differ from the base are what a dirty-page diff would write;
 // it runs where both files are, in the dev container:
 //   bun packages/daemon/bench/count-changed-pages.ts <base> <snapshot>
-import { writeStderr } from '../../../scripts/lib/write-stderr.ts';
-import { writeStdoutLine } from '../../../scripts/lib/write-stdout-line.ts';
+import { writeStderr } from '@impz/scripts/lib/write-stderr';
+import { writeStdoutLine } from '@impz/scripts/lib/write-stdout-line';
 import { buildChangedPagesReport } from '../src/test-utils/bench/build-changed-pages-report';
 import { readChangedPages } from '../src/test-utils/bench/count-changed-pages';
 import { parseCountChangedPagesArgs } from '../src/test-utils/bench/parse-count-changed-pages-args';

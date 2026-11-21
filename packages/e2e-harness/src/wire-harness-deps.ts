@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, rmSync, statfsSync } from 'node:fs';
 import { createImpClient } from '@impz/client';
-import { readTextOrNull } from '../../../scripts/lib/read-text-or-null.ts';
+import { readTextOrNull } from '@impz/scripts/lib/read-text-or-null';
 import { checkPrivileges } from './check-privileges';
 import type { HarnessEnv } from './config';
 import { createMissingImages } from './create-missing-images';

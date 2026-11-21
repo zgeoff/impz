@@ -7,6 +7,7 @@
   "exports": {
     "./dev/headscale-images": "./dev/headscale-images.ts",
     "./lib/*": "./lib/*.ts",
+    "./render/render-imp-host": "./render/render-imp-host.ts",
     "./test-utils/*": "./src/test-utils/*.ts",
     "./zfs/*": "./zfs/*.ts"
   },

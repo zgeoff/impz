@@ -1,5 +1,5 @@
-import { makeOpReader } from '../../../scripts/lib/make-op-reader.ts';
-import { readTailscaleE2EAuthkey } from '../../../scripts/lib/read-tailscale-e2e-authkey.ts';
+import { makeOpReader } from '@impz/scripts/lib/make-op-reader';
+import { readTailscaleE2EAuthkey } from '@impz/scripts/lib/read-tailscale-e2e-authkey';
 import type { HarnessEnv } from './config';
 
 export interface TailscaleE2EKey {

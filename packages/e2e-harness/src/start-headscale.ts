@@ -1,6 +1,6 @@
 import { join } from 'node:path';
+import { HEADSCALE_IMAGES } from '@impz/scripts/dev/headscale-images';
 import * as z from 'zod';
-import { HEADSCALE_IMAGES } from '../../../scripts/dev/headscale-images';
 import { FIXTURES_DIR, instance } from './instance';
 import type { CommandRunners } from './instance';
 import { startTailnetMember } from './start-tailnet-member';
