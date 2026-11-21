@@ -7,6 +7,7 @@ import { buildStubAnswerQueue } from '@impz/shared/test-utils/build-stub-answer-
 import { readImpEnv } from '@impz/shared/test-utils/read-imp-env';
 import { updateEnv } from '@impz/shared/test-utils/update-env';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import { loadConfig } from '../../config';
 import { createImage, listImages, readImageByName } from '../../platform/db/create-image';
 import { listImps } from '../../platform/db/list-imps';
@@ -22,7 +23,6 @@ import { createStubImageMkfs } from '../../test-utils/imps/create-stub-image-mkf
 import { createStubOciFetch } from '../../test-utils/imps/create-stub-oci-fetch';
 import { buildQueryGate } from '../../test-utils/platform/build-query-gate';
 import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
-import { startTestImpd } from '../../test-utils/start-test-impd';
 import type { StubAnswer } from '../../test-utils/vm/build-stub-guest';
 import { buildImagePaths } from '../../vm/storage/build-imp-paths';
 import { countTreeBytes } from '../../vm/storage/count-tree-bytes';

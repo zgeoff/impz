@@ -19,6 +19,7 @@
   "devDependencies": {
     "@faker-js/faker": "catalog:",
     "@impz/daemon": "workspace:*",
+    "@impz/testing": "workspace:*",
     "@modelcontextprotocol/client": "catalog:",
     "tiny-invariant": "catalog:"
   }

@@ -1,5 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { buildStubAnswerQueue } from '@impz/shared/test-utils/build-stub-answer-queue';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import { createForwardedPeers } from '../../network/proxy/forwarded-peers';
 import { startWakeProxy } from '../../network/proxy/wake-proxy';
 import { createImage } from '../../platform/db/create-image';
@@ -9,7 +10,6 @@ import { buildMockLeaseRecord } from '../../test-utils/imps/build-mock-lease-rec
 import { buildMockNewImage } from '../../test-utils/imps/build-mock-new-image';
 import { seedLoopbackImp } from '../../test-utils/imps/seed-loopback-imp';
 import { startStubHeaderEcho } from '../../test-utils/network/start-stub-header-echo';
-import { startTestImpd } from '../../test-utils/start-test-impd';
 import { buildImagePaths } from '../../vm/storage/build-imp-paths';
 import { createIdleLoop } from './idle-loop';
 

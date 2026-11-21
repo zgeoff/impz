@@ -7,11 +7,11 @@ import {
   STUB_GENERATION,
   buildImpPaths,
   buildStubExecAgent,
-  startStubAgent,
-  startTestImpd,
 } from '@impz/daemon/test-utils';
 import { server } from '@impz/shared/test-utils/server';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
+import { startStubAgent } from '@impz/testing/stand-in/vm/start-stub-agent';
 import { ORPCError } from '@orpc/client';
 import { http } from 'msw';
 import { createImpClient } from '../create-imp-client';

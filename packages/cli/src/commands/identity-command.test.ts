@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { faker } from '@faker-js/faker';
 import { createImpClient } from '@impz/client';
-import { startTestImpd } from '@impz/daemon/test-utils';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import * as z from 'zod';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 

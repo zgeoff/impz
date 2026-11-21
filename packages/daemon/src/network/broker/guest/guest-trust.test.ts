@@ -13,10 +13,10 @@ import {
   encodeMessageFrame,
 } from '@impz/agent-protocol';
 import { BROKER_ENV_NAMES } from '@impz/api';
+import { startStubAgent } from '@impz/testing/stand-in/vm/start-stub-agent';
 import invariant from 'tiny-invariant';
 import { captureImpdLogs } from '../../../test-utils/platform/capture-impd-logs';
 import { buildStubExecReplies } from '../../../test-utils/vm/build-stub-exec-replies';
-import { startStubAgent } from '../../../test-utils/vm/start-stub-agent';
 import {
   buildBrokerEnv,
   buildInstallArgv,

@@ -11,6 +11,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
+import { readRunOwner } from '@impz/testing/stand-in/platform/read-run-owner';
 import { buildSQLiteDialect } from '@zgeoff/kysely-bun-sqlite';
 import { Kysely } from 'kysely';
 import type { DB } from '../../platform/db/db';
@@ -18,7 +19,6 @@ import { runMigrationsTo } from '../../platform/db/run-migrations';
 import type { TemplateDependencies } from './copy-migrated-template';
 import { probeProcessRunning } from './probe-process-running';
 import { readMigrationsHash } from './read-migrations-hash';
-import { readRunOwner } from './read-run-owner';
 
 export function readTemplateDependencies(cacheDirectory: string): TemplateDependencies {
   return {

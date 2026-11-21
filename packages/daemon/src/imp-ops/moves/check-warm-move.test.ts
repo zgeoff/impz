@@ -11,6 +11,7 @@ import {
 } from '@impz/agent-protocol';
 import { MoveOfferReplySchema } from '@impz/api';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { startStubAgent } from '@impz/testing/stand-in/vm/start-stub-agent';
 import invariant from 'tiny-invariant';
 import * as z from 'zod';
 import { runBundleInstall } from '../../network/broker/guest/guest-trust';
@@ -27,7 +28,6 @@ import {
 import { buildMockAgentSession } from '../../test-utils/imps/build-mock-agent-session';
 import { buildStubCpuCgroups } from '../../test-utils/vm/build-stub-cpu-cgroups';
 import { buildStubExecReplies } from '../../test-utils/vm/build-stub-exec-replies';
-import { startStubAgent } from '../../test-utils/vm/start-stub-agent';
 import { readSnapshotMeta, writeSnapshotMeta } from '../../vm/sleep/snapshot-meta';
 import { VmIdentitySchema } from '../../vm/sleep/vm-identity';
 import { MOVE_FRAMES, readJsonPayload } from './move-frames';

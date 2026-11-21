@@ -2,15 +2,11 @@ import { expect, mock, onTestFinished, test } from 'bun:test';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import {
-  buildStubImageBuilder,
-  createFilesTar,
-  startBuilderImpd,
-  startTestImpd,
-} from '@impz/daemon/test-utils';
+import { buildStubImageBuilder, createFilesTar, startBuilderImpd } from '@impz/daemon/test-utils';
 import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
 import { server } from '@impz/shared/test-utils/server';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import { ORPCError } from '@orpc/client';
 import { HttpResponse, http } from 'msw';
 import { createImpClient } from './create-imp-client';

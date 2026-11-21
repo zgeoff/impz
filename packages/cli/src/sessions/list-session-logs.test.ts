@@ -10,8 +10,8 @@ import {
   createGenerationLog,
   createImage,
   startStubImpdRelease,
-  startTestImpd,
 } from '@impz/daemon/test-utils';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 
 async function setupTest() {

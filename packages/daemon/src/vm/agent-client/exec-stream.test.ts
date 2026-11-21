@@ -11,8 +11,8 @@ import {
   encodeFrame,
   encodeMessageFrame,
 } from '@impz/agent-protocol';
+import { startStubAgent } from '@impz/testing/stand-in/vm/start-stub-agent';
 import invariant from 'tiny-invariant';
-import { startStubAgent } from '../../test-utils/vm/start-stub-agent';
 import { startStubEchoExecAgent } from '../../test-utils/vm/start-stub-echo-exec-agent';
 import { AgentWaitError } from './agent-wait-error';
 import { openAttachStream, openExecStream, openTapStream } from './exec-stream';

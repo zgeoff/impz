@@ -3,12 +3,9 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createImpClient } from '@impz/client';
-import {
-  buildStubImpdReleaseFetch,
-  createUbuntuImage,
-  startTestImpd,
-} from '@impz/daemon/test-utils';
+import { buildStubImpdReleaseFetch, createUbuntuImage } from '@impz/daemon/test-utils';
 import { server } from '@impz/shared/test-utils/server';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import { HttpResponse, http } from 'msw';
 import { UsageError } from '../cli/usage-error';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';

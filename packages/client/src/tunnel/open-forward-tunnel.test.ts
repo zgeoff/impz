@@ -10,13 +10,13 @@ import { TUNNEL_MAX_FRAME_BYTES, TUNNEL_WINDOW_BYTES } from '@impz/api';
 import {
   buildImpPaths,
   readVmIdentity,
-  startStubAgent,
   startStubDialAgent,
-  startTestImpd,
   writeVmIdentity,
 } from '@impz/daemon/test-utils';
 import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
+import { startStubAgent } from '@impz/testing/stand-in/vm/start-stub-agent';
 import invariant from 'tiny-invariant';
 import { createImpClient } from '../create-imp-client';
 import { openForwardTunnel } from './open-forward-tunnel';

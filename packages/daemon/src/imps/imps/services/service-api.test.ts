@@ -8,14 +8,14 @@ import {
   ServiceStatusSchema,
 } from '@impz/agent-protocol';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
+import { TEST_TOKEN } from '@impz/testing/test-token';
 import invariant from 'tiny-invariant';
 import type { LoggedImpEvent } from '../../../platform/db/imp-log-entry';
 import { createEventBus } from '../../../platform/events/event-bus';
-import { buildStubClock } from '../../../test-utils/platform/build-stub-clock';
 import { readInBackground } from '../../../test-utils/platform/read-in-background';
 import { readQueuedText } from '../../../test-utils/platform/read-queued-text';
-import { startTestImpd } from '../../../test-utils/start-test-impd';
-import { TEST_TOKEN } from '../../../test-utils/test-token';
 import { startStubServiceAgent } from '../../../test-utils/vm/start-stub-service-agent';
 import { readSnapshotMeta } from '../../../vm/sleep/snapshot-meta';
 import { buildImpPaths } from '../../../vm/storage/build-imp-paths';

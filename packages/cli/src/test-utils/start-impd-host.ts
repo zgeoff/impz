@@ -1,7 +1,7 @@
 import { faker } from '@faker-js/faker';
 import { createImpClient } from '@impz/client';
-import { startTestImpd } from '@impz/daemon/test-utils';
-import type { TestImpd } from '@impz/daemon/test-utils';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
+import type { TestImpd } from '@impz/testing/stand-in/start-test-impd';
 
 interface ImpdHostOptions {
   readonly env: Readonly<Record<string, string>>;

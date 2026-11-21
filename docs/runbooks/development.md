@@ -258,14 +258,14 @@ hand, with `docker image rm <tag>`.
 
 ## Daemon tests
 
-The daemon's tests need no VM. `startTestImpd` in `packages/daemon/src/test-utils/` starts impd
+The daemon's tests need no VM. `startTestImpd` in `packages/testing/src/stand-in/` starts impd
 through the same startup as production, over an in-memory database and a stub VMM
-(`src/test-utils/vm/build-stub-vmm.ts`). A test scripts what the next boot, wake, sleep, stop or
-agent check does (succeed, fail, die or hang), holds a step until it releases it, and restarts impd
-over the same database and VMs. Another package's tests import the harness from
-`@impz/daemon/test-utils`. To check that impd left no dead VM or lost snapshot on its records, a
-test calls `readBrokenInvariants`. It reads the records raw, because a read through the service
-repairs what it finds.
+(`packages/testing/src/stand-in/vm/build-stub-vmm.ts`). A test scripts what the next boot, wake,
+sleep, stop or agent check does (succeed, fail, die or hang), holds a step until it releases it, and
+restarts impd over the same database and VMs. Another package's tests import the harness from
+`@impz/testing/stand-in/start-test-impd`. To check that impd left no dead VM or lost snapshot on its
+records, a test calls `readBrokenInvariants`. It reads the records raw, because a read through the
+service repairs what it finds.
 
 After you add a migration, run `bun run render:db-schema`: kysely-codegen writes the daemon's typed
 schema from a freshly migrated database, and `bun test` fails while the committed file differs.

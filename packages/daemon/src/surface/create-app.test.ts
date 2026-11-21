@@ -8,6 +8,7 @@ import { readImpEnv } from '@impz/shared/test-utils/read-imp-env';
 import { server } from '@impz/shared/test-utils/server';
 import { updateEnv } from '@impz/shared/test-utils/update-env';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
@@ -24,7 +25,6 @@ import { buildStubImageBuilder } from '../test-utils/imps/build-stub-image-build
 import { createBuilderImage } from '../test-utils/imps/create-builder-image';
 import { createFilesTar } from '../test-utils/imps/create-files-tar';
 import { createStubCloudflareApi } from '../test-utils/network/create-stub-cloudflare-api';
-import { startTestImpd } from '../test-utils/start-test-impd';
 import { tryExecSocket, tryTunnelSocket } from '../test-utils/surface/try-exec-socket';
 import { buildStubCpuCgroups } from '../test-utils/vm/build-stub-cpu-cgroups';
 import { buildStubZfsStorage } from '../test-utils/vm/build-stub-zfs-storage';

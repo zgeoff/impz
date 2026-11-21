@@ -3,8 +3,8 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
 import { stopPid } from '../../platform/process/read-stat-fields';
-import { buildStubClock } from '../../test-utils/platform/build-stub-clock';
 import { startStubFirecrackerProcess } from '../../test-utils/vm/start-stub-firecracker-process';
 import { buildJailerCommand } from './create-jails';
 import { readProcessCgroup } from './read-process-uid';

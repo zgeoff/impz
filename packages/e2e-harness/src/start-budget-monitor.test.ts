@@ -1,6 +1,6 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
-import { buildStubClock } from '@impz/daemon/test-utils';
 import { buildStubAnswerQueue } from '@impz/shared/test-utils/build-stub-answer-queue';
+import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
 import type { BudgetSample } from './start-budget-monitor';
 import {
   buildFillScript,

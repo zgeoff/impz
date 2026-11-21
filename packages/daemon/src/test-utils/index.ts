@@ -1,8 +1,3 @@
-export { startTestImpd } from './start-test-impd';
-export type { TestImpd, TestImpdOptions } from './start-test-impd';
-export { TEST_TOKEN } from './test-token';
-export { formatRunPrefix } from './platform/format-run-prefix';
-export { readRunOwner } from './platform/read-run-owner';
 export { buildStubImpdReleaseFetch } from './surface/build-stub-impd-release-fetch';
 export type { StubImpdReleaseOptions } from './surface/build-stub-impd-release-fetch';
 export { startStubImpdRelease } from './surface/start-stub-impd-release';
@@ -35,7 +30,6 @@ export { probeUnshare } from './host-net/probe-unshare';
 export { readHostNetfilter } from './host-net/read-host-netfilter';
 export { runInNetns } from './host-net/run-in-netns';
 export { buildQueryGate } from './platform/build-query-gate';
-export { buildStubClock } from './platform/build-stub-clock';
 export { readInBackground } from './platform/read-in-background';
 export { runEventPrune } from './platform/run-event-prune';
 
@@ -49,8 +43,6 @@ export {
 export { buildStubExecGuest } from './vm/build-stub-exec-guest';
 export { buildStubExecReplies } from './vm/build-stub-exec-replies';
 export { buildStubForwardAgent } from './vm/build-stub-forward-agent';
-export { startStubAgent } from './vm/start-stub-agent';
-export type { StubAgentHandler } from './vm/start-stub-agent';
 export { startStubDialAgent } from './vm/start-stub-dial-agent';
 export { startStubExecAgent } from './vm/start-stub-exec-agent';
 export { startStubInnerAgent } from './vm/start-stub-inner-agent';

@@ -1,5 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { readImpEnv } from '@impz/shared/test-utils/read-imp-env';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import {
   createImage,
   readImageByName,
@@ -9,7 +10,6 @@ import {
 import { buildMockCaller } from '../../test-utils/identity/build-mock-caller';
 import { buildMockNewImage } from '../../test-utils/imps/build-mock-new-image';
 import { buildQueryGate } from '../../test-utils/platform/build-query-gate';
-import { startTestImpd } from '../../test-utils/start-test-impd';
 import { checkImagePin } from './check-image-pin';
 
 async function setupTest() {

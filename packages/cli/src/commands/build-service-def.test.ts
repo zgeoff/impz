@@ -2,13 +2,9 @@ import { expect, mock, onTestFinished, test } from 'bun:test';
 import { faker } from '@faker-js/faker';
 import { RequestSchema, encodeAgentMessage } from '@impz/agent-protocol';
 import { createImpClient } from '@impz/client';
-import {
-  buildImpPaths,
-  sendServicesAdd,
-  startStubServiceAgent,
-  startTestImpd,
-} from '@impz/daemon/test-utils';
+import { buildImpPaths, sendServicesAdd, startStubServiceAgent } from '@impz/daemon/test-utils';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import { UsageError } from '../cli/usage-error';
 import { runCLIInProcess } from '../test-utils/run-cli-in-process';
 import { buildServiceDef, createLogPrinter, formatLogEvent } from './build-service-def';

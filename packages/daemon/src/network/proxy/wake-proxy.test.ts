@@ -3,6 +3,8 @@ import { expect, jest, mock, onTestFinished, test } from 'bun:test';
 import { join } from 'node:path';
 import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import invariant from 'tiny-invariant';
 import {
   readImpByName,
@@ -16,9 +18,7 @@ import { startStubCutStream } from '../../test-utils/network/start-stub-cut-stre
 import { startStubHeaderEcho } from '../../test-utils/network/start-stub-header-echo';
 import { startStubPausedSocketGuest } from '../../test-utils/network/start-stub-paused-socket-guest';
 import { startStubSilentOrigin } from '../../test-utils/network/start-stub-silent-origin';
-import { buildStubClock } from '../../test-utils/platform/build-stub-clock';
 import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
-import { startTestImpd } from '../../test-utils/start-test-impd';
 import { PEER_HEADER, createForwardedPeers } from './forwarded-peers';
 import { startWakeProxy } from './wake-proxy';
 

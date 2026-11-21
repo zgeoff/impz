@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { statSync } from 'node:fs';
 import { join } from 'node:path';
 import { createImpClient } from '@impz/client';
-import { startTestImpd } from '../test-utils/start-test-impd';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

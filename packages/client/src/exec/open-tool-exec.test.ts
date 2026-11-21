@@ -16,12 +16,12 @@ import {
   buildImpPaths,
   buildStubExecReplies,
   readVmIdentity,
-  startStubAgent,
-  startTestImpd,
   writeVmIdentity,
 } from '@impz/daemon/test-utils';
 import { listLocalEntries, writeLocalEntries } from '@impz/local-tar';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
+import { startStubAgent } from '@impz/testing/stand-in/vm/start-stub-agent';
 import tar from 'tar-stream';
 import invariant from 'tiny-invariant';
 import { createImpClient } from '../create-imp-client';

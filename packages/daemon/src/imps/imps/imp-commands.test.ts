@@ -1,8 +1,8 @@
 import { expect, onTestFinished, test } from 'bun:test';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import invariant from 'tiny-invariant';
 import { updateImage } from '../../platform/db/create-image';
 import { readImpByName } from '../../platform/db/list-imps';
-import { startTestImpd } from '../../test-utils/start-test-impd';
 
 function setupTest() {
   const stack = new AsyncDisposableStack();

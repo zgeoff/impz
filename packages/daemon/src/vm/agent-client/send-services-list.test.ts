@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { startStubAgent } from '../../test-utils/vm/start-stub-agent';
+import { startStubAgent } from '@impz/testing/stand-in/vm/start-stub-agent';
 import { openServiceLogStream } from './send-services-list';
 
 function setupTest() {

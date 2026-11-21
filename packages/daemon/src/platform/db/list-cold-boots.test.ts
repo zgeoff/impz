@@ -6,11 +6,11 @@ import {
   StartedSchema,
   encodeMessageFrame,
 } from '@impz/agent-protocol';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
+import { buildStubBootId } from '@impz/testing/stand-in/vm/build-stub-vmm';
 import invariant from 'tiny-invariant';
 import { buildMockNewImage } from '../../test-utils/imps/build-mock-new-image';
 import { buildMockNewImp } from '../../test-utils/imps/build-mock-new-imp';
-import { startTestImpd } from '../../test-utils/start-test-impd';
-import { buildStubBootId } from '../../test-utils/vm/build-stub-vmm';
 import { startStubAttachAgent } from '../../test-utils/vm/start-stub-attach-agent';
 import { buildImpPaths } from '../../vm/storage/build-imp-paths';
 import { createImage } from './create-image';

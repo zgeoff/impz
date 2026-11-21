@@ -5,8 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { IdentityTrustDocument } from '@impz/api';
 import { verifyImpIdentity } from '@impz/client/identity';
+import { buildStubTickerTimer } from '@impz/testing/stand-in/platform/build-stub-ticker-timer';
 import { parseStubJwtSegment } from '../../../test-utils/network/parse-stub-jwt-segment';
-import { buildStubTickerTimer } from '../../../test-utils/platform/build-stub-ticker-timer';
 import { loadOrCreateIdentity } from './load-or-create-identity';
 
 async function setupTest() {

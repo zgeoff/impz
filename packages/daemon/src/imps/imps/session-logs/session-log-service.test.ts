@@ -4,6 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve as resolvePath } from 'node:path';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
 import invariant from 'tiny-invariant';
 import { ImpdError } from '../../../platform/errors/impd-error';
 import { buildStubTapOpener } from '../../../test-utils/host-net/build-stub-tap-opener';
@@ -11,7 +12,6 @@ import { buildMockAgentSession } from '../../../test-utils/imps/build-mock-agent
 import { buildMockSessionOutput } from '../../../test-utils/imps/build-mock-session-output';
 import { buildStubGenerationLogGate } from '../../../test-utils/imps/build-stub-generation-log-gate';
 import { buildStubTapStream } from '../../../test-utils/imps/build-stub-tap-stream';
-import { buildStubClock } from '../../../test-utils/platform/build-stub-clock';
 import { captureImpdLogs } from '../../../test-utils/platform/capture-impd-logs';
 import { AgentError } from '../../../vm/agent-client/agent-connection';
 import type { ExecStream } from '../../../vm/agent-client/exec-stream';

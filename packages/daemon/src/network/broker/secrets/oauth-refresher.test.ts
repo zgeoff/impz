@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { buildMockBrokerRule } from '@impz/api/test-utils/build-mock-broker-rule';
 import { buildMockOAuthConfig } from '@impz/api/test-utils/build-mock-oauth-config';
 import { server } from '@impz/shared/test-utils/server';
+import { buildStubTickerTimer } from '@impz/testing/stand-in/platform/build-stub-ticker-timer';
 import { HttpResponse, delay, http } from 'msw';
 import invariant from 'tiny-invariant';
 import { createSecret, removeSecret } from '../../../platform/db/create-checked-grant';
@@ -14,7 +15,6 @@ import { buildStubBrokerJwt } from '../../../test-utils/network/build-stub-broke
 import { createStubBrokerTokenEndpoint } from '../../../test-utils/network/create-stub-broker-token-endpoint';
 import { startStubBrokerTlsUpstream } from '../../../test-utils/network/start-stub-broker-tls-upstream';
 import { buildQueryGate } from '../../../test-utils/platform/build-query-gate';
-import { buildStubTickerTimer } from '../../../test-utils/platform/build-stub-ticker-timer';
 import { captureImpdLogs } from '../../../test-utils/platform/capture-impd-logs';
 import { createTestDatabase } from '../../../test-utils/platform/create-test-database';
 import { loadOrCreateBrokerCa } from '../tls/broker-ca';

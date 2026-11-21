@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { join } from 'node:path';
+import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
 import { startStubSilentOrigin } from '../../test-utils/network/start-stub-silent-origin';
-import { buildStubClock } from '../../test-utils/platform/build-stub-clock';
 import { sendLongRequest } from './send-long-request';
 
 function setupTest() {

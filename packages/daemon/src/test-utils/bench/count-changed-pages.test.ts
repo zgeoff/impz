@@ -2,8 +2,8 @@ import { expect, mock, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { formatRunPrefix } from '../platform/format-run-prefix';
-import { readRunOwner } from '../platform/read-run-owner';
+import { formatRunPrefix } from '@impz/testing/stand-in/platform/format-run-prefix';
+import { readRunOwner } from '@impz/testing/stand-in/platform/read-run-owner';
 import { countChangedPages, readChangedPages } from './count-changed-pages';
 import { wireChangedPagesFS } from './wire-changed-pages-fs';
 

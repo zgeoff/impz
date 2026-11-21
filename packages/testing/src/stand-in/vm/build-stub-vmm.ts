@@ -1,14 +1,17 @@
 import { existsSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
-import { buildAgentOutdatedError } from '../../vm/agent-client/build-agent-outdated-error';
-import { readLoadingMeta } from '../../vm/sleep/snapshot-meta';
-import type { FirecrackerPaths, ImpPaths } from '../../vm/storage/build-imp-paths';
-import type { JailUser } from '../../vm/vmm/create-jails';
-import { TemplateRestoreError } from '../../vm/vmm/create-template-vm';
-import type { TemplateBuildPlan, TemplateRestorePlan } from '../../vm/vmm/create-template-vm';
-import type { InstanceState } from '../../vm/vmm/firecracker-client';
-import type { VmOwner } from '../../vm/vmm/start-firecracker';
-import type { UffdStats } from '../../vm/vmm/start-uffd-handler';
-import type { VmRunner } from '../../vm/vmm/vm-runner';
+import { buildAgentOutdatedError } from '@impz/daemon/host/vm/agent-client/build-agent-outdated-error';
+import { readLoadingMeta } from '@impz/daemon/host/vm/sleep/snapshot-meta';
+import type { FirecrackerPaths, ImpPaths } from '@impz/daemon/host/vm/storage/build-imp-paths';
+import type { JailUser } from '@impz/daemon/host/vm/vmm/create-jails';
+import { TemplateRestoreError } from '@impz/daemon/host/vm/vmm/create-template-vm';
+import type {
+  TemplateBuildPlan,
+  TemplateRestorePlan,
+} from '@impz/daemon/host/vm/vmm/create-template-vm';
+import type { InstanceState } from '@impz/daemon/host/vm/vmm/firecracker-client';
+import type { VmOwner } from '@impz/daemon/host/vm/vmm/start-firecracker';
+import type { UffdStats } from '@impz/daemon/host/vm/vmm/start-uffd-handler';
+import type { VmRunner } from '@impz/daemon/host/vm/vmm/vm-runner';
 
 export const STUB_AGENT_VERSION = '0.1.0';
 const IMPD_OWNER: VmOwner = { uid: process.getuid?.() ?? 0, cgroup: null };

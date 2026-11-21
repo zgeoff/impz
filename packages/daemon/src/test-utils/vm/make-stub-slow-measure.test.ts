@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { buildStubClock } from '../platform/build-stub-clock';
+import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
 import { buildMockImpDiskUsage } from './build-mock-imp-disk-usage';
 import { makeStubSlowMeasure } from './make-stub-slow-measure';
 

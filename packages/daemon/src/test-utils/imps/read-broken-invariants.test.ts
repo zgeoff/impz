@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import invariant from 'tiny-invariant';
 import { listImps } from '../../platform/db/list-imps';
-import { startTestImpd } from '../start-test-impd';
 import { readBrokenInvariants } from './read-broken-invariants';
 
 test('#readBrokenInvariants finds nothing wrong with a running imp and its VM', async () => {

@@ -6,13 +6,13 @@ import { buildStubAnswerQueue } from '@impz/shared/test-utils/build-stub-answer-
 import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
 import { server } from '@impz/shared/test-utils/server';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { buildStubTickerTimer } from '@impz/testing/stand-in/platform/build-stub-ticker-timer';
 import { HttpResponse, http } from 'msw';
 import invariant from 'tiny-invariant';
 import { buildMockPublicImp } from '../../test-utils/network/build-mock-public-imp';
 import { buildStubProxyListen } from '../../test-utils/network/build-stub-proxy-listen';
 import { createMockCertificate } from '../../test-utils/network/create-mock-certificate';
 import { createStubCloudflareApi } from '../../test-utils/network/create-stub-cloudflare-api';
-import { buildStubTickerTimer } from '../../test-utils/platform/build-stub-ticker-timer';
 import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
 import type { Certificate } from './acme/cert-store';
 import { createCertStore } from './acme/cert-store';

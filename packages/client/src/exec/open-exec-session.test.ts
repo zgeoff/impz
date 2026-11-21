@@ -1,12 +1,9 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
-import {
-  buildImpPaths,
-  buildStubExecAgent,
-  startStubAgent,
-  startTestImpd,
-} from '@impz/daemon/test-utils';
+import { buildImpPaths, buildStubExecAgent } from '@impz/daemon/test-utils';
 import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
 import { server } from '@impz/shared/test-utils/server';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
+import { startStubAgent } from '@impz/testing/stand-in/vm/start-stub-agent';
 import { http } from 'msw';
 import { createImpClient } from '../create-imp-client';
 import { createStubUndiciWebSocket } from '../test-utils/create-stub-undici-web-socket';

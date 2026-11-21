@@ -1,5 +1,5 @@
 import { expect, mock, test } from 'bun:test';
-import { buildStubClock } from '../../test-utils/platform/build-stub-clock';
+import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
 import { waitForGuestAge } from './wait-for-guest-age';
 
 test('it sleeps a guest old enough at once without a wait', async () => {

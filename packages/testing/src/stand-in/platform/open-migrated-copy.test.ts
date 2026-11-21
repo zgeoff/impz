@@ -1,12 +1,12 @@
 import { expect, onTestFinished, test } from 'bun:test';
+import { createImage, listImages } from '@impz/daemon/host/platform/db/create-image';
+import { createImp } from '@impz/daemon/host/platform/db/list-imps';
+import { openDatabase } from '@impz/daemon/host/platform/db/open-database';
+import { readNames } from '@impz/daemon/host/platform/db/read-names';
+import { MIGRATIONS } from '@impz/daemon/host/platform/db/run-migrations';
+import { buildMockNewImage } from '@impz/daemon/test-utils/imps/build-mock-new-image';
+import { buildMockNewImp } from '@impz/daemon/test-utils/imps/build-mock-new-imp';
 import { sql } from 'kysely';
-import { createImage, listImages } from '../../platform/db/create-image';
-import { createImp } from '../../platform/db/list-imps';
-import { openDatabase } from '../../platform/db/open-database';
-import { readNames } from '../../platform/db/read-names';
-import { MIGRATIONS } from '../../platform/db/run-migrations';
-import { buildMockNewImage } from '../imps/build-mock-new-image';
-import { buildMockNewImp } from '../imps/build-mock-new-imp';
 import { openMigratedCopy } from './open-migrated-copy';
 
 test('it opens a copy that has run every migration', async () => {

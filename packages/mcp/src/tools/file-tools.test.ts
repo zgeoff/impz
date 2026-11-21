@@ -5,8 +5,8 @@ import {
   buildStubExecGuest,
   readImpByName,
   startStubExecAgent,
-  startTestImpd,
 } from '@impz/daemon/test-utils';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import invariant from 'tiny-invariant';
 import { buildImpGuard } from '../imp-guard';
 import { createMcpServer } from '../test-utils/create-mcp-server';

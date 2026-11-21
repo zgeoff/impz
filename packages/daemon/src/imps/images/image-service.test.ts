@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { updateEnv } from '@impz/shared/test-utils/update-env';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
 import { loadConfig } from '../../config';
 import {
   createImage,
@@ -22,7 +23,6 @@ import { buildStubImageBuilder } from '../../test-utils/imps/build-stub-image-bu
 import { createFilesTar } from '../../test-utils/imps/create-files-tar';
 import { createStubOciFetch } from '../../test-utils/imps/create-stub-oci-fetch';
 import { buildQueryGate } from '../../test-utils/platform/build-query-gate';
-import { buildStubClock } from '../../test-utils/platform/build-stub-clock';
 import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
 import { buildImagePaths } from '../../vm/storage/build-imp-paths';
 import { countTreeBytes } from '../../vm/storage/count-tree-bytes';

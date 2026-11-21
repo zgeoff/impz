@@ -1,5 +1,6 @@
 import { createImpClient } from '@impz/client';
-import { TEST_TOKEN, createMoveHosts, createUbuntuImage } from '@impz/daemon/test-utils';
+import { createMoveHosts, createUbuntuImage } from '@impz/daemon/test-utils';
+import { TEST_TOKEN } from '@impz/testing/test-token';
 
 export async function startWarmMoveHosts(stack: Readonly<AsyncDisposableStack>) {
   const hosts = await createMoveHosts(stack, { isShared: true });

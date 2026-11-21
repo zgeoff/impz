@@ -28,6 +28,7 @@
     "@faker-js/faker": "catalog:",
     "@impz/agent-protocol": "workspace:*",
     "@impz/daemon": "workspace:*",
+    "@impz/testing": "workspace:*",
     "msw": "catalog:",
     "tiny-invariant": "catalog:"
   }

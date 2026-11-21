@@ -4,15 +4,15 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { createImpClient } from '@impz/client';
 import {
-  TEST_TOKEN,
   buildImagePaths,
   buildMockNewImage,
   createImage,
   createMoveHosts,
   createUbuntuImage,
   makeStubStalledMovePart,
-  startTestImpd,
 } from '@impz/daemon/test-utils';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
+import { TEST_TOKEN } from '@impz/testing/test-token';
 import {
   removeImageIfPresent,
   removeImpIfPresent,

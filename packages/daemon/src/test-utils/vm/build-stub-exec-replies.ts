@@ -1,5 +1,5 @@
 import { FRAME_TYPES } from '@impz/agent-protocol';
-import type { StubAgentHandler } from './start-stub-agent';
+import type { StubAgentHandler } from '@impz/testing/stand-in/vm/start-stub-agent';
 
 interface StubExecReplies {
   readonly started: readonly Uint8Array[];

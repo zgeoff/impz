@@ -14,8 +14,8 @@ import {
 } from '@impz/agent-protocol';
 import type { AgentFrame } from '@impz/agent-protocol';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { startStubAgent } from '@impz/testing/stand-in/vm/start-stub-agent';
 import { buildStubExecReplies } from './build-stub-exec-replies';
-import { startStubAgent } from './start-stub-agent';
 
 async function setupTest() {
   const directory = await mkdtemp(join(tmpdir(), 'stub-exec-replies-'));

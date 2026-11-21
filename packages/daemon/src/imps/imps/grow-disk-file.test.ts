@@ -2,12 +2,12 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, rmSync, statSync, truncateSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import { createImp, readImpByName } from '../../platform/db/list-imps';
 import { runChecked } from '../../platform/process/run-command';
 import { buildMockNewImp } from '../../test-utils/imps/build-mock-new-imp';
 import { buildStubDiskTools } from '../../test-utils/imps/build-stub-disk-tools';
 import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
-import { startTestImpd } from '../../test-utils/start-test-impd';
 import { buildImpPaths } from '../../vm/storage/build-imp-paths';
 import { growFilesystem } from './grow-disk-file';
 

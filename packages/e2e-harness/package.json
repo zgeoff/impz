@@ -21,6 +21,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@impz/testing": "workspace:*",
     "@types/dns-packet": "catalog:",
     "@types/ssh2": "catalog:"
   }

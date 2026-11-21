@@ -1,4 +1,4 @@
-import type { Clock } from '../../platform/process/clock';
+import type { Clock } from '@impz/daemon/host/platform/process/clock';
 
 interface StubTimer {
   readonly at: number;

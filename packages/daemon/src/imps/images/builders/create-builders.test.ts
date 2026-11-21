@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildStubAnswerQueue } from '@impz/shared/test-utils/build-stub-answer-queue';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import invariant from 'tiny-invariant';
 import { createImage } from '../../../platform/db/create-image';
 import { listImps, readImpByName } from '../../../platform/db/list-imps';
@@ -15,9 +17,7 @@ import {
 } from '../../../test-utils/imps/build-stub-image-builder';
 import { createBuilderImage } from '../../../test-utils/imps/create-builder-image';
 import { makeStubEngineAnswer } from '../../../test-utils/imps/make-stub-engine-answer';
-import { buildStubClock } from '../../../test-utils/platform/build-stub-clock';
 import { captureImpdLogs } from '../../../test-utils/platform/capture-impd-logs';
-import { startTestImpd } from '../../../test-utils/start-test-impd';
 import { buildStubGuest } from '../../../test-utils/vm/build-stub-guest';
 import { makeStubCommandAnswer } from '../../../test-utils/vm/make-stub-command-answer';
 import { AgentWaitError } from '../../../vm/agent-client/agent-wait-error';

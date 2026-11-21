@@ -15,19 +15,19 @@ import {
   encodeMessageFrame,
 } from '@impz/agent-protocol';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
+import type { TestImpdOptions } from '@impz/testing/stand-in/start-test-impd';
+import { startStubAgent } from '@impz/testing/stand-in/vm/start-stub-agent';
 import invariant from 'tiny-invariant';
 import { readImpByName, updateImpActivity } from '../../platform/db/list-imps';
 import { writeLease } from '../../platform/db/list-leases';
 import { buildMockLeaseRecord } from '../../test-utils/imps/build-mock-lease-record';
 import { waitForOutcome } from '../../test-utils/imps/wait-for-outcome';
-import { buildStubClock } from '../../test-utils/platform/build-stub-clock';
 import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
 import { runSql } from '../../test-utils/platform/run-sql';
-import { startTestImpd } from '../../test-utils/start-test-impd';
-import type { TestImpdOptions } from '../../test-utils/start-test-impd';
 import { buildStubMounts } from '../../test-utils/vm/build-stub-mounts';
 import { buildStubUidProcesses } from '../../test-utils/vm/build-stub-uid-processes';
-import { startStubAgent } from '../../test-utils/vm/start-stub-agent';
 import { startStubInnerAgent } from '../../test-utils/vm/start-stub-inner-agent';
 import { startStubSessionAgent } from '../../test-utils/vm/start-stub-session-agent';
 import { readVmIdentity, writeVmIdentity } from '../../vm/sleep/vm-identity';

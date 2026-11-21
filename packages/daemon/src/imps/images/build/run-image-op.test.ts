@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import type { Image } from '@impz/api';
 import { buildMockImage } from '@impz/api/test-utils/build-mock-image';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import invariant from 'tiny-invariant';
 import { createImage } from '../../../platform/db/create-image';
 import { listApiCalls } from '../../../platform/db/list-api-calls';
@@ -14,7 +15,6 @@ import { buildStubImageBuilder } from '../../../test-utils/imps/build-stub-image
 import { createFilesTar } from '../../../test-utils/imps/create-files-tar';
 import { startBuilderImpd } from '../../../test-utils/imps/start-builder-impd';
 import { buildStubRepeat } from '../../../test-utils/platform/build-stub-repeat';
-import { startTestImpd } from '../../../test-utils/start-test-impd';
 import { buildImagePaths } from '../../../vm/storage/build-imp-paths';
 import { runImageOp } from './run-image-op';
 

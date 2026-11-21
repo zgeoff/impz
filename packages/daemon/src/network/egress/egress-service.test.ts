@@ -4,6 +4,7 @@ import { createConnection } from 'node:net';
 import { readImpEnv } from '@impz/shared/test-utils/read-imp-env';
 import { updateEnv } from '@impz/shared/test-utils/update-env';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import invariant from 'tiny-invariant';
 import { parsePrefix64 } from '../../host-net/net/derive-guest-ip6';
 import { resolveIpv6Plan } from '../../host-net/net/ipv6-plan';
@@ -14,7 +15,6 @@ import { buildStubHostRoutes } from '../../test-utils/host-net/build-stub-host-r
 import { buildStubNft } from '../../test-utils/network/build-stub-nft';
 import { startStubEchoServer } from '../../test-utils/network/start-stub-echo-server';
 import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
-import { startTestImpd } from '../../test-utils/start-test-impd';
 import type { EgressDeps } from './egress-service';
 
 interface SetupOptions {

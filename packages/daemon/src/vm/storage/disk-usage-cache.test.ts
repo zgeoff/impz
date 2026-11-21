@@ -1,11 +1,11 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
 import invariant from 'tiny-invariant';
 import { createCheckpoint } from '../../platform/db/create-checkpoint';
 import { createImage } from '../../platform/db/create-image';
 import { createImp } from '../../platform/db/list-imps';
 import { buildMockNewCheckpoint } from '../../test-utils/imp-ops/build-mock-new-checkpoint';
-import { buildStubClock } from '../../test-utils/platform/build-stub-clock';
 import { captureImpdLogs } from '../../test-utils/platform/capture-impd-logs';
 import { createTestDatabase } from '../../test-utils/platform/create-test-database';
 import { buildMockImpDiskUsage } from '../../test-utils/vm/build-mock-imp-disk-usage';

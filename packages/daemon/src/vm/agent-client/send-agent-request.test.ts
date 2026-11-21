@@ -16,8 +16,8 @@ import {
   encodeJsonFrame,
   encodeMessageFrame,
 } from '@impz/agent-protocol';
+import { startStubAgent } from '@impz/testing/stand-in/vm/start-stub-agent';
 import invariant from 'tiny-invariant';
-import { startStubAgent } from '../../test-utils/vm/start-stub-agent';
 import { openAgentConnection } from './agent-connection';
 import {
   readFrameWithin,

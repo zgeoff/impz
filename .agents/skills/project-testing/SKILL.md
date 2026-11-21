@@ -136,7 +136,7 @@ the result of the row's CI job: `eval` and `vm` are in
   - a WebSocket.
 - Look for a stand-in in [Stand-ins](./references/stand-ins.md) before you write one.
 - Boot a real impd with
-  [`startTestImpd`](../../../packages/daemon/src/test-utils/start-test-impd.ts), which runs
+  [`startTestImpd`](../../../packages/testing/src/stand-in/start-test-impd.ts), which runs
   production's startup through `createImpd` on the stand-ins. Leave its `defaultDiskBytes` at 0: its
   stand-in storage copies each disk in full, and a 32 GiB disk takes minutes.
 - Pass the stub clock of `startTestImpd` directly to each component that keeps a clock of its own.

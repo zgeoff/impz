@@ -86,15 +86,15 @@ that it checks under both.
 Read a util's signature and its test to tell how it releases its resource:
 
 - **A util that takes a stack as its first parameter**, such as
-  [`startTestImpd`](../../../../packages/daemon/src/test-utils/start-test-impd.ts), defers its
+  [`startTestImpd`](../../../../packages/testing/src/stand-in/start-test-impd.ts), defers its
   release into that stack and registers nothing. Search the `src/test-utils/` folders for
   `stack: Readonly<AsyncDisposableStack>` to find the others.
 - **A util that returns a function**, such as
-  [`startImpdLogCapture`](../../../../packages/daemon/src/test-utils/platform/start-impd-log-capture.ts),
+  [`startImpdLogCapture`](../../../../packages/testing/src/stand-in/platform/start-impd-log-capture.ts),
   returns its release. Register that function with `onTestFinished`, or defer it into your stack, on
   the next line. Until you call it, the resource stays active, into later tests.
 - **A util with an optional `stack` option**, such as
-  [`startStubAgent`](../../../../packages/daemon/src/test-utils/vm/start-stub-agent.ts), defers into
+  [`startStubAgent`](../../../../packages/testing/src/stand-in/vm/start-stub-agent.ts), defers into
   the stack when you pass one, and registers its own `onTestFinished` only when you pass none.
 - **A util with none of these** registers its own `onTestFinished`, so it releases before anything
   the test registers after the call. Confirm this in its test before you rely on it.
@@ -110,7 +110,7 @@ onTestFinished(() => stack.disposeAsync());
 
 The stack releases last deferred, first released. When your resource must be released before the
 util's resource, defer your release into the stack after the util's call. An example is a step that
-the fake VMM, [`buildStubVmm`](../../../../packages/daemon/src/test-utils/vm/build-stub-vmm.ts),
+the fake VMM, [`buildStubVmm`](../../../../packages/testing/src/stand-in/vm/build-stub-vmm.ts),
 still holds when impd stops.
 
 ## What a daemon setupTest returns

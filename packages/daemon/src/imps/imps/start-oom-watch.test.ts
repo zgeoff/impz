@@ -1,6 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { startTestImpd } from '../../test-utils/start-test-impd';
-import type { TestImpdOptions } from '../../test-utils/start-test-impd';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
+import type { TestImpdOptions } from '@impz/testing/stand-in/start-test-impd';
 import { buildStubCpuCgroups } from '../../test-utils/vm/build-stub-cpu-cgroups';
 import { OOM_KILL_TRIGGER, startOomWatch } from './start-oom-watch';
 

@@ -1,7 +1,7 @@
 import { BUILD_CONTEXT_PATH, BuildContextErrorSchema, BuildContextUploadSchema } from '@impz/api';
 import type { ImageOpEvent } from '@impz/api';
+import type { TestImpd } from '@impz/testing/stand-in/start-test-impd';
 import { ORPCError } from '@orpc/client';
-import type { TestImpd } from '../start-test-impd';
 
 export interface UploadedBuild {
   readonly token: string;

@@ -1,6 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { claimFreePorts } from '@impz/shared/test-utils/claim-free-ports';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import {
   Client,
   StreamableHTTPClientTransport,
@@ -14,7 +15,6 @@ import type {
 import invariant from 'tiny-invariant';
 import { seedOAuthGrant } from '../test-utils/identity/seed-oauth-grant';
 import { captureImpdLogs } from '../test-utils/platform/capture-impd-logs';
-import { startTestImpd } from '../test-utils/start-test-impd';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

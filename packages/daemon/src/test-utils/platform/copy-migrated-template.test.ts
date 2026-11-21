@@ -16,10 +16,10 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildStubAnswerQueue } from '@impz/shared/test-utils/build-stub-answer-queue';
+import { formatRunPrefix } from '@impz/testing/stand-in/platform/format-run-prefix';
+import { readRunOwner } from '@impz/testing/stand-in/platform/read-run-owner';
 import { buildStubTemplateWriter } from './build-stub-template-writer';
 import { copyMigratedTemplate } from './copy-migrated-template';
-import { formatRunPrefix } from './format-run-prefix';
-import { readRunOwner } from './read-run-owner';
 
 function setupTest() {
   const prefix = formatRunPrefix(readRunOwner());

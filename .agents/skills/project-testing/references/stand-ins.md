@@ -32,7 +32,7 @@ The traps:
 Choose the kind by the boundary that the code under test reaches:
 
 - **The fake VMM**,
-  [`buildStubVmm`](../../../../packages/daemon/src/test-utils/vm/build-stub-vmm.ts), replaces the VM
+  [`buildStubVmm`](../../../../packages/testing/src/stand-in/vm/build-stub-vmm.ts), replaces the VM
   runner, which starts and drives each Firecracker, under every impd test above the VM layer. Script
   each VM step to succeed, fail, die or hang. A hung step blocks until the test lets it go. Before
   you inspect a hung step, wait until the fake's `countHungCalls()` rises.
@@ -60,9 +60,9 @@ Choose the kind by the boundary that the code under test reaches:
 - **Temporary directories** replace `/proc`, `/sys` and the cgroup tree. Their readers take a root
   path from the caller.
 - **Timer stand-ins** fire only when the test says so. In a test of one component without impd, use
-  [`buildStubClock`](../../../../packages/daemon/src/test-utils/platform/build-stub-clock.ts) for
-  its clock, and `buildStubRepeat` or `buildStubTickerTimer`, beside it, for its timer. A test that
-  boots impd uses the harness's clock, as [Booting impd](#booting-impd) shows.
+  [`buildStubClock`](../../../../packages/testing/src/stand-in/platform/build-stub-clock.ts) for its
+  clock, and `buildStubRepeat` or `buildStubTickerTimer` for its timer. A test that boots impd uses
+  the harness's clock, as [Booting impd](#booting-impd) shows.
 - **Version-skew proxies** wrap a real impd's answers and drop or add fields or events, to check
   behaviour against an older or a newer impd. Each is a `make-stub-*` file named for the version it
   plays, such as
@@ -88,10 +88,10 @@ each applies it at a different time. Pick the one whose timing the code under te
 
 [`createImpd`](../../../../packages/daemon/src/impd/create-impd.ts) builds impd from its config and
 its boundaries; `main.ts` calls it in production. Tests call it through
-[`startTestImpd`](../../../../packages/daemon/src/test-utils/start-test-impd.ts), which
-`@impz/daemon/test-utils` exports. `startTestImpd` runs every startup step that production runs,
-opens the API, the broker and the wake proxy on free ports, and passes a stand-in for each host
-boundary.
+[`startTestImpd`](../../../../packages/testing/src/stand-in/start-test-impd.ts), which
+`@impz/testing/stand-in/start-test-impd` exports. `startTestImpd` runs every startup step that
+production runs, opens the API, the broker and the wake proxy on free ports, and passes a stand-in
+for each host boundary.
 
 - Send RPCs through the `client` it returns, which holds the root token, or through the real client
   to its `url`.

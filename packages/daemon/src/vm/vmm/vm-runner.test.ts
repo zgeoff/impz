@@ -14,16 +14,16 @@ import { setImmediate as setImmediatePromise } from 'node:timers/promises';
 import { create } from '@bufbuild/protobuf';
 import { FRAME_TYPES, PingSchema, encodeMessageFrame } from '@impz/agent-protocol';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { buildStubClock } from '@impz/testing/stand-in/platform/build-stub-clock';
+import { createStubUffdHandler } from '@impz/testing/stand-in/vm/create-stub-uffd-handler';
+import { startStubAgent } from '@impz/testing/stand-in/vm/start-stub-agent';
 import { deriveSlotAddress, parseSubnet } from '../../host-net/net/derive-slot-address';
 import { stopPid } from '../../platform/process/read-stat-fields';
-import { buildStubClock } from '../../test-utils/platform/build-stub-clock';
 import { buildMockTemplateBuildPlan } from '../../test-utils/vm/build-mock-template-build-plan';
 import { buildMockTemplateRestorePlan } from '../../test-utils/vm/build-mock-template-restore-plan';
 import { buildStubJails } from '../../test-utils/vm/build-stub-jails';
 import { createStubKsmExec } from '../../test-utils/vm/create-stub-ksm-exec';
-import { createStubUffdHandler } from '../../test-utils/vm/create-stub-uffd-handler';
 import { makeRecordingFirecrackerClient } from '../../test-utils/vm/make-recording-firecracker-client';
-import { startStubAgent } from '../../test-utils/vm/start-stub-agent';
 import {
   buildStubFirecrackerArgv,
   startStubFirecracker,

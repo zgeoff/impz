@@ -6,6 +6,8 @@ import { buildMockBrokerRule } from '@impz/api/test-utils/build-mock-broker-rule
 import { buildMockOAuthConfig } from '@impz/api/test-utils/build-mock-oauth-config';
 import { server } from '@impz/shared/test-utils/server';
 import { waitFor } from '@impz/shared/test-utils/wait-for';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
+import { TEST_TOKEN } from '@impz/testing/test-token';
 import { HttpResponse, http } from 'msw';
 import invariant from 'tiny-invariant';
 import { createReachPolicy } from '../../../host-net/net/reach-policy';
@@ -16,8 +18,6 @@ import { buildStubHostRoutes } from '../../../test-utils/host-net/build-stub-hos
 import { buildStubBrokerJwt } from '../../../test-utils/network/build-stub-broker-jwt';
 import { createStubBrokerTokenEndpoint } from '../../../test-utils/network/create-stub-broker-token-endpoint';
 import { runSql } from '../../../test-utils/platform/run-sql';
-import { startTestImpd } from '../../../test-utils/start-test-impd';
-import { TEST_TOKEN } from '../../../test-utils/test-token';
 import { createBroker } from '../broker-service';
 import { resolvePublicUpstream } from '../tls/resolve-public-upstream';
 import { buildValueFile, createSecretFiles } from './secret-files';

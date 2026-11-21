@@ -10,7 +10,7 @@ import {
   encodeFrame,
   encodeMessageFrame,
 } from '@impz/agent-protocol';
-import type { StubAgentHandler } from '@impz/daemon/test-utils';
+import type { StubAgentHandler } from '@impz/testing/stand-in/vm/start-stub-agent';
 
 interface AgentRefusal {
   readonly code: string;

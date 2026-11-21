@@ -11,13 +11,13 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { formatRunPrefix } from '@impz/testing/stand-in/platform/format-run-prefix';
+import { readRunOwner } from '@impz/testing/stand-in/platform/read-run-owner';
 import { sql } from 'kysely';
 import invariant from 'tiny-invariant';
 import * as z from 'zod';
 import { createMigratedDatabaseFile } from '../../test-utils/platform/create-migrated-database-file';
 import { createUnmigratedDatabase } from '../../test-utils/platform/create-unmigrated-database';
-import { formatRunPrefix } from '../../test-utils/platform/format-run-prefix';
-import { readRunOwner } from '../../test-utils/platform/read-run-owner';
 import { createDiskBudget } from '../../vm/storage/disk-budget';
 import { openDatabase } from './open-database';
 import { readNames } from './read-names';

@@ -3,6 +3,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { buildStubTickerTimer } from '@impz/testing/stand-in/platform/build-stub-ticker-timer';
 import invariant from 'tiny-invariant';
 import { loadConfig } from '../../../config';
 import { createReachPolicy } from '../../../host-net/net/reach-policy';
@@ -10,7 +11,6 @@ import { listFileRemovals, readSecret } from '../../../platform/db/create-checke
 import { openDatabase } from '../../../platform/db/open-database';
 import { writeConsistentCopy } from '../../../platform/db/write-database-copy';
 import { buildStubHostRoutes } from '../../../test-utils/host-net/build-stub-host-routes';
-import { buildStubTickerTimer } from '../../../test-utils/platform/build-stub-ticker-timer';
 import { captureImpdLogs } from '../../../test-utils/platform/capture-impd-logs';
 import { createBroker } from '../broker-service';
 import { resolvePublicUpstream } from '../tls/resolve-public-upstream';
