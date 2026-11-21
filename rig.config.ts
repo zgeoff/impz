@@ -8,8 +8,8 @@ export default defineRig({
   lanes: {
     e2e: { limit: '60s' },
     zfs: { limit: '60s' },
-    headscale: { limit: '15s', start: 'scripts/dev/prepare-docker-lane.ts' },
-    pebble: { limit: '5s', start: 'scripts/dev/prepare-docker-lane.ts' },
+    headscale: { limit: '15s', start: 'packages/daemon/src/test-utils/prepare-docker-lane.ts' },
+    pebble: { limit: '5s', start: 'packages/daemon/src/test-utils/prepare-docker-lane.ts' },
     'small-fs': { limit: '15s' },
   },
 });
