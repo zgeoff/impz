@@ -10,7 +10,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubRepoScript } from '@impz/scripts/test-utils/create-stub-repo-script';
+import { createStubShellScript } from '@impz/scripts/test-utils/create-stub-shell-script';
 import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
 import { createStubBin, readStubCalls } from '@zgeoff/testing/bin';
 
@@ -45,9 +45,12 @@ function setupTest() {
     ],
   });
 
-  createStubRepoScript(join(source, 'scripts', 'kconfig'), 'merge_config.sh', stubs, {
-    recordEnv: ['KCONFIG_CONFIG', 'PWD'],
-  });
+  createStubShellScript(
+    stubs,
+    'merge_config',
+    { recordEnv: ['KCONFIG_CONFIG', 'PWD'] },
+    join(source, 'scripts', 'kconfig'),
+  );
 
   return {
     kernel,
@@ -86,7 +89,7 @@ test('it merges the config, builds vmlinux with fixed build metadata, and copies
   }).toStrictEqual({ exitCode: 0, stdout: '', stderr: '' });
 
   expect(formatStubCalls(readStubCalls(ctx.stubs)).split('\n')).toStrictEqual([
-    `merge_config.sh -m -O ${ctx.obj} ${ctx.kernel}/config-base ${ctx.kernel}/docker.fragment`,
+    `merge_config -m -O ${ctx.obj} ${ctx.kernel}/config-base ${ctx.kernel}/docker.fragment`,
     `  KCONFIG_CONFIG=${ctx.obj}/.config PWD=${ctx.source}`,
     `make O=${ctx.obj} olddefconfig`,
     '  KBUILD_BUILD_TIMESTAMP=1970-01-01 00:00:00 UTC KBUILD_BUILD_USER=imp KBUILD_BUILD_HOST=imp KBUILD_BUILD_VERSION=1',
@@ -157,7 +160,7 @@ test('it stops at the first make that fails and copies nothing out', () => {
   }).toStrictEqual({ exitCode: 2, stdout: '', stderr: '' });
 
   expect(formatStubCalls(readStubCalls(ctx.stubs)).split('\n')).toStrictEqual([
-    `merge_config.sh -m -O ${ctx.obj} ${ctx.kernel}/config-base ${ctx.kernel}/docker.fragment`,
+    `merge_config -m -O ${ctx.obj} ${ctx.kernel}/config-base ${ctx.kernel}/docker.fragment`,
     `  KCONFIG_CONFIG=${ctx.obj}/.config PWD=${ctx.source}`,
     `make O=${ctx.obj} olddefconfig`,
     '',
@@ -189,7 +192,7 @@ test('it builds with one job per processor when JOBS is unset', () => {
 
   expect(formatStubCalls(readStubCalls(ctx.stubs)).split('\n')).toStrictEqual([
     'nproc ',
-    `merge_config.sh -m -O ${ctx.obj} ${ctx.kernel}/config-base ${ctx.kernel}/docker.fragment`,
+    `merge_config -m -O ${ctx.obj} ${ctx.kernel}/config-base ${ctx.kernel}/docker.fragment`,
     `  KCONFIG_CONFIG=${ctx.obj}/.config PWD=${ctx.source}`,
     `make O=${ctx.obj} olddefconfig`,
     `make O=${ctx.obj} -j3 vmlinux`,

@@ -6,7 +6,7 @@ import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
 import { createStubBin, readStubCalls } from '@zgeoff/testing/bin';
 import { $ } from 'bun';
 import { buildStubGo } from '../src/test-utils/build-stub-go';
-import { createStubRepoScript } from '../src/test-utils/create-stub-repo-script';
+import { createStubShellScript } from '../src/test-utils/create-stub-shell-script';
 
 function setupTest() {
   const created = mkdtempSync(join(tmpdir(), 'imp-go-checks-'));
@@ -212,7 +212,7 @@ test("it runs the agent's tests through test-go.sh and every other module's unde
 
   createStubBin(ctx.directoryPath, 'go');
   mkdirSync(join(ctx.checkout, 'scripts'));
-  createStubRepoScript(join(ctx.checkout, 'scripts'), 'test-go.sh', ctx.directoryPath);
+  createStubShellScript(ctx.directoryPath, 'test-go', undefined, join(ctx.checkout, 'scripts'));
 
   const result = await $`${process.execPath} ${ctx.scriptPath} test`
     .cwd(ctx.checkout)
@@ -224,7 +224,7 @@ test("it runs the agent's tests through test-go.sh and every other module's unde
 
   expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe(
     [
-      'test-go.sh ',
+      'test-go ',
       'go -C host/ksm-exec test -race ./...',
       'go -C host/oci-fetch test -race ./...',
       'go -C host/uffd-handler test -race ./...',

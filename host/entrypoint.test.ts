@@ -1,12 +1,27 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubImpd } from '@impz/scripts/test-utils/create-stub-impd';
 import { createStubShellScript } from '@impz/scripts/test-utils/create-stub-shell-script';
+import { formatShellWord } from '@impz/shared/test-utils/format-shell-word';
 import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
 import { waitFor } from '@zgeoff/testing';
 import { createStubBin, readStubCalls } from '@zgeoff/testing/bin';
+
+interface StubImpdOptions {
+  // the lines impd --network-env prints
+  readonly networkEnv: readonly string[];
+
+  // variables each run records with its call, when set
+  readonly recordEnv?: readonly string[];
+
+  // the codes the first runs exit with, in order, before a run takes lastRun
+  readonly exitCodes?: readonly number[];
+
+  // stop-entrypoint sends SIGTERM to the entrypoint, the parent of the stand-in; wait-for-term
+  // runs until a SIGTERM reaches it, then notes it and exits 0
+  readonly lastRun?: 'stop-entrypoint' | 'wait-for-term';
+}
 
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-entrypoint-'));
@@ -15,9 +30,50 @@ function setupTest() {
     rmSync(directory, { recursive: true, force: true });
   });
 
+  // The kit's stand-in for impd. The script runs under the stand-in's own process, so its parent is
+  // that process, and the entrypoint is the parent of that.
+  const createStubImpd = (options: Readonly<StubImpdOptions>) => {
+    const runs = formatShellWord(join(directory, 'impd-runs'));
+    const running = join(directory, 'impd-running');
+    const terminated = join(directory, 'impd-terminated');
+    const exitCodes = (options.exitCodes ?? []).join(' ');
+
+    // bash runs a trap only once a foreground command ends, but a trapped signal ends the wait
+    // builtin at once; the sleep bounds a stub that misses its signal, and holds none of its pipes
+    const lastRun =
+      (options.lastRun ?? 'stop-entrypoint') === 'stop-entrypoint'
+        ? `kill -TERM "$(sed -n 's/^PPid:\\t//p' "/proc/$PPID/status")"`
+        : `trap 'kill "$sleeper" 2>/dev/null; touch ${formatShellWord(terminated)}; exit 0' TERM
+command -p sleep 30 </dev/null >/dev/null 2>&1 &
+sleeper=$!
+touch ${formatShellWord(running)}
+wait "$sleeper"`;
+
+    createStubBin(directory, 'impd', {
+      recordEnv: options.recordEnv ?? [],
+      script: `#!/bin/bash
+if [ "$1" = --network-env ]; then
+  printf '%s\\n' ${options.networkEnv.map((line) => formatShellWord(line)).join(' ')}
+  exit 0
+fi
+run=$(command -p cat ${runs} 2>/dev/null || echo 0)
+echo $((run + 1)) >${runs}
+exit_codes=(${exitCodes})
+if [ "$run" -lt "\${#exit_codes[@]}" ]; then exit "\${exit_codes[$run]}"; fi
+${lastRun}
+`,
+    });
+
+    return {
+      probeRunning: () => existsSync(running),
+      probeTerminated: () => existsSync(terminated),
+    };
+  };
+
   return {
     directoryPath: directory,
     script: new URL('entrypoint', import.meta.url).pathname,
+    createStubImpd,
   };
 }
 
@@ -100,7 +156,7 @@ test('it exports impd’s network settings, runs each setup script in order, the
 
   createStubShellScript(ctx.directoryPath, 'tailscale-up');
 
-  createStubImpd(ctx.directoryPath, {
+  ctx.createStubImpd({
     networkEnv: ['IMP_SUBNET=10.66.0.0/16', 'IMP_BROKER_PORT=7081'],
     recordEnv: ['IMP_TAILSCALE_NODE'],
   });
@@ -128,7 +184,6 @@ test('it exports impd’s network settings, runs each setup script in order, the
     '  IMP_SUBNET=10.66.0.0/16 IMP_BROKER_PORT=7081',
     'tailscale-up ',
     'impd ',
-    '  IMP_TAILSCALE_NODE=',
     '',
   ]);
 });
@@ -144,7 +199,8 @@ test('it stops the container before impd when a setup script fails', () => {
 
   createStubShellScript(ctx.directoryPath, 'setup-net');
   createStubShellScript(ctx.directoryPath, 'tailscale-up');
-  createStubImpd(ctx.directoryPath, { networkEnv: ['IMP_SUBNET=10.66.0.0/16'] });
+
+  ctx.createStubImpd({ networkEnv: ['IMP_SUBNET=10.66.0.0/16'] });
 
   const result = Bun.spawnSync(['bash', ctx.script], {
     env: {
@@ -176,7 +232,7 @@ test('it starts impd without the tailnet when tailscale-up fails', () => {
   createStubShellScript(ctx.directoryPath, 'setup-net');
   createStubShellScript(ctx.directoryPath, 'tailscale-up', { script: '#!/bin/bash\nexit 1' });
 
-  createStubImpd(ctx.directoryPath, {
+  ctx.createStubImpd({
     networkEnv: ['IMP_SUBNET=10.66.0.0/16'],
     recordEnv: ['IMP_TAILSCALE_NODE'],
   });
@@ -210,9 +266,7 @@ test('it starts impd without the tailnet when tailscale-up fails', () => {
     stderr: 'entrypoint: tailscale-up failed; continuing without the tailnet\n',
   });
 
-  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toEndWith(
-    'impd \n  IMP_TAILSCALE_NODE=\n',
-  );
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toEndWith('impd \n');
 });
 
 test('it tells impd it is on the tailnet when tailscale-up leaves a tailscaled socket', () => {
@@ -223,7 +277,7 @@ test('it tells impd it is on the tailnet when tailscale-up leaves a tailscaled s
   createStubShellScript(ctx.directoryPath, 'setup-net');
   createStubShellScript(ctx.directoryPath, 'tailscale-up');
 
-  createStubImpd(ctx.directoryPath, {
+  ctx.createStubImpd({
     networkEnv: ['IMP_SUBNET=10.66.0.0/16'],
     recordEnv: ['IMP_TAILSCALE_NODE'],
   });
@@ -261,7 +315,8 @@ test('it restarts impd a second after it exits on its own', () => {
   createStubShellScript(ctx.directoryPath, 'setup-net');
   createStubShellScript(ctx.directoryPath, 'tailscale-up');
   createStubBin(ctx.directoryPath, 'sleep');
-  createStubImpd(ctx.directoryPath, { networkEnv: ['IMP_SUBNET=10.66.0.0/16'], exitCodes: [7] });
+
+  ctx.createStubImpd({ networkEnv: ['IMP_SUBNET=10.66.0.0/16'], exitCodes: [7] });
 
   const result = Bun.spawnSync(['bash', ctx.script], {
     env: {
@@ -292,7 +347,7 @@ test('it stops the running impd and exits 0 on SIGTERM', async () => {
   createStubShellScript(ctx.directoryPath, 'setup-net');
   createStubShellScript(ctx.directoryPath, 'tailscale-up');
 
-  const impd = createStubImpd(ctx.directoryPath, {
+  const impd = ctx.createStubImpd({
     networkEnv: ['IMP_SUBNET=10.66.0.0/16'],
     lastRun: 'wait-for-term',
   });

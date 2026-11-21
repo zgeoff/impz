@@ -13,7 +13,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createStubInstanceDocker } from '@impz/scripts/test-utils/create-stub-instance-docker';
-import { createStubRepoScript } from '@impz/scripts/test-utils/create-stub-repo-script';
+import { createStubShellScript } from '@impz/scripts/test-utils/create-stub-shell-script';
 import { createStubZfs } from '@impz/scripts/test-utils/create-stub-zfs';
 import { createStubZpool } from '@impz/scripts/test-utils/create-stub-zpool';
 import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
@@ -43,9 +43,9 @@ function setupTest() {
 
   createStubBin(stubs, 'sudo', { script: '#!/bin/bash\nexec "$@"' });
   createStubZfs(stubs);
-  createStubRepoScript(join(scripts, 'dev'), 'dev.sh', stubs);
-  createStubRepoScript(scripts, 'test-e2e.sh', stubs);
-  createStubRepoScript(scripts, 'test-zfs.sh', stubs);
+  createStubShellScript(stubs, 'dev', undefined, join(scripts, 'dev'));
+  createStubShellScript(stubs, 'test-e2e', undefined, scripts);
+  createStubShellScript(stubs, 'test-zfs', undefined, scripts);
 
   return {
     directoryPath: directory,
@@ -96,20 +96,20 @@ test('it runs the unit tests and suites on a bench pool, then releases all it ma
     'docker container inspect imp-zfs-mv-b',
     'docker network inspect imp-zfs-mv',
     `sudo env PATH=${ctx.path} IMP_ZFS_TEST_DIR=${work}/unit ${ctx.directoryPath}/root/scripts/test-zfs.sh`,
-    'test-zfs.sh ',
+    'test-zfs ',
     `sudo zpool create -o ashift=12 -O compression=lz4 -O atime=off -O xattr=sa -O mountpoint=none impbenchPID ${work}/bench.img`,
     `zpool create -o ashift=12 -O compression=lz4 -O atime=off -O xattr=sa -O mountpoint=none impbenchPID ${work}/bench.img`,
     'sudo zfs create -o mountpoint=legacy impbenchPID/imp',
     'zfs create -o mountpoint=legacy impbenchPID/imp',
     'sudo zfs create -o mountpoint=legacy impbenchPID/imp-mv-b',
     'zfs create -o mountpoint=legacy impbenchPID/imp-mv-b',
-    'test-e2e.sh --only moves,backups,backups-repo',
+    'test-e2e --only moves,backups,backups-repo',
     'docker logs imp-zfs',
     'sudo zfs list -r -o name,used,refer,compressratio,recordsize impbenchPID',
     'zfs list -r -o name,used,refer,compressratio,recordsize impbenchPID',
     'docker container inspect imp-zfs-mv-b',
     'docker logs imp-zfs',
-    'dev.sh down',
+    'dev down',
     'docker network rm imp-zfs-mv',
     'sudo zpool list -H -o name',
     'zpool list -H -o name',
@@ -148,12 +148,12 @@ test('it runs the unit tests and suites on a bench pool, then releases all it ma
 });
 
 test.each([
-  [{ IMP_ZFS_SHARD: '1/2' }, 'test-e2e.sh --only moves'],
-  [{ IMP_ZFS_SHARD: '2/2' }, 'test-e2e.sh --only backups,backups-repo'],
-  [{ IMP_ZFS_E2E_SUITES: 'lifecycle,sleep' }, 'test-e2e.sh --only lifecycle,sleep'],
+  [{ IMP_ZFS_SHARD: '1/2' }, 'test-e2e --only moves'],
+  [{ IMP_ZFS_SHARD: '2/2' }, 'test-e2e --only backups,backups-repo'],
+  [{ IMP_ZFS_E2E_SUITES: 'lifecycle,sleep' }, 'test-e2e --only lifecycle,sleep'],
   [
     { IMP_ZFS_SHARD: '1/2', IMP_ZFS_E2E_SUITES: 'lifecycle,sleep' },
-    'test-e2e.sh --only moves,lifecycle,sleep',
+    'test-e2e --only moves,lifecycle,sleep',
   ],
 ] as const)('it runs the suites that %p picks', (settings, expected) => {
   const ctx = setupTest();
@@ -181,7 +181,7 @@ test.each([
   const calls = formatStubCalls(readStubCalls(ctx.stubs)).split('\n');
 
   expect(result.exitCode).toBe(0);
-  expect(calls.filter((call) => call.startsWith('test-e2e.sh'))).toStrictEqual([expected]);
+  expect(calls.filter((call) => call.startsWith('test-e2e'))).toStrictEqual([expected]);
 });
 
 test('it refuses an IMP_ZFS_SHARD that names no shard, and runs no suite', () => {
@@ -215,7 +215,7 @@ test('it refuses an IMP_ZFS_SHARD that names no shard, and runs no suite', () =>
     'IMP_ZFS_SHARD must be <shard>/<count>, such as 1/2, not 3/2',
   );
 
-  expect(calls.filter((call) => call.startsWith('test-e2e.sh'))).toStrictEqual([]);
+  expect(calls.filter((call) => call.startsWith('test-e2e'))).toStrictEqual([]);
 });
 
 test('it refuses a bench pool name that is taken and touches nothing', () => {
@@ -892,13 +892,19 @@ test('it stops the suites, the moves suites’ B, the instance and the pool when
   mkdirSync(work);
   createStubZpool(ctx.stubs);
 
-  createStubRepoScript(ctx.scripts, 'test-e2e.sh', ctx.stubs, {
-    body: `: >'${started}'; exec sleep 30`,
-  });
+  createStubShellScript(
+    ctx.stubs,
+    'test-e2e',
+    { script: `#!/bin/bash\n: >'${started}'; exec sleep 30` },
+    ctx.scripts,
+  );
 
-  createStubRepoScript(join(ctx.directoryPath, 'root', 'scripts', 'dev'), 'dev.sh', ctx.stubs, {
-    recordEnv: ['IMP_DEV_NAME', 'IMP_DEV_DATA'],
-  });
+  createStubShellScript(
+    ctx.stubs,
+    'dev',
+    { recordEnv: ['IMP_DEV_NAME', 'IMP_DEV_DATA'] },
+    join(ctx.directoryPath, 'root', 'scripts', 'dev'),
+  );
 
   const subprocess = Bun.spawn(ctx.run, {
     stdout: 'ignore',
@@ -931,13 +937,13 @@ test('it stops the suites, the moves suites’ B, the instance and the pool when
   expect(exitCode).toBe(143);
 
   expect(calls.split('\n').slice(-21)).toStrictEqual([
-    'test-e2e.sh --only moves,backups,backups-repo',
+    'test-e2e --only moves,backups,backups-repo',
     'docker container inspect imp-zfs-mv-b',
     'docker logs imp-zfs-mv-b',
-    'dev.sh down',
+    'dev down',
     `  IMP_DEV_NAME=imp-zfs-mv-b IMP_DEV_DATA=${work}/data-mv-b`,
     'docker logs imp-zfs',
-    'dev.sh down',
+    'dev down',
     `  IMP_DEV_NAME=imp-zfs IMP_DEV_DATA=${work}/data`,
     'docker network rm imp-zfs-mv',
     'sudo zpool list -H -o name',
