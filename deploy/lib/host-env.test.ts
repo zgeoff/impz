@@ -2,7 +2,8 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
+import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
+import { createStubBin, readStubCalls } from '@zgeoff/testing/bin';
 import { runSourcedFunction } from '../../scripts/test-utils/run-sourced-function';
 
 function setupTest() {
@@ -260,21 +261,19 @@ test.each([
 test('#network_others names the containers on the network other than imp-host, from podman ps', () => {
   const ctx = setupTest();
 
-  const podman = createStubBin(
-    ctx.directoryPath,
-    'podman',
-    String.raw`printf '%s\n' imp-host pod-a pod-b`,
-  );
+  createStubBin(ctx.directoryPath, 'podman', {
+    script: `#!/bin/bash\n${String.raw`printf '%s\n' imp-host pod-a pod-b`}`,
+  });
 
   const result = runSourcedFunction({
     script: new URL('host-env.sh', import.meta.url).pathname,
     fn: 'network_others',
-    env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
+    env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
   });
 
   expect(result).toStrictEqual({ exitCode: 0, stdout: 'pod-a pod-b\n', stderr: '' });
 
-  expect(readFileSync(podman.calls, 'utf8')).toBe(
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe(
     'podman ps -a --filter network=imp-host --format {{.Names}}\n',
   );
 });
@@ -282,18 +281,16 @@ test('#network_others names the containers on the network other than imp-host, f
 test("#host_addresses lists the host's global addresses with their prefixes, comma-separated", () => {
   const ctx = setupTest();
 
-  const ip = createStubBin(
-    ctx.directoryPath,
-    'ip',
-    String.raw`printf '%s\n' \
+  createStubBin(ctx.directoryPath, 'ip', {
+    script: `#!/bin/bash\n${String.raw`printf '%s\n' \
       '2: eth0    inet 192.0.2.10/24 brd 192.0.2.255 scope global eth0' \
-      '2: eth0    inet6 2001:db8::10/64 scope global dynamic'`,
-  );
+      '2: eth0    inet6 2001:db8::10/64 scope global dynamic'`}`,
+  });
 
   const result = runSourcedFunction({
     script: new URL('host-env.sh', import.meta.url).pathname,
     fn: 'host_addresses',
-    env: { PATH: `${ip.bin}:${process.env['PATH'] ?? ''}` },
+    env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
   });
 
   expect(result).toStrictEqual({
@@ -302,23 +299,24 @@ test("#host_addresses lists the host's global addresses with their prefixes, com
     stderr: '',
   });
 
-  expect(readFileSync(ip.calls, 'utf8')).toBe('ip -o addr show scope global\n');
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe('ip -o addr show scope global\n');
 });
 
 test('#create_host_network creates the network with podman, without DNS, and the arguments the unit uses', () => {
   const ctx = setupTest();
-  const podman = createStubBin(ctx.directoryPath, 'podman');
+
+  createStubBin(ctx.directoryPath, 'podman');
 
   runSourcedFunction({
     script: new URL('host-env.sh', import.meta.url).pathname,
     fn: 'create_host_network',
     args: ['fd12::/64'],
-    env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
+    env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
   });
 
   const unit = readFileSync(new URL('../imp-host.service', import.meta.url), 'utf8');
 
-  expect(readFileSync(podman.calls, 'utf8')).toBe(
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe(
     'podman network create --ipv6 --subnet fd12::/64 --disable-dns --interface-name br-imphost imp-host\n',
   );
 

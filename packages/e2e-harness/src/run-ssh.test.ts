@@ -3,8 +3,8 @@ import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
 import { updateEnv } from '@zgeoff/testing';
+import { createStubBin } from '@zgeoff/testing/bin';
 import { runCommand } from './instance';
 import { listAgentThroughUnixForward, startLocalSshAgent } from './run-ssh';
 
@@ -19,20 +19,18 @@ async function setupTest() {
 test('#listAgentThroughUnixForward lists the agent at the far end of the forward, and removes the local socket', async () => {
   const ctx = await setupTest();
 
-  const ssh = createStubBin(
-    ctx.directoryPath,
-    'ssh',
-    [
+  createStubBin(ctx.directoryPath, 'ssh', {
+    script: `#!/bin/bash\n${[
       'for arg in "$@"; do',
       '  if [ "$prev" = -L ]; then spec=$arg; fi',
       '  prev=$arg',
       'done',
       'echo "forward $spec" >&2',
       String.raw`exec ssh-agent -D -a "$(printf '%s' "$spec" | cut -d: -f1)" >/dev/null 2>&1`,
-    ].join('\n'),
-  );
+    ].join('\n')}`,
+  });
 
-  updateEnv('PATH', `${ssh.bin}:${process.env['PATH'] ?? ''}`);
+  updateEnv('PATH', `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`);
 
   const local = join(ctx.directoryPath, 'dev.sock');
 

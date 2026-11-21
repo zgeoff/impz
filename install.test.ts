@@ -10,11 +10,11 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createCommandLinks } from '@impz/shared/test-utils/create-command-links';
 import { createStubGhAttestation } from '@impz/shared/test-utils/create-stub-gh-attestation';
 import { createStubShasum } from '@impz/shared/test-utils/create-stub-shasum';
 import { createStubUname } from '@impz/shared/test-utils/create-stub-uname';
 import { startStubGithubReleases } from '@impz/shared/test-utils/start-stub-github-releases';
+import { linkCommands } from '@zgeoff/testing/bin';
 import { $ } from 'bun';
 
 function setupTest() {
@@ -186,10 +186,19 @@ test('it installs without a provenance check when gh is not on PATH', async () =
     },
   });
 
-  createCommandLinks({
-    bin: ctx.bin,
-    names: ['sh', 'curl', 'awk', 'sha256sum', 'cut', 'mktemp', 'rm', 'mkdir', 'cp', 'chmod', 'mv'],
-  });
+  linkCommands(ctx.bin, [
+    'sh',
+    'curl',
+    'awk',
+    'sha256sum',
+    'cut',
+    'mktemp',
+    'rm',
+    'mkdir',
+    'cp',
+    'chmod',
+    'mv',
+  ]);
 
   createStubUname({ bin: ctx.bin, system: 'Linux', machine: 'x86_64' });
 
@@ -231,11 +240,7 @@ test('it checks the binary with shasum when sha256sum is not on PATH', async () 
     },
   });
 
-  createCommandLinks({
-    bin: ctx.bin,
-    names: ['sh', 'curl', 'awk', 'cut', 'mktemp', 'rm', 'mkdir', 'cp', 'chmod', 'mv'],
-  });
-
+  linkCommands(ctx.bin, ['sh', 'curl', 'awk', 'cut', 'mktemp', 'rm', 'mkdir', 'cp', 'chmod', 'mv']);
   createStubUname({ bin: ctx.bin, system: 'Linux', machine: 'x86_64' });
   createStubGhAttestation({ bin: ctx.bin, loggedIn: true, verifies: true });
 

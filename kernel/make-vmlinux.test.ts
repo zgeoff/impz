@@ -10,8 +10,8 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
-import { buildStubEnvRecord } from '../scripts/test-utils/build-stub-env-record';
+import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
+import { createStubBin, readStubCalls } from '@zgeoff/testing/bin';
 import { createStubRepoScript } from '../scripts/test-utils/create-stub-repo-script';
 
 // make-vmlinux.sh reads its config inputs beside itself, so each test runs a
@@ -36,23 +36,18 @@ function setupTest() {
     join(kernel, 'make-vmlinux.sh'),
   );
 
-  const make = createStubBin(
-    stubs,
-    'make',
-    buildStubEnvRecord([
+  createStubBin(stubs, 'make', {
+    recordEnv: [
       'KBUILD_BUILD_TIMESTAMP',
       'KBUILD_BUILD_USER',
       'KBUILD_BUILD_HOST',
       'KBUILD_BUILD_VERSION',
-    ]),
-  );
+    ],
+  });
 
-  createStubRepoScript(
-    join(source, 'scripts', 'kconfig'),
-    'merge_config.sh',
-    make.calls,
-    buildStubEnvRecord(['KCONFIG_CONFIG', 'PWD']),
-  );
+  createStubRepoScript(join(source, 'scripts', 'kconfig'), 'merge_config.sh', stubs, {
+    recordEnv: ['KCONFIG_CONFIG', 'PWD'],
+  });
 
   return {
     kernel,
@@ -60,8 +55,7 @@ function setupTest() {
     obj: join(directory, 'obj'),
     out: join(directory, 'out'),
     stubs,
-    calls: make.calls,
-    path: `${make.bin}:${process.env['PATH'] ?? ''}`,
+    path: `${stubs}:${process.env['PATH'] ?? ''}`,
     script: join(kernel, 'make-vmlinux.sh'),
   };
 }
@@ -91,7 +85,7 @@ test('it merges the config, builds vmlinux with fixed build metadata, and copies
     stderr: result.stderr.toString(),
   }).toStrictEqual({ exitCode: 0, stdout: '', stderr: '' });
 
-  expect(readFileSync(ctx.calls, 'utf8').split('\n')).toStrictEqual([
+  expect(formatStubCalls(readStubCalls(ctx.stubs)).split('\n')).toStrictEqual([
     `merge_config.sh -m -O ${ctx.obj} ${ctx.kernel}/config-base ${ctx.kernel}/docker.fragment`,
     `  KCONFIG_CONFIG=${ctx.obj}/.config PWD=${ctx.source}`,
     `make O=${ctx.obj} olddefconfig`,
@@ -150,7 +144,7 @@ test('it stops at the first make that fails and copies nothing out', () => {
 
   writeFileSync(join(ctx.kernel, 'config-base'), 'CONFIG_PRINTK=y\n');
   writeFileSync(join(ctx.kernel, 'docker.fragment'), 'CONFIG_NF_TABLES=y\n');
-  createStubBin(ctx.stubs, 'make', 'exit 2');
+  createStubBin(ctx.stubs, 'make', { script: '#!/bin/bash\nexit 2' });
 
   const result = Bun.spawnSync([ctx.script, ctx.source, ctx.obj, ctx.out], {
     env: { PATH: ctx.path, JOBS: '5' },
@@ -162,7 +156,7 @@ test('it stops at the first make that fails and copies nothing out', () => {
     stderr: result.stderr.toString(),
   }).toStrictEqual({ exitCode: 2, stdout: '', stderr: '' });
 
-  expect(readFileSync(ctx.calls, 'utf8').split('\n')).toStrictEqual([
+  expect(formatStubCalls(readStubCalls(ctx.stubs)).split('\n')).toStrictEqual([
     `merge_config.sh -m -O ${ctx.obj} ${ctx.kernel}/config-base ${ctx.kernel}/docker.fragment`,
     `  KCONFIG_CONFIG=${ctx.obj}/.config PWD=${ctx.source}`,
     `make O=${ctx.obj} olddefconfig`,
@@ -181,7 +175,7 @@ test('it builds with one job per processor when JOBS is unset', () => {
   writeFileSync(join(ctx.obj, '.config'), 'CONFIG_PRINTK=y\nCONFIG_NF_TABLES=y\n');
   writeFileSync(join(ctx.obj, 'vmlinux'), 'ELF');
   createStubBin(ctx.stubs, 'make');
-  createStubBin(ctx.stubs, 'nproc', 'echo 3');
+  createStubBin(ctx.stubs, 'nproc', { script: '#!/bin/bash\necho 3' });
 
   const result = Bun.spawnSync([ctx.script, ctx.source, ctx.obj, ctx.out], {
     env: { PATH: ctx.path },
@@ -193,7 +187,7 @@ test('it builds with one job per processor when JOBS is unset', () => {
     stderr: result.stderr.toString(),
   }).toStrictEqual({ exitCode: 0, stdout: '', stderr: '' });
 
-  expect(readFileSync(ctx.calls, 'utf8').split('\n')).toStrictEqual([
+  expect(formatStubCalls(readStubCalls(ctx.stubs)).split('\n')).toStrictEqual([
     'nproc ',
     `merge_config.sh -m -O ${ctx.obj} ${ctx.kernel}/config-base ${ctx.kernel}/docker.fragment`,
     `  KCONFIG_CONFIG=${ctx.obj}/.config PWD=${ctx.source}`,
@@ -209,5 +203,5 @@ test('it refuses to run without the source, object and output folders', () => {
 
   expect(result.exitCode).toBe(1);
   expect(result.stderr.toString()).toEndWith(': $1: unbound variable\n');
-  expect(readFileSync(ctx.calls, 'utf8')).toBe('');
+  expect(formatStubCalls(readStubCalls(ctx.stubs))).toBe('');
 });

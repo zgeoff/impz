@@ -1,7 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
+import { readStubCalls } from '@zgeoff/testing/bin';
 import { createStubMountpoint } from './create-stub-mountpoint';
 
 function setupTest() {
@@ -16,19 +18,22 @@ function setupTest() {
 
 test('it reports a path it was not given as a mount', () => {
   const ctx = setupTest();
-  const stub = createStubMountpoint(ctx.directoryPath, ['/var/lib/imp']);
-  const result = Bun.spawnSync([join(stub.bin, 'mountpoint'), '-q', '/data']);
+
+  createStubMountpoint(ctx.directoryPath, ['/var/lib/imp']);
+
+  const result = Bun.spawnSync([join(ctx.directoryPath, 'mountpoint'), '-q', '/data']);
 
   expect(result.exitCode).toBe(0);
 });
 
 test('it reports each path it was given as no mount', () => {
   const ctx = setupTest();
-  const stub = createStubMountpoint(ctx.directoryPath, ['/var/lib/imp', '/srv/imp']);
+
+  createStubMountpoint(ctx.directoryPath, ['/var/lib/imp', '/srv/imp']);
 
   const exitCodes = [
-    Bun.spawnSync([join(stub.bin, 'mountpoint'), '-q', '/var/lib/imp']).exitCode,
-    Bun.spawnSync([join(stub.bin, 'mountpoint'), '-q', '/srv/imp']).exitCode,
+    Bun.spawnSync([join(ctx.directoryPath, 'mountpoint'), '-q', '/var/lib/imp']).exitCode,
+    Bun.spawnSync([join(ctx.directoryPath, 'mountpoint'), '-q', '/srv/imp']).exitCode,
   ];
 
   expect(exitCodes).toStrictEqual([1, 1]);
@@ -36,11 +41,12 @@ test('it reports each path it was given as no mount', () => {
 
 test('it matches a path that holds a space and a quote as written', () => {
   const ctx = setupTest();
-  const stub = createStubMountpoint(ctx.directoryPath, ["/tmp/it's here"]);
+
+  createStubMountpoint(ctx.directoryPath, ["/tmp/it's here"]);
 
   const exitCodes = [
-    Bun.spawnSync([join(stub.bin, 'mountpoint'), '-q', "/tmp/it's here"]).exitCode,
-    Bun.spawnSync([join(stub.bin, 'mountpoint'), '-q', '/tmp/it']).exitCode,
+    Bun.spawnSync([join(ctx.directoryPath, 'mountpoint'), '-q', "/tmp/it's here"]).exitCode,
+    Bun.spawnSync([join(ctx.directoryPath, 'mountpoint'), '-q', '/tmp/it']).exitCode,
   ];
 
   expect(exitCodes).toStrictEqual([1, 0]);
@@ -48,9 +54,10 @@ test('it matches a path that holds a space and a quote as written', () => {
 
 test('it logs each call with its arguments', () => {
   const ctx = setupTest();
-  const stub = createStubMountpoint(ctx.directoryPath, ['/var/lib/imp']);
 
-  Bun.spawnSync([join(stub.bin, 'mountpoint'), '-q', '/var/lib/imp']);
+  createStubMountpoint(ctx.directoryPath, ['/var/lib/imp']);
 
-  expect(readFileSync(stub.calls, 'utf8')).toBe('mountpoint -q /var/lib/imp\n');
+  Bun.spawnSync([join(ctx.directoryPath, 'mountpoint'), '-q', '/var/lib/imp']);
+
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe('mountpoint -q /var/lib/imp\n');
 });

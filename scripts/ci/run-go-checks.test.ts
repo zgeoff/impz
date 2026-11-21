@@ -1,10 +1,12 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
+import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
+import { createStubBin, readStubCalls } from '@zgeoff/testing/bin';
 import { $ } from 'bun';
 import { buildStubGo } from '../test-utils/build-stub-go';
+import { createStubRepoScript } from '../test-utils/create-stub-repo-script';
 
 function setupTest() {
   const created = mkdtempSync(join(tmpdir(), 'imp-go-checks-'));
@@ -25,28 +27,32 @@ function setupTest() {
 
 test('it passes the format check when gofmt lists no file', async () => {
   const ctx = setupTest();
-  const gofmt = createStubBin(ctx.directoryPath, 'gofmt');
+
+  createStubBin(ctx.directoryPath, 'gofmt');
 
   const result = await $`${process.execPath} ${ctx.scriptPath} format`
     .cwd(ctx.checkout)
-    .env({ PATH: gofmt.bin })
+    .env({ PATH: ctx.directoryPath })
     .nothrow()
     .quiet();
 
   expect(result.exitCode).toBe(0);
 
-  expect(readFileSync(gofmt.calls, 'utf8')).toBe(
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe(
     'gofmt -l agent host/ksm-exec host/oci-fetch host/uffd-handler scripts/dockerfile-difftest docs/design/spikes/uffd-2m-restore/harness\n',
   );
 });
 
 test('it fails the format check, listing the files gofmt would reformat', async () => {
   const ctx = setupTest();
-  const gofmt = createStubBin(ctx.directoryPath, 'gofmt', 'echo agent/cmd/imp-agent/main.go');
+
+  createStubBin(ctx.directoryPath, 'gofmt', {
+    script: '#!/bin/bash\necho agent/cmd/imp-agent/main.go',
+  });
 
   const result = await $`${process.execPath} ${ctx.scriptPath} format`
     .cwd(ctx.checkout)
-    .env({ PATH: gofmt.bin })
+    .env({ PATH: ctx.directoryPath })
     .nothrow()
     .quiet();
 
@@ -58,17 +64,18 @@ test('it fails the format check, listing the files gofmt would reformat', async 
 
 test('it vets every Go module, with and without the root tag where a module has root tests', async () => {
   const ctx = setupTest();
-  const go = createStubBin(ctx.directoryPath, 'go');
+
+  createStubBin(ctx.directoryPath, 'go');
 
   const result = await $`${process.execPath} ${ctx.scriptPath} vet`
     .cwd(ctx.checkout)
-    .env({ PATH: go.bin })
+    .env({ PATH: ctx.directoryPath })
     .nothrow()
     .quiet();
 
   expect(result.exitCode).toBe(0);
 
-  expect(readFileSync(go.calls, 'utf8')).toBe(
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe(
     [
       'go -C agent vet ./...',
       'go -C agent vet -tags root ./...',
@@ -85,18 +92,20 @@ test('it vets every Go module, with and without the root tag where a module has 
 
 test("it lints every Go module with the agent's pinned golangci-lint and config", async () => {
   const ctx = setupTest();
-  const go = createStubBin(ctx.directoryPath, 'go');
+
+  createStubBin(ctx.directoryPath, 'go');
+
   const tool = `tool -modfile=${ctx.checkout}/agent/tools/go.mod golangci-lint run --config ${ctx.checkout}/agent/.golangci.yml`;
 
   const result = await $`${process.execPath} ${ctx.scriptPath} lint`
     .cwd(ctx.checkout)
-    .env({ PATH: go.bin })
+    .env({ PATH: ctx.directoryPath })
     .nothrow()
     .quiet();
 
   expect(result.exitCode).toBe(0);
 
-  expect(readFileSync(go.calls, 'utf8')).toBe(
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe(
     [
       `go -C agent ${tool} --build-tags root ./...`,
       `go -C host/ksm-exec ${tool} ./...`,
@@ -112,36 +121,36 @@ test("it lints every Go module with the agent's pinned golangci-lint and config"
 test('it stops at the first module that fails its lint', async () => {
   const ctx = setupTest();
 
-  const go = createStubBin(
-    ctx.directoryPath,
-    'go',
-    buildStubGo({ 'host/ksm-exec': { exitCode: 1 } }),
-  );
+  createStubBin(ctx.directoryPath, 'go', {
+    script: buildStubGo({ 'host/ksm-exec': { exitCode: 1 } }),
+  });
 
   const result = await $`${process.execPath} ${ctx.scriptPath} lint`
     .cwd(ctx.checkout)
-    .env({ PATH: go.bin })
+    .env({ PATH: ctx.directoryPath })
     .nothrow()
     .quiet();
 
   expect(result.exitCode).toBe(1);
-  expect(readFileSync(go.calls, 'utf8').trimEnd().split('\n')).toHaveLength(2);
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath)).trimEnd().split('\n')).toHaveLength(2);
 });
 
 test('it checks the shipped modules for known vulnerabilities', async () => {
   const ctx = setupTest();
-  const go = createStubBin(ctx.directoryPath, 'go');
+
+  createStubBin(ctx.directoryPath, 'go');
+
   const tool = `tool -modfile=${ctx.checkout}/agent/tools/go.mod govulncheck ./...`;
 
   const result = await $`${process.execPath} ${ctx.scriptPath} vulnerabilities`
     .cwd(ctx.checkout)
-    .env({ PATH: go.bin })
+    .env({ PATH: ctx.directoryPath })
     .nothrow()
     .quiet();
 
   expect(result.exitCode).toBe(0);
 
-  expect(readFileSync(go.calls, 'utf8')).toBe(
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe(
     [
       `go -C agent ${tool}`,
       `go -C host/ksm-exec ${tool}`,
@@ -155,15 +164,15 @@ test('it checks the shipped modules for known vulnerabilities', async () => {
 test('it fails the dead code check, listing what only tests call', async () => {
   const ctx = setupTest();
 
-  const go = createStubBin(
-    ctx.directoryPath,
-    'go',
-    buildStubGo({ 'host/oci-fetch': { stdout: 'fetch.go:12:6: unreachable func: parseDigest' } }),
-  );
+  createStubBin(ctx.directoryPath, 'go', {
+    script: buildStubGo({
+      'host/oci-fetch': { stdout: 'fetch.go:12:6: unreachable func: parseDigest' },
+    }),
+  });
 
   const result = await $`${process.execPath} ${ctx.scriptPath} deadcode`
     .cwd(ctx.checkout)
-    .env({ PATH: go.bin })
+    .env({ PATH: ctx.directoryPath })
     .nothrow()
     .quiet();
 
@@ -173,7 +182,7 @@ test('it fails the dead code check, listing what only tests call', async () => {
       '::error::only tests call these; delete them or move them into the tests:\nfetch.go:12:6: unreachable func: parseDigest\n',
   });
 
-  expect(readFileSync(go.calls, 'utf8')).toBe(
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe(
     [
       `go -C agent tool -modfile=${ctx.checkout}/agent/tools/go.mod deadcode -test=false ./cmd/...`,
       `go -C host/ksm-exec tool -modfile=${ctx.checkout}/agent/tools/go.mod deadcode -test=false .`,
@@ -186,11 +195,12 @@ test('it fails the dead code check, listing what only tests call', async () => {
 
 test('it passes the dead code check when every function has a caller', async () => {
   const ctx = setupTest();
-  const go = createStubBin(ctx.directoryPath, 'go');
+
+  createStubBin(ctx.directoryPath, 'go');
 
   const result = await $`${process.execPath} ${ctx.scriptPath} deadcode`
     .cwd(ctx.checkout)
-    .env({ PATH: go.bin })
+    .env({ PATH: ctx.directoryPath })
     .nothrow()
     .quiet();
 
@@ -199,27 +209,22 @@ test('it passes the dead code check when every function has a caller', async () 
 
 test("it runs the agent's tests through test-go.sh and every other module's under the race detector", async () => {
   const ctx = setupTest();
-  const go = createStubBin(ctx.directoryPath, 'go');
 
+  createStubBin(ctx.directoryPath, 'go');
   mkdirSync(join(ctx.checkout, 'scripts'));
-
-  writeFileSync(
-    join(ctx.checkout, 'scripts', 'test-go.sh'),
-    `#!/bin/bash\nprintf '%s\\n' test-go.sh >>'${go.calls}'\n`,
-    { mode: 0o755 },
-  );
+  createStubRepoScript(join(ctx.checkout, 'scripts'), 'test-go.sh', ctx.directoryPath);
 
   const result = await $`${process.execPath} ${ctx.scriptPath} test`
     .cwd(ctx.checkout)
-    .env({ PATH: go.bin })
+    .env({ PATH: ctx.directoryPath })
     .nothrow()
     .quiet();
 
   expect(result.exitCode).toBe(0);
 
-  expect(readFileSync(go.calls, 'utf8')).toBe(
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe(
     [
-      'test-go.sh',
+      'test-go.sh ',
       'go -C host/ksm-exec test -race ./...',
       'go -C host/oci-fetch test -race ./...',
       'go -C host/uffd-handler test -race ./...',
@@ -231,20 +236,21 @@ test("it runs the agent's tests through test-go.sh and every other module's unde
 
 test("it runs the root-only tests as root, on the runner user's PATH", async () => {
   const ctx = setupTest();
-  const sudo = createStubBin(ctx.directoryPath, 'sudo');
+
+  createStubBin(ctx.directoryPath, 'sudo');
 
   const result = await $`${process.execPath} ${ctx.scriptPath} test-root`
     .cwd(ctx.checkout)
-    .env({ PATH: sudo.bin })
+    .env({ PATH: ctx.directoryPath })
     .nothrow()
     .quiet();
 
   expect(result.exitCode).toBe(0);
 
-  expect(readFileSync(sudo.calls, 'utf8')).toBe(
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe(
     [
-      `sudo -E env PATH=${sudo.bin} go -C agent test -tags root -race ./...`,
-      `sudo -E env PATH=${sudo.bin} go -C host/uffd-handler test -tags root -race ./...`,
+      `sudo -E env PATH=${ctx.directoryPath} go -C agent test -tags root -race ./...`,
+      `sudo -E env PATH=${ctx.directoryPath} go -C host/uffd-handler test -tags root -race ./...`,
       '',
     ].join('\n'),
   );
@@ -267,11 +273,12 @@ test('it refuses a check it does not know, with its usage', async () => {
 
 test('it refuses an extra argument after the check, and runs nothing', async () => {
   const ctx = setupTest();
-  const go = createStubBin(ctx.directoryPath, 'go');
+
+  createStubBin(ctx.directoryPath, 'go');
 
   const result = await $`${process.execPath} ${ctx.scriptPath} vet extra`
     .cwd(ctx.checkout)
-    .env({ PATH: go.bin })
+    .env({ PATH: ctx.directoryPath })
     .nothrow()
     .quiet();
 
@@ -280,5 +287,5 @@ test('it refuses an extra argument after the check, and runs nothing', async () 
     stderr: 'usage: run-go-checks.ts <format|vet|lint|vulnerabilities|deadcode|test|test-root>\n',
   });
 
-  expect(readFileSync(go.calls, 'utf8')).toBe('');
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe('');
 });

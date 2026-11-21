@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
+import { createStubBin } from '@zgeoff/testing/bin';
 import { buildStubHostDocker } from './build-stub-host-docker';
 
 function setupTest() {
@@ -19,7 +19,8 @@ function setupTest() {
 
 test('it answers that Docker runs imp-host, on an image id with sha256: before it', () => {
   const ctx = setupTest();
-  const docker = createStubBin(ctx.directoryPath, 'docker', buildStubHostDocker({}));
+
+  createStubBin(ctx.directoryPath, 'docker', { script: buildStubHostDocker({}) });
 
   const result = Bun.spawnSync(
     [
@@ -27,7 +28,7 @@ test('it answers that Docker runs imp-host, on an image id with sha256: before i
       '-c',
       'docker container inspect imp-host; echo "inspect $?"; docker inspect -f {{.Image}} imp-host',
     ],
-    { env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` } },
+    { env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` } },
   );
 
   expect(result.stdout.toString()).toBe('inspect 0\nsha256:old\n');
@@ -36,11 +37,9 @@ test('it answers that Docker runs imp-host, on an image id with sha256: before i
 test('it lists the awake imps as running, and sleeps each but the sleepless one', () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({ awakeImps: ['web', 'db'], sleeplessImp: 'db' }),
-  );
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: buildStubHostDocker({ awakeImps: ['web', 'db'], sleeplessImp: 'db' }),
+  });
 
   const result = Bun.spawnSync(
     [
@@ -49,7 +48,7 @@ test('it lists the awake imps as running, and sleeps each but the sleepless one'
       'docker exec imp-host impz ls --json; docker exec imp-host impz sleep web; echo "web $?"; ' +
         'docker exec imp-host impz sleep db; echo "db $?"',
     ],
-    { env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` } },
+    { env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` } },
   );
 
   expect(result.stdout.toString()).toBe(
@@ -60,11 +59,9 @@ test('it lists the awake imps as running, and sleeps each but the sleepless one'
 test('it fails impz --version, as an image from before the CLI was impz does, and answers imp', () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({ runningCLI: 'imp' }),
-  );
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: buildStubHostDocker({ runningCLI: 'imp' }),
+  });
 
   const result = Bun.spawnSync(
     [
@@ -72,7 +69,7 @@ test('it fails impz --version, as an image from before the CLI was impz does, an
       '-c',
       'docker exec imp-host impz --version; echo "version $?"; docker exec imp-host imp ls --json',
     ],
-    { env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` } },
+    { env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` } },
   );
 
   expect(result.stdout.toString()).toBe('version 126\n[]\n');
@@ -80,10 +77,11 @@ test('it fails impz --version, as an image from before the CLI was impz does, an
 
 test('it removes the imp-host container', () => {
   const ctx = setupTest();
-  const docker = createStubBin(ctx.directoryPath, 'docker', buildStubHostDocker({}));
+
+  createStubBin(ctx.directoryPath, 'docker', { script: buildStubHostDocker({}) });
 
   const result = Bun.spawnSync(['docker', 'rm', '-f', 'imp-host'], {
-    env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
+    env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
   });
 
   expect({ exitCode: result.exitCode, stdout: result.stdout.toString() }).toStrictEqual({
@@ -95,11 +93,9 @@ test('it removes the imp-host container', () => {
 test('it lists the containers on its imp-host network, and removes it', () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({ hostNetwork: ['imp-host', 'sidecar'] }),
-  );
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: buildStubHostDocker({ hostNetwork: ['imp-host', 'sidecar'] }),
+  });
 
   const result = Bun.spawnSync(
     [
@@ -108,7 +104,7 @@ test('it lists the containers on its imp-host network, and removes it', () => {
       "docker network inspect -f '{{range .Containers}}{{.Name}} {{end}}' imp-host; " +
         'docker network rm imp-host; echo "rm $?"',
     ],
-    { env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` } },
+    { env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` } },
   );
 
   expect(result.stdout.toString()).toBe('imp-host sidecar \nimp-host\nrm 0\n');
@@ -117,11 +113,9 @@ test('it lists the containers on its imp-host network, and removes it', () => {
 test('it lists the containers on an imp-host network in use, and fails to remove it', () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubHostDocker({ hostNetwork: ['imp-host'], networkInUse: true }),
-  );
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: buildStubHostDocker({ hostNetwork: ['imp-host'], networkInUse: true }),
+  });
 
   const result = Bun.spawnSync(
     [
@@ -130,7 +124,7 @@ test('it lists the containers on an imp-host network in use, and fails to remove
       "docker network inspect -f '{{range .Containers}}{{.Name}} {{end}}' imp-host; " +
         'docker network rm imp-host; echo "rm $?"',
     ],
-    { env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` } },
+    { env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` } },
   );
 
   expect({ stdout: result.stdout.toString(), stderr: result.stderr.toString() }).toStrictEqual({
@@ -142,7 +136,8 @@ test('it lists the containers on an imp-host network in use, and fails to remove
 
 test('it fails to inspect or remove an imp-host network it was given none of', () => {
   const ctx = setupTest();
-  const docker = createStubBin(ctx.directoryPath, 'docker', buildStubHostDocker({}));
+
+  createStubBin(ctx.directoryPath, 'docker', { script: buildStubHostDocker({}) });
 
   const result = Bun.spawnSync(
     [
@@ -151,7 +146,7 @@ test('it fails to inspect or remove an imp-host network it was given none of', (
       'docker network inspect -f \'{{.Name}}\' imp-host; echo "inspect $?"; ' +
         'docker network rm imp-host; echo "rm $?"',
     ],
-    { env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` } },
+    { env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` } },
   );
 
   expect({ stdout: result.stdout.toString(), stderr: result.stderr.toString() }).toStrictEqual({
@@ -162,10 +157,11 @@ test('it fails to inspect or remove an imp-host network it was given none of', (
 
 test('it fails a call that upgrade.sh does not make', () => {
   const ctx = setupTest();
-  const docker = createStubBin(ctx.directoryPath, 'docker', buildStubHostDocker({}));
+
+  createStubBin(ctx.directoryPath, 'docker', { script: buildStubHostDocker({}) });
 
   const result = Bun.spawnSync(['docker', 'pull', '-q', 'imp-host:next'], {
-    env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
+    env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
   });
 
   expect({ exitCode: result.exitCode, stderr: result.stderr.toString() }).toStrictEqual({

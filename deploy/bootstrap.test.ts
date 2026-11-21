@@ -2,8 +2,8 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createCommandLinks } from '@impz/shared/test-utils/create-command-links';
-import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
+import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
+import { createStubBin, linkCommands, readStubCalls } from '@zgeoff/testing/bin';
 import * as z from 'zod';
 import { buildStubBlockDevices } from '../scripts/test-utils/build-stub-block-devices';
 import { buildStubBootstrapDocker } from '../scripts/test-utils/build-stub-bootstrap-docker';
@@ -784,18 +784,18 @@ test('#subnet6 accepts the subnet random_ula64 picks as it is', () => {
 
 test('#create_host_network creates the network with podman when the caller sets CONTAINER_CLI to docker', () => {
   const ctx = setupTest();
-  const podman = createStubBin(ctx.directoryPath, 'podman');
 
+  createStubBin(ctx.directoryPath, 'podman');
   createStubBin(ctx.directoryPath, 'docker');
 
   runSourcedFunction({
     script: new URL('bootstrap.sh', import.meta.url).pathname,
     fn: 'create_host_network',
     args: ['fd12::/64'],
-    env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}`, CONTAINER_CLI: 'docker' },
+    env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`, CONTAINER_CLI: 'docker' },
   });
 
-  expect(readFileSync(podman.calls, 'utf8')).toBe(
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe(
     'podman network create --ipv6 --subnet fd12::/64 --disable-dns --interface-name br-imphost imp-host\n',
   );
 });
@@ -912,13 +912,16 @@ test('#blank_env_key blanks the key and leaves every other line alone', () => {
 
 test('#check_image_contract refuses an image that needs a Docker socket, with how to get the new one', () => {
   const ctx = setupTest();
-  const podman = createStubBin(ctx.directoryPath, 'podman', "echo 'socket-proxy'");
+
+  createStubBin(ctx.directoryPath, 'podman', {
+    script: "#!/bin/bash\necho 'socket-proxy'",
+  });
 
   const result = runSourcedFunction({
     script: new URL('bootstrap.sh', import.meta.url).pathname,
     fn: 'check_image_contract',
     args: ['imp-host:1'],
-    env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
+    env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
   });
 
   expect(result.exitCode).toBe(1);
@@ -932,13 +935,16 @@ test.each([
   ['no-docker', 0],
 ])('#check_image_contract answers an image labelled %p with exit %d', (label, exitCode) => {
   const ctx = setupTest();
-  const podman = createStubBin(ctx.directoryPath, 'podman', `echo '${label}'`);
+
+  createStubBin(ctx.directoryPath, 'podman', {
+    script: `#!/bin/bash\necho '${label}'`,
+  });
 
   const result = runSourcedFunction({
     script: new URL('bootstrap.sh', import.meta.url).pathname,
     fn: 'check_image_contract',
     args: ['imp-host:1'],
-    env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
+    env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
   });
 
   expect(result.exitCode).toBe(exitCode);
@@ -946,7 +952,9 @@ test.each([
 
 test('#retire_proxy_unit stops and disables an installed legacy imp-docker-proxy, then removes its unit file', () => {
   const ctx = setupTest();
-  const systemctl = createStubBin(ctx.directoryPath, 'systemctl');
+
+  createStubBin(ctx.directoryPath, 'systemctl');
+
   const unit = join(ctx.directoryPath, 'imp-docker-proxy.service');
 
   writeFileSync(unit, '[Service]\nExecStart=/usr/local/bin/imp-docker-proxy\n');
@@ -955,7 +963,7 @@ test('#retire_proxy_unit stops and disables an installed legacy imp-docker-proxy
     script: new URL('bootstrap.sh', import.meta.url).pathname,
     fn: 'eval',
     args: [`mode=yes; retire_proxy_unit '${unit}'`],
-    env: { PATH: `${systemctl.bin}:${process.env['PATH'] ?? ''}` },
+    env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
   });
 
   expect(result).toStrictEqual({
@@ -964,7 +972,7 @@ test('#retire_proxy_unit stops and disables an installed legacy imp-docker-proxy
     stderr: '',
   });
 
-  expect(readFileSync(systemctl.calls, 'utf8')).toBe(
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe(
     'systemctl disable -q --now imp-docker-proxy\nsystemctl daemon-reload\n',
   );
 
@@ -974,11 +982,9 @@ test('#retire_proxy_unit stops and disables an installed legacy imp-docker-proxy
 test('#retire_proxy_unit fails and keeps the unit file when systemd cannot stop the legacy imp-docker-proxy', () => {
   const ctx = setupTest();
 
-  const systemctl = createStubBin(
-    ctx.directoryPath,
-    'systemctl',
-    `echo 'Failed to stop imp-docker-proxy.service' >&2; exit 1`,
-  );
+  createStubBin(ctx.directoryPath, 'systemctl', {
+    script: `#!/bin/bash\necho 'Failed to stop imp-docker-proxy.service' >&2; exit 1`,
+  });
 
   const unit = join(ctx.directoryPath, 'imp-docker-proxy.service');
 
@@ -988,7 +994,7 @@ test('#retire_proxy_unit fails and keeps the unit file when systemd cannot stop 
     script: new URL('bootstrap.sh', import.meta.url).pathname,
     fn: 'eval',
     args: [`mode=yes; retire_proxy_unit '${unit}'`],
-    env: { PATH: `${systemctl.bin}:${process.env['PATH'] ?? ''}` },
+    env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
   });
 
   expect(result).toStrictEqual({
@@ -998,7 +1004,7 @@ test('#retire_proxy_unit fails and keeps the unit file when systemd cannot stop 
       'Failed to stop imp-docker-proxy.service\nbootstrap: failed: remove imp-docker-proxy, which impd no longer calls\n',
   });
 
-  expect(readFileSync(systemctl.calls, 'utf8')).toBe(
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe(
     'systemctl disable -q --now imp-docker-proxy\n',
   );
 
@@ -1007,7 +1013,8 @@ test('#retire_proxy_unit fails and keeps the unit file when systemd cannot stop 
 
 test('#retire_proxy_unit changes nothing on a host without the legacy imp-docker-proxy unit', () => {
   const ctx = setupTest();
-  const systemctl = createStubBin(ctx.directoryPath, 'systemctl');
+
+  createStubBin(ctx.directoryPath, 'systemctl');
 
   const result = runSourcedFunction({
     script: new URL('bootstrap.sh', import.meta.url).pathname,
@@ -1015,11 +1022,11 @@ test('#retire_proxy_unit changes nothing on a host without the legacy imp-docker
     args: [
       `mode=yes; retire_proxy_unit '${join(ctx.directoryPath, 'imp-docker-proxy.service')}'; echo "$changes"`,
     ],
-    env: { PATH: `${systemctl.bin}:${process.env['PATH'] ?? ''}` },
+    env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
   });
 
   expect(result).toStrictEqual({ exitCode: 0, stdout: '0\n', stderr: '' });
-  expect(readFileSync(systemctl.calls, 'utf8')).toBe('');
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe('');
 });
 
 test.each([['unit_imp_host'], ['env_template']])(
@@ -1371,13 +1378,14 @@ test('#resolve_subnet6 takes the env file IMP_HOST_SUBNET6 as Podman prints it',
 
 test('#preflight refuses to run as a user other than root', () => {
   const ctx = setupTest();
-  const id = createStubBin(ctx.directoryPath, 'id', 'echo 1000');
+
+  createStubBin(ctx.directoryPath, 'id', { script: '#!/bin/bash\necho 1000' });
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'preflight',
-      env: { PATH: `${id.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -1388,15 +1396,18 @@ test('#preflight refuses to run as a user other than root', () => {
 
 test('#preflight refuses a host whose imp-host runs under Docker', () => {
   const ctx = setupTest();
-  const id = createStubBin(ctx.directoryPath, 'id', 'echo 0');
-  const virt = createStubBin(ctx.directoryPath, 'systemd-detect-virt', 'exit 1');
-  const uname = createStubBin(ctx.directoryPath, 'uname', 'echo x86_64');
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubBootstrapDocker({ hostContainer: 'present' }),
-  );
+  createStubBin(ctx.directoryPath, 'id', { script: '#!/bin/bash\necho 0' });
+
+  createStubBin(ctx.directoryPath, 'systemd-detect-virt', {
+    script: '#!/bin/bash\nexit 1',
+  });
+
+  createStubBin(ctx.directoryPath, 'uname', { script: '#!/bin/bash\necho x86_64' });
+
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: buildStubBootstrapDocker({ hostContainer: 'present' }),
+  });
 
   writeFileSync(join(ctx.directoryPath, 'osrelease'), '6.8.0-85-generic\n');
 
@@ -1418,7 +1429,7 @@ test('#preflight refuses a host whose imp-host runs under Docker', () => {
         join(ctx.directoryPath, 'cpuinfo'),
       ],
       env: {
-        PATH: `${id.bin}:${virt.bin}:${uname.bin}:${docker.bin}:${process.env['PATH'] ?? ''}`,
+        PATH: `${ctx.directoryPath}:${ctx.directoryPath}:${ctx.directoryPath}:${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
       },
     }),
   ).toStrictEqual({
@@ -1472,8 +1483,8 @@ test('#check_platform refuses an OS other than Ubuntu 24.04 or 26.04 or Debian 1
 
 test('#check_platform refuses a machine other than x86_64', () => {
   const ctx = setupTest();
-  const uname = createStubBin(ctx.directoryPath, 'uname', 'echo aarch64');
 
+  createStubBin(ctx.directoryPath, 'uname', { script: '#!/bin/bash\necho aarch64' });
   writeFileSync(join(ctx.directoryPath, 'osrelease'), '6.8.0-85-generic\n');
 
   writeFileSync(
@@ -1486,7 +1497,7 @@ test('#check_platform refuses a machine other than x86_64', () => {
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'check_platform',
       args: [join(ctx.directoryPath, 'osrelease'), join(ctx.directoryPath, 'os-release')],
-      env: { PATH: `${uname.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -1497,8 +1508,8 @@ test('#check_platform refuses a machine other than x86_64', () => {
 
 test('#check_platform refuses a host without the KVM device, naming it', () => {
   const ctx = setupTest();
-  const uname = createStubBin(ctx.directoryPath, 'uname', 'echo x86_64');
 
+  createStubBin(ctx.directoryPath, 'uname', { script: '#!/bin/bash\necho x86_64' });
   writeFileSync(join(ctx.directoryPath, 'osrelease'), '6.8.0-85-generic\n');
 
   writeFileSync(
@@ -1515,7 +1526,7 @@ test('#check_platform refuses a host without the KVM device, naming it', () => {
         join(ctx.directoryPath, 'os-release'),
         join(ctx.directoryPath, 'kvm'),
       ],
-      env: { PATH: `${uname.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -1527,8 +1538,8 @@ test('#check_platform refuses a host without the KVM device, naming it', () => {
 // /dev/null stands in for /dev/kvm: the check wants a character device
 test('#check_platform refuses a CPU that reports neither vmx nor svm', () => {
   const ctx = setupTest();
-  const uname = createStubBin(ctx.directoryPath, 'uname', 'echo x86_64');
 
+  createStubBin(ctx.directoryPath, 'uname', { script: '#!/bin/bash\necho x86_64' });
   writeFileSync(join(ctx.directoryPath, 'osrelease'), '6.8.0-85-generic\n');
 
   writeFileSync(
@@ -1548,7 +1559,7 @@ test('#check_platform refuses a CPU that reports neither vmx nor svm', () => {
         '/dev/null',
         join(ctx.directoryPath, 'cpuinfo'),
       ],
-      env: { PATH: `${uname.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -1559,8 +1570,8 @@ test('#check_platform refuses a CPU that reports neither vmx nor svm', () => {
 
 test('#check_platform accepts Debian 13 on x86_64 with KVM and vmx', () => {
   const ctx = setupTest();
-  const uname = createStubBin(ctx.directoryPath, 'uname', 'echo x86_64');
 
+  createStubBin(ctx.directoryPath, 'uname', { script: '#!/bin/bash\necho x86_64' });
   writeFileSync(join(ctx.directoryPath, 'osrelease'), '6.12.48+deb13-amd64\n');
 
   writeFileSync(
@@ -1580,7 +1591,7 @@ test('#check_platform accepts Debian 13 on x86_64 with KVM and vmx', () => {
         '/dev/null',
         join(ctx.directoryPath, 'cpuinfo'),
       ],
-      env: { PATH: `${uname.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 0,
@@ -1591,14 +1602,17 @@ test('#check_platform accepts Debian 13 on x86_64 with KVM and vmx', () => {
 
 test('#check_data_source refuses XFS with no device, no loop file and nothing mounted', () => {
   const ctx = setupTest();
-  const mountpoint = createStubBin(ctx.directoryPath, 'mountpoint', 'exit 1');
+
+  createStubBin(ctx.directoryPath, 'mountpoint', {
+    script: '#!/bin/bash\nexit 1',
+  });
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
       args: ['storage=xfs; check_data_source'],
-      env: { PATH: `${mountpoint.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -1609,14 +1623,17 @@ test('#check_data_source refuses XFS with no device, no loop file and nothing mo
 
 test('#resolve_storage refuses zfs where /var/lib/imp is a mount on the host', () => {
   const ctx = setupTest();
-  const mountpoint = createStubBin(ctx.directoryPath, 'mountpoint', 'exit 0');
+
+  createStubBin(ctx.directoryPath, 'mountpoint', {
+    script: '#!/bin/bash\nexit 0',
+  });
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
       args: [`storage=zfs; resolve_storage '${join(ctx.directoryPath, 'no-env')}'`],
-      env: { PATH: `${mountpoint.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -1629,18 +1646,16 @@ test('#resolve_storage refuses zfs where /var/lib/imp is a mount on the host', (
 test('#apt_install refuses a failed install with the tail of the log and where the log is', () => {
   const ctx = setupTest();
 
-  const aptGet = createStubBin(
-    ctx.directoryPath,
-    'apt-get',
-    "echo 'E: Unable to locate package nope'; exit 100",
-  );
+  createStubBin(ctx.directoryPath, 'apt-get', {
+    script: "#!/bin/bash\necho 'E: Unable to locate package nope'; exit 100",
+  });
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'apt_install',
       args: [join(ctx.directoryPath, 'apt.log'), 'nope'],
-      env: { PATH: `${aptGet.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -1651,14 +1666,17 @@ test('#apt_install refuses a failed install with the tail of the log and where t
 
 test('#ensure_packages installs Podman and what it needs past its dependencies on a fresh host', () => {
   const ctx = setupTest();
-  const dpkgQuery = createStubBin(ctx.directoryPath, 'dpkg-query', 'exit 1');
+
+  createStubBin(ctx.directoryPath, 'dpkg-query', {
+    script: '#!/bin/bash\nexit 1',
+  });
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
       args: ['mode=dry-run; ensure_packages'],
-      env: { PATH: `${dpkgQuery.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 0,
@@ -1671,18 +1689,16 @@ test('#ensure_packages installs Podman and what it needs past its dependencies o
 test('#check_docker_host refuses a host whose imp-host runs under Docker, naming upgrade.sh', () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubBootstrapDocker({ hostContainer: 'present' }),
-  );
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: buildStubBootstrapDocker({ hostContainer: 'present' }),
+  });
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'check_docker_host',
       args: [join(ctx.directoryPath, 'imp-host.service')],
-      env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -1694,7 +1710,10 @@ test('#check_docker_host refuses a host whose imp-host runs under Docker, naming
 
 test('#check_docker_host refuses a stopped older host whose installed unit runs docker', () => {
   const ctx = setupTest();
-  const docker = createStubBin(ctx.directoryPath, 'docker', buildStubBootstrapDocker({}));
+
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: buildStubBootstrapDocker({}),
+  });
 
   writeFileSync(
     join(ctx.directoryPath, 'imp-host.service'),
@@ -1706,7 +1725,7 @@ test('#check_docker_host refuses a stopped older host whose installed unit runs 
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'check_docker_host',
       args: [join(ctx.directoryPath, 'imp-host.service')],
-      env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -1718,7 +1737,10 @@ test('#check_docker_host refuses a stopped older host whose installed unit runs 
 
 test('#check_docker_host passes a host whose Docker runs no imp-host', () => {
   const ctx = setupTest();
-  const docker = createStubBin(ctx.directoryPath, 'docker', buildStubBootstrapDocker({}));
+
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: buildStubBootstrapDocker({}),
+  });
 
   writeFileSync(
     join(ctx.directoryPath, 'imp-host.service'),
@@ -1730,20 +1752,21 @@ test('#check_docker_host passes a host whose Docker runs no imp-host', () => {
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'check_docker_host',
       args: [join(ctx.directoryPath, 'imp-host.service')],
-      env: { PATH: `${docker.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({ exitCode: 0, stdout: '', stderr: '' });
 });
 
 test('#check_xfs_reflink refuses a mount on /var/lib/imp that is not XFS', () => {
   const ctx = setupTest();
-  const findmnt = createStubBin(ctx.directoryPath, 'findmnt', 'echo ext4');
+
+  createStubBin(ctx.directoryPath, 'findmnt', { script: '#!/bin/bash\necho ext4' });
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'check_xfs_reflink',
-      env: { PATH: `${findmnt.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -1755,19 +1778,18 @@ test('#check_xfs_reflink refuses a mount on /var/lib/imp that is not XFS', () =>
 test('#check_xfs_reflink refuses an XFS on /var/lib/imp without reflink', () => {
   const ctx = setupTest();
 
-  createStubBin(ctx.directoryPath, 'findmnt', 'echo xfs');
+  createStubBin(ctx.directoryPath, 'findmnt', { script: '#!/bin/bash\necho xfs' });
 
-  const xfsInfo = createStubBin(
-    ctx.directoryPath,
-    'xfs_info',
-    "echo 'meta-data=/dev/vdb isize=512 agcount=4, crc=1 finobt=1, sparse=1, rmapbt=0, reflink=0'",
-  );
+  createStubBin(ctx.directoryPath, 'xfs_info', {
+    script:
+      "#!/bin/bash\necho 'meta-data=/dev/vdb isize=512 agcount=4, crc=1 finobt=1, sparse=1, rmapbt=0, reflink=0'",
+  });
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'check_xfs_reflink',
-      env: { PATH: `${xfsInfo.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -1785,14 +1807,14 @@ test('#check_device_free refuses a path that is not a block device', () => {
     devices: {},
   });
 
-  const stat = createStubBin(ctx.directoryPath, 'stat', scripts.stat);
+  createStubBin(ctx.directoryPath, 'stat', { script: `#!/bin/bash\n${scripts.stat}` });
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'check_device_free',
       args: ['/dev/imp-test-vdb'],
-      env: { PATH: `${stat.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -1809,17 +1831,19 @@ test('#check_device_free refuses the disk that holds the root filesystem', () =>
     devices: {},
   });
 
-  createStubBin(ctx.directoryPath, 'stat', scripts.stat);
-  createStubBin(ctx.directoryPath, 'findmnt', scripts.findmnt);
+  createStubBin(ctx.directoryPath, 'stat', { script: `#!/bin/bash\n${scripts.stat}` });
+  createStubBin(ctx.directoryPath, 'findmnt', { script: `#!/bin/bash\n${scripts.findmnt}` });
 
-  const lsblk = createStubBin(ctx.directoryPath, 'lsblk', scripts.lsblk);
+  createStubBin(ctx.directoryPath, 'lsblk', {
+    script: `#!/bin/bash\n${scripts.lsblk}`,
+  });
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'check_device_free',
       args: ['/dev/imp-test-sda'],
-      env: { PATH: `${lsblk.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -1836,17 +1860,19 @@ test('#check_device_free refuses a device with partitions', () => {
     devices: { '/dev/imp-test-vdb': { partitions: ['/dev/imp-test-vdb1'] } },
   });
 
-  createStubBin(ctx.directoryPath, 'stat', scripts.stat);
-  createStubBin(ctx.directoryPath, 'findmnt', scripts.findmnt);
+  createStubBin(ctx.directoryPath, 'stat', { script: `#!/bin/bash\n${scripts.stat}` });
+  createStubBin(ctx.directoryPath, 'findmnt', { script: `#!/bin/bash\n${scripts.findmnt}` });
 
-  const lsblk = createStubBin(ctx.directoryPath, 'lsblk', scripts.lsblk);
+  createStubBin(ctx.directoryPath, 'lsblk', {
+    script: `#!/bin/bash\n${scripts.lsblk}`,
+  });
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'check_device_free',
       args: ['/dev/imp-test-vdb'],
-      env: { PATH: `${lsblk.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -1864,18 +1890,20 @@ test('#prepare_device refuses a device that carries a signature but no filesyste
     devices: { '/dev/imp-test-vdb': { signature: true } },
   });
 
-  createStubBin(ctx.directoryPath, 'stat', scripts.stat);
-  createStubBin(ctx.directoryPath, 'findmnt', scripts.findmnt);
-  createStubBin(ctx.directoryPath, 'lsblk', scripts.lsblk);
+  createStubBin(ctx.directoryPath, 'stat', { script: `#!/bin/bash\n${scripts.stat}` });
+  createStubBin(ctx.directoryPath, 'findmnt', { script: `#!/bin/bash\n${scripts.findmnt}` });
+  createStubBin(ctx.directoryPath, 'lsblk', { script: `#!/bin/bash\n${scripts.lsblk}` });
 
-  const blkid = createStubBin(ctx.directoryPath, 'blkid', scripts.blkid);
+  createStubBin(ctx.directoryPath, 'blkid', {
+    script: `#!/bin/bash\n${scripts.blkid}`,
+  });
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'prepare_device',
       args: ['/dev/imp-test-vdb'],
-      env: { PATH: `${blkid.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -1893,19 +1921,18 @@ test('#storage_zfs refuses a device that belongs to another ZFS pool', () => {
     devices: { '/dev/imp-test-vdb': { type: 'zfs_member', label: 'other' } },
   });
 
-  createStubBin(ctx.directoryPath, 'stat', scripts.stat);
-  createStubBin(ctx.directoryPath, 'findmnt', scripts.findmnt);
-  createStubBin(ctx.directoryPath, 'lsblk', scripts.lsblk);
-  createStubBin(ctx.directoryPath, 'blkid', scripts.blkid);
-
-  const zpool = createStubBin(ctx.directoryPath, 'zpool', 'exit 1');
+  createStubBin(ctx.directoryPath, 'stat', { script: `#!/bin/bash\n${scripts.stat}` });
+  createStubBin(ctx.directoryPath, 'findmnt', { script: `#!/bin/bash\n${scripts.findmnt}` });
+  createStubBin(ctx.directoryPath, 'lsblk', { script: `#!/bin/bash\n${scripts.lsblk}` });
+  createStubBin(ctx.directoryPath, 'blkid', { script: `#!/bin/bash\n${scripts.blkid}` });
+  createStubBin(ctx.directoryPath, 'zpool', { script: '#!/bin/bash\nexit 1' });
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
       args: ['zfs_pool=tank; data_device=/dev/imp-test-vdb; storage_zfs'],
-      env: { PATH: `${zpool.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -1922,19 +1949,18 @@ test('#storage_zfs refuses a device that carries a signature but no filesystem',
     devices: { '/dev/imp-test-vdb': { signature: true } },
   });
 
-  createStubBin(ctx.directoryPath, 'stat', scripts.stat);
-  createStubBin(ctx.directoryPath, 'findmnt', scripts.findmnt);
-  createStubBin(ctx.directoryPath, 'lsblk', scripts.lsblk);
-  createStubBin(ctx.directoryPath, 'blkid', scripts.blkid);
-
-  const zpool = createStubBin(ctx.directoryPath, 'zpool', 'exit 1');
+  createStubBin(ctx.directoryPath, 'stat', { script: `#!/bin/bash\n${scripts.stat}` });
+  createStubBin(ctx.directoryPath, 'findmnt', { script: `#!/bin/bash\n${scripts.findmnt}` });
+  createStubBin(ctx.directoryPath, 'lsblk', { script: `#!/bin/bash\n${scripts.lsblk}` });
+  createStubBin(ctx.directoryPath, 'blkid', { script: `#!/bin/bash\n${scripts.blkid}` });
+  createStubBin(ctx.directoryPath, 'zpool', { script: '#!/bin/bash\nexit 1' });
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
       args: ['zfs_pool=tank; data_device=/dev/imp-test-vdb; storage_zfs'],
-      env: { PATH: `${zpool.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -1952,19 +1978,18 @@ test('#storage_zfs refuses a device that holds a filesystem, naming it', () => {
     devices: { '/dev/imp-test-vdb': { type: 'ext4' } },
   });
 
-  createStubBin(ctx.directoryPath, 'stat', scripts.stat);
-  createStubBin(ctx.directoryPath, 'findmnt', scripts.findmnt);
-  createStubBin(ctx.directoryPath, 'lsblk', scripts.lsblk);
-  createStubBin(ctx.directoryPath, 'blkid', scripts.blkid);
-
-  const zpool = createStubBin(ctx.directoryPath, 'zpool', 'exit 1');
+  createStubBin(ctx.directoryPath, 'stat', { script: `#!/bin/bash\n${scripts.stat}` });
+  createStubBin(ctx.directoryPath, 'findmnt', { script: `#!/bin/bash\n${scripts.findmnt}` });
+  createStubBin(ctx.directoryPath, 'lsblk', { script: `#!/bin/bash\n${scripts.lsblk}` });
+  createStubBin(ctx.directoryPath, 'blkid', { script: `#!/bin/bash\n${scripts.blkid}` });
+  createStubBin(ctx.directoryPath, 'zpool', { script: '#!/bin/bash\nexit 1' });
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
       args: ['zfs_pool=tank; data_device=/dev/imp-test-vdb; storage_zfs'],
-      env: { PATH: `${zpool.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -1981,26 +2006,31 @@ test('#storage_zfs creates the pool on an empty device with the properties deplo
     devices: { '/dev/imp-test-vdb': {} },
   });
 
-  createStubBin(ctx.directoryPath, 'stat', scripts.stat);
-  createStubBin(ctx.directoryPath, 'findmnt', scripts.findmnt);
-  createStubBin(ctx.directoryPath, 'lsblk', scripts.lsblk);
-  createStubBin(ctx.directoryPath, 'blkid', scripts.blkid);
-  createStubBin(ctx.directoryPath, 'zfs', 'case "$1" in list) exit 1 ;; esac');
+  createStubBin(ctx.directoryPath, 'stat', { script: `#!/bin/bash\n${scripts.stat}` });
+  createStubBin(ctx.directoryPath, 'findmnt', { script: `#!/bin/bash\n${scripts.findmnt}` });
+  createStubBin(ctx.directoryPath, 'lsblk', { script: `#!/bin/bash\n${scripts.lsblk}` });
+  createStubBin(ctx.directoryPath, 'blkid', { script: `#!/bin/bash\n${scripts.blkid}` });
 
-  const zpool = createStubBin(ctx.directoryPath, 'zpool', 'case "$1" in list) exit 1 ;; esac');
+  createStubBin(ctx.directoryPath, 'zfs', {
+    script: '#!/bin/bash\ncase "$1" in list) exit 1 ;; esac',
+  });
+
+  createStubBin(ctx.directoryPath, 'zpool', {
+    script: '#!/bin/bash\ncase "$1" in list) exit 1 ;; esac',
+  });
 
   // The data directory is a path the host owns, so the run makes no directory there.
   const result = runSourcedFunction({
     script: new URL('bootstrap.sh', import.meta.url).pathname,
     fn: 'eval',
     args: ['mkdir() { :; }; mode=yes zfs_pool=tank data_device=/dev/imp-test-vdb; storage_zfs'],
-    env: { PATH: `${zpool.bin}:${process.env['PATH'] ?? ''}` },
+    env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
   });
 
   expect(result.exitCode).toBe(0);
 
   expect(
-    readFileSync(zpool.calls, 'utf8')
+    formatStubCalls(readStubCalls(ctx.directoryPath))
       .split('\n')
       .filter((call) => call.startsWith('zpool create ')),
   ).toStrictEqual([
@@ -2010,14 +2040,15 @@ test('#storage_zfs creates the pool on an empty device with the properties deplo
 
 test('#storage_zfs refuses a pool that is not there without a device to create it on', () => {
   const ctx = setupTest();
-  const zpool = createStubBin(ctx.directoryPath, 'zpool', 'exit 1');
+
+  createStubBin(ctx.directoryPath, 'zpool', { script: '#!/bin/bash\nexit 1' });
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
       args: ['zfs_pool=tank; storage_zfs'],
-      env: { PATH: `${zpool.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -2028,14 +2059,15 @@ test('#storage_zfs refuses a pool that is not there without a device to create i
 
 test('#prepare_loop_file refuses a loop file off the root filesystem', () => {
   const ctx = setupTest();
-  const findmnt = createStubBin(ctx.directoryPath, 'findmnt', 'echo /srv');
+
+  createStubBin(ctx.directoryPath, 'findmnt', { script: '#!/bin/bash\necho /srv' });
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
       args: ['loop_file=/srv/imp/imp.xfs; prepare_loop_file'],
-      env: { PATH: `${findmnt.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -2048,10 +2080,8 @@ test('#prepare_loop_file refuses a loop file off the root filesystem', () => {
 test('#prepare_loop_file refuses an existing loop file that holds no XFS', () => {
   const ctx = setupTest();
 
-  createStubBin(ctx.directoryPath, 'findmnt', 'echo /');
-
-  const blkid = createStubBin(ctx.directoryPath, 'blkid', 'exit 2');
-
+  createStubBin(ctx.directoryPath, 'findmnt', { script: '#!/bin/bash\necho /' });
+  createStubBin(ctx.directoryPath, 'blkid', { script: '#!/bin/bash\nexit 2' });
   writeFileSync(join(ctx.directoryPath, 'imp.xfs'), 'not a filesystem\n');
 
   expect(
@@ -2059,7 +2089,7 @@ test('#prepare_loop_file refuses an existing loop file that holds no XFS', () =>
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
       args: [`loop_file='${join(ctx.directoryPath, 'imp.xfs')}'; prepare_loop_file`],
-      env: { PATH: `${blkid.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -2072,9 +2102,11 @@ test('#prepare_loop_file refuses an existing loop file that holds no XFS', () =>
 test('#prepare_loop_file refuses a loop size below 20 GiB, naming the free space', () => {
   const ctx = setupTest();
 
-  createStubBin(ctx.directoryPath, 'findmnt', 'echo /');
+  createStubBin(ctx.directoryPath, 'findmnt', { script: '#!/bin/bash\necho /' });
 
-  const df = createStubBin(ctx.directoryPath, 'df', String.raw`printf '%s\n' Avail 104857600`);
+  createStubBin(ctx.directoryPath, 'df', {
+    script: `#!/bin/bash\n${String.raw`printf '%s\n' Avail 104857600`}`,
+  });
 
   expect(
     runSourcedFunction({
@@ -2083,7 +2115,7 @@ test('#prepare_loop_file refuses a loop size below 20 GiB, naming the free space
       args: [
         `loop_file='${join(ctx.directoryPath, 'imp.xfs')}'; loop_size_gib=15; prepare_loop_file`,
       ],
-      env: { PATH: `${df.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -2127,14 +2159,15 @@ test('#ensure_ksm refuses --ksm in a container', () => {
 
 test('#ensure_ksm refuses --ksm on a kernel older than 6.10, naming it', () => {
   const ctx = setupTest();
-  const uname = createStubBin(ctx.directoryPath, 'uname', 'echo 6.6.87');
+
+  createStubBin(ctx.directoryPath, 'uname', { script: '#!/bin/bash\necho 6.6.87' });
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
       args: ['ksm=on; ensure_ksm'],
-      env: { PATH: `${uname.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -2145,14 +2178,15 @@ test('#ensure_ksm refuses --ksm on a kernel older than 6.10, naming it', () => {
 
 test('#ensure_ksm refuses --ksm on a kernel without KSM in sysfs', () => {
   const ctx = setupTest();
-  const uname = createStubBin(ctx.directoryPath, 'uname', 'echo 6.12.48');
+
+  createStubBin(ctx.directoryPath, 'uname', { script: '#!/bin/bash\necho 6.12.48' });
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
       args: [`ksm=on; ensure_ksm '${join(ctx.directoryPath, 'ksm')}'`],
-      env: { PATH: `${uname.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -2163,14 +2197,17 @@ test('#ensure_ksm refuses --ksm on a kernel without KSM in sysfs', () => {
 
 test('#ensure_firewall refuses its own firewall while nftables.service is enabled', () => {
   const ctx = setupTest();
-  const systemctl = createStubBin(ctx.directoryPath, 'systemctl', 'exit 0');
+
+  createStubBin(ctx.directoryPath, 'systemctl', {
+    script: '#!/bin/bash\nexit 0',
+  });
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
       args: ['host_firewall=own; ensure_firewall'],
-      env: { PATH: `${systemctl.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -2183,18 +2220,17 @@ test('#ensure_firewall refuses its own firewall while nftables.service is enable
 test('#ensure_firewall refuses a host where it finds no SSH port', () => {
   const ctx = setupTest();
 
-  createStubBin(ctx.directoryPath, 'systemctl', 'exit 1');
-  createStubBin(ctx.directoryPath, 'ufw', "echo 'Status: inactive'");
-  createStubBin(ctx.directoryPath, 'sshd', 'exit 1');
-
-  const ss = createStubBin(ctx.directoryPath, 'ss');
+  createStubBin(ctx.directoryPath, 'systemctl', { script: '#!/bin/bash\nexit 1' });
+  createStubBin(ctx.directoryPath, 'ufw', { script: "#!/bin/bash\necho 'Status: inactive'" });
+  createStubBin(ctx.directoryPath, 'sshd', { script: '#!/bin/bash\nexit 1' });
+  createStubBin(ctx.directoryPath, 'ss');
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
       args: ['host_firewall=own; ensure_firewall'],
-      env: { PATH: `${ss.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -2206,18 +2242,17 @@ test('#ensure_firewall refuses a host where it finds no SSH port', () => {
 test('#ensure_firewall refuses a sudo run that dropped SSH_CONNECTION', () => {
   const ctx = setupTest();
 
-  createStubBin(ctx.directoryPath, 'systemctl', 'exit 1');
-  createStubBin(ctx.directoryPath, 'ufw', "echo 'Status: inactive'");
-  createStubBin(ctx.directoryPath, 'sshd', "echo 'port 22'");
-
-  const ss = createStubBin(ctx.directoryPath, 'ss');
+  createStubBin(ctx.directoryPath, 'systemctl', { script: '#!/bin/bash\nexit 1' });
+  createStubBin(ctx.directoryPath, 'ufw', { script: "#!/bin/bash\necho 'Status: inactive'" });
+  createStubBin(ctx.directoryPath, 'sshd', { script: "#!/bin/bash\necho 'port 22'" });
+  createStubBin(ctx.directoryPath, 'ss');
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
       args: ['host_firewall=own; SUDO_USER=ops; ensure_firewall'],
-      env: { PATH: `${ss.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -2230,18 +2265,17 @@ test('#ensure_firewall refuses a sudo run that dropped SSH_CONNECTION', () => {
 test('#ensure_firewall refuses an SSH session on a port sshd does not report, naming it', () => {
   const ctx = setupTest();
 
-  createStubBin(ctx.directoryPath, 'systemctl', 'exit 1');
-  createStubBin(ctx.directoryPath, 'ufw', "echo 'Status: inactive'");
-  createStubBin(ctx.directoryPath, 'sshd', "echo 'port 22'");
-
-  const ss = createStubBin(ctx.directoryPath, 'ss');
+  createStubBin(ctx.directoryPath, 'systemctl', { script: '#!/bin/bash\nexit 1' });
+  createStubBin(ctx.directoryPath, 'ufw', { script: "#!/bin/bash\necho 'Status: inactive'" });
+  createStubBin(ctx.directoryPath, 'sshd', { script: "#!/bin/bash\necho 'port 22'" });
+  createStubBin(ctx.directoryPath, 'ss');
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
       args: ["host_firewall=own; SSH_CONNECTION='10.0.0.2 50000 10.0.0.1 2222'; ensure_firewall"],
-      env: { PATH: `${ss.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -2255,7 +2289,7 @@ test('#check_ruleset refuses a run that makes changes without nft', () => {
   const ctx = setupTest();
 
   mkdirSync(join(ctx.directoryPath, 'bin'));
-  createCommandLinks({ bin: join(ctx.directoryPath, 'bin'), names: ['bash'] });
+  linkCommands(join(ctx.directoryPath, 'bin'), ['bash']);
 
   expect(
     runSourcedFunction({
@@ -2273,14 +2307,17 @@ test('#check_ruleset refuses a run that makes changes without nft', () => {
 
 test('#check_ruleset refuses a ruleset nft rejects', () => {
   const ctx = setupTest();
-  const nft = createStubBin(ctx.directoryPath, 'nft', "echo 'Error: syntax error' >&2; exit 1");
+
+  createStubBin(ctx.directoryPath, 'nft', {
+    script: "#!/bin/bash\necho 'Error: syntax error' >&2; exit 1",
+  });
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
       args: ["mode=yes; check_ruleset 'table inet imp_host {'"],
-      env: { PATH: `${nft.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -2293,14 +2330,12 @@ test('#check_ruleset refuses a ruleset nft rejects', () => {
 test('#settle_host_network refuses to recreate a network that differs while other containers use it', () => {
   const ctx = setupTest();
 
-  const podman = createStubBin(
-    ctx.directoryPath,
-    'podman',
-    buildStubBootstrapPodman({
+  createStubBin(ctx.directoryPath, 'podman', {
+    script: buildStubBootstrapPodman({
       hostNetwork: 'true unnamed false 172.18.0.0/16 fd12::/64',
       networkContainers: ['imp-host', 'web'],
     }),
-  );
+  });
 
   expect(
     runSourcedFunction({
@@ -2309,7 +2344,7 @@ test('#settle_host_network refuses to recreate a network that differs while othe
       args: [
         "ipv6_subnet=fd12::/64; settle_host_network 1 'true unnamed false 172.18.0.0/16 fd12::/64'",
       ],
-      env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -2322,14 +2357,12 @@ test('#settle_host_network refuses to recreate a network that differs while othe
 test('#settle_host_network reads a network that answers DNS on its gateway as one that differs', () => {
   const ctx = setupTest();
 
-  const podman = createStubBin(
-    ctx.directoryPath,
-    'podman',
-    buildStubBootstrapPodman({
+  createStubBin(ctx.directoryPath, 'podman', {
+    script: buildStubBootstrapPodman({
       hostNetwork: 'true br-imphost true 10.89.0.0/24 fd12::/64',
       networkContainers: ['imp-host', 'web'],
     }),
-  );
+  });
 
   expect(
     runSourcedFunction({
@@ -2338,7 +2371,7 @@ test('#settle_host_network reads a network that answers DNS on its gateway as on
       args: [
         "ipv6_subnet=fd12::/64; settle_host_network 1 'true br-imphost true 10.89.0.0/24 fd12::/64'",
       ],
-      env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -2351,14 +2384,12 @@ test('#settle_host_network reads a network that answers DNS on its gateway as on
 test('#settle_host_network keeps a network that is right', () => {
   const ctx = setupTest();
 
-  const podman = createStubBin(
-    ctx.directoryPath,
-    'podman',
-    buildStubBootstrapPodman({
+  createStubBin(ctx.directoryPath, 'podman', {
+    script: buildStubBootstrapPodman({
       hostNetwork: 'true br-imphost false 172.18.0.0/16 fd12::/64',
       networkContainers: ['imp-host', 'web'],
     }),
-  );
+  });
 
   expect(
     runSourcedFunction({
@@ -2367,7 +2398,7 @@ test('#settle_host_network keeps a network that is right', () => {
       args: [
         "ipv6_subnet=fd12::/64; settle_host_network 1 'true br-imphost false 172.18.0.0/16 fd12::/64'",
       ],
-      env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 0,
@@ -2378,7 +2409,10 @@ test('#settle_host_network keeps a network that is right', () => {
 
 test('#remove_ipv6 refuses an accept_ra file left without --ipv6 off, naming it', () => {
   const ctx = setupTest();
-  const podman = createStubBin(ctx.directoryPath, 'podman', buildStubBootstrapPodman({}));
+
+  createStubBin(ctx.directoryPath, 'podman', {
+    script: buildStubBootstrapPodman({}),
+  });
 
   writeFileSync(join(ctx.directoryPath, '90-imp-ipv6.conf'), 'net.ipv6.conf.eth0.accept_ra = 2\n');
 
@@ -2387,7 +2421,7 @@ test('#remove_ipv6 refuses an accept_ra file left without --ipv6 off, naming it'
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
       args: [`mode=yes; remove_ipv6 '${join(ctx.directoryPath, '90-imp-ipv6.conf')}'`],
-      env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -2398,14 +2432,17 @@ test('#remove_ipv6 refuses an accept_ra file left without --ipv6 off, naming it'
 
 test('#remove_ipv6 leaves a host with no network and no accept_ra file as it is', () => {
   const ctx = setupTest();
-  const podman = createStubBin(ctx.directoryPath, 'podman', buildStubBootstrapPodman({}));
+
+  createStubBin(ctx.directoryPath, 'podman', {
+    script: buildStubBootstrapPodman({}),
+  });
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
       args: [`mode=yes; remove_ipv6 '${join(ctx.directoryPath, '90-imp-ipv6.conf')}'`],
-      env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 0,
@@ -2417,21 +2454,19 @@ test('#remove_ipv6 leaves a host with no network and no accept_ra file as it is'
 test('#remove_ipv6 refuses to remove the network while other containers use it', () => {
   const ctx = setupTest();
 
-  const podman = createStubBin(
-    ctx.directoryPath,
-    'podman',
-    buildStubBootstrapPodman({
+  createStubBin(ctx.directoryPath, 'podman', {
+    script: buildStubBootstrapPodman({
       hostNetwork: 'true br-imphost 172.18.0.0/16 fd12::/64',
       networkContainers: ['imp-host', 'web'],
     }),
-  );
+  });
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
       args: [`ipv6_set=1; remove_ipv6 '${join(ctx.directoryPath, '90-imp-ipv6.conf')}'`],
-      env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -2443,18 +2478,16 @@ test('#remove_ipv6 refuses to remove the network while other containers use it',
 test('#read_seccomp refuses an image without the seccomp profile', () => {
   const ctx = setupTest();
 
-  const podman = createStubBin(
-    ctx.directoryPath,
-    'podman',
-    buildStubBootstrapPodman({ images: ['imp-host:1'] }),
-  );
+  createStubBin(ctx.directoryPath, 'podman', {
+    script: buildStubBootstrapPodman({ images: ['imp-host:1'] }),
+  });
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'read_seccomp',
       args: ['imp-host:1'],
-      env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -2468,32 +2501,33 @@ test('#read_seccomp refuses an image without the seccomp profile', () => {
 test('#read_seccomp prints the seccomp profile of an image that carries one', () => {
   const ctx = setupTest();
 
-  const podman = createStubBin(
-    ctx.directoryPath,
-    'podman',
-    buildStubBootstrapPodman({ images: ['imp-host:1'], seccompImages: ['imp-host:1'] }),
-  );
+  createStubBin(ctx.directoryPath, 'podman', {
+    script: buildStubBootstrapPodman({ images: ['imp-host:1'], seccompImages: ['imp-host:1'] }),
+  });
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'read_seccomp',
       args: ['imp-host:1'],
-      env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({ exitCode: 0, stdout: '{}\n', stderr: '' });
 });
 
 test('#ensure_image refuses an image archive it cannot read', () => {
   const ctx = setupTest();
-  const podman = createStubBin(ctx.directoryPath, 'podman', buildStubBootstrapPodman({}));
+
+  createStubBin(ctx.directoryPath, 'podman', {
+    script: buildStubBootstrapPodman({}),
+  });
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
       args: [`image_archive='${join(ctx.directoryPath, 'imp-host.tar')}'; ensure_image imp-host:1`],
-      env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -2504,14 +2538,17 @@ test('#ensure_image refuses an image archive it cannot read', () => {
 
 test('#load_image refuses an archive that does not hold the image', () => {
   const ctx = setupTest();
-  const podman = createStubBin(ctx.directoryPath, 'podman', buildStubBootstrapPodman({}));
+
+  createStubBin(ctx.directoryPath, 'podman', {
+    script: buildStubBootstrapPodman({}),
+  });
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
       args: ['image_archive=/srv/imp-host.tar; load_image imp-host:1'],
-      env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -2523,17 +2560,18 @@ test('#load_image refuses an archive that does not hold the image', () => {
 test('#health refuses imp-host publishing a port beyond loopback', () => {
   const ctx = setupTest();
 
-  const podman = createStubBin(
-    ctx.directoryPath,
-    'podman',
-    buildStubBootstrapPodman({ impInfo: 'imp 0.40.4', published: '7070/tcp -> 0.0.0.0:7070' }),
-  );
+  createStubBin(ctx.directoryPath, 'podman', {
+    script: buildStubBootstrapPodman({
+      impInfo: 'imp 0.40.4',
+      published: '7070/tcp -> 0.0.0.0:7070',
+    }),
+  });
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'health',
-      env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -2545,21 +2583,19 @@ test('#health refuses imp-host publishing a port beyond loopback', () => {
 test('#health asks imp in an image from before the CLI was impz', () => {
   const ctx = setupTest();
 
-  const podman = createStubBin(
-    ctx.directoryPath,
-    'podman',
-    buildStubBootstrapPodman({
+  createStubBin(ctx.directoryPath, 'podman', {
+    script: buildStubBootstrapPodman({
       impInfo: 'imp 1.6.0',
       published: '7070/tcp -> 0.0.0.0:7070',
       runningCLI: 'imp',
     }),
-  );
+  });
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'health',
-      env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -2571,18 +2607,16 @@ test('#health asks imp in an image from before the CLI was impz', () => {
 test('#check_storage_live refuses impd on another storage backend than the bootstrap set up', () => {
   const ctx = setupTest();
 
-  const podman = createStubBin(
-    ctx.directoryPath,
-    'podman',
-    buildStubBootstrapPodman({ impInfo: '{"storage":{"backend":"xfs"}}' }),
-  );
+  createStubBin(ctx.directoryPath, 'podman', {
+    script: buildStubBootstrapPodman({ impInfo: '{"storage":{"backend":"xfs"}}' }),
+  });
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
       args: ['storage=zfs; check_storage_live'],
-      env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -2594,20 +2628,18 @@ test('#check_storage_live refuses impd on another storage backend than the boots
 test('#check_storage_live refuses a ZFS pool that is not ONLINE', () => {
   const ctx = setupTest();
 
-  createStubBin(
-    ctx.directoryPath,
-    'podman',
-    buildStubBootstrapPodman({ impInfo: '{"storage":{"backend":"zfs"}}' }),
-  );
+  createStubBin(ctx.directoryPath, 'podman', {
+    script: buildStubBootstrapPodman({ impInfo: '{"storage":{"backend":"zfs"}}' }),
+  });
 
-  const zpool = createStubBin(ctx.directoryPath, 'zpool', 'echo DEGRADED');
+  createStubBin(ctx.directoryPath, 'zpool', { script: '#!/bin/bash\necho DEGRADED' });
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
       args: ['storage=zfs; zfs_pool=tank; zfs_root=tank/imp; check_storage_live'],
-      env: { PATH: `${zpool.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -2619,23 +2651,21 @@ test('#check_storage_live refuses a ZFS pool that is not ONLINE', () => {
 test('#check_storage_live refuses a container with another dataset on /var/lib/imp', () => {
   const ctx = setupTest();
 
-  createStubBin(
-    ctx.directoryPath,
-    'podman',
-    buildStubBootstrapPodman({
+  createStubBin(ctx.directoryPath, 'podman', {
+    script: buildStubBootstrapPodman({
       impInfo: '{"storage":{"backend":"zfs"}}',
       dataMount: 'tank/other zfs',
     }),
-  );
+  });
 
-  const zpool = createStubBin(ctx.directoryPath, 'zpool', 'echo ONLINE');
+  createStubBin(ctx.directoryPath, 'zpool', { script: '#!/bin/bash\necho ONLINE' });
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'eval',
       args: ['storage=zfs; zfs_pool=tank; zfs_root=tank/imp; check_storage_live'],
-      env: { PATH: `${zpool.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -2646,13 +2676,16 @@ test('#check_storage_live refuses a container with another dataset on /var/lib/i
 
 test('#check_ipv6_live refuses imp-host without an IPv6 default route', () => {
   const ctx = setupTest();
-  const podman = createStubBin(ctx.directoryPath, 'podman', buildStubBootstrapPodman({}));
+
+  createStubBin(ctx.directoryPath, 'podman', {
+    script: buildStubBootstrapPodman({}),
+  });
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'check_ipv6_live',
-      env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -2664,20 +2697,18 @@ test('#check_ipv6_live refuses imp-host without an IPv6 default route', () => {
 test('#check_ipv6_live refuses an impd that logs IPv6 off, quoting its line', () => {
   const ctx = setupTest();
 
-  const podman = createStubBin(
-    ctx.directoryPath,
-    'podman',
-    buildStubBootstrapPodman({
+  createStubBin(ctx.directoryPath, 'podman', {
+    script: buildStubBootstrapPodman({
       ipv6Route: 'default via fd12::1 dev eth0 metric 1024',
       logs: 'INFO impd.ipv6 off (no default route)',
     }),
-  );
+  });
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'check_ipv6_live',
-      env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -2695,17 +2726,18 @@ test.each([
 ])('#check_ipv6_live refuses an older image whose impd logs %s', (logs, quoted) => {
   const ctx = setupTest();
 
-  const podman = createStubBin(
-    ctx.directoryPath,
-    'podman',
-    buildStubBootstrapPodman({ ipv6Route: 'default via fd12::1 dev eth0 metric 1024', logs }),
-  );
+  createStubBin(ctx.directoryPath, 'podman', {
+    script: buildStubBootstrapPodman({
+      ipv6Route: 'default via fd12::1 dev eth0 metric 1024',
+      logs,
+    }),
+  });
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'check_ipv6_live',
-      env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 1,
@@ -2717,20 +2749,18 @@ test.each([
 test('#check_ipv6_live passes an older image whose impd logs its IPv6 plan', () => {
   const ctx = setupTest();
 
-  const podman = createStubBin(
-    ctx.directoryPath,
-    'podman',
-    buildStubBootstrapPodman({
+  createStubBin(ctx.directoryPath, 'podman', {
+    script: buildStubBootstrapPodman({
       ipv6Route: 'default via fd12::1 dev eth0 metric 1024',
       logs: 'impd: api on :7070\nimpd: ipv6: fd12:3456:789a::/64, NAT66 out of eth0',
     }),
-  );
+  });
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'check_ipv6_live',
-      env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 0,
@@ -2742,20 +2772,18 @@ test('#check_ipv6_live passes an older image whose impd logs its IPv6 plan', () 
 test('#check_ipv6_live passes an impd that logs its IPv6 plan, quoting its line', () => {
   const ctx = setupTest();
 
-  const podman = createStubBin(
-    ctx.directoryPath,
-    'podman',
-    buildStubBootstrapPodman({
+  createStubBin(ctx.directoryPath, 'podman', {
+    script: buildStubBootstrapPodman({
       ipv6Route: 'default via fd12::1 dev eth0 metric 1024',
       logs: 'INFO impd.api api on :7070\nINFO impd.ipv6 fd12:3456:789a::/64, NAT66 out of eth0',
     }),
-  );
+  });
 
   expect(
     runSourcedFunction({
       script: new URL('bootstrap.sh', import.meta.url).pathname,
       fn: 'check_ipv6_live',
-      env: { PATH: `${podman.bin}:${process.env['PATH'] ?? ''}` },
+      env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
     }),
   ).toStrictEqual({
     exitCode: 0,

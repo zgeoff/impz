@@ -12,8 +12,9 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
+import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
 import { waitFor } from '@zgeoff/testing';
+import { createStubBin, readStubCalls } from '@zgeoff/testing/bin';
 import { createStubInstanceDocker } from './test-utils/create-stub-instance-docker';
 import { createStubRepoScript } from './test-utils/create-stub-repo-script';
 import { createStubZfs } from './test-utils/create-stub-zfs';
@@ -39,20 +40,19 @@ function setupTest() {
   );
 
   const stubs = join(directory, 'stubs');
-  const sudo = createStubBin(stubs, 'sudo', 'exec "$@"');
 
+  createStubBin(stubs, 'sudo', { script: '#!/bin/bash\nexec "$@"' });
   createStubZfs(stubs);
-  createStubRepoScript(join(scripts, 'dev'), 'dev.sh', sudo.calls);
-  createStubRepoScript(scripts, 'test-e2e.sh', sudo.calls);
-  createStubRepoScript(scripts, 'test-zfs.sh', sudo.calls);
+  createStubRepoScript(join(scripts, 'dev'), 'dev.sh', stubs);
+  createStubRepoScript(scripts, 'test-e2e.sh', stubs);
+  createStubRepoScript(scripts, 'test-zfs.sh', stubs);
 
   return {
     directoryPath: directory,
     stubs,
     scripts,
     moduleVersion: join(directory, 'zfs-version'),
-    calls: sudo.calls,
-    path: `${sudo.bin}:${process.env['PATH'] ?? ''}`,
+    path: `${stubs}:${process.env['PATH'] ?? ''}`,
     root,
     script: new URL('zfs-host-test.sh', import.meta.url).pathname,
 
@@ -82,7 +82,10 @@ test('it runs the unit tests and suites on a bench pool, then releases all it ma
     },
   });
 
-  const calls = readFileSync(ctx.calls, 'utf8').replaceAll(/impbench\d+/gu, 'impbenchPID');
+  const calls = formatStubCalls(readStubCalls(ctx.stubs)).replaceAll(
+    /impbench\d+/gu,
+    'impbenchPID',
+  );
 
   expect(result.exitCode).toBe(0);
 
@@ -175,7 +178,7 @@ test.each([
     },
   });
 
-  const calls = readFileSync(ctx.calls, 'utf8').split('\n');
+  const calls = formatStubCalls(readStubCalls(ctx.stubs)).split('\n');
 
   expect(result.exitCode).toBe(0);
   expect(calls.filter((call) => call.startsWith('test-e2e.sh'))).toStrictEqual([expected]);
@@ -204,7 +207,7 @@ test('it refuses an IMP_ZFS_SHARD that names no shard, and runs no suite', () =>
     },
   });
 
-  const calls = readFileSync(ctx.calls, 'utf8').split('\n');
+  const calls = formatStubCalls(readStubCalls(ctx.stubs)).split('\n');
 
   expect(result.exitCode).toBe(1);
 
@@ -236,7 +239,10 @@ test('it refuses a bench pool name that is taken and touches nothing', () => {
     },
   });
 
-  const calls = readFileSync(ctx.calls, 'utf8').replaceAll(/impbench\d+/gu, 'impbenchPID');
+  const calls = formatStubCalls(readStubCalls(ctx.stubs)).replaceAll(
+    /impbench\d+/gu,
+    'impbenchPID',
+  );
 
   expect(result.exitCode).toBe(1);
 
@@ -273,7 +279,10 @@ test('it refuses a work dir that already holds a bench.img and leaves the file a
     },
   });
 
-  const calls = readFileSync(ctx.calls, 'utf8').replaceAll(/impbench\d+/gu, 'impbenchPID');
+  const calls = formatStubCalls(readStubCalls(ctx.stubs)).replaceAll(
+    /impbench\d+/gu,
+    'impbenchPID',
+  );
 
   expect(result.exitCode).toBe(1);
 
@@ -344,7 +353,10 @@ test('it never destroys a pool or stops an instance when its own pool create fai
     },
   });
 
-  const calls = readFileSync(ctx.calls, 'utf8').replaceAll(/impbench\d+/gu, 'impbenchPID');
+  const calls = formatStubCalls(readStubCalls(ctx.stubs)).replaceAll(
+    /impbench\d+/gu,
+    'impbenchPID',
+  );
 
   expect(result.exitCode).toBe(1);
 
@@ -379,7 +391,7 @@ test('it fails and keeps the pool file, saying so, when the pool will not go', (
 
   mkdirSync(work);
   createStubZpool(ctx.stubs, { destroy: 'fails' });
-  createStubBin(ctx.stubs, 'dmesg', 'echo "[  12.000000] eth0: link up"');
+  createStubBin(ctx.stubs, 'dmesg', { script: '#!/bin/bash\necho "[  12.000000] eth0: link up"' });
 
   const result = Bun.spawnSync(ctx.run, {
     env: {
@@ -412,10 +424,8 @@ test('it keeps the pool file, prints the oops and passes when a kernel oops in Z
   mkdirSync(work);
   createStubZpool(ctx.stubs, { destroy: 'busy' });
 
-  createStubBin(
-    ctx.stubs,
-    'dmesg',
-    `cat <<'EOF'
+  createStubBin(ctx.stubs, 'dmesg', {
+    script: `#!/bin/bash\ncat <<'EOF'
 [  80.100000] eth0: link up
 [  90.200000] usercopy: Kernel memory exposure attempt detected from SLUB object 'zio_buf_comb_16384' (offset 12288, size 20480)!
 [  90.200050] ------------[ cut here ]------------
@@ -429,7 +439,7 @@ test('it keeps the pool file, prints the oops and passes when a kernel oops in Z
 [  90.200800] ---[ end trace 0000000000000000 ]---
 [  90.200900] RIP: 0010:usercopy_abort+0x6c/0x80
 EOF`,
-  );
+  });
 
   const result = Bun.spawnSync(ctx.run, {
     env: {
@@ -442,7 +452,7 @@ EOF`,
     },
   });
 
-  const calls = readFileSync(ctx.calls, 'utf8');
+  const calls = formatStubCalls(readStubCalls(ctx.stubs));
 
   expect(result.exitCode).toBe(0);
 
@@ -473,10 +483,8 @@ test('it fails and keeps the pool file when an oops outside ZFS sits beside a ZF
   mkdirSync(work);
   createStubZpool(ctx.stubs, { destroy: 'busy' });
 
-  createStubBin(
-    ctx.stubs,
-    'dmesg',
-    `cat <<'EOF'
+  createStubBin(ctx.stubs, 'dmesg', {
+    script: `#!/bin/bash\ncat <<'EOF'
 [  90.200050] ------------[ cut here ]------------
 [  90.200100] kernel BUG at mm/slub.c:500!
 [  90.200200] Oops: invalid opcode: 0000 [#1] SMP NOPTI
@@ -487,7 +495,7 @@ test('it fails and keeps the pool file when an oops outside ZFS sits beside a ZF
 [  95.300200]  txg_wait_synced+0x20/0x40 [zfs]
 [  95.300300] ---[ end trace 0000000000000000 ]---
 EOF`,
-  );
+  });
 
   const result = Bun.spawnSync(ctx.run, {
     env: {
@@ -522,10 +530,8 @@ test('it fails and keeps the pool file when a ZFS soft lockup comes before an oo
   mkdirSync(work);
   createStubZpool(ctx.stubs, { destroy: 'busy' });
 
-  createStubBin(
-    ctx.stubs,
-    'dmesg',
-    `cat <<'EOF'
+  createStubBin(ctx.stubs, 'dmesg', {
+    script: `#!/bin/bash\ncat <<'EOF'
 [  80.100000] watchdog: BUG: soft lockup - CPU#2 stuck for 26s! [z_wr_iss:812]
 [  80.100100] CPU: 2 UID: 0 PID: 812 Comm: z_wr_iss Tainted: P O 6.17.0-1-azure
 [  80.100200]  zio_execute+0x90/0x130 [zfs]
@@ -536,7 +542,7 @@ test('it fails and keeps the pool file when a ZFS soft lockup comes before an oo
 [  90.200500]  kmem_cache_free+0x10/0x40
 [  90.200600] ---[ end trace 0000000000000000 ]---
 EOF`,
-  );
+  });
 
   const result = Bun.spawnSync(ctx.run, {
     env: {
@@ -571,10 +577,8 @@ test('it keeps the pool file and passes when a page-fault oops in ZFS holds the 
   mkdirSync(work);
   createStubZpool(ctx.stubs, { destroy: 'busy' });
 
-  createStubBin(
-    ctx.stubs,
-    'dmesg',
-    `cat <<'EOF'
+  createStubBin(ctx.stubs, 'dmesg', {
+    script: `#!/bin/bash\ncat <<'EOF'
 [  90.200000] BUG: unable to handle page fault for address: ffffa0b1c0000000
 [  90.200100] #PF: supervisor read access in kernel mode
 [  90.200200] Oops: 0000 [#1] SMP NOPTI
@@ -582,7 +586,7 @@ test('it keeps the pool file and passes when a page-fault oops in ZFS holds the 
 [  90.200400]  zfs_read+0x3c8/0x500 [zfs]
 [  90.200500] ---[ end trace 0000000000000000 ]---
 EOF`,
-  );
+  });
 
   const result = Bun.spawnSync(ctx.run, {
     env: {
@@ -620,16 +624,14 @@ test('it fails and keeps the pool file when a destroy fails for a reason other t
   mkdirSync(work);
   createStubZpool(ctx.stubs, { destroy: 'fails' });
 
-  createStubBin(
-    ctx.stubs,
-    'dmesg',
-    `cat <<'EOF'
+  createStubBin(ctx.stubs, 'dmesg', {
+    script: `#!/bin/bash\ncat <<'EOF'
 [  90.200100] kernel BUG at mm/usercopy.c:102!
 [  90.200200] Oops: invalid opcode: 0000 [#1] SMP NOPTI
 [  90.200500]  zfs_uiomove_iter+0x47/0xc0 [zfs]
 [  90.200600] ---[ end trace 0000000000000000 ]---
 EOF`,
-  );
+  });
 
   const result = Bun.spawnSync(ctx.run, {
     env: {
@@ -673,7 +675,10 @@ test('it refuses a work dir that already holds a data dir and leaves it as it wa
     },
   });
 
-  const calls = readFileSync(ctx.calls, 'utf8').replaceAll(/impbench\d+/gu, 'impbenchPID');
+  const calls = formatStubCalls(readStubCalls(ctx.stubs)).replaceAll(
+    /impbench\d+/gu,
+    'impbenchPID',
+  );
 
   expect(result.exitCode).toBe(1);
 
@@ -709,7 +714,10 @@ test('it refuses an imp-zfs container that is already there and touches nothing'
     },
   });
 
-  const calls = readFileSync(ctx.calls, 'utf8').replaceAll(/impbench\d+/gu, 'impbenchPID');
+  const calls = formatStubCalls(readStubCalls(ctx.stubs)).replaceAll(
+    /impbench\d+/gu,
+    'impbenchPID',
+  );
 
   expect(result.exitCode).toBe(1);
 
@@ -746,7 +754,10 @@ test('it refuses a work dir that already holds the moves suites’ B data dir an
     },
   });
 
-  const calls = readFileSync(ctx.calls, 'utf8').replaceAll(/impbench\d+/gu, 'impbenchPID');
+  const calls = formatStubCalls(readStubCalls(ctx.stubs)).replaceAll(
+    /impbench\d+/gu,
+    'impbenchPID',
+  );
 
   expect(result.exitCode).toBe(1);
 
@@ -783,7 +794,10 @@ test('it refuses an imp-zfs-mv-b container that is already there and touches not
     },
   });
 
-  const calls = readFileSync(ctx.calls, 'utf8').replaceAll(/impbench\d+/gu, 'impbenchPID');
+  const calls = formatStubCalls(readStubCalls(ctx.stubs)).replaceAll(
+    /impbench\d+/gu,
+    'impbenchPID',
+  );
 
   expect(result.exitCode).toBe(1);
 
@@ -819,7 +833,10 @@ test('it refuses an imp-zfs-mv network that is already there and touches nothing
     },
   });
 
-  const calls = readFileSync(ctx.calls, 'utf8').replaceAll(/impbench\d+/gu, 'impbenchPID');
+  const calls = formatStubCalls(readStubCalls(ctx.stubs)).replaceAll(
+    /impbench\d+/gu,
+    'impbenchPID',
+  );
 
   expect(result.exitCode).toBe(1);
 
@@ -874,14 +891,14 @@ test('it stops the suites, the moves suites’ B, the instance and the pool when
 
   mkdirSync(work);
   createStubZpool(ctx.stubs);
-  createStubRepoScript(ctx.scripts, 'test-e2e.sh', ctx.calls, `: >'${started}'; exec sleep 30`);
 
-  createStubRepoScript(
-    join(ctx.directoryPath, 'root', 'scripts', 'dev'),
-    'dev.sh',
-    ctx.calls,
-    `printf '%s\\n' "  for $IMP_DEV_NAME on $IMP_DEV_DATA" >>'${ctx.calls}'`,
-  );
+  createStubRepoScript(ctx.scripts, 'test-e2e.sh', ctx.stubs, {
+    body: `: >'${started}'; exec sleep 30`,
+  });
+
+  createStubRepoScript(join(ctx.directoryPath, 'root', 'scripts', 'dev'), 'dev.sh', ctx.stubs, {
+    recordEnv: ['IMP_DEV_NAME', 'IMP_DEV_DATA'],
+  });
 
   const subprocess = Bun.spawn(ctx.run, {
     stdout: 'ignore',
@@ -906,7 +923,10 @@ test('it stops the suites, the moves suites’ B, the instance and the pool when
 
   const exitCode = await subprocess.exited;
 
-  const calls = readFileSync(ctx.calls, 'utf8').replaceAll(/impbench\d+/gu, 'impbenchPID');
+  const calls = formatStubCalls(readStubCalls(ctx.stubs)).replaceAll(
+    /impbench\d+/gu,
+    'impbenchPID',
+  );
 
   expect(exitCode).toBe(143);
 
@@ -915,10 +935,10 @@ test('it stops the suites, the moves suites’ B, the instance and the pool when
     'docker container inspect imp-zfs-mv-b',
     'docker logs imp-zfs-mv-b',
     'dev.sh down',
-    `  for imp-zfs-mv-b on ${work}/data-mv-b`,
+    `  IMP_DEV_NAME=imp-zfs-mv-b IMP_DEV_DATA=${work}/data-mv-b`,
     'docker logs imp-zfs',
     'dev.sh down',
-    `  for imp-zfs on ${work}/data`,
+    `  IMP_DEV_NAME=imp-zfs IMP_DEV_DATA=${work}/data`,
     'docker network rm imp-zfs-mv',
     'sudo zpool list -H -o name',
     'zpool list -H -o name',
@@ -976,7 +996,10 @@ test('it destroys the pool and removes its file when SIGTERM comes during the po
 
   const exitCode = await subprocess.exited;
 
-  const calls = readFileSync(ctx.calls, 'utf8').replaceAll(/impbench\d+/gu, 'impbenchPID');
+  const calls = formatStubCalls(readStubCalls(ctx.stubs)).replaceAll(
+    /impbench\d+/gu,
+    'impbenchPID',
+  );
 
   expect(exitCode).toBe(143);
 
@@ -1055,11 +1078,9 @@ test('it fails, saying so, when the pool file will not go', () => {
   mkdirSync(work);
   createStubZpool(ctx.stubs);
 
-  createStubBin(
-    ctx.stubs,
-    'rm',
-    `echo "rm: cannot remove '$2': Operation not permitted" >&2; exit 1`,
-  );
+  createStubBin(ctx.stubs, 'rm', {
+    script: `#!/bin/bash\necho "rm: cannot remove '$2': Operation not permitted" >&2; exit 1`,
+  });
 
   const result = Bun.spawnSync(ctx.run, {
     env: {
@@ -1280,6 +1301,6 @@ test('it refuses to run when the zfs module is not loaded and touches nothing', 
     stderr: 'zfs-host-test: load the zfs module first (sudo modprobe zfs)\n',
   });
 
-  expect(readFileSync(ctx.calls, 'utf8')).toBe('');
+  expect(formatStubCalls(readStubCalls(ctx.stubs))).toBe('');
   expect(existsSync(work)).toBeFalse();
 });

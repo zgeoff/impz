@@ -37,7 +37,8 @@ export function buildStubHostPodman(stub: StubHostPodman): string {
       : `echo ${stub.pulledIsRunning === true ? 'old' : 'new'}`;
 
   // Podman prints an image id without the sha256: that Docker puts before it.
-  return `case "$*" in
+  return `#!/bin/bash
+case "$*" in
   "container exists imp-host") ${runsHost} ;;
   "inspect -f {{.Image}} imp-host") ${hostImage} ;;
   "pull -q "${formatShellWord(stub.image)}) ;;

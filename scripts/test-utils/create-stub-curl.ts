@@ -1,6 +1,6 @@
-import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
-import type { StubBin } from '@impz/shared/test-utils/create-stub-bin';
 import { formatShellWord } from '@impz/shared/test-utils/format-shell-word';
+import { createStubBin } from '@zgeoff/testing/bin';
+import type { StubBin } from '@zgeoff/testing/bin';
 
 export interface StubCurlOptions {
   // the file whose bytes curl writes to its -o path, whatever the URL
@@ -11,10 +11,8 @@ export interface StubCurlOptions {
 }
 
 export function createStubCurl(directory: string, options: Readonly<StubCurlOptions>): StubBin {
-  return createStubBin(
-    directory,
-    'curl',
-    `output=
+  return createStubBin(directory, 'curl', {
+    script: `#!/bin/bash\noutput=
 while [ "$#" -gt 0 ]; do
   case "$1" in
     -o) output=$2; shift ;;
@@ -24,5 +22,5 @@ done
 [ -n "$output" ] || exit 2
 command -p cp ${formatShellWord(options.source)} "$output"
 exit ${options.exitCode ?? 0}`,
-  );
+  });
 }

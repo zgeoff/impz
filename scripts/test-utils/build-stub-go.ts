@@ -15,5 +15,12 @@ export function buildStubGo(answers: Readonly<Record<string, StubGoAnswer>>): st
     return `  ${formatShellWord(module)}) ${print}exit ${String(answer.exitCode ?? 0)} ;;`;
   });
 
-  return ['[ "$1" = -C ] || exit 0', 'case "$2" in', ...cases, 'esac', 'exit 0'].join('\n');
+  return [
+    '#!/bin/bash',
+    '[ "$1" = -C ] || exit 0',
+    'case "$2" in',
+    ...cases,
+    'esac',
+    'exit 0',
+  ].join('\n');
 }

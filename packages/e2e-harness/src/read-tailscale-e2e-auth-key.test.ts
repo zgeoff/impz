@@ -2,8 +2,8 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
 import { updateEnv } from '@zgeoff/testing';
+import { createStubBin } from '@zgeoff/testing/bin';
 import { probeTailscaleE2EKey, readTailscaleE2EAuthKey } from './read-tailscale-e2e-auth-key';
 
 function setupTest() {
@@ -27,9 +27,12 @@ test('#readTailscaleE2EAuthKey reads the e2e client as an ephemeral, preauthoriz
 
 test('#readTailscaleE2EAuthKey reads no key when neither the env nor op has the e2e client', async () => {
   const ctx = setupTest();
-  const op = createStubBin(ctx.directoryPath, 'op', 'exit 1');
 
-  const found = await readTailscaleE2EAuthKey({ PATH: `${op.bin}:${process.env['PATH'] ?? ''}` });
+  createStubBin(ctx.directoryPath, 'op', { script: '#!/bin/bash\nexit 1' });
+
+  const found = await readTailscaleE2EAuthKey({
+    PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
+  });
 
   expect(found).toBeNull();
 });

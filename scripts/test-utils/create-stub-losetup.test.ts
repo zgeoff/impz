@@ -1,7 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
+import { readStubCalls } from '@zgeoff/testing/bin';
 import { createStubLosetup } from './create-stub-losetup';
 
 function setupTest() {
@@ -16,8 +18,10 @@ function setupTest() {
 
 test('it prints the free device it was given for -f', () => {
   const ctx = setupTest();
-  const stub = createStubLosetup(ctx.directoryPath, { free: '/dev/loop7777 (lost)' });
-  const result = Bun.spawnSync([join(stub.bin, 'losetup'), '-f']);
+
+  createStubLosetup(ctx.directoryPath, { free: '/dev/loop7777 (lost)' });
+
+  const result = Bun.spawnSync([join(ctx.directoryPath, 'losetup'), '-f']);
 
   expect({ exitCode: result.exitCode, stdout: result.stdout.toString() }).toStrictEqual({
     exitCode: 0,
@@ -27,8 +31,10 @@ test('it prints the free device it was given for -f', () => {
 
 test('it fails -f without a free device, as on a kernel with none left', () => {
   const ctx = setupTest();
-  const stub = createStubLosetup(ctx.directoryPath);
-  const result = Bun.spawnSync([join(stub.bin, 'losetup'), '-f']);
+
+  createStubLosetup(ctx.directoryPath);
+
+  const result = Bun.spawnSync([join(ctx.directoryPath, 'losetup'), '-f']);
 
   expect({ exitCode: result.exitCode, stdout: result.stdout.toString() }).toStrictEqual({
     exitCode: 1,
@@ -38,10 +44,11 @@ test('it fails -f without a free device, as on a kernel with none left', () => {
 
 test('it prints the device that holds the file for -j', () => {
   const ctx = setupTest();
-  const stub = createStubLosetup(ctx.directoryPath, { attached: '/dev/loop3' });
+
+  createStubLosetup(ctx.directoryPath, { attached: '/dev/loop3' });
 
   const result = Bun.spawnSync([
-    join(stub.bin, 'losetup'),
+    join(ctx.directoryPath, 'losetup'),
     '-j',
     '/data/imp.xfs',
     '-n',
@@ -57,10 +64,11 @@ test('it prints the device that holds the file for -j', () => {
 
 test('it prints nothing for -j when no device holds the file', () => {
   const ctx = setupTest();
-  const stub = createStubLosetup(ctx.directoryPath);
+
+  createStubLosetup(ctx.directoryPath);
 
   const result = Bun.spawnSync([
-    join(stub.bin, 'losetup'),
+    join(ctx.directoryPath, 'losetup'),
     '-j',
     '/data/imp.xfs',
     '-n',
@@ -76,19 +84,28 @@ test('it prints nothing for -j when no device holds the file', () => {
 
 test('it attaches a file at the first try by default', () => {
   const ctx = setupTest();
-  const stub = createStubLosetup(ctx.directoryPath);
-  const result = Bun.spawnSync([join(stub.bin, 'losetup'), '/dev/loop7777', '/data/imp.xfs']);
+
+  createStubLosetup(ctx.directoryPath);
+
+  const result = Bun.spawnSync([
+    join(ctx.directoryPath, 'losetup'),
+    '/dev/loop7777',
+    '/data/imp.xfs',
+  ]);
 
   expect(result.exitCode).toBe(0);
 });
 
 test('it fails the busy attaches it was given, then attaches, across separate runs', () => {
   const ctx = setupTest();
-  const stub = createStubLosetup(ctx.directoryPath, { busyAttaches: 2 });
+
+  createStubLosetup(ctx.directoryPath, { busyAttaches: 2 });
 
   const exitCodes = Array.from(
     { length: 4 },
-    () => Bun.spawnSync([join(stub.bin, 'losetup'), '/dev/loop7777', '/data/imp.xfs']).exitCode,
+    () =>
+      Bun.spawnSync([join(ctx.directoryPath, 'losetup'), '/dev/loop7777', '/data/imp.xfs'])
+        .exitCode,
   );
 
   expect(exitCodes).toStrictEqual([1, 1, 0, 0]);
@@ -96,23 +113,29 @@ test('it fails the busy attaches it was given, then attaches, across separate ru
 
 test('it never counts a detach as an attach', () => {
   const ctx = setupTest();
-  const stub = createStubLosetup(ctx.directoryPath, { busyAttaches: 1 });
 
-  Bun.spawnSync([join(stub.bin, 'losetup'), '-d', '/dev/loop7777']);
+  createStubLosetup(ctx.directoryPath, { busyAttaches: 1 });
 
-  const result = Bun.spawnSync([join(stub.bin, 'losetup'), '/dev/loop7777', '/data/imp.xfs']);
+  Bun.spawnSync([join(ctx.directoryPath, 'losetup'), '-d', '/dev/loop7777']);
+
+  const result = Bun.spawnSync([
+    join(ctx.directoryPath, 'losetup'),
+    '/dev/loop7777',
+    '/data/imp.xfs',
+  ]);
 
   expect(result.exitCode).toBe(1);
 });
 
 test('it logs each call with its arguments', () => {
   const ctx = setupTest();
-  const stub = createStubLosetup(ctx.directoryPath, { free: '/dev/loop7777' });
 
-  Bun.spawnSync([join(stub.bin, 'losetup'), '-f']);
-  Bun.spawnSync([join(stub.bin, 'losetup'), '/dev/loop7777', '/data/imp.xfs']);
+  createStubLosetup(ctx.directoryPath, { free: '/dev/loop7777' });
 
-  expect(readFileSync(stub.calls, 'utf8')).toBe(
+  Bun.spawnSync([join(ctx.directoryPath, 'losetup'), '-f']);
+  Bun.spawnSync([join(ctx.directoryPath, 'losetup'), '/dev/loop7777', '/data/imp.xfs']);
+
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe(
     'losetup -f\nlosetup /dev/loop7777 /data/imp.xfs\n',
   );
 });

@@ -1,6 +1,6 @@
-import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
-import type { StubBin } from '@impz/shared/test-utils/create-stub-bin';
 import { formatShellWord } from '@impz/shared/test-utils/format-shell-word';
+import { createStubBin } from '@zgeoff/testing/bin';
+import type { StubBin } from '@zgeoff/testing/bin';
 
 export interface StubBinAnswer {
   // the leading arguments a call must start with; empty matches every call
@@ -17,11 +17,9 @@ export function createStubAnsweringBin(
   name: string,
   answers: readonly StubBinAnswer[],
 ): StubBin {
-  return createStubBin(
-    directory,
-    name,
-    `${answers.map((answer) => formatAnswer(answer)).join('\n')}\nexit 0`,
-  );
+  return createStubBin(directory, name, {
+    script: `#!/bin/bash\n${answers.map((answer) => formatAnswer(answer)).join('\n')}\nexit 0`,
+  });
 }
 
 function formatAnswer(answer: StubBinAnswer): string {

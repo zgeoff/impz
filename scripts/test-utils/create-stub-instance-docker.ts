@@ -1,5 +1,5 @@
-import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
-import type { StubBin } from '@impz/shared/test-utils/create-stub-bin';
+import { createStubBin } from '@zgeoff/testing/bin';
+import type { StubBin } from '@zgeoff/testing/bin';
 
 export interface InstanceDockerStubOptions {
   readonly containers: readonly string[];
@@ -16,10 +16,8 @@ export function createStubInstanceDocker(
   const later = (options.startedLater?.containers ?? []).map((name) => `'${name}'`).join(' ');
   const networks = (options.networks ?? []).map((name) => `'${name}'`).join(' ');
 
-  return createStubBin(
-    stubs,
-    'docker',
-    `if [ "$1" = container ] && [ "$2" = inspect ]; then
+  return createStubBin(stubs, 'docker', {
+    script: `#!/bin/bash\nif [ "$1" = container ] && [ "$2" = inspect ]; then
   for name in ${names}; do
     [ "$name" != "$3" ] || exit 0
   done
@@ -38,5 +36,5 @@ if [ "$1" = network ] && [ "$2" = inspect ]; then
   echo "Error response from daemon: network $3 not found" >&2
   exit 1
 fi`,
-  );
+  });
 }

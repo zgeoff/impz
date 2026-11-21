@@ -30,6 +30,7 @@ export function buildStubDevDocker(images: readonly StubDevImage[]): string {
     .map((image) => `  "image rm "${formatShellWord(image.tag)}) exit 1 ;;`);
 
   return [
+    '#!/bin/bash',
     'case "$*" in',
     `  "image ls --filter label=imp.worktree --format "*) ${images.length === 0 ? ':' : `printf '%s\\n' ${listed}`} ;;`,
     ...inspects,

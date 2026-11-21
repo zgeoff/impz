@@ -6,5 +6,6 @@ export function buildStubGhRepoClone(remote: string | null): string {
   const clone =
     remote === null ? 'mkdir -p "$4"' : `exec git clone -q ${formatShellWord(remote)} "$4"`;
 
-  return `[ "$1 $2" = "repo clone" ] && ${clone}\nexit 0`;
+  return `#!/bin/bash
+[ "$1 $2" = "repo clone" ] && ${clone}\nexit 0`;
 }

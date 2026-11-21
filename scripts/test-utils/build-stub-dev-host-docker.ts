@@ -38,6 +38,7 @@ export function buildStubDevHostDocker(stub: StubDevHostDocker): string {
       : `  "exec "*" pgrep -f "*) printf '%s' ${formatShellWord(lookupError.stderr)} >&2; exit ${String(lookupError.exitCode)} ;;`;
 
   return [
+    '#!/bin/bash',
     'case "$*" in',
     pgrep,
     '  "exec "*" kill -HUP "*) ;;',
@@ -55,7 +56,7 @@ export function buildStubDevHostDocker(stub: StubDevHostDocker): string {
     '  "rm -f "*) ;;',
     ...logs,
     '  "logs --tail "*) ;;',
-    '  *) echo "stub $(basename "$0"): unexpected call: $*" >&2; exit 1 ;;',
+    '  *) echo "stub $(basename "$0" .script | cut -c2-): unexpected call: $*" >&2; exit 1 ;;',
     'esac',
   ].join('\n');
 }

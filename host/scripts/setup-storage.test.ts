@@ -1,8 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
+import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
+import { createStubBin, readStubCalls } from '@zgeoff/testing/bin';
 import { createStubLosetup } from '../../scripts/test-utils/create-stub-losetup';
 import { createStubMountpoint } from '../../scripts/test-utils/create-stub-mountpoint';
 
@@ -21,8 +22,6 @@ function setupTest() {
   return {
     directoryPath: directory,
     nodesPath: join(directory, 'nodes'),
-    bin: join(directory, 'bin'),
-    calls: join(directory, 'calls'),
     root: join(directory, 'imp'),
     file: join(directory, 'data', 'imp.xfs'),
     script: new URL('setup-storage.sh', import.meta.url).pathname,
@@ -35,7 +34,10 @@ test('it refuses a storage backend other than xfs or zfs', () => {
   createStubBin(ctx.directoryPath, 'mountpoint');
 
   const result = Bun.spawnSync(['bash', ctx.script], {
-    env: { PATH: `${ctx.bin}:${process.env['PATH'] ?? ''}`, IMP_STORAGE_BACKEND: 'btrfs' },
+    env: {
+      PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
+      IMP_STORAGE_BACKEND: 'btrfs',
+    },
   });
 
   expect({
@@ -48,7 +50,7 @@ test('it refuses a storage backend other than xfs or zfs', () => {
     stderr: 'setup-storage: IMP_STORAGE_BACKEND is btrfs; use xfs or zfs\n',
   });
 
-  expect(readFileSync(ctx.calls, 'utf8')).toBe('');
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe('');
 });
 
 test('it refuses the zfs backend without a dataset in IMP_ZFS_ROOT', () => {
@@ -57,7 +59,7 @@ test('it refuses the zfs backend without a dataset in IMP_ZFS_ROOT', () => {
   createStubBin(ctx.directoryPath, 'zfs');
 
   const result = Bun.spawnSync(['bash', ctx.script], {
-    env: { PATH: `${ctx.bin}:${process.env['PATH'] ?? ''}`, IMP_STORAGE_BACKEND: 'zfs' },
+    env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`, IMP_STORAGE_BACKEND: 'zfs' },
   });
 
   expect({
@@ -71,16 +73,16 @@ test('it refuses the zfs backend without a dataset in IMP_ZFS_ROOT', () => {
       'setup-storage: IMP_STORAGE_BACKEND=zfs needs IMP_ZFS_ROOT, the dataset for /var/lib/imp\n',
   });
 
-  expect(readFileSync(ctx.calls, 'utf8')).toBe('');
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe('');
 });
 
 test('it refuses to start without a mount at /var/lib/imp when loop files are off', () => {
   const ctx = setupTest();
 
-  createStubBin(ctx.directoryPath, 'mountpoint', 'exit 1');
+  createStubBin(ctx.directoryPath, 'mountpoint', { script: '#!/bin/bash\nexit 1' });
 
   const result = Bun.spawnSync(['bash', ctx.script], {
-    env: { PATH: `${ctx.bin}:${process.env['PATH'] ?? ''}`, IMP_STORAGE_LOOP: '0' },
+    env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`, IMP_STORAGE_LOOP: '0' },
   });
 
   expect({
@@ -94,19 +96,19 @@ test('it refuses to start without a mount at /var/lib/imp when loop files are of
       'setup-storage: nothing is mounted at /var/lib/imp; mount a host XFS directory with reflink there\n',
   });
 
-  expect(readFileSync(ctx.calls, 'utf8')).toBe('mountpoint -q /var/lib/imp\n');
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe('mountpoint -q /var/lib/imp\n');
 });
 
 test('it refuses a loop file whose directory is not a mount, since it would go with the container', () => {
   const ctx = setupTest();
 
-  createStubBin(ctx.directoryPath, 'mountpoint', 'exit 1');
+  createStubBin(ctx.directoryPath, 'mountpoint', { script: '#!/bin/bash\nexit 1' });
   createStubBin(ctx.directoryPath, 'truncate');
   createStubBin(ctx.directoryPath, 'mkfs.xfs');
 
   const result = Bun.spawnSync(['bash', ctx.script], {
     env: {
-      PATH: `${ctx.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
       IMP_STORAGE_FILE: join(ctx.directoryPath, 'data', 'imp.xfs'),
     },
   });
@@ -121,7 +123,7 @@ test('it refuses a loop file whose directory is not a mount, since it would go w
     stderr: `setup-storage: ${ctx.directoryPath}/data is not a mount; mount a host directory there for ${ctx.directoryPath}/data/imp.xfs\n`,
   });
 
-  expect(readFileSync(ctx.calls, 'utf8').split('\n')).toStrictEqual([
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath)).split('\n')).toStrictEqual([
     'mountpoint -q /var/lib/imp',
     `mountpoint -q ${ctx.directoryPath}/data`,
     '',
@@ -132,11 +134,11 @@ test('it refuses a filesystem already mounted at /var/lib/imp that is not XFS, a
   const ctx = setupTest();
 
   createStubBin(ctx.directoryPath, 'mountpoint');
-  createStubBin(ctx.directoryPath, 'findmnt', 'echo ext4');
+  createStubBin(ctx.directoryPath, 'findmnt', { script: '#!/bin/bash\necho ext4' });
   createStubBin(ctx.directoryPath, 'umount');
 
   const result = Bun.spawnSync(['bash', ctx.script], {
-    env: { PATH: `${ctx.bin}:${process.env['PATH'] ?? ''}` },
+    env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}` },
   });
 
   expect({
@@ -149,7 +151,7 @@ test('it refuses a filesystem already mounted at /var/lib/imp that is not XFS, a
     stderr: 'setup-storage: /var/lib/imp is ext4; imp needs XFS with reflink\n',
   });
 
-  expect(readFileSync(ctx.calls, 'utf8').split('\n')).toStrictEqual([
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath)).split('\n')).toStrictEqual([
     'mountpoint -q /var/lib/imp',
     'findmnt -n -o FSTYPE --mountpoint /var/lib/imp',
     '',
@@ -165,13 +167,13 @@ test('it creates a sparse XFS loop file, mounts it and checks that it reflinks',
   createStubLosetup(ctx.directoryPath, { free: '/dev/loop7777 (lost)' });
   createStubBin(ctx.directoryPath, 'mount');
   createStubBin(ctx.directoryPath, 'umount');
-  createStubBin(ctx.directoryPath, 'findmnt', 'echo xfs');
+  createStubBin(ctx.directoryPath, 'findmnt', { script: '#!/bin/bash\necho xfs' });
   createStubBin(ctx.directoryPath, 'cp');
   createStubBin(ctx.nodesPath, 'mknod');
 
   const result = Bun.spawnSync(['bash', ctx.script], {
     env: {
-      PATH: `${join(ctx.nodesPath, 'bin')}:${ctx.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.nodesPath}:${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
       IMP_STORAGE_ROOT: ctx.root,
       IMP_STORAGE_FILE: ctx.file,
       IMP_STORAGE_GIB: '8',
@@ -188,7 +190,7 @@ test('it creates a sparse XFS loop file, mounts it and checks that it reflinks',
     stderr: '',
   });
 
-  expect(readFileSync(ctx.calls, 'utf8').split('\n')).toStrictEqual([
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath)).split('\n')).toStrictEqual([
     `mountpoint -q ${ctx.root}`,
     `mountpoint -q ${ctx.directoryPath}/data`,
     `truncate -s 8G ${ctx.file}`,
@@ -203,10 +205,7 @@ test('it creates a sparse XFS loop file, mounts it and checks that it reflinks',
     '',
   ]);
 
-  expect(readFileSync(join(ctx.nodesPath, 'calls'), 'utf8')).toInclude(
-    'mknod /dev/loop7777 b 7 7777\n',
-  );
-
+  expect(formatStubCalls(readStubCalls(ctx.nodesPath))).toInclude('mknod /dev/loop7777 b 7 7777\n');
   expect(readdirSync(ctx.root)).toStrictEqual([]);
 });
 
@@ -219,13 +218,13 @@ test('it mounts a loop file that exists already without formatting it again', ()
   createStubBin(ctx.directoryPath, 'mkfs.xfs');
   createStubLosetup(ctx.directoryPath, { free: '/dev/loop7777 (lost)' });
   createStubBin(ctx.directoryPath, 'mount');
-  createStubBin(ctx.directoryPath, 'findmnt', 'echo xfs');
+  createStubBin(ctx.directoryPath, 'findmnt', { script: '#!/bin/bash\necho xfs' });
   createStubBin(ctx.directoryPath, 'cp');
   createStubBin(ctx.nodesPath, 'mknod');
 
   const result = Bun.spawnSync(['bash', ctx.script], {
     env: {
-      PATH: `${join(ctx.nodesPath, 'bin')}:${ctx.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.nodesPath}:${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
       IMP_STORAGE_ROOT: ctx.root,
       IMP_STORAGE_FILE: ctx.file,
     },
@@ -241,7 +240,7 @@ test('it mounts a loop file that exists already without formatting it again', ()
     stderr: '',
   });
 
-  expect(readFileSync(ctx.calls, 'utf8').split('\n')).toStrictEqual([
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath)).split('\n')).toStrictEqual([
     `mountpoint -q ${ctx.root}`,
     `mountpoint -q ${ctx.directoryPath}/data`,
     `losetup -j ${ctx.file} -n -O NAME`,
@@ -266,7 +265,7 @@ test('it refuses a loop file that a loop device still holds, so two kernels neve
 
   const result = Bun.spawnSync(['bash', ctx.script], {
     env: {
-      PATH: `${join(ctx.nodesPath, 'bin')}:${ctx.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.nodesPath}:${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
       IMP_STORAGE_ROOT: ctx.root,
       IMP_STORAGE_FILE: ctx.file,
     },
@@ -282,7 +281,7 @@ test('it refuses a loop file that a loop device still holds, so two kernels neve
     stderr: `setup-storage: ${ctx.file} is still attached to /dev/loop3; wait for it to detach, or losetup -d it once nothing uses it\n`,
   });
 
-  expect(readFileSync(ctx.calls, 'utf8').split('\n')).toStrictEqual([
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath)).split('\n')).toStrictEqual([
     `mountpoint -q ${ctx.root}`,
     `mountpoint -q ${ctx.directoryPath}/data`,
     `losetup -j ${ctx.file} -n -O NAME`,
@@ -297,13 +296,13 @@ test('it tries another loop device when another container takes the free one fir
   createStubMountpoint(ctx.directoryPath, [ctx.root]);
   createStubLosetup(ctx.directoryPath, { free: '/dev/loop7777', busyAttaches: 1 });
   createStubBin(ctx.directoryPath, 'mount');
-  createStubBin(ctx.directoryPath, 'findmnt', 'echo xfs');
+  createStubBin(ctx.directoryPath, 'findmnt', { script: '#!/bin/bash\necho xfs' });
   createStubBin(ctx.directoryPath, 'cp');
   createStubBin(ctx.nodesPath, 'mknod');
 
   const result = Bun.spawnSync(['bash', ctx.script], {
     env: {
-      PATH: `${join(ctx.nodesPath, 'bin')}:${ctx.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.nodesPath}:${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
       IMP_STORAGE_ROOT: ctx.root,
       IMP_STORAGE_FILE: ctx.file,
     },
@@ -311,7 +310,7 @@ test('it tries another loop device when another container takes the free one fir
 
   expect(result.exitCode).toBe(0);
 
-  expect(readFileSync(ctx.calls, 'utf8').split('\n')).toStrictEqual([
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath)).split('\n')).toStrictEqual([
     `mountpoint -q ${ctx.root}`,
     `mountpoint -q ${ctx.directoryPath}/data`,
     `losetup -j ${ctx.file} -n -O NAME`,
@@ -338,7 +337,7 @@ test('it gives up after five loop devices are taken before it can attach one', (
 
   const result = Bun.spawnSync(['bash', ctx.script], {
     env: {
-      PATH: `${join(ctx.nodesPath, 'bin')}:${ctx.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.nodesPath}:${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
       IMP_STORAGE_ROOT: ctx.root,
       IMP_STORAGE_FILE: ctx.file,
     },
@@ -354,7 +353,7 @@ test('it gives up after five loop devices are taken before it can attach one', (
     stderr: `setup-storage: no loop device for ${ctx.file} after 5 tries\n`,
   });
 
-  expect(readFileSync(ctx.calls, 'utf8').split('\n')).toStrictEqual([
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath)).split('\n')).toStrictEqual([
     `mountpoint -q ${ctx.root}`,
     `mountpoint -q ${ctx.directoryPath}/data`,
     `losetup -j ${ctx.file} -n -O NAME`,
@@ -383,7 +382,7 @@ test('it fails when the kernel has no free loop device', () => {
 
   const result = Bun.spawnSync(['bash', ctx.script], {
     env: {
-      PATH: `${join(ctx.nodesPath, 'bin')}:${ctx.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.nodesPath}:${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
       IMP_STORAGE_ROOT: ctx.root,
       IMP_STORAGE_FILE: ctx.file,
     },
@@ -406,12 +405,16 @@ test('it detaches the loop device and fails when the mount fails', () => {
   writeFileSync(ctx.file, '');
   createStubMountpoint(ctx.directoryPath, [ctx.root]);
   createStubLosetup(ctx.directoryPath, { free: '/dev/loop7777' });
-  createStubBin(ctx.directoryPath, 'mount', "echo 'mount: wrong fs type' >&2; exit 32");
+
+  createStubBin(ctx.directoryPath, 'mount', {
+    script: "#!/bin/bash\necho 'mount: wrong fs type' >&2; exit 32",
+  });
+
   createStubBin(ctx.nodesPath, 'mknod');
 
   const result = Bun.spawnSync(['bash', ctx.script], {
     env: {
-      PATH: `${join(ctx.nodesPath, 'bin')}:${ctx.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.nodesPath}:${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
       IMP_STORAGE_ROOT: ctx.root,
       IMP_STORAGE_FILE: ctx.file,
     },
@@ -427,7 +430,7 @@ test('it detaches the loop device and fails when the mount fails', () => {
     stderr: `mount: wrong fs type\nsetup-storage: cannot mount /dev/loop7777 (${ctx.file}) on ${ctx.root}\n`,
   });
 
-  expect(readFileSync(ctx.calls, 'utf8').split('\n')).toStrictEqual([
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath)).split('\n')).toStrictEqual([
     `mountpoint -q ${ctx.root}`,
     `mountpoint -q ${ctx.directoryPath}/data`,
     `losetup -j ${ctx.file} -n -O NAME`,
@@ -447,13 +450,13 @@ test('it unmounts its own loop file and fails when the filesystem cannot reflink
   createStubLosetup(ctx.directoryPath, { free: '/dev/loop7777' });
   createStubBin(ctx.directoryPath, 'mount');
   createStubBin(ctx.directoryPath, 'umount');
-  createStubBin(ctx.directoryPath, 'findmnt', 'echo xfs');
-  createStubBin(ctx.directoryPath, 'cp', 'exit 1');
+  createStubBin(ctx.directoryPath, 'findmnt', { script: '#!/bin/bash\necho xfs' });
+  createStubBin(ctx.directoryPath, 'cp', { script: '#!/bin/bash\nexit 1' });
   createStubBin(ctx.nodesPath, 'mknod');
 
   const result = Bun.spawnSync(['bash', ctx.script], {
     env: {
-      PATH: `${join(ctx.nodesPath, 'bin')}:${ctx.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.nodesPath}:${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
       IMP_STORAGE_ROOT: ctx.root,
       IMP_STORAGE_FILE: ctx.file,
     },
@@ -469,7 +472,7 @@ test('it unmounts its own loop file and fails when the filesystem cannot reflink
     stderr: `setup-storage: ${ctx.root} is XFS without reflink (from ${ctx.file}); recreate it with mkfs.xfs -m reflink=1\n`,
   });
 
-  expect(readFileSync(ctx.calls, 'utf8').split('\n')).toStrictEqual([
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath)).split('\n')).toStrictEqual([
     `mountpoint -q ${ctx.root}`,
     `mountpoint -q ${ctx.directoryPath}/data`,
     `losetup -j ${ctx.file} -n -O NAME`,
@@ -494,12 +497,12 @@ test('it unmounts its own loop file and fails when the loop file holds no XFS', 
   createStubLosetup(ctx.directoryPath, { free: '/dev/loop7777' });
   createStubBin(ctx.directoryPath, 'mount');
   createStubBin(ctx.directoryPath, 'umount');
-  createStubBin(ctx.directoryPath, 'findmnt', 'echo ext4');
+  createStubBin(ctx.directoryPath, 'findmnt', { script: '#!/bin/bash\necho ext4' });
   createStubBin(ctx.nodesPath, 'mknod');
 
   const result = Bun.spawnSync(['bash', ctx.script], {
     env: {
-      PATH: `${join(ctx.nodesPath, 'bin')}:${ctx.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.nodesPath}:${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
       IMP_STORAGE_ROOT: ctx.root,
       IMP_STORAGE_FILE: ctx.file,
     },
@@ -515,7 +518,7 @@ test('it unmounts its own loop file and fails when the loop file holds no XFS', 
     stderr: `setup-storage: ${ctx.root} is ext4 (from ${ctx.file}); imp needs XFS with reflink\n`,
   });
 
-  expect(readFileSync(ctx.calls, 'utf8').split('\n')).toStrictEqual([
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath)).split('\n')).toStrictEqual([
     `mountpoint -q ${ctx.root}`,
     `mountpoint -q ${ctx.directoryPath}/data`,
     `losetup -j ${ctx.file} -n -O NAME`,
@@ -534,11 +537,11 @@ test('it uses an XFS already mounted at the storage root as it is', () => {
 
   mkdirSync(ctx.root);
   createStubBin(ctx.directoryPath, 'mountpoint');
-  createStubBin(ctx.directoryPath, 'findmnt', 'echo xfs');
+  createStubBin(ctx.directoryPath, 'findmnt', { script: '#!/bin/bash\necho xfs' });
   createStubBin(ctx.directoryPath, 'cp');
 
   const result = Bun.spawnSync(['bash', ctx.script], {
-    env: { PATH: `${ctx.bin}:${process.env['PATH'] ?? ''}`, IMP_STORAGE_ROOT: ctx.root },
+    env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`, IMP_STORAGE_ROOT: ctx.root },
   });
 
   expect({
@@ -551,7 +554,7 @@ test('it uses an XFS already mounted at the storage root as it is', () => {
     stderr: '',
   });
 
-  expect(readFileSync(ctx.calls, 'utf8').split('\n')).toStrictEqual([
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath)).split('\n')).toStrictEqual([
     `mountpoint -q ${ctx.root}`,
     `findmnt -n -o FSTYPE --mountpoint ${ctx.root}`,
     expect.toStartWith(`cp --reflink=always ${ctx.root}/.reflink-probe.`),
@@ -564,12 +567,12 @@ test('it never unmounts a filesystem it did not mount when that one cannot refli
 
   mkdirSync(ctx.root);
   createStubBin(ctx.directoryPath, 'mountpoint');
-  createStubBin(ctx.directoryPath, 'findmnt', 'echo xfs');
-  createStubBin(ctx.directoryPath, 'cp', 'exit 1');
+  createStubBin(ctx.directoryPath, 'findmnt', { script: '#!/bin/bash\necho xfs' });
+  createStubBin(ctx.directoryPath, 'cp', { script: '#!/bin/bash\nexit 1' });
   createStubBin(ctx.directoryPath, 'umount');
 
   const result = Bun.spawnSync(['bash', ctx.script], {
-    env: { PATH: `${ctx.bin}:${process.env['PATH'] ?? ''}`, IMP_STORAGE_ROOT: ctx.root },
+    env: { PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`, IMP_STORAGE_ROOT: ctx.root },
   });
 
   expect({
@@ -582,7 +585,7 @@ test('it never unmounts a filesystem it did not mount when that one cannot refli
     stderr: `setup-storage: ${ctx.root} is XFS without reflink; recreate it with mkfs.xfs -m reflink=1\n`,
   });
 
-  expect(readFileSync(ctx.calls, 'utf8').split('\n')).toStrictEqual([
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath)).split('\n')).toStrictEqual([
     `mountpoint -q ${ctx.root}`,
     `findmnt -n -o FSTYPE --mountpoint ${ctx.root}`,
     expect.toStartWith(`cp --reflink=always ${ctx.root}/.reflink-probe.`),

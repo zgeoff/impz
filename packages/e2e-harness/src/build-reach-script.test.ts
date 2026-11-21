@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
+import { createStubBin } from '@zgeoff/testing/bin';
 import { buildReachScript } from './build-reach-script';
 
 async function setupTest() {
@@ -23,10 +23,10 @@ test.each([
 ])('it counts %s as reached', async (_label, wget) => {
   const ctx = await setupTest();
 
-  const stub = createStubBin(ctx.directoryPath, 'wget', wget);
+  createStubBin(ctx.directoryPath, 'wget', { script: `#!/bin/bash\n${wget}` });
 
   const result = Bun.spawnSync(['sh', '-c', buildReachScript('http://example.com/', 5)], {
-    env: { PATH: `${stub.bin}:/usr/bin:/bin` },
+    env: { PATH: `${ctx.directoryPath}:/usr/bin:/bin` },
   });
 
   expect(result.exitCode).toBe(0);
@@ -38,10 +38,12 @@ test.each([
 ])("it counts %s as not reached, and prints wget's error", async (_label, message) => {
   const ctx = await setupTest();
 
-  const stub = createStubBin(ctx.directoryPath, 'wget', `printf '%s\\n' "${message}" >&2; exit 1`);
+  createStubBin(ctx.directoryPath, 'wget', {
+    script: `#!/bin/bash\nprintf '%s\\n' "${message}" >&2; exit 1`,
+  });
 
   const result = Bun.spawnSync(['sh', '-c', buildReachScript('http://example.org/', 5)], {
-    env: { PATH: `${stub.bin}:/usr/bin:/bin` },
+    env: { PATH: `${ctx.directoryPath}:/usr/bin:/bin` },
   });
 
   expect(result.exitCode).toBe(1);

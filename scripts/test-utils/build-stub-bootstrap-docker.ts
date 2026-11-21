@@ -13,7 +13,8 @@ export function buildStubBootstrapDocker(stub: StubBootstrapDocker): string {
       ? `echo '[{"Name": "/imp-host"}]'`
       : 'echo "Error response from daemon: No such container: imp-host" >&2; exit 1';
 
-  return `case "$*" in
+  return `#!/bin/bash
+case "$*" in
   "container inspect imp-host") ${hostContainer} ;;
   "exec "*" bash -c "*) ${stub.teardown === 'fails' ? 'echo "teardown: zpool destroy failed: pool is busy" >&2; exit 1' : ':'} ;;
   "rm -f -v "*) ${stub.removal === 'fails' ? 'echo "Error response from daemon: cannot remove container" >&2; exit 1' : ':'} ;;

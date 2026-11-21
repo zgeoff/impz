@@ -5,9 +5,10 @@ import { join } from 'node:path';
 import { faker } from '@faker-js/faker';
 import { createImpClient } from '@impz/client';
 import { createUbuntuImage } from '@impz/daemon/test-utils';
-import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
+import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import { updateEnv } from '@zgeoff/testing';
+import { createStubBin, readStubCalls } from '@zgeoff/testing/bin';
 import { createInstance } from './instance';
 import {
   buildUpstreamsPath,
@@ -121,9 +122,11 @@ test('#startMoveSend marks the imp sending on the source host', async () => {
   await createUbuntuImage(ctx.harness);
 
   // dev.sh's token command reads the host's token through docker exec.
-  const docker = createStubBin(ctx.directoryPath, 'docker', `echo ${ctx.rootToken}`);
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: `#!/bin/bash\necho ${ctx.rootToken}`,
+  });
 
-  updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
+  updateEnv('PATH', `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`);
 
   await ctx.client.imps.create({ name: 'e2e-mv-seen' });
   await ctx.client.imps.stop({ name: 'e2e-mv-seen' });
@@ -149,9 +152,11 @@ test('#startMoveSend rejects with the host’s error when the source refuses the
   const ctx = await setupTest();
 
   // dev.sh's token command reads the host's token through docker exec.
-  const docker = createStubBin(ctx.directoryPath, 'docker', `echo ${ctx.rootToken}`);
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: `#!/bin/bash\necho ${ctx.rootToken}`,
+  });
 
-  updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
+  updateEnv('PATH', `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`);
 
   const host = {
     ...createInstance({
@@ -172,13 +177,11 @@ test('#startMoveSend rejects with the host’s error when the source refuses the
 test('#readAllowSet reads the addresses of the slot’s allow set in the host’s container', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    String.raw`printf 'table inet imp_egress {\n\tset allow7 {\n\t\telements = { 93.184.215.14, 140.82.112.5 }\n\t}\n}\n'`,
-  );
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: `#!/bin/bash\n${String.raw`printf 'table inet imp_egress {\n\tset allow7 {\n\t\telements = { 93.184.215.14, 140.82.112.5 }\n\t}\n}\n'`}`,
+  });
 
-  updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
+  updateEnv('PATH', `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`);
 
   const host = createInstance({
     container: 'imp-e2e-mv-b',
@@ -188,7 +191,8 @@ test('#readAllowSet reads the addresses of the slot’s allow set in the host’
   });
 
   const allowed = await readAllowSet(host, 7);
-  const calls = await readFile(docker.calls, 'utf8');
+
+  const calls = formatStubCalls(readStubCalls(ctx.directoryPath));
 
   expect(allowed).toStrictEqual(['93.184.215.14', '140.82.112.5']);
   expect(calls).toBe('docker exec imp-e2e-mv-b nft list set inet imp_egress allow7\n');
@@ -197,13 +201,11 @@ test('#readAllowSet reads the addresses of the slot’s allow set in the host’
 test('#readJailOwners reads the jail uid, then the owners of the disk and the tap, in the host’s container', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    `printf '%s' "$5" > '${join(ctx.directoryPath, 'script')}'\nprintf '900007\\n900007\\n900007\\n'`,
-  );
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: `#!/bin/bash\nprintf '%s' "$5" > '${join(ctx.directoryPath, 'script')}'\nprintf '900007\\n900007\\n900007\\n'`,
+  });
 
-  updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
+  updateEnv('PATH', `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`);
 
   const host = createInstance({
     container: 'imp-e2e-mv-b',

@@ -2,8 +2,8 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
 import { updateEnv } from '@zgeoff/testing';
+import { createStubBin } from '@zgeoff/testing/bin';
 import { buildPebbleNames } from './build-pebble-names';
 import { parsePublishedPort, readPebbleEndpoints } from './read-pebble-endpoints';
 
@@ -18,20 +18,18 @@ async function setupTest() {
 test('#readPebbleEndpoints reads each published port and the minica PEM of a running stack', async () => {
   const ctx = await setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    [
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: `#!/bin/bash\n${[
       'case "$*" in',
       '  "port imp-acme-it-x-pebble 14000/tcp") echo 127.0.0.1:49153 ;;',
       '  "port imp-acme-it-x-pebble 15000/tcp") echo 127.0.0.1:49154 ;;',
       '  "port imp-acme-it-x-challtestsrv 8055/tcp") echo 127.0.0.1:49155 ;;',
       '  *) exit 1 ;;',
       'esac',
-    ].join('\n'),
-  );
+    ].join('\n')}`,
+  });
 
-  updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
+  updateEnv('PATH', `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`);
 
   await writeFile(join(ctx.directoryPath, 'imp-acme-it-x-pebble-minica.pem'), 'minica pem\n');
 

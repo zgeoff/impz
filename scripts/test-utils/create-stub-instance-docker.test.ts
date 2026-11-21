@@ -1,7 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
+import { readStubCalls } from '@zgeoff/testing/bin';
 import { createStubInstanceDocker } from './create-stub-instance-docker';
 
 function setupTest() {
@@ -16,17 +18,25 @@ function setupTest() {
 
 test('it inspects a listed container', () => {
   const ctx = setupTest();
-  const stub = createStubInstanceDocker(ctx.directoryPath, { containers: ['imp-zfs'] });
+
+  createStubInstanceDocker(ctx.directoryPath, { containers: ['imp-zfs'] });
 
   expect(
-    Bun.spawnSync([join(stub.bin, 'docker'), 'container', 'inspect', 'imp-zfs']).exitCode,
+    Bun.spawnSync([join(ctx.directoryPath, 'docker'), 'container', 'inspect', 'imp-zfs']).exitCode,
   ).toBe(0);
 });
 
 test('it fails to inspect a container that is not listed, as Docker does', () => {
   const ctx = setupTest();
-  const stub = createStubInstanceDocker(ctx.directoryPath, { containers: ['imp-dev'] });
-  const result = Bun.spawnSync([join(stub.bin, 'docker'), 'container', 'inspect', 'imp-zfs']);
+
+  createStubInstanceDocker(ctx.directoryPath, { containers: ['imp-dev'] });
+
+  const result = Bun.spawnSync([
+    join(ctx.directoryPath, 'docker'),
+    'container',
+    'inspect',
+    'imp-zfs',
+  ]);
 
   expect({ exitCode: result.exitCode, stderr: result.stderr.toString() }).toStrictEqual({
     exitCode: 1,
@@ -36,10 +46,11 @@ test('it fails to inspect a container that is not listed, as Docker does', () =>
 
 test('it fails to inspect any container when none is listed', () => {
   const ctx = setupTest();
-  const stub = createStubInstanceDocker(ctx.directoryPath, { containers: [] });
+
+  createStubInstanceDocker(ctx.directoryPath, { containers: [] });
 
   expect(
-    Bun.spawnSync([join(stub.bin, 'docker'), 'container', 'inspect', 'imp-zfs']).exitCode,
+    Bun.spawnSync([join(ctx.directoryPath, 'docker'), 'container', 'inspect', 'imp-zfs']).exitCode,
   ).toBe(1);
 });
 
@@ -47,13 +58,14 @@ test('it fails to inspect a container started later until its marker exists', ()
   const ctx = setupTest();
   const marker = join(ctx.directoryPath, 'started');
 
-  const stub = createStubInstanceDocker(ctx.directoryPath, {
+  createStubInstanceDocker(ctx.directoryPath, {
     containers: [],
     startedLater: { marker, containers: ['imp-zfs-mv-b'] },
   });
 
   expect(
-    Bun.spawnSync([join(stub.bin, 'docker'), 'container', 'inspect', 'imp-zfs-mv-b']).exitCode,
+    Bun.spawnSync([join(ctx.directoryPath, 'docker'), 'container', 'inspect', 'imp-zfs-mv-b'])
+      .exitCode,
   ).toBe(1);
 });
 
@@ -61,7 +73,7 @@ test('it inspects a container started later once its marker exists', () => {
   const ctx = setupTest();
   const marker = join(ctx.directoryPath, 'started');
 
-  const stub = createStubInstanceDocker(ctx.directoryPath, {
+  createStubInstanceDocker(ctx.directoryPath, {
     containers: [],
     startedLater: { marker, containers: ['imp-zfs-mv-b'] },
   });
@@ -69,27 +81,35 @@ test('it inspects a container started later once its marker exists', () => {
   writeFileSync(marker, '');
 
   expect(
-    Bun.spawnSync([join(stub.bin, 'docker'), 'container', 'inspect', 'imp-zfs-mv-b']).exitCode,
+    Bun.spawnSync([join(ctx.directoryPath, 'docker'), 'container', 'inspect', 'imp-zfs-mv-b'])
+      .exitCode,
   ).toBe(0);
 });
 
 test('it inspects a listed network', () => {
   const ctx = setupTest();
 
-  const stub = createStubInstanceDocker(ctx.directoryPath, {
+  createStubInstanceDocker(ctx.directoryPath, {
     containers: [],
     networks: ['imp-zfs-mv'],
   });
 
   expect(
-    Bun.spawnSync([join(stub.bin, 'docker'), 'network', 'inspect', 'imp-zfs-mv']).exitCode,
+    Bun.spawnSync([join(ctx.directoryPath, 'docker'), 'network', 'inspect', 'imp-zfs-mv']).exitCode,
   ).toBe(0);
 });
 
 test('it fails to inspect a network that is not listed, as Docker does', () => {
   const ctx = setupTest();
-  const stub = createStubInstanceDocker(ctx.directoryPath, { containers: ['imp-zfs-mv'] });
-  const result = Bun.spawnSync([join(stub.bin, 'docker'), 'network', 'inspect', 'imp-zfs-mv']);
+
+  createStubInstanceDocker(ctx.directoryPath, { containers: ['imp-zfs-mv'] });
+
+  const result = Bun.spawnSync([
+    join(ctx.directoryPath, 'docker'),
+    'network',
+    'inspect',
+    'imp-zfs-mv',
+  ]);
 
   expect({ exitCode: result.exitCode, stderr: result.stderr.toString() }).toStrictEqual({
     exitCode: 1,
@@ -99,8 +119,10 @@ test('it fails to inspect a network that is not listed, as Docker does', () => {
 
 test('it succeeds any other command silently', () => {
   const ctx = setupTest();
-  const stub = createStubInstanceDocker(ctx.directoryPath, { containers: [] });
-  const result = Bun.spawnSync([join(stub.bin, 'docker'), 'logs', 'imp-zfs']);
+
+  createStubInstanceDocker(ctx.directoryPath, { containers: [] });
+
+  const result = Bun.spawnSync([join(ctx.directoryPath, 'docker'), 'logs', 'imp-zfs']);
 
   expect({ exitCode: result.exitCode, stdout: result.stdout.toString() }).toStrictEqual({
     exitCode: 0,
@@ -110,9 +132,12 @@ test('it succeeds any other command silently', () => {
 
 test('it logs each call to the shared stub log', () => {
   const ctx = setupTest();
-  const stub = createStubInstanceDocker(ctx.directoryPath, { containers: [] });
 
-  Bun.spawnSync([join(stub.bin, 'docker'), 'container', 'inspect', 'imp-zfs']);
+  createStubInstanceDocker(ctx.directoryPath, { containers: [] });
 
-  expect(readFileSync(stub.calls, 'utf8')).toBe('docker container inspect imp-zfs\n');
+  Bun.spawnSync([join(ctx.directoryPath, 'docker'), 'container', 'inspect', 'imp-zfs']);
+
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe(
+    'docker container inspect imp-zfs\n',
+  );
 });

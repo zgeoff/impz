@@ -13,7 +13,8 @@ export function buildStubRegistryDocker(answer: StubRegistryAnswer): string {
       answer.kind === 'failed' ? `printf '%s\\n' ${formatShellWord(answer.error)} >&2; exit 1` : '',
   };
 
-  return `case "$1 $2 $3" in
+  return `#!/bin/bash
+case "$1 $2 $3" in
   "buildx imagetools inspect") ${answers[answer.kind]} ;;
   *) exit 1 ;;
 esac`;

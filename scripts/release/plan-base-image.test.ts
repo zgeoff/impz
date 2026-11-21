@@ -2,7 +2,8 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
+import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
+import { createStubBin, readStubCalls } from '@zgeoff/testing/bin';
 import { $ } from 'bun';
 import { buildStubRegistryDocker } from '../test-utils/build-stub-registry-docker';
 
@@ -27,11 +28,9 @@ function setupTest() {
 test('it pushes a tag the registry does not have', async () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubRegistryDocker({ kind: 'missing' }),
-  );
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: buildStubRegistryDocker({ kind: 'missing' }),
+  });
 
   mkdirSync(join(ctx.tree, 'scripts', 'release'), { recursive: true });
   writeFileSync(join(ctx.tree, 'scripts', 'release', 'check-base-image.sh'), '');
@@ -44,7 +43,7 @@ test('it pushes a tag the registry does not have', async () => {
   const result = await $`bun ${ctx.scriptPath}`
     .env({
       ...process.env,
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
       BASE_IMAGE: 'ghcr.io/zgeoff/imp-base',
       PUSH_TAG: '1.2.3',
       GITHUB_OUTPUT: ctx.outputs,
@@ -61,11 +60,9 @@ test('it pushes a tag the registry does not have', async () => {
 test('it pushes a missing tag of a tree that keeps its check script in host/', async () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubRegistryDocker({ kind: 'missing' }),
-  );
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: buildStubRegistryDocker({ kind: 'missing' }),
+  });
 
   mkdirSync(join(ctx.tree, 'host'));
   writeFileSync(join(ctx.tree, 'host', 'check-base-image.sh'), '');
@@ -78,7 +75,7 @@ test('it pushes a missing tag of a tree that keeps its check script in host/', a
   const result = await $`bun ${ctx.scriptPath}`
     .env({
       ...process.env,
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
       BASE_IMAGE: 'ghcr.io/zgeoff/imp-base',
       PUSH_TAG: '1.2.3',
       GITHUB_OUTPUT: ctx.outputs,
@@ -96,14 +93,11 @@ test('it leaves an attested existing tag alone, with a notice', async () => {
   const ctx = setupTest();
   const digest = `sha256:${'0123456789abcdef'.repeat(4)}`;
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubRegistryDocker({ kind: 'found', stdout: digest }),
-  );
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: buildStubRegistryDocker({ kind: 'found', stdout: digest }),
+  });
 
-  const gh = createStubBin(ctx.directoryPath, 'gh', 'exit 0');
-
+  createStubBin(ctx.directoryPath, 'gh', { script: '#!/bin/bash\nexit 0' });
   mkdirSync(join(ctx.tree, 'scripts', 'release'), { recursive: true });
   writeFileSync(join(ctx.tree, 'scripts', 'release', 'check-base-image.sh'), '');
 
@@ -115,7 +109,7 @@ test('it leaves an attested existing tag alone, with a notice', async () => {
   const result = await $`bun ${ctx.scriptPath}`
     .env({
       ...process.env,
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
       BASE_IMAGE: 'ghcr.io/zgeoff/imp-base',
       PUSH_TAG: '1.2.3',
       GITHUB_OUTPUT: ctx.outputs,
@@ -132,7 +126,7 @@ test('it leaves an attested existing tag alone, with a notice', async () => {
     `::notice::ghcr.io/zgeoff/imp-base:1.2.3 exists already at ${digest}, attested; a published imp-base never moves, so this run leaves it alone\n`,
   );
 
-  expect(readFileSync(gh.calls, 'utf8')).toInclude(
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toInclude(
     `gh attestation verify oci://ghcr.io/zgeoff/imp-base@${digest} --repo zgeoff/impz\n`,
   );
 });
@@ -141,13 +135,14 @@ test('it fails the job on an existing tag without an attestation, and plans noth
   const ctx = setupTest();
   const digest = `sha256:${'0123456789abcdef'.repeat(4)}`;
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubRegistryDocker({ kind: 'found', stdout: digest }),
-  );
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: buildStubRegistryDocker({ kind: 'found', stdout: digest }),
+  });
 
-  createStubBin(ctx.directoryPath, 'gh', 'echo "no attestations found" >&2\nexit 1');
+  createStubBin(ctx.directoryPath, 'gh', {
+    script: '#!/bin/bash\necho "no attestations found" >&2\nexit 1',
+  });
+
   mkdirSync(join(ctx.tree, 'scripts', 'release'), { recursive: true });
   writeFileSync(join(ctx.tree, 'scripts', 'release', 'check-base-image.sh'), '');
 
@@ -159,7 +154,7 @@ test('it fails the job on an existing tag without an attestation, and plans noth
   const result = await $`bun ${ctx.scriptPath}`
     .env({
       ...process.env,
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
       BASE_IMAGE: 'ghcr.io/zgeoff/imp-base',
       PUSH_TAG: '1.2.3',
       GITHUB_OUTPUT: ctx.outputs,
@@ -185,13 +180,11 @@ test('it fails the job on an existing tag without an attestation, and plans noth
 test('it fails the job on an existing tag whose digest is not a sha256', async () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubRegistryDocker({ kind: 'found', stdout: 'WARN: something\nsha256:abc' }),
-  );
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: buildStubRegistryDocker({ kind: 'found', stdout: 'WARN: something\nsha256:abc' }),
+  });
 
-  createStubBin(ctx.directoryPath, 'gh', 'exit 0');
+  createStubBin(ctx.directoryPath, 'gh', { script: '#!/bin/bash\nexit 0' });
   mkdirSync(join(ctx.tree, 'scripts', 'release'), { recursive: true });
   writeFileSync(join(ctx.tree, 'scripts', 'release', 'check-base-image.sh'), '');
 
@@ -203,7 +196,7 @@ test('it fails the job on an existing tag whose digest is not a sha256', async (
   const result = await $`bun ${ctx.scriptPath}`
     .env({
       ...process.env,
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
       BASE_IMAGE: 'ghcr.io/zgeoff/imp-base',
       PUSH_TAG: '1.2.3',
       GITHUB_OUTPUT: ctx.outputs,
@@ -228,11 +221,9 @@ test.each([
 ])('it fails the job, planning nothing, on %s from the registry', async (_reason, error) => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubRegistryDocker({ kind: 'failed', error }),
-  );
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: buildStubRegistryDocker({ kind: 'failed', error }),
+  });
 
   mkdirSync(join(ctx.tree, 'scripts', 'release'), { recursive: true });
   writeFileSync(join(ctx.tree, 'scripts', 'release', 'check-base-image.sh'), '');
@@ -245,7 +236,7 @@ test.each([
   const result = await $`bun ${ctx.scriptPath}`
     .env({
       ...process.env,
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
       BASE_IMAGE: 'ghcr.io/zgeoff/imp-base',
       PUSH_TAG: '1.2.3',
       GITHUB_OUTPUT: ctx.outputs,
@@ -266,18 +257,16 @@ test.each([
 test('it skips a release from before imp-base without asking the registry', async () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubRegistryDocker({ kind: 'missing' }),
-  );
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: buildStubRegistryDocker({ kind: 'missing' }),
+  });
 
   writeFileSync(join(ctx.tree, 'images', 'base', 'Dockerfile'), 'FROM ubuntu:24.04\n');
 
   const result = await $`bun ${ctx.scriptPath}`
     .env({
       ...process.env,
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
       BASE_IMAGE: 'ghcr.io/zgeoff/imp-base',
       PUSH_TAG: '1.2.3',
       GITHUB_OUTPUT: ctx.outputs,
@@ -294,17 +283,15 @@ test('it skips a release from before imp-base without asking the registry', asyn
   });
 
   expect(readFileSync(ctx.outputs, 'utf8')).toBe('action=skip\n');
-  expect(readFileSync(docker.calls, 'utf8')).toBe('');
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe('');
 });
 
 test('it skips a tree with the check script but an unpinned base image', async () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
-    ctx.directoryPath,
-    'docker',
-    buildStubRegistryDocker({ kind: 'missing' }),
-  );
+  createStubBin(ctx.directoryPath, 'docker', {
+    script: buildStubRegistryDocker({ kind: 'missing' }),
+  });
 
   mkdirSync(join(ctx.tree, 'host'));
   writeFileSync(join(ctx.tree, 'host', 'check-base-image.sh'), '');
@@ -313,7 +300,7 @@ test('it skips a tree with the check script but an unpinned base image', async (
   const result = await $`bun ${ctx.scriptPath}`
     .env({
       ...process.env,
-      PATH: `${docker.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
       BASE_IMAGE: 'ghcr.io/zgeoff/imp-base',
       PUSH_TAG: '1.2.3',
       GITHUB_OUTPUT: ctx.outputs,
@@ -325,5 +312,5 @@ test('it skips a tree with the check script but an unpinned base image', async (
 
   expect(result.exitCode).toBe(0);
   expect(readFileSync(ctx.outputs, 'utf8')).toBe('action=skip\n');
-  expect(readFileSync(docker.calls, 'utf8')).toBe('');
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe('');
 });

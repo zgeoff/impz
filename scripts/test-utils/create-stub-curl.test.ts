@@ -2,6 +2,8 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
+import { readStubCalls } from '@zgeoff/testing/bin';
 import { createStubCurl } from './create-stub-curl';
 
 function setupTest() {
@@ -20,11 +22,10 @@ test('it writes the source file to the path after -o and exits 0', () => {
   const output = join(ctx.directoryPath, 'linux.tar.xz.part');
 
   writeFileSync(source, 'tarball');
-
-  const stub = createStubCurl(ctx.directoryPath, { source });
+  createStubCurl(ctx.directoryPath, { source });
 
   const result = Bun.spawnSync([
-    join(stub.bin, 'curl'),
+    join(ctx.directoryPath, 'curl'),
     '-fL',
     '--retry',
     '3',
@@ -43,10 +44,15 @@ test('it finds -o wherever it sits among the arguments', () => {
   const output = join(ctx.directoryPath, 'out');
 
   writeFileSync(source, 'tarball');
+  createStubCurl(ctx.directoryPath, { source });
 
-  const stub = createStubCurl(ctx.directoryPath, { source });
-
-  Bun.spawnSync([join(stub.bin, 'curl'), '-o', output, '-fL', 'https://example.test/linux.tar']);
+  Bun.spawnSync([
+    join(ctx.directoryPath, 'curl'),
+    '-o',
+    output,
+    '-fL',
+    'https://example.test/linux.tar',
+  ]);
 
   expect(readFileSync(output, 'utf8')).toBe('tarball');
 });
@@ -57,11 +63,10 @@ test('it writes what it had and exits with the code it was given for a failed do
   const output = join(ctx.directoryPath, 'out');
 
   writeFileSync(source, 'partial');
-
-  const stub = createStubCurl(ctx.directoryPath, { source, exitCode: 22 });
+  createStubCurl(ctx.directoryPath, { source, exitCode: 22 });
 
   const result = Bun.spawnSync([
-    join(stub.bin, 'curl'),
+    join(ctx.directoryPath, 'curl'),
     '-fL',
     '-o',
     output,
@@ -77,9 +82,13 @@ test('it fails as a usage error without -o', () => {
   const source = join(ctx.directoryPath, 'linux.tar');
 
   writeFileSync(source, 'tarball');
+  createStubCurl(ctx.directoryPath, { source });
 
-  const stub = createStubCurl(ctx.directoryPath, { source });
-  const result = Bun.spawnSync([join(stub.bin, 'curl'), '-fL', 'https://example.test/linux.tar']);
+  const result = Bun.spawnSync([
+    join(ctx.directoryPath, 'curl'),
+    '-fL',
+    'https://example.test/linux.tar',
+  ]);
 
   expect(result.exitCode).toBe(2);
 });
@@ -89,17 +98,16 @@ test('it logs each call with its arguments', () => {
   const source = join(ctx.directoryPath, 'linux.tar');
 
   writeFileSync(source, 'tarball');
-
-  const stub = createStubCurl(ctx.directoryPath, { source });
+  createStubCurl(ctx.directoryPath, { source });
 
   Bun.spawnSync([
-    join(stub.bin, 'curl'),
+    join(ctx.directoryPath, 'curl'),
     '-o',
     join(ctx.directoryPath, 'out'),
     'https://example.test/linux.tar',
   ]);
 
-  expect(readFileSync(stub.calls, 'utf8')).toBe(
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe(
     `curl -o ${ctx.directoryPath}/out https://example.test/linux.tar\n`,
   );
 });

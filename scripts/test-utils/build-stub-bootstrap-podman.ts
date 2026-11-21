@@ -27,7 +27,8 @@ export function buildStubBootstrapPodman(stub: StubBootstrapPodman): string {
   const cli = stub.runningCLI ?? 'impz';
   const cliVersion = cli === 'impz' ? 'echo 0.0.0' : 'exit 126';
 
-  return `case "$*" in
+  return `#!/bin/bash
+case "$*" in
   "network inspect -f "*" imp-host") ${stub.hostNetwork === undefined ? noNetwork : `echo ${formatShellWord(stub.hostNetwork)}`} ;;
   "network exists imp-host") ${stub.hostNetwork === undefined ? 'exit 1' : ':'} ;;
   "ps -a --filter network=imp-host --format {{.Names}}") ${stub.hostNetwork === undefined || containers === '' ? ':' : `printf '%s\\n' ${formatShellWord(containers)}`} ;;

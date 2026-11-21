@@ -1,9 +1,10 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
+import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
 import { updateEnv } from '@zgeoff/testing';
+import { createStubBin, readStubCalls } from '@zgeoff/testing/bin';
 import { buildStubBootstrapDocker } from '../../../../scripts/test-utils/build-stub-bootstrap-docker';
 import { removeTestContainer } from './remove-test-container';
 import type { BootstrapRun } from './types';
@@ -36,9 +37,9 @@ function setupTest() {
 
 test('it tears down the pool and loop devices in the container before docker removes it, then forgets it', async () => {
   const ctx = setupTest();
-  const docker = createStubBin(ctx.directory, 'docker', buildStubBootstrapDocker({}));
 
-  updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
+  createStubBin(ctx.directory, 'docker', { script: buildStubBootstrapDocker({}) });
+  updateEnv('PATH', `${ctx.directory}:${process.env['PATH'] ?? ''}`);
 
   ctx.run.state.container = 'imp-bootstrap-test-debian-4242';
 
@@ -46,7 +47,7 @@ test('it tears down the pool and loop devices in the container before docker rem
 
   expect(ctx.run.state.container).toBeNull();
 
-  expect(readFileSync(docker.calls, 'utf8')).toMatch(
+  expect(formatStubCalls(readStubCalls(ctx.directory))).toMatch(
     /^docker exec imp-bootstrap-test-debian-4242 bash -c .*zpool destroy -f "\$pool".*losetup -d "\$dev".* teardown impt4242 \/var\/imp\.xfs \/var\/disk-empty\.img \/var\/disk-ext4\.img\ndocker rm -f -v imp-bootstrap-test-debian-4242\n$/su,
   );
 });
@@ -54,13 +55,11 @@ test('it tears down the pool and loop devices in the container before docker rem
 test('it warns and still removes the container when the teardown in it fails', async () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
-    ctx.directory,
-    'docker',
-    buildStubBootstrapDocker({ teardown: 'fails' }),
-  );
+  createStubBin(ctx.directory, 'docker', {
+    script: buildStubBootstrapDocker({ teardown: 'fails' }),
+  });
 
-  updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
+  updateEnv('PATH', `${ctx.directory}:${process.env['PATH'] ?? ''}`);
 
   ctx.run.state.container = 'imp-bootstrap-test-debian-4242';
 
@@ -75,7 +74,7 @@ test('it warns and still removes the container when the teardown in it fails', a
     ],
   ]);
 
-  expect(readFileSync(docker.calls, 'utf8')).toEndWith(
+  expect(formatStubCalls(readStubCalls(ctx.directory))).toEndWith(
     '\ndocker rm -f -v imp-bootstrap-test-debian-4242\n',
   );
 });
@@ -83,13 +82,11 @@ test('it warns and still removes the container when the teardown in it fails', a
 test('it fails and keeps the container when docker cannot remove it', async () => {
   const ctx = setupTest();
 
-  const docker = createStubBin(
-    ctx.directory,
-    'docker',
-    buildStubBootstrapDocker({ removal: 'fails' }),
-  );
+  createStubBin(ctx.directory, 'docker', {
+    script: buildStubBootstrapDocker({ removal: 'fails' }),
+  });
 
-  updateEnv('PATH', `${docker.bin}:${process.env['PATH'] ?? ''}`);
+  updateEnv('PATH', `${ctx.directory}:${process.env['PATH'] ?? ''}`);
 
   ctx.run.state.container = 'imp-bootstrap-test-debian-4242';
 

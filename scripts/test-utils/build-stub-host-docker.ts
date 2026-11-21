@@ -29,7 +29,8 @@ export function buildStubHostDocker(stub: StubHostDocker): string {
               : 'echo imp-host',
         };
 
-  return `case "$*" in
+  return `#!/bin/bash
+case "$*" in
   "container inspect imp-host") ;;
   "inspect -f {{.Image}} imp-host") echo sha256:old ;;
   "exec imp-host impz --version") ${version} ;;

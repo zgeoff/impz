@@ -2,7 +2,8 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
+import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
+import { createStubBin, readStubCalls } from '@zgeoff/testing/bin';
 import { $ } from 'bun';
 
 function setupTest() {
@@ -24,21 +25,21 @@ function setupTest() {
 
 test('it puts the data dir and its siblings on /mnt when the runner mounts a disk there', async () => {
   const ctx = setupTest();
-  const sudo = createStubBin(ctx.directoryPath, 'sudo');
 
+  createStubBin(ctx.directoryPath, 'sudo');
   createStubBin(ctx.directoryPath, 'df');
   createStubBin(ctx.directoryPath, 'mountpoint');
 
   const result =
     await $`${process.execPath} ${ctx.scriptPath} --env IMP_DEV_DATA --mnt /mnt/imp-e2e --fallback /work/.data/ci --sibling=-mv-b`
-      .env({ PATH: sudo.bin, GITHUB_ENV: ctx.githubEnv })
+      .env({ PATH: ctx.directoryPath, GITHUB_ENV: ctx.githubEnv })
       .nothrow()
       .quiet();
 
   expect(result.exitCode).toBe(0);
   expect(readFileSync(ctx.githubEnv, 'utf8')).toBe('IMP_DEV_DATA=/mnt/imp-e2e\n');
 
-  expect(readFileSync(sudo.calls, 'utf8')).toBe(
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe(
     [
       'df -h / /mnt',
       'mountpoint -q /mnt',
@@ -51,21 +52,21 @@ test('it puts the data dir and its siblings on /mnt when the runner mounts a dis
 
 test('it puts the data dir in its fallback when /mnt is no mount point', async () => {
   const ctx = setupTest();
-  const sudo = createStubBin(ctx.directoryPath, 'sudo');
 
-  createStubBin(ctx.directoryPath, 'df', 'exit 1');
-  createStubBin(ctx.directoryPath, 'mountpoint', 'exit 32');
+  createStubBin(ctx.directoryPath, 'sudo');
+  createStubBin(ctx.directoryPath, 'df', { script: '#!/bin/bash\nexit 1' });
+  createStubBin(ctx.directoryPath, 'mountpoint', { script: '#!/bin/bash\nexit 32' });
 
   const result =
     await $`${process.execPath} ${ctx.scriptPath} --env IMP_ZFS_TEST_DIR --mnt /mnt/imp-zfs --fallback /runner/temp/imp-zfs`
-      .env({ PATH: sudo.bin, GITHUB_ENV: ctx.githubEnv })
+      .env({ PATH: ctx.directoryPath, GITHUB_ENV: ctx.githubEnv })
       .nothrow()
       .quiet();
 
   expect(result.exitCode).toBe(0);
   expect(readFileSync(ctx.githubEnv, 'utf8')).toBe('IMP_ZFS_TEST_DIR=/runner/temp/imp-zfs\n');
 
-  expect(readFileSync(sudo.calls, 'utf8')).toBe(
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe(
     [
       'df -h / /mnt',
       'mountpoint -q /mnt',
@@ -78,14 +79,14 @@ test('it puts the data dir in its fallback when /mnt is no mount point', async (
 
 test('it fails, naming no data dir, when it cannot make the data dir', async () => {
   const ctx = setupTest();
-  const sudo = createStubBin(ctx.directoryPath, 'sudo', 'exit 1');
 
+  createStubBin(ctx.directoryPath, 'sudo', { script: '#!/bin/bash\nexit 1' });
   createStubBin(ctx.directoryPath, 'df');
   createStubBin(ctx.directoryPath, 'mountpoint');
 
   const result =
     await $`${process.execPath} ${ctx.scriptPath} --env IMP_DEV_DATA --mnt /mnt/imp-e2e --fallback /work/.data/ci`
-      .env({ PATH: sudo.bin, GITHUB_ENV: ctx.githubEnv })
+      .env({ PATH: ctx.directoryPath, GITHUB_ENV: ctx.githubEnv })
       .nothrow()
       .quiet();
 
@@ -95,15 +96,16 @@ test('it fails, naming no data dir, when it cannot make the data dir', async () 
 
 test('it prints its usage, and makes no dir, when the step leaves out the fallback dir', async () => {
   const ctx = setupTest();
-  const sudo = createStubBin(ctx.directoryPath, 'sudo');
+
+  createStubBin(ctx.directoryPath, 'sudo');
 
   const result =
     await $`${process.execPath} ${ctx.scriptPath} --env IMP_DEV_DATA --mnt /mnt/imp-e2e`
-      .env({ PATH: sudo.bin, GITHUB_ENV: ctx.githubEnv })
+      .env({ PATH: ctx.directoryPath, GITHUB_ENV: ctx.githubEnv })
       .nothrow()
       .quiet();
 
   expect(result.exitCode).toBe(2);
   expect(result.stderr.toString()).toStartWith('usage: pick-data-dir.ts --env <name>');
-  expect(readFileSync(sudo.calls, 'utf8')).toBe('');
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe('');
 });

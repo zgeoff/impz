@@ -2,7 +2,8 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStubBin } from '@impz/shared/test-utils/create-stub-bin';
+import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
+import { createStubBin, readStubCalls } from '@zgeoff/testing/bin';
 import { $ } from 'bun';
 import { buildStubNpmView } from '../test-utils/build-stub-npm-view';
 
@@ -26,7 +27,10 @@ function setupTest() {
 
 test('it plans both packages of the newest release under latest', async () => {
   const ctx = setupTest();
-  const npm = createStubBin(ctx.directoryPath, 'npm', 'echo "npm error code E404" >&2\nexit 1');
+
+  createStubBin(ctx.directoryPath, 'npm', {
+    script: '#!/bin/bash\necho "npm error code E404" >&2\nexit 1',
+  });
 
   mkdirSync(join(ctx.tree, 'packages', 'testing'), { recursive: true });
   writeFileSync(join(ctx.tree, 'packages', 'testing', 'package.json'), '{}\n');
@@ -34,7 +38,7 @@ test('it plans both packages of the newest release under latest', async () => {
   const result = await $`bun ${ctx.scriptPath}`
     .env({
       ...process.env,
-      PATH: `${npm.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
       VERSION: '2.0.1',
       IS_NEWEST: 'true',
       TESTING_ENABLED: 'true',
@@ -50,19 +54,20 @@ test('it plans both packages of the newest release under latest', async () => {
     'client=true\ntesting=true\ndist_tag=latest\npublish=true\n',
   );
 
-  expect(readFileSync(npm.calls, 'utf8')).toBe(
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe(
     'npm view @impz/client@2.0.1 version\nnpm view @impz/testing@2.0.1 version\n',
   );
 });
 
 test('it plans a republish of an older release under previous', async () => {
   const ctx = setupTest();
-  const npm = createStubBin(ctx.directoryPath, 'npm', 'exit 1');
+
+  createStubBin(ctx.directoryPath, 'npm', { script: '#!/bin/bash\nexit 1' });
 
   const result = await $`bun ${ctx.scriptPath}`
     .env({
       ...process.env,
-      PATH: `${npm.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
       VERSION: '2.0.0',
       IS_NEWEST: 'false',
       TESTING_ENABLED: 'false',
@@ -81,12 +86,13 @@ test('it plans a republish of an older release under previous', async () => {
 
 test('it plans the client alone for a tag with no packages/testing', async () => {
   const ctx = setupTest();
-  const npm = createStubBin(ctx.directoryPath, 'npm', 'exit 1');
+
+  createStubBin(ctx.directoryPath, 'npm', { script: '#!/bin/bash\nexit 1' });
 
   const result = await $`bun ${ctx.scriptPath}`
     .env({
       ...process.env,
-      PATH: `${npm.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
       VERSION: '1.6.0',
       IS_NEWEST: 'true',
       TESTING_ENABLED: 'true',
@@ -102,12 +108,17 @@ test('it plans the client alone for a tag with no packages/testing', async () =>
     'client=true\ntesting=false\ndist_tag=latest\npublish=true\n',
   );
 
-  expect(readFileSync(npm.calls, 'utf8')).toBe('npm view @impz/client@1.6.0 version\n');
+  expect(formatStubCalls(readStubCalls(ctx.directoryPath))).toBe(
+    'npm view @impz/client@1.6.0 version\n',
+  );
 });
 
 test('it skips a package whose version is on npm already', async () => {
   const ctx = setupTest();
-  const npm = createStubBin(ctx.directoryPath, 'npm', buildStubNpmView(['@impz/client@2.0.1']));
+
+  createStubBin(ctx.directoryPath, 'npm', {
+    script: buildStubNpmView(['@impz/client@2.0.1']),
+  });
 
   mkdirSync(join(ctx.tree, 'packages', 'testing'), { recursive: true });
   writeFileSync(join(ctx.tree, 'packages', 'testing', 'package.json'), '{}\n');
@@ -115,7 +126,7 @@ test('it skips a package whose version is on npm already', async () => {
   const result = await $`bun ${ctx.scriptPath}`
     .env({
       ...process.env,
-      PATH: `${npm.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
       VERSION: '2.0.1',
       IS_NEWEST: 'true',
       TESTING_ENABLED: 'true',
@@ -137,12 +148,13 @@ test('it skips a package whose version is on npm already', async () => {
 
 test('it publishes nothing when every planned version is on npm already', async () => {
   const ctx = setupTest();
-  const npm = createStubBin(ctx.directoryPath, 'npm', 'echo 2.0.1');
+
+  createStubBin(ctx.directoryPath, 'npm', { script: '#!/bin/bash\necho 2.0.1' });
 
   const result = await $`bun ${ctx.scriptPath}`
     .env({
       ...process.env,
-      PATH: `${npm.bin}:${process.env['PATH'] ?? ''}`,
+      PATH: `${ctx.directoryPath}:${process.env['PATH'] ?? ''}`,
       VERSION: '2.0.1',
       IS_NEWEST: 'true',
       TESTING_ENABLED: 'false',

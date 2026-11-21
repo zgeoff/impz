@@ -10,6 +10,7 @@ export function buildStubNpmView(published: readonly string[]): string {
   });
 
   return [
+    '#!/bin/bash',
     '[ "$1 $3" = "view version" ] || exit 1',
     'case "$2" in',
     ...answers,
