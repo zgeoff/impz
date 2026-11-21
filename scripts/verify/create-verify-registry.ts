@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { WringerError, createWringer, local } from '@wringer/core';
+import { WringerError, createHostUploader, createWringer, local } from '@wringer/core';
 import type { DriverConfigContext, LaunchContext, LaunchPlan, Wringer } from '@wringer/core';
 import { http } from '@wringer/http';
 import { mcp } from '@wringer/mcp';
@@ -69,6 +69,7 @@ export function createVerifyRegistry(): Wringer {
     .target('local', {
       mode: 'launch',
       access: 'read-write',
+      evidence: 'upload',
       host: local(),
       launch: (ctx) => createLaunchPlan(ctx, 'run-local-impd.ts', null),
       drivers: {
@@ -81,6 +82,7 @@ export function createVerifyRegistry(): Wringer {
     .target('local-kvm', {
       mode: 'launch',
       access: 'read-write',
+      evidence: 'upload',
       host: local(),
       launch: (ctx) => createLaunchPlan(ctx, 'run-kvm-impd.ts', 'remove-kvm-instance.ts'),
       drivers: {
@@ -237,6 +239,10 @@ export function createVerifyRegistry(): Wringer {
           'Checkpoint an imp over MCP, change a file, restore, then fork the checkpoint, on a real VM',
         paths: featurePaths['checkpoint-restore-fork'],
       },
+    )
+    .hook(
+      'upload',
+      createHostUploader({ urlEnv: 'CLOUD_FILES_URL', tokenEnv: 'CLOUD_FILES_TOKEN' }),
     )
     .shared(...sharedPaths)
     .ignore(...ignoredPaths)
