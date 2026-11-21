@@ -92,6 +92,7 @@
     "@faker-js/faker": "catalog:",
     "@impz/cli": "workspace:*",
     "@impz/e2e-harness": "workspace:*",
+    "@impz/scripts": "workspace:*",
     "@impz/testing": "workspace:*",
     "@modelcontextprotocol/client": "catalog:",
     "@msw/data": "catalog:",

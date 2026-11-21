@@ -39,14 +39,12 @@
         "verify/verify.ts!",
         // the dev CLI that scripts/dev/dev.sh runs
         "dev/run-dev.ts!",
-        "dev/prepare-docker-lane.ts!",
         // the target apps and the stop command that the verify registry runs by path
         "verify/run-local-impd.ts!",
         "verify/run-kvm-impd.ts!",
         "verify/remove-kvm-instance.ts!",
-        // the zfs harnesses that scripts/test-zfs.sh and scripts/zfs-host-test.sh run
+        // the zfs harness that scripts/test-zfs.sh runs
         "test-zfs.ts!",
-        "zfs-host-test.ts!",
         "**/*.test.ts"
       ],
       "project": ["**/*.ts!", "!src/test-utils/**!"]
