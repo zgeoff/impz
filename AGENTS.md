@@ -28,7 +28,8 @@ When you write or edit a skill:
 1. Load the `skill-writing`, `cold-read` and `deslop` skills from `.agents/skills/`. Install none of
    them yourself: repo-sync, the job that copies shared files into this repo, delivers them there.
 2. Do every step in the "Check it" section of `.agents/skills/skill-writing/SKILL.md`. In its last
-   step, you fill in the `## Checks` section of the PR template.
+   step, tick the Deslop and Cold read lines of the PR template's `## Checks` section, each with the
+   short hash of the commit you checked, and leave the chex line for CI.
 
 ## Repo structure
 
