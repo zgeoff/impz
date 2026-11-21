@@ -651,6 +651,7 @@ test('it keeps the build of a builder that survives its removal, and logs the su
 
   expect(built).toBe('built');
   expect(survivors.map((imp) => imp.kind)).toStrictEqual(['builder']);
+  expect(timers.countPending()).toBe(1);
   expect(readNextDelayMs(timers)).toBe(30_000);
 
   expect(logs).toContainEqual(
@@ -737,6 +738,7 @@ test('it retries the removal of a leftover builder that survives it at start', a
   fireNextTimer(timers);
 
   await waitFor(() => {
+    expect(timers.countPending()).toBe(1);
     expect(readNextDelayMs(timers)).toBe(30_000);
   });
 

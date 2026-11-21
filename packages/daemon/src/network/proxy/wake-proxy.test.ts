@@ -1459,6 +1459,7 @@ test('it answers a 502 when the imp’s WebSocket does not open in time', async 
   });
 
   await waitFor(() => {
+    expect(clock.countPending()).toBe(1);
     expect(readNextDelayMs(clock)).toBe(50);
   });
 

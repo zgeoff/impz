@@ -54,6 +54,7 @@ test('#keepStreamVerified checks the token every interval, and ends the stream a
   ctx.clock.advance(600_000);
 
   await waitFor(() => {
+    expect(ctx.clock.countPending()).toBe(1);
     expect(readNextDelayMs(ctx.clock)).toBe(600_000);
   });
 

@@ -7,6 +7,12 @@
 record_json_string() {
   local text=${1//\\/\\\\}
   text=${text//\"/\\\"}
+  text=${text//$'\n'/\\n}
+  text=${text//$'\r'/\\r}
+  text=${text//$'\t'/\\t}
+  text=${text//$'\b'/\\b}
+  text=${text//$'\f'/\\f}
+
   printf '"%s"' "$text"
 }
 

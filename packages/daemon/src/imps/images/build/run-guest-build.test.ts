@@ -665,6 +665,7 @@ test('#writeGuestTree ends an export that sends nothing for its idle limit', asy
   });
 
   await waitFor(() => {
+    expect(timers.countPending()).toBe(1);
     expect(readNextDelayMs(timers)).toBe(120_000);
   });
 

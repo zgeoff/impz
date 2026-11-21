@@ -910,6 +910,8 @@ test('it looks again after the short retry, not the long recheck, while a lifecy
     expect(readNextDelayMs(timers)).not.toBeNull();
   });
 
+  expect(timers.countPending()).toBe(1);
+
   const pendingMs = readNextDelayMs(timers);
 
   release.resolve();
@@ -1111,6 +1113,7 @@ test('it goes on with a follow when the wake’s event comes before the wake let
   const waking = stream.next();
 
   await waitFor(() => {
+    expect(timers.countPending()).toBe(1);
     expect(readNextDelayMs(timers)).toBe(5000);
   });
 
@@ -1120,6 +1123,7 @@ test('it goes on with a follow when the wake’s event comes before the wake let
     events.publish({ ev: 'ImpChanged', imp: held, reason: 'woke', seq: 1, at: new Date() });
 
     return waitFor(() => {
+      expect(timers.countPending()).toBe(1);
       expect(readNextDelayMs(timers)).toBe(500);
 
       return readNextDelayMs(timers);

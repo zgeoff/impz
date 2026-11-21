@@ -516,6 +516,8 @@ test('it ends a move whose target sends no answer to a part within an hour', asy
 
   await partHeld.promise;
 
+  expect(clock.countPending()).toBe(1);
+
   const pendingMs = readNextDelayMs(clock);
 
   fireNextTimer(clock);
@@ -560,6 +562,8 @@ test('it ends a move whose target sends no answer to the finish within an hour',
 
   await finishHeld.promise;
 
+  expect(clock.countPending()).toBe(1);
+
   const pendingMs = readNextDelayMs(clock);
 
   fireNextTimer(clock);
@@ -603,6 +607,8 @@ test('it keeps both copies when the target sends no answer to the commit within 
   const moved = ctx.runMove('dev');
 
   await commitHeld.promise;
+
+  expect(clock.countPending()).toBe(1);
 
   const pendingMs = readNextDelayMs(clock);
 
@@ -649,6 +655,8 @@ test('it ends a move whose target sends no answer to the offer within ten minute
   const moved = ctx.runMove('dev');
 
   await offerHeld.promise;
+
+  expect(clock.countPending()).toBe(1);
 
   const pendingMs = readNextDelayMs(clock);
 
@@ -697,6 +705,8 @@ test('it keeps the mark when the target sends no answer to the abort within ten 
   const moved = ctx.runMove('dev');
 
   await abortHeld.promise;
+
+  expect(clock.countPending()).toBe(1);
 
   const pendingMs = readNextDelayMs(clock);
 

@@ -29,6 +29,8 @@ test('#backups.run ends at its 24 hour deadline when impd sends no answer', asyn
 
   await ctx.origin.longHeld;
 
+  expect(ctx.clock.countPending()).toBe(1);
+
   const pendingMs = readNextDelayMs(ctx.clock);
 
   fireNextTimer(ctx.clock);
@@ -49,6 +51,8 @@ test('#backups.restore ends at its 24 hour deadline when impd sends no answer', 
 
   await ctx.origin.longHeld;
 
+  expect(ctx.clock.countPending()).toBe(1);
+
   const pendingMs = readNextDelayMs(ctx.clock);
 
   fireNextTimer(ctx.clock);
@@ -66,6 +70,8 @@ test('#backups.check ends at its 24 hour deadline when impd sends no answer', as
   const call = ctx.client.backups.check({});
 
   await ctx.origin.longHeld;
+
+  expect(ctx.clock.countPending()).toBe(1);
 
   const pendingMs = readNextDelayMs(ctx.clock);
 
@@ -85,6 +91,8 @@ test('#images.add ends at its 6 hour deadline when impd sends no answer', async 
 
   await ctx.origin.longHeld;
 
+  expect(ctx.clock.countPending()).toBe(1);
+
   const pendingMs = readNextDelayMs(ctx.clock);
 
   fireNextTimer(ctx.clock);
@@ -102,6 +110,8 @@ test('#images.build ends at its 6 hour deadline when impd sends no answer', asyn
   const call = ctx.client.images.build({ contextDir: '/srv/app', name: 'app' });
 
   await ctx.origin.longHeld;
+
+  expect(ctx.clock.countPending()).toBe(1);
 
   const pendingMs = readNextDelayMs(ctx.clock);
 
@@ -121,6 +131,8 @@ test('#system.gc ends at its one hour deadline when impd sends no answer', async
 
   await ctx.origin.longHeld;
 
+  expect(ctx.clock.countPending()).toBe(1);
+
   const pendingMs = readNextDelayMs(ctx.clock);
 
   fireNextTimer(ctx.clock);
@@ -139,6 +151,8 @@ test('#moves.abort ends at its one hour deadline when impd sends no answer', asy
 
   await ctx.origin.longHeld;
 
+  expect(ctx.clock.countPending()).toBe(1);
+
   const pendingMs = readNextDelayMs(ctx.clock);
 
   fireNextTimer(ctx.clock);
@@ -156,6 +170,8 @@ test('#moves.resume ends at its one hour deadline when impd sends no answer', as
   const call = ctx.client.moves.resume({ name: 'dev' });
 
   await ctx.origin.longHeld;
+
+  expect(ctx.clock.countPending()).toBe(1);
 
   const pendingMs = readNextDelayMs(ctx.clock);
 

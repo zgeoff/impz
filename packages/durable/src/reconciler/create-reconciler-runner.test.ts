@@ -233,6 +233,8 @@ test('it backs off interval × 2ⁿ, capped at 10 × the interval, after errors 
       expect(runner.list()[0]?.last?.consecutiveErrors).toBe(count);
     });
 
+    expect(ctx.clock.countPending()).toBe(1);
+
     delaysMs.push(readNextDelayMs(ctx.clock));
   }
 
@@ -266,6 +268,7 @@ test.each([
     runner.trigger('backup');
 
     await waitFor(() => {
+      expect(ctx.clock.countPending()).toBe(1);
       expect(readNextDelayMs(ctx.clock)).toBe(row.delayMs);
     });
   },
@@ -298,12 +301,14 @@ test('it waits one interval again after a pass that follows errors succeeds', as
   runner.trigger('broker');
 
   await waitFor(() => {
+    expect(ctx.clock.countPending()).toBe(1);
     expect(readNextDelayMs(ctx.clock)).toBe(120_000);
   });
 
   runner.trigger('broker');
 
   await waitFor(() => {
+    expect(ctx.clock.countPending()).toBe(1);
     expect(readNextDelayMs(ctx.clock)).toBe(60_000);
   });
 });

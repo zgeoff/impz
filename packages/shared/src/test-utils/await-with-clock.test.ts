@@ -43,3 +43,18 @@ test('it throws when the work is still waiting after the clock time it is given'
     'the condition stayed false for 5000 ms of clock time',
   );
 });
+
+test('it waits in real time for work that awaits real I/O before it schedules anything', async () => {
+  const clock = createFakeClock();
+
+  const work = (async () => {
+    await Bun.spawn([process.execPath, '-e', 'process.exit(0)']).exited;
+    await clock.sleep(1000);
+
+    return 'done';
+  })();
+
+  const result = await awaitWithClock(clock, work);
+
+  expect(result).toBe('done');
+});

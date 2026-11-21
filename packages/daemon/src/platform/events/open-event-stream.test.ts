@@ -693,6 +693,9 @@ test('it ends at its end time', async () => {
   });
 
   const waiting = stream.next();
+
+  expect(timers.countPending()).toBe(1);
+
   const pendingMs = readNextDelayMs(timers);
 
   fireNextTimer(timers);
@@ -723,6 +726,8 @@ test('it stays open when the longest timer fires short of a 30-day end, and wait
 
   const first = await stream.next();
 
+  expect(timers.countPending()).toBe(1);
+
   const clampedMs = readNextDelayMs(timers);
 
   clock.at = Date.UTC(2026, 9, 2, 12) + 2 ** 31 - 1;
@@ -742,6 +747,8 @@ test('it stays open when the longest timer fires short of a 30-day end, and wait
   );
 
   const second = await stream.next();
+
+  expect(timers.countPending()).toBe(1);
 
   const pendingMs = readNextDelayMs(timers);
 

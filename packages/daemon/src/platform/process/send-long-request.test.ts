@@ -30,6 +30,8 @@ test('it ends a call with no answer at its deadline, and aborts the request', as
 
   await ctx.origin.longHeld;
 
+  expect(clock.countPending()).toBe(1);
+
   const pendingMs = readNextDelayMs(clock);
 
   clock.advance(3_600_000);

@@ -436,6 +436,7 @@ test('it starts a commit one second after an append', async () => {
 
   await log.append(new TextEncoder().encode('abc'));
 
+  expect(timers.countPending()).toBe(1);
   expect(readNextDelayMs(timers)).toBe(1000);
   expect(readGenerationMeta(ctx.directory)?.segments).toStrictEqual([]);
 });

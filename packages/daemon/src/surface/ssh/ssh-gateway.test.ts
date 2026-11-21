@@ -470,6 +470,7 @@ test('it drops a client that does not log in within the auth timeout', async () 
   socket.resume();
 
   await waitFor(() => {
+    expect(clock.countPending()).toBe(1);
     expect(readNextDelayMs(clock)).toBe(50);
   });
 
@@ -509,6 +510,7 @@ test('it keeps a client that has not logged in while its auth timeout is pending
   await greeted.promise;
 
   await waitFor(() => {
+    expect(clock.countPending()).toBe(1);
     expect(readNextDelayMs(clock)).toBe(50);
   });
 

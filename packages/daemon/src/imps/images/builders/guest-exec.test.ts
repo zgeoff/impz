@@ -124,6 +124,7 @@ test('it fails a step that does not exit within its timeout', async () => {
   });
 
   await waitFor(() => {
+    expect(timers.countPending()).toBe(1);
     expect(readNextDelayMs(timers)).toBe(20);
   });
 
@@ -142,6 +143,7 @@ test('it kills and closes a step that does not exit within its timeout', async (
   });
 
   await waitFor(() => {
+    expect(timers.countPending()).toBe(1);
     expect(readNextDelayMs(timers)).toBe(20);
   });
 

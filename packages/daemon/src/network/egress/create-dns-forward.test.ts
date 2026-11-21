@@ -123,6 +123,8 @@ test('it gives an upstream 2 s to answer by default', async () => {
   const forwarded = forward(buildMockDnsQuery({ name: 'example.com', type: 'A' }));
 
   const pendingMs = await waitFor(() => {
+    expect(clock.countPending()).toBe(1);
+
     const pending = readNextDelayMs(clock);
 
     invariant(pending !== null);
