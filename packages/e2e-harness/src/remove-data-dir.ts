@@ -1,9 +1,9 @@
 import { realpathSync } from 'node:fs';
-import type { ContainerCLI } from '../../../scripts/lib/build-dev-layout.ts';
-import { ensureHostImage } from '../../../scripts/lib/ensure-host-image.ts';
-import { readDevCheckout } from '../../../scripts/lib/read-dev-checkout.ts';
-import { readMachineID } from '../../../scripts/lib/read-machine-id.ts';
-import { readTextOrNull } from '../../../scripts/lib/read-text-or-null.ts';
+import type { ContainerCLI } from '@impz/scripts/lib/build-dev-layout';
+import { ensureHostImage } from '@impz/scripts/lib/ensure-host-image';
+import { readDevCheckout } from '@impz/scripts/lib/read-dev-checkout';
+import { readMachineID } from '@impz/scripts/lib/read-machine-id';
+import { readTextOrNull } from '@impz/scripts/lib/read-text-or-null';
 import type { HarnessEnv } from './config';
 import { REPO_ROOT, readHostImageFromEnv, runChecked } from './instance';
 import { runHostZfs } from './run-host-zfs';

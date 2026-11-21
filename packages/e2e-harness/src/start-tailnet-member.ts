@@ -1,4 +1,4 @@
-import { HEADSCALE_IMAGES } from '../../../scripts/dev/headscale-images';
+import { HEADSCALE_IMAGES } from '@impz/scripts/dev/headscale-images';
 import type { CommandRunners } from './instance';
 import { waitFor } from './wait-for';
 import { readMemberStatus } from './wait-for-tailnet-ip';

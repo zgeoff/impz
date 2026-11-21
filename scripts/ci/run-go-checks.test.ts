@@ -5,8 +5,8 @@ import { join } from 'node:path';
 import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
 import { createStubBin, readStubCalls } from '@zgeoff/testing/bin';
 import { $ } from 'bun';
-import { buildStubGo } from '../test-utils/build-stub-go';
-import { createStubRepoScript } from '../test-utils/create-stub-repo-script';
+import { buildStubGo } from '../src/test-utils/build-stub-go';
+import { createStubRepoScript } from '../src/test-utils/create-stub-repo-script';
 
 function setupTest() {
   const created = mkdtempSync(join(tmpdir(), 'imp-go-checks-'));

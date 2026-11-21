@@ -5,8 +5,8 @@ import { join } from 'node:path';
 import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
 import { createStubBin, readStubCalls } from '@zgeoff/testing/bin';
 import { buildDevImageTag } from '../lib/build-dev-image-tag.ts';
-import { buildStubDevDocker } from '../test-utils/build-stub-dev-docker';
-import { buildStubDevHostDocker } from '../test-utils/build-stub-dev-host-docker';
+import { buildStubDevDocker } from '../src/test-utils/build-stub-dev-docker';
+import { buildStubDevHostDocker } from '../src/test-utils/build-stub-dev-host-docker';
 import { runDev } from './run-dev.ts';
 import { wireDevIO } from './wire-dev-io.ts';
 

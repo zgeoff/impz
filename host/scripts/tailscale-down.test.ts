@@ -2,9 +2,9 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createStubProcessTable } from '@impz/scripts/test-utils/create-stub-process-table';
 import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
 import { createStubBin, readStubCalls } from '@zgeoff/testing/bin';
-import { createStubProcessTable } from '../../scripts/test-utils/create-stub-process-table';
 
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-tailscale-down-'));

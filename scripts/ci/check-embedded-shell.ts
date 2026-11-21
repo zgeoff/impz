@@ -5,8 +5,10 @@ import { CONSOLE_SHELL } from '@impz/api';
 import { WRITE_SCRIPT } from '@impz/mcp/internal';
 import { $ } from 'bun';
 
+const CLI_MAIN = join(import.meta.dir, '..', '..', 'packages', 'cli', 'src', 'main.ts');
+
 async function main(): Promise<void> {
-  const completion = await $`bun run --silent impz completion bash`.text();
+  const completion = await $`bun ${CLI_MAIN} completion bash`.text();
 
   // shellcheck reads no zsh or fish, so only the bash completion gets this check
   const scripts = [

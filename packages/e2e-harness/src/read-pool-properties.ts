@@ -1,4 +1,4 @@
-import { parseZfsPoolProperties } from '../../../scripts/lib/parse-zfs-pool-properties.ts';
+import { parseZfsPoolProperties } from '@impz/scripts/lib/parse-zfs-pool-properties';
 
 // -o words are pool properties, which zpool reads back, and -O words the pool's root dataset's,
 // which zfs reads back.

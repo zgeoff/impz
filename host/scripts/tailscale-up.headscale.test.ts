@@ -3,10 +3,10 @@ import { randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { HEADSCALE_IMAGES } from '@impz/scripts/dev/headscale-images';
 import { waitFor } from '@zgeoff/testing';
 import { $ } from 'bun';
 import * as z from 'zod';
-import { HEADSCALE_IMAGES } from '../../scripts/dev/headscale-images';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

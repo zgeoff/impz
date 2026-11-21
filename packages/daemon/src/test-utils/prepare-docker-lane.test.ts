@@ -24,7 +24,7 @@ function setupTest() {
           limitMs: 5000,
           parallel: 1,
           memory: null,
-          start: 'scripts/dev/prepare-docker-lane.ts',
+          start: 'packages/daemon/src/test-utils/prepare-docker-lane.ts',
           stop: null,
         },
         runID: '4242',

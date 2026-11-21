@@ -1,6 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { randomUUID } from 'node:crypto';
-import { HEADSCALE_IMAGES } from '../../../scripts/dev/headscale-images';
+import { HEADSCALE_IMAGES } from '@impz/scripts/dev/headscale-images';
 import { runChecked, runCommand } from './instance';
 import { removeDockerNetwork } from './remove-docker-network';
 import { HEADSCALE_LOGIN_SERVER, startHeadscale, stopHeadscale } from './start-headscale';

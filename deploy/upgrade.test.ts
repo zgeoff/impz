@@ -12,13 +12,13 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { buildStubFailingSystemctl } from '@impz/scripts/test-utils/build-stub-failing-systemctl';
+import { buildStubHostDocker } from '@impz/scripts/test-utils/build-stub-host-docker';
+import { buildStubHostPodman } from '@impz/scripts/test-utils/build-stub-host-podman';
+import { buildStubUnitSystemctl } from '@impz/scripts/test-utils/build-stub-unit-systemctl';
 import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
 import { createStubBin, readStubCalls } from '@zgeoff/testing/bin';
 import * as z from 'zod';
-import { buildStubFailingSystemctl } from '../scripts/test-utils/build-stub-failing-systemctl';
-import { buildStubHostDocker } from '../scripts/test-utils/build-stub-host-docker';
-import { buildStubHostPodman } from '../scripts/test-utils/build-stub-host-podman';
-import { buildStubUnitSystemctl } from '../scripts/test-utils/build-stub-unit-systemctl';
 
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-upgrade-'));

@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
 import { createStubBin, readStubCalls } from '@zgeoff/testing/bin';
 import { $ } from 'bun';
-import { buildStubSudo } from '../test-utils/build-stub-sudo';
+import { buildStubSudo } from '../src/test-utils/build-stub-sudo';
 
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-set-up-runner-'));

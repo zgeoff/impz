@@ -2,9 +2,9 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { runSourcedFunction } from '@impz/scripts/test-utils/run-sourced-function';
 import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
 import { createStubBin, readStubCalls } from '@zgeoff/testing/bin';
-import { runSourcedFunction } from '../../scripts/test-utils/run-sourced-function';
 
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-host-env-lib-'));

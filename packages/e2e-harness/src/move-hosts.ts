@@ -1,7 +1,7 @@
 import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { readTextOrNull } from '@impz/scripts/lib/read-text-or-null';
 import { match } from 'ts-pattern';
-import { readTextOrNull } from '../../../scripts/lib/read-text-or-null.ts';
 import { checkPrivileges } from './check-privileges';
 import type { HarnessEnv } from './config';
 import type { DevInstance } from './instance';

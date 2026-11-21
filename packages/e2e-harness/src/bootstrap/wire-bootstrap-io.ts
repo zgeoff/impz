@@ -2,10 +2,10 @@ import { accessSync, constants, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readText } from '@impz/daemon/read-text';
-import { runBunShell } from '../../../../scripts/lib/run-bun-shell.ts';
-import { writeStderr } from '../../../../scripts/lib/write-stderr.ts';
-import { writeStdoutLine } from '../../../../scripts/lib/write-stdout-line.ts';
-import { writeText } from '../../../../scripts/lib/write-text.ts';
+import { runBunShell } from '@impz/scripts/lib/run-bun-shell';
+import { writeStderr } from '@impz/scripts/lib/write-stderr';
+import { writeStdoutLine } from '@impz/scripts/lib/write-stdout-line';
+import { writeText } from '@impz/scripts/lib/write-text';
 import type { BootstrapIO } from './types';
 
 export function wireBootstrapIO(): BootstrapIO {

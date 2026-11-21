@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
 import { createStubBin, readStubCalls } from '@zgeoff/testing/bin';
 import { $ } from 'bun';
-import { buildStubRegistryDocker } from '../test-utils/build-stub-registry-docker';
+import { buildStubRegistryDocker } from '../src/test-utils/build-stub-registry-docker';
 
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-plan-base-image-'));

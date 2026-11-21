@@ -39,9 +39,10 @@ root-only test needs, push the branch and read the CI check that runs it, as [CI
 
 Each `.sh` runs the TypeScript entry of the same name,
 [`test-zfs.ts`](../../../../scripts/test-zfs.ts) or
-[`zfs-host-test.ts`](../../../../scripts/zfs-host-test.ts). Set the settings below only for a run of
-these scripts: the root preload deletes them in a unit test. Mind the order of the words:
-`IMP_ZFS_TEST_DIR` is the scripts' work folder, and `IMP_TEST_ZFS_DIR` is a test's parent folder.
+[`zfs-host-test.ts`](../../../../packages/e2e-harness/src/zfs-host-test.ts). Set the settings below
+only for a run of these scripts: the root preload deletes them in a unit test. Mind the order of the
+words: `IMP_ZFS_TEST_DIR` is the scripts' work folder, and `IMP_TEST_ZFS_DIR` is a test's parent
+folder.
 
 | Setting                       | Script             | What it does                                                                                |
 | ----------------------------- | ------------------ | ------------------------------------------------------------------------------------------- |
@@ -60,8 +61,8 @@ ZFS suites and the named VM suites.
 
 - When you change either script's cleanup, extend its tests,
   [`test-zfs.test.ts`](../../../../scripts/test-zfs.test.ts) or
-  [`zfs-host-test.test.ts`](../../../../scripts/zfs-host-test.test.ts), which run it against stub
-  binaries.
+  [`zfs-host-test.test.ts`](../../../../packages/e2e-harness/src/zfs-host-test.test.ts), which run
+  it against stub binaries.
 - In a test that stubs `bun`, run the entry with `process.execPath`, because the `.sh` wrapper would
   find the stub on `PATH`.
 - Point `IMP_ROOT` at a folder of stub scripts to test `zfs-host-test.ts`. It then runs them in

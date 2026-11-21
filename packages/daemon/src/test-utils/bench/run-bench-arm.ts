@@ -2,10 +2,10 @@ import { join, resolve } from 'node:path';
 import { SystemInfoSchema } from '@impz/api';
 import type { CommandResult } from '@impz/e2e-harness/instance';
 import { waitFor } from '@impz/e2e-harness/wait-for';
+import { buildDevLayout } from '@impz/scripts/lib/build-dev-layout';
+import type { DevEnv, DevLayout } from '@impz/scripts/lib/build-dev-layout';
+import { parseJSONOrNull } from '@impz/scripts/lib/parse-json-or-null';
 import type * as z from 'zod';
-import { buildDevLayout } from '../../../../../scripts/lib/build-dev-layout.ts';
-import type { DevEnv, DevLayout } from '../../../../../scripts/lib/build-dev-layout.ts';
-import { parseJSONOrNull } from '../../../../../scripts/lib/parse-json-or-null.ts';
 import type { BenchArm, BenchArmsArgs } from './parse-bench-arms-args';
 
 type CommandEnv = Readonly<Record<string, string>>;

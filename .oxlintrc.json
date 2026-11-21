@@ -42,6 +42,10 @@
           {
             "group": ["@impz/*/src", "@impz/*/src/**", "**/packages/*/**"],
             "message": "import a package by its name and an entry its package.json exports, never its files by path"
+          },
+          {
+            "regex": "^\\.\\.?/(.*/)?scripts(/|$)",
+            "message": "import @impz/scripts by its name and an entry its package.json exports, never its files by path"
           }
         ]
       }

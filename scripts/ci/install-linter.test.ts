@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { formatStubCalls } from '@impz/shared/test-utils/format-stub-calls';
 import { readStubCalls } from '@zgeoff/testing/bin';
 import { $ } from 'bun';
-import { createStubGhReleaseDownload } from '../test-utils/create-stub-gh-release-download';
+import { createStubGhReleaseDownload } from '../src/test-utils/create-stub-gh-release-download';
 
 function setupTest() {
   const directory = mkdtempSync(join(tmpdir(), 'imp-install-linter-'));

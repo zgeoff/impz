@@ -1,9 +1,9 @@
 import { realpathSync } from 'node:fs';
 import { join } from 'node:path';
+import { buildDevLayout } from '@impz/scripts/lib/build-dev-layout';
+import type { ContainerCLI } from '@impz/scripts/lib/build-dev-layout';
+import { readDevCheckout } from '@impz/scripts/lib/read-dev-checkout';
 import * as z from 'zod';
-import { buildDevLayout } from '../../../scripts/lib/build-dev-layout.ts';
-import type { ContainerCLI } from '../../../scripts/lib/build-dev-layout.ts';
-import { readDevCheckout } from '../../../scripts/lib/read-dev-checkout.ts';
 import { CommandTimeoutError } from './command-timeout-error';
 import { config } from './config';
 import type { HarnessEnv } from './config';

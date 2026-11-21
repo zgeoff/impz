@@ -50,7 +50,8 @@ packages/
   durable/         the durable work library for any program on SQLite: an event log, operations
                    that resume or undo their steps after a restart, and reconcilers
   e2e-harness/     the end-to-end and bootstrap harnesses that scripts/test-e2e.sh and
-                   scripts/test-bootstrap.sh run, and the helpers the suites import
+                   scripts/test-bootstrap.sh run, the ZFS lane runner that
+                   scripts/zfs-host-test.sh starts, and the helpers the suites import
   local-tar/       local files as a tar, for impz cp and image build contexts
   mcp/             the MCP server: imps, exec, files and checkpoints as tools
   shared/          pure helpers that know nothing about imp, and in src/test-utils/ the test
@@ -66,7 +67,8 @@ host/              the host container image that runs impd; ksm-exec, the Go pro
 images/            the guest images that ship with imp
 kernel/            the guest kernel build
 deploy/            the systemd units, bootstrap and the NixOS module
-scripts/           the ci, dev, release and render scripts
+scripts/           @impz/scripts, a private workspace package: the ci, dev, release and
+                   render scripts, and in src/test-utils/ their test helpers
 patches/           bun patches for third-party packages
 docs/
   architecture/    how imp is built
