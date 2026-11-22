@@ -67,8 +67,8 @@ every copy of its disk, and reads with no boot.
 
 A session has one viewer, so impd cannot log from the viewer's stream. It taps the session instead:
 a tap reads the raw ring by offset beside the viewer, takes no input, never takes the viewer over,
-and counts as no connection, so a logged session never keeps an imp awake. impd taps a session when
-a start creates it and on every look at the imp's sessions, from the end of its log, and the ring's
+and counts as no connection, so the log alone never keeps an imp awake. impd taps a session when a
+start creates it and on every look at the imp's sessions, from the end of its log, and the ring's
 answer places the bytes, so a tap that fell behind leaves a recorded hole, never a silent skip. The
 agent holds a logged session's output briefly while its ring could drop bytes no tap read, so the
 first tap after a start or a wake still finds every byte.

@@ -4,8 +4,8 @@ impd's API is one typed contract, `packages/api`, which the daemon implements an
 calls: the `impz` CLI, the `@impz/client` library on npm, the MCP server and the dashboard. Elysia
 serves the HTTP app, and oRPC serves the contract's procedures under `/rpc`. A few routes sit beside
 it, because they need a shape a procedure call does not have: two-way streams, an upload, the
-dashboard's files, the MCP endpoint, and the routes a move's two hosts speak. [Auth](./auth.md)
-covers who may call what.
+dashboard's files, the MCP endpoint, and the routes a move's two hosts speak
+([moves](../storage/moves.md)). [Auth](./auth.md) covers who may call what.
 
 The contract package splits by role: the contract itself, the schemas its procedures are built from,
 the wire protocols of the routes beside it, and the rules that impd and its clients both apply, such
@@ -74,12 +74,12 @@ stopping.
 ## Events, audit and telemetry
 
 The database layer writes each change to an imp or checkpoint row, with the reason its caller gives,
-and appends an event row for it in the same transaction, and no other code writes those rows. The
-`events` table is impd's outbox, through `packages/durable`: each row has a `seq` that SQLite never
-reuses, the time, the kind and the imp's record as the change left it. The governor's decisions and
-the execs in an agent go into the same table. A row holds impd's own record of the imp, and the
-event stream presents it in the contract's shape as it reads the row, so the live fields of an
-`imp`, such as the RAM it uses, are those of the read.
+and appends an event row for it in the same transaction, and no other code writes imp or checkpoint
+rows. The `events` table is impd's outbox, through `packages/durable`: each row has a `seq` that
+SQLite never reuses, the time, the kind and the imp's record as the change left it. The governor's
+decisions and the execs in an agent go into the same table. A row holds impd's own record of the
+imp, and the event stream presents it in the contract's shape as it reads the row, so the live
+fields of an `imp`, such as the RAM it uses, are those of the read.
 
 After each commit, impd wakes the readers of the table through a signal in memory that carries no
 event. Each reader then reads the rows past its own cursor, so no event data passes through memory

@@ -68,8 +68,8 @@ of its own.
 
 ## One live copy
 
-A move keeps exactly one copy live. Both copies exist from the stream until the commit, and neither
-may run.
+A move never lets more than one copy run. Both copies exist from the stream until the commit, and
+neither may run then.
 
 | Source    | Target               | Who may wake the imp                          |
 | --------- | -------------------- | --------------------------------------------- |
@@ -127,13 +127,13 @@ A warm move puts the imp into the same slot on the target, because the snapshot 
 tap, addresses and MAC, and each tap's MAC comes from its slot, so the guest's neighbour entry for
 its gateway holds ([networking](../network/networking.md#addressing)). The ticket keeps the slot for
 the imp while its stream runs. The snapshot's facts, the CPU, the host kernel and the Firecracker
-version, are checked against the target three times: at the prepare, at the receive and in the
-header, and last by the wake's own check, so a snapshot that got past the others still boots cold
-and never faults ([snapshot identity](../lifecycle/sleep-and-wake.md#snapshot-identity)). The
-snapshot's record goes last, and the commit sets the imp `sleeping` only once it reads whole. The
-imp's first wake on the target installs the target's broker CA in the guest before the wake returns,
-because until then the guest trusts the source's. When the install fails, the imp still wakes, and
-each later wake tries the install again until one succeeds.
+version, are checked against the target four times: at the prepare, at the receive, in the header,
+and last by the wake's own check, so a snapshot that got past the others still boots cold and never
+faults ([snapshot identity](../lifecycle/sleep-and-wake.md#snapshot-identity)). The snapshot's
+record goes last, and the commit sets the imp `sleeping` only once it reads whole. The imp's first
+wake on the target installs the target's broker CA in the guest before the wake returns, because
+until then the guest trusts the source's. When the install fails, the imp still wakes, and each
+later wake tries the install again until one succeeds.
 
 A warm move trusts the source with the target host, not only with the imp. The VM state is
 Firecracker's own format, which the target does not parse, and the paths in it are what the target's

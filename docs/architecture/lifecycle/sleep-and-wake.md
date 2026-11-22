@@ -24,8 +24,9 @@ is the only thing a crash has to get right.
 4. It waits for one of the host's sleep slots. A snapshot pushes the whole memory file through the
    host's page cache, and a few at a time keep a burst of sleeps from flooding it.
 5. It pauses the VM and has Firecracker write a snapshot into new files: a full snapshot for a VM
-   that booted, and a diff snapshot for a woken one ([woken VMs](#the-sleep-of-a-woken-vm)). A
-   failure here deletes the new files and resumes the VM, and the imp stays awake.
+   that booted, and a diff snapshot for a woken one, except in the cases
+   [woken VMs](#the-sleep-of-a-woken-vm) lists. A failure here deletes the new files and resumes the
+   VM, and the imp stays awake.
 6. It kills Firecracker. The VM is paused and its state is on disk, so nothing needs a clean
    shutdown.
 7. It renames the new files over the old ones, digs holes in the memory file where the guest's pages

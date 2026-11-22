@@ -6,7 +6,7 @@ Before you write one, search for an existing one. A stand-in's file name starts 
 `start-stub-`, `create-stub-` or `make-stub-`, and ends with what it replaces:
 
 ```bash
-find packages scripts -path '*test-utils*' -name '*-stub-*.ts' ! -name '*.test.ts' | grep -i <boundary>
+find packages scripts -name node_modules -prune -o -name '*-stub-*.ts' ! -name '*.test.ts' -print | grep -i <boundary>
 ```
 
 Read a stand-in's test to learn what it models and which calls it throws on.

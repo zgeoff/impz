@@ -13,13 +13,15 @@ keeps it free of imp code.
 
 ## One transaction for a change and its record
 
-The package never opens a transaction of its own. A function that makes several writes, such as a
-prune, takes only a transaction, so the type check fails a call on a plain connection. A function
-that makes one write, such as an event append, also accepts a plain connection, so the type check
-misses a call outside the transaction. The program must pass it the transaction of the change the
-event describes. The change and its event then commit together, or neither commits. A program that
-commits a change in one transaction and its event in another can lose the event in a crash, and a
-reader then never learns of the change.
+The package never opens a transaction of its own. The operation runner commits through the
+`withTransaction` function the program gives it, and every other write takes the program's
+transaction or connection as an argument. A function that makes several writes, such as a prune,
+takes only a transaction, so the type check fails a call on a plain connection. A function that
+makes one write, such as an event append, also accepts a plain connection, so the type check misses
+a call outside the transaction. The program must pass it the transaction of the change the event
+describes. The change and its event then commit together, or neither commits. A program that commits
+a change in one transaction and its event in another can lose the event in a crash, and a reader
+then never learns of the change.
 
 ## The event log
 
@@ -28,7 +30,7 @@ after the rows above it are removed. A reader keeps the sequence number of the l
 asks for the events after it. A reader that disconnects therefore misses nothing that is still in
 the table.
 
-The package runs no timer, so the program calls the event prune itself. The prune keeps the events
+The event log runs no timer, so the program calls the event prune itself. The prune keeps the events
 younger than `EVENT_MAX_AGE_MS`, but at most the newest `EVENT_MAX_ROWS`, and saves the highest
 sequence number it removed as the prune mark. When a reader asks for the events after a number below
 the mark, it gets a reset in place of events, because some events it has not seen are gone. The

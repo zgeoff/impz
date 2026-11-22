@@ -80,8 +80,8 @@ How impz is built: the parts, what each one owns, and what holds whatever a call
 
 ### Where things live
 
-Five areas spread over more than one folder. Each row maps one folder or file to the part it holds
-and the doc that explains that part.
+Each row maps one folder or file of five areas to the part it holds and the doc that explains that
+part.
 
 | Area           | Code                                    | Holds                                                             | Doc                                                                |
 | -------------- | --------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------ |

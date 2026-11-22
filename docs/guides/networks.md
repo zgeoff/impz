@@ -12,7 +12,7 @@ impz exec web -- ping db           # by its imp name
 impz exec web -- ping db.lab.internal
 impz net ls                        # NAME  IMPS
 impz net leave lab db              # its connections to web end
-impz net rm lab                    # every member's connections to the others end
+impz net rm lab                    # members that share no other network lose their connections
 ```
 
 `--net` takes a comma-separated list, and each network must exist. Joining twice and leaving a
@@ -23,8 +23,8 @@ network the imp is not on do nothing.
 - Every member reaches every other member on any port, over TCP, UDP and ICMP, whatever either one's
   [egress policy](../architecture/network/egress.md) is. The firewall still holds a `public`, `box`
   or `none` imp to its policy for every address outside the network.
-- A non-member reaches no member, and no member reaches it. A packet between two imps that share no
-  network is refused: TCP gets a reset, the rest ICMP admin-prohibited.
+- A non-member imp reaches no member, and no member reaches it. A packet between two imps that share
+  no network is refused: TCP gets a reset, the rest ICMP admin-prohibited.
 - IPv4 only: two members do not reach each other over IPv6, and names answer A records only.
 - A leave, a `net rm` and an `impz rm` take effect at once. A held connection between two imps that
   no longer share a network gets a reset on its next packet, and impd deletes the pair's conntrack
@@ -37,10 +37,10 @@ network the imp is not on do nothing.
 ## A network is a trust boundary
 
 A network weakens the egress policy of a member whenever an imp that reaches more is on it too. An
-`open` peer reaches anything, so it can relay for the others: a proxy, a port forward or a tunnel on
-it carries a box imp's traffic anywhere. A `public` peer does the same to the internet for a `box`
-or `none` member. A `public`, `box` or `none` imp on a network trusts every open peer on it with its
-egress, and a `box` or `none` imp trusts every public peer.
+`open` peer reaches anything outside the network, so it can relay for the others: a proxy, a port
+forward or a tunnel on it carries a box imp's traffic anywhere. A `public` peer does the same to the
+internet for a `box` or `none` member. A `public`, `box` or `none` imp on a network trusts every
+open peer on it with its egress, and a `box` or `none` imp trusts every public peer.
 
 `impz net join` warns when a join puts a `public`, `box` or `none` imp on a network with an `open`
 one, or a `box` or `none` imp with a `public` one, from either side, and `--json` carries the same

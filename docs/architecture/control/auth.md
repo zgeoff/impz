@@ -1,11 +1,13 @@
 # Auth
 
-Every call into impd runs as a caller, and one resolver decides the caller for every route alike:
-the procedures, the exec and tunnel sockets, the upload and the MCP endpoint. A caller has a scope
-and the imps it may reach, and the router checks both before a handler runs. The wake proxy is the
-exception: it serves an imp's own pages to anything that can reach it, and the tailnet's ACL is its
-boundary ([ingress](../network/ingress.md#the-wake-proxy)). The
-[tokens guide](../../guides/tokens.md) covers making tokens and rules.
+Every call into impd but the login and the logout runs as a caller, and one resolver decides the
+caller for the procedures, the exec and tunnel sockets, the upload and the MCP endpoint. Some routes
+take only some of its sources, as [the dashboard session](#the-dashboard-session) and
+[OAuth](#oauth) say. A caller has a scope and the imps it may reach, and the router checks both
+before a handler runs. The wake proxy is the exception: it serves an imp's own pages to anything
+that can reach it, and the tailnet's ACL is its boundary
+([ingress](../network/ingress.md#the-wake-proxy)). The [tokens guide](../../guides/tokens.md) covers
+making tokens and rules.
 
 ## Callers
 

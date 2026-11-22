@@ -54,9 +54,10 @@ them, but never past its max or the budget.
 
 The cgroup's hard limit on a VM follows what its guest may hold: its memory, plus what is plugged,
 plus room for Firecracker and its page cache. impd moves the limit in an order that never cuts a
-guest short. A cold boot sets it to the memory alone, a wake to the memory plus the snapshot's
-plugged size before the load, a grow raises it before the plug, and a shrink lowers it only once the
-guest holds no more than the target. An impd restart sets it from what each adopted guest holds.
+guest short. A cold boot, when nothing is plugged yet, sets it to the memory and that room, a wake
+to the memory plus the snapshot's plugged size before the load, a grow raises it before the plug,
+and a shrink lowers it only once the guest holds no more than the target. An impd restart sets it
+from what each adopted guest holds.
 
 ## Sleep
 
@@ -70,10 +71,10 @@ restores it, and the controller goes on from there.
 - **The max is a few times the memory at most.** Movable memory cannot hold the kernel's own
   allocations, such as page tables, slab and the page structures of plugged memory, so a guest that
   is mostly plugged memory runs out of kernel memory first. A larger max is refused at create.
-- **The max is within the budget.** The governor admits a boot or a wake by the imp's max, and never
-  admits an imp whose max is larger than the whole budget, because a guest that could grow past the
-  budget would make enforcement sleep every other imp. The check runs at each boot and wake, so a
-  smaller budget set later holds too.
+- **The max is within the budget.** At a boot or a wake, the governor reserves room for the imp's
+  memory, and refuses an imp whose max is larger than the whole budget, because a guest that could
+  grow past the budget would make enforcement sleep every other imp. The check runs at each boot and
+  wake, so a smaller budget set later holds too.
 - **The max is fixed.** A fork, a backup restore and a move keep it. A move refuses a target that
   cannot keep it, rather than land the imp at a fixed size.
 - **No boot templates.** A template's snapshot has no hot-plug region, and a restore cannot add one,

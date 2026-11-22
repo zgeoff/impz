@@ -44,12 +44,13 @@ impd streams that tar into the same unpack, under the same limits, as a builder'
 the rootfs by the image's manifest digest. impd passes oci-fetch no other reference, so a client
 cannot steer what the host fetches, and no engine on the host builds.
 
-impd checks the build's input on the host before anything runs. It parses the Dockerfile with a port
-of the pinned frontend's parser and refuses what the engine would fetch on its own, such as an `ADD`
-from a URL or a git remote, a variable in `FROM`, and `ONBUILD`. It pins every image the Dockerfile
-names to its registry digest, then builds a rewritten copy of the context with the pinned frontend,
-so a Dockerfile cannot choose the frontend BuildKit runs. impd pulls the named images in the builder
-first, to pin them. The guard rejects inputs and isolates nothing: the builder is the isolation.
+impd checks the build's input on the host before any build step runs. It parses the Dockerfile with
+a port of the pinned frontend's parser and refuses what the engine would fetch on its own, such as
+an `ADD` from a URL or a git remote, a variable in `FROM`, and `ONBUILD`. It pins every image the
+Dockerfile names to its registry digest, then builds a rewritten copy of the context with the pinned
+frontend, so a Dockerfile cannot choose the frontend BuildKit runs. To pin them, impd pulls the
+named images in the builder before the build. The guard rejects inputs and isolates nothing: the
+builder is the isolation.
 
 ## Template images
 

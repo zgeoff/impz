@@ -9,11 +9,12 @@ unrelated to a template image, which is an image made from an imp's disk
 
 ## The key
 
-A template is reused only where a restore inherits exactly what a cold boot would have. Its key is a
-hash of the guest kernel and the system drive, the Firecracker version and snapshot format, the host
-kernel, the CPU model and its flags, the template's kernel command line, the devices, and the vCPU
-count and memory size, and whether the guest runs on [huge pages](./huge-pages.md). The image is not
-in the key, because a template never opens a user disk.
+A template is reused only where a restore inherits what a cold boot would have, apart from the
+kernel state in [accepted risks](#accepted-risks). Its key is a hash of the guest kernel and the
+system drive, the Firecracker version and snapshot format, the host kernel, the CPU model and its
+flags, the template's kernel command line, the devices, and the vCPU count and memory size, and
+whether the guest runs on [huge pages](./huge-pages.md). The image is not in the key, because a
+template never opens a user disk.
 
 An elastic imp never restores a template: its guest needs a hot-plug region from its boot on, and a
 template has none ([elastic memory](./elastic-memory.md#limits)). At start, impd removes every

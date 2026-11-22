@@ -2,10 +2,10 @@
 
 The governor keeps the RAM of every awake imp under one budget, which the owner sets for the host.
 Imps share the host with everything else on it, and a host that runs out of RAM kills processes at
-random, so the budget is a hard line the governor holds. It admits every boot, wake and memory grow
-before it happens, and sleeps the least recently active imps to make room. The
-[lifecycle](./lifecycle.md) asks it for room under the imp's lock;
-[elastic memory](./elastic-memory.md) covers the grows it admits.
+random. So the governor admits every boot, wake and memory grow before it happens, sleeps the least
+recently active imps to make room, and sleeps more when use passes the budget between admissions
+([enforcement](#enforcement)). The [lifecycle](./lifecycle.md) asks it for room under the imp's
+lock; [elastic memory](./elastic-memory.md) covers the grows it admits.
 
 ## What it measures
 
@@ -97,7 +97,8 @@ ordinary pages finds no RAM kept there and makes room by sleeping imps outside t
 - To make room for an imp outside the patterns, the governor never sleeps a priority imp. A sleeping
   priority imp frees its RAM into the kept RAM, which the other imp cannot use.
 - A priority imp can use the whole budget. To make room for it, the governor sleeps any imp that
-  step 2 of the admission allows, priority imps included.
+  step 2 of the admission allows, priority imps included. The pool is the exception: no imp sleeps
+  to make pool room, for a priority imp either.
 
 The kept RAM counts only at admission. [Enforcement](#enforcement) treats every imp alike.
 

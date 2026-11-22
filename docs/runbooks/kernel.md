@@ -1,6 +1,6 @@
 # Guest kernel
 
-The custom guest kernel for imp.
+Build, check or bump the custom guest kernel that every imp boots.
 [Guest agent and kernel](../architecture/guest/agent.md#two-drives-and-a-kernel) says why imp builds
 its own and what the config adds.
 

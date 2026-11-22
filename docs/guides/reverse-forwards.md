@@ -14,15 +14,16 @@ impz proxy box 5432 --reverse 9000:8080                          # both directio
 ```
 
 Each `--reverse` is `GUEST:LOCAL`, and `--reverse` repeats. Each side is an absolute socket path or
-a port, and a lone side is both: `--reverse 9000` is `9000:9000`. An empty `GUEST` is a socket the
-imp's agent makes under `/run/imp/forward/`. The CLI prints one line for each forward, such as
-`forwarding box:/tmp/app.sock -> /run/user/1000/app.sock`, and relays until Ctrl-C.
+a port, and a lone side is both: `--reverse 9000` is `9000:9000`. `GUEST` may also be empty, and the
+imp's agent then makes a socket for it under `/run/imp/forward/`. The CLI prints one line for each
+forward, such as `forwarding box:/tmp/app.sock -> /run/user/1000/app.sock`, and relays until Ctrl-C.
 
 ## In the imp
 
 - The forward listens as the image's USER, the user `impz exec` runs as. A socket path must be one
-  that user may make, in a directory that exists; impd's own `/run/imp/` is refused. A socket left
-  at the path by an earlier forward is replaced; any other file there is refused.
+  that user may make, in a directory that exists. A path you name under impd's own `/run/imp/` is
+  refused. A socket left at the path by an earlier forward is replaced; any other file there is
+  refused.
 - A socket is mode 0600, and only the image's user and root get through. A port listens on the imp's
   `127.0.0.1` only, never an address another machine reaches. A port below 1024 is refused unless
   the user is root.

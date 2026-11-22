@@ -14,18 +14,21 @@ on.
 | `box`    | the addresses its allow-list's names resolve to, and the ranges the list names |
 | `none`   | nothing                                                                        |
 
-`open` is the default. A policy change applies at once, whatever the imp's state, because the table
-is keyed by slot. A fork and a backup restore carry the policy. When the new policy is narrower,
-impd deletes the guest's connection tracking entries, so a flow the policy now denies ends on its
-next packet, and the broker closes the imp's tunnels that the new policy denies, since those are
-relays in impd that connection tracking never sees.
+The table leaves out the grant-covered hosts and the members of the imp's
+[private networks](#networks), which every policy reaches. `open` is the default. A policy change
+applies at once, whatever the imp's state, because the table is keyed by slot. A fork and a backup
+restore carry the policy. When the new policy is narrower, impd deletes the guest's connection
+tracking entries, so a flow the policy now denies ends on its next packet, and the broker closes the
+imp's tunnels that the new policy denies, since those are relays in impd that connection tracking
+never sees.
 
 ## The firewall
 
 impd owns one nftables table and writes it whole, in one transaction, at start and on every create,
 destroy, policy change and network change. DNS answers and expiries change only its sets. Its
-forward chain runs before the base rules and only drops and rejects, so the base rules still accept
-what it lets through.
+forward chain runs before the base rules. An accept in it only passes the packet on to the base
+rules, and a drop or a reject in it is final, so the table can refuse a packet but never let through
+one the base rules refuse.
 
 - A verdict map sends each tap to its slot's chain, and a tap with no entry is refused. Each slot
   chain first drops any source but the guest's own addresses.

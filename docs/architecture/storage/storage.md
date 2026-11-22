@@ -42,9 +42,10 @@ drive that is not the current one and that no snapshot, live VM or boot template
 
 ## Checkpoints, restores and forks
 
-These work the same on both backends; only the clone differs.
+These run the same steps on both backends. Only the copy differs: a reflink copy on XFS, and a
+snapshot or a clone on ZFS. The ZFS rules below add to restore.
 
-- **Checkpoint.** The agent syncs and freezes the guest's filesystem, impd clones the disk, and the
+- **Checkpoint.** The agent syncs and freezes the guest's filesystem, impd copies the disk, and the
   agent thaws it. The freeze carries its own timeout, so a guest whose host never thaws it thaws by
   itself. A sleeping imp wakes first, because its memory holds page cache that is not on the disk
   yet, and a stopped imp needs no freeze.
@@ -81,7 +82,7 @@ snapshot still needs its blocks.
   runs on a full pool ([disk space](./disk-space.md#the-budget)).
 - **Versions.** The container's ZFS tools and the host's ZFS module must share a major version, and
   impd refuses to start when they do not. A different minor version only logs a warning, since impd
-  runs nothing a 2.x module lacks.
+  runs no command a 2.x module lacks. The minimum module version below still applies.
 - **Minimum module versions.** A ZFS module needs 2.3.7 on the 2.3 line or 2.4.2 on the 2.4 line,
   and no 2.2 or older release has the fix. An older module can overrun a buffer when a SIGKILL or a
   cgroup OOM kill lands during a read (openzfs/zfs#15918). impd sends both kills to Firecracker, at

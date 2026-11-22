@@ -52,7 +52,9 @@ them before the first test.
 Run a command only where its needs are met. When this host lacks them, push your branch, and read
 the result of the row's CI job: `eval` and `vm` are in
 [`nix.yml`](../../../.github/workflows/nix.yml), the others in
-[`ci.yml`](../../../.github/workflows/ci.yml).
+[`ci.yml`](../../../.github/workflows/ci.yml). CI runs no single journey: for that row, read the
+`e2e-group` job that runs the journey's suite. A suite outside every group never runs in CI, as
+[Sets, groups and acceptance](./references/e2e.md#sets-groups-and-acceptance) says.
 
 | Tests                   | Command                                                                                | Needs                                                        | CI job         |
 | ----------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------ | -------------- |
@@ -79,8 +81,9 @@ the result of the row's CI job: `eval` and `vm` are in
 - Search both folders in the Test utils row of [Facts](#facts) before you write a test util, and put
   a new one in the folder that row names for it.
 - Put a client or MCP server test that needs a real impd beside the module it tests, and boot impd
-  by the rule in [Boundaries](#boundaries), from `@impz/daemon/test-utils`. Keep `@impz/daemon` a
-  dev dependency of `@impz/client` and `@impz/mcp`, so neither published build depends on impd.
+  by the rule in [Boundaries](#boundaries), from `@impz/testing/stand-in/start-test-impd`. Keep
+  `@impz/daemon` and `@impz/testing` dev dependencies of `@impz/client` and `@impz/mcp`, so neither
+  published build depends on impd.
 - Put a test of the end-to-end or bootstrap harness in
   [`packages/e2e-harness/`](../../../packages/e2e-harness/). It runs in the unit run, with no KVM.
   Keep [`packages/daemon/e2e/`](../../../packages/daemon/e2e/) for the journeys and their fixtures.
@@ -137,8 +140,9 @@ the result of the row's CI job: `eval` and `vm` are in
   [`startTestImpd`](../../../packages/testing/src/stand-in/start-test-impd.ts), which runs
   production's startup through `createImpd` on the stand-ins. Leave its `defaultDiskBytes` at 0: its
   stand-in storage copies each disk in full, and a 32 GiB disk takes minutes.
-- Pass the stub clock of `startTestImpd` directly to each component that keeps a clock of its own.
-  Find those components, and where the clock comes from, in
+- Before you move time in a test, check that the component under test takes impd's clock from
+  `createImpd`. A component that calls `Date.now()` itself stays on the wall clock. Find the check,
+  and how to give such a component a `now` parameter, in
   [Booting impd](./references/stand-ins.md#booting-impd).
 
 ## Host resources

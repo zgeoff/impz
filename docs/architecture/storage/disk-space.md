@@ -79,6 +79,7 @@ A sweep while impd runs must never take storage that is about to get its row: a 
 snapshot exists before its row, an image build takes minutes, and a fork's disk is made under its
 source's lock. So every operation that touches storage joins a gate from before its first storage
 call until its rows commit, and the sweep runs only once nothing is in flight. Operations that start
-meanwhile wait for it, and a sweep that waits holds nothing back: it gives up after a while, and a
-backup run keeps it waiting for as long as the run lasts. The sweep reads the database and the pool
-inside the gate each time, so it never acts on a list made before.
+while the sweep runs wait for it. While the sweep waits, new operations still start, and the sweep
+gives up after a timeout. A backup run stays in the gate for its whole length, so a sweep that meets
+one gives up. The sweep reads the database and the pool inside the gate each time, so it never acts
+on a list made before.

@@ -20,8 +20,9 @@ metadata:
 
 ## The function-verb lint rule
 
-- List each name that a library interface sets in the `exemptNames` option of `zgeoff/function-verb`
-  in [`.oxlintrc.json`](../../../.oxlintrc.json), with a comment above it that names the interface.
+- List each name that a library interface sets, `on` included, in the `exemptNames` option of
+  `zgeoff/function-verb` in [`.oxlintrc.json`](../../../.oxlintrc.json), with a comment above it
+  that names the interface.
 
 ## Domain verbs
 

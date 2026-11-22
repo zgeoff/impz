@@ -53,9 +53,10 @@ The container gets the userfaultfd device only when the owner turns
 [huge pages](./lifecycle/huge-pages.md#the-device) on and the host kernel has the device. The device
 reaches more of the kernel than a jailed process otherwise can, so no other host carries it.
 
-Docker opens the ports below 1024 to every process in the container by default, and Podman does not.
-The arguments add the capability to bind them, which opens them to the container's root alone, on
-either engine.
+Podman keeps the ports below 1024 closed to the container's processes, so the arguments add the
+capability to bind them, and only the container's root gets it. Docker, which runs a dev instance,
+opens those ports to every process in the container by default, and the capability changes nothing
+there.
 
 The arguments lift the cap on the container's processes that Podman sets by default, because every
 imp's Firecracker and jailer processes and threads count against the container's cgroup. They also

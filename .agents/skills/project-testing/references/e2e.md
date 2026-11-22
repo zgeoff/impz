@@ -12,7 +12,8 @@ harness, [`scripts/test-e2e.sh`](../../../../scripts/test-e2e.sh), and its flags
 The traps:
 
 - Start the name of everything the journey makes with the suite's name prefix, its `prefix` field.
-  The harness removes only what carries it.
+  The [baseline reset](#the-baseline-reset) removes only the imps, networks and other records that
+  carry it.
 - When a journey changes impd's settings, put them back in the journey. The next journey runs on the
   same instance.
 - Before you run a journey alone, run its suite once through `scripts/test-e2e.sh --only <suite>`. A
@@ -59,10 +60,11 @@ The traps:
    one journey needs, import `runDevScript` and `instance` from `@impz/e2e-harness/instance`. Call
    `runDevScript('reboot', instance, { IMP_IDLE_TIMEOUT_S: '5' })` in the journey, with the `IMP_*`
    variables it needs. Then defer a reboot back onto the suite's `settings`, or a bare
-   `runDevScript('reboot')` when the suite has none.
+   `runDevScript('reboot')` when the suite has none. Its second argument defaults to `instance`.
 
-When you pass `--keep` to the harness, `registerRemoval` registers nothing, so the imps and images
-stay for a look after the run. A removal you defer on the stack yourself still runs.
+When you pass `--keep` to the harness, it skips the baseline reset after each journey, and
+`registerRemoval` registers nothing, so the imps and images stay for a look after the run. A removal
+you defer on the stack yourself still runs.
 
 ## Guest and host facts
 
@@ -132,8 +134,9 @@ a run that includes `acceptance`, an overrun fails the journey.
 
 ## Resources outside the instance
 
-Touch a resource outside the instance only when the journey can prove it made the resource. For a
-new one, write an owner file beside it, as the `registry` suite does. The harness's own checks:
+Touch a resource outside the instance only when the journey can prove it made the resource, or when
+the run owns the whole machine, as `E2E_OWNS_ZFS_HOST=1` marks below. For a new resource, write an
+owner file beside it, as the `registry` suite does. The harness's own checks:
 
 - When the harness resets an instance, it deletes the instance's data dir as root.
   [`wipe-target.ts`](../../../../packages/e2e-harness/src/wipe-target.ts) decides which data dirs

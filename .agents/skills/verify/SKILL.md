@@ -149,7 +149,9 @@ that command alone. A command with neither runs on the registry's first target, 
 | `local-kvm` | [Real VMs](references/local-kvm.md)                   | read-write | Real VMs; 70 s to start.      |
 | `prod`      | [On prod](references/feature-mcp-reads.md#on-prod)    | read-only  | The deployed impd. No `done`. |
 
-Run each feature that says "on a real VM" on `local-kvm`.
+Run each feature that says "on a real VM" on `local-kvm`, even when your task names no target: on
+`local` its journey fails. Run the other features on `local` first, then switch targets as
+[Real VMs](references/local-kvm.md#switch-targets) shows.
 
 <!-- /repo -->
 

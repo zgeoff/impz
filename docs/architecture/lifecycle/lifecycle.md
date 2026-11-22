@@ -79,9 +79,9 @@ a VM lost later is judged against it. The log names the thread by its id in the 
 namespace, so impd matches only when it runs in that namespace, because a container's thread ids are
 other numbers that may collide with it. When impd runs elsewhere, cannot read the oops from the log,
 or finds that no VM owned the thread, any VM may hold the disk, so impd blames the oops on every VM
-lost after it.
+lost after it that was running when impd first read the flag set.
 
-Until the flag clears, impd refuses a start or a wake of that imp with an error that asks for the
+While the imp holds the oops, impd refuses a start or a wake of it with an error that asks for the
 reboot ([a kernel oops](../../guides/operations.md#a-kernel-oops)). The hold lives in the imp's
 record with the kernel's boot id, so it outlasts the reboot that freed the disk. At start impd
 clears every hold when it reads the flag clear, because only a reboot clears the flag. It also
@@ -97,7 +97,7 @@ its own admission lock while it sleeps imps, and a boot waiting for admission ho
 so a governor that waited for imp locks could deadlock with it.
 
 The lock also gates moves. While an imp is marked as moving between hosts, the lock refuses every
-call with `MOVING`, by name or by ID, except the move's own steps
+call with `MOVING`, by name or by ID, except the move's own steps and impd's start-up repair
 ([moves](../storage/moves.md#one-live-copy)). The refusal sits in the read under the lock, so no
 caller depends on the order in which the move writes its mark. A background try finds a moving imp
 held and skips it, and impd's start-up repair reaches a moving imp as its move does, because the

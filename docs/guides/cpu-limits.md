@@ -1,8 +1,9 @@
 # CPU limits and resource use
 
-Each imp can have a CPU limit and a CPU weight. impd also samples each running imp's CPU, memory and
-network every 5 s and shows the result in `impz ls`, `impz top`, the dashboard and the
-[telemetry](./events.md#telemetry).
+Give an imp a CPU limit or a CPU weight with `impz new` or `impz set`, and check what each imp uses
+with `impz ls` or `impz top`. impd samples each running imp's CPU, memory and network every 5 s and
+also shows the result in the dashboard and the [telemetry](./events.md#telemetry). After you set a
+limit, check that `impz info` does not show `limits OFF` ([the note below](#the-memory-limit)).
 
 ## Limits and weights
 
@@ -34,9 +35,9 @@ error `its memory limit killed firecracker`. See [cgroups](../architecture/isola
 
 **NOTE:** impd enforces limits only when the host container runs in a private cgroup v2 namespace
 (`--cgroupns=private`, which `scripts/dev/dev.sh` and `deploy/imp-host.service` pass) and
-`setup-cgroups.sh` can remount its cgroupfs read-write. Without either, impd logs
+`setup-cgroups.sh` can remount its cgroupfs read-write. When either is missing, impd logs
 `CPU limits are kept, not applied`, stores the settings, `impz info` shows `limits OFF`, and
-`impz info --json` shows `cpu.limitsEnforced: false`. Jailed VMs cannot start then.
+`impz info --json` shows `cpu.limitsEnforced: false`, and no jailed VM can start.
 
 ## Resource use
 

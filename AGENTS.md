@@ -129,8 +129,8 @@ with a catch:
   script sets `TSRS_FAST=1`, tsrs's fast mode. `bun run typecheck` runs `tsrs --fast`. `lint:full`
   is CI-only: never run it locally.
 - lefthook runs the checks in [`lefthook.yml`](lefthook.yml) before a commit and a push. On a 2 GiB
-  host, leave the other checks to CI. `bun run check` runs every check and needs more memory than a
-  2 GiB host has.
+  host, leave the other checks to CI. `bun run check` runs every check, `lint:full` included, so
+  leave it to CI too.
 - For the Go agent, run `gofmt -l .` and `go vet ./...` in [`agent/`](agent/). golangci-lint,
   govulncheck and the race tests in [`scripts/test-go.sh`](scripts/test-go.sh) each need more than 2
   GiB, so leave them to CI on a 2 GiB host.

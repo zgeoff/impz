@@ -107,12 +107,12 @@ ZFS suites and the named VM suites.
 
 Find the check that runs a test this host cannot:
 
-| Tests                              | Workflow                                           | Check                                     |
-| ---------------------------------- | -------------------------------------------------- | ----------------------------------------- |
-| End-to-end suites, host networking | [`ci.yml`](../../../../.github/workflows/ci.yml)   | `e2e`, from the `e2e-group` jobs; group 2 |
-| ZFS suites and `test-zfs.sh`       | `ci.yml`                                           | `zfs`, from the `zfs-shard` jobs; shard 1 |
-| Agent Go, root-only included       | `ci.yml`                                           | `go`                                      |
-| NixOS module evaluation and VMs    | [`nix.yml`](../../../../.github/workflows/nix.yml) | `eval` and `vm`                           |
+| Tests                              | Workflow                                           | Check                                                                        |
+| ---------------------------------- | -------------------------------------------------- | ---------------------------------------------------------------------------- |
+| End-to-end suites, host networking | [`ci.yml`](../../../../.github/workflows/ci.yml)   | `e2e`, from the `e2e-group` jobs; only group 2 runs the host networking lane |
+| ZFS suites and `test-zfs.sh`       | `ci.yml`                                           | `zfs`, from the `zfs-shard` jobs; only shard 1 runs `test-zfs.sh`            |
+| Agent Go, root-only included       | `ci.yml`                                           | `go`                                                                         |
+| NixOS module evaluation and VMs    | [`nix.yml`](../../../../.github/workflows/nix.yml) | `eval` and `vm`                                                              |
 
 - The `e2e` and `zfs` checks pass only when every job of their matrix passes, so open the failed
   job's log, not the summary check's.

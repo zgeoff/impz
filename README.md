@@ -40,8 +40,9 @@ impz checkpoint box clean              # name a known-good state
 impz restore box clean                 # and back
 ```
 
-The [install guide](./docs/guides/install.md) also covers a dev instance from the repo and the
-release image.
+`impz login` takes impd's token, which impd writes to `<IMP_DATA_DIR>/token` on the host. The
+[install guide](./docs/guides/install.md) also covers a dev instance from the repo and the release
+image.
 
 ## Features
 

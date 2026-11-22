@@ -1,9 +1,10 @@
 # Backups
 
-impd backs up each imp's disk, its checkpoints and the images they come from to a
-[restic](https://restic.net) repository off the host: an S3 bucket, a REST server, or anything else
-restic speaks. Backups are off until the owner names a repository, and the
-[backups guide](../../guides/backups.md) covers running, restoring and protecting them.
+impd backs up each imp's disk, its checkpoints and the images they come from, except for the
+[imps left out](#imps-left-out), to a [restic](https://restic.net) repository off the host: an S3
+bucket, a REST server, or anything else restic speaks. Backups are off until the owner names a
+repository, and the [backups guide](../../guides/backups.md) covers running, restoring and
+protecting them.
 
 restic does the work that a store of impd's own would need: encryption, content-defined
 deduplication, many targets, locks, retention, garbage collection and verification. It also gives
@@ -13,9 +14,10 @@ the repository password stays in its file, never in an argv, a log or the API.
 
 ## What a backup holds
 
-Each run is one restic snapshot of a backup tree in the data directory: a manifest, each imp's disk
-and checkpoints, and each image. The paths are the same every run, so restic finds each file it read
-the run before and uploads only the chunks that changed.
+Each run is one restic snapshot of a backup tree in the data directory: a manifest, the disk and
+checkpoints of each imp the run copies ([a run](#a-run)), and each image. The paths are the same
+every run, so restic finds each file it read the run before and uploads only the chunks that
+changed.
 
 The manifest is everything a restore reads: each imp's settings, its egress policy, the names of the
 secrets granted to it with each grant's filter, the networks it is on, its checkpoints in order, and

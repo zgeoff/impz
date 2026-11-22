@@ -60,13 +60,13 @@ the setting can change across a restart.
 ## Cgroups
 
 The container's entrypoint takes a private cgroup v2 namespace and makes a subtree for the imps with
-the CPU and memory controllers. impd makes one cgroup per VM and starts Firecracker inside it, so no
-VM thread ever runs outside its limits. It sets the CPU limit and weight the owner chose, and a hard
-memory limit of the guest's memory plus room for Firecracker and the page cache of its disk and
-snapshot I/O, with no swap, and an OOM kill that takes the whole VM. The lifecycle then names a VM
-that the limit killed as such, rather than as a crash. The soft memory limit stays off, because its
-throttling slowed a guest's disk I/O badly. In a container without its own cgroup namespace, impd
-stores CPU settings without enforcing them, and no jailed VM starts.
+the CPU and memory controllers. With the jailer on, impd makes one cgroup per VM and starts
+Firecracker inside it, so no VM thread ever runs outside its limits. It sets the CPU limit and
+weight the owner chose, and a hard memory limit of the guest's memory plus room for Firecracker and
+the page cache of its disk and snapshot I/O, with no swap, and an OOM kill that takes the whole VM.
+The lifecycle then names a VM that the limit killed as such, rather than as a crash. The soft memory
+limit stays off, because its throttling slowed a guest's disk I/O badly. In a container without its
+own cgroup namespace, impd stores CPU settings without enforcing them, and no jailed VM starts.
 
 ## The host container
 

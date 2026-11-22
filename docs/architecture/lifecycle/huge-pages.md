@@ -164,8 +164,9 @@ there.
 
 A sleeping imp of fixed memory whose snapshot is on ordinary pages, such as one that slept before
 the host turned huge pages on, wakes on ordinary pages. When the ordinary budget refuses that wake,
-impd boots the imp cold onto the pool instead, which costs the guest its memory but not its disk. An
-elastic imp cannot run on the pool, so the refusal stands and it stays asleep with its snapshot.
+impd boots the imp cold onto the pool instead when its memory is a whole number of huge pages, which
+costs the guest its memory but not its disk. For any other imp, an elastic one included, the refusal
+stands and it stays asleep with its snapshot.
 
 Firecracker maps the pool without a reservation, so a guest that faults past an empty pool dies of
 SIGBUS. The admission rule keeps that from happening while nothing else on the host takes pool

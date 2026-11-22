@@ -1,20 +1,21 @@
 # Ingress
 
-Traffic reaches an imp's own servers by four routes, and every one of them goes through impd, which
-wakes the imp first: the wake proxy for HTTP, the SSH gateway, tunnels from `impz proxy`, and
-reverse forwards that run the other way. impd listens inside the host container's own namespace, the
-host publishes its ports on loopback only, and the tailnet reaches them through the container's own
-tailscaled. [The API](../control/api.md#exec-and-tunnels) covers the WebSockets that carry tunnels,
-and [auth](../control/auth.md) who may open them.
+Traffic reaches an imp's own servers by four routes, and every one of them goes through impd: the
+wake proxy for HTTP, the SSH gateway, tunnels from `impz proxy`, and reverse forwards that run the
+other way. The first three wake the imp first; a reverse forward waits for a wake. impd listens
+inside the host container's own namespace, the host publishes its ports on loopback only, and the
+tailnet reaches them through the container's own tailscaled. A [public imp](#https-on-a-domain) is
+the one exception. [The API](../control/api.md#exec-and-tunnels) covers the WebSockets that carry
+tunnels, and [auth](../control/auth.md) who may open them.
 
 ## The wake proxy
 
 The proxy forwards HTTP and WebSockets to an imp's HTTP port. It routes by two means. On the proxy
 port, the first label of the Host header names the imp, as `<name>.imp.localhost` on the host or
 `<name>.<domain>` under an HTTPS domain. And each imp has a port of its own, by its slot, where
-every request goes to that imp. The tailnet uses those ports, because MagicDNS has no wildcard
-names, so on the tailnet each imp has a port, not a host name. impd refuses to start when its own
-ports fall in the per-imp range.
+every request goes to that imp. Without an HTTPS domain or per-imp names, the tailnet uses those
+ports, because MagicDNS has no wildcard names. impd refuses to start when its own ports fall in the
+per-imp range.
 
 A request asks the lifecycle for a running VM, which wakes a sleeping imp or boots a stopped one,
 and then goes to the guest's address from the host container. A response that needed a wake says how

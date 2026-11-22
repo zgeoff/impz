@@ -23,17 +23,17 @@ has a size cap, and larger data goes as several frames. The kinds of request fal
 - **Exec streams**: a process's stdin, resizes and signals one way, its output and exit the other.
   An outer exec and a session start or attach are exec streams too ([sessions](./sessions.md)).
 - **Relays**: a dial to an address or a socket in the guest, which then carries raw bytes both ways,
-  and the listeners for reverse forwards and SSH agent forwarding, whose clients each arrive as a
-  new connection that impd accepts.
+  and the listeners for reverse forwards and SSH agent forwarding, whose clients impd takes one at a
+  time, each on a new connection it opens with an accept request.
 - **Readers**: a service's log, which resumes from a cursor, and a tap on a logged session.
 
 ## The schema
 
-Each message body is the proto3 JSON form of a message in the schema, under the schema's field
-names, so a frame stays readable in a dump. Protobuf covers only the bodies: the frame types, the
-length prefix and the size cap stay hand-written in each side's frame codec, and so do the op names
-and error codes, which the schema lists in its comments. `bun run gen:proto` lints the schema and
-writes the Go types, impd's TypeScript types and the
+Each JSON payload is the proto3 JSON form of a message in the schema, and a raw payload carries a
+stream's bytes, under the schema's field names, so a frame stays readable in a dump. Protobuf covers
+only the bodies: the frame types, the length prefix and the size cap stay hand-written in each
+side's frame codec, and so do the op names and error codes, which the schema lists in its comments.
+`bun run gen:proto` lints the schema and writes the Go types, impd's TypeScript types and the
 [protocol reference](../../reference/agent-protocol.md), and CI fails when the committed output
 differs from what the schema generates. The TypeScript types sit beside impd's frame codec in one
 workspace package, so impd and every stand-in agent in the tests encode and decode the bodies

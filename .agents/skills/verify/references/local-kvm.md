@@ -20,7 +20,7 @@ bun verify doctor
 ```
 
 Expect: `ok: true` from each, and `data.passed: true` from `doctor`. To go back, run the same four
-commands with `--target local`.
+commands with `use --target local` as the second.
 
 ## What the machine needs
 

@@ -21,7 +21,7 @@ helper does.
 ## The root preload
 
 The [root preload](../../../../packages/shared/src/test-utils/preload.ts) runs before every test
-file:
+file but the end-to-end suites', which have [a preload of their own](#shared-test-utils):
 
 - It deletes every `IMP_*` variable the shell passed in, so your own settings never reach a test. It
   keeps the four that turn on the host networking, small filesystem and real ZFS pool tests:
@@ -71,7 +71,7 @@ To write a dashboard test:
    keeps impd's session cookie and sends it back, as a browser does.
 2. Arrange state through the `harness` it returns: `harness.client`, an RPC client that holds the
    root token, or the harness's stand-ins.
-3. Log in with that object's `logIn`.
+3. Log in with the `logIn` that `startDashboardImpd` returns beside `harness`.
 4. Mount the whole app with
    [`renderApp`](../../../../packages/dashboard/src/test-utils/render-app.tsx).
 5. Assert on impd's state, never on the arguments that a mock received.

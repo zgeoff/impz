@@ -44,12 +44,12 @@ await imp.imps.fork({ source: 'dev', name: 'dev-2', checkpoint: checkpoint.id })
 await imp.imps.sleep({ name: 'dev' });
 ```
 
-`imp.requireAwake(name)` makes one wake call. It wakes a sleeping imp, boots a stopped one and
-returns a running one as it is. impd refuses an imp in the `error` state with `INVALID_STATE`,
-because a wake would restart it; pass `{ restartError: true }` to restart it anyway. While impd
-stops, calls fail with `SERVICE_UNAVAILABLE`, and while it restarts, `fetch` cannot connect; pass
-`{ retryUnavailable: { attempts, delayMs } }` to wait for it to come back. `RAM_BUDGET_EXCEEDED` is
-never retried.
+`imp.requireAwake(name)` makes one wake call, plus the retries you ask for below. It wakes a
+sleeping imp, boots a stopped one and returns a running one as it is. impd refuses an imp in the
+`error` state with `INVALID_STATE`, because a wake would restart it; pass `{ restartError: true }`
+to restart it anyway. While impd stops, calls fail with `SERVICE_UNAVAILABLE`, and while it
+restarts, `fetch` cannot connect; pass `{ retryUnavailable: { attempts, delayMs } }` to wait for it
+to come back. `RAM_BUDGET_EXCEEDED` is never retried.
 
 `watchEvents(imp, { onEvent })` follows `events.stream`: every imp first, then each change. `name`
 keeps one imp's events, and `reconnect: { delayMs }` opens a fresh stream whenever one ends, until
@@ -58,8 +58,9 @@ across impd restarts, so `onEvent` misses nothing. On a resumed stream, the watc
 `Position` events, which move its cursor past the events of imps the token may not see, and passes
 none of them on. It passes over an event kind it does not know, which a newer impd may send. When
 impd no longer holds the events since then, `onEvent` gets `Reset` and then every imp again.
-`onOpen` runs as each stream opens, with the cursor it opens at: a stream with no `after` starts
-with every imp, and the caller may have missed what changed while it was away.
+`onOpen` runs as each stream opens, with the cursor it opens at. A stream with no cursor, such as
+the first, starts with every imp, so code outside the watch may have missed what changed before it
+opened.
 
 `openForwardTunnel` relays one connection to a port in the imp over `/tunnel`, and
 `openReverseForward` listens in the imp and relays each client back. `openToolExec` runs an agent
