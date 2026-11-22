@@ -1,14 +1,14 @@
 # checkpoint-restore-fork
 
-Run this journey on the `local-kvm` target. Before it, run `bun verify use --target local-kvm`,
-`bun verify up` and `bun verify doctor`. Only `local-kvm` boots the guest VM that `imp_write_file`
-and `imp_read_file` need. The journey checks that an MCP client can checkpoint an imp, restore the
-imp to the checkpoint, and fork the checkpoint into a second imp.
+Run this journey on the `local-kvm` target. Before it, switch to it as
+[Real VMs](local-kvm.md#switch-targets) shows. Only `local-kvm` boots the guest VM that
+`imp_write_file` and `imp_read_file` need. The journey checks that an MCP client can checkpoint an
+imp, restore the imp to the checkpoint, and fork the checkpoint into a second imp.
 
 `bun verify mcp call` signs in as an MCP client that impd lets touch only imps named `wv-mcp-*`; it
-refuses any other name with `FORBIDDEN`. When a step fails, skip to the two `imp_destroy` calls, so
-the next run starts with neither imp. Ignore `isError: true` from a destroy of an imp that never got
-made.
+refuses any other name with `FORBIDDEN`. When a step fails, do what its row in
+[Exit codes](exit-codes.md) says, then skip to the two `imp_destroy` calls, so the next run starts
+with neither imp. Ignore `isError: true` from a destroy of an imp that never got made.
 
 ## Journey
 
